@@ -4,10 +4,32 @@ build-backend = "maturin"
 
 [project]
 name = "bammetrics"
-version = "0.1.0"
+dynamic = ["version"]
+description = "Picard-concordant BAM QC metrics in Rust, without a JVM"
+readme = "README.md"
 requires-python = ">=3.9"
-description = "Embeddable, JVM-free, Picard-concordant BAM QC metrics"
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
+authors = [{ name = "Paulo Nuin" }]
+keywords = ["bioinformatics", "ngs", "bam", "picard", "qc", "metrics"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Repository = "https://github.com/nuin/bammetrics"
+Changelog = "https://github.com/nuin/bammetrics/blob/main/CHANGELOG.md"
 
 [tool.maturin]
 manifest-path = "crates/py/Cargo.toml"
 features = ["pyo3/extension-module"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]

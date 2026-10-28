@@ -1,8 +1,9 @@
-/target
-**/target
-*.so
+target/
 .venv/
-test.bam
+*.so
 *.bai
-dist/
+test.bam
 __pycache__/
+tests/corpus/out/
+.pytest_cache/
+dist/

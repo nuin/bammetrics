@@ -1,0 +1,4 @@
+# macOS links Python extension modules with unresolved libpython symbols.
+# Without this, `cargo test --workspace` fails to link the cdylib in crates/py.
+[target.'cfg(target_os = "macos")']
+rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]

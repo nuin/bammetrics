@@ -1,3 +1,9 @@
+"""Write a BAM of 5 FR pairs with known insert-size statistics.
+
+Usage: make_bam.py [OUT.bam]   (default tests/data/insert_size.bam)
+Known answers: median 310, mode 310, MAD 10, SD 8.1650, width of 50% = 21.
+"""
+import sys
 import pysam
 header = {'HD': {'VN':'1.6','SO':'coordinate'},
           'SQ': [{'SN':'chr1','LN':100000}]}
@@ -28,6 +34,7 @@ for i, ins in enumerate(inserts):
     recs.append((s2,b))
 
 recs.sort(key=lambda x: x[0])
-with pysam.AlignmentFile("test.bam","wb",header=header) as out:
+out_path = sys.argv[1] if len(sys.argv) > 1 else "tests/data/insert_size.bam"
+with pysam.AlignmentFile(out_path,"wb",header=header) as out:
     for _,r in recs: out.write(r)
-print("wrote test.bam with", len(recs), "records")
+print("wrote", out_path, "with", len(recs), "records")
