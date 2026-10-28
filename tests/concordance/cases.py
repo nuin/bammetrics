@@ -29,6 +29,8 @@ METRICS = {
     # H= is required; with the no-op Rscript shim nothing is drawn.
     "insert_size": Metric("CollectInsertSizeMetrics", "insert-size", ("H=/dev/null",),
                           ("PAIR_ORIENTATION", "SAMPLE", "LIBRARY", "READ_GROUP")),
+    "alignment_summary": Metric("CollectAlignmentSummaryMetrics", "alignment-summary", (),
+                                ("CATEGORY",)),
 }
 
 
@@ -84,4 +86,48 @@ def _insert_size_cases():
     return cases
 
 
-CASES = _insert_size_cases()
+REFERENCE = CORPUS / "reference.fa"
+
+
+def _alignment_summary_cases():
+    """Every BAM with and without R= where the BAM header matches the corpus
+    reference. The insert-size t0 BAMs have their own @SQ lengths, so they
+    run without R= only."""
+    ref = ((f"R={REFERENCE}",), ("-R", str(REFERENCE)))
+    # t0_asm has a read running off the end of chrM, which Picard's default
+    # STRICT validation rejects before any metric is computed.
+    silent = "VALIDATION_STRINGENCY=SILENT"
+    cases = [Case(name, CORPUS / f"{name}.bam", "alignment_summary")
+             for name in ("t0_filters", "t0_all_tandem", "t0_no_pairs", "t0_spread")]
+    cases.append(Case("t0_fixture", FIXTURES / "insert_size.bam", "alignment_summary"))
+    for name in ("t0_asm", "t0_asm_cycles", "t0_asm_empty", "t1", "t2", "t3"):
+        bam = CORPUS / f"{name}.bam"
+        extra = (silent,) if name == "t0_asm" else ()
+        cases.append(Case(name, bam, "alignment_summary", extra))
+        cases.append(Case(f"{name}_ref", bam, "alignment_summary", extra + ref[0], ref[1]))
+    t2, t0 = CORPUS / "t2.bam", CORPUS / "t0_asm.bam"
+    adapter = "AGATCGGAAGAGCACACGTCTGAACTCC"
+    cases += [
+        Case("t2_max_insert_400", t2, "alignment_summary",
+             ref[0] + ("MAX_INSERT_SIZE=400",), ref[1] + ("--max-insert-size", "400")),
+        # Picard appends to the default [FR]; null empties the list first.
+        Case("t2_orient_add_rf", t2, "alignment_summary",
+             ref[0] + ("EXPECTED_PAIR_ORIENTATIONS=RF",),
+             ref[1] + ("--expected-pair-orientation", "RF")),
+        Case("t2_orient_tandem_only", t2, "alignment_summary",
+             ref[0] + ("EXPECTED_PAIR_ORIENTATIONS=null", "EXPECTED_PAIR_ORIENTATIONS=TANDEM"),
+             ref[1] + ("--expected-pair-orientation", "null",
+                       "--expected-pair-orientation", "TANDEM")),
+        Case("t2_no_alignment_info", t2, "alignment_summary",
+             ref[0] + ("COLLECT_ALIGNMENT_INFORMATION=false",),
+             ref[1] + ("--collect-alignment-information", "false")),
+        Case("t0_asm_no_adapters", t0, "alignment_summary",
+             (silent, "ADAPTER_SEQUENCE=null"), ("--adapter-sequence", "null")),
+        Case("t0_asm_own_adapter", t0, "alignment_summary",
+             (silent, "ADAPTER_SEQUENCE=null", f"ADAPTER_SEQUENCE={adapter}"),
+             ("--adapter-sequence", "null", "--adapter-sequence", adapter)),
+    ]
+    return cases
+
+
+CASES = _insert_size_cases() + _alignment_summary_cases()
