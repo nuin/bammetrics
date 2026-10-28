@@ -2,16 +2,17 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use bammetrics_core::Error;
-use bammetrics_core::alignment_summary::{self, DEFAULT_MAX_INSERT_SIZE};
-use bammetrics_core::hs_metrics;
-use bammetrics_core::insert_size::{self, Options};
-use bammetrics_core::metrics_file::started_on;
+use bammetrics_core::alignment_summary::{self, AlignmentSummary, DEFAULT_MAX_INSERT_SIZE};
+use bammetrics_core::collect::{self, Outputs, Request};
+use bammetrics_core::hs_metrics::{self, HsMetrics};
+use bammetrics_core::insert_size::{self, InsertSize};
+use bammetrics_core::metrics_file::headers;
+use bammetrics_core::pass;
 use bammetrics_core::picard_cli;
-use bammetrics_core::quality_yield;
-use clap::{ArgAction, Args, Parser, Subcommand};
+use bammetrics_core::quality_yield::{self, QualityYield};
+use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(
@@ -42,6 +43,61 @@ enum Command {
     /// CollectHsMetrics: a Picard HsMetrics file, one row of bait, target and
     /// coverage metrics plus the depth and base-quality histograms.
     HsMetrics(HsMetricsArgs),
+    /// Several metrics from one pass over the BAM, one Picard file each:
+    /// PREFIX.quality_yield_metrics, .alignment_summary_metrics,
+    /// .insert_size_metrics and .hs_metrics.
+    Collect(CollectArgs),
+}
+
+/// BGZF decompression workers. Records are processed on the main thread in
+/// file order, so the metrics do not depend on this.
+#[derive(Args)]
+struct Threads {
+    /// BGZF decompression threads (default: available cores, at most 8).
+    #[arg(long, default_value_t = pass::default_threads())]
+    threads: usize,
+}
+
+/// A metric `collect` can compute.
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum MetricName {
+    /// CollectQualityYieldMetrics.
+    QualityYield,
+    /// CollectAlignmentSummaryMetrics.
+    AlignmentSummary,
+    /// CollectInsertSizeMetrics.
+    InsertSize,
+    /// CollectHsMetrics, once per --hs pair.
+    Hs,
+}
+
+#[derive(Args)]
+struct CollectArgs {
+    /// Input BAM (or --input).
+    #[arg(required_unless_present = "input", conflicts_with = "input")]
+    bam: Option<PathBuf>,
+    /// Input BAM.
+    #[arg(short = 'I', long)]
+    input: Option<PathBuf>,
+    /// Output prefix. Files are PREFIX plus .quality_yield_metrics,
+    /// .alignment_summary_metrics, .insert_size_metrics (the names Picard
+    /// CollectMultipleMetrics uses) and .hs_metrics, or .BAIT_SET.hs_metrics
+    /// with several --hs pairs.
+    #[arg(short = 'O', long)]
+    output: PathBuf,
+    /// Metrics to compute, comma separated (default: quality-yield,
+    /// alignment-summary, insert-size, and hs when --hs is given).
+    #[arg(long = "metric", value_enum, value_delimiter = ',')]
+    metrics: Vec<MetricName>,
+    /// Reference FASTA with a .fai index, for alignment-summary and hs.
+    #[arg(short = 'R', long)]
+    reference: Option<PathBuf>,
+    /// One CollectHsMetrics run: a bait and a target interval file
+    /// (interval list or BED). Repeat for more runs.
+    #[arg(long = "hs", num_args = 2, value_names = ["BAITS", "TARGETS"], action = ArgAction::Append)]
+    hs: Vec<PathBuf>,
+    #[command(flatten)]
+    threads: Threads,
 }
 
 #[derive(Args)]
@@ -55,6 +111,8 @@ struct InsertSizeArgs {
     /// Metrics file to write (Picard OUTPUT). Standard output when absent.
     #[arg(short = 'O', long)]
     output: Option<PathBuf>,
+    #[command(flatten)]
+    threads: Threads,
     /// Drop orientations below this fraction of all pairs (Picard MINIMUM_PCT).
     #[arg(short = 'M', long, default_value_t = 0.05)]
     minimum_pct: f32,
@@ -83,6 +141,8 @@ struct AlignmentSummaryArgs {
     /// Metrics file to write (Picard OUTPUT). Standard output when absent.
     #[arg(short = 'O', long)]
     output: Option<PathBuf>,
+    #[command(flatten)]
+    threads: Threads,
     /// Reference FASTA with a .fai index (Picard REFERENCE_SEQUENCE). Without
     /// it no base counts as a mismatch.
     #[arg(short = 'R', long)]
@@ -114,6 +174,8 @@ struct QualityYieldArgs {
     /// Metrics file to write (Picard OUTPUT). Standard output when absent.
     #[arg(short = 'O', long)]
     output: Option<PathBuf>,
+    #[command(flatten)]
+    threads: Threads,
     /// false reads QUAL even where an OQ tag exists (Picard USE_ORIGINAL_QUALITIES).
     #[arg(long, default_value = "true", value_parser = parse_bool, action = ArgAction::Set)]
     use_original_qualities: bool,
@@ -136,6 +198,8 @@ struct HsMetricsArgs {
     /// Metrics file to write (Picard OUTPUT). Standard output when absent.
     #[arg(short = 'O', long)]
     output: Option<PathBuf>,
+    #[command(flatten)]
+    threads: Threads,
     /// Bait intervals: an interval list, or a BED file (Picard BAIT_INTERVALS).
     /// Repeat for several files.
     #[arg(long = "bait-intervals", value_name = "FILE", required = true)]
@@ -207,13 +271,6 @@ fn parse_bool(value: &str) -> Result<bool, String> {
 }
 
 impl AlignmentSummaryArgs {
-    fn bam(&self) -> bammetrics_core::Result<&Path> {
-        self.bam
-            .as_deref()
-            .or(self.input.as_deref())
-            .ok_or_else(|| Error::Usage("no input BAM".to_owned()))
-    }
-
     fn options(&self) -> bammetrics_core::Result<alignment_summary::Options> {
         let defaults = alignment_summary::Options::default();
         Ok(alignment_summary::Options {
@@ -236,36 +293,14 @@ impl AlignmentSummaryArgs {
     }
 }
 
-impl InsertSizeArgs {
-    /// The BAM given positionally or with `--input`; clap guarantees one.
-    fn bam(&self) -> bammetrics_core::Result<&Path> {
-        self.bam
-            .as_deref()
-            .or(self.input.as_deref())
-            .ok_or_else(|| Error::Usage("no input BAM".to_owned()))
-    }
-}
-
-/// `StringHeader` lines in Picard's shape: the tool name and its arguments
-/// (parsers such as MultiQC read `INPUT=` from it), then `Started on: <time>`.
-fn insert_size_headers(args: &InsertSizeArgs, bam: &Path) -> Vec<String> {
-    let mut command = format!(
-        "CollectInsertSizeMetrics INPUT={} MINIMUM_PCT={:?} DEVIATIONS={:?} INCLUDE_DUPLICATES={} METRIC_ACCUMULATION_LEVEL=[ALL_READS]",
-        bam.display(),
-        args.minimum_pct,
-        args.deviations,
-        args.include_duplicates
-    );
-    if let Some(output) = &args.output {
-        command.push_str(&format!(" OUTPUT={}", output.display()));
-    }
-    if let Some(w) = args.histogram_width {
-        command.push_str(&format!(" HISTOGRAM_WIDTH={w}"));
-    }
-    if let Some(w) = args.min_histogram_width {
-        command.push_str(&format!(" MIN_HISTOGRAM_WIDTH={w}"));
-    }
-    vec![command, started_on(now())]
+/// The BAM given positionally or with `--input`; clap guarantees one.
+fn input_bam<'a>(
+    bam: &'a Option<PathBuf>,
+    input: &'a Option<PathBuf>,
+) -> bammetrics_core::Result<&'a Path> {
+    bam.as_deref()
+        .or(input.as_deref())
+        .ok_or_else(|| Error::Usage("no input BAM".to_owned()))
 }
 
 type Output = BufWriter<Box<dyn Write>>;
@@ -288,173 +323,177 @@ fn write_to(
     out.flush().map_err(output_error)
 }
 
+/// The warning `CollectInsertSizeMetrics.finish` logs when it writes no file.
+fn no_insert_size_rows(minimum_pct: f32) {
+    eprintln!(
+        "bammetrics: all data categories were discarded because they contained < {minimum_pct:?} of the total aligned paired data; no metrics written"
+    );
+}
+
+impl InsertSizeArgs {
+    fn options(&self) -> insert_size::Options {
+        insert_size::Options {
+            minimum_pct: self.minimum_pct,
+            deviations: self.deviations,
+            histogram_width: self.histogram_width,
+            min_histogram_width: self.min_histogram_width,
+            include_duplicates: self.include_duplicates,
+        }
+    }
+}
+
+impl QualityYieldArgs {
+    fn options(&self) -> quality_yield::Options {
+        quality_yield::Options {
+            use_original_qualities: self.use_original_qualities,
+            include_secondary_alignments: self.include_secondary_alignments,
+            include_supplemental_alignments: self.include_supplemental_alignments,
+        }
+    }
+}
+
+impl HsMetricsArgs {
+    fn options(&self) -> hs_metrics::Options {
+        hs_metrics::Options {
+            bait_intervals: self.bait_intervals.clone(),
+            target_intervals: self.target_intervals.clone(),
+            bait_set_name: self.bait_set_name.clone(),
+            reference: self.reference.clone(),
+            minimum_mapping_quality: self.minimum_mapping_quality,
+            minimum_base_quality: self.minimum_base_quality,
+            clip_overlapping_reads: self.clip_overlapping_reads,
+            include_indels: self.include_indels,
+            coverage_cap: self.coverage_cap,
+            near_distance: self.near_distance,
+            sample_size: self.sample_size,
+        }
+    }
+}
+
 fn insert_size(args: InsertSizeArgs) -> bammetrics_core::Result<()> {
-    let opts = Options {
-        minimum_pct: args.minimum_pct,
-        deviations: args.deviations,
-        histogram_width: args.histogram_width,
-        min_histogram_width: args.min_histogram_width,
-        include_duplicates: args.include_duplicates,
-    };
-    let bam = args.bam()?;
-    let rows = insert_size::run_over_bam(bam, &opts)?;
+    let bam = input_bam(&args.bam, &args.input)?;
+    let opts = args.options();
+    let rows = pass::run(bam, args.threads.threads, |_| Ok(InsertSize::new(&opts)))?;
     // CollectInsertSizeMetrics.finish writes no file when every orientation
     // was dropped (or there were no pairs), and only logs a warning.
     if rows.is_empty() {
-        eprintln!(
-            "bammetrics: all data categories were discarded because they contained < {:?} of the total aligned paired data; no metrics written",
-            args.minimum_pct
-        );
+        no_insert_size_rows(opts.minimum_pct);
         return Ok(());
     }
-    let headers = insert_size_headers(&args, bam);
-    write_to(args.output.as_deref(), |out| {
+    let output = args.output.as_deref();
+    let headers = headers(insert_size::command_header(&opts, bam, output));
+    write_to(output, |out| {
         insert_size::write_metrics(&rows, headers, out)
     })
 }
 
-/// `StringHeader` lines in Picard's shape for `CollectAlignmentSummaryMetrics`.
-fn alignment_summary_headers(
-    args: &AlignmentSummaryArgs,
-    bam: &Path,
-    opts: &alignment_summary::Options,
-) -> Vec<String> {
-    let mut command = format!("CollectAlignmentSummaryMetrics INPUT={}", bam.display());
-    if let Some(output) = &args.output {
-        command.push_str(&format!(" OUTPUT={}", output.display()));
-    }
-    if let Some(reference) = &opts.reference {
-        command.push_str(&format!(" REFERENCE_SEQUENCE={}", reference.display()));
-    }
-    let orientations: Vec<&str> = opts
-        .expected_orientations
-        .iter()
-        .map(|o| o.as_str())
-        .collect();
-    command.push_str(&format!(
-        " MAX_INSERT_SIZE={} EXPECTED_PAIR_ORIENTATIONS=[{}] ADAPTER_SEQUENCE=[{}] METRIC_ACCUMULATION_LEVEL=[ALL_READS] IS_BISULFITE_SEQUENCED=false COLLECT_ALIGNMENT_INFORMATION={}",
-        opts.max_insert_size,
-        orientations.join(", "),
-        opts.adapter_sequences.join(", "),
-        opts.collect_alignment_information
-    ));
-    vec![command, started_on(now())]
-}
-
-/// `StringHeader` lines in Picard's shape for `CollectQualityYieldMetrics`.
-fn quality_yield_headers(
-    args: &QualityYieldArgs,
-    bam: &Path,
-    opts: &quality_yield::Options,
-) -> Vec<String> {
-    let mut command = format!("CollectQualityYieldMetrics INPUT={}", bam.display());
-    if let Some(output) = &args.output {
-        command.push_str(&format!(" OUTPUT={}", output.display()));
-    }
-    command.push_str(&format!(
-        " USE_ORIGINAL_QUALITIES={} INCLUDE_SECONDARY_ALIGNMENTS={} INCLUDE_SUPPLEMENTAL_ALIGNMENTS={}",
-        opts.use_original_qualities,
-        opts.include_secondary_alignments,
-        opts.include_supplemental_alignments
-    ));
-    vec![command, started_on(now())]
-}
-
-/// `StringHeader` lines in Picard's shape for `CollectHsMetrics`.
-fn hs_metrics_headers(args: &HsMetricsArgs, bam: &Path, opts: &hs_metrics::Options) -> Vec<String> {
-    let list = |paths: &[PathBuf]| {
-        paths
-            .iter()
-            .map(|p| p.display().to_string())
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
-    let mut command = format!(
-        "CollectHsMetrics BAIT_INTERVALS=[{}] TARGET_INTERVALS=[{}] INPUT={}",
-        list(&opts.bait_intervals),
-        list(&opts.target_intervals),
-        bam.display()
-    );
-    if let Some(output) = &args.output {
-        command.push_str(&format!(" OUTPUT={}", output.display()));
-    }
-    if let Some(name) = &opts.bait_set_name {
-        command.push_str(&format!(" BAIT_SET_NAME={name}"));
-    }
-    if let Some(reference) = &opts.reference {
-        command.push_str(&format!(" REFERENCE_SEQUENCE={}", reference.display()));
-    }
-    command.push_str(&format!(
-        " METRIC_ACCUMULATION_LEVEL=[ALL_READS] NEAR_DISTANCE={} MINIMUM_MAPPING_QUALITY={} MINIMUM_BASE_QUALITY={} CLIP_OVERLAPPING_READS={} INCLUDE_INDELS={} COVERAGE_CAP={} SAMPLE_SIZE={}",
-        opts.near_distance,
-        opts.minimum_mapping_quality,
-        opts.minimum_base_quality,
-        opts.clip_overlapping_reads,
-        opts.include_indels,
-        opts.coverage_cap,
-        opts.sample_size
-    ));
-    vec![command, started_on(now())]
-}
-
-fn now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs())
-}
-
 fn alignment_summary(args: AlignmentSummaryArgs) -> bammetrics_core::Result<()> {
-    let bam = args.bam()?;
+    let bam = input_bam(&args.bam, &args.input)?;
     let opts = args.options()?;
-    let report = alignment_summary::run_over_bam(bam, &opts)?;
-    let headers = alignment_summary_headers(&args, bam, &opts);
-    write_to(args.output.as_deref(), |out| {
+    let report = pass::run(bam, args.threads.threads, |header| {
+        AlignmentSummary::new(&opts, header)
+    })?;
+    let output = args.output.as_deref();
+    let headers = headers(alignment_summary::command_header(&opts, bam, output));
+    write_to(output, |out| {
         alignment_summary::write_metrics(&report, headers, out)
     })
 }
 
 fn quality_yield(args: QualityYieldArgs) -> bammetrics_core::Result<()> {
-    let bam = args
-        .bam
-        .as_deref()
-        .or(args.input.as_deref())
-        .ok_or_else(|| Error::Usage("no input BAM".to_owned()))?;
-    let opts = quality_yield::Options {
-        use_original_qualities: args.use_original_qualities,
-        include_secondary_alignments: args.include_secondary_alignments,
-        include_supplemental_alignments: args.include_supplemental_alignments,
-    };
-    let row = quality_yield::run_over_bam(bam, &opts)?;
-    let headers = quality_yield_headers(&args, bam, &opts);
-    write_to(args.output.as_deref(), |out| {
+    let bam = input_bam(&args.bam, &args.input)?;
+    let opts = args.options();
+    let row = pass::run(bam, args.threads.threads, |_| Ok(QualityYield::new(&opts)))?;
+    let output = args.output.as_deref();
+    let headers = headers(quality_yield::command_header(&opts, bam, output));
+    write_to(output, |out| {
         quality_yield::write_metrics(&row, headers, out)
     })
 }
 
 fn hs_metrics(args: HsMetricsArgs) -> bammetrics_core::Result<()> {
-    let bam = args
-        .bam
-        .as_deref()
-        .or(args.input.as_deref())
-        .ok_or_else(|| Error::Usage("no input BAM".to_owned()))?;
-    let opts = hs_metrics::Options {
-        bait_intervals: args.bait_intervals.clone(),
-        target_intervals: args.target_intervals.clone(),
-        bait_set_name: args.bait_set_name.clone(),
-        reference: args.reference.clone(),
-        minimum_mapping_quality: args.minimum_mapping_quality,
-        minimum_base_quality: args.minimum_base_quality,
-        clip_overlapping_reads: args.clip_overlapping_reads,
-        include_indels: args.include_indels,
-        coverage_cap: args.coverage_cap,
-        near_distance: args.near_distance,
-        sample_size: args.sample_size,
-    };
-    let report = hs_metrics::run_over_bam(bam, &opts)?;
-    let headers = hs_metrics_headers(&args, bam, &opts);
-    write_to(args.output.as_deref(), |out| {
+    let bam = input_bam(&args.bam, &args.input)?;
+    let opts = args.options();
+    let report = pass::run(bam, args.threads.threads, |header| {
+        HsMetrics::new(&opts, header)
+    })?;
+    let output = args.output.as_deref();
+    let headers = headers(hs_metrics::command_header(&opts, bam, output));
+    write_to(output, |out| {
         hs_metrics::write_metrics(&report, headers, out)
     })
+}
+
+impl CollectArgs {
+    /// Picard's defaults for every metric, with `-R` given to the two that
+    /// read a reference (`CollectInsertSizeMetrics` does not).
+    fn request(&self) -> bammetrics_core::Result<Request> {
+        let wanted = if self.metrics.is_empty() {
+            let mut all = vec![
+                MetricName::QualityYield,
+                MetricName::AlignmentSummary,
+                MetricName::InsertSize,
+            ];
+            if !self.hs.is_empty() {
+                all.push(MetricName::Hs);
+            }
+            all
+        } else {
+            self.metrics.clone()
+        };
+        let has_hs = wanted.contains(&MetricName::Hs);
+        if has_hs == self.hs.is_empty() {
+            return Err(Error::Usage(
+                "--metric hs and --hs BAITS TARGETS go together".to_owned(),
+            ));
+        }
+        let hs_metrics = self
+            .hs
+            .chunks(2)
+            .map(|pair| hs_metrics::Options {
+                bait_intervals: pair[..1].to_vec(),
+                target_intervals: pair[1..].to_vec(),
+                reference: self.reference.clone(),
+                ..hs_metrics::Options::default()
+            })
+            .collect();
+        Ok(Request {
+            quality_yield: wanted
+                .contains(&MetricName::QualityYield)
+                .then(quality_yield::Options::default),
+            alignment_summary: wanted.contains(&MetricName::AlignmentSummary).then(|| {
+                alignment_summary::Options {
+                    reference: self.reference.clone(),
+                    ..alignment_summary::Options::default()
+                }
+            }),
+            insert_size: wanted
+                .contains(&MetricName::InsertSize)
+                .then(insert_size::Options::default),
+            hs_metrics,
+        })
+    }
+}
+
+fn collect(args: CollectArgs) -> bammetrics_core::Result<()> {
+    let bam = input_bam(&args.bam, &args.input)?;
+    let request = args.request()?;
+    let outputs = Outputs::new(&args.output, &request)?;
+    let results = collect::run_over_bam(bam, &request, args.threads.threads)?;
+    collect::write_files(&request, &results, bam, &outputs)?;
+    if let (Some(opts), Some(Ok(rows))) = (&request.insert_size, &results.insert_size)
+        && rows.is_empty()
+    {
+        no_insert_size_rows(opts.minimum_pct);
+    }
+    let errors = results.errors();
+    for (tool, e) in &errors {
+        eprintln!("bammetrics: {tool}: {e}");
+    }
+    if !errors.is_empty() {
+        return Err(Error::Metric(format!("{} metric(s) failed", errors.len())));
+    }
+    Ok(())
 }
 
 /// The command line as clap sees it. A first argument naming a Picard tool
@@ -486,6 +525,7 @@ fn run() -> bammetrics_core::Result<()> {
         Command::AlignmentSummary(args) => alignment_summary(args),
         Command::QualityYield(args) => quality_yield(args),
         Command::HsMetrics(args) => hs_metrics(args),
+        Command::Collect(args) => collect(args),
     }
 }
 

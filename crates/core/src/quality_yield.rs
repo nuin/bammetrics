@@ -6,7 +6,6 @@
 //! Bases are counted from the record length, qualities from whichever
 //! quality array is in use, so the two can differ (see `quality_array`).
 
-use std::fs::File;
 use std::io::{self, Write};
 use std::path::Path;
 
@@ -15,6 +14,7 @@ use noodles::sam::alignment::record::data::field::{Tag, Value};
 
 use crate::error::{Error, Result};
 use crate::metrics_file::MetricsFile;
+use crate::pass::{self, Accumulator};
 use crate::record::record_name;
 
 /// `QualityYieldMetrics` columns in Picard 3.5.0 file order (the order the
@@ -196,33 +196,71 @@ fn quality_array(
     Ok(())
 }
 
-/// Compute the metrics of one BAM.
-pub fn run_over_bam(path: impl AsRef<Path>, opts: &Options) -> Result<Row> {
-    let path = path.as_ref();
-    let input = |source| Error::Input {
-        path: path.to_path_buf(),
-        source,
-    };
-    let mut reader = bam::io::Reader::new(File::open(path).map_err(input)?);
-    reader.read_header().map_err(input)?;
-    let mut collector = Collector::default();
-    let mut qualities = Vec::new();
-    for result in reader.records() {
-        let record = result?;
-        let flags = record.flags();
-        if (flags.is_secondary() && !opts.include_secondary_alignments)
-            || (flags.is_supplementary() && !opts.include_supplemental_alignments)
-        {
-            continue;
+/// `CollectQualityYieldMetrics` as a pass [`Accumulator`].
+pub struct QualityYield {
+    opts: Options,
+    collector: Collector,
+    qualities: Vec<i8>,
+}
+
+impl QualityYield {
+    pub fn new(opts: &Options) -> Self {
+        Self {
+            opts: *opts,
+            collector: Collector::default(),
+            qualities: Vec::new(),
         }
-        quality_array(&record, opts.use_original_qualities, &mut qualities)?;
-        collector.add(
+    }
+}
+
+impl Accumulator for QualityYield {
+    type Output = Row;
+
+    fn accept(&mut self, record: &bam::Record) -> Result<()> {
+        let flags = record.flags();
+        if (flags.is_secondary() && !self.opts.include_secondary_alignments)
+            || (flags.is_supplementary() && !self.opts.include_supplemental_alignments)
+        {
+            return Ok(());
+        }
+        quality_array(
+            record,
+            self.opts.use_original_qualities,
+            &mut self.qualities,
+        )?;
+        self.collector.add(
             record.sequence().len() as i64,
             !flags.is_qc_fail(),
-            &qualities,
+            &self.qualities,
         );
+        Ok(())
     }
-    Ok(collector.finish())
+
+    fn finish(self) -> Result<Row> {
+        Ok(self.collector.finish())
+    }
+}
+
+/// `StringHeader` command line in Picard's shape.
+pub fn command_header(opts: &Options, bam: &Path, output: Option<&Path>) -> String {
+    let mut command = format!("CollectQualityYieldMetrics INPUT={}", bam.display());
+    if let Some(output) = output {
+        command.push_str(&format!(" OUTPUT={}", output.display()));
+    }
+    command.push_str(&format!(
+        " USE_ORIGINAL_QUALITIES={} INCLUDE_SECONDARY_ALIGNMENTS={} INCLUDE_SUPPLEMENTAL_ALIGNMENTS={}",
+        opts.use_original_qualities,
+        opts.include_secondary_alignments,
+        opts.include_supplemental_alignments
+    ));
+    command
+}
+
+/// Compute the metrics of one BAM with the default BGZF worker count.
+pub fn run_over_bam(path: impl AsRef<Path>, opts: &Options) -> Result<Row> {
+    pass::run(path.as_ref(), pass::default_threads(), |_| {
+        Ok(QualityYield::new(opts))
+    })
 }
 
 #[cfg(test)]

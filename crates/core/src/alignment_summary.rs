@@ -5,18 +5,18 @@
 //! description is added to its categories: `FIRST_OF_PAIR` or
 //! `SECOND_OF_PAIR` plus `PAIR` for a paired read, `UNPAIRED` otherwise.
 
-use std::fs::File;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use noodles::bam;
 use noodles::sam::alignment::record::cigar::op::Kind;
 use noodles::sam::alignment::record::data::field::Tag;
+use noodles::{bam, sam};
 
 use crate::adapter::{Adapters, DEFAULT_ADAPTERS};
 use crate::error::{Error, Result};
 use crate::histogram::Histogram;
 use crate::metrics_file::{HistogramColumn, HistogramTable, MetricsFile, format_double};
+use crate::pass::{self, Accumulator};
 use crate::record::{Orientation, orientation, record_name};
 use crate::reference::Reference;
 use crate::sequence::{bases_equal, is_no_call};
@@ -737,39 +737,54 @@ fn divide(numerator: f64, denominator: f64) -> f64 {
     }
 }
 
-pub fn run_over_bam(path: impl AsRef<Path>, opts: &Options) -> Result<Report> {
-    let path = path.as_ref();
-    let input = |source| Error::Input {
-        path: path.to_path_buf(),
-        source,
-    };
-    let mut reader = bam::io::Reader::new(File::open(path).map_err(input)?);
-    let header = reader.read_header().map_err(input)?;
-    let mut reference = opts
-        .reference
-        .as_deref()
-        .map(|r| Reference::open(r, &header))
-        .transpose()?;
-    let mut describer = Describer {
-        adapters: Adapters::new(&opts.adapter_sequences),
-        max_insert_size: i64::from(opts.max_insert_size),
-        expected: opts.expected_orientations.clone(),
-        do_ref_metrics: opts.collect_alignment_information,
-        bases: Vec::new(),
-        cigar: Vec::new(),
-    };
-    let (mut first, mut second, mut pair, mut unpaired) = (
-        Collector::default(),
-        Collector::default(),
-        Collector::default(),
-        Collector::default(),
-    );
+/// `CollectAlignmentSummaryMetrics` as a pass [`Accumulator`]: one
+/// collector per category, plus the reference walker when `R` is given.
+pub struct AlignmentSummary {
+    reference: Option<Reference>,
+    describer: Describer,
+    first: Collector,
+    second: Collector,
+    pair: Collector,
+    unpaired: Collector,
+}
 
-    for result in reader.records() {
-        let record = result?;
+impl AlignmentSummary {
+    /// Opens the reference, when there is one, and checks it against the
+    /// BAM header.
+    pub fn new(opts: &Options, header: &sam::Header) -> Result<Self> {
+        let reference = opts
+            .reference
+            .as_deref()
+            .map(|r| Reference::open(r, header))
+            .transpose()?;
+        Ok(Self {
+            reference,
+            describer: Describer {
+                adapters: Adapters::new(&opts.adapter_sequences),
+                max_insert_size: i64::from(opts.max_insert_size),
+                expected: opts.expected_orientations.clone(),
+                do_ref_metrics: opts.collect_alignment_information,
+                bases: Vec::new(),
+                cigar: Vec::new(),
+            },
+            first: Collector::default(),
+            second: Collector::default(),
+            pair: Collector::default(),
+            unpaired: Collector::default(),
+        })
+    }
+}
+
+impl Accumulator for AlignmentSummary {
+    type Output = Report;
+
+    fn accept(&mut self, record: &bam::Record) -> Result<()> {
         // `SinglePassSamProgram` fetches the contig of every placed record,
         // secondary and unmapped ones included, so the sort check covers them.
-        let bases = match (&mut reference, record.reference_sequence_id().transpose()?) {
+        let bases = match (
+            &mut self.reference,
+            record.reference_sequence_id().transpose()?,
+        ) {
             (Some(r), Some(id)) => Some(r.contig(id)?),
             _ => None,
         };
@@ -777,46 +792,80 @@ pub fn run_over_bam(path: impl AsRef<Path>, opts: &Options) -> Result<Report> {
         // `AlignmentSummaryMetricsCollector.acceptRecord` drops secondary and
         // supplementary records before any counting.
         if flags.is_secondary() || flags.is_supplementary() {
-            continue;
+            return Ok(());
         }
-        let read = describer.describe(&record, bases)?;
+        let read = self.describer.describe(record, bases)?;
         if flags.is_segmented() {
             if flags.is_first_segment() {
-                first.add(&read);
+                self.first.add(&read);
             } else {
-                second.add(&read);
+                self.second.add(&read);
             }
-            pair.add(&read);
+            self.pair.add(&read);
         } else {
-            unpaired.add(&read);
+            self.unpaired.add(&read);
         }
+        Ok(())
     }
 
-    let do_ref = opts.collect_alignment_information;
-    let first_row = first.finish(Category::FirstOfPair, do_ref)?;
-    let second_row = second.finish(Category::SecondOfPair, do_ref)?;
-    let mut pair_row = pair.finish(Category::Pair, do_ref)?;
-    let unpaired_row = unpaired.finish(Category::Unpaired, do_ref)?;
+    fn finish(self) -> Result<Report> {
+        let do_ref = self.describer.do_ref_metrics;
+        let first_row = self.first.finish(Category::FirstOfPair, do_ref)?;
+        let second_row = self.second.finish(Category::SecondOfPair, do_ref)?;
+        let mut pair_row = self.pair.finish(Category::Pair, do_ref)?;
+        let unpaired_row = self.unpaired.finish(Category::Unpaired, do_ref)?;
 
-    // `GroupAlignmentSummaryMetricsPerUnitMetricCollector.addMetricsToFile`:
-    // paired rows only when FIRST_OF_PAIR has reads, with PAIR's BAD_CYCLES
-    // the sum of the two ends; UNPAIRED when it has reads or when nothing
-    // else is written (an all-zero row for an empty file).
-    let mut rows = Vec::with_capacity(4);
-    let has_pairs = first_row.total_reads > 0;
-    if has_pairs {
-        pair_row.bad_cycles = first_row.bad_cycles + second_row.bad_cycles;
-        rows.extend([first_row, second_row, pair_row]);
+        // `GroupAlignmentSummaryMetricsPerUnitMetricCollector.addMetricsToFile`:
+        // paired rows only when FIRST_OF_PAIR has reads, with PAIR's BAD_CYCLES
+        // the sum of the two ends; UNPAIRED when it has reads or when nothing
+        // else is written (an all-zero row for an empty file).
+        let mut rows = Vec::with_capacity(4);
+        let has_pairs = first_row.total_reads > 0;
+        if has_pairs {
+            pair_row.bad_cycles = first_row.bad_cycles + second_row.bad_cycles;
+            rows.extend([first_row, second_row, pair_row]);
+        }
+        if unpaired_row.total_reads > 0 || !has_pairs {
+            rows.push(unpaired_row);
+        }
+        Ok(Report {
+            rows,
+            paired_read_lengths: self.pair.read_lengths,
+            paired_aligned_lengths: self.pair.aligned_lengths,
+            unpaired_read_lengths: self.unpaired.read_lengths,
+            unpaired_aligned_lengths: self.unpaired.aligned_lengths,
+        })
     }
-    if unpaired_row.total_reads > 0 || !has_pairs {
-        rows.push(unpaired_row);
+}
+
+/// `StringHeader` command line in Picard's shape.
+pub fn command_header(opts: &Options, bam: &Path, output: Option<&Path>) -> String {
+    let mut command = format!("CollectAlignmentSummaryMetrics INPUT={}", bam.display());
+    if let Some(output) = output {
+        command.push_str(&format!(" OUTPUT={}", output.display()));
     }
-    Ok(Report {
-        rows,
-        paired_read_lengths: pair.read_lengths,
-        paired_aligned_lengths: pair.aligned_lengths,
-        unpaired_read_lengths: unpaired.read_lengths,
-        unpaired_aligned_lengths: unpaired.aligned_lengths,
+    if let Some(reference) = &opts.reference {
+        command.push_str(&format!(" REFERENCE_SEQUENCE={}", reference.display()));
+    }
+    let orientations: Vec<&str> = opts
+        .expected_orientations
+        .iter()
+        .map(|o| o.as_str())
+        .collect();
+    command.push_str(&format!(
+        " MAX_INSERT_SIZE={} EXPECTED_PAIR_ORIENTATIONS=[{}] ADAPTER_SEQUENCE=[{}] METRIC_ACCUMULATION_LEVEL=[ALL_READS] IS_BISULFITE_SEQUENCED=false COLLECT_ALIGNMENT_INFORMATION={}",
+        opts.max_insert_size,
+        orientations.join(", "),
+        opts.adapter_sequences.join(", "),
+        opts.collect_alignment_information
+    ));
+    command
+}
+
+/// Compute the metrics of one BAM with the default BGZF worker count.
+pub fn run_over_bam(path: impl AsRef<Path>, opts: &Options) -> Result<Report> {
+    pass::run(path.as_ref(), pass::default_threads(), |header| {
+        AlignmentSummary::new(opts, header)
     })
 }
 

@@ -7,13 +7,12 @@
 //! and coverage is kept only for target bases: one depth array per uniqued
 //! target, laid end to end, at high quality and unfiltered.
 
-use std::fs::File;
 use std::io::{self, Write};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 
-use noodles::bam;
 use noodles::sam::alignment::record::cigar::op::Kind;
+use noodles::{bam, sam};
 
 use crate::adapter::Adapters;
 use crate::duplication::{estimate_library_size, estimate_roi};
@@ -21,6 +20,7 @@ use crate::error::{Error, Result};
 use crate::histogram::Histogram;
 use crate::intervals::{self, Interval, OverlapIndex};
 use crate::metrics_file::{HistogramColumn, HistogramTable, MetricsFile, format_double};
+use crate::pass::{self, Accumulator};
 use crate::record::{position, record_name};
 use crate::reference::Reference;
 use crate::sensitivity::{het_snp_sensitivity, math_round, phred_from_error_probability};
@@ -343,7 +343,7 @@ pub fn write_metrics(
 
 /// `CollectHsMetrics.getProbeSetName`: `BAIT_SET_NAME`, or the distinct
 /// bait file names cut at their first dot, sorted and joined with dots.
-fn bait_set_name(opts: &Options) -> String {
+pub fn bait_set_name(opts: &Options) -> String {
     if let Some(name) = &opts.bait_set_name {
         return name.clone();
     }
@@ -1068,73 +1068,132 @@ impl Collector {
     }
 }
 
-/// Compute the metrics of one BAM.
-pub fn run_over_bam(path: impl AsRef<Path>, opts: &Options) -> Result<Report> {
-    let path = path.as_ref();
-    if opts.bait_intervals.is_empty() || opts.target_intervals.is_empty() {
-        return Err(Error::Usage(
-            "CollectHsMetrics needs at least one bait and one target interval file".to_owned(),
-        ));
-    }
-    if opts.coverage_cap < 0 || opts.near_distance < 0 {
-        return Err(Error::Usage(
-            "COVERAGE_CAP and NEAR_DISTANCE must not be negative".to_owned(),
-        ));
-    }
-    let input = |source| Error::Input {
-        path: path.to_path_buf(),
-        source,
-    };
-    let mut reader = bam::io::Reader::new(File::open(path).map_err(input)?);
-    let header = reader.read_header().map_err(input)?;
-    let contigs = header.reference_sequences().len();
-    let raw_targets = intervals::read_files(&opts.target_intervals, &header)?;
-    let unique_targets = intervals::uniqued(&raw_targets);
-    let unique_baits = intervals::uniqued(&intervals::read_files(&opts.bait_intervals, &header)?);
-    let target_gc = match &opts.reference {
-        None => None,
-        Some(reference) => {
-            let mut reference = Reference::open(reference, &header)?;
-            let gc = unique_targets
-                .iter()
-                .map(|t| {
-                    Ok(gc_fraction(
-                        &reference.subsequence(t.contig, t.start, t.end)?,
-                    ))
-                })
-                .collect::<Result<Vec<f64>>>()?;
-            Some(gc)
+/// `CollectHsMetrics` as a pass [`Accumulator`].
+pub struct HsMetrics {
+    collector: Collector,
+    territory: Territory,
+}
+
+impl HsMetrics {
+    /// Reads and uniques the interval files against the BAM header, and
+    /// with a reference computes the GC fraction of every target.
+    pub fn new(opts: &Options, header: &sam::Header) -> Result<Self> {
+        if opts.bait_intervals.is_empty() || opts.target_intervals.is_empty() {
+            return Err(Error::Usage(
+                "CollectHsMetrics needs at least one bait and one target interval file".to_owned(),
+            ));
         }
-    };
-    let territory = Territory {
-        bait_set: bait_set_name(opts),
-        bait_territory: intervals::count_bases(&unique_baits),
-        target_territory: intervals::count_bases(&unique_targets),
-        genome_size: header
-            .reference_sequences()
-            .values()
-            .map(|c| c.length().get() as i64)
-            .sum(),
-        raw_target_count: raw_targets.len(),
-        target_gc,
-    };
-    let mut collector = Collector {
-        opts: opts.clone(),
-        coverage: Coverage::new(&unique_targets),
-        targets: OverlapIndex::new(unique_targets, contigs, 0),
-        probes: OverlapIndex::new(unique_baits, contigs, i64::from(opts.near_distance)),
-        hq_max_depth: 0,
-        base_q_capped: [0; QUALITY_SLOTS],
-        base_q: [0; QUALITY_SLOTS],
-        counts: Counts::default(),
-        adapters: Adapters::default(),
-        cigar: Vec::new(),
-        bases: Vec::new(),
-    };
-    for result in reader.records() {
-        collector.accept(&result?)?;
+        if opts.coverage_cap < 0 || opts.near_distance < 0 {
+            return Err(Error::Usage(
+                "COVERAGE_CAP and NEAR_DISTANCE must not be negative".to_owned(),
+            ));
+        }
+        let contigs = header.reference_sequences().len();
+        let raw_targets = intervals::read_files(&opts.target_intervals, header)?;
+        let unique_targets = intervals::uniqued(&raw_targets);
+        let unique_baits =
+            intervals::uniqued(&intervals::read_files(&opts.bait_intervals, header)?);
+        let target_gc = match &opts.reference {
+            None => None,
+            Some(reference) => {
+                let mut reference = Reference::open(reference, header)?;
+                let gc = unique_targets
+                    .iter()
+                    .map(|t| {
+                        Ok(gc_fraction(
+                            &reference.subsequence(t.contig, t.start, t.end)?,
+                        ))
+                    })
+                    .collect::<Result<Vec<f64>>>()?;
+                Some(gc)
+            }
+        };
+        let territory = Territory {
+            bait_set: bait_set_name(opts),
+            bait_territory: intervals::count_bases(&unique_baits),
+            target_territory: intervals::count_bases(&unique_targets),
+            genome_size: header
+                .reference_sequences()
+                .values()
+                .map(|c| c.length().get() as i64)
+                .sum(),
+            raw_target_count: raw_targets.len(),
+            target_gc,
+        };
+        let collector = Collector {
+            opts: opts.clone(),
+            coverage: Coverage::new(&unique_targets),
+            targets: OverlapIndex::new(unique_targets, contigs, 0),
+            probes: OverlapIndex::new(unique_baits, contigs, i64::from(opts.near_distance)),
+            hq_max_depth: 0,
+            base_q_capped: [0; QUALITY_SLOTS],
+            base_q: [0; QUALITY_SLOTS],
+            counts: Counts::default(),
+            adapters: Adapters::default(),
+            cigar: Vec::new(),
+            bases: Vec::new(),
+        };
+        Ok(Self {
+            collector,
+            territory,
+        })
     }
-    collector.finish(territory)
+}
+
+impl Accumulator for HsMetrics {
+    type Output = Report;
+
+    fn accept(&mut self, record: &bam::Record) -> Result<()> {
+        self.collector.accept(record)
+    }
+
+    fn finish(self) -> Result<Report> {
+        self.collector.finish(self.territory)
+    }
+}
+
+/// `StringHeader` command line in Picard's shape.
+pub fn command_header(opts: &Options, bam: &Path, output: Option<&Path>) -> String {
+    let list = |paths: &[PathBuf]| {
+        paths
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let mut command = format!(
+        "CollectHsMetrics BAIT_INTERVALS=[{}] TARGET_INTERVALS=[{}] INPUT={}",
+        list(&opts.bait_intervals),
+        list(&opts.target_intervals),
+        bam.display()
+    );
+    if let Some(output) = output {
+        command.push_str(&format!(" OUTPUT={}", output.display()));
+    }
+    if let Some(name) = &opts.bait_set_name {
+        command.push_str(&format!(" BAIT_SET_NAME={name}"));
+    }
+    if let Some(reference) = &opts.reference {
+        command.push_str(&format!(" REFERENCE_SEQUENCE={}", reference.display()));
+    }
+    command.push_str(&format!(
+        " METRIC_ACCUMULATION_LEVEL=[ALL_READS] NEAR_DISTANCE={} MINIMUM_MAPPING_QUALITY={} MINIMUM_BASE_QUALITY={} CLIP_OVERLAPPING_READS={} INCLUDE_INDELS={} COVERAGE_CAP={} SAMPLE_SIZE={}",
+        opts.near_distance,
+        opts.minimum_mapping_quality,
+        opts.minimum_base_quality,
+        opts.clip_overlapping_reads,
+        opts.include_indels,
+        opts.coverage_cap,
+        opts.sample_size
+    ));
+    command
+}
+
+/// Compute the metrics of one BAM with the default BGZF worker count.
+pub fn run_over_bam(path: impl AsRef<Path>, opts: &Options) -> Result<Report> {
+    pass::run(path.as_ref(), pass::default_threads(), |header| {
+        HsMetrics::new(opts, header)
+    })
 }
 
 #[cfg(test)]

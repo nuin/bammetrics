@@ -7,6 +7,7 @@
 
 use std::collections::BTreeSet;
 use std::io::{self, Write};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::histogram::Histogram;
 
@@ -169,6 +170,15 @@ pub fn started_on(seconds_since_epoch: u64) -> String {
         in_day % 3600 / 60,
         in_day % 60
     )
+}
+
+/// The two `StringHeader` lines Picard writes: the command line, then
+/// `Started on` with the current time.
+pub fn headers(command: String) -> Vec<String> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    vec![command, started_on(now)]
 }
 
 /// One histogram column: its header label and its bins.

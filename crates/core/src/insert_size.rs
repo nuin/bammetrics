@@ -1,14 +1,14 @@
 //! `CollectInsertSizeMetrics` (see docs/01 section 2.2).
 
-use std::fs::File;
 use std::io::{self, Write};
 use std::path::Path;
 
 use noodles::bam;
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::histogram::Histogram;
 use crate::metrics_file::{HistogramColumn, HistogramTable, MetricsFile, format_double};
+use crate::pass::{self, Accumulator};
 pub use crate::record::Orientation;
 use crate::record::orientation;
 
@@ -157,49 +157,95 @@ fn is_counted(record: &bam::Record, opts: &Options) -> bool {
         && record.template_length() != 0
 }
 
-pub fn run_over_bam(path: impl AsRef<Path>, opts: &Options) -> Result<Vec<Row>> {
-    let path = path.as_ref();
-    let input = |source| Error::Input {
-        path: path.to_path_buf(),
-        source,
-    };
-    let mut reader = bam::io::Reader::new(File::open(path).map_err(input)?);
-    reader.read_header().map_err(input)?;
-    let (mut fr, mut rf, mut tandem) = (Histogram::new(), Histogram::new(), Histogram::new());
+/// `CollectInsertSizeMetrics` as a pass [`Accumulator`]: one histogram
+/// per pair orientation.
+pub struct InsertSize {
+    opts: Options,
+    fr: Histogram,
+    rf: Histogram,
+    tandem: Histogram,
+}
 
-    for result in reader.records() {
-        let record = result?;
-        if !is_counted(&record, opts) {
-            continue;
+impl InsertSize {
+    pub fn new(opts: &Options) -> Self {
+        Self {
+            opts: opts.clone(),
+            fr: Histogram::new(),
+            rf: Histogram::new(),
+            tandem: Histogram::new(),
+        }
+    }
+}
+
+impl Accumulator for InsertSize {
+    /// The rows Picard writes; empty when every orientation is dropped, in
+    /// which case Picard writes no file.
+    type Output = Vec<Row>;
+
+    fn accept(&mut self, record: &bam::Record) -> Result<()> {
+        if !is_counted(record, &self.opts) {
+            return Ok(());
         }
         let (Some(Ok(reference)), Some(Ok(mate_reference))) = (
             record.reference_sequence_id(),
             record.mate_reference_sequence_id(),
         ) else {
-            continue;
+            return Ok(());
         };
         if reference != mate_reference {
-            continue;
+            return Ok(());
         }
         let insert_size = i64::from(record.template_length()).abs();
-        match orientation(&record)? {
-            Orientation::Fr => fr.increment(insert_size),
-            Orientation::Rf => rf.increment(insert_size),
-            Orientation::Tandem => tandem.increment(insert_size),
+        match orientation(record)? {
+            Orientation::Fr => self.fr.increment(insert_size),
+            Orientation::Rf => self.rf.increment(insert_size),
+            Orientation::Tandem => self.tandem.increment(insert_size),
         }
+        Ok(())
     }
 
-    let total = fr.count() + rf.count() + tandem.count();
-    let rows = [
-        (Orientation::Fr, &fr),
-        (Orientation::Rf, &rf),
-        (Orientation::Tandem, &tandem),
-    ]
-    .into_iter()
-    .filter(|(_, h)| passes_minimum_pct(h.count(), total, opts.minimum_pct))
-    .map(|(orientation, h)| finalize_row(orientation, h, opts))
-    .collect();
-    Ok(rows)
+    fn finish(self) -> Result<Vec<Row>> {
+        let opts = &self.opts;
+        let total = self.fr.count() + self.rf.count() + self.tandem.count();
+        Ok([
+            (Orientation::Fr, &self.fr),
+            (Orientation::Rf, &self.rf),
+            (Orientation::Tandem, &self.tandem),
+        ]
+        .into_iter()
+        .filter(|(_, h)| passes_minimum_pct(h.count(), total, opts.minimum_pct))
+        .map(|(orientation, h)| finalize_row(orientation, h, opts))
+        .collect())
+    }
+}
+
+/// `StringHeader` command line in Picard's shape (parsers such as MultiQC
+/// read `INPUT=` from it).
+pub fn command_header(opts: &Options, bam: &Path, output: Option<&Path>) -> String {
+    let mut command = format!(
+        "CollectInsertSizeMetrics INPUT={} MINIMUM_PCT={:?} DEVIATIONS={:?} INCLUDE_DUPLICATES={} METRIC_ACCUMULATION_LEVEL=[ALL_READS]",
+        bam.display(),
+        opts.minimum_pct,
+        opts.deviations,
+        opts.include_duplicates
+    );
+    if let Some(output) = output {
+        command.push_str(&format!(" OUTPUT={}", output.display()));
+    }
+    if let Some(w) = opts.histogram_width {
+        command.push_str(&format!(" HISTOGRAM_WIDTH={w}"));
+    }
+    if let Some(w) = opts.min_histogram_width {
+        command.push_str(&format!(" MIN_HISTOGRAM_WIDTH={w}"));
+    }
+    command
+}
+
+/// Compute the metrics of one BAM with the default BGZF worker count.
+pub fn run_over_bam(path: impl AsRef<Path>, opts: &Options) -> Result<Vec<Row>> {
+    pass::run(path.as_ref(), pass::default_threads(), |_| {
+        Ok(InsertSize::new(opts))
+    })
 }
 
 /// The orientation filter in `InsertSizeMetricsCollector.PerUnitInsertSizeMetricsCollector

@@ -221,3 +221,55 @@ def _hs_metrics_cases():
 
 CASES = (_insert_size_cases() + _alignment_summary_cases() + _quality_yield_cases()
          + _hs_metrics_cases())
+
+
+@dataclass(frozen=True)
+class CollectCase:
+    """One `bammetrics collect` run. Each file it writes must equal the Picard
+    reference of a single-tool case above with the same settings."""
+    name: str
+    bam: Path
+    our_args: tuple
+    # (file suffix after the output prefix, case id of the Picard reference)
+    expected: tuple
+
+    @property
+    def prefix(self):
+        return OURS_DIR / "collect" / self.name
+
+
+def _collect_cases():
+    """The clinical pipeline's set: quality yield, alignment summary and
+    two CollectHsMetrics runs (baits and targets, targets as both) with R=,
+    plus insert size. t3 has no R= cases for HS, so it runs without one;
+    t0_asm picks two metrics with --metric."""
+    def hs(baits, targets):
+        return ("--hs", str(CORPUS / f"{baits}.interval_list"),
+                str(CORPUS / f"{targets}.interval_list"))
+
+    ref = ("-R", str(REFERENCE))
+    cases = []
+    for name in ("t1", "t2"):
+        cases.append(CollectCase(
+            name, CORPUS / f"{name}.bam",
+            ref + hs("baits", "targets") + hs("targets", "targets"),
+            ((".quality_yield_metrics", f"{name}.quality_yield"),
+             (".alignment_summary_metrics", f"{name}_ref.alignment_summary"),
+             (".insert_size_metrics", f"{name}.insert_size"),
+             (".baits.hs_metrics", f"{name}_ref.hs_metrics"),
+             (".targets.hs_metrics", f"{name}_same_ref.hs_metrics"))))
+    cases.append(CollectCase(
+        "t3", CORPUS / "t3.bam", hs("baits", "targets"),
+        ((".quality_yield_metrics", "t3.quality_yield"),
+         (".alignment_summary_metrics", "t3.alignment_summary"),
+         (".insert_size_metrics", "t3.insert_size"),
+         (".hs_metrics", "t3.hs_metrics"))))
+    cases.append(CollectCase(
+        "t0_asm", CORPUS / "t0_asm.bam", ref + ("--metric", "quality-yield,alignment-summary"),
+        ((".quality_yield_metrics", "t0_asm.quality_yield"),
+         (".alignment_summary_metrics", "t0_asm_ref.alignment_summary"))))
+    return cases
+
+
+COLLECT_CASES = _collect_cases()
+CASES_BY_ID = {case.id: case for case in CASES}

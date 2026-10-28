@@ -2,9 +2,11 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use bammetrics_core::alignment_summary::{self, DEFAULT_MAX_INSERT_SIZE};
+use bammetrics_core::collect::{self, Outputs, Request};
 use bammetrics_core::histogram::Histogram;
 use bammetrics_core::hs_metrics::{self, COLUMNS, Field};
 use bammetrics_core::insert_size::{self, Options};
+use bammetrics_core::pass;
 use bammetrics_core::quality_yield;
 use bammetrics_core::record::Orientation;
 use pyo3::exceptions::{PyAttributeError, PyIOError, PyValueError};
@@ -442,10 +444,130 @@ fn py_hs_metrics(
     };
     hs_metrics::run_over_bam(path, &opts)
         .map(Into::into)
-        .map_err(|e| match e {
-            bammetrics_core::Error::Usage(message) => PyValueError::new_err(message),
-            other => PyIOError::new_err(other.to_string()),
+        .map_err(|e| py_error(&e))
+}
+
+/// An error from the core as a Python exception: bad arguments as
+/// ValueError, everything else as IOError.
+fn py_error(e: &bammetrics_core::Error) -> PyErr {
+    match e {
+        bammetrics_core::Error::Usage(message) => PyValueError::new_err(message.clone()),
+        other => PyIOError::new_err(other.to_string()),
+    }
+}
+
+/// Several metrics from one pass over the BAM. `metrics` lists any of
+/// "quality_yield", "alignment_summary", "insert_size" and "hs_metrics"; by
+/// default the first three, plus "hs_metrics" when `hs` is given. `hs` is a
+/// list of (bait_intervals, target_intervals) pairs, one `CollectHsMetrics`
+/// run each; each side takes a path or a list of paths. `reference` goes to
+/// alignment_summary and hs_metrics. Every other option is Picard's default.
+/// `threads` is the BGZF worker count (default: cores, at most 8).
+///
+/// Returns {name: result}, each result as the single-metric function
+/// returns it, and a list of HsMetrics for "hs_metrics". With
+/// `output_prefix`, every metric is also written as a Picard file, named as
+/// by `bammetrics collect -O PREFIX`. A failed metric raises, after the
+/// files of the others are written.
+#[pyfunction]
+#[pyo3(name = "collect", signature = (
+    path,
+    metrics=None,
+    reference=None,
+    hs=None,
+    output_prefix=None,
+    threads=None,
+))]
+fn py_collect<'py>(
+    py: Python<'py>,
+    path: PathBuf,
+    metrics: Option<Vec<String>>,
+    reference: Option<PathBuf>,
+    hs: Option<Vec<(Bound<'py, PyAny>, Bound<'py, PyAny>)>>,
+    output_prefix: Option<PathBuf>,
+    threads: Option<usize>,
+) -> PyResult<Bound<'py, PyDict>> {
+    const NAMES: [&str; 4] = [
+        "quality_yield",
+        "alignment_summary",
+        "insert_size",
+        "hs_metrics",
+    ];
+    let hs = hs.unwrap_or_default();
+    let wanted = metrics.unwrap_or_else(|| {
+        let n = if hs.is_empty() { 3 } else { 4 };
+        NAMES[..n].iter().map(|s| (*s).to_owned()).collect()
+    });
+    if let Some(unknown) = wanted.iter().find(|m| !NAMES.contains(&m.as_str())) {
+        return Err(PyValueError::new_err(format!(
+            "unknown metric {unknown:?}; expected one of {NAMES:?}"
+        )));
+    }
+    let has = |name: &str| wanted.iter().any(|m| m == name);
+    if has("hs_metrics") == hs.is_empty() {
+        return Err(PyValueError::new_err(
+            "\"hs_metrics\" in metrics and a non-empty hs list go together",
+        ));
+    }
+    let request = Request {
+        quality_yield: has("quality_yield").then(quality_yield::Options::default),
+        alignment_summary: has("alignment_summary").then(|| alignment_summary::Options {
+            reference: reference.clone(),
+            ..alignment_summary::Options::default()
+        }),
+        insert_size: has("insert_size").then(Options::default),
+        hs_metrics: hs
+            .iter()
+            .map(|(baits, targets)| {
+                Ok(hs_metrics::Options {
+                    bait_intervals: path_list(baits)?,
+                    target_intervals: path_list(targets)?,
+                    reference: reference.clone(),
+                    ..hs_metrics::Options::default()
+                })
+            })
+            .collect::<PyResult<_>>()?,
+    };
+    let outputs = output_prefix
+        .as_deref()
+        .map(|prefix| Outputs::new(prefix, &request))
+        .transpose()
+        .map_err(|e| py_error(&e))?;
+    let threads = threads.unwrap_or_else(pass::default_threads);
+    let results = py
+        .detach(|| {
+            let results = collect::run_over_bam(&path, &request, threads)?;
+            if let Some(outputs) = &outputs {
+                collect::write_files(&request, &results, &path, outputs)?;
+            }
+            Ok::<_, bammetrics_core::Error>(results)
         })
+        .map_err(|e| py_error(&e))?;
+    if let Some((tool, e)) = results.errors().first() {
+        return Err(PyIOError::new_err(format!("{tool}: {e}")));
+    }
+    let dict = PyDict::new(py);
+    if let Some(Ok(row)) = results.quality_yield {
+        dict.set_item("quality_yield", QualityYieldMetrics::from(row))?;
+    }
+    if let Some(Ok(report)) = results.alignment_summary {
+        let rows: Vec<AlignmentSummaryMetrics> = report.rows.into_iter().map(Into::into).collect();
+        dict.set_item("alignment_summary", rows)?;
+    }
+    if let Some(Ok(rows)) = results.insert_size {
+        let rows: Vec<InsertSizeMetrics> = rows.into_iter().map(Into::into).collect();
+        dict.set_item("insert_size", rows)?;
+    }
+    if !request.hs_metrics.is_empty() {
+        let reports: Vec<HsMetrics> = results
+            .hs_metrics
+            .into_iter()
+            .filter_map(Result::ok)
+            .map(Into::into)
+            .collect();
+        dict.set_item("hs_metrics", reports)?;
+    }
+    Ok(dict)
 }
 
 #[pymodule]
@@ -458,5 +580,6 @@ fn bammetrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_quality_yield, m)?)?;
     m.add_class::<HsMetrics>()?;
     m.add_function(wrap_pyfunction!(py_hs_metrics, m)?)?;
+    m.add_function(wrap_pyfunction!(py_collect, m)?)?;
     Ok(())
 }

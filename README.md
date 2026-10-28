@@ -6,7 +6,7 @@ No JVM, no subprocess, no temp-file parsing: `import bammetrics` and get the num
 
 Status: **v0.2 in progress.** Cargo workspace on noodles 0.118; `CollectInsertSizeMetrics`,
 `CollectAlignmentSummaryMetrics`, `CollectQualityYieldMetrics` and `CollectHsMetrics`
-implemented. On 90 concordance cases, run in native and in Picard syntax, (synthetic tiers t0 to t3, with and without a
+implemented. On 90 concordance cases, run natively at --threads 1 and 8 and in Picard syntax, plus 4 one-pass `collect` runs (synthetic tiers t0 to t3, with and without a
 reference) every field and histogram cell matches Picard 3.5.0, and the metrics file is
 byte-identical from `## METRICS CLASS` on.
 
@@ -21,12 +21,14 @@ crates/
   core/  bammetrics-core: library + `bammetrics` CLI. insert_size, alignment_summary,
          quality_yield, hs_metrics (metrics); adapter, sequence, reference, record,
          intervals, duplication, sensitivity (htsjdk/Picard helpers);
+         pass (shared reader loop, Accumulator trait), collect (one-pass multi-metric);
          histogram, metrics_file, picard_cli
   py/    PyO3 wrapper (cdylib) -> the `bammetrics` Python module
 tests/   make_bam.py and make_orientation_bam.py generate the committed fixtures in data/
          corpus/generate.py   synthetic corpus (reference, intervals, t0-t3 BAMs)
          concordance/         pytest harness: bammetrics CLI vs Picard 3.5.0
-Makefile corpus, reference-metrics, concordance, test, lint
+benches/ make_bam.py (2M-pair benchmark BAM in target/bench), bench.py (Picard vs bammetrics)
+Makefile corpus, reference-metrics, concordance, test, lint, bench-bam, bench
 pyproject.toml  maturin packaging (builds crates/py)
 ```
 
@@ -85,6 +87,30 @@ Picard. Python: `bammetrics.hs_metrics(path, bait_intervals, target_intervals,
 reference=None, ...)` returns one `HsMetrics`; every column is an attribute in lower case,
 `as_dict()` gives all of them, and `high_quality_coverage` and `unfiltered_base_quality`
 are the two histograms as dicts.
+
+`collect` computes several metrics in one pass over the BAM and writes one Picard file
+per metric: `PREFIX.quality_yield_metrics`, `.alignment_summary_metrics`,
+`.insert_size_metrics` (the names Picard `CollectMultipleMetrics` uses) and `.hs_metrics`.
+`--hs BAITS TARGETS` adds one `CollectHsMetrics` run and may be repeated; with more than
+one, each file is `PREFIX.<BAIT_SET>.hs_metrics`, where BAIT_SET is the bait file name up
+to its first dot, as in Picard. `-R` goes to alignment-summary and hs. `--metric` picks a
+subset (comma separated; default all three, plus hs when `--hs` is given). Every other
+option is Picard's default. A metric that fails (for example an unsorted BAM with `-R`)
+writes no file and exits 1 after the others are written.
+
+```bash
+target/release/bammetrics collect in.bam -O out/sample -R ref.fa \
+    --hs panel.bed panel.bed --hs baits.interval_list panel.bed
+```
+
+Every subcommand takes `--threads N`: the BGZF decompression workers (default: the
+available cores, at most 8). Records are decoded and counted on one thread in file order,
+so results do not depend on N. In `collect` each metric also runs on a thread of its own,
+fed the same record batches in file order. Python: `bammetrics.collect(path,
+metrics=None, reference=None, hs=None, output_prefix=None, threads=None)` returns
+`{name: result}`, each result as the single-metric function returns it (`hs_metrics` is a
+list), and writes the files when `output_prefix` is given. Timings are in
+[docs/benchmarks.md](docs/benchmarks.md).
 
 `insert-size` takes Picard's options: `-M` (MINIMUM_PCT), `--deviations`, `-W`
 (HISTOGRAM_WIDTH), `--min-histogram-width` and `--include-duplicates`. Like Picard,
@@ -171,6 +197,9 @@ The harness (`tests/concordance/`):
   keeps a 7th-decimal difference from failing. Empty fields equal only empty
   fields; `?` (FormatUtil's NaN and infinity) equals `?` or NaN only. Every
   mismatching field is reported with both values.
+- Native runs repeat at `--threads 1` and `--threads 8`. `test_collect` runs
+  `bammetrics collect` on t1, t2, t3 and t0_asm at both thread counts and checks each
+  file it writes against the Picard reference of the matching single-tool case.
 - The run ends with one line per case: fields matched / total, and whether the
   file body is byte-identical to Picard's.
 

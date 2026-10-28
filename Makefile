@@ -4,7 +4,7 @@
 UV_RUN := uv run --no-project
 CORPUS := tests/corpus/out
 
-.PHONY: all test lint release corpus reference-metrics concordance clean-corpus
+.PHONY: all test lint release corpus reference-metrics concordance clean-corpus bench-bam bench
 
 all: test lint concordance
 
@@ -30,6 +30,16 @@ reference-metrics: corpus
 
 concordance: reference-metrics release
 	$(UV_RUN) --with pytest python -m pytest tests/concordance -q
+
+# 2M-pair benchmark BAM in target/bench (about 10 minutes, 320 MB; not committed).
+bench-bam: target/bench/bench.json
+
+target/bench/bench.json: benches/make_bam.py tests/corpus/generate.py
+	$(UV_RUN) --with pysam --with numpy python benches/make_bam.py
+
+# Picard vs bammetrics on the benchmark BAM; numbers go into docs/benchmarks.md.
+bench: bench-bam release
+	$(UV_RUN) python benches/bench.py
 
 clean-corpus:
 	rm -rf $(CORPUS) target/concordance target/fakeR
