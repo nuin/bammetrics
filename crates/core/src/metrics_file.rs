@@ -177,7 +177,7 @@ pub struct HistogramColumn<'a> {
     pub histogram: &'a Histogram,
 }
 
-/// `MetricsFile.writeHistogram` for several histograms sharing a key column:
+/// `MetricsFile.printHistogram` for several histograms sharing a key column:
 /// the rows are the union of all keys in ascending order, and a histogram
 /// without a bin at a key prints 0.
 pub struct HistogramTable<'a> {
@@ -213,29 +213,36 @@ impl MetricsFile<'_> {
         if let Some(table) = &self.histogram {
             table.write(out)?;
         }
-        Ok(())
+        // `MetricsFile.write` ends with a blank line whether or not a
+        // histogram was printed.
+        writeln!(out)
     }
 }
 
 impl HistogramTable<'_> {
+    /// `MetricsFile.printHistogram`: empty histograms are left out, and with
+    /// none left nothing is printed, not even the `## HISTOGRAM` line.
     fn write(&self, out: &mut impl Write) -> io::Result<()> {
-        writeln!(out, "## HISTOGRAM\tjava.lang.Integer")?;
-        let labels: Vec<&str> = self.columns.iter().map(|c| c.label.as_str()).collect();
-        writeln!(out, "{}\t{}", self.key_label, labels.join("\t"))?;
-        let keys: BTreeSet<i64> = self
+        let columns: Vec<&HistogramColumn> = self
             .columns
             .iter()
-            .flat_map(|c| c.histogram.keys())
+            .filter(|c| !c.histogram.is_empty())
             .collect();
+        if columns.is_empty() {
+            return Ok(());
+        }
+        writeln!(out, "## HISTOGRAM\tjava.lang.Integer")?;
+        let labels: Vec<&str> = columns.iter().map(|c| c.label.as_str()).collect();
+        writeln!(out, "{}\t{}", self.key_label, labels.join("\t"))?;
+        let keys: BTreeSet<i64> = columns.iter().flat_map(|c| c.histogram.keys()).collect();
         for key in keys {
-            let values: Vec<String> = self
-                .columns
+            let values: Vec<String> = columns
                 .iter()
                 .map(|c| format_double(c.histogram.get(key).unwrap_or(0.0)))
                 .collect();
             writeln!(out, "{key}\t{}", values.join("\t"))?;
         }
-        writeln!(out)
+        Ok(())
     }
 }
 

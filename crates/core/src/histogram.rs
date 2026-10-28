@@ -32,6 +32,11 @@ impl Histogram {
         self.bins.values().sum()
     }
 
+    /// `Histogram.getSum`: sum(count * key), in ascending key order.
+    pub fn sum(&self) -> f64 {
+        self.bins.iter().fold(0.0, |s, (&k, &c)| s + c * k as f64)
+    }
+
     /// Smallest key present. Picard's `getMin` returns a key, not a count.
     pub fn min(&self) -> Option<i64> {
         self.bins.keys().next().copied()

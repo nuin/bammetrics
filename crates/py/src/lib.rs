@@ -1,5 +1,9 @@
+use std::path::PathBuf;
+
+use bammetrics_core::alignment_summary::{self, DEFAULT_MAX_INSERT_SIZE};
 use bammetrics_core::insert_size::{self, Options};
-use pyo3::exceptions::PyIOError;
+use bammetrics_core::record::Orientation;
+use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
 
 #[pyclass(get_all)]
@@ -97,9 +101,142 @@ fn py_insert_size(
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
+/// One `AlignmentSummaryMetrics` row; field names are Picard's columns in
+/// lower case.
+#[pyclass(get_all)]
+#[derive(Clone)]
+struct AlignmentSummaryMetrics {
+    category: String,
+    total_reads: i64,
+    pf_reads: i64,
+    pct_pf_reads: f64,
+    pf_noise_reads: i64,
+    pf_reads_aligned: i64,
+    pct_pf_reads_aligned: f64,
+    pf_aligned_bases: i64,
+    pf_hq_aligned_reads: i64,
+    pf_hq_aligned_bases: i64,
+    pf_hq_aligned_q20_bases: i64,
+    pf_hq_median_mismatches: f64,
+    pf_mismatch_rate: f64,
+    pf_hq_error_rate: f64,
+    pf_indel_rate: f64,
+    mean_read_length: f64,
+    sd_read_length: f64,
+    median_read_length: f64,
+    mad_read_length: f64,
+    min_read_length: f64,
+    max_read_length: f64,
+    mean_aligned_read_length: f64,
+    reads_aligned_in_pairs: i64,
+    pct_reads_aligned_in_pairs: f64,
+    pf_reads_improper_pairs: i64,
+    pct_pf_reads_improper_pairs: f64,
+    bad_cycles: i64,
+    strand_balance: f64,
+    pct_chimeras: f64,
+    pct_adapter: f64,
+    pct_softclip: f64,
+    pct_hardclip: f64,
+    avg_pos_3prime_softclip_length: f64,
+}
+
+#[pymethods]
+impl AlignmentSummaryMetrics {
+    fn __repr__(&self) -> String {
+        format!(
+            "AlignmentSummaryMetrics(category={}, total_reads={}, pf_reads_aligned={}, pf_mismatch_rate={:.6})",
+            self.category, self.total_reads, self.pf_reads_aligned, self.pf_mismatch_rate
+        )
+    }
+}
+
+impl From<alignment_summary::Row> for AlignmentSummaryMetrics {
+    fn from(r: alignment_summary::Row) -> Self {
+        Self {
+            category: r.category.as_str().to_owned(),
+            total_reads: r.total_reads,
+            pf_reads: r.pf_reads,
+            pct_pf_reads: r.pct_pf_reads,
+            pf_noise_reads: r.pf_noise_reads,
+            pf_reads_aligned: r.pf_reads_aligned,
+            pct_pf_reads_aligned: r.pct_pf_reads_aligned,
+            pf_aligned_bases: r.pf_aligned_bases,
+            pf_hq_aligned_reads: r.pf_hq_aligned_reads,
+            pf_hq_aligned_bases: r.pf_hq_aligned_bases,
+            pf_hq_aligned_q20_bases: r.pf_hq_aligned_q20_bases,
+            pf_hq_median_mismatches: r.pf_hq_median_mismatches,
+            pf_mismatch_rate: r.pf_mismatch_rate,
+            pf_hq_error_rate: r.pf_hq_error_rate,
+            pf_indel_rate: r.pf_indel_rate,
+            mean_read_length: r.mean_read_length,
+            sd_read_length: r.sd_read_length,
+            median_read_length: r.median_read_length,
+            mad_read_length: r.mad_read_length,
+            min_read_length: r.min_read_length,
+            max_read_length: r.max_read_length,
+            mean_aligned_read_length: r.mean_aligned_read_length,
+            reads_aligned_in_pairs: r.reads_aligned_in_pairs,
+            pct_reads_aligned_in_pairs: r.pct_reads_aligned_in_pairs,
+            pf_reads_improper_pairs: r.pf_reads_improper_pairs,
+            pct_pf_reads_improper_pairs: r.pct_pf_reads_improper_pairs,
+            bad_cycles: r.bad_cycles,
+            strand_balance: r.strand_balance,
+            pct_chimeras: r.pct_chimeras,
+            pct_adapter: r.pct_adapter,
+            pct_softclip: r.pct_softclip,
+            pct_hardclip: r.pct_hardclip,
+            avg_pos_3prime_softclip_length: r.avg_pos_3prime_softclip_length,
+        }
+    }
+}
+
+/// `CollectAlignmentSummaryMetrics` at `ALL_READS`. A list given for
+/// `expected_pair_orientations` or `adapter_sequences` replaces Picard's
+/// default (`["FR"]` and its six Illumina adapters); `None` keeps it.
+#[pyfunction]
+#[pyo3(name = "alignment_summary", signature = (
+    path,
+    reference=None,
+    max_insert_size=DEFAULT_MAX_INSERT_SIZE,
+    expected_pair_orientations=None,
+    adapter_sequences=None,
+    collect_alignment_information=true,
+))]
+fn py_alignment_summary(
+    path: &str,
+    reference: Option<PathBuf>,
+    max_insert_size: i32,
+    expected_pair_orientations: Option<Vec<String>>,
+    adapter_sequences: Option<Vec<String>>,
+    collect_alignment_information: bool,
+) -> PyResult<Vec<AlignmentSummaryMetrics>> {
+    let defaults = alignment_summary::Options::default();
+    let expected_orientations = match expected_pair_orientations {
+        None => defaults.expected_orientations,
+        Some(names) => names
+            .iter()
+            .map(|n| n.parse::<Orientation>())
+            .collect::<Result<_, _>>()
+            .map_err(|e| PyValueError::new_err(e.to_string()))?,
+    };
+    let opts = alignment_summary::Options {
+        reference,
+        max_insert_size,
+        expected_orientations,
+        adapter_sequences: adapter_sequences.unwrap_or(defaults.adapter_sequences),
+        collect_alignment_information,
+    };
+    let report = alignment_summary::run_over_bam(path, &opts)
+        .map_err(|e| PyIOError::new_err(e.to_string()))?;
+    Ok(report.rows.into_iter().map(Into::into).collect())
+}
+
 #[pymodule]
 fn bammetrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<InsertSizeMetrics>()?;
     m.add_function(wrap_pyfunction!(py_insert_size, m)?)?;
+    m.add_class::<AlignmentSummaryMetrics>()?;
+    m.add_function(wrap_pyfunction!(py_alignment_summary, m)?)?;
     Ok(())
 }

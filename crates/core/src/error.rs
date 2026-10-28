@@ -23,6 +23,9 @@ pub enum Error {
     /// A record could not be decoded.
     #[error("bad record: {0}")]
     Record(#[from] io::Error),
+    /// The reference FASTA cannot be used with this BAM.
+    #[error("{path}: {message}")]
+    Reference { path: PathBuf, message: String },
     /// A command-line option cannot be honoured.
     #[error("{0}")]
     Usage(String),

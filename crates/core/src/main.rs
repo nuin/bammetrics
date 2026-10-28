@@ -5,17 +5,19 @@ use std::process::ExitCode;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use bammetrics_core::Error;
+use bammetrics_core::alignment_summary::{self, DEFAULT_MAX_INSERT_SIZE};
 use bammetrics_core::insert_size::{self, Options};
 use bammetrics_core::metrics_file::started_on;
 use bammetrics_core::picard_cli;
-use clap::{Args, Parser, Subcommand};
+use clap::{ArgAction, Args, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(
     name = "bammetrics",
     version,
     about = "Picard-concordant BAM QC metrics",
-    after_help = "Picard syntax also works: bammetrics CollectInsertSizeMetrics I=in.bam O=out.txt [M=0.05 ...]"
+    after_help = "Picard syntax also works: bammetrics CollectInsertSizeMetrics I=in.bam O=out.txt [M=0.05 ...]\n\
+                  bammetrics CollectAlignmentSummaryMetrics I=in.bam O=out.txt [R=ref.fa ...]"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -27,6 +29,9 @@ enum Command {
     /// CollectInsertSizeMetrics: a Picard InsertSizeMetrics file, one row per
     /// pair orientation plus the trimmed histograms.
     InsertSize(InsertSizeArgs),
+    /// CollectAlignmentSummaryMetrics: a Picard AlignmentSummaryMetrics file,
+    /// one row per read category plus the read-length histograms.
+    AlignmentSummary(AlignmentSummaryArgs),
 }
 
 #[derive(Args)]
@@ -55,6 +60,98 @@ struct InsertSizeArgs {
     /// Count reads flagged as duplicates (Picard INCLUDE_DUPLICATES).
     #[arg(long)]
     include_duplicates: bool,
+}
+
+#[derive(Args)]
+struct AlignmentSummaryArgs {
+    /// Input BAM (or --input).
+    #[arg(required_unless_present = "input", conflicts_with = "input")]
+    bam: Option<PathBuf>,
+    /// Input BAM (Picard INPUT).
+    #[arg(short = 'I', long)]
+    input: Option<PathBuf>,
+    /// Metrics file to write (Picard OUTPUT). Standard output when absent.
+    #[arg(short = 'O', long)]
+    output: Option<PathBuf>,
+    /// Reference FASTA with a .fai index (Picard REFERENCE_SEQUENCE). Without
+    /// it no base counts as a mismatch.
+    #[arg(short = 'R', long)]
+    reference: Option<PathBuf>,
+    /// Pairs with a larger |TLEN| are chimeric (Picard MAX_INSERT_SIZE).
+    #[arg(long, default_value_t = DEFAULT_MAX_INSERT_SIZE)]
+    max_insert_size: i32,
+    /// Adds FR, RF or TANDEM to the expected orientations, FR by default;
+    /// "null" clears the list (Picard EXPECTED_PAIR_ORIENTATIONS).
+    #[arg(long = "expected-pair-orientation", value_name = "ORIENTATION")]
+    expected_pair_orientations: Vec<String>,
+    /// Adds an adapter to Picard's default list; "null" clears the list
+    /// (Picard ADAPTER_SEQUENCE).
+    #[arg(long = "adapter-sequence", value_name = "SEQUENCE")]
+    adapter_sequences: Vec<String>,
+    /// false counts reads only (Picard COLLECT_ALIGNMENT_INFORMATION).
+    #[arg(long, default_value = "true", value_parser = parse_bool, action = ArgAction::Set)]
+    collect_alignment_information: bool,
+}
+
+/// A Picard collection argument: values add to the default, and `null`
+/// empties the list so far.
+fn picard_list<T: PartialEq>(
+    default: Vec<T>,
+    values: &[String],
+    parse: impl Fn(&str) -> bammetrics_core::Result<T>,
+    distinct: bool,
+) -> bammetrics_core::Result<Vec<T>> {
+    let mut list = default;
+    for value in values {
+        if value == "null" {
+            list.clear();
+            continue;
+        }
+        let item = parse(value)?;
+        if !(distinct && list.contains(&item)) {
+            list.push(item);
+        }
+    }
+    Ok(list)
+}
+
+/// Booleans as Picard reads them, in any case.
+fn parse_bool(value: &str) -> Result<bool, String> {
+    match value.to_ascii_lowercase().as_str() {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err(format!("expected true or false, got {value:?}")),
+    }
+}
+
+impl AlignmentSummaryArgs {
+    fn bam(&self) -> bammetrics_core::Result<&Path> {
+        self.bam
+            .as_deref()
+            .or(self.input.as_deref())
+            .ok_or_else(|| Error::Usage("no input BAM".to_owned()))
+    }
+
+    fn options(&self) -> bammetrics_core::Result<alignment_summary::Options> {
+        let defaults = alignment_summary::Options::default();
+        Ok(alignment_summary::Options {
+            reference: self.reference.clone(),
+            max_insert_size: self.max_insert_size,
+            expected_orientations: picard_list(
+                defaults.expected_orientations,
+                &self.expected_pair_orientations,
+                str::parse,
+                true,
+            )?,
+            adapter_sequences: picard_list(
+                defaults.adapter_sequences,
+                &self.adapter_sequences,
+                |s| Ok(s.to_owned()),
+                false,
+            )?,
+            collect_alignment_information: self.collect_alignment_information,
+        })
+    }
 }
 
 impl InsertSizeArgs {
@@ -86,10 +183,7 @@ fn insert_size_headers(args: &InsertSizeArgs, bam: &Path) -> Vec<String> {
     if let Some(w) = args.min_histogram_width {
         command.push_str(&format!(" MIN_HISTOGRAM_WIDTH={w}"));
     }
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs());
-    vec![command, started_on(now)]
+    vec![command, started_on(now())]
 }
 
 type Output = BufWriter<Box<dyn Write>>;
@@ -137,6 +231,50 @@ fn insert_size(args: InsertSizeArgs) -> bammetrics_core::Result<()> {
     })
 }
 
+/// `StringHeader` lines in Picard's shape for `CollectAlignmentSummaryMetrics`.
+fn alignment_summary_headers(
+    args: &AlignmentSummaryArgs,
+    bam: &Path,
+    opts: &alignment_summary::Options,
+) -> Vec<String> {
+    let mut command = format!("CollectAlignmentSummaryMetrics INPUT={}", bam.display());
+    if let Some(output) = &args.output {
+        command.push_str(&format!(" OUTPUT={}", output.display()));
+    }
+    if let Some(reference) = &opts.reference {
+        command.push_str(&format!(" REFERENCE_SEQUENCE={}", reference.display()));
+    }
+    let orientations: Vec<&str> = opts
+        .expected_orientations
+        .iter()
+        .map(|o| o.as_str())
+        .collect();
+    command.push_str(&format!(
+        " MAX_INSERT_SIZE={} EXPECTED_PAIR_ORIENTATIONS=[{}] ADAPTER_SEQUENCE=[{}] METRIC_ACCUMULATION_LEVEL=[ALL_READS] IS_BISULFITE_SEQUENCED=false COLLECT_ALIGNMENT_INFORMATION={}",
+        opts.max_insert_size,
+        orientations.join(", "),
+        opts.adapter_sequences.join(", "),
+        opts.collect_alignment_information
+    ));
+    vec![command, started_on(now())]
+}
+
+fn now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+fn alignment_summary(args: AlignmentSummaryArgs) -> bammetrics_core::Result<()> {
+    let bam = args.bam()?;
+    let opts = args.options()?;
+    let report = alignment_summary::run_over_bam(bam, &opts)?;
+    let headers = alignment_summary_headers(&args, bam, &opts);
+    write_to(args.output.as_deref(), |out| {
+        alignment_summary::write_metrics(&report, headers, out)
+    })
+}
+
 /// The command line as clap sees it. A first argument naming a Picard tool
 /// switches to Picard syntax and is rewritten to the native flags.
 fn command_line() -> bammetrics_core::Result<Vec<String>> {
@@ -163,6 +301,7 @@ fn command_line() -> bammetrics_core::Result<Vec<String>> {
 fn run() -> bammetrics_core::Result<()> {
     match Cli::parse_from(command_line()?).command {
         Command::InsertSize(args) => insert_size(args),
+        Command::AlignmentSummary(args) => alignment_summary(args),
     }
 }
 

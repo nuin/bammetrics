@@ -90,17 +90,57 @@ const INSERT_SIZE: &[Entry] = &[
     ),
 ];
 
+/// Options of `CollectAlignmentSummaryMetrics` (`SinglePassSamProgram` and
+/// `CollectAlignmentSummaryMetrics` in Picard 3.5.0). `R` is read here, so
+/// this entry shadows the `COMMON` one. The two list options append to
+/// Picard's default and `null` clears it; the native flags do the same.
+const ALIGNMENT_SUMMARY: &[Entry] = &[
+    (&["INPUT", "I"], Action::Value("--input")),
+    (&["OUTPUT", "O"], Action::Value("--output")),
+    (&["REFERENCE_SEQUENCE", "R"], Action::Value("--reference")),
+    (
+        &["HISTOGRAM_FILE", "H"],
+        Action::Ignore("no histogram plot is drawn"),
+    ),
+    (&["MAX_INSERT_SIZE"], Action::Value("--max-insert-size")),
+    (
+        &["EXPECTED_PAIR_ORIENTATIONS"],
+        Action::Value("--expected-pair-orientation"),
+    ),
+    (&["ADAPTER_SEQUENCE"], Action::Value("--adapter-sequence")),
+    (
+        &["COLLECT_ALIGNMENT_INFORMATION"],
+        Action::Value("--collect-alignment-information"),
+    ),
+    (&["IS_BISULFITE_SEQUENCED", "BS"], Action::Only("false")),
+    (
+        &["METRIC_ACCUMULATION_LEVEL", "LEVEL"],
+        Action::Only("ALL_READS"),
+    ),
+    (
+        &["ASSUME_SORTED", "AS"],
+        Action::Ignore("the header sort order is not checked"),
+    ),
+];
+
 struct Tool {
     picard_name: &'static str,
     subcommand: &'static str,
     options: &'static [Entry],
 }
 
-const TOOLS: &[Tool] = &[Tool {
-    picard_name: "CollectInsertSizeMetrics",
-    subcommand: "insert-size",
-    options: INSERT_SIZE,
-}];
+const TOOLS: &[Tool] = &[
+    Tool {
+        picard_name: "CollectInsertSizeMetrics",
+        subcommand: "insert-size",
+        options: INSERT_SIZE,
+    },
+    Tool {
+        picard_name: "CollectAlignmentSummaryMetrics",
+        subcommand: "alignment-summary",
+        options: ALIGNMENT_SUMMARY,
+    },
+];
 
 /// A Picard command line rewritten for the native parser.
 #[derive(Debug, PartialEq)]
@@ -278,6 +318,42 @@ mod tests {
         assert!(message.contains("STOP_AFTER"));
         let message = usage(translate("CollectInsertSizeMetrics", &strings(&["bam"])));
         assert!(message.contains("NAME=VALUE"));
+    }
+
+    #[test]
+    fn alignment_summary_reads_the_reference() {
+        let t = translate(
+            "CollectAlignmentSummaryMetrics",
+            &strings(&[
+                "I=x.bam",
+                "O=out.txt",
+                "R=ref.fa",
+                "EXPECTED_PAIR_ORIENTATIONS=null",
+                "EXPECTED_PAIR_ORIENTATIONS=RF",
+                "MAX_INSERT_SIZE=500",
+                "IS_BISULFITE_SEQUENCED=false",
+            ]),
+        )
+        .expect("translates")
+        .expect("known tool");
+        assert_eq!(t.subcommand, "alignment-summary");
+        assert_eq!(
+            t.args,
+            [
+                "--input=x.bam",
+                "--output=out.txt",
+                "--reference=ref.fa",
+                "--expected-pair-orientation=null",
+                "--expected-pair-orientation=RF",
+                "--max-insert-size=500",
+            ]
+        );
+        assert!(t.notes.is_empty());
+        let message = usage(translate(
+            "CollectAlignmentSummaryMetrics",
+            &strings(&["IS_BISULFITE_SEQUENCED=true"]),
+        ));
+        assert!(message.contains("IS_BISULFITE_SEQUENCED"));
     }
 
     #[test]
