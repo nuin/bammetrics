@@ -1,0 +1,79 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  PICARD_VERSION: "3.5.0"
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Unit and integration tests
+        run: cargo test --workspace
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install bwa and samtools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y bwa samtools
+
+      - name: Install bwa and samtools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install bwa samtools
+
+      # The release jar behind a `picard` command, the name the harness calls.
+      - name: Install Picard
+        run: |
+          mkdir -p "$HOME/picard/bin"
+          curl -sSL --fail -o "$HOME/picard/picard.jar" \
+            "https://github.com/broadinstitute/picard/releases/download/${PICARD_VERSION}/picard.jar"
+          printf '#!/bin/sh\nexec java -jar "%s/picard/picard.jar" "$@"\n' "$HOME" > "$HOME/picard/bin/picard"
+          chmod +x "$HOME/picard/bin/picard"
+          echo "$HOME/picard/bin" >> "$GITHUB_PATH"
+
+      - name: Concordance harness
+        run: make concordance
+
+      - name: Python module
+        run: |
+          uv venv .venv
+          uv pip install --python .venv/bin/python maturin pytest pysam
+          make python-test
+          make wheel
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}
+          path: target/wheels/*.whl

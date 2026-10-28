@@ -1,36 +1,129 @@
 # bammetrics
 
-Embeddable, JVM-free, **Picard-concordant** BAM QC metrics — a Rust core (built on
-[`noodles`](https://github.com/zaeleus/noodles)) exposed to Python via PyO3/maturin.
-No JVM, no subprocess, no temp-file parsing: `import bammetrics` and get the numbers in-process.
+bammetrics reproduces Picard 3.5.0 QC metrics field by field in Rust, 3x to 14x faster, with
+no JVM. It is a Rust library, a `bammetrics` command line that accepts Picard's `KEY=VALUE`
+syntax and writes Picard-format metrics files, and a typed Python module (PyO3, maturin).
 
-Status: **v0.2 in progress.** Cargo workspace on noodles 0.118; `CollectInsertSizeMetrics`,
-`CollectAlignmentSummaryMetrics`, `CollectQualityYieldMetrics` and `CollectHsMetrics`
-implemented. On 90 concordance cases, run natively at --threads 1 and 8 and in Picard syntax, plus 4 one-pass `collect` runs (synthetic tiers t0 to t3, with and without a
-reference) every field and histogram cell matches Picard 3.5.0, and the metrics file is
-byte-identical from `## METRICS CLASS` on.
+Version 0.2.0. Pinned reference: Picard 3.5.0. On 90 concordance cases (synthetic tiers t0 to
+t3, with and without a reference, native at 1 and 8 threads and in Picard syntax, plus 4
+one-pass `collect` runs), every field and histogram cell matches Picard, and each file is
+byte-identical from `## METRICS CLASS` on. Differences that remain are in
+[KNOWN_DIFFERENCES.md](KNOWN_DIFFERENCES.md).
+
+## Metrics implemented
+
+| Picard tool | subcommand | Python |
+|---|---|---|
+| CollectQualityYieldMetrics | `quality-yield` | `quality_yield()` |
+| CollectAlignmentSummaryMetrics | `alignment-summary` | `alignment_summary()` |
+| CollectHsMetrics | `hs-metrics` | `hs_metrics()` |
+| CollectInsertSizeMetrics | `insert-size` | `insert_size()` |
+| all of the above in one pass | `collect` | `collect()` |
+
+Accumulation level is `ALL_READS` only. Per-library and per-read-group rows are on the
+[roadmap](ROADMAP.md).
+
+## Drop-in for a Picard pipeline
+
+Put `bammetrics` where `picard` was and keep the arguments. The first argument is the Picard
+tool name; options are `KEY=VALUE`. Options that cannot change a number
+(`VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`, `VERBOSITY`) are accepted and dropped. Any other
+option bammetrics does not know exits 1 naming it.
+
+```bash
+# CollectQualityYieldMetrics
+bammetrics CollectQualityYieldMetrics I=sample.bam O=sample.quality_yield_metrics.txt
+
+# CollectAlignmentSummaryMetrics
+bammetrics CollectAlignmentSummaryMetrics I=sample.bam O=sample.alignment_summary_metrics.txt R=ref.fa
+
+# CollectHsMetrics, once with the panel and once with the bait intervals
+bammetrics CollectHsMetrics I=sample.bam O=sample.hs_metrics.txt R=ref.fa \
+    BAIT_INTERVALS=panel.interval_list TARGET_INTERVALS=panel.interval_list
+bammetrics CollectHsMetrics I=sample.bam O=sample.hs_metrics_baits.txt R=ref.fa \
+    BAIT_INTERVALS=baits.interval_list TARGET_INTERVALS=panel.interval_list
+
+# CollectInsertSizeMetrics (Picard needs R installed for this one; bammetrics does not)
+bammetrics CollectInsertSizeMetrics I=sample.bam O=sample.insert_size_metrics.txt H=hist.pdf
+```
+
+`R=` needs a `.fai` next to the FASTA. A BED file works where Picard 3.5.0 needs an
+interval list. The same runs in one pass over the BAM, which is faster than four runs:
+
+```bash
+bammetrics collect sample.bam -O out/sample -R ref.fa \
+    --hs panel.bed panel.bed --hs baits.interval_list panel.bed
+```
+
+## Python
+
+```bash
+uv venv .venv && uv pip install --python .venv/bin/python maturin
+.venv/bin/maturin build --release      # wheel in target/wheels
+.venv/bin/maturin develop --release    # or install into the venv
+```
+
+```python
+import bammetrics
+
+qy = bammetrics.quality_yield("sample.bam")
+rows = bammetrics.alignment_summary("sample.bam", reference="ref.fa")
+hs = bammetrics.hs_metrics("sample.bam", "panel.bed", "panel.bed", reference="ref.fa")
+everything = bammetrics.collect("sample.bam", reference="ref.fa", hs=[("panel.bed", "panel.bed")])
+print(qy.q30_bases, hs.mean_target_coverage, hs.to_dict()["pct_target_bases_20x"])
+```
+
+Every result has each Picard column as a lower-case attribute and a `to_dict()`. Type stubs
+(`bammetrics.pyi`) and `py.typed` ship in the wheel. Bad arguments raise `ValueError` and
+every other failure raises `OSError`, both with the Rust message. `collect` releases the GIL.
+
+## Benchmark
+
+4,039,148 records (2,000,000 simulated 2x150 pairs, 319 MB), Mac Studio, 20 cores, Picard 3.5.0
+against bammetrics 0.2.0. Setup and method: [docs/benchmarks.md](docs/benchmarks.md).
+
+| run | Picard wall s | Picard peak MB | bammetrics wall s | bammetrics peak MB | speed-up | text identical |
+|---|---:|---:|---:|---:|---:|---|
+| CollectQualityYieldMetrics | 5.25 | 967 | 1.07 | 6 | 4.9x | yes |
+| CollectAlignmentSummaryMetrics R= | 12.11 | 932 | 4.13 | 26 | 2.9x | yes |
+| CollectInsertSizeMetrics | 3.89 | 926 | 0.39 | 6 | 10.0x | yes |
+| CollectHsMetrics R= (baits, targets) | 32.44 | 458 | 2.68 | 34 | 12.1x | yes |
+| CollectHsMetrics R= (targets as baits) | 29.79 | 508 | 2.75 | 35 | 10.8x | yes |
+| all five, separate runs | 83.48 | | 11.02 | | 7.6x | |
+| `collect`, all five in one pass, 8 threads | | | 5.80 | 73 | 14.4x | yes |
+| `collect`, all five in one pass, `--threads 1` | | | 5.78 | 69 | 14.4x | yes |
+
+Picard's peak memory is the JVM heap (460 to 970 MB); bammetrics stays under 75 MB.
+
+## Concordance harness
+
+A generator builds a synthetic corpus (reference, intervals, BAMs t0 to t3, under 20 MB) from
+one seed. `run_picard.py` runs Picard 3.5.0 on every case. The tests run bammetrics and compare
+each field, column order, row order, histogram cell and the file text. Details are in
+[Concordance corpus and harness](#concordance-corpus-and-harness).
+
+```bash
+make corpus reference-metrics concordance   # needs samtools, bwa, picard 3.5.0, uv
+make python-test                            # maturin develop, then pytest tests/python
+```
+
+No real patient data is in the repository or the tests.
 
 ## Layout
 
 ```
-docs/    01 algorithm spec (Picard -> plain English, scope, concordance traps)
-         02 Rust -> Python build walkthrough
-         03 Rust programming guide
-Cargo.toml     workspace (version 0.2.0, edition 2024, shared dependencies)
+docs/    01 algorithm spec (Picard -> plain English, concordance traps)
+         02 Rust -> Python build walkthrough, 03 Rust programming guide, benchmarks.md
 crates/
-  core/  bammetrics-core: library + `bammetrics` CLI. insert_size, alignment_summary,
-         quality_yield, hs_metrics (metrics); adapter, sequence, reference, record,
-         intervals, duplication, sensitivity (htsjdk/Picard helpers);
-         pass (shared reader loop, Accumulator trait), collect (one-pass multi-metric);
-         histogram, metrics_file, picard_cli
-  py/    PyO3 wrapper (cdylib) -> the `bammetrics` Python module
-tests/   make_bam.py and make_orientation_bam.py generate the committed fixtures in data/
-         corpus/generate.py   synthetic corpus (reference, intervals, t0-t3 BAMs)
-         concordance/         pytest harness: bammetrics CLI vs Picard 3.5.0
-benches/ make_bam.py (2M-pair benchmark BAM in target/bench), bench.py (Picard vs bammetrics)
-Makefile corpus, reference-metrics, concordance, test, lint, bench-bam, bench
-pyproject.toml  maturin packaging (builds crates/py)
+  core/  bammetrics-core: library and `bammetrics` CLI (metrics, Picard helpers, pass, collect,
+         histogram, metrics_file, picard_cli)
+  py/    PyO3 wrapper (cdylib), the `bammetrics` Python module
+tests/   concordance/ (Picard harness), corpus/ (generator), python/ (module tests), data/ (fixtures)
+benches/ benchmark BAM generator and Picard-vs-bammetrics timing
 ```
+
+License: MIT OR Apache-2.0 ([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)).
+Changes: [CHANGELOG.md](CHANGELOG.md).
 
 ## Build and test
 
@@ -85,7 +178,7 @@ would convert them. The run time has a fixed part of about 0.7 s: the `HET_SNP_S
 simulation draws 10000 x 201 qualities from the same `java.util.Random(51)` stream as
 Picard. Python: `bammetrics.hs_metrics(path, bait_intervals, target_intervals,
 reference=None, ...)` returns one `HsMetrics`; every column is an attribute in lower case,
-`as_dict()` gives all of them, and `high_quality_coverage` and `unfiltered_base_quality`
+`to_dict()` gives all of them, and `high_quality_coverage` and `unfiltered_base_quality`
 are the two histograms as dicts.
 
 `collect` computes several metrics in one pass over the BAM and writes one Picard file
@@ -203,21 +296,19 @@ The harness (`tests/concordance/`):
 - The run ends with one line per case: fields matched / total, and whether the
   file body is byte-identical to Picard's.
 
-## Python module
+## Python module tests
 
 ```bash
-uv venv .venv && uv pip install --python .venv/bin/python maturin pytest pysam
-.venv/bin/maturin develop --release
-.venv/bin/python -c "import bammetrics; print(bammetrics.insert_size('tests/data/insert_size.bam'))"
-.venv/bin/python -c "import bammetrics; print(bammetrics.alignment_summary('tests/data/insert_size.bam', reference=None))"
-.venv/bin/pytest tests
+make python-test     # maturin develop --release, then pytest tests/python
 ```
 
-`maturin build --release` makes a wheel. Plain `cargo build` of the cdylib is
-not a usable module on macOS; use maturin.
+`tests/python` runs against the maturin-built module. `test_cli_parity.py` compares every
+field the module returns on corpus BAM t1 with the CLI's Picard-format output, and
+`test_api.py` checks `to_dict()`, the error types and that `bammetrics.pyi` lists every field.
+Plain `cargo build` of the cdylib is not a usable module on macOS; use maturin.
 
-## Next steps (from docs/01 and docs/02)
+## Next steps
 
-- `PER_TARGET_COVERAGE`, `PER_BASE_COVERAGE` and `THEORETICAL_SENSITIVITY_OUTPUT` for
-  `CollectHsMetrics` (exit 1 today).
-- `METRIC_ACCUMULATION_LEVEL` other than `ALL_READS` (t1 and t2 carry two libraries).
+See [ROADMAP.md](ROADMAP.md): `CollectVariantCallingMetrics`, `MarkDuplicates`,
+`CollectWgsMetrics`, per-library and per-read-group accumulation levels, a bioconda recipe, and the
+`CollectHsMetrics` per-target and per-base outputs.

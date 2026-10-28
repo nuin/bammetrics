@@ -4,7 +4,7 @@
 UV_RUN := uv run --no-project
 CORPUS := tests/corpus/out
 
-.PHONY: all test lint release corpus reference-metrics concordance clean-corpus bench-bam bench
+.PHONY: all test lint release corpus reference-metrics concordance python-test wheel clean-corpus bench-bam bench
 
 all: test lint concordance
 
@@ -30,6 +30,15 @@ reference-metrics: corpus
 
 concordance: reference-metrics release
 	$(UV_RUN) --with pytest python -m pytest tests/concordance -q
+
+# Python module tests: build into .venv with maturin, then run tests/python.
+# Needs .venv with maturin, pytest and pysam, plus `make corpus` and `make release`.
+python-test: corpus release
+	.venv/bin/maturin develop --release
+	.venv/bin/pytest tests/python -q
+
+wheel:
+	.venv/bin/maturin build --release
 
 # 2M-pair benchmark BAM in target/bench (about 10 minutes, 320 MB; not committed).
 bench-bam: target/bench/bench.json

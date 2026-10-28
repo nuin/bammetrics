@@ -16,10 +16,26 @@ Library underneath (permissive, adoption), application + cloud on top (AGPL, mon
 
 ---
 
-## Phase 0 — Finish the core  *(you're mostly here)*
+## Phase 0 — Finish the core  *(bammetrics done in 0.2.0; vcfclick open)*
 
-- bammetrics: finish `CollectAlignmentSummaryMetrics` + the variant-concordance engine (the `noodles-fasta` reference path is the open piece).
-- vcfclick: settle the engine question — **DuckDB** for the open/embeddable core (conda-packageable; chDB is not), chDB reserved for cloud scale.
+- [x] bammetrics: `CollectInsertSizeMetrics`, `CollectAlignmentSummaryMetrics`,
+  `CollectQualityYieldMetrics` and `CollectHsMetrics`, concordant with Picard 3.5.0 on 90 cases.
+- [x] `noodles-fasta` reference path (`.fai`, one contig at a time, with `Reference::subsequence`).
+- [x] Picard-format output files and Picard `KEY=VALUE` command-line syntax, a drop-in for a pipeline.
+- [x] One-pass `collect`, threaded BGZF decoding, benchmark: 14.4x on a 4-million-read BAM.
+- [x] Python API with row objects, `to_dict()`, type stubs, `py.typed`; wheel from `maturin build --release`.
+- [x] CI workflow (fmt, clippy, tests, concordance, wheel), MIT OR Apache-2.0 licence files, CHANGELOG.
+- [ ] vcfclick: settle the engine question — **DuckDB** for the open/embeddable core (conda-packageable; chDB is not), chDB reserved for cloud scale.
+
+Remaining for bammetrics:
+
+- `CollectVariantCallingMetrics` (the variant-concordance engine).
+- `MarkDuplicates` (optical duplicates, duplicate scoring, library complexity; reuses `duplication`).
+- `CollectWgsMetrics` (reuses `intervals::OverlapIndex` and the `pass` reader).
+- `METRIC_ACCUMULATION_LEVEL` `LIBRARY` and `READ_GROUP`: needs the read-group to library map and
+  per-level histogram labels. The corpus BAMs t1 and t2 already carry two libraries.
+- `CollectHsMetrics` `PER_TARGET_COVERAGE`, `PER_BASE_COVERAGE`, `THEORETICAL_SENSITIVITY_OUTPUT`.
+- bioconda recipe and a PyPI release (first push of the branch runs the CI workflow).
 
 Exit criterion: a `pip install`-able library that produces correct, hand-verified numbers.
 
