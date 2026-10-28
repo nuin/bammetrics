@@ -2,16 +2,20 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use bammetrics_core::Error;
 use bammetrics_core::insert_size::{self, Options};
+use bammetrics_core::metrics_file::started_on;
+use bammetrics_core::picard_cli;
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(
     name = "bammetrics",
     version,
-    about = "Picard-concordant BAM QC metrics"
+    about = "Picard-concordant BAM QC metrics",
+    after_help = "Picard syntax also works: bammetrics CollectInsertSizeMetrics I=in.bam O=out.txt [M=0.05 ...]"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -27,8 +31,12 @@ enum Command {
 
 #[derive(Args)]
 struct InsertSizeArgs {
-    /// Input BAM.
-    bam: PathBuf,
+    /// Input BAM (or --input).
+    #[arg(required_unless_present = "input", conflicts_with = "input")]
+    bam: Option<PathBuf>,
+    /// Input BAM (Picard INPUT).
+    #[arg(short = 'I', long)]
+    input: Option<PathBuf>,
     /// Metrics file to write (Picard OUTPUT). Standard output when absent.
     #[arg(short = 'O', long)]
     output: Option<PathBuf>,
@@ -49,12 +57,22 @@ struct InsertSizeArgs {
     include_duplicates: bool,
 }
 
+impl InsertSizeArgs {
+    /// The BAM given positionally or with `--input`; clap guarantees one.
+    fn bam(&self) -> bammetrics_core::Result<&Path> {
+        self.bam
+            .as_deref()
+            .or(self.input.as_deref())
+            .ok_or_else(|| Error::Usage("no input BAM".to_owned()))
+    }
+}
+
 /// `StringHeader` lines in Picard's shape: the tool name and its arguments
-/// (parsers such as MultiQC read `INPUT=` from it), then the producer.
-fn insert_size_headers(args: &InsertSizeArgs) -> Vec<String> {
+/// (parsers such as MultiQC read `INPUT=` from it), then `Started on: <time>`.
+fn insert_size_headers(args: &InsertSizeArgs, bam: &Path) -> Vec<String> {
     let mut command = format!(
         "CollectInsertSizeMetrics INPUT={} MINIMUM_PCT={:?} DEVIATIONS={:?} INCLUDE_DUPLICATES={} METRIC_ACCUMULATION_LEVEL=[ALL_READS]",
-        args.bam.display(),
+        bam.display(),
         args.minimum_pct,
         args.deviations,
         args.include_duplicates
@@ -68,10 +86,10 @@ fn insert_size_headers(args: &InsertSizeArgs) -> Vec<String> {
     if let Some(w) = args.min_histogram_width {
         command.push_str(&format!(" MIN_HISTOGRAM_WIDTH={w}"));
     }
-    vec![
-        command,
-        format!("Started by bammetrics {}", env!("CARGO_PKG_VERSION")),
-    ]
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    vec![command, started_on(now)]
 }
 
 type Output = BufWriter<Box<dyn Write>>;
@@ -102,7 +120,8 @@ fn insert_size(args: InsertSizeArgs) -> bammetrics_core::Result<()> {
         min_histogram_width: args.min_histogram_width,
         include_duplicates: args.include_duplicates,
     };
-    let rows = insert_size::run_over_bam(&args.bam, &opts)?;
+    let bam = args.bam()?;
+    let rows = insert_size::run_over_bam(bam, &opts)?;
     // CollectInsertSizeMetrics.finish writes no file when every orientation
     // was dropped (or there were no pairs), and only logs a warning.
     if rows.is_empty() {
@@ -112,17 +131,43 @@ fn insert_size(args: InsertSizeArgs) -> bammetrics_core::Result<()> {
         );
         return Ok(());
     }
-    let headers = insert_size_headers(&args);
+    let headers = insert_size_headers(&args, bam);
     write_to(args.output.as_deref(), |out| {
         insert_size::write_metrics(&rows, headers, out)
     })
 }
 
-fn main() -> ExitCode {
-    let result = match Cli::parse().command {
-        Command::InsertSize(args) => insert_size(args),
+/// The command line as clap sees it. A first argument naming a Picard tool
+/// switches to Picard syntax and is rewritten to the native flags.
+fn command_line() -> bammetrics_core::Result<Vec<String>> {
+    let mut argv = std::env::args();
+    let program = argv.next().unwrap_or_else(|| "bammetrics".to_owned());
+    let rest: Vec<String> = argv.collect();
+    let Some(translation) = rest
+        .split_first()
+        .map(|(tool, options)| picard_cli::translate(tool, options))
+        .transpose()?
+        .flatten()
+    else {
+        return Ok(std::iter::once(program).chain(rest).collect());
     };
-    match result {
+    for note in &translation.notes {
+        eprintln!("bammetrics: {note}");
+    }
+    Ok([program, translation.subcommand.to_owned()]
+        .into_iter()
+        .chain(translation.args)
+        .collect())
+}
+
+fn run() -> bammetrics_core::Result<()> {
+    match Cli::parse_from(command_line()?).command {
+        Command::InsertSize(args) => insert_size(args),
+    }
+}
+
+fn main() -> ExitCode {
+    match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("bammetrics: {e}");

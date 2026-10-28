@@ -23,6 +23,9 @@ pub enum Error {
     /// A record could not be decoded.
     #[error("bad record: {0}")]
     Record(#[from] io::Error),
+    /// A command-line option cannot be honoured.
+    #[error("{0}")]
+    Usage(String),
     /// A record carries a flag combination that needs a field it does not have.
     #[error("record {name}: {what}")]
     MalformedRecord { name: String, what: &'static str },

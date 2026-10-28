@@ -5,7 +5,7 @@ Embeddable, JVM-free, **Picard-concordant** BAM QC metrics — a Rust core (buil
 No JVM, no subprocess, no temp-file parsing: `import bammetrics` and get the numbers in-process.
 
 Status: **v0.2 in progress.** Cargo workspace on noodles 0.118; `CollectInsertSizeMetrics` implemented.
-On 23 concordance cases (synthetic tiers t0 to t3) every field and histogram cell
+On 23 concordance cases, run in native and in Picard syntax, (synthetic tiers t0 to t3) every field and histogram cell
 matches Picard 3.5.0, and the metrics file is byte-identical from `## METRICS CLASS` on.
 
 ## Layout
@@ -35,7 +35,14 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 target/release/bammetrics insert-size tests/data/insert_size.bam            # Picard-format file on stdout
 target/release/bammetrics insert-size in.bam -O in.insert_size_metrics.txt -M 0.05
+target/release/bammetrics insert-size --input in.bam --output out.txt
+# Picard syntax, a drop-in for the jar:
+target/release/bammetrics CollectInsertSizeMetrics I=in.bam O=out.txt H=hist.pdf M=0.5
 ```
+
+Picard options that cannot change a metric (`VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`,
+`VERBOSITY`, `H`, `R`, `ASSUME_SORTED`, ...) are accepted, dropped, and noted on stderr.
+Any other option, and `METRIC_ACCUMULATION_LEVEL` other than `ALL_READS`, exits 1 naming the option.
 
 `insert-size` takes Picard's options: `-M` (MINIMUM_PCT), `--deviations`, `-W`
 (HISTOGRAM_WIDTH), `--min-histogram-width` and `--include-duplicates`. Like Picard,

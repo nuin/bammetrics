@@ -136,8 +136,21 @@ def compare(picard_rows, ours_rows, key_columns=()):
 
 
 def compare_files(picard, ours, key_columns=()):
-    """Compare two parsed MetricsFiles: class, metric rows and histogram cells."""
+    """Compare two parsed MetricsFiles: class, column order, row count and order,
+    histogram column order, key order and cells."""
     result = compare(picard.rows, ours.rows, key_columns)
+    if len(picard.rows) != len(ours.rows):
+        result.mismatches.append(
+            f"row count: picard={len(picard.rows)} bammetrics={len(ours.rows)}")
+    elif key_columns:
+        picard_order = [_row_key(r, key_columns) for r in picard.rows]
+        ours_order = [_row_key(r, key_columns) for r in ours.rows]
+        if picard_order != ours_order:
+            result.mismatches.append(f"row order: picard={picard_order} bammetrics={ours_order}")
+    if list(picard.histogram) != list(ours.histogram):
+        result.mismatches.append(
+            f"histogram key order or count: picard={len(picard.histogram)} keys, "
+            f"bammetrics={len(ours.histogram)} keys")
     if picard.metrics_class != ours.metrics_class:
         result.mismatches.append(
             f"METRICS CLASS: picard={picard.metrics_class!r} bammetrics={ours.metrics_class!r}")

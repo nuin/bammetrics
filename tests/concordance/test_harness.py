@@ -1,7 +1,8 @@
 """Unit tests for the comparison rules in picard_metrics.py."""
 import math
 
-from picard_metrics import compare, compare_values, format_like_picard, parse_picard_metrics
+from picard_metrics import (compare, compare_files, compare_values, format_like_picard,
+                            parse_picard_metrics)
 
 
 def test_format_like_picard():
@@ -60,3 +61,25 @@ def test_parse(tmp_path):
     assert m.rows == [{"A": "1", "B": "?", "SAMPLE": ""}]
     assert m.histogram == {"200": {"All_Reads.fr_count": "1"},
                            "300": {"All_Reads.fr_count": "36"}}
+
+
+def test_compare_files_checks_order_and_counts(tmp_path):
+    text = ("## METRICS CLASS\tpicard.analysis.InsertSizeMetrics\nA\tPAIR_ORIENTATION\n"
+            "1\tFR\n2\tRF\n\n## HISTOGRAM\tjava.lang.Integer\nk\tc\n1\t1\n2\t2\n\n")
+    (tmp_path / "a.txt").write_text(text)
+    key = ("PAIR_ORIENTATION",)
+    base = parse_picard_metrics(tmp_path / "a.txt")
+    assert compare_files(base, parse_picard_metrics(tmp_path / "a.txt"), key).ok
+
+    (tmp_path / "swapped.txt").write_text(
+        text.replace("1\tFR\n2\tRF", "2\tRF\n1\tFR"))
+    result = compare_files(base, parse_picard_metrics(tmp_path / "swapped.txt"), key)
+    assert any("row order" in m for m in result.mismatches)
+
+    (tmp_path / "short.txt").write_text(text.replace("2\tRF\n", ""))
+    result = compare_files(base, parse_picard_metrics(tmp_path / "short.txt"), key)
+    assert any("row count" in m for m in result.mismatches)
+
+    (tmp_path / "keys.txt").write_text(text.replace("1\t1\n2\t2", "2\t2\n1\t1"))
+    result = compare_files(base, parse_picard_metrics(tmp_path / "keys.txt"), key)
+    assert any("histogram key order" in m for m in result.mismatches)
