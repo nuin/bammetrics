@@ -5,3 +5,4 @@
 test.bam
 *.bai
 dist/
+__pycache__/
