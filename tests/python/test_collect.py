@@ -1,6 +1,6 @@
 """Python binding of collect on the committed fixture (five FR pairs of 100
 bases on chr1, 100000 bp): one pass gives what the single-metric functions
-give, and output_prefix writes the Picard files. Run: pytest tests/ after
+give, and output_prefix writes the Picard files. Run: pytest tests/python after
 maturin develop."""
 from pathlib import Path
 
@@ -8,7 +8,7 @@ import pytest
 
 import bammetrics
 
-HERE = Path(__file__).parent
+HERE = Path(__file__).parents[1]
 FIXTURE = str(HERE / "data" / "insert_size.bam")
 
 

@@ -1,14 +1,14 @@
 """Python binding of hs_metrics on the committed fixture (five FR pairs of 100
 bases on chr1, 100000 bp, Q40; the first pair at 1001-1100 and 1201-1300),
 and on the corpus t1 BAM, against Picard 3.5.0's own numbers for it
-(`make corpus`). Run: pytest tests/ after maturin develop."""
+(`make corpus`). Run: pytest tests/python after maturin develop."""
 from pathlib import Path
 
 import pytest
 
 import bammetrics
 
-HERE = Path(__file__).parent
+HERE = Path(__file__).parents[1]
 FIXTURE = str(HERE / "data" / "insert_size.bam")
 CORPUS = HERE / "corpus" / "out"
 
@@ -29,7 +29,7 @@ def test_fixture_fields_and_histograms(tmp_path):
     assert m.sample is None
     assert m.high_quality_coverage[1] == 100
     assert m.unfiltered_base_quality[40] == 100
-    fields = m.as_dict()
+    fields = m.to_dict()
     assert list(fields)[:3] == ["bait_set", "bait_territory", "bait_design_efficiency"]
     assert len(fields) == 69
     with pytest.raises(AttributeError):

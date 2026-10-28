@@ -1,9 +1,9 @@
-"""Python binding on the committed fixture (run: pytest tests/ after maturin develop)."""
+"""Python binding on the committed fixture (run: pytest tests/python after maturin develop)."""
 from pathlib import Path
 
 import bammetrics
 
-FIXTURE = Path(__file__).parent / "data" / "insert_size.bam"
+FIXTURE = Path(__file__).parents[1] / "data" / "insert_size.bam"
 
 
 def test_known_answers():
@@ -18,7 +18,7 @@ def test_known_answers():
 
 
 def test_orientation_cutoff_matches_picard():
-    path = str(Path(__file__).parent / "data" / "orientation.bam")
+    path = str(Path(__file__).parents[1] / "data" / "orientation.bam")
     assert [r.pair_orientation for r in bammetrics.insert_size(path)] == ["FR"]
     rows = bammetrics.insert_size(path, minimum_pct=0.0)
     assert [(r.pair_orientation, r.read_pairs) for r in rows] == [

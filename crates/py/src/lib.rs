@@ -13,9 +13,41 @@ use pyo3::exceptions::{PyAttributeError, PyIOError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-#[pyclass(get_all)]
-#[derive(Clone)]
-struct InsertSizeMetrics {
+/// Declares a row class: every field readable as an attribute, `to_dict()`
+/// returning them in declaration order, and a `__repr__` that shows the
+/// fields named after `repr`.
+macro_rules! row_class {
+    (
+        $(#[$meta:meta])*
+        $name:ident { $($field:ident: $ty:ty),+ $(,)? }
+        repr [$($shown:ident),+ $(,)?]
+    ) => {
+        $(#[$meta])*
+        #[pyclass(get_all)]
+        #[derive(Clone)]
+        struct $name {
+            $($field: $ty),+
+        }
+
+        #[pymethods]
+        impl $name {
+            /// Every field as {name: value}, in declaration order.
+            fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+                let dict = PyDict::new(py);
+                $(dict.set_item(stringify!($field), &self.$field)?;)+
+                Ok(dict)
+            }
+
+            fn __repr__(&self) -> String {
+                let shown: Vec<String> = vec![$(format!("{}={:?}", stringify!($shown), self.$shown)),+];
+                format!("{}({})", stringify!($name), shown.join(", "))
+            }
+        }
+    };
+}
+
+row_class! {
+    InsertSizeMetrics {
     pair_orientation: String,
     read_pairs: i64,
     min_insert_size: i64,
@@ -36,20 +68,8 @@ struct InsertSizeMetrics {
     width_of_90_percent: i64,
     width_of_95_percent: i64,
     width_of_99_percent: i64,
-}
-
-#[pymethods]
-impl InsertSizeMetrics {
-    fn __repr__(&self) -> String {
-        format!(
-            "InsertSizeMetrics(orientation={}, read_pairs={}, median={}, mean={:.4}, sd={:.4})",
-            self.pair_orientation,
-            self.read_pairs,
-            self.median_insert_size,
-            self.mean_insert_size,
-            self.standard_deviation
-        )
     }
+    repr [pair_orientation, read_pairs, median_insert_size, mean_insert_size, standard_deviation]
 }
 
 impl From<insert_size::Row> for InsertSizeMetrics {
@@ -103,16 +123,14 @@ fn py_insert_size(
         min_histogram_width,
         include_duplicates,
     };
-    let rows =
-        insert_size::run_over_bam(path, &opts).map_err(|e| PyIOError::new_err(e.to_string()))?;
+    let rows = insert_size::run_over_bam(path, &opts).map_err(|e| py_error(&e))?;
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
-/// One `AlignmentSummaryMetrics` row; field names are Picard's columns in
-/// lower case.
-#[pyclass(get_all)]
-#[derive(Clone)]
-struct AlignmentSummaryMetrics {
+row_class! {
+    /// One `AlignmentSummaryMetrics` row; field names are Picard's columns in
+    /// lower case.
+    AlignmentSummaryMetrics {
     category: String,
     total_reads: i64,
     pf_reads: i64,
@@ -146,16 +164,8 @@ struct AlignmentSummaryMetrics {
     pct_softclip: f64,
     pct_hardclip: f64,
     avg_pos_3prime_softclip_length: f64,
-}
-
-#[pymethods]
-impl AlignmentSummaryMetrics {
-    fn __repr__(&self) -> String {
-        format!(
-            "AlignmentSummaryMetrics(category={}, total_reads={}, pf_reads_aligned={}, pf_mismatch_rate={:.6})",
-            self.category, self.total_reads, self.pf_reads_aligned, self.pf_mismatch_rate
-        )
     }
+    repr [category, total_reads, pf_reads_aligned, pf_mismatch_rate]
 }
 
 impl From<alignment_summary::Row> for AlignmentSummaryMetrics {
@@ -234,15 +244,13 @@ fn py_alignment_summary(
         adapter_sequences: adapter_sequences.unwrap_or(defaults.adapter_sequences),
         collect_alignment_information,
     };
-    let report = alignment_summary::run_over_bam(path, &opts)
-        .map_err(|e| PyIOError::new_err(e.to_string()))?;
+    let report = alignment_summary::run_over_bam(path, &opts).map_err(|e| py_error(&e))?;
     Ok(report.rows.into_iter().map(Into::into).collect())
 }
 
-/// The `QualityYieldMetrics` row; field names are Picard's columns in lower case.
-#[pyclass(get_all)]
-#[derive(Clone)]
-struct QualityYieldMetrics {
+row_class! {
+    /// The `QualityYieldMetrics` row; field names are Picard's columns in lower case.
+    QualityYieldMetrics {
     total_reads: i64,
     pf_reads: i64,
     read_length: i32,
@@ -254,16 +262,8 @@ struct QualityYieldMetrics {
     pf_q30_bases: i64,
     q20_equivalent_yield: i64,
     pf_q20_equivalent_yield: i64,
-}
-
-#[pymethods]
-impl QualityYieldMetrics {
-    fn __repr__(&self) -> String {
-        format!(
-            "QualityYieldMetrics(total_reads={}, total_bases={}, q30_bases={})",
-            self.total_reads, self.total_bases, self.q30_bases
-        )
     }
+    repr [total_reads, total_bases, q30_bases]
 }
 
 impl From<quality_yield::Row> for QualityYieldMetrics {
@@ -305,7 +305,7 @@ fn py_quality_yield(
     };
     quality_yield::run_over_bam(path, &opts)
         .map(Into::into)
-        .map_err(|e| PyIOError::new_err(e.to_string()))
+        .map_err(|e| py_error(&e))
 }
 
 /// The `HsMetrics` row. Every Picard column is an attribute in lower case
@@ -350,8 +350,9 @@ impl HsMetrics {
         field_object(py, field)
     }
 
-    /// Every column, in Picard's order, as {lower-case name: value}.
-    fn as_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+    /// Every column, in Picard's order, as {lower-case name: value}. The two
+    /// histograms are attributes, not entries.
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         for (name, field) in &self.fields {
             dict.set_item(name, field_object(py, field)?)?;

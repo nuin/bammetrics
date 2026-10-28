@@ -1,12 +1,12 @@
 """Python binding of alignment_summary on the committed fixture (five FR pairs
-of 100 A bases on chr1, 100000 bp). Run: pytest tests/ after maturin develop."""
+of 100 A bases on chr1, 100000 bp). Run: pytest tests/python after maturin develop."""
 from pathlib import Path
 
 import pytest
 
 import bammetrics
 
-FIXTURE = str(Path(__file__).parent / "data" / "insert_size.bam")
+FIXTURE = str(Path(__file__).parents[1] / "data" / "insert_size.bam")
 
 
 def write_reference(directory, base):

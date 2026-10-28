@@ -1,13 +1,13 @@
 """Python binding of quality_yield. The committed fixture has ten reads of 100
 bases at Q40 (I); the t0_qy numbers are Picard 3.5.0's own output for the
-generated corpus BAM (`make corpus`). Run: pytest tests/ after maturin develop."""
+generated corpus BAM (`make corpus`). Run: pytest tests/python after maturin develop."""
 from pathlib import Path
 
 import pytest
 
 import bammetrics
 
-HERE = Path(__file__).parent
+HERE = Path(__file__).parents[1]
 FIXTURE = str(HERE / "data" / "insert_size.bam")
 T0_QY = HERE / "corpus" / "out" / "t0_qy.bam"
 
