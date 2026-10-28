@@ -148,6 +148,48 @@ const QUALITY_YIELD: &[Entry] = &[
     ),
 ];
 
+/// Options of `CollectHsMetrics` (`CollectTargetedMetrics` and
+/// `CollectHsMetrics` in Picard 3.5.0). `R` changes `AT_DROPOUT` and
+/// `GC_DROPOUT`, so this entry shadows the `COMMON` one. The two interval
+/// options repeat, one file per occurrence. The extra output files
+/// (`PER_TARGET_COVERAGE`, `PER_BASE_COVERAGE`, `THEORETICAL_SENSITIVITY_OUTPUT`)
+/// are not written, so they are errors.
+const HS_METRICS: &[Entry] = &[
+    (&["INPUT", "I"], Action::Value("--input")),
+    (&["OUTPUT", "O"], Action::Value("--output")),
+    (&["BAIT_INTERVALS", "BI"], Action::Value("--bait-intervals")),
+    (
+        &["TARGET_INTERVALS", "TI"],
+        Action::Value("--target-intervals"),
+    ),
+    (&["BAIT_SET_NAME", "N"], Action::Value("--bait-set-name")),
+    (&["REFERENCE_SEQUENCE", "R"], Action::Value("--reference")),
+    (
+        &["MINIMUM_MAPPING_QUALITY", "MQ"],
+        Action::Value("--minimum-mapping-quality"),
+    ),
+    (
+        &["MINIMUM_BASE_QUALITY", "Q"],
+        Action::Value("--minimum-base-quality"),
+    ),
+    (
+        &["CLIP_OVERLAPPING_READS"],
+        Action::Value("--clip-overlapping-reads"),
+    ),
+    (&["INCLUDE_INDELS"], Action::Bool("--include-indels")),
+    (&["COVERAGE_CAP", "covMax"], Action::Value("--coverage-cap")),
+    (&["NEAR_DISTANCE"], Action::Value("--near-distance")),
+    (&["SAMPLE_SIZE"], Action::Value("--sample-size")),
+    (
+        &["ALLELE_FRACTION"],
+        Action::Ignore("only THEORETICAL_SENSITIVITY_OUTPUT reads it"),
+    ),
+    (
+        &["METRIC_ACCUMULATION_LEVEL", "LEVEL"],
+        Action::Only("ALL_READS"),
+    ),
+];
+
 struct Tool {
     picard_name: &'static str,
     subcommand: &'static str,
@@ -169,6 +211,11 @@ const TOOLS: &[Tool] = &[
         picard_name: "CollectQualityYieldMetrics",
         subcommand: "quality-yield",
         options: QUALITY_YIELD,
+    },
+    Tool {
+        picard_name: "CollectHsMetrics",
+        subcommand: "hs-metrics",
+        options: HS_METRICS,
     },
 ];
 
@@ -417,6 +464,52 @@ mod tests {
             &strings(&["FLOW_MODE=true"]),
         ));
         assert!(message.contains("FLOW_MODE"));
+    }
+
+    #[test]
+    fn hs_metrics_options() {
+        let t = translate(
+            "CollectHsMetrics",
+            &strings(&[
+                "I=x.bam",
+                "O=out.txt",
+                "R=ref.fa",
+                "BAIT_INTERVALS=b.interval_list",
+                "TI=t1.interval_list",
+                "TARGET_INTERVALS=t2.interval_list",
+                "MQ=10",
+                "Q=5",
+                "CLIP_OVERLAPPING_READS=false",
+                "INCLUDE_INDELS=true",
+                "covMax=50",
+                "ALLELE_FRACTION=0.1",
+            ]),
+        )
+        .expect("translates")
+        .expect("known tool");
+        assert_eq!(t.subcommand, "hs-metrics");
+        assert_eq!(
+            t.args,
+            [
+                "--input=x.bam",
+                "--output=out.txt",
+                "--reference=ref.fa",
+                "--bait-intervals=b.interval_list",
+                "--target-intervals=t1.interval_list",
+                "--target-intervals=t2.interval_list",
+                "--minimum-mapping-quality=10",
+                "--minimum-base-quality=5",
+                "--clip-overlapping-reads=false",
+                "--include-indels",
+                "--coverage-cap=50",
+            ]
+        );
+        assert_eq!(t.notes.len(), 1);
+        let message = usage(translate(
+            "CollectHsMetrics",
+            &strings(&["PER_TARGET_COVERAGE=x.txt"]),
+        ));
+        assert!(message.contains("PER_TARGET_COVERAGE"));
     }
 
     #[test]

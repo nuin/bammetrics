@@ -1,11 +1,15 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use bammetrics_core::alignment_summary::{self, DEFAULT_MAX_INSERT_SIZE};
+use bammetrics_core::histogram::Histogram;
+use bammetrics_core::hs_metrics::{self, COLUMNS, Field};
 use bammetrics_core::insert_size::{self, Options};
 use bammetrics_core::quality_yield;
 use bammetrics_core::record::Orientation;
-use pyo3::exceptions::{PyIOError, PyValueError};
+use pyo3::exceptions::{PyAttributeError, PyIOError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 
 #[pyclass(get_all)]
 #[derive(Clone)]
@@ -302,6 +306,148 @@ fn py_quality_yield(
         .map_err(|e| PyIOError::new_err(e.to_string()))
 }
 
+/// The `HsMetrics` row. Every Picard column is an attribute in lower case
+/// (`m.mean_target_coverage`); `HS_LIBRARY_SIZE` and the read-group columns
+/// may be None. The two histograms are dicts keyed by depth or quality.
+#[pyclass]
+struct HsMetrics {
+    fields: Vec<(String, Field)>,
+    /// `high_quality_coverage_count`: target bases per high-quality depth.
+    #[pyo3(get)]
+    high_quality_coverage: BTreeMap<i64, f64>,
+    /// `unfiltered_baseq_count`: on-target bases above Q2 per base quality.
+    #[pyo3(get)]
+    unfiltered_base_quality: BTreeMap<i64, f64>,
+}
+
+fn histogram_dict(histogram: &Histogram) -> BTreeMap<i64, f64> {
+    histogram
+        .keys()
+        .map(|k| (k, histogram.get(k).unwrap_or(0.0)))
+        .collect()
+}
+
+fn field_object(py: Python<'_>, field: &Field) -> PyResult<Py<PyAny>> {
+    Ok(match field {
+        Field::Text(s) => s.into_pyobject(py)?.into_any().unbind(),
+        Field::Long(v) => v.into_pyobject(py)?.into_any().unbind(),
+        Field::Double(v) => v.into_pyobject(py)?.into_any().unbind(),
+        Field::Null => py.None(),
+    })
+}
+
+#[pymethods]
+impl HsMetrics {
+    fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
+        let field = self
+            .fields
+            .iter()
+            .find(|(column, _)| column == name)
+            .map(|(_, field)| field)
+            .ok_or_else(|| PyAttributeError::new_err(format!("HsMetrics has no field {name:?}")))?;
+        field_object(py, field)
+    }
+
+    /// Every column, in Picard's order, as {lower-case name: value}.
+    fn as_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        for (name, field) in &self.fields {
+            dict.set_item(name, field_object(py, field)?)?;
+        }
+        Ok(dict)
+    }
+
+    fn __repr__(&self) -> String {
+        let text = |name: &str| {
+            self.fields
+                .iter()
+                .find(|(column, _)| column == name)
+                .map_or_else(String::new, |(_, f)| f.picard_text())
+        };
+        format!(
+            "HsMetrics(bait_set={}, mean_target_coverage={}, pct_target_bases_20x={})",
+            text("bait_set"),
+            text("mean_target_coverage"),
+            text("pct_target_bases_20x")
+        )
+    }
+}
+
+impl From<hs_metrics::Report> for HsMetrics {
+    fn from(report: hs_metrics::Report) -> Self {
+        Self {
+            fields: COLUMNS
+                .iter()
+                .map(|c| c.to_ascii_lowercase())
+                .zip(report.row.fields())
+                .collect(),
+            high_quality_coverage: histogram_dict(&report.depth),
+            unfiltered_base_quality: histogram_dict(&report.base_quality),
+        }
+    }
+}
+
+/// One path or a list of paths, as Picard's repeatable interval options.
+fn path_list(value: &Bound<'_, PyAny>) -> PyResult<Vec<PathBuf>> {
+    match value.extract::<PathBuf>() {
+        Ok(path) => Ok(vec![path]),
+        Err(_) => value.extract::<Vec<PathBuf>>(),
+    }
+}
+
+/// `CollectHsMetrics`: one `HsMetrics` for the BAM. `bait_intervals` and
+/// `target_intervals` take a path or a list of paths (interval lists or BED).
+#[pyfunction]
+#[pyo3(name = "hs_metrics", signature = (
+    path,
+    bait_intervals,
+    target_intervals,
+    reference=None,
+    bait_set_name=None,
+    minimum_mapping_quality=hs_metrics::DEFAULT_MINIMUM_MAPPING_QUALITY,
+    minimum_base_quality=hs_metrics::DEFAULT_MINIMUM_BASE_QUALITY,
+    clip_overlapping_reads=true,
+    include_indels=false,
+    coverage_cap=hs_metrics::DEFAULT_COVERAGE_CAP,
+    near_distance=hs_metrics::DEFAULT_NEAR_DISTANCE,
+    sample_size=hs_metrics::DEFAULT_SAMPLE_SIZE,
+))]
+#[allow(clippy::too_many_arguments)]
+fn py_hs_metrics(
+    path: &str,
+    bait_intervals: &Bound<'_, PyAny>,
+    target_intervals: &Bound<'_, PyAny>,
+    reference: Option<PathBuf>,
+    bait_set_name: Option<String>,
+    minimum_mapping_quality: i32,
+    minimum_base_quality: i32,
+    clip_overlapping_reads: bool,
+    include_indels: bool,
+    coverage_cap: i32,
+    near_distance: i32,
+    sample_size: usize,
+) -> PyResult<HsMetrics> {
+    let opts = hs_metrics::Options {
+        bait_intervals: path_list(bait_intervals)?,
+        target_intervals: path_list(target_intervals)?,
+        bait_set_name,
+        reference,
+        minimum_mapping_quality,
+        minimum_base_quality,
+        clip_overlapping_reads,
+        include_indels,
+        coverage_cap,
+        near_distance,
+        sample_size,
+    };
+    hs_metrics::run_over_bam(path, &opts)
+        .map(Into::into)
+        .map_err(|e| match e {
+            bammetrics_core::Error::Usage(message) => PyValueError::new_err(message),
+            other => PyIOError::new_err(other.to_string()),
+        })
+}
+
 #[pymodule]
 fn bammetrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<InsertSizeMetrics>()?;
@@ -310,5 +456,7 @@ fn bammetrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_alignment_summary, m)?)?;
     m.add_class::<QualityYieldMetrics>()?;
     m.add_function(wrap_pyfunction!(py_quality_yield, m)?)?;
+    m.add_class::<HsMetrics>()?;
+    m.add_function(wrap_pyfunction!(py_hs_metrics, m)?)?;
     Ok(())
 }

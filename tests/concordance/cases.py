@@ -33,6 +33,7 @@ METRICS = {
                                 ("CATEGORY",)),
     # One row, no key column.
     "quality_yield": Metric("CollectQualityYieldMetrics", "quality-yield"),
+    "hs_metrics": Metric("CollectHsMetrics", "hs-metrics"),
 }
 
 
@@ -158,4 +159,65 @@ def _quality_yield_cases():
     return cases
 
 
-CASES = _insert_size_cases() + _alignment_summary_cases() + _quality_yield_cases()
+def _hs_metrics_cases():
+    """t1 and t2 with baits and targets, with the target list as both (how the
+    clinical pipeline calls it), each with and without R=; then single-end t3,
+    the t0_hs rule BAM, and the options. Every interval option has a native
+    flag; the t1_bed case gives bammetrics the BED copies of the lists Picard
+    reads (Picard 3.5.0 refuses BED)."""
+    def intervals(baits, targets, ext="interval_list"):
+        picard = (f"BAIT_INTERVALS={CORPUS / f'{baits}.{ext}'}",
+                  f"TARGET_INTERVALS={CORPUS / f'{targets}.{ext}'}")
+        ours = ("--bait-intervals", str(CORPUS / f"{baits}.{ext}"),
+                "--target-intervals", str(CORPUS / f"{targets}.{ext}"))
+        return picard, ours
+
+    ref = ((f"R={REFERENCE}",), ("-R", str(REFERENCE)))
+    pairs = {"": intervals("baits", "targets"), "_same": intervals("targets", "targets")}
+    cases = []
+    for name in ("t1", "t2"):
+        bam = CORPUS / f"{name}.bam"
+        for label, (picard, ours) in pairs.items():
+            cases.append(Case(f"{name}{label}", bam, "hs_metrics", picard, ours))
+            cases.append(Case(f"{name}{label}_ref", bam, "hs_metrics",
+                              picard + ref[0], ours + ref[1]))
+    picard, ours = pairs[""]
+    _, bed = intervals("baits", "targets", "bed")
+    cases.append(Case("t1_bed_ref", CORPUS / "t1.bam", "hs_metrics", picard + ref[0], bed + ref[1]))
+    cases.append(Case("t3", CORPUS / "t3.bam", "hs_metrics", picard, ours))
+    t2 = CORPUS / "t2.bam"
+    for label, picard_opts, our_opts in (
+            ("no_clip", ("CLIP_OVERLAPPING_READS=false",), ("--clip-overlapping-reads", "false")),
+            ("indels", ("INCLUDE_INDELS=true",), ("--include-indels",)),
+            ("cap20", ("COVERAGE_CAP=20",), ("--coverage-cap", "20")),
+            ("q0", ("MINIMUM_MAPPING_QUALITY=0", "MINIMUM_BASE_QUALITY=0"),
+             ("--minimum-mapping-quality", "0", "--minimum-base-quality", "0")),
+            ("near10", ("NEAR_DISTANCE=10",), ("--near-distance", "10"))):
+        cases.append(Case(f"t2_{label}", t2, "hs_metrics", picard + picard_opts, ours + our_opts))
+    # t0_hs records do not pass Picard's STRICT validation.
+    silent = ("VALIDATION_STRINGENCY=SILENT",)
+    t0 = CORPUS / "t0_hs.bam"
+    messy = intervals("baits", "hs_targets")
+    two_baits = (picard[:1] + (f"BAIT_INTERVALS={CORPUS / 'targets.interval_list'}",) + picard[1:],
+                 ours[:2] + ("--bait-intervals", str(CORPUS / "targets.interval_list")) + ours[2:])
+    for label, (p, o) in {
+            "": (picard, ours),
+            "_ref": (picard + ref[0], ours + ref[1]),
+            "_cap5": (picard + ("COVERAGE_CAP=5",), ours + ("--coverage-cap", "5")),
+            "_indels": (picard + ("INCLUDE_INDELS=true",), ours + ("--include-indels",)),
+            "_no_clip": (picard + ("CLIP_OVERLAPPING_READS=false",),
+                         ours + ("--clip-overlapping-reads", "false")),
+            "_q0": (picard + ("MINIMUM_MAPPING_QUALITY=0", "MINIMUM_BASE_QUALITY=0"),
+                    ours + ("--minimum-mapping-quality", "0", "--minimum-base-quality", "0")),
+            "_messy_targets": messy,
+            "_messy_targets_ref": (messy[0] + ref[0], messy[1] + ref[1]),
+            "_two_bait_files": two_baits,
+            "_named_near0": (picard + ("BAIT_SET_NAME=kit_v1", "NEAR_DISTANCE=0"),
+                             ours + ("--bait-set-name", "kit_v1", "--near-distance", "0")),
+    }.items():
+        cases.append(Case(f"t0_hs{label}", t0, "hs_metrics", silent + p, o))
+    return cases
+
+
+CASES = (_insert_size_cases() + _alignment_summary_cases() + _quality_yield_cases()
+         + _hs_metrics_cases())

@@ -16,6 +16,9 @@ Tiers:
   t3    10k single-end reads
   t0_qy hand-built reads for CollectQualityYieldMetrics: OQ tags of every
         length, no QUAL, quality thresholds, QC-fail, secondary, supplementary
+  t0_hs hand-built reads for CollectHsMetrics: overlap clipping, filters and
+        bait distances; hs_targets.interval_list holds unsorted, duplicate,
+        overlapping, abutting and empty targets
 
 t1 to t3 also carry an OQ tag on a quarter of the reads, with the QUAL field
 lowered the way base recalibration does, so the OQ and QUAL totals differ.
@@ -681,6 +684,85 @@ def t0_qy(reference):
     return b
 
 
+def t0_hs(reference, targets):
+    """CollectHsMetrics rules on a few reads placed on the corpus targets:
+    overlapping mates clipped as htsjdk does (equal starts, = and X elements,
+    insertions, trailing soft clips and deletions at the clip, a mate on
+    another contig), the duplicate, adapter, MAPQ and base-quality filters,
+    QC-fail, secondary, supplementary and mate-unmapped records, near-bait
+    and off-bait reads, and a pile-up deeper than a small COVERAGE_CAP."""
+    b = AsmBuilder(reference)
+    r = b.ref_seq
+    t = [start for contig, start, _ in targets if contig == "chr1"]
+    # Overlapping mates: the left end loses the overlap.
+    b.pair("p_overlap", "chr1", t[0], t[0] + 50)
+    # Same start: the first end keeps everything, the second is dropped.
+    b.pair("p_same_start", "chr1", t[1], t[1])
+    # = and X elements straddling the mate start are clipped whole.
+    b.pair("p_seq_match", "chr1", t[2], t[2] + 30, cigars=("40=1X59=", None),
+           seqs=(substitute(r("chr1", t[2], 100), [40]), None))
+    # An insertion before the clip point and a trailing soft clip.
+    b.pair("p_insertion", "chr1", t[3], t[3] + 47, len1=95, cigars=("45M5I50M", None),
+           seqs=(r("chr1", t[3], 45) + "ACGTA" + r("chr1", t[3] + 45, 50), None))
+    b.pair("p_soft_clip", "chr1", t[4], t[4] + 60, len1=90, cigars=("90M10S", None),
+           seqs=(r("chr1", t[4], 90) + "A" * 10, None))
+    # The mate starts inside a deletion.
+    b.pair("p_deletion", "chr1", t[5], t[5] + 55, len1=110, cigars=("50M10D50M", None),
+           seqs=(r("chr1", t[5], 50) + r("chr1", t[5] + 60, 50), None))
+    # A mate on chr2 at a larger position still clips (contigs are not compared).
+    b.pair("p_other_contig", "chr1", t[6], t[6] + 40, mate_contig="chr2",
+           flags=PAIRED)
+    # Duplicates and unique first ends near the baits give HS_LIBRARY_SIZE.
+    for i in range(4):
+        b.pair(f"p_dup{i}", "chr1", t[7] + 10 * i, t[7] + 150,
+               flags=PAIRED | PROPER | (DUPLICATE if i % 2 else 0))
+    # Adapter at MAPQ 0, MAPQ 0 without adapter, MAPQ 10.
+    b.make("u_adapter", 0, "chr1", t[8], "100M", ADAPTER_READ + r("chr1", t[8] + 64, 36), mapq=0)
+    b.make("u_mapq0", 0, "chr1", t[8] + 20, "100M", r("chr1", t[8] + 20, 100), mapq=0)
+    b.make("u_mapq10", REVERSE, "chr1", t[8] + 40, "100M", r("chr1", t[8] + 40, 100), mapq=10)
+    # Base qualities 2, 3, 10 and 40.
+    quals = "#" * 10 + "$" * 10 + "+" * 30 + "I" * 50
+    b.make("u_low_quality", 0, "chr1", t[9], "100M", r("chr1", t[9], 100), quals=quals)
+    # Partly off target, then near-bait and off-bait reads.
+    b.make("u_edge", 0, "chr1", t[10] - 60, "100M", r("chr1", t[10] - 60, 100))
+    b.make("u_near", 0, "chr1", t[11] - 250, "100M", r("chr1", t[11] - 250, 100))
+    b.make("u_off", 0, "chr1", t[11] - 1_000, "100M", r("chr1", t[11] - 1_000, 100))
+    # Flags: QC-fail, secondary, supplementary (hard clipped), mate unmapped.
+    b.make("u_qcfail", QCFAIL, "chr1", t[12], "100M", r("chr1", t[12], 100))
+    b.make("u_secondary", SECONDARY, "chr1", t[12] + 10, "100M", r("chr1", t[12] + 10, 100))
+    b.make("u_supplementary", SUPPLEMENTARY, "chr1", t[12] + 20, "50H50M",
+           r("chr1", t[12] + 20, 50))
+    b.make("p_mate_unmapped", PAIRED | FIRST | MATE_UNMAPPED, "chr1", t[13], "100M",
+           r("chr1", t[13], 100), mate=("chr1", t[13]))
+    b.make("p_mate_unmapped", PAIRED | SECOND | UNMAPPED, "chr1", t[13], None,
+           r("chr1", t[13], 100), mate=("chr1", t[13]))
+    # Indels on target for INCLUDE_INDELS.
+    b.make("u_indels", 0, "chr1", t[14], "30M3I30M4D37M",
+           r("chr1", t[14], 30) + "TTT" + r("chr1", t[14] + 30, 30) + r("chr1", t[14] + 64, 37))
+    # Eight reads on one spot: depth 8 against COVERAGE_CAP=5.
+    for i in range(8):
+        b.make(f"u_stack{i}", 0, "chr1", t[15], "100M", r("chr1", t[15], 100),
+               quals="5" * 50 + "I" * 50)
+    return b
+
+
+def write_hs_intervals(out, targets):
+    """Targets for the t0_hs merge rules, in a deliberately unsorted list:
+    two copies of one target, an overlapping and an abutting pair, an empty
+    interval and a contig missing from the dictionary (skipped by htsjdk)."""
+    (c0, s0, e0), (_, s1, e1), (_, s2, e2) = targets[0], targets[1], targets[2]
+    rows = [
+        (c0, s2 + 1, e2), (c0, s0 + 1, e0), (c0, s0 + 1, e0),
+        (c0, s1 + 1, s1 + 100), (c0, s1 + 50, e1),
+        (c0, e1 + 1, e1 + 30), (c0, e2 + 500, e2 + 499), ("chrUn", 1, 10),
+    ]
+    header = (out / "reference.dict").read_text()
+    with (out / "hs_targets.interval_list").open("w") as f:
+        f.write(header)
+        for i, (contig, start, end) in enumerate(rows, 1):
+            f.write(f"{contig}\t{start}\t{end}\t+\ths_{i}\n")
+
+
 def make_t0_asm(out, reference):
     t0_asm(reference).write(out / "t0_asm.bam")
     t0_asm_cycles(reference).write(out / "t0_asm_cycles.bam")
@@ -699,6 +781,8 @@ def main():
     write_intervals(out, "baits", baits)
     make_t0(out)
     make_t0_asm(out, reference)
+    t0_hs(reference, targets).write(out / "t0_hs.bam")
+    write_hs_intervals(out, targets)
     make_paired_tier(Simulator(rng, reference, targets, messy=False), out, "t1",
                      20_000, dup_rate=0.0, all_alignments=False)
     make_paired_tier(Simulator(rng, reference, targets, messy=True), out, "t2",

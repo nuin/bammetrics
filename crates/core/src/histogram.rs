@@ -88,10 +88,15 @@ impl Histogram {
 
     /// `Histogram.getMedian`. Even count: mean of the bins holding items
     /// count/2 and count/2 + 1. Odd count: both picks are the same bin.
+    /// A count of exactly 1 returns the first key, even when that bin is
+    /// empty and the item sits in a later one.
     pub fn median(&self) -> f64 {
         let count = self.count();
         if count == 0.0 {
             return 0.0;
+        }
+        if count == 1.0 {
+            return self.min().map_or(0.0, |k| k as f64);
         }
         let (mid_low, mid_high) = if (count as i64) % 2 == 0 {
             (count / 2.0, count / 2.0 + 1.0)
@@ -133,6 +138,26 @@ impl Histogram {
         deviations.median() / 2.0
     }
 
+    /// `Histogram.getPercentile`: the first key at which the running count
+    /// reaches `percentile` of the total. `None` when the total is 0, where
+    /// htsjdk throws.
+    pub fn percentile(&self, percentile: f64) -> Option<f64> {
+        let total = self.count();
+        if total == 0.0 {
+            return None;
+        }
+        let mut so_far = 0.0;
+        self.bins.iter().find_map(|(&k, &c)| {
+            so_far += c;
+            (so_far / total >= percentile).then_some(k as f64)
+        })
+    }
+
+    /// Number of bins (`Histogram.size`), empty ones included.
+    pub fn len(&self) -> usize {
+        self.bins.len()
+    }
+
     /// `Histogram.trimByWidth`: drop every bin whose key exceeds `width`.
     pub fn trim_by_width(&mut self, width: i64) {
         self.bins.retain(|&k, _| k <= width);
@@ -166,6 +191,22 @@ mod tests {
     #[test]
     fn single_item_median_is_its_key() {
         assert_eq!(hist(&[(7, 1.0)]).median(), 7.0);
+    }
+
+    #[test]
+    fn single_item_median_is_the_first_key_even_if_empty() {
+        // htsjdk returns values().iterator().next() when the count is 1.
+        assert_eq!(hist(&[(0, 0.0), (1, 0.0), (5, 1.0)]).median(), 0.0);
+    }
+
+    #[test]
+    fn percentile_is_first_key_reaching_the_fraction() {
+        let h = hist(&[(0, 1.0), (3, 0.0), (4, 3.0), (9, 1.0)]);
+        assert_eq!(h.percentile(0.2), Some(0.0));
+        assert_eq!(h.percentile(0.21), Some(4.0));
+        assert_eq!(h.percentile(0.9), Some(9.0));
+        assert_eq!(Histogram::new().percentile(0.2), None);
+        assert_eq!(h.len(), 4);
     }
 
     #[test]

@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use noodles::core::Region;
+use noodles::core::{Position, Region};
 use noodles::fasta;
 use noodles::sam;
 
@@ -81,17 +81,41 @@ impl Reference {
         Ok(self.current.as_ref().map_or(&[], |(_, bases)| bases))
     }
 
+    /// Bases `start..=end` (1-based) of the contig at `id`, read through the
+    /// `.fai` without loading the contig (`ReferenceSequenceFile.getSubsequenceAt`).
+    /// It does not move the forward-only `contig` walker.
+    pub fn subsequence(&mut self, id: usize, start: i64, end: i64) -> Result<Vec<u8>> {
+        if end < start {
+            return Ok(Vec::new());
+        }
+        let position = |p: i64| {
+            usize::try_from(p)
+                .ok()
+                .and_then(Position::new)
+                .ok_or_else(|| self.error(format!("bad position {p}")))
+        };
+        let region = Region::new(self.name(id)?, position(start)?..=position(end)?);
+        self.query(&region)
+    }
+
     fn load(&mut self, id: usize) -> Result<Vec<u8>> {
-        let name = self
-            .reader
+        let region = Region::new(self.name(id)?, ..);
+        self.query(&region)
+    }
+
+    fn name(&self, id: usize) -> Result<Vec<u8>> {
+        self.reader
             .index()
             .as_ref()
             .get(id)
-            .map(|r| r.name().to_owned())
-            .ok_or_else(|| self.error(format!("no contig {id} in the .fai index")))?;
+            .map(|r| r.name().to_vec())
+            .ok_or_else(|| self.error(format!("no contig {id} in the .fai index")))
+    }
+
+    fn query(&mut self, region: &Region) -> Result<Vec<u8>> {
         let record = self
             .reader
-            .query(&Region::new(name, ..))
+            .query(region)
             .map_err(|e: io::Error| self.error(e.to_string()))?;
         Ok(record.sequence().as_ref().to_vec())
     }
@@ -108,9 +132,11 @@ impl Reference {
 mod tests {
     use super::*;
 
-    /// chr1 = ACGTACGTAC, chr2 = GGGG, one line each, with a `.fai`.
-    fn two_contigs() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("bammetrics-ref-{}", std::process::id()));
+    /// chr1 = ACGTACGTAC, chr2 = GGGG, one line each, with a `.fai`, in a
+    /// directory of its own per test so parallel tests do not race.
+    fn two_contigs(test: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("bammetrics-ref-{}-{test}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("temp dir");
         let path = dir.join("ref.fa");
         std::fs::write(&path, ">chr1\nACGTACGTAC\n>chr2\nGGGG\n").expect("write FASTA");
@@ -125,7 +151,7 @@ mod tests {
     #[test]
     fn contigs_load_forward_only() {
         let mut reference =
-            Reference::open(&two_contigs(), &sam::Header::default()).expect("opens");
+            Reference::open(&two_contigs("walk"), &sam::Header::default()).expect("opens");
         assert_eq!(reference.contig(0).expect("chr1"), b"ACGTACGTAC");
         assert_eq!(reference.contig(1).expect("chr2"), b"GGGG");
         assert_eq!(reference.contig(1).expect("chr2 again"), b"GGGG");
@@ -134,5 +160,18 @@ mod tests {
             Err(Error::Reference { message, .. }) if message.contains("coordinate sorted")
         ));
         assert!(reference.contig(5).is_err());
+    }
+
+    #[test]
+    fn subsequences_are_one_based_and_closed() {
+        let mut reference =
+            Reference::open(&two_contigs("region"), &sam::Header::default()).expect("opens");
+        assert_eq!(reference.subsequence(0, 2, 5).expect("chr1"), b"CGTA");
+        assert_eq!(reference.subsequence(1, 4, 4).expect("chr2"), b"G");
+        assert!(reference.subsequence(1, 3, 2).expect("empty").is_empty());
+        assert_eq!(
+            reference.contig(0).expect("walker untouched"),
+            b"ACGTACGTAC"
+        );
     }
 }

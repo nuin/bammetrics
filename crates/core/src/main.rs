@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use bammetrics_core::Error;
 use bammetrics_core::alignment_summary::{self, DEFAULT_MAX_INSERT_SIZE};
+use bammetrics_core::hs_metrics;
 use bammetrics_core::insert_size::{self, Options};
 use bammetrics_core::metrics_file::started_on;
 use bammetrics_core::picard_cli;
@@ -19,7 +20,8 @@ use clap::{ArgAction, Args, Parser, Subcommand};
     about = "Picard-concordant BAM QC metrics",
     after_help = "Picard syntax also works: bammetrics CollectInsertSizeMetrics I=in.bam O=out.txt [M=0.05 ...]\n\
                   bammetrics CollectAlignmentSummaryMetrics I=in.bam O=out.txt [R=ref.fa ...]\n\
-                  bammetrics CollectQualityYieldMetrics I=in.bam O=out.txt [OQ=false ...]"
+                  bammetrics CollectQualityYieldMetrics I=in.bam O=out.txt [OQ=false ...]\n\
+                  bammetrics CollectHsMetrics I=in.bam O=out.txt BAIT_INTERVALS=b.interval_list TARGET_INTERVALS=t.interval_list [R=ref.fa ...]"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -37,6 +39,9 @@ enum Command {
     /// CollectQualityYieldMetrics: a Picard QualityYieldMetrics file, one
     /// row of read, base and Q20/Q30 totals.
     QualityYield(QualityYieldArgs),
+    /// CollectHsMetrics: a Picard HsMetrics file, one row of bait, target and
+    /// coverage metrics plus the depth and base-quality histograms.
+    HsMetrics(HsMetricsArgs),
 }
 
 #[derive(Args)]
@@ -118,6 +123,56 @@ struct QualityYieldArgs {
     /// Count supplementary alignments (Picard INCLUDE_SUPPLEMENTAL_ALIGNMENTS).
     #[arg(long)]
     include_supplemental_alignments: bool,
+}
+
+#[derive(Args)]
+struct HsMetricsArgs {
+    /// Input BAM (or --input).
+    #[arg(required_unless_present = "input", conflicts_with = "input")]
+    bam: Option<PathBuf>,
+    /// Input BAM (Picard INPUT).
+    #[arg(short = 'I', long)]
+    input: Option<PathBuf>,
+    /// Metrics file to write (Picard OUTPUT). Standard output when absent.
+    #[arg(short = 'O', long)]
+    output: Option<PathBuf>,
+    /// Bait intervals: an interval list, or a BED file (Picard BAIT_INTERVALS).
+    /// Repeat for several files.
+    #[arg(long = "bait-intervals", value_name = "FILE", required = true)]
+    bait_intervals: Vec<PathBuf>,
+    /// Target intervals, as for --bait-intervals (Picard TARGET_INTERVALS).
+    #[arg(long = "target-intervals", value_name = "FILE", required = true)]
+    target_intervals: Vec<PathBuf>,
+    /// BAIT_SET column; by default the bait file names up to the first dot
+    /// (Picard BAIT_SET_NAME).
+    #[arg(long)]
+    bait_set_name: Option<String>,
+    /// Reference FASTA with a .fai index, for AT_DROPOUT and GC_DROPOUT
+    /// (Picard REFERENCE_SEQUENCE).
+    #[arg(short = 'R', long)]
+    reference: Option<PathBuf>,
+    /// Reads below this MAPQ add no coverage (Picard MINIMUM_MAPPING_QUALITY).
+    #[arg(long, default_value_t = hs_metrics::DEFAULT_MINIMUM_MAPPING_QUALITY)]
+    minimum_mapping_quality: i32,
+    /// Bases below this quality add no coverage (Picard MINIMUM_BASE_QUALITY).
+    #[arg(long, default_value_t = hs_metrics::DEFAULT_MINIMUM_BASE_QUALITY)]
+    minimum_base_quality: i32,
+    /// false counts both mates where they overlap (Picard CLIP_OVERLAPPING_READS).
+    #[arg(long, default_value = "true", value_parser = parse_bool, action = ArgAction::Set)]
+    clip_overlapping_reads: bool,
+    /// Count inserted bases as on target and deleted bases as covered
+    /// (Picard INCLUDE_INDELS).
+    #[arg(long)]
+    include_indels: bool,
+    /// Depth cap of the het SNP sensitivity model (Picard COVERAGE_CAP).
+    #[arg(long, default_value_t = hs_metrics::DEFAULT_COVERAGE_CAP)]
+    coverage_cap: i32,
+    /// Reads this close to a bait are near bait (Picard NEAR_DISTANCE).
+    #[arg(long, default_value_t = hs_metrics::DEFAULT_NEAR_DISTANCE)]
+    near_distance: i32,
+    /// Samples of the het SNP sensitivity simulation (Picard SAMPLE_SIZE).
+    #[arg(long, default_value_t = hs_metrics::DEFAULT_SAMPLE_SIZE)]
+    sample_size: usize,
 }
 
 /// A Picard collection argument: values add to the default, and `null`
@@ -305,6 +360,43 @@ fn quality_yield_headers(
     vec![command, started_on(now())]
 }
 
+/// `StringHeader` lines in Picard's shape for `CollectHsMetrics`.
+fn hs_metrics_headers(args: &HsMetricsArgs, bam: &Path, opts: &hs_metrics::Options) -> Vec<String> {
+    let list = |paths: &[PathBuf]| {
+        paths
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let mut command = format!(
+        "CollectHsMetrics BAIT_INTERVALS=[{}] TARGET_INTERVALS=[{}] INPUT={}",
+        list(&opts.bait_intervals),
+        list(&opts.target_intervals),
+        bam.display()
+    );
+    if let Some(output) = &args.output {
+        command.push_str(&format!(" OUTPUT={}", output.display()));
+    }
+    if let Some(name) = &opts.bait_set_name {
+        command.push_str(&format!(" BAIT_SET_NAME={name}"));
+    }
+    if let Some(reference) = &opts.reference {
+        command.push_str(&format!(" REFERENCE_SEQUENCE={}", reference.display()));
+    }
+    command.push_str(&format!(
+        " METRIC_ACCUMULATION_LEVEL=[ALL_READS] NEAR_DISTANCE={} MINIMUM_MAPPING_QUALITY={} MINIMUM_BASE_QUALITY={} CLIP_OVERLAPPING_READS={} INCLUDE_INDELS={} COVERAGE_CAP={} SAMPLE_SIZE={}",
+        opts.near_distance,
+        opts.minimum_mapping_quality,
+        opts.minimum_base_quality,
+        opts.clip_overlapping_reads,
+        opts.include_indels,
+        opts.coverage_cap,
+        opts.sample_size
+    ));
+    vec![command, started_on(now())]
+}
+
 fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -339,6 +431,32 @@ fn quality_yield(args: QualityYieldArgs) -> bammetrics_core::Result<()> {
     })
 }
 
+fn hs_metrics(args: HsMetricsArgs) -> bammetrics_core::Result<()> {
+    let bam = args
+        .bam
+        .as_deref()
+        .or(args.input.as_deref())
+        .ok_or_else(|| Error::Usage("no input BAM".to_owned()))?;
+    let opts = hs_metrics::Options {
+        bait_intervals: args.bait_intervals.clone(),
+        target_intervals: args.target_intervals.clone(),
+        bait_set_name: args.bait_set_name.clone(),
+        reference: args.reference.clone(),
+        minimum_mapping_quality: args.minimum_mapping_quality,
+        minimum_base_quality: args.minimum_base_quality,
+        clip_overlapping_reads: args.clip_overlapping_reads,
+        include_indels: args.include_indels,
+        coverage_cap: args.coverage_cap,
+        near_distance: args.near_distance,
+        sample_size: args.sample_size,
+    };
+    let report = hs_metrics::run_over_bam(bam, &opts)?;
+    let headers = hs_metrics_headers(&args, bam, &opts);
+    write_to(args.output.as_deref(), |out| {
+        hs_metrics::write_metrics(&report, headers, out)
+    })
+}
+
 /// The command line as clap sees it. A first argument naming a Picard tool
 /// switches to Picard syntax and is rewritten to the native flags.
 fn command_line() -> bammetrics_core::Result<Vec<String>> {
@@ -367,6 +485,7 @@ fn run() -> bammetrics_core::Result<()> {
         Command::InsertSize(args) => insert_size(args),
         Command::AlignmentSummary(args) => alignment_summary(args),
         Command::QualityYield(args) => quality_yield(args),
+        Command::HsMetrics(args) => hs_metrics(args),
     }
 }
 

@@ -26,6 +26,12 @@ pub enum Error {
     /// The reference FASTA cannot be used with this BAM.
     #[error("{path}: {message}")]
     Reference { path: PathBuf, message: String },
+    /// An interval list or BED file cannot be used with this BAM.
+    #[error("{path}: {message}")]
+    Intervals { path: PathBuf, message: String },
+    /// The data cannot produce the metric (Picard throws in the same case).
+    #[error("{0}")]
+    Metric(String),
     /// A command-line option cannot be honoured.
     #[error("{0}")]
     Usage(String),

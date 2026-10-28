@@ -4,9 +4,9 @@ Embeddable, JVM-free, **Picard-concordant** BAM QC metrics — a Rust core (buil
 [`noodles`](https://github.com/zaeleus/noodles)) exposed to Python via PyO3/maturin.
 No JVM, no subprocess, no temp-file parsing: `import bammetrics` and get the numbers in-process.
 
-Status: **v0.2 in progress.** Cargo workspace on noodles 0.118; `CollectInsertSizeMetrics` and
-`CollectAlignmentSummaryMetrics` and `CollectQualityYieldMetrics` implemented. On 65 concordance
-cases, run in native and in Picard syntax, (synthetic tiers t0 to t3, with and without a
+Status: **v0.2 in progress.** Cargo workspace on noodles 0.118; `CollectInsertSizeMetrics`,
+`CollectAlignmentSummaryMetrics`, `CollectQualityYieldMetrics` and `CollectHsMetrics`
+implemented. On 90 concordance cases, run in native and in Picard syntax, (synthetic tiers t0 to t3, with and without a
 reference) every field and histogram cell matches Picard 3.5.0, and the metrics file is
 byte-identical from `## METRICS CLASS` on.
 
@@ -19,7 +19,8 @@ docs/    01 algorithm spec (Picard -> plain English, scope, concordance traps)
 Cargo.toml     workspace (version 0.2.0, edition 2024, shared dependencies)
 crates/
   core/  bammetrics-core: library + `bammetrics` CLI. insert_size, alignment_summary,
-         quality_yield (metrics); adapter, sequence, reference, record (htsjdk/Picard helpers);
+         quality_yield, hs_metrics (metrics); adapter, sequence, reference, record,
+         intervals, duplication, sensitivity (htsjdk/Picard helpers);
          histogram, metrics_file, picard_cli
   py/    PyO3 wrapper (cdylib) -> the `bammetrics` Python module
 tests/   make_bam.py and make_orientation_bam.py generate the committed fixtures in data/
@@ -42,10 +43,14 @@ target/release/bammetrics insert-size in.bam -O in.insert_size_metrics.txt -M 0.
 target/release/bammetrics insert-size --input in.bam --output out.txt
 target/release/bammetrics alignment-summary in.bam -R ref.fa -O in.alignment_summary_metrics.txt
 target/release/bammetrics quality-yield in.bam -O in.quality_yield_metrics.txt
+target/release/bammetrics hs-metrics in.bam -O in.hs_metrics.txt -R ref.fa \
+    --bait-intervals baits.interval_list --target-intervals targets.interval_list
 # Picard syntax, a drop-in for the jar:
 target/release/bammetrics CollectInsertSizeMetrics I=in.bam O=out.txt H=hist.pdf M=0.5
 target/release/bammetrics CollectAlignmentSummaryMetrics I=in.bam O=out.txt R=ref.fa
 target/release/bammetrics CollectQualityYieldMetrics I=in.bam O=out.txt
+target/release/bammetrics CollectHsMetrics I=in.bam O=out.txt R=ref.fa \
+    BAIT_INTERVALS=panel.interval_list TARGET_INTERVALS=panel.interval_list
 ```
 
 Picard options that cannot change a metric (`VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`,
@@ -65,6 +70,21 @@ true, so an `OQ` tag replaces `QUAL`), `--include-secondary-alignments` and
 `--include-supplemental-alignments`. It reads no reference, so `R=` is dropped with a note. It
 needs no index and no sort order. Python: `bammetrics.quality_yield(path, ...)` returns one
 `QualityYieldMetrics`.
+
+`hs-metrics` takes `--bait-intervals` and `--target-intervals` (repeatable; Picard
+`BAIT_INTERVALS`/`BI`, `TARGET_INTERVALS`/`TI`), `--bait-set-name` (`N`), `-R` (needed for
+`AT_DROPOUT` and `GC_DROPOUT`), `--minimum-mapping-quality` (`MQ`, 20),
+`--minimum-base-quality` (`Q`, 20), `--clip-overlapping-reads <bool>` (true),
+`--include-indels`, `--coverage-cap` (`covMax`, 200), `--near-distance` (250) and
+`--sample-size` (10000). An interval file is an interval list when its first line starts
+with `@` (the `@SQ` lines must equal the BAM's), otherwise BED (0-based, read against the
+BAM header). Picard 3.5.0 refuses BED files; bammetrics reads them as `BedToIntervalList`
+would convert them. The run time has a fixed part of about 0.7 s: the `HET_SNP_SENSITIVITY`
+simulation draws 10000 x 201 qualities from the same `java.util.Random(51)` stream as
+Picard. Python: `bammetrics.hs_metrics(path, bait_intervals, target_intervals,
+reference=None, ...)` returns one `HsMetrics`; every column is an attribute in lower case,
+`as_dict()` gives all of them, and `high_quality_coverage` and `unfiltered_base_quality`
+are the two histograms as dicts.
 
 `insert-size` takes Picard's options: `-M` (MINIMUM_PCT), `--deviations`, `-W`
 (HISTOGRAM_WIDTH), `--min-histogram-width` and `--include-duplicates`. Like Picard,
@@ -113,6 +133,14 @@ The corpus (`tests/corpus/generate.py`):
   mates, 5% PCR duplicates marked by `picard MarkDuplicates`, 1% QC-fail flags,
   `bwa mem -a` secondary records.
 - t3: 10k single-end reads.
+- t0_hs: pysam-built pairs and reads on the corpus targets for `CollectHsMetrics`:
+  overlapping mates in every clipping shape htsjdk handles (equal starts, `=`/`X`
+  elements, an insertion, a trailing soft clip, a deletion at the clip, a mate on
+  another contig), duplicates, an adapter read at MAPQ 0, MAPQ 0 and 10, Q2 and Q3
+  bases, QC-fail, secondary, supplementary and mate-unmapped records, near-bait and
+  off-bait reads, indels, and an 8-deep stack. `hs_targets.interval_list` holds the
+  first targets unsorted, duplicated, overlapping, abutting, empty, and on a contig
+  outside the dictionary.
 - t0_asm, t0_asm_cycles, t0_asm_empty: pysam-built BAMs on the corpus reference
   for `CollectAlignmentSummaryMetrics`: one record per rule (mismatches, IUPAC and
   `=` read bases, clips, indels, `XN` noise, adapter reads at MAPQ 0 and unmapped,
@@ -134,7 +162,8 @@ The harness (`tests/concordance/`):
   with `picard_metrics.compare_files`: every `METRICS CLASS` field, the column
   order, and every `HISTOGRAM` cell. Rows pair by each metric's key columns
   (`Metric.key_columns`: `PAIR_ORIENTATION` plus `SAMPLE`, `LIBRARY`, `READ_GROUP`
-  for insert size, `CATEGORY` for alignment summary).
+  for insert size, `CATEGORY` for alignment summary; quality yield and HS metrics
+  have one row).
 - Comparison rules: integer literals compare exactly; other numbers compare with
   `math.isclose(rel_tol=1e-9, abs_tol=1e-6)` after our value is printed the way
   htsjdk `FormatUtil` prints doubles (at most 6 decimals, trailing zeros dropped).
@@ -160,5 +189,6 @@ not a usable module on macOS; use maturin.
 
 ## Next steps (from docs/01 and docs/02)
 
-- `CollectHsMetrics` (panel BED and bait intervals, with R=) and its cases in `cases.py`.
+- `PER_TARGET_COVERAGE`, `PER_BASE_COVERAGE` and `THEORETICAL_SENSITIVITY_OUTPUT` for
+  `CollectHsMetrics` (exit 1 today).
 - `METRIC_ACCUMULATION_LEVEL` other than `ALL_READS` (t1 and t2 carry two libraries).
