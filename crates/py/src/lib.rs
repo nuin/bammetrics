@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use bammetrics_core::alignment_summary::{self, DEFAULT_MAX_INSERT_SIZE};
 use bammetrics_core::insert_size::{self, Options};
+use bammetrics_core::quality_yield;
 use bammetrics_core::record::Orientation;
 use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
@@ -232,11 +233,82 @@ fn py_alignment_summary(
     Ok(report.rows.into_iter().map(Into::into).collect())
 }
 
+/// The `QualityYieldMetrics` row; field names are Picard's columns in lower case.
+#[pyclass(get_all)]
+#[derive(Clone)]
+struct QualityYieldMetrics {
+    total_reads: i64,
+    pf_reads: i64,
+    read_length: i32,
+    total_bases: i64,
+    pf_bases: i64,
+    q20_bases: i64,
+    pf_q20_bases: i64,
+    q30_bases: i64,
+    pf_q30_bases: i64,
+    q20_equivalent_yield: i64,
+    pf_q20_equivalent_yield: i64,
+}
+
+#[pymethods]
+impl QualityYieldMetrics {
+    fn __repr__(&self) -> String {
+        format!(
+            "QualityYieldMetrics(total_reads={}, total_bases={}, q30_bases={})",
+            self.total_reads, self.total_bases, self.q30_bases
+        )
+    }
+}
+
+impl From<quality_yield::Row> for QualityYieldMetrics {
+    fn from(r: quality_yield::Row) -> Self {
+        Self {
+            total_reads: r.total_reads,
+            pf_reads: r.pf_reads,
+            read_length: r.read_length,
+            total_bases: r.total_bases,
+            pf_bases: r.pf_bases,
+            q20_bases: r.q20_bases,
+            pf_q20_bases: r.pf_q20_bases,
+            q30_bases: r.q30_bases,
+            pf_q30_bases: r.pf_q30_bases,
+            q20_equivalent_yield: r.q20_equivalent_yield,
+            pf_q20_equivalent_yield: r.pf_q20_equivalent_yield,
+        }
+    }
+}
+
+/// `CollectQualityYieldMetrics`: one `QualityYieldMetrics` for the BAM.
+#[pyfunction]
+#[pyo3(name = "quality_yield", signature = (
+    path,
+    use_original_qualities=true,
+    include_secondary_alignments=false,
+    include_supplemental_alignments=false,
+))]
+fn py_quality_yield(
+    path: &str,
+    use_original_qualities: bool,
+    include_secondary_alignments: bool,
+    include_supplemental_alignments: bool,
+) -> PyResult<QualityYieldMetrics> {
+    let opts = quality_yield::Options {
+        use_original_qualities,
+        include_secondary_alignments,
+        include_supplemental_alignments,
+    };
+    quality_yield::run_over_bam(path, &opts)
+        .map(Into::into)
+        .map_err(|e| PyIOError::new_err(e.to_string()))
+}
+
 #[pymodule]
 fn bammetrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<InsertSizeMetrics>()?;
     m.add_function(wrap_pyfunction!(py_insert_size, m)?)?;
     m.add_class::<AlignmentSummaryMetrics>()?;
     m.add_function(wrap_pyfunction!(py_alignment_summary, m)?)?;
+    m.add_class::<QualityYieldMetrics>()?;
+    m.add_function(wrap_pyfunction!(py_quality_yield, m)?)?;
     Ok(())
 }

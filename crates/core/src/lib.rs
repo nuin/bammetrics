@@ -7,6 +7,7 @@ pub mod histogram;
 pub mod insert_size;
 pub mod metrics_file;
 pub mod picard_cli;
+pub mod quality_yield;
 pub mod record;
 pub mod reference;
 pub mod sequence;

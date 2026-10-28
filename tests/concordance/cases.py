@@ -31,6 +31,8 @@ METRICS = {
                           ("PAIR_ORIENTATION", "SAMPLE", "LIBRARY", "READ_GROUP")),
     "alignment_summary": Metric("CollectAlignmentSummaryMetrics", "alignment-summary", (),
                                 ("CATEGORY",)),
+    # One row, no key column.
+    "quality_yield": Metric("CollectQualityYieldMetrics", "quality-yield"),
 }
 
 
@@ -130,4 +132,30 @@ def _alignment_summary_cases():
     return cases
 
 
-CASES = _insert_size_cases() + _alignment_summary_cases()
+def _quality_yield_cases():
+    """Every BAM at the defaults, then each option on the BAMs where it matters.
+    t0_qy carries OQ tags of every length, a record without QUAL, and secondary
+    and supplementary records; t1 to t3 carry OQ on a quarter of their reads."""
+    silent = "VALIDATION_STRINGENCY=SILENT"
+    names = ["t0_qy", "t0_asm", "t0_asm_empty", "t0_filters", "t0_no_pairs", "t1", "t2", "t3"]
+    cases = [Case(name, CORPUS / f"{name}.bam", "quality_yield",
+                  (silent,) if name == "t0_asm" else ()) for name in names]
+    cases.append(Case("t0_fixture", FIXTURES / "insert_size.bam", "quality_yield"))
+    options = {
+        "no_oq": (("USE_ORIGINAL_QUALITIES=false",), ("--use-original-qualities", "false")),
+        "oq_flag": (("OQ=false",), ("--use-original-qualities", "false")),
+        "secondary": (("INCLUDE_SECONDARY_ALIGNMENTS=true",),
+                      ("--include-secondary-alignments",)),
+        "supplemental": (("INCLUDE_SUPPLEMENTAL_ALIGNMENTS=true",),
+                         ("--include-supplemental-alignments",)),
+        "both": (("INCLUDE_SECONDARY_ALIGNMENTS=true", "INCLUDE_SUPPLEMENTAL_ALIGNMENTS=true"),
+                 ("--include-secondary-alignments", "--include-supplemental-alignments")),
+    }
+    for name in ("t0_qy", "t2"):
+        for label, (picard_args, our_args) in options.items():
+            cases.append(Case(f"{name}_{label}", CORPUS / f"{name}.bam", "quality_yield",
+                              picard_args, our_args))
+    return cases
+
+
+CASES = _insert_size_cases() + _alignment_summary_cases() + _quality_yield_cases()

@@ -5,9 +5,10 @@ Embeddable, JVM-free, **Picard-concordant** BAM QC metrics — a Rust core (buil
 No JVM, no subprocess, no temp-file parsing: `import bammetrics` and get the numbers in-process.
 
 Status: **v0.2 in progress.** Cargo workspace on noodles 0.118; `CollectInsertSizeMetrics` and
-`CollectAlignmentSummaryMetrics` implemented. On 50 concordance cases, run in native and in Picard
-syntax, (synthetic tiers t0 to t3, with and without a reference) every field and histogram cell
-matches Picard 3.5.0, and the metrics file is byte-identical from `## METRICS CLASS` on.
+`CollectAlignmentSummaryMetrics` and `CollectQualityYieldMetrics` implemented. On 65 concordance
+cases, run in native and in Picard syntax, (synthetic tiers t0 to t3, with and without a
+reference) every field and histogram cell matches Picard 3.5.0, and the metrics file is
+byte-identical from `## METRICS CLASS` on.
 
 ## Layout
 
@@ -17,8 +18,8 @@ docs/    01 algorithm spec (Picard -> plain English, scope, concordance traps)
          03 Rust programming guide
 Cargo.toml     workspace (version 0.2.0, edition 2024, shared dependencies)
 crates/
-  core/  bammetrics-core: library + `bammetrics` CLI. insert_size, alignment_summary
-         (metrics); adapter, sequence, reference, record (htsjdk/Picard helpers);
+  core/  bammetrics-core: library + `bammetrics` CLI. insert_size, alignment_summary,
+         quality_yield (metrics); adapter, sequence, reference, record (htsjdk/Picard helpers);
          histogram, metrics_file, picard_cli
   py/    PyO3 wrapper (cdylib) -> the `bammetrics` Python module
 tests/   make_bam.py and make_orientation_bam.py generate the committed fixtures in data/
@@ -40,9 +41,11 @@ target/release/bammetrics insert-size tests/data/insert_size.bam            # Pi
 target/release/bammetrics insert-size in.bam -O in.insert_size_metrics.txt -M 0.05
 target/release/bammetrics insert-size --input in.bam --output out.txt
 target/release/bammetrics alignment-summary in.bam -R ref.fa -O in.alignment_summary_metrics.txt
+target/release/bammetrics quality-yield in.bam -O in.quality_yield_metrics.txt
 # Picard syntax, a drop-in for the jar:
 target/release/bammetrics CollectInsertSizeMetrics I=in.bam O=out.txt H=hist.pdf M=0.5
 target/release/bammetrics CollectAlignmentSummaryMetrics I=in.bam O=out.txt R=ref.fa
+target/release/bammetrics CollectQualityYieldMetrics I=in.bam O=out.txt
 ```
 
 Picard options that cannot change a metric (`VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`,
@@ -56,6 +59,12 @@ and `--collect-alignment-information`. The two list options add to Picard's defa
 Without `-R` Picard still writes every row and counts no mismatches; so does
 `alignment-summary`. With `-R` the BAM `@SQ` lines must match the `.fai` (names, lengths,
 order) and the records must be coordinate sorted, or it exits 1 as Picard does.
+
+`quality-yield` takes `--use-original-qualities <bool>` (USE_ORIGINAL_QUALITIES, `OQ=`; default
+true, so an `OQ` tag replaces `QUAL`), `--include-secondary-alignments` and
+`--include-supplemental-alignments`. It reads no reference, so `R=` is dropped with a note. It
+needs no index and no sort order. Python: `bammetrics.quality_yield(path, ...)` returns one
+`QualityYieldMetrics`.
 
 `insert-size` takes Picard's options: `-M` (MINIMUM_PCT), `--deviations`, `-W`
 (HISTOGRAM_WIDTH), `--min-histogram-width` and `--include-duplicates`. Like Picard,

@@ -14,9 +14,15 @@ Tiers:
         repeats (low MAPQ, secondary with bwa mem -a), PCR duplicates marked
         by picard MarkDuplicates, QC-fail flags
   t3    10k single-end reads
+  t0_qy hand-built reads for CollectQualityYieldMetrics: OQ tags of every
+        length, no QUAL, quality thresholds, QC-fail, secondary, supplementary
+
+t1 to t3 also carry an OQ tag on a quarter of the reads, with the QUAL field
+lowered the way base recalibration does, so the OQ and QUAL totals differ.
 """
 import json
 import shutil
+import zlib
 import subprocess
 import sys
 from pathlib import Path
@@ -256,6 +262,22 @@ def write_fastq(path, records):
             f.write(f"@{name}\n{seq}\n+\n{qual}\n")
 
 
+# Fraction of records (1 in OQ_EVERY, picked by a hash of the read name so that
+# both mates and all alignments of a read agree) that get an OQ tag.
+OQ_EVERY = 4
+RECALIBRATION_SHIFT = 8
+
+
+def add_original_qualities(record):
+    """Move QUAL into OQ and lower QUAL by RECALIBRATION_SHIFT (floor Q2)."""
+    quals = record.query_qualities
+    if quals is None or zlib.crc32(record.query_name.encode()) % OQ_EVERY:
+        return
+    record.set_tag("OQ", pysam.qualities_to_qualitystring(quals))
+    record.query_qualities = pysam.qualitystring_to_array(
+        "".join(chr(33 + max(2, q - RECALIBRATION_SHIFT)) for q in quals))
+
+
 def align(out, tier, per_library_fastqs, all_alignments):
     """bwa mem per library, fixmate -m (MC and ms tags), sort, merge,
     MarkDuplicates, then QC-fail flags from the read names."""
@@ -288,6 +310,7 @@ def align(out, tier, per_library_fastqs, all_alignments):
         for r in src:
             if r.query_name.endswith(":qcfail"):
                 r.flag |= 0x200
+            add_original_qualities(r)
             dst.write(r)
     run(["samtools", "index", str(final)])
     shutil.rmtree(work)
@@ -623,10 +646,46 @@ def t0_asm_cycles(reference):
     return b
 
 
+def t0_qy(reference):
+    """CollectQualityYieldMetrics rules on a few reads: Q20 and Q30 edges,
+    OQ longer, shorter, empty and different from QUAL, a record without QUAL,
+    and the records the default settings skip or keep."""
+    b = AsmBuilder(reference)
+    r = b.ref_seq
+
+    def qstring(values):
+        return "".join(chr(33 + v) for v in values)
+
+    edges = [0, 1, 19, 20, 21, 29, 30, 31, 41, 60, 93]
+    b.make("q_plain", 0, "chr1", 1_000, "100M", r("chr1", 1_000, 100))
+    b.make("q_edges", 0, "chr1", 2_000, "44M", r("chr1", 2_000, 44), quals=qstring(edges * 4))
+    b.make("q_oq_differs", REVERSE, "chr1", 3_000, "100M", r("chr1", 3_000, 100),
+           tags=[("OQ", qstring(edges * 9 + [30]))])
+    b.make("q_oq_short", 0, "chr1", 4_000, "100M", r("chr1", 4_000, 100),
+           tags=[("OQ", qstring([35] * 60))])
+    b.make("q_oq_long", 0, "chr1", 5_000, "100M", r("chr1", 5_000, 100),
+           tags=[("OQ", qstring([25] * 120))])
+    b.make("q_oq_empty", 0, "chr1", 6_000, "100M", r("chr1", 6_000, 100),
+           quals=qstring([22] * 100), tags=[("OQ", "")])
+    b.make("q_no_qual", 0, "chr1", 7_000, "100M", r("chr1", 7_000, 100)).query_qualities = None
+    b.make("q_qcfail", QCFAIL, "chr1", 8_000, "100M", r("chr1", 8_000, 100),
+           quals=qstring([40] * 100), tags=[("OQ", qstring([10] * 100))])
+    b.make("q_secondary", SECONDARY, "chr1", 9_000, "100M", r("chr1", 9_000, 100),
+           quals=qstring([33] * 100))
+    b.make("q_supplementary", SUPPLEMENTARY, "chr2", 5_000, "60H40M", r("chr2", 5_000, 40),
+           quals=qstring([28] * 40))
+    b.make("q_unmapped", UNMAPPED, None, 0, None, "ACGT" * 15, quals=qstring([20] * 60))
+    b.make("q_short", 0, "chr1", 10_000, "36M", r("chr1", 10_000, 36), quals=qstring([30] * 36))
+    b.pair("q_pair", "chr1", 20_000, 20_200, len1=120, len2=75)
+    b.pair("q_pair_qcfail", "chr1", 21_000, 21_200, flags=PAIRED | PROPER | QCFAIL)
+    return b
+
+
 def make_t0_asm(out, reference):
     t0_asm(reference).write(out / "t0_asm.bam")
     t0_asm_cycles(reference).write(out / "t0_asm_cycles.bam")
     AsmBuilder(reference).write(out / "t0_asm_empty.bam")
+    t0_qy(reference).write(out / "t0_qy.bam")
 
 
 def main():

@@ -9,6 +9,7 @@ use bammetrics_core::alignment_summary::{self, DEFAULT_MAX_INSERT_SIZE};
 use bammetrics_core::insert_size::{self, Options};
 use bammetrics_core::metrics_file::started_on;
 use bammetrics_core::picard_cli;
+use bammetrics_core::quality_yield;
 use clap::{ArgAction, Args, Parser, Subcommand};
 
 #[derive(Parser)]
@@ -17,7 +18,8 @@ use clap::{ArgAction, Args, Parser, Subcommand};
     version,
     about = "Picard-concordant BAM QC metrics",
     after_help = "Picard syntax also works: bammetrics CollectInsertSizeMetrics I=in.bam O=out.txt [M=0.05 ...]\n\
-                  bammetrics CollectAlignmentSummaryMetrics I=in.bam O=out.txt [R=ref.fa ...]"
+                  bammetrics CollectAlignmentSummaryMetrics I=in.bam O=out.txt [R=ref.fa ...]\n\
+                  bammetrics CollectQualityYieldMetrics I=in.bam O=out.txt [OQ=false ...]"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -32,6 +34,9 @@ enum Command {
     /// CollectAlignmentSummaryMetrics: a Picard AlignmentSummaryMetrics file,
     /// one row per read category plus the read-length histograms.
     AlignmentSummary(AlignmentSummaryArgs),
+    /// CollectQualityYieldMetrics: a Picard QualityYieldMetrics file, one
+    /// row of read, base and Q20/Q30 totals.
+    QualityYield(QualityYieldArgs),
 }
 
 #[derive(Args)]
@@ -91,6 +96,28 @@ struct AlignmentSummaryArgs {
     /// false counts reads only (Picard COLLECT_ALIGNMENT_INFORMATION).
     #[arg(long, default_value = "true", value_parser = parse_bool, action = ArgAction::Set)]
     collect_alignment_information: bool,
+}
+
+#[derive(Args)]
+struct QualityYieldArgs {
+    /// Input BAM (or --input).
+    #[arg(required_unless_present = "input", conflicts_with = "input")]
+    bam: Option<PathBuf>,
+    /// Input BAM (Picard INPUT).
+    #[arg(short = 'I', long)]
+    input: Option<PathBuf>,
+    /// Metrics file to write (Picard OUTPUT). Standard output when absent.
+    #[arg(short = 'O', long)]
+    output: Option<PathBuf>,
+    /// false reads QUAL even where an OQ tag exists (Picard USE_ORIGINAL_QUALITIES).
+    #[arg(long, default_value = "true", value_parser = parse_bool, action = ArgAction::Set)]
+    use_original_qualities: bool,
+    /// Count secondary alignments (Picard INCLUDE_SECONDARY_ALIGNMENTS).
+    #[arg(long)]
+    include_secondary_alignments: bool,
+    /// Count supplementary alignments (Picard INCLUDE_SUPPLEMENTAL_ALIGNMENTS).
+    #[arg(long)]
+    include_supplemental_alignments: bool,
 }
 
 /// A Picard collection argument: values add to the default, and `null`
@@ -259,6 +286,25 @@ fn alignment_summary_headers(
     vec![command, started_on(now())]
 }
 
+/// `StringHeader` lines in Picard's shape for `CollectQualityYieldMetrics`.
+fn quality_yield_headers(
+    args: &QualityYieldArgs,
+    bam: &Path,
+    opts: &quality_yield::Options,
+) -> Vec<String> {
+    let mut command = format!("CollectQualityYieldMetrics INPUT={}", bam.display());
+    if let Some(output) = &args.output {
+        command.push_str(&format!(" OUTPUT={}", output.display()));
+    }
+    command.push_str(&format!(
+        " USE_ORIGINAL_QUALITIES={} INCLUDE_SECONDARY_ALIGNMENTS={} INCLUDE_SUPPLEMENTAL_ALIGNMENTS={}",
+        opts.use_original_qualities,
+        opts.include_secondary_alignments,
+        opts.include_supplemental_alignments
+    ));
+    vec![command, started_on(now())]
+}
+
 fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -272,6 +318,24 @@ fn alignment_summary(args: AlignmentSummaryArgs) -> bammetrics_core::Result<()> 
     let headers = alignment_summary_headers(&args, bam, &opts);
     write_to(args.output.as_deref(), |out| {
         alignment_summary::write_metrics(&report, headers, out)
+    })
+}
+
+fn quality_yield(args: QualityYieldArgs) -> bammetrics_core::Result<()> {
+    let bam = args
+        .bam
+        .as_deref()
+        .or(args.input.as_deref())
+        .ok_or_else(|| Error::Usage("no input BAM".to_owned()))?;
+    let opts = quality_yield::Options {
+        use_original_qualities: args.use_original_qualities,
+        include_secondary_alignments: args.include_secondary_alignments,
+        include_supplemental_alignments: args.include_supplemental_alignments,
+    };
+    let row = quality_yield::run_over_bam(bam, &opts)?;
+    let headers = quality_yield_headers(&args, bam, &opts);
+    write_to(args.output.as_deref(), |out| {
+        quality_yield::write_metrics(&row, headers, out)
     })
 }
 
@@ -302,6 +366,7 @@ fn run() -> bammetrics_core::Result<()> {
     match Cli::parse_from(command_line()?).command {
         Command::InsertSize(args) => insert_size(args),
         Command::AlignmentSummary(args) => alignment_summary(args),
+        Command::QualityYield(args) => quality_yield(args),
     }
 }
 

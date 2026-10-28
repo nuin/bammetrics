@@ -123,6 +123,31 @@ const ALIGNMENT_SUMMARY: &[Entry] = &[
     ),
 ];
 
+/// Options of `CollectQualityYieldMetrics` (`SinglePassSamProgram` and
+/// `CollectQualityYieldMetrics` in Picard 3.5.0). The metric does not read
+/// the reference, so `R` stays ignored through `COMMON`.
+const QUALITY_YIELD: &[Entry] = &[
+    (&["INPUT", "I"], Action::Value("--input")),
+    (&["OUTPUT", "O"], Action::Value("--output")),
+    (
+        &["USE_ORIGINAL_QUALITIES", "OQ"],
+        Action::Value("--use-original-qualities"),
+    ),
+    (
+        &["INCLUDE_SECONDARY_ALIGNMENTS"],
+        Action::Bool("--include-secondary-alignments"),
+    ),
+    (
+        &["INCLUDE_SUPPLEMENTAL_ALIGNMENTS"],
+        Action::Bool("--include-supplemental-alignments"),
+    ),
+    (&["FLOW_MODE"], Action::Only("false")),
+    (
+        &["ASSUME_SORTED", "AS"],
+        Action::Ignore("one pass over the file in any order"),
+    ),
+];
+
 struct Tool {
     picard_name: &'static str,
     subcommand: &'static str,
@@ -139,6 +164,11 @@ const TOOLS: &[Tool] = &[
         picard_name: "CollectAlignmentSummaryMetrics",
         subcommand: "alignment-summary",
         options: ALIGNMENT_SUMMARY,
+    },
+    Tool {
+        picard_name: "CollectQualityYieldMetrics",
+        subcommand: "quality-yield",
+        options: QUALITY_YIELD,
     },
 ];
 
@@ -354,6 +384,39 @@ mod tests {
             &strings(&["IS_BISULFITE_SEQUENCED=true"]),
         ));
         assert!(message.contains("IS_BISULFITE_SEQUENCED"));
+    }
+
+    #[test]
+    fn quality_yield_options() {
+        let t = translate(
+            "CollectQualityYieldMetrics",
+            &strings(&[
+                "I=x.bam",
+                "O=out.txt",
+                "OQ=false",
+                "INCLUDE_SECONDARY_ALIGNMENTS=true",
+                "INCLUDE_SUPPLEMENTAL_ALIGNMENTS=false",
+                "R=ref.fa",
+            ]),
+        )
+        .expect("translates")
+        .expect("known tool");
+        assert_eq!(t.subcommand, "quality-yield");
+        assert_eq!(
+            t.args,
+            [
+                "--input=x.bam",
+                "--output=out.txt",
+                "--use-original-qualities=false",
+                "--include-secondary-alignments",
+            ]
+        );
+        assert_eq!(t.notes.len(), 1);
+        let message = usage(translate(
+            "CollectQualityYieldMetrics",
+            &strings(&["FLOW_MODE=true"]),
+        ));
+        assert!(message.contains("FLOW_MODE"));
     }
 
     #[test]
