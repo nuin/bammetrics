@@ -1,0 +1,6 @@
+/target
+**/target
+*.so
+.venv/
+test.bam
+*.bai

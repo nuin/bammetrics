@@ -1,0 +1,13 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "bammetrics"
+version = "0.1.0"
+requires-python = ">=3.9"
+description = "Embeddable, JVM-free, Picard-concordant BAM QC metrics"
+
+[tool.maturin]
+manifest-path = "crates/py/Cargo.toml"
+features = ["pyo3/extension-module"]
