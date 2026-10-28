@@ -14,7 +14,17 @@ struct InsertSizeMetrics {
     median_absolute_deviation: f64,
     mean_insert_size: f64,
     standard_deviation: f64,
+    width_of_10_percent: i64,
+    width_of_20_percent: i64,
+    width_of_30_percent: i64,
+    width_of_40_percent: i64,
     width_of_50_percent: i64,
+    width_of_60_percent: i64,
+    width_of_70_percent: i64,
+    width_of_80_percent: i64,
+    width_of_90_percent: i64,
+    width_of_95_percent: i64,
+    width_of_99_percent: i64,
 }
 
 #[pymethods]
@@ -43,22 +53,43 @@ impl From<insert_size::Row> for InsertSizeMetrics {
             median_absolute_deviation: r.median_absolute_deviation,
             mean_insert_size: r.mean_insert_size,
             standard_deviation: r.standard_deviation,
-            width_of_50_percent: r.width_of_50_percent,
+            width_of_10_percent: r.widths[0],
+            width_of_20_percent: r.widths[1],
+            width_of_30_percent: r.widths[2],
+            width_of_40_percent: r.widths[3],
+            width_of_50_percent: r.widths[4],
+            width_of_60_percent: r.widths[5],
+            width_of_70_percent: r.widths[6],
+            width_of_80_percent: r.widths[7],
+            width_of_90_percent: r.widths[8],
+            width_of_95_percent: r.widths[9],
+            width_of_99_percent: r.widths[10],
         }
     }
 }
 
 #[pyfunction]
-#[pyo3(name = "insert_size", signature = (path, minimum_pct=0.05, deviations=10.0, include_duplicates=false))]
+#[pyo3(name = "insert_size", signature = (
+    path,
+    minimum_pct=0.05,
+    deviations=10.0,
+    histogram_width=None,
+    min_histogram_width=None,
+    include_duplicates=false,
+))]
 fn py_insert_size(
     path: &str,
     minimum_pct: f32,
     deviations: f64,
+    histogram_width: Option<i64>,
+    min_histogram_width: Option<i64>,
     include_duplicates: bool,
 ) -> PyResult<Vec<InsertSizeMetrics>> {
     let opts = Options {
         minimum_pct,
         deviations,
+        histogram_width,
+        min_histogram_width,
         include_duplicates,
     };
     let rows =

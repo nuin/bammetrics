@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, PartialEq)]
 pub struct Histogram {
     bins: BTreeMap<i64, f64>,
 }
@@ -44,6 +44,11 @@ impl Histogram {
 
     pub fn get(&self, key: i64) -> Option<f64> {
         self.bins.get(&key).copied()
+    }
+
+    /// Keys present, ascending.
+    pub fn keys(&self) -> impl Iterator<Item = i64> + '_ {
+        self.bins.keys().copied()
     }
 
     /// `Histogram.getMean`: sum(key * count) / sum(count). NaN when empty.

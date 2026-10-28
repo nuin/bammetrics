@@ -25,7 +25,7 @@ fn known_answers() {
     // 500 lies above median + 10 * MAD = 410, so mean and SD use 300, 310, 310, 320.
     assert_eq!(r.mean_insert_size, 310.0);
     assert!((r.standard_deviation - 8.1650).abs() < 1e-4);
-    assert_eq!(r.width_of_50_percent, 21);
+    assert_eq!(r.width_of_percent(50), Some(21));
 }
 
 #[test]
@@ -56,7 +56,7 @@ fn orientation_default_cutoff_matches_picard() {
     assert_eq!(r.median_absolute_deviation, 0.0);
     assert!((r.mean_insert_size - 297.297297).abs() < 1e-6);
     assert!((r.standard_deviation - 16.439899).abs() < 1e-6);
-    assert_eq!(r.width_of_50_percent, 1);
+    assert_eq!(r.width_of_percent(50), Some(1));
 }
 
 #[test]

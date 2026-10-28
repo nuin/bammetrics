@@ -13,6 +13,13 @@ pub enum Error {
         #[source]
         source: io::Error,
     },
+    /// Writing an output file failed.
+    #[error("{path}: {source}")]
+    Output {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
     /// A record could not be decoded.
     #[error("bad record: {0}")]
     Record(#[from] io::Error),
