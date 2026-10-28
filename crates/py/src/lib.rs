@@ -52,7 +52,7 @@ impl From<insert_size::Row> for InsertSizeMetrics {
 #[pyo3(name = "insert_size", signature = (path, minimum_pct=0.05, deviations=10.0, include_duplicates=false))]
 fn py_insert_size(
     path: &str,
-    minimum_pct: f64,
+    minimum_pct: f32,
     deviations: f64,
     include_duplicates: bool,
 ) -> PyResult<Vec<InsertSizeMetrics>> {

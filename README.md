@@ -19,7 +19,7 @@ Cargo.toml     workspace (version 0.2.0, edition 2024, shared dependencies)
 crates/
   core/  bammetrics-core: library (error, histogram, insert_size) + `bammetrics` CLI
   py/    PyO3 wrapper (cdylib) -> the `bammetrics` Python module
-tests/   make_bam.py generates the fixture; data/insert_size.bam is the committed copy
+tests/   make_bam.py and make_orientation_bam.py generate the committed fixtures in data/
 pyproject.toml  maturin packaging (builds crates/py)
 ```
 
@@ -40,6 +40,7 @@ target/release/bammetrics insert-size tests/data/insert_size.bam
 
 ```bash
 uv run --no-project --with pysam python tests/make_bam.py   # writes tests/data/insert_size.bam
+uv run --no-project --with pysam python tests/make_orientation_bam.py   # writes tests/data/orientation.bam
 ```
 
 ## Python module
