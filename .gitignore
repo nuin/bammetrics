@@ -2,6 +2,7 @@ target/
 .venv/
 *.so
 *.bai
-/corpus/
 test.bam
 __pycache__/
+tests/corpus/out/
+.pytest_cache/
