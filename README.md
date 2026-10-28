@@ -4,8 +4,8 @@ Embeddable, JVM-free, **Picard-concordant** BAM QC metrics — a Rust core (buil
 [`noodles`](https://github.com/zaeleus/noodles)) exposed to Python via PyO3/maturin.
 No JVM, no subprocess, no temp-file parsing: `import bammetrics` and get the numbers in-process.
 
-Status: **v0.1 — `CollectInsertSizeMetrics` implemented, verified end-to-end.**
-The insert-size core compiles and runs on rustc 1.75 / noodles 0.77, and on the
+Status: **v0.2 in progress.** Cargo workspace on noodles 0.118; `CollectInsertSizeMetrics` implemented.
+On the
 included test BAM it reproduces hand-computed Picard statistics exactly
 (median 310, mode 310, MAD 10, trimmed mean 310, SD 8.1650, width-of-50% 21).
 
@@ -13,51 +13,46 @@ included test BAM it reproduces hand-computed Picard statistics exactly
 
 ```
 docs/    01 algorithm spec (Picard -> plain English, scope, concordance traps)
-         02 Rust -> Python build walkthrough (verified, step by step)
-         03 Rust programming guide (the language, for an experienced programmer)
+         02 Rust -> Python build walkthrough
+         03 Rust programming guide
+Cargo.toml     workspace (version 0.2.0, edition 2024, shared dependencies)
 crates/
-  core/  pure-Rust core + CLI  (histogram.rs, insert_size.rs, main.rs)
-  py/    PyO3 wrapper (cdylib)  -> the `bammetrics` Python module
-tests/   make_bam.py — generates a controlled BAM with known answers
-pyproject.toml  — maturin packaging
+  core/  bammetrics-core: library (error, histogram, insert_size) + `bammetrics` CLI
+  py/    PyO3 wrapper (cdylib) -> the `bammetrics` Python module
+tests/   make_bam.py generates the fixture; data/insert_size.bam is the committed copy
+pyproject.toml  maturin packaging (builds crates/py)
 ```
 
-## Build & run the core (CLI)
+## Build and test
+
+Needs Rust 1.85 or newer (edition 2024).
 
 ```bash
-cd crates/core
-cargo generate-lockfile && cargo run --release -- ../../test.bam
+cargo build --release            # target/release/bammetrics
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+target/release/bammetrics insert-size tests/data/insert_size.bam
 ```
 
-## Generate the test BAM
+`.cargo/config.toml` lets the Python cdylib link under `cargo test` on macOS.
+
+## Regenerate the test BAM
 
 ```bash
-pip install --break-system-packages pysam
-python3 tests/make_bam.py        # writes test.bam with known statistics
+uv run --no-project --with pysam python tests/make_bam.py   # writes tests/data/insert_size.bam
 ```
 
-## Build the Python module
+## Python module
 
-Quick inner loop (no maturin):
 ```bash
-cd crates/py
-cargo build --release
-cp target/release/libbammetrics.so ./bammetrics.so
-python3 -c "import bammetrics; print(bammetrics.insert_size('../../test.bam'))"
+uv venv .venv && uv pip install --python .venv/bin/python maturin pytest pysam
+.venv/bin/maturin develop --release
+.venv/bin/python -c "import bammetrics; print(bammetrics.insert_size('tests/data/insert_size.bam'))"
+.venv/bin/pytest tests
 ```
 
-Shippable wheel (maturin):
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install maturin
-maturin develop --release        # or: maturin build --release
-```
-
-## Toolchain note
-
-Pins (`hashbrown=0.14.5`, `indexmap=2.2.6`, and `rayon-core=1.12.1` if you add rayon)
-exist only so the tree builds on **rustc < 1.85**, because newer transitive deps require
-`edition2024`. On a modern rustup toolchain (>= 1.85) you can drop these caps and bump noodles.
+`maturin build --release` makes a wheel. Plain `cargo build` of the cdylib is
+not a usable module on macOS; use maturin.
 
 ## Next steps (from docs/01 and docs/02)
 

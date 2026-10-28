@@ -1,6 +1,7 @@
-/target
-**/target
-*.so
+target/
 .venv/
-test.bam
+*.so
 *.bai
+/corpus/
+test.bam
+__pycache__/

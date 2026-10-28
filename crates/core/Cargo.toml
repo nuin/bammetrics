@@ -1,14 +1,19 @@
 [package]
 name = "bammetrics-core"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Picard-concordant BAM QC metrics"
 
-[dependencies]
-noodles = { version = "0.77", features = ["bam", "sam", "bgzf"] }
-# edition2024 caps so the tree builds on rustc < 1.85 (drop on modern toolchains)
-hashbrown = "=0.14.5"
-indexmap  = "=2.2.6"
+[lib]
+name = "bammetrics_core"
 
 [[bin]]
 name = "bammetrics"
 path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+noodles.workspace = true
+thiserror.workspace = true
