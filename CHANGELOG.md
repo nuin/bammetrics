@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.0
+
+`CollectHsMetrics PER_BASE_COVERAGE`, so the clinical pipeline's coverage step can call
+bammetrics in place of Picard with the same arguments.
+
+### Added
+
+- `PER_BASE_COVERAGE=<file>` (Picard syntax), `--per-base-coverage` (`hs-metrics`) and
+  `per_base_coverage=` (Python `hs_metrics`): Picard's `chrom pos target coverage` file,
+  one line per merged target base with the high-quality depth, target names of merged
+  intervals joined by `|`. A `.gz`, `.gzip` or `.bfq` name is compressed (BGZF).
+- `collect --hs-per-base` and Python `collect(..., hs_per_base=True)`: one per-base file per
+  HS run, `PREFIX[.BAIT_SET].per_base_coverage`.
+- 9 concordance cases (t1, t2, t0_hs, t0_hs on overlapping targets, at the defaults and with
+  `MINIMUM_MAPPING_QUALITY=0 MINIMUM_BASE_QUALITY=0`, one gzip), a `collect` case, and a test
+  running the pipeline's coverage command argument for argument. Whole per-base files are
+  byte-identical to Picard 3.5.0.
+- `benches/bench.py --coverage-only`: the coverage command against Picard (2.43 s against
+  28.74 s on the 4-million-record benchmark BAM).
+
+### Changed
+
+- Interval files keep strand and name (`intervals::read_named_files`, `uniqued_named`).
+
 ## 0.2.0
 
 Picard 3.5.0 concordance for the metrics a clinical panel pipeline runs, plus a

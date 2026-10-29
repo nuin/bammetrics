@@ -4,11 +4,12 @@ bammetrics reproduces Picard 3.5.0 QC metrics field by field in Rust, 3x to 14x 
 no JVM. It is a Rust library, a `bammetrics` command line that accepts Picard's `KEY=VALUE`
 syntax and writes Picard-format metrics files, and a typed Python module (PyO3, maturin).
 
-Version 0.2.0. Pinned reference: Picard 3.5.0. On 90 concordance cases (synthetic tiers t0 to
-t3, with and without a reference, native at 1 and 8 threads and in Picard syntax, plus 4
+Version 0.3.0. Pinned reference: Picard 3.5.0. On 99 concordance cases (synthetic tiers t0 to
+t3, with and without a reference, native at 1 and 8 threads and in Picard syntax, plus 5
 one-pass `collect` runs), every field and histogram cell matches Picard, and each file is
-byte-identical from `## METRICS CLASS` on. Differences that remain are in
-[KNOWN_DIFFERENCES.md](KNOWN_DIFFERENCES.md).
+byte-identical from `## METRICS CLASS` on. The 9 `CollectHsMetrics` cases with
+`PER_BASE_COVERAGE` also write a per-base file byte-identical to Picard's, whole file.
+Differences that remain are in [KNOWN_DIFFERENCES.md](KNOWN_DIFFERENCES.md).
 
 ## Metrics implemented
 
@@ -16,7 +17,7 @@ byte-identical from `## METRICS CLASS` on. Differences that remain are in
 |---|---|---|
 | CollectQualityYieldMetrics | `quality-yield` | `quality_yield()` |
 | CollectAlignmentSummaryMetrics | `alignment-summary` | `alignment_summary()` |
-| CollectHsMetrics | `hs-metrics` | `hs_metrics()` |
+| CollectHsMetrics, with `PER_BASE_COVERAGE` | `hs-metrics` | `hs_metrics()` |
 | CollectInsertSizeMetrics | `insert-size` | `insert_size()` |
 | all of the above in one pass | `collect` | `collect()` |
 
@@ -42,6 +43,11 @@ bammetrics CollectHsMetrics I=sample.bam O=sample.hs_metrics.txt R=ref.fa \
     BAIT_INTERVALS=panel.interval_list TARGET_INTERVALS=panel.interval_list
 bammetrics CollectHsMetrics I=sample.bam O=sample.hs_metrics_baits.txt R=ref.fa \
     BAIT_INTERVALS=baits.interval_list TARGET_INTERVALS=panel.interval_list
+
+# CollectHsMetrics with the per-base depth file (the clinical coverage step)
+bammetrics CollectHsMetrics BI=panel.interval_list I=sample.bam \
+    PER_BASE_COVERAGE=sample.nucl.partial.out MINIMUM_MAPPING_QUALITY=0 MINIMUM_BASE_QUALITY=0 \
+    TARGET_INTERVALS=panel.interval_list OUTPUT=sample.summary.partial.out R=ref.fa QUIET=true
 
 # CollectInsertSizeMetrics (Picard needs R installed for this one; bammetrics does not)
 bammetrics CollectInsertSizeMetrics I=sample.bam O=sample.insert_size_metrics.txt H=hist.pdf
@@ -80,7 +86,8 @@ every other failure raises `OSError`, both with the Rust message. `collect` rele
 ## Benchmark
 
 4,039,148 records (2,000,000 simulated 2x150 pairs, 319 MB), Mac Studio, 20 cores, Picard 3.5.0
-against bammetrics 0.2.0. Setup and method: [docs/benchmarks.md](docs/benchmarks.md).
+against bammetrics 0.2.0 (the coverage row: 0.3.0). Setup and method:
+[docs/benchmarks.md](docs/benchmarks.md).
 
 | run | Picard wall s | Picard peak MB | bammetrics wall s | bammetrics peak MB | speed-up | text identical |
 |---|---:|---:|---:|---:|---:|---|
@@ -92,6 +99,7 @@ against bammetrics 0.2.0. Setup and method: [docs/benchmarks.md](docs/benchmarks
 | all five, separate runs | 83.48 | | 11.02 | | 7.6x | |
 | `collect`, all five in one pass, 8 threads | | | 5.80 | 73 | 14.4x | yes |
 | `collect`, all five in one pass, `--threads 1` | | | 5.78 | 69 | 14.4x | yes |
+| coverage command, `PER_BASE_COVERAGE` (503,914 bases) | 28.74 | 472 | 2.43 | 35 | 11.8x | yes |
 
 Picard's peak memory is the JVM heap (460 to 970 MB); bammetrics stays under 75 MB.
 
@@ -99,7 +107,8 @@ Picard's peak memory is the JVM heap (460 to 970 MB); bammetrics stays under 75 
 
 A generator builds a synthetic corpus (reference, intervals, BAMs t0 to t3, under 20 MB) from
 one seed. `run_picard.py` runs Picard 3.5.0 on every case. The tests run bammetrics and compare
-each field, column order, row order, histogram cell and the file text. Details are in
+each field, column order, row order, histogram cell and the file text, and the whole
+per-base file for `PER_BASE_COVERAGE` cases. Details are in
 [Concordance corpus and harness](#concordance-corpus-and-harness).
 
 ```bash
@@ -176,8 +185,12 @@ with `@` (the `@SQ` lines must equal the BAM's), otherwise BED (0-based, read ag
 BAM header). Picard 3.5.0 refuses BED files; bammetrics reads them as `BedToIntervalList`
 would convert them. The run time has a fixed part of about 0.7 s: the `HET_SNP_SENSITIVITY`
 simulation draws 10000 x 201 qualities from the same `java.util.Random(51)` stream as
-Picard. Python: `bammetrics.hs_metrics(path, bait_intervals, target_intervals,
-reference=None, ...)` returns one `HsMetrics`; every column is an attribute in lower case,
+Picard. `--per-base-coverage FILE` (`PER_BASE_COVERAGE`) also writes Picard's per-base file: a
+`chrom pos target coverage` header, then one line per base of every merged target in
+interval order, with the 1-based position, the target name (names of merged targets joined
+by `|`) and the high-quality depth. A name ending in `.gz` is gzip-compressed (BGZF).
+Python: `bammetrics.hs_metrics(path, bait_intervals, target_intervals,
+reference=None, ..., per_base_coverage=None)` returns one `HsMetrics`; every column is an attribute in lower case,
 `to_dict()` gives all of them, and `high_quality_coverage` and `unfiltered_base_quality`
 are the two histograms as dicts.
 
@@ -186,7 +199,9 @@ per metric: `PREFIX.quality_yield_metrics`, `.alignment_summary_metrics`,
 `.insert_size_metrics` (the names Picard `CollectMultipleMetrics` uses) and `.hs_metrics`.
 `--hs BAITS TARGETS` adds one `CollectHsMetrics` run and may be repeated; with more than
 one, each file is `PREFIX.<BAIT_SET>.hs_metrics`, where BAIT_SET is the bait file name up
-to its first dot, as in Picard. `-R` goes to alignment-summary and hs. `--metric` picks a
+to its first dot, as in Picard. `--hs-per-base` also writes each run's per-base coverage
+to the same name with `.per_base_coverage` in place of `.hs_metrics`. `-R` goes to
+alignment-summary and hs. `--metric` picks a
 subset (comma separated; default all three, plus hs when `--hs` is given). Every other
 option is Picard's default. A metric that fails (for example an unsorted BAM with `-R`)
 writes no file and exits 1 after the others are written.
@@ -200,7 +215,8 @@ Every subcommand takes `--threads N`: the BGZF decompression workers (default: t
 available cores, at most 8). Records are decoded and counted on one thread in file order,
 so results do not depend on N. In `collect` each metric also runs on a thread of its own,
 fed the same record batches in file order. Python: `bammetrics.collect(path,
-metrics=None, reference=None, hs=None, output_prefix=None, threads=None)` returns
+metrics=None, reference=None, hs=None, output_prefix=None, threads=None,
+hs_per_base=False)` returns
 `{name: result}`, each result as the single-metric function returns it (`hs_metrics` is a
 list), and writes the files when `output_prefix` is given. Timings are in
 [docs/benchmarks.md](docs/benchmarks.md).
@@ -293,6 +309,11 @@ The harness (`tests/concordance/`):
 - Native runs repeat at `--threads 1` and `--threads 8`. `test_collect` runs
   `bammetrics collect` on t1, t2, t3 and t0_asm at both thread counts and checks each
   file it writes against the Picard reference of the matching single-tool case.
+- `PER_BASE_COVERAGE` cases (`t1_pb`, `t2_pb`, `t0_hs_pb`, `t0_hs_pb_messy`, each at the
+  defaults and with `MINIMUM_MAPPING_QUALITY=0 MINIMUM_BASE_QUALITY=0`, plus `t1_pb_q0_gz`)
+  compare the whole per-base file byte for byte (after gunzip for the `.gz` case).
+  `test_pipeline_coverage_command` runs the clinical pipeline's coverage command argument
+  for argument on t1 and t2.
 - The run ends with one line per case: fields matched / total, and whether the
   file body is byte-identical to Picard's.
 
@@ -311,4 +332,4 @@ Plain `cargo build` of the cdylib is not a usable module on macOS; use maturin.
 
 See [ROADMAP.md](ROADMAP.md): `CollectVariantCallingMetrics`, `MarkDuplicates`,
 `CollectWgsMetrics`, per-library and per-read-group accumulation levels, a bioconda recipe, and the
-`CollectHsMetrics` per-target and per-base outputs.
+`CollectHsMetrics` per-target output.

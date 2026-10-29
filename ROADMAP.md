@@ -34,7 +34,7 @@ Remaining for bammetrics:
 - `CollectWgsMetrics` (reuses `intervals::OverlapIndex` and the `pass` reader).
 - `METRIC_ACCUMULATION_LEVEL` `LIBRARY` and `READ_GROUP`: needs the read-group to library map and
   per-level histogram labels. The corpus BAMs t1 and t2 already carry two libraries.
-- `CollectHsMetrics` `PER_TARGET_COVERAGE`, `PER_BASE_COVERAGE`, `THEORETICAL_SENSITIVITY_OUTPUT`.
+- `CollectHsMetrics` `PER_TARGET_COVERAGE`, `THEORETICAL_SENSITIVITY_OUTPUT` (`PER_BASE_COVERAGE` is done in 0.3.0).
 - bioconda recipe and a PyPI release (first push of the branch runs the CI workflow).
 
 Exit criterion: a `pip install`-able library that produces correct, hand-verified numbers.
