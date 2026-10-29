@@ -47,3 +47,15 @@ def test_bad_arguments_raise_value_error(tmp_path):
         bammetrics.collect(FIXTURE, metrics=["wgs"])
     with pytest.raises(ValueError):
         bammetrics.collect(FIXTURE, metrics=["hs_metrics"])
+    with pytest.raises(ValueError):
+        bammetrics.collect(FIXTURE, hs=[(write_panel(tmp_path),) * 2], hs_per_base=True)
+
+
+def test_hs_per_base_files(tmp_path):
+    panel = write_panel(tmp_path)
+    prefix = tmp_path / "s1"
+    bammetrics.collect(FIXTURE, metrics=["hs_metrics"], hs=[(panel, panel)],
+                       output_prefix=str(prefix), hs_per_base=True)
+    single = tmp_path / "single.txt"
+    bammetrics.hs_metrics(FIXTURE, panel, panel, per_base_coverage=str(single))
+    assert (tmp_path / "s1.per_base_coverage").read_bytes() == single.read_bytes()

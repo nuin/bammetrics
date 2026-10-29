@@ -22,7 +22,7 @@ use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
     after_help = "Picard syntax also works: bammetrics CollectInsertSizeMetrics I=in.bam O=out.txt [M=0.05 ...]\n\
                   bammetrics CollectAlignmentSummaryMetrics I=in.bam O=out.txt [R=ref.fa ...]\n\
                   bammetrics CollectQualityYieldMetrics I=in.bam O=out.txt [OQ=false ...]\n\
-                  bammetrics CollectHsMetrics I=in.bam O=out.txt BAIT_INTERVALS=b.interval_list TARGET_INTERVALS=t.interval_list [R=ref.fa ...]"
+                  bammetrics CollectHsMetrics I=in.bam O=out.txt BAIT_INTERVALS=b.interval_list TARGET_INTERVALS=t.interval_list [R=ref.fa PER_BASE_COVERAGE=bases.txt ...]"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -96,6 +96,11 @@ struct CollectArgs {
     /// (interval list or BED). Repeat for more runs.
     #[arg(long = "hs", num_args = 2, value_names = ["BAITS", "TARGETS"], action = ArgAction::Append)]
     hs: Vec<PathBuf>,
+    /// Also write each --hs run's per-base target coverage (Picard
+    /// PER_BASE_COVERAGE), named as its HS file with .per_base_coverage in
+    /// place of .hs_metrics.
+    #[arg(long, requires = "hs")]
+    hs_per_base: bool,
     #[command(flatten)]
     threads: Threads,
 }
@@ -237,6 +242,10 @@ struct HsMetricsArgs {
     /// Samples of the het SNP sensitivity simulation (Picard SAMPLE_SIZE).
     #[arg(long, default_value_t = hs_metrics::DEFAULT_SAMPLE_SIZE)]
     sample_size: usize,
+    /// Also write the high-quality depth of every target base to this file;
+    /// gzip when it ends in .gz (Picard PER_BASE_COVERAGE).
+    #[arg(long, value_name = "FILE")]
+    per_base_coverage: Option<PathBuf>,
 }
 
 /// A Picard collection argument: values add to the default, and `null`
@@ -366,6 +375,7 @@ impl HsMetricsArgs {
             coverage_cap: self.coverage_cap,
             near_distance: self.near_distance,
             sample_size: self.sample_size,
+            per_base_coverage: self.per_base_coverage.clone(),
         }
     }
 }
@@ -477,8 +487,13 @@ impl CollectArgs {
 
 fn collect(args: CollectArgs) -> bammetrics_core::Result<()> {
     let bam = input_bam(&args.bam, &args.input)?;
-    let request = args.request()?;
+    let mut request = args.request()?;
     let outputs = Outputs::new(&args.output, &request)?;
+    if args.hs_per_base {
+        for (opts, path) in request.hs_metrics.iter_mut().zip(&outputs.hs_metrics) {
+            opts.per_base_coverage = Some(collect::per_base_coverage_path(path));
+        }
+    }
     let results = collect::run_over_bam(bam, &request, args.threads.threads)?;
     collect::write_files(&request, &results, bam, &outputs)?;
     if let (Some(opts), Some(Ok(rows))) = (&request.insert_size, &results.insert_size)

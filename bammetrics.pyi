@@ -201,8 +201,12 @@ def hs_metrics(
     coverage_cap: int = 200,
     near_distance: int = 250,
     sample_size: int = 10000,
+    per_base_coverage: _Path | None = None,
 ) -> HsMetrics:
-    """CollectHsMetrics. Interval files are interval lists or BED."""
+    """CollectHsMetrics. Interval files are interval lists or BED.
+
+    per_base_coverage writes Picard's PER_BASE_COVERAGE file there.
+    """
 
 def collect(
     path: _Path,
@@ -211,6 +215,7 @@ def collect(
     hs: Sequence[tuple[_Paths, _Paths]] | None = None,
     output_prefix: _Path | None = None,
     threads: int | None = None,
+    hs_per_base: bool = False,
 ) -> dict[str, Any]:
     """Several metrics in one pass over the BAM.
 

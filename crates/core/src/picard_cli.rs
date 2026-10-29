@@ -151,9 +151,9 @@ const QUALITY_YIELD: &[Entry] = &[
 /// Options of `CollectHsMetrics` (`CollectTargetedMetrics` and
 /// `CollectHsMetrics` in Picard 3.5.0). `R` changes `AT_DROPOUT` and
 /// `GC_DROPOUT`, so this entry shadows the `COMMON` one. The two interval
-/// options repeat, one file per occurrence. The extra output files
-/// (`PER_TARGET_COVERAGE`, `PER_BASE_COVERAGE`, `THEORETICAL_SENSITIVITY_OUTPUT`)
-/// are not written, so they are errors.
+/// options repeat, one file per occurrence. `PER_BASE_COVERAGE` is written;
+/// the other extra outputs (`PER_TARGET_COVERAGE`,
+/// `THEORETICAL_SENSITIVITY_OUTPUT`) are not, so they are errors.
 const HS_METRICS: &[Entry] = &[
     (&["INPUT", "I"], Action::Value("--input")),
     (&["OUTPUT", "O"], Action::Value("--output")),
@@ -180,6 +180,7 @@ const HS_METRICS: &[Entry] = &[
     (&["COVERAGE_CAP", "covMax"], Action::Value("--coverage-cap")),
     (&["NEAR_DISTANCE"], Action::Value("--near-distance")),
     (&["SAMPLE_SIZE"], Action::Value("--sample-size")),
+    (&["PER_BASE_COVERAGE"], Action::Value("--per-base-coverage")),
     (
         &["ALLELE_FRACTION"],
         Action::Ignore("only THEORETICAL_SENSITIVITY_OUTPUT reads it"),
@@ -510,6 +511,41 @@ mod tests {
             &strings(&["PER_TARGET_COVERAGE=x.txt"]),
         ));
         assert!(message.contains("PER_TARGET_COVERAGE"));
+    }
+
+    #[test]
+    fn clinical_coverage_command_translates() {
+        // The pipeline's coverage step, short BI= next to long OUTPUT=.
+        let t = translate(
+            "CollectHsMetrics",
+            &strings(&[
+                "BI=panel.interval_list",
+                "I=x.bam",
+                "PER_BASE_COVERAGE=x.nucl.partial.out",
+                "MINIMUM_MAPPING_QUALITY=0",
+                "MINIMUM_BASE_QUALITY=0",
+                "TARGET_INTERVALS=panel.interval_list",
+                "OUTPUT=x.summary.partial.out",
+                "R=ref.fa",
+                "QUIET=true",
+            ]),
+        )
+        .expect("translates")
+        .expect("known tool");
+        assert_eq!(
+            t.args,
+            [
+                "--bait-intervals=panel.interval_list",
+                "--input=x.bam",
+                "--per-base-coverage=x.nucl.partial.out",
+                "--minimum-mapping-quality=0",
+                "--minimum-base-quality=0",
+                "--target-intervals=panel.interval_list",
+                "--output=x.summary.partial.out",
+                "--reference=ref.fa",
+            ]
+        );
+        assert_eq!(t.notes, ["ignoring QUIET=true: progress is not logged"]);
     }
 
     #[test]

@@ -68,6 +68,9 @@ pub struct Options {
     pub near_distance: i32,
     /// `SAMPLE_SIZE` of the `HET_SNP_SENSITIVITY` simulation.
     pub sample_size: usize,
+    /// `PER_BASE_COVERAGE`: write the high-quality depth of every target base
+    /// here. A name ending in `.gz`, `.gzip` or `.bfq` is compressed.
+    pub per_base_coverage: Option<PathBuf>,
 }
 
 impl Default for Options {
@@ -84,6 +87,7 @@ impl Default for Options {
             coverage_cap: DEFAULT_COVERAGE_CAP,
             near_distance: DEFAULT_NEAR_DISTANCE,
             sample_size: DEFAULT_SAMPLE_SIZE,
+            per_base_coverage: None,
         }
     }
 }
@@ -822,6 +826,56 @@ impl Collector {
     }
 }
 
+/// What `emitPerBaseCoverageIfRequested` needs besides the depths.
+struct PerBase {
+    path: PathBuf,
+    /// `@SQ` names, by contig index.
+    contigs: Vec<String>,
+    /// Name of each uniqued target, as `IntervalList.uniqued()` merges them.
+    target_names: Vec<String>,
+}
+
+/// `PerUnitTargetMetricCollector.emitPerBaseCoverageIfRequested`: a
+/// `chrom pos target coverage` header, then one line per target base in
+/// uniqued target order, with the 1-based position and the high-quality
+/// depth. htsjdk compresses when the file name ends in `.gz`, `.gzip` or
+/// `.bfq`; this writes BGZF there, which gzip readers take as plain gzip.
+fn write_per_base_coverage(
+    per_base: &PerBase,
+    targets: &[Interval],
+    coverage: &Coverage,
+) -> Result<()> {
+    let output_error = |source| Error::Output {
+        path: per_base.path.clone(),
+        source,
+    };
+    let file = std::fs::File::create(&per_base.path).map_err(output_error)?;
+    let name = per_base.path.file_name().map(|n| n.to_string_lossy());
+    let compressed = name.is_some_and(|n| [".gz", ".gzip", ".bfq"].iter().any(|e| n.ends_with(e)));
+    let write = |out: &mut dyn Write| -> io::Result<()> {
+        out.write_all(b"chrom\tpos\ttarget\tcoverage\n")?;
+        for (i, target) in targets.iter().enumerate() {
+            let contig = per_base.contigs[target.contig].as_bytes();
+            let name = per_base.target_names[i].as_bytes();
+            for (offset, depth) in coverage.high_quality[coverage.range(i)].iter().enumerate() {
+                out.write_all(contig)?;
+                write!(out, "\t{}\t", target.start + offset as i64)?;
+                out.write_all(name)?;
+                writeln!(out, "\t{depth}")?;
+            }
+        }
+        out.flush()
+    };
+    if compressed {
+        let mut out = noodles::bgzf::io::Writer::new(file);
+        write(&mut out).map_err(output_error)?;
+        out.finish().map_err(output_error)?;
+    } else {
+        write(&mut io::BufWriter::with_capacity(1 << 16, file)).map_err(output_error)?;
+    }
+    Ok(())
+}
+
 /// Inputs to `finish` that do not come from the reads.
 struct Territory {
     bait_set: String,
@@ -833,6 +887,7 @@ struct Territory {
     raw_target_count: usize,
     /// GC fraction of each uniqued target, when a reference was given.
     target_gc: Option<Vec<f64>>,
+    per_base: Option<PerBase>,
 }
 
 /// Depth counts as Picard's histogram holds them: bins `0..prefill` exist
@@ -1060,6 +1115,11 @@ impl Collector {
         row.hs_library_size =
             estimate_library_size(c.pf_selected_pairs, c.pf_selected_unique_pairs);
         row.hs_penalty = PENALTY_GOALS.map(|goal| hs_penalty(row.hs_library_size, c, &row, goal));
+        // Picard writes the per-base file at the end of `finish`, so a run
+        // that fails above writes none.
+        if let Some(per_base) = &territory.per_base {
+            write_per_base_coverage(per_base, targets, &self.coverage)?;
+        }
         Ok(Report {
             row,
             depth,
@@ -1089,8 +1149,9 @@ impl HsMetrics {
             ));
         }
         let contigs = header.reference_sequences().len();
-        let raw_targets = intervals::read_files(&opts.target_intervals, header)?;
-        let unique_targets = intervals::uniqued(&raw_targets);
+        let raw_targets = intervals::read_named_files(&opts.target_intervals, header)?;
+        let unique_named = intervals::uniqued_named(&raw_targets);
+        let unique_targets: Vec<Interval> = unique_named.iter().map(|n| n.interval).collect();
         let unique_baits =
             intervals::uniqued(&intervals::read_files(&opts.bait_intervals, header)?);
         let target_gc = match &opts.reference {
@@ -1119,6 +1180,15 @@ impl HsMetrics {
                 .sum(),
             raw_target_count: raw_targets.len(),
             target_gc,
+            per_base: opts.per_base_coverage.as_ref().map(|path| PerBase {
+                path: path.clone(),
+                contigs: header
+                    .reference_sequences()
+                    .keys()
+                    .map(|name| name.to_string())
+                    .collect(),
+                target_names: unique_named.into_iter().map(|n| n.name).collect(),
+            }),
         };
         let collector = Collector {
             opts: opts.clone(),
@@ -1169,6 +1239,9 @@ pub fn command_header(opts: &Options, bam: &Path, output: Option<&Path>) -> Stri
     );
     if let Some(output) = output {
         command.push_str(&format!(" OUTPUT={}", output.display()));
+    }
+    if let Some(per_base) = &opts.per_base_coverage {
+        command.push_str(&format!(" PER_BASE_COVERAGE={}", per_base.display()));
     }
     if let Some(name) = &opts.bait_set_name {
         command.push_str(&format!(" BAIT_SET_NAME={name}"));

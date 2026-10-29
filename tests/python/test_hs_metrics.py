@@ -62,3 +62,25 @@ def test_t1_matches_picard():
     assert round(m.fold_80_base_penalty, 6) == 1.229678
     assert round(m.het_snp_sensitivity, 6) == 0.994345
     assert m.het_snp_q == 22
+
+
+def test_per_base_coverage(tmp_path):
+    panel = write_panel(tmp_path)
+    out = tmp_path / "bases.txt"
+    bammetrics.hs_metrics(FIXTURE, panel, panel, sample_size=100, per_base_coverage=str(out))
+    lines = out.read_text().splitlines()
+    assert lines[0] == "chrom\tpos\ttarget\tcoverage"
+    assert lines[1] == "chr1\t1001\tt1\t1"
+    assert len(lines) == 101
+
+
+@pytest.mark.skipif(not (CORPUS / "picard" / "t1_pb_q0.hs_metrics.per_base.txt").exists(),
+                    reason="Picard references not generated")
+def test_t1_per_base_matches_picard(tmp_path):
+    panel = str(CORPUS / "targets.interval_list")
+    out = tmp_path / "t1.nucl.partial.out"
+    bammetrics.hs_metrics(str(CORPUS / "t1.bam"), panel, panel,
+                          reference=str(CORPUS / "reference.fa"), minimum_mapping_quality=0,
+                          minimum_base_quality=0, per_base_coverage=out)
+    picard = CORPUS / "picard" / "t1_pb_q0.hs_metrics.per_base.txt"
+    assert out.read_bytes() == picard.read_bytes()

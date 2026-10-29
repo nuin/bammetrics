@@ -106,3 +106,68 @@ fn intervals_are_required() {
         Err(Error::Usage(_))
     ));
 }
+
+#[test]
+fn per_base_coverage_lists_every_target_base() {
+    // Two overlapping targets merge into one named "a|b"; a third is 3 bp.
+    let list = file(
+        "per-base",
+        "panel.interval_list",
+        "@SQ\tSN:chr1\tLN:100000\n\
+         chr1\t1051\t1100\t+\tb\nchr1\t1001\t1060\t+\ta\nchr1\t99001\t99003\t-\tc\n",
+    );
+    let path = list.with_file_name("bases.txt");
+    let opts = Options {
+        per_base_coverage: Some(path.clone()),
+        ..options(list)
+    };
+    run_over_bam(FIXTURE, &opts).expect("metrics");
+    let text = fs::read_to_string(&path).expect("per-base file");
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 1 + 100 + 3);
+    assert_eq!(lines[0], "chrom\tpos\ttarget\tcoverage");
+    assert_eq!(lines[1], "chr1\t1001\ta|b\t1");
+    assert_eq!(lines[100], "chr1\t1100\ta|b\t1");
+    assert_eq!(lines[101], "chr1\t99001\tc\t0");
+    assert!(text.ends_with("chr1\t99003\tc\t0\n"));
+}
+
+#[test]
+fn per_base_coverage_gzips_a_gz_name() {
+    let list = file(
+        "per-base-gz",
+        "panel.interval_list",
+        "@SQ\tSN:chr1\tLN:100000\nchr1\t1001\t1100\t+\tt1\n",
+    );
+    let plain = list.with_file_name("bases.txt");
+    let gz = list.with_file_name("bases.txt.gz");
+    for path in [&plain, &gz] {
+        let opts = Options {
+            per_base_coverage: Some(path.clone()),
+            ..options(list.clone())
+        };
+        run_over_bam(FIXTURE, &opts).expect("metrics");
+    }
+    let mut reader = noodles::bgzf::io::Reader::new(fs::File::open(&gz).expect("gz"));
+    let mut text = Vec::new();
+    std::io::Read::read_to_end(&mut reader, &mut text).expect("gunzip");
+    assert_eq!(text, fs::read(&plain).expect("plain"));
+    assert_eq!(&fs::read(&gz).expect("gz")[..2], b"\x1f\x8b");
+}
+
+#[test]
+fn per_base_coverage_to_a_missing_directory_is_an_output_error() {
+    let list = file(
+        "per-base-bad",
+        "panel.interval_list",
+        "@SQ\tSN:chr1\tLN:100000\nchr1\t1001\t1100\t+\tt1\n",
+    );
+    let opts = Options {
+        per_base_coverage: Some(PathBuf::from("/nonexistent/dir/bases.txt")),
+        ..options(list)
+    };
+    assert!(matches!(
+        run_over_bam(FIXTURE, &opts),
+        Err(Error::Output { .. })
+    ));
+}
