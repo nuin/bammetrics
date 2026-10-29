@@ -2,7 +2,8 @@
 
 Usage: python tests/concordance/run_picard.py [--force]
 
-Output: tests/corpus/out/picard/<case>.<metric>.txt, plus manifest.json that
+Output: tests/corpus/out/picard/<case>.<metric>.txt (and <case>.<metric>.per_base.txt
+for PER_BASE_COVERAGE cases), plus manifest.json that
 records, per case, the Picard command and whether Picard wrote a file
 (CollectInsertSizeMetrics writes none when no orientation is kept). A case
 is rerun only when its BAM is newer than the manifest entry or --force is
@@ -55,12 +56,17 @@ def main():
         metric = METRICS[case.metric]
         cmd = ["picard", metric.picard_tool, f"I={case.bam}", f"O={case.picard_txt}",
                *metric.picard_args, *case.picard_args, "VERBOSITY=ERROR", "QUIET=true"]
+        if case.per_base:
+            cmd.append(f"PER_BASE_COVERAGE={case.picard_per_base}")
         entry = manifest.get(case.id)
         if (not force and entry and entry["command"] == cmd[1:]
                 and entry["bam_mtime"] == case.bam.stat().st_mtime_ns
-                and (case.picard_txt.exists() or not entry["written"])):
+                and (case.picard_txt.exists() or not entry["written"])
+                and (not case.per_base or case.picard_per_base.exists())):
             continue
         case.picard_txt.unlink(missing_ok=True)
+        if case.per_base:
+            case.picard_per_base.unlink(missing_ok=True)
         subprocess.run(cmd, check=True, env=env, stdout=subprocess.DEVNULL,
                        stderr=subprocess.DEVNULL)
         manifest[case.id] = {
