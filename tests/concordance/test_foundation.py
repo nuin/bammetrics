@@ -122,6 +122,7 @@ def test_row_order_follows_header_order_for_other_seeds(tmp_path, seed):
     generate(tmp_path, seed=seed)
     cells = compare_metrics(INSERT_SIZE, tmp_path / "corpus.bam",
                             [HIST, *levels("SAMPLE", "LIBRARY", "READ_GROUP")], workdir=tmp_path)
+    assert cells > 0
     record(f"foundation insert_size seed {seed}", cells)
 
 
@@ -142,6 +143,7 @@ def test_read_groups_without_library_or_platform_unit(corpus, tmp_path):
             out.write(pysam.AlignedSegment.fromstring(read.to_string(), out.header))
     cells = compare_metrics(INSERT_SIZE, bam, [HIST, *levels("SAMPLE", "LIBRARY", "READ_GROUP")],
                             workdir=tmp_path)
+    assert cells > 0
     record("foundation insert_size missing LB and PU", cells)
 
 
@@ -162,6 +164,7 @@ def test_records_without_a_read_group(corpus, tmp_path, missing):
             out.write(pysam.AlignedSegment.fromstring(read.to_string(), out.header))
     cells = compare_metrics(INSERT_SIZE, bam, [HIST, *levels("SAMPLE", "LIBRARY", "READ_GROUP")],
                             workdir=tmp_path)
+    assert cells > 0
     record(f"foundation insert_size {missing}", cells)
 
 
@@ -176,4 +179,5 @@ def test_pairs_without_an_mc_tag(corpus, tmp_path):
             read.set_tag("MC", None)
             out.write(read)
     cells = compare_metrics(INSERT_SIZE, bam, [HIST, *levels("SAMPLE")], workdir=tmp_path)
+    assert cells > 0
     record("foundation insert_size without MC", cells)
