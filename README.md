@@ -161,14 +161,14 @@ target/release/bammetrics CollectHsMetrics I=in.bam O=out.txt R=ref.fa \
 
 Picard options that cannot change a metric (`VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`,
 `VERBOSITY`, `H`, `R`, `ASSUME_SORTED`, ...) are accepted, dropped, and noted on stderr.
-Any other option exits 1 naming the option. `CollectInsertSizeMetrics` takes
-`METRIC_ACCUMULATION_LEVEL` (`ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`; `null` clears the
-default); the other three tools accept `ALL_READS` only. Tools in the registry
+Any other option exits 1 naming the option. `CollectInsertSizeMetrics` and
+`CollectAlignmentSummaryMetrics` take `METRIC_ACCUMULATION_LEVEL` (`ALL_READS`, `SAMPLE`,
+`LIBRARY`, `READ_GROUP`; `null` clears the default); `CollectHsMetrics` accepts `ALL_READS` only. Tools in the registry
 (`crates/core/src/registry.rs`) also take Picard 3's `--NAME value` and `--NAME=value` forms.
 
 `alignment-summary` takes `-R` (REFERENCE_SEQUENCE; a FASTA with a `.fai`, read one
-contig at a time), `--max-insert-size`, `--expected-pair-orientation`, `--adapter-sequence`
-and `--collect-alignment-information`. The two list options add to Picard's default
+contig at a time), `--max-insert-size`, `--expected-pair-orientation`, `--adapter-sequence`,
+`--collect-alignment-information`, `--is-bisulfite-sequenced`, `--level` and `--stop-after`. The two list options add to Picard's default
 (`[FR]`, six Illumina adapters) and `null` clears it, as Picard's own parser does.
 Without `-R` Picard still writes every row and counts no mismatches; so does
 `alignment-summary`. With `-R` the BAM `@SQ` lines must match the `.fai` (names, lengths,

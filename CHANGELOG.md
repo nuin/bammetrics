@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+`CollectAlignmentSummaryMetrics` at every accumulation level, with every Picard option
+that changes a number (parity plan phase P1).
+
+### Added
+
+- `CollectAlignmentSummaryMetrics` in the tool registry: `METRIC_ACCUMULATION_LEVEL`
+  (`ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`), `IS_BISULFITE_SEQUENCED` (`BS`) and
+  `STOP_AFTER`, next to `R`, `MAX_INSERT_SIZE`, `EXPECTED_PAIR_ORIENTATIONS`,
+  `ADAPTER_SEQUENCE` and `COLLECT_ALIGNMENT_INFORMATION`. Picard 3 `--NAME value` forms work.
+  Python: `collect_alignment_summary_metrics(input, **options)`, rows as dicts.
+- `alignment-summary --level`, `--is-bisulfite-sequenced` and `--stop-after`.
+- `tests/concordance/test_alignment_summary.py`: 80 cases against Picard 3.5.0 (t0 to t3,
+  the foundation corpus and the hand-built `asm_bams.py` BAMs, all four levels, every
+  option, with and without a reference), error parity for units without PF reads, and a
+  check that each of the 36 columns takes at least 3 distinct non-default values.
+
+### Changed
+
+- `Levels` makes the `unknown` unit only when a record needs it, and makes a unit for the
+  first `@RG` line without the level's field, as Picard's `MultiLevelCollector` does.
+  `CollectInsertSizeMetrics` output does not change (empty units print no row there).
+- Picard-syntax `CollectAlignmentSummaryMetrics` goes through the registry;
+  `picard_cli.rs` keeps quality yield and HS metrics.
+
+### Fixed
+
+- `format_double` rounded a double exactly on a 7th-decimal tie half-even; htsjdk uses
+  `HALF_DOWN` (123/128 prints `0.960937`). Affects every tool.
+
 ## 0.3.0
 
 `CollectHsMetrics PER_BASE_COVERAGE`, so the clinical pipeline's coverage step can call
