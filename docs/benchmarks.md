@@ -34,9 +34,17 @@ one-pass run is 14.4x faster. Every bammetrics file is byte-identical to Picard'
 | all five, separate runs | 83.48 | | 11.02 | | 7.6x | |
 | `collect`, all five in one pass, 8 threads | | | 5.80 | 73 | 14.4x | yes |
 | `collect`, all five in one pass, `--threads 1` | | | 5.78 | 69 | 14.4x | yes |
+| coverage command, `PER_BASE_COVERAGE` (bammetrics 0.3.0) | 28.74 | 472 | 2.43 | 35 | 11.8x | yes |
 
 The clinical pipeline's four runs (quality yield, alignment summary, HS twice) take
 79.6 s in Picard and 10.6 s as four bammetrics runs.
+
+The coverage row is the pipeline's coverage step in Picard syntax, measured on
+2026-10-28 with bammetrics 0.3.0: `CollectHsMetrics BI=targets I=bench.bam
+PER_BASE_COVERAGE=... MINIMUM_MAPPING_QUALITY=0 MINIMUM_BASE_QUALITY=0
+TARGET_INTERVALS=targets OUTPUT=... R=reference.fa QUIET=true`. The per-base file has
+503,914 lines (one per target base, 14 MB); it and the summary from `## METRICS CLASS` on
+are byte-identical to Picard's. `benches/bench.py --coverage-only` reruns just this row.
 
 ## Where the time goes
 

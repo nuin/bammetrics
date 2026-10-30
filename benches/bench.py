@@ -1,7 +1,7 @@
 """Time Picard and bammetrics on the benchmark BAM (benches/make_bam.py).
 
 Usage:
-    uv run --no-project python benches/bench.py [--reps N] [--bench-dir DIR]
+    uv run --no-project python benches/bench.py [--reps N] [--bench-dir DIR] [--coverage-only]
 
 Runs, each under /usr/bin/time -l (wall seconds, peak RSS):
   picard      CollectQualityYieldMetrics, CollectAlignmentSummaryMetrics R=,
@@ -11,6 +11,10 @@ Runs, each under /usr/bin/time -l (wall seconds, peak RSS):
   bammetrics  the same five runs, one process each
   collect     bammetrics collect: all five metrics in one pass, at the
               default thread count and at --threads 1
+  coverage    the clinical pipeline's coverage command (CollectHsMetrics with
+              the targets as baits, R=, MINIMUM_MAPPING_QUALITY=0,
+              MINIMUM_BASE_QUALITY=0 and PER_BASE_COVERAGE) in Picard syntax,
+              Picard and bammetrics; --coverage-only runs just this
 
 Each bammetrics file is compared with Picard's from `## METRICS CLASS` on;
 the table says whether the text is identical. Wall time is the median of
@@ -95,10 +99,33 @@ def _picard_java():
     return out.stderr.strip().splitlines()[0]
 
 
+def coverage_run(d, out, env, reps):
+    """The pipeline's coverage step, argument for argument, with `bammetrics`
+    in place of `picard`. Identical means the summary from `## METRICS CLASS`
+    on and the whole per-base file."""
+    targets, ref, bam = d / "targets.interval_list", d / "reference.fa", d / "bench.bam"
+    walls = {}
+    for tool, exe in (("picard", "picard"), ("bammetrics", str(BAMMETRICS))):
+        cmd = [exe, "CollectHsMetrics", f"BI={targets}", f"I={bam}",
+               f"PER_BASE_COVERAGE={out / f'{tool}.nucl.partial.out'}",
+               "MINIMUM_MAPPING_QUALITY=0", "MINIMUM_BASE_QUALITY=0",
+               f"TARGET_INTERVALS={targets}", f"OUTPUT={out / f'{tool}.summary.partial.out'}",
+               f"R={ref}", "QUIET=true", "VALIDATION_STRINGENCY=SILENT", "VERBOSITY=ERROR"]
+        walls[tool] = measure(cmd, env, reps)
+        print(f"coverage command {tool}: {walls[tool][0]:.2f} s", flush=True)
+    per_base = [(out / f"{t}.nucl.partial.out").read_bytes() for t in ("picard", "bammetrics")]
+    summary = [body(out / f"{t}.summary.partial.out") for t in ("picard", "bammetrics")]
+    return {"picard_s": walls["picard"][0], "picard_mb": walls["picard"][1],
+            "bammetrics_s": walls["bammetrics"][0], "bammetrics_mb": walls["bammetrics"][1],
+            "per_base_lines": per_base[0].count(b"\n"),
+            "identical": per_base[0] == per_base[1] and summary[0] == summary[1]}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--reps", type=int, default=3)
     parser.add_argument("--bench-dir", type=Path, default=ROOT / "target" / "bench")
+    parser.add_argument("--coverage-only", action="store_true")
     args = parser.parse_args()
     d = args.bench_dir
     bam, ref = d / "bench.bam", d / "reference.fa"
@@ -126,6 +153,10 @@ def main():
          ["hs-metrics", "-R", str(ref), "--bait-intervals", str(targets),
           "--target-intervals", str(targets)], ".targets.hs_metrics"),
     ]
+    coverage = coverage_run(d, out, env, args.reps)
+    if args.coverage_only:
+        print(json.dumps(coverage, indent=2))
+        return
     rows = []
     for i, (label, picard, ours, suffix) in enumerate(tools):
         picard_txt, ours_txt = out / f"picard.{i}.txt", out / f"ours.{i}.txt"
@@ -153,6 +184,7 @@ def main():
 
     result = {"versions": versions(), "reps": args.reps, "rows": rows,
               "collect": {k: {"wall_s": w, "peak_mb": m} for k, (w, m) in collect.items()},
+              "coverage": coverage,
               "bench": json.loads((d / "bench.json").read_text()),
               "bam_mb": bam.stat().st_size / 1e6}
     (d / "results.json").write_text(json.dumps(result, indent=2) + "\n")
@@ -171,6 +203,10 @@ def main():
     for label, (wall, rss) in collect.items():
         same = all(r[f"collect_{label}_identical"] for r in rows)
         print(f"| collect, {label} | | | {wall:.2f} | {rss:.0f} | {p_total / wall:.1f}x | {same} |")
+    c = coverage
+    print(f"| coverage command (PER_BASE_COVERAGE) | {c['picard_s']:.2f} | {c['picard_mb']:.0f} "
+          f"| {c['bammetrics_s']:.2f} | {c['bammetrics_mb']:.0f} "
+          f"| {c['picard_s'] / c['bammetrics_s']:.1f}x | {c['identical']} |")
     print()
     for key, value in result["versions"].items():
         print(f"- {key}: {value}")

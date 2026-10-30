@@ -30,6 +30,15 @@ impl Interval {
     }
 }
 
+/// An interval with the strand and name its file gave it. Names only reach
+/// the `PER_BASE_COVERAGE` file.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NamedInterval {
+    pub interval: Interval,
+    pub negative_strand: bool,
+    pub name: String,
+}
+
 /// `Interval.countBases`: the summed lengths.
 pub fn count_bases(intervals: &[Interval]) -> i64 {
     intervals.iter().map(Interval::length).sum()
@@ -56,10 +65,55 @@ pub fn uniqued(intervals: &[Interval]) -> Vec<Interval> {
     merged
 }
 
+/// `IntervalList.uniqued()` with names: the same intervals as [`uniqued`],
+/// each named as `IntervalList.merge(intervals, concatenateNames = true)`
+/// names it. Ties on coordinates sort by strand (`+` first) and then by
+/// name (`IntervalCoordinateComparator`), and the distinct names of a merged
+/// group are joined with `|` in that order.
+pub fn uniqued_named(intervals: &[NamedInterval]) -> Vec<NamedInterval> {
+    let mut sorted: Vec<&NamedInterval> = intervals.iter().collect();
+    sorted.sort_by(|a, b| {
+        (a.interval, a.negative_strand, &a.name).cmp(&(b.interval, b.negative_strand, &b.name))
+    });
+    let mut merged: Vec<(NamedInterval, Vec<&str>)> = Vec::with_capacity(sorted.len());
+    for next in sorted {
+        match merged.last_mut() {
+            Some((current, names))
+                if current.interval.contig == next.interval.contig
+                    && next.interval.start <= current.interval.end + 1 =>
+            {
+                current.interval.end = current.interval.end.max(next.interval.end);
+                if !names.contains(&next.name.as_str()) {
+                    names.push(&next.name);
+                }
+            }
+            _ => merged.push((next.clone(), vec![&next.name])),
+        }
+    }
+    merged
+        .into_iter()
+        .map(|(mut interval, names)| {
+            interval.name = names.join("|");
+            interval
+        })
+        .collect()
+}
+
 /// Read and concatenate interval files (`IntervalList.fromFiles`), in file
 /// order and without merging. A file whose first non-blank line starts with
 /// `@` is an interval list, anything else is BED.
 pub fn read_files<P: AsRef<Path>>(paths: &[P], header: &sam::Header) -> Result<Vec<Interval>> {
+    Ok(read_named_files(paths, header)?
+        .into_iter()
+        .map(|named| named.interval)
+        .collect())
+}
+
+/// [`read_files`] keeping each interval's strand and name.
+pub fn read_named_files<P: AsRef<Path>>(
+    paths: &[P],
+    header: &sam::Header,
+) -> Result<Vec<NamedInterval>> {
     let mut intervals = Vec::new();
     for path in paths {
         let path = path.as_ref();
@@ -91,7 +145,7 @@ pub fn read_files<P: AsRef<Path>>(paths: &[P], header: &sam::Header) -> Result<V
 fn parse_interval_list(
     text: &str,
     header: &sam::Header,
-) -> std::result::Result<Vec<Interval>, String> {
+) -> std::result::Result<Vec<NamedInterval>, String> {
     let mut lines = text.lines().peekable();
     let mut dictionary: Vec<(String, i64)> = Vec::new();
     while let Some(line) = lines.next_if(|l| l.starts_with('@')) {
@@ -106,7 +160,7 @@ fn parse_interval_list(
             continue;
         }
         let fields: Vec<&str> = line.split('\t').collect();
-        let [contig, start, end, strand, _name] = fields[..] else {
+        let [contig, start, end, strand, name] = fields[..] else {
             return Err(format!(
                 "Invalid interval record contains {} fields: {line}",
                 fields.len()
@@ -132,10 +186,14 @@ fn parse_interval_list(
                 "interval with end {end} extends beyond the end of {contig} ({length} bp)"
             ));
         }
-        intervals.push(Interval {
-            contig: index,
-            start,
-            end,
+        intervals.push(NamedInterval {
+            interval: Interval {
+                contig: index,
+                start,
+                end,
+            },
+            negative_strand: strand == "-",
+            name: name.to_owned(),
         });
     }
     Ok(intervals)
@@ -189,8 +247,10 @@ fn check_dictionary(
 /// BED as `BEDCodec` decodes it: tab-separated, 0-based half-open, so the
 /// htsjdk interval is `start + 1 ..= end`. `#`, `track` and `browser` lines
 /// and blank lines are skipped. The BAM header is the dictionary, as it is
-/// for `BedToIntervalList SD=<bam>`; an unknown contig is an error.
-fn parse_bed(text: &str, header: &sam::Header) -> std::result::Result<Vec<Interval>, String> {
+/// for `BedToIntervalList SD=<bam>`; an unknown contig is an error. The name
+/// is column 4; without one `BedToIntervalList` writes `.`, which is the name
+/// Picard then reads. Column 6 `-` is the negative strand.
+fn parse_bed(text: &str, header: &sam::Header) -> std::result::Result<Vec<NamedInterval>, String> {
     let contigs = header.reference_sequences();
     let mut intervals = Vec::new();
     for line in text.lines() {
@@ -219,10 +279,15 @@ fn parse_bed(text: &str, header: &sam::Header) -> std::result::Result<Vec<Interv
                 "interval with end {end} extends beyond the end of {contig} ({length} bp)"
             ));
         }
-        intervals.push(Interval {
-            contig: index,
-            start,
-            end,
+        let name = fields.get(3).copied().filter(|n| !n.is_empty());
+        intervals.push(NamedInterval {
+            interval: Interval {
+                contig: index,
+                start,
+                end,
+            },
+            negative_strand: fields.get(5) == Some(&"-"),
+            name: name.unwrap_or(".").to_owned(),
         });
     }
     Ok(intervals)
@@ -302,6 +367,24 @@ mod tests {
         Interval { contig, start, end }
     }
 
+    fn named(
+        contig: usize,
+        start: i64,
+        end: i64,
+        negative_strand: bool,
+        name: &str,
+    ) -> NamedInterval {
+        NamedInterval {
+            interval: iv(contig, start, end),
+            negative_strand,
+            name: name.to_owned(),
+        }
+    }
+
+    fn bare(named: Vec<NamedInterval>) -> Vec<Interval> {
+        named.into_iter().map(|n| n.interval).collect()
+    }
+
     fn header() -> sam::Header {
         let text = "@SQ\tSN:chr1\tLN:1000\n@SQ\tSN:chr2\tLN:500\n";
         text.parse().expect("header parses")
@@ -325,13 +408,37 @@ mod tests {
     }
 
     #[test]
+    fn uniqued_named_joins_names_in_sort_order() {
+        let raw = vec![
+            named(0, 61, 70, false, "c"),
+            named(0, 50, 60, false, "b"),
+            named(0, 50, 60, false, "a"),
+            named(0, 50, 60, false, "b"),
+            named(0, 50, 60, true, "0"),
+            named(0, 80, 79, false, "empty"),
+            named(1, 10, 20, false, "solo"),
+        ];
+        let merged = uniqued_named(&raw);
+        // Same coordinates sort `+` before `-`, then by name; repeats are dropped.
+        assert_eq!(
+            merged,
+            [
+                named(0, 50, 70, false, "a|b|0|c"),
+                named(0, 80, 79, false, "empty"),
+                named(1, 10, 20, false, "solo"),
+            ]
+        );
+        assert_eq!(bare(merged), uniqued(&bare(raw)));
+    }
+
+    #[test]
     fn interval_list_needs_matching_dictionary() {
         let ok = "@HD\tVN:1.0\n@SQ\tSN:chr1\tLN:1000\n@SQ\tSN:chr2\tLN:500\n\
                   chr1\t5\t10\t+\ta\n\nchr2\t1\t0\t-\tempty\nchrX\t1\t5\t+\tskipped\n";
         let header = header();
         assert_eq!(
             parse_interval_list(ok, &header).expect("parses"),
-            [iv(0, 5, 10), iv(1, 1, 0)]
+            [named(0, 5, 10, false, "a"), named(1, 1, 0, true, "empty")]
         );
         let other = "@SQ\tSN:chr1\tLN:999\n@SQ\tSN:chr2\tLN:500\nchr1\t5\t10\t+\ta\n";
         assert!(parse_interval_list(other, &header).is_err());
@@ -346,7 +453,15 @@ mod tests {
         let bed = "track name=x\n# comment\nchr1\t0\t100\tname\nchr2\t9\t10\n";
         assert_eq!(
             parse_bed(bed, &header()).expect("parses"),
-            [iv(0, 1, 100), iv(1, 10, 10)]
+            [
+                named(0, 1, 100, false, "name"),
+                named(1, 10, 10, false, ".")
+            ]
+        );
+        let stranded = "chr1\t0\t10\tx\t0\t-\n";
+        assert_eq!(
+            parse_bed(stranded, &header()).expect("parses"),
+            [named(0, 1, 10, true, "x")]
         );
         assert!(parse_bed("chr3\t0\t10\n", &header()).is_err());
         assert!(parse_bed("chr1\t0\n", &header()).is_err());

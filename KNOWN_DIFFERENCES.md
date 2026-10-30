@@ -1,7 +1,8 @@
 # Known differences from Picard 3.5.0
 
-bammetrics 0.2.0 matches Picard 3.5.0 byte for byte from `## METRICS CLASS` on, for
-every case in the concordance harness. This file lists where it differs on purpose,
+bammetrics 0.3.0 matches Picard 3.5.0 byte for byte from `## METRICS CLASS` on, for
+every case in the concordance harness, and writes `PER_BASE_COVERAGE` files identical to
+Picard's, whole file. This file lists where it differs on purpose,
 where it cannot match, and what is not implemented. Each item says which side
 behaves how.
 
@@ -14,6 +15,11 @@ behaves how.
   so MultiQC-style parsers read it. It lists the options bammetrics implements with their values, not every
   Picard option.
 - Without `O=` in Picard syntax the file goes to stdout. Picard requires `O`.
+- `PER_BASE_COVERAGE` with a name ending in `.gz`, `.gzip` or `.bfq` is compressed as
+  BGZF (noodles). Picard writes one `java.util.zip` gzip member. The compressed bytes
+  differ; `gunzip` gives the same text from both, which the `t1_pb_q0_gz` case checks.
+- A BED target without a name gets `.` in the per-base `target` column, the name a
+  `BedToIntervalList` round trip gives it. Picard reads interval lists only.
 
 ## Options
 
@@ -24,8 +30,8 @@ behaves how.
   is drawn), `R` for tools that do not read a reference.
 - `METRIC_ACCUMULATION_LEVEL` accepts `ALL_READS` only. `LIBRARY` and `READ_GROUP`
   rows are not produced.
-- `STOP_AFTER`, `FLOW_MODE=true`, `IS_BISULFITE_SEQUENCED=true`, `PER_TARGET_COVERAGE`,
-  `PER_BASE_COVERAGE` and `THEORETICAL_SENSITIVITY_OUTPUT` exit 1.
+- `STOP_AFTER`, `FLOW_MODE=true`, `IS_BISULFITE_SEQUENCED=true`, `PER_TARGET_COVERAGE`
+  and `THEORETICAL_SENSITIVITY_OUTPUT` exit 1. `PER_BASE_COVERAGE` is implemented.
 - Picard list options (`EXPECTED_PAIR_ORIENTATIONS`, `ADAPTER_SEQUENCE`) append to the
   default and `null` clears it. The native CLI copies this. The Python keyword
   arguments replace the default list instead, and `None` keeps it.

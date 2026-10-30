@@ -44,6 +44,9 @@ class Case:
     metric: str
     picard_args: tuple = ()
     our_args: tuple = field(default=())
+    # CollectHsMetrics PER_BASE_COVERAGE: the file extension (".txt", or
+    # ".txt.gz" for Picard's gzip output), or None for no per-base file.
+    per_base: str | None = None
 
     @property
     def id(self):
@@ -56,6 +59,14 @@ class Case:
     @property
     def ours_txt(self):
         return OURS_DIR / f"{self.id}.txt"
+
+    @property
+    def picard_per_base(self):
+        return PICARD_DIR / f"{self.id}.per_base{self.per_base}"
+
+    @property
+    def ours_per_base(self):
+        return OURS_DIR / f"{self.id}.per_base{self.per_base}"
 
 
 def _insert_size_cases():
@@ -216,6 +227,41 @@ def _hs_metrics_cases():
                              ours + ("--bait-set-name", "kit_v1", "--near-distance", "0")),
     }.items():
         cases.append(Case(f"t0_hs{label}", t0, "hs_metrics", silent + p, o))
+    return cases + _per_base_cases()
+
+
+def _per_base_cases():
+    """PER_BASE_COVERAGE with the clinical pipeline's coverage command: the
+    target list as baits and targets, R=, and MINIMUM_MAPPING_QUALITY=0
+    MINIMUM_BASE_QUALITY=0 (`_q0`), then the same at the defaults. t0_hs
+    also runs on hs_targets, whose duplicated, overlapping and abutting
+    targets merge into `|`-joined names, and t1 once with a .gz name."""
+    def run(bait, target, short_bait=True):
+        bait_key = "BI" if short_bait else "BAIT_INTERVALS"
+        picard = (f"{bait_key}={CORPUS / f'{bait}.interval_list'}",
+                  f"TARGET_INTERVALS={CORPUS / f'{target}.interval_list'}", f"R={REFERENCE}")
+        ours = ("--bait-intervals", str(CORPUS / f"{bait}.interval_list"),
+                "--target-intervals", str(CORPUS / f"{target}.interval_list"),
+                "-R", str(REFERENCE))
+        return picard, ours
+
+    q0 = (("MINIMUM_MAPPING_QUALITY=0", "MINIMUM_BASE_QUALITY=0"),
+          ("--minimum-mapping-quality", "0", "--minimum-base-quality", "0"))
+    silent = ("VALIDATION_STRINGENCY=SILENT",)
+    cases = []
+    for name, bait, target, extra in (
+            ("t1_pb", "targets", "targets", ()),
+            ("t2_pb", "targets", "targets", ()),
+            ("t0_hs_pb", "targets", "targets", silent),
+            ("t0_hs_pb_messy", "baits", "hs_targets", silent)):
+        bam = CORPUS / f"{name.split('_pb')[0]}.bam"
+        picard, ours = run(bait, target)
+        cases.append(Case(f"{name}_q0", bam, "hs_metrics", extra + picard + q0[0], ours + q0[1],
+                          per_base=".txt"))
+        cases.append(Case(name, bam, "hs_metrics", extra + picard, ours, per_base=".txt"))
+    picard, ours = run("targets", "targets", short_bait=False)
+    cases.append(Case("t1_pb_q0_gz", CORPUS / "t1.bam", "hs_metrics", picard + q0[0],
+                      ours + q0[1], per_base=".txt.gz"))
     return cases
 
 
@@ -264,6 +310,11 @@ def _collect_cases():
          (".alignment_summary_metrics", "t3.alignment_summary"),
          (".insert_size_metrics", "t3.insert_size"),
          (".hs_metrics", "t3.hs_metrics"))))
+    # --hs-per-base writes PER_BASE_COVERAGE next to each HS file.
+    cases.append(CollectCase(
+        "t1_pb", CORPUS / "t1.bam", ref + hs("targets", "targets") + ("--hs-per-base",),
+        ((".hs_metrics", "t1_pb.hs_metrics"),
+         (".per_base_coverage", "t1_pb.hs_metrics"))))
     cases.append(CollectCase(
         "t0_asm", CORPUS / "t0_asm.bam", ref + ("--metric", "quality-yield,alignment-summary"),
         ((".quality_yield_metrics", "t0_asm.quality_yield"),

@@ -32,6 +32,16 @@ pub const QUALITY_YIELD_EXTENSION: &str = ".quality_yield_metrics";
 pub const ALIGNMENT_SUMMARY_EXTENSION: &str = ".alignment_summary_metrics";
 pub const INSERT_SIZE_EXTENSION: &str = ".insert_size_metrics";
 pub const HS_METRICS_EXTENSION: &str = ".hs_metrics";
+/// Per-base coverage of an HS run: its `.hs_metrics` name with this in place.
+pub const PER_BASE_COVERAGE_EXTENSION: &str = ".per_base_coverage";
+
+/// The per-base coverage file that goes with an HS metrics file:
+/// `PREFIX[.BAIT_SET].hs_metrics` becomes `PREFIX[.BAIT_SET].per_base_coverage`.
+pub fn per_base_coverage_path(hs_metrics: &Path) -> PathBuf {
+    let name = hs_metrics.as_os_str().to_string_lossy();
+    let stem = name.strip_suffix(HS_METRICS_EXTENSION).unwrap_or(&name);
+    PathBuf::from(format!("{stem}{PER_BASE_COVERAGE_EXTENSION}"))
+}
 
 /// The metrics to compute; `None` (or an empty list) skips one.
 #[derive(Clone, Debug, Default)]
@@ -418,6 +428,14 @@ mod tests {
         assert_eq!(
             outputs.insert_size,
             PathBuf::from("out/s1.insert_size_metrics")
+        );
+    }
+
+    #[test]
+    fn per_base_coverage_follows_the_hs_file_name() {
+        assert_eq!(
+            per_base_coverage_path(Path::new("out/s1.baits.hs_metrics")),
+            PathBuf::from("out/s1.baits.per_base_coverage")
         );
     }
 

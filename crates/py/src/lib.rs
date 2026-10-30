@@ -400,6 +400,7 @@ fn path_list(value: &Bound<'_, PyAny>) -> PyResult<Vec<PathBuf>> {
 
 /// `CollectHsMetrics`: one `HsMetrics` for the BAM. `bait_intervals` and
 /// `target_intervals` take a path or a list of paths (interval lists or BED).
+/// `per_base_coverage` names a file for Picard's PER_BASE_COVERAGE output.
 #[pyfunction]
 #[pyo3(name = "hs_metrics", signature = (
     path,
@@ -414,6 +415,7 @@ fn path_list(value: &Bound<'_, PyAny>) -> PyResult<Vec<PathBuf>> {
     coverage_cap=hs_metrics::DEFAULT_COVERAGE_CAP,
     near_distance=hs_metrics::DEFAULT_NEAR_DISTANCE,
     sample_size=hs_metrics::DEFAULT_SAMPLE_SIZE,
+    per_base_coverage=None,
 ))]
 #[allow(clippy::too_many_arguments)]
 fn py_hs_metrics(
@@ -429,6 +431,7 @@ fn py_hs_metrics(
     coverage_cap: i32,
     near_distance: i32,
     sample_size: usize,
+    per_base_coverage: Option<PathBuf>,
 ) -> PyResult<HsMetrics> {
     let opts = hs_metrics::Options {
         bait_intervals: path_list(bait_intervals)?,
@@ -442,6 +445,7 @@ fn py_hs_metrics(
         coverage_cap,
         near_distance,
         sample_size,
+        per_base_coverage,
     };
     hs_metrics::run_over_bam(path, &opts)
         .map(Into::into)
@@ -468,8 +472,9 @@ fn py_error(e: &bammetrics_core::Error) -> PyErr {
 /// Returns {name: result}, each result as the single-metric function
 /// returns it, and a list of HsMetrics for "hs_metrics". With
 /// `output_prefix`, every metric is also written as a Picard file, named as
-/// by `bammetrics collect -O PREFIX`. A failed metric raises, after the
-/// files of the others are written.
+/// by `bammetrics collect -O PREFIX`. `hs_per_base` (needs `output_prefix`)
+/// also writes each HS run's per-base coverage, as `--hs-per-base` does. A
+/// failed metric raises, after the files of the others are written.
 #[pyfunction]
 #[pyo3(name = "collect", signature = (
     path,
@@ -478,7 +483,9 @@ fn py_error(e: &bammetrics_core::Error) -> PyErr {
     hs=None,
     output_prefix=None,
     threads=None,
+    hs_per_base=false,
 ))]
+#[allow(clippy::too_many_arguments)]
 fn py_collect<'py>(
     py: Python<'py>,
     path: PathBuf,
@@ -487,6 +494,7 @@ fn py_collect<'py>(
     hs: Option<Vec<(Bound<'py, PyAny>, Bound<'py, PyAny>)>>,
     output_prefix: Option<PathBuf>,
     threads: Option<usize>,
+    hs_per_base: bool,
 ) -> PyResult<Bound<'py, PyDict>> {
     const NAMES: [&str; 4] = [
         "quality_yield",
@@ -510,7 +518,12 @@ fn py_collect<'py>(
             "\"hs_metrics\" in metrics and a non-empty hs list go together",
         ));
     }
-    let request = Request {
+    if hs_per_base && (hs.is_empty() || output_prefix.is_none()) {
+        return Err(PyValueError::new_err(
+            "hs_per_base needs a non-empty hs list and output_prefix",
+        ));
+    }
+    let mut request = Request {
         quality_yield: has("quality_yield").then(quality_yield::Options::default),
         alignment_summary: has("alignment_summary").then(|| alignment_summary::Options {
             reference: reference.clone(),
@@ -534,6 +547,11 @@ fn py_collect<'py>(
         .map(|prefix| Outputs::new(prefix, &request))
         .transpose()
         .map_err(|e| py_error(&e))?;
+    if let (true, Some(outputs)) = (hs_per_base, &outputs) {
+        for (opts, path) in request.hs_metrics.iter_mut().zip(&outputs.hs_metrics) {
+            opts.per_base_coverage = Some(collect::per_base_coverage_path(path));
+        }
+    }
     let threads = threads.unwrap_or_else(pass::default_threads);
     let results = py
         .detach(|| {
