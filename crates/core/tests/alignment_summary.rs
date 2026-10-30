@@ -107,3 +107,47 @@ fn writes_the_picard_layout() {
         "## HISTOGRAM\tjava.lang.Integer\nREAD_LENGTH\tPAIRED_TOTAL_LENGTH_COUNT\tPAIRED_ALIGNED_LENGTH_COUNT\n100\t10\t10\n"
     ));
 }
+
+#[test]
+fn records_without_read_groups_fill_the_unknown_bucket() {
+    use bammetrics_core::levels::Level;
+    let opts = Options {
+        levels: vec![Level::AllReads, Level::ReadGroup],
+        ..Options::default()
+    };
+    let report = run_over_bam(FIXTURE, &opts).expect("fixture reads");
+    let labels: Vec<Option<&str>> = report
+        .rows
+        .iter()
+        .map(|r| r.labels.read_group.as_deref())
+        .collect();
+    assert_eq!(
+        labels,
+        [
+            None,
+            None,
+            None,
+            Some("unknown"),
+            Some("unknown"),
+            Some("unknown")
+        ]
+    );
+    assert_eq!(report.rows[2], {
+        let mut pair = report.rows[5].clone();
+        pair.labels = report.rows[2].labels.clone();
+        pair
+    });
+}
+
+#[test]
+fn stop_after_counts_every_record_and_no_all_reads_drops_the_histogram() {
+    use bammetrics_core::levels::Level;
+    let opts = Options {
+        stop_after: 3,
+        levels: vec![Level::Sample],
+        ..Options::default()
+    };
+    let report = run_over_bam(FIXTURE, &opts).expect("fixture reads");
+    assert_eq!(report.rows.last().map(|r| r.total_reads), Some(3));
+    assert!(report.histograms.is_none());
+}

@@ -50,6 +50,17 @@ pub fn bases_equal(lhs: u8, rhs: u8) -> bool {
     }
 }
 
+/// `SequenceUtil.bisulfiteBasesEqual`: equal bases, or a read T on a
+/// reference C (forward strand) or a read A on a reference G (reverse).
+pub fn bisulfite_bases_equal(negative_strand: bool, read: u8, reference: u8) -> bool {
+    let converted = if negative_strand {
+        bases_equal(reference, b'G') && bases_equal(read, b'A')
+    } else {
+        bases_equal(reference, b'C') && bases_equal(read, b'T')
+    };
+    bases_equal(read, reference) || converted
+}
+
 /// `SequenceUtil.isNoCall`: `N`, `n` or `.`.
 pub fn is_no_call(base: u8) -> bool {
     matches!(base, b'N' | b'n' | b'.')
