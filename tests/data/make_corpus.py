@@ -13,7 +13,8 @@ Per pair it simulates mismatches, N bases, low-quality bases, insertions,
 deletions, soft clips, FR/RF/TANDEM and dovetailed pairs, chimeric pairs across
 contigs, pairs with an unmapped mate, fully unmapped pairs, secondary and
 supplementary records, and duplicates (flagged 0x400 and unflagged copies).
-The same seed gives the same files.
+The same seed gives the same records and sequences. Header @SQ UR fields hold
+the output directory, so the .dict, .interval_list and BAM bytes differ by directory.
 
 Needs pysam, samtools and picard on PATH.
 """

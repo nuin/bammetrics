@@ -36,6 +36,8 @@ OPTION_CASES = {
     "minimum_pct_0": ["M=0"],
     "minimum_pct_20": ["MINIMUM_PCT=0.2"],
     "histogram_width": ["W=400"],
+    "histogram_width_0": ["W=0"],
+    "histogram_width_below_min_insert": ["W=1"],
     "min_histogram_width": ["MW=1000"],
     "deviations": ["DEVIATIONS=2"],
     "include_duplicates": ["INCLUDE_DUPLICATES=true"],
@@ -56,13 +58,17 @@ def test_insert_size_accumulation_levels(corpus, tmp_path, name):
 @pytest.mark.parametrize("name", OPTION_CASES)
 def test_insert_size_options_at_every_level(corpus, tmp_path, name):
     args = [HIST, *levels("SAMPLE", "LIBRARY", "READ_GROUP"), *OPTION_CASES[name]]
-    cells = compare_metrics(INSERT_SIZE, corpus / "corpus.bam", args, workdir=tmp_path)
+    cells = compare_metrics(INSERT_SIZE, corpus / "corpus.bam", args, workdir=tmp_path,
+                            expect_file=True)
+    assert cells > 0
     record(f"foundation insert_size {name}", cells)
 
 
 @pytest.mark.parametrize("fixture", ["insert_size.bam", "orientation.bam"])
 def test_known_answer_fixtures(tmp_path, fixture):
-    cells = compare_metrics(INSERT_SIZE, FIXTURES / fixture, [HIST], workdir=tmp_path)
+    cells = compare_metrics(INSERT_SIZE, FIXTURES / fixture, [HIST], workdir=tmp_path,
+                            expect_file=True)
+    assert cells > 0
     record(f"foundation insert_size {fixture}", cells)
 
 

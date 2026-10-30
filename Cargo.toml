@@ -6,7 +6,7 @@ members = ["crates/core", "crates/py"]
 version = "0.3.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-rust-version = "1.85"
+rust-version = "1.88"
 
 [workspace.dependencies]
 bammetrics-core = { path = "crates/core", version = "0.3.0" }

@@ -431,6 +431,13 @@ fn finalize_row(orientation: Orientation, h: &Histogram, opts: &Options) -> Row 
     // keeps at least the median bin; a single pair gives SD 0/0 = NaN.
     let mut trimmed = h.clone();
     trimmed.trim_by_width(trim_width(median, mad, opts));
+    // A width below the smallest insert size empties the histogram. Picard
+    // then reports mean 0 and SD 0 (checked with W=0, 1, 100 on one pair).
+    let (mean, sd) = if trimmed.min().is_none() {
+        (0.0, 0.0)
+    } else {
+        (trimmed.mean(), trimmed.standard_deviation())
+    };
 
     Row {
         key: String::new(),
@@ -442,8 +449,8 @@ fn finalize_row(orientation: Orientation, h: &Histogram, opts: &Options) -> Row 
         median_insert_size: median,
         mode_insert_size: mode,
         median_absolute_deviation: mad,
-        mean_insert_size: trimmed.mean(),
-        standard_deviation: trimmed.standard_deviation(),
+        mean_insert_size: mean,
+        standard_deviation: sd,
         widths,
         histogram: trimmed,
     }

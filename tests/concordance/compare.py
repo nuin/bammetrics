@@ -73,9 +73,11 @@ def diff_metrics(picard, ours):
     return problems
 
 
-def compare_metrics(tool, bam, picard_args=(), bam_args=None, workdir=None):
+def compare_metrics(tool, bam, picard_args=(), bam_args=None, workdir=None, expect_file=False):
     """Run both tools on `bam` and assert the metrics files agree. Returns the
-    number of cells compared (metrics cells plus histogram cells)."""
+    number of cells compared (metrics cells plus histogram cells). With
+    `expect_file`, both tools writing no file is a failure, so a case that
+    should compare cells cannot pass with nothing compared."""
     bam_args = picard_args if bam_args is None else bam_args
     with tempfile.TemporaryDirectory(dir=workdir) as tmp:
         picard_out, ours_out = Path(tmp, "picard.txt"), Path(tmp, "bammetrics.txt")
@@ -85,6 +87,7 @@ def compare_metrics(tool, bam, picard_args=(), bam_args=None, workdir=None):
             f"{tool}: Picard {'wrote' if picard_out.exists() else 'wrote no'} file, "
             f"bammetrics {'wrote' if ours_out.exists() else 'wrote no'} file")
         if not picard_out.exists():
+            assert not expect_file, f"{tool}: neither tool wrote a file, nothing was compared"
             return 0
         picard, ours = parse_picard_metrics(picard_out), parse_picard_metrics(ours_out)
     problems = diff_metrics(picard, ours)
