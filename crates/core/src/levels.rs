@@ -1,24 +1,32 @@
 //! `METRIC_ACCUMULATION_LEVEL`: one accumulator per sample, library or read
-//! group, the way htsjdk's `MultiLevelCollector` keeps them.
+//! group, the way Picard's `MultiLevelCollector` keeps them.
 //!
 //! A tool keeps its per-unit state in [`Levels<T>`] and calls
 //! [`Levels::route`] for each record; the closure sees every bucket the
 //! record belongs to. [`Levels::into_buckets`] returns the buckets in the
 //! order Picard writes their rows.
 //!
-//! Picard 3.5.0 behaviour (checked on a 12-read-group BAM):
+//! Picard 3.5.0 behaviour (`MultiLevelCollector.Distributor`, checked on a
+//! 12-read-group BAM with `CollectInsertSizeMetrics` and
+//! `CollectAlignmentSummaryMetrics`):
 //! * Row order is `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`, whatever
 //!   order the options came in. Within a level, buckets follow the order their
 //!   key first appears among the `@RG` header lines, not alphabetical order.
 //! * `READ_GROUP` keys on the platform unit (`PU`), not on the `ID`.
-//! * A record with no `RG` tag, or one the header does not list, falls in the
-//!   `unknown` bucket of every level but `ALL_READS`, even for a BAM with no
-//!   `@RG` lines.
-//! * A read group without `LB` (or `PU`) falls in an `unknown` bucket that
-//!   comes after every named bucket of that level. At `LIBRARY` level its
-//!   `SAMPLE` and `LIBRARY` columns both print `unknown`; at `READ_GROUP` level
-//!   a missing `PU` prints `unknown` in all three columns, while a missing `LB`
-//!   with a `PU` prints the sample and an empty library.
+//! * The buckets are made from the header before any record is read. The
+//!   first `@RG` line without the level's field (`SM`, `LB` or `PU`) makes a
+//!   bucket too, at its header position, labelled with that line's fields.
+//!   No record ever reaches it. A tool that writes a row for an empty bucket
+//!   (`CollectAlignmentSummaryMetrics` writes an all-zero `UNPAIRED` row)
+//!   shows it; `CollectInsertSizeMetrics` writes nothing for it.
+//! * A record with no `RG` tag, one the header does not list, or one whose
+//!   `@RG` line lacks the level's field goes to the `unknown` bucket. That
+//!   bucket is made when the first such record arrives, after every header
+//!   bucket, and does not exist when no record needs it. Its labels are
+//!   `unknown` up to the level: `SAMPLE` prints `unknown`; `LIBRARY` prints
+//!   `unknown` twice; `READ_GROUP` prints `unknown` three times.
+//! * A header bucket keeps the `@RG` line's fields up to its level: a missing
+//!   `LB` with a `PU` prints the sample and an empty library.
 //! * `METRIC_ACCUMULATION_LEVEL` is a list option with default `ALL_READS`:
 //!   each value is added to it, and `null` clears it.
 //! * Histogram columns are named `<key>.<orientation>_count`, with
@@ -118,6 +126,19 @@ pub struct Labels {
     pub read_group: Option<String>,
 }
 
+impl Labels {
+    /// The histogram column prefix of a collector: the read group, else the
+    /// library, else the sample, else `All_Reads`.
+    fn key(&self) -> String {
+        self.read_group
+            .as_deref()
+            .or(self.library.as_deref())
+            .or(self.sample.as_deref())
+            .unwrap_or("All_Reads")
+            .to_owned()
+    }
+}
+
 /// One accumulator and what identifies it.
 #[derive(Clone, Debug)]
 pub struct Bucket<T> {
@@ -131,107 +152,158 @@ pub struct Bucket<T> {
 
 const UNKNOWN: &str = "unknown";
 
-/// The accumulators of every requested level.
-pub struct Levels<T> {
-    buckets: Vec<Bucket<T>>,
-    /// Bucket indices that take every record (the `ALL_READS` bucket).
-    all: Vec<usize>,
-    /// Read group `ID` to the non-`ALL_READS` buckets it feeds.
-    by_read_group: HashMap<Vec<u8>, Vec<usize>>,
-    /// The `unknown` bucket of each non-`ALL_READS` level, for records
-    /// whose read group is missing or not in the header.
-    unknown: Vec<usize>,
+/// Where a read group's records go at one level.
+#[derive(Clone, Copy, Debug)]
+enum Route {
+    /// The header bucket of the read group's key.
+    Bucket(usize),
+    /// The read group lacks the level's field: the `unknown` bucket.
+    Unknown,
 }
 
-impl<T> Levels<T> {
-    /// Build one bucket per unit of each level in `levels`; `new_state` makes
-    /// the empty accumulator for a bucket.
-    pub fn new(header: &sam::Header, levels: &[Level], mut new_state: impl FnMut() -> T) -> Self {
-        let groups = read_groups(header);
-        let mut buckets = Vec::new();
-        let mut all = Vec::new();
-        let mut by_read_group: HashMap<Vec<u8>, Vec<usize>> = HashMap::new();
-        let mut unknown = Vec::new();
-        for level in [
-            Level::AllReads,
-            Level::Sample,
-            Level::Library,
-            Level::ReadGroup,
-        ] {
-            if !levels.contains(&level) {
-                continue;
-            }
-            if level == Level::AllReads {
-                all.push(buckets.len());
-                buckets.push(Bucket {
-                    level,
-                    key: "All_Reads".to_owned(),
-                    labels: Labels::default(),
-                    state: new_state(),
-                });
-                continue;
-            }
-            // Named keys in header order, then the `unknown` bucket.
-            let mut order: Vec<Option<&str>> = Vec::new();
-            for group in &groups {
-                let key = unit_key(level, group);
-                if !order.contains(&key) {
-                    order.push(key);
+/// The buckets of one `SAMPLE`, `LIBRARY` or `READ_GROUP` level (Picard's
+/// `Distributor`).
+struct Unit<T> {
+    level: Level,
+    /// Bucket keys in creation order; `None` for read groups without the
+    /// level's field.
+    keys: Vec<Option<String>>,
+    buckets: Vec<Bucket<T>>,
+    /// Index of the bucket keyed `unknown`, once it exists.
+    unknown: Option<usize>,
+}
+
+impl<T: Clone> Unit<T> {
+    /// One bucket per distinct key among the `@RG` lines, in header order,
+    /// the `None` key included.
+    fn new(level: Level, groups: &[ReadGroupInfo], empty: &T) -> Self {
+        let mut unit = Self {
+            level,
+            keys: Vec::new(),
+            buckets: Vec::new(),
+            unknown: None,
+        };
+        for group in groups {
+            let key = unit_key(level, group).map(str::to_owned);
+            if !unit.keys.contains(&key) {
+                if key.as_deref() == Some(UNKNOWN) {
+                    unit.unknown = Some(unit.buckets.len());
                 }
-            }
-            if !order.contains(&None) {
-                order.push(None);
-            }
-            order.sort_by_key(Option::is_none);
-            let first = buckets.len();
-            unknown.push(first + order.len() - 1);
-            for key in &order {
-                let representative = groups.iter().find(|g| unit_key(level, g) == *key);
-                buckets.push(Bucket {
-                    level,
-                    key: key.unwrap_or(UNKNOWN).to_owned(),
-                    labels: labels_for(level, *key, representative),
-                    state: new_state(),
-                });
-            }
-            for group in &groups {
-                let key = unit_key(level, group);
-                let at = order.iter().position(|k| *k == key).unwrap_or_default();
-                by_read_group
-                    .entry(group.id.clone().into_bytes())
-                    .or_default()
-                    .push(first + at);
+                unit.push(key, labels_for(level, group), empty.clone());
             }
         }
+        unit
+    }
+
+    fn push(&mut self, key: Option<String>, labels: Labels, state: T) {
+        self.keys.push(key);
+        self.buckets.push(Bucket {
+            level: self.level,
+            key: labels.key(),
+            labels,
+            state,
+        });
+    }
+
+    fn route(&self, group: &ReadGroupInfo) -> Route {
+        match unit_key(self.level, group) {
+            None | Some(UNKNOWN) => Route::Unknown,
+            Some(key) => Route::Bucket(
+                self.keys
+                    .iter()
+                    .position(|k| k.as_deref() == Some(key))
+                    .unwrap_or_default(),
+            ),
+        }
+    }
+
+    /// The `unknown` bucket's state, made on first use after every header
+    /// bucket.
+    fn unknown_state(&mut self, empty: &T) -> &mut T {
+        let index = match self.unknown {
+            Some(i) => i,
+            None => {
+                self.push(
+                    Some(UNKNOWN.to_owned()),
+                    unknown_labels(self.level),
+                    empty.clone(),
+                );
+                let i = self.buckets.len() - 1;
+                self.unknown = Some(i);
+                i
+            }
+        };
+        &mut self.buckets[index].state
+    }
+}
+
+/// The accumulators of every requested level.
+pub struct Levels<T> {
+    all: Option<Bucket<T>>,
+    units: Vec<Unit<T>>,
+    /// Read group `ID` to its route at each entry of `units`.
+    by_read_group: HashMap<Vec<u8>, Vec<Route>>,
+    /// The empty accumulator, copied into each `unknown` bucket.
+    empty: T,
+}
+
+impl<T: Clone> Levels<T> {
+    /// One bucket per unit of each level in `levels`, each a copy of `empty`.
+    pub fn new(header: &sam::Header, levels: &[Level], empty: T) -> Self {
+        let groups = read_groups(header);
+        let all = levels.contains(&Level::AllReads).then(|| Bucket {
+            level: Level::AllReads,
+            key: "All_Reads".to_owned(),
+            labels: Labels::default(),
+            state: empty.clone(),
+        });
+        let units: Vec<Unit<T>> = [Level::Sample, Level::Library, Level::ReadGroup]
+            .into_iter()
+            .filter(|level| levels.contains(level))
+            .map(|level| Unit::new(level, &groups, &empty))
+            .collect();
+        let by_read_group = groups
+            .iter()
+            .map(|g| {
+                let routes = units.iter().map(|u| u.route(g)).collect();
+                (g.id.clone().into_bytes(), routes)
+            })
+            .collect();
         Self {
-            buckets,
             all,
+            units,
             by_read_group,
-            unknown,
+            empty,
         }
     }
 
     /// Run `f` on every bucket this record belongs to: the `ALL_READS`
     /// bucket, and the sample, library and read group buckets of its `RG` tag.
-    /// A record without a read group in the header reaches the `unknown`
-    /// bucket of each other level, as in Picard.
     pub fn route(&mut self, record: &bam::Record, mut f: impl FnMut(&mut T)) {
-        for &i in &self.all {
-            f(&mut self.buckets[i].state);
+        if let Some(all) = &mut self.all {
+            f(&mut all.state);
         }
-        let targets = match record.data().get(&Tag::READ_GROUP) {
+        if self.units.is_empty() {
+            return;
+        }
+        let routes = match record.data().get(&Tag::READ_GROUP) {
             Some(Ok(Value::String(id))) => self.by_read_group.get(AsRef::<[u8]>::as_ref(id)),
             _ => None,
-        }
-        .unwrap_or(&self.unknown);
-        for &i in targets {
-            f(&mut self.buckets[i].state);
+        };
+        for (i, unit) in self.units.iter_mut().enumerate() {
+            match routes.map_or(Route::Unknown, |r| r[i]) {
+                Route::Bucket(b) => f(&mut unit.buckets[b].state),
+                Route::Unknown => f(unit.unknown_state(&self.empty)),
+            }
         }
     }
 
     /// Buckets in the order Picard writes their rows.
     pub fn into_buckets(self) -> Vec<Bucket<T>> {
-        self.buckets
+        self.all
+            .into_iter()
+            .chain(self.units.into_iter().flat_map(|u| u.buckets))
+            .collect()
     }
 }
 
@@ -245,37 +317,25 @@ fn unit_key(level: Level, group: &ReadGroupInfo) -> Option<&str> {
     }
 }
 
-fn labels_for(level: Level, key: Option<&str>, group: Option<&ReadGroupInfo>) -> Labels {
-    let text = |s: &str| Some(s.to_owned());
-    match (level, key, group) {
-        (Level::Sample, Some(sample), _) => Labels {
-            sample: text(sample),
-            ..Labels::default()
-        },
-        (Level::Sample, None, _) => Labels {
-            sample: text(UNKNOWN),
-            ..Labels::default()
-        },
-        (Level::Library, Some(library), Some(g)) => Labels {
-            sample: g.sample.clone(),
-            library: text(library),
-            read_group: None,
-        },
-        (Level::Library, _, _) => Labels {
-            sample: text(UNKNOWN),
-            library: text(UNKNOWN),
-            read_group: None,
-        },
-        (Level::ReadGroup, Some(unit), Some(g)) => Labels {
-            sample: g.sample.clone(),
-            library: g.library.clone(),
-            read_group: text(unit),
-        },
-        _ => Labels {
-            sample: text(UNKNOWN),
-            library: text(UNKNOWN),
-            read_group: text(UNKNOWN),
-        },
+/// Labels of a header bucket: the group's fields up to the level.
+fn labels_for(level: Level, group: &ReadGroupInfo) -> Labels {
+    Labels {
+        sample: group.sample.clone(),
+        library: group.library.clone().filter(|_| level != Level::Sample),
+        read_group: group
+            .platform_unit
+            .clone()
+            .filter(|_| level == Level::ReadGroup),
+    }
+}
+
+/// Labels of an `unknown` bucket: `unknown` up to the level.
+fn unknown_labels(level: Level) -> Labels {
+    let text = Some(UNKNOWN.to_owned());
+    Labels {
+        sample: text.clone(),
+        library: text.clone().filter(|_| level != Level::Sample),
+        read_group: text.filter(|_| level == Level::ReadGroup),
     }
 }
 
@@ -293,6 +353,32 @@ mod tests {
         @RG\tID:a2\tSM:S1\tLB:LibA\n\
         @RG\tID:c1\tSM:S1\tPU:pu-c1\n";
 
+    /// An unmapped record with read group `id`, or none, round-tripped
+    /// through BAM bytes.
+    fn record(id: Option<&str>) -> bam::Record {
+        use noodles::sam::alignment::io::Write as _;
+        use noodles::sam::alignment::record_buf::RecordBuf;
+        use noodles::sam::alignment::record_buf::data::field::Value as BufValue;
+
+        let mut buf = RecordBuf::default();
+        if let Some(id) = id {
+            buf.data_mut()
+                .insert(Tag::READ_GROUP, BufValue::from(id.to_owned()));
+        }
+        let header = sam::Header::default();
+        let mut writer = bam::io::Writer::new(Vec::new());
+        writer.write_header(&header).expect("header");
+        writer
+            .write_alignment_record(&header, &buf)
+            .expect("encode");
+        let bytes = writer.into_inner().finish().expect("finish");
+        let mut reader = bam::io::Reader::new(bytes.as_slice());
+        reader.read_header().expect("header");
+        let mut out = bam::Record::default();
+        reader.read_record(&mut out).expect("decode");
+        out
+    }
+
     #[test]
     fn levels_option_is_a_list_with_default_all_reads() {
         let none: [&str; 0] = [];
@@ -308,53 +394,73 @@ mod tests {
         assert!(parse_levels(&["BOGUS"]).is_err());
     }
 
+    fn keys(buckets: &[Bucket<u32>]) -> Vec<(Level, &str, u32)> {
+        buckets
+            .iter()
+            .map(|b| (b.level, b.key.as_str(), b.state))
+            .collect()
+    }
+
     #[test]
-    fn buckets_follow_header_order_with_unknown_last() {
+    fn header_buckets_in_header_order_and_unknown_only_when_used() {
+        let all = [
+            Level::ReadGroup,
+            Level::Library,
+            Level::Sample,
+            Level::AllReads,
+        ];
         let h = header(HEADER);
-        let levels = Levels::new(
-            &h,
-            &[
-                Level::ReadGroup,
-                Level::Library,
-                Level::Sample,
-                Level::AllReads,
-            ],
-            || 0u32,
-        );
+        let mut levels = Levels::new(&h, &all, 0u32);
+        levels.route(&record(Some("a1")), |n| *n += 1);
         let buckets = levels.into_buckets();
-        let keys: Vec<(Level, &str)> = buckets.iter().map(|b| (b.level, b.key.as_str())).collect();
+        // c1 has no LB: its LIBRARY bucket takes c1's sample as its key and
+        // gets nothing. a2 has no PU: likewise at READ_GROUP.
         assert_eq!(
-            keys,
+            keys(&buckets),
             [
-                (Level::AllReads, "All_Reads"),
-                (Level::Sample, "S2"),
-                (Level::Sample, "S1"),
-                (Level::Sample, "unknown"),
-                (Level::Library, "LibB"),
-                (Level::Library, "LibA"),
-                (Level::Library, "unknown"),
-                (Level::ReadGroup, "pu-b1"),
-                (Level::ReadGroup, "pu-a1"),
-                (Level::ReadGroup, "pu-c1"),
-                (Level::ReadGroup, "unknown"),
+                (Level::AllReads, "All_Reads", 1),
+                (Level::Sample, "S2", 0),
+                (Level::Sample, "S1", 1),
+                (Level::Library, "LibB", 0),
+                (Level::Library, "LibA", 1),
+                (Level::Library, "S1", 0),
+                (Level::ReadGroup, "pu-b1", 0),
+                (Level::ReadGroup, "pu-a1", 1),
+                (Level::ReadGroup, "LibA", 0),
+                (Level::ReadGroup, "pu-c1", 0),
             ]
         );
     }
 
     #[test]
-    fn unknown_labels_match_picard() {
+    fn records_without_the_field_make_an_unknown_bucket_last() {
         let h = header(HEADER);
-        let buckets = Levels::new(&h, &[Level::Library, Level::ReadGroup], || ()).into_buckets();
-        let unknown_library = &buckets[2].labels;
-        assert_eq!(unknown_library.sample.as_deref(), Some("unknown"));
-        assert_eq!(unknown_library.library.as_deref(), Some("unknown"));
+        let mut levels = Levels::new(&h, &[Level::Library, Level::ReadGroup], 0u32);
+        for id in [Some("c1"), None, Some("zz"), Some("a2")] {
+            levels.route(&record(id), |n| *n += 1);
+        }
+        let buckets = levels.into_buckets();
+        let unknown_library = &buckets[3];
+        assert_eq!(
+            (unknown_library.key.as_str(), unknown_library.state),
+            ("unknown", 3)
+        );
+        assert_eq!(unknown_library.labels.sample.as_deref(), Some("unknown"));
+        assert_eq!(unknown_library.labels.library.as_deref(), Some("unknown"));
+        assert_eq!(unknown_library.labels.read_group, None);
         // pu-c1 has a PU but no LB: sample kept, library empty.
-        let no_library = &buckets[5].labels;
+        let no_library = &buckets[7].labels;
         assert_eq!(no_library.sample.as_deref(), Some("S1"));
         assert_eq!(no_library.library, None);
         assert_eq!(no_library.read_group.as_deref(), Some("pu-c1"));
-        let unknown_unit = &buckets[6].labels;
-        assert_eq!(unknown_unit.read_group.as_deref(), Some("unknown"));
-        assert_eq!(unknown_unit.sample.as_deref(), Some("unknown"));
+        let unknown_unit = &buckets[8];
+        assert_eq!(unknown_unit.state, 3);
+        assert_eq!(unknown_unit.labels.read_group.as_deref(), Some("unknown"));
+        assert_eq!(unknown_unit.labels.library.as_deref(), Some("unknown"));
+        // The empty a2 bucket keeps a2's sample and library.
+        let empty_unit = &buckets[6];
+        assert_eq!(empty_unit.state, 0);
+        assert_eq!(empty_unit.labels.library.as_deref(), Some("LibA"));
+        assert_eq!(empty_unit.labels.read_group, None);
     }
 }
