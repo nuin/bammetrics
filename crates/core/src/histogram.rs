@@ -277,4 +277,43 @@ mod tests {
         h.trim_by_width(10);
         assert_eq!((h.min(), h.max()), (Some(1), Some(10)));
     }
+
+    /// Trap 4: an even count gives a half-integer median, so the deviations
+    /// are `x.5`. Items 10,11,12,13: median 11.5, deviations 1.5,.5,.5,1.5,
+    /// MAD (0.5 + 1.5) / 2 = 1. Rounding each deviation to an integer first
+    /// gives 2,1,1,2 and a MAD of 1.5.
+    #[test]
+    fn trap_4_even_count_mad_keeps_half_integer_deviations() {
+        let h = hist(&[(10, 1.0), (11, 1.0), (12, 1.0), (13, 1.0)]);
+        assert_eq!(h.median(), 11.5);
+        assert_eq!(h.median_absolute_deviation(), 1.0);
+        // The same shape with weights: 20 x 300, 10 x 301 -> median 300.5.
+        let weighted = hist(&[(300, 20.0), (301, 20.0)]);
+        assert_eq!(weighted.median(), 300.5);
+        assert_eq!(weighted.median_absolute_deviation(), 0.5);
+    }
+
+    /// Trap 5: `min`/`max` return keys. A bin with a count of 0 still has a key.
+    #[test]
+    fn trap_5_min_max_are_keys_even_for_empty_bins() {
+        let h = hist(&[(3, 0.0), (40, 7.0), (900, 1.0)]);
+        assert_eq!((h.min(), h.max()), (Some(3), Some(900)));
+    }
+
+    /// Trap 6: the sample SD divides by n - 1. Items 1,3: mean 2, squares 2,
+    /// SD sqrt(2), where a population SD would be 1. One item is 0/0 = NaN.
+    #[test]
+    fn trap_6_sample_sd_divides_by_n_minus_one() {
+        let h = hist(&[(1, 1.0), (3, 1.0)]);
+        assert!((h.standard_deviation() - 2.0f64.sqrt()).abs() < 1e-15);
+        assert!(hist(&[(5, 1.0)]).standard_deviation().is_nan());
+    }
+
+    /// Trap 7: on equal counts the mode is the lowest key, however many
+    /// bins tie and whatever order they were added in.
+    #[test]
+    fn trap_7_mode_ties_resolve_to_the_lowest_key() {
+        assert_eq!(hist(&[(9, 4.0), (2, 4.0), (5, 4.0)]).mode(), Some(2));
+        assert_eq!(hist(&[(9, 4.0), (2, 3.0)]).mode(), Some(9));
+    }
 }

@@ -3,14 +3,16 @@
 use std::io::{self, Write};
 use std::path::Path;
 
-use noodles::bam;
+use noodles::{bam, sam};
 
 use crate::error::Result;
 use crate::histogram::Histogram;
-use crate::metrics_file::{HistogramColumn, HistogramTable, MetricsFile, format_double};
+use crate::levels::{Labels, Level, Levels, parse_levels};
+use crate::metric::{HistogramSection, HistogramSeries, MetricRow, MetricsOutput, Value};
 use crate::pass::{self, Accumulator};
 pub use crate::record::Orientation;
 use crate::record::orientation;
+use crate::registry::{Invocation, Opt, Tool};
 
 #[derive(Clone, Debug)]
 pub struct Options {
@@ -25,6 +27,23 @@ pub struct Options {
     /// `MIN_HISTOGRAM_WIDTH`: lower bound on the computed trim width.
     pub min_histogram_width: Option<i64>,
     pub include_duplicates: bool,
+    /// `METRIC_ACCUMULATION_LEVEL`: one set of rows per level.
+    pub levels: Vec<Level>,
+}
+
+impl Options {
+    /// The options of a parsed `CollectInsertSizeMetrics` command line.
+    pub fn from_invocation(inv: &Invocation) -> Result<Self> {
+        let defaults = Self::default();
+        Ok(Self {
+            minimum_pct: inv.parse("MINIMUM_PCT", defaults.minimum_pct)?,
+            deviations: inv.parse("DEVIATIONS", defaults.deviations)?,
+            histogram_width: inv.parse_opt("HISTOGRAM_WIDTH")?,
+            min_histogram_width: inv.parse_opt("MINIMUM_HISTOGRAM_WIDTH")?,
+            include_duplicates: inv.flag("INCLUDE_DUPLICATES", false)?,
+            levels: parse_levels(inv.all("METRIC_ACCUMULATION_LEVEL"))?,
+        })
+    }
 }
 
 impl Default for Options {
@@ -35,8 +54,45 @@ impl Default for Options {
             histogram_width: None,
             min_histogram_width: None,
             include_duplicates: false,
+            levels: vec![Level::AllReads],
         }
     }
+}
+
+/// `CollectInsertSizeMetrics` in the tool registry.
+pub const TOOL: Tool = Tool {
+    name: "CollectInsertSizeMetrics",
+    options: &[
+        Opt::ignored(&["HISTOGRAM_FILE", "H"], "no histogram plot is drawn"),
+        Opt::value(&["DEVIATIONS"]),
+        Opt::value(&["HISTOGRAM_WIDTH", "W"]),
+        Opt::value(&["MINIMUM_HISTOGRAM_WIDTH", "MW"]),
+        Opt::value(&["MINIMUM_PCT", "M"]),
+        Opt::value(&["INCLUDE_DUPLICATES"]),
+        Opt::value(&["METRIC_ACCUMULATION_LEVEL", "LEVEL"]),
+    ],
+    run: run_tool,
+};
+
+/// The rows Picard writes, or `None` (with Picard's warning on standard
+/// error) when it writes no file.
+fn run_tool(inv: &Invocation) -> Result<Option<MetricsOutput>> {
+    let opts = Options::from_invocation(inv)?;
+    let rows = pass::run(&inv.input, inv.threads, |header| {
+        Ok(InsertSize::new(&opts, header))
+    })?;
+    if rows.is_empty() {
+        eprintln!("{}", no_rows_warning(opts.minimum_pct));
+        return Ok(None);
+    }
+    Ok(Some(output(&rows)))
+}
+
+/// The warning `CollectInsertSizeMetrics.finish` logs when it writes no file.
+pub fn no_rows_warning(minimum_pct: f32) -> String {
+    format!(
+        "bammetrics: all data categories were discarded because they contained < {minimum_pct:?} of the total aligned paired data; no metrics written"
+    )
 }
 
 /// The X of each `WIDTH_OF_X_PERCENT` column, in column order.
@@ -72,6 +128,10 @@ pub const COLUMNS: [&str; 23] = [
 /// One `MetricsFile` row for one pair orientation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Row {
+    /// Histogram column prefix of the row's accumulation unit.
+    pub key: String,
+    /// The `SAMPLE`, `LIBRARY` and `READ_GROUP` columns.
+    pub labels: Labels,
     pub orientation: Orientation,
     pub read_pairs: i64,
     pub min_insert_size: i64,
@@ -97,51 +157,60 @@ impl Row {
             .position(|&p| p == percent)
             .map(|i| self.widths[i])
     }
+}
 
-    /// The row's fields as Picard prints them, in `COLUMNS` order. `SAMPLE`,
-    /// `LIBRARY` and `READ_GROUP` are empty at the `ALL_READS` level.
-    fn picard_fields(&self) -> Vec<String> {
-        let mut fields = vec![
-            format_double(self.median_insert_size),
-            self.mode_insert_size.to_string(),
-            format_double(self.median_absolute_deviation),
-            self.min_insert_size.to_string(),
-            self.max_insert_size.to_string(),
-            format_double(self.mean_insert_size),
-            format_double(self.standard_deviation),
-            self.read_pairs.to_string(),
-            self.orientation.as_str().to_owned(),
+impl MetricRow for Row {
+    const CLASS: &'static str = "picard.analysis.InsertSizeMetrics";
+    const COLUMNS: &'static [&'static str] = &COLUMNS;
+
+    /// `SAMPLE`, `LIBRARY` and `READ_GROUP` are null at the `ALL_READS` level.
+    fn values(&self) -> Vec<Value> {
+        let mut values = vec![
+            self.median_insert_size.into(),
+            self.mode_insert_size.into(),
+            self.median_absolute_deviation.into(),
+            self.min_insert_size.into(),
+            self.max_insert_size.into(),
+            self.mean_insert_size.into(),
+            self.standard_deviation.into(),
+            self.read_pairs.into(),
+            self.orientation.as_str().into(),
         ];
-        fields.extend(self.widths.iter().map(i64::to_string));
-        fields.extend([String::new(), String::new(), String::new()]);
-        fields
+        values.extend(self.widths.iter().map(|&w| Value::Int(w)));
+        values.extend([
+            self.labels.sample.clone().into(),
+            self.labels.library.clone().into(),
+            self.labels.read_group.clone().into(),
+        ]);
+        values
     }
 }
 
-/// Write rows as a Picard `InsertSizeMetrics` file. `headers` become the
-/// `StringHeader` lines. Histogram columns are named
-/// `All_Reads.<orientation>_count`, as Picard names the `ALL_READS` level.
+/// The metrics file content for `rows`. Histogram columns are named
+/// `<key>.<orientation>_count`, with `All_Reads` as the `ALL_READS` key.
 /// Picard 3.5.0 leaves an empty orientation's histogram out of the table
 /// (`MetricsFile.printHistogram`) while still writing its all-zero metrics row.
-pub fn write_metrics(rows: &[Row], headers: Vec<String>, out: &mut impl Write) -> io::Result<()> {
-    let columns = rows
+pub fn output(rows: &[Row]) -> MetricsOutput {
+    let series = rows
         .iter()
-        .map(|r| HistogramColumn {
-            label: format!("All_Reads.{}_count", r.orientation.as_str().to_lowercase()),
-            histogram: &r.histogram,
+        .map(|r| HistogramSeries {
+            label: format!("{}.{}_count", r.key, r.orientation.as_str().to_lowercase()),
+            histogram: r.histogram.clone(),
         })
         .collect();
-    MetricsFile {
-        headers,
-        class: "picard.analysis.InsertSizeMetrics",
-        columns: &COLUMNS,
-        rows: rows.iter().map(Row::picard_fields).collect(),
-        histogram: Some(HistogramTable {
+    MetricsOutput::from_rows(
+        rows,
+        Some(HistogramSection {
             key_label: "insert_size",
-            columns,
+            series,
         }),
-    }
-    .write(out)
+    )
+}
+
+/// Write rows as a Picard `InsertSizeMetrics` file. `headers` become the
+/// `StringHeader` lines.
+pub fn write_metrics(rows: &[Row], headers: Vec<String>, out: &mut impl Write) -> io::Result<()> {
+    output(rows).write(headers, out)
 }
 
 /// Whether `CollectInsertSizeMetrics` counts this record (docs/01 section 2.2).
@@ -161,18 +230,42 @@ fn is_counted(record: &bam::Record, opts: &Options) -> bool {
 /// per pair orientation.
 pub struct InsertSize {
     opts: Options,
+    levels: Levels<Orientations>,
+}
+
+/// The three orientation histograms of one accumulation unit.
+#[derive(Clone, Default)]
+struct Orientations {
     fr: Histogram,
     rf: Histogram,
     tandem: Histogram,
 }
 
+impl Orientations {
+    fn histogram(&self, orientation: Orientation) -> &Histogram {
+        match orientation {
+            Orientation::Fr => &self.fr,
+            Orientation::Rf => &self.rf,
+            Orientation::Tandem => &self.tandem,
+        }
+    }
+
+    fn histogram_mut(&mut self, orientation: Orientation) -> &mut Histogram {
+        match orientation {
+            Orientation::Fr => &mut self.fr,
+            Orientation::Rf => &mut self.rf,
+            Orientation::Tandem => &mut self.tandem,
+        }
+    }
+}
+
 impl InsertSize {
-    pub fn new(opts: &Options) -> Self {
+    /// An accumulator with one unit per level of `opts.levels`, units
+    /// taken from the header's read groups.
+    pub fn new(opts: &Options, header: &sam::Header) -> Self {
         Self {
             opts: opts.clone(),
-            fr: Histogram::new(),
-            rf: Histogram::new(),
-            tandem: Histogram::new(),
+            levels: Levels::new(header, &opts.levels, Orientations::default),
         }
     }
 }
@@ -196,38 +289,44 @@ impl Accumulator for InsertSize {
             return Ok(());
         }
         let insert_size = i64::from(record.template_length()).abs();
-        match orientation(record)? {
-            Orientation::Fr => self.fr.increment(insert_size),
-            Orientation::Rf => self.rf.increment(insert_size),
-            Orientation::Tandem => self.tandem.increment(insert_size),
-        }
+        let orientation = orientation(record)?;
+        self.levels.route(record, |unit| {
+            unit.histogram_mut(orientation).increment(insert_size);
+        });
         Ok(())
     }
 
     fn finish(self) -> Result<Vec<Row>> {
         let opts = &self.opts;
-        let total = self.fr.count() + self.rf.count() + self.tandem.count();
-        Ok([
-            (Orientation::Fr, &self.fr),
-            (Orientation::Rf, &self.rf),
-            (Orientation::Tandem, &self.tandem),
-        ]
-        .into_iter()
-        .filter(|(_, h)| passes_minimum_pct(h.count(), total, opts.minimum_pct))
-        .map(|(orientation, h)| finalize_row(orientation, h, opts))
-        .collect())
+        let mut rows = Vec::new();
+        for bucket in self.levels.into_buckets() {
+            let unit = &bucket.state;
+            let total = unit.fr.count() + unit.rf.count() + unit.tandem.count();
+            for orientation in [Orientation::Fr, Orientation::Rf, Orientation::Tandem] {
+                let h = unit.histogram(orientation);
+                if passes_minimum_pct(h.count(), total, opts.minimum_pct) {
+                    let mut row = finalize_row(orientation, h, opts);
+                    row.key = bucket.key.clone();
+                    row.labels = bucket.labels.clone();
+                    rows.push(row);
+                }
+            }
+        }
+        Ok(rows)
     }
 }
 
 /// `StringHeader` command line in Picard's shape (parsers such as MultiQC
 /// read `INPUT=` from it).
 pub fn command_header(opts: &Options, bam: &Path, output: Option<&Path>) -> String {
+    let levels: Vec<&str> = opts.levels.iter().map(|l| l.name()).collect();
     let mut command = format!(
-        "CollectInsertSizeMetrics INPUT={} MINIMUM_PCT={:?} DEVIATIONS={:?} INCLUDE_DUPLICATES={} METRIC_ACCUMULATION_LEVEL=[ALL_READS]",
+        "CollectInsertSizeMetrics INPUT={} MINIMUM_PCT={:?} DEVIATIONS={:?} INCLUDE_DUPLICATES={} METRIC_ACCUMULATION_LEVEL=[{}]",
         bam.display(),
         opts.minimum_pct,
         opts.deviations,
-        opts.include_duplicates
+        opts.include_duplicates,
+        levels.join(", ")
     );
     if let Some(output) = output {
         command.push_str(&format!(" OUTPUT={}", output.display()));
@@ -243,8 +342,8 @@ pub fn command_header(opts: &Options, bam: &Path, output: Option<&Path>) -> Stri
 
 /// Compute the metrics of one BAM with the default BGZF worker count.
 pub fn run_over_bam(path: impl AsRef<Path>, opts: &Options) -> Result<Vec<Row>> {
-    pass::run(path.as_ref(), pass::default_threads(), |_| {
-        Ok(InsertSize::new(opts))
+    pass::run(path.as_ref(), pass::default_threads(), |header| {
+        Ok(InsertSize::new(opts, header))
     })
 }
 
@@ -307,6 +406,8 @@ fn finalize_row(orientation: Orientation, h: &Histogram, opts: &Options) -> Row 
         // `addMetricsToFile` then skips every computation (`histogram.isEmpty()`
         // guard), so all numeric fields keep Java's default 0.
         return Row {
+            key: String::new(),
+            labels: Labels::default(),
             orientation,
             read_pairs: 0,
             min_insert_size: 0,
@@ -330,8 +431,17 @@ fn finalize_row(orientation: Orientation, h: &Histogram, opts: &Options) -> Row 
     // keeps at least the median bin; a single pair gives SD 0/0 = NaN.
     let mut trimmed = h.clone();
     trimmed.trim_by_width(trim_width(median, mad, opts));
+    // A width below the smallest insert size empties the histogram. Picard
+    // then reports mean 0 and SD 0 (checked with W=0, 1, 100 on one pair).
+    let (mean, sd) = if trimmed.min().is_none() {
+        (0.0, 0.0)
+    } else {
+        (trimmed.mean(), trimmed.standard_deviation())
+    };
 
     Row {
+        key: String::new(),
+        labels: Labels::default(),
         orientation,
         read_pairs: h.count() as i64,
         min_insert_size: min,
@@ -339,8 +449,8 @@ fn finalize_row(orientation: Orientation, h: &Histogram, opts: &Options) -> Row 
         median_insert_size: median,
         mode_insert_size: mode,
         median_absolute_deviation: mad,
-        mean_insert_size: trimmed.mean(),
-        standard_deviation: trimmed.standard_deviation(),
+        mean_insert_size: mean,
+        standard_deviation: sd,
         widths,
         histogram: trimmed,
     }
@@ -402,10 +512,13 @@ mod tests {
             minimum_pct: 0.0,
             ..Options::default()
         };
-        let rows = vec![
+        let mut rows = vec![
             finalize_row(Orientation::Fr, &hist(&[(250, 1.0)]), &opts),
             finalize_row(Orientation::Rf, &Histogram::new(), &opts),
         ];
+        for row in &mut rows {
+            row.key = "All_Reads".to_owned();
+        }
         assert_eq!(rows[1].read_pairs, 0);
         assert_eq!(rows[1].mean_insert_size, 0.0);
         assert!(rows[0].standard_deviation.is_nan());

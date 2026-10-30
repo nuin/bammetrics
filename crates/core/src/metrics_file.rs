@@ -74,7 +74,7 @@ fn prefer_even_on_tie(value: f64, digits: &mut String) {
         return;
     };
     let n = digits.len();
-    if (last - b'0') % 2 == 0 {
+    if (last - b'0').is_multiple_of(2) {
         return;
     }
     let exact = format!("{value:.40e}");
@@ -112,7 +112,7 @@ fn round_at(value: f64, integer: String, fraction: String, places: usize) -> (St
         match exact.as_str().cmp(tie_text.as_str()) {
             std::cmp::Ordering::Greater => true,
             std::cmp::Ordering::Less => false,
-            std::cmp::Ordering::Equal => kept.last().is_some_and(|b| (b - b'0') % 2 == 1),
+            std::cmp::Ordering::Equal => kept.last().is_some_and(|b| !(b - b'0').is_multiple_of(2)),
         }
     } else {
         rest[0] >= b'5'

@@ -6,12 +6,12 @@ members = ["crates/core", "crates/py"]
 version = "0.3.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-rust-version = "1.85"
+rust-version = "1.88"
 
 [workspace.dependencies]
 bammetrics-core = { path = "crates/core", version = "0.3.0" }
 clap = { version = "4", features = ["derive"] }
-noodles = { version = "0.118", features = ["bam", "sam", "bgzf", "core", "fasta"] }
+noodles = { version = "0.119", features = ["bam", "sam", "bgzf", "core", "fasta"] }
 pyo3 = { version = "0.30", features = ["extension-module"] }
 thiserror = "2"
 

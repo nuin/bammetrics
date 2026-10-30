@@ -23,13 +23,15 @@ behaves how.
 
 ## Options
 
-- Picard syntax takes `KEY=VALUE` only. `--INPUT x` and `--INPUT=x` exit 1.
+- Picard syntax takes `KEY=VALUE`. `CollectInsertSizeMetrics`, which is in the registry,
+  also takes `--INPUT x`, `--INPUT=x` and `-I x`. The other three tools exit 1 on those forms.
 - An unknown option exits 1 naming it. Dropping it could change a number silently.
 - Options that cannot change a metric are accepted, dropped and noted on stderr:
   `VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`, `VERBOSITY`, `ASSUME_SORTED`, `H` (no PDF
   is drawn), `R` for tools that do not read a reference.
-- `METRIC_ACCUMULATION_LEVEL` accepts `ALL_READS` only. `LIBRARY` and `READ_GROUP`
-  rows are not produced.
+- `METRIC_ACCUMULATION_LEVEL` is implemented for `CollectInsertSizeMetrics` (all four
+  levels). The other tools accept `ALL_READS` only; `SAMPLE`, `LIBRARY` and `READ_GROUP`
+  rows are not produced for them.
 - `STOP_AFTER`, `FLOW_MODE=true`, `IS_BISULFITE_SEQUENCED=true`, `PER_TARGET_COVERAGE`
   and `THEORETICAL_SENSITIVITY_OUTPUT` exit 1. `PER_BASE_COVERAGE` is implemented.
 - Picard list options (`EXPECTED_PAIR_ORIENTATIONS`, `ADAPTER_SEQUENCE`) append to the
