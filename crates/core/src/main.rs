@@ -13,7 +13,7 @@ use bammetrics_core::metrics_file::headers;
 use bammetrics_core::pass;
 use bammetrics_core::picard_cli;
 use bammetrics_core::quality_yield::{self, QualityYield};
-use bammetrics_core::registry;
+use bammetrics_core::registry::{self, picard_list};
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
@@ -172,6 +172,16 @@ struct AlignmentSummaryArgs {
     /// false counts reads only (Picard COLLECT_ALIGNMENT_INFORMATION).
     #[arg(long, default_value = "true", value_parser = parse_bool, action = ArgAction::Set)]
     collect_alignment_information: bool,
+    /// Bisulfite conversions are not mismatches (Picard IS_BISULFITE_SEQUENCED).
+    #[arg(long)]
+    is_bisulfite_sequenced: bool,
+    /// Adds ALL_READS, SAMPLE, LIBRARY or READ_GROUP to the default ALL_READS;
+    /// "null" clears the list (Picard METRIC_ACCUMULATION_LEVEL).
+    #[arg(long = "level", value_name = "LEVEL")]
+    levels: Vec<String>,
+    /// Read only the first N records (Picard STOP_AFTER); 0 reads them all.
+    #[arg(long, default_value_t = 0)]
+    stop_after: i64,
 }
 
 #[derive(Args)]
@@ -254,28 +264,6 @@ struct HsMetricsArgs {
     per_base_coverage: Option<PathBuf>,
 }
 
-/// A Picard collection argument: values add to the default, and `null`
-/// empties the list so far.
-fn picard_list<T: PartialEq>(
-    default: Vec<T>,
-    values: &[String],
-    parse: impl Fn(&str) -> bammetrics_core::Result<T>,
-    distinct: bool,
-) -> bammetrics_core::Result<Vec<T>> {
-    let mut list = default;
-    for value in values {
-        if value == "null" {
-            list.clear();
-            continue;
-        }
-        let item = parse(value)?;
-        if !(distinct && list.contains(&item)) {
-            list.push(item);
-        }
-    }
-    Ok(list)
-}
-
 /// Booleans as Picard reads them, in any case.
 fn parse_bool(value: &str) -> Result<bool, String> {
     match value.to_ascii_lowercase().as_str() {
@@ -295,15 +283,16 @@ impl AlignmentSummaryArgs {
                 defaults.expected_orientations,
                 &self.expected_pair_orientations,
                 str::parse,
-                true,
             )?,
             adapter_sequences: picard_list(
                 defaults.adapter_sequences,
                 &self.adapter_sequences,
                 |s| Ok(s.to_owned()),
-                false,
             )?,
             collect_alignment_information: self.collect_alignment_information,
+            bisulfite: self.is_bisulfite_sequenced,
+            levels: parse_levels(&self.levels)?,
+            stop_after: self.stop_after,
         })
     }
 }

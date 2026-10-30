@@ -1,34 +1,33 @@
 //! `CollectAlignmentSummaryMetrics` (docs/01 section 2.4), mirroring Picard
-//! 3.5.0 `AlignmentSummaryMetricsCollector` at the `ALL_READS` level.
+//! 3.5.0 `AlignmentSummaryMetricsCollector` at every
+//! `METRIC_ACCUMULATION_LEVEL`.
 //!
-//! Each primary record is described once (`Read::describe`) and the
-//! description is added to its categories: `FIRST_OF_PAIR` or
-//! `SECOND_OF_PAIR` plus `PAIR` for a paired read, `UNPAIRED` otherwise.
+//! Each primary record is described once (`Describer::describe`) and the
+//! description is added to its categories in every bucket it belongs to:
+//! `FIRST_OF_PAIR` or `SECOND_OF_PAIR` plus `PAIR` for a paired read,
+//! `UNPAIRED` otherwise. The read-length histograms come from the
+//! `ALL_READS` bucket only; without that level Picard writes none.
+
+mod describe;
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use noodles::sam::alignment::record::cigar::op::Kind;
-use noodles::sam::alignment::record::data::field::Tag;
 use noodles::{bam, sam};
 
 use crate::adapter::{Adapters, DEFAULT_ADAPTERS};
 use crate::error::{Error, Result};
 use crate::histogram::Histogram;
-use crate::metrics_file::{HistogramColumn, HistogramTable, MetricsFile, format_double};
+use crate::levels::{Labels, Level, Levels, parse_levels};
+use crate::metric::{HistogramSection, HistogramSeries, MetricRow, MetricsOutput, Value};
 use crate::pass::{self, Accumulator};
-use crate::record::{Orientation, orientation, record_name};
+use crate::record::Orientation;
 use crate::reference::Reference;
-use crate::sequence::{bases_equal, is_no_call};
+use crate::registry::{Invocation, Opt, Tool};
+use describe::{Describer, Read};
 
-/// `MAPPING_QUALITY_THRESHOLD`: MAPQ for a high-quality (HQ) alignment.
-const HQ_MAPQ: u8 = 20;
-/// `BASE_QUALITY_THRESHOLD`: base quality counted in `PF_HQ_ALIGNED_Q20_BASES`.
-const Q20: i8 = 20;
 /// `ChimeraUtil.DEFAULT_INSERT_SIZE_LIMIT`.
 pub const DEFAULT_MAX_INSERT_SIZE: i32 = 100_000;
-/// `ReservedTagConstants.XN`: the Illumina noise-read tag.
-const NOISE: Tag = Tag::new(b'X', b'N');
 
 #[derive(Clone, Debug)]
 pub struct Options {
@@ -44,6 +43,15 @@ pub struct Options {
     /// `COLLECT_ALIGNMENT_INFORMATION`: false counts reads only (and no-calls
     /// for `BAD_CYCLES`); every alignment field stays 0.
     pub collect_alignment_information: bool,
+    /// `IS_BISULFITE_SEQUENCED`: a converted base (read T on reference C,
+    /// or A on G for a reverse read) is no mismatch and leaves the mismatch
+    /// rate denominators.
+    pub bisulfite: bool,
+    /// `METRIC_ACCUMULATION_LEVEL`: one set of rows per level.
+    pub levels: Vec<Level>,
+    /// `STOP_AFTER`: read this many records, every flag counted; 0 or less
+    /// reads them all.
+    pub stop_after: i64,
 }
 
 impl Default for Options {
@@ -54,8 +62,62 @@ impl Default for Options {
             expected_orientations: vec![Orientation::Fr],
             adapter_sequences: DEFAULT_ADAPTERS.iter().map(|s| (*s).to_owned()).collect(),
             collect_alignment_information: true,
+            bisulfite: false,
+            levels: vec![Level::AllReads],
+            stop_after: 0,
         }
     }
+}
+
+impl Options {
+    /// The options of a parsed `CollectAlignmentSummaryMetrics` command line.
+    pub fn from_invocation(inv: &Invocation) -> Result<Self> {
+        let defaults = Self::default();
+        Ok(Self {
+            reference: inv.get("REFERENCE_SEQUENCE").map(PathBuf::from),
+            max_insert_size: inv.parse("MAX_INSERT_SIZE", defaults.max_insert_size)?,
+            expected_orientations: inv.list(
+                "EXPECTED_PAIR_ORIENTATIONS",
+                defaults.expected_orientations,
+                str::parse,
+            )?,
+            adapter_sequences: inv.list("ADAPTER_SEQUENCE", defaults.adapter_sequences, |s| {
+                Ok(s.to_owned())
+            })?,
+            collect_alignment_information: inv.flag(
+                "COLLECT_ALIGNMENT_INFORMATION",
+                defaults.collect_alignment_information,
+            )?,
+            bisulfite: inv.flag("IS_BISULFITE_SEQUENCED", defaults.bisulfite)?,
+            levels: parse_levels(inv.all("METRIC_ACCUMULATION_LEVEL"))?,
+            stop_after: inv.parse("STOP_AFTER", defaults.stop_after)?,
+        })
+    }
+}
+
+/// `CollectAlignmentSummaryMetrics` in the tool registry.
+pub const TOOL: Tool = Tool {
+    name: "CollectAlignmentSummaryMetrics",
+    options: &[
+        Opt::ignored(&["HISTOGRAM_FILE", "H"], "no read-length plot is drawn"),
+        Opt::value(&["REFERENCE_SEQUENCE", "R"]),
+        Opt::value(&["MAX_INSERT_SIZE"]),
+        Opt::value(&["EXPECTED_PAIR_ORIENTATIONS"]),
+        Opt::value(&["ADAPTER_SEQUENCE"]),
+        Opt::value(&["METRIC_ACCUMULATION_LEVEL", "LEVEL"]),
+        Opt::value(&["IS_BISULFITE_SEQUENCED", "BS"]),
+        Opt::value(&["COLLECT_ALIGNMENT_INFORMATION"]),
+        Opt::value(&["STOP_AFTER"]),
+    ],
+    run: run_tool,
+};
+
+fn run_tool(inv: &Invocation) -> Result<Option<MetricsOutput>> {
+    let opts = Options::from_invocation(inv)?;
+    let report = pass::run(&inv.input, inv.threads, |header| {
+        AlignmentSummary::new(&opts, header)
+    })?;
+    Ok(Some(report.output()))
 }
 
 /// `AlignmentSummaryMetrics.Category`.
@@ -155,416 +217,112 @@ pub struct Row {
     pub pct_softclip: f64,
     pub pct_hardclip: f64,
     pub avg_pos_3prime_softclip_length: f64,
+    /// The `SAMPLE`, `LIBRARY` and `READ_GROUP` columns.
+    pub labels: Labels,
 }
 
-impl Row {
-    /// The row as Picard prints it, in `COLUMNS` order. `SAMPLE`, `LIBRARY`
-    /// and `READ_GROUP` are empty at the `ALL_READS` level.
-    fn picard_fields(&self) -> Vec<String> {
-        let d = |v: f64| format_double(v);
+impl MetricRow for Row {
+    const CLASS: &'static str = "picard.analysis.AlignmentSummaryMetrics";
+    const COLUMNS: &'static [&'static str] = &COLUMNS;
+
+    fn values(&self) -> Vec<Value> {
         vec![
-            self.category.as_str().to_owned(),
-            self.total_reads.to_string(),
-            self.pf_reads.to_string(),
-            d(self.pct_pf_reads),
-            self.pf_noise_reads.to_string(),
-            self.pf_reads_aligned.to_string(),
-            d(self.pct_pf_reads_aligned),
-            self.pf_aligned_bases.to_string(),
-            self.pf_hq_aligned_reads.to_string(),
-            self.pf_hq_aligned_bases.to_string(),
-            self.pf_hq_aligned_q20_bases.to_string(),
-            d(self.pf_hq_median_mismatches),
-            d(self.pf_mismatch_rate),
-            d(self.pf_hq_error_rate),
-            d(self.pf_indel_rate),
-            d(self.mean_read_length),
-            d(self.sd_read_length),
-            d(self.median_read_length),
-            d(self.mad_read_length),
-            d(self.min_read_length),
-            d(self.max_read_length),
-            d(self.mean_aligned_read_length),
-            self.reads_aligned_in_pairs.to_string(),
-            d(self.pct_reads_aligned_in_pairs),
-            self.pf_reads_improper_pairs.to_string(),
-            d(self.pct_pf_reads_improper_pairs),
-            self.bad_cycles.to_string(),
-            d(self.strand_balance),
-            d(self.pct_chimeras),
-            d(self.pct_adapter),
-            d(self.pct_softclip),
-            d(self.pct_hardclip),
-            d(self.avg_pos_3prime_softclip_length),
-            String::new(),
-            String::new(),
-            String::new(),
+            self.category.as_str().into(),
+            self.total_reads.into(),
+            self.pf_reads.into(),
+            self.pct_pf_reads.into(),
+            self.pf_noise_reads.into(),
+            self.pf_reads_aligned.into(),
+            self.pct_pf_reads_aligned.into(),
+            self.pf_aligned_bases.into(),
+            self.pf_hq_aligned_reads.into(),
+            self.pf_hq_aligned_bases.into(),
+            self.pf_hq_aligned_q20_bases.into(),
+            self.pf_hq_median_mismatches.into(),
+            self.pf_mismatch_rate.into(),
+            self.pf_hq_error_rate.into(),
+            self.pf_indel_rate.into(),
+            self.mean_read_length.into(),
+            self.sd_read_length.into(),
+            self.median_read_length.into(),
+            self.mad_read_length.into(),
+            self.min_read_length.into(),
+            self.max_read_length.into(),
+            self.mean_aligned_read_length.into(),
+            self.reads_aligned_in_pairs.into(),
+            self.pct_reads_aligned_in_pairs.into(),
+            self.pf_reads_improper_pairs.into(),
+            self.pct_pf_reads_improper_pairs.into(),
+            self.bad_cycles.into(),
+            self.strand_balance.into(),
+            self.pct_chimeras.into(),
+            self.pct_adapter.into(),
+            self.pct_softclip.into(),
+            self.pct_hardclip.into(),
+            self.avg_pos_3prime_softclip_length.into(),
+            self.labels.sample.clone().into(),
+            self.labels.library.clone().into(),
+            self.labels.read_group.clone().into(),
         ]
     }
 }
 
-/// The rows Picard writes and the read-length histograms of the `PAIR` and
-/// `UNPAIRED` categories (`CollectAlignmentSummaryMetrics.finish`).
+/// The read-length histograms of the `ALL_READS` bucket's `PAIR` and
+/// `UNPAIRED` categories.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct ReadLengths {
+    /// `PAIRED_TOTAL_LENGTH_COUNT`: read lengths of PF paired reads.
+    pub paired_total: Histogram,
+    /// `PAIRED_ALIGNED_LENGTH_COUNT`: bases in M, I, = and X operations.
+    pub paired_aligned: Histogram,
+    /// `UNPAIRED_TOTAL_LENGTH_COUNT`.
+    pub unpaired_total: Histogram,
+    /// `UNPAIRED_ALIGNED_LENGTH_COUNT`.
+    pub unpaired_aligned: Histogram,
+}
+
+/// The rows Picard writes and, when `ALL_READS` is a level, the read-length
+/// histograms (`CollectAlignmentSummaryMetrics.finish`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Report {
     pub rows: Vec<Row>,
-    /// `PAIRED_TOTAL_LENGTH_COUNT`: read lengths of PF paired reads.
-    pub paired_read_lengths: Histogram,
-    /// `PAIRED_ALIGNED_LENGTH_COUNT`: bases in M, I, = and X operations.
-    pub paired_aligned_lengths: Histogram,
-    /// `UNPAIRED_TOTAL_LENGTH_COUNT`.
-    pub unpaired_read_lengths: Histogram,
-    /// `UNPAIRED_ALIGNED_LENGTH_COUNT`.
-    pub unpaired_aligned_lengths: Histogram,
+    pub histograms: Option<ReadLengths>,
 }
 
-/// Write a report as a Picard `AlignmentSummaryMetrics` file. Histograms
-/// with no reads are left out (`MetricsFile.printHistogram`).
+impl Report {
+    /// The metrics file content. Histograms with no reads are left out when
+    /// written (`MetricsFile.printHistogram`).
+    pub fn output(&self) -> MetricsOutput {
+        let histogram = self.histograms.as_ref().map(|h| {
+            let series = |label: &str, histogram: &Histogram| HistogramSeries {
+                label: label.to_owned(),
+                histogram: histogram.clone(),
+            };
+            HistogramSection {
+                key_label: "READ_LENGTH",
+                series: vec![
+                    series("PAIRED_TOTAL_LENGTH_COUNT", &h.paired_total),
+                    series("PAIRED_ALIGNED_LENGTH_COUNT", &h.paired_aligned),
+                    series("UNPAIRED_TOTAL_LENGTH_COUNT", &h.unpaired_total),
+                    series("UNPAIRED_ALIGNED_LENGTH_COUNT", &h.unpaired_aligned),
+                ],
+            }
+        });
+        MetricsOutput::from_rows(&self.rows, histogram)
+    }
+}
+
+/// Write a report as a Picard `AlignmentSummaryMetrics` file.
 pub fn write_metrics(
     report: &Report,
     headers: Vec<String>,
     out: &mut impl Write,
 ) -> io::Result<()> {
-    let column = |label: &str, histogram| HistogramColumn {
-        label: label.to_owned(),
-        histogram,
-    };
-    MetricsFile {
-        headers,
-        class: "picard.analysis.AlignmentSummaryMetrics",
-        columns: &COLUMNS,
-        rows: report.rows.iter().map(Row::picard_fields).collect(),
-        histogram: Some(HistogramTable {
-            key_label: "READ_LENGTH",
-            columns: vec![
-                column("PAIRED_TOTAL_LENGTH_COUNT", &report.paired_read_lengths),
-                column(
-                    "PAIRED_ALIGNED_LENGTH_COUNT",
-                    &report.paired_aligned_lengths,
-                ),
-                column("UNPAIRED_TOTAL_LENGTH_COUNT", &report.unpaired_read_lengths),
-                column(
-                    "UNPAIRED_ALIGNED_LENGTH_COUNT",
-                    &report.unpaired_aligned_lengths,
-                ),
-            ],
-        }),
-    }
-    .write(out)
-}
-
-/// What one primary record adds to a category. `describe` fills it once per
-/// record; `Collector::add` applies it to each category the record is in.
-#[derive(Default)]
-struct Read {
-    qc_fail: bool,
-    noise: bool,
-    length: i64,
-    /// `getUnclippedBaseCount`: bases in M, I, = and X operations.
-    aligned_length: i64,
-    adapter: bool,
-    hard_clipped: i64,
-    /// Present for a mapped read: soft-clipped bases and 3' soft-clipped bases.
-    clips: Option<(i64, i64)>,
-    /// Present for a mapped read when alignment information is collected.
-    alignment: Option<Alignment>,
-    /// Present when the read takes the mismatch branch of `collectQualityData`.
-    bases: Option<BaseCounts>,
-    /// Keys added to the bad-cycle histogram.
-    bad_cycles: Vec<i64>,
-}
-
-struct Alignment {
-    improper_pair: bool,
-    positive_strand: bool,
-    aligned_in_pair: bool,
-    /// `Some(chimeric)` when the read enters the `PCT_CHIMERAS` denominator.
-    chimera: Option<bool>,
-}
-
-#[derive(Default)]
-struct BaseCounts {
-    hq_read: bool,
-    aligned: i64,
-    hq_aligned: i64,
-    hq_q20: i64,
-    mismatches: i64,
-    hq_mismatches: i64,
-    indels: i64,
-}
-
-/// Settings and scratch space shared by every record.
-struct Describer {
-    adapters: Adapters,
-    max_insert_size: i64,
-    expected: Vec<Orientation>,
-    do_ref_metrics: bool,
-    bases: Vec<u8>,
-    cigar: Vec<(Kind, usize)>,
-}
-
-impl Describer {
-    fn describe(&mut self, record: &bam::Record, reference: Option<&[u8]>) -> Result<Read> {
-        let flags = record.flags();
-        // htsjdk `getMappingQuality` reports a missing MAPQ as 255.
-        let mapq = record.mapping_quality().map_or(255, |q| q.get());
-        let unmapped = flags.is_unmapped();
-        let reverse = flags.is_reverse_complemented();
-        self.bases.clear();
-        self.bases.extend(record.sequence().iter());
-        self.cigar.clear();
-        for op in record.cigar().iter() {
-            let op = op?;
-            self.cigar.push((op.kind(), op.len()));
-        }
-        let mut read = Read {
-            qc_fail: flags.is_qc_fail(),
-            noise: is_noise(record)?,
-            length: self.bases.len() as i64,
-            aligned_length: self
-                .cigar
-                .iter()
-                .filter(|(k, _)| {
-                    matches!(
-                        k,
-                        Kind::Match
-                            | Kind::Insertion
-                            | Kind::SequenceMatch
-                            | Kind::SequenceMismatch
-                    )
-                })
-                .map(|&(_, n)| n as i64)
-                .sum(),
-            adapter: self
-                .adapters
-                .is_adapter(&self.bases, unmapped, reverse, mapq),
-            hard_clipped: self.total(Kind::HardClip),
-            ..Read::default()
-        };
-        if !unmapped {
-            read.clips = Some((
-                self.total(Kind::SoftClip),
-                three_prime_soft_clip(&self.cigar, reverse),
-            ));
-            if self.do_ref_metrics {
-                read.alignment = Some(self.alignment(record, mapq)?);
-            }
-        }
-        if unmapped || read.qc_fail || !self.do_ref_metrics {
-            // `collectQualityData` on a read that is not an aligned PF read:
-            // every no-call counts toward its machine cycle.
-            for (i, &base) in self.bases.iter().enumerate() {
-                if is_no_call(base) {
-                    read.bad_cycles.push(cycle(reverse, self.bases.len(), i));
-                }
-            }
-        } else {
-            read.bases = Some(self.base_counts(record, reference, mapq, &mut read.bad_cycles)?);
-        }
-        Ok(read)
-    }
-
-    /// Summed length of one CIGAR operation (`getTotalCigarOperatorCount`).
-    fn total(&self, kind: Kind) -> i64 {
-        self.cigar
-            .iter()
-            .filter(|(k, _)| *k == kind)
-            .map(|&(_, n)| n as i64)
-            .sum()
-    }
-
-    /// The `doRefMetrics` block of `collectReadData` for a mapped PF read.
-    fn alignment(&self, record: &bam::Record, mapq: u8) -> Result<Alignment> {
-        let flags = record.flags();
-        let paired = flags.is_segmented();
-        let aligned_in_pair = paired && !flags.is_mate_unmapped();
-        let chimera = if aligned_in_pair {
-            // Both ends must pass MAPQ 20; a missing MQ tag passes.
-            let mate_mapq = mate_mapping_quality(record)?;
-            if mate_mapq.is_none_or(|mq| mq >= i64::from(HQ_MAPQ) && mapq >= HQ_MAPQ) {
-                Some(self.is_chimeric(record)?)
-            } else {
-                None
-            }
-        } else if mapq >= HQ_MAPQ {
-            // A fragment, or a pair with one end mapped: chimeric when split
-            // (an SA tag).
-            Some(has_sa(record))
-        } else {
-            None
-        };
-        Ok(Alignment {
-            improper_pair: paired && !flags.is_properly_segmented(),
-            positive_strand: !flags.is_reverse_complemented(),
-            aligned_in_pair,
-            chimera,
-        })
-    }
-
-    /// `ChimeraUtil.isChimeric(rec, maxInsertSize, expectedOrientations)` for
-    /// a read whose pair is mapped: |TLEN| above the limit, mates on two
-    /// contigs, or an orientation outside the expected set or an SA tag.
-    /// The orientation is computed only for mates on one contig.
-    fn is_chimeric(&self, record: &bam::Record) -> Result<bool> {
-        if i64::from(record.template_length()).abs() > self.max_insert_size {
-            return Ok(true);
-        }
-        let contig = record.reference_sequence_id().transpose()?;
-        let mate_contig = record.mate_reference_sequence_id().transpose()?;
-        if contig != mate_contig {
-            return Ok(true);
-        }
-        Ok(!self.expected.contains(&orientation(record)?) || has_sa(record))
-    }
-
-    /// The mismatch branch of `collectQualityData` for an aligned PF read.
-    /// Each alignment block compares read and reference base by base, up to
-    /// the end of the contig. Mismatches and no-calls count toward
-    /// `getCycle(negativeStrand, readLength, i)` where `i` is the offset in
-    /// the *block*, not in the read: Picard passes the block loop variable,
-    /// so every block starts again at cycle 1 (or the last cycle when reverse).
-    fn base_counts(
-        &self,
-        record: &bam::Record,
-        reference: Option<&[u8]>,
-        mapq: u8,
-        bad_cycles: &mut Vec<i64>,
-    ) -> Result<BaseCounts> {
-        let malformed = |what| Error::MalformedRecord {
-            name: record_name(record),
-            what,
-        };
-        let reverse = record.flags().is_reverse_complemented();
-        let hq = mapq >= HQ_MAPQ;
-        let qualities = record.quality_scores();
-        let qualities = qualities.as_ref();
-        // htsjdk decodes a 0xFF quality string as no qualities.
-        let qualities = if qualities.first() == Some(&0xFF) {
-            &[][..]
-        } else {
-            qualities
-        };
-        let start = record
-            .alignment_start()
-            .transpose()?
-            .ok_or_else(|| malformed("mapped read without an alignment start"))?;
-        let mut counts = BaseCounts {
-            hq_read: hq,
-            ..BaseCounts::default()
-        };
-        let ref_length = reference.map_or(usize::MAX, <[u8]>::len);
-        let (mut read_pos, mut ref_pos) = (0usize, start.get() - 1);
-        for &(kind, len) in &self.cigar {
-            match kind {
-                Kind::Match | Kind::SequenceMatch | Kind::SequenceMismatch => {
-                    for i in 0..len {
-                        if ref_pos + i >= ref_length {
-                            break;
-                        }
-                        let read_base = *self
-                            .bases
-                            .get(read_pos + i)
-                            .ok_or_else(|| malformed("CIGAR longer than the read"))?;
-                        let mismatch =
-                            reference.is_some_and(|r| !bases_equal(read_base, r[ref_pos + i]));
-                        counts.aligned += 1;
-                        if hq {
-                            counts.hq_aligned += 1;
-                            let quality = *qualities
-                                .get(read_pos + i)
-                                .ok_or_else(|| malformed("aligned read without base qualities"))?;
-                            // A Java byte: qualities above 127 are negative.
-                            if quality as i8 >= Q20 {
-                                counts.hq_q20 += 1;
-                            }
-                            counts.hq_mismatches += i64::from(mismatch);
-                        }
-                        counts.mismatches += i64::from(mismatch);
-                        if mismatch || is_no_call(read_base) {
-                            bad_cycles.push(cycle(reverse, self.bases.len(), i));
-                        }
-                    }
-                    read_pos += len;
-                    ref_pos += len;
-                }
-                Kind::Insertion => {
-                    counts.indels += 1;
-                    read_pos += len;
-                }
-                Kind::Deletion => {
-                    counts.indels += 1;
-                    ref_pos += len;
-                }
-                Kind::SoftClip => read_pos += len,
-                Kind::Skip => ref_pos += len,
-                Kind::HardClip | Kind::Pad => {}
-            }
-        }
-        Ok(counts)
-    }
-}
-
-/// `CoordMath.getCycle`: 1-based machine cycle of read offset `i`.
-fn cycle(reverse: bool, read_length: usize, i: usize) -> i64 {
-    if reverse {
-        read_length as i64 - i as i64
-    } else {
-        i as i64 + 1
-    }
-}
-
-/// `get3PrimeSoftClippedBases`: soft clips after the first non-clipping
-/// operation, reading the CIGAR from the 3' end's side (reversed for a
-/// reverse-strand read). A CIGAR of clips only gives 0.
-fn three_prime_soft_clip(cigar: &[(Kind, usize)], reverse: bool) -> i64 {
-    let mut seen_aligned = false;
-    let mut clipped = 0i64;
-    let ops: Box<dyn Iterator<Item = &(Kind, usize)>> = if reverse {
-        Box::new(cigar.iter().rev())
-    } else {
-        Box::new(cigar.iter())
-    };
-    for &(kind, len) in ops {
-        match kind {
-            Kind::SoftClip if seen_aligned => clipped += len as i64,
-            Kind::SoftClip | Kind::HardClip => {}
-            _ => seen_aligned = true,
-        }
-    }
-    clipped
-}
-
-/// `isNoiseRead`: an `XN` tag equal to `Integer` 1. Any BAM integer type
-/// decodes to a Java `Integer` (or `Long` above `Integer.MAX_VALUE`); a
-/// float or string 1 is not noise.
-fn is_noise(record: &bam::Record) -> Result<bool> {
-    match record.data().get(&NOISE) {
-        None => Ok(false),
-        Some(value) => Ok(value?.as_int() == Some(1)),
-    }
-}
-
-fn has_sa(record: &bam::Record) -> bool {
-    record.data().get(&Tag::OTHER_ALIGNMENTS).is_some()
-}
-
-/// `getIntegerAttribute("MQ")`: `None` when absent, an error when the tag
-/// is not an integer.
-fn mate_mapping_quality(record: &bam::Record) -> Result<Option<i64>> {
-    match record.data().get(&Tag::MATE_MAPPING_QUALITY) {
-        None => Ok(None),
-        Some(value) => value?
-            .as_int()
-            .map(Some)
-            .ok_or_else(|| Error::MalformedRecord {
-                name: record_name(record),
-                what: "MQ tag is not an integer",
-            }),
-    }
+    report.output().write(headers, out)
 }
 
 /// `IndividualAlignmentSummaryMetricsCollector` for one category.
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Collector {
     total_reads: i64,
     pf_reads: i64,
@@ -582,7 +340,9 @@ struct Collector {
     hard_clipped: i64,
     pf_hq_aligned_reads: i64,
     pf_aligned_bases: i64,
+    non_bisulfite_aligned_bases: i64,
     pf_hq_aligned_bases: i64,
+    hq_non_bisulfite_aligned_bases: i64,
     pf_hq_aligned_q20_bases: i64,
     indels: i64,
     read_lengths: Histogram,
@@ -627,7 +387,9 @@ impl Collector {
         if let Some(b) = &read.bases {
             self.pf_hq_aligned_reads += i64::from(b.hq_read);
             self.pf_aligned_bases += b.aligned;
+            self.non_bisulfite_aligned_bases += b.non_bisulfite;
             self.pf_hq_aligned_bases += b.hq_aligned;
+            self.hq_non_bisulfite_aligned_bases += b.hq_non_bisulfite;
             self.pf_hq_aligned_q20_bases += b.hq_q20;
             self.mismatches.increment(b.mismatches);
             self.hq_mismatches.increment(b.hq_mismatches);
@@ -637,9 +399,8 @@ impl Collector {
 
     /// `IndividualAlignmentSummaryMetricsCollector.finish`. Ratios go
     /// through `MathUtil.divide` (0 for a zero denominator) except
-    /// `PCT_PF_READS` and `PCT_ADAPTER`, which divide directly. With no
-    /// bisulfite reads every aligned base is a non-bisulfite base.
-    fn finish(&self, category: Category, do_ref_metrics: bool) -> Result<Row> {
+    /// `PCT_PF_READS` and `PCT_ADAPTER`, which divide directly.
+    fn finish(&self, category: Category, labels: &Labels, do_ref_metrics: bool) -> Result<Row> {
         let mut row = Row {
             category,
             total_reads: self.total_reads,
@@ -674,6 +435,7 @@ impl Collector {
             pct_softclip: 0.0,
             pct_hardclip: 0.0,
             avg_pos_3prime_softclip_length: 0.0,
+            labels: labels.clone(),
         };
         if self.pf_reads == 0 {
             if self.total_reads > 0 {
@@ -713,9 +475,14 @@ impl Collector {
             row.strand_balance = divide(self.positive_strand as f64, aligned);
             row.pct_chimeras = divide(self.chimeras as f64, self.chimeras_denominator as f64);
             row.pf_indel_rate = divide(self.indels as f64, self.pf_aligned_bases as f64);
-            row.pf_mismatch_rate = divide(self.mismatches.sum(), self.pf_aligned_bases as f64);
-            row.pf_hq_error_rate =
-                divide(self.hq_mismatches.sum(), self.pf_hq_aligned_bases as f64);
+            row.pf_mismatch_rate = divide(
+                self.mismatches.sum(),
+                self.non_bisulfite_aligned_bases as f64,
+            );
+            row.pf_hq_error_rate = divide(
+                self.hq_mismatches.sum(),
+                self.hq_non_bisulfite_aligned_bases as f64,
+            );
             row.pct_hardclip = divide(self.hard_clipped as f64, total_bases);
             row.pct_softclip = divide(self.soft_clipped as f64, total_bases);
             row.avg_pos_3prime_softclip_length = divide(
@@ -737,15 +504,61 @@ fn divide(numerator: f64, denominator: f64) -> f64 {
     }
 }
 
-/// `CollectAlignmentSummaryMetrics` as a pass [`Accumulator`]: one
-/// collector per category, plus the reference walker when `R` is given.
-pub struct AlignmentSummary {
-    reference: Option<Reference>,
-    describer: Describer,
+/// `GroupAlignmentSummaryMetricsPerUnitMetricCollector`: the four
+/// categories of one accumulation unit.
+#[derive(Clone, Default)]
+struct Group {
     first: Collector,
     second: Collector,
     pair: Collector,
     unpaired: Collector,
+}
+
+impl Group {
+    fn add(&mut self, read: &Read, paired: bool, first: bool) {
+        if paired {
+            if first {
+                self.first.add(read);
+            } else {
+                self.second.add(read);
+            }
+            self.pair.add(read);
+        } else {
+            self.unpaired.add(read);
+        }
+    }
+
+    /// `addMetricsToFile`: paired rows only when FIRST_OF_PAIR has reads,
+    /// with PAIR's BAD_CYCLES the sum of the two ends; UNPAIRED when it has
+    /// reads or when FIRST_OF_PAIR has none (an all-zero row for a unit
+    /// with no reads).
+    fn rows(&self, labels: &Labels, do_ref: bool) -> Result<Vec<Row>> {
+        let unpaired_row = self.unpaired.finish(Category::Unpaired, labels, do_ref)?;
+        let first_row = self.first.finish(Category::FirstOfPair, labels, do_ref)?;
+        let second_row = self.second.finish(Category::SecondOfPair, labels, do_ref)?;
+        let mut pair_row = self.pair.finish(Category::Pair, labels, do_ref)?;
+        let mut rows = Vec::with_capacity(4);
+        let has_pairs = first_row.total_reads > 0;
+        if has_pairs {
+            pair_row.bad_cycles = first_row.bad_cycles + second_row.bad_cycles;
+            rows.extend([first_row, second_row, pair_row]);
+        }
+        if unpaired_row.total_reads > 0 || !has_pairs {
+            rows.push(unpaired_row);
+        }
+        Ok(rows)
+    }
+}
+
+/// `CollectAlignmentSummaryMetrics` as a pass [`Accumulator`]: one group of
+/// category collectors per accumulation unit, plus the reference walker
+/// when `R` is given.
+pub struct AlignmentSummary {
+    reference: Option<Reference>,
+    describer: Describer,
+    levels: Levels<Group>,
+    stop_after: Option<u64>,
+    records: u64,
 }
 
 impl AlignmentSummary {
@@ -764,13 +577,13 @@ impl AlignmentSummary {
                 max_insert_size: i64::from(opts.max_insert_size),
                 expected: opts.expected_orientations.clone(),
                 do_ref_metrics: opts.collect_alignment_information,
+                bisulfite: opts.bisulfite,
                 bases: Vec::new(),
                 cigar: Vec::new(),
             },
-            first: Collector::default(),
-            second: Collector::default(),
-            pair: Collector::default(),
-            unpaired: Collector::default(),
+            levels: Levels::new(header, &opts.levels, Group::default()),
+            stop_after: u64::try_from(opts.stop_after).ok().filter(|&n| n > 0),
+            records: 0,
         })
     }
 }
@@ -779,8 +592,13 @@ impl Accumulator for AlignmentSummary {
     type Output = Report;
 
     fn accept(&mut self, record: &bam::Record) -> Result<()> {
-        // `SinglePassSamProgram` fetches the contig of every placed record,
-        // secondary and unmapped ones included, so the sort check covers them.
+        if self.done() {
+            return Ok(());
+        }
+        // `SinglePassSamProgram` counts every record toward STOP_AFTER and
+        // fetches the contig of every placed one, secondary and unmapped
+        // ones included, so the sort check covers them.
+        self.records += 1;
         let bases = match (
             &mut self.reference,
             record.reference_sequence_id().transpose()?,
@@ -795,46 +613,35 @@ impl Accumulator for AlignmentSummary {
             return Ok(());
         }
         let read = self.describer.describe(record, bases)?;
-        if flags.is_segmented() {
-            if flags.is_first_segment() {
-                self.first.add(&read);
-            } else {
-                self.second.add(&read);
-            }
-            self.pair.add(&read);
-        } else {
-            self.unpaired.add(&read);
-        }
+        let (paired, first) = (flags.is_segmented(), flags.is_first_segment());
+        self.levels
+            .route(record, |group| group.add(&read, paired, first));
         Ok(())
     }
 
+    fn done(&self) -> bool {
+        self.stop_after.is_some_and(|n| self.records >= n)
+    }
+
+    /// Every collector is finished before any row is kept, so a unit with
+    /// QC-failed reads only fails the run as Picard's `finish` does.
     fn finish(self) -> Result<Report> {
         let do_ref = self.describer.do_ref_metrics;
-        let first_row = self.first.finish(Category::FirstOfPair, do_ref)?;
-        let second_row = self.second.finish(Category::SecondOfPair, do_ref)?;
-        let mut pair_row = self.pair.finish(Category::Pair, do_ref)?;
-        let unpaired_row = self.unpaired.finish(Category::Unpaired, do_ref)?;
-
-        // `GroupAlignmentSummaryMetricsPerUnitMetricCollector.addMetricsToFile`:
-        // paired rows only when FIRST_OF_PAIR has reads, with PAIR's BAD_CYCLES
-        // the sum of the two ends; UNPAIRED when it has reads or when nothing
-        // else is written (an all-zero row for an empty file).
-        let mut rows = Vec::with_capacity(4);
-        let has_pairs = first_row.total_reads > 0;
-        if has_pairs {
-            pair_row.bad_cycles = first_row.bad_cycles + second_row.bad_cycles;
-            rows.extend([first_row, second_row, pair_row]);
+        let mut rows = Vec::new();
+        let mut histograms = None;
+        for bucket in self.levels.into_buckets() {
+            rows.extend(bucket.state.rows(&bucket.labels, do_ref)?);
+            if bucket.level == Level::AllReads {
+                let group = bucket.state;
+                histograms = Some(ReadLengths {
+                    paired_total: group.pair.read_lengths,
+                    paired_aligned: group.pair.aligned_lengths,
+                    unpaired_total: group.unpaired.read_lengths,
+                    unpaired_aligned: group.unpaired.aligned_lengths,
+                });
+            }
         }
-        if unpaired_row.total_reads > 0 || !has_pairs {
-            rows.push(unpaired_row);
-        }
-        Ok(Report {
-            rows,
-            paired_read_lengths: self.pair.read_lengths,
-            paired_aligned_lengths: self.pair.aligned_lengths,
-            unpaired_read_lengths: self.unpaired.read_lengths,
-            unpaired_aligned_lengths: self.unpaired.aligned_lengths,
-        })
+        Ok(Report { rows, histograms })
     }
 }
 
@@ -852,13 +659,19 @@ pub fn command_header(opts: &Options, bam: &Path, output: Option<&Path>) -> Stri
         .iter()
         .map(|o| o.as_str())
         .collect();
+    let levels: Vec<&str> = opts.levels.iter().map(|l| l.name()).collect();
     command.push_str(&format!(
-        " MAX_INSERT_SIZE={} EXPECTED_PAIR_ORIENTATIONS=[{}] ADAPTER_SEQUENCE=[{}] METRIC_ACCUMULATION_LEVEL=[ALL_READS] IS_BISULFITE_SEQUENCED=false COLLECT_ALIGNMENT_INFORMATION={}",
+        " MAX_INSERT_SIZE={} EXPECTED_PAIR_ORIENTATIONS=[{}] ADAPTER_SEQUENCE=[{}] METRIC_ACCUMULATION_LEVEL=[{}] IS_BISULFITE_SEQUENCED={} COLLECT_ALIGNMENT_INFORMATION={}",
         opts.max_insert_size,
         orientations.join(", "),
         opts.adapter_sequences.join(", "),
+        levels.join(", "),
+        opts.bisulfite,
         opts.collect_alignment_information
     ));
+    if opts.stop_after > 0 {
+        command.push_str(&format!(" STOP_AFTER={}", opts.stop_after));
+    }
     command
 }
 
@@ -871,27 +684,8 @@ pub fn run_over_bam(path: impl AsRef<Path>, opts: &Options) -> Result<Report> {
 
 #[cfg(test)]
 mod tests {
+    use super::describe::BaseCounts;
     use super::*;
-
-    #[test]
-    fn three_prime_soft_clip_follows_strand() {
-        let cigar = [
-            (Kind::SoftClip, 5),
-            (Kind::Match, 90),
-            (Kind::SoftClip, 3),
-            (Kind::HardClip, 2),
-        ];
-        assert_eq!(three_prime_soft_clip(&cigar, false), 3);
-        assert_eq!(three_prime_soft_clip(&cigar, true), 5);
-        assert_eq!(three_prime_soft_clip(&[(Kind::SoftClip, 10)], false), 0);
-    }
-
-    #[test]
-    fn cycles_count_from_the_machine_start() {
-        assert_eq!(cycle(false, 100, 0), 1);
-        assert_eq!(cycle(true, 100, 0), 100);
-        assert_eq!(cycle(true, 100, 99), 1);
-    }
 
     #[test]
     fn math_util_divide_guards_zero() {
@@ -901,23 +695,26 @@ mod tests {
     }
 
     #[test]
-    fn empty_category_is_an_all_zero_row() {
-        let row = Collector::default()
-            .finish(Category::Unpaired, true)
+    fn empty_unit_is_an_all_zero_unpaired_row() {
+        let labels = Labels {
+            sample: Some("S1".to_owned()),
+            library: Some("L1".to_owned()),
+            read_group: None,
+        };
+        let rows = Group::default()
+            .rows(&labels, true)
             .expect("no reads is not an error");
-        assert_eq!(row.total_reads, 0);
-        assert_eq!(row.mean_read_length, 0.0);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].category, Category::Unpaired);
+        assert_eq!(rows[0].mean_read_length, 0.0);
         let mut out = Vec::new();
         let report = Report {
-            rows: vec![row],
-            paired_read_lengths: Histogram::new(),
-            paired_aligned_lengths: Histogram::new(),
-            unpaired_read_lengths: Histogram::new(),
-            unpaired_aligned_lengths: Histogram::new(),
+            rows,
+            histograms: Some(ReadLengths::default()),
         };
         write_metrics(&report, Vec::new(), &mut out).expect("write to Vec");
         let text = String::from_utf8(out).expect("utf8");
-        assert!(text.ends_with("\nUNPAIRED\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t\t\t\n\n\n"));
+        assert!(text.ends_with("\nUNPAIRED\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\tS1\tL1\t\n\n\n"));
     }
 
     #[test]
@@ -928,7 +725,7 @@ mod tests {
             ..Read::default()
         });
         assert!(matches!(
-            collector.finish(Category::Unpaired, true),
+            collector.finish(Category::Unpaired, &Labels::default(), true),
             Err(Error::Usage(m)) if m.contains("no PF_READS")
         ));
     }
@@ -943,8 +740,35 @@ mod tests {
                 ..Read::default()
             });
         }
-        let row = collector.finish(Category::Unpaired, true).expect("finish");
+        let row = collector
+            .finish(Category::Unpaired, &Labels::default(), true)
+            .expect("finish");
         // cycle 3: 5/5, cycle 7: 4/5 = 0.8
         assert_eq!(row.bad_cycles, 2);
+    }
+
+    #[test]
+    fn bisulfite_bases_leave_the_rate_denominators() {
+        let mut collector = Collector::default();
+        collector.add(&Read {
+            length: 10,
+            bases: Some(BaseCounts {
+                hq_read: true,
+                aligned: 10,
+                non_bisulfite: 8,
+                hq_aligned: 10,
+                hq_non_bisulfite: 8,
+                mismatches: 2,
+                hq_mismatches: 2,
+                ..BaseCounts::default()
+            }),
+            ..Read::default()
+        });
+        let row = collector
+            .finish(Category::Unpaired, &Labels::default(), true)
+            .expect("finish");
+        assert_eq!(row.pf_aligned_bases, 10);
+        assert_eq!(row.pf_mismatch_rate, 0.25);
+        assert_eq!(row.pf_hq_error_rate, 0.25);
     }
 }
