@@ -29,7 +29,7 @@ reference-metrics: corpus
 	$(UV_RUN) python tests/concordance/run_picard.py
 
 concordance: reference-metrics release
-	$(UV_RUN) --with pytest python -m pytest tests/concordance -q
+	$(UV_RUN) --with pytest --with pysam python -m pytest tests/concordance -q
 
 # Python module tests: build into .venv with maturin, then run tests/python.
 # Needs .venv with maturin, pytest and pysam, plus `make corpus` and `make release`.

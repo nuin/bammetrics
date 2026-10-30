@@ -151,6 +151,8 @@ target/release/bammetrics hs-metrics in.bam -O in.hs_metrics.txt -R ref.fa \
     --bait-intervals baits.interval_list --target-intervals targets.interval_list
 # Picard syntax, a drop-in for the jar:
 target/release/bammetrics CollectInsertSizeMetrics I=in.bam O=out.txt H=hist.pdf M=0.5
+target/release/bammetrics CollectInsertSizeMetrics --INPUT in.bam --OUTPUT out.txt \
+    --METRIC_ACCUMULATION_LEVEL SAMPLE --METRIC_ACCUMULATION_LEVEL READ_GROUP
 target/release/bammetrics CollectAlignmentSummaryMetrics I=in.bam O=out.txt R=ref.fa
 target/release/bammetrics CollectQualityYieldMetrics I=in.bam O=out.txt
 target/release/bammetrics CollectHsMetrics I=in.bam O=out.txt R=ref.fa \
@@ -159,7 +161,10 @@ target/release/bammetrics CollectHsMetrics I=in.bam O=out.txt R=ref.fa \
 
 Picard options that cannot change a metric (`VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`,
 `VERBOSITY`, `H`, `R`, `ASSUME_SORTED`, ...) are accepted, dropped, and noted on stderr.
-Any other option, and `METRIC_ACCUMULATION_LEVEL` other than `ALL_READS`, exits 1 naming the option.
+Any other option exits 1 naming the option. `CollectInsertSizeMetrics` takes
+`METRIC_ACCUMULATION_LEVEL` (`ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`; `null` clears the
+default); the other three tools accept `ALL_READS` only. Tools in the registry
+(`crates/core/src/registry.rs`) also take Picard 3's `--NAME value` and `--NAME=value` forms.
 
 `alignment-summary` takes `-R` (REFERENCE_SEQUENCE; a FASTA with a `.fai`, read one
 contig at a time), `--max-insert-size`, `--expected-pair-orientation`, `--adapter-sequence`
@@ -240,7 +245,12 @@ uv run --no-project --with pysam python tests/make_orientation_bam.py   # writes
 make corpus             # tests/corpus/out: reference, intervals, t0-t3 BAMs (11 MB, ~30 s)
 make reference-metrics  # Picard 3.5.0 output: tests/corpus/out/picard/<case>.<metric>.txt
 make concordance        # cargo build --release, then pytest tests/concordance
+python3 tests/data/make_corpus.py out_dir   # seeded multi-sample corpus: 2 samples x 2 libraries x 3 read groups
 ```
+
+`tests/concordance/compare.py` has `compare_metrics(tool, bam, picard_args)`: it runs Picard and
+bammetrics on one BAM and asserts every column of every row, and the histogram section,
+equal as printed strings. `CLAUDE.md` lists the steps for adding a tool.
 
 Needs samtools, bwa, `picard` (3.5.0, checked) and uv. Nothing in
 `tests/corpus/out/` is committed; `generate.py` rebuilds it from one seed. Records

@@ -27,6 +27,9 @@ class InsertSizeMetrics:
     width_of_90_percent: int
     width_of_95_percent: int
     width_of_99_percent: int
+    sample: str | None
+    library: str | None
+    read_group: str | None
     def to_dict(self) -> dict[str, Any]: ...
     def __repr__(self) -> str: ...
 
@@ -167,8 +170,20 @@ def insert_size(
     histogram_width: int | None = None,
     min_histogram_width: int | None = None,
     include_duplicates: bool = False,
+    metric_accumulation_level: Sequence[str] | None = None,
 ) -> list[InsertSizeMetrics]:
-    """CollectInsertSizeMetrics at ALL_READS: one row per pair orientation."""
+    """CollectInsertSizeMetrics: one row per pair orientation and accumulation unit.
+
+    metric_accumulation_level adds ALL_READS, SAMPLE, LIBRARY or READ_GROUP to the
+    default ALL_READS; "null" clears the list, as in Picard."""
+
+def tools() -> list[str]:
+    """Picard names of the tools in the registry."""
+
+def collect_insert_size_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """CollectInsertSizeMetrics through the registry: one dict per row, keyed by
+    Picard's column names. Options are Picard's, lower case: minimum_pct=0.1,
+    metric_accumulation_level=["SAMPLE"]. output=PATH also writes the metrics file."""
 
 def alignment_summary(
     path: _Path,

@@ -57,39 +57,6 @@ const COMMON: &[Entry] = &[
     ),
 ];
 
-/// Options of `CollectInsertSizeMetrics` (`SinglePassSamProgram` and
-/// `CollectInsertSizeMetrics` in Picard 3.5.0).
-const INSERT_SIZE: &[Entry] = &[
-    (&["INPUT", "I"], Action::Value("--input")),
-    (&["OUTPUT", "O"], Action::Value("--output")),
-    (
-        &["HISTOGRAM_FILE", "H"],
-        Action::Ignore("no histogram plot is drawn"),
-    ),
-    (&["DEVIATIONS"], Action::Value("--deviations")),
-    (
-        &["HISTOGRAM_WIDTH", "W"],
-        Action::Value("--histogram-width"),
-    ),
-    (
-        &["MINIMUM_HISTOGRAM_WIDTH", "MW"],
-        Action::Value("--min-histogram-width"),
-    ),
-    (&["MINIMUM_PCT", "M"], Action::Value("--minimum-pct")),
-    (
-        &["INCLUDE_DUPLICATES"],
-        Action::Bool("--include-duplicates"),
-    ),
-    (
-        &["METRIC_ACCUMULATION_LEVEL", "LEVEL"],
-        Action::Only("ALL_READS"),
-    ),
-    (
-        &["ASSUME_SORTED", "AS"],
-        Action::Ignore("one pass over the file in any order"),
-    ),
-];
-
 /// Options of `CollectAlignmentSummaryMetrics` (`SinglePassSamProgram` and
 /// `CollectAlignmentSummaryMetrics` in Picard 3.5.0). `R` is read here, so
 /// this entry shadows the `COMMON` one. The two list options append to
@@ -199,11 +166,6 @@ struct Tool {
 
 const TOOLS: &[Tool] = &[
     Tool {
-        picard_name: "CollectInsertSizeMetrics",
-        subcommand: "insert-size",
-        options: INSERT_SIZE,
-    },
-    Tool {
         picard_name: "CollectAlignmentSummaryMetrics",
         subcommand: "alignment-summary",
         options: ALIGNMENT_SUMMARY,
@@ -303,84 +265,14 @@ mod tests {
     }
 
     #[test]
-    fn maps_short_and_long_names() {
-        let t = translate(
-            "CollectInsertSizeMetrics",
-            &strings(&[
-                "I=x.bam",
-                "O=out.txt",
-                "H=hist.pdf",
-                "M=0.5",
-                "W=300",
-                "MW=100",
-            ]),
-        )
-        .expect("translates")
-        .expect("known tool");
-        assert_eq!(t.subcommand, "insert-size");
-        assert_eq!(
-            t.args,
-            [
-                "--input=x.bam",
-                "--output=out.txt",
-                "--minimum-pct=0.5",
-                "--histogram-width=300",
-                "--min-histogram-width=100"
-            ]
-        );
-        assert_eq!(t.notes, ["ignoring H=hist.pdf: no histogram plot is drawn"]);
-    }
-
-    #[test]
-    fn booleans_become_flags() {
-        let on = translate(
-            "CollectInsertSizeMetrics",
-            &strings(&["INCLUDE_DUPLICATES=true"]),
-        )
-        .expect("translates")
-        .expect("known tool");
-        assert_eq!(on.args, ["--include-duplicates"]);
-        let off = translate(
-            "CollectInsertSizeMetrics",
-            &strings(&["INCLUDE_DUPLICATES=FALSE"]),
-        )
-        .expect("translates")
-        .expect("known tool");
-        assert!(off.args.is_empty());
-        let message = usage(translate(
-            "CollectInsertSizeMetrics",
-            &strings(&["INCLUDE_DUPLICATES=maybe"]),
-        ));
-        assert!(message.contains("INCLUDE_DUPLICATES"));
-    }
-
-    #[test]
-    fn plumbing_options_are_dropped_with_a_note() {
-        let t = translate(
-            "CollectInsertSizeMetrics",
-            &strings(&[
-                "VALIDATION_STRINGENCY=SILENT",
-                "TMP_DIR=/tmp",
-                "QUIET=true",
-                "R=ref.fa",
-            ]),
-        )
-        .expect("translates")
-        .expect("known tool");
-        assert!(t.args.is_empty());
-        assert_eq!(t.notes.len(), 4);
-        assert!(t.notes[0].starts_with("ignoring VALIDATION_STRINGENCY=SILENT"));
-    }
-
-    #[test]
     fn accumulation_level_other_than_all_reads_is_an_error() {
         let ok = translate(
-            "CollectInsertSizeMetrics",
+            "CollectAlignmentSummaryMetrics",
             &strings(&["METRIC_ACCUMULATION_LEVEL=ALL_READS"]),
         );
         assert!(ok.is_ok());
         let message = usage(translate(
-            "CollectInsertSizeMetrics",
+            "CollectAlignmentSummaryMetrics",
             &strings(&["METRIC_ACCUMULATION_LEVEL=LIBRARY"]),
         ));
         assert!(message.contains("METRIC_ACCUMULATION_LEVEL"));
@@ -390,11 +282,14 @@ mod tests {
     #[test]
     fn unknown_option_names_itself() {
         let message = usage(translate(
-            "CollectInsertSizeMetrics",
+            "CollectAlignmentSummaryMetrics",
             &strings(&["STOP_AFTER=10"]),
         ));
         assert!(message.contains("STOP_AFTER"));
-        let message = usage(translate("CollectInsertSizeMetrics", &strings(&["bam"])));
+        let message = usage(translate(
+            "CollectAlignmentSummaryMetrics",
+            &strings(&["bam"]),
+        ));
         assert!(message.contains("NAME=VALUE"));
     }
 

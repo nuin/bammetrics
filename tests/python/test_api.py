@@ -56,9 +56,15 @@ def test_stub_lists_every_field(all_rows, name):
     assert declared == expected
 
 
+def snake_case(name):
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
 def test_stub_functions_exist():
     defined = set(re.findall(r"^def (\w+)\(", STUB.read_text(), re.M))
-    assert defined == {"insert_size", "alignment_summary", "quality_yield", "hs_metrics", "collect"}
+    registered = {snake_case(name) for name in bammetrics.tools()}
+    assert defined == {"insert_size", "alignment_summary", "quality_yield", "hs_metrics", "collect",
+                       "tools"} | registered
     assert all(callable(getattr(bammetrics, f)) for f in defined)
 
 

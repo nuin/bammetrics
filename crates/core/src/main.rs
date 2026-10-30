@@ -8,10 +8,12 @@ use bammetrics_core::alignment_summary::{self, AlignmentSummary, DEFAULT_MAX_INS
 use bammetrics_core::collect::{self, Outputs, Request};
 use bammetrics_core::hs_metrics::{self, HsMetrics};
 use bammetrics_core::insert_size::{self, InsertSize};
+use bammetrics_core::levels::parse_levels;
 use bammetrics_core::metrics_file::headers;
 use bammetrics_core::pass;
 use bammetrics_core::picard_cli;
 use bammetrics_core::quality_yield::{self, QualityYield};
+use bammetrics_core::registry;
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
@@ -133,6 +135,10 @@ struct InsertSizeArgs {
     /// Count reads flagged as duplicates (Picard INCLUDE_DUPLICATES).
     #[arg(long)]
     include_duplicates: bool,
+    /// Adds ALL_READS, SAMPLE, LIBRARY or READ_GROUP to the default ALL_READS;
+    /// "null" clears the list (Picard METRIC_ACCUMULATION_LEVEL).
+    #[arg(long = "level", value_name = "LEVEL")]
+    levels: Vec<String>,
 }
 
 #[derive(Args)]
@@ -332,22 +338,20 @@ fn write_to(
     out.flush().map_err(output_error)
 }
 
-/// The warning `CollectInsertSizeMetrics.finish` logs when it writes no file.
 fn no_insert_size_rows(minimum_pct: f32) {
-    eprintln!(
-        "bammetrics: all data categories were discarded because they contained < {minimum_pct:?} of the total aligned paired data; no metrics written"
-    );
+    eprintln!("{}", insert_size::no_rows_warning(minimum_pct));
 }
 
 impl InsertSizeArgs {
-    fn options(&self) -> insert_size::Options {
-        insert_size::Options {
+    fn options(&self) -> bammetrics_core::Result<insert_size::Options> {
+        Ok(insert_size::Options {
             minimum_pct: self.minimum_pct,
             deviations: self.deviations,
             histogram_width: self.histogram_width,
             min_histogram_width: self.min_histogram_width,
             include_duplicates: self.include_duplicates,
-        }
+            levels: parse_levels(&self.levels)?,
+        })
     }
 }
 
@@ -382,8 +386,10 @@ impl HsMetricsArgs {
 
 fn insert_size(args: InsertSizeArgs) -> bammetrics_core::Result<()> {
     let bam = input_bam(&args.bam, &args.input)?;
-    let opts = args.options();
-    let rows = pass::run(bam, args.threads.threads, |_| Ok(InsertSize::new(&opts)))?;
+    let opts = args.options()?;
+    let rows = pass::run(bam, args.threads.threads, |header| {
+        Ok(InsertSize::new(&opts, header))
+    })?;
     // CollectInsertSizeMetrics.finish writes no file when every orientation
     // was dropped (or there were no pairs), and only logs a warning.
     if rows.is_empty() {
@@ -535,6 +541,12 @@ fn command_line() -> bammetrics_core::Result<Vec<String>> {
 }
 
 fn run() -> bammetrics_core::Result<()> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some((name, options)) = args.split_first()
+        && let Some(tool) = registry::find(name)
+    {
+        return tool.run_cli(options);
+    }
     match Cli::parse_from(command_line()?).command {
         Command::InsertSize(args) => insert_size(args),
         Command::AlignmentSummary(args) => alignment_summary(args),

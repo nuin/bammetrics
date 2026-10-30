@@ -125,6 +125,19 @@ fn mate_reference_length(record: &bam::Record) -> Result<Option<i64>> {
     }
 }
 
+/// 1-based last aligned reference base of the mate, from the mate's start and
+/// the `MC` tag (`SAMRecord.getMateAlignmentEnd` semantics). `None` when the
+/// record has no mapped mate position or no `MC` tag.
+pub fn mate_alignment_end(record: &bam::Record) -> Result<Option<i64>> {
+    let Some(length) = mate_reference_length(record)? else {
+        return Ok(None);
+    };
+    match record.mate_alignment_start() {
+        Some(start) => Ok(Some(start?.get() as i64 + length - 1)),
+        None => Ok(None),
+    }
+}
+
 /// 5' position of the reverse-strand mate, seen from the forward-strand read.
 /// Mirrors the `else` branch of `SamPairUtil.getPairOrientation`: with `MC`,
 /// `CoordMath.getEnd(mateStart, mateCigar.getReferenceLength())`; without it,

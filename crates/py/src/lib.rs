@@ -6,12 +6,15 @@ use bammetrics_core::collect::{self, Outputs, Request};
 use bammetrics_core::histogram::Histogram;
 use bammetrics_core::hs_metrics::{self, COLUMNS, Field};
 use bammetrics_core::insert_size::{self, Options};
+use bammetrics_core::levels::{Level, parse_levels};
+use bammetrics_core::metric::{MetricsOutput, Value};
 use bammetrics_core::pass;
 use bammetrics_core::quality_yield;
 use bammetrics_core::record::Orientation;
+use bammetrics_core::registry::{self, Tool};
 use pyo3::exceptions::{PyAttributeError, PyIOError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyCFunction, PyDict, PyList, PyTuple};
 
 /// Declares a row class: every field readable as an attribute, `to_dict()`
 /// returning them in declaration order, and a `__repr__` that shows the
@@ -68,6 +71,9 @@ row_class! {
     width_of_90_percent: i64,
     width_of_95_percent: i64,
     width_of_99_percent: i64,
+    sample: Option<String>,
+    library: Option<String>,
+    read_group: Option<String>,
     }
     repr [pair_orientation, read_pairs, median_insert_size, mean_insert_size, standard_deviation]
 }
@@ -95,6 +101,9 @@ impl From<insert_size::Row> for InsertSizeMetrics {
             width_of_90_percent: r.widths[8],
             width_of_95_percent: r.widths[9],
             width_of_99_percent: r.widths[10],
+            sample: r.labels.sample,
+            library: r.labels.library,
+            read_group: r.labels.read_group,
         }
     }
 }
@@ -107,6 +116,7 @@ impl From<insert_size::Row> for InsertSizeMetrics {
     histogram_width=None,
     min_histogram_width=None,
     include_duplicates=false,
+    metric_accumulation_level=None,
 ))]
 fn py_insert_size(
     path: &str,
@@ -115,13 +125,17 @@ fn py_insert_size(
     histogram_width: Option<i64>,
     min_histogram_width: Option<i64>,
     include_duplicates: bool,
+    metric_accumulation_level: Option<Vec<String>>,
 ) -> PyResult<Vec<InsertSizeMetrics>> {
+    let levels = metric_accumulation_level
+        .map_or_else(|| Ok(vec![Level::AllReads]), |values| parse_levels(&values));
     let opts = Options {
         minimum_pct,
         deviations,
         histogram_width,
         min_histogram_width,
         include_duplicates,
+        levels: levels.map_err(|e| py_error(&e))?,
     };
     let rows = insert_size::run_over_bam(path, &opts).map_err(|e| py_error(&e))?;
     Ok(rows.into_iter().map(Into::into).collect())
@@ -589,8 +603,125 @@ fn py_collect<'py>(
     Ok(dict)
 }
 
+/// A metrics value as a Python object: int, float, str, bool or None.
+fn value_object(py: Python<'_>, value: &Value) -> PyResult<Py<PyAny>> {
+    Ok(match value {
+        Value::Int(v) => v.into_pyobject(py)?.into_any().unbind(),
+        Value::Float(v) => v.into_pyobject(py)?.into_any().unbind(),
+        Value::Str(v) => v.into_pyobject(py)?.into_any().unbind(),
+        Value::Bool(v) => v.into_pyobject(py)?.to_owned().into_any().unbind(),
+        Value::Null => py.None(),
+    })
+}
+
+/// The generic converter: every registered tool's rows as a list of dicts
+/// keyed by Picard's column names, in column order.
+fn rows_as_dicts<'py>(py: Python<'py>, output: &MetricsOutput) -> PyResult<Bound<'py, PyList>> {
+    let list = PyList::empty(py);
+    for record in output.records() {
+        let dict = PyDict::new(py);
+        for (column, value) in record {
+            dict.set_item(column, value_object(py, value)?)?;
+        }
+        list.append(dict)?;
+    }
+    Ok(list)
+}
+
+/// Python keyword arguments as Picard `KEY=VALUE` arguments: upper-case
+/// names, bools as true/false, lists as repeated options, `None` skipped.
+fn keyword_arguments(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Vec<String>> {
+    let mut args = Vec::new();
+    let Some(kwargs) = kwargs else {
+        return Ok(args);
+    };
+    for (key, value) in kwargs.iter() {
+        let name = key.extract::<String>()?.to_uppercase();
+        if value.is_none() {
+            continue;
+        }
+        let texts: Vec<String> = if let Ok(items) = value.extract::<Vec<String>>() {
+            items
+        } else if let Ok(flag) = value.extract::<bool>() {
+            vec![flag.to_string()]
+        } else {
+            vec![value.str()?.to_string()]
+        };
+        args.extend(texts.into_iter().map(|t| format!("{name}={t}")));
+    }
+    Ok(args)
+}
+
+/// Run a registered tool: the input path plus Picard options as keyword
+/// arguments (`minimum_pct=0.1`, `metric_accumulation_level=["SAMPLE"]`).
+/// Returns one dict per metrics row, empty when Picard would write no file.
+/// With `output=` the Picard metrics file is written as well.
+fn run_registered<'py>(
+    py: Python<'py>,
+    tool: &'static Tool,
+    args: &Bound<'py, PyTuple>,
+    kwargs: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Bound<'py, PyList>> {
+    let input: String = args.get_item(0)?.str()?.to_string();
+    let mut options = vec![format!("INPUT={input}")];
+    options.extend(keyword_arguments(kwargs)?);
+    let (invocation, output) = py
+        .detach(|| tool.execute(&options))
+        .map_err(|e| py_error(&e))?;
+    let Some(output) = output else {
+        return Ok(PyList::empty(py));
+    };
+    if let Some(path) = invocation.output.as_deref() {
+        let headers = bammetrics_core::metrics_file::headers(invocation.command.clone());
+        registry::write_to(Some(path), |out| output.write(headers, out))
+            .map_err(|e| py_error(&e))?;
+    }
+    rows_as_dicts(py, &output)
+}
+
+/// `CollectInsertSizeMetrics` -> `collect_insert_size_metrics`.
+fn snake_case(name: &str) -> String {
+    let mut out = String::new();
+    for (i, c) in name.chars().enumerate() {
+        if c.is_ascii_uppercase() {
+            if i > 0 {
+                out.push('_');
+            }
+            out.push(c.to_ascii_lowercase());
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Add one function per registered tool, named after its Picard class in
+/// snake case.
+fn add_registered_tools(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    for &tool in registry::TOOLS {
+        let function = PyCFunction::new_closure(
+            m.py(),
+            None,
+            None,
+            move |args: &Bound<'_, PyTuple>, kwargs: Option<&Bound<'_, PyDict>>| {
+                run_registered(args.py(), tool, args, kwargs).map(Bound::unbind)
+            },
+        )?;
+        m.add(snake_case(tool.name).as_str(), function)?;
+    }
+    Ok(())
+}
+
+/// Picard names of the registered tools.
+#[pyfunction]
+fn tools() -> Vec<&'static str> {
+    registry::TOOLS.iter().map(|t| t.name).collect()
+}
+
 #[pymodule]
 fn bammetrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    add_registered_tools(m)?;
+    m.add_function(wrap_pyfunction!(tools, m)?)?;
     m.add_class::<InsertSizeMetrics>()?;
     m.add_function(wrap_pyfunction!(py_insert_size, m)?)?;
     m.add_class::<AlignmentSummaryMetrics>()?;

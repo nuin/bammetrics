@@ -11,7 +11,7 @@ rust-version = "1.85"
 [workspace.dependencies]
 bammetrics-core = { path = "crates/core", version = "0.3.0" }
 clap = { version = "4", features = ["derive"] }
-noodles = { version = "0.118", features = ["bam", "sam", "bgzf", "core", "fasta"] }
+noodles = { version = "0.119", features = ["bam", "sam", "bgzf", "core", "fasta"] }
 pyo3 = { version = "0.30", features = ["extension-module"] }
 thiserror = "2"
 

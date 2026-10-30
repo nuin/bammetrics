@@ -174,7 +174,7 @@ impl Collect {
             insert_size: request
                 .insert_size
                 .as_ref()
-                .map(|o| Worker::spawn(InsertSize::new(o))),
+                .map(|o| Worker::spawn(InsertSize::new(o, header))),
             hs_metrics: hs_metrics.into_iter().map(Worker::spawn).collect(),
         })
     }
