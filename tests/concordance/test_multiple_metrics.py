@@ -50,15 +50,16 @@ def inputs(name, built, corpus):
 
 
 def compare(bam, args, label, expected_files=None):
+    before = len(SEEN)
     cells = compare_outputs(TOOL, bam, [SILENT, *args], (("O", ""),), workdir=bam.parent, seen=SEEN)
     assert cells > 0, f"{TOOL} {label}: no cell compared"
+    written = {suffix for suffix, _ in SEEN[before:]}
     if expected_files is not None:
         # The insert size file is absent when the input has no counted pair.
-        written = {suffix for suffix, _ in SEEN[-len(expected_files):]}
         assert set(expected_files) - {".insert_size_metrics"} <= written <= set(expected_files), (
             f"{label}: files {sorted(written)}")
     RESULTS.append((f"{TOOL} {label}", cells, cells, "every file identical"))
-    return cells
+    return written
 
 
 DEFAULT_FILES = [".alignment_summary_metrics", ".base_distribution_by_cycle_metrics",
@@ -78,7 +79,12 @@ def test_defaults_without_reference(built, corpus, name):
     compare(bam, [], f"{name} defaults", DEFAULT_FILES)
 
 
-@pytest.mark.parametrize("name", INPUTS)
+# CollectGcBiasMetrics fails on t0_asm (a read past its contig) and t2 (over
+# 100 secondary records without bases), so both tools fail there (below).
+REFERENCE_INPUTS = [name for name in INPUTS if name not in ("t0_asm", "t2")]
+
+
+@pytest.mark.parametrize("name", REFERENCE_INPUTS)
 def test_every_program_with_reference(built, corpus, name):
     bam, ref = inputs(name, built, corpus)
     compare(bam, [f"R={ref}", *ALL_PROGRAMS], f"{name} all programs", ALL_FILES)
@@ -152,12 +158,11 @@ def test_extra_output_override(built, tmp_path):
     RESULTS.append((f"{TOOL} rl_reads extra OUTPUT", 1, 1, "moved file identical"))
 
 
-def test_insert_size_file_absent_when_every_orientation_is_dropped(built):
-    """MINIMUM_PCT above every orientation's share: neither tool writes the
-    insert size file, the other files are compared."""
-    bam, _ = built["asm_mix"]
-    compare(bam, ["EXTRA_ARGUMENT=CollectInsertSizeMetrics::MINIMUM_PCT=0.5"],
-            "asm_mix insert size dropped", [f for f in DEFAULT_FILES if f != ".insert_size_metrics"])
+def test_insert_size_file_absent_without_pairs(corpus):
+    """No counted pair: neither tool writes the insert size file, the other
+    files are compared."""
+    written = compare(CORPUS / "t0_no_pairs.bam", [], "t0_no_pairs insert size absent")
+    assert ".insert_size_metrics" not in written and len(written) == 4
 
 
 def test_empty_bam(built):
@@ -211,6 +216,12 @@ def test_failures(built, tmp_path, case):
 def test_assume_sorted_false_on_query_name_order_fails(built, tmp_path):
     bam, _ = built["rl_queryname"]
     both_fail(bam, ["ASSUME_SORTED=false"], tmp_path, "coordinate sorted")
+
+
+@pytest.mark.parametrize("name", ["t0_asm", "t2"])
+def test_a_failing_program_fails_the_run(tmp_path, name):
+    """CollectGcBiasMetrics throws on these inputs: no file of any program."""
+    both_fail(CORPUS / f"{name}.bam", [f"R={REFERENCE}", "PROGRAM=CollectGcBiasMetrics"], tmp_path)
 
 
 def test_files_compared_cover_every_program():

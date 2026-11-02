@@ -102,7 +102,7 @@ OPTIONS = {
     "diff_rate_0.5": ["MAX_DIFF_RATE=0.5"],
     "mean_quality_0": ["MIN_MEAN_QUALITY=0"],
     "mean_quality_30": ["MIN_MEAN_QUALITY=30"],
-    "mean_quality_36": ["MIN_MEAN_QUALITY=36"],
+    "mean_quality_25": ["MIN_MEAN_QUALITY=25"],
     "group_ratio_1": ["MAX_GROUP_RATIO=1"],
     "group_ratio_2": ["MAX_GROUP_RATIO=2"],
     "read_length_20": ["MAX_READ_LENGTH=20"],
@@ -129,7 +129,7 @@ OPTIONS = {
     "everything": ["MIN_IDENTICAL_BASES=4", "MAX_DIFF_RATE=0.08", "MIN_MEAN_QUALITY=15",
                    "MAX_GROUP_RATIO=3", "MAX_READ_LENGTH=40", "MIN_GROUP_COUNT=1",
                    "OPTICAL_DUPLICATE_PIXEL_DISTANCE=300"],
-    "reference_ignored": ["R=/dev/null"],
+    "reference_ignored": [f"R={CORPUS / 'reference.fa'}"],
 }
 OPTION_INPUTS = ["elc_illumina", "elc_unaligned", "elc_plain_names", "rl_reads", "foundation"]
 

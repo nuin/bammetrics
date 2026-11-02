@@ -161,8 +161,8 @@ def unaligned(sam):
         copies = rng.choice((1, 1, 2, 3))
         for c in range(copies):
             name = illumina_name(rng, i * 10 + c, 1101, 1000 + 30 * c, 1000)
-            q = (phred([rng.choice((15, 25, 35)) for _ in range(len1)]),
-                 phred([rng.choice((15, 25, 35)) for _ in range(len2)]))
+            q = (phred([rng.choice((20, 35, 40)) for _ in range(len1)]),
+                 phred([rng.choice((20, 35, 40)) for _ in range(len2)]))
             sam.unmapped_pair(name, (mutate(rng, seq1, 0.01), mutate(rng, seq2, 0.01)), q,
                               rng.choice(("rgA", "rgD")))
 

@@ -57,7 +57,8 @@ def inputs(name, built, corpus):
 
 # Inputs without an aligned read: Picard writes both files with neither class
 # block nor row, so the byte comparison of the file bodies is the whole check.
-NO_CELLS = {"t0_asm_empty", "asm_single_unmapped", "asm_empty", "rl_empty", "elc_elc_empty"}
+NO_CELLS = {"t0_asm_empty", "asm_single_unmapped", "asm_empty", "rl_empty", "elc_elc_empty",
+            "elc_unaligned"}
 
 
 def compare(bam, ref, args, label):
@@ -71,9 +72,10 @@ def compare(bam, ref, args, label):
 
 # --- every input at the defaults -------------------------------------------------
 
-# t0_asm has a read running 40 bases past the end of chrM: both tools fail (below).
-TIERS = ["t0_asm_cycles", "t0_asm_empty", "t0_filters", "t0_no_pairs", "t0_all_tandem",
-         "t0_spread", "t1", "t2", "t3"]
+# t0_asm has a read running 40 bases past the end of chrM, t2 more than 100
+# secondary records without bases, and the insert-size t0 BAMs their own @SQ
+# lengths: both tools fail on them with the reference (below).
+TIERS = ["t0_asm_cycles", "t0_asm_empty", "t1", "t3"]
 BUILT = ["asm_mix", "asm_unpaired_only", "asm_no_pf_group", "asm_all_qcfail", "asm_single_unmapped",
          "asm_clips_and_flags", "asm_no_read_groups", "asm_some_without_rg", "rl_reads",
          "rl_star_fields", "rl_all_duplicates", "rl_empty", "rl_no_read_groups", "elc_illumina",
@@ -95,7 +97,7 @@ LEVELS = {
     "all_four": ["LEVEL=SAMPLE", "LEVEL=LIBRARY", "LEVEL=READ_GROUP"],
     "null_then_library": ["LEVEL=null", "LEVEL=LIBRARY"],
 }
-LEVEL_INPUTS = ["foundation", "asm_mix", "asm_some_without_rg", "rl_reads", "elc_illumina", "t2"]
+LEVEL_INPUTS = ["foundation", "asm_mix", "asm_some_without_rg", "rl_reads", "elc_illumina", "t1"]
 
 
 @pytest.mark.parametrize("name", LEVEL_INPUTS)
@@ -121,7 +123,7 @@ OPTIONS = {
     "chart": ["CHART=/dev/null"],
     "assume_sorted_true": ["ASSUME_SORTED=true"],
 }
-OPTION_INPUTS = ["foundation", "asm_mix", "rl_reads", "t2", "elc_illumina"]
+OPTION_INPUTS = ["foundation", "asm_mix", "rl_reads", "t1", "elc_illumina"]
 
 
 @pytest.mark.parametrize("name", OPTION_INPUTS)
@@ -179,6 +181,13 @@ def test_read_past_the_contig_end_fails(tmp_path):
 def test_reference_contigs_must_match_the_header(built, corpus, tmp_path):
     bam, _ = built["rl_reads"]
     both_fail(bam, [f"R={corpus / 'ref.fa'}"], tmp_path)
+    both_fail(CORPUS / "t0_filters.bam", [f"R={REFERENCE}"], tmp_path)
+
+
+def test_more_than_100_records_without_bases_fail(tmp_path):
+    """t2 has over 100 secondary records with `*` for SEQ: each unit drops
+    its first 100 and then Picard counts mismatches on an empty read."""
+    both_fail(CORPUS / "t2.bam", [f"R={REFERENCE}"], tmp_path, "CIGAR longer than the sequence")
 
 
 # --- every column exercised ----------------------------------------------------------

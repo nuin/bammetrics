@@ -411,14 +411,17 @@ impl GcBias {
         })
     }
 
-    fn observe(&mut self, record: &bam::Record) -> Result<Observation> {
+    /// What the record adds. `counted` is false for a record without
+    /// bases that every unit it reaches still drops: its window and errors
+    /// are then not computed, since Picard returns before touching them.
+    fn observe(&mut self, record: &bam::Record, counted: bool) -> Result<Observation> {
         let flags = record.flags();
         self.bases.clear();
         self.bases.extend(record.sequence().iter());
         let cluster = !flags.is_segmented() || flags.is_first_segment();
         let duplicate = flags.is_duplicate();
         let star = self.bases.is_empty();
-        if flags.is_unmapped() {
+        if flags.is_unmapped() || !counted {
             return Ok(Observation {
                 cluster,
                 aligned: false,
@@ -514,7 +517,16 @@ impl Accumulator for GcBias {
     type Output = Report;
 
     fn accept(&mut self, record: &bam::Record) -> Result<()> {
-        let o = self.observe(record)?;
+        let star = record.sequence().is_empty();
+        let mut counted = !star;
+        if star {
+            // The unit decides after its first 100 such records; the
+            // `unknown` unit comes into being here, as Picard's does.
+            self.levels.route(record, |unit| {
+                counted |= unit.star_records >= STAR_RECORDS_DROPPED;
+            });
+        }
+        let o = self.observe(record, counted)?;
         self.levels.route(record, |unit| {
             if o.star && unit.star_records < STAR_RECORDS_DROPPED {
                 unit.star_records += 1;
