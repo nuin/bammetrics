@@ -45,3 +45,39 @@ def test_options():
         bammetrics.alignment_summary(FIXTURE, expected_pair_orientations=["XY"])
     with pytest.raises(OSError):
         bammetrics.alignment_summary("/nonexistent.bam")
+
+
+def test_registry_function_matches_the_typed_rows(tmp_path):
+    reference = write_reference(tmp_path, "C")
+    typed = bammetrics.alignment_summary(FIXTURE, reference=reference)
+    generic = bammetrics.collect_alignment_summary_metrics(FIXTURE, reference_sequence=reference)
+    assert [g["CATEGORY"] for g in generic] == [t.category for t in typed]
+    for t, g in zip(typed, generic):
+        for key, value in t.to_dict().items():
+            assert g[key.upper()] == value
+        assert (g["SAMPLE"], g["LIBRARY"], g["READ_GROUP"]) == (None, None, None)
+
+
+def test_registry_function_takes_levels_and_bisulfite(tmp_path):
+    # The fixture has no @RG lines: every record lands in the unknown buckets.
+    rows = bammetrics.collect_alignment_summary_metrics(
+        FIXTURE, metric_accumulation_level=["READ_GROUP"])
+    assert [(r["CATEGORY"], r["READ_GROUP"]) for r in rows] == [
+        ("FIRST_OF_PAIR", None), ("SECOND_OF_PAIR", None), ("PAIR", None),
+        ("FIRST_OF_PAIR", "unknown"), ("SECOND_OF_PAIR", "unknown"), ("PAIR", "unknown")]
+    # The reads are all A on a reference of all G. A reverse read's A on a G
+    # is a bisulfite conversion; a forward read's is a mismatch either way.
+    reference = write_reference(tmp_path, "G")
+    plain = bammetrics.collect_alignment_summary_metrics(FIXTURE, reference_sequence=reference)
+    bisulfite = bammetrics.collect_alignment_summary_metrics(
+        FIXTURE, reference_sequence=reference, is_bisulfite_sequenced=True)
+    assert plain[0]["PF_MISMATCH_RATE"] == 1
+    assert bisulfite[1]["PF_MISMATCH_RATE"] == 0
+    assert bisulfite[1]["PF_ALIGNED_BASES"] == plain[1]["PF_ALIGNED_BASES"]
+
+
+def test_registry_function_stop_after_and_bad_options():
+    rows = bammetrics.collect_alignment_summary_metrics(FIXTURE, stop_after=3)
+    assert rows[-1]["TOTAL_READS"] == 3
+    with pytest.raises(ValueError, match="METRIC_ACCUMULATION_LEVEL"):
+        bammetrics.collect_alignment_summary_metrics(FIXTURE, metric_accumulation_level=["X"])

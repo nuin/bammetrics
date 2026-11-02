@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-bammetrics reimplements Picard BAM QC metrics in Rust (on `noodles` 0.119) and exposes them to Python through PyO3 and maturin. The goal is output identical to Picard 3.5.0, field for field and string for string. Implemented: `CollectInsertSizeMetrics` (all four accumulation levels), `CollectAlignmentSummaryMetrics`, `CollectQualityYieldMetrics`, `CollectHsMetrics`. `ROADMAP.md` holds the product plan, `KNOWN_DIFFERENCES.md` lists where output differs on purpose.
+bammetrics reimplements Picard BAM QC metrics in Rust (on `noodles` 0.119) and exposes them to Python through PyO3 and maturin. The goal is output identical to Picard 3.5.0, field for field and string for string. Implemented: `CollectInsertSizeMetrics` and `CollectAlignmentSummaryMetrics` (all four accumulation levels), `CollectQualityYieldMetrics`, `CollectHsMetrics`. `ROADMAP.md` holds the product plan, `KNOWN_DIFFERENCES.md` lists where output differs on purpose.
 
 ## Commands
 
@@ -50,7 +50,7 @@ Shared building blocks in `crates/core/src`:
 | `pass.rs` | `Accumulator` trait and the one-pass multithreaded BAM reader. |
 | `histogram.rs` | Picard `Histogram<Integer>`: `BTreeMap<i64, f64>` in ascending key order. |
 
-`insert_size.rs` is the reference tool: copy its shape. `alignment_summary.rs`, `quality_yield.rs` and `hs_metrics.rs` predate the registry and still use `picard_cli.rs` plus clap subcommands in `main.rs`; moving one to the registry is optional.
+`insert_size.rs` is the reference tool: copy its shape. `alignment_summary.rs` is in the registry too and keeps its `alignment-summary` clap subcommand for the older harness. `quality_yield.rs` and `hs_metrics.rs` predate the registry and still use `picard_cli.rs` plus clap subcommands in `main.rs`; moving one to the registry is optional.
 
 ## How to add a Picard tool (registry route)
 
@@ -98,7 +98,7 @@ The command line (`bammetrics CollectX I=... O=...`) and the Python function nee
 ## Corpus and harness
 
 - `tests/data/make_corpus.py OUT [--seed N] [--pairs N]` writes a seeded corpus: `ref.fa` (+ `.fai`, `.dict`), `corpus.bam` (+ `.bai`; 2 samples x 2 libraries x 3 read groups with PU different from ID; mismatches, N bases, low qualities, I/D/S CIGARs, FR/RF/TANDEM/dovetailed/chimeric pairs, unmapped reads and mates, secondary, supplementary, flagged and unflagged duplicates; `samtools fixmate -m` applied), `bait.interval_list`, `target.interval_list`, `refflat.txt`. The `@RG` header order is shuffled on purpose.
-- `tests/concordance/compare.py` holds `compare_metrics`. `tests/concordance/test_foundation.py` runs insert size on that corpus at every accumulation level and option.
+- `tests/concordance/compare.py` holds `compare_metrics`. `tests/concordance/test_foundation.py` runs insert size on that corpus at every accumulation level and option. `tests/concordance/test_alignment_summary.py` runs alignment summary on t0 to t3, that corpus and the `asm_bams.py` BAMs at all four levels and every option, checks error parity for units without PF reads, and requires 3 distinct non-default values per column.
 - `tests/corpus/generate.py` (bwa-based tiers t0 to t3) and `tests/concordance/cases.py` drive the older 90-case matrix. `tests/make_bam.py` plus `tests/data/insert_size.bam` is the known-answer case (median 310, mode 310, MAD 10, trimmed mean 310, SD 8.1650, width of 50% 21).
 
 ## Concordance rules
@@ -111,8 +111,8 @@ The command line (`bammetrics CollectX I=... O=...`) and the Python function nee
 
 Picard output facts found by running 3.5.0 (full list in the module docs of `levels.rs` and `metric.rs`):
 
-- Doubles print with at most 6 fraction digits, no trailing zeros; NaN and infinity print `?`. Integers print as decimals, booleans as `Y`/`N`, null and empty string as an empty field.
-- `METRIC_ACCUMULATION_LEVEL` is a list option whose default `ALL_READS` stays unless `null` is given first. Rows come out `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`, each level in `@RG` header order, `unknown` last. `READ_GROUP` rows carry the `PU`, not the `ID`.
+- Doubles print with at most 6 fraction digits, no trailing zeros, `HALF_DOWN` on an exact binary tie (123/128 prints `0.960937`); NaN and infinity print `?`. Integers print as decimals, booleans as `Y`/`N`, null and empty string as an empty field.
+- `METRIC_ACCUMULATION_LEVEL` is a list option whose default `ALL_READS` stays unless `null` is given first. Rows come out `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`, each level in `@RG` header order, `unknown` last and only when a record needed it. `READ_GROUP` rows carry the `PU`, not the `ID`. The first `@RG` line lacking the level's field makes an empty unit at its header position; alignment summary prints it as an all-zero `UNPAIRED` row.
 - Picard writes no insert size file when every orientation falls under `MINIMUM_PCT`; bammetrics writes none either.
 
 `docs/02` is a step-by-step Rust to Python build walkthrough. `docs/03` is a Rust language guide.

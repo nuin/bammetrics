@@ -185,6 +185,13 @@ def collect_insert_size_metrics(input: _Path, **options: Any) -> list[dict[str, 
     Picard's column names. Options are Picard's, lower case: minimum_pct=0.1,
     metric_accumulation_level=["SAMPLE"]. output=PATH also writes the metrics file."""
 
+def collect_alignment_summary_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """CollectAlignmentSummaryMetrics through the registry: one dict per row (a
+    CATEGORY of one accumulation unit), keyed by Picard's column names. Options
+    are Picard's, lower case: reference_sequence=PATH, is_bisulfite_sequenced=True,
+    metric_accumulation_level=["READ_GROUP"], adapter_sequence=[...] (adds to
+    Picard's default list). output=PATH also writes the metrics file."""
+
 def alignment_summary(
     path: _Path,
     reference: _Path | None = None,

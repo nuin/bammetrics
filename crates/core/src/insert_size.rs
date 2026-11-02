@@ -265,7 +265,7 @@ impl InsertSize {
     pub fn new(opts: &Options, header: &sam::Header) -> Self {
         Self {
             opts: opts.clone(),
-            levels: Levels::new(header, &opts.levels, Orientations::default),
+            levels: Levels::new(header, &opts.levels, Orientations::default()),
         }
     }
 }

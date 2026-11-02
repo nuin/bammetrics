@@ -257,6 +257,7 @@ fn py_alignment_summary(
         expected_orientations,
         adapter_sequences: adapter_sequences.unwrap_or(defaults.adapter_sequences),
         collect_alignment_information,
+        ..defaults
     };
     let report = alignment_summary::run_over_bam(path, &opts).map_err(|e| py_error(&e))?;
     Ok(report.rows.into_iter().map(Into::into).collect())

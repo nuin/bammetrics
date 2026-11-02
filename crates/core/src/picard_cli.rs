@@ -57,39 +57,6 @@ const COMMON: &[Entry] = &[
     ),
 ];
 
-/// Options of `CollectAlignmentSummaryMetrics` (`SinglePassSamProgram` and
-/// `CollectAlignmentSummaryMetrics` in Picard 3.5.0). `R` is read here, so
-/// this entry shadows the `COMMON` one. The two list options append to
-/// Picard's default and `null` clears it; the native flags do the same.
-const ALIGNMENT_SUMMARY: &[Entry] = &[
-    (&["INPUT", "I"], Action::Value("--input")),
-    (&["OUTPUT", "O"], Action::Value("--output")),
-    (&["REFERENCE_SEQUENCE", "R"], Action::Value("--reference")),
-    (
-        &["HISTOGRAM_FILE", "H"],
-        Action::Ignore("no histogram plot is drawn"),
-    ),
-    (&["MAX_INSERT_SIZE"], Action::Value("--max-insert-size")),
-    (
-        &["EXPECTED_PAIR_ORIENTATIONS"],
-        Action::Value("--expected-pair-orientation"),
-    ),
-    (&["ADAPTER_SEQUENCE"], Action::Value("--adapter-sequence")),
-    (
-        &["COLLECT_ALIGNMENT_INFORMATION"],
-        Action::Value("--collect-alignment-information"),
-    ),
-    (&["IS_BISULFITE_SEQUENCED", "BS"], Action::Only("false")),
-    (
-        &["METRIC_ACCUMULATION_LEVEL", "LEVEL"],
-        Action::Only("ALL_READS"),
-    ),
-    (
-        &["ASSUME_SORTED", "AS"],
-        Action::Ignore("the header sort order is not checked"),
-    ),
-];
-
 /// Options of `CollectQualityYieldMetrics` (`SinglePassSamProgram` and
 /// `CollectQualityYieldMetrics` in Picard 3.5.0). The metric does not read
 /// the reference, so `R` stays ignored through `COMMON`.
@@ -165,11 +132,6 @@ struct Tool {
 }
 
 const TOOLS: &[Tool] = &[
-    Tool {
-        picard_name: "CollectAlignmentSummaryMetrics",
-        subcommand: "alignment-summary",
-        options: ALIGNMENT_SUMMARY,
-    },
     Tool {
         picard_name: "CollectQualityYieldMetrics",
         subcommand: "quality-yield",
@@ -267,12 +229,12 @@ mod tests {
     #[test]
     fn accumulation_level_other_than_all_reads_is_an_error() {
         let ok = translate(
-            "CollectAlignmentSummaryMetrics",
+            "CollectHsMetrics",
             &strings(&["METRIC_ACCUMULATION_LEVEL=ALL_READS"]),
         );
         assert!(ok.is_ok());
         let message = usage(translate(
-            "CollectAlignmentSummaryMetrics",
+            "CollectHsMetrics",
             &strings(&["METRIC_ACCUMULATION_LEVEL=LIBRARY"]),
         ));
         assert!(message.contains("METRIC_ACCUMULATION_LEVEL"));
@@ -282,51 +244,20 @@ mod tests {
     #[test]
     fn unknown_option_names_itself() {
         let message = usage(translate(
-            "CollectAlignmentSummaryMetrics",
+            "CollectQualityYieldMetrics",
             &strings(&["STOP_AFTER=10"]),
         ));
         assert!(message.contains("STOP_AFTER"));
-        let message = usage(translate(
-            "CollectAlignmentSummaryMetrics",
-            &strings(&["bam"]),
-        ));
+        let message = usage(translate("CollectQualityYieldMetrics", &strings(&["bam"])));
         assert!(message.contains("NAME=VALUE"));
     }
 
     #[test]
-    fn alignment_summary_reads_the_reference() {
-        let t = translate(
-            "CollectAlignmentSummaryMetrics",
-            &strings(&[
-                "I=x.bam",
-                "O=out.txt",
-                "R=ref.fa",
-                "EXPECTED_PAIR_ORIENTATIONS=null",
-                "EXPECTED_PAIR_ORIENTATIONS=RF",
-                "MAX_INSERT_SIZE=500",
-                "IS_BISULFITE_SEQUENCED=false",
-            ]),
-        )
-        .expect("translates")
-        .expect("known tool");
-        assert_eq!(t.subcommand, "alignment-summary");
+    fn registry_tools_are_not_translated() {
         assert_eq!(
-            t.args,
-            [
-                "--input=x.bam",
-                "--output=out.txt",
-                "--reference=ref.fa",
-                "--expected-pair-orientation=null",
-                "--expected-pair-orientation=RF",
-                "--max-insert-size=500",
-            ]
+            translate("CollectAlignmentSummaryMetrics", &[]).expect("no error"),
+            None
         );
-        assert!(t.notes.is_empty());
-        let message = usage(translate(
-            "CollectAlignmentSummaryMetrics",
-            &strings(&["IS_BISULFITE_SEQUENCED=true"]),
-        ));
-        assert!(message.contains("IS_BISULFITE_SEQUENCED"));
     }
 
     #[test]

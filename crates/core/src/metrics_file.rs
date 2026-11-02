@@ -23,7 +23,8 @@ use crate::histogram::Histogram;
 /// where an exact expansion would print other digits. When the shortest digits
 /// end in an exact tie (a final 5 right after the kept digits) the JDK breaks
 /// it with the exact binary value, rounding up if the double is above the tie
-/// and down if below, and half-even only if it is exactly on it.
+/// and down if below. A double exactly on the tie (123/128 = 0.9609375)
+/// rounds down, because htsjdk sets `RoundingMode.HALF_DOWN`.
 pub fn format_double(value: f64) -> String {
     if value.is_nan() {
         return "?".to_owned();
@@ -111,8 +112,8 @@ fn round_at(value: f64, integer: String, fraction: String, places: usize) -> (St
         let tie_text = format!("{integer}.{fraction:0<80}");
         match exact.as_str().cmp(tie_text.as_str()) {
             std::cmp::Ordering::Greater => true,
-            std::cmp::Ordering::Less => false,
-            std::cmp::Ordering::Equal => kept.last().is_some_and(|b| !(b - b'0').is_multiple_of(2)),
+            // `RoundingMode.HALF_DOWN`: a double exactly on the tie rounds down.
+            std::cmp::Ordering::Less | std::cmp::Ordering::Equal => false,
         }
     } else {
         rest[0] >= b'5'
@@ -290,7 +291,7 @@ mod tests {
     }
 
     #[test]
-    fn rounding_is_half_even_on_shortest_digits() {
+    fn rounding_works_on_shortest_digits() {
         assert_eq!(format_double(5e-7), "0");
         assert_eq!(format_double(1.5e-6), "0.000002");
         assert_eq!(format_double(2.5e-7), "0");
@@ -312,6 +313,16 @@ mod tests {
             "-12240085416352.812"
         );
         assert_eq!(format_double(6.404_429_851_067_573e14), "640442985106757.2");
+    }
+
+    /// Doubles exactly on a 7th-decimal tie round down (HALF_DOWN), seen in
+    /// Picard 3.5.0 output as PCT_PF_READS 0.960937 for 123/128.
+    #[test]
+    fn exact_binary_ties_round_down() {
+        assert_eq!(format_double(123.0 / 128.0), "0.960937");
+        assert_eq!(format_double(1.0 / 128.0), "0.007812");
+        assert_eq!(format_double(3.0 / 128.0), "0.023437");
+        assert_eq!(format_double(-123.0 / 128.0), "-0.960937");
     }
 
     #[test]

@@ -92,7 +92,7 @@ pub struct Tool {
 }
 
 /// Every registered tool. One line per tool.
-pub const TOOLS: &[&Tool] = &[&crate::insert_size::TOOL];
+pub const TOOLS: &[&Tool] = &[&crate::insert_size::TOOL, &crate::alignment_summary::TOOL];
 
 /// The tool named `name`.
 pub fn find(name: &str) -> Option<&'static Tool> {
@@ -138,6 +138,17 @@ impl Invocation {
                     .map_err(|_| Error::Usage(format!("{name}={v}: not a valid value")))
             })
             .transpose()
+    }
+
+    /// A Picard collection option: each value given adds to `default`, and
+    /// `null` empties the list so far.
+    pub fn list<T: PartialEq>(
+        &self,
+        name: &str,
+        default: Vec<T>,
+        parse: impl Fn(&str) -> Result<T>,
+    ) -> Result<Vec<T>> {
+        picard_list(default, self.all(name), parse)
     }
 
     /// A Picard boolean (`true` or `false`, any case).
@@ -237,6 +248,25 @@ impl Tool {
         let path = inv.output.as_deref();
         write_to(path, |out| output.write(headers(inv.command.clone()), out))
     }
+}
+
+/// The values of a Picard collection option applied to its default: each
+/// value is added, `null` empties the list so far. A value already in the
+/// list is added again; the options that use this only test membership.
+pub fn picard_list<T, S: AsRef<str>>(
+    default: Vec<T>,
+    values: &[S],
+    parse: impl Fn(&str) -> Result<T>,
+) -> Result<Vec<T>> {
+    let mut list = default;
+    for value in values {
+        if value.as_ref() == "null" {
+            list.clear();
+        } else {
+            list.push(parse(value.as_ref())?);
+        }
+    }
+    Ok(list)
 }
 
 /// Run `write` against `path`, or standard output when `path` is `None`.

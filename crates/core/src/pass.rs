@@ -24,6 +24,12 @@ pub trait Accumulator {
     /// Take one record, in file order.
     fn accept(&mut self, record: &bam::Record) -> Result<()>;
 
+    /// True once the accumulator wants no more records (`STOP_AFTER`); the
+    /// pass then stops reading.
+    fn done(&self) -> bool {
+        false
+    }
+
     /// The metric after the last record.
     fn finish(self) -> Result<Self::Output>;
 }
@@ -54,7 +60,7 @@ where
     let header = reader.read_header().map_err(input)?;
     let mut accumulator = build(&header)?;
     let mut record = bam::Record::default();
-    while reader.read_record(&mut record)? != 0 {
+    while !accumulator.done() && reader.read_record(&mut record)? != 0 {
         accumulator.accept(&record)?;
     }
     accumulator.finish()
