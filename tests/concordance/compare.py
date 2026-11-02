@@ -12,9 +12,16 @@ are skipped. Everything from `## METRICS CLASS` on must agree:
     is compared, with no tolerance;
   * the `## HISTOGRAM` section: its class, its columns and every cell.
 
+  * the whole file after the StringHeader lines, byte for byte. This is what
+    checks a file without a METRICS CLASS block (QualityScoreDistribution,
+    MeanQualityByCycle): its blank lines, the histogram key class and the
+    trailing newlines.
+
 A failure lists each differing column with the row index, the row's key
 columns and both values. When Picard writes no file (CollectInsertSizeMetrics
 with every orientation under MINIMUM_PCT), bammetrics must write none either.
+`output_key` is the option naming the metrics file (`M` for
+CollectDuplicateMetrics, which takes no `O`).
 """
 import subprocess
 import tempfile
@@ -28,15 +35,40 @@ from run_picard import picard_env
 KEY_COLUMNS = ("CATEGORY", "PAIR_ORIENTATION", "SAMPLE", "LIBRARY", "READ_GROUP")
 
 
-def run_picard_tool(tool, bam, out, args):
-    cmd = ["picard", tool, f"I={bam}", f"O={out}", *args, "VERBOSITY=ERROR", "QUIET=true"]
+def run_picard_tool(tool, bam, out, args, output_key="O"):
+    cmd = ["picard", tool, f"I={bam}", f"{output_key}={out}", *args, "VERBOSITY=ERROR", "QUIET=true"]
     subprocess.run(cmd, check=True, env=picard_env(),
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def run_bammetrics_tool(tool, bam, out, args):
-    cmd = [str(BAMMETRICS), tool, f"I={bam}", f"O={out}", *args]
+def run_bammetrics_tool(tool, bam, out, args, output_key="O"):
+    cmd = [str(BAMMETRICS), tool, f"I={bam}", f"{output_key}={out}", *args]
     subprocess.run(cmd, check=True, capture_output=True, text=True)
+
+
+def body(path):
+    """The file without its StringHeader lines (each `## htsjdk...StringHeader`
+    line and the `# ` line after it), as bytes."""
+    lines = Path(path).read_bytes().split(b"\n")
+    kept, skip = [], False
+    for line in lines:
+        if skip:
+            skip = False
+            continue
+        if line == b"## htsjdk.samtools.metrics.StringHeader":
+            skip = True
+            continue
+        kept.append(line)
+    return b"\n".join(kept)
+
+
+def first_difference(picard, ours):
+    """Line number and both lines of the first differing line of two bodies."""
+    p, o = picard.split(b"\n"), ours.split(b"\n")
+    for i, (a, b) in enumerate(zip(p, o)):
+        if a != b:
+            return f"line {i + 1}: Picard {a!r}, bammetrics {b!r}"
+    return f"line counts: Picard {len(p)}, bammetrics {len(o)}"
 
 
 def diff_metrics(picard, ours):
@@ -74,7 +106,7 @@ def diff_metrics(picard, ours):
 
 
 def compare_metrics(tool, bam, picard_args=(), bam_args=None, workdir=None, expect_file=False,
-                    seen=None):
+                    seen=None, output_key="O"):
     """Run both tools on `bam` and assert the metrics files agree. Returns the
     number of cells compared (metrics cells plus histogram cells). With
     `expect_file`, both tools writing no file is a failure, so a case that
@@ -83,8 +115,8 @@ def compare_metrics(tool, bam, picard_args=(), bam_args=None, workdir=None, expe
     bam_args = picard_args if bam_args is None else bam_args
     with tempfile.TemporaryDirectory(dir=workdir) as tmp:
         picard_out, ours_out = Path(tmp, "picard.txt"), Path(tmp, "bammetrics.txt")
-        run_picard_tool(tool, bam, picard_out, list(picard_args))
-        run_bammetrics_tool(tool, bam, ours_out, list(bam_args))
+        run_picard_tool(tool, bam, picard_out, list(picard_args), output_key)
+        run_bammetrics_tool(tool, bam, ours_out, list(bam_args), output_key)
         assert picard_out.exists() == ours_out.exists(), (
             f"{tool}: Picard {'wrote' if picard_out.exists() else 'wrote no'} file, "
             f"bammetrics {'wrote' if ours_out.exists() else 'wrote no'} file")
@@ -92,7 +124,11 @@ def compare_metrics(tool, bam, picard_args=(), bam_args=None, workdir=None, expe
             assert not expect_file, f"{tool}: neither tool wrote a file, nothing was compared"
             return 0
         picard, ours = parse_picard_metrics(picard_out), parse_picard_metrics(ours_out)
+        picard_body, ours_body = body(picard_out), body(ours_out)
     problems = diff_metrics(picard, ours)
+    if not problems and picard_body != ours_body:
+        problems.append("file after the header lines differs: "
+                        + first_difference(picard_body, ours_body))
     assert not problems, f"{tool} {' '.join(picard_args)}:\n  " + "\n  ".join(problems[:40])
     if seen is not None:
         seen.append(picard)
