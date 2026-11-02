@@ -330,6 +330,7 @@ pub fn write_metrics(
         rows: vec![report.row.fields().iter().map(Field::picard_text).collect()],
         histogram: Some(HistogramTable {
             key_label: "coverage_or_base_quality",
+            key_class: crate::metrics_file::KeyClass::Integer,
             columns: vec![
                 HistogramColumn {
                     label: "high_quality_coverage_count".to_owned(),

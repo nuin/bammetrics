@@ -18,16 +18,19 @@ use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+use noodles::sam;
+
 use crate::error::{Error, Result};
 use crate::metric::MetricsOutput;
-use crate::metrics_file::headers;
-use crate::pass::default_threads;
+use crate::pass::{self, Accumulator, Limits, default_threads};
 
 /// What an option does once recognised.
 #[derive(Clone, Copy)]
 pub enum Kind {
     /// Read by the tool through [`Invocation`].
     Value,
+    /// The metrics file path ([`Invocation::output`]).
+    Output,
     /// Never changes the metrics: accepted, dropped, noted on stderr.
     Ignored(&'static str),
 }
@@ -47,6 +50,15 @@ impl Opt {
         }
     }
 
+    /// The option naming the metrics file. A tool that declares one takes
+    /// no `OUTPUT` (Picard's `CollectDuplicateMetrics` writes to `M`).
+    pub const fn output(names: &'static [&'static str]) -> Self {
+        Self {
+            names,
+            kind: Kind::Output,
+        }
+    }
+
     pub const fn ignored(names: &'static [&'static str], why: &'static str) -> Self {
         Self {
             names,
@@ -56,10 +68,12 @@ impl Opt {
 }
 
 /// Options every Picard tool takes from `CommandLineProgram` and
-/// `SinglePassSamProgram`; none changes a metric.
+/// `SinglePassSamProgram`. `ASSUME_SORTED=false` fails a file whose header
+/// is not coordinate sorted ([`Invocation::single_pass`]); the others change
+/// no metric.
 const COMMON: &[Opt] = &[
     Opt::value(&["INPUT", "I"]),
-    Opt::value(&["OUTPUT", "O"]),
+    Opt::output(&["OUTPUT", "O"]),
     Opt::ignored(&["VALIDATION_STRINGENCY"], "records are not validated"),
     Opt::ignored(&["TMP_DIR"], "no temporary files are written"),
     Opt::ignored(&["QUIET"], "progress is not logged"),
@@ -70,10 +84,7 @@ const COMMON: &[Opt] = &[
     Opt::ignored(&["CREATE_MD5_FILE"], "no BAM is written"),
     Opt::ignored(&["GA4GH_CLIENT_SECRETS"], "no GA4GH access"),
     Opt::ignored(&["USE_JDK_DEFLATER", "USE_JDK_INFLATER"], "no JDK codec"),
-    Opt::ignored(
-        &["ASSUME_SORTED", "AS"],
-        "one pass over the file in any order",
-    ),
+    Opt::value(&["ASSUME_SORTED", "AS"]),
     Opt::ignored(
         &["REFERENCE_SEQUENCE", "R"],
         "this metric does not read the reference",
@@ -92,7 +103,16 @@ pub struct Tool {
 }
 
 /// Every registered tool. One line per tool.
-pub const TOOLS: &[&Tool] = &[&crate::insert_size::TOOL, &crate::alignment_summary::TOOL];
+pub const TOOLS: &[&Tool] = &[
+    &crate::insert_size::TOOL,
+    &crate::alignment_summary::TOOL,
+    &crate::quality_yield::TOOL,
+    &crate::quality_score_distribution::TOOL,
+    &crate::mean_quality_by_cycle::TOOL,
+    &crate::base_distribution_by_cycle::TOOL,
+    &crate::duplicate_metrics::TOOL,
+    &crate::accumulate_quality_yield::TOOL,
+];
 
 /// The tool named `name`.
 pub fn find(name: &str) -> Option<&'static Tool> {
@@ -151,6 +171,22 @@ impl Invocation {
         picard_list(default, self.all(name), parse)
     }
 
+    /// Read `INPUT` once with `STOP_AFTER` (0 when the tool has no such
+    /// option) and `ASSUME_SORTED` (default true) applied, the
+    /// `SinglePassSamProgram` loop.
+    pub fn single_pass<A, F>(&self, build: F) -> Result<A::Output>
+    where
+        A: Accumulator,
+        F: FnOnce(&sam::Header) -> Result<A>,
+    {
+        let stop_after: i64 = self.parse("STOP_AFTER", 0)?;
+        let limits = Limits {
+            stop_after: u64::try_from(stop_after).unwrap_or(0),
+            assume_sorted: self.flag("ASSUME_SORTED", true)?,
+        };
+        pass::run_limited(&self.input, self.threads, limits, build)
+    }
+
     /// A Picard boolean (`true` or `false`, any case).
     pub fn flag(&self, name: &str, default: bool) -> Result<bool> {
         match self.get(name).map(str::to_ascii_lowercase).as_deref() {
@@ -164,10 +200,24 @@ impl Invocation {
 
 impl Tool {
     fn lookup(&self, name: &str) -> Option<&'static Opt> {
+        let own_output = self.options.iter().any(|o| matches!(o.kind, Kind::Output));
+        self.options
+            .iter()
+            .chain(
+                COMMON
+                    .iter()
+                    .filter(|o| !(own_output && matches!(o.kind, Kind::Output))),
+            )
+            .find(|o| o.names.contains(&name))
+    }
+
+    /// Long name of the option that names the metrics file.
+    pub fn output_name(&self) -> &'static str {
         self.options
             .iter()
             .chain(COMMON)
-            .find(|o| o.names.contains(&name))
+            .find(|o| matches!(o.kind, Kind::Output))
+            .map_or("OUTPUT", |o| o.names[0])
     }
 
     /// Parse `args` (Picard syntax) into an [`Invocation`].
@@ -212,11 +262,10 @@ impl Tool {
             inv.command.push_str(&format!(" {}={value}", opt.names[0]));
             match opt.kind {
                 Kind::Ignored(why) => inv.notes.push(format!("ignoring {name}={value}: {why}")),
+                Kind::Output => inv.output = Some(PathBuf::from(&value)),
                 Kind::Value => {
                     if opt.names[0] == "INPUT" {
                         input = Some(PathBuf::from(&value));
-                    } else if opt.names[0] == "OUTPUT" {
-                        inv.output = Some(PathBuf::from(&value));
                     }
                     inv.values.entry(opt.names[0]).or_default().push(value);
                 }
@@ -246,7 +295,7 @@ impl Tool {
             return Ok(());
         };
         let path = inv.output.as_deref();
-        write_to(path, |out| output.write(headers(inv.command.clone()), out))
+        write_to(path, |out| output.write(output.headers(&inv.command), out))
     }
 }
 
@@ -360,5 +409,21 @@ mod tests {
             .expect_err("not a number");
         assert!(err.to_string().contains("HISTOGRAM_WIDTH"));
         assert!(inv.flag("MISSING", true).expect("default"));
+    }
+
+    #[test]
+    fn a_tool_with_its_own_output_option_takes_no_output() {
+        let dup = find("CollectDuplicateMetrics").expect("registered");
+        assert_eq!(dup.output_name(), "METRICS_FILE");
+        assert_eq!(tool().output_name(), "OUTPUT");
+        let inv = dup
+            .parse(&strings(&["I=x.bam", "M=d.txt", "AS=false"]))
+            .expect("parses");
+        assert_eq!(inv.output.as_deref(), Some(Path::new("d.txt")));
+        assert!(!inv.flag("ASSUME_SORTED", true).expect("bool"));
+        let err = dup
+            .parse(&strings(&["I=x.bam", "O=d.txt"]))
+            .expect_err("no OUTPUT");
+        assert!(err.to_string().contains("option O "));
     }
 }

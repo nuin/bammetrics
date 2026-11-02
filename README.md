@@ -20,6 +20,16 @@ Differences that remain are in [KNOWN_DIFFERENCES.md](KNOWN_DIFFERENCES.md).
 | CollectHsMetrics, with `PER_BASE_COVERAGE` | `hs-metrics` | `hs_metrics()` |
 | CollectInsertSizeMetrics | `insert-size` | `insert_size()` |
 | all of the above in one pass | `collect` | `collect()` |
+| QualityScoreDistribution | Picard syntax only | `quality_score_distribution()` |
+| MeanQualityByCycle | Picard syntax only | `mean_quality_by_cycle()` |
+| CollectBaseDistributionByCycle | Picard syntax only | `collect_base_distribution_by_cycle()` |
+| CollectDuplicateMetrics (`M=` output) | Picard syntax only | `collect_duplicate_metrics()` |
+| AccumulateQualityYieldMetrics | Picard syntax only | `accumulate_quality_yield_metrics()` |
+
+Every tool in the registry (all but CollectHsMetrics) also has a Python function named
+after the Picard class in snake case, e.g. `collect_quality_yield_metrics(path, **options)`,
+returning rows as dicts. QualityScoreDistribution and MeanQualityByCycle write no metrics
+class, so their functions return the histogram table.
 
 Accumulation level is `ALL_READS` only. Per-library and per-read-group rows are on the
 [roadmap](ROADMAP.md).
@@ -51,6 +61,13 @@ bammetrics CollectHsMetrics BI=panel.interval_list I=sample.bam \
 
 # CollectInsertSizeMetrics (Picard needs R installed for this one; bammetrics does not)
 bammetrics CollectInsertSizeMetrics I=sample.bam O=sample.insert_size_metrics.txt H=hist.pdf
+
+# Read-level tools (CHART= is accepted; no PDF is drawn)
+bammetrics QualityScoreDistribution I=sample.bam O=sample.qual_score_dist.txt CHART=q.pdf
+bammetrics MeanQualityByCycle I=sample.bam O=sample.mean_qual_by_cycle.txt PF_READS_ONLY=true
+bammetrics CollectBaseDistributionByCycle I=sample.bam O=sample.base_dist_by_cycle.txt
+bammetrics CollectDuplicateMetrics I=sample.marked.bam M=sample.duplicate_metrics.txt
+bammetrics AccumulateQualityYieldMetrics I=shard1.qy.txt I=shard2.qy.txt O=sample.qy.txt
 ```
 
 `R=` needs a `.fai` next to the FASTA. A BED file works where Picard 3.5.0 needs an
@@ -160,7 +177,10 @@ target/release/bammetrics CollectHsMetrics I=in.bam O=out.txt R=ref.fa \
 ```
 
 Picard options that cannot change a metric (`VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`,
-`VERBOSITY`, `H`, `R`, `ASSUME_SORTED`, ...) are accepted, dropped, and noted on stderr.
+`VERBOSITY`, `H`, `CHART`, `R`, ...) are accepted, dropped, and noted on stderr.
+`ASSUME_SORTED=false` makes a registry tool exit 1 on a BAM whose header is not
+coordinate sorted, as Picard does; `STOP_AFTER` works in CollectAlignmentSummaryMetrics,
+CollectQualityYieldMetrics, the three by-cycle tools and CollectDuplicateMetrics.
 Any other option exits 1 naming the option. `CollectInsertSizeMetrics` and
 `CollectAlignmentSummaryMetrics` take `METRIC_ACCUMULATION_LEVEL` (`ALL_READS`, `SAMPLE`,
 `LIBRARY`, `READ_GROUP`; `null` clears the default); `CollectHsMetrics` accepts `ALL_READS` only. Tools in the registry

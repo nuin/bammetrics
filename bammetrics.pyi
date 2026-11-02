@@ -192,6 +192,36 @@ def collect_alignment_summary_metrics(input: _Path, **options: Any) -> list[dict
     metric_accumulation_level=["READ_GROUP"], adapter_sequence=[...] (adds to
     Picard's default list). output=PATH also writes the metrics file."""
 
+def collect_quality_yield_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """CollectQualityYieldMetrics through the registry: one dict. Options:
+    use_original_qualities, include_secondary_alignments,
+    include_supplemental_alignments, stop_after, assume_sorted."""
+
+def quality_score_distribution(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """QualityScoreDistribution. Picard's file has no metrics class, so the
+    result is the histogram: one dict per quality, keys QUALITY, COUNT_OF_Q and
+    COUNT_OF_OQ (only when a counted base has OQ). Options: aligned_reads_only,
+    pf_reads_only, include_no_calls, stop_after, assume_sorted."""
+
+def mean_quality_by_cycle(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """MeanQualityByCycle. The result is the histogram: one dict per cycle,
+    keys CYCLE, MEAN_QUALITY and MEAN_ORIGINAL_QUALITY (only when a record has
+    OQ; 0 at a cycle without an OQ mean). Options: aligned_reads_only,
+    pf_reads_only, stop_after, assume_sorted."""
+
+def collect_base_distribution_by_cycle(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """CollectBaseDistributionByCycle: one dict per read end and cycle (READ_END,
+    CYCLE, PCT_A, PCT_C, PCT_G, PCT_T, PCT_N on a 0 to 100 scale). Options:
+    aligned_reads_only, pf_reads_only, stop_after, assume_sorted."""
+
+def collect_duplicate_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """CollectDuplicateMetrics from the duplicate flags already in the file: one
+    dict per library. output=PATH writes the file Picard writes to METRICS_FILE."""
+
+def accumulate_quality_yield_metrics(input: _Paths, **options: Any) -> list[dict[str, Any]]:
+    """AccumulateQualityYieldMetrics: QualityYieldMetrics files (a list of paths)
+    merged into one dict. output=PATH writes the merged file."""
+
 def alignment_summary(
     path: _Path,
     reference: _Path | None = None,

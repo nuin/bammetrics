@@ -1,9 +1,13 @@
 //! Picard-concordant BAM QC metrics.
 
+pub mod accumulate_quality_yield;
 pub mod adapter;
 pub mod alignment_summary;
+pub mod base_distribution_by_cycle;
 pub mod blocks;
 pub mod collect;
+pub mod cycle;
+pub mod duplicate_metrics;
 pub mod duplication;
 pub mod error;
 pub mod filters;
@@ -12,10 +16,13 @@ pub mod hs_metrics;
 pub mod insert_size;
 pub mod intervals;
 pub mod levels;
+pub mod mean_quality_by_cycle;
 pub mod metric;
 pub mod metrics_file;
 pub mod pass;
 pub mod picard_cli;
+pub mod quality;
+pub mod quality_score_distribution;
 pub mod quality_yield;
 pub mod record;
 pub mod reference;

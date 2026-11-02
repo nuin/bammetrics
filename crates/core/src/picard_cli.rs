@@ -57,31 +57,6 @@ const COMMON: &[Entry] = &[
     ),
 ];
 
-/// Options of `CollectQualityYieldMetrics` (`SinglePassSamProgram` and
-/// `CollectQualityYieldMetrics` in Picard 3.5.0). The metric does not read
-/// the reference, so `R` stays ignored through `COMMON`.
-const QUALITY_YIELD: &[Entry] = &[
-    (&["INPUT", "I"], Action::Value("--input")),
-    (&["OUTPUT", "O"], Action::Value("--output")),
-    (
-        &["USE_ORIGINAL_QUALITIES", "OQ"],
-        Action::Value("--use-original-qualities"),
-    ),
-    (
-        &["INCLUDE_SECONDARY_ALIGNMENTS"],
-        Action::Bool("--include-secondary-alignments"),
-    ),
-    (
-        &["INCLUDE_SUPPLEMENTAL_ALIGNMENTS"],
-        Action::Bool("--include-supplemental-alignments"),
-    ),
-    (&["FLOW_MODE"], Action::Only("false")),
-    (
-        &["ASSUME_SORTED", "AS"],
-        Action::Ignore("one pass over the file in any order"),
-    ),
-];
-
 /// Options of `CollectHsMetrics` (`CollectTargetedMetrics` and
 /// `CollectHsMetrics` in Picard 3.5.0). `R` changes `AT_DROPOUT` and
 /// `GC_DROPOUT`, so this entry shadows the `COMMON` one. The two interval
@@ -131,18 +106,11 @@ struct Tool {
     options: &'static [Entry],
 }
 
-const TOOLS: &[Tool] = &[
-    Tool {
-        picard_name: "CollectQualityYieldMetrics",
-        subcommand: "quality-yield",
-        options: QUALITY_YIELD,
-    },
-    Tool {
-        picard_name: "CollectHsMetrics",
-        subcommand: "hs-metrics",
-        options: HS_METRICS,
-    },
-];
+const TOOLS: &[Tool] = &[Tool {
+    picard_name: "CollectHsMetrics",
+    subcommand: "hs-metrics",
+    options: HS_METRICS,
+}];
 
 /// A Picard command line rewritten for the native parser.
 #[derive(Debug, PartialEq)]
@@ -243,54 +211,20 @@ mod tests {
 
     #[test]
     fn unknown_option_names_itself() {
-        let message = usage(translate(
-            "CollectQualityYieldMetrics",
-            &strings(&["STOP_AFTER=10"]),
-        ));
+        let message = usage(translate("CollectHsMetrics", &strings(&["STOP_AFTER=10"])));
         assert!(message.contains("STOP_AFTER"));
-        let message = usage(translate("CollectQualityYieldMetrics", &strings(&["bam"])));
+        let message = usage(translate("CollectHsMetrics", &strings(&["bam"])));
         assert!(message.contains("NAME=VALUE"));
     }
 
     #[test]
     fn registry_tools_are_not_translated() {
-        assert_eq!(
-            translate("CollectAlignmentSummaryMetrics", &[]).expect("no error"),
-            None
-        );
-    }
-
-    #[test]
-    fn quality_yield_options() {
-        let t = translate(
+        for tool in [
+            "CollectAlignmentSummaryMetrics",
             "CollectQualityYieldMetrics",
-            &strings(&[
-                "I=x.bam",
-                "O=out.txt",
-                "OQ=false",
-                "INCLUDE_SECONDARY_ALIGNMENTS=true",
-                "INCLUDE_SUPPLEMENTAL_ALIGNMENTS=false",
-                "R=ref.fa",
-            ]),
-        )
-        .expect("translates")
-        .expect("known tool");
-        assert_eq!(t.subcommand, "quality-yield");
-        assert_eq!(
-            t.args,
-            [
-                "--input=x.bam",
-                "--output=out.txt",
-                "--use-original-qualities=false",
-                "--include-secondary-alignments",
-            ]
-        );
-        assert_eq!(t.notes.len(), 1);
-        let message = usage(translate(
-            "CollectQualityYieldMetrics",
-            &strings(&["FLOW_MODE=true"]),
-        ));
-        assert!(message.contains("FLOW_MODE"));
+        ] {
+            assert_eq!(translate(tool, &[]).expect("no error"), None);
+        }
     }
 
     #[test]

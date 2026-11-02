@@ -182,6 +182,34 @@ pub fn headers(command: String) -> Vec<String> {
     vec![command, started_on(now)]
 }
 
+/// The Java class of a histogram's keys, printed after `## HISTOGRAM`.
+/// Keys are stored as integers; `Double` keys print with a `.0`
+/// (`Double.toString` of a whole number).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum KeyClass {
+    #[default]
+    Integer,
+    Byte,
+    Double,
+}
+
+impl KeyClass {
+    pub fn java_name(self) -> &'static str {
+        match self {
+            KeyClass::Integer => "java.lang.Integer",
+            KeyClass::Byte => "java.lang.Byte",
+            KeyClass::Double => "java.lang.Double",
+        }
+    }
+
+    pub fn format(self, key: i64) -> String {
+        match self {
+            KeyClass::Integer | KeyClass::Byte => key.to_string(),
+            KeyClass::Double => format!("{key}.0"),
+        }
+    }
+}
+
 /// One histogram column: its header label and its bins.
 pub struct HistogramColumn<'a> {
     pub label: String,
@@ -193,6 +221,7 @@ pub struct HistogramColumn<'a> {
 /// without a bin at a key prints 0.
 pub struct HistogramTable<'a> {
     pub key_label: &'a str,
+    pub key_class: KeyClass,
     pub columns: Vec<HistogramColumn<'a>>,
 }
 
@@ -215,10 +244,14 @@ impl MetricsFile<'_> {
             writeln!(out, "# {header}")?;
         }
         writeln!(out)?;
-        writeln!(out, "## METRICS CLASS\t{}", self.class)?;
-        writeln!(out, "{}", self.columns.join("\t"))?;
-        for row in &self.rows {
-            writeln!(out, "{}", row.join("\t"))?;
+        // `printBeanMetrics` prints nothing, not even the class line, without
+        // a row; a histogram-only file has two blank lines here.
+        if !self.rows.is_empty() {
+            writeln!(out, "## METRICS CLASS\t{}", self.class)?;
+            writeln!(out, "{}", self.columns.join("\t"))?;
+            for row in &self.rows {
+                writeln!(out, "{}", row.join("\t"))?;
+            }
         }
         writeln!(out)?;
         if let Some(table) = &self.histogram {
@@ -242,7 +275,7 @@ impl HistogramTable<'_> {
         if columns.is_empty() {
             return Ok(());
         }
-        writeln!(out, "## HISTOGRAM\tjava.lang.Integer")?;
+        writeln!(out, "## HISTOGRAM\t{}", self.key_class.java_name())?;
         let labels: Vec<&str> = columns.iter().map(|c| c.label.as_str()).collect();
         writeln!(out, "{}\t{}", self.key_label, labels.join("\t"))?;
         let keys: BTreeSet<i64> = columns.iter().flat_map(|c| c.histogram.keys()).collect();
@@ -251,7 +284,7 @@ impl HistogramTable<'_> {
                 .iter()
                 .map(|c| format_double(c.histogram.get(key).unwrap_or(0.0)))
                 .collect();
-            writeln!(out, "{key}\t{}", values.join("\t"))?;
+            writeln!(out, "{}\t{}", self.key_class.format(key), values.join("\t"))?;
         }
         Ok(())
     }
@@ -352,6 +385,7 @@ mod tests {
             rows: vec![vec!["1".to_owned(), String::new()]],
             histogram: Some(HistogramTable {
                 key_label: "insert_size",
+                key_class: KeyClass::Integer,
                 columns: vec![
                     HistogramColumn {
                         label: "All_Reads.fr_count".to_owned(),

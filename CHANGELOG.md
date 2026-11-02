@@ -3,9 +3,32 @@
 ## Unreleased
 
 `CollectAlignmentSummaryMetrics` at every accumulation level, with every Picard option
-that changes a number (parity plan phase P1).
+that changes a number (parity plan phase P1). The read-level tools of phase P2:
+`QualityScoreDistribution`, `MeanQualityByCycle`, `CollectBaseDistributionByCycle`,
+`CollectDuplicateMetrics` and `AccumulateQualityYieldMetrics`, with
+`CollectQualityYieldMetrics` moved to the registry.
 
 ### Added
+
+- `QualityScoreDistribution`, `MeanQualityByCycle` and `CollectBaseDistributionByCycle` in
+  the registry, with `ALIGNED_READS_ONLY`, `PF_READS_ONLY`, `INCLUDE_NO_CALLS` (quality
+  score distribution), `STOP_AFTER` and `CHART` (accepted, no PDF). Their files have no
+  `## METRICS CLASS` block where Picard writes none.
+- `CollectDuplicateMetrics` (`M=`/`METRICS_FILE=`, `STOP_AFTER`): one row per library from
+  the duplicate flags, and the ROI histogram for a single library.
+- `AccumulateQualityYieldMetrics`: merges `QualityYieldMetrics` files as Picard does.
+- `crates/core/src/quality.rs` (`QUAL` and `OQ` decoding with the OQ fallback) and
+  `crates/core/src/cycle.rs` (machine cycle, read end, per-cycle cells), shared by quality
+  yield, alignment summary `BAD_CYCLES` and the by-cycle tools.
+- Python: `quality_score_distribution()`, `mean_quality_by_cycle()`,
+  `collect_base_distribution_by_cycle()`, `collect_duplicate_metrics()`,
+  `collect_quality_yield_metrics()` and `accumulate_quality_yield_metrics()` from the
+  registry, with stubs.
+- `tests/concordance/test_read_level.py`: 348 tests (332 file comparisons, 8 error-parity cases) against Picard 3.5.0 on t0 to t3, the
+  foundation corpus and the `read_level_bams.py` BAMs, every option, error parity, and the
+  3-distinct-values check per column.
+- `compare_metrics` also compares the whole file after the header lines byte for byte, and
+  takes `output_key` for tools that write to `M=`.
 
 - `CollectAlignmentSummaryMetrics` in the tool registry: `METRIC_ACCUMULATION_LEVEL`
   (`ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`), `IS_BISULFITE_SEQUENCED` (`BS`) and
@@ -20,6 +43,12 @@ that changes a number (parity plan phase P1).
 
 ### Changed
 
+- `ASSUME_SORTED=false` exits 1 on a BAM whose header is not coordinate sorted in every
+  registry tool, as Picard does. It used to be dropped with a note.
+- Picard-syntax `CollectQualityYieldMetrics` goes through the registry and gains
+  `STOP_AFTER` and `--NAME value` forms; `picard_cli.rs` keeps HS metrics only.
+- The metrics writer leaves out the `## METRICS CLASS` block when a file has no row, as
+  htsjdk does.
 - `Levels` makes the `unknown` unit only when a record needs it, and makes a unit for the
   first `@RG` line without the level's field, as Picard's `MultiLevelCollector` does.
   `CollectInsertSizeMetrics` output does not change (empty units print no row there).

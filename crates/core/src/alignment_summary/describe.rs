@@ -7,6 +7,7 @@ use noodles::sam::alignment::record::cigar::op::Kind;
 use noodles::sam::alignment::record::data::field::Tag;
 
 use crate::adapter::Adapters;
+use crate::cycle::machine_cycle;
 use crate::error::{Error, Result};
 use crate::record::{Orientation, orientation, record_name};
 use crate::sequence::{bases_equal, bisulfite_bases_equal, is_no_call};
@@ -300,13 +301,10 @@ impl Describer {
     }
 }
 
-/// `CoordMath.getCycle`: 1-based machine cycle of read offset `i`.
+/// `CoordMath.getCycle`: 1-based machine cycle of read offset `i`, as a
+/// bad-cycle histogram key.
 fn cycle(reverse: bool, read_length: usize, i: usize) -> i64 {
-    if reverse {
-        read_length as i64 - i as i64
-    } else {
-        i as i64 + 1
-    }
+    machine_cycle(reverse, read_length, i) as i64
 }
 
 /// `get3PrimeSoftClippedBases`: soft clips after the first non-clipping
