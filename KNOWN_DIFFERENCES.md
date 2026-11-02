@@ -34,19 +34,62 @@ behaves how.
 - `ASSUME_SORTED=false` (`AS`) on a BAM whose header sort order is not `coordinate` (or
   has no `@HD` sort order) exits 1 and writes no file in every registry tool, as Picard
   does. `CollectHsMetrics` still drops the option with a note.
-- `AccumulateQualityYieldMetrics` accepts the `SinglePassSamProgram` options
-  (`ASSUME_SORTED`, `R`, ...) and ignores them; Picard rejects them for that tool.
-- `METRIC_ACCUMULATION_LEVEL` is implemented for `CollectInsertSizeMetrics` and
-  `CollectAlignmentSummaryMetrics` (all four levels). `CollectQualityYieldMetrics` has
-  no such option; `CollectHsMetrics` accepts `ALL_READS` only.
-- `IS_BISULFITE_SEQUENCED` is implemented for `CollectAlignmentSummaryMetrics`.
-  `STOP_AFTER` is implemented for `CollectAlignmentSummaryMetrics`,
+- `AccumulateQualityYieldMetrics` and `EstimateLibraryComplexity` reject `ASSUME_SORTED`
+  as Picard does (`Unrecognized option`); the other `CommandLineProgram` plumbing options
+  (`R`, `TMP_DIR`, ...) are accepted and dropped where Picard rejects them.
+- `METRIC_ACCUMULATION_LEVEL` is implemented for `CollectInsertSizeMetrics`,
+  `CollectAlignmentSummaryMetrics`, `CollectGcBiasMetrics` and `CollectMultipleMetrics`
+  (all four levels). `CollectQualityYieldMetrics` has no such option;
+  `CollectHsMetrics` accepts `ALL_READS` only.
+- `IS_BISULFITE_SEQUENCED` is implemented for `CollectAlignmentSummaryMetrics` and
+  `CollectGcBiasMetrics`. `STOP_AFTER` is implemented for `CollectAlignmentSummaryMetrics`,
   `CollectQualityYieldMetrics`, `QualityScoreDistribution`, `MeanQualityByCycle`,
-  `CollectBaseDistributionByCycle` and `CollectDuplicateMetrics`; it counts every record,
+  `CollectBaseDistributionByCycle`, `CollectDuplicateMetrics`, `CollectGcBiasMetrics` and
+  `CollectMultipleMetrics`; it counts every record,
   secondary and unmapped ones included, as Picard does. `STOP_AFTER` for
   `CollectInsertSizeMetrics` and `CollectHsMetrics`, `PER_TARGET_COVERAGE` and
   `THEORETICAL_SENSITIVITY_OUTPUT` exit 1. `FLOW_MODE=true` exits 1 in both tools.
   `PER_BASE_COVERAGE` is implemented.
+- `CollectGcBiasMetrics` accepts `MINIMUM_GENOME_FRACTION` (`MGF`) and changes nothing
+  with it: Picard 3.5.0 declares the option and never reads it (`CollectGcBiasMetrics.java`,
+  the field is not passed to `GcBiasMetricsCollector`). `test_gc_bias.py` runs `MGF=0.5` and
+  `MINIMUM_GENOME_FRACTION=0` and both files stay identical to Picard's.
+- `CollectMultipleMetrics`:
+  - `EXTRA_ARGUMENT=<PROGRAM>::<KEY=VALUE>` is the only form. Picard 3.5.0 hands the text to
+    the program's legacy parser, which rejects `--KEY VALUE` (`ERROR: Invalid argument
+    '--HISTOGRAM_WIDTH'` on the foundation corpus); bammetrics exits 1 on it too.
+  - `INPUT`, `REFERENCE_SEQUENCE`, `ASSUME_SORTED` and `STOP_AFTER` in an `EXTRA_ARGUMENT`
+    are dropped without a word, as Picard's `makeItSo` uses the run's own values. `OUTPUT`
+    in one moves that program's file, as it does in Picard (`test_extra_output_override`).
+  - `METRIC_ACCUMULATION_LEVEL` in an `EXTRA_ARGUMENT` applies to that program only. In
+    Picard every program shares one `Set` with the run (`program.METRIC_ACCUMULATION_LEVEL
+    = metricAccumulationLevel`), so `CollectAlignmentSummaryMetrics::LEVEL=SAMPLE` also adds
+    `SAMPLE` rows to the insert size file: on the foundation corpus Picard's
+    `.insert_size_metrics` then has 369 rows with `S1` and `S2` rows, bammetrics' has the
+    `ALL_READS` rows only. The harness runs the option on a single program, where the two
+    agree (`extra_level_one_program`).
+  - `PROGRAM=RnaSeqMetrics` and `PROGRAM=CollectSequencingArtifactMetrics` exit 1 (not
+    implemented). `INTERVALS`, `DB_SNP`, `REF_FLAT`, `IGNORE_SEQUENCE` and
+    `INCLUDE_UNPAIRED` serve only those two programs and are accepted and dropped.
+  - `DO_NOT_CREATE_PLOTS` is accepted and dropped; no plot is drawn either way. Picard
+    needs `Rscript` on `PATH` unless it is true; the harness uses the no-op shim.
+  - One failing program (a read past its contig, a missing reference) fails the run and
+    no file is written, as one exception ends Picard's run before `finish`.
+- `EstimateLibraryComplexity`:
+  - `STOP_AFTER` and `ASSUME_SORTED` exit 1 (`Unrecognized option`) in both tools.
+  - Picard compares the pairs of a group of 100 or more through 32-bit hashes of
+    interleaved bases (`ElcHashBasedDuplicatesFinder`) and compares bases only where the
+    hashes differ, so a hash collision could hide a difference; bammetrics compares the
+    bases of every group. The `illumina` BAM has a 130-pair group and matches.
+  - Picard sorts the pairs in a `SortingCollection` that spills to disk past
+    `MAX_RECORDS_IN_RAM` (about 18 million pairs with the default heap); bammetrics sorts
+    in memory, stably. Pairs equal on their first `MIN_IDENTICAL_BASES` bases keep file
+    order in both until Picard spills; a spilled merge may interleave them differently,
+    which can change which pair of a set is the keeper and so the optical count.
+  - Rows and histogram columns follow Java `HashMap` iteration order of the library names
+    (`java.rs`: bucket index of the spread `String.hashCode`, ties in insertion order,
+    table doubling past three quarters). A bucket with 8 or more names in a 64-slot table
+    turns into a tree in Java, which `java.rs` does not emulate; no input here has it.
 - Picard list options (`EXPECTED_PAIR_ORIENTATIONS`, `ADAPTER_SEQUENCE`,
   `METRIC_ACCUMULATION_LEVEL`) append to the default and `null` clears it. The native CLI
   and the registry functions (`collect_alignment_summary_metrics(...,
@@ -68,7 +111,10 @@ one dict per key with the key column and each value column, because Picard's fil
 metrics class. A value column only printed when non-empty (`COUNT_OF_OQ`,
 `MEAN_ORIGINAL_QUALITY`) is absent from the dicts in the same cases. The other registry
 functions return the metrics rows. `output=` writes the file Picard writes to `OUTPUT`, or
-to `METRICS_FILE` for `collect_duplicate_metrics()`.
+to `METRICS_FILE` for `collect_duplicate_metrics()`. `collect_gc_bias_metrics()` returns
+the detail rows and writes the summary only with `summary_output=`.
+`collect_multiple_metrics()` needs `output=` (the prefix) and returns one dict per file
+written, with `file` and `rows`.
 
 ## Inputs
 
@@ -80,6 +126,8 @@ to `METRICS_FILE` for `collect_duplicate_metrics()`.
   BED file with `Interval list file must contain header`. The harness gives Picard the
   matching interval lists for this case (`t1_bed_ref`); the outputs are identical.
 - `CollectInsertSizeMetrics` has no reference argument, so it reads none.
+- `CollectGcBiasMetrics` scans every contig of the FASTA for its window table, as Picard
+  does; with `@SQ` lines in the BAM the FASTA must list the same contigs.
 
 ## Validation
 
@@ -155,6 +203,32 @@ purpose and checked by the concordance cases in `tests/concordance/test_alignmen
 - `AccumulateQualityYieldMetrics` adds the yields as printed (already divided by 20) and
   writes no header lines: the file starts with a blank line.
 
+`CollectGcBiasMetrics` and `EstimateLibraryComplexity` output reproduced from Picard 3.5.0,
+each checked by a case in `tests/concordance/test_gc_bias.py` or
+`test_library_complexity.py`:
+
+- The GC window table skips the first and the last window of every contig (the scan runs
+  from offset 1 up to, not including, `length - SCAN_WINDOW_SIZE`), and a read whose window
+  starts past the scanned range, or on a contig shorter than the window, lands in GC bin
+  0 because the per-contig table is a zeroed array there (`window_7000`, `window_70000`).
+  A window with 5 or more `N` has no bin. The base entering a window tests `N` by exact
+  byte and the base leaving it by IUPAC mask, as the two branches of
+  `GcBiasUtils.calculateGc` do.
+- `ACCUMULATION_LEVEL` prints `All Reads`, `Sample`, `Library` or `Read Group`, and only
+  that level's column is filled (`LIBRARY` rows have an empty `SAMPLE`). A unit with no
+  aligned read has no row. Secondary, supplementary, duplicate and QC-fail records count;
+  `UNIQUE` rows leave out duplicate-flagged ones. `TOTAL_CLUSTERS` counts unpaired and
+  first-of-pair records, mapped or not.
+- `EstimateLibraryComplexity` sets a pair's read group, and so its library, only when the
+  read name yields a tile and coordinates: a plain read name, a 6-field name, or
+  `READ_NAME_REGEX=null` sends every pair to `Unknown` (`plain_names`, `regex_null`). A name
+  seen a third time starts a new pair, and the pair taken out of the pending map is lost
+  unless that record completes it (`illumina` has both orders). `MAX_GROUP_RATIO` compares
+  the group size with the ratio times `max(1, pairs / 4^(2 * MIN_IDENTICAL_BASES))`, so on
+  a small input any group larger than the ratio is skipped (`group_ratio_1`).
+  `MAX_OPTICAL_DUPLICATE_SET_SIZE=-1` turns optical detection off rather than the limit,
+  because Picard's constructor stores the value as given (`set_size_minus_1`).
+
 ## Failures
 
 A unit whose reads all fail QC (`no PF_READS`) makes Picard throw and write no file, at any
@@ -169,6 +243,19 @@ read longer than its contig, returns a malformed-record error. Picard throws
 `ArrayIndexOutOfBoundsException` there. No test reaches it: every contig in the corpus is
 longer than every read.
 
+`CollectGcBiasMetrics` on a read aligned past the end of its contig (`t0_asm`'s
+`u_past_end`) exits 1 with a malformed-record error; Picard throws
+`ArrayIndexOutOfBoundsException` counting its mismatches
+(`test_read_past_the_contig_end_fails`). A record with no sequence (`*`) is dropped while
+its accumulation unit has seen fewer than 100 of them and counted from the 101st on, as
+Picard's `logCounter < 100` test does; a mapped one with alignment blocks is then an error
+in both tools.
+
+`EstimateLibraryComplexity` on a record with fewer qualities than bases (a `*` `QUAL` on a
+read of at least `MIN_IDENTICAL_BASES` bases) exits 1; Picard throws an index error summing
+the qualities. A barcode tag that is not a string (`BARCODE_TAG=XN` on an `XN:i` read) exits
+1 in both tools (`test_barcode_tag_that_is_not_a_string_fails`).
+
 ## Threads
 
 `--threads N` sets the BGZF decompression workers. Results do not depend on it; the
@@ -176,8 +263,20 @@ harness runs every native case at 1 and 8.
 
 ## Not implemented
 
-`CollectVariantCallingMetrics`, `MarkDuplicates`, `CollectWgsMetrics`, accumulation levels
-of `CollectHsMetrics`. `CollectDuplicateMetrics` counts no optical duplicates, as Picard's
+`CollectVariantCallingMetrics`, `MarkDuplicates`, `CollectWgsMetrics`, `CollectRnaSeqMetrics`,
+`CollectSequencingArtifactMetrics` (so `CollectMultipleMetrics` rejects `RnaSeqMetrics` and
+`CollectSequencingArtifactMetrics`), accumulation levels of `CollectHsMetrics`.
+`CollectDuplicateMetrics` counts no optical duplicates, as Picard's
 does (`READ_PAIR_OPTICAL_DUPLICATES` is always 0). `CollectDuplicateMetrics` sorts library
 names by UTF-8 bytes; Java sorts by UTF-16 units. The orders differ only for names that
 mix characters above U+FFFF with characters from U+E000 to U+FFFF. See [ROADMAP.md](ROADMAP.md).
+
+## Fuzzing
+
+`tests/concordance/fuzz.py` counts a command that fails in both tools apart (`both-err`),
+never as agreement. On seeds 1, 2 and 3 (10,000 examples, 177,955 templates, 30,000
+commands) there were 0 failures and 522 both-fail commands (1.7%). Every both-fail command
+in a 600-example sample of seed 1 (27 of 1,800 commands) was a `CollectMultipleMetrics` run
+whose `CollectAlignmentSummaryMetrics` had a category with reads and no PF read, the
+`Input file contains no PF_READS` throw listed under Failures above, which bammetrics
+reproduces as exit 1.

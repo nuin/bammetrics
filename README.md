@@ -4,7 +4,7 @@ bammetrics reproduces Picard 3.5.0 QC metrics field by field in Rust, 3x to 14x 
 no JVM. It is a Rust library, a `bammetrics` command line that accepts Picard's `KEY=VALUE`
 syntax and writes Picard-format metrics files, and a typed Python module (PyO3, maturin).
 
-Version 0.3.0. Pinned reference: Picard 3.5.0. On 99 concordance cases (synthetic tiers t0 to
+Version 0.6.0. Pinned reference: Picard 3.5.0. On 99 concordance cases (synthetic tiers t0 to
 t3, with and without a reference, native at 1 and 8 threads and in Picard syntax, plus 5
 one-pass `collect` runs), every field and histogram cell matches Picard, and each file is
 byte-identical from `## METRICS CLASS` on. The 9 `CollectHsMetrics` cases with
@@ -25,14 +25,18 @@ Differences that remain are in [KNOWN_DIFFERENCES.md](KNOWN_DIFFERENCES.md).
 | CollectBaseDistributionByCycle | Picard syntax only | `collect_base_distribution_by_cycle()` |
 | CollectDuplicateMetrics (`M=` output) | Picard syntax only | `collect_duplicate_metrics()` |
 | AccumulateQualityYieldMetrics | Picard syntax only | `accumulate_quality_yield_metrics()` |
+| CollectGcBiasMetrics (`O=` detail, `S=` summary) | Picard syntax only | `collect_gc_bias_metrics()` |
+| CollectMultipleMetrics (the default five, plus CollectGcBiasMetrics and CollectQualityYieldMetrics) | Picard syntax only | `collect_multiple_metrics()` |
+| EstimateLibraryComplexity (aligned or unaligned input, optical duplicates) | Picard syntax only | `estimate_library_complexity()` |
 
 Every tool in the registry (all but CollectHsMetrics) also has a Python function named
 after the Picard class in snake case, e.g. `collect_quality_yield_metrics(path, **options)`,
 returning rows as dicts. QualityScoreDistribution and MeanQualityByCycle write no metrics
 class, so their functions return the histogram table.
 
-Accumulation level is `ALL_READS` only. Per-library and per-read-group rows are on the
-[roadmap](ROADMAP.md).
+`METRIC_ACCUMULATION_LEVEL` (`ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`) works for
+CollectInsertSizeMetrics, CollectAlignmentSummaryMetrics, CollectGcBiasMetrics and
+CollectMultipleMetrics. `CollectHsMetrics` takes `ALL_READS` only.
 
 ## Drop-in for a Picard pipeline
 
@@ -131,6 +135,7 @@ per-base file for `PER_BASE_COVERAGE` cases. Details are in
 ```bash
 make corpus reference-metrics concordance   # needs samtools, bwa, picard 3.5.0, uv
 make python-test                            # maturin develop, then pytest tests/python
+make fuzz SEED=1 N=200                      # seeded random BAMs through both tools, failures shrunk
 ```
 
 No real patient data is in the repository or the tests.
@@ -270,7 +275,16 @@ python3 tests/data/make_corpus.py out_dir   # seeded multi-sample corpus: 2 samp
 
 `tests/concordance/compare.py` has `compare_metrics(tool, bam, picard_args)`: it runs Picard and
 bammetrics on one BAM and asserts every column of every row, and the histogram section,
-equal as printed strings. `CLAUDE.md` lists the steps for adding a tool.
+equal as printed strings, and the file body byte for byte; `compare_outputs` does the same
+for every file a multi-file tool writes. `CLAUDE.md` lists the steps for adding a tool.
+
+`tests/concordance/fuzz.py` (`make fuzz SEED=n N=m`) draws random BAM specs from a seed
+(contigs with N runs and IUPAC bases, read groups with missing fields, up to 40 templates
+with every CIGAR operation, flag, MAPQ and quality edge, MC/MQ/SA/XN/OQ/NM/BC/BX tags,
+Illumina-style read names), runs CollectMultipleMetrics with all seven programs,
+CollectDuplicateMetrics and EstimateLibraryComplexity through Picard (cached by input
+hash) and bammetrics, and compares every file. A failure is shrunk by ddmin over
+templates into `tests/concordance/regressions/`, which `test_regressions.py` replays.
 
 Needs samtools, bwa, `picard` (3.5.0, checked) and uv. Nothing in
 `tests/corpus/out/` is committed; `generate.py` rebuilds it from one seed. Records
