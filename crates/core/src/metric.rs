@@ -12,6 +12,7 @@
 //! as they are, and null as an empty field.
 
 use std::io::{self, Write};
+use std::path::PathBuf;
 
 use crate::histogram::Histogram;
 use crate::metrics_file::{
@@ -132,6 +133,38 @@ impl HistogramSection {
                     .collect()
             })
             .collect()
+    }
+}
+
+/// Everything one tool run produces: the file for its `OUTPUT` option
+/// (`None` where Picard writes none) and any further files with the path
+/// each goes to (`CollectGcBiasMetrics` writes `SUMMARY_OUTPUT`,
+/// `CollectMultipleMetrics` one file per program).
+#[derive(Clone, Debug, Default)]
+pub struct ToolOutput {
+    pub main: Option<MetricsOutput>,
+    pub extra: Vec<(PathBuf, MetricsOutput)>,
+}
+
+impl ToolOutput {
+    /// No file at all.
+    pub const NONE: Self = Self {
+        main: None,
+        extra: Vec::new(),
+    };
+
+    /// The `OUTPUT` file only.
+    pub fn file(output: MetricsOutput) -> Self {
+        Self {
+            main: Some(output),
+            extra: Vec::new(),
+        }
+    }
+}
+
+impl From<MetricsOutput> for ToolOutput {
+    fn from(output: MetricsOutput) -> Self {
+        Self::file(output)
     }
 }
 

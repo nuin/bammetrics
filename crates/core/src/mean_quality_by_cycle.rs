@@ -13,14 +13,14 @@
 //!   first-end cycle whose quality sum is positive. A first-end cycle whose
 //!   qualities are all 0 does not print and moves the second end down.
 
-use noodles::bam;
+use noodles::{bam, sam};
 
 use crate::cycle::{ByCycle, is_second_end, machine_cycle};
 use crate::error::Result;
 use crate::histogram::Histogram;
-use crate::metric::{HistogramSection, HistogramSeries, MetricsOutput};
+use crate::metric::{HistogramSection, HistogramSeries, MetricsOutput, ToolOutput};
 use crate::metrics_file::KeyClass;
-use crate::pass::Accumulator;
+use crate::pass::{self, Accumulator, Collector};
 use crate::quality::{base_qualities, original_qualities};
 use crate::registry::{Invocation, Opt, Tool};
 
@@ -33,14 +33,20 @@ pub const TOOL: Tool = Tool {
         Opt::value(&["STOP_AFTER"]),
     ],
     run: run_tool,
+    collector: Some(collector),
 };
 
-fn run_tool(inv: &Invocation) -> Result<Option<MetricsOutput>> {
+fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
+    inv.run_collector(collector)
+}
+
+fn collector(inv: &Invocation, _: &sam::Header) -> Result<Box<dyn Collector>> {
     let aligned_reads_only = inv.flag("ALIGNED_READS_ONLY", false)?;
     let pf_reads_only = inv.flag("PF_READS_ONLY", false)?;
-    let section =
-        inv.single_pass(|_| Ok(MeanQualityByCycle::new(aligned_reads_only, pf_reads_only)))?;
-    Ok(Some(MetricsOutput::histogram_only(section)))
+    Ok(pass::boxed(
+        MeanQualityByCycle::new(aligned_reads_only, pf_reads_only),
+        |section| Ok(MetricsOutput::histogram_only(section).into()),
+    ))
 }
 
 /// Quality sum and base count of one cycle.
