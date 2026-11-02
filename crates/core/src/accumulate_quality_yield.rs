@@ -16,11 +16,11 @@ use std::path::Path;
 use crate::error::{Error, Result};
 use crate::metric::{MetricsOutput, ToolOutput};
 use crate::quality_yield::{CLASS, COLUMNS, Row};
-use crate::registry::{Invocation, Tool};
+use crate::registry::{Invocation, Opt, Tool};
 
 pub const TOOL: Tool = Tool {
     name: "AccumulateQualityYieldMetrics",
-    options: &[],
+    options: &[Opt::rejected(&["ASSUME_SORTED", "AS"])],
     run: run_tool,
     collector: None,
 };
