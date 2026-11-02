@@ -23,7 +23,9 @@ use crate::metrics_file::{HistogramColumn, HistogramTable, MetricsFile, format_d
 use crate::pass::{self, Accumulator};
 use crate::record::{position, record_name};
 use crate::reference::Reference;
-use crate::sensitivity::{het_snp_sensitivity, math_round, phred_from_error_probability};
+use crate::sensitivity::{
+    het_snp_sensitivity, math_round, normalize_histogram, phred_from_error_probability,
+};
 
 /// `CollectHsMetrics` overrides of `CollectTargetedMetrics` defaults, and
 /// the defaults it keeps.
@@ -904,15 +906,6 @@ fn depth_histogram(counts: &[i64], prefill: usize) -> Histogram {
     histogram
 }
 
-/// `TheoreticalSensitivity.normalizeHistogram`: an array as long as the
-/// number of bins, slot i holding bin i over the sum of all bins.
-fn normalize(histogram: &Histogram) -> Vec<f64> {
-    let total = histogram.count();
-    (0..histogram.len())
-        .map(|i| histogram.get(i as i64).map_or(0.0, |v| v / total))
-        .collect()
-}
-
 /// `SequenceUtil.calculateGc`.
 fn gc_fraction(bases: &[u8]) -> f64 {
     let gc = bases
@@ -1070,8 +1063,8 @@ impl Collector {
             base_quality.increment_by(q as i64, self.base_q[q] as f64);
         }
         row.het_snp_sensitivity = het_snp_sensitivity(
-            &normalize(&unfiltered_depth),
-            &normalize(&capped_quality),
+            &normalize_histogram(&unfiltered_depth),
+            &normalize_histogram(&capped_quality),
             self.opts.sample_size,
             LOG_ODDS_THRESHOLD,
         )?;
@@ -1387,12 +1380,6 @@ mod tests {
         assert_eq!(h.keys().collect::<Vec<_>>(), [0, 1, 2, 3, 4]);
         let h = depth_histogram(&[5, 0, 0], 0);
         assert_eq!(h.keys().collect::<Vec<_>>(), [0]);
-    }
-
-    #[test]
-    fn normalize_indexes_by_key() {
-        let h = depth_histogram(&[1, 3], 2);
-        assert_eq!(normalize(&h), [0.25, 0.75]);
     }
 
     #[test]

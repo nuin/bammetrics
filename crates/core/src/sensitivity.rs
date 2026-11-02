@@ -3,6 +3,7 @@
 //! is the same number Picard prints.
 
 use crate::error::{Error, Result};
+use crate::histogram::Histogram;
 
 /// `TheoreticalSensitivity.MAX_CONSIDERED_DEPTH_HET_SENS`.
 const MAX_CONSIDERED_DEPTH: usize = 1000;
@@ -50,13 +51,24 @@ struct RouletteWheel {
 }
 
 impl RouletteWheel {
+    /// `MathUtil.max` starts from the first weight and keeps it unless a
+    /// later one compares greater, so a NaN first weight (a histogram whose
+    /// bins sum to 0, normalised by 0) stays NaN and the `wMax == 0` test
+    /// does not fire: every draw then fails its acceptance test and returns
+    /// 0 after `SAMPLING_MAX` tries. Picard throws only when the largest
+    /// weight is exactly 0, and on an empty array.
     fn new(weights: &[f64]) -> Result<Self> {
-        let max = weights.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-        // Picard throws on an all-zero distribution; NaN weights (an empty
-        // histogram normalised by 0) are the same case.
-        if max.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) {
+        let Some(&first) = weights.first() else {
             return Err(Error::Metric(
-                "Quality score distribution is empty (no target base above Q2)".to_owned(),
+                "Quality score distribution has no bins".to_owned(),
+            ));
+        };
+        let max = weights[1..]
+            .iter()
+            .fold(first, |max, &w| if w > max { w } else { max });
+        if max == 0.0 {
+            return Err(Error::Metric(
+                "Quality score distribution is empty.".to_owned(),
             ));
         }
         Ok(Self {
@@ -134,6 +146,16 @@ fn het_alt_depth_distribution(n_rows: usize) -> Vec<Vec<f64>> {
         table.push(row);
     }
     table
+}
+
+/// `TheoreticalSensitivity.normalizeHistogram`: an array as long as the
+/// number of bins, slot i holding bin i over the sum of all bins (NaN in
+/// every slot when the bins sum to 0).
+pub fn normalize_histogram(histogram: &Histogram) -> Vec<f64> {
+    let total = histogram.count();
+    (0..histogram.len())
+        .map(|i| histogram.get(i as i64).map_or(0.0, |v| v / total))
+        .collect()
 }
 
 /// `TheoreticalSensitivity.hetSNPSensitivity`: the chance of calling a
@@ -226,5 +248,33 @@ mod tests {
     #[test]
     fn empty_quality_distribution_is_an_error() {
         assert!(het_snp_sensitivity(&[1.0], &[0.0, 0.0], 10, 3.0).is_err());
+        assert!(het_snp_sensitivity(&[1.0], &[], 10, 3.0).is_err());
+    }
+
+    /// A histogram whose bins sum to 0 normalises to NaN weights. Java's
+    /// `MathUtil.max` keeps the NaN, so Picard computes a sensitivity of 0
+    /// (every draw is rejected 600 times and returns 0) instead of throwing.
+    #[test]
+    fn nan_weights_give_zero_sensitivity() {
+        let depth = [1.0, 0.0, 0.0];
+        let quality = normalize_histogram(&Histogram::new());
+        assert!(quality.is_empty());
+        let mut empty = Histogram::new();
+        empty.increment_by(0, 0.0);
+        empty.increment_by(1, 0.0);
+        let quality = normalize_histogram(&empty);
+        assert!(quality.iter().all(|w| w.is_nan()));
+        assert_eq!(
+            het_snp_sensitivity(&depth, &quality, 3, 3.0).expect("no throw"),
+            0.0
+        );
+    }
+
+    #[test]
+    fn normalize_divides_by_the_bin_total() {
+        let mut h = Histogram::new();
+        h.increment_by(0, 1.0);
+        h.increment_by(1, 3.0);
+        assert_eq!(normalize_histogram(&h), [0.25, 0.75]);
     }
 }
