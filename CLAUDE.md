@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-bammetrics reimplements Picard BAM QC metrics in Rust (on `noodles` 0.119) and exposes them to Python through PyO3 and maturin. The goal is output identical to Picard 3.5.0, field for field and string for string. Implemented: `CollectInsertSizeMetrics` and `CollectAlignmentSummaryMetrics` (all four accumulation levels), `CollectQualityYieldMetrics`, `CollectHsMetrics`. `ROADMAP.md` holds the product plan, `KNOWN_DIFFERENCES.md` lists where output differs on purpose.
+bammetrics reimplements Picard BAM QC metrics in Rust (on `noodles` 0.119) and exposes them to Python through PyO3 and maturin. The goal is output identical to Picard 3.5.0, field for field and string for string. Implemented: `CollectInsertSizeMetrics` and `CollectAlignmentSummaryMetrics` (all four accumulation levels), `CollectQualityYieldMetrics`, `QualityScoreDistribution`, `MeanQualityByCycle`, `CollectBaseDistributionByCycle`, `CollectDuplicateMetrics`, `AccumulateQualityYieldMetrics`, `CollectHsMetrics`. `ROADMAP.md` holds the product plan, `KNOWN_DIFFERENCES.md` lists where output differs on purpose.
 
 ## Commands
 
@@ -26,7 +26,7 @@ python3 -m venv .venv && .venv/bin/pip install maturin pytest pysam
 target/release/bammetrics CollectInsertSizeMetrics I=in.bam O=out.txt METRIC_ACCUMULATION_LEVEL=SAMPLE
 ```
 
-`picard` is a wrapper script around Homebrew openjdk. Plain `java` on PATH may be broken; call `picard`. CollectInsertSizeMetrics needs an `Rscript` on PATH; `tests/concordance/run_picard.py` puts a no-op one in `target/fakeR`.
+`picard` is a wrapper script around Homebrew openjdk. Plain `java` on PATH may be broken; call `picard`. CollectInsertSizeMetrics, and the three by-cycle tools when given `CHART`, need an `Rscript` on PATH; `tests/concordance/run_picard.py` puts a no-op one in `target/fakeR`, so no PDF is written.
 
 ## Layout
 
@@ -39,18 +39,20 @@ Shared building blocks in `crates/core/src`:
 
 | File | Role |
 |---|---|
-| `metric.rs` | `Value`, `MetricRow` trait (class, columns in Picard order, one `Value` per column), `MetricsOutput`, `HistogramSection`. One writer and one Python converter serve every registered tool. |
+| `metric.rs` | `Value`, `MetricRow` trait (class, columns in Picard order, one `Value` per column), `MetricsOutput` (`from_rows`, or `histogram_only` for a file without a metrics class), `HistogramSection` with its `KeyClass` (`Integer`, `Byte`, `Double`). One writer and one Python converter serve every registered tool. |
 | `metrics_file.rs` | Picard metrics text format and `format_double` (htsjdk `FormatUtil`). |
-| `registry.rs` | `Tool`, `Opt`, `Invocation`, `TOOLS`. Parses `KEY=VALUE` and `--KEY VALUE` arguments, runs the tool, writes the file. |
+| `registry.rs` | `Tool`, `Opt` (`value`, `output`, `ignored`), `Invocation`, `TOOLS`. Parses `KEY=VALUE` and `--KEY VALUE` arguments, runs the tool, writes the file. `Invocation::single_pass` reads the BAM with `STOP_AFTER` and `ASSUME_SORTED` applied. |
 | `levels.rs` | `METRIC_ACCUMULATION_LEVEL`: `Level`, `parse_levels`, `Levels<T>` keyed accumulator, read-group lookup. |
 | `filters.rs` | `RecordFilter`: unmapped, secondary, supplementary, duplicate, QC fail, minimum MAPQ. |
 | `blocks.rs` | `alignment_blocks` from the CIGAR (docs/01 section 2.5) and `alignment_end`. |
 | `record.rs` | Pair orientation, `mate_alignment_end` from the `MC` tag (TLEN fallback as Picard does). |
 | `reference.rs` | Indexed FASTA reader (`Reference::open`, `contig`, `subsequence`), `.fai` required. |
-| `pass.rs` | `Accumulator` trait and the one-pass multithreaded BAM reader. |
+| `pass.rs` | `Accumulator` trait and the one-pass multithreaded BAM reader (`run`, `run_limited` with `Limits`). |
+| `quality.rs` | `QUAL` and `OQ` as htsjdk returns them (`base_qualities`, `original_qualities`, `qualities` with the OQ fallback). |
+| `cycle.rs` | `machine_cycle`, `is_second_end`, `ByCycle<T>`: per-cycle cells for both read ends and Picard's second-end offset. |
 | `histogram.rs` | Picard `Histogram<Integer>`: `BTreeMap<i64, f64>` in ascending key order. |
 
-`insert_size.rs` is the reference tool: copy its shape. `alignment_summary.rs` is in the registry too and keeps its `alignment-summary` clap subcommand for the older harness. `quality_yield.rs` and `hs_metrics.rs` predate the registry and still use `picard_cli.rs` plus clap subcommands in `main.rs`; moving one to the registry is optional.
+`insert_size.rs` is the reference tool: copy its shape. `quality_score_distribution.rs` is the shape of a histogram-only tool. `alignment_summary.rs` and `quality_yield.rs` are in the registry too and keep their clap subcommands for the older harness. `hs_metrics.rs` predates the registry and still uses `picard_cli.rs` plus a clap subcommand in `main.rs`.
 
 ## How to add a Picard tool (registry route)
 
@@ -77,11 +79,11 @@ Touch exactly these places. `CollectX` is the Picard class name.
    };
    fn run_tool(inv: &Invocation) -> Result<Option<MetricsOutput>> {
        let opts = Options::from_invocation(inv)?;            // inv.get / all / parse / parse_opt / flag
-       let rows = pass::run(&inv.input, inv.threads, |header| Ok(CollectX::new(&opts, header)))?;
+       let rows = inv.single_pass(|header| Ok(CollectX::new(&opts, header)))?;   // STOP_AFTER, ASSUME_SORTED
        Ok(Some(MetricsOutput::from_rows(&rows, histogram_or_none)))   // None = Picard writes no file
    }
    ```
-   `COMMON` options (`INPUT`, `OUTPUT`, `VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`, `VERBOSITY`, `ASSUME_SORTED`, `R` ignored, ...) need no entry. Any option Picard has that changes the numbers and is not implemented must stay absent: an unknown option is an error.
+   `COMMON` options (`INPUT`, `OUTPUT`, `ASSUME_SORTED`, `VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`, `VERBOSITY`, `R` ignored, ...) need no entry. `STOP_AFTER` needs `Opt::value(&["STOP_AFTER"])`; `single_pass` applies it. A tool whose file option is not `OUTPUT` declares `Opt::output(&["METRICS_FILE", "M"])`, and then `O=` is an error. Any option Picard has that changes the numbers and is not implemented must stay absent: an unknown option is an error.
 2. `crates/core/src/lib.rs`: add `pub mod collect_x;`.
 3. `crates/core/src/registry.rs`: add `&crate::collect_x::TOOL,` to `TOOLS`.
 4. `bammetrics.pyi`: add `def collect_x(input: _Path, **options: Any) -> list[dict[str, Any]]: ...` (the Python function name is the Picard name in snake case; it is created from the registry at import). `tests/python/test_api.py::test_stub_functions_exist` fails until the stub has it.
@@ -91,14 +93,14 @@ Touch exactly these places. `CollectX` is the Picard class name.
    def test_collect_x(corpus, tmp_path):
        compare_metrics("CollectX", corpus / "corpus.bam", ["R=" + str(corpus / "ref.fa")], workdir=tmp_path)
    ```
-   The `corpus` fixture (session scope, generated once into `tests/corpus/out/foundation`) lives in `tests/concordance/conftest.py`. `compare_metrics(tool, bam, picard_args, bam_args=None, workdir=None)` runs Picard and `target/release/bammetrics` with `I=` and `O=` plus the arguments, then asserts class, columns, row count and every cell string equal, and the same for the histogram section. It reports each differing column with the row index and key columns.
+   The `corpus` fixture (session scope, generated once into `tests/corpus/out/foundation`) lives in `tests/concordance/conftest.py`. `compare_metrics(tool, bam, picard_args, bam_args=None, workdir=None, expect_file=False, seen=None, output_key="O")` runs Picard and `target/release/bammetrics` with `I=` and `O=` (or `output_key`) plus the arguments, then asserts class, columns, row count and every cell string equal, the same for the histogram section, and the whole file after the `StringHeader` lines equal byte for byte. It reports each differing column with the row index and key columns.
 
 The command line (`bammetrics CollectX I=... O=...`) and the Python function need no further edits.
 
 ## Corpus and harness
 
 - `tests/data/make_corpus.py OUT [--seed N] [--pairs N]` writes a seeded corpus: `ref.fa` (+ `.fai`, `.dict`), `corpus.bam` (+ `.bai`; 2 samples x 2 libraries x 3 read groups with PU different from ID; mismatches, N bases, low qualities, I/D/S CIGARs, FR/RF/TANDEM/dovetailed/chimeric pairs, unmapped reads and mates, secondary, supplementary, flagged and unflagged duplicates; `samtools fixmate -m` applied), `bait.interval_list`, `target.interval_list`, `refflat.txt`. The `@RG` header order is shuffled on purpose.
-- `tests/concordance/compare.py` holds `compare_metrics`. `tests/concordance/test_foundation.py` runs insert size on that corpus at every accumulation level and option. `tests/concordance/test_alignment_summary.py` runs alignment summary on t0 to t3, that corpus and the `asm_bams.py` BAMs at all four levels and every option, checks error parity for units without PF reads, and requires 3 distinct non-default values per column.
+- `tests/concordance/compare.py` holds `compare_metrics`. `tests/concordance/test_foundation.py` runs insert size on that corpus at every accumulation level and option. `tests/concordance/test_alignment_summary.py` runs alignment summary on t0 to t3, that corpus and the `asm_bams.py` BAMs at all four levels and every option, checks error parity for units without PF reads, and requires 3 distinct non-default values per column. `tests/concordance/test_read_level.py` does the same for the six read-level tools on t0 to t3, that corpus and the `read_level_bams.py` BAMs, with error parity for `ASSUME_SORTED=false`, `FLOW_MODE=true` and an `OQ` shorter than `QUAL`.
 - `tests/corpus/generate.py` (bwa-based tiers t0 to t3) and `tests/concordance/cases.py` drive the older 90-case matrix. `tests/make_bam.py` plus `tests/data/insert_size.bam` is the known-answer case (median 310, mode 310, MAD 10, trimmed mean 310, SD 8.1650, width of 50% 21).
 
 ## Concordance rules
