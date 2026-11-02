@@ -616,9 +616,21 @@ fn value_object(py: Python<'_>, value: &Value) -> PyResult<Py<PyAny>> {
 }
 
 /// The generic converter: every registered tool's rows as a list of dicts
-/// keyed by Picard's column names, in column order.
+/// keyed by Picard's column names, in column order. A tool whose file has no
+/// metrics class (`QualityScoreDistribution`, `MeanQualityByCycle`) returns
+/// its histogram table instead, one dict per key.
 fn rows_as_dicts<'py>(py: Python<'py>, output: &MetricsOutput) -> PyResult<Bound<'py, PyList>> {
     let list = PyList::empty(py);
+    if output.is_histogram_only() {
+        for record in output.histogram.iter().flat_map(|h| h.records()) {
+            let dict = PyDict::new(py);
+            for (column, value) in &record {
+                dict.set_item(column, value_object(py, value)?)?;
+            }
+            list.append(dict)?;
+        }
+        return Ok(list);
+    }
     for record in output.records() {
         let dict = PyDict::new(py);
         for (column, value) in record {
@@ -631,13 +643,18 @@ fn rows_as_dicts<'py>(py: Python<'py>, output: &MetricsOutput) -> PyResult<Bound
 
 /// Python keyword arguments as Picard `KEY=VALUE` arguments: upper-case
 /// names, bools as true/false, lists as repeated options, `None` skipped.
-fn keyword_arguments(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Vec<String>> {
+/// `output` names the tool's metrics file option (`METRICS_FILE` for
+/// `CollectDuplicateMetrics`).
+fn keyword_arguments(tool: &Tool, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Vec<String>> {
     let mut args = Vec::new();
     let Some(kwargs) = kwargs else {
         return Ok(args);
     };
     for (key, value) in kwargs.iter() {
-        let name = key.extract::<String>()?.to_uppercase();
+        let mut name = key.extract::<String>()?.to_uppercase();
+        if name == "OUTPUT" {
+            name = tool.output_name().to_owned();
+        }
         if value.is_none() {
             continue;
         }
@@ -663,9 +680,15 @@ fn run_registered<'py>(
     args: &Bound<'py, PyTuple>,
     kwargs: Option<&Bound<'py, PyDict>>,
 ) -> PyResult<Bound<'py, PyList>> {
-    let input: String = args.get_item(0)?.str()?.to_string();
-    let mut options = vec![format!("INPUT={input}")];
-    options.extend(keyword_arguments(kwargs)?);
+    // A list of paths is several INPUT options
+    // (`accumulate_quality_yield_metrics([a, b])`).
+    let first = args.get_item(0)?;
+    let inputs: Vec<String> = match first.extract::<Vec<String>>() {
+        Ok(paths) if !first.is_instance_of::<pyo3::types::PyString>() => paths,
+        _ => vec![first.str()?.to_string()],
+    };
+    let mut options: Vec<String> = inputs.iter().map(|i| format!("INPUT={i}")).collect();
+    options.extend(keyword_arguments(tool, kwargs)?);
     let (invocation, output) = py
         .detach(|| tool.execute(&options))
         .map_err(|e| py_error(&e))?;
@@ -673,7 +696,7 @@ fn run_registered<'py>(
         return Ok(PyList::empty(py));
     };
     if let Some(path) = invocation.output.as_deref() {
-        let headers = bammetrics_core::metrics_file::headers(invocation.command.clone());
+        let headers = output.headers(&invocation.command);
         registry::write_to(Some(path), |out| output.write(headers, out))
             .map_err(|e| py_error(&e))?;
     }

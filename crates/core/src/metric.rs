@@ -14,7 +14,9 @@
 use std::io::{self, Write};
 
 use crate::histogram::Histogram;
-use crate::metrics_file::{HistogramColumn, HistogramTable, MetricsFile, format_double};
+use crate::metrics_file::{
+    HistogramColumn, HistogramTable, KeyClass, MetricsFile, format_double, headers,
+};
 
 /// One field of a metrics row.
 #[derive(Clone, Debug, PartialEq)]
@@ -98,7 +100,39 @@ pub struct HistogramSeries {
 #[derive(Clone, Debug)]
 pub struct HistogramSection {
     pub key_label: &'static str,
+    pub key_class: KeyClass,
     pub series: Vec<HistogramSeries>,
+}
+
+impl HistogramSection {
+    /// The table as printed: one row per key in the union of the non-empty
+    /// series, the key then each non-empty series' value (0 where it has no
+    /// bin), labelled like the header line.
+    pub fn records(&self) -> Vec<Vec<(String, Value)>> {
+        let series: Vec<&HistogramSeries> = self
+            .series
+            .iter()
+            .filter(|s| !s.histogram.is_empty())
+            .collect();
+        let keys: std::collections::BTreeSet<i64> =
+            series.iter().flat_map(|s| s.histogram.keys()).collect();
+        keys.into_iter()
+            .map(|key| {
+                let key_value = match self.key_class {
+                    KeyClass::Double => Value::Float(key as f64),
+                    KeyClass::Integer | KeyClass::Byte => Value::Int(key),
+                };
+                std::iter::once((self.key_label.to_owned(), key_value))
+                    .chain(series.iter().map(|s| {
+                        (
+                            s.label.clone(),
+                            Value::Float(s.histogram.get(key).unwrap_or(0.0)),
+                        )
+                    }))
+                    .collect()
+            })
+            .collect()
+    }
 }
 
 /// Everything a tool returns: enough to write the file or build Python rows.
@@ -108,6 +142,9 @@ pub struct MetricsOutput {
     pub columns: &'static [&'static str],
     pub rows: Vec<Vec<Value>>,
     pub histogram: Option<HistogramSection>,
+    /// False for a file Picard writes without `StringHeader` lines
+    /// (`AccumulateQualityYieldMetrics`).
+    pub with_headers: bool,
 }
 
 impl MetricsOutput {
@@ -117,7 +154,36 @@ impl MetricsOutput {
             columns: R::COLUMNS,
             rows: rows.iter().map(MetricRow::values).collect(),
             histogram,
+            with_headers: true,
         }
+    }
+
+    /// A file with no metrics class, only the histogram
+    /// (`QualityScoreDistribution`, `MeanQualityByCycle`).
+    pub fn histogram_only(histogram: HistogramSection) -> Self {
+        Self {
+            class: "",
+            columns: &[],
+            rows: Vec::new(),
+            histogram: Some(histogram),
+            with_headers: true,
+        }
+    }
+
+    /// The `StringHeader` texts for this file: the command line and the
+    /// start time, or none.
+    pub fn headers(&self, command: &str) -> Vec<String> {
+        if self.with_headers {
+            headers(command.to_owned())
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// True for a file without a metrics class, whose content is the
+    /// histogram table.
+    pub fn is_histogram_only(&self) -> bool {
+        self.columns.is_empty()
     }
 
     /// Rows as `(column, value)` pairs, the shape the Python converter wants.
@@ -131,6 +197,7 @@ impl MetricsOutput {
     pub fn write(&self, headers: Vec<String>, out: &mut impl Write) -> io::Result<()> {
         let histogram = self.histogram.as_ref().map(|h| HistogramTable {
             key_label: h.key_label,
+            key_class: h.key_class,
             columns: h
                 .series
                 .iter()

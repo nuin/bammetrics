@@ -4,18 +4,20 @@
 //! One row for the whole file. Every record counts, mapped or not, except
 //! secondary and supplementary alignments unless the options ask for them.
 //! Bases are counted from the record length, qualities from whichever
-//! quality array is in use, so the two can differ (see `quality_array`).
+//! quality array is in use (`crate::quality::qualities`), so the two can
+//! differ: an `OQ` tag longer or shorter than the read is summed whole.
 
 use std::io::{self, Write};
 use std::path::Path;
 
 use noodles::bam;
-use noodles::sam::alignment::record::data::field::{Tag, Value};
 
 use crate::error::{Error, Result};
+use crate::metric::{MetricRow, MetricsOutput, Value};
 use crate::metrics_file::MetricsFile;
 use crate::pass::{self, Accumulator};
-use crate::record::record_name;
+use crate::quality::qualities;
+use crate::registry::{Invocation, Opt, Tool};
 
 /// `QualityYieldMetrics` columns in Picard 3.5.0 file order (the order the
 /// fields are declared in, which `MetricsFile` reads by reflection).
@@ -39,10 +41,8 @@ const Q20: i8 = 20;
 const Q30: i8 = 30;
 /// `Q20_EQUIVALENT_YIELD` is the sum of base qualities divided by this.
 const Q20_EQUIVALENT_DIVISOR: i64 = 20;
-/// Offset of a Phred quality in the SAM text of an `OQ` tag.
-const PHRED_OFFSET: u8 = 33;
-/// BAM stores a missing `QUAL` (`*`) as 0xFF bytes.
-const MISSING_QUALITY: u8 = 0xFF;
+/// Class name as Picard writes it after `## METRICS CLASS`.
+pub const CLASS: &str = "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Options {
@@ -82,7 +82,46 @@ pub struct Row {
     pub pf_q20_equivalent_yield: i64,
 }
 
+impl MetricRow for Row {
+    const CLASS: &'static str = CLASS;
+    const COLUMNS: &'static [&'static str] = &COLUMNS;
+
+    fn values(&self) -> Vec<Value> {
+        vec![
+            self.total_reads.into(),
+            self.pf_reads.into(),
+            i64::from(self.read_length).into(),
+            self.total_bases.into(),
+            self.pf_bases.into(),
+            self.q20_bases.into(),
+            self.pf_q20_bases.into(),
+            self.q30_bases.into(),
+            self.pf_q30_bases.into(),
+            self.q20_equivalent_yield.into(),
+            self.pf_q20_equivalent_yield.into(),
+        ]
+    }
+}
+
 impl Row {
+    /// `QualityYieldMetrics.merge`: every field but `READ_LENGTH` is added,
+    /// then `READ_LENGTH` is derived again as `TOTAL_BASES / TOTAL_READS`
+    /// (0 without reads). The two yields are added as printed, already
+    /// divided by 20.
+    pub fn merge(&mut self, other: &Row) {
+        self.total_reads += other.total_reads;
+        self.pf_reads += other.pf_reads;
+        self.total_bases += other.total_bases;
+        self.pf_bases += other.pf_bases;
+        self.q20_bases += other.q20_bases;
+        self.pf_q20_bases += other.pf_q20_bases;
+        self.q30_bases += other.q30_bases;
+        self.pf_q30_bases += other.pf_q30_bases;
+        self.q20_equivalent_yield += other.q20_equivalent_yield;
+        self.pf_q20_equivalent_yield += other.pf_q20_equivalent_yield;
+        self.read_length = derived_read_length(self);
+    }
+
     fn picard_fields(&self) -> Vec<String> {
         vec![
             self.total_reads.to_string(),
@@ -104,7 +143,7 @@ impl Row {
 pub fn write_metrics(row: &Row, headers: Vec<String>, out: &mut impl Write) -> io::Result<()> {
     MetricsFile {
         headers,
-        class: "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics",
+        class: CLASS,
         columns: &COLUMNS,
         rows: vec![row.picard_fields()],
         histogram: None,
@@ -150,50 +189,54 @@ impl Collector {
         let mut row = self.row;
         row.q20_equivalent_yield /= Q20_EQUIVALENT_DIVISOR;
         row.pf_q20_equivalent_yield /= Q20_EQUIVALENT_DIVISOR;
-        row.read_length = row
-            .total_bases
-            .checked_div(row.total_reads)
-            .map_or(0, |mean| mean as i32);
+        row.read_length = derived_read_length(&row);
         row
     }
 }
 
-/// The qualities Picard loops over for a record: the `OQ` tag when
-/// original qualities are wanted and the tag is a non-empty string
-/// (`SAMRecord.getOriginalBaseQualities`), else `QUAL`. Its length is not
-/// checked against the read length. A missing `QUAL` yields no qualities
-/// (htsjdk `NULL_QUALS`), so the read's bases count but no quality does.
-fn quality_array(
-    record: &bam::Record,
-    use_original_qualities: bool,
-    scratch: &mut Vec<i8>,
-) -> Result<()> {
-    scratch.clear();
-    if use_original_qualities {
-        match record.data().get(&Tag::ORIGINAL_QUALITY_SCORES) {
-            None => {}
-            Some(Err(e)) => return Err(e.into()),
-            // htsjdk casts the attribute to String, which fails for other types.
-            Some(Ok(Value::String(oq))) => {
-                if !oq.is_empty() {
-                    scratch.extend(oq.iter().map(|c| c.wrapping_sub(PHRED_OFFSET) as i8));
-                    return Ok(());
-                }
-            }
-            Some(Ok(_)) => {
-                return Err(Error::MalformedRecord {
-                    name: record_name(record),
-                    what: "OQ tag is not a string",
-                });
-            }
-        }
+/// `calculateDerivedFields`: `(int) (TOTAL_BASES / TOTAL_READS)`, 0 without
+/// reads.
+fn derived_read_length(row: &Row) -> i32 {
+    row.total_bases
+        .checked_div(row.total_reads)
+        .map_or(0, |mean| mean as i32)
+}
+
+pub const TOOL: Tool = Tool {
+    name: "CollectQualityYieldMetrics",
+    options: &[
+        Opt::value(&["USE_ORIGINAL_QUALITIES", "OQ"]),
+        Opt::value(&["INCLUDE_SECONDARY_ALIGNMENTS"]),
+        Opt::value(&["INCLUDE_SUPPLEMENTAL_ALIGNMENTS"]),
+        Opt::value(&["FLOW_MODE"]),
+        Opt::value(&["STOP_AFTER"]),
+    ],
+    run: run_tool,
+};
+
+fn run_tool(inv: &Invocation) -> Result<Option<MetricsOutput>> {
+    // Picard 3.5.0 throws before reading: flow data has its own tool.
+    if inv.flag("FLOW_MODE", false)? {
+        return Err(Error::Usage(
+            "FLOW_MODE is obsolete; Picard moved flow support to CollectQualityYieldMetricsFlow"
+                .to_owned(),
+        ));
     }
-    let quality = record.quality_scores();
-    let bytes = quality.as_bytes();
-    if bytes.first() != Some(&MISSING_QUALITY) {
-        scratch.extend(bytes.iter().map(|&q| q as i8));
-    }
-    Ok(())
+    let defaults = Options::default();
+    let opts = Options {
+        use_original_qualities: inv
+            .flag("USE_ORIGINAL_QUALITIES", defaults.use_original_qualities)?,
+        include_secondary_alignments: inv.flag(
+            "INCLUDE_SECONDARY_ALIGNMENTS",
+            defaults.include_secondary_alignments,
+        )?,
+        include_supplemental_alignments: inv.flag(
+            "INCLUDE_SUPPLEMENTAL_ALIGNMENTS",
+            defaults.include_supplemental_alignments,
+        )?,
+    };
+    let row = inv.single_pass(|_| Ok(QualityYield::new(&opts)))?;
+    Ok(Some(MetricsOutput::from_rows(&[row], None)))
 }
 
 /// `CollectQualityYieldMetrics` as a pass [`Accumulator`].
@@ -223,7 +266,7 @@ impl Accumulator for QualityYield {
         {
             return Ok(());
         }
-        quality_array(
+        qualities(
             record,
             self.opts.use_original_qualities,
             &mut self.qualities,

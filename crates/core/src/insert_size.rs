@@ -78,9 +78,7 @@ pub const TOOL: Tool = Tool {
 /// error) when it writes no file.
 fn run_tool(inv: &Invocation) -> Result<Option<MetricsOutput>> {
     let opts = Options::from_invocation(inv)?;
-    let rows = pass::run(&inv.input, inv.threads, |header| {
-        Ok(InsertSize::new(&opts, header))
-    })?;
+    let rows = inv.single_pass(|header| Ok(InsertSize::new(&opts, header)))?;
     if rows.is_empty() {
         eprintln!("{}", no_rows_warning(opts.minimum_pct));
         return Ok(None);
@@ -202,6 +200,7 @@ pub fn output(rows: &[Row]) -> MetricsOutput {
         rows,
         Some(HistogramSection {
             key_label: "insert_size",
+            key_class: crate::metrics_file::KeyClass::Integer,
             series,
         }),
     )

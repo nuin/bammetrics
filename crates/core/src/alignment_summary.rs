@@ -114,9 +114,7 @@ pub const TOOL: Tool = Tool {
 
 fn run_tool(inv: &Invocation) -> Result<Option<MetricsOutput>> {
     let opts = Options::from_invocation(inv)?;
-    let report = pass::run(&inv.input, inv.threads, |header| {
-        AlignmentSummary::new(&opts, header)
-    })?;
+    let report = inv.single_pass(|header| AlignmentSummary::new(&opts, header))?;
     Ok(Some(report.output()))
 }
 
@@ -300,6 +298,7 @@ impl Report {
             };
             HistogramSection {
                 key_label: "READ_LENGTH",
+                key_class: crate::metrics_file::KeyClass::Integer,
                 series: vec![
                     series("PAIRED_TOTAL_LENGTH_COUNT", &h.paired_total),
                     series("PAIRED_ALIGNED_LENGTH_COUNT", &h.paired_aligned),
