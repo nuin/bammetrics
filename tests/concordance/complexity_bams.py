@@ -21,8 +21,8 @@ pairs. One set of 130 copies exercises Picard's hash-based finder (groups of
 import random
 from pathlib import Path
 
-from asm_bams import (DUPLICATE, FIRST, MATE_UNMAPPED, PAIRED, PROPER, REVERSE, SECOND, UNMAPPED,
-                      Sam, mutate, revcomp, run, write_reference)
+from asm_bams import (CONTIGS, DUPLICATE, FIRST, MATE_UNMAPPED, PAIRED, PROPER, REVERSE, SECOND,
+                      UNMAPPED, Sam, mutate, revcomp, run, write_reference)
 
 GROUPS = [
     ("rgA", {"SM": "S1", "LB": "L1", "PU": "FC1.1"}),
@@ -179,6 +179,52 @@ def plain_names(sam):
     dup_sets(sam, rng, 80, GROUPS, (50, 60), ("plain",))
 
 
+def write_skewed_reference(out, seed=17):
+    """The asm_bams contigs with, on c2, an AT-rich stretch (bases 1 to 6000,
+    92% A or T) and a GC-rich stretch (6001 to 12000, 92% G or C), so
+    CollectGcBiasMetrics has windows in the 0 to 19 and 80 to 100 GC bins."""
+    rng = random.Random(seed)
+    ref = {}
+    with open(out / "ref.fa", "w") as fasta:
+        for name, length in CONTIGS:
+            bases = []
+            for i in range(length):
+                if name == "c2" and i < 6000:
+                    pool = "AT" if rng.random() < 0.92 else "GC"
+                elif name == "c2" and i < 12000:
+                    pool = "GC" if rng.random() < 0.92 else "AT"
+                else:
+                    pool = "ACGT"
+                bases.append(rng.choice(pool))
+            ref[name] = "".join(bases)
+            fasta.write(f">{name}\n")
+            for i in range(0, length, 70):
+                fasta.write(ref[name][i:i + 70] + "\n")
+    run(["samtools", "faidx", str(out / "ref.fa")])
+    (out / "ref.dict").unlink(missing_ok=True)
+    run(["picard", "CreateSequenceDictionary", f"R={out / 'ref.fa'}", f"O={out / 'ref.dict'}",
+         "QUIET=true", "VERBOSITY=ERROR"])
+    return ref
+
+
+def gc_skew(sam):
+    """Pairs over the AT-rich and GC-rich stretches of c2 and over c1, in
+    every read group, with duplicates and a few mismatches."""
+    rng = sam.rng
+    names = [g for g, _ in GROUPS]
+    for i in range(400):
+        region = rng.choice(("at", "gc", "mixed", "c1"))
+        contig = "c1" if region == "c1" else "c2"
+        pos = {"at": rng.randint(100, 5500), "gc": rng.randint(6100, 11500),
+               "mixed": rng.randint(5700, 6300), "c1": rng.randint(100, 25_000)}[region]
+        length = rng.choice((50, 100, 150))
+        seqs = (mutate(rng, sam.ref_seq(contig, pos, length), 0.01),
+                mutate(rng, sam.ref_seq(contig, pos + 250, length), 0.01))
+        flags = PAIRED | PROPER | (DUPLICATE if rng.random() < 0.15 else 0)
+        sam.pair(illumina_name(rng, i, 1101, 1000 + i, 2000), contig, pos, pos + 250, seqs,
+                 rg=rng.choice(names), flags=flags)
+
+
 # name -> (builder, read groups)
 CASES = {
     "illumina": (illumina, GROUPS),
@@ -201,4 +247,10 @@ def build_all(out: Path, seed=13):
     queryname = out / "unaligned_queryname.bam"
     run(["samtools", "sort", "-n", "-o", str(queryname), str(bams["unaligned"])])
     bams["unaligned_queryname"] = queryname
+    # The GC-skewed BAM has its own reference, in its own directory.
+    gc_dir = out / "gc"
+    gc_dir.mkdir(exist_ok=True)
+    sam = ElcSam(write_skewed_reference(gc_dir), random.Random(seed * 100 + 99))
+    gc_skew(sam)
+    bams["gc_skew"] = sam.write(gc_dir, "gc_skew", GROUPS)
     return bams

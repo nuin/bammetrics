@@ -32,12 +32,10 @@ def built(tmp_path_factory):
     read_dir = tmp_path_factory.mktemp("read_level")
     elc_dir = tmp_path_factory.mktemp("complexity")
     bams = {}
-    for name, bam in build_asm(asm_dir).items():
-        bams[f"asm_{name}"] = (bam, asm_dir / "ref.fa")
-    for name, bam in build_read_level(read_dir).items():
-        bams[f"rl_{name}"] = (bam, read_dir / "ref.fa")
-    for name, bam in build_complexity(elc_dir).items():
-        bams[f"elc_{name}"] = (bam, elc_dir / "ref.fa")
+    for prefix, build, directory in (("asm", build_asm, asm_dir), ("rl", build_read_level, read_dir),
+                                     ("elc", build_complexity, elc_dir)):
+        for name, bam in build(directory).items():
+            bams[f"{prefix}_{name}"] = (bam, bam.parent / "ref.fa")
     return bams
 
 
@@ -69,8 +67,10 @@ ALL_FILES = DEFAULT_FILES + [".gc_bias.detail_metrics", ".gc_bias.summary_metric
 
 # --- the default programs, with and without a reference --------------------------
 
+# rl_star_fields has a mapped read without qualities: CollectAlignmentSummaryMetrics
+# throws in Picard and fails in bammetrics (below).
 INPUTS = ["t0_asm", "t0_filters", "t0_no_pairs", "t1", "t2", "t3", "foundation", "asm_mix",
-          "asm_unpaired_only", "asm_clips_and_flags", "rl_reads", "rl_star_fields", "elc_illumina"]
+          "asm_unpaired_only", "asm_clips_and_flags", "rl_reads", "elc_illumina", "elc_gc_skew"]
 
 
 @pytest.mark.parametrize("name", INPUTS)
@@ -79,9 +79,10 @@ def test_defaults_without_reference(built, corpus, name):
     compare(bam, [], f"{name} defaults", DEFAULT_FILES)
 
 
-# CollectGcBiasMetrics fails on t0_asm (a read past its contig) and t2 (over
-# 100 secondary records without bases), so both tools fail there (below).
-REFERENCE_INPUTS = [name for name in INPUTS if name not in ("t0_asm", "t2")]
+# CollectGcBiasMetrics fails on t0_asm (a read past its contig), t2 (over 100
+# secondary records without bases) and the insert-size t0 BAMs (their own @SQ
+# lengths), so both tools fail there (below).
+REFERENCE_INPUTS = [name for name in INPUTS if name not in ("t0_asm", "t2", "t0_filters", "t0_no_pairs")]
 
 
 @pytest.mark.parametrize("name", REFERENCE_INPUTS)
@@ -130,7 +131,7 @@ def option_cases(ref):
     }
 
 
-OPTION_INPUTS = ["foundation", "asm_mix", "rl_reads", "t2"]
+OPTION_INPUTS = ["foundation", "asm_mix", "rl_reads", "t1"]
 
 
 @pytest.mark.parametrize("name", OPTION_INPUTS)
@@ -218,10 +219,16 @@ def test_assume_sorted_false_on_query_name_order_fails(built, tmp_path):
     both_fail(bam, ["ASSUME_SORTED=false"], tmp_path, "coordinate sorted")
 
 
-@pytest.mark.parametrize("name", ["t0_asm", "t2"])
+@pytest.mark.parametrize("name", ["t0_asm", "t2", "t0_filters"])
 def test_a_failing_program_fails_the_run(tmp_path, name):
     """CollectGcBiasMetrics throws on these inputs: no file of any program."""
     both_fail(CORPUS / f"{name}.bam", [f"R={REFERENCE}", "PROGRAM=CollectGcBiasMetrics"], tmp_path)
+
+
+def test_a_read_without_qualities_fails_the_run(built, tmp_path):
+    """CollectAlignmentSummaryMetrics throws on a mapped read with `*` for QUAL."""
+    bam, _ = built["rl_star_fields"]
+    both_fail(bam, [], tmp_path, "without base qualities")
 
 
 def test_files_compared_cover_every_program():

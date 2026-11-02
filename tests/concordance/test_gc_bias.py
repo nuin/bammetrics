@@ -37,12 +37,10 @@ def built(tmp_path_factory):
     read_dir = tmp_path_factory.mktemp("read_level")
     elc_dir = tmp_path_factory.mktemp("complexity")
     bams = {}
-    for name, bam in build_asm(asm_dir).items():
-        bams[f"asm_{name}"] = (bam, asm_dir / "ref.fa")
-    for name, bam in build_read_level(read_dir).items():
-        bams[f"rl_{name}"] = (bam, read_dir / "ref.fa")
-    for name, bam in build_complexity(elc_dir).items():
-        bams[f"elc_{name}"] = (bam, elc_dir / "ref.fa")
+    for prefix, build, directory in (("asm", build_asm, asm_dir), ("rl", build_read_level, read_dir),
+                                     ("elc", build_complexity, elc_dir)):
+        for name, bam in build(directory).items():
+            bams[f"{prefix}_{name}"] = (bam, bam.parent / "ref.fa")
     return bams
 
 
@@ -79,7 +77,7 @@ TIERS = ["t0_asm_cycles", "t0_asm_empty", "t1", "t3"]
 BUILT = ["asm_mix", "asm_unpaired_only", "asm_no_pf_group", "asm_all_qcfail", "asm_single_unmapped",
          "asm_clips_and_flags", "asm_no_read_groups", "asm_some_without_rg", "rl_reads",
          "rl_star_fields", "rl_all_duplicates", "rl_empty", "rl_no_read_groups", "elc_illumina",
-         "elc_unaligned"]
+         "elc_unaligned", "elc_gc_skew"]
 
 
 @pytest.mark.parametrize("name", TIERS + ["foundation"] + BUILT)
@@ -97,7 +95,8 @@ LEVELS = {
     "all_four": ["LEVEL=SAMPLE", "LEVEL=LIBRARY", "LEVEL=READ_GROUP"],
     "null_then_library": ["LEVEL=null", "LEVEL=LIBRARY"],
 }
-LEVEL_INPUTS = ["foundation", "asm_mix", "asm_some_without_rg", "rl_reads", "elc_illumina", "t1"]
+LEVEL_INPUTS = ["foundation", "asm_mix", "asm_some_without_rg", "rl_reads", "elc_illumina", "t1",
+                "elc_gc_skew"]
 
 
 @pytest.mark.parametrize("name", LEVEL_INPUTS)
@@ -123,7 +122,7 @@ OPTIONS = {
     "chart": ["CHART=/dev/null"],
     "assume_sorted_true": ["ASSUME_SORTED=true"],
 }
-OPTION_INPUTS = ["foundation", "asm_mix", "rl_reads", "t1", "elc_illumina"]
+OPTION_INPUTS = ["foundation", "asm_mix", "rl_reads", "t1", "elc_illumina", "elc_gc_skew"]
 
 
 @pytest.mark.parametrize("name", OPTION_INPUTS)
