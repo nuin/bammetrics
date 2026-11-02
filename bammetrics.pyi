@@ -247,6 +247,31 @@ def estimate_library_complexity(input: _Paths, **options: Any) -> list[dict[str,
     read_two_barcode_tag. output=PATH writes the file with the
     duplication_group_count histogram."""
 
+def collect_wgs_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """CollectWgsMetrics: one dict of the 32 WgsMetrics columns. reference_sequence=PATH
+    (with a .fai) is required. Options: minimum_mapping_quality, minimum_base_quality,
+    coverage_cap, locus_accumulation_cap, count_unpaired, include_bq_histogram,
+    sample_size, intervals=PATH (an interval list), stop_after (loci), use_fast_algorithm,
+    read_length (the fast algorithm's window). output=PATH also writes the metrics file
+    with the coverage histogram."""
+
+def collect_raw_wgs_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """CollectRawWgsMetrics: CollectWgsMetrics with MINIMUM_MAPPING_QUALITY 0,
+    MINIMUM_BASE_QUALITY 3, COVERAGE_CAP 100000 and LOCUS_ACCUMULATION_CAP 200000 as
+    defaults, and the RawWgsMetrics class name. Same options and result."""
+
+def collect_wgs_metrics_with_non_zero_coverage(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """CollectWgsMetricsWithNonZeroCoverage: two dicts, CATEGORY WHOLE_GENOME and
+    NON_ZERO_REGIONS (the latter with the zero-depth loci left out), plus the
+    WgsMetrics columns. Same options as collect_wgs_metrics; chart_output is
+    accepted and no chart is drawn."""
+
+def bed_to_interval_list(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """BedToIntervalList: one dict per interval written (contig, start, end, strand,
+    name). sequence_dictionary=PATH is required (.dict, BAM, SAM, interval list or
+    FASTA with a .dict). Options: sort (default True), unique, drop_missing_contigs,
+    keep_length_zero_intervals. output=PATH writes the interval list."""
+
 def alignment_summary(
     path: _Path,
     reference: _Path | None = None,
