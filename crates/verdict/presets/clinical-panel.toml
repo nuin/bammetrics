@@ -1,0 +1,140 @@
+# clinical-panel, version 1: 14 rules for a hybrid-capture clinical panel
+# (docs/05_cli_and_ui_design.md section 4.3).
+#
+# STARTING VALUES. These thresholds are not validated clinical limits. They
+# need maintainer and lab sign-off before anyone calls them clinical, and a
+# lab owns its own copy of this file. The verdict is not a release decision.
+#
+# Rule syntax: docs/verdict.md. A value that breaks `fail` fails, one that
+# breaks only `warn` warns, the rest pass. A missing file, row or value is
+# "not measured" and the band reads INCOMPLETE.
+
+[preset]
+name = "clinical-panel"
+version = 1
+note = "starting values"
+
+[[rule]]
+id = "hs.mean-target-coverage"
+label = "Mean target coverage"
+class = "HsMetrics"
+metric = "MEAN_TARGET_COVERAGE"
+warn = "< 200"
+fail = "< 100"
+plot = "coverage"
+
+[[rule]]
+id = "hs.target-20x"
+label = "Target bases at 20x"
+class = "HsMetrics"
+metric = "PCT_TARGET_BASES_20X"
+warn = "< 0.98"
+fail = "< 0.95"
+plot = "coverage"
+
+[[rule]]
+id = "hs.target-100x"
+label = "Target bases at 100x"
+class = "HsMetrics"
+metric = "PCT_TARGET_BASES_100X"
+warn = "< 0.80"
+fail = "< 0.60"
+plot = "coverage"
+
+[[rule]]
+id = "hs.evenness"
+label = "Fold-80 base penalty"
+class = "HsMetrics"
+metric = "FOLD_80_BASE_PENALTY"
+warn = "> 2.0"
+fail = "> 3.0"
+plot = "coverage"
+
+[[rule]]
+id = "hs.usable-on-target"
+label = "Usable bases on target"
+class = "HsMetrics"
+metric = "PCT_USABLE_BASES_ON_TARGET"
+warn = "< 0.50"
+fail = "< 0.30"
+
+[[rule]]
+id = "hs.selected-bases"
+label = "Selected bases"
+class = "HsMetrics"
+metric = "PCT_SELECTED_BASES"
+warn = "< 0.70"
+fail = "< 0.50"
+
+[[rule]]
+id = "hs.excluded-duplicates"
+label = "Bases excluded as duplicates"
+class = "HsMetrics"
+metric = "PCT_EXC_DUPE"
+warn = "> 0.30"
+fail = "> 0.50"
+
+[[rule]]
+id = "hs.zero-coverage-targets"
+label = "Targets with zero coverage"
+class = "HsMetrics"
+metric = "ZERO_CVG_TARGETS_PCT"
+warn = "> 0.01"
+fail = "> 0.03"
+plot = "coverage"
+
+[[rule]]
+id = "hs.gc-dropout"
+label = "GC dropout"
+class = "HsMetrics"
+metric = "GC_DROPOUT"
+warn = "> 5"
+fail = "> 10"
+plot = "gc-bias"
+
+[[rule]]
+id = "alignment.pf-reads-aligned"
+label = "PF reads aligned"
+class = "AlignmentSummaryMetrics"
+metric = "PCT_PF_READS_ALIGNED"
+select = "CATEGORY=PAIR"
+warn = "< 0.98"
+fail = "< 0.95"
+
+[[rule]]
+id = "alignment.adapter"
+label = "Adapter reads"
+class = "AlignmentSummaryMetrics"
+metric = "PCT_ADAPTER"
+select = "CATEGORY=PAIR"
+warn = "> 0.005"
+fail = "> 0.020"
+plot = "insert-size"
+
+[[rule]]
+id = "alignment.chimeras"
+label = "Chimeric pairs"
+class = "AlignmentSummaryMetrics"
+metric = "PCT_CHIMERAS"
+select = "CATEGORY=PAIR"
+warn = "> 0.05"
+fail = "> 0.10"
+
+[[rule]]
+id = "insert.median"
+label = "Median insert size"
+class = "InsertSizeMetrics"
+metric = "MEDIAN_INSERT_SIZE"
+select = "PAIR_ORIENTATION=FR"
+warn = "outside 180..450"
+fail = "outside 120..600"
+plot = "insert-size"
+
+[[rule]]
+id = "yield.q30"
+label = "Q30 fraction of PF bases"
+class = "QualityYieldMetrics"
+metric = "PF_Q30_BASES / PF_BASES"
+warn = "< 0.85"
+fail = "< 0.75"
+plot = "cycle-quality"
