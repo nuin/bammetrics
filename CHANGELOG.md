@@ -39,7 +39,7 @@ per-sample HTML report page with its four plots.
   in both themes computed from the CSS tokens, `<script>` in the sample name, a path
   and a header line, every plot on an empty and a one-bin histogram, page size (under
   150 KB without plots, 300 KB with all four; measured 67 KB and 86 KB) and render time
-  (median under 20 ms; measured under 1 ms in a debug build).
+  (median under 20 ms; measured 7.8 ms in a debug build, 1.1 ms in release).
   `cargo run -p bammetrics-report --example fixture_pages -- DIR` writes the fixture
   pages for a look in a browser until the `report` verb exists (phase 6).
 
