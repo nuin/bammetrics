@@ -2,8 +2,8 @@
 
 bammetrics matches Picard 3.5.0 byte for byte after the `StringHeader` lines, for
 every case in the concordance harness (the harness compares the whole file body, so files
-without a `## METRICS CLASS` block are covered too), and writes `PER_BASE_COVERAGE` files identical to
-Picard's, whole file. This file lists where it differs on purpose,
+without a `## METRICS CLASS` block are covered too), and writes `PER_BASE_COVERAGE` and
+`PER_TARGET_COVERAGE` files identical to Picard's, whole file. This file lists where it differs on purpose,
 where it cannot match, and what is not implemented. Each item says which side
 behaves how.
 
@@ -24,41 +24,100 @@ behaves how.
 
 ## Options
 
-- Picard syntax takes `KEY=VALUE`. The tools in the registry (every tool but
-  `CollectHsMetrics`) also take `--INPUT x`, `--INPUT=x` and `-I x`. `CollectHsMetrics`
-  exits 1 on those forms.
+- Picard syntax takes `KEY=VALUE`. Every tool in the registry also takes `--INPUT x`,
+  `--INPUT=x` and `-I x`.
 - An unknown option exits 1 naming it. Dropping it could change a number silently.
 - Options that cannot change a metric are accepted, dropped and noted on stderr:
   `VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`, `VERBOSITY`, `H` and `CHART` (no PDF
   is drawn), `R` for tools that do not read a reference.
 - `ASSUME_SORTED=false` (`AS`) on a BAM whose header sort order is not `coordinate` (or
   has no `@HD` sort order) exits 1 and writes no file in every registry tool, as Picard
-  does. `CollectHsMetrics` still drops the option with a note.
-- `AccumulateQualityYieldMetrics` and `EstimateLibraryComplexity` reject `ASSUME_SORTED`
-  as Picard does (`Unrecognized option`); the other `CommandLineProgram` plumbing options
-  (`R`, `TMP_DIR`, ...) are accepted and dropped where Picard rejects them.
+  does.
+- `AccumulateQualityYieldMetrics`, `EstimateLibraryComplexity`, `CollectHsMetrics` and
+  `CollectTargetedPcrMetrics` reject `ASSUME_SORTED` as Picard does (`Unrecognized
+  option`); the two capture tools reject `STOP_AFTER` the same way (neither is a
+  `SinglePassSamProgram`). The other `CommandLineProgram` plumbing options (`R`,
+  `TMP_DIR`, ...) are accepted and dropped where Picard rejects them.
 - `METRIC_ACCUMULATION_LEVEL` is implemented for `CollectInsertSizeMetrics`,
-  `CollectAlignmentSummaryMetrics`, `CollectGcBiasMetrics` and `CollectMultipleMetrics`
-  (all four levels). `CollectQualityYieldMetrics` has no such option;
-  `CollectHsMetrics` accepts `ALL_READS` only.
+  `CollectAlignmentSummaryMetrics`, `CollectGcBiasMetrics`, `CollectMultipleMetrics`,
+  `CollectHsMetrics`, `CollectTargetedPcrMetrics` and `CollectRnaSeqMetrics` (all four
+  levels). `CollectQualityYieldMetrics` has no such option.
+- `CollectRnaSeqMetrics` takes every option of Picard's that changes a number
+  (`REF_FLAT`, `RIBOSOMAL_INTERVALS`, `STRAND_SPECIFICITY`, `MINIMUM_LENGTH`,
+  `END_BIAS_BASES`, `RRNA_FRAGMENT_PERCENTAGE`, `IGNORE_SEQUENCE`,
+  `METRIC_ACCUMULATION_LEVEL`, `STOP_AFTER`, `ASSUME_SORTED`), each with a non-default case
+  in `tests/concordance/test_rna_seq_metrics.py`; `CHART_OUTPUT` is accepted and dropped
+  (the harness gives Picard the no-op `Rscript`, and neither tool writes a PDF). A
+  missing `REF_FLAT` or `STRAND_SPECIFICITY` exits 1 with Picard's message (`Option
+  'REF_FLAT' is required.`), a bad strand value with `'X' is not a valid value for
+  StrandSpecificity.`, `RRNA_FRAGMENT_PERCENTAGE=0` without `RIBOSOMAL_INTERVALS` with
+  `Must use a RIBOSOMAL_INTERVALS file if RRNA_FRAGMENT_PERCENTAGE = 0.0`, and an
+  `IGNORE_SEQUENCE` name the header lacks with `Unrecognized sequence X passed as
+  argument to IGNORE_SEQUENCE`. A negative `RRNA_FRAGMENT_PERCENTAGE` without
+  `RIBOSOMAL_INTERVALS` makes every fragment ribosomal and Picard adds to a null
+  `RIBOSOMAL_BASES` (`NullPointerException`, no file); bammetrics exits 1 and writes none
+  (`test_negative_percentage_without_intervals_fails_in_both`).
+- `CollectHsMetrics` and `CollectTargetedPcrMetrics` at any level but a single unit:
+  Picard 3.5.0 keeps the four histograms of `TargetMetricsCollector` (high-quality
+  depth, unfiltered depth, capped and uncapped base quality) on the collector, so every
+  unit's `finish` adds to the same four, in file order (`ALL_READS`, then the `SAMPLE`,
+  `LIBRARY` and `READ_GROUP` units). A unit's `MEDIAN_TARGET_COVERAGE`,
+  `FOLD_80_BASE_PENALTY`, `HET_SNP_SENSITIVITY` and `HET_SNP_Q` read the histograms as
+  the units before it left them, the file prints the final histograms once per unit
+  (the two columns repeat), and `calculateTheoreticalHetSensitivity` throws
+  `numbers of bases in the base quality histogram and the coverage histogram are not
+  equal` in every unit that finishes after a unit with a base counted under the cap,
+  so no file is written. bammetrics reproduces all of it (`hs_metrics.rs`, `Shared`):
+  `LEVEL=SAMPLE` on a BAM with one on-target sample exits 1 in both tools
+  (`ALL_READS` finishes first), `LEVEL=null LEVEL=SAMPLE` completes with one sample
+  and fails with two, and a unit with no counted base before the covered one
+  completes and shifts the covered unit's median and sensitivity
+  (`tests/concordance/hs_bams.py`, `test_levels_that_complete`,
+  `test_a_unit_after_a_covered_unit_fails_in_both`). `PER_BASE_COVERAGE` and
+  `PER_TARGET_COVERAGE` are written by the `ALL_READS` unit only, so `LEVEL=null`
+  writes neither; `PER_TARGET_COVERAGE` with any other level, or without
+  `REFERENCE_SEQUENCE`, exits 1 before reading, as Picard's validation does.
+- `NEAR_DISTANCE` may be negative in both tools (the bait intervals shrink);
+  `COVERAGE_CAP` under 0 keys the unfiltered depth histogram below 0, so the base-count
+  check above fails at the first unit with a counted base, in both tools.
 - `IS_BISULFITE_SEQUENCED` is implemented for `CollectAlignmentSummaryMetrics` and
   `CollectGcBiasMetrics`. `STOP_AFTER` is implemented for `CollectAlignmentSummaryMetrics`,
   `CollectQualityYieldMetrics`, `QualityScoreDistribution`, `MeanQualityByCycle`,
   `CollectBaseDistributionByCycle`, `CollectDuplicateMetrics`, `CollectGcBiasMetrics` and
   `CollectMultipleMetrics`; it counts every record,
   secondary and unmapped ones included, as Picard does. `STOP_AFTER` for
-  `CollectInsertSizeMetrics` and `CollectHsMetrics`, `PER_TARGET_COVERAGE` and
-  `THEORETICAL_SENSITIVITY_OUTPUT` exit 1. `FLOW_MODE=true` exits 1 in both tools.
-  `PER_BASE_COVERAGE` is implemented.
+  `CollectInsertSizeMetrics` exits 1. `FLOW_MODE=true` exits 1 in both tools.
+- `CollectHsMetrics` and `CollectTargetedPcrMetrics` take every option of Picard's
+  `CollectTargetedMetrics` that changes a number or a file (`MINIMUM_MAPPING_QUALITY`,
+  `MINIMUM_BASE_QUALITY`, `CLIP_OVERLAPPING_READS`, `INCLUDE_INDELS`, `COVERAGE_CAP`,
+  `NEAR_DISTANCE`, `SAMPLE_SIZE`, `METRIC_ACCUMULATION_LEVEL`, `PER_TARGET_COVERAGE`,
+  `PER_BASE_COVERAGE`, `THEORETICAL_SENSITIVITY_OUTPUT`, `ALLELE_FRACTION`,
+  `BAIT_SET_NAME` or `CUSTOM_AMPLICON_SET_NAME`), each with a non-default case in
+  `tests/concordance/test_hs_metrics.py`. `THEORETICAL_SENSITIVITY_OUTPUT` draws its
+  binomial alt depths from a port of commons-math 3.6.1 `Well19937c` and
+  `BinomialDistribution` (`commons_math.rs`: the inverse CDF through
+  `Beta.regularizedBeta`) and its large alt quality sums from `java.util.Random(51)`
+  `nextGaussian`, so the file matches cell for cell at the default `SAMPLE_SIZE`
+  (`test_hs_theoretical_sensitivity_output`). The port uses Rust `ln`, `exp` and
+  `log10` where commons-math uses `FastMath`; a last-ulp difference could move one
+  bisection step of one sample when a uniform draw lands within 1e-15 of a CDF value.
+  None showed up on the corpus. An `ALLELE_FRACTION` outside 0 to 1 exits 1 in both
+  tools after `OUTPUT` is written and before the sensitivity file, with the same metrics
+  file (`test_allele_fraction_outside_0_1_fails_with_the_sensitivity_file`). A missing
+  `BAIT_INTERVALS`, `TARGET_INTERVALS` or `AMPLICON_INTERVALS` exits 1 with Picard's
+  argument parser message (`Option 'TARGET_INTERVALS' must be specified at least 1
+  times.`, `Option 'AMPLICON_INTERVALS' is required.`).
 - The three WGS tools take every option of Picard's `CollectWgsMetrics` that changes a
   number (`MINIMUM_MAPPING_QUALITY`, `MINIMUM_BASE_QUALITY`, `COVERAGE_CAP`,
   `LOCUS_ACCUMULATION_CAP`, `COUNT_UNPAIRED`, `INCLUDE_BQ_HISTOGRAM`, `SAMPLE_SIZE`,
   `INTERVALS`, `STOP_AFTER`, `USE_FAST_ALGORITHM`, `READ_LENGTH`), each with a non-default
   case in `tests/concordance/test_wgs_metrics.py`, except `THEORETICAL_SENSITIVITY_OUTPUT`
   and `ALLELE_FRACTION`, which exit 1 naming the option: Picard writes a second file from
-  `TheoreticalSensitivity.calculateSensitivities`, whose sampling uses commons-math's
-  `Well19937c` (`test_theoretical_sensitivity_output_is_not_implemented` checks Picard
-  writes both files and bammetrics exits 1). `ASSUME_SORTED` is rejected in both tools.
+  `TheoreticalSensitivity.calculateSensitivities`
+  (`test_theoretical_sensitivity_output_is_not_implemented` checks Picard writes both
+  files and bammetrics exits 1). The model is ported for the capture tools
+  (`sensitivity::calculate_sensitivities`); the three WGS tools do not call it yet.
+  `ASSUME_SORTED` is rejected in both tools.
   `CollectWgsMetricsWithNonZeroCoverage` accepts `CHART_OUTPUT` and draws nothing.
 - `CollectGcBiasMetrics` accepts `MINIMUM_GENOME_FRACTION` (`MGF`) and changes nothing
   with it: Picard 3.5.0 declares the option and never reads it (`CollectGcBiasMetrics.java`,
@@ -131,10 +190,11 @@ written, with `file` and `rows`.
 - `R=` needs a `.fai` next to the FASTA. Picard needs a `.dict`. bammetrics checks the
   BAM `@SQ` lines against the `.fai` (names, lengths, order); Picard checks them against
   the dictionary.
-- BED interval files are read for `CollectHsMetrics`, converted the way
+- BED interval files are read for `CollectHsMetrics` and `CollectTargetedPcrMetrics`, converted the way
   `BedToIntervalList` would, with the BAM header as dictionary. Picard 3.5.0 rejects a
   BED file with `Interval list file must contain header`. The harness gives Picard the
-  matching interval lists for this case (`t1_bed_ref`); the outputs are identical.
+  matching interval lists for this case (`t1_bed_ref`,
+  `test_bed_intervals_are_read_by_bammetrics_only`); the outputs are identical.
 - `CollectInsertSizeMetrics` has no reference argument, so it reads none.
 - `CollectWgsMetrics`, `CollectRawWgsMetrics` and `CollectWgsMetricsWithNonZeroCoverage`
   read `R=` through its `.fai`; Picard also needs the `.dict` next to it. `INTERVALS` takes
@@ -146,6 +206,16 @@ written, with `file` and `rows`.
   `.fai` and writes `SN` and `LN` only, where Picard fails. A VCF is not read.
 - `CollectGcBiasMetrics` scans every contig of the FASTA for its window table, as Picard
   does; with `@SQ` lines in the BAM the FASTA must list the same contigs.
+- `CollectRnaSeqMetrics` `REF_FLAT` is read against the BAM header's `@SQ` lines, as
+  Picard reads it against the dictionary: a line on a contig the header lacks is dropped.
+  A line whose tab-separated field count is not 11 exits 1 naming the line; Picard takes
+  the first line's count, pads a later shorter line with nulls and fails on the null exon
+  list (`NullPointerException`), or fails every later longer line (`Unexpected number of
+  elements`); both tools write no file. `RIBOSOMAL_INTERVALS` takes an interval list, or a
+  BED converted as `BedToIntervalList` would with the BAM header as dictionary, which
+  Picard rejects (`test_rna_bed_ribosomal_intervals_are_read_by_bammetrics_only` gives
+  Picard the interval list and the outputs are identical). An interval list of another
+  dictionary exits 1 in both tools.
 
 ## Validation
 
@@ -289,6 +359,52 @@ output reproduced from Picard 3.5.0, each checked by a case in
   cases). A BAM in which no record reaches a locus completes in both tools with every depth
   0 (`test_non_zero_fast_algorithm_on_an_empty_bam`, `rl_empty` and `asm_empty`).
 
+`CollectRnaSeqMetrics` output reproduced from Picard 3.5.0, each checked by a case in
+`tests/concordance/test_rna_seq_metrics.py`:
+
+- `PF_BASES` adds the base count of every record that is not QC-failed or secondary,
+  unmapped and supplementary ones included; every aligned base of every mapped primary
+  record is classified, duplicate-flagged and MAPQ 0 records included. `IGNORED_READS`
+  counts mapped primary records on an `IGNORE_SEQUENCE` contig, supplementary ones too.
+- The rRNA test measures the fragment: `|TLEN|` bases from the lower of the two starts for
+  a pair mapped on one contig, the alignment for an unpaired read, nothing for a pair with
+  an unmapped or cross-contig mate. The longest single interval overlap over the fragment
+  length at or above `RRNA_FRAGMENT_PERCENTAGE` makes every aligned base ribosomal and the
+  record counts nowhere else (`pct_0.5`, `pct_0.3`, `pct_0`, `pct_1`); a `TLEN` of 0 gives
+  a 0-length fragment and NaN, never ribosomal (`tlen0` pairs). Without
+  `RIBOSOMAL_INTERVALS`, `RIBOSOMAL_BASES` and `PCT_RIBOSOMAL_BASES` print empty.
+- A base takes the strongest function over every transcript of every overlapping gene
+  (coding over UTR over intronic over intergenic); a non-coding transcript is all UTR.
+  Strand and template columns count a non-supplementary record with a coding or UTR base
+  over exactly one gene (`two` pairs over GB and GC count in no strand column); the
+  template of a first-of-pair or unpaired record is R1, R2 or unexplained by FR
+  orientation and enclosure in the gene, with the mate end from `MC` or, without it,
+  the read length (`drop_mate_cigar` pairs).
+- Transcript coverage counts every exonic base of every alignment block except the
+  block's last: `addCoverageCounts(start, end, coverage)` runs to `end` exclusive and
+  the collector passes the block's last base as `end`. A one-base block adds nothing.
+- The coverage columns use, per gene with any coverage, the transcript of the highest
+  mean among those at least `max(MINIMUM_LENGTH, END_BIAS_BASES)` long with a mean of at
+  least 1, ties to the first in `HashMap` order of transcript names, then those whose
+  mean reaches the 1001st-highest value. The CV is `sqrt(mean of squares - mean^2) /
+  mean` (NaN, printed `?`, when rounding makes the difference negative), the end biases
+  divide the first and last `END_BIAS_BASES` means by the mean, their ratio is 0 when the
+  3' mean is within 1e-6 of 0, and the medians are over `Histogram<Double>` bins with NaN
+  last. Each histogram bin sums `(mean of the bases within 0.5% of the position) / mean /
+  transcript count` over the picked transcripts in the iteration order of Picard's
+  `HashMap<Transcript, int[]>` (`Transcript.hashCode`, through
+  `java::hash_map_order_by_hash`); a different summation order could move the last
+  digit of a bin. A unit with no picked transcript adds an empty histogram, which the
+  file leaves out, and prints the four medians as 0.
+- The refFlat reader groups lines by gene name and drops a whole gene whose lines
+  disagree on strand or chromosome, repeat a transcript name, list an exon count that is
+  not the number of starts or ends, hold an exon of zero or negative extent or two exons
+  that overlap (`GH`, `GI` in `rna_bams.py`). A second gene with the span and strand of
+  an earlier one is dropped (the detector's tree merges equal spans and `Gene.equals` is
+  the span plus the strand); genes are added in `HashMap` order of their names.
+- Rows and histogram columns follow the accumulation levels of `levels.rs`; the column
+  prefix is the platform unit, else the library, else the sample, else `All_Reads`.
+
 `BedToIntervalList` output reproduced from Picard 3.5.0
 (`tests/concordance/test_bed_to_interval_list.py`): fields split on a tab or a run of
 spaces; a line with one field is skipped and one with two fields is a one-base interval;
@@ -332,9 +448,11 @@ harness runs every native case at 1 and 8.
 
 ## Not implemented
 
-`CollectVariantCallingMetrics`, `MarkDuplicates`, `CollectRnaSeqMetrics`,
-`CollectSequencingArtifactMetrics` (so `CollectMultipleMetrics` rejects `RnaSeqMetrics` and
-`CollectSequencingArtifactMetrics`), accumulation levels of `CollectHsMetrics`.
+`CollectVariantCallingMetrics`, `MarkDuplicates`, `CollectSequencingArtifactMetrics`.
+`CollectMultipleMetrics` still rejects `PROGRAM=RnaSeqMetrics` and
+`CollectSequencingArtifactMetrics`: the wrapper does not yet pass its `REF_FLAT`,
+`INTERVALS` and `IGNORE_SEQUENCE` to the RNA collector (Picard runs that program at
+`SECOND_READ_TRANSCRIPTION_STRAND` with the run's `INTERVALS` as the ribosomal list).
 `CollectDuplicateMetrics` counts no optical duplicates, as Picard's
 does (`READ_PAIR_OPTICAL_DUPLICATES` is always 0). `CollectDuplicateMetrics` sorts library
 names by UTF-8 bytes; Java sorts by UTF-16 units. The orders differ only for names that

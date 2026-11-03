@@ -74,7 +74,8 @@ under each failing check. The presets, the rule language and `verdict.json` are 
 |---|---|---|
 | CollectAlignmentSummaryMetrics | all four | `alignment_summary()` |
 | CollectInsertSizeMetrics | all four | `insert_size()` |
-| CollectHsMetrics, with `PER_BASE_COVERAGE` | ALL_READS | `hs_metrics()` |
+| CollectHsMetrics (`PER_TARGET_COVERAGE`, `PER_BASE_COVERAGE`, `THEORETICAL_SENSITIVITY_OUTPUT`) | all four | `collect_hs_metrics()`, `hs_metrics()` |
+| CollectTargetedPcrMetrics (`AI=` amplicons) | all four | `collect_targeted_pcr_metrics()` |
 | CollectQualityYieldMetrics | | `quality_yield()` |
 | QualityScoreDistribution | | `quality_score_distribution()` |
 | MeanQualityByCycle | | `mean_quality_by_cycle()` |
@@ -88,9 +89,12 @@ under each failing check. The presets, the rule language and `verdict.json` are 
 | CollectRawWgsMetrics | | `collect_raw_wgs_metrics()` |
 | CollectWgsMetricsWithNonZeroCoverage | | `collect_wgs_metrics_with_non_zero_coverage()` |
 | BedToIntervalList | | `bed_to_interval_list()` |
+| CollectRnaSeqMetrics (`REF_FLAT`, `RIBOSOMAL_INTERVALS`, all three `STRAND` values, the normalized coverage histogram) | all four | `collect_rna_seq_metrics()` |
 | the first four in one pass | | `collect()` |
 
 Levels are `METRIC_ACCUMULATION_LEVEL`: `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`.
+The capture tools complete only when at most the last unit in file order has a counted
+base, as Picard 3.5.0 does; see KNOWN_DIFFERENCES.md.
 Every tool also has a Python function named after the Picard class in snake case, taking
 Picard's options as keywords. The build order for the remaining Picard tools is in
 [docs/04_picard_parity_plan.md](docs/04_picard_parity_plan.md).

@@ -3,12 +3,7 @@ CollectHsMetrics
 I=tests/data/insert_size.bam
 BAIT_INTERVALS=tests/data/targets.interval_list
 ## exit
-2
+1
 ## stdout
 ## stderr
-error: the following required arguments were not provided:
-  --target-intervals <FILE>
-
-Usage: bammetrics hs-metrics --bait-intervals <FILE> --target-intervals <FILE> --input <INPUT> [BAM]
-
-For more information, try '--help'.
+bammetrics: Option 'TARGET_INTERVALS' must be specified at least 1 times.

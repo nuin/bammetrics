@@ -84,7 +84,7 @@ const FIXTURE_CASES: &[Case] = &[
     case!("picard_multiple_metrics_no_output", "CollectMultipleMetrics", "I=IS"),
     case!("picard_library_complexity", "EstimateLibraryComplexity", "I=IS", "O=OUT/library_complexity.txt"),
     case!("picard_library_complexity_stdout", "EstimateLibraryComplexity", "I=IS"),
-    // Picard syntax, CollectHsMetrics (the picard_cli path).
+    // Picard syntax, CollectHsMetrics (the registry path).
     case!("picard_hs_metrics", "CollectHsMetrics", "I=IS", "O=OUT/hs_metrics.txt", "BAIT_INTERVALS=IL", "TARGET_INTERVALS=IL", "R=REF"),
     case!("picard_hs_metrics_stdout", "CollectHsMetrics", "I=IS", "BAIT_INTERVALS=IL", "TARGET_INTERVALS=IL", "SAMPLE_SIZE=1000"),
     case!("picard_hs_metrics_per_base", "CollectHsMetrics", "I=IS", "O=OUT/hs_metrics.txt", "BI=IL", "TI=IL", "N=panel", "PER_BASE_COVERAGE=OUT/per_base.txt", "SAMPLE_SIZE=1000", "VALIDATION_STRINGENCY=SILENT"),

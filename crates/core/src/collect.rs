@@ -16,7 +16,7 @@ use noodles::bam;
 
 use crate::alignment_summary::{self, AlignmentSummary};
 use crate::error::{Error, Result};
-use crate::hs_metrics::{self, HsMetrics};
+use crate::hs_metrics::{self, CaptureMetrics};
 use crate::insert_size::{self, InsertSize};
 use crate::metrics_file::headers;
 use crate::pass::{self, Accumulator, BATCH_RECORDS, Batch, Worker};
@@ -69,7 +69,7 @@ pub struct Collect {
     quality_yield: Option<Worker<QualityYield>>,
     alignment_summary: Option<Worker<AlignmentSummary>>,
     insert_size: Option<Worker<InsertSize>>,
-    hs_metrics: Vec<Worker<HsMetrics>>,
+    hs_metrics: Vec<Worker<CaptureMetrics>>,
 }
 
 impl Collect {
@@ -85,7 +85,7 @@ impl Collect {
         let hs_metrics = request
             .hs_metrics
             .iter()
-            .map(|o| HsMetrics::new(o, header))
+            .map(|o| CaptureMetrics::new(o, header))
             .collect::<Result<Vec<_>>>()?;
         Ok(Self {
             batch: Vec::with_capacity(BATCH_RECORDS),

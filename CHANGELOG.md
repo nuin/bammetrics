@@ -1,5 +1,84 @@
 # Changelog
 
+## 0.10.0
+
+Parity plan phase P6, RNA: the refFlat gene model (M17) and `CollectRnaSeqMetrics` on the
+registry with every column, option and level.
+
+### Added
+
+- `ref_flat.rs` (M17): the refFlat reader as Picard's `RefFlatReader` reads it (11 fields,
+  lines on contigs the BAM lacks skipped, genes dropped on strand or chromosome
+  disagreement, repeated transcript names, exon count mismatches, empty or overlapping
+  exons), the gene overlap detector, the coding, UTR, intronic and intergenic locus
+  functions and the transcript coverage counter, which skips the last base of each
+  alignment block as Picard's `addCoverageCounts` call does.
+- `CollectRnaSeqMetrics` in the registry (`rna_seq_metrics.rs`): `REF_FLAT`,
+  `RIBOSOMAL_INTERVALS` (interval list or BED), `STRAND_SPECIFICITY` (all three values),
+  `MINIMUM_LENGTH`, `END_BIAS_BASES`, `RRNA_FRAGMENT_PERCENTAGE`, `IGNORE_SEQUENCE`,
+  `METRIC_ACCUMULATION_LEVEL` (all four levels), `STOP_AFTER`, `ASSUME_SORTED`, `CHART`
+  accepted and dropped; every column from `PF_BASES` to `MEDIAN_5PRIME_TO_3PRIME_BIAS`
+  and the 101-row `normalized_position` histogram with one column per unit. Python
+  `collect_rna_seq_metrics`.
+- `java::hash_map_order_by_hash`: `HashMap` iteration order for keys of any class, used
+  for Picard's transcript and gene maps.
+- `tests/concordance/rna_bams.py`: a stranded and an unstranded RNA corpus with spliced
+  reads over a synthetic refFlat (multi-exon transcripts on both strands, a skipped exon,
+  a non-coding transcript, overlapping genes, a transcript under `MINIMUM_LENGTH`, lines
+  Picard drops) and rRNA intervals. `tests/concordance/test_rna_seq_metrics.py`: 74 tests
+  against Picard 3.5.0, 62 metrics files and 25,262 cells identical, histogram included,
+  11 error-parity cases, every column with 3 distinct non-default values.
+
+### Not changed
+
+- `CollectMultipleMetrics PROGRAM=RnaSeqMetrics` still exits 1: the program's `REF_FLAT`,
+  `INTERVALS` and `IGNORE_SEQUENCE` plumbing is not wired to the new collector yet.
+
+## 0.9.0
+
+Parity plan phase P5, capture: `CollectHsMetrics` on the registry with every option and
+level, `CollectTargetedPcrMetrics` on the same collector, the exome-like slice.
+
+### Added
+
+- `CollectHsMetrics` in the registry (`hs_metrics.rs`, `CaptureMetrics`): all four
+  accumulation levels with Picard's shared histograms (a unit after a unit with a counted
+  base fails as Picard 3.5.0 does), `PER_TARGET_COVERAGE` (file name, columns, `%gc`, mean
+  and normalized coverage, extremes, read count, `pct_0x` as Picard writes them),
+  `THEORETICAL_SENSITIVITY_OUTPUT` with `ALLELE_FRACTION`, `COVERAGE_CAP`,
+  `NEAR_DISTANCE` (negative too), `MINIMUM_MAPPING_QUALITY`, `MINIMUM_BASE_QUALITY`,
+  `CLIP_OVERLAPPING_READS`, `INCLUDE_INDELS`, `SAMPLE_SIZE`, `BAIT_SET_NAME`;
+  `PER_BASE_COVERAGE` unchanged. `STOP_AFTER` and `ASSUME_SORTED` are rejected as Picard
+  rejects them. The Python function is `collect_hs_metrics`; `hs_metrics()` and `collect()`
+  stay.
+- `CollectTargetedPcrMetrics`: the `TargetedPcrMetrics` class and columns
+  (`CUSTOM_AMPLICON_SET`, `AMPLICON_*`, `PCT_AMPLIFIED_BASES`, the pair counts), its
+  defaults (MAPQ 1, base quality 0, no overlap clipping), `AMPLICON_INTERVALS` (one file)
+  and `CUSTOM_AMPLICON_SET_NAME`. Python `collect_targeted_pcr_metrics`.
+- `commons_math.rs`: `Well19937c`, `BinomialDistribution.sample` with the
+  `Beta.regularizedBeta`, `logBeta` and `logGamma` it bisects over, ported from
+  commons-math 3.6.1, plus `java.util.Random.nextGaussian`, so the sensitivity file matches
+  cell for cell.
+- `tests/data/make_exome.py`: a 500 kb reference with 150 GC-varied exons, tiled baits, a
+  GC-skewed target subset and a GC-dependent coverage BAM (plan tier T2d, synthetic).
+  `tests/concordance/hs_bams.py`: the level shapes that complete, adapter reads, and three
+  40-base targets whose depth falls from 160,000x to 500x along the target.
+  `tests/concordance/test_hs_metrics.py` runs both tools on every input with every
+  option, the extra files byte for byte and error parity: 179 tests against Picard 3.5.0,
+  CollectHsMetrics 114 metrics files and 2,986,122 cells, CollectTargetedPcrMetrics 52
+  files and 2,121,076 cells, 18 per-target and per-base files (109,578 lines) and 7
+  sensitivity files (290 cells), all identical; 19 error-parity cases; every column of
+  both tools takes 3 distinct non-default values. `make concordance`: 1923 passed, 1
+  skipped.
+
+### Changed
+
+- `picard_cli.rs` and the translation layer in `main.rs` are gone: a Picard tool name goes
+  to the registry. `bammetrics CollectHsMetrics ...` now takes the `--NAME value` forms too.
+- `hs_metrics::Report` holds every unit's `TargetMetrics` and the four shared histograms;
+  `Row` (HsMetrics) and `PcrRow` implement `MetricRow`, and the `Field` enum is replaced
+  by `metric::Value`.
+
 ## 0.8.0
 
 Parity plan phase P4, coverage: the pileup engine (M14) and the WGS tools over it, plus

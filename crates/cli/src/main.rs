@@ -6,12 +6,11 @@ use std::process::ExitCode;
 use bammetrics_core::Error;
 use bammetrics_core::alignment_summary::{self, AlignmentSummary, DEFAULT_MAX_INSERT_SIZE};
 use bammetrics_core::collect::{self, Outputs, Request};
-use bammetrics_core::hs_metrics::{self, HsMetrics};
+use bammetrics_core::hs_metrics::{self, CaptureMetrics};
 use bammetrics_core::insert_size::{self, InsertSize};
 use bammetrics_core::levels::parse_levels;
 use bammetrics_core::metrics_file::headers;
 use bammetrics_core::pass;
-use bammetrics_core::picard_cli;
 use bammetrics_core::quality_yield::{self, QualityYield};
 use bammetrics_core::registry::{self, picard_list};
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
@@ -381,6 +380,7 @@ impl HsMetricsArgs {
             near_distance: self.near_distance,
             sample_size: self.sample_size,
             per_base_coverage: self.per_base_coverage.clone(),
+            ..hs_metrics::Options::default()
         }
     }
 }
@@ -432,7 +432,7 @@ fn hs_metrics(args: HsMetricsArgs) -> bammetrics_core::Result<()> {
     let bam = input_bam(&args.bam, &args.input)?;
     let opts = args.options();
     let report = pass::run(bam, args.threads.threads, |header| {
-        HsMetrics::new(&opts, header)
+        CaptureMetrics::new(&opts, header)
     })?;
     let output = args.output.as_deref();
     let headers = headers(hs_metrics::command_header(&opts, bam, output));
@@ -518,30 +518,8 @@ fn collect(args: CollectArgs) -> bammetrics_core::Result<()> {
     Ok(())
 }
 
-/// The command line as clap sees it. A first argument naming a Picard tool
-/// switches to Picard syntax and is rewritten to the native flags.
-fn command_line() -> bammetrics_core::Result<Vec<String>> {
-    let mut argv = std::env::args();
-    let program = argv.next().unwrap_or_else(|| "bammetrics".to_owned());
-    let rest: Vec<String> = argv.collect();
-    let Some(translation) = rest
-        .split_first()
-        .map(|(tool, options)| picard_cli::translate(tool, options))
-        .transpose()?
-        .flatten()
-    else {
-        return Ok(std::iter::once(program).chain(rest).collect());
-    };
-    for note in &translation.notes {
-        eprintln!("bammetrics: {note}");
-    }
-    Ok([program, translation.subcommand.to_owned()]
-        .into_iter()
-        .chain(translation.args)
-        .collect())
-}
-
-/// The exit code of the command. The Picard face and the five older
+/// A first argument naming a registered Picard tool runs it with Picard
+/// syntax; anything else is a native subcommand. The exit code of the command. The Picard face and the five older
 /// subcommands exit 0 or 1; `report` exits 0 on any verdict; `check` exits
 /// 10 or 11 on a bad one (its `--help` has the table).
 fn run() -> error::Result<u8> {
@@ -552,7 +530,7 @@ fn run() -> error::Result<u8> {
         tool.run_cli(options)?;
         return Ok(0);
     }
-    match Cli::parse_from(command_line()?).command {
+    match Cli::parse().command {
         Command::InsertSize(args) => insert_size(args)?,
         Command::AlignmentSummary(args) => alignment_summary(args)?,
         Command::QualityYield(args) => quality_yield(args)?,
