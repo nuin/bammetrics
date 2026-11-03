@@ -111,6 +111,40 @@ const DEFAULT_PROGRAMS: [&str; 5] = [
     "QualityScoreDistribution",
 ];
 
+/// Files of the tools `qc` runs that have no program here: the file option
+/// and the extension after the prefix. `.rna_metrics` is the extension of
+/// Picard's `RnaSeqMetrics` program; `.hs_metrics` is the one `collect`
+/// writes; Picard has no prefix convention for the other two.
+const OTHER_FILES: &[(&str, &[(&str, &str)])] = &[
+    (
+        "CollectHsMetrics",
+        &[("OUTPUT", crate::collect::HS_METRICS_EXTENSION)],
+    ),
+    (
+        "CollectDuplicateMetrics",
+        &[("METRICS_FILE", ".duplicate_metrics")],
+    ),
+    ("CollectWgsMetrics", &[("OUTPUT", ".wgs_metrics")]),
+    ("CollectRnaSeqMetrics", &[("OUTPUT", ".rna_metrics")]),
+];
+
+/// The files `tool` writes under an output prefix, as (file option,
+/// extension) pairs: a program's own from the `CollectMultipleMetrics`
+/// table, so `qc` and the Picard face write the same names, else from
+/// [`OTHER_FILES`]. `None` for a tool with no prefix naming.
+pub fn file_extensions(tool: &str) -> Option<&'static [(&'static str, &'static str)]> {
+    PROGRAMS
+        .iter()
+        .find(|p| p.name == tool)
+        .map(|p| p.files)
+        .or_else(|| {
+            OTHER_FILES
+                .iter()
+                .find(|(name, _)| *name == tool)
+                .map(|(_, files)| *files)
+        })
+}
+
 /// Programs Picard 3.5.0 lists that bammetrics does not have.
 const NOT_IMPLEMENTED: [&str; 2] = ["RnaSeqMetrics", "CollectSequencingArtifactMetrics"];
 
@@ -446,6 +480,42 @@ mod tests {
         ] {
             let inv = parse(&["I=x.bam", "O=out", bad]);
             assert!(plan(&inv).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn both_faces_name_files_from_one_table() {
+        use crate::collect;
+        let ext = |tool| file_extensions(tool).expect("named")[0].1;
+        assert_eq!(
+            ext("CollectQualityYieldMetrics"),
+            collect::QUALITY_YIELD_EXTENSION
+        );
+        assert_eq!(
+            ext("CollectAlignmentSummaryMetrics"),
+            collect::ALIGNMENT_SUMMARY_EXTENSION
+        );
+        assert_eq!(
+            ext("CollectInsertSizeMetrics"),
+            collect::INSERT_SIZE_EXTENSION
+        );
+        assert_eq!(ext("CollectHsMetrics"), collect::HS_METRICS_EXTENSION);
+        assert_eq!(
+            file_extensions("CollectGcBiasMetrics").expect("named"),
+            [
+                ("OUTPUT", ".gc_bias.detail_metrics"),
+                ("SUMMARY_OUTPUT", ".gc_bias.summary_metrics")
+            ]
+        );
+        assert_eq!(
+            file_extensions("CollectDuplicateMetrics").expect("named"),
+            [("METRICS_FILE", ".duplicate_metrics")]
+        );
+        assert!(file_extensions("EstimateLibraryComplexity").is_none());
+        for (tool, files) in OTHER_FILES {
+            let registered = crate::registry::find(tool).expect("registered");
+            assert_eq!(files[0].0, registered.output_name(), "{tool}");
+            assert!(PROGRAMS.iter().all(|p| p.name != *tool), "{tool}");
         }
     }
 
