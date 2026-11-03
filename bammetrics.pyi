@@ -297,6 +297,31 @@ def collect_rna_seq_metrics(input: _Path, **options: Any) -> list[dict[str, Any]
     assume_sorted. output=PATH also writes the metrics file with the
     normalized_position histogram (one normalized_coverage column per unit)."""
 
+def collect_variant_calling_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """CollectVariantCallingMetrics: input is a VCF (plain or bgzip, index not needed).
+    dbsnp=PATH (a dbSNP VCF) and output=PREFIX are required; the summary file goes to
+    PREFIX.variant_calling_summary_metrics and the per-sample detail file to
+    PREFIX.variant_calling_detail_metrics. Returns one dict per file written: file and
+    rows (the detail rows in Picard's HashMap order of sample names). Options:
+    target_intervals=PATH (an interval list), sequence_dictionary=PATH (.dict, VCF, BAM,
+    interval list or FASTA), gvcf_input=True (one sample, each record cut to its
+    genotype), thread_count (accepted; the output does not depend on it)."""
+
+def accumulate_variant_calling_metrics(input: _Paths, **options: Any) -> list[dict[str, Any]]:
+    """AccumulateVariantCallingMetrics: the prefixes (a list) of CollectVariantCallingMetrics
+    shards, merged as Picard merges them (the printed ratios inverted back into counts,
+    which is lossy where a ratio printed 0 or ?). output=PREFIX is required and gets the
+    two files; returns one dict per file: file and rows."""
+
+def genotype_concordance(truth_vcf: _Path, call_vcf: _Path, **options: Any) -> list[dict[str, Any]]:
+    """GenotypeConcordance: the truth and call VCFs by position (or as truth_vcf= and
+    call_vcf=). output=PREFIX is required and gets PREFIX.genotype_concordance_summary_metrics,
+    _detail_metrics and _contingency_metrics; returns one dict per file: file and rows.
+    Options: truth_sample, call_sample (required with more than one sample), intervals
+    (a list of interval lists; needs both VCFs indexed, as Picard does), intersect_intervals,
+    min_gq, min_dp, output_all_rows, use_vcf_index, missing_sites_hom_ref (needs intervals),
+    ignore_filter_status. output_vcf is not implemented."""
+
 def bed_to_interval_list(input: _Path, **options: Any) -> list[dict[str, Any]]:
     """BedToIntervalList: one dict per interval written (contig, start, end, strand,
     name). sequence_dictionary=PATH is required (.dict, BAM, SAM, interval list or

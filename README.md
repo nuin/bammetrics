@@ -34,6 +34,9 @@ Differences that remain are in [KNOWN_DIFFERENCES.md](KNOWN_DIFFERENCES.md).
 | CollectWgsMetricsWithNonZeroCoverage | Picard syntax only | `collect_wgs_metrics_with_non_zero_coverage()` |
 | BedToIntervalList (`SD=` from .dict, BAM, SAM, interval list or FASTA) | Picard syntax only | `bed_to_interval_list()` |
 | CollectRnaSeqMetrics (`REF_FLAT`, `RIBOSOMAL_INTERVALS`, all three `STRAND` values, all four levels, the normalized coverage histogram) | Picard syntax only | `collect_rna_seq_metrics()` |
+| CollectVariantCallingMetrics (VCF in, `DBSNP`, `TARGET_INTERVALS`, `SEQUENCE_DICTIONARY`, `GVCF_INPUT`, `THREAD_COUNT`; summary and per-sample detail files) | Picard syntax only | `collect_variant_calling_metrics()` |
+| AccumulateVariantCallingMetrics (shard prefixes merged as Picard merges them) | Picard syntax only | `accumulate_variant_calling_metrics()` |
+| GenotypeConcordance (`TRUTH_VCF`, `CALL_VCF`, samples, `INTERVALS`, `MIN_GQ`, `MIN_DP`, `MISSING_SITES_HOM_REF`, `IGNORE_FILTER_STATUS`, `OUTPUT_ALL_ROWS`; summary, detail and contingency files) | Picard syntax only | `genotype_concordance()` |
 
 Every tool in the registry also has a Python function named
 after the Picard class in snake case, e.g. `collect_quality_yield_metrics(path, **options)`,
@@ -83,6 +86,10 @@ bammetrics AccumulateQualityYieldMetrics I=shard1.qy.txt I=shard2.qy.txt O=sampl
 # Coverage: whole genome, or the intervals of a BED converted first
 bammetrics BedToIntervalList I=panel.bed SD=ref.dict O=panel.interval_list
 bammetrics CollectWgsMetrics I=sample.bam O=sample.wgs_metrics.txt R=ref.fa INTERVALS=panel.interval_list
+
+# VCF tools: OUTPUT is a prefix, the files get Picard's extensions
+bammetrics CollectVariantCallingMetrics I=calls.vcf.gz DBSNP=dbsnp.vcf.gz O=sample
+bammetrics GenotypeConcordance TV=truth.vcf.gz TRUTH_SAMPLE=HG002 CV=calls.vcf.gz CS=sample O=sample
 bammetrics CollectRawWgsMetrics I=sample.bam O=sample.raw_wgs_metrics.txt R=ref.fa INCLUDE_BQ_HISTOGRAM=true
 ```
 
