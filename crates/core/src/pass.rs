@@ -138,6 +138,16 @@ impl Default for Limits {
     }
 }
 
+/// The header of the BAM at `path`, no record read.
+pub fn read_header(path: &Path) -> Result<sam::Header> {
+    let input = |source| Error::Input {
+        path: path.to_path_buf(),
+        source,
+    };
+    let file = File::open(path).map_err(input)?;
+    bam::io::Reader::new(file).read_header().map_err(input)
+}
+
 /// [`run`] with `STOP_AFTER` and `ASSUME_SORTED` applied.
 pub fn run_limited<A, F>(path: &Path, threads: usize, limits: Limits, build: F) -> Result<A::Output>
 where

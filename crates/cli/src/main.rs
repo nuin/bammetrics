@@ -17,7 +17,12 @@ use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 
 mod check;
 mod discover;
+mod engine;
 mod error;
+mod events;
+mod manifest;
+mod plan;
+mod qc;
 mod report;
 
 #[derive(Parser)]
@@ -60,6 +65,14 @@ enum Command {
     /// read verdict.json files, print the checks and exit 10 or 11 on a
     /// bad verdict.
     Check(check::CheckArgs),
+    /// The collectors a preset needs on one read of a BAM, then the
+    /// verdict and the page: PREFIX.<metrics files>, PREFIX.verdict.json,
+    /// PREFIX.report.html, PREFIX.manifest.json.
+    Qc(qc::QcArgs),
+    /// What qc with the same options would run: stages, collectors, which
+    /// share the BAM read and why any does not, which steps --resume would
+    /// skip. Nothing runs.
+    Plan(qc::QcArgs),
 }
 
 /// BGZF decompression workers. Records are processed on the main thread in
@@ -538,6 +551,8 @@ fn run() -> error::Result<u8> {
         Command::Collect(args) => collect(args)?,
         Command::Report(args) => return report::run(args),
         Command::Check(args) => return check::run(args),
+        Command::Qc(args) => return engine::run(&args),
+        Command::Plan(args) => return plan::run(&args),
     }
     Ok(0)
 }

@@ -131,7 +131,7 @@ pub fn exit_code(verdicts: &[Verdict], fail_on: FailOn) -> u8 {
     }
 }
 
-fn status_word(status: Status) -> &'static str {
+pub fn status_word(status: Status) -> &'static str {
     match status {
         Status::Pass => "PASS",
         Status::Warn => "WARN",
@@ -208,19 +208,27 @@ pub fn text(verdicts: &[Verdict], code: u8, fail_on: FailOn) -> String {
     out
 }
 
+/// One `check` event line per check of `v`: the sample, then the check as
+/// verdict.json holds it.
+pub fn check_events(v: &Verdict) -> impl Iterator<Item = String> + '_ {
+    v.checks.iter().map(|check| {
+        let mut fields = vec![
+            ("event".to_owned(), Json::text("check")),
+            ("sample".to_owned(), Json::text(&v.sample)),
+        ];
+        if let Json::Object(check_fields) = check.to_json() {
+            fields.extend(check_fields);
+        }
+        Json::Object(fields).render_line()
+    })
+}
+
 /// The JSON lines form: `check` events, then one `verdict` event per sample.
 pub fn jsonl(verdicts: &[Verdict]) -> String {
     let mut out = String::new();
     for v in verdicts {
-        for check in &v.checks {
-            let mut fields = vec![
-                ("event".to_owned(), Json::text("check")),
-                ("sample".to_owned(), Json::text(&v.sample)),
-            ];
-            if let Json::Object(check_fields) = check.to_json() {
-                fields.extend(check_fields);
-            }
-            let _ = writeln!(out, "{}", Json::Object(fields).render_line());
+        for line in check_events(v) {
+            let _ = writeln!(out, "{line}");
         }
         let line = Json::Object(vec![
             ("event".to_owned(), Json::text("verdict")),
