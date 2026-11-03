@@ -4,10 +4,10 @@ use std::path::PathBuf;
 use bammetrics_core::alignment_summary::{self, DEFAULT_MAX_INSERT_SIZE};
 use bammetrics_core::collect::{self, Outputs, Request};
 use bammetrics_core::histogram::Histogram;
-use bammetrics_core::hs_metrics::{self, COLUMNS, Field};
+use bammetrics_core::hs_metrics::{self, COLUMNS};
 use bammetrics_core::insert_size::{self, Options};
 use bammetrics_core::levels::{Level, parse_levels};
-use bammetrics_core::metric::{MetricsOutput, Value};
+use bammetrics_core::metric::{MetricRow, MetricsOutput, Value};
 use bammetrics_core::metrics_file::MetricsDoc;
 use bammetrics_core::pass;
 use bammetrics_core::quality_yield;
@@ -330,7 +330,7 @@ fn py_quality_yield(
 /// may be None. The two histograms are dicts keyed by depth or quality.
 #[pyclass]
 struct HsMetrics {
-    fields: Vec<(String, Field)>,
+    fields: Vec<(String, Value)>,
     /// `high_quality_coverage_count`: target bases per high-quality depth.
     #[pyo3(get)]
     high_quality_coverage: BTreeMap<i64, f64>,
@@ -346,15 +346,6 @@ fn histogram_dict(histogram: &Histogram) -> BTreeMap<i64, f64> {
         .collect()
 }
 
-fn field_object(py: Python<'_>, field: &Field) -> PyResult<Py<PyAny>> {
-    Ok(match field {
-        Field::Text(s) => s.into_pyobject(py)?.into_any().unbind(),
-        Field::Long(v) => v.into_pyobject(py)?.into_any().unbind(),
-        Field::Double(v) => v.into_pyobject(py)?.into_any().unbind(),
-        Field::Null => py.None(),
-    })
-}
-
 #[pymethods]
 impl HsMetrics {
     fn __getattr__(&self, py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
@@ -364,7 +355,7 @@ impl HsMetrics {
             .find(|(column, _)| column == name)
             .map(|(_, field)| field)
             .ok_or_else(|| PyAttributeError::new_err(format!("HsMetrics has no field {name:?}")))?;
-        field_object(py, field)
+        value_object(py, field)
     }
 
     /// Every column, in Picard's order, as {lower-case name: value}. The two
@@ -372,7 +363,7 @@ impl HsMetrics {
     fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         for (name, field) in &self.fields {
-            dict.set_item(name, field_object(py, field)?)?;
+            dict.set_item(name, value_object(py, field)?)?;
         }
         Ok(dict)
     }
@@ -394,12 +385,14 @@ impl HsMetrics {
 }
 
 impl From<hs_metrics::Report> for HsMetrics {
+    /// The `ALL_READS` row: the only one the native `hs_metrics` call makes.
     fn from(report: hs_metrics::Report) -> Self {
+        let row = report.hs_rows().into_iter().next().unwrap_or_default();
         Self {
             fields: COLUMNS
                 .iter()
                 .map(|c| c.to_ascii_lowercase())
-                .zip(report.row.fields())
+                .zip(row.values())
                 .collect(),
             high_quality_coverage: histogram_dict(&report.depth),
             unfiltered_base_quality: histogram_dict(&report.base_quality),
@@ -463,6 +456,7 @@ fn py_hs_metrics(
         near_distance,
         sample_size,
         per_base_coverage,
+        ..hs_metrics::Options::default()
     };
     hs_metrics::run_over_bam(path, &opts)
         .map(Into::into)

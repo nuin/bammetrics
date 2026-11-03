@@ -15,7 +15,7 @@ VALIDATION_STRINGENCY=SILENT
 bammetrics: ignoring VALIDATION_STRINGENCY=SILENT: records are not validated
 ## file hs_metrics.txt
 ## htsjdk.samtools.metrics.StringHeader
-# CollectHsMetrics BAIT_INTERVALS=[tests/data/targets.interval_list] TARGET_INTERVALS=[tests/data/targets.interval_list] INPUT=tests/data/insert_size.bam OUTPUT=OUT/hs_metrics.txt PER_BASE_COVERAGE=OUT/per_base.txt BAIT_SET_NAME=panel METRIC_ACCUMULATION_LEVEL=[ALL_READS] NEAR_DISTANCE=250 MINIMUM_MAPPING_QUALITY=20 MINIMUM_BASE_QUALITY=20 CLIP_OVERLAPPING_READS=true INCLUDE_INDELS=false COVERAGE_CAP=200 SAMPLE_SIZE=1000
+# CollectHsMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/hs_metrics.txt BAIT_INTERVALS=tests/data/targets.interval_list TARGET_INTERVALS=tests/data/targets.interval_list BAIT_SET_NAME=panel PER_BASE_COVERAGE=OUT/per_base.txt SAMPLE_SIZE=1000 VALIDATION_STRINGENCY=SILENT
 ## htsjdk.samtools.metrics.StringHeader
 # Started on: <time>
 

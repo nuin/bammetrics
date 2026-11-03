@@ -8,7 +8,7 @@ SAMPLE_SIZE=1000
 0
 ## stdout
 ## htsjdk.samtools.metrics.StringHeader
-# CollectHsMetrics BAIT_INTERVALS=[tests/data/targets.interval_list] TARGET_INTERVALS=[tests/data/targets.interval_list] INPUT=tests/data/insert_size.bam METRIC_ACCUMULATION_LEVEL=[ALL_READS] NEAR_DISTANCE=250 MINIMUM_MAPPING_QUALITY=20 MINIMUM_BASE_QUALITY=20 CLIP_OVERLAPPING_READS=true INCLUDE_INDELS=false COVERAGE_CAP=200 SAMPLE_SIZE=1000
+# CollectHsMetrics INPUT=tests/data/insert_size.bam BAIT_INTERVALS=tests/data/targets.interval_list TARGET_INTERVALS=tests/data/targets.interval_list SAMPLE_SIZE=1000
 ## htsjdk.samtools.metrics.StringHeader
 # Started on: <time>
 

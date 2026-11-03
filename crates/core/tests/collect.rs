@@ -59,7 +59,7 @@ fn one_pass_matches_single_runs_at_any_thread_count() {
         .iter()
         .map(|o| hs_metrics::run_over_bam(FIXTURE, o).expect("hs"))
         .collect();
-    assert_ne!(hs[0].row, hs[1].row, "the two runs differ");
+    assert_ne!(hs[0].rows, hs[1].rows, "the two runs differ");
 
     for threads in [1, 8] {
         let results = collect::run_over_bam(FIXTURE, &request, threads).expect("collect");

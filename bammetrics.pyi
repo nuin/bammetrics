@@ -335,6 +335,26 @@ def collect_wgs_metrics_with_non_zero_coverage(input: _Path, **options: Any) -> 
     WgsMetrics columns. Same options as collect_wgs_metrics; chart_output is
     accepted and no chart is drawn."""
 
+def collect_hs_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """CollectHsMetrics: one dict of the 69 HsMetrics columns per accumulation unit.
+    bait_intervals=PATH (or a list) and target_intervals=PATH (interval lists, or BED
+    files converted as BedToIntervalList would) are required. Options:
+    bait_set_name, reference_sequence (AT_DROPOUT, GC_DROPOUT, PER_TARGET_COVERAGE),
+    metric_accumulation_level (a list; Picard 3.5.0 completes only when at most the
+    last unit in file order has a counted base, see KNOWN_DIFFERENCES.md),
+    minimum_mapping_quality, minimum_base_quality, clip_overlapping_reads,
+    include_indels, coverage_cap, near_distance, sample_size, per_target_coverage=PATH,
+    per_base_coverage=PATH, theoretical_sensitivity_output=PATH with allele_fraction
+    (a list). output=PATH also writes the metrics file with the two histograms."""
+
+def collect_targeted_pcr_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """CollectTargetedPcrMetrics: one dict of the 62 TargetedPcrMetrics columns per
+    unit, from the CollectHsMetrics collector with MINIMUM_MAPPING_QUALITY 1,
+    MINIMUM_BASE_QUALITY 0 and CLIP_OVERLAPPING_READS false as defaults.
+    amplicon_intervals=PATH (one file) and target_intervals=PATH are required;
+    custom_amplicon_set_name names the CUSTOM_AMPLICON_SET column. The other options
+    are those of collect_hs_metrics."""
+
 def bed_to_interval_list(input: _Path, **options: Any) -> list[dict[str, Any]]:
     """BedToIntervalList: one dict per interval written (contig, start, end, strand,
     name). sequence_dictionary=PATH is required (.dict, BAM, SAM, interval list or

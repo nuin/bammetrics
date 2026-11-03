@@ -95,11 +95,12 @@ def write_intervals(rng, out):
 
 
 class Simulator:
-    def __init__(self, rng, sequences, header):
+    def __init__(self, rng, sequences, header, contigs=CONTIGS):
         self.rng = rng
         self.sequences = sequences
         self.header = header
-        self.tid = {name: i for i, (name, _) in enumerate(CONTIGS)}
+        self.tid = {name: i for i, (name, _) in enumerate(contigs)}
+        self.contigs = contigs
         self.counter = 0
 
     def build_read(self, contig, pos, length):
@@ -192,8 +193,8 @@ class Simulator:
         rng = self.rng
         self.counter += 1
         name = f"p{self.counter:06d}"
-        contig = rng.choice(CONTIGS[:2] if kind != "CHIMERIC" else CONTIGS)[0]
-        length = dict(CONTIGS)[contig]
+        contig = rng.choice(self.contigs[:2] if kind != "CHIMERIC" else self.contigs)[0]
+        length = dict(self.contigs)[contig]
         insert = max(READ_LENGTH + 20, int(rng.gauss(mean_insert, 25)))
         if rng.random() < 0.02:
             insert += rng.randint(500, 2500)
@@ -210,8 +211,8 @@ class Simulator:
                                  contig, pos, rg)
             return [r1, r2]
         if kind == "CHIMERIC":
-            other = rng.choice([c for c, _ in CONTIGS if c != contig])
-            pos2 = rng.randint(200, dict(CONTIGS)[other] - 400)
+            other = rng.choice([c for c, _ in self.contigs if c != contig])
+            pos2 = rng.randint(200, dict(self.contigs)[other] - 400)
             f1 = PAIRED | READ1 | (REVERSE if first_reverse else 0) | (0 if first_reverse else MREVERSE)
             f2 = PAIRED | READ2 | (0 if first_reverse else REVERSE) | (MREVERSE if first_reverse else 0)
             r1, _ = self.segment(name, f1, contig, pos, rg)
