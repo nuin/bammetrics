@@ -142,6 +142,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::bed_to_interval_list::TOOL,
     &crate::hs_metrics::TOOL,
     &crate::hs_metrics::PCR_TOOL,
+    &crate::rna_seq_metrics::TOOL,
 ];
 
 /// The tool named `name`.

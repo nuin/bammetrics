@@ -286,6 +286,17 @@ def collect_targeted_pcr_metrics(input: _Path, **options: Any) -> list[dict[str,
     custom_amplicon_set_name names the CUSTOM_AMPLICON_SET column. The other options
     are those of collect_hs_metrics."""
 
+def collect_rna_seq_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """CollectRnaSeqMetrics: one dict of the 30 RnaSeqMetrics columns per accumulation
+    unit. ref_flat=PATH (UCSC refFlat) and strand_specificity (NONE,
+    FIRST_READ_TRANSCRIPTION_STRAND or SECOND_READ_TRANSCRIPTION_STRAND) are required.
+    Options: ribosomal_intervals=PATH (an interval list, or a BED converted as
+    BedToIntervalList would; without it RIBOSOMAL_BASES and PCT_RIBOSOMAL_BASES are
+    None), minimum_length, end_bias_bases, rrna_fragment_percentage, ignore_sequence
+    (a list of contig names), metric_accumulation_level (a list), stop_after,
+    assume_sorted. output=PATH also writes the metrics file with the
+    normalized_position histogram (one normalized_coverage column per unit)."""
+
 def bed_to_interval_list(input: _Path, **options: Any) -> list[dict[str, Any]]:
     """BedToIntervalList: one dict per interval written (contig, start, end, strand,
     name). sequence_dictionary=PATH is required (.dict, BAM, SAM, interval list or

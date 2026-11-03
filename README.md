@@ -4,7 +4,7 @@ bammetrics reproduces Picard 3.5.0 QC metrics field by field in Rust, 3x to 14x 
 no JVM. It is a Rust library, a `bammetrics` command line that accepts Picard's `KEY=VALUE`
 syntax and writes Picard-format metrics files, and a typed Python module (PyO3, maturin).
 
-Version 0.7.0. Pinned reference: Picard 3.5.0. On 99 concordance cases (synthetic tiers t0 to
+Version 0.9.0. Pinned reference: Picard 3.5.0. On 99 concordance cases (synthetic tiers t0 to
 t3, with and without a reference, native at 1 and 8 threads and in Picard syntax, plus 5
 one-pass `collect` runs), every field and histogram cell matches Picard, and each file is
 byte-identical from `## METRICS CLASS` on. The 9 `CollectHsMetrics` cases with
@@ -33,6 +33,7 @@ Differences that remain are in [KNOWN_DIFFERENCES.md](KNOWN_DIFFERENCES.md).
 | CollectRawWgsMetrics | Picard syntax only | `collect_raw_wgs_metrics()` |
 | CollectWgsMetricsWithNonZeroCoverage | Picard syntax only | `collect_wgs_metrics_with_non_zero_coverage()` |
 | BedToIntervalList (`SD=` from .dict, BAM, SAM, interval list or FASTA) | Picard syntax only | `bed_to_interval_list()` |
+| CollectRnaSeqMetrics (`REF_FLAT`, `RIBOSOMAL_INTERVALS`, all three `STRAND` values, all four levels, the normalized coverage histogram) | Picard syntax only | `collect_rna_seq_metrics()` |
 
 Every tool in the registry also has a Python function named
 after the Picard class in snake case, e.g. `collect_quality_yield_metrics(path, **options)`,
@@ -40,8 +41,8 @@ returning rows as dicts. QualityScoreDistribution and MeanQualityByCycle write n
 class, so their functions return the histogram table.
 
 `METRIC_ACCUMULATION_LEVEL` (`ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`) works for
-CollectInsertSizeMetrics, CollectAlignmentSummaryMetrics, CollectGcBiasMetrics and
-CollectMultipleMetrics, CollectHsMetrics and CollectTargetedPcrMetrics (the capture tools complete only
+CollectInsertSizeMetrics, CollectAlignmentSummaryMetrics, CollectGcBiasMetrics,
+CollectMultipleMetrics, CollectRnaSeqMetrics, CollectHsMetrics and CollectTargetedPcrMetrics (the capture tools complete only
 when at most the last unit in file order has a counted base, as Picard 3.5.0 does; see KNOWN_DIFFERENCES.md).
 
 ## Drop-in for a Picard pipeline
