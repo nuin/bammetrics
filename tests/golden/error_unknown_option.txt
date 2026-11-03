@@ -1,0 +1,9 @@
+## argv
+CollectInsertSizeMetrics
+I=tests/data/insert_size.bam
+STOP_AFTER=10
+## exit
+1
+## stdout
+## stderr
+bammetrics: CollectInsertSizeMetrics: option STOP_AFTER is not implemented (it may change the metrics)

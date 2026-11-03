@@ -1,0 +1,8 @@
+## argv
+CollectQualityYieldMetrics
+I=tests/data/nope.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/nope.bam: No such file or directory (os error 2)

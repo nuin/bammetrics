@@ -1,0 +1,17 @@
+## argv
+QualityScoreDistribution
+I=tests/data/insert_size.bam
+## exit
+0
+## stdout
+## htsjdk.samtools.metrics.StringHeader
+# QualityScoreDistribution INPUT=tests/data/insert_size.bam
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+
+## HISTOGRAM	java.lang.Byte
+QUALITY	COUNT_OF_Q
+40	1000
+
+## stderr

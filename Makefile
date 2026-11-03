@@ -4,7 +4,7 @@
 UV_RUN := uv run --no-project
 CORPUS := tests/corpus/out
 
-.PHONY: all test lint release corpus reference-metrics concordance python-test wheel clean-corpus bench-bam bench fuzz
+.PHONY: all test lint release corpus reference-metrics concordance golden golden-update python-test wheel clean-corpus bench-bam bench fuzz
 
 all: test lint concordance
 
@@ -28,8 +28,18 @@ $(CORPUS)/corpus.json: tests/corpus/generate.py
 reference-metrics: corpus
 	$(UV_RUN) python tests/concordance/run_picard.py
 
-concordance: reference-metrics release
+concordance: reference-metrics release golden
 	$(UV_RUN) --with pytest --with pysam python -m pytest tests/concordance -q
+
+# Golden suite (crates/core/tests/golden.rs): every documented command form on
+# tests/data, and on corpus t1 when tests/corpus/out exists, byte for byte
+# against tests/golden. golden-update rewrites the records after an intended
+# change; the diff is the review.
+golden: release
+	cargo test --release -p bammetrics-core --test golden
+
+golden-update: release
+	UPDATE_GOLDEN=1 cargo test --release -p bammetrics-core --test golden
 
 # Differential fuzzing (tests/concordance/fuzz.py): N seeded random BAMs through
 # Picard and bammetrics, failures shrunk into tests/concordance/regressions.
