@@ -118,6 +118,14 @@ td.def { color: var(--ink-2); font-size: var(--fs-1); }
 tbody tr:nth-child(even) td { background: var(--bg-2); }
 table.checks td:first-child { white-space: nowrap; }
 table.checks td:nth-child(2) { min-width: 11em; }
+table.index td { white-space: nowrap; }
+table.index th.rule { max-width: 9em; white-space: normal; vertical-align: bottom; }
+table.index td.cell { text-align: right; }
+table.index td.cell.pass { color: var(--pass-ink); }
+table.index td.cell.warn, tbody tr:nth-child(even) td.cell.warn { color: var(--warn-ink); background: var(--warn-bg); }
+table.index td.cell.fail, tbody tr:nth-child(even) td.cell.fail { color: var(--fail-ink); background: var(--fail-bg); }
+table.index td.cell.none { color: var(--ink-2); }
+a { color: var(--accent); }
 details { margin: 0 0 8px; border: 1px solid var(--line); border-radius: 6px; }
 summary { cursor: pointer; padding: 10px 14px; font-weight: 600; overflow-wrap: anywhere; }
 summary .muted { font-weight: 400; margin-left: 8px; }
