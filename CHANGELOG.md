@@ -19,7 +19,9 @@ change to collection. The parity chain's P4 branch (`feat/p4-coverage`) also cla
   `CollectMultipleMetrics` names them, else one sample per directory; the rule is in
   `--help`); evaluates the preset (`generic` by default); writes `SAMPLE.verdict.json`,
   `SAMPLE.report.html` and `index.html` into `OUT` (the directory itself when one is
-  given), each file written whole and renamed into place; prints a one-screen summary
+  given), each file written whole to a temporary name (process id, counter and clock,
+  opened with `create_new`, so a planted symlink fails the write instead of being
+  followed) and renamed into place; prints a one-screen summary
   (header, each sample's band and counts, its fails and warns, the files written). It
   works on a directory Picard 3.5.0 wrote with no bammetrics involved and never reads
   a BAM. Exit 0 on any verdict, 1 on an error, 2 on a usage error.
