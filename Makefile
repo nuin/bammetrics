@@ -32,7 +32,8 @@ concordance: reference-metrics release golden
 	$(UV_RUN) --with pytest --with pysam python -m pytest tests/concordance -q
 
 # Golden suite (crates/core/tests/golden.rs): every documented command form on
-# tests/data, and on corpus t1 when tests/corpus/out exists, byte for byte
+# tests/data (and on corpus t1 with GOLDEN_CORPUS=1, since those records depend
+# on one machine's bwa output), byte for byte
 # against tests/golden. golden-update rewrites the records after an intended
 # change; the diff is the review.
 golden: release
