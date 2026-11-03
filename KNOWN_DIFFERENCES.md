@@ -50,6 +50,16 @@ behaves how.
   `CollectInsertSizeMetrics` and `CollectHsMetrics`, `PER_TARGET_COVERAGE` and
   `THEORETICAL_SENSITIVITY_OUTPUT` exit 1. `FLOW_MODE=true` exits 1 in both tools.
   `PER_BASE_COVERAGE` is implemented.
+- The three WGS tools take every option of Picard's `CollectWgsMetrics` that changes a
+  number (`MINIMUM_MAPPING_QUALITY`, `MINIMUM_BASE_QUALITY`, `COVERAGE_CAP`,
+  `LOCUS_ACCUMULATION_CAP`, `COUNT_UNPAIRED`, `INCLUDE_BQ_HISTOGRAM`, `SAMPLE_SIZE`,
+  `INTERVALS`, `STOP_AFTER`, `USE_FAST_ALGORITHM`, `READ_LENGTH`), each with a non-default
+  case in `tests/concordance/test_wgs_metrics.py`, except `THEORETICAL_SENSITIVITY_OUTPUT`
+  and `ALLELE_FRACTION`, which exit 1 naming the option: Picard writes a second file from
+  `TheoreticalSensitivity.calculateSensitivities`, whose sampling uses commons-math's
+  `Well19937c` (`test_theoretical_sensitivity_output_is_not_implemented` checks Picard
+  writes both files and bammetrics exits 1). `ASSUME_SORTED` is rejected in both tools.
+  `CollectWgsMetricsWithNonZeroCoverage` accepts `CHART_OUTPUT` and draws nothing.
 - `CollectGcBiasMetrics` accepts `MINIMUM_GENOME_FRACTION` (`MGF`) and changes nothing
   with it: Picard 3.5.0 declares the option and never reads it (`CollectGcBiasMetrics.java`,
   the field is not passed to `GcBiasMetricsCollector`). `test_gc_bias.py` runs `MGF=0.5` and
@@ -126,6 +136,14 @@ written, with `file` and `rows`.
   BED file with `Interval list file must contain header`. The harness gives Picard the
   matching interval lists for this case (`t1_bed_ref`); the outputs are identical.
 - `CollectInsertSizeMetrics` has no reference argument, so it reads none.
+- `CollectWgsMetrics`, `CollectRawWgsMetrics` and `CollectWgsMetricsWithNonZeroCoverage`
+  read `R=` through its `.fai`; Picard also needs the `.dict` next to it. `INTERVALS` takes
+  an interval list, or a BED file converted as `BedToIntervalList` would with the BAM header
+  as dictionary; Picard 3.5.0 rejects the BED (`test_bed_intervals_are_read_by_bammetrics_only`
+  gives Picard the converted list and the outputs are identical).
+- `BedToIntervalList` `SD=` takes a `.dict`, a BAM or SAM header, an interval list, or a
+  FASTA with a `.dict` next to it, as Picard does; without the `.dict` it falls back to the
+  `.fai` and writes `SN` and `LN` only, where Picard fails. A VCF is not read.
 - `CollectGcBiasMetrics` scans every contig of the FASTA for its window table, as Picard
   does; with `@SQ` lines in the BAM the FASTA must list the same contigs.
 
@@ -229,6 +247,57 @@ each checked by a case in `tests/concordance/test_gc_bias.py` or
   `MAX_OPTICAL_DUPLICATE_SET_SIZE=-1` turns optical detection off rather than the limit,
   because Picard's constructor stores the value as given (`set_size_minus_1`).
 
+`CollectWgsMetrics`, `CollectRawWgsMetrics` and `CollectWgsMetricsWithNonZeroCoverage`
+output reproduced from Picard 3.5.0, each checked by a case in
+`tests/concordance/test_wgs_metrics.py`:
+
+- The coverage histogram has a bin for every depth from 0 to `COVERAGE_CAP`, zero counts
+  included (100,001 lines for `CollectRawWgsMetrics`), and the base-quality histogram one
+  for every quality 0 to 126; the key column is `coverage` for both.
+- `LOCUS_ACCUMULATION_CAP` below `COVERAGE_CAP` is raised to it. At the cap, a record is
+  dropped when the first pending locus already holds that many bases (`locus_cap_2`,
+  `locus_cap_5`); the dropped record counts nowhere. The fast algorithm has no such cap.
+- `STOP_AFTER` counts loci whose reference base is not `N`, and the `PCT_EXC_*` columns of
+  a stopped run reflect the records htsjdk had read by then: one passing record beyond the
+  one that forced the locus out (`stop_after_1765`, `fast_stop_after_1765`).
+- `COUNT_UNPAIRED=false` (the default) excludes unpaired records and records whose mate is
+  unmapped, their aligned bases under `PCT_EXC_UNPAIRED`. The filter order is adapter,
+  MAPQ, duplicate, pair: a base is charged to the first filter that rejects its record.
+- A BAM without a base above quality 2 prints `HET_SNP_SENSITIVITY` 0 and `HET_SNP_Q` 0:
+  the normalised quality histogram is NaN, Java's `MathUtil.max` keeps the NaN, and every
+  draw of the sampler is rejected 600 times and returns 0 (`t0_asm_empty`, `rl_empty`).
+- With `USE_FAST_ALGORITHM=true` a read overlaps its mate at a base when any open block of
+  the same name reaches that base with quality at or above `MINIMUM_BASE_QUALITY`, whatever
+  that base is; the default algorithm excludes the later record's base when the earlier
+  one passed every base check. `READ_LENGTH` sizes the fast collector's counter window
+  (`READ_LENGTH * 2000` loci), which slides forward only when fewer than `READ_LENGTH`
+  loci are left in it, so a read longer than `READ_LENGTH` that starts near the end of the
+  window is an index error in both tools (`test_fast_algorithm_window_too_small_fails`,
+  `READ_LENGTH` 0, 1 and 2 against 150-base reads). A counted read running past its
+  contig is one too (`test_fast_algorithm_on_a_read_past_the_contig_end`, `COUNT_UNPAIRED=true`
+  on `t0_asm`), where the default algorithm drops the loci past the contig.
+- `CollectWgsMetricsWithNonZeroCoverage` computes its `NON_ZERO_REGIONS` row after
+  clearing the zero-depth bin of the high-quality and unfiltered depth histograms, so the
+  `PCT_EXC_*` columns repeat and `HET_SNP_*` differ; `count_NON_ZERO_REGIONS` starts at
+  depth 1.
+- `CollectWgsMetricsWithNonZeroCoverage` with `USE_FAST_ALGORITHM=true` fails in Picard
+  3.5.0 at the first non-N locus that holds an alignment event: the tool keeps its own
+  `WgsMetricsCollector` whatever the flag says, `doWork` still reads with the
+  `EdgeReadIterator`, and the collector's `addInfo` casts each `EdgingRecordAndOffset` to
+  `SamLocusIterator.RecordAndOffset` (`ClassCastException`, no file). bammetrics exits 1
+  and writes no file at the same locus (`test_non_zero_fast_algorithm_fails_in_both`, 6
+  cases). A BAM in which no record reaches a locus completes in both tools with every depth
+  0 (`test_non_zero_fast_algorithm_on_an_empty_bam`, `rl_empty` and `asm_empty`).
+
+`BedToIntervalList` output reproduced from Picard 3.5.0
+(`tests/concordance/test_bed_to_interval_list.py`): fields split on a tab or a run of
+spaces; a line with one field is skipped and one with two fields is a one-base interval;
+double quotes are stripped from the name; a fifth field that is not a float ends the line
+before the strand; `.` is the positive strand; zero-length intervals are dropped unless
+`KEEP_LENGTH_ZERO_INTERVALS=true`; `UNIQUE=true` merges overlapping and abutting intervals
+with the first one's strand and the distinct names joined by `|`; the header is
+`@HD VN:1.6 SO:coordinate` whatever `SORT` says.
+
 ## Failures
 
 A unit whose reads all fail QC (`no PF_READS`) makes Picard throw and write no file, at any
@@ -263,7 +332,7 @@ harness runs every native case at 1 and 8.
 
 ## Not implemented
 
-`CollectVariantCallingMetrics`, `MarkDuplicates`, `CollectWgsMetrics`, `CollectRnaSeqMetrics`,
+`CollectVariantCallingMetrics`, `MarkDuplicates`, `CollectRnaSeqMetrics`,
 `CollectSequencingArtifactMetrics` (so `CollectMultipleMetrics` rejects `RnaSeqMetrics` and
 `CollectSequencingArtifactMetrics`), accumulation levels of `CollectHsMetrics`.
 `CollectDuplicateMetrics` counts no optical duplicates, as Picard's

@@ -4,7 +4,7 @@ bammetrics reproduces Picard 3.5.0 QC metrics field by field in Rust, 3x to 14x 
 no JVM. It is a Rust library, a `bammetrics` command line that accepts Picard's `KEY=VALUE`
 syntax and writes Picard-format metrics files, and a typed Python module (PyO3, maturin).
 
-Version 0.6.0. Pinned reference: Picard 3.5.0. On 99 concordance cases (synthetic tiers t0 to
+Version 0.7.0. Pinned reference: Picard 3.5.0. On 99 concordance cases (synthetic tiers t0 to
 t3, with and without a reference, native at 1 and 8 threads and in Picard syntax, plus 5
 one-pass `collect` runs), every field and histogram cell matches Picard, and each file is
 byte-identical from `## METRICS CLASS` on. The 9 `CollectHsMetrics` cases with
@@ -28,6 +28,10 @@ Differences that remain are in [KNOWN_DIFFERENCES.md](KNOWN_DIFFERENCES.md).
 | CollectGcBiasMetrics (`O=` detail, `S=` summary) | Picard syntax only | `collect_gc_bias_metrics()` |
 | CollectMultipleMetrics (the default five, plus CollectGcBiasMetrics and CollectQualityYieldMetrics) | Picard syntax only | `collect_multiple_metrics()` |
 | EstimateLibraryComplexity (aligned or unaligned input, optical duplicates) | Picard syntax only | `estimate_library_complexity()` |
+| CollectWgsMetrics (both pileup algorithms, `INTERVALS`, `STOP_AFTER`) | Picard syntax only | `collect_wgs_metrics()` |
+| CollectRawWgsMetrics | Picard syntax only | `collect_raw_wgs_metrics()` |
+| CollectWgsMetricsWithNonZeroCoverage | Picard syntax only | `collect_wgs_metrics_with_non_zero_coverage()` |
+| BedToIntervalList (`SD=` from .dict, BAM, SAM, interval list or FASTA) | Picard syntax only | `bed_to_interval_list()` |
 
 Every tool in the registry (all but CollectHsMetrics) also has a Python function named
 after the Picard class in snake case, e.g. `collect_quality_yield_metrics(path, **options)`,
@@ -72,6 +76,11 @@ bammetrics MeanQualityByCycle I=sample.bam O=sample.mean_qual_by_cycle.txt PF_RE
 bammetrics CollectBaseDistributionByCycle I=sample.bam O=sample.base_dist_by_cycle.txt
 bammetrics CollectDuplicateMetrics I=sample.marked.bam M=sample.duplicate_metrics.txt
 bammetrics AccumulateQualityYieldMetrics I=shard1.qy.txt I=shard2.qy.txt O=sample.qy.txt
+
+# Coverage: whole genome, or the intervals of a BED converted first
+bammetrics BedToIntervalList I=panel.bed SD=ref.dict O=panel.interval_list
+bammetrics CollectWgsMetrics I=sample.bam O=sample.wgs_metrics.txt R=ref.fa INTERVALS=panel.interval_list
+bammetrics CollectRawWgsMetrics I=sample.bam O=sample.raw_wgs_metrics.txt R=ref.fa INCLUDE_BQ_HISTOGRAM=true
 ```
 
 `R=` needs a `.fai` next to the FASTA. A BED file works where Picard 3.5.0 needs an

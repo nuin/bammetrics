@@ -79,6 +79,10 @@ def test_wgs_errors(corpus, tmp_path):
     with pytest.raises(OSError, match="in the BAM header"):
         # The fixture's header names a contig the corpus reference lacks.
         bammetrics.collect_wgs_metrics(FIXTURE, reference_sequence=str(corpus / "ref.fa"))
+    with pytest.raises(OSError, match="USE_FAST_ALGORITHM=true"):
+        # Picard 3.5.0 fails at the first covered locus (KNOWN_DIFFERENCES.md).
+        bammetrics.collect_wgs_metrics_with_non_zero_coverage(
+            str(corpus / "corpus.bam"), reference_sequence=str(corpus / "ref.fa"), use_fast_algorithm=True)
 
 
 def test_bed_to_interval_list(corpus, tmp_path):

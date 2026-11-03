@@ -585,6 +585,45 @@ impl Sink<EdgeEntry> for FastSink {
     }
 }
 
+/// `CollectWgsMetricsWithNonZeroCoverage` with `USE_FAST_ALGORITHM=true`.
+/// Picard 3.5.0 keeps `WgsMetricsWithNonZeroCoverageCollector`, a
+/// `WgsMetricsCollector`, whatever the flag says, but `doWork` still picks
+/// the `EdgeReadIterator`, so the collector's `addInfo` casts each
+/// `EdgingRecordAndOffset` to `SamLocusIterator.RecordAndOffset` and the
+/// run dies with a `ClassCastException` at the first non-N locus holding
+/// an event. A locus with no event counts as depth 0, and an N locus is
+/// skipped before the cast, so a BAM with no record reaching a locus
+/// completes with every depth at 0.
+struct NonZeroFastSink {
+    counts: Counts,
+}
+
+impl Sink<EdgeEntry> for NonZeroFastSink {
+    fn locus(
+        &mut self,
+        _contig: usize,
+        _position: i64,
+        entries: &[EdgeEntry],
+        _reference: &[u8],
+        reference_n: bool,
+        _counter: i64,
+    ) -> Result<()> {
+        if reference_n {
+            return Ok(());
+        }
+        if !entries.is_empty() {
+            return Err(Error::Metric(
+                "CollectWgsMetricsWithNonZeroCoverage with USE_FAST_ALGORITHM=true: Picard 3.5.0 \
+                 fails at the first covered locus (its collector casts the fast iterator's \
+                 EdgingRecordAndOffset to SamLocusIterator.RecordAndOffset)"
+                    .to_owned(),
+            ));
+        }
+        self.counts.count_locus(0, 0);
+        Ok(())
+    }
+}
+
 /// `WgsMetrics` with every field derived.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Row {
@@ -818,7 +857,23 @@ fn run_variant(inv: &Invocation, variant: Variant) -> Result<ToolOutput> {
         };
         Ok((reference, unique))
     };
-    let (counts, filters) = if opts.use_fast_algorithm {
+    let (counts, filters) = if opts.use_fast_algorithm && variant == Variant::NonZero {
+        let Finished { sink, filters } = pass::run(&inv.input, inv.threads, |header| {
+            let (reference, unique) = setup(header)?;
+            let contigs = header.reference_sequences().len();
+            Ok(Engine::new(
+                Edge::new(unique.as_deref(), contigs),
+                NonZeroFastSink {
+                    counts: Counts::new(&opts),
+                },
+                reference,
+                header,
+                unique.as_deref(),
+                settings(None),
+            ))
+        })?;
+        (sink.counts, filters)
+    } else if opts.use_fast_algorithm {
         let Finished { sink, filters } = pass::run(&inv.input, inv.threads, |header| {
             let (reference, unique) = setup(header)?;
             let contigs = header.reference_sequences().len();
@@ -954,6 +1009,43 @@ mod tests {
         assert_eq!(section.series.len(), 2);
         assert_eq!(section.series[1].histogram.min(), Some(1));
         assert_eq!(section.series[1].histogram.get(1), Some(1.0));
+    }
+
+    #[test]
+    fn non_zero_fast_sink_fails_at_the_first_covered_locus() {
+        let mut sink = NonZeroFastSink {
+            counts: Counts::new(&options(Variant::NonZero)),
+        };
+        let read = std::sync::Arc::new(crate::locus::Read {
+            name: b"r1".as_slice().into(),
+            name_hash: 0,
+            bases: b"ACGT".as_slice().into(),
+            qualities: [30; 4].as_slice().into(),
+            start: 2,
+            end: 5,
+            blocks: Vec::new(),
+        });
+        let event = EdgeEntry {
+            read,
+            offset: 0,
+            length: 4,
+            ref_pos: 2,
+            id: 1,
+            begin: true,
+        };
+        let reference = b"NACGTACGT";
+        sink.locus(0, 1, &[], reference, true, 0).expect("N locus");
+        sink.locus(0, 2, &[], reference, false, 1)
+            .expect("empty locus");
+        let events = [event];
+        sink.locus(0, 3, &events, reference, true, 1)
+            .expect("an event on an N locus is skipped before the cast");
+        let error = sink
+            .locus(0, 4, &events, reference, false, 2)
+            .expect_err("a covered locus");
+        assert!(error.to_string().contains("USE_FAST_ALGORITHM=true"));
+        assert_eq!(sink.counts.high_quality_depth[0], 1);
+        assert_eq!(sink.counts.unfiltered_depth[0], 1);
     }
 
     #[test]
