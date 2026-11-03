@@ -22,6 +22,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("IL", "tests/data/targets.interval_list"),
     ("QY_A", "tests/data/quality_yield_a.txt"),
     ("QY_B", "tests/data/quality_yield_b.txt"),
+    ("PICARD", "tests/data/picard"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -46,7 +47,10 @@ macro_rules! case {
 
 /// The documented forms on the committed fixtures: every registry tool and
 /// CollectHsMetrics in Picard syntax with and without `O=`, the five clap
-/// subcommands with and without `-O`, and the documented error paths.
+/// subcommands with and without `-O`, `check` on the Picard 3.5.0 directory
+/// in its text and jsonl forms with every exit code, and the documented
+/// error paths. `report` writes pages that carry the tool version, so its
+/// files are checked in `verbs.rs` instead.
 #[rustfmt::skip]
 const FIXTURE_CASES: &[Case] = &[
     // Picard syntax, registry tools.
@@ -107,6 +111,16 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_missing_file", "CollectQualityYieldMetrics", "I=tests/data/nope.bam"),
     case!("error_unknown_tool", "NoSuchTool", "I=IS"),
     case!("error_hs_no_targets", "CollectHsMetrics", "I=IS", "BAIT_INTERVALS=IL"),
+    // check on a directory Picard 3.5.0 wrote: exit 10, 0 and 11.
+    case!("check_clinical_panel_text", "check", "PICARD", "--preset", "clinical-panel"),
+    case!("check_generic_text", "check", "PICARD"),
+    case!("check_generic_fail_on_warn", "check", "PICARD", "--fail-on", "warn"),
+    case!("check_clinical_panel_jsonl", "check", "PICARD", "--preset", "clinical-panel", "--format", "jsonl"),
+    case!("check_wgs_incomplete", "check", "PICARD", "--preset", "wgs"),
+    case!("error_report_several_dirs", "report", "PICARD", "PICARD"),
+    case!("error_report_not_a_directory", "report", "tests/data/nope"),
+    case!("error_check_no_metrics", "check", "crates/cli"),
+    case!("error_check_unknown_preset", "check", "PICARD", "--preset", "nope"),
 ];
 
 /// The same tools on corpus BAM t1, with its reference and interval lists.

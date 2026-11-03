@@ -1,0 +1,10 @@
+## argv
+check
+tests/data/picard
+--preset
+nope
+## exit
+1
+## stdout
+## stderr
+bammetrics: no preset "nope": not a shipped preset (generic, clinical-panel, wgs, rna-seq) and not a file

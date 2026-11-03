@@ -16,6 +16,11 @@ use bammetrics_core::quality_yield::{self, QualityYield};
 use bammetrics_core::registry::{self, picard_list};
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 
+mod check;
+mod discover;
+mod error;
+mod report;
+
 #[derive(Parser)]
 #[command(
     name = "bammetrics",
@@ -49,6 +54,13 @@ enum Command {
     /// PREFIX.quality_yield_metrics, .alignment_summary_metrics,
     /// .insert_size_metrics and .hs_metrics.
     Collect(CollectArgs),
+    /// Verdicts, sample pages and a run index from directories of Picard
+    /// metrics files: SAMPLE.verdict.json, SAMPLE.report.html, index.html.
+    Report(report::ReportArgs),
+    /// The gate: evaluate a preset over directories of metrics files, or
+    /// read verdict.json files, print the checks and exit 10 or 11 on a
+    /// bad verdict.
+    Check(check::CheckArgs),
 }
 
 /// BGZF decompression workers. Records are processed on the main thread in
@@ -529,28 +541,35 @@ fn command_line() -> bammetrics_core::Result<Vec<String>> {
         .collect())
 }
 
-fn run() -> bammetrics_core::Result<()> {
+/// The exit code of the command. The Picard face and the five older
+/// subcommands exit 0 or 1; `report` exits 0 on any verdict; `check` exits
+/// 10 or 11 on a bad one (its `--help` has the table).
+fn run() -> error::Result<u8> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if let Some((name, options)) = args.split_first()
         && let Some(tool) = registry::find(name)
     {
-        return tool.run_cli(options);
+        tool.run_cli(options)?;
+        return Ok(0);
     }
     match Cli::parse_from(command_line()?).command {
-        Command::InsertSize(args) => insert_size(args),
-        Command::AlignmentSummary(args) => alignment_summary(args),
-        Command::QualityYield(args) => quality_yield(args),
-        Command::HsMetrics(args) => hs_metrics(args),
-        Command::Collect(args) => collect(args),
+        Command::InsertSize(args) => insert_size(args)?,
+        Command::AlignmentSummary(args) => alignment_summary(args)?,
+        Command::QualityYield(args) => quality_yield(args)?,
+        Command::HsMetrics(args) => hs_metrics(args)?,
+        Command::Collect(args) => collect(args)?,
+        Command::Report(args) => return report::run(args),
+        Command::Check(args) => return check::run(args),
     }
+    Ok(0)
 }
 
 fn main() -> ExitCode {
     match run() {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(code) => ExitCode::from(code),
         Err(e) => {
             eprintln!("bammetrics: {e}");
-            ExitCode::FAILURE
+            ExitCode::from(e.exit_code())
         }
     }
 }

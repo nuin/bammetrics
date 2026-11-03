@@ -1,0 +1,8 @@
+## argv
+check
+crates/cli
+## exit
+1
+## stdout
+## stderr
+bammetrics: no metrics file under crates/cli (a file with a ## METRICS CLASS block)

@@ -1,0 +1,26 @@
+## argv
+check
+tests/data/picard
+--preset
+clinical-panel
+--format
+jsonl
+## exit
+10
+## stdout
+{"event":"check","sample":"NA12878","rule":"hs.mean-target-coverage","label":"Mean target coverage","class":"HsMetrics","metric":"MEAN_TARGET_COVERAGE","level":"ALL_READS","select":null,"unit":null,"value":0.377778,"warn":"< 200","fail":"< 100","status":"fail","reason":"Mean target coverage is 0.377778, below the fail limit of 100","plot":"coverage"}
+{"event":"check","sample":"NA12878","rule":"hs.target-20x","label":"Target bases at 20x","class":"HsMetrics","metric":"PCT_TARGET_BASES_20X","level":"ALL_READS","select":null,"unit":null,"value":0,"warn":"< 0.98","fail":"< 0.95","status":"fail","reason":"Target bases at 20x is 0, below the fail limit of 0.95","plot":"coverage"}
+{"event":"check","sample":"NA12878","rule":"hs.target-100x","label":"Target bases at 100x","class":"HsMetrics","metric":"PCT_TARGET_BASES_100X","level":"ALL_READS","select":null,"unit":null,"value":0,"warn":"< 0.8","fail":"< 0.6","status":"fail","reason":"Target bases at 100x is 0, below the fail limit of 0.6","plot":"coverage"}
+{"event":"check","sample":"NA12878","rule":"hs.evenness","label":"Fold-80 base penalty","class":"HsMetrics","metric":"FOLD_80_BASE_PENALTY","level":"ALL_READS","select":null,"unit":null,"value":null,"warn":"> 2","fail":"> 3","status":"not_measured","reason":"FOLD_80_BASE_PENALTY is ?","plot":"coverage"}
+{"event":"check","sample":"NA12878","rule":"hs.usable-on-target","label":"Usable bases on target","class":"HsMetrics","metric":"PCT_USABLE_BASES_ON_TARGET","level":"ALL_READS","select":null,"unit":null,"value":0.68,"warn":"< 0.5","fail":"< 0.3","status":"pass","reason":null,"plot":null}
+{"event":"check","sample":"NA12878","rule":"hs.selected-bases","label":"Selected bases","class":"HsMetrics","metric":"PCT_SELECTED_BASES","level":"ALL_READS","select":null,"unit":null,"value":0.8,"warn":"< 0.7","fail":"< 0.5","status":"pass","reason":null,"plot":null}
+{"event":"check","sample":"NA12878","rule":"hs.excluded-duplicates","label":"Bases excluded as duplicates","class":"HsMetrics","metric":"PCT_EXC_DUPE","level":"ALL_READS","select":null,"unit":null,"value":0,"warn":"> 0.3","fail":"> 0.5","status":"pass","reason":null,"plot":null}
+{"event":"check","sample":"NA12878","rule":"hs.zero-coverage-targets","label":"Targets with zero coverage","class":"HsMetrics","metric":"ZERO_CVG_TARGETS_PCT","level":"ALL_READS","select":null,"unit":null,"value":0.2,"warn":"> 0.01","fail":"> 0.03","status":"fail","reason":"Targets with zero coverage is 0.2, above the fail limit of 0.03","plot":"coverage"}
+{"event":"check","sample":"NA12878","rule":"hs.gc-dropout","label":"GC dropout","class":"HsMetrics","metric":"GC_DROPOUT","level":"ALL_READS","select":null,"unit":null,"value":20.588235,"warn":"> 5","fail":"> 10","status":"fail","reason":"GC dropout is 20.588235, above the fail limit of 10","plot":"gc-bias"}
+{"event":"check","sample":"NA12878","rule":"alignment.pf-reads-aligned","label":"PF reads aligned","class":"AlignmentSummaryMetrics","metric":"PCT_PF_READS_ALIGNED","level":"ALL_READS","select":"CATEGORY=PAIR","unit":null,"value":1,"warn":"< 0.98","fail":"< 0.95","status":"pass","reason":null,"plot":null}
+{"event":"check","sample":"NA12878","rule":"alignment.adapter","label":"Adapter reads","class":"AlignmentSummaryMetrics","metric":"PCT_ADAPTER","level":"ALL_READS","select":"CATEGORY=PAIR","unit":null,"value":0,"warn":"> 0.005","fail":"> 0.02","status":"pass","reason":null,"plot":"insert-size"}
+{"event":"check","sample":"NA12878","rule":"alignment.chimeras","label":"Chimeric pairs","class":"AlignmentSummaryMetrics","metric":"PCT_CHIMERAS","level":"ALL_READS","select":"CATEGORY=PAIR","unit":null,"value":0,"warn":"> 0.05","fail":"> 0.1","status":"pass","reason":null,"plot":null}
+{"event":"check","sample":"NA12878","rule":"insert.median","label":"Median insert size","class":"InsertSizeMetrics","metric":"MEDIAN_INSERT_SIZE","level":"ALL_READS","select":"PAIR_ORIENTATION=FR","unit":null,"value":310,"warn":"outside 180..450","fail":"outside 120..600","status":"pass","reason":null,"plot":"insert-size"}
+{"event":"check","sample":"NA12878","rule":"yield.q30","label":"Q30 fraction of PF bases","class":"QualityYieldMetrics","metric":"PF_Q30_BASES / PF_BASES","level":"ALL_READS","select":null,"unit":null,"value":1,"warn":"< 0.85","fail":"< 0.75","status":"pass","reason":null,"plot":"cycle-quality"}
+{"event":"verdict","sample":"NA12878","status":"fail","counts":{"pass":8,"warn":0,"fail":5,"not_measured":1},"preset":{"name":"clinical-panel","version":1,"hash":"3d0bcdc8430441db"}}
+## stderr
