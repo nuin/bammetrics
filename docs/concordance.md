@@ -17,7 +17,7 @@ committed fixtures.
 ## Golden suite
 
 ```bash
-make golden          # cargo test --release -p bammetrics-core --test golden
+make golden          # cargo test --release -p bammetrics-cli --test golden
 make golden-update   # rewrite tests/golden after an intended command-line change
 ```
 

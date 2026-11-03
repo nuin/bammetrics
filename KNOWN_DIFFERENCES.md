@@ -57,6 +57,32 @@ behaves how.
   `RIBOSOMAL_INTERVALS` makes every fragment ribosomal and Picard adds to a null
   `RIBOSOMAL_BASES` (`NullPointerException`, no file); bammetrics exits 1 and writes none
   (`test_negative_percentage_without_intervals_fails_in_both`).
+- `CollectVariantCallingMetrics` takes `DBSNP`, `TARGET_INTERVALS` (`TI`),
+  `SEQUENCE_DICTIONARY` (`SD`), `GVCF_INPUT` and `THREAD_COUNT`, each with a non-default
+  case in `tests/concordance/test_variant_tools.py`. `THREAD_COUNT` changes no number in
+  either tool (Picard merges its per-thread accumulators by adding; the cases run Picard at
+  2, 3 and 8 threads against bammetrics' one pass) and a value under 1 exits 1 in both with
+  `Multithreading value must exceed 0.`. `OUTPUT` is the prefix of the two files, as in
+  Picard; a missing `OUTPUT` or `DBSNP` exits 1 with Picard's `Option 'X' is required.`.
+- `GenotypeConcordance` takes `TRUTH_VCF`, `CALL_VCF`, `TRUTH_SAMPLE`, `CALL_SAMPLE`,
+  `INTERVALS` (repeatable), `INTERSECT_INTERVALS`, `MIN_GQ`, `MIN_DP`, `OUTPUT_ALL_ROWS`,
+  `USE_VCF_INDEX`, `MISSING_SITES_HOM_REF` (`MISSING_HOM`) and `IGNORE_FILTER_STATUS`, each
+  with a non-default case. `INPUT` is rejected as Picard rejects it (`Unrecognized option:
+  I`). `OUTPUT_VCF` is not implemented: the annotated VCF is a fourth output file and no
+  metric depends on it, so the option is unknown and exits 1 (Picard would write
+  `<OUTPUT>.genotype_concordance.vcf.gz`). The validation errors are Picard's:
+  `MISSING_SITES_HOM_REF` without `INTERVALS`, `USE_VCF_INDEX=true` or `INTERVALS` on a VCF
+  without a `.tbi` or `.idx` next to it, a missing `TRUTH_SAMPLE` or `CALL_SAMPLE` on a
+  file with two samples, a sample the file lacks, an interval list of another dictionary.
+- `AccumulateVariantCallingMetrics` takes `INPUT` (repeatable prefixes) and `OUTPUT` (a
+  prefix). It reads the shard files back as text and merges them as Picard does, which is
+  lossy: the hidden transition, transversion, insertion, deletion, het and hom-var counts
+  are recovered from the printed ratios (`invertFromRatio`: `round(sum / (ratio + 1))`, 0
+  for a `?`), so a ratio that printed `0` (no transversion) comes back as all
+  transversions, and the merged `DBSNP_TITV`, `NOVEL_TITV`, `*_INS_DEL_RATIO`,
+  `HET_HOMVAR_RATIO` and `SNP_REFERENCE_BIAS` can differ from a single run over the whole
+  file. The cases merge the same shard twice and three times, which doubles the counts in
+  both tools alike.
 - `CollectHsMetrics` and `CollectTargetedPcrMetrics` at any level but a single unit:
   Picard 3.5.0 keeps the four histograms of `TargetMetricsCollector` (high-quality
   depth, unfiltered depth, capped and uncapped base quality) on the collector, so every
@@ -183,7 +209,12 @@ functions return the metrics rows. `output=` writes the file Picard writes to `O
 to `METRICS_FILE` for `collect_duplicate_metrics()`. `collect_gc_bias_metrics()` returns
 the detail rows and writes the summary only with `summary_output=`.
 `collect_multiple_metrics()` needs `output=` (the prefix) and returns one dict per file
-written, with `file` and `rows`.
+written, with `file` and `rows`; so do `collect_variant_calling_metrics()`,
+`accumulate_variant_calling_metrics()` (a list of prefixes) and `genotype_concordance()`.
+`genotype_concordance(truth_vcf, call_vcf, ...)` takes its two VCFs by position (a tool
+without `INPUT` fills its own value options in declaration order from the positional
+arguments) or as `truth_vcf=` and `call_vcf=`. A double Picard prints as `?` (NaN,
+`HET_SPECIFICITY`, a ratio over zero) is `float("nan")` in the dicts.
 
 ## Inputs
 
@@ -195,6 +226,20 @@ written, with `file` and `rows`.
   BED file with `Interval list file must contain header`. The harness gives Picard the
   matching interval lists for this case (`t1_bed_ref`,
   `test_bed_intervals_are_read_by_bammetrics_only`); the outputs are identical.
+- The VCF tools (`CollectVariantCallingMetrics`, `GenotypeConcordance`) read a plain or
+  BGZF-compressed VCF (detected by the gzip magic bytes, whatever the extension) from start
+  to end and never open an index. Picard's `CollectVariantCallingMetrics` queries `INPUT`
+  through its index for every contig of the header dictionary, so a `.vcf` without a
+  `.idx`, or a `.vcf.gz` without a `.tbi`, fails there with `An index is required`; the
+  dbSNP file needs an index there only with `TARGET_INTERVALS`. bammetrics writes the files
+  the indexed run writes (`test_variant_calling_metrics_reads_an_unindexed_input`,
+  `test_target_intervals_need_an_indexed_dbsnp`). The records visited are the same: a
+  record on a contig the header lacks is skipped on both sides, and with
+  `TARGET_INTERVALS` only records overlapping a `uniqued` interval count. `GenotypeConcordance`
+  checks the index files exist when Picard does (`USE_VCF_INDEX`, `INTERVALS`) and then
+  reads the files whole, so a sorted file gives Picard's order. Both VCF headers need
+  `##contig` lines: Picard builds its contig order from them and fails with a
+  `NullPointerException` without; bammetrics exits 1 naming the file.
 - `CollectInsertSizeMetrics` has no reference argument, so it reads none.
 - `CollectWgsMetrics`, `CollectRawWgsMetrics` and `CollectWgsMetricsWithNonZeroCoverage`
   read `R=` through its `.fai`; Picard also needs the `.dict` next to it. `INTERVALS` takes
@@ -405,6 +450,74 @@ output reproduced from Picard 3.5.0, each checked by a case in
 - Rows and histogram columns follow the accumulation levels of `levels.rs`; the column
   prefix is the platform unit, else the library, else the sample, else `All_Reads`.
 
+`CollectVariantCallingMetrics` output reproduced from Picard 3.5.0, each checked by a case
+in `tests/concordance/test_variant_tools.py`:
+
+- The detail rows come out in Java `HashMap` order of the sample names (`java.rs`): Picard
+  keeps them in a `DefaultingMap` and regroups them with `Collectors.groupingBy` when it
+  merges its thread results, even at `THREAD_COUNT=1`.
+- `PCT_DBSNP` and `PCT_DBSNP_INDELS` divide in `float` (`6/11` prints `0.545455` from both
+  precisions, but a count pair whose quotient sits near a sixth-decimal tie can print one
+  unit apart from a double division); the other ratios divide in `double`. `DBSNP_TITV`,
+  `NOVEL_TITV`, `DBSNP_INS_DEL_RATIO` and `NOVEL_INS_DEL_RATIO` stay `0` over a zero
+  denominator; `PCT_DBSNP`, `SNP_REFERENCE_BIAS`, `HET_HOMVAR_RATIO` and
+  `PCT_GQ0_VARIANTS` print `?` there. `TOTAL_MULTIALLELIC_SNPS`, `NUM_IN_DB_SNP_MULTIALLELIC`,
+  `TOTAL_COMPLEX_INDELS` and `NUM_IN_DB_SNP_COMPLEX_INDELS` are doubles in Picard and
+  print as integers.
+- A record counts when its allele list holds an alternate and some genotype is not
+  hom-ref, so a sites-only VCF and an all-no-call site differ: the first counts nothing
+  (no genotype at all passes `allMatch`), the second counts for the summary. A filtered
+  record adds only to `FILTERED_SNPS` (any SNP, multiallelic included) or
+  `FILTERED_INDELS` (any indel, complex included). An MNP, symbolic or mixed record falls
+  in no bucket but still counts in `NUM_SINGLETONS` when exactly one sample is het and no
+  other sample carries a variant allele. dbSNP membership is by contig and start in two
+  bit sets (SNP records set the SNP bits, indel records the indel bits, each from the
+  record's start to its end), so a call inside the span of a dbSNP deletion is in dbSNP
+  and a dbSNP SNP at an indel's position is not; a filtered dbSNP record sets its bits
+  too. The reference bias adds `AD[0]` and `AD[1]` of every het genotype at a biallelic
+  unfiltered SNP (an `AD` with a non-integer is null and skipped). A sample's detail row
+  sees a record only when its genotype is not hom-ref, skips its no-calls for every
+  column but `TOTAL_GQ0_VARIANTS`, which counts a `GQ` of 0 on a no-call too; `GQ` is read
+  as a double and rounded (`20.5` is 21). `GVCF_INPUT` cuts each record to its one
+  sample's called alleles first, so a `<NON_REF>` record with a hom-ref genotype is not a
+  variant and `A>G,<NON_REF>` with `0/1` is a biallelic SNP; without the flag the same
+  record is `MIXED` and counts only as a singleton.
+
+`GenotypeConcordance` output reproduced from Picard 3.5.0, each checked by a case in
+`tests/concordance/test_variant_tools.py` (`genotype_concordance.rs` documents the
+scheme, the states and the allele normalization):
+
+- Each record is cut to the chosen sample before anything else, re-deriving its alleles
+  from that genotype: a `0/0`, `./.` or `0/.` genotype makes a `NO_VARIATION` record and a
+  `./1` a SNP. The pair's types then pick the counter: a SNP truth with a SNP, mixed or
+  non-variant call goes to the SNP rows, likewise for indels, a mixed or non-variant truth
+  follows the call's type, and every other pair (two non-variants, SNP against indel, an
+  MNP or symbolic record on either side, two mixed records) is counted nowhere. So a
+  truth `0/0` reaches a cell only against a variant call, and a hom-ref truth against a
+  missing call, two hom-refs, or a mixed record against a hom-ref are cells no site can
+  fill; neither can `HET_VAR3_VAR4` against a missing or hom-ref truth (the call's
+  alleles take positions 1 and 2) nor `HOM_VAR2` against a `HET_VAR1_VAR2` truth (a call
+  allele already at position 2 makes Picard re-add the truth alleles swapped, so the call
+  reads `HOM_VAR1`). `variant_vcfs.py` lists these 11 cells; every other cell outside the
+  scheme's `NA` entries is counted by some site of the corpus
+  (`test_every_reachable_scheme_cell_is_hit`), the `MISSING`/`MISSING` cell under
+  `MISSING_SITES_HOM_REF` only, where it holds the interval bases minus the records counted.
+- A filtered truth record is `VC_FILTERED` whatever `IGNORE_FILTER_STATUS` says; the flag
+  only turns a filtered call into its genotype's state. `LOW_GQ` is tested before
+  `LOW_DP`, a `GQ` or `DP` that is absent or `.` (-1) never fires, `FT` other than `.` or
+  `PASS` is `GT_FILTERED`, and a genotype with one allele reaching the allele comparison
+  (a haploid `1`) is Picard's `IllegalStateException`, exit 1 in both tools; so is a pair
+  whose reference alleles are neither equal nor one a prefix of the other. When one
+  reference is longer, the shorter side's alleles get the suffix spliced in at the
+  shorter reference's length (a truth `A>AT` against a call `AC>ATC` gives `ACT` against
+  `ATC`, two different alleles, `HOM_VAR1` against `HOM_VAR2`).
+- Two records at one position in one file pair with the other file's records in order
+  (the first with the first, the second with nothing); records on different contigs
+  order by the truth header's `##contig` lines. `INTERVALS` lists are intersected (or
+  united with `INTERSECT_INTERVALS=false`) and `uniqued`; the first list's dictionary
+  must equal the truth VCF's. `HET_SPECIFICITY` and `HOMVAR_SPECIFICITY` are NaN by
+  definition (`?`), and every rate over no cells prints `?`.
+
 `BedToIntervalList` output reproduced from Picard 3.5.0
 (`tests/concordance/test_bed_to_interval_list.py`): fields split on a tab or a run of
 spaces; a line with one field is skipped and one with two fields is a one-base interval;
@@ -448,7 +561,8 @@ harness runs every native case at 1 and 8.
 
 ## Not implemented
 
-`CollectVariantCallingMetrics`, `MarkDuplicates`, `CollectSequencingArtifactMetrics`.
+`MarkDuplicates`, `CollectSequencingArtifactMetrics`, `FindMendelianViolations`,
+`GenotypeConcordance OUTPUT_VCF` (see Options).
 `CollectMultipleMetrics` still rejects `PROGRAM=RnaSeqMetrics` and
 `CollectSequencingArtifactMetrics`: the wrapper does not yet pass its `REF_FLAT`,
 `INTERVALS` and `IGNORE_SEQUENCE` to the RNA collector (Picard runs that program at

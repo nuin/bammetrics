@@ -33,6 +33,10 @@ bammetrics CollectInsertSizeMetrics I=sample.bam O=sample.insert_size_metrics H=
 bammetrics BedToIntervalList I=panel.bed SD=ref.dict O=panel.interval_list
 bammetrics CollectWgsMetrics I=sample.bam O=sample.wgs_metrics R=ref.fa INTERVALS=panel.interval_list
 bammetrics CollectRawWgsMetrics I=sample.bam O=sample.raw_wgs_metrics R=ref.fa INCLUDE_BQ_HISTOGRAM=true
+
+# VCF tools: OUTPUT is a prefix, the files get Picard's extensions
+bammetrics CollectVariantCallingMetrics I=calls.vcf.gz DBSNP=dbsnp.vcf.gz O=sample
+bammetrics GenotypeConcordance TV=truth.vcf.gz TRUTH_SAMPLE=HG002 CV=calls.vcf.gz CS=sample O=sample
 ```
 
 Or compute several metrics in one read of the BAM:
@@ -90,6 +94,9 @@ under each failing check. The presets, the rule language and `verdict.json` are 
 | CollectWgsMetricsWithNonZeroCoverage | | `collect_wgs_metrics_with_non_zero_coverage()` |
 | BedToIntervalList | | `bed_to_interval_list()` |
 | CollectRnaSeqMetrics (`REF_FLAT`, `RIBOSOMAL_INTERVALS`, all three `STRAND` values, the normalized coverage histogram) | all four | `collect_rna_seq_metrics()` |
+| CollectVariantCallingMetrics (VCF in, `DBSNP`, `TARGET_INTERVALS`, `SEQUENCE_DICTIONARY`, `GVCF_INPUT`, `THREAD_COUNT`; summary and per-sample detail files) | | `collect_variant_calling_metrics()` |
+| AccumulateVariantCallingMetrics (shard prefixes merged as Picard merges them) | | `accumulate_variant_calling_metrics()` |
+| GenotypeConcordance (`TRUTH_VCF`, `CALL_VCF`, samples, `INTERVALS`, `MIN_GQ`, `MIN_DP`, `MISSING_SITES_HOM_REF`, `IGNORE_FILTER_STATUS`, `OUTPUT_ALL_ROWS`; summary, detail and contingency files) | | `genotype_concordance()` |
 | the first four in one pass | | `collect()` |
 
 Levels are `METRIC_ACCUMULATION_LEVEL`: `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`.

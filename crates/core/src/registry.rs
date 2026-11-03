@@ -143,6 +143,9 @@ pub const TOOLS: &[&Tool] = &[
     &crate::hs_metrics::TOOL,
     &crate::hs_metrics::PCR_TOOL,
     &crate::rna_seq_metrics::TOOL,
+    &crate::variant_calling_metrics::TOOL,
+    &crate::variant_calling_metrics::ACCUMULATE_TOOL,
+    &crate::genotype_concordance::TOOL,
 ];
 
 /// The tool named `name`.
@@ -319,9 +322,32 @@ impl Tool {
                 }
             }
         }
-        inv.input =
-            input.ok_or_else(|| Error::Usage(format!("{}: INPUT is required", self.name)))?;
+        inv.input = match input {
+            Some(path) => path,
+            None if self.takes_input() => {
+                return Err(Error::Usage(format!("{}: INPUT is required", self.name)));
+            }
+            None => PathBuf::new(),
+        };
         Ok(inv)
+    }
+
+    /// False for a tool that declares `INPUT` as [`Opt::rejected`]
+    /// (`GenotypeConcordance` reads `TRUTH_VCF` and `CALL_VCF`); its
+    /// positional Python arguments then fill its own value options in
+    /// declaration order.
+    pub fn takes_input(&self) -> bool {
+        self.lookup("INPUT")
+            .is_some_and(|o| matches!(o.kind, Kind::Value))
+    }
+
+    /// The long names of the tool's own value options, in declaration
+    /// order.
+    pub fn value_options(&self) -> impl Iterator<Item = &'static str> {
+        self.options
+            .iter()
+            .filter(|o| matches!(o.kind, Kind::Value))
+            .map(|o| o.names[0])
     }
 
     /// Parse and compute. The invocation is returned for its output path
