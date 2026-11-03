@@ -81,6 +81,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bammetrics-report"
+version = "0.6.0"
+dependencies = [
+ "bammetrics-core",
+ "bammetrics-verdict",
+]
+
+[[package]]
 name = "bammetrics-verdict"
 version = "0.6.0"
 dependencies = [
