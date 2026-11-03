@@ -222,6 +222,31 @@ def accumulate_quality_yield_metrics(input: _Paths, **options: Any) -> list[dict
     """AccumulateQualityYieldMetrics: QualityYieldMetrics files (a list of paths)
     merged into one dict. output=PATH writes the merged file."""
 
+def collect_gc_bias_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """CollectGcBiasMetrics: the detail rows (Picard's OUTPUT file), one dict per
+    GC bin, accumulation unit and READS_USED value. reference_sequence=PATH is
+    required. summary_output=PATH writes the GcBiasSummaryMetrics file and
+    output=PATH the detail file. Options: scan_window_size, is_bisulfite_sequenced,
+    also_ignore_duplicates, metric_accumulation_level, minimum_genome_fraction
+    (accepted, unused by Picard 3.5.0), stop_after, assume_sorted."""
+
+def collect_multiple_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
+    """CollectMultipleMetrics: every PROGRAM on one read of the BAM, each written
+    to output + its Picard extension (+ file_extension). output=PREFIX is
+    required. Returns one dict per file written: file and rows. Options:
+    program=[...] (adds to Picard's default five; "null" clears), reference_sequence,
+    metric_accumulation_level, file_extension, extra_argument=["PROGRAM::KEY=VALUE"],
+    stop_after, assume_sorted."""
+
+def estimate_library_complexity(input: _Paths, **options: Any) -> list[dict[str, Any]]:
+    """EstimateLibraryComplexity: one dict per library (DuplicationMetrics columns)
+    from read sequences alone; the input may be unaligned, or a list of files.
+    Options: min_identical_bases, max_diff_rate, min_mean_quality, max_group_ratio,
+    max_read_length, min_group_count, read_name_regex, optical_duplicate_pixel_distance,
+    max_optical_duplicate_set_size, barcode_tag, read_one_barcode_tag,
+    read_two_barcode_tag. output=PATH writes the file with the
+    duplication_group_count histogram."""
+
 def alignment_summary(
     path: _Path,
     reference: _Path | None = None,

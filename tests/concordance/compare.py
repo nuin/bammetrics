@@ -22,6 +22,11 @@ columns and both values. When Picard writes no file (CollectInsertSizeMetrics
 with every orientation under MINIMUM_PCT), bammetrics must write none either.
 `output_key` is the option naming the metrics file (`M` for
 CollectDuplicateMetrics, which takes no `O`).
+
+`compare_outputs` does the same for a tool that writes several files
+(CollectGcBiasMetrics with `S=`, CollectMultipleMetrics with `O=` as a
+prefix): every file either side wrote under the work directory must have its
+counterpart, and each pair is compared as above.
 """
 import subprocess
 import tempfile
@@ -134,4 +139,46 @@ def compare_metrics(tool, bam, picard_args=(), bam_args=None, workdir=None, expe
         seen.append(picard)
     return (len(picard.rows) * len(picard.columns)
             + len(picard.histogram) * len(picard.histogram_columns))
+
+
+def compare_outputs(tool, bam, picard_args=(), outputs=(("O", ""),), workdir=None, seen=None,
+                    bam_args=None):
+    """Run both tools with each `(option, suffix)` of `outputs` set to
+    `<side><suffix>` in a fresh directory (`("O", "")` makes `O=<dir>/picard`,
+    which CollectMultipleMetrics takes as a prefix), then compare every file
+    Picard wrote with bammetrics' file of the same suffix. Returns the cells
+    compared over every file. A file on one side only is a failure, as is
+    nothing written by either side. A `seen` list receives `(suffix, parsed)`
+    per Picard file."""
+    bam_args = picard_args if bam_args is None else bam_args
+    with tempfile.TemporaryDirectory(dir=workdir) as tmp:
+        tmp = Path(tmp)
+        picard_cmd = [f"{option}={tmp / ('picard' + suffix)}" for option, suffix in outputs]
+        ours_cmd = [f"{option}={tmp / ('bammetrics' + suffix)}" for option, suffix in outputs]
+        subprocess.run(["picard", tool, f"I={bam}", *picard_cmd, *picard_args, "VERBOSITY=ERROR",
+                        "QUIET=true"], check=True, env=picard_env(),
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run([str(BAMMETRICS), tool, f"I={bam}", *ours_cmd, *bam_args],
+                       check=True, capture_output=True, text=True)
+        picard_files = {p.name[len("picard"):]: p for p in tmp.glob("picard*")}
+        ours_files = {p.name[len("bammetrics"):]: p for p in tmp.glob("bammetrics*")}
+        assert set(picard_files) == set(ours_files), (
+            f"{tool}: Picard wrote {sorted(picard_files)}, bammetrics {sorted(ours_files)}")
+        assert picard_files, f"{tool}: neither tool wrote a file"
+        cells = 0
+        for suffix in sorted(picard_files):
+            picard = parse_picard_metrics(picard_files[suffix])
+            ours = parse_picard_metrics(ours_files[suffix])
+            problems = diff_metrics(picard, ours)
+            picard_body, ours_body = body(picard_files[suffix]), body(ours_files[suffix])
+            if not problems and picard_body != ours_body:
+                problems.append("file after the header lines differs: "
+                                + first_difference(picard_body, ours_body))
+            assert not problems, (f"{tool} {' '.join(picard_args)} file {suffix!r}:\n  "
+                                  + "\n  ".join(problems[:40]))
+            if seen is not None:
+                seen.append((suffix, picard))
+            cells += (len(picard.rows) * len(picard.columns)
+                      + len(picard.histogram) * len(picard.histogram_columns))
+        return cells
 

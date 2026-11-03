@@ -14,24 +14,25 @@ use std::fs;
 use std::path::Path;
 
 use crate::error::{Error, Result};
-use crate::metric::MetricsOutput;
+use crate::metric::{MetricsOutput, ToolOutput};
 use crate::quality_yield::{CLASS, COLUMNS, Row};
-use crate::registry::{Invocation, Tool};
+use crate::registry::{Invocation, Opt, Tool};
 
 pub const TOOL: Tool = Tool {
     name: "AccumulateQualityYieldMetrics",
-    options: &[],
+    options: &[Opt::rejected(&["ASSUME_SORTED", "AS"])],
     run: run_tool,
+    collector: None,
 };
 
-fn run_tool(inv: &Invocation) -> Result<Option<MetricsOutput>> {
+fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let mut total = Row::default();
     for input in inv.all("INPUT") {
         total.merge(&read_row(Path::new(input))?);
     }
     let mut output = MetricsOutput::from_rows(&[total], None);
     output.with_headers = false;
-    Ok(Some(output))
+    Ok(output.into())
 }
 
 /// The first `QualityYieldMetrics` row of a Picard metrics file

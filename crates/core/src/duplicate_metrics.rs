@@ -32,9 +32,11 @@ use crate::duplication::{estimate_library_size, estimate_roi};
 use crate::error::Result;
 use crate::histogram::Histogram;
 use crate::levels::read_groups;
-use crate::metric::{HistogramSection, HistogramSeries, MetricRow, MetricsOutput, Value};
+use crate::metric::{
+    HistogramSection, HistogramSeries, MetricRow, MetricsOutput, ToolOutput, Value,
+};
 use crate::metrics_file::KeyClass;
-use crate::pass::Accumulator;
+use crate::pass::{self, Accumulator, Collector};
 use crate::registry::{Invocation, Opt, Tool};
 
 /// `LibraryIdGenerator.UNKNOWN_LIBRARY`.
@@ -125,11 +127,23 @@ pub const TOOL: Tool = Tool {
         Opt::value(&["STOP_AFTER"]),
     ],
     run: run_tool,
+    collector: Some(collector),
 };
 
-fn run_tool(inv: &Invocation) -> Result<Option<MetricsOutput>> {
-    let rows = inv.single_pass(|header| Ok(DuplicateMetrics::new(header)))?;
-    let histogram = match rows.as_slice() {
+fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
+    inv.run_collector(collector)
+}
+
+fn collector(_: &Invocation, header: &sam::Header) -> Result<Box<dyn Collector>> {
+    Ok(pass::boxed(DuplicateMetrics::new(header), |rows| {
+        Ok(output(&rows).into())
+    }))
+}
+
+/// The metrics file: the rows and, for exactly one library with a size,
+/// the ROI histogram.
+fn output(rows: &[Row]) -> MetricsOutput {
+    let histogram = match rows {
         [only] => only.roi_histogram().map(|histogram| HistogramSection {
             key_label: "BIN",
             key_class: KeyClass::Double,
@@ -140,7 +154,7 @@ fn run_tool(inv: &Invocation) -> Result<Option<MetricsOutput>> {
         }),
         _ => None,
     };
-    Ok(Some(MetricsOutput::from_rows(&rows, histogram)))
+    MetricsOutput::from_rows(rows, histogram)
 }
 
 /// The pass accumulator.

@@ -1,14 +1,54 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
-`CollectAlignmentSummaryMetrics` at every accumulation level, with every Picard option
-that changes a number (parity plan phase P1). The read-level tools of phase P2:
+Parity plan phases P1 to P3. `CollectAlignmentSummaryMetrics` at every accumulation
+level, with every Picard option that changes a number (P1). The read-level tools of P2:
 `QualityScoreDistribution`, `MeanQualityByCycle`, `CollectBaseDistributionByCycle`,
 `CollectDuplicateMetrics` and `AccumulateQualityYieldMetrics`, with
-`CollectQualityYieldMetrics` moved to the registry.
+`CollectQualityYieldMetrics` moved to the registry. The wrapper and complexity tools of
+P3: `CollectMultipleMetrics` on one read of the BAM, `CollectGcBiasMetrics`,
+`EstimateLibraryComplexity` with the optical duplicate finder, and the differential
+fuzzer with its shrinker.
 
 ### Added
+
+- `CollectMultipleMetrics`: Picard's default `PROGRAM` list plus `CollectGcBiasMetrics`
+  and `CollectQualityYieldMetrics`, every file named as Picard names it (`OUTPUT` plus
+  the program's extension plus `FILE_EXTENSION`), `EXTRA_ARGUMENT=<PROGRAM>::<KEY=VALUE>`,
+  `METRIC_ACCUMULATION_LEVEL`, `STOP_AFTER`, `ASSUME_SORTED`, `REFERENCE_SEQUENCE`. Every
+  program reads the BAM once: each tool in the registry exposes a one-pass `collector`
+  (`pass::Collector`, plan item M9) and `pass::run_many` feeds them from one read on a
+  thread each.
+- `CollectGcBiasMetrics`: the detail file (`OUTPUT`) and the summary file
+  (`SUMMARY_OUTPUT`, `S`), `SCAN_WINDOW_SIZE`, `IS_BISULFITE_SEQUENCED`,
+  `ALSO_IGNORE_DUPLICATES` (the `UNIQUE` rows), all four accumulation levels with Picard's
+  `All Reads`, `Sample`, `Library` and `Read Group` labels, `STOP_AFTER`,
+  `MINIMUM_GENOME_FRACTION` (accepted; Picard 3.5.0 never reads it).
+- `EstimateLibraryComplexity` on aligned or unaligned input, one or several `INPUT`
+  files: `MIN_IDENTICAL_BASES`, `MAX_DIFF_RATE`, `MIN_MEAN_QUALITY`, `MAX_GROUP_RATIO`,
+  `MAX_READ_LENGTH`, `MIN_GROUP_COUNT`, `READ_NAME_REGEX` (the 5- and 7-field Illumina
+  forms, a regex, or `null`), `OPTICAL_DUPLICATE_PIXEL_DISTANCE`,
+  `MAX_OPTICAL_DUPLICATE_SET_SIZE`, `BARCODE_TAG`, `READ_ONE_BARCODE_TAG`,
+  `READ_TWO_BARCODE_TAG`; the per-library rows in Java `HashMap` order and the
+  `duplication_group_count` histogram.
+- `crates/core/src/optical.rs` (plan item M18): the read-name tile parser and the optical
+  duplicate finder (direct pairs for sets of 2 or 3, union-find clusters above).
+  `crates/core/src/java.rs` (M22, first piece): `String.hashCode` and `HashMap`
+  iteration order.
+- `tests/concordance/fuzz.py` and `make fuzz SEED=n N=m`: a seeded random BAM generator,
+  a differential runner over CollectMultipleMetrics (seven programs),
+  CollectDuplicateMetrics and EstimateLibraryComplexity with a Picard output cache, and a
+  ddmin shrinker writing `tests/concordance/regressions/`, replayed by
+  `test_regressions.py`.
+- `tests/concordance/test_multiple_metrics.py`, `test_gc_bias.py` and
+  `test_library_complexity.py` against Picard 3.5.0 on the bwa tiers, the foundation
+  corpus and the hand-built BAMs (`complexity_bams.py` adds Illumina read names, optical
+  duplicate sets and barcodes), every option, error parity, and the 3-distinct-values
+  check per column. `compare_outputs` compares every file a multi-file tool writes.
+- Python: `collect_multiple_metrics()` (one dict per file written: `file`, `rows`),
+  `collect_gc_bias_metrics()` (detail rows; `summary_output=` writes the summary) and
+  `estimate_library_complexity()`.
 
 - `QualityScoreDistribution`, `MeanQualityByCycle` and `CollectBaseDistributionByCycle` in
   the registry, with `ALIGNED_READS_ONLY`, `PF_READS_ONLY`, `INCLUDE_NO_CALLS` (quality
@@ -43,6 +83,10 @@ that changes a number (parity plan phase P1). The read-level tools of phase P2:
 
 ### Changed
 
+- `Tool::run` returns a `ToolOutput` (the `OUTPUT` file plus any further files with
+  their paths); `Tool::execute` and the Python binding write every file.
+- `EstimateLibraryComplexity` and `AccumulateQualityYieldMetrics` reject `ASSUME_SORTED`
+  as Picard does (`Opt::rejected`).
 - `ASSUME_SORTED=false` exits 1 on a BAM whose header is not coordinate sorted in every
   registry tool, as Picard does. It used to be dropped with a note.
 - Picard-syntax `CollectQualityYieldMetrics` goes through the registry and gains

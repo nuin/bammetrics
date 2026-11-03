@@ -12,13 +12,13 @@
 //!   index error).
 //! * Only qualities with a non-zero count print.
 
-use noodles::bam;
+use noodles::{bam, sam};
 
 use crate::error::{Error, Result};
 use crate::histogram::Histogram;
-use crate::metric::{HistogramSection, HistogramSeries, MetricsOutput};
+use crate::metric::{HistogramSection, HistogramSeries, MetricsOutput, ToolOutput};
 use crate::metrics_file::KeyClass;
-use crate::pass::Accumulator;
+use crate::pass::{self, Accumulator, Collector};
 use crate::quality::{base_qualities, original_qualities};
 use crate::record::record_name;
 use crate::registry::{Invocation, Opt, Tool};
@@ -54,12 +54,19 @@ pub const TOOL: Tool = Tool {
         Opt::value(&["STOP_AFTER"]),
     ],
     run: run_tool,
+    collector: Some(collector),
 };
 
-fn run_tool(inv: &Invocation) -> Result<Option<MetricsOutput>> {
+fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
+    inv.run_collector(collector)
+}
+
+fn collector(inv: &Invocation, _: &sam::Header) -> Result<Box<dyn Collector>> {
     let opts = Options::from_invocation(inv)?;
-    let section = inv.single_pass(|_| Ok(QualityScoreDistribution::new(opts)))?;
-    Ok(Some(MetricsOutput::histogram_only(section)))
+    Ok(pass::boxed(
+        QualityScoreDistribution::new(opts),
+        |section| Ok(MetricsOutput::histogram_only(section).into()),
+    ))
 }
 
 /// The pass accumulator.

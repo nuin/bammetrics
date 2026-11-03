@@ -2,10 +2,12 @@
 //!
 //! A tool is a [`Tool`] constant in its own module: the Picard name, the
 //! options it takes and a `run` function from [`Invocation`] to
-//! [`MetricsOutput`]. Adding it to [`TOOLS`] is the only edit outside that
+//! [`ToolOutput`]. Adding it to [`TOOLS`] is the only edit outside that
 //! module; the command line (`bammetrics <ToolName> I=... O=...`) and the
 //! Python binding then both serve it, because both go through
-//! [`Tool::execute`].
+//! [`Tool::execute`]. A tool that reads the BAM once also gives a
+//! `collector`, which `CollectMultipleMetrics` runs beside the other
+//! programs' collectors on one read of the file.
 //!
 //! Arguments are the forms Picard 3.5.0 accepts: `KEY=VALUE`, `--KEY VALUE`,
 //! `--KEY=VALUE` and `-K VALUE`, with long or short names. An option no
@@ -21,8 +23,8 @@ use std::str::FromStr;
 use noodles::sam;
 
 use crate::error::{Error, Result};
-use crate::metric::MetricsOutput;
-use crate::pass::{self, Accumulator, Limits, default_threads};
+use crate::metric::ToolOutput;
+use crate::pass::{self, Accumulator, Collector, Limits, default_threads};
 
 /// What an option does once recognised.
 #[derive(Clone, Copy)]
@@ -33,6 +35,9 @@ pub enum Kind {
     Output,
     /// Never changes the metrics: accepted, dropped, noted on stderr.
     Ignored(&'static str),
+    /// A [`COMMON`] option this tool does not take (Picard's parser
+    /// rejects it as unrecognized).
+    Rejected,
 }
 
 /// One option: its names (the long Picard name first) and kind.
@@ -65,6 +70,14 @@ impl Opt {
             kind: Kind::Ignored(why),
         }
     }
+
+    /// A common option Picard rejects for this tool.
+    pub const fn rejected(names: &'static [&'static str]) -> Self {
+        Self {
+            names,
+            kind: Kind::Rejected,
+        }
+    }
 }
 
 /// Options every Picard tool takes from `CommandLineProgram` and
@@ -91,15 +104,23 @@ const COMMON: &[Opt] = &[
     ),
 ];
 
+/// Builds a tool's one-pass [`Collector`] from its parsed options and the
+/// BAM header (Picard's `SinglePassSamProgram.setup`).
+pub type CollectorFn = fn(&Invocation, &sam::Header) -> Result<Box<dyn Collector>>;
+
 /// A registered Picard tool.
 pub struct Tool {
     /// The Picard class name, e.g. `CollectInsertSizeMetrics`.
     pub name: &'static str,
     /// Options beyond [`COMMON`]; these shadow a common option of the same name.
     pub options: &'static [Opt],
-    /// Compute the metrics. `None` means Picard writes no file (it logs a
-    /// warning instead, which `run` prints).
-    pub run: fn(&Invocation) -> Result<Option<MetricsOutput>>,
+    /// Compute the metrics: the `OUTPUT` file (`None` where Picard writes
+    /// none and logs a warning, which `run` prints) and any further files.
+    pub run: fn(&Invocation) -> Result<ToolOutput>,
+    /// For a tool that reads the BAM once: its collector, so
+    /// `CollectMultipleMetrics` can run it on a shared read. `run` is then
+    /// [`Invocation::run_collector`] on it.
+    pub collector: Option<CollectorFn>,
 }
 
 /// Every registered tool. One line per tool.
@@ -112,6 +133,9 @@ pub const TOOLS: &[&Tool] = &[
     &crate::base_distribution_by_cycle::TOOL,
     &crate::duplicate_metrics::TOOL,
     &crate::accumulate_quality_yield::TOOL,
+    &crate::gc_bias::TOOL,
+    &crate::multiple_metrics::TOOL,
+    &crate::library_complexity::TOOL,
 ];
 
 /// The tool named `name`.
@@ -171,20 +195,30 @@ impl Invocation {
         picard_list(default, self.all(name), parse)
     }
 
-    /// Read `INPUT` once with `STOP_AFTER` (0 when the tool has no such
-    /// option) and `ASSUME_SORTED` (default true) applied, the
+    /// `STOP_AFTER` (0 when the tool has no such option) and `ASSUME_SORTED`
+    /// (default true) as given.
+    pub fn limits(&self) -> Result<Limits> {
+        let stop_after: i64 = self.parse("STOP_AFTER", 0)?;
+        Ok(Limits {
+            stop_after: u64::try_from(stop_after).unwrap_or(0),
+            assume_sorted: self.flag("ASSUME_SORTED", true)?,
+        })
+    }
+
+    /// Read `INPUT` once with [`Invocation::limits`] applied, the
     /// `SinglePassSamProgram` loop.
     pub fn single_pass<A, F>(&self, build: F) -> Result<A::Output>
     where
         A: Accumulator,
         F: FnOnce(&sam::Header) -> Result<A>,
     {
-        let stop_after: i64 = self.parse("STOP_AFTER", 0)?;
-        let limits = Limits {
-            stop_after: u64::try_from(stop_after).unwrap_or(0),
-            assume_sorted: self.flag("ASSUME_SORTED", true)?,
-        };
-        pass::run_limited(&self.input, self.threads, limits, build)
+        pass::run_limited(&self.input, self.threads, self.limits()?, build)
+    }
+
+    /// [`Invocation::single_pass`] over a tool's collector: the `run` of
+    /// every tool that has one.
+    pub fn run_collector(&self, build: CollectorFn) -> Result<ToolOutput> {
+        self.single_pass(|header| build(self, header))
     }
 
     /// A Picard boolean (`true` or `false`, any case).
@@ -259,9 +293,16 @@ impl Tool {
                     self.name
                 ))
             })?;
+            if matches!(opt.kind, Kind::Rejected) {
+                return Err(Error::Usage(format!(
+                    "{}: Unrecognized option: {name}",
+                    self.name
+                )));
+            }
             inv.command.push_str(&format!(" {}={value}", opt.names[0]));
             match opt.kind {
                 Kind::Ignored(why) => inv.notes.push(format!("ignoring {name}={value}: {why}")),
+                Kind::Rejected => unreachable!("rejected above"),
                 Kind::Output => inv.output = Some(PathBuf::from(&value)),
                 Kind::Value => {
                     if opt.names[0] == "INPUT" {
@@ -278,25 +319,37 @@ impl Tool {
 
     /// Parse and compute. The invocation is returned for its output path
     /// and header.
-    pub fn execute(&self, args: &[String]) -> Result<(Invocation, Option<MetricsOutput>)> {
+    pub fn execute(&self, args: &[String]) -> Result<(Invocation, ToolOutput)> {
         let inv = self.parse(args)?;
         let output = (self.run)(&inv)?;
         Ok((inv, output))
     }
 
     /// The command-line entry: compute and write the Picard metrics file to
-    /// `OUTPUT`, or standard output without one.
+    /// `OUTPUT`, or standard output without one, and every further file to
+    /// its own path.
     pub fn run_cli(&self, args: &[String]) -> Result<()> {
         let (inv, output) = self.execute(args)?;
         for note in &inv.notes {
             eprintln!("bammetrics: {note}");
         }
-        let Some(output) = output else {
-            return Ok(());
-        };
-        let path = inv.output.as_deref();
-        write_to(path, |out| output.write(output.headers(&inv.command), out))
+        write_files(&inv, &output)
     }
+}
+
+/// Write a tool's files: `OUTPUT` (standard output without a path) and the
+/// extra files, each with the invocation's `StringHeader` lines.
+pub fn write_files(inv: &Invocation, output: &ToolOutput) -> Result<()> {
+    if let Some(main) = &output.main {
+        let path = inv.output.as_deref();
+        write_to(path, |out| main.write(main.headers(&inv.command), out))?;
+    }
+    for (path, file) in &output.extra {
+        write_to(Some(path), |out| {
+            file.write(file.headers(&inv.command), out)
+        })?;
+    }
+    Ok(())
 }
 
 /// The values of a Picard collection option applied to its default: each

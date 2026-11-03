@@ -19,7 +19,9 @@ use crate::adapter::{Adapters, DEFAULT_ADAPTERS};
 use crate::error::{Error, Result};
 use crate::histogram::Histogram;
 use crate::levels::{Labels, Level, Levels, parse_levels};
-use crate::metric::{HistogramSection, HistogramSeries, MetricRow, MetricsOutput, Value};
+use crate::metric::{
+    HistogramSection, HistogramSeries, MetricRow, MetricsOutput, ToolOutput, Value,
+};
 use crate::pass::{self, Accumulator};
 use crate::record::Orientation;
 use crate::reference::Reference;
@@ -110,12 +112,19 @@ pub const TOOL: Tool = Tool {
         Opt::value(&["STOP_AFTER"]),
     ],
     run: run_tool,
+    collector: Some(collector),
 };
 
-fn run_tool(inv: &Invocation) -> Result<Option<MetricsOutput>> {
+fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
+    inv.run_collector(collector)
+}
+
+fn collector(inv: &Invocation, header: &sam::Header) -> Result<Box<dyn pass::Collector>> {
     let opts = Options::from_invocation(inv)?;
-    let report = inv.single_pass(|header| AlignmentSummary::new(&opts, header))?;
-    Ok(Some(report.output()))
+    Ok(pass::boxed(
+        AlignmentSummary::new(&opts, header)?,
+        |report| Ok(report.output().into()),
+    ))
 }
 
 /// `AlignmentSummaryMetrics.Category`.

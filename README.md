@@ -6,8 +6,8 @@ bammetrics is a drop-in for the Picard jar. It takes Picard's `KEY=VALUE` argume
 writes Picard's metrics files, byte-identical from `## METRICS CLASS` on. It is also a
 Python module that returns the same numbers as typed objects, and a Rust library.
 
-Every tool is checked against a pinned Picard 3.5.0 on a synthetic corpus: 980
-cases, every printed cell compared as a string. What still differs on purpose is in
+Every tool is checked against a pinned Picard 3.5.0 on a synthetic corpus and on
+seeded random BAMs, every printed cell compared as a string. What still differs on purpose is in
 [KNOWN_DIFFERENCES.md](KNOWN_DIFFERENCES.md).
 
 ## Install
@@ -63,6 +63,9 @@ Every option is listed in [docs/cli.md](docs/cli.md).
 | CollectBaseDistributionByCycle | | `collect_base_distribution_by_cycle()` |
 | CollectDuplicateMetrics | | `collect_duplicate_metrics()` |
 | AccumulateQualityYieldMetrics | | `accumulate_quality_yield_metrics()` |
+| CollectGcBiasMetrics | all four | `collect_gc_bias_metrics()` |
+| CollectMultipleMetrics | all four | `collect_multiple_metrics()` |
+| EstimateLibraryComplexity | | `estimate_library_complexity()` |
 | the first four in one pass | | `collect()` |
 
 Levels are `METRIC_ACCUMULATION_LEVEL`: `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`.
@@ -89,6 +92,7 @@ Method and all rows: [docs/benchmarks.md](docs/benchmarks.md).
 ```bash
 make corpus reference-metrics concordance   # needs samtools, bwa, picard 3.5.0, uv
 make python-test
+make fuzz SEED=1 N=200                      # random BAMs through both tools, failures shrunk
 ```
 
 The corpus is synthetic and seeded; no patient data is in the repository. The generator,

@@ -11,12 +11,12 @@
 //!   first-end cycle with a base.
 //! * No row at all (an empty file) leaves out the `## METRICS CLASS` block.
 
-use noodles::bam;
+use noodles::{bam, sam};
 
 use crate::cycle::{ByCycle, is_second_end, machine_cycle};
 use crate::error::Result;
-use crate::metric::{MetricRow, MetricsOutput, Value};
-use crate::pass::Accumulator;
+use crate::metric::{MetricRow, MetricsOutput, ToolOutput, Value};
+use crate::pass::{self, Accumulator, Collector};
 use crate::registry::{Invocation, Opt, Tool};
 
 pub struct Row {
@@ -57,18 +57,20 @@ pub const TOOL: Tool = Tool {
         Opt::value(&["STOP_AFTER"]),
     ],
     run: run_tool,
+    collector: Some(collector),
 };
 
-fn run_tool(inv: &Invocation) -> Result<Option<MetricsOutput>> {
+fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
+    inv.run_collector(collector)
+}
+
+fn collector(inv: &Invocation, _: &sam::Header) -> Result<Box<dyn Collector>> {
     let aligned_reads_only = inv.flag("ALIGNED_READS_ONLY", false)?;
     let pf_reads_only = inv.flag("PF_READS_ONLY", false)?;
-    let rows = inv.single_pass(|_| {
-        Ok(BaseDistributionByCycle::new(
-            aligned_reads_only,
-            pf_reads_only,
-        ))
-    })?;
-    Ok(Some(MetricsOutput::from_rows(&rows, None)))
+    Ok(pass::boxed(
+        BaseDistributionByCycle::new(aligned_reads_only, pf_reads_only),
+        |rows| Ok(MetricsOutput::from_rows(&rows, None).into()),
+    ))
 }
 
 /// Counts of A, C, G, T and N at one cycle.

@@ -11,8 +11,6 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::mpsc::{self, SyncSender};
-use std::thread::{self, JoinHandle};
 
 use noodles::bam;
 
@@ -21,7 +19,7 @@ use crate::error::{Error, Result};
 use crate::hs_metrics::{self, HsMetrics};
 use crate::insert_size::{self, InsertSize};
 use crate::metrics_file::headers;
-use crate::pass::{self, Accumulator};
+use crate::pass::{self, Accumulator, BATCH_RECORDS, Batch, Worker};
 use crate::quality_yield::{self, QualityYield};
 
 /// File name extensions after the output prefix. The first three are the
@@ -61,81 +59,6 @@ pub struct Results {
     /// Empty rows mean every orientation was dropped and Picard writes no file.
     pub insert_size: Option<Result<Vec<insert_size::Row>>>,
     pub hs_metrics: Vec<Result<hs_metrics::Report>>,
-}
-
-/// Records per batch handed to the metric threads.
-const BATCH_RECORDS: usize = 4096;
-/// Batches a metric thread may have queued before the reader waits.
-const QUEUED_BATCHES: usize = 8;
-
-type Batch = Arc<Vec<bam::Record>>;
-
-/// An accumulator, or the error that stopped it. Once failed it takes no
-/// more records.
-enum Slot<A> {
-    Running(A),
-    Failed(Error),
-}
-
-impl<A: Accumulator> Slot<A> {
-    fn accept(&mut self, record: &bam::Record) {
-        if let Slot::Running(accumulator) = self
-            && let Err(e) = accumulator.accept(record)
-        {
-            *self = Slot::Failed(e);
-        }
-    }
-
-    fn finish(self) -> Result<A::Output> {
-        match self {
-            Slot::Running(accumulator) => accumulator.finish(),
-            Slot::Failed(e) => Err(e),
-        }
-    }
-}
-
-/// One metric on its own thread. It takes every batch in file order, so it
-/// sees the records exactly as a single-metric run does, then finishes
-/// there too (the `HET_SNP_SENSITIVITY` simulation of each
-/// `CollectHsMetrics` run overlaps with the others).
-struct Worker<A: Accumulator> {
-    sender: SyncSender<Batch>,
-    handle: JoinHandle<Result<A::Output>>,
-}
-
-impl<A> Worker<A>
-where
-    A: Accumulator + Send + 'static,
-    A::Output: Send + 'static,
-{
-    fn spawn(accumulator: A) -> Self {
-        let (sender, batches) = mpsc::sync_channel::<Batch>(QUEUED_BATCHES);
-        let handle = thread::spawn(move || {
-            let mut slot = Slot::Running(accumulator);
-            for batch in batches {
-                for record in batch.iter() {
-                    slot.accept(record);
-                }
-            }
-            slot.finish()
-        });
-        Self { sender, handle }
-    }
-
-    fn send(&self, batch: &Batch) {
-        // The receiver is gone only when the thread panicked; `finish`
-        // re-raises that panic, so the batch can be dropped here.
-        let _ = self.sender.send(Arc::clone(batch));
-    }
-
-    /// Close the queue and wait for the metric. A panic on its thread
-    /// carries on here.
-    fn finish(self) -> Result<A::Output> {
-        drop(self.sender);
-        self.handle
-            .join()
-            .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
-    }
 }
 
 /// The requested accumulators as one [`Accumulator`]. Records are batched
@@ -368,38 +291,6 @@ fn write_file(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Fails on its second record and counts the records it took.
-    struct FailsSecond(usize);
-
-    impl Accumulator for FailsSecond {
-        type Output = usize;
-
-        fn accept(&mut self, _: &bam::Record) -> Result<()> {
-            self.0 += 1;
-            if self.0 == 2 {
-                return Err(Error::Metric("second record".to_owned()));
-            }
-            Ok(())
-        }
-
-        fn finish(self) -> Result<usize> {
-            Ok(self.0)
-        }
-    }
-
-    #[test]
-    fn a_failed_slot_keeps_its_error_and_takes_no_more_records() {
-        let record = bam::Record::default();
-        let mut slot = Slot::Running(FailsSecond(0));
-        for _ in 0..3 {
-            slot.accept(&record);
-        }
-        assert!(matches!(slot.finish(), Err(Error::Metric(m)) if m == "second record"));
-        let mut healthy = Slot::Running(FailsSecond(5));
-        healthy.accept(&record);
-        assert_eq!(healthy.finish().expect("ok"), 6);
-    }
 
     fn hs(baits: &str) -> hs_metrics::Options {
         hs_metrics::Options {

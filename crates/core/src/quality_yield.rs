@@ -10,10 +10,10 @@
 use std::io::{self, Write};
 use std::path::Path;
 
-use noodles::bam;
+use noodles::{bam, sam};
 
 use crate::error::{Error, Result};
-use crate::metric::{MetricRow, MetricsOutput, Value};
+use crate::metric::{MetricRow, MetricsOutput, ToolOutput, Value};
 use crate::metrics_file::MetricsFile;
 use crate::pass::{self, Accumulator};
 use crate::quality::qualities;
@@ -212,9 +212,14 @@ pub const TOOL: Tool = Tool {
         Opt::value(&["STOP_AFTER"]),
     ],
     run: run_tool,
+    collector: Some(collector),
 };
 
-fn run_tool(inv: &Invocation) -> Result<Option<MetricsOutput>> {
+fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
+    inv.run_collector(collector)
+}
+
+fn collector(inv: &Invocation, _: &sam::Header) -> Result<Box<dyn pass::Collector>> {
     // Picard 3.5.0 throws before reading: flow data has its own tool.
     if inv.flag("FLOW_MODE", false)? {
         return Err(Error::Usage(
@@ -235,8 +240,9 @@ fn run_tool(inv: &Invocation) -> Result<Option<MetricsOutput>> {
             defaults.include_supplemental_alignments,
         )?,
     };
-    let row = inv.single_pass(|_| Ok(QualityYield::new(&opts)))?;
-    Ok(Some(MetricsOutput::from_rows(&[row], None)))
+    Ok(pass::boxed(QualityYield::new(&opts), |row| {
+        Ok(MetricsOutput::from_rows(&[row], None).into())
+    }))
 }
 
 /// `CollectQualityYieldMetrics` as a pass [`Accumulator`].

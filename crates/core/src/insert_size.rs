@@ -8,8 +8,10 @@ use noodles::{bam, sam};
 use crate::error::Result;
 use crate::histogram::Histogram;
 use crate::levels::{Labels, Level, Levels, parse_levels};
-use crate::metric::{HistogramSection, HistogramSeries, MetricRow, MetricsOutput, Value};
-use crate::pass::{self, Accumulator};
+use crate::metric::{
+    HistogramSection, HistogramSeries, MetricRow, MetricsOutput, ToolOutput, Value,
+};
+use crate::pass::{self, Accumulator, Collector};
 pub use crate::record::Orientation;
 use crate::record::orientation;
 use crate::registry::{Invocation, Opt, Tool};
@@ -72,18 +74,25 @@ pub const TOOL: Tool = Tool {
         Opt::value(&["METRIC_ACCUMULATION_LEVEL", "LEVEL"]),
     ],
     run: run_tool,
+    collector: Some(collector),
 };
 
-/// The rows Picard writes, or `None` (with Picard's warning on standard
-/// error) when it writes no file.
-fn run_tool(inv: &Invocation) -> Result<Option<MetricsOutput>> {
+fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
+    inv.run_collector(collector)
+}
+
+/// The rows Picard writes, or no file (with Picard's warning on standard
+/// error) when every orientation is dropped.
+fn collector(inv: &Invocation, header: &sam::Header) -> Result<Box<dyn Collector>> {
     let opts = Options::from_invocation(inv)?;
-    let rows = inv.single_pass(|header| Ok(InsertSize::new(&opts, header)))?;
-    if rows.is_empty() {
-        eprintln!("{}", no_rows_warning(opts.minimum_pct));
-        return Ok(None);
-    }
-    Ok(Some(output(&rows)))
+    let minimum_pct = opts.minimum_pct;
+    Ok(pass::boxed(InsertSize::new(&opts, header), move |rows| {
+        if rows.is_empty() {
+            eprintln!("{}", no_rows_warning(minimum_pct));
+            return Ok(ToolOutput::NONE);
+        }
+        Ok(output(&rows).into())
+    }))
 }
 
 /// The warning `CollectInsertSizeMetrics.finish` logs when it writes no file.
