@@ -1,0 +1,8 @@
+## argv
+CollectInsertSizeMetrics
+O=OUT/insert_size.txt
+## exit
+1
+## stdout
+## stderr
+bammetrics: CollectInsertSizeMetrics: INPUT is required

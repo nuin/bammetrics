@@ -1,0 +1,104 @@
+# wgs, version 1: 10 rules for a whole-genome BAM. STARTING VALUES: not
+# validated limits for any assay. Rule syntax: docs/verdict.md.
+#
+# The 4 coverage rules read CollectWgsMetrics (class WgsMetrics), which
+# bammetrics does not implement yet. Until it does, those rules are "not
+# measured" and the band reads INCOMPLETE; a WgsMetrics file written by
+# Picard satisfies them today.
+
+[preset]
+name = "wgs"
+version = 1
+note = "starting values"
+
+[[rule]]
+id = "wgs.mean-coverage"
+label = "Mean coverage"
+class = "WgsMetrics"
+metric = "MEAN_COVERAGE"
+warn = "< 30"
+fail = "< 20"
+plot = "coverage"
+
+[[rule]]
+id = "wgs.bases-10x"
+label = "Genome bases at 10x"
+class = "WgsMetrics"
+metric = "PCT_10X"
+warn = "< 0.95"
+fail = "< 0.90"
+plot = "coverage"
+
+[[rule]]
+id = "wgs.bases-30x"
+label = "Genome bases at 30x"
+class = "WgsMetrics"
+metric = "PCT_30X"
+warn = "< 0.80"
+fail = "< 0.60"
+plot = "coverage"
+
+[[rule]]
+id = "wgs.evenness"
+label = "Fold-80 base penalty"
+class = "WgsMetrics"
+metric = "FOLD_80_BASE_PENALTY"
+warn = "> 1.5"
+fail = "> 2.0"
+plot = "coverage"
+
+[[rule]]
+id = "alignment.pf-reads-aligned"
+label = "PF reads aligned"
+class = "AlignmentSummaryMetrics"
+metric = "PCT_PF_READS_ALIGNED"
+select = "CATEGORY=PAIR"
+warn = "< 0.98"
+fail = "< 0.95"
+
+[[rule]]
+id = "alignment.adapter"
+label = "Adapter reads"
+class = "AlignmentSummaryMetrics"
+metric = "PCT_ADAPTER"
+select = "CATEGORY=PAIR"
+warn = "> 0.005"
+fail = "> 0.020"
+plot = "insert-size"
+
+[[rule]]
+id = "alignment.chimeras"
+label = "Chimeric pairs"
+class = "AlignmentSummaryMetrics"
+metric = "PCT_CHIMERAS"
+select = "CATEGORY=PAIR"
+warn = "> 0.02"
+fail = "> 0.05"
+
+[[rule]]
+id = "insert.median"
+label = "Median insert size"
+class = "InsertSizeMetrics"
+metric = "MEDIAN_INSERT_SIZE"
+select = "PAIR_ORIENTATION=FR"
+warn = "outside 250..600"
+fail = "outside 150..900"
+plot = "insert-size"
+
+[[rule]]
+id = "yield.q30"
+label = "Q30 fraction of PF bases"
+class = "QualityYieldMetrics"
+metric = "PF_Q30_BASES / PF_BASES"
+warn = "< 0.85"
+fail = "< 0.75"
+plot = "cycle-quality"
+
+[[rule]]
+id = "duplication.percent"
+label = "Duplicate reads"
+class = "DuplicationMetrics"
+metric = "PERCENT_DUPLICATION"
+level = "LIBRARY"
+warn = "> 0.15"
+fail = "> 0.30"

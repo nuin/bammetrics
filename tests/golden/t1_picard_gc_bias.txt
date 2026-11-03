@@ -1,0 +1,337 @@
+## argv
+CollectGcBiasMetrics
+I=tests/corpus/out/t1.bam
+O=OUT/gc_bias.txt
+S=OUT/gc_bias_summary.txt
+R=tests/corpus/out/reference.fa
+LEVEL=LIBRARY
+## exit
+0
+## stdout
+## stderr
+## file gc_bias.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectGcBiasMetrics INPUT=tests/corpus/out/t1.bam OUTPUT=OUT/gc_bias.txt SUMMARY_OUTPUT=OUT/gc_bias_summary.txt REFERENCE_SEQUENCE=tests/corpus/out/reference.fa METRIC_ACCUMULATION_LEVEL=LIBRARY
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.GcBiasDetailMetrics
+ACCUMULATION_LEVEL	READS_USED	GC	WINDOWS	READ_STARTS	MEAN_BASE_QUALITY	NORMALIZED_COVERAGE	ERROR_BAR_WIDTH	SAMPLE	LIBRARY	READ_GROUP
+All Reads	ALL	0	0	0	0	0	0			
+All Reads	ALL	1	0	0	0	0	0			
+All Reads	ALL	2	0	0	0	0	0			
+All Reads	ALL	3	0	0	0	0	0			
+All Reads	ALL	4	0	0	0	0	0			
+All Reads	ALL	5	0	0	0	0	0			
+All Reads	ALL	6	0	0	0	0	0			
+All Reads	ALL	7	0	0	0	0	0			
+All Reads	ALL	8	0	0	0	0	0			
+All Reads	ALL	9	0	0	0	0	0			
+All Reads	ALL	10	0	0	0	0	0			
+All Reads	ALL	11	0	0	0	0	0			
+All Reads	ALL	12	0	0	0	0	0			
+All Reads	ALL	13	0	0	0	0	0			
+All Reads	ALL	14	0	0	0	0	0			
+All Reads	ALL	15	0	0	0	0	0			
+All Reads	ALL	16	0	0	0	0	0			
+All Reads	ALL	17	0	0	0	0	0			
+All Reads	ALL	18	0	0	0	0	0			
+All Reads	ALL	19	0	0	0	0	0			
+All Reads	ALL	20	0	0	0	0	0			
+All Reads	ALL	21	0	0	0	0	0			
+All Reads	ALL	22	0	0	0	0	0			
+All Reads	ALL	23	0	0	0	0	0			
+All Reads	ALL	24	0	0	0	0	0			
+All Reads	ALL	25	0	0	0	0	0			
+All Reads	ALL	26	0	0	0	0	0			
+All Reads	ALL	27	0	0	0	0	0			
+All Reads	ALL	28	0	0	0	0	0			
+All Reads	ALL	29	0	0	0	0	0			
+All Reads	ALL	30	9	0	0	0	0			
+All Reads	ALL	31	31	1	0	0.415885	0.415885			
+All Reads	ALL	32	79	1	19	0.163195	0.163195			
+All Reads	ALL	33	115	13	33	1.457405	0.404211			
+All Reads	ALL	34	182	15	27	1.062563	0.274352			
+All Reads	ALL	35	372	41	23	1.420939	0.221913			
+All Reads	ALL	36	714	55	25	0.993114	0.133911			
+All Reads	ALL	37	1301	102	25	1.010782	0.100082			
+All Reads	ALL	38	2248	187	26	1.072457	0.078426			
+All Reads	ALL	39	3538	274	26	0.998452	0.060319			
+All Reads	ALL	40	5432	428	25	1.015824	0.049102			
+All Reads	ALL	41	7974	667	25	1.078411	0.041756			
+All Reads	ALL	42	11250	891	25	1.02108	0.034207			
+All Reads	ALL	43	15398	1169	25	0.978779	0.028627			
+All Reads	ALL	44	20709	1656	26	1.030946	0.025334			
+All Reads	ALL	45	26110	2009	25	0.991991	0.022132			
+All Reads	ALL	46	30577	2258	25	0.952059	0.020036			
+All Reads	ALL	47	34439	2463	25	0.922037	0.018579			
+All Reads	ALL	48	38717	2840	25	0.945695	0.017746			
+All Reads	ALL	49	40688	3142	25	0.995576	0.017761			
+All Reads	ALL	50	40951	3253	25	1.024128	0.017956			
+All Reads	ALL	51	39590	3027	25	0.985738	0.017917			
+All Reads	ALL	52	36750	2860	25	1.003329	0.018761			
+All Reads	ALL	53	33586	2647	25	1.016086	0.019749			
+All Reads	ALL	54	29475	2380	25	1.041017	0.021339			
+All Reads	ALL	55	24537	1852	26	0.973093	0.022612			
+All Reads	ALL	56	20211	1522	25	0.970871	0.024886			
+All Reads	ALL	57	15215	1190	25	1.008346	0.02923			
+All Reads	ALL	58	11167	967	25	1.116412	0.035901			
+All Reads	ALL	59	8331	711	26	1.10029	0.041264			
+All Reads	ALL	60	5969	529	26	1.142585	0.049678			
+All Reads	ALL	61	4004	355	25	1.14306	0.060667			
+All Reads	ALL	62	2540	199	26	1.010076	0.071602			
+All Reads	ALL	63	1468	123	25	1.080224	0.0974			
+All Reads	ALL	64	916	79	26	1.111901	0.125099			
+All Reads	ALL	65	557	44	27	1.018432	0.153534			
+All Reads	ALL	66	311	26	25	1.077823	0.211379			
+All Reads	ALL	67	146	17	25	1.501173	0.364088			
+All Reads	ALL	68	57	6	27	1.357097	0.554033			
+All Reads	ALL	69	26	1	0	0.495863	0.495863			
+All Reads	ALL	70	6	0	0	0	0			
+All Reads	ALL	71	1	0	0	0	0			
+All Reads	ALL	72	0	0	0	0	0			
+All Reads	ALL	73	0	0	0	0	0			
+All Reads	ALL	74	0	0	0	0	0			
+All Reads	ALL	75	0	0	0	0	0			
+All Reads	ALL	76	0	0	0	0	0			
+All Reads	ALL	77	0	0	0	0	0			
+All Reads	ALL	78	0	0	0	0	0			
+All Reads	ALL	79	0	0	0	0	0			
+All Reads	ALL	80	0	0	0	0	0			
+All Reads	ALL	81	0	0	0	0	0			
+All Reads	ALL	82	0	0	0	0	0			
+All Reads	ALL	83	0	0	0	0	0			
+All Reads	ALL	84	0	0	0	0	0			
+All Reads	ALL	85	0	0	0	0	0			
+All Reads	ALL	86	0	0	0	0	0			
+All Reads	ALL	87	0	0	0	0	0			
+All Reads	ALL	88	0	0	0	0	0			
+All Reads	ALL	89	0	0	0	0	0			
+All Reads	ALL	90	0	0	0	0	0			
+All Reads	ALL	91	0	0	0	0	0			
+All Reads	ALL	92	0	0	0	0	0			
+All Reads	ALL	93	0	0	0	0	0			
+All Reads	ALL	94	0	0	0	0	0			
+All Reads	ALL	95	0	0	0	0	0			
+All Reads	ALL	96	0	0	0	0	0			
+All Reads	ALL	97	0	0	0	0	0			
+All Reads	ALL	98	0	0	0	0	0			
+All Reads	ALL	99	0	0	0	0	0			
+All Reads	ALL	100	0	0	0	0	0			
+Library	ALL	0	0	0	0	0	0		libA	
+Library	ALL	1	0	0	0	0	0		libA	
+Library	ALL	2	0	0	0	0	0		libA	
+Library	ALL	3	0	0	0	0	0		libA	
+Library	ALL	4	0	0	0	0	0		libA	
+Library	ALL	5	0	0	0	0	0		libA	
+Library	ALL	6	0	0	0	0	0		libA	
+Library	ALL	7	0	0	0	0	0		libA	
+Library	ALL	8	0	0	0	0	0		libA	
+Library	ALL	9	0	0	0	0	0		libA	
+Library	ALL	10	0	0	0	0	0		libA	
+Library	ALL	11	0	0	0	0	0		libA	
+Library	ALL	12	0	0	0	0	0		libA	
+Library	ALL	13	0	0	0	0	0		libA	
+Library	ALL	14	0	0	0	0	0		libA	
+Library	ALL	15	0	0	0	0	0		libA	
+Library	ALL	16	0	0	0	0	0		libA	
+Library	ALL	17	0	0	0	0	0		libA	
+Library	ALL	18	0	0	0	0	0		libA	
+Library	ALL	19	0	0	0	0	0		libA	
+Library	ALL	20	0	0	0	0	0		libA	
+Library	ALL	21	0	0	0	0	0		libA	
+Library	ALL	22	0	0	0	0	0		libA	
+Library	ALL	23	0	0	0	0	0		libA	
+Library	ALL	24	0	0	0	0	0		libA	
+Library	ALL	25	0	0	0	0	0		libA	
+Library	ALL	26	0	0	0	0	0		libA	
+Library	ALL	27	0	0	0	0	0		libA	
+Library	ALL	28	0	0	0	0	0		libA	
+Library	ALL	29	0	0	0	0	0		libA	
+Library	ALL	30	9	0	0	0	0		libA	
+Library	ALL	31	31	1	0	0.837548	0.837548		libA	
+Library	ALL	32	79	0	0	0	0		libA	
+Library	ALL	33	115	6	30	1.354644	0.553031		libA	
+Library	ALL	34	182	7	30	0.998615	0.377441		libA	
+Library	ALL	35	372	23	23	1.605301	0.334728		libA	
+Library	ALL	36	714	33	26	1.200017	0.208896		libA	
+Library	ALL	37	1301	52	25	1.037762	0.143912		libA	
+Library	ALL	38	2248	91	26	1.051034	0.110178		libA	
+Library	ALL	39	3538	134	26	0.983374	0.084951		libA	
+Library	ALL	40	5432	214	26	1.022882	0.069923		libA	
+Library	ALL	41	7974	329	25	1.071251	0.05906		libA	
+Library	ALL	42	11250	425	25	0.980862	0.047579		libA	
+Library	ALL	43	15398	602	25	1.015088	0.041372		libA	
+Library	ALL	44	20709	808	26	1.013034	0.035638		libA	
+Library	ALL	45	26110	989	25	0.98347	0.031273		libA	
+Library	ALL	46	30577	1139	25	0.967165	0.028658		libA	
+Library	ALL	47	34439	1234	25	0.930328	0.026484		libA	
+Library	ALL	48	38717	1382	25	0.926783	0.02493		libA	
+Library	ALL	49	40688	1527	25	0.974416	0.024936		libA	
+Library	ALL	50	40951	1589	25	1.007467	0.025274		libA	
+Library	ALL	51	39590	1516	25	0.994226	0.025535		libA	
+Library	ALL	52	36750	1442	25	1.018778	0.026829		libA	
+Library	ALL	53	33586	1324	25	1.023532	0.028129		libA	
+Library	ALL	54	29475	1148	25	1.011253	0.029846		libA	
+Library	ALL	55	24537	906	25	0.95869	0.03185		libA	
+Library	ALL	56	20211	764	25	0.98147	0.035508		libA	
+Library	ALL	57	15215	608	25	1.037536	0.042078		libA	
+Library	ALL	58	11167	494	26	1.148582	0.051677		libA	
+Library	ALL	59	8331	370	25	1.153125	0.059948		libA	
+Library	ALL	60	5969	277	26	1.204897	0.072395		libA	
+Library	ALL	61	4004	176	25	1.141275	0.086027		libA	
+Library	ALL	62	2540	101	26	1.032427	0.10273		libA	
+Library	ALL	63	1468	61	26	1.078886	0.138137		libA	
+Library	ALL	64	916	43	25	1.218834	0.18587		libA	
+Library	ALL	65	557	20	29	0.93228	0.208464		libA	
+Library	ALL	66	311	11	25	0.918341	0.27689		libA	
+Library	ALL	67	146	9	24	1.600521	0.533507		libA	
+Library	ALL	68	57	6	27	2.733053	1.115764		libA	
+Library	ALL	69	26	1	0	0.998615	0.998615		libA	
+Library	ALL	70	6	0	0	0	0		libA	
+Library	ALL	71	1	0	0	0	0		libA	
+Library	ALL	72	0	0	0	0	0		libA	
+Library	ALL	73	0	0	0	0	0		libA	
+Library	ALL	74	0	0	0	0	0		libA	
+Library	ALL	75	0	0	0	0	0		libA	
+Library	ALL	76	0	0	0	0	0		libA	
+Library	ALL	77	0	0	0	0	0		libA	
+Library	ALL	78	0	0	0	0	0		libA	
+Library	ALL	79	0	0	0	0	0		libA	
+Library	ALL	80	0	0	0	0	0		libA	
+Library	ALL	81	0	0	0	0	0		libA	
+Library	ALL	82	0	0	0	0	0		libA	
+Library	ALL	83	0	0	0	0	0		libA	
+Library	ALL	84	0	0	0	0	0		libA	
+Library	ALL	85	0	0	0	0	0		libA	
+Library	ALL	86	0	0	0	0	0		libA	
+Library	ALL	87	0	0	0	0	0		libA	
+Library	ALL	88	0	0	0	0	0		libA	
+Library	ALL	89	0	0	0	0	0		libA	
+Library	ALL	90	0	0	0	0	0		libA	
+Library	ALL	91	0	0	0	0	0		libA	
+Library	ALL	92	0	0	0	0	0		libA	
+Library	ALL	93	0	0	0	0	0		libA	
+Library	ALL	94	0	0	0	0	0		libA	
+Library	ALL	95	0	0	0	0	0		libA	
+Library	ALL	96	0	0	0	0	0		libA	
+Library	ALL	97	0	0	0	0	0		libA	
+Library	ALL	98	0	0	0	0	0		libA	
+Library	ALL	99	0	0	0	0	0		libA	
+Library	ALL	100	0	0	0	0	0		libA	
+Library	ALL	0	0	0	0	0	0		libB	
+Library	ALL	1	0	0	0	0	0		libB	
+Library	ALL	2	0	0	0	0	0		libB	
+Library	ALL	3	0	0	0	0	0		libB	
+Library	ALL	4	0	0	0	0	0		libB	
+Library	ALL	5	0	0	0	0	0		libB	
+Library	ALL	6	0	0	0	0	0		libB	
+Library	ALL	7	0	0	0	0	0		libB	
+Library	ALL	8	0	0	0	0	0		libB	
+Library	ALL	9	0	0	0	0	0		libB	
+Library	ALL	10	0	0	0	0	0		libB	
+Library	ALL	11	0	0	0	0	0		libB	
+Library	ALL	12	0	0	0	0	0		libB	
+Library	ALL	13	0	0	0	0	0		libB	
+Library	ALL	14	0	0	0	0	0		libB	
+Library	ALL	15	0	0	0	0	0		libB	
+Library	ALL	16	0	0	0	0	0		libB	
+Library	ALL	17	0	0	0	0	0		libB	
+Library	ALL	18	0	0	0	0	0		libB	
+Library	ALL	19	0	0	0	0	0		libB	
+Library	ALL	20	0	0	0	0	0		libB	
+Library	ALL	21	0	0	0	0	0		libB	
+Library	ALL	22	0	0	0	0	0		libB	
+Library	ALL	23	0	0	0	0	0		libB	
+Library	ALL	24	0	0	0	0	0		libB	
+Library	ALL	25	0	0	0	0	0		libB	
+Library	ALL	26	0	0	0	0	0		libB	
+Library	ALL	27	0	0	0	0	0		libB	
+Library	ALL	28	0	0	0	0	0		libB	
+Library	ALL	29	0	0	0	0	0		libB	
+Library	ALL	30	9	0	0	0	0		libB	
+Library	ALL	31	31	0	0	0	0		libB	
+Library	ALL	32	79	1	19	0.324154	0.324154		libB	
+Library	ALL	33	115	7	0	1.558757	0.589155		libB	
+Library	ALL	34	182	8	25	1.125633	0.397971		libB	
+Library	ALL	35	372	18	24	1.239104	0.29206		libB	
+Library	ALL	36	714	22	25	0.789047	0.168225		libB	
+Library	ALL	37	1301	50	25	0.984172	0.139183		libB	
+Library	ALL	38	2248	96	26	1.093587	0.111614		libB	
+Library	ALL	39	3538	140	26	1.013324	0.085642		libB	
+Library	ALL	40	5432	214	25	1.008863	0.068964		libB	
+Library	ALL	41	7974	338	26	1.085472	0.059042		libB	
+Library	ALL	42	11250	466	26	1.060747	0.049138		libB	
+Library	ALL	43	15398	567	25	0.942968	0.039601		libB	
+Library	ALL	44	20709	848	25	1.048612	0.036009		libB	
+Library	ALL	45	26110	1020	25	1.000395	0.031324		libB	
+Library	ALL	46	30577	1119	25	0.937159	0.028016		libB	
+Library	ALL	47	34439	1229	25	0.91386	0.026068		libB	
+Library	ALL	48	38717	1458	25	0.964349	0.025255		libB	
+Library	ALL	49	40688	1615	25	1.016446	0.025293		libB	
+Library	ALL	50	40951	1664	25	1.04056	0.025509		libB	
+Library	ALL	51	39590	1511	25	0.977366	0.025143		libB	
+Library	ALL	52	36750	1418	25	0.988091	0.02624		libB	
+Library	ALL	53	33586	1323	25	1.008741	0.027733		libB	
+Library	ALL	54	29475	1232	25	1.070373	0.030495		libB	
+Library	ALL	55	24537	946	26	0.987297	0.0321		libB	
+Library	ALL	56	20211	758	26	0.960417	0.034884		libB	
+Library	ALL	57	15215	582	26	0.979556	0.040604		libB	
+Library	ALL	58	11167	473	25	1.084683	0.049874		libB	
+Library	ALL	59	8331	341	26	1.048179	0.056762		libB	
+Library	ALL	60	5969	252	26	1.081128	0.068105		libB	
+Library	ALL	61	4004	179	25	1.14482	0.085568		libB	
+Library	ALL	62	2540	98	26	0.988031	0.099806		libB	
+Library	ALL	63	1468	62	24	1.081543	0.137356		libB	
+Library	ALL	64	916	36	27	1.006434	0.167739		libB	
+Library	ALL	65	557	24	26	1.103403	0.225231		libB	
+Library	ALL	66	311	15	26	1.23512	0.318907		libB	
+Library	ALL	67	146	8	26	1.403187	0.496101		libB	
+Library	ALL	68	57	0	0	0	0		libB	
+Library	ALL	69	26	0	0	0	0		libB	
+Library	ALL	70	6	0	0	0	0		libB	
+Library	ALL	71	1	0	0	0	0		libB	
+Library	ALL	72	0	0	0	0	0		libB	
+Library	ALL	73	0	0	0	0	0		libB	
+Library	ALL	74	0	0	0	0	0		libB	
+Library	ALL	75	0	0	0	0	0		libB	
+Library	ALL	76	0	0	0	0	0		libB	
+Library	ALL	77	0	0	0	0	0		libB	
+Library	ALL	78	0	0	0	0	0		libB	
+Library	ALL	79	0	0	0	0	0		libB	
+Library	ALL	80	0	0	0	0	0		libB	
+Library	ALL	81	0	0	0	0	0		libB	
+Library	ALL	82	0	0	0	0	0		libB	
+Library	ALL	83	0	0	0	0	0		libB	
+Library	ALL	84	0	0	0	0	0		libB	
+Library	ALL	85	0	0	0	0	0		libB	
+Library	ALL	86	0	0	0	0	0		libB	
+Library	ALL	87	0	0	0	0	0		libB	
+Library	ALL	88	0	0	0	0	0		libB	
+Library	ALL	89	0	0	0	0	0		libB	
+Library	ALL	90	0	0	0	0	0		libB	
+Library	ALL	91	0	0	0	0	0		libB	
+Library	ALL	92	0	0	0	0	0		libB	
+Library	ALL	93	0	0	0	0	0		libB	
+Library	ALL	94	0	0	0	0	0		libB	
+Library	ALL	95	0	0	0	0	0		libB	
+Library	ALL	96	0	0	0	0	0		libB	
+Library	ALL	97	0	0	0	0	0		libB	
+Library	ALL	98	0	0	0	0	0		libB	
+Library	ALL	99	0	0	0	0	0		libB	
+Library	ALL	100	0	0	0	0	0		libB	
+
+
+## file gc_bias_summary.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectGcBiasMetrics INPUT=tests/corpus/out/t1.bam OUTPUT=OUT/gc_bias.txt SUMMARY_OUTPUT=OUT/gc_bias_summary.txt REFERENCE_SEQUENCE=tests/corpus/out/reference.fa METRIC_ACCUMULATION_LEVEL=LIBRARY
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.GcBiasSummaryMetrics
+ACCUMULATION_LEVEL	READS_USED	WINDOW_SIZE	TOTAL_CLUSTERS	ALIGNED_READS	AT_DROPOUT	GC_DROPOUT	GC_NC_0_19	GC_NC_20_39	GC_NC_40_59	GC_NC_60_79	GC_NC_80_100	SAMPLE	LIBRARY	READ_GROUP
+All Reads	ALL	100	20000	40000	1.371514	0.355576	0	1.034216	0.995782	1.111096	0			
+Library	ALL	100	9931	19862	1.566454	0.3271	0	1.048959	0.994453	1.143967	0		libA	
+Library	ALL	100	10069	20138	1.437113	0.557862	0	1.019675	0.997093	1.078676	0		libB	
+
+

@@ -1,0 +1,15 @@
+## argv
+CollectInsertSizeMetrics
+--INPUT
+tests/data/insert_size.bam
+--OUTPUT
+OUT/insert_size.txt
+--METRIC_ACCUMULATION_LEVEL
+SAMPLE
+--METRIC_ACCUMULATION_LEVEL
+READ_GROUP
+## exit
+1
+## stdout
+## stderr
+bammetrics: CollectInsertSizeMetrics: option OUTPUT is not implemented (it may change the metrics)

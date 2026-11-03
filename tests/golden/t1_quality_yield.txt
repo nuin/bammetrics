@@ -1,0 +1,20 @@
+## argv
+quality-yield
+tests/corpus/out/t1.bam
+-O
+OUT/quality_yield.txt
+## exit
+0
+## stdout
+## stderr
+## file quality_yield.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectQualityYieldMetrics INPUT=tests/corpus/out/t1.bam OUTPUT=OUT/quality_yield.txt USE_ORIGINAL_QUALITIES=true INCLUDE_SECONDARY_ALIGNMENTS=false INCLUDE_SUPPLEMENTAL_ALIGNMENTS=false
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+40000	40000	150	6000000	6000000	5692950	5692950	5060436	5060436	10273427	10273427
+
+

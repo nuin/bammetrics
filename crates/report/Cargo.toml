@@ -1,0 +1,14 @@
+[package]
+name = "bammetrics-report"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "The verdict-first per-sample HTML report: one self-contained page from a verdict and its metrics files"
+
+[lib]
+name = "bammetrics_report"
+
+[dependencies]
+bammetrics-core.workspace = true
+bammetrics-verdict.workspace = true

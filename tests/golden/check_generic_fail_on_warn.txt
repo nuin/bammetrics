@@ -1,0 +1,17 @@
+## argv
+check
+tests/data/picard
+--fail-on
+warn
+## exit
+0
+## stdout
+NA12878  PASS  0 fail, 0 warn, 6 pass, 0 not measured  preset generic v1 (6dd89e)
+  PASS          alignment.pf-reads-aligned    1  warn < 0.9, fail < 0.8
+  PASS          alignment.adapter             0  warn > 0.01, fail > 0.05
+  PASS          alignment.chimeras            0  warn > 0.05, fail > 0.1
+  PASS          insert.median               310  warn outside 100..1000, fail outside 50..2000
+  PASS          yield.q30                     1  warn < 0.8, fail < 0.7
+  PASS          duplication.percent           0  warn > 0.3, fail > 0.5
+exit 0: no sample reaches --fail-on warn
+## stderr

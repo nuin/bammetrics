@@ -10,11 +10,11 @@
 //! the file without `StringHeader` lines; bammetrics does the same.
 
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
 use crate::error::{Error, Result};
 use crate::metric::{MetricsOutput, ToolOutput};
+use crate::metrics_file::MetricsDoc;
 use crate::quality_yield::{CLASS, COLUMNS, Row};
 use crate::registry::{Invocation, Opt, Tool};
 
@@ -40,36 +40,33 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
 /// a value that is not an integer, or a file without a row is an error, as
 /// in htsjdk; a column the file lacks stays 0.
 pub fn read_row(path: &Path) -> Result<Row> {
-    let text = fs::read_to_string(path).map_err(|source| Error::Input {
-        path: path.to_path_buf(),
-        source,
-    })?;
+    let doc = MetricsDoc::read(path)?;
     let bad = |message: String| Error::Metric(format!("{}: {message}", path.display()));
-    let mut lines = text.lines();
-    let class = lines
-        .by_ref()
-        .find_map(|l| l.strip_prefix("## METRICS CLASS\t"))
+    let block = doc
+        .classes
+        .first()
         .ok_or_else(|| bad("no ## METRICS CLASS line".to_owned()))?;
-    if class.trim() != CLASS {
-        return Err(bad(format!("metrics class {class} is not {CLASS}")));
+    if block.class != CLASS {
+        return Err(bad(format!("metrics class {} is not {CLASS}", block.class)));
     }
-    let columns: Vec<&str> = lines.next().unwrap_or_default().split('\t').collect();
-    let values: Vec<&str> = match lines.next() {
-        Some(line) if !line.is_empty() && !line.starts_with('#') => line.split('\t').collect(),
-        _ => return Err(bad("no metrics row".to_owned())),
-    };
+    let values = block
+        .rows
+        .first()
+        .ok_or_else(|| bad("no metrics row".to_owned()))?;
     let mut fields = HashMap::new();
-    for (i, &column) in columns.iter().enumerate() {
-        if !COLUMNS.contains(&column) {
+    for (column, value) in block.columns.iter().zip(values) {
+        if !COLUMNS.contains(&column.as_str()) {
             return Err(bad(format!(
                 "column {column} is not a QualityYieldMetrics field"
             )));
         }
-        let text = values.get(i).copied().unwrap_or_default();
-        let value: i64 = text
-            .parse()
-            .map_err(|_| bad(format!("{column}={text:?} is not an integer")))?;
-        fields.insert(column, value);
+        let value = value.as_int().ok_or_else(|| {
+            bad(format!(
+                "{column}={:?} is not an integer",
+                value.picard_text()
+            ))
+        })?;
+        fields.insert(column.as_str(), value);
     }
     let field = |name: &str| fields.get(name).copied().unwrap_or(0);
     Ok(Row {
@@ -89,6 +86,8 @@ pub fn read_row(path: &Path) -> Result<Row> {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
 
     fn write(dir: &Path, name: &str, body: &str) -> std::path::PathBuf {

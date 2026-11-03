@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.7.0
+## 0.8.0
 
 Parity plan phase P4, coverage: the pileup engine (M14) and the WGS tools over it, plus
 `BedToIntervalList` for the harness.
@@ -41,6 +41,137 @@ Parity plan phase P4, coverage: the pileup engine (M14) and the WGS tools over i
 
 - `sensitivity.rs` keeps a NaN maximum weight as Java's `MathUtil.max` does: a histogram
   whose bins sum to 0 gives a sensitivity of 0 instead of an error.
+
+## 0.7.0
+
+Report and check on any directory of Picard output. Phases 1 to 6 of the CLI and
+report design (`docs/05_cli_and_ui_design.md`): the golden suite that pins every
+existing command line, the metrics file reader with the column glossary, the verdict
+crate with its presets, the per-sample HTML report page with its four plots, the run
+index, and the `report` and `check` verbs that write them from files Picard wrote. No
+change to collection. The parity chain's P4 branch (`feat/p4-coverage`) also claimed
+0.7.0; this release kept the number and P4 shipped as 0.8.0.
+
+### Added
+
+- `bammetrics report DIR... [--preset NAME|FILE] [-o OUT] [--all-plots] [--date ISO]`:
+  finds every metrics file under the directories given by its `## METRICS CLASS` block
+  (or a `## HISTOGRAM` section under a Picard header), whatever the file name, at any
+  depth; groups the files into samples (by the file name up to the first dot, as
+  `CollectMultipleMetrics` names them, else one sample per directory; the rule is in
+  `--help`); evaluates the preset (`generic` by default); writes `SAMPLE.verdict.json`,
+  `SAMPLE.report.html` and `index.html` into `OUT` (the directory itself when one is
+  given), each file written whole to a temporary name (process id, counter and clock,
+  opened with `create_new`, so a planted symlink fails the write instead of being
+  followed) and renamed into place; prints a one-screen summary
+  (header, each sample's band and counts, its fails and warns, the files written). It
+  works on a directory Picard 3.5.0 wrote with no bammetrics involved and never reads
+  a BAM. Exit 0 on any verdict, 1 on an error, 2 on a usage error.
+- `bammetrics check DIR|VERDICT.json... [--preset ...] [--fail-on warn|fail]
+  [--format text|json|jsonl]`: the gate. Prints every check per sample and exits 10
+  when a sample's verdict reaches `--fail-on` (`fail` by default), 11 when a sample is
+  incomplete and none reached the gate, 0 otherwise, 1 on an error. A `verdict.json`
+  written by `report` is read back as is. The exit code table is in `--help` and
+  `docs/cli.md`.
+- Run index (`bammetrics_report::render_index`, `write_index`, `SampleSummary`,
+  `Tally`): one row per sample, worst first (fail, incomplete, warn, pass, then by fail
+  count, then name), the verdict badge, the fail, warn, pass and not-measured counts,
+  then one cell per rule with the glyph and the value and the reason as its title; the
+  preset name, version and hash, the tool version and the date on top. Same CSS as the
+  sample page, no script. 100 samples with 14 rules render in 86 KB and about 2 ms.
+  Snapshot `tests/report/index.html`.
+- `crates/cli` (`bammetrics-cli`): the `bammetrics` binary moved here from
+  `crates/core`, with the golden suite (`crates/cli/tests/golden.rs`, `make golden`
+  runs `-p bammetrics-cli`). The verbs need the verdict and report crates, which
+  depend on core, and Cargo rejects that cycle inside one package. `discover.rs`
+  (file sniff and sample grouping), `report.rs`, `check.rs`, `error.rs` (exit codes).
+- `tests/data/picard/NA12878`: the 11 files Picard 3.5.0 writes for the fixture BAM
+  (`CollectMultipleMetrics` with seven programs, `CollectHsMetrics` with
+  `PER_BASE_COVERAGE`, `CollectDuplicateMetrics`), the input of the `report` and
+  `check` tests: `crates/cli/tests/verbs.rs` end to end, and 9 golden records
+  (`check_*`, `error_report_*`, `error_check_*`) pinning the text and jsonl forms and
+  every exit code.
+- `Check::to_json`, `Counts::to_json` and `Json::render_line` in the verdict crate,
+  for the `check --format jsonl` events; `metrics_file::CivilTime` in core (the civil
+  date behind the `Started on` header, now also the report date).
+- A guide label in a plot that would overlap an earlier one moves one row down
+  (`Chart::vguide`), so a median near a fail limit stays readable.
+
+- `crates/report` (`bammetrics-report`): `render(verdict, inputs, options)` and
+  `write(path, ...)` build one self-contained HTML page for one sample from a `Verdict`
+  and the parsed metrics files. Page order: header (sample, preset name, version and
+  hash, reads, tool version), verdict band with counts, the failing and warning checks
+  each with its reason and, when the rule names a plot, that plot under it, the
+  not-measured checks, every check in one table, the metrics tables collapsed in
+  `<details>` with the glossary definition of every column, then the run section
+  (tool version, preset, hash, date passed by the caller, input files with their
+  command lines). No script, no network request, a `<meta>` CSP of `default-src
+  'none'; style-src 'unsafe-inline'`, every header string and file name escaped.
+- Four plots as inline SVG with no dependency: coverage (cumulative share of target
+  bases at or above depth, guides at the depths the coverage rules name and at the
+  mean), insert size (histogram, median and MAD band, the fail range shaded), GC bias
+  (normalized coverage by GC window from `GcBiasDetailMetrics`, the 0.9 to 1.1 band, a
+  strip of window counts) and per-cycle quality (`MeanQualityByCycle` split into read 1
+  and read 2 at the first-of-pair read length, Q20 and Q30 guides). Each has axis
+  titles, ticks, direct labels, a legend when two series are drawn and a `<title>` plus
+  `<desc>` text alternative. A plot renders only under a warn or fail check whose rule
+  names it, or everywhere with `Options { all_plots: true }`.
+- Visual design: one system font stack, a four-step type scale on 15 px, a palette of
+  CSS custom properties (`--ink`, `--accent`, pass, warn, fail and neutral pairs), dark
+  mode through `prefers-color-scheme` and a `data-theme` override, print CSS that
+  keeps the band, the issues and the plots and hides the tables. About 6.8 KB of CSS
+  inlined, no framework, no JavaScript. Works at 360 px without horizontal scroll.
+- Tests (`crates/report/tests/report.rs`): snapshots `tests/report/pass.html` (preset
+  `generic`) and `fail.html` (`clinical-panel`) on the committed fixtures
+  (`UPDATE_REPORT=1` rewrites them), WCAG AA 4.5:1 for every text and background pair
+  in both themes computed from the CSS tokens, `<script>` in the sample name, a path
+  and a header line, every plot on an empty and a one-bin histogram, page size (under
+  150 KB without plots, 300 KB with all four; measured 67 KB and 86 KB) and render time
+  (median under 20 ms; measured 7.8 ms in a debug build, 1.1 ms in release).
+  `cargo run -p bammetrics-report --example fixture_pages -- DIR` writes the fixture
+  pages for a look in a browser until the `report` verb exists (phase 6).
+
+- `crates/verdict` (`bammetrics-verdict`, `docs/verdict.md`): a preset of threshold
+  rules evaluated over one sample's metrics files. A rule names a metrics class, a
+  column or a ratio of two, a row scope (accumulation level, `COLUMN=VALUE` selector),
+  one comparator (`<`, `<=`, `>`, `>=`, `outside A..B`) and a warn and a fail bound.
+  Statuses `pass`, `warn`, `fail` and `not_measured`; the band is `fail`, else
+  `incomplete` when any check is not measured, else `warn`, else `pass`. Every warn or
+  fail carries one reason line with the value and the limit. `verdict.json` (schema
+  `bammetrics.verdict/1`) is written by `Verdict::to_json` and read back by
+  `Verdict::from_json`.
+- Shipped presets, each labelled `starting values`: `generic` (6 rules),
+  `clinical-panel` (the 14 rules of docs/05 section 4.3), `wgs` (10) and `rna-seq` (8).
+  `wgs` and `rna-seq` read INCOMPLETE until `CollectWgsMetrics` and
+  `CollectRnaSeqMetrics` exist. A lab's own TOML file replaces a shipped preset. The
+  preset hash (FNV-1a 64 of the text, CR removed) is the same on every platform.
+- Python: `bammetrics.evaluate(preset, paths, sample=None)` returns the verdict as the
+  dict form of `verdict.json`; `bammetrics.presets()` lists the shipped names.
+
+- Golden suite (`crates/core/tests/golden.rs`, `make golden`): 54 documented command
+  forms on the committed fixtures (every registry tool and `CollectHsMetrics` in Picard
+  syntax with and without `O=`, the five subcommands with and without `-O`, the
+  documented error paths) and 16 on corpus t1 when `tests/corpus/out` exists. Each
+  record under `tests/golden/` holds argv, exit code, stdout, stderr and every written
+  file; any byte change fails. `make golden-update` rewrites the records after an
+  intended change, and `make concordance` runs the suite. New fixtures in `tests/data`:
+  `ref_100k.fa` (+ `.fai`, from `make_ref.py`), `targets.interval_list`,
+  `quality_yield_a.txt` and `quality_yield_b.txt`.
+- `metrics_file::MetricsDoc`: a reader for Picard metrics files as Picard 3.5.0 and
+  bammetrics write them. Header lines, several `## METRICS CLASS` blocks, the
+  `## HISTOGRAM` section, empty tables, columns the reader has never seen, empty
+  fields, `?` (NaN) and `-?`, and `0,5` from a comma-decimal locale. Cells are typed
+  from their text (`Value::Int`, `Float`, `Str`, `Null`) with `as_int`, `as_float`,
+  `as_str` and `is_null` accessors; `ClassBlock::get(row, column)` and `find(column,
+  text)` look columns up by name. `AccumulateQualityYieldMetrics` reads its inputs
+  through it, with unchanged output.
+- `crates/core/glossary.tsv` and `glossary::lookup`: 204 rows, one per column the
+  implemented tools write (182 metrics-class columns and 22 histogram columns), with
+  the Picard class, type and a definition in our own words; a test fails when a tool
+  emits a column without a row.
+- Python: `bammetrics.read_metrics(path)` returns the headers, the class blocks as
+  lists of dicts and the histogram, with `MetricsDoc`, `MetricsClass` and
+  `MetricsHistogram` typed dicts in the stub.
 
 ## 0.6.0
 

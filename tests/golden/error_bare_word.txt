@@ -1,0 +1,8 @@
+## argv
+CollectInsertSizeMetrics
+tests/data/insert_size.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: CollectInsertSizeMetrics: expected NAME=VALUE, got "tests/data/insert_size.bam"

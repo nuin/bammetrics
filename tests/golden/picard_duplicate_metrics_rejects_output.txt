@@ -1,0 +1,9 @@
+## argv
+CollectDuplicateMetrics
+I=tests/data/insert_size.bam
+O=OUT/duplicate_metrics.txt
+## exit
+1
+## stdout
+## stderr
+bammetrics: CollectDuplicateMetrics: option O is not implemented (it may change the metrics)

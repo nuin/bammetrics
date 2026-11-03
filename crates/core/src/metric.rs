@@ -41,6 +41,35 @@ impl Value {
             Value::Null => String::new(),
         }
     }
+
+    /// The integer, for an `Int` field only.
+    pub fn as_int(&self) -> Option<i64> {
+        match self {
+            Value::Int(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// The number: a `Float`, or an `Int` widened. NaN for a `?` field.
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            Value::Float(v) => Some(*v),
+            Value::Int(v) => Some(*v as f64),
+            _ => None,
+        }
+    }
+
+    /// The text, for a `Str` field only.
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Value::Str(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn is_null(&self) -> bool {
+        matches!(self, Value::Null)
+    }
 }
 
 impl From<i64> for Value {

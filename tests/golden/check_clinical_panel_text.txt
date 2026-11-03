@@ -1,0 +1,25 @@
+## argv
+check
+tests/data/picard
+--preset
+clinical-panel
+## exit
+10
+## stdout
+NA12878  FAIL  5 fail, 0 warn, 8 pass, 1 not measured  preset clinical-panel v1 (3d0bcd)
+  FAIL          hs.mean-target-coverage      0.377778  warn < 200, fail < 100                        Mean target coverage is 0.377778, below the fail limit of 100
+  FAIL          hs.target-20x                       0  warn < 0.98, fail < 0.95                      Target bases at 20x is 0, below the fail limit of 0.95
+  FAIL          hs.target-100x                      0  warn < 0.8, fail < 0.6                        Target bases at 100x is 0, below the fail limit of 0.6
+  NOT MEASURED  hs.evenness                         ?  warn > 2, fail > 3                            FOLD_80_BASE_PENALTY is ?
+  PASS          hs.usable-on-target              0.68  warn < 0.5, fail < 0.3
+  PASS          hs.selected-bases                 0.8  warn < 0.7, fail < 0.5
+  PASS          hs.excluded-duplicates              0  warn > 0.3, fail > 0.5
+  FAIL          hs.zero-coverage-targets          0.2  warn > 0.01, fail > 0.03                      Targets with zero coverage is 0.2, above the fail limit of 0.03
+  FAIL          hs.gc-dropout               20.588235  warn > 5, fail > 10                           GC dropout is 20.588235, above the fail limit of 10
+  PASS          alignment.pf-reads-aligned          1  warn < 0.98, fail < 0.95
+  PASS          alignment.adapter                   0  warn > 0.005, fail > 0.02
+  PASS          alignment.chimeras                  0  warn > 0.05, fail > 0.1
+  PASS          insert.median                     310  warn outside 180..450, fail outside 120..600
+  PASS          yield.q30                           1  warn < 0.85, fail < 0.75
+exit 10: a sample reaches --fail-on fail
+## stderr

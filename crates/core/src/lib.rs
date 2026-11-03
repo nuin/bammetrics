@@ -13,6 +13,7 @@ pub mod duplication;
 pub mod error;
 pub mod filters;
 pub mod gc_bias;
+pub mod glossary;
 pub mod histogram;
 pub mod hs_metrics;
 pub mod insert_size;

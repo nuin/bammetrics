@@ -1,0 +1,9 @@
+## argv
+report
+tests/data/picard
+tests/data/picard
+## exit
+2
+## stdout
+## stderr
+bammetrics: several directories: say where the files go with -o OUT

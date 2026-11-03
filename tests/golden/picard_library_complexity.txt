@@ -1,0 +1,22 @@
+## argv
+EstimateLibraryComplexity
+I=tests/data/insert_size.bam
+O=OUT/library_complexity.txt
+## exit
+0
+## stdout
+## stderr
+## file library_complexity.txt
+## htsjdk.samtools.metrics.StringHeader
+# EstimateLibraryComplexity INPUT=tests/data/insert_size.bam OUTPUT=OUT/library_complexity.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.DuplicationMetrics
+LIBRARY	UNPAIRED_READS_EXAMINED	READ_PAIRS_EXAMINED	SECONDARY_OR_SUPPLEMENTARY_RDS	UNMAPPED_READS	UNPAIRED_READ_DUPLICATES	READ_PAIR_DUPLICATES	READ_PAIR_OPTICAL_DUPLICATES	PERCENT_DUPLICATION	ESTIMATED_LIBRARY_SIZE
+Unknown	0	0	0	0	0	0	0	0	
+
+## HISTOGRAM	java.lang.Integer
+duplication_group_count	Unknown
+5	1
+
