@@ -108,4 +108,11 @@ their text: int, float, str, or None for an empty field; `?` is `nan`, and `0,5`
 comma-decimal locale is `0.5`. The same reader is `metrics_file::MetricsDoc` in Rust,
 and `crates/core/glossary.tsv` defines every column the tools write.
 
+`bammetrics.evaluate(preset, paths, sample=None)` evaluates a verdict preset (a shipped
+name from `bammetrics.presets()`, or the path of a preset file) over one sample's
+metrics files and returns `verdict.json` as dicts: band `status`, `counts`, and one
+check per rule with its value, bounds, status and reason. Presets, the rule language
+and the JSON schema are in [docs/verdict.md](verdict.md). The `report` and `check`
+verbs that write the file arrive with phase 6 of docs/05.
+
 `.cargo/config.toml` lets the Python cdylib link under `cargo test` on macOS.

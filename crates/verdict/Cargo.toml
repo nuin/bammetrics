@@ -1,0 +1,14 @@
+[package]
+name = "bammetrics-verdict"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Preset rules evaluated over Picard metrics files: the verdict behind the bammetrics report"
+
+[lib]
+name = "bammetrics_verdict"
+
+[dependencies]
+bammetrics-core.workspace = true
+thiserror.workspace = true

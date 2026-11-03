@@ -1,0 +1,24 @@
+# A lab-owned preset, used by the tests for a user-supplied preset file.
+# Two rules the committed fixture (tests/data/insert_size.bam) meets.
+
+[preset]
+name = "lab-fixture"
+version = 3
+note = "fixture values"
+
+[[rule]]
+id = "insert.median"
+label = "Median insert size"
+class = "InsertSizeMetrics"
+metric = "MEDIAN_INSERT_SIZE"
+select = "PAIR_ORIENTATION=FR"
+warn = "outside 300..320"
+fail = "outside 250..400"
+
+[[rule]]
+id = "hs.mean-target-coverage"
+label = "Mean target coverage"
+class = "HsMetrics"
+metric = "MEAN_TARGET_COVERAGE"
+warn = "< 0.3"
+fail = "< 0.1"

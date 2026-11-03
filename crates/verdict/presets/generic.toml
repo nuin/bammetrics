@@ -1,0 +1,64 @@
+# generic, version 1: 6 rules any paired DNA BAM can meet, from the tools
+# that exist today. STARTING VALUES: not validated limits for any assay.
+# Rule syntax: docs/verdict.md.
+
+[preset]
+name = "generic"
+version = 1
+note = "starting values"
+
+[[rule]]
+id = "alignment.pf-reads-aligned"
+label = "PF reads aligned"
+class = "AlignmentSummaryMetrics"
+metric = "PCT_PF_READS_ALIGNED"
+select = "CATEGORY=PAIR"
+warn = "< 0.90"
+fail = "< 0.80"
+
+[[rule]]
+id = "alignment.adapter"
+label = "Adapter reads"
+class = "AlignmentSummaryMetrics"
+metric = "PCT_ADAPTER"
+select = "CATEGORY=PAIR"
+warn = "> 0.01"
+fail = "> 0.05"
+plot = "insert-size"
+
+[[rule]]
+id = "alignment.chimeras"
+label = "Chimeric pairs"
+class = "AlignmentSummaryMetrics"
+metric = "PCT_CHIMERAS"
+select = "CATEGORY=PAIR"
+warn = "> 0.05"
+fail = "> 0.10"
+
+[[rule]]
+id = "insert.median"
+label = "Median insert size"
+class = "InsertSizeMetrics"
+metric = "MEDIAN_INSERT_SIZE"
+select = "PAIR_ORIENTATION=FR"
+warn = "outside 100..1000"
+fail = "outside 50..2000"
+plot = "insert-size"
+
+[[rule]]
+id = "yield.q30"
+label = "Q30 fraction of PF bases"
+class = "QualityYieldMetrics"
+metric = "PF_Q30_BASES / PF_BASES"
+warn = "< 0.80"
+fail = "< 0.70"
+plot = "cycle-quality"
+
+[[rule]]
+id = "duplication.percent"
+label = "Duplicate reads"
+class = "DuplicationMetrics"
+metric = "PERCENT_DUPLICATION"
+level = "LIBRARY"
+warn = "> 0.30"
+fail = "> 0.50"

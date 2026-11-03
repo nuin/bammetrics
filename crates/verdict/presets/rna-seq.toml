@@ -1,0 +1,82 @@
+# rna-seq, version 1: 8 rules for a poly-A or ribo-depleted RNA-seq BAM.
+# STARTING VALUES: not validated limits for any assay. Rule syntax:
+# docs/verdict.md.
+#
+# The 4 rna.* rules read CollectRnaSeqMetrics (class RnaSeqMetrics), which
+# bammetrics does not implement yet. Until it does, those rules are "not
+# measured" and the band reads INCOMPLETE; an RnaSeqMetrics file written by
+# Picard satisfies them today.
+
+[preset]
+name = "rna-seq"
+version = 1
+note = "starting values"
+
+[[rule]]
+id = "rna.ribosomal"
+label = "Ribosomal bases"
+class = "RnaSeqMetrics"
+metric = "PCT_RIBOSOMAL_BASES"
+warn = "> 0.10"
+fail = "> 0.30"
+
+[[rule]]
+id = "rna.mrna-bases"
+label = "mRNA bases"
+class = "RnaSeqMetrics"
+metric = "PCT_MRNA_BASES"
+warn = "< 0.60"
+fail = "< 0.40"
+
+[[rule]]
+id = "rna.intergenic"
+label = "Intergenic bases"
+class = "RnaSeqMetrics"
+metric = "PCT_INTERGENIC_BASES"
+warn = "> 0.15"
+fail = "> 0.30"
+
+[[rule]]
+id = "rna.five-to-three-bias"
+label = "Median 5' to 3' bias"
+class = "RnaSeqMetrics"
+metric = "MEDIAN_5PRIME_TO_3PRIME_BIAS"
+warn = "outside 0.5..2.0"
+fail = "outside 0.25..4.0"
+
+[[rule]]
+id = "alignment.pf-reads-aligned"
+label = "PF reads aligned"
+class = "AlignmentSummaryMetrics"
+metric = "PCT_PF_READS_ALIGNED"
+select = "CATEGORY=PAIR"
+warn = "< 0.90"
+fail = "< 0.80"
+
+[[rule]]
+id = "alignment.adapter"
+label = "Adapter reads"
+class = "AlignmentSummaryMetrics"
+metric = "PCT_ADAPTER"
+select = "CATEGORY=PAIR"
+warn = "> 0.01"
+fail = "> 0.05"
+plot = "insert-size"
+
+[[rule]]
+id = "yield.q30"
+label = "Q30 fraction of PF bases"
+class = "QualityYieldMetrics"
+metric = "PF_Q30_BASES / PF_BASES"
+warn = "< 0.85"
+fail = "< 0.75"
+plot = "cycle-quality"
+
+[[rule]]
+id = "duplication.percent"
+label = "Duplicate reads"
+class = "DuplicationMetrics"
+metric = "PERCENT_DUPLICATION"
+level = "LIBRARY"
+warn = "> 0.50"
+fail = "> 0.70"

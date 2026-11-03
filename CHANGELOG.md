@@ -2,11 +2,28 @@
 
 ## Unreleased
 
-Phases 1 and 2 of the CLI and report design (`docs/05_cli_and_ui_design.md`): the
-golden suite that pins every existing command line, and the metrics file reader
-with the column glossary the report will read.
+Phases 1 to 3 of the CLI and report design (`docs/05_cli_and_ui_design.md`): the
+golden suite that pins every existing command line, the metrics file reader with the
+column glossary the report will read, and the verdict crate with its presets.
 
 ### Added
+
+- `crates/verdict` (`bammetrics-verdict`, `docs/verdict.md`): a preset of threshold
+  rules evaluated over one sample's metrics files. A rule names a metrics class, a
+  column or a ratio of two, a row scope (accumulation level, `COLUMN=VALUE` selector),
+  one comparator (`<`, `<=`, `>`, `>=`, `outside A..B`) and a warn and a fail bound.
+  Statuses `pass`, `warn`, `fail` and `not_measured`; the band is `fail`, else
+  `incomplete` when any check is not measured, else `warn`, else `pass`. Every warn or
+  fail carries one reason line with the value and the limit. `verdict.json` (schema
+  `bammetrics.verdict/1`) is written by `Verdict::to_json` and read back by
+  `Verdict::from_json`.
+- Shipped presets, each labelled `starting values`: `generic` (6 rules),
+  `clinical-panel` (the 14 rules of docs/05 section 4.3), `wgs` (10) and `rna-seq` (8).
+  `wgs` and `rna-seq` read INCOMPLETE until `CollectWgsMetrics` and
+  `CollectRnaSeqMetrics` exist. A lab's own TOML file replaces a shipped preset. The
+  preset hash (FNV-1a 64 of the text, CR removed) is the same on every platform.
+- Python: `bammetrics.evaluate(preset, paths, sample=None)` returns the verdict as the
+  dict form of `verdict.json`; `bammetrics.presets()` lists the shipped names.
 
 - Golden suite (`crates/core/tests/golden.rs`, `make golden`): 54 documented command
   forms on the committed fixtures (every registry tool and `CollectHsMetrics` in Picard
