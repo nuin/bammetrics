@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.8.0
+
+Parity plan phase P5, capture: `CollectHsMetrics` on the registry with every option and
+level, `CollectTargetedPcrMetrics` on the same collector, the exome-like slice.
+
+### Added
+
+- `CollectHsMetrics` in the registry (`hs_metrics.rs`, `CaptureMetrics`): all four
+  accumulation levels with Picard's shared histograms (a unit after a unit with a counted
+  base fails as Picard 3.5.0 does), `PER_TARGET_COVERAGE` (file name, columns, `%gc`, mean
+  and normalized coverage, extremes, read count, `pct_0x` as Picard writes them),
+  `THEORETICAL_SENSITIVITY_OUTPUT` with `ALLELE_FRACTION`, `COVERAGE_CAP`,
+  `NEAR_DISTANCE` (negative too), `MINIMUM_MAPPING_QUALITY`, `MINIMUM_BASE_QUALITY`,
+  `CLIP_OVERLAPPING_READS`, `INCLUDE_INDELS`, `SAMPLE_SIZE`, `BAIT_SET_NAME`;
+  `PER_BASE_COVERAGE` unchanged. `STOP_AFTER` and `ASSUME_SORTED` are rejected as Picard
+  rejects them. The Python function is `collect_hs_metrics`; `hs_metrics()` and `collect()`
+  stay.
+- `CollectTargetedPcrMetrics`: the `TargetedPcrMetrics` class and columns
+  (`CUSTOM_AMPLICON_SET`, `AMPLICON_*`, `PCT_AMPLIFIED_BASES`, the pair counts), its
+  defaults (MAPQ 1, base quality 0, no overlap clipping), `AMPLICON_INTERVALS` (one file)
+  and `CUSTOM_AMPLICON_SET_NAME`. Python `collect_targeted_pcr_metrics`.
+- `commons_math.rs`: `Well19937c`, `BinomialDistribution.sample` with the
+  `Beta.regularizedBeta`, `logBeta` and `logGamma` it bisects over, ported from
+  commons-math 3.6.1, plus `java.util.Random.nextGaussian`, so the sensitivity file matches
+  cell for cell.
+- `tests/data/make_exome.py`: a 500 kb reference with 150 GC-varied exons, tiled baits, a
+  GC-skewed target subset and a GC-dependent coverage BAM (plan tier T2d, synthetic).
+  `tests/concordance/hs_bams.py`: the level shapes that complete, adapter reads, and three
+  40-base targets over 100,000x. `tests/concordance/test_hs_metrics.py` runs both tools
+  on every input with every option, the extra files byte for byte and error parity.
+
+### Changed
+
+- `picard_cli.rs` and the translation layer in `main.rs` are gone: a Picard tool name goes
+  to the registry. `bammetrics CollectHsMetrics ...` now takes the `--NAME value` forms too.
+- `hs_metrics::Report` holds every unit's `TargetMetrics` and the four shared histograms;
+  `Row` (HsMetrics) and `PcrRow` implement `MetricRow`, and the `Field` enum is replaced
+  by `metric::Value`.
+
 ## 0.7.0
 
 Parity plan phase P4, coverage: the pileup engine (M14) and the WGS tools over it, plus

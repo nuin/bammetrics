@@ -17,7 +17,8 @@ Differences that remain are in [KNOWN_DIFFERENCES.md](KNOWN_DIFFERENCES.md).
 |---|---|---|
 | CollectQualityYieldMetrics | `quality-yield` | `quality_yield()` |
 | CollectAlignmentSummaryMetrics | `alignment-summary` | `alignment_summary()` |
-| CollectHsMetrics, with `PER_BASE_COVERAGE` | `hs-metrics` | `hs_metrics()` |
+| CollectHsMetrics (all four levels, `PER_TARGET_COVERAGE`, `PER_BASE_COVERAGE`, `THEORETICAL_SENSITIVITY_OUTPUT`) | `hs-metrics`, Picard syntax | `collect_hs_metrics()`, `hs_metrics()` |
+| CollectTargetedPcrMetrics (`AI=` amplicons, same collector) | Picard syntax only | `collect_targeted_pcr_metrics()` |
 | CollectInsertSizeMetrics | `insert-size` | `insert_size()` |
 | all of the above in one pass | `collect` | `collect()` |
 | QualityScoreDistribution | Picard syntax only | `quality_score_distribution()` |
@@ -33,14 +34,15 @@ Differences that remain are in [KNOWN_DIFFERENCES.md](KNOWN_DIFFERENCES.md).
 | CollectWgsMetricsWithNonZeroCoverage | Picard syntax only | `collect_wgs_metrics_with_non_zero_coverage()` |
 | BedToIntervalList (`SD=` from .dict, BAM, SAM, interval list or FASTA) | Picard syntax only | `bed_to_interval_list()` |
 
-Every tool in the registry (all but CollectHsMetrics) also has a Python function named
+Every tool in the registry also has a Python function named
 after the Picard class in snake case, e.g. `collect_quality_yield_metrics(path, **options)`,
 returning rows as dicts. QualityScoreDistribution and MeanQualityByCycle write no metrics
 class, so their functions return the histogram table.
 
 `METRIC_ACCUMULATION_LEVEL` (`ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`) works for
 CollectInsertSizeMetrics, CollectAlignmentSummaryMetrics, CollectGcBiasMetrics and
-CollectMultipleMetrics. `CollectHsMetrics` takes `ALL_READS` only.
+CollectMultipleMetrics, CollectHsMetrics and CollectTargetedPcrMetrics (the capture tools complete only
+when at most the last unit in file order has a counted base, as Picard 3.5.0 does; see KNOWN_DIFFERENCES.md).
 
 ## Drop-in for a Picard pipeline
 
@@ -156,7 +158,7 @@ docs/    01 algorithm spec (Picard -> plain English, concordance traps)
          02 Rust -> Python build walkthrough, 03 Rust programming guide, benchmarks.md
 crates/
   core/  bammetrics-core: library and `bammetrics` CLI (metrics, Picard helpers, pass, collect,
-         histogram, metrics_file, picard_cli)
+         histogram, metrics_file, registry)
   py/    PyO3 wrapper (cdylib), the `bammetrics` Python module
 tests/   concordance/ (Picard harness), corpus/ (generator), python/ (module tests), data/ (fixtures)
 benches/ benchmark BAM generator and Picard-vs-bammetrics timing
@@ -197,7 +199,7 @@ coordinate sorted, as Picard does; `STOP_AFTER` works in CollectAlignmentSummary
 CollectQualityYieldMetrics, the three by-cycle tools and CollectDuplicateMetrics.
 Any other option exits 1 naming the option. `CollectInsertSizeMetrics` and
 `CollectAlignmentSummaryMetrics` take `METRIC_ACCUMULATION_LEVEL` (`ALL_READS`, `SAMPLE`,
-`LIBRARY`, `READ_GROUP`; `null` clears the default); `CollectHsMetrics` accepts `ALL_READS` only. Tools in the registry
+`LIBRARY`, `READ_GROUP`; `null` clears the default). Tools in the registry
 (`crates/core/src/registry.rs`) also take Picard 3's `--NAME value` and `--NAME=value` forms.
 
 `alignment-summary` takes `-R` (REFERENCE_SEQUENCE; a FASTA with a `.fai`, read one

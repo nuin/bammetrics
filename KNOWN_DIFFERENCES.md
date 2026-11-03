@@ -2,8 +2,8 @@
 
 bammetrics matches Picard 3.5.0 byte for byte after the `StringHeader` lines, for
 every case in the concordance harness (the harness compares the whole file body, so files
-without a `## METRICS CLASS` block are covered too), and writes `PER_BASE_COVERAGE` files identical to
-Picard's, whole file. This file lists where it differs on purpose,
+without a `## METRICS CLASS` block are covered too), and writes `PER_BASE_COVERAGE` and
+`PER_TARGET_COVERAGE` files identical to Picard's, whole file. This file lists where it differs on purpose,
 where it cannot match, and what is not implemented. Each item says which side
 behaves how.
 
@@ -24,41 +24,80 @@ behaves how.
 
 ## Options
 
-- Picard syntax takes `KEY=VALUE`. The tools in the registry (every tool but
-  `CollectHsMetrics`) also take `--INPUT x`, `--INPUT=x` and `-I x`. `CollectHsMetrics`
-  exits 1 on those forms.
+- Picard syntax takes `KEY=VALUE`. Every tool in the registry also takes `--INPUT x`,
+  `--INPUT=x` and `-I x`.
 - An unknown option exits 1 naming it. Dropping it could change a number silently.
 - Options that cannot change a metric are accepted, dropped and noted on stderr:
   `VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`, `VERBOSITY`, `H` and `CHART` (no PDF
   is drawn), `R` for tools that do not read a reference.
 - `ASSUME_SORTED=false` (`AS`) on a BAM whose header sort order is not `coordinate` (or
   has no `@HD` sort order) exits 1 and writes no file in every registry tool, as Picard
-  does. `CollectHsMetrics` still drops the option with a note.
-- `AccumulateQualityYieldMetrics` and `EstimateLibraryComplexity` reject `ASSUME_SORTED`
-  as Picard does (`Unrecognized option`); the other `CommandLineProgram` plumbing options
-  (`R`, `TMP_DIR`, ...) are accepted and dropped where Picard rejects them.
+  does.
+- `AccumulateQualityYieldMetrics`, `EstimateLibraryComplexity`, `CollectHsMetrics` and
+  `CollectTargetedPcrMetrics` reject `ASSUME_SORTED` as Picard does (`Unrecognized
+  option`); the two capture tools reject `STOP_AFTER` the same way (neither is a
+  `SinglePassSamProgram`). The other `CommandLineProgram` plumbing options (`R`,
+  `TMP_DIR`, ...) are accepted and dropped where Picard rejects them.
 - `METRIC_ACCUMULATION_LEVEL` is implemented for `CollectInsertSizeMetrics`,
-  `CollectAlignmentSummaryMetrics`, `CollectGcBiasMetrics` and `CollectMultipleMetrics`
-  (all four levels). `CollectQualityYieldMetrics` has no such option;
-  `CollectHsMetrics` accepts `ALL_READS` only.
+  `CollectAlignmentSummaryMetrics`, `CollectGcBiasMetrics`, `CollectMultipleMetrics`,
+  `CollectHsMetrics` and `CollectTargetedPcrMetrics` (all four levels).
+  `CollectQualityYieldMetrics` has no such option.
+- `CollectHsMetrics` and `CollectTargetedPcrMetrics` at any level but a single unit:
+  Picard 3.5.0 keeps the four histograms of `TargetMetricsCollector` (high-quality
+  depth, unfiltered depth, capped and uncapped base quality) on the collector, so every
+  unit's `finish` adds to the same four, in file order (`ALL_READS`, then the `SAMPLE`,
+  `LIBRARY` and `READ_GROUP` units). A unit's `MEDIAN_TARGET_COVERAGE`,
+  `FOLD_80_BASE_PENALTY`, `HET_SNP_SENSITIVITY` and `HET_SNP_Q` read the histograms as
+  the units before it left them, the file prints the final histograms once per unit
+  (the two columns repeat), and `calculateTheoreticalHetSensitivity` throws
+  `numbers of bases in the base quality histogram and the coverage histogram are not
+  equal` in every unit that finishes after a unit with a base counted under the cap,
+  so no file is written. bammetrics reproduces all of it (`hs_metrics.rs`, `Shared`):
+  `LEVEL=SAMPLE` on a BAM with one on-target sample exits 1 in both tools
+  (`ALL_READS` finishes first), `LEVEL=null LEVEL=SAMPLE` completes with one sample
+  and fails with two, and a unit with no counted base before the covered one
+  completes and shifts the covered unit's median and sensitivity
+  (`tests/concordance/hs_bams.py`, `test_levels_that_complete`,
+  `test_a_unit_after_a_covered_unit_fails_in_both`). `PER_BASE_COVERAGE` and
+  `PER_TARGET_COVERAGE` are written by the `ALL_READS` unit only, so `LEVEL=null`
+  writes neither; `PER_TARGET_COVERAGE` with any other level, or without
+  `REFERENCE_SEQUENCE`, exits 1 before reading, as Picard's validation does.
+- `NEAR_DISTANCE` may be negative in both tools (the bait intervals shrink);
+  `COVERAGE_CAP` under 0 keys the unfiltered depth histogram below 0, so the base-count
+  check above fails at the first unit with a counted base, in both tools.
 - `IS_BISULFITE_SEQUENCED` is implemented for `CollectAlignmentSummaryMetrics` and
   `CollectGcBiasMetrics`. `STOP_AFTER` is implemented for `CollectAlignmentSummaryMetrics`,
   `CollectQualityYieldMetrics`, `QualityScoreDistribution`, `MeanQualityByCycle`,
   `CollectBaseDistributionByCycle`, `CollectDuplicateMetrics`, `CollectGcBiasMetrics` and
   `CollectMultipleMetrics`; it counts every record,
   secondary and unmapped ones included, as Picard does. `STOP_AFTER` for
-  `CollectInsertSizeMetrics` and `CollectHsMetrics`, `PER_TARGET_COVERAGE` and
-  `THEORETICAL_SENSITIVITY_OUTPUT` exit 1. `FLOW_MODE=true` exits 1 in both tools.
-  `PER_BASE_COVERAGE` is implemented.
+  `CollectInsertSizeMetrics` exits 1. `FLOW_MODE=true` exits 1 in both tools.
+- `CollectHsMetrics` and `CollectTargetedPcrMetrics` take every option of Picard's
+  `CollectTargetedMetrics` that changes a number or a file (`MINIMUM_MAPPING_QUALITY`,
+  `MINIMUM_BASE_QUALITY`, `CLIP_OVERLAPPING_READS`, `INCLUDE_INDELS`, `COVERAGE_CAP`,
+  `NEAR_DISTANCE`, `SAMPLE_SIZE`, `METRIC_ACCUMULATION_LEVEL`, `PER_TARGET_COVERAGE`,
+  `PER_BASE_COVERAGE`, `THEORETICAL_SENSITIVITY_OUTPUT`, `ALLELE_FRACTION`,
+  `BAIT_SET_NAME` or `CUSTOM_AMPLICON_SET_NAME`), each with a non-default case in
+  `tests/concordance/test_hs_metrics.py`. `THEORETICAL_SENSITIVITY_OUTPUT` draws its
+  binomial alt depths from a port of commons-math 3.6.1 `Well19937c` and
+  `BinomialDistribution` (`commons_math.rs`: the inverse CDF through
+  `Beta.regularizedBeta`) and its large alt quality sums from `java.util.Random(51)`
+  `nextGaussian`, so the file matches cell for cell at the default `SAMPLE_SIZE`
+  (`test_hs_theoretical_sensitivity_output`). The port uses Rust `ln`, `exp` and
+  `log10` where commons-math uses `FastMath`; a last-ulp difference could move one
+  bisection step of one sample when a uniform draw lands within 1e-15 of a CDF value.
+  None showed up on the corpus.
 - The three WGS tools take every option of Picard's `CollectWgsMetrics` that changes a
   number (`MINIMUM_MAPPING_QUALITY`, `MINIMUM_BASE_QUALITY`, `COVERAGE_CAP`,
   `LOCUS_ACCUMULATION_CAP`, `COUNT_UNPAIRED`, `INCLUDE_BQ_HISTOGRAM`, `SAMPLE_SIZE`,
   `INTERVALS`, `STOP_AFTER`, `USE_FAST_ALGORITHM`, `READ_LENGTH`), each with a non-default
   case in `tests/concordance/test_wgs_metrics.py`, except `THEORETICAL_SENSITIVITY_OUTPUT`
   and `ALLELE_FRACTION`, which exit 1 naming the option: Picard writes a second file from
-  `TheoreticalSensitivity.calculateSensitivities`, whose sampling uses commons-math's
-  `Well19937c` (`test_theoretical_sensitivity_output_is_not_implemented` checks Picard
-  writes both files and bammetrics exits 1). `ASSUME_SORTED` is rejected in both tools.
+  `TheoreticalSensitivity.calculateSensitivities`
+  (`test_theoretical_sensitivity_output_is_not_implemented` checks Picard writes both
+  files and bammetrics exits 1). The model is ported for the capture tools
+  (`sensitivity::calculate_sensitivities`); the three WGS tools do not call it yet.
+  `ASSUME_SORTED` is rejected in both tools.
   `CollectWgsMetricsWithNonZeroCoverage` accepts `CHART_OUTPUT` and draws nothing.
 - `CollectGcBiasMetrics` accepts `MINIMUM_GENOME_FRACTION` (`MGF`) and changes nothing
   with it: Picard 3.5.0 declares the option and never reads it (`CollectGcBiasMetrics.java`,
@@ -131,10 +170,11 @@ written, with `file` and `rows`.
 - `R=` needs a `.fai` next to the FASTA. Picard needs a `.dict`. bammetrics checks the
   BAM `@SQ` lines against the `.fai` (names, lengths, order); Picard checks them against
   the dictionary.
-- BED interval files are read for `CollectHsMetrics`, converted the way
+- BED interval files are read for `CollectHsMetrics` and `CollectTargetedPcrMetrics`, converted the way
   `BedToIntervalList` would, with the BAM header as dictionary. Picard 3.5.0 rejects a
   BED file with `Interval list file must contain header`. The harness gives Picard the
-  matching interval lists for this case (`t1_bed_ref`); the outputs are identical.
+  matching interval lists for this case (`t1_bed_ref`,
+  `test_bed_intervals_are_read_by_bammetrics_only`); the outputs are identical.
 - `CollectInsertSizeMetrics` has no reference argument, so it reads none.
 - `CollectWgsMetrics`, `CollectRawWgsMetrics` and `CollectWgsMetricsWithNonZeroCoverage`
   read `R=` through its `.fai`; Picard also needs the `.dict` next to it. `INTERVALS` takes
@@ -334,7 +374,7 @@ harness runs every native case at 1 and 8.
 
 `CollectVariantCallingMetrics`, `MarkDuplicates`, `CollectRnaSeqMetrics`,
 `CollectSequencingArtifactMetrics` (so `CollectMultipleMetrics` rejects `RnaSeqMetrics` and
-`CollectSequencingArtifactMetrics`), accumulation levels of `CollectHsMetrics`.
+`CollectSequencingArtifactMetrics`).
 `CollectDuplicateMetrics` counts no optical duplicates, as Picard's
 does (`READ_PAIR_OPTICAL_DUPLICATES` is always 0). `CollectDuplicateMetrics` sorts library
 names by UTF-8 bytes; Java sorts by UTF-16 units. The orders differ only for names that
