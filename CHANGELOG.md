@@ -2,11 +2,46 @@
 
 ## Unreleased
 
-Phases 1 to 3 of the CLI and report design (`docs/05_cli_and_ui_design.md`): the
+Phases 1 to 4 of the CLI and report design (`docs/05_cli_and_ui_design.md`): the
 golden suite that pins every existing command line, the metrics file reader with the
-column glossary the report will read, and the verdict crate with its presets.
+column glossary the report will read, the verdict crate with its presets, and the
+per-sample HTML report page with its four plots.
 
 ### Added
+
+- `crates/report` (`bammetrics-report`): `render(verdict, inputs, options)` and
+  `write(path, ...)` build one self-contained HTML page for one sample from a `Verdict`
+  and the parsed metrics files. Page order: header (sample, preset name, version and
+  hash, reads, tool version), verdict band with counts, the failing and warning checks
+  each with its reason and, when the rule names a plot, that plot under it, the
+  not-measured checks, every check in one table, the metrics tables collapsed in
+  `<details>` with the glossary definition of every column, then the run section
+  (tool version, preset, hash, date passed by the caller, input files with their
+  command lines). No script, no network request, a `<meta>` CSP of `default-src
+  'none'; style-src 'unsafe-inline'`, every header string and file name escaped.
+- Four plots as inline SVG with no dependency: coverage (cumulative share of target
+  bases at or above depth, guides at the depths the coverage rules name and at the
+  mean), insert size (histogram, median and MAD band, the fail range shaded), GC bias
+  (normalized coverage by GC window from `GcBiasDetailMetrics`, the 0.9 to 1.1 band, a
+  strip of window counts) and per-cycle quality (`MeanQualityByCycle` split into read 1
+  and read 2 at the first-of-pair read length, Q20 and Q30 guides). Each has axis
+  titles, ticks, direct labels, a legend when two series are drawn and a `<title>` plus
+  `<desc>` text alternative. A plot renders only under a warn or fail check whose rule
+  names it, or everywhere with `Options { all_plots: true }`.
+- Visual design: one system font stack, a four-step type scale on 15 px, a palette of
+  CSS custom properties (`--ink`, `--accent`, pass, warn, fail and neutral pairs), dark
+  mode through `prefers-color-scheme` and a `data-theme` override, print CSS that
+  keeps the band, the issues and the plots and hides the tables. About 6.8 KB of CSS
+  inlined, no framework, no JavaScript. Works at 360 px without horizontal scroll.
+- Tests (`crates/report/tests/report.rs`): snapshots `tests/report/pass.html` (preset
+  `generic`) and `fail.html` (`clinical-panel`) on the committed fixtures
+  (`UPDATE_REPORT=1` rewrites them), WCAG AA 4.5:1 for every text and background pair
+  in both themes computed from the CSS tokens, `<script>` in the sample name, a path
+  and a header line, every plot on an empty and a one-bin histogram, page size (under
+  150 KB without plots, 300 KB with all four; measured 67 KB and 86 KB) and render time
+  (median under 20 ms; measured under 1 ms in a debug build).
+  `cargo run -p bammetrics-report --example fixture_pages -- DIR` writes the fixture
+  pages for a look in a browser until the `report` verb exists (phase 6).
 
 - `crates/verdict` (`bammetrics-verdict`, `docs/verdict.md`): a preset of threshold
   rules evaluated over one sample's metrics files. A rule names a metrics class, a
