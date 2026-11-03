@@ -41,23 +41,21 @@ fn one_target_covered_once() {
         "@HD\tVN:1.6\n@SQ\tSN:chr1\tLN:100000\nchr1\t1001\t1100\t+\tt1\n",
     );
     let report = run_over_bam(FIXTURE, &options(list)).expect("metrics");
-    let row = &report.row;
+    let rows = report.hs_rows();
+    let (row, p) = (&rows[0], &rows[0].panel);
     assert_eq!(row.bait_set, "panel");
-    assert_eq!((row.bait_territory, row.target_territory), (100, 100));
-    assert_eq!(row.genome_size, 100_000);
-    assert_eq!(
-        (row.total_reads, row.pf_reads, row.pf_bases),
-        (10, 10, 1000)
-    );
+    assert_eq!((row.bait_territory, p.target_territory), (100, 100));
+    assert_eq!(p.genome_size, 100_000);
+    assert_eq!((p.total_reads, p.pf_reads, p.pf_bases), (10, 10, 1000));
     // r0's first read is on the bait, its mate within 250 bp, the rest off.
     assert_eq!(
         (row.on_bait_bases, row.near_bait_bases, row.off_bait_bases),
         (100, 100, 800)
     );
-    assert_eq!(row.on_target_bases, 100);
-    assert_eq!(row.mean_target_coverage, 1.0);
-    assert_eq!(row.pct_target_bases[0], 1.0);
-    assert_eq!(row.pct_target_bases[1], 0.0);
+    assert_eq!(p.on_target_bases, 100);
+    assert_eq!(p.mean_target_coverage, 1.0);
+    assert_eq!(p.pct_target_bases[0], 1.0);
+    assert_eq!(p.pct_target_bases[1], 0.0);
     assert_eq!(row.hs_library_size, None);
     assert_eq!(row.hs_penalty, [0.0; 6]);
     assert_eq!(report.depth.get(1), Some(100.0));

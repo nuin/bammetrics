@@ -140,6 +140,8 @@ pub const TOOLS: &[&Tool] = &[
     &crate::wgs_metrics::RAW_TOOL,
     &crate::wgs_metrics::NON_ZERO_TOOL,
     &crate::bed_to_interval_list::TOOL,
+    &crate::hs_metrics::TOOL,
+    &crate::hs_metrics::PCR_TOOL,
 ];
 
 /// The tool named `name`.
