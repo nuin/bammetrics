@@ -21,6 +21,7 @@ over all Picard files compared, except the columns in FEWER_THAN_THREE with the
 reason.
 """
 import gzip
+import shutil
 import subprocess
 from collections import defaultdict
 from pathlib import Path
@@ -29,7 +30,7 @@ import pytest
 
 from asm_bams import build_all as build_asm
 from cases import BAMMETRICS, CORPUS, REFERENCE
-from compare import body, compare_metrics
+from compare import body, compare_metrics, diff_metrics
 from conftest import RESULTS
 from hs_bams import build_all as build_hs
 from picard_metrics import parse_picard_metrics
@@ -173,7 +174,9 @@ DEEP_OPTIONS = {"default": [], "mq_0": ["MQ=0"], "q_0": ["Q=0"], "mq_0_q_0": ["M
 
 @pytest.mark.parametrize("option", DEEP_OPTIONS)
 def test_hs_deep_targets(built, corpus, exome, option):
-    """Three 40-base targets at over 100,000x: PCT_TARGET_BASES_1000X to _100000X."""
+    """Three 40-base targets whose depth falls from 160,000x along the target
+    (hs_bams.py): PCT_TARGET_BASES_500X to _100000X count a different number of
+    bases at each filter."""
     bam, ref, baits, targets = inputs("hs_deep", built, corpus, exome)
     compare(HS, bam, [*probe_args(HS, baits, targets), f"R={ref}", SMALL, *DEEP_OPTIONS[option]], f"deep {option}")
 
@@ -299,6 +302,7 @@ def test_pcr_defaults(built, corpus, exome, name):
 PCR_OPTIONS = {
     "reference": [],
     "hs_defaults": ["MQ=20", "Q=20", "CLIP_OVERLAPPING_READS=true"],
+    "clip": ["CLIP_OVERLAPPING_READS=true"],
     "mq_60": ["MINIMUM_MAPPING_QUALITY=60"],
     "q_30": ["Q=30"],
     "indels": ["INCLUDE_INDELS=true"],
@@ -319,6 +323,19 @@ def test_pcr_options(built, corpus, exome, option, name):
     compare(PCR, bam, [*probe_args(PCR, baits, targets), f"R={ref}", *PCR_OPTIONS[option]], f"{name} {option}")
 
 
+PCR_DEEP_OPTIONS = {"mq_20": ["MQ=20"], "q_20": ["Q=20"], "mq_20_q_20": ["MQ=20", "Q=20"]}
+
+
+@pytest.mark.parametrize("option", PCR_DEEP_OPTIONS)
+def test_pcr_deep_targets(built, corpus, exome, option):
+    """The deep ladder under the filters CollectTargetedPcrMetrics leaves off by
+    default (MAPQ 1, base quality 0): a fifth of the reads and a seventh of the
+    bases drop out, so every PCT_TARGET_BASES_*X column moves."""
+    bam, ref, baits, targets = inputs("hs_deep", built, corpus, exome)
+    compare(PCR, bam, [*probe_args(PCR, baits, targets), f"R={ref}", SMALL, *PCR_DEEP_OPTIONS[option]],
+            f"deep {option}")
+
+
 @pytest.mark.parametrize("name, targets", [("exome", "gc_targets"), ("t0_hs", "hs_targets"), ("hs_deep", None)])
 def test_pcr_per_target_coverage(built, corpus, exome, tmp_path, name, targets):
     bam, ref, baits, target_list = inputs(name, built, corpus, exome, targets)
@@ -337,20 +354,35 @@ def test_pcr_per_base_and_sensitivity(built, corpus, exome, tmp_path):
 
 # --- error parity --------------------------------------------------------------------------
 
-def both_fail(tool, bam, args, tmp_path, message=None, picard_message=None):
+def both_fail(tool, bam, args, tmp_path, message, picard_message, output_written=False):
+    """Both tools exit non-zero with `message` (bammetrics) and `picard_message`
+    (Picard) in their output. Neither writes OUTPUT, or with `output_written`
+    both do and the files agree cell for cell (Picard writes the metrics file
+    before it computes the sensitivities)."""
     picard_out, ours_out = tmp_path / "picard.txt", tmp_path / "ours.txt"
     picard = subprocess.run(["picard", tool, f"I={bam}", f"O={picard_out}", SILENT, *args, "QUIET=true",
                              "VERBOSITY=ERROR"], env=picard_env(), capture_output=True, text=True)
     assert picard.returncode != 0, f"Picard completed: {args}"
-    if picard_message:
-        assert picard_message in picard.stdout + picard.stderr
+    assert picard_message in picard.stdout + picard.stderr, picard.stderr
     result = subprocess.run([str(BAMMETRICS), tool, f"I={bam}", f"O={ours_out}", *args],
                             capture_output=True, text=True)
     assert result.returncode != 0, result.stdout
-    if message:
-        assert message in result.stderr, result.stderr
-    assert not picard_out.exists() and not ours_out.exists()
-    RESULTS.append((f"{tool} {bam.name} {' '.join(args)}", 0, 0, "both exit non-zero, no file"))
+    assert message in result.stderr, result.stderr
+    label = f"{tool} {bam.name} {' '.join(args)}"
+    if not output_written:
+        assert not picard_out.exists() and not ours_out.exists()
+        RESULTS.append((label, 0, 0, "both exit non-zero, no file"))
+        return
+    assert picard_out.exists() and ours_out.exists(), f"{label}: OUTPUT not written by both tools"
+    picard_metrics, ours_metrics = parse_picard_metrics(picard_out), parse_picard_metrics(ours_out)
+    problems = diff_metrics(picard_metrics, ours_metrics)
+    assert not problems, f"{label}:\n  " + "\n  ".join(problems[:40])
+    assert body(picard_out) == body(ours_out), f"{label}: OUTPUT body differs"
+    cells = (len(picard_metrics.rows) * len(picard_metrics.columns)
+             + len(picard_metrics.histogram) * len(picard_metrics.histogram_columns))
+    assert cells > 0, f"{label}: no cell compared"
+    SEEN[tool].append(picard_metrics)
+    RESULTS.append((label, cells, cells, "both exit non-zero, OUTPUT identical"))
 
 
 def test_stop_after_and_assume_sorted_are_not_options(built, tmp_path):
@@ -403,29 +435,46 @@ def test_negative_coverage_cap_fails(built, tmp_path):
 
 
 def test_amplicon_intervals_once_and_targets_required(built, tmp_path):
+    """bammetrics prints Picard's argument parser messages, option name included."""
     bam, _, baits, targets = built["hs_first_empty"]
     both_fail(PCR, bam, [f"AI={baits}", f"AI={targets}", f"TI={targets}"], tmp_path,
-              "cannot be specified more than once", "cannot be specified more than once")
-    both_fail(HS, bam, [f"BI={baits}"], tmp_path, "TARGET_INTERVALS")
-    both_fail(HS, bam, [f"TI={targets}"], tmp_path, "BAIT_INTERVALS")
+              "Option 'AMPLICON_INTERVALS' cannot be specified more than once.",
+              "Option 'AI' cannot be specified more than once.")
+    targets_required = "Option 'TARGET_INTERVALS' must be specified at least 1 times."
+    both_fail(HS, bam, [f"BI={baits}"], tmp_path, targets_required, targets_required)
+    both_fail(PCR, bam, [f"AI={baits}"], tmp_path, targets_required, targets_required)
+    baits_required = "Option 'BAIT_INTERVALS' must be specified at least 1 times."
+    both_fail(HS, bam, [f"TI={targets}"], tmp_path, baits_required, baits_required)
+    amplicons_required = "Option 'AMPLICON_INTERVALS' is required."
+    both_fail(PCR, bam, [f"TI={targets}"], tmp_path, amplicons_required, amplicons_required)
 
 
 def test_interval_list_of_another_dictionary_fails(built, corpus, tmp_path):
+    """The foundation targets name chr1 (60,000 bp); the hs_bams header has c1 (30,000 bp)."""
     bam, _, baits, _ = built["hs_first_empty"]
-    both_fail(HS, bam, [f"BI={baits}", f"TI={corpus / 'target.interval_list'}"], tmp_path)
+    both_fail(HS, bam, [f"BI={baits}", f"TI={corpus / 'target.interval_list'}"], tmp_path,
+              "contig chr1 (60000 bp) in the interval list, c1 (30000 bp) in the BAM header",
+              "does not match sequence dictionary for (target intervals)")
 
 
 def test_allele_fraction_outside_0_1_fails_with_the_sensitivity_file(built, tmp_path):
+    """Picard writes OUTPUT, then throws computing the sensitivities: the metrics
+    file exists and agrees, the sensitivity file does not."""
     bam, _, baits, targets = built["hs_first_empty"]
+    sensitivity = tmp_path / "ts.txt"
     both_fail(HS, bam, [*probe_args(HS, baits, targets), "ALLELE_FRACTION=1.5", SMALL,
-                        f"THEORETICAL_SENSITIVITY_OUTPUT={tmp_path / 'ts.txt'}"], tmp_path,
-              "Allele fractions must be between 0 and 1", "Allele fractions must be between 0 and 1")
+                        f"THEORETICAL_SENSITIVITY_OUTPUT={sensitivity}"], tmp_path,
+              "Allele fractions must be between 0 and 1", "Allele fractions must be between 0 and 1",
+              output_written=True)
+    assert not sensitivity.exists()
 
 
 def test_bed_intervals_are_read_by_bammetrics_only(built, tmp_path):
-    """Picard 3.5.0 rejects a BED; bammetrics converts it as BedToIntervalList would."""
+    """Picard 3.5.0 rejects a BED; bammetrics converts it as BedToIntervalList would.
+    The BED is copied to the interval list's stem, so BAIT_SET is `panel` on both sides."""
     bam, ref, baits, targets = built["hs_first_empty"]
-    bed = bam.parent / "hs_panel.bed"
+    bed = tmp_path / "panel.bed"
+    shutil.copy(bam.parent / "hs_panel.bed", bed)
     with pytest.raises(subprocess.CalledProcessError):
         subprocess.run(["picard", HS, f"I={bam}", f"O={tmp_path / 'p.txt'}", SILENT, f"BI={bed}", f"TI={bed}",
                         "QUIET=true", "VERBOSITY=ERROR"], check=True, env=picard_env(), stdout=subprocess.DEVNULL,
@@ -434,6 +483,7 @@ def test_bed_intervals_are_read_by_bammetrics_only(built, tmp_path):
                             bam_args=[SILENT, f"BI={bed}", f"TI={bed}", f"R={ref}", SMALL], workdir=tmp_path,
                             expect_file=True, seen=SEEN[HS])
     assert cells > 0
+    RESULTS.append((f"{HS} hs_first_empty BED", cells, cells, "every cell and the file body identical"))
 
 
 # --- every column exercised ---------------------------------------------------------------
@@ -442,10 +492,13 @@ DEFAULTS = {"0", ""}
 # Columns that cannot take 3 distinct non-default values, and why.
 FEWER_THAN_THREE = {}
 EXPECTED_FILES = {
+    # The last 1 of each: the BED case (Hs) and the written OUTPUT of the
+    # ALLELE_FRACTION=1.5 case (Hs); none for CollectTargetedPcrMetrics.
     HS: (len(INPUTS) + len(REFERENCE_INPUTS) + len(OTHER_TARGETS) + len(OPTIONS) * len(OPTION_INPUTS)
          + len(DEEP_OPTIONS) + 1 + len(PER_TARGET_CASES) + len(PER_BASE_CASES) + len(SENSITIVITY_CASES)
-         + len(LEVEL_CASES) + 1),
-    PCR: (len(PCR_INPUTS) + len(PCR_OPTIONS) * len(PCR_OPTION_INPUTS) + 3 + 2 + len(LEVEL_CASES)),
+         + len(LEVEL_CASES) + 1 + 1),
+    PCR: (len(PCR_INPUTS) + len(PCR_OPTIONS) * len(PCR_OPTION_INPUTS) + len(PCR_DEEP_OPTIONS) + 3 + 2
+          + len(LEVEL_CASES)),
 }
 
 

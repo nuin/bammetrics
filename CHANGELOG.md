@@ -28,8 +28,14 @@ level, `CollectTargetedPcrMetrics` on the same collector, the exome-like slice.
 - `tests/data/make_exome.py`: a 500 kb reference with 150 GC-varied exons, tiled baits, a
   GC-skewed target subset and a GC-dependent coverage BAM (plan tier T2d, synthetic).
   `tests/concordance/hs_bams.py`: the level shapes that complete, adapter reads, and three
-  40-base targets over 100,000x. `tests/concordance/test_hs_metrics.py` runs both tools
-  on every input with every option, the extra files byte for byte and error parity.
+  40-base targets whose depth falls from 160,000x to 500x along the target.
+  `tests/concordance/test_hs_metrics.py` runs both tools on every input with every
+  option, the extra files byte for byte and error parity: 179 tests against Picard 3.5.0,
+  CollectHsMetrics 114 metrics files and 2,986,122 cells, CollectTargetedPcrMetrics 52
+  files and 2,121,076 cells, 18 per-target and per-base files (109,578 lines) and 7
+  sensitivity files (290 cells), all identical; 19 error-parity cases; every column of
+  both tools takes 3 distinct non-default values. `make concordance`: 1923 passed, 1
+  skipped.
 
 ### Changed
 

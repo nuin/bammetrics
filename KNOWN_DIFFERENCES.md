@@ -86,7 +86,12 @@ behaves how.
   (`test_hs_theoretical_sensitivity_output`). The port uses Rust `ln`, `exp` and
   `log10` where commons-math uses `FastMath`; a last-ulp difference could move one
   bisection step of one sample when a uniform draw lands within 1e-15 of a CDF value.
-  None showed up on the corpus.
+  None showed up on the corpus. An `ALLELE_FRACTION` outside 0 to 1 exits 1 in both
+  tools after `OUTPUT` is written and before the sensitivity file, with the same metrics
+  file (`test_allele_fraction_outside_0_1_fails_with_the_sensitivity_file`). A missing
+  `BAIT_INTERVALS`, `TARGET_INTERVALS` or `AMPLICON_INTERVALS` exits 1 with Picard's
+  argument parser message (`Option 'TARGET_INTERVALS' must be specified at least 1
+  times.`, `Option 'AMPLICON_INTERVALS' is required.`).
 - The three WGS tools take every option of Picard's `CollectWgsMetrics` that changes a
   number (`MINIMUM_MAPPING_QUALITY`, `MINIMUM_BASE_QUALITY`, `COVERAGE_CAP`,
   `LOCUS_ACCUMULATION_CAP`, `COUNT_UNPAIRED`, `INCLUDE_BQ_HISTOGRAM`, `SAMPLE_SIZE`,

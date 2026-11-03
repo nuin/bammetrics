@@ -15,11 +15,14 @@ are the shapes that complete:
   unknown       @RG g0 only, off target; the on-target reads carry no RG, so
                 they land in the `unknown` unit made after the header units.
   no_coverage   g0 and g1 both off target: every level at once, all zeros.
-  deep          three 40-base targets (DEEP_TARGETS, deep_panel.bed) under
-                150,000, 120,000 and 140,000 unpaired reads, a fifth at MAPQ 5
-                and a seventh with Q10 bases, so the PCT_TARGET_BASES_*X
-                columns up to 100000X take values and change with
-                MINIMUM_MAPPING_QUALITY and MINIMUM_BASE_QUALITY.
+  deep          three 40-base targets (DEEP_TARGETS, deep_panel.bed) whose
+                depth falls geometrically along the target, 160,000x to 4,000x,
+                20,000x to 500x and 60,000x to 1,500x (DEEP_DEPTHS), under
+                unpaired reads that end inside the target; a fifth at MAPQ 5 and
+                a seventh with Q10 bases. Every PCT_TARGET_BASES_*X column from
+                500X to 100000X then counts a different number of bases at each
+                MINIMUM_MAPPING_QUALITY and MINIMUM_BASE_QUALITY, and
+                MIN_TARGET_COVERAGE and MAX_TARGET_COVERAGE move with them.
 
 first_empty, unknown and deep also carry adapter reads at MAPQ 0 (2, 5 and 1).
 PANEL is the BED of the targets; baits are the targets padded by 50 bp
@@ -37,7 +40,8 @@ TARGETS = [("c1", 1001, 1200, "ta"), ("c1", 5001, 5300, "tb"), ("c1", 9001, 9150
            ("c2", 2001, 2400, "td")]
 DEEP_TARGETS = [("c1", 15_001, 15_040, "da"), ("c1", 16_001, 16_040, "db"),
                 ("c2", 5_001, 5_040, "dc")]
-DEEP_READS = [150_000, 120_000, 140_000]
+# (depth at the first target base, depth at the last), per DEEP_TARGETS entry.
+DEEP_DEPTHS = [(160_000, 4_000), (20_000, 500), (60_000, 1_500)]
 BAIT_PAD = 50
 # Fragment starts well clear of every bait and its 250 bp near-bait zone.
 OFF_TARGET = [("c1", 20_000, 28_000), ("c2", 10_000, 18_000), ("c3", 500, 5_000)]
@@ -119,14 +123,27 @@ def no_coverage(sam):
     off_target_reads(sam, "g1", "p", count=12)
 
 
+def deep_depths(top, bottom, length):
+    """`length` depths falling geometrically from `top` to `bottom`."""
+    return [round(top * (bottom / top) ** (j / (length - 1))) for j in range(length)]
+
+
 def deep(sam):
-    for (contig, start, _, name), count in zip(DEEP_TARGETS, DEEP_READS):
-        pos = start - 30
-        seq = sam.ref_seq(contig, pos, 100)
-        low = "+" * 100
-        for i in range(count):
-            sam.single(f"{name}{i}", 0, contig, pos, seq, mapq=5 if i % 5 == 0 else 60, rg="g1",
-                       qual=low if i % 7 == 0 else None)
+    """100-base reads ending inside each target: a read ending at target base j
+    covers bases 0 to j, so the depth at base j is the number of reads ending at
+    j or later, and `deep_depths(j) - deep_depths(j + 1)` reads end at j."""
+    low = "+" * 100
+    for (contig, start, end, name), (top, bottom) in zip(DEEP_TARGETS, DEEP_DEPTHS):
+        length = end - start + 1
+        depths = deep_depths(top, bottom, length) + [0]
+        i = 0
+        for j in range(length):
+            pos = start + j - 99
+            seq = sam.ref_seq(contig, pos, 100)
+            for _ in range(depths[j] - depths[j + 1]):
+                sam.single(f"{name}{i}", 0, contig, pos, seq, mapq=5 if i % 5 == 0 else 60, rg="g1",
+                           qual=low if i % 7 == 0 else None)
+                i += 1
     adapter_reads(sam, "g1", "d", 1)
 
 

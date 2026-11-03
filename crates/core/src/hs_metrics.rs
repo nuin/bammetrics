@@ -42,7 +42,7 @@ use crate::metrics_file::{KeyClass, format_double};
 use crate::pass::{self, Accumulator};
 use crate::record::{position, record_name};
 use crate::reference::Reference;
-use crate::registry::{Invocation, Opt, Tool};
+use crate::registry::{Invocation, Opt, Tool, write_files};
 use crate::sensitivity::{
     calculate_sensitivities, het_snp_sensitivity, math_round, normalize_histogram,
     phred_from_error_probability,
@@ -168,6 +168,29 @@ impl Options {
         }
     }
 
+    /// Picard's argument parser messages for a missing probe or target file:
+    /// `BAIT_INTERVALS` and `TARGET_INTERVALS` are lists, `AMPLICON_INTERVALS`
+    /// is one required value.
+    pub fn check_interval_files(&self) -> Result<()> {
+        let missing = |name: &str| {
+            Err(Error::Usage(format!(
+                "Option '{name}' must be specified at least 1 times."
+            )))
+        };
+        if self.bait_intervals.is_empty() {
+            return match self.variant {
+                Variant::Hs => missing("BAIT_INTERVALS"),
+                Variant::TargetedPcr => Err(Error::Usage(
+                    "Option 'AMPLICON_INTERVALS' is required.".to_owned(),
+                )),
+            };
+        }
+        if self.target_intervals.is_empty() {
+            return missing("TARGET_INTERVALS");
+        }
+        Ok(())
+    }
+
     fn from_invocation(inv: &Invocation, variant: Variant) -> Result<Self> {
         let defaults = match variant {
             Variant::Hs => Self::default(),
@@ -230,6 +253,7 @@ impl Options {
                 },
             )?,
         };
+        opts.check_interval_files()?;
         // CollectTargetedMetrics.customCommandLineValidation.
         if opts.per_target_coverage.is_some() && opts.levels != [Level::AllReads] {
             return Err(Error::Usage(
@@ -315,7 +339,10 @@ fn run_pcr(inv: &Invocation) -> Result<ToolOutput> {
 }
 
 /// `CollectTargetedMetrics.doWork`: the pass, the metrics file, then the
-/// sensitivity file from the collector's shared histograms.
+/// sensitivity file from the collector's shared histograms. Picard writes
+/// `OUTPUT` before it computes the sensitivities, so an `ALLELE_FRACTION`
+/// outside 0 to 1 leaves the metrics file behind and exits 1: the file is
+/// written here before the error is returned.
 fn run_variant(inv: &Invocation, variant: Variant) -> Result<ToolOutput> {
     let opts = Options::from_invocation(inv, variant)?;
     let report = pass::run(&inv.input, inv.threads, |header| {
@@ -323,12 +350,20 @@ fn run_variant(inv: &Invocation, variant: Variant) -> Result<ToolOutput> {
     })?;
     let mut output = ToolOutput::file(report.metrics_output());
     if let Some(path) = &opts.theoretical_sensitivity_output {
-        let rows = calculate_sensitivities(
+        let rows = match calculate_sensitivities(
             opts.sample_size,
             &report.unfiltered_depth,
             &report.unfiltered_base_quality,
             &opts.allele_fractions,
-        )?;
+        ) {
+            Ok(rows) => rows,
+            Err(error) => {
+                if inv.output.is_some() {
+                    write_files(inv, &output)?;
+                }
+                return Err(error);
+            }
+        };
         output
             .extra
             .push((path.clone(), MetricsOutput::from_rows(&rows, None)));
@@ -1687,12 +1722,7 @@ impl CaptureMetrics {
     /// Reads and uniques the interval files against the BAM header, and
     /// with a reference computes the GC fraction of every target.
     pub fn new(opts: &Options, header: &sam::Header) -> Result<Self> {
-        if opts.bait_intervals.is_empty() || opts.target_intervals.is_empty() {
-            return Err(Error::Usage(format!(
-                "{} needs at least one probe and one target interval file",
-                opts.variant.name()
-            )));
-        }
+        opts.check_interval_files()?;
         let contigs = header.reference_sequences().len();
         let raw_targets = intervals::read_named_files(&opts.target_intervals, header)?;
         let unique_named = intervals::uniqued_named(&raw_targets);
@@ -2213,16 +2243,46 @@ mod tests {
     }
 
     #[test]
+    fn missing_interval_files_name_the_option_as_picard_does() {
+        let parse = |tool: &Tool, variant, args: &[&str]| {
+            let args: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
+            let inv = tool.parse(&args).expect("parses");
+            Options::from_invocation(&inv, variant)
+                .expect_err("an interval file is missing")
+                .to_string()
+        };
+        assert_eq!(
+            parse(&TOOL, Variant::Hs, &["I=x.bam", "BI=b.il"]),
+            "Option 'TARGET_INTERVALS' must be specified at least 1 times."
+        );
+        assert_eq!(
+            parse(&TOOL, Variant::Hs, &["I=x.bam", "TI=t.il"]),
+            "Option 'BAIT_INTERVALS' must be specified at least 1 times."
+        );
+        assert_eq!(
+            parse(&PCR_TOOL, Variant::TargetedPcr, &["I=x.bam", "AI=a.il"]),
+            "Option 'TARGET_INTERVALS' must be specified at least 1 times."
+        );
+        assert_eq!(
+            parse(&PCR_TOOL, Variant::TargetedPcr, &["I=x.bam", "TI=t.il"]),
+            "Option 'AMPLICON_INTERVALS' is required."
+        );
+    }
+
+    #[test]
     fn per_target_file_needs_all_reads_and_a_reference() {
         let parse = |args: &[&str]| {
             let args: Vec<String> = args.iter().map(|s| (*s).to_owned()).collect();
             let inv = TOOL.parse(&args).expect("parses");
             Options::from_invocation(&inv, Variant::Hs)
         };
-        let err = parse(&["I=x.bam", "PER_TARGET_COVERAGE=t.txt"]).expect_err("no reference");
+        let err = parse(&["I=x.bam", "BI=b.il", "TI=t.il", "PER_TARGET_COVERAGE=t.txt"])
+            .expect_err("no reference");
         assert!(err.to_string().contains("REFERENCE_SEQUENCE"));
         let err = parse(&[
             "I=x.bam",
+            "BI=b.il",
+            "TI=t.il",
             "PER_TARGET_COVERAGE=t.txt",
             "R=r.fa",
             "LEVEL=SAMPLE",
@@ -2231,6 +2291,8 @@ mod tests {
         assert!(err.to_string().contains("ALL_READS"));
         let opts = parse(&[
             "I=x.bam",
+            "BI=b.il",
+            "TI=t.il",
             "PER_TARGET_COVERAGE=t.txt",
             "R=r.fa",
             "ALLELE_FRACTION=null",

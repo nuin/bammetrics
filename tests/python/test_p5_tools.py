@@ -84,7 +84,7 @@ def test_hs_errors(corpus, tmp_path):
         bammetrics.collect_hs_metrics(str(corpus / "corpus.bam"), stop_after=10, **args)
     with pytest.raises(ValueError, match="REFERENCE_SEQUENCE"):
         bammetrics.collect_hs_metrics(str(corpus / "corpus.bam"), per_target_coverage=str(tmp_path / "pt.txt"), **args)
-    with pytest.raises(ValueError, match="probe"):
+    with pytest.raises(ValueError, match="Option 'BAIT_INTERVALS' must be specified at least 1 times"):
         bammetrics.collect_hs_metrics(str(corpus / "corpus.bam"), target_intervals=args["target_intervals"])
 
 
