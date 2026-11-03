@@ -1,5 +1,5 @@
 //! Write the sample page for the committed fixtures into a directory, for
-//! looking at it in a browser before the `report` verb exists (phase 6):
+//! looking at it in a browser without a directory of metrics files
 //!
 //! ```text
 //! cargo run -p bammetrics-report --example fixture_pages -- OUT_DIR

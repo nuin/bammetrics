@@ -143,6 +143,65 @@ fn round_at(value: f64, integer: String, fraction: String, places: usize) -> (St
     (text[..split].to_owned(), text[split..].to_owned())
 }
 
+/// A UTC calendar time from seconds since the epoch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CivilTime {
+    pub year: u64,
+    pub month: u64,
+    pub day: u64,
+    pub hour: u64,
+    pub minute: u64,
+    pub second: u64,
+    /// 0 is Thursday, the weekday of the epoch.
+    pub weekday: usize,
+}
+
+impl CivilTime {
+    /// Civil date from a day count (Hinnant's days_from_civil, inverted).
+    pub fn from_seconds(seconds_since_epoch: u64) -> Self {
+        let days = seconds_since_epoch / 86_400;
+        let in_day = seconds_since_epoch % 86_400;
+        let shifted = days + 719_468;
+        let era = shifted / 146_097;
+        let day_of_era = shifted % 146_097;
+        let year_of_era =
+            (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+        let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+        let march_month = (5 * day_of_year + 2) / 153;
+        let day = day_of_year - (153 * march_month + 2) / 5 + 1;
+        let month = if march_month < 10 {
+            march_month + 3
+        } else {
+            march_month - 9
+        };
+        CivilTime {
+            year: year_of_era + era * 400 + u64::from(month <= 2),
+            month,
+            day,
+            hour: in_day / 3600,
+            minute: in_day % 3600 / 60,
+            second: in_day % 60,
+            weekday: (days % 7) as usize,
+        }
+    }
+
+    /// The current time.
+    pub fn now() -> Self {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        Self::from_seconds(now)
+    }
+
+    /// `2026-01-02 03:04:05 UTC`.
+    pub fn iso(&self) -> String {
+        format!(
+            "{:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC",
+            self.year, self.month, self.day, self.hour, self.minute, self.second
+        )
+    }
+}
+
 /// `StringHeader` text for the second header Picard writes, `Started on: ` and
 /// the time in `java.util.Date.toString` form (UTC here, where Picard prints
 /// the JVM's zone).
@@ -151,30 +210,16 @@ pub fn started_on(seconds_since_epoch: u64) -> String {
     const MONTHS: [&str; 12] = [
         "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     ];
-    let days = seconds_since_epoch / 86_400;
-    let in_day = seconds_since_epoch % 86_400;
-    // Civil date from a day count (Hinnant's days_from_civil, inverted).
-    let shifted = days + 719_468;
-    let era = shifted / 146_097;
-    let day_of_era = shifted % 146_097;
-    let year_of_era =
-        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let march_month = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * march_month + 2) / 5 + 1;
-    let month = if march_month < 10 {
-        march_month + 3
-    } else {
-        march_month - 9
-    };
-    let year = year_of_era + era * 400 + u64::from(month <= 2);
+    let t = CivilTime::from_seconds(seconds_since_epoch);
     format!(
-        "Started on: {} {} {day:02} {:02}:{:02}:{:02} UTC {year}",
-        DAYS[(days % 7) as usize],
-        MONTHS[(month - 1) as usize],
-        in_day / 3600,
-        in_day % 3600 / 60,
-        in_day % 60
+        "Started on: {} {} {:02} {:02}:{:02}:{:02} UTC {}",
+        DAYS[t.weekday],
+        MONTHS[(t.month - 1) as usize],
+        t.day,
+        t.hour,
+        t.minute,
+        t.second,
+        t.year
     )
 }
 
@@ -185,6 +230,23 @@ pub fn headers(command: String) -> Vec<String> {
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
     vec![command, started_on(now)]
+}
+
+#[cfg(test)]
+mod civil_tests {
+    use super::*;
+
+    #[test]
+    fn civil_time_matches_the_started_on_header() {
+        // 2026-01-02 03:04:05 UTC is a Friday.
+        let t = CivilTime::from_seconds(1_767_323_045);
+        assert_eq!(t.iso(), "2026-01-02 03:04:05 UTC");
+        assert_eq!(
+            started_on(1_767_323_045),
+            "Started on: Fri Jan 02 03:04:05 UTC 2026"
+        );
+        assert_eq!(CivilTime::from_seconds(0).iso(), "1970-01-01 00:00:00 UTC");
+    }
 }
 
 /// The Java class of a histogram's keys, printed after `## HISTOGRAM`.

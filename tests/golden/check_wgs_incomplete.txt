@@ -1,0 +1,21 @@
+## argv
+check
+tests/data/picard
+--preset
+wgs
+## exit
+11
+## stdout
+NA12878  INCOMPLETE  0 fail, 0 warn, 6 pass, 4 not measured  preset wgs v1 (8a5fc4)
+  NOT MEASURED  wgs.mean-coverage             ?  warn < 30, fail < 20                          no WgsMetrics file
+  NOT MEASURED  wgs.bases-10x                 ?  warn < 0.95, fail < 0.9                       no WgsMetrics file
+  NOT MEASURED  wgs.bases-30x                 ?  warn < 0.8, fail < 0.6                        no WgsMetrics file
+  NOT MEASURED  wgs.evenness                  ?  warn > 1.5, fail > 2                          no WgsMetrics file
+  PASS          alignment.pf-reads-aligned    1  warn < 0.98, fail < 0.95
+  PASS          alignment.adapter             0  warn > 0.005, fail > 0.02
+  PASS          alignment.chimeras            0  warn > 0.02, fail > 0.05
+  PASS          insert.median               310  warn outside 250..600, fail outside 150..900
+  PASS          yield.q30                     1  warn < 0.85, fail < 0.75
+  PASS          duplication.percent           0  warn > 0.15, fail > 0.3
+exit 11: a sample is incomplete
+## stderr

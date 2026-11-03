@@ -1,0 +1,8 @@
+## argv
+report
+tests/data/nope
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/nope: not a directory

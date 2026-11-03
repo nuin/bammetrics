@@ -130,7 +130,16 @@ pub struct Chart {
     out: String,
     x: Scale,
     y: Scale,
+    /// The pixel spans of the guide labels placed so far, with the text
+    /// row each one took, so a later label that would overlap moves down a
+    /// row.
+    guide_labels: Vec<(f64, f64, usize)>,
 }
+
+/// The width of one label character at the 11 px label font, about.
+const LABEL_CHAR: f64 = 6.2;
+/// The height of one label row.
+const LABEL_ROW: f64 = 13.0;
 
 impl Chart {
     /// Open the SVG with its text alternative, draw both axes with their
@@ -152,7 +161,12 @@ impl Chart {
             escape(title),
             escape(desc)
         );
-        let mut chart = Chart { out, x, y };
+        let mut chart = Chart {
+            out,
+            x,
+            y,
+            guide_labels: Vec::new(),
+        };
         chart.axes(x_title, y_title);
         chart
     }
@@ -244,7 +258,8 @@ impl Chart {
         self.out.push_str("\"/>");
     }
 
-    /// A dashed vertical line at data `x` with `label` beside its top.
+    /// A dashed vertical line at data `x` with `label` beside its top. A
+    /// label that would overlap an earlier one goes one row lower.
     pub fn vguide(&mut self, x: f64, label: &str, class: &str) {
         let px = self.px(x);
         let anchor = if px > WIDTH - RIGHT - 90.0 {
@@ -253,13 +268,28 @@ impl Chart {
             "start"
         };
         let dx = if anchor == "end" { -4.0 } else { 4.0 };
+        let width = label.chars().count() as f64 * LABEL_CHAR;
+        let (start, end) = if anchor == "end" {
+            (px + dx - width, px + dx)
+        } else {
+            (px + dx, px + dx + width)
+        };
+        let mut row = 0;
+        while self
+            .guide_labels
+            .iter()
+            .any(|&(s, e, r)| r == row && start < e && s < end)
+        {
+            row += 1;
+        }
+        self.guide_labels.push((start, end, row));
         let _ = write!(
             self.out,
             "<path class=\"{class}\" d=\"M{} {TOP}V{}\"/><text class=\"lbl\" x=\"{}\" y=\"{}\" text-anchor=\"{anchor}\">{}</text>",
             coord(px),
             HEIGHT - BOTTOM,
             coord(px + dx),
-            TOP + 10.0,
+            coord(TOP + 10.0 + row as f64 * LABEL_ROW),
             escape(label)
         );
     }

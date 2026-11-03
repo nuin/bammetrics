@@ -1,13 +1,59 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
 
-Phases 1 to 4 of the CLI and report design (`docs/05_cli_and_ui_design.md`): the
-golden suite that pins every existing command line, the metrics file reader with the
-column glossary the report will read, the verdict crate with its presets, and the
-per-sample HTML report page with its four plots.
+Report and check on any directory of Picard output. Phases 1 to 6 of the CLI and
+report design (`docs/05_cli_and_ui_design.md`): the golden suite that pins every
+existing command line, the metrics file reader with the column glossary, the verdict
+crate with its presets, the per-sample HTML report page with its four plots, the run
+index, and the `report` and `check` verbs that write them from files Picard wrote. No
+change to collection. The parity chain's P4 branch (`feat/p4-coverage`) also claims
+0.7.0; this release takes the number and P4 is renumbered at merge.
 
 ### Added
+
+- `bammetrics report DIR... [--preset NAME|FILE] [-o OUT] [--all-plots] [--date ISO]`:
+  finds every metrics file under the directories given by its `## METRICS CLASS` block
+  (or a `## HISTOGRAM` section under a Picard header), whatever the file name, at any
+  depth; groups the files into samples (by the file name up to the first dot, as
+  `CollectMultipleMetrics` names them, else one sample per directory; the rule is in
+  `--help`); evaluates the preset (`generic` by default); writes `SAMPLE.verdict.json`,
+  `SAMPLE.report.html` and `index.html` into `OUT` (the directory itself when one is
+  given), each file written whole to a temporary name (process id, counter and clock,
+  opened with `create_new`, so a planted symlink fails the write instead of being
+  followed) and renamed into place; prints a one-screen summary
+  (header, each sample's band and counts, its fails and warns, the files written). It
+  works on a directory Picard 3.5.0 wrote with no bammetrics involved and never reads
+  a BAM. Exit 0 on any verdict, 1 on an error, 2 on a usage error.
+- `bammetrics check DIR|VERDICT.json... [--preset ...] [--fail-on warn|fail]
+  [--format text|json|jsonl]`: the gate. Prints every check per sample and exits 10
+  when a sample's verdict reaches `--fail-on` (`fail` by default), 11 when a sample is
+  incomplete and none reached the gate, 0 otherwise, 1 on an error. A `verdict.json`
+  written by `report` is read back as is. The exit code table is in `--help` and
+  `docs/cli.md`.
+- Run index (`bammetrics_report::render_index`, `write_index`, `SampleSummary`,
+  `Tally`): one row per sample, worst first (fail, incomplete, warn, pass, then by fail
+  count, then name), the verdict badge, the fail, warn, pass and not-measured counts,
+  then one cell per rule with the glyph and the value and the reason as its title; the
+  preset name, version and hash, the tool version and the date on top. Same CSS as the
+  sample page, no script. 100 samples with 14 rules render in 86 KB and about 2 ms.
+  Snapshot `tests/report/index.html`.
+- `crates/cli` (`bammetrics-cli`): the `bammetrics` binary moved here from
+  `crates/core`, with the golden suite (`crates/cli/tests/golden.rs`, `make golden`
+  runs `-p bammetrics-cli`). The verbs need the verdict and report crates, which
+  depend on core, and Cargo rejects that cycle inside one package. `discover.rs`
+  (file sniff and sample grouping), `report.rs`, `check.rs`, `error.rs` (exit codes).
+- `tests/data/picard/NA12878`: the 11 files Picard 3.5.0 writes for the fixture BAM
+  (`CollectMultipleMetrics` with seven programs, `CollectHsMetrics` with
+  `PER_BASE_COVERAGE`, `CollectDuplicateMetrics`), the input of the `report` and
+  `check` tests: `crates/cli/tests/verbs.rs` end to end, and 9 golden records
+  (`check_*`, `error_report_*`, `error_check_*`) pinning the text and jsonl forms and
+  every exit code.
+- `Check::to_json`, `Counts::to_json` and `Json::render_line` in the verdict crate,
+  for the `check --format jsonl` events; `metrics_file::CivilTime` in core (the civil
+  date behind the `Started on` header, now also the report date).
+- A guide label in a plot that would overlap an earlier one moves one row down
+  (`Chart::vguide`), so a median near a fail limit stays readable.
 
 - `crates/report` (`bammetrics-report`): `render(verdict, inputs, options)` and
   `write(path, ...)` build one self-contained HTML page for one sample from a `Verdict`

@@ -50,6 +50,19 @@ Options that cannot change a number (`VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`
 needs a `.fai` next to the FASTA. A BED file works wherever Picard wants an interval list.
 Every option is listed in [docs/cli.md](docs/cli.md).
 
+## Report
+
+```bash
+bammetrics report runs/ --preset clinical-panel -o site/   # site/index.html, site/SAMPLE.report.html
+bammetrics check runs/ --preset clinical-panel             # exit 10 on a failed verdict, 11 when incomplete
+```
+
+`report` finds the metrics files by their `## METRICS CLASS` block in any directory of
+Picard output, no bammetrics run needed, and judges each sample against a preset of
+thresholds: the verdict (pass, warn, fail or incomplete) opens each page, with one plot
+under each failing check. The presets, the rule language and `verdict.json` are in
+[docs/verdict.md](docs/verdict.md); the exit codes of `check` are in [docs/cli.md](docs/cli.md).
+
 ## Tools
 
 | Picard tool | Levels | Python |
@@ -101,7 +114,9 @@ the cases and the comparison rules are in [docs/concordance.md](docs/concordance
 ## Layout
 
 ```
-crates/core   bammetrics-core: the library and the bammetrics CLI
+crates/core   bammetrics-core: the metrics library
+crates/verdict, crates/report   presets and verdicts; the HTML pages and the index
+crates/cli    the bammetrics command
 crates/py     the bammetrics Python module (PyO3)
 tests/        concordance/ (Picard harness), corpus/ (generator), python/, data/
 docs/         cli.md, verdict.md, concordance.md, benchmarks.md, 04_picard_parity_plan.md

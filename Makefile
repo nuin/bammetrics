@@ -31,16 +31,16 @@ reference-metrics: corpus
 concordance: reference-metrics release golden
 	$(UV_RUN) --with pytest --with pysam python -m pytest tests/concordance -q
 
-# Golden suite (crates/core/tests/golden.rs): every documented command form on
+# Golden suite (crates/cli/tests/golden.rs): every documented command form on
 # tests/data (and on corpus t1 with GOLDEN_CORPUS=1, since those records depend
 # on one machine's bwa output), byte for byte
 # against tests/golden. golden-update rewrites the records after an intended
 # change; the diff is the review.
 golden: release
-	cargo test --release -p bammetrics-core --test golden
+	cargo test --release -p bammetrics-cli --test golden
 
 golden-update: release
-	UPDATE_GOLDEN=1 cargo test --release -p bammetrics-core --test golden
+	UPDATE_GOLDEN=1 cargo test --release -p bammetrics-cli --test golden
 
 # Differential fuzzing (tests/concordance/fuzz.py): N seeded random BAMs through
 # Picard and bammetrics, failures shrunk into tests/concordance/regressions.

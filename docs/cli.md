@@ -112,7 +112,53 @@ and `crates/core/glossary.tsv` defines every column the tools write.
 name from `bammetrics.presets()`, or the path of a preset file) over one sample's
 metrics files and returns `verdict.json` as dicts: band `status`, `counts`, and one
 check per rule with its value, bounds, status and reason. Presets, the rule language
-and the JSON schema are in [docs/verdict.md](verdict.md). The `report` and `check`
-verbs that write the file arrive with phase 6 of docs/05.
+and the JSON schema are in [docs/verdict.md](verdict.md). The CLI writes the same
+verdict through `report` and gates on it through `check`, below. `bammetrics.report()`
+in Python arrives with the Python mirror (phase 11 of docs/05).
+
+## report and check
+
+```bash
+bammetrics report DIR... [--preset NAME|FILE] [-o OUT] [--all-plots] [--date ISO]
+bammetrics check DIR|VERDICT.json... [--preset NAME|FILE] [--fail-on warn|fail] [--format text|json|jsonl]
+```
+
+Both work on any directory of Picard output; neither reads a BAM. A metrics file is
+any file whose text holds a `## METRICS CLASS` block (or a `## HISTOGRAM` section
+under a Picard header), whatever its name, at any depth under `DIR`. Files that look
+like metrics and do not parse are listed on stderr and left out. Samples: the files in
+one directory are grouped by the file name up to the first dot, so
+`NA12878.insert_size_metrics` and `NA12878.hs_metrics` form the sample `NA12878` (the
+prefix `CollectMultipleMetrics` writes). When no metrics class repeats across the
+groups of a directory, the directory holds one sample, named by the prefix when two or
+more files share it, else by the directory: `runs/NA12878/insert_size.txt` and
+`runs/NA12878/hs.txt` form the sample `NA12878`. Two samples with one name is an error.
+
+`report` evaluates the preset (`generic` without `--preset`; a shipped name or a TOML
+file) and writes `OUT/SAMPLE.verdict.json`, `OUT/SAMPLE.report.html` and
+`OUT/index.html`, `OUT` being `DIR` when one directory is given. Each file is written
+whole and renamed into place. The summary on stdout is one screen: a header line, one
+line per sample with its band and counts, the fail and warn reasons (three per sample,
+then `+N more`), and the files written. The index lists the samples worst first (fail,
+incomplete, warn, pass, then by fail count, then name) with one cell per rule.
+`--all-plots` draws every plot family the files have data for; `--date` fixes the date
+printed on the pages, so the same inputs give the same bytes. `report` exits 0 on any
+verdict: a Nextflow task is not killed by a bad sample.
+
+`check` is the gate. A directory is discovered and evaluated as `report` does; a
+`verdict.json` file is read back as is. `--format text` prints a band line per sample
+and every check under it; `json` prints a JSON array of verdicts, each as
+`verdict.json`; `jsonl` prints one object per line, a `check` event per check and a
+`verdict` event per sample.
+
+| Exit | Meaning |
+|---|---|
+| 0 | every sample passes, or none reaches `--fail-on` |
+| 1 | an input could not be read, or the preset does not parse |
+| 2 | usage error; nothing ran |
+| 10 | a sample reached `--fail-on`: its verdict is fail (or warn with `--fail-on warn`) |
+| 11 | a sample is incomplete (a rule's file, row or column is missing) and none reached `--fail-on` |
+
+The Picard face and the five older subcommands keep exit codes 0 and 1.
 
 `.cargo/config.toml` lets the Python cdylib link under `cargo test` on macOS.

@@ -413,31 +413,44 @@ fn reason_line(
     )
 }
 
+impl Check {
+    /// This check as the object `verdict.json` holds under `checks`.
+    pub fn to_json(&self) -> Json {
+        Json::Object(vec![
+            ("rule".into(), Json::text(&self.rule)),
+            ("label".into(), Json::text(&self.label)),
+            ("class".into(), Json::text(&self.class)),
+            ("metric".into(), Json::text(&self.metric)),
+            ("level".into(), Json::text(&self.level)),
+            ("select".into(), Json::option_text(self.select.as_deref())),
+            ("unit".into(), Json::option_text(self.unit.as_deref())),
+            ("value".into(), Json::number(self.value)),
+            ("warn".into(), Json::option_text(self.warn.as_deref())),
+            ("fail".into(), Json::option_text(self.fail.as_deref())),
+            ("status".into(), Json::text(self.status.name())),
+            ("reason".into(), Json::option_text(self.reason.as_deref())),
+            ("plot".into(), Json::option_text(self.plot.as_deref())),
+        ])
+    }
+}
+
+impl Counts {
+    /// The `counts` object of `verdict.json`.
+    pub fn to_json(&self) -> Json {
+        let count = |n: usize| Json::Number(n as f64);
+        Json::Object(vec![
+            ("pass".into(), count(self.pass)),
+            ("warn".into(), count(self.warn)),
+            ("fail".into(), count(self.fail)),
+            ("not_measured".into(), count(self.not_measured)),
+        ])
+    }
+}
+
 impl Verdict {
     /// The `verdict.json` text.
     pub fn to_json(&self) -> String {
         let text = |s: &String| Json::text(s);
-        let checks = self
-            .checks
-            .iter()
-            .map(|c| {
-                Json::Object(vec![
-                    ("rule".into(), text(&c.rule)),
-                    ("label".into(), text(&c.label)),
-                    ("class".into(), text(&c.class)),
-                    ("metric".into(), text(&c.metric)),
-                    ("level".into(), text(&c.level)),
-                    ("select".into(), Json::option_text(c.select.as_deref())),
-                    ("unit".into(), Json::option_text(c.unit.as_deref())),
-                    ("value".into(), Json::number(c.value)),
-                    ("warn".into(), Json::option_text(c.warn.as_deref())),
-                    ("fail".into(), Json::option_text(c.fail.as_deref())),
-                    ("status".into(), Json::text(c.status.name())),
-                    ("reason".into(), Json::option_text(c.reason.as_deref())),
-                    ("plot".into(), Json::option_text(c.plot.as_deref())),
-                ])
-            })
-            .collect();
         let files = self
             .files
             .iter()
@@ -451,7 +464,6 @@ impl Verdict {
                 ])
             })
             .collect();
-        let count = |n: usize| Json::Number(n as f64);
         Json::Object(vec![
             ("schema".into(), text(&self.schema)),
             ("tool_version".into(), text(&self.tool_version)),
@@ -467,17 +479,12 @@ impl Verdict {
                 ]),
             ),
             ("status".into(), Json::text(self.status.name())),
-            (
-                "counts".into(),
-                Json::Object(vec![
-                    ("pass".into(), count(self.counts.pass)),
-                    ("warn".into(), count(self.counts.warn)),
-                    ("fail".into(), count(self.counts.fail)),
-                    ("not_measured".into(), count(self.counts.not_measured)),
-                ]),
-            ),
+            ("counts".into(), self.counts.to_json()),
             ("files".into(), Json::Array(files)),
-            ("checks".into(), Json::Array(checks)),
+            (
+                "checks".into(),
+                Json::Array(self.checks.iter().map(Check::to_json).collect()),
+            ),
         ])
         .render()
     }

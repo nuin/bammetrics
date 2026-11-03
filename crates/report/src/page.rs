@@ -66,7 +66,7 @@ struct Page<'a> {
     drawn: Vec<Family>,
 }
 
-fn status_class(status: Status) -> &'static str {
+pub(crate) fn status_class(status: Status) -> &'static str {
     match status {
         Status::Pass => "pass",
         Status::Warn => "warn",
@@ -75,7 +75,7 @@ fn status_class(status: Status) -> &'static str {
     }
 }
 
-fn status_glyph(status: Status) -> &'static str {
+pub(crate) fn status_glyph(status: Status) -> &'static str {
     match status {
         Status::Pass => "\u{2713}",
         Status::Warn => "\u{25B2}",
@@ -84,14 +84,14 @@ fn status_glyph(status: Status) -> &'static str {
     }
 }
 
-fn status_word(status: Status) -> &'static str {
+pub(crate) fn status_word(status: Status) -> &'static str {
     match status {
         Status::NotMeasured => "not measured",
         other => other.name(),
     }
 }
 
-fn band_class(band: Band) -> &'static str {
+pub(crate) fn band_class(band: Band) -> &'static str {
     match band {
         Band::Pass => "pass",
         Band::Warn => "warn",
@@ -100,7 +100,7 @@ fn band_class(band: Band) -> &'static str {
     }
 }
 
-fn band_glyph(band: Band) -> &'static str {
+pub(crate) fn band_glyph(band: Band) -> &'static str {
     status_glyph(match band {
         Band::Pass => Status::Pass,
         Band::Warn => Status::Warn,
@@ -123,6 +123,19 @@ fn file_name(path: &str) -> &str {
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or(path)
+}
+
+/// `HsMetrics.PCT_TARGET_BASES_20X`, with the selector and the level when
+/// they narrow the rows.
+pub(crate) fn metric_text(check: &Check) -> String {
+    let mut text = format!("{}.{}", check.class, check.metric);
+    if let Some(select) = &check.select {
+        let _ = write!(text, " [{select}]");
+    }
+    if check.level != "ALL_READS" {
+        let _ = write!(text, " at {}", check.level);
+    }
+    text
 }
 
 /// `n` with a singular or plural noun: `1 check`, `3 checks`.
@@ -307,7 +320,7 @@ impl<'a> Page<'a> {
         let _ = write!(
             self.out,
             "<div><dt>metric</dt><dd><code>{}</code></dd></div></dl>",
-            escape(&self.metric_text(check))
+            escape(&metric_text(check))
         );
         if let Some(family) = check.plot.as_deref().and_then(Family::parse)
             && !self.drawn.contains(&family)
@@ -315,19 +328,6 @@ impl<'a> Page<'a> {
             self.plot(family);
         }
         self.out.push_str("</article>\n");
-    }
-
-    /// `HsMetrics.PCT_TARGET_BASES_20X`, with the selector and the level
-    /// when they narrow the rows.
-    fn metric_text(&self, check: &Check) -> String {
-        let mut text = format!("{}.{}", check.class, check.metric);
-        if let Some(select) = &check.select {
-            let _ = write!(text, " [{select}]");
-        }
-        if check.level != "ALL_READS" {
-            let _ = write!(text, " at {}", check.level);
-        }
-        text
     }
 
     fn plot(&mut self, family: Family) {
@@ -370,7 +370,7 @@ impl<'a> Page<'a> {
                 "<tr><td>{}</td><td>{}{unit}</td><td><code>{}</code></td><td class=\"num\">{}</td><td>{}</td><td>{}</td></tr>",
                 status_badge(check.status),
                 escape(&check.label),
-                escape(&self.metric_text(check)),
+                escape(&metric_text(check)),
                 escape(&value),
                 escape(check.warn.as_deref().unwrap_or("")),
                 escape(check.fail.as_deref().unwrap_or(""))

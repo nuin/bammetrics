@@ -62,10 +62,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "bammetrics-core"
-version = "0.6.0"
+name = "bammetrics-cli"
+version = "0.7.0"
 dependencies = [
+ "bammetrics-core",
+ "bammetrics-report",
+ "bammetrics-verdict",
  "clap",
+ "thiserror",
+]
+
+[[package]]
+name = "bammetrics-core"
+version = "0.7.0"
+dependencies = [
  "noodles",
  "regex",
  "thiserror",
@@ -73,7 +83,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-py"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bammetrics-core",
  "bammetrics-verdict",
@@ -82,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-report"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bammetrics-core",
  "bammetrics-verdict",
@@ -90,7 +100,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-verdict"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "bammetrics-core",
  "thiserror",
