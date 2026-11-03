@@ -62,10 +62,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "bammetrics-cli"
+version = "0.6.0"
+dependencies = [
+ "bammetrics-core",
+ "bammetrics-report",
+ "bammetrics-verdict",
+ "clap",
+]
+
+[[package]]
 name = "bammetrics-core"
 version = "0.6.0"
 dependencies = [
- "clap",
  "noodles",
  "regex",
  "thiserror",

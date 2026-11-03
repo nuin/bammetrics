@@ -1,0 +1,18 @@
+[package]
+name = "bammetrics-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "The bammetrics command: Picard-concordant BAM QC metrics, verdicts and reports"
+publish = false
+
+[[bin]]
+name = "bammetrics"
+path = "src/main.rs"
+
+[dependencies]
+bammetrics-core.workspace = true
+bammetrics-report.workspace = true
+bammetrics-verdict.workspace = true
+clap.workspace = true
