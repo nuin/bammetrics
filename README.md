@@ -104,7 +104,7 @@ the cases and the comparison rules are in [docs/concordance.md](docs/concordance
 crates/core   bammetrics-core: the library and the bammetrics CLI
 crates/py     the bammetrics Python module (PyO3)
 tests/        concordance/ (Picard harness), corpus/ (generator), python/, data/
-docs/         cli.md, concordance.md, benchmarks.md, 04_picard_parity_plan.md
+docs/         cli.md, verdict.md, concordance.md, benchmarks.md, 04_picard_parity_plan.md
 ```
 
 License: MIT OR Apache-2.0. Changes: [CHANGELOG.md](CHANGELOG.md).

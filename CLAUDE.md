@@ -36,7 +36,8 @@ target/release/bammetrics CollectInsertSizeMetrics I=in.bam O=out.txt METRIC_ACC
 Cargo workspace (root `Cargo.toml`, one `Cargo.lock`):
 
 - `crates/core` (`bammetrics-core`): library plus the `bammetrics` binary (`src/main.rs`).
-- `crates/py` (`bammetrics` cdylib): PyO3 wrapper over the core crate. `pyproject.toml` points maturin at `crates/py/Cargo.toml`.
+- `crates/verdict` (`bammetrics-verdict`, `docs/verdict.md`): presets of threshold rules evaluated over `MetricsDoc`s, and `verdict.json` (schema `bammetrics.verdict/1`). `preset.rs` (`Preset`, `Rule`, `Bound`, `content_hash`), `verdict.rs` (`evaluate`, `Verdict::to_json` and `from_json`), `table.rs` (the TOML subset reader, `parse_tables`: the one function a switch to the `toml` crate replaces), `json.rs` (hand-written JSON value, writer and reader). The four shipped presets are `presets/*.toml`, compiled in; every one says `note = "starting values"`. Rules from docs/05 section 4.9: the crate reads the metrics files it is given and nothing else (no other run directory, no history, no user identity, no network, no comment field). No new dependency.
+- `crates/py` (`bammetrics` cdylib): PyO3 wrapper over the core and verdict crates. `pyproject.toml` points maturin at `crates/py/Cargo.toml`.
 
 Shared building blocks in `crates/core/src`:
 
