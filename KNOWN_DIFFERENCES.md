@@ -40,8 +40,23 @@ behaves how.
   `TMP_DIR`, ...) are accepted and dropped where Picard rejects them.
 - `METRIC_ACCUMULATION_LEVEL` is implemented for `CollectInsertSizeMetrics`,
   `CollectAlignmentSummaryMetrics`, `CollectGcBiasMetrics`, `CollectMultipleMetrics`,
-  `CollectHsMetrics` and `CollectTargetedPcrMetrics` (all four levels).
-  `CollectQualityYieldMetrics` has no such option.
+  `CollectHsMetrics`, `CollectTargetedPcrMetrics` and `CollectRnaSeqMetrics` (all four
+  levels). `CollectQualityYieldMetrics` has no such option.
+- `CollectRnaSeqMetrics` takes every option of Picard's that changes a number
+  (`REF_FLAT`, `RIBOSOMAL_INTERVALS`, `STRAND_SPECIFICITY`, `MINIMUM_LENGTH`,
+  `END_BIAS_BASES`, `RRNA_FRAGMENT_PERCENTAGE`, `IGNORE_SEQUENCE`,
+  `METRIC_ACCUMULATION_LEVEL`, `STOP_AFTER`, `ASSUME_SORTED`), each with a non-default case
+  in `tests/concordance/test_rna_seq_metrics.py`; `CHART_OUTPUT` is accepted and dropped
+  (the harness gives Picard the no-op `Rscript`, and neither tool writes a PDF). A
+  missing `REF_FLAT` or `STRAND_SPECIFICITY` exits 1 with Picard's message (`Option
+  'REF_FLAT' is required.`), a bad strand value with `'X' is not a valid value for
+  StrandSpecificity.`, `RRNA_FRAGMENT_PERCENTAGE=0` without `RIBOSOMAL_INTERVALS` with
+  `Must use a RIBOSOMAL_INTERVALS file if RRNA_FRAGMENT_PERCENTAGE = 0.0`, and an
+  `IGNORE_SEQUENCE` name the header lacks with `Unrecognized sequence X passed as
+  argument to IGNORE_SEQUENCE`. A negative `RRNA_FRAGMENT_PERCENTAGE` without
+  `RIBOSOMAL_INTERVALS` makes every fragment ribosomal and Picard adds to a null
+  `RIBOSOMAL_BASES` (`NullPointerException`, no file); bammetrics exits 1 and writes none
+  (`test_negative_percentage_without_intervals_fails_in_both`).
 - `CollectHsMetrics` and `CollectTargetedPcrMetrics` at any level but a single unit:
   Picard 3.5.0 keeps the four histograms of `TargetMetricsCollector` (high-quality
   depth, unfiltered depth, capped and uncapped base quality) on the collector, so every
@@ -191,6 +206,16 @@ written, with `file` and `rows`.
   `.fai` and writes `SN` and `LN` only, where Picard fails. A VCF is not read.
 - `CollectGcBiasMetrics` scans every contig of the FASTA for its window table, as Picard
   does; with `@SQ` lines in the BAM the FASTA must list the same contigs.
+- `CollectRnaSeqMetrics` `REF_FLAT` is read against the BAM header's `@SQ` lines, as
+  Picard reads it against the dictionary: a line on a contig the header lacks is dropped.
+  A line whose tab-separated field count is not 11 exits 1 naming the line; Picard takes
+  the first line's count, pads a later shorter line with nulls and fails on the null exon
+  list (`NullPointerException`), or fails every later longer line (`Unexpected number of
+  elements`); both tools write no file. `RIBOSOMAL_INTERVALS` takes an interval list, or a
+  BED converted as `BedToIntervalList` would with the BAM header as dictionary, which
+  Picard rejects (`test_rna_bed_ribosomal_intervals_are_read_by_bammetrics_only` gives
+  Picard the interval list and the outputs are identical). An interval list of another
+  dictionary exits 1 in both tools.
 
 ## Validation
 
@@ -334,6 +359,52 @@ output reproduced from Picard 3.5.0, each checked by a case in
   cases). A BAM in which no record reaches a locus completes in both tools with every depth
   0 (`test_non_zero_fast_algorithm_on_an_empty_bam`, `rl_empty` and `asm_empty`).
 
+`CollectRnaSeqMetrics` output reproduced from Picard 3.5.0, each checked by a case in
+`tests/concordance/test_rna_seq_metrics.py`:
+
+- `PF_BASES` adds the base count of every record that is not QC-failed or secondary,
+  unmapped and supplementary ones included; every aligned base of every mapped primary
+  record is classified, duplicate-flagged and MAPQ 0 records included. `IGNORED_READS`
+  counts mapped primary records on an `IGNORE_SEQUENCE` contig, supplementary ones too.
+- The rRNA test measures the fragment: `|TLEN|` bases from the lower of the two starts for
+  a pair mapped on one contig, the alignment for an unpaired read, nothing for a pair with
+  an unmapped or cross-contig mate. The longest single interval overlap over the fragment
+  length at or above `RRNA_FRAGMENT_PERCENTAGE` makes every aligned base ribosomal and the
+  record counts nowhere else (`pct_0.5`, `pct_0.3`, `pct_0`, `pct_1`); a `TLEN` of 0 gives
+  a 0-length fragment and NaN, never ribosomal (`tlen0` pairs). Without
+  `RIBOSOMAL_INTERVALS`, `RIBOSOMAL_BASES` and `PCT_RIBOSOMAL_BASES` print empty.
+- A base takes the strongest function over every transcript of every overlapping gene
+  (coding over UTR over intronic over intergenic); a non-coding transcript is all UTR.
+  Strand and template columns count a non-supplementary record with a coding or UTR base
+  over exactly one gene (`two` pairs over GB and GC count in no strand column); the
+  template of a first-of-pair or unpaired record is R1, R2 or unexplained by FR
+  orientation and enclosure in the gene, with the mate end from `MC` or, without it,
+  the read length (`drop_mate_cigar` pairs).
+- Transcript coverage counts every exonic base of every alignment block except the
+  block's last: `addCoverageCounts(start, end, coverage)` runs to `end` exclusive and
+  the collector passes the block's last base as `end`. A one-base block adds nothing.
+- The coverage columns use, per gene with any coverage, the transcript of the highest
+  mean among those at least `max(MINIMUM_LENGTH, END_BIAS_BASES)` long with a mean of at
+  least 1, ties to the first in `HashMap` order of transcript names, then those whose
+  mean reaches the 1001st-highest value. The CV is `sqrt(mean of squares - mean^2) /
+  mean` (NaN, printed `?`, when rounding makes the difference negative), the end biases
+  divide the first and last `END_BIAS_BASES` means by the mean, their ratio is 0 when the
+  3' mean is within 1e-6 of 0, and the medians are over `Histogram<Double>` bins with NaN
+  last. Each histogram bin sums `(mean of the bases within 0.5% of the position) / mean /
+  transcript count` over the picked transcripts in the iteration order of Picard's
+  `HashMap<Transcript, int[]>` (`Transcript.hashCode`, through
+  `java::hash_map_order_by_hash`); a different summation order could move the last
+  digit of a bin. A unit with no picked transcript adds an empty histogram, which the
+  file leaves out, and prints the four medians as 0.
+- The refFlat reader groups lines by gene name and drops a whole gene whose lines
+  disagree on strand or chromosome, repeat a transcript name, list an exon count that is
+  not the number of starts or ends, hold an exon of zero or negative extent or two exons
+  that overlap (`GH`, `GI` in `rna_bams.py`). A second gene with the span and strand of
+  an earlier one is dropped (the detector's tree merges equal spans and `Gene.equals` is
+  the span plus the strand); genes are added in `HashMap` order of their names.
+- Rows and histogram columns follow the accumulation levels of `levels.rs`; the column
+  prefix is the platform unit, else the library, else the sample, else `All_Reads`.
+
 `BedToIntervalList` output reproduced from Picard 3.5.0
 (`tests/concordance/test_bed_to_interval_list.py`): fields split on a tab or a run of
 spaces; a line with one field is skipped and one with two fields is a one-base interval;
@@ -377,9 +448,11 @@ harness runs every native case at 1 and 8.
 
 ## Not implemented
 
-`CollectVariantCallingMetrics`, `MarkDuplicates`, `CollectRnaSeqMetrics`,
-`CollectSequencingArtifactMetrics` (so `CollectMultipleMetrics` rejects `RnaSeqMetrics` and
-`CollectSequencingArtifactMetrics`).
+`CollectVariantCallingMetrics`, `MarkDuplicates`, `CollectSequencingArtifactMetrics`.
+`CollectMultipleMetrics` still rejects `PROGRAM=RnaSeqMetrics` and
+`CollectSequencingArtifactMetrics`: the wrapper does not yet pass its `REF_FLAT`,
+`INTERVALS` and `IGNORE_SEQUENCE` to the RNA collector (Picard runs that program at
+`SECOND_READ_TRANSCRIPTION_STRAND` with the run's `INTERVALS` as the ribosomal list).
 `CollectDuplicateMetrics` counts no optical duplicates, as Picard's
 does (`READ_PAIR_OPTICAL_DUPLICATES` is always 0). `CollectDuplicateMetrics` sorts library
 names by UTF-8 bytes; Java sorts by UTF-16 units. The orders differ only for names that

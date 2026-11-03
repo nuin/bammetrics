@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.10.0
+
+Parity plan phase P6, RNA: the refFlat gene model (M17) and `CollectRnaSeqMetrics` on the
+registry with every column, option and level.
+
+### Added
+
+- `ref_flat.rs` (M17): the refFlat reader as Picard's `RefFlatReader` reads it (11 fields,
+  lines on contigs the BAM lacks skipped, genes dropped on strand or chromosome
+  disagreement, repeated transcript names, exon count mismatches, empty or overlapping
+  exons), the gene overlap detector, the coding, UTR, intronic and intergenic locus
+  functions and the transcript coverage counter, which skips the last base of each
+  alignment block as Picard's `addCoverageCounts` call does.
+- `CollectRnaSeqMetrics` in the registry (`rna_seq_metrics.rs`): `REF_FLAT`,
+  `RIBOSOMAL_INTERVALS` (interval list or BED), `STRAND_SPECIFICITY` (all three values),
+  `MINIMUM_LENGTH`, `END_BIAS_BASES`, `RRNA_FRAGMENT_PERCENTAGE`, `IGNORE_SEQUENCE`,
+  `METRIC_ACCUMULATION_LEVEL` (all four levels), `STOP_AFTER`, `ASSUME_SORTED`, `CHART`
+  accepted and dropped; every column from `PF_BASES` to `MEDIAN_5PRIME_TO_3PRIME_BIAS`
+  and the 101-row `normalized_position` histogram with one column per unit. Python
+  `collect_rna_seq_metrics`.
+- `java::hash_map_order_by_hash`: `HashMap` iteration order for keys of any class, used
+  for Picard's transcript and gene maps.
+- `tests/concordance/rna_bams.py`: a stranded and an unstranded RNA corpus with spliced
+  reads over a synthetic refFlat (multi-exon transcripts on both strands, a skipped exon,
+  a non-coding transcript, overlapping genes, a transcript under `MINIMUM_LENGTH`, lines
+  Picard drops) and rRNA intervals. `tests/concordance/test_rna_seq_metrics.py`: 74 tests
+  against Picard 3.5.0, 62 metrics files and 25,262 cells identical, histogram included,
+  11 error-parity cases, every column with 3 distinct non-default values.
+
+### Not changed
+
+- `CollectMultipleMetrics PROGRAM=RnaSeqMetrics` still exits 1: the program's `REF_FLAT`,
+  `INTERVALS` and `IGNORE_SEQUENCE` plumbing is not wired to the new collector yet.
+
 ## 0.9.0
 
 Parity plan phase P5, capture: `CollectHsMetrics` on the registry with every option and

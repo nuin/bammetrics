@@ -33,9 +33,17 @@ fn capacity(size: usize) -> usize {
 /// Indices of `keys` (given in insertion order, no repeats) in the order a
 /// `HashMap<String, _>` iterates them.
 pub fn hash_map_order(keys: &[&str]) -> Vec<usize> {
-    let mask = (capacity(keys.len()) - 1) as i32;
-    let mut order: Vec<usize> = (0..keys.len()).collect();
-    order.sort_by_key(|&i| spread(string_hash_code(keys[i])) & mask);
+    let hashes: Vec<i32> = keys.iter().map(|k| string_hash_code(k)).collect();
+    hash_map_order_by_hash(&hashes)
+}
+
+/// [`hash_map_order`] for keys of any class: `hashes` are their `hashCode`
+/// values in insertion order. A `HashSet` iterates like the `HashMap` it
+/// wraps.
+pub fn hash_map_order_by_hash(hashes: &[i32]) -> Vec<usize> {
+    let mask = (capacity(hashes.len()) - 1) as i32;
+    let mut order: Vec<usize> = (0..hashes.len()).collect();
+    order.sort_by_key(|&i| spread(hashes[i]) & mask);
     order
 }
 

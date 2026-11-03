@@ -110,7 +110,7 @@ fn text_cigar_reference_length(cigar: &[u8]) -> Option<i64> {
 }
 
 /// Reference length of the mate from the `MC` tag, `None` when the tag is absent.
-fn mate_reference_length(record: &bam::Record) -> Result<Option<i64>> {
+pub(crate) fn mate_reference_length(record: &bam::Record) -> Result<Option<i64>> {
     let malformed = |what| Error::MalformedRecord {
         name: record_name(record),
         what,

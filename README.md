@@ -89,6 +89,7 @@ under each failing check. The presets, the rule language and `verdict.json` are 
 | CollectRawWgsMetrics | | `collect_raw_wgs_metrics()` |
 | CollectWgsMetricsWithNonZeroCoverage | | `collect_wgs_metrics_with_non_zero_coverage()` |
 | BedToIntervalList | | `bed_to_interval_list()` |
+| CollectRnaSeqMetrics (`REF_FLAT`, `RIBOSOMAL_INTERVALS`, all three `STRAND` values, the normalized coverage histogram) | all four | `collect_rna_seq_metrics()` |
 | the first four in one pass | | `collect()` |
 
 Levels are `METRIC_ACCUMULATION_LEVEL`: `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`.
