@@ -13,6 +13,7 @@ use bammetrics_core::pass;
 use bammetrics_core::quality_yield;
 use bammetrics_core::record::Orientation;
 use bammetrics_core::registry::{self, Tool};
+use bammetrics_verdict::{Preset, evaluate_files};
 use pyo3::exceptions::{PyAttributeError, PyIOError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyCFunction, PyDict, PyList, PyTuple};
@@ -795,11 +796,53 @@ fn read_metrics<'py>(py: Python<'py>, path: PathBuf) -> PyResult<Bound<'py, PyDi
     Ok(result)
 }
 
+/// Names of the shipped verdict presets.
+#[pyfunction]
+fn presets() -> Vec<&'static str> {
+    bammetrics_verdict::names()
+}
+
+/// A preset error is a ValueError (the file or name is wrong); a metrics
+/// file that cannot be read is an OSError, as elsewhere in the module.
+fn verdict_error(e: &bammetrics_verdict::Error) -> PyErr {
+    match e {
+        bammetrics_verdict::Error::Metrics(inner) => py_error(inner),
+        bammetrics_verdict::Error::Input { .. } => PyIOError::new_err(e.to_string()),
+        _ => PyValueError::new_err(e.to_string()),
+    }
+}
+
+/// Evaluate a preset (a shipped name from `presets()`, or the path of a
+/// preset file) over one sample's metrics files. Returns the verdict as
+/// the dict form of `verdict.json` (schema bammetrics.verdict/1): the text
+/// the Rust crate writes, loaded with the json module, so the two never
+/// differ. `sample` names the sample; without it the first SAMPLE cell in
+/// the files is used, else the first file's stem.
+#[pyfunction]
+#[pyo3(signature = (preset, paths, sample = None))]
+fn evaluate<'py>(
+    py: Python<'py>,
+    preset: PathBuf,
+    paths: Vec<PathBuf>,
+    sample: Option<String>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let text = py
+        .detach(|| {
+            let preset = Preset::resolve(&preset.to_string_lossy())?;
+            let paths: Vec<&std::path::Path> = paths.iter().map(PathBuf::as_path).collect();
+            evaluate_files(&preset, &paths, sample.as_deref()).map(|v| v.to_json())
+        })
+        .map_err(|e| verdict_error(&e))?;
+    py.import("json")?.call_method1("loads", (text,))
+}
+
 #[pymodule]
 fn bammetrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     add_registered_tools(m)?;
     m.add_function(wrap_pyfunction!(tools, m)?)?;
     m.add_function(wrap_pyfunction!(read_metrics, m)?)?;
+    m.add_function(wrap_pyfunction!(presets, m)?)?;
+    m.add_function(wrap_pyfunction!(evaluate, m)?)?;
     m.add_class::<InsertSizeMetrics>()?;
     m.add_function(wrap_pyfunction!(py_insert_size, m)?)?;
     m.add_class::<AlignmentSummaryMetrics>()?;

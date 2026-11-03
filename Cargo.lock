@@ -76,6 +76,7 @@ name = "bammetrics-py"
 version = "0.6.0"
 dependencies = [
  "bammetrics-core",
+ "bammetrics-verdict",
  "pyo3",
 ]
 

@@ -9,6 +9,52 @@ MetricsClass = TypedDict("MetricsClass", {"class": str, "columns": list[str], "r
 MetricsHistogram = TypedDict("MetricsHistogram", {"key_class": str, "columns": list[str], "rows": list[dict[str, Any]]})
 MetricsDoc = TypedDict("MetricsDoc", {"headers": list[str], "classes": list[MetricsClass], "histogram": MetricsHistogram | None})
 
+class VerdictPreset(TypedDict):
+    name: str
+    version: int
+    hash: str
+    source: str
+    note: str
+
+class VerdictCounts(TypedDict):
+    pass_: int
+    warn: int
+    fail: int
+    not_measured: int
+
+class VerdictFile(TypedDict):
+    path: str
+    classes: list[str]
+
+class VerdictCheck(TypedDict):
+    rule: str
+    label: str
+    metric: str
+    level: str
+    select: str | None
+    unit: str | None
+    value: float | None
+    warn: str | None
+    fail: str | None
+    status: str
+    reason: str | None
+    plot: str | None
+
+class Verdict(TypedDict):
+    """verdict.json (schema bammetrics.verdict/1) as dicts; see docs/verdict.md.
+
+    status is "pass", "warn", "fail" or "incomplete"; a check's status is
+    "pass", "warn", "fail" or "not_measured". counts has the key "pass"
+    (spelled pass_ above because pass is a Python keyword)."""
+    schema: str
+    tool_version: str
+    sample: str
+    preset: VerdictPreset
+    status: str
+    counts: VerdictCounts
+    files: list[VerdictFile]
+    checks: list[VerdictCheck]
+
 class InsertSizeMetrics:
     """One CollectInsertSizeMetrics row; fields are Picard's columns in lower case."""
     pair_orientation: str
@@ -192,6 +238,16 @@ def read_metrics(path: _Path) -> MetricsDoc:
     is the ## HISTOGRAM section (key_class, columns, rows) or None. Cells are
     typed from their text: int, float, str or None for an empty field; "?"
     is nan."""
+
+def presets() -> list[str]:
+    """Names of the shipped verdict presets: generic, clinical-panel, wgs, rna-seq."""
+
+def evaluate(preset: str | PathLike[str], paths: Sequence[_Path], sample: str | None = None) -> Verdict:
+    """Evaluate a preset over one sample's metrics files and return the verdict.
+
+    preset is a shipped name from presets() or the path of a preset file
+    (docs/verdict.md). paths are Picard metrics files written by bammetrics
+    or Picard. A bad preset raises ValueError; an unreadable file OSError."""
 
 def collect_insert_size_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
     """CollectInsertSizeMetrics through the registry: one dict per row, keyed by

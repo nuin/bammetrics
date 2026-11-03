@@ -12,4 +12,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 bammetrics-core.workspace = true
+bammetrics-verdict.workspace = true
 pyo3.workspace = true
