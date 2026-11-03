@@ -1,0 +1,22 @@
+## argv
+CollectQualityYieldMetrics
+I=tests/data/orientation.bam
+O=OUT/quality_yield.txt
+OQ=false
+R=tests/data/ref_100k.fa
+## exit
+0
+## stdout
+## stderr
+bammetrics: ignoring R=tests/data/ref_100k.fa: this metric does not read the reference
+## file quality_yield.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectQualityYieldMetrics INPUT=tests/data/orientation.bam OUTPUT=OUT/quality_yield.txt USE_ORIGINAL_QUALITIES=false REFERENCE_SEQUENCE=tests/data/ref_100k.fa
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+80	80	0	0	0	0	0	0	0	0	0
+
+

@@ -1,0 +1,12 @@
+## argv
+NoSuchTool
+I=tests/data/insert_size.bam
+## exit
+2
+## stdout
+## stderr
+error: unrecognized subcommand 'NoSuchTool'
+
+Usage: bammetrics <COMMAND>
+
+For more information, try '--help'.

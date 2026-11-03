@@ -1,0 +1,10 @@
+## argv
+CollectGcBiasMetrics
+I=tests/data/insert_size.bam
+O=OUT/gc_bias.txt
+S=OUT/gc_bias_summary.txt
+## exit
+1
+## stdout
+## stderr
+bammetrics: CollectGcBiasMetrics: REFERENCE_SEQUENCE is required

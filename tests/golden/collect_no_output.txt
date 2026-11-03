@@ -1,0 +1,13 @@
+## argv
+collect
+tests/data/insert_size.bam
+## exit
+2
+## stdout
+## stderr
+error: the following required arguments were not provided:
+  --output <OUTPUT>
+
+Usage: bammetrics collect --output <OUTPUT> <BAM>
+
+For more information, try '--help'.

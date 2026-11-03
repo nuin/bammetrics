@@ -1,0 +1,24 @@
+## argv
+QualityScoreDistribution
+I=tests/corpus/out/t1.bam
+O=OUT/qsd.txt
+## exit
+0
+## stdout
+## stderr
+## file qsd.txt
+## htsjdk.samtools.metrics.StringHeader
+# QualityScoreDistribution INPUT=tests/corpus/out/t1.bam OUTPUT=OUT/qsd.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+
+## HISTOGRAM	java.lang.Byte
+QUALITY	COUNT_OF_Q	COUNT_OF_OQ
+4	77111	0
+12	229939	77111
+15	158231	0
+23	474283	158231
+29	1264658	0
+37	3795778	1264658
+

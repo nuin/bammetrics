@@ -8,6 +8,7 @@ use bammetrics_core::hs_metrics::{self, COLUMNS, Field};
 use bammetrics_core::insert_size::{self, Options};
 use bammetrics_core::levels::{Level, parse_levels};
 use bammetrics_core::metric::{MetricsOutput, Value};
+use bammetrics_core::metrics_file::MetricsDoc;
 use bammetrics_core::pass;
 use bammetrics_core::quality_yield;
 use bammetrics_core::record::Orientation;
@@ -620,25 +621,17 @@ fn value_object(py: Python<'_>, value: &Value) -> PyResult<Py<PyAny>> {
 /// metrics class (`QualityScoreDistribution`, `MeanQualityByCycle`) returns
 /// its histogram table instead, one dict per key.
 fn rows_as_dicts<'py>(py: Python<'py>, output: &MetricsOutput) -> PyResult<Bound<'py, PyList>> {
-    let list = PyList::empty(py);
     if output.is_histogram_only() {
-        for record in output.histogram.iter().flat_map(|h| h.records()) {
-            let dict = PyDict::new(py);
-            for (column, value) in &record {
-                dict.set_item(column, value_object(py, value)?)?;
-            }
-            list.append(dict)?;
-        }
-        return Ok(list);
+        let records: Vec<Vec<(String, Value)>> =
+            output.histogram.iter().flat_map(|h| h.records()).collect();
+        return table_as_dicts(
+            py,
+            records
+                .iter()
+                .map(|r| r.iter().map(|(column, value)| (column.as_str(), value))),
+        );
     }
-    for record in output.records() {
-        let dict = PyDict::new(py);
-        for (column, value) in record {
-            dict.set_item(column, value_object(py, value)?)?;
-        }
-        list.append(dict)?;
-    }
-    Ok(list)
+    table_as_dicts(py, output.records())
 }
 
 /// Python keyword arguments as Picard `KEY=VALUE` arguments: upper-case
@@ -751,10 +744,62 @@ fn tools() -> Vec<&'static str> {
     registry::TOOLS.iter().map(|t| t.name).collect()
 }
 
+/// A table of the parsed file (a class block or the histogram) as a list of
+/// dicts keyed by its column names.
+fn table_as_dicts<'c, 'v, 'py>(
+    py: Python<'py>,
+    records: impl Iterator<Item = impl Iterator<Item = (&'c str, &'v Value)>>,
+) -> PyResult<Bound<'py, PyList>> {
+    let list = PyList::empty(py);
+    for record in records {
+        let dict = PyDict::new(py);
+        for (column, value) in record {
+            dict.set_item(column, value_object(py, value)?)?;
+        }
+        list.append(dict)?;
+    }
+    Ok(list)
+}
+
+/// Read a Picard metrics file, written by Picard or bammetrics. Returns
+/// {"headers": [str], "classes": [{"class", "columns", "rows"}],
+/// "histogram": {"key_class", "columns", "rows"} or None}; every row is a
+/// dict keyed by column, with cells typed from their text (int, float, str
+/// or None; `?` is nan).
+#[pyfunction]
+fn read_metrics<'py>(py: Python<'py>, path: PathBuf) -> PyResult<Bound<'py, PyDict>> {
+    let doc = py
+        .detach(|| MetricsDoc::read(&path))
+        .map_err(|e| py_error(&e))?;
+    let result = PyDict::new(py);
+    result.set_item("headers", &doc.headers)?;
+    let classes = PyList::empty(py);
+    for block in &doc.classes {
+        let dict = PyDict::new(py);
+        dict.set_item("class", &block.class)?;
+        dict.set_item("columns", &block.columns)?;
+        dict.set_item("rows", table_as_dicts(py, block.records())?)?;
+        classes.append(dict)?;
+    }
+    result.set_item("classes", classes)?;
+    match &doc.histogram {
+        Some(histogram) => {
+            let dict = PyDict::new(py);
+            dict.set_item("key_class", &histogram.key_class)?;
+            dict.set_item("columns", &histogram.columns)?;
+            dict.set_item("rows", table_as_dicts(py, histogram.records())?)?;
+            result.set_item("histogram", dict)?;
+        }
+        None => result.set_item("histogram", py.None())?,
+    }
+    Ok(result)
+}
+
 #[pymodule]
 fn bammetrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     add_registered_tools(m)?;
     m.add_function(wrap_pyfunction!(tools, m)?)?;
+    m.add_function(wrap_pyfunction!(read_metrics, m)?)?;
     m.add_class::<InsertSizeMetrics>()?;
     m.add_function(wrap_pyfunction!(py_insert_size, m)?)?;
     m.add_class::<AlignmentSummaryMetrics>()?;

@@ -1,0 +1,134 @@
+## argv
+CollectGcBiasMetrics
+I=tests/data/insert_size.bam
+O=OUT/gc_bias.txt
+S=OUT/gc_bias_summary.txt
+CHART=OUT/gc_bias.pdf
+R=tests/data/ref_100k.fa
+## exit
+0
+## stdout
+## stderr
+bammetrics: ignoring CHART=OUT/gc_bias.pdf: no chart is drawn
+## file gc_bias.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectGcBiasMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/gc_bias.txt SUMMARY_OUTPUT=OUT/gc_bias_summary.txt CHART_OUTPUT=OUT/gc_bias.pdf REFERENCE_SEQUENCE=tests/data/ref_100k.fa
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.GcBiasDetailMetrics
+ACCUMULATION_LEVEL	READS_USED	GC	WINDOWS	READ_STARTS	MEAN_BASE_QUALITY	NORMALIZED_COVERAGE	ERROR_BAR_WIDTH	SAMPLE	LIBRARY	READ_GROUP
+All Reads	ALL	0	0	0	0	0	0			
+All Reads	ALL	1	0	0	0	0	0			
+All Reads	ALL	2	0	0	0	0	0			
+All Reads	ALL	3	0	0	0	0	0			
+All Reads	ALL	4	0	0	0	0	0			
+All Reads	ALL	5	0	0	0	0	0			
+All Reads	ALL	6	0	0	0	0	0			
+All Reads	ALL	7	0	0	0	0	0			
+All Reads	ALL	8	0	0	0	0	0			
+All Reads	ALL	9	0	0	0	0	0			
+All Reads	ALL	10	0	0	0	0	0			
+All Reads	ALL	11	0	0	0	0	0			
+All Reads	ALL	12	0	0	0	0	0			
+All Reads	ALL	13	0	0	0	0	0			
+All Reads	ALL	14	0	0	0	0	0			
+All Reads	ALL	15	0	0	0	0	0			
+All Reads	ALL	16	0	0	0	0	0			
+All Reads	ALL	17	0	0	0	0	0			
+All Reads	ALL	18	0	0	0	0	0			
+All Reads	ALL	19	0	0	0	0	0			
+All Reads	ALL	20	0	0	0	0	0			
+All Reads	ALL	21	0	0	0	0	0			
+All Reads	ALL	22	0	0	0	0	0			
+All Reads	ALL	23	0	0	0	0	0			
+All Reads	ALL	24	0	0	0	0	0			
+All Reads	ALL	25	0	0	0	0	0			
+All Reads	ALL	26	0	0	0	0	0			
+All Reads	ALL	27	0	0	0	0	0			
+All Reads	ALL	28	0	0	0	0	0			
+All Reads	ALL	29	0	0	0	0	0			
+All Reads	ALL	30	0	0	0	0	0			
+All Reads	ALL	31	0	0	0	0	0			
+All Reads	ALL	32	0	0	0	0	0			
+All Reads	ALL	33	1	0	0	0	0			
+All Reads	ALL	34	17	0	0	0	0			
+All Reads	ALL	35	59	0	0	0	0			
+All Reads	ALL	36	160	0	0	0	0			
+All Reads	ALL	37	216	0	0	0	0			
+All Reads	ALL	38	403	0	0	0	0			
+All Reads	ALL	39	628	0	0	0	0			
+All Reads	ALL	40	971	0	0	0	0			
+All Reads	ALL	41	1562	0	0	0	0			
+All Reads	ALL	42	2257	0	0	0	0			
+All Reads	ALL	43	3077	0	0	0	0			
+All Reads	ALL	44	4129	0	0	0	0			
+All Reads	ALL	45	5143	0	0	0	0			
+All Reads	ALL	46	6155	2	2	3.246109	2.295346			
+All Reads	ALL	47	7005	0	0	0	0			
+All Reads	ALL	48	7445	0	0	0	0			
+All Reads	ALL	49	7552	0	0	0	0			
+All Reads	ALL	50	7728	2	1	2.585378	1.828138			
+All Reads	ALL	51	7583	3	1	3.952222	2.281816			
+All Reads	ALL	52	7379	1	1	1.353828	1.353828			
+All Reads	ALL	53	6606	0	0	0	0			
+All Reads	ALL	54	5745	0	0	0	0			
+All Reads	ALL	55	4784	0	0	0	0			
+All Reads	ALL	56	3800	1	1	2.628921	2.628921			
+All Reads	ALL	57	2928	0	0	0	0			
+All Reads	ALL	58	2132	0	0	0	0			
+All Reads	ALL	59	1491	0	0	0	0			
+All Reads	ALL	60	967	1	1	10.330817	10.330817			
+All Reads	ALL	61	702	0	0	0	0			
+All Reads	ALL	62	427	0	0	0	0			
+All Reads	ALL	63	241	0	0	0	0			
+All Reads	ALL	64	161	0	0	0	0			
+All Reads	ALL	65	157	0	0	0	0			
+All Reads	ALL	66	89	0	0	0	0			
+All Reads	ALL	67	59	0	0	0	0			
+All Reads	ALL	68	33	0	0	0	0			
+All Reads	ALL	69	41	0	0	0	0			
+All Reads	ALL	70	35	0	0	0	0			
+All Reads	ALL	71	8	0	0	0	0			
+All Reads	ALL	72	8	0	0	0	0			
+All Reads	ALL	73	8	0	0	0	0			
+All Reads	ALL	74	7	0	0	0	0			
+All Reads	ALL	75	0	0	0	0	0			
+All Reads	ALL	76	0	0	0	0	0			
+All Reads	ALL	77	0	0	0	0	0			
+All Reads	ALL	78	0	0	0	0	0			
+All Reads	ALL	79	0	0	0	0	0			
+All Reads	ALL	80	0	0	0	0	0			
+All Reads	ALL	81	0	0	0	0	0			
+All Reads	ALL	82	0	0	0	0	0			
+All Reads	ALL	83	0	0	0	0	0			
+All Reads	ALL	84	0	0	0	0	0			
+All Reads	ALL	85	0	0	0	0	0			
+All Reads	ALL	86	0	0	0	0	0			
+All Reads	ALL	87	0	0	0	0	0			
+All Reads	ALL	88	0	0	0	0	0			
+All Reads	ALL	89	0	0	0	0	0			
+All Reads	ALL	90	0	0	0	0	0			
+All Reads	ALL	91	0	0	0	0	0			
+All Reads	ALL	92	0	0	0	0	0			
+All Reads	ALL	93	0	0	0	0	0			
+All Reads	ALL	94	0	0	0	0	0			
+All Reads	ALL	95	0	0	0	0	0			
+All Reads	ALL	96	0	0	0	0	0			
+All Reads	ALL	97	0	0	0	0	0			
+All Reads	ALL	98	0	0	0	0	0			
+All Reads	ALL	99	0	0	0	0	0			
+All Reads	ALL	100	0	0	0	0	0			
+
+
+## file gc_bias_summary.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectGcBiasMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/gc_bias.txt SUMMARY_OUTPUT=OUT/gc_bias_summary.txt CHART_OUTPUT=OUT/gc_bias.pdf REFERENCE_SEQUENCE=tests/data/ref_100k.fa
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.GcBiasSummaryMetrics
+ACCUMULATION_LEVEL	READS_USED	WINDOW_SIZE	TOTAL_CLUSTERS	ALIGNED_READS	AT_DROPOUT	GC_DROPOUT	GC_NC_0_19	GC_NC_20_39	GC_NC_40_59	GC_NC_60_79	GC_NC_80_100	SAMPLE	LIBRARY	READ_GROUP
+All Reads	ALL	100	5	10	40.666073	25.687945	0	0	0.941733	3.394461	0			
+
+

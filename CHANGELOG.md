@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+Phases 1 and 2 of the CLI and report design (`docs/05_cli_and_ui_design.md`): the
+golden suite that pins every existing command line, and the metrics file reader
+with the column glossary the report will read.
+
+### Added
+
+- Golden suite (`crates/core/tests/golden.rs`, `make golden`): 54 documented command
+  forms on the committed fixtures (every registry tool and `CollectHsMetrics` in Picard
+  syntax with and without `O=`, the five subcommands with and without `-O`, the
+  documented error paths) and 16 on corpus t1 when `tests/corpus/out` exists. Each
+  record under `tests/golden/` holds argv, exit code, stdout, stderr and every written
+  file; any byte change fails. `make golden-update` rewrites the records after an
+  intended change, and `make concordance` runs the suite. New fixtures in `tests/data`:
+  `ref_100k.fa` (+ `.fai`, from `make_ref.py`), `targets.interval_list`,
+  `quality_yield_a.txt` and `quality_yield_b.txt`.
+- `metrics_file::MetricsDoc`: a reader for Picard metrics files as Picard 3.5.0 and
+  bammetrics write them. Header lines, several `## METRICS CLASS` blocks, the
+  `## HISTOGRAM` section, empty tables, columns the reader has never seen, empty
+  fields, `?` (NaN) and `-?`, and `0,5` from a comma-decimal locale. Cells are typed
+  from their text (`Value::Int`, `Float`, `Str`, `Null`) with `as_int`, `as_float`,
+  `as_str` and `is_null` accessors; `ClassBlock::get(row, column)` and `find(column,
+  text)` look columns up by name. `AccumulateQualityYieldMetrics` reads its inputs
+  through it, with unchanged output.
+- `crates/core/glossary.tsv` and `glossary::lookup`: 204 rows, one per column the
+  implemented tools write (182 metrics-class columns and 22 histogram columns), with
+  the Picard class, type and a definition in our own words; a test fails when a tool
+  emits a column without a row.
+- Python: `bammetrics.read_metrics(path)` returns the headers, the class blocks as
+  lists of dicts and the histogram, with `MetricsDoc`, `MetricsClass` and
+  `MetricsHistogram` typed dicts in the stub.
+
 ## 0.6.0
 
 Parity plan phases P1 to P3. `CollectAlignmentSummaryMetrics` at every accumulation

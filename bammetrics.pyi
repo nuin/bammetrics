@@ -1,9 +1,13 @@
 """Type stubs for the bammetrics Python module (Picard-concordant BAM QC metrics)."""
 from os import PathLike
-from typing import Any, Sequence
+from typing import Any, Sequence, TypedDict
 
 _Path = str | PathLike[str]
 _Paths = _Path | Sequence[_Path]
+
+MetricsClass = TypedDict("MetricsClass", {"class": str, "columns": list[str], "rows": list[dict[str, Any]]})
+MetricsHistogram = TypedDict("MetricsHistogram", {"key_class": str, "columns": list[str], "rows": list[dict[str, Any]]})
+MetricsDoc = TypedDict("MetricsDoc", {"headers": list[str], "classes": list[MetricsClass], "histogram": MetricsHistogram | None})
 
 class InsertSizeMetrics:
     """One CollectInsertSizeMetrics row; fields are Picard's columns in lower case."""
@@ -179,6 +183,15 @@ def insert_size(
 
 def tools() -> list[str]:
     """Picard names of the tools in the registry."""
+
+def read_metrics(path: _Path) -> MetricsDoc:
+    """Read a Picard metrics file written by Picard or bammetrics.
+
+    headers are the StringHeader texts; classes has one entry per
+    ## METRICS CLASS block with its rows as dicts keyed by column; histogram
+    is the ## HISTOGRAM section (key_class, columns, rows) or None. Cells are
+    typed from their text: int, float, str or None for an empty field; "?"
+    is nan."""
 
 def collect_insert_size_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
     """CollectInsertSizeMetrics through the registry: one dict per row, keyed by

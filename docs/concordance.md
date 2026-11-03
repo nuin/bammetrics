@@ -7,7 +7,31 @@ How the synthetic corpus is built and how every case is compared with Picard 3.5
 ```bash
 uv run --no-project --with pysam python tests/make_bam.py   # writes tests/data/insert_size.bam
 uv run --no-project --with pysam python tests/make_orientation_bam.py   # writes tests/data/orientation.bam
+python3 tests/data/make_ref.py                               # writes tests/data/ref_100k.fa and .fai
 ```
+
+`tests/data/targets.interval_list` (5 targets over the fixture reads) and the two
+`quality_yield_*.txt` files (`CollectQualityYieldMetrics` on each BAM) complete the
+committed fixtures.
+
+## Golden suite
+
+```bash
+make golden          # cargo test --release -p bammetrics-core --test golden
+make golden-update   # rewrite tests/golden after an intended command-line change
+```
+
+`crates/core/tests/golden.rs` runs every documented command form from the repository
+root: each registry tool and `CollectHsMetrics` in Picard syntax with and without `O=`,
+the five subcommands with and without `-O`, and the documented error paths, 54 cases on
+the committed fixtures and 16 more on corpus t1 when `tests/corpus/out` exists. One
+record per case under `tests/golden/` holds the argv, the exit code, stdout, stderr and
+every file written (the output directory reads `OUT`, the `Started on` header line
+`<time>`). Any byte change fails, with the first differing line named. The records were
+first written by the 0.6.0 binary, so a later command-line change has to keep them or
+show its change in the diff of `tests/golden`. `BAMMETRICS_BIN=path make golden` runs
+another binary against the same records. `make concordance` runs the suite before the
+pytest cases.
 
 ## Corpus and harness
 
