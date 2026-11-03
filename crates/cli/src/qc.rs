@@ -83,8 +83,9 @@ pub struct QcArgs {
     /// Input BAM.
     #[arg(value_name = "BAM")]
     pub bam: PathBuf,
-    /// Output prefix (default: ./ plus the BAM name without .bam). Missing
-    /// directories are created.
+    /// Output prefix (default: ./ plus the BAM name without .bam). A
+    /// directory (an existing one, or a path ending in /) gets the BAM name
+    /// as the file part. Missing directories are created.
     #[arg(short = 'o', short_alias = 'O', long, value_name = "PREFIX")]
     pub output: Option<PathBuf>,
     /// Reference FASTA with a .fai index: alignment summary mismatches, hs
@@ -117,8 +118,9 @@ pub struct QcArgs {
     #[arg(long, value_enum)]
     pub fail_on: Option<FailOn>,
     /// Skip every collector whose manifest record matches (argv, tool
-    /// version, preset, input size, mtime and end hashes) and whose files
-    /// exist. The verdict and the page are always rewritten.
+    /// version, preset, and the size, mtime and end hashes of the BAM and of
+    /// every FASTA, .fai, interval or annotation file it reads) and whose
+    /// files exist. The verdict and the page are always rewritten.
     #[arg(long, conflicts_with = "force")]
     pub resume: bool,
     /// Rerun every step over an earlier run's files.
@@ -239,6 +241,8 @@ pub enum Origin {
     Option,
     ReadGroup,
     FileName,
+    /// `-o` named a directory; the BAM name is the file part.
+    Directory,
 }
 
 /// Everything prepare decides; nothing has been written.
@@ -395,6 +399,44 @@ impl Context<'_> {
     }
 }
 
+/// The argv keys that name a file the tool reads besides the BAM.
+const READ_FILES: &[&str] = &[
+    "REFERENCE_SEQUENCE",
+    "BAIT_INTERVALS",
+    "TARGET_INTERVALS",
+    "REF_FLAT",
+    "RIBOSOMAL_INTERVALS",
+];
+
+/// The fingerprint of every file `argv` names besides the BAM (a FASTA
+/// with its `.fai`), each once, in argv order.
+fn read_files(argv: &[String]) -> Result<Vec<(PathBuf, Fingerprint)>> {
+    let mut paths: Vec<PathBuf> = Vec::new();
+    for arg in argv {
+        let Some((key, value)) = arg.split_once('=') else {
+            continue;
+        };
+        if !READ_FILES.contains(&key) {
+            continue;
+        }
+        let path = PathBuf::from(value);
+        if key == "REFERENCE_SEQUENCE" {
+            paths.push(path.clone());
+            paths.push(with_suffix(&path, ".fai"));
+        } else {
+            paths.push(path);
+        }
+    }
+    let mut files: Vec<(PathBuf, Fingerprint)> = Vec::new();
+    for path in paths {
+        if files.iter().all(|(p, _)| *p != path) {
+            let print = Fingerprint::of(&path)?;
+            files.push((path, print));
+        }
+    }
+    Ok(files)
+}
+
 /// Why a tool with no one-pass collector reads the BAM on its own.
 fn own_read_reason(tool: &str) -> &'static str {
     match tool {
@@ -446,6 +488,7 @@ impl Context<'_> {
                 preset_hash: self.preset.hash.clone(),
                 input: self.args.bam.clone(),
                 fingerprint: self.fingerprint.clone(),
+                files: read_files(&argv)?,
             },
             argv,
             outputs: files
@@ -590,12 +633,14 @@ fn unmet(cx: &Context, tools: &[&str]) -> Vec<Unmet> {
 }
 
 /// The sample: `--sample`, else the first `@RG` with an `SM`, else the
-/// BAM name.
+/// BAM name. The header is read either way, so a file that is not a BAM
+/// stops the run here.
 fn sample(args: &QcArgs) -> Result<(String, Origin)> {
+    let header =
+        pass::read_header(&args.bam).map_err(|e| Error::Input(format!("{e} (from BAM)")))?;
     if let Some(name) = &args.sample {
         return Ok((name.clone(), Origin::Option));
     }
-    let header = pass::read_header(&args.bam)?;
     Ok(levels::read_groups(&header)
         .into_iter()
         .find_map(|rg| rg.sample)
@@ -605,12 +650,30 @@ fn sample(args: &QcArgs) -> Result<(String, Origin)> {
         ))
 }
 
+/// `1 collector`, `4 collectors`.
+pub fn plural(n: usize, word: &str) -> String {
+    if n == 1 {
+        format!("1 {word}")
+    } else {
+        format!("{n} {word}s")
+    }
+}
+
+/// True for an `-o` that ends in a path separator or is a directory: a
+/// prefix there would make hidden files (`out/.manifest.json`) that
+/// `report` skips.
+fn names_directory(output: &Path) -> bool {
+    let text = output.as_os_str().to_string_lossy();
+    text.ends_with(std::path::is_separator) || output.is_dir()
+}
+
 /// Prepare: everything checked and decided, nothing written.
 pub fn prepare(args: &QcArgs) -> Result<Plan> {
     check_inputs(args)?;
     let preset = Preset::resolve(&args.preset)?;
     let (sample, sample_origin) = sample(args)?;
     let (prefix, prefix_origin) = match &args.output {
+        Some(dir) if names_directory(dir) => (dir.join(bam_stem(&args.bam)), Origin::Directory),
         Some(prefix) => (prefix.clone(), Origin::Option),
         None => (PathBuf::from(bam_stem(&args.bam)), Origin::FileName),
     };
@@ -693,6 +756,14 @@ mod tests {
             assert!(registry::find(tool).is_some(), "{tool}");
             assert!(file_extensions(tool).is_some(), "{tool}");
         }
+    }
+
+    #[test]
+    fn a_directory_output_is_not_a_prefix() {
+        assert!(names_directory(Path::new("out/")));
+        assert!(names_directory(Path::new(".")));
+        assert!(names_directory(&std::env::temp_dir()));
+        assert!(!names_directory(Path::new("no-such-dir/s")));
     }
 
     #[test]

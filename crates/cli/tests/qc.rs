@@ -1,8 +1,9 @@
 //! `qc` and `plan` end to end on the committed fixture BAM: the files are
 //! the Picard face's bytes, `--resume` after a killed run and after one
-//! lost file, per-collector isolation, the plan writes nothing, the exit
-//! codes with and without `--fail-on`, and the verdict and page equal what
-//! `report` writes for the same files. The byte-exact stdout of each form
+//! lost file or an interval file edited in place, per-collector isolation,
+//! the plan writes nothing, the exit codes with and without `--fail-on`,
+//! errors as jsonl events, a closed stdout, and the verdict and page equal
+//! what `report` writes for the same files. The byte-exact stdout of each form
 //! is in the golden suite.
 
 use std::fs;
@@ -322,7 +323,11 @@ fn plan_runs_nothing_and_names_what_resume_would_skip() {
     assert!(!dir.exists(), "plan wrote nothing");
     let text = stdout(&plan);
     assert!(
-        text.contains("pass      1 BAM read, 4 collectors\n"),
+        text.contains("pass      4 collectors, 1 shared BAM read\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("  reads     2 BAM reads: 1 for the pass, 1 own read\n"),
         "{text}"
     );
     assert!(text.contains("own read  run CollectWgsMetrics"), "{text}");
@@ -339,6 +344,14 @@ fn plan_runs_nothing_and_names_what_resume_would_skip() {
     ]);
     let text = stdout(&plan);
     assert!(text.contains("--resume skips 4 of 5 collectors"), "{text}");
+    assert!(
+        text.contains("pass      4 collectors, 3 skipped by --resume, 1 shared BAM read\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("  reads     1 BAM read: 1 for the pass, 0 own reads\n"),
+        "{text}"
+    );
     assert!(text.contains("  run   CollectDuplicateMetrics"), "{text}");
     assert!(text.contains("  skip  CollectInsertSizeMetrics"), "{text}");
     let lines = bammetrics(&[
@@ -445,5 +458,132 @@ fn without_o_the_prefix_is_the_bam_name_in_the_current_directory() {
         "{}",
         stdout(&run)
     );
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_interval_file_edited_in_place_reruns_hs_under_resume() {
+    let dir = fresh_dir("aux-edit");
+    fs::create_dir_all(&dir).expect("dir");
+    let panel = dir.join("p.interval_list");
+    fs::copy(root().join(PANEL), &panel).expect("copy panel");
+    let panel = panel.to_str().expect("utf-8");
+    let args = [
+        "--panel",
+        panel,
+        "--preset",
+        "clinical-panel",
+        "--format",
+        "jsonl",
+    ];
+    assert_eq!(code(&qc(&dir, &args)), 0);
+    let hs = steps(&dir)
+        .into_iter()
+        .find(|s| text(s, "id") == "CollectHsMetrics")
+        .expect("hs step");
+    let recorded: Vec<&str> = hs
+        .get("files")
+        .and_then(Json::as_array)
+        .expect("files")
+        .iter()
+        .map(|f| text(f, "path"))
+        .collect();
+    assert_eq!(recorded, [panel], "the panel is fingerprinted once");
+
+    let mut resume = args.to_vec();
+    resume.push("--resume");
+    assert!(written_steps(&qc(&dir, &resume)).is_empty());
+    let mut text_of = fs::read_to_string(panel).expect("panel");
+    let last = text_of.lines().last().expect("an interval").to_owned();
+    text_of.push_str(&last);
+    text_of.push('\n');
+    fs::write(panel, text_of).expect("edit panel");
+    assert_eq!(written_steps(&qc(&dir, &resume)), ["CollectHsMetrics"]);
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_collector_the_new_options_drop_loses_its_old_file() {
+    let dir = fresh_dir("dropped");
+    assert_eq!(code(&qc(&dir, &["--panel", PANEL])), 0);
+    assert!(dir.join("s.hs_metrics").is_file());
+    let forced = qc(&dir, &["--force"]);
+    assert_eq!(code(&forced), 0, "{}", stderr(&forced));
+    assert!(
+        stdout(&forced).contains("1 stale removed"),
+        "{}",
+        stdout(&forced)
+    );
+    assert_eq!(names(&dir), GENERIC_FILES);
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_output_directory_gets_the_bam_name_as_the_file_part() {
+    for (i, trailing) in ["/", ""].into_iter().enumerate() {
+        let dir = fresh_dir(&format!("dir-output-{i}"));
+        if trailing.is_empty() {
+            fs::create_dir_all(&dir).expect("existing directory");
+        }
+        let output = format!("{}{trailing}", dir.display());
+        let run = bammetrics(&["qc", BAM, "-o", &output, "--date", DATE]);
+        assert_eq!(code(&run), 0, "{}", stderr(&run));
+        assert!(
+            stdout(&run).contains("(-o is a directory: named after the BAM)"),
+            "{}",
+            stdout(&run)
+        );
+        let expected: Vec<String> = GENERIC_FILES
+            .iter()
+            .map(|name| name.replacen("s.", "insert_size.", 1))
+            .collect();
+        assert_eq!(names(&dir), expected);
+        let _ = fs::remove_dir_all(&dir);
+    }
+}
+
+#[test]
+fn a_prepare_error_is_a_jsonl_error_and_done_event() {
+    for verb in ["qc", "plan"] {
+        let run = bammetrics(&[verb, "tests/data/nope.bam", "--format", "jsonl"]);
+        assert_eq!(code(&run), 1);
+        assert_eq!(
+            stderr(&run),
+            format!("bammetrics {verb}: tests/data/nope.bam not found (from BAM)\n")
+        );
+        let events: Vec<Json> = stdout(&run)
+            .lines()
+            .map(|l| Json::parse(l).expect("a JSON line"))
+            .collect();
+        assert_eq!(events.len(), 2, "{}", stdout(&run));
+        assert_eq!(text(&events[0], "event"), "error");
+        assert_eq!(text(&events[1], "event"), "done");
+        assert_eq!(events[1].get("exit"), Some(&Json::Number(1.0)));
+    }
+}
+
+#[test]
+fn a_closed_stdout_does_not_stop_the_run() {
+    let dir = fresh_dir("closed-stdout");
+    let prefix = dir.join("s");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+        .args([
+            "qc",
+            BAM,
+            "-o",
+            prefix.to_str().expect("utf-8"),
+            "--format",
+            "jsonl",
+        ])
+        .current_dir(root())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn");
+    drop(child.stdout.take());
+    let run = child.wait_with_output().expect("wait");
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    assert!(!stderr(&run).contains("panicked"), "{}", stderr(&run));
+    assert_eq!(names(&dir), GENERIC_FILES);
     let _ = fs::remove_dir_all(&dir);
 }

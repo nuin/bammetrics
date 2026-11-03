@@ -8,7 +8,7 @@ OUT/sample
 ## exit
 0
 ## stdout
-insert_size  PASS  preset generic v1 (6dd89e)  4 collectors, 1 BAM read
+insert_size  PASS  preset generic v1 (6dd89e)  4 collectors, 1 BAM read (10 records)
 PASS          6 checks
 wrote 7 files to OUT/sample.*, report OUT/sample.report.html
 ## stderr
@@ -84,6 +84,7 @@ insert_size	All_Reads.fr_count
         "mtime": "<mtime>",
         "edges_hash": "9194c505a3f0ed99"
       },
+      "files": [],
       "outputs": [
         {
           "path": "OUT/sample.quality_yield_metrics",
@@ -111,6 +112,7 @@ insert_size	All_Reads.fr_count
         "mtime": "<mtime>",
         "edges_hash": "9194c505a3f0ed99"
       },
+      "files": [],
       "outputs": [
         {
           "path": "OUT/sample.alignment_summary_metrics",
@@ -138,6 +140,7 @@ insert_size	All_Reads.fr_count
         "mtime": "<mtime>",
         "edges_hash": "9194c505a3f0ed99"
       },
+      "files": [],
       "outputs": [
         {
           "path": "OUT/sample.insert_size_metrics",
@@ -165,6 +168,7 @@ insert_size	All_Reads.fr_count
         "mtime": "<mtime>",
         "edges_hash": "9194c505a3f0ed99"
       },
+      "files": [],
       "outputs": [
         {
           "path": "OUT/sample.duplicate_metrics",
@@ -195,6 +199,7 @@ insert_size	All_Reads.fr_count
         "mtime": "<mtime>",
         "edges_hash": "9194c505a3f0ed99"
       },
+      "files": [],
       "outputs": [],
       "status": "ok",
       "error": null
@@ -216,6 +221,7 @@ insert_size	All_Reads.fr_count
         "mtime": "<mtime>",
         "edges_hash": "9194c505a3f0ed99"
       },
+      "files": [],
       "outputs": [
         {
           "path": "OUT/sample.verdict.json",

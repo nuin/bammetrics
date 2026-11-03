@@ -70,7 +70,9 @@ bammetrics check runs/ --preset clinical-panel             # exit 10 on a failed
 `qc` reads the BAM once for every collector the preset needs and writes
 `out/NA12878.*`: the metrics files, `.verdict.json`, `.report.html` and a manifest that
 `--resume` uses to skip finished collectors; `bammetrics plan` with the same options shows
-what would run. `report` finds the metrics files by their `## METRICS CLASS` block in any directory of
+what would run.
+
+`report` finds the metrics files by their `## METRICS CLASS` block in any directory of
 Picard output, no bammetrics run needed, and judges each sample against a preset of
 thresholds: the verdict (pass, warn, fail or incomplete) opens each page, with one plot
 under each failing check. The presets, the rule language and `verdict.json` are in

@@ -1,8 +1,9 @@
 //! `PREFIX.manifest.json` (schema `bammetrics.manifest/1`): one record per
 //! `qc` step with the fields `--resume` compares (docs/05 section 3): the
 //! argv hash, the tool version, the preset hash, and the input's size,
-//! mtime and a hash of its first and last 64 KiB; then the step's outputs
-//! with tool and kind, and its status.
+//! mtime and a hash of its first and last 64 KiB, the same three for every
+//! further file the argv names (FASTA, .fai, intervals, annotation); then
+//! the step's outputs with tool and kind, and its status.
 
 use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom};
@@ -54,6 +55,29 @@ impl Fingerprint {
             edges: bytes_hash(head.into_iter().chain(tail)),
         })
     }
+
+    /// The JSON object of `path` with this fingerprint.
+    fn to_json(&self, path: &Path) -> Json {
+        Json::Object(vec![
+            ("path".to_owned(), Json::text(&path.display().to_string())),
+            ("size".to_owned(), Json::Number(self.size as f64)),
+            ("mtime".to_owned(), Json::text(&self.mtime)),
+            ("edges_hash".to_owned(), Json::text(&self.edges)),
+        ])
+    }
+
+    /// The path and fingerprint of a [`Fingerprint::to_json`] object.
+    fn from_json(json: &Json) -> Option<(PathBuf, Self)> {
+        let text = |key: &str| json.get(key)?.as_str().map(str::to_owned);
+        Some((
+            PathBuf::from(text("path")?),
+            Self {
+                size: json.get("size")?.as_f64()? as u64,
+                mtime: text("mtime")?,
+                edges: text("edges_hash")?,
+            },
+        ))
+    }
 }
 
 /// The fields `--resume` compares: a step is skipped when they all match
@@ -65,6 +89,9 @@ pub struct Key {
     pub preset_hash: String,
     pub input: PathBuf,
     pub fingerprint: Fingerprint,
+    /// Every further file the argv names, in argv order: an edit in place
+    /// changes the metrics as much as an edit of the BAM.
+    pub files: Vec<(PathBuf, Fingerprint)>,
 }
 
 /// One file a step wrote.
@@ -123,7 +150,6 @@ impl StepRecord {
     fn to_json(&self) -> Json {
         let text = |s: &str| Json::text(s);
         let path = |p: &Path| Json::text(&p.display().to_string());
-        let f = &self.key.fingerprint;
         Json::Object(vec![
             ("id".to_owned(), text(&self.id)),
             ("stage".to_owned(), text(&self.stage)),
@@ -137,12 +163,11 @@ impl StepRecord {
             ("preset_hash".to_owned(), text(&self.key.preset_hash)),
             (
                 "input".to_owned(),
-                Json::Object(vec![
-                    ("path".to_owned(), path(&self.key.input)),
-                    ("size".to_owned(), Json::Number(f.size as f64)),
-                    ("mtime".to_owned(), text(&f.mtime)),
-                    ("edges_hash".to_owned(), text(&f.edges)),
-                ]),
+                self.key.fingerprint.to_json(&self.key.input),
+            ),
+            (
+                "files".to_owned(),
+                Json::Array(self.key.files.iter().map(|(p, f)| f.to_json(p)).collect()),
             ),
             (
                 "outputs".to_owned(),
@@ -166,7 +191,13 @@ impl StepRecord {
 
     fn from_json(json: &Json) -> Option<Self> {
         let text = |j: &Json, key: &str| j.get(key)?.as_str().map(str::to_owned);
-        let input = json.get("input")?;
+        let (input, fingerprint) = Fingerprint::from_json(json.get("input")?)?;
+        let files = json
+            .get("files")?
+            .as_array()?
+            .iter()
+            .map(Fingerprint::from_json)
+            .collect::<Option<Vec<_>>>()?;
         let outputs = json
             .get("outputs")?
             .as_array()?
@@ -198,12 +229,9 @@ impl StepRecord {
                 argv_hash: text(json, "argv_hash")?,
                 tool_version: text(json, "tool_version")?,
                 preset_hash: text(json, "preset_hash")?,
-                input: PathBuf::from(text(input, "path")?),
-                fingerprint: Fingerprint {
-                    size: input.get("size")?.as_f64()? as u64,
-                    mtime: text(input, "mtime")?,
-                    edges: text(input, "edges_hash")?,
-                },
+                input,
+                fingerprint,
+                files,
             },
             outputs,
             status,
@@ -311,6 +339,14 @@ mod tests {
                     mtime: "1730000000.000000001".to_owned(),
                     edges: "00000000000000ff".to_owned(),
                 },
+                files: vec![(
+                    PathBuf::from("ref.fa"),
+                    Fingerprint {
+                        size: 42,
+                        mtime: "1730000000.000000002".to_owned(),
+                        edges: "00000000000000fe".to_owned(),
+                    },
+                )],
             },
             outputs: vec![Output {
                 path: PathBuf::from("out/s.insert_size_metrics"),
@@ -366,6 +402,9 @@ mod tests {
         let mut moved = new.clone();
         moved.key.fingerprint.mtime = "1730000001.000000000".to_owned();
         assert!(!moved.resumes(&old));
+        let mut edited = new.clone();
+        edited.key.files[0].1.size += 1;
+        assert!(!edited.resumes(&old));
         let mut other_version = new.clone();
         other_version.key.tool_version = "0.12.1".to_owned();
         assert!(!other_version.resumes(&old));

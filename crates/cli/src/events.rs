@@ -1,7 +1,9 @@
 //! What `qc` tells the user while it runs (docs/05 section 4.10): a
 //! progress line on stderr, only on a terminal and not with `-q`, at most
 //! 10 updates a second; or, with `--format jsonl`, one JSON object per line
-//! on stdout (`start`, `progress`, `file`, `error`, `check`, `done`).
+//! on stdout (`start`, `progress`, `file`, `error`, `check`, `done`). A
+//! closed stdout (`qc ... | head -1`) drops what is printed, and the run
+//! still writes its files.
 
 use std::io::{IsTerminal, Write as _};
 use std::time::{Duration, Instant};
@@ -11,6 +13,7 @@ use bammetrics_verdict::Verdict;
 use bammetrics_verdict::json::Json;
 
 use crate::check::check_events;
+use crate::error::Error;
 use crate::manifest::Output;
 use crate::qc::{Format, Plan};
 
@@ -28,6 +31,42 @@ pub struct Reporter {
     started: Instant,
     last_draw: Option<Instant>,
     next_event: u64,
+    /// Records the pass has read so far.
+    records: u64,
+}
+
+/// `text` on stdout. A write error (a closed pipe) is dropped on purpose:
+/// the run goes on, writes its files and keeps its exit code.
+pub fn print_stdout(text: &str) {
+    let mut stdout = std::io::stdout().lock();
+    let _ = stdout
+        .write_all(text.as_bytes())
+        .and_then(|()| stdout.flush());
+}
+
+/// A verb's fatal error: `bammetrics VERB: what` on stderr and, with
+/// `--format jsonl`, an `error` and a `done` event on stdout. Returns the
+/// exit code.
+pub fn fatal(verb: &str, format: Format, error: &Error) -> u8 {
+    let code = error.exit_code();
+    eprintln!("bammetrics {verb}: {error}");
+    if format == Format::Jsonl {
+        let error_event = Json::Object(vec![
+            field("event", Json::text("error")),
+            field("step", Json::Null),
+            field("message", Json::text(&error.to_string())),
+        ]);
+        let done = Json::Object(vec![
+            field("event", Json::text("done")),
+            field("exit", Json::Number(f64::from(code))),
+        ]);
+        print_stdout(&format!(
+            "{}\n{}\n",
+            error_event.render_line(),
+            done.render_line()
+        ));
+    }
+    code
 }
 
 fn field(key: &str, value: Json) -> (String, Json) {
@@ -39,7 +78,7 @@ fn path(p: &std::path::Path) -> Json {
 }
 
 /// `950`, `12.4k`, `3.1M`.
-fn count(n: f64) -> String {
+pub fn count(n: f64) -> String {
     if n >= 1e6 {
         format!("{:.1}M", n / 1e6)
     } else if n >= 1e3 {
@@ -58,13 +97,19 @@ impl Reporter {
             started: Instant::now(),
             last_draw: None,
             next_event: PROGRESS_EVENT_RECORDS,
+            records: 0,
         }
     }
 
     fn emit(&self, fields: Vec<(String, Json)>) {
         if self.jsonl {
-            println!("{}", Json::Object(fields).render_line());
+            print_stdout(&format!("{}\n", Json::Object(fields).render_line()));
         }
+    }
+
+    /// Records the pass read; the pass reports its total last.
+    pub fn records(&self) -> u64 {
+        self.records
     }
 
     pub fn start(&self, plan: &Plan, resume: bool) {
@@ -86,6 +131,7 @@ impl Reporter {
     }
 
     pub fn progress(&mut self, p: Progress) {
+        self.records = p.records;
         while self.jsonl && p.records >= self.next_event {
             let mut fields = vec![
                 field("event", Json::text("progress")),
@@ -152,9 +198,10 @@ impl Reporter {
 
     pub fn checks(&self, verdict: &Verdict) {
         if self.jsonl {
-            for line in check_events(verdict) {
-                println!("{line}");
-            }
+            let lines: String = check_events(verdict)
+                .map(|line| format!("{line}\n"))
+                .collect();
+            print_stdout(&lines);
         }
     }
 

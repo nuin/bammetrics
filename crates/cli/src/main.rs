@@ -551,8 +551,8 @@ fn run() -> error::Result<u8> {
         Command::Collect(args) => collect(args)?,
         Command::Report(args) => return report::run(args),
         Command::Check(args) => return check::run(args),
-        Command::Qc(args) => return engine::run(&args),
-        Command::Plan(args) => return plan::run(&args),
+        Command::Qc(args) => return Ok(engine::run(&args)),
+        Command::Plan(args) => return Ok(plan::run(&args)),
     }
     Ok(0)
 }

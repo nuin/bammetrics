@@ -13,10 +13,10 @@ use bammetrics_verdict::{Band, Input, Status as CheckStatus, Verdict, bytes_hash
 
 use crate::check::{self, status_word};
 use crate::error::{Error, Result};
-use crate::events::Reporter;
+use crate::events::{self, Reporter, print_stdout};
 use crate::manifest::{Key, Manifest, Output, Status, StepRecord};
 use crate::qc::{
-    Origin, Plan, QcArgs, Read, Step, make_prefix_dir, manifest_path, page_path, prepare,
+    Origin, Plan, QcArgs, Read, Step, make_prefix_dir, manifest_path, page_path, plural, prepare,
     verdict_path,
 };
 use crate::report::write_atomic;
@@ -80,6 +80,35 @@ fn write_output(
 fn remove_stale(step: &Step, written: &[Output], files: &mut Files) {
     for planned in &step.record.outputs {
         if !written.iter().any(|w| w.path == planned.path) && fs::remove_file(&planned.path).is_ok()
+        {
+            files.removed += 1;
+        }
+    }
+}
+
+/// Remove the metrics files the earlier run's manifest lists that no step
+/// of this run wrote or kept (a collector the new options drop), so the
+/// prefix holds what this run's manifest lists and `report DIR` agrees
+/// with it. Only paths under the prefix are touched.
+fn remove_dropped(plan: &Plan, done: &[Done], files: &mut Files) {
+    let Ok(Some(old)) = &plan.previous else {
+        return;
+    };
+    let prefix = plan.prefix.as_os_str().to_string_lossy().into_owned();
+    let current = |path: &Path| {
+        done.iter()
+            .any(|d| d.record.outputs.iter().any(|o| o.path == path))
+    };
+    for output in old.steps.iter().flat_map(|s| &s.outputs) {
+        let under_prefix = output
+            .path
+            .as_os_str()
+            .to_string_lossy()
+            .starts_with(&prefix);
+        if output.kind == "metrics"
+            && under_prefix
+            && !current(&output.path)
+            && fs::remove_file(&output.path).is_ok()
         {
             files.removed += 1;
         }
@@ -178,6 +207,7 @@ fn own_step(
             preset_hash: plan.preset.hash.clone(),
             input: plan.bam.clone(),
             fingerprint: plan.fingerprint.clone(),
+            files: Vec::new(),
         },
         argv,
         outputs,
@@ -271,7 +301,13 @@ fn post_and_report(
     Ok((verdict, vec![post, report]))
 }
 
-pub fn run(args: &QcArgs) -> Result<u8> {
+/// `qc`: the exit code, after a fatal error too (printed as `bammetrics qc:
+/// ...`, and as `error` and `done` events with `--format jsonl`).
+pub fn run(args: &QcArgs) -> u8 {
+    qc(args).unwrap_or_else(|e| events::fatal("qc", args.format, &e))
+}
+
+fn qc(args: &QcArgs) -> Result<u8> {
     let plan = prepare(args)?;
     guard_previous(&plan, args)?;
     let mut out = Reporter::new(args.format, args.quiet, plan.fingerprint.size);
@@ -279,6 +315,7 @@ pub fn run(args: &QcArgs) -> Result<u8> {
     make_prefix_dir(&plan.prefix)?;
     let mut files = Files::default();
     let done = collect(&plan, args, &mut files, &mut out)?;
+    remove_dropped(&plan, &done, &mut files);
     let records: Vec<StepRecord> = done.iter().map(|d| d.record.clone()).collect();
     write_atomic(
         &manifest_path(&plan.prefix),
@@ -309,18 +346,16 @@ pub fn run(args: &QcArgs) -> Result<u8> {
                 .iter()
                 .filter(|d| d.ran && d.record.stage == "own-read")
                 .count();
-        print!(
-            "{}",
-            summary(&Summary {
-                plan: &plan,
-                verdict: &verdict,
-                failed: &failed,
-                files: &files,
-                reads,
-                code,
-                gate: args.fail_on.is_some(),
-            })
-        );
+        print_stdout(&summary(&Summary {
+            plan: &plan,
+            verdict: &verdict,
+            failed: &failed,
+            files: &files,
+            reads,
+            records: out.records(),
+            code,
+            gate: args.fail_on.is_some(),
+        }));
     }
     Ok(code)
 }
@@ -335,6 +370,8 @@ struct Summary<'a> {
     files: &'a Files,
     /// BAM reads made: the pass, plus each own read.
     reads: usize,
+    /// Records the shared pass read.
+    records: u64,
     code: u8,
     gate: bool,
 }
@@ -429,18 +466,21 @@ fn summary(s: &Summary) -> String {
     let v = s.verdict;
     let p = &v.preset;
     let mut text = String::new();
-    let collectors = s.plan.steps.len();
+    let records = match s.records {
+        0 => String::new(),
+        1 => " (1 record)".to_owned(),
+        n => format!(" ({} records)", events::count(n as f64)),
+    };
     let _ = writeln!(
         text,
-        "{}  {}  preset {} v{} ({})  {collectors} collector{}, {} BAM read{}",
+        "{}  {}  preset {} v{} ({})  {}, {}{records}",
         v.sample,
         v.status.name().to_uppercase(),
         p.name,
         p.version,
         p.hash.get(..6).unwrap_or(&p.hash),
-        if collectors == 1 { "" } else { "s" },
-        s.reads,
-        if s.reads == 1 { "" } else { "s" },
+        plural(s.plan.steps.len(), "collector"),
+        plural(s.reads, "BAM read"),
     );
     let tail = if s.code != 0 || (!s.gate && v.status != Band::Pass) {
         1
@@ -476,8 +516,10 @@ fn summary(s: &Summary) -> String {
             notes.push(format!("{n} {word}"));
         }
     }
-    if s.plan.prefix_origin == Origin::FileName {
-        notes.push("no -o: named after the BAM".to_owned());
+    match s.plan.prefix_origin {
+        Origin::FileName => notes.push("no -o: named after the BAM".to_owned()),
+        Origin::Directory => notes.push("-o is a directory: named after the BAM".to_owned()),
+        Origin::Option | Origin::ReadGroup => {}
     }
     let notes = if notes.is_empty() {
         String::new()

@@ -146,13 +146,22 @@ them. A rule whose collector cannot run is listed as not measured with the reaso
 File names come from the `CollectMultipleMetrics` extension table
 (`multiple_metrics::file_extensions`), so both faces write the same names. Each metrics
 file is byte for byte what `bammetrics <Collector> INPUT=BAM OUTPUT=FILE ...` writes for
-the argv the manifest records, apart from the `Started on` line. The sample name
-(`--sample`, else the first `@RG SM`, else the BAM name) goes only into the verdict, the
-page and the manifest. No `-o` means `./<BAM name without .bam>`, and the summary says so.
-Missing directories are created. Every file is written to a temporary name opened with
-`create_new` and renamed into place. A file a collector plans and does not write this
-time (it failed, or insert size dropped every orientation and Picard writes no file) is
-removed, so the prefix holds no older run's copy; the summary counts it as stale removed.
+the argv the manifest records, apart from the `Started on` line. The header command line
+follows that argv: `qc` passes `REFERENCE_SEQUENCE` only to the collectors that read `-R`
+(alignment summary, hs, gc bias, wgs), so the insert size and duplicate headers lack the
+`REFERENCE_SEQUENCE=` that `bammetrics CollectInsertSizeMetrics ... R=ref.fa` prints; the
+data lines are the same. The sample name (`--sample`, else the first `@RG SM`, else the
+BAM name) goes only into the verdict, the page and the manifest. No `-o` means `./<BAM name
+without .bam>`, and the summary says so. An `-o` that ends in `/` or names an existing
+directory gets the BAM name as the file part (`-o out/` writes `out/NA12878.*`), and the
+summary says so. Missing directories are created. Every file is written to a temporary
+name opened with `create_new` and renamed into place. A file a collector plans and does
+not write this time (it failed, or insert size dropped every orientation and Picard writes
+no file) is removed, and so is a metrics file of an earlier run's collector that the new
+options drop (`--panel` given before, not now), so the prefix holds what the manifest
+lists; the summary counts both as stale removed. With several `--hs` runs the verdict
+reads the HsMetrics file whose path sorts first (`PREFIX.<bait stem>.hs_metrics`); every
+file is written and listed in the manifest. Two bait files with one stem are an error.
 
 Stages, in order: prepare (the BAM header, the input fingerprint, the preset, every file an
 option names; nothing written), pass (every one-pass collector on one read; a collector
@@ -163,26 +172,36 @@ the pass), post (the verdict over the files), report (`PREFIX.verdict.json` and
 
 `PREFIX.manifest.json` (schema `bammetrics.manifest/1`) holds per step its stage, tool,
 Picard argv and the argv hash, the tool version, the preset hash, the input path, size,
-mtime and a hash of its first and last 64 KiB, the outputs with tool and kind, and the
-status (`ok` or `failed`, with the error). `--resume` skips a collector when every one of
-those fields matches and its files exist: one lost file reruns that collector alone, in a
-pass of its own. A manifest that does not parse (a killed run) is reported on stderr and
+mtime and a hash of its first and last 64 KiB, the same three for every further file the
+argv names (`files`: the FASTA and its `.fai`, the bait and target intervals, the refFlat,
+the ribosomal intervals), the outputs with tool and kind, and the status (`ok` or
+`failed`, with the error). `--resume` skips a collector when every one of those fields
+matches and its files exist: one lost file reruns that collector alone, in a pass of its
+own, and an interval file edited in place reruns the collectors that read it. A BAM (or
+FASTA) larger than 128 KiB edited in the middle with its size and mtime kept (`touch -r`,
+`cp -p` over it) is not detected; use `--force`. A manifest that does not parse (a killed run) is reported on stderr and
 every step runs. `--force` reruns every step. Without either, `qc` refuses a prefix that
 holds an earlier run's manifest (exit 2). The verdict and the page are always rewritten.
 
-`plan` prints the stages, each collector with its files and rule count, which collectors
-share the read and why one does not, the classes no collector can write, and which steps
-`--resume` would skip. It reads the BAM header and 128 KiB of the BAM and writes nothing.
+`plan` prints the stages, the BAM reads (`2 BAM reads: 1 for the pass, 1 own read`), each
+collector with its files and rule count, which collectors share the read and why one does
+not, the classes no collector can write, and which steps `--resume` would skip. It reads
+the BAM header and the first and last 64 KiB of the BAM and of every further input file,
+and writes nothing.
 `--format jsonl` gives one `plan` event, a `step` event per collector (with `argv`,
 `outputs`, `rules`, `read`, `action`, `resumable`) and an `unmet` event per class.
 
 The `qc` summary on stdout is at most 12 lines: the header (sample, band, preset, collectors,
-BAM reads), every error, fail, warn and not-measured line (collapsed into `+N more, see
+BAM reads, records the pass read: `4 collectors, 1 BAM read (41.8M records)`), every error, fail, warn and not-measured line (collapsed into `+N more, see
 PAGE`), the pass count, the files written (kept by `--resume`, replaced, stale removed), and
 the gate hint or the exit reason. Progress (`reading 12.4M reads  1.9M/s  62%`) goes to
 stderr only on a terminal, at most 10 times a second; `-q` turns it off. `--format jsonl`
 prints `start`, `progress` (every million records), `file` (with `written` false for a
-file `--resume` kept), `error`, `check` and `done` events on stdout instead.
+file `--resume` kept), `error`, `check` and `done` events on stdout instead. A closed
+stdout (`| head -1`) drops the rest of the output; the run still writes its files and keeps
+its exit code. An error that stops `qc` or `plan` prints `bammetrics qc: WHAT` (or
+`bammetrics plan:`) on stderr and, with `--format jsonl`, an `error` event (`step` null) and
+a `done` event with only `exit` on stdout.
 
 `qc` exits 0 on any verdict unless `--fail-on` is given; then 10 when the verdict reaches it
 and 11 when the verdict is incomplete, as `check` does. A failed collector exits 1 after the

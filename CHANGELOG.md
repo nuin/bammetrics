@@ -20,16 +20,23 @@ Report track phase 7 (docs/05): the `qc` engine and the `plan` verb.
   `.duplicate_metrics`, `.wgs_metrics` and `.rna_metrics`), written to a `create_new`
   temporary file and renamed (`report::write_atomic`, now taking bytes).
 - `PREFIX.manifest.json` (`bammetrics.manifest/1`): per step the argv and its hash, tool
-  version, preset hash, input size, mtime and a hash of its first and last 64 KiB, the
+  version, preset hash, input size, mtime and a hash of its first and last 64 KiB, the same
+  three for every further file the argv names (FASTA, `.fai`, intervals, refFlat), the
   outputs with tool and kind, the status and the error. `--resume` skips a collector whose
-  fields all match and whose files exist, so 1 lost file reruns 1 collector; a cut-short
-  manifest reruns every step. `--force` reruns every step; without either, an earlier run's
+  fields all match and whose files exist, so 1 lost file reruns 1 collector and an interval
+  file edited in place reruns hs; a cut-short manifest reruns every step. A run removes the
+  metrics files of an earlier run's collectors that its options drop. `--force` reruns every step; without either, an earlier run's
   prefix exits 2. The verdict and the page are always rewritten.
 - `bammetrics plan BAM [qc options]`: the stages, the collectors with their files and rule
   counts, which share the read and why one does not, the classes no collector writes, and
-  which steps `--resume` would skip. Nothing runs. `--format jsonl` too.
-- Terminal summary of at most 12 lines, progress on stderr on a terminal (`-q` off), and
-  `--format jsonl` with `start`, `progress`, `file`, `error`, `check` and `done` events.
+  which steps `--resume` would skip, and the BAM reads in all. Nothing runs. `--format
+  jsonl` too.
+- An `-o` ending in `/` or naming a directory gets the BAM name as the file part.
+- Terminal summary of at most 12 lines (the header counts collectors, BAM reads and
+  records), progress on stderr on a terminal (`-q` off), and `--format jsonl` with `start`,
+  `progress`, `file`, `error`, `check` and `done` events. An error that stops `qc` or
+  `plan` prints `bammetrics qc:` (or `plan:`) on stderr and, with jsonl, an `error` and a
+  `done` event. A closed stdout no longer panics; the run still writes its files.
 - Exit codes: `qc` exits 0 on any verdict unless `--fail-on warn|fail`, then 10 or 11 as
   `check`; 1 when a collector failed (after the other files are written); 2 on a usage error.
 - `pass::run_isolated`: one read shared by collectors that fail alone (build error, record
@@ -45,6 +52,8 @@ Report track phase 7 (docs/05): the `qc` engine and the `plan` verb.
 
 - docs/05 section 2.4 lists the exit codes `check.rs` implements (0, 1, 2, 10, 11); section 8
   records the decisions on `generic`, `--fail-on` and the dropped sample sheet runner.
+  Sections 2.3, 2.5 (examples 3, 4, 5 and 12, the `plan` line) and 4.10 describe the shipped
+  Hs naming (bait file stem), collector set, summary header, `plan` form and `error` event.
 
 ### Not changed
 

@@ -7,4 +7,4 @@ OUT/sample
 1
 ## stdout
 ## stderr
-bammetrics: tests/data/nope.bam not found (from BAM)
+bammetrics qc: tests/data/nope.bam not found (from BAM)

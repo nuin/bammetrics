@@ -8,9 +8,10 @@ use std::fmt::Write as _;
 
 use bammetrics_verdict::json::Json;
 
-use crate::error::Result;
+use crate::events::{self, print_stdout};
 use crate::qc::{
-    Format, Origin, Plan, QcArgs, Read, Step, manifest_path, page_path, prepare, verdict_path,
+    Format, Origin, Plan, QcArgs, Read, Step, manifest_path, page_path, plural, prepare,
+    verdict_path,
 };
 
 fn origin(o: Origin, option: &str, other: &str) -> String {
@@ -18,6 +19,7 @@ fn origin(o: Origin, option: &str, other: &str) -> String {
         Origin::Option => format!("from {option}"),
         Origin::ReadGroup => "from @RG SM".to_owned(),
         Origin::FileName => format!("from {other}"),
+        Origin::Directory => format!("from {option}, a directory, and the BAM name"),
     }
 }
 
@@ -95,18 +97,35 @@ pub fn text(plan: &Plan, resume: bool) -> String {
         p.rules.len()
     );
     let _ = writeln!(out, "  manifest  {}", manifest_line(plan, resume));
+    let shared: Vec<&Step> = plan.steps.iter().filter(|s| s.read == Read::Pass).collect();
+    let skipped = shared.iter().filter(|s| s.skipped(resume)).count();
+    let pass_reads = usize::from(skipped < shared.len());
+    let own_reads = plan
+        .steps
+        .iter()
+        .filter(|s| s.read != Read::Pass && !s.skipped(resume))
+        .count();
+    let _ = writeln!(
+        out,
+        "  reads     {}: {} for the pass, {}",
+        plural(pass_reads + own_reads, "BAM read"),
+        pass_reads,
+        plural(own_reads, "own read")
+    );
     let _ = writeln!(
         out,
         "prepare   inputs checked: the BAM header, -R and its .fai, every file an option names"
     );
-    let shared: Vec<&Step> = plan.steps.iter().filter(|s| s.read == Read::Pass).collect();
-    let reading = shared.iter().any(|s| !s.skipped(resume));
+    let skips = if skipped > 0 {
+        format!(", {skipped} skipped by --resume")
+    } else {
+        String::new()
+    };
     let _ = writeln!(
         out,
-        "pass      {} BAM read, {} collector{}",
-        usize::from(reading),
-        shared.len(),
-        if shared.len() == 1 { "" } else { "s" }
+        "pass      {}{skips}, {}",
+        plural(shared.len(), "collector"),
+        plural(pass_reads, "shared BAM read")
     );
     let width = plan
         .steps
@@ -224,11 +243,17 @@ pub fn jsonl(plan: &Plan, resume: bool) -> String {
     out
 }
 
-pub fn run(args: &QcArgs) -> Result<u8> {
-    let plan = prepare(args)?;
-    match args.format {
-        Format::Text => print!("{}", text(&plan, args.resume)),
-        Format::Jsonl => print!("{}", jsonl(&plan, args.resume)),
+/// `plan`: exit 0, or the code of a prepare error (printed as `bammetrics
+/// plan: ...`, and as `error` and `done` events with `--format jsonl`).
+pub fn run(args: &QcArgs) -> u8 {
+    match prepare(args) {
+        Ok(plan) => {
+            print_stdout(&match args.format {
+                Format::Text => text(&plan, args.resume),
+                Format::Jsonl => jsonl(&plan, args.resume),
+            });
+            0
+        }
+        Err(e) => events::fatal("plan", args.format, &e),
     }
-    Ok(0)
 }

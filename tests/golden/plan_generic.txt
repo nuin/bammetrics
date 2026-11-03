@@ -11,8 +11,9 @@ qc plan for tests/data/insert_size.bam
   prefix    OUT/sample (from -o)
   preset    generic v1 (6dd89e), 6 rules
   manifest  OUT/sample.manifest.json: none yet
+  reads     1 BAM read: 1 for the pass, 0 own reads
 prepare   inputs checked: the BAM header, -R and its .fai, every file an option names
-pass      1 BAM read, 4 collectors
+pass      4 collectors, 1 shared BAM read
   run   CollectQualityYieldMetrics      OUT/sample.quality_yield_metrics  1 rule
   run   CollectAlignmentSummaryMetrics  OUT/sample.alignment_summary_metrics  3 rules
   run   CollectInsertSizeMetrics        OUT/sample.insert_size_metrics  1 rule
