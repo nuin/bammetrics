@@ -5,4 +5,4 @@ crates/cli
 1
 ## stdout
 ## stderr
-bammetrics: no metrics file under crates/cli (a file with a ## METRICS CLASS block)
+bammetrics: no metrics file under crates/cli (a file with a ## METRICS CLASS block) and no *.verdict.json

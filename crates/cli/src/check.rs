@@ -50,7 +50,8 @@ fn after_help() -> String {
 #[command(after_help = after_help())]
 pub struct CheckArgs {
     /// Directories of Picard metrics files (searched at any depth), or
-    /// verdict.json files written by report.
+    /// verdict.json files written by report, or a directory report wrote
+    /// (its *.verdict.json files are read, no preset needed).
     #[arg(required = true, value_name = "DIR|VERDICT.json")]
     pub inputs: Vec<PathBuf>,
     #[arg(long, default_value = "generic", value_name = "NAME|FILE", help = PRESET_HELP)]
@@ -62,13 +63,40 @@ pub struct CheckArgs {
     pub format: Format,
 }
 
+/// The `*.verdict.json` files directly in `dir`, in name order. A directory
+/// `report` wrote holds those and no metrics file.
+fn verdict_files(dir: &PathBuf) -> Result<Vec<PathBuf>> {
+    let mut files: Vec<PathBuf> = fs::read_dir(dir)
+        .map_err(|e| Error::io(dir, e))?
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .filter(|p| {
+            p.is_file()
+                && p.file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.ends_with(".verdict.json"))
+        })
+        .collect();
+    files.sort();
+    Ok(files)
+}
+
 /// The verdicts of `inputs`: a directory is discovered and evaluated with
-/// `preset`, a file is read as verdict.json.
+/// `preset`, or, when it holds `*.verdict.json` files and no metrics file,
+/// those are read; a file is read as verdict.json.
 fn verdicts(inputs: &[PathBuf], preset: &str) -> Result<Vec<Verdict>> {
     let mut verdicts = Vec::new();
     let mut preset_cache = None;
     for input in inputs {
-        if input.is_dir() {
+        if input.is_dir() && crate::discover::find(input)?.is_empty() {
+            let files = verdict_files(input)?;
+            if files.is_empty() {
+                return Err(Error::Input(format!(
+                    "no metrics file under {} (a file with a ## METRICS CLASS block) and no *.verdict.json",
+                    input.display()
+                )));
+            }
+            verdicts.extend(self::verdicts(&files, preset)?);
+        } else if input.is_dir() {
             let preset = match &preset_cache {
                 Some(p) => p,
                 None => preset_cache.insert(Preset::resolve(preset)?),
