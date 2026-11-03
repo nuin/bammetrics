@@ -101,4 +101,11 @@ list), and writes the files when `output_prefix` is given. Timings are in
 (HISTOGRAM_WIDTH), `--min-histogram-width` and `--include-duplicates`. Like Picard,
 it writes no file when no orientation is kept (single-end input, for example).
 
+`bammetrics.read_metrics(path)` reads a metrics file written by Picard or bammetrics:
+`{"headers": [...], "classes": [{"class", "columns", "rows"}], "histogram": {"key_class",
+"columns", "rows"} or None}`, every row a dict keyed by column. Cells are typed from
+their text: int, float, str, or None for an empty field; `?` is `nan`, and `0,5` from a
+comma-decimal locale is `0.5`. The same reader is `metrics_file::MetricsDoc` in Rust,
+and `crates/core/glossary.tsv` defines every column the tools write.
+
 `.cargo/config.toml` lets the Python cdylib link under `cargo test` on macOS.

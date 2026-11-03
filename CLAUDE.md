@@ -15,7 +15,9 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 
 # Picard concordance (needs picard 3.5.0, samtools, bwa, uv on PATH)
-make concordance                            # corpus, Picard references, pytest tests/concordance
+make concordance                            # corpus, Picard references, golden suite, pytest tests/concordance
+make golden                                 # crates/core/tests/golden.rs against tests/golden (byte for byte)
+make golden-update                          # rewrite tests/golden after an intended CLI change
 make python-test                            # maturin develop into .venv, pytest tests/python
 make fuzz SEED=1 N=200                      # tests/concordance/fuzz.py: random BAMs through both tools
 
@@ -41,7 +43,8 @@ Shared building blocks in `crates/core/src`:
 | File | Role |
 |---|---|
 | `metric.rs` | `Value`, `MetricRow` trait (class, columns in Picard order, one `Value` per column), `MetricsOutput` (`from_rows`, or `histogram_only` for a file without a metrics class), `HistogramSection` with its `KeyClass` (`Integer`, `Byte`, `Double`), `ToolOutput` (the `OUTPUT` file plus extra files with their paths). One writer and one Python converter serve every registered tool. |
-| `metrics_file.rs` | Picard metrics text format and `format_double` (htsjdk `FormatUtil`). |
+| `metrics_file.rs` | Picard metrics text format and `format_double` (htsjdk `FormatUtil`), plus the reader: `MetricsDoc::read` or `parse` gives the header texts, every `## METRICS CLASS` block (`ClassBlock`: columns by name, `get(row, column)`, `find(column, text)`) and the `## HISTOGRAM` section (`HistogramBlock`, `series(label)`), cells typed from their text by `parse_value` (`Value::Int`, `Float`, `Str`, `Null`; `?` is NaN, `0,5` is 0.5). Python `read_metrics(path)` wraps it. |
+| `glossary.rs` | `crates/core/glossary.tsv` compiled in: one row per column the tools write (Picard class, column, type, definition in our own words; histogram columns under the program name). `lookup(class, column)`; a test fails when a tool emits a column without a row. |
 | `registry.rs` | `Tool` (`run`, and `collector` for one-pass tools), `Opt` (`value`, `output`, `ignored`, `rejected`), `Invocation`, `TOOLS`. Parses `KEY=VALUE` and `--KEY VALUE` arguments, runs the tool, writes every file. `Invocation::single_pass` reads the BAM with `STOP_AFTER` and `ASSUME_SORTED` applied; `run_collector` is the `run` of a one-pass tool. |
 | `levels.rs` | `METRIC_ACCUMULATION_LEVEL`: `Level`, `parse_levels`, `Levels<T>` keyed accumulator, read-group lookup. |
 | `filters.rs` | `RecordFilter`: unmapped, secondary, supplementary, duplicate, QC fail, minimum MAPQ. |
@@ -112,6 +115,7 @@ The command line (`bammetrics CollectX I=... O=...`) and the Python function nee
 - `tests/concordance/compare.py` holds `compare_metrics` and `compare_outputs`. `tests/concordance/test_foundation.py` runs insert size on that corpus at every accumulation level and option. `tests/concordance/test_alignment_summary.py` runs alignment summary on t0 to t3, that corpus and the `asm_bams.py` BAMs at all four levels and every option, checks error parity for units without PF reads, and requires 3 distinct non-default values per column. `tests/concordance/test_read_level.py` does the same for the six read-level tools on t0 to t3, that corpus and the `read_level_bams.py` BAMs, with error parity for `ASSUME_SORTED=false`, `FLOW_MODE=true` and an `OQ` shorter than `QUAL`. `test_gc_bias.py`, `test_multiple_metrics.py` and `test_library_complexity.py` do the same for the P3 tools; `complexity_bams.py` builds BAMs with Illumina read names, optical duplicate sets and barcode tags.
 - `tests/concordance/fuzz.py` (`make fuzz SEED=n N=m JOBS=8`) draws random BAM specs from a seed, runs CollectMultipleMetrics (seven programs), CollectDuplicateMetrics and EstimateLibraryComplexity through Picard (output cached by input hash in `target/fuzz/cache`) and bammetrics, and compares every file. A failure is shrunk by ddmin over templates into `tests/concordance/regressions/` (`.sam`, `.fa`, `.args`, `.picard.txt`), which `test_regressions.py` replays. A command failing in both tools counts as `both-err`, never as agreement.
 - `tests/corpus/generate.py` (bwa-based tiers t0 to t3) and `tests/concordance/cases.py` drive the older 90-case matrix. `tests/make_bam.py` plus `tests/data/insert_size.bam` is the known-answer case (median 310, mode 310, MAD 10, trimmed mean 310, SD 8.1650, width of 50% 21).
+- Golden suite: `crates/core/tests/golden.rs` runs 54 documented command forms on the committed fixtures and 16 on corpus t1 (skipped without `tests/corpus/out`), each from the repository root, and compares argv, exit code, stdout, stderr and every written file with `tests/golden/<case>.txt` byte for byte (the output directory reads `OUT`, the `Started on` line `<time>`). `make golden` runs it on the release binary, `make golden-update` rewrites the records, `BAMMETRICS_BIN=path` runs another binary against them. A CLI change that alters any record is a change to review in the diff of `tests/golden`. Fixtures beside the two BAMs: `tests/data/ref_100k.fa` (+ `.fai`, written by `tests/data/make_ref.py`, chr1 of 100000 bases as both BAMs declare), `targets.interval_list` (5 targets on the fixture reads) and `quality_yield_a.txt`, `quality_yield_b.txt` (for `AccumulateQualityYieldMetrics`).
 
 ## Concordance rules
 
