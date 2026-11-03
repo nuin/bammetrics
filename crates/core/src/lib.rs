@@ -14,6 +14,7 @@ pub mod duplication;
 pub mod error;
 pub mod filters;
 pub mod gc_bias;
+pub mod genotype_concordance;
 pub mod glossary;
 pub mod histogram;
 pub mod hs_metrics;
@@ -39,6 +40,8 @@ pub mod registry;
 pub mod rna_seq_metrics;
 pub mod sensitivity;
 pub mod sequence;
+pub mod variant_calling_metrics;
+pub mod vcf;
 pub mod wgs_metrics;
 
 pub use error::{Error, Result};

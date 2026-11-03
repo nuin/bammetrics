@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.11.0
+
+Parity plan phase P7, variants: the VCF layer (M20), the GenotypeConcordance scheme and
+allele normalization (M21), `CollectVariantCallingMetrics`, `AccumulateVariantCallingMetrics`
+(M22 was already in `java.rs`) and `GenotypeConcordance` on the registry.
+
+### Added
+
+- `vcf.rs` (M20) on noodles-vcf: plain and BGZF VCFs (by the gzip magic bytes), the
+  genotype fields as htsjdk's codec decodes them (`GT`, `GQ` rounded from a double, `DP`,
+  `AD` null unless all integers, `FT`), `VariantContext.determineType`, the genotype types,
+  `subContextFromSample`, the simple and complex indel tests, the dbSNP SNP and indel bit
+  sets, interval lists for VCF tools (`uniqued`, `intersection`, `union`, base count,
+  overlap by contig name) and the dictionary checks. No index is opened; the index files
+  are only checked to exist where Picard requires them.
+- `CollectVariantCallingMetrics` (`variant_calling_metrics.rs`): `DBSNP`, `TARGET_INTERVALS`,
+  `SEQUENCE_DICTIONARY`, `GVCF_INPUT`, `THREAD_COUNT` (output-invariant), the summary file
+  (20 columns, `PCT_DBSNP` and `PCT_DBSNP_INDELS` in `float`) and the per-sample detail
+  file (25 columns, rows in Java `HashMap` order of the sample names). Python
+  `collect_variant_calling_metrics`.
+- `AccumulateVariantCallingMetrics`: shard prefixes merged as Picard merges them, the
+  printed ratios inverted back into counts (lossy where a ratio printed `0` or `?`). Python
+  `accumulate_variant_calling_metrics`.
+- `GenotypeConcordance` (`genotype_concordance.rs`, M21): `TRUTH_VCF`, `CALL_VCF`,
+  `TRUTH_SAMPLE`, `CALL_SAMPLE`, `INTERVALS` (intersected or united), `MIN_GQ`, `MIN_DP`,
+  `IGNORE_FILTER_STATUS`, `OUTPUT_ALL_ROWS`, `USE_VCF_INDEX`, `MISSING_SITES_HOM_REF`; the
+  summary, detail and contingency files; the GA4GH scheme and its hom-ref variant. Python
+  `genotype_concordance(truth_vcf, call_vcf, ...)`: a registry tool without `INPUT` fills
+  its value options from positional arguments.
+- `tests/concordance/variant_vcfs.py`: the VCF corpus (one site per reachable scheme cell
+  for SNPs and indels, the odd sites, a three-sample calls file with every bucket, a dbSNP
+  slice, a gVCF, a sites-only VCF, interval lists), each VCF plain and bgzip-indexed.
+  `tests/concordance/test_variant_tools.py`: 78 tests against Picard 3.5.0, CollectVariantCallingMetrics
+  20 cases, 40 files and 1,675 cells, AccumulateVariantCallingMetrics 8 cases, 16 files and
+  760 cells, GenotypeConcordance 26 cases, 78 files and 30,082 cells, all identical and
+  every file body identical byte for byte after the header lines; 19 error-parity cases;
+  all 123 scheme cells the states can reach counted (the 11 cells no pair of records can
+  produce are listed with their reasons); every column with 3 distinct non-default values
+  except `VARIANT_TYPE`, `HET_SPECIFICITY` and `HOMVAR_SPECIFICITY`. `compare_prefixed` in
+  `compare.py` for tools whose `OUTPUT` is a prefix.
+- `Tool::takes_input` and `Tool::value_options` in `registry.rs`: a tool may reject
+  `INPUT`.
+
+### Not changed
+
+- `GenotypeConcordance OUTPUT_VCF` (the annotated VCF) is not implemented; the option exits 1.
+- Picard needs an indexed `INPUT` for `CollectVariantCallingMetrics`; bammetrics reads an
+  unindexed file and writes the same output.
+
 ## 0.10.0
 
 Parity plan phase P6, RNA: the refFlat gene model (M17) and `CollectRnaSeqMetrics` on the

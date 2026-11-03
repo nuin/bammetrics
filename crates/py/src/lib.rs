@@ -671,14 +671,29 @@ fn run_registered<'py>(
     args: &Bound<'py, PyTuple>,
     kwargs: Option<&Bound<'py, PyDict>>,
 ) -> PyResult<Bound<'py, PyList>> {
-    // A list of paths is several INPUT options
-    // (`accumulate_quality_yield_metrics([a, b])`).
-    let first = args.get_item(0)?;
-    let inputs: Vec<String> = match first.extract::<Vec<String>>() {
-        Ok(paths) if !first.is_instance_of::<pyo3::types::PyString>() => paths,
-        _ => vec![first.str()?.to_string()],
-    };
-    let mut options: Vec<String> = inputs.iter().map(|i| format!("INPUT={i}")).collect();
+    let mut options: Vec<String> = Vec::new();
+    if tool.takes_input() {
+        // A list of paths is several INPUT options
+        // (`accumulate_quality_yield_metrics([a, b])`).
+        let first = args.get_item(0)?;
+        let inputs: Vec<String> = match first.extract::<Vec<String>>() {
+            Ok(paths) if !first.is_instance_of::<pyo3::types::PyString>() => paths,
+            _ => vec![first.str()?.to_string()],
+        };
+        options.extend(inputs.iter().map(|i| format!("INPUT={i}")));
+    } else {
+        // A tool without INPUT (`genotype_concordance(truth_vcf, call_vcf)`)
+        // takes its first value options by position.
+        for (value, name) in args.iter().zip(tool.value_options()) {
+            options.push(format!("{name}={}", value.str()?));
+        }
+        if args.len() > tool.value_options().count() {
+            return Err(PyValueError::new_err(format!(
+                "{}: too many positional arguments",
+                tool.name
+            )));
+        }
+    }
     options.extend(keyword_arguments(tool, kwargs)?);
     let (invocation, output) = py
         .detach(|| tool.execute(&options))

@@ -141,6 +141,48 @@ def compare_metrics(tool, bam, picard_args=(), bam_args=None, workdir=None, expe
             + len(picard.histogram) * len(picard.histogram_columns))
 
 
+def compare_prefixed(tool, picard_args, bam_args=None, workdir=None, seen=None):
+    """Run both tools with the given arguments plus `O=<dir>/picard` or `O=<dir>/bammetrics`,
+    a prefix the tool extends with its own file names (CollectVariantCallingMetrics,
+    GenotypeConcordance, AccumulateVariantCallingMetrics), and compare every file written
+    as compare_outputs does. The arguments name the inputs themselves (`I=`, `TV=`),
+    because these tools do not all take `INPUT`. Returns the cells compared; `seen`
+    receives `(suffix, parsed)` per Picard file."""
+    bam_args = picard_args if bam_args is None else bam_args
+    with tempfile.TemporaryDirectory(dir=workdir) as tmp:
+        tmp = Path(tmp)
+        subprocess.run(["picard", tool, *picard_args, f"O={tmp / 'picard'}", "VERBOSITY=ERROR",
+                        "QUIET=true"], check=True, env=picard_env(),
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run([str(BAMMETRICS), tool, *bam_args, f"O={tmp / 'bammetrics'}"],
+                       check=True, capture_output=True, text=True)
+        return compare_written(tool, tmp, " ".join(picard_args), seen)
+
+
+def compare_written(tool, tmp, label, seen=None):
+    """Compare every `picard*` file under `tmp` with its `bammetrics*` counterpart."""
+    picard_files = {p.name[len("picard"):]: p for p in tmp.glob("picard*")}
+    ours_files = {p.name[len("bammetrics"):]: p for p in tmp.glob("bammetrics*")}
+    assert set(picard_files) == set(ours_files), (
+        f"{tool}: Picard wrote {sorted(picard_files)}, bammetrics {sorted(ours_files)}")
+    assert picard_files, f"{tool}: neither tool wrote a file"
+    cells = 0
+    for suffix in sorted(picard_files):
+        picard = parse_picard_metrics(picard_files[suffix])
+        ours = parse_picard_metrics(ours_files[suffix])
+        problems = diff_metrics(picard, ours)
+        picard_body, ours_body = body(picard_files[suffix]), body(ours_files[suffix])
+        if not problems and picard_body != ours_body:
+            problems.append("file after the header lines differs: "
+                            + first_difference(picard_body, ours_body))
+        assert not problems, (f"{tool} {label} file {suffix!r}:\n  " + "\n  ".join(problems[:40]))
+        if seen is not None:
+            seen.append((suffix, picard))
+        cells += (len(picard.rows) * len(picard.columns)
+                  + len(picard.histogram) * len(picard.histogram_columns))
+    return cells
+
+
 def compare_outputs(tool, bam, picard_args=(), outputs=(("O", ""),), workdir=None, seen=None,
                     bam_args=None):
     """Run both tools with each `(option, suffix)` of `outputs` set to
@@ -160,25 +202,5 @@ def compare_outputs(tool, bam, picard_args=(), outputs=(("O", ""),), workdir=Non
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         subprocess.run([str(BAMMETRICS), tool, f"I={bam}", *ours_cmd, *bam_args],
                        check=True, capture_output=True, text=True)
-        picard_files = {p.name[len("picard"):]: p for p in tmp.glob("picard*")}
-        ours_files = {p.name[len("bammetrics"):]: p for p in tmp.glob("bammetrics*")}
-        assert set(picard_files) == set(ours_files), (
-            f"{tool}: Picard wrote {sorted(picard_files)}, bammetrics {sorted(ours_files)}")
-        assert picard_files, f"{tool}: neither tool wrote a file"
-        cells = 0
-        for suffix in sorted(picard_files):
-            picard = parse_picard_metrics(picard_files[suffix])
-            ours = parse_picard_metrics(ours_files[suffix])
-            problems = diff_metrics(picard, ours)
-            picard_body, ours_body = body(picard_files[suffix]), body(ours_files[suffix])
-            if not problems and picard_body != ours_body:
-                problems.append("file after the header lines differs: "
-                                + first_difference(picard_body, ours_body))
-            assert not problems, (f"{tool} {' '.join(picard_args)} file {suffix!r}:\n  "
-                                  + "\n  ".join(problems[:40]))
-            if seen is not None:
-                seen.append((suffix, picard))
-            cells += (len(picard.rows) * len(picard.columns)
-                      + len(picard.histogram) * len(picard.histogram_columns))
-        return cells
+        return compare_written(tool, tmp, " ".join(picard_args), seen)
 
