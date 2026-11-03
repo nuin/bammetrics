@@ -28,6 +28,11 @@ bammetrics CollectAlignmentSummaryMetrics I=sample.bam O=sample.alignment_summar
 bammetrics CollectHsMetrics I=sample.bam O=sample.hs_metrics R=ref.fa \
     BAIT_INTERVALS=baits.interval_list TARGET_INTERVALS=panel.interval_list
 bammetrics CollectInsertSizeMetrics I=sample.bam O=sample.insert_size_metrics H=hist.pdf
+
+# Coverage: whole genome, or the intervals of a BED converted first
+bammetrics BedToIntervalList I=panel.bed SD=ref.dict O=panel.interval_list
+bammetrics CollectWgsMetrics I=sample.bam O=sample.wgs_metrics R=ref.fa INTERVALS=panel.interval_list
+bammetrics CollectRawWgsMetrics I=sample.bam O=sample.raw_wgs_metrics R=ref.fa INCLUDE_BQ_HISTOGRAM=true
 ```
 
 Or compute several metrics in one read of the BAM:
@@ -79,6 +84,10 @@ under each failing check. The presets, the rule language and `verdict.json` are 
 | CollectGcBiasMetrics | all four | `collect_gc_bias_metrics()` |
 | CollectMultipleMetrics | all four | `collect_multiple_metrics()` |
 | EstimateLibraryComplexity | | `estimate_library_complexity()` |
+| CollectWgsMetrics | | `collect_wgs_metrics()` |
+| CollectRawWgsMetrics | | `collect_raw_wgs_metrics()` |
+| CollectWgsMetricsWithNonZeroCoverage | | `collect_wgs_metrics_with_non_zero_coverage()` |
+| BedToIntervalList | | `bed_to_interval_list()` |
 | the first four in one pass | | `collect()` |
 
 Levels are `METRIC_ACCUMULATION_LEVEL`: `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`.

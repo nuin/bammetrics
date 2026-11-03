@@ -136,6 +136,10 @@ pub const TOOLS: &[&Tool] = &[
     &crate::gc_bias::TOOL,
     &crate::multiple_metrics::TOOL,
     &crate::library_complexity::TOOL,
+    &crate::wgs_metrics::TOOL,
+    &crate::wgs_metrics::RAW_TOOL,
+    &crate::wgs_metrics::NON_ZERO_TOOL,
+    &crate::bed_to_interval_list::TOOL,
 ];
 
 /// The tool named `name`.

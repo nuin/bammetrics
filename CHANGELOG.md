@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.8.0
+
+Parity plan phase P4, coverage: the pileup engine (M14) and the WGS tools over it, plus
+`BedToIntervalList` for the harness.
+
+### Added
+
+- `crates/core/src/locus.rs` (plan item M14): a port of htsjdk 5.0.0 `AbstractLocusIterator`
+  with `SamLocusIterator` (one entry per aligned base) and `EdgeReadIterator` (BEGIN and END
+  events per alignment block), Picard's counting filter chain (adapter, MAPQ, duplicate,
+  pair), the whole-genome and interval masks, `LOCUS_ACCUMULATION_CAP`, and the lazy
+  emission order plus the one-record prefetch of `FilteringSamIterator` that `STOP_AFTER`
+  depends on.
+- `CollectWgsMetrics`: the 32-column row, the coverage histogram and the base-quality
+  histogram, with `MINIMUM_MAPPING_QUALITY`, `MINIMUM_BASE_QUALITY`, `COVERAGE_CAP`,
+  `LOCUS_ACCUMULATION_CAP`, `COUNT_UNPAIRED`, `INCLUDE_BQ_HISTOGRAM`, `SAMPLE_SIZE`,
+  `INTERVALS`, `STOP_AFTER`, `USE_FAST_ALGORITHM` (the `FastWgsMetricsCollector` port with
+  its `CounterManager` window) and `READ_LENGTH`. `HET_SNP_SENSITIVITY` and `HET_SNP_Q` are
+  exact through `sensitivity.rs`.
+- `CollectRawWgsMetrics` (the Raw defaults and class name) and
+  `CollectWgsMetricsWithNonZeroCoverage` (the `WHOLE_GENOME` and `NON_ZERO_REGIONS` rows,
+  two depth histograms; `CHART_OUTPUT` accepted, no chart; `USE_FAST_ALGORITHM=true` is an
+  error at the first covered locus, as Picard 3.5.0's `ClassCastException` is).
+- `BedToIntervalList` with `SORT`, `UNIQUE`, `DROP_MISSING_CONTIGS`,
+  `KEEP_LENGTH_ZERO_INTERVALS`, and `SEQUENCE_DICTIONARY` from a `.dict`, a BAM or SAM
+  header, an interval list or a FASTA. `MetricsOutput::text` carries a file that is not a
+  metrics file through the registry.
+- `tests/concordance/test_wgs_metrics.py` and `test_bed_to_interval_list.py` against Picard
+  3.5.0 on the bwa tiers, the foundation corpus and the hand-built BAMs: every option, both
+  pileup algorithms, `INTERVALS` from lists `bammetrics BedToIntervalList` wrote, error
+  parity, and the 3-distinct-values check per column.
+- `benches/wgs_bench.py` and `make bench-wgs`: the T4 scale run (2 Mb reference, 200,000
+  pairs, 404,088 records), recorded in `docs/benchmarks.md`: 5.1x to 6.5x faster than
+  Picard, every file identical after the header lines.
+- Python: `collect_wgs_metrics()`, `collect_raw_wgs_metrics()`,
+  `collect_wgs_metrics_with_non_zero_coverage()` and `bed_to_interval_list()`.
+
+### Changed
+
+- `sensitivity.rs` keeps a NaN maximum weight as Java's `MathUtil.max` does: a histogram
+  whose bins sum to 0 gives a sensitivity of 0 instead of an error.
+
 ## 0.7.0
 
 Report and check on any directory of Picard output. Phases 1 to 6 of the CLI and
@@ -7,8 +49,8 @@ report design (`docs/05_cli_and_ui_design.md`): the golden suite that pins every
 existing command line, the metrics file reader with the column glossary, the verdict
 crate with its presets, the per-sample HTML report page with its four plots, the run
 index, and the `report` and `check` verbs that write them from files Picard wrote. No
-change to collection. The parity chain's P4 branch (`feat/p4-coverage`) also claims
-0.7.0; this release takes the number and P4 is renumbered at merge.
+change to collection. The parity chain's P4 branch (`feat/p4-coverage`) also claimed
+0.7.0; this release kept the number and P4 shipped as 0.8.0.
 
 ### Added
 

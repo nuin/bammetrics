@@ -91,6 +91,15 @@ mod tests {
                 crate::base_distribution_by_cycle::Row::CLASS,
                 crate::base_distribution_by_cycle::Row::COLUMNS,
             ),
+            ("picard.analysis.WgsMetrics", &crate::wgs_metrics::COLUMNS),
+            (
+                "picard.analysis.CollectRawWgsMetrics$RawWgsMetrics",
+                &crate::wgs_metrics::COLUMNS,
+            ),
+            (
+                "picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage",
+                &crate::wgs_metrics::NON_ZERO_COLUMNS,
+            ),
         ]
     }
 

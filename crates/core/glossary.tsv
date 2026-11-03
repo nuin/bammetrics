@@ -186,6 +186,103 @@ picard.analysis.BaseDistributionByCycleMetrics	PCT_C	float	Percent of the bases 
 picard.analysis.BaseDistributionByCycleMetrics	PCT_G	float	Percent of the bases at this cycle that are G.
 picard.analysis.BaseDistributionByCycleMetrics	PCT_T	float	Percent of the bases at this cycle that are T.
 picard.analysis.BaseDistributionByCycleMetrics	PCT_N	float	Percent of the bases at this cycle that are N.
+picard.analysis.WgsMetrics	GENOME_TERRITORY	int	Reference positions counted: every non-N base of every @SQ contig, or of the INTERVALS list when given.
+picard.analysis.WgsMetrics	MEAN_COVERAGE	float	Mean high-quality depth over GENOME_TERRITORY: the bases left after the read filters, the base quality and overlap filters and COVERAGE_CAP (250).
+picard.analysis.WgsMetrics	SD_COVERAGE	float	Standard deviation of the high-quality depth over GENOME_TERRITORY.
+picard.analysis.WgsMetrics	MEDIAN_COVERAGE	float	Median high-quality depth over GENOME_TERRITORY.
+picard.analysis.WgsMetrics	MAD_COVERAGE	float	Median absolute deviation of the high-quality depth from MEDIAN_COVERAGE.
+picard.analysis.WgsMetrics	PCT_EXC_ADAPTER	float	Aligned bases dropped because their read is unmapped or has mapping quality 0 and starts with adapter sequence, as a share of all bases counted or dropped.
+picard.analysis.WgsMetrics	PCT_EXC_MAPQ	float	Aligned bases dropped because their read is below MINIMUM_MAPPING_QUALITY (20), as a share of all bases counted or dropped.
+picard.analysis.WgsMetrics	PCT_EXC_DUPE	float	Aligned bases dropped because their read is flagged as a duplicate, as a share of all bases counted or dropped.
+picard.analysis.WgsMetrics	PCT_EXC_UNPAIRED	float	Aligned bases dropped because their read is unpaired or its mate is unmapped, as a share of all bases counted or dropped. 0 with COUNT_UNPAIRED=true.
+picard.analysis.WgsMetrics	PCT_EXC_BASEQ	float	Bases dropped at a locus because their quality is 2 or less, below MINIMUM_BASE_QUALITY (20), or a no-call, as a share of all bases counted or dropped.
+picard.analysis.WgsMetrics	PCT_EXC_OVERLAP	float	Bases dropped at a locus because a base of the same read name already counted there, as a share of all bases counted or dropped.
+picard.analysis.WgsMetrics	PCT_EXC_CAPPED	float	Bases above COVERAGE_CAP (250) at a locus, left out of the depth, as a share of all bases counted or dropped.
+picard.analysis.WgsMetrics	PCT_EXC_TOTAL	float	All dropped bases over all bases counted or dropped: the sum of the PCT_EXC_ columns.
+picard.analysis.WgsMetrics	PCT_1X	float	Share of GENOME_TERRITORY with high-quality depth 1 or more.
+picard.analysis.WgsMetrics	PCT_5X	float	Share of GENOME_TERRITORY with high-quality depth 5 or more.
+picard.analysis.WgsMetrics	PCT_10X	float	Share of GENOME_TERRITORY with high-quality depth 10 or more.
+picard.analysis.WgsMetrics	PCT_15X	float	Share of GENOME_TERRITORY with high-quality depth 15 or more.
+picard.analysis.WgsMetrics	PCT_20X	float	Share of GENOME_TERRITORY with high-quality depth 20 or more.
+picard.analysis.WgsMetrics	PCT_25X	float	Share of GENOME_TERRITORY with high-quality depth 25 or more.
+picard.analysis.WgsMetrics	PCT_30X	float	Share of GENOME_TERRITORY with high-quality depth 30 or more.
+picard.analysis.WgsMetrics	PCT_40X	float	Share of GENOME_TERRITORY with high-quality depth 40 or more.
+picard.analysis.WgsMetrics	PCT_50X	float	Share of GENOME_TERRITORY with high-quality depth 50 or more.
+picard.analysis.WgsMetrics	PCT_60X	float	Share of GENOME_TERRITORY with high-quality depth 60 or more.
+picard.analysis.WgsMetrics	PCT_70X	float	Share of GENOME_TERRITORY with high-quality depth 70 or more.
+picard.analysis.WgsMetrics	PCT_80X	float	Share of GENOME_TERRITORY with high-quality depth 80 or more.
+picard.analysis.WgsMetrics	PCT_90X	float	Share of GENOME_TERRITORY with high-quality depth 90 or more.
+picard.analysis.WgsMetrics	PCT_100X	float	Share of GENOME_TERRITORY with high-quality depth 100 or more.
+picard.analysis.WgsMetrics	FOLD_80_BASE_PENALTY	float	MEAN_COVERAGE divided by the 20th-percentile high-quality depth: the sequencing multiple that brings 80% of the loci to the mean. ? when that percentile is 0, 0 when no locus was counted.
+picard.analysis.WgsMetrics	FOLD_90_BASE_PENALTY	float	MEAN_COVERAGE divided by the 10th-percentile high-quality depth: the sequencing multiple that brings 90% of the loci to the mean. ? when that percentile is 0, 0 when no locus was counted.
+picard.analysis.WgsMetrics	FOLD_95_BASE_PENALTY	float	MEAN_COVERAGE divided by the 5th-percentile high-quality depth: the sequencing multiple that brings 95% of the loci to the mean. ? when that percentile is 0, 0 when no locus was counted.
+picard.analysis.WgsMetrics	HET_SNP_SENSITIVITY	float	Modelled probability of calling a heterozygous SNP given the unfiltered depth distribution and the base qualities (SAMPLE_SIZE draws, log-odds threshold 3).
+picard.analysis.WgsMetrics	HET_SNP_Q	float	HET_SNP_SENSITIVITY as a Phred score: -10 log10(1 - sensitivity), rounded to an integer.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	GENOME_TERRITORY	int	Reference positions counted: every non-N base of every @SQ contig, or of the INTERVALS list when given.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	MEAN_COVERAGE	float	Mean high-quality depth over GENOME_TERRITORY: the bases left after the read filters, the base quality and overlap filters and COVERAGE_CAP (100000).
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	SD_COVERAGE	float	Standard deviation of the high-quality depth over GENOME_TERRITORY.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	MEDIAN_COVERAGE	float	Median high-quality depth over GENOME_TERRITORY.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	MAD_COVERAGE	float	Median absolute deviation of the high-quality depth from MEDIAN_COVERAGE.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_EXC_ADAPTER	float	Aligned bases dropped because their read is unmapped or has mapping quality 0 and starts with adapter sequence, as a share of all bases counted or dropped.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_EXC_MAPQ	float	Aligned bases dropped because their read is below MINIMUM_MAPPING_QUALITY (0), as a share of all bases counted or dropped.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_EXC_DUPE	float	Aligned bases dropped because their read is flagged as a duplicate, as a share of all bases counted or dropped.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_EXC_UNPAIRED	float	Aligned bases dropped because their read is unpaired or its mate is unmapped, as a share of all bases counted or dropped. 0 with COUNT_UNPAIRED=true.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_EXC_BASEQ	float	Bases dropped at a locus because their quality is 2 or less, below MINIMUM_BASE_QUALITY (3), or a no-call, as a share of all bases counted or dropped.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_EXC_OVERLAP	float	Bases dropped at a locus because a base of the same read name already counted there, as a share of all bases counted or dropped.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_EXC_CAPPED	float	Bases above COVERAGE_CAP (100000) at a locus, left out of the depth, as a share of all bases counted or dropped.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_EXC_TOTAL	float	All dropped bases over all bases counted or dropped: the sum of the PCT_EXC_ columns.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_1X	float	Share of GENOME_TERRITORY with high-quality depth 1 or more.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_5X	float	Share of GENOME_TERRITORY with high-quality depth 5 or more.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_10X	float	Share of GENOME_TERRITORY with high-quality depth 10 or more.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_15X	float	Share of GENOME_TERRITORY with high-quality depth 15 or more.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_20X	float	Share of GENOME_TERRITORY with high-quality depth 20 or more.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_25X	float	Share of GENOME_TERRITORY with high-quality depth 25 or more.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_30X	float	Share of GENOME_TERRITORY with high-quality depth 30 or more.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_40X	float	Share of GENOME_TERRITORY with high-quality depth 40 or more.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_50X	float	Share of GENOME_TERRITORY with high-quality depth 50 or more.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_60X	float	Share of GENOME_TERRITORY with high-quality depth 60 or more.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_70X	float	Share of GENOME_TERRITORY with high-quality depth 70 or more.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_80X	float	Share of GENOME_TERRITORY with high-quality depth 80 or more.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_90X	float	Share of GENOME_TERRITORY with high-quality depth 90 or more.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	PCT_100X	float	Share of GENOME_TERRITORY with high-quality depth 100 or more.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	FOLD_80_BASE_PENALTY	float	MEAN_COVERAGE divided by the 20th-percentile high-quality depth: the sequencing multiple that brings 80% of the loci to the mean. ? when that percentile is 0, 0 when no locus was counted.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	FOLD_90_BASE_PENALTY	float	MEAN_COVERAGE divided by the 10th-percentile high-quality depth: the sequencing multiple that brings 90% of the loci to the mean. ? when that percentile is 0, 0 when no locus was counted.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	FOLD_95_BASE_PENALTY	float	MEAN_COVERAGE divided by the 5th-percentile high-quality depth: the sequencing multiple that brings 95% of the loci to the mean. ? when that percentile is 0, 0 when no locus was counted.
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	HET_SNP_SENSITIVITY	float	Modelled probability of calling a heterozygous SNP given the unfiltered depth distribution and the base qualities (SAMPLE_SIZE draws, log-odds threshold 3).
+picard.analysis.CollectRawWgsMetrics$RawWgsMetrics	HET_SNP_Q	float	HET_SNP_SENSITIVITY as a Phred score: -10 log10(1 - sensitivity), rounded to an integer.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	CATEGORY	string	WHOLE_GENOME for every counted locus; NON_ZERO_REGIONS for the loci with high-quality depth 1 or more, computed after the depth-0 bin is cleared.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	GENOME_TERRITORY	int	Reference positions counted: every non-N base of every @SQ contig, or of the INTERVALS list when given; in the NON_ZERO_REGIONS row only the positions with high-quality depth 1 or more.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	MEAN_COVERAGE	float	Mean high-quality depth over the loci of the row: the bases left after the read filters, the base quality and overlap filters and COVERAGE_CAP (250).
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	SD_COVERAGE	float	Standard deviation of the high-quality depth over the loci of the row.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	MEDIAN_COVERAGE	float	Median high-quality depth over the loci of the row.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	MAD_COVERAGE	float	Median absolute deviation of the high-quality depth from MEDIAN_COVERAGE.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_EXC_ADAPTER	float	Aligned bases dropped because their read is unmapped or has mapping quality 0 and starts with adapter sequence, as a share of all bases counted or dropped.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_EXC_MAPQ	float	Aligned bases dropped because their read is below MINIMUM_MAPPING_QUALITY (20), as a share of all bases counted or dropped.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_EXC_DUPE	float	Aligned bases dropped because their read is flagged as a duplicate, as a share of all bases counted or dropped.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_EXC_UNPAIRED	float	Aligned bases dropped because their read is unpaired or its mate is unmapped, as a share of all bases counted or dropped. 0 with COUNT_UNPAIRED=true.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_EXC_BASEQ	float	Bases dropped at a locus because their quality is 2 or less, below MINIMUM_BASE_QUALITY (20), or a no-call, as a share of all bases counted or dropped.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_EXC_OVERLAP	float	Bases dropped at a locus because a base of the same read name already counted there, as a share of all bases counted or dropped.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_EXC_CAPPED	float	Bases above COVERAGE_CAP (250) at a locus, left out of the depth, as a share of all bases counted or dropped.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_EXC_TOTAL	float	All dropped bases over all bases counted or dropped: the sum of the PCT_EXC_ columns.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_1X	float	Share of the loci of the row with high-quality depth 1 or more.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_5X	float	Share of the loci of the row with high-quality depth 5 or more.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_10X	float	Share of the loci of the row with high-quality depth 10 or more.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_15X	float	Share of the loci of the row with high-quality depth 15 or more.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_20X	float	Share of the loci of the row with high-quality depth 20 or more.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_25X	float	Share of the loci of the row with high-quality depth 25 or more.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_30X	float	Share of the loci of the row with high-quality depth 30 or more.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_40X	float	Share of the loci of the row with high-quality depth 40 or more.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_50X	float	Share of the loci of the row with high-quality depth 50 or more.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_60X	float	Share of the loci of the row with high-quality depth 60 or more.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_70X	float	Share of the loci of the row with high-quality depth 70 or more.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_80X	float	Share of the loci of the row with high-quality depth 80 or more.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_90X	float	Share of the loci of the row with high-quality depth 90 or more.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	PCT_100X	float	Share of the loci of the row with high-quality depth 100 or more.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	FOLD_80_BASE_PENALTY	float	MEAN_COVERAGE divided by the 20th-percentile high-quality depth: the sequencing multiple that brings 80% of the loci to the mean. ? when that percentile is 0, 0 when no locus was counted.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	FOLD_90_BASE_PENALTY	float	MEAN_COVERAGE divided by the 10th-percentile high-quality depth: the sequencing multiple that brings 90% of the loci to the mean. ? when that percentile is 0, 0 when no locus was counted.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	FOLD_95_BASE_PENALTY	float	MEAN_COVERAGE divided by the 5th-percentile high-quality depth: the sequencing multiple that brings 95% of the loci to the mean. ? when that percentile is 0, 0 when no locus was counted.
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	HET_SNP_SENSITIVITY	float	Modelled probability of calling a heterozygous SNP given the unfiltered depth distribution and the base qualities (SAMPLE_SIZE draws, log-odds threshold 3).
+picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage	HET_SNP_Q	float	HET_SNP_SENSITIVITY as a Phred score: -10 log10(1 - sensitivity), rounded to an integer.
 CollectInsertSizeMetrics	insert_size	int	Histogram key: insert size in bases.
 CollectInsertSizeMetrics	*.fr_count	float	Pairs with this insert size and FR orientation in the unit named before the dot (All_Reads, or the sample, library or read group).
 CollectInsertSizeMetrics	*.rf_count	float	Pairs with this insert size and RF orientation in the unit named before the dot.
@@ -208,3 +305,13 @@ QualityScoreDistribution	COUNT_OF_OQ	float	Bases with this quality in the OQ tag
 MeanQualityByCycle	CYCLE	int	Histogram key: sequencing cycle, 1-based; second-of-pair cycles follow the first-of-pair ones.
 MeanQualityByCycle	MEAN_QUALITY	float	Mean QUAL over the bases at this cycle.
 MeanQualityByCycle	MEAN_ORIGINAL_QUALITY	float	Mean OQ over the bases at this cycle. Present only when a record had an OQ; 0 at a cycle without one.
+CollectWgsMetrics	coverage	int	Histogram key: a high-quality depth, or a base quality for unfiltered_baseq_count.
+CollectWgsMetrics	high_quality_coverage_count	float	Loci whose high-quality depth equals the key.
+CollectWgsMetrics	unfiltered_baseq_count	float	Bases with this quality among those feeding the unfiltered depth, before the base quality and overlap filters; quality 2 or less is left out. Written with INCLUDE_BQ_HISTOGRAM=true.
+CollectRawWgsMetrics	coverage	int	Histogram key: a high-quality depth, or a base quality for unfiltered_baseq_count.
+CollectRawWgsMetrics	high_quality_coverage_count	float	Loci whose high-quality depth equals the key.
+CollectRawWgsMetrics	unfiltered_baseq_count	float	Bases with this quality among those feeding the unfiltered depth, before the base quality and overlap filters; quality 2 or less is left out. Written with INCLUDE_BQ_HISTOGRAM=true.
+CollectWgsMetricsWithNonZeroCoverage	coverage	int	Histogram key: a high-quality depth, or a base quality for unfiltered_baseq_count.
+CollectWgsMetricsWithNonZeroCoverage	count_WHOLE_GENOME	float	Loci whose high-quality depth equals the key, every counted locus included.
+CollectWgsMetricsWithNonZeroCoverage	count_NON_ZERO_REGIONS	float	Loci whose high-quality depth equals the key, from depth 1 up.
+CollectWgsMetricsWithNonZeroCoverage	unfiltered_baseq_count	float	Bases with this quality among those feeding the unfiltered depth, before the base quality and overlap filters; quality 2 or less is left out. Written with INCLUDE_BQ_HISTOGRAM=true.

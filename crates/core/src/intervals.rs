@@ -307,6 +307,7 @@ fn parse_int(field: &str, line: &str) -> std::result::Result<i64, String> {
 /// The intervals come from `uniqued`, so on each contig both starts and ends
 /// rise and a query hits one contiguous run, found by binary search. Results
 /// are index ranges into `intervals()`, which keeps the uniqued order.
+#[derive(Clone, Debug)]
 pub struct OverlapIndex {
     intervals: Vec<Interval>,
     /// Index range of each contig's intervals.

@@ -4,7 +4,7 @@
 UV_RUN := uv run --no-project
 CORPUS := tests/corpus/out
 
-.PHONY: all test lint release corpus reference-metrics concordance golden golden-update python-test wheel clean-corpus bench-bam bench fuzz
+.PHONY: all test lint release corpus reference-metrics concordance golden golden-update python-test wheel clean-corpus bench-bam bench bench-wgs fuzz
 
 all: test lint concordance
 
@@ -68,6 +68,11 @@ target/bench/bench.json: benches/make_bam.py tests/corpus/generate.py
 # Picard vs bammetrics on the benchmark BAM; numbers go into docs/benchmarks.md.
 bench: bench-bam release
 	$(UV_RUN) python benches/bench.py
+
+# T4 scale run of the coverage tools: 2 Mb reference, 200k pairs in target/bench_wgs
+# (built on first use), Picard vs bammetrics; numbers go into docs/benchmarks.md.
+bench-wgs: release
+	$(UV_RUN) --with pysam --with numpy python benches/wgs_bench.py
 
 clean-corpus:
 	rm -rf $(CORPUS) target/concordance target/fakeR

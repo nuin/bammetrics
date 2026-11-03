@@ -62,9 +62,28 @@ are byte-identical to Picard's. `benches/bench.py --coverage-only` reruns just t
   runs cost the time of one.
 - Picard's peak RSS is the JVM heap (460-970 MB); bammetrics stays under 75 MB.
 
+## Coverage tools (T4 scale run)
+
+Measured 2026-11-02 with bammetrics 0.7.0, rustc 1.99.1, Picard 3.5.0 on OpenJDK 27.0.1,
+same machine. BAM: `benches/wgs_bench.py`, 200,000 simulated 2x150 pairs (seed 20261102)
+of the same messy kind on chr1 1.2 Mb and chr2 0.8 Mb, 404,088 records. Wall time is the
+median of 3 runs, peak RSS the largest; every bammetrics file is identical to Picard's
+after the header lines.
+
+| run | Picard wall s | Picard peak MB | bammetrics wall s | bammetrics peak MB | speed-up | text identical |
+|---|---:|---:|---:|---:|---:|---|
+| CollectWgsMetrics | 10.01 | 770 | 1.97 | 41 | 5.1x | yes |
+| CollectWgsMetrics USE_FAST_ALGORITHM=true | 9.00 | 480 | 1.46 | 43 | 6.2x | yes |
+| CollectRawWgsMetrics | 31.07 | 809 | 4.75 | 142 | 6.5x | yes |
+| CollectWgsMetricsWithNonZeroCoverage | 16.85 | 707 | 2.88 | 50 | 5.9x | yes |
+
+CollectRawWgsMetrics spends most of its time in the `HET_SNP_SENSITIVITY` simulation over
+its 100,001-bin depth histogram, in both tools.
+
 ## Reproduce
 
 ```bash
 make bench-bam   # target/bench/bench.bam, about 10 minutes (Python simulation, bwa, MarkDuplicates)
 make bench       # release build, then benches/bench.py: table on stdout, target/bench/results.json
+make bench-wgs   # target/bench_wgs on first use, then benches/wgs_bench.py: the coverage table, target/bench_wgs/results.json
 ```

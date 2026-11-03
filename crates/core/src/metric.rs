@@ -207,6 +207,10 @@ pub struct MetricsOutput {
     /// False for a file Picard writes without `StringHeader` lines
     /// (`AccumulateQualityYieldMetrics`).
     pub with_headers: bool,
+    /// A file that is not a metrics file (`BedToIntervalList` writes an
+    /// interval list): written as it is, with no header lines. `rows` and
+    /// `columns` still describe it for Python.
+    pub text: Option<String>,
 }
 
 impl MetricsOutput {
@@ -217,6 +221,7 @@ impl MetricsOutput {
             rows: rows.iter().map(MetricRow::values).collect(),
             histogram,
             with_headers: true,
+            text: None,
         }
     }
 
@@ -229,6 +234,20 @@ impl MetricsOutput {
             rows: Vec::new(),
             histogram: Some(histogram),
             with_headers: true,
+            text: None,
+        }
+    }
+
+    /// A plain text file described as a table for Python: `columns` name
+    /// the fields of each row.
+    pub fn text(columns: &'static [&'static str], rows: Vec<Vec<Value>>, text: String) -> Self {
+        Self {
+            class: "",
+            columns,
+            rows,
+            histogram: None,
+            with_headers: false,
+            text: Some(text),
         }
     }
 
@@ -257,6 +276,9 @@ impl MetricsOutput {
 
     /// Write the Picard metrics file; `headers` are the `StringHeader` texts.
     pub fn write(&self, headers: Vec<String>, out: &mut impl Write) -> io::Result<()> {
+        if let Some(text) = &self.text {
+            return out.write_all(text.as_bytes());
+        }
         let histogram = self.histogram.as_ref().map(|h| HistogramTable {
             key_label: h.key_label,
             key_class: h.key_class,
