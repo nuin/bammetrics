@@ -150,7 +150,9 @@ the argv the manifest records, apart from the `Started on` line. The sample name
 (`--sample`, else the first `@RG SM`, else the BAM name) goes only into the verdict, the
 page and the manifest. No `-o` means `./<BAM name without .bam>`, and the summary says so.
 Missing directories are created. Every file is written to a temporary name opened with
-`create_new` and renamed into place.
+`create_new` and renamed into place. A file a collector plans and does not write this
+time (it failed, or insert size dropped every orientation and Picard writes no file) is
+removed, so the prefix holds no older run's copy; the summary counts it as stale removed.
 
 Stages, in order: prepare (the BAM header, the input fingerprint, the preset, every file an
 option names; nothing written), pass (every one-pass collector on one read; a collector
