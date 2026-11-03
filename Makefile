@@ -4,7 +4,7 @@
 UV_RUN := uv run --no-project
 CORPUS := tests/corpus/out
 
-.PHONY: all test lint release corpus reference-metrics concordance python-test wheel clean-corpus bench-bam bench
+.PHONY: all test lint release corpus reference-metrics concordance python-test wheel clean-corpus bench-bam bench fuzz
 
 all: test lint concordance
 
@@ -30,6 +30,14 @@ reference-metrics: corpus
 
 concordance: reference-metrics release
 	$(UV_RUN) --with pytest --with pysam python -m pytest tests/concordance -q
+
+# Differential fuzzing (tests/concordance/fuzz.py): N seeded random BAMs through
+# Picard and bammetrics, failures shrunk into tests/concordance/regressions.
+SEED ?= 1
+N ?= 200
+JOBS ?= 8
+fuzz: release
+	$(UV_RUN) python tests/concordance/fuzz.py --seed $(SEED) --n $(N) --jobs $(JOBS)
 
 # Python module tests: build into .venv with maturin, then run tests/python.
 # Needs .venv with maturin, pytest and pysam, plus `make corpus` and `make release`.

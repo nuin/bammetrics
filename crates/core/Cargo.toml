@@ -16,4 +16,5 @@ path = "src/main.rs"
 [dependencies]
 clap.workspace = true
 noodles.workspace = true
+regex.workspace = true
 thiserror.workspace = true

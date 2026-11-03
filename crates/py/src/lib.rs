@@ -673,7 +673,10 @@ fn keyword_arguments(tool: &Tool, kwargs: Option<&Bound<'_, PyDict>>) -> PyResul
 /// Run a registered tool: the input path plus Picard options as keyword
 /// arguments (`minimum_pct=0.1`, `metric_accumulation_level=["SAMPLE"]`).
 /// Returns one dict per metrics row, empty when Picard would write no file.
-/// With `output=` the Picard metrics file is written as well.
+/// With `output=` the Picard metrics file is written as well, and a tool
+/// with further files (`CollectGcBiasMetrics` `summary_output=`) writes them
+/// too. A tool with no `OUTPUT` file of its own (`CollectMultipleMetrics`)
+/// returns one dict per file written: `file` and `rows`.
 fn run_registered<'py>(
     py: Python<'py>,
     tool: &'static Tool,
@@ -692,15 +695,21 @@ fn run_registered<'py>(
     let (invocation, output) = py
         .detach(|| tool.execute(&options))
         .map_err(|e| py_error(&e))?;
-    let Some(output) = output else {
-        return Ok(PyList::empty(py));
-    };
-    if let Some(path) = invocation.output.as_deref() {
-        let headers = output.headers(&invocation.command);
-        registry::write_to(Some(path), |out| output.write(headers, out))
+    if invocation.output.is_some() || !output.extra.is_empty() {
+        py.detach(|| registry::write_files(&invocation, &output))
             .map_err(|e| py_error(&e))?;
     }
-    rows_as_dicts(py, &output)
+    if let Some(main) = &output.main {
+        return rows_as_dicts(py, main);
+    }
+    let files = PyList::empty(py);
+    for (path, file) in &output.extra {
+        let dict = PyDict::new(py);
+        dict.set_item("file", path.to_string_lossy())?;
+        dict.set_item("rows", rows_as_dicts(py, file)?)?;
+        files.append(dict)?;
+    }
+    Ok(files)
 }
 
 /// `CollectInsertSizeMetrics` -> `collect_insert_size_metrics`.

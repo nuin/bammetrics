@@ -98,9 +98,20 @@ impl Reference {
         self.query(&region)
     }
 
-    fn load(&mut self, id: usize) -> Result<Vec<u8>> {
+    /// Every base of the contig at `id`, read fresh through the `.fai`.
+    /// It does not move the forward-only `contig` walker.
+    pub fn load(&mut self, id: usize) -> Result<Vec<u8>> {
         let region = Region::new(self.name(id)?, ..);
         self.query(&region)
+    }
+
+    /// Number of contigs in the `.fai`.
+    pub fn len(&self) -> usize {
+        self.reader.index().as_ref().len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     fn name(&self, id: usize) -> Result<Vec<u8>> {
