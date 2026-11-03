@@ -116,6 +116,76 @@ and the JSON schema are in [docs/verdict.md](verdict.md). The CLI writes the sam
 verdict through `report` and gates on it through `check`, below. `bammetrics.report()`
 in Python arrives with the Python mirror (phase 11 of docs/05).
 
+## qc and plan
+
+```bash
+bammetrics qc BAM [-o PREFIX] [-R FASTA] [--preset NAME|FILE] [--hs BAITS TARGETS]... [--panel FILE]
+              [--ref-flat FILE --strand STRAND [--ribosomal-intervals FILE]] [--sample NAME]
+              [--fail-on warn|fail] [--resume | --force] [--threads N] [--format text|jsonl] [-q]
+              [--all-plots] [--date ISO]
+bammetrics plan BAM [the same options]
+```
+
+`qc` runs the collectors the preset's rules need (`generic` without `--preset`), on one
+read of the BAM, then writes the verdict and the page. `--hs` or `--panel` adds
+`CollectHsMetrics` and `--ref-flat` adds `CollectRnaSeqMetrics` whether or not a rule reads
+them. A rule whose collector cannot run is listed as not measured with the reason (`needs
+--hs BAITS TARGETS or --panel FILE`, `needs -R FASTA`), and the verdict reads INCOMPLETE.
+
+| Metrics class | Collector | Needs | File |
+|---|---|---|---|
+| QualityYieldMetrics | CollectQualityYieldMetrics | | `PREFIX.quality_yield_metrics` |
+| AlignmentSummaryMetrics | CollectAlignmentSummaryMetrics | (`-R` used when given) | `PREFIX.alignment_summary_metrics` |
+| InsertSizeMetrics | CollectInsertSizeMetrics | | `PREFIX.insert_size_metrics` |
+| DuplicationMetrics | CollectDuplicateMetrics | | `PREFIX.duplicate_metrics` |
+| HsMetrics | CollectHsMetrics, once per `--hs`/`--panel` | intervals | `PREFIX.hs_metrics`, `PREFIX.BAIT_SET.hs_metrics` with several |
+| GcBiasSummaryMetrics, GcBiasDetailMetrics | CollectGcBiasMetrics | `-R` | `PREFIX.gc_bias.detail_metrics`, `PREFIX.gc_bias.summary_metrics` |
+| RnaSeqMetrics | CollectRnaSeqMetrics | `--ref-flat`, `--strand` | `PREFIX.rna_metrics` |
+| WgsMetrics | CollectWgsMetrics, on a read of its own | `-R` | `PREFIX.wgs_metrics` |
+
+File names come from the `CollectMultipleMetrics` extension table
+(`multiple_metrics::file_extensions`), so both faces write the same names. Each metrics
+file is byte for byte what `bammetrics <Collector> INPUT=BAM OUTPUT=FILE ...` writes for
+the argv the manifest records, apart from the `Started on` line. The sample name
+(`--sample`, else the first `@RG SM`, else the BAM name) goes only into the verdict, the
+page and the manifest. No `-o` means `./<BAM name without .bam>`, and the summary says so.
+Missing directories are created. Every file is written to a temporary name opened with
+`create_new` and renamed into place.
+
+Stages, in order: prepare (the BAM header, the input fingerprint, the preset, every file an
+option names; nothing written), pass (every one-pass collector on one read; a collector
+that fails to build, fails on a record or panics fails alone, and a BAM read error fails
+the pass), post (the verdict over the files), report (`PREFIX.verdict.json` and
+`PREFIX.report.html`, the bytes `bammetrics report` writes for the same files and sample).
+`CollectWgsMetrics` walks reference loci and reads the BAM on its own.
+
+`PREFIX.manifest.json` (schema `bammetrics.manifest/1`) holds per step its stage, tool,
+Picard argv and the argv hash, the tool version, the preset hash, the input path, size,
+mtime and a hash of its first and last 64 KiB, the outputs with tool and kind, and the
+status (`ok` or `failed`, with the error). `--resume` skips a collector when every one of
+those fields matches and its files exist: one lost file reruns that collector alone, in a
+pass of its own. A manifest that does not parse (a killed run) is reported on stderr and
+every step runs. `--force` reruns every step. Without either, `qc` refuses a prefix that
+holds an earlier run's manifest (exit 2). The verdict and the page are always rewritten.
+
+`plan` prints the stages, each collector with its files and rule count, which collectors
+share the read and why one does not, the classes no collector can write, and which steps
+`--resume` would skip. It reads the BAM header and 128 KiB of the BAM and writes nothing.
+`--format jsonl` gives one `plan` event, a `step` event per collector (with `argv`,
+`outputs`, `rules`, `read`, `action`, `resumable`) and an `unmet` event per class.
+
+The `qc` summary on stdout is at most 12 lines: the header (sample, band, preset, collectors,
+BAM reads), every error, fail, warn and not-measured line (collapsed into `+N more, see
+PAGE`), the pass count, the files written (kept by `--resume`, replaced, stale removed), and
+the gate hint or the exit reason. Progress (`reading 12.4M reads  1.9M/s  62%`) goes to
+stderr only on a terminal, at most 10 times a second; `-q` turns it off. `--format jsonl`
+prints `start`, `progress` (every million records), `file` (with `written` false for a
+file `--resume` kept), `error`, `check` and `done` events on stdout instead.
+
+`qc` exits 0 on any verdict unless `--fail-on` is given; then 10 when the verdict reaches it
+and 11 when the verdict is incomplete, as `check` does. A failed collector exits 1 after the
+other files, the verdict and the page are written.
+
 ## report and check
 
 ```bash
@@ -159,6 +229,6 @@ and every check under it; `json` prints a JSON array of verdicts, each as
 | 10 | a sample reached `--fail-on`: its verdict is fail (or warn with `--fail-on warn`) |
 | 11 | a sample is incomplete (a rule's file, row or column is missing) and none reached `--fail-on` |
 
-The Picard face and the five older subcommands keep exit codes 0 and 1.
+`qc` uses the same table: 10 and 11 only with `--fail-on`, and 1 also for a failed collector. The Picard face and the five older subcommands keep exit codes 0 and 1.
 
 `.cargo/config.toml` lets the Python cdylib link under `cargo test` on macOS.

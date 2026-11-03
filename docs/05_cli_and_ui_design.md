@@ -78,17 +78,17 @@ Spelling rules:
 
 ### 2.4 Exit codes
 
+The table `check.rs` implements (`EXIT_CODES`), shared by `check` and `qc`:
+
 | Code | Meaning |
 |---|---|
-| 0 | success. For `check`, verdict pass. |
-| 1 | runtime failure (I/O, internal) |
-| 2 | usage or plan error, nothing ran |
-| 3 | input error (missing file, truncated or unsorted BAM, no .fai) |
-| 10 | `check` or `--fail-on warn`: at least 1 warn |
-| 11 | `check` or `--fail-on fail`: at least 1 fail |
-| 130 | interrupted |
+| 0 | success: every verdict passes, or none reaches `--fail-on` (`qc` without `--fail-on`: any verdict) |
+| 1 | an input could not be read (a missing BAM, FASTA, .fai or interval file), the preset does not parse, or a `qc` collector failed |
+| 2 | usage error, nothing ran (bad arguments; `qc` over an earlier run without `--resume` or `--force`) |
+| 10 | a verdict reached `--fail-on`: fail, or warn with `--fail-on warn` (`check` defaults to `--fail-on fail`) |
+| 11 | a verdict is incomplete (a rule's file, row or column is missing) and none reached `--fail-on` |
 
-`qc` exits 0 on a failed verdict unless `--fail-on warn|fail` is set. A Nextflow task is not killed by a bad sample. `check` always gates. The summary prints `use --fail-on fail or bammetrics check to gate`. The Picard face keeps 0 and 1. Both faces use the same defaults for the same verdict: `qc` never gates, `check` always gates.
+`qc` exits 0 on a failed verdict unless `--fail-on warn|fail` is set. A Nextflow task is not killed by a bad sample. `check` always gates. The summary prints `use --fail-on fail or bammetrics check to gate`. A `qc` run with a failed collector exits 1 after it writes the other files, the verdict and the page. The Picard face keeps 0 and 1. Both faces use the same defaults for the same verdict: `qc` never gates, `check` always gates.
 
 ### 2.5 Twelve worked examples
 
@@ -193,8 +193,8 @@ bammetrics hs-metrics: missing --targets (Picard: TARGET_INTERVALS)
 exit status 2
 
 $ bammetrics qc nope.bam
-bammetrics qc: input 'nope.bam' not found (from INPUT)
-exit status 3
+bammetrics: nope.bam not found (from BAM)
+exit status 1
 
 $ bammetrics check out/NA12878 --preset clinical-panel --format jsonl > checks.jsonl; echo $?
 11
@@ -219,7 +219,7 @@ Three layers. No workflow language.
 Rules:
 
 - A collector that needs a file from an earlier step waits for it. Hs waits for the interval list. A collector joins the pass only when its input BAM, reference and read filter match. `plan` prints the reason when it does not.
-- Per-collector error isolation (NEW in pass.rs): one failing collector marks only itself failed, the others finish. A failure in reading the BAM still fails the pass. The concordance suite gates this change.
+- Per-collector error isolation (`pass::run_isolated`, 0.12.0): one failing collector marks only itself failed, the others finish. A failure in reading the BAM still fails the pass. The concordance suite gates this change.
 - Resume: `qc --resume` reads `PREFIX.manifest.json`. Each step stores the argv hash, tool version, preset hash, input size, mtime, and a hash of the first and last 64 KiB of the input. A step is skipped when all match and its outputs exist. If 1 of 6 collector files is missing, the pass reruns for that collector only. `--force` reruns all. `report` always reruns because it takes milliseconds.
 - Users who need loops, scatter, conditionals or clusters use the shell, make, Snakemake or Nextflow.
 
@@ -433,12 +433,12 @@ Risks, each with its mitigation:
 
 ## 8. Open decisions for the maintainer
 
-1. Does `qc` without `--preset` use `generic` (this proposal), or must it require a preset?
+1. Does `qc` without `--preset` use `generic` (this proposal), or must it require a preset? Decided: `generic` (0.12.0).
 2. Are the 14 clinical-panel starting values in 4.3 acceptable as shipped defaults, or does a lab review them first?
-3. Should `qc` exit 0 on a failed verdict by default (this proposal), or gate by default?
+3. Should `qc` exit 0 on a failed verdict by default (this proposal), or gate by default? Decided: exit 0 unless `--fail-on` is given; `check` always gates (0.12.0).
 4. Is `toml` acceptable as a dependency, or should presets use a hand-written format?
 5. Is the 75-day plan acceptable, or should phases 9 to 11 move after 0.8?
-6. Do you want the sample sheet runner (phase 10) in this scope, or leave cohorts to Nextflow plus `report`?
+6. Do you want the sample sheet runner (phase 10) in this scope, or leave cohorts to Nextflow plus `report`? Decided: no sample sheet runner for now; phase 10 is dropped.
 7. Should the old subcommands be listed as aliases in `help` and docs, or hidden after 0.9?
 8. Who writes and reviews the column glossary text (about 400 entries, 1 week of review)?
 9. Is a `data-theme` override for dark mode wanted, or only `prefers-color-scheme`?
