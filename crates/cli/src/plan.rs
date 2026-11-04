@@ -14,6 +14,9 @@ use crate::qc::{
     verdict_path,
 };
 
+/// What the one prepare step does, for the text and jsonl plans.
+const PANEL_WHY: &str = "the --panel BED as an interval list, @SQ lines from the BAM header";
+
 fn origin(o: Origin, option: &str, other: &str) -> String {
     match o {
         Origin::Option => format!("from {option}"),
@@ -116,6 +119,15 @@ pub fn text(plan: &Plan, resume: bool) -> String {
         out,
         "prepare   inputs checked: the BAM header, -R and its .fai, every file an option names"
     );
+    for step in &plan.prepare {
+        let (verb, note) = action(step, resume);
+        let _ = writeln!(
+            out,
+            "  {verb:<4}  {}  {}  {PANEL_WHY}{note}",
+            step.record.id,
+            outputs(step)
+        );
+    }
     let skips = if skipped > 0 {
         format!(", {skipped} skipped by --resume")
     } else {
@@ -196,11 +208,12 @@ pub fn jsonl(plan: &Plan, resume: bool) -> String {
         field("preset_hash", Json::text(&plan.preset.hash)),
     ]);
     let _ = writeln!(out, "{}", head.render_line());
-    for step in &plan.steps {
+    for step in plan.prepare.iter().chain(&plan.steps) {
         let (verb, _) = action(step, resume);
         let read = match step.read {
             Read::Pass => Json::text("pass"),
             Read::Own(_) => Json::text("own"),
+            Read::Header => Json::text("header"),
         };
         let line = Json::Object(vec![
             field("event", Json::text("step")),
@@ -211,6 +224,7 @@ pub fn jsonl(plan: &Plan, resume: bool) -> String {
                 "reason",
                 match step.read {
                     Read::Own(why) => Json::text(why),
+                    Read::Header => Json::text(PANEL_WHY),
                     Read::Pass => Json::Null,
                 },
             ),

@@ -3,7 +3,9 @@
 //!
 //! Stages, in order (docs/05 section 3):
 //! * prepare: the BAM header, the sample name, the input fingerprint, the
-//!   preset, every file an option names, the manifest of an earlier run.
+//!   preset, every file an option names, the manifest of an earlier run;
+//!   then a `--panel` BED written as `PREFIX.panel.interval_list`
+//!   (`BedToIntervalList` with the BAM header as the dictionary).
 //! * pass: every one-pass collector on one read through
 //!   [`pass::run_isolated`]; a collector that fails fails alone. A tool
 //!   with no one-pass collector (`CollectWgsMetrics` walks loci) reads the
@@ -22,6 +24,7 @@ use std::path::{Path, PathBuf};
 
 use bammetrics_core::collect;
 use bammetrics_core::hs_metrics;
+use bammetrics_core::intervals;
 use bammetrics_core::levels::{self, Level};
 use bammetrics_core::multiple_metrics::file_extensions;
 use bammetrics_core::pass;
@@ -69,7 +72,8 @@ fn after_help() -> String {
         "Files: PREFIX plus the CollectMultipleMetrics extensions (.alignment_summary_metrics, \
 .insert_size_metrics, .quality_yield_metrics, .gc_bias.detail_metrics and \
 .gc_bias.summary_metrics), .hs_metrics (.BAIT_SET.hs_metrics with several --hs), \
-.duplicate_metrics, .wgs_metrics, .rna_metrics; then PREFIX.verdict.json, PREFIX.report.html \
+.duplicate_metrics, .wgs_metrics, .rna_metrics; .panel.interval_list when --panel is a BED (its \
+@SQ lines from the BAM header); then PREFIX.verdict.json, PREFIX.report.html \
 and PREFIX.manifest.json. Each metrics file is byte for byte the one `bammetrics <Tool> \
 INPUT=BAM OUTPUT=FILE` writes, apart from the Started on line.\n\n\
 Without --fail-on, qc exits 0 on any verdict; bammetrics check always gates.\n\n{EXIT_CODES}\n  \
@@ -199,14 +203,31 @@ fn short_class(class: &str) -> &str {
     class.rsplit('$').next().unwrap_or(class)
 }
 
-/// How a collector reads the BAM.
+/// How a step reads the BAM.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Read {
     /// On the shared read.
     Pass,
     /// On a read of its own, for the reason given.
     Own(&'static str),
+    /// The header only: a prepare step (`--panel` BED to interval list).
+    Header,
 }
+
+impl Read {
+    /// The manifest's `stage` of a step that reads the BAM this way.
+    fn stage(self) -> &'static str {
+        match self {
+            Read::Pass => "pass",
+            Read::Own(_) => "own-read",
+            Read::Header => "prepare",
+        }
+    }
+}
+
+/// The interval list `qc --panel BED` keeps, `PREFIX.panel.interval_list`
+/// (docs/05 example 7).
+pub const PANEL_SUFFIX: &str = ".panel.interval_list";
 
 /// One collector of the run.
 pub struct Step {
@@ -254,6 +275,9 @@ pub struct Plan {
     pub sample_origin: Origin,
     pub preset: Preset,
     pub fingerprint: Fingerprint,
+    /// The prepare stage: steps that read no BAM record, run first.
+    pub prepare: Vec<Step>,
+    /// The collectors.
     pub steps: Vec<Step>,
     pub unmet: Vec<Unmet>,
     /// The earlier run's manifest, or why it could not be read.
@@ -399,8 +423,11 @@ impl Context<'_> {
     }
 }
 
-/// The argv keys that name a file the tool reads besides the BAM.
+/// The argv keys that name a file a step reads (the BAM itself is the
+/// step's input and is left out).
 const READ_FILES: &[&str] = &[
+    "INPUT",
+    "SEQUENCE_DICTIONARY",
     "REFERENCE_SEQUENCE",
     "BAIT_INTERVALS",
     "TARGET_INTERVALS",
@@ -408,18 +435,18 @@ const READ_FILES: &[&str] = &[
     "RIBOSOMAL_INTERVALS",
 ];
 
-/// The fingerprint of every file `argv` names besides the BAM (a FASTA
+/// The fingerprint of every file `argv` names besides `bam` (a FASTA
 /// with its `.fai`), each once, in argv order.
-fn read_files(argv: &[String]) -> Result<Vec<(PathBuf, Fingerprint)>> {
+fn read_files(argv: &[String], bam: &Path) -> Result<Vec<(PathBuf, Fingerprint)>> {
     let mut paths: Vec<PathBuf> = Vec::new();
     for arg in argv {
         let Some((key, value)) = arg.split_once('=') else {
             continue;
         };
-        if !READ_FILES.contains(&key) {
+        let path = PathBuf::from(value);
+        if !READ_FILES.contains(&key) || path == bam {
             continue;
         }
-        let path = PathBuf::from(value);
         if key == "REFERENCE_SEQUENCE" {
             paths.push(path.clone());
             paths.push(with_suffix(&path, ".fai"));
@@ -455,7 +482,7 @@ struct Spec {
 }
 
 impl Context<'_> {
-    /// The step for `spec`, its record keyed on this run.
+    /// The collector step for `spec`, its record keyed on this run.
     fn step(&self, spec: Spec) -> Result<Step> {
         let Spec {
             id,
@@ -465,22 +492,36 @@ impl Context<'_> {
             rules,
         } = spec;
         let argv = self.argv(tool, &files, &extra);
-        let mut inv = tool
-            .parse(&argv)
-            .map_err(|e| Error::Usage(format!("{}: {e}", tool.name)))?;
-        inv.threads = self.args.threads;
         let read = if tool.collector.is_some() {
             Read::Pass
         } else {
             Read::Own(own_read_reason(tool.name))
         };
+        let outputs = files
+            .into_iter()
+            .map(|(_, path)| (path, "metrics"))
+            .collect();
+        self.planned(id, tool, argv, outputs, rules, read)
+    }
+
+    /// The step running `tool` on `argv` and writing `outputs` (path and
+    /// manifest kind), its record keyed on this run.
+    fn planned(
+        &self,
+        id: String,
+        tool: &'static Tool,
+        argv: Vec<String>,
+        outputs: Vec<(PathBuf, &str)>,
+        rules: Vec<String>,
+        read: Read,
+    ) -> Result<Step> {
+        let mut inv = tool
+            .parse(&argv)
+            .map_err(|e| Error::Usage(format!("{}: {e}", tool.name)))?;
+        inv.threads = self.args.threads;
         let record = StepRecord {
             id,
-            stage: match read {
-                Read::Pass => "pass",
-                Read::Own(_) => "own-read",
-            }
-            .to_owned(),
+            stage: read.stage().to_owned(),
             tool: tool.name.to_owned(),
             key: Key {
                 argv_hash: bytes_hash(argv.join("\0").into_bytes()),
@@ -488,15 +529,15 @@ impl Context<'_> {
                 preset_hash: self.preset.hash.clone(),
                 input: self.args.bam.clone(),
                 fingerprint: self.fingerprint.clone(),
-                files: read_files(&argv)?,
+                files: read_files(&argv, &self.args.bam)?,
             },
             argv,
-            outputs: files
+            outputs: outputs
                 .into_iter()
-                .map(|(_, path)| Output {
+                .map(|(path, kind)| Output {
                     path,
                     tool: tool.name.to_owned(),
-                    kind: "metrics".to_owned(),
+                    kind: kind.to_owned(),
                 })
                 .collect(),
             status: Status::Ok,
@@ -555,6 +596,38 @@ fn hs_steps(cx: &Context, rules: &[String], levels: &[String]) -> Result<Vec<Ste
             })
         })
         .collect()
+}
+
+/// The prepare stage: a `--panel` BED as `PREFIX.panel.interval_list`,
+/// written by `BedToIntervalList` with the BAM header as the dictionary,
+/// for the Picard tools that read only interval lists. The hs step reads
+/// the BED itself, so its file and `BAIT_SET` do not depend on this one.
+/// A panel that is an interval list already needs no step.
+fn prepare_steps(cx: &Context) -> Result<Vec<Step>> {
+    let Some(panel) = &cx.args.panel else {
+        return Ok(Vec::new());
+    };
+    let text = fs::read_to_string(panel)
+        .map_err(|e| Error::Input(format!("{}: {e} (from --panel)", panel.display())))?;
+    if intervals::is_interval_list(&text) {
+        return Ok(Vec::new());
+    }
+    let tool = registry::find("BedToIntervalList").expect("registered");
+    let output = with_suffix(cx.prefix, PANEL_SUFFIX);
+    let argv = vec![
+        format!("INPUT={}", panel.display()),
+        format!("SEQUENCE_DICTIONARY={}", cx.args.bam.display()),
+        format!("OUTPUT={}", output.display()),
+    ];
+    let step = cx.planned(
+        tool.name.to_owned(),
+        tool,
+        argv,
+        vec![(output, "intervals")],
+        Vec::new(),
+        Read::Header,
+    )?;
+    Ok(vec![step])
 }
 
 /// Every collector the preset's rules need (plus hs for `--hs`/`--panel`
@@ -690,10 +763,11 @@ pub fn prepare(args: &QcArgs) -> Result<Plan> {
         preset: &preset,
         fingerprint: &fingerprint,
     };
+    let mut prepare = prepare_steps(&cx)?;
     let (mut steps, unmet) = collectors(&cx)?;
     let previous = Manifest::read(&manifest_path(&prefix));
     if let Ok(Some(manifest)) = &previous {
-        for step in &mut steps {
+        for step in prepare.iter_mut().chain(&mut steps) {
             step.resumable = manifest
                 .step(&step.record.id)
                 .is_some_and(|old| step.record.resumes(old));
@@ -707,6 +781,7 @@ pub fn prepare(args: &QcArgs) -> Result<Plan> {
         sample_origin,
         preset,
         fingerprint,
+        prepare,
         steps,
         unmet,
         previous,

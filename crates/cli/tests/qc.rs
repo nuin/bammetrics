@@ -2,8 +2,9 @@
 //! the Picard face's bytes, `--resume` after a killed run and after one
 //! lost file or an interval file edited in place, per-collector isolation,
 //! the plan writes nothing, the exit codes with and without `--fail-on`,
-//! errors as jsonl events, a closed stdout, and the verdict and page equal
-//! what `report` writes for the same files. The byte-exact stdout of each form
+//! errors as jsonl events, a closed stdout, the verdict and page equal
+//! what `report` writes for the same files, and a `--panel` BED kept as
+//! `PREFIX.panel.interval_list`. The byte-exact stdout of each form
 //! is in the golden suite.
 
 use std::fs;
@@ -14,6 +15,7 @@ use bammetrics_verdict::json::Json;
 
 const BAM: &str = "tests/data/insert_size.bam";
 const PANEL: &str = "tests/data/targets.interval_list";
+const BED: &str = "tests/data/targets.bed";
 const REF: &str = "tests/data/ref_100k.fa";
 const DATE: &str = "2026-01-02 03:04:05 UTC";
 
@@ -273,8 +275,13 @@ fn a_failing_collector_fails_alone_and_the_run_exits_1() {
         "{summary}"
     );
     assert!(summary.contains("(9 rules not measured)"), "{summary}");
+    // The BED fails its conversion to PREFIX.panel.interval_list too.
     assert!(
-        summary.ends_with("exit 1: 1 collector(s) failed\n"),
+        summary.contains("ERROR         BedToIntervalList  Sequence 'chrNope' was not found"),
+        "{summary}"
+    );
+    assert!(
+        summary.ends_with("exit 1: 1 collector(s) and 1 prepare step(s) failed\n"),
         "{summary}"
     );
     assert!(summary.lines().count() <= 12, "{summary}");
@@ -586,4 +593,118 @@ fn a_closed_stdout_does_not_stop_the_run() {
     assert!(!stderr(&run).contains("panicked"), "{}", stderr(&run));
     assert_eq!(names(&dir), GENERIC_FILES);
     let _ = fs::remove_dir_all(&dir);
+}
+
+/// The steps a `--format jsonl` run wrote an interval list for.
+fn interval_steps(output: &Output) -> Vec<String> {
+    stdout(output)
+        .lines()
+        .map(|l| Json::parse(l).expect("a JSON line"))
+        .filter(|e| {
+            text(e, "event") == "file"
+                && text(e, "kind") == "intervals"
+                && e.get("written") == Some(&Json::Bool(true))
+        })
+        .map(|e| text(&e, "step").to_owned())
+        .collect()
+}
+
+/// docs/05 example 7: `qc --panel BED` keeps `PREFIX.panel.interval_list`,
+/// the bytes `BedToIntervalList SD=<the BAM>` writes, recorded in the
+/// manifest so `--resume` keeps it and a later run without the BED removes
+/// it. An interval list panel gets no copy.
+#[test]
+fn a_bed_panel_is_kept_as_the_interval_list_the_picard_face_writes() {
+    let dir = fresh_dir("bed-panel");
+    let args = [
+        "--panel",
+        BED,
+        "--preset",
+        "clinical-panel",
+        "--format",
+        "jsonl",
+    ];
+    let run = qc(&dir, &args);
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    assert_eq!(interval_steps(&run), ["BedToIntervalList"]);
+    let kept = dir.join("s.panel.interval_list");
+    let face = dir.join("face.interval_list");
+    let picard = bammetrics(&[
+        "BedToIntervalList",
+        &format!("I={BED}"),
+        &format!("SD={BAM}"),
+        &format!("O={}", face.display()),
+    ]);
+    assert_eq!(code(&picard), 0, "{}", stderr(&picard));
+    assert_eq!(
+        fs::read(&kept).expect("kept"),
+        fs::read(&face).expect("face")
+    );
+    fs::remove_file(&face).expect("remove face");
+    let step = steps(&dir)
+        .into_iter()
+        .find(|s| text(s, "id") == "BedToIntervalList")
+        .expect("prepare step");
+    assert_eq!(text(&step, "stage"), "prepare");
+    let outputs = step
+        .get("outputs")
+        .and_then(Json::as_array)
+        .expect("outputs");
+    assert_eq!(outputs.len(), 1);
+    assert_eq!(text(&outputs[0], "kind"), "intervals");
+    assert_eq!(text(&outputs[0], "path"), kept.to_str().expect("utf-8"));
+
+    let mut resume = args.to_vec();
+    resume.push("--resume");
+    let again = qc(&dir, &resume);
+    assert!(interval_steps(&again).is_empty() && written_steps(&again).is_empty());
+    fs::remove_file(&kept).expect("lose the interval list");
+    let again = qc(&dir, &resume);
+    assert_eq!(interval_steps(&again), ["BedToIntervalList"]);
+    assert!(written_steps(&again).is_empty(), "the collectors stay kept");
+
+    let switched = qc(&dir, &["--panel", PANEL, "--force"]);
+    assert_eq!(code(&switched), 0, "{}", stderr(&switched));
+    assert!(
+        !kept.exists(),
+        "the interval list of a dropped BED is removed"
+    );
+    assert!(dir.join("s.hs_metrics").is_file());
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn plan_lists_the_prepare_step_of_a_bed_panel() {
+    let dir = fresh_dir("plan-bed");
+    let prefix = dir.join("s");
+    let prefix = prefix.to_str().expect("utf-8");
+    let plan = bammetrics(&["plan", BAM, "-o", prefix, "--panel", BED]);
+    assert_eq!(code(&plan), 0, "{}", stderr(&plan));
+    let text = stdout(&plan);
+    assert!(
+        text.contains(&format!(
+            "  run   BedToIntervalList  {prefix}.panel.interval_list  the --panel BED"
+        )),
+        "{text}"
+    );
+    assert!(
+        text.contains("  reads     1 BAM read: 1 for the pass, 0 own reads\n"),
+        "{text}"
+    );
+    let lines = bammetrics(&[
+        "plan", BAM, "-o", prefix, "--panel", BED, "--format", "jsonl",
+    ]);
+    let step = stdout(&lines)
+        .lines()
+        .map(|l| Json::parse(l).expect("JSON line"))
+        .find(|e| e.get("id").and_then(Json::as_str) == Some("BedToIntervalList"))
+        .expect("prepare step");
+    assert_eq!(step.get("read").and_then(Json::as_str), Some("header"));
+    let plan = bammetrics(&["plan", BAM, "-o", prefix, "--panel", PANEL]);
+    assert!(
+        !stdout(&plan).contains("BedToIntervalList"),
+        "{}",
+        stdout(&plan)
+    );
+    assert!(!dir.exists(), "plan wrote nothing");
 }
