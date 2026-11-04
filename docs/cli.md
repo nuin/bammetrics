@@ -175,6 +175,40 @@ line and one line per row, `human` an aligned table (a row per line up to 6 colu
 forms print Picard's cell text. For `QualityScoreDistribution` and `MeanQualityByCycle`,
 whose file has no metrics class, the rows are the histogram.
 
+## bed-to-interval-list
+
+```bash
+bammetrics bed-to-interval-list panel.bed --from-bam sample.bam -o panel.interval_list
+bammetrics bed-to-interval-list panel.bed --dict ref.dict -o -
+bammetrics CollectHsMetrics I=sample.bam O=hs.txt R=ref.fa \
+    BAIT_INTERVALS=panel.interval_list TARGET_INTERVALS=panel.interval_list
+```
+
+The verb writes the interval list `BedToIntervalList I=BED SD=FILE O=FILE` writes, byte for
+byte: `@HD VN:1.6 SO:coordinate`, the dictionary's `@SQ` lines with their fields in its
+order, then one line per BED interval (1-based, closed, `+` or `-`, the name or `.`).
+Without `-o`, or with `-o -`, the same bytes go to standard output. `-` as the BED reads
+standard input.
+
+- `--from-bam FILE`, `--dict FILE` and `--sd FILE` (`--sequence-dictionary`,
+  `SEQUENCE_DICTIONARY=`, `SD=`) are spellings of one option. The file type comes from its
+  name, as the Picard face reads it: a `.bam` name is read as a BAM header, a FASTA name
+  (`.fa`, `.fasta`, `.fna`, `.fa.gz`, `.fasta.gz`) finds the `.dict` beside it (its `.fai`
+  without one), and any other name is read as text with `@SQ` lines (`.dict`, SAM, interval list).
+  So `--from-bam x.dict` and `--dict x.bam` both work.
+- Two of those spellings on one command line exit 2, from the second one:
+  `bammetrics bed-to-interval-list: --from-bam and --dict both set SEQUENCE_DICTIONARY (from
+  --dict)`. One spelling given twice keeps the last value, as every option does.
+- `--sort` (default true), `--unique`, `--drop-missing-contigs` and
+  `--keep-length-zero-intervals` are Picard's options.
+- `--format json`, `jsonl`, `tsv` and `human` print the intervals as rows (`contig`,
+  `start`, `end`, `strand`, `name`), with no `sample`. `--threads` and `--sample` are
+  accepted and ignored: no BAM record is read, and an interval list has no sample.
+
+`qc --panel BED` runs the same conversion and keeps `PREFIX.panel.interval_list` (see qc
+and plan below). `hs-metrics`, `collect` and `qc` read a BED directly, so the verb is for
+Picard tools and other programs that take only interval lists.
+
 ## The 0.12 subcommands
 
 `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics` and `collect` were clap
@@ -345,11 +379,21 @@ reads the HsMetrics file whose path sorts first (`PREFIX.<bait stem>.hs_metrics`
 file is written and listed in the manifest. Two bait files with one stem are an error.
 
 Stages, in order: prepare (the BAM header, the input fingerprint, the preset, every file an
-option names; nothing written), pass (every one-pass collector on one read; a collector
+option names; then, when `--panel` names a BED, `BedToIntervalList` with the BAM as the
+dictionary writes `PREFIX.panel.interval_list`, the bytes `bammetrics bed-to-interval-list
+BED --from-bam BAM` writes; no BAM record is read), pass (every one-pass collector on one read; a collector
 that fails to build, fails on a record or panics fails alone, and a BAM read error fails
 the pass), post (the verdict over the files), report (`PREFIX.verdict.json` and
 `PREFIX.report.html`, the bytes `bammetrics report` writes for the same files and sample).
-`CollectWgsMetrics` walks reference loci and reads the BAM on its own.
+`CollectWgsMetrics` walks reference loci and reads the BAM on its own. A panel whose first
+non-blank line starts with `@` is an interval list already, and prepare writes nothing for
+it. The hs collector reads the `--panel` file itself, so its file, header line and
+`BAIT_SET` are the same with or without the prepare step. The prepare step is a step of the
+manifest (stage `prepare`, output kind `intervals`, the BED under `files`), so `--resume`
+keeps the interval list, a lost one is written again, and a later run without the BED
+removes it as a stale file. It is not counted as a collector; when it fails (a contig the
+BAM header lacks), the summary lists it as an `ERROR` line and `qc` exits 1 (`exit 1: 1
+collector(s) and 1 prepare step(s) failed` when hs fails on the same BED).
 
 `PREFIX.manifest.json` (schema `bammetrics.manifest/1`) holds per step its stage, tool,
 Picard argv and the argv hash, the tool version, the preset hash, the input path, size,
@@ -370,7 +414,9 @@ not, the classes no collector can write, and which steps `--resume` would skip. 
 the BAM header and the first and last 64 KiB of the BAM and of every further input file,
 and writes nothing.
 `--format jsonl` gives one `plan` event, a `step` event per collector (with `argv`,
-`outputs`, `rules`, `read`, `action`, `resumable`) and an `unmet` event per class.
+`outputs`, `rules`, `read`, `action`, `resumable`) and an `unmet` event per class. The
+prepare step of a `--panel` BED is listed under `prepare` in the text plan and as a `step`
+event with `read` `header`, before the collectors.
 
 The `qc` summary on stdout is at most 12 lines: the header (sample, band, preset, collectors,
 BAM reads, records the pass read: `4 collectors, 1 BAM read (41.8M records)`), every error, fail, warn and not-measured line (collapsed into `+N more, see

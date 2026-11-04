@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.14.0
+
+Report track phase 9 (docs/05): the `bed-to-interval-list` verb.
+
+### Added
+
+- `bammetrics bed-to-interval-list BED --from-bam BAM -o FILE` and `--dict FILE`, as docs/05
+  example 7 writes them. Both are spellings of `SEQUENCE_DICTIONARY` (`--sd`); the file type
+  comes from its name as the Picard face reads it, so `--from-bam x.dict` works too. Giving
+  two of the spellings exits 2 (`--from-bam and --dict both set SEQUENCE_DICTIONARY (from
+  --dict)`). `-o FILE`, `-o -` and no `-o` write the bytes `BedToIntervalList I= SD= O=`
+  writes; `-` reads the BED from standard input. A test pins the verb against the Picard
+  face, and the concordance suite compares it with Picard 3.5.0 on three BEDs with
+  `--from-bam` and `--dict`, to a file, to standard output and from standard input.
+- `qc --panel BED` keeps `PREFIX.panel.interval_list`: a prepare step runs
+  `BedToIntervalList` with the BAM as the dictionary before the pass and writes it
+  atomically. The manifest records it (stage `prepare`, output kind `intervals`, the BED
+  fingerprinted under `files`), so `--resume` keeps it, a lost file is written again, and a
+  later run without the BED removes it as stale. `plan` lists it under `prepare` (jsonl
+  `read` `header`). An interval list panel gets no step. The hs collector still reads the
+  BED, so its file and `BAIT_SET` are unchanged.
+- Fixtures `tests/data/targets.bed` (the five targets of `targets.interval_list`, unsorted,
+  with a track line and one minus strand) and `tests/data/chr1.dict` (`samtools dict` of
+  `ref_100k.fa`, named so that no tool finds it beside the FASTA).
+- Golden records: the Picard face, the verb with `--from-bam`, `--dict` to standard output
+  and `--format tsv`, the two-dictionaries and no-dictionary errors, and `qc` and `plan` with
+  a BED panel (108 fixture cases).
+
+### Changed
+
+- `bed-to-interval-list --help` describes the interval list: the summary, `-o` and
+  `--format` name it in place of a metrics file, and `--threads` and `--sample` read
+  `Accepted and ignored`. Its json forms carry no `sample`. A missing dictionary names
+  `--from-bam` and `--dict`. Other verbs' help is unchanged; the `-o` and `--format` lines
+  come from one per-verb noun whose default is `metrics file`.
+- `qc` exits 1 with `exit 1: N collector(s) and M prepare step(s) failed` when a prepare
+  step failed too (a BED contig the BAM lacks fails both the conversion and hs); with only
+  collectors failing the line is unchanged.
+- Golden records and report snapshots carry 0.14.0 (version only).
+
 ## 0.13.0
 
 Report track phase 8 (docs/05): the verb grammar.
