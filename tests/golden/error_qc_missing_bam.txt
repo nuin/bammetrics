@@ -1,0 +1,10 @@
+## argv
+qc
+tests/data/nope.bam
+-o
+OUT/sample
+## exit
+1
+## stdout
+## stderr
+bammetrics qc: tests/data/nope.bam not found (from BAM)

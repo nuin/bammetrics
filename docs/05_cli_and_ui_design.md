@@ -71,24 +71,24 @@ Spelling rules:
 - Single-file verbs: `-o FILE`. No `-o` prints Picard text to stdout, as today.
 - Multi-file verbs (`qc`, `collect`, `multiple-metrics`, `gc-bias`): `-o PREFIX`. No `-o` means `./<bam stem>`, and the summary says so. Today `collect` errors here.
 - Extensions come from one table in registry.rs. They reuse the CollectMultipleMetrics extensions, so both faces write the same names: `.alignment_summary_metrics`, `.insert_size_metrics`, `.quality_yield_metrics`, `.hs_metrics`.
-- Several Hs sets: `PREFIX.<name>.hs_metrics`. The name comes from `--hs name=baits,targets` or the bait file stem. A test pins the name table so it cannot drift from the Picard face.
+- Several Hs sets: `PREFIX.<name>.hs_metrics`. The name is the bait file stem (`qc --hs BAITS TARGETS`, as `collect --hs` names it); two bait files with one stem are an error. A `--hs name=baits,targets` form is not built (0.12.0). A test pins the name table so it cannot drift from the Picard face.
 - Run files: `PREFIX.manifest.json`, `PREFIX.verdict.json`, `PREFIX.report.html`.
-- Missing output directories are created. Files are written to `name.tmp` and renamed. Overwrites are listed in the summary.
+- Missing output directories are created. A `qc -o` that ends in `/` or names an existing directory gets the BAM stem as the file part. Files are written to a temporary name and renamed. The summary counts overwrites (`6 replaced`); it does not list them.
 - The sample name is not written into Picard files, which stay byte-compatible. It goes in the manifest.
 
 ### 2.4 Exit codes
 
+The table `check.rs` implements (`EXIT_CODES`), shared by `check` and `qc`:
+
 | Code | Meaning |
 |---|---|
-| 0 | success. For `check`, verdict pass. |
-| 1 | runtime failure (I/O, internal) |
-| 2 | usage or plan error, nothing ran |
-| 3 | input error (missing file, truncated or unsorted BAM, no .fai) |
-| 10 | `check` or `--fail-on warn`: at least 1 warn |
-| 11 | `check` or `--fail-on fail`: at least 1 fail |
-| 130 | interrupted |
+| 0 | success: every verdict passes, or none reaches `--fail-on` (`qc` without `--fail-on`: any verdict) |
+| 1 | an input could not be read (a missing BAM, FASTA, .fai or interval file), the preset does not parse, or a `qc` collector failed |
+| 2 | usage error, nothing ran (bad arguments; `qc` over an earlier run without `--resume` or `--force`) |
+| 10 | a verdict reached `--fail-on`: fail, or warn with `--fail-on warn` (`check` defaults to `--fail-on fail`) |
+| 11 | a verdict is incomplete (a rule's file, row or column is missing) and none reached `--fail-on` |
 
-`qc` exits 0 on a failed verdict unless `--fail-on warn|fail` is set. A Nextflow task is not killed by a bad sample. `check` always gates. The summary prints `use --fail-on fail or bammetrics check to gate`. The Picard face keeps 0 and 1. Both faces use the same defaults for the same verdict: `qc` never gates, `check` always gates.
+`qc` exits 0 on a failed verdict unless `--fail-on warn|fail` is set. A Nextflow task is not killed by a bad sample. `check` always gates. The summary prints `use --fail-on fail or bammetrics check to gate`. A `qc` run with a failed collector exits 1 after it writes the other files, the verdict and the page. The Picard face keeps 0 and 1. Both faces use the same defaults for the same verdict: `qc` never gates, `check` always gates.
 
 ### 2.5 Twelve worked examples
 
@@ -111,7 +111,7 @@ Kebab and Picard spellings mix freely.
 **3. Quick look, no preset.**
 ```
 $ bammetrics qc sample.bam -R ref.fa
-S1  preset generic (default, 6 checks)  1 pass  2.1 s
+S1  WARN  preset generic v1 (6dd89e)  4 collectors, 1 BAM read (41.8M records)
 WARN  alignment.PCT_ADAPTER   0.012   above 0.005   adapter in 1.2% of reads
 NOT MEASURED  gc-bias.AT_DROPOUT  needs -R
 PASS  4 checks
@@ -122,20 +122,20 @@ With no `--preset`, `qc` uses the named preset `generic` and prints its name. It
 **4. Clinical panel, one sample.**
 ```
 $ bammetrics qc sample.bam --preset clinical-panel --panel panel.bed -R ref.fa -o out/NA12878
-NA12878  clinical-panel 1 (a3f9c2)  3.4 s  41.8M reads  1 BAM read
+NA12878  FAIL  preset clinical-panel v1 (3d0bcd)  4 collectors, 1 BAM read (41.8M records)
 FAIL  hs.PCT_TARGET_BASES_20X  0.874  below 0.95   12.6% of panel bases are under 20x
 WARN  insert.MEDIAN_INSERT_SIZE  171  below 180   fragments shorter than usual
 PASS  12 checks
-wrote 9 files, report out/NA12878.report.html
+wrote 7 files, report out/NA12878.report.html
 ```
-`--panel` is baits and targets. The preset runs quality-yield, alignment-summary, insert-size, hs with per-base coverage, gc-bias and duplicate-metrics in 1 read.
+`--panel` is baits and targets. The collectors follow the preset's rules: `clinical-panel` reads quality yield, alignment summary, insert size and hs, so those 4 run in 1 read. `--panel` adds hs under a preset with no hs rule too. A rule set that reads gc bias or duplication adds those collectors. Hs per-base coverage is not requested. The summary has no elapsed time, so the same inputs print the same stdout; the progress line on stderr shows the rate.
 
 **5. Vendor baits as a second Hs run.**
 ```
 bammetrics qc sample.bam --preset clinical-panel --panel panel.bed \
-    --hs vendor=vendor.interval_list,panel.bed -R ref.fa -o out/NA12878
+    --hs vendor.interval_list panel.bed -R ref.fa -o out/NA12878
 ```
-Writes `out/NA12878.hs_metrics` and `out/NA12878.vendor.hs_metrics`.
+Writes `out/NA12878.vendor.hs_metrics` and `out/NA12878.panel.hs_metrics`, each named by its bait file stem. The verdict reads the one whose path sorts first (`panel`).
 
 **6. Cohort from a sample sheet.**
 ```
@@ -193,13 +193,13 @@ bammetrics hs-metrics: missing --targets (Picard: TARGET_INTERVALS)
 exit status 2
 
 $ bammetrics qc nope.bam
-bammetrics qc: input 'nope.bam' not found (from INPUT)
-exit status 3
+bammetrics qc: nope.bam not found (from BAM)
+exit status 1
 
 $ bammetrics check out/NA12878 --preset clinical-panel --format jsonl > checks.jsonl; echo $?
 11
 ```
-`plan` is the dry run. `bammetrics plan qc ... --format json` lists steps, inputs, outputs and BAM reads per step, writes nothing, and rejects type errors before any BAM is opened.
+`plan` is the dry run. `bammetrics plan BAM [the qc options] [--format text|jsonl]` lists the stages, each collector with its argv, outputs and rules, the BAM reads (the shared pass plus each own read), and the steps `--resume` would skip. It writes nothing. It reads the BAM header and the first and last 64 KiB of each input, as `qc` prepare does, so a file that is not a BAM exits 1 there.
 
 ## 3. Chaining model
 
@@ -219,7 +219,7 @@ Three layers. No workflow language.
 Rules:
 
 - A collector that needs a file from an earlier step waits for it. Hs waits for the interval list. A collector joins the pass only when its input BAM, reference and read filter match. `plan` prints the reason when it does not.
-- Per-collector error isolation (NEW in pass.rs): one failing collector marks only itself failed, the others finish. A failure in reading the BAM still fails the pass. The concordance suite gates this change.
+- Per-collector error isolation (`pass::run_isolated`, 0.12.0): one failing collector marks only itself failed, the others finish. A failure in reading the BAM still fails the pass. The concordance suite gates this change.
 - Resume: `qc --resume` reads `PREFIX.manifest.json`. Each step stores the argv hash, tool version, preset hash, input size, mtime, and a hash of the first and last 64 KiB of the input. A step is skipped when all match and its outputs exist. If 1 of 6 collector files is missing, the pass reruns for that collector only. `--force` reruns all. `report` always reruns because it takes milliseconds.
 - Users who need loops, scatter, conditionals or clusters use the shell, make, Snakemake or Nextflow.
 
@@ -358,7 +358,7 @@ A CI benchmark on the test fixtures fails the build at 2x any target.
 
 ### 4.10 Terminal output
 
-Progress goes to stderr, only on a terminal, 10 updates per second: `reading 12.4M reads  1.9M/s  62%`. Percent is compressed bytes read over file size, so stdin shows none. `NO_COLOR` and `-q` are honored. The summary is at most 12 lines: header, every fail, every warn, a pass count, files written, report path. Extra failures collapse to `+N more, see report`. `--format jsonl` emits `start`, `progress`, `file`, `check` and `done` events, one per line.
+Progress goes to stderr, only on a terminal, 10 updates per second: `reading 12.4M reads  1.9M/s  62%`. Percent is compressed bytes read over file size, so stdin shows none. `NO_COLOR` and `-q` are honored. The summary is at most 12 lines: header (sample, band, preset, collectors, BAM reads, records read; no elapsed time, so stdout is reproducible), every fail, every warn, a pass count, files written, report path. Extra failures collapse to `+N more, see report`. `--format jsonl` emits `start`, `progress`, `file`, `error`, `check` and `done` events, one per line. An error that stops the run emits an `error` event and a `done` event with its exit code.
 
 ## 5. Python mirror
 
@@ -433,12 +433,12 @@ Risks, each with its mitigation:
 
 ## 8. Open decisions for the maintainer
 
-1. Does `qc` without `--preset` use `generic` (this proposal), or must it require a preset?
+1. Does `qc` without `--preset` use `generic` (this proposal), or must it require a preset? Decided: `generic` (0.12.0).
 2. Are the 14 clinical-panel starting values in 4.3 acceptable as shipped defaults, or does a lab review them first?
-3. Should `qc` exit 0 on a failed verdict by default (this proposal), or gate by default?
+3. Should `qc` exit 0 on a failed verdict by default (this proposal), or gate by default? Decided: exit 0 unless `--fail-on` is given; `check` always gates (0.12.0).
 4. Is `toml` acceptable as a dependency, or should presets use a hand-written format?
 5. Is the 75-day plan acceptable, or should phases 9 to 11 move after 0.8?
-6. Do you want the sample sheet runner (phase 10) in this scope, or leave cohorts to Nextflow plus `report`?
+6. Do you want the sample sheet runner (phase 10) in this scope, or leave cohorts to Nextflow plus `report`? Decided: no sample sheet runner for now; phase 10 is dropped.
 7. Should the old subcommands be listed as aliases in `help` and docs, or hidden after 0.9?
 8. Who writes and reviews the column glossary text (about 400 entries, 1 week of review)?
 9. Is a `data-theme` override for dark mode wanted, or only `prefers-color-scheme`?

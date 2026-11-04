@@ -323,10 +323,15 @@ impl Preset {
 /// FNV-1a 64 over the text with every `\r` removed, as 16 hex digits. The
 /// same file hashes the same on every platform and checkout line ending.
 pub fn content_hash(text: &str) -> String {
+    bytes_hash(text.bytes().filter(|&b| b != b'\r'))
+}
+
+/// FNV-1a 64 over `bytes`, as 16 hex digits.
+pub fn bytes_hash(bytes: impl IntoIterator<Item = u8>) -> String {
     const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
     const PRIME: u64 = 0x0000_0100_0000_01b3;
     let mut hash = OFFSET;
-    for byte in text.bytes().filter(|&b| b != b'\r') {
+    for byte in bytes {
         hash ^= u64::from(byte);
         hash = hash.wrapping_mul(PRIME);
     }

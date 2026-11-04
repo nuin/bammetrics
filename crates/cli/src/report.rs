@@ -53,13 +53,13 @@ pub struct ReportArgs {
     pub date: Option<String>,
 }
 
-/// Write `text` to `path` through a temporary file beside it, so a reader
+/// Write `contents` to `path` through a temporary file beside it, so a reader
 /// never sees a partial file. The temporary name carries the process id, a
 /// counter and a nanosecond clock, so nothing can be placed there ahead of
 /// time; it is opened with `create_new` (O_EXCL), which refuses an existing
 /// path and never follows a symlink, so a pre-placed link cannot redirect
 /// the write.
-pub fn write_atomic(path: &Path, text: &str) -> Result<()> {
+pub fn write_atomic(path: &Path, contents: impl AsRef<[u8]>) -> Result<()> {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let dir = path.parent().filter(|d| !d.as_os_str().is_empty());
     let name = path
@@ -75,18 +75,18 @@ pub fn write_atomic(path: &Path, text: &str) -> Result<()> {
         COUNTER.fetch_add(1, Ordering::Relaxed)
     );
     let tmp = dir.map_or_else(|| PathBuf::from(&tmp), |d| d.join(&tmp));
-    write_via(path, &tmp, text)
+    write_via(path, &tmp, contents.as_ref())
 }
 
 /// [`write_atomic`] through the given temporary path.
-fn write_via(path: &Path, tmp: &Path, text: &str) -> Result<()> {
+fn write_via(path: &Path, tmp: &Path, contents: &[u8]) -> Result<()> {
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(tmp)
         .map_err(|e| Error::io(tmp, e))?;
     let written = file
-        .write_all(text.as_bytes())
+        .write_all(contents)
         .and_then(|()| file.sync_all())
         .and_then(|()| fs::rename(tmp, path));
     if let Err(e) = written {
@@ -135,7 +135,7 @@ pub fn run(args: ReportArgs) -> Result<u8> {
     let mut files = 0;
     for sample in &samples {
         let verdict = evaluate(&preset, &sample.inputs, Some(&sample.name));
-        write_atomic(&out.join(verdict_name(&sample.name)), &verdict.to_json())?;
+        write_atomic(&out.join(verdict_name(&sample.name)), verdict.to_json())?;
         let page = bammetrics_report::render(&verdict, &sample.inputs, &options);
         write_atomic(&out.join(page_name(&sample.name)), &page)?;
         files += 2;
@@ -144,7 +144,7 @@ pub fn run(args: ReportArgs) -> Result<u8> {
     let index = out.join("index.html");
     write_atomic(
         &index,
-        &bammetrics_report::render_index(&summaries, &options),
+        bammetrics_report::render_index(&summaries, &options),
     )?;
     files += 1;
     print!("{}", summary(&summaries, &out, files));
@@ -294,7 +294,7 @@ mod atomic_tests {
         let tmp = dir.join(".index.html.planted.tmp");
         std::os::unix::fs::symlink(&victim, &tmp).expect("symlink");
         let path = dir.join("index.html");
-        let err = write_via(&path, &tmp, "overwritten").expect_err("create_new refuses the link");
+        let err = write_via(&path, &tmp, b"overwritten").expect_err("create_new refuses the link");
         assert!(err.to_string().contains(".index.html.planted.tmp"), "{err}");
         assert_eq!(fs::read_to_string(&victim).expect("read"), "keep me");
         assert!(!path.exists());

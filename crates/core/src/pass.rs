@@ -6,12 +6,16 @@
 //! Several tools can share one read ([`run_many`]): each one is a boxed
 //! [`Collector`] fed from batches on a thread of its own, the way Picard's
 //! `SinglePassSamProgram.makeItSo` hands every record to every program of
-//! `CollectMultipleMetrics`.
+//! `CollectMultipleMetrics`. [`run_isolated`] is the same read for `qc`:
+//! a collector that fails or panics fails alone, and the others finish.
 
+use std::any::Any;
 use std::fs::File;
+use std::io::{self, Read};
 use std::num::NonZero;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, SyncSender};
 use std::thread::{self, JoinHandle};
 
@@ -134,8 +138,59 @@ impl Default for Limits {
     }
 }
 
+/// The header of the BAM at `path`, no record read.
+pub fn read_header(path: &Path) -> Result<sam::Header> {
+    let input = |source| Error::Input {
+        path: path.to_path_buf(),
+        source,
+    };
+    let file = File::open(path).map_err(input)?;
+    bam::io::Reader::new(file).read_header().map_err(input)
+}
+
 /// [`run`] with `STOP_AFTER` and `ASSUME_SORTED` applied.
 pub fn run_limited<A, F>(path: &Path, threads: usize, limits: Limits, build: F) -> Result<A::Output>
+where
+    A: Accumulator,
+    F: FnOnce(&sam::Header) -> Result<A>,
+{
+    read(path, threads, limits, None, build)
+}
+
+/// How far a pass has got: records handed to the accumulator and
+/// compressed bytes read from the file.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Progress {
+    pub records: u64,
+    pub bytes: u64,
+}
+
+/// A progress callback: called every [`BATCH_RECORDS`] records and once
+/// after the last.
+pub type OnProgress<'a> = &'a mut dyn FnMut(Progress);
+
+/// The file, counting the bytes the BGZF reader takes from it.
+struct Counted {
+    file: File,
+    bytes: Arc<AtomicU64>,
+}
+
+impl Read for Counted {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let n = self.file.read(buf)?;
+        self.bytes.fetch_add(n as u64, Ordering::Relaxed);
+        Ok(n)
+    }
+}
+
+/// The read loop behind [`run_limited`] and [`run_isolated`].
+fn read<A, F>(
+    path: &Path,
+    threads: usize,
+    limits: Limits,
+    mut progress: Option<OnProgress>,
+    build: F,
+) -> Result<A::Output>
 where
     A: Accumulator,
     F: FnOnce(&sam::Header) -> Result<A>,
@@ -144,7 +199,11 @@ where
         path: path.to_path_buf(),
         source,
     };
-    let file = File::open(path).map_err(input)?;
+    let bytes = Arc::new(AtomicU64::new(0));
+    let file = Counted {
+        file: File::open(path).map_err(input)?,
+        bytes: Arc::clone(&bytes),
+    };
     let workers = NonZero::new(threads).unwrap_or(NonZero::<usize>::MIN);
     let mut reader = bam::io::Reader::from(bgzf::io::MultithreadedReader::with_worker_count(
         workers, file,
@@ -156,13 +215,25 @@ where
     let mut accumulator = build(&header)?;
     let mut record = bam::Record::default();
     let mut records = 0;
+    let mut report = |records: u64| {
+        if let Some(callback) = progress.as_mut() {
+            callback(Progress {
+                records,
+                bytes: bytes.load(Ordering::Relaxed),
+            });
+        }
+    };
     while !accumulator.done() && reader.read_record(&mut record)? != 0 {
         accumulator.accept(&record)?;
         records += 1;
+        if records % BATCH_RECORDS as u64 == 0 {
+            report(records);
+        }
         if limits.stop_after > 0 && records >= limits.stop_after {
             break;
         }
     }
+    report(records);
     accumulator.finish()
 }
 
@@ -175,9 +246,32 @@ where
     F: FnOnce(&sam::Header) -> Result<Vec<Box<dyn Collector>>>,
 {
     let results = run_limited(path, threads, limits, |header| {
-        Ok(Fanout::new(build(header)?))
+        Ok(Fanout::new(
+            build(header)?.into_iter().map(Ok).collect(),
+            false,
+        ))
     })?;
     results.into_iter().collect()
+}
+
+/// One pass over `path` shared by the collectors `build` returns, each
+/// isolated from the others: a collector that fails to build, fails on a
+/// record, fails to finish or panics gives its own `Err`, and the others
+/// finish. Only a failure to open or read the BAM fails the pass. The
+/// results come back in the order of `build`.
+pub fn run_isolated<F>(
+    path: &Path,
+    threads: usize,
+    limits: Limits,
+    progress: Option<OnProgress>,
+    build: F,
+) -> Result<Vec<Result<ToolOutput>>>
+where
+    F: FnOnce(&sam::Header) -> Vec<Result<Box<dyn Collector>>>,
+{
+    read(path, threads, limits, progress, |header| {
+        Ok(Fanout::new(build(header), true))
+    })
 }
 
 /// Records per batch handed to the collector threads.
@@ -247,24 +341,46 @@ where
     /// Close the queue and wait for the metric. A panic on its thread
     /// carries on here.
     pub(crate) fn finish(self) -> Result<A::Output> {
-        drop(self.sender);
-        self.handle
-            .join()
+        self.join()
             .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+    }
+
+    /// Close the queue and wait for the thread: the metric, or the panic
+    /// that ended the thread.
+    fn join(self) -> thread::Result<Result<A::Output>> {
+        drop(self.sender);
+        self.handle.join()
     }
 }
 
-/// Collectors of one pass, each on its own thread, fed in batches.
+/// The text of a panic payload, for the error that replaces it.
+fn panic_text(panic: &(dyn Any + Send)) -> String {
+    panic
+        .downcast_ref::<&str>()
+        .map(|s| (*s).to_owned())
+        .or_else(|| panic.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "no message".to_owned())
+}
+
+/// Collectors of one pass, each on its own thread, fed in batches. A
+/// collector that failed to build holds its error and gets no batch.
 struct Fanout {
     batch: Vec<bam::Record>,
-    workers: Vec<Worker<Box<dyn Collector>>>,
+    workers: Vec<Result<Worker<Box<dyn Collector>>>>,
+    /// True: a panic on a collector thread becomes that collector's error.
+    /// False: it carries on to the caller, as a Picard exception would.
+    isolate: bool,
 }
 
 impl Fanout {
-    fn new(collectors: Vec<Box<dyn Collector>>) -> Self {
+    fn new(collectors: Vec<Result<Box<dyn Collector>>>, isolate: bool) -> Self {
         Self {
             batch: Vec::with_capacity(BATCH_RECORDS),
-            workers: collectors.into_iter().map(Worker::spawn).collect(),
+            workers: collectors
+                .into_iter()
+                .map(|c| c.map(Worker::spawn))
+                .collect(),
+            isolate,
         }
     }
 
@@ -273,7 +389,7 @@ impl Fanout {
             &mut self.batch,
             Vec::with_capacity(BATCH_RECORDS),
         ));
-        for worker in &self.workers {
+        for worker in self.workers.iter().flatten() {
             worker.send(&batch);
         }
     }
@@ -294,7 +410,23 @@ impl Accumulator for Fanout {
         if !self.batch.is_empty() {
             self.flush();
         }
-        Ok(self.workers.into_iter().map(Worker::finish).collect())
+        let isolate = self.isolate;
+        Ok(self
+            .workers
+            .into_iter()
+            .map(|worker| {
+                let worker = worker?;
+                if !isolate {
+                    return worker.finish();
+                }
+                worker.join().unwrap_or_else(|panic| {
+                    Err(Error::Metric(format!(
+                        "the collector stopped: {}",
+                        panic_text(panic.as_ref())
+                    )))
+                })
+            })
+            .collect())
     }
 }
 
@@ -360,17 +492,96 @@ mod tests {
         });
         collector.accept(&record).expect("first");
         assert!(Collector::finish(collector).expect("finish").main.is_none());
-        let mut fanout = Fanout::new(vec![
-            boxed(FailsSecond(0), |_| Ok(ToolOutput::NONE)),
-            boxed(FailsSecond(10), |n| {
-                assert_eq!(n, 12);
-                Ok(ToolOutput::NONE)
-            }),
-        ]);
+        let mut fanout = Fanout::new(
+            vec![
+                Ok(boxed(FailsSecond(0), |_| Ok(ToolOutput::NONE))),
+                Ok(boxed(FailsSecond(10), |n| {
+                    assert_eq!(n, 12);
+                    Ok(ToolOutput::NONE)
+                })),
+            ],
+            false,
+        );
         fanout.accept(&record).expect("one");
         fanout.accept(&record).expect("two");
         let results = fanout.finish().expect("results");
         assert!(results[0].is_err());
         assert!(results[1].is_ok());
+    }
+
+    /// Counts records and panics on the second when asked to.
+    struct Counter {
+        seen: usize,
+        panic_on_second: bool,
+    }
+
+    impl Accumulator for Counter {
+        type Output = usize;
+
+        fn accept(&mut self, _: &bam::Record) -> Result<()> {
+            self.seen += 1;
+            assert!(!(self.panic_on_second && self.seen == 2), "planted panic");
+            Ok(())
+        }
+
+        fn finish(self) -> Result<usize> {
+            Ok(self.seen)
+        }
+    }
+
+    fn fixture() -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/insert_size.bam")
+    }
+
+    /// A collector whose finish reports its record count as a note.
+    fn counting(panic_on_second: bool) -> Box<dyn Collector> {
+        boxed(
+            Counter {
+                seen: 0,
+                panic_on_second,
+            },
+            |n| Err(Error::Metric(format!("{n} records"))),
+        )
+    }
+
+    #[test]
+    fn an_isolated_pass_keeps_each_failure_to_its_own_collector() {
+        let mut updates = Vec::new();
+        let mut on_progress = |p: Progress| updates.push(p);
+        let results = run_isolated(
+            &fixture(),
+            2,
+            Limits::default(),
+            Some(&mut on_progress),
+            |_| {
+                vec![
+                    Ok(boxed(FailsSecond(0), |_| Ok(ToolOutput::NONE))),
+                    Err(Error::Usage("no such interval file".to_owned())),
+                    Ok(counting(true)),
+                    Ok(counting(false)),
+                ]
+            },
+        )
+        .expect("the BAM reads");
+        assert_eq!(results.len(), 4);
+        assert!(matches!(&results[0], Err(Error::Metric(m)) if m == "second record"));
+        assert!(matches!(&results[1], Err(Error::Usage(m)) if m == "no such interval file"));
+        assert!(
+            matches!(&results[2], Err(Error::Metric(m)) if m == "the collector stopped: planted panic")
+        );
+        assert!(matches!(&results[3], Err(Error::Metric(m)) if m == "10 records"));
+        let last = updates.last().expect("a final update");
+        assert_eq!(last.records, 10);
+        assert!(last.bytes > 0);
+    }
+
+    #[test]
+    fn an_unreadable_bam_still_fails_the_isolated_pass() {
+        let missing = fixture().with_file_name("no_such.bam");
+        let err = run_isolated(&missing, 1, Limits::default(), None, |_| {
+            vec![Ok(counting(false))]
+        })
+        .expect_err("no file");
+        assert!(matches!(err, Error::Input { .. }));
     }
 }

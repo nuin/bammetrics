@@ -13,7 +13,7 @@ pub mod table;
 pub mod verdict;
 
 pub use error::{Error, Result};
-pub use preset::{Bound, Comparator, Preset, Rule, content_hash, names};
+pub use preset::{Bound, Comparator, Preset, Rule, bytes_hash, content_hash, names};
 pub use verdict::{
     Band, Check, Counts, FileInfo, Input, PresetInfo, SCHEMA, Status, Verdict, evaluate,
     evaluate_files,

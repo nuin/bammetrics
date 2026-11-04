@@ -317,7 +317,7 @@ pub const TOOL: Tool = Tool {
         Opt::value(&["BAIT_SET_NAME", "N"])
     ),
     run: run_hs,
-    collector: None,
+    collector: Some(hs_collector),
 };
 
 pub const PCR_TOOL: Tool = Tool {
@@ -338,6 +338,37 @@ fn run_pcr(inv: &Invocation) -> Result<ToolOutput> {
     run_variant(inv, Variant::TargetedPcr)
 }
 
+/// `CollectHsMetrics` as a one-pass collector, for `qc`: the metrics file
+/// and, when asked for, the sensitivity file. An `ALLELE_FRACTION` outside
+/// 0 to 1 fails the collector and writes no file. Picard has no
+/// `CollectMultipleMetrics` program for it, and `run_hs` keeps its own
+/// read.
+fn hs_collector(inv: &Invocation, header: &sam::Header) -> Result<Box<dyn pass::Collector>> {
+    let opts = Options::from_invocation(inv, Variant::Hs)?;
+    let capture = CaptureMetrics::new(&opts, header)?;
+    Ok(pass::boxed(capture, move |report| {
+        let mut output = ToolOutput::file(report.metrics_output());
+        if let Some(file) = sensitivity_file(&opts, &report)? {
+            output.extra.push(file);
+        }
+        Ok(output)
+    }))
+}
+
+/// The `THEORETICAL_SENSITIVITY_OUTPUT` file, when the option is given.
+fn sensitivity_file(opts: &Options, report: &Report) -> Result<Option<(PathBuf, MetricsOutput)>> {
+    let Some(path) = &opts.theoretical_sensitivity_output else {
+        return Ok(None);
+    };
+    let rows = calculate_sensitivities(
+        opts.sample_size,
+        &report.unfiltered_depth,
+        &report.unfiltered_base_quality,
+        &opts.allele_fractions,
+    )?;
+    Ok(Some((path.clone(), MetricsOutput::from_rows(&rows, None))))
+}
+
 /// `CollectTargetedMetrics.doWork`: the pass, the metrics file, then the
 /// sensitivity file from the collector's shared histograms. Picard writes
 /// `OUTPUT` before it computes the sensitivities, so an `ALLELE_FRACTION`
@@ -349,24 +380,14 @@ fn run_variant(inv: &Invocation, variant: Variant) -> Result<ToolOutput> {
         CaptureMetrics::new(&opts, header)
     })?;
     let mut output = ToolOutput::file(report.metrics_output());
-    if let Some(path) = &opts.theoretical_sensitivity_output {
-        let rows = match calculate_sensitivities(
-            opts.sample_size,
-            &report.unfiltered_depth,
-            &report.unfiltered_base_quality,
-            &opts.allele_fractions,
-        ) {
-            Ok(rows) => rows,
-            Err(error) => {
-                if inv.output.is_some() {
-                    write_files(inv, &output)?;
-                }
-                return Err(error);
+    match sensitivity_file(&opts, &report) {
+        Ok(file) => output.extra.extend(file),
+        Err(error) => {
+            if inv.output.is_some() {
+                write_files(inv, &output)?;
             }
-        };
-        output
-            .extra
-            .push((path.clone(), MetricsOutput::from_rows(&rows, None)));
+            return Err(error);
+        }
     }
     Ok(output)
 }

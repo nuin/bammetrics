@@ -62,9 +62,15 @@ Every option is listed in [docs/cli.md](docs/cli.md).
 ## Report
 
 ```bash
+bammetrics qc sample.bam --preset clinical-panel --panel panel.bed -R ref.fa -o out/NA12878
 bammetrics report runs/ --preset clinical-panel -o site/   # site/index.html, site/SAMPLE.report.html
 bammetrics check runs/ --preset clinical-panel             # exit 10 on a failed verdict, 11 when incomplete
 ```
+
+`qc` reads the BAM once for every collector the preset needs and writes
+`out/NA12878.*`: the metrics files, `.verdict.json`, `.report.html` and a manifest that
+`--resume` uses to skip finished collectors; `bammetrics plan` with the same options shows
+what would run.
 
 `report` finds the metrics files by their `## METRICS CLASS` block in any directory of
 Picard output, no bammetrics run needed, and judges each sample against a preset of

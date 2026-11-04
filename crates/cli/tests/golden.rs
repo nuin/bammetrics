@@ -121,6 +121,13 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_report_not_a_directory", "report", "tests/data/nope"),
     case!("error_check_no_metrics", "check", "crates/cli"),
     case!("error_check_unknown_preset", "check", "PICARD", "--preset", "nope"),
+    // qc and plan: the summary, every file but the page, the exit codes.
+    case!("qc_generic", "qc", "IS", "-o", "OUT/sample", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("qc_clinical_panel_jsonl", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--panel", "IL", "-R", "REF", "--format", "jsonl", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("qc_fail_on_incomplete", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--fail-on", "fail", "--sample", "NA12878", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("plan_generic", "plan", "IS", "-o", "OUT/sample"),
+    case!("plan_wgs_jsonl", "plan", "IS", "-o", "OUT/sample", "-R", "REF", "--preset", "wgs", "--format", "jsonl"),
+    case!("error_qc_missing_bam", "qc", "tests/data/nope.bam", "-o", "OUT/sample"),
 ];
 
 /// The same tools on corpus BAM t1, with its reference and interval lists.
@@ -210,6 +217,12 @@ fn record(case: &Case) -> String {
     files.sort();
     for (name, path) in files {
         text.push_str(&format!("## file {name}\n"));
+        // A report page is about 50 KB of CSS and SVG; its bytes are pinned
+        // by the crates/report snapshots and crates/cli/tests/qc.rs.
+        if name.ends_with(".html") {
+            text.push_str("<page not recorded>\n");
+            continue;
+        }
         text.push_str(&String::from_utf8_lossy(
             &fs::read(path).expect("read output file"),
         ));
@@ -236,7 +249,8 @@ fn collect_files(base: &Path, dir: &Path, files: &mut Vec<(String, PathBuf)>) {
 
 /// The record with the output directory written as `OUT`, the binary's
 /// file name (clap prints it in usage lines) as `bammetrics`, and the clock
-/// header replaced.
+/// header and two manifest fields replaced: the input mtime changes with
+/// each checkout, and the argv hash covers the temporary `OUT` path.
 fn normalize(text: &str, out: &str) -> String {
     let binary = binary();
     let name = binary
@@ -248,6 +262,12 @@ fn normalize(text: &str, out: &str) -> String {
     for line in text.lines() {
         if line.starts_with("# Started on: ") {
             normalized.push_str("# Started on: <time>");
+        } else if let Some(indent) = line.strip_suffix(line.trim_start())
+            && let Some(key) = ["mtime", "argv_hash"]
+                .into_iter()
+                .find(|key| line.trim_start().starts_with(&format!("\"{key}\": ")))
+        {
+            normalized.push_str(&format!("{indent}\"{key}\": \"<{key}>\","));
         } else {
             normalized.push_str(line);
         }
