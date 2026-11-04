@@ -1,0 +1,9 @@
+## argv
+quality-yield
+tests/data/insert_size.bam
+--use-original-qualities=maybe
+## exit
+2
+## stdout
+## stderr
+bammetrics quality-yield: expected true or false, got "maybe" (from --use-original-qualities)

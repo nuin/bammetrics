@@ -274,7 +274,7 @@ const NON_ZERO_OPTIONS: &[Opt] = wgs_options!(Opt::ignored(
 
 pub const TOOL: Tool = Tool {
     name: "CollectWgsMetrics",
-    summary: "one dict of the 32 WgsMetrics columns; the metrics file adds the coverage \
+    summary: "one row of the 32 WgsMetrics columns; the metrics file adds the coverage \
               histogram.",
     options: OPTIONS,
     run: run_wgs,
@@ -293,7 +293,7 @@ pub const RAW_TOOL: Tool = Tool {
 
 pub const NON_ZERO_TOOL: Tool = Tool {
     name: "CollectWgsMetricsWithNonZeroCoverage",
-    summary: "two dicts, CATEGORY WHOLE_GENOME and NON_ZERO_REGIONS (the zero-depth loci left \
+    summary: "two rows, CATEGORY WHOLE_GENOME and NON_ZERO_REGIONS (the zero-depth loci left \
               out), with the WgsMetrics columns.",
     options: NON_ZERO_OPTIONS,
     run: run_non_zero,

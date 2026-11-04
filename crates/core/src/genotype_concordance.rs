@@ -960,7 +960,7 @@ pub const TOOL: Tool = Tool {
     name: "GenotypeConcordance",
     summary: "the truth and call VCFs compared by position. OUTPUT is a prefix: \
               PREFIX.genotype_concordance_summary_metrics, _detail_metrics and \
-              _contingency_metrics; one dict per file: file and rows.",
+              _contingency_metrics; Python returns one row per file: file and rows.",
     options: &[
         Opt::path(&["TRUTH_VCF", "TV"], "The truth VCF.").required(),
         Opt::path(&["CALL_VCF", "CV"], "The call VCF.").required(),

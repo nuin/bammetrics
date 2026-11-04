@@ -160,7 +160,7 @@ const RUN_LEVEL: [&str; 7] = [
 pub const TOOL: Tool = Tool {
     name: "CollectMultipleMetrics",
     summary: "every PROGRAM on one read of the BAM, each written to OUTPUT plus its Picard \
-              extension (plus FILE_EXTENSION); one dict per file written: file and rows.",
+              extension (plus FILE_EXTENSION); Python returns Python returns one row per file: file and rows.",
     options: &[
         Opt::output(&["OUTPUT", "O"])
             .with_help("The output prefix: each program writes PREFIX plus its extension.")

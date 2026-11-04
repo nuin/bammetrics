@@ -1,0 +1,11 @@
+## argv
+quality-yield
+tests/data/insert_size.bam
+--no-use-original-qualities
+--format
+jsonl
+## exit
+0
+## stdout
+{"TOTAL_READS":10,"PF_READS":10,"READ_LENGTH":100,"TOTAL_BASES":1000,"PF_BASES":1000,"Q20_BASES":1000,"PF_Q20_BASES":1000,"Q30_BASES":1000,"PF_Q30_BASES":1000,"Q20_EQUIVALENT_YIELD":2000,"PF_Q20_EQUIVALENT_YIELD":2000}
+## stderr

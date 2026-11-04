@@ -100,7 +100,7 @@ impl Options {
 /// `CollectAlignmentSummaryMetrics` in the tool registry.
 pub const TOOL: Tool = Tool {
     name: "CollectAlignmentSummaryMetrics",
-    summary: "one dict per row (a CATEGORY of one accumulation unit), keyed by Picard's \
+    summary: "one row per CATEGORY of each accumulation unit, keyed by Picard's \
               column names; the metrics file adds the read length histograms.",
     options: &[
         Opt::ignored(&["HISTOGRAM_FILE", "H"], "no read-length plot is drawn"),
@@ -676,6 +676,13 @@ impl Accumulator for AlignmentSummary {
 }
 
 /// `StringHeader` command line in Picard's shape.
+/// The `StringHeader` command line of the `alignment-summary` verb, the form the
+/// 0.12 subcommand wrote: every option with its value, defaults included.
+pub fn subcommand_header(inv: &Invocation) -> Result<String> {
+    let opts = Options::from_invocation(inv)?;
+    Ok(command_header(&opts, &inv.input, inv.output.as_deref()))
+}
+
 pub fn command_header(opts: &Options, bam: &Path, output: Option<&Path>) -> String {
     let mut command = format!("CollectAlignmentSummaryMetrics INPUT={}", bam.display());
     if let Some(output) = output {

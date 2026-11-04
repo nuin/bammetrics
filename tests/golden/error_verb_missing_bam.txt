@@ -1,0 +1,8 @@
+## argv
+quality-yield
+tests/data/nope.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics quality-yield: tests/data/nope.bam not found (from BAM)

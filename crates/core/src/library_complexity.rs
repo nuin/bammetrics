@@ -147,7 +147,7 @@ impl Options {
 
 pub const TOOL: Tool = Tool {
     name: "EstimateLibraryComplexity",
-    summary: "one dict per library (DuplicationMetrics columns) from read sequences alone; the \
+    summary: "one row per library (DuplicationMetrics columns) from read sequences alone; the \
               input may be unaligned, or several files. The metrics file adds the \
               duplication_group_count histogram.",
     options: &[

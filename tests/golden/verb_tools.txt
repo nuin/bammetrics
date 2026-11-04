@@ -1,0 +1,41 @@
+## argv
+tools
+## exit
+0
+## stdout
+VERB                        PICARD CLASS
+insert-size                 CollectInsertSizeMetrics
+alignment-summary           CollectAlignmentSummaryMetrics
+quality-yield               CollectQualityYieldMetrics
+hs-metrics                  CollectHsMetrics
+gc-bias                     CollectGcBiasMetrics
+quality-score-distribution  QualityScoreDistribution
+mean-quality-by-cycle       MeanQualityByCycle
+base-distribution-by-cycle  CollectBaseDistributionByCycle
+duplicate-metrics           CollectDuplicateMetrics
+library-complexity          EstimateLibraryComplexity
+multiple-metrics            CollectMultipleMetrics
+accumulate-quality-yield    AccumulateQualityYieldMetrics
+wgs                         CollectWgsMetrics
+raw-wgs                     CollectRawWgsMetrics
+wgs-with-non-zero-coverage  CollectWgsMetricsWithNonZeroCoverage
+targeted-pcr                CollectTargetedPcrMetrics
+rna-seq                     CollectRnaSeqMetrics
+variant-calling             CollectVariantCallingMetrics
+accumulate-variant-calling  AccumulateVariantCallingMetrics
+genotype-concordance        GenotypeConcordance
+bed-to-interval-list        BedToIntervalList
+
+Other verbs:
+  collect      Several metrics from one read of the BAM, one Picard file each.
+  tools        List the verbs and the Picard class each runs.
+  presets      List the built-in verdict presets with version and hash.
+  help         Help for a verb or a Picard class.
+  completions  A completion script for bash, zsh, fish, elvish or powershell.
+  qc           bammetrics help qc
+  plan         bammetrics help plan
+  check        bammetrics help check
+  report       bammetrics help report
+
+Picard syntax: bammetrics <PICARD CLASS> I=... O=... [KEY=VALUE ...]
+## stderr

@@ -26,7 +26,7 @@ use crate::registry::{Invocation, Opt, Tool};
 
 pub const TOOL: Tool = Tool {
     name: "MeanQualityByCycle",
-    summary: "the histogram, one dict per cycle: CYCLE, MEAN_QUALITY and MEAN_ORIGINAL_QUALITY \
+    summary: "the histogram, one row per cycle: CYCLE, MEAN_QUALITY and MEAN_ORIGINAL_QUALITY \
               (only when a record has OQ; 0 at a cycle without an OQ mean).",
     options: &[
         Opt::ignored(&["CHART_OUTPUT", "CHART"], "no chart is drawn"),

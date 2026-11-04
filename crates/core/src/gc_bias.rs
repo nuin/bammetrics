@@ -74,7 +74,7 @@ impl Options {
 
 pub const TOOL: Tool = Tool {
     name: "CollectGcBiasMetrics",
-    summary: "the detail rows (Picard's OUTPUT file), one dict per GC bin, accumulation unit \
+    summary: "the detail rows (Picard's OUTPUT file), one row per GC bin, accumulation unit \
               and READS_USED value; SUMMARY_OUTPUT gets the GcBiasSummaryMetrics file.",
     options: &[
         Opt::ignored(&["CHART_OUTPUT", "CHART"], "no chart is drawn"),

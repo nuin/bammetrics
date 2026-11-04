@@ -1,0 +1,424 @@
+//! The verb grammar of docs/05 section 2.2: one parser for every tool verb
+//! and `collect`.
+//!
+//! A verb's flags come from the registry option table plus the shared
+//! options. One option has several spellings, all read the same way:
+//! `--minimum-pct 0.1`, `--minimum-pct=0.1`, `--MINIMUM_PCT 0.1`,
+//! `MINIMUM_PCT=0.1`, `-M 0.1` and `M=0.1`. A name is normalised (upper
+//! case, `-` as `_`) and compared with the row's Picard names, so the
+//! registry parser then sees `MINIMUM_PCT=0.1`.
+//!
+//! A boolean takes `--x` (true), `--no-x`, `--x=false`, `X=false`, or the
+//! space form `--x false` of the 0.12 subcommands. Only a literal `true` or
+//! `false` (any case) after a boolean is read as its value, so a BAM path
+//! after a flag stays a positional argument.
+
+use bammetrics_core::registry::{Ty, did_you_mean, normalize};
+
+use crate::error::VerbError;
+
+/// What a flag sets.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Key {
+    /// A row of the tool's option table, by its Picard long name.
+    Picard(&'static str),
+    /// A verb's own option, by its long name (`collect --metric`).
+    Own(&'static str),
+    Input,
+    Output,
+    Threads,
+    Sample,
+    Format,
+    Quiet,
+    Verbose,
+    Help,
+}
+
+/// One flag of a verb.
+#[derive(Clone, Debug)]
+pub struct Flag {
+    pub key: Key,
+    /// The `--long` spelling, kebab case.
+    pub long: String,
+    /// Spellings with one dash, compared as given: `o`, `@`, `q`.
+    pub shorts: &'static [&'static str],
+    /// Picard names and aliases, compared after normalising.
+    pub names: Vec<&'static str>,
+    pub ty: Ty,
+    /// Values each occurrence takes: 1, or 2 for `--hs BAITS TARGETS`.
+    pub values: usize,
+    pub repeated: bool,
+    pub required: bool,
+    pub help: String,
+    /// What `--help` prints after the flag (`FILE`, `BAITS TARGETS`).
+    pub placeholder: String,
+}
+
+impl Flag {
+    /// A flag that is not a table row.
+    pub fn new(key: Key, long: &str, shorts: &'static [&'static str], ty: Ty, help: &str) -> Self {
+        Self {
+            key,
+            long: long.to_owned(),
+            shorts,
+            names: Vec::new(),
+            ty,
+            values: 1,
+            repeated: false,
+            required: false,
+            help: help.to_owned(),
+            placeholder: ty.placeholder().to_owned(),
+        }
+    }
+
+    pub fn names(mut self, names: &[&'static str]) -> Self {
+        self.names.extend_from_slice(names);
+        self
+    }
+
+    pub fn placeholder(mut self, placeholder: &str) -> Self {
+        self.placeholder = placeholder.to_owned();
+        self
+    }
+
+    pub fn repeated(mut self) -> Self {
+        self.repeated = true;
+        self
+    }
+
+    /// The spellings `--help` lists: `-o, --output FILE`.
+    pub fn spellings(&self) -> String {
+        let mut parts: Vec<String> = self.shorts.iter().map(|s| format!("-{s}")).collect();
+        parts.push(format!("--{}", self.long));
+        let mut text = parts.join(", ");
+        if !self.placeholder.is_empty() {
+            text.push(' ');
+            text.push_str(&self.placeholder);
+        }
+        text
+    }
+
+    /// The Picard spelling, `MINIMUM_PCT=`, for a table row.
+    pub fn picard(&self) -> Option<&'static str> {
+        match self.key {
+            Key::Picard(name) => Some(name),
+            _ => None,
+        }
+    }
+
+    fn is_named(&self, name: &str) -> bool {
+        let wanted = normalize(name);
+        normalize(&self.long) == wanted
+            || self.names.iter().any(|n| n.eq_ignore_ascii_case(&wanted))
+    }
+}
+
+/// One occurrence of a flag: its key, the values and the spelling given.
+#[derive(Clone, Debug)]
+pub struct Given {
+    pub key: Key,
+    pub values: Vec<String>,
+    pub spelled: String,
+}
+
+/// A parsed command line.
+#[derive(Debug, Default)]
+pub struct Parsed {
+    pub positional: Vec<String>,
+    pub given: Vec<Given>,
+}
+
+impl Parsed {
+    /// The last value given for `key`.
+    pub fn last(&self, key: Key) -> Option<&Given> {
+        self.given.iter().rev().find(|g| g.key == key)
+    }
+
+    /// Every occurrence of `key`, in order.
+    pub fn all(&self, key: Key) -> impl Iterator<Item = &Given> {
+        self.given.iter().filter(move |g| g.key == key)
+    }
+
+    /// Whether a boolean flag was given as true.
+    pub fn flag(&self, key: Key) -> bool {
+        self.last(key).is_some_and(|g| g.values[0] == "true")
+    }
+}
+
+/// The flag `name` (the argument without its dashes) refers to: a
+/// one-dash short spelling exactly, then the long kebab spelling, then any
+/// normalised name.
+fn find<'a>(flags: &'a [Flag], dashes: usize, name: &str) -> Option<&'a Flag> {
+    if dashes == 1
+        && let Some(flag) = flags.iter().find(|f| f.shorts.contains(&name))
+    {
+        return Some(flag);
+    }
+    flags
+        .iter()
+        .find(|f| f.long == name)
+        .or_else(|| flags.iter().find(|f| f.is_named(name)))
+}
+
+/// `true` or `false` in any case, as Picard reads a boolean.
+fn bool_text(text: &str) -> Option<&'static str> {
+    if text.eq_ignore_ascii_case("true") {
+        Some("true")
+    } else if text.eq_ignore_ascii_case("false") {
+        Some("false")
+    } else {
+        None
+    }
+}
+
+/// A bare word that reads as `NAME=VALUE`: the part before `=` has no path
+/// characters, so `a/b=c.bam` stays a positional argument.
+fn option_word(arg: &str) -> Option<(&str, &str)> {
+    let (name, value) = arg.split_once('=')?;
+    let plain = !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    plain.then_some((name, value))
+}
+
+/// The error for an option no flag has, with the closest spelling.
+fn unknown(verb: &str, flags: &[Flag], spelled: &str, name: &str) -> VerbError {
+    let kebab = name.to_ascii_lowercase().replace('_', "-");
+    let longs = flags.iter().map(|f| f.long.as_str());
+    let mut error = VerbError::usage(verb, format!("unknown option {spelled}"));
+    if let Some(best) = did_you_mean(&kebab, longs) {
+        let flag = flags.iter().find(|f| f.long == best).expect("a flag");
+        let picard = flag
+            .picard()
+            .map_or_else(String::new, |p| format!(" (Picard {p})"));
+        error = error.hint(format!("did you mean --{best}{picard}?"));
+    }
+    error.hint(format!("every option: bammetrics help {verb}"))
+}
+
+/// Parse `args` against `flags`. Arguments that are not options are
+/// positional; `--` makes every later argument positional.
+pub fn parse(verb: &str, flags: &[Flag], args: &[String]) -> Result<Parsed, VerbError> {
+    let mut parsed = Parsed::default();
+    let mut rest = args.iter().peekable();
+    while let Some(arg) = rest.next() {
+        if arg == "--" {
+            parsed.positional.extend(rest.by_ref().cloned());
+            break;
+        }
+        let dashes = arg.len() - arg.trim_start_matches('-').len();
+        let (name, inline) = if arg == "-" || dashes > 2 {
+            parsed.positional.push(arg.clone());
+            continue;
+        } else if dashes > 0 {
+            match arg[dashes..].split_once('=') {
+                Some((n, v)) => (n, Some(v)),
+                None => (&arg[dashes..], None),
+            }
+        } else if let Some((n, v)) = option_word(arg) {
+            (n, Some(v))
+        } else {
+            parsed.positional.push(arg.clone());
+            continue;
+        };
+        let spelled = if dashes > 0 {
+            arg.split('=').next().unwrap_or(arg).to_owned()
+        } else {
+            format!("{name}=")
+        };
+        // `--no-x` sets the boolean `x` to false.
+        let negated = (dashes == 2 && inline.is_none())
+            .then(|| name.strip_prefix("no-"))
+            .flatten()
+            .and_then(|positive| find(flags, 2, positive))
+            .filter(|f| f.ty == Ty::Bool);
+        if let Some(flag) = negated {
+            parsed.given.push(Given {
+                key: flag.key,
+                values: vec!["false".to_owned()],
+                spelled,
+            });
+            continue;
+        }
+        let flag = find(flags, dashes, name).ok_or_else(|| unknown(verb, flags, &spelled, name))?;
+        let values = if flag.ty == Ty::Bool {
+            let value = match inline {
+                Some(text) => bool_text(text).ok_or_else(|| {
+                    VerbError::usage(verb, format!("expected true or false, got {text:?}"))
+                        .from(spelled.clone())
+                })?,
+                None => match rest.peek().and_then(|next| bool_text(next)) {
+                    Some(value) => {
+                        rest.next();
+                        value
+                    }
+                    None => "true",
+                },
+            };
+            vec![value.to_owned()]
+        } else if let Some(text) = inline {
+            if flag.values > 1 {
+                return Err(VerbError::usage(
+                    verb,
+                    format!("{spelled} takes {} values after a space", flag.values),
+                ));
+            }
+            vec![text.to_owned()]
+        } else {
+            let mut values = Vec::new();
+            for _ in 0..flag.values {
+                let value = rest.next().ok_or_else(|| {
+                    VerbError::usage(verb, "missing value")
+                        .from(spelled.clone())
+                        .hint(format!("{} {}", spelled, flag.placeholder))
+                })?;
+                values.push(value.clone());
+            }
+            values
+        };
+        parsed.given.push(Given {
+            key: flag.key,
+            values,
+            spelled,
+        });
+    }
+    Ok(parsed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn flags() -> Vec<Flag> {
+        vec![
+            Flag::new(Key::Output, "output", &["o", "O"], Ty::Path, "out").names(&["OUTPUT", "O"]),
+            Flag::new(Key::Quiet, "quiet", &["q"], Ty::Bool, "quiet"),
+            Flag::new(
+                Key::Picard("MINIMUM_PCT"),
+                "minimum-pct",
+                &[],
+                Ty::Float,
+                "pct",
+            )
+            .names(&["MINIMUM_PCT", "M"]),
+            Flag::new(
+                Key::Picard("CLIP_OVERLAPPING_READS"),
+                "clip-overlapping-reads",
+                &[],
+                Ty::Bool,
+                "clip",
+            )
+            .names(&["CLIP_OVERLAPPING_READS"]),
+            Flag::new(Key::Own("hs"), "hs", &[], Ty::Path, "hs").placeholder("BAITS TARGETS"),
+        ]
+        .into_iter()
+        .map(|mut f| {
+            if f.long == "hs" {
+                f.values = 2;
+            }
+            f
+        })
+        .collect()
+    }
+
+    fn strings(args: &[&str]) -> Vec<String> {
+        args.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    fn values(args: &[&str], key: Key) -> Vec<String> {
+        let parsed = parse("v", &flags(), &strings(args)).expect("parses");
+        parsed.all(key).flat_map(|g| g.values.clone()).collect()
+    }
+
+    #[test]
+    fn every_spelling_of_one_option_is_one_option() {
+        let pct = Key::Picard("MINIMUM_PCT");
+        for args in [
+            &["--minimum-pct", "0.1"][..],
+            &["--minimum-pct=0.1"],
+            &["--MINIMUM_PCT", "0.1"],
+            &["--MINIMUM_PCT=0.1"],
+            &["MINIMUM_PCT=0.1"],
+            &["minimum_pct=0.1"],
+            &["-M", "0.1"],
+            &["M=0.1"],
+        ] {
+            assert_eq!(values(args, pct), ["0.1"], "{args:?}");
+        }
+    }
+
+    #[test]
+    fn booleans_take_four_forms_and_never_a_path() {
+        let clip = Key::Picard("CLIP_OVERLAPPING_READS");
+        assert_eq!(values(&["--clip-overlapping-reads"], clip), ["true"]);
+        assert_eq!(values(&["--no-clip-overlapping-reads"], clip), ["false"]);
+        assert_eq!(values(&["--clip-overlapping-reads=false"], clip), ["false"]);
+        assert_eq!(values(&["CLIP_OVERLAPPING_READS=False"], clip), ["false"]);
+        assert_eq!(
+            values(&["--clip-overlapping-reads", "FALSE"], clip),
+            ["false"]
+        );
+        let parsed = parse(
+            "v",
+            &flags(),
+            &strings(&["--clip-overlapping-reads", "true.bam", "-q"]),
+        )
+        .expect("parses");
+        assert_eq!(parsed.positional, ["true.bam"]);
+        assert!(parsed.flag(Key::Quiet));
+        let err = parse("v", &flags(), &strings(&["--clip-overlapping-reads=maybe"]))
+            .expect_err("not a bool");
+        assert_eq!(
+            err.to_string(),
+            "bammetrics v: expected true or false, got \"maybe\" (from --clip-overlapping-reads)"
+        );
+    }
+
+    #[test]
+    fn positionals_dashes_and_paths_with_equals() {
+        let parsed = parse(
+            "v",
+            &flags(),
+            &strings(&[
+                "-",
+                "dir/a=b.bam",
+                "--hs",
+                "b.bed",
+                "t.bed",
+                "--",
+                "--quiet",
+            ]),
+        )
+        .expect("parses");
+        assert_eq!(parsed.positional, ["-", "dir/a=b.bam", "--quiet"]);
+        assert_eq!(values(&["--hs", "b", "t"], Key::Own("hs")), ["b", "t"]);
+        assert_eq!(
+            values(&["-o", "x", "--output=y", "O=z"], Key::Output),
+            ["x", "y", "z"]
+        );
+    }
+
+    #[test]
+    fn unknown_options_suggest_the_closest_flag() {
+        let err = parse("insert-size", &flags(), &strings(&["--minmum-pct", "0.1"]))
+            .expect_err("unknown");
+        assert_eq!(err.code, 2);
+        assert_eq!(
+            err.to_string(),
+            "bammetrics insert-size: unknown option --minmum-pct\n  \
+             did you mean --minimum-pct (Picard MINIMUM_PCT)?\n  \
+             every option: bammetrics help insert-size"
+        );
+        let err = parse("v", &flags(), &strings(&["MINIMUM_PCX=1"])).expect_err("unknown");
+        assert!(
+            err.to_string()
+                .starts_with("bammetrics v: unknown option MINIMUM_PCX=")
+        );
+        let err = parse("v", &flags(), &strings(&["--minimum-pct"])).expect_err("no value");
+        assert_eq!(
+            err.to_string(),
+            "bammetrics v: missing value (from --minimum-pct)\n  --minimum-pct NUM"
+        );
+    }
+}

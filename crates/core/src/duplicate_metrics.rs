@@ -122,7 +122,7 @@ impl Row {
 
 pub const TOOL: Tool = Tool {
     name: "CollectDuplicateMetrics",
-    summary: "one dict per library, from the duplicate flags already in the file; the metrics \
+    summary: "one row per library, from the duplicate flags already in the file; the metrics \
               file goes to METRICS_FILE.",
     options: &[
         Opt::output(&["METRICS_FILE", "M"]),

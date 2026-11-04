@@ -760,7 +760,10 @@ pub fn python_stub(tool: &Tool) -> String {
 /// The generated block of `bammetrics.pyi`: every tool in [`TOOLS`] order,
 /// between [`STUB_BEGIN`] and [`STUB_END`].
 pub fn python_stubs() -> String {
-    let mut text = format!("{STUB_BEGIN}\n");
+    let mut text = format!(
+        "{STUB_BEGIN}\n# Each returns its rows as dicts keyed by Picard's column names; output= also \
+         writes the files.\n"
+    );
     for tool in TOOLS {
         text.push('\n');
         text.push_str(&python_stub(tool));

@@ -64,7 +64,7 @@ impl Default for Options {
 /// `CollectInsertSizeMetrics` in the tool registry.
 pub const TOOL: Tool = Tool {
     name: "CollectInsertSizeMetrics",
-    summary: "one dict per pair orientation and accumulation unit, keyed by Picard's column \
+    summary: "one row per pair orientation and accumulation unit, keyed by Picard's column \
               names; the metrics file adds the insert size histogram.",
     options: &[
         Opt::ignored(&["HISTOGRAM_FILE", "H"], "no histogram plot is drawn"),
@@ -363,6 +363,13 @@ pub fn command_header(opts: &Options, bam: &Path, output: Option<&Path>) -> Stri
         command.push_str(&format!(" MIN_HISTOGRAM_WIDTH={w}"));
     }
     command
+}
+
+/// The `StringHeader` command line of the `insert-size` verb, the form the
+/// 0.12 subcommand wrote: every option with its value, defaults included.
+pub fn subcommand_header(inv: &Invocation) -> Result<String> {
+    let opts = Options::from_invocation(inv)?;
+    Ok(command_header(&opts, &inv.input, inv.output.as_deref()))
 }
 
 /// Compute the metrics of one BAM with the default BGZF worker count.

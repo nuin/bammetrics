@@ -46,7 +46,7 @@ impl Options {
 
 pub const TOOL: Tool = Tool {
     name: "QualityScoreDistribution",
-    summary: "the histogram, one dict per quality: QUALITY, COUNT_OF_Q and COUNT_OF_OQ (only \
+    summary: "the histogram, one row per quality: QUALITY, COUNT_OF_Q and COUNT_OF_OQ (only \
               when a counted base has OQ).",
     options: &[
         Opt::ignored(&["CHART_OUTPUT", "CHART"], "no chart is drawn"),

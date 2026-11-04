@@ -20,7 +20,7 @@ use crate::registry::{Invocation, Opt, Tool};
 
 pub const TOOL: Tool = Tool {
     name: "AccumulateQualityYieldMetrics",
-    summary: "QualityYieldMetrics files (a list of paths) merged into one dict.",
+    summary: "QualityYieldMetrics files (a list of paths) merged into one row.",
     options: &[
         Opt::path(
             &["INPUT", "I"],

@@ -133,7 +133,7 @@ impl Options {
 /// `CollectRnaSeqMetrics` in the tool registry.
 pub const TOOL: Tool = Tool {
     name: "CollectRnaSeqMetrics",
-    summary: "one dict of the 30 RnaSeqMetrics columns per accumulation unit; the metrics \
+    summary: "one row of the 30 RnaSeqMetrics columns per accumulation unit; the metrics \
               file adds the normalized_position histogram, one normalized_coverage column per \
               unit.",
     options: &[

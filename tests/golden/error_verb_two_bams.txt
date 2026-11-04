@@ -1,0 +1,9 @@
+## argv
+insert-size
+tests/data/insert_size.bam
+tests/data/orientation.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics insert-size: one BAM expected, got 2 (from tests/data/orientation.bam)

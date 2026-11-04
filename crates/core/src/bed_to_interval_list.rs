@@ -37,7 +37,7 @@ const HEADER_VERSION: &str = "1.6";
 
 pub const TOOL: Tool = Tool {
     name: "BedToIntervalList",
-    summary: "one dict per interval written (contig, start, end, strand, name); OUTPUT gets \
+    summary: "one row per interval written (contig, start, end, strand, name); OUTPUT gets \
               the interval list.",
     options: &[
         Opt::path(&["INPUT", "I"], "The BED file to convert.").required(),

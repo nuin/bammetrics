@@ -250,6 +250,7 @@ def evaluate(preset: str | PathLike[str], paths: Sequence[_Path], sample: str | 
     or Picard. A bad preset raises ValueError; an unreadable file OSError."""
 
 # BEGIN registry tools: generated from crates/core/src/registry.rs (UPDATE_PYI=1 cargo test -p bammetrics-core python_stubs)
+# Each returns its rows as dicts keyed by Picard's column names; output= also writes the files.
 
 def collect_insert_size_metrics(
     input: _Path,
@@ -263,7 +264,7 @@ def collect_insert_size_metrics(
     output: _Path | None = None,
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
-    """CollectInsertSizeMetrics: one dict per pair orientation and accumulation unit, keyed
+    """CollectInsertSizeMetrics: one row per pair orientation and accumulation unit, keyed
     by Picard's column names; the metrics file adds the insert size histogram."""
 
 def collect_alignment_summary_metrics(
@@ -280,9 +281,8 @@ def collect_alignment_summary_metrics(
     output: _Path | None = None,
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
-    """CollectAlignmentSummaryMetrics: one dict per row (a CATEGORY of one accumulation
-    unit), keyed by Picard's column names; the metrics file adds the read length
-    histograms."""
+    """CollectAlignmentSummaryMetrics: one row per CATEGORY of each accumulation unit,
+    keyed by Picard's column names; the metrics file adds the read length histograms."""
 
 def collect_quality_yield_metrics(
     input: _Path,
@@ -295,7 +295,7 @@ def collect_quality_yield_metrics(
     output: _Path | None = None,
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
-    """CollectQualityYieldMetrics: one dict of read, base and Q20/Q30 totals."""
+    """CollectQualityYieldMetrics: one row of read, base and Q20/Q30 totals."""
 
 def quality_score_distribution(
     input: _Path,
@@ -307,7 +307,7 @@ def quality_score_distribution(
     output: _Path | None = None,
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
-    """QualityScoreDistribution: the histogram, one dict per quality: QUALITY, COUNT_OF_Q
+    """QualityScoreDistribution: the histogram, one row per quality: QUALITY, COUNT_OF_Q
     and COUNT_OF_OQ (only when a counted base has OQ)."""
 
 def mean_quality_by_cycle(
@@ -319,7 +319,7 @@ def mean_quality_by_cycle(
     output: _Path | None = None,
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
-    """MeanQualityByCycle: the histogram, one dict per cycle: CYCLE, MEAN_QUALITY and
+    """MeanQualityByCycle: the histogram, one row per cycle: CYCLE, MEAN_QUALITY and
     MEAN_ORIGINAL_QUALITY (only when a record has OQ; 0 at a cycle without an OQ mean)."""
 
 def collect_base_distribution_by_cycle(
@@ -331,7 +331,7 @@ def collect_base_distribution_by_cycle(
     output: _Path | None = None,
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
-    """CollectBaseDistributionByCycle: one dict per read end and cycle (READ_END, CYCLE,
+    """CollectBaseDistributionByCycle: one row per read end and cycle (READ_END, CYCLE,
     PCT_A, PCT_C, PCT_G, PCT_T, PCT_N on a 0 to 100 scale)."""
 
 def collect_duplicate_metrics(
@@ -341,7 +341,7 @@ def collect_duplicate_metrics(
     stop_after: int | None = None,
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
-    """CollectDuplicateMetrics: one dict per library, from the duplicate flags already in
+    """CollectDuplicateMetrics: one row per library, from the duplicate flags already in
     the file; the metrics file goes to METRICS_FILE."""
 
 def accumulate_quality_yield_metrics(
@@ -350,7 +350,7 @@ def accumulate_quality_yield_metrics(
     output: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """AccumulateQualityYieldMetrics: QualityYieldMetrics files (a list of paths) merged
-    into one dict."""
+    into one row."""
 
 def collect_gc_bias_metrics(
     input: _Path,
@@ -366,7 +366,7 @@ def collect_gc_bias_metrics(
     output: _Path | None = None,
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
-    """CollectGcBiasMetrics: the detail rows (Picard's OUTPUT file), one dict per GC bin,
+    """CollectGcBiasMetrics: the detail rows (Picard's OUTPUT file), one row per GC bin,
     accumulation unit and READS_USED value; SUMMARY_OUTPUT gets the GcBiasSummaryMetrics
     file."""
 
@@ -383,8 +383,8 @@ def collect_multiple_metrics(
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
     """CollectMultipleMetrics: every PROGRAM on one read of the BAM, each written to OUTPUT
-    plus its Picard extension (plus FILE_EXTENSION); one dict per file written: file and
-    rows."""
+    plus its Picard extension (plus FILE_EXTENSION); Python returns Python returns one
+    row per file: file and rows."""
 
 def estimate_library_complexity(
     input: _Paths,
@@ -403,7 +403,7 @@ def estimate_library_complexity(
     max_optical_duplicate_set_size: int | None = None,
     output: _Path | None = None,
 ) -> list[dict[str, Any]]:
-    """EstimateLibraryComplexity: one dict per library (DuplicationMetrics columns) from
+    """EstimateLibraryComplexity: one row per library (DuplicationMetrics columns) from
     read sequences alone; the input may be unaligned, or several files. The metrics file
     adds the duplication_group_count histogram."""
 
@@ -424,7 +424,7 @@ def collect_wgs_metrics(
     read_length: int | None = None,
     output: _Path | None = None,
 ) -> list[dict[str, Any]]:
-    """CollectWgsMetrics: one dict of the 32 WgsMetrics columns; the metrics file adds the
+    """CollectWgsMetrics: one row of the 32 WgsMetrics columns; the metrics file adds the
     coverage histogram."""
 
 def collect_raw_wgs_metrics(
@@ -465,7 +465,7 @@ def collect_wgs_metrics_with_non_zero_coverage(
     read_length: int | None = None,
     output: _Path | None = None,
 ) -> list[dict[str, Any]]:
-    """CollectWgsMetricsWithNonZeroCoverage: two dicts, CATEGORY WHOLE_GENOME and
+    """CollectWgsMetricsWithNonZeroCoverage: two rows, CATEGORY WHOLE_GENOME and
     NON_ZERO_REGIONS (the zero-depth loci left out), with the WgsMetrics columns."""
 
 def bed_to_interval_list(
@@ -478,7 +478,7 @@ def bed_to_interval_list(
     keep_length_zero_intervals: bool | None = None,
     output: _Path | None = None,
 ) -> list[dict[str, Any]]:
-    """BedToIntervalList: one dict per interval written (contig, start, end, strand, name);
+    """BedToIntervalList: one row per interval written (contig, start, end, strand, name);
     OUTPUT gets the interval list."""
 
 def collect_hs_metrics(
@@ -502,7 +502,7 @@ def collect_hs_metrics(
     bait_set_name: str | None = None,
     output: _Path | None = None,
 ) -> list[dict[str, Any]]:
-    """CollectHsMetrics: one dict of the 69 HsMetrics columns per accumulation unit; the
+    """CollectHsMetrics: one row of the 69 HsMetrics columns per accumulation unit; the
     metrics file adds the coverage and base quality histograms."""
 
 def collect_targeted_pcr_metrics(
@@ -526,7 +526,7 @@ def collect_targeted_pcr_metrics(
     custom_amplicon_set_name: str | None = None,
     output: _Path | None = None,
 ) -> list[dict[str, Any]]:
-    """CollectTargetedPcrMetrics: one dict of the 62 TargetedPcrMetrics columns per
+    """CollectTargetedPcrMetrics: one row of the 62 TargetedPcrMetrics columns per
     accumulation unit, from the CollectHsMetrics collector with MINIMUM_MAPPING_QUALITY
     1, MINIMUM_BASE_QUALITY 0 and CLIP_OVERLAPPING_READS false as defaults."""
 
@@ -545,9 +545,9 @@ def collect_rna_seq_metrics(
     output: _Path | None = None,
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
-    """CollectRnaSeqMetrics: one dict of the 30 RnaSeqMetrics columns per accumulation
-    unit; the metrics file adds the normalized_position histogram, one
-    normalized_coverage column per unit."""
+    """CollectRnaSeqMetrics: one row of the 30 RnaSeqMetrics columns per accumulation unit;
+    the metrics file adds the normalized_position histogram, one normalized_coverage
+    column per unit."""
 
 def collect_variant_calling_metrics(
     input: _Path,
@@ -561,7 +561,8 @@ def collect_variant_calling_metrics(
 ) -> list[dict[str, Any]]:
     """CollectVariantCallingMetrics: the input is a VCF (plain or bgzip). OUTPUT is a
     prefix: PREFIX.variant_calling_summary_metrics and
-    PREFIX.variant_calling_detail_metrics; one dict per file written: file and rows."""
+    PREFIX.variant_calling_detail_metrics; Python returns Python returns one row per
+    file: file and rows."""
 
 def accumulate_variant_calling_metrics(
     input: _Paths,
@@ -569,8 +570,8 @@ def accumulate_variant_calling_metrics(
     output: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """AccumulateVariantCallingMetrics: the prefixes of CollectVariantCallingMetrics shards
-    merged as Picard merges them; OUTPUT is the prefix of the two files. One dict per
-    file: file and rows."""
+    merged as Picard merges them; OUTPUT is the prefix of the two files. Python returns
+    Python returns one row per file: file and rows."""
 
 def genotype_concordance(
     truth_vcf: _Path,
@@ -590,7 +591,7 @@ def genotype_concordance(
 ) -> list[dict[str, Any]]:
     """GenotypeConcordance: the truth and call VCFs compared by position. OUTPUT is a
     prefix: PREFIX.genotype_concordance_summary_metrics, _detail_metrics and
-    _contingency_metrics; one dict per file: file and rows."""
+    _contingency_metrics; Python returns one row per file: file and rows."""
 
 # END registry tools
 

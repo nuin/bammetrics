@@ -354,7 +354,7 @@ macro_rules! options {
 
 pub const TOOL: Tool = Tool {
     name: "CollectHsMetrics",
-    summary: "one dict of the 69 HsMetrics columns per accumulation unit; the metrics file \
+    summary: "one row of the 69 HsMetrics columns per accumulation unit; the metrics file \
               adds the coverage and base quality histograms.",
     options: options!(
         Opt::path(
@@ -374,7 +374,7 @@ pub const TOOL: Tool = Tool {
 
 pub const PCR_TOOL: Tool = Tool {
     name: "CollectTargetedPcrMetrics",
-    summary: "one dict of the 62 TargetedPcrMetrics columns per accumulation unit, from the \
+    summary: "one row of the 62 TargetedPcrMetrics columns per accumulation unit, from the \
               CollectHsMetrics collector with MINIMUM_MAPPING_QUALITY 1, MINIMUM_BASE_QUALITY 0 \
               and CLIP_OVERLAPPING_READS false as defaults.",
     options: options!(
@@ -2093,6 +2093,13 @@ impl Accumulator for CaptureMetrics {
 
 /// `StringHeader` command line in Picard's shape, for the native
 /// `hs-metrics` subcommand.
+/// The `StringHeader` command line of the `hs-metrics` verb, the form the
+/// 0.12 subcommand wrote: every option with its value, defaults included.
+pub fn subcommand_header(inv: &Invocation) -> Result<String> {
+    let opts = Options::from_invocation(inv, Variant::Hs)?;
+    Ok(command_header(&opts, &inv.input, inv.output.as_deref()))
+}
+
 pub fn command_header(opts: &Options, bam: &Path, output: Option<&Path>) -> String {
     let list = |paths: &[PathBuf]| {
         paths

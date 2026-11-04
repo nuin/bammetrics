@@ -50,7 +50,7 @@ impl MetricRow for Row {
 
 pub const TOOL: Tool = Tool {
     name: "CollectBaseDistributionByCycle",
-    summary: "one dict per read end and cycle (READ_END, CYCLE, PCT_A, PCT_C, PCT_G, PCT_T, \
+    summary: "one row per read end and cycle (READ_END, CYCLE, PCT_A, PCT_C, PCT_G, PCT_T, \
               PCT_N on a 0 to 100 scale).",
     options: &[
         Opt::ignored(&["CHART_OUTPUT", "CHART"], "no chart is drawn"),
