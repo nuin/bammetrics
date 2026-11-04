@@ -4,7 +4,8 @@ for hand-written BED files, every option, every dictionary source, and error par
 The BED files cover tab and space separators, quoted names, a score that is not a
 number (the strand after it is not read), `.` and `-` strands, zero-length
 intervals, overlapping and abutting intervals, repeated names, header and comment
-lines, and lines with one or two fields.
+lines, and lines with one or two fields. `test_verb_face` runs the
+`bed-to-interval-list` verb with `--from-bam` and `--dict` on three of them.
 """
 import subprocess
 
@@ -111,6 +112,33 @@ def test_bad_intervals_fail_in_both(corpus, tmp_path, line, message):
     assert message in picard.stderr.decode() and message in ours.stderr
     assert not picard_out.exists() and not ours_out.exists()
     RESULTS.append((f"{TOOL} {line.strip()!r}", 0, 0, "both exit non-zero, no file"))
+
+
+@pytest.mark.parametrize("spelling, source", [("--from-bam", "corpus.bam"), ("--dict", "ref.dict")])
+@pytest.mark.parametrize("name", ["plain", "messy", "unsorted"])
+def test_verb_face(beds, corpus, tmp_path, name, spelling, source):
+    """docs/05 section 7 row 9 and example 7: `bammetrics bed-to-interval-list BED
+    --from-bam BAM` (or `--dict FILE`) to a file, to `-o -` and with the BED on
+    standard input, each byte for byte the file Picard writes for `SD=` that file."""
+    dictionary = corpus / source
+    picard_out = tmp_path / "picard.interval_list"
+    picard = subprocess.run(["picard", TOOL, f"I={beds[name]}", f"SD={dictionary}", f"O={picard_out}",
+                             "QUIET=true", "VERBOSITY=ERROR"], env=picard_env(), capture_output=True)
+    assert picard.returncode == 0, picard.stderr[-500:]
+    expected = picard_out.read_bytes()
+    verb = [str(BAMMETRICS), "bed-to-interval-list"]
+    file_out = tmp_path / "verb.interval_list"
+    to_file = subprocess.run([*verb, str(beds[name]), spelling, str(dictionary), "-o", str(file_out)],
+                             capture_output=True)
+    assert to_file.returncode == 0, to_file.stderr
+    assert file_out.read_bytes() == expected, f"{name} {spelling} -o FILE"
+    to_stdout = subprocess.run([*verb, str(beds[name]), spelling, str(dictionary), "-o", "-"], capture_output=True)
+    assert to_stdout.returncode == 0 and to_stdout.stdout == expected, f"{name} {spelling} -o -"
+    with open(beds[name], "rb") as bed:
+        piped = subprocess.run([*verb, "-", spelling, str(dictionary)], stdin=bed, capture_output=True)
+    assert piped.returncode == 0 and piped.stdout == expected, f"{name} {spelling} BED on stdin"
+    lines = expected.count(b"\n")
+    RESULTS.append((f"bed-to-interval-list {name} {spelling}", lines, lines, "file, -o - and stdin identical"))
 
 
 def test_assume_sorted_is_not_an_option(beds, corpus, tmp_path):
