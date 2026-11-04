@@ -48,7 +48,7 @@ pub fn flags() -> Vec<Flag> {
     hs.values = 2;
     let mut flags = vec![
         Flag::new(Key::Input, "input", &["i", "I"], Ty::Path, "The BAM to read; - reads standard input.")
-            .names(&["INPUT"])
+            .names(&["INPUT", "I"])
             .placeholder("BAM"),
         Flag::new(
             Key::Output,
@@ -59,7 +59,7 @@ pub fn flags() -> Vec<Flag> {
              .quality_yield_metrics, .alignment_summary_metrics, .insert_size_metrics (the names \
              of CollectMultipleMetrics) and .hs_metrics, or .BAIT_SET.hs_metrics with several --hs.",
         )
-        .names(&["OUTPUT"])
+        .names(&["OUTPUT", "O"])
         .placeholder("PREFIX"),
         Flag::new(
             Key::Own("metric"),

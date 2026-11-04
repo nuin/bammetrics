@@ -279,17 +279,14 @@ impl Verb {
                 .names(&output_names)
                 .placeholder(placeholder),
         );
+        let format_help = match self.files {
+            Files::Single => "picard (the metrics file), json, tsv, jsonl or human.",
+            Files::Prefix => "picard only: this verb writes several Picard files.",
+        };
+        flags.push(
+            Flag::new(Key::Format, "format", &[], Ty::Text, format_help).placeholder("FORMAT"),
+        );
         if self.files == Files::Single {
-            flags.push(
-                Flag::new(
-                    Key::Format,
-                    "format",
-                    &[],
-                    Ty::Text,
-                    "picard (the metrics file), json, tsv, jsonl or human.",
-                )
-                .placeholder("FORMAT"),
-            );
             flags.push(
                 Flag::new(
                     Key::Sample,
@@ -392,6 +389,17 @@ impl Verb {
                 error.hint(format!("formats: {}", format::NAMES.join(", ")))
             })?,
         };
+        if self.files == Files::Prefix
+            && format != Format::Picard
+            && let Some(given) = parsed.last(Key::Format)
+        {
+            return Err(VerbError::usage(
+                self.name,
+                format!("--format {} needs a single-file verb", given.values[0]),
+            )
+            .from(given.spelled.clone())
+            .hint("this verb writes several Picard files under -o PREFIX"));
+        }
         let mut picard = self.picard_arguments(&parsed, &flags)?;
         let output = self.output_path(&parsed, &picard)?;
         if let Some(path) = &output {
