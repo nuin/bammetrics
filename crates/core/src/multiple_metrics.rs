@@ -160,7 +160,7 @@ const RUN_LEVEL: [&str; 7] = [
 pub const TOOL: Tool = Tool {
     name: "CollectMultipleMetrics",
     summary: "every PROGRAM on one read of the BAM, each written to OUTPUT plus its Picard \
-              extension (plus FILE_EXTENSION); Python returns Python returns one row per file: file and rows.",
+              extension (plus FILE_EXTENSION); Python returns one row per file: file and rows.",
     options: &[
         Opt::output(&["OUTPUT", "O"])
             .with_help("The output prefix: each program writes PREFIX plus its extension.")
@@ -189,11 +189,11 @@ pub const TOOL: Tool = Tool {
         ),
         Opt::ignored(&["REF_FLAT"], "only RnaSeqMetrics reads it"),
         Opt::ignored(&["IGNORE_SEQUENCE"], "only RnaSeqMetrics reads it"),
-        Opt::ignored(
+        Opt::ignored_bool(
             &["INCLUDE_UNPAIRED", "UNPAIRED"],
             "only CollectSequencingArtifactMetrics reads it",
         ),
-        Opt::ignored(&["DO_NOT_CREATE_PLOTS"], "no plot is drawn"),
+        Opt::ignored_bool(&["DO_NOT_CREATE_PLOTS"], "no plot is drawn"),
     ],
     run: run_tool,
     collector: None,

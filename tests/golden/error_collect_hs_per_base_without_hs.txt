@@ -1,0 +1,11 @@
+## argv
+collect
+tests/data/insert_size.bam
+-O
+OUT/sample
+--hs-per-base
+## exit
+2
+## stdout
+## stderr
+bammetrics collect: --hs-per-base needs --hs BAITS TARGETS (from --hs-per-base)

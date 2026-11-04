@@ -79,10 +79,7 @@ pub const VERBS: &[Verb] = &[
         ..verb("insert-size", "CollectInsertSizeMetrics", Files::Single)
     },
     Verb {
-        aliases: &[
-            ("EXPECTED_PAIR_ORIENTATION", "EXPECTED_PAIR_ORIENTATIONS"),
-            ("REFERENCE", "REFERENCE_SEQUENCE"),
-        ],
+        aliases: &[("EXPECTED_PAIR_ORIENTATION", "EXPECTED_PAIR_ORIENTATIONS")],
         header: Some(bammetrics_core::alignment_summary::subcommand_header),
         ..verb(
             "alignment-summary",
@@ -95,18 +92,11 @@ pub const VERBS: &[Verb] = &[
         ..verb("quality-yield", "CollectQualityYieldMetrics", Files::Single)
     },
     Verb {
-        aliases: &[
-            ("BAITS", "BAIT_INTERVALS"),
-            ("TARGETS", "TARGET_INTERVALS"),
-            ("REFERENCE", "REFERENCE_SEQUENCE"),
-        ],
+        aliases: &[("BAITS", "BAIT_INTERVALS"), ("TARGETS", "TARGET_INTERVALS")],
         header: Some(bammetrics_core::hs_metrics::subcommand_header),
         ..verb("hs-metrics", "CollectHsMetrics", Files::Single)
     },
-    Verb {
-        aliases: &[("REFERENCE", "REFERENCE_SEQUENCE")],
-        ..verb("gc-bias", "CollectGcBiasMetrics", Files::Prefix)
-    },
+    verb("gc-bias", "CollectGcBiasMetrics", Files::Prefix),
     verb(
         "quality-score-distribution",
         "QualityScoreDistribution",
@@ -128,10 +118,7 @@ pub const VERBS: &[Verb] = &[
         "EstimateLibraryComplexity",
         Files::Single,
     ),
-    Verb {
-        aliases: &[("REFERENCE", "REFERENCE_SEQUENCE")],
-        ..verb("multiple-metrics", "CollectMultipleMetrics", Files::Prefix)
-    },
+    verb("multiple-metrics", "CollectMultipleMetrics", Files::Prefix),
     with_input(
         verb(
             "accumulate-quality-yield",
@@ -140,26 +127,14 @@ pub const VERBS: &[Verb] = &[
         ),
         "FILE",
     ),
-    Verb {
-        aliases: &[("REFERENCE", "REFERENCE_SEQUENCE")],
-        ..verb("wgs", "CollectWgsMetrics", Files::Single)
-    },
-    Verb {
-        aliases: &[("REFERENCE", "REFERENCE_SEQUENCE")],
-        ..verb("raw-wgs", "CollectRawWgsMetrics", Files::Single)
-    },
-    Verb {
-        aliases: &[("REFERENCE", "REFERENCE_SEQUENCE")],
-        ..verb(
-            "wgs-with-non-zero-coverage",
-            "CollectWgsMetricsWithNonZeroCoverage",
-            Files::Single,
-        )
-    },
-    Verb {
-        aliases: &[("REFERENCE", "REFERENCE_SEQUENCE")],
-        ..verb("targeted-pcr", "CollectTargetedPcrMetrics", Files::Single)
-    },
+    verb("wgs", "CollectWgsMetrics", Files::Single),
+    verb("raw-wgs", "CollectRawWgsMetrics", Files::Single),
+    verb(
+        "wgs-with-non-zero-coverage",
+        "CollectWgsMetricsWithNonZeroCoverage",
+        Files::Single,
+    ),
+    verb("targeted-pcr", "CollectTargetedPcrMetrics", Files::Single),
     verb("rna-seq", "CollectRnaSeqMetrics", Files::Single),
     with_input(
         verb(
@@ -187,6 +162,10 @@ pub const VERBS: &[Verb] = &[
     ),
 ];
 
+/// Verb spellings every verb's rows take, beside a verb's own
+/// [`Verb::aliases`]: `--reference` is `REFERENCE_SEQUENCE` as in 0.12.
+const SHARED_ALIASES: &[(&str, &str)] = &[("REFERENCE", "REFERENCE_SEQUENCE")];
+
 /// The verb named `name`.
 pub fn find(name: &str) -> Option<&'static Verb> {
     VERBS.iter().find(|v| v.name == name)
@@ -206,7 +185,8 @@ pub fn shared_flags() -> Vec<Flag> {
             &["@"],
             Ty::Int,
             &format!(
-                "BGZF decompression threads (default: available cores, at most 8; {} here).",
+                "BGZF decompression threads (default: available cores, at most 8; {} here; 0 \
+                 counts as 1).",
                 pass::default_threads()
             ),
         )
@@ -293,7 +273,8 @@ impl Verb {
                     "sample",
                     &[],
                     Ty::Text,
-                    "Sample name for the json and jsonl forms; never written into a Picard file.",
+                    "Sample name for the json and jsonl forms (default the first @RG SM, else the input \
+                     name); never written into a Picard file.",
                 )
                 .placeholder("NAME"),
             );
@@ -321,6 +302,7 @@ impl Verb {
             names.extend(
                 self.aliases
                     .iter()
+                    .chain(SHARED_ALIASES)
                     .filter(|(_, target)| *target == opt.picard())
                     .map(|(alias, _)| *alias),
             );
@@ -329,14 +311,9 @@ impl Verb {
                 _ if opt.required => format!("{} Required.", opt.help),
                 _ => opt.help.to_owned(),
             };
-            let ty = if matches!(opt.kind, Kind::Ignored(_)) {
-                Ty::Text
-            } else {
-                opt.ty
-            };
-            let mut flag = Flag::new(Key::Picard(opt.picard()), &opt.kebab(), &[], ty, &help)
+            let mut flag = Flag::new(Key::Picard(opt.picard()), &opt.kebab(), &[], opt.ty, &help)
                 .names(&names)
-                .placeholder(ty.placeholder());
+                .placeholder(opt.ty.placeholder());
             flag.repeated = opt.repeated;
             flag.required = opt.required;
             flags.push(flag);
@@ -402,18 +379,26 @@ impl Verb {
         }
         let mut picard = self.picard_arguments(&parsed, &flags)?;
         let output = self.output_path(&parsed, &picard)?;
+        let output_flag = || parsed.last(Key::Output).map(|g| g.spelled.clone());
         if let Some(path) = &output {
-            create_parent(self.name, path)?;
             self.name_outputs(path, &parsed, &mut picard, format);
         }
         self.check_required(&flags, &picard)?;
-        self.check_inputs(&picard)?;
-        let mut inv = tool
-            .parse(&picard)
-            .map_err(|e| VerbError::core(self.name, &e))?;
+        self.check_inputs(&parsed, &picard)?;
+        let core = |e: bammetrics_core::Error| self.core_error(&parsed, &e);
+        let mut inv = tool.parse(&picard).map_err(core)?;
+        refuse_overwriting_inputs(
+            self.name,
+            &self.input_paths(&inv),
+            &self.output_paths(&inv, output.as_deref()),
+        )
+        .map_err(|e| with_from(e, output_flag()))?;
+        if let Some(path) = &output {
+            create_parent(self.name, path).map_err(|e| with_from(e, output_flag()))?;
+        }
         inv.threads = self.threads(&parsed)?;
         if let Some(header) = self.header {
-            inv.command = header(&inv).map_err(|e| VerbError::core(self.name, &e))?;
+            inv.command = header(&inv).map_err(core)?;
         }
         inv.read_dash_from_stdin();
         let quiet = parsed.flag(Key::Quiet);
@@ -421,24 +406,28 @@ impl Verb {
         if verbose {
             eprintln!("bammetrics {}: {}", self.name, inv.command);
         }
-        let result = (tool.run)(&inv).map_err(|e| VerbError::core(self.name, &e))?;
+        let result = (tool.run)(&inv).map_err(core)?;
         if !quiet {
             for note in &inv.notes {
                 eprintln!("bammetrics {}: {note}", self.name);
             }
         }
-        let sample = parsed.last(Key::Sample).map(|g| g.values[0].as_str());
+        let sample = match parsed.last(Key::Sample) {
+            Some(given) => Some(given.values[0].clone()),
+            None if matches!(format, Format::Json | Format::Jsonl) => self.default_sample(&inv),
+            None => None,
+        };
         let context = Context {
             tool: tool.name,
             command: &inv.command,
-            sample,
+            sample: sample.as_deref(),
         };
         let written = if self.files == Files::Single {
             write_single(&inv, &result, format, &context, output.as_deref())
         } else {
             registry::write_files(&inv, &result).map(|()| written_paths(&inv, &result))
         }
-        .map_err(|e| VerbError::core(self.name, &e))?;
+        .map_err(core)?;
         if verbose {
             for path in written {
                 eprintln!("bammetrics {}: wrote {}", self.name, path.display());
@@ -462,11 +451,27 @@ impl Verb {
         if tool.takes_input() {
             let many = flags.iter().any(|f| f.key == Key::Input && f.repeated);
             if inputs.len() > 1 && !many {
-                return Err(VerbError::usage(
+                let mut error = VerbError::usage(
                     self.name,
                     format!("one {} expected, got {}", self.input, inputs.len()),
                 )
-                .from(inputs[1].clone()));
+                .from(inputs[1].clone());
+                if let Some(hint) = (0..parsed.positional.len().min(2))
+                    .rev()
+                    .find_map(|i| parsed.bool_value_hint(i))
+                {
+                    error = error.hint(hint);
+                }
+                return Err(error);
+            }
+            if inputs.is_empty() {
+                let mut error = VerbError::usage(self.name, format!("missing {}", self.input));
+                if let Some(hint) = parsed.bool_word_hint() {
+                    error = error.hint(hint);
+                }
+                return Err(
+                    error.hint(format!("bammetrics {} {} [OPTIONS]", self.name, self.input))
+                );
             }
             picard.extend(inputs.iter().map(|i| format!("INPUT={i}")));
         } else {
@@ -617,14 +622,95 @@ impl Verb {
     }
 
     /// Every `INPUT` that names a file must exist (`-` is standard input).
-    fn check_inputs(&self, picard: &[String]) -> Result<(), VerbError> {
+    /// The error says where the name came from: `-i` as spelled, else the
+    /// positional argument by its placeholder (`BAM`, as docs/05 example 12).
+    fn check_inputs(&self, parsed: &Parsed, picard: &[String]) -> Result<(), VerbError> {
         for input in picard.iter().filter_map(|a| a.strip_prefix("INPUT=")) {
             if input == "-" || self.input == "PREFIX" || Path::new(input).exists() {
                 continue;
             }
-            return Err(VerbError::input(self.name, format!("{input} not found")).from(self.input));
+            let from = parsed
+                .all(Key::Input)
+                .find(|g| g.values.iter().any(|v| v == input))
+                .map_or_else(|| self.input.to_owned(), |g| g.spelled.clone());
+            return Err(VerbError::input(self.name, format!("{input} not found")).from(from));
         }
         Ok(())
+    }
+
+    /// A core error with the option it names: `MINIMUM_PCT=abc: ...` comes
+    /// from the flag that gave `MINIMUM_PCT`, a write error from `-o`.
+    fn core_error(&self, parsed: &Parsed, e: &bammetrics_core::Error) -> VerbError {
+        let from = match e {
+            bammetrics_core::Error::Usage(message) => {
+                message.split_once('=').and_then(|(name, _)| {
+                    parsed
+                        .given
+                        .iter()
+                        .rev()
+                        .find(|g| matches!(g.key, Key::Picard(n) if n == name))
+                        .map(|g| g.spelled.clone())
+                })
+            }
+            bammetrics_core::Error::Output { .. } => {
+                parsed.last(Key::Output).map(|g| g.spelled.clone())
+            }
+            _ => None,
+        };
+        with_from(VerbError::core(self.name, e), from)
+    }
+
+    /// The files the run reads: every `INPUT`, the reference and, for a
+    /// tool without `INPUT`, its required options.
+    fn input_paths(&self, inv: &Invocation) -> Vec<PathBuf> {
+        let tool = self.tool();
+        let mut names = vec!["INPUT", "REFERENCE_SEQUENCE"];
+        if !tool.takes_input() {
+            names.extend(
+                tool.table()
+                    .iter()
+                    .filter(|o| o.required && o.kind == Kind::Value)
+                    .map(|o| o.picard()),
+            );
+        }
+        names
+            .iter()
+            .flat_map(|name| inv.all(name))
+            .map(PathBuf::from)
+            .collect()
+    }
+
+    /// The files the run writes under names it knows before it runs: `-o`,
+    /// the metrics file and each file option of [`file_extensions`].
+    fn output_paths(&self, inv: &Invocation, output: Option<&Path>) -> Vec<PathBuf> {
+        let mut paths: Vec<PathBuf> = output
+            .map(Path::to_path_buf)
+            .into_iter()
+            .chain(inv.output.clone())
+            .collect();
+        for (option, _) in file_extensions(self.tool().name).unwrap_or_default() {
+            paths.extend(inv.all(option).iter().map(PathBuf::from));
+        }
+        paths
+    }
+
+    /// `--sample` for json and jsonl when none is given (docs/05 section
+    /// 2.2): the first `@RG` `SM` of a BAM, else the input name without its
+    /// extension. Standard input has neither.
+    fn default_sample(&self, inv: &Invocation) -> Option<String> {
+        let input = inv.all("INPUT").first()?;
+        if input == "/dev/stdin" {
+            return None;
+        }
+        let from_header = (self.input == "BAM")
+            .then(|| pass::read_header(Path::new(input)).ok())
+            .flatten()
+            .and_then(|header| {
+                bammetrics_core::levels::read_groups(&header)
+                    .into_iter()
+                    .find_map(|rg| rg.sample)
+            });
+        Some(from_header.unwrap_or_else(|| stem(input)))
     }
 
     fn threads(&self, parsed: &Parsed) -> Result<usize, VerbError> {
@@ -675,7 +761,44 @@ pub fn stem(input: &str) -> String {
     name.to_owned()
 }
 
-/// Create the directories above `path` that do not exist.
+/// `error` with `from` set when it has none.
+fn with_from(error: VerbError, from: Option<String>) -> VerbError {
+    match from {
+        Some(from) if error.from.is_none() => error.from(from),
+        _ => error,
+    }
+}
+
+/// An output that is one of the inputs would overwrite it: a usage error.
+/// Only existing files compare equal, after resolving links and `..`.
+pub fn refuse_overwriting_inputs(
+    verb: &str,
+    inputs: &[PathBuf],
+    outputs: &[PathBuf],
+) -> Result<(), VerbError> {
+    let inputs: Vec<PathBuf> = inputs
+        .iter()
+        .filter_map(|p| p.canonicalize().ok())
+        .collect();
+    for output in outputs {
+        let Ok(resolved) = output.canonicalize() else {
+            continue;
+        };
+        if inputs.contains(&resolved) {
+            return Err(VerbError::usage(
+                verb,
+                format!(
+                    "{} is an input; writing it would destroy it",
+                    output.display()
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Create the directories above `path` that do not exist (docs/05 section
+/// 2.3: missing output directories are created).
 fn create_parent(verb: &str, path: &Path) -> Result<(), VerbError> {
     match path.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => fs::create_dir_all(parent)

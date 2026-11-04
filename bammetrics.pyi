@@ -373,7 +373,7 @@ def collect_gc_bias_metrics(
 def collect_multiple_metrics(
     input: _Path,
     *,
-    output: _Path | None = None,
+    output: _Path,
     reference_sequence: _Path | None = None,
     stop_after: int | None = None,
     metric_accumulation_level: str | Sequence[str] | None = None,
@@ -383,8 +383,8 @@ def collect_multiple_metrics(
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
     """CollectMultipleMetrics: every PROGRAM on one read of the BAM, each written to OUTPUT
-    plus its Picard extension (plus FILE_EXTENSION); Python returns Python returns one
-    row per file: file and rows."""
+    plus its Picard extension (plus FILE_EXTENSION); Python returns one row per file:
+    file and rows."""
 
 def estimate_library_complexity(
     input: _Paths,
@@ -552,7 +552,7 @@ def collect_rna_seq_metrics(
 def collect_variant_calling_metrics(
     input: _Path,
     *,
-    output: _Path | None = None,
+    output: _Path,
     dbsnp: _Path,
     target_intervals: _Path | None = None,
     sequence_dictionary: _Path | None = None,
@@ -561,23 +561,23 @@ def collect_variant_calling_metrics(
 ) -> list[dict[str, Any]]:
     """CollectVariantCallingMetrics: the input is a VCF (plain or bgzip). OUTPUT is a
     prefix: PREFIX.variant_calling_summary_metrics and
-    PREFIX.variant_calling_detail_metrics; Python returns Python returns one row per
-    file: file and rows."""
+    PREFIX.variant_calling_detail_metrics; Python returns one row per file: file and
+    rows."""
 
 def accumulate_variant_calling_metrics(
     input: _Paths,
     *,
-    output: _Path | None = None,
+    output: _Path,
 ) -> list[dict[str, Any]]:
     """AccumulateVariantCallingMetrics: the prefixes of CollectVariantCallingMetrics shards
     merged as Picard merges them; OUTPUT is the prefix of the two files. Python returns
-    Python returns one row per file: file and rows."""
+    one row per file: file and rows."""
 
 def genotype_concordance(
     truth_vcf: _Path,
     call_vcf: _Path,
     *,
-    output: _Path | None = None,
+    output: _Path,
     truth_sample: str | None = None,
     call_sample: str | None = None,
     intervals: _Path | Sequence[_Path] | None = None,

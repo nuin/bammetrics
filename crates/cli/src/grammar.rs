@@ -8,10 +8,14 @@
 //! case, `-` as `_`) and compared with the row's Picard names, so the
 //! registry parser then sees `MINIMUM_PCT=0.1`.
 //!
+//! A one-letter spelling takes its value attached as clap read it in 0.12:
+//! `-Oout.txt`, `-M0.1`, `-@4` (and `-O=out.txt`).
+//!
 //! A boolean takes `--x` (true), `--no-x`, `--x=false`, `X=false`, or the
 //! space form `--x false` of the 0.12 subcommands. Only a literal `true` or
 //! `false` (any case) after a boolean is read as its value, so a BAM path
-//! after a flag stays a positional argument.
+//! after a flag stays a positional argument. [`Parsed`] records both
+//! cases, so an error about the input can say what the flag did.
 
 use bammetrics_core::registry::{Ty, did_you_mean, normalize};
 
@@ -40,8 +44,12 @@ pub struct Flag {
     pub key: Key,
     /// The `--long` spelling, kebab case.
     pub long: String,
-    /// Spellings with one dash, compared as given: `o`, `@`, `q`.
-    pub shorts: &'static [&'static str],
+    /// Further `--long` spellings `--help` lists: the kebab form of each
+    /// longer Picard name (`--level` for `LEVEL`).
+    pub aliases: Vec<String>,
+    /// Spellings with one dash, compared as given: `o`, `@`, `q`, and each
+    /// one-letter Picard name (`M`).
+    pub shorts: Vec<&'static str>,
     /// Picard names and aliases, compared after normalising.
     pub names: Vec<&'static str>,
     pub ty: Ty,
@@ -60,7 +68,8 @@ impl Flag {
         Self {
             key,
             long: long.to_owned(),
-            shorts,
+            aliases: Vec::new(),
+            shorts: shorts.to_vec(),
             names: Vec::new(),
             ty,
             values: 1,
@@ -71,8 +80,24 @@ impl Flag {
         }
     }
 
+    /// Add Picard names: a one-letter name is also a short spelling, a
+    /// longer one a `--kebab` alias.
     pub fn names(mut self, names: &[&'static str]) -> Self {
-        self.names.extend_from_slice(names);
+        for &name in names {
+            if !self.names.contains(&name) {
+                self.names.push(name);
+            }
+            if name.chars().count() == 1 {
+                if !self.shorts.contains(&name) {
+                    self.shorts.push(name);
+                }
+                continue;
+            }
+            let kebab = name.to_ascii_lowercase().replace('_', "-");
+            if kebab != self.long && !self.aliases.contains(&kebab) {
+                self.aliases.push(kebab);
+            }
+        }
         self
     }
 
@@ -90,6 +115,7 @@ impl Flag {
     pub fn spellings(&self) -> String {
         let mut parts: Vec<String> = self.shorts.iter().map(|s| format!("-{s}")).collect();
         parts.push(format!("--{}", self.long));
+        parts.extend(self.aliases.iter().map(|a| format!("--{a}")));
         let mut text = parts.join(", ");
         if !self.placeholder.is_empty() {
             text.push(' ');
@@ -126,6 +152,13 @@ pub struct Given {
 pub struct Parsed {
     pub positional: Vec<String>,
     pub given: Vec<Given>,
+    /// A boolean given as `--x true` or `--x false` (space form): the flag
+    /// as spelled and the word it took.
+    pub bool_word: Option<(String, String)>,
+    /// Positional arguments right after a bare boolean flag: the index in
+    /// `positional` and the flag as spelled (`--x maybe` reads `maybe` as
+    /// an input).
+    pub after_bool: Vec<(usize, String)>,
 }
 
 impl Parsed {
@@ -143,6 +176,23 @@ impl Parsed {
     pub fn flag(&self, key: Key) -> bool {
         self.last(key).is_some_and(|g| g.values[0] == "true")
     }
+
+    /// The hint for positional argument `index` when a bare boolean flag
+    /// came right before it: `--x maybe` reads `maybe` as an input.
+    pub fn bool_value_hint(&self, index: usize) -> Option<String> {
+        self.after_bool
+            .iter()
+            .find(|(i, _)| *i == index)
+            .map(|(_, flag)| format!("expected true or false after {flag}"))
+    }
+
+    /// The hint for a missing input when a boolean took a literal word
+    /// that may have been meant as the input file.
+    pub fn bool_word_hint(&self) -> Option<String> {
+        self.bool_word.as_ref().map(|(flag, word)| {
+            format!("{flag} took {word} as its value; write ./{word} for an input named {word}")
+        })
+    }
 }
 
 /// The flag `name` (the argument without its dashes) refers to: a
@@ -158,6 +208,28 @@ fn find<'a>(flags: &'a [Flag], dashes: usize, name: &str) -> Option<&'a Flag> {
         .iter()
         .find(|f| f.long == name)
         .or_else(|| flags.iter().find(|f| f.is_named(name)))
+}
+
+/// A one-dash argument with its value attached, as clap read one in 0.12:
+/// `-Oout.txt` is `-O out.txt` and `-O=out.txt` is `-O out.txt`, when the
+/// whole word names no flag and its first letter is the short spelling of
+/// a flag that takes one value.
+fn attached<'a>(flags: &[Flag], dashes: usize, arg: &'a str) -> Option<(&'a str, &'a str)> {
+    if dashes != 1 {
+        return None;
+    }
+    let body = &arg[1..];
+    let whole = body.split_once('=').map_or(body, |(n, _)| n);
+    if find(flags, 1, whole).is_some() {
+        return None;
+    }
+    let first = body.chars().next()?;
+    let (short, rest) = body.split_at(first.len_utf8());
+    let takes_value = flags
+        .iter()
+        .any(|f| f.shorts.contains(&short) && f.ty != Ty::Bool && f.values == 1);
+    let value = rest.strip_prefix('=').unwrap_or(rest);
+    (takes_value && !value.is_empty()).then_some((short, value))
 }
 
 /// `true` or `false` in any case, as Picard reads a boolean.
@@ -202,13 +274,19 @@ fn unknown(verb: &str, flags: &[Flag], spelled: &str, name: &str) -> VerbError {
 pub fn parse(verb: &str, flags: &[Flag], args: &[String]) -> Result<Parsed, VerbError> {
     let mut parsed = Parsed::default();
     let mut rest = args.iter().peekable();
+    // The spelling of a boolean flag given bare as the previous argument.
+    let mut bare_bool: Option<String> = None;
     while let Some(arg) = rest.next() {
+        let previous_bool = bare_bool.take();
         if arg == "--" {
             parsed.positional.extend(rest.by_ref().cloned());
             break;
         }
         let dashes = arg.len() - arg.trim_start_matches('-').len();
-        let (name, inline) = if arg == "-" || dashes > 2 {
+        let short_value = attached(flags, dashes, arg);
+        let (name, inline) = if let Some((short, value)) = short_value {
+            (short, Some(value))
+        } else if arg == "-" || dashes > 2 {
             parsed.positional.push(arg.clone());
             continue;
         } else if dashes > 0 {
@@ -219,10 +297,15 @@ pub fn parse(verb: &str, flags: &[Flag], args: &[String]) -> Result<Parsed, Verb
         } else if let Some((n, v)) = option_word(arg) {
             (n, Some(v))
         } else {
+            if let Some(flag) = previous_bool {
+                parsed.after_bool.push((parsed.positional.len(), flag));
+            }
             parsed.positional.push(arg.clone());
             continue;
         };
-        let spelled = if dashes > 0 {
+        let spelled = if short_value.is_some() {
+            format!("-{name}")
+        } else if dashes > 0 {
             arg.split('=').next().unwrap_or(arg).to_owned()
         } else {
             format!("{name}=")
@@ -250,10 +333,14 @@ pub fn parse(verb: &str, flags: &[Flag], args: &[String]) -> Result<Parsed, Verb
                 })?,
                 None => match rest.peek().and_then(|next| bool_text(next)) {
                     Some(value) => {
-                        rest.next();
+                        let word = rest.next().cloned().unwrap_or_default();
+                        parsed.bool_word = Some((spelled.clone(), word));
                         value
                     }
-                    None => "true",
+                    None => {
+                        bare_bool = Some(spelled.clone());
+                        "true"
+                    }
                 },
             };
             vec![value.to_owned()]
@@ -396,6 +483,49 @@ mod tests {
         assert_eq!(
             values(&["-o", "x", "--output=y", "O=z"], Key::Output),
             ["x", "y", "z"]
+        );
+    }
+
+    #[test]
+    fn one_letter_flags_take_attached_values() {
+        let pct = Key::Picard("MINIMUM_PCT");
+        assert_eq!(values(&["-M0.1"], pct), ["0.1"]);
+        assert_eq!(values(&["-M=0.1"], pct), ["0.1"]);
+        assert_eq!(values(&["-Oout.txt"], Key::Output), ["out.txt"]);
+        assert_eq!(values(&["-Oa=b.txt"], Key::Output), ["a=b.txt"]);
+        let parsed = parse("v", &flags(), &strings(&["-M0.1"])).expect("parses");
+        assert_eq!(parsed.given[0].spelled, "-M");
+        // A boolean takes no attached value; `-qx` stays unknown.
+        assert!(parse("v", &flags(), &strings(&["-qx"])).is_err());
+    }
+
+    #[test]
+    fn boolean_words_are_recorded_for_the_input_errors() {
+        let parsed = parse(
+            "v",
+            &flags(),
+            &strings(&["--clip-overlapping-reads", "true"]),
+        )
+        .expect("parses");
+        assert!(parsed.positional.is_empty());
+        assert_eq!(
+            parsed.bool_word_hint().as_deref(),
+            Some(
+                "--clip-overlapping-reads took true as its value; write ./true for an input \
+                 named true"
+            )
+        );
+        let parsed = parse(
+            "v",
+            &flags(),
+            &strings(&["in.bam", "--clip-overlapping-reads", "maybe"]),
+        )
+        .expect("parses");
+        assert_eq!(parsed.positional, ["in.bam", "maybe"]);
+        assert_eq!(parsed.bool_value_hint(0), None);
+        assert_eq!(
+            parsed.bool_value_hint(1).as_deref(),
+            Some("expected true or false after --clip-overlapping-reads")
         );
     }
 

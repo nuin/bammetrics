@@ -506,3 +506,88 @@ fn the_picard_face_prints_the_verb_help() {
     let completions = run_ok(&strings(&["completions", "bash"]));
     assert!(String::from_utf8_lossy(&completions.stdout).contains("--minimum-pct"));
 }
+
+/// clap 0.12 read a value attached to a one-letter flag: `-Oout.txt`,
+/// `-M0.1`, `-Iin.bam`, `-Rref.fa`, `-@2`. They write what the spaced
+/// forms write.
+#[test]
+fn attached_short_values_read_as_the_spaced_forms() {
+    let dir = fresh_dir("attached");
+    let spaced = dir.join("spaced.txt");
+    let joined = dir.join("joined.txt");
+    run_ok(&strings(&[
+        "alignment-summary",
+        "-I",
+        IS,
+        "-R",
+        REF,
+        "-@",
+        "2",
+        "-O",
+        spaced.to_str().expect("utf-8"),
+    ]));
+    run_ok(&[
+        "alignment-summary".to_owned(),
+        format!("-I{IS}"),
+        format!("-R{REF}"),
+        "-@2".to_owned(),
+        format!("-O{}", joined.display()),
+    ]);
+    let body = |p: &Path| {
+        fs::read_to_string(p)
+            .expect("written")
+            .lines()
+            .filter(|l| !l.starts_with("# "))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    assert_eq!(body(&joined), body(&spaced));
+    let pct = run_ok(&strings(&["insert-size", IS, "-M0.5"]));
+    assert!(String::from_utf8_lossy(&pct.stdout).contains("MINIMUM_PCT=0.5"));
+}
+
+/// An output that names an input is refused before anything is written.
+#[test]
+fn an_output_that_is_the_input_is_refused() {
+    let dir = fresh_dir("overwrite");
+    let bam = dir.join("in.bam");
+    fs::copy(root().join(IS), &bam).expect("copy");
+    let before = fs::read(&bam).expect("bam");
+    let path = bam.to_str().expect("utf-8");
+    let collect_prefix = dir.join("in.bam.quality_yield_metrics");
+    fs::copy(root().join(IS), &collect_prefix).expect("copy");
+    let collect_input = collect_prefix.to_str().expect("utf-8");
+    for args in [
+        strings(&["quality-yield", path, "-o", path]),
+        strings(&["collect", collect_input, "-o", path, "-m", "quality-yield"]),
+    ] {
+        let run = bammetrics(&args);
+        assert_eq!(run.status.code(), Some(2), "{args:?}");
+        assert!(
+            String::from_utf8_lossy(&run.stderr).contains("is an input"),
+            "{args:?}"
+        );
+    }
+    assert_eq!(fs::read(&bam).expect("bam"), before);
+    assert_eq!(fs::read(&collect_prefix).expect("bam"), before);
+}
+
+/// Picard's plumbing booleans (`CREATE_INDEX`) are flags too: a BAM after
+/// one stays the input, and `--no-x` is known.
+#[test]
+fn ignored_booleans_never_take_a_path() {
+    for flag in ["--create-index", "--no-create-index", "--use-jdk-deflater"] {
+        let run = run_ok(&strings(&["insert-size", flag, IS]));
+        assert!(String::from_utf8_lossy(&run.stderr).contains("ignoring"));
+    }
+}
+
+/// Completions offer the short, alias and `--no-x` spellings.
+#[test]
+fn completions_list_every_spelling() {
+    let run = run_ok(&strings(&["completions", "zsh"]));
+    let text = String::from_utf8_lossy(&run.stdout);
+    for spelling in ["'*-M+", "--level", "--no-include-duplicates", "--input"] {
+        assert!(text.contains(spelling), "{spelling}");
+    }
+}

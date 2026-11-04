@@ -32,10 +32,10 @@ Other verbs:
   presets      List the built-in verdict presets with version and hash.
   help         Help for a verb or a Picard class.
   completions  A completion script for bash, zsh, fish, elvish or powershell.
-  qc           bammetrics help qc
-  plan         bammetrics help plan
-  check        bammetrics help check
-  report       bammetrics help report
+  qc           The collectors a preset needs on one read of a BAM, then the verdict and the page.
+  plan         What qc with the same options would run.
+  check        Evaluate a preset over directories of metrics files, or read verdict.json files, and gate.
+  report       Verdicts, sample pages and a run index from directories of Picard metrics files.
 
 Picard syntax: bammetrics <PICARD CLASS> I=... O=... [KEY=VALUE ...]
 ## stderr

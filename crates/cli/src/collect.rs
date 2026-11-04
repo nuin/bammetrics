@@ -15,7 +15,7 @@ use bammetrics_core::registry::{Ty, did_you_mean};
 
 use crate::error::VerbError;
 use crate::grammar::{self, Flag, Key, Parsed};
-use crate::verbs::{option_lines, shared_flags, stem};
+use crate::verbs::{option_lines, refuse_overwriting_inputs, shared_flags, stem};
 
 const VERB: &str = "collect";
 
@@ -141,6 +141,15 @@ fn request(parsed: &Parsed) -> Result<Request, VerbError> {
             "--metric hs and --hs BAITS TARGETS go together",
         ));
     }
+    // 0.12 clap: `--hs-per-base` requires `--hs`.
+    if let Some(given) = parsed.last(Key::Own("hs-per-base"))
+        && hs.is_empty()
+    {
+        return Err(
+            VerbError::usage(VERB, "--hs-per-base needs --hs BAITS TARGETS")
+                .from(given.spelled.clone()),
+        );
+    }
     let reference = parsed
         .last(Key::Own("reference"))
         .map(|g| PathBuf::from(&g.values[0]));
@@ -184,18 +193,34 @@ pub fn run(args: &[String]) -> Result<u8, VerbError> {
     let bam = match inputs.as_slice() {
         [bam] => PathBuf::from(bam.as_str()),
         [] => {
-            return Err(
-                VerbError::usage(VERB, "missing BAM").hint("bammetrics collect BAM -o PREFIX")
-            );
+            let mut error = VerbError::usage(VERB, "missing BAM");
+            if let Some(hint) = parsed.bool_word_hint() {
+                error = error.hint(hint);
+            }
+            return Err(error.hint("bammetrics collect BAM -o PREFIX"));
         }
         [_, second, ..] => {
-            return Err(
+            let mut error =
                 VerbError::usage(VERB, format!("one BAM expected, got {}", inputs.len()))
-                    .from(second.as_str()),
-            );
+                    .from(second.as_str());
+            if let Some(hint) = (0..parsed.positional.len().min(2))
+                .rev()
+                .find_map(|i| parsed.bool_value_hint(i))
+            {
+                error = error.hint(hint);
+            }
+            return Err(error);
         }
     };
     let prefix = match parsed.last(Key::Output) {
+        Some(given) if given.values[0] == "-" => {
+            return Err(VerbError::usage(
+                VERB,
+                "standard output takes one file; this verb writes several",
+            )
+            .from(given.spelled.clone())
+            .hint("give -o PREFIX"));
+        }
         Some(given) => {
             let path = PathBuf::from(&given.values[0]);
             if given.values[0].ends_with('/') || path.is_dir() {
@@ -231,11 +256,42 @@ pub fn run(args: &[String]) -> Result<u8, VerbError> {
     };
     let mut request = request(&parsed)?;
     let core = |e: Error| VerbError::core(VERB, &e);
+    let outputs = Outputs::new(&prefix, &request).map_err(core)?;
+    let mut read = vec![bam.clone()];
+    read.extend(
+        parsed
+            .last(Key::Own("reference"))
+            .map(|g| PathBuf::from(&g.values[0])),
+    );
+    read.extend(
+        parsed
+            .all(Key::Own("hs"))
+            .flat_map(|g| g.values.iter().map(PathBuf::from)),
+    );
+    let written: Vec<PathBuf> = [
+        (request.quality_yield.is_some(), &outputs.quality_yield),
+        (
+            request.alignment_summary.is_some(),
+            &outputs.alignment_summary,
+        ),
+        (request.insert_size.is_some(), &outputs.insert_size),
+    ]
+    .into_iter()
+    .filter(|(wanted, _)| *wanted)
+    .map(|(_, path)| path.clone())
+    .chain(outputs.hs_metrics.iter().cloned())
+    .collect();
+    refuse_overwriting_inputs(VERB, &read, &written).map_err(|e| {
+        match parsed.last(Key::Output) {
+            Some(given) => e.from(given.spelled.clone()),
+            None => e,
+        }
+    })?;
+    // docs/05 section 2.3: missing output directories are created.
     if let Some(parent) = prefix.parent().filter(|p| !p.as_os_str().is_empty()) {
         std::fs::create_dir_all(parent)
             .map_err(|e| VerbError::input(VERB, format!("{}: {e}", parent.display())))?;
     }
-    let outputs = Outputs::new(&prefix, &request).map_err(core)?;
     if parsed.flag(Key::Own("hs-per-base")) {
         for (opts, path) in request.hs_metrics.iter_mut().zip(&outputs.hs_metrics) {
             opts.per_base_coverage = Some(collect::per_base_coverage_path(path));

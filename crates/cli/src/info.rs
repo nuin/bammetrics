@@ -32,16 +32,41 @@ const OTHER_VERBS: &[(&str, &str)] = &[
     ),
 ];
 
-/// A clap argument for a grammar flag, for completion scripts.
+/// The verbs clap parses (`main.rs`), in `tools` order.
+pub const CLAP_VERBS: [&str; 4] = ["qc", "plan", "check", "report"];
+
+/// `text` up to its first `.`, `;` or `:` outside parentheses and before
+/// a space: one line for a verb list.
+fn first_clause(text: &str) -> String {
+    let mut depth = 0usize;
+    let mut end = text.len();
+    for (i, c) in text.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            '.' | ';' | ':'
+                if depth == 0 && text[i + 1..].chars().next().is_none_or(char::is_whitespace) =>
+            {
+                end = i;
+                break;
+            }
+            _ => {}
+        }
+    }
+    let clause = text[..end].split_whitespace().collect::<Vec<_>>().join(" ");
+    format!("{clause}.")
+}
+
+/// A clap argument for a grammar flag, for completion scripts: every
+/// short spelling (`-M`), every `--alias` (`--level`).
 fn argument(flag: &Flag) -> Arg {
     let mut arg = Arg::new(flag.long.clone()).long(flag.long.clone());
     let mut shorts = flag.shorts.iter().filter_map(|s| s.chars().next());
     if let Some(first) = shorts.next() {
         arg = arg.short(first);
     }
-    for alias in shorts {
-        arg = arg.short_alias(alias);
-    }
+    arg = arg.visible_short_aliases(shorts);
+    arg = arg.visible_aliases(flag.aliases.clone());
     if flag.ty == Ty::Bool {
         return arg.action(ArgAction::SetTrue).help(flag.help.clone());
     }
@@ -56,9 +81,13 @@ fn argument(flag: &Flag) -> Arg {
     }
 }
 
-/// A clap subcommand for a verb's flags; the input is positional.
-fn subcommand(name: &'static str, about: String, flags: &[Flag]) -> Command {
-    let mut command = Command::new(name).about(about).disable_help_flag(true);
+/// A clap subcommand for a verb's flags: the input positional and as
+/// `-i`, and `--no-x` beside each boolean `--x`.
+fn subcommand(name: &'static str, about: String, long_about: String, flags: &[Flag]) -> Command {
+    let mut command = Command::new(name)
+        .about(about)
+        .long_about(long_about)
+        .disable_help_flag(true);
     if flags.iter().any(|f| f.key == Key::Input) {
         command = command.arg(
             Arg::new("INPUT")
@@ -67,8 +96,16 @@ fn subcommand(name: &'static str, about: String, flags: &[Flag]) -> Command {
         );
     }
     for flag in flags {
-        if flag.key != Key::Input {
-            command = command.arg(argument(flag));
+        command = command.arg(argument(flag));
+        let negated = format!("no-{}", flag.long);
+        if flag.ty == Ty::Bool && flag.key != Key::Help && !flags.iter().any(|f| f.long == negated)
+        {
+            command = command.arg(
+                Arg::new(negated.clone())
+                    .long(negated)
+                    .action(ArgAction::SetTrue)
+                    .help(format!("--{} false.", flag.long)),
+            );
         }
     }
     command
@@ -79,16 +116,27 @@ fn subcommand(name: &'static str, about: String, flags: &[Flag]) -> Command {
 /// list all of them.
 pub fn command(base: Command) -> Command {
     let mut command = base.disable_help_subcommand(true);
+    for name in CLAP_VERBS {
+        command = command.mut_subcommand(name, |sub| {
+            let about = sub.get_about().map(ToString::to_string).unwrap_or_default();
+            let long = sub
+                .get_long_about()
+                .map_or_else(|| about.clone(), ToString::to_string);
+            sub.about(first_clause(&about)).long_about(long)
+        });
+    }
     for verb in VERBS {
         let tool = verb.tool();
         command = command.subcommand(subcommand(
             verb.name,
+            format!("{}: {}", tool.name, first_clause(tool.summary)),
             format!("{}: {}", tool.name, tool.summary),
             &verb.flags(),
         ));
     }
     command = command.subcommand(subcommand(
         "collect",
+        OTHER_VERBS[0].1.to_owned(),
         OTHER_VERBS[0].1.to_owned(),
         &collect::flags(),
     ));
@@ -109,8 +157,9 @@ pub fn command(base: Command) -> Command {
         )
 }
 
-/// `bammetrics tools`.
-pub fn tools() -> String {
+/// `bammetrics tools`: the tool verbs with their Picard class, then the
+/// other verbs with what they do (`base` holds the clap verbs' text).
+pub fn tools(base: &Command) -> String {
     let width = VERBS.iter().map(|v| v.name.len()).max().unwrap_or(0);
     let mut text = format!("{:<width$}  PICARD CLASS\n", "VERB");
     for verb in VERBS {
@@ -120,8 +169,13 @@ pub fn tools() -> String {
     for (name, about) in OTHER_VERBS {
         text.push_str(&format!("  {name:<12} {about}\n"));
     }
-    for name in ["qc", "plan", "check", "report"] {
-        text.push_str(&format!("  {name:<12} bammetrics help {name}\n"));
+    for name in CLAP_VERBS {
+        let about = base
+            .find_subcommand(name)
+            .and_then(Command::get_about)
+            .map(|a| first_clause(&a.to_string()))
+            .unwrap_or_default();
+        text.push_str(&format!("  {name:<12} {about}\n"));
     }
     text.push_str("\nPicard syntax: bammetrics <PICARD CLASS> I=... O=... [KEY=VALUE ...]\n");
     text
@@ -152,8 +206,18 @@ fn topics() -> Vec<&'static str> {
         .iter()
         .flat_map(|v| [v.name, v.class])
         .chain(OTHER_VERBS.iter().map(|(n, _)| *n))
-        .chain(["qc", "plan", "check", "report"])
+        .chain(CLAP_VERBS)
         .collect()
+}
+
+/// The error for a first argument that is no verb and no Picard class
+/// (docs/05 section 6): the closest name, and where the list is.
+pub fn unknown_verb(name: &str) -> VerbError {
+    let mut error = VerbError::usage("", format!("unknown verb or Picard class {name:?}"));
+    if let Some(best) = did_you_mean(name, topics()) {
+        error = error.hint(format!("did you mean {best}?"));
+    }
+    error.hint("bammetrics tools lists them")
 }
 
 /// `bammetrics help [TOPIC]`: the help of a verb, of the verb for a Picard
@@ -168,9 +232,10 @@ pub fn help(base: Command, args: &[String]) -> Result<String, VerbError> {
     if topic == "collect" {
         return Ok(collect::help());
     }
-    let mut full = command(base);
+    let mut full = command(base).bin_name("bammetrics");
+    full.build();
     if let Some(sub) = full.find_subcommand_mut(topic) {
-        return Ok(sub.render_help().to_string());
+        return Ok(sub.render_long_help().to_string());
     }
     let mut error = VerbError::usage("help", format!("no verb or Picard class {topic:?}"));
     if let Some(best) = did_you_mean(topic, topics()) {
@@ -192,4 +257,40 @@ pub fn completions(base: Command, args: &[String]) -> Result<(), VerbError> {
     let mut full = command(base);
     clap_complete::generate(shell, &mut full, "bammetrics", &mut io::stdout());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::CommandFactory;
+
+    use super::*;
+
+    /// clap's own checks (one short and one long per argument) pass for the
+    /// command that lists every verb, so `--help` and completions build.
+    #[test]
+    fn the_full_command_is_valid() {
+        command(crate::Cli::command()).debug_assert();
+    }
+
+    #[test]
+    fn first_clauses_stop_outside_parentheses() {
+        assert_eq!(first_clause("a b. c"), "a b.");
+        assert_eq!(first_clause("x (y; z) w; v"), "x (y; z) w.");
+        assert_eq!(
+            first_clause("PREFIX.<files>, more"),
+            "PREFIX.<files>, more."
+        );
+        assert_eq!(first_clause("the page: PREFIX.x"), "the page.");
+    }
+
+    #[test]
+    fn unknown_first_words_get_the_closest_verb_or_class() {
+        assert_eq!(
+            unknown_verb("inser-size").to_string(),
+            "bammetrics: unknown verb or Picard class \"inser-size\"\n  \
+             did you mean insert-size?\n  bammetrics tools lists them"
+        );
+        let class = unknown_verb("CollectInsertSizeMetric").to_string();
+        assert!(class.contains("did you mean CollectInsertSizeMetrics?"));
+    }
 }

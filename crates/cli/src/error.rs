@@ -62,7 +62,12 @@ impl VerbError {
 
 impl fmt::Display for VerbError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "bammetrics {}: {}", self.verb, self.what)?;
+        // An empty verb is an error about the first argument itself.
+        if self.verb.is_empty() {
+            write!(f, "bammetrics: {}", self.what)?;
+        } else {
+            write!(f, "bammetrics {}: {}", self.verb, self.what)?;
+        }
         if let Some(from) = &self.from {
             write!(f, " (from {from})")?;
         }

@@ -2091,8 +2091,6 @@ impl Accumulator for CaptureMetrics {
     }
 }
 
-/// `StringHeader` command line in Picard's shape, for the native
-/// `hs-metrics` subcommand.
 /// The `StringHeader` command line of the `hs-metrics` verb, the form the
 /// 0.12 subcommand wrote: every option with its value, defaults included.
 pub fn subcommand_header(inv: &Invocation) -> Result<String> {
@@ -2100,6 +2098,9 @@ pub fn subcommand_header(inv: &Invocation) -> Result<String> {
     Ok(command_header(&opts, &inv.input, inv.output.as_deref()))
 }
 
+/// The `StringHeader` command line for `opts` in Picard's shape, `bam` as
+/// `INPUT` and `output` as `OUTPUT` when given: `hs-metrics` and the
+/// `CollectHsMetrics` runs of `collect`.
 pub fn command_header(opts: &Options, bam: &Path, output: Option<&Path>) -> String {
     let list = |paths: &[PathBuf]| {
         paths

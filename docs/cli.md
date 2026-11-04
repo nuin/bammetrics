@@ -79,14 +79,20 @@ Picard key, the `--help` line, the Python keyword argument and the `bammetrics.p
 lists every row of a verb.
 
 Spellings. `--minimum-pct 0.1`, `--minimum-pct=0.1`, `--MINIMUM_PCT 0.1`, `MINIMUM_PCT=0.1`,
-`minimum_pct=0.1`, `-M 0.1` and `M=0.1` are one option. A name is upper-cased with `-` read
-as `_`, then matched against the row's Picard names, and the registry parser gets
-`MINIMUM_PCT=0.1`. A bare word holding `=` is an option only when the part before `=` has no
-path character, so `dir/a=b.bam` stays an input.
+`minimum_pct=0.1`, `-M 0.1`, `-M0.1` and `M=0.1` are one option. A name is upper-cased with
+`-` read as `_`, then matched against the row's Picard names, and the registry parser gets
+`MINIMUM_PCT=0.1`. A one-letter Picard name is a short flag (`-M`, `-W`, `-R`), and its value
+may be attached as clap read it in 0.12 (`-Oout.txt`, `-Rref.fa`, `-@4`). A longer Picard
+name is a `--kebab` alias (`--level` for `LEVEL`). A bare word holding `=` is an option only
+when the part before `=` has no path character, so `dir/a=b.bam` stays an input.
 
 Booleans take `--x` (true), `--no-x`, `--x=false`, `X=false` and the space form `--x false`
 of the 0.12 subcommands. Only a literal `true` or `false` (any case) after a boolean is read
-as its value: in `--include-duplicates in.bam`, `in.bam` is the input.
+as its value: in `--include-duplicates in.bam`, `in.bam` is the input. Picard's plumbing
+booleans (`--create-index`, `--create-md5-file`, ...) are flags too. An input file named
+`true` or `false` right after a boolean is read as the value; write `./true`, and the
+missing-input error says so. A word after a bare boolean that is neither (`--x maybe`) is
+read as an input, and the error names the boolean.
 
 Shared options, on every tool verb:
 
@@ -94,16 +100,18 @@ Shared options, on every tool verb:
 |---|---|---|
 | INPUT or `-i` | input file; `-` reads standard input | `I`, `INPUT` |
 | `-o` (`-O` kept) | file, prefix, or `-` for standard output | `O`, `OUTPUT` (`M` for duplicate-metrics) |
-| `-@`, `--threads N` | BGZF decompression workers; default the available cores, at most 8 (`--help` prints the number) | none |
+| `-@`, `--threads N` | BGZF decompression workers; default the available cores, at most 8 (`--help` prints the number); 0 counts as 1, as in 0.12 | none |
 | `-R` | FASTA with a `.fai` | `R`, `REFERENCE_SEQUENCE` |
 | `--level` | accumulation level, repeatable | `LEVEL`, `METRIC_ACCUMULATION_LEVEL` |
 | `--stop-after N` | read limit | `STOP_AFTER` |
 | `--format` | `picard`, `json`, `tsv`, `jsonl`, `human` (single-file verbs) | none |
-| `--sample NAME` | sample name in the json and jsonl forms; never written into a Picard file | none |
+| `--sample NAME` | sample name in the json and jsonl forms, default the first `@RG SM`, else the input name without its extension (none for standard input); never written into a Picard file | none |
 | `-q`, `-v` | no notes on stderr; the Picard command line and each file written on stderr | `QUIET` |
 
-`--level` and `--stop-after` exist on a verb whose tool has the Picard option; elsewhere
-they are unknown options, as the Picard face rejects them. `-R` on a tool that reads no
+`--level` and `--stop-after` exist on a verb whose tool has the option; elsewhere they are
+unknown options, as the Picard face rejects them. `insert-size` has no `--stop-after`:
+Picard's `CollectInsertSizeMetrics` takes `STOP_AFTER`, bammetrics does not implement it
+yet, and `quality-yield` has no `--level`, as in Picard. `-R` on a tool that reads no
 reference is accepted and noted, as `R=` is on the Picard face. Records are decoded and counted
 on one thread in file order, so the metrics do not depend on `--threads`.
 
@@ -127,10 +135,15 @@ bammetrics hs-metrics: missing --target-intervals (Picard: TARGET_INTERVALS)
   every option: bammetrics help hs-metrics
 $ bammetrics quality-yield nope.bam
 bammetrics quality-yield: nope.bam not found (from BAM)
+$ bammetrics inser-size in.bam
+bammetrics: unknown verb or Picard class "inser-size"
+  did you mean insert-size?
+  bammetrics tools lists them
 ```
 
 A usage error that clap finds on `qc`, `plan`, `check` or `report` uses the same form, with
-the usage line as a hint.
+the usage line as a hint. An output that resolves to an input file (`-o in.bam`) is a usage
+error, and nothing is written.
 
 ## Output naming
 
@@ -155,7 +168,7 @@ the usage line as a hint.
 ## Formats
 
 `--format picard` (the default) is the Picard metrics file. `json` is one object: `tool`,
-`sample` (with `--sample`), `class`, `metrics` (one object per row, keyed by column) and
+`sample` (`--sample`, else its default), `class`, `metrics` (one object per row, keyed by column) and
 `histogram` (`columns`, `rows`, or `null`). `jsonl` is one object per row, `tsv` a header
 line and one line per row, `human` an aligned table (a row per line up to 6 columns, else
 `COLUMN  value` lines per row). Numbers are JSON numbers, NaN and infinity `null`; the text
@@ -203,7 +216,8 @@ value.
   TARGETS` adds one `CollectHsMetrics` run and may be repeated; with more than one, each file
   is `PREFIX.<BAIT_SET>.hs_metrics`, BAIT_SET being the bait file name up to its first dot.
   `--hs-per-base` also writes each run's per-base coverage, named as its HS file with
-  `.per_base_coverage` in place of `.hs_metrics`. `-R` goes to alignment summary and hs.
+  `.per_base_coverage` in place of `.hs_metrics`; without `--hs` it is a usage error. `-R`
+  goes to alignment summary and hs. `-o -` is an error, as on the other multi-file verbs.
   `--metric` (or `-m`) picks a subset, comma separated (default the first three, plus hs
   with `--hs`). Every other option is Picard's default. A metric that fails (an unsorted BAM
   with `-R`, for example) writes no file and exits 1 after the others are written. In

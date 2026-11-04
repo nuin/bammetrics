@@ -1,0 +1,11 @@
+## argv
+quality-yield
+--include-secondary-alignments
+true
+## exit
+2
+## stdout
+## stderr
+bammetrics quality-yield: missing BAM
+  --include-secondary-alignments took true as its value; write ./true for an input named true
+  bammetrics quality-yield BAM [OPTIONS]

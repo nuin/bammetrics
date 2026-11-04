@@ -111,7 +111,7 @@ fn histogram(output: &MetricsOutput) -> Json {
 }
 
 /// What a verb prints for one tool's output: the tool, the `StringHeader`
-/// command line and `--sample`.
+/// command line and the sample (`--sample`, or its default).
 pub struct Context<'a> {
     pub tool: &'a str,
     pub command: &'a str,
@@ -120,7 +120,7 @@ pub struct Context<'a> {
 
 /// `output` as `format`. The Picard form is the file the registry writer
 /// writes, `StringHeader` lines included; `sample` is added to the JSON
-/// forms when given.
+/// forms when there is one.
 pub fn render(format: Format, context: &Context<'_>, output: &MetricsOutput) -> String {
     let table = table(output);
     let (tool, sample) = (context.tool, context.sample);

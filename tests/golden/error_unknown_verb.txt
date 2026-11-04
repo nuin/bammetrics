@@ -1,0 +1,10 @@
+## argv
+inser-size
+tests/data/insert_size.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics: unknown verb or Picard class "inser-size"
+  did you mean insert-size?
+  bammetrics tools lists them

@@ -440,7 +440,7 @@ pub const TOOL: Tool = Tool {
     name: "CollectVariantCallingMetrics",
     summary: "the input is a VCF (plain or bgzip). OUTPUT is a prefix: \
               PREFIX.variant_calling_summary_metrics and PREFIX.variant_calling_detail_metrics; \
-              Python returns Python returns one row per file: file and rows.",
+              Python returns one row per file: file and rows.",
     options: &[
         PREFIX_OUTPUT,
         Opt::path(&["INPUT", "I"], "The VCF to read, plain or bgzip.").required(),
@@ -471,7 +471,7 @@ pub const TOOL: Tool = Tool {
 pub const ACCUMULATE_TOOL: Tool = Tool {
     name: "AccumulateVariantCallingMetrics",
     summary: "the prefixes of CollectVariantCallingMetrics shards merged as Picard merges \
-              them; OUTPUT is the prefix of the two files. Python returns Python returns one row per file: file and rows.",
+              them; OUTPUT is the prefix of the two files. Python returns one row per file: file and rows.",
     options: &[
         PREFIX_OUTPUT,
         Opt::path(

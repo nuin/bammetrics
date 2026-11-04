@@ -44,9 +44,9 @@ enum Command {
     /// Verdicts, sample pages and a run index from directories of Picard
     /// metrics files: SAMPLE.verdict.json, SAMPLE.report.html, index.html.
     Report(report::ReportArgs),
-    /// The gate: evaluate a preset over directories of metrics files, or
-    /// read verdict.json files, print the checks and exit 10 or 11 on a
-    /// bad verdict.
+    /// Evaluate a preset over directories of metrics files, or read
+    /// verdict.json files, and gate: print the checks and exit 10 or 11 on
+    /// a bad verdict.
     Check(check::CheckArgs),
     /// The collectors a preset needs on one read of a BAM, then the
     /// verdict and the page: PREFIX.<metrics files>, PREFIX.verdict.json,
@@ -57,9 +57,6 @@ enum Command {
     /// skip. Nothing runs.
     Plan(qc::QcArgs),
 }
-
-/// The verbs whose usage errors clap finds.
-const CLAP_VERBS: [&str; 4] = ["report", "check", "qc", "plan"];
 
 /// The text of one clap context value.
 fn context_text(value: &ContextValue) -> String {
@@ -85,9 +82,20 @@ fn clap_error(verb: &str, e: &clap::Error) -> VerbError {
     // `--fail-on <FAIL_ON>` is written as the option alone.
     let arg = context(ContextKind::InvalidArg)
         .map(|a| a.split_whitespace().next().unwrap_or_default().to_owned());
+    let value = context(ContextKind::InvalidValue).unwrap_or_default();
     let mut error = match (e.kind(), &arg) {
         (ErrorKind::MissingRequiredArgument, Some(arg)) => {
             VerbError::usage(verb, format!("missing {arg}"))
+        }
+        (ErrorKind::InvalidValue, Some(arg)) if value.is_empty() => {
+            VerbError::usage(verb, "missing value").from(arg.clone())
+        }
+        // `--threads x`: clap's reason follows the quoted option.
+        (ErrorKind::ValueValidation, Some(arg)) => {
+            let reason = first
+                .rsplit_once("': ")
+                .map_or_else(String::new, |(_, r)| format!(": {r}"));
+            VerbError::usage(verb, format!("invalid value {value:?}{reason}")).from(arg.clone())
         }
         (ErrorKind::InvalidValue, Some(arg)) => VerbError::usage(
             verb,
@@ -146,7 +154,7 @@ fn run() -> error::Result<u8> {
         match name.as_str() {
             "collect" => return Ok(collect::run(rest)?),
             "tools" => {
-                print!("{}", info::tools());
+                print!("{}", info::tools(&Cli::command()));
                 return Ok(0);
             }
             "presets" => {
@@ -161,6 +169,9 @@ fn run() -> error::Result<u8> {
                 info::completions(Cli::command(), rest)?;
                 return Ok(0);
             }
+            other if !other.starts_with('-') && !info::CLAP_VERBS.contains(&other) => {
+                return Err(info::unknown_verb(other).into());
+            }
             _ => {}
         }
     }
@@ -171,7 +182,7 @@ fn run() -> error::Result<u8> {
         Ok(cli) => cli,
         Err(e) => match args.first().map(String::as_str) {
             Some(verb)
-                if CLAP_VERBS.contains(&verb)
+                if info::CLAP_VERBS.contains(&verb)
                     && !matches!(
                         e.kind(),
                         ErrorKind::DisplayHelp

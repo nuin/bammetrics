@@ -158,6 +158,12 @@ impl Opt {
         Self::new(names, Kind::Ignored(why), Ty::Text, why)
     }
 
+    /// An ignored Picard boolean (`CREATE_INDEX`): the verb grammar reads
+    /// it as a flag, so `--create-index in.bam` keeps the BAM as the input.
+    pub const fn ignored_bool(names: &'static [&'static str], why: &'static str) -> Self {
+        Self::new(names, Kind::Ignored(why), Ty::Bool, why)
+    }
+
     /// A common option Picard rejects for this tool.
     pub const fn rejected(names: &'static [&'static str]) -> Self {
         Self::new(names, Kind::Rejected, Ty::Text, "")
@@ -201,14 +207,14 @@ pub const COMMON: &[Opt] = &[
     Opt::output(&["OUTPUT", "O"]),
     Opt::ignored(&["VALIDATION_STRINGENCY"], "records are not validated"),
     Opt::ignored(&["TMP_DIR"], "no temporary files are written"),
-    Opt::ignored(&["QUIET"], "progress is not logged"),
+    Opt::ignored_bool(&["QUIET"], "progress is not logged"),
     Opt::ignored(&["VERBOSITY"], "progress is not logged"),
     Opt::ignored(&["COMPRESSION_LEVEL"], "no BAM is written"),
     Opt::ignored(&["MAX_RECORDS_IN_RAM"], "records are streamed"),
-    Opt::ignored(&["CREATE_INDEX"], "no BAM is written"),
-    Opt::ignored(&["CREATE_MD5_FILE"], "no BAM is written"),
+    Opt::ignored_bool(&["CREATE_INDEX"], "no BAM is written"),
+    Opt::ignored_bool(&["CREATE_MD5_FILE"], "no BAM is written"),
     Opt::ignored(&["GA4GH_CLIENT_SECRETS"], "no GA4GH access"),
-    Opt::ignored(&["USE_JDK_DEFLATER", "USE_JDK_INFLATER"], "no JDK codec"),
+    Opt::ignored_bool(&["USE_JDK_DEFLATER", "USE_JDK_INFLATER"], "no JDK codec"),
     Opt::bool(
         &["ASSUME_SORTED", "AS"],
         "false fails a BAM whose header is not coordinate sorted (default true).",
@@ -725,6 +731,7 @@ pub fn python_stub(tool: &Tool) -> String {
             continue;
         }
         match opt.kind {
+            Kind::Output if opt.required => keywords.push("output: _Path".to_owned()),
             Kind::Output => keywords.push("output: _Path | None = None".to_owned()),
             Kind::Value if opt.required => {
                 keywords.push(format!("{}: {}", opt.kwarg(), python_annotation(opt)));

@@ -177,6 +177,7 @@ samtools view -b in.bam chr20 | bammetrics collect - -R ref.fa -o out/chr20 \
     -m quality-yield,alignment-summary,insert-size,gc-bias,mean-quality-by-cycle,quality-score-distribution,base-distribution-by-cycle
 ```
 1 read of the input. 9 files: gc-bias writes detail, summary and chart data. `-m multiple-metrics` expands to the Picard default five.
+Not built in 0.13.0: `collect -m` knows `quality-yield`, `alignment-summary`, `insert-size` and `hs`. Today `bammetrics multiple-metrics - -R ref.fa -o out/chr20 --program ...` runs those programs on one read of standard input.
 
 **11. Report and index from files, including real Picard output.**
 ```

@@ -1,0 +1,10 @@
+## argv
+insert-size
+tests/data/insert_size.bam
+--minimum-pct
+abc
+## exit
+2
+## stdout
+## stderr
+bammetrics insert-size: MINIMUM_PCT=abc: not a valid value (from --minimum-pct)

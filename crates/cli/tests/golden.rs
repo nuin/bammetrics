@@ -133,6 +133,18 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_verb_bool_value", "quality-yield", "IS", "--use-original-qualities=maybe"),
     case!("error_verb_two_bams", "insert-size", "IS", "OR"),
     case!("error_verb_format", "insert-size", "IS", "--format", "jsn"),
+    // Values attached to a one-letter flag, as clap read them in 0.12.
+    case!("verb_insert_size_attached", "insert-size", "IS", "-OOUT/insert_size.txt", "-M0.05", "-@2"),
+    case!("verb_alignment_summary_attached", "alignment-summary", "-Itests/data/insert_size.bam", "-Rtests/data/ref_100k.fa", "-OOUT/alignment_summary.txt"),
+    case!("verb_insert_size_ignored_bool", "insert-size", "--create-index", "IS", "-o", "OUT/insert_size.txt"),
+    case!("error_verb_bool_space_value", "quality-yield", "IS", "--use-original-qualities", "maybe"),
+    case!("error_verb_bool_took_input", "quality-yield", "--include-secondary-alignments", "true"),
+    case!("error_verb_no_bam", "insert-size"),
+    case!("error_verb_bad_number", "insert-size", "IS", "--minimum-pct", "abc"),
+    case!("error_collect_hs_per_base_without_hs", "collect", "IS", "-O", "OUT/sample", "--hs-per-base"),
+    case!("error_collect_stdout", "collect", "IS", "-o", "-"),
+    case!("error_unknown_verb", "inser-size", "IS"),
+    case!("error_qc_bad_threads", "qc", "IS", "--threads", "x"),
     case!("error_qc_no_bam", "qc"),
     case!("error_check_bad_fail_on", "check", "PICARD", "--fail-on", "bad"),
     // Documented error paths.
