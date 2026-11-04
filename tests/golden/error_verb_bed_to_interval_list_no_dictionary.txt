@@ -1,0 +1,10 @@
+## argv
+bed-to-interval-list
+tests/data/targets.bed
+## exit
+2
+## stdout
+## stderr
+bammetrics bed-to-interval-list: missing --sequence-dictionary (Picard: SEQUENCE_DICTIONARY)
+  --from-bam BAM copies the @SQ lines of a BAM header; --dict FILE reads a .dict.
+  every option: bammetrics help bed-to-interval-list

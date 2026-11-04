@@ -20,6 +20,8 @@ const FIXTURES: &[(&str, &str)] = &[
     ("OR", "tests/data/orientation.bam"),
     ("REF", "tests/data/ref_100k.fa"),
     ("IL", "tests/data/targets.interval_list"),
+    ("BED", "tests/data/targets.bed"),
+    ("DICT", "tests/data/chr1.dict"),
     ("QY_A", "tests/data/quality_yield_a.txt"),
     ("QY_B", "tests/data/quality_yield_b.txt"),
     ("PICARD", "tests/data/picard"),
@@ -171,6 +173,15 @@ const FIXTURE_CASES: &[Case] = &[
     case!("plan_generic", "plan", "IS", "-o", "OUT/sample"),
     case!("plan_wgs_jsonl", "plan", "IS", "-o", "OUT/sample", "-R", "REF", "--preset", "wgs", "--format", "jsonl"),
     case!("error_qc_missing_bam", "qc", "tests/data/nope.bam", "-o", "OUT/sample"),
+    // bed-to-interval-list (0.14.0): docs/05 example 7, and qc --panel BED.
+    case!("picard_bed_to_interval_list", "BedToIntervalList", "I=BED", "SD=IS", "O=OUT/panel.interval_list"),
+    case!("verb_bed_to_interval_list_from_bam", "bed-to-interval-list", "BED", "--from-bam", "IS", "-o", "OUT/panel.interval_list"),
+    case!("verb_bed_to_interval_list_dict_stdout", "bed-to-interval-list", "BED", "--dict", "DICT", "-o", "-"),
+    case!("verb_bed_to_interval_list_tsv", "bed-to-interval-list", "BED", "--dict", "DICT", "--unique", "--format", "tsv"),
+    case!("error_verb_bed_to_interval_list_two_dictionaries", "bed-to-interval-list", "BED", "--from-bam", "IS", "--dict", "DICT"),
+    case!("error_verb_bed_to_interval_list_no_dictionary", "bed-to-interval-list", "BED"),
+    case!("qc_panel_bed", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--panel", "BED", "-R", "REF", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("plan_panel_bed", "plan", "IS", "-o", "OUT/sample", "--panel", "BED"),
 ];
 
 /// The same tools on corpus BAM t1, with its reference and interval lists.
