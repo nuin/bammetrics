@@ -133,17 +133,40 @@ impl Options {
 /// `CollectRnaSeqMetrics` in the tool registry.
 pub const TOOL: Tool = Tool {
     name: "CollectRnaSeqMetrics",
+    summary: "one row of the 30 RnaSeqMetrics columns per accumulation unit; the metrics \
+              file adds the normalized_position histogram, one normalized_coverage column per \
+              unit.",
     options: &[
-        Opt::value(&["REF_FLAT"]),
-        Opt::value(&["RIBOSOMAL_INTERVALS"]),
-        Opt::value(&["STRAND_SPECIFICITY", "STRAND"]),
-        Opt::value(&["MINIMUM_LENGTH"]),
+        Opt::path(&["REF_FLAT"], "Gene annotation in UCSC refFlat format.").required(),
+        Opt::path(
+            &["RIBOSOMAL_INTERVALS"],
+            "rRNA intervals: an interval list or BED; without it the ribosomal columns are empty.",
+        ),
+        Opt::text(
+            &["STRAND_SPECIFICITY", "STRAND"],
+            "NONE, FIRST_READ_TRANSCRIPTION_STRAND or SECOND_READ_TRANSCRIPTION_STRAND.",
+        )
+        .required(),
+        Opt::int(
+            &["MINIMUM_LENGTH"],
+            "Transcripts shorter than this add no coverage (default 500).",
+        ),
         Opt::ignored(&["CHART_OUTPUT", "CHART"], "no coverage plot is drawn"),
-        Opt::value(&["IGNORE_SEQUENCE"]),
-        Opt::value(&["RRNA_FRAGMENT_PERCENTAGE"]),
-        Opt::value(&["METRIC_ACCUMULATION_LEVEL", "LEVEL"]),
-        Opt::value(&["END_BIAS_BASES"]),
-        Opt::value(&["STOP_AFTER"]),
+        Opt::text(
+            &["IGNORE_SEQUENCE"],
+            "A contig whose reads are ignored; repeat for several.",
+        )
+        .repeated(),
+        Opt::float(
+            &["RRNA_FRAGMENT_PERCENTAGE"],
+            "Fraction of a read that must overlap rRNA to count as ribosomal (default 0.8).",
+        ),
+        crate::registry::LEVEL_OPTION,
+        Opt::int(
+            &["END_BIAS_BASES"],
+            "Bases at each transcript end for the 5' and 3' bias (default 100).",
+        ),
+        crate::registry::STOP_AFTER_OPTION,
     ],
     run: run_tool,
     collector: Some(collector),

@@ -1,0 +1,10 @@
+## argv
+presets
+## exit
+0
+## stdout
+generic          v1  6dd89e  6 rules  starting values
+clinical-panel   v1  3d0bcd  14 rules  starting values
+wgs              v1  8a5fc4  10 rules  starting values
+rna-seq          v1  2d1283  8 rules  starting values
+## stderr

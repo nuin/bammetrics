@@ -1,0 +1,8 @@
+## argv
+qc
+## exit
+2
+## stdout
+## stderr
+bammetrics qc: missing <BAM>
+  usage: bammetrics qc <BAM>

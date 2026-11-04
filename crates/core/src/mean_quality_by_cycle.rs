@@ -26,11 +26,16 @@ use crate::registry::{Invocation, Opt, Tool};
 
 pub const TOOL: Tool = Tool {
     name: "MeanQualityByCycle",
+    summary: "the histogram, one row per cycle: CYCLE, MEAN_QUALITY and MEAN_ORIGINAL_QUALITY \
+              (only when a record has OQ; 0 at a cycle without an OQ mean).",
     options: &[
         Opt::ignored(&["CHART_OUTPUT", "CHART"], "no chart is drawn"),
-        Opt::value(&["ALIGNED_READS_ONLY"]),
-        Opt::value(&["PF_READS_ONLY"]),
-        Opt::value(&["STOP_AFTER"]),
+        crate::registry::ALIGNED_READS_ONLY_OPTION,
+        Opt::bool(
+            &["PF_READS_ONLY"],
+            "Count only reads that pass the vendor filter (default false).",
+        ),
+        crate::registry::STOP_AFTER_OPTION,
     ],
     run: run_tool,
     collector: Some(collector),

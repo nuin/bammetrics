@@ -1,0 +1,11 @@
+## argv
+qc
+tests/data/insert_size.bam
+--threads
+x
+## exit
+2
+## stdout
+## stderr
+bammetrics qc: invalid value "x": invalid digit found in string (from --threads)
+  every option: bammetrics help qc

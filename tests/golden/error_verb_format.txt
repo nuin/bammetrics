@@ -1,0 +1,12 @@
+## argv
+insert-size
+tests/data/insert_size.bam
+--format
+jsn
+## exit
+2
+## stdout
+## stderr
+bammetrics insert-size: no format "jsn" (from --format)
+  did you mean json?
+  formats: picard, json, tsv, jsonl, human

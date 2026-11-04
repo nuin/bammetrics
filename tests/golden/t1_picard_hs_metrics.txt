@@ -11,7 +11,7 @@ R=tests/corpus/out/reference.fa
 ## stderr
 ## file hs_metrics.txt
 ## htsjdk.samtools.metrics.StringHeader
-# CollectHsMetrics BAIT_INTERVALS=[tests/corpus/out/baits.interval_list] TARGET_INTERVALS=[tests/corpus/out/targets.interval_list] INPUT=tests/corpus/out/t1.bam OUTPUT=OUT/hs_metrics.txt REFERENCE_SEQUENCE=tests/corpus/out/reference.fa METRIC_ACCUMULATION_LEVEL=[ALL_READS] NEAR_DISTANCE=250 MINIMUM_MAPPING_QUALITY=20 MINIMUM_BASE_QUALITY=20 CLIP_OVERLAPPING_READS=true INCLUDE_INDELS=false COVERAGE_CAP=200 SAMPLE_SIZE=10000
+# CollectHsMetrics INPUT=tests/corpus/out/t1.bam OUTPUT=OUT/hs_metrics.txt BAIT_INTERVALS=tests/corpus/out/baits.interval_list TARGET_INTERVALS=tests/corpus/out/targets.interval_list REFERENCE_SEQUENCE=tests/corpus/out/reference.fa
 ## htsjdk.samtools.metrics.StringHeader
 # Started on: <time>
 

@@ -20,7 +20,16 @@ use crate::registry::{Invocation, Opt, Tool};
 
 pub const TOOL: Tool = Tool {
     name: "AccumulateQualityYieldMetrics",
-    options: &[Opt::rejected(&["ASSUME_SORTED", "AS"])],
+    summary: "QualityYieldMetrics files (a list of paths) merged into one row.",
+    options: &[
+        Opt::path(
+            &["INPUT", "I"],
+            "A QualityYieldMetrics file; repeat for each.",
+        )
+        .repeated()
+        .required(),
+        Opt::rejected(&["ASSUME_SORTED", "AS"]),
+    ],
     run: run_tool,
     collector: None,
 };

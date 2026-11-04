@@ -63,18 +63,19 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-cli"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "bammetrics-core",
  "bammetrics-report",
  "bammetrics-verdict",
  "clap",
+ "clap_complete",
  "thiserror",
 ]
 
 [[package]]
 name = "bammetrics-core"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "noodles",
  "regex",
@@ -83,7 +84,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-py"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "bammetrics-core",
  "bammetrics-verdict",
@@ -92,7 +93,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-report"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "bammetrics-core",
  "bammetrics-verdict",
@@ -100,7 +101,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-verdict"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "bammetrics-core",
  "thiserror",
@@ -188,6 +189,15 @@ dependencies = [
  "anstyle",
  "clap_lex",
  "strsim",
+]
+
+[[package]]
+name = "clap_complete"
+version = "4.6.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "037e2a1a92236d0aff7e845093f64661d6df4c02c9fcc61a60e9e1d736fa392f"
+dependencies = [
+ "clap",
 ]
 
 [[package]]

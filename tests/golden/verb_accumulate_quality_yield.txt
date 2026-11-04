@@ -1,0 +1,14 @@
+## argv
+accumulate-quality-yield
+tests/data/quality_yield_a.txt
+tests/data/quality_yield_b.txt
+## exit
+0
+## stdout
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+90	90	11	1000	1000	1000	1000	1000	1000	2000	2000
+
+
+## stderr

@@ -204,12 +204,25 @@ fn derived_read_length(row: &Row) -> i32 {
 
 pub const TOOL: Tool = Tool {
     name: "CollectQualityYieldMetrics",
+    summary: "one row of read, base and Q20/Q30 totals.",
     options: &[
-        Opt::value(&["USE_ORIGINAL_QUALITIES", "OQ"]),
-        Opt::value(&["INCLUDE_SECONDARY_ALIGNMENTS"]),
-        Opt::value(&["INCLUDE_SUPPLEMENTAL_ALIGNMENTS"]),
-        Opt::value(&["FLOW_MODE"]),
-        Opt::value(&["STOP_AFTER"]),
+        Opt::bool(
+            &["USE_ORIGINAL_QUALITIES", "OQ"],
+            "Read the OQ tag where a record has one (default true).",
+        ),
+        Opt::bool(
+            &["INCLUDE_SECONDARY_ALIGNMENTS"],
+            "Count secondary alignments (default false).",
+        ),
+        Opt::bool(
+            &["INCLUDE_SUPPLEMENTAL_ALIGNMENTS"],
+            "Count supplementary alignments (default false).",
+        ),
+        Opt::bool(
+            &["FLOW_MODE"],
+            "Obsolete in Picard 3.5.0; true is an error, as there.",
+        ),
+        crate::registry::STOP_AFTER_OPTION,
     ],
     run: run_tool,
     collector: Some(collector),
@@ -227,22 +240,37 @@ fn collector(inv: &Invocation, _: &sam::Header) -> Result<Box<dyn pass::Collecto
                 .to_owned(),
         ));
     }
-    let defaults = Options::default();
-    let opts = Options {
-        use_original_qualities: inv
-            .flag("USE_ORIGINAL_QUALITIES", defaults.use_original_qualities)?,
-        include_secondary_alignments: inv.flag(
-            "INCLUDE_SECONDARY_ALIGNMENTS",
-            defaults.include_secondary_alignments,
-        )?,
-        include_supplemental_alignments: inv.flag(
-            "INCLUDE_SUPPLEMENTAL_ALIGNMENTS",
-            defaults.include_supplemental_alignments,
-        )?,
-    };
+    let opts = Options::from_invocation(inv)?;
     Ok(pass::boxed(QualityYield::new(&opts), |row| {
         Ok(MetricsOutput::from_rows(&[row], None).into())
     }))
+}
+
+impl Options {
+    /// The options of a parsed `CollectQualityYieldMetrics` command line.
+    pub fn from_invocation(inv: &Invocation) -> Result<Self> {
+        let defaults = Self::default();
+        Ok(Self {
+            use_original_qualities: inv
+                .flag("USE_ORIGINAL_QUALITIES", defaults.use_original_qualities)?,
+            include_secondary_alignments: inv.flag(
+                "INCLUDE_SECONDARY_ALIGNMENTS",
+                defaults.include_secondary_alignments,
+            )?,
+            include_supplemental_alignments: inv.flag(
+                "INCLUDE_SUPPLEMENTAL_ALIGNMENTS",
+                defaults.include_supplemental_alignments,
+            )?,
+        })
+    }
+}
+
+/// The `StringHeader` command line of the `quality-yield` verb, the form
+/// the 0.12 subcommand wrote: every option with its value, defaults
+/// included.
+pub fn subcommand_header(inv: &Invocation) -> Result<String> {
+    let opts = Options::from_invocation(inv)?;
+    Ok(command_header(&opts, &inv.input, inv.output.as_deref()))
 }
 
 /// `CollectQualityYieldMetrics` as a pass [`Accumulator`].

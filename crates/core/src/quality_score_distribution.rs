@@ -46,12 +46,20 @@ impl Options {
 
 pub const TOOL: Tool = Tool {
     name: "QualityScoreDistribution",
+    summary: "the histogram, one row per quality: QUALITY, COUNT_OF_Q and COUNT_OF_OQ (only \
+              when a counted base has OQ).",
     options: &[
         Opt::ignored(&["CHART_OUTPUT", "CHART"], "no chart is drawn"),
-        Opt::value(&["ALIGNED_READS_ONLY"]),
-        Opt::value(&["PF_READS_ONLY", "PF"]),
-        Opt::value(&["INCLUDE_NO_CALLS"]),
-        Opt::value(&["STOP_AFTER"]),
+        crate::registry::ALIGNED_READS_ONLY_OPTION,
+        Opt::bool(
+            &["PF_READS_ONLY", "PF"],
+            "Count only reads that pass the vendor filter (default false).",
+        ),
+        Opt::bool(
+            &["INCLUDE_NO_CALLS"],
+            "Count N bases as well (default false).",
+        ),
+        crate::registry::STOP_AFTER_OPTION,
     ],
     run: run_tool,
     collector: Some(collector),

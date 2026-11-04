@@ -1,0 +1,12 @@
+## argv
+check
+tests/data/picard
+--fail-on
+bad
+## exit
+2
+## stdout
+## stderr
+bammetrics check: invalid value "bad" (from --fail-on)
+  one of: warn, fail
+  every option: bammetrics help check

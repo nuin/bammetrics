@@ -21,10 +21,14 @@ make golden          # cargo test --release -p bammetrics-cli --test golden
 make golden-update   # rewrite tests/golden after an intended command-line change
 ```
 
-`crates/core/tests/golden.rs` runs every documented command form from the repository
-root: each registry tool and `CollectHsMetrics` in Picard syntax with and without `O=`,
-the five subcommands with and without `-O`, and the documented error paths, 54 cases on
-the committed fixtures and 16 more on corpus t1 when `tests/corpus/out` exists. One
+`crates/cli/tests/golden.rs` runs every documented command form from the repository
+root: each registry tool in Picard syntax with and without `O=`, the five 0.12
+subcommands (verbs since 0.13.0) with and without `-O`, the verb grammar's spellings,
+formats, prefixes and info verbs, `check`, `report`, `qc` and `plan`, and the documented
+error paths, 100 cases on the committed fixtures and 16 more on corpus t1 when
+`GOLDEN_CORPUS=1` is set and `tests/corpus/out` exists. A case that writes into `.`
+(`collect` without `-o`) runs in its output directory and records the fixture paths as
+`ROOT/...`. One
 record per case under `tests/golden/` holds the argv, the exit code, stdout, stderr and
 every file written (the output directory reads `OUT`, the `Started on` header line
 `<time>`). Any byte change fails, with the first differing line named. The records were

@@ -1,0 +1,12 @@
+## argv
+insert-size
+tests/data/insert_size.bam
+--minmum-pct
+0.1
+## exit
+2
+## stdout
+## stderr
+bammetrics insert-size: unknown option --minmum-pct
+  did you mean --minimum-pct (Picard MINIMUM_PCT)?
+  every option: bammetrics help insert-size

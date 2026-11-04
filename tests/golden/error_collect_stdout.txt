@@ -1,0 +1,11 @@
+## argv
+collect
+tests/data/insert_size.bam
+-o
+-
+## exit
+2
+## stdout
+## stderr
+bammetrics collect: standard output takes one file; this verb writes several (from -o)
+  give -o PREFIX

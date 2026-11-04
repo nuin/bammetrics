@@ -147,19 +147,59 @@ impl Options {
 
 pub const TOOL: Tool = Tool {
     name: "EstimateLibraryComplexity",
+    summary: "one row per library (DuplicationMetrics columns) from read sequences alone; the \
+              input may be unaligned, or several files. The metrics file adds the \
+              duplication_group_count histogram.",
     options: &[
-        Opt::value(&["MIN_IDENTICAL_BASES"]),
-        Opt::value(&["MAX_DIFF_RATE"]),
-        Opt::value(&["MIN_MEAN_QUALITY"]),
-        Opt::value(&["MAX_GROUP_RATIO"]),
-        Opt::value(&["BARCODE_TAG"]),
-        Opt::value(&["READ_ONE_BARCODE_TAG"]),
-        Opt::value(&["READ_TWO_BARCODE_TAG"]),
-        Opt::value(&["MAX_READ_LENGTH"]),
-        Opt::value(&["MIN_GROUP_COUNT"]),
-        Opt::value(&["READ_NAME_REGEX"]),
-        Opt::value(&["OPTICAL_DUPLICATE_PIXEL_DISTANCE"]),
-        Opt::value(&["MAX_OPTICAL_DUPLICATE_SET_SIZE"]),
+        Opt::path(&["INPUT", "I"], "A BAM to read; repeat for each.")
+            .repeated()
+            .required(),
+        Opt::int(
+            &["MIN_IDENTICAL_BASES"],
+            "Leading bases two reads share to be compared (default 5).",
+        ),
+        Opt::float(
+            &["MAX_DIFF_RATE"],
+            "Largest mismatch rate between duplicates (default 0.03).",
+        ),
+        Opt::int(
+            &["MIN_MEAN_QUALITY"],
+            "Pairs below this mean base quality are left out (default 20).",
+        ),
+        Opt::int(
+            &["MAX_GROUP_RATIO"],
+            "Groups larger than this ratio to the median are left out (default 500).",
+        ),
+        Opt::text(&["BARCODE_TAG"], "Tag of the molecular barcode, or null."),
+        Opt::text(
+            &["READ_ONE_BARCODE_TAG"],
+            "Tag of the first read's barcode, or null.",
+        ),
+        Opt::text(
+            &["READ_TWO_BARCODE_TAG"],
+            "Tag of the second read's barcode, or null.",
+        ),
+        Opt::int(
+            &["MAX_READ_LENGTH"],
+            "Compare at most this many bases; 0 compares all (default 0).",
+        ),
+        Opt::int(
+            &["MIN_GROUP_COUNT"],
+            "Smallest group the histogram reports (default 2).",
+        ),
+        Opt::text(
+            &["READ_NAME_REGEX"],
+            "Regex with tile, x and y groups; null for no optical duplicates (default: \
+             5- and 7-field Illumina names).",
+        ),
+        Opt::int(
+            &["OPTICAL_DUPLICATE_PIXEL_DISTANCE"],
+            "Largest pixel distance of optical duplicates (default 100).",
+        ),
+        Opt::int(
+            &["MAX_OPTICAL_DUPLICATE_SET_SIZE"],
+            "Larger duplicate sets are not checked for optical duplicates (default 300000).",
+        ),
         Opt::rejected(&["ASSUME_SORTED", "AS"]),
     ],
     run: run_tool,

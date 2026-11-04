@@ -1,0 +1,8 @@
+## argv
+insert-size
+## exit
+2
+## stdout
+## stderr
+bammetrics insert-size: missing BAM
+  bammetrics insert-size BAM [OPTIONS]

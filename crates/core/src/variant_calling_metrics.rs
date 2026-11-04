@@ -430,15 +430,37 @@ fn hash_map_ordered(details: Vec<DetailRow>) -> Vec<DetailRow> {
         .collect()
 }
 
+/// `OUTPUT` of both tools: the prefix of the summary and detail files.
+const PREFIX_OUTPUT: Opt = Opt::output(&["OUTPUT", "O"])
+    .with_help("The output prefix of the summary and detail files.")
+    .required();
+
 /// `CollectVariantCallingMetrics` in the tool registry.
 pub const TOOL: Tool = Tool {
     name: "CollectVariantCallingMetrics",
+    summary: "the input is a VCF (plain or bgzip). OUTPUT is a prefix: \
+              PREFIX.variant_calling_summary_metrics and PREFIX.variant_calling_detail_metrics; \
+              Python returns one row per file: file and rows.",
     options: &[
-        Opt::value(&["DBSNP"]),
-        Opt::value(&["TARGET_INTERVALS", "TI"]),
-        Opt::value(&["SEQUENCE_DICTIONARY", "SD"]),
-        Opt::value(&["GVCF_INPUT"]),
-        Opt::value(&["THREAD_COUNT"]),
+        PREFIX_OUTPUT,
+        Opt::path(&["INPUT", "I"], "The VCF to read, plain or bgzip.").required(),
+        Opt::path(&["DBSNP"], "A dbSNP VCF.").required(),
+        Opt::path(
+            &["TARGET_INTERVALS", "TI"],
+            "An interval list: only these sites count.",
+        ),
+        Opt::path(
+            &["SEQUENCE_DICTIONARY", "SD"],
+            "A .dict, VCF, BAM, interval list or FASTA for the contig order.",
+        ),
+        Opt::bool(
+            &["GVCF_INPUT"],
+            "One-sample GVCF: each record cut to its genotype (default false).",
+        ),
+        Opt::int(
+            &["THREAD_COUNT"],
+            "Accepted; the output does not depend on it (default 1).",
+        ),
         Opt::rejected(&["ASSUME_SORTED", "AS"]),
     ],
     run: run_tool,
@@ -448,7 +470,18 @@ pub const TOOL: Tool = Tool {
 /// `AccumulateVariantCallingMetrics` in the tool registry.
 pub const ACCUMULATE_TOOL: Tool = Tool {
     name: "AccumulateVariantCallingMetrics",
-    options: &[Opt::rejected(&["ASSUME_SORTED", "AS"])],
+    summary: "the prefixes of CollectVariantCallingMetrics shards merged as Picard merges \
+              them; OUTPUT is the prefix of the two files. Python returns one row per file: file and rows.",
+    options: &[
+        PREFIX_OUTPUT,
+        Opt::path(
+            &["INPUT", "I"],
+            "The prefix of one CollectVariantCallingMetrics run; repeat for each.",
+        )
+        .repeated()
+        .required(),
+        Opt::rejected(&["ASSUME_SORTED", "AS"]),
+    ],
     run: run_accumulate,
     collector: None,
 };

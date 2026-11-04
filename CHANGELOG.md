@@ -1,5 +1,80 @@
 # Changelog
 
+## 0.13.0
+
+Report track phase 8 (docs/05): the verb grammar.
+
+### Added
+
+- One verb per registry tool, 21 in all: the twelve names of docs/05 section 2.1
+  (`insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`,
+  `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`,
+  `duplicate-metrics`, `library-complexity`, `multiple-metrics`, `accumulate-quality-yield`)
+  and, by the same rule (the class without `Collect` and `Metrics`, in kebab case), `wgs`,
+  `raw-wgs`, `wgs-with-non-zero-coverage`, `targeted-pcr`, `rna-seq`, `variant-calling`,
+  `accumulate-variant-calling`, `genotype-concordance` and `bed-to-interval-list`. A verb
+  runs its tool through the registry, so it writes the metrics the Picard class writes.
+- One option table in `registry.rs`: each `Opt` row has its Picard names, value type,
+  repeat and required flags and help text, and gives the kebab flag, the Picard key, the
+  `--help` line, the Python keyword and the `bammetrics.pyi` stub. Each `Tool` has a
+  `summary`. The registry block of `bammetrics.pyi` is generated (typed keyword arguments in
+  place of `**options`); `UPDATE_PYI=1 cargo test -p bammetrics-core python_stubs` rewrites
+  it and the test fails while they disagree.
+- Spellings: `--minimum-pct`, `--MINIMUM_PCT`, `MINIMUM_PCT=`, `-M` and `M=` are one option.
+  A one-letter Picard name is a short flag whose value may be attached (`-M0.1`, `-Oout.txt`,
+  `-Rref.fa`, `-@4`, as clap read them in 0.12); a longer one is a `--kebab` alias
+  (`--level`). Booleans take `--x`, `--no-x`, `--x=false` and `--x false`; only a literal true
+  or false is read as the value, so a BAM path after a flag stays the input. Picard's
+  plumbing booleans (`CREATE_INDEX`, `CREATE_MD5_FILE`, `USE_JDK_DEFLATER`, ...) are flags
+  too. A missing input after `--x true` and a stray word after a bare `--x` get a hint that
+  names the boolean.
+- Shared options: positional INPUT or `-i`, `-o` (`-O` kept), `-@`/`--threads` (default the
+  available cores, at most 8; 0 counts as 1), `-R` (and `--reference` on every verb),
+  `--level`, `--stop-after`, `--format picard|json|tsv|jsonl|human`, `--sample` (json and
+  jsonl default to the first `@RG SM`, else the input stem), `-q`, `-v`. `-` reads the BAM from standard input
+  and `-o -` writes standard output, on the verbs only.
+- Output naming: single-file verbs write `-o FILE` or standard output; `gc-bias`,
+  `multiple-metrics`, `variant-calling`, `accumulate-variant-calling`,
+  `genotype-concordance` and `collect` write under `-o PREFIX`, `./<input stem>` by default,
+  a directory getting the stem as the file part, with the names of
+  `multiple_metrics::file_extensions`. `collect` now reads that table too; a test pins it and
+  another checks the verbs against `CollectMultipleMetrics O=PREFIX`. An output that resolves
+  to an input file is a usage error on the verbs and `collect`; nothing is written.
+- `hs-metrics --panel FILE` (baits and targets in one file), `--baits` and `--targets`.
+- `bammetrics tools`, `bammetrics presets` (version, hash, rule count, note), `bammetrics
+  help VERB|PicardClass`, `bammetrics completions bash|zsh|fish|elvish|powershell`
+  (`clap_complete`; the scripts list the short, alias and `--no-x` spellings).
+  `bammetrics <PicardClass> --help` and `-h` print the verb help and exit 0 (0.12 exited 1
+  with `--help needs a value`).
+- Errors on the verbs read `bammetrics <verb>: <what> (from <option>)` with at most two
+  hint lines: an unknown option exits 2 with a did-you-mean from the option table, a missing
+  required option names its flag and Picard key, a missing input exits 1, a bad value names
+  the flag it came from. Clap usage errors on `qc`, `plan`, `check` and `report` use the same
+  form. An unknown first word (`bammetrics inser-size`, `bammetrics NoSuchTool`) prints
+  `bammetrics: unknown verb or Picard class` with a did-you-mean over the verbs and classes
+  and exits 2, as docs/05 section 6 asks; its golden record `error_unknown_tool` changed
+  from clap's text.
+
+### Changed
+
+- `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics` and `collect` are verbs
+  in the table, no longer clap subcommands. Every flag and default is kept, and every golden
+  record of a command that worked is byte-identical, `StringHeader` line included.
+- Behaviour change: `collect` without `-o` writes three files, `./<bam stem>.*`, into the
+  current directory and exits 0 (0.12 exited 2 with a usage error), as docs/05 section 2.3
+  asks. Its golden record `collect_no_output` is the one old record whose behaviour changed;
+  the case now runs in the output directory, so the record reads `ROOT/` for the fixture
+  path.
+- A usage error on the five verbs exits 2. In 0.12 a bad value the tool rejected
+  (`insert-size --level BOGUS`, `alignment-summary --expected-pair-orientation BOGUS`,
+  `collect --metric hs` without `--hs`) exited 1, and clap errors exited 2.
+- `-o` into a directory that does not exist creates it on the five verbs (0.12 failed with
+  `No such file or directory`), as docs/05 section 2.3 asks.
+- The Python registry functions map keywords through the option table and take a list of
+  any values as a repeated option (`allele_fraction=[0.1, 0.2]`).
+- docs/05: decision 2 recorded (the maintainer reviews the 14 clinical-panel thresholds),
+  the sample sheet example and phase removed.
+
 ## 0.12.0
 
 Report track phase 7 (docs/05): the `qc` engine and the `plan` verb.

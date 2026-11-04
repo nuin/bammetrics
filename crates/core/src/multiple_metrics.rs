@@ -116,10 +116,7 @@ const DEFAULT_PROGRAMS: [&str; 5] = [
 /// Picard's `RnaSeqMetrics` program; `.hs_metrics` is the one `collect`
 /// writes; Picard has no prefix convention for the other two.
 const OTHER_FILES: &[(&str, &[(&str, &str)])] = &[
-    (
-        "CollectHsMetrics",
-        &[("OUTPUT", crate::collect::HS_METRICS_EXTENSION)],
-    ),
+    ("CollectHsMetrics", &[("OUTPUT", ".hs_metrics")]),
     (
         "CollectDuplicateMetrics",
         &[("METRICS_FILE", ".duplicate_metrics")],
@@ -162,13 +159,29 @@ const RUN_LEVEL: [&str; 7] = [
 
 pub const TOOL: Tool = Tool {
     name: "CollectMultipleMetrics",
+    summary: "every PROGRAM on one read of the BAM, each written to OUTPUT plus its Picard \
+              extension (plus FILE_EXTENSION); Python returns one row per file: file and rows.",
     options: &[
-        Opt::value(&["REFERENCE_SEQUENCE", "R"]),
-        Opt::value(&["STOP_AFTER"]),
-        Opt::value(&["METRIC_ACCUMULATION_LEVEL", "LEVEL"]),
-        Opt::value(&["FILE_EXTENSION", "EXT"]),
-        Opt::value(&["PROGRAM"]),
-        Opt::value(&["EXTRA_ARGUMENT"]),
+        Opt::output(&["OUTPUT", "O"])
+            .with_help("The output prefix: each program writes PREFIX plus its extension.")
+            .required(),
+        crate::registry::REFERENCE_OPTION,
+        crate::registry::STOP_AFTER_OPTION,
+        crate::registry::LEVEL_OPTION,
+        Opt::text(
+            &["FILE_EXTENSION", "EXT"],
+            "Appended to every file name after the program's extension.",
+        ),
+        Opt::text(
+            &["PROGRAM"],
+            "A program to run; each adds to Picard's default five, null clears.",
+        )
+        .repeated(),
+        Opt::text(
+            &["EXTRA_ARGUMENT"],
+            "PROGRAM::KEY=VALUE, an option for one program.",
+        )
+        .repeated(),
         Opt::ignored(&["INTERVALS"], "only RnaSeqMetrics reads it"),
         Opt::ignored(
             &["DB_SNP"],
@@ -176,11 +189,11 @@ pub const TOOL: Tool = Tool {
         ),
         Opt::ignored(&["REF_FLAT"], "only RnaSeqMetrics reads it"),
         Opt::ignored(&["IGNORE_SEQUENCE"], "only RnaSeqMetrics reads it"),
-        Opt::ignored(
+        Opt::ignored_bool(
             &["INCLUDE_UNPAIRED", "UNPAIRED"],
             "only CollectSequencingArtifactMetrics reads it",
         ),
-        Opt::ignored(&["DO_NOT_CREATE_PLOTS"], "no plot is drawn"),
+        Opt::ignored_bool(&["DO_NOT_CREATE_PLOTS"], "no plot is drawn"),
     ],
     run: run_tool,
     collector: None,
@@ -483,23 +496,32 @@ mod tests {
         }
     }
 
+    /// The name table pinned: a change here renames files on both faces
+    /// (`CollectMultipleMetrics O=PREFIX`, `collect`, `qc` and the verbs).
     #[test]
     fn both_faces_name_files_from_one_table() {
-        use crate::collect;
         let ext = |tool| file_extensions(tool).expect("named")[0].1;
-        assert_eq!(
-            ext("CollectQualityYieldMetrics"),
-            collect::QUALITY_YIELD_EXTENSION
-        );
-        assert_eq!(
-            ext("CollectAlignmentSummaryMetrics"),
-            collect::ALIGNMENT_SUMMARY_EXTENSION
-        );
-        assert_eq!(
-            ext("CollectInsertSizeMetrics"),
-            collect::INSERT_SIZE_EXTENSION
-        );
-        assert_eq!(ext("CollectHsMetrics"), collect::HS_METRICS_EXTENSION);
+        for (tool, extension) in [
+            (
+                "CollectAlignmentSummaryMetrics",
+                ".alignment_summary_metrics",
+            ),
+            ("CollectInsertSizeMetrics", ".insert_size_metrics"),
+            ("QualityScoreDistribution", ".quality_distribution_metrics"),
+            ("MeanQualityByCycle", ".quality_by_cycle_metrics"),
+            (
+                "CollectBaseDistributionByCycle",
+                ".base_distribution_by_cycle_metrics",
+            ),
+            ("CollectQualityYieldMetrics", ".quality_yield_metrics"),
+            ("CollectHsMetrics", ".hs_metrics"),
+            ("CollectDuplicateMetrics", ".duplicate_metrics"),
+            ("CollectWgsMetrics", ".wgs_metrics"),
+            ("CollectRnaSeqMetrics", ".rna_metrics"),
+        ] {
+            assert_eq!(ext(tool), extension, "{tool}");
+            assert_eq!(crate::collect::extension(tool), extension, "{tool}");
+        }
         assert_eq!(
             file_extensions("CollectGcBiasMetrics").expect("named"),
             [

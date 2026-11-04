@@ -74,16 +74,34 @@ impl Options {
 
 pub const TOOL: Tool = Tool {
     name: "CollectGcBiasMetrics",
+    summary: "the detail rows (Picard's OUTPUT file), one row per GC bin, accumulation unit \
+              and READS_USED value; SUMMARY_OUTPUT gets the GcBiasSummaryMetrics file.",
     options: &[
         Opt::ignored(&["CHART_OUTPUT", "CHART"], "no chart is drawn"),
-        Opt::value(&["SUMMARY_OUTPUT", "S"]),
-        Opt::value(&["REFERENCE_SEQUENCE", "R"]),
-        Opt::value(&["SCAN_WINDOW_SIZE", "WINDOW_SIZE"]),
-        Opt::value(&["MINIMUM_GENOME_FRACTION", "MGF"]),
-        Opt::value(&["IS_BISULFITE_SEQUENCED", "BS"]),
-        Opt::value(&["METRIC_ACCUMULATION_LEVEL", "LEVEL"]),
-        Opt::value(&["ALSO_IGNORE_DUPLICATES"]),
-        Opt::value(&["STOP_AFTER"]),
+        Opt::path(&["SUMMARY_OUTPUT", "S"], "The GcBiasSummaryMetrics file.").required(),
+        Opt::path(
+            &["REFERENCE_SEQUENCE", "R"],
+            "Reference FASTA with a .fai index.",
+        )
+        .required(),
+        Opt::int(
+            &["SCAN_WINDOW_SIZE", "WINDOW_SIZE"],
+            "Window length for the GC content (default 100).",
+        ),
+        Opt::float(
+            &["MINIMUM_GENOME_FRACTION", "MGF"],
+            "Accepted and unused, as in Picard 3.5.0 (default 0.00001).",
+        ),
+        Opt::bool(
+            &["IS_BISULFITE_SEQUENCED", "BS"],
+            "Count C after T as bisulfite converted (default false).",
+        ),
+        crate::registry::LEVEL_OPTION,
+        Opt::bool(
+            &["ALSO_IGNORE_DUPLICATES"],
+            "Add rows with duplicates left out (default false).",
+        ),
+        crate::registry::STOP_AFTER_OPTION,
     ],
     run: run_tool,
     collector: Some(collector),

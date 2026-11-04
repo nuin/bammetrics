@@ -217,42 +217,65 @@ impl Options {
     }
 }
 
-/// The options of `CollectWgsMetrics`; the two subclasses add to them.
-const OPTIONS: &[Opt] = &[
-    Opt::value(&["REFERENCE_SEQUENCE", "R"]),
-    Opt::value(&["MINIMUM_MAPPING_QUALITY", "MQ"]),
-    Opt::value(&["MINIMUM_BASE_QUALITY", "Q"]),
-    Opt::value(&["COVERAGE_CAP", "CAP"]),
-    Opt::value(&["LOCUS_ACCUMULATION_CAP"]),
-    Opt::value(&["STOP_AFTER"]),
-    Opt::value(&["INCLUDE_BQ_HISTOGRAM"]),
-    Opt::value(&["COUNT_UNPAIRED"]),
-    Opt::value(&["SAMPLE_SIZE"]),
-    Opt::value(&["INTERVALS"]),
-    Opt::value(&["USE_FAST_ALGORITHM"]),
-    Opt::value(&["READ_LENGTH"]),
-    Opt::rejected(&["ASSUME_SORTED", "AS"]),
-];
+/// The options of the three tools, the same rows in each; `$extra` adds
+/// rows. The defaults of the raw variant differ (`Variant::defaults`).
+macro_rules! wgs_options {
+    ($($extra:expr),*) => {
+        &[
+            Opt::path(&["REFERENCE_SEQUENCE", "R"], "Reference FASTA with a .fai index.")
+                .required(),
+            Opt::int(
+                &["MINIMUM_MAPPING_QUALITY", "MQ"],
+                "Reads below this MAPQ add no coverage (default 20; raw 0).",
+            ),
+            Opt::int(
+                &["MINIMUM_BASE_QUALITY", "Q"],
+                "Bases below this quality add no coverage (default 20; raw 3).",
+            ),
+            Opt::int(
+                &["COVERAGE_CAP", "CAP"],
+                "Depths above this count as the cap (default 250; raw 100000).",
+            ),
+            Opt::int(
+                &["LOCUS_ACCUMULATION_CAP"],
+                "Reads processed per locus at most (default 100000; raw 200000).",
+            ),
+            Opt::int(&["STOP_AFTER"], "Stop after this many loci; -1 reads all (default -1)."),
+            Opt::bool(
+                &["INCLUDE_BQ_HISTOGRAM"],
+                "Add the base quality histogram (default false).",
+            ),
+            Opt::bool(&["COUNT_UNPAIRED"], "Count unpaired reads (default false)."),
+            Opt::int(
+                &["SAMPLE_SIZE"],
+                "Samples of the het SNP sensitivity simulation (default 10000).",
+            ),
+            Opt::path(&["INTERVALS"], "An interval list: only these loci count."),
+            Opt::bool(
+                &["USE_FAST_ALGORITHM"],
+                "Picard's fast algorithm; the metrics are the same (default false).",
+            ),
+            Opt::int(
+                &["READ_LENGTH"],
+                "Window of the fast algorithm (default 150).",
+            ),
+            Opt::rejected(&["ASSUME_SORTED", "AS"]),
+            $($extra),*
+        ]
+    };
+}
 
-const NON_ZERO_OPTIONS: &[Opt] = &[
-    Opt::value(&["REFERENCE_SEQUENCE", "R"]),
-    Opt::value(&["MINIMUM_MAPPING_QUALITY", "MQ"]),
-    Opt::value(&["MINIMUM_BASE_QUALITY", "Q"]),
-    Opt::value(&["COVERAGE_CAP", "CAP"]),
-    Opt::value(&["LOCUS_ACCUMULATION_CAP"]),
-    Opt::value(&["STOP_AFTER"]),
-    Opt::value(&["INCLUDE_BQ_HISTOGRAM"]),
-    Opt::value(&["COUNT_UNPAIRED"]),
-    Opt::value(&["SAMPLE_SIZE"]),
-    Opt::value(&["INTERVALS"]),
-    Opt::value(&["USE_FAST_ALGORITHM"]),
-    Opt::value(&["READ_LENGTH"]),
-    Opt::rejected(&["ASSUME_SORTED", "AS"]),
-    Opt::ignored(&["CHART_OUTPUT", "CHART"], "no chart is drawn"),
-];
+const OPTIONS: &[Opt] = wgs_options!();
+
+const NON_ZERO_OPTIONS: &[Opt] = wgs_options!(Opt::ignored(
+    &["CHART_OUTPUT", "CHART"],
+    "no chart is drawn"
+));
 
 pub const TOOL: Tool = Tool {
     name: "CollectWgsMetrics",
+    summary: "one row of the 32 WgsMetrics columns; the metrics file adds the coverage \
+              histogram.",
     options: OPTIONS,
     run: run_wgs,
     collector: None,
@@ -260,6 +283,9 @@ pub const TOOL: Tool = Tool {
 
 pub const RAW_TOOL: Tool = Tool {
     name: "CollectRawWgsMetrics",
+    summary: "CollectWgsMetrics with MINIMUM_MAPPING_QUALITY 0, MINIMUM_BASE_QUALITY 3, \
+              COVERAGE_CAP 100000 and LOCUS_ACCUMULATION_CAP 200000 as defaults, and the \
+              RawWgsMetrics class name.",
     options: OPTIONS,
     run: run_raw,
     collector: None,
@@ -267,6 +293,8 @@ pub const RAW_TOOL: Tool = Tool {
 
 pub const NON_ZERO_TOOL: Tool = Tool {
     name: "CollectWgsMetricsWithNonZeroCoverage",
+    summary: "two rows, CATEGORY WHOLE_GENOME and NON_ZERO_REGIONS (the zero-depth loci left \
+              out), with the WgsMetrics columns.",
     options: NON_ZERO_OPTIONS,
     run: run_non_zero,
     collector: None,

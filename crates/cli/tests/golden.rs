@@ -37,16 +37,25 @@ const T1_FIXTURES: &[(&str, &str)] = &[
 struct Case {
     name: &'static str,
     argv: &'static [&'static str],
+    /// Run in the output directory, with fixtures by absolute path
+    /// (recorded as `ROOT/...`): for a command that writes into `.`.
+    in_out: bool,
 }
 
 macro_rules! case {
     ($name:literal, $($arg:expr),+ $(,)?) => {
-        Case { name: $name, argv: &[$($arg),+] }
+        Case { name: $name, argv: &[$($arg),+], in_out: false }
+    };
+}
+
+macro_rules! case_in_out {
+    ($name:literal, $($arg:expr),+ $(,)?) => {
+        Case { name: $name, argv: &[$($arg),+], in_out: true }
     };
 }
 
 /// The documented forms on the committed fixtures: every registry tool and
-/// CollectHsMetrics in Picard syntax with and without `O=`, the five clap
+/// CollectHsMetrics in Picard syntax with and without `O=`, the five 0.12
 /// subcommands with and without `-O`, `check` on the Picard 3.5.0 directory
 /// in its text and jsonl forms with every exit code, and the documented
 /// error paths. `report` writes pages that carry the tool version, so its
@@ -88,7 +97,7 @@ const FIXTURE_CASES: &[Case] = &[
     case!("picard_hs_metrics", "CollectHsMetrics", "I=IS", "O=OUT/hs_metrics.txt", "BAIT_INTERVALS=IL", "TARGET_INTERVALS=IL", "R=REF"),
     case!("picard_hs_metrics_stdout", "CollectHsMetrics", "I=IS", "BAIT_INTERVALS=IL", "TARGET_INTERVALS=IL", "SAMPLE_SIZE=1000"),
     case!("picard_hs_metrics_per_base", "CollectHsMetrics", "I=IS", "O=OUT/hs_metrics.txt", "BI=IL", "TI=IL", "N=panel", "PER_BASE_COVERAGE=OUT/per_base.txt", "SAMPLE_SIZE=1000", "VALIDATION_STRINGENCY=SILENT"),
-    // The five clap subcommands.
+    // The five 0.12 subcommands, verbs since 0.13.0.
     case!("insert_size_stdout", "insert-size", "IS"),
     case!("insert_size_output", "insert-size", "IS", "-O", "OUT/insert_size.txt", "-M", "0.05"),
     case!("insert_size_long_flags", "insert-size", "--input", "IS", "--output", "OUT/insert_size.txt", "--level", "SAMPLE", "--level", "READ_GROUP", "--deviations", "3"),
@@ -103,7 +112,41 @@ const FIXTURE_CASES: &[Case] = &[
     case!("collect_default", "collect", "IS", "-O", "OUT/sample"),
     case!("collect_with_hs", "collect", "IS", "-O", "OUT/sample", "-R", "REF", "--hs", "IL", "IL", "--hs-per-base"),
     case!("collect_subset", "collect", "IS", "-O", "OUT/sample", "--metric", "quality-yield,insert-size"),
-    case!("collect_no_output", "collect", "IS"),
+    // Without -o, collect writes ./<bam stem>.* (0.13.0; it was a usage error).
+    case_in_out!("collect_no_output", "collect", "IS"),
+    // The verb grammar (0.13.0): Picard spellings, formats, prefixes, info verbs.
+    case!("verb_insert_size_spellings", "insert-size", "IS", "--MINIMUM_PCT", "0.1", "DEVIATIONS=5", "--include-duplicates=false", "-o", "OUT/insert_size.txt"),
+    case!("verb_insert_size_json", "insert-size", "IS", "--format", "json", "--sample", "S1"),
+    case!("verb_insert_size_tsv", "insert-size", "IS", "--format", "tsv", "-o", "OUT/insert_size.tsv"),
+    case!("verb_quality_score_distribution_human", "quality-score-distribution", "IS", "--format", "human"),
+    case!("verb_quality_yield_jsonl", "quality-yield", "IS", "--no-use-original-qualities", "--format", "jsonl"),
+    case!("verb_gc_bias_prefix", "gc-bias", "IS", "-R", "REF", "-o", "OUT/sample"),
+    case!("verb_multiple_metrics_directory", "multiple-metrics", "IS", "-o", "OUT/", "--program", "CollectQualityYieldMetrics"),
+    case!("verb_duplicate_metrics", "duplicate-metrics", "IS", "-o", "OUT/duplicate_metrics.txt"),
+    case!("verb_accumulate_quality_yield", "accumulate-quality-yield", "QY_A", "QY_B"),
+    case!("verb_hs_metrics_panel", "hs-metrics", "IS", "--panel", "IL", "--sample-size", "1000", "--no-clip-overlapping-reads"),
+    case!("verb_tools", "tools"),
+    case!("verb_presets", "presets"),
+    case!("error_verb_unknown_option", "insert-size", "IS", "--minmum-pct", "0.1"),
+    case!("error_verb_hs_no_targets", "hs-metrics", "IS", "--baits", "IL", "-R", "REF"),
+    case!("error_verb_missing_bam", "quality-yield", "tests/data/nope.bam"),
+    case!("error_verb_bool_value", "quality-yield", "IS", "--use-original-qualities=maybe"),
+    case!("error_verb_two_bams", "insert-size", "IS", "OR"),
+    case!("error_verb_format", "insert-size", "IS", "--format", "jsn"),
+    // Values attached to a one-letter flag, as clap read them in 0.12.
+    case!("verb_insert_size_attached", "insert-size", "IS", "-OOUT/insert_size.txt", "-M0.05", "-@2"),
+    case!("verb_alignment_summary_attached", "alignment-summary", "-Itests/data/insert_size.bam", "-Rtests/data/ref_100k.fa", "-OOUT/alignment_summary.txt"),
+    case!("verb_insert_size_ignored_bool", "insert-size", "--create-index", "IS", "-o", "OUT/insert_size.txt"),
+    case!("error_verb_bool_space_value", "quality-yield", "IS", "--use-original-qualities", "maybe"),
+    case!("error_verb_bool_took_input", "quality-yield", "--include-secondary-alignments", "true"),
+    case!("error_verb_no_bam", "insert-size"),
+    case!("error_verb_bad_number", "insert-size", "IS", "--minimum-pct", "abc"),
+    case!("error_collect_hs_per_base_without_hs", "collect", "IS", "-O", "OUT/sample", "--hs-per-base"),
+    case!("error_collect_stdout", "collect", "IS", "-o", "-"),
+    case!("error_unknown_verb", "inser-size", "IS"),
+    case!("error_qc_bad_threads", "qc", "IS", "--threads", "x"),
+    case!("error_qc_no_bam", "qc"),
+    case!("error_check_bad_fail_on", "check", "PICARD", "--fail-on", "bad"),
     // Documented error paths.
     case!("error_unknown_option", "CollectInsertSizeMetrics", "I=IS", "STOP_AFTER=10"),
     case!("error_no_input", "CollectInsertSizeMetrics", "O=OUT/insert_size.txt"),
@@ -166,8 +209,9 @@ fn binary() -> PathBuf {
 }
 
 /// `arg` with each fixture name (whole, or after a `KEY=`) replaced by its
-/// path, and `OUT` by the case's output directory.
-fn resolve(arg: &str, out: &str) -> String {
+/// path under `base` (empty for the repository root as working directory),
+/// and `OUT` by the case's output directory.
+fn resolve(arg: &str, out: &str, base: &str) -> String {
     let (key, token) = match arg.split_once('=') {
         Some((k, t)) => (Some(k), t),
         None => (None, arg),
@@ -176,7 +220,10 @@ fn resolve(arg: &str, out: &str) -> String {
         .iter()
         .chain(T1_FIXTURES)
         .find(|(name, _)| *name == token)
-        .map_or_else(|| token.replace("OUT", out), |(_, path)| (*path).to_owned());
+        .map_or_else(
+            || token.replace("OUT", out),
+            |(_, path)| format!("{base}{path}"),
+        );
     match key {
         Some(key) => format!("{key}={path}"),
         None => path,
@@ -193,10 +240,15 @@ fn record(case: &Case) -> String {
     let _ = fs::remove_dir_all(&out_dir);
     fs::create_dir_all(&out_dir).expect("output directory");
     let out = out_dir.to_str().expect("utf-8 temp dir");
-    let argv: Vec<String> = case.argv.iter().map(|a| resolve(a, out)).collect();
+    let (cwd, base) = if case.in_out {
+        (out_dir.clone(), format!("{}/", root().display()))
+    } else {
+        (root(), String::new())
+    };
+    let argv: Vec<String> = case.argv.iter().map(|a| resolve(a, out, &base)).collect();
     let result = Command::new(binary())
         .args(&argv)
-        .current_dir(root())
+        .current_dir(cwd)
         .output()
         .expect("run bammetrics");
     let mut text = String::from("## argv\n");
@@ -247,7 +299,8 @@ fn collect_files(base: &Path, dir: &Path, files: &mut Vec<(String, PathBuf)>) {
     }
 }
 
-/// The record with the output directory written as `OUT`, the binary's
+/// The record with the output directory written as `OUT`, the repository
+/// root as `ROOT` (in an `in_out` case), the binary's
 /// file name (clap prints it in usage lines) as `bammetrics`, and the clock
 /// header and two manifest fields replaced: the input mtime changes with
 /// each checkout, and the argv hash covers the temporary `OUT` path.
@@ -257,7 +310,11 @@ fn normalize(text: &str, out: &str) -> String {
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("bammetrics");
-    let text = text.replace(out, "OUT").replace(name, "bammetrics");
+    let root = format!("{}/", root().display());
+    let text = text
+        .replace(out, "OUT")
+        .replace(&root, "ROOT/")
+        .replace(name, "bammetrics");
     let mut normalized = String::with_capacity(text.len());
     for line in text.lines() {
         if line.starts_with("# Started on: ") {

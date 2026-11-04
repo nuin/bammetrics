@@ -27,7 +27,7 @@ use crate::metric::ToolOutput;
 use crate::pass::{self, Accumulator, Collector, Limits, default_threads};
 
 /// What an option does once recognised.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     /// Read by the tool through [`Invocation`].
     Value,
@@ -40,69 +40,215 @@ pub enum Kind {
     Rejected,
 }
 
-/// One option: its names (the long Picard name first) and kind.
-#[derive(Clone, Copy)]
+/// The type of an option's value. The verb grammar reads `Bool` options
+/// as flags (`--x`, `--no-x`, `--x=false`); the Python stub types the
+/// keyword argument from it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ty {
+    Bool,
+    Int,
+    Float,
+    Text,
+    Path,
+}
+
+impl Ty {
+    /// The Python annotation of one value.
+    pub fn python(self) -> &'static str {
+        match self {
+            Ty::Bool => "bool",
+            Ty::Int => "int",
+            Ty::Float => "float",
+            Ty::Text => "str",
+            Ty::Path => "_Path",
+        }
+    }
+
+    /// The placeholder `--help` prints after the flag.
+    pub fn placeholder(self) -> &'static str {
+        match self {
+            Ty::Bool => "",
+            Ty::Int => "INT",
+            Ty::Float => "NUM",
+            Ty::Text => "TEXT",
+            Ty::Path => "FILE",
+        }
+    }
+}
+
+/// One option row: its Picard names (the long name first), kind, value
+/// type and help text. The row is the only place an option is named: the
+/// Picard parser, the verb grammar (`--minimum-pct`), `--help`, the Python
+/// keyword argument (`minimum_pct`) and the `bammetrics.pyi` stub all come
+/// from it.
+#[derive(Clone, Copy, Debug)]
 pub struct Opt {
     pub names: &'static [&'static str],
     pub kind: Kind,
+    pub ty: Ty,
+    /// A Picard collection option: every occurrence adds a value.
+    pub repeated: bool,
+    /// Picard fails without it.
+    pub required: bool,
+    pub help: &'static str,
 }
 
 impl Opt {
-    pub const fn value(names: &'static [&'static str]) -> Self {
+    const fn new(names: &'static [&'static str], kind: Kind, ty: Ty, help: &'static str) -> Self {
         Self {
             names,
-            kind: Kind::Value,
+            kind,
+            ty,
+            repeated: false,
+            required: false,
+            help,
         }
+    }
+
+    pub const fn bool(names: &'static [&'static str], help: &'static str) -> Self {
+        Self::new(names, Kind::Value, Ty::Bool, help)
+    }
+
+    pub const fn int(names: &'static [&'static str], help: &'static str) -> Self {
+        Self::new(names, Kind::Value, Ty::Int, help)
+    }
+
+    pub const fn float(names: &'static [&'static str], help: &'static str) -> Self {
+        Self::new(names, Kind::Value, Ty::Float, help)
+    }
+
+    pub const fn text(names: &'static [&'static str], help: &'static str) -> Self {
+        Self::new(names, Kind::Value, Ty::Text, help)
+    }
+
+    pub const fn path(names: &'static [&'static str], help: &'static str) -> Self {
+        Self::new(names, Kind::Value, Ty::Path, help)
+    }
+
+    /// Every occurrence adds a value (Picard's collection options).
+    pub const fn repeated(mut self) -> Self {
+        self.repeated = true;
+        self
+    }
+
+    /// Picard fails without the option.
+    pub const fn required(mut self) -> Self {
+        self.required = true;
+        self
+    }
+
+    /// The row with its own `--help` text.
+    pub const fn with_help(mut self, help: &'static str) -> Self {
+        self.help = help;
+        self
     }
 
     /// The option naming the metrics file. A tool that declares one takes
     /// no `OUTPUT` (Picard's `CollectDuplicateMetrics` writes to `M`).
     pub const fn output(names: &'static [&'static str]) -> Self {
-        Self {
+        Self::new(
             names,
-            kind: Kind::Output,
-        }
+            Kind::Output,
+            Ty::Path,
+            "The metrics file; standard output without one.",
+        )
     }
 
     pub const fn ignored(names: &'static [&'static str], why: &'static str) -> Self {
-        Self {
-            names,
-            kind: Kind::Ignored(why),
-        }
+        Self::new(names, Kind::Ignored(why), Ty::Text, why)
+    }
+
+    /// An ignored Picard boolean (`CREATE_INDEX`): the verb grammar reads
+    /// it as a flag, so `--create-index in.bam` keeps the BAM as the input.
+    pub const fn ignored_bool(names: &'static [&'static str], why: &'static str) -> Self {
+        Self::new(names, Kind::Ignored(why), Ty::Bool, why)
     }
 
     /// A common option Picard rejects for this tool.
     pub const fn rejected(names: &'static [&'static str]) -> Self {
-        Self {
-            names,
-            kind: Kind::Rejected,
-        }
+        Self::new(names, Kind::Rejected, Ty::Text, "")
     }
+
+    /// The Picard long name, `MINIMUM_PCT`.
+    pub fn picard(&self) -> &'static str {
+        self.names[0]
+    }
+
+    /// The verb flag without its dashes, `minimum-pct`.
+    pub fn kebab(&self) -> String {
+        self.picard().to_ascii_lowercase().replace('_', "-")
+    }
+
+    /// The Python keyword argument, `minimum_pct`.
+    pub fn kwarg(&self) -> String {
+        self.picard().to_ascii_lowercase()
+    }
+
+    /// Whether `name` is one of the option's Picard names once normalised
+    /// ([`normalize`]): `minimum-pct`, `MINIMUM_PCT` and `m` all name
+    /// `MINIMUM_PCT`, whose short name is `M`.
+    pub fn matches(&self, name: &str) -> bool {
+        let wanted = normalize(name);
+        self.names.iter().any(|n| n.eq_ignore_ascii_case(&wanted))
+    }
+}
+
+/// An option name as the verb grammar compares it: upper case, `-` as `_`.
+pub fn normalize(name: &str) -> String {
+    name.to_ascii_uppercase().replace('-', "_")
 }
 
 /// Options every Picard tool takes from `CommandLineProgram` and
 /// `SinglePassSamProgram`. `ASSUME_SORTED=false` fails a file whose header
 /// is not coordinate sorted ([`Invocation::single_pass`]); the others change
 /// no metric.
-const COMMON: &[Opt] = &[
-    Opt::value(&["INPUT", "I"]),
+pub const COMMON: &[Opt] = &[
+    Opt::path(&["INPUT", "I"], "The BAM to read.").required(),
     Opt::output(&["OUTPUT", "O"]),
     Opt::ignored(&["VALIDATION_STRINGENCY"], "records are not validated"),
     Opt::ignored(&["TMP_DIR"], "no temporary files are written"),
-    Opt::ignored(&["QUIET"], "progress is not logged"),
+    Opt::ignored_bool(&["QUIET"], "progress is not logged"),
     Opt::ignored(&["VERBOSITY"], "progress is not logged"),
     Opt::ignored(&["COMPRESSION_LEVEL"], "no BAM is written"),
     Opt::ignored(&["MAX_RECORDS_IN_RAM"], "records are streamed"),
-    Opt::ignored(&["CREATE_INDEX"], "no BAM is written"),
-    Opt::ignored(&["CREATE_MD5_FILE"], "no BAM is written"),
+    Opt::ignored_bool(&["CREATE_INDEX"], "no BAM is written"),
+    Opt::ignored_bool(&["CREATE_MD5_FILE"], "no BAM is written"),
     Opt::ignored(&["GA4GH_CLIENT_SECRETS"], "no GA4GH access"),
-    Opt::ignored(&["USE_JDK_DEFLATER", "USE_JDK_INFLATER"], "no JDK codec"),
-    Opt::value(&["ASSUME_SORTED", "AS"]),
+    Opt::ignored_bool(&["USE_JDK_DEFLATER", "USE_JDK_INFLATER"], "no JDK codec"),
+    Opt::bool(
+        &["ASSUME_SORTED", "AS"],
+        "false fails a BAM whose header is not coordinate sorted (default true).",
+    ),
     Opt::ignored(
         &["REFERENCE_SEQUENCE", "R"],
         "this metric does not read the reference",
     ),
 ];
+
+/// `METRIC_ACCUMULATION_LEVEL`, the same row in every tool that has it.
+pub const LEVEL_OPTION: Opt = Opt::text(
+    &["METRIC_ACCUMULATION_LEVEL", "LEVEL"],
+    "ALL_READS, SAMPLE, LIBRARY or READ_GROUP; each adds to the default ALL_READS, null clears.",
+)
+.repeated();
+
+/// `STOP_AFTER` of a `SinglePassSamProgram`.
+pub const STOP_AFTER_OPTION: Opt = Opt::int(
+    &["STOP_AFTER"],
+    "Read only the first N records; 0 reads them all.",
+);
+
+/// `ALIGNED_READS_ONLY` of the three by-cycle and quality tools.
+pub const ALIGNED_READS_ONLY_OPTION: Opt = Opt::bool(
+    &["ALIGNED_READS_ONLY"],
+    "Count only aligned reads (default false).",
+);
+
+/// `REFERENCE_SEQUENCE` for a tool that reads it when given.
+pub const REFERENCE_OPTION: Opt = Opt::path(
+    &["REFERENCE_SEQUENCE", "R"],
+    "Reference FASTA with a .fai index.",
+);
 
 /// Builds a tool's one-pass [`Collector`] from its parsed options and the
 /// BAM header (Picard's `SinglePassSamProgram.setup`).
@@ -112,6 +258,9 @@ pub type CollectorFn = fn(&Invocation, &sam::Header) -> Result<Box<dyn Collector
 pub struct Tool {
     /// The Picard class name, e.g. `CollectInsertSizeMetrics`.
     pub name: &'static str,
+    /// What the tool returns, one or two sentences: the `tools` listing,
+    /// `--help` and the Python docstring.
+    pub summary: &'static str,
     /// Options beyond [`COMMON`]; these shadow a common option of the same name.
     pub options: &'static [Opt],
     /// Compute the metrics: the `OUTPUT` file (`None` where Picard writes
@@ -231,6 +380,21 @@ impl Invocation {
         self.single_pass(|header| build(self, header))
     }
 
+    /// Read an `INPUT` of `-` from standard input (`/dev/stdin`). The
+    /// `StringHeader` command line keeps `-`. Only the verb grammar calls
+    /// this: the Picard face reads a file named `-`, as Picard does.
+    pub fn read_dash_from_stdin(&mut self) {
+        let stdin = "/dev/stdin";
+        if self.input == Path::new("-") {
+            self.input = PathBuf::from(stdin);
+        }
+        if let Some(inputs) = self.values.get_mut("INPUT") {
+            for input in inputs.iter_mut().filter(|i| *i == "-") {
+                *input = stdin.to_owned();
+            }
+        }
+    }
+
     /// A Picard boolean (`true` or `false`, any case).
     pub fn flag(&self, name: &str, default: bool) -> Result<bool> {
         match self.get(name).map(str::to_ascii_lowercase).as_deref() {
@@ -253,6 +417,31 @@ impl Tool {
                     .filter(|o| !(own_output && matches!(o.kind, Kind::Output))),
             )
             .find(|o| o.names.contains(&name))
+    }
+
+    /// Every option the tool takes: its own rows, then the [`COMMON`] rows
+    /// it neither shadows nor rejects. Rejected rows are left out.
+    pub fn table(&self) -> Vec<&'static Opt> {
+        let own_output = self.options.iter().any(|o| o.kind == Kind::Output);
+        let own = self.options.iter().filter(|o| o.kind != Kind::Rejected);
+        let common = COMMON.iter().filter(|c| {
+            !(own_output && c.kind == Kind::Output)
+                && !self.options.iter().any(|o| o.names.contains(&c.picard()))
+        });
+        own.chain(common).collect()
+    }
+
+    /// The row a verb-grammar or Python name refers to ([`Opt::matches`]).
+    pub fn option(&self, name: &str) -> Option<&'static Opt> {
+        self.table().into_iter().find(|o| o.matches(name))
+    }
+
+    /// The row whose name is closest to `name`, for a did-you-mean hint.
+    pub fn suggest(&self, name: &str) -> Option<&'static Opt> {
+        let table = self.table();
+        let names = table.iter().flat_map(|o| o.names.iter().copied());
+        let best = did_you_mean(&normalize(name), names)?;
+        self.option(best)
     }
 
     /// Long name of the option that names the metrics file.
@@ -422,6 +611,176 @@ pub fn write_to(
     out.flush().map_err(output_error)
 }
 
+/// The candidate closest to `word` by edit distance, ignoring case, when it
+/// is close enough to be a typo: at most 2 edits, or a third of the word.
+pub fn did_you_mean<'a>(
+    word: &str,
+    candidates: impl IntoIterator<Item = &'a str>,
+) -> Option<&'a str> {
+    let word = word.to_ascii_lowercase();
+    let limit = (word.chars().count() / 3).max(2);
+    candidates
+        .into_iter()
+        .map(|c| (edit_distance(&word, &c.to_ascii_lowercase()), c))
+        .filter(|(d, _)| *d <= limit)
+        .min_by_key(|(d, _)| *d)
+        .map(|(_, c)| c)
+}
+
+/// Levenshtein distance over chars.
+fn edit_distance(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.chars().enumerate() {
+        let mut diagonal = row[0];
+        row[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let above = row[j + 1];
+            row[j + 1] = (above + 1)
+                .min(row[j] + 1)
+                .min(diagonal + usize::from(ca != *cb));
+            diagonal = above;
+        }
+    }
+    row[b.len()]
+}
+
+/// `CollectInsertSizeMetrics` -> `collect_insert_size_metrics`, the Python
+/// function name of a tool.
+pub fn snake_case(name: &str) -> String {
+    let mut out = String::new();
+    for (i, c) in name.chars().enumerate() {
+        if c.is_ascii_uppercase() {
+            if i > 0 {
+                out.push('_');
+            }
+            out.push(c.to_ascii_lowercase());
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// First line of the generated block in `bammetrics.pyi`.
+pub const STUB_BEGIN: &str = "# BEGIN registry tools: generated from crates/core/src/registry.rs (UPDATE_PYI=1 cargo test -p bammetrics-core python_stubs)";
+/// Last line of the generated block.
+pub const STUB_END: &str = "# END registry tools";
+
+/// The Python annotation of one row's keyword argument.
+fn python_annotation(opt: &Opt) -> String {
+    let one = opt.ty.python();
+    if opt.repeated {
+        format!("{one} | Sequence[{one}]")
+    } else {
+        one.to_owned()
+    }
+}
+
+/// `text` wrapped to lines of at most `width` characters, each indented.
+fn wrap(text: &str, indent: &str, width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        if !line.is_empty() && indent.len() + line.len() + 1 + word.len() > width {
+            lines.push(format!("{indent}{line}"));
+            line.clear();
+        }
+        if !line.is_empty() {
+            line.push(' ');
+        }
+        line.push_str(word);
+    }
+    if !line.is_empty() {
+        lines.push(format!("{indent}{line}"));
+    }
+    lines
+}
+
+/// The `bammetrics.pyi` entry of one tool: its positional inputs, one
+/// keyword argument per value row of [`Tool::table`] (`output` for the
+/// metrics file), and the summary as the docstring. `None` leaves an
+/// option out, so Picard's default applies.
+pub fn python_stub(tool: &Tool) -> String {
+    let table = tool.table();
+    let mut params = Vec::new();
+    let positional: Vec<&Opt> = if tool.takes_input() {
+        table
+            .iter()
+            .copied()
+            .filter(|o| o.picard() == "INPUT")
+            .collect()
+    } else {
+        table
+            .iter()
+            .copied()
+            .filter(|o| o.kind == Kind::Value && o.required)
+            .collect()
+    };
+    for opt in &positional {
+        let ty = if opt.picard() == "INPUT" && opt.repeated {
+            "_Paths".to_owned()
+        } else {
+            python_annotation(opt)
+        };
+        params.push(format!("{}: {ty}", opt.kwarg()));
+    }
+    let mut keywords = Vec::new();
+    for opt in &table {
+        if positional.iter().any(|p| p.picard() == opt.picard()) {
+            continue;
+        }
+        match opt.kind {
+            Kind::Output if opt.required => keywords.push("output: _Path".to_owned()),
+            Kind::Output => keywords.push("output: _Path | None = None".to_owned()),
+            Kind::Value if opt.required => {
+                keywords.push(format!("{}: {}", opt.kwarg(), python_annotation(opt)));
+            }
+            Kind::Value => keywords.push(format!(
+                "{}: {} | None = None",
+                opt.kwarg(),
+                python_annotation(opt)
+            )),
+            Kind::Ignored(_) | Kind::Rejected => {}
+        }
+    }
+    if !keywords.is_empty() {
+        params.push("*".to_owned());
+        params.extend(keywords);
+    }
+    let mut text = format!("def {}(\n", snake_case(tool.name));
+    for param in params {
+        text.push_str(&format!("    {param},\n"));
+    }
+    text.push_str(") -> list[dict[str, Any]]:\n");
+    let mut doc = wrap(&format!("{}: {}", tool.name, tool.summary), "    ", 88);
+    doc[0] = format!("    \"\"\"{}", doc[0].trim_start());
+    let last = doc.len() - 1;
+    doc[last].push_str("\"\"\"");
+    for line in doc {
+        text.push_str(&line);
+        text.push('\n');
+    }
+    text
+}
+
+/// The generated block of `bammetrics.pyi`: every tool in [`TOOLS`] order,
+/// between [`STUB_BEGIN`] and [`STUB_END`].
+pub fn python_stubs() -> String {
+    let mut text = format!(
+        "{STUB_BEGIN}\n# Each returns its rows as dicts keyed by Picard's column names; output= also \
+         writes the files.\n"
+    );
+    for tool in TOOLS {
+        text.push('\n');
+        text.push_str(&python_stub(tool));
+    }
+    text.push('\n');
+    text.push_str(STUB_END);
+    text.push('\n');
+    text
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -495,6 +854,110 @@ mod tests {
             .expect_err("not a number");
         assert!(err.to_string().contains("HISTOGRAM_WIDTH"));
         assert!(inv.flag("MISSING", true).expect("default"));
+    }
+
+    /// `bammetrics.pyi` holds [`python_stubs`] between its markers, so the
+    /// stub and the option table cannot disagree. `UPDATE_PYI=1` rewrites
+    /// the block.
+    #[test]
+    fn python_stubs() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../bammetrics.pyi");
+        let text = std::fs::read_to_string(&path).expect("bammetrics.pyi");
+        let begin = text.find(STUB_BEGIN).expect("begin marker");
+        let end = text.find(STUB_END).expect("end marker") + STUB_END.len() + 1;
+        let generated = super::python_stubs();
+        if std::env::var_os("UPDATE_PYI").is_some() {
+            let updated = format!("{}{generated}{}", &text[..begin], &text[end..]);
+            std::fs::write(&path, updated).expect("write bammetrics.pyi");
+            return;
+        }
+        assert_eq!(
+            &text[begin..end],
+            generated,
+            "bammetrics.pyi is stale: UPDATE_PYI=1 cargo test -p bammetrics-core python_stubs"
+        );
+    }
+
+    #[test]
+    fn every_row_has_help_and_one_meaning_per_name() {
+        for tool in TOOLS {
+            assert!(!tool.summary.is_empty(), "{}: no summary", tool.name);
+            let table = tool.table();
+            for opt in &table {
+                assert!(
+                    !opt.help.is_empty(),
+                    "{}: {} has no help",
+                    tool.name,
+                    opt.picard()
+                );
+                for name in opt.names {
+                    let rows = table.iter().filter(|o| o.matches(name)).count();
+                    assert_eq!(rows, 1, "{}: {name} names {rows} rows", tool.name);
+                    // The Picard face resolves the name to the same row.
+                    assert_eq!(
+                        tool.lookup(name).map(Opt::picard),
+                        Some(opt.picard()),
+                        "{}: {name}",
+                        tool.name
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn spellings_name_one_row() {
+        let tool = tool();
+        for spelling in ["minimum-pct", "MINIMUM_PCT", "Minimum_Pct", "M", "m"] {
+            assert_eq!(tool.option(spelling).map(Opt::picard), Some("MINIMUM_PCT"));
+        }
+        let pct = tool.option("M").expect("row");
+        assert_eq!(pct.kebab(), "minimum-pct");
+        assert_eq!(pct.kwarg(), "minimum_pct");
+        assert_eq!(pct.ty, Ty::Float);
+        assert_eq!(
+            tool.option("LEVEL").map(|o| (o.picard(), o.repeated)),
+            Some(("METRIC_ACCUMULATION_LEVEL", true))
+        );
+        assert!(
+            tool.option("STOP_AFTER").is_none(),
+            "not a CollectInsertSizeMetrics option"
+        );
+        let dup = find("CollectDuplicateMetrics").expect("registered");
+        assert!(
+            dup.option("o").is_none(),
+            "OUTPUT is replaced by METRICS_FILE"
+        );
+        assert_eq!(dup.option("m").map(Opt::picard), Some("METRICS_FILE"));
+    }
+
+    #[test]
+    fn did_you_mean_finds_the_typo_only() {
+        let tool = tool();
+        assert_eq!(
+            tool.suggest("minmum-pct").map(Opt::picard),
+            Some("MINIMUM_PCT")
+        );
+        assert_eq!(
+            tool.suggest("deviation").map(Opt::picard),
+            Some("DEVIATIONS")
+        );
+        assert_eq!(
+            tool.suggest("histogram-widht").map(Opt::picard),
+            Some("HISTOGRAM_WIDTH")
+        );
+        assert!(tool.suggest("reference-sequence-file-name").is_none());
+        assert_eq!(did_you_mean("tols", ["tools", "presets"]), Some("tools"));
+        assert_eq!(did_you_mean("xyz", ["tools", "presets"]), None);
+    }
+
+    #[test]
+    fn stdin_dash_is_read_from_dev_stdin_with_the_header_kept() {
+        let mut inv = tool().parse(&strings(&["I=-"])).expect("parses");
+        inv.read_dash_from_stdin();
+        assert_eq!(inv.input, Path::new("/dev/stdin"));
+        assert_eq!(inv.all("INPUT"), ["/dev/stdin"]);
+        assert_eq!(inv.command, "CollectInsertSizeMetrics INPUT=-");
     }
 
     #[test]

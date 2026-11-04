@@ -100,16 +100,38 @@ impl Options {
 /// `CollectAlignmentSummaryMetrics` in the tool registry.
 pub const TOOL: Tool = Tool {
     name: "CollectAlignmentSummaryMetrics",
+    summary: "one row per CATEGORY of each accumulation unit, keyed by Picard's \
+              column names; the metrics file adds the read length histograms.",
     options: &[
         Opt::ignored(&["HISTOGRAM_FILE", "H"], "no read-length plot is drawn"),
-        Opt::value(&["REFERENCE_SEQUENCE", "R"]),
-        Opt::value(&["MAX_INSERT_SIZE"]),
-        Opt::value(&["EXPECTED_PAIR_ORIENTATIONS"]),
-        Opt::value(&["ADAPTER_SEQUENCE"]),
-        Opt::value(&["METRIC_ACCUMULATION_LEVEL", "LEVEL"]),
-        Opt::value(&["IS_BISULFITE_SEQUENCED", "BS"]),
-        Opt::value(&["COLLECT_ALIGNMENT_INFORMATION"]),
-        Opt::value(&["STOP_AFTER"]),
+        Opt::path(
+            &["REFERENCE_SEQUENCE", "R"],
+            "Reference FASTA with a .fai index; without it no base counts as a mismatch.",
+        ),
+        Opt::int(
+            &["MAX_INSERT_SIZE"],
+            "Pairs with a larger |TLEN| are chimeric (default 100000).",
+        ),
+        Opt::text(
+            &["EXPECTED_PAIR_ORIENTATIONS"],
+            "FR, RF or TANDEM; each adds to the default FR, null clears.",
+        )
+        .repeated(),
+        Opt::text(
+            &["ADAPTER_SEQUENCE"],
+            "An adapter; each adds to Picard's six Illumina adapters, null clears.",
+        )
+        .repeated(),
+        crate::registry::LEVEL_OPTION,
+        Opt::bool(
+            &["IS_BISULFITE_SEQUENCED", "BS"],
+            "Bisulfite conversions are not mismatches (default false).",
+        ),
+        Opt::bool(
+            &["COLLECT_ALIGNMENT_INFORMATION"],
+            "false counts reads only (default true).",
+        ),
+        crate::registry::STOP_AFTER_OPTION,
     ],
     run: run_tool,
     collector: Some(collector),
@@ -654,6 +676,13 @@ impl Accumulator for AlignmentSummary {
 }
 
 /// `StringHeader` command line in Picard's shape.
+/// The `StringHeader` command line of the `alignment-summary` verb, the form the
+/// 0.12 subcommand wrote: every option with its value, defaults included.
+pub fn subcommand_header(inv: &Invocation) -> Result<String> {
+    let opts = Options::from_invocation(inv)?;
+    Ok(command_header(&opts, &inv.input, inv.output.as_deref()))
+}
+
 pub fn command_header(opts: &Options, bam: &Path, output: Option<&Path>) -> String {
     let mut command = format!("CollectAlignmentSummaryMetrics INPUT={}", bam.display());
     if let Some(output) = output {

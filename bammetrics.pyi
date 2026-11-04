@@ -249,153 +249,351 @@ def evaluate(preset: str | PathLike[str], paths: Sequence[_Path], sample: str | 
     (docs/verdict.md). paths are Picard metrics files written by bammetrics
     or Picard. A bad preset raises ValueError; an unreadable file OSError."""
 
-def collect_insert_size_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
-    """CollectInsertSizeMetrics through the registry: one dict per row, keyed by
-    Picard's column names. Options are Picard's, lower case: minimum_pct=0.1,
-    metric_accumulation_level=["SAMPLE"]. output=PATH also writes the metrics file."""
+# BEGIN registry tools: generated from crates/core/src/registry.rs (UPDATE_PYI=1 cargo test -p bammetrics-core python_stubs)
+# Each returns its rows as dicts keyed by Picard's column names; output= also writes the files.
 
-def collect_alignment_summary_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
-    """CollectAlignmentSummaryMetrics through the registry: one dict per row (a
-    CATEGORY of one accumulation unit), keyed by Picard's column names. Options
-    are Picard's, lower case: reference_sequence=PATH, is_bisulfite_sequenced=True,
-    metric_accumulation_level=["READ_GROUP"], adapter_sequence=[...] (adds to
-    Picard's default list). output=PATH also writes the metrics file."""
+def collect_insert_size_metrics(
+    input: _Path,
+    *,
+    deviations: float | None = None,
+    histogram_width: int | None = None,
+    minimum_histogram_width: int | None = None,
+    minimum_pct: float | None = None,
+    include_duplicates: bool | None = None,
+    metric_accumulation_level: str | Sequence[str] | None = None,
+    output: _Path | None = None,
+    assume_sorted: bool | None = None,
+) -> list[dict[str, Any]]:
+    """CollectInsertSizeMetrics: one row per pair orientation and accumulation unit, keyed
+    by Picard's column names; the metrics file adds the insert size histogram."""
 
-def collect_quality_yield_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
-    """CollectQualityYieldMetrics through the registry: one dict. Options:
-    use_original_qualities, include_secondary_alignments,
-    include_supplemental_alignments, stop_after, assume_sorted."""
+def collect_alignment_summary_metrics(
+    input: _Path,
+    *,
+    reference_sequence: _Path | None = None,
+    max_insert_size: int | None = None,
+    expected_pair_orientations: str | Sequence[str] | None = None,
+    adapter_sequence: str | Sequence[str] | None = None,
+    metric_accumulation_level: str | Sequence[str] | None = None,
+    is_bisulfite_sequenced: bool | None = None,
+    collect_alignment_information: bool | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    assume_sorted: bool | None = None,
+) -> list[dict[str, Any]]:
+    """CollectAlignmentSummaryMetrics: one row per CATEGORY of each accumulation unit,
+    keyed by Picard's column names; the metrics file adds the read length histograms."""
 
-def quality_score_distribution(input: _Path, **options: Any) -> list[dict[str, Any]]:
-    """QualityScoreDistribution. Picard's file has no metrics class, so the
-    result is the histogram: one dict per quality, keys QUALITY, COUNT_OF_Q and
-    COUNT_OF_OQ (only when a counted base has OQ). Options: aligned_reads_only,
-    pf_reads_only, include_no_calls, stop_after, assume_sorted."""
+def collect_quality_yield_metrics(
+    input: _Path,
+    *,
+    use_original_qualities: bool | None = None,
+    include_secondary_alignments: bool | None = None,
+    include_supplemental_alignments: bool | None = None,
+    flow_mode: bool | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    assume_sorted: bool | None = None,
+) -> list[dict[str, Any]]:
+    """CollectQualityYieldMetrics: one row of read, base and Q20/Q30 totals."""
 
-def mean_quality_by_cycle(input: _Path, **options: Any) -> list[dict[str, Any]]:
-    """MeanQualityByCycle. The result is the histogram: one dict per cycle,
-    keys CYCLE, MEAN_QUALITY and MEAN_ORIGINAL_QUALITY (only when a record has
-    OQ; 0 at a cycle without an OQ mean). Options: aligned_reads_only,
-    pf_reads_only, stop_after, assume_sorted."""
+def quality_score_distribution(
+    input: _Path,
+    *,
+    aligned_reads_only: bool | None = None,
+    pf_reads_only: bool | None = None,
+    include_no_calls: bool | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    assume_sorted: bool | None = None,
+) -> list[dict[str, Any]]:
+    """QualityScoreDistribution: the histogram, one row per quality: QUALITY, COUNT_OF_Q
+    and COUNT_OF_OQ (only when a counted base has OQ)."""
 
-def collect_base_distribution_by_cycle(input: _Path, **options: Any) -> list[dict[str, Any]]:
-    """CollectBaseDistributionByCycle: one dict per read end and cycle (READ_END,
-    CYCLE, PCT_A, PCT_C, PCT_G, PCT_T, PCT_N on a 0 to 100 scale). Options:
-    aligned_reads_only, pf_reads_only, stop_after, assume_sorted."""
+def mean_quality_by_cycle(
+    input: _Path,
+    *,
+    aligned_reads_only: bool | None = None,
+    pf_reads_only: bool | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    assume_sorted: bool | None = None,
+) -> list[dict[str, Any]]:
+    """MeanQualityByCycle: the histogram, one row per cycle: CYCLE, MEAN_QUALITY and
+    MEAN_ORIGINAL_QUALITY (only when a record has OQ; 0 at a cycle without an OQ mean)."""
 
-def collect_duplicate_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
-    """CollectDuplicateMetrics from the duplicate flags already in the file: one
-    dict per library. output=PATH writes the file Picard writes to METRICS_FILE."""
+def collect_base_distribution_by_cycle(
+    input: _Path,
+    *,
+    aligned_reads_only: bool | None = None,
+    pf_reads_only: bool | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    assume_sorted: bool | None = None,
+) -> list[dict[str, Any]]:
+    """CollectBaseDistributionByCycle: one row per read end and cycle (READ_END, CYCLE,
+    PCT_A, PCT_C, PCT_G, PCT_T, PCT_N on a 0 to 100 scale)."""
 
-def accumulate_quality_yield_metrics(input: _Paths, **options: Any) -> list[dict[str, Any]]:
-    """AccumulateQualityYieldMetrics: QualityYieldMetrics files (a list of paths)
-    merged into one dict. output=PATH writes the merged file."""
+def collect_duplicate_metrics(
+    input: _Path,
+    *,
+    output: _Path | None = None,
+    stop_after: int | None = None,
+    assume_sorted: bool | None = None,
+) -> list[dict[str, Any]]:
+    """CollectDuplicateMetrics: one row per library, from the duplicate flags already in
+    the file; the metrics file goes to METRICS_FILE."""
 
-def collect_gc_bias_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
-    """CollectGcBiasMetrics: the detail rows (Picard's OUTPUT file), one dict per
-    GC bin, accumulation unit and READS_USED value. reference_sequence=PATH is
-    required. summary_output=PATH writes the GcBiasSummaryMetrics file and
-    output=PATH the detail file. Options: scan_window_size, is_bisulfite_sequenced,
-    also_ignore_duplicates, metric_accumulation_level, minimum_genome_fraction
-    (accepted, unused by Picard 3.5.0), stop_after, assume_sorted."""
+def accumulate_quality_yield_metrics(
+    input: _Paths,
+    *,
+    output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """AccumulateQualityYieldMetrics: QualityYieldMetrics files (a list of paths) merged
+    into one row."""
 
-def collect_multiple_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
-    """CollectMultipleMetrics: every PROGRAM on one read of the BAM, each written
-    to output + its Picard extension (+ file_extension). output=PREFIX is
-    required. Returns one dict per file written: file and rows. Options:
-    program=[...] (adds to Picard's default five; "null" clears), reference_sequence,
-    metric_accumulation_level, file_extension, extra_argument=["PROGRAM::KEY=VALUE"],
-    stop_after, assume_sorted."""
+def collect_gc_bias_metrics(
+    input: _Path,
+    *,
+    summary_output: _Path,
+    reference_sequence: _Path,
+    scan_window_size: int | None = None,
+    minimum_genome_fraction: float | None = None,
+    is_bisulfite_sequenced: bool | None = None,
+    metric_accumulation_level: str | Sequence[str] | None = None,
+    also_ignore_duplicates: bool | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    assume_sorted: bool | None = None,
+) -> list[dict[str, Any]]:
+    """CollectGcBiasMetrics: the detail rows (Picard's OUTPUT file), one row per GC bin,
+    accumulation unit and READS_USED value; SUMMARY_OUTPUT gets the GcBiasSummaryMetrics
+    file."""
 
-def estimate_library_complexity(input: _Paths, **options: Any) -> list[dict[str, Any]]:
-    """EstimateLibraryComplexity: one dict per library (DuplicationMetrics columns)
-    from read sequences alone; the input may be unaligned, or a list of files.
-    Options: min_identical_bases, max_diff_rate, min_mean_quality, max_group_ratio,
-    max_read_length, min_group_count, read_name_regex, optical_duplicate_pixel_distance,
-    max_optical_duplicate_set_size, barcode_tag, read_one_barcode_tag,
-    read_two_barcode_tag. output=PATH writes the file with the
-    duplication_group_count histogram."""
+def collect_multiple_metrics(
+    input: _Path,
+    *,
+    output: _Path,
+    reference_sequence: _Path | None = None,
+    stop_after: int | None = None,
+    metric_accumulation_level: str | Sequence[str] | None = None,
+    file_extension: str | None = None,
+    program: str | Sequence[str] | None = None,
+    extra_argument: str | Sequence[str] | None = None,
+    assume_sorted: bool | None = None,
+) -> list[dict[str, Any]]:
+    """CollectMultipleMetrics: every PROGRAM on one read of the BAM, each written to OUTPUT
+    plus its Picard extension (plus FILE_EXTENSION); Python returns one row per file:
+    file and rows."""
 
-def collect_wgs_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
-    """CollectWgsMetrics: one dict of the 32 WgsMetrics columns. reference_sequence=PATH
-    (with a .fai) is required. Options: minimum_mapping_quality, minimum_base_quality,
-    coverage_cap, locus_accumulation_cap, count_unpaired, include_bq_histogram,
-    sample_size, intervals=PATH (an interval list), stop_after (loci), use_fast_algorithm,
-    read_length (the fast algorithm's window). output=PATH also writes the metrics file
-    with the coverage histogram."""
+def estimate_library_complexity(
+    input: _Paths,
+    *,
+    min_identical_bases: int | None = None,
+    max_diff_rate: float | None = None,
+    min_mean_quality: int | None = None,
+    max_group_ratio: int | None = None,
+    barcode_tag: str | None = None,
+    read_one_barcode_tag: str | None = None,
+    read_two_barcode_tag: str | None = None,
+    max_read_length: int | None = None,
+    min_group_count: int | None = None,
+    read_name_regex: str | None = None,
+    optical_duplicate_pixel_distance: int | None = None,
+    max_optical_duplicate_set_size: int | None = None,
+    output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """EstimateLibraryComplexity: one row per library (DuplicationMetrics columns) from
+    read sequences alone; the input may be unaligned, or several files. The metrics file
+    adds the duplication_group_count histogram."""
 
-def collect_raw_wgs_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
+def collect_wgs_metrics(
+    input: _Path,
+    *,
+    reference_sequence: _Path,
+    minimum_mapping_quality: int | None = None,
+    minimum_base_quality: int | None = None,
+    coverage_cap: int | None = None,
+    locus_accumulation_cap: int | None = None,
+    stop_after: int | None = None,
+    include_bq_histogram: bool | None = None,
+    count_unpaired: bool | None = None,
+    sample_size: int | None = None,
+    intervals: _Path | None = None,
+    use_fast_algorithm: bool | None = None,
+    read_length: int | None = None,
+    output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectWgsMetrics: one row of the 32 WgsMetrics columns; the metrics file adds the
+    coverage histogram."""
+
+def collect_raw_wgs_metrics(
+    input: _Path,
+    *,
+    reference_sequence: _Path,
+    minimum_mapping_quality: int | None = None,
+    minimum_base_quality: int | None = None,
+    coverage_cap: int | None = None,
+    locus_accumulation_cap: int | None = None,
+    stop_after: int | None = None,
+    include_bq_histogram: bool | None = None,
+    count_unpaired: bool | None = None,
+    sample_size: int | None = None,
+    intervals: _Path | None = None,
+    use_fast_algorithm: bool | None = None,
+    read_length: int | None = None,
+    output: _Path | None = None,
+) -> list[dict[str, Any]]:
     """CollectRawWgsMetrics: CollectWgsMetrics with MINIMUM_MAPPING_QUALITY 0,
     MINIMUM_BASE_QUALITY 3, COVERAGE_CAP 100000 and LOCUS_ACCUMULATION_CAP 200000 as
-    defaults, and the RawWgsMetrics class name. Same options and result."""
+    defaults, and the RawWgsMetrics class name."""
 
-def collect_wgs_metrics_with_non_zero_coverage(input: _Path, **options: Any) -> list[dict[str, Any]]:
-    """CollectWgsMetricsWithNonZeroCoverage: two dicts, CATEGORY WHOLE_GENOME and
-    NON_ZERO_REGIONS (the latter with the zero-depth loci left out), plus the
-    WgsMetrics columns. Same options as collect_wgs_metrics; chart_output is
-    accepted and no chart is drawn."""
+def collect_wgs_metrics_with_non_zero_coverage(
+    input: _Path,
+    *,
+    reference_sequence: _Path,
+    minimum_mapping_quality: int | None = None,
+    minimum_base_quality: int | None = None,
+    coverage_cap: int | None = None,
+    locus_accumulation_cap: int | None = None,
+    stop_after: int | None = None,
+    include_bq_histogram: bool | None = None,
+    count_unpaired: bool | None = None,
+    sample_size: int | None = None,
+    intervals: _Path | None = None,
+    use_fast_algorithm: bool | None = None,
+    read_length: int | None = None,
+    output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectWgsMetricsWithNonZeroCoverage: two rows, CATEGORY WHOLE_GENOME and
+    NON_ZERO_REGIONS (the zero-depth loci left out), with the WgsMetrics columns."""
 
-def collect_hs_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
-    """CollectHsMetrics: one dict of the 69 HsMetrics columns per accumulation unit.
-    bait_intervals=PATH (or a list) and target_intervals=PATH (interval lists, or BED
-    files converted as BedToIntervalList would) are required. Options:
-    bait_set_name, reference_sequence (AT_DROPOUT, GC_DROPOUT, PER_TARGET_COVERAGE),
-    metric_accumulation_level (a list; Picard 3.5.0 completes only when at most the
-    last unit in file order has a counted base, see KNOWN_DIFFERENCES.md),
-    minimum_mapping_quality, minimum_base_quality, clip_overlapping_reads,
-    include_indels, coverage_cap, near_distance, sample_size, per_target_coverage=PATH,
-    per_base_coverage=PATH, theoretical_sensitivity_output=PATH with allele_fraction
-    (a list). output=PATH also writes the metrics file with the two histograms."""
+def bed_to_interval_list(
+    input: _Path,
+    *,
+    sequence_dictionary: _Path,
+    sort: bool | None = None,
+    unique: bool | None = None,
+    drop_missing_contigs: bool | None = None,
+    keep_length_zero_intervals: bool | None = None,
+    output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """BedToIntervalList: one row per interval written (contig, start, end, strand, name);
+    OUTPUT gets the interval list."""
 
-def collect_targeted_pcr_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
-    """CollectTargetedPcrMetrics: one dict of the 62 TargetedPcrMetrics columns per
-    unit, from the CollectHsMetrics collector with MINIMUM_MAPPING_QUALITY 1,
-    MINIMUM_BASE_QUALITY 0 and CLIP_OVERLAPPING_READS false as defaults.
-    amplicon_intervals=PATH (one file) and target_intervals=PATH are required;
-    custom_amplicon_set_name names the CUSTOM_AMPLICON_SET column. The other options
-    are those of collect_hs_metrics."""
+def collect_hs_metrics(
+    input: _Path,
+    *,
+    target_intervals: _Path | Sequence[_Path],
+    reference_sequence: _Path | None = None,
+    metric_accumulation_level: str | Sequence[str] | None = None,
+    per_target_coverage: _Path | None = None,
+    per_base_coverage: _Path | None = None,
+    near_distance: int | None = None,
+    minimum_mapping_quality: int | None = None,
+    minimum_base_quality: int | None = None,
+    clip_overlapping_reads: bool | None = None,
+    include_indels: bool | None = None,
+    coverage_cap: int | None = None,
+    sample_size: int | None = None,
+    theoretical_sensitivity_output: _Path | None = None,
+    allele_fraction: float | Sequence[float] | None = None,
+    bait_intervals: _Path | Sequence[_Path],
+    bait_set_name: str | None = None,
+    output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectHsMetrics: one row of the 69 HsMetrics columns per accumulation unit; the
+    metrics file adds the coverage and base quality histograms."""
 
-def collect_rna_seq_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
-    """CollectRnaSeqMetrics: one dict of the 30 RnaSeqMetrics columns per accumulation
-    unit. ref_flat=PATH (UCSC refFlat) and strand_specificity (NONE,
-    FIRST_READ_TRANSCRIPTION_STRAND or SECOND_READ_TRANSCRIPTION_STRAND) are required.
-    Options: ribosomal_intervals=PATH (an interval list, or a BED converted as
-    BedToIntervalList would; without it RIBOSOMAL_BASES and PCT_RIBOSOMAL_BASES are
-    None), minimum_length, end_bias_bases, rrna_fragment_percentage, ignore_sequence
-    (a list of contig names), metric_accumulation_level (a list), stop_after,
-    assume_sorted. output=PATH also writes the metrics file with the
-    normalized_position histogram (one normalized_coverage column per unit)."""
+def collect_targeted_pcr_metrics(
+    input: _Path,
+    *,
+    target_intervals: _Path | Sequence[_Path],
+    reference_sequence: _Path | None = None,
+    metric_accumulation_level: str | Sequence[str] | None = None,
+    per_target_coverage: _Path | None = None,
+    per_base_coverage: _Path | None = None,
+    near_distance: int | None = None,
+    minimum_mapping_quality: int | None = None,
+    minimum_base_quality: int | None = None,
+    clip_overlapping_reads: bool | None = None,
+    include_indels: bool | None = None,
+    coverage_cap: int | None = None,
+    sample_size: int | None = None,
+    theoretical_sensitivity_output: _Path | None = None,
+    allele_fraction: float | Sequence[float] | None = None,
+    amplicon_intervals: _Path,
+    custom_amplicon_set_name: str | None = None,
+    output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectTargetedPcrMetrics: one row of the 62 TargetedPcrMetrics columns per
+    accumulation unit, from the CollectHsMetrics collector with MINIMUM_MAPPING_QUALITY
+    1, MINIMUM_BASE_QUALITY 0 and CLIP_OVERLAPPING_READS false as defaults."""
 
-def collect_variant_calling_metrics(input: _Path, **options: Any) -> list[dict[str, Any]]:
-    """CollectVariantCallingMetrics: input is a VCF (plain or bgzip, index not needed).
-    dbsnp=PATH (a dbSNP VCF) and output=PREFIX are required; the summary file goes to
-    PREFIX.variant_calling_summary_metrics and the per-sample detail file to
-    PREFIX.variant_calling_detail_metrics. Returns one dict per file written: file and
-    rows (the detail rows in Picard's HashMap order of sample names). Options:
-    target_intervals=PATH (an interval list), sequence_dictionary=PATH (.dict, VCF, BAM,
-    interval list or FASTA), gvcf_input=True (one sample, each record cut to its
-    genotype), thread_count (accepted; the output does not depend on it)."""
+def collect_rna_seq_metrics(
+    input: _Path,
+    *,
+    ref_flat: _Path,
+    ribosomal_intervals: _Path | None = None,
+    strand_specificity: str,
+    minimum_length: int | None = None,
+    ignore_sequence: str | Sequence[str] | None = None,
+    rrna_fragment_percentage: float | None = None,
+    metric_accumulation_level: str | Sequence[str] | None = None,
+    end_bias_bases: int | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    assume_sorted: bool | None = None,
+) -> list[dict[str, Any]]:
+    """CollectRnaSeqMetrics: one row of the 30 RnaSeqMetrics columns per accumulation unit;
+    the metrics file adds the normalized_position histogram, one normalized_coverage
+    column per unit."""
 
-def accumulate_variant_calling_metrics(input: _Paths, **options: Any) -> list[dict[str, Any]]:
-    """AccumulateVariantCallingMetrics: the prefixes (a list) of CollectVariantCallingMetrics
-    shards, merged as Picard merges them (the printed ratios inverted back into counts,
-    which is lossy where a ratio printed 0 or ?). output=PREFIX is required and gets the
-    two files; returns one dict per file: file and rows."""
+def collect_variant_calling_metrics(
+    input: _Path,
+    *,
+    output: _Path,
+    dbsnp: _Path,
+    target_intervals: _Path | None = None,
+    sequence_dictionary: _Path | None = None,
+    gvcf_input: bool | None = None,
+    thread_count: int | None = None,
+) -> list[dict[str, Any]]:
+    """CollectVariantCallingMetrics: the input is a VCF (plain or bgzip). OUTPUT is a
+    prefix: PREFIX.variant_calling_summary_metrics and
+    PREFIX.variant_calling_detail_metrics; Python returns one row per file: file and
+    rows."""
 
-def genotype_concordance(truth_vcf: _Path, call_vcf: _Path, **options: Any) -> list[dict[str, Any]]:
-    """GenotypeConcordance: the truth and call VCFs by position (or as truth_vcf= and
-    call_vcf=). output=PREFIX is required and gets PREFIX.genotype_concordance_summary_metrics,
-    _detail_metrics and _contingency_metrics; returns one dict per file: file and rows.
-    Options: truth_sample, call_sample (required with more than one sample), intervals
-    (a list of interval lists; needs both VCFs indexed, as Picard does), intersect_intervals,
-    min_gq, min_dp, output_all_rows, use_vcf_index, missing_sites_hom_ref (needs intervals),
-    ignore_filter_status. output_vcf is not implemented."""
+def accumulate_variant_calling_metrics(
+    input: _Paths,
+    *,
+    output: _Path,
+) -> list[dict[str, Any]]:
+    """AccumulateVariantCallingMetrics: the prefixes of CollectVariantCallingMetrics shards
+    merged as Picard merges them; OUTPUT is the prefix of the two files. Python returns
+    one row per file: file and rows."""
 
-def bed_to_interval_list(input: _Path, **options: Any) -> list[dict[str, Any]]:
-    """BedToIntervalList: one dict per interval written (contig, start, end, strand,
-    name). sequence_dictionary=PATH is required (.dict, BAM, SAM, interval list or
-    FASTA with a .dict). Options: sort (default True), unique, drop_missing_contigs,
-    keep_length_zero_intervals. output=PATH writes the interval list."""
+def genotype_concordance(
+    truth_vcf: _Path,
+    call_vcf: _Path,
+    *,
+    output: _Path,
+    truth_sample: str | None = None,
+    call_sample: str | None = None,
+    intervals: _Path | Sequence[_Path] | None = None,
+    intersect_intervals: bool | None = None,
+    min_gq: int | None = None,
+    min_dp: int | None = None,
+    output_all_rows: bool | None = None,
+    use_vcf_index: bool | None = None,
+    missing_sites_hom_ref: bool | None = None,
+    ignore_filter_status: bool | None = None,
+) -> list[dict[str, Any]]:
+    """GenotypeConcordance: the truth and call VCFs compared by position. OUTPUT is a
+    prefix: PREFIX.genotype_concordance_summary_metrics, _detail_metrics and
+    _contingency_metrics; Python returns one row per file: file and rows."""
+
+# END registry tools
 
 def alignment_summary(
     path: _Path,

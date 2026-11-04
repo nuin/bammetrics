@@ -629,9 +629,20 @@ fn rows_as_dicts<'py>(py: Python<'py>, output: &MetricsOutput) -> PyResult<Bound
     table_as_dicts(py, output.records())
 }
 
-/// Python keyword arguments as Picard `KEY=VALUE` arguments: upper-case
-/// names, bools as true/false, lists as repeated options, `None` skipped.
-/// `output` names the tool's metrics file option (`METRICS_FILE` for
+/// One keyword value as Picard text: bools as true/false.
+fn picard_text(value: &Bound<'_, PyAny>) -> PyResult<String> {
+    match value.extract::<bool>() {
+        Ok(flag) if value.is_instance_of::<pyo3::types::PyBool>() => Ok(flag.to_string()),
+        _ => Ok(value.str()?.to_string()),
+    }
+}
+
+/// Python keyword arguments as Picard `KEY=VALUE` arguments. A keyword is
+/// the snake-case name of an option row (`minimum_pct`, or a short name
+/// such as `m`), which gives its Picard name; a name no row has is passed
+/// upper-cased, so the parser rejects it with the Picard face's message.
+/// Lists and tuples are repeated options, `None` is skipped, and `output`
+/// names the tool's metrics file option (`METRICS_FILE` for
 /// `CollectDuplicateMetrics`).
 fn keyword_arguments(tool: &Tool, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Vec<String>> {
     let mut args = Vec::new();
@@ -639,20 +650,25 @@ fn keyword_arguments(tool: &Tool, kwargs: Option<&Bound<'_, PyDict>>) -> PyResul
         return Ok(args);
     };
     for (key, value) in kwargs.iter() {
-        let mut name = key.extract::<String>()?.to_uppercase();
-        if name == "OUTPUT" {
-            name = tool.output_name().to_owned();
-        }
+        let key = key.extract::<String>()?;
+        let name = if key == "output" {
+            tool.output_name().to_owned()
+        } else {
+            tool.option(&key)
+                .map_or_else(|| key.to_uppercase(), |opt| opt.picard().to_owned())
+        };
         if value.is_none() {
             continue;
         }
-        let texts: Vec<String> = if let Ok(items) = value.extract::<Vec<String>>() {
-            items
-        } else if let Ok(flag) = value.extract::<bool>() {
-            vec![flag.to_string()]
-        } else {
-            vec![value.str()?.to_string()]
-        };
+        let texts: Vec<String> =
+            if value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>() {
+                value
+                    .try_iter()?
+                    .map(|item| picard_text(&item?))
+                    .collect::<PyResult<_>>()?
+            } else {
+                vec![picard_text(&value)?]
+            };
         args.extend(texts.into_iter().map(|t| format!("{name}={t}")));
     }
     Ok(args)
@@ -715,22 +731,6 @@ fn run_registered<'py>(
     Ok(files)
 }
 
-/// `CollectInsertSizeMetrics` -> `collect_insert_size_metrics`.
-fn snake_case(name: &str) -> String {
-    let mut out = String::new();
-    for (i, c) in name.chars().enumerate() {
-        if c.is_ascii_uppercase() {
-            if i > 0 {
-                out.push('_');
-            }
-            out.push(c.to_ascii_lowercase());
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
-
 /// Add one function per registered tool, named after its Picard class in
 /// snake case.
 fn add_registered_tools(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -743,7 +743,7 @@ fn add_registered_tools(m: &Bound<'_, PyModule>) -> PyResult<()> {
                 run_registered(args.py(), tool, args, kwargs).map(Bound::unbind)
             },
         )?;
-        m.add(snake_case(tool.name).as_str(), function)?;
+        m.add(registry::snake_case(tool.name).as_str(), function)?;
     }
     Ok(())
 }
