@@ -55,7 +55,7 @@ macro_rules! case_in_out {
 }
 
 /// The documented forms on the committed fixtures: every registry tool and
-/// CollectHsMetrics in Picard syntax with and without `O=`, the five clap
+/// CollectHsMetrics in Picard syntax with and without `O=`, the five 0.12
 /// subcommands with and without `-O`, `check` on the Picard 3.5.0 directory
 /// in its text and jsonl forms with every exit code, and the documented
 /// error paths. `report` writes pages that carry the tool version, so its
@@ -97,7 +97,7 @@ const FIXTURE_CASES: &[Case] = &[
     case!("picard_hs_metrics", "CollectHsMetrics", "I=IS", "O=OUT/hs_metrics.txt", "BAIT_INTERVALS=IL", "TARGET_INTERVALS=IL", "R=REF"),
     case!("picard_hs_metrics_stdout", "CollectHsMetrics", "I=IS", "BAIT_INTERVALS=IL", "TARGET_INTERVALS=IL", "SAMPLE_SIZE=1000"),
     case!("picard_hs_metrics_per_base", "CollectHsMetrics", "I=IS", "O=OUT/hs_metrics.txt", "BI=IL", "TI=IL", "N=panel", "PER_BASE_COVERAGE=OUT/per_base.txt", "SAMPLE_SIZE=1000", "VALIDATION_STRINGENCY=SILENT"),
-    // The five clap subcommands.
+    // The five 0.12 subcommands, verbs since 0.13.0.
     case!("insert_size_stdout", "insert-size", "IS"),
     case!("insert_size_output", "insert-size", "IS", "-O", "OUT/insert_size.txt", "-M", "0.05"),
     case!("insert_size_long_flags", "insert-size", "--input", "IS", "--output", "OUT/insert_size.txt", "--level", "SAMPLE", "--level", "READ_GROUP", "--deviations", "3"),
