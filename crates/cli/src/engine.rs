@@ -89,30 +89,46 @@ fn remove_stale(step: &Step, written: &[Output], files: &mut Files) {
 /// Remove the metrics files the earlier run's manifest lists that no step
 /// of this run wrote or kept (a collector the new options drop), so the
 /// prefix holds what this run's manifest lists and `report DIR` agrees
-/// with it. Only paths under the prefix are touched.
+/// with it. The manifest is a file on disk, so its paths are not trusted:
+/// only [`owned_by_prefix`] paths are removed, and a symlink is never followed.
 fn remove_dropped(plan: &Plan, done: &[Done], files: &mut Files) {
     let Ok(Some(old)) = &plan.previous else {
         return;
     };
-    let prefix = plan.prefix.as_os_str().to_string_lossy().into_owned();
     let current = |path: &Path| {
         done.iter()
             .any(|d| d.record.outputs.iter().any(|o| o.path == path))
     };
     for output in old.steps.iter().flat_map(|s| &s.outputs) {
-        let under_prefix = output
-            .path
-            .as_os_str()
-            .to_string_lossy()
-            .starts_with(&prefix);
         if output.kind == "metrics"
-            && under_prefix
+            && owned_by_prefix(&plan.prefix, &output.path)
             && !current(&output.path)
+            && fs::symlink_metadata(&output.path).is_ok_and(|m| m.file_type().is_file())
             && fs::remove_file(&output.path).is_ok()
         {
             files.removed += 1;
         }
     }
+}
+
+/// True when `path` is `<prefix>.<suffix>`: the same directory as `prefix`,
+/// a file name of the prefix's file name, a dot and a suffix without a path
+/// separator, and no `..` component anywhere.
+fn owned_by_prefix(prefix: &Path, path: &Path) -> bool {
+    use std::path::Component;
+    let plain = |p: &Path| !p.components().any(|c| matches!(c, Component::ParentDir));
+    if !plain(prefix) || !plain(path) || path.parent() != prefix.parent() {
+        return false;
+    }
+    let (Some(stem), Some(name)) = (
+        prefix.file_name().and_then(|n| n.to_str()),
+        path.file_name().and_then(|n| n.to_str()),
+    ) else {
+        return false;
+    };
+    name.strip_prefix(stem)
+        .and_then(|rest| rest.strip_prefix('.'))
+        .is_some_and(|suffix| !suffix.is_empty())
 }
 
 /// The record of a step that ran: its files, or its error.
@@ -543,4 +559,37 @@ fn summary(s: &Summary) -> String {
         _ => text.push_str("exit 11: the verdict is incomplete\n"),
     }
     text
+}
+
+#[cfg(test)]
+mod tests {
+    use super::owned_by_prefix;
+    use std::path::Path;
+
+    #[test]
+    fn owned_by_prefix_rejects_paths_outside_the_prefix() {
+        let prefix = Path::new("out/s");
+        assert!(owned_by_prefix(
+            prefix,
+            Path::new("out/s.insert_size_metrics")
+        ));
+        assert!(!owned_by_prefix(prefix, Path::new("out/s/../../victim")));
+        assert!(!owned_by_prefix(prefix, Path::new("out/s.x/../../victim")));
+        assert!(!owned_by_prefix(
+            prefix,
+            Path::new("out/sample2.insert_size_metrics")
+        ));
+        assert!(!owned_by_prefix(prefix, Path::new("/etc/s.passwd")));
+        assert!(!owned_by_prefix(prefix, Path::new("out/s.")));
+        assert!(!owned_by_prefix(
+            prefix,
+            Path::new("out/other/s.insert_size_metrics")
+        ));
+        let abs = Path::new("/data/run/s");
+        assert!(owned_by_prefix(abs, Path::new("/data/run/s.hs_metrics")));
+        assert!(!owned_by_prefix(
+            abs,
+            Path::new("/data/run/../run/s.hs_metrics")
+        ));
+    }
 }
