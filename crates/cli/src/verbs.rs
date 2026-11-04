@@ -21,11 +21,11 @@ use std::path::{Path, PathBuf};
 
 use bammetrics_core::multiple_metrics::file_extensions;
 use bammetrics_core::pass;
-use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty};
+use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
 
 use crate::error::VerbError;
 use crate::format::{self, Context, Format};
-use crate::grammar::{self, Flag, Key, Parsed};
+use crate::grammar::{self, Flag, Given, Key, Parsed};
 
 /// How a verb names what it writes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,6 +51,18 @@ pub struct Verb {
     pub aliases: &'static [(&'static str, &'static str)],
     /// The `StringHeader` line of a 0.12 subcommand.
     pub header: Option<Header>,
+    /// The `--help` summary when it differs from [`Tool::summary`], which
+    /// describes the rows Python returns.
+    pub about: Option<&'static str>,
+    /// What the main file is, for the `-o` and `--format` help.
+    pub writes: &'static str,
+    /// Options whose spellings name one source: two of them on one command
+    /// line are a usage error (`--from-bam` and `--dict` both give
+    /// `SEQUENCE_DICTIONARY`). One spelling given twice keeps the last.
+    pub one_spelling: &'static [&'static str],
+    /// Shared flags the verb accepts and ignores, with the reason `--help`
+    /// prints.
+    pub ignores: &'static [(Key, &'static str)],
 }
 
 const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
@@ -61,6 +73,10 @@ const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
         input: "BAM",
         aliases: &[],
         header: None,
+        about: None,
+        writes: "metrics file",
+        one_spelling: &[],
+        ignores: &[],
     }
 }
 
@@ -156,10 +172,27 @@ pub const VERBS: &[Verb] = &[
         verb("genotype-concordance", "GenotypeConcordance", Files::Prefix),
         "VCF",
     ),
-    with_input(
-        verb("bed-to-interval-list", "BedToIntervalList", Files::Single),
-        "BED",
-    ),
+    Verb {
+        input: "BED",
+        about: Some(
+            "writes an interval list: the @SQ lines of the dictionary (--from-bam BAM, --dict \
+             FILE or --sd FILE), then one line per BED interval, 1-based and closed.",
+        ),
+        writes: "interval list",
+        aliases: &[
+            ("FROM_BAM", "SEQUENCE_DICTIONARY"),
+            ("DICT", "SEQUENCE_DICTIONARY"),
+        ],
+        one_spelling: &["SEQUENCE_DICTIONARY"],
+        ignores: &[
+            (
+                Key::Threads,
+                "no BAM record is read, a BAM gives only its header",
+            ),
+            (Key::Sample, "an interval list has no sample"),
+        ],
+        ..verb("bed-to-interval-list", "BedToIntervalList", Files::Single)
+    },
 ];
 
 /// Verb spellings every verb's rows take, beside a verb's own
@@ -246,25 +279,29 @@ impl Verb {
         let (placeholder, help) = match self.files {
             Files::Single => (
                 "FILE",
-                "The metrics file; standard output without one, or with -.",
+                format!(
+                    "The {}; standard output without one, or with -.",
+                    self.writes
+                ),
             ),
             Files::Prefix => (
                 "PREFIX",
                 "Output prefix (default ./ plus the input name without its extension); a \
-                 directory gets that name as the file part.",
+                 directory gets that name as the file part."
+                    .to_owned(),
             ),
         };
         flags.push(
-            Flag::new(Key::Output, "output", &["o", "O"], Ty::Path, help)
+            Flag::new(Key::Output, "output", &["o", "O"], Ty::Path, &help)
                 .names(&output_names)
                 .placeholder(placeholder),
         );
         let format_help = match self.files {
-            Files::Single => "picard (the metrics file), json, tsv, jsonl or human.",
-            Files::Prefix => "picard only: this verb writes several Picard files.",
+            Files::Single => format!("picard (the {}), json, tsv, jsonl or human.", self.writes),
+            Files::Prefix => "picard only: this verb writes several Picard files.".to_owned(),
         };
         flags.push(
-            Flag::new(Key::Format, "format", &[], Ty::Text, format_help).placeholder("FORMAT"),
+            Flag::new(Key::Format, "format", &[], Ty::Text, &format_help).placeholder("FORMAT"),
         );
         if self.files == Files::Single {
             flags.push(
@@ -319,7 +356,16 @@ impl Verb {
             flags.push(flag);
         }
         flags.extend(shared);
+        for flag in &mut flags {
+            if let Some((_, why)) = self.ignores.iter().find(|(key, _)| *key == flag.key) {
+                flag.help = format!("Accepted and ignored: {why}.");
+            }
+        }
         flags
+    }
+
+    fn ignored(&self, key: Key) -> bool {
+        self.ignores.iter().any(|(k, _)| *k == key)
     }
 
     /// `bammetrics <verb> --help`.
@@ -330,7 +376,7 @@ impl Verb {
              bammetrics {} {}=... [KEY=VALUE ...]   (Picard syntax)\n\n",
             self.name,
             tool.name,
-            tool.summary,
+            self.about.unwrap_or(tool.summary),
             self.name,
             self.input,
             tool.name,
@@ -377,6 +423,7 @@ impl Verb {
             .from(given.spelled.clone())
             .hint("this verb writes several Picard files under -o PREFIX"));
         }
+        self.check_one_spelling(&parsed, &flags)?;
         let mut picard = self.picard_arguments(&parsed, &flags)?;
         let output = self.output_path(&parsed, &picard)?;
         let output_flag = || parsed.last(Key::Output).map(|g| g.spelled.clone());
@@ -413,6 +460,7 @@ impl Verb {
             }
         }
         let sample = match parsed.last(Key::Sample) {
+            _ if self.ignored(Key::Sample) => None,
             Some(given) => Some(given.values[0].clone()),
             None if matches!(format, Format::Json | Format::Jsonl) => self.default_sample(&inv),
             None => None,
@@ -434,6 +482,44 @@ impl Verb {
             }
         }
         Ok(0)
+    }
+
+    /// An option of [`Verb::one_spelling`] given under two of its
+    /// spellings: a usage error from the second. A verb alias is its own
+    /// spelling; the row's Picard names and their kebab forms are one.
+    fn check_one_spelling(&self, parsed: &Parsed, flags: &[Flag]) -> Result<(), VerbError> {
+        for &name in self.one_spelling {
+            let spelling = |given: &Given| {
+                let word = normalize(given.spelled.trim_start_matches('-').trim_end_matches('='));
+                self.aliases
+                    .iter()
+                    .find(|(alias, target)| *target == name && *alias == word)
+                    .map_or(name, |(alias, _)| *alias)
+            };
+            let mut given = parsed.all(Key::Picard(name));
+            let Some(first) = given.next() else { continue };
+            let Some(second) = given.find(|g| spelling(g) != spelling(first)) else {
+                continue;
+            };
+            let long = flags
+                .iter()
+                .find(|f| f.key == Key::Picard(name))
+                .map_or_else(|| name.to_owned(), |f| f.long.clone());
+            let spellings: Vec<String> = self
+                .aliases
+                .iter()
+                .filter(|(_, target)| *target == name)
+                .map(|(alias, _)| format!("--{}", alias.to_ascii_lowercase().replace('_', "-")))
+                .chain([format!("--{long}")])
+                .collect();
+            return Err(VerbError::usage(
+                self.name,
+                format!("{} and {} both set {name}", first.spelled, second.spelled),
+            )
+            .from(second.spelled.clone())
+            .hint(format!("give one of {}", spellings.join(", "))));
+        }
+        Ok(())
     }
 
     /// The Picard arguments of every option given, in order: `KEY=VALUE`
@@ -616,6 +702,11 @@ impl Verb {
             if name == "BAIT_INTERVALS" || name == "TARGET_INTERVALS" {
                 error = error.hint("Use --panel FILE when baits and targets are the same file.");
             }
+            if name == "SEQUENCE_DICTIONARY" {
+                error = error.hint(
+                    "--from-bam BAM copies the @SQ lines of a BAM header; --dict FILE reads a .dict.",
+                );
+            }
             return Err(error.hint(format!("every option: bammetrics help {}", self.name)));
         }
         Ok(())
@@ -714,7 +805,10 @@ impl Verb {
     }
 
     fn threads(&self, parsed: &Parsed) -> Result<usize, VerbError> {
-        let Some(given) = parsed.last(Key::Threads) else {
+        let given = parsed
+            .last(Key::Threads)
+            .filter(|_| !self.ignored(Key::Threads));
+        let Some(given) = given else {
             return Ok(pass::default_threads());
         };
         given.values[0].parse().map_err(|_| {
