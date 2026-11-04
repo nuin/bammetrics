@@ -958,19 +958,56 @@ impl Counters {
 /// implemented and so stays unknown.
 pub const TOOL: Tool = Tool {
     name: "GenotypeConcordance",
+    summary: "the truth and call VCFs compared by position. OUTPUT is a prefix: \
+              PREFIX.genotype_concordance_summary_metrics, _detail_metrics and \
+              _contingency_metrics; one dict per file: file and rows.",
     options: &[
-        Opt::value(&["TRUTH_VCF", "TV"]),
-        Opt::value(&["CALL_VCF", "CV"]),
-        Opt::value(&["TRUTH_SAMPLE", "TS"]),
-        Opt::value(&["CALL_SAMPLE", "CS"]),
-        Opt::value(&["INTERVALS"]),
-        Opt::value(&["INTERSECT_INTERVALS"]),
-        Opt::value(&["MIN_GQ"]),
-        Opt::value(&["MIN_DP"]),
-        Opt::value(&["OUTPUT_ALL_ROWS"]),
-        Opt::value(&["USE_VCF_INDEX"]),
-        Opt::value(&["MISSING_SITES_HOM_REF", "MISSING_HOM"]),
-        Opt::value(&["IGNORE_FILTER_STATUS"]),
+        Opt::path(&["TRUTH_VCF", "TV"], "The truth VCF.").required(),
+        Opt::path(&["CALL_VCF", "CV"], "The call VCF.").required(),
+        Opt::output(&["OUTPUT", "O"])
+            .with_help("The output prefix of the three files.")
+            .required(),
+        Opt::text(
+            &["TRUTH_SAMPLE", "TS"],
+            "Sample of the truth VCF; required with more than one.",
+        ),
+        Opt::text(
+            &["CALL_SAMPLE", "CS"],
+            "Sample of the call VCF; required with more than one.",
+        ),
+        Opt::path(
+            &["INTERVALS"],
+            "An interval list; repeat for several. Both VCFs must be indexed.",
+        )
+        .repeated(),
+        Opt::bool(
+            &["INTERSECT_INTERVALS"],
+            "Use the intersection of INTERVALS, false their union (default true).",
+        ),
+        Opt::int(
+            &["MIN_GQ"],
+            "Genotypes below this GQ count as no call (default 0).",
+        ),
+        Opt::int(
+            &["MIN_DP"],
+            "Genotypes below this depth count as no call (default 0).",
+        ),
+        Opt::bool(
+            &["OUTPUT_ALL_ROWS"],
+            "Write rows whose counts are all zero (default false).",
+        ),
+        Opt::bool(
+            &["USE_VCF_INDEX"],
+            "Read the VCFs through their index (default false).",
+        ),
+        Opt::bool(
+            &["MISSING_SITES_HOM_REF", "MISSING_HOM"],
+            "Sites absent from a VCF are hom-ref; needs INTERVALS (default false).",
+        ),
+        Opt::bool(
+            &["IGNORE_FILTER_STATUS"],
+            "Count filtered sites (default false).",
+        ),
         Opt::rejected(&["INPUT", "I"]),
         Opt::rejected(&["ASSUME_SORTED", "AS"]),
     ],

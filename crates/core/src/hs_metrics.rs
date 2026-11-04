@@ -271,20 +271,62 @@ impl Options {
 }
 
 const COMMON_OPTIONS: [Opt; 15] = [
-    Opt::value(&["TARGET_INTERVALS", "TI"]),
-    Opt::value(&["REFERENCE_SEQUENCE", "R"]),
-    Opt::value(&["METRIC_ACCUMULATION_LEVEL", "LEVEL"]),
-    Opt::value(&["PER_TARGET_COVERAGE"]),
-    Opt::value(&["PER_BASE_COVERAGE"]),
-    Opt::value(&["NEAR_DISTANCE"]),
-    Opt::value(&["MINIMUM_MAPPING_QUALITY", "MQ"]),
-    Opt::value(&["MINIMUM_BASE_QUALITY", "Q"]),
-    Opt::value(&["CLIP_OVERLAPPING_READS"]),
-    Opt::value(&["INCLUDE_INDELS"]),
-    Opt::value(&["COVERAGE_CAP", "covMax"]),
-    Opt::value(&["SAMPLE_SIZE"]),
-    Opt::value(&["THEORETICAL_SENSITIVITY_OUTPUT"]),
-    Opt::value(&["ALLELE_FRACTION"]),
+    Opt::path(
+        &["TARGET_INTERVALS", "TI"],
+        "Target intervals: an interval list, or a BED file; repeat for several.",
+    )
+    .repeated()
+    .required(),
+    Opt::path(
+        &["REFERENCE_SEQUENCE", "R"],
+        "Reference FASTA with a .fai index, for AT_DROPOUT, GC_DROPOUT and PER_TARGET_COVERAGE.",
+    ),
+    crate::registry::LEVEL_OPTION,
+    Opt::path(
+        &["PER_TARGET_COVERAGE"],
+        "Also write the coverage of every target to this file.",
+    ),
+    Opt::path(
+        &["PER_BASE_COVERAGE"],
+        "Also write the depth of every target base to this file; gzip when it ends in .gz.",
+    ),
+    Opt::int(
+        &["NEAR_DISTANCE"],
+        "Reads this close to a bait are near bait (default 250).",
+    ),
+    Opt::int(
+        &["MINIMUM_MAPPING_QUALITY", "MQ"],
+        "Reads below this MAPQ add no coverage (default 20; targeted PCR 1).",
+    ),
+    Opt::int(
+        &["MINIMUM_BASE_QUALITY", "Q"],
+        "Bases below this quality add no coverage (default 20; targeted PCR 0).",
+    ),
+    Opt::bool(
+        &["CLIP_OVERLAPPING_READS"],
+        "Count the overlap of two mates once (default true; targeted PCR false).",
+    ),
+    Opt::bool(
+        &["INCLUDE_INDELS"],
+        "Count inserted bases as on target and deleted bases as covered (default false).",
+    ),
+    Opt::int(
+        &["COVERAGE_CAP", "covMax"],
+        "Depth cap of the het SNP sensitivity model (default 200).",
+    ),
+    Opt::int(
+        &["SAMPLE_SIZE"],
+        "Samples of the het SNP sensitivity simulation (default 10000).",
+    ),
+    Opt::path(
+        &["THEORETICAL_SENSITIVITY_OUTPUT"],
+        "Also write the theoretical sensitivity per allele fraction to this file.",
+    ),
+    Opt::float(
+        &["ALLELE_FRACTION"],
+        "An allele fraction for THEORETICAL_SENSITIVITY_OUTPUT; each adds to the default list, null clears.",
+    )
+    .repeated(),
     // Not a SinglePassSamProgram: Picard's parser rejects both.
     Opt::rejected(&["ASSUME_SORTED", "AS"]),
 ];
@@ -312,9 +354,19 @@ macro_rules! options {
 
 pub const TOOL: Tool = Tool {
     name: "CollectHsMetrics",
+    summary: "one dict of the 69 HsMetrics columns per accumulation unit; the metrics file \
+              adds the coverage and base quality histograms.",
     options: options!(
-        Opt::value(&["BAIT_INTERVALS", "BI"]),
-        Opt::value(&["BAIT_SET_NAME", "N"])
+        Opt::path(
+            &["BAIT_INTERVALS", "BI"],
+            "Bait intervals: an interval list, or a BED file; repeat for several.",
+        )
+        .repeated()
+        .required(),
+        Opt::text(
+            &["BAIT_SET_NAME", "N"],
+            "BAIT_SET column (default: the bait file names up to the first dot).",
+        )
     ),
     run: run_hs,
     collector: Some(hs_collector),
@@ -322,9 +374,19 @@ pub const TOOL: Tool = Tool {
 
 pub const PCR_TOOL: Tool = Tool {
     name: "CollectTargetedPcrMetrics",
+    summary: "one dict of the 62 TargetedPcrMetrics columns per accumulation unit, from the \
+              CollectHsMetrics collector with MINIMUM_MAPPING_QUALITY 1, MINIMUM_BASE_QUALITY 0 \
+              and CLIP_OVERLAPPING_READS false as defaults.",
     options: options!(
-        Opt::value(&["AMPLICON_INTERVALS", "AI"]),
-        Opt::value(&["CUSTOM_AMPLICON_SET_NAME", "N"])
+        Opt::path(
+            &["AMPLICON_INTERVALS", "AI"],
+            "Amplicon intervals: one interval list or BED file.",
+        )
+        .required(),
+        Opt::text(
+            &["CUSTOM_AMPLICON_SET_NAME", "N"],
+            "CUSTOM_AMPLICON_SET column (default: the amplicon file name up to the first dot).",
+        )
     ),
     run: run_pcr,
     collector: None,

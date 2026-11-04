@@ -19,17 +19,18 @@ use crate::error::{Error, Result};
 use crate::hs_metrics::{self, CaptureMetrics};
 use crate::insert_size::{self, InsertSize};
 use crate::metrics_file::headers;
+use crate::multiple_metrics::file_extensions;
 use crate::pass::{self, Accumulator, BATCH_RECORDS, Batch, Worker};
 use crate::quality_yield::{self, QualityYield};
 
-/// File name extensions after the output prefix. The first three are the
-/// ones `CollectMultipleMetrics` gives its programs (`Program.*`, e.g.
-/// `AlignmentSummaryMetrics.FILE_EXTENSION`); Picard has no prefix
-/// convention for `CollectHsMetrics`.
-pub const QUALITY_YIELD_EXTENSION: &str = ".quality_yield_metrics";
-pub const ALIGNMENT_SUMMARY_EXTENSION: &str = ".alignment_summary_metrics";
-pub const INSERT_SIZE_EXTENSION: &str = ".insert_size_metrics";
-pub const HS_METRICS_EXTENSION: &str = ".hs_metrics";
+/// The extension `tool` writes after the output prefix, from the one table
+/// both faces use ([`file_extensions`]): `.quality_yield_metrics`,
+/// `.alignment_summary_metrics` and `.insert_size_metrics` are Picard's
+/// `CollectMultipleMetrics` names, `.hs_metrics` has no Picard convention.
+pub fn extension(tool: &str) -> &'static str {
+    file_extensions(tool).map_or("", |files| files[0].1)
+}
+
 /// Per-base coverage of an HS run: its `.hs_metrics` name with this in place.
 pub const PER_BASE_COVERAGE_EXTENSION: &str = ".per_base_coverage";
 
@@ -37,7 +38,9 @@ pub const PER_BASE_COVERAGE_EXTENSION: &str = ".per_base_coverage";
 /// `PREFIX[.BAIT_SET].hs_metrics` becomes `PREFIX[.BAIT_SET].per_base_coverage`.
 pub fn per_base_coverage_path(hs_metrics: &Path) -> PathBuf {
     let name = hs_metrics.as_os_str().to_string_lossy();
-    let stem = name.strip_suffix(HS_METRICS_EXTENSION).unwrap_or(&name);
+    let stem = name
+        .strip_suffix(extension("CollectHsMetrics"))
+        .unwrap_or(&name);
     PathBuf::from(format!("{stem}{PER_BASE_COVERAGE_EXTENSION}"))
 }
 
@@ -175,13 +178,14 @@ impl Outputs {
             PathBuf::from(name)
         };
         let hs_metrics: Vec<PathBuf> = match request.hs_metrics.as_slice() {
-            [_] => vec![with(HS_METRICS_EXTENSION)],
+            [_] => vec![with(extension("CollectHsMetrics"))],
             runs => runs
                 .iter()
                 .map(|o| {
                     with(&format!(
-                        ".{}{HS_METRICS_EXTENSION}",
-                        hs_metrics::bait_set_name(o)
+                        ".{}{}",
+                        hs_metrics::bait_set_name(o),
+                        extension("CollectHsMetrics")
                     ))
                 })
                 .collect(),
@@ -195,9 +199,9 @@ impl Outputs {
             }
         }
         Ok(Self {
-            quality_yield: with(QUALITY_YIELD_EXTENSION),
-            alignment_summary: with(ALIGNMENT_SUMMARY_EXTENSION),
-            insert_size: with(INSERT_SIZE_EXTENSION),
+            quality_yield: with(extension("CollectQualityYieldMetrics")),
+            alignment_summary: with(extension("CollectAlignmentSummaryMetrics")),
+            insert_size: with(extension("CollectInsertSizeMetrics")),
             hs_metrics,
         })
     }

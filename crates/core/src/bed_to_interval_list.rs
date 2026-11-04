@@ -37,12 +37,25 @@ const HEADER_VERSION: &str = "1.6";
 
 pub const TOOL: Tool = Tool {
     name: "BedToIntervalList",
+    summary: "one dict per interval written (contig, start, end, strand, name); OUTPUT gets \
+              the interval list.",
     options: &[
-        Opt::value(&["SEQUENCE_DICTIONARY", "SD"]),
-        Opt::value(&["SORT"]),
-        Opt::value(&["UNIQUE"]),
-        Opt::value(&["DROP_MISSING_CONTIGS"]),
-        Opt::value(&["KEEP_LENGTH_ZERO_INTERVALS"]),
+        Opt::path(&["INPUT", "I"], "The BED file to convert.").required(),
+        Opt::path(
+            &["SEQUENCE_DICTIONARY", "SD"],
+            "The @SQ lines: a .dict, BAM, SAM, interval list, or FASTA with a .dict.",
+        )
+        .required(),
+        Opt::bool(&["SORT"], "Sort the intervals (default true)."),
+        Opt::bool(&["UNIQUE"], "Merge identical intervals (default false)."),
+        Opt::bool(
+            &["DROP_MISSING_CONTIGS"],
+            "Drop intervals on contigs the dictionary lacks (default false).",
+        ),
+        Opt::bool(
+            &["KEEP_LENGTH_ZERO_INTERVALS"],
+            "Keep intervals of length zero (default false).",
+        ),
         Opt::rejected(&["ASSUME_SORTED", "AS"]),
     ],
     run: run_tool,

@@ -50,11 +50,16 @@ impl MetricRow for Row {
 
 pub const TOOL: Tool = Tool {
     name: "CollectBaseDistributionByCycle",
+    summary: "one dict per read end and cycle (READ_END, CYCLE, PCT_A, PCT_C, PCT_G, PCT_T, \
+              PCT_N on a 0 to 100 scale).",
     options: &[
         Opt::ignored(&["CHART_OUTPUT", "CHART"], "no chart is drawn"),
-        Opt::value(&["ALIGNED_READS_ONLY"]),
-        Opt::value(&["PF_READS_ONLY"]),
-        Opt::value(&["STOP_AFTER"]),
+        crate::registry::ALIGNED_READS_ONLY_OPTION,
+        Opt::bool(
+            &["PF_READS_ONLY"],
+            "Count only reads that pass the vendor filter (default false).",
+        ),
+        crate::registry::STOP_AFTER_OPTION,
     ],
     run: run_tool,
     collector: Some(collector),

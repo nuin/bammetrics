@@ -204,12 +204,25 @@ fn derived_read_length(row: &Row) -> i32 {
 
 pub const TOOL: Tool = Tool {
     name: "CollectQualityYieldMetrics",
+    summary: "one dict of read, base and Q20/Q30 totals.",
     options: &[
-        Opt::value(&["USE_ORIGINAL_QUALITIES", "OQ"]),
-        Opt::value(&["INCLUDE_SECONDARY_ALIGNMENTS"]),
-        Opt::value(&["INCLUDE_SUPPLEMENTAL_ALIGNMENTS"]),
-        Opt::value(&["FLOW_MODE"]),
-        Opt::value(&["STOP_AFTER"]),
+        Opt::bool(
+            &["USE_ORIGINAL_QUALITIES", "OQ"],
+            "Read the OQ tag where a record has one (default true).",
+        ),
+        Opt::bool(
+            &["INCLUDE_SECONDARY_ALIGNMENTS"],
+            "Count secondary alignments (default false).",
+        ),
+        Opt::bool(
+            &["INCLUDE_SUPPLEMENTAL_ALIGNMENTS"],
+            "Count supplementary alignments (default false).",
+        ),
+        Opt::bool(
+            &["FLOW_MODE"],
+            "Obsolete in Picard 3.5.0; true is an error, as there.",
+        ),
+        crate::registry::STOP_AFTER_OPTION,
     ],
     run: run_tool,
     collector: Some(collector),
