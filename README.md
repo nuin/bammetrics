@@ -39,10 +39,13 @@ bammetrics CollectVariantCallingMetrics I=calls.vcf.gz DBSNP=dbsnp.vcf.gz O=samp
 bammetrics GenotypeConcordance TV=truth.vcf.gz TRUTH_SAMPLE=HG002 CV=calls.vcf.gz CS=sample O=sample
 ```
 
-Or compute several metrics in one read of the BAM:
+Each Picard class is also a kebab-case verb (`insert-size`, `gc-bias`, ...; `bammetrics
+tools` lists them) that takes the same options as `--minimum-pct`, `--MINIMUM_PCT` or
+`MINIMUM_PCT=`, `-` for standard input and `--format json`. `collect` computes several
+metrics in one read of the BAM:
 
 ```bash
-bammetrics collect sample.bam -O out/sample -R ref.fa --hs baits.interval_list panel.bed
+bammetrics collect sample.bam -o out/sample -R ref.fa --hs baits.interval_list panel.bed
 ```
 
 ```python

@@ -60,7 +60,7 @@ Tool verbs. The name is the Picard class without `Collect` and `Metrics`, in keb
 
 Spelling rules:
 
-- One option has one table row in registry.rs. The row generates the kebab flag, the Picard key, `--help`, the Python kwarg and the `.pyi` stub. Today these are three hand-kept lists. This is the StepSpec idea from the Run-first design.
+- One option has one table row in registry.rs. The row generates the kebab flag, the Picard key, `--help`, the Python kwarg and the `.pyi` stub (0.13.0; they were three hand-kept lists). This is the StepSpec idea from the Run-first design.
 - `--minimum-pct`, `--MINIMUM_PCT` and `MINIMUM_PCT=` are one option. The normaliser upper-cases and swaps `-` for `_`, then calls the existing registry parser.
 - Booleans take `--x`, `--x=false` and `--no-x`. The old space form `--clip-overlapping-reads false` still parses. A BAM path is never read as a boolean value.
 - An unknown option exits 2 with a did-you-mean from the option table.
@@ -137,17 +137,17 @@ bammetrics qc sample.bam --preset clinical-panel --panel panel.bed \
 ```
 Writes `out/NA12878.vendor.hs_metrics` and `out/NA12878.panel.hs_metrics`, each named by its bait file stem. The verdict reads the one whose path sorts first (`panel`).
 
-**6. Cohort from a sample sheet.**
+**6. Cohort: one `qc` per sample, then one `report`.**
 ```
-$ bammetrics qc --samples sheet.csv --preset clinical-panel --panel panel.bed \
-    -R ref.fa -o runs/2026-11-02/ -j 4 --fail-on fail
-48 samples, 4 at a time, 2 threads each
+$ for bam in bams/*.bam; do
+    bammetrics qc "$bam" --preset clinical-panel --panel panel.bed -R ref.fa \
+        -o runs/2026-11-02/$(basename "$bam" .bam)
+  done
+$ bammetrics report runs/2026-11-02/ --preset clinical-panel
 index: 3 fail, 5 warn, 40 pass (worst first)
 wrote runs/2026-11-02/index.html
-$ echo $?
-11
 ```
-The sheet has columns `sample,bam`. If 1 sample fails to run, the others finish and the exit code is 1 after the index is written.
+Cohorts stay in the shell, make, Snakemake or Nextflow. `qc` runs one sample; `report` builds the index from any directory of per-sample outputs. There is no sample sheet runner (decision 6 in section 8).
 
 **7. Chain: BedToIntervalList to CollectHsMetrics.**
 ```
@@ -403,7 +403,7 @@ bm.tools(); bm.presets()
 
 ## 7. Implementation plan
 
-Each phase is 1 PR-sized unit. Days are for 1 engineer. Total: 75 days (15 weeks). The first release with a visible report is after phase 6, at day 40.
+Each phase is 1 PR-sized unit. Days are for 1 engineer. Total: 73 days (15 weeks). The first release with a visible report is after phase 6, at day 40.
 
 | # | Phase | Content | Tests | Days |
 |---|---|---|---|---|
@@ -416,11 +416,10 @@ Each phase is 1 PR-sized unit. Days are for 1 engineer. Total: 75 days (15 weeks
 | 7 | `qc` engine | stage graph, manifest, resume, atomic writes, `plan`, summary, progress, per-collector error isolation, jsonl | resume after a killed run, 1 missing file reruns 1 collector, golden suite unchanged, concordance unchanged | 10 |
 | 8 | Verb grammar | option table in registry.rs, normaliser, bool forms, `tools`, `presets`, `help`, did-you-mean, completions, `-` for stdin and stdout, output naming table | every old argv still byte-identical, spelling matrix per tool, name-table pin vs Picard face, stdin BAM case | 10 |
 | 9 | `bed-to-interval-list` | BED to interval list with @SQ from BAM or dict | compare against Picard BedToIntervalList output on 3 BEDs | 2.5 |
-| 10 | Sample sheet | `--samples`, `-j`, partial failure, index write | 3 samples with 1 bad BAM, exit code 1, index present | 2 |
-| 11 | Python mirror | `qc`, `check`, `report`, `read_metrics`, `_repr_html_`, generated stubs, wheel check | stub vs `dir()` test, GIL release, error classes | 8 |
-| 12 | Docs and benchmark | `cli.md` rewrite, preset docs, CI size and time budgets, accessibility pass | benchmark fails at 2x target | 4.5 |
+| 10 | Python mirror | `qc`, `check`, `report`, `read_metrics`, `_repr_html_`, generated stubs, wheel check | stub vs `dir()` test, GIL release, error classes | 8 |
+| 11 | Docs and benchmark | `cli.md` rewrite, preset docs, CI size and time budgets, accessibility pass | benchmark fails at 2x target | 4.5 |
 
-Order of delivery: phases 1 to 6 as 0.7 (report and check on any Picard directory, no change to collection). Phase 7 as 0.8. Phases 8 to 10 as 0.9. Phases 11 and 12 as 0.10. `mark-duplicates` is outside the 75 days because it waits on parity plan P9 (6 to 8 weeks).
+Order of delivery: phases 1 to 6 as 0.7 (report and check on any Picard directory, no change to collection). Phase 7 as 0.8. Phases 8 and 9 as 0.9. Phases 10 and 11 as 0.10. `mark-duplicates` is outside the 73 days because it waits on parity plan P9 (6 to 8 weeks).
 
 Risks, each with its mitigation:
 
@@ -434,11 +433,11 @@ Risks, each with its mitigation:
 ## 8. Open decisions for the maintainer
 
 1. Does `qc` without `--preset` use `generic` (this proposal), or must it require a preset? Decided: `generic` (0.12.0).
-2. Are the 14 clinical-panel starting values in 4.3 acceptable as shipped defaults, or does a lab review them first?
+2. Are the 14 clinical-panel starting values in 4.3 acceptable as shipped defaults, or does a lab review them first? Decided: they ship labelled "starting values" after the maintainer reviews them; the review is open.
 3. Should `qc` exit 0 on a failed verdict by default (this proposal), or gate by default? Decided: exit 0 unless `--fail-on` is given; `check` always gates (0.12.0).
 4. Is `toml` acceptable as a dependency, or should presets use a hand-written format?
-5. Is the 75-day plan acceptable, or should phases 9 to 11 move after 0.8?
-6. Do you want the sample sheet runner (phase 10) in this scope, or leave cohorts to Nextflow plus `report`? Decided: no sample sheet runner for now; phase 10 is dropped.
+5. Is the 73-day plan acceptable, or should phases 9 and 10 move after 0.8?
+6. Do you want a sample sheet runner in this scope, or leave cohorts to Nextflow plus `report`? Decided: no sample sheet runner; `qc` runs one sample, cohorts loop in the shell or a workflow engine and finish with `report` (example 6). Its phase is dropped.
 7. Should the old subcommands be listed as aliases in `help` and docs, or hidden after 0.9?
 8. Who writes and reviews the column glossary text (about 400 entries, 1 week of review)?
 9. Is a `data-theme` override for dark mode wanted, or only `prefers-color-scheme`?
