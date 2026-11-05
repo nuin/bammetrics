@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.15.0
+
+Report track phase 10 (docs/05): the Python mirror. docs/python.md describes the API.
+
+### Added
+
+- `bammetrics.qc(bam, preset=, panel=, hs=, reference=, output=, report=True, resume=,
+  force=, fail_on=None, threads=, sample=, ...)` runs the engine of `bammetrics qc` and
+  writes the same files, byte for byte apart from the `Started on` line (a test compares
+  every file with the command's). It returns a `Run`: `.verdict` (`status`, `checks` as
+  `Check(rule, status, value, limit, why)`), `.files`, `.metrics` (each parsed file by the
+  verb of its tool: `insert-size`, `gc-bias.summary`, `hs-metrics.BAIT_SET`), `.manifest`,
+  `.exit_code`, `.errors`. A failed verdict is a value; `VerdictError` is raised only when
+  `fail_on` is given and reached, with `.run` set. `report=False` writes no page.
+- `Run._repr_html_()`: the report body in `<div class="bm">`, its stylesheet rewritten so
+  every rule applies inside the div, inline SVG, plot series and histogram tables cut to
+  200 points, no script (`bammetrics_report::fragment`).
+- `bammetrics.check(inputs, preset=, fail_on="fail")` returns a `Verdict` (one path, one
+  sample) or a list, with the discovery and statuses of `bammetrics check`, and raises
+  `VerdictError` at `fail_on` (`fail_on=None` never raises). A `qc` prefix reads its
+  `verdict.json`.
+- `bammetrics.report(dirs, preset=, output=)` writes the files `bammetrics report` writes
+  and returns their paths.
+- `bammetrics.collect(bam, metrics=["quality-yield", "insert-size", "gc-bias"],
+  reference=, output=, threads=)` runs those collectors as `qc` builds them and returns a
+  `Run` with `.metrics` and `.files`. The form is taken for a metric name with a dash or a
+  keyword-only argument; the 0.12 positional and keyword forms return their dict as before.
+- `UsageError(ValueError)`, `InputError(OSError)` and `VerdictError`, all under
+  `BammetricsError`. Usage errors of the shared engine are `UsageError`, unreadable inputs
+  and failed collectors `InputError`; the messages are the command's lines.
+- The keywords of `qc`, `check` and `report` are the clap arguments of the verbs in snake
+  case, parsed by the command's parser, and their `bammetrics.pyi` entries are generated
+  from them (`UPDATE_PYI=1 cargo test -p bammetrics-cli python_stubs`).
+- `make wheel-check`: `maturin build`, a fresh venv, an import that must resolve there, the
+  shipped stub against `bammetrics.pyi`, and the stub tests against `dir(bammetrics)`.
+- `crates/cli` has a library target (`bammetrics_cli`); `src/main.rs` calls
+  `bammetrics_cli::main`. `engine::execute`, `engine::collect_tools`, `report::write` and
+  `python.rs` serve the Python module. No CLI byte changes: the golden suite (108 fixture
+  cases, 16 on corpus t1) passes unchanged apart from the version.
+
+### Changed
+
+- Every function of the module raises `UsageError` or `InputError` where it raised
+  `ValueError` or `OSError`; they subclass those, so existing `except` clauses still catch.
+- `tools()` returns `Tool` objects and `presets()` returns `PresetInfo` objects. Both are
+  `str` subclasses equal to the Picard class name or preset name the functions returned
+  before, so comparisons, `in`, sorting and JSON keep working, and they carry the columns
+  of `bammetrics tools` (`verb`, `picard_class`, `summary`) and `bammetrics presets`
+  (`version`, `hash`, `rules`, `note`). `tools()` lists the tool verbs in `bammetrics
+  tools` order, which differs from the registry order it used.
+- `bammetrics.pyi` names only what the module defines: the typing-only dicts are
+  `_MetricsDoc`, `_VerdictDict` and so on (`Verdict` is now the class `check` returns), and
+  the module sets `__all__`.
+- Golden records and report snapshots carry 0.15.0 (version only).
+
 ## 0.14.0
 
 Report track phase 9 (docs/05): the `bed-to-interval-list` verb.
