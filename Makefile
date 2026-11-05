@@ -4,7 +4,7 @@
 UV_RUN := uv run --no-project
 CORPUS := tests/corpus/out
 
-.PHONY: all test lint release corpus reference-metrics concordance golden golden-update python-test wheel clean-corpus bench-bam bench bench-wgs fuzz
+.PHONY: all test lint release corpus reference-metrics concordance golden golden-update python-test wheel wheel-check clean-corpus bench-bam bench bench-wgs fuzz
 
 all: test lint concordance
 
@@ -58,6 +58,22 @@ python-test: corpus release
 
 wheel:
 	.venv/bin/maturin build --release
+
+# The wheel as a user installs it: maturin build, a fresh venv with only the
+# wheel and pytest, an import that must resolve inside that venv, then the
+# tests that compare bammetrics.pyi with dir(bammetrics) both ways, and the
+# stub the wheel ships against bammetrics.pyi. Catches a stale wheel or stub.
+WHEEL_CHECK := target/wheel-check
+wheel-check:
+	rm -rf $(WHEEL_CHECK)
+	.venv/bin/maturin build --release -i python3 --out $(WHEEL_CHECK)/dist
+	python3 -m venv $(WHEEL_CHECK)/venv
+	$(WHEEL_CHECK)/venv/bin/pip install -q pytest $(WHEEL_CHECK)/dist/*.whl
+	cd $(WHEEL_CHECK) && venv/bin/python -c "import bammetrics, sys; f = bammetrics.__file__; \
+		assert 'wheel-check/venv' in f, f; print('bammetrics', f)"
+	cmp bammetrics.pyi $(WHEEL_CHECK)/venv/lib/python*/site-packages/bammetrics/__init__.pyi
+	$(WHEEL_CHECK)/venv/bin/pytest -q -p no:cacheprovider tests/python/test_mirror.py \
+		tests/python/test_api.py -k "stub or all_lists"
 
 # 2M-pair benchmark BAM in target/bench (about 10 minutes, 320 MB; not committed).
 bench-bam: target/bench/bench.json
