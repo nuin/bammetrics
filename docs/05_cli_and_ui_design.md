@@ -228,7 +228,7 @@ Rules:
 
 ### 4.1 What it is
 
-`bammetrics report` and the end of `qc` write the same files: one `SAMPLE.report.html` per sample, one `index.html` per set, and `SAMPLE.verdict.json`. Each HTML file is self-contained, makes no network request and holds no script. Targets: under 20 ms to render once the metrics are in memory, under 100 KB per sample page, under 300 KB binary growth. All three are budgets until CI measures them.
+`bammetrics report` and the end of `qc` write the same files: one `SAMPLE.report.html` per sample, one `index.html` per set, and `SAMPLE.verdict.json`. Each HTML file is self-contained, makes no network request and holds no script. Targets: under 20 ms to render once the metrics are in memory, under 100 KB per sample page, under 300 KB binary growth. CI measures all three with `make budgets` since 0.16.0 (section 4.8).
 
 ### 4.2 The page, top to bottom
 
@@ -333,16 +333,16 @@ One row per sample, worst first. Sort: verdict rank (fail, warn, incomplete, pas
 
 ### 4.8 Size and speed targets
 
-| Target | Value | Status |
+| Target | Value | Status (0.16.0, Mac Studio, release build) |
 |---|---|---|
-| Render, sample page | under 20 ms | to be measured |
-| Render, index of 100 samples | under 100 ms | to be measured |
-| Sample page size | under 100 KB | to be measured |
-| Index size, 100 samples | under 200 KB | to be measured |
-| Binary growth | under 300 KB | to be measured |
-| Added passes over the BAM | 0 | by design |
+| Render, sample page | under 20 ms | 1.2 ms, the failing fixture page with every plot, median of 31 |
+| Render, index of 100 samples | under 100 ms | 0.64 ms, median of 31 |
+| Sample page size | under 100 KB | 88.5 KB, the largest of the three fixture pages |
+| Index size, 100 samples | under 200 KB | 155.8 KB, 14 `clinical-panel` rules per sample |
+| Binary growth | under 300 KB | 290.8 KB stripped (314.8 KB unstripped), the `size_report` probe less `size_base` |
+| Added passes over the BAM | 0 | 0: `qc` reports 1 BAM read with the report; `report` and `check` run with the BAM deleted |
 
-A CI benchmark on the test fixtures fails the build at 2x any target.
+`make budgets` (`crates/cli/tests/budgets.rs`) measures every row on the test fixtures and fails the build at 2x any target; CI runs it on Linux and macOS (decision 11). Each row's method and the history of the binary size are in docs/benchmarks.md.
 
 ### 4.9 Out of scope: the hosted dashboard
 
@@ -418,7 +418,7 @@ Each phase is 1 PR-sized unit. Days are for 1 engineer. Total: 73 days (15 weeks
 | 8 | Verb grammar | option table in registry.rs, normaliser, bool forms, `tools`, `presets`, `help`, did-you-mean, completions, `-` for stdin and stdout, output naming table | every old argv still byte-identical, spelling matrix per tool, name-table pin vs Picard face, stdin BAM case | 10 |
 | 9 | `bed-to-interval-list` | BED to interval list with @SQ from BAM or dict (0.14.0) | compare against Picard BedToIntervalList output on 3 BEDs | 2.5 |
 | 10 | Python mirror | `qc`, `check`, `report`, `read_metrics`, `_repr_html_`, generated stubs, wheel check (0.15.0; docs/python.md) | stub vs `dir()` test, GIL release, error classes | 8 |
-| 11 | Docs and benchmark | `cli.md` rewrite, preset docs, CI size and time budgets, accessibility pass | benchmark fails at 2x target | 4.5 |
+| 11 | Docs and benchmark | `cli.md` rewrite, preset docs, CI size and time budgets, accessibility pass (0.16.0; `make budgets`, docs/benchmarks.md) | benchmark fails at 2x target | 4.5 |
 
 Order of delivery: phases 1 to 6 as 0.7 (report and check on any Picard directory, no change to collection). Phase 7 as 0.8. Phases 8 and 9 as 0.9. Phases 10 and 11 as 0.10. `mark-duplicates` is outside the 73 days because it waits on parity plan P9 (6 to 8 weeks).
 
@@ -443,7 +443,7 @@ Risks, each with its mitigation:
 8. Who writes and reviews the column glossary text (about 400 entries, 1 week of review)?
 9. Is a `data-theme` override for dark mode wanted, or only `prefers-color-scheme`?
 10. Does `mark-duplicates` ship in the P9 PR train, and should the verb slot exist as an error stub from 0.9?
-11. Do the size and speed budgets in 4.8 become hard CI failures?
+11. Do the size and speed budgets in 4.8 become hard CI failures? Decided: yes, at 2x the target. `make budgets` fails the CI job when a measured value reaches twice its target and prints `over target` when it passes the target alone (0.16.0).
 12. Which name for the report file: `SAMPLE.report.html` (this proposal) or `SAMPLE.html`?
 
 Result: 12 verbs and 1 prefix cover every chain in the audit, the Picard face stays byte-identical, and the verdict report ships first at day 40.

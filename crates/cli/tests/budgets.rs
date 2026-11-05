@@ -228,6 +228,23 @@ fn added_bam_passes(dir: &Path) -> f64 {
 }
 
 #[test]
+fn a_budget_fails_at_twice_its_target() {
+    let at = |target: f64, measured: f64| Budget {
+        name: "t",
+        target,
+        measured,
+        unit: "ms",
+    };
+    assert_eq!(at(20.0, 19.9).status(), "ok");
+    assert_eq!(at(20.0, 20.0).status(), "over target");
+    assert_eq!(at(20.0, 39.9).status(), "over target");
+    assert!(!at(20.0, 39.9).fails());
+    assert!(at(20.0, 40.0).fails());
+    assert!(!at(0.0, 0.0).fails());
+    assert!(at(0.0, 1.0).fails());
+}
+
+#[test]
 #[ignore = "release build and probe examples: run make budgets"]
 fn budgets_of_docs_05_section_4_8() {
     let dir = std::env::temp_dir().join(format!("bammetrics-budgets-{}", std::process::id()));

@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.16.0
+
+Report track phase 11 (docs/05), the last one: docs and benchmark.
+
+### Added
+
+- `make budgets` (`crates/cli/tests/budgets.rs`, ignored by `cargo test`): the six
+  budgets of docs/05 section 4.8 measured on the fixtures and failing at twice any target
+  (decision 11). Measured on a Mac Studio: sample page render 1.2 ms (target 20 ms),
+  100-sample index render 0.64 ms (100 ms), largest sample page 88.5 KB (100 KB),
+  100-sample index 155.8 KB (200 KB), binary growth 290.8 KB stripped (300 KB), 0 added BAM
+  passes. CI runs it on Linux and macOS. docs/benchmarks.md has the method and the binary
+  size of the commits before and after the report crates.
+- `crates/report/examples/size_base.rs` and `size_report.rs`: the two probe binaries whose
+  stripped size difference is the binary growth budget.
+- `crates/verdict/tests/doc_presets.rs`: docs/verdict.md lists every rule of the four
+  shipped presets (bounds, rows, plot, version, note, hash), and the test fails when a
+  table differs from the compiled presets. `UPDATE_DOCS=1` rewrites the tables.
+
+### Changed
+
+- Accessibility pass on the sample page and the index, checked with axe-core 4.10.2 at
+  360 and 1280 px in light, dark and print with every `<details>` closed and open: no
+  violation. The page header and the run footer sit outside `<main>`; the metrics tables
+  are `h3` under their `h2`; every header cell has a `scope`, and the check, column and
+  sample cells are row headers; each table region takes the keyboard focus and carries a
+  name, so a table that scrolls sideways is reachable without a mouse; a status glyph
+  beside its word is `aria-hidden`; an index cell carries its status word for a screen
+  reader.
+- `@media print` redeclares the light palette, so a page viewed in the dark theme prints
+  dark text on paper. The contrast test covers print, adds `pass-ink` on `bg-2` (a passing
+  index cell on an even row), and checks that every text color and background of
+  `report.css` is in a tested pair.
+- docs/cli.md is rewritten around the verb groups (run, prepare, post, info), with one exit
+  code table and the worked examples of docs/05 section 2.5 that work today, run against
+  the fixtures. docs/verdict.md says what completes each preset with `qc` and that the
+  review of the 14 `clinical-panel` starting values is open. docs/05 records decision 11
+  and the measured budgets.
+- Report snapshots (`tests/report/*.html`) change with the accessibility markup and the
+  version; the golden records change in the version only.
+
 ## 0.15.0
 
 Report track phase 10 (docs/05): the Python mirror. docs/python.md describes the API.
