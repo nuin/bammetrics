@@ -102,6 +102,6 @@ def test_bed_to_interval_list(corpus, tmp_path):
     unique = bammetrics.bed_to_interval_list(str(bed), sequence_dictionary=str(corpus / "corpus.bam"),
                                              unique=True)
     assert [(r["start"], r["end"], r["name"]) for r in unique] == [(101, 260, "a|c"), (1, 50, "b")]
-    with pytest.raises(ValueError, match="chrX"):
+    with pytest.raises(OSError, match="chrX"):
         bed.write_text("chrX\t0\t5\n")
         bammetrics.bed_to_interval_list(str(bed), sequence_dictionary=str(corpus / "ref.dict"))

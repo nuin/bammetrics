@@ -23,7 +23,7 @@ Verbs:
 | Group | Verbs |
 |---|---|
 | Run | `qc` (preset or metric set, one pass, files, verdict, report), `collect` (same engine, no verdict, kept), one verb per tool |
-| Prepare | `bed-to-interval-list` (NEW, P4 library piece pulled forward; 0.14.0), `mark-duplicates` (reserved, arrives with parity plan P9) |
+| Prepare | `bed-to-interval-list` (P4 library piece pulled forward; 0.14.0), `mark-duplicates` (reserved, arrives with parity plan P9) |
 | Post | `accumulate-quality-yield`, `report`, `check` |
 | Info | `tools`, `presets`, `plan`, `completions <shell>`, `help <verb or Picard class>` |
 

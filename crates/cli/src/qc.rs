@@ -310,6 +310,60 @@ fn need_file(path: &Path, option: &str) -> Result<()> {
     )))
 }
 
+/// Every file the run reads, with the option that named it.
+fn inputs(args: &QcArgs) -> Vec<(PathBuf, &'static str)> {
+    let mut inputs = vec![(args.bam.clone(), "BAM")];
+    if let Some(reference) = &args.reference {
+        inputs.push((reference.clone(), "-R"));
+        inputs.push((with_suffix(reference, ".fai"), "-R"));
+    }
+    inputs.extend(args.hs.iter().map(|p| (p.clone(), "--hs")));
+    let named = [
+        (&args.panel, "--panel"),
+        (&args.ref_flat, "--ref-flat"),
+        (&args.ribosomal_intervals, "--ribosomal-intervals"),
+    ];
+    inputs.extend(
+        named
+            .into_iter()
+            .filter_map(|(path, option)| path.as_ref().map(|p| (p.clone(), option))),
+    );
+    inputs
+}
+
+/// A planned file that is one of the inputs (a `--panel` BED named
+/// `PREFIX.panel.interval_list`) would be overwritten: a usage error
+/// before anything is written. Only existing files compare equal, after
+/// resolving links and `..`.
+fn refuse_overwriting_inputs<'a>(
+    args: &QcArgs,
+    prefix: &Path,
+    steps: impl Iterator<Item = &'a Step>,
+) -> Result<()> {
+    let inputs: Vec<(PathBuf, &str)> = inputs(args)
+        .into_iter()
+        .filter_map(|(path, option)| path.canonicalize().ok().map(|p| (p, option)))
+        .collect();
+    let fixed = [
+        manifest_path(prefix),
+        verdict_path(prefix),
+        page_path(prefix),
+    ];
+    let planned = steps.flat_map(|s| s.record.outputs.iter().map(|o| o.path.clone()));
+    for output in planned.chain(fixed) {
+        let Ok(resolved) = output.canonicalize() else {
+            continue;
+        };
+        if let Some((_, option)) = inputs.iter().find(|(input, _)| *input == resolved) {
+            return Err(Error::Usage(format!(
+                "{} is an input; writing it would destroy it (from {option})",
+                output.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// The bait and target files of every hs run: `--hs` pairs, then `--panel`.
 fn hs_runs(args: &QcArgs) -> Vec<(PathBuf, PathBuf)> {
     let mut runs: Vec<(PathBuf, PathBuf)> = args
@@ -765,6 +819,7 @@ pub fn prepare(args: &QcArgs) -> Result<Plan> {
     };
     let mut prepare = prepare_steps(&cx)?;
     let (mut steps, unmet) = collectors(&cx)?;
+    refuse_overwriting_inputs(args, &prefix, prepare.iter().chain(&steps))?;
     let previous = Manifest::read(&manifest_path(&prefix));
     if let Ok(Some(manifest)) = &previous {
         for step in prepare.iter_mut().chain(&mut steps) {

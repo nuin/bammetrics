@@ -198,7 +198,13 @@ standard input.
   So `--from-bam x.dict` and `--dict x.bam` both work.
 - Two of those spellings on one command line exit 2, from the second one:
   `bammetrics bed-to-interval-list: --from-bam and --dict both set SEQUENCE_DICTIONARY (from
-  --dict)`. One spelling given twice keeps the last value, as every option does.
+  --dict)`. One spelling given twice keeps the last value, as every option does. A
+  dictionary that does not exist exits 1 from the spelling given (`nothere.bam not found
+  (from --from-bam)`), and `-o` naming the dictionary or the BED exits 2. A typo of
+  `--from-bam` or `--dict` gets a `did you mean` line, as a typo of the long name does.
+- A BED line the dictionary rejects (a contig it lacks, a start or end past the contig, a
+  field that is not a number) exits 1 with Picard's message, on the verb and on the Picard
+  face; exit 2 stays for command-line mistakes.
 - `--sort` (default true), `--unique`, `--drop-missing-contigs` and
   `--keep-length-zero-intervals` are Picard's options.
 - `--format json`, `jsonl`, `tsv` and `human` print the intervals as rows (`contig`,
@@ -387,7 +393,9 @@ the pass), post (the verdict over the files), report (`PREFIX.verdict.json` and
 `PREFIX.report.html`, the bytes `bammetrics report` writes for the same files and sample).
 `CollectWgsMetrics` walks reference loci and reads the BAM on its own. A panel whose first
 non-blank line starts with `@` is an interval list already, and prepare writes nothing for
-it. The hs collector reads the `--panel` file itself, so its file, header line and
+it. A `--panel` BED that is itself named `PREFIX.panel.interval_list` exits 2 (`is an
+input; writing it would destroy it (from --panel)`), as does any planned file that is an
+input. The hs collector reads the `--panel` file itself, so its file, header line and
 `BAIT_SET` are the same with or without the prepare step. The prepare step is a step of the
 manifest (stage `prepare`, output kind `intervals`, the BED under `files`), so `--resume`
 keeps the interval list, a lost one is written again, and a later run without the BED

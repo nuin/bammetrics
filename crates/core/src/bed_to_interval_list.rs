@@ -271,10 +271,9 @@ fn decode_bed(line: &str) -> Result<Option<Feature>> {
         return Ok(None);
     }
     let number = |field: &str| -> Result<i64> {
-        field
-            .parse::<i32>()
-            .map(i64::from)
-            .map_err(|_| Error::Usage(format!("For input string: \"{field}\" in BED line: {line}")))
+        field.parse::<i32>().map(i64::from).map_err(|_| {
+            Error::Metric(format!("For input string: \"{field}\" in BED line: {line}"))
+        })
     };
     let start = number(fields[1])? + 1;
     let end = match fields.get(2) {
@@ -298,7 +297,8 @@ fn decode_bed(line: &str) -> Result<Option<Feature>> {
 }
 
 /// `BedToIntervalList.doWork` up to the sort: every feature checked against
-/// the dictionary.
+/// the dictionary. A feature Picard rejects is an [`Error::Metric`], an
+/// error in the data (exit 1 on every face), never a usage error.
 pub fn read_bed(text: &str, dictionary: &[Sequence], opts: &Options) -> Result<Vec<Interval>> {
     let mut intervals = Vec::new();
     for line in text.lines() {
@@ -309,29 +309,29 @@ pub fn read_bed(text: &str, dictionary: &[Sequence], opts: &Options) -> Result<V
             if opts.drop_missing_contigs {
                 continue;
             }
-            return Err(Error::Usage(format!(
+            return Err(Error::Metric(format!(
                 "Sequence '{contig}' was not found in the sequence dictionary"
             )));
         };
         let length = dictionary[index].length;
         if start < 1 {
-            return Err(Error::Usage(format!(
+            return Err(Error::Metric(format!(
                 "Start on sequence '{contig}' was less than one: {start}"
             )));
         } else if length < start {
-            return Err(Error::Usage(format!(
+            return Err(Error::Metric(format!(
                 "Start on sequence '{contig}' was past the end: {length} < {start}"
             )));
         } else if (end == 0 && start != 1) || end < 0 {
-            return Err(Error::Usage(format!(
+            return Err(Error::Metric(format!(
                 "End on sequence '{contig}' was less than one: {end}"
             )));
         } else if length < end {
-            return Err(Error::Usage(format!(
+            return Err(Error::Metric(format!(
                 "End on sequence '{contig}' was past the end: {length} < {end}"
             )));
         } else if end < start - 1 {
-            return Err(Error::Usage(format!(
+            return Err(Error::Metric(format!(
                 "On sequence '{contig}', end < start-1: {end} <= {start}"
             )));
         }

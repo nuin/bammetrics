@@ -2,7 +2,9 @@
 //! `--from-bam`, `--dict` and `--sd` are one option, the file, `-o -` and
 //! no `-o` hold the bytes `BedToIntervalList I= SD= O=` writes, a BED on
 //! standard input gives the same bytes, two dictionary spellings are a
-//! usage error, and `--threads` and `--sample` change nothing.
+//! usage error, a missing dictionary names the spelling given, a BED line
+//! the dictionary rejects exits 1 on both faces, and `--threads` and
+//! `--sample` change nothing.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -148,6 +150,71 @@ fn two_dictionary_spellings_are_a_usage_error() {
         DICT,
     ]);
     assert_eq!(run.stdout, picard_face(&fresh_dir("twice"), DICT));
+}
+
+/// A missing dictionary is an input error (exit 1) from the spelling
+/// given, as a missing BED is from `BED`; `-o` naming the dictionary is a
+/// usage error.
+#[test]
+fn a_missing_or_overwritten_dictionary_names_its_spelling() {
+    for spelling in ["--from-bam", "--dict", "--sd", "SD="] {
+        let mut argv = vec!["bed-to-interval-list", BED];
+        let joined = format!("{spelling}nothere.bam");
+        if spelling.ends_with('=') {
+            argv.push(&joined);
+        } else {
+            argv.extend([spelling, "nothere.bam"]);
+        }
+        let run = bammetrics(&argv);
+        assert_eq!(run.status.code(), Some(1), "{spelling}");
+        assert_eq!(
+            String::from_utf8_lossy(&run.stderr),
+            format!("bammetrics bed-to-interval-list: nothere.bam not found (from {spelling})\n")
+        );
+    }
+    let dir = fresh_dir("overwrite");
+    let dict = dir.join("chr1.dict");
+    fs::copy(root().join(DICT), &dict).expect("copy dict");
+    let dict = dict.to_str().expect("utf-8");
+    let run = bammetrics(&["bed-to-interval-list", BED, "--dict", dict, "-o", dict]);
+    assert_eq!(run.status.code(), Some(2));
+    assert_eq!(
+        String::from_utf8_lossy(&run.stderr),
+        format!(
+            "bammetrics bed-to-interval-list: {dict} is an input; writing it would destroy it \
+             (from -o)\n"
+        )
+    );
+    assert_eq!(
+        fs::read(dict).expect("dict"),
+        fs::read(root().join(DICT)).expect("fixture")
+    );
+}
+
+/// A BED line the dictionary rejects is a data error: exit 1 on the verb
+/// and on the Picard face, so exit 2 stays a command-line mistake.
+#[test]
+fn a_contig_missing_from_the_dictionary_exits_1_on_both_faces() {
+    let dir = fresh_dir("missing-contig");
+    let bed = dir.join("x.bed");
+    fs::write(&bed, "chrX\t0\t10\n").expect("BED");
+    let bed = bed.to_str().expect("utf-8");
+    let out = dir.join("x.interval_list");
+    let message = "Sequence 'chrX' was not found in the sequence dictionary";
+    let face = [
+        "BedToIntervalList".to_owned(),
+        format!("I={bed}"),
+        format!("SD={DICT}"),
+        format!("O={}", out.display()),
+    ];
+    let face: Vec<&str> = face.iter().map(String::as_str).collect();
+    for argv in [vec!["bed-to-interval-list", bed, "--dict", DICT], face] {
+        let run = bammetrics(&argv);
+        assert_eq!(run.status.code(), Some(1), "{argv:?}");
+        let stderr = String::from_utf8_lossy(&run.stderr);
+        assert!(stderr.contains(message), "{argv:?}: {stderr}");
+    }
+    assert!(!out.exists());
 }
 
 #[test]

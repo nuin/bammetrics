@@ -60,6 +60,10 @@ pub struct Verb {
     /// line are a usage error (`--from-bam` and `--dict` both give
     /// `SEQUENCE_DICTIONARY`). One spelling given twice keeps the last.
     pub one_spelling: &'static [&'static str],
+    /// Picard options beside `INPUT` that name a file the verb reads: a
+    /// missing one is an input error from the spelling given, and `-o`
+    /// may not name it (`SEQUENCE_DICTIONARY` of `bed-to-interval-list`).
+    pub reads: &'static [&'static str],
     /// Shared flags the verb accepts and ignores, with the reason `--help`
     /// prints.
     pub ignores: &'static [(Key, &'static str)],
@@ -76,6 +80,7 @@ const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
         about: None,
         writes: "metrics file",
         one_spelling: &[],
+        reads: &[],
         ignores: &[],
     }
 }
@@ -184,6 +189,7 @@ pub const VERBS: &[Verb] = &[
             ("DICT", "SEQUENCE_DICTIONARY"),
         ],
         one_spelling: &["SEQUENCE_DICTIONARY"],
+        reads: &["SEQUENCE_DICTIONARY"],
         ignores: &[
             (
                 Key::Threads,
@@ -726,6 +732,22 @@ impl Verb {
                 .map_or_else(|| self.input.to_owned(), |g| g.spelled.clone());
             return Err(VerbError::input(self.name, format!("{input} not found")).from(from));
         }
+        for &name in self.reads {
+            let prefix = format!("{name}=");
+            // One option given twice keeps the last value.
+            let last = picard
+                .iter()
+                .rev()
+                .find_map(|a| a.strip_prefix(prefix.as_str()));
+            if let Some(path) = last.filter(|p| !Path::new(p).exists()) {
+                let from = parsed
+                    .all(Key::Picard(name))
+                    .filter(|g| g.values.iter().any(|v| v == path))
+                    .last()
+                    .map_or_else(|| name.to_owned(), |g| g.spelled.clone());
+                return Err(VerbError::input(self.name, format!("{path} not found")).from(from));
+            }
+        }
         Ok(())
     }
 
@@ -756,6 +778,7 @@ impl Verb {
     fn input_paths(&self, inv: &Invocation) -> Vec<PathBuf> {
         let tool = self.tool();
         let mut names = vec!["INPUT", "REFERENCE_SEQUENCE"];
+        names.extend(self.reads);
         if !tool.takes_input() {
             names.extend(
                 tool.table()

@@ -708,3 +708,28 @@ fn plan_lists_the_prepare_step_of_a_bed_panel() {
     );
     assert!(!dir.exists(), "plan wrote nothing");
 }
+
+/// A `--panel` BED that is itself named `PREFIX.panel.interval_list` would
+/// be overwritten by its own conversion: a usage error, nothing written.
+#[test]
+fn a_bed_panel_named_as_its_own_interval_list_is_refused() {
+    let dir = fresh_dir("bed-panel-self");
+    fs::create_dir_all(&dir).expect("dir");
+    let panel = dir.join("s.panel.interval_list");
+    fs::copy(root().join(BED), &panel).expect("copy BED");
+    let run = qc(&dir, &["--panel", panel.to_str().expect("utf-8")]);
+    assert_eq!(code(&run), 2, "{}", stderr(&run));
+    assert_eq!(
+        stderr(&run),
+        format!(
+            "bammetrics qc: {} is an input; writing it would destroy it (from --panel)\n",
+            panel.display()
+        )
+    );
+    assert_eq!(
+        fs::read(&panel).expect("panel"),
+        fs::read(root().join(BED)).expect("BED")
+    );
+    assert_eq!(names(&dir), ["s.panel.interval_list"]);
+    let _ = fs::remove_dir_all(&dir);
+}

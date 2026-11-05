@@ -257,10 +257,16 @@ fn option_word(arg: &str) -> Option<(&str, &str)> {
 /// The error for an option no flag has, with the closest spelling.
 fn unknown(verb: &str, flags: &[Flag], spelled: &str, name: &str) -> VerbError {
     let kebab = name.to_ascii_lowercase().replace('_', "-");
-    let longs = flags.iter().map(|f| f.long.as_str());
+    let spellings = flags
+        .iter()
+        .flat_map(|f| std::iter::once(&f.long).chain(&f.aliases))
+        .map(String::as_str);
     let mut error = VerbError::usage(verb, format!("unknown option {spelled}"));
-    if let Some(best) = did_you_mean(&kebab, longs) {
-        let flag = flags.iter().find(|f| f.long == best).expect("a flag");
+    if let Some(best) = did_you_mean(&kebab, spellings) {
+        let flag = flags
+            .iter()
+            .find(|f| f.long == best || f.aliases.iter().any(|a| a == best))
+            .expect("a flag");
         let picard = flag
             .picard()
             .map_or_else(String::new, |p| format!(" (Picard {p})"));
@@ -545,7 +551,27 @@ mod tests {
             err.to_string()
                 .starts_with("bammetrics v: unknown option MINIMUM_PCX=")
         );
-        let err = parse("v", &flags(), &strings(&["--minimum-pct"])).expect_err("no value");
+        let mut flags = flags();
+        flags.push(
+            Flag::new(
+                Key::Picard("SEQUENCE_DICTIONARY"),
+                "sequence-dictionary",
+                &[],
+                Ty::Path,
+                "dict",
+            )
+            .names(&["SEQUENCE_DICTIONARY", "FROM_BAM", "DICT"]),
+        );
+        for (typo, alias) in [("--from-bm", "--from-bam"), ("--dic", "--dict")] {
+            let err = parse("v", &flags, &strings(&[typo, "x"])).expect_err("unknown");
+            assert!(
+                err.to_string().contains(&format!(
+                    "did you mean {alias} (Picard SEQUENCE_DICTIONARY)?"
+                )),
+                "{err}"
+            );
+        }
+        let err = parse("v", &flags, &strings(&["--minimum-pct"])).expect_err("no value");
         assert_eq!(
             err.to_string(),
             "bammetrics v: missing value (from --minimum-pct)\n  --minimum-pct NUM"

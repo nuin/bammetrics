@@ -38,6 +38,19 @@ Report track phase 9 (docs/05): the `bed-to-interval-list` verb.
 - `qc` exits 1 with `exit 1: N collector(s) and M prepare step(s) failed` when a prepare
   step failed too (a BED contig the BAM lacks fails both the conversion and hs); with only
   collectors failing the line is unchanged.
+- `qc` exits 2 when a planned file is one of its inputs (a `--panel` BED named
+  `PREFIX.panel.interval_list`, which the prepare step would overwrite): `... is an input;
+  writing it would destroy it (from --panel)`, nothing written.
+- `bed-to-interval-list` checks the dictionary before the run: a missing file exits 1 as
+  `nothere.bam not found (from --from-bam)`, with the spelling given, and `-o` naming it
+  exits 2.
+- `BedToIntervalList`: a BED line the dictionary rejects exits 1 on the verb as on the
+  Picard face (it exited 2 on the verb), so exit 2 stays a command-line mistake. Python
+  `bed_to_interval_list` raises `OSError` for such a line (it raised `ValueError`), the
+  input-error class of docs/05 section 5; a bad option still raises `ValueError`.
+- An unknown option's `did you mean` line considers every `--long` alias as well as the
+  long name: `--from-bm` suggests `--from-bam (Picard SEQUENCE_DICTIONARY)`. This is the
+  shared parser, so a typo of an alias of any verb (`--referenc`) gets the alias.
 - Golden records and report snapshots carry 0.14.0 (version only).
 
 ## 0.13.0
