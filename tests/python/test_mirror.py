@@ -4,8 +4,13 @@ command on the committed fixtures, the stub against the module both ways,
 the error classes and the GIL release. Needs target/release/bammetrics
 (`cargo build --release`) for the byte comparisons."""
 import ast
+import concurrent.futures
+import copy
+import inspect
 import json
 import os
+import pickle
+import shutil
 import subprocess
 import sys
 import threading
@@ -297,6 +302,16 @@ def test_tools_and_presets_are_the_info_verbs_data():
 def test_qc_releases_the_gil(tmp_path):
     """A second Python thread runs while qc reads the BAM: with a switch
     interval of 1 s it could not, had qc kept the GIL."""
+    runs = iter(range(5))
+    inside = ticks_during(lambda: bm.qc(BAM, output=tmp_path / f"s{next(runs)}",
+                                        preset="clinical-panel", panel=PANEL,
+                                        reference=REFERENCE, threads=1), 5)
+    assert inside > 10, f"{inside} ticks while qc ran"
+
+
+def ticks_during(call, runs):
+    """Ticks a second Python thread makes while `call` runs `runs` times, with
+    a switch interval of 1 s: none had `call` kept the GIL."""
     ticks = []
     stop = threading.Event()
 
@@ -312,14 +327,174 @@ def test_qc_releases_the_gil(tmp_path):
     try:
         time.sleep(0.01)
         inside = 0
-        for i in range(5):
+        for _ in range(runs):
             start = time.perf_counter()
-            bm.qc(BAM, output=tmp_path / f"s{i}", preset="clinical-panel", panel=PANEL,
-                  reference=REFERENCE, threads=1)
+            call()
             end = time.perf_counter()
             inside += sum(start < t < end for t in ticks)
     finally:
         stop.set()
         thread.join()
         sys.setswitchinterval(interval)
-    assert inside > 10, f"{inside} ticks while qc ran"
+    return inside
+
+
+@pytest.mark.parametrize("name", ["insert_size", "alignment_summary", "quality_yield",
+                                  "hs_metrics"])
+def test_typed_functions_release_the_gil(name):
+    targets = str(DATA / "targets.interval_list")
+    calls = {
+        "insert_size": lambda: bm.insert_size(str(BAM)),
+        "alignment_summary": lambda: bm.alignment_summary(str(BAM)),
+        "quality_yield": lambda: bm.quality_yield(str(BAM)),
+        "hs_metrics": lambda: bm.hs_metrics(str(BAM), targets, targets),
+    }
+    inside = ticks_during(calls[name], 20)
+    assert inside > 10, f"{inside} ticks while {name} ran"
+
+
+def round_trips(value):
+    """copy, deepcopy and pickle of `value`."""
+    return [copy.copy(value), copy.deepcopy(value), pickle.loads(pickle.dumps(value))]
+
+
+def test_tools_and_presets_rows_copy_and_pickle():
+    for row in (bm.tools()[0], bm.presets()[1]):
+        for other in round_trips(row):
+            assert type(other) is type(row)
+            assert other == row and vars(other) == vars(row)
+
+
+CHECK_FIELDS = ("rule", "status", "value", "limit", "why", "label", "metric", "level", "unit",
+                "warn", "fail")
+
+
+def test_verdicts_checks_and_runs_copy_and_pickle(failing_run):
+    verdict = failing_run.verdict
+    for other in round_trips(verdict):
+        assert isinstance(other, bm.Verdict) and other.to_json() == verdict.to_json()
+    for check in verdict.checks:
+        for other in round_trips(check):
+            assert [getattr(other, f) for f in CHECK_FIELDS] == [
+                getattr(check, f) for f in CHECK_FIELDS]
+    for other in round_trips(failing_run):
+        assert isinstance(other, bm.Run)
+        assert (other.sample, other.prefix, other.files, other.manifest, other.exit_code) == (
+            failing_run.sample, failing_run.prefix, failing_run.files, failing_run.manifest,
+            failing_run.exit_code)
+        assert repr(other.metrics) == repr(failing_run.metrics)  # NaN cells: repr, not ==
+        assert other.verdict.to_json() == verdict.to_json()
+        assert other._repr_html_() == failing_run._repr_html_()
+
+
+def test_errors_copy_and_pickle(failing_run):
+    error = bm.VerdictError("m", [failing_run.verdict], failing_run)
+    for other in round_trips(error):
+        assert str(other) == "m" and other.code == 10
+        assert other.verdicts[0].to_json() == failing_run.verdict.to_json()
+        assert other.run.prefix == failing_run.prefix
+    for other in round_trips(bm.VerdictError("m", [])):
+        assert other.verdicts == [] and other.run is None
+
+
+def test_a_verdict_error_crosses_a_process_pool(failing_run):
+    with concurrent.futures.ProcessPoolExecutor(1) as pool:
+        future = pool.submit(bm.check, failing_run.prefix, preset="clinical-panel")
+        with pytest.raises(bm.VerdictError) as caught:
+            future.result()
+    assert caught.value.verdicts[0].status == "fail"
+
+
+def test_input_error_run_is_none_without_a_failed_collector(tmp_path):
+    with pytest.raises(bm.InputError) as caught:
+        bm.qc(tmp_path / "nope.bam", output=tmp_path / "s")
+    assert caught.value.run is None
+
+
+def test_path_keywords_take_a_str_or_a_path_only(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(TypeError, match="qc: output takes a str or os.PathLike, not int"):
+        bm.qc(BAM, output=5)
+    with pytest.raises(TypeError, match="qc: bam takes a str or os.PathLike, not NoneType"):
+        bm.qc(None)
+    with pytest.raises(TypeError, match="check: inputs takes"):
+        bm.check(None)
+    with pytest.raises(TypeError, match="qc: hs takes"):
+        bm.qc(BAM, hs=(PANEL, 3))
+    assert list(tmp_path.iterdir()) == []
+    assert bm.qc(BAM, output="s", threads=2).exit_code == 0
+
+
+def test_a_nul_byte_is_a_usage_error(tmp_path):
+    with pytest.raises(bm.UsageError, match="cannot hold a NUL byte"):
+        bm.qc(BAM, output=str(tmp_path / "s\0x"))
+    with pytest.raises(bm.UsageError, match="cannot hold a NUL byte"):
+        bm.qc(BAM, output=tmp_path / "s", sample="a\0b")
+
+
+def test_an_unreadable_manifest_is_named_with_its_reason(tmp_path):
+    (tmp_path / "s.manifest.json").write_text("{")
+    with pytest.raises(bm.UsageError, match="is not a whole manifest: --resume or --force"):
+        bm.qc(BAM, output=tmp_path / "s")
+    assert bm.qc(BAM, output=tmp_path / "s", force=True).exit_code == 0
+
+
+def test_report_false_keeps_a_page_no_run_wrote(tmp_path):
+    page = tmp_path / "s.report.html"
+    page.write_text("USER NOTES")
+    bm.qc(BAM, output=tmp_path / "s", report=False)
+    assert page.read_text() == "USER NOTES"
+    bm.qc(BAM, output=tmp_path / "t")
+    assert (tmp_path / "t.report.html").exists()
+    bm.qc(BAM, output=tmp_path / "t", report=False, force=True)
+    assert not (tmp_path / "t.report.html").exists()
+
+
+def test_collect_refuses_the_prefix_of_a_qc_run(tmp_path):
+    bm.qc(BAM, output=tmp_path / "s")
+    with pytest.raises(bm.UsageError, match="holds a qc run"):
+        bm.collect(BAM, metrics=["insert-size"], output=tmp_path / "s")
+
+
+def test_old_collect_type_errors_name_the_argument():
+    with pytest.raises(TypeError, match="argument 'path'"):
+        bm.collect(5)
+    with pytest.raises(TypeError, match="argument 'hs'"):
+        bm.collect(str(BAM), metrics=["hs_metrics"], hs="x")
+
+
+def test_check_returns_an_incomplete_verdict_under_fail_on(tmp_path):
+    shutil.copy(PICARD / "NA12878" / "NA12878.insert_size_metrics",
+                tmp_path / "NA12878.insert_size_metrics")
+    for fail_on in ("fail", "warn", None):
+        verdict = bm.check(tmp_path, preset="clinical-panel", fail_on=fail_on)
+        assert verdict.status == "incomplete"
+    assert verdict.exit_code("fail") == 11
+
+
+def stub_function(name):
+    return next(n for n in stub_tree().body if isinstance(n, ast.FunctionDef) and n.name == name)
+
+
+@pytest.mark.parametrize("name", ["qc", "check", "report"])
+def test_help_shows_the_stub_signature_and_docstring(name):
+    node = stub_function(name)
+    function = getattr(bm, name)
+    assert " ".join(function.__doc__.split()) == " ".join(ast.get_docstring(node).split())
+    args = node.args
+    expected = [(a.arg, inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.empty)
+                for a in args.args]
+    expected += [(a.arg, inspect.Parameter.KEYWORD_ONLY, ast.literal_eval(d))
+                 for a, d in zip(args.kwonlyargs, args.kw_defaults)]
+    parameters = inspect.signature(function).parameters.values()
+    assert [(p.name, p.kind, p.default) for p in parameters] == expected
+
+
+def test_stub_collector_verbs_are_the_runtime_names():
+    node = next(n for n in stub_tree().body if isinstance(n, ast.Assign)
+                and n.targets[0].id == "_CollectorVerb")
+    stub = [e.value for e in node.value.slice.elts]
+    with pytest.raises(bm.UsageError) as caught:
+        bm.collect(BAM, metrics=["no-such"])
+    runtime = str(caught.value).split("one of: ")[1].split(", ")
+    assert stub == [n for n in runtime if "-" in n]

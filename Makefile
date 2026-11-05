@@ -62,13 +62,15 @@ wheel:
 # The wheel as a user installs it: maturin build, a fresh venv with only the
 # wheel and pytest, an import that must resolve inside that venv, then the
 # tests that compare bammetrics.pyi with dir(bammetrics) both ways, and the
-# stub the wheel ships against bammetrics.pyi. Catches a stale wheel or stub.
+# stub the wheel ships against bammetrics.pyi, then mypy over the stub and the
+# calls in tests/python/stub_types.py. Catches a stale wheel or stub.
 WHEEL_CHECK := target/wheel-check
 wheel-check:
 	rm -rf $(WHEEL_CHECK)
 	.venv/bin/maturin build --release -i python3 --out $(WHEEL_CHECK)/dist
 	python3 -m venv $(WHEEL_CHECK)/venv
-	$(WHEEL_CHECK)/venv/bin/pip install -q pytest $(WHEEL_CHECK)/dist/*.whl
+	$(WHEEL_CHECK)/venv/bin/pip install -q pytest mypy $(WHEEL_CHECK)/dist/*.whl
+	$(WHEEL_CHECK)/venv/bin/mypy --cache-dir=$(WHEEL_CHECK)/mypy-cache bammetrics.pyi tests/python/stub_types.py
 	cd $(WHEEL_CHECK) && venv/bin/python -c "import bammetrics, sys; f = bammetrics.__file__; \
 		assert 'wheel-check/venv' in f, f; print('bammetrics', f)"
 	cmp bammetrics.pyi $(WHEEL_CHECK)/venv/lib/python*/site-packages/bammetrics/__init__.pyi

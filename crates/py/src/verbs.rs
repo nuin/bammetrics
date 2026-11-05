@@ -15,13 +15,15 @@ use bammetrics_cli::python::{self as table, Keyword, Shape};
 use bammetrics_cli::qc::{self, QcArgs};
 use bammetrics_cli::report::{self, ReportArgs};
 use bammetrics_cli::{info, verbs};
-use bammetrics_core::metrics_file::{CivilTime, MetricsDoc};
+use bammetrics_core::metric::Value;
+use bammetrics_core::metrics_file::{CivilTime, ClassBlock, HistogramBlock, MetricsDoc};
 use bammetrics_core::registry::did_you_mean;
 use bammetrics_report::{Input, Options};
 use bammetrics_verdict::{Status, Verdict as RustVerdict};
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::{PyBool, PyDict, PyList, PyString, PyTuple, PyType};
+use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple, PyType};
 
 use crate::doc_dict;
 
@@ -123,6 +125,20 @@ fn text(value: &Bound<'_, PyAny>) -> PyResult<String> {
     Ok(value.str()?.to_string())
 }
 
+/// The value of `keyword` as argv text. A path takes a str or an
+/// `os.PathLike` only: `None` or an int is a `TypeError` naming the
+/// keyword, never a file name made by `str()`.
+fn keyword_text(verb: &str, keyword: &Keyword, value: &Bound<'_, PyAny>) -> PyResult<String> {
+    if !keyword.takes_path() || is_scalar(value)? {
+        return text(value);
+    }
+    Err(PyTypeError::new_err(format!(
+        "bammetrics {verb}: {} takes a str or os.PathLike, not {}",
+        keyword.name,
+        value.get_type().name()?
+    )))
+}
+
 /// True for a str or a path: one value, not a sequence of them.
 fn is_scalar(value: &Bound<'_, PyAny>) -> PyResult<bool> {
     Ok(value.is_instance_of::<PyString>() || value.hasattr("__fspath__")?)
@@ -186,7 +202,10 @@ fn argv<'py>(
                     args.push(flag);
                 }
             }
-            Shape::Value => args.push(format!("{flag}={}", text(&value)?)),
+            Shape::Value => args.push(format!(
+                "{flag}={}",
+                keyword_text(verb.name, keyword, &value)?
+            )),
             Shape::Pairs => {
                 let first = items(&value)?;
                 let pairs = match first.first() {
@@ -201,15 +220,23 @@ fn argv<'py>(
                             verb.name
                         )));
                     };
-                    args.extend([flag.clone(), text(a)?, text(b)?]);
+                    args.extend([
+                        flag.clone(),
+                        keyword_text(verb.name, keyword, a)?,
+                        keyword_text(verb.name, keyword, b)?,
+                    ]);
                 }
             }
             Shape::Positional { .. } => {}
         }
     }
     args.push("--".to_owned());
+    let first = keywords
+        .iter()
+        .find(|k| matches!(k.shape, Shape::Positional { .. }))
+        .expect("every Python verb has a positional argument");
     for value in items(positional)? {
-        args.push(text(&value)?);
+        args.push(keyword_text(verb.name, first, &value)?);
     }
     Ok((args, extra))
 }
@@ -234,8 +261,59 @@ pub struct Check {
     fail: Option<String>,
 }
 
+/// The fields of a [`Check`] in declaration order, as pickle stores them.
+type CheckState = (
+    String,
+    String,
+    Option<f64>,
+    Option<String>,
+    Option<String>,
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
 #[pymethods]
 impl Check {
+    #[staticmethod]
+    fn _restore(state: CheckState) -> Self {
+        let (rule, status, value, limit, why, label, metric, level, unit, warn, fail) = state;
+        Check {
+            rule,
+            status,
+            value,
+            limit,
+            why,
+            label,
+            metric,
+            level,
+            unit,
+            warn,
+            fail,
+        }
+    }
+
+    fn __reduce__<'py>(slf: &Bound<'py, Self>) -> PyResult<(Bound<'py, PyAny>, (CheckState,))> {
+        let c = slf.get();
+        let state = (
+            c.rule.clone(),
+            c.status.clone(),
+            c.value,
+            c.limit.clone(),
+            c.why.clone(),
+            c.label.clone(),
+            c.metric.clone(),
+            c.level.clone(),
+            c.unit.clone(),
+            c.warn.clone(),
+            c.fail.clone(),
+        );
+        Ok((slf.get_type().getattr("_restore")?, (state,)))
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "Check(rule={:?}, status={:?}, value={}, limit={})",
@@ -258,6 +336,21 @@ pub struct Verdict {
 
 #[pymethods]
 impl Verdict {
+    /// The verdict `to_json` wrote: what pickle and copy rebuild from.
+    #[staticmethod]
+    fn _from_json(text: &str) -> PyResult<Self> {
+        RustVerdict::from_json(text)
+            .map(|inner| Verdict { inner })
+            .map_err(|e| usage_error(e.to_string()))
+    }
+
+    fn __reduce__<'py>(slf: &Bound<'py, Self>) -> PyResult<(Bound<'py, PyAny>, (String,))> {
+        Ok((
+            slf.get_type().getattr("_from_json")?,
+            (slf.get().inner.to_json(),),
+        ))
+    }
+
     #[getter]
     fn sample(&self) -> &str {
         &self.inner.sample
@@ -392,8 +485,183 @@ pub struct Run {
     date: String,
 }
 
+/// A class block or the histogram as pickle stores it: the name (class or
+/// key class), the columns and the rows of cells.
+type TableState = (String, Vec<String>, Vec<Vec<Py<PyAny>>>);
+/// A parsed metrics file as pickle stores it: headers, class blocks,
+/// histogram. Rows stay lists, so a repeated column name keeps every cell.
+type DocState = (Vec<String>, Vec<TableState>, Option<TableState>);
+/// The fields of a [`Run`] as pickle stores them; the verdict pickles on
+/// its own.
+type RunState = (
+    String,
+    String,
+    Vec<String>,
+    Option<String>,
+    u8,
+    Py<PyDict>,
+    Py<PyDict>,
+    Option<Py<Verdict>>,
+    Vec<(String, DocState)>,
+    bool,
+    String,
+);
+
+fn table_state(
+    py: Python<'_>,
+    name: &str,
+    columns: &[String],
+    rows: &[Vec<Value>],
+) -> PyResult<TableState> {
+    let rows = rows
+        .iter()
+        .map(|row| row.iter().map(|v| crate::value_object(py, v)).collect())
+        .collect::<PyResult<_>>()?;
+    Ok((name.to_owned(), columns.to_vec(), rows))
+}
+
+fn doc_state(py: Python<'_>, doc: &MetricsDoc) -> PyResult<DocState> {
+    let classes = doc
+        .classes
+        .iter()
+        .map(|b| table_state(py, &b.class, &b.columns, &b.rows))
+        .collect::<PyResult<_>>()?;
+    let histogram = doc
+        .histogram
+        .as_ref()
+        .map(|h| table_state(py, &h.key_class, &h.columns, &h.rows))
+        .transpose()?;
+    Ok((doc.headers.clone(), classes, histogram))
+}
+
+/// A cell back from Python: None, bool, int, float or str, as
+/// [`crate::value_object`] made it.
+fn object_value(object: &Bound<'_, PyAny>) -> PyResult<Value> {
+    Ok(if object.is_none() {
+        Value::Null
+    } else if object.is_instance_of::<PyBool>() {
+        Value::Bool(object.extract()?)
+    } else if object.is_instance_of::<PyInt>() {
+        Value::Int(object.extract()?)
+    } else if object.is_instance_of::<PyFloat>() {
+        Value::Float(object.extract()?)
+    } else {
+        Value::Str(object.extract()?)
+    })
+}
+
+fn table_rows(py: Python<'_>, rows: &[Vec<Py<PyAny>>]) -> PyResult<Vec<Vec<Value>>> {
+    rows.iter()
+        .map(|row| row.iter().map(|cell| object_value(cell.bind(py))).collect())
+        .collect()
+}
+
+fn doc_of_state(py: Python<'_>, state: DocState) -> PyResult<MetricsDoc> {
+    let (headers, classes, histogram) = state;
+    Ok(MetricsDoc {
+        headers,
+        classes: classes
+            .into_iter()
+            .map(|(class, columns, rows)| {
+                Ok(ClassBlock {
+                    class,
+                    columns,
+                    rows: table_rows(py, &rows)?,
+                })
+            })
+            .collect::<PyResult<_>>()?,
+        histogram: histogram
+            .map(|(key_class, columns, rows)| {
+                Ok::<_, PyErr>(HistogramBlock {
+                    key_class,
+                    columns,
+                    rows: table_rows(py, &rows)?,
+                })
+            })
+            .transpose()?,
+    })
+}
+
 #[pymethods]
 impl Run {
+    #[staticmethod]
+    fn _restore(py: Python<'_>, state: RunState) -> PyResult<Self> {
+        let (
+            sample,
+            prefix,
+            files,
+            manifest,
+            exit_code,
+            errors,
+            metrics,
+            verdict,
+            inputs,
+            all_plots,
+            date,
+        ) = state;
+        let inputs = inputs
+            .into_iter()
+            .map(|(path, doc)| {
+                Ok(Input {
+                    path,
+                    doc: doc_of_state(py, doc)?,
+                })
+            })
+            .collect::<PyResult<_>>()?;
+        let rust_verdict = verdict.as_ref().map(|v| v.get().inner.clone());
+        Ok(Run {
+            sample,
+            prefix,
+            files,
+            manifest,
+            exit_code,
+            errors,
+            metrics,
+            verdict,
+            inputs,
+            rust_verdict,
+            all_plots,
+            date,
+        })
+    }
+
+    fn __reduce__<'py>(slf: &Bound<'py, Self>) -> PyResult<(Bound<'py, PyAny>, (RunState,))> {
+        let py = slf.py();
+        let r = slf.get();
+        let inputs = r
+            .inputs
+            .iter()
+            .map(|i| Ok((i.path.clone(), doc_state(py, &i.doc)?)))
+            .collect::<PyResult<_>>()?;
+        let state = (
+            r.sample.clone(),
+            r.prefix.clone(),
+            r.files.clone(),
+            r.manifest.clone(),
+            r.exit_code,
+            r.errors.clone_ref(py),
+            r.metrics.clone_ref(py),
+            r.verdict.as_ref().map(|v| v.clone_ref(py)),
+            inputs,
+            r.all_plots,
+            r.date.clone(),
+        );
+        Ok((slf.get_type().getattr("_restore")?, (state,)))
+    }
+
+    /// `Run[Verdict]` (a qc run) and `Run[None]` (a collect run) in
+    /// annotations, as the stub writes them.
+    #[classmethod]
+    fn __class_getitem__<'py>(
+        cls: &Bound<'py, PyType>,
+        item: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        cls.py()
+            .import("types")?
+            .getattr("GenericAlias")?
+            .call1((cls, item))
+    }
+
     /// `{name: parsed metrics file}`, each as `read_metrics` returns it,
     /// keyed by the verb of the tool that wrote it (`insert-size`; see
     /// docs/python.md for several hs runs and further files).
@@ -522,10 +790,24 @@ fn verb(name: &str) -> &'static table::Verb {
     table::verb(name).expect("a Python verb")
 }
 
-/// `qc(bam, **options)`: `bammetrics qc` through [`engine::execute`],
-/// without the GIL. Returns a [`Run`].
+/// bammetrics qc: the collectors the preset needs on one read of the BAM,
+/// the verdict and the page, the files the command writes. report=False
+/// leaves out PREFIX.report.html. A failed verdict is a value; VerdictError
+/// only when fail_on is given and reached. An incomplete verdict returns the
+/// Run (its exit_code is 11). A failed collector raises InputError (its .run
+/// holds the rest).
+//
+// Runs `engine::execute` without the GIL. The text signature and the
+// docstring above are the stub's (tests/python/test_mirror.py compares them).
 #[pyfunction]
-#[pyo3(name = "qc", signature = (bam, **options))]
+#[pyo3(
+    name = "qc",
+    signature = (bam, **options),
+    text_signature = "(bam, *, output=None, reference=None, preset='generic', hs=None, \
+                      panel=None, ref_flat=None, strand=None, ribosomal_intervals=None, \
+                      sample=None, fail_on=None, resume=False, force=False, threads=None, \
+                      all_plots=False, date=None, report=True)"
+)]
 pub fn py_qc<'py>(
     py: Python<'py>,
     bam: &Bound<'py, PyAny>,
@@ -600,9 +882,17 @@ pub fn py_qc<'py>(
     }
 }
 
-/// `check(inputs, **options)`: the verdicts `bammetrics check` gates on.
+/// bammetrics check: verdicts from directories of metrics files,
+/// verdict.json files or qc prefixes. One path with one sample gives a
+/// Verdict, else a list. VerdictError when a verdict reaches fail_on
+/// (fail_on=None never raises). An incomplete verdict is returned (its
+/// exit_code(fail_on) is 11).
 #[pyfunction]
-#[pyo3(name = "check", signature = (inputs, **options))]
+#[pyo3(
+    name = "check",
+    signature = (inputs, **options),
+    text_signature = "(inputs, *, preset='generic', fail_on='fail')"
+)]
 pub fn py_check<'py>(
     py: Python<'py>,
     inputs: &Bound<'py, PyAny>,
@@ -648,10 +938,17 @@ pub fn py_check<'py>(
     Ok(PyList::new(py, objects)?.into_any().unbind())
 }
 
-/// `report(dirs, **options)`: the pages, verdicts and index `bammetrics
-/// report` writes, without the GIL. Returns the paths written.
+/// bammetrics report: SAMPLE.verdict.json and SAMPLE.report.html per sample
+/// and index.html, under output (default: the one directory given). Returns
+/// the paths written.
+//
+// Runs `report::write` without the GIL.
 #[pyfunction]
-#[pyo3(name = "report", signature = (dirs, **options))]
+#[pyo3(
+    name = "report",
+    signature = (dirs, **options),
+    text_signature = "(dirs, *, preset='generic', output=None, all_plots=False, date=None)"
+)]
 pub fn py_report(
     py: Python<'_>,
     dirs: &Bound<'_, PyAny>,

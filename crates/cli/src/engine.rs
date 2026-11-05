@@ -280,21 +280,26 @@ fn manifest(plan: &Plan, steps: Vec<StepRecord>) -> Manifest {
     }
 }
 
-/// An earlier run's files are replaced only on request.
+/// An earlier run's files are replaced only on request. A manifest that
+/// cannot be read (`plan.previous` is `Err`) is reported with its reason.
 fn guard_previous(plan: &Plan, args: &QcArgs) -> Result<()> {
     if matches!(plan.previous, Ok(None)) || args.force {
         return Ok(());
     }
-    if !args.resume {
-        return Err(Error::Usage(format!(
+    match (&plan.previous, args.resume) {
+        (Err(why), false) => Err(Error::Usage(format!(
+            "{why}: --resume or --force runs every step"
+        ))),
+        (Err(why), true) => {
+            eprintln!("bammetrics qc: {why}; running every step");
+            Ok(())
+        }
+        (_, false) => Err(Error::Usage(format!(
             "{} holds an earlier run: --resume skips its finished steps, --force reruns them",
             manifest_path(&plan.prefix).display()
-        )));
+        ))),
+        (_, true) => Ok(()),
     }
-    if let Err(why) = &plan.previous {
-        eprintln!("bammetrics qc: {why}; running every step");
-    }
-    Ok(())
 }
 
 /// Post and report: the verdict over the run's files, then verdict.json and
@@ -337,7 +342,7 @@ fn post_and_report(
         );
         written.push((page_path(&plan.prefix), page, "report"));
     } else {
-        remove_stale_page(&plan.prefix, files);
+        remove_stale_page(plan, files);
     }
     let mut outputs = Vec::new();
     for (path, text, kind) in written {
@@ -360,10 +365,21 @@ fn post_and_report(
 
 /// Without the page (Python `qc(report=False)`), an earlier run's page
 /// would show an older verdict: remove it. Only the path this run computes
-/// from its prefix, and only a regular file (a symlink is never followed).
-fn remove_stale_page(prefix: &Path, files: &mut Files) {
-    let page = page_path(prefix);
-    if fs::symlink_metadata(&page).is_ok_and(|m| m.file_type().is_file())
+/// from its prefix, only when the earlier run's manifest lists it as its
+/// `report` file, and only a regular file (a symlink is never followed).
+/// A page no run of this prefix wrote stays.
+fn remove_stale_page(plan: &Plan, files: &mut Files) {
+    let Ok(Some(old)) = &plan.previous else {
+        return;
+    };
+    let page = page_path(&plan.prefix);
+    let written_before = old
+        .steps
+        .iter()
+        .flat_map(|s| &s.outputs)
+        .any(|o| o.kind == "report" && o.path == page);
+    if written_before
+        && fs::symlink_metadata(&page).is_ok_and(|m| m.file_type().is_file())
         && fs::remove_file(&page).is_ok()
     {
         files.removed += 1;

@@ -14,7 +14,7 @@ use bammetrics_core::quality_yield;
 use bammetrics_core::record::Orientation;
 use bammetrics_core::registry::{self, Tool};
 use bammetrics_verdict::{Preset, evaluate_files};
-use pyo3::exceptions::PyAttributeError;
+use pyo3::exceptions::{PyAttributeError, PyTypeError};
 use pyo3::prelude::*;
 use pyo3::types::{PyCFunction, PyDict, PyList, PyTuple};
 
@@ -124,7 +124,9 @@ impl From<insert_size::Row> for InsertSizeMetrics {
     include_duplicates=false,
     metric_accumulation_level=None,
 ))]
+#[allow(clippy::too_many_arguments)]
 fn py_insert_size(
+    py: Python<'_>,
     path: &str,
     minimum_pct: f32,
     deviations: f64,
@@ -143,7 +145,9 @@ fn py_insert_size(
         include_duplicates,
         levels: levels.map_err(|e| py_error(&e))?,
     };
-    let rows = insert_size::run_over_bam(path, &opts).map_err(|e| py_error(&e))?;
+    let rows = py
+        .detach(|| insert_size::run_over_bam(path, &opts))
+        .map_err(|e| py_error(&e))?;
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
@@ -241,6 +245,7 @@ impl From<alignment_summary::Row> for AlignmentSummaryMetrics {
     collect_alignment_information=true,
 ))]
 fn py_alignment_summary(
+    py: Python<'_>,
     path: &str,
     reference: Option<PathBuf>,
     max_insert_size: i32,
@@ -265,7 +270,9 @@ fn py_alignment_summary(
         collect_alignment_information,
         ..defaults
     };
-    let report = alignment_summary::run_over_bam(path, &opts).map_err(|e| py_error(&e))?;
+    let report = py
+        .detach(|| alignment_summary::run_over_bam(path, &opts))
+        .map_err(|e| py_error(&e))?;
     Ok(report.rows.into_iter().map(Into::into).collect())
 }
 
@@ -314,6 +321,7 @@ impl From<quality_yield::Row> for QualityYieldMetrics {
     include_supplemental_alignments=false,
 ))]
 fn py_quality_yield(
+    py: Python<'_>,
     path: &str,
     use_original_qualities: bool,
     include_secondary_alignments: bool,
@@ -324,7 +332,7 @@ fn py_quality_yield(
         include_secondary_alignments,
         include_supplemental_alignments,
     };
-    quality_yield::run_over_bam(path, &opts)
+    py.detach(|| quality_yield::run_over_bam(path, &opts))
         .map(Into::into)
         .map_err(|e| py_error(&e))
 }
@@ -433,6 +441,7 @@ fn path_list(value: &Bound<'_, PyAny>) -> PyResult<Vec<PathBuf>> {
 ))]
 #[allow(clippy::too_many_arguments)]
 fn py_hs_metrics(
+    py: Python<'_>,
     path: &str,
     bait_intervals: &Bound<'_, PyAny>,
     target_intervals: &Bound<'_, PyAny>,
@@ -462,7 +471,7 @@ fn py_hs_metrics(
         per_base_coverage,
         ..hs_metrics::Options::default()
     };
-    hs_metrics::run_over_bam(path, &opts)
+    py.detach(|| hs_metrics::run_over_bam(path, &opts))
         .map(Into::into)
         .map_err(|e| py_error(&e))
 }
@@ -532,10 +541,14 @@ fn py_collect<'py>(
         .is_some_and(|names| names.iter().any(|n| n.contains('-')));
     let qc_only = [&output, &panel, &ref_flat, &strand, &ribosomal_intervals];
     if !verb_names && qc_only.iter().all(|o| o.is_none()) {
-        let reference = reference.map(|r| r.extract::<PathBuf>()).transpose()?;
-        let hs = hs.map(|h| h.extract()).transpose()?;
-        let threads = threads.map(|t| t.extract::<usize>()).transpose()?;
-        let path: PathBuf = path.extract()?;
+        let reference = reference
+            .map(|r| argument::<PathBuf>("reference", &r))
+            .transpose()?;
+        let hs = hs.map(|h| argument("hs", &h)).transpose()?;
+        let threads = threads
+            .map(|t| argument::<usize>("threads", &t))
+            .transpose()?;
+        let path: PathBuf = argument("path", &path)?;
         return collect_dict(
             py,
             path,
@@ -570,6 +583,18 @@ fn py_collect<'py>(
         }
     }
     verbs::collect_run(py, &path, metrics, &options).map(Py::into_any)
+}
+
+/// An argument of [`py_collect`] taken by hand, as pyo3 takes the others:
+/// a wrong type is a `TypeError` that names the argument.
+fn argument<'py, T: FromPyObjectOwned<'py>>(name: &str, value: &Bound<'py, PyAny>) -> PyResult<T> {
+    value.extract::<T>().map_err(|e| {
+        let e: PyErr = e.into();
+        let py = value.py();
+        let error = PyTypeError::new_err(format!("argument '{name}': {}", e.value(py)));
+        error.set_cause(py, Some(e));
+        error
+    })
 }
 
 /// The form of [`py_collect`] with snake-case metric names: a dict of

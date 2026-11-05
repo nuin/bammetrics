@@ -1,6 +1,6 @@
 """Type stubs for the bammetrics Python module (Picard-concordant BAM QC metrics)."""
 from os import PathLike
-from typing import Any, Literal, Sequence, TypedDict, overload
+from typing import Any, Generic, Literal, Sequence, TypeVar, TypedDict, overload
 
 _Path = str | PathLike[str]
 _Paths = _Path | Sequence[_Path]
@@ -63,15 +63,16 @@ class UsageError(BammetricsError, ValueError):
 
 class InputError(BammetricsError, OSError):
     """An input could not be read, or a collector failed (the command's exit 1).
-    After a failed collector, .run holds the run with the other files."""
-    run: Run
+    After a failed collector, .run holds the run with the other files; it is
+    None otherwise."""
+    run: Run[Any] | None
 
 class VerdictError(BammetricsError):
     """A verdict reached fail_on (the command's exit 10)."""
     verdicts: list[Verdict]
-    run: Run | None
+    run: Run[Verdict] | None
     code: int
-    def __init__(self, message: str, verdicts: list[Verdict], run: Run | None = None) -> None: ...
+    def __init__(self, message: str, verdicts: list[Verdict], run: Run[Verdict] | None = None) -> None: ...
 
 class Tool(str):
     """One row of `bammetrics tools`; the string is the Picard class name."""
@@ -117,8 +118,11 @@ class Verdict:
     def exit_code(self, fail_on: Literal["warn", "fail"] = "fail") -> int:
         """The exit code bammetrics check gives this verdict: 0, 10 or 11."""
 
-class Run:
-    """A qc run, or a collect(metrics=[...]) run (verdict and manifest None).
+_V = TypeVar("_V", Verdict, None)
+
+class Run(Generic[_V]):
+    """A qc run (Run[Verdict]), or a collect(metrics=[...]) run (Run[None]: verdict
+    and manifest None).
 
     files lists every file written or kept, the manifest last. metrics maps the
     verb of each tool (insert-size, hs-metrics.BAIT_SET for one of several hs
@@ -131,7 +135,7 @@ class Run:
     exit_code: int
     errors: dict[str, str]
     metrics: dict[str, _MetricsDoc]
-    verdict: Verdict | None
+    verdict: _V
     def _repr_html_(self) -> str | None: ...
 
 class InsertSizeMetrics:
@@ -715,10 +719,13 @@ def hs_metrics(
     per_base_coverage writes Picard's PER_BASE_COVERAGE file there.
     """
 
+_Strand = Literal["NONE", "FIRST_READ_TRANSCRIPTION_STRAND", "SECOND_READ_TRANSCRIPTION_STRAND"]
+_OldMetric = Literal["quality_yield", "alignment_summary", "insert_size", "hs_metrics"]
+
 @overload
 def collect(
     path: _Path,
-    metrics: Sequence[str] | None = None,
+    metrics: Sequence[_OldMetric] | None = None,
     reference: _Path | None = None,
     hs: Sequence[tuple[_Paths, _Paths]] | None = None,
     output_prefix: _Path | None = None,
@@ -734,7 +741,7 @@ def collect(
 @overload
 def collect(
     path: _Path,
-    metrics: Sequence[str] | None = None,
+    metrics: Sequence[_CollectorVerb],
     reference: _Path | None = None,
     hs: tuple[_Path, _Path] | Sequence[tuple[_Path, _Path]] | None = None,
     *,
@@ -742,15 +749,59 @@ def collect(
     threads: int | None = None,
     panel: _Path | None = None,
     ref_flat: _Path | None = None,
-    strand: Literal["NONE", "FIRST_READ_TRANSCRIPTION_STRAND", "SECOND_READ_TRANSCRIPTION_STRAND"] | None = None,
+    strand: _Strand | None = None,
     ribosomal_intervals: _Path | None = None,
-) -> Run:
+) -> Run[None]:
     """The collectors qc runs for verb names (insert-size, gc-bias, hs-metrics, ...),
     on one read, files under output (default ./<bam stem>). Taken when a metric
     name holds a dash or a keyword after * is given."""
 
+@overload
+def collect(
+    path: _Path,
+    metrics: Sequence[str] | None = None,
+    reference: _Path | None = None,
+    hs: tuple[_Path, _Path] | Sequence[tuple[_Path, _Path]] | None = None,
+    *,
+    output: _Path,
+    threads: int | None = None,
+    panel: _Path | None = None,
+    ref_flat: _Path | None = None,
+    strand: _Strand | None = None,
+    ribosomal_intervals: _Path | None = None,
+) -> Run[None]: ...
+
+@overload
+def collect(
+    path: _Path,
+    metrics: Sequence[str] | None = None,
+    reference: _Path | None = None,
+    hs: tuple[_Path, _Path] | Sequence[tuple[_Paths, _Paths]] | None = None,
+    output_prefix: _Path | None = None,
+    threads: int | None = None,
+    hs_per_base: bool = False,
+    *,
+    output: _Path | None = None,
+    panel: _Path | None = None,
+    ref_flat: _Path | None = None,
+    strand: _Strand | None = None,
+    ribosomal_intervals: _Path | None = None,
+) -> dict[str, Any] | Run[None]:
+    """Names held in a variable of type list[str]: the form follows the names at run time."""
+
 # BEGIN verbs: generated from crates/cli/src/python.rs (UPDATE_PYI=1 cargo test -p bammetrics-cli python_stubs)
 # Keywords are the command's long flags in snake case; None leaves an option at the command's default.
+
+# The metric names with a dash: collect(metrics=[...]) given one runs the collectors as qc does.
+_CollectorVerb = Literal[
+    "quality-yield",
+    "alignment-summary",
+    "insert-size",
+    "duplicate-metrics",
+    "hs-metrics",
+    "gc-bias",
+    "rna-seq",
+]
 
 def qc(
     bam: _Path,
@@ -771,11 +822,12 @@ def qc(
     all_plots: bool = False,
     date: str | None = None,
     report: bool = True,
-) -> Run:
+) -> Run[Verdict]:
     """bammetrics qc: the collectors the preset needs on one read of the BAM, the verdict
     and the page, the files the command writes. report=False leaves out
     PREFIX.report.html. A failed verdict is a value; VerdictError only when fail_on is
-    given and reached. A failed collector raises InputError (its .run holds the rest)."""
+    given and reached. An incomplete verdict returns the Run (its exit_code is 11). A
+    failed collector raises InputError (its .run holds the rest)."""
 
 def check(
     inputs: _Path | Sequence[_Path],
@@ -785,7 +837,8 @@ def check(
 ) -> Verdict | list[Verdict]:
     """bammetrics check: verdicts from directories of metrics files, verdict.json files or
     qc prefixes. One path with one sample gives a Verdict, else a list. VerdictError
-    when a verdict reaches fail_on (fail_on=None never raises)."""
+    when a verdict reaches fail_on (fail_on=None never raises). An incomplete verdict is
+    returned (its exit_code(fail_on) is 11)."""
 
 def report(
     dirs: _Path | Sequence[_Path],

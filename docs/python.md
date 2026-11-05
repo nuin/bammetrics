@@ -24,11 +24,11 @@ run = bm.collect("s.bam", metrics=["quality-yield", "insert-size", "gc-bias"],
 
 The keywords of `qc`, `check` and `report` are the command's long flags in snake case: `--fail-on` is `fail_on`, `--ref-flat` is `ref_flat`, `--all-plots` is `all_plots`. They come from the clap arguments of the verb (`crates/cli/src/python.rs`), and the call runs the command's parser on the argv they spell, so a bad value fails with the command's message. `bammetrics.pyi` is generated from the same arguments (`UPDATE_PYI=1 cargo test -p bammetrics-cli python_stubs`).
 
-- A flag takes `True` or `False`. A value takes a str, a path or a number. `None` leaves the option at the command's default.
+- A flag takes `True` or `False`. A path (`bam`, `output`, `reference`, `panel`, `hs`, ...) takes a str or an `os.PathLike`; any other object raises `TypeError`. Another value takes a str or a number. `None` leaves the option at the command's default.
 - `hs` takes one `(baits, targets)` pair or a list of pairs, as `--hs BAITS TARGETS` repeated.
-- `--format` and `--quiet` have no keyword: the functions print nothing.
-- `qc(report=False)` is the one keyword the command lacks: no `PREFIX.report.html` is written, and an earlier run's page under the same prefix is removed. `PREFIX.verdict.json` is still written.
-- Messages are the command's lines, with its spelling: `bammetrics qc: out/s.manifest.json holds an earlier run: --resume skips its finished steps, --force reruns them` means `resume=True` or `force=True`.
+- `--format` and `--quiet` have no keyword: no progress line, no event and no step error is printed (step errors are in `Run.errors`). Three warnings still go to stderr: a `resume` over a manifest that cannot be read (`... is not a whole manifest; running every step`), a core tool's own warning (`CollectInsertSizeMetrics` when every orientation falls under `MINIMUM_PCT`), and `check` skipping an unparsable metrics file (`bammetrics: skipped ...`).
+- `qc(report=False)` is the one keyword the command lacks: no `PREFIX.report.html` is written. An earlier run's page under the same prefix is removed only when that run's manifest lists it as its `report` file; a page no run wrote stays. `PREFIX.verdict.json` is still written.
+- Messages are the command's lines, with its spelling: `bammetrics qc: out/s.manifest.json holds an earlier run: --resume skips its finished steps, --force reruns them` means `resume=True` or `force=True`. A manifest that cannot be read is named with its reason (`out/s.manifest.json is not a whole manifest: --resume or --force runs every step`). An `output` or `sample` holding a NUL byte is a `UsageError`.
 
 ## qc
 
@@ -43,7 +43,7 @@ The keywords of `qc`, `check` and `report` are the command's long flags in snake
 | usage error, nothing ran | 2 | raises `UsageError` |
 | an input cannot be read | 1 | raises `InputError` |
 
-`Run` fields: `sample`, `prefix`, `files` (every file written or kept by `resume`, the manifest last), `manifest`, `exit_code`, `errors` (`{step: message}`), `metrics`, `verdict`.
+`Run` fields: `sample`, `prefix`, `files` (every file written or kept by `resume`, the manifest last), `manifest`, `exit_code`, `errors` (`{step: message}`), `metrics`, `verdict`. The stub types a `qc` run as `Run[Verdict]` and a `collect` run as `Run[None]`, so `run.verdict.status` type-checks after `qc`.
 
 `run.metrics` maps a name to the parsed file, in the dict form of `read_metrics`. The name is the verb of the tool that wrote it (`quality-yield`, `alignment-summary`, `insert-size`, `hs-metrics`, `duplicate-metrics`, `gc-bias`, `rna-seq`, `wgs`). Two suffixes make names unique: `.BAIT_SET` for one of several hs runs (`hs-metrics.exome`), and the file option for a tool's further file (`gc-bias.summary` for `SUMMARY_OUTPUT`).
 
@@ -57,7 +57,7 @@ The keywords of `qc`, `check` and `report` are the command's long flags in snake
 
 `check(inputs, *, preset="generic", fail_on="fail")` reads what `bammetrics check` reads: directories of metrics files (discovered by their `## METRICS CLASS` block, grouped into samples), `verdict.json` files, or a directory `report` wrote. A path that names nothing but is a `qc` prefix (`out/s`, with `out/s.verdict.json` present) reads that `verdict.json`; the command has no such form.
 
-One path giving one sample returns a `Verdict`; a list of paths, or a directory with several samples, returns a list. Like the command, `check` gates by default: a verdict reaching `fail_on` raises `VerdictError` with every verdict in `.verdicts`. `fail_on=None` never raises.
+One path giving one sample returns a `Verdict`; a list of paths, or a directory with several samples, returns a list. Like the command, `check` gates by default: a verdict reaching `fail_on` raises `VerdictError` with every verdict in `.verdicts`. `fail_on=None` never raises. An incomplete verdict (the command's exit 11) is returned under every `fail_on`, as `qc` returns its `Run`; `verdict.exit_code(fail_on)` gives 11 for it.
 
 ## report
 
@@ -73,7 +73,7 @@ bm.collect("s.bam", ["quality_yield"], "ref.fa")           # positional, as befo
 bm.collect("s.bam", metrics=["insert_size"], output_prefix="out/s", hs_per_base=False)
 ```
 
-The docs/05 form is taken when a metric name holds a dash or a keyword after `*` is given (`output`, `panel`, `ref_flat`, `strand`, `ribosomal_intervals`). It runs the named collectors as `qc` builds them, on one read of the BAM, writes their files under `output` (default `./<bam stem>`, as `bammetrics collect`) and returns a `Run` with `metrics` and `files`; `verdict` and `manifest` are `None`. Names are verbs `qc` can run, plus `hs` as `bammetrics collect --metric hs` spells it. `output_prefix` and `hs_per_base` belong to the old form and raise `UsageError` here.
+The docs/05 form is taken when a metric name holds a dash or a keyword after `*` is given (`output`, `panel`, `ref_flat`, `strand`, `ribosomal_intervals`). It runs the named collectors as `qc` builds them, on one read of the BAM, writes their files under `output` (default `./<bam stem>`, as `bammetrics collect`) and returns a `Run` with `metrics` and `files`; `verdict` and `manifest` are `None`. Names are verbs `qc` can run, plus `hs` as `bammetrics collect --metric hs` spells it. `output_prefix` and `hs_per_base` belong to the old form and raise `UsageError` here. An `output` that holds a `qc` run (`PREFIX.manifest.json` present) raises `UsageError`: the collect files would replace the run's files and leave its manifest and verdict stale. A wrong-typed argument of the old form raises `TypeError` naming it (`argument 'path': ...`).
 
 ## Errors
 
@@ -81,14 +81,16 @@ The docs/05 form is taken when a metric name holds a dash or a keyword after `*`
 |---|---|---|
 | `BammetricsError` | `Exception` | base of the three below |
 | `UsageError` | `BammetricsError`, `ValueError` | bad arguments, unknown keywords, an earlier run without `resume` or `force` (exit 2) |
-| `InputError` | `BammetricsError`, `OSError` | a missing or unreadable BAM, FASTA, `.fai`, interval or preset file, a failed collector (exit 1) |
+| `InputError` | `BammetricsError`, `OSError` | a missing or unreadable BAM, FASTA, `.fai`, interval or preset file, a failed collector (exit 1); `.run` holds the run after a failed collector, else `None` |
 | `VerdictError` | `BammetricsError` | a verdict reached `fail_on` (exit 10); `.verdicts`, `.run`, `.code` |
 
 Every function raised `ValueError` and `OSError` before 0.15.0, and the new classes subclass them, so `except ValueError` and `except OSError` keep working.
 
+Every class copies and pickles (`copy.deepcopy`, `pickle`, a `ProcessPoolExecutor` result or exception): `Tool`, `PresetInfo`, the errors, `Verdict` (through its `verdict.json` text), `Check` and `Run` (with its parsed files, so `_repr_html_` renders after unpickling).
+
 ## Threads and the GIL
 
-`qc`, `check`, `report`, `collect` and the per-tool functions release the GIL while they read and write, so other Python threads run meanwhile. `threads` is the BGZF decompression thread count (default: cores, at most 8).
+`qc`, `check`, `report`, `collect`, the generated per-tool functions, the typed functions (`insert_size`, `alignment_summary`, `quality_yield`, `hs_metrics`), `read_metrics` and `evaluate` release the GIL while they read and write, so other Python threads run meanwhile. `threads` is the BGZF decompression thread count (default: cores, at most 8).
 
 ## Notebook view
 
@@ -100,4 +102,4 @@ Every function raised `ValueError` and `OSError` before 0.15.0, and the new clas
 
 ## Stub and wheel
 
-`bammetrics.pyi` names every public module attribute and nothing else; its typing-only dicts start with an underscore. `tests/python/test_mirror.py` compares it with `dir(bammetrics)` both ways and with the fields of `Run`, `Verdict` and `Check`. `make wheel-check` builds the wheel with `maturin build`, installs it into a fresh venv, imports it from there, compares the stub the wheel ships with `bammetrics.pyi`, and runs the stub tests, which catches a stale wheel.
+`bammetrics.pyi` names every public module attribute and nothing else; its typing-only dicts start with an underscore. The function entries of `qc`, `check` and `report` and the `_CollectorVerb` names are generated from the option table; the class entries (`Run`, `Verdict`, `Check`, the errors, `Tool`, `PresetInfo`) are written by hand. `tests/python/test_mirror.py` compares the stub with `dir(bammetrics)` both ways, with the fields of `Run`, `Verdict` and `Check`, and with `help()` of `qc`, `check` and `report` (signature and docstring). `make wheel-check` builds the wheel with `maturin build`, installs it into a fresh venv, runs `mypy` over the stub and `tests/python/stub_types.py` (the type of each call form), imports the module from there, compares the stub the wheel ships with `bammetrics.pyi`, and runs the stub tests, which catches a stale wheel.

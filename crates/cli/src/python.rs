@@ -46,6 +46,14 @@ pub struct Keyword {
     pub default: String,
 }
 
+impl Keyword {
+    /// True when the values are paths (`_Path` in the annotation): a str or
+    /// an `os.PathLike`, never another object turned into text.
+    pub fn takes_path(&self) -> bool {
+        self.annotation.contains("_Path")
+    }
+}
+
 /// A Python verb function: the clap verb it runs and what it adds or
 /// leaves out.
 pub struct Verb {
@@ -78,11 +86,12 @@ pub const VERBS: [Verb; 3] = [
         command: qc_command,
         skipped: &["format", "quiet"],
         extra: &[("report", "bool", "True")],
-        returns: "Run",
+        returns: "Run[Verdict]",
         doc: "bammetrics qc: the collectors the preset needs on one read of the BAM, the verdict \
               and the page, the files the command writes. report=False leaves out \
               PREFIX.report.html. A failed verdict is a value; VerdictError only when fail_on is \
-              given and reached. A failed collector raises InputError (its .run holds the rest).",
+              given and reached. An incomplete verdict returns the Run (its exit_code is 11). A \
+              failed collector raises InputError (its .run holds the rest).",
     },
     Verb {
         name: "check",
@@ -92,7 +101,8 @@ pub const VERBS: [Verb; 3] = [
         returns: "Verdict | list[Verdict]",
         doc: "bammetrics check: verdicts from directories of metrics files, verdict.json files or \
               qc prefixes. One path with one sample gives a Verdict, else a list. VerdictError \
-              when a verdict reaches fail_on (fail_on=None never raises).",
+              when a verdict reaches fail_on (fail_on=None never raises). An incomplete verdict \
+              is returned (its exit_code(fail_on) is 11).",
     },
     Verb {
         name: "report",
@@ -263,12 +273,32 @@ pub const STUB_BEGIN: &str = "# BEGIN verbs: generated from crates/cli/src/pytho
 /// Last line of the block.
 pub const STUB_END: &str = "# END verbs";
 
+/// The names the Python `collect(metrics=[...])` takes: the verb of every
+/// tool `qc` can run, in [`crate::qc::collector_tools`] order, then `hs` as
+/// `bammetrics collect --metric hs` spells it.
+pub fn collector_names() -> Vec<&'static str> {
+    let mut names: Vec<&str> = crate::qc::collector_tools()
+        .iter()
+        .filter_map(|t| verbs::for_class(t).map(|v| v.name))
+        .collect();
+    names.push("hs");
+    names
+}
+
 /// The generated verb block of `bammetrics.pyi`.
 pub fn python_stubs() -> String {
     let mut text = format!(
         "{STUB_BEGIN}\n# Keywords are the command's long flags in snake case; None leaves an option \
          at the command's default.\n"
     );
+    text.push_str(
+        "\n# The metric names with a dash: collect(metrics=[...]) given one runs the collectors \
+         as qc does.\n_CollectorVerb = Literal[\n",
+    );
+    for name in collector_names().into_iter().filter(|n| n.contains('-')) {
+        text.push_str(&format!("    \"{name}\",\n"));
+    }
+    text.push_str("]\n");
     for verb in &VERBS {
         text.push('\n');
         text.push_str(&verb.stub());

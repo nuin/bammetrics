@@ -770,6 +770,11 @@ fn sample(args: &QcArgs) -> Result<(String, Origin)> {
     let header =
         pass::read_header(&args.bam).map_err(|e| Error::Input(format!("{e} (from BAM)")))?;
     if let Some(name) = &args.sample {
+        if name.contains('\0') {
+            return Err(Error::Usage(format!(
+                "--sample {name:?}: a sample name cannot hold a NUL byte"
+            )));
+        }
         return Ok((name.clone(), Origin::Option));
     }
     Ok(levels::read_groups(&header)
@@ -810,6 +815,12 @@ fn prefix(args: &QcArgs) -> Result<(PathBuf, Origin)> {
         return Err(Error::Usage(format!(
             "-o {}: a prefix needs a file name part, as in out/NA12878",
             prefix.display()
+        )));
+    }
+    if prefix.as_os_str().as_encoded_bytes().contains(&0) {
+        return Err(Error::Usage(format!(
+            "-o {:?}: a prefix cannot hold a NUL byte",
+            prefix.display().to_string()
         )));
     }
     Ok((prefix, origin))
@@ -920,6 +931,14 @@ pub fn prepare_tools(args: &QcArgs, tools: &[&str]) -> Result<Plan> {
         })?);
     }
     refuse_overwriting_inputs(args, &prefix, prepare.iter().chain(&steps))?;
+    let manifest = manifest_path(&prefix);
+    if std::fs::symlink_metadata(&manifest).is_ok() {
+        return Err(Error::Usage(format!(
+            "{} holds a qc run: collect would rewrite its files and leave its manifest and \
+             verdict stale; give another output",
+            manifest.display()
+        )));
+    }
     Ok(Plan {
         bam: args.bam.clone(),
         prefix,
