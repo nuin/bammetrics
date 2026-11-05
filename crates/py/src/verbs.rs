@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use bammetrics_cli::check::{self, CheckArgs, FailOn};
 use bammetrics_cli::engine::{self, Outcome};
 use bammetrics_cli::error::{Error as CliError, VerbError};
-use bammetrics_cli::manifest::{Status as StepStatus, StepRecord};
+use bammetrics_cli::manifest::{Output, Status as StepStatus, StepRecord};
 use bammetrics_cli::python::{self as table, Keyword, Shape};
 use bammetrics_cli::qc::{self, QcArgs};
 use bammetrics_cli::report::{self, ReportArgs};
@@ -436,25 +436,39 @@ impl Run {
     }
 }
 
-/// The parsed metrics files of `records`, keyed by [`table::metric_key`],
-/// from `inputs` when the run parsed them already, else from disk.
+/// The metrics files of the steps that finished, parsed.
+fn read_outputs(records: &[StepRecord]) -> Result<Vec<Input>, CliError> {
+    metrics_outputs(records)
+        .map(|(_, output)| {
+            Ok(Input {
+                path: path_text(&output.path),
+                doc: MetricsDoc::read(&output.path)?,
+            })
+        })
+        .collect()
+}
+
+/// Every metrics file of the steps that finished, with its step.
+fn metrics_outputs(records: &[StepRecord]) -> impl Iterator<Item = (&StepRecord, &Output)> {
+    records
+        .iter()
+        .filter(|r| r.status == StepStatus::Ok)
+        .flat_map(|r| r.outputs.iter().map(move |o| (r, o)))
+        .filter(|(_, o)| o.kind == "metrics")
+}
+
+/// The parsed metrics files of `records`, keyed by [`table::metric_key`];
+/// `inputs` holds them parsed.
 fn metrics_of<'py>(
     py: Python<'py>,
     records: &[StepRecord],
     inputs: &[Input],
 ) -> PyResult<Bound<'py, PyDict>> {
     let dict = PyDict::new(py);
-    for record in records.iter().filter(|r| r.status == StepStatus::Ok) {
-        for output in record.outputs.iter().filter(|o| o.kind == "metrics") {
-            let shown = output.path.display().to_string();
-            let doc = match inputs.iter().find(|i| i.path == shown) {
-                Some(input) => doc_dict(py, &input.doc)?,
-                None => {
-                    let doc = MetricsDoc::read(&output.path).map_err(|e| crate::py_error(&e))?;
-                    doc_dict(py, &doc)?
-                }
-            };
-            dict.set_item(table::metric_key(record, output), doc)?;
+    for (record, output) in metrics_outputs(records) {
+        let shown = path_text(&output.path);
+        if let Some(input) = inputs.iter().find(|i| i.path == shown) {
+            dict.set_item(table::metric_key(record, output), doc_dict(py, &input.doc)?)?;
         }
     }
     Ok(dict)
@@ -720,8 +734,12 @@ pub fn collect_run<'py>(
     let (argv, _) = argv(qc_verb, path, Some(options), Some(&COLLECT_KEYWORDS))?;
     let mut args: QcArgs = qc_verb.parse(&argv).map_err(|e| verb_error(&e))?;
     args.quiet = true;
-    let (plan, records) = py
-        .detach(|| engine::collect_tools(&args, &tools))
+    let (plan, records, inputs) = py
+        .detach(|| {
+            let (plan, records) = engine::collect_tools(&args, &tools)?;
+            let inputs = read_outputs(&records)?;
+            Ok::<_, CliError>((plan, records, inputs))
+        })
         .map_err(|e| cli_error("collect", &e))?;
     let files = records
         .iter()
@@ -737,7 +755,7 @@ pub fn collect_run<'py>(
             manifest: None,
             exit_code: u8::from(records.iter().any(|r| r.status == StepStatus::Failed)),
             errors: errors_of(py, &records)?.unbind(),
-            metrics: metrics_of(py, &records, &[])?.unbind(),
+            metrics: metrics_of(py, &records, &inputs)?.unbind(),
             verdict: None,
             inputs: Vec::new(),
             rust_verdict: None,
