@@ -1,0 +1,18 @@
+## argv
+bed-to-interval-list
+tests/data/targets.bed
+--dict
+tests/data/chr1.dict
+--unique
+--format
+tsv
+## exit
+0
+## stdout
+contig	start	end	strand	name
+chr1	1001	1200	+	t1
+chr1	2001	2400	-	t2
+chr1	4001	4300	+	t3
+chr1	5001	5600	+	t4
+chr1	8001	8300	+	t5
+## stderr

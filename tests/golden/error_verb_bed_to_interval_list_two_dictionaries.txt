@@ -1,0 +1,13 @@
+## argv
+bed-to-interval-list
+tests/data/targets.bed
+--from-bam
+tests/data/insert_size.bam
+--dict
+tests/data/chr1.dict
+## exit
+2
+## stdout
+## stderr
+bammetrics bed-to-interval-list: --from-bam and --dict both set SEQUENCE_DICTIONARY (from --dict)
+  give one of --from-bam, --dict, --sequence-dictionary

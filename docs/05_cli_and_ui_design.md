@@ -23,7 +23,7 @@ Verbs:
 | Group | Verbs |
 |---|---|
 | Run | `qc` (preset or metric set, one pass, files, verdict, report), `collect` (same engine, no verdict, kept), one verb per tool |
-| Prepare | `bed-to-interval-list` (NEW, P4 library piece pulled forward), `mark-duplicates` (reserved, arrives with parity plan P9) |
+| Prepare | `bed-to-interval-list` (P4 library piece pulled forward; 0.14.0), `mark-duplicates` (reserved, arrives with parity plan P9) |
 | Post | `accumulate-quality-yield`, `report`, `check` |
 | Info | `tools`, `presets`, `plan`, `completions <shell>`, `help <verb or Picard class>` |
 
@@ -155,7 +155,7 @@ bammetrics bed-to-interval-list panel.bed --from-bam sample.bam -o panel.interva
 bammetrics hs-metrics sample.bam -R ref.fa \
     --baits panel.interval_list --targets panel.interval_list -o hs.txt
 ```
-`--from-bam` copies @SQ lines from the BAM header. `--dict ref.dict` also works. `-o -` writes to stdout, so process substitution joins the steps. `qc --panel` does this internally and keeps `PREFIX.panel.interval_list`. Hs reads BED directly, so the step is for Picard interop only.
+`--from-bam` copies @SQ lines from the BAM header. `--dict ref.dict` also works. `-o -` writes to stdout, so process substitution joins the steps. `qc --panel` does this internally and keeps `PREFIX.panel.interval_list` (0.14.0: a prepare step with the BAM header as the dictionary, recorded in the manifest). Hs reads BED directly, so the step is for Picard interop only. Giving both `--from-bam` and `--dict` is a usage error.
 
 **8. Chain: scattered quality yield to Accumulate.**
 ```
@@ -212,14 +212,14 @@ Three layers. No workflow language.
 
 | Stage | Content | BAM reads |
 |---|---|---|
-| prepare | bed-to-interval-list (reads BED), mark-duplicates (later) | 0, or 2 for mark-duplicates |
+| prepare | bed-to-interval-list (reads BED; `qc --panel BED` since 0.14.0), mark-duplicates (later) | 0, or 2 for mark-duplicates |
 | pass | quality-yield, alignment-summary, insert-size, any number of hs, gc-bias, by-cycle tools, duplicate-metrics | 1, shared through pass.rs |
 | post | accumulate-quality-yield, verdict | 0 |
 | report | HTML and JSON | 0 |
 
 Rules:
 
-- A collector that needs a file from an earlier step waits for it. Hs waits for the interval list. A collector joins the pass only when its input BAM, reference and read filter match. `plan` prints the reason when it does not.
+- A collector that needs a file from an earlier step waits for it. Hs reads the `--panel` BED itself, so it does not wait for `PREFIX.panel.interval_list` (0.14.0). A collector joins the pass only when its input BAM, reference and read filter match. `plan` prints the reason when it does not.
 - Per-collector error isolation (`pass::run_isolated`, 0.12.0): one failing collector marks only itself failed, the others finish. A failure in reading the BAM still fails the pass. The concordance suite gates this change.
 - Resume: `qc --resume` reads `PREFIX.manifest.json`. Each step stores the argv hash, tool version, preset hash, input size, mtime, and a hash of the first and last 64 KiB of the input. A step is skipped when all match and its outputs exist. If 1 of 6 collector files is missing, the pass reruns for that collector only. `--force` reruns all. `report` always reruns because it takes milliseconds.
 - Users who need loops, scatter, conditionals or clusters use the shell, make, Snakemake or Nextflow.
@@ -416,7 +416,7 @@ Each phase is 1 PR-sized unit. Days are for 1 engineer. Total: 73 days (15 weeks
 | 6 | `report` and `check` verbs | file discovery by class block, exit codes 10 and 11, release 0.7 | end to end on Picard output, exit code table | 4 |
 | 7 | `qc` engine | stage graph, manifest, resume, atomic writes, `plan`, summary, progress, per-collector error isolation, jsonl | resume after a killed run, 1 missing file reruns 1 collector, golden suite unchanged, concordance unchanged | 10 |
 | 8 | Verb grammar | option table in registry.rs, normaliser, bool forms, `tools`, `presets`, `help`, did-you-mean, completions, `-` for stdin and stdout, output naming table | every old argv still byte-identical, spelling matrix per tool, name-table pin vs Picard face, stdin BAM case | 10 |
-| 9 | `bed-to-interval-list` | BED to interval list with @SQ from BAM or dict | compare against Picard BedToIntervalList output on 3 BEDs | 2.5 |
+| 9 | `bed-to-interval-list` | BED to interval list with @SQ from BAM or dict (0.14.0) | compare against Picard BedToIntervalList output on 3 BEDs | 2.5 |
 | 10 | Python mirror | `qc`, `check`, `report`, `read_metrics`, `_repr_html_`, generated stubs, wheel check | stub vs `dir()` test, GIL release, error classes | 8 |
 | 11 | Docs and benchmark | `cli.md` rewrite, preset docs, CI size and time budgets, accessibility pass | benchmark fails at 2x target | 4.5 |
 

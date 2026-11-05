@@ -4,7 +4,9 @@ for hand-written BED files, every option, every dictionary source, and error par
 The BED files cover tab and space separators, quoted names, a score that is not a
 number (the strand after it is not read), `.` and `-` strands, zero-length
 intervals, overlapping and abutting intervals, repeated names, header and comment
-lines, and lines with one or two fields.
+lines, and lines with one or two fields. `test_verb_face` runs the
+`bed-to-interval-list` verb with `--from-bam` and `--dict` on three of them, at the
+defaults and under each option's verb spelling (`VERB_OPTIONS`).
 """
 import subprocess
 
@@ -32,6 +34,14 @@ OPTIONS = {
     "unsorted_output": ["SORT=false"],
     "unsorted_unique": ["SORT=false", "UNIQUE=true"],
     "keep_zero_unique": ["KEEP_LENGTH_ZERO_INTERVALS=true", "UNIQUE=true"],
+}
+# The verb spelling of an option set and the Picard arguments it stands for.
+VERB_OPTIONS = {
+    "defaults": ([], []),
+    "unique": (["--unique"], ["UNIQUE=true"]),
+    "unsorted_output": (["--sort", "false"], ["SORT=false"]),
+    "keep_zero": (["--keep-length-zero-intervals"], ["KEEP_LENGTH_ZERO_INTERVALS=true"]),
+    "drop_missing": (["--drop-missing-contigs"], ["DROP_MISSING_CONTIGS=true"]),
 }
 
 
@@ -111,6 +121,43 @@ def test_bad_intervals_fail_in_both(corpus, tmp_path, line, message):
     assert message in picard.stderr.decode() and message in ours.stderr
     assert not picard_out.exists() and not ours_out.exists()
     RESULTS.append((f"{TOOL} {line.strip()!r}", 0, 0, "both exit non-zero, no file"))
+
+
+@pytest.mark.parametrize("option", VERB_OPTIONS)
+@pytest.mark.parametrize("spelling, source", [("--from-bam", "corpus.bam"), ("--dict", "ref.dict")])
+@pytest.mark.parametrize("name", ["plain", "messy", "unsorted"])
+def test_verb_face(beds, corpus, tmp_path, name, spelling, source, option):
+    """docs/05 section 7 row 9 and example 7: `bammetrics bed-to-interval-list BED
+    --from-bam BAM` (or `--dict FILE`) to a file, to `-o -` and with the BED on
+    standard input, each byte for byte the file Picard writes for `SD=` that file
+    and the Picard arguments the verb options stand for. Under
+    `--drop-missing-contigs` the BED gets a chrX line the dictionary lacks."""
+    verb_args, picard_args = VERB_OPTIONS[option]
+    bed = beds[name]
+    if option == "drop_missing":
+        bed = tmp_path / f"{name}_chrX.bed"
+        bed.write_text(beds[name].read_text() + "chrX\t1\t2\tgone\n")
+    dictionary = corpus / source
+    picard_out = tmp_path / "picard.interval_list"
+    picard = subprocess.run(["picard", TOOL, f"I={bed}", f"SD={dictionary}", f"O={picard_out}", *picard_args,
+                             "QUIET=true", "VERBOSITY=ERROR"], env=picard_env(), capture_output=True)
+    assert picard.returncode == 0, picard.stderr[-500:]
+    expected = picard_out.read_bytes()
+    verb = [str(BAMMETRICS), "bed-to-interval-list"]
+    file_out = tmp_path / "verb.interval_list"
+    to_file = subprocess.run([*verb, str(bed), spelling, str(dictionary), *verb_args, "-o", str(file_out)],
+                             capture_output=True)
+    assert to_file.returncode == 0, to_file.stderr
+    label = f"{name} {spelling} {option}"
+    assert file_out.read_bytes() == expected, f"{label} -o FILE"
+    to_stdout = subprocess.run([*verb, str(bed), spelling, str(dictionary), *verb_args, "-o", "-"],
+                               capture_output=True)
+    assert to_stdout.returncode == 0 and to_stdout.stdout == expected, f"{label} -o -"
+    with open(bed, "rb") as stdin:
+        piped = subprocess.run([*verb, "-", spelling, str(dictionary), *verb_args], stdin=stdin, capture_output=True)
+    assert piped.returncode == 0 and piped.stdout == expected, f"{label} BED on stdin"
+    lines = expected.count(b"\n")
+    RESULTS.append((f"bed-to-interval-list {label}", lines, lines, "file, -o - and stdin identical"))
 
 
 def test_assume_sorted_is_not_an_option(beds, corpus, tmp_path):

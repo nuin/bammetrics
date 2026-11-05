@@ -64,10 +64,16 @@ fn write_output(
         write_atomic(&path, render(step, file)?)?;
         files.written += 1;
         files.replaced += usize::from(existed);
+        let kind = step
+            .record
+            .outputs
+            .iter()
+            .find(|o| o.path == path)
+            .map_or("metrics", |o| o.kind.as_str());
         let record = Output {
             path,
             tool: step.tool.name.to_owned(),
-            kind: "metrics".to_owned(),
+            kind: kind.to_owned(),
         };
         out.file(&step.record.id, &record, true);
         written.push(record);
@@ -86,8 +92,13 @@ fn remove_stale(step: &Step, written: &[Output], files: &mut Files) {
     }
 }
 
-/// Remove the metrics files the earlier run's manifest lists that no step
-/// of this run wrote or kept (a collector the new options drop), so the
+/// The manifest kinds of the files a step writes: [`remove_dropped`]
+/// removes only these, never the verdict, page or manifest.
+const STEP_KINDS: &[&str] = &["metrics", "intervals"];
+
+/// Remove the step files the earlier run's manifest lists that no step of
+/// this run wrote or kept (a collector the new options drop, the interval
+/// list of a `--panel` BED no longer given), so the
 /// prefix holds what this run's manifest lists and `report DIR` agrees
 /// with it. The manifest is a file on disk, so its paths are not trusted:
 /// only [`owned_by_prefix`] paths are removed, and a symlink is never followed.
@@ -100,7 +111,7 @@ fn remove_dropped(plan: &Plan, done: &[Done], files: &mut Files) {
             .any(|d| d.record.outputs.iter().any(|o| o.path == path))
     };
     for output in old.steps.iter().flat_map(|s| &s.outputs) {
-        if output.kind == "metrics"
+        if STEP_KINDS.contains(&output.kind.as_str())
             && owned_by_prefix(&plan.prefix, &output.path)
             && !current(&output.path)
             && fs::symlink_metadata(&output.path).is_ok_and(|m| m.file_type().is_file())
@@ -152,9 +163,45 @@ fn finished(
     Ok(Done { record, ran: true })
 }
 
-/// The pass and the own reads: every collector not skipped by `--resume`.
+/// The earlier run's record of a step `--resume` skips, its files counted
+/// as kept; `None` for a step that runs.
+fn kept(
+    plan: &Plan,
+    step: &Step,
+    args: &QcArgs,
+    files: &mut Files,
+    out: &Reporter,
+) -> Option<Done> {
+    if !step.skipped(args.resume) {
+        return None;
+    }
+    let old = plan
+        .previous
+        .as_ref()
+        .ok()
+        .and_then(Option::as_ref)
+        .and_then(|m| m.step(&step.record.id))
+        .expect("a resumable step has a record");
+    for output in &old.outputs {
+        out.file(&old.id, output, false);
+    }
+    files.kept += old.outputs.len();
+    Some(Done {
+        record: old.clone(),
+        ran: false,
+    })
+}
+
+/// Prepare, the pass and the own reads: every step not skipped by
+/// `--resume`, prepare steps first.
 fn collect(plan: &Plan, args: &QcArgs, files: &mut Files, out: &mut Reporter) -> Result<Vec<Done>> {
-    let previous = plan.previous.as_ref().ok().and_then(Option::as_ref);
+    let mut done = Vec::with_capacity(plan.prepare.len() + plan.steps.len());
+    for step in &plan.prepare {
+        match kept(plan, step, args, files, out) {
+            Some(old) => done.push(old),
+            None => done.push(finished(step, (step.tool.run)(&step.inv), files, out)?),
+        }
+    }
     let running: Vec<&Step> = plan
         .steps
         .iter()
@@ -180,25 +227,14 @@ fn collect(plan: &Plan, args: &QcArgs, files: &mut Files, out: &mut Reporter) ->
         results?
     }
     .into_iter();
-    let mut done = Vec::with_capacity(plan.steps.len());
     for step in &plan.steps {
-        if step.skipped(args.resume) {
-            let old = previous
-                .and_then(|m| m.step(&step.record.id))
-                .expect("a resumable step has a record");
-            for output in &old.outputs {
-                out.file(&old.id, output, false);
-            }
-            files.kept += old.outputs.len();
-            done.push(Done {
-                record: old.clone(),
-                ran: false,
-            });
+        if let Some(old) = kept(plan, step, args, files, out) {
+            done.push(old);
             continue;
         }
         let result = match step.read {
             Read::Pass => results.next().expect("one result per pass step"),
-            Read::Own(_) => (step.tool.run)(&step.inv),
+            Read::Own(_) | Read::Header => (step.tool.run)(&step.inv),
         };
         done.push(finished(step, result, files, out)?);
     }
@@ -274,7 +310,9 @@ fn post_and_report(
     let mut paths: Vec<&Path> = done
         .iter()
         .filter(|d| d.record.status == Status::Ok)
-        .flat_map(|d| d.record.outputs.iter().map(|o| o.path.as_path()))
+        .flat_map(|d| &d.record.outputs)
+        .filter(|o| o.kind == "metrics")
+        .map(|o| o.path.as_path())
         .collect();
     paths.sort();
     let inputs = paths
@@ -553,7 +591,14 @@ fn summary(s: &Summary) -> String {
         0 if tail == 1 => text.push_str("use --fail-on fail or bammetrics check to gate\n"),
         0 => {}
         1 => {
-            let _ = writeln!(text, "exit 1: {} collector(s) failed", s.failed.len());
+            let prepare = s.failed.iter().filter(|r| r.stage == "prepare").count();
+            let collectors = s.failed.len() - prepare;
+            let what = match (collectors, prepare) {
+                (n, 0) => format!("{n} collector(s)"),
+                (0, p) => format!("{p} prepare step(s)"),
+                (n, p) => format!("{n} collector(s) and {p} prepare step(s)"),
+            };
+            let _ = writeln!(text, "exit 1: {what} failed");
         }
         10 => text.push_str("exit 10: the verdict reaches --fail-on\n"),
         _ => text.push_str("exit 11: the verdict is incomplete\n"),

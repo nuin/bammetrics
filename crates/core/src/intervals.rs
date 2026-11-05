@@ -99,6 +99,14 @@ pub fn uniqued_named(intervals: &[NamedInterval]) -> Vec<NamedInterval> {
         .collect()
 }
 
+/// True when the first non-blank line of `text` starts with `@`: an
+/// interval list. [`read_files`] reads any other text as BED.
+pub fn is_interval_list(text: &str) -> bool {
+    text.lines()
+        .find(|l| !l.trim().is_empty())
+        .is_some_and(|l| l.starts_with('@'))
+}
+
 /// Read and concatenate interval files (`IntervalList.fromFiles`), in file
 /// order and without merging. A file whose first non-blank line starts with
 /// `@` is an interval list, anything else is BED.
@@ -121,11 +129,7 @@ pub fn read_named_files<P: AsRef<Path>>(
             path: path.to_path_buf(),
             source,
         })?;
-        let is_interval_list = text
-            .lines()
-            .find(|l| !l.trim().is_empty())
-            .is_some_and(|l| l.starts_with('@'));
-        let parsed = if is_interval_list {
+        let parsed = if is_interval_list(&text) {
             parse_interval_list(&text, header)
         } else {
             parse_bed(&text, header)
