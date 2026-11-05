@@ -11,8 +11,8 @@ use bammetrics_core::metrics_file::{ClassBlock, HistogramBlock, MetricsDoc};
 use bammetrics_verdict::{Band, Check, Input, Status, Verdict};
 
 use crate::html::{escape, number, thousands};
-use crate::plots::{Family, figure};
-use crate::theme::CSS;
+use crate::plots::{Family, figure_with, thin_indices};
+use crate::theme::{CSS, scoped_css};
 
 /// What the caller decides about one page.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -34,16 +34,42 @@ pub fn render(verdict: &Verdict, inputs: &[Input], options: &Options) -> String 
         inputs,
         options,
         drawn: Vec::new(),
+        max_points: None,
     };
     page.head();
-    page.header();
-    page.band();
-    page.issues();
-    page.checks_table();
-    page.remaining_plots();
-    page.tables();
-    page.run();
+    page.body();
     page.out.push_str("</main></body></html>\n");
+    page.out
+}
+
+/// The scope class of [`fragment`].
+pub const FRAGMENT_CLASS: &str = "bm";
+/// The most points a [`fragment`] draws per series, and the most rows it
+/// shows of a histogram table.
+pub const FRAGMENT_POINTS: usize = 200;
+
+/// The page body for embedding in another page (the notebook view of the
+/// Python `Run`): one `<div class="bm">` holding its stylesheet with every
+/// rule limited to the div ([`scoped_css`]), then the sections of
+/// [`render`] with inline SVG. Each series and histogram table is cut to
+/// [`FRAGMENT_POINTS`]. No script, no external resource.
+pub fn fragment(verdict: &Verdict, inputs: &[Input], options: &Options) -> String {
+    let mut page = Page {
+        out: String::with_capacity(64 * 1024),
+        verdict,
+        inputs,
+        options,
+        drawn: Vec::new(),
+        max_points: Some(FRAGMENT_POINTS),
+    };
+    let scope = format!(".{FRAGMENT_CLASS}");
+    let _ = write!(
+        page.out,
+        "<div class=\"{FRAGMENT_CLASS}\">\n<style>\n{}</style>\n",
+        scoped_css(&scope)
+    );
+    page.body();
+    page.out.push_str("</div>\n");
     page.out
 }
 
@@ -64,6 +90,8 @@ struct Page<'a> {
     options: &'a Options<'a>,
     /// Plot families already on the page.
     drawn: Vec<Family>,
+    /// The most points per series and rows per histogram table.
+    max_points: Option<usize>,
 }
 
 pub(crate) fn status_class(status: Status) -> &'static str {
@@ -170,6 +198,17 @@ fn histogram_definition(program: Option<&str>, label: &str) -> Option<&'static s
 }
 
 impl<'a> Page<'a> {
+    /// Every section below the document head.
+    fn body(&mut self) {
+        self.header();
+        self.band();
+        self.issues();
+        self.checks_table();
+        self.remaining_plots();
+        self.tables();
+        self.run();
+    }
+
     fn head(&mut self) {
         let _ = write!(
             self.out,
@@ -332,7 +371,7 @@ impl<'a> Page<'a> {
 
     fn plot(&mut self, family: Family) {
         self.drawn.push(family);
-        match figure(family, self.inputs, &self.verdict.checks) {
+        match figure_with(family, self.inputs, &self.verdict.checks, self.max_points) {
             Some(html) => self.out.push_str(&html),
             None => {
                 let _ = write!(
@@ -540,7 +579,7 @@ impl<'a> Page<'a> {
     }
 
     /// `<tr>` per row, one `<td>` per cell.
-    fn rows(out: &mut String, rows: &[Vec<Value>]) {
+    fn rows<'r>(out: &mut String, rows: impl IntoIterator<Item = &'r Vec<Value>>) {
         for row in rows {
             out.push_str("<tr>");
             for value in row {
@@ -551,10 +590,19 @@ impl<'a> Page<'a> {
     }
 
     fn histogram_table(&mut self, hist: &HistogramBlock, program: Option<&str>) {
+        let shown = match self.max_points {
+            Some(max) => thin_indices(hist.rows.len(), max),
+            None => (0..hist.rows.len()).collect(),
+        };
+        let rows = if shown.len() == hist.rows.len() {
+            count(hist.rows.len(), "row")
+        } else {
+            format!("{} of {} rows, evenly spaced", shown.len(), hist.rows.len())
+        };
         let _ = write!(
             self.out,
             "<h4>Histogram <span class=\"muted\">{}</span></h4><div class=\"tbl\"><table class=\"wide\"><thead><tr>",
-            escape(&count(hist.rows.len(), "row"))
+            escape(&rows)
         );
         for label in &hist.columns {
             let definition = histogram_definition(program, label).unwrap_or("");
@@ -566,7 +614,7 @@ impl<'a> Page<'a> {
             );
         }
         self.out.push_str("</tr></thead><tbody>");
-        Self::rows(&mut self.out, &hist.rows);
+        Self::rows(&mut self.out, shown.iter().map(|&i| &hist.rows[i]));
         self.out.push_str("</tbody></table></div>");
     }
 

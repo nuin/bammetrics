@@ -78,11 +78,22 @@ impl Family {
 /// The plot of `family` as a `<figure>`, or `None` when the inputs hold no
 /// data for it. `checks` supply the limits drawn as guides.
 pub fn figure(family: Family, inputs: &[Input], checks: &[Check]) -> Option<String> {
+    figure_with(family, inputs, checks, None)
+}
+
+/// [`figure`] with every series cut to at most `max_points` points
+/// ([`thin`]); the insert size bars are merged to at most that many.
+pub fn figure_with(
+    family: Family,
+    inputs: &[Input],
+    checks: &[Check],
+    max_points: Option<usize>,
+) -> Option<String> {
     let (svg, caption) = match family {
-        Family::Coverage => coverage(inputs, checks)?,
-        Family::InsertSize => insert_size(inputs, checks)?,
-        Family::GcBias => gc_bias(inputs)?,
-        Family::CycleQuality => cycle_quality(inputs)?,
+        Family::Coverage => coverage(inputs, checks, max_points)?,
+        Family::InsertSize => insert_size(inputs, checks, max_points)?,
+        Family::GcBias => gc_bias(inputs, max_points)?,
+        Family::CycleQuality => cycle_quality(inputs, max_points)?,
     };
     Some(format!(
         "<figure class=\"plot\" id=\"plot-{}\">{svg}<figcaption>{}</figcaption></figure>",
@@ -143,7 +154,11 @@ fn depth_of(metric: &str) -> Option<f64> {
 /// Cumulative coverage: the share of target bases at or above each depth,
 /// from the `high_quality_coverage_count` histogram of HsMetrics or
 /// WgsMetrics. Guides mark the depths the coverage rules name and the mean.
-fn coverage(inputs: &[Input], checks: &[Check]) -> Option<(String, String)> {
+fn coverage(
+    inputs: &[Input],
+    checks: &[Check],
+    max_points: Option<usize>,
+) -> Option<(String, String)> {
     let (_, hist) = histogram_with(
         inputs,
         &["coverage_or_base_quality", "coverage"],
@@ -226,7 +241,7 @@ fn coverage(inputs: &[Input], checks: &[Check]) -> Option<(String, String)> {
         "depth (x)",
         "target bases at or above depth",
     );
-    chart.polyline(&curve, "ser");
+    chart.polyline(&thin(&curve, max_points), "ser");
     for (depth, share, label) in &marks {
         chart.vguide(*depth, &format!("{}x", short_number(*depth)), "guide");
         chart.point(*depth, *share, label);
@@ -239,7 +254,11 @@ fn coverage(inputs: &[Input], checks: &[Check]) -> Option<(String, String)> {
 
 /// The insert size histogram (the `All_Reads.fr_count` series, else the
 /// first) with the median, the MAD band and the rule's fail range.
-fn insert_size(inputs: &[Input], checks: &[Check]) -> Option<(String, String)> {
+fn insert_size(
+    inputs: &[Input],
+    checks: &[Check],
+    max_points: Option<usize>,
+) -> Option<(String, String)> {
     let input = inputs.iter().find(|input| {
         input.doc.class("InsertSizeMetrics").is_some() && input.doc.histogram.is_some()
     })?;
@@ -287,7 +306,7 @@ fn insert_size(inputs: &[Input], checks: &[Check]) -> Option<(String, String)> {
         lo = lo.min(a);
         hi = hi.max(b);
     }
-    let bars = rebin(&bins, 200);
+    let bars = rebin(&bins, max_points.map_or(MAX_BARS, |n| n.clamp(1, MAX_BARS)));
     let y_max = bars.iter().map(|(_, _, h)| *h).fold(0.0, f64::max);
     let x = Scale::nice(lo.max(0.0), hi, Ticks::Number);
     let y = Scale::nice(0.0, y_max, Ticks::Number);
@@ -340,6 +359,37 @@ fn insert_size(inputs: &[Input], checks: &[Check]) -> Option<(String, String)> {
     Some((chart.finish(), desc))
 }
 
+/// The most bars the insert size plot draws.
+const MAX_BARS: usize = 200;
+
+/// The indices of at most `max` of `len` items, evenly spread, the first
+/// and the last always among them; every index when `len` fits.
+pub fn thin_indices(len: usize, max: usize) -> Vec<usize> {
+    if len <= max {
+        return (0..len).collect();
+    }
+    if max < 2 {
+        return (0..max).collect();
+    }
+    let mut picked: Vec<usize> = (0..max)
+        .map(|i| (i * (len - 1) + (max - 1) / 2) / (max - 1))
+        .collect();
+    picked.dedup();
+    picked
+}
+
+/// `points` cut to at most `max_points` by [`thin_indices`]; all of them
+/// without a limit.
+pub fn thin(points: &[(f64, f64)], max_points: Option<usize>) -> Vec<(f64, f64)> {
+    match max_points {
+        Some(max) => thin_indices(points.len(), max)
+            .into_iter()
+            .map(|i| points[i])
+            .collect(),
+        None => points.to_vec(),
+    }
+}
+
 /// `(x0, x1, height)` bars from `(key, count)` bins: one per key up to
 /// `max_bars`, else `max_bars` equal-width bins over the key range.
 fn rebin(bins: &[(f64, f64)], max_bars: usize) -> Vec<(f64, f64, f64)> {
@@ -361,7 +411,7 @@ fn rebin(bins: &[(f64, f64)], max_bars: usize) -> Vec<(f64, f64, f64)> {
 
 /// Normalized coverage by GC window from the `All Reads` rows of
 /// GcBiasDetailMetrics, the 0.9 to 1.1 band and a strip of window counts.
-fn gc_bias(inputs: &[Input]) -> Option<(String, String)> {
+fn gc_bias(inputs: &[Input], max_points: Option<usize>) -> Option<(String, String)> {
     let block = class(inputs, "GcBiasDetailMetrics")?;
     let is_all_reads = |row: usize| {
         block
@@ -442,7 +492,7 @@ fn gc_bias(inputs: &[Input]) -> Option<(String, String)> {
     chart.rect(0.0, 100.0, 0.9, 1.1, "band");
     chart.hguide(1.0, "1.0 average, band 0.9 to 1.1", "guide");
     chart.strip(&strip, "strip");
-    chart.polyline(&covered, "ser");
+    chart.polyline(&thin(&covered, max_points), "ser");
     chart.legend(&[
         ("ser", "normalized coverage"),
         ("strip", "windows at this GC"),
@@ -453,7 +503,7 @@ fn gc_bias(inputs: &[Input]) -> Option<(String, String)> {
 /// Mean base quality per cycle from MeanQualityByCycle, split into read 1
 /// and read 2 at the first-of-pair read length when the alignment summary
 /// gives it, with Q20 and Q30 guides.
-fn cycle_quality(inputs: &[Input]) -> Option<(String, String)> {
+fn cycle_quality(inputs: &[Input], max_points: Option<usize>) -> Option<(String, String)> {
     let (_, hist) = histogram_with(inputs, &["CYCLE"], "MEAN_QUALITY")?;
     let points = numeric_series(hist, "MEAN_QUALITY");
     if points.is_empty() {
@@ -515,11 +565,11 @@ fn cycle_quality(inputs: &[Input]) -> Option<(String, String)> {
     chart.rect(0.0, f64::MAX, 0.0, 20.0, "shade");
     chart.hguide(30.0, "Q30", "guide");
     chart.hguide(20.0, "Q20", "limit");
-    chart.polyline(&read1, "ser");
+    chart.polyline(&thin(&read1, max_points), "ser");
     if read2.is_empty() {
         chart.legend(&[("ser", "all cycles")]);
     } else {
-        chart.polyline(&read2, "ser2");
+        chart.polyline(&thin(&read2, max_points), "ser2");
         chart.legend(&[("ser", "read 1"), ("ser2", "read 2")]);
     }
     Some((chart.finish(), desc))
@@ -546,6 +596,19 @@ mod tests {
             rebin(&bins[..3], 200),
             vec![(0.0, 1.0, 1.0), (1.0, 2.0, 1.0), (2.0, 3.0, 1.0)]
         );
+    }
+
+    #[test]
+    fn thinning_keeps_the_ends_and_the_limit() {
+        let points: Vec<(f64, f64)> = (0..1001).map(|i| (i as f64, 1.0)).collect();
+        let thinned = thin(&points, Some(200));
+        assert_eq!(thinned.len(), 200);
+        assert_eq!(thinned[0].0, 0.0);
+        assert_eq!(thinned[199].0, 1000.0);
+        assert!(thinned.windows(2).all(|w| w[0].0 < w[1].0));
+        assert_eq!(thin(&points[..150], Some(200)).len(), 150);
+        assert_eq!(thin(&points, None).len(), 1001);
+        assert_eq!(thin_indices(3, 2), vec![0, 2]);
     }
 
     #[test]
