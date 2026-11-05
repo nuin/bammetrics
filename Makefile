@@ -4,7 +4,7 @@
 UV_RUN := uv run --no-project
 CORPUS := tests/corpus/out
 
-.PHONY: all test lint release corpus reference-metrics concordance golden golden-update python-test wheel wheel-check clean-corpus bench-bam bench bench-wgs fuzz
+.PHONY: all test lint release corpus reference-metrics concordance golden golden-update budgets python-test wheel wheel-check clean-corpus bench-bam bench bench-wgs fuzz
 
 all: test lint concordance
 
@@ -41,6 +41,14 @@ golden: release
 
 golden-update: release
 	UPDATE_GOLDEN=1 cargo test --release -p bammetrics-cli --test golden
+
+# Size and speed budgets of docs/05 section 4.8 (crates/cli/tests/budgets.rs):
+# the fixture pages and a 100-sample index timed (median of 31 renders) and
+# sized, the binary growth between the two probe examples of crates/report,
+# and the BAM reads the report adds to qc. Fails at 2x any target.
+budgets:
+	cargo build --release -p bammetrics-report --example size_base --example size_report
+	cargo test --release -p bammetrics-cli --test budgets -- --ignored --nocapture
 
 # Differential fuzzing (tests/concordance/fuzz.py): N seeded random BAMs through
 # Picard and bammetrics, failures shrunk into tests/concordance/regressions.
