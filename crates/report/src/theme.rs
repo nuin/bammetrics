@@ -54,6 +54,73 @@ pub fn tokens(theme: Theme) -> Vec<(String, [u8; 3])> {
         .collect()
 }
 
+/// [`CSS`] with every rule limited to elements inside `scope` (a class
+/// selector, `.bm`): `:root`, `html` and `body` become the scope itself,
+/// every other selector gets the scope in front, `@media` blocks keep their
+/// condition. For a page fragment embedded in another page (a notebook
+/// cell), whose own styles it must not touch.
+pub fn scoped_css(scope: &str) -> String {
+    let mut out = String::with_capacity(CSS.len() * 2);
+    scope_rules(CSS, scope, &mut out);
+    out
+}
+
+/// One level of rules: `selectors { body }` or `@media ... { rules }`.
+fn scope_rules(css: &str, scope: &str, out: &mut String) {
+    let mut rest = css;
+    while let Some(open) = rest.find('{') {
+        let head = rest[..open].trim();
+        let after = &rest[open + 1..];
+        if head.starts_with('@') {
+            let close = matching_brace(after);
+            out.push_str(head);
+            out.push_str(" {\n");
+            scope_rules(&after[..close], scope, out);
+            out.push_str("}\n");
+            rest = &after[(close + 1).min(after.len())..];
+            continue;
+        }
+        let close = after.find('}').unwrap_or(after.len());
+        let selectors: Vec<String> = head
+            .split(',')
+            .map(|s| scope_selector(s.trim(), scope))
+            .collect();
+        out.push_str(&selectors.join(", "));
+        out.push_str(" {");
+        out.push_str(&after[..close]);
+        out.push_str("}\n");
+        rest = &after[(close + 1).min(after.len())..];
+    }
+}
+
+/// The index of the `}` that closes a block opened just before `text`.
+fn matching_brace(text: &str) -> usize {
+    let mut depth = 1usize;
+    for (i, c) in text.char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return i;
+                }
+            }
+            _ => {}
+        }
+    }
+    text.len()
+}
+
+fn scope_selector(selector: &str, scope: &str) -> String {
+    if let Some(rest) = selector.strip_prefix(":root") {
+        return format!("{scope}{rest}");
+    }
+    match selector {
+        "html" | "body" => scope.to_owned(),
+        _ => format!("{scope} {selector}"),
+    }
+}
+
 /// The color of `name` in `theme`.
 pub fn token(theme: Theme, name: &str) -> Option<[u8; 3]> {
     tokens(theme)
@@ -99,6 +166,35 @@ mod tests {
     fn black_on_white_is_21_to_1() {
         let ratio = contrast([0, 0, 0], [255, 255, 255]);
         assert!((ratio - 21.0).abs() < 1e-9, "{ratio}");
+    }
+
+    #[test]
+    fn scoped_css_touches_only_the_scope() {
+        let css = scoped_css(".bm");
+        let mut selectors = 0;
+        for line in css.lines() {
+            let Some(head) = line.split('{').next().filter(|_| line.contains('{')) else {
+                continue;
+            };
+            if head.starts_with('@') {
+                continue;
+            }
+            for selector in head.split(',') {
+                selectors += 1;
+                assert!(selector.trim().starts_with(".bm"), "{line}");
+            }
+        }
+        assert!(selectors > 80, "{selectors} selectors");
+        assert!(css.contains(".bm {\n  --bg: #ffffff;"));
+        assert!(css.contains(".bm[data-theme=\"dark\"] {"));
+        assert!(
+            css.contains(
+                "@media (prefers-color-scheme: dark) {\n.bm:not([data-theme=\"light\"]) {"
+            )
+        );
+        assert!(css.contains(".bm table.checks td:first-child {"));
+        assert_eq!(css.matches('{').count(), css.matches('}').count());
+        assert_eq!(css.matches('{').count(), CSS.matches('{').count());
     }
 
     #[test]

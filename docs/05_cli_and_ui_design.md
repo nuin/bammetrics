@@ -390,7 +390,7 @@ bm.tools(); bm.presets()
 - Errors: `UsageError(ValueError)` and `InputError(OSError)`. Existing `except ValueError` and `except OSError` keep working.
 - Option names come from the same table as the CLI, and `.pyi` is generated from it. This ends `reference` against `reference_sequence` and `path` against `input` for new functions. Old functions keep their signatures and are documented as aliases.
 - The notebook repr is the report body in `<div class="bm">` with scoped CSS and inline SVG. Histograms are downsampled to 200 points.
-- CI builds the wheel, imports it and compares `dir(bammetrics)` with the stub. This catches the stale wheel now in `.venv`.
+- CI builds the wheel, imports it and compares `dir(bammetrics)` with the stub. This catches the stale wheel now in `.venv` (`make wheel-check`, 0.15.0).
 - Not added: a fluent builder, a `Cohort` class, pandas frames, Python callables as checks. A verdict must reproduce from `verdict.json` alone.
 
 ## 6. Compatibility and migration
@@ -417,7 +417,7 @@ Each phase is 1 PR-sized unit. Days are for 1 engineer. Total: 73 days (15 weeks
 | 7 | `qc` engine | stage graph, manifest, resume, atomic writes, `plan`, summary, progress, per-collector error isolation, jsonl | resume after a killed run, 1 missing file reruns 1 collector, golden suite unchanged, concordance unchanged | 10 |
 | 8 | Verb grammar | option table in registry.rs, normaliser, bool forms, `tools`, `presets`, `help`, did-you-mean, completions, `-` for stdin and stdout, output naming table | every old argv still byte-identical, spelling matrix per tool, name-table pin vs Picard face, stdin BAM case | 10 |
 | 9 | `bed-to-interval-list` | BED to interval list with @SQ from BAM or dict (0.14.0) | compare against Picard BedToIntervalList output on 3 BEDs | 2.5 |
-| 10 | Python mirror | `qc`, `check`, `report`, `read_metrics`, `_repr_html_`, generated stubs, wheel check | stub vs `dir()` test, GIL release, error classes | 8 |
+| 10 | Python mirror | `qc`, `check`, `report`, `read_metrics`, `_repr_html_`, generated stubs, wheel check (0.15.0; docs/python.md) | stub vs `dir()` test, GIL release, error classes | 8 |
 | 11 | Docs and benchmark | `cli.md` rewrite, preset docs, CI size and time budgets, accessibility pass | benchmark fails at 2x target | 4.5 |
 
 Order of delivery: phases 1 to 6 as 0.7 (report and check on any Picard directory, no change to collection). Phase 7 as 0.8. Phases 8 and 9 as 0.9. Phases 10 and 11 as 0.10. `mark-duplicates` is outside the 73 days because it waits on parity plan P9 (6 to 8 weeks).

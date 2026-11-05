@@ -280,21 +280,26 @@ fn manifest(plan: &Plan, steps: Vec<StepRecord>) -> Manifest {
     }
 }
 
-/// An earlier run's files are replaced only on request.
+/// An earlier run's files are replaced only on request. A manifest that
+/// cannot be read (`plan.previous` is `Err`) is reported with its reason.
 fn guard_previous(plan: &Plan, args: &QcArgs) -> Result<()> {
     if matches!(plan.previous, Ok(None)) || args.force {
         return Ok(());
     }
-    if !args.resume {
-        return Err(Error::Usage(format!(
+    match (&plan.previous, args.resume) {
+        (Err(why), false) => Err(Error::Usage(format!(
+            "{why}: --resume or --force runs every step"
+        ))),
+        (Err(why), true) => {
+            eprintln!("bammetrics qc: {why}; running every step");
+            Ok(())
+        }
+        (_, false) => Err(Error::Usage(format!(
             "{} holds an earlier run: --resume skips its finished steps, --force reruns them",
             manifest_path(&plan.prefix).display()
-        )));
+        ))),
+        (_, true) => Ok(()),
     }
-    if let Err(why) = &plan.previous {
-        eprintln!("bammetrics qc: {why}; running every step");
-    }
-    Ok(())
 }
 
 /// Post and report: the verdict over the run's files, then verdict.json and
@@ -305,7 +310,7 @@ fn post_and_report(
     done: &[Done],
     files: &mut Files,
     out: &Reporter,
-) -> Result<(Verdict, Vec<StepRecord>)> {
+) -> Result<(Verdict, Vec<Input>, Vec<StepRecord>)> {
     // In path order, the order `report` discovers the same files in.
     let mut paths: Vec<&Path> = done
         .iter()
@@ -324,20 +329,23 @@ fn post_and_report(
     argv.extend(paths.iter().map(|p| p.display().to_string()));
     let post = own_step(plan, "verdict", "post", argv, Vec::new());
 
-    let date = args.date.clone().unwrap_or_else(|| CivilTime::now().iso());
-    let page = bammetrics_report::render(
-        &verdict,
-        &inputs,
-        &Options {
-            all_plots: args.all_plots,
-            date: &date,
-        },
-    );
+    let mut written = vec![(verdict_path(&plan.prefix), verdict.to_json(), "verdict")];
+    if args.write_page {
+        let date = args.date.clone().unwrap_or_else(|| CivilTime::now().iso());
+        let page = bammetrics_report::render(
+            &verdict,
+            &inputs,
+            &Options {
+                all_plots: args.all_plots,
+                date: &date,
+            },
+        );
+        written.push((page_path(&plan.prefix), page, "report"));
+    } else {
+        remove_stale_page(plan, files);
+    }
     let mut outputs = Vec::new();
-    for (path, text, kind) in [
-        (verdict_path(&plan.prefix), verdict.to_json(), "verdict"),
-        (page_path(&plan.prefix), page, "report"),
-    ] {
+    for (path, text, kind) in written {
         files.replaced += usize::from(path.exists());
         write_atomic(&path, text)?;
         files.written += 1;
@@ -352,7 +360,30 @@ fn post_and_report(
     let mut report_argv = vec![format!("--all-plots={}", args.all_plots)];
     report_argv.extend(args.date.iter().map(|d| format!("--date={d}")));
     let report = own_step(plan, "report", "report", report_argv, outputs);
-    Ok((verdict, vec![post, report]))
+    Ok((verdict, inputs, vec![post, report]))
+}
+
+/// Without the page (Python `qc(report=False)`), an earlier run's page
+/// would show an older verdict: remove it. Only the path this run computes
+/// from its prefix, only when the earlier run's manifest lists it as its
+/// `report` file, and only a regular file (a symlink is never followed).
+/// A page no run of this prefix wrote stays.
+fn remove_stale_page(plan: &Plan, files: &mut Files) {
+    let Ok(Some(old)) = &plan.previous else {
+        return;
+    };
+    let page = page_path(&plan.prefix);
+    let written_before = old
+        .steps
+        .iter()
+        .flat_map(|s| &s.outputs)
+        .any(|o| o.kind == "report" && o.path == page);
+    if written_before
+        && fs::symlink_metadata(&page).is_ok_and(|m| m.file_type().is_file())
+        && fs::remove_file(&page).is_ok()
+    {
+        files.removed += 1;
+    }
 }
 
 /// `qc`: the exit code, after a fatal error too (printed as `bammetrics qc:
@@ -361,10 +392,57 @@ pub fn run(args: &QcArgs) -> u8 {
     qc(args).unwrap_or_else(|e| events::fatal("qc", args.format, &e))
 }
 
-fn qc(args: &QcArgs) -> Result<u8> {
+/// A finished `qc` run, as [`execute`] returns it.
+pub struct Outcome {
+    pub plan: Plan,
+    pub verdict: Verdict,
+    /// The metrics files the verdict was evaluated over, parsed, in path order.
+    pub inputs: Vec<Input>,
+    /// The manifest's step records: prepare steps and collectors, then the
+    /// verdict and the report.
+    pub records: Vec<StepRecord>,
+    /// The exit code `bammetrics qc` gives the same run: 0, 1 when a step
+    /// failed, 10 or 11 under `--fail-on`.
+    pub code: u8,
+}
+
+/// The stages of `qc`, writing the files the command writes, with no
+/// progress line, no event, no summary and no step error on stderr (the
+/// Python `qc`).
+pub fn execute(args: &QcArgs) -> Result<Outcome> {
+    stages(args, true).map(|s| s.outcome)
+}
+
+/// The Python `collect(metrics=[...])`: the collectors of `tools` on the
+/// prepare stage and the one pass `qc` runs, their files written as `qc`
+/// writes them; no manifest, verdict or page. Returns the plan and one
+/// record per step, a failed step with its error.
+pub fn collect_tools(args: &QcArgs, tools: &[&str]) -> Result<(Plan, Vec<StepRecord>)> {
+    let plan = crate::qc::prepare_tools(args, tools)?;
+    let mut out = Reporter::silent();
+    make_prefix_dir(&plan.prefix)?;
+    let mut files = Files::default();
+    let done = collect(&plan, args, &mut files, &mut out)?;
+    let records = done.into_iter().map(|d| d.record).collect();
+    Ok((plan, records))
+}
+
+/// A run's outcome plus what the summary needs.
+struct Stages {
+    outcome: Outcome,
+    done: Vec<Done>,
+    files: Files,
+    out: Reporter,
+}
+
+fn stages(args: &QcArgs, silent: bool) -> Result<Stages> {
     let plan = prepare(args)?;
     guard_previous(&plan, args)?;
-    let mut out = Reporter::new(args.format, args.quiet, plan.fingerprint.size);
+    let mut out = if silent {
+        Reporter::silent()
+    } else {
+        Reporter::new(args.format, args.quiet, plan.fingerprint.size)
+    };
     out.start(&plan, args.resume);
     make_prefix_dir(&plan.prefix)?;
     let mut files = Files::default();
@@ -375,25 +453,55 @@ fn qc(args: &QcArgs) -> Result<u8> {
         &manifest_path(&plan.prefix),
         manifest(&plan, records.clone()).to_json(),
     )?;
-    let (verdict, own) = post_and_report(&plan, args, &done, &mut files, &out)?;
+    let (verdict, inputs, own) = post_and_report(&plan, args, &done, &mut files, &out)?;
     let mut all = records;
     all.extend(own);
-    write_atomic(&manifest_path(&plan.prefix), manifest(&plan, all).to_json())?;
+    write_atomic(
+        &manifest_path(&plan.prefix),
+        manifest(&plan, all.clone()).to_json(),
+    )?;
     files.written += 1;
+    let code = if done.iter().any(|d| d.record.status == Status::Failed) {
+        1
+    } else {
+        args.fail_on.map_or(0, |gate| {
+            check::exit_code(std::slice::from_ref(&verdict), gate)
+        })
+    };
+    Ok(Stages {
+        outcome: Outcome {
+            plan,
+            verdict,
+            inputs,
+            records: all,
+            code,
+        },
+        done,
+        files,
+        out,
+    })
+}
+
+fn qc(args: &QcArgs) -> Result<u8> {
+    let Stages {
+        outcome,
+        done,
+        files,
+        out,
+    } = stages(args, false)?;
+    let Outcome {
+        plan,
+        verdict,
+        code,
+        ..
+    } = &outcome;
     let failed: Vec<&StepRecord> = done
         .iter()
         .map(|d| &d.record)
         .filter(|r| r.status == Status::Failed)
         .collect();
-    let code = if failed.is_empty() {
-        args.fail_on.map_or(0, |gate| {
-            check::exit_code(std::slice::from_ref(&verdict), gate)
-        })
-    } else {
-        1
-    };
-    out.checks(&verdict);
-    out.done(&verdict, code, &page_path(&plan.prefix));
+    out.checks(verdict);
+    out.done(verdict, *code, &page_path(&plan.prefix));
     if args.format == crate::qc::Format::Text {
         let reads = usize::from(done.iter().any(|d| d.ran && d.record.stage == "pass"))
             + done
@@ -401,17 +509,17 @@ fn qc(args: &QcArgs) -> Result<u8> {
                 .filter(|d| d.ran && d.record.stage == "own-read")
                 .count();
         print_stdout(&summary(&Summary {
-            plan: &plan,
-            verdict: &verdict,
+            plan,
+            verdict,
             failed: &failed,
             files: &files,
             reads,
             records: out.records(),
-            code,
+            code: *code,
             gate: args.fail_on.is_some(),
         }));
     }
-    Ok(code)
+    Ok(*code)
 }
 
 /// The most lines the summary prints.

@@ -64,7 +64,8 @@ def test_stub_functions_exist():
     defined = set(re.findall(r"^def (\w+)\(", STUB.read_text(), re.M))
     registered = {snake_case(name) for name in bammetrics.tools()}
     assert defined == {"insert_size", "alignment_summary", "quality_yield", "hs_metrics", "collect",
-                       "tools", "read_metrics", "presets", "evaluate"} | registered
+                       "tools", "read_metrics", "presets", "evaluate", "qc", "check",
+                       "report"} | registered
     assert all(callable(getattr(bammetrics, f)) for f in defined)
 
 

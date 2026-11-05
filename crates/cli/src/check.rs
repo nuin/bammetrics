@@ -83,7 +83,7 @@ fn verdict_files(dir: &PathBuf) -> Result<Vec<PathBuf>> {
 /// The verdicts of `inputs`: a directory is discovered and evaluated with
 /// `preset`, or, when it holds `*.verdict.json` files and no metrics file,
 /// those are read; a file is read as verdict.json.
-fn verdicts(inputs: &[PathBuf], preset: &str) -> Result<Vec<Verdict>> {
+pub fn verdicts(inputs: &[PathBuf], preset: &str) -> Result<Vec<Verdict>> {
     let mut verdicts = Vec::new();
     let mut preset_cache = None;
     for input in inputs {

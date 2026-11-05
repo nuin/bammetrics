@@ -212,6 +212,13 @@ fn a_killed_run_resumes_from_nothing_and_a_lost_file_reruns_its_collector_only()
         &manifest_text[..manifest_text.len() / 3],
     )
     .expect("truncate");
+    let refused = qc(&dir, &[]);
+    assert_eq!(code(&refused), 2, "{}", stderr(&refused));
+    assert!(
+        stderr(&refused).contains("is not a whole manifest: --resume or --force runs every step"),
+        "{}",
+        stderr(&refused)
+    );
     let killed = qc(&dir, &["--resume", "--format", "jsonl"]);
     assert_eq!(code(&killed), 0, "{}", stderr(&killed));
     assert!(stderr(&killed).contains("is not a whole manifest; running every step"));

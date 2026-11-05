@@ -406,3 +406,40 @@ fn page_renders_in_under_20_ms() {
         "median render {median:?}"
     );
 }
+
+/// The notebook fragment: one scoped div, no document, no script, every
+/// series and histogram table cut to 200 points.
+#[test]
+fn the_fragment_is_one_scoped_div_with_thinned_series() {
+    let (verdict, mut inputs) = failing();
+    let rows: String = (0..1000).map(|i| format!("{i}\t{}\n", i % 7)).collect();
+    inputs.push(histogram_input(
+        None,
+        "MeanQualityByCycle INPUT=x.bam",
+        "CYCLE\tMEAN_QUALITY",
+        &rows,
+    ));
+    let options = Options {
+        all_plots: true,
+        date: DATE,
+    };
+    let html = bammetrics_report::fragment(&verdict, &inputs, &options);
+    assert!(html.starts_with("<div class=\"bm\">\n<style>\n.bm {"));
+    assert!(html.ends_with("</div>\n"));
+    for absent in [
+        "<script", "<html", "<body", "<head>", "<main", ":root", "http://", "https://",
+    ] {
+        assert!(!html.contains(absent), "{absent}");
+    }
+    assert!(html.contains("<svg"));
+    for polyline in html.split("<polyline").skip(1) {
+        let points = polyline.split("points=\"").nth(1).expect("points");
+        let points = &points[..points.find('"').expect("end")];
+        let n = points.split_whitespace().count();
+        assert!(n <= 200, "{n} points");
+    }
+    assert!(html.contains("200 of 1000 rows, evenly spaced"));
+    // The page itself keeps every row.
+    let page = render(&verdict, &inputs, &options);
+    assert!(page.contains("1000 rows"));
+}

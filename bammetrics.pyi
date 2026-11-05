@@ -1,32 +1,32 @@
 """Type stubs for the bammetrics Python module (Picard-concordant BAM QC metrics)."""
 from os import PathLike
-from typing import Any, Sequence, TypedDict
+from typing import Any, Generic, Literal, Sequence, TypeVar, TypedDict, overload
 
 _Path = str | PathLike[str]
 _Paths = _Path | Sequence[_Path]
 
-MetricsClass = TypedDict("MetricsClass", {"class": str, "columns": list[str], "rows": list[dict[str, Any]]})
-MetricsHistogram = TypedDict("MetricsHistogram", {"key_class": str, "columns": list[str], "rows": list[dict[str, Any]]})
-MetricsDoc = TypedDict("MetricsDoc", {"headers": list[str], "classes": list[MetricsClass], "histogram": MetricsHistogram | None})
+_MetricsClass = TypedDict("_MetricsClass", {"class": str, "columns": list[str], "rows": list[dict[str, Any]]})
+_MetricsHistogram = TypedDict("_MetricsHistogram", {"key_class": str, "columns": list[str], "rows": list[dict[str, Any]]})
+_MetricsDoc = TypedDict("_MetricsDoc", {"headers": list[str], "classes": list[_MetricsClass], "histogram": _MetricsHistogram | None})
 
-class VerdictPreset(TypedDict):
+class _VerdictPreset(TypedDict):
     name: str
     version: int
     hash: str
     source: str
     note: str
 
-class VerdictCounts(TypedDict):
+class _VerdictCounts(TypedDict):
     pass_: int
     warn: int
     fail: int
     not_measured: int
 
-class VerdictFile(TypedDict):
+class _VerdictFile(TypedDict):
     path: str
     classes: list[str]
 
-class VerdictCheck(TypedDict):
+class _VerdictCheck(TypedDict):
     rule: str
     label: str
     metric: str
@@ -40,7 +40,7 @@ class VerdictCheck(TypedDict):
     reason: str | None
     plot: str | None
 
-class Verdict(TypedDict):
+class _VerdictDict(TypedDict):
     """verdict.json (schema bammetrics.verdict/1) as dicts; see docs/verdict.md.
 
     status is "pass", "warn", "fail" or "incomplete"; a check's status is
@@ -49,11 +49,94 @@ class Verdict(TypedDict):
     schema: str
     tool_version: str
     sample: str
-    preset: VerdictPreset
+    preset: _VerdictPreset
     status: str
-    counts: VerdictCounts
-    files: list[VerdictFile]
-    checks: list[VerdictCheck]
+    counts: _VerdictCounts
+    files: list[_VerdictFile]
+    checks: list[_VerdictCheck]
+
+class BammetricsError(Exception):
+    """Base of UsageError, InputError and VerdictError."""
+
+class UsageError(BammetricsError, ValueError):
+    """The arguments cannot be acted on and nothing ran (the command's exit 2)."""
+
+class InputError(BammetricsError, OSError):
+    """An input could not be read, or a collector failed (the command's exit 1).
+    After a failed collector, .run holds the run with the other files; it is
+    None otherwise."""
+    run: Run[Any] | None
+
+class VerdictError(BammetricsError):
+    """A verdict reached fail_on (the command's exit 10)."""
+    verdicts: list[Verdict]
+    run: Run[Verdict] | None
+    code: int
+    def __init__(self, message: str, verdicts: list[Verdict], run: Run[Verdict] | None = None) -> None: ...
+
+class Tool(str):
+    """One row of `bammetrics tools`; the string is the Picard class name."""
+    picard_class: str
+    verb: str
+    summary: str
+    def __new__(cls, picard_class: str, verb: str, summary: str) -> Tool: ...
+
+class PresetInfo(str):
+    """One row of `bammetrics presets`; the string is the preset name."""
+    name: str
+    version: int
+    hash: str
+    rules: int
+    note: str
+    def __new__(cls, name: str, version: int, hash: str, rules: int, note: str) -> PresetInfo: ...
+
+class Check:
+    """One check of a verdict. status is "pass", "warn", "fail" or "not_measured";
+    limit is the fail bound of a fail, else the warn bound (or the fail bound
+    when the rule has none); why is the reason in plain words, None for a pass."""
+    rule: str
+    status: str
+    value: float | None
+    limit: str | None
+    why: str | None
+    label: str
+    metric: str
+    level: str
+    unit: str | None
+    warn: str | None
+    fail: str | None
+
+class Verdict:
+    """A sample's verdict, as PREFIX.verdict.json holds it."""
+    sample: str
+    status: Literal["pass", "warn", "fail", "incomplete"]
+    checks: list[Check]
+    counts: dict[str, int]
+    preset: dict[str, Any]
+    def to_json(self) -> str: ...
+    def to_dict(self) -> _VerdictDict: ...
+    def exit_code(self, fail_on: Literal["warn", "fail"] = "fail") -> int:
+        """The exit code bammetrics check gives this verdict: 0, 10 or 11."""
+
+_V = TypeVar("_V", Verdict, None)
+
+class Run(Generic[_V]):
+    """A qc run (Run[Verdict]), or a collect(metrics=[...]) run (Run[None]: verdict
+    and manifest None).
+
+    files lists every file written or kept, the manifest last. metrics maps the
+    verb of each tool (insert-size, hs-metrics.BAIT_SET for one of several hs
+    runs, gc-bias.summary for a further file) to the parsed file, as
+    read_metrics returns it. In a notebook the run shows the report body."""
+    sample: str
+    prefix: str
+    files: list[str]
+    manifest: str | None
+    exit_code: int
+    errors: dict[str, str]
+    metrics: dict[str, _MetricsDoc]
+    verdict: _V
+    def _repr_html_(self) -> str | None: ...
 
 class InsertSizeMetrics:
     """One CollectInsertSizeMetrics row; fields are Picard's columns in lower case."""
@@ -227,10 +310,11 @@ def insert_size(
     metric_accumulation_level adds ALL_READS, SAMPLE, LIBRARY or READ_GROUP to the
     default ALL_READS; "null" clears the list, as in Picard."""
 
-def tools() -> list[str]:
-    """Picard names of the tools in the registry."""
+def tools() -> list[Tool]:
+    """The tool verbs as `bammetrics tools` lists them: each a str equal to its
+    Picard class, with verb and summary."""
 
-def read_metrics(path: _Path) -> MetricsDoc:
+def read_metrics(path: _Path) -> _MetricsDoc:
     """Read a Picard metrics file written by Picard or bammetrics.
 
     headers are the StringHeader texts; classes has one entry per
@@ -239,10 +323,12 @@ def read_metrics(path: _Path) -> MetricsDoc:
     typed from their text: int, float, str or None for an empty field; "?"
     is nan."""
 
-def presets() -> list[str]:
-    """Names of the shipped verdict presets: generic, clinical-panel, wgs, rna-seq."""
+def presets() -> list[PresetInfo]:
+    """The shipped verdict presets as `bammetrics presets` lists them (generic,
+    clinical-panel, wgs, rna-seq): each a str equal to its name, with version,
+    hash, rules (the rule count) and note."""
 
-def evaluate(preset: str | PathLike[str], paths: Sequence[_Path], sample: str | None = None) -> Verdict:
+def evaluate(preset: str | PathLike[str], paths: Sequence[_Path], sample: str | None = None) -> _VerdictDict:
     """Evaluate a preset over one sample's metrics files and return the verdict.
 
     preset is a shipped name from presets() or the path of a preset file
@@ -633,9 +719,13 @@ def hs_metrics(
     per_base_coverage writes Picard's PER_BASE_COVERAGE file there.
     """
 
+_Strand = Literal["NONE", "FIRST_READ_TRANSCRIPTION_STRAND", "SECOND_READ_TRANSCRIPTION_STRAND"]
+_OldMetric = Literal["quality_yield", "alignment_summary", "insert_size", "hs_metrics"]
+
+@overload
 def collect(
     path: _Path,
-    metrics: Sequence[str] | None = None,
+    metrics: Sequence[_OldMetric] | None = None,
     reference: _Path | None = None,
     hs: Sequence[tuple[_Paths, _Paths]] | None = None,
     output_prefix: _Path | None = None,
@@ -648,3 +738,118 @@ def collect(
     return, and a list of HsMetrics for "hs_metrics".
     """
 
+@overload
+def collect(
+    path: _Path,
+    metrics: Sequence[_CollectorVerb],
+    reference: _Path | None = None,
+    hs: tuple[_Path, _Path] | Sequence[tuple[_Path, _Path]] | None = None,
+    *,
+    output: _Path | None = None,
+    threads: int | None = None,
+    panel: _Path | None = None,
+    ref_flat: _Path | None = None,
+    strand: _Strand | None = None,
+    ribosomal_intervals: _Path | None = None,
+) -> Run[None]:
+    """The collectors qc runs for verb names (insert-size, gc-bias, hs-metrics, ...),
+    on one read, files under output (default ./<bam stem>). Taken when a metric
+    name holds a dash or a keyword after * is given."""
+
+@overload
+def collect(
+    path: _Path,
+    metrics: Sequence[str] | None = None,
+    reference: _Path | None = None,
+    hs: tuple[_Path, _Path] | Sequence[tuple[_Path, _Path]] | None = None,
+    *,
+    output: _Path,
+    threads: int | None = None,
+    panel: _Path | None = None,
+    ref_flat: _Path | None = None,
+    strand: _Strand | None = None,
+    ribosomal_intervals: _Path | None = None,
+) -> Run[None]: ...
+
+@overload
+def collect(
+    path: _Path,
+    metrics: Sequence[str] | None = None,
+    reference: _Path | None = None,
+    hs: tuple[_Path, _Path] | Sequence[tuple[_Paths, _Paths]] | None = None,
+    output_prefix: _Path | None = None,
+    threads: int | None = None,
+    hs_per_base: bool = False,
+    *,
+    output: _Path | None = None,
+    panel: _Path | None = None,
+    ref_flat: _Path | None = None,
+    strand: _Strand | None = None,
+    ribosomal_intervals: _Path | None = None,
+) -> dict[str, Any] | Run[None]:
+    """Names held in a variable of type list[str]: the form follows the names at run time."""
+
+# BEGIN verbs: generated from crates/cli/src/python.rs (UPDATE_PYI=1 cargo test -p bammetrics-cli python_stubs)
+# Keywords are the command's long flags in snake case; None leaves an option at the command's default.
+
+# The metric names with a dash: collect(metrics=[...]) given one runs the collectors as qc does.
+_CollectorVerb = Literal[
+    "quality-yield",
+    "alignment-summary",
+    "insert-size",
+    "duplicate-metrics",
+    "hs-metrics",
+    "gc-bias",
+    "rna-seq",
+]
+
+def qc(
+    bam: _Path,
+    *,
+    output: _Path | None = None,
+    reference: _Path | None = None,
+    preset: str | None = "generic",
+    hs: tuple[_Path, _Path] | Sequence[tuple[_Path, _Path]] | None = None,
+    panel: _Path | None = None,
+    ref_flat: _Path | None = None,
+    strand: Literal["NONE", "FIRST_READ_TRANSCRIPTION_STRAND", "SECOND_READ_TRANSCRIPTION_STRAND"] | None = None,
+    ribosomal_intervals: _Path | None = None,
+    sample: str | None = None,
+    fail_on: Literal["warn", "fail"] | None = None,
+    resume: bool = False,
+    force: bool = False,
+    threads: int | None = None,
+    all_plots: bool = False,
+    date: str | None = None,
+    report: bool = True,
+) -> Run[Verdict]:
+    """bammetrics qc: the collectors the preset needs on one read of the BAM, the verdict
+    and the page, the files the command writes. report=False leaves out
+    PREFIX.report.html. A failed verdict is a value; VerdictError only when fail_on is
+    given and reached. An incomplete verdict returns the Run (its exit_code is 11). A
+    failed collector raises InputError (its .run holds the rest)."""
+
+def check(
+    inputs: _Path | Sequence[_Path],
+    *,
+    preset: str | None = "generic",
+    fail_on: Literal["warn", "fail"] | None = "fail",
+) -> Verdict | list[Verdict]:
+    """bammetrics check: verdicts from directories of metrics files, verdict.json files or
+    qc prefixes. One path with one sample gives a Verdict, else a list. VerdictError
+    when a verdict reaches fail_on (fail_on=None never raises). An incomplete verdict is
+    returned (its exit_code(fail_on) is 11)."""
+
+def report(
+    dirs: _Path | Sequence[_Path],
+    *,
+    preset: str | None = "generic",
+    output: _Path | None = None,
+    all_plots: bool = False,
+    date: str | None = None,
+) -> list[str]:
+    """bammetrics report: SAMPLE.verdict.json and SAMPLE.report.html per sample and
+    index.html, under output (default: the one directory given). Returns the paths
+    written."""
+
+# END verbs

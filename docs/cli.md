@@ -414,7 +414,9 @@ own, and an interval file edited in place reruns the collectors that read it. A 
 FASTA) larger than 128 KiB edited in the middle with its size and mtime kept (`touch -r`,
 `cp -p` over it) is not detected; use `--force`. A manifest that does not parse (a killed run) is reported on stderr and
 every step runs. `--force` reruns every step. Without either, `qc` refuses a prefix that
-holds an earlier run's manifest (exit 2). The verdict and the page are always rewritten.
+holds an earlier run's manifest (exit 2), and names a manifest it cannot read with the
+reason (`out/s.manifest.json is not a whole manifest: --resume or --force runs every
+step`). The verdict and the page are always rewritten.
 
 `plan` prints the stages, the BAM reads (`2 BAM reads: 1 for the pass, 1 own read`), each
 collector with its files and rule count, which collectors share the read and why one does

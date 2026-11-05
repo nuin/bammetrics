@@ -678,7 +678,7 @@ fn python_annotation(opt: &Opt) -> String {
 }
 
 /// `text` wrapped to lines of at most `width` characters, each indented.
-fn wrap(text: &str, indent: &str, width: usize) -> Vec<String> {
+pub fn wrap(text: &str, indent: &str, width: usize) -> Vec<String> {
     let mut lines = Vec::new();
     let mut line = String::new();
     for word in text.split_whitespace() {

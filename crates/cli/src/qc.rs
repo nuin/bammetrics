@@ -144,6 +144,10 @@ pub struct QcArgs {
     /// The date printed on the page (default: now, as 2026-01-02 03:04:05 UTC).
     #[arg(long, value_name = "ISO")]
     pub date: Option<String>,
+    /// Write PREFIX.report.html. No flag sets it: the command always writes
+    /// the page, the Python `qc(report=False)` does not.
+    #[arg(skip = true)]
+    pub write_page: bool,
 }
 
 /// What a collector needs beyond the BAM.
@@ -766,6 +770,11 @@ fn sample(args: &QcArgs) -> Result<(String, Origin)> {
     let header =
         pass::read_header(&args.bam).map_err(|e| Error::Input(format!("{e} (from BAM)")))?;
     if let Some(name) = &args.sample {
+        if name.contains('\0') {
+            return Err(Error::Usage(format!(
+                "--sample {name:?}: a sample name cannot hold a NUL byte"
+            )));
+        }
         return Ok((name.clone(), Origin::Option));
     }
     Ok(levels::read_groups(&header)
@@ -794,12 +803,10 @@ fn names_directory(output: &Path) -> bool {
     text.ends_with(std::path::is_separator) || output.is_dir()
 }
 
-/// Prepare: everything checked and decided, nothing written.
-pub fn prepare(args: &QcArgs) -> Result<Plan> {
-    check_inputs(args)?;
-    let preset = Preset::resolve(&args.preset)?;
-    let (sample, sample_origin) = sample(args)?;
-    let (prefix, prefix_origin) = match &args.output {
+/// The output prefix: `-o`, with the BAM name as the file part when `-o`
+/// names a directory, else the BAM name in the current directory.
+fn prefix(args: &QcArgs) -> Result<(PathBuf, Origin)> {
+    let (prefix, origin) = match &args.output {
         Some(dir) if names_directory(dir) => (dir.join(bam_stem(&args.bam)), Origin::Directory),
         Some(prefix) => (prefix.clone(), Origin::Option),
         None => (PathBuf::from(bam_stem(&args.bam)), Origin::FileName),
@@ -810,6 +817,21 @@ pub fn prepare(args: &QcArgs) -> Result<Plan> {
             prefix.display()
         )));
     }
+    if prefix.as_os_str().as_encoded_bytes().contains(&0) {
+        return Err(Error::Usage(format!(
+            "-o {:?}: a prefix cannot hold a NUL byte",
+            prefix.display().to_string()
+        )));
+    }
+    Ok((prefix, origin))
+}
+
+/// Prepare: everything checked and decided, nothing written.
+pub fn prepare(args: &QcArgs) -> Result<Plan> {
+    check_inputs(args)?;
+    let preset = Preset::resolve(&args.preset)?;
+    let (sample, sample_origin) = sample(args)?;
+    let (prefix, prefix_origin) = prefix(args)?;
     let fingerprint = Fingerprint::of(&args.bam)?;
     let cx = Context {
         args,
@@ -840,6 +862,95 @@ pub fn prepare(args: &QcArgs) -> Result<Plan> {
         steps,
         unmet,
         previous,
+    })
+}
+
+/// The collector tools `qc` can run, in the order its pass runs them.
+pub fn collector_tools() -> Vec<&'static str> {
+    let mut tools: Vec<&'static str> = Vec::new();
+    for (_, tool, _) in SOURCES {
+        if !tools.contains(tool) {
+            tools.push(tool);
+        }
+    }
+    tools
+}
+
+/// Prepare for the Python `collect(metrics=[...])`: the collector steps of
+/// `tools` (Picard class names from [`collector_tools`]), each built as
+/// `qc` builds it, plus the `--panel` prepare step. No verdict, no
+/// manifest, no resume. A tool whose input is missing is a usage error,
+/// named by the Python keyword it needs.
+pub fn prepare_tools(args: &QcArgs, tools: &[&str]) -> Result<Plan> {
+    check_inputs(args)?;
+    let preset = Preset::resolve(&args.preset)?;
+    let (sample, sample_origin) = sample(args)?;
+    let (prefix, prefix_origin) = prefix(args)?;
+    let fingerprint = Fingerprint::of(&args.bam)?;
+    let cx = Context {
+        args,
+        prefix: &prefix,
+        preset: &preset,
+        fingerprint: &fingerprint,
+    };
+    let prepare = prepare_steps(&cx)?;
+    let mut steps = Vec::new();
+    for tool in collector_tools() {
+        if !tools.contains(&tool) {
+            continue;
+        }
+        let (_, _, needs) = SOURCES
+            .iter()
+            .find(|(_, t, _)| *t == tool)
+            .expect("a collector tool");
+        if !cx.available(*needs) {
+            let keyword = match needs {
+                Needs::Bam => "",
+                Needs::Reference => "reference (a FASTA with a .fai)",
+                Needs::Intervals => "hs=(baits, targets) or panel",
+                Needs::Annotation => "ref_flat and strand",
+            };
+            return Err(Error::Usage(format!("{tool} needs {keyword}")));
+        }
+        let registered = registry::find(tool).expect("registered");
+        if tool == "CollectHsMetrics" {
+            steps.extend(hs_steps(&cx, &[], &[])?);
+            continue;
+        }
+        let extra = if tool == "CollectRnaSeqMetrics" {
+            cx.rna_options()
+        } else {
+            Vec::new()
+        };
+        steps.push(cx.step(Spec {
+            id: tool.to_owned(),
+            tool: registered,
+            files: cx.files(tool),
+            extra,
+            rules: Vec::new(),
+        })?);
+    }
+    refuse_overwriting_inputs(args, &prefix, prepare.iter().chain(&steps))?;
+    let manifest = manifest_path(&prefix);
+    if std::fs::symlink_metadata(&manifest).is_ok() {
+        return Err(Error::Usage(format!(
+            "{} holds a qc run: collect would rewrite its files and leave its manifest and \
+             verdict stale; give another output",
+            manifest.display()
+        )));
+    }
+    Ok(Plan {
+        bam: args.bam.clone(),
+        prefix,
+        prefix_origin,
+        sample,
+        sample_origin,
+        preset,
+        fingerprint,
+        prepare,
+        steps,
+        unmet: Vec::new(),
+        previous: Ok(None),
     })
 }
 
