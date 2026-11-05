@@ -8,27 +8,37 @@ Report track phase 11 (docs/05), the last one: docs and benchmark.
 
 - `make budgets` (`crates/cli/tests/budgets.rs`, ignored by `cargo test`): the six
   budgets of docs/05 section 4.8 measured on the fixtures and failing at twice any target
-  (decision 11). Measured on a Mac Studio: sample page render 1.2 ms (target 20 ms),
-  100-sample index render 0.64 ms (100 ms), largest sample page 88.5 KB (100 KB),
-  100-sample index 155.8 KB (200 KB), binary growth 290.8 KB stripped (300 KB), 0 added BAM
-  passes. CI runs it on Linux and macOS. docs/benchmarks.md has the method and the binary
-  size of the commits before and after the report crates.
+  (decision 11). Measured on a Mac Studio: sample page render 1.1 ms (target 20 ms),
+  100-sample index render 0.63 ms (100 ms), largest sample page 88.6 KB (100 KB),
+  100-sample index 151.9 KB (200 KB), binary growth 290.8 KB stripped (300 KB), 0 added BAM
+  passes (`qc` must report exactly 1 BAM read). CI runs it on Linux and macOS.
+  docs/benchmarks.md has the method and the binary size of the commits before and after
+  the report crates. The growth probe holds the two crates and leaves out the verbs' own
+  code; the whole binary grew 339.4 KB stripped when the `report` and `check` verbs first
+  linked them (28647a8 to f82df56), over the target and under twice it.
 - `crates/report/examples/size_base.rs` and `size_report.rs`: the two probe binaries whose
   stripped size difference is the binary growth budget.
 - `crates/verdict/tests/doc_presets.rs`: docs/verdict.md lists every rule of the four
   shipped presets (bounds, rows, plot, version, note, hash), and the test fails when a
-  table differs from the compiled presets. `UPDATE_DOCS=1` rewrites the tables.
+  table differs from the compiled presets. `UPDATE_DOCS=1` rewrites the tables. A second
+  test checks the rule counts of the hand-written summary table.
+- `make a11y` (`benches/a11y.mjs`, not in CI): axe-core 4.10.2 in Chromium on the index
+  and sample pages in light, dark and print at 320, 360 and 1280 px (0 violations in 54
+  runs), no sideways scroll at 320 and 360 px with every `<details>` open, and every
+  control reached by Tab. Needs node and npm.
 
 ### Changed
 
-- Accessibility pass on the sample page and the index, checked with axe-core 4.10.2 at
-  360 and 1280 px in light, dark and print with every `<details>` closed and open: no
-  violation. The page header and the run footer sit outside `<main>`; the metrics tables
+- Accessibility pass on the sample page and the index, checked with `make a11y`: no axe
+  violation, no sideways scroll at 320 px. The page header and the run footer sit outside `<main>`; the metrics tables
   are `h3` under their `h2`; every header cell has a `scope`, and the check, column and
   sample cells are row headers; each table region takes the keyboard focus and carries a
   name, so a table that scrolls sideways is reachable without a mouse; a status glyph
   beside its word is `aria-hidden`; an index cell carries its status word for a screen
-  reader.
+  reader, and `report.css` draws its glyph with an empty alternative text, so a screen
+  reader reads `fail 0.5`. A table region is the containing block of the hidden words, and
+  a metrics heading breaks anywhere, so neither widens the page at phone width. The plot
+  shading class is `zone` (it was `band`, the class of the verdict banner).
 - `@media print` redeclares the light palette, so a page viewed in the dark theme prints
   dark text on paper. The contrast test covers print, adds `pass-ink` on `bg-2` (a passing
   index cell on an even row), and checks that every text color and background of
@@ -40,6 +50,11 @@ Report track phase 11 (docs/05), the last one: docs and benchmark.
   and the measured budgets.
 - Report snapshots (`tests/report/*.html`) change with the accessibility markup and the
   version; the golden records change in the version only.
+
+### Fixed
+
+- `bammetrics completions SHELL | head` no longer panics on a closed pipe: the script goes
+  through the same writer as `qc` and `report`, which drops output on a closed pipe.
 
 ## 0.15.0
 

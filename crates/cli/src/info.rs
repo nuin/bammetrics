@@ -2,8 +2,6 @@
 //! or Picard class>` and `completions <shell>`, plus the clap command that
 //! lists every verb (top-level `--help` and the completion scripts).
 
-use std::io;
-
 use bammetrics_core::registry::{Ty, did_you_mean};
 use bammetrics_verdict::Preset;
 use clap::{Arg, ArgAction, Command};
@@ -253,7 +251,8 @@ pub fn help(base: Command, args: &[String]) -> Result<String, VerbError> {
     Err(error.hint("bammetrics tools lists them"))
 }
 
-/// `bammetrics completions <shell>`: the script on standard output.
+/// `bammetrics completions <shell>`: the script on standard output, dropped
+/// on a closed pipe.
 pub fn completions(base: Command, args: &[String]) -> Result<(), VerbError> {
     let name = args.first().ok_or_else(|| {
         VerbError::usage("completions", "missing shell")
@@ -264,7 +263,9 @@ pub fn completions(base: Command, args: &[String]) -> Result<(), VerbError> {
             .hint("bash, zsh, fish, elvish or powershell")
     })?;
     let mut full = command(base);
-    clap_complete::generate(shell, &mut full, "bammetrics", &mut io::stdout());
+    let mut script = Vec::new();
+    clap_complete::generate(shell, &mut full, "bammetrics", &mut script);
+    crate::events::print_stdout(&String::from_utf8_lossy(&script));
     Ok(())
 }
 

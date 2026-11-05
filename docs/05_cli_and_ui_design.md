@@ -319,8 +319,8 @@ One row per sample, worst first. Sort: verdict rank (fail, warn, incomplete, pas
 - All colors are CSS custom properties on `:root`. `@media (prefers-color-scheme: dark)` swaps them. A `data-theme` attribute overrides it. Plots read the same tokens, so there is 1 SVG per plot.
 - SVG: hand-built in Rust, fixed viewBox, 3 to 5 ticks per axis, direct labels instead of legends, the rule limit as a thin dashed line with its value, the failing region shaded at 8% opacity. No gridlines beyond the baseline.
 - Print: `@media print` hides collapsed tables and the footer detail, drops status backgrounds, keeps the band, failure list and plots. Targets: 1 page for a pass, 2 pages with plots, on A4 and Letter.
-- Layout: 1 column, text to 72 ch, tables to 1100 px. Works at 360 px and 1280 px with no horizontal scroll. No hover-only content.
-- No framework CSS. About 6 KB of CSS inlined per file. No JavaScript. A sort script (under 2 KB, inline) is justified only for indexes over about 200 samples, and is out of v1.
+- Layout: 1 column, text to 72 ch, tables to 1100 px. Works at 360 px and 1280 px with no horizontal scroll. No hover-only content. `make a11y` checks both pages with axe-core at 320, 360 and 1280 px, the reflow at 320 and 360 px with every `<details>` open, and the keyboard order (docs/benchmarks.md).
+- No framework CSS. About 8 KB of CSS inlined per file (8,153 bytes in 0.16.0; a test fails at 8 KB). No JavaScript. A sort script (under 2 KB, inline) is justified only for indexes over about 200 samples, and is out of v1.
 - Security: a `<meta>` CSP of `default-src 'none'; style-src 'unsafe-inline'`. Every string from a BAM header (sample, read group, path) is HTML-escaped, with a test using `<script>` in @RG SM.
 
 ### 4.7 How it is rendered from Rust
@@ -335,11 +335,11 @@ One row per sample, worst first. Sort: verdict rank (fail, warn, incomplete, pas
 
 | Target | Value | Status (0.16.0, Mac Studio, release build) |
 |---|---|---|
-| Render, sample page | under 20 ms | 1.2 ms, the failing fixture page with every plot, median of 31 |
-| Render, index of 100 samples | under 100 ms | 0.64 ms, median of 31 |
-| Sample page size | under 100 KB | 88.5 KB, the largest of the three fixture pages |
-| Index size, 100 samples | under 200 KB | 155.8 KB, 14 `clinical-panel` rules per sample |
-| Binary growth | under 300 KB | 290.8 KB stripped (314.8 KB unstripped), the `size_report` probe less `size_base` |
+| Render, sample page | under 20 ms | 1.1 ms, the failing fixture page with every plot, median of 31 |
+| Render, index of 100 samples | under 100 ms | 0.63 ms, median of 31 |
+| Sample page size | under 100 KB | 88.6 KB, the largest of the three fixture pages |
+| Index size, 100 samples | under 200 KB | 151.9 KB, 14 `clinical-panel` rules per sample |
+| Binary growth | under 300 KB | 290.8 KB stripped (314.8 KB unstripped), the `size_report` probe less `size_base`. The probe holds the two crates and leaves out the verbs' own code (`report.rs`, `check.rs`, `discover.rs`, the `qc` engine). The whole binary grew 339.4 KB stripped when the `report` and `check` verbs first linked the crates (28647a8 to f82df56): over the target, under 2x. |
 | Added passes over the BAM | 0 | 0: `qc` reports 1 BAM read with the report; `report` and `check` run with the BAM deleted |
 
 `make budgets` (`crates/cli/tests/budgets.rs`) measures every row on the test fixtures and fails the build at 2x any target; CI runs it on Linux and macOS (decision 11). Each row's method and the history of the binary size are in docs/benchmarks.md.

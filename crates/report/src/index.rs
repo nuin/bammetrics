@@ -11,8 +11,7 @@ use bammetrics_verdict::{Band, Check, Verdict};
 
 use crate::html::{escape, number};
 use crate::page::{
-    Options, band_class, band_glyph, glyph, metric_text, status_class, status_glyph, status_word,
-    table_region,
+    Options, band_class, band_glyph, glyph, metric_text, status_class, status_word, table_region,
 };
 use crate::theme::CSS;
 
@@ -270,9 +269,11 @@ pub fn render_index(samples: &[SampleSummary], options: &Options) -> String {
     out
 }
 
-/// One rule cell: the glyph and the value, with the reason as the title on
-/// a warn, fail or not-measured check. The status word is in the cell for a
-/// screen reader and hidden on screen, where the glyph shows it.
+/// One rule cell: the status word and the value, with the reason as the
+/// title on a warn, fail or not-measured check. The word is hidden on
+/// screen. `report.css` draws the status glyph before it with an empty
+/// alternative text (`td.cell.<status> { --glyph }`), so a screen reader
+/// reads the word alone and the markup holds no glyph per cell.
 fn cell(out: &mut String, check: &Check) {
     let value = match check.value {
         Some(v) => number(v),
@@ -284,9 +285,8 @@ fn cell(out: &mut String, check: &Check) {
     }
     let _ = write!(
         out,
-        "><span class=\"sr\">{}</span>{} {}</td>",
+        "><span class=\"sr\">{} </span>{}</td>",
         status_word(check.status),
-        status_glyph(check.status),
         escape(&value)
     );
 }
@@ -298,4 +298,29 @@ pub fn write_index(
     options: &Options,
 ) -> std::io::Result<()> {
     std::fs::write(path, render_index(samples, options))
+}
+
+#[cfg(test)]
+mod tests {
+    use bammetrics_verdict::Status;
+
+    use super::*;
+    use crate::page::status_glyph;
+
+    #[test]
+    fn the_css_draws_the_glyph_of_each_cell_status() {
+        for status in [
+            Status::Pass,
+            Status::Warn,
+            Status::Fail,
+            Status::NotMeasured,
+        ] {
+            let code = status_glyph(status).chars().next().map_or(0, u32::from);
+            let rule = format!(
+                "td.cell.{} {{ --glyph: \"\\{code:X}\";",
+                status_class(status)
+            );
+            assert!(CSS.contains(&rule), "{rule}");
+        }
+    }
 }

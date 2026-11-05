@@ -170,8 +170,8 @@ fn bammetrics(args: &[&str]) -> Output {
 }
 
 /// BAM reads the report adds: `qc` on a copy of the fixture BAM must say
-/// one BAM read, and `report` and `check` must run on its output once the
-/// copy is gone. Returns the added reads (0) for the table.
+/// exactly one BAM read, and `report` and `check` must run on its output
+/// once the copy is gone. Returns the added reads (0) for the table.
 fn added_bam_passes(dir: &Path) -> f64 {
     let bam = dir.join("copy.bam");
     fs::copy(root().join("tests/data/insert_size.bam"), &bam).expect("copy the fixture BAM");
@@ -224,6 +224,8 @@ fn added_bam_passes(dir: &Path) -> f64 {
         .and_then(|end| header[..end].rsplit(' ').next())
         .and_then(|n| n.parse().ok())
         .unwrap_or_else(|| panic!("no BAM read count in {header:?}"));
+    // Exactly one: 0 would mean the summary miscounts, 2 an added pass.
+    assert_eq!(reads, 1.0, "qc must read the BAM once: {header:?}");
     reads - 1.0
 }
 

@@ -88,11 +88,11 @@ and CI runs it on the Linux and macOS runners after the unit tests.
 
 | Budget | Target | Fails at | Measured | How |
 |---|---:|---:|---:|---|
-| Render, sample page | 20 ms | 40 ms | 1.20 ms | the failing fixture page (`clinical-panel`) with every plot, median of 31 renders after 3 unmeasured |
-| Render, index of 100 samples | 100 ms | 200 ms | 0.64 ms | 100 copies of that verdict under 100 names, median of 31 |
-| Sample page size | 100 KB | 200 KB | 88.5 KB | the largest of the three fixture pages: 71,610 bytes passing, 84,542 failing, 90,619 failing with every plot |
-| Index size, 100 samples | 200 KB | 400 KB | 155.8 KB | 159,556 bytes, 14 rule cells per row |
-| Binary growth | 300 KB | 600 KB | 290.8 KB | 297,808 bytes: stripped `size_report` less stripped `size_base` |
+| Render, sample page | 20 ms | 40 ms | 1.13 ms | the failing fixture page (`clinical-panel`) with every plot, median of 31 renders after 3 unmeasured |
+| Render, index of 100 samples | 100 ms | 200 ms | 0.63 ms | 100 copies of that verdict under 100 names, median of 31 |
+| Sample page size | 100 KB | 200 KB | 88.6 KB | the largest of the three fixture pages: 71,767 bytes passing, 84,699 failing, 90,776 failing with every plot |
+| Index size, 100 samples | 200 KB | 400 KB | 151.9 KB | 155,513 bytes, 14 rule cells per row |
+| Binary growth | 300 KB | 600 KB | 290.8 KB | 297,808 bytes: stripped `size_report` less stripped `size_base`; the probe leaves out the verbs' code (see below) |
 | Added passes over the BAM | 0 | 1 | 0 | `qc` reports 1 BAM read with the verdict and page; `report` and `check` run with the BAM deleted |
 
 The fixture metrics are the seven files the golden records hold for
@@ -124,10 +124,25 @@ under twice it. The growth from 10d7f47 to 0.16.0 (1,479,520 bytes) is mostly th
 added since (the capture, RNA and variant tools, the `qc` engine and the verb grammar), so
 it does not measure the report.
 
+## Report accessibility
+
+Checked 2026-11-05 with bammetrics 0.16.0 by `make a11y` (`benches/a11y.mjs`): axe-core
+4.10.2 in Chromium (Playwright 1.64.1) on six pages, the 4-sample index snapshot
+(`tests/report/index.html`), the three fixture pages of `crates/report/examples/fixture_pages.rs`
+and the page and index `bammetrics report` writes for `tests/data/picard`. Each page runs
+in the light theme, the dark theme and print media, at 320, 360 and 1280 px: 54 runs, 0
+axe violations. At 320 and 360 px no page scrolls sideways, with every `<details>` closed
+and open. Tab reaches every summary, link and table scroll box outside a closed
+`<details>` on all six pages. The pages of commit 2c2af79 failed this check: the index was
+721 px wide at a 320 px viewport (the hidden status words escaped the table's scroll
+box) and a sample page with its tables open was 556 px (an unbroken Picard class name in
+a heading). `make a11y` needs node and npm and is not run in CI.
+
 ## Reproduce
 
 ```bash
 make budgets     # the report budgets above; fails at 2x any target
+make a11y        # axe-core, reflow and keyboard check of the report pages (node, npm)
 make bench-bam   # target/bench/bench.bam, about 10 minutes (Python simulation, bwa, MarkDuplicates)
 make bench       # release build, then benches/bench.py: table on stdout, target/bench/results.json
 make bench-wgs   # target/bench_wgs on first use, then benches/wgs_bench.py: the coverage table, target/bench_wgs/results.json

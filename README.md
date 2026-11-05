@@ -58,9 +58,9 @@ rows = bammetrics.collect_alignment_summary_metrics("sample.bam", R="ref.fa", ME
 ```
 
 Options that cannot change a number (`VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`,
-`CHART`, `H`) are accepted and ignored. An unknown option exits 1 and names it. `R=`
-needs a `.fai` next to the FASTA. A BED file works wherever Picard wants an interval list.
-Every option is listed in [docs/cli.md](docs/cli.md).
+`CHART`, `H`) are accepted and ignored. An unknown option is named and exits 1 on the Picard
+face, 2 on a verb. `R=` needs a `.fai` next to the FASTA. A BED file works wherever Picard
+wants an interval list. Every option is listed in [docs/cli.md](docs/cli.md).
 
 ## Report
 

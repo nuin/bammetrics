@@ -92,3 +92,34 @@ fn verdict_md_lists_every_rule_of_every_shipped_preset() {
         );
     }
 }
+
+/// The `Shipped presets` summary table of docs/verdict.md is hand-written:
+/// its `Rules` column must equal each preset's rule count, and the counts
+/// in its `Reads` column (`alignment summary (3)`, one rule when no count
+/// is given) must add up to it.
+#[test]
+fn verdict_md_summary_counts_match_the_compiled_presets() {
+    let doc = fs::read_to_string(doc_path()).expect("docs/verdict.md");
+    for name in names() {
+        let preset = Preset::builtin(name)
+            .expect("shipped")
+            .expect("shipped preset parses");
+        let prefix = format!("| `{name}` | ");
+        let row = doc
+            .lines()
+            .find(|line| line.starts_with(&prefix))
+            .unwrap_or_else(|| panic!("docs/verdict.md has no summary row for {name}"));
+        let cells: Vec<&str> = row.split(" | ").collect();
+        let rules: usize = cells[1].trim().parse().expect("a rule count");
+        assert_eq!(rules, preset.rules.len(), "{name}: Rules column");
+        let read: usize = cells[2]
+            .split(", ")
+            .map(|item| {
+                item.rsplit_once(" (")
+                    .and_then(|(_, n)| n.strip_suffix(')'))
+                    .map_or(1, |n| n.parse().expect("a count"))
+            })
+            .sum();
+        assert_eq!(read, preset.rules.len(), "{name}: Reads column");
+    }
+}

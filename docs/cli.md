@@ -25,7 +25,7 @@ bammetrics <verb> [INPUT] [options]       kebab-case verbs
 bammetrics <PicardClass> KEY=VALUE ...    the Picard drop-in, unchanged
 ```
 
-`main.rs` dispatches in this order: a first argument that names a Picard class in the
+`run` in `crates/cli/src/lib.rs` dispatches in this order: a first argument that names a Picard class in the
 registry runs the Picard face, untouched; then a grammar verb (a tool verb, `collect`,
 `tools`, `presets`, `help`, `completions`); then the clap verbs `qc`, `plan`, `check` and
 `report`. Class names are CamelCase and verbs are kebab case, so the two cannot collide.
@@ -489,8 +489,8 @@ sample.
 The page and the index are self-contained HTML with no script and no network request: a
 `<meta>` CSP of `default-src 'none'; style-src 'unsafe-inline'`, the CSS inlined, plots as
 inline SVG with a text alternative. They follow the light or dark system theme, print on a
-light palette, and pass axe-core 4.10.2 with no violation at 360 and 1280 px (docs/05
-section 4.6). Every text color pair meets WCAG AA (4.5:1) in light, dark and print, checked
+light palette, and pass axe-core 4.10.2 with no violation at 320, 360 and 1280 px in light,
+dark and print (`make a11y`, recorded in [docs/benchmarks.md](benchmarks.md)). Every text color pair meets WCAG AA (4.5:1) in light, dark and print, checked
 by a unit test over the tokens of `report.css`. Size and render time are budgets of docs/05
 section 4.8, measured by `make budgets` ([docs/benchmarks.md](benchmarks.md)).
 
@@ -638,7 +638,7 @@ bammetrics bed-to-interval-list tests/data/targets.bed --from-bam tests/data/ins
     -o out/panel.interval_list
 bammetrics hs-metrics tests/data/insert_size.bam -R tests/data/ref_100k.fa \
     --baits out/panel.interval_list --targets out/panel.interval_list -o out/hs.txt
-# the same step through process substitution, with -o - on the first verb
+# the same step through process substitution: with no -o, the first verb writes to stdout
 bammetrics hs-metrics tests/data/insert_size.bam -R tests/data/ref_100k.fa \
     --baits <(bammetrics bed-to-interval-list tests/data/targets.bed --from-bam tests/data/insert_size.bam) \
     --targets tests/data/targets.bed -o out/hs2.txt
@@ -722,14 +722,15 @@ alias.
 import bammetrics as bm
 
 rows = bm.collect_insert_size_metrics("s.bam", minimum_pct=0.1, metric_accumulation_level=["SAMPLE"])
-files = bm.collect_gc_bias_metrics("s.bam", reference_sequence="ref.fa",
-                                   output="out/s.gc", summary_output="out/s.gc_summary")
+gc_rows = bm.collect_gc_bias_metrics("s.bam", reference_sequence="ref.fa",
+                                     output="out/s.gc", summary_output="out/s.gc_summary")
 run = bm.qc("s.bam", preset="clinical-panel", panel="panel.bed", reference="ref.fa", output="out/s")
 ```
 
 One function per registry tool, named after the Picard class in snake case. A keyword is a
 row's Picard name in lower case (`minimum_pct`; a short name such as `m` works too), a list
-is a repeated option, `None` leaves the option out, `output=` writes the files. The
+is a repeated option, `None` leaves the option out, `output=` writes the files (into a
+directory that must exist) and the function returns the rows either way. The
 generated block of `bammetrics.pyi` holds one typed signature per tool from the option table;
 `UPDATE_PYI=1 cargo test -p bammetrics-core python_stubs` rewrites it and the test fails
 while the stub and the table disagree. The older typed functions stay:

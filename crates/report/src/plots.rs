@@ -346,7 +346,7 @@ fn insert_size(
         chart.vguide(b, &format!("fail above {}", short_number(b)), "limit");
     }
     if let (Some(m), Some(d)) = (median, mad) {
-        chart.rect(m - d, m + d, y.min, y.max, "band");
+        chart.rect(m - d, m + d, y.min, y.max, "zone");
     }
     chart.bars(&bars, "bar");
     if let Some(m) = median {
@@ -489,7 +489,7 @@ fn gc_bias(inputs: &[Input], max_points: Option<usize>) -> Option<(String, Strin
         "GC content of the window (%)",
         "normalized coverage",
     );
-    chart.rect(0.0, 100.0, 0.9, 1.1, "band");
+    chart.rect(0.0, 100.0, 0.9, 1.1, "zone");
     chart.hguide(1.0, "1.0 average, band 0.9 to 1.1", "guide");
     chart.strip(&strip, "strip");
     chart.polyline(&thin(&covered, max_points), "ser");
