@@ -7,6 +7,10 @@ rust-version.workspace = true
 description = "The bammetrics command: Picard-concordant BAM QC metrics, verdicts and reports"
 publish = false
 
+[lib]
+name = "bammetrics_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "bammetrics"
 path = "src/main.rs"

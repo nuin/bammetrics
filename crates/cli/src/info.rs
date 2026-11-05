@@ -181,13 +181,22 @@ pub fn tools(base: &Command) -> String {
     text
 }
 
+/// The shipped presets, parsed, in `bammetrics presets` order.
+pub fn shipped_presets() -> Result<Vec<Preset>, VerbError> {
+    bammetrics_verdict::names()
+        .into_iter()
+        .map(|name| {
+            Preset::builtin(name)
+                .expect("a shipped name")
+                .map_err(|e| VerbError::input("presets", e.to_string()))
+        })
+        .collect()
+}
+
 /// `bammetrics presets`.
 pub fn presets() -> Result<String, VerbError> {
     let mut text = String::new();
-    for name in bammetrics_verdict::names() {
-        let preset = Preset::builtin(name)
-            .expect("a shipped name")
-            .map_err(|e| VerbError::input("presets", e.to_string()))?;
+    for preset in shipped_presets()? {
         text.push_str(&format!(
             "{:<16} v{}  {}  {} rules  {}\n",
             preset.name,

@@ -113,7 +113,25 @@ pub fn samples(dirs: &[PathBuf]) -> Result<Vec<Sample>> {
     Ok(samples)
 }
 
+/// What [`write`] wrote: the output directory, every file in write order
+/// (verdict and page per sample, then the index), one summary per sample.
+pub struct Written {
+    pub out: PathBuf,
+    pub files: Vec<PathBuf>,
+    pub samples: Vec<SampleSummary>,
+}
+
 pub fn run(args: ReportArgs) -> Result<u8> {
+    let written = write(&args)?;
+    print!(
+        "{}",
+        summary(&written.samples, &written.out, written.files.len())
+    );
+    Ok(0)
+}
+
+/// `report` without the summary: every file written.
+pub fn write(args: &ReportArgs) -> Result<Written> {
     let preset = Preset::resolve(&args.preset)?;
     let out = match (&args.output, args.dirs.as_slice()) {
         (Some(out), _) => out.clone(),
@@ -132,13 +150,15 @@ pub fn run(args: ReportArgs) -> Result<u8> {
         date: &date,
     };
     let mut summaries = Vec::with_capacity(samples.len());
-    let mut files = 0;
+    let mut files = Vec::with_capacity(2 * samples.len() + 1);
     for sample in &samples {
         let verdict = evaluate(&preset, &sample.inputs, Some(&sample.name));
-        write_atomic(&out.join(verdict_name(&sample.name)), verdict.to_json())?;
+        let verdict_file = out.join(verdict_name(&sample.name));
+        write_atomic(&verdict_file, verdict.to_json())?;
         let page = bammetrics_report::render(&verdict, &sample.inputs, &options);
-        write_atomic(&out.join(page_name(&sample.name)), &page)?;
-        files += 2;
+        let page_file = out.join(page_name(&sample.name));
+        write_atomic(&page_file, &page)?;
+        files.extend([verdict_file, page_file]);
         summaries.push(SampleSummary::new(verdict, page_name(&sample.name)));
     }
     let index = out.join("index.html");
@@ -146,9 +166,12 @@ pub fn run(args: ReportArgs) -> Result<u8> {
         &index,
         bammetrics_report::render_index(&summaries, &options),
     )?;
-    files += 1;
-    print!("{}", summary(&summaries, &out, files));
-    Ok(0)
+    files.push(index);
+    Ok(Written {
+        out,
+        files,
+        samples: summaries,
+    })
 }
 
 /// How many reason lines one sample gets in the summary.

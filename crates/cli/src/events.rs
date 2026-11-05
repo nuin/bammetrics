@@ -26,6 +26,9 @@ pub struct Reporter {
     jsonl: bool,
     /// Draw the progress line on stderr.
     line: bool,
+    /// Print nothing at all, a failed step included (a library caller
+    /// reads the step records).
+    silent: bool,
     /// The BAM size, for the percent.
     size: u64,
     started: Instant,
@@ -93,11 +96,20 @@ impl Reporter {
         Self {
             jsonl: format == Format::Jsonl,
             line: !quiet && std::io::stderr().is_terminal(),
+            silent: false,
             size,
             started: Instant::now(),
             last_draw: None,
             next_event: PROGRESS_EVENT_RECORDS,
             records: 0,
+        }
+    }
+
+    /// A reporter that prints nothing.
+    pub fn silent() -> Self {
+        Self {
+            silent: true,
+            ..Self::new(Format::Text, true, 0)
         }
     }
 
@@ -191,7 +203,7 @@ impl Reporter {
                 field("step", Json::text(step)),
                 field("message", Json::text(message)),
             ]);
-        } else {
+        } else if !self.silent {
             eprintln!("bammetrics qc: {step} failed: {message}");
         }
     }
