@@ -37,8 +37,12 @@ pub fn render(verdict: &Verdict, inputs: &[Input], options: &Options) -> String 
         max_points: None,
     };
     page.head();
-    page.body();
-    page.out.push_str("</main></body></html>\n");
+    page.header();
+    page.out.push_str("<main>\n");
+    page.sections();
+    page.out.push_str("</main>\n");
+    page.run();
+    page.out.push_str("</body></html>\n");
     page.out
 }
 
@@ -68,7 +72,9 @@ pub fn fragment(verdict: &Verdict, inputs: &[Input], options: &Options) -> Strin
         "<div class=\"{FRAGMENT_CLASS}\">\n<style>\n{}</style>\n",
         scoped_css(&scope)
     );
-    page.body();
+    page.header();
+    page.sections();
+    page.run();
     page.out.push_str("</div>\n");
     page.out
 }
@@ -137,13 +143,34 @@ pub(crate) fn band_glyph(band: Band) -> &'static str {
     })
 }
 
+/// The glyph beside a status word, hidden from a screen reader, which
+/// reads the word.
+pub(crate) fn glyph(glyph: &str) -> String {
+    format!("<span class=\"glyph\" aria-hidden=\"true\">{glyph}</span>")
+}
+
 fn status_badge(status: Status) -> String {
     format!(
-        "<span class=\"status {}\"><span class=\"glyph\">{}</span> {}</span>",
+        "<span class=\"status {}\">{} {}</span>",
         status_class(status),
-        status_glyph(status),
+        glyph(status_glyph(status)),
         status_word(status)
     )
+}
+
+/// The `<div>` around a table: it scrolls sideways on a narrow screen, so
+/// it takes the keyboard focus and carries the table's name.
+pub(crate) fn table_region(out: &mut String, label: &str) {
+    let _ = write!(
+        out,
+        "<div class=\"tbl\" role=\"region\" tabindex=\"0\" aria-label=\"{}\">",
+        escape(label)
+    );
+}
+
+/// `HsMetrics` for `picard.analysis.directed.HsMetrics`.
+fn short_class(class: &str) -> &str {
+    class.rsplit(['.', '$']).next().unwrap_or(class)
 }
 
 fn file_name(path: &str) -> &str {
@@ -198,15 +225,14 @@ fn histogram_definition(program: Option<&str>, label: &str) -> Option<&'static s
 }
 
 impl<'a> Page<'a> {
-    /// Every section below the document head.
-    fn body(&mut self) {
-        self.header();
+    /// The sections between the header and the run footer: the content of
+    /// `<main>` on the page.
+    fn sections(&mut self) {
         self.band();
         self.issues();
         self.checks_table();
         self.remaining_plots();
         self.tables();
-        self.run();
     }
 
     fn head(&mut self) {
@@ -216,7 +242,7 @@ impl<'a> Page<'a> {
              <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
              <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'\">\n\
              <meta name=\"color-scheme\" content=\"light dark\">\n\
-             <title>{}: {} (bammetrics)</title>\n<style>\n{CSS}</style>\n</head>\n<body>\n<main>\n",
+             <title>{}: {} (bammetrics)</title>\n<style>\n{CSS}</style>\n</head>\n<body>\n",
             escape(&self.verdict.sample),
             self.verdict.status.name().to_uppercase()
         );
@@ -276,9 +302,9 @@ impl<'a> Page<'a> {
         }
         let _ = write!(
             self.out,
-            "<section class=\"band {}\" aria-label=\"Verdict\"><p class=\"word\"><span class=\"glyph\">{}</span> {}</p><p class=\"counts\">{}</p></section>",
+            "<section class=\"band {}\" aria-label=\"Verdict\"><p class=\"word\">{} {}</p><p class=\"counts\">{}</p></section>",
             band_class(v.status),
-            band_glyph(v.status),
+            glyph(band_glyph(v.status)),
             v.status.name().to_uppercase(),
             escape(&parts.join(", "))
         );
@@ -385,9 +411,13 @@ impl<'a> Page<'a> {
     }
 
     fn checks_table(&mut self) {
+        self.out
+            .push_str("<section id=\"checks\"><h2>All checks</h2>");
+        table_region(&mut self.out, "All checks");
         self.out.push_str(
-            "<section id=\"checks\"><h2>All checks</h2><div class=\"tbl\"><table class=\"checks\">\
-             <thead><tr><th>Status</th><th>Check</th><th>Metric</th><th class=\"num\">Value</th><th>Warn</th><th>Fail</th></tr></thead><tbody>",
+            "<table class=\"checks\"><thead><tr><th scope=\"col\">Status</th><th scope=\"col\">Check</th>\
+             <th scope=\"col\">Metric</th><th scope=\"col\" class=\"num\">Value</th><th scope=\"col\">Warn</th>\
+             <th scope=\"col\">Fail</th></tr></thead><tbody>",
         );
         for check in &self.verdict.checks {
             let value = match check.value {
@@ -406,7 +436,7 @@ impl<'a> Page<'a> {
             }
             let _ = write!(
                 self.out,
-                "<tr><td>{}</td><td>{}{unit}</td><td><code>{}</code></td><td class=\"num\">{}</td><td>{}</td><td>{}</td></tr>",
+                "<tr><td>{}</td><th scope=\"row\">{}{unit}</th><td><code>{}</code></td><td class=\"num\">{}</td><td>{}</td><td>{}</td></tr>",
                 status_badge(check.status),
                 escape(&check.label),
                 escape(&metric_text(check)),
@@ -473,13 +503,7 @@ impl<'a> Page<'a> {
             let mut what: Vec<String> = doc
                 .classes
                 .iter()
-                .map(|b| {
-                    b.class
-                        .rsplit(['.', '$'])
-                        .next()
-                        .unwrap_or(&b.class)
-                        .to_owned()
-                })
+                .map(|b| short_class(&b.class).to_owned())
                 .collect();
             if doc.histogram.is_some() {
                 what.push("histogram".to_owned());
@@ -492,15 +516,21 @@ impl<'a> Page<'a> {
             );
             let program = program(doc);
             for block in &doc.classes {
-                let _ = write!(self.out, "<h4>{}</h4>", escape(&block.class));
+                let _ = write!(self.out, "<h3>{}</h3>", escape(&block.class));
+                let label = format!(
+                    "{} in {}",
+                    short_class(&block.class),
+                    file_name(&input.path)
+                );
                 if block.rows.len() <= 4 {
-                    self.transposed_table(block);
+                    self.transposed_table(block, &label);
                 } else {
-                    self.wide_table(block);
+                    self.wide_table(block, &label);
                 }
             }
             if let Some(hist) = &doc.histogram {
-                self.histogram_table(hist, program);
+                let label = format!("Histogram in {}", file_name(&input.path));
+                self.histogram_table(hist, program, &label);
             }
             self.out.push_str("</div></details>");
         }
@@ -533,19 +563,25 @@ impl<'a> Page<'a> {
     }
 
     /// One row per column: the column, one value cell per row, the definition.
-    fn transposed_table(&mut self, block: &ClassBlock) {
+    fn transposed_table(&mut self, block: &ClassBlock, label: &str) {
+        table_region(&mut self.out, label);
         self.out
-            .push_str("<div class=\"tbl\"><table><thead><tr><th>Column</th>");
+            .push_str("<table><thead><tr><th scope=\"col\">Column</th>");
         for row in 0..block.rows.len() {
             let _ = write!(
                 self.out,
-                "<th class=\"num\">{}</th>",
+                "<th scope=\"col\" class=\"num\">{}</th>",
                 escape(&Self::row_label(block, row))
             );
         }
-        self.out.push_str("<th>Definition</th></tr></thead><tbody>");
+        self.out
+            .push_str("<th scope=\"col\">Definition</th></tr></thead><tbody>");
         for (i, column) in block.columns.iter().enumerate() {
-            let _ = write!(self.out, "<tr><td><code>{}</code></td>", escape(column));
+            let _ = write!(
+                self.out,
+                "<tr><th scope=\"row\"><code>{}</code></th>",
+                escape(column)
+            );
             for row in &block.rows {
                 let text = row.get(i).map(Value::picard_text).unwrap_or_default();
                 let _ = write!(self.out, "<td class=\"num\">{}</td>", escape(&text));
@@ -561,14 +597,14 @@ impl<'a> Page<'a> {
     }
 
     /// One row per record, the definition as the header cell's title.
-    fn wide_table(&mut self, block: &ClassBlock) {
-        self.out
-            .push_str("<div class=\"tbl\"><table class=\"wide\"><thead><tr>");
+    fn wide_table(&mut self, block: &ClassBlock, label: &str) {
+        table_region(&mut self.out, label);
+        self.out.push_str("<table class=\"wide\"><thead><tr>");
         for column in &block.columns {
             let definition = glossary::lookup(&block.class, column).map_or("", |e| e.definition);
             let _ = write!(
                 self.out,
-                "<th title=\"{}\">{}</th>",
+                "<th scope=\"col\" title=\"{}\">{}</th>",
                 escape(definition),
                 escape(column)
             );
@@ -589,7 +625,7 @@ impl<'a> Page<'a> {
         }
     }
 
-    fn histogram_table(&mut self, hist: &HistogramBlock, program: Option<&str>) {
+    fn histogram_table(&mut self, hist: &HistogramBlock, program: Option<&str>, label: &str) {
         let shown = match self.max_points {
             Some(max) => thin_indices(hist.rows.len(), max),
             None => (0..hist.rows.len()).collect(),
@@ -601,14 +637,16 @@ impl<'a> Page<'a> {
         };
         let _ = write!(
             self.out,
-            "<h4>Histogram <span class=\"muted\">{}</span></h4><div class=\"tbl\"><table class=\"wide\"><thead><tr>",
+            "<h3>Histogram <span class=\"muted\">{}</span></h3>",
             escape(&rows)
         );
+        table_region(&mut self.out, label);
+        self.out.push_str("<table class=\"wide\"><thead><tr>");
         for label in &hist.columns {
             let definition = histogram_definition(program, label).unwrap_or("");
             let _ = write!(
                 self.out,
-                "<th title=\"{}\">{}</th>",
+                "<th scope=\"col\" title=\"{}\">{}</th>",
                 escape(definition),
                 escape(label)
             );

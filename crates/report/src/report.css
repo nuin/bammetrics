@@ -110,15 +110,18 @@ code, .mono { font-family: var(--mono); font-size: 0.93em; }
 .plot svg { display: block; width: 100%; height: auto; }
 .plot figcaption { margin-top: 4px; }
 .tbl { overflow-x: auto; margin: 0 0 8px; }
+.tbl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 table { border-collapse: collapse; width: 100%; max-width: 1100px; }
 th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { color: var(--ink-2); font-weight: 600; white-space: nowrap; }
+tbody th { color: inherit; font-size: inherit; font-weight: 400; white-space: normal; }
 td.num, th.num, table.wide td, table.wide th { text-align: right; }
 td.def { color: var(--ink-2); font-size: var(--fs-1); }
-tbody tr:nth-child(even) td { background: var(--bg-2); }
+tbody tr:nth-child(even) > * { background: var(--bg-2); }
 table.checks td:first-child { white-space: nowrap; }
-table.checks td:nth-child(2) { min-width: 11em; }
-table.index td { white-space: nowrap; }
+table.checks tbody th { min-width: 11em; }
+table.index td, table.index tbody th { white-space: nowrap; }
 table.index th.rule { max-width: 9em; white-space: normal; vertical-align: bottom; }
 table.index td.cell { text-align: right; }
 table.index td.cell.pass { color: var(--pass-ink); }
@@ -131,7 +134,7 @@ summary { cursor: pointer; padding: 10px 14px; font-weight: 600; overflow-wrap: 
 summary .muted { font-weight: 400; margin-left: 8px; }
 details[open] summary { border-bottom: 1px solid var(--line); }
 details .body { padding: 8px 14px 4px; }
-details h4 { font-size: var(--fs-1); color: var(--ink-2); margin: 8px 0 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+details h3 { font-size: var(--fs-1); color: var(--ink-2); margin: 8px 0 6px; text-transform: uppercase; letter-spacing: 0.06em; }
 .run dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; max-width: none; }
 .run dt, .run dd { margin: 0; }
 .run dd, .facts dd, .reason { min-width: 0; overflow-wrap: anywhere; }
@@ -151,6 +154,12 @@ details h4 { font-size: var(--fs-1); color: var(--ink-2); margin: 8px 0 6px; tex
 .chart .dot { fill: var(--accent); }
 .chart .lg { font: 11px system-ui, sans-serif; fill: var(--ink); }
 @media print {
+  :root, :root[data-theme="dark"], :root:not([data-theme="light"]) {
+    --bg: #ffffff; --bg-2: #f3f3f0; --ink: #1b1c1e; --ink-2: #5b5d60; --line: #d9d9d5;
+    --accent: #2a5db0; --accent-2: #b4530a; --pass-ink: #1b6b3a; --pass-bg: #e2f3e6;
+    --warn-ink: #7a4a00; --warn-bg: #fbefd2; --fail-ink: #a31f1f; --fail-bg: #fbe4e4;
+    --neutral-ink: #4b4d50; --neutral-bg: #ebebe8;
+  }
   html { font-size: 12px; }
   main { padding: 0; max-width: none; }
   .band, .status { background: none !important; color: var(--ink) !important; border: 1px solid var(--ink); }

@@ -145,7 +145,7 @@ fn four() -> Vec<SampleSummary> {
 
 /// The sample names in row order of `html`.
 fn row_order(html: &str) -> Vec<String> {
-    html.split("<tr><td><a href=\"")
+    html.split("<tr><th scope=\"row\"><a href=\"")
         .skip(1)
         .map(|row| {
             let after = row.split_once("\">").expect("href end").1;
@@ -250,11 +250,13 @@ fn four_sample_index_matches_its_snapshot() {
     }
     // A failing cell carries the reason as its title, a passing cell none.
     assert!(html.contains(
-        "<td class=\"cell fail\" title=\"Target bases at 20x is 0.5, past the fail limit\">\u{2715} 0.5</td>"
+        "<td class=\"cell fail\" title=\"Target bases at 20x is 0.5, past the fail limit\"><span class=\"sr\">fail</span>\u{2715} 0.5</td>"
     ));
-    assert!(html.contains("<td class=\"cell pass\">\u{2713} 310</td>"));
-    assert!(html.contains("<td class=\"cell none\" title=\"no HsMetrics file\">\u{25CB} ?</td>"));
-    assert!(html.contains("<th class=\"num\">Not measured</th>"));
+    assert!(
+        html.contains("<td class=\"cell pass\"><span class=\"sr\">pass</span>\u{2713} 310</td>")
+    );
+    assert!(html.contains("<td class=\"cell none\" title=\"no HsMetrics file\"><span class=\"sr\">not measured</span>\u{25CB} ?</td>"));
+    assert!(html.contains("<th scope=\"col\" class=\"num\">Not measured</th>"));
     assert!(!html.contains("<script"));
     assert!(html.contains("default-src 'none'; style-src 'unsafe-inline'"));
     assert!(html.contains(DATE));
