@@ -86,7 +86,9 @@ dependencies = [
 name = "bammetrics-py"
 version = "0.14.0"
 dependencies = [
+ "bammetrics-cli",
  "bammetrics-core",
+ "bammetrics-report",
  "bammetrics-verdict",
  "pyo3",
 ]

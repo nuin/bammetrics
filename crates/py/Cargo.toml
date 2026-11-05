@@ -11,6 +11,8 @@ name = "bammetrics"
 crate-type = ["cdylib"]
 
 [dependencies]
+bammetrics-cli = { path = "../cli" }
 bammetrics-core.workspace = true
+bammetrics-report.workspace = true
 bammetrics-verdict.workspace = true
 pyo3.workspace = true

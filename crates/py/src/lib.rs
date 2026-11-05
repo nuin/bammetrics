@@ -14,9 +14,13 @@ use bammetrics_core::quality_yield;
 use bammetrics_core::record::Orientation;
 use bammetrics_core::registry::{self, Tool};
 use bammetrics_verdict::{Preset, evaluate_files};
-use pyo3::exceptions::{PyAttributeError, PyIOError, PyValueError};
+use pyo3::exceptions::PyAttributeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyCFunction, PyDict, PyList, PyTuple};
+
+mod verbs;
+
+use verbs::{input_error, usage_error};
 
 /// Declares a row class: every field readable as an attribute, `to_dict()`
 /// returning them in declaration order, and a `__repr__` that shows the
@@ -251,7 +255,7 @@ fn py_alignment_summary(
             .iter()
             .map(|n| n.parse::<Orientation>())
             .collect::<Result<_, _>>()
-            .map_err(|e| PyValueError::new_err(e.to_string()))?,
+            .map_err(|e| usage_error(e.to_string()))?,
     };
     let opts = alignment_summary::Options {
         reference,
@@ -467,8 +471,8 @@ fn py_hs_metrics(
 /// ValueError, everything else as IOError.
 fn py_error(e: &bammetrics_core::Error) -> PyErr {
     match e {
-        bammetrics_core::Error::Usage(message) => PyValueError::new_err(message.clone()),
-        other => PyIOError::new_err(other.to_string()),
+        bammetrics_core::Error::Usage(message) => usage_error(message.clone()),
+        other => input_error(other.to_string()),
     }
 }
 
@@ -486,6 +490,11 @@ fn py_error(e: &bammetrics_core::Error) -> PyErr {
 /// by `bammetrics collect -O PREFIX`. `hs_per_base` (needs `output_prefix`)
 /// also writes each HS run's per-base coverage, as `--hs-per-base` does. A
 /// failed metric raises, after the files of the others are written.
+///
+/// The form of docs/05 section 5 takes verb names (`metrics=["insert-size",
+/// "gc-bias"]`) or `output=PREFIX`, plus the `qc` keywords in
+/// [`verbs::COLLECT_KEYWORDS`]: it runs those collectors as `qc` does and
+/// returns a `Run` with `.metrics` and `.files`.
 #[pyfunction]
 #[pyo3(name = "collect", signature = (
     path,
@@ -495,9 +504,78 @@ fn py_error(e: &bammetrics_core::Error) -> PyErr {
     output_prefix=None,
     threads=None,
     hs_per_base=false,
+    *,
+    output=None,
+    panel=None,
+    ref_flat=None,
+    strand=None,
+    ribosomal_intervals=None,
 ))]
 #[allow(clippy::too_many_arguments)]
 fn py_collect<'py>(
+    py: Python<'py>,
+    path: Bound<'py, PyAny>,
+    metrics: Option<Vec<String>>,
+    reference: Option<Bound<'py, PyAny>>,
+    hs: Option<Bound<'py, PyAny>>,
+    output_prefix: Option<PathBuf>,
+    threads: Option<Bound<'py, PyAny>>,
+    hs_per_base: bool,
+    output: Option<Bound<'py, PyAny>>,
+    panel: Option<Bound<'py, PyAny>>,
+    ref_flat: Option<Bound<'py, PyAny>>,
+    strand: Option<Bound<'py, PyAny>>,
+    ribosomal_intervals: Option<Bound<'py, PyAny>>,
+) -> PyResult<Py<PyAny>> {
+    let verb_names = metrics
+        .as_ref()
+        .is_some_and(|names| names.iter().any(|n| n.contains('-')));
+    let qc_only = [&output, &panel, &ref_flat, &strand, &ribosomal_intervals];
+    if !verb_names && qc_only.iter().all(|o| o.is_none()) {
+        let reference = reference.map(|r| r.extract::<PathBuf>()).transpose()?;
+        let hs = hs.map(|h| h.extract()).transpose()?;
+        let threads = threads.map(|t| t.extract::<usize>()).transpose()?;
+        let path: PathBuf = path.extract()?;
+        return collect_dict(
+            py,
+            path,
+            metrics,
+            reference,
+            hs,
+            output_prefix,
+            threads,
+            hs_per_base,
+        )
+        .map(|d| d.into_any().unbind());
+    }
+    if output_prefix.is_some() || hs_per_base {
+        return Err(usage_error(
+            "bammetrics collect: output_prefix and hs_per_base belong to the form with \
+             snake-case metric names; with verb names, give output",
+        ));
+    }
+    let options = PyDict::new(py);
+    for (name, value) in [
+        ("output", output),
+        ("reference", reference),
+        ("hs", hs),
+        ("panel", panel),
+        ("ref_flat", ref_flat),
+        ("strand", strand),
+        ("ribosomal_intervals", ribosomal_intervals),
+        ("threads", threads),
+    ] {
+        if let Some(value) = value {
+            options.set_item(name, value)?;
+        }
+    }
+    verbs::collect_run(py, &path, metrics, &options).map(Py::into_any)
+}
+
+/// The form of [`py_collect`] with snake-case metric names: a dict of
+/// row objects.
+#[allow(clippy::too_many_arguments)]
+fn collect_dict<'py>(
     py: Python<'py>,
     path: PathBuf,
     metrics: Option<Vec<String>>,
@@ -519,18 +597,18 @@ fn py_collect<'py>(
         NAMES[..n].iter().map(|s| (*s).to_owned()).collect()
     });
     if let Some(unknown) = wanted.iter().find(|m| !NAMES.contains(&m.as_str())) {
-        return Err(PyValueError::new_err(format!(
+        return Err(usage_error(format!(
             "unknown metric {unknown:?}; expected one of {NAMES:?}"
         )));
     }
     let has = |name: &str| wanted.iter().any(|m| m == name);
     if has("hs_metrics") == hs.is_empty() {
-        return Err(PyValueError::new_err(
+        return Err(usage_error(
             "\"hs_metrics\" in metrics and a non-empty hs list go together",
         ));
     }
     if hs_per_base && (hs.is_empty() || output_prefix.is_none()) {
-        return Err(PyValueError::new_err(
+        return Err(usage_error(
             "hs_per_base needs a non-empty hs list and output_prefix",
         ));
     }
@@ -574,7 +652,7 @@ fn py_collect<'py>(
         })
         .map_err(|e| py_error(&e))?;
     if let Some((tool, e)) = results.errors().first() {
-        return Err(PyIOError::new_err(format!("{tool}: {e}")));
+        return Err(input_error(format!("{tool}: {e}")));
     }
     let dict = PyDict::new(py);
     if let Some(Ok(row)) = results.quality_yield {
@@ -704,7 +782,7 @@ fn run_registered<'py>(
             options.push(format!("{name}={}", value.str()?));
         }
         if args.len() > tool.value_options().count() {
-            return Err(PyValueError::new_err(format!(
+            return Err(usage_error(format!(
                 "{}: too many positional arguments",
                 tool.name
             )));
@@ -748,12 +826,6 @@ fn add_registered_tools(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-/// Picard names of the registered tools.
-#[pyfunction]
-fn tools() -> Vec<&'static str> {
-    registry::TOOLS.iter().map(|t| t.name).collect()
-}
-
 /// A table of the parsed file (a class block or the histogram) as a list of
 /// dicts keyed by its column names.
 fn table_as_dicts<'c, 'v, 'py>(
@@ -781,6 +853,11 @@ fn read_metrics<'py>(py: Python<'py>, path: PathBuf) -> PyResult<Bound<'py, PyDi
     let doc = py
         .detach(|| MetricsDoc::read(&path))
         .map_err(|e| py_error(&e))?;
+    doc_dict(py, &doc)
+}
+
+/// A parsed metrics file in the form [`read_metrics`] returns.
+fn doc_dict<'py>(py: Python<'py>, doc: &MetricsDoc) -> PyResult<Bound<'py, PyDict>> {
     let result = PyDict::new(py);
     result.set_item("headers", &doc.headers)?;
     let classes = PyList::empty(py);
@@ -805,19 +882,13 @@ fn read_metrics<'py>(py: Python<'py>, path: PathBuf) -> PyResult<Bound<'py, PyDi
     Ok(result)
 }
 
-/// Names of the shipped verdict presets.
-#[pyfunction]
-fn presets() -> Vec<&'static str> {
-    bammetrics_verdict::names()
-}
-
 /// A preset error is a ValueError (the file or name is wrong); a metrics
 /// file that cannot be read is an OSError, as elsewhere in the module.
 fn verdict_error(e: &bammetrics_verdict::Error) -> PyErr {
     match e {
         bammetrics_verdict::Error::Metrics(inner) => py_error(inner),
-        bammetrics_verdict::Error::Input { .. } => PyIOError::new_err(e.to_string()),
-        _ => PyValueError::new_err(e.to_string()),
+        bammetrics_verdict::Error::Input { .. } => input_error(e.to_string()),
+        _ => usage_error(e.to_string()),
     }
 }
 
@@ -847,11 +918,18 @@ fn evaluate<'py>(
 
 #[pymodule]
 fn bammetrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    verbs::add_types(m)?;
     add_registered_tools(m)?;
-    m.add_function(wrap_pyfunction!(tools, m)?)?;
+    m.add_function(wrap_pyfunction!(verbs::py_tools, m)?)?;
     m.add_function(wrap_pyfunction!(read_metrics, m)?)?;
-    m.add_function(wrap_pyfunction!(presets, m)?)?;
+    m.add_function(wrap_pyfunction!(verbs::py_presets, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate, m)?)?;
+    m.add_function(wrap_pyfunction!(verbs::py_qc, m)?)?;
+    m.add_function(wrap_pyfunction!(verbs::py_check, m)?)?;
+    m.add_function(wrap_pyfunction!(verbs::py_report, m)?)?;
+    m.add_class::<verbs::Run>()?;
+    m.add_class::<verbs::Verdict>()?;
+    m.add_class::<verbs::Check>()?;
     m.add_class::<InsertSizeMetrics>()?;
     m.add_function(wrap_pyfunction!(py_insert_size, m)?)?;
     m.add_class::<AlignmentSummaryMetrics>()?;
@@ -861,5 +939,16 @@ fn bammetrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<HsMetrics>()?;
     m.add_function(wrap_pyfunction!(py_hs_metrics, m)?)?;
     m.add_function(wrap_pyfunction!(py_collect, m)?)?;
+    // Every public name, so maturin's `from .bammetrics import *` package
+    // shim exports exactly these.
+    let mut public: Vec<String> = m
+        .dict()
+        .keys()
+        .iter()
+        .map(|k| k.extract::<String>())
+        .collect::<PyResult<_>>()?;
+    public.retain(|name| !name.starts_with('_'));
+    public.sort();
+    m.add("__all__", public)?;
     Ok(())
 }
