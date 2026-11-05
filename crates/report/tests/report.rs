@@ -1,5 +1,5 @@
 //! The sample page on the committed fixtures: snapshots of a passing and a
-//! failing page under `tests/report/`, the palette contrast in both themes,
+//! failing page under `tests/report/`, the palette contrast in both themes and print,
 //! escaping of header text, every plot on an empty and a one-bin
 //! histogram, and the size and render time budgets of docs/05 section 4.8.
 
@@ -192,7 +192,7 @@ fn page_has_no_script_and_a_csp() {
 
 #[test]
 fn every_palette_pair_meets_wcag_aa_in_both_themes() {
-    for theme in [Theme::Light, Theme::Dark] {
+    for theme in Theme::ALL {
         for (text, background) in TEXT_ON_BACKGROUND {
             let fg = token(theme, text).unwrap_or_else(|| panic!("{theme:?} --{text}"));
             let bg = token(theme, background).unwrap_or_else(|| panic!("{theme:?} --{background}"));

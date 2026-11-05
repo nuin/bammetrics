@@ -80,9 +80,69 @@ after the header lines.
 CollectRawWgsMetrics spends most of its time in the `HET_SNP_SENSITIVITY` simulation over
 its 100,001-bin depth histogram, in both tools.
 
+## Report budgets (docs/05 section 4.8)
+
+Measured 2026-11-05 with bammetrics 0.16.0, rustc 1.99.1, same machine, by `make budgets`
+(`crates/cli/tests/budgets.rs` on a release build). The test fails at twice any target,
+and CI runs it on the Linux and macOS runners after the unit tests.
+
+| Budget | Target | Fails at | Measured | How |
+|---|---:|---:|---:|---|
+| Render, sample page | 20 ms | 40 ms | 1.13 ms | the failing fixture page (`clinical-panel`) with every plot, median of 31 renders after 3 unmeasured |
+| Render, index of 100 samples | 100 ms | 200 ms | 0.63 ms | 100 copies of that verdict under 100 names, median of 31 |
+| Sample page size | 100 KB | 200 KB | 88.6 KB | the largest of the three fixture pages: 71,767 bytes passing, 84,699 failing, 90,776 failing with every plot |
+| Index size, 100 samples | 200 KB | 400 KB | 151.9 KB | 155,513 bytes, 14 rule cells per row |
+| Binary growth | 300 KB | 600 KB | 290.8 KB | 297,808 bytes: stripped `size_report` less stripped `size_base`; the probe leaves out the verbs' code (see below) |
+| Added passes over the BAM | 0 | 1 | 0 | `qc` reports 1 BAM read with the verdict and page; `report` and `check` run with the BAM deleted |
+
+The fixture metrics are the seven files the golden records hold for
+`tests/data/insert_size.bam` (alignment summary, insert size, quality yield, duplicate
+metrics, hs metrics, gc bias, mean quality by cycle). A KB is 1024 bytes.
+
+Binary growth baseline. The two probes are release examples of `crates/report`, built with
+the workspace release profile (`lto = "fat"`, `codegen-units = 1`) on the machine that runs
+the test. `size_base` reads metrics files with the core reader; `size_report` does the same
+and then calls every verdict and report entry point the command calls (each shipped
+preset, `evaluate`, `verdict.json` out and back, the page, the index). The difference is
+the code and data the two crates add, the CSS, presets and glossary included, and it
+holds on any runner because both sides are built there. Unstripped, the difference is
+322,400 bytes (314.8 KB). The probe leaves out the command's own report code (`report.rs`,
+`check.rs`, `discover.rs` and the `qc` engine in `crates/cli`).
+
+The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built once):
+
+| Commit | What | Binary bytes | Stripped bytes |
+|---|---|---:|---:|
+| 10d7f47 | last commit before `crates/verdict` and `crates/report` | 3,390,832 | 2,869,432 |
+| 28647a8 | both crates exist; the binary links neither | 3,390,576 | 2,869,432 |
+| f82df56 | the `report` and `check` verbs link both crates | 3,778,528 | 3,216,936 |
+| 0.16.0 | today | 4,870,352 | 4,161,072 |
+
+From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
+KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and
+under twice it. The growth from 10d7f47 to 0.16.0 (1,479,520 bytes) is mostly the tools
+added since (the capture, RNA and variant tools, the `qc` engine and the verb grammar), so
+it does not measure the report.
+
+## Report accessibility
+
+Checked 2026-11-05 with bammetrics 0.16.0 by `make a11y` (`benches/a11y.mjs`): axe-core
+4.10.2 in Chromium (Playwright 1.64.1) on six pages, the 4-sample index snapshot
+(`tests/report/index.html`), the three fixture pages of `crates/report/examples/fixture_pages.rs`
+and the page and index `bammetrics report` writes for `tests/data/picard`. Each page runs
+in the light theme, the dark theme and print media, at 320, 360 and 1280 px: 54 runs, 0
+axe violations. At 320 and 360 px no page scrolls sideways, with every `<details>` closed
+and open. Tab reaches every summary, link and table scroll box outside a closed
+`<details>` on all six pages. The pages of commit 2c2af79 failed this check: the index was
+721 px wide at a 320 px viewport (the hidden status words escaped the table's scroll
+box) and a sample page with its tables open was 556 px (an unbroken Picard class name in
+a heading). `make a11y` needs node and npm and is not run in CI.
+
 ## Reproduce
 
 ```bash
+make budgets     # the report budgets above; fails at 2x any target
+make a11y        # axe-core, reflow and keyboard check of the report pages (node, npm)
 make bench-bam   # target/bench/bench.bam, about 10 minutes (Python simulation, bwa, MarkDuplicates)
 make bench       # release build, then benches/bench.py: table on stdout, target/bench/results.json
 make bench-wgs   # target/bench_wgs on first use, then benches/wgs_bench.py: the coverage table, target/bench_wgs/results.json

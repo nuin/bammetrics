@@ -58,9 +58,9 @@ rows = bammetrics.collect_alignment_summary_metrics("sample.bam", R="ref.fa", ME
 ```
 
 Options that cannot change a number (`VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`,
-`CHART`, `H`) are accepted and ignored. An unknown option exits 1 and names it. `R=`
-needs a `.fai` next to the FASTA. A BED file works wherever Picard wants an interval list.
-Every option is listed in [docs/cli.md](docs/cli.md).
+`CHART`, `H`) are accepted and ignored. An unknown option is named and exits 1 on the Picard
+face, 2 on a verb. `R=` needs a `.fai` next to the FASTA. A BED file works wherever Picard
+wants an interval list. Every option is listed in [docs/cli.md](docs/cli.md).
 
 ## Report
 
@@ -77,8 +77,8 @@ what would run.
 
 `report` finds the metrics files by their `## METRICS CLASS` block in any directory of
 Picard output, no bammetrics run needed, and judges each sample against a preset of
-thresholds: the verdict (pass, warn, fail or incomplete) opens each page, with one plot
-under each failing check. The presets, the rule language and `verdict.json` are in
+thresholds: the verdict (pass, warn, fail or incomplete) opens each page, with a plot
+under the failing check it explains. The presets, the rule language and `verdict.json` are in
 [docs/verdict.md](docs/verdict.md); the exit codes of `check` are in [docs/cli.md](docs/cli.md).
 
 ## Tools
@@ -148,7 +148,7 @@ crates/verdict, crates/report   presets and verdicts; the HTML pages and the ind
 crates/cli    the bammetrics command
 crates/py     the bammetrics Python module (PyO3)
 tests/        concordance/ (Picard harness), corpus/ (generator), python/, data/
-docs/         cli.md, verdict.md, concordance.md, benchmarks.md, 04_picard_parity_plan.md
+docs/         cli.md, verdict.md, python.md, concordance.md, benchmarks.md, 04_picard_parity_plan.md
 ```
 
 License: MIT OR Apache-2.0. Changes: [CHANGELOG.md](CHANGELOG.md).

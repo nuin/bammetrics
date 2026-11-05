@@ -10,7 +10,9 @@ use std::path::Path;
 use bammetrics_verdict::{Band, Check, Verdict};
 
 use crate::html::{escape, number};
-use crate::page::{Options, band_class, band_glyph, metric_text, status_class, status_glyph};
+use crate::page::{
+    Options, band_class, band_glyph, glyph, metric_text, status_class, status_word, table_region,
+};
 use crate::theme::CSS;
 
 /// One sample on the index: its verdict and the link to its page.
@@ -154,7 +156,7 @@ pub fn render_index(samples: &[SampleSummary], options: &Options) -> String {
          <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
          <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'\">\n\
          <meta name=\"color-scheme\" content=\"light dark\">\n\
-         <title>{} {}: {} (bammetrics)</title>\n<style>\n{CSS}</style>\n</head>\n<body>\n<main>\n",
+         <title>{} {}: {} (bammetrics)</title>\n<style>\n{CSS}</style>\n</head>\n<body>\n",
         samples.len(),
         if samples.len() == 1 {
             "sample"
@@ -187,13 +189,13 @@ pub fn render_index(samples: &[SampleSummary], options: &Options) -> String {
     if !options.date.is_empty() {
         let _ = write!(out, "<span>{}</span>", escape(options.date));
     }
-    out.push_str("</p></header>\n");
+    out.push_str("</p></header>\n<main>\n");
     let worst = tally.worst();
     let _ = writeln!(
         out,
-        "<section class=\"band {}\" aria-label=\"Verdict\"><p class=\"word\"><span class=\"glyph\">{}</span> {}</p><p class=\"counts\">{}</p></section>",
+        "<section class=\"band {}\" aria-label=\"Verdict\"><p class=\"word\">{} {}</p><p class=\"counts\">{}</p></section>",
         band_class(worst),
-        band_glyph(worst),
+        glyph(band_glyph(worst)),
         worst.name().to_uppercase(),
         escape(&tally.line())
     );
@@ -205,20 +207,23 @@ pub fn render_index(samples: &[SampleSummary], options: &Options) -> String {
     }
     let not_measured = samples.iter().any(|s| s.verdict.counts.not_measured > 0);
     out.push_str(
-        "<section id=\"samples\"><h2>Samples <span class=\"muted\">worst first</span></h2>\
-         <div class=\"tbl\"><table class=\"index\"><thead><tr><th>Sample</th><th>Verdict</th>\
-         <th class=\"num\">Fail</th><th class=\"num\">Warn</th><th class=\"num\">Pass</th>",
+        "<section id=\"samples\"><h2>Samples <span class=\"muted\">worst first</span></h2>",
+    );
+    table_region(&mut out, "Samples");
+    out.push_str(
+        "<table class=\"index\"><thead><tr><th scope=\"col\">Sample</th><th scope=\"col\">Verdict</th>\
+         <th scope=\"col\" class=\"num\">Fail</th><th scope=\"col\" class=\"num\">Warn</th><th scope=\"col\" class=\"num\">Pass</th>",
     );
     if not_measured {
-        out.push_str("<th class=\"num\">Not measured</th>");
+        out.push_str("<th scope=\"col\" class=\"num\">Not measured</th>");
     }
     if presets.len() > 1 {
-        out.push_str("<th>Preset</th>");
+        out.push_str("<th scope=\"col\">Preset</th>");
     }
     for (_, label, metric) in &columns {
         let _ = write!(
             out,
-            "<th class=\"rule\" title=\"{}\">{}</th>",
+            "<th scope=\"col\" class=\"rule\" title=\"{}\">{}</th>",
             escape(metric),
             escape(label)
         );
@@ -228,12 +233,12 @@ pub fn render_index(samples: &[SampleSummary], options: &Options) -> String {
         let v = &sample.verdict;
         let _ = write!(
             out,
-            "<tr><td><a href=\"{}\">{}</a></td><td><span class=\"status {}\"><span class=\"glyph\">{}</span> {}</span></td>\
+            "<tr><th scope=\"row\"><a href=\"{}\">{}</a></th><td><span class=\"status {}\">{} {}</span></td>\
              <td class=\"num\">{}</td><td class=\"num\">{}</td><td class=\"num\">{}</td>",
             escape(&sample.href),
             escape(&v.sample),
             band_class(v.status),
-            band_glyph(v.status),
+            glyph(band_glyph(v.status)),
             v.status.name(),
             v.counts.fail,
             v.counts.warn,
@@ -264,8 +269,11 @@ pub fn render_index(samples: &[SampleSummary], options: &Options) -> String {
     out
 }
 
-/// One rule cell: the glyph and the value, with the reason as the title on
-/// a warn, fail or not-measured check.
+/// One rule cell: the status word and the value, with the reason as the
+/// title on a warn, fail or not-measured check. The word is hidden on
+/// screen. `report.css` draws the status glyph before it with an empty
+/// alternative text (`td.cell.<status> { --glyph }`), so a screen reader
+/// reads the word alone and the markup holds no glyph per cell.
 fn cell(out: &mut String, check: &Check) {
     let value = match check.value {
         Some(v) => number(v),
@@ -277,8 +285,8 @@ fn cell(out: &mut String, check: &Check) {
     }
     let _ = write!(
         out,
-        ">{} {}</td>",
-        status_glyph(check.status),
+        "><span class=\"sr\">{} </span>{}</td>",
+        status_word(check.status),
         escape(&value)
     );
 }
@@ -290,4 +298,29 @@ pub fn write_index(
     options: &Options,
 ) -> std::io::Result<()> {
     std::fs::write(path, render_index(samples, options))
+}
+
+#[cfg(test)]
+mod tests {
+    use bammetrics_verdict::Status;
+
+    use super::*;
+    use crate::page::status_glyph;
+
+    #[test]
+    fn the_css_draws_the_glyph_of_each_cell_status() {
+        for status in [
+            Status::Pass,
+            Status::Warn,
+            Status::Fail,
+            Status::NotMeasured,
+        ] {
+            let code = status_glyph(status).chars().next().map_or(0, u32::from);
+            let rule = format!(
+                "td.cell.{} {{ --glyph: \"\\{code:X}\";",
+                status_class(status)
+            );
+            assert!(CSS.contains(&rule), "{rule}");
+        }
+    }
 }

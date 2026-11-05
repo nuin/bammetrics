@@ -4,7 +4,7 @@
 UV_RUN := uv run --no-project
 CORPUS := tests/corpus/out
 
-.PHONY: all test lint release corpus reference-metrics concordance golden golden-update python-test wheel wheel-check clean-corpus bench-bam bench bench-wgs fuzz
+.PHONY: all test lint release corpus reference-metrics concordance golden golden-update budgets a11y python-test wheel wheel-check clean-corpus bench-bam bench bench-wgs fuzz
 
 all: test lint concordance
 
@@ -41,6 +41,28 @@ golden: release
 
 golden-update: release
 	UPDATE_GOLDEN=1 cargo test --release -p bammetrics-cli --test golden
+
+# Size and speed budgets of docs/05 section 4.8 (crates/cli/tests/budgets.rs):
+# the fixture pages and a 100-sample index timed (median of 31 renders) and
+# sized, the binary growth between the two probe examples of crates/report,
+# and the BAM reads the report adds to qc. Fails at 2x any target.
+budgets:
+	cargo build --release -p bammetrics-report --example size_base --example size_report
+	cargo test --release -p bammetrics-cli --test budgets -- --ignored --nocapture
+
+# Accessibility check of the report pages (benches/a11y.mjs): axe-core in
+# Chromium, light and dark, 320, 360 and 1280 px, no sideways scroll at phone
+# width with details closed and open, every control reached by Tab. Needs node
+# and npm; installs Playwright and axe-core under target/a11y. Not run in CI.
+A11Y := target/a11y
+a11y: release
+	npm install --no-audit --no-fund --prefix $(A11Y) playwright@1.64.1 axe-core@4.10.2
+	cd $(A11Y) && npx playwright install chromium
+	rm -rf $(A11Y)/pages $(A11Y)/run && mkdir -p $(A11Y)/run
+	cargo run --release -q -p bammetrics-report --example fixture_pages -- $(A11Y)/pages
+	cp -R tests/data/picard/ $(A11Y)/run/
+	target/release/bammetrics report $(A11Y)/run --preset clinical-panel --date 2026-01-01 > /dev/null
+	node benches/a11y.mjs $(A11Y) tests/report/index.html $(A11Y)/pages/*.html $(A11Y)/run/*.html
 
 # Differential fuzzing (tests/concordance/fuzz.py): N seeded random BAMs through
 # Picard and bammetrics, failures shrunk into tests/concordance/regressions.

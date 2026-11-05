@@ -34,6 +34,11 @@ jobs:
       - name: Unit and integration tests
         run: cargo test --workspace
 
+      # docs/05 section 4.8: page and index render time and size, binary
+      # growth, added BAM passes. Fails at 2x any target (decision 11).
+      - name: Size and speed budgets
+        run: make budgets
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
