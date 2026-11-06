@@ -25,6 +25,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("QY_A", "tests/data/quality_yield_a.txt"),
     ("QY_B", "tests/data/quality_yield_b.txt"),
     ("PICARD", "tests/data/picard"),
+    ("IS_CRAM", "tests/data/insert_size.cram"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -182,6 +183,17 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_verb_bed_to_interval_list_no_dictionary", "bed-to-interval-list", "BED"),
     case!("qc_panel_bed", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--panel", "BED", "-R", "REF", "--date", "2026-01-02 03:04:05 UTC"),
     case!("plan_panel_bed", "plan", "IS", "-o", "OUT/sample", "--panel", "BED"),
+    // CRAM input (tests/data/make_cram.py): told by its magic, decoded with R=.
+    case!("picard_quality_yield_cram", "CollectQualityYieldMetrics", "I=IS_CRAM", "O=OUT/quality_yield.txt", "R=REF"),
+    case!("picard_multiple_metrics_cram", "CollectMultipleMetrics", "I=IS_CRAM", "O=OUT/sample", "R=REF"),
+    case!("picard_wgs_metrics_cram", "CollectWgsMetrics", "I=IS_CRAM", "O=OUT/wgs_metrics.txt", "R=REF"),
+    case!("picard_bed_to_interval_list_cram", "BedToIntervalList", "I=BED", "SD=IS_CRAM", "O=OUT/panel.interval_list"),
+    case!("error_cram_no_reference", "CollectQualityYieldMetrics", "I=IS_CRAM"),
+    case!("verb_quality_yield_cram", "quality-yield", "IS_CRAM", "-R", "REF"),
+    case!("verb_insert_size_cram_json", "insert-size", "IS_CRAM", "-R", "REF", "--format", "json"),
+    case!("qc_generic_cram", "qc", "IS_CRAM", "-R", "REF", "-o", "OUT/sample", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("plan_cram", "plan", "IS_CRAM", "-R", "REF", "-o", "OUT/sample"),
+    case!("error_qc_cram_no_reference", "qc", "IS_CRAM", "-o", "OUT/sample"),
 ];
 
 /// The same tools on corpus BAM t1, with its reference and interval lists.

@@ -465,6 +465,44 @@ fn a_bam_on_standard_input_gives_the_metrics_of_the_file() {
 }
 
 #[test]
+fn a_cram_on_standard_input_gives_the_metrics_of_the_bam() {
+    const CRAM: &str = "tests/data/insert_size.cram";
+    let body = |o: &Output| {
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter(|l| !l.starts_with("# "))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    for verb in ["insert-size", "quality-yield", "alignment-summary"] {
+        let from_bam = run_ok(&strings(&[verb, IS, "-R", REF]));
+        let piped = Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+            .args([verb, "-", "-R", REF])
+            .current_dir(root())
+            .stdin(Stdio::from(
+                fs::File::open(root().join(CRAM)).expect("cram"),
+            ))
+            .output()
+            .expect("run bammetrics");
+        assert_eq!(body(&piped), body(&from_bam), "{verb}");
+        let unreferenced = Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+            .args([verb, "-"])
+            .current_dir(root())
+            .stdin(Stdio::from(
+                fs::File::open(root().join(CRAM)).expect("cram"),
+            ))
+            .output()
+            .expect("run bammetrics");
+        assert_eq!(unreferenced.status.code(), Some(1), "{verb}");
+        assert!(
+            String::from_utf8_lossy(&unreferenced.stderr).contains("REFERENCE_SEQUENCE (R)"),
+            "{verb}"
+        );
+    }
+}
+
+#[test]
 fn boolean_forms_agree_and_never_take_a_path() {
     let forms: [&[&str]; 5] = [
         &["--use-original-qualities", "false"],
