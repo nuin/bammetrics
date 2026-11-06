@@ -1,0 +1,9 @@
+## argv
+CompareMetrics
+I=tests/data/quality_yield_a.txt
+I=tests/data/picard/NA12878/NA12878.duplicate_metrics
+## exit
+1
+## stdout
+## stderr
+bammetrics: Metrics are of differing class between ROOT/tests/data/quality_yield_a.txt and ROOT/tests/data/picard/NA12878/NA12878.duplicate_metrics
