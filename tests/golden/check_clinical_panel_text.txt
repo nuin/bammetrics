@@ -6,7 +6,7 @@ clinical-panel
 ## exit
 10
 ## stdout
-NA12878  FAIL  5 fail, 0 warn, 8 pass, 1 not measured  preset clinical-panel v1 (3d0bcd)
+NA12878  FAIL  5 fail, 0 warn, 8 pass, 1 not measured  preset clinical-panel v2 (e62755)
   FAIL          hs.mean-target-coverage      0.377778  warn < 200, fail < 100                        Mean target coverage is 0.377778, below the fail limit of 100
   FAIL          hs.target-20x                       0  warn < 0.98, fail < 0.95                      Target bases at 20x is 0, below the fail limit of 0.95
   FAIL          hs.target-100x                      0  warn < 0.8, fail < 0.6                        Target bases at 100x is 0, below the fail limit of 0.6

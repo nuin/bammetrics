@@ -187,7 +187,7 @@ fn page_has_no_script_and_a_csp() {
     assert!(html.contains("@media (prefers-color-scheme: dark)"));
     assert!(html.contains("@media print"));
     assert!(html.contains(DATE));
-    assert!(html.contains("<code>3d0bcdc8430441db</code>"));
+    assert!(html.contains("<code>e6275515a0d3de26</code>"));
 }
 
 #[test]

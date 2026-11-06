@@ -40,7 +40,7 @@ A preset is a TOML file: one `[preset]` table and one `[[rule]]` per rule.
 [preset]
 name = "clinical-panel"
 version = 1
-note = "starting values"        # free text; the shipped presets say this
+note = "starting values"        # free text; shown on the page and in verdict.json
 
 [[rule]]
 id = "hs.target-20x"            # unique in the preset
@@ -90,10 +90,11 @@ docs/05 section 4.3 is not built).
 
 ## Shipped presets
 
-All four carry `note = "starting values"`. The numbers are not validated limits for any
-assay. They need maintainer and lab sign-off before anyone calls them clinical, and the
-verdict is not a release decision. The maintainer's review of the 14 `clinical-panel`
-thresholds is open (decision 2 of docs/05 section 8); until it closes, the label stays.
+`clinical-panel` version 2 carries `note = "reviewed defaults"`: the maintainer reviewed
+its 14 thresholds on 2026-11-06 and kept the version 1 values (decision 2 of docs/05
+section 8). `generic`, `wgs` and `rna-seq` carry `note = "starting values"`. No shipped
+number is a validated limit for any assay: a lab validates and owns its own copy, and the
+verdict is not a release decision.
 
 | Preset | Rules | Reads | What completes it |
 |---|---|---|---|
@@ -132,7 +133,7 @@ Version 1, 6 rules, note `starting values`, hash `6dd89ed0478fd5e4` (the report 
 The table of docs/05 section 4.3, with the rule ids and selectors.
 
 <!-- preset clinical-panel -->
-Version 1, 14 rules, note `starting values`, hash `3d0bcdc8430441db` (the report prints `3d0bcd`).
+Version 2, 14 rules, note `reviewed defaults`, hash `e6275515a0d3de26` (the report prints `e62755`).
 
 | Rule | Label | Metric | Rows | Warn | Fail | Plot |
 |---|---|---|---|---|---|---|
@@ -200,8 +201,8 @@ nothing else from a run. Written by `Verdict::to_json`, read back by
   "schema": "bammetrics.verdict/1",
   "tool_version": "0.16.0",
   "sample": "NA12878",
-  "preset": {"name": "clinical-panel", "version": 1, "hash": "3d0bcdc8430441db",
-             "source": "built-in", "note": "starting values"},
+  "preset": {"name": "clinical-panel", "version": 2, "hash": "e6275515a0d3de26",
+             "source": "built-in", "note": "reviewed defaults"},
   "status": "fail",
   "counts": {"pass": 8, "warn": 0, "fail": 5, "not_measured": 1},
   "files": [{"path": "s.hs_metrics", "classes": ["picard.analysis.directed.HsMetrics"]}],

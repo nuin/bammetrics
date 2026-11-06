@@ -122,7 +122,7 @@ With no `--preset`, `qc` uses the named preset `generic` and prints its name. It
 **4. Clinical panel, one sample.**
 ```
 $ bammetrics qc sample.bam --preset clinical-panel --panel panel.bed -R ref.fa -o out/NA12878
-NA12878  FAIL  preset clinical-panel v1 (3d0bcd)  4 collectors, 1 BAM read (41.8M records)
+NA12878  FAIL  preset clinical-panel v2 (e62755)  4 collectors, 1 BAM read (41.8M records)
 FAIL  hs.PCT_TARGET_BASES_20X  0.874  below 0.95   12.6% of panel bases are under 20x
 WARN  insert.MEDIAN_INSERT_SIZE  171  below 180   fragments shorter than usual
 PASS  12 checks
@@ -276,9 +276,9 @@ Status logic:
 - A rule whose metrics file is absent has status `not measured`. It never counts as pass. If any rule is not measured, the band reads INCOMPLETE unless a rule already failed, in which case it reads FAIL with the not-measured count beside it.
 - Presets shipped: `generic`, `clinical-panel`, `wgs`, `rna-seq`. `wgs` and `rna-seq` carry only rules for tools that exist today. Coverage rules for CollectWgsMetrics and ribosomal rules for CollectRnaSeqMetrics arrive with those tools, and until then the band reads INCOMPLETE.
 - The lab owns the file. `--preset my.toml` replaces a shipped preset. `--set hs.target-20x.fail="< 0.90"` overrides one bound. The page prints the preset name, a 6-character hash of its content, and every threshold.
-- Shipped numbers are starting values, not validated clinical limits. They need maintainer and lab sign-off before anyone calls them clinical. The verdict is not a release decision.
+- Shipped numbers are not validated clinical limits. The maintainer reviewed the `clinical-panel` values (2026-11-06, version 2, note `reviewed defaults`); the other presets stay starting values. A lab validates its own copy. The verdict is not a release decision.
 
-Default thresholds, preset `clinical-panel` version 1 (14 rules, starting values):
+Default thresholds, preset `clinical-panel` version 2 (14 rules, reviewed defaults; the values of version 1):
 
 | Rule | Source | Warn | Fail |
 |---|---|---|---|
@@ -434,16 +434,16 @@ Risks, each with its mitigation:
 ## 8. Open decisions for the maintainer
 
 1. Does `qc` without `--preset` use `generic` (this proposal), or must it require a preset? Decided: `generic` (0.12.0).
-2. Are the 14 clinical-panel starting values in 4.3 acceptable as shipped defaults, or does a lab review them first? Decided: they ship labelled "starting values" after the maintainer reviews them; the review is open.
+2. Are the 14 clinical-panel starting values in 4.3 acceptable as shipped defaults, or does a lab review them first? Decided: they ship labelled "starting values" after the maintainer reviews them; the review closed on 2026-11-06: the 14 values are kept as `clinical-panel` version 2 with the note `reviewed defaults`, and a lab still validates its own copy.
 3. Should `qc` exit 0 on a failed verdict by default (this proposal), or gate by default? Decided: exit 0 unless `--fail-on` is given; `check` always gates (0.12.0).
-4. Is `toml` acceptable as a dependency, or should presets use a hand-written format?
-5. Is the 73-day plan acceptable, or should phases 9 and 10 move after 0.8?
+4. Is `toml` acceptable as a dependency, or should presets use a hand-written format? Decided: hand-written. `crates/verdict/src/table.rs` reads the TOML subset the presets use, with no dependency; `parse_tables` is the one function a later switch to the `toml` crate replaces (2026-11-06).
+5. Is the 73-day plan acceptable, or should phases 9 and 10 move after 0.8? Decided: the plan ran in order; phases 7 to 11 shipped as 0.12.0 to 0.16.0.
 6. Do you want a sample sheet runner in this scope, or leave cohorts to Nextflow plus `report`? Decided: no sample sheet runner; `qc` runs one sample, cohorts loop in the shell or a workflow engine and finish with `report` (example 6). Its phase is dropped.
-7. Should the old subcommands be listed as aliases in `help` and docs, or hidden after 0.9?
-8. Who writes and reviews the column glossary text (about 400 entries, 1 week of review)?
-9. Is a `data-theme` override for dark mode wanted, or only `prefers-color-scheme`?
-10. Does `mark-duplicates` ship in the P9 PR train, and should the verb slot exist as an error stub from 0.9?
+7. Should the old subcommands be listed as aliases in `help` and docs, or hidden after 0.9? Decided: neither. `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics` and `collect` are verb-table entries since 0.13.0, listed in `help`, `tools` and docs/cli.md as verbs like the rest (2026-11-06).
+8. Who writes and reviews the column glossary text (about 400 entries, 1 week of review)? Decided: `crates/core/glossary.tsv` (317 rows) is cross-checked against the Picard metric classes and the code that computes each column, and the maintainer approves the disagreements found (2026-11-06).
+9. Is a `data-theme` override for dark mode wanted, or only `prefers-color-scheme`? Decided: both. The page follows `prefers-color-scheme`; `data-theme="light"` or `"dark"` on the html element forces one (2026-11-06).
+10. Does `mark-duplicates` ship in the P9 PR train, and should the verb slot exist as an error stub from 0.9? Decided: MarkDuplicates is the next feature release after 0.17.0; no stub, so `mark-duplicates` stays an unknown verb until then (2026-11-06).
 11. Do the size and speed budgets in 4.8 become hard CI failures? Decided: yes, at 2x the target. `make budgets` fails the CI job when a measured value reaches twice its target and prints `over target` when it passes the target alone (0.16.0).
-12. Which name for the report file: `SAMPLE.report.html` (this proposal) or `SAMPLE.html`?
+12. Which name for the report file: `SAMPLE.report.html` (this proposal) or `SAMPLE.html`? Decided: `SAMPLE.report.html`, as shipped since 0.12.0 (2026-11-06).
 
 Result: 12 verbs and 1 prefix cover every chain in the audit, the Picard face stays byte-identical, and the verdict report ships first at day 40.

@@ -1,9 +1,10 @@
-# clinical-panel, version 1: 14 rules for a hybrid-capture clinical panel
+# clinical-panel, version 2: 14 rules for a hybrid-capture clinical panel
 # (docs/05_cli_and_ui_design.md section 4.3).
 #
-# STARTING VALUES. These thresholds are not validated clinical limits. They
-# need maintainer and lab sign-off before anyone calls them clinical, and a
-# lab owns its own copy of this file. The verdict is not a release decision.
+# REVIEWED DEFAULTS. The maintainer reviewed these 14 thresholds on
+# 2026-11-06 and kept the version 1 values. They are not validated clinical
+# limits for any assay: a lab validates and owns its own copy of this file.
+# The verdict is not a release decision.
 #
 # Rule syntax: docs/verdict.md. A value that breaks `fail` fails, one that
 # breaks only `warn` warns, the rest pass. A missing file, row or value is
@@ -11,8 +12,8 @@
 
 [preset]
 name = "clinical-panel"
-version = 1
-note = "starting values"
+version = 2
+note = "reviewed defaults"
 
 [[rule]]
 id = "hs.mean-target-coverage"

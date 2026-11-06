@@ -14,7 +14,7 @@ NA12878
 ## exit
 11
 ## stdout
-NA12878  INCOMPLETE  preset clinical-panel v1 (3d0bcd)  3 collectors, 1 BAM read (10 records)
+NA12878  INCOMPLETE  preset clinical-panel v2 (e62755)  3 collectors, 1 BAM read (10 records)
 NOT MEASURED  HsMetrics  9 rules, needs --hs BAITS TARGETS or --panel FILE
 PASS          5 checks
 wrote 6 files to OUT/sample.*, report OUT/sample.report.html
@@ -61,7 +61,7 @@ insert_size	All_Reads.fr_count
   "prefix": "OUT/sample",
   "preset": {
     "name": "clinical-panel",
-    "hash": "3d0bcdc8430441db"
+    "hash": "e6275515a0d3de26"
   },
   "steps": [
     {
@@ -74,7 +74,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.16.0",
-      "preset_hash": "3d0bcdc8430441db",
+      "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -102,7 +102,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.16.0",
-      "preset_hash": "3d0bcdc8430441db",
+      "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -130,7 +130,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.16.0",
-      "preset_hash": "3d0bcdc8430441db",
+      "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -160,7 +160,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.16.0",
-      "preset_hash": "3d0bcdc8430441db",
+      "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -182,7 +182,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.16.0",
-      "preset_hash": "3d0bcdc8430441db",
+      "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -227,10 +227,10 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
   "sample": "NA12878",
   "preset": {
     "name": "clinical-panel",
-    "version": 1,
-    "hash": "3d0bcdc8430441db",
+    "version": 2,
+    "hash": "e6275515a0d3de26",
     "source": "built-in",
-    "note": "starting values"
+    "note": "reviewed defaults"
   },
   "status": "incomplete",
   "counts": {
