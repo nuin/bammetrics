@@ -44,27 +44,75 @@ pub(crate) struct Sniffed<R> {
     pub(crate) reader: Chain<Cursor<Vec<u8>>, R>,
 }
 
-/// Read the first four bytes of `inner` (fewer for a shorter file) and tell
-/// a CRAM by its magic. Nothing is lost: the bytes read come first again.
+/// The magic and the major and minor version of the file definition.
+const DEFINITION_HEAD: usize = MAGIC.len() + 2;
+
+/// Read the first bytes of `inner` (fewer for a shorter file) and tell a
+/// CRAM by its magic. Nothing is lost: the bytes read come first again. A
+/// CRAM of a version other than 3.0 or 3.1 is an error, as htsjdk raises
+/// for 4.x; htsjdk reads 2.1, which noodles does not.
 pub(crate) fn sniff<R: Read>(mut inner: R) -> io::Result<Sniffed<R>> {
-    let mut head = Vec::with_capacity(MAGIC.len());
+    let mut head = Vec::with_capacity(DEFINITION_HEAD);
     (&mut inner)
-        .take(MAGIC.len() as u64)
+        .take(DEFINITION_HEAD as u64)
         .read_to_end(&mut head)?;
+    let cram = head.starts_with(&MAGIC);
+    if cram
+        && let Some(&[major, minor]) = head.get(MAGIC.len()..)
+        && !matches!((major, minor), (3, 0 | 1))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("CRAM {major}.{minor} is not supported (3.0 and 3.1 are)"),
+        ));
+    }
     Ok(Sniffed {
-        cram: head == MAGIC,
+        cram,
         reader: Cursor::new(head).chain(inner),
     })
 }
 
-/// True when `path` is a regular file that starts with the CRAM magic. A
-/// pipe or a device is never opened for this, since the bytes looked at
-/// would be gone for the read that follows.
+/// Whether the first bytes of `path` can be read ahead of the pass: a
+/// regular file outside `/dev`, told by `stat` without opening it. Opening
+/// a named pipe takes its read end, and opening `/dev/stdin` redirected
+/// from a file shares its offset (macOS), so either loses the bytes read.
+/// `None` when there is no such file.
+fn sniffable(path: &Path) -> Option<bool> {
+    let regular = std::fs::metadata(path).ok()?.is_file();
+    let device = path.canonicalize().is_ok_and(|p| p.starts_with("/dev"));
+    Some(regular && !device)
+}
+
+/// True when `path` is a regular file that starts with the CRAM magic.
 pub fn is_cram(path: &Path) -> bool {
-    let Ok(file) = File::open(path) else {
-        return false;
+    sniffable(path) == Some(true)
+        && File::open(path).is_ok_and(|file| sniff(file).is_ok_and(|s| s.cram))
+}
+
+/// True for a pipe, a device, a CRAM, and `-` when no file has that name
+/// (the verbs read it from standard input): only a regular file that is no
+/// CRAM, or a missing one, is known to hold none before the pass reads it.
+pub fn may_be_cram(path: &Path) -> bool {
+    match sniffable(path) {
+        None => path == Path::new("-"),
+        Some(false) => true,
+        Some(true) => is_cram(path),
+    }
+}
+
+/// A read error of the CRAM at hand, with a cut file named as such.
+/// `inside` tells whether the cut came inside a container or at a
+/// container boundary, where only the EOF container is missing.
+pub(crate) fn truncated(e: io::Error, inside: bool) -> io::Error {
+    if e.kind() != io::ErrorKind::UnexpectedEof {
+        return e;
+    }
+    let message = if inside {
+        "truncated CRAM: the file ends inside a container"
+    } else {
+        "truncated CRAM: the file ends without its EOF container"
     };
-    file.metadata().is_ok_and(|m| m.is_file()) && sniff(file).is_ok_and(|s| s.cram)
+    io::Error::new(io::ErrorKind::UnexpectedEof, message)
 }
 
 /// A FASTA with its `.fai`. A plain file gives a contig with one
@@ -334,7 +382,8 @@ fn dispatch<R: Read>(
             Ok(0) => return,
             Ok(_) => {}
             Err(e) => {
-                let _ = done.send(Err(e));
+                let inside = !reader.get_ref().head.is_empty();
+                let _ = done.send(Err(truncated(e, inside)));
                 let _ = order.send(result);
                 return;
             }
@@ -454,11 +503,22 @@ fn decode_container(
             )
             .map_err(checksum)?;
         for record in &records {
+            let start = writer.get_ref().len();
             writer.write_alignment_record(header, record)?;
+            if sam::alignment::Record::flags(record)?.is_unmapped() {
+                // CRAM stores no mapping quality for an unmapped record.
+                // htsjdk gives it 0; noodles leaves it missing, which BAM
+                // writes as 255.
+                writer.get_mut()[start + BAM_MAPQ_OFFSET] = 0;
+            }
         }
     }
     Ok(writer.into_inner())
 }
+
+/// The mapping quality byte of a BAM record, after `block_size`, `refID`,
+/// `pos` and `l_read_name`.
+const BAM_MAPQ_OFFSET: usize = 13;
 
 /// The slice MD5 check in the words of htsjdk's `CRAMException`.
 fn checksum(e: io::Error) -> io::Error {
@@ -479,13 +539,75 @@ mod tests {
 
     #[test]
     fn sniffing_puts_the_bytes_back() {
-        for data in [&b"CRAM\x03\x00rest"[..], b"\x1f\x8b\x08\x04", b"CR", b""] {
+        for data in [
+            &b"CRAM\x03\x00rest"[..],
+            b"CRAM\x03\x01",
+            b"\x1f\x8b\x08\x04",
+            b"CR",
+            b"",
+        ] {
             let mut sniffed = sniff(data).expect("read");
             assert_eq!(sniffed.cram, data.starts_with(&MAGIC));
             let mut all = Vec::new();
             sniffed.reader.read_to_end(&mut all).expect("read");
             assert_eq!(all, data);
         }
+    }
+
+    #[test]
+    fn only_cram_3_0_and_3_1_are_read() {
+        for (data, version) in [
+            (&b"CRAM\x02\x01"[..], "2.1"),
+            (b"CRAM\x04\x00", "4.0"),
+            (b"CRAM\x03\x02", "3.2"),
+        ] {
+            let err = sniff(data).err().expect("unsupported");
+            assert!(
+                err.to_string()
+                    .contains(&format!("CRAM {version} is not supported")),
+                "{err}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_cut_file_is_named_truncated() {
+        let eof = || io::Error::from(io::ErrorKind::UnexpectedEof);
+        assert!(
+            truncated(eof(), true)
+                .to_string()
+                .contains("inside a container")
+        );
+        assert!(
+            truncated(eof(), false)
+                .to_string()
+                .contains("without its EOF container")
+        );
+        assert_eq!(truncated(io::Error::other("x"), true).to_string(), "x");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_named_pipe_is_not_opened() {
+        let dir = std::env::temp_dir().join(format!("bammetrics-fifo-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let fifo = dir.join("in.bam");
+        let made = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .expect("mkfifo");
+        assert!(made.success());
+        // Opening a pipe without a writer blocks: a test that opens it
+        // never sends.
+        let (tx, rx) = mpsc::channel();
+        let path = fifo.clone();
+        thread::spawn(move || {
+            let _ = tx.send((is_cram(&path), may_be_cram(&path)));
+        });
+        let answer = rx.recv_timeout(std::time::Duration::from_secs(5));
+        std::fs::remove_file(&fifo).expect("remove the pipe");
+        std::fs::remove_dir(&dir).expect("remove the directory");
+        assert_eq!(answer, Ok((false, true)));
     }
 
     #[test]

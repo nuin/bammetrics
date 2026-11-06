@@ -151,7 +151,7 @@ pub const TOOL: Tool = Tool {
               input may be unaligned, or several files. The metrics file adds the \
               duplication_group_count histogram.",
     options: &[
-        Opt::path(&["INPUT", "I"], "A BAM to read; repeat for each.")
+        Opt::path(&["INPUT", "I"], "A BAM or CRAM to read; repeat for each.")
             .repeated()
             .required(),
         Opt::int(

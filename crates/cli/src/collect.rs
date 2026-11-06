@@ -47,7 +47,7 @@ pub fn flags() -> Vec<Flag> {
     .repeated();
     hs.values = 2;
     let mut flags = vec![
-        Flag::new(Key::Input, "input", &["i", "I"], Ty::Path, "The BAM to read; - reads standard input.")
+        Flag::new(Key::Input, "input", &["i", "I"], Ty::Path, "The BAM or CRAM to read; - reads standard input.")
             .names(&["INPUT", "I"])
             .placeholder("BAM"),
         Flag::new(

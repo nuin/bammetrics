@@ -153,7 +153,7 @@ pub fn read_header(path: &Path) -> Result<sam::Header> {
     if sniffed.cram {
         noodles::cram::io::Reader::new(BufReader::new(sniffed.reader))
             .read_header()
-            .map_err(input)
+            .map_err(|e| input(cram::truncated(e, true)))
     } else {
         bam::io::Reader::new(sniffed.reader)
             .read_header()
@@ -239,7 +239,9 @@ where
     if sniffed.cram {
         let mut reader =
             noodles::cram::io::Reader::new(cram::Peek::new(BufReader::new(sniffed.reader)));
-        let header = reader.read_header().map_err(input)?;
+        let header = reader
+            .read_header()
+            .map_err(|e| input(cram::truncated(e, true)))?;
         cram::decode(reader, &header, reference, workers, |records| {
             pass.drive(records, &header, build)
         })

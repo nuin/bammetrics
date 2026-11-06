@@ -48,13 +48,14 @@ fn request(dir: &Path) -> Request {
 #[test]
 fn one_pass_matches_single_runs_at_any_thread_count() {
     let request = request(&dir("match"));
-    let quality_yield = quality_yield::run_over_bam(FIXTURE, &quality_yield::Options::default())
-        .expect("quality yield");
+    let quality_yield =
+        quality_yield::run_over_bam(FIXTURE, None, &quality_yield::Options::default())
+            .expect("quality yield");
     let alignment_summary =
         alignment_summary::run_over_bam(FIXTURE, &alignment_summary::Options::default())
             .expect("alignment summary");
-    let insert_size =
-        insert_size::run_over_bam(FIXTURE, &insert_size::Options::default()).expect("insert size");
+    let insert_size = insert_size::run_over_bam(FIXTURE, None, &insert_size::Options::default())
+        .expect("insert size");
     let hs: Vec<_> = request
         .hs_metrics
         .iter()

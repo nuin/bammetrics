@@ -41,6 +41,7 @@ pub const TOOL: Tool = Tool {
               the interval list.",
     options: &[
         Opt::path(&["INPUT", "I"], "The BED file to convert.").required(),
+        crate::registry::REFERENCE_NOT_DECODED,
         Opt::path(
             &["SEQUENCE_DICTIONARY", "SD"],
             "The @SQ lines: a .dict, BAM, SAM, interval list, or FASTA with a .dict.",

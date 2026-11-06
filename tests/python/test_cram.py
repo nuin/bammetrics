@@ -36,3 +36,7 @@ def test_the_older_functions_take_the_reference_for_a_cram():
     assert from_cram == from_bam
     collected = bammetrics.collect(CRAM, metrics=["quality_yield"], reference=REF)
     assert collected["quality_yield"].to_dict() == bammetrics.quality_yield(BAM).to_dict()
+    assert bammetrics.quality_yield(CRAM, reference=REF).to_dict() == \
+        bammetrics.quality_yield(BAM).to_dict()
+    from_cram = [r.to_dict() for r in bammetrics.insert_size(CRAM, reference=REF)]
+    assert from_cram == [r.to_dict() for r in bammetrics.insert_size(BAM)]

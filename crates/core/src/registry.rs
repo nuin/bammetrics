@@ -204,7 +204,7 @@ pub fn normalize(name: &str) -> String {
 /// is not coordinate sorted ([`Invocation::single_pass`]); the others change
 /// no metric.
 pub const COMMON: &[Opt] = &[
-    Opt::path(&["INPUT", "I"], "The BAM to read.").required(),
+    Opt::path(&["INPUT", "I"], "The BAM or CRAM to read.").required(),
     Opt::output(&["OUTPUT", "O"]),
     Opt::ignored(&["VALIDATION_STRINGENCY"], "records are not validated"),
     Opt::ignored(&["TMP_DIR"], "no temporary files are written"),
@@ -226,6 +226,12 @@ pub const COMMON: &[Opt] = &[
 /// Why `REFERENCE_SEQUENCE` is ignored by a tool whose metrics do not read
 /// it. A CRAM input is decoded with it, and then no note is written.
 const REFERENCE_UNREAD: &str = "this metric does not read the reference";
+
+/// `REFERENCE_SEQUENCE` of a tool whose input is no BAM or CRAM (a BED, a
+/// VCF, a metrics file): Picard takes it, nothing reads it, and Python
+/// offers no keyword for it.
+pub const REFERENCE_NOT_DECODED: Opt =
+    Opt::ignored(&["REFERENCE_SEQUENCE", "R"], "no BAM or CRAM is read");
 
 /// `METRIC_ACCUMULATION_LEVEL`, the same row in every tool that has it.
 pub const LEVEL_OPTION: Opt = Opt::text(
@@ -554,8 +560,13 @@ impl Tool {
             }
             None => PathBuf::new(),
         };
-        if cram::is_cram(&inv.input) {
-            // A CRAM is decoded with the reference: it is not ignored.
+        if inv
+            .all("INPUT")
+            .iter()
+            .any(|path| cram::may_be_cram(Path::new(path)))
+        {
+            // A CRAM is decoded with the reference: it is not ignored. A
+            // pipe may hold one.
             inv.notes.retain(|note| !note.ends_with(REFERENCE_UNREAD));
         }
         Ok(inv)
@@ -782,7 +793,7 @@ pub fn python_stub(tool: &Tool) -> String {
                 python_annotation(opt)
             )),
             // The metrics do not read it, a CRAM input is decoded with it.
-            Kind::Ignored(_) if opt.picard() == "REFERENCE_SEQUENCE" => {
+            Kind::Ignored(REFERENCE_UNREAD) if opt.picard() == "REFERENCE_SEQUENCE" => {
                 keywords.push(format!("{}: _Path | None = None", opt.kwarg()));
             }
             Kind::Ignored(_) | Kind::Rejected => {}

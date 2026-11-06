@@ -216,19 +216,34 @@ without `INPUT` fills its own value options in declaration order from the positi
 arguments) or as `truth_vcf=` and `call_vcf=`. A double Picard prints as `?` (NaN,
 `HET_SPECIFICITY`, a ratio over zero) is `float("nan")` in the dicts.
 Every registry function that reads a BAM takes a CRAM with `reference_sequence=`, which the
-stub lists for every such tool. Of the older functions, `alignment_summary()`,
-`hs_metrics()` and `collect()` decode a CRAM with their `reference`; `insert_size()` and
-`quality_yield()` take no reference and read BAM only.
+stub lists for every such tool and for no other (a BED, VCF or metrics-file input has no
+CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `collect()`,
+`insert_size()` and `quality_yield()` decode a CRAM with their `reference`.
 
 ## Inputs
 
 - CRAM (3.0 and 3.1) is read by every tool that reads a BAM, with `R=` the FASTA it was
   written with. A file is a CRAM when its first four bytes are `CRAM`, whatever its name.
+  CRAM 2.1 fails with `CRAM 2.1 is not supported (3.0 and 3.1 are)`; Picard reads it. Any
+  other version fails in both tools (Picard: `CRAM version 4.1 is not supported`).
   The records reach the tools in file order exactly as the BAM of the same data gives them;
   `test_cram.py` checks every tool against Picard on the CRAMs of t1, the foundation corpus
   and the exome slice, and against bammetrics on the BAMs. The reference bases are upper
   cased, as htsjdk's `ReferenceSource` gives them. On a tool whose metrics read no
-  reference, `R=` decodes the CRAM and no `ignoring R=` note is written.
+  reference, `R=` decodes the CRAM and no `ignoring R=` note is written; nor for an input
+  on a pipe or `/dev/stdin`, whose format is known only once the pass reads it.
+- The template length of a mate pair stored attached (no TLEN in the file) is rebuilt as
+  htsjdk's `computeInsertSize` rebuilds it: 0 across references or with an unmapped mate,
+  otherwise the span of both reads, positive on the read that starts first and, at equal
+  starts, on the first of pair. noodles-cram 0.102 gives the plus sign to the read that
+  comes first in the file; `vendor/noodles-cram` carries the change (`vendor/README.md`). An
+  unmapped CRAM record has mapping quality 0, as htsjdk gives it (noodles leaves 255).
+- An input whose records return to an earlier contig (queryname-sorted, or unsorted) with
+  `R=` fails in Picard (`SAMException: Requesting earlier reference sequence: 0 < 1`: Picard
+  walks the reference in file order) and runs in bammetrics, which reads no reference for
+  these tools on a BAM and decodes a CRAM container by container. A BAM given `R=` shows the
+  same difference; a CRAM needs `R=`, so it always does. `CollectAlignmentSummaryMetrics`
+  and `CollectWgsMetrics` fail on such input in both tools.
 - bammetrics never opens a `.crai`; the whole file is read in order. Picard 3.5.0 (htsjdk
   4) opens the `.crai` beside the CRAM and fails on some: on NA12878.final.cram (1000
   Genomes high coverage, GRCh38) it throws `Attempt to create a bai entry for an unmapped
@@ -576,6 +591,11 @@ fail a slice's MD5 fails both (Picard: `The MD5 for the reference failed to vali
 bammetrics: `the MD5 of the reference bases does not match the CRAM slice`), and so does a
 FASTA without the CRAM's contig (`no contig chr1 in the reference`). Both exit 1 and write
 no file (`test_cram.py`). `qc` and `plan` refuse a CRAM without `-R` before the pass.
+A CRAM cut at a container boundary, so that it ends without its EOF container, fails in
+both tools (Picard: `RuntimeEOFException`; bammetrics: `truncated CRAM: the file ends
+without its EOF container`); one cut inside a container fails in both (`truncated CRAM: the
+file ends inside a container`). A cut inside the EOF container itself is read to the end by
+both, since neither reads the EOF container's block.
 
 `EstimateLibraryComplexity` on a record with fewer qualities than bases (a `*` `QUAL` on a
 read of at least `MIN_IDENTICAL_BASES` bases) exits 1; Picard throws an index error summing

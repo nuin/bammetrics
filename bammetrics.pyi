@@ -304,6 +304,7 @@ def insert_size(
     min_histogram_width: int | None = None,
     include_duplicates: bool = False,
     metric_accumulation_level: Sequence[str] | None = None,
+    reference: _Path | None = None,
 ) -> list[InsertSizeMetrics]:
     """CollectInsertSizeMetrics: one row per pair orientation and accumulation unit.
 
@@ -440,7 +441,6 @@ def accumulate_quality_yield_metrics(
     input: _Paths,
     *,
     output: _Path | None = None,
-    reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """AccumulateQualityYieldMetrics: QualityYieldMetrics files (a list of paths) merged
     into one row."""
@@ -571,7 +571,6 @@ def bed_to_interval_list(
     drop_missing_contigs: bool | None = None,
     keep_length_zero_intervals: bool | None = None,
     output: _Path | None = None,
-    reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """BedToIntervalList: one row per interval written (contig, start, end, strand, name);
     OUTPUT gets the interval list."""
@@ -654,7 +653,6 @@ def collect_variant_calling_metrics(
     sequence_dictionary: _Path | None = None,
     gvcf_input: bool | None = None,
     thread_count: int | None = None,
-    reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """CollectVariantCallingMetrics: the input is a VCF (plain or bgzip). OUTPUT is a
     prefix: PREFIX.variant_calling_summary_metrics and
@@ -665,7 +663,6 @@ def accumulate_variant_calling_metrics(
     input: _Paths,
     *,
     output: _Path,
-    reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """AccumulateVariantCallingMetrics: the prefixes of CollectVariantCallingMetrics shards
     merged as Picard merges them; OUTPUT is the prefix of the two files. Python returns
@@ -686,7 +683,6 @@ def genotype_concordance(
     use_vcf_index: bool | None = None,
     missing_sites_hom_ref: bool | None = None,
     ignore_filter_status: bool | None = None,
-    reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """GenotypeConcordance: the truth and call VCFs compared by position. OUTPUT is a
     prefix: PREFIX.genotype_concordance_summary_metrics, _detail_metrics and
@@ -709,8 +705,9 @@ def quality_yield(
     use_original_qualities: bool = True,
     include_secondary_alignments: bool = False,
     include_supplemental_alignments: bool = False,
+    reference: _Path | None = None,
 ) -> QualityYieldMetrics:
-    """CollectQualityYieldMetrics."""
+    """CollectQualityYieldMetrics. reference decodes a CRAM."""
 
 def hs_metrics(
     path: _Path,

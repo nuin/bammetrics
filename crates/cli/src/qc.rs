@@ -93,8 +93,9 @@ pub struct QcArgs {
     /// as the file part. Missing directories are created.
     #[arg(short = 'o', short_alias = 'O', long, value_name = "PREFIX")]
     pub output: Option<PathBuf>,
-    /// Reference FASTA with a .fai index: alignment summary mismatches, hs
-    /// dropouts, and the collectors that need one (gc bias, wgs).
+    /// Reference FASTA with a .fai index: decodes a CRAM, and gives alignment
+    /// summary mismatches, hs dropouts and the collectors that need one (gc
+    /// bias, wgs).
     #[arg(short = 'R', long, value_name = "FASTA")]
     pub reference: Option<PathBuf>,
     #[arg(long, default_value = "generic", value_name = "NAME|FILE", help = PRESET_HELP)]
@@ -131,7 +132,8 @@ pub struct QcArgs {
     /// Rerun every step over an earlier run's files.
     #[arg(long)]
     pub force: bool,
-    /// BGZF decompression threads (default: available cores, at most 8).
+    /// BGZF decompression threads, or CRAM container decoders (default:
+    /// available cores, at most 8).
     #[arg(long, default_value_t = pass::default_threads())]
     pub threads: usize,
     #[arg(long, value_enum, default_value_t = Format::Text)]

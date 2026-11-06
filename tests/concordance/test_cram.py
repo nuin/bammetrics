@@ -10,10 +10,18 @@ bammetrics on the BAM with the same arguments must write the same bodies:
 the CRAM path gives the records the BAM path gives.
 
 Error parity: a CRAM without `R=`, a reference with the same contig and
-other bases (the slice MD5 fails), and a reference without the CRAM's
-contigs. Each fails in both tools with no file written. STOP_AFTER runs on
-the one-pass tools, and BedToIntervalList takes the CRAM as its
+other bases (the slice MD5 fails), a reference without the CRAM's contigs,
+a CRAM cut before its EOF container or inside a container, and CRAM 4.0.
+Each fails in both tools with no file written. CRAM 2.1, which Picard
+reads, fails in bammetrics with its own message. STOP_AFTER runs on the
+one-pass tools, and BedToIntervalList takes the CRAM as its
 SEQUENCE_DICTIONARY.
+
+Other shapes: mate pairs without MC stored attached at equal starts (the
+template length sign reaches the orientation), CRAMs samtools writes with
+an embedded reference, with no reference (both read without `R=`), with
+several contigs per slice and with small slices, and a CRAM Picard's
+SamFormatConverter wrote.
 
 Needs picard, samtools and pysam; run `make concordance`.
 """
@@ -237,3 +245,164 @@ def test_a_cram_is_told_by_its_bytes_not_its_name(crams, tmp_path):
     args = [SILENT, f"R={ref}"]
     compare_metrics("CollectQualityYieldMetrics", renamed, args, workdir=tmp_path, expect_file=True)
     same_as_bam("CollectQualityYieldMetrics", renamed, bam, (("O", ""),), args, tmp_path)
+
+
+def write_reference(out, contigs, seed):
+    """A random FASTA of `contigs` ((name, length)) with its `.fai` and `.dict`."""
+    rng = random.Random(seed)
+    bases = {name: "".join(rng.choice("ACGT") for _ in range(length)) for name, length in contigs}
+    out.write_text("".join(f">{name}\n" + "".join(seq[i:i + 60] + "\n" for i in range(0, len(seq), 60))
+                           for name, seq in bases.items()))
+    subprocess.run(["samtools", "faidx", str(out)], check=True)
+    subprocess.run(["samtools", "dict", "-o", str(out.with_suffix(".dict")), str(out)], check=True)
+    return bases
+
+
+SHAPES_OF_PAIRS = [((0, 50, False), (0, 50, True)), ((0, 50, True), (0, 50, False)),
+                   ((0, 60, False), (0, 40, True)), ((0, 40, False), (0, 60, True)),
+                   ((0, 100, False), (20, 30, True)), ((30, 30, False), (0, 100, True)),
+                   ((0, 50, False), (50, 50, True)), ((50, 50, False), (0, 50, True))]
+
+
+def attached_mates_sam(out, bases):
+    """Pairs with no MC tag. Each shape of SHAPES_OF_PAIRS ((offset, length,
+    reverse) of the first and the second of pair) comes with the TLEN htsjdk
+    rebuilds for a mate stored attached (so samtools attaches it), and with
+    the other sign at equal starts (stored detached), each in both file
+    orders. Then a pair with a placed unmapped mate and a pair across
+    contigs, both TLEN 0."""
+
+    def record(name, flag, contig, pos, length, mate_contig, mate_pos, tlen):
+        cigar, mapq = ("*", "0") if flag & 4 else (f"{length}M", "60")
+        mate = "=" if mate_contig == contig else mate_contig
+        return "\t".join([name, str(flag), contig, str(pos), mapq, cigar, mate, str(mate_pos),
+                          str(tlen), bases[contig][pos - 1:pos - 1 + length], "I" * length, "RG:Z:a"])
+
+    lines, n = [], 0
+    for (s1, l1, r1), (s2, l2, r2) in SHAPES_OF_PAIRS:
+        for first_positive in (True, False):
+            for first_in_file in (True, False):
+                n += 1
+                p1, p2 = 100 + n * 300 + s1, 100 + n * 300 + s2
+                span = max(p1 + l1, p2 + l2) - min(p1, p2)
+                t1 = span if p1 < p2 or (p1 == p2 and first_positive) else -span
+                a = record(f"q{n}", 1 | 2 | 64 | (16 if r1 else 0) | (32 if r2 else 0), "c1", p1, l1,
+                           "c1", p2, t1)
+                b = record(f"q{n}", 1 | 2 | 128 | (16 if r2 else 0) | (32 if r1 else 0), "c1", p2, l2,
+                           "c1", p1, -t1)
+                lines += [a, b] if first_in_file else [b, a]
+    at = 100 + (n + 1) * 300
+    lines += [record("u1", 1 | 8 | 64, "c1", at, 50, "c1", at, 0),
+              record("u1", 1 | 4 | 128, "c1", at, 50, "c1", at, 0),
+              record("x1", 1 | 64, "c1", at + 300, 50, "c2", 100, 0),
+              record("x1", 1 | 128 | 16, "c2", 100, 50, "c1", at + 300, 0)]
+    header = (f"@HD\tVN:1.6\tSO:unsorted\n@SQ\tSN:c1\tLN:{len(bases['c1'])}\n"
+              f"@SQ\tSN:c2\tLN:{len(bases['c2'])}\n@RG\tID:a\tSM:s\tLB:l\tPU:p\n")
+    out.write_text(header + "\n".join(lines) + "\n")
+    return out
+
+
+@pytest.fixture(scope="module")
+def mates(tmp_path_factory):
+    """version -> (cram, bam, ref) of attached_mates_sam."""
+    directory = tmp_path_factory.mktemp("mates")
+    ref = directory / "ref.fa"
+    sam = attached_mates_sam(directory / "mates.sam",
+                             write_reference(ref, [("c1", 20000), ("c2", 2000)], seed=8))
+    bam = directory / "mates.bam"
+    subprocess.run(["samtools", "view", "-b", "-o", str(bam), str(sam)], check=True)
+    return {version: (write_cram(sam, ref, directory / f"mates.{version}.cram", [f"version={version}"]),
+                      bam, ref) for version in VERSIONS}
+
+
+@pytest.mark.parametrize("version", VERSIONS)
+@pytest.mark.parametrize("tool,extra", [("CollectInsertSizeMetrics", ["H=/dev/null", "MINIMUM_PCT=0"]),
+                                        ("CollectAlignmentSummaryMetrics", [])])
+def test_attached_mates_without_mc_tag(mates, tmp_path, version, tool, extra):
+    """Without MC the orientation takes the mate end from start + TLEN - 1, so
+    the sign of a rebuilt template length reaches the metrics."""
+    cram, bam, ref = mates[version]
+    args = [SILENT, f"R={ref}", *extra]
+    cells = compare_metrics(tool, cram, args, workdir=tmp_path, expect_file=True)
+    assert cells > 0
+    same_as_bam(tool, cram, bam, (("O", ""),), args, tmp_path)
+    RESULTS.append((f"{tool} attached mates CRAM {version}", cells, cells, "agrees"))
+
+
+def write_cram(source, ref, out, options):
+    command = ["samtools", "view", "-C", "-T", str(ref), "-o", str(out)]
+    for option in options:
+        command += ["--output-fmt-option", option]
+    subprocess.run([*command, str(source)], check=True)
+    return out
+
+
+# samtools options -> whether the CRAM needs R= (it does not when it carries
+# its bases or stores every base itself).
+SHAPES = {
+    "embedded reference": (["version=3.0", "embed_ref=1"], False),
+    "no reference": (["version=3.1", "no_ref=1"], False),
+    "several contigs per slice": (["version=3.0", "multi_seq_per_slice=1", "seqs_per_slice=50"], True),
+    "small slices": (["version=3.1", "seqs_per_slice=100", "slices_per_container=3"], True),
+}
+SHAPE_TOOLS = [("CollectQualityYieldMetrics", []), ("CollectInsertSizeMetrics", ["H=/dev/null"]),
+               ("CollectAlignmentSummaryMetrics", LEVELS)]
+
+
+@pytest.mark.parametrize("shape", list(SHAPES))
+def test_cram_shapes(corpus, tmp_path, shape):
+    options, needs_reference = SHAPES[shape]
+    bam, ref = corpus / "corpus.bam", corpus / "ref.fa"
+    cram = write_cram(bam, ref, tmp_path / "shape.cram", options)
+    cells = 0
+    for tool, extra in SHAPE_TOOLS:
+        args = [SILENT, *([f"R={ref}"] if needs_reference else []), *extra]
+        cells += compare_metrics(tool, cram, args, workdir=tmp_path, expect_file=True)
+        same_as_bam(tool, cram, bam, (("O", ""),), args, tmp_path)
+    RESULTS.append((f"CRAM {shape}", cells, cells, "agrees"))
+
+
+def test_a_cram_picard_wrote(corpus, tmp_path):
+    bam, ref = corpus / "corpus.bam", corpus / "ref.fa"
+    cram = tmp_path / "picard.cram"
+    subprocess.run(["picard", "SamFormatConverter", f"I={bam}", f"O={cram}", f"R={ref}", SILENT,
+                    "QUIET=true", "VERBOSITY=ERROR"], check=True, env=picard_env(), capture_output=True)
+    cells = 0
+    for tool, extra in SHAPE_TOOLS:
+        args = [SILENT, f"R={ref}", *extra]
+        cells += compare_metrics(tool, cram, args, workdir=tmp_path, expect_file=True)
+        same_as_bam(tool, cram, bam, (("O", ""),), args, tmp_path)
+    RESULTS.append(("CRAM Picard wrote", cells, cells, "agrees"))
+
+
+def test_cram_2_1_is_refused(corpus, tmp_path):
+    """Picard reads CRAM 2.1, noodles does not (KNOWN_DIFFERENCES.md)."""
+    ref = corpus / "ref.fa"
+    cram = write_cram(corpus / "corpus.bam", ref, tmp_path / "v21.cram", ["version=2.1"])
+    out = tmp_path / "ours.txt"
+    ours = subprocess.run([str(BAMMETRICS), "CollectQualityYieldMetrics", f"I={cram}", f"O={out}",
+                           f"R={ref}"], capture_output=True, text=True)
+    assert ours.returncode == 1, ours.stderr
+    assert "CRAM 2.1 is not supported (3.0 and 3.1 are)" in ours.stderr, ours.stderr
+    assert not out.exists()
+    picard = subprocess.run(["picard", "CollectQualityYieldMetrics", f"I={cram}",
+                             f"O={tmp_path / 'picard.txt'}", f"R={ref}", SILENT, "QUIET=true",
+                             "VERBOSITY=ERROR"], env=picard_env(), capture_output=True)
+    assert picard.returncode == 0
+
+
+EOF_CONTAINER = 38
+
+
+def test_a_cut_or_unknown_version_cram_fails(crams, tmp_path):
+    cram, _, ref, *_ = crams["foundation", "3.0"]
+    data = Path(cram).read_bytes()
+    assert data[-EOF_CONTAINER:][:4] == b"\x0f\x00\x00\x00", "the EOF container ends the file"
+    version_4 = bytearray(data)
+    version_4[4] = 4
+    for name, content, message in [("no_eof", data[:-EOF_CONTAINER], "ends without its EOF container"),
+                                   ("inside", data[:len(data) // 2], "ends inside a container"),
+                                   ("v4", bytes(version_4), "CRAM 4.0 is not supported")]:
+        path = tmp_path / f"{name}.cram"
+        path.write_bytes(content)
+        both_fail("CollectQualityYieldMetrics", path, [f"R={ref}"], tmp_path, message)
