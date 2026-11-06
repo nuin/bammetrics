@@ -510,8 +510,8 @@ sample. It writes no file. Exit codes: the table above, with `--fail-on fail` by
 
 - `bammetrics tools`: every verb and the Picard class it runs, then the other verbs.
 - `bammetrics presets`: the built-in verdict presets with version, the first 6 characters
-  of the content hash, rule count and note (`clinical-panel   v1  3d0bcd  14 rules  starting
-  values`). Every rule is listed in [docs/verdict.md](verdict.md).
+  of the content hash, rule count and note (`clinical-panel   v2  e62755  14 rules  reviewed
+  defaults`). Every rule is listed in [docs/verdict.md](verdict.md).
 - `bammetrics help VERB|PicardClass`: the verb's options in every spelling; `help qc` (or
   `plan`, `check`, `report`) prints clap's help.
 - `bammetrics completions bash|zsh|fish|elvish|powershell`: a completion script on stdout
@@ -584,7 +584,7 @@ wrote 7 files to out/quick/S1.*, report out/quick/S1.report.html
 ```
 $ bammetrics qc tests/data/insert_size.bam --preset clinical-panel --panel tests/data/targets.bed \
       -R tests/data/ref_100k.fa -o out/NA12878
-insert_size  FAIL  preset clinical-panel v1 (3d0bcd)  4 collectors, 1 BAM read (10 records)
+insert_size  FAIL  preset clinical-panel v2 (e62755)  4 collectors, 1 BAM read (10 records)
 FAIL          hs.mean-target-coverage   Mean target coverage is 0.377778, below the fail limit of 100
 FAIL          hs.target-20x             Target bases at 20x is 0, below the fail limit of 0.95
 FAIL          hs.target-100x            Target bases at 100x is 0, below the fail limit of 0.6
@@ -620,7 +620,7 @@ $ for bam in bams/*.bam; do
         -o runs/2026-11-02/$(basename "$bam" .bam) -q > /dev/null
   done
 $ bammetrics report runs/2026-11-02/ --preset clinical-panel
-2 samples, preset clinical-panel v1 (3d0bcd), bammetrics 0.16.0
+2 samples, preset clinical-panel v2 (e62755), bammetrics 0.16.0
 FAIL        NA1  5 fail, 8 pass, 1 not measured
   FAIL  Mean target coverage is 0.377778, below the fail limit of 100
   ...

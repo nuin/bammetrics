@@ -16,7 +16,7 @@ jsonl
 ## exit
 0
 ## stdout
-{"event":"start","sample":"insert_size","bam":"tests/data/insert_size.bam","prefix":"OUT/sample","preset":"clinical-panel","preset_hash":"3d0bcdc8430441db","collectors":4,"skipped":0}
+{"event":"start","sample":"insert_size","bam":"tests/data/insert_size.bam","prefix":"OUT/sample","preset":"clinical-panel","preset_hash":"e6275515a0d3de26","collectors":4,"skipped":0}
 {"event":"file","step":"CollectQualityYieldMetrics","path":"OUT/sample.quality_yield_metrics","tool":"CollectQualityYieldMetrics","kind":"metrics","written":true}
 {"event":"file","step":"CollectAlignmentSummaryMetrics","path":"OUT/sample.alignment_summary_metrics","tool":"CollectAlignmentSummaryMetrics","kind":"metrics","written":true}
 {"event":"file","step":"CollectInsertSizeMetrics","path":"OUT/sample.insert_size_metrics","tool":"CollectInsertSizeMetrics","kind":"metrics","written":true}
@@ -220,7 +220,7 @@ insert_size	All_Reads.fr_count
   "prefix": "OUT/sample",
   "preset": {
     "name": "clinical-panel",
-    "hash": "3d0bcdc8430441db"
+    "hash": "e6275515a0d3de26"
   },
   "steps": [
     {
@@ -233,7 +233,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.16.0",
-      "preset_hash": "3d0bcdc8430441db",
+      "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -262,7 +262,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.16.0",
-      "preset_hash": "3d0bcdc8430441db",
+      "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -303,7 +303,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.16.0",
-      "preset_hash": "3d0bcdc8430441db",
+      "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -334,7 +334,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.16.0",
-      "preset_hash": "3d0bcdc8430441db",
+      "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -384,7 +384,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.16.0",
-      "preset_hash": "3d0bcdc8430441db",
+      "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -406,7 +406,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.16.0",
-      "preset_hash": "3d0bcdc8430441db",
+      "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -451,10 +451,10 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
   "sample": "insert_size",
   "preset": {
     "name": "clinical-panel",
-    "version": 1,
-    "hash": "3d0bcdc8430441db",
+    "version": 2,
+    "hash": "e6275515a0d3de26",
     "source": "built-in",
-    "note": "starting values"
+    "note": "reviewed defaults"
   },
   "status": "fail",
   "counts": {

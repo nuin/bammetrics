@@ -4,6 +4,12 @@
 
 ### Changed
 
+- `clinical-panel` is version 2 with the note `reviewed defaults`: the maintainer reviewed
+  its 14 thresholds on 2026-11-06 and kept every version 1 value. Its hash is now
+  `e6275515a0d3de26` (`e62755`), so verdicts and pages name `clinical-panel v2 (e62755)`.
+  `generic`, `wgs` and `rna-seq` keep `starting values`.
+- docs/05 section 8 records decisions 4, 5, 7, 8, 9, 10 and 12.
+
 - The sample page heads each metrics table with its name in words (`Alignment summary
   metrics`, `HS metrics`) in place of the class string in capitals
   (`PICARD.ANALYSIS.ALIGNMENTSUMMARYMETRICS`). The metrics files keep the class string,

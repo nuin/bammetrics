@@ -72,7 +72,7 @@ fn verdict_md_lists_every_rule_of_every_shipped_preset() {
         let preset = Preset::builtin(name)
             .expect("shipped")
             .expect("shipped preset parses");
-        assert_eq!(preset.note, "starting values", "{name}");
+        assert_eq!(preset.note, expected_note(name), "{name}");
         doc = replace_block(&doc, name, &block(&preset))
             .unwrap_or_else(|| panic!("docs/verdict.md has no <!-- preset {name} --> block"));
     }
@@ -121,5 +121,15 @@ fn verdict_md_summary_counts_match_the_compiled_presets() {
             })
             .sum();
         assert_eq!(read, preset.rules.len(), "{name}: Reads column");
+    }
+}
+
+/// The shipped note: `clinical-panel` was reviewed (decision 2 of docs/05
+/// section 8), the other presets still carry starting values.
+fn expected_note(name: &str) -> &'static str {
+    if name == "clinical-panel" {
+        "reviewed defaults"
+    } else {
+        "starting values"
     }
 }

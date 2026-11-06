@@ -22,5 +22,5 @@ jsonl
 {"event":"check","sample":"NA12878","rule":"alignment.chimeras","label":"Chimeric pairs","class":"AlignmentSummaryMetrics","metric":"PCT_CHIMERAS","level":"ALL_READS","select":"CATEGORY=PAIR","unit":null,"value":0,"warn":"> 0.05","fail":"> 0.1","status":"pass","reason":null,"plot":null}
 {"event":"check","sample":"NA12878","rule":"insert.median","label":"Median insert size","class":"InsertSizeMetrics","metric":"MEDIAN_INSERT_SIZE","level":"ALL_READS","select":"PAIR_ORIENTATION=FR","unit":null,"value":310,"warn":"outside 180..450","fail":"outside 120..600","status":"pass","reason":null,"plot":"insert-size"}
 {"event":"check","sample":"NA12878","rule":"yield.q30","label":"Q30 fraction of PF bases","class":"QualityYieldMetrics","metric":"PF_Q30_BASES / PF_BASES","level":"ALL_READS","select":null,"unit":null,"value":1,"warn":"< 0.85","fail":"< 0.75","status":"pass","reason":null,"plot":"cycle-quality"}
-{"event":"verdict","sample":"NA12878","status":"fail","counts":{"pass":8,"warn":0,"fail":5,"not_measured":1},"preset":{"name":"clinical-panel","version":1,"hash":"3d0bcdc8430441db"}}
+{"event":"verdict","sample":"NA12878","status":"fail","counts":{"pass":8,"warn":0,"fail":5,"not_measured":1},"preset":{"name":"clinical-panel","version":2,"hash":"e6275515a0d3de26"}}
 ## stderr

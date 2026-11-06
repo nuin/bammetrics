@@ -135,8 +135,13 @@ fn shipped_presets_parse_with_their_rule_counts_and_notes() {
     for (name, rules) in counts {
         let preset = builtin(name);
         assert_eq!(preset.name, name);
-        assert_eq!(preset.version, 1);
-        assert_eq!(preset.note, "starting values", "{name}");
+        let (version, note) = if name == "clinical-panel" {
+            (2, "reviewed defaults")
+        } else {
+            (1, "starting values")
+        };
+        assert_eq!(preset.version, version, "{name}");
+        assert_eq!(preset.note, note, "{name}");
         assert_eq!(preset.source, "built-in");
         assert_eq!(preset.rules.len(), rules, "{name}");
         for rule in &preset.rules {
@@ -156,7 +161,7 @@ fn shipped_presets_parse_with_their_rule_counts_and_notes() {
 fn shipped_preset_hashes_are_pinned() {
     let pinned = [
         ("generic", "6dd89ed0478fd5e4"),
-        ("clinical-panel", "3d0bcdc8430441db"),
+        ("clinical-panel", "e6275515a0d3de26"),
         ("wgs", "8a5fc4360f357d10"),
         ("rna-seq", "2d1283287b120a2e"),
     ];
@@ -570,7 +575,7 @@ fn verdict_json_round_trips() {
     assert!(text.contains("\"not_measured\": 1"));
     assert!(text.contains("\"value\": null"));
     assert!(text.contains("\"select\": \"CATEGORY=PAIR\""));
-    assert!(text.contains("\"note\": \"starting values\""));
+    assert!(text.contains("\"note\": \"reviewed defaults\""));
     let back = Verdict::from_json(&text).expect("reads back");
     assert_eq!(back, verdict);
     assert_eq!(back.to_json(), text);
