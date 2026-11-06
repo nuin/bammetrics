@@ -107,8 +107,11 @@ under the failing check it explains. The presets, the rule language and `verdict
 | AccumulateVariantCallingMetrics (shard prefixes merged as Picard merges them) | | `accumulate_variant_calling_metrics()` |
 | GenotypeConcordance (`TRUTH_VCF`, `CALL_VCF`, samples, `INTERVALS`, `MIN_GQ`, `MIN_DP`, `MISSING_SITES_HOM_REF`, `IGNORE_FILTER_STATUS`, `OUTPUT_ALL_ROWS`; summary, detail and contingency files) | | `genotype_concordance()` |
 | the first four in one pass | | `collect()` |
+| CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 
 Levels are `METRIC_ACCUMULATION_LEVEL`: `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`.
+A CRAM is told by its magic bytes, not its name, and gives the same files as the BAM of the
+same data: `bammetrics CollectQualityYieldMetrics I=sample.cram O=out.txt R=ref.fa`.
 The capture tools complete only when at most the last unit in file order has a counted
 base, as Picard 3.5.0 does; see KNOWN_DIFFERENCES.md.
 Every tool also has a Python function named after the Picard class in snake case, taking

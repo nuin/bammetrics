@@ -215,9 +215,29 @@ written, with `file` and `rows`; so do `collect_variant_calling_metrics()`,
 without `INPUT` fills its own value options in declaration order from the positional
 arguments) or as `truth_vcf=` and `call_vcf=`. A double Picard prints as `?` (NaN,
 `HET_SPECIFICITY`, a ratio over zero) is `float("nan")` in the dicts.
+Every registry function that reads a BAM takes a CRAM with `reference_sequence=`, which the
+stub lists for every such tool. Of the older functions, `alignment_summary()`,
+`hs_metrics()` and `collect()` decode a CRAM with their `reference`; `insert_size()` and
+`quality_yield()` take no reference and read BAM only.
 
 ## Inputs
 
+- CRAM (3.0 and 3.1) is read by every tool that reads a BAM, with `R=` the FASTA it was
+  written with. A file is a CRAM when its first four bytes are `CRAM`, whatever its name.
+  The records reach the tools in file order exactly as the BAM of the same data gives them;
+  `test_cram.py` checks every tool against Picard on the CRAMs of t1, the foundation corpus
+  and the exome slice, and against bammetrics on the BAMs. The reference bases are upper
+  cased, as htsjdk's `ReferenceSource` gives them. On a tool whose metrics read no
+  reference, `R=` decodes the CRAM and no `ignoring R=` note is written.
+- bammetrics never opens a `.crai`; the whole file is read in order. Picard 3.5.0 (htsjdk
+  4) opens the `.crai` beside the CRAM and fails on some: on NA12878.final.cram (1000
+  Genomes high coverage, GRCh38) it throws `Attempt to create a bai entry for an unmapped
+  slice with unexpected alignment start (0) or span (150) values` before the first record.
+  Without the `.crai` beside it, Picard and bammetrics agree on that file
+  (`CollectQualityYieldMetrics STOP_AFTER=5000000`, every cell).
+- The reference for a CRAM is checked where htsjdk checks it: per slice, by the slice's
+  MD5, when the slice needs bases. A FASTA whose `@SQ` lengths differ from the CRAM header
+  still decodes the slices it matches, as in Picard.
 - `R=` needs a `.fai` next to the FASTA. Picard needs a `.dict`. bammetrics checks the
   BAM `@SQ` lines against the `.fai` (names, lengths, order); Picard checks them against
   the dictionary.
@@ -548,6 +568,14 @@ longer than every read.
 its accumulation unit has seen fewer than 100 of them and counted from the 101st on, as
 Picard's `logCounter < 100` test does; a mapped one with alignment blocks is then an error
 in both tools.
+
+A CRAM without `R=` fails in both tools at the first slice that needs reference bases:
+Picard with `Failure getting reference bases for sequence chr1`, bammetrics with `the records
+on chr1 need reference bases: a CRAM input needs REFERENCE_SEQUENCE (R)`. A FASTA whose bases
+fail a slice's MD5 fails both (Picard: `The MD5 for the reference failed to validate`;
+bammetrics: `the MD5 of the reference bases does not match the CRAM slice`), and so does a
+FASTA without the CRAM's contig (`no contig chr1 in the reference`). Both exit 1 and write
+no file (`test_cram.py`). `qc` and `plan` refuse a CRAM without `-R` before the pass.
 
 `EstimateLibraryComplexity` on a record with fewer qualities than bases (a `*` `QUAL` on a
 read of at least `MIN_IDENTICAL_BASES` bases) exits 1; Picard throws an index error summing

@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Added
+
+- CRAM input (docs/04 section 5.9): every tool that reads a BAM, the verbs, `collect`,
+  `qc`, `plan` and Python read CRAM 3.0 and 3.1 with `R=` (`-R`, `reference_sequence=`)
+  the FASTA it was written with. A file starting with the bytes `CRAM` is a CRAM whatever
+  its name; `-` reads one from standard input on the verbs. `crates/core/src/cram.rs`
+  decodes each container on a worker thread (noodles-cram 0.102, the `cram` feature of
+  noodles 0.119) and encodes its records as BAM records, so the tools keep taking
+  `bam::Record` and see the records in the BAM's order. Errors come where Picard 3.5.0
+  raises them: without `R=` at the first slice that needs bases, with other bases at the
+  slice MD5, and without the contig. `qc` and `plan` refuse a CRAM without `-R`.
+  `BedToIntervalList SD=` takes a CRAM header. The Python stub lists `reference_sequence`
+  for every tool. `tests/concordance/test_cram.py`: the 16 BAM-reading tools on t1, the foundation corpus
+  and the exome slice as CRAM 3.0 and 3.1 against Picard and against the BAM, `STOP_AFTER`,
+  and error parity. 10 golden records on `tests/data/insert_size.cram`
+  (`tests/data/make_cram.py`). BAM speed is unchanged (CollectQualityYieldMetrics on a
+  656 MB chr21 BAM 2.95 s before, 2.93 s after); a CRAM decodes at 1.6 million records a
+  second on 8 threads. NA12878.final.cram (15.8 GB): `STOP_AFTER=5000000` agrees with
+  Picard in every cell (2.0 s against 15.1 s); the whole file takes 261 s and 1.2 GiB.
+  docs/benchmarks.md has the table.
+
 ### Changed
 
 - The sample page heads each metrics table with its name in words (`Alignment summary
