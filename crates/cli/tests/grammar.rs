@@ -410,7 +410,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && **c != "AccumulateVariantCallingMetrics")
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 22);
+    assert_eq!(classes.len(), 23);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names
