@@ -8,6 +8,7 @@ pub mod bed_to_interval_list;
 pub mod blocks;
 pub mod collect;
 pub mod commons_math;
+pub mod cram;
 pub mod cycle;
 pub mod duplicate_metrics;
 pub mod duplication;

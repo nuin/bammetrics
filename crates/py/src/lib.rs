@@ -655,6 +655,7 @@ fn collect_dict<'py>(
                 })
             })
             .collect::<PyResult<_>>()?,
+        reference: reference.clone(),
     };
     let outputs = output_prefix
         .as_deref()

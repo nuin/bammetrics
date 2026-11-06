@@ -176,6 +176,7 @@ fn request(parsed: &Parsed) -> Result<Request, VerbError> {
             .contains(&Metric::InsertSize)
             .then(insert_size::Options::default),
         hs_metrics,
+        reference,
     })
 }
 

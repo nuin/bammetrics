@@ -41,6 +41,7 @@ fn request(dir: &Path) -> Request {
         alignment_summary: Some(alignment_summary::Options::default()),
         insert_size: Some(insert_size::Options::default()),
         hs_metrics: vec![hs(&panel), hs(&baits)],
+        reference: None,
     }
 }
 
