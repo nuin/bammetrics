@@ -10,6 +10,20 @@
   which MultiQC and `bammetrics report` read. Snapshots in `tests/report` changed by
   those headings and one CSS rule.
 
+### Added
+
+- `CompareMetrics` (Picard face and Python `compare_metrics()`) and the `compare-metrics`
+  verb: two metrics files compared as Picard 3.5.0 compares them, with every option
+  (`KEY`, `METRICS_TO_IGNORE`, `METRICS_NOT_REQUIRED`, `METRIC_ALLOWABLE_RELATIVE_CHANGE`,
+  `IGNORE_HISTOGRAM_DIFFERENCES`, `OUTPUT`, `OUTPUT_TABLE`, `VERBOSITY`). Exit 0 when equal,
+  1 when NOT equal. The `OUTPUT` text and the log lines (without their timestamp) match
+  Picard's byte for byte on 69 concordance cases (`tests/concordance/test_compare_metrics.py`).
+- `crates/core/picard_fields.tsv` and `make picard-fields`: the 65 Picard 3.5.0 metrics
+  classes with their fields' Java types and defaults, read from `picard.jar`
+  (`tests/data/PicardFields.java`), so values compare typed as htsjdk reads them.
+- `java.rs`: `Double.toString`, the JDK number parsers with their error messages, and
+  the iteration order of a `HashSet<String>`.
+
 ## 0.16.0
 
 Report track phase 11 (docs/05), the last one: docs and benchmark.

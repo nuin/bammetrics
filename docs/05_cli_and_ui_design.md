@@ -24,7 +24,7 @@ Verbs:
 |---|---|
 | Run | `qc` (preset or metric set, one pass, files, verdict, report), `collect` (same engine, no verdict, kept), one verb per tool |
 | Prepare | `bed-to-interval-list` (P4 library piece pulled forward; 0.14.0), `mark-duplicates` (reserved, arrives with parity plan P9) |
-| Post | `accumulate-quality-yield`, `report`, `check` |
+| Post | `accumulate-quality-yield`, `compare-metrics`, `report`, `check` |
 | Info | `tools`, `presets`, `plan`, `completions <shell>`, `help <verb or Picard class>` |
 
 Tool verbs. The name is the Picard class without `Collect` and `Metrics`, in kebab case.
@@ -43,6 +43,7 @@ Tool verbs. The name is the Picard class without `Collect` and `Metrics`, in keb
 | library-complexity | EstimateLibraryComplexity |
 | multiple-metrics | CollectMultipleMetrics (expands to a metric set) |
 | accumulate-quality-yield | AccumulateQualityYieldMetrics |
+| compare-metrics | CompareMetrics (the rule would give `compare`; the verb keeps the class's noun) |
 
 ### 2.2 Shared options
 

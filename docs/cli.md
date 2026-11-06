@@ -34,7 +34,7 @@ registry runs the Picard face, untouched; then a grammar verb (a tool verb, `col
 |---|---|
 | Run | `qc` (the collectors a preset needs, one pass, files, verdict, page), `collect` (the same pass, no verdict), one verb per registry tool |
 | Prepare | `bed-to-interval-list`; `mark-duplicates` is reserved for parity plan P9 and not built |
-| Post | `accumulate-quality-yield`, `accumulate-variant-calling`, `report`, `check` |
+| Post | `accumulate-quality-yield`, `accumulate-variant-calling`, `compare-metrics`, `report`, `check` |
 | Info | `tools`, `presets`, `plan`, `help`, `completions` |
 
 ```bash
@@ -165,7 +165,8 @@ One table for every verb, `EXIT_CODES` in `check.rs`:
 killed by a bad sample, and its summary prints `use --fail-on fail or bammetrics check to
 gate`. `report` exits 0 on any verdict. `check` always gates. A `qc` run with a failed
 collector exits 1 after it writes the other files, the verdict and the page. The tool verbs
-and `collect` exit 0, 1 or 2; the Picard face keeps 0 and 1.
+and `collect` exit 0, 1 or 2; the Picard face keeps 0 and 1. `compare-metrics` and
+`CompareMetrics` exit 1 when the two files are NOT equal, as Picard does.
 
 ## Errors
 
@@ -200,8 +201,9 @@ null) and a `done` event with only `exit` on stdout.
 ### Tool verbs
 
 One verb per tool in the registry (`crates/core/src/registry.rs`). The name is the Picard
-class without `Collect` and `Metrics`, in kebab case; the first twelve are the names of
-docs/05 section 2.1. `bammetrics tools` prints this table.
+class without `Collect` and `Metrics`, in kebab case; the first twelve and
+`compare-metrics` are the names of docs/05 section 2.1. `bammetrics tools` prints this
+table.
 
 | Verb | Picard class | Files |
 |---|---|---|
@@ -226,6 +228,7 @@ docs/05 section 2.1. `bammetrics tools` prints this table.
 | `accumulate-variant-calling` | AccumulateVariantCallingMetrics (inputs are prefixes) | as `variant-calling` |
 | `genotype-concordance` | GenotypeConcordance (truth and call VCF as positionals) | `PREFIX.genotype_concordance_{summary,detail,contingency}_metrics` |
 | `bed-to-interval-list` | BedToIntervalList | one interval list |
+| `compare-metrics` | CompareMetrics (two metrics files as positionals) | the comparison text |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -457,6 +460,39 @@ bammetrics AccumulateQualityYieldMetrics I=out/a.qy I=out/b.qy O=out/sample.qy
 Files in, file out; no BAM is read. The two forms write the same metrics.
 `accumulate-variant-calling` takes the prefixes `variant-calling` wrote and writes the two
 files under `-o PREFIX`, inverting the printed ratios into counts as Picard does.
+
+### compare-metrics
+
+```bash
+bammetrics compare-metrics picard.insert_size_metrics ours.insert_size_metrics
+bammetrics compare-metrics a.hs_metrics b.hs_metrics -o diff.txt --marc MEAN_TARGET_COVERAGE:0.01
+bammetrics CompareMetrics I=a.txt I=b.txt O=diff.txt OUTPUT_TABLE=diff.table KEY=CATEGORY
+```
+
+Two metrics files in, the comparison out; Picard 3.5.0's `CompareMetrics`, exit code
+included: 0 equal, 1 NOT equal or an error. The verb writes the comparison (`Comparison of
+<class> metrics between files A and B`, `Metrics are equal` or `NOT equal`, then one line
+per difference) to `-o`, or to standard output. The Picard face writes it to `O=` only and
+prints Picard's log lines on standard error without their timestamp: `INFO` for the
+summary, `ERROR` for each difference. `OUTPUT_TABLE` (`--output-table`) gets the value
+differences as a `CompareMetrics$MetricComparisonDifferences` metrics file.
+
+- Values are compared typed, by the Java type of the class's field, from a table read out
+  of `picard.jar` (`crates/core/picard_fields.tsv`, `make picard-fields`). `0.5` and `0.50`
+  in a double column are one value; `5.0` in a long column is an error, as in Picard.
+- Rows equal when every field prints the same 6-decimal text, so a change below the sixth
+  decimal does not count unless another field of the files differs.
+- Rows pair by position (`Key: 0`), or by the `--key` columns' values. A key value that is
+  empty is an error in Picard and here.
+- `--marc NAME:FRACTION` (`METRIC_ALLOWABLE_RELATIVE_CHANGE`) allows a relative change
+  below FRACTION. A change from 0 is a relative change of `1.7976931348623157E308`; a NaN
+  relative change is within any allowance.
+- `--metrics-to-ignore` leaves a column out but both files must have it;
+  `--metrics-not-required` lets either file lack it. `--ignore-histogram-differences`
+  stops a histogram difference from failing the files.
+- `--format json`, `jsonl`, `tsv` and `human` print one row per difference line: `KEY`,
+  `METRIC`, `VALUE1`, `VALUE2` for a value, `DIFFERENCE` for every line. `--threads` and
+  `--sample` are accepted and ignored.
 
 ### report
 
