@@ -13,3 +13,4 @@ name = "bammetrics_core"
 noodles.workspace = true
 regex.workspace = true
 thiserror.workspace = true
+zlib-rs.workspace = true

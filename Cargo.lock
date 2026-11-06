@@ -80,6 +80,7 @@ dependencies = [
  "noodles",
  "regex",
  "thiserror",
+ "zlib-rs",
 ]
 
 [[package]]

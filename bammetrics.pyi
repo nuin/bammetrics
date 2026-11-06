@@ -679,6 +679,21 @@ def genotype_concordance(
     prefix: PREFIX.genotype_concordance_summary_metrics, _detail_metrics and
     _contingency_metrics; Python returns one row per file: file and rows."""
 
+def create_sequence_dictionary(
+    reference: _Path,
+    *,
+    genome_assembly: str | None = None,
+    uri: str | None = None,
+    species: str | None = None,
+    truncate_names_at_whitespace: bool | None = None,
+    num_sequences: int | None = None,
+    alt_names: _Path | None = None,
+    create_md5_file: bool | None = None,
+    output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CreateSequenceDictionary: one row per FASTA sequence (name, length, md5, assembly,
+    uri, species, alternate_names); OUTPUT gets the .dict."""
+
 # END registry tools
 
 def alignment_summary(

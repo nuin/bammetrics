@@ -17,6 +17,7 @@ noodles = { version = "0.119", features = ["bam", "sam", "bgzf", "core", "fasta"
 pyo3 = { version = "0.30", features = ["extension-module"] }
 regex = "1"
 thiserror = "2"
+zlib-rs = "0.6"
 
 [profile.release]
 lto = "fat"
