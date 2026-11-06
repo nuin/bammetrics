@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The sample page heads each metrics table with its name in words (`Alignment summary
+  metrics`, `HS metrics`) in place of the class string in capitals
+  (`PICARD.ANALYSIS.ALIGNMENTSUMMARYMETRICS`). The metrics files keep the class string,
+  which MultiQC and `bammetrics report` read. Snapshots in `tests/report` changed by
+  those headings and one CSS rule.
+
 ## 0.16.0
 
 Report track phase 11 (docs/05), the last one: docs and benchmark.

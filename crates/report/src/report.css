@@ -135,7 +135,7 @@ summary { cursor: pointer; padding: 10px 14px; font-weight: 600; overflow-wrap: 
 summary .muted { font-weight: 400; margin-left: 8px; }
 details[open] summary { border-bottom: 1px solid var(--line); }
 details .body { padding: 8px 14px 4px; }
-details h3 { font-size: var(--fs-1); color: var(--ink-2); margin: 8px 0 6px; text-transform: uppercase; letter-spacing: 0.06em; overflow-wrap: anywhere; }
+details h3 { font-size: var(--fs-1); color: var(--ink-2); margin: 8px 0 6px; overflow-wrap: anywhere; }
 .run dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; max-width: none; }
 .run dt, .run dd { margin: 0; }
 .run dd, .facts dd, .reason { min-width: 0; overflow-wrap: anywhere; }
