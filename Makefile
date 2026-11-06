@@ -4,7 +4,7 @@
 UV_RUN := uv run --no-project
 CORPUS := tests/corpus/out
 
-.PHONY: all test lint release corpus reference-metrics concordance golden golden-update budgets a11y python-test wheel wheel-check clean-corpus bench-bam bench bench-wgs fuzz
+.PHONY: all test lint release corpus reference-metrics concordance golden golden-update budgets a11y python-test wheel wheel-check clean-corpus bench-bam bench bench-wgs fuzz picard-fields
 
 all: test lint concordance
 
@@ -71,6 +71,14 @@ N ?= 200
 JOBS ?= 8
 fuzz: release
 	$(UV_RUN) python tests/concordance/fuzz.py --seed $(SEED) --n $(N) --jobs $(JOBS)
+
+# The Picard metrics classes CompareMetrics reads (crates/core/picard_fields.tsv):
+# every MetricBase subclass in picard.jar with its public fields, types and
+# defaults, by reflection (tests/data/PicardFields.java). Rerun on a Picard upgrade.
+PICARD_JAR ?= /opt/homebrew/Cellar/picard-tools/3.5.0/libexec/picard.jar
+JAVA ?= /opt/homebrew/opt/openjdk/bin/java
+picard-fields:
+	$(JAVA) -cp $(PICARD_JAR) tests/data/PicardFields.java $(PICARD_JAR) > crates/core/picard_fields.tsv
 
 # Python module tests: build into .venv with maturin, then run tests/python.
 # Needs .venv with maturin, pytest and pysam, plus `make corpus` and `make release`.

@@ -34,7 +34,7 @@ registry runs the Picard face, untouched; then a grammar verb (a tool verb, `col
 |---|---|
 | Run | `qc` (the collectors a preset needs, one pass, files, verdict, page), `collect` (the same pass, no verdict), one verb per registry tool |
 | Prepare | `bed-to-interval-list`; `mark-duplicates` is reserved for parity plan P9 and not built |
-| Post | `accumulate-quality-yield`, `accumulate-variant-calling`, `report`, `check` |
+| Post | `accumulate-quality-yield`, `accumulate-variant-calling`, `compare-metrics`, `report`, `check` |
 | Info | `tools`, `presets`, `plan`, `help`, `completions` |
 
 ```bash
@@ -78,8 +78,8 @@ On every tool verb:
 | Option | Meaning | Picard spelling |
 |---|---|---|
 | INPUT or `-i` | input file; `-` reads standard input | `I`, `INPUT` |
-| `-o` (`-O` kept) | file, prefix, or `-` for standard output | `O`, `OUTPUT` (`M` for duplicate-metrics) |
-| `-@`, `--threads N` | BGZF decompression workers; default the available cores, at most 8 (`--help` prints the number); 0 counts as 1, as in 0.12 | none |
+| `-o` (`-O` kept) | file, prefix, or `-` for standard output; a verb refuses one that names an input, the `-R` FASTA or its `.fai` (exit 2), the Picard face writes it as Picard does | `O`, `OUTPUT` (`M` for duplicate-metrics) |
+| `-@`, `--threads N` | BGZF decompression workers, or CRAM container decoders; default the available cores, at most 8 (`--help` prints the number); 0 counts as 1, as in 0.12 | none |
 | `-R` | FASTA with a `.fai` | `R`, `REFERENCE_SEQUENCE` |
 | `--level` | accumulation level, repeatable | `LEVEL`, `METRIC_ACCUMULATION_LEVEL` |
 | `--stop-after N` | read limit | `STOP_AFTER` |
@@ -93,6 +93,20 @@ Picard's `CollectInsertSizeMetrics` takes `STOP_AFTER`, bammetrics does not impl
 yet, and `quality-yield` has no `--level`, as in Picard. `-R` on a tool that reads no
 reference is accepted and noted, as `R=` is on the Picard face. Records are decoded and counted
 on one thread in file order, so the metrics do not depend on `--threads`.
+
+CRAM. Every verb and Picard-face tool that reads a BAM reads a CRAM, and so do `collect`,
+`qc` and `plan`. A file that starts with the bytes `CRAM` is a CRAM whatever its name;
+anything else is read as a BAM. `-R` (`R=`) names the FASTA the CRAM was written with,
+with a `.fai` beside it, and is then used on every tool: no `ignoring R=` note is written for
+a CRAM, nor for an input read from a pipe, whose format is known only once it is read. Without `-R` the run fails at the first slice that needs reference
+bases, as Picard does (`the records on chr1 need reference bases: a CRAM input needs
+REFERENCE_SEQUENCE (R)`, exit 1); `qc` and `plan` refuse the CRAM before they start. A FASTA
+whose bases do not match a slice's MD5 fails there (`the MD5 of the reference bases does not
+match the CRAM slice`), as one without the CRAM's contigs does (`no contig chr1 in the
+reference`). `--threads` is then the number of container decoders. CRAM 3.0 and 3.1 are
+read; another version fails (`CRAM 2.1 is not supported (3.0 and 3.1 are)`), and so does a
+cut file (`truncated CRAM: the file ends inside a container`). The `.crai` is never opened. `-` reads a CRAM from standard input too:
+`samtools view -C -T ref.fa in.bam | bammetrics quality-yield - -R ref.fa`.
 
 Options Picard has that cannot change a metric (`VALIDATION_STRINGENCY`, `TMP_DIR`,
 `VERBOSITY`, `H`, `CHART`, `R` on a tool that reads no reference, ...) are accepted,
@@ -129,7 +143,7 @@ above where a verb has them.
   temporary name and rename it into place.
 - An output that resolves to an input file (`-o in.bam`) is a usage error, and nothing is
   written.
-- `-` as the input reads the BAM from standard input on the verbs only; the header line
+- `-` as the input reads the BAM or CRAM from standard input on the verbs only; the header line
   reads `INPUT=-`. The Picard face reads a file named `-` and writes `O=-` to a file named
   `-`, as listed in KNOWN_DIFFERENCES.md.
 - The sample name is never written into a Picard file, which stays byte-compatible. It goes
@@ -165,7 +179,8 @@ One table for every verb, `EXIT_CODES` in `check.rs`:
 killed by a bad sample, and its summary prints `use --fail-on fail or bammetrics check to
 gate`. `report` exits 0 on any verdict. `check` always gates. A `qc` run with a failed
 collector exits 1 after it writes the other files, the verdict and the page. The tool verbs
-and `collect` exit 0, 1 or 2; the Picard face keeps 0 and 1.
+and `collect` exit 0, 1 or 2; the Picard face keeps 0 and 1. `compare-metrics` and
+`CompareMetrics` exit 1 when the two files are NOT equal, as Picard does.
 
 ## Errors
 
@@ -200,8 +215,9 @@ null) and a `done` event with only `exit` on stdout.
 ### Tool verbs
 
 One verb per tool in the registry (`crates/core/src/registry.rs`). The name is the Picard
-class without `Collect` and `Metrics`, in kebab case; the first twelve are the names of
-docs/05 section 2.1. `bammetrics tools` prints this table.
+class without `Collect` and `Metrics`, in kebab case; the first twelve and
+`compare-metrics` are the names of docs/05 section 2.1. `bammetrics tools` prints this
+table.
 
 | Verb | Picard class | Files |
 |---|---|---|
@@ -226,6 +242,8 @@ docs/05 section 2.1. `bammetrics tools` prints this table.
 | `accumulate-variant-calling` | AccumulateVariantCallingMetrics (inputs are prefixes) | as `variant-calling` |
 | `genotype-concordance` | GenotypeConcordance (truth and call VCF as positionals) | `PREFIX.genotype_concordance_{summary,detail,contingency}_metrics` |
 | `bed-to-interval-list` | BedToIntervalList | one interval list |
+| `compare-metrics` | CompareMetrics (two metrics files as positionals) | the comparison text |
+| `create-sequence-dictionary` | CreateSequenceDictionary (input is a FASTA) | one `.dict` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -235,7 +253,8 @@ for every tool.
 
 `multiple-metrics --program X` adds to Picard's default five programs, as `PROGRAM=` does;
 `--program null` first clears them. The accumulate verbs and `bed-to-interval-list` are
-listed here because the registry runs them; they are described under post and prepare.
+listed here because the registry runs them; they are described under post and prepare,
+as is `create-sequence-dictionary`.
 
 ### The 0.12 subcommands
 
@@ -330,9 +349,10 @@ writes for the argv the manifest records, apart from the `Started on` line. The 
 command line follows that argv: `qc` passes `REFERENCE_SEQUENCE` only to the collectors that
 read `-R` (alignment summary, hs, gc bias, wgs), so the insert size and duplicate headers
 lack the `REFERENCE_SEQUENCE=` that `bammetrics CollectInsertSizeMetrics ... R=ref.fa`
-prints; the data lines are the same. The sample name (`--sample`, else the first `@RG SM`,
-else the BAM name) goes only into the verdict, the page and the manifest. No `-o` means
-`./<BAM name without .bam>`, and the summary says so; a directory `-o` gets the BAM name as
+prints; the data lines are the same. A CRAM input needs `-R`, and then every collector gets
+`REFERENCE_SEQUENCE`, since each one decodes the CRAM with it. The sample name (`--sample`,
+else the first `@RG SM`, else the BAM name) goes only into the verdict, the page and the
+manifest. No `-o` means `./<BAM name without .bam or .cram>`, and the summary says so; a directory `-o` gets the BAM name as
 the file part, and the summary says so. Every file is written to a temporary name opened
 with `create_new` and renamed into place. A file a collector plans and does not write this
 time (it failed, or insert size dropped every orientation and Picard writes no file) is
@@ -439,6 +459,41 @@ counted as a collector; when it fails (a contig the BAM header lacks), the summa
 as an `ERROR` line and `qc` exits 1 (`exit 1: 1 collector(s) and 1 prepare step(s) failed`
 when hs fails on the same BED).
 
+### create-sequence-dictionary
+
+```bash
+bammetrics create-sequence-dictionary ref.fa -o ref.dict
+bammetrics create-sequence-dictionary ref.fa.gz --genome-assembly GRCh38 --species "Homo sapiens"
+bammetrics CreateSequenceDictionary R=ref.fa        # writes ref.dict, as Picard does
+```
+
+The verb writes the bytes `CreateSequenceDictionary R=FASTA O=FILE` writes: `@HD VN:1.6`,
+then one `@SQ` line per FASTA sequence with `SN`, `LN`, `M5` (the MD5 of the bases in
+upper case), `AS` when given, `UR` (default `file://` and the FASTA's absolute path,
+encoded as Java encodes it) and `SP` when given, then `AN` for a sequence `--alt-names`
+names. Without `-o`, or with `-o -`, the same bytes go to standard output. The Picard face
+without `O=` writes the FASTA name with its extension replaced by `.dict`, beside it.
+
+- The FASTA name ends in `.fasta`, `.fas`, `.fa`, `.fna` or `.txt`, each also with `.gz`;
+  any other name exits 1 (`File is not a supported reference file type`). A `.gz` file is
+  read as plain gzip or bgzip, member after member. The `.fai` is never read.
+- `O=FILE`, and `-o FILE` in picard format, refuse a file that exists (exit 1, `already
+  exists.  Delete this file and try again`). With `--format json`, `jsonl`, `tsv` or
+  `human`, `-o FILE` replaces an existing file, as in every verb. The verb exits 2 when
+  `-o` or `FILE.md5` names the FASTA or the `--alt-names` file.
+- A line feed in `--genome-assembly`, `--uri` or `--species` exits 2 before any file is
+  written; Picard fails there too (`Supplied String contains illegal character`).
+- `--truncate-names-at-whitespace` (default true) names a sequence by the first word of
+  its `>` line. `--num-sequences N` stops after N sequences, at least one.
+  `--create-md5-file` also writes `FILE.md5` and needs `-o`.
+- `--format json`, `jsonl`, `tsv` and `human` print one row per sequence (`name`,
+  `length`, `md5`, `assembly`, `uri`, `species`, `alternate_names`), with no `sample`.
+  `--threads` and `--sample` are accepted and ignored.
+
+The tools that look for a `.dict` beside a FASTA (`bed-to-interval-list --dict ref.fa`,
+`SD=ref.fa`) read the file this verb writes, and Picard's CollectWgsMetrics takes it as
+the dictionary of `R=ref.fa`.
+
 ### mark-duplicates
 
 Reserved for parity plan P9 (docs/05 section 2.5, example 9). It is not built:
@@ -457,6 +512,45 @@ bammetrics AccumulateQualityYieldMetrics I=out/a.qy I=out/b.qy O=out/sample.qy
 Files in, file out; no BAM is read. The two forms write the same metrics.
 `accumulate-variant-calling` takes the prefixes `variant-calling` wrote and writes the two
 files under `-o PREFIX`, inverting the printed ratios into counts as Picard does.
+
+### compare-metrics
+
+```bash
+bammetrics compare-metrics picard.insert_size_metrics ours.insert_size_metrics
+bammetrics compare-metrics a.hs_metrics b.hs_metrics -o diff.txt --marc MEAN_TARGET_COVERAGE:0.01
+bammetrics CompareMetrics I=a.txt I=b.txt O=diff.txt OUTPUT_TABLE=diff.table KEY=CATEGORY
+```
+
+Two metrics files in, the comparison out; Picard 3.5.0's `CompareMetrics`, exit code
+included: 0 equal, 1 NOT equal or an error. The verb writes the comparison (`Comparison of
+<class> metrics between files A and B`, `Metrics are equal` or `NOT equal`, then one line
+per difference) to `-o`, or to standard output. The Picard face writes it to `O=` only and
+prints Picard's log lines on standard error without their timestamp: `INFO` for the
+summary, `ERROR` for each difference. `OUTPUT_TABLE` (`--output-table`) gets the value
+differences as a `CompareMetrics$MetricComparisonDifferences` metrics file.
+
+- Values are compared typed, by the Java type of the class's field, from a table read out
+  of `picard.jar` (`crates/core/picard_fields.tsv`, `make picard-fields`). `0.5` and `0.50`
+  in a double column are one value; `5.0` in a long column is an error, as in Picard.
+- Rows equal when every field prints the same 6-decimal text, so a change below the sixth
+  decimal does not count unless another field of the files differs.
+- Rows pair by position (`Key: 0`), or by the `--key` columns' values. A key value that is
+  empty is an error in Picard and here.
+- `--marc NAME:FRACTION` (`METRIC_ALLOWABLE_RELATIVE_CHANGE`) allows a relative change
+  below FRACTION. A change from 0 is a relative change of `1.7976931348623157E308`; a NaN
+  relative change is within any allowance.
+- `--metrics-to-ignore` leaves a column out but both files must have it;
+  `--metrics-not-required` lets either file lack it. `--ignore-histogram-differences`
+  stops a histogram difference from failing the files.
+- `--format json`, `jsonl`, `tsv` and `human` print one row per difference line: `KEY`,
+  `METRIC`, `VALUE1`, `VALUE2` for a value, `DIFFERENCE` for every line. `--threads` and
+  `--sample` are accepted and ignored.
+- The text on standard output ends with a newline; the `-o` file is Picard's `OUTPUT`
+  byte for byte, which has none.
+- An `-o` or `--output-table` that names an input, the two naming one file, and `- -`
+  (standard input read twice) are usage errors (exit 2). The Picard face writes over an
+  input as Picard does.
+- `-h` and `--help` print this help and exit 0; Picard prints its usage and exits 1.
 
 ### report
 
@@ -546,8 +640,11 @@ bammetrics CollectHsMetrics I=in.bam O=out.txt R=ref.fa \
 
 The Picard face takes `KEY=VALUE`, `--KEY VALUE`, `--KEY=VALUE` and `-K VALUE` with long
 or short names, writes `O=` (standard output without it) and exits 0 or 1. It is
-byte-identical to 0.12, apart from `--help` alone, which now prints the verb help.
-`ASSUME_SORTED=false` exits
+byte-identical to 0.12, apart from `--help` alone, which now prints the verb help, and an
+option given twice. An option Picard takes once, given twice (`SP=a SP=b`, `O=a O=b`), exits
+1 with Picard's `Option 'SPECIES' cannot be specified more than once.`; 0.12 kept the last
+value. A list option (`METRIC_ACCUMULATION_LEVEL`, `BAIT_INTERVALS`, `PROGRAM`) adds each
+value. The verbs keep the last value of an option given twice. `ASSUME_SORTED=false` exits
 1 on a BAM whose header is not coordinate sorted, as Picard does.
 `METRIC_ACCUMULATION_LEVEL` (`ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`; `null`
 clears the default) works where Picard has it. Where the output differs from Picard on
@@ -557,7 +654,7 @@ purpose is listed in KNOWN_DIFFERENCES.md.
 
 The worked examples of docs/05 section 2.5 that work today, written against the committed
 fixtures so each runs from the repository root as shown (`tests/data/insert_size.bam` has
-no `@RG SM`, so the sample is the BAM name). Output is what 0.16.0 prints; long lines are
+no `@RG SM`, so the sample is the BAM name). Output is what 0.17.0 prints; long lines are
 cut.
 
 **1 and 2. One tool, as Picard text or machine-readable.**
@@ -620,7 +717,7 @@ $ for bam in bams/*.bam; do
         -o runs/2026-11-02/$(basename "$bam" .bam) -q > /dev/null
   done
 $ bammetrics report runs/2026-11-02/ --preset clinical-panel
-2 samples, preset clinical-panel v2 (e62755), bammetrics 0.16.0
+2 samples, preset clinical-panel v2 (e62755), bammetrics 0.17.0
 FAIL        NA1  5 fail, 8 pass, 1 not measured
   FAIL  Mean target coverage is 0.377778, below the fail limit of 100
   ...

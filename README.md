@@ -29,6 +29,9 @@ bammetrics CollectHsMetrics I=sample.bam O=sample.hs_metrics R=ref.fa \
     BAIT_INTERVALS=baits.interval_list TARGET_INTERVALS=panel.interval_list
 bammetrics CollectInsertSizeMetrics I=sample.bam O=sample.insert_size_metrics H=hist.pdf
 
+# Reference dictionary: ref.dict beside ref.fa, for BedToIntervalList and Picard
+bammetrics CreateSequenceDictionary R=ref.fa
+
 # Coverage: whole genome, or the intervals of a BED converted first
 bammetrics BedToIntervalList I=panel.bed SD=ref.dict O=panel.interval_list
 bammetrics CollectWgsMetrics I=sample.bam O=sample.wgs_metrics R=ref.fa INTERVALS=panel.interval_list
@@ -37,6 +40,9 @@ bammetrics CollectRawWgsMetrics I=sample.bam O=sample.raw_wgs_metrics R=ref.fa I
 # VCF tools: OUTPUT is a prefix, the files get Picard's extensions
 bammetrics CollectVariantCallingMetrics I=calls.vcf.gz DBSNP=dbsnp.vcf.gz O=sample
 bammetrics GenotypeConcordance TV=truth.vcf.gz TRUTH_SAMPLE=HG002 CV=calls.vcf.gz CS=sample O=sample
+
+# Two metrics files compared as Picard compares them: exit 1 when they differ
+bammetrics CompareMetrics I=picard.hs_metrics I=ours.hs_metrics O=diff.txt
 ```
 
 Each Picard class is also a kebab-case verb (`insert-size`, `gc-bias`, ...; `bammetrics
@@ -106,9 +112,14 @@ under the failing check it explains. The presets, the rule language and `verdict
 | CollectVariantCallingMetrics (VCF in, `DBSNP`, `TARGET_INTERVALS`, `SEQUENCE_DICTIONARY`, `GVCF_INPUT`, `THREAD_COUNT`; summary and per-sample detail files) | | `collect_variant_calling_metrics()` |
 | AccumulateVariantCallingMetrics (shard prefixes merged as Picard merges them) | | `accumulate_variant_calling_metrics()` |
 | GenotypeConcordance (`TRUTH_VCF`, `CALL_VCF`, samples, `INTERVALS`, `MIN_GQ`, `MIN_DP`, `MISSING_SITES_HOM_REF`, `IGNORE_FILTER_STATUS`, `OUTPUT_ALL_ROWS`; summary, detail and contingency files) | | `genotype_concordance()` |
+| CompareMetrics (`KEY`, `METRICS_TO_IGNORE`, `METRICS_NOT_REQUIRED`, `METRIC_ALLOWABLE_RELATIVE_CHANGE`, `IGNORE_HISTOGRAM_DIFFERENCES`, `OUTPUT_TABLE`; Picard's exit code) | | `compare_metrics()` |
+| CreateSequenceDictionary (plain, gzip or bgzip FASTA; `AS`, `UR`, `SP`, `ALT_NAMES`, `NUM_SEQUENCES`, `CREATE_MD5_FILE`) | | `create_sequence_dictionary()` |
 | the first four in one pass | | `collect()` |
+| CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 
 Levels are `METRIC_ACCUMULATION_LEVEL`: `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`.
+A CRAM is told by its magic bytes, not its name, and gives the same files as the BAM of the
+same data: `bammetrics CollectQualityYieldMetrics I=sample.cram O=out.txt R=ref.fa`.
 The capture tools complete only when at most the last unit in file order has a counted
 base, as Picard 3.5.0 does; see KNOWN_DIFFERENCES.md.
 Every tool also has a Python function named after the Picard class in snake case, taking

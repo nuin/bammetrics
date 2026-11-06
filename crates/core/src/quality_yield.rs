@@ -333,11 +333,20 @@ pub fn command_header(opts: &Options, bam: &Path, output: Option<&Path>) -> Stri
     command
 }
 
-/// Compute the metrics of one BAM with the default BGZF worker count.
-pub fn run_over_bam(path: impl AsRef<Path>, opts: &Options) -> Result<Row> {
-    pass::run(path.as_ref(), pass::default_threads(), |_| {
-        Ok(QualityYield::new(opts))
-    })
+/// Compute the metrics of one BAM (or a CRAM, decoded with `reference`)
+/// with the default worker count.
+pub fn run_over_bam(
+    path: impl AsRef<Path>,
+    reference: Option<&Path>,
+    opts: &Options,
+) -> Result<Row> {
+    pass::run_limited(
+        path.as_ref(),
+        reference,
+        pass::default_threads(),
+        pass::Limits::default(),
+        |_| Ok(QualityYield::new(opts)),
+    )
 }
 
 #[cfg(test)]

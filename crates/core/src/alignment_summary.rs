@@ -712,11 +712,16 @@ pub fn command_header(opts: &Options, bam: &Path, output: Option<&Path>) -> Stri
     command
 }
 
-/// Compute the metrics of one BAM with the default BGZF worker count.
+/// Compute the metrics of one BAM (or a CRAM, decoded with
+/// `opts.reference`) with the default worker count.
 pub fn run_over_bam(path: impl AsRef<Path>, opts: &Options) -> Result<Report> {
-    pass::run(path.as_ref(), pass::default_threads(), |header| {
-        AlignmentSummary::new(opts, header)
-    })
+    pass::run_limited(
+        path.as_ref(),
+        opts.reference.as_deref(),
+        pass::default_threads(),
+        pass::Limits::default(),
+        |header| AlignmentSummary::new(opts, header),
+    )
 }
 
 #[cfg(test)]

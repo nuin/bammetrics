@@ -123,6 +123,7 @@ impl From<insert_size::Row> for InsertSizeMetrics {
     min_histogram_width=None,
     include_duplicates=false,
     metric_accumulation_level=None,
+    reference=None,
 ))]
 #[allow(clippy::too_many_arguments)]
 fn py_insert_size(
@@ -134,6 +135,7 @@ fn py_insert_size(
     min_histogram_width: Option<i64>,
     include_duplicates: bool,
     metric_accumulation_level: Option<Vec<String>>,
+    reference: Option<PathBuf>,
 ) -> PyResult<Vec<InsertSizeMetrics>> {
     let levels = metric_accumulation_level
         .map_or_else(|| Ok(vec![Level::AllReads]), |values| parse_levels(&values));
@@ -146,7 +148,7 @@ fn py_insert_size(
         levels: levels.map_err(|e| py_error(&e))?,
     };
     let rows = py
-        .detach(|| insert_size::run_over_bam(path, &opts))
+        .detach(|| insert_size::run_over_bam(path, reference.as_deref(), &opts))
         .map_err(|e| py_error(&e))?;
     Ok(rows.into_iter().map(Into::into).collect())
 }
@@ -319,6 +321,7 @@ impl From<quality_yield::Row> for QualityYieldMetrics {
     use_original_qualities=true,
     include_secondary_alignments=false,
     include_supplemental_alignments=false,
+    reference=None,
 ))]
 fn py_quality_yield(
     py: Python<'_>,
@@ -326,13 +329,14 @@ fn py_quality_yield(
     use_original_qualities: bool,
     include_secondary_alignments: bool,
     include_supplemental_alignments: bool,
+    reference: Option<PathBuf>,
 ) -> PyResult<QualityYieldMetrics> {
     let opts = quality_yield::Options {
         use_original_qualities,
         include_secondary_alignments,
         include_supplemental_alignments,
     };
-    py.detach(|| quality_yield::run_over_bam(path, &opts))
+    py.detach(|| quality_yield::run_over_bam(path, reference.as_deref(), &opts))
         .map(Into::into)
         .map_err(|e| py_error(&e))
 }
@@ -655,6 +659,7 @@ fn collect_dict<'py>(
                 })
             })
             .collect::<PyResult<_>>()?,
+        reference: reference.clone(),
     };
     let outputs = output_prefix
         .as_deref()

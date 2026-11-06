@@ -1,0 +1,8 @@
+## argv
+CollectQualityYieldMetrics
+I=tests/data/insert_size.cram
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/insert_size.cram: the records on chr1 need reference bases: a CRAM input needs REFERENCE_SEQUENCE (R)

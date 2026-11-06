@@ -16,6 +16,9 @@ behaves how.
   so MultiQC-style parsers read it. It lists the options bammetrics implements with their values, not every
   Picard option.
 - Without `O=` in Picard syntax the file goes to stdout. Picard requires `O`.
+  `CreateSequenceDictionary` is the exception: without `O=` it writes the FASTA name with
+  `.dict`, as Picard does. Its verb without `-o` prints the `.dict`, and
+  `create_sequence_dictionary()` without `output=` returns the rows and writes nothing.
 - `PER_BASE_COVERAGE` with a name ending in `.gz`, `.gzip` or `.bfq` is compressed as
   BGZF (noodles). Picard writes one `java.util.zip` gzip member. The compressed bytes
   differ; `gunzip` gives the same text from both, which the `t1_pb_q0_gz` case checks.
@@ -191,6 +194,23 @@ behaves how.
   adapter_sequence=[...])`) copy this. The older keyword arguments of
   `alignment_summary()` replace the default list instead, and `None` keeps it; that
   function returns `ALL_READS` rows only.
+- `CreateSequenceDictionary SPECIES=` (an empty value, likewise `URI=` and
+  `GENOME_ASSEMBLY=`) writes the field empty (`SP:`), as Picard's `--SPECIES ""` does.
+  Picard's `KEY=VALUE` parser takes the next argument as the value of an empty `KEY=`.
+- An option Picard takes once, given twice on the Picard face (`SP=a SP=b`), exits 1 in
+  both tools. Picard's message names the spelling given (`Option 'SP' cannot be specified
+  more than once.`), bammetrics the long name (`Option 'SPECIES' ...`). The verbs keep the
+  last value.
+
+- `CompareMetrics` prints Picard's log lines on standard error without the date and time
+  field (`INFO\tCompareMetrics\t<summary>`, `ERROR\tCompareMetrics\t<difference>`), so
+  the rest of each line matches. Picard's start-up lines, its command-line echo and its
+  `To get help, see ...` line are not printed. Where Picard throws, bammetrics prints
+  `bammetrics: <the exception's message>` with no stack trace; where Picard's parser
+  refuses the arguments, the error lines without the usage text. The exit codes match.
+- The `compare-metrics` verb writes the comparison to standard output without `-o`; the
+  Picard face, as Picard, writes it only to `O=`. Both exit 1 when the files are NOT
+  equal, where other tool verbs keep 1 for an input error.
 
 ## Charts
 
@@ -215,9 +235,55 @@ written, with `file` and `rows`; so do `collect_variant_calling_metrics()`,
 without `INPUT` fills its own value options in declaration order from the positional
 arguments) or as `truth_vcf=` and `call_vcf=`. A double Picard prints as `?` (NaN,
 `HET_SPECIFICITY`, a ratio over zero) is `float("nan")` in the dicts.
+`create_sequence_dictionary(reference, ...)` returns one dict per `@SQ` line (`name`,
+`length`, `md5`, `assembly`, `uri`, `species`, `alternate_names`) and writes the `.dict`
+only with `output=`.
+
+`compare_metrics([a, b], ...)` returns one dict per line Picard logs as a difference:
+`KEY`, `METRIC`, `VALUE1` and `VALUE2` (typed as the metric's field) for a value
+difference, `None` there for a row-count, column, missing-key or histogram line, and
+`DIFFERENCE` with the whole line for every one. An empty list means equal, except with
+`ignore_histogram_differences=True`, where the one line `Metrics Histograms differ, but
+the 'IGNORE_HISTOGRAM_DIFFERENCES' flag is set.` comes with files that are equal.
+`output=` writes Picard's `OUTPUT` text and `output_table=` its table.
+Every registry function that reads a BAM takes a CRAM with `reference_sequence=`, which the
+stub lists for every such tool and for no other (a BED, VCF or metrics-file input has no
+CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `collect()`,
+`insert_size()` and `quality_yield()` decode a CRAM with their `reference`.
 
 ## Inputs
 
+- CRAM (3.0 and 3.1) is read by every tool that reads a BAM, with `R=` the FASTA it was
+  written with. A file is a CRAM when its first four bytes are `CRAM`, whatever its name.
+  CRAM 2.1 fails with `CRAM 2.1 is not supported (3.0 and 3.1 are)`; Picard reads it. Any
+  other version fails in both tools (Picard: `CRAM version 4.1 is not supported`).
+  The records reach the tools in file order exactly as the BAM of the same data gives them;
+  `test_cram.py` checks every tool against Picard on the CRAMs of t1, the foundation corpus
+  and the exome slice, and against bammetrics on the BAMs. The reference bases are upper
+  cased, as htsjdk's `ReferenceSource` gives them. On a tool whose metrics read no
+  reference, `R=` decodes the CRAM and no `ignoring R=` note is written; nor for an input
+  on a pipe or `/dev/stdin`, whose format is known only once the pass reads it.
+- The template length of a mate pair stored attached (no TLEN in the file) is rebuilt as
+  htsjdk's `computeInsertSize` rebuilds it: 0 across references or with an unmapped mate,
+  otherwise the span of both reads, positive on the read that starts first and, at equal
+  starts, on the first of pair. noodles-cram 0.102 gives the plus sign to the read that
+  comes first in the file; `vendor/noodles-cram` carries the change (`vendor/README.md`). An
+  unmapped CRAM record has mapping quality 0, as htsjdk gives it (noodles leaves 255).
+- An input whose records return to an earlier contig (queryname-sorted, or unsorted) with
+  `R=` fails in Picard (`SAMException: Requesting earlier reference sequence: 0 < 1`: Picard
+  walks the reference in file order) and runs in bammetrics, which reads no reference for
+  these tools on a BAM and decodes a CRAM container by container. A BAM given `R=` shows the
+  same difference; a CRAM needs `R=`, so it always does. `CollectAlignmentSummaryMetrics`
+  and `CollectWgsMetrics` fail on such input in both tools.
+- bammetrics never opens a `.crai`; the whole file is read in order. Picard 3.5.0 (htsjdk
+  4) opens the `.crai` beside the CRAM and fails on some: on NA12878.final.cram (1000
+  Genomes high coverage, GRCh38) it throws `Attempt to create a bai entry for an unmapped
+  slice with unexpected alignment start (0) or span (150) values` before the first record.
+  Without the `.crai` beside it, Picard and bammetrics agree on that file
+  (`CollectQualityYieldMetrics STOP_AFTER=5000000`, every cell).
+- The reference for a CRAM is checked where htsjdk checks it: per slice, by the slice's
+  MD5, when the slice needs bases. A FASTA whose `@SQ` lengths differ from the CRAM header
+  still decodes the slices it matches, as in Picard.
 - `R=` needs a `.fai` next to the FASTA. Picard needs a `.dict`. bammetrics checks the
   BAM `@SQ` lines against the `.fai` (names, lengths, order); Picard checks them against
   the dictionary.
@@ -261,6 +327,51 @@ arguments) or as `truth_vcf=` and `call_vcf=`. A double Picard prints as `?` (Na
   Picard rejects (`test_rna_bed_ribosomal_intervals_are_read_by_bammetrics_only` gives
   Picard the interval list and the outputs are identical). An interval list of another
   dictionary exits 1 in both tools.
+- `CreateSequenceDictionary` reads the FASTA from start to end and opens neither its
+  `.fai` nor a `.dict` beside it. Picard 3.5.0 reads through the index when there is a
+  `.fai` (and a `.gzi` for bgzip) and `TRUNCATE_NAMES_AT_WHITESPACE=true`, so a stale
+  `.fai` changes its names and lengths. It also stops each sequence at the length a
+  `.dict` beside the FASTA gives: with `O=` naming another file and a stale `LN:5` in
+  that `.dict`, Picard writes `LN:5` for a 12-base sequence and the MD5 of 5 bases.
+  With a current `.fai` and no `.dict` both read the same bases (`test_options` on
+  `indexed` and `bgzip_indexed`). Further sidecar cases, each exit 0 in Picard:
+  - An empty `.fai` gives Picard a dictionary of `@HD` alone; bammetrics writes every
+    sequence.
+  - A `.fai` that lists fewer sequences than the FASTA drops the others in Picard.
+  - The `.dict` beside the FASTA cuts each sequence to its `LN` whatever names it holds: a
+    `.dict` of `SN:z LN:2` cuts sequence `a` to `LN:2`.
+  - A corrupt `.fai` fails Picard after it has written `@HD`.
+  - `samtools faidx` leaves a byte `0xA0` inside a sequence line out of the length, so
+    with that `.fai` Picard writes `LN:4` for `AC\xA0GT`. bammetrics counts it as a base
+    (`LN:5`), as Picard does without a `.fai`.
+- `CreateSequenceDictionary` `R=` takes a file name. Picard 3.5.0 also takes a `file://`
+  URI there (`PicardHtsPath`) and writes the same `UR` as for the plain path; bammetrics
+  exits 1 (`No such file or directory`). `ALT_NAMES=file://...` fails in both tools.
+- `--arguments_file FILE` (Picard's options read from a file) is not read: every tool
+  exits 1 with `option arguments_file is not implemented`.
+
+- `CompareMetrics` reads a class only from `crates/core/picard_fields.tsv`: the 65
+  `MetricBase` classes and 2 `Header` classes in `picard.jar` 3.5.0. A metrics class from
+  another jar (GATK, a user class) is `Could not locate class` here; Picard reads it when
+  it is on its class path. A class that loads in Java but is not a metrics class
+  (`java.lang.String`, the program class `picard.analysis.CollectInsertSizeMetrics`) is
+  `Could not locate class` here and `Could not get field with name ...` in Picard; both
+  exit 1. The two `Iso8601Date` fields (`AUTOCALL_DATE` and `IMAGING_DATE` of
+  `ArraysVariantCallingDetailMetrics`) are compared as their text.
+- `CompareMetrics` options parse as every bammetrics tool's do. A single-valued option
+  given twice (`O`, `OUTPUT_TABLE`, `IHD`, `VERBOSITY`, `R`) keeps the last value; Picard
+  refuses it. A boolean takes `true` or `false` in any case, and anything else exits 1
+  naming the option; Picard's parser reads any other text as false, so `IHD=yes` compares
+  histograms there. A mix of `-I a` and `I=b` is read; Picard refuses the mix. The common options
+  bammetrics ignores are not checked: `COMPRESSION_LEVEL=99`, `MAX_RECORDS_IN_RAM=abc` and
+  `VALIDATION_STRINGENCY=LOUD` exit 0 here and 1 in Picard, and `GA4GH_CLIENT_SECRETS` is
+  accepted where Picard's `CompareMetrics` does not list it. `-h` and `--help` print the
+  bammetrics help and exit 0, where Picard prints its usage and exits 1; `--version` and
+  `--arguments_file` are not read.
+- `CompareMetrics` on the Picard face and `compare_metrics()` in Python write `OUTPUT` and
+  `OUTPUT_TABLE` even when one names an `INPUT`, as Picard does, so the input is replaced.
+  The `compare-metrics` verb refuses both (exit 2), and refuses `-o` and `--output-table`
+  naming one file.
 
 ## Validation
 
@@ -527,6 +638,39 @@ before the strand; `.` is the positive strand; zero-length intervals are dropped
 with the first one's strand and the distinct names joined by `|`; the header is
 `@HD VN:1.6 SO:coordinate` whatever `SORT` says.
 
+`CompareMetrics` behaviour reproduced from Picard 3.5.0
+(`tests/concordance/test_compare_metrics.py`, 74 cases): files equal when every field
+prints the same `FormatUtil` text, so `0.5` and `0.50` agree, a change below the sixth
+decimal is no difference, and a dropped column whose values all equal the class default
+(`0`) leaves the files equal; a row-count difference ends the comparison before the class
+check, and two classes with one row count are an error; the columns either file lacks are
+named in `HashSet` order (`MEAN_READ_LENGTH,TOTAL_READS,PF_READS`); `METRICS_TO_IGNORE`
+and allowance names must be columns of the first file, `METRICS_NOT_REQUIRED` names need
+not be; rows pair by position (`Key: 0`) or by the `KEY` values, a repeated key keeps its
+first place and takes the later row, a null key value throws; numbers compare as doubles,
+both NaN is no change, a change from 0 has relative change `1.7976931348623157E308`, a NaN
+relative change is within any allowance, and the allowance test is strict; values print
+with `Double.toString` (`1.0E-7`, `0.01200000000000001`); a histogram with a value or a
+bin added differs, a zero bin counts, `10` and `10.0` agree, keys of two classes differ
+unless both histograms are empty; `Metrics Histograms differ` when only histograms
+differ, `Metric Histograms differ` after a row difference, nothing with
+`IGNORE_HISTOGRAM_DIFFERENCES` once rows differ; `\r\n` and `\r` end lines; a short row,
+a `5.0` in a long column, an empty cell in a primitive column, an unknown enum constant,
+column, class or header class, and a stray header line fail with htsjdk's messages; a
+`net.sf.picard` class name resolves through htsjdk's 17 packages.
+
+`CreateSequenceDictionary` output reproduced from Picard 3.5.0
+(`tests/concordance/test_create_sequence_dictionary.py`): `@HD VN:1.6`, then `SN`, `LN`,
+`M5`, `AS`, `UR`, `SP`, `AN` in that order; a name trimmed of characters up to U+0020
+and cut at the first space, tab, line feed, vertical tab, form feed or carriage return;
+`\n`, `\r\n` and `\r` as line ends; trailing Java whitespace dropped from each
+sequence line and kept inside it; `M5` over the bases with `a` to `z` upper-cased;
+`UR` as `Path.toUri` writes it (`..` kept, a space as `%20`, each UTF-8 byte above
+0x7F as `%XX`); duplicate names and `LN:0` sequences written; `NUM_SEQUENCES` writing
+at least one sequence and reading one more; `ALT_NAMES` in `HashSet` order; gzip by
+the name only (a gzip file named `.fa` fails at `chr(31)`); `CREATE_MD5_FILE` writing
+the 32 hex digits without a line end.
+
 ## Failures
 
 A unit whose reads all fail QC (`no PF_READS`) makes Picard throw and write no file, at any
@@ -549,10 +693,32 @@ its accumulation unit has seen fewer than 100 of them and counted from the 101st
 Picard's `logCounter < 100` test does; a mapped one with alignment blocks is then an error
 in both tools.
 
+A CRAM without `R=` fails in both tools at the first slice that needs reference bases:
+Picard with `Failure getting reference bases for sequence chr1`, bammetrics with `the records
+on chr1 need reference bases: a CRAM input needs REFERENCE_SEQUENCE (R)`. A FASTA whose bases
+fail a slice's MD5 fails both (Picard: `The MD5 for the reference failed to validate`;
+bammetrics: `the MD5 of the reference bases does not match the CRAM slice`), and so does a
+FASTA without the CRAM's contig (`no contig chr1 in the reference`). Both exit 1 and write
+no file (`test_cram.py`). `qc` and `plan` refuse a CRAM without `-R` before the pass.
+A CRAM cut at a container boundary, so that it ends without its EOF container, fails in
+both tools (Picard: `RuntimeEOFException`; bammetrics: `truncated CRAM: the file ends
+without its EOF container`); one cut inside a container fails in both (`truncated CRAM: the
+file ends inside a container`). A cut inside the EOF container itself is read to the end by
+both, since neither reads the EOF container's block.
+
 `EstimateLibraryComplexity` on a record with fewer qualities than bases (a `*` `QUAL` on a
 read of at least `MIN_IDENTICAL_BASES` bases) exits 1; Picard throws an index error summing
 the qualities. A barcode tag that is not a string (`BARCODE_TAG=XN` on an `XN:i` read) exits
 1 in both tools (`test_barcode_tag_that_is_not_a_string_fails`).
+
+`CreateSequenceDictionary` writes no file when it fails (a name outside the SAM pattern,
+a `>` without a name, bases before the first header, a bad `ALT_NAMES` line). Picard has
+written the `@HD` line and every `@SQ` line before the failing sequence by then and
+leaves that file; it deletes it only after an I/O or argument error. Both exit non-zero
+with the same message (`test_bad_fasta_fails_in_both`, `test_alt_name_errors`).
+With `CREATE_MD5_FILE=true` and a directory at `OUTPUT.md5`, Picard writes `OUTPUT` and
+then exits 1 (`Can't write to or close output file`); bammetrics exits 1 with that message
+before it writes anything (`test_md5_path_is_a_directory`).
 
 ## Threads
 

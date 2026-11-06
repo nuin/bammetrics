@@ -26,6 +26,11 @@ The keywords of `qc`, `check` and `report` are the command's long flags in snake
 
 - A flag takes `True` or `False`. A path (`bam`, `output`, `reference`, `panel`, `hs`, ...) takes a str or an `os.PathLike`; any other object raises `TypeError`. Another value takes a str or a number. `None` leaves the option at the command's default.
 - `hs` takes one `(baits, targets)` pair or a list of pairs, as `--hs BAITS TARGETS` repeated.
+- A CRAM is read wherever a BAM is, with its FASTA as `reference` (`qc`, `collect`,
+  `alignment_summary`, `hs_metrics`, `insert_size`, `quality_yield`) or `reference_sequence`
+  (every registry function that reads a BAM, such as
+  `collect_quality_yield_metrics(cram, reference_sequence="ref.fa")`). Without it the
+  call raises the command's error (`a CRAM input needs REFERENCE_SEQUENCE (R)`).
 - `--format` and `--quiet` have no keyword: no progress line, no event and no step error is printed (step errors are in `Run.errors`). Three warnings still go to stderr: a `resume` over a manifest that cannot be read (`... is not a whole manifest; running every step`), a core tool's own warning (`CollectInsertSizeMetrics` when every orientation falls under `MINIMUM_PCT`), and `check` skipping an unparsable metrics file (`bammetrics: skipped ...`).
 - `qc(report=False)` is the one keyword the command lacks: no `PREFIX.report.html` is written. An earlier run's page under the same prefix is removed only when that run's manifest lists it as its `report` file; a page no run wrote stays. `PREFIX.verdict.json` is still written.
 - Messages are the command's lines, with its spelling: `bammetrics qc: out/s.manifest.json holds an earlier run: --resume skips its finished steps, --force reruns them` means `resume=True` or `force=True`. A manifest that cannot be read is named with its reason (`out/s.manifest.json is not a whole manifest: --resume or --force runs every step`). An `output` or `sample` holding a NUL byte is a `UsageError`.

@@ -35,7 +35,6 @@ use crate::locus::{
 };
 use crate::metric::{HistogramSection, HistogramSeries, MetricsOutput, ToolOutput, Value};
 use crate::metrics_file::KeyClass;
-use crate::pass;
 use crate::reference::Reference;
 use crate::registry::{Invocation, Opt, Tool};
 use crate::sensitivity::{het_snp_sensitivity, normalize_histogram, phred_from_error_probability};
@@ -886,7 +885,7 @@ fn run_variant(inv: &Invocation, variant: Variant) -> Result<ToolOutput> {
         Ok((reference, unique))
     };
     let (counts, filters) = if opts.use_fast_algorithm && variant == Variant::NonZero {
-        let Finished { sink, filters } = pass::run(&inv.input, inv.threads, |header| {
+        let Finished { sink, filters } = inv.read_whole(&inv.input, |header| {
             let (reference, unique) = setup(header)?;
             let contigs = header.reference_sequences().len();
             Ok(Engine::new(
@@ -902,7 +901,7 @@ fn run_variant(inv: &Invocation, variant: Variant) -> Result<ToolOutput> {
         })?;
         (sink.counts, filters)
     } else if opts.use_fast_algorithm {
-        let Finished { sink, filters } = pass::run(&inv.input, inv.threads, |header| {
+        let Finished { sink, filters } = inv.read_whole(&inv.input, |header| {
             let (reference, unique) = setup(header)?;
             let contigs = header.reference_sequences().len();
             Ok(Engine::new(
@@ -922,7 +921,7 @@ fn run_variant(inv: &Invocation, variant: Variant) -> Result<ToolOutput> {
         })?;
         (sink.counts, filters)
     } else {
-        let Finished { sink, filters } = pass::run(&inv.input, inv.threads, |header| {
+        let Finished { sink, filters } = inv.read_whole(&inv.input, |header| {
             let (reference, unique) = setup(header)?;
             Ok(Engine::new(
                 Classic,

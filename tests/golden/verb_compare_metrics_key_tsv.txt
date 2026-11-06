@@ -1,0 +1,15 @@
+## argv
+compare-metrics
+tests/data/quality_yield_a.txt
+tests/data/quality_yield_b.txt
+--key
+TOTAL_READS
+--format
+tsv
+## exit
+1
+## stdout
+KEY	METRIC	VALUE1	VALUE2	DIFFERENCE
+				KEY 10 found in tests/data/quality_yield_a.txt but not in tests/data/quality_yield_b.txt
+				KEY 80 found in tests/data/quality_yield_b.txt but not in tests/data/quality_yield_a.txt
+## stderr

@@ -372,11 +372,20 @@ pub fn subcommand_header(inv: &Invocation) -> Result<String> {
     Ok(command_header(&opts, &inv.input, inv.output.as_deref()))
 }
 
-/// Compute the metrics of one BAM with the default BGZF worker count.
-pub fn run_over_bam(path: impl AsRef<Path>, opts: &Options) -> Result<Vec<Row>> {
-    pass::run(path.as_ref(), pass::default_threads(), |header| {
-        Ok(InsertSize::new(opts, header))
-    })
+/// Compute the metrics of one BAM (or a CRAM, decoded with `reference`)
+/// with the default worker count.
+pub fn run_over_bam(
+    path: impl AsRef<Path>,
+    reference: Option<&Path>,
+    opts: &Options,
+) -> Result<Vec<Row>> {
+    pass::run_limited(
+        path.as_ref(),
+        reference,
+        pass::default_threads(),
+        pass::Limits::default(),
+        |header| Ok(InsertSize::new(opts, header)),
+    )
 }
 
 /// The orientation filter in `InsertSizeMetricsCollector.PerUnitInsertSizeMetricsCollector

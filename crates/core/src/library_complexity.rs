@@ -58,7 +58,7 @@ use crate::optical::{
     DEFAULT_MAX_DUPLICATE_SET_SIZE, DEFAULT_OPTICAL_DUPLICATE_DISTANCE, Location,
     OpticalDuplicateFinder, ReadNameParser,
 };
-use crate::pass::{self, Accumulator};
+use crate::pass::Accumulator;
 use crate::quality::base_qualities;
 use crate::record::record_name;
 use crate::registry::{Invocation, Opt, Tool};
@@ -151,7 +151,7 @@ pub const TOOL: Tool = Tool {
               input may be unaligned, or several files. The metrics file adds the \
               duplication_group_count histogram.",
     options: &[
-        Opt::path(&["INPUT", "I"], "A BAM to read; repeat for each.")
+        Opt::path(&["INPUT", "I"], "A BAM or CRAM to read; repeat for each.")
             .repeated()
             .required(),
         Opt::int(
@@ -210,7 +210,7 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let opts = Options::from_invocation(inv)?;
     let mut reader = Reader::new(opts);
     for input in inv.all("INPUT") {
-        reader = pass::run(Path::new(input), inv.threads, |header| {
+        reader = inv.read_whole(Path::new(input), |header| {
             reader.start_file(header);
             Ok(reader)
         })?;

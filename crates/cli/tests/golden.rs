@@ -25,6 +25,15 @@ const FIXTURES: &[(&str, &str)] = &[
     ("QY_A", "tests/data/quality_yield_a.txt"),
     ("QY_B", "tests/data/quality_yield_b.txt"),
     ("PICARD", "tests/data/picard"),
+    (
+        "PIC_ASM",
+        "tests/data/picard/NA12878/NA12878.alignment_summary_metrics",
+    ),
+    (
+        "PIC_DUP",
+        "tests/data/picard/NA12878/NA12878.duplicate_metrics",
+    ),
+    ("IS_CRAM", "tests/data/insert_size.cram"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -182,6 +191,34 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_verb_bed_to_interval_list_no_dictionary", "bed-to-interval-list", "BED"),
     case!("qc_panel_bed", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--panel", "BED", "-R", "REF", "--date", "2026-01-02 03:04:05 UTC"),
     case!("plan_panel_bed", "plan", "IS", "-o", "OUT/sample", "--panel", "BED"),
+    // CompareMetrics: exit 0 equal, 1 NOT equal; the OUTPUT names both files by absolute path.
+    case!("picard_compare_metrics_equal", "CompareMetrics", "I=PIC_ASM", "I=PIC_ASM", "O=OUT/compare.txt"),
+    case!("picard_compare_metrics_differ", "CompareMetrics", "I=QY_A", "I=QY_B", "O=OUT/compare.txt", "OUTPUT_TABLE=OUT/table.txt"),
+    case!("picard_compare_metrics_allowance", "CompareMetrics", "I=QY_A", "I=QY_B", "MARC=TOTAL_READS:8", "MI=PF_READS", "VERBOSITY=ERROR"),
+    case!("verb_compare_metrics_stdout", "compare-metrics", "QY_A", "QY_B"),
+    case!("verb_compare_metrics_output", "compare-metrics", "PIC_ASM", "PIC_ASM", "-o", "OUT/compare.txt", "--output-table", "OUT/table.txt"),
+    case!("verb_compare_metrics_key_tsv", "compare-metrics", "QY_A", "QY_B", "--key", "TOTAL_READS", "--format", "tsv"),
+    case!("error_compare_metrics_one_input", "CompareMetrics", "I=QY_A"),
+    case!("error_compare_metrics_classes", "CompareMetrics", "I=QY_A", "I=PIC_DUP"),
+    // create-sequence-dictionary: the .dict and .md5 Picard 3.5.0 writes. The default
+    // name beside the FASTA is checked in tests/create_sequence_dictionary.rs.
+    case!("picard_create_sequence_dictionary", "CreateSequenceDictionary", "R=REF", "O=OUT/ref.dict"),
+    case!("picard_create_sequence_dictionary_options", "CreateSequenceDictionary", "-R", "REF", "-O", "OUT/ref.dict", "AS=GRCh38", "SP=Homo sapiens", "UR=ref_100k.fa", "CREATE_MD5_FILE=true"),
+    case!("verb_create_sequence_dictionary_stdout", "create-sequence-dictionary", "REF"),
+    case!("verb_create_sequence_dictionary_json", "create-sequence-dictionary", "REF", "--format", "json", "--uri", "ref_100k.fa"),
+    case!("error_create_sequence_dictionary_exists", "CreateSequenceDictionary", "R=REF", "O=DICT"),
+    case!("error_verb_create_sequence_dictionary_no_fasta", "create-sequence-dictionary"),
+    // CRAM input (tests/data/make_cram.py): told by its magic, decoded with R=.
+    case!("picard_quality_yield_cram", "CollectQualityYieldMetrics", "I=IS_CRAM", "O=OUT/quality_yield.txt", "R=REF"),
+    case!("picard_multiple_metrics_cram", "CollectMultipleMetrics", "I=IS_CRAM", "O=OUT/sample", "R=REF"),
+    case!("picard_wgs_metrics_cram", "CollectWgsMetrics", "I=IS_CRAM", "O=OUT/wgs_metrics.txt", "R=REF"),
+    case!("picard_bed_to_interval_list_cram", "BedToIntervalList", "I=BED", "SD=IS_CRAM", "O=OUT/panel.interval_list"),
+    case!("error_cram_no_reference", "CollectQualityYieldMetrics", "I=IS_CRAM"),
+    case!("verb_quality_yield_cram", "quality-yield", "IS_CRAM", "-R", "REF"),
+    case!("verb_insert_size_cram_json", "insert-size", "IS_CRAM", "-R", "REF", "--format", "json"),
+    case!("qc_generic_cram", "qc", "IS_CRAM", "-R", "REF", "-o", "OUT/sample", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("plan_cram", "plan", "IS_CRAM", "-R", "REF", "-o", "OUT/sample"),
+    case!("error_qc_cram_no_reference", "qc", "IS_CRAM", "-o", "OUT/sample"),
 ];
 
 /// The same tools on corpus BAM t1, with its reference and interval lists.
