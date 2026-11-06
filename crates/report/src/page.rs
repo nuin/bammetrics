@@ -173,6 +173,34 @@ fn short_class(class: &str) -> &str {
     class.rsplit(['.', '$']).next().unwrap_or(class)
 }
 
+/// The heading of a class block: `Alignment summary metrics` for
+/// `picard.analysis.AlignmentSummaryMetrics`. The words of the last name
+/// part, with the short forms in [`ACRONYMS`] in capitals.
+fn class_title(class: &str) -> String {
+    const ACRONYMS: [&str; 5] = ["Hs", "Wgs", "Rna", "Gc", "Pcr"];
+    let mut words: Vec<String> = Vec::new();
+    for c in short_class(class).chars() {
+        match words.last_mut() {
+            Some(word) if !c.is_ascii_uppercase() => word.push(c),
+            _ => words.push(c.to_string()),
+        }
+    }
+    let words: Vec<String> = words
+        .into_iter()
+        .enumerate()
+        .map(|(i, w)| {
+            if ACRONYMS.contains(&w.as_str()) {
+                w.to_ascii_uppercase()
+            } else if i == 0 {
+                w
+            } else {
+                w.to_ascii_lowercase()
+            }
+        })
+        .collect();
+    words.join(" ")
+}
+
 fn file_name(path: &str) -> &str {
     Path::new(path)
         .file_name()
@@ -516,7 +544,7 @@ impl<'a> Page<'a> {
             );
             let program = program(doc);
             for block in &doc.classes {
-                let _ = write!(self.out, "<h3>{}</h3>", escape(&block.class));
+                let _ = write!(self.out, "<h3>{}</h3>", escape(&class_title(&block.class)));
                 let label = format!(
                     "{} in {}",
                     short_class(&block.class),
@@ -695,5 +723,38 @@ impl<'a> Page<'a> {
             self.out.push_str("</li>");
         }
         self.out.push_str("</ul></dd></dl></footer>\n");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::class_title;
+
+    #[test]
+    fn class_titles_read_as_words() {
+        for (class, title) in [
+            (
+                "picard.analysis.AlignmentSummaryMetrics",
+                "Alignment summary metrics",
+            ),
+            ("picard.analysis.directed.HsMetrics", "HS metrics"),
+            ("picard.sam.DuplicationMetrics", "Duplication metrics"),
+            (
+                "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics",
+                "Quality yield metrics",
+            ),
+            (
+                "picard.analysis.GcBiasSummaryMetrics",
+                "GC bias summary metrics",
+            ),
+            ("picard.analysis.RnaSeqMetrics", "RNA seq metrics"),
+            (
+                "picard.analysis.directed.TargetedPcrMetrics",
+                "Targeted PCR metrics",
+            ),
+            ("picard.analysis.WgsMetrics", "WGS metrics"),
+        ] {
+            assert_eq!(class_title(class), title, "{class}");
+        }
     }
 }
