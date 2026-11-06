@@ -324,6 +324,15 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("UNIQUE", "true")),
             picard_outputs: single,
         },
+        // Equal files, so both faces exit 0.
+        Case {
+            verb: "compare-metrics",
+            class: "CompareMetrics",
+            verb_args: strings(&[QY_A, QY_A]),
+            picard_args: strings(&[&format!("I={QY_A}"), &format!("I={QY_A}")]),
+            option: Some(("KEY", "TOTAL_READS")),
+            picard_outputs: single,
+        },
     ]
 }
 
@@ -393,7 +402,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && **c != "AccumulateVariantCallingMetrics")
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 21);
+    assert_eq!(classes.len(), 22);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

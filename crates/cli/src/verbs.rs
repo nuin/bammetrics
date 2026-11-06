@@ -19,6 +19,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+use bammetrics_core::compare_metrics;
 use bammetrics_core::multiple_metrics::file_extensions;
 use bammetrics_core::pass;
 use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
@@ -198,6 +199,19 @@ pub const VERBS: &[Verb] = &[
             (Key::Sample, "an interval list has no sample"),
         ],
         ..verb("bed-to-interval-list", "BedToIntervalList", Files::Single)
+    },
+    Verb {
+        input: "FILE",
+        about: Some(
+            "compares two metrics files as Picard does: the comparison (both files, equal or NOT \
+             equal, one line per difference) to -o or standard output, exit 1 when they differ.",
+        ),
+        writes: "comparison",
+        ignores: &[
+            (Key::Threads, "no BAM is read"),
+            (Key::Sample, "a comparison has no sample"),
+        ],
+        ..verb("compare-metrics", "CompareMetrics", Files::Single)
     },
 ];
 
@@ -459,7 +473,12 @@ impl Verb {
         if verbose {
             eprintln!("bammetrics {}: {}", self.name, inv.command);
         }
-        let result = (tool.run)(&inv).map_err(core)?;
+        let (result, status) = if tool.name == compare_metrics::TOOL.name {
+            self.compare(&inv, output.as_deref(), format, quiet)
+                .map_err(core)?
+        } else {
+            ((tool.run)(&inv).map_err(core)?, 0)
+        };
         if !quiet {
             for note in &inv.notes {
                 eprintln!("bammetrics {}: {note}", self.name);
@@ -487,7 +506,30 @@ impl Verb {
                 eprintln!("bammetrics {}: wrote {}", self.name, path.display());
             }
         }
-        Ok(0)
+        Ok(status)
+    }
+
+    /// `compare-metrics`: the comparison as the main file (standard output
+    /// gets it too, where the Picard face prints nothing), the summary line
+    /// on standard error when it goes to a file, and Picard's exit code.
+    fn compare(
+        &self,
+        inv: &Invocation,
+        output: Option<&Path>,
+        format: Format,
+        quiet: bool,
+    ) -> bammetrics_core::Result<(bammetrics_core::metric::ToolOutput, u8)> {
+        let mut comparison = compare_metrics::compare(inv)?;
+        if format == Format::Picard
+            && let Some(main) = comparison.output.main.as_mut()
+        {
+            main.text = Some(comparison.report.clone());
+        }
+        if output.is_some() && !quiet {
+            eprintln!("bammetrics {}: {}", self.name, comparison.summary);
+        }
+        let status = comparison.status();
+        Ok((comparison.output, status))
     }
 
     /// An option of [`Verb::one_spelling`] given under two of its
@@ -1007,6 +1049,7 @@ mod tests {
             ("library-complexity", "EstimateLibraryComplexity"),
             ("multiple-metrics", "CollectMultipleMetrics"),
             ("accumulate-quality-yield", "AccumulateQualityYieldMetrics"),
+            ("compare-metrics", "CompareMetrics"),
         ];
         for (name, class) in table {
             assert_eq!(find(name).map(|v| v.class), Some(class), "{name}");
