@@ -239,17 +239,16 @@ fn program(doc: &MetricsDoc) -> Option<&str> {
         .filter(|w| w.chars().all(|c| c.is_ascii_alphanumeric()))
 }
 
-/// The glossary definition of a histogram column: the label itself, then
-/// `*.<suffix>` for a unit-prefixed label, then `*`.
-fn histogram_definition(program: Option<&str>, label: &str) -> Option<&'static str> {
-    let program = program?;
-    glossary::lookup(program, label)
-        .or_else(|| {
-            let suffix = label.split_once('.')?.1;
-            glossary::lookup(program, &format!("*.{suffix}"))
-        })
-        .or_else(|| glossary::lookup(program, "*"))
-        .map(|e| e.definition)
+/// The glossary definition of a histogram column of `hist`, by the program
+/// that wrote the file and the histogram's key label (the first column), so
+/// a `CollectMultipleMetrics` file finds the rows of the program behind it.
+fn histogram_definition(
+    program: Option<&str>,
+    hist: &HistogramBlock,
+    label: &str,
+) -> Option<&'static str> {
+    let key = hist.columns.first()?;
+    glossary::histogram_lookup(program.unwrap_or_default(), key, label).map(|e| e.definition)
 }
 
 impl<'a> Page<'a> {
@@ -671,7 +670,7 @@ impl<'a> Page<'a> {
         table_region(&mut self.out, label);
         self.out.push_str("<table class=\"wide\"><thead><tr>");
         for label in &hist.columns {
-            let definition = histogram_definition(program, label).unwrap_or("");
+            let definition = histogram_definition(program, hist, label).unwrap_or("");
             let _ = write!(
                 self.out,
                 "<th scope=\"col\" title=\"{}\">{}</th>",
@@ -728,7 +727,37 @@ impl<'a> Page<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::class_title;
+    use bammetrics_core::metrics_file::MetricsDoc;
+
+    use super::{class_title, histogram_definition, program};
+
+    /// The four histogram files of `tests/data/picard/NA12878`, written by
+    /// CollectMultipleMetrics and CollectHsMetrics: every column, the key
+    /// included, has a definition.
+    #[test]
+    fn every_fixture_histogram_column_has_a_definition() {
+        let dir = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/data/picard/NA12878"
+        );
+        for name in [
+            "insert_size_metrics",
+            "alignment_summary_metrics",
+            "quality_distribution_metrics",
+            "quality_by_cycle_metrics",
+            "hs_metrics",
+        ] {
+            let path = format!("{dir}/NA12878.{name}");
+            let doc = MetricsDoc::read(std::path::Path::new(&path)).expect(name);
+            let hist = doc.histogram.as_ref().expect(name);
+            for label in &hist.columns {
+                assert!(
+                    histogram_definition(program(&doc), hist, label).is_some(),
+                    "{name}: no definition for {label}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn class_titles_read_as_words() {
