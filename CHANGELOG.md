@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Added
+
+- `CreateSequenceDictionary` (docs/04 core) and its verb `create-sequence-dictionary`:
+  the `.dict` Picard 3.5.0 writes for a FASTA, byte for byte. `@HD VN:1.6`, then `SN`,
+  `LN`, `M5`, `AS`, `UR` (default `file://` and the absolute path, encoded as
+  `Path.toUri` does), `SP` and `AN` per sequence. Every option that changes the file:
+  `REFERENCE`, `OUTPUT` (the Picard face defaults to the FASTA name with `.dict`; an
+  existing file exits 1), `GENOME_ASSEMBLY`, `URI`, `SPECIES`,
+  `TRUNCATE_NAMES_AT_WHITESPACE`, `NUM_SEQUENCES`, `ALT_NAMES` (Picard's six checks,
+  `HashSet` order) and `CREATE_MD5_FILE`. Plain gzip and bgzip FASTA files are read by
+  name, as Picard reads them. The verb prints to standard output without `-o`; Python
+  `create_sequence_dictionary(reference, ...)` returns one row per sequence.
+- `crates/core/src/md5.rs` (RFC 1321) and `crates/core/src/gzip.rs` (gzip members in
+  turn). `zlib-rs`, which `noodles-bgzf` already builds, is now a direct dependency of
+  the core crate; `Cargo.lock` gains no package.
+- `tests/concordance/test_create_sequence_dictionary.py` and
+  `crates/cli/tests/create_sequence_dictionary.rs`; six golden records, and the `tools`
+  listing gains one row.
+
 ### Changed
 
 - The sample page heads each metrics table with its name in words (`Alignment summary
