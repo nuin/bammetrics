@@ -80,6 +80,35 @@ after the header lines.
 CollectRawWgsMetrics spends most of its time in the `HET_SNP_SENSITIVITY` simulation over
 its 100,001-bin depth histogram, in both tools.
 
+## CRAM input
+
+Mac Studio, Apple M1 Ultra, 20 cores, 64 GB. Default threads (8). NA12878.final.cram is
+the 1000 Genomes high-coverage GRCh38 CRAM (15,797,182,294 bytes, CRAM 3.0) with
+GRCh38_full_analysis_set_plus_decoy_hla as `R=`. `chr21.bam` (656 MB, 11,625,214 records)
+is its chr21 written by `samtools view -b`, and `chr21.cram` (220 MB, 1,163 containers of
+10,000 records) that BAM written back by `samtools view -C`. Median of 5 runs (3 for CRAM).
+
+| run | wall | max RSS |
+|---|---:|---:|
+| CollectQualityYieldMetrics chr21.bam, 0.16.0 | 2.95 s | 9 MiB |
+| CollectQualityYieldMetrics chr21.bam, with CRAM input | 2.93 s | 9 MiB |
+| CollectAlignmentSummaryMetrics chr21.bam, 0.16.0 | 10.56 s | 9 MiB |
+| CollectAlignmentSummaryMetrics chr21.bam, with CRAM input | 10.30 s | 10 MiB |
+| CollectQualityYieldMetrics chr21.cram | 7.10 s | 998 MiB |
+| CollectQualityYieldMetrics chr21.cram, `threads=1` | 42.26 s | 381 MiB |
+| CollectAlignmentSummaryMetrics chr21.cram | 14.36 s | 858 MiB |
+| CollectQualityYieldMetrics NA12878.final.cram `STOP_AFTER=5000000`, Picard 3.5.0 | 15.1 s | 4,625 MiB |
+| CollectQualityYieldMetrics NA12878.final.cram `STOP_AFTER=5000000` | 2.0 s | 700 MiB |
+| CollectQualityYieldMetrics NA12878.final.cram, whole file (758,135,204 reads) | 260.7 s | 1,221 MiB |
+
+The BAM path is unchanged: the input is sniffed once and the record loop is the same.
+A CRAM decodes at about 1.6 million records a second on 8 decoder threads (chr21); the
+whole genome ran at 2.9 million counted reads a second (secondary and supplementary records
+are read and not counted). Memory
+grows with the decoder count, about 90 MiB per decoder, plus the contigs in use
+(chr21 is 47 MB, chr1 249 MB). Picard read the CRAM through an APFS clone with no `.crai`
+beside it (KNOWN_DIFFERENCES.md); both files agree in every cell.
+
 ## Report budgets (docs/05 section 4.8)
 
 Measured 2026-11-05 with bammetrics 0.16.0, rustc 1.99.1, same machine, by `make budgets`

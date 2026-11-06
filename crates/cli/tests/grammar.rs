@@ -482,6 +482,122 @@ fn a_bam_on_standard_input_gives_the_metrics_of_the_file() {
 }
 
 #[test]
+fn a_cram_on_standard_input_gives_the_metrics_of_the_bam() {
+    const CRAM: &str = "tests/data/insert_size.cram";
+    let body = |o: &Output| {
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter(|l| !l.starts_with("# "))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    for verb in ["insert-size", "quality-yield", "alignment-summary"] {
+        let from_bam = run_ok(&strings(&[verb, IS, "-R", REF]));
+        let piped = Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+            .args([verb, "-", "-R", REF])
+            .current_dir(root())
+            .stdin(Stdio::from(
+                fs::File::open(root().join(CRAM)).expect("cram"),
+            ))
+            .output()
+            .expect("run bammetrics");
+        assert_eq!(body(&piped), body(&from_bam), "{verb}");
+        assert!(
+            !String::from_utf8_lossy(&piped.stderr).contains("ignoring REFERENCE_SEQUENCE"),
+            "{verb}: the reference decodes the CRAM"
+        );
+        let unreferenced = Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+            .args([verb, "-"])
+            .current_dir(root())
+            .stdin(Stdio::from(
+                fs::File::open(root().join(CRAM)).expect("cram"),
+            ))
+            .output()
+            .expect("run bammetrics");
+        assert_eq!(unreferenced.status.code(), Some(1), "{verb}");
+        assert!(
+            String::from_utf8_lossy(&unreferenced.stderr).contains("REFERENCE_SEQUENCE (R)"),
+            "{verb}"
+        );
+    }
+}
+
+/// `I=/dev/stdin` redirected from a file: no byte is read ahead of the pass,
+/// which on macOS would move the shared offset.
+#[test]
+fn dev_stdin_from_a_file_is_read_whole() {
+    let file = |o: &Output| {
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter(|l| !l.starts_with("# "))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let expected = file(&run_ok(&strings(&[
+        "CollectQualityYieldMetrics",
+        &format!("I={IS}"),
+    ])));
+    for input in [IS, "tests/data/insert_size.cram"] {
+        let run = Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+            .args([
+                "CollectQualityYieldMetrics",
+                "I=/dev/stdin",
+                &format!("R={REF}"),
+            ])
+            .current_dir(root())
+            .stdin(Stdio::from(
+                fs::File::open(root().join(input)).expect("input"),
+            ))
+            .output()
+            .expect("run bammetrics");
+        assert_eq!(file(&run), expected, "{input}");
+    }
+}
+
+/// A BAM on a named pipe: the input is not opened before the pass.
+#[cfg(unix)]
+#[test]
+fn a_bam_on_a_named_pipe_is_read() {
+    let dir = fresh_dir("fifo");
+    let fifo = dir.join("in.bam");
+    let made = Command::new("mkfifo").arg(&fifo).status().expect("mkfifo");
+    assert!(made.success());
+    let source = root().join(IS);
+    let target = fifo.clone();
+    let writer = std::thread::spawn(move || {
+        let mut out = fs::OpenOptions::new().write(true).open(target)?;
+        std::io::copy(&mut fs::File::open(source)?, &mut out)
+    });
+    let mut child = Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+        .args(["quality-yield", fifo.to_str().expect("utf-8")])
+        .current_dir(root())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("run bammetrics");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while child.try_wait().expect("wait").is_none() {
+        if std::time::Instant::now() > deadline {
+            child.kill().expect("kill");
+            // Unblock the writer, then fail.
+            let _ = fs::File::open(&fifo);
+            panic!("bammetrics did not finish reading the pipe");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let run = child.wait_with_output().expect("output");
+    writer.join().expect("writer").expect("written");
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert!(String::from_utf8_lossy(&run.stdout).contains("TOTAL_READS"));
+}
+
+#[test]
 fn boolean_forms_agree_and_never_take_a_path() {
     let forms: [&[&str]; 5] = [
         &["--use-original-qualities", "false"],
@@ -636,6 +752,31 @@ fn compare_metrics_outputs_are_checked() {
     let printed = bammetrics(&strings(&["compare-metrics", pa, pb]));
     assert_eq!(printed.status.code(), Some(1));
     assert!(printed.stdout.ends_with(b")\n"));
+}
+
+/// The `-R` FASTA and its `.fai` are inputs too.
+#[test]
+fn an_output_that_is_the_reference_index_is_refused() {
+    let dir = fresh_dir("overwrite-fai");
+    let fasta = dir.join("ref.fa");
+    let index = dir.join("ref.fa.fai");
+    fs::copy(root().join(REF), &fasta).expect("copy");
+    fs::copy(root().join(format!("{REF}.fai")), &index).expect("copy");
+    let before = fs::read(&index).expect("fai");
+    let reference = fasta.to_str().expect("utf-8");
+    for target in [&fasta, &index] {
+        let run = bammetrics(&strings(&[
+            "quality-yield",
+            IS,
+            "-R",
+            reference,
+            "-o",
+            target.to_str().expect("utf-8"),
+        ]));
+        assert_eq!(run.status.code(), Some(2), "{}", target.display());
+        assert!(String::from_utf8_lossy(&run.stderr).contains("is an input"));
+    }
+    assert_eq!(fs::read(&index).expect("fai"), before);
 }
 
 /// Picard's plumbing booleans (`CREATE_INDEX`) are flags too: a BAM after

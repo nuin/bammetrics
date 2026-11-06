@@ -29,6 +29,7 @@ pub const TOOL: Tool = Tool {
         .repeated()
         .required(),
         Opt::rejected(&["ASSUME_SORTED", "AS"]),
+        crate::registry::REFERENCE_NOT_DECODED,
     ],
     run: run_tool,
     collector: None,

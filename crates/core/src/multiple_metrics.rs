@@ -363,18 +363,24 @@ fn plan(inv: &Invocation) -> Result<Vec<(&'static Program, Invocation)>> {
 
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let planned = plan(inv)?;
-    let outputs = pass::run_many(&inv.input, inv.threads, inv.limits()?, |header| {
-        planned
-            .iter()
-            .map(|(p, program_inv)| {
-                let build = p
-                    .tool
-                    .collector
-                    .ok_or_else(|| Error::Usage(format!("{} has no collector", p.name)))?;
-                build(program_inv, header)
-            })
-            .collect::<Result<Vec<Box<dyn Collector>>>>()
-    })?;
+    let outputs = pass::run_many(
+        &inv.input,
+        inv.reference(),
+        inv.threads,
+        inv.limits()?,
+        |header| {
+            planned
+                .iter()
+                .map(|(p, program_inv)| {
+                    let build = p
+                        .tool
+                        .collector
+                        .ok_or_else(|| Error::Usage(format!("{} has no collector", p.name)))?;
+                    build(program_inv, header)
+                })
+                .collect::<Result<Vec<Box<dyn Collector>>>>()
+        },
+    )?;
     let mut all = ToolOutput::NONE;
     for ((_, program_inv), output) in planned.iter().zip(outputs) {
         if let (Some(main), Some(path)) = (output.main, &program_inv.output) {

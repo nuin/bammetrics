@@ -78,8 +78,8 @@ On every tool verb:
 | Option | Meaning | Picard spelling |
 |---|---|---|
 | INPUT or `-i` | input file; `-` reads standard input | `I`, `INPUT` |
-| `-o` (`-O` kept) | file, prefix, or `-` for standard output | `O`, `OUTPUT` (`M` for duplicate-metrics) |
-| `-@`, `--threads N` | BGZF decompression workers; default the available cores, at most 8 (`--help` prints the number); 0 counts as 1, as in 0.12 | none |
+| `-o` (`-O` kept) | file, prefix, or `-` for standard output; a verb refuses one that names an input, the `-R` FASTA or its `.fai` (exit 2), the Picard face writes it as Picard does | `O`, `OUTPUT` (`M` for duplicate-metrics) |
+| `-@`, `--threads N` | BGZF decompression workers, or CRAM container decoders; default the available cores, at most 8 (`--help` prints the number); 0 counts as 1, as in 0.12 | none |
 | `-R` | FASTA with a `.fai` | `R`, `REFERENCE_SEQUENCE` |
 | `--level` | accumulation level, repeatable | `LEVEL`, `METRIC_ACCUMULATION_LEVEL` |
 | `--stop-after N` | read limit | `STOP_AFTER` |
@@ -93,6 +93,20 @@ Picard's `CollectInsertSizeMetrics` takes `STOP_AFTER`, bammetrics does not impl
 yet, and `quality-yield` has no `--level`, as in Picard. `-R` on a tool that reads no
 reference is accepted and noted, as `R=` is on the Picard face. Records are decoded and counted
 on one thread in file order, so the metrics do not depend on `--threads`.
+
+CRAM. Every verb and Picard-face tool that reads a BAM reads a CRAM, and so do `collect`,
+`qc` and `plan`. A file that starts with the bytes `CRAM` is a CRAM whatever its name;
+anything else is read as a BAM. `-R` (`R=`) names the FASTA the CRAM was written with,
+with a `.fai` beside it, and is then used on every tool: no `ignoring R=` note is written for
+a CRAM, nor for an input read from a pipe, whose format is known only once it is read. Without `-R` the run fails at the first slice that needs reference
+bases, as Picard does (`the records on chr1 need reference bases: a CRAM input needs
+REFERENCE_SEQUENCE (R)`, exit 1); `qc` and `plan` refuse the CRAM before they start. A FASTA
+whose bases do not match a slice's MD5 fails there (`the MD5 of the reference bases does not
+match the CRAM slice`), as one without the CRAM's contigs does (`no contig chr1 in the
+reference`). `--threads` is then the number of container decoders. CRAM 3.0 and 3.1 are
+read; another version fails (`CRAM 2.1 is not supported (3.0 and 3.1 are)`), and so does a
+cut file (`truncated CRAM: the file ends inside a container`). The `.crai` is never opened. `-` reads a CRAM from standard input too:
+`samtools view -C -T ref.fa in.bam | bammetrics quality-yield - -R ref.fa`.
 
 Options Picard has that cannot change a metric (`VALIDATION_STRINGENCY`, `TMP_DIR`,
 `VERBOSITY`, `H`, `CHART`, `R` on a tool that reads no reference, ...) are accepted,
@@ -129,7 +143,7 @@ above where a verb has them.
   temporary name and rename it into place.
 - An output that resolves to an input file (`-o in.bam`) is a usage error, and nothing is
   written.
-- `-` as the input reads the BAM from standard input on the verbs only; the header line
+- `-` as the input reads the BAM or CRAM from standard input on the verbs only; the header line
   reads `INPUT=-`. The Picard face reads a file named `-` and writes `O=-` to a file named
   `-`, as listed in KNOWN_DIFFERENCES.md.
 - The sample name is never written into a Picard file, which stays byte-compatible. It goes
@@ -335,9 +349,10 @@ writes for the argv the manifest records, apart from the `Started on` line. The 
 command line follows that argv: `qc` passes `REFERENCE_SEQUENCE` only to the collectors that
 read `-R` (alignment summary, hs, gc bias, wgs), so the insert size and duplicate headers
 lack the `REFERENCE_SEQUENCE=` that `bammetrics CollectInsertSizeMetrics ... R=ref.fa`
-prints; the data lines are the same. The sample name (`--sample`, else the first `@RG SM`,
-else the BAM name) goes only into the verdict, the page and the manifest. No `-o` means
-`./<BAM name without .bam>`, and the summary says so; a directory `-o` gets the BAM name as
+prints; the data lines are the same. A CRAM input needs `-R`, and then every collector gets
+`REFERENCE_SEQUENCE`, since each one decodes the CRAM with it. The sample name (`--sample`,
+else the first `@RG SM`, else the BAM name) goes only into the verdict, the page and the
+manifest. No `-o` means `./<BAM name without .bam or .cram>`, and the summary says so; a directory `-o` gets the BAM name as
 the file part, and the summary says so. Every file is written to a temporary name opened
 with `create_new` and renamed into place. A file a collector plans and does not write this
 time (it failed, or insert size dropped every orientation and Picard writes no file) is

@@ -263,8 +263,8 @@ pub fn shared_flags() -> Vec<Flag> {
             &["@"],
             Ty::Int,
             &format!(
-                "BGZF decompression threads (default: available cores, at most 8; {} here; 0 \
-                 counts as 1).",
+                "BGZF decompression threads, or CRAM container decoders (default: available \
+                 cores, at most 8; {} here; 0 counts as 1).",
                 pass::default_threads()
             ),
         )
@@ -389,6 +389,9 @@ impl Verb {
                     .map(|(alias, _)| *alias),
             );
             let help = match opt.kind {
+                Kind::Ignored(why) if opt.picard() == "REFERENCE_SEQUENCE" => {
+                    format!("Decodes a CRAM input; for a BAM accepted and ignored: {why}.")
+                }
                 Kind::Ignored(why) => format!("Accepted and ignored: {why}."),
                 _ if opt.required => format!("{} Required.", opt.help),
                 _ => opt.help.to_owned(),
@@ -860,8 +863,8 @@ impl Verb {
         with_from(VerbError::core(self.name, e), from)
     }
 
-    /// The files the run reads: every `INPUT`, the reference and, for a
-    /// tool without `INPUT`, its required options.
+    /// The files the run reads: every `INPUT`, the reference and its `.fai`
+    /// and, for a tool without `INPUT`, its required options.
     fn input_paths(&self, inv: &Invocation) -> Vec<PathBuf> {
         let tool = self.tool();
         let mut names = vec!["INPUT", "REFERENCE_SEQUENCE"];
@@ -874,9 +877,14 @@ impl Verb {
                     .map(|o| o.picard()),
             );
         }
+        let indexes = inv
+            .all("REFERENCE_SEQUENCE")
+            .iter()
+            .map(|fasta| format!("{fasta}.fai"));
         names
             .iter()
-            .flat_map(|name| inv.all(name))
+            .flat_map(|name| inv.all(name).iter().cloned())
+            .chain(indexes)
             .map(PathBuf::from)
             .collect()
     }

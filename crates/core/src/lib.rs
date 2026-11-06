@@ -10,6 +10,7 @@ pub mod collect;
 pub mod commons_math;
 pub mod compare_metrics;
 pub mod create_sequence_dictionary;
+pub mod cram;
 pub mod cycle;
 pub mod duplicate_metrics;
 pub mod duplication;

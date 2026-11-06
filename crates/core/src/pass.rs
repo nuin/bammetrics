@@ -1,7 +1,9 @@
 //! The reader loop every metric shares. A BAM is read once; BGZF blocks are
 //! inflated on worker threads (`noodles` `MultithreadedReader`), and records
 //! are decoded and handed to an [`Accumulator`] on the calling thread, in
-//! file order. Results therefore do not depend on the worker count.
+//! file order. Results therefore do not depend on the worker count. A CRAM
+//! (told by its magic bytes) is decoded by [`crate::cram`] into the same
+//! record stream, its containers on worker threads.
 //!
 //! Several tools can share one read ([`run_many`]): each one is a boxed
 //! [`Collector`] fed from batches on a thread of its own, the way Picard's
@@ -11,7 +13,7 @@
 
 use std::any::Any;
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::{self, BufReader, Read};
 use std::num::NonZero;
 use std::path::Path;
 use std::sync::Arc;
@@ -22,6 +24,7 @@ use std::thread::{self, JoinHandle};
 use noodles::sam::header::record::value::map::header::tag::SORT_ORDER;
 use noodles::{bam, bgzf, sam};
 
+use crate::cram;
 use crate::error::{Error, Result};
 use crate::metric::ToolOutput;
 
@@ -109,13 +112,14 @@ pub fn default_threads() -> usize {
 }
 
 /// Read `path` once with `threads` BGZF workers (0 counts as 1), build the
-/// accumulator from the header, feed it every record and finish it.
+/// accumulator from the header, feed it every record and finish it. A
+/// CRAM needs [`run_limited`] with its reference.
 pub fn run<A, F>(path: &Path, threads: usize, build: F) -> Result<A::Output>
 where
     A: Accumulator,
     F: FnOnce(&sam::Header) -> Result<A>,
 {
-    run_limited(path, threads, Limits::default(), build)
+    run_limited(path, None, threads, Limits::default(), build)
 }
 
 /// The `SinglePassSamProgram` options every pass takes.
@@ -138,23 +142,39 @@ impl Default for Limits {
     }
 }
 
-/// The header of the BAM at `path`, no record read.
+/// The header of the BAM or CRAM at `path`, no record read. A CRAM header
+/// needs no reference.
 pub fn read_header(path: &Path) -> Result<sam::Header> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
     };
-    let file = File::open(path).map_err(input)?;
-    bam::io::Reader::new(file).read_header().map_err(input)
+    let sniffed = cram::sniff(File::open(path).map_err(input)?).map_err(input)?;
+    if sniffed.cram {
+        noodles::cram::io::Reader::new(BufReader::new(sniffed.reader))
+            .read_header()
+            .map_err(|e| input(cram::truncated(e, true)))
+    } else {
+        bam::io::Reader::new(sniffed.reader)
+            .read_header()
+            .map_err(input)
+    }
 }
 
-/// [`run`] with `STOP_AFTER` and `ASSUME_SORTED` applied.
-pub fn run_limited<A, F>(path: &Path, threads: usize, limits: Limits, build: F) -> Result<A::Output>
+/// [`run`] with `STOP_AFTER` and `ASSUME_SORTED` applied, and the
+/// `REFERENCE_SEQUENCE` a CRAM is decoded with (a BAM ignores it).
+pub fn run_limited<A, F>(
+    path: &Path,
+    reference: Option<&Path>,
+    threads: usize,
+    limits: Limits,
+    build: F,
+) -> Result<A::Output>
 where
     A: Accumulator,
     F: FnOnce(&sam::Header) -> Result<A>,
 {
-    read(path, threads, limits, None, build)
+    read(path, reference, threads, limits, None, build)
 }
 
 /// How far a pass has got: records handed to the accumulator and
@@ -169,7 +189,7 @@ pub struct Progress {
 /// after the last.
 pub type OnProgress<'a> = &'a mut dyn FnMut(Progress);
 
-/// The file, counting the bytes the BGZF reader takes from it.
+/// The file, counting the bytes the BGZF or CRAM reader takes from it.
 struct Counted {
     file: File,
     bytes: Arc<AtomicU64>,
@@ -183,12 +203,15 @@ impl Read for Counted {
     }
 }
 
-/// The read loop behind [`run_limited`] and [`run_isolated`].
+/// The read loop behind [`run_limited`] and [`run_isolated`]. A BAM is
+/// inflated by `threads` BGZF workers; a CRAM ([`crate::cram`]) is decoded
+/// by `threads` container workers into the same BAM record stream.
 fn read<A, F>(
     path: &Path,
+    reference: Option<&Path>,
     threads: usize,
     limits: Limits,
-    mut progress: Option<OnProgress>,
+    progress: Option<OnProgress>,
     build: F,
 ) -> Result<A::Output>
 where
@@ -204,48 +227,112 @@ where
         file: File::open(path).map_err(input)?,
         bytes: Arc::clone(&bytes),
     };
+    let sniffed = cram::sniff(file).map_err(input)?;
     let workers = NonZero::new(threads).unwrap_or(NonZero::<usize>::MIN);
-    let mut reader = bam::io::Reader::from(bgzf::io::MultithreadedReader::with_worker_count(
-        workers, file,
-    ));
-    let header = reader.read_header().map_err(input)?;
-    if !limits.assume_sorted {
-        check_coordinate_sorted(path, &header)?;
-    }
-    let mut accumulator = build(&header)?;
-    let mut record = bam::Record::default();
-    let mut records = 0;
-    let mut report = |records: u64| {
-        if let Some(callback) = progress.as_mut() {
-            callback(Progress {
-                records,
-                bytes: bytes.load(Ordering::Relaxed),
-            });
-        }
+    let pass = Pass {
+        path,
+        cram: sniffed.cram,
+        limits,
+        progress,
+        bytes: &bytes,
     };
-    while !accumulator.done() && reader.read_record(&mut record)? != 0 {
-        accumulator.accept(&record)?;
-        records += 1;
-        if records % BATCH_RECORDS as u64 == 0 {
-            report(records);
-        }
-        if limits.stop_after > 0 && records >= limits.stop_after {
-            break;
-        }
+    if sniffed.cram {
+        let mut reader =
+            noodles::cram::io::Reader::new(cram::Peek::new(BufReader::new(sniffed.reader)));
+        let header = reader
+            .read_header()
+            .map_err(|e| input(cram::truncated(e, true)))?;
+        cram::decode(reader, &header, reference, workers, |records| {
+            pass.drive(records, &header, build)
+        })
+    } else {
+        let mut reader = bam::io::Reader::from(bgzf::io::MultithreadedReader::with_worker_count(
+            workers,
+            sniffed.reader,
+        ));
+        let header = reader.read_header().map_err(input)?;
+        pass.drive(&mut reader, &header, build)
     }
-    report(records);
-    accumulator.finish()
+}
+
+/// One read's settings: the record loop over a BAM record stream.
+struct Pass<'a, 'p> {
+    path: &'a Path,
+    cram: bool,
+    limits: Limits,
+    progress: Option<OnProgress<'p>>,
+    bytes: &'a AtomicU64,
+}
+
+impl Pass<'_, '_> {
+    /// Build the accumulator from `header`, feed it the records of
+    /// `reader` in file order and finish it. A CRAM decoding error names
+    /// the input file; a BAM one stays a bad record.
+    fn drive<R, A, F>(
+        mut self,
+        reader: &mut bam::io::Reader<R>,
+        header: &sam::Header,
+        build: F,
+    ) -> Result<A::Output>
+    where
+        R: Read,
+        A: Accumulator,
+        F: FnOnce(&sam::Header) -> Result<A>,
+    {
+        if !self.limits.assume_sorted {
+            check_coordinate_sorted(self.path, header)?;
+        }
+        let mut accumulator = build(header)?;
+        let mut record = bam::Record::default();
+        let mut records = 0;
+        let mut report = |records: u64| {
+            if let Some(callback) = self.progress.as_mut() {
+                callback(Progress {
+                    records,
+                    bytes: self.bytes.load(Ordering::Relaxed),
+                });
+            }
+        };
+        let read_error = |source: io::Error| {
+            if self.cram {
+                Error::Input {
+                    path: self.path.to_path_buf(),
+                    source,
+                }
+            } else {
+                Error::Record(source)
+            }
+        };
+        while !accumulator.done() && reader.read_record(&mut record).map_err(read_error)? != 0 {
+            accumulator.accept(&record)?;
+            records += 1;
+            if records % BATCH_RECORDS as u64 == 0 {
+                report(records);
+            }
+            if self.limits.stop_after > 0 && records >= self.limits.stop_after {
+                break;
+            }
+        }
+        report(records);
+        accumulator.finish()
+    }
 }
 
 /// One pass over `path` shared by every collector `build` returns, each on a
 /// thread of its own. The outputs come back in the same order. The first
 /// collector to fail fails the run, and no file of any of them is written,
 /// as one exception ends a Picard `CollectMultipleMetrics` run.
-pub fn run_many<F>(path: &Path, threads: usize, limits: Limits, build: F) -> Result<Vec<ToolOutput>>
+pub fn run_many<F>(
+    path: &Path,
+    reference: Option<&Path>,
+    threads: usize,
+    limits: Limits,
+    build: F,
+) -> Result<Vec<ToolOutput>>
 where
     F: FnOnce(&sam::Header) -> Result<Vec<Box<dyn Collector>>>,
 {
-    let results = run_limited(path, threads, limits, |header| {
+    let results = run_limited(path, reference, threads, limits, |header| {
         Ok(Fanout::new(
             build(header)?.into_iter().map(Ok).collect(),
             false,
@@ -261,6 +348,7 @@ where
 /// results come back in the order of `build`.
 pub fn run_isolated<F>(
     path: &Path,
+    reference: Option<&Path>,
     threads: usize,
     limits: Limits,
     progress: Option<OnProgress>,
@@ -269,7 +357,7 @@ pub fn run_isolated<F>(
 where
     F: FnOnce(&sam::Header) -> Vec<Result<Box<dyn Collector>>>,
 {
-    read(path, threads, limits, progress, |header| {
+    read(path, reference, threads, limits, progress, |header| {
         Ok(Fanout::new(build(header), true))
     })
 }
@@ -354,7 +442,7 @@ where
 }
 
 /// The text of a panic payload, for the error that replaces it.
-fn panic_text(panic: &(dyn Any + Send)) -> String {
+pub(crate) fn panic_text(panic: &(dyn Any + Send)) -> String {
     panic
         .downcast_ref::<&str>()
         .map(|s| (*s).to_owned())
@@ -550,6 +638,7 @@ mod tests {
         let mut on_progress = |p: Progress| updates.push(p);
         let results = run_isolated(
             &fixture(),
+            None,
             2,
             Limits::default(),
             Some(&mut on_progress),
@@ -578,7 +667,7 @@ mod tests {
     #[test]
     fn an_unreadable_bam_still_fails_the_isolated_pass() {
         let missing = fixture().with_file_name("no_such.bam");
-        let err = run_isolated(&missing, 1, Limits::default(), None, |_| {
+        let err = run_isolated(&missing, None, 1, Limits::default(), None, |_| {
             vec![Ok(counting(false))]
         })
         .expect_err("no file");

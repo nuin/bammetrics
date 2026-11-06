@@ -94,6 +94,7 @@ pub const TOOL: Tool = Tool {
             "ERROR or WARNING drops the INFO summary line on standard error (default INFO).",
         ),
         Opt::rejected(&["ASSUME_SORTED", "AS"]),
+        crate::registry::REFERENCE_NOT_DECODED,
     ],
     run: run_tool,
     collector: None,

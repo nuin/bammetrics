@@ -21,6 +21,47 @@
   `crates/cli/tests/create_sequence_dictionary.rs`; six golden records, and the `tools`
   listing gains one row.
 
+### Added
+
+- CRAM input (docs/04 section 5.9): every tool that reads a BAM, the verbs, `collect`,
+  `qc`, `plan` and Python read CRAM 3.0 and 3.1 with `R=` (`-R`, `reference_sequence=`)
+  the FASTA it was written with. A file starting with the bytes `CRAM` is a CRAM whatever
+  its name; `-` reads one from standard input on the verbs. `crates/core/src/cram.rs`
+  decodes each container on a worker thread (noodles-cram 0.102, the `cram` feature of
+  noodles 0.119) and encodes its records as BAM records, so the tools keep taking
+  `bam::Record` and see the records in the BAM's order. Errors come where Picard 3.5.0
+  raises them: without `R=` at the first slice that needs bases, with other bases at the
+  slice MD5, and without the contig. `qc` and `plan` refuse a CRAM without `-R`.
+  `BedToIntervalList SD=` takes a CRAM header. The Python stub lists `reference_sequence`
+  for every tool. `tests/concordance/test_cram.py`: the 16 BAM-reading tools on t1, the foundation corpus
+  and the exome slice as CRAM 3.0 and 3.1 against Picard and against the BAM, `STOP_AFTER`,
+  and error parity. 10 golden records on `tests/data/insert_size.cram`
+  (`tests/data/make_cram.py`). BAM speed is unchanged (CollectQualityYieldMetrics on a
+  656 MB chr21 BAM 2.95 s before, 2.93 s after); a CRAM decodes at 1.6 million records a
+  second on 8 threads. NA12878.final.cram (15.8 GB): `STOP_AFTER=5000000` agrees with
+  Picard in every cell (2.0 s against 15.1 s); the whole file takes 261 s and 1.2 GiB.
+  docs/benchmarks.md has the table.
+- `vendor/noodles-cram`: noodles-cram 0.102.0 with htsjdk's template length for mates
+  stored attached (positive on the read that starts first, at equal starts on the first of
+  pair; 0 across references or with an unmapped mate). Without it a pair without `MC`
+  stored at equal starts took the opposite orientation from Picard; 4 of 64 random fuzz
+  CRAMs differed, 0 do now. An unmapped CRAM record has mapping quality 0, as in htsjdk.
+- CRAM versions other than 3.0 and 3.1 fail with `CRAM 2.1 is not supported (3.0 and 3.1
+  are)`; Picard reads 2.1 (KNOWN_DIFFERENCES.md). A cut CRAM fails with `truncated CRAM:
+  the file ends inside a container` or `... without its EOF container`.
+- Python `insert_size()` and `quality_yield()` take `reference=` for a CRAM. The stub
+  offers `reference_sequence` only to tools that read a BAM or CRAM (not to the VCF tools,
+  `AccumulateQualityYieldMetrics` or `BedToIntervalList`).
+
+### Fixed
+
+- A BAM on a named pipe hung: the CRAM check opened the pipe before the pass did. The check
+  now reads the file type with `stat` and opens only a regular file outside `/dev`, so
+  `I=/dev/stdin` redirected from a file is read whole too.
+- A CRAM on a pipe or `/dev/stdin` printed `ignoring REFERENCE_SEQUENCE`; the note is now
+  written only for a regular file that is no CRAM.
+- A verb's `-o` that names the `.fai` of `-R` exits 2, as one naming the FASTA does.
+
 ### Changed
 
 - `clinical-panel` is version 2 with the note `reviewed defaults`: the maintainer reviewed

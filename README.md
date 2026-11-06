@@ -115,8 +115,11 @@ under the failing check it explains. The presets, the rule language and `verdict
 | CompareMetrics (`KEY`, `METRICS_TO_IGNORE`, `METRICS_NOT_REQUIRED`, `METRIC_ALLOWABLE_RELATIVE_CHANGE`, `IGNORE_HISTOGRAM_DIFFERENCES`, `OUTPUT_TABLE`; Picard's exit code) | | `compare_metrics()` |
 | CreateSequenceDictionary (plain, gzip or bgzip FASTA; `AS`, `UR`, `SP`, `ALT_NAMES`, `NUM_SEQUENCES`, `CREATE_MD5_FILE`) | | `create_sequence_dictionary()` |
 | the first four in one pass | | `collect()` |
+| CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 
 Levels are `METRIC_ACCUMULATION_LEVEL`: `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`.
+A CRAM is told by its magic bytes, not its name, and gives the same files as the BAM of the
+same data: `bammetrics CollectQualityYieldMetrics I=sample.cram O=out.txt R=ref.fa`.
 The capture tools complete only when at most the last unit in file order has a counted
 base, as Picard 3.5.0 does; see KNOWN_DIFFERENCES.md.
 Every tool also has a Python function named after the Picard class in snake case, taking

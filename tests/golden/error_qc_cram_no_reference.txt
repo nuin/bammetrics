@@ -1,0 +1,10 @@
+## argv
+qc
+tests/data/insert_size.cram
+-o
+OUT/sample
+## exit
+2
+## stdout
+## stderr
+bammetrics qc: tests/data/insert_size.cram is a CRAM: give the reference it was written with as -R FASTA

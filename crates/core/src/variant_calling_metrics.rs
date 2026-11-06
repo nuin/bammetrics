@@ -443,6 +443,7 @@ pub const TOOL: Tool = Tool {
               Python returns one row per file: file and rows.",
     options: &[
         PREFIX_OUTPUT,
+        crate::registry::REFERENCE_NOT_DECODED,
         Opt::path(&["INPUT", "I"], "The VCF to read, plain or bgzip.").required(),
         Opt::path(&["DBSNP"], "A dbSNP VCF.").required(),
         Opt::path(
@@ -474,6 +475,7 @@ pub const ACCUMULATE_TOOL: Tool = Tool {
               them; OUTPUT is the prefix of the two files. Python returns one row per file: file and rows.",
     options: &[
         PREFIX_OUTPUT,
+        crate::registry::REFERENCE_NOT_DECODED,
         Opt::path(
             &["INPUT", "I"],
             "The prefix of one CollectVariantCallingMetrics run; repeat for each.",

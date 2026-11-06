@@ -23,6 +23,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use bammetrics_core::collect;
+use bammetrics_core::cram;
 use bammetrics_core::hs_metrics;
 use bammetrics_core::intervals;
 use bammetrics_core::levels::{self, Level};
@@ -84,16 +85,17 @@ qc also exits 1 when a collector failed, after it writes the files the others ma
 #[derive(Args)]
 #[command(after_help = after_help())]
 pub struct QcArgs {
-    /// Input BAM.
+    /// Input BAM, or CRAM with -R.
     #[arg(value_name = "BAM")]
     pub bam: PathBuf,
-    /// Output prefix (default: ./ plus the BAM name without .bam). A
+    /// Output prefix (default: ./ plus the BAM name without .bam or .cram). A
     /// directory (an existing one, or a path ending in /) gets the BAM name
     /// as the file part. Missing directories are created.
     #[arg(short = 'o', short_alias = 'O', long, value_name = "PREFIX")]
     pub output: Option<PathBuf>,
-    /// Reference FASTA with a .fai index: alignment summary mismatches, hs
-    /// dropouts, and the collectors that need one (gc bias, wgs).
+    /// Reference FASTA with a .fai index: decodes a CRAM, and gives alignment
+    /// summary mismatches, hs dropouts and the collectors that need one (gc
+    /// bias, wgs).
     #[arg(short = 'R', long, value_name = "FASTA")]
     pub reference: Option<PathBuf>,
     #[arg(long, default_value = "generic", value_name = "NAME|FILE", help = PRESET_HELP)]
@@ -130,7 +132,8 @@ pub struct QcArgs {
     /// Rerun every step over an earlier run's files.
     #[arg(long)]
     pub force: bool,
-    /// BGZF decompression threads (default: available cores, at most 8).
+    /// BGZF decompression threads, or CRAM container decoders (default:
+    /// available cores, at most 8).
     #[arg(long, default_value_t = pass::default_threads())]
     pub threads: usize,
     #[arg(long, value_enum, default_value_t = Format::Text)]
@@ -295,12 +298,16 @@ pub fn with_suffix(prefix: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
-/// The BAM's file name without `.bam`.
+/// The input's file name without `.bam` or `.cram`.
 fn bam_stem(bam: &Path) -> String {
     let name = bam
         .file_name()
         .map_or_else(|| "sample".to_owned(), |n| n.to_string_lossy().into_owned());
-    name.strip_suffix(".bam").unwrap_or(&name).to_owned()
+    [".bam", ".cram"]
+        .iter()
+        .find_map(|extension| name.strip_suffix(extension))
+        .unwrap_or(&name)
+        .to_owned()
 }
 
 /// An input file an option names must exist before anything runs.
@@ -383,6 +390,12 @@ fn hs_runs(args: &QcArgs) -> Vec<(PathBuf, PathBuf)> {
 
 fn check_inputs(args: &QcArgs) -> Result<()> {
     need_file(&args.bam, "BAM")?;
+    if args.reference.is_none() && cram::is_cram(&args.bam) {
+        return Err(Error::Usage(format!(
+            "{} is a CRAM: give the reference it was written with as -R FASTA",
+            args.bam.display()
+        )));
+    }
     if let Some(reference) = &args.reference {
         need_file(reference, "-R")?;
         need_file(&with_suffix(reference, ".fai"), "-R, its .fai index")?;
@@ -443,11 +456,13 @@ impl Context<'_> {
                 .iter()
                 .map(|(option, path)| format!("{option}={}", path.display())),
         );
+        // Every tool decodes a CRAM with the reference, as Picard does.
         let reference = match tool.name {
             "CollectAlignmentSummaryMetrics"
             | "CollectHsMetrics"
             | "CollectGcBiasMetrics"
             | "CollectWgsMetrics" => self.args.reference.as_ref(),
+            _ if cram::is_cram(&self.args.bam) => self.args.reference.as_ref(),
             _ => None,
         };
         if let Some(r) = reference {
@@ -1010,7 +1025,7 @@ mod tests {
     #[test]
     fn the_default_prefix_is_the_bam_name() {
         assert_eq!(bam_stem(Path::new("runs/NA12878.bam")), "NA12878");
-        assert_eq!(bam_stem(Path::new("x.cram")), "x.cram");
+        assert_eq!(bam_stem(Path::new("x.cram")), "x");
         assert_eq!(
             with_suffix(Path::new("out/s"), ".manifest.json"),
             PathBuf::from("out/s.manifest.json")
