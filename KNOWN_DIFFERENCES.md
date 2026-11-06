@@ -16,6 +16,9 @@ behaves how.
   so MultiQC-style parsers read it. It lists the options bammetrics implements with their values, not every
   Picard option.
 - Without `O=` in Picard syntax the file goes to stdout. Picard requires `O`.
+  `CreateSequenceDictionary` is the exception: without `O=` it writes the FASTA name with
+  `.dict`, as Picard does. Its verb without `-o` prints the `.dict`, and
+  `create_sequence_dictionary()` without `output=` returns the rows and writes nothing.
 - `PER_BASE_COVERAGE` with a name ending in `.gz`, `.gzip` or `.bfq` is compressed as
   BGZF (noodles). Picard writes one `java.util.zip` gzip member. The compressed bytes
   differ; `gunzip` gives the same text from both, which the `t1_pb_q0_gz` case checks.
@@ -191,6 +194,13 @@ behaves how.
   adapter_sequence=[...])`) copy this. The older keyword arguments of
   `alignment_summary()` replace the default list instead, and `None` keeps it; that
   function returns `ALL_READS` rows only.
+- `CreateSequenceDictionary SPECIES=` (an empty value, likewise `URI=` and
+  `GENOME_ASSEMBLY=`) writes the field empty (`SP:`), as Picard's `--SPECIES ""` does.
+  Picard's `KEY=VALUE` parser takes the next argument as the value of an empty `KEY=`.
+- An option Picard takes once, given twice on the Picard face (`SP=a SP=b`), exits 1 in
+  both tools. Picard's message names the spelling given (`Option 'SP' cannot be specified
+  more than once.`), bammetrics the long name (`Option 'SPECIES' ...`). The verbs keep the
+  last value.
 
 - `CompareMetrics` prints Picard's log lines on standard error without the date and time
   field (`INFO\tCompareMetrics\t<summary>`, `ERROR\tCompareMetrics\t<difference>`), so
@@ -225,6 +235,9 @@ written, with `file` and `rows`; so do `collect_variant_calling_metrics()`,
 without `INPUT` fills its own value options in declaration order from the positional
 arguments) or as `truth_vcf=` and `call_vcf=`. A double Picard prints as `?` (NaN,
 `HET_SPECIFICITY`, a ratio over zero) is `float("nan")` in the dicts.
+`create_sequence_dictionary(reference, ...)` returns one dict per `@SQ` line (`name`,
+`length`, `md5`, `assembly`, `uri`, `species`, `alternate_names`) and writes the `.dict`
+only with `output=`.
 
 `compare_metrics([a, b], ...)` returns one dict per line Picard logs as a difference:
 `KEY`, `METRIC`, `VALUE1` and `VALUE2` (typed as the metric's field) for a value
@@ -279,6 +292,28 @@ the 'IGNORE_HISTOGRAM_DIFFERENCES' flag is set.` comes with files that are equal
   Picard rejects (`test_rna_bed_ribosomal_intervals_are_read_by_bammetrics_only` gives
   Picard the interval list and the outputs are identical). An interval list of another
   dictionary exits 1 in both tools.
+- `CreateSequenceDictionary` reads the FASTA from start to end and opens neither its
+  `.fai` nor a `.dict` beside it. Picard 3.5.0 reads through the index when there is a
+  `.fai` (and a `.gzi` for bgzip) and `TRUNCATE_NAMES_AT_WHITESPACE=true`, so a stale
+  `.fai` changes its names and lengths. It also stops each sequence at the length a
+  `.dict` beside the FASTA gives: with `O=` naming another file and a stale `LN:5` in
+  that `.dict`, Picard writes `LN:5` for a 12-base sequence and the MD5 of 5 bases.
+  With a current `.fai` and no `.dict` both read the same bases (`test_options` on
+  `indexed` and `bgzip_indexed`). Further sidecar cases, each exit 0 in Picard:
+  - An empty `.fai` gives Picard a dictionary of `@HD` alone; bammetrics writes every
+    sequence.
+  - A `.fai` that lists fewer sequences than the FASTA drops the others in Picard.
+  - The `.dict` beside the FASTA cuts each sequence to its `LN` whatever names it holds: a
+    `.dict` of `SN:z LN:2` cuts sequence `a` to `LN:2`.
+  - A corrupt `.fai` fails Picard after it has written `@HD`.
+  - `samtools faidx` leaves a byte `0xA0` inside a sequence line out of the length, so
+    with that `.fai` Picard writes `LN:4` for `AC\xA0GT`. bammetrics counts it as a base
+    (`LN:5`), as Picard does without a `.fai`.
+- `CreateSequenceDictionary` `R=` takes a file name. Picard 3.5.0 also takes a `file://`
+  URI there (`PicardHtsPath`) and writes the same `UR` as for the plain path; bammetrics
+  exits 1 (`No such file or directory`). `ALT_NAMES=file://...` fails in both tools.
+- `--arguments_file FILE` (Picard's options read from a file) is not read: every tool
+  exits 1 with `option arguments_file is not implemented`.
 
 - `CompareMetrics` reads a class only from `crates/core/picard_fields.tsv`: the 65
   `MetricBase` classes and 2 `Header` classes in `picard.jar` 3.5.0. A metrics class from
@@ -589,6 +624,18 @@ a `5.0` in a long column, an empty cell in a primitive column, an unknown enum c
 column, class or header class, and a stray header line fail with htsjdk's messages; a
 `net.sf.picard` class name resolves through htsjdk's 17 packages.
 
+`CreateSequenceDictionary` output reproduced from Picard 3.5.0
+(`tests/concordance/test_create_sequence_dictionary.py`): `@HD VN:1.6`, then `SN`, `LN`,
+`M5`, `AS`, `UR`, `SP`, `AN` in that order; a name trimmed of characters up to U+0020
+and cut at the first space, tab, line feed, vertical tab, form feed or carriage return;
+`\n`, `\r\n` and `\r` as line ends; trailing Java whitespace dropped from each
+sequence line and kept inside it; `M5` over the bases with `a` to `z` upper-cased;
+`UR` as `Path.toUri` writes it (`..` kept, a space as `%20`, each UTF-8 byte above
+0x7F as `%XX`); duplicate names and `LN:0` sequences written; `NUM_SEQUENCES` writing
+at least one sequence and reading one more; `ALT_NAMES` in `HashSet` order; gzip by
+the name only (a gzip file named `.fa` fails at `chr(31)`); `CREATE_MD5_FILE` writing
+the 32 hex digits without a line end.
+
 ## Failures
 
 A unit whose reads all fail QC (`no PF_READS`) makes Picard throw and write no file, at any
@@ -615,6 +662,15 @@ in both tools.
 read of at least `MIN_IDENTICAL_BASES` bases) exits 1; Picard throws an index error summing
 the qualities. A barcode tag that is not a string (`BARCODE_TAG=XN` on an `XN:i` read) exits
 1 in both tools (`test_barcode_tag_that_is_not_a_string_fails`).
+
+`CreateSequenceDictionary` writes no file when it fails (a name outside the SAM pattern,
+a `>` without a name, bases before the first header, a bad `ALT_NAMES` line). Picard has
+written the `@HD` line and every `@SQ` line before the failing sequence by then and
+leaves that file; it deletes it only after an I/O or argument error. Both exit non-zero
+with the same message (`test_bad_fasta_fails_in_both`, `test_alt_name_errors`).
+With `CREATE_MD5_FILE=true` and a directory at `OUTPUT.md5`, Picard writes `OUTPUT` and
+then exits 1 (`Can't write to or close output file`); bammetrics exits 1 with that message
+before it writes anything (`test_md5_path_is_a_directory`).
 
 ## Threads
 

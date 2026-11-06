@@ -4,7 +4,7 @@
 
 use std::process::ExitCode;
 
-use bammetrics_core::registry;
+use bammetrics_core::{create_sequence_dictionary, registry};
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 
@@ -153,6 +153,12 @@ pub fn run() -> error::Result<u8> {
             // Picard's exit code tells equal from NOT equal.
             if tool.name == bammetrics_core::compare_metrics::TOOL.name {
                 return Ok(bammetrics_core::compare_metrics::run_cli(rest)?);
+            }
+            // Picard's CreateSequenceDictionary names its .dict when O= is absent;
+            // the verb and Python write standard output and rows instead.
+            if tool.name == create_sequence_dictionary::TOOL.name {
+                tool.run_cli(&create_sequence_dictionary::with_default_output(rest)?)?;
+                return Ok(0);
             }
             tool.run_cli(rest)?;
             return Ok(0);

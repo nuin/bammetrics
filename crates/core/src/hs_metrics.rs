@@ -204,19 +204,13 @@ impl Options {
                     .collect(),
                 inv.get("BAIT_SET_NAME").map(str::to_owned),
             ),
-            Variant::TargetedPcr => {
-                let amplicons = inv.all("AMPLICON_INTERVALS");
-                if amplicons.len() > 1 {
-                    return Err(Error::Usage(
-                        "Option 'AMPLICON_INTERVALS' cannot be specified more than once."
-                            .to_owned(),
-                    ));
-                }
-                (
-                    amplicons.iter().map(PathBuf::from).collect(),
-                    inv.get("CUSTOM_AMPLICON_SET_NAME").map(str::to_owned),
-                )
-            }
+            Variant::TargetedPcr => (
+                inv.all("AMPLICON_INTERVALS")
+                    .iter()
+                    .map(PathBuf::from)
+                    .collect(),
+                inv.get("CUSTOM_AMPLICON_SET_NAME").map(str::to_owned),
+            ),
         };
         let opts = Self {
             variant,

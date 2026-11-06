@@ -333,6 +333,14 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("KEY", "TOTAL_READS")),
             picard_outputs: single,
         },
+        Case {
+            verb: "create-sequence-dictionary",
+            class: "CreateSequenceDictionary",
+            verb_args: strings(&[REF]),
+            picard_args: strings(&[&r]),
+            option: Some(("GENOME_ASSEMBLY", "GRCh38")),
+            picard_outputs: single,
+        },
     ]
 }
 

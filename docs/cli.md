@@ -229,6 +229,7 @@ table.
 | `genotype-concordance` | GenotypeConcordance (truth and call VCF as positionals) | `PREFIX.genotype_concordance_{summary,detail,contingency}_metrics` |
 | `bed-to-interval-list` | BedToIntervalList | one interval list |
 | `compare-metrics` | CompareMetrics (two metrics files as positionals) | the comparison text |
+| `create-sequence-dictionary` | CreateSequenceDictionary (input is a FASTA) | one `.dict` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -238,7 +239,8 @@ for every tool.
 
 `multiple-metrics --program X` adds to Picard's default five programs, as `PROGRAM=` does;
 `--program null` first clears them. The accumulate verbs and `bed-to-interval-list` are
-listed here because the registry runs them; they are described under post and prepare.
+listed here because the registry runs them; they are described under post and prepare,
+as is `create-sequence-dictionary`.
 
 ### The 0.12 subcommands
 
@@ -442,6 +444,41 @@ counted as a collector; when it fails (a contig the BAM header lacks), the summa
 as an `ERROR` line and `qc` exits 1 (`exit 1: 1 collector(s) and 1 prepare step(s) failed`
 when hs fails on the same BED).
 
+### create-sequence-dictionary
+
+```bash
+bammetrics create-sequence-dictionary ref.fa -o ref.dict
+bammetrics create-sequence-dictionary ref.fa.gz --genome-assembly GRCh38 --species "Homo sapiens"
+bammetrics CreateSequenceDictionary R=ref.fa        # writes ref.dict, as Picard does
+```
+
+The verb writes the bytes `CreateSequenceDictionary R=FASTA O=FILE` writes: `@HD VN:1.6`,
+then one `@SQ` line per FASTA sequence with `SN`, `LN`, `M5` (the MD5 of the bases in
+upper case), `AS` when given, `UR` (default `file://` and the FASTA's absolute path,
+encoded as Java encodes it) and `SP` when given, then `AN` for a sequence `--alt-names`
+names. Without `-o`, or with `-o -`, the same bytes go to standard output. The Picard face
+without `O=` writes the FASTA name with its extension replaced by `.dict`, beside it.
+
+- The FASTA name ends in `.fasta`, `.fas`, `.fa`, `.fna` or `.txt`, each also with `.gz`;
+  any other name exits 1 (`File is not a supported reference file type`). A `.gz` file is
+  read as plain gzip or bgzip, member after member. The `.fai` is never read.
+- `O=FILE`, and `-o FILE` in picard format, refuse a file that exists (exit 1, `already
+  exists.  Delete this file and try again`). With `--format json`, `jsonl`, `tsv` or
+  `human`, `-o FILE` replaces an existing file, as in every verb. The verb exits 2 when
+  `-o` or `FILE.md5` names the FASTA or the `--alt-names` file.
+- A line feed in `--genome-assembly`, `--uri` or `--species` exits 2 before any file is
+  written; Picard fails there too (`Supplied String contains illegal character`).
+- `--truncate-names-at-whitespace` (default true) names a sequence by the first word of
+  its `>` line. `--num-sequences N` stops after N sequences, at least one.
+  `--create-md5-file` also writes `FILE.md5` and needs `-o`.
+- `--format json`, `jsonl`, `tsv` and `human` print one row per sequence (`name`,
+  `length`, `md5`, `assembly`, `uri`, `species`, `alternate_names`), with no `sample`.
+  `--threads` and `--sample` are accepted and ignored.
+
+The tools that look for a `.dict` beside a FASTA (`bed-to-interval-list --dict ref.fa`,
+`SD=ref.fa`) read the file this verb writes, and Picard's CollectWgsMetrics takes it as
+the dictionary of `R=ref.fa`.
+
 ### mark-duplicates
 
 Reserved for parity plan P9 (docs/05 section 2.5, example 9). It is not built:
@@ -588,8 +625,11 @@ bammetrics CollectHsMetrics I=in.bam O=out.txt R=ref.fa \
 
 The Picard face takes `KEY=VALUE`, `--KEY VALUE`, `--KEY=VALUE` and `-K VALUE` with long
 or short names, writes `O=` (standard output without it) and exits 0 or 1. It is
-byte-identical to 0.12, apart from `--help` alone, which now prints the verb help.
-`ASSUME_SORTED=false` exits
+byte-identical to 0.12, apart from `--help` alone, which now prints the verb help, and an
+option given twice. An option Picard takes once, given twice (`SP=a SP=b`, `O=a O=b`), exits
+1 with Picard's `Option 'SPECIES' cannot be specified more than once.`; 0.12 kept the last
+value. A list option (`METRIC_ACCUMULATION_LEVEL`, `BAIT_INTERVALS`, `PROGRAM`) adds each
+value. The verbs keep the last value of an option given twice. `ASSUME_SORTED=false` exits
 1 on a BAM whose header is not coordinate sorted, as Picard does.
 `METRIC_ACCUMULATION_LEVEL` (`ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`; `null`
 clears the default) works where Picard has it. Where the output differs from Picard on

@@ -29,6 +29,9 @@ bammetrics CollectHsMetrics I=sample.bam O=sample.hs_metrics R=ref.fa \
     BAIT_INTERVALS=baits.interval_list TARGET_INTERVALS=panel.interval_list
 bammetrics CollectInsertSizeMetrics I=sample.bam O=sample.insert_size_metrics H=hist.pdf
 
+# Reference dictionary: ref.dict beside ref.fa, for BedToIntervalList and Picard
+bammetrics CreateSequenceDictionary R=ref.fa
+
 # Coverage: whole genome, or the intervals of a BED converted first
 bammetrics BedToIntervalList I=panel.bed SD=ref.dict O=panel.interval_list
 bammetrics CollectWgsMetrics I=sample.bam O=sample.wgs_metrics R=ref.fa INTERVALS=panel.interval_list
@@ -110,6 +113,7 @@ under the failing check it explains. The presets, the rule language and `verdict
 | AccumulateVariantCallingMetrics (shard prefixes merged as Picard merges them) | | `accumulate_variant_calling_metrics()` |
 | GenotypeConcordance (`TRUTH_VCF`, `CALL_VCF`, samples, `INTERVALS`, `MIN_GQ`, `MIN_DP`, `MISSING_SITES_HOM_REF`, `IGNORE_FILTER_STATUS`, `OUTPUT_ALL_ROWS`; summary, detail and contingency files) | | `genotype_concordance()` |
 | CompareMetrics (`KEY`, `METRICS_TO_IGNORE`, `METRICS_NOT_REQUIRED`, `METRIC_ALLOWABLE_RELATIVE_CHANGE`, `IGNORE_HISTOGRAM_DIFFERENCES`, `OUTPUT_TABLE`; Picard's exit code) | | `compare_metrics()` |
+| CreateSequenceDictionary (plain, gzip or bgzip FASTA; `AS`, `UR`, `SP`, `ALT_NAMES`, `NUM_SEQUENCES`, `CREATE_MD5_FILE`) | | `create_sequence_dictionary()` |
 | the first four in one pass | | `collect()` |
 
 Levels are `METRIC_ACCUMULATION_LEVEL`: `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`.

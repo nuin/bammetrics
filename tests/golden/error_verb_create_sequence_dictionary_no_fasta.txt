@@ -1,0 +1,8 @@
+## argv
+create-sequence-dictionary
+## exit
+2
+## stdout
+## stderr
+bammetrics create-sequence-dictionary: missing --reference (Picard: REFERENCE)
+  every option: bammetrics help create-sequence-dictionary

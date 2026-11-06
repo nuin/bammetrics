@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Added
+
+- `CreateSequenceDictionary` (docs/04 core) and its verb `create-sequence-dictionary`:
+  the `.dict` Picard 3.5.0 writes for a FASTA, byte for byte. `@HD VN:1.6`, then `SN`,
+  `LN`, `M5`, `AS`, `UR` (default `file://` and the absolute path, encoded as
+  `Path.toUri` does), `SP` and `AN` per sequence. Every option that changes the file:
+  `REFERENCE`, `OUTPUT` (the Picard face defaults to the FASTA name with `.dict`; an
+  existing file exits 1), `GENOME_ASSEMBLY`, `URI`, `SPECIES`,
+  `TRUNCATE_NAMES_AT_WHITESPACE`, `NUM_SEQUENCES`, `ALT_NAMES` (Picard's six checks,
+  `HashSet` order) and `CREATE_MD5_FILE`. Plain gzip and bgzip FASTA files are read by
+  name, as Picard reads them. The verb prints to standard output without `-o`; Python
+  `create_sequence_dictionary(reference, ...)` returns one row per sequence.
+- `crates/core/src/md5.rs` (RFC 1321) and `crates/core/src/gzip.rs` (gzip members in
+  turn). `zlib-rs`, which `noodles-bgzf` already builds, is now a direct dependency of
+  the core crate; `Cargo.lock` gains no package.
+- `tests/concordance/test_create_sequence_dictionary.py` and
+  `crates/cli/tests/create_sequence_dictionary.rs`; six golden records, and the `tools`
+  listing gains one row.
+
 ### Changed
 
 - `clinical-panel` is version 2 with the note `reviewed defaults`: the maintainer reviewed
@@ -10,6 +29,15 @@
   `generic`, `wgs` and `rna-seq` keep `starting values`.
 - docs/05 section 8 records decisions 4, 5, 7, 8, 9, 10 and 12.
 
+- The Picard face exits 1 on an option Picard takes once given twice (`SP=a SP=b`,
+  `O=a O=b`), with Picard's `Option 'SPECIES' cannot be specified more than once.`, in
+  every tool. It kept the last value before. List options still add each value, the
+  verbs keep the last value, and an `EXTRA_ARGUMENT` of `CollectMultipleMetrics` still
+  replaces the value the program table gives (`CollectAlignmentSummaryMetrics::OUTPUT=`).
+- `CreateSequenceDictionary` exits before writing on a line feed in `GENOME_ASSEMBLY`,
+  `URI` or `SPECIES`, and on a directory at `OUTPUT.md5` with `CREATE_MD5_FILE=true`. The
+  verb refuses `FILE.md5` naming an input. The FASTA is read in 64 KiB chunks, so a
+  one-line sequence no longer holds its whole line in memory.
 - The sample page heads each metrics table with its name in words (`Alignment summary
   metrics`, `HS metrics`) in place of the class string in capitals
   (`PICARD.ANALYSIS.ALIGNMENTSUMMARYMETRICS`). The metrics files keep the class string,
