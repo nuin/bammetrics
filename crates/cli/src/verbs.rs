@@ -65,6 +65,10 @@ pub struct Verb {
     /// missing one is an input error from the spelling given, and `-o`
     /// may not name it (`SEQUENCE_DICTIONARY` of `bed-to-interval-list`).
     pub reads: &'static [&'static str],
+    /// Picard options beside `OUTPUT` that name a file the verb writes: it
+    /// may not be an input, nor the `-o` file (`OUTPUT_TABLE` of
+    /// `compare-metrics`).
+    pub also_writes: &'static [&'static str],
     /// Shared flags the verb accepts and ignores, with the reason `--help`
     /// prints.
     pub ignores: &'static [(Key, &'static str)],
@@ -82,6 +86,7 @@ const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
         writes: "metrics file",
         one_spelling: &[],
         reads: &[],
+        also_writes: &[],
         ignores: &[],
     }
 }
@@ -207,6 +212,7 @@ pub const VERBS: &[Verb] = &[
              equal, one line per difference) to -o or standard output, exit 1 when they differ.",
         ),
         writes: "comparison",
+        also_writes: &["OUTPUT_TABLE"],
         ignores: &[
             (Key::Threads, "no BAM is read"),
             (Key::Sample, "a comparison has no sample"),
@@ -460,6 +466,7 @@ impl Verb {
             &self.output_paths(&inv, output.as_deref()),
         )
         .map_err(|e| with_from(e, output_flag()))?;
+        self.refuse_one_file_twice(&inv, output.as_deref())?;
         if let Some(path) = &output {
             create_parent(self.name, path).map_err(|e| with_from(e, output_flag()))?;
         }
@@ -510,8 +517,9 @@ impl Verb {
     }
 
     /// `compare-metrics`: the comparison as the main file (standard output
-    /// gets it too, where the Picard face prints nothing), the summary line
-    /// on standard error when it goes to a file, and Picard's exit code.
+    /// gets it too, where the Picard face prints nothing, with a final
+    /// newline the file lacks), the summary line on standard error when it
+    /// goes to a file, and Picard's exit code.
     fn compare(
         &self,
         inv: &Invocation,
@@ -523,7 +531,11 @@ impl Verb {
         if format == Format::Picard
             && let Some(main) = comparison.output.main.as_mut()
         {
-            main.text = Some(comparison.report.clone());
+            let mut text = comparison.report.clone();
+            if output.is_none() && !text.ends_with('\n') {
+                text.push('\n');
+            }
+            main.text = Some(text);
         }
         if output.is_some() && !quiet {
             eprintln!("bammetrics {}: {}", self.name, comparison.summary);
@@ -764,6 +776,13 @@ impl Verb {
     /// The error says where the name came from: `-i` as spelled, else the
     /// positional argument by its placeholder (`BAM`, as docs/05 example 12).
     fn check_inputs(&self, parsed: &Parsed, picard: &[String]) -> Result<(), VerbError> {
+        let stdin_reads = picard.iter().filter(|a| *a == "INPUT=-").count();
+        if stdin_reads > 1 {
+            return Err(VerbError::usage(
+                self.name,
+                format!("- names standard input {stdin_reads} times; it can be read once"),
+            ));
+        }
         for input in picard.iter().filter_map(|a| a.strip_prefix("INPUT=")) {
             if input == "-" || self.input == "PREFIX" || Path::new(input).exists() {
                 continue;
@@ -847,7 +866,42 @@ impl Verb {
         for (option, _) in file_extensions(self.tool().name).unwrap_or_default() {
             paths.extend(inv.all(option).iter().map(PathBuf::from));
         }
+        paths.extend(self.further_outputs(inv));
         paths
+    }
+
+    /// The files of [`Verb::also_writes`].
+    fn further_outputs(&self, inv: &Invocation) -> Vec<PathBuf> {
+        self.also_writes
+            .iter()
+            .flat_map(|name| inv.all(name))
+            .map(PathBuf::from)
+            .collect()
+    }
+
+    /// A file of [`Verb::also_writes`] that is the main file: the second
+    /// write would replace the first.
+    fn refuse_one_file_twice(
+        &self,
+        inv: &Invocation,
+        output: Option<&Path>,
+    ) -> Result<(), VerbError> {
+        let Some(main) = output.map(Path::to_path_buf).or_else(|| inv.output.clone()) else {
+            return Ok(());
+        };
+        let main_path = same_file_key(&main);
+        for further in self.further_outputs(inv) {
+            if same_file_key(&further) == main_path {
+                return Err(VerbError::usage(
+                    self.name,
+                    format!(
+                        "{} is the main output too; one file cannot hold both",
+                        further.display()
+                    ),
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// `--sample` for json and jsonl when none is given (docs/05 section
@@ -954,6 +1008,18 @@ pub fn refuse_overwriting_inputs(
         }
     }
     Ok(())
+}
+
+/// `path` with its directory resolved where it exists, so `a.txt` and
+/// `./a.txt` compare equal before either file is written.
+fn same_file_key(path: &Path) -> PathBuf {
+    let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    match (absolute.parent(), absolute.file_name()) {
+        (Some(dir), Some(name)) => dir
+            .canonicalize()
+            .map_or_else(|_| absolute.clone(), |d| d.join(name)),
+        _ => absolute,
+    }
 }
 
 /// Create the directories above `path` that do not exist (docs/05 section

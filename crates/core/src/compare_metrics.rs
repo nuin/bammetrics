@@ -36,6 +36,7 @@
 //! NOT equal; [`run_cli`] prints the log lines without the timestamp and
 //! returns it.
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -46,7 +47,7 @@ use crate::java::{self, StringHashSet};
 use crate::metric::{MetricRow, MetricsOutput, ToolOutput, Value};
 use crate::picard_classes::MetricClass;
 use crate::registry::{Invocation, Opt, Tool, write_files};
-use reader::{Cell, Doc, java_split, read_doc};
+use reader::{Cell, CellKey, Doc, java_split, read_doc};
 
 pub const TOOL: Tool = Tool {
     name: "CompareMetrics",
@@ -121,8 +122,32 @@ pub fn run_cli(args: &[String]) -> Result<u8> {
     }
     let comparison = compare(&inv)?;
     comparison.print_log();
-    write_files(&inv, &comparison.output)?;
-    Ok(comparison.status())
+    let status = comparison.status();
+    let ToolOutput { main, extra } = comparison.output;
+    write_files(
+        &inv,
+        &ToolOutput {
+            main,
+            extra: Vec::new(),
+        },
+    )?;
+    for (path, table) in extra {
+        let one = ToolOutput {
+            main: None,
+            extra: vec![(path.clone(), table)],
+        };
+        write_files(&inv, &one).map_err(|_| table_write_error(&path))?;
+    }
+    Ok(status)
+}
+
+/// `MetricsFile.write`'s message when `OUTPUT_TABLE` cannot be written.
+fn table_write_error(path: &Path) -> Error {
+    let file = JavaFile::new(&path.to_string_lossy());
+    Error::Metric(format!(
+        "Could not write metrics to file: {}",
+        file.absolute
+    ))
 }
 
 /// One comparison's result.
@@ -466,14 +491,12 @@ fn compare_docs(
             differ |= entry.compare(r1, r2, &i.to_string(), differences);
         }
     } else {
-        let map1 = keyed_rows(d1, class, &options.keys)?;
-        let mut map2 = keyed_rows(d2, class, &options.keys)?;
-        for (key, r1) in map1 {
-            let found = map2.iter().position(|(k, _)| same_key(k, &key));
-            let text = key_text(&key)?;
-            match found {
-                Some(index) => {
-                    let (_, r2) = map2.remove(index);
+        let map1 = KeyedRows::new(d1, class, &options.keys)?;
+        let mut map2 = KeyedRows::new(d2, class, &options.keys)?;
+        for r1 in map1.remaining() {
+            let text = map1.text(r1)?;
+            match map2.take(r1) {
+                Some(r2) => {
                     differ |= entry.compare(r1, r2, &text, differences);
                 }
                 None => {
@@ -485,10 +508,10 @@ fn compare_docs(
                 }
             }
         }
-        for (key, _) in map2 {
+        for r2 in map2.remaining() {
             differences.push(Difference::line(format!(
                 "KEY {} found in {} but not in {}",
-                key_text(&key)?,
+                map2.text(r2)?,
                 f2.given,
                 f1.given
             )));
@@ -551,34 +574,64 @@ fn validate_names<'a>(
 
 /// `buildMetricsMap`: rows by the values of the `KEY` fields, in first
 /// appearance order; a repeated key keeps its place and takes the later row.
-fn keyed_rows<'d>(
-    doc: &'d Doc,
-    class: &MetricClass,
-    keys: &[String],
-) -> Result<Vec<(Vec<Cell>, &'d Vec<Cell>)>> {
-    let slots = keys
-        .iter()
-        .map(|k| class.field(k).ok_or_else(|| Error::Metric(k.clone())))
-        .collect::<Result<Vec<usize>>>()?;
-    let mut map: Vec<(Vec<Cell>, &Vec<Cell>)> = Vec::new();
-    for row in &doc.rows {
-        let key: Vec<Cell> = slots.iter().map(|&s| row[s].clone()).collect();
-        match map.iter_mut().find(|(k, _)| same_key(k, &key)) {
-            Some(entry) => entry.1 = row,
-            None => map.push((key, row)),
-        }
-    }
-    Ok(map)
+/// `index` finds a key's slot in one hash lookup; a slot taken by the
+/// pairing is `None`.
+struct KeyedRows<'d> {
+    rows: Vec<Option<&'d [Cell]>>,
+    index: HashMap<Vec<CellKey<'d>>, usize>,
+    /// The `KEY` fields' positions in a row.
+    slots: Vec<usize>,
 }
 
-fn same_key(a: &[Cell], b: &[Cell]) -> bool {
-    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.same(y))
+impl<'d> KeyedRows<'d> {
+    fn new(doc: &'d Doc, class: &MetricClass, keys: &[String]) -> Result<Self> {
+        let slots = keys
+            .iter()
+            .map(|k| class.field(k).ok_or_else(|| Error::Metric(k.clone())))
+            .collect::<Result<Vec<usize>>>()?;
+        let mut map = Self {
+            rows: Vec::new(),
+            index: HashMap::new(),
+            slots,
+        };
+        for row in &doc.rows {
+            let key = map.key(row);
+            match map.index.get(&key) {
+                Some(&slot) => map.rows[slot] = Some(row),
+                None => {
+                    map.index.insert(key, map.rows.len());
+                    map.rows.push(Some(row));
+                }
+            }
+        }
+        Ok(map)
+    }
+
+    fn key(&self, row: &'d [Cell]) -> Vec<CellKey<'d>> {
+        self.slots.iter().map(|&s| row[s].key()).collect()
+    }
+
+    /// The row whose key equals the key of `row` (a row of the other file),
+    /// taken out of the map.
+    fn take(&mut self, row: &'d [Cell]) -> Option<&'d [Cell]> {
+        let slot = *self.index.get(&self.key(row))?;
+        self.rows[slot].take()
+    }
+
+    /// The rows not taken, in first appearance order.
+    fn remaining(&self) -> impl Iterator<Item = &'d [Cell]> + '_ {
+        self.rows.iter().filter_map(|r| *r)
+    }
+
+    /// `StringUtil.join(",", key)` of `row`'s key.
+    fn text(&self, row: &[Cell]) -> Result<String> {
+        key_text(self.slots.iter().map(|&s| &row[s]))
+    }
 }
 
 /// `StringUtil.join(",", key)`: each value's `toString`, an error on null.
-fn key_text(key: &[Cell]) -> Result<String> {
+fn key_text<'c>(key: impl Iterator<Item = &'c Cell>) -> Result<String> {
     let parts = key
-        .iter()
         .map(|cell| match cell {
             Cell::Null => Err(Error::Metric(NULL_KEY.to_owned())),
             other => Ok(other.java_string()),

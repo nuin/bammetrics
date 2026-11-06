@@ -43,6 +43,17 @@ pub(super) enum Cell {
     Text(String),
 }
 
+/// [`Cell::key`].
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub(super) enum CellKey<'a> {
+    Null,
+    Int(i64),
+    Double(u64),
+    Float(u32),
+    Bool(bool),
+    Text(&'a str),
+}
+
 impl Cell {
     /// `FormatUtil.format(Object)`, what `MetricBase.equals` compares.
     pub(super) fn format(&self) -> String {
@@ -91,6 +102,21 @@ impl Cell {
             (Cell::Bool(a), Cell::Bool(b)) => a == b,
             (Cell::Text(a), Cell::Text(b)) => a == b,
             _ => false,
+        }
+    }
+
+    /// A hashable stand-in: two cells are [`Cell::same`] exactly when
+    /// their keys are equal (every NaN is one key, `-0.0` and `0.0` two).
+    pub(super) fn key(&self) -> CellKey<'_> {
+        match self {
+            Cell::Null => CellKey::Null,
+            Cell::Int(v) => CellKey::Int(*v),
+            Cell::Double(v) if v.is_nan() => CellKey::Double(f64::NAN.to_bits()),
+            Cell::Double(v) => CellKey::Double(v.to_bits()),
+            Cell::Float(v) if v.is_nan() => CellKey::Float(f32::NAN.to_bits()),
+            Cell::Float(v) => CellKey::Float(v.to_bits()),
+            Cell::Bool(v) => CellKey::Bool(*v),
+            Cell::Text(v) => CellKey::Text(v),
         }
     }
 

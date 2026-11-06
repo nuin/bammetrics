@@ -283,9 +283,25 @@ the 'IGNORE_HISTOGRAM_DIFFERENCES' flag is set.` comes with files that are equal
 - `CompareMetrics` reads a class only from `crates/core/picard_fields.tsv`: the 65
   `MetricBase` classes and 2 `Header` classes in `picard.jar` 3.5.0. A metrics class from
   another jar (GATK, a user class) is `Could not locate class` here; Picard reads it when
-  it is on its class path. The two `Iso8601Date` fields (`AUTOCALL_DATE` and
-  `IMAGING_DATE` of `ArraysVariantCallingDetailMetrics`) are compared as their text. A single-valued option given twice keeps the last
-  value, as every bammetrics option does; Picard refuses it.
+  it is on its class path. A class that loads in Java but is not a metrics class
+  (`java.lang.String`, the program class `picard.analysis.CollectInsertSizeMetrics`) is
+  `Could not locate class` here and `Could not get field with name ...` in Picard; both
+  exit 1. The two `Iso8601Date` fields (`AUTOCALL_DATE` and `IMAGING_DATE` of
+  `ArraysVariantCallingDetailMetrics`) are compared as their text.
+- `CompareMetrics` options parse as every bammetrics tool's do. A single-valued option
+  given twice (`O`, `OUTPUT_TABLE`, `IHD`, `VERBOSITY`, `R`) keeps the last value; Picard
+  refuses it. A boolean takes `true` or `false` in any case, and anything else exits 1
+  naming the option; Picard's parser reads any other text as false, so `IHD=yes` compares
+  histograms there. A mix of `-I a` and `I=b` is read; Picard refuses the mix. The common options
+  bammetrics ignores are not checked: `COMPRESSION_LEVEL=99`, `MAX_RECORDS_IN_RAM=abc` and
+  `VALIDATION_STRINGENCY=LOUD` exit 0 here and 1 in Picard, and `GA4GH_CLIENT_SECRETS` is
+  accepted where Picard's `CompareMetrics` does not list it. `-h` and `--help` print the
+  bammetrics help and exit 0, where Picard prints its usage and exits 1; `--version` and
+  `--arguments_file` are not read.
+- `CompareMetrics` on the Picard face and `compare_metrics()` in Python write `OUTPUT` and
+  `OUTPUT_TABLE` even when one names an `INPUT`, as Picard does, so the input is replaced.
+  The `compare-metrics` verb refuses both (exit 2), and refuses `-o` and `--output-table`
+  naming one file.
 
 ## Validation
 
@@ -553,7 +569,7 @@ with the first one's strand and the distinct names joined by `|`; the header is
 `@HD VN:1.6 SO:coordinate` whatever `SORT` says.
 
 `CompareMetrics` behaviour reproduced from Picard 3.5.0
-(`tests/concordance/test_compare_metrics.py`, 69 cases): files equal when every field
+(`tests/concordance/test_compare_metrics.py`, 74 cases): files equal when every field
 prints the same `FormatUtil` text, so `0.5` and `0.50` agree, a change below the sixth
 decimal is no difference, and a dropped column whose values all equal the class default
 (`0`) leaves the files equal; a row-count difference ends the comparison before the class

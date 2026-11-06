@@ -190,6 +190,11 @@ def mutations(p):
         "gc_key_changed": set_cell(p["gc_detail"], 5, "GC", "500"),
         "qsd_hist": set_histogram(p["qsd"], 0, 1, "1"),
         "qy_one_row": edit_rows(p["qy"], lambda rows: rows[:1]),
+        # Long.parseLong reads any script's decimal digits: Arabic-Indic 12.
+        "asm_unicode_digits": set_cell(p["asm"], 0, "TOTAL_READS", "\u0661\u0662"),
+        "asm_multiple_points": set_cell(p["asm"], 0, "MEAN_READ_LENGTH", "1..5"),
+        "insert_hex_subnormal": set_cell(p["insert"], 0, "MEAN_INSERT_SIZE", "0x0.80000001p-1074"),
+        "gc_shuffled": edit_rows(p["gc_detail"], lambda rows: rows[1::2] + rows[::2]),
     }
 
 
@@ -277,6 +282,11 @@ def cases():
         ("key_reordered", "picard:asm", "asm_reordered", ["KEY=CATEGORY"]),
         ("class_differs", "insert_one_row", "qy_one_row", []),
         ("class_and_rows_differ", "picard:insert", "picard:qy", []),
+        ("unicode_digits", "picard:asm", "asm_unicode_digits", []),
+        ("multiple_points", "picard:asm", "asm_multiple_points", []),
+        ("hex_subnormal", "picard:insert", "insert_hex_subnormal", []),
+        ("key_shuffled", "picard:gc_detail", "gc_shuffled", ["KEY=ACCUMULATION_LEVEL", "KEY=GC"]),
+        ("key_shuffled_changed", "gc_zero_to_value", "gc_shuffled", ["KEY=ACCUMULATION_LEVEL", "KEY=GC"]),
         ("one_input", "picard:asm", None, []),
         ("missing_input", "picard:asm", "missing_file", []),
     ]

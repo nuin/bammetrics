@@ -81,8 +81,9 @@ fn shortest_decimal(value: f64) -> (String, String) {
 /// round-trip digits sits between two candidates that both round-trip. Rust
 /// takes the upper one, the JDK (`FloatingDecimal`) the one with the even last
 /// digit, so an odd last digit moves down by one when the exact value is that
-/// tie. Only large values, with 16 or 17 digits, reach it.
-fn prefer_even_on_tie(value: f64, digits: &mut String) {
+/// tie. Only large values, with 16 or 17 digits (8 or 9 for a float), reach
+/// it.
+pub(crate) fn prefer_even_on_tie(value: f64, digits: &mut String) {
     let Some(last) = digits.bytes().last() else {
         return;
     };

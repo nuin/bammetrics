@@ -187,30 +187,46 @@ fn bad_number(text: &str) -> String {
     format!("For input string: \"{text}\"")
 }
 
-/// The text Rust parses for a Java floating-point literal
-/// (`Double.parseDouble`): the string trimmed, an optional sign, `NaN`,
-/// `Infinity`, or digits with an optional `.` and exponent and an optional
-/// `f`, `F`, `d` or `D` suffix. A hexadecimal literal (`0x1.8p1`) is
-/// converted through a double, so a float parsed from one can round twice.
-fn java_decimal(text: &str) -> Result<String, String> {
+/// The message `FloatingDecimal` gives a mantissa with a second `.`.
+const MULTIPLE_POINTS: &str = "multiple points";
+
+/// A Java floating-point literal after its sign: decimal text Rust parses
+/// (`NaN` and `inf` included), or a hexadecimal value, which is rounded
+/// once to the target type.
+enum Literal {
+    Decimal(String),
+    Hex(HexLiteral),
+}
+
+/// `Double.parseDouble` up to the rounding: the string trimmed, an optional
+/// sign, `NaN`, `Infinity`, or digits with an optional `.` and exponent and
+/// an optional `f`, `F`, `d` or `D` suffix. The flag is the minus sign.
+fn java_literal(text: &str) -> Result<(bool, Literal), String> {
     let trimmed = trim(text);
     if trimmed.is_empty() {
         return Err("empty String".to_owned());
     }
-    let (sign, body) = match trimmed.strip_prefix(['+', '-']) {
-        Some(rest) => (&trimmed[..1], rest),
-        None => ("", trimmed),
+    let (negative, body) = match trimmed.strip_prefix(['+', '-']) {
+        Some(rest) => (trimmed.starts_with('-'), rest),
+        None => (false, trimmed),
     };
     match body {
-        "NaN" => return Ok("NaN".to_owned()),
-        "Infinity" => return Ok(format!("{sign}inf")),
+        "NaN" => return Ok((negative, Literal::Decimal("NaN".to_owned()))),
+        "Infinity" => return Ok((negative, Literal::Decimal("inf".to_owned()))),
         _ => {}
     }
-    let body = body.strip_suffix(['f', 'F', 'd', 'D']).unwrap_or(body);
     if let Some(hex) = body.strip_prefix("0x").or_else(|| body.strip_prefix("0X")) {
-        let value = hex_value(hex).ok_or_else(|| bad_number(text))?;
-        return Ok(format!("{sign}{value:e}"));
+        if second_point(hex, |b| b.is_ascii_hexdigit()) {
+            return Err(MULTIPLE_POINTS.to_owned());
+        }
+        let hex = hex.strip_suffix(['f', 'F', 'd', 'D']).unwrap_or(hex);
+        let value = hex_literal(hex).ok_or_else(|| bad_number(text))?;
+        return Ok((negative, Literal::Hex(value)));
     }
+    if second_point(body, |b| b.is_ascii_digit()) {
+        return Err(MULTIPLE_POINTS.to_owned());
+    }
+    let body = body.strip_suffix(['f', 'F', 'd', 'D']).unwrap_or(body);
     let (mantissa, exponent) = match body.split_once(['e', 'E']) {
         Some((m, e)) => (m, Some(e.strip_prefix(['+', '-']).unwrap_or(e))),
         None => (body, None),
@@ -223,61 +239,176 @@ fn java_decimal(text: &str) -> Result<String, String> {
     if !mantissa_ok || !exponent_ok {
         return Err(bad_number(text));
     }
-    Ok(format!("{sign}{body}"))
+    Ok((negative, Literal::Decimal(body.to_owned())))
+}
+
+/// Whether the leading run of digits and points holds two points, which
+/// `FloatingDecimal` reports before it checks the rest (`1..5x` and
+/// `0x1..p0` are `multiple points`, `1a.5.` is not).
+fn second_point(text: &str, digit: impl Fn(u8) -> bool) -> bool {
+    let mut seen = false;
+    for byte in text.bytes() {
+        if byte == b'.' {
+            if seen {
+                return true;
+            }
+            seen = true;
+        } else if !digit(byte) {
+            break;
+        }
+    }
+    false
+}
+
+/// A hexadecimal literal: its first 30 significant digits, whether a digit
+/// past them is nonzero, and the power of two that scales the digits.
+struct HexLiteral {
+    digits: u128,
+    sticky: bool,
+    shift: i64,
+}
+
+impl HexLiteral {
+    /// The value rounded once, half to even, to a binary format of
+    /// `precision` significand bits whose least subnormal is 2^`min_lsb`
+    /// (53 and -1074 for a double, 24 and -149 for a float). The result is
+    /// exact in a double; past the format's range it is infinite.
+    fn round(&self, precision: i64, min_lsb: i64) -> f64 {
+        if self.digits == 0 {
+            return 0.0;
+        }
+        let bits = 128 - i64::from(self.digits.leading_zeros());
+        let top = self.shift + bits - 1;
+        let lsb = (top - (precision - 1)).max(min_lsb);
+        let dropped = lsb - self.shift;
+        let units = if dropped <= 0 {
+            // Fewer than `precision` bits, so the shift cannot overflow.
+            self.digits << dropped.unsigned_abs()
+        } else if dropped >= 128 {
+            // At most 120 bits, so the value is below half a unit.
+            0
+        } else {
+            let kept = self.digits >> dropped;
+            let rest = self.digits & ((1u128 << dropped) - 1);
+            let half = 1u128 << (dropped - 1);
+            let up = rest > half || (rest == half && (self.sticky || kept & 1 == 1));
+            kept + u128::from(up)
+        };
+        units as f64 * pow2(lsb)
+    }
+}
+
+/// 2^`exponent` as a double: infinite above 1023, zero below -1074.
+fn pow2(exponent: i64) -> f64 {
+    if exponent > 1023 {
+        f64::INFINITY
+    } else if exponent >= -1022 {
+        f64::from_bits(((exponent + 1023) as u64) << 52)
+    } else if exponent >= -1074 {
+        f64::from_bits(1u64 << (exponent + 1074))
+    } else {
+        0.0
+    }
 }
 
 /// `<hex digits>[.<hex digits>](p|P)[sign]<digits>`, after the `0x`.
-fn hex_value(hex: &str) -> Option<f64> {
+fn hex_literal(hex: &str) -> Option<HexLiteral> {
     let (mantissa, exponent) = hex.split_once(['p', 'P'])?;
     let unsigned = exponent.strip_prefix(['+', '-']).unwrap_or(exponent);
     if unsigned.is_empty() || !unsigned.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
-    let exponent: i32 = exponent.parse().unwrap_or(if exponent.starts_with('-') {
-        i32::MIN / 2
+    // Past 2^40 every literal is zero or infinite; the clamp keeps the shift
+    // arithmetic in range.
+    let limit = 1i64 << 40;
+    let fallback = if exponent.starts_with('-') {
+        -limit
     } else {
-        i32::MAX / 2
-    });
+        limit
+    };
+    let exponent = exponent
+        .parse::<i64>()
+        .map_or(fallback, |e| e.clamp(-limit, limit));
     let (whole, fraction) = mantissa.split_once('.').unwrap_or((mantissa, ""));
     let digits = format!("{whole}{fraction}");
     if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
     let significant = digits.trim_start_matches('0');
-    let kept = &significant[..significant.len().min(30)];
-    let dropped = (significant.len() - kept.len()) as i32;
-    let value = u128::from_str_radix(if kept.is_empty() { "0" } else { kept }, 16).ok()? as f64;
-    let shift = exponent
-        .saturating_add(4 * dropped)
-        .saturating_sub(4 * fraction.len() as i32);
-    if value == 0.0 {
-        return Some(0.0);
-    }
-    // Two steps keep 2^shift finite where the product is.
-    let half = shift.clamp(-1100, 1100) / 2;
-    Some(value * 2f64.powi(half) * 2f64.powi(shift.clamp(-1100, 1100) - half))
+    let (kept, rest) = significant.split_at(significant.len().min(30));
+    let value = if kept.is_empty() {
+        0
+    } else {
+        u128::from_str_radix(kept, 16).ok()?
+    };
+    Some(HexLiteral {
+        digits: value,
+        sticky: rest.bytes().any(|b| b != b'0'),
+        shift: exponent + 4 * rest.len() as i64 - 4 * fraction.len() as i64,
+    })
 }
 
 /// `Double.parseDouble`; the error is the `NumberFormatException` message.
 pub fn parse_double(text: &str) -> Result<f64, String> {
-    java_decimal(text)?.parse().map_err(|_| bad_number(text))
+    let (negative, literal) = java_literal(text)?;
+    let value = match literal {
+        Literal::Decimal(body) => body.parse::<f64>().map_err(|_| bad_number(text))?,
+        Literal::Hex(hex) => hex.round(53, -1074),
+    };
+    Ok(if negative { -value } else { value })
 }
 
-/// `Float.parseFloat`, rounded once from the decimal text.
+/// `Float.parseFloat`, rounded once from the literal.
 pub fn parse_float(text: &str) -> Result<f32, String> {
-    java_decimal(text)?.parse().map_err(|_| bad_number(text))
+    let (negative, literal) = java_literal(text)?;
+    let value = match literal {
+        Literal::Decimal(body) => body.parse::<f32>().map_err(|_| bad_number(text))?,
+        // Exact in a double, so the conversion does not round again.
+        Literal::Hex(hex) => hex.round(24, -149) as f32,
+    };
+    Ok(if negative { -value } else { value })
+}
+
+/// The first code point of each run of ten decimal digits (Unicode category
+/// Nd) in the Basic Multilingual Plane, as OpenJDK 27 `Character.digit`
+/// reads them (370 digits). A digit outside the plane is a surrogate pair
+/// in Java, and neither half is a digit.
+const DIGIT_ZEROS: [u32; 37] = [
+    0x0030, 0x0660, 0x06F0, 0x07C0, 0x0966, 0x09E6, 0x0A66, 0x0AE6, 0x0B66, 0x0BE6, 0x0C66, 0x0CE6,
+    0x0D66, 0x0DE6, 0x0E50, 0x0ED0, 0x0F20, 0x1040, 0x1090, 0x17E0, 0x1810, 0x1946, 0x19D0, 0x1A80,
+    0x1A90, 0x1B50, 0x1BB0, 0x1C40, 0x1C50, 0xA620, 0xA8D0, 0xA900, 0xA9D0, 0xA9F0, 0xAA50, 0xABF0,
+    0xFF10,
+];
+
+/// `Character.digit(c, 10)`.
+fn decimal_digit(c: char) -> Option<i128> {
+    let code = u32::from(c);
+    DIGIT_ZEROS
+        .iter()
+        .find(|&&zero| (zero..zero + 10).contains(&code))
+        .map(|zero| i128::from(code - zero))
 }
 
 /// `Long.parseLong` (`bits` 64) or `Integer.parseInt` (32): an optional
-/// sign, then ASCII digits, inside the type's range. Nothing is trimmed.
+/// ASCII sign, then decimal digits of any script (`١٢` is 12), inside the
+/// type's range. Nothing is trimmed.
 pub fn parse_integer(text: &str, bits: u32) -> Result<i64, String> {
+    let negative = text.starts_with('-');
     let body = text.strip_prefix(['+', '-']).unwrap_or(text);
-    if body.is_empty() || !body.bytes().all(|b| b.is_ascii_digit()) {
+    if body.is_empty() {
         return Err(bad_number(text));
     }
-    let value: i128 = text.parse().map_err(|_| bad_number(text))?;
     let limit = 1i128 << (bits - 1);
-    if value < -limit || value >= limit {
+    let mut magnitude: i128 = 0;
+    for c in body.chars() {
+        let digit = decimal_digit(c).ok_or_else(|| bad_number(text))?;
+        magnitude = magnitude * 10 + digit;
+        if magnitude > limit {
+            return Err(bad_number(text));
+        }
+    }
+    let value = if negative { -magnitude } else { magnitude };
+    if value >= limit {
         return Err(bad_number(text));
     }
     Ok(value as i64)
@@ -295,9 +426,10 @@ pub fn parse_short(text: &str) -> Result<i64, String> {
 /// `Double.toString` (JDK 19 and later, the form string concatenation
 /// prints): the shortest digits that round-trip, as a plain decimal with at
 /// least one fraction digit from 10^-3 up to 10^7 (`0.001`, `123.0`), else
-/// as `d.dddE<exponent>` (`1.0E7`, `9.99E-4`). A subnormal value can differ
-/// in its last digit (`Double.MIN_VALUE` is `5.0E-324` here, `4.9E-324` in
-/// Java).
+/// as `d.dddE<exponent>` (`1.0E7`, `9.99E-4`). Of two shortest candidates
+/// equally close, the one with the even last digit is printed. Where the
+/// shortest is one digit of a subnormal, the closest two-digit decimal that
+/// round-trips is printed (`Double.MIN_VALUE` is `4.9E-324`, not `5.0E-324`).
 pub fn double_to_string(value: f64) -> String {
     match special_text(
         value.is_nan(),
@@ -307,13 +439,20 @@ pub fn double_to_string(value: f64) -> String {
     ) {
         Some(text) => text,
         None => {
-            let (digits, exponent) = crate::metrics_file::shortest_digits(value.abs());
+            let (mut digits, mut exponent) = crate::metrics_file::shortest_digits(value.abs());
+            if digits.len() == 1 && value.abs() < f64::MIN_POSITIVE {
+                let two = format!("{:.1e}", value.abs());
+                if two.parse::<f64>() == Ok(value.abs()) {
+                    (digits, exponent) = scientific_digits(&two);
+                }
+            }
             signed_layout(value.is_sign_negative(), &digits, exponent)
         }
     }
 }
 
-/// `Float.toString`: the same layout over the shortest digits of the float.
+/// `Float.toString`: the same rules over the digits of the float
+/// (`1234567.25f` is `1234567.2`, `Float.MIN_VALUE` is `1.4E-45`).
 pub fn float_to_string(value: f32) -> String {
     match special_text(
         value.is_nan(),
@@ -323,16 +462,35 @@ pub fn float_to_string(value: f32) -> String {
     ) {
         Some(text) => text,
         None => {
-            let scientific = format!("{:e}", value.abs());
-            let (mantissa, exponent) = scientific.split_once('e').unwrap_or((&scientific, "0"));
-            let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
-            signed_layout(
-                value.is_sign_negative(),
-                &digits,
-                exponent.parse().unwrap_or(0),
-            )
+            let (mut digits, mut exponent) = scientific_digits(&format!("{:e}", value.abs()));
+            // A float converts to a double exactly, so its exact digits are
+            // the same. Below a power of two the lower candidate can fall
+            // outside the float's rounding interval; it is kept only when it
+            // reads back as the same float.
+            let mut even = digits.clone();
+            crate::metrics_file::prefer_even_on_tie(f64::from(value.abs()), &mut even);
+            let reads_back = |d: &str| {
+                format!("{}.{}e{exponent}", &d[..1], &d[1..]).parse::<f32>() == Ok(value.abs())
+            };
+            if even != digits && reads_back(&even) {
+                digits = even;
+            }
+            if digits.len() == 1 && value.abs() < f32::MIN_POSITIVE {
+                let two = format!("{:.1e}", value.abs());
+                if two.parse::<f32>() == Ok(value.abs()) {
+                    (digits, exponent) = scientific_digits(&two);
+                }
+            }
+            signed_layout(value.is_sign_negative(), &digits, exponent)
         }
     }
+}
+
+/// The digits and exponent of Rust's `d.ddde<exp>` text.
+fn scientific_digits(scientific: &str) -> (String, i64) {
+    let (mantissa, exponent) = scientific.split_once('e').unwrap_or((scientific, "0"));
+    let digits = mantissa.chars().filter(char::is_ascii_digit).collect();
+    (digits, exponent.parse().unwrap_or(0))
 }
 
 /// `NaN`, `Infinity` and the zeros, which have no digits to lay out.
@@ -398,6 +556,12 @@ mod lang_tests {
             (1e16, "1.0E16"),
             (123.0, "123.0"),
             (-500.0, "-500.0"),
+            (f64::from_bits(1), "4.9E-324"),
+            (f64::from_bits(2), "9.9E-324"),
+            (f64::from_bits(3), "1.5E-323"),
+            (f64::from_bits(10), "4.9E-323"),
+            (-1e-320, "-1.0E-320"),
+            (2.5e-323, "2.5E-323"),
             (f64::NAN, "NaN"),
             (f64::NEG_INFINITY, "-Infinity"),
         ];
@@ -416,6 +580,17 @@ mod lang_tests {
             (16_777_216f32, "1.6777216E7"),
             (f32::MAX, "3.4028235E38"),
             (0.3f32, "0.3"),
+            (1_234_567f32 + 0.25, "1234567.2"),
+            (3_897_416f32 + 0.25, "3897416.2"),
+            (-1_234_567f32 - 0.75, "-1234567.8"),
+            (16_777_215f32, "1.6777215E7"),
+            (9.5f32, "9.5"),
+            (f32::from_bits(1), "1.4E-45"),
+            (f32::from_bits(3), "4.2E-45"),
+            (f32::from_bits(4), "5.6E-45"),
+            (f32::from_bits(7), "9.8E-45"),
+            (1e-40f32, "1.0E-40"),
+            (1e-39f32, "1.0E-39"),
         ];
         for (value, text) in cases {
             assert_eq!(float_to_string(value), text, "{value:e}");
@@ -468,6 +643,84 @@ mod lang_tests {
         assert_eq!(parse_double("-0x1.8P-1d"), Ok(-0.75));
         assert_eq!(parse_double("0x0p9999"), Ok(0.0));
         assert!(parse_double("0x1").is_err());
+        for text in [
+            "1..5", "..5", "0.5.", "1.2.3e4", ".5.5", "-1..5", " 1..5", "0x1..p0",
+        ] {
+            assert_eq!(
+                parse_double(text),
+                Err("multiple points".to_owned()),
+                "{text}"
+            );
+        }
+        for text in ["1a.5.", "1.5e3.2", "1e5..", "0x1.p0.", "0xg..p0"] {
+            assert_eq!(parse_double(text), Err(bad_number(text)), "{text}");
+        }
+        assert_eq!(parse_float("1..5"), Err("multiple points".to_owned()));
+    }
+
+    /// Hexadecimal literals round once, half to even, as OpenJDK 27 rounds
+    /// them (the raw bits Java printed).
+    #[test]
+    fn hex_literals_round_like_java() {
+        let doubles = [
+            ("0x0.80000001p-1074", 0x1),
+            ("0x1.00000000000008p0", 0x3ff0_0000_0000_0000),
+            ("0x1.000000000000081p0", 0x3ff0_0000_0000_0001),
+            (
+                "0x1.0000000000000800000000000000000001p0",
+                0x3ff0_0000_0000_0001,
+            ),
+            ("0x.0000000000000000000000000000000000000000001p-900", 0x4),
+            ("0xfffffffffffffffffffffffffffffffffffffp-1200", 0x40_0000),
+            ("0x1.fffffffffffff8p1023", 0x7ff0_0000_0000_0000),
+            ("0x1.fffffffffffff7ffffp1023", 0x7fef_ffff_ffff_ffff),
+            ("0x0.0000000000001p-1022", 0x1),
+            ("0x0.00000000000008p-1022", 0x0),
+            ("0x0.000000000000080001p-1022", 0x1),
+            ("0x0.00000000000018p-1022", 0x2),
+        ];
+        for (text, bits) in doubles {
+            assert_eq!(parse_double(text).map(f64::to_bits), Ok(bits), "{text}");
+        }
+        let floats = [
+            ("0x1.000001p0", 0x3f80_0000),
+            ("0x1.0000010000001p0", 0x3f80_0001),
+            ("0x1.00000100000000000000001p0", 0x3f80_0001),
+            ("0x1p-150", 0x0),
+            ("0x1.0000000001p-150", 0x1),
+        ];
+        for (text, bits) in floats {
+            assert_eq!(parse_float(text).map(f32::to_bits), Ok(bits), "{text}");
+        }
+    }
+
+    /// `Long.parseLong` reads a decimal digit of any script in the Basic
+    /// Multilingual Plane, as OpenJDK 27 does.
+    #[test]
+    fn integers_read_unicode_digits() {
+        assert_eq!(parse_integer("\u{661}\u{662}", 64), Ok(12));
+        assert_eq!(parse_integer("\u{96b}", 32), Ok(5));
+        assert_eq!(parse_integer("\u{ff11}\u{ff12}", 64), Ok(12));
+        assert_eq!(parse_integer("-\u{ff11}", 64), Ok(-1));
+        assert_eq!(parse_integer("+\u{663}", 32), Ok(3));
+        assert_eq!(parse_integer("1\u{662}", 64), Ok(12));
+        assert_eq!(
+            parse_integer("922337203685477580\u{ff17}", 64),
+            Ok(i64::MAX)
+        );
+        assert_eq!(
+            parse_integer("-922337203685477580\u{ff18}", 64),
+            Ok(i64::MIN)
+        );
+        assert!(parse_integer("922337203685477580\u{ff18}", 64).is_err());
+        assert!(parse_integer("214748364\u{ff18}", 32).is_err());
+        assert_eq!(parse_integer("-214748364\u{ff18}", 32), Ok(-2_147_483_648));
+        // Mathematical bold digits lie outside the plane.
+        assert!(parse_integer("\u{1d7cf}\u{1d7d0}", 64).is_err());
+        assert_eq!(
+            parse_integer(&format!("{}1", "\u{ff10}".repeat(19)), 64),
+            Ok(1)
+        );
     }
 
     /// Orders an OpenJDK 27 `HashSet` printed for the same insertions.

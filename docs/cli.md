@@ -493,6 +493,12 @@ differences as a `CompareMetrics$MetricComparisonDifferences` metrics file.
 - `--format json`, `jsonl`, `tsv` and `human` print one row per difference line: `KEY`,
   `METRIC`, `VALUE1`, `VALUE2` for a value, `DIFFERENCE` for every line. `--threads` and
   `--sample` are accepted and ignored.
+- The text on standard output ends with a newline; the `-o` file is Picard's `OUTPUT`
+  byte for byte, which has none.
+- An `-o` or `--output-table` that names an input, the two naming one file, and `- -`
+  (standard input read twice) are usage errors (exit 2). The Picard face writes over an
+  input as Picard does.
+- `-h` and `--help` print this help and exit 0; Picard prints its usage and exits 1.
 
 ### report
 
