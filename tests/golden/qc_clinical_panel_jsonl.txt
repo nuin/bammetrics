@@ -214,7 +214,7 @@ insert_size	All_Reads.fr_count
 ## file sample.manifest.json
 {
   "schema": "bammetrics.manifest/1",
-  "tool_version": "0.16.0",
+  "tool_version": "0.17.0",
   "sample": "insert_size",
   "bam": "tests/data/insert_size.bam",
   "prefix": "OUT/sample",
@@ -232,7 +232,7 @@ insert_size	All_Reads.fr_count
         "OUTPUT=OUT/sample.quality_yield_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.16.0",
+      "tool_version": "0.17.0",
       "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -261,7 +261,7 @@ insert_size	All_Reads.fr_count
         "REFERENCE_SEQUENCE=tests/data/ref_100k.fa"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.16.0",
+      "tool_version": "0.17.0",
       "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -302,7 +302,7 @@ insert_size	All_Reads.fr_count
         "OUTPUT=OUT/sample.insert_size_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.16.0",
+      "tool_version": "0.17.0",
       "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -333,7 +333,7 @@ insert_size	All_Reads.fr_count
         "TARGET_INTERVALS=tests/data/targets.interval_list"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.16.0",
+      "tool_version": "0.17.0",
       "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -383,7 +383,7 @@ insert_size	All_Reads.fr_count
         "OUT/sample.quality_yield_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.16.0",
+      "tool_version": "0.17.0",
       "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -405,7 +405,7 @@ insert_size	All_Reads.fr_count
         "--date=2026-01-02 03:04:05 UTC"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.16.0",
+      "tool_version": "0.17.0",
       "preset_hash": "e6275515a0d3de26",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -447,7 +447,7 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
 ## file sample.verdict.json
 {
   "schema": "bammetrics.verdict/1",
-  "tool_version": "0.16.0",
+  "tool_version": "0.17.0",
   "sample": "insert_size",
   "preset": {
     "name": "clinical-panel",

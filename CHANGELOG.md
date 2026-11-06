@@ -1,9 +1,27 @@
 # Changelog
 
-## Unreleased
+## 0.17.0
+
+CompareMetrics, CreateSequenceDictionary, and CRAM input for every tool that reads a BAM.
 
 ### Added
 
+- `CompareMetrics` (Picard face and Python `compare_metrics()`) and the `compare-metrics`
+  verb: two metrics files compared as Picard 3.5.0 compares them, with every option
+  (`KEY`, `METRICS_TO_IGNORE`, `METRICS_NOT_REQUIRED`, `METRIC_ALLOWABLE_RELATIVE_CHANGE`,
+  `IGNORE_HISTOGRAM_DIFFERENCES`, `OUTPUT`, `OUTPUT_TABLE`, `VERBOSITY`). Exit 0 when equal,
+  1 when NOT equal. The `OUTPUT` text and the log lines (without their timestamp) match
+  Picard's byte for byte on 74 concordance cases (`tests/concordance/test_compare_metrics.py`).
+- `crates/core/picard_fields.tsv` and `make picard-fields`: the 65 Picard 3.5.0 metrics
+  classes with their fields' Java types and defaults, read from `picard.jar`
+  (`tests/data/PicardFields.java`), so values compare typed as htsjdk reads them.
+- `java.rs`: `Double.toString` and `Float.toString` (even digit on a tie, two digits for
+  a subnormal), the JDK number parsers with their error messages (`multiple points`,
+  decimal digits of any script in a long column, hexadecimal literals rounded once), and
+  the iteration order of a `HashSet<String>`.
+- `compare-metrics` refuses an `-o` or `--output-table` that names an input, the two
+  naming one file, and `- -` (exit 2); its standard output ends with a newline. `KEY`
+  pairs rows through a hash map (300,000 shuffled rows in 0.6 s).
 - `CreateSequenceDictionary` (docs/04 core) and its verb `create-sequence-dictionary`:
   the `.dict` Picard 3.5.0 writes for a FASTA, byte for byte. `@HD VN:1.6`, then `SN`,
   `LN`, `M5`, `AS`, `UR` (default `file://` and the absolute path, encoded as
@@ -20,9 +38,6 @@
 - `tests/concordance/test_create_sequence_dictionary.py` and
   `crates/cli/tests/create_sequence_dictionary.rs`; six golden records, and the `tools`
   listing gains one row.
-
-### Added
-
 - CRAM input (docs/04 section 5.9): every tool that reads a BAM, the verbs, `collect`,
   `qc`, `plan` and Python read CRAM 3.0 and 3.1 with `R=` (`-R`, `reference_sequence=`)
   the FASTA it was written with. A file starting with the bytes `CRAM` is a CRAM whatever
@@ -53,15 +68,6 @@
   offers `reference_sequence` only to tools that read a BAM or CRAM (not to the VCF tools,
   `AccumulateQualityYieldMetrics` or `BedToIntervalList`).
 
-### Fixed
-
-- A BAM on a named pipe hung: the CRAM check opened the pipe before the pass did. The check
-  now reads the file type with `stat` and opens only a regular file outside `/dev`, so
-  `I=/dev/stdin` redirected from a file is read whole too.
-- A CRAM on a pipe or `/dev/stdin` printed `ignoring REFERENCE_SEQUENCE`; the note is now
-  written only for a regular file that is no CRAM.
-- A verb's `-o` that names the `.fai` of `-R` exits 2, as one naming the FASTA does.
-
 ### Changed
 
 - `clinical-panel` is version 2 with the note `reviewed defaults`: the maintainer reviewed
@@ -69,7 +75,6 @@
   `e6275515a0d3de26` (`e62755`), so verdicts and pages name `clinical-panel v2 (e62755)`.
   `generic`, `wgs` and `rna-seq` keep `starting values`.
 - docs/05 section 8 records decisions 4, 5, 7, 8, 9, 10 and 12.
-
 - The Picard face exits 1 on an option Picard takes once given twice (`SP=a SP=b`,
   `O=a O=b`), with Picard's `Option 'SPECIES' cannot be specified more than once.`, in
   every tool. It kept the last value before. List options still add each value, the
@@ -85,24 +90,14 @@
   which MultiQC and `bammetrics report` read. Snapshots in `tests/report` changed by
   those headings and one CSS rule.
 
-### Added
+### Fixed
 
-- `CompareMetrics` (Picard face and Python `compare_metrics()`) and the `compare-metrics`
-  verb: two metrics files compared as Picard 3.5.0 compares them, with every option
-  (`KEY`, `METRICS_TO_IGNORE`, `METRICS_NOT_REQUIRED`, `METRIC_ALLOWABLE_RELATIVE_CHANGE`,
-  `IGNORE_HISTOGRAM_DIFFERENCES`, `OUTPUT`, `OUTPUT_TABLE`, `VERBOSITY`). Exit 0 when equal,
-  1 when NOT equal. The `OUTPUT` text and the log lines (without their timestamp) match
-  Picard's byte for byte on 74 concordance cases (`tests/concordance/test_compare_metrics.py`).
-- `crates/core/picard_fields.tsv` and `make picard-fields`: the 65 Picard 3.5.0 metrics
-  classes with their fields' Java types and defaults, read from `picard.jar`
-  (`tests/data/PicardFields.java`), so values compare typed as htsjdk reads them.
-- `java.rs`: `Double.toString` and `Float.toString` (even digit on a tie, two digits for
-  a subnormal), the JDK number parsers with their error messages (`multiple points`,
-  decimal digits of any script in a long column, hexadecimal literals rounded once), and
-  the iteration order of a `HashSet<String>`.
-- `compare-metrics` refuses an `-o` or `--output-table` that names an input, the two
-  naming one file, and `- -` (exit 2); its standard output ends with a newline. `KEY`
-  pairs rows through a hash map (300,000 shuffled rows in 0.6 s).
+- A BAM on a named pipe hung: the CRAM check opened the pipe before the pass did. The check
+  now reads the file type with `stat` and opens only a regular file outside `/dev`, so
+  `I=/dev/stdin` redirected from a file is read whole too.
+- A CRAM on a pipe or `/dev/stdin` printed `ignoring REFERENCE_SEQUENCE`; the note is now
+  written only for a regular file that is no CRAM.
+- A verb's `-o` that names the `.fai` of `-R` exits 2, as one naming the FASTA does.
 
 ## 0.16.0
 
