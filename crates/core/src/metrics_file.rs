@@ -48,15 +48,22 @@ pub fn format_double(value: f64) -> String {
     }
 }
 
-/// Integer and fraction digits of the shortest round-trip decimal form.
-fn shortest_decimal(value: f64) -> (String, String) {
+/// The shortest round-trip decimal digits of a non-negative finite `value`
+/// as the JDK chooses them (`Double.toString`), and the decimal exponent of
+/// the first digit: 0.0125 is `("125", -2)`.
+pub(crate) fn shortest_digits(value: f64) -> (String, i64) {
     // `{:e}` prints the shortest round-trip digits as `d.ddde<exp>`.
     let scientific = format!("{value:e}");
     let (mantissa, exponent) = scientific.split_once('e').unwrap_or((&scientific, "0"));
     let mut digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
     prefer_even_on_tie(value, &mut digits);
     // Rust's own output always has a valid exponent; 0 is only a fallback.
-    let exponent: i64 = exponent.parse().unwrap_or(0);
+    (digits, exponent.parse().unwrap_or(0))
+}
+
+/// Integer and fraction digits of the shortest round-trip decimal form.
+fn shortest_decimal(value: f64) -> (String, String) {
+    let (digits, exponent) = shortest_digits(value);
     let point = exponent + 1;
     if point <= 0 {
         let zeros = "0".repeat(point.unsigned_abs() as usize);
