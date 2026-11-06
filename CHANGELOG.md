@@ -34,7 +34,7 @@ CompareMetrics, CreateSequenceDictionary, and CRAM input for every tool that rea
   `create_sequence_dictionary(reference, ...)` returns one row per sequence.
 - `crates/core/src/md5.rs` (RFC 1321) and `crates/core/src/gzip.rs` (gzip members in
   turn). `zlib-rs`, which `noodles-bgzf` already builds, is now a direct dependency of
-  the core crate; `Cargo.lock` gains no package.
+  the core crate and adds no package. The CRAM reader adds `noodles-cram` and its codecs (flate2, bzip2, lzma-rust2, md-5, sha2).
 - `tests/concordance/test_create_sequence_dictionary.py` and
   `crates/cli/tests/create_sequence_dictionary.rs`; six golden records, and the `tools`
   listing gains one row.
@@ -98,6 +98,21 @@ CompareMetrics, CreateSequenceDictionary, and CRAM input for every tool that rea
 - A CRAM on a pipe or `/dev/stdin` printed `ignoring REFERENCE_SEQUENCE`; the note is now
   written only for a regular file that is no CRAM.
 - A verb's `-o` that names the `.fai` of `-R` exits 2, as one naming the FASTA does.
+- `crates/core/glossary.tsv` follows a review against Picard 3.5.0 and our code:
+  157 definitions rewritten (among them HsMetrics `FOLD_ENRICHMENT` counts on-bait bases
+  only, AlignmentSummaryMetrics `PF_INDEL_RATE` is a fraction, not per 100, and
+  InsertSizeMetrics `MEAN_INSERT_SIZE` cuts the upper tail only), `MODE_INSERT_SIZE`
+  typed `float` as Picard declares it, and 176 rows added for the classes that had none:
+  RnaSeqMetrics, the two VariantCalling classes, the three GenotypeConcordance classes,
+  TargetedPcrMetrics, TheoreticalSensitivityMetrics and the RNA and targeted PCR
+  histograms. Report pages show the new text; no metrics file changes.
+- Histograms in `CollectMultipleMetrics` files (insert size, read length, quality
+  distribution, quality by cycle) had blank definitions on the sample page, because the
+  file header names `CollectMultipleMetrics`. `glossary::histogram_lookup` now takes the
+  program whose histogram has the file's key column.
+- The glossary test runs every tool in `TOOLS` and fails when a written column or
+  histogram label has no row; it replaces a hand list of 11 classes. A tool added to
+  `TOOLS` without an argument list in `crates/core/tests/glossary.rs` fails it too.
 
 ## 0.16.0
 
