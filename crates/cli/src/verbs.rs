@@ -389,7 +389,10 @@ impl Verb {
                     .map(|(alias, _)| *alias),
             );
             let help = match opt.kind {
-                Kind::Ignored(why) if opt.picard() == "REFERENCE_SEQUENCE" => {
+                Kind::Ignored(why)
+                    if opt.picard() == "REFERENCE_SEQUENCE"
+                        && opt.kind != registry::REFERENCE_NOT_DECODED.kind =>
+                {
                     format!("Decodes a CRAM input; for a BAM accepted and ignored: {why}.")
                 }
                 Kind::Ignored(why) => format!("Accepted and ignored: {why}."),

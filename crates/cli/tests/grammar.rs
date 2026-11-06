@@ -640,6 +640,23 @@ fn the_picard_face_prints_the_verb_help() {
     assert!(String::from_utf8_lossy(&completions.stdout).contains("--minimum-pct"));
 }
 
+/// `-R` decodes a CRAM for a tool that reads one; a tool whose input is a
+/// metrics file or a BED only accepts it.
+#[test]
+fn the_reference_help_says_whether_a_cram_is_decoded() {
+    let decodes = "Decodes a CRAM input";
+    let ignored = "Accepted and ignored: no BAM or CRAM is read.";
+    let help = |verb: &str| {
+        String::from_utf8_lossy(&run_ok(&strings(&["help", verb])).stdout).into_owned()
+    };
+    let reads = help("quality-yield");
+    assert!(reads.contains(decodes), "{reads}");
+    for verb in ["compare-metrics", "bed-to-interval-list"] {
+        let text = help(verb);
+        assert!(text.contains(ignored) && !text.contains(decodes), "{text}");
+    }
+}
+
 /// clap 0.12 read a value attached to a one-letter flag: `-Oout.txt`,
 /// `-M0.1`, `-Iin.bam`, `-Rref.fa`, `-@2`. They write what the spaced
 /// forms write.
