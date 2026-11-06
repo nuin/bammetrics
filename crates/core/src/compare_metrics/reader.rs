@@ -16,6 +16,7 @@ const MINOR_HEADER: &str = "# ";
 /// The NPE a missing column line raises (`readLine().split`).
 const NO_COLUMN_LINE: &str = "Cannot invoke \"String.split(String)\" because the return value of \
                               \"java.io.BufferedReader.readLine()\" is null";
+
 /// `String.split` with limit 0: trailing empty strings dropped, and a text
 /// without the separator is itself.
 pub(super) fn java_split(text: &str, separator: char) -> Vec<&str> {

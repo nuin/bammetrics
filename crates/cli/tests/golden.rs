@@ -25,8 +25,14 @@ const FIXTURES: &[(&str, &str)] = &[
     ("QY_A", "tests/data/quality_yield_a.txt"),
     ("QY_B", "tests/data/quality_yield_b.txt"),
     ("PICARD", "tests/data/picard"),
-    ("PIC_ASM", "tests/data/picard/NA12878/NA12878.alignment_summary_metrics"),
-    ("PIC_DUP", "tests/data/picard/NA12878/NA12878.duplicate_metrics"),
+    (
+        "PIC_ASM",
+        "tests/data/picard/NA12878/NA12878.alignment_summary_metrics",
+    ),
+    (
+        "PIC_DUP",
+        "tests/data/picard/NA12878/NA12878.duplicate_metrics",
+    ),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
