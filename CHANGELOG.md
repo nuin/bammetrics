@@ -16,6 +16,25 @@
   which MultiQC and `bammetrics report` read. Snapshots in `tests/report` changed by
   those headings and one CSS rule.
 
+### Added
+
+- `CompareMetrics` (Picard face and Python `compare_metrics()`) and the `compare-metrics`
+  verb: two metrics files compared as Picard 3.5.0 compares them, with every option
+  (`KEY`, `METRICS_TO_IGNORE`, `METRICS_NOT_REQUIRED`, `METRIC_ALLOWABLE_RELATIVE_CHANGE`,
+  `IGNORE_HISTOGRAM_DIFFERENCES`, `OUTPUT`, `OUTPUT_TABLE`, `VERBOSITY`). Exit 0 when equal,
+  1 when NOT equal. The `OUTPUT` text and the log lines (without their timestamp) match
+  Picard's byte for byte on 74 concordance cases (`tests/concordance/test_compare_metrics.py`).
+- `crates/core/picard_fields.tsv` and `make picard-fields`: the 65 Picard 3.5.0 metrics
+  classes with their fields' Java types and defaults, read from `picard.jar`
+  (`tests/data/PicardFields.java`), so values compare typed as htsjdk reads them.
+- `java.rs`: `Double.toString` and `Float.toString` (even digit on a tie, two digits for
+  a subnormal), the JDK number parsers with their error messages (`multiple points`,
+  decimal digits of any script in a long column, hexadecimal literals rounded once), and
+  the iteration order of a `HashSet<String>`.
+- `compare-metrics` refuses an `-o` or `--output-table` that names an input, the two
+  naming one file, and `- -` (exit 2); its standard output ends with a newline. `KEY`
+  pairs rows through a hash map (300,000 shuffled rows in 0.6 s).
+
 ## 0.16.0
 
 Report track phase 11 (docs/05), the last one: docs and benchmark.

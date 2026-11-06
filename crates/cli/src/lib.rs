@@ -150,6 +150,10 @@ pub fn run() -> error::Result<u8> {
                 print!("{}", verb.help());
                 return Ok(0);
             }
+            // Picard's exit code tells equal from NOT equal.
+            if tool.name == bammetrics_core::compare_metrics::TOOL.name {
+                return Ok(bammetrics_core::compare_metrics::run_cli(rest)?);
+            }
             tool.run_cli(rest)?;
             return Ok(0);
         }

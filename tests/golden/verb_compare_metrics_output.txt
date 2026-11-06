@@ -1,0 +1,26 @@
+## argv
+compare-metrics
+tests/data/picard/NA12878/NA12878.alignment_summary_metrics
+tests/data/picard/NA12878/NA12878.alignment_summary_metrics
+-o
+OUT/compare.txt
+--output-table
+OUT/table.txt
+## exit
+0
+## stdout
+## stderr
+bammetrics compare-metrics: picard.analysis.AlignmentSummaryMetrics Metric files tests/data/picard/NA12878/NA12878.alignment_summary_metrics and tests/data/picard/NA12878/NA12878.alignment_summary_metrics are equal
+## file compare.txt
+Comparison of picard.analysis.AlignmentSummaryMetrics metrics between files ROOT/tests/data/picard/NA12878/NA12878.alignment_summary_metrics and ROOT/tests/data/picard/NA12878/NA12878.alignment_summary_metrics
+
+Metrics are equal
+
+## file table.txt
+## htsjdk.samtools.metrics.StringHeader
+# CompareMetrics INPUT=tests/data/picard/NA12878/NA12878.alignment_summary_metrics INPUT=tests/data/picard/NA12878/NA12878.alignment_summary_metrics OUTPUT_TABLE=OUT/table.txt OUTPUT=OUT/compare.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+
+

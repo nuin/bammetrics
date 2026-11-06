@@ -192,6 +192,16 @@ behaves how.
   `alignment_summary()` replace the default list instead, and `None` keeps it; that
   function returns `ALL_READS` rows only.
 
+- `CompareMetrics` prints Picard's log lines on standard error without the date and time
+  field (`INFO\tCompareMetrics\t<summary>`, `ERROR\tCompareMetrics\t<difference>`), so
+  the rest of each line matches. Picard's start-up lines, its command-line echo and its
+  `To get help, see ...` line are not printed. Where Picard throws, bammetrics prints
+  `bammetrics: <the exception's message>` with no stack trace; where Picard's parser
+  refuses the arguments, the error lines without the usage text. The exit codes match.
+- The `compare-metrics` verb writes the comparison to standard output without `-o`; the
+  Picard face, as Picard, writes it only to `O=`. Both exit 1 when the files are NOT
+  equal, where other tool verbs keep 1 for an input error.
+
 ## Charts
 
 `QualityScoreDistribution`, `MeanQualityByCycle` and `CollectBaseDistributionByCycle`
@@ -215,6 +225,14 @@ written, with `file` and `rows`; so do `collect_variant_calling_metrics()`,
 without `INPUT` fills its own value options in declaration order from the positional
 arguments) or as `truth_vcf=` and `call_vcf=`. A double Picard prints as `?` (NaN,
 `HET_SPECIFICITY`, a ratio over zero) is `float("nan")` in the dicts.
+
+`compare_metrics([a, b], ...)` returns one dict per line Picard logs as a difference:
+`KEY`, `METRIC`, `VALUE1` and `VALUE2` (typed as the metric's field) for a value
+difference, `None` there for a row-count, column, missing-key or histogram line, and
+`DIFFERENCE` with the whole line for every one. An empty list means equal, except with
+`ignore_histogram_differences=True`, where the one line `Metrics Histograms differ, but
+the 'IGNORE_HISTOGRAM_DIFFERENCES' flag is set.` comes with files that are equal.
+`output=` writes Picard's `OUTPUT` text and `output_table=` its table.
 
 ## Inputs
 
@@ -261,6 +279,29 @@ arguments) or as `truth_vcf=` and `call_vcf=`. A double Picard prints as `?` (Na
   Picard rejects (`test_rna_bed_ribosomal_intervals_are_read_by_bammetrics_only` gives
   Picard the interval list and the outputs are identical). An interval list of another
   dictionary exits 1 in both tools.
+
+- `CompareMetrics` reads a class only from `crates/core/picard_fields.tsv`: the 65
+  `MetricBase` classes and 2 `Header` classes in `picard.jar` 3.5.0. A metrics class from
+  another jar (GATK, a user class) is `Could not locate class` here; Picard reads it when
+  it is on its class path. A class that loads in Java but is not a metrics class
+  (`java.lang.String`, the program class `picard.analysis.CollectInsertSizeMetrics`) is
+  `Could not locate class` here and `Could not get field with name ...` in Picard; both
+  exit 1. The two `Iso8601Date` fields (`AUTOCALL_DATE` and `IMAGING_DATE` of
+  `ArraysVariantCallingDetailMetrics`) are compared as their text.
+- `CompareMetrics` options parse as every bammetrics tool's do. A single-valued option
+  given twice (`O`, `OUTPUT_TABLE`, `IHD`, `VERBOSITY`, `R`) keeps the last value; Picard
+  refuses it. A boolean takes `true` or `false` in any case, and anything else exits 1
+  naming the option; Picard's parser reads any other text as false, so `IHD=yes` compares
+  histograms there. A mix of `-I a` and `I=b` is read; Picard refuses the mix. The common options
+  bammetrics ignores are not checked: `COMPRESSION_LEVEL=99`, `MAX_RECORDS_IN_RAM=abc` and
+  `VALIDATION_STRINGENCY=LOUD` exit 0 here and 1 in Picard, and `GA4GH_CLIENT_SECRETS` is
+  accepted where Picard's `CompareMetrics` does not list it. `-h` and `--help` print the
+  bammetrics help and exit 0, where Picard prints its usage and exits 1; `--version` and
+  `--arguments_file` are not read.
+- `CompareMetrics` on the Picard face and `compare_metrics()` in Python write `OUTPUT` and
+  `OUTPUT_TABLE` even when one names an `INPUT`, as Picard does, so the input is replaced.
+  The `compare-metrics` verb refuses both (exit 2), and refuses `-o` and `--output-table`
+  naming one file.
 
 ## Validation
 
@@ -526,6 +567,27 @@ before the strand; `.` is the positive strand; zero-length intervals are dropped
 `KEEP_LENGTH_ZERO_INTERVALS=true`; `UNIQUE=true` merges overlapping and abutting intervals
 with the first one's strand and the distinct names joined by `|`; the header is
 `@HD VN:1.6 SO:coordinate` whatever `SORT` says.
+
+`CompareMetrics` behaviour reproduced from Picard 3.5.0
+(`tests/concordance/test_compare_metrics.py`, 74 cases): files equal when every field
+prints the same `FormatUtil` text, so `0.5` and `0.50` agree, a change below the sixth
+decimal is no difference, and a dropped column whose values all equal the class default
+(`0`) leaves the files equal; a row-count difference ends the comparison before the class
+check, and two classes with one row count are an error; the columns either file lacks are
+named in `HashSet` order (`MEAN_READ_LENGTH,TOTAL_READS,PF_READS`); `METRICS_TO_IGNORE`
+and allowance names must be columns of the first file, `METRICS_NOT_REQUIRED` names need
+not be; rows pair by position (`Key: 0`) or by the `KEY` values, a repeated key keeps its
+first place and takes the later row, a null key value throws; numbers compare as doubles,
+both NaN is no change, a change from 0 has relative change `1.7976931348623157E308`, a NaN
+relative change is within any allowance, and the allowance test is strict; values print
+with `Double.toString` (`1.0E-7`, `0.01200000000000001`); a histogram with a value or a
+bin added differs, a zero bin counts, `10` and `10.0` agree, keys of two classes differ
+unless both histograms are empty; `Metrics Histograms differ` when only histograms
+differ, `Metric Histograms differ` after a row difference, nothing with
+`IGNORE_HISTOGRAM_DIFFERENCES` once rows differ; `\r\n` and `\r` end lines; a short row,
+a `5.0` in a long column, an empty cell in a primitive column, an unknown enum constant,
+column, class or header class, and a stray header line fail with htsjdk's messages; a
+`net.sf.picard` class name resolves through htsjdk's 17 packages.
 
 ## Failures
 

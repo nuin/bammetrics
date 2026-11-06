@@ -25,6 +25,14 @@ const FIXTURES: &[(&str, &str)] = &[
     ("QY_A", "tests/data/quality_yield_a.txt"),
     ("QY_B", "tests/data/quality_yield_b.txt"),
     ("PICARD", "tests/data/picard"),
+    (
+        "PIC_ASM",
+        "tests/data/picard/NA12878/NA12878.alignment_summary_metrics",
+    ),
+    (
+        "PIC_DUP",
+        "tests/data/picard/NA12878/NA12878.duplicate_metrics",
+    ),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -182,6 +190,15 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_verb_bed_to_interval_list_no_dictionary", "bed-to-interval-list", "BED"),
     case!("qc_panel_bed", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--panel", "BED", "-R", "REF", "--date", "2026-01-02 03:04:05 UTC"),
     case!("plan_panel_bed", "plan", "IS", "-o", "OUT/sample", "--panel", "BED"),
+    // CompareMetrics: exit 0 equal, 1 NOT equal; the OUTPUT names both files by absolute path.
+    case!("picard_compare_metrics_equal", "CompareMetrics", "I=PIC_ASM", "I=PIC_ASM", "O=OUT/compare.txt"),
+    case!("picard_compare_metrics_differ", "CompareMetrics", "I=QY_A", "I=QY_B", "O=OUT/compare.txt", "OUTPUT_TABLE=OUT/table.txt"),
+    case!("picard_compare_metrics_allowance", "CompareMetrics", "I=QY_A", "I=QY_B", "MARC=TOTAL_READS:8", "MI=PF_READS", "VERBOSITY=ERROR"),
+    case!("verb_compare_metrics_stdout", "compare-metrics", "QY_A", "QY_B"),
+    case!("verb_compare_metrics_output", "compare-metrics", "PIC_ASM", "PIC_ASM", "-o", "OUT/compare.txt", "--output-table", "OUT/table.txt"),
+    case!("verb_compare_metrics_key_tsv", "compare-metrics", "QY_A", "QY_B", "--key", "TOTAL_READS", "--format", "tsv"),
+    case!("error_compare_metrics_one_input", "CompareMetrics", "I=QY_A"),
+    case!("error_compare_metrics_classes", "CompareMetrics", "I=QY_A", "I=PIC_DUP"),
 ];
 
 /// The same tools on corpus BAM t1, with its reference and interval lists.

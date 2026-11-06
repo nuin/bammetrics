@@ -295,6 +295,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::variant_calling_metrics::TOOL,
     &crate::variant_calling_metrics::ACCUMULATE_TOOL,
     &crate::genotype_concordance::TOOL,
+    &crate::compare_metrics::TOOL,
 ];
 
 /// The tool named `name`.

@@ -37,6 +37,9 @@ bammetrics CollectRawWgsMetrics I=sample.bam O=sample.raw_wgs_metrics R=ref.fa I
 # VCF tools: OUTPUT is a prefix, the files get Picard's extensions
 bammetrics CollectVariantCallingMetrics I=calls.vcf.gz DBSNP=dbsnp.vcf.gz O=sample
 bammetrics GenotypeConcordance TV=truth.vcf.gz TRUTH_SAMPLE=HG002 CV=calls.vcf.gz CS=sample O=sample
+
+# Two metrics files compared as Picard compares them: exit 1 when they differ
+bammetrics CompareMetrics I=picard.hs_metrics I=ours.hs_metrics O=diff.txt
 ```
 
 Each Picard class is also a kebab-case verb (`insert-size`, `gc-bias`, ...; `bammetrics
@@ -106,6 +109,7 @@ under the failing check it explains. The presets, the rule language and `verdict
 | CollectVariantCallingMetrics (VCF in, `DBSNP`, `TARGET_INTERVALS`, `SEQUENCE_DICTIONARY`, `GVCF_INPUT`, `THREAD_COUNT`; summary and per-sample detail files) | | `collect_variant_calling_metrics()` |
 | AccumulateVariantCallingMetrics (shard prefixes merged as Picard merges them) | | `accumulate_variant_calling_metrics()` |
 | GenotypeConcordance (`TRUTH_VCF`, `CALL_VCF`, samples, `INTERVALS`, `MIN_GQ`, `MIN_DP`, `MISSING_SITES_HOM_REF`, `IGNORE_FILTER_STATUS`, `OUTPUT_ALL_ROWS`; summary, detail and contingency files) | | `genotype_concordance()` |
+| CompareMetrics (`KEY`, `METRICS_TO_IGNORE`, `METRICS_NOT_REQUIRED`, `METRIC_ALLOWABLE_RELATIVE_CHANGE`, `IGNORE_HISTOGRAM_DIFFERENCES`, `OUTPUT_TABLE`; Picard's exit code) | | `compare_metrics()` |
 | the first four in one pass | | `collect()` |
 
 Levels are `METRIC_ACCUMULATION_LEVEL`: `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`.

@@ -324,6 +324,15 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("UNIQUE", "true")),
             picard_outputs: single,
         },
+        // Equal files, so both faces exit 0.
+        Case {
+            verb: "compare-metrics",
+            class: "CompareMetrics",
+            verb_args: strings(&[QY_A, QY_A]),
+            picard_args: strings(&[&format!("I={QY_A}"), &format!("I={QY_A}")]),
+            option: Some(("KEY", "TOTAL_READS")),
+            picard_outputs: single,
+        },
     ]
 }
 
@@ -393,7 +402,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && **c != "AccumulateVariantCallingMetrics")
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 21);
+    assert_eq!(classes.len(), 22);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names
@@ -570,6 +579,55 @@ fn an_output_that_is_the_input_is_refused() {
     }
     assert_eq!(fs::read(&bam).expect("bam"), before);
     assert_eq!(fs::read(&collect_prefix).expect("bam"), before);
+}
+
+/// `compare-metrics` refuses an `--output-table` or `-o` naming an input,
+/// the two naming one file, and standard input given twice, all before
+/// anything is written.
+#[test]
+fn compare_metrics_outputs_are_checked() {
+    let dir = fresh_dir("compare-overwrite");
+    let a = dir.join("a.txt");
+    let b = dir.join("b.txt");
+    fs::copy(root().join(QY_A), &a).expect("copy");
+    fs::copy(root().join(QY_B), &b).expect("copy");
+    let before = fs::read(&a).expect("a");
+    let (pa, pb) = (a.to_str().expect("utf-8"), b.to_str().expect("utf-8"));
+    let out = dir.join("out.txt");
+    let po = out.to_str().expect("utf-8");
+    let same = format!("{}/./out.txt", dir.display());
+    let cases = [
+        (
+            strings(&["compare-metrics", pa, pb, "--output-table", pa]),
+            "is an input",
+        ),
+        (
+            strings(&["compare-metrics", pa, pb, "-o", pa]),
+            "is an input",
+        ),
+        (
+            strings(&["compare-metrics", pa, pb, "-o", po, "--output-table", &same]),
+            "is the main output too",
+        ),
+        (
+            strings(&["compare-metrics", "-", "-"]),
+            "standard input 2 times",
+        ),
+    ];
+    for (args, message) in cases {
+        let run = bammetrics(&args);
+        assert_eq!(run.status.code(), Some(2), "{args:?}");
+        assert!(
+            String::from_utf8_lossy(&run.stderr).contains(message),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+    }
+    assert_eq!(fs::read(&a).expect("a"), before);
+    assert!(!out.exists());
+    let printed = bammetrics(&strings(&["compare-metrics", pa, pb]));
+    assert_eq!(printed.status.code(), Some(1));
+    assert!(printed.stdout.ends_with(b")\n"));
 }
 
 /// Picard's plumbing booleans (`CREATE_INDEX`) are flags too: a BAM after

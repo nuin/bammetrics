@@ -1,0 +1,58 @@
+## argv
+CompareMetrics
+I=tests/data/quality_yield_a.txt
+I=tests/data/quality_yield_b.txt
+O=OUT/compare.txt
+OUTPUT_TABLE=OUT/table.txt
+## exit
+1
+## stdout
+## stderr
+INFO	CompareMetrics	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics Metric files tests/data/quality_yield_a.txt and tests/data/quality_yield_b.txt are NOT equal
+ERROR	CompareMetrics	Key: 0 Metric: TOTAL_READS values differ. Value1: 10 Value2: 80 Changed by 70.0 (relative change of 7.0)
+ERROR	CompareMetrics	Key: 0 Metric: PF_READS values differ. Value1: 10 Value2: 80 Changed by 70.0 (relative change of 7.0)
+ERROR	CompareMetrics	Key: 0 Metric: READ_LENGTH values differ. Value1: 100 Value2: 0 Changed by -100.0 (relative change of -1.0)
+ERROR	CompareMetrics	Key: 0 Metric: TOTAL_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+ERROR	CompareMetrics	Key: 0 Metric: PF_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+ERROR	CompareMetrics	Key: 0 Metric: Q20_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+ERROR	CompareMetrics	Key: 0 Metric: PF_Q20_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+ERROR	CompareMetrics	Key: 0 Metric: Q30_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+ERROR	CompareMetrics	Key: 0 Metric: PF_Q30_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+ERROR	CompareMetrics	Key: 0 Metric: Q20_EQUIVALENT_YIELD values differ. Value1: 2000 Value2: 0 Changed by -2000.0 (relative change of -1.0)
+ERROR	CompareMetrics	Key: 0 Metric: PF_Q20_EQUIVALENT_YIELD values differ. Value1: 2000 Value2: 0 Changed by -2000.0 (relative change of -1.0)
+## file compare.txt
+Comparison of picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics metrics between files ROOT/tests/data/quality_yield_a.txt and ROOT/tests/data/quality_yield_b.txt
+
+Metrics are NOT equal
+
+Key: 0 Metric: TOTAL_READS values differ. Value1: 10 Value2: 80 Changed by 70.0 (relative change of 7.0)
+Key: 0 Metric: PF_READS values differ. Value1: 10 Value2: 80 Changed by 70.0 (relative change of 7.0)
+Key: 0 Metric: READ_LENGTH values differ. Value1: 100 Value2: 0 Changed by -100.0 (relative change of -1.0)
+Key: 0 Metric: TOTAL_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+Key: 0 Metric: PF_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+Key: 0 Metric: Q20_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+Key: 0 Metric: PF_Q20_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+Key: 0 Metric: Q30_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+Key: 0 Metric: PF_Q30_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+Key: 0 Metric: Q20_EQUIVALENT_YIELD values differ. Value1: 2000 Value2: 0 Changed by -2000.0 (relative change of -1.0)
+Key: 0 Metric: PF_Q20_EQUIVALENT_YIELD values differ. Value1: 2000 Value2: 0 Changed by -2000.0 (relative change of -1.0)## file table.txt
+## htsjdk.samtools.metrics.StringHeader
+# CompareMetrics INPUT=tests/data/quality_yield_a.txt INPUT=tests/data/quality_yield_b.txt OUTPUT=OUT/compare.txt OUTPUT_TABLE=OUT/table.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CompareMetrics$MetricComparisonDifferences
+KEY	METRIC	VALUE1	VALUE2
+0	TOTAL_READS	10	80
+0	PF_READS	10	80
+0	READ_LENGTH	100	0
+0	TOTAL_BASES	1000	0
+0	PF_BASES	1000	0
+0	Q20_BASES	1000	0
+0	PF_Q20_BASES	1000	0
+0	Q30_BASES	1000	0
+0	PF_Q30_BASES	1000	0
+0	Q20_EQUIVALENT_YIELD	2000	0
+0	PF_Q20_EQUIVALENT_YIELD	2000	0
+
+
