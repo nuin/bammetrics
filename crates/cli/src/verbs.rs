@@ -350,6 +350,9 @@ impl Verb {
                     .map(|(alias, _)| *alias),
             );
             let help = match opt.kind {
+                Kind::Ignored(why) if opt.picard() == "REFERENCE_SEQUENCE" => {
+                    format!("Decodes a CRAM input; for a BAM accepted and ignored: {why}.")
+                }
                 Kind::Ignored(why) => format!("Accepted and ignored: {why}."),
                 _ if opt.required => format!("{} Required.", opt.help),
                 _ => opt.help.to_owned(),
