@@ -1,7 +1,9 @@
 //! Column definitions for the report: `glossary.tsv`, one row per column the
 //! implemented tools write (metrics class, column, type, definition in our
-//! own words). The file is compiled into the binary; a test checks that
-//! every column a tool emits has a row.
+//! own words). The file is compiled into the binary. `tests/glossary.rs`
+//! runs every tool in the registry and fails when a column or histogram
+//! label it writes has no row, or a row names a column its class does not
+//! write.
 
 /// The glossary text: `#` comment lines, then [`HEADER`], then one row per
 /// column.
@@ -49,59 +51,37 @@ pub fn lookup(class: &str, column: &str) -> Option<Entry> {
     })
 }
 
+/// The row for histogram column `label` of a file `program` wrote, where
+/// `key` is the histogram's key label: the label itself, then `*.<suffix>`
+/// for a unit-prefixed label, then `*`. `CollectMultipleMetrics` writes each
+/// program's histogram under its own name, so when `program` has no row for
+/// `key` the program whose histogram has that key is used.
+pub fn histogram_lookup(program: &str, key: &str, label: &str) -> Option<Entry> {
+    let program = if lookup(program, key).is_some() {
+        program
+    } else {
+        entries()
+            .find(|e| e.column == key && is_program(e.class))?
+            .class
+    };
+    lookup(program, label)
+        .or_else(|| {
+            let suffix = label.split_once('.')?.1;
+            lookup(program, &format!("*.{suffix}"))
+        })
+        .or_else(|| lookup(program, "*"))
+}
+
+/// A histogram row's first field: a program name, not a dotted class.
+fn is_program(class: &str) -> bool {
+    !class.contains('.')
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
     use super::*;
-    use crate::metric::MetricRow;
-
-    /// Every metrics class a tool writes, with its columns.
-    fn emitted_classes() -> Vec<(&'static str, &'static [&'static str])> {
-        vec![
-            (
-                crate::insert_size::Row::CLASS,
-                crate::insert_size::Row::COLUMNS,
-            ),
-            (
-                crate::alignment_summary::Row::CLASS,
-                crate::alignment_summary::Row::COLUMNS,
-            ),
-            (
-                crate::quality_yield::Row::CLASS,
-                crate::quality_yield::Row::COLUMNS,
-            ),
-            (
-                "picard.analysis.directed.HsMetrics",
-                &crate::hs_metrics::COLUMNS,
-            ),
-            (
-                crate::gc_bias::DetailRow::CLASS,
-                crate::gc_bias::DetailRow::COLUMNS,
-            ),
-            (
-                crate::gc_bias::SummaryRow::CLASS,
-                crate::gc_bias::SummaryRow::COLUMNS,
-            ),
-            (
-                crate::duplicate_metrics::Row::CLASS,
-                crate::duplicate_metrics::Row::COLUMNS,
-            ),
-            (
-                crate::base_distribution_by_cycle::Row::CLASS,
-                crate::base_distribution_by_cycle::Row::COLUMNS,
-            ),
-            ("picard.analysis.WgsMetrics", &crate::wgs_metrics::COLUMNS),
-            (
-                "picard.analysis.CollectRawWgsMetrics$RawWgsMetrics",
-                &crate::wgs_metrics::COLUMNS,
-            ),
-            (
-                "picard.analysis.CollectWgsMetricsWithNonZeroCoverage$WgsMetricsWithNonZeroCoverage",
-                &crate::wgs_metrics::NON_ZERO_COLUMNS,
-            ),
-        ]
-    }
 
     #[test]
     fn every_line_is_a_row() {
@@ -116,29 +96,9 @@ mod tests {
     }
 
     #[test]
-    fn every_emitted_column_has_a_definition() {
-        let mut missing = Vec::new();
-        for (class, columns) in emitted_classes() {
-            for column in columns {
-                if lookup(class, column).is_none() {
-                    missing.push(format!("{class}\t{column}"));
-                }
-            }
-        }
-        assert!(
-            missing.is_empty(),
-            "no glossary row for:\n{}",
-            missing.join("\n")
-        );
-    }
-
-    #[test]
-    fn no_row_names_a_column_the_class_does_not_emit() {
-        let classes = emitted_classes();
+    fn no_definition_has_an_en_or_em_dash() {
         for e in entries() {
-            if let Some((_, columns)) = classes.iter().find(|(class, _)| *class == e.class) {
-                assert!(columns.contains(&e.column), "stale glossary row {e:?}");
-            }
+            assert!(!e.definition.contains(['\u{2013}', '\u{2014}']), "{e:?}");
         }
     }
 
@@ -151,5 +111,55 @@ mod tests {
             Some("int")
         );
         assert_eq!(lookup("InsertSizeMetrics", "NO_SUCH"), None);
+    }
+
+    #[test]
+    fn histogram_lookup_tries_the_label_then_the_suffix_then_star() {
+        let column = |program, key, label| histogram_lookup(program, key, label).map(|e| e.column);
+        assert_eq!(
+            column("CollectInsertSizeMetrics", "insert_size", "insert_size"),
+            Some("insert_size")
+        );
+        assert_eq!(
+            column("CollectInsertSizeMetrics", "insert_size", "lib1.fr_count"),
+            Some("*.fr_count")
+        );
+        assert_eq!(
+            column(
+                "EstimateLibraryComplexity",
+                "duplication_group_count",
+                "lib1"
+            ),
+            Some("*")
+        );
+        assert_eq!(
+            column("CollectInsertSizeMetrics", "insert_size", "NO_SUCH"),
+            None
+        );
+    }
+
+    #[test]
+    fn multiple_metrics_histograms_take_the_program_of_their_key() {
+        for (key, label, program) in [
+            (
+                "insert_size",
+                "All_Reads.fr_count",
+                "CollectInsertSizeMetrics",
+            ),
+            (
+                "READ_LENGTH",
+                "PAIRED_TOTAL_LENGTH_COUNT",
+                "CollectAlignmentSummaryMetrics",
+            ),
+            ("QUALITY", "COUNT_OF_Q", "QualityScoreDistribution"),
+            ("CYCLE", "MEAN_QUALITY", "MeanQualityByCycle"),
+        ] {
+            let entry = histogram_lookup("CollectMultipleMetrics", key, label).expect(label);
+            assert_eq!(entry.class, program);
+        }
+        assert_eq!(
+            histogram_lookup("CollectMultipleMetrics", "NO_SUCH", "x"),
+            None
+        );
     }
 }

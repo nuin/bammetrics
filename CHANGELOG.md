@@ -16,6 +16,24 @@
   which MultiQC and `bammetrics report` read. Snapshots in `tests/report` changed by
   those headings and one CSS rule.
 
+### Fixed
+
+- `crates/core/glossary.tsv` follows a review against Picard 3.5.0 and our code:
+  157 definitions rewritten (among them HsMetrics `FOLD_ENRICHMENT` counts on-bait bases
+  only, AlignmentSummaryMetrics `PF_INDEL_RATE` is a fraction, not per 100, and
+  InsertSizeMetrics `MEAN_INSERT_SIZE` cuts the upper tail only), `MODE_INSERT_SIZE`
+  typed `float` as Picard declares it, and 176 rows added for the classes that had none:
+  RnaSeqMetrics, the two VariantCalling classes, the three GenotypeConcordance classes,
+  TargetedPcrMetrics, TheoreticalSensitivityMetrics and the RNA and targeted PCR
+  histograms. Report pages show the new text; no metrics file changes.
+- Histograms in `CollectMultipleMetrics` files (insert size, read length, quality
+  distribution, quality by cycle) had blank definitions on the sample page, because the
+  file header names `CollectMultipleMetrics`. `glossary::histogram_lookup` now takes the
+  program whose histogram has the file's key column.
+- The glossary test runs every tool in `TOOLS` and fails when a written column or
+  histogram label has no row; it replaces a hand list of 11 classes. A tool added to
+  `TOOLS` without an argument list in `crates/core/tests/glossary.rs` fails it too.
+
 ## 0.16.0
 
 Report track phase 11 (docs/05), the last one: docs and benchmark.
