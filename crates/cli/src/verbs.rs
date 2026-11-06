@@ -199,6 +199,24 @@ pub const VERBS: &[Verb] = &[
         ],
         ..verb("bed-to-interval-list", "BedToIntervalList", Files::Single)
     },
+    Verb {
+        input: "FASTA",
+        about: Some(
+            "writes a sequence dictionary: @HD, then one @SQ line per FASTA sequence with SN, \
+             LN, M5 and UR. -o FILE refuses an existing file, as Picard does.",
+        ),
+        writes: "sequence dictionary",
+        reads: &["REFERENCE", "ALT_NAMES"],
+        ignores: &[
+            (Key::Threads, "no BAM is read"),
+            (Key::Sample, "a sequence dictionary has no sample"),
+        ],
+        ..verb(
+            "create-sequence-dictionary",
+            "CreateSequenceDictionary",
+            Files::Single,
+        )
+    },
 ];
 
 /// Verb spellings every verb's rows take, beside a verb's own

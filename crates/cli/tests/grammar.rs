@@ -324,6 +324,14 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("UNIQUE", "true")),
             picard_outputs: single,
         },
+        Case {
+            verb: "create-sequence-dictionary",
+            class: "CreateSequenceDictionary",
+            verb_args: strings(&[REF]),
+            picard_args: strings(&[&r]),
+            option: Some(("GENOME_ASSEMBLY", "GRCh38")),
+            picard_outputs: single,
+        },
     ]
 }
 
@@ -393,7 +401,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && **c != "AccumulateVariantCallingMetrics")
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 21);
+    assert_eq!(classes.len(), 22);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

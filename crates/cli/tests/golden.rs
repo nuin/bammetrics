@@ -182,6 +182,14 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_verb_bed_to_interval_list_no_dictionary", "bed-to-interval-list", "BED"),
     case!("qc_panel_bed", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--panel", "BED", "-R", "REF", "--date", "2026-01-02 03:04:05 UTC"),
     case!("plan_panel_bed", "plan", "IS", "-o", "OUT/sample", "--panel", "BED"),
+    // create-sequence-dictionary: the .dict and .md5 Picard 3.5.0 writes. The default
+    // name beside the FASTA is checked in tests/create_sequence_dictionary.rs.
+    case!("picard_create_sequence_dictionary", "CreateSequenceDictionary", "R=REF", "O=OUT/ref.dict"),
+    case!("picard_create_sequence_dictionary_options", "CreateSequenceDictionary", "-R", "REF", "-O", "OUT/ref.dict", "AS=GRCh38", "SP=Homo sapiens", "UR=ref_100k.fa", "CREATE_MD5_FILE=true"),
+    case!("verb_create_sequence_dictionary_stdout", "create-sequence-dictionary", "REF"),
+    case!("verb_create_sequence_dictionary_json", "create-sequence-dictionary", "REF", "--format", "json", "--uri", "ref_100k.fa"),
+    case!("error_create_sequence_dictionary_exists", "CreateSequenceDictionary", "R=REF", "O=DICT"),
+    case!("error_verb_create_sequence_dictionary_no_fasta", "create-sequence-dictionary"),
 ];
 
 /// The same tools on corpus BAM t1, with its reference and interval lists.

@@ -1,0 +1,27 @@
+## argv
+create-sequence-dictionary
+tests/data/ref_100k.fa
+--format
+json
+--uri
+ref_100k.fa
+## exit
+0
+## stdout
+{
+  "tool": "CreateSequenceDictionary",
+  "class": null,
+  "metrics": [
+    {
+      "name": "chr1",
+      "length": 100000,
+      "md5": "45cf6d7380b910e1541ebad795fe3e49",
+      "assembly": null,
+      "uri": "ref_100k.fa",
+      "species": null,
+      "alternate_names": null
+    }
+  ],
+  "histogram": null
+}
+## stderr

@@ -1,0 +1,9 @@
+## argv
+CreateSequenceDictionary
+R=tests/data/ref_100k.fa
+O=tests/data/chr1.dict
+## exit
+1
+## stdout
+## stderr
+bammetrics: file://ROOT/tests/data/chr1.dict already exists.  Delete this file and try again, or specify a different output file.
