@@ -679,6 +679,23 @@ def genotype_concordance(
     prefix: PREFIX.genotype_concordance_summary_metrics, _detail_metrics and
     _contingency_metrics; Python returns one row per file: file and rows."""
 
+def compare_metrics(
+    input: _Paths,
+    *,
+    output: _Path | None = None,
+    output_table: _Path | None = None,
+    metrics_to_ignore: str | Sequence[str] | None = None,
+    metrics_not_required: str | Sequence[str] | None = None,
+    metric_allowable_relative_change: str | Sequence[str] | None = None,
+    ignore_histogram_differences: bool | None = None,
+    key: str | Sequence[str] | None = None,
+    verbosity: str | None = None,
+) -> list[dict[str, Any]]:
+    """CompareMetrics: one row per difference Picard reports between two metrics files:
+    KEY, METRIC, VALUE1 and VALUE2 for a value, DIFFERENCE (the line Picard logs) for
+    every one; no row when the files are equal. The command line exits 1 when they are
+    not."""
+
 # END registry tools
 
 def alignment_summary(
