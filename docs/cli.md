@@ -459,9 +459,12 @@ without `O=` writes the FASTA name with its extension replaced by `.dict`, besid
 - The FASTA name ends in `.fasta`, `.fas`, `.fa`, `.fna` or `.txt`, each also with `.gz`;
   any other name exits 1 (`File is not a supported reference file type`). A `.gz` file is
   read as plain gzip or bgzip, member after member. The `.fai` is never read.
-- `-o FILE` and `O=FILE` refuse a file that exists (exit 1, `already exists.  Delete this
-  file and try again`), and the verb exits 2 when `-o` names the FASTA or the
-  `--alt-names` file.
+- `O=FILE`, and `-o FILE` in picard format, refuse a file that exists (exit 1, `already
+  exists.  Delete this file and try again`). With `--format json`, `jsonl`, `tsv` or
+  `human`, `-o FILE` replaces an existing file, as in every verb. The verb exits 2 when
+  `-o` or `FILE.md5` names the FASTA or the `--alt-names` file.
+- A line feed in `--genome-assembly`, `--uri` or `--species` exits 2 before any file is
+  written; Picard fails there too (`Supplied String contains illegal character`).
 - `--truncate-names-at-whitespace` (default true) names a sequence by the first word of
   its `>` line. `--num-sequences N` stops after N sequences, at least one.
   `--create-md5-file` also writes `FILE.md5` and needs `-o`.
@@ -580,8 +583,11 @@ bammetrics CollectHsMetrics I=in.bam O=out.txt R=ref.fa \
 
 The Picard face takes `KEY=VALUE`, `--KEY VALUE`, `--KEY=VALUE` and `-K VALUE` with long
 or short names, writes `O=` (standard output without it) and exits 0 or 1. It is
-byte-identical to 0.12, apart from `--help` alone, which now prints the verb help.
-`ASSUME_SORTED=false` exits
+byte-identical to 0.12, apart from `--help` alone, which now prints the verb help, and an
+option given twice. An option Picard takes once, given twice (`SP=a SP=b`, `O=a O=b`), exits
+1 with Picard's `Option 'SPECIES' cannot be specified more than once.`; 0.12 kept the last
+value. A list option (`METRIC_ACCUMULATION_LEVEL`, `BAIT_INTERVALS`, `PROGRAM`) adds each
+value. The verbs keep the last value of an option given twice. `ASSUME_SORTED=false` exits
 1 on a BAM whose header is not coordinate sorted, as Picard does.
 `METRIC_ACCUMULATION_LEVEL` (`ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`; `null`
 clears the default) works where Picard has it. Where the output differs from Picard on

@@ -32,7 +32,6 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
@@ -288,21 +287,64 @@ fn check_name(name: &str) -> Result<()> {
     }
 }
 
+/// A line ends at `\n` or `\r`, as `FastLineReader` ends lines, so `\r\n`
+/// gives a line and an empty one. Empty lines are skipped.
+fn line_end(b: u8) -> bool {
+    b == b'\n' || b == b'\r'
+}
+
+fn read_error(source: &str, e: &std::io::Error) -> Error {
+    Error::Metric(format!("Error reading FASTA {source}: {e}"))
+}
+
+/// One sequence's bases as they are read: the MD5 of the bases upper-cased,
+/// their count, and the Java whitespace at the end of the line so far, which
+/// counts only when a base follows it on the same line.
+#[derive(Default)]
+struct Bases {
+    digest: Md5,
+    length: u64,
+    blanks: Vec<u8>,
+    upper: Vec<u8>,
+}
+
+impl Bases {
+    /// The next bytes of the current line.
+    fn add(&mut self, bytes: &[u8]) {
+        let Some(last) = bytes.iter().rposition(|&b| !java_whitespace(b)) else {
+            self.blanks.extend_from_slice(bytes);
+            return;
+        };
+        self.digest.update(&self.blanks);
+        self.length += self.blanks.len() as u64;
+        self.blanks.clear();
+        self.upper.clear();
+        self.upper
+            .extend(bytes[..=last].iter().map(u8::to_ascii_uppercase));
+        self.digest.update(&self.upper);
+        self.length += self.upper.len() as u64;
+        self.blanks.extend_from_slice(&bytes[last + 1..]);
+    }
+
+    /// The line ended: its trailing whitespace is dropped.
+    fn end_line(&mut self) {
+        self.blanks.clear();
+    }
+}
+
 /// `FastaSequenceFile` over a plain or gzip stream: one [`Sequence`] per
-/// header, bases hashed as they are read.
+/// header, bases hashed as they are read. A line is scanned in the chunks
+/// the read buffer holds, so memory stays at the buffer size whatever the
+/// line length.
 struct FastaReader {
     input: Box<dyn BufRead>,
     /// The absolute path, for messages (`getSource`).
     source: String,
     truncate: bool,
-    /// One line of the file, without its `\n`.
-    buf: Vec<u8>,
-    /// Where the unread part of `buf` starts; `None` when `buf` is used up.
-    start: Option<usize>,
-    /// The header (after `>`) that ended the previous sequence.
+    /// The header (after `>`) that ended the previous sequence, cut at
+    /// `NAME_LIMIT + 1` bytes.
     pending: Option<Vec<u8>>,
     index: usize,
-    upper: Vec<u8>,
 }
 
 impl FastaReader {
@@ -331,66 +373,81 @@ impl FastaReader {
             input,
             source: absolute(path)?.display().to_string(),
             truncate,
-            buf: Vec::new(),
-            start: None,
             pending: None,
             index: 0,
-            upper: Vec::new(),
         })
     }
 
-    /// The next line of `buf`, ended by `\n` or `\r` as `FastLineReader`
-    /// ends lines (so `\r\n` gives a line and an empty one); `None` at the
+    /// The first byte of the next non-empty line, consumed; `None` at the
     /// end of the file.
-    fn next_line(&mut self) -> Result<Option<Range<usize>>> {
-        let start = match self.start {
-            Some(start) => start,
-            None => {
-                self.buf.clear();
-                let read = self.input.read_until(b'\n', &mut self.buf).map_err(|e| {
-                    Error::Metric(format!("Error reading FASTA {}: {e}", self.source))
-                })?;
-                if read == 0 {
-                    return Ok(None);
-                }
-                if self.buf.last() == Some(&b'\n') {
-                    self.buf.pop();
-                }
-                0
-            }
-        };
-        match self.buf[start..].iter().position(|&b| b == b'\r') {
-            Some(end) => {
-                self.start = Some(start + end + 1);
-                Ok(Some(start..start + end))
-            }
-            None => {
-                self.start = None;
-                Ok(Some(start..self.buf.len()))
+    fn line_start(&mut self) -> Result<Option<u8>> {
+        loop {
+            let buf = self
+                .input
+                .fill_buf()
+                .map_err(|e| read_error(&self.source, &e))?;
+            let Some(&first) = buf.first() else {
+                return Ok(None);
+            };
+            self.input.consume(1);
+            if !line_end(first) {
+                return Ok(Some(first));
             }
         }
+    }
+
+    /// The rest of the current line, each chunk passed to `chunk`; the line
+    /// end is consumed.
+    fn rest_of_line(&mut self, mut chunk: impl FnMut(&[u8])) -> Result<()> {
+        loop {
+            let buf = self
+                .input
+                .fill_buf()
+                .map_err(|e| read_error(&self.source, &e))?;
+            if buf.is_empty() {
+                return Ok(());
+            }
+            match buf.iter().position(|&b| line_end(b)) {
+                Some(end) => {
+                    chunk(&buf[..end]);
+                    self.input.consume(end + 1);
+                    return Ok(());
+                }
+                None => {
+                    let read = buf.len();
+                    chunk(buf);
+                    self.input.consume(read);
+                }
+            }
+        }
+    }
+
+    /// The text of a header line after its `>`, kept up to
+    /// `NAME_LIMIT + 1` bytes: enough for [`Self::name`] to see a name
+    /// that is too long.
+    fn header_line(&mut self) -> Result<Vec<u8>> {
+        let mut header = Vec::new();
+        self.rest_of_line(|bytes| {
+            let room = (NAME_LIMIT + 1).saturating_sub(header.len());
+            header.extend_from_slice(&bytes[..bytes.len().min(room)]);
+        })?;
+        Ok(header)
     }
 
     /// The header text after `>` of the first sequence, or `None` for a
     /// file of blank lines.
     fn first_header(&mut self) -> Result<Option<Vec<u8>>> {
-        while let Some(range) = self.next_line()? {
-            let line = &self.buf[range];
-            let Some(&first) = line.first() else {
-                continue;
-            };
-            if first != b'>' {
-                return Err(Error::Metric(format!(
-                    "Format exception reading FASTA {}.  Expected > but saw chr({}) at start of \
-                     sequence with index {}",
-                    self.source,
-                    first.cast_signed(),
-                    self.index
-                )));
-            }
-            return Ok(Some(line[1..].to_vec()));
+        match self.line_start()? {
+            None => Ok(None),
+            Some(b'>') => self.header_line().map(Some),
+            Some(first) => Err(Error::Metric(format!(
+                "Format exception reading FASTA {}.  Expected > but saw chr({}) at start of \
+                 sequence with index {}",
+                self.source,
+                first.cast_signed(),
+                self.index
+            ))),
         }
-        Ok(None)
     }
 
     /// `readSequenceName`: the two length checks, then trim and truncate.
@@ -429,33 +486,21 @@ impl FastaReader {
             None => return Ok(None),
         };
         let name = self.name(&header)?;
-        let mut digest = Md5::new();
-        let mut length = 0u64;
-        while let Some(range) = self.next_line()? {
-            let line = &self.buf[range];
-            match line.first() {
-                None => continue,
-                Some(b'>') => {
-                    self.pending = Some(line[1..].to_vec());
-                    break;
-                }
-                Some(_) => {}
+        let mut bases = Bases::default();
+        while let Some(first) = self.line_start()? {
+            if first == b'>' {
+                self.pending = Some(self.header_line()?);
+                break;
             }
-            let kept = line
-                .iter()
-                .rposition(|&b| !java_whitespace(b))
-                .map_or(0, |i| i + 1);
-            self.upper.clear();
-            self.upper
-                .extend(line[..kept].iter().map(u8::to_ascii_uppercase));
-            digest.update(&self.upper);
-            length += kept as u64;
+            bases.add(&[first]);
+            self.rest_of_line(|bytes| bases.add(bytes))?;
+            bases.end_line();
         }
         self.index += 1;
         Ok(Some(Sequence {
             name,
-            length,
-            md5: md5::hex(&digest.finish()),
+            length: bases.length,
+            md5: md5::hex(&bases.digest.finish()),
         }))
     }
 }
@@ -622,9 +667,39 @@ pub fn dictionary(sequences: &[Sequence], fields: &Fields) -> (String, Vec<Vec<V
     (text, rows)
 }
 
+/// `OUTPUT.md5`, the file `CREATE_MD5_FILE=true` writes beside `OUTPUT`.
+fn md5_path(output: &Path) -> PathBuf {
+    let mut name = output.as_os_str().to_owned();
+    name.push(".md5");
+    PathBuf::from(name)
+}
+
+/// The `.md5` file a parsed `CreateSequenceDictionary` command line writes:
+/// `None` without `CREATE_MD5_FILE=true` and `OUTPUT`. Other tools take
+/// `CREATE_MD5_FILE` as an ignored option, so this is `None` for them.
+pub fn md5_output(inv: &Invocation) -> Option<PathBuf> {
+    let output = inv.output.as_deref()?;
+    inv.flag("CREATE_MD5_FILE", false)
+        .unwrap_or(false)
+        .then(|| md5_path(output))
+}
+
+/// `SAMSequenceRecord.setAttribute` through `StringUtil.assertCharactersNotInString`:
+/// a line feed in `AS`, `UR` or `SP` fails Picard before any file is written.
+fn check_field(option: &str, value: Option<&str>) -> Result<()> {
+    if value.is_some_and(|v| v.contains('\n')) {
+        return Err(Error::Usage(format!(
+            "CreateSequenceDictionary: {option}: Supplied String contains illegal character '\\n'."
+        )));
+    }
+    Ok(())
+}
+
 /// `doWork`'s checks before the FASTA is opened: an existing `OUTPUT`,
-/// then a missing directory for it (`IOUtil.assertFileIsWritable`).
-fn check_output(output: &Path) -> Result<()> {
+/// then a missing directory for it (`IOUtil.assertFileIsWritable`). Then a
+/// directory at the `.md5` path, which Picard meets only after it has
+/// written `OUTPUT` (`Can't write to or close output file`).
+fn check_output(output: &Path, md5: Option<&Path>) -> Result<()> {
     if output.exists() {
         return Err(Error::Metric(format!(
             "{} already exists.  Delete this file and try again, or specify a different output \
@@ -639,13 +714,24 @@ fn check_output(output: &Path) -> Result<()> {
             absolute(output)?.display()
         )));
     }
+    if let Some(md5) = md5.filter(|p| p.is_dir()) {
+        return Err(Error::Metric(format!(
+            "Can't write to or close output file {}: {}: Is a directory",
+            file_uri(output)?,
+            absolute(md5)?.display()
+        )));
+    }
     Ok(())
 }
 
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let opts = Options::from_invocation(inv)?;
+    check_field("GENOME_ASSEMBLY", opts.genome_assembly.as_deref())?;
+    check_field("URI", opts.uri.as_deref())?;
+    check_field("SPECIES", opts.species.as_deref())?;
+    let md5_file = md5_output(inv);
     match &opts.output {
-        Some(output) => check_output(output)?,
+        Some(output) => check_output(output, md5_file.as_deref())?,
         None if opts.create_md5_file => {
             return Err(Error::Usage(
                 "CreateSequenceDictionary: CREATE_MD5_FILE=true needs OUTPUT".to_owned(),
@@ -674,15 +760,11 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     };
     let (text, rows) = dictionary(&sequences, &fields);
     let mut output = ToolOutput::file(MetricsOutput::text(&COLUMNS, rows, text.clone()));
-    if opts.create_md5_file
-        && let Some(path) = &opts.output
-    {
+    if let Some(path) = md5_file {
         let mut digest = Md5::new();
         digest.update(text.as_bytes());
-        let mut name = path.as_os_str().to_owned();
-        name.push(".md5");
         output.extra.push((
-            PathBuf::from(name),
+            path,
             MetricsOutput::text(&[], Vec::new(), md5::hex(&digest.finish())),
         ));
     }
@@ -764,6 +846,47 @@ mod tests {
                 .expect("reads")
                 .is_empty()
         );
+    }
+
+    /// Lines longer than the 64 KiB read buffer give the digest a line of
+    /// the same bases gives, whitespace at a chunk end included.
+    #[test]
+    fn lines_longer_than_the_buffer_hash_as_one_line() {
+        let chunk = 1 << 16;
+        let mut long = b">L\n".to_vec();
+        long.extend(std::iter::repeat_n(b'a', chunk - 4));
+        long.extend(b"  \t");
+        long.extend(std::iter::repeat_n(b'c', chunk));
+        long.extend(b" \t \n");
+        long.extend(std::iter::repeat_n(b' ', 2 * chunk));
+        long.extend(b"\rgg");
+        let mut bases = std::iter::repeat_n(b'A', chunk - 4).collect::<Vec<u8>>();
+        bases.extend(b"  \t");
+        bases.extend(std::iter::repeat_n(b'C', chunk));
+        bases.extend(b"GG");
+        let mut digest = Md5::new();
+        digest.update(&bases);
+        let read = sequences(&long, true, i32::MAX).expect("reads");
+        assert_eq!(read[0].length, bases.len() as u64);
+        assert_eq!(read[0].md5, md5::hex(&digest.finish()));
+
+        let mut header = b">".to_vec();
+        header.extend(std::iter::repeat_n(b'n', NAME_LIMIT));
+        header.extend(b"\nA\n");
+        let read = sequences(&header, true, i32::MAX).expect("4096 bytes is the limit");
+        assert_eq!(read[0].name.len(), NAME_LIMIT);
+        header.insert(1, b'n');
+        let err = sequences(&header, true, i32::MAX).expect_err("too long");
+        assert!(err.to_string().starts_with("Sequence name too long"));
+    }
+
+    #[test]
+    fn a_line_feed_in_a_field_is_refused() {
+        assert!(check_field("SPECIES", Some("a\tb\rc")).is_ok());
+        assert!(check_field("SPECIES", None).is_ok());
+        let err = check_field("URI", Some("a\nb")).expect_err("line feed");
+        assert!(matches!(err, Error::Usage(_)));
+        assert!(err.to_string().contains("illegal character"));
     }
 
     #[test]

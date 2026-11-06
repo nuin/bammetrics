@@ -102,6 +102,58 @@ fn the_picard_face_names_the_dict_beside_the_fasta_and_keeps_it() {
     assert_eq!(fs::read_to_string(&dict).expect("kept"), text);
 }
 
+/// Picard fails on all three before it writes a file; so does bammetrics.
+#[test]
+fn a_repeated_option_a_line_feed_or_a_directory_at_the_md5_path_writes_nothing() {
+    let scratch = Scratch::new("refused");
+    let reference = scratch.reference();
+    let dict = scratch.path("o.dict");
+    let r = format!("R={reference}");
+    let o = format!("O={dict}");
+    fs::create_dir(scratch.path("o.dict.md5")).expect("directory");
+    for (args, message) in [
+        (
+            vec!["SP=a", "SP=b"],
+            "Option 'SPECIES' cannot be specified more than once.",
+        ),
+        (
+            vec!["SP=a\nb"],
+            "Supplied String contains illegal character",
+        ),
+        (vec!["CREATE_MD5_FILE=true"], "o.dict.md5: Is a directory"),
+    ] {
+        let out = bammetrics(&[&["CreateSequenceDictionary", &r, &o], args.as_slice()].concat());
+        assert_eq!(out.status.code(), Some(1), "{args:?}");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(stderr.contains(message), "{args:?}: {stderr}");
+        assert!(!Path::new(&dict).exists(), "{args:?}");
+    }
+    // The verb keeps the last value, and -o FILE.md5 may not name an input.
+    let out = bammetrics(&[
+        "create-sequence-dictionary",
+        &reference,
+        "--species",
+        "a",
+        "--species",
+        "b",
+    ]);
+    assert!(String::from_utf8_lossy(&out.stdout).contains("\tSP:b\n"));
+    let alt = scratch.path("v.dict.md5");
+    fs::write(&alt, "chr1\t1\n").expect("alt names");
+    let out = bammetrics(&[
+        "create-sequence-dictionary",
+        &reference,
+        "-o",
+        &scratch.path("v.dict"),
+        "--alt-names",
+        &alt,
+        "--create-md5-file",
+    ]);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("is an input"));
+    assert_eq!(fs::read_to_string(&alt).expect("kept"), "chr1\t1\n");
+}
+
 #[test]
 fn the_verb_prints_the_dictionary_without_o() {
     let out = bammetrics(&["create-sequence-dictionary", REF]);

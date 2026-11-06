@@ -203,7 +203,8 @@ pub const VERBS: &[Verb] = &[
         input: "FASTA",
         about: Some(
             "writes a sequence dictionary: @HD, then one @SQ line per FASTA sequence with SN, \
-             LN, M5 and UR. -o FILE refuses an existing file, as Picard does.",
+             LN, M5 and UR. In picard format -o FILE refuses an existing file, as Picard \
+             does; the other formats replace it, as every verb does.",
         ),
         writes: "sequence dictionary",
         reads: &["REFERENCE", "ALT_NAMES"],
@@ -610,6 +611,13 @@ impl Verb {
         }
         for given in &parsed.given {
             match given.key {
+                // The verb keeps the last value of an option Picard takes once;
+                // the Picard face refuses a second one.
+                Key::Picard(name) if !tool.option(name).is_some_and(|o| o.repeated) => {
+                    let prefix = format!("{name}=");
+                    picard.retain(|a| !a.starts_with(&prefix));
+                    picard.extend(given.values.last().map(|v| format!("{name}={v}")));
+                }
                 Key::Picard(name) => {
                     picard.extend(given.values.iter().map(|v| format!("{name}={v}")));
                 }
@@ -823,6 +831,7 @@ impl Verb {
         for (option, _) in file_extensions(self.tool().name).unwrap_or_default() {
             paths.extend(inv.all(option).iter().map(PathBuf::from));
         }
+        paths.extend(bammetrics_core::create_sequence_dictionary::md5_output(inv));
         paths
     }
 

@@ -23,6 +23,15 @@
 
 ### Changed
 
+- The Picard face exits 1 on an option Picard takes once given twice (`SP=a SP=b`,
+  `O=a O=b`), with Picard's `Option 'SPECIES' cannot be specified more than once.`, in
+  every tool. It kept the last value before. List options still add each value, the
+  verbs keep the last value, and an `EXTRA_ARGUMENT` of `CollectMultipleMetrics` still
+  replaces the value the program table gives (`CollectAlignmentSummaryMetrics::OUTPUT=`).
+- `CreateSequenceDictionary` exits before writing on a line feed in `GENOME_ASSEMBLY`,
+  `URI` or `SPECIES`, and on a directory at `OUTPUT.md5` with `CREATE_MD5_FILE=true`. The
+  verb refuses `FILE.md5` naming an input. The FASTA is read in 64 KiB chunks, so a
+  one-line sequence no longer holds its whole line in memory.
 - The sample page heads each metrics table with its name in words (`Alignment summary
   metrics`, `HS metrics`) in place of the class string in capitals
   (`PICARD.ANALYSIS.ALIGNMENTSUMMARYMETRICS`). The metrics files keep the class string,

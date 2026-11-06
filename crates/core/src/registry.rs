@@ -499,6 +499,17 @@ impl Tool {
                     self.name
                 )));
             }
+            let given_before = match opt.kind {
+                Kind::Output => inv.output.is_some(),
+                Kind::Value => inv.values.contains_key(opt.names[0]),
+                Kind::Ignored(_) | Kind::Rejected => false,
+            };
+            if given_before && !opt.repeated {
+                return Err(Error::Usage(format!(
+                    "Option '{}' cannot be specified more than once.",
+                    opt.names[0]
+                )));
+            }
             inv.command.push_str(&format!(" {}={value}", opt.names[0]));
             match opt.kind {
                 Kind::Ignored(why) => inv.notes.push(format!("ignoring {name}={value}: {why}")),
@@ -826,6 +837,26 @@ mod tests {
             inv.all("METRIC_ACCUMULATION_LEVEL"),
             ["SAMPLE", "READ_GROUP"]
         );
+    }
+
+    /// Picard's parser: `Option 'MINIMUM_PCT' cannot be specified more than once.`
+    #[test]
+    fn a_single_option_given_twice_is_an_error() {
+        for args in [
+            ["I=x.bam", "M=0.5", "MINIMUM_PCT=0.1"],
+            ["I=x.bam", "I=y.bam", "M=0.5"],
+            ["I=x.bam", "O=a.txt", "OUTPUT=b.txt"],
+        ] {
+            let err = tool().parse(&strings(&args)).expect_err("given twice");
+            assert!(
+                matches!(err, Error::Usage(_)) && err.to_string().contains("more than once"),
+                "{args:?}: {err}"
+            );
+        }
+        let inv = tool()
+            .parse(&strings(&["I=x.bam", "QUIET=true", "QUIET=false"]))
+            .expect("an ignored option may repeat (Picard's TMP_DIR is a list)");
+        assert_eq!(inv.notes.len(), 2);
     }
 
     #[test]

@@ -197,6 +197,10 @@ behaves how.
 - `CreateSequenceDictionary SPECIES=` (an empty value, likewise `URI=` and
   `GENOME_ASSEMBLY=`) writes the field empty (`SP:`), as Picard's `--SPECIES ""` does.
   Picard's `KEY=VALUE` parser takes the next argument as the value of an empty `KEY=`.
+- An option Picard takes once, given twice on the Picard face (`SP=a SP=b`), exits 1 in
+  both tools. Picard's message names the spelling given (`Option 'SP' cannot be specified
+  more than once.`), bammetrics the long name (`Option 'SPECIES' ...`). The verbs keep the
+  last value.
 
 ## Charts
 
@@ -277,7 +281,21 @@ only with `output=`.
   `.dict` beside the FASTA gives: with `O=` naming another file and a stale `LN:5` in
   that `.dict`, Picard writes `LN:5` for a 12-base sequence and the MD5 of 5 bases.
   With a current `.fai` and no `.dict` both read the same bases (`test_options` on
-  `indexed` and `bgzip_indexed`).
+  `indexed` and `bgzip_indexed`). Further sidecar cases, each exit 0 in Picard:
+  - An empty `.fai` gives Picard a dictionary of `@HD` alone; bammetrics writes every
+    sequence.
+  - A `.fai` that lists fewer sequences than the FASTA drops the others in Picard.
+  - The `.dict` beside the FASTA cuts each sequence to its `LN` whatever names it holds: a
+    `.dict` of `SN:z LN:2` cuts sequence `a` to `LN:2`.
+  - A corrupt `.fai` fails Picard after it has written `@HD`.
+  - `samtools faidx` leaves a byte `0xA0` inside a sequence line out of the length, so
+    with that `.fai` Picard writes `LN:4` for `AC\xA0GT`. bammetrics counts it as a base
+    (`LN:5`), as Picard does without a `.fai`.
+- `CreateSequenceDictionary` `R=` takes a file name. Picard 3.5.0 also takes a `file://`
+  URI there (`PicardHtsPath`) and writes the same `UR` as for the plain path; bammetrics
+  exits 1 (`No such file or directory`). `ALT_NAMES=file://...` fails in both tools.
+- `--arguments_file FILE` (Picard's options read from a file) is not read: every tool
+  exits 1 with `option arguments_file is not implemented`.
 
 ## Validation
 
@@ -588,6 +606,9 @@ a `>` without a name, bases before the first header, a bad `ALT_NAMES` line). Pi
 written the `@HD` line and every `@SQ` line before the failing sequence by then and
 leaves that file; it deletes it only after an I/O or argument error. Both exit non-zero
 with the same message (`test_bad_fasta_fails_in_both`, `test_alt_name_errors`).
+With `CREATE_MD5_FILE=true` and a directory at `OUTPUT.md5`, Picard writes `OUTPUT` and
+then exits 1 (`Can't write to or close output file`); bammetrics exits 1 with that message
+before it writes anything (`test_md5_path_is_a_directory`).
 
 ## Threads
 

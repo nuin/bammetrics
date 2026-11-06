@@ -14,9 +14,10 @@ space and a non-ASCII byte is compared too.
 Picard 3.5.0 writes a duplicate name twice and an empty sequence as `LN:0`, so both
 of those cases compare files. The errors (an existing OUTPUT, a name outside the SAM
 pattern, a header without a name, bases before the first header, a gzip file under a
-plain name, a name outside the FASTA extensions, a missing FASTA, and the six ALT_NAMES
-checks) exit non-zero in both tools with Picard's message; bammetrics writes no file
-where Picard leaves the lines it had written (KNOWN_DIFFERENCES.md).
+plain name, a name outside the FASTA extensions, a missing FASTA, the six ALT_NAMES
+checks, a line feed in AS, UR or SP, an option given twice, a directory at OUTPUT.md5)
+exit non-zero in both tools with Picard's message; bammetrics writes no file where
+Picard leaves the lines it had written (KNOWN_DIFFERENCES.md).
 
 `test_written_dict_feeds_picard_and_bammetrics` puts the .dict bammetrics wrote beside
 a copy of the corpus FASTA, converts a BED with it through both BedToIntervalList
@@ -232,6 +233,44 @@ def test_missing_name_after_the_last_sequence_written(tmp_path):
                      "read ahead")
     reference.write_bytes(b">ok\nAC\n>*x\nACGT\n")
     compare(reference, ["NUM_SEQUENCES=1"], tmp_path, "read ahead pattern")
+
+
+@pytest.mark.parametrize("label, args, picard_message, ours_message", [
+    ("species_line_feed", ["SP=a\nb"], "Supplied String contains illegal character", None),
+    ("assembly_line_feed", ["AS=a\nb"], "Supplied String contains illegal character", None),
+    ("uri_line_feed", ["UR=a\nb"], "Supplied String contains illegal character", None),
+    ("species_twice", ["SP=a", "SP=b"], "Option 'SP' cannot be specified more than once.",
+     "Option 'SPECIES' cannot be specified more than once."),
+    ("output_twice", ["O=x.dict"], "cannot be specified more than once", None),
+    ("num_sequences_twice", ["NUM_SEQUENCES=1", "NUM_SEQUENCES=2"],
+     "Option 'NUM_SEQUENCES' cannot be specified more than once.", None),
+])
+def test_argument_errors_fail_in_both(fastas, tmp_path, label, args, picard_message, ours_message):
+    """A line feed in AS, UR or SP (htsjdk StringUtil.assertCharactersNotInString) and an
+    option Picard takes once given twice: both tools exit non-zero and write no file."""
+    ours_out = tmp_path / f"{label}.ours.dict"
+    results = {}
+    for side, out in (("picard", tmp_path / f"{label}.picard.dict"), ("ours", ours_out)):
+        results[side] = run(side, [f"R={fastas['wrapped']}", f"O={out}", *args], cwd=tmp_path)
+        assert results[side].returncode != 0, (side, results[side].stderr[-500:])
+        assert not out.exists(), side
+    assert picard_message in results["picard"].stderr + results["picard"].stdout, label
+    assert (ours_message or picard_message) in results["ours"].stderr, results["ours"].stderr
+    assert not (tmp_path / "x.dict").exists()
+    RESULTS.append((f"{TOOL} {label}", 0, 0, "both exit non-zero, no file"))
+
+
+def test_md5_path_is_a_directory(fastas, tmp_path):
+    """CREATE_MD5_FILE=true with a directory at OUTPUT.md5: both exit non-zero with
+    Picard's message; Picard leaves OUTPUT, bammetrics writes nothing."""
+    message = "Can't write to or close output file"
+    for side in ("picard", "ours"):
+        out = tmp_path / f"{side}.dict"
+        (tmp_path / f"{side}.dict.md5").mkdir()
+        result = run(side, [f"R={fastas['wrapped']}", f"O={out}", "CREATE_MD5_FILE=true"])
+        assert result.returncode != 0 and message in result.stderr, (side, result.stderr[-500:])
+    assert (tmp_path / "picard.dict").exists() and not (tmp_path / "ours.dict").exists()
+    RESULTS.append((f"{TOOL} .md5 path is a directory", 0, 0, "both exit non-zero"))
 
 
 def test_missing_fasta_and_unknown_options(tmp_path):

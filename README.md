@@ -29,8 +29,10 @@ bammetrics CollectHsMetrics I=sample.bam O=sample.hs_metrics R=ref.fa \
     BAIT_INTERVALS=baits.interval_list TARGET_INTERVALS=panel.interval_list
 bammetrics CollectInsertSizeMetrics I=sample.bam O=sample.insert_size_metrics H=hist.pdf
 
+# Reference dictionary: ref.dict beside ref.fa, for BedToIntervalList and Picard
+bammetrics CreateSequenceDictionary R=ref.fa
+
 # Coverage: whole genome, or the intervals of a BED converted first
-bammetrics CreateSequenceDictionary R=ref.fa                    # writes ref.dict
 bammetrics BedToIntervalList I=panel.bed SD=ref.dict O=panel.interval_list
 bammetrics CollectWgsMetrics I=sample.bam O=sample.wgs_metrics R=ref.fa INTERVALS=panel.interval_list
 bammetrics CollectRawWgsMetrics I=sample.bam O=sample.raw_wgs_metrics R=ref.fa INCLUDE_BQ_HISTOGRAM=true
