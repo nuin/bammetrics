@@ -1,0 +1,19 @@
+## argv
+CreateSequenceDictionary
+-R
+tests/data/ref_100k.fa
+-O
+OUT/ref.dict
+AS=GRCh38
+SP=Homo sapiens
+UR=ref_100k.fa
+CREATE_MD5_FILE=true
+## exit
+0
+## stdout
+## stderr
+## file ref.dict
+@HD	VN:1.6
+@SQ	SN:chr1	LN:100000	M5:45cf6d7380b910e1541ebad795fe3e49	AS:GRCh38	UR:ref_100k.fa	SP:Homo sapiens
+## file ref.dict.md5
+9053e585a6654a88e9afec1e17022abe

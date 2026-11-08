@@ -170,6 +170,18 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
         vec![format!("I={}", shard.display()), out("calling")],
     );
     args.insert(
+        "CompareMetrics",
+        vec![
+            format!("I={DATA}/quality_yield_a.txt"),
+            format!("I={DATA}/quality_yield_a.txt"),
+            out("compared"),
+        ],
+    );
+    args.insert(
+        "CreateSequenceDictionary",
+        vec![reference.clone(), out("ref.dict")],
+    );
+    args.insert(
         "GenotypeConcordance",
         vec![
             format!("TRUTH_VCF={calls}"),

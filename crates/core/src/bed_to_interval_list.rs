@@ -12,15 +12,15 @@
 //! checked against the dictionary the way Picard checks it, and a
 //! zero-length one is dropped unless `KEEP_LENGTH_ZERO_INTERVALS`.
 //!
-//! The dictionary comes from `SEQUENCE_DICTIONARY`: a `.dict`, a SAM or BAM
-//! header, an interval list, or a FASTA with a `.dict` next to it (its
+//! The dictionary comes from `SEQUENCE_DICTIONARY`: a `.dict`, a SAM, BAM
+//! or CRAM header (a CRAM told by its magic), an interval list, or a FASTA with a `.dict` next to it (its
 //! `.fai` when there is none, which then yields `SN` and `LN` only). The
 //! file starts with `@HD VN:1.6 SO:coordinate` and the `@SQ` lines with
 //! their fields in the order the dictionary gave them, then one line per
 //! interval: contig, start, end, `+` or `-`, name or `.`.
 
 use std::fs::File;
-use std::io::Read;
+use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 
 use noodles::{bam, bgzf};
@@ -41,6 +41,7 @@ pub const TOOL: Tool = Tool {
               the interval list.",
     options: &[
         Opt::path(&["INPUT", "I"], "The BED file to convert.").required(),
+        crate::registry::REFERENCE_NOT_DECODED,
         Opt::path(
             &["SEQUENCE_DICTIONARY", "SD"],
             "The @SQ lines: a .dict, BAM, SAM, interval list, or FASTA with a .dict.",
@@ -116,7 +117,22 @@ pub fn read_dictionary(path: &Path) -> Result<Vec<Sequence>> {
         source,
     };
     let name = path.to_string_lossy().to_ascii_lowercase();
-    let text = if name.ends_with(".bam") {
+    let text = if crate::cram::is_cram(path) {
+        let mut reader =
+            noodles::cram::io::Reader::new(BufReader::new(File::open(path).map_err(input)?));
+        let mut header = reader.header_reader();
+        header.read_magic_number().map_err(input)?;
+        header.read_format_version().map_err(input)?;
+        header.read_file_id().map_err(input)?;
+        let mut container = header.container_reader().map_err(input)?;
+        let mut text = String::new();
+        container
+            .raw_sam_header_reader()
+            .map_err(input)?
+            .read_to_string(&mut text)
+            .map_err(input)?;
+        text
+    } else if name.ends_with(".bam") {
         let mut reader = bam::io::Reader::new(File::open(path).map_err(input)?);
         let mut header = reader.header_reader();
         header.read_magic_number().map_err(input)?;

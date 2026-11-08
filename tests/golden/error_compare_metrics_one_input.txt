@@ -1,0 +1,8 @@
+## argv
+CompareMetrics
+I=tests/data/quality_yield_a.txt
+## exit
+1
+## stdout
+## stderr
+bammetrics: Option 'INPUT' must be specified at least 2 times.

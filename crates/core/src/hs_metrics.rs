@@ -204,19 +204,13 @@ impl Options {
                     .collect(),
                 inv.get("BAIT_SET_NAME").map(str::to_owned),
             ),
-            Variant::TargetedPcr => {
-                let amplicons = inv.all("AMPLICON_INTERVALS");
-                if amplicons.len() > 1 {
-                    return Err(Error::Usage(
-                        "Option 'AMPLICON_INTERVALS' cannot be specified more than once."
-                            .to_owned(),
-                    ));
-                }
-                (
-                    amplicons.iter().map(PathBuf::from).collect(),
-                    inv.get("CUSTOM_AMPLICON_SET_NAME").map(str::to_owned),
-                )
-            }
+            Variant::TargetedPcr => (
+                inv.all("AMPLICON_INTERVALS")
+                    .iter()
+                    .map(PathBuf::from)
+                    .collect(),
+                inv.get("CUSTOM_AMPLICON_SET_NAME").map(str::to_owned),
+            ),
         };
         let opts = Self {
             variant,
@@ -438,9 +432,7 @@ fn sensitivity_file(opts: &Options, report: &Report) -> Result<Option<(PathBuf, 
 /// written here before the error is returned.
 fn run_variant(inv: &Invocation, variant: Variant) -> Result<ToolOutput> {
     let opts = Options::from_invocation(inv, variant)?;
-    let report = pass::run(&inv.input, inv.threads, |header| {
-        CaptureMetrics::new(&opts, header)
-    })?;
+    let report = inv.read_whole(&inv.input, |header| CaptureMetrics::new(&opts, header))?;
     let mut output = ToolOutput::file(report.metrics_output());
     match sensitivity_file(&opts, &report) {
         Ok(file) => output.extra.extend(file),
@@ -2142,11 +2134,16 @@ pub fn command_header(opts: &Options, bam: &Path, output: Option<&Path>) -> Stri
     command
 }
 
-/// Compute the metrics of one BAM with the default BGZF worker count.
+/// Compute the metrics of one BAM (or a CRAM, decoded with
+/// `opts.reference`) with the default worker count.
 pub fn run_over_bam(path: impl AsRef<Path>, opts: &Options) -> Result<Report> {
-    pass::run(path.as_ref(), pass::default_threads(), |header| {
-        CaptureMetrics::new(opts, header)
-    })
+    pass::run_limited(
+        path.as_ref(),
+        opts.reference.as_deref(),
+        pass::default_threads(),
+        pass::Limits::default(),
+        |header| CaptureMetrics::new(opts, header),
+    )
 }
 
 #[cfg(test)]

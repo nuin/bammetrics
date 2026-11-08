@@ -963,6 +963,7 @@ pub const TOOL: Tool = Tool {
               _contingency_metrics; Python returns one row per file: file and rows.",
     options: &[
         Opt::path(&["TRUTH_VCF", "TV"], "The truth VCF.").required(),
+        crate::registry::REFERENCE_NOT_DECODED,
         Opt::path(&["CALL_VCF", "CV"], "The call VCF.").required(),
         Opt::output(&["OUTPUT", "O"])
             .with_help("The output prefix of the three files.")

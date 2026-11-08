@@ -1,0 +1,15 @@
+## argv
+CompareMetrics
+I=tests/data/picard/NA12878/NA12878.alignment_summary_metrics
+I=tests/data/picard/NA12878/NA12878.alignment_summary_metrics
+O=OUT/compare.txt
+## exit
+0
+## stdout
+## stderr
+INFO	CompareMetrics	picard.analysis.AlignmentSummaryMetrics Metric files tests/data/picard/NA12878/NA12878.alignment_summary_metrics and tests/data/picard/NA12878/NA12878.alignment_summary_metrics are equal
+## file compare.txt
+Comparison of picard.analysis.AlignmentSummaryMetrics metrics between files ROOT/tests/data/picard/NA12878/NA12878.alignment_summary_metrics and ROOT/tests/data/picard/NA12878/NA12878.alignment_summary_metrics
+
+Metrics are equal
+

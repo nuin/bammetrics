@@ -22,6 +22,7 @@ use std::str::FromStr;
 
 use noodles::sam;
 
+use crate::cram;
 use crate::error::{Error, Result};
 use crate::metric::ToolOutput;
 use crate::pass::{self, Accumulator, Collector, Limits, default_threads};
@@ -203,7 +204,7 @@ pub fn normalize(name: &str) -> String {
 /// is not coordinate sorted ([`Invocation::single_pass`]); the others change
 /// no metric.
 pub const COMMON: &[Opt] = &[
-    Opt::path(&["INPUT", "I"], "The BAM to read.").required(),
+    Opt::path(&["INPUT", "I"], "The BAM or CRAM to read.").required(),
     Opt::output(&["OUTPUT", "O"]),
     Opt::ignored(&["VALIDATION_STRINGENCY"], "records are not validated"),
     Opt::ignored(&["TMP_DIR"], "no temporary files are written"),
@@ -219,11 +220,18 @@ pub const COMMON: &[Opt] = &[
         &["ASSUME_SORTED", "AS"],
         "false fails a BAM whose header is not coordinate sorted (default true).",
     ),
-    Opt::ignored(
-        &["REFERENCE_SEQUENCE", "R"],
-        "this metric does not read the reference",
-    ),
+    Opt::ignored(&["REFERENCE_SEQUENCE", "R"], REFERENCE_UNREAD),
 ];
+
+/// Why `REFERENCE_SEQUENCE` is ignored by a tool whose metrics do not read
+/// it. A CRAM input is decoded with it, and then no note is written.
+const REFERENCE_UNREAD: &str = "this metric does not read the reference";
+
+/// `REFERENCE_SEQUENCE` of a tool whose input is no BAM or CRAM (a BED, a
+/// VCF, a metrics file): Picard takes it, nothing reads it, and Python
+/// offers no keyword for it.
+pub const REFERENCE_NOT_DECODED: Opt =
+    Opt::ignored(&["REFERENCE_SEQUENCE", "R"], "no BAM or CRAM is read");
 
 /// `METRIC_ACCUMULATION_LEVEL`, the same row in every tool that has it.
 pub const LEVEL_OPTION: Opt = Opt::text(
@@ -295,6 +303,8 @@ pub const TOOLS: &[&Tool] = &[
     &crate::variant_calling_metrics::TOOL,
     &crate::variant_calling_metrics::ACCUMULATE_TOOL,
     &crate::genotype_concordance::TOOL,
+    &crate::compare_metrics::TOOL,
+    &crate::create_sequence_dictionary::TOOL,
 ];
 
 /// The tool named `name`.
@@ -371,7 +381,36 @@ impl Invocation {
         A: Accumulator,
         F: FnOnce(&sam::Header) -> Result<A>,
     {
-        pass::run_limited(&self.input, self.threads, self.limits()?, build)
+        pass::run_limited(
+            &self.input,
+            self.reference(),
+            self.threads,
+            self.limits()?,
+            build,
+        )
+    }
+
+    /// Read `path` whole, no `STOP_AFTER` and no sort check, with the
+    /// invocation's workers and reference: the read of a tool that is not
+    /// a `SinglePassSamProgram`.
+    pub fn read_whole<A, F>(&self, path: &Path, build: F) -> Result<A::Output>
+    where
+        A: Accumulator,
+        F: FnOnce(&sam::Header) -> Result<A>,
+    {
+        pass::run_limited(
+            path,
+            self.reference(),
+            self.threads,
+            Limits::default(),
+            build,
+        )
+    }
+
+    /// `REFERENCE_SEQUENCE` as given, also for a tool whose metrics do not
+    /// read it: a CRAM input is decoded with it.
+    pub fn reference(&self) -> Option<&Path> {
+        self.get("REFERENCE_SEQUENCE").map(Path::new)
     }
 
     /// [`Invocation::single_pass`] over a tool's collector: the `run` of
@@ -498,9 +537,25 @@ impl Tool {
                     self.name
                 )));
             }
+            let given_before = match opt.kind {
+                Kind::Output => inv.output.is_some(),
+                Kind::Value => inv.values.contains_key(opt.names[0]),
+                Kind::Ignored(_) | Kind::Rejected => false,
+            };
+            if given_before && !opt.repeated {
+                return Err(Error::Usage(format!(
+                    "Option '{}' cannot be specified more than once.",
+                    opt.names[0]
+                )));
+            }
             inv.command.push_str(&format!(" {}={value}", opt.names[0]));
             match opt.kind {
-                Kind::Ignored(why) => inv.notes.push(format!("ignoring {name}={value}: {why}")),
+                Kind::Ignored(why) => {
+                    inv.notes.push(format!("ignoring {name}={value}: {why}"));
+                    if opt.names[0] == "REFERENCE_SEQUENCE" {
+                        inv.values.entry(opt.names[0]).or_default().push(value);
+                    }
+                }
                 Kind::Rejected => unreachable!("rejected above"),
                 Kind::Output => inv.output = Some(PathBuf::from(&value)),
                 Kind::Value => {
@@ -518,6 +573,15 @@ impl Tool {
             }
             None => PathBuf::new(),
         };
+        if inv
+            .all("INPUT")
+            .iter()
+            .any(|path| cram::may_be_cram(Path::new(path)))
+        {
+            // A CRAM is decoded with the reference: it is not ignored. A
+            // pipe may hold one.
+            inv.notes.retain(|note| !note.ends_with(REFERENCE_UNREAD));
+        }
         Ok(inv)
     }
 
@@ -741,6 +805,10 @@ pub fn python_stub(tool: &Tool) -> String {
                 opt.kwarg(),
                 python_annotation(opt)
             )),
+            // The metrics do not read it, a CRAM input is decoded with it.
+            Kind::Ignored(REFERENCE_UNREAD) if opt.picard() == "REFERENCE_SEQUENCE" => {
+                keywords.push(format!("{}: _Path | None = None", opt.kwarg()));
+            }
             Kind::Ignored(_) | Kind::Rejected => {}
         }
     }
@@ -825,6 +893,26 @@ mod tests {
             inv.all("METRIC_ACCUMULATION_LEVEL"),
             ["SAMPLE", "READ_GROUP"]
         );
+    }
+
+    /// Picard's parser: `Option 'MINIMUM_PCT' cannot be specified more than once.`
+    #[test]
+    fn a_single_option_given_twice_is_an_error() {
+        for args in [
+            ["I=x.bam", "M=0.5", "MINIMUM_PCT=0.1"],
+            ["I=x.bam", "I=y.bam", "M=0.5"],
+            ["I=x.bam", "O=a.txt", "OUTPUT=b.txt"],
+        ] {
+            let err = tool().parse(&strings(&args)).expect_err("given twice");
+            assert!(
+                matches!(err, Error::Usage(_)) && err.to_string().contains("more than once"),
+                "{args:?}: {err}"
+            );
+        }
+        let inv = tool()
+            .parse(&strings(&["I=x.bam", "QUIET=true", "QUIET=false"]))
+            .expect("an ignored option may repeat (Picard's TMP_DIR is a list)");
+        assert_eq!(inv.notes.len(), 2);
     }
 
     #[test]

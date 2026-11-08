@@ -304,6 +304,7 @@ def insert_size(
     min_histogram_width: int | None = None,
     include_duplicates: bool = False,
     metric_accumulation_level: Sequence[str] | None = None,
+    reference: _Path | None = None,
 ) -> list[InsertSizeMetrics]:
     """CollectInsertSizeMetrics: one row per pair orientation and accumulation unit.
 
@@ -349,6 +350,7 @@ def collect_insert_size_metrics(
     metric_accumulation_level: str | Sequence[str] | None = None,
     output: _Path | None = None,
     assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """CollectInsertSizeMetrics: one row per pair orientation and accumulation unit, keyed
     by Picard's column names; the metrics file adds the insert size histogram."""
@@ -380,6 +382,7 @@ def collect_quality_yield_metrics(
     stop_after: int | None = None,
     output: _Path | None = None,
     assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """CollectQualityYieldMetrics: one row of read, base and Q20/Q30 totals."""
 
@@ -392,6 +395,7 @@ def quality_score_distribution(
     stop_after: int | None = None,
     output: _Path | None = None,
     assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """QualityScoreDistribution: the histogram, one row per quality: QUALITY, COUNT_OF_Q
     and COUNT_OF_OQ (only when a counted base has OQ)."""
@@ -404,6 +408,7 @@ def mean_quality_by_cycle(
     stop_after: int | None = None,
     output: _Path | None = None,
     assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """MeanQualityByCycle: the histogram, one row per cycle: CYCLE, MEAN_QUALITY and
     MEAN_ORIGINAL_QUALITY (only when a record has OQ; 0 at a cycle without an OQ mean)."""
@@ -416,6 +421,7 @@ def collect_base_distribution_by_cycle(
     stop_after: int | None = None,
     output: _Path | None = None,
     assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """CollectBaseDistributionByCycle: one row per read end and cycle (READ_END, CYCLE,
     PCT_A, PCT_C, PCT_G, PCT_T, PCT_N on a 0 to 100 scale)."""
@@ -426,6 +432,7 @@ def collect_duplicate_metrics(
     output: _Path | None = None,
     stop_after: int | None = None,
     assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """CollectDuplicateMetrics: one row per library, from the duplicate flags already in
     the file; the metrics file goes to METRICS_FILE."""
@@ -488,6 +495,7 @@ def estimate_library_complexity(
     optical_duplicate_pixel_distance: int | None = None,
     max_optical_duplicate_set_size: int | None = None,
     output: _Path | None = None,
+    reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """EstimateLibraryComplexity: one row per library (DuplicationMetrics columns) from
     read sequences alone; the input may be unaligned, or several files. The metrics file
@@ -630,6 +638,7 @@ def collect_rna_seq_metrics(
     stop_after: int | None = None,
     output: _Path | None = None,
     assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """CollectRnaSeqMetrics: one row of the 30 RnaSeqMetrics columns per accumulation unit;
     the metrics file adds the normalized_position histogram, one normalized_coverage
@@ -679,6 +688,38 @@ def genotype_concordance(
     prefix: PREFIX.genotype_concordance_summary_metrics, _detail_metrics and
     _contingency_metrics; Python returns one row per file: file and rows."""
 
+def compare_metrics(
+    input: _Paths,
+    *,
+    output: _Path | None = None,
+    output_table: _Path | None = None,
+    metrics_to_ignore: str | Sequence[str] | None = None,
+    metrics_not_required: str | Sequence[str] | None = None,
+    metric_allowable_relative_change: str | Sequence[str] | None = None,
+    ignore_histogram_differences: bool | None = None,
+    key: str | Sequence[str] | None = None,
+    verbosity: str | None = None,
+) -> list[dict[str, Any]]:
+    """CompareMetrics: one row per difference Picard reports between two metrics files:
+    KEY, METRIC, VALUE1 and VALUE2 for a value, DIFFERENCE (the line Picard logs) for
+    every one; no row when the files are equal. The command line exits 1 when they are
+    not."""
+
+def create_sequence_dictionary(
+    reference: _Path,
+    *,
+    genome_assembly: str | None = None,
+    uri: str | None = None,
+    species: str | None = None,
+    truncate_names_at_whitespace: bool | None = None,
+    num_sequences: int | None = None,
+    alt_names: _Path | None = None,
+    create_md5_file: bool | None = None,
+    output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CreateSequenceDictionary: one row per FASTA sequence (name, length, md5, assembly,
+    uri, species, alternate_names); OUTPUT gets the .dict."""
+
 # END registry tools
 
 def alignment_summary(
@@ -696,8 +737,9 @@ def quality_yield(
     use_original_qualities: bool = True,
     include_secondary_alignments: bool = False,
     include_supplemental_alignments: bool = False,
+    reference: _Path | None = None,
 ) -> QualityYieldMetrics:
-    """CollectQualityYieldMetrics."""
+    """CollectQualityYieldMetrics. reference decodes a CRAM."""
 
 def hs_metrics(
     path: _Path,

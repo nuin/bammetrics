@@ -12,7 +12,7 @@ const FIXTURE: &str = concat!(
 
 #[test]
 fn known_answers() {
-    let rows = run_over_bam(FIXTURE, &Options::default()).expect("fixture reads");
+    let rows = run_over_bam(FIXTURE, None, &Options::default()).expect("fixture reads");
     assert_eq!(rows.len(), 1);
     let r = &rows[0];
     assert_eq!(r.orientation, Orientation::Fr);
@@ -30,7 +30,7 @@ fn known_answers() {
 
 #[test]
 fn missing_file_is_an_error() {
-    assert!(run_over_bam("/nonexistent/x.bam", &Options::default()).is_err());
+    assert!(run_over_bam("/nonexistent/x.bam", None, &Options::default()).is_err());
 }
 
 /// tests/data/orientation.bam (made by tests/make_orientation_bam.py): FR pairs
@@ -43,7 +43,7 @@ const ORIENTATION: &str = concat!(
 
 #[test]
 fn orientation_default_cutoff_matches_picard() {
-    let rows = run_over_bam(ORIENTATION, &Options::default()).expect("fixture reads");
+    let rows = run_over_bam(ORIENTATION, None, &Options::default()).expect("fixture reads");
     // RF holds exactly 2 of 40 pairs; Picard's float MINIMUM_PCT drops it.
     assert_eq!(rows.len(), 1);
     let r = &rows[0];
@@ -65,7 +65,7 @@ fn orientation_counts_without_cutoff_match_picard() {
         minimum_pct: 0.0,
         ..Options::default()
     };
-    let rows = run_over_bam(ORIENTATION, &opts).expect("fixture reads");
+    let rows = run_over_bam(ORIENTATION, None, &opts).expect("fixture reads");
     let pairs: Vec<_> = rows
         .iter()
         .map(|r| (r.orientation, r.read_pairs, r.median_insert_size))

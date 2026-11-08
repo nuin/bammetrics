@@ -48,15 +48,22 @@ pub fn format_double(value: f64) -> String {
     }
 }
 
-/// Integer and fraction digits of the shortest round-trip decimal form.
-fn shortest_decimal(value: f64) -> (String, String) {
+/// The shortest round-trip decimal digits of a non-negative finite `value`
+/// as the JDK chooses them (`Double.toString`), and the decimal exponent of
+/// the first digit: 0.0125 is `("125", -2)`.
+pub(crate) fn shortest_digits(value: f64) -> (String, i64) {
     // `{:e}` prints the shortest round-trip digits as `d.ddde<exp>`.
     let scientific = format!("{value:e}");
     let (mantissa, exponent) = scientific.split_once('e').unwrap_or((&scientific, "0"));
     let mut digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
     prefer_even_on_tie(value, &mut digits);
     // Rust's own output always has a valid exponent; 0 is only a fallback.
-    let exponent: i64 = exponent.parse().unwrap_or(0);
+    (digits, exponent.parse().unwrap_or(0))
+}
+
+/// Integer and fraction digits of the shortest round-trip decimal form.
+fn shortest_decimal(value: f64) -> (String, String) {
+    let (digits, exponent) = shortest_digits(value);
     let point = exponent + 1;
     if point <= 0 {
         let zeros = "0".repeat(point.unsigned_abs() as usize);
@@ -74,8 +81,9 @@ fn shortest_decimal(value: f64) -> (String, String) {
 /// round-trip digits sits between two candidates that both round-trip. Rust
 /// takes the upper one, the JDK (`FloatingDecimal`) the one with the even last
 /// digit, so an odd last digit moves down by one when the exact value is that
-/// tie. Only large values, with 16 or 17 digits, reach it.
-fn prefer_even_on_tie(value: f64, digits: &mut String) {
+/// tie. Only large values, with 16 or 17 digits (8 or 9 for a float), reach
+/// it.
+pub(crate) fn prefer_even_on_tie(value: f64, digits: &mut String) {
     let Some(last) = digits.bytes().last() else {
         return;
     };

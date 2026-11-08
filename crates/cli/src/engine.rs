@@ -213,6 +213,7 @@ fn collect(plan: &Plan, args: &QcArgs, files: &mut Files, out: &mut Reporter) ->
         let mut on_progress = |p| out.progress(p);
         let results = pass::run_isolated(
             &plan.bam,
+            args.reference.as_deref(),
             args.threads,
             Limits::default(),
             Some(&mut on_progress),

@@ -1,6 +1,72 @@
 # Changelog
 
-## Unreleased
+## 0.17.0
+
+CompareMetrics, CreateSequenceDictionary, and CRAM input for every tool that reads a BAM.
+
+### Added
+
+- `CompareMetrics` (Picard face and Python `compare_metrics()`) and the `compare-metrics`
+  verb: two metrics files compared as Picard 3.5.0 compares them, with every option
+  (`KEY`, `METRICS_TO_IGNORE`, `METRICS_NOT_REQUIRED`, `METRIC_ALLOWABLE_RELATIVE_CHANGE`,
+  `IGNORE_HISTOGRAM_DIFFERENCES`, `OUTPUT`, `OUTPUT_TABLE`, `VERBOSITY`). Exit 0 when equal,
+  1 when NOT equal. The `OUTPUT` text and the log lines (without their timestamp) match
+  Picard's byte for byte on 74 concordance cases (`tests/concordance/test_compare_metrics.py`).
+- `crates/core/picard_fields.tsv` and `make picard-fields`: the 65 Picard 3.5.0 metrics
+  classes with their fields' Java types and defaults, read from `picard.jar`
+  (`tests/data/PicardFields.java`), so values compare typed as htsjdk reads them.
+- `java.rs`: `Double.toString` and `Float.toString` (even digit on a tie, two digits for
+  a subnormal), the JDK number parsers with their error messages (`multiple points`,
+  decimal digits of any script in a long column, hexadecimal literals rounded once), and
+  the iteration order of a `HashSet<String>`.
+- `compare-metrics` refuses an `-o` or `--output-table` that names an input, the two
+  naming one file, and `- -` (exit 2); its standard output ends with a newline. `KEY`
+  pairs rows through a hash map (300,000 shuffled rows in 0.6 s).
+- `CreateSequenceDictionary` (docs/04 core) and its verb `create-sequence-dictionary`:
+  the `.dict` Picard 3.5.0 writes for a FASTA, byte for byte. `@HD VN:1.6`, then `SN`,
+  `LN`, `M5`, `AS`, `UR` (default `file://` and the absolute path, encoded as
+  `Path.toUri` does), `SP` and `AN` per sequence. Every option that changes the file:
+  `REFERENCE`, `OUTPUT` (the Picard face defaults to the FASTA name with `.dict`; an
+  existing file exits 1), `GENOME_ASSEMBLY`, `URI`, `SPECIES`,
+  `TRUNCATE_NAMES_AT_WHITESPACE`, `NUM_SEQUENCES`, `ALT_NAMES` (Picard's six checks,
+  `HashSet` order) and `CREATE_MD5_FILE`. Plain gzip and bgzip FASTA files are read by
+  name, as Picard reads them. The verb prints to standard output without `-o`; Python
+  `create_sequence_dictionary(reference, ...)` returns one row per sequence.
+- `crates/core/src/md5.rs` (RFC 1321) and `crates/core/src/gzip.rs` (gzip members in
+  turn). `zlib-rs`, which `noodles-bgzf` already builds, is now a direct dependency of
+  the core crate and adds no package. The CRAM reader adds `noodles-cram` and its codecs (flate2, bzip2, lzma-rust2, md-5, sha2).
+- `tests/concordance/test_create_sequence_dictionary.py` and
+  `crates/cli/tests/create_sequence_dictionary.rs`; six golden records, and the `tools`
+  listing gains one row.
+- CRAM input (docs/04 section 5.9): every tool that reads a BAM, the verbs, `collect`,
+  `qc`, `plan` and Python read CRAM 3.0 and 3.1 with `R=` (`-R`, `reference_sequence=`)
+  the FASTA it was written with. A file starting with the bytes `CRAM` is a CRAM whatever
+  its name; `-` reads one from standard input on the verbs. `crates/core/src/cram.rs`
+  decodes each container on a worker thread (noodles-cram 0.102, the `cram` feature of
+  noodles 0.119) and encodes its records as BAM records, so the tools keep taking
+  `bam::Record` and see the records in the BAM's order. Errors come where Picard 3.5.0
+  raises them: without `R=` at the first slice that needs bases, with other bases at the
+  slice MD5, and without the contig. `qc` and `plan` refuse a CRAM without `-R`.
+  `BedToIntervalList SD=` takes a CRAM header. The Python stub lists `reference_sequence`
+  for every tool. `tests/concordance/test_cram.py`: the 16 BAM-reading tools on t1, the foundation corpus
+  and the exome slice as CRAM 3.0 and 3.1 against Picard and against the BAM, `STOP_AFTER`,
+  and error parity. 10 golden records on `tests/data/insert_size.cram`
+  (`tests/data/make_cram.py`). BAM speed is unchanged (CollectQualityYieldMetrics on a
+  656 MB chr21 BAM 2.95 s before, 2.93 s after); a CRAM decodes at 1.6 million records a
+  second on 8 threads. NA12878.final.cram (15.8 GB): `STOP_AFTER=5000000` agrees with
+  Picard in every cell (2.0 s against 15.1 s); the whole file takes 261 s and 1.2 GiB.
+  docs/benchmarks.md has the table.
+- `vendor/noodles-cram`: noodles-cram 0.102.0 with htsjdk's template length for mates
+  stored attached (positive on the read that starts first, at equal starts on the first of
+  pair; 0 across references or with an unmapped mate). Without it a pair without `MC`
+  stored at equal starts took the opposite orientation from Picard; 4 of 64 random fuzz
+  CRAMs differed, 0 do now. An unmapped CRAM record has mapping quality 0, as in htsjdk.
+- CRAM versions other than 3.0 and 3.1 fail with `CRAM 2.1 is not supported (3.0 and 3.1
+  are)`; Picard reads 2.1 (KNOWN_DIFFERENCES.md). A cut CRAM fails with `truncated CRAM:
+  the file ends inside a container` or `... without its EOF container`.
+- Python `insert_size()` and `quality_yield()` take `reference=` for a CRAM. The stub
+  offers `reference_sequence` only to tools that read a BAM or CRAM (not to the VCF tools,
+  `AccumulateQualityYieldMetrics` or `BedToIntervalList`).
 
 ### Changed
 
@@ -9,7 +75,15 @@
   `e6275515a0d3de26` (`e62755`), so verdicts and pages name `clinical-panel v2 (e62755)`.
   `generic`, `wgs` and `rna-seq` keep `starting values`.
 - docs/05 section 8 records decisions 4, 5, 7, 8, 9, 10 and 12.
-
+- The Picard face exits 1 on an option Picard takes once given twice (`SP=a SP=b`,
+  `O=a O=b`), with Picard's `Option 'SPECIES' cannot be specified more than once.`, in
+  every tool. It kept the last value before. List options still add each value, the
+  verbs keep the last value, and an `EXTRA_ARGUMENT` of `CollectMultipleMetrics` still
+  replaces the value the program table gives (`CollectAlignmentSummaryMetrics::OUTPUT=`).
+- `CreateSequenceDictionary` exits before writing on a line feed in `GENOME_ASSEMBLY`,
+  `URI` or `SPECIES`, and on a directory at `OUTPUT.md5` with `CREATE_MD5_FILE=true`. The
+  verb refuses `FILE.md5` naming an input. The FASTA is read in 64 KiB chunks, so a
+  one-line sequence no longer holds its whole line in memory.
 - The sample page heads each metrics table with its name in words (`Alignment summary
   metrics`, `HS metrics`) in place of the class string in capitals
   (`PICARD.ANALYSIS.ALIGNMENTSUMMARYMETRICS`). The metrics files keep the class string,
@@ -18,6 +92,12 @@
 
 ### Fixed
 
+- A BAM on a named pipe hung: the CRAM check opened the pipe before the pass did. The check
+  now reads the file type with `stat` and opens only a regular file outside `/dev`, so
+  `I=/dev/stdin` redirected from a file is read whole too.
+- A CRAM on a pipe or `/dev/stdin` printed `ignoring REFERENCE_SEQUENCE`; the note is now
+  written only for a regular file that is no CRAM.
+- A verb's `-o` that names the `.fai` of `-R` exits 2, as one naming the FASTA does.
 - `crates/core/glossary.tsv` follows a review against Picard 3.5.0 and our code:
   157 definitions rewritten (among them HsMetrics `FOLD_ENRICHMENT` counts on-bait bases
   only, AlignmentSummaryMetrics `PF_INDEL_RATE` is a fraction, not per 100, and

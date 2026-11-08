@@ -256,6 +256,16 @@ fn without_run_level(args: Vec<String>) -> Vec<String> {
         .collect()
 }
 
+/// The long name of the option `arg` (`NAME=VALUE`) sets, when the tool
+/// takes it once. An extra argument replaces the value the program table
+/// gives it (`CollectAlignmentSummaryMetrics::OUTPUT=asm.txt`).
+fn single(tool: &Tool, arg: &str) -> Option<&'static str> {
+    let (name, _) = arg.split_once('=')?;
+    tool.option(name)
+        .filter(|o| !o.repeated)
+        .map(|o| o.picard())
+}
+
 /// `OUTPUT` plus `extension` plus `FILE_EXTENSION`.
 fn file_name(base: &OsString, extension: &str, file_extension: &str) -> PathBuf {
     let mut name = base.clone();
@@ -336,7 +346,10 @@ fn plan(inv: &Invocation) -> Result<Vec<(&'static Program, Invocation)>> {
             );
         }
         if let Some((_, extra)) = extras.iter().find(|(name, _)| *name == p.name) {
-            args.extend(without_run_level(extra.clone()));
+            let extra = without_run_level(extra.clone());
+            let named: Vec<&str> = extra.iter().filter_map(|a| single(p.tool, a)).collect();
+            args.retain(|a| single(p.tool, a).is_none_or(|n| !named.contains(&n)));
+            args.extend(extra);
         }
         let mut program_inv = p
             .tool
@@ -350,18 +363,24 @@ fn plan(inv: &Invocation) -> Result<Vec<(&'static Program, Invocation)>> {
 
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let planned = plan(inv)?;
-    let outputs = pass::run_many(&inv.input, inv.threads, inv.limits()?, |header| {
-        planned
-            .iter()
-            .map(|(p, program_inv)| {
-                let build = p
-                    .tool
-                    .collector
-                    .ok_or_else(|| Error::Usage(format!("{} has no collector", p.name)))?;
-                build(program_inv, header)
-            })
-            .collect::<Result<Vec<Box<dyn Collector>>>>()
-    })?;
+    let outputs = pass::run_many(
+        &inv.input,
+        inv.reference(),
+        inv.threads,
+        inv.limits()?,
+        |header| {
+            planned
+                .iter()
+                .map(|(p, program_inv)| {
+                    let build = p
+                        .tool
+                        .collector
+                        .ok_or_else(|| Error::Usage(format!("{} has no collector", p.name)))?;
+                    build(program_inv, header)
+                })
+                .collect::<Result<Vec<Box<dyn Collector>>>>()
+        },
+    )?;
     let mut all = ToolOutput::NONE;
     for ((_, program_inv), output) in planned.iter().zip(outputs) {
         if let (Some(main), Some(path)) = (output.main, &program_inv.output) {

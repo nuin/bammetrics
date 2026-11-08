@@ -52,6 +52,8 @@ pub struct Request {
     pub insert_size: Option<insert_size::Options>,
     /// One `CollectHsMetrics` run per entry, each with its own intervals.
     pub hs_metrics: Vec<hs_metrics::Options>,
+    /// The FASTA a CRAM input is decoded with.
+    pub reference: Option<PathBuf>,
 }
 
 /// Each requested metric, or the error that stopped it.
@@ -150,11 +152,15 @@ impl Accumulator for Collect {
     }
 }
 
-/// Compute the requested metrics in one pass with `threads` BGZF workers.
+/// Compute the requested metrics in one pass with `threads` workers.
 pub fn run_over_bam(path: impl AsRef<Path>, request: &Request, threads: usize) -> Result<Results> {
-    pass::run(path.as_ref(), threads, |header| {
-        Collect::new(request, header)
-    })
+    pass::run_limited(
+        path.as_ref(),
+        request.reference.as_deref(),
+        threads,
+        pass::Limits::default(),
+        |header| Collect::new(request, header),
+    )
 }
 
 /// The file each requested metric goes to: `prefix` plus its extension.

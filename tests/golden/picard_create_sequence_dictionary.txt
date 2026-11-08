@@ -1,0 +1,11 @@
+## argv
+CreateSequenceDictionary
+R=tests/data/ref_100k.fa
+O=OUT/ref.dict
+## exit
+0
+## stdout
+## stderr
+## file ref.dict
+@HD	VN:1.6
+@SQ	SN:chr1	LN:100000	M5:45cf6d7380b910e1541ebad795fe3e49	UR:file://ROOT/tests/data/ref_100k.fa

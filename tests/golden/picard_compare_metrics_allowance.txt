@@ -1,0 +1,20 @@
+## argv
+CompareMetrics
+I=tests/data/quality_yield_a.txt
+I=tests/data/quality_yield_b.txt
+MARC=TOTAL_READS:8
+MI=PF_READS
+VERBOSITY=ERROR
+## exit
+1
+## stdout
+## stderr
+ERROR	CompareMetrics	Key: 0 Metric: READ_LENGTH values differ. Value1: 100 Value2: 0 Changed by -100.0 (relative change of -1.0)
+ERROR	CompareMetrics	Key: 0 Metric: TOTAL_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+ERROR	CompareMetrics	Key: 0 Metric: PF_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+ERROR	CompareMetrics	Key: 0 Metric: Q20_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+ERROR	CompareMetrics	Key: 0 Metric: PF_Q20_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+ERROR	CompareMetrics	Key: 0 Metric: Q30_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+ERROR	CompareMetrics	Key: 0 Metric: PF_Q30_BASES values differ. Value1: 1000 Value2: 0 Changed by -1000.0 (relative change of -1.0)
+ERROR	CompareMetrics	Key: 0 Metric: Q20_EQUIVALENT_YIELD values differ. Value1: 2000 Value2: 0 Changed by -2000.0 (relative change of -1.0)
+ERROR	CompareMetrics	Key: 0 Metric: PF_Q20_EQUIVALENT_YIELD values differ. Value1: 2000 Value2: 0 Changed by -2000.0 (relative change of -1.0)
