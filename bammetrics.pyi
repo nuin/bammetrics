@@ -92,11 +92,13 @@ class PresetInfo(str):
 
 class Check:
     """One check of a verdict. status is "pass", "warn", "fail" or "not_measured";
+    text is the cell's text for a rule with an "is TEXT" bound (value is then None);
     limit is the fail bound of a fail, else the warn bound (or the fail bound
     when the rule has none); why is the reason in plain words, None for a pass."""
     rule: str
     status: str
     value: float | None
+    text: str | None
     limit: str | None
     why: str | None
     label: str
@@ -720,6 +722,46 @@ def create_sequence_dictionary(
     """CreateSequenceDictionary: one row per FASTA sequence (name, length, md5, assembly,
     uri, species, alternate_names); OUTPUT gets the .dict."""
 
+def collect_coverage_gaps(
+    input: _Path,
+    *,
+    target_intervals: _Path | Sequence[_Path],
+    gaps_file: _Path | None = None,
+    min_depth: int | None = None,
+    minimum_mapping_quality: int | None = None,
+    minimum_base_quality: int | None = None,
+    clip_overlapping_reads: bool | None = None,
+    include_indels: bool | None = None,
+    count_unpaired: bool | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectCoverageGaps: one row of the 10 CoverageGapMetrics columns: the target bases
+    under MIN_DEPTH as maximal runs, with the depth CollectHsMetrics writes per base;
+    the metrics file adds a histogram of gap lengths, and GAPS_FILE a BED of the gaps.
+    Not a Picard tool (docs/06)."""
+
+def collect_sex_check_metrics(
+    input: _Path,
+    *,
+    expected_sex: str | None = None,
+    minimum_mapping_quality: int | None = None,
+    target_intervals: _Path | Sequence[_Path] | None = None,
+    x_contig: str | None = None,
+    y_contig: str | None = None,
+    autosomes: str | Sequence[str] | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectSexCheckMetrics: one row of the 12 SexCheckMetrics columns: reads per base on
+    the X contig, the Y contig and the autosomes, their ratios, the sex they imply
+    (FEMALE, MALE or UNKNOWN) and whether it matches EXPECTED_SEX. Not a Picard tool
+    (docs/06)."""
+
 # END registry tools
 
 def alignment_summary(
@@ -843,6 +885,8 @@ _CollectorVerb = Literal[
     "hs-metrics",
     "gc-bias",
     "rna-seq",
+    "sex-check",
+    "coverage-gaps",
 ]
 
 def qc(
@@ -856,6 +900,7 @@ def qc(
     ref_flat: _Path | None = None,
     strand: Literal["NONE", "FIRST_READ_TRANSCRIPTION_STRAND", "SECOND_READ_TRANSCRIPTION_STRAND"] | None = None,
     ribosomal_intervals: _Path | None = None,
+    sex: Literal["male", "female"] | None = None,
     sample: str | None = None,
     fail_on: Literal["warn", "fail"] | None = None,
     resume: bool = False,

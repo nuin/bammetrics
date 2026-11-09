@@ -10,9 +10,11 @@ OUT/sample
 ## exit
 0
 ## stdout
-insert_size  PASS  preset generic v1 (6dd89e)  4 collectors, 1 BAM read (10 records)
-PASS          6 checks
-wrote 7 files to OUT/sample.*, report OUT/sample.report.html
+insert_size  WARN  preset generic v2 (9094cb)  5 collectors, 1 BAM read (10 records)
+WARN          sex.inferred  Inferred sex is UNKNOWN, the warn value
+PASS          7 checks
+wrote 8 files to OUT/sample.*, report OUT/sample.report.html
+use --fail-on fail or bammetrics check to gate
 ## stderr
 ## file sample.alignment_summary_metrics
 ## htsjdk.samtools.metrics.StringHeader
@@ -66,7 +68,7 @@ insert_size	All_Reads.fr_count
   "prefix": "OUT/sample",
   "preset": {
     "name": "generic",
-    "hash": "6dd89ed0478fd5e4"
+    "hash": "9094cb1df1d01bca"
   },
   "steps": [
     {
@@ -80,7 +82,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "6dd89ed0478fd5e4",
+      "preset_hash": "9094cb1df1d01bca",
       "input": {
         "path": "tests/data/insert_size.cram",
         "size": 966,
@@ -122,7 +124,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "6dd89ed0478fd5e4",
+      "preset_hash": "9094cb1df1d01bca",
       "input": {
         "path": "tests/data/insert_size.cram",
         "size": 966,
@@ -164,7 +166,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "6dd89ed0478fd5e4",
+      "preset_hash": "9094cb1df1d01bca",
       "input": {
         "path": "tests/data/insert_size.cram",
         "size": 966,
@@ -206,7 +208,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "6dd89ed0478fd5e4",
+      "preset_hash": "9094cb1df1d01bca",
       "input": {
         "path": "tests/data/insert_size.cram",
         "size": 966,
@@ -238,6 +240,48 @@ insert_size	All_Reads.fr_count
       "error": null
     },
     {
+      "id": "CollectSexCheckMetrics",
+      "stage": "pass",
+      "tool": "CollectSexCheckMetrics",
+      "argv": [
+        "INPUT=tests/data/insert_size.cram",
+        "OUTPUT=OUT/sample.sex_check_metrics",
+        "REFERENCE_SEQUENCE=tests/data/ref_100k.fa"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.17.0",
+      "preset_hash": "9094cb1df1d01bca",
+      "input": {
+        "path": "tests/data/insert_size.cram",
+        "size": 966,
+        "mtime": "<mtime>",
+        "edges_hash": "ac6253e6a0a6fc05"
+      },
+      "files": [
+        {
+          "path": "tests/data/ref_100k.fa",
+          "size": 101673,
+          "mtime": "<mtime>",
+          "edges_hash": "c6102fe7a669b9e5"
+        },
+        {
+          "path": "tests/data/ref_100k.fa.fai",
+          "size": 20,
+          "mtime": "<mtime>",
+          "edges_hash": "d2cbd1a1591a3255"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "OUT/sample.sex_check_metrics",
+          "tool": "CollectSexCheckMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
       "id": "verdict",
       "stage": "post",
       "tool": "bammetrics",
@@ -246,11 +290,12 @@ insert_size	All_Reads.fr_count
         "OUT/sample.alignment_summary_metrics",
         "OUT/sample.duplicate_metrics",
         "OUT/sample.insert_size_metrics",
-        "OUT/sample.quality_yield_metrics"
+        "OUT/sample.quality_yield_metrics",
+        "OUT/sample.sex_check_metrics"
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "6dd89ed0478fd5e4",
+      "preset_hash": "9094cb1df1d01bca",
       "input": {
         "path": "tests/data/insert_size.cram",
         "size": 966,
@@ -272,7 +317,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "6dd89ed0478fd5e4",
+      "preset_hash": "9094cb1df1d01bca",
       "input": {
         "path": "tests/data/insert_size.cram",
         "size": 966,
@@ -310,6 +355,17 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
 
 ## file sample.report.html
 <page not recorded>
+## file sample.sex_check_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectSexCheckMetrics INPUT=tests/data/insert_size.cram OUTPUT=OUT/sample.sex_check_metrics REFERENCE_SEQUENCE=tests/data/ref_100k.fa
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.SexCheckMetrics
+AUTOSOME_READS	X_READS	Y_READS	AUTOSOME_LENGTH	X_LENGTH	Y_LENGTH	X_RATIO	Y_RATIO	INFERRED_SEX	DECLARED_SEX	SEX_MATCH	REASON
+10	0	0	100000	0	0	?	?	UNKNOWN			no X bases; no Y bases
+
+
 ## file sample.verdict.json
 {
   "schema": "bammetrics.verdict/1",
@@ -317,15 +373,15 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
   "sample": "insert_size",
   "preset": {
     "name": "generic",
-    "version": 1,
-    "hash": "6dd89ed0478fd5e4",
+    "version": 2,
+    "hash": "9094cb1df1d01bca",
     "source": "built-in",
     "note": "starting values"
   },
-  "status": "pass",
+  "status": "warn",
   "counts": {
-    "pass": 6,
-    "warn": 0,
+    "pass": 7,
+    "warn": 1,
     "fail": 0,
     "not_measured": 0
   },
@@ -352,6 +408,12 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
       "path": "OUT/sample.quality_yield_metrics",
       "classes": [
         "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics"
+      ]
+    },
+    {
+      "path": "OUT/sample.sex_check_metrics",
+      "classes": [
+        "bammetrics.qc.SexCheckMetrics"
       ]
     }
   ],
@@ -444,6 +506,38 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
       "fail": "> 0.5",
       "status": "pass",
       "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "sex.match",
+      "label": "Declared sex matches",
+      "class": "SexCheckMetrics",
+      "metric": "SEX_MATCH",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": null,
+      "text": "",
+      "warn": null,
+      "fail": "is N",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "sex.inferred",
+      "label": "Inferred sex",
+      "class": "SexCheckMetrics",
+      "metric": "INFERRED_SEX",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": null,
+      "text": "UNKNOWN",
+      "warn": "is UNKNOWN",
+      "fail": null,
+      "status": "warn",
+      "reason": "Inferred sex is UNKNOWN, the warn value",
       "plot": null
     }
   ]

@@ -14,10 +14,12 @@ NA12878
 ## exit
 11
 ## stdout
-NA12878  INCOMPLETE  preset clinical-panel v2 (e62755)  3 collectors, 1 BAM read (10 records)
-NOT MEASURED  HsMetrics  9 rules, needs --hs BAITS TARGETS or --panel FILE
-PASS          5 checks
-wrote 6 files to OUT/sample.*, report OUT/sample.report.html
+NA12878  INCOMPLETE  preset clinical-panel v3 (6f0d59)  4 collectors, 1 BAM read (10 records)
+WARN          sex.inferred        Inferred sex is UNKNOWN, the warn value
+NOT MEASURED  HsMetrics           9 rules, needs --hs BAITS TARGETS or --panel FILE
+NOT MEASURED  CoverageGapMetrics  2 rules, needs --hs BAITS TARGETS or --panel FILE
+PASS          6 checks
+wrote 7 files to OUT/sample.*, report OUT/sample.report.html
 exit 11: the verdict is incomplete
 ## stderr
 ## file sample.alignment_summary_metrics
@@ -61,7 +63,7 @@ insert_size	All_Reads.fr_count
   "prefix": "OUT/sample",
   "preset": {
     "name": "clinical-panel",
-    "hash": "e6275515a0d3de26"
+    "hash": "6f0d59319750923f"
   },
   "steps": [
     {
@@ -74,7 +76,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "e6275515a0d3de26",
+      "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -102,7 +104,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "e6275515a0d3de26",
+      "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -130,7 +132,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "e6275515a0d3de26",
+      "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -149,6 +151,34 @@ insert_size	All_Reads.fr_count
       "error": null
     },
     {
+      "id": "CollectSexCheckMetrics",
+      "stage": "pass",
+      "tool": "CollectSexCheckMetrics",
+      "argv": [
+        "INPUT=tests/data/insert_size.bam",
+        "OUTPUT=OUT/sample.sex_check_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.17.0",
+      "preset_hash": "6f0d59319750923f",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.sex_check_metrics",
+          "tool": "CollectSexCheckMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
       "id": "verdict",
       "stage": "post",
       "tool": "bammetrics",
@@ -156,11 +186,12 @@ insert_size	All_Reads.fr_count
         "--preset=clinical-panel",
         "OUT/sample.alignment_summary_metrics",
         "OUT/sample.insert_size_metrics",
-        "OUT/sample.quality_yield_metrics"
+        "OUT/sample.quality_yield_metrics",
+        "OUT/sample.sex_check_metrics"
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "e6275515a0d3de26",
+      "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -182,7 +213,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "e6275515a0d3de26",
+      "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -220,6 +251,17 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
 
 ## file sample.report.html
 <page not recorded>
+## file sample.sex_check_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectSexCheckMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.sex_check_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.SexCheckMetrics
+AUTOSOME_READS	X_READS	Y_READS	AUTOSOME_LENGTH	X_LENGTH	Y_LENGTH	X_RATIO	Y_RATIO	INFERRED_SEX	DECLARED_SEX	SEX_MATCH	REASON
+10	0	0	100000	0	0	?	?	UNKNOWN			no X bases; no Y bases
+
+
 ## file sample.verdict.json
 {
   "schema": "bammetrics.verdict/1",
@@ -227,17 +269,17 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
   "sample": "NA12878",
   "preset": {
     "name": "clinical-panel",
-    "version": 2,
-    "hash": "e6275515a0d3de26",
+    "version": 3,
+    "hash": "6f0d59319750923f",
     "source": "built-in",
-    "note": "reviewed defaults"
+    "note": "reviewed defaults; gap and sex rules are starting values"
   },
   "status": "incomplete",
   "counts": {
-    "pass": 5,
-    "warn": 0,
+    "pass": 6,
+    "warn": 1,
     "fail": 0,
-    "not_measured": 9
+    "not_measured": 11
   },
   "files": [
     {
@@ -256,6 +298,12 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
       "path": "OUT/sample.quality_yield_metrics",
       "classes": [
         "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics"
+      ]
+    },
+    {
+      "path": "OUT/sample.sex_check_metrics",
+      "classes": [
+        "bammetrics.qc.SexCheckMetrics"
       ]
     }
   ],
@@ -469,6 +517,68 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
       "status": "pass",
       "reason": null,
       "plot": "cycle-quality"
+    },
+    {
+      "rule": "gaps.reportable-range",
+      "label": "Target bases at MIN_DEPTH",
+      "class": "CoverageGapMetrics",
+      "metric": "PCT_REPORTABLE",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": null,
+      "warn": "< 0.98",
+      "fail": "< 0.95",
+      "status": "not_measured",
+      "reason": "no CoverageGapMetrics file",
+      "plot": "coverage"
+    },
+    {
+      "rule": "gaps.targets-complete",
+      "label": "Targets without a gap",
+      "class": "CoverageGapMetrics",
+      "metric": "PCT_TARGETS_COMPLETE",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": null,
+      "warn": "< 0.95",
+      "fail": "< 0.9",
+      "status": "not_measured",
+      "reason": "no CoverageGapMetrics file",
+      "plot": "coverage"
+    },
+    {
+      "rule": "sex.match",
+      "label": "Declared sex matches",
+      "class": "SexCheckMetrics",
+      "metric": "SEX_MATCH",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": null,
+      "text": "",
+      "warn": null,
+      "fail": "is N",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "sex.inferred",
+      "label": "Inferred sex",
+      "class": "SexCheckMetrics",
+      "metric": "INFERRED_SEX",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": null,
+      "text": "UNKNOWN",
+      "warn": "is UNKNOWN",
+      "fail": null,
+      "status": "warn",
+      "reason": "Inferred sex is UNKNOWN, the warn value",
+      "plot": null
     }
   ]
 }

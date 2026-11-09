@@ -12,10 +12,11 @@ jsonl
 ## exit
 0
 ## stdout
-{"event":"plan","bam":"tests/data/insert_size.bam","sample":"insert_size","prefix":"OUT/sample","preset":"wgs","preset_hash":"8a5fc4360f357d10"}
+{"event":"plan","bam":"tests/data/insert_size.bam","sample":"insert_size","prefix":"OUT/sample","preset":"wgs","preset_hash":"724803a818010824"}
 {"event":"step","id":"CollectQualityYieldMetrics","tool":"CollectQualityYieldMetrics","read":"pass","reason":null,"action":"run","resumable":false,"argv":["INPUT=tests/data/insert_size.bam","OUTPUT=OUT/sample.quality_yield_metrics"],"outputs":["OUT/sample.quality_yield_metrics"],"rules":["yield.q30"]}
 {"event":"step","id":"CollectAlignmentSummaryMetrics","tool":"CollectAlignmentSummaryMetrics","read":"pass","reason":null,"action":"run","resumable":false,"argv":["INPUT=tests/data/insert_size.bam","OUTPUT=OUT/sample.alignment_summary_metrics","REFERENCE_SEQUENCE=tests/data/ref_100k.fa"],"outputs":["OUT/sample.alignment_summary_metrics"],"rules":["alignment.pf-reads-aligned","alignment.adapter","alignment.chimeras"]}
 {"event":"step","id":"CollectInsertSizeMetrics","tool":"CollectInsertSizeMetrics","read":"pass","reason":null,"action":"run","resumable":false,"argv":["INPUT=tests/data/insert_size.bam","OUTPUT=OUT/sample.insert_size_metrics"],"outputs":["OUT/sample.insert_size_metrics"],"rules":["insert.median"]}
 {"event":"step","id":"CollectDuplicateMetrics","tool":"CollectDuplicateMetrics","read":"pass","reason":null,"action":"run","resumable":false,"argv":["INPUT=tests/data/insert_size.bam","METRICS_FILE=OUT/sample.duplicate_metrics"],"outputs":["OUT/sample.duplicate_metrics"],"rules":["duplication.percent"]}
 {"event":"step","id":"CollectWgsMetrics","tool":"CollectWgsMetrics","read":"own","reason":"it walks reference loci, not one record at a time","action":"run","resumable":false,"argv":["INPUT=tests/data/insert_size.bam","OUTPUT=OUT/sample.wgs_metrics","REFERENCE_SEQUENCE=tests/data/ref_100k.fa"],"outputs":["OUT/sample.wgs_metrics"],"rules":["wgs.mean-coverage","wgs.bases-10x","wgs.bases-30x","wgs.evenness"]}
+{"event":"step","id":"CollectSexCheckMetrics","tool":"CollectSexCheckMetrics","read":"pass","reason":null,"action":"run","resumable":false,"argv":["INPUT=tests/data/insert_size.bam","OUTPUT=OUT/sample.sex_check_metrics"],"outputs":["OUT/sample.sex_check_metrics"],"rules":["sex.match","sex.inferred"]}
 ## stderr

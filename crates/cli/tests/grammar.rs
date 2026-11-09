@@ -174,6 +174,22 @@ fn cases(built: &Built) -> Vec<Case> {
             picard_outputs: single,
         },
         Case {
+            verb: "coverage-gaps",
+            class: "CollectCoverageGaps",
+            verb_args: bam(&["--target-intervals", IL]),
+            picard_args: picard_bam(&[&format!("TI={IL}")]),
+            option: Some(("MIN_DEPTH", "5")),
+            picard_outputs: single,
+        },
+        Case {
+            verb: "sex-check",
+            class: "CollectSexCheckMetrics",
+            verb_args: bam(&[]),
+            picard_args: picard_bam(&[]),
+            option: Some(("MINIMUM_MAPPING_QUALITY", "0")),
+            picard_outputs: single,
+        },
+        Case {
             verb: "gc-bias",
             class: "CollectGcBiasMetrics",
             verb_args: bam(&["-R", REF]),
@@ -410,7 +426,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && **c != "AccumulateVariantCallingMetrics")
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 23);
+    assert_eq!(classes.len(), 25);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

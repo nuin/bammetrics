@@ -1,0 +1,19 @@
+## argv
+CollectSexCheckMetrics
+I=tests/data/insert_size.bam
+X_CONTIG=chr1
+MQ=0
+## exit
+0
+## stdout
+## htsjdk.samtools.metrics.StringHeader
+# CollectSexCheckMetrics INPUT=tests/data/insert_size.bam X_CONTIG=chr1 MINIMUM_MAPPING_QUALITY=0
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.SexCheckMetrics
+AUTOSOME_READS	X_READS	Y_READS	AUTOSOME_LENGTH	X_LENGTH	Y_LENGTH	X_RATIO	Y_RATIO	INFERRED_SEX	DECLARED_SEX	SEX_MATCH	REASON
+0	10	0	0	100000	0	?	?	UNKNOWN			no autosome bases; no Y bases
+
+
+## stderr

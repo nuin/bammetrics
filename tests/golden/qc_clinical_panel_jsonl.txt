@@ -16,11 +16,14 @@ jsonl
 ## exit
 0
 ## stdout
-{"event":"start","sample":"insert_size","bam":"tests/data/insert_size.bam","prefix":"OUT/sample","preset":"clinical-panel","preset_hash":"e6275515a0d3de26","collectors":4,"skipped":0}
+{"event":"start","sample":"insert_size","bam":"tests/data/insert_size.bam","prefix":"OUT/sample","preset":"clinical-panel","preset_hash":"6f0d59319750923f","collectors":6,"skipped":0}
 {"event":"file","step":"CollectQualityYieldMetrics","path":"OUT/sample.quality_yield_metrics","tool":"CollectQualityYieldMetrics","kind":"metrics","written":true}
 {"event":"file","step":"CollectAlignmentSummaryMetrics","path":"OUT/sample.alignment_summary_metrics","tool":"CollectAlignmentSummaryMetrics","kind":"metrics","written":true}
 {"event":"file","step":"CollectInsertSizeMetrics","path":"OUT/sample.insert_size_metrics","tool":"CollectInsertSizeMetrics","kind":"metrics","written":true}
 {"event":"file","step":"CollectHsMetrics","path":"OUT/sample.hs_metrics","tool":"CollectHsMetrics","kind":"metrics","written":true}
+{"event":"file","step":"CollectSexCheckMetrics","path":"OUT/sample.sex_check_metrics","tool":"CollectSexCheckMetrics","kind":"metrics","written":true}
+{"event":"file","step":"CollectCoverageGaps","path":"OUT/sample.coverage_gaps","tool":"CollectCoverageGaps","kind":"metrics","written":true}
+{"event":"file","step":"CollectCoverageGaps","path":"OUT/sample.coverage_gaps.bed","tool":"CollectCoverageGaps","kind":"gaps","written":true}
 {"event":"file","step":"report","path":"OUT/sample.verdict.json","tool":"bammetrics","kind":"verdict","written":true}
 {"event":"file","step":"report","path":"OUT/sample.report.html","tool":"bammetrics","kind":"report","written":true}
 {"event":"check","sample":"insert_size","rule":"hs.mean-target-coverage","label":"Mean target coverage","class":"HsMetrics","metric":"MEAN_TARGET_COVERAGE","level":"ALL_READS","select":null,"unit":null,"value":0.377778,"warn":"< 200","fail":"< 100","status":"fail","reason":"Mean target coverage is 0.377778, below the fail limit of 100","plot":"coverage"}
@@ -37,7 +40,11 @@ jsonl
 {"event":"check","sample":"insert_size","rule":"alignment.chimeras","label":"Chimeric pairs","class":"AlignmentSummaryMetrics","metric":"PCT_CHIMERAS","level":"ALL_READS","select":"CATEGORY=PAIR","unit":null,"value":0,"warn":"> 0.05","fail":"> 0.1","status":"pass","reason":null,"plot":null}
 {"event":"check","sample":"insert_size","rule":"insert.median","label":"Median insert size","class":"InsertSizeMetrics","metric":"MEDIAN_INSERT_SIZE","level":"ALL_READS","select":"PAIR_ORIENTATION=FR","unit":null,"value":310,"warn":"outside 180..450","fail":"outside 120..600","status":"pass","reason":null,"plot":"insert-size"}
 {"event":"check","sample":"insert_size","rule":"yield.q30","label":"Q30 fraction of PF bases","class":"QualityYieldMetrics","metric":"PF_Q30_BASES / PF_BASES","level":"ALL_READS","select":null,"unit":null,"value":1,"warn":"< 0.85","fail":"< 0.75","status":"pass","reason":null,"plot":"cycle-quality"}
-{"event":"done","sample":"insert_size","status":"fail","counts":{"pass":8,"warn":0,"fail":5,"not_measured":1},"report":"OUT/sample.report.html","exit":0}
+{"event":"check","sample":"insert_size","rule":"gaps.reportable-range","label":"Target bases at MIN_DEPTH","class":"CoverageGapMetrics","metric":"PCT_REPORTABLE","level":"ALL_READS","select":null,"unit":null,"value":0,"warn":"< 0.98","fail":"< 0.95","status":"fail","reason":"Target bases at MIN_DEPTH is 0, below the fail limit of 0.95","plot":"coverage"}
+{"event":"check","sample":"insert_size","rule":"gaps.targets-complete","label":"Targets without a gap","class":"CoverageGapMetrics","metric":"PCT_TARGETS_COMPLETE","level":"ALL_READS","select":null,"unit":null,"value":0,"warn":"< 0.95","fail":"< 0.9","status":"fail","reason":"Targets without a gap is 0, below the fail limit of 0.9","plot":"coverage"}
+{"event":"check","sample":"insert_size","rule":"sex.match","label":"Declared sex matches","class":"SexCheckMetrics","metric":"SEX_MATCH","level":"ALL_READS","select":null,"unit":null,"value":null,"text":"","warn":null,"fail":"is N","status":"pass","reason":null,"plot":null}
+{"event":"check","sample":"insert_size","rule":"sex.inferred","label":"Inferred sex","class":"SexCheckMetrics","metric":"INFERRED_SEX","level":"ALL_READS","select":null,"unit":null,"value":null,"text":"UNKNOWN","warn":"is UNKNOWN","fail":null,"status":"warn","reason":"Inferred sex is UNKNOWN, the warn value","plot":null}
+{"event":"done","sample":"insert_size","status":"fail","counts":{"pass":9,"warn":1,"fail":7,"not_measured":1},"report":"OUT/sample.report.html","exit":0}
 ## stderr
 ## file sample.alignment_summary_metrics
 ## htsjdk.samtools.metrics.StringHeader
@@ -55,6 +62,30 @@ PAIR	10	10	1	0	10	1	1000	10	1000	1000	73.5	0.75	0.75	0	100	0	100	0	100	100	100	1
 READ_LENGTH	PAIRED_TOTAL_LENGTH_COUNT	PAIRED_ALIGNED_LENGTH_COUNT
 100	10	10
 
+## file sample.coverage_gaps
+## htsjdk.samtools.metrics.StringHeader
+# CollectCoverageGaps INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.coverage_gaps GAPS_FILE=OUT/sample.coverage_gaps.bed TARGET_INTERVALS=tests/data/targets.interval_list
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.CoverageGapMetrics
+TARGET_TERRITORY	TARGET_COUNT	MIN_DEPTH	BASES_AT_OR_ABOVE_MIN_DEPTH	PCT_REPORTABLE	GAP_BASES	GAP_COUNT	LARGEST_GAP	TARGETS_WITH_GAP	PCT_TARGETS_COMPLETE
+1800	5	20	0	0	1800	5	600	5	0
+
+## HISTOGRAM	java.lang.Integer
+gap_length	gap_count
+200	1
+300	2
+400	1
+600	1
+
+## file sample.coverage_gaps.bed
+#chrom	start	end	target	mean_depth	min_depth
+chr1	1000	1200	t1	0.5	0
+chr1	2000	2400	t2	0.5	0
+chr1	4000	4300	t3	0.6	0
+chr1	5000	5600	t4	0.333333	0
+chr1	8000	8300	t5	0	0
 ## file sample.hs_metrics
 ## htsjdk.samtools.metrics.StringHeader
 # CollectHsMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.hs_metrics REFERENCE_SEQUENCE=tests/data/ref_100k.fa BAIT_INTERVALS=tests/data/targets.interval_list TARGET_INTERVALS=tests/data/targets.interval_list
@@ -220,7 +251,7 @@ insert_size	All_Reads.fr_count
   "prefix": "OUT/sample",
   "preset": {
     "name": "clinical-panel",
-    "hash": "e6275515a0d3de26"
+    "hash": "6f0d59319750923f"
   },
   "steps": [
     {
@@ -233,7 +264,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "e6275515a0d3de26",
+      "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -262,7 +293,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "e6275515a0d3de26",
+      "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -303,7 +334,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "e6275515a0d3de26",
+      "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -334,7 +365,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "e6275515a0d3de26",
+      "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -372,19 +403,99 @@ insert_size	All_Reads.fr_count
       "error": null
     },
     {
+      "id": "CollectSexCheckMetrics",
+      "stage": "pass",
+      "tool": "CollectSexCheckMetrics",
+      "argv": [
+        "INPUT=tests/data/insert_size.bam",
+        "OUTPUT=OUT/sample.sex_check_metrics",
+        "TARGET_INTERVALS=tests/data/targets.interval_list"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.17.0",
+      "preset_hash": "6f0d59319750923f",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [
+        {
+          "path": "tests/data/targets.interval_list",
+          "size": 147,
+          "mtime": "<mtime>",
+          "edges_hash": "76d72c2a1a5c81e5"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "OUT/sample.sex_check_metrics",
+          "tool": "CollectSexCheckMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "CollectCoverageGaps",
+      "stage": "pass",
+      "tool": "CollectCoverageGaps",
+      "argv": [
+        "INPUT=tests/data/insert_size.bam",
+        "OUTPUT=OUT/sample.coverage_gaps",
+        "GAPS_FILE=OUT/sample.coverage_gaps.bed",
+        "TARGET_INTERVALS=tests/data/targets.interval_list"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.17.0",
+      "preset_hash": "6f0d59319750923f",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [
+        {
+          "path": "tests/data/targets.interval_list",
+          "size": 147,
+          "mtime": "<mtime>",
+          "edges_hash": "76d72c2a1a5c81e5"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "OUT/sample.coverage_gaps",
+          "tool": "CollectCoverageGaps",
+          "kind": "metrics"
+        },
+        {
+          "path": "OUT/sample.coverage_gaps.bed",
+          "tool": "CollectCoverageGaps",
+          "kind": "gaps"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
       "id": "verdict",
       "stage": "post",
       "tool": "bammetrics",
       "argv": [
         "--preset=clinical-panel",
         "OUT/sample.alignment_summary_metrics",
+        "OUT/sample.coverage_gaps",
         "OUT/sample.hs_metrics",
         "OUT/sample.insert_size_metrics",
-        "OUT/sample.quality_yield_metrics"
+        "OUT/sample.quality_yield_metrics",
+        "OUT/sample.sex_check_metrics"
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "e6275515a0d3de26",
+      "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -406,7 +517,7 @@ insert_size	All_Reads.fr_count
       ],
       "argv_hash": "<argv_hash>",
       "tool_version": "0.17.0",
-      "preset_hash": "e6275515a0d3de26",
+      "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
         "size": 328,
@@ -444,6 +555,17 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
 
 ## file sample.report.html
 <page not recorded>
+## file sample.sex_check_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectSexCheckMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.sex_check_metrics TARGET_INTERVALS=tests/data/targets.interval_list
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.SexCheckMetrics
+AUTOSOME_READS	X_READS	Y_READS	AUTOSOME_LENGTH	X_LENGTH	Y_LENGTH	X_RATIO	Y_RATIO	INFERRED_SEX	DECLARED_SEX	SEX_MATCH	REASON
+7	0	0	1800	0	0	?	?	UNKNOWN			no X bases; no Y bases
+
+
 ## file sample.verdict.json
 {
   "schema": "bammetrics.verdict/1",
@@ -451,16 +573,16 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
   "sample": "insert_size",
   "preset": {
     "name": "clinical-panel",
-    "version": 2,
-    "hash": "e6275515a0d3de26",
+    "version": 3,
+    "hash": "6f0d59319750923f",
     "source": "built-in",
-    "note": "reviewed defaults"
+    "note": "reviewed defaults; gap and sex rules are starting values"
   },
   "status": "fail",
   "counts": {
-    "pass": 8,
-    "warn": 0,
-    "fail": 5,
+    "pass": 9,
+    "warn": 1,
+    "fail": 7,
     "not_measured": 1
   },
   "files": [
@@ -468,6 +590,12 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
       "path": "OUT/sample.alignment_summary_metrics",
       "classes": [
         "picard.analysis.AlignmentSummaryMetrics"
+      ]
+    },
+    {
+      "path": "OUT/sample.coverage_gaps",
+      "classes": [
+        "bammetrics.qc.CoverageGapMetrics"
       ]
     },
     {
@@ -486,6 +614,12 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
       "path": "OUT/sample.quality_yield_metrics",
       "classes": [
         "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics"
+      ]
+    },
+    {
+      "path": "OUT/sample.sex_check_metrics",
+      "classes": [
+        "bammetrics.qc.SexCheckMetrics"
       ]
     }
   ],
@@ -699,6 +833,68 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
       "status": "pass",
       "reason": null,
       "plot": "cycle-quality"
+    },
+    {
+      "rule": "gaps.reportable-range",
+      "label": "Target bases at MIN_DEPTH",
+      "class": "CoverageGapMetrics",
+      "metric": "PCT_REPORTABLE",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0,
+      "warn": "< 0.98",
+      "fail": "< 0.95",
+      "status": "fail",
+      "reason": "Target bases at MIN_DEPTH is 0, below the fail limit of 0.95",
+      "plot": "coverage"
+    },
+    {
+      "rule": "gaps.targets-complete",
+      "label": "Targets without a gap",
+      "class": "CoverageGapMetrics",
+      "metric": "PCT_TARGETS_COMPLETE",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0,
+      "warn": "< 0.95",
+      "fail": "< 0.9",
+      "status": "fail",
+      "reason": "Targets without a gap is 0, below the fail limit of 0.9",
+      "plot": "coverage"
+    },
+    {
+      "rule": "sex.match",
+      "label": "Declared sex matches",
+      "class": "SexCheckMetrics",
+      "metric": "SEX_MATCH",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": null,
+      "text": "",
+      "warn": null,
+      "fail": "is N",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "sex.inferred",
+      "label": "Inferred sex",
+      "class": "SexCheckMetrics",
+      "metric": "INFERRED_SEX",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": null,
+      "text": "UNKNOWN",
+      "warn": "is UNKNOWN",
+      "fail": null,
+      "status": "warn",
+      "reason": "Inferred sex is UNKNOWN, the warn value",
+      "plot": null
     }
   ]
 }

@@ -68,12 +68,29 @@ impl Strand {
     }
 }
 
+/// `EXPECTED_SEX` of `CollectSexCheckMetrics`, as `--sex` spells it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum Sex {
+    Male,
+    Female,
+}
+
+impl Sex {
+    fn picard(self) -> &'static str {
+        match self {
+            Sex::Male => "MALE",
+            Sex::Female => "FEMALE",
+        }
+    }
+}
+
 fn after_help() -> String {
     format!(
         "Files: PREFIX plus the CollectMultipleMetrics extensions (.alignment_summary_metrics, \
 .insert_size_metrics, .quality_yield_metrics, .gc_bias.detail_metrics and \
 .gc_bias.summary_metrics), .hs_metrics (.BAIT_SET.hs_metrics with several --hs), \
-.duplicate_metrics, .wgs_metrics, .rna_metrics; .panel.interval_list when --panel is a BED (its \
+.duplicate_metrics, .wgs_metrics, .rna_metrics, .sex_check_metrics, .coverage_gaps with its \
+.coverage_gaps.bed; .panel.interval_list when --panel is a BED (its \
 @SQ lines from the BAM header); then PREFIX.verdict.json, PREFIX.report.html \
 and PREFIX.manifest.json. Each metrics file is byte for byte the one `bammetrics <Tool> \
 INPUT=BAM OUTPUT=FILE` writes, apart from the Started on line.\n\n\
@@ -116,6 +133,10 @@ pub struct QcArgs {
     /// CollectRnaSeqMetrics RIBOSOMAL_INTERVALS.
     #[arg(long, value_name = "FILE", requires = "ref_flat")]
     pub ribosomal_intervals: Option<PathBuf>,
+    /// The declared sex, CollectSexCheckMetrics EXPECTED_SEX: the sex.match
+    /// rule fails when the reads say otherwise.
+    #[arg(long, value_enum)]
+    pub sex: Option<Sex>,
     /// Sample name for the verdict, the page and the manifest (default: the
     /// first @RG SM, else the BAM name). Never written into a metrics file.
     #[arg(long, value_name = "NAME")]
@@ -201,7 +222,24 @@ const SOURCES: &[(&str, &str, Needs)] = &[
     ),
     ("RnaSeqMetrics", "CollectRnaSeqMetrics", Needs::Annotation),
     ("WgsMetrics", "CollectWgsMetrics", Needs::Reference),
+    ("SexCheckMetrics", "CollectSexCheckMetrics", Needs::Bam),
+    (
+        "CoverageGapMetrics",
+        "CollectCoverageGaps",
+        Needs::Intervals,
+    ),
 ];
+
+/// The manifest kind of a step's file by its option: the `GAPS_FILE` BED
+/// of `CollectCoverageGaps` is no metrics file, so the verdict, the page,
+/// `report DIR` and Python `Run.metrics` leave it out.
+fn output_kind(option: &str) -> &'static str {
+    if option == "GAPS_FILE" {
+        "gaps"
+    } else {
+        "metrics"
+    }
+}
 
 /// `picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics` and
 /// `QualityYieldMetrics` both name `QualityYieldMetrics`.
@@ -494,6 +532,47 @@ impl Context<'_> {
         }
         extra
     }
+
+    /// The targets of the two clinical checks (docs/06): `--panel`, else
+    /// the targets of the first `--hs`.
+    fn clinical_targets(&self) -> Option<PathBuf> {
+        self.args.panel.clone().or_else(|| {
+            hs_runs(self.args)
+                .first()
+                .map(|(_, targets)| targets.clone())
+        })
+    }
+
+    /// `CollectSexCheckMetrics`: `EXPECTED_SEX` from `--sex`, and the panel
+    /// targets when there are any, so the lengths follow the design.
+    fn sex_options(&self) -> Vec<String> {
+        let mut extra = Vec::new();
+        if let Some(sex) = self.args.sex {
+            extra.push(format!("EXPECTED_SEX={}", sex.picard()));
+        }
+        if let Some(targets) = self.clinical_targets() {
+            extra.push(format!("TARGET_INTERVALS={}", targets.display()));
+        }
+        extra
+    }
+
+    /// `CollectCoverageGaps`: the panel targets.
+    fn gaps_options(&self) -> Vec<String> {
+        self.clinical_targets()
+            .map(|targets| format!("TARGET_INTERVALS={}", targets.display()))
+            .into_iter()
+            .collect()
+    }
+
+    /// The further Picard options of `tool` from this run's arguments.
+    fn tool_options(&self, tool: &str) -> Vec<String> {
+        match tool {
+            "CollectRnaSeqMetrics" => self.rna_options(),
+            "CollectSexCheckMetrics" => self.sex_options(),
+            "CollectCoverageGaps" => self.gaps_options(),
+            _ => Vec::new(),
+        }
+    }
 }
 
 /// The argv keys that name a file a step reads (the BAM itself is the
@@ -572,7 +651,7 @@ impl Context<'_> {
         };
         let outputs = files
             .into_iter()
-            .map(|(_, path)| (path, "metrics"))
+            .map(|(option, path)| (path, output_kind(&option)))
             .collect();
         self.planned(id, tool, argv, outputs, rules, read)
     }
@@ -740,9 +819,7 @@ fn collectors(cx: &Context) -> Result<(Vec<Step>, Vec<Unmet>)> {
             continue;
         }
         let mut extra = levels;
-        if *tool == "CollectRnaSeqMetrics" {
-            extra.extend(cx.rna_options());
-        }
+        extra.extend(cx.tool_options(tool));
         steps.push(cx.step(Spec {
             id: (*tool).to_owned(),
             tool: registered,
@@ -932,16 +1009,11 @@ pub fn prepare_tools(args: &QcArgs, tools: &[&str]) -> Result<Plan> {
             steps.extend(hs_steps(&cx, &[], &[])?);
             continue;
         }
-        let extra = if tool == "CollectRnaSeqMetrics" {
-            cx.rna_options()
-        } else {
-            Vec::new()
-        };
         steps.push(cx.step(Spec {
             id: tool.to_owned(),
             tool: registered,
             files: cx.files(tool),
-            extra,
+            extra: cx.tool_options(tool),
             rules: Vec::new(),
         })?);
     }

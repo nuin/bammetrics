@@ -1,0 +1,33 @@
+## argv
+sex-check
+tests/data/insert_size.bam
+--sex
+male
+--format
+json
+## exit
+0
+## stdout
+{
+  "tool": "CollectSexCheckMetrics",
+  "sample": "insert_size",
+  "class": "bammetrics.qc.SexCheckMetrics",
+  "metrics": [
+    {
+      "AUTOSOME_READS": 10,
+      "X_READS": 0,
+      "Y_READS": 0,
+      "AUTOSOME_LENGTH": 100000,
+      "X_LENGTH": 0,
+      "Y_LENGTH": 0,
+      "X_RATIO": null,
+      "Y_RATIO": null,
+      "INFERRED_SEX": "UNKNOWN",
+      "DECLARED_SEX": "MALE",
+      "SEX_MATCH": null,
+      "REASON": "no X bases; no Y bases; MALE declared, the inferred sex is UNKNOWN"
+    }
+  ],
+  "histogram": null
+}
+## stderr

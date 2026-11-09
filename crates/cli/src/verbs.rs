@@ -238,6 +238,18 @@ pub const VERBS: &[Verb] = &[
             Files::Single,
         )
     },
+    Verb {
+        aliases: &[
+            ("TARGETS", "TARGET_INTERVALS"),
+            ("PANEL", "TARGET_INTERVALS"),
+        ],
+        also_writes: &["GAPS_FILE"],
+        ..verb("coverage-gaps", "CollectCoverageGaps", Files::Single)
+    },
+    Verb {
+        aliases: &[("TARGETS", "TARGET_INTERVALS"), ("SEX", "EXPECTED_SEX")],
+        ..verb("sex-check", "CollectSexCheckMetrics", Files::Single)
+    },
 ];
 
 /// Verb spellings every verb's rows take, beside a verb's own
@@ -791,8 +803,11 @@ impl Verb {
                 self.name,
                 format!("missing --{} (Picard: {name})", flag.long),
             );
-            if name == "BAIT_INTERVALS" || name == "TARGET_INTERVALS" {
+            if self.name == "hs-metrics" && (name == "BAIT_INTERVALS" || name == "TARGET_INTERVALS")
+            {
                 error = error.hint("Use --panel FILE when baits and targets are the same file.");
+            } else if name == "TARGET_INTERVALS" {
+                error = error.hint("--targets FILE and --panel FILE spell it too.");
             }
             if name == "SEQUENCE_DICTIONARY" {
                 error = error.hint(

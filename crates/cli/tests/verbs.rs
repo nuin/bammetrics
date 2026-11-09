@@ -62,8 +62,10 @@ fn report_on_a_picard_directory_writes_three_files_and_exits_zero() {
     ]);
     assert_eq!(code(&run), 0, "{}", stderr(&run));
     let text = stdout(&run);
-    assert!(text.starts_with("1 sample, preset clinical-panel v2 (e62755), bammetrics "));
-    assert!(text.contains("FAIL        NA12878  5 fail, 8 pass, 1 not measured\n"));
+    assert!(text.starts_with("1 sample, preset clinical-panel v3 (6f0d59), bammetrics "));
+    // A Picard directory has no sex check or coverage gaps file: those four
+    // rules of clinical-panel version 3 read not measured.
+    assert!(text.contains("FAIL        NA12878  5 fail, 8 pass, 5 not measured\n"));
     assert!(
         text.contains("  FAIL  Mean target coverage is 0.377778, below the fail limit of 100\n")
     );
@@ -124,7 +126,8 @@ fn report_on_a_picard_directory_writes_three_files_and_exits_zero() {
     // A second run overwrites in place.
     let again = bammetrics(&["report", PICARD, "-o", out.to_str().expect("utf-8")]);
     assert_eq!(code(&again), 0);
-    assert!(stdout(&again).contains("PASS        NA12878  6 pass\n"));
+    // generic version 2 reads the sex check, which Picard does not write.
+    assert!(stdout(&again).contains("INCOMPLETE  NA12878  6 pass, 2 not measured\n"));
     assert!(!out.join("NA12878.report.html.tmp").exists());
     let _ = fs::remove_dir_all(&out);
 }
@@ -161,7 +164,7 @@ fn report_defaults_to_the_directory_given_and_makes_the_output_directory() {
     assert!(stderr(&run).contains("bammetrics: skipped "));
     assert!(stderr(&run).contains("broken.txt"));
     let text = stdout(&run);
-    assert!(text.starts_with("2 samples, preset generic v1"));
+    assert!(text.starts_with("2 samples, preset generic v2"));
     let index = fs::read_to_string(runs.join("index.html")).expect("index in DIR");
     assert!(runs.join("A.report.html").exists());
     assert!(runs.join("B.verdict.json").exists());
@@ -203,19 +206,21 @@ fn check_formats_and_exit_codes() {
     assert!(text.starts_with("[{\n  \"schema\": \"bammetrics.verdict/1\""));
     assert!(text.trim_end().ends_with("}]"));
 
+    // Picard writes no sex check, so generic version 2 is incomplete here.
     let jsonl = bammetrics(&["check", PICARD, "--format", "jsonl"]);
-    assert_eq!(code(&jsonl), 0);
+    assert_eq!(code(&jsonl), 11);
     let lines: Vec<String> = stdout(&jsonl).lines().map(str::to_owned).collect();
-    assert_eq!(lines.len(), 7, "6 checks and 1 verdict");
+    assert_eq!(lines.len(), 9, "8 checks and 1 verdict");
     assert!(lines[0].starts_with(
         "{\"event\":\"check\",\"sample\":\"NA12878\",\"rule\":\"alignment.pf-reads-aligned\""
     ));
     assert!(
-        lines[6].starts_with("{\"event\":\"verdict\",\"sample\":\"NA12878\",\"status\":\"pass\"")
+        lines[8]
+            .starts_with("{\"event\":\"verdict\",\"sample\":\"NA12878\",\"status\":\"incomplete\"")
     );
 
     let warn = bammetrics(&["check", PICARD, "--fail-on", "warn"]);
-    assert_eq!(code(&warn), 0, "the fixture passes generic outright");
+    assert_eq!(code(&warn), 11, "every measured generic check passes");
     let wgs = bammetrics(&["check", PICARD, "--preset", "wgs"]);
     assert_eq!(code(&wgs), 11);
     assert!(stdout(&wgs).ends_with("exit 11: a sample is incomplete\n"));
