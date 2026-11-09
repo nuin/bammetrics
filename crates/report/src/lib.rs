@@ -8,6 +8,7 @@
 //! The rules of docs/05 section 4.9 apply as in the verdict crate: the page
 //! is built from the inputs it is given and nothing else.
 
+pub mod gaps;
 pub mod html;
 pub mod index;
 pub mod page;

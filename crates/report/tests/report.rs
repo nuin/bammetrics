@@ -45,7 +45,23 @@ fn fixture_set() -> Vec<Input> {
         golden_input("picard_hs_metrics", "hs_metrics.txt"),
         golden_input("picard_gc_bias", "gc_bias.txt"),
         golden_input("picard_mean_quality_by_cycle", "mqbc.txt"),
+        sex_check_input(),
+        golden_input("picard_coverage_gaps", "coverage_gaps.txt"),
     ]
+}
+
+/// A `CollectSexCheckMetrics` row of a male sample declared male: the
+/// fixture BAM has chr1 only, so its own row reads UNKNOWN.
+fn sex_check_input() -> Input {
+    Input {
+        path: "fixture.sex_check_metrics".to_owned(),
+        doc: MetricsDoc::parse(
+            "## METRICS CLASS\tbammetrics.qc.SexCheckMetrics\n\
+             AUTOSOME_READS\tX_READS\tY_READS\tAUTOSOME_LENGTH\tX_LENGTH\tY_LENGTH\tX_RATIO\tY_RATIO\tINFERRED_SEX\tDECLARED_SEX\tSEX_MATCH\tREASON\n\
+             1000000\t25000\t5000\t2875000000\t156000000\t57000000\t0.460737\t0.252193\tMALE\tMALE\tY\t\n\n",
+        )
+        .expect("parses"),
+    }
 }
 
 fn builtin(name: &str) -> Preset {
@@ -102,8 +118,11 @@ fn passing_page_matches_its_snapshot() {
         },
     );
     assert!(html.contains("PASS"));
-    assert!(html.contains("0 fail, 0 warn, 6 pass"));
+    assert!(html.contains("0 fail, 0 warn, 8 pass"));
     assert!(html.contains("Every check passes."));
+    // A text check shows its text in the checks table.
+    assert!(html.contains("<td class=\"num\">MALE</td>"));
+    assert!(html.contains("<td class=\"num\">Y</td>"));
     assert!(!html.contains("<svg"), "a passing page draws no plot");
     assert!(html.contains("2 plots hidden, all related checks pass."));
     snapshot("pass", &html);
@@ -121,8 +140,15 @@ fn failing_page_matches_its_snapshot() {
         },
     );
     assert!(html.contains("<title>S1: FAIL (bammetrics)</title>"));
-    assert!(html.contains("5 fail, 0 warn, 8 pass, 1 not measured"));
+    assert!(html.contains("7 fail, 0 warn, 10 pass, 1 not measured"));
     assert!(html.contains("Mean target coverage is 0.377778, below the fail limit of 100"));
+    // The gaps table sits under the first failing gap check; the fixture
+    // inputs are not files on disk, so the BED beside them is not found.
+    assert_eq!(
+        html.matches("Coverage gaps not listed: no gaps file at fixture.coverage_gaps.txt.bed.")
+            .count(),
+        1
+    );
     // The coverage plot sits under the first failing coverage check, once.
     assert_eq!(html.matches("id=\"plot-coverage\"").count(), 1);
     assert_eq!(html.matches("id=\"plot-gc-bias\"").count(), 1);
@@ -187,7 +213,59 @@ fn page_has_no_script_and_a_csp() {
     assert!(html.contains("@media (prefers-color-scheme: dark)"));
     assert!(html.contains("@media print"));
     assert!(html.contains(DATE));
-    assert!(html.contains("<code>e6275515a0d3de26</code>"));
+    assert!(html.contains("<code>6f0d59319750923f</code>"));
+}
+
+/// The `Coverage gaps` table (docs/06 section 1.7) from the BED beside the
+/// metrics file: the longest gaps first, cut to 200 with a line for the rest.
+#[test]
+fn the_gaps_table_lists_the_longest_gaps_from_the_bed_beside_the_file() {
+    let dir = std::env::temp_dir().join(format!("bammetrics-report-gaps-{}", std::process::id()));
+    fs::create_dir_all(&dir).expect("temp dir");
+    let metrics = dir.join("s.coverage_gaps");
+    fs::write(
+        &metrics,
+        "## METRICS CLASS\tbammetrics.qc.CoverageGapMetrics\n\
+         TARGET_TERRITORY\tTARGET_COUNT\tMIN_DEPTH\tBASES_AT_OR_ABOVE_MIN_DEPTH\tPCT_REPORTABLE\tGAP_BASES\tGAP_COUNT\tLARGEST_GAP\tTARGETS_WITH_GAP\tPCT_TARGETS_COMPLETE\n\
+         100000\t300\t20\t90000\t0.9\t10000\t250\t400\t120\t0.6\n\n",
+    )
+    .expect("metrics");
+    let mut bed = String::from("#chrom\tstart\tend\ttarget\tmean_depth\tmin_depth\n");
+    for i in 0..250 {
+        bed.push_str(&format!(
+            "chr{}\t{}\t{}\tgene_{i}\t{}\t0\n",
+            1 + i % 3,
+            1000 * i,
+            1000 * i + 10 + i,
+            i % 7
+        ));
+    }
+    fs::write(format!("{}.bed", metrics.display()), bed).expect("bed");
+    let inputs = vec![Input::read(&metrics).expect("reads")];
+    let verdict = evaluate(&builtin("clinical-panel"), &inputs, Some("S1"));
+    let html = render(
+        &verdict,
+        &inputs,
+        &Options {
+            all_plots: false,
+            date: DATE,
+        },
+    );
+    assert!(
+        html.contains("<h4>Coverage gaps <span class=\"muted\">200 longest of 250</span></h4>")
+    );
+    assert_eq!(html.matches("<tr><th scope=\"row\">gene_").count(), 200);
+    // The longest gap (249 + 10 bases) comes first, 1-based and closed.
+    assert!(html.contains(
+        "<tr><th scope=\"row\">gene_249</th><td>chr1:249,001-249,259</td><td class=\"num\">259</td><td class=\"num\">4</td><td class=\"num\">0</td></tr>"
+    ));
+    assert!(html.contains("<p class=\"muted\">50 gaps more in s.coverage_gaps.bed.</p>"));
+    assert_eq!(
+        html.matches("<h4>Coverage gaps").count(),
+        1,
+        "once per page"
+    );
+    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]

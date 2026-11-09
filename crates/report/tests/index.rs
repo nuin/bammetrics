@@ -75,6 +75,7 @@ fn verdict(sample: &str, statuses: &[Option<Status>]) -> Verdict {
                 select: None,
                 unit: None,
                 value: (status != Status::NotMeasured).then_some(value),
+                text: None,
                 warn: Some(fail.to_owned()),
                 fail: Some(fail.to_owned()),
                 status,
