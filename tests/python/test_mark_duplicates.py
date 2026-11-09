@@ -16,7 +16,8 @@ BINARY = ROOT / "target" / "release" / "bammetrics"
 def body(path):
     """The metrics file without its StringHeader lines."""
     lines = Path(path).read_text().splitlines()
-    return [line for line in lines if not line.startswith("#")]
+    return [line for line in lines
+            if not line.startswith("# ") and line != "## htsjdk.samtools.metrics.StringHeader"]
 
 
 def test_rows_and_both_files(tmp_path):
@@ -29,14 +30,21 @@ def test_rows_and_both_files(tmp_path):
     assert rows[0]["ESTIMATED_LIBRARY_SIZE"] is None
     with pysam.AlignmentFile(str(bam)) as marked:
         records = list(marked)
-        programs = marked.header.to_dict()["PG"]
+        header = str(marked.header)
     assert len(records) == 36
     duplicates = [r for r in records if r.is_duplicate]
     assert len(duplicates) == 17
     assert all(r.get_tag("DT") in ("LB", "SQ") for r in duplicates if not r.is_secondary
                and not r.is_supplementary and not r.is_unmapped)
-    assert programs[-1]["ID"] == "MarkDuplicates" and programs[-1]["PP"] == "bwa"
-    assert body(metrics)[0] == "## METRICS CLASS\tpicard.sam.DuplicationMetrics"
+    # One @PG line per PG value seen (none, then bwa, in Java HashSet order), each
+    # ID made unique as Picard's PgIdGenerator makes it. pysam reads CL to the end
+    # of the line, so the fields are split here.
+    lines = [dict(f.split(":", 1) for f in line.split("\t")[1:])
+             for line in header.splitlines() if line.startswith("@PG")]
+    added = [(p["ID"], p.get("PP")) for p in lines[1:]]
+    assert added == [("MarkDuplicates", None), ("MarkDuplicates.2", "bwa")]
+    assert {r.get_tag("PG") for r in records} == {"MarkDuplicates", "MarkDuplicates.2"}
+    assert "## METRICS CLASS\tpicard.sam.DuplicationMetrics" in body(metrics)
 
 
 def test_same_files_as_the_picard_face(tmp_path):
