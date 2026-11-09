@@ -4,9 +4,9 @@
 //! A rule names a metrics class and a column, a row scope (an accumulation
 //! level, and a `COLUMN=VALUE` selector such as `CATEGORY=PAIR`), one
 //! comparator, and a warn and a fail threshold. Both thresholds are written
-//! as bounds (`warn = "< 0.98"`, `fail = "< 0.95"`); the parser requires
-//! the same comparator in both and a fail bound at least as strict as the
-//! warn bound.
+//! as bounds (`warn = "< 0.98"`, `fail = "< 0.95"`, or the text form
+//! `fail = "is N"`); the parser requires the same comparator in both and a
+//! fail bound at least as strict as the warn bound.
 
 use std::fmt;
 use std::fs;
@@ -47,6 +47,8 @@ pub enum Comparator {
     Ge,
     /// `outside A..B`: breaks below A or above B.
     Outside,
+    /// `is TEXT`: breaks when the cell prints as `TEXT` (docs/06 section 2.5).
+    Is,
 }
 
 impl Comparator {
@@ -57,23 +59,26 @@ impl Comparator {
             Comparator::Gt => ">",
             Comparator::Ge => ">=",
             Comparator::Outside => "outside",
+            Comparator::Is => "is",
         }
     }
 }
 
 /// One threshold with its comparator, as written: `< 0.98`, `> 0.3`,
-/// `outside 180..450`.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// `outside 180..450`, `is N`.
+#[derive(Clone, Debug, PartialEq)]
 pub struct Bound {
     pub comparator: Comparator,
-    /// The threshold; the lower end for `outside`.
+    /// The threshold; the lower end for `outside`; 0 for `is`.
     pub low: f64,
     /// The upper end for `outside`; equal to `low` otherwise.
     pub high: f64,
+    /// The text of an `is` bound; empty for the numeric comparators.
+    pub text: String,
 }
 
 impl Bound {
-    /// `< 0.98`, `<= 1`, `> 0.3`, `>= 2`, `outside 180..450`.
+    /// `< 0.98`, `<= 1`, `> 0.3`, `>= 2`, `outside 180..450`, `is UNKNOWN`.
     pub fn parse(text: &str) -> Option<Self> {
         let (op, rest) = text.trim().split_once(char::is_whitespace)?;
         let rest = rest.trim();
@@ -83,6 +88,14 @@ impl Bound {
             ">" => Comparator::Gt,
             ">=" => Comparator::Ge,
             "outside" => Comparator::Outside,
+            "is" => {
+                return Some(Bound {
+                    comparator: Comparator::Is,
+                    low: 0.0,
+                    high: 0.0,
+                    text: rest.to_owned(),
+                });
+            }
             _ => return None,
         };
         let number = |s: &str| s.trim().parse::<f64>().ok().filter(|v| v.is_finite());
@@ -101,10 +114,16 @@ impl Bound {
             comparator,
             low,
             high,
+            text: String::new(),
         })
     }
 
-    /// True when `value` breaks this bound.
+    /// True for an `is` bound, which judges the cell's text.
+    pub fn is_text(&self) -> bool {
+        self.comparator == Comparator::Is
+    }
+
+    /// True when `value` breaks this bound. An `is` bound breaks no number.
     pub fn breaks(&self, value: f64) -> bool {
         match self.comparator {
             Comparator::Lt => value < self.low,
@@ -112,7 +131,14 @@ impl Bound {
             Comparator::Gt => value > self.low,
             Comparator::Ge => value >= self.low,
             Comparator::Outside => value < self.low || value > self.high,
+            Comparator::Is => false,
         }
+    }
+
+    /// True when the cell text `text` breaks this `is` bound. A numeric
+    /// bound breaks no text.
+    pub fn breaks_text(&self, text: &str) -> bool {
+        self.is_text() && self.text == text
     }
 
     /// True when every value that breaks `other` also breaks `self`: a
@@ -122,11 +148,12 @@ impl Bound {
             Comparator::Lt | Comparator::Le => other.low <= self.low,
             Comparator::Gt | Comparator::Ge => other.low >= self.low,
             Comparator::Outside => other.low <= self.low && other.high >= self.high,
+            Comparator::Is => other.text == self.text,
         }
     }
 
     /// The words of a reason line: `below the fail limit of 0.95`,
-    /// `outside the warn range 180 to 450`.
+    /// `outside the warn range 180 to 450`, `the fail value`.
     pub fn describe(&self, status: &str) -> String {
         match self.comparator {
             Comparator::Lt => format!("below the {status} limit of {}", format_double(self.low)),
@@ -144,6 +171,7 @@ impl Bound {
                 format_double(self.low),
                 format_double(self.high)
             ),
+            Comparator::Is => format!("the {status} value"),
         }
     }
 }
@@ -157,6 +185,7 @@ impl fmt::Display for Bound {
                 format_double(self.low),
                 format_double(self.high)
             ),
+            Comparator::Is => write!(f, "is {}", self.text),
             op => write!(f, "{} {}", op.symbol(), format_double(self.low)),
         }
     }
@@ -189,8 +218,14 @@ impl Rule {
     /// The comparator both bounds share.
     pub fn comparator(&self) -> Comparator {
         self.fail
-            .or(self.warn)
+            .as_ref()
+            .or(self.warn.as_ref())
             .map_or(Comparator::Lt, |b| b.comparator)
+    }
+
+    /// True when the rule judges the cell's text (`is TEXT` bounds).
+    pub fn is_text(&self) -> bool {
+        self.comparator() == Comparator::Is
     }
 
     /// `PCT_TARGET_BASES_20X`, or `PF_Q30_BASES / PF_BASES`.
@@ -466,7 +501,9 @@ fn read_rule(table: &Table, source: &str) -> Result<Rule> {
             Some((text, line)) => Bound::parse(&text).map(Some).ok_or_else(|| {
                 entries.error(
                     line,
-                    format!("{key} {text:?}: expected < N, <= N, > N, >= N or outside A..B"),
+                    format!(
+                        "{key} {text:?}: expected < N, <= N, > N, >= N, outside A..B or is TEXT"
+                    ),
                 )
             }),
         }
@@ -476,7 +513,7 @@ fn read_rule(table: &Table, source: &str) -> Result<Rule> {
     if warn.is_none() && fail.is_none() {
         return Err(entries.error(table.line, format!("rule {id}: needs warn, fail or both")));
     }
-    if let (Some(w), Some(f)) = (warn, fail) {
+    if let (Some(w), Some(f)) = (&warn, &fail) {
         if w.comparator != f.comparator {
             return Err(entries.error(
                 table.line,
@@ -487,12 +524,19 @@ fn read_rule(table: &Table, source: &str) -> Result<Rule> {
                 ),
             ));
         }
-        if !w.encloses(&f) {
+        if !w.encloses(f) {
             return Err(entries.error(
                 table.line,
                 format!("rule {id}: fail bound {f} is looser than warn bound {w}"),
             ));
         }
+    }
+    let text_bound = warn.as_ref().or(fail.as_ref()).is_some_and(Bound::is_text);
+    if text_bound && divisor.is_some() {
+        return Err(entries.error(
+            metric_line,
+            format!("rule {id}: an is bound judges one column, not a ratio"),
+        ));
     }
     let plot = entries.string("plot")?.map(|(s, _)| s);
     entries.finish()?;
@@ -580,6 +624,17 @@ mod tests {
                 .to_string(),
             "outside 180..450"
         );
+        let is = Bound::parse(" is  N ").expect("parses");
+        assert_eq!(is.comparator, Comparator::Is);
+        assert_eq!(is.text, "N");
+        assert!(is.is_text());
+        assert!(is.breaks_text("N"));
+        assert!(!is.breaks_text("Y"));
+        assert!(!is.breaks_text(""));
+        assert!(!is.breaks(0.0));
+        assert_eq!(is.to_string(), "is N");
+        assert_eq!(is.describe("fail"), "the fail value");
+        assert!(!Bound::parse("< 1").expect("parses").breaks_text("1"));
         assert_eq!(Bound::parse(">=  2").expect("parses").to_string(), ">= 2");
         assert_eq!(
             Bound::parse("< 0.98").expect("parses").describe("fail"),
@@ -614,6 +669,8 @@ mod tests {
             "outside 1",
             "< inf",
             "< 1 2",
+            "is",
+            "is ",
         ] {
             assert_eq!(Bound::parse(bad), None, "{bad:?}");
         }
@@ -761,7 +818,30 @@ mod tests {
                 with_rule("id = 1\nclass = \"X\"\nmetric = \"M\"\nfail = \"< 1\"\n"),
                 "id: expected a string, got an integer",
             ),
+            (
+                with_rule(
+                    "id = \"a\"\nclass = \"X\"\nmetric = \"M\"\nwarn = \"is A\"\nfail = \"is B\"\n",
+                ),
+                "fail bound is B is looser than warn bound is A",
+            ),
+            (
+                with_rule(
+                    "id = \"a\"\nclass = \"X\"\nmetric = \"M\"\nwarn = \"is A\"\nfail = \"< 1\"\n",
+                ),
+                "one comparator per rule",
+            ),
+            (
+                with_rule("id = \"a\"\nclass = \"X\"\nmetric = \"A / B\"\nfail = \"is N\"\n"),
+                "an is bound judges one column",
+            ),
         ];
+        let text_rule = Preset::parse(
+            &with_rule("id = \"a\"\nclass = \"X\"\nmetric = \"M\"\nfail = \"is N\"\n"),
+            "p.toml",
+        )
+        .expect("a text rule parses");
+        assert!(text_rule.rules[0].is_text());
+        assert_eq!(text_rule.rules[0].comparator(), Comparator::Is);
         for (text, needle) in cases {
             let error = Preset::parse(text, "p.toml").expect_err(text).to_string();
             assert!(error.contains(needle), "{text:?}\n  got: {error}");

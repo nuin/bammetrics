@@ -1,10 +1,10 @@
-# generic, version 1: 6 rules any paired DNA BAM can meet, from the tools
+# generic, version 2: 8 rules any paired DNA BAM can meet, from the tools
 # that exist today. STARTING VALUES: not validated limits for any assay.
 # Rule syntax: docs/verdict.md.
 
 [preset]
 name = "generic"
-version = 1
+version = 2
 note = "starting values"
 
 [[rule]]
@@ -62,3 +62,17 @@ metric = "PERCENT_DUPLICATION"
 level = "LIBRARY"
 warn = "> 0.30"
 fail = "> 0.50"
+
+[[rule]]
+id = "sex.match"
+label = "Declared sex matches"
+class = "SexCheckMetrics"
+metric = "SEX_MATCH"
+fail = "is N"
+
+[[rule]]
+id = "sex.inferred"
+label = "Inferred sex"
+class = "SexCheckMetrics"
+metric = "INFERRED_SEX"
+warn = "is UNKNOWN"

@@ -1,9 +1,10 @@
-# clinical-panel, version 2: 14 rules for a hybrid-capture clinical panel
-# (docs/05_cli_and_ui_design.md section 4.3).
+# clinical-panel, version 3: 18 rules for a hybrid-capture clinical panel
+# (docs/05_cli_and_ui_design.md section 4.3, docs/06_clinical_checks.md).
 #
-# REVIEWED DEFAULTS. The maintainer reviewed these 14 thresholds on
-# 2026-11-06 and kept the version 1 values. They are not validated clinical
-# limits for any assay: a lab validates and owns its own copy of this file.
+# REVIEWED DEFAULTS for the first 14 rules: the maintainer reviewed those
+# thresholds on 2026-11-06 and kept the version 1 values. The four gap and
+# sex rules of version 3 are starting values. None is a validated clinical
+# limit for any assay: a lab validates and owns its own copy of this file.
 # The verdict is not a release decision.
 #
 # Rule syntax: docs/verdict.md. A value that breaks `fail` fails, one that
@@ -12,8 +13,8 @@
 
 [preset]
 name = "clinical-panel"
-version = 2
-note = "reviewed defaults"
+version = 3
+note = "reviewed defaults; gap and sex rules are starting values"
 
 [[rule]]
 id = "hs.mean-target-coverage"
@@ -139,3 +140,35 @@ metric = "PF_Q30_BASES / PF_BASES"
 warn = "< 0.85"
 fail = "< 0.75"
 plot = "cycle-quality"
+
+[[rule]]
+id = "gaps.reportable-range"
+label = "Target bases at MIN_DEPTH"
+class = "CoverageGapMetrics"
+metric = "PCT_REPORTABLE"
+warn = "< 0.98"
+fail = "< 0.95"
+plot = "coverage"
+
+[[rule]]
+id = "gaps.targets-complete"
+label = "Targets without a gap"
+class = "CoverageGapMetrics"
+metric = "PCT_TARGETS_COMPLETE"
+warn = "< 0.95"
+fail = "< 0.90"
+plot = "coverage"
+
+[[rule]]
+id = "sex.match"
+label = "Declared sex matches"
+class = "SexCheckMetrics"
+metric = "SEX_MATCH"
+fail = "is N"
+
+[[rule]]
+id = "sex.inferred"
+label = "Inferred sex"
+class = "SexCheckMetrics"
+metric = "INFERRED_SEX"
+warn = "is UNKNOWN"

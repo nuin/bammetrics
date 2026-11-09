@@ -1,4 +1,4 @@
-# wgs, version 1: 10 rules for a whole-genome BAM. STARTING VALUES: not
+# wgs, version 2: 12 rules for a whole-genome BAM. STARTING VALUES: not
 # validated limits for any assay. Rule syntax: docs/verdict.md.
 #
 # The 4 coverage rules read CollectWgsMetrics (class WgsMetrics), which
@@ -8,7 +8,7 @@
 
 [preset]
 name = "wgs"
-version = 1
+version = 2
 note = "starting values"
 
 [[rule]]
@@ -102,3 +102,17 @@ metric = "PERCENT_DUPLICATION"
 level = "LIBRARY"
 warn = "> 0.15"
 fail = "> 0.30"
+
+[[rule]]
+id = "sex.match"
+label = "Declared sex matches"
+class = "SexCheckMetrics"
+metric = "SEX_MATCH"
+fail = "is N"
+
+[[rule]]
+id = "sex.inferred"
+label = "Inferred sex"
+class = "SexCheckMetrics"
+metric = "INFERRED_SEX"
+warn = "is UNKNOWN"

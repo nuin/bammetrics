@@ -1,0 +1,21 @@
+## argv
+CollectSexCheckMetrics
+I=tests/data/insert_size.bam
+O=OUT/sex_check.txt
+EXPECTED_SEX=female
+TI=tests/data/targets.interval_list
+## exit
+0
+## stdout
+## stderr
+## file sex_check.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectSexCheckMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sex_check.txt EXPECTED_SEX=female TARGET_INTERVALS=tests/data/targets.interval_list
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.SexCheckMetrics
+AUTOSOME_READS	X_READS	Y_READS	AUTOSOME_LENGTH	X_LENGTH	Y_LENGTH	X_RATIO	Y_RATIO	INFERRED_SEX	DECLARED_SEX	SEX_MATCH	REASON
+7	0	0	1800	0	0	?	?	UNKNOWN	FEMALE		no X bases; no Y bases; FEMALE declared, the inferred sex is UNKNOWN
+
+
