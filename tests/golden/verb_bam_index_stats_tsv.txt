@@ -1,0 +1,12 @@
+## argv
+bam-index-stats
+tests/data/insert_size.bam
+--format
+tsv
+## exit
+0
+## stdout
+reference	length	aligned	unaligned
+chr1	100000	10	0
+*	0	0	0
+## stderr

@@ -27,6 +27,7 @@ genotype-concordance        GenotypeConcordance
 bed-to-interval-list        BedToIntervalList
 compare-metrics             CompareMetrics
 create-sequence-dictionary  CreateSequenceDictionary
+bam-index-stats             BamIndexStats
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

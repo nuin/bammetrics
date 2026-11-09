@@ -238,6 +238,16 @@ pub const VERBS: &[Verb] = &[
             Files::Single,
         )
     },
+    Verb {
+        about: Some(
+            "prints Picard's index statistics: one line per reference of the BAM header with \
+             its length and the Aligned= and Unaligned= counts of the .bai or .csi beside the \
+             BAM, then NoCoordinateCount=. A CRAM, or a BAM on standard input, is read whole \
+             and its records counted.",
+        ),
+        writes: "index statistics",
+        ..verb("bam-index-stats", "BamIndexStats", Files::Single)
+    },
 ];
 
 /// Verb spellings every verb's rows take, beside a verb's own
@@ -752,14 +762,16 @@ impl Verb {
 
     /// The tool's file options for output `path`: `OUTPUT` for a
     /// single-file verb in the Picard form (another form is written by the
-    /// verb itself), the prefix as `OUTPUT` for a tool whose Picard
-    /// `OUTPUT` is a prefix, or one name per file of [`file_extensions`]
-    /// (an option the user gave keeps its value).
+    /// verb itself; a tool without an output option, `BamIndexStats`, gets
+    /// none and the verb writes `-o` itself), the prefix as `OUTPUT` for a
+    /// tool whose Picard `OUTPUT` is a prefix, or one name per file of
+    /// [`file_extensions`] (an option the user gave keeps its value).
     fn name_outputs(&self, path: &Path, parsed: &Parsed, picard: &mut Vec<String>, format: Format) {
         let tool = self.tool();
         let output = tool.output_name();
         if self.files == Files::Single {
-            if format == Format::Picard {
+            let has_output = tool.table().iter().any(|o| o.kind == Kind::Output);
+            if format == Format::Picard && has_output {
                 picard.push(format!("{output}={}", path.display()));
             }
             return;
