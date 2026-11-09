@@ -385,7 +385,11 @@ fn bam_text(path: &Path) -> String {
             ));
             for field in TagIter::new(record.tag_bytes()) {
                 let (tag, value) = field.map_err(bammetrics_core::Error::Record)?;
-                text.push_str(&format!("\t{}:{}", String::from_utf8_lossy(&tag), render(&value)));
+                text.push_str(&format!(
+                    "\t{}:{}",
+                    String::from_utf8_lossy(&tag),
+                    render(&value)
+                ));
             }
             text.push('\n');
         }

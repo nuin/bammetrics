@@ -16,6 +16,7 @@ const REF: &str = "tests/data/ref_100k.fa";
 const IL: &str = "tests/data/targets.interval_list";
 const QY_A: &str = "tests/data/quality_yield_a.txt";
 const QY_B: &str = "tests/data/quality_yield_b.txt";
+const MD: &str = "tests/data/markdup.bam";
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -55,11 +56,15 @@ fn run_ok(args: &[String]) -> Output {
 }
 
 /// Every file under `dir` by name, with the `StringHeader` text lines
-/// (the command line and the clock) left out.
+/// (the command line and the clock) left out. A BAM is left out: its
+/// `@PG` line holds the command line.
 fn bodies(dir: &Path) -> BTreeMap<String, String> {
     let mut files = BTreeMap::new();
     for entry in fs::read_dir(dir).expect("list") {
         let path = entry.expect("entry").path();
+        if path.extension().is_some_and(|e| e == "bam") {
+            continue;
+        }
         let text = fs::read_to_string(&path).expect("read");
         let body: Vec<&str> = text.lines().filter(|l| !l.starts_with("# ")).collect();
         let name = path
@@ -341,7 +346,20 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("GENOME_ASSEMBLY", "GRCh38")),
             picard_outputs: single,
         },
+        // -o is the BAM; the metrics file is compared.
+        Case {
+            verb: "mark-duplicates",
+            class: "MarkDuplicates",
+            verb_args: strings(&[MD]),
+            picard_args: strings(&[&format!("I={MD}")]),
+            option: Some(("TAGGING_POLICY", "All")),
+            picard_outputs: marked,
+        },
     ]
+}
+
+fn marked(out: &str) -> Vec<String> {
+    vec![format!("O={out}.bam"), format!("M={out}")]
 }
 
 /// The three spellings of `name` with `value`.
@@ -384,7 +402,16 @@ fn every_verb_reads_three_spellings_as_the_picard_face_does() {
             let mut args = vec![case.verb.to_owned()];
             args.extend(case.verb_args.iter().cloned());
             args.extend(form.iter().cloned());
-            args.extend(["-o".to_owned(), out]);
+            if case.verb == "mark-duplicates" {
+                args.extend([
+                    "-o".to_owned(),
+                    format!("{out}.bam"),
+                    "--metrics".to_owned(),
+                ]);
+            } else {
+                args.push("-o".to_owned());
+            }
+            args.push(out);
             run_ok(&args);
             assert_eq!(bodies(&dir), expected, "{} {form:?}", case.verb);
             let _ = fs::remove_dir_all(&dir);
@@ -410,7 +437,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && **c != "AccumulateVariantCallingMetrics")
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 23);
+    assert_eq!(classes.len(), 24);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

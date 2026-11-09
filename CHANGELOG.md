@@ -1,5 +1,50 @@
 # Changelog
 
+## Unreleased
+
+MarkDuplicates, the first bammetrics tool that writes reads.
+
+### Added
+
+- `MarkDuplicates` (Picard face, the `mark-duplicates` verb, Python `mark_duplicates()`):
+  Picard 3.5.0's duplicate marker. `OUTPUT` gets every record with the duplicate flag
+  (0x400) set or cleared, `METRICS_FILE` the `DuplicationMetrics` rows per library and
+  the `set_size` histograms (`all_sets`, `optical_sets`, `non_optical_sets`, with
+  `CoverageMult` for one library). Read ends sort as `ReadEndsMDComparator` sorts them
+  (library, barcodes, both 5' ends and orientation, tile, x, y, file order), so the
+  record kept in each set is Picard's. Every option that changes the output:
+  `DUPLICATE_SCORING_STRATEGY` (the three strategies; `RANDOM` is htsjdk's Murmur3 of the
+  read name), `READ_NAME_REGEX`, `OPTICAL_DUPLICATE_PIXEL_DISTANCE`,
+  `MAX_OPTICAL_DUPLICATE_SET_SIZE`, `TAGGING_POLICY` (`DT:Z:LB` and `DT:Z:SQ`),
+  `TAG_DUPLICATE_SET_MEMBERS` (`DS`, `DI`), `REMOVE_DUPLICATES`,
+  `REMOVE_SEQUENCING_DUPLICATES`, `ASSUME_SORT_ORDER`, `ASSUME_SORTED`, `BARCODE_TAG`,
+  `READ_ONE_BARCODE_TAG`, `READ_TWO_BARCODE_TAG`, `DUPLEX_UMI`,
+  `MOLECULAR_IDENTIFIER_TAG` (`MI`), `CLEAR_DT`, `COMMENT`, the `@PG` options and
+  `ADD_PG_TAG_TO_READS`, `COMPRESSION_LEVEL`, `CREATE_INDEX`, `CREATE_MD5_FILE`.
+  Coordinate and query-name sorted input (query-name marks the secondary,
+  supplementary and unmapped records of a duplicate template), several `INPUT` files
+  merged as htsjdk merges them (read group and program IDs that collide get Picard's
+  suffixes), CRAM input with `R=` (`MD` and `NM` rebuilt as htsjdk rebuilds them).
+  The flow-based options exit 1 as not implemented; SAM and CRAM output exit 1.
+- `crates/core/src/spill.rs`: a stable sort that spills sorted runs to `TMP_DIR` and
+  merges them, the role of htsjdk's `SortingCollection`. Read ends, duplicate indexes and
+  set representatives go through it, so memory holds `MAX_RECORDS_IN_RAM` (default
+  4,000,000) entries per list. Every file it writes is removed at the end.
+- `crates/core/src/bam_raw.rs`: BAM records as bytes, read from the inflated stream and
+  written back with only the flag and tags changed, tags in htsjdk's list order.
+  `pass::with_record_stream` hands a BAM's or CRAM's record stream to such a reader.
+- The optical duplicate finder takes a keeper that is not in the list (Picard passes
+  the set's keeper to both strand halves) and walks clusters of more than 65,536 reads
+  in Java `HashMap` order; `EstimateLibraryComplexity` uses the second.
+- `tests/concordance/test_mark_duplicates.py` and `markdup_bams.py`: the metrics cell by
+  cell, the BAM header and every record as `samtools view` prints it, on the markdup
+  BAMs (optical sets, barcodes, duplex UMIs, a query-name copy, a second input with
+  colliding IDs), the complexity, read-level and alignment-summary BAMs, the foundation
+  corpus, the exome slice, t0 to t3 and a CRAM, every option, error parity, and 3
+  distinct non-default values per column. `tests/data/markdup.bam`
+  (`tests/data/make_markdup_bam.py`) and 13 golden records; a written BAM is recorded as
+  its header and records in text. The `tools` listing gains one row.
+
 ## 0.17.0
 
 CompareMetrics, CreateSequenceDictionary, and CRAM input for every tool that reads a BAM.

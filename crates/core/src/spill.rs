@@ -166,28 +166,66 @@ impl<'d, T: Spill + Ord> Sorter<'d, T> {
         if !self.buffer.is_empty() {
             self.spill()?;
         }
-        let mut readers = Vec::with_capacity(self.runs.len());
-        let mut heap = BinaryHeap::with_capacity(self.runs.len());
-        for (run, path) in self.runs.iter().enumerate() {
-            let file = File::open(path).map_err(|source| Error::Input {
-                path: path.clone(),
-                source,
-            })?;
-            let mut reader = BufReader::with_capacity(1 << 18, file);
-            if let Some(item) = T::decode(&mut reader).map_err(Error::Record)? {
-                heap.push(Reverse(Head { item, run }));
+        // Consecutive runs merge into one until few enough files stay open;
+        // a merged run takes its place in the list, so ties keep their order.
+        while self.runs.len() > MAX_OPEN_RUNS {
+            let mut merged = Vec::with_capacity(self.runs.len() / MAX_OPEN_RUNS + 1);
+            for group in std::mem::take(&mut self.runs).chunks(MAX_OPEN_RUNS) {
+                merged.push(self.merge_into_run(group)?);
             }
-            readers.push(reader);
+            self.runs = merged;
         }
         Ok(Sorted {
-            source: Source::Runs {
-                dir: self.dir,
-                paths: std::mem::take(&mut self.runs),
-                readers,
-                heap,
-            },
+            source: open_runs(self.dir, std::mem::take(&mut self.runs))?,
         })
     }
+
+    /// Merge `group` into one new run file; the files of `group` are removed.
+    fn merge_into_run(&self, group: &[PathBuf]) -> Result<PathBuf> {
+        if let [only] = group {
+            return Ok(only.clone());
+        }
+        let mut source: Sorted<'_, T> = Sorted {
+            source: open_runs(self.dir, group.to_vec())?,
+        };
+        let path = self.dir.file(self.stem);
+        let file = File::create(&path).map_err(write_error(&path))?;
+        let mut out = BufWriter::with_capacity(1 << 20, file);
+        let mut bytes = Vec::with_capacity(64);
+        while let Some(item) = source.next_item()? {
+            bytes.clear();
+            item.encode(&mut bytes);
+            out.write_all(&bytes).map_err(write_error(&path))?;
+        }
+        out.flush().map_err(write_error(&path))?;
+        Ok(path)
+    }
+}
+
+/// Most run files read at once; more are merged in groups first.
+const MAX_OPEN_RUNS: usize = 64;
+
+/// The k-way merge over `paths`, ties to the earlier run.
+fn open_runs<T: Spill + Ord>(dir: &TempDir, paths: Vec<PathBuf>) -> Result<Source<'_, T>> {
+    let mut readers = Vec::with_capacity(paths.len());
+    let mut heap = BinaryHeap::with_capacity(paths.len());
+    for (run, path) in paths.iter().enumerate() {
+        let file = File::open(path).map_err(|source| Error::Input {
+            path: path.clone(),
+            source,
+        })?;
+        let mut reader = BufReader::with_capacity(1 << 18, file);
+        if let Some(item) = T::decode(&mut reader).map_err(Error::Record)? {
+            heap.push(Reverse(Head { item, run }));
+        }
+        readers.push(reader);
+    }
+    Ok(Source::Runs {
+        dir,
+        paths,
+        readers,
+        heap,
+    })
 }
 
 /// The smallest unread record of one run; ties go to the earlier run.
@@ -349,6 +387,25 @@ mod tests {
         let path = dir.path().to_path_buf();
         drop(dir);
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn many_runs_merge_in_groups() {
+        let dir = TempDir::new(None).expect("temp dir");
+        let mut sorter = Sorter::new(&dir, "many", 2);
+        let values: Vec<u64> = (0..300u64).map(|i| (i * 7919) % 301).collect();
+        for v in &values {
+            sorter.push(*v).expect("push");
+        }
+        let mut sorted = sorter.finish().expect("finish");
+        let mut out = Vec::new();
+        while let Some(v) = sorted.next_item().expect("next") {
+            out.push(v);
+        }
+        let mut expected = values;
+        expected.sort_unstable();
+        assert_eq!(out, expected);
+        assert!(fs::read_dir(dir.path()).expect("dir").count() <= MAX_OPEN_RUNS);
     }
 
     #[test]

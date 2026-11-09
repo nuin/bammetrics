@@ -725,10 +725,63 @@ before it writes anything (`test_md5_path_is_a_directory`).
 `--threads N` sets the BGZF decompression workers. Results do not depend on it; the
 harness runs every native case at 1 and 8.
 
+## MarkDuplicates
+
+`tests/concordance/test_mark_duplicates.py` compares the metrics file cell by cell and
+byte for byte after the `StringHeader` lines, the BAM header lines other than `@PG`, the
+`@PG` IDs and `PP` links, and every record as `samtools view` prints it (flag, every
+field, every tag in order). Every case agrees; the differences below are on purpose or
+cannot be avoided.
+
+- `@PG`: the lines added carry the IDs and `PP` links Picard gives them, and the records'
+  `PG` tags name them, so the records match. `VN` is `bammetrics` and its version (Picard
+  writes `3.5.0`) and `CL` is the bammetrics command line (`MarkDuplicates INPUT=in.bam
+  OUTPUT=...`), not Picard's line with every default.
+  `PROGRAM_GROUP_VERSION` and `PROGRAM_GROUP_COMMAND_LINE` set them as in Picard.
+- The BAM bytes differ: noodles compresses the blocks, and the `bin` field of each
+  record is copied from the input (htsjdk computes it again). Each record's fields and
+  tags are the ones Picard writes, tag order and integer type included: a record whose
+  tags were set or removed (always, under the default `CLEAR_DT=true`) is written with
+  its tags in htsjdk's list order and integers in the smallest BAM type; any other
+  record keeps its bytes, as htsjdk keeps them.
+- `CREATE_MD5_FILE` writes the MD5 of bammetrics' bytes; the index of `CREATE_INDEX` is
+  noodles' BAI of them. Both are named as Picard names them (`OUT.bam.md5`, `OUT.bai`).
+- `OUTPUT` is always BAM. A name ending in `.sam` or `.cram` exits 1 before anything is
+  read (`bammetrics writes BAM only`); Picard writes SAM or CRAM by the extension.
+- `MAX_RECORDS_IN_RAM` is the number of read ends each sorted list holds in memory before
+  it spills a run to `TMP_DIR` (default 4,000,000); Picard sets its own from the JVM heap
+  and ignores the option. `MAX_FILE_HANDLES_FOR_READ_ENDS_MAP`,
+  `MAX_SEQUENCES_FOR_DISK_READ_ENDS_MAP` and `SORTING_COLLECTION_SIZE_RATIO` are accepted
+  and ignored: mates still waiting for their pair are held in memory. Only the first
+  `TMP_DIR` is used. A pipe or standard input is copied there first, so it can be read
+  twice; Picard cannot read one.
+- The flow-based options (`FLOW_MODE` and the other `FLOW_*`) are not implemented and
+  exit 1 as unknown options; Picard runs them.
+- CRAM input: htsjdk rebuilds `MD` and `NM` on each mapped record that lacks them while
+  it decodes, and gives every record its tags in list order. bammetrics computes both
+  from the reference given with `R=`, so the records match Picard's (`test_cram`).
+  The last two contigs are held in memory, so a query-name sorted CRAM reloads contigs
+  often.
+- `VALIDATION_STRINGENCY` is not applied (records are not validated), as for every tool;
+  Picard's default `STRICT` stops on records it finds invalid. The harness runs Picard
+  with `SILENT`.
+- Errors are raised where Picard raises them, with Picard's message where one exists: a
+  paired record without a read group (Picard's `NullPointerException`), a pair key put
+  twice in coordinate order (`Value was put into PairInfoMap more than once`), records
+  out of the header's order at write time (`Alignments added out of order`), an input
+  neither coordinate nor query-name sorted, `ASSUME_SORTED` with `ASSUME_SORT_ORDER`,
+  inputs in different orders, a duplex UMI on an unpaired read, a UMI with other letters
+  than `ACGTN-`, a barcode tag that is not a string. The metrics file is never written
+  then. An error at write time leaves the BAM written so far, as Picard leaves it.
+- Picard 3.5.0 accepts every combination of `REMOVE_DUPLICATES`,
+  `REMOVE_SEQUENCING_DUPLICATES` and `TAGGING_POLICY`; so does bammetrics, and the
+  harness compares each.
+
 ## Not implemented
 
-`MarkDuplicates`, `CollectSequencingArtifactMetrics`, `FindMendelianViolations`,
-`GenotypeConcordance OUTPUT_VCF` (see Options).
+`CollectSequencingArtifactMetrics`, `FindMendelianViolations`,
+`GenotypeConcordance OUTPUT_VCF` (see Options), the flow-based options of
+`MarkDuplicates`, SAM and CRAM output.
 `CollectMultipleMetrics` still rejects `PROGRAM=RnaSeqMetrics` and
 `CollectSequencingArtifactMetrics`: the wrapper does not yet pass its `REF_FLAT`,
 `INTERVALS` and `IGNORE_SEQUENCE` to the RNA collector (Picard runs that program at

@@ -361,7 +361,9 @@ impl Verb {
         let format_help = match self.files {
             Files::Single => format!("picard (the {}), json, tsv, jsonl or human.", self.writes),
             Files::Prefix => "picard only: this verb writes several Picard files.".to_owned(),
-            Files::Bam => "picard only: this verb writes a BAM and a Picard metrics file.".to_owned(),
+            Files::Bam => {
+                "picard only: this verb writes a BAM and a Picard metrics file.".to_owned()
+            }
         };
         flags.push(
             Flag::new(Key::Format, "format", &[], Ty::Text, &format_help).placeholder("FORMAT"),
@@ -741,8 +743,10 @@ impl Verb {
             Files::Bam => match given {
                 Some(g) if g.values[0] == "-" => Ok(Some(PathBuf::from("/dev/stdout"))),
                 Some(g) => Ok(Some(PathBuf::from(&g.values[0]))),
-                None => Err(VerbError::usage(self.name, "missing -o BAM (Picard: OUTPUT)")
-                    .hint("-o - writes the BAM to standard output")),
+                None => Err(
+                    VerbError::usage(self.name, "missing -o BAM (Picard: OUTPUT)")
+                        .hint("-o - writes the BAM to standard output"),
+                ),
             },
             Files::Prefix => {
                 if let Some(g) = given.filter(|g| g.values[0] == "-") {
@@ -971,7 +975,11 @@ impl Verb {
             return Ok(());
         };
         let main_path = same_file_key(&main);
-        let metrics = inv.output.iter().filter(|_| self.files == Files::Bam).cloned();
+        let metrics = inv
+            .output
+            .iter()
+            .filter(|_| self.files == Files::Bam)
+            .cloned();
         for further in self.further_outputs(inv).into_iter().chain(metrics) {
             if same_file_key(&further) == main_path {
                 return Err(VerbError::usage(

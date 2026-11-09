@@ -547,8 +547,7 @@ mod tests {
         decoded.set(*b"DT", TagValue::String(b"LB".to_vec()));
         decoded.remove(*b"NM");
         record.set_tags(&decoded).expect("encode");
-        // Order by (second char, first char): RG (G), DT (T), XS (S)?
-        // 'G' < 'S' < 'T': RG, XS, DT.
+        // Ordered by second character, then first: RG (G), XS (S), DT (T).
         assert_eq!(record.tag_bytes(), b"RGZa\0XSc\x07DTZLB\0");
     }
 

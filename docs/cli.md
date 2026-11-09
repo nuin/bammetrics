@@ -33,7 +33,7 @@ registry runs the Picard face, untouched; then a grammar verb (a tool verb, `col
 | Group | Verbs |
 |---|---|
 | Run | `qc` (the collectors a preset needs, one pass, files, verdict, page), `collect` (the same pass, no verdict), one verb per registry tool |
-| Prepare | `bed-to-interval-list`; `mark-duplicates` is reserved for parity plan P9 and not built |
+| Prepare | `bed-to-interval-list`, `mark-duplicates` |
 | Post | `accumulate-quality-yield`, `accumulate-variant-calling`, `compare-metrics`, `report`, `check` |
 | Info | `tools`, `presets`, `plan`, `help`, `completions` |
 
@@ -496,9 +496,49 @@ the dictionary of `R=ref.fa`.
 
 ### mark-duplicates
 
-Reserved for parity plan P9 (docs/05 section 2.5, example 9). It is not built:
-`bammetrics mark-duplicates` exits 2 as an unknown verb. `duplicate-metrics marked.bam`
-works on a BAM marked by another tool.
+```bash
+bammetrics mark-duplicates in.bam -o marked.bam --metrics marked.markdup_metrics
+bammetrics mark-duplicates a.bam b.bam -o - --metrics ab.markdup_metrics --tagging-policy All | samtools flagstat -
+bammetrics MarkDuplicates I=in.bam O=marked.bam M=marked.markdup_metrics TMP_DIR=/scratch
+```
+
+The verb runs `MarkDuplicates`, Picard 3.5.0's duplicate marker (0.18.0). `-o BAM` is
+`OUTPUT`, the BAM it writes; `-o -` writes it to standard output. `--metrics-file`
+(`--metrics`, `-M`, `METRICS_FILE=`) is the `DuplicationMetrics` file. Both are required.
+`--format` takes `picard` only.
+
+- `OUTPUT` holds every input record in input order. The duplicate flag (0x400) is set on
+  each duplicate and cleared on every other record, so a flag from an earlier run does
+  not survive. `--remove-duplicates` leaves duplicates out, and
+  `--remove-sequencing-duplicates` leaves out optical duplicates.
+- The header gains one `@PG` line per distinct `PG` value of the input records, chained
+  with `PP` to that value, and each record's `PG` tag names its new line. The ID is
+  `MarkDuplicates`, then `MarkDuplicates.1` and so on when the ID is taken, as Picard
+  numbers them. `VN` is `bammetrics` and the version, `CL` the bammetrics command line;
+  `--program-group-version` and `--program-group-command-line` replace them.
+  `--program-record-id null` adds no line and changes no `PG` tag;
+  `--no-add-pg-tag-to-reads` keeps the lines and leaves the tags.
+- The metrics file has one row per library and the `set_size` histograms `all_sets`,
+  `optical_sets` and `non_optical_sets`; with one library and a size estimate the
+  `CoverageMult` column comes first and the key reads `BIN`.
+- The input may be coordinate sorted or query-name sorted (by the header or by
+  `--assume-sort-order`). In query-name order the secondary, supplementary and
+  unmapped records of a duplicate template are flagged too. Any other order exits 1
+  after the first read. Several `-i` inputs are merged as Picard merges them; their
+  dictionaries must be equal.
+- The input is read twice. Standard input and pipes are copied to `--tmp-dir` first.
+  Read ends and index lists are sorted in runs of `--max-records-in-ram` entries (default
+  4,000,000) spilled to `--tmp-dir` (default the system temporary directory); every file
+  written there is removed at the end.
+- A CRAM input needs `-R`. Its records come out with the `MD` and `NM` tags htsjdk
+  rebuilds while decoding. The output is always BAM: an `-o` ending in `.sam` or `.cram`
+  exits 1.
+- `--create-index` writes `marked.bai` beside a coordinate-sorted BAM;
+  `--create-md5-file` writes `marked.bam.md5`. `--compression-level` sets the BGZF level
+  (default 5). `--threads` sets the decompression and compression workers.
+
+KNOWN_DIFFERENCES.md lists what differs from Picard: the `@PG` `VN` and `CL`, the flow
+options it refuses, and the `MAX_RECORDS_IN_RAM` meaning.
 
 ## Post verbs
 
@@ -754,9 +794,16 @@ bammetrics accumulate-quality-yield out/*.qy -o out/sample.qy
 `AccumulateQualityYieldMetrics I=out/a.qy I=out/b.qy O=...` writes the same metrics. GNU
 `parallel` works in place of the loop.
 
-**9. MarkDuplicates to CollectDuplicateMetrics.** Not built: `mark-duplicates` waits for
-parity plan P9. `bammetrics duplicate-metrics tests/data/insert_size.bam -o out/s.dup`
-works on a BAM whose duplicates another tool marked.
+**9. MarkDuplicates to CollectDuplicateMetrics.**
+
+```bash
+bammetrics mark-duplicates tests/data/markdup.bam --metrics out/s.markdup_metrics -o - \
+  | tee out/s.marked.bam | bammetrics duplicate-metrics - -o out/s.dup
+```
+
+The marker reads its input twice, so the input must be a file (standard input is copied
+to `--tmp-dir` first). `duplicate-metrics` reads the flags it set: its pair and duplicate
+counts equal the marker's, and its `READ_PAIR_OPTICAL_DUPLICATES` is 0, as in Picard.
 
 **10. One read of standard input, several collectors.**
 
