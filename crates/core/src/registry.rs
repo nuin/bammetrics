@@ -305,6 +305,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::genotype_concordance::TOOL,
     &crate::compare_metrics::TOOL,
     &crate::create_sequence_dictionary::TOOL,
+    &crate::mark_duplicates::TOOL,
 ];
 
 /// The tool named `name`.
@@ -481,6 +482,20 @@ impl Tool {
         let names = table.iter().flat_map(|o| o.names.iter().copied());
         let best = did_you_mean(&normalize(name), names)?;
         self.option(best)
+    }
+
+    /// The Python keyword of the metrics file: `output`, or the metrics
+    /// row's own keyword (`metrics_file`) for a tool whose `OUTPUT` is a
+    /// value of its own (`MarkDuplicates` writes its BAM there).
+    pub fn metrics_kwarg(&self) -> String {
+        let own_output = self
+            .options
+            .iter()
+            .any(|o| o.kind == Kind::Value && o.picard() == "OUTPUT");
+        match self.lookup(self.output_name()) {
+            Some(metrics) if own_output => metrics.kwarg(),
+            _ => "output".to_owned(),
+        }
     }
 
     /// Long name of the option that names the metrics file.
@@ -795,8 +810,10 @@ pub fn python_stub(tool: &Tool) -> String {
             continue;
         }
         match opt.kind {
-            Kind::Output if opt.required => keywords.push("output: _Path".to_owned()),
-            Kind::Output => keywords.push("output: _Path | None = None".to_owned()),
+            Kind::Output if opt.required => {
+                keywords.push(format!("{}: _Path", tool.metrics_kwarg()));
+            }
+            Kind::Output => keywords.push(format!("{}: _Path | None = None", tool.metrics_kwarg())),
             Kind::Value if opt.required => {
                 keywords.push(format!("{}: {}", opt.kwarg(), python_annotation(opt)));
             }

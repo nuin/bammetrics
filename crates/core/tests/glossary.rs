@@ -189,6 +189,14 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
             out("concordance"),
         ],
     );
+    args.insert(
+        "MarkDuplicates",
+        vec![
+            format!("I={DATA}/markdup.bam"),
+            out("marked.bam"),
+            format!("M={}", dir.join("markdup_metrics").display()),
+        ],
+    );
     args
 }
 
