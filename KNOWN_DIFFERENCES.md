@@ -148,6 +148,17 @@ behaves how.
   (`sensitivity::calculate_sensitivities`); the three WGS tools do not call it yet.
   `ASSUME_SORTED` is rejected in both tools.
   `CollectWgsMetricsWithNonZeroCoverage` accepts `CHART_OUTPUT` and draws nothing.
+- `CollectOxoGMetrics` takes every option of Picard's that changes a number
+  (`REFERENCE_SEQUENCE`, `INTERVALS`, `DB_SNP`, `MINIMUM_QUALITY_SCORE`,
+  `MINIMUM_MAPPING_QUALITY`, `MINIMUM_INSERT_SIZE`, `MAXIMUM_INSERT_SIZE`,
+  `INCLUDE_NON_PF_READS`, `USE_OQ`, `CONTEXT_SIZE`, `CONTEXTS`, `STOP_AFTER`), each with a
+  non-default case in `tests/concordance/test_oxog_metrics.py`. Picard's tool has no
+  `METRIC_ACCUMULATION_LEVEL` and no `ASSUME_SORTED`; both exit 1 in both tools.
+  `CONTEXT_SIZE` above 4 without `CONTEXTS` exits 1 naming the option, and so does a
+  `CONTEXTS` list whose `HashMap` would turn a bin into a tree: Picard 3.5.0 writes
+  1,048,576 contexts per library at `CONTEXT_SIZE=5` (a 306 MB file in about a minute) in
+  an order its tree bins decide, which bammetrics does not reproduce
+  (`test_context_size_5_is_refused`; a short `CONTEXTS` list at that size runs).
 - `CollectGcBiasMetrics` accepts `MINIMUM_GENOME_FRACTION` (`MGF`) and changes nothing
   with it: Picard 3.5.0 declares the option and never reads it (`CollectGcBiasMetrics.java`,
   the field is not passed to `GcBiasMetricsCollector`). `test_gc_bias.py` runs `MGF=0.5` and
@@ -312,6 +323,9 @@ CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `col
   an interval list, or a BED file converted as `BedToIntervalList` would with the BAM header
   as dictionary; Picard 3.5.0 rejects the BED (`test_bed_intervals_are_read_by_bammetrics_only`
   gives Picard the converted list and the outputs are identical).
+- `CollectOxoGMetrics` reads `R=` through its `.fai` and takes a BED as `INTERVALS` in the
+  same way; Picard 3.5.0 rejects the BED (`test_bed_intervals_are_read_by_bammetrics_only`
+  in `test_oxog_metrics.py`).
 - `BedToIntervalList` `SD=` takes a `.dict`, a BAM or SAM header, an interval list, or a
   FASTA with a `.dict` next to it, as Picard does; without the `.dict` it falls back to the
   `.fai` and writes `SN` and `LN` only, where Picard fails. A VCF is not read.
@@ -514,6 +528,40 @@ output reproduced from Picard 3.5.0, each checked by a case in
   and writes no file at the same locus (`test_non_zero_fast_algorithm_fails_in_both`, 6
   cases). A BAM in which no record reaches a locus completes in both tools with every depth
   0 (`test_non_zero_fast_algorithm_on_an_empty_bam`, `rl_empty` and `asm_empty`).
+
+`CollectOxoGMetrics` output reproduced from Picard 3.5.0, each checked by a case in
+`tests/concordance/test_oxog_metrics.py`:
+
+- Rows come out in the `HashMap` order of the context strings, each context's libraries
+  in `HashSet` order. `SAMPLE_ALIAS` is every `@RG` sample joined with commas in
+  `HashSet` order (`S3,UnknownSample,S1,S2` on `ox_damage`), the same on every row. A
+  read group without `LB` or `SM` is `UnknownLibrary` or `UnknownSample`. A `CONTEXTS`
+  value given twice makes one row.
+- The insert size filter exists unless `MINIMUM_INSERT_SIZE` and `MAXIMUM_INSERT_SIZE`
+  are both 0, and while it exists it drops every unpaired record. Supplementary records
+  are counted; secondary and duplicate records are not. Non-PF records count at the
+  default `INCLUDE_NON_PF_READS=true`.
+- A context is the upper-cased reference around the site, reverse-complemented at a G,
+  so a context holding N or an IUPAC code matches a `CONTEXTS` value that names it
+  (`NCA`, `RCG`); a lower-case value never matches and prints a row of zeros. Sites
+  within `CONTEXT_SIZE` bases of a contig end are skipped.
+- `STOP_AFTER` counts every C or G locus whose context is reported, with or without a
+  counted base, and stops at the first when it is 0 or less (`stop_after_0`,
+  `stop_after_negative`).
+- `DB_SNP` skips every position from the start to the end of every record, whatever its
+  type or filter. Its `##contig` lines must match the BAM's; a VCF without them is not
+  compared, and a record on a contig the BAM lacks fails in both tools.
+- A row without counted bases prints `OXIDATION_ERROR_RATE` `?` (1 / 0) and
+  `OXIDATION_Q` `-?`, and the four `*_REF_OXO_*` columns `?` (0 / 0, which Java's
+  `Math.max` keeps). A reference-bias rate at its 1e-10 floor prints `0`, its Q `100`.
+- A base that passes `MINIMUM_QUALITY_SCORE` on a record without a header read group
+  fails the run in both tools (Picard: `NullPointerException`); a base under the
+  threshold is skipped before the read group is looked up, so such a record at quality
+  2 passes at the default and fails at `Q=2` (`ox_rg_free_low_quality`). A header without
+  `@RG` fails in both (`This analysis requires a read group entry in the alignment file
+  header`), so does a header sort order other than none, `unsorted` or `coordinate`.
+- With `USE_OQ=true` an `OQ` tag shorter than the read fails only when a base past its
+  end is reached at a counted site, as Picard's index error does.
 
 `CollectRnaSeqMetrics` output reproduced from Picard 3.5.0, each checked by a case in
 `tests/concordance/test_rna_seq_metrics.py`:
