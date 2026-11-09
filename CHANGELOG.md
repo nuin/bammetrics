@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `CollectSequencingArtifactMetrics` (Picard face, the `sequencing-artifact` verb, Python
+  `collect_sequencing_artifact_metrics()` and a `CollectMultipleMetrics` program): the five
+  files of Picard 3.5.0 from one read of the BAM, the pre-adapter and bait-bias detail and
+  summary files and the error summary. Every option: `MINIMUM_QUALITY_SCORE`,
+  `MINIMUM_MAPPING_QUALITY`, `MINIMUM_INSERT_SIZE`, `MAXIMUM_INSERT_SIZE`,
+  `INCLUDE_UNPAIRED`, `INCLUDE_DUPLICATES`, `INCLUDE_NON_PF_READS`, `TANDEM_READS`, `USE_OQ`,
+  `CONTEXT_SIZE`, `CONTEXTS_TO_PRINT`, `FILE_EXTENSION`, `INTERVALS`, `DB_SNP` (a VCF, every
+  record type), `STOP_AFTER`, `ASSUME_SORTED`. Libraries and samples come in Java `HashMap`
+  order. `CollectMultipleMetrics` passes the program its `INTERVALS`, `DB_SNP` and
+  `INCLUDE_UNPAIRED`, which it used to drop.
+- `ConvertSequencingArtifactToOxoG` (Picard face, the `convert-sequencing-artifact-to-oxo-g`
+  verb, Python `convert_sequencing_artifact_to_oxo_g()`): the `CpcgMetrics` rows of
+  `CollectOxoGMetrics` from the two detail files, with Picard's failures for a missing row,
+  an empty or swapped file.
+- `tests/concordance/test_sequencing_artifact.py`: both tools against Picard 3.5.0 on the
+  foundation corpus, t1 to t3, the exome slice and three built BAMs (`artifact_bams.py`),
+  `CONTEXT_SIZE` 0 to 2, every option, `INTERVALS`, `DB_SNP`, error parity and the
+  distinct-value gate. `tests/data/artifact.bam` (`make_artifact_bam.py`) and Picard's five
+  files for it in `tests/data/artifact`; ten golden records, and the `tools` listing gains
+  two rows.
+- A verb whose tool has no required option takes its first value option as the positional
+  argument (`INPUT_BASE` of the converter).
+
 ## 0.17.0
 
 CompareMetrics, CreateSequenceDictionary, and CRAM input for every tool that reads a BAM.

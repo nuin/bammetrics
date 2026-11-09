@@ -41,6 +41,15 @@ behaves how.
   option`); the two capture tools reject `STOP_AFTER` the same way (neither is a
   `SinglePassSamProgram`). The other `CommandLineProgram` plumbing options (`R`,
   `TMP_DIR`, ...) are accepted and dropped where Picard rejects them.
+- `CollectSequencingArtifactMetrics` takes every option of Picard's (see
+  `tests/concordance/test_sequencing_artifact.py`). `CONTEXT_SIZE` above 5 is refused: the
+  counts take 4^(2k+1) contexts per library (512 MB at 5), and Picard's detail files would
+  hold millions of rows. Inside `CollectMultipleMetrics` the program never stops at the first
+  record without a reference, as the stand-alone tool does (`usesNoRefReads` is false);
+  Picard stops a shared read there only when no other program reads such records. Counts
+  differ only for a file whose mapped records follow an unplaced one, which a
+  coordinate-sorted BAM never has. `ConvertSequencingArtifactToOxoG` needs the columns of the
+  detail files it reads; Picard leaves a missing column at its default.
 - `METRIC_ACCUMULATION_LEVEL` is implemented for `CollectInsertSizeMetrics`,
   `CollectAlignmentSummaryMetrics`, `CollectGcBiasMetrics`, `CollectMultipleMetrics`,
   `CollectHsMetrics`, `CollectTargetedPcrMetrics` and `CollectRnaSeqMetrics` (all four
@@ -673,6 +682,20 @@ the 32 hex digits without a line end.
 
 ## Failures
 
+`CollectSequencingArtifactMetrics` fails where Picard fails, each with Picard's message:
+no `REFERENCE_SEQUENCE`; a negative `CONTEXT_SIZE`, `MINIMUM_INSERT_SIZE` or
+`MAXIMUM_INSERT_SIZE`; a maximum under the minimum; a `CONTEXTS_TO_PRINT` entry of the wrong
+length (every message, in `HashSet` order); a counted record whose library the header lacks
+(`Record contains library that is missing from header: UnknownLibrary`, a BAM without `@RG`
+lines); a BED as `INTERVALS` (`Interval list file must contain header`); `DB_SNP` with
+`INTERVALS` and no index beside the VCF; a dbSNP or reference dictionary that differs from
+the BAM's. A read whose qualities or bases are shorter than its CIGAR fails both (Picard:
+`ArrayIndexOutOfBoundsException`); no concordance case reaches it. `ConvertSequencingArtifactToOxoG` fails with no input, a
+missing file, a pre-adapter file without rows (Picard: `IndexOutOfBoundsException`), the
+two files swapped (Picard: `ClassCastException`), a library in the bait-bias file only, or a
+context whose reverse complement or bait-bias row is missing, which a `CONTEXTS_TO_PRINT`
+run leaves out (Picard: `NullPointerException`). The concordance module checks each.
+
 A unit whose reads all fail QC (`no PF_READS`) makes Picard throw and write no file, at any
 accumulation level. bammetrics exits 1 and writes no file; three concordance cases check
 both tools fail (`test_no_pf_reads_fails_like_picard`).
@@ -727,10 +750,10 @@ harness runs every native case at 1 and 8.
 
 ## Not implemented
 
-`MarkDuplicates`, `CollectSequencingArtifactMetrics`, `FindMendelianViolations`,
-`GenotypeConcordance OUTPUT_VCF` (see Options).
-`CollectMultipleMetrics` still rejects `PROGRAM=RnaSeqMetrics` and
-`CollectSequencingArtifactMetrics`: the wrapper does not yet pass its `REF_FLAT`,
+`MarkDuplicates`, `FindMendelianViolations`, `GenotypeConcordance OUTPUT_VCF` (see
+Options).
+`CollectMultipleMetrics` still rejects `PROGRAM=RnaSeqMetrics`: the wrapper does not yet
+pass its `REF_FLAT`,
 `INTERVALS` and `IGNORE_SEQUENCE` to the RNA collector (Picard runs that program at
 `SECOND_READ_TRANSCRIPTION_STRAND` with the run's `INTERVALS` as the ribosomal list).
 `CollectDuplicateMetrics` counts no optical duplicates, as Picard's
