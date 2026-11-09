@@ -32,7 +32,7 @@ def exome():
 
 def test_tools_and_presets_list_the_clinical_checks():
     names = [str(t) for t in bammetrics.tools()]
-    assert "coverage-gaps" in names and "sex-check" in names
+    assert "CollectCoverageGaps" in names and "CollectSexCheckMetrics" in names
     panel = next(p for p in bammetrics.presets() if p == "clinical-panel")
     assert panel.version == 3
     assert panel.rules == 18

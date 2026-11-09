@@ -34,8 +34,9 @@ def test_presets_lists_the_shipped_names():
 def test_generic_passes_the_fixture(metrics_files):
     verdict = bammetrics.evaluate("generic", list(metrics_files.values()))
     assert verdict["schema"] == "bammetrics.verdict/1"
-    assert verdict["status"] == "pass"
-    assert verdict["counts"] == {"pass": 6, "warn": 0, "fail": 0, "not_measured": 0}
+    # generic version 2 reads the sex check, which these Picard files lack.
+    assert verdict["status"] == "incomplete"
+    assert verdict["counts"] == {"pass": 6, "warn": 0, "fail": 0, "not_measured": 2}
     assert verdict["sample"] == "s"
     assert verdict["preset"]["name"] == "generic"
     assert verdict["preset"]["source"] == "built-in"
@@ -50,17 +51,20 @@ def test_generic_passes_the_fixture(metrics_files):
     assert by_rule["yield.q30"]["metric"] == "PF_Q30_BASES / PF_BASES"
     assert by_rule["yield.q30"]["value"] == 1
     assert by_rule["duplication.percent"]["unit"] == "Unknown Library"
-    assert all(c["reason"] is None for c in verdict["checks"])
+    assert all(c["reason"] is None for c in verdict["checks"] if c["status"] == "pass")
+    assert by_rule["sex.match"]["reason"] == "no SexCheckMetrics file"
+    assert by_rule["sex.match"]["fail"] == "is N"
 
 
 def test_clinical_panel_is_incomplete_without_hs_metrics(metrics_files):
     verdict = bammetrics.evaluate("clinical-panel", list(metrics_files.values()), sample="NA12878")
     assert verdict["sample"] == "NA12878"
     assert verdict["status"] == "incomplete"
-    assert verdict["counts"]["not_measured"] == 9
+    assert verdict["counts"]["not_measured"] == 13
     assert verdict["counts"]["pass"] == 5
     missing = [c for c in verdict["checks"] if c["status"] == "not_measured"]
-    assert all(c["reason"] == "no HsMetrics file" for c in missing)
+    reasons = {c["reason"] for c in missing}
+    assert reasons == {"no HsMetrics file", "no CoverageGapMetrics file", "no SexCheckMetrics file"}
     assert all(c["value"] is None for c in missing)
 
 
