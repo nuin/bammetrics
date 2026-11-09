@@ -2083,6 +2083,72 @@ impl Accumulator for CaptureMetrics {
     }
 }
 
+/// The high-quality depth of every target base, as `PER_BASE_COVERAGE`
+/// writes it: the arrays of the `ALL_READS` unit after the pass, with the
+/// merged targets, their names and the contig names. `CollectCoverageGaps`
+/// reads its gaps from this, so its depth is the Hs depth by construction.
+pub struct TargetDepths {
+    targets: Vec<Interval>,
+    target_names: Vec<String>,
+    contigs: Vec<String>,
+    offsets: Vec<usize>,
+    depth: Vec<i32>,
+}
+
+impl TargetDepths {
+    /// The merged targets, in file order.
+    pub fn targets(&self) -> &[Interval] {
+        &self.targets
+    }
+
+    /// The name of merged target `index` (`|`-joined when targets merged).
+    pub fn target_name(&self, index: usize) -> &str {
+        &self.target_names[index]
+    }
+
+    /// The `@SQ` name of contig `index`.
+    pub fn contig_name(&self, index: usize) -> &str {
+        &self.contigs[index]
+    }
+
+    /// The high-quality depth of each base of merged target `index`, from
+    /// its start.
+    pub fn depth(&self, index: usize) -> &[i32] {
+        &self.depth[self.offsets[index]..self.offsets[index + 1]]
+    }
+}
+
+impl CaptureMetrics {
+    /// The depth arrays of the `ALL_READS` unit after the pass, in place of
+    /// the metrics. The accumulator must have been built with `ALL_READS`
+    /// as its only level.
+    pub fn into_target_depths(self) -> Result<TargetDepths> {
+        let unit = self
+            .levels
+            .into_buckets()
+            .into_iter()
+            .find(|b| b.level == Level::AllReads)
+            .ok_or_else(|| Error::Metric("no ALL_READS unit".to_owned()))?
+            .state;
+        let Coverage {
+            offsets,
+            high_quality,
+            ..
+        } = unit.coverage;
+        let FileNames {
+            contigs,
+            target_names,
+        } = self.territory.names;
+        Ok(TargetDepths {
+            targets: self.targets.intervals().to_vec(),
+            target_names,
+            contigs,
+            offsets,
+            depth: high_quality,
+        })
+    }
+}
+
 /// The `StringHeader` command line of the `hs-metrics` verb, the form the
 /// 0.12 subcommand wrote: every option with its value, defaults included.
 pub fn subcommand_header(inv: &Invocation) -> Result<String> {

@@ -491,3 +491,27 @@ CollectTargetedPcrMetrics	high_quality_coverage_count	float	Target bases whose h
 CollectTargetedPcrMetrics	unfiltered_baseq_count	float	On-target bases with this base quality, from reads that pass the duplicate, adapter and MAPQ filters, after mate-overlap clipping but before the MINIMUM_BASE_QUALITY filter. Bases at quality 2 or below and inserted bases are left out. No coverage cap is applied.
 CollectRnaSeqMetrics	normalized_position	int	Histogram key: position along the transcript in percent of its length, 0 at the 5' end to 100 at the 3' end.
 CollectRnaSeqMetrics	*.normalized_coverage	float	Coverage within 0.5% of the transcript length around this position, divided by the transcript's mean coverage, averaged over the picked transcripts of the unit named before the dot (All_Reads, or the read group, library or sample). 1 is flat; the last base of each alignment block is not counted.
+bammetrics.qc.CoverageGapMetrics	TARGET_TERRITORY	int	Bases in the merged target intervals (overlapping and abutting targets merged, as CollectHsMetrics merges them).
+bammetrics.qc.CoverageGapMetrics	TARGET_COUNT	int	Number of merged targets; the denominator of PCT_TARGETS_COMPLETE.
+bammetrics.qc.CoverageGapMetrics	MIN_DEPTH	int	The MIN_DEPTH option (default 20): a target base at or above this high-quality depth is reportable.
+bammetrics.qc.CoverageGapMetrics	BASES_AT_OR_ABOVE_MIN_DEPTH	int	Target bases whose high-quality depth, as CollectHsMetrics PER_BASE_COVERAGE counts it, is at or above MIN_DEPTH.
+bammetrics.qc.CoverageGapMetrics	PCT_REPORTABLE	float	BASES_AT_OR_ABOVE_MIN_DEPTH divided by TARGET_TERRITORY. At MIN_DEPTH 20 this equals PCT_TARGET_BASES_20X of CollectHsMetrics on the same input and filters. ? when the territory is 0.
+bammetrics.qc.CoverageGapMetrics	GAP_BASES	int	Target bases below MIN_DEPTH: TARGET_TERRITORY minus BASES_AT_OR_ABOVE_MIN_DEPTH.
+bammetrics.qc.CoverageGapMetrics	GAP_COUNT	int	Number of gap runs: maximal runs of consecutive bases of one merged target below MIN_DEPTH.
+bammetrics.qc.CoverageGapMetrics	LARGEST_GAP	int	Length in bases of the longest gap run; 0 without a gap.
+bammetrics.qc.CoverageGapMetrics	TARGETS_WITH_GAP	int	Merged targets that hold at least one gap run.
+bammetrics.qc.CoverageGapMetrics	PCT_TARGETS_COMPLETE	float	Merged targets without a gap run, divided by TARGET_COUNT. ? when there is no target.
+CollectCoverageGaps	gap_length	int	Histogram key: the length in bases of a gap run.
+CollectCoverageGaps	gap_count	float	Number of gap runs of this length.
+bammetrics.qc.SexCheckMetrics	AUTOSOME_READS	int	Primary mapped reads on the autosomes (chr1 to chr22 or 1 to 22, or the AUTOSOMES option) that are not duplicates or QC failures and have MAPQ at or above MINIMUM_MAPPING_QUALITY. With TARGET_INTERVALS, only reads over a target.
+bammetrics.qc.SexCheckMetrics	X_READS	int	Reads counted as for AUTOSOME_READS on the X contig (chrX or X, or X_CONTIG).
+bammetrics.qc.SexCheckMetrics	Y_READS	int	Reads counted as for AUTOSOME_READS on the Y contig (chrY or Y, or Y_CONTIG).
+bammetrics.qc.SexCheckMetrics	AUTOSOME_LENGTH	int	Bases of the autosomes: the @SQ lengths summed, or with TARGET_INTERVALS the merged target bases on them.
+bammetrics.qc.SexCheckMetrics	X_LENGTH	int	Bases of the X contig: its @SQ length, or with TARGET_INTERVALS the merged target bases on it.
+bammetrics.qc.SexCheckMetrics	Y_LENGTH	int	Bases of the Y contig: its @SQ length, or with TARGET_INTERVALS the merged target bases on it.
+bammetrics.qc.SexCheckMetrics	X_RATIO	float	X reads per X base divided by autosome reads per autosome base. Near 1 for two X chromosomes, near 0.5 for one. ? when a length or the autosome read count is 0.
+bammetrics.qc.SexCheckMetrics	Y_RATIO	float	Y reads per Y base divided by autosome reads per autosome base. Near 0 without a Y chromosome. ? when a length or the autosome read count is 0.
+bammetrics.qc.SexCheckMetrics	INFERRED_SEX	string	FEMALE when X_RATIO is at least 0.75 and Y_RATIO under 0.05; MALE when X_RATIO is between 0.3 and 0.75 and Y_RATIO at least 0.1; UNKNOWN otherwise. Starting values (docs/06).
+bammetrics.qc.SexCheckMetrics	DECLARED_SEX	string	The EXPECTED_SEX option, upper-cased; empty when none was given.
+bammetrics.qc.SexCheckMetrics	SEX_MATCH	string	Y when INFERRED_SEX equals DECLARED_SEX, N when the inferred sex is MALE or FEMALE and differs; empty without a declaration or when the inferred sex is UNKNOWN.
+bammetrics.qc.SexCheckMetrics	REASON	string	Why INFERRED_SEX is UNKNOWN (a contig set with no bases, no autosome reads, or ratios that fit neither pattern), and why SEX_MATCH is empty with a declaration; empty otherwise.
