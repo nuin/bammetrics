@@ -79,7 +79,9 @@ bammetrics check runs/ --preset clinical-panel             # exit 10 on a failed
 `qc` reads the BAM once for every collector the preset needs and writes
 `out/NA12878.*`: the metrics files, `.verdict.json`, `.report.html` and a manifest that
 `--resume` uses to skip finished collectors; `bammetrics plan` with the same options shows
-what would run.
+what would run. `--sex male|female` declares the sample's sex for the sex check, and a
+panel adds the coverage gap check (`.coverage_gaps` and a BED of the gaps); both are
+bammetrics checks with no Picard counterpart ([docs/06](docs/06_clinical_checks.md)).
 
 `report` finds the metrics files by their `## METRICS CLASS` block in any directory of
 Picard output, no bammetrics run needed, and judges each sample against a preset of
@@ -114,6 +116,8 @@ under the failing check it explains. The presets, the rule language and `verdict
 | GenotypeConcordance (`TRUTH_VCF`, `CALL_VCF`, samples, `INTERVALS`, `MIN_GQ`, `MIN_DP`, `MISSING_SITES_HOM_REF`, `IGNORE_FILTER_STATUS`, `OUTPUT_ALL_ROWS`; summary, detail and contingency files) | | `genotype_concordance()` |
 | CompareMetrics (`KEY`, `METRICS_TO_IGNORE`, `METRICS_NOT_REQUIRED`, `METRIC_ALLOWABLE_RELATIVE_CHANGE`, `IGNORE_HISTOGRAM_DIFFERENCES`, `OUTPUT_TABLE`; Picard's exit code) | | `compare_metrics()` |
 | CreateSequenceDictionary (plain, gzip or bgzip FASTA; `AS`, `UR`, `SP`, `ALT_NAMES`, `NUM_SEQUENCES`, `CREATE_MD5_FILE`) | | `create_sequence_dictionary()` |
+| CollectCoverageGaps (not a Picard tool, [docs/06](docs/06_clinical_checks.md): target bases under `MIN_DEPTH` as a metrics row and a BED of gap runs, with the CollectHsMetrics depth) | | `collect_coverage_gaps()` |
+| CollectSexCheckMetrics (not a Picard tool, docs/06: reads per base on X, Y and the autosomes, the inferred sex against `EXPECTED_SEX`) | | `collect_sex_check_metrics()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 

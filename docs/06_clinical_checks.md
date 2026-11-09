@@ -240,10 +240,25 @@ Core: `coverage_gaps.rs`, `sex_check.rs`, `lib.rs`, `registry.rs` (`TOOLS`),
 
 ## 4. Measurements
 
-Filled in after the run on the scale data (`~/data/bammetrics-scale`, outputs under
-`~/data/bammetrics-scale/clinical/`): HG002 exome (hs37d5 names `1`..`22`, `X`, `Y`; male)
-and NA12878 genome CRAM with `STOP_AFTER=50000000` (GRCh38; female), each with the inferred
-sex, both ratios and the wall time.
+`CollectSexCheckMetrics` on the scale data (Mac Studio, release build, 8 threads, outputs
+under `~/data/bammetrics-scale/clinical/`), 2026-11-09:
+
+| Input | Reads A / X / Y | X_RATIO | Y_RATIO | Inferred | Declared | Wall |
+|---|---|---|---|---|---|---|
+| HG002 exome BAM, 10 GB, hs37d5 (`1`..`22`, `X`, `Y`), no targets | 135,806,288 / 2,822,993 / 146,171 | 0.3857 | 0.052227 | UNKNOWN | MALE | 24.2 s |
+| NA12878 genome CRAM, `STOP_AFTER=50000000` | 39,196,583 / 0 / 0 | 0 | 0 | UNKNOWN | FEMALE | 19.2 s |
+| NA12878 genome CRAM, whole file (16 GB) | 594,884,986 / 31,492,585 / 257,316 | 0.975382 | 0.02173 | FEMALE, `SEX_MATCH=Y` | FEMALE | 336.5 s |
+
+Findings. The female genome lands where the thresholds expect it (X 0.98, Y 0.02). The
+male exome without its capture targets has X_RATIO 0.39, inside the male band, and
+Y_RATIO 0.052: under the `MALE_MIN_Y` of 0.1, because reads per base over the whole Y
+contig (59 Mb, most of it unmappable or not captured) run far below the autosomes. With
+`TARGET_INTERVALS` the Y length is the targeted bases and the ratio rises; the kit's
+target file was not available for this run. A `MALE_MIN_Y` of 0.03 would call this
+sample MALE and keep NA12878 FEMALE; the margin above the female genome's 0.022 is 0.008,
+so the value stays at 0.1 until a female exome and a male genome are measured. The
+`STOP_AFTER` run shows that a coordinate-sorted genome needs the whole file: the first 50
+million records lie on chromosomes 1 to 3 and hold no X or Y read.
 
 ## 5. Out of scope
 

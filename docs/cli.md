@@ -244,6 +244,8 @@ table.
 | `bed-to-interval-list` | BedToIntervalList | one interval list |
 | `compare-metrics` | CompareMetrics (two metrics files as positionals) | the comparison text |
 | `create-sequence-dictionary` | CreateSequenceDictionary (input is a FASTA) | one `.dict` |
+| `coverage-gaps` | CollectCoverageGaps (not a Picard tool, [docs/06](06_clinical_checks.md); `--targets` or `--panel`) | one (plus the `--gaps-file` BED) |
+| `sex-check` | CollectSexCheckMetrics (not a Picard tool, docs/06; `--sex male|female`, `--targets` for a panel) | one |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -255,6 +257,17 @@ for every tool.
 `--program null` first clears them. The accumulate verbs and `bed-to-interval-list` are
 listed here because the registry runs them; they are described under post and prepare,
 as is `create-sequence-dictionary`.
+
+`coverage-gaps` and `sex-check` are the two clinical checks of
+[docs/06](06_clinical_checks.md), with no Picard counterpart. `bammetrics coverage-gaps
+BAM --panel panel.bed --gaps-file gaps.bed -o gaps.txt` writes one
+`CoverageGapMetrics` row (`PCT_REPORTABLE`, `GAP_COUNT`, `LARGEST_GAP`,
+`PCT_TARGETS_COMPLETE`, a histogram of gap lengths) and the BED of maximal runs of target
+bases under `--min-depth` (default 20); its depth is the `CollectHsMetrics` per-base depth,
+so `--min-depth 20` gives `PCT_TARGET_BASES_20X`. `bammetrics sex-check BAM --sex male`
+writes one `SexCheckMetrics` row: reads per base on X, Y and the autosomes against the
+`@SQ` lengths (or the target bases with `--targets`), the ratios, `INFERRED_SEX`
+(`FEMALE`, `MALE`, `UNKNOWN`) and `SEX_MATCH` against the declaration.
 
 ### The 0.12 subcommands
 
@@ -321,15 +334,18 @@ examples).
 
 ```bash
 bammetrics qc BAM [-o PREFIX] [-R FASTA] [--preset NAME|FILE] [--hs BAITS TARGETS]... [--panel FILE]
-              [--ref-flat FILE --strand STRAND [--ribosomal-intervals FILE]] [--sample NAME]
-              [--fail-on warn|fail] [--resume | --force] [--threads N] [--format text|jsonl] [-q]
-              [--all-plots] [--date ISO]
+              [--ref-flat FILE --strand STRAND [--ribosomal-intervals FILE]] [--sex male|female]
+              [--sample NAME] [--fail-on warn|fail] [--resume | --force] [--threads N]
+              [--format text|jsonl] [-q] [--all-plots] [--date ISO]
 ```
 
 `qc` runs the collectors the preset's rules need (`generic` without `--preset`; it never
 picks a clinical preset by itself), on one read of the BAM, then writes the verdict and
 the page. `--hs` or `--panel` adds `CollectHsMetrics` and `--ref-flat` adds
-`CollectRnaSeqMetrics` whether or not a rule reads them. A rule whose collector cannot run
+`CollectRnaSeqMetrics` whether or not a rule reads them. `--sex` is the declared sex for
+`CollectSexCheckMetrics` (`EXPECTED_SEX`), which the `generic`, `wgs` and `clinical-panel`
+presets run; the panel targets (`--panel`, else the first `--hs` pair's targets) reach it and
+`CollectCoverageGaps`. A rule whose collector cannot run
 is listed as not measured with the reason (`needs --hs BAITS TARGETS or --panel FILE`,
 `needs -R FASTA`), and the verdict reads INCOMPLETE.
 
@@ -343,6 +359,8 @@ is listed as not measured with the reason (`needs --hs BAITS TARGETS or --panel 
 | GcBiasSummaryMetrics, GcBiasDetailMetrics | CollectGcBiasMetrics | `-R` | `PREFIX.gc_bias.detail_metrics`, `PREFIX.gc_bias.summary_metrics` |
 | RnaSeqMetrics | CollectRnaSeqMetrics | `--ref-flat`, `--strand` | `PREFIX.rna_metrics` |
 | WgsMetrics | CollectWgsMetrics, on a read of its own | `-R` | `PREFIX.wgs_metrics` |
+| SexCheckMetrics | CollectSexCheckMetrics | (`--sex`, the panel targets when given) | `PREFIX.sex_check_metrics` |
+| CoverageGapMetrics | CollectCoverageGaps | the panel targets | `PREFIX.coverage_gaps`, `PREFIX.coverage_gaps.bed` (manifest kind `gaps`, not a verdict input) |
 
 Each metrics file is byte for byte what `bammetrics <Collector> INPUT=BAM OUTPUT=FILE ...`
 writes for the argv the manifest records, apart from the `Started on` line. The header
@@ -604,8 +622,9 @@ sample. It writes no file. Exit codes: the table above, with `--fail-on fail` by
 
 - `bammetrics tools`: every verb and the Picard class it runs, then the other verbs.
 - `bammetrics presets`: the built-in verdict presets with version, the first 6 characters
-  of the content hash, rule count and note (`clinical-panel   v2  e62755  14 rules  reviewed
-  defaults`). Every rule is listed in [docs/verdict.md](verdict.md).
+  of the content hash, rule count and note (`clinical-panel   v3  6f0d59  18 rules  reviewed
+  defaults; gap and sex rules are starting values`). Every rule is listed in
+  [docs/verdict.md](verdict.md).
 - `bammetrics help VERB|PicardClass`: the verb's options in every spelling; `help qc` (or
   `plan`, `check`, `report`) prints clap's help.
 - `bammetrics completions bash|zsh|fish|elvish|powershell`: a completion script on stdout
@@ -671,27 +690,37 @@ MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE
 
 ```
 $ bammetrics qc tests/data/insert_size.bam -R tests/data/ref_100k.fa -o out/quick/S1
-insert_size  PASS  preset generic v1 (6dd89e)  4 collectors, 1 BAM read (10 records)
-PASS          6 checks
-wrote 7 files to out/quick/S1.*, report out/quick/S1.report.html
+insert_size  WARN  preset generic v2 (9094cb)  5 collectors, 1 BAM read (10 records)
+WARN          sex.inferred  Inferred sex is UNKNOWN, the warn value
+PASS          7 checks
+wrote 8 files to out/quick/S1.*, report out/quick/S1.report.html
+use --fail-on fail or bammetrics check to gate
 ```
+
+The fixture BAM has chr1 only, so the sex check infers no sex and its rule warns.
 
 **4. Clinical panel, one sample.**
 
 ```
 $ bammetrics qc tests/data/insert_size.bam --preset clinical-panel --panel tests/data/targets.bed \
       -R tests/data/ref_100k.fa -o out/NA12878
-insert_size  FAIL  preset clinical-panel v2 (e62755)  4 collectors, 1 BAM read (10 records)
+insert_size  FAIL  preset clinical-panel v3 (6f0d59)  6 collectors, 1 BAM read (10 records)
 FAIL          hs.mean-target-coverage   Mean target coverage is 0.377778, below the fail limit of 100
 FAIL          hs.target-20x             Target bases at 20x is 0, below the fail limit of 0.95
 FAIL          hs.target-100x            Target bases at 100x is 0, below the fail limit of 0.6
 FAIL          hs.zero-coverage-targets  Targets with zero coverage is 0.2, above the fail limit of 0.03
 FAIL          hs.gc-dropout             GC dropout is 20.588235, above the fail limit of 10
-NOT MEASURED  hs.evenness               FOLD_80_BASE_PENALTY is ?
-PASS          8 checks
-wrote 8 files to out/NA12878.*, report out/NA12878.report.html
+FAIL          gaps.reportable-range     Target bases at MIN_DEPTH is 0, below the fail limit of 0.95
+FAIL          gaps.targets-complete     Targets without a gap is 0, below the fail limit of 0.9
++2 more, see out/NA12878.report.html
+PASS          9 checks
+wrote 11 files to out/NA12878.*, report out/NA12878.report.html
 use --fail-on fail or bammetrics check to gate
 ```
+
+The two lines past the 12-line budget are `WARN sex.inferred` and `NOT MEASURED
+hs.evenness`. The 11 files add `NA12878.coverage_gaps`, `NA12878.coverage_gaps.bed` and
+`NA12878.sex_check_metrics` to the run of 0.17.0.
 
 **5. Vendor baits as a second Hs run.** Two bait files with one stem are an error, so the
 second run's baits get their own name.
@@ -717,8 +746,8 @@ $ for bam in bams/*.bam; do
         -o runs/2026-11-02/$(basename "$bam" .bam) -q > /dev/null
   done
 $ bammetrics report runs/2026-11-02/ --preset clinical-panel
-2 samples, preset clinical-panel v2 (e62755), bammetrics 0.17.0
-FAIL        NA1  5 fail, 8 pass, 1 not measured
+2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.17.0
+FAIL        NA1  7 fail, 1 warn, 9 pass, 1 not measured
   FAIL  Mean target coverage is 0.377778, below the fail limit of 100
   ...
 wrote 5 files to runs/2026-11-02/, index runs/2026-11-02/index.html

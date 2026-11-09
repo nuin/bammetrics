@@ -345,6 +345,21 @@ One row per sample, worst first. Sort: verdict rank (fail, warn, incomplete, pas
 
 `make budgets` (`crates/cli/tests/budgets.rs`) measures every row on the test fixtures and fails the build at 2x any target; CI runs it on Linux and macOS (decision 11). Each row's method and the history of the binary size are in docs/benchmarks.md.
 
+### 4.11 Clinical checks (docs/06)
+
+Two single-sample checks Picard does not have, specified in
+[docs/06_clinical_checks.md](06_clinical_checks.md): `CollectCoverageGaps` (verb
+`coverage-gaps`, class `bammetrics.qc.CoverageGapMetrics`, a BED of the target runs under
+`MIN_DEPTH`, the Hs per-base depth) and `CollectSexCheckMetrics` (verb `sex-check`, class
+`bammetrics.qc.SexCheckMetrics`, reads per base on X, Y and the autosomes against
+`EXPECTED_SEX`, `qc --sex`). The rule language gains one text comparator, `is TEXT`, for
+`sex.match` (fail `is N`) and `sex.inferred` (warn `is UNKNOWN`); `verdict.json` checks
+judged as text carry a `text` field. `clinical-panel` version 3 adds the four rules
+(`gaps.reportable-range`, `gaps.targets-complete`, `sex.match`, `sex.inferred`); `generic`
+and `wgs` version 2 add the sex rules. The page lists the 200 longest gaps under the first
+warn or fail gap check, from the BED beside the metrics file. Both stay inside the rules
+of section 4.9: one run's files, no history, no cohort.
+
 ### 4.9 Out of scope: the hosted dashboard
 
 | Stays in the open report | Belongs to the hosted dashboard (ROADMAP.md) |
@@ -446,5 +461,6 @@ Risks, each with its mitigation:
 10. Does `mark-duplicates` ship in the P9 PR train, and should the verb slot exist as an error stub from 0.9? Decided: MarkDuplicates is the next feature release after 0.17.0; no stub, so `mark-duplicates` stays an unknown verb until then (2026-11-06).
 11. Do the size and speed budgets in 4.8 become hard CI failures? Decided: yes, at 2x the target. `make budgets` fails the CI job when a measured value reaches twice its target and prints `over target` when it passes the target alone (0.16.0).
 12. Which name for the report file: `SAMPLE.report.html` (this proposal) or `SAMPLE.html`? Decided: `SAMPLE.report.html`, as shipped since 0.12.0 (2026-11-06).
+13. Do the coverage gap and sex check rules of docs/06 join `clinical-panel`, and how are their thresholds labelled? Decided: `clinical-panel` version 3 carries them with the note `reviewed defaults; gap and sex rules are starting values`; `generic` and `wgs` version 2 carry the sex rules. The sex thresholds are starting values measured on HG002 and NA12878 (docs/06 section 4); the 14 reviewed values are unchanged (2026-11-09).
 
 Result: 12 verbs and 1 prefix cover every chain in the audit, the Picard face stays byte-identical, and the verdict report ships first at day 40.

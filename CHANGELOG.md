@@ -1,5 +1,57 @@
 # Changelog
 
+## Unreleased
+
+Two clinical checks Picard does not have (docs/06_clinical_checks.md), a text comparator
+in the rule language, and `clinical-panel` version 3.
+
+### Added
+
+- `CollectCoverageGaps` (verb `coverage-gaps`, Python `collect_coverage_gaps()`), class
+  `bammetrics.qc.CoverageGapMetrics`: the target bases under `MIN_DEPTH` (default 20) as
+  one row (`TARGET_TERRITORY`, `TARGET_COUNT`, `MIN_DEPTH`, `BASES_AT_OR_ABOVE_MIN_DEPTH`,
+  `PCT_REPORTABLE`, `GAP_BASES`, `GAP_COUNT`, `LARGEST_GAP`, `TARGETS_WITH_GAP`,
+  `PCT_TARGETS_COMPLETE`), a histogram of gap lengths, and `GAPS_FILE`, a BED of the
+  maximal runs under the depth with the target name and the run's mean and minimum depth.
+  The depth is the `CollectHsMetrics` per-base depth (the Hs accumulator is reused through
+  `CaptureMetrics::into_target_depths`), so `PCT_REPORTABLE` at `MIN_DEPTH=20` equals
+  `PCT_TARGET_BASES_20X` (`crates/core/tests/coverage_gaps.rs`,
+  `tests/python/test_clinical_checks.py` on the exome slice). Options
+  `TARGET_INTERVALS`, `GAPS_FILE`, `MIN_DEPTH`, `MINIMUM_MAPPING_QUALITY`,
+  `MINIMUM_BASE_QUALITY`, `CLIP_OVERLAPPING_READS`, `INCLUDE_INDELS`, `COUNT_UNPAIRED`
+  (default true, as Hs counts unpaired reads), `STOP_AFTER`.
+- `CollectSexCheckMetrics` (verb `sex-check`, Python `collect_sex_check_metrics()`), class
+  `bammetrics.qc.SexCheckMetrics`: primary, mapped, non-duplicate, non-QC-fail reads at or
+  above `MINIMUM_MAPPING_QUALITY` (20) on the X contig, the Y contig and the autosomes
+  (`chrX`/`X`, `chrY`/`Y`, `chr1`..`chr22`/`1`..`22`, or `X_CONTIG`, `Y_CONTIG`,
+  `AUTOSOMES`), the lengths from `@SQ` or from the merged `TARGET_INTERVALS`, `X_RATIO`
+  and `Y_RATIO` to the autosomes, `INFERRED_SEX` (`FEMALE` at `X_RATIO >= 0.75` and
+  `Y_RATIO < 0.05`, `MALE` at `0.3 <= X_RATIO <= 0.75` and `Y_RATIO >= 0.1`, else
+  `UNKNOWN`; starting values), `DECLARED_SEX` from `EXPECTED_SEX`, `SEX_MATCH` and
+  `REASON`. One-pass collector, so `qc` runs it on the shared read.
+- `qc --sex male|female` (Python `qc(sex=...)`): `EXPECTED_SEX` of the sex check. `qc`
+  writes `PREFIX.sex_check_metrics` for `generic`, `wgs` and `clinical-panel`, and with a
+  panel `PREFIX.coverage_gaps` and `PREFIX.coverage_gaps.bed` (manifest kind `gaps`; the
+  BED is no verdict input). The panel targets reach both collectors.
+- Rule language: an `is TEXT` bound (`fail = "is N"`, `warn = "is UNKNOWN"`) judges the
+  cell's text; the check carries it in a new `text` field of `verdict.json` and of the
+  Python `Check` (present only on such a check), with `value` null. docs/verdict.md.
+- Presets: `clinical-panel` version 3 (18 rules, note `reviewed defaults; gap and sex rules
+  are starting values`) adds `gaps.reportable-range` (`PCT_REPORTABLE` warn `< 0.98`, fail
+  `< 0.95`), `gaps.targets-complete` (`PCT_TARGETS_COMPLETE` warn `< 0.95`, fail `< 0.90`),
+  `sex.match` (fail `is N`) and `sex.inferred` (warn `is UNKNOWN`); `generic` and `wgs`
+  version 2 add the two sex rules. A `report` or `check` over a directory of Picard output
+  alone now reads INCOMPLETE under those three presets, since Picard writes no sex check.
+- Report page: a `Coverage gaps` table (the 200 longest gaps, from the BED beside the
+  metrics file) under the first warn or fail gap check; text checks show their text.
+- Glossary rows for both classes and the gap histogram; 12 golden records; `tools` lists
+  25 classes; docs/cli.md, docs/05 section 4.11 and decision 13, KNOWN_DIFFERENCES.md.
+
+### Changed
+
+- `Bound` in `bammetrics-verdict` is `Clone`, not `Copy`, and holds the text of an `is`
+  bound.
+
 ## 0.17.0
 
 CompareMetrics, CreateSequenceDictionary, and CRAM input for every tool that reads a BAM.

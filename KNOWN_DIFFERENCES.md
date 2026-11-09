@@ -725,6 +725,15 @@ before it writes anything (`test_md5_path_is_a_directory`).
 `--threads N` sets the BGZF decompression workers. Results do not depend on it; the
 harness runs every native case at 1 and 8.
 
+## Not in Picard
+
+`CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))
+have no Picard counterpart, so the concordance harness and the fuzzer never run them. Their
+metrics classes are `bammetrics.qc.CoverageGapMetrics` and `bammetrics.qc.SexCheckMetrics`.
+The gap depth is the `CollectHsMetrics` per-base depth, and `crates/core/tests/coverage_gaps.rs`
+and `tests/python/test_clinical_checks.py` check that `PCT_REPORTABLE` at `MIN_DEPTH=20`
+equals `PCT_TARGET_BASES_20X`.
+
 ## Not implemented
 
 `MarkDuplicates`, `CollectSequencingArtifactMetrics`, `FindMendelianViolations`,
