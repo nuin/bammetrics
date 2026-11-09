@@ -44,6 +44,9 @@ MarkDuplicates, the first bammetrics tool that writes reads.
   distinct non-default values per column. `tests/data/markdup.bam`
   (`tests/data/make_markdup_bam.py`) and 13 golden records; a written BAM is recorded as
   its header and records in text. The `tools` listing gains one row.
+- HG002 exome (10.3 GB, 150.5 million records): 299 s and 783 MiB against Picard's
+  1,364 s and 11,256 MiB; equal metrics, 7,305,282 duplicates in both, every record
+  equal (docs/benchmarks.md).
 
 ## 0.17.0
 

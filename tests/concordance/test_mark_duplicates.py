@@ -171,6 +171,22 @@ def test_defaults(built, corpus, exome, name):
     compare(path, [], name, "equal" if name in MUST_SUCCEED else "same")
 
 
+T0 = sorted(p.stem for p in CORPUS.glob("t0_*.bam"))
+
+
+@pytest.mark.parametrize("name", T0)
+def test_t0_with_a_read_group(tmp_path, name):
+    """The t0 BAMs carry no read group, which Picard needs on every pair
+    (test_defaults checks that both fail); `samtools addreplacerg` gives them
+    one so their shapes are compared too."""
+    bam = tmp_path / f"{name}.rg.bam"
+    subprocess.run(["samtools", "addreplacerg", "--no-PG", "-r", "ID:t0", "-r", "SM:t0",
+                    "-r", "LB:t0", "-m", "overwrite_all", "-o", str(bam),
+                    str(CORPUS / f"{name}.bam")], check=True)
+    compare(bam, [], f"{name} with RG")
+    compare(bam, ["TAGGING_POLICY=All", "TAG_DUPLICATE_SET_MEMBERS=true"], f"{name} with RG tagged")
+
+
 def test_cram(built):
     reference = built["md_markdup"].parent / "ref.fa"
     compare(built["md_markdup_cram"], [f"R={reference}"], "md_markdup.cram")

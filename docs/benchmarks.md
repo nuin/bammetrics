@@ -109,6 +109,27 @@ grows with the decoder count, about 90 MiB per decoder, plus the contigs in use
 (chr21 is 47 MB, chr1 249 MB). Picard read the CRAM through an APFS clone with no `.crai`
 beside it (KNOWN_DIFFERENCES.md); both files agree in every cell.
 
+## MarkDuplicates (HG002 exome)
+
+Mac Studio, Apple M1 Ultra, 20 cores, 64 GB. HG002.exome.bam: 10,339,495,604 bytes,
+150,538,907 records (150,113,954 mapped), coordinate sorted, one read group, on hs37d5.
+Default options and threads (8), `TMP_DIR` on the same disk, one run each,
+`/usr/bin/time -l`.
+
+| run | wall | max RSS | output BAM |
+|---|---:|---:|---:|
+| bammetrics MarkDuplicates | 299 s | 783 MiB | 10,210,240,603 bytes |
+| Picard 3.5.0 MarkDuplicates | 1,364 s | 11,256 MiB | 10,347,171,256 bytes |
+
+bammetrics reads the BAM twice on 8 BGZF workers and compresses on 8; its read ends
+spill to `TMP_DIR` in runs of 4,000,000 entries of about 29 bytes each; `TMP_DIR` is
+empty again at the end.
+Picard ran with the JVM's default heap (16 GiB). The two metrics files are equal byte for
+byte from `## METRICS CLASS` on. Both BAMs hold 150,538,907 records with 7,305,282
+duplicate flags, and `samtools view --no-PG` prints the same text for every record (equal
+SHA-256 over all records). The headers differ in the `@PG` line each tool adds and in the
+`@RG DT` value, which htsjdk writes in the JVM's time zone (KNOWN_DIFFERENCES.md).
+
 ## Report budgets (docs/05 section 4.8)
 
 Measured 2026-11-05 with bammetrics 0.16.0, rustc 1.99.1, same machine, by `make budgets`
