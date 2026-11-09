@@ -245,6 +245,8 @@ pub const VERBS: &[Verb] = &[
     ),
     Verb {
         input: "PREFIX",
+        reads: &["PRE_ADAPTER_IN", "BAIT_BIAS_IN"],
+        also_writes: &["OXOG_OUT"],
         ignores: &[(Key::Threads, "no BAM is read")],
         ..verb(
             "convert-sequencing-artifact-to-oxo-g",
@@ -760,6 +762,16 @@ impl Verb {
                             );
                         }
                         path
+                    }
+                    // `--oxog-out` names the one file: no prefix is needed.
+                    (None, None)
+                        if self.also_writes.iter().any(|name| {
+                            picard
+                                .iter()
+                                .any(|a| a.strip_prefix(name).is_some_and(|v| v.starts_with('=')))
+                        }) =>
+                    {
+                        return Ok(None);
                     }
                     (None, None) => {
                         return Err(VerbError::usage(self.name, "missing -o PREFIX"));

@@ -13,6 +13,12 @@
   RG tags, so a counted record has a library missing from the header.
 * unplaced_middle: the corpus BAM with an unmapped pair without a reference
   between the chr1 and chr2 records. Picard stops reading there.
+* sparse: one pair whose forward read mismatches every 7th base, so contexts
+  with an error rate of 1 print QSCORE 0 (never -0).
+* oq_below_bang: the corpus BAM with an OQ of spaces on every 7th record,
+  which Picard rejects (Invalid fastq character).
+
+    without_contigs(vcf, out) -> the VCF without ##contig lines, plus a POS 0 record
 
     write_dbsnp(reference, out) -> (plain VCF, bgzip VCF with .tbi)
 
@@ -120,15 +126,75 @@ def unplaced_middle_bam(source: Path, out: Path) -> Path:
     return path
 
 
+def sparse_bam(source: Path, reference: Path, out: Path) -> Path:
+    """One FR pair on chr1 whose forward read mismatches every 7th base: with
+    CONTEXT_SIZE=2 most mismatch contexts hold that one base, so their error
+    rate is 1 and QSCORE prints 0."""
+    path = out / "sparse.bam"
+    seq = pysam.FastaFile(str(reference)).fetch("chr1", 10000, 10300).upper()
+    swap = {"A": "C", "C": "G", "G": "T", "T": "A"}
+    with pysam.AlignmentFile(str(source)) as bam:
+        header = bam.header.to_dict()
+    group = header["RG"][0]["ID"]
+    with pysam.AlignmentFile(str(path), "wb", header=header) as sink:
+        for flag, start, tlen in ((99, 0, 300), (147, 200, -300)):
+            bases = list(seq[start:start + 100])
+            if flag == 99:
+                for i in range(3, 97, 7):
+                    bases[i] = swap.get(bases[i], "A")
+            r = pysam.AlignedSegment(sink.header)
+            r.query_name = "sparse"
+            r.flag = flag
+            r.reference_id = 0
+            r.reference_start = 10000 + start
+            r.mapping_quality = 60
+            r.cigarstring = "100M"
+            r.next_reference_id = 0
+            r.next_reference_start = 10200 if flag == 99 else 10000
+            r.template_length = tlen
+            r.query_sequence = "".join(bases)
+            r.query_qualities = [30] * 100
+            r.set_tag("RG", group)
+            r.set_tag("MC", "100M")
+            sink.write(r)
+    return path
+
+
+def oq_below_bang_bam(source: Path, out: Path) -> Path:
+    """The corpus BAM with an OQ of spaces (below '!') on every 7th record."""
+    path = out / "oq_below_bang.bam"
+    with pysam.AlignmentFile(str(source)) as bam:
+        with pysam.AlignmentFile(str(path), "wb", template=bam) as sink:
+            for i, r in enumerate(bam):
+                if i % 7 == 0 and r.query_length:
+                    r.set_tag("OQ", " " * r.query_length)
+                sink.write(r)
+    return path
+
+
 def build_all(out: Path, foundation: Path):
-    """{name: (bam, reference)} of the three BAMs."""
+    """{name: (bam, reference)} of the BAMs."""
     out.mkdir(parents=True, exist_ok=True)
     corpus, reference = foundation / "corpus.bam", foundation / "ref.fa"
     return {
         "decorated": (decorated_bam(corpus, out), decorate_reference(reference, out)),
         "no_read_groups": (no_read_groups_bam(corpus, out), reference),
         "unplaced_middle": (unplaced_middle_bam(corpus, out), reference),
+        "sparse": (sparse_bam(corpus, reference, out), reference),
+        "oq_below_bang": (oq_below_bang_bam(corpus, out), reference),
     }
+
+
+def without_contigs(vcf: Path, out: Path) -> Path:
+    """`vcf` without its ##contig lines and with a POS 0 record first: Picard's
+    artifact tool reads both."""
+    lines = vcf.read_text().splitlines()
+    header = [line for line in lines if line.startswith("#") and not line.startswith("##contig")]
+    records = [line for line in lines if not line.startswith("#")]
+    contig = records[0].split("\t", 1)[0]
+    path = out / f"{vcf.stem}.no_contigs.vcf"
+    path.write_text("\n".join([*header, f"{contig}\t0\trs0\tA\tC\t.\tPASS\t.", *records]) + "\n")
+    return path
 
 
 def write_dbsnp(reference: Path, out: Path, span=30000):

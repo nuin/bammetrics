@@ -15,6 +15,14 @@ behaves how.
 - The command line in the first header line mimics Picard's (`# CollectInsertSizeMetrics INPUT=...`)
   so MultiQC-style parsers read it. It lists the options bammetrics implements with their values, not every
   Picard option.
+- An output path that names a file the run reads (`INPUT`, `REFERENCE_SEQUENCE`, any input
+  path option, or a detail file `ConvertSequencingArtifactToOxoG` reads) fails with
+  `is an input; writing it would destroy it`, and no file is written. Picard replaces the
+  input and exits 0 (`CollectInsertSizeMetrics O=` the input BAM,
+  `ConvertSequencingArtifactToOxoG OXOG_OUT=` its pre-adapter file).
+- Every output path is checked before the first file is written: a directory, a file
+  without write permission or a missing parent directory fails the run with no file
+  written, as Picard's `assertFileIsWritable` does.
 - Without `O=` in Picard syntax the file goes to stdout. Picard requires `O`.
   `CreateSequenceDictionary` is the exception: without `O=` it writes the FASTA name with
   `.dict`, as Picard does. Its verb without `-o` prints the `.dict`, and
@@ -175,9 +183,10 @@ behaves how.
     `.insert_size_metrics` then has 369 rows with `S1` and `S2` rows, bammetrics' has the
     `ALL_READS` rows only. The harness runs the option on a single program, where the two
     agree (`extra_level_one_program`).
-  - `PROGRAM=RnaSeqMetrics` and `PROGRAM=CollectSequencingArtifactMetrics` exit 1 (not
-    implemented). `INTERVALS`, `DB_SNP`, `REF_FLAT`, `IGNORE_SEQUENCE` and
-    `INCLUDE_UNPAIRED` serve only those two programs and are accepted and dropped.
+  - `PROGRAM=RnaSeqMetrics` exits 1 (not implemented). `REF_FLAT` and `IGNORE_SEQUENCE`
+    serve only that program and are accepted and dropped. `INTERVALS`, `DB_SNP` and
+    `INCLUDE_UNPAIRED` reach `PROGRAM=CollectSequencingArtifactMetrics`, which writes the
+    same five files as Picard.
   - `DO_NOT_CREATE_PLOTS` is accepted and dropped; no plot is drawn either way. Picard
     needs `Rscript` on `PATH` unless it is true; the harness uses the no-op shim.
   - One failing program (a read past its contig, a missing reference) fails the run and
@@ -262,6 +271,11 @@ CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `col
 
 ## Inputs
 
+- A non-ASCII `@RG` field (`LB:Ünï35257`) is read as UTF-8 and written back unchanged.
+  htsjdk reads the BAM header text byte by byte as Latin-1, so Picard prints
+  `ÃnÃ¯35257` and orders libraries by the hash of that string. Every tool with library or
+  sample rows differs on such a header (`CollectSequencingArtifactMetrics`,
+  `CollectAlignmentSummaryMetrics LEVEL=LIBRARY`); ASCII names match.
 - CRAM (3.0 and 3.1) is read by every tool that reads a BAM, with `R=` the FASTA it was
   written with. A file is a CRAM when its first four bytes are `CRAM`, whatever its name.
   CRAM 2.1 fails with `CRAM 2.1 is not supported (3.0 and 3.1 are)`; Picard reads it. Any

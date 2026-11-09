@@ -78,7 +78,9 @@ pub const TOOL: Tool = Tool {
               and READS_USED value; SUMMARY_OUTPUT gets the GcBiasSummaryMetrics file.",
     options: &[
         Opt::ignored(&["CHART_OUTPUT", "CHART"], "no chart is drawn"),
-        Opt::path(&["SUMMARY_OUTPUT", "S"], "The GcBiasSummaryMetrics file.").required(),
+        Opt::path(&["SUMMARY_OUTPUT", "S"], "The GcBiasSummaryMetrics file.")
+            .required()
+            .written(),
         Opt::path(
             &["REFERENCE_SEQUENCE", "R"],
             "Reference FASTA with a .fai index.",

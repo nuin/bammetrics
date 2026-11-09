@@ -6,8 +6,9 @@
 //!   nothing when the tag is absent or empty. Its length is never checked
 //!   against the read length.
 //!
-//! Values are Java bytes (`i8`): a quality above 127 or an `OQ` character
-//! below `!` comes out negative, as it does in htsjdk.
+//! Values are Java bytes (`i8`): a quality above 127 comes out negative,
+//! as it does in htsjdk. An `OQ` character below `!` is an error, as
+//! `SAMUtils.fastqToPhred` throws `Invalid fastq character`.
 
 use noodles::bam;
 use noodles::sam::alignment::record::data::field::{Tag, Value};
@@ -39,7 +40,13 @@ pub fn original_qualities(record: &bam::Record, out: &mut Vec<i8>) -> Result<boo
         None => Ok(false),
         Some(Err(e)) => Err(e.into()),
         Some(Ok(Value::String(oq))) => {
-            out.extend(oq.iter().map(|c| c.wrapping_sub(PHRED_OFFSET) as i8));
+            if oq.iter().any(|&c| c < PHRED_OFFSET) {
+                return Err(Error::MalformedRecord {
+                    name: record_name(record),
+                    what: "Invalid fastq character in the OQ tag",
+                });
+            }
+            out.extend(oq.iter().map(|&c| (c - PHRED_OFFSET) as i8));
             Ok(!out.is_empty())
         }
         Some(Ok(_)) => Err(Error::MalformedRecord {
@@ -57,4 +64,47 @@ pub fn qualities(record: &bam::Record, use_original: bool, out: &mut Vec<i8>) ->
     }
     base_qualities(record, out);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use noodles::sam;
+
+    /// An unmapped record with `OQ:Z:<oq>`, round-tripped through BAM bytes.
+    fn record_with_oq(oq: &str) -> bam::Record {
+        use noodles::sam::alignment::io::Write as _;
+        use noodles::sam::alignment::record_buf::RecordBuf;
+        use noodles::sam::alignment::record_buf::data::field::Value as BufValue;
+
+        let mut buf = RecordBuf::default();
+        buf.data_mut()
+            .insert(Tag::ORIGINAL_QUALITY_SCORES, BufValue::from(oq.to_owned()));
+        let header = sam::Header::default();
+        let mut writer = bam::io::Writer::new(Vec::new());
+        writer.write_header(&header).expect("header");
+        writer
+            .write_alignment_record(&header, &buf)
+            .expect("encode");
+        let bytes = writer.into_inner().finish().expect("finish");
+        let mut reader = bam::io::Reader::new(bytes.as_slice());
+        reader.read_header().expect("header");
+        let mut out = bam::Record::default();
+        reader.read_record(&mut out).expect("decode");
+        out
+    }
+
+    #[test]
+    fn oq_decodes_phred_plus_33() {
+        let mut out = Vec::new();
+        assert!(original_qualities(&record_with_oq("!5I"), &mut out).unwrap());
+        assert_eq!(out, [0, 20, 40]);
+    }
+
+    #[test]
+    fn oq_character_below_bang_is_an_error() {
+        let mut out = Vec::new();
+        let error = original_qualities(&record_with_oq("I I"), &mut out).unwrap_err();
+        assert!(error.to_string().contains("Invalid fastq character"));
+    }
 }

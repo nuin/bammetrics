@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from artifact_bams import build_all, write_dbsnp
+from artifact_bams import build_all, without_contigs, write_dbsnp
 from cases import BAMMETRICS, CORPUS
 from compare import compare_written
 from conftest import RESULTS
@@ -82,6 +82,7 @@ def compare(bam, ref, args, label, tmp, bam_args=None):
     """Both collectors and both converters; every file compared. Returns cells compared."""
     bam_args = args if bam_args is None else bam_args
     ext = next((a.split("=", 1)[1] for a in args if a.startswith(("EXT=", "FILE_EXTENSION="))), "")
+    ext = "" if ext == "null" else ext
     converted = []
     for side, side_args, picard in (("picard", args, True), ("bammetrics", bam_args, False)):
         prefix = tmp / side
@@ -155,6 +156,7 @@ OPTIONS = {
     "contexts_oxog": ["CONTEXT_SIZE=0", "CONTEXTS_TO_PRINT=C", "CONTEXTS_TO_PRINT=G"],
     "contexts_null": ["CONTEXTS_TO_PRINT=AAA", "CONTEXTS_TO_PRINT=null", "CONTEXTS_TO_PRINT=CCC"],
     "ext": ["FILE_EXTENSION=.txt"],
+    "nulls": ["FILE_EXTENSION=null", "INTERVALS=null", "DB_SNP=null"],
     "stop_1000": ["STOP_AFTER=1000"],
     "stop_5000": ["STOP_AFTER=5000", "CONTEXT_SIZE=0"],
     "everything": ["Q=5", "MQ=0", "UNPAIRED=true", "DUPES=true", "NON_PF=true", "TANDEM=true",
@@ -180,6 +182,25 @@ TIER_OPTIONS = {
 def test_artifact_tier_options(built, corpus, exome, name, tmp_path):
     bam, ref, _ = inputs(name, built, corpus, exome)
     compare(bam, ref, TIER_OPTIONS[name], f"{name} options", tmp_path)
+
+
+def test_artifact_rate_of_one_prints_qscore_zero(built, tmp_path):
+    """sparse: contexts holding one mismatched base have ERROR_RATE 1 and QSCORE 0."""
+    bam, ref = built["sparse"]
+    compare(bam, ref, ["CONTEXT_SIZE=2"], "sparse CONTEXT_SIZE=2", tmp_path)
+    detail = (tmp_path / "picard.pre_adapter_detail_metrics").read_text().splitlines()
+    columns = next(line.split("\t") for line in detail if line.startswith("SAMPLE_ALIAS"))
+    rows = [dict(zip(columns, line.split("\t"))) for line in detail
+            if line and not line.startswith(("#", "SAMPLE_ALIAS"))]
+    assert any(r["ERROR_RATE"] == "1" and r["QSCORE"] == "0" for r in rows)
+
+
+def test_artifact_db_snp_without_contigs(corpus, dbsnp, tmp_path):
+    """A dbSNP VCF without ##contig lines and with a POS 0 record: both tools run."""
+    plain, _ = dbsnp[corpus / "ref.fa"]
+    vcf = without_contigs(plain, tmp_path)
+    compare(corpus / "corpus.bam", corpus / "ref.fa", [f"DB_SNP={vcf}"],
+            "foundation DB_SNP without contigs", tmp_path)
 
 
 def test_converter_reads_picard_files(corpus, tmp_path):
@@ -263,6 +284,34 @@ def test_bed_intervals(corpus, tmp_path):
     message = "Interval list file must contain header"
     both_fail(collector(corpus / "corpus.bam", corpus / "ref.fa", f"INTERVALS={bed}"), tmp_path,
               message, message)
+
+
+def test_interval_past_its_contig(corpus, tmp_path):
+    intervals = tmp_path / "beyond.interval_list"
+    header = (corpus / "target.interval_list").read_text().splitlines()
+    sq = [line for line in header if line.startswith("@")]
+    length = int(next(f[3:] for f in sq[1].split("\t") if f.startswith("LN:")))
+    name = next(f[3:] for f in sq[1].split("\t") if f.startswith("SN:"))
+    intervals.write_text("\n".join([*sq, f"{name}\t1\t{length + 1000}\t+\tbeyond"]) + "\n")
+    both_fail(collector(corpus / "corpus.bam", corpus / "ref.fa", f"INTERVALS={intervals}"),
+              tmp_path, "extends beyond the end of", "extends beyond end of sequence")
+
+
+def test_oq_below_bang(built, tmp_path):
+    bam, ref = built["oq_below_bang"]
+    message = "Invalid fastq character"
+    both_fail(collector(bam, ref), tmp_path, message, message)
+
+
+def test_output_directory_fails_before_any_file(corpus, tmp_path):
+    """A directory named like the last file: neither tool writes the other four."""
+    for side, picard in (("picard", True), ("ours", False)):
+        (tmp_path / f"{side}.error_summary_metrics").mkdir()
+        done = run(collector(corpus / "corpus.bam", corpus / "ref.fa", f"O={tmp_path / side}"),
+                   picard)
+        assert done.returncode != 0, f"{side} completed"
+        assert [p.name for p in tmp_path.glob(f"{side}.*")] == [f"{side}.error_summary_metrics"]
+    RESULTS.append((f"{TOOL} output is a directory", 0, 0, "both exit non-zero, no file"))
 
 
 def test_db_snp_with_intervals_needs_an_index(corpus, dbsnp, tmp_path):
@@ -355,8 +404,10 @@ FEWER_THAN_THREE = {
 CLASSES = 6
 # Six Picard files per case; contexts_null leaves the converter without GGG, so
 # those cases have five.
+# The two hand-built cases (sparse, DB_SNP without contigs) add six each.
+HAND_BUILT = 2
 EXPECTED_FILES = (6 * (len(INPUTS) * 3 + 3 * len(INTERVAL_INPUTS) + len(OPTIONS) * len(OPTION_INPUTS)
-                       + len(TIER_OPTIONS))
+                       + len(TIER_OPTIONS) + HAND_BUILT)
                   - len(OPTION_INPUTS))
 
 

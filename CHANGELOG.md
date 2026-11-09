@@ -27,6 +27,28 @@
 - A verb whose tool has no required option takes its first value option as the positional
   argument (`INPUT_BASE` of the converter).
 
+### Changed
+
+- Every tool checks all its output paths before it writes the first file: a directory, a
+  read-only file or a missing parent fails the run with no file written. An output path
+  that is one of the run's inputs fails with `is an input; writing it would destroy it`
+  (Picard replaces the input). `Opt::written` marks the path options a tool writes.
+- An `OQ` character below `!` fails the run (`Invalid fastq character`), as in Picard. It
+  used to decode as a negative quality.
+- An interval list interval past the end of its contig fails the VCF tools and
+  `CollectSequencingArtifactMetrics`, as in Picard.
+- A VCF record at `POS` 0 reads as position 0. It used to fail with `missing position`.
+
+### Fixed
+
+- `CollectSequencingArtifactMetrics` printed `-0` for `QSCORE`, `TOTAL_QSCORE` and the
+  `WORST_*_QSCORE` columns of an error rate of 1; Picard prints `0`.
+- `FILE_EXTENSION=null`, `INTERVALS=null` and `DB_SNP=null` leave the option unset, as in
+  Picard. They used to name a file `null`.
+- A `DB_SNP` VCF without `##contig` lines runs, as in Picard.
+- `convert-sequencing-artifact-to-oxo-g --pre-adapter-in A --bait-bias-in B --oxog-out C`
+  runs without `-o`.
+
 ## 0.17.0
 
 CompareMetrics, CreateSequenceDictionary, and CRAM input for every tool that reads a BAM.

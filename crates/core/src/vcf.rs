@@ -518,7 +518,8 @@ fn parse_variant(record: &vcf::Record, samples: usize) -> std::result::Result<Va
     let start = match record.variant_start() {
         Some(Ok(p)) => usize::from(p) as i64,
         Some(Err(e)) => return Err(format!("bad position: {e}")),
-        None => return Err("missing position".to_owned()),
+        // noodles reads `POS` 0 (a telomere) as no position; htsjdk keeps 0.
+        None => 0,
     };
     let reference = Allele::parse(record.reference_bases(), true)?;
     let mut alleles = vec![reference];
@@ -707,7 +708,7 @@ impl DbSnpSets {
         regions: Option<&Regions>,
     ) -> Result<Self> {
         let mut sets = Self::default();
-        load_db_snp(path, dictionary, regions, |variant| {
+        load_db_snp(path, dictionary, regions, true, |variant| {
             let kind = variant.kind();
             sets.snps.add(variant, kind == VariantType::Snp);
             sets.indels.add(variant, kind == VariantType::Indel);
@@ -726,7 +727,9 @@ impl DbSnpBitSet {
         regions: Option<&Regions>,
     ) -> Result<Self> {
         let mut set = Self::default();
-        load_db_snp(path, dictionary, regions, |variant| set.add(variant, true))?;
+        load_db_snp(path, dictionary, regions, false, |variant| {
+            set.add(variant, true);
+        })?;
         Ok(set)
     }
 
@@ -744,19 +747,26 @@ impl DbSnpBitSet {
 
 /// `DbSnpBitSetUtil.loadVcf`: check the dictionaries, then hand `each`
 /// every record of `path` (only those overlapping `regions`, when given).
+/// Without `needs_dictionary`, a VCF without `##contig` lines skips the
+/// check: `CollectSequencingArtifactMetrics` completes on one, while
+/// `CollectVariantCallingMetrics` fails.
 fn load_db_snp(
     path: &Path,
     dictionary: Option<&Dictionary>,
     regions: Option<&Regions>,
+    needs_dictionary: bool,
     mut each: impl FnMut(&Variant),
 ) -> Result<()> {
     let mut reader = VcfReader::open(path)?;
-    assert_dictionaries_equal(
-        reader.dictionary().as_ref(),
-        &format!("DBSNP: {}", path.display()),
-        dictionary,
-        "INPUT",
-    )?;
+    let own = reader.dictionary();
+    if needs_dictionary || own.is_some() {
+        assert_dictionaries_equal(
+            own.as_ref(),
+            &format!("DBSNP: {}", path.display()),
+            dictionary,
+            "INPUT",
+        )?;
+    }
     while let Some(variant) = reader.next_variant()? {
         if let Some(regions) = regions
             && !regions.overlaps(&variant.contig, variant.start, variant.end)
@@ -853,6 +863,11 @@ impl Regions {
             let Some(index) = dictionary.iter().position(|c| c.name == contig) else {
                 continue;
             };
+            if let Some(length) = dictionary[index].length.filter(|&l| l > 0 && l < end) {
+                return Err(format!(
+                    "interval with end {end} extends beyond the end of {contig} ({length} bp)"
+                ));
+            }
             intervals.push((index, start, end));
         }
         Ok(Self {

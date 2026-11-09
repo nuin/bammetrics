@@ -189,6 +189,12 @@ pub struct Options {
     pub file_extension: String,
 }
 
+/// A single-valued option as Picard's parser reads it: the text `null`
+/// leaves the option unset.
+fn unless_null(value: Option<&str>) -> Option<&str> {
+    value.filter(|v| *v != "null")
+}
+
 impl Options {
     pub fn from_invocation(inv: &Invocation) -> Result<Self> {
         let prefix = inv
@@ -201,8 +207,8 @@ impl Options {
         Ok(Self {
             prefix,
             reference: reference.into(),
-            intervals: inv.get("INTERVALS").map(PathBuf::from),
-            db_snp: inv.get("DB_SNP").map(PathBuf::from),
+            intervals: unless_null(inv.get("INTERVALS")).map(PathBuf::from),
+            db_snp: unless_null(inv.get("DB_SNP")).map(PathBuf::from),
             minimum_quality_score: inv.parse("MINIMUM_QUALITY_SCORE", 20)?,
             minimum_mapping_quality: inv.parse("MINIMUM_MAPPING_QUALITY", 30)?,
             minimum_insert_size: inv.parse("MINIMUM_INSERT_SIZE", 60)?,
@@ -216,7 +222,9 @@ impl Options {
             contexts_to_print: picard_list(Vec::new(), inv.all("CONTEXTS_TO_PRINT"), |s| {
                 Ok(s.to_owned())
             })?,
-            file_extension: inv.get("FILE_EXTENSION").unwrap_or("").to_owned(),
+            file_extension: unless_null(inv.get("FILE_EXTENSION"))
+                .unwrap_or("")
+                .to_owned(),
         })
     }
 

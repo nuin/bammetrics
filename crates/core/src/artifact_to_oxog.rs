@@ -64,7 +64,8 @@ pub const TOOL: Tool = Tool {
         Opt::path(
             &["OXOG_OUT"],
             "The output file (default OUTPUT_BASE.oxog_metrics).",
-        ),
+        )
+        .written(),
         crate::registry::REFERENCE_NOT_DECODED,
         Opt::rejected(&["INPUT"]),
         Opt::rejected(&["OUTPUT"]),
@@ -212,6 +213,11 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let paths = Paths::from_invocation(inv)?;
     let pre_adapter = read_beans(&paths.pre_adapter, &PRE_ADAPTER)?;
     let bait_bias = read_beans(&paths.bait_bias, &BAIT_BIAS)?;
+    // The two detail files may come from `INPUT_BASE`, which names neither.
+    crate::registry::check_writable(
+        [paths.output.as_path()],
+        &[paths.pre_adapter.clone(), paths.bait_bias.clone()],
+    )?;
     let rows = convert(&pre_adapter, &bait_bias)?;
     Ok(ToolOutput {
         main: None,

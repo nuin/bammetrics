@@ -305,8 +305,10 @@ fn java_max(a: f64, b: f64) -> f64 {
 }
 
 /// `QualityUtil.getPhredScoreFromErrorProbability`: rounded to an integer.
+/// Adding `0.0` turns the `-0.0` of a rate of 1 into `0.0`, which prints
+/// `0` as Picard's `Math.round` long does.
 fn phred(error_rate: f64) -> f64 {
-    (-10.0 * error_rate.log10()).round()
+    (-10.0 * error_rate.log10()).round() + 0.0
 }
 
 /// Index of an upper-case `ACGT` base.
@@ -628,6 +630,11 @@ mod tests {
         assert_eq!(phred(0.001588), 28.0);
         assert_eq!(phred(0.5), 3.0);
         assert_eq!(phred(1.0), 0.0);
+    }
+
+    #[test]
+    fn phred_of_a_rate_of_one_prints_zero() {
+        assert_eq!(crate::metrics_file::format_double(phred(1.0)), "0");
     }
 
     #[test]
