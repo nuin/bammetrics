@@ -66,10 +66,36 @@ pub(crate) fn sniff<R: Read>(mut inner: R) -> io::Result<Sniffed<R>> {
             format!("CRAM {major}.{minor} is not supported (3.0 and 3.1 are)"),
         ));
     }
+    let cut_cram = MAGIC.starts_with(&head[..head.len().min(MAGIC.len())]);
+    if !cram && !cut_cram && head.len() >= 2 && head[..2] != GZIP_MAGIC {
+        return Err(not_bam_or_cram());
+    }
     Ok(Sniffed {
         cram,
         reader: Cursor::new(head).chain(inner),
     })
+}
+
+/// A BGZF file, as every BAM, starts with the gzip magic.
+const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
+
+/// The error for a file that is neither BAM nor CRAM; a SAM, plain or
+/// compressed, is the likely one.
+fn not_bam_or_cram() -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        "not a BAM or CRAM file (SAM input is not supported; convert it with samtools view -b)",
+    )
+}
+
+/// The error of a BAM header read: noodles' `invalid BAM header` (a BGZF
+/// file without the BAM magic, such as a bgzipped SAM) named as
+/// [`not_bam_or_cram`] names it.
+pub(crate) fn bam_header_error(e: io::Error) -> io::Error {
+    if e.kind() == io::ErrorKind::InvalidData && e.to_string() == "invalid BAM header" {
+        return not_bam_or_cram();
+    }
+    e
 }
 
 /// Whether the first bytes of `path` can be read ahead of the pass: a
@@ -552,6 +578,21 @@ mod tests {
             sniffed.reader.read_to_end(&mut all).expect("read");
             assert_eq!(all, data);
         }
+    }
+
+    #[test]
+    fn a_sam_is_named_as_such() {
+        let err = sniff(&b"@HD\tVN:1.6\n"[..]).err().expect("not BAM");
+        assert!(
+            err.to_string().contains("SAM input is not supported"),
+            "{err}"
+        );
+        let header = io::Error::new(io::ErrorKind::InvalidData, "invalid BAM header");
+        assert!(
+            bam_header_error(header)
+                .to_string()
+                .contains("not a BAM or CRAM")
+        );
     }
 
     #[test]

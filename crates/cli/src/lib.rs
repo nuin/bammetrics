@@ -218,6 +218,26 @@ pub fn run() -> error::Result<u8> {
     }
 }
 
+/// On SIGINT, SIGTERM or SIGHUP, remove the spill files and partial
+/// outputs registered in [`bammetrics_core::cleanup`], then end as the
+/// signal's default action ends the process. A watcher thread runs the
+/// removal, so nothing runs inside the signal handler itself. Only the
+/// binary installs it: the Python module leaves signals to Python.
+pub fn remove_files_on_signal() {
+    use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
+    let Ok(mut signals) = signal_hook::iterator::Signals::new([SIGINT, SIGTERM, SIGHUP]) else {
+        return;
+    };
+    std::thread::spawn(move || {
+        if let Some(signal) = signals.forever().next() {
+            // Held until the process ends: no new file is registered.
+            let _registry = bammetrics_core::cleanup::remove_registered();
+            let _ = signal_hook::low_level::emulate_default_handler(signal);
+            std::process::exit(128 + signal);
+        }
+    });
+}
+
 /// The binary: [`run`], its error printed, its exit code returned.
 pub fn main() -> ExitCode {
     match run() {

@@ -35,6 +35,9 @@ pub enum Files {
     Single,
     /// `-o PREFIX`, default `./<input stem>`.
     Prefix,
+    /// `-o BAM` (`-o -` for standard output) is the tool's `OUTPUT`; the
+    /// metrics file has a flag of its own (`mark-duplicates --metrics`).
+    Bam,
 }
 
 /// Builds the `StringHeader` command line of a 0.12 subcommand.
@@ -238,6 +241,16 @@ pub const VERBS: &[Verb] = &[
             Files::Single,
         )
     },
+    Verb {
+        about: Some(
+            "marks duplicate reads: -o gets every record with the duplicate flag (0x400) set \
+             or cleared and a @PG line, --metrics-file the DuplicationMetrics rows per library \
+             and the set_size histograms. Several inputs are merged; the input is read twice.",
+        ),
+        writes: "marked BAM",
+        aliases: &[("METRICS", "METRICS_FILE")],
+        ..verb("mark-duplicates", "MarkDuplicates", Files::Bam)
+    },
 ];
 
 /// Verb spellings every verb's rows take, beside a verb's own
@@ -317,11 +330,15 @@ impl Verb {
         }
         let output_names: Vec<&'static str> = table
             .iter()
-            .filter(|o| o.kind == Kind::Output)
+            .filter(|o| o.kind == Kind::Output && self.files != Files::Bam)
             .flat_map(|o| o.names.iter().copied())
             .chain(["OUTPUT", "O"])
             .collect();
         let (placeholder, help) = match self.files {
+            Files::Bam => (
+                "BAM",
+                "The BAM to write; - writes standard output. Required.".to_owned(),
+            ),
             Files::Single => (
                 "FILE",
                 format!(
@@ -344,6 +361,9 @@ impl Verb {
         let format_help = match self.files {
             Files::Single => format!("picard (the {}), json, tsv, jsonl or human.", self.writes),
             Files::Prefix => "picard only: this verb writes several Picard files.".to_owned(),
+            Files::Bam => {
+                "picard only: this verb writes a BAM and a Picard metrics file.".to_owned()
+            }
         };
         flags.push(
             Flag::new(Key::Format, "format", &[], Ty::Text, &format_help).placeholder("FORMAT"),
@@ -377,7 +397,12 @@ impl Verb {
         for opt in table {
             // `QUIET=true` reads as the shared `--quiet`.
             let is_shared = shared.iter().any(|f| f.long == opt.kebab());
-            if opt.picard() == "INPUT" || opt.kind == Kind::Output || is_shared {
+            // A BAM verb's `-o` is its `OUTPUT`; its metrics file row stays a flag.
+            let output_row = match self.files {
+                Files::Bam => opt.picard() == "OUTPUT",
+                _ => opt.kind == Kind::Output,
+            };
+            if opt.picard() == "INPUT" || output_row || is_shared {
                 continue;
             }
             let mut names: Vec<&'static str> = opt.names.to_vec();
@@ -463,16 +488,20 @@ impl Verb {
                 error.hint(format!("formats: {}", format::NAMES.join(", ")))
             })?,
         };
-        if self.files == Files::Prefix
+        if self.files != Files::Single
             && format != Format::Picard
             && let Some(given) = parsed.last(Key::Format)
         {
+            let hint = match self.files {
+                Files::Bam => "this verb writes a BAM to -o and its metrics to --metrics-file",
+                _ => "this verb writes several Picard files under -o PREFIX",
+            };
             return Err(VerbError::usage(
                 self.name,
                 format!("--format {} needs a single-file verb", given.values[0]),
             )
             .from(given.spelled.clone())
-            .hint("this verb writes several Picard files under -o PREFIX"));
+            .hint(hint));
         }
         self.check_one_spelling(&parsed, &flags)?;
         let mut picard = self.picard_arguments(&parsed, &flags)?;
@@ -485,12 +514,11 @@ impl Verb {
         self.check_inputs(&parsed, &picard)?;
         let core = |e: bammetrics_core::Error| self.core_error(&parsed, &e);
         let mut inv = tool.parse(&picard).map_err(core)?;
-        refuse_overwriting_inputs(
-            self.name,
-            &self.input_paths(&inv),
-            &self.output_paths(&inv, output.as_deref()),
-        )
-        .map_err(|e| with_from(e, output_flag()))?;
+        let read = self.input_paths(&inv);
+        for written in self.output_paths(&inv, output.as_deref()) {
+            refuse_overwriting_inputs(self.name, &read, std::slice::from_ref(&written))
+                .map_err(|e| with_from(e, flag_for_path(&parsed, &written).or_else(output_flag)))?;
+        }
         self.refuse_one_file_twice(&inv, output.as_deref())?;
         if let Some(path) = &output {
             create_parent(self.name, path).map_err(|e| with_from(e, output_flag()))?;
@@ -527,10 +555,16 @@ impl Verb {
             command: &inv.command,
             sample: sample.as_deref(),
         };
-        let written = if self.files == Files::Single {
-            write_single(&inv, &result, format, &context, output.as_deref())
-        } else {
-            registry::write_files(&inv, &result).map(|()| written_paths(&inv, &result))
+        let written = match self.files {
+            Files::Single => write_single(&inv, &result, format, &context, output.as_deref()),
+            Files::Prefix => {
+                registry::write_files(&inv, &result).map(|()| written_paths(&inv, &result))
+            }
+            Files::Bam => registry::write_files(&inv, &result).map(|()| {
+                let mut paths: Vec<PathBuf> = output.iter().cloned().collect();
+                paths.extend(written_paths(&inv, &result));
+                paths
+            }),
         }
         .map_err(core)?;
         if verbose {
@@ -705,6 +739,14 @@ impl Verb {
             Files::Single => Ok(given
                 .map(|g| PathBuf::from(&g.values[0]))
                 .filter(|p| p != Path::new("-"))),
+            Files::Bam => match given {
+                Some(g) if g.values[0] == "-" => Ok(Some(PathBuf::from("/dev/stdout"))),
+                Some(g) => Ok(Some(PathBuf::from(&g.values[0]))),
+                None => Err(
+                    VerbError::usage(self.name, "missing -o BAM (Picard: OUTPUT)")
+                        .hint("-o - writes the BAM to standard output"),
+                ),
+            },
             Files::Prefix => {
                 if let Some(g) = given.filter(|g| g.values[0] == "-") {
                     return Err(VerbError::usage(
@@ -758,6 +800,10 @@ impl Verb {
     fn name_outputs(&self, path: &Path, parsed: &Parsed, picard: &mut Vec<String>, format: Format) {
         let tool = self.tool();
         let output = tool.output_name();
+        if self.files == Files::Bam {
+            picard.push(format!("OUTPUT={}", path.display()));
+            return;
+        }
         if self.files == Files::Single {
             if format == Format::Picard {
                 picard.push(format!("{output}={}", path.display()));
@@ -858,9 +904,8 @@ impl Verb {
                         .map(|g| g.spelled.clone())
                 })
             }
-            bammetrics_core::Error::Output { .. } => {
-                parsed.last(Key::Output).map(|g| g.spelled.clone())
-            }
+            bammetrics_core::Error::Output { path, .. } => flag_for_path(parsed, path)
+                .or_else(|| parsed.last(Key::Output).map(|g| g.spelled.clone())),
             _ => None,
         };
         with_from(VerbError::core(self.name, e), from)
@@ -928,7 +973,12 @@ impl Verb {
             return Ok(());
         };
         let main_path = same_file_key(&main);
-        for further in self.further_outputs(inv) {
+        let metrics = inv
+            .output
+            .iter()
+            .filter(|_| self.files == Files::Bam)
+            .cloned();
+        for further in self.further_outputs(inv).into_iter().chain(metrics) {
             if same_file_key(&further) == main_path {
                 return Err(VerbError::usage(
                     self.name,
@@ -1013,6 +1063,20 @@ pub fn stem(input: &str) -> String {
 }
 
 /// `error` with `from` set when it has none.
+/// The flag, as spelled, whose value is `path`, or else the last one whose
+/// value is a directory above it (`--tmp-dir` for a file under it).
+fn flag_for_path(parsed: &Parsed, path: &Path) -> Option<String> {
+    let named = |test: &dyn Fn(&Path) -> bool| {
+        parsed
+            .given
+            .iter()
+            .rev()
+            .find(|g| g.values.iter().any(|v| test(Path::new(v))))
+            .map(|g| g.spelled.clone())
+    };
+    named(&|v| v == path).or_else(|| named(&|v| !v.as_os_str().is_empty() && path.starts_with(v)))
+}
+
 fn with_from(error: VerbError, from: Option<String>) -> VerbError {
     match from {
         Some(from) if error.from.is_none() => error.from(from),

@@ -1,0 +1,11 @@
+## argv
+mark-duplicates
+tests/data/markdup.bam
+--metrics
+OUT/markdup_metrics.txt
+## exit
+2
+## stdout
+## stderr
+bammetrics mark-duplicates: missing -o BAM (Picard: OUTPUT)
+  -o - writes the BAM to standard output

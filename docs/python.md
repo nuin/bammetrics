@@ -31,6 +31,14 @@ The keywords of `qc`, `check` and `report` are the command's long flags in snake
   (every registry function that reads a BAM, such as
   `collect_quality_yield_metrics(cram, reference_sequence="ref.fa")`). Without it the
   call raises the command's error (`a CRAM input needs REFERENCE_SEQUENCE (R)`).
+- `mark_duplicates(bam, *, output, metrics_file, ...)` is the one registry function whose
+  `output` is not the metrics file: `output` is the marked BAM and `metrics_file` the
+  `DuplicationMetrics` file. Both are required; a list of BAMs is several `INPUT`s. It
+  returns one dict per library. An `output` or `metrics_file` that is an input, or both
+  naming one file, raises `UsageError` before anything is read. The `flow_*` keywords
+  take their Picard defaults only. The module installs no signal handler: a Python
+  process killed mid-run leaves its spill directory (`bammetrics-markdup.<pid>.<n>`) and
+  its temporary output (`.NAME.<pid>.<n>.tmp`) behind.
 - `--format` and `--quiet` have no keyword: no progress line, no event and no step error is printed (step errors are in `Run.errors`). Three warnings still go to stderr: a `resume` over a manifest that cannot be read (`... is not a whole manifest; running every step`), a core tool's own warning (`CollectInsertSizeMetrics` when every orientation falls under `MINIMUM_PCT`), and `check` skipping an unparsable metrics file (`bammetrics: skipped ...`).
 - `qc(report=False)` is the one keyword the command lacks: no `PREFIX.report.html` is written. An earlier run's page under the same prefix is removed only when that run's manifest lists it as its `report` file; a page no run wrote stays. `PREFIX.verdict.json` is still written.
 - Messages are the command's lines, with its spelling: `bammetrics qc: out/s.manifest.json holds an earlier run: --resume skips its finished steps, --force reruns them` means `resume=True` or `force=True`. A manifest that cannot be read is named with its reason (`out/s.manifest.json is not a whole manifest: --resume or --force runs every step`). An `output` or `sample` holding a NUL byte is a `UsageError`.
