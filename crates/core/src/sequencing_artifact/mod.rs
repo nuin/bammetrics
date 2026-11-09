@@ -195,9 +195,9 @@ impl Options {
             .output
             .clone()
             .ok_or_else(|| Error::Usage("Option 'OUTPUT' is required.".to_owned()))?;
-        let reference = inv.get("REFERENCE_SEQUENCE").ok_or_else(|| {
-            Error::Usage("Option 'REFERENCE_SEQUENCE' is required.".to_owned())
-        })?;
+        let reference = inv
+            .get("REFERENCE_SEQUENCE")
+            .ok_or_else(|| Error::Usage("Option 'REFERENCE_SEQUENCE' is required.".to_owned()))?;
         Ok(Self {
             prefix,
             reference: reference.into(),
