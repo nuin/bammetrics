@@ -738,6 +738,11 @@ cannot be avoided.
   writes `3.5.0`) and `CL` is the bammetrics command line (`MarkDuplicates INPUT=in.bam
   OUTPUT=...`), not Picard's line with every default.
   `PROGRAM_GROUP_VERSION` and `PROGRAM_GROUP_COMMAND_LINE` set them as in Picard.
+- The `@HD` line gets `VN:1.6` whatever the input said, as htsjdk's BAM writer gives
+  it. An `@RG` `DT` value is written as the input wrote it. htsjdk parses it and writes
+  it back in the JVM's time zone (`2015-10-02T02:00:00+0200` became
+  `2015-10-01T18:00:00-0600` on a machine in America/Edmonton), so Picard's header
+  depends on the machine that ran it.
 - The BAM bytes differ: noodles compresses the blocks, and the `bin` field of each
   record is copied from the input (htsjdk computes it again). Each record's fields and
   tags are the ones Picard writes, tag order and integer type included: a record whose

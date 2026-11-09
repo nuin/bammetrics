@@ -75,6 +75,11 @@ fn output_header(
     pg_ids: &[Option<Vec<u8>>],
 ) -> (sam::Header, Option<Chained>) {
     let mut out = header.clone();
+    // htsjdk's BAM writer gives `@HD` the version it writes (1.6), whatever
+    // the input said.
+    if let Some(map) = out.header_mut().as_mut() {
+        *map.version_mut() = noodles::sam::header::record::value::map::header::Version::new(1, 6);
+    }
     if opts.assume_sort_order == Some(SortOrder::Queryname) {
         inputs::set_header_tag(&mut out, HeaderTag::GroupOrder, "query");
         inputs::set_header_tag(&mut out, HeaderTag::SortOrder, "unknown");

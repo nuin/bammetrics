@@ -22,7 +22,7 @@
   (`samtools sort -N`), the order htsjdk checks.
 * `markdup_second`: a second input with one read group equal to
   `markdup`'s, one with the same ID and other fields (a collision), a new
-  one, and a colliding @PG ID.
+  one, a colliding @PG ID and `@HD VN:1.5` (htsjdk writes 1.6).
 * `markdup_no_rg`: a pair without RG (Picard's NullPointerException).
 * `markdup_unsorted`: `markdup` with `SO:unsorted`.
 * `markdup_natural`: `markdup` sorted by name in natural order
@@ -209,8 +209,8 @@ def unplaced(sam, rng, count, groups, start):
                        0, 0, seq, None, [f"RG:Z:{rg}", f"PG:Z:{rng.choice(('pgA', 'pgB'))}"])
 
 
-def write(sam, out, name, groups, programs, order="coordinate"):
-    header = f"@HD\tVN:1.6\tSO:{order}\n"
+def write(sam, out, name, groups, programs, order="coordinate", version="1.6"):
+    header = f"@HD\tVN:{version}\tSO:{order}\n"
     header += "".join(f"@SQ\tSN:{n}\tLN:{length}\n" for n, length in CONTIGS)
     for rg_id, fields in groups:
         header += "@RG\tID:" + rg_id + "".join(f"\t{k}:{v}" for k, v in fields.items()) + "\n"
@@ -262,7 +262,8 @@ def build_all(out: Path, seed=29):
     second = MarkdupSam(ref, rng2)
     end = duplicate_sets(second, rng2, 50, SECOND_GROUPS, (1, 2, 3, 4), 5000)
     unplaced(second, rng2, 2, SECOND_GROUPS, end)
-    bams["markdup_second"] = write(second, out, "markdup_second", SECOND_GROUPS, SECOND_PROGRAMS)
+    bams["markdup_second"] = write(second, out, "markdup_second", SECOND_GROUPS, SECOND_PROGRAMS,
+                                   version="1.5")
     bams["markdup_second_queryname"] = name_sorted(bams["markdup_second"],
                                                    out / "markdup_second_queryname.bam")
     rng3 = random.Random(seed + 3)
