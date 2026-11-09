@@ -181,6 +181,19 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
         "CreateSequenceDictionary",
         vec![reference.clone(), out("ref.dict")],
     );
+    let artifact = dir.join("artifact");
+    args.insert(
+        "CollectSequencingArtifactMetrics",
+        vec![
+            format!("I={DATA}/artifact.bam"),
+            reference.clone(),
+            format!("O={}", artifact.display()),
+        ],
+    );
+    args.insert(
+        "ConvertSequencingArtifactToOxoG",
+        vec![format!("I={}", artifact.display())],
+    );
     args.insert(
         "GenotypeConcordance",
         vec![

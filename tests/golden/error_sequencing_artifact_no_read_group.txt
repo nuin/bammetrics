@@ -1,0 +1,10 @@
+## argv
+CollectSequencingArtifactMetrics
+I=tests/data/insert_size.bam
+O=OUT/artifact
+R=tests/data/ref_100k.fa
+## exit
+1
+## stdout
+## stderr
+bammetrics: Record contains library that is missing from header: UnknownLibrary

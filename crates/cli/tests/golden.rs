@@ -34,6 +34,7 @@ const FIXTURES: &[(&str, &str)] = &[
         "tests/data/picard/NA12878/NA12878.duplicate_metrics",
     ),
     ("IS_CRAM", "tests/data/insert_size.cram"),
+    ("ART", "tests/data/artifact.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -219,6 +220,18 @@ const FIXTURE_CASES: &[Case] = &[
     case!("qc_generic_cram", "qc", "IS_CRAM", "-R", "REF", "-o", "OUT/sample", "--date", "2026-01-02 03:04:05 UTC"),
     case!("plan_cram", "plan", "IS_CRAM", "-R", "REF", "-o", "OUT/sample"),
     case!("error_qc_cram_no_reference", "qc", "IS_CRAM", "-o", "OUT/sample"),
+    // CollectSequencingArtifactMetrics on tests/data/artifact.bam (make_artifact_bam.py), and
+    // ConvertSequencingArtifactToOxoG on Picard 3.5.0's files for it in tests/data/artifact.
+    case!("picard_sequencing_artifact", "CollectSequencingArtifactMetrics", "I=ART", "O=OUT/artifact", "R=REF"),
+    case!("picard_sequencing_artifact_options", "CollectSequencingArtifactMetrics", "I=ART", "O=OUT/artifact", "R=REF", "CONTEXT_SIZE=0", "CONTEXTS_TO_PRINT=G", "CONTEXTS_TO_PRINT=C", "EXT=.txt", "TANDEM_READS=true", "INCLUDE_DUPLICATES=true", "Q=10"),
+    case!("picard_multiple_metrics_artifact", "CollectMultipleMetrics", "I=ART", "O=OUT/sample", "R=REF", "PROGRAM=null", "PROGRAM=CollectSequencingArtifactMetrics", "EXTRA_ARGUMENT=CollectSequencingArtifactMetrics::CONTEXT_SIZE=0", "EXTRA_ARGUMENT=CollectSequencingArtifactMetrics::R=tests/data/ref_100k.fa"),
+    case!("picard_convert_sequencing_artifact_to_oxog", "ConvertSequencingArtifactToOxoG", "I=tests/data/artifact/artifact", "O=OUT/artifact"),
+    case!("verb_sequencing_artifact", "sequencing-artifact", "ART", "-R", "REF", "-o", "OUT/sample", "--min-ins", "100"),
+    case!("verb_convert_sequencing_artifact_to_oxo_g", "convert-sequencing-artifact-to-oxo-g", "tests/data/artifact/artifact", "-o", "OUT/sample"),
+    case!("error_sequencing_artifact_no_reference", "CollectSequencingArtifactMetrics", "I=ART", "O=OUT/artifact"),
+    case!("error_sequencing_artifact_no_read_group", "CollectSequencingArtifactMetrics", "I=IS", "O=OUT/artifact", "R=REF"),
+    case!("error_sequencing_artifact_context_length", "CollectSequencingArtifactMetrics", "I=ART", "O=OUT/artifact", "R=REF", "CONTEXTS_TO_PRINT=AC"),
+    case!("error_convert_sequencing_artifact_no_input", "ConvertSequencingArtifactToOxoG", "O=OUT/artifact"),
 ];
 
 /// The same tools on corpus BAM t1, with its reference and interval lists.

@@ -1,0 +1,9 @@
+## argv
+CollectSequencingArtifactMetrics
+I=tests/data/artifact.bam
+O=OUT/artifact
+## exit
+1
+## stdout
+## stderr
+bammetrics: CollectSequencingArtifactMetrics: REFERENCE_SEQUENCE is required
