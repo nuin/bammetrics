@@ -3,6 +3,7 @@
 pub mod accumulate_quality_yield;
 pub mod adapter;
 pub mod alignment_summary;
+pub mod artifact_to_oxog;
 pub mod base_distribution_by_cycle;
 pub mod bed_to_interval_list;
 pub mod blocks;
@@ -46,6 +47,7 @@ pub mod registry;
 pub mod rna_seq_metrics;
 pub mod sensitivity;
 pub mod sequence;
+pub mod sequencing_artifact;
 pub mod variant_calling_metrics;
 pub mod vcf;
 pub mod wgs_metrics;

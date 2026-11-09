@@ -706,46 +706,77 @@ impl DbSnpSets {
         dictionary: Option<&Dictionary>,
         regions: Option<&Regions>,
     ) -> Result<Self> {
-        let mut reader = VcfReader::open(path)?;
-        assert_dictionaries_equal(
-            reader.dictionary().as_ref(),
-            &format!("DBSNP: {}", path.display()),
-            dictionary,
-            "INPUT",
-        )?;
         let mut sets = Self::default();
-        while let Some(variant) = reader.next_variant()? {
-            if let Some(regions) = regions
-                && !regions.overlaps(&variant.contig, variant.start, variant.end)
-            {
-                continue;
-            }
-            if let Some(dictionary) = dictionary
-                && !dictionary.iter().any(|c| c.name == variant.contig)
-            {
-                return Err(Error::Intervals {
-                    path: path.to_path_buf(),
-                    message: format!(
-                        "contig {} is not in the sequence dictionary (Picard fails with a NullPointerException)",
-                        variant.contig
-                    ),
-                });
-            }
+        load_db_snp(path, dictionary, regions, |variant| {
             let kind = variant.kind();
-            for (set, wanted) in [
-                (&mut sets.snps, kind == VariantType::Snp),
-                (&mut sets.indels, kind == VariantType::Indel),
-            ] {
-                let bits = set.by_contig.entry(variant.contig.clone()).or_default();
-                if wanted {
-                    for position in variant.start..=variant.end {
-                        bits.set(position);
-                    }
-                }
-            }
-        }
+            sets.snps.add(variant, kind == VariantType::Snp);
+            sets.indels.add(variant, kind == VariantType::Indel);
+        })?;
         Ok(sets)
     }
+}
+
+impl DbSnpBitSet {
+    /// `new DbSnpBitSetUtil(file, dictionary, EnumSet.noneOf(VariantType.class),
+    /// intervals)`: every record sets its bits, whatever its type. The
+    /// dictionary and region rules are those of [`DbSnpSets::load`].
+    pub fn load_all(
+        path: &Path,
+        dictionary: Option<&Dictionary>,
+        regions: Option<&Regions>,
+    ) -> Result<Self> {
+        let mut set = Self::default();
+        load_db_snp(path, dictionary, regions, |variant| set.add(variant, true))?;
+        Ok(set)
+    }
+
+    /// The record's contig gets a set (empty when not `wanted`), and a
+    /// wanted record sets every position from its start to its end.
+    fn add(&mut self, variant: &Variant, wanted: bool) {
+        let bits = self.by_contig.entry(variant.contig.clone()).or_default();
+        if wanted {
+            for position in variant.start..=variant.end {
+                bits.set(position);
+            }
+        }
+    }
+}
+
+/// `DbSnpBitSetUtil.loadVcf`: check the dictionaries, then hand `each`
+/// every record of `path` (only those overlapping `regions`, when given).
+fn load_db_snp(
+    path: &Path,
+    dictionary: Option<&Dictionary>,
+    regions: Option<&Regions>,
+    mut each: impl FnMut(&Variant),
+) -> Result<()> {
+    let mut reader = VcfReader::open(path)?;
+    assert_dictionaries_equal(
+        reader.dictionary().as_ref(),
+        &format!("DBSNP: {}", path.display()),
+        dictionary,
+        "INPUT",
+    )?;
+    while let Some(variant) = reader.next_variant()? {
+        if let Some(regions) = regions
+            && !regions.overlaps(&variant.contig, variant.start, variant.end)
+        {
+            continue;
+        }
+        if let Some(dictionary) = dictionary
+            && !dictionary.iter().any(|c| c.name == variant.contig)
+        {
+            return Err(Error::Intervals {
+                path: path.to_path_buf(),
+                message: format!(
+                    "contig {} is not in the sequence dictionary (Picard fails with a NullPointerException)",
+                    variant.contig
+                ),
+            });
+        }
+        each(&variant);
+    }
+    Ok(())
 }
 
 /// An interval list for the VCF tools: its own `@SQ` dictionary and the
