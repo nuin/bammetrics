@@ -30,6 +30,9 @@ behaves how.
 - Picard syntax takes `KEY=VALUE`. Every tool in the registry also takes `--INPUT x`,
   `--INPUT=x` and `-I x`.
 - An unknown option exits 1 naming it. Dropping it could change a number silently.
+- A boolean option takes `true` or `false` in any case. Any other value (`T`, `1`, `yes`,
+  `Y`, `N`, empty) exits 1 with `expected true or false` in every tool. Picard 3.5.0 reads
+  any other text as false: `USE_OQ=yes` writes the `USE_OQ=false` file there.
 - Options that cannot change a metric are accepted, dropped and noted on stderr:
   `VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`, `VERBOSITY`, `H` and `CHART` (no PDF
   is drawn), `R` for tools that do not read a reference.
@@ -326,6 +329,25 @@ CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `col
 - `CollectOxoGMetrics` reads `R=` through its `.fai` and takes a BED as `INTERVALS` in the
   same way; Picard 3.5.0 rejects the BED (`test_bed_intervals_are_read_by_bammetrics_only`
   in `test_oxog_metrics.py`).
+- `CollectOxoGMetrics` exits 1 when the `.fai` of `R=` differs from the BAM `@SQ` lines.
+  Picard 3.5.0 checks no dictionary there: a FASTA whose `chr1` has 10 bases against a
+  100000-base `chr1` in the header, or one holding only a contig `other`, exits 0 in
+  Picard with every row zero. The foundation corpus FASTA against `oxog_bams.py` input
+  exits 1 in both (`test_reference_contigs_must_match_the_header`).
+- An interval list (a file named `*.interval_list`, or starting with `@`) without `@SQ`
+  lines exits 1 in every tool that takes intervals, as in Picard. Any other headerless
+  file is read as BED.
+- `CollectOxoGMetrics` `DB_SNP` is read by the VCF reader of the VCF tools, which differs
+  from htsjdk on three inputs. A record at `POS` 0 exits 1 (`missing position`); Picard
+  completes. An `ALT` equal to `REF` is read; Picard exits 1 (`Duplicate allele added to
+  VariantContext`). A plain gzip file (from `gzip`, not `bgzip`) exits 1 (`failed to fill
+  whole buffer`); Picard reads it.
+- An `@RG` line with an empty `SM:` or `LB:` value exits 1 in every tool (`invalid
+  record`): the noodles header reader rejects an empty field. Picard reads the field as
+  missing (`CollectOxoGMetrics` writes `UnknownSample` or `UnknownLibrary`). A value of
+  one space reads the same in both.
+- SAM text input exits 1 in every tool (`failed to fill whole buffer`). Picard reads it.
+  BAM and CRAM are read.
 - `BedToIntervalList` `SD=` takes a `.dict`, a BAM or SAM header, an interval list, or a
   FASTA with a `.dict` next to it, as Picard does; without the `.dict` it falls back to the
   `.fai` and writes `SN` and `LN` only, where Picard fails. A VCF is not read.

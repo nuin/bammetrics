@@ -370,6 +370,14 @@ def test_context_size_5_is_refused(built, tmp_path):
             "ox_damage context_size_5 contexts")
 
 
+def test_headerless_interval_list_fails(corpus, tmp_path):
+    """An interval list without @SQ lines has no dictionary: Picard and bammetrics exit 1."""
+    headerless = tmp_path / "headerless.interval_list"
+    headerless.write_text("chr1\t1000\t3000\t+\ta\n")
+    both_fail(corpus / "corpus.bam", [f"R={corpus / 'ref.fa'}", f"INTERVALS={headerless}"], tmp_path,
+              "no @SQ lines")
+
+
 def test_bed_intervals_are_read_by_bammetrics_only(corpus, tmp_path):
     """Picard 3.5.0 rejects a BED as INTERVALS; bammetrics converts it as
     BedToIntervalList would (KNOWN_DIFFERENCES.md)."""

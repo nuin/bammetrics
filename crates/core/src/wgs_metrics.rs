@@ -32,6 +32,7 @@ use crate::histogram::Histogram;
 use crate::intervals::{self, uniqued};
 use crate::locus::{
     BaseEntry, Classic, Edge, EdgeEntry, Engine, Filters, Finished, NameSet, Settings, Setup, Sink,
+    check_sort_order,
 };
 use crate::metric::{HistogramSection, HistogramSeries, MetricsOutput, ToolOutput, Value};
 use crate::metrics_file::KeyClass;
@@ -880,6 +881,7 @@ fn run_variant(inv: &Invocation, variant: Variant) -> Result<ToolOutput> {
     };
     let setup = |header: &sam::Header| -> Result<(Reference, Option<Vec<intervals::Interval>>)> {
         let reference = Reference::open(&opts.reference, header)?;
+        check_sort_order(header)?;
         let unique = match &opts.intervals {
             Some(path) => Some(uniqued(&intervals::read_files(&[path], header)?)),
             None => None,
