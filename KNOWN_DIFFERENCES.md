@@ -211,6 +211,15 @@ behaves how.
 - The `compare-metrics` verb writes the comparison to standard output without `-o`; the
   Picard face, as Picard, writes it only to `O=`. Both exit 1 when the files are NOT
   equal, where other tool verbs keep 1 for an input error.
+- `CheckDuplicateMarking` prints Picard's log lines the same way (`WARNING` per bad
+  record, `ERROR` or `INFO` summary, the `INFO` sorting line), the Picard face writes
+  `O=` only, the verb prints the bad querynames to standard output without `-o` and the
+  summary on standard error. Both exit 1 when a record disagrees. A file whose header is
+  not `SO:queryname` is sorted in memory (name, flags, position and `HI` of every record);
+  Picard sorts whole records through `SortingCollection`, spilling to `TMP_DIR` past
+  `MAX_RECORDS_IN_RAM`. The order is the same, since both sorts are stable. A read name
+  is compared by its bytes; Java compares UTF-16 units, which differs only for names mixing
+  characters above U+FFFF with characters from U+E000 to U+FFFF.
 
 ## Charts
 
@@ -238,6 +247,13 @@ arguments) or as `truth_vcf=` and `call_vcf=`. A double Picard prints as `?` (Na
 `create_sequence_dictionary(reference, ...)` returns one dict per `@SQ` line (`name`,
 `length`, `md5`, `assembly`, `uri`, `species`, `alternate_names`) and writes the `.dict`
 only with `output=`.
+
+`check_duplicate_marking(bam, mode=..., output=...)` returns one dict per record whose
+duplicate flag differs from the first record of its queryname (`read_name`, `contig`,
+`start`; `contig` is `None` for an unmapped record), in the order Picard logs them. An
+empty list means every queryname agrees; the exit code 1 of the command line is not an
+exception, as `compare_metrics` returns differences without raising. `output=` writes the
+names file.
 
 `compare_metrics([a, b], ...)` returns one dict per line Picard logs as a difference:
 `KEY`, `METRIC`, `VALUE1` and `VALUE2` (typed as the metric's field) for a value
@@ -671,6 +687,21 @@ at least one sequence and reading one more; `ALT_NAMES` in `HashSet` order; gzip
 the name only (a gzip file named `.fa` fails at `chr(31)`); `CREATE_MD5_FILE` writing
 the 32 hex digits without a line end.
 
+`CheckDuplicateMarking` behaviour reproduced from Picard 3.5.0
+(`tests/concordance/test_check_duplicate_marking.py`): the first checked record of a
+queryname sets the flag, each later record of that name with the other flag is one bad
+record (so a name with three records, two marked and the first not, counts two); a
+dropped record (`MODE`) leaves the current name unchanged; the warning's contig is `null`
+for any unmapped record, placed or not, and its start is the alignment start, 0 without
+one; the 100th bad record is followed by `Further warnings will be suppressed.`;
+`Found 1 records ...` keeps Picard's grammar; `OUTPUT` holds one name per bad record and
+is an empty file when every name agrees; `VERBOSITY=ERROR` leaves the `ERROR` line only
+and `QUIET=true` leaves every log line; a header without `SO:queryname` is sorted in
+`SAMRecordQueryNameComparator` order (name bytes, paired before unpaired, first before
+second of pair, forward before reverse, primary before supplementary before secondary,
+`HI` ascending after records without `HI`, stable), and `SO:queryname` is trusted, so a
+name that comes back after another starts a new group.
+
 ## Failures
 
 A unit whose reads all fail QC (`no PF_READS`) makes Picard throw and write no file, at any
@@ -719,6 +750,16 @@ with the same message (`test_bad_fasta_fails_in_both`, `test_alt_name_errors`).
 With `CREATE_MD5_FILE=true` and a directory at `OUTPUT.md5`, Picard writes `OUTPUT` and
 then exits 1 (`Can't write to or close output file`); bammetrics exits 1 with that message
 before it writes anything (`test_md5_path_is_a_directory`).
+
+`CheckDuplicateMarking MODE=PRIMARY_PROPER_PAIR_ONLY` on an unpaired record exits 1 in both
+tools with `Inappropriate call if not paired read` (htsjdk's `getProperPairFlag`). Picard
+has opened `OUTPUT` before the first record and leaves the names written up to that
+record, after the warnings it logged; bammetrics writes no file and prints no log line.
+A bad `MODE` exits 1 in both with `'X' is not a valid value for Mode.`; Picard follows it
+with its usage text. An `OUTPUT` whose directory does not exist exits 1 in both before the
+read with `Neither file nor parent directory exist.`; a missing `INPUT` exits 1 in both
+(Picard: `Cannot read non-existent file`; bammetrics: the path and `No such file or
+directory`).
 
 ## Threads
 

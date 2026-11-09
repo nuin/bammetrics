@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `CheckDuplicateMarking` (Picard face and Python `check_duplicate_marking()`) and the
+  `check-duplicate-marking` verb: every record of a queryname must carry the same
+  duplicate flag, as Picard 3.5.0 checks it. `MODE` (`ALL`, `PRIMARY_ONLY`,
+  `PRIMARY_MAPPED_ONLY`, `PRIMARY_PROPER_PAIR_ONLY`), `OUTPUT` (one queryname per bad
+  record) and `VERBOSITY`; exit 0 when every name agrees, 1 otherwise. The log lines
+  (without their timestamp) and the `OUTPUT` file match Picard's on every case of
+  `tests/concordance/test_check_duplicate_marking.py` (hand-written BAMs for every flag
+  shape, 105 bad records, the foundation corpus coordinate sorted, queryname sorted and
+  as CRAM, corpus t1, error parity). A header without `SO:queryname` is sorted in memory in
+  `SAMRecordQueryNameComparator` order, as Picard sorts it into temp space; its CRAM
+  input works as for every other tool. Python returns one row per bad record
+  (`read_name`, `contig`, `start`) and an empty list when every name agrees.
+  `tests/data/duplicate_marking.bam` (`tests/data/make_duplicate_marking.py`) is the
+  fixture of its 10 golden records; the `tools` listing gains one row.
+
 ## 0.17.0
 
 CompareMetrics, CreateSequenceDictionary, and CRAM input for every tool that reads a BAM.

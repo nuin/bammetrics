@@ -34,7 +34,7 @@ registry runs the Picard face, untouched; then a grammar verb (a tool verb, `col
 |---|---|
 | Run | `qc` (the collectors a preset needs, one pass, files, verdict, page), `collect` (the same pass, no verdict), one verb per registry tool |
 | Prepare | `bed-to-interval-list`; `mark-duplicates` is reserved for parity plan P9 and not built |
-| Post | `accumulate-quality-yield`, `accumulate-variant-calling`, `compare-metrics`, `report`, `check` |
+| Post | `accumulate-quality-yield`, `accumulate-variant-calling`, `compare-metrics`, `check-duplicate-marking`, `report`, `check` |
 | Info | `tools`, `presets`, `plan`, `help`, `completions` |
 
 ```bash
@@ -180,7 +180,9 @@ killed by a bad sample, and its summary prints `use --fail-on fail or bammetrics
 gate`. `report` exits 0 on any verdict. `check` always gates. A `qc` run with a failed
 collector exits 1 after it writes the other files, the verdict and the page. The tool verbs
 and `collect` exit 0, 1 or 2; the Picard face keeps 0 and 1. `compare-metrics` and
-`CompareMetrics` exit 1 when the two files are NOT equal, as Picard does.
+`CompareMetrics` exit 1 when the two files are NOT equal, as Picard does;
+`check-duplicate-marking` and `CheckDuplicateMarking` exit 1 when a record's duplicate flag
+differs from the first record of its queryname.
 
 ## Errors
 
@@ -244,6 +246,7 @@ table.
 | `bed-to-interval-list` | BedToIntervalList | one interval list |
 | `compare-metrics` | CompareMetrics (two metrics files as positionals) | the comparison text |
 | `create-sequence-dictionary` | CreateSequenceDictionary (input is a FASTA) | one `.dict` |
+| `check-duplicate-marking` | CheckDuplicateMarking | the bad querynames, one line per record |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -551,6 +554,47 @@ differences as a `CompareMetrics$MetricComparisonDifferences` metrics file.
   (standard input read twice) are usage errors (exit 2). The Picard face writes over an
   input as Picard does.
 - `-h` and `--help` print this help and exit 0; Picard prints its usage and exits 1.
+
+### check-duplicate-marking
+
+```bash
+bammetrics check-duplicate-marking marked.qname.bam
+bammetrics check-duplicate-marking marked.bam -o bad_querynames.txt --mode PRIMARY_MAPPED_ONLY
+bammetrics CheckDuplicateMarking I=marked.qname.bam O=bad_querynames.txt MODE=PRIMARY_ONLY
+```
+
+A marked BAM or CRAM in, the querynames whose records disagree on the duplicate flag
+(0x400) out; Picard 3.5.0's `CheckDuplicateMarking`, exit code included: 0 when every
+queryname agrees, 1 when a record differs from the first record of its queryname or on an
+error. Whether the marking is right is not checked. The verb writes one line per record
+that disagrees (a name repeats when two of its records do) to `-o`, or to standard output,
+and the summary (`All records' duplicate markings agree.` or `Found N records that do not
+agree on their duplicate flag.`) on standard error. The Picard face writes `O=` only and
+prints Picard's log lines on standard error without their timestamp: one `WARNING` per bad
+record for the first 100 (`Reads with queryname NAME have different duplicate flags (at
+CONTIG:START)`, `null` for an unmapped record), then `Further warnings will be
+suppressed.`, then the summary at `ERROR` or `INFO`.
+
+- `SO:queryname` is read in file order, and only adjacent records are one queryname: a
+  name that comes back later starts a new group, as Picard's single current name does.
+  Any other header (coordinate, unsorted, unknown, no `@HD`) logs `Input file isn't
+  queryname sorted. Sorting into temp space.` and is sorted first, in Picard's
+  `SAMRecordQueryNameComparator` order (name by bytes, first of pair before second,
+  paired before unpaired, forward before reverse, primary before supplementary before
+  secondary, `HI` ascending after records without one, file order between ties).
+  bammetrics keeps the sort keys in memory and writes no temporary file.
+- `--mode` (`MODE`) is `ALL` (default), `PRIMARY_ONLY` (secondary and supplementary records
+  dropped), `PRIMARY_MAPPED_ONLY` (unmapped records dropped too) or
+  `PRIMARY_PROPER_PAIR_ONLY` (proper pairs only; an unpaired record is an error, as
+  Picard's `getProperPairFlag` throws). A dropped record does not change the current name.
+- `--verbosity ERROR` drops the INFO and WARNING log lines, `WARNING` the INFO lines.
+- `--format json`, `jsonl`, `tsv` and `human` print one row per bad record: `read_name`,
+  `contig` (empty for an unmapped record) and `start` (0 without a position).
+- `ASSUME_SORTED` and `STOP_AFTER` are not options of Picard's tool and exit 1 on the
+  Picard face, 2 on the verb.
+- Python `check_duplicate_marking(bam, mode=..., output=...)` returns the rows; an empty
+  list means every queryname agrees. It raises nothing for a bad marking, only for an
+  error (a bad `mode`, an unpaired record under `PRIMARY_PROPER_PAIR_ONLY`).
 
 ### report
 
