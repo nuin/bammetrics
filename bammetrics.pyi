@@ -473,6 +473,9 @@ def collect_multiple_metrics(
     file_extension: str | None = None,
     program: str | Sequence[str] | None = None,
     extra_argument: str | Sequence[str] | None = None,
+    intervals: _Path | None = None,
+    db_snp: _Path | None = None,
+    include_unpaired: bool | None = None,
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
     """CollectMultipleMetrics: every PROGRAM on one read of the BAM, each written to OUTPUT

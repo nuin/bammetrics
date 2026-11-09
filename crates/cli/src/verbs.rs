@@ -238,6 +238,20 @@ pub const VERBS: &[Verb] = &[
             Files::Single,
         )
     },
+    verb(
+        "sequencing-artifact",
+        "CollectSequencingArtifactMetrics",
+        Files::Prefix,
+    ),
+    Verb {
+        input: "PREFIX",
+        ignores: &[(Key::Threads, "no BAM is read")],
+        ..verb(
+            "convert-sequencing-artifact-to-oxo-g",
+            "ConvertSequencingArtifactToOxoG",
+            Files::Prefix,
+        )
+    },
 ];
 
 /// Verb spellings every verb's rows take, beside a verb's own
@@ -610,7 +624,7 @@ impl Verb {
     /// The Picard arguments of every option given, in order: `KEY=VALUE`
     /// with the row's long name. Positional arguments are the inputs
     /// (`INPUT`, or the tool's first required options when it has no
-    /// `INPUT`).
+    /// `INPUT`, or its first value option when it has neither).
     fn picard_arguments(&self, parsed: &Parsed, flags: &[Flag]) -> Result<Vec<String>, VerbError> {
         let tool = self.tool();
         let mut picard = Vec::new();
@@ -646,11 +660,16 @@ impl Verb {
             }
             picard.extend(inputs.iter().map(|i| format!("INPUT={i}")));
         } else {
-            let slots: Vec<&str> = flags
+            let mut slots: Vec<&str> = flags
                 .iter()
                 .filter(|f| f.required)
                 .filter_map(Flag::picard)
                 .collect();
+            if slots.is_empty() {
+                // No required option (`INPUT_BASE` of the OxoG converter is
+                // optional): the first value option takes the argument.
+                slots.extend(tool.value_options().next());
+            }
             if inputs.len() > slots.len() {
                 return Err(VerbError::usage(
                     self.name,
@@ -719,6 +738,7 @@ impl Verb {
                     .find_map(|a| {
                         a.strip_prefix("INPUT=")
                             .or_else(|| a.strip_prefix("CALL_VCF="))
+                            .or_else(|| a.strip_prefix("INPUT_BASE="))
                     })
                     .map(stem);
                 let path = match (given, stem) {
