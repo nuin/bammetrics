@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Docs
+
+- `docs/07_full_parity_program.md`: the program plan for all 121 Picard 3.5.0 tools
+  (23 on main, 7 in flight, 91 to build), in-process chaining (`chain`), output formats
+  from one typed table, PDF reports on krilla, and 15 analyses beyond Picard: 48 waves,
+  572 agents, 0.18.0 to 1.7.0 with the parity gate at 1.0.0, the machine schedule, the
+  changes to docs/04 and docs/05, and 12 open questions.
+- docs/04: the 65 `out` tools and the 26 unbuilt `later` tools are scheduled in docs/07;
+  the two rules after section 1.2 (harness-prep tools never ported, one README line per
+  out tool) are marked reversed. ROADMAP.md gains a Phase 0b pointer.
+
 ## 0.17.0
 
 CompareMetrics, CreateSequenceDictionary, and CRAM input for every tool that reads a BAM.

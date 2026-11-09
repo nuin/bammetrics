@@ -6,6 +6,7 @@ Sources: the per-tool inventory (49 tools, each run on Picard 3.5.0), a triage o
 
 ## 0. How to read this
 
+- Update 2026-11-09: every tool in this table is now scheduled. `docs/07_full_parity_program.md` is the program plan for all 121 Picard tools, in-process chaining, output formats, PDF reports and the analyses beyond Picard. The `out` rows below are scheduled there (see the note after section 1.2).
 - A "decision" is one of core (build for 1.0), later (build after 1.0 or as a cheap by-product), out (not built, with a reason).
 - Counts, from the 121 programs in Picard 3.5.0: **19 core, 37 later, 65 out**.
 - The inventory covered 49 tools: 17 core, 25 later, 7 out. The triage covered 74: 2 core, 12 later, 60 out. Two out tools were counted in both inputs, so 49 + 74 = 123 and the union is 121.
@@ -152,9 +153,11 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | VcfFormatConverter | Variant | out | VCF/BCF conversion. | bcftools view |
 | VcfToIntervalList | Variant | later | Source of Hs-style targets from VCF sites. | bcftools query plus BedToIntervalList |
 
-Rules that follow from the table:
-- "later" harness-prep tools (SortSam, BuildBamIndex, FixMateInformation, SetNmMdAndUqTags, AddOrReplaceReadGroups, CleanSam, DownsampleSam, FastqToSam) are never built as Rust ports. The harness calls samtools or Picard for them. Their "later" status means "prepare fixtures with the covering tool".
-- Out-of-scope tools get one line in the README so users know the covering tool.
+Scheduling update (2026-11-09): the 65 `out` tools and the 26 unbuilt `later` tools are now scheduled. `docs/07_full_parity_program.md` places each of the 91 in a wave (section 5 there) with its oracle tier and acceptance line. The `out` decision in the table above records the 2026-10-29 reasoning and the covering tool; it no longer means "not built". The rows are rewritten to `build (docs/07 Wnn)` one wave at a time, closing at the 1.0.0 parity gate (docs/07 W40, change D1).
+
+Rules that followed from the table, and their status:
+- "later" harness-prep tools (SortSam, BuildBamIndex, FixMateInformation, SetNmMdAndUqTags, AddOrReplaceReadGroups, CleanSam, DownsampleSam, FastqToSam) were never to be built as Rust ports. Reversed by docs/07 (change D2): they are built in waves W05, W09, W13 and W22. Until each lands, the harness still calls samtools or Picard for it.
+- Out-of-scope tools got one line in the README. Replaced by docs/07 (change D3): the README lists all 121 tools with wave, oracle tier and covering tool at the 1.0.0 gate.
 
 ## 2. Feature inventory
 
