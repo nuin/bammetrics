@@ -377,9 +377,25 @@ struct OxoGSink {
     window: Vec<u8>,
     sites: i32,
     stopped: bool,
+    /// Libraries in `HashSet` order, the row order within a context.
+    library_names: Vec<String>,
+    sample_alias: String,
 }
 
 impl OxoGSink {
+    /// One row per calculator: contexts in the order given, libraries
+    /// within each.
+    fn rows(&self, contexts: &[String]) -> Vec<Row> {
+        let mut rows = Vec::with_capacity(self.calculators.len());
+        for (c, context) in contexts.iter().enumerate() {
+            for (l, library) in self.library_names.iter().enumerate() {
+                let calculator = &self.calculators[c * self.libraries + l];
+                rows.push(calculator.finish(&self.sample_alias, library, context));
+            }
+        }
+        rows
+    }
+
     /// `computeAlleleFraction` for every library at once: the same tests
     /// in the same order, so a base that makes Picard throw makes this fail.
     fn count(&mut self, entries: &[BaseEntry], reference_base: u8) -> Result<()> {
@@ -514,7 +530,6 @@ fn dictionary(header: &sam::Header) -> Dictionary {
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let opts = Options::from_invocation(inv)?;
     let contexts = opts.context_order()?;
-    let mut rows_meta = (Vec::new(), String::new());
     let Finished { sink, .. } = inv.read_whole(&inv.input, |header| {
         let reference = Reference::open(&opts.reference, header)?;
         check_sort_order(header)?;
@@ -565,8 +580,9 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
             window: Vec::new(),
             sites: 0,
             stopped: false,
+            library_names: libraries,
+            sample_alias: samples.join(","),
         };
-        rows_meta = (libraries, samples.join(","));
         Ok(Engine::new(
             Classic,
             sink,
@@ -584,21 +600,7 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
             },
         ))
     })?;
-    let (libraries, sample_alias) = rows_meta;
-    let rows: Vec<Row> = contexts
-        .iter()
-        .enumerate()
-        .flat_map(|(c, context)| {
-            libraries.iter().enumerate().map({
-                let sink = &sink;
-                let sample_alias = &sample_alias;
-                move |(l, library)| {
-                    sink.calculators[c * sink.libraries + l].finish(sample_alias, library, context)
-                }
-            })
-        })
-        .collect();
-    Ok(MetricsOutput::from_rows(&rows, None).into())
+    Ok(MetricsOutput::from_rows(&sink.rows(&contexts), None).into())
 }
 
 pub const TOOL: Tool = Tool {
