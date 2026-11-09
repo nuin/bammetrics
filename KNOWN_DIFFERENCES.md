@@ -773,6 +773,9 @@ cannot be avoided.
   inputs in different orders, a duplex UMI on an unpaired read, a UMI with other letters
   than `ACGTN-`, a barcode tag that is not a string. The metrics file is never written
   then. An error at write time leaves the BAM written so far, as Picard leaves it.
+- A record with more than 65,535 CIGAR operations keeps its real CIGAR in the `CG`
+  tag; htsjdk reads that one, bammetrics reads the placeholder in the record, so such a
+  read's unclipped 5' end can differ. Reads this long are not in the harness.
 - Picard 3.5.0 accepts every combination of `REMOVE_DUPLICATES`,
   `REMOVE_SEQUENCING_DUPLICATES` and `TAGGING_POLICY`; so does bammetrics, and the
   harness compares each.
