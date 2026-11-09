@@ -2,11 +2,12 @@
 cell and byte for byte from `## METRICS CLASS` on, and the BAM record by
 record. Every case runs Picard with VALIDATION_STRINGENCY=SILENT.
 
-The BAMs are compared as `samtools view --no-PG` text: the header lines
-other than @PG must be equal, and so must every record, in file order, with
-every field and every tag (the PG tag included). The @PG lines must carry
-the same IDs and PP links; their VN and CL name the program that wrote
-them. BAM bytes are never compared.
+The BAMs are compared as `samtools view --no-PG` text, one character per
+byte: the header lines other than @PG must be equal (an @RG DT field
+aside: htsjdk writes it in the JVM's time zone), and so must every record,
+in file order, with every field and every tag (the PG tag included). The
+@PG lines must carry the same IDs and PP links; their VN and CL name the
+program that wrote them. BAM bytes are never compared.
 
 Inputs: the markdup_bams BAMs (optical sets, barcodes, UMIs, clips, every
 record kind, a query-name copy, a second input with colliding read group
@@ -67,8 +68,23 @@ def bam_path(name, built, corpus, exome):
 
 
 def view(path, header=False):
+    """`samtools view` lines, one character per byte (htsjdk writes text
+    from the command line one byte per character, so it need not be UTF-8)."""
     args = ["samtools", "view", "--no-PG", *(["-H"] if header else []), str(path)]
-    return subprocess.run(args, check=True, capture_output=True).stdout.decode().splitlines()
+    out = subprocess.run(args, check=True, capture_output=True).stdout
+    return out.decode("latin-1").splitlines()
+
+
+def header_lines(lines):
+    """The header lines other than @PG, the DT field cut from @RG lines."""
+    kept = []
+    for line in lines:
+        if line.startswith("@PG"):
+            continue
+        if line.startswith("@RG"):
+            line = "\t".join(f for f in line.split("\t") if not f.startswith("DT:"))
+        kept.append(line)
+    return kept
 
 
 def programs(lines):
@@ -117,8 +133,7 @@ def compare(inputs, args, label, outcome="equal"):
             problems.append("metrics file after the header lines differs: "
                             + first_difference(picard_body, ours_body))
         picard_header, ours_header = view(picard_bam, True), view(ours_bam, True)
-        if [h for h in picard_header if not h.startswith("@PG")] != \
-                [h for h in ours_header if not h.startswith("@PG")]:
+        if header_lines(picard_header) != header_lines(ours_header):
             problems.append("BAM header lines other than @PG differ")
         if programs(picard_header) != programs(ours_header):
             problems.append(f"@PG IDs: Picard {programs(picard_header)}, "
@@ -211,6 +226,26 @@ def test_same_input_twice_puts_a_pair_twice(built):
     """The cross-contig pairs of one file given twice meet in Picard's
     CoordinateSortedPairInfoMap: both tools fail."""
     compare([built["md_markdup"], built["md_markdup"]], [], "markdup twice", "fail")
+
+
+def test_header_text_is_copied_byte_for_byte(built):
+    """UTF-8 letters in @RG, @PG and @CO values, a tab in @CO, and option
+    text that htsjdk writes one byte per character (`café` as caf and 0xE9)."""
+    bam = built["md_markdup_text"]
+    compare(bam, [], "markdup_text")
+    compare(bam, ["COMMENT=caf\u00e9", "COMMENT=a\tb", "PROGRAM_GROUP_NAME=caf\u00e9"],
+            "markdup_text with option text")
+
+
+def test_shared_names_wait_as_htsjdk_waits(built):
+    """A key put twice for a reference already passed is never read back
+    (both succeed); one put twice for a later reference fails when that
+    reference is read back."""
+    compare(built["md_mates_behind"], [], "mates_behind")
+    compare(built["md_mates_behind"], ["MAX_RECORDS_IN_RAM=1"], "mates_behind, one-entry buffer")
+    compare(built["md_mates_late"], [], "mates_late", "fail")
+    compare(built["md_mates_late"], ["MAX_RECORDS_IN_RAM=1"], "mates_late, one-entry buffer",
+            "fail")
 
 
 def test_inputs_in_two_orders_fail(built):
@@ -356,6 +391,69 @@ def test_flow_options_are_refused(built, tmp_path, option):
     assert ours.returncode != 0 and option.split("=")[0] in ours.stderr
     assert not (tmp_path / "o.bam").exists()
     RESULTS.append((f"{TOOL} {option}", 0, 0, "refused as not implemented"))
+
+
+def test_flow_options_at_their_defaults_run(built):
+    compare(built["md_markdup"], ["FLOW_MODE=false", "FLOW_DUP_STRATEGY=FLOW_QUALITY_SUM_STRATEGY",
+                                  "FLOW_EFFECTIVE_QUALITY_THRESHOLD=15", "FLOW_Q_IS_KNOWN_END=false",
+                                  "FLOW_SKIP_FIRST_N_FLOWS=0", "FLOW_UNPAIRED_END_UNCERTAINTY=0",
+                                  "FLOW_UNPAIRED_START_UNCERTAINTY=0",
+                                  "FLOW_USE_END_IN_UNPAIRED_READS=false",
+                                  "FLOW_USE_UNPAIRED_CLIPPED_END=false"], "flow options at defaults")
+
+
+def ours(*args):
+    return subprocess.run([str(BAMMETRICS), TOOL, *map(str, args)], capture_output=True, text=True)
+
+
+def test_outputs_never_overwrite_an_input(built, tmp_path):
+    """bammetrics refuses every written file that is an input, a link to one,
+    or another written file; Picard destroys the input (not run here)."""
+    bam = tmp_path / "in.bam"
+    bam.write_bytes(built["md_markdup"].read_bytes())
+    (tmp_path / "link.bam").symlink_to(bam)
+    (tmp_path / "hard.bam").hardlink_to(bam)
+    before = bam.read_bytes()
+    cases = [
+        [f"O={bam}", f"M={tmp_path / 'm.txt'}"],
+        [f"O={tmp_path / 'o.bam'}", f"M={bam}"],
+        [f"O={tmp_path / 'link.bam'}", f"M={tmp_path / 'm.txt'}"],
+        [f"O={tmp_path / 'hard.bam'}", f"M={tmp_path / 'm.txt'}"],
+        [f"O={tmp_path / 'same'}", f"M={tmp_path / 'same'}"],
+        [f"O={tmp_path / 'o.bam'}", f"M={tmp_path / 'o.bai'}", "CREATE_INDEX=true"],
+    ]
+    for args in cases:
+        result = ours(f"I={bam}", *args)
+        assert result.returncode != 0 and ("one file cannot hold both" in result.stderr
+                                           or "writing it would destroy it" in result.stderr), \
+            (args, result.stderr)
+    assert bam.read_bytes() == before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["hard.bam", "in.bam", "link.bam"]
+    RESULTS.append((f"{TOOL} outputs never overwrite an input", 0, 0, f"{len(cases)} refused"))
+
+
+def test_failed_run_leaves_the_old_output(built, tmp_path):
+    """OUTPUT is written under a temporary name and renamed at the end: a
+    run that fails while writing leaves the previous file whole."""
+    out = tmp_path / "out.bam"
+    out.write_bytes(b"previous")
+    result = ours(f"I={built['md_markdup_natural']}", f"O={out}", f"M={tmp_path / 'm.txt'}")
+    assert result.returncode != 0 and "out of order" in result.stderr
+    assert out.read_bytes() == b"previous"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["out.bam"]
+
+
+def test_small_buffers_and_sam_input_are_refused(built, tmp_path):
+    result = ours(f"I={built['md_markdup']}", f"O={tmp_path / 'o.bam'}",
+                  f"M={tmp_path / 'm.txt'}", "MAX_RECORDS_IN_RAM=0")
+    assert result.returncode != 0 and "MAX_RECORDS_IN_RAM=0" in result.stderr
+    sam = tmp_path / "in.sam"
+    with open(sam, "wb") as handle:
+        subprocess.run(["samtools", "view", "-h", str(built["md_markdup"])], check=True,
+                       stdout=handle)
+    result = ours(f"I={sam}", f"O={tmp_path / 'o.bam'}", f"M={tmp_path / 'm.txt'}")
+    assert result.returncode != 0 and "SAM input is not supported" in result.stderr
+    assert not (tmp_path / "o.bam").exists()
 
 
 def test_missing_input_fails(tmp_path):

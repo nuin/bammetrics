@@ -728,23 +728,32 @@ harness runs every native case at 1 and 8.
 ## MarkDuplicates
 
 `tests/concordance/test_mark_duplicates.py` compares the metrics file cell by cell and
-byte for byte after the `StringHeader` lines, the BAM header lines other than `@PG`, the
-`@PG` IDs and `PP` links, and every record as `samtools view` prints it (flag, every
-field, every tag in order). Every case agrees; the differences below are on purpose or
-cannot be avoided.
+byte for byte after the `StringHeader` lines, the BAM header lines other than `@PG` (an
+`@RG` `DT` field aside, see below), the `@PG` IDs and `PP` links, and every record as
+`samtools view` prints it (flag, every field, every tag in order). Every case agrees;
+the differences below are on purpose or cannot be avoided.
 
 - `@PG`: the lines added carry the IDs and `PP` links Picard gives them, and the records'
   `PG` tags name them, so the records match. `VN` is `bammetrics` and its version (Picard
   writes `3.5.0`) and `CL` is the bammetrics command line (`MarkDuplicates INPUT=in.bam
   OUTPUT=...`), not Picard's line with every default.
   `PROGRAM_GROUP_VERSION` and `PROGRAM_GROUP_COMMAND_LINE` set them as in Picard.
+  Text from the command line (`COMMENT`, `PROGRAM_RECORD_ID`, `PROGRAM_GROUP_NAME`,
+  `PROGRAM_GROUP_VERSION`, `PROGRAM_GROUP_COMMAND_LINE`) is written one byte per UTF-16
+  unit, the low byte, as htsjdk writes a Java string: `COMMENT=café` becomes `caf` and
+  the byte 0xE9 in both tools. An empty value (`PROGRAM_RECORD_ID=`) is the empty
+  string in bammetrics; Picard's parser takes the next argument as the value.
+- Header values are copied byte for byte, UTF-8 letters and tabs in `@CO` included,
+  as htsjdk copies them.
 - The `@HD` line gets `VN:1.6` whatever the input said, as htsjdk's BAM writer gives
   it. An `@RG` `DT` value is written as the input wrote it. htsjdk parses it and writes
   it back in the JVM's time zone (`2015-10-02T02:00:00+0200` became
   `2015-10-01T18:00:00-0600` on a machine in America/Edmonton), so Picard's header
-  depends on the machine that ran it.
+  depends on the machine that ran it. The harness drops the `DT` field before it
+  compares `@RG` lines; on the HG002 exome this is the one header difference.
 - The BAM bytes differ: noodles compresses the blocks, and the `bin` field of each
-  record is copied from the input (htsjdk computes it again). Each record's fields and
+  record is copied from the input (htsjdk computes it again; they differ on unplaced
+  unmapped records, 4680 from samtools against htsjdk's 0, which readers ignore). Each record's fields and
   tags are the ones Picard writes, tag order and integer type included: a record whose
   tags were set or removed (always, under the default `CLEAR_DT=true`) is written with
   its tags in htsjdk's list order and integers in the smallest BAM type; any other
@@ -754,14 +763,33 @@ cannot be avoided.
 - `OUTPUT` is always BAM. A name ending in `.sam` or `.cram` exits 1 before anything is
   read (`bammetrics writes BAM only`); Picard writes SAM or CRAM by the extension.
 - `MAX_RECORDS_IN_RAM` is the number of read ends each sorted list holds in memory before
-  it spills a run to `TMP_DIR` (default 4,000,000); Picard sets its own from the JVM heap
-  and ignores the option. `MAX_FILE_HANDLES_FOR_READ_ENDS_MAP`,
-  `MAX_SEQUENCES_FOR_DISK_READ_ENDS_MAP` and `SORTING_COLLECTION_SIZE_RATIO` are accepted
-  and ignored: mates still waiting for their pair are held in memory. Only the first
-  `TMP_DIR` is used. A pipe or standard input is copied there first, so it can be read
-  twice; Picard cannot read one.
-- The flow-based options (`FLOW_MODE` and the other `FLOW_*`) are not implemented and
-  exit 1 as unknown options; Picard runs them.
+  it spills a run to `TMP_DIR` (1 or more, default 4,000,000; 0 exits 1); Picard sets
+  its own from the JVM heap and ignores the option. It also caps the entries buffered
+  before the waiting mates are appended to their reference's file (at most 1,048,576).
+  `MAX_FILE_HANDLES_FOR_READ_ENDS_MAP`, `MAX_SEQUENCES_FOR_DISK_READ_ENDS_MAP` and
+  `SORTING_COLLECTION_SIZE_RATIO` are checked as numbers and then ignored. Mates waiting
+  for a mate on a later reference are spilled per reference as htsjdk's
+  `CoordinateSortedPairInfoMap` spills them, so memory holds only those waiting on the
+  reference being read. Entries for a reference already passed are dropped; htsjdk
+  writes them to a file it never reads. Only the first `TMP_DIR` is used, and it is
+  created at the first spill, so a run that spills nothing never needs it. A pipe or
+  standard input is copied there first, so it can be read twice; Picard cannot read one.
+- Spill files and the temporary `OUTPUT` are removed on SIGINT, SIGTERM and SIGHUP, as
+  Picard's `deleteOnExit` removes its own. bammetrics does not remove directories that
+  other runs left after a SIGKILL: a `TMP_DIR` shared between hosts holds directories
+  of processes this host cannot see.
+- The flow-based options (`FLOW_MODE` and the other `FLOW_*`) are accepted at their
+  default values only. Any other value exits 1 (`flow-based duplicate marking is not
+  implemented`); Picard runs it.
+- `READ_NAME_REGEX` is compiled by the Rust `regex` crate; Picard compiles a Java regex.
+  The common syntax means the same and the harness compares named groups, `(?i)`,
+  `\b`, `\p{Alpha}`, alternation and lazy quantifiers. Look-ahead, look-behind and
+  `\Q...\E` exit 1 (`regex parse error`), where Picard runs.
+- Booleans take `true` or `false` in any case. Picard reads any other word
+  (`REMOVE_DUPLICATES=yes`) as false; bammetrics exits 1, so a misspelt `true` never
+  turns an option off.
+- SAM input, plain or bgzipped, exits 1 (`not a BAM or CRAM file`), for every tool;
+  Picard reads it.
 - CRAM input: htsjdk rebuilds `MD` and `NM` on each mapped record that lacks them while
   it decodes, and gives every record its tags in list order. bammetrics computes both
   from the reference given with `R=`, so the records match Picard's (`test_cram`).
@@ -772,12 +800,18 @@ cannot be avoided.
   with `SILENT`.
 - Errors are raised where Picard raises them, with Picard's message where one exists: a
   paired record without a read group (Picard's `NullPointerException`), a pair key put
-  twice in coordinate order (`Value was put into PairInfoMap more than once`), records
+  twice for the reference being read (`Putting value into PairInfoMap that already
+  existed`) or found twice when a later reference's waiting mates are read back (`Value
+  was put into PairInfoMap more than once`), records
   out of the header's order at write time (`Alignments added out of order`), an input
   neither coordinate nor query-name sorted, `ASSUME_SORTED` with `ASSUME_SORT_ORDER`,
   inputs in different orders, a duplex UMI on an unpaired read, a UMI with other letters
-  than `ACGTN-`, a barcode tag that is not a string. The metrics file is never written
-  then. An error at write time leaves the BAM written so far, as Picard leaves it.
+  than `ACGTN-`, a barcode tag that is not a string, a missing `REFERENCE_SEQUENCE`. The
+  metrics file is never written then. An error at write time leaves no `OUTPUT` (an
+  earlier file of that name stays whole); Picard leaves the BAM written so far.
+- An `OUTPUT`, `METRICS_FILE`, index or MD5 that is an input, or two of them that name
+  one file, exits 1 before anything is read; Picard writes over the input and destroys
+  it. The verb exits 2 for the same.
 - A record with more than 65,535 CIGAR operations keeps its real CIGAR in the `CG`
   tag; htsjdk reads that one, bammetrics reads the placeholder in the record, so such a
   read's unclipped 5' end can differ. Reads this long are not in the harness.

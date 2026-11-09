@@ -514,12 +514,11 @@ impl Verb {
         self.check_inputs(&parsed, &picard)?;
         let core = |e: bammetrics_core::Error| self.core_error(&parsed, &e);
         let mut inv = tool.parse(&picard).map_err(core)?;
-        refuse_overwriting_inputs(
-            self.name,
-            &self.input_paths(&inv),
-            &self.output_paths(&inv, output.as_deref()),
-        )
-        .map_err(|e| with_from(e, output_flag()))?;
+        let read = self.input_paths(&inv);
+        for written in self.output_paths(&inv, output.as_deref()) {
+            refuse_overwriting_inputs(self.name, &read, std::slice::from_ref(&written))
+                .map_err(|e| with_from(e, flag_for_path(&parsed, &written).or_else(output_flag)))?;
+        }
         self.refuse_one_file_twice(&inv, output.as_deref())?;
         if let Some(path) = &output {
             create_parent(self.name, path).map_err(|e| with_from(e, output_flag()))?;
@@ -905,9 +904,8 @@ impl Verb {
                         .map(|g| g.spelled.clone())
                 })
             }
-            bammetrics_core::Error::Output { .. } => {
-                parsed.last(Key::Output).map(|g| g.spelled.clone())
-            }
+            bammetrics_core::Error::Output { path, .. } => flag_for_path(parsed, path)
+                .or_else(|| parsed.last(Key::Output).map(|g| g.spelled.clone())),
             _ => None,
         };
         with_from(VerbError::core(self.name, e), from)
@@ -1065,6 +1063,20 @@ pub fn stem(input: &str) -> String {
 }
 
 /// `error` with `from` set when it has none.
+/// The flag, as spelled, whose value is `path`, or else the last one whose
+/// value is a directory above it (`--tmp-dir` for a file under it).
+fn flag_for_path(parsed: &Parsed, path: &Path) -> Option<String> {
+    let named = |test: &dyn Fn(&Path) -> bool| {
+        parsed
+            .given
+            .iter()
+            .rev()
+            .find(|g| g.values.iter().any(|v| test(Path::new(v))))
+            .map(|g| g.spelled.clone())
+    };
+    named(&|v| v == path).or_else(|| named(&|v| !v.as_os_str().is_empty() && path.starts_with(v)))
+}
+
 fn with_from(error: VerbError, from: Option<String>) -> VerbError {
     match from {
         Some(from) if error.from.is_none() => error.from(from),

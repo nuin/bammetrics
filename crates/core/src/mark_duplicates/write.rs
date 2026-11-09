@@ -51,6 +51,7 @@ use super::mark::Marks;
 use super::md_nm::{self, ContigCache};
 use super::{Options, TaggingPolicy};
 use crate::bam_raw::{RawRecord, TagValue};
+use crate::cleanup::AtomicFile;
 use crate::duplicate_metrics::Row;
 use crate::error::{Error, Result};
 use crate::metric::{HistogramSection, HistogramSeries, MetricsOutput};
@@ -86,7 +87,7 @@ fn output_header(
     }
     for comment in &opts.comments {
         let text = comment.strip_prefix("@CO\t").unwrap_or(comment);
-        out.comments_mut().push(text.into());
+        out.comments_mut().push(java_bytes(text).into());
     }
     let Some(record_id) = opts.program_record_id.as_deref() else {
         return (out, None);
@@ -94,13 +95,13 @@ fn output_header(
     let mut taken: HashSet<Vec<u8>> = out.programs().as_ref().keys().map(|k| k.to_vec()).collect();
     let mut counter = taken.len() as i32;
     let mut next_id = || {
-        let wanted = record_id.as_bytes().to_vec();
+        let wanted = java_bytes(record_id);
         if taken.insert(wanted.clone()) {
             counter += 1;
             return wanted;
         }
         loop {
-            let candidate = format!("{record_id}.{}", base36(counter)).into_bytes();
+            let candidate = java_bytes(&format!("{record_id}.{}", base36(counter)));
             counter += 1;
             if taken.insert(candidate.clone()) {
                 return candidate;
@@ -125,10 +126,10 @@ fn output_header(
         let id = next_id();
         let mut map = Map::<Program>::default();
         let fields = map.other_fields_mut();
-        fields.insert(tag::VERSION, version.as_str().into());
-        fields.insert(tag::COMMAND_LINE, command_line.as_str().into());
+        fields.insert(tag::VERSION, java_bytes(&version).into());
+        fields.insert(tag::COMMAND_LINE, java_bytes(&command_line).into());
         if let Some(name) = opts.program_group_name.as_deref() {
-            fields.insert(tag::NAME, name.into());
+            fields.insert(tag::NAME, java_bytes(name).into());
         }
         if let Some(previous) = existing {
             fields.insert(tag::PREVIOUS_PROGRAM_ID, previous.clone().into());
@@ -137,6 +138,107 @@ fn output_header(
         chained.insert(existing.clone(), id);
     }
     (out, Some(chained))
+}
+
+/// Text from the command line as htsjdk writes a Java `String`: the low
+/// byte of each UTF-16 unit (`StringUtil.stringToBytes`), so `café` is
+/// written `caf` and the byte 0xE9.
+fn java_bytes(text: &str) -> Vec<u8> {
+    text.encode_utf16().map(|unit| unit as u8).collect()
+}
+
+/// The fields of one header record as `(tag, value)` byte pairs.
+fn fields<'a, K, V>(
+    other: impl IntoIterator<Item = (&'a K, &'a V)>,
+) -> impl Iterator<Item = (&'a [u8], &'a [u8])>
+where
+    K: AsRef<[u8; 2]> + 'a,
+    V: AsRef<[u8]> + 'a,
+{
+    other
+        .into_iter()
+        .map(|(t, v)| (t.as_ref().as_slice(), v.as_ref()))
+}
+
+/// One header line: `kind`, then a tab and `TAG:value` per field.
+fn header_line<'a>(
+    text: &mut Vec<u8>,
+    kind: &[u8],
+    fields: impl IntoIterator<Item = (&'a [u8], &'a [u8])>,
+) {
+    text.extend_from_slice(kind);
+    for (tag, value) in fields {
+        text.push(b'\t');
+        text.extend_from_slice(tag);
+        text.push(b':');
+        text.extend_from_slice(value);
+    }
+    text.push(b'\n');
+}
+
+/// The SAM header text: `@HD`, `@SQ`, `@RG`, `@PG` and `@CO` lines in
+/// that order, each record's fields in the order noodles keeps them, the
+/// order noodles' own writer uses. Values are written byte for byte, as
+/// htsjdk writes them; noodles' writer refuses bytes outside printable
+/// ASCII, which a valid BAM may hold (`@RG SM:s\xc3\xa9`, a tab in `@CO`).
+fn header_text(header: &sam::Header) -> Vec<u8> {
+    let mut text = Vec::new();
+    if let Some(map) = header.header() {
+        let version = map.version();
+        let version = format!("{}.{}", version.major(), version.minor());
+        let vn = std::iter::once((b"VN".as_slice(), version.as_bytes()));
+        header_line(&mut text, b"@HD", vn.chain(fields(map.other_fields())));
+    }
+    for (name, map) in header.reference_sequences() {
+        let length = map.length().to_string();
+        let sn_ln = [
+            (b"SN".as_slice(), name.as_ref()),
+            (b"LN".as_slice(), length.as_bytes()),
+        ];
+        header_line(
+            &mut text,
+            b"@SQ",
+            sn_ln.into_iter().chain(fields(map.other_fields())),
+        );
+    }
+    for (id, map) in header.read_groups() {
+        let id = std::iter::once((b"ID".as_slice(), id.as_ref()));
+        header_line(&mut text, b"@RG", id.chain(fields(map.other_fields())));
+    }
+    for (id, map) in header.programs().as_ref() {
+        let id = std::iter::once((b"ID".as_slice(), id.as_ref()));
+        header_line(&mut text, b"@PG", id.chain(fields(map.other_fields())));
+    }
+    for comment in header.comments() {
+        text.extend_from_slice(b"@CO\t");
+        text.extend_from_slice(comment);
+        text.push(b'\n');
+    }
+    text
+}
+
+/// The BAM header: magic, the text, the reference list.
+fn write_bam_header(out: &mut impl Write, header: &sam::Header) -> io::Result<()> {
+    let invalid = |e| io::Error::new(io::ErrorKind::InvalidInput, e);
+    let text = header_text(header);
+    out.write_all(b"BAM\x01")?;
+    out.write_all(&i32::try_from(text.len()).map_err(invalid)?.to_le_bytes())?;
+    out.write_all(&text)?;
+    let references = header.reference_sequences();
+    out.write_all(
+        &i32::try_from(references.len())
+            .map_err(invalid)?
+            .to_le_bytes(),
+    )?;
+    for (name, map) in references {
+        let length = u32::try_from(name.len() + 1).map_err(invalid)?;
+        out.write_all(&length.to_le_bytes())?;
+        out.write_all(name)?;
+        out.write_all(&[0])?;
+        let length = i32::try_from(usize::from(map.length())).map_err(invalid)?;
+        out.write_all(&length.to_le_bytes())?;
+    }
+    Ok(())
 }
 
 /// `MarkDuplicates` second read: write `OUTPUT`, return the metrics file.
@@ -177,30 +279,57 @@ pub fn run(opts: &Options, inputs: &[PathBuf], mut marks: Marks<'_>) -> Result<M
                 contigs,
             };
             copier.copy(&mut stream, &mut marks, &groups, &mut rows, &mut writer)?;
-            writer.finish()?;
+            let output = writer.finish()?;
             let coordinate = SortOrder::of(&header) == SortOrder::Coordinate;
-            Ok((rows, coordinate))
+            Ok((rows, coordinate, output))
         },
     )?;
-    let (rows, coordinate) = rows;
-    if opts.create_index && coordinate {
-        let index = noodles::bam::fs::index(&opts.output).map_err(|source| Error::Output {
-            path: opts.output.clone(),
-            source,
-        })?;
-        let path = opts.output.with_extension("bai");
-        let noodles::bam::Index::Bai(index) = index else {
-            return Err(Error::Metric(
-                "CREATE_INDEX: a contig is too long for a BAI index".to_owned(),
-            ));
-        };
-        noodles::bam::bai::fs::write(&path, &index)
+    let (rows, coordinate, output) = rows;
+    let output_error = |source| Error::Output {
+        path: opts.output.clone(),
+        source,
+    };
+    let index = if opts.create_index && coordinate {
+        Some(write_index(
+            output.writing(),
+            &opts.output.with_extension("bai"),
+        )?)
+    } else {
+        None
+    };
+    let md5 = if opts.create_md5_file {
+        Some(write_md5(output.writing(), &md5_path(&opts.output))?)
+    } else {
+        None
+    };
+    output.commit().map_err(output_error)?;
+    for file in index.into_iter().chain(md5) {
+        let path = file.path().to_path_buf();
+        file.commit()
             .map_err(|source| Error::Output { path, source })?;
     }
-    if opts.create_md5_file {
-        write_md5(&opts.output)?;
-    }
     Ok(metrics(rows, &marks))
+}
+
+/// The BAI of the BAM at `bam`, into a file to be renamed to `target`.
+fn write_index(bam: &Path, target: &Path) -> Result<AtomicFile> {
+    let index = noodles::bam::fs::index(bam).map_err(|source| Error::Input {
+        path: bam.to_path_buf(),
+        source,
+    })?;
+    let noodles::bam::Index::Bai(index) = index else {
+        return Err(Error::Metric(
+            "CREATE_INDEX: a contig is too long for a BAI index".to_owned(),
+        ));
+    };
+    let file = AtomicFile::new(target);
+    file.create()
+        .and_then(|out| noodles::bam::bai::io::Writer::new(out).write_index(&index))
+        .map_err(|source| Error::Output {
+            path: target.to_path_buf(),
+            source,
+        })?;
+    Ok(file)
 }
 
 /// `finalizeAndWriteMetrics`.
@@ -249,8 +378,16 @@ fn metrics(rows: BTreeMap<String, Row>, marks: &Marks<'_>) -> MetricsOutput {
     MetricsOutput::from_rows(&rows, histogram)
 }
 
-/// `OUTPUT.md5`: the hex MD5 of the BAM, as htsjdk writes it.
-fn write_md5(path: &Path) -> Result<()> {
+/// Where `CREATE_MD5_FILE` writes: `OUTPUT` with `.md5` appended.
+pub(super) fn md5_path(output: &Path) -> PathBuf {
+    let mut name = output.as_os_str().to_owned();
+    name.push(".md5");
+    PathBuf::from(name)
+}
+
+/// The hex MD5 of the BAM at `path`, as htsjdk writes it, into a file to
+/// be renamed to `target`.
+fn write_md5(path: &Path, target: &Path) -> Result<AtomicFile> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
@@ -265,13 +402,14 @@ fn write_md5(path: &Path) -> Result<()> {
         }
         md5.update(&buffer[..n]);
     }
-    let mut name = path.as_os_str().to_owned();
-    name.push(".md5");
-    let target = PathBuf::from(name);
-    std::fs::write(&target, crate::md5::hex(&md5.finish())).map_err(|source| Error::Output {
-        path: target.clone(),
-        source,
-    })
+    let file = AtomicFile::new(target);
+    file.create()
+        .and_then(|mut out| out.write_all(crate::md5::hex(&md5.finish()).as_bytes()))
+        .map_err(|source| Error::Output {
+            path: target.to_path_buf(),
+            source,
+        })?;
+    Ok(file)
 }
 
 /// The BGZF output, compressed on worker threads. Records must come in the
@@ -280,6 +418,8 @@ fn write_md5(path: &Path) -> Result<()> {
 /// not checked.
 struct Writer {
     path: PathBuf,
+    /// `OUTPUT` under its temporary name.
+    file: AtomicFile,
     inner: noodles::bam::io::Writer<bgzf::io::MultithreadedWriter<BufWriter<File>>>,
     order: SortOrder,
     /// Reference and start of the last record written, and its name.
@@ -329,7 +469,8 @@ impl Writer {
             path: path.clone(),
             source,
         };
-        let file = File::create(&path).map_err(error)?;
+        let atomic = AtomicFile::new(&path);
+        let file = atomic.create().map_err(error)?;
         let level = bgzf::io::writer::CompressionLevel::try_from(opts.compression_level)
             .map_err(|e| error(io::Error::new(io::ErrorKind::InvalidInput, e)))?;
         let workers = NonZero::new(opts.threads).unwrap_or(NonZero::<usize>::MIN);
@@ -338,9 +479,10 @@ impl Writer {
             .set_worker_count(workers)
             .build_from_writer(BufWriter::with_capacity(1 << 20, file));
         let mut inner = noodles::bam::io::Writer::from(bgzf);
-        inner.write_header(header).map_err(error)?;
+        write_bam_header(inner.get_mut(), header).map_err(error)?;
         Ok(Self {
             path,
+            file: atomic,
             inner,
             order: SortOrder::of(header),
             previous: None,
@@ -360,13 +502,16 @@ impl Writer {
             })
     }
 
-    fn finish(mut self) -> Result<()> {
+    /// Write the last block and the EOF marker. The caller renames the
+    /// file into place.
+    fn finish(mut self) -> Result<AtomicFile> {
         let error = |source| Error::Output {
             path: self.path.clone(),
             source,
         };
         let mut file = self.inner.get_mut().finish().map_err(error)?;
-        file.flush().map_err(error)
+        file.flush().map_err(error)?;
+        Ok(self.file)
     }
 }
 

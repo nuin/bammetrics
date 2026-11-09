@@ -12,8 +12,8 @@
 //!   reference as `read2` (which marks it paired).
 //! * A record whose mate is mapped also waits under its `RG` ID plus read
 //!   name (no `RG`, or one the header lacks, is Picard's
-//!   `NullPointerException`) for its mate; the second to arrive completes
-//!   the pair. The lower end, by reference then coordinate, becomes
+//!   `NullPointerException`) for its mate ([`super::mates`]); the second
+//!   to arrive completes the pair. The lower end, by reference then coordinate, becomes
 //!   `read1`; equal coordinates with opposite strands are `FR` whatever the
 //!   file order. The pair keeps the first mate's library and location, its
 //!   score is the sum of both scores in 16-bit arithmetic, and its optical
@@ -32,6 +32,7 @@ use std::path::PathBuf;
 use noodles::sam;
 
 use super::inputs::{self, SortOrder};
+use super::mates::Mates;
 use super::read_ends::{F, FR, R, RF, ReadEnds, orientation_byte};
 use super::{Options, Scoring};
 use crate::bam_raw::{RawRecord, TagValue};
@@ -375,9 +376,7 @@ struct Builder<'a, 'd> {
     queryname: bool,
     library_ids: HashMap<String, i16>,
     next_library: i16,
-    /// Coordinate order: a key put twice is an error, as in htsjdk's
-    /// `CoordinateSortedPairInfoMap`; query-name order replaces.
-    pending: HashMap<(i32, Vec<u8>), ReadEnds>,
+    pending: Mates<'d>,
     pairs: Sorter<'d, ReadEnds>,
     fragments: Sorter<'d, ReadEnds>,
     pg_seen: HashSet<Option<Vec<u8>>>,
@@ -400,7 +399,7 @@ pub fn run<'d>(opts: &Options, inputs: &[PathBuf], temp: &'d TempDir) -> Result<
                 queryname: order == SortOrder::Queryname,
                 library_ids: HashMap::new(),
                 next_library: 1,
-                pending: HashMap::new(),
+                pending: Mates::new(order == SortOrder::Queryname, temp, opts.records_in_ram),
                 pairs: Sorter::new(temp, "pairs", opts.records_in_ram),
                 fragments: Sorter::new(temp, "fragments", opts.records_in_ram),
                 pg_seen: HashSet::new(),
@@ -530,17 +529,9 @@ impl Builder<'_, '_> {
             })?;
         let mut key = rg.to_vec();
         key.extend_from_slice(record.name());
-        let found = self.pending.remove(&(record.reference_id(), key.clone()));
-        let Some(mut pair) = found else {
-            let slot = (fragment.read2_reference, key);
-            if !self.queryname && self.pending.contains_key(&slot) {
-                return Err(Error::Metric(format!(
-                    "Putting value into PairInfoMap that already existed. {}: {}",
-                    slot.0,
-                    String::from_utf8_lossy(&slot.1)
-                )));
-            }
-            self.pending.insert(slot, fragment.clone());
+        let Some(mut pair) = self.pending.remove(record.reference_id(), &key)? else {
+            self.pending
+                .put(fragment.read2_reference, key, fragment.clone())?;
             return self.fragments.push(fragment);
         };
         let negative = flags & 0x10 != 0;

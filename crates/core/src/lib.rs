@@ -7,6 +7,7 @@ pub mod bam_raw;
 pub mod base_distribution_by_cycle;
 pub mod bed_to_interval_list;
 pub mod blocks;
+pub mod cleanup;
 pub mod collect;
 pub mod commons_math;
 pub mod compare_metrics;

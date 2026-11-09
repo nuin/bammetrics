@@ -7,8 +7,12 @@
 //! 5 or 7 fields. Each field is read with `rapidParseInt`: an optional `-`,
 //! then the leading digits, with 32-bit wrap; no digit at all means the
 //! name has no location. The tile is cut to 16 bits (Java's `(short)`).
-//! Any other value is a Java regex matched against the whole name with
-//! three capture groups; `null` turns location parsing off.
+//! Any other value is a regex matched against the whole name with three
+//! capture groups; `null` turns location parsing off. Picard compiles it as
+//! a Java regex, bammetrics with the Rust `regex` crate: the common syntax
+//! (classes, groups, named groups, `(?i)`, `\b`, `\p{..}`, lazy quantifiers)
+//! means the same, while look-around and `\Q...\E` are refused with an
+//! error.
 //!
 //! Two reads are an optical duplicate pair when both have a location, share
 //! the read group index and the tile, and are within the pixel distance on

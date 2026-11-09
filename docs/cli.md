@@ -527,18 +527,30 @@ The verb runs `MarkDuplicates`, Picard 3.5.0's duplicate marker (0.18.0). `-o BA
   after the first read. Several `-i` inputs are merged as Picard merges them; their
   dictionaries must be equal.
 - The input is read twice. Standard input and pipes are copied to `--tmp-dir` first.
-  Read ends and index lists are sorted in runs of `--max-records-in-ram` entries (default
-  4,000,000) spilled to `--tmp-dir` (default the system temporary directory); every file
-  written there is removed at the end.
+  Read ends and index lists are sorted in runs of `--max-records-in-ram` entries (1 or
+  more, default 4,000,000) spilled to `--tmp-dir` (default the system temporary
+  directory). Mates waiting for a mate on a later reference are spilled there too, one
+  file per reference; memory holds those waiting on the reference being read. The
+  directory `bammetrics-markdup.<pid>.<n>` is made at the first spill and removed at the
+  end, on an error, and on SIGINT, SIGTERM or SIGHUP; a SIGKILL leaves it.
+- `--tmp-dir` needs about 55 bytes per input record at its peak, during the first read:
+  6.5 GiB for the 150.5M-record HG002 exome, 42.1 GiB for a 768.6M-record genome (about
+  the size of the output BAM). Peak memory was 0.8 GB on the exome and 2.75 GB on the
+  genome at the default `--max-records-in-ram`.
+- `-o` and `--metrics-file` are written under temporary names in their directories and
+  renamed at the end, so a failed or interrupted run leaves an earlier file whole. An
+  output that is an input (by path, symbolic link or hard link), or two outputs that
+  name one file, exit 2 before anything is read.
 - A CRAM input needs `-R`. Its records come out with the `MD` and `NM` tags htsjdk
   rebuilds while decoding. The output is always BAM: an `-o` ending in `.sam` or `.cram`
-  exits 1.
+  exits 1. SAM input, plain or bgzipped, exits 1 (`SAM input is not supported`);
+  convert it with `samtools view -b`.
 - `--create-index` writes `marked.bai` beside a coordinate-sorted BAM;
   `--create-md5-file` writes `marked.bam.md5`. `--compression-level` sets the BGZF level
   (default 5). `--threads` sets the decompression and compression workers.
 
 KNOWN_DIFFERENCES.md lists what differs from Picard: the `@PG` `VN` and `CL`, the flow
-options it refuses, and the `MAX_RECORDS_IN_RAM` meaning.
+options it refuses, the `READ_NAME_REGEX` syntax and the `MAX_RECORDS_IN_RAM` meaning.
 
 ## Post verbs
 

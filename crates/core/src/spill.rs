@@ -13,8 +13,8 @@ use std::collections::BinaryHeap;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::sync::{Mutex, OnceLock};
 
 use crate::error::{Error, Result};
 
@@ -26,47 +26,74 @@ pub trait Spill: Sized {
 }
 
 /// A directory of run files, removed with everything this process put in it.
+/// The directory is created by the first [`TempDir::file`], so a run that
+/// spills nothing never touches `TMP_DIR`. Its name holds the process ID
+/// and a process-wide counter; a name already taken is skipped.
 #[derive(Debug)]
 pub struct TempDir {
-    path: PathBuf,
+    base: PathBuf,
+    /// The directory, once created.
+    path: OnceLock<PathBuf>,
     files: Mutex<Vec<PathBuf>>,
     next: AtomicU64,
 }
 
+/// Directories made by this process so far, for unique names.
+static DIRECTORIES: AtomicU64 = AtomicU64::new(0);
+
 impl TempDir {
-    /// A new directory under `base` (the first `TMP_DIR`, or the system
-    /// temporary directory).
-    pub fn new(base: Option<&Path>) -> Result<Self> {
-        let base = base.map_or_else(std::env::temp_dir, Path::to_path_buf);
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_nanos());
-        let path = base.join(format!("bammetrics-markdup.{}.{stamp}", std::process::id()));
-        fs::create_dir_all(&base)
-            .and_then(|()| fs::create_dir(&path))
-            .map_err(|source| Error::Output {
-                path: path.clone(),
-                source,
-            })?;
-        Ok(Self {
-            path,
+    /// A directory to be made under `base` (the first `TMP_DIR`, or the
+    /// system temporary directory).
+    pub fn new(base: Option<&Path>) -> Self {
+        Self {
+            base: base.map_or_else(std::env::temp_dir, Path::to_path_buf),
+            path: OnceLock::new(),
             files: Mutex::new(Vec::new()),
             next: AtomicU64::new(0),
-        })
+        }
     }
 
-    pub fn path(&self) -> &Path {
-        &self.path
+    /// The directory, `None` before the first file.
+    pub fn path(&self) -> Option<&Path> {
+        self.path.get().map(PathBuf::as_path)
     }
 
-    /// A new file name in the directory, recorded for removal.
-    pub fn file(&self, stem: &str) -> PathBuf {
+    fn create(&self) -> Result<&Path> {
+        if let Some(path) = self.path.get() {
+            return Ok(path);
+        }
+        let error = |path: &Path| {
+            let path = path.to_path_buf();
+            move |source| Error::Output { path, source }
+        };
+        fs::create_dir_all(&self.base).map_err(error(&self.base))?;
+        loop {
+            let n = DIRECTORIES.fetch_add(1, AtomicOrdering::Relaxed);
+            let path = self
+                .base
+                .join(format!("bammetrics-markdup.{}.{n}", std::process::id()));
+            match fs::create_dir(&path) {
+                Ok(()) => {
+                    crate::cleanup::register(&path);
+                    return Ok(self.path.get_or_init(|| path));
+                }
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
+                Err(e) => return Err(error(&path)(e)),
+            }
+        }
+    }
+
+    /// A new file name in the directory, recorded for removal. The first
+    /// call creates the directory.
+    pub fn file(&self, stem: &str) -> Result<PathBuf> {
+        let dir = self.create()?;
         let n = self.next.fetch_add(1, AtomicOrdering::Relaxed);
-        let path = self.path.join(format!("{stem}.{n}.tmp"));
+        let path = dir.join(format!("{stem}.{n}.tmp"));
+        crate::cleanup::register(&path);
         if let Ok(mut files) = self.files.lock() {
             files.push(path.clone());
         }
-        path
+        Ok(path)
     }
 
     /// Remove one file made by [`TempDir::file`] before the directory goes.
@@ -76,6 +103,7 @@ impl TempDir {
         {
             files.swap_remove(i);
             let _ = fs::remove_file(path);
+            crate::cleanup::unregister(path);
         }
     }
 }
@@ -85,9 +113,13 @@ impl Drop for TempDir {
         if let Ok(files) = self.files.lock() {
             for file in files.iter() {
                 let _ = fs::remove_file(file);
+                crate::cleanup::unregister(file);
             }
         }
-        let _ = fs::remove_dir(&self.path);
+        if let Some(path) = self.path.get() {
+            let _ = fs::remove_dir(path);
+            crate::cleanup::unregister(path);
+        }
     }
 }
 
@@ -105,6 +137,8 @@ pub struct Sorter<'d, T> {
     limit: usize,
     buffer: Vec<T>,
     runs: Vec<PathBuf>,
+    /// How many merges made each run: 0 for a spilled buffer.
+    levels: Vec<u32>,
     count: u64,
 }
 
@@ -117,6 +151,7 @@ impl<'d, T: Spill + Ord> Sorter<'d, T> {
             limit: limit.max(1),
             buffer: Vec::new(),
             runs: Vec::new(),
+            levels: Vec::new(),
             count: 0,
         }
     }
@@ -141,7 +176,7 @@ impl<'d, T: Spill + Ord> Sorter<'d, T> {
 
     fn spill(&mut self) -> Result<()> {
         self.buffer.sort();
-        let path = self.dir.file(self.stem);
+        let path = self.dir.file(self.stem)?;
         let file = File::create(&path).map_err(write_error(&path))?;
         let mut out = BufWriter::with_capacity(1 << 20, file);
         let mut bytes = Vec::with_capacity(64);
@@ -152,6 +187,22 @@ impl<'d, T: Spill + Ord> Sorter<'d, T> {
         }
         out.flush().map_err(write_error(&path))?;
         self.runs.push(path);
+        self.levels.push(0);
+        // The last MAX_OPEN_RUNS runs of one level merge into one run of
+        // the next, so a small buffer cannot pile up thousands of files;
+        // consecutive runs merge, so ties keep their order.
+        while self.levels.len() >= MAX_OPEN_RUNS {
+            let from = self.levels.len() - MAX_OPEN_RUNS;
+            let level = self.levels[from];
+            if self.levels[from..].iter().any(|l| *l != level) {
+                break;
+            }
+            let merged = self.merge_into_run(&self.runs[from..])?;
+            self.runs.truncate(from);
+            self.levels.truncate(from);
+            self.runs.push(merged);
+            self.levels.push(level + 1);
+        }
         Ok(())
     }
 
@@ -175,6 +226,7 @@ impl<'d, T: Spill + Ord> Sorter<'d, T> {
             }
             self.runs = merged;
         }
+        self.levels.clear();
         Ok(Sorted {
             source: open_runs(self.dir, std::mem::take(&mut self.runs))?,
         })
@@ -188,7 +240,7 @@ impl<'d, T: Spill + Ord> Sorter<'d, T> {
         let mut source: Sorted<'_, T> = Sorted {
             source: open_runs(self.dir, group.to_vec())?,
         };
-        let path = self.dir.file(self.stem);
+        let path = self.dir.file(self.stem)?;
         let file = File::create(&path).map_err(write_error(&path))?;
         let mut out = BufWriter::with_capacity(1 << 20, file);
         let mut bytes = Vec::with_capacity(64);
@@ -365,7 +417,7 @@ mod tests {
 
     #[test]
     fn runs_merge_into_one_sorted_stream_and_are_removed() {
-        let dir = TempDir::new(None).expect("temp dir");
+        let dir = TempDir::new(None);
         let mut sorter = Sorter::new(&dir, "n", 3);
         let values = [9u64, 1, 7, 3, 3, 0, 1 << 40, 5, 2, 8];
         for v in values {
@@ -380,18 +432,25 @@ mod tests {
         let mut expected = values.to_vec();
         expected.sort_unstable();
         assert_eq!(out, expected);
-        let runs: Vec<_> = fs::read_dir(dir.path()).expect("dir").collect();
+        let runs: Vec<_> = fs::read_dir(dir.path().expect("created"))
+            .expect("dir")
+            .collect();
         assert_eq!(runs.len(), 4);
         drop(sorted);
-        assert_eq!(fs::read_dir(dir.path()).expect("dir").count(), 0);
-        let path = dir.path().to_path_buf();
+        assert_eq!(
+            fs::read_dir(dir.path().expect("created"))
+                .expect("dir")
+                .count(),
+            0
+        );
+        let path = dir.path().expect("created").to_path_buf();
         drop(dir);
         assert!(!path.exists());
     }
 
     #[test]
     fn many_runs_merge_in_groups() {
-        let dir = TempDir::new(None).expect("temp dir");
+        let dir = TempDir::new(None);
         let mut sorter = Sorter::new(&dir, "many", 2);
         let values: Vec<u64> = (0..300u64).map(|i| (i * 7919) % 301).collect();
         for v in &values {
@@ -405,7 +464,45 @@ mod tests {
         let mut expected = values;
         expected.sort_unstable();
         assert_eq!(out, expected);
-        assert!(fs::read_dir(dir.path()).expect("dir").count() <= MAX_OPEN_RUNS);
+        assert!(
+            fs::read_dir(dir.path().expect("created"))
+                .expect("dir")
+                .count()
+                <= MAX_OPEN_RUNS
+        );
+    }
+
+    #[test]
+    fn a_one_record_buffer_keeps_few_files() {
+        let dir = TempDir::new(None);
+        let mut sorter = Sorter::new(&dir, "ones", 1);
+        let values: Vec<u64> = (0..5000u64).map(|i| ((i % 3) << 32) | i).collect();
+        for v in &values {
+            sorter.push(*v).expect("push");
+            let files = dir
+                .path()
+                .map_or(0, |p| fs::read_dir(p).expect("dir").count());
+            assert!(files < 3 * MAX_OPEN_RUNS, "{files} run files");
+        }
+        let mut sorted = sorter.finish().expect("finish");
+        let mut out = Vec::new();
+        while let Some(v) = sorted.next_item().expect("next") {
+            out.push(v);
+        }
+        let mut expected = values;
+        expected.sort_unstable();
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn nothing_is_created_until_a_run_spills() {
+        let base = std::env::temp_dir().join(format!("bammetrics-lazy.{}", std::process::id()));
+        let dir = TempDir::new(Some(&base));
+        let mut sorter = Sorter::new(&dir, "lazy", 10);
+        sorter.push(1u64).expect("push");
+        let mut sorted = sorter.finish().expect("finish");
+        assert_eq!(sorted.next_item().expect("next"), Some(1));
+        assert!(dir.path().is_none() && !base.exists());
     }
 
     #[test]

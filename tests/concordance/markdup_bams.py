@@ -27,6 +27,15 @@
 * `markdup_unsorted`: `markdup` with `SO:unsorted`.
 * `markdup_natural`: `markdup` sorted by name in natural order
   (`samtools sort -n`), which htsjdk's writer refuses.
+* `markdup_text`: `markdup` with UTF-8 letters in `@RG` `SM`, `LB`, `PU`
+  and `DS`, in `@PG` `CL` and in `@CO`, a tab in `@CO` and an `@RG` `DT`
+  (htsjdk writes `DT` back in the JVM's time zone; the harness strips it).
+* `mates_behind`: two templates sharing a read name and read group; the
+  first waits for a mate on c1 that came already, so htsjdk never reads
+  its entry back and both tools succeed.
+* `mates_late`: two templates sharing a read name and read group whose
+  first mates wait for c2; reading c2's entries back finds the key twice
+  (htsjdk's `Value was put into PairInfoMap more than once`).
 """
 import random
 import subprocess
@@ -244,6 +253,39 @@ def name_sorted(source, target, natural=False):
     return target
 
 
+def text_header(source, target):
+    """`source` with non-ASCII header values, a tab in a comment and a DT."""
+    text = subprocess.run(["samtools", "view", "-H", "--no-PG", str(source)], check=True,
+                          capture_output=True).stdout.decode("utf-8")
+    text = text.replace("@RG\tID:rgA\tSM:S1\tLB:L1\tPU:FC1.1",
+                        "@RG\tID:rgA\tSM:S\u00e9\tLB:L1\u00c9\tPU:\u00e9.1\tDS:caf\u00e9"
+                        "\tDT:2015-10-01T18:00:00-0600", 1)
+    text = text.replace("@PG\tID:pgA\tPN:aligner", "@PG\tID:pgA\tPN:aligner"
+                        "\tCL:/home/\u00e9/align", 1)
+    text += "@CO\tna\u00efve \u00e9\n@CO\ta\tb\n"
+    sam = target.with_suffix(".header.sam")
+    sam.write_bytes(text.encode("utf-8"))
+    with open(target, "wb") as handle:
+        subprocess.run(["samtools", "reheader", "--no-PG", str(sam), str(source)], check=True,
+                       stdout=handle)
+    return target
+
+
+def shared_names(out, name, records):
+    """A BAM of `records`: (flag, contig, position, mate contig, mate position), all named
+    `same` in read group rgA."""
+    header = "@HD\tVN:1.6\tSO:coordinate\n"
+    header += "".join(f"@SQ\tSN:{n}\tLN:{length}\n" for n, length in CONTIGS)
+    header += "@RG\tID:rgA\tSM:S1\tLB:L1\n"
+    lines = [f"same\t{flag}\t{ref}\t{pos}\t60\t10M\t{mref}\t{mpos}\t0\tACGTACGTAC\t"
+             f"IIIIIIIIII\tRG:Z:rgA\tMC:Z:10M" for flag, ref, pos, mref, mpos in records]
+    sam = out / f"{name}.sam"
+    sam.write_text(header + "".join(line + "\n" for line in lines))
+    bam = out / f"{name}.bam"
+    run(["samtools", "view", "--no-PG", "-b", "-o", str(bam), str(sam)])
+    return bam
+
+
 def build_all(out: Path, seed=29):
     ref = write_reference(out)
     bams = {}
@@ -275,6 +317,13 @@ def build_all(out: Path, seed=29):
     no_rg = MarkdupSam(ref, random.Random(seed + 2))
     no_rg.pair("lonely", "c1", 500, 800, (ref["c1"][499:575], ref["c1"][799:875]))
     bams["markdup_no_rg"] = write(no_rg, out, "markdup_no_rg", GROUPS, PROGRAMS)
+    bams["markdup_text"] = text_header(bams["markdup"], out / "markdup_text.bam")
+    bams["mates_behind"] = shared_names(out, "mates_behind", [
+        (1121, "c1", 102, "=", 121), (129, "c1", 105, "c2", 105),
+        (1169, "c1", 121, "=", 102), (65, "c2", 105, "c1", 105)])
+    bams["mates_late"] = shared_names(out, "mates_late", [
+        (65, "c1", 100, "c2", 100), (129, "c1", 150, "c2", 150),
+        (129, "c2", 100, "c1", 100), (65, "c2", 150, "c1", 150)])
     return bams
 
 

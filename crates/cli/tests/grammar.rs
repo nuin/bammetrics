@@ -85,8 +85,10 @@ struct Built {
     vcf: String,
 }
 
-fn build_inputs() -> Built {
-    let dir = fresh_dir("inputs");
+/// The input files, in a directory of `test`'s own: two tests building one
+/// directory at once would remove each other's files.
+fn build_inputs(test: &str) -> Built {
+    let dir = fresh_dir(&format!("inputs-{test}"));
     let bed = dir.join("panel.bed");
     fs::write(&bed, "chr1\t1000\t1100\nchr1\t2000\t2050\n").expect("bed");
     let ref_flat = dir.join("genes.refflat");
@@ -374,7 +376,7 @@ fn spellings(name: &str, value: &str) -> [Vec<String>; 3] {
 
 #[test]
 fn every_verb_reads_three_spellings_as_the_picard_face_does() {
-    let built = build_inputs();
+    let built = build_inputs("spellings");
     let cases = cases(&built);
     for case in &cases {
         let picard_dir = fresh_dir(&format!("{}-picard", case.verb));
@@ -422,7 +424,7 @@ fn every_verb_reads_three_spellings_as_the_picard_face_does() {
 
 #[test]
 fn every_registry_tool_is_in_the_matrix() {
-    let built = build_inputs();
+    let built = build_inputs("matrix");
     let listed = run_ok(&strings(&["tools"]));
     let text = String::from_utf8_lossy(&listed.stdout);
     let classes: Vec<&str> = text

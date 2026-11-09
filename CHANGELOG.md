@@ -25,11 +25,31 @@ MarkDuplicates, the first bammetrics tool that writes reads.
   supplementary and unmapped records of a duplicate template), several `INPUT` files
   merged as htsjdk merges them (read group and program IDs that collide get Picard's
   suffixes), CRAM input with `R=` (`MD` and `NM` rebuilt as htsjdk rebuilds them).
-  The flow-based options exit 1 as not implemented; SAM and CRAM output exit 1.
+  The flow-based options are accepted at their defaults only; SAM and CRAM output
+  exit 1. Header values are copied byte for byte (UTF-8 letters, a tab in `@CO`), and
+  text from the command line is written one byte per character as htsjdk writes it.
+- `MarkDuplicates` never writes over an input: an `OUTPUT`, `METRICS_FILE`, index or
+  MD5 that is an input (by path, symbolic link or hard link), or two that name one file,
+  exit before anything is read, in every face. `OUTPUT`, its index and MD5 are written
+  under temporary names and renamed at the end, so a failed run leaves an earlier file
+  whole.
+- Mates waiting for a mate on a later reference spill to one file per reference in
+  `TMP_DIR`, as htsjdk's `CoordinateSortedPairInfoMap` does, so memory holds only those
+  waiting on the reference being read. A key found twice when a reference's file is
+  read back fails with Picard's `Value was put into PairInfoMap more than once`; a key
+  put twice for a reference already passed is not an error, as in Picard.
 - `crates/core/src/spill.rs`: a stable sort that spills sorted runs to `TMP_DIR` and
   merges them, the role of htsjdk's `SortingCollection`. Read ends, duplicate indexes and
   set representatives go through it, so memory holds `MAX_RECORDS_IN_RAM` (default
-  4,000,000) entries per list. Every file it writes is removed at the end.
+  4,000,000) entries per list; 64 runs of one level merge as they are spilled, so even
+  `MAX_RECORDS_IN_RAM=1` keeps under 200 files. The directory is made at the first spill
+  and every file it holds is removed at the end, on an error, and on SIGINT, SIGTERM
+  or SIGHUP (`crates/core/src/cleanup.rs`, the `signal-hook` watcher of the binary).
+- Metrics files of every tool are written under a temporary name and renamed into
+  place (`registry::write_to`), so a failed write leaves the earlier file.
+- SAM input, plain or bgzipped, exits 1 with `not a BAM or CRAM file (SAM input is not
+  supported; convert it with samtools view -b)` for every tool, where it said `failed
+  to fill whole buffer` or `invalid BAM header`.
 - `crates/core/src/bam_raw.rs`: BAM records as bytes, read from the inflated stream and
   written back with only the flag and tags changed, tags in htsjdk's list order.
   `pass::with_record_stream` hands a BAM's or CRAM's record stream to such a reader.
@@ -44,9 +64,10 @@ MarkDuplicates, the first bammetrics tool that writes reads.
   distinct non-default values per column. `tests/data/markdup.bam`
   (`tests/data/make_markdup_bam.py`) and 13 golden records; a written BAM is recorded as
   its header and records in text. The `tools` listing gains one row.
-- HG002 exome (10.3 GB, 150.5 million records): 299 s and 783 MiB against Picard's
+- HG002 exome (10.3 GB, 150.5 million records): 303 s and 765 MiB against Picard's
   1,364 s and 11,256 MiB; equal metrics, 7,305,282 duplicates in both, every record
-  equal (docs/benchmarks.md).
+  equal, header lines other than `@PG` equal once `@RG DT` is dropped
+  (docs/benchmarks.md).
 
 ## 0.17.0
 

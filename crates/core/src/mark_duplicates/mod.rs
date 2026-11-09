@@ -24,6 +24,7 @@
 mod build;
 mod inputs;
 mod mark;
+mod mates;
 mod md_nm;
 mod read_ends;
 mod write;
@@ -163,6 +164,15 @@ impl Options {
                 ))
             })?;
         let records_in_ram: i64 = inv.parse("MAX_RECORDS_IN_RAM", DEFAULT_RECORDS_IN_RAM as i64)?;
+        let records_in_ram = usize::try_from(records_in_ram)
+            .ok()
+            .filter(|n| *n >= 1)
+            .ok_or_else(|| {
+                Error::Usage(format!(
+                    "MAX_RECORDS_IN_RAM={records_in_ram}: expected 1 or more"
+                ))
+            })?;
+        refuse_flow_mode(inv)?;
         let output = inv
             .get("OUTPUT")
             .map(PathBuf::from)
@@ -220,10 +230,42 @@ impl Options {
             create_index: inv.flag("CREATE_INDEX", false)?,
             create_md5_file: inv.flag("CREATE_MD5_FILE", false)?,
             tmp_dir: inv.all("TMP_DIR").first().map(PathBuf::from),
-            records_in_ram: usize::try_from(records_in_ram).unwrap_or(1).max(1),
+            records_in_ram,
             command: inv.command.clone(),
         })
     }
+}
+
+/// The flow-based options with their Picard defaults. They are accepted at
+/// the default only: flow-based duplicate marking is not implemented.
+const FLOW_DEFAULTS: [(&str, &str); 9] = [
+    ("FLOW_MODE", "false"),
+    ("FLOW_DUP_STRATEGY", "FLOW_QUALITY_SUM_STRATEGY"),
+    ("FLOW_EFFECTIVE_QUALITY_THRESHOLD", "15"),
+    ("FLOW_Q_IS_KNOWN_END", "false"),
+    ("FLOW_SKIP_FIRST_N_FLOWS", "0"),
+    ("FLOW_UNPAIRED_END_UNCERTAINTY", "0"),
+    ("FLOW_UNPAIRED_START_UNCERTAINTY", "0"),
+    ("FLOW_USE_END_IN_UNPAIRED_READS", "false"),
+    ("FLOW_USE_UNPAIRED_CLIPPED_END", "false"),
+];
+
+fn refuse_flow_mode(inv: &Invocation) -> Result<()> {
+    for (name, default) in FLOW_DEFAULTS {
+        let Some(value) = inv.get(name) else { continue };
+        let at_default = match default {
+            "false" => !inv.flag(name, false)?,
+            "FLOW_QUALITY_SUM_STRATEGY" => value == default,
+            _ => inv.parse::<i64>(name, 0)?.to_string() == default,
+        };
+        if !at_default {
+            return Err(Error::Usage(format!(
+                "{name}={value}: flow-based duplicate marking is not implemented; only the \
+                 default {default} is accepted"
+            )));
+        }
+    }
+    Ok(())
 }
 
 pub const TOOL: Tool = Tool {
@@ -323,7 +365,7 @@ pub const TOOL: Tool = Tool {
         Opt::text(
             &["READ_NAME_REGEX"],
             "Regex with tile, x and y groups; null for no optical duplicates (default: \
-             5- and 7-field Illumina names).",
+             5- and 7-field Illumina names). Rust regex syntax: no look-around, no \\Q...\\E.",
         ),
         Opt::int(
             &["OPTICAL_DUPLICATE_PIXEL_DISTANCE"],
@@ -349,20 +391,56 @@ pub const TOOL: Tool = Tool {
         .repeated(),
         Opt::int(
             &["MAX_RECORDS_IN_RAM"],
-            "Entries each sorted list holds in memory before it spills to TMP_DIR (default \
-             4000000).",
+            "Entries each sorted list holds in memory before it spills to TMP_DIR, 1 or more \
+             (default 4000000).",
         ),
-        Opt::ignored(
+        Opt::ignored_int(
             &["MAX_SEQUENCES_FOR_DISK_READ_ENDS_MAP", "MAX_SEQS"],
             "obsolete in Picard",
         ),
-        Opt::ignored(
+        Opt::ignored_int(
             &["MAX_FILE_HANDLES_FOR_READ_ENDS_MAP", "MAX_FILE_HANDLES"],
-            "unmatched mates are held in memory",
+            "waiting mates spill to one file per reference, opened one at a time",
         ),
-        Opt::ignored(
+        Opt::ignored_float(
             &["SORTING_COLLECTION_SIZE_RATIO"],
             "MAX_RECORDS_IN_RAM sets the sort buffers",
+        ),
+        Opt::bool(
+            &["FLOW_MODE"],
+            "Flow-based reads are not supported: only false, the default, is accepted.",
+        ),
+        Opt::text(
+            &["FLOW_DUP_STRATEGY"],
+            "Only FLOW_QUALITY_SUM_STRATEGY, the default, is accepted.",
+        ),
+        Opt::int(
+            &["FLOW_EFFECTIVE_QUALITY_THRESHOLD"],
+            "Only 15, the default, is accepted.",
+        ),
+        Opt::bool(
+            &["FLOW_Q_IS_KNOWN_END"],
+            "Only false, the default, is accepted.",
+        ),
+        Opt::int(
+            &["FLOW_SKIP_FIRST_N_FLOWS"],
+            "Only 0, the default, is accepted.",
+        ),
+        Opt::int(
+            &["FLOW_UNPAIRED_END_UNCERTAINTY"],
+            "Only 0, the default, is accepted.",
+        ),
+        Opt::int(
+            &["FLOW_UNPAIRED_START_UNCERTAINTY"],
+            "Only 0, the default, is accepted.",
+        ),
+        Opt::bool(
+            &["FLOW_USE_END_IN_UNPAIRED_READS"],
+            "Only false, the default, is accepted.",
+        ),
+        Opt::bool(
+            &["FLOW_USE_UNPAIRED_CLIPPED_END"],
+            "Only false, the default, is accepted.",
         ),
         crate::registry::REFERENCE_OPTION,
     ],
@@ -376,7 +454,9 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
 }
 
 /// Mark duplicates as `opts` say: write `OUTPUT` (and its index and MD5
-/// when asked) and return the metrics file for `METRICS_FILE`.
+/// when asked) and return the metrics file for `METRICS_FILE`. `OUTPUT`,
+/// its index and its MD5 are written under temporary names and renamed
+/// into place at the end, so a failed run leaves no partial file.
 pub fn run(opts: &Options) -> Result<crate::metric::MetricsOutput> {
     for path in [&opts.output, &opts.metrics] {
         check_writable(path)?;
@@ -387,7 +467,7 @@ pub fn run(opts: &Options) -> Result<crate::metric::MetricsOutput> {
             opts.output.display()
         )));
     }
-    for input in &opts.inputs {
+    for input in opts.inputs.iter().chain(&opts.reference) {
         if !input.exists() {
             return Err(Error::Input {
                 path: input.clone(),
@@ -395,12 +475,91 @@ pub fn run(opts: &Options) -> Result<crate::metric::MetricsOutput> {
             });
         }
     }
-    let temp = TempDir::new(opts.tmp_dir.as_deref())?;
+    refuse_overlaps(opts)?;
+    let temp = TempDir::new(opts.tmp_dir.as_deref());
     let inputs = spool_streams(&opts.inputs, &temp)?;
     let built = build::run(opts, &inputs, &temp)?;
     let marks = mark::run(opts, built, &temp)?;
     let metrics = write::run(opts, &inputs, marks)?;
     Ok(metrics)
+}
+
+/// The files a run writes, with the option that names each.
+fn written_files(opts: &Options) -> Vec<(&'static str, PathBuf)> {
+    let mut files = vec![
+        ("OUTPUT", opts.output.clone()),
+        ("METRICS_FILE", opts.metrics.clone()),
+    ];
+    if opts.create_index {
+        files.push(("CREATE_INDEX", opts.output.with_extension("bai")));
+    }
+    if opts.create_md5_file {
+        files.push(("CREATE_MD5_FILE", write::md5_path(&opts.output)));
+    }
+    files
+}
+
+/// Refuse a written file that is an input (writing it would destroy the
+/// input before the second read) or that another written file names too.
+/// Paths compare after symbolic links and `..` are resolved; on Unix a
+/// hard link to an input is found by device and inode. Device files are
+/// not destroyed by writing and are not compared.
+fn refuse_overlaps(opts: &Options) -> Result<()> {
+    let device = |path: &Path| same_file_key(path).starts_with("/dev");
+    let read: Vec<&PathBuf> = opts
+        .inputs
+        .iter()
+        .chain(&opts.reference)
+        .filter(|p| !device(p))
+        .collect();
+    let written = written_files(opts);
+    for (i, (name, path)) in written.iter().enumerate() {
+        if device(path) {
+            continue;
+        }
+        if let Some(input) = read.iter().find(|input| same_file(input, path)) {
+            return Err(Error::Usage(format!(
+                "{name}={}: it is the input {}; writing it would destroy it",
+                path.display(),
+                input.display()
+            )));
+        }
+        if let Some((other, _)) = written[..i].iter().find(|(_, o)| same_file(o, path)) {
+            return Err(Error::Usage(format!(
+                "{name}={}: {other} names the same file; one file cannot hold both",
+                path.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// `path` absolute with its links resolved, or with its directory resolved
+/// when the file does not exist yet.
+fn same_file_key(path: &Path) -> PathBuf {
+    if let Ok(resolved) = path.canonicalize() {
+        return resolved;
+    }
+    let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    match (absolute.parent(), absolute.file_name()) {
+        (Some(dir), Some(name)) => dir
+            .canonicalize()
+            .map_or_else(|_| absolute.clone(), |d| d.join(name)),
+        _ => absolute,
+    }
+}
+
+fn same_file(a: &Path, b: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if let (Ok(x), Ok(y)) = (fs::metadata(a), fs::metadata(b))
+            && (x.dev(), x.ino()) == (y.dev(), y.ino())
+        {
+            return true;
+        }
+    }
+    same_file_key(a) == same_file_key(b)
 }
 
 fn has_extension(path: &Path, extension: &str) -> bool {
@@ -438,7 +597,7 @@ fn spool_streams(inputs: &[PathBuf], temp: &TempDir) -> Result<Vec<PathBuf>> {
             if regular && !input.starts_with("/dev") {
                 return Ok(input.clone());
             }
-            let copy = temp.file("input");
+            let copy = temp.file("input")?;
             let read_error = |source| Error::Input {
                 path: input.clone(),
                 source,

@@ -157,7 +157,7 @@ pub fn read_header(path: &Path) -> Result<sam::Header> {
     } else {
         bam::io::Reader::new(sniffed.reader)
             .read_header()
-            .map_err(input)
+            .map_err(|e| input(cram::bam_header_error(e)))
     }
 }
 
@@ -208,7 +208,9 @@ pub fn with_record_stream<T>(
             workers,
             sniffed.reader,
         ));
-        let header = reader.read_header().map_err(input)?;
+        let header = reader
+            .read_header()
+            .map_err(|e| input(cram::bam_header_error(e)))?;
         consume(&header, reader.get_mut(), false)
     }
 }
@@ -286,7 +288,9 @@ where
             workers,
             sniffed.reader,
         ));
-        let header = reader.read_header().map_err(input)?;
+        let header = reader
+            .read_header()
+            .map_err(|e| input(cram::bam_header_error(e)))?;
         pass.drive(&mut reader, &header, build)
     }
 }

@@ -752,6 +752,15 @@ def mark_duplicates(
     create_md5_file: bool | None = None,
     tmp_dir: _Path | Sequence[_Path] | None = None,
     max_records_in_ram: int | None = None,
+    flow_mode: bool | None = None,
+    flow_dup_strategy: str | None = None,
+    flow_effective_quality_threshold: int | None = None,
+    flow_q_is_known_end: bool | None = None,
+    flow_skip_first_n_flows: int | None = None,
+    flow_unpaired_end_uncertainty: int | None = None,
+    flow_unpaired_start_uncertainty: int | None = None,
+    flow_use_end_in_unpaired_reads: bool | None = None,
+    flow_use_unpaired_clipped_end: bool | None = None,
     reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """MarkDuplicates: one row per library (DuplicationMetrics) plus the set_size

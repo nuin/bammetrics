@@ -8,4 +8,4 @@ FLOW_MODE=true
 1
 ## stdout
 ## stderr
-bammetrics: MarkDuplicates: option FLOW_MODE is not implemented (it may change the metrics)
+bammetrics: FLOW_MODE=true: flow-based duplicate marking is not implemented; only the default false is accepted
