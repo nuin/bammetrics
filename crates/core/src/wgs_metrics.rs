@@ -31,7 +31,7 @@ use crate::error::{Error, Result};
 use crate::histogram::Histogram;
 use crate::intervals::{self, uniqued};
 use crate::locus::{
-    BaseEntry, Classic, Edge, EdgeEntry, Engine, Filters, Finished, NameSet, Settings, Sink,
+    BaseEntry, Classic, Edge, EdgeEntry, Engine, Filters, Finished, NameSet, Settings, Setup, Sink,
 };
 use crate::metric::{HistogramSection, HistogramSeries, MetricsOutput, ToolOutput, Value};
 use crate::metrics_file::KeyClass;
@@ -872,7 +872,9 @@ fn run_variant(inv: &Invocation, variant: Variant) -> Result<ToolOutput> {
     let opts = Options::from_invocation(inv, variant)?;
     let settings = |locus_cap: Option<usize>| Settings {
         minimum_mapping_quality: opts.minimum_mapping_quality,
-        count_unpaired: opts.count_unpaired,
+        setup: Setup::Wgs {
+            count_unpaired: opts.count_unpaired,
+        },
         locus_accumulation_cap: locus_cap,
         stop_after: opts.stop_after,
     };
@@ -1051,6 +1053,9 @@ mod tests {
             start: 2,
             end: 5,
             blocks: Vec::new(),
+            flags: Default::default(),
+            read_group: None,
+            original_qualities: None,
         });
         let event = EdgeEntry {
             read,

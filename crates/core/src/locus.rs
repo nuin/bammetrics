@@ -24,18 +24,28 @@
 //! not `N` and the counting filters have by then seen every record up to
 //! and including the one that forced the emission, which is what makes the
 //! `PCT_EXC_*` columns of a `STOP_AFTER` run reproducible.
+//!
+//! `CollectOxoGMetrics` sets the iterator up differently ([`Setup::OxoG`]):
+//! secondary, duplicate, MAPQ and insert size filters with no adapter or
+//! pair filter, non-PF reads kept unless told otherwise, and covered loci
+//! only (`setEmitUncoveredLoci(false)`). Its sink counts the sites itself
+//! and stops the pass through [`Sink::done`].
 
 use std::collections::VecDeque;
 use std::sync::Arc;
 
 use noodles::bam;
 use noodles::sam;
+use noodles::sam::alignment::record::Flags;
+use noodles::sam::alignment::record::data::field::{Tag, Value};
+use noodles::sam::header::record::value::map::header::tag::SORT_ORDER;
 
 use crate::adapter::Adapters;
 use crate::blocks::{AlignmentBlock, alignment_blocks};
 use crate::error::{Error, Result};
 use crate::intervals::{Interval, OverlapIndex};
 use crate::pass::Accumulator;
+use crate::quality::original_qualities;
 use crate::record::{position, record_name, reference_length};
 use crate::reference::Reference;
 use crate::sequence::is_no_call;
@@ -58,6 +68,13 @@ pub struct Read {
     /// `start - 1` when no operation consumes the reference.
     pub end: i64,
     pub blocks: Vec<AlignmentBlock>,
+    pub flags: Flags,
+    /// Index of the record's `RG` in the header's `@RG` lines; `None` for
+    /// no tag, an ID the header lacks, or a run that does not decode tags.
+    pub read_group: Option<usize>,
+    /// `OQ` as Java bytes, when the tag is present and not empty and the
+    /// run decodes tags.
+    pub original_qualities: Option<Box<[i8]>>,
 }
 
 impl Read {
@@ -71,6 +88,19 @@ impl Read {
             .ok_or_else(|| self.malformed("aligned base without a base quality"))
     }
 
+    /// `getOriginalBaseQualities()[offset]`: `None` without an `OQ`, an
+    /// error past its end, as htsjdk throws.
+    pub fn original_quality(&self, offset: usize) -> Result<Option<i8>> {
+        self.original_qualities
+            .as_ref()
+            .map(|oq| {
+                oq.get(offset)
+                    .copied()
+                    .ok_or_else(|| self.malformed("OQ shorter than the read"))
+            })
+            .transpose()
+    }
+
     pub fn base(&self, offset: usize) -> Result<u8> {
         self.bases
             .get(offset)
@@ -78,7 +108,7 @@ impl Read {
             .ok_or_else(|| self.malformed("aligned base without a sequence base"))
     }
 
-    fn malformed(&self, what: &'static str) -> Error {
+    pub fn malformed(&self, what: &'static str) -> Error {
         Error::MalformedRecord {
             name: String::from_utf8_lossy(&self.name).into_owned(),
             what,
@@ -97,9 +127,17 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 /// the lengths of its alignment blocks to its total (`getFilteredBases`), so
 /// a duplicate read below the MAPQ threshold counts under MAPQ only. The
 /// pair filter exists only when `COUNT_UNPAIRED` is false.
+///
+/// Under [`Setup::OxoG`] the adapter and pair filters are off and htsjdk's
+/// `InsertSizeFilter` comes first, uncounted. The MAPQ test there is the
+/// iterator's `mappingQualityScoreCutoff`; it drops the same records.
 #[derive(Debug)]
 pub struct Filters {
     adapters: Adapters,
+    adapter_filter: bool,
+    /// `InsertSizeFilter(min, max)`: drops an unpaired record and one whose
+    /// `|TLEN|` is outside `min..=max`.
+    insert_size: Option<(i32, i32)>,
     minimum_mapping_quality: i32,
     count_unpaired: bool,
     pub excluded_adapter: i64,
@@ -112,6 +150,8 @@ impl Filters {
     pub fn new(minimum_mapping_quality: i32, count_unpaired: bool) -> Self {
         Self {
             adapters: Adapters::default(),
+            adapter_filter: true,
+            insert_size: None,
             minimum_mapping_quality,
             count_unpaired,
             excluded_adapter: 0,
@@ -130,9 +170,16 @@ impl Filters {
         bases: impl FnOnce() -> Vec<u8>,
     ) -> bool {
         let flags = record.flags();
+        if let Some((min, max)) = self.insert_size {
+            let insert = record.template_length().wrapping_abs();
+            if !flags.is_segmented() || insert < min || insert > max {
+                return true;
+            }
+        }
         let unmapped = flags.is_unmapped();
         let mapq = record.mapping_quality().map_or(255, |q| q.get());
-        let adapter = (unmapped || mapq == 0)
+        let adapter = self.adapter_filter
+            && (unmapped || mapq == 0)
             && self
                 .adapters
                 .is_adapter(&bases(), unmapped, flags.is_reverse_complemented(), mapq);
@@ -526,13 +573,50 @@ pub trait Sink<E> {
         reference_n: bool,
         counter: i64,
     ) -> Result<()>;
+
+    /// True when the sink wants no more loci; the pass then stops reading.
+    fn done(&self) -> bool {
+        false
+    }
+}
+
+/// The program that set the locus iterator up.
+#[derive(Clone, Copy, Debug)]
+pub enum Setup {
+    /// `CollectWgsMetrics`: the counting filters, non-PF reads skipped,
+    /// uncovered loci emitted. The pair filter exists unless
+    /// `count_unpaired`.
+    Wgs { count_unpaired: bool },
+    /// `CollectOxoGMetrics`: the secondary, duplicate and (when given)
+    /// insert size filters, the MAPQ cutoff, non-PF reads kept when
+    /// `include_non_pf`, covered loci only, and each read's `RG` and `OQ`
+    /// decoded for the sink.
+    OxoG {
+        insert_size: Option<(i32, i32)>,
+        include_non_pf: bool,
+    },
+}
+
+/// The check of the `AbstractLocusIterator` constructor: a header sort
+/// order other than none, `unsorted` or `coordinate` is an error.
+pub fn check_sort_order(header: &sam::Header) -> Result<()> {
+    let order = header
+        .header()
+        .and_then(|h| h.other_fields().get(&SORT_ORDER))
+        .map(ToString::to_string);
+    match order.as_deref() {
+        None | Some("unsorted") | Some("coordinate") => Ok(()),
+        Some(order) => Err(Error::Usage(format!(
+            "the header sort order is {order}: the locus iterator needs a coordinate sorted input"
+        ))),
+    }
 }
 
 /// The engine's settings beyond the piler and the sink.
 #[derive(Debug)]
 pub struct Settings {
     pub minimum_mapping_quality: i32,
-    pub count_unpaired: bool,
+    pub setup: Setup,
     /// `LOCUS_ACCUMULATION_CAP` (`setMaxReadsToAccumulatePerLocus`); `None`
     /// for the edge iterator, which has none.
     pub locus_accumulation_cap: Option<usize>,
@@ -570,6 +654,8 @@ pub struct Engine<P: Piler, S> {
     /// The input ended (or the first record without a reference index
     /// was reached) and the pending loci are out.
     finished: bool,
+    /// `@RG` IDs to their header index, when the setup decodes tags.
+    read_groups: Option<std::collections::HashMap<Vec<u8>, usize>>,
 }
 
 /// The engine's result: the sink and the filter counts.
@@ -603,8 +689,27 @@ impl<P: Piler, S: Sink<P::Entry>> Engine<P, S> {
             }
             None => (Mask::whole_genome(header), None),
         };
+        let filters = match settings.setup {
+            Setup::Wgs { count_unpaired } => {
+                Filters::new(settings.minimum_mapping_quality, count_unpaired)
+            }
+            Setup::OxoG { insert_size, .. } => Filters {
+                adapter_filter: false,
+                insert_size,
+                ..Filters::new(settings.minimum_mapping_quality, true)
+            },
+        };
+        let read_groups = matches!(settings.setup, Setup::OxoG { .. }).then(|| {
+            header
+                .read_groups()
+                .keys()
+                .enumerate()
+                .map(|(i, id)| (id.to_vec(), i))
+                .collect()
+        });
         Self {
-            filters: Filters::new(settings.minimum_mapping_quality, settings.count_unpaired),
+            filters,
+            read_groups,
             piler,
             sink,
             mask,
@@ -662,6 +767,9 @@ impl<P: Piler, S: Sink<P::Entry>> Engine<P, S> {
         let reference_n = is_no_call(base);
         self.sink
             .locus(contig, pos, entries, bases, reference_n, self.counter)?;
+        if self.sink.done() {
+            self.stopped = true;
+        }
         if !reference_n {
             self.counter += 1;
             if self.settings.stop_after > 0 && self.counter > self.settings.stop_after - 1 {
@@ -669,6 +777,12 @@ impl<P: Piler, S: Sink<P::Entry>> Engine<P, S> {
             }
         }
         Ok(())
+    }
+
+    /// `emitUncoveredLoci`: true for `CollectWgsMetrics`, false for
+    /// `CollectOxoGMetrics`.
+    fn emit_uncovered(&self) -> bool {
+        matches!(self.settings.setup, Setup::Wgs { .. })
     }
 
     /// `createNextUncoveredLocusInfo(stop)`: the next masked position after
@@ -716,7 +830,9 @@ impl<P: Piler, S: Sink<P::Entry>> Engine<P, S> {
         if stop <= at {
             return Ok(false);
         }
-        if let Some((contig, pos)) = self.next_uncovered_before(at) {
+        if self.emit_uncovered()
+            && let Some((contig, pos)) = self.next_uncovered_before(at)
+        {
             self.emit(contig, pos, &[])?;
             return Ok(true);
         }
@@ -765,7 +881,7 @@ impl<P: Piler, S: Sink<P::Entry>> Engine<P, S> {
             self.populate(end)?;
         }
         let max_contig = self.mask.max_contig();
-        if max_contig < 0 {
+        if max_contig < 0 || !self.emit_uncovered() {
             return Ok(());
         }
         let after_mask = (max_contig as usize, self.mask.max_position() + 1);
@@ -793,6 +909,18 @@ impl<P: Piler, S: Sink<P::Entry>> Engine<P, S> {
         } else {
             qualities.into()
         };
+        let (read_group, original) = match &self.read_groups {
+            Some(ids) => {
+                let read_group = match record.data().get(&Tag::READ_GROUP) {
+                    Some(Ok(Value::String(id))) => ids.get(id.as_ref() as &[u8]).copied(),
+                    _ => None,
+                };
+                let mut oq = Vec::new();
+                let original = original_qualities(record, &mut oq)?.then(|| oq.into());
+                (read_group, original)
+            }
+            None => (None, None),
+        };
         Ok(Read {
             name_hash: fnv1a(&name),
             name,
@@ -801,6 +929,9 @@ impl<P: Piler, S: Sink<P::Entry>> Engine<P, S> {
             start,
             end: start + reference_length(record)? - 1,
             blocks,
+            flags: record.flags(),
+            read_group,
+            original_qualities: original,
         })
     }
 }
@@ -814,7 +945,14 @@ impl<P: Piler, S: Sink<P::Entry>> Engine<P, S> {
         let Some(contig) = record.reference_sequence_id().transpose()? else {
             return self.drain();
         };
-        if flags.is_unmapped() || flags.is_qc_fail() {
+        let include_non_pf = matches!(
+            self.settings.setup,
+            Setup::OxoG {
+                include_non_pf: true,
+                ..
+            }
+        );
+        if flags.is_unmapped() || (flags.is_qc_fail() && !include_non_pf) {
             return Ok(());
         }
         let start = position(record, record.alignment_start(), "missing alignment start")?;

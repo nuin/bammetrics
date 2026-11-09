@@ -9,6 +9,8 @@
 //! quarters of it. A bucket turns into a tree only past 8 entries in one
 //! bucket with 64 slots or more, which no library list reaches.
 
+use std::collections::HashMap;
+
 /// `String.hashCode`: `31 * h + c` over UTF-16 code units, wrapping.
 pub fn string_hash_code(text: &str) -> i32 {
     text.encode_utf16()
@@ -47,9 +49,66 @@ pub fn hash_map_order_by_hash(hashes: &[i32]) -> Vec<usize> {
     order
 }
 
+/// `HashMap.TREEIFY_THRESHOLD`: a bin holding this many entries turns into
+/// a tree when the next one arrives.
+const TREEIFY_THRESHOLD: usize = 8;
+/// `HashMap.MIN_TREEIFY_CAPACITY`: a smaller table doubles instead.
+const MIN_TREEIFY_CAPACITY: usize = 64;
+
+/// [`hash_map_order_by_hash`] with the table grown as `putVal` grows it:
+/// at the load threshold, and also when a bin reaches
+/// `TREEIFY_THRESHOLD` entries in a table under 64 slots. `None` when a
+/// bin would become a tree, whose iteration order this does not model.
+pub fn hash_map_order_checked(hashes: &[i32]) -> Option<Vec<usize>> {
+    let mut capacity = 16usize;
+    let mut bins: HashMap<usize, usize> = HashMap::new();
+    let bin = |hash: i32, capacity: usize| (spread(hash) & (capacity as i32 - 1)) as usize;
+    let rebin = |count: usize, capacity: usize| {
+        let mut bins = HashMap::new();
+        for &hash in &hashes[..count] {
+            *bins.entry(bin(hash, capacity)).or_default() += 1;
+        }
+        bins
+    };
+    for (size, &hash) in hashes.iter().enumerate() {
+        let entries = bins.entry(bin(hash, capacity)).or_default();
+        *entries += 1;
+        if *entries > TREEIFY_THRESHOLD {
+            if capacity >= MIN_TREEIFY_CAPACITY {
+                return None;
+            }
+            capacity *= 2;
+            bins = rebin(size + 1, capacity);
+        }
+        if size + 1 > capacity * 3 / 4 {
+            capacity *= 2;
+            bins = rebin(size + 1, capacity);
+        }
+    }
+    let mask = (capacity - 1) as i32;
+    let mut order: Vec<usize> = (0..hashes.len()).collect();
+    order.sort_by_key(|&i| spread(hashes[i]) & mask);
+    Some(order)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn checked_order_finds_tree_bins() {
+        let keys: Vec<String> = (0..200).map(|i| format!("k{i}")).collect();
+        let hashes: Vec<i32> = keys.iter().map(|k| string_hash_code(k)).collect();
+        assert_eq!(
+            hash_map_order_checked(&hashes),
+            Some(hash_map_order_by_hash(&hashes))
+        );
+        // Keys with one hash code: the 9th and 10th double the table to 32
+        // and 64 slots, the 11th turns the bin into a tree.
+        let same = vec![7; 11];
+        assert_eq!(hash_map_order_checked(&same), None);
+        assert!(hash_map_order_checked(&same[..10]).is_some());
+    }
 
     #[test]
     fn hash_code_matches_java() {

@@ -678,6 +678,41 @@ pub struct DbSnpBitSet {
 }
 
 impl DbSnpBitSet {
+    /// `new DbSnpBitSetUtil(file, dictionary)`: every record, whatever its
+    /// type or filter, sets the bits from its start to its end. The VCF's
+    /// `##contig` lines must equal `dictionary` when it has any
+    /// (`SequenceUtil.assertSequenceDictionariesEqual` skips a missing
+    /// one); a record on a contig `dictionary` lacks is Picard's
+    /// `NullPointerException`.
+    pub fn load_all(path: &Path, dictionary: &Dictionary) -> Result<Self> {
+        let mut reader = VcfReader::open(path)?;
+        if let Some(own) = reader.dictionary() {
+            assert_dictionaries_equal(
+                Some(&own),
+                &format!("DBSNP: {}", path.display()),
+                Some(dictionary),
+                "INPUT",
+            )?;
+        }
+        let mut set = Self::default();
+        while let Some(variant) = reader.next_variant()? {
+            if !dictionary.iter().any(|c| c.name == variant.contig) {
+                return Err(Error::Intervals {
+                    path: path.to_path_buf(),
+                    message: format!(
+                        "contig {} is not in the sequence dictionary (Picard fails with a NullPointerException)",
+                        variant.contig
+                    ),
+                });
+            }
+            let bits = set.by_contig.entry(variant.contig.clone()).or_default();
+            for position in variant.start..=variant.end {
+                bits.set(position);
+            }
+        }
+        Ok(set)
+    }
+
     /// `isDbSnpSite`.
     pub fn is_site(&self, contig: &str, position: i64) -> bool {
         self.by_contig
