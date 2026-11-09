@@ -181,6 +181,8 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
         "CreateSequenceDictionary",
         vec![reference.clone(), out("ref.dict")],
     );
+    // No OUTPUT option; the text goes to standard output.
+    args.insert("BamIndexStats", vec![bam.clone()]);
     args.insert(
         "GenotypeConcordance",
         vec![

@@ -3,6 +3,7 @@
 pub mod accumulate_quality_yield;
 pub mod adapter;
 pub mod alignment_summary;
+pub mod bam_index_stats;
 pub mod base_distribution_by_cycle;
 pub mod bed_to_interval_list;
 pub mod blocks;

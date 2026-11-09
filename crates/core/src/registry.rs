@@ -305,6 +305,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::genotype_concordance::TOOL,
     &crate::compare_metrics::TOOL,
     &crate::create_sequence_dictionary::TOOL,
+    &crate::bam_index_stats::TOOL,
 ];
 
 /// The tool named `name`.

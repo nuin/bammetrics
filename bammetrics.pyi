@@ -720,6 +720,15 @@ def create_sequence_dictionary(
     """CreateSequenceDictionary: one row per FASTA sequence (name, length, md5, assembly,
     uri, species, alternate_names); OUTPUT gets the .dict."""
 
+def bam_index_stats(
+    input: _Path,
+    *,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """BamIndexStats: one row per reference of the BAM header (reference, length, aligned,
+    unaligned) read from the .bai or .csi beside INPUT, then a * row whose unaligned
+    count is the NoCoordinateCount; the command prints the text Picard prints."""
+
 # END registry tools
 
 def alignment_summary(
