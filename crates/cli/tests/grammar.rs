@@ -81,7 +81,13 @@ struct Built {
 }
 
 fn build_inputs() -> Built {
-    let dir = fresh_dir("inputs");
+    // One directory per calling test: two tests building at once would
+    // otherwise remove each other's files.
+    let thread = std::thread::current();
+    let dir = fresh_dir(&format!(
+        "inputs-{}",
+        thread.name().unwrap_or("main").replace("::", "-")
+    ));
     let bed = dir.join("panel.bed");
     fs::write(&bed, "chr1\t1000\t1100\nchr1\t2000\t2050\n").expect("bed");
     let ref_flat = dir.join("genes.refflat");
@@ -830,4 +836,42 @@ fn completions_list_every_spelling() {
     for spelling in ["'*-M+", "--level", "--no-include-duplicates", "--input"] {
         assert!(text.contains(spelling), "{spelling}");
     }
+}
+
+/// The target intervals of `coverage-gaps`, `sex-check` and `hs-metrics`
+/// are inputs: neither `-o` nor `--gaps-file` may name them.
+#[test]
+fn an_output_that_is_the_targets_file_is_refused() {
+    let dir = fresh_dir("overwrite-targets");
+    let targets = dir.join("targets.interval_list");
+    fs::copy(root().join(IL), &targets).expect("copy");
+    let before = fs::read(&targets).expect("targets");
+    let path = targets.to_str().expect("utf-8");
+    let out = dir.join("out.txt");
+    let out = out.to_str().expect("utf-8");
+    for args in [
+        strings(&["coverage-gaps", IS, "--targets", path, "-o", path]),
+        strings(&[
+            "coverage-gaps",
+            IS,
+            "--targets",
+            path,
+            "--gaps-file",
+            path,
+            "-o",
+            out,
+        ]),
+        strings(&["sex-check", IS, "--targets", path, "-o", path]),
+        strings(&["hs-metrics", IS, "--panel", path, "-o", path]),
+    ] {
+        let run = bammetrics(&args);
+        assert_eq!(run.status.code(), Some(2), "{args:?}");
+        assert!(
+            String::from_utf8_lossy(&run.stderr).contains("is an input"),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+    }
+    assert_eq!(fs::read(&targets).expect("targets"), before);
+    assert!(!Path::new(out).exists());
 }

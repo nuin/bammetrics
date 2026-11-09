@@ -450,7 +450,9 @@ impl<'a> Page<'a> {
     /// The `Coverage gaps` table of docs/06 section 1.7, under the first
     /// warn or fail gap check: the longest [`gaps::SHOWN`] gaps from the BED
     /// beside the `CoverageGapMetrics` file, or one line when the BED is
-    /// not there.
+    /// not there. This read is the one exception to the crate's rule of
+    /// inputs only (docs/05 section 4.9): the sidecar lives in the same run
+    /// directory under the name `qc` writes.
     fn gaps_table(&mut self) {
         let Some(input) = self
             .inputs

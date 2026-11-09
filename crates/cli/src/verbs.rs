@@ -121,6 +121,7 @@ pub const VERBS: &[Verb] = &[
     Verb {
         aliases: &[("BAITS", "BAIT_INTERVALS"), ("TARGETS", "TARGET_INTERVALS")],
         header: Some(bammetrics_core::hs_metrics::subcommand_header),
+        reads: &["BAIT_INTERVALS", "TARGET_INTERVALS"],
         ..verb("hs-metrics", "CollectHsMetrics", Files::Single)
     },
     verb("gc-bias", "CollectGcBiasMetrics", Files::Prefix),
@@ -243,11 +244,13 @@ pub const VERBS: &[Verb] = &[
             ("TARGETS", "TARGET_INTERVALS"),
             ("PANEL", "TARGET_INTERVALS"),
         ],
+        reads: &["TARGET_INTERVALS"],
         also_writes: &["GAPS_FILE"],
         ..verb("coverage-gaps", "CollectCoverageGaps", Files::Single)
     },
     Verb {
         aliases: &[("TARGETS", "TARGET_INTERVALS"), ("SEX", "EXPECTED_SEX")],
+        reads: &["TARGET_INTERVALS"],
         ..verb("sex-check", "CollectSexCheckMetrics", Files::Single)
     },
 ];

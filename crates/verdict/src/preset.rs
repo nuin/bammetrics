@@ -12,6 +12,7 @@ use std::fmt;
 use std::fs;
 use std::path::Path;
 
+use bammetrics_core::glossary;
 use bammetrics_core::levels::Level;
 use bammetrics_core::metrics_file::format_double;
 
@@ -153,7 +154,7 @@ impl Bound {
     }
 
     /// The words of a reason line: `below the fail limit of 0.95`,
-    /// `outside the warn range 180 to 450`, `the fail value`.
+    /// `outside the warn range 180 to 450`, `a fail value`.
     pub fn describe(&self, status: &str) -> String {
         match self.comparator {
             Comparator::Lt => format!("below the {status} limit of {}", format_double(self.low)),
@@ -171,7 +172,7 @@ impl Bound {
                 format_double(self.low),
                 format_double(self.high)
             ),
-            Comparator::Is => format!("the {status} value"),
+            Comparator::Is => format!("a {status} value"),
         }
     }
 }
@@ -433,7 +434,7 @@ impl<'a> Entries<'a> {
     }
 
     /// An error for the first key no reader asked for.
-    fn finish(self) -> Result<()> {
+    fn finish(&self) -> Result<()> {
         match self
             .table
             .entries
@@ -444,6 +445,15 @@ impl<'a> Entries<'a> {
             Some((entry, _)) => Err(self.error(entry.line, format!("unknown key {}", entry.key))),
             None => Ok(()),
         }
+    }
+}
+
+/// `a number` for `int` and `float`, `a yes/no field` for `bool`.
+fn article(kind: &str) -> &'static str {
+    match kind {
+        "int" | "float" => "a number",
+        "bool" => "a yes/no field",
+        _ => "not text",
     }
 }
 
@@ -510,8 +520,17 @@ fn read_rule(table: &Table, source: &str) -> Result<Rule> {
     };
     let warn = bound("warn")?;
     let fail = bound("fail")?;
+    let plot = entries.string("plot")?.map(|(s, _)| s);
+    // An unknown key first: `expect = "Y"` is a misspelt bound, and the
+    // message names it.
+    entries.finish()?;
     if warn.is_none() && fail.is_none() {
-        return Err(entries.error(table.line, format!("rule {id}: needs warn, fail or both")));
+        return Err(entries.error(
+            table.line,
+            format!(
+                "rule {id}: needs warn, fail or both (a bound: < N, <= N, > N, >= N, outside A..B or is TEXT)"
+            ),
+        ));
     }
     if let (Some(w), Some(f)) = (&warn, &fail) {
         if w.comparator != f.comparator {
@@ -538,8 +557,19 @@ fn read_rule(table: &Table, source: &str) -> Result<Rule> {
             format!("rule {id}: an is bound judges one column, not a ratio"),
         ));
     }
-    let plot = entries.string("plot")?.map(|(s, _)| s);
-    entries.finish()?;
+    if text_bound
+        && let Some(entry) = glossary::lookup(&class, &metric)
+        && entry.kind != "string"
+    {
+        return Err(entries.error(
+            metric_line,
+            format!(
+                "rule {id}: an is bound judges text, {class}.{metric} is {} ({})",
+                article(entry.kind),
+                entry.kind
+            ),
+        ));
+    }
     Ok(Rule {
         id,
         label,
@@ -633,7 +663,7 @@ mod tests {
         assert!(!is.breaks_text(""));
         assert!(!is.breaks(0.0));
         assert_eq!(is.to_string(), "is N");
-        assert_eq!(is.describe("fail"), "the fail value");
+        assert_eq!(is.describe("fail"), "a fail value");
         assert!(!Bound::parse("< 1").expect("parses").breaks_text("1"));
         assert_eq!(Bound::parse(">=  2").expect("parses").to_string(), ">= 2");
         assert_eq!(
@@ -763,6 +793,20 @@ mod tests {
             (
                 with_rule("id = \"a\"\nclass = \"X\"\nmetric = \"M\"\n"),
                 "needs warn, fail or both",
+            ),
+            // A misspelt bound key is named before the missing bounds.
+            (
+                with_rule(
+                    "id = \"a\"\nclass = \"SexCheckMetrics\"\nmetric = \"SEX_MATCH\"\nexpect = \"Y\"\n",
+                ),
+                "unknown key expect",
+            ),
+            // An `is` bound on a column the glossary types as a number.
+            (
+                with_rule(
+                    "id = \"a\"\nclass = \"SexCheckMetrics\"\nmetric = \"X_RATIO\"\nfail = \"is 1\"\n",
+                ),
+                "an is bound judges text, SexCheckMetrics.X_RATIO is a number (float)",
             ),
             (
                 with_rule("id = \"a\"\nclass = \"X\"\nmetric = \"M\"\nfail = \"below 1\"\n"),

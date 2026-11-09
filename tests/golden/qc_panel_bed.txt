@@ -918,7 +918,7 @@ AUTOSOME_READS	X_READS	Y_READS	AUTOSOME_LENGTH	X_LENGTH	Y_LENGTH	X_RATIO	Y_RATIO
       "warn": "is UNKNOWN",
       "fail": null,
       "status": "warn",
-      "reason": "Inferred sex is UNKNOWN, the warn value",
+      "reason": "Inferred sex: UNKNOWN, a warn value",
       "plot": null
     }
   ]

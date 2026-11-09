@@ -918,3 +918,35 @@ fn sex_and_gap_files_follow_the_panel_and_the_declared_sex() {
     let _ = fs::remove_dir_all(&dir);
     let _ = fs::remove_dir_all(&plain);
 }
+
+/// `--sex` takes any case, and a preset with no `SexCheckMetrics` rule
+/// refuses it (exit 2) instead of dropping it in silence.
+#[test]
+fn sex_takes_any_case_and_needs_a_sex_rule() {
+    let dir = fresh_dir("sex-case");
+    let plan = bammetrics(&[
+        "plan",
+        BAM,
+        "-o",
+        dir.join("s").to_str().expect("utf-8"),
+        "--preset",
+        "clinical-panel",
+        "--sex",
+        "MALE",
+        "--format",
+        "jsonl",
+    ]);
+    assert_eq!(code(&plan), 0, "{}", stderr(&plan));
+    assert!(
+        stdout(&plan).contains("EXPECTED_SEX=MALE"),
+        "{}",
+        stdout(&plan)
+    );
+    let dropped = qc(&dir, &["--preset", "rna-seq", "--sex", "male"]);
+    assert_eq!(code(&dropped), 2, "{}", stderr(&dropped));
+    assert_eq!(
+        stderr(&dropped),
+        "bammetrics qc: --sex given, but preset rna-seq has no SexCheckMetrics rule, so no sex check would run\n"
+    );
+    assert!(!dir.exists(), "nothing written");
+}

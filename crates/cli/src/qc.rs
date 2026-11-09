@@ -134,8 +134,9 @@ pub struct QcArgs {
     #[arg(long, value_name = "FILE", requires = "ref_flat")]
     pub ribosomal_intervals: Option<PathBuf>,
     /// The declared sex, CollectSexCheckMetrics EXPECTED_SEX: the sex.match
-    /// rule fails when the reads say otherwise.
-    #[arg(long, value_enum)]
+    /// rule fails when the reads say otherwise. Any case; a usage error
+    /// when the preset has no SexCheckMetrics rule.
+    #[arg(long, value_enum, ignore_case = true)]
     pub sex: Option<Sex>,
     /// Sample name for the verdict, the page and the manifest (default: the
     /// first @RG SM, else the BAM name). Never written into a metrics file.
@@ -922,6 +923,7 @@ fn prefix(args: &QcArgs) -> Result<(PathBuf, Origin)> {
 pub fn prepare(args: &QcArgs) -> Result<Plan> {
     check_inputs(args)?;
     let preset = Preset::resolve(&args.preset)?;
+    check_sex_has_a_rule(args, &preset)?;
     let (sample, sample_origin) = sample(args)?;
     let (prefix, prefix_origin) = prefix(args)?;
     let fingerprint = Fingerprint::of(&args.bam)?;
@@ -955,6 +957,23 @@ pub fn prepare(args: &QcArgs) -> Result<Plan> {
         unmet,
         previous,
     })
+}
+
+/// `--sex` reaches the run only through a `SexCheckMetrics` rule, so a
+/// preset without one would drop it in silence: a usage error instead.
+fn check_sex_has_a_rule(args: &QcArgs, preset: &Preset) -> Result<()> {
+    if args.sex.is_some()
+        && !preset
+            .rules
+            .iter()
+            .any(|r| short_class(&r.class) == "SexCheckMetrics")
+    {
+        return Err(Error::Usage(format!(
+            "--sex given, but preset {} has no SexCheckMetrics rule, so no sex check would run",
+            preset.name
+        )));
+    }
+    Ok(())
 }
 
 /// The collector tools `qc` can run, in the order its pass runs them.

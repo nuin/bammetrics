@@ -21,7 +21,7 @@ FAIL          hs.target-100x            Target bases at 100x is 0, below the fai
 FAIL          hs.zero-coverage-targets  Targets with zero coverage is 0.2, above the fail limit of 0.03
 FAIL          gaps.reportable-range     Target bases at MIN_DEPTH is 0, below the fail limit of 0.95
 FAIL          gaps.targets-complete     Targets without a gap is 0, below the fail limit of 0.9
-WARN          sex.inferred              Inferred sex is UNKNOWN, the warn value
+WARN          sex.inferred              Inferred sex: UNKNOWN, a warn value
 NOT MEASURED  hs.evenness               FOLD_80_BASE_PENALTY is ?
 PASS          10 checks
 wrote 10 files to OUT/sample.*, report OUT/sample.report.html
@@ -848,7 +848,7 @@ AUTOSOME_READS	X_READS	Y_READS	AUTOSOME_LENGTH	X_LENGTH	Y_LENGTH	X_RATIO	Y_RATIO
       "warn": "is UNKNOWN",
       "fail": null,
       "status": "warn",
-      "reason": "Inferred sex is UNKNOWN, the warn value",
+      "reason": "Inferred sex: UNKNOWN, a warn value",
       "plot": null
     }
   ]

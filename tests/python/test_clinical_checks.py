@@ -103,7 +103,7 @@ def test_qc_runs_both_checks_with_a_panel_and_a_declared_sex(tmp_path):
     by_rule = {c.rule: c for c in run.verdict.checks}
     inferred = by_rule["sex.inferred"]
     assert (inferred.status, inferred.value, inferred.text) == ("warn", None, "UNKNOWN")
-    assert inferred.why == "Inferred sex is UNKNOWN, the warn value"
+    assert inferred.why == "Inferred sex: UNKNOWN, a warn value"
     matched = by_rule["sex.match"]
     assert (matched.status, matched.text, matched.limit) == ("pass", "", "is N")
     assert by_rule["gaps.reportable-range"].status == "fail"

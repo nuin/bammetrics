@@ -339,7 +339,7 @@ fn clinical_panel_fails_the_fixture_on_coverage_with_plain_reasons() {
     assert_eq!(inferred.status, Status::Warn);
     assert_eq!(
         inferred.reason.as_deref(),
-        Some("Inferred sex is UNKNOWN, the warn value")
+        Some("Inferred sex: UNKNOWN, a warn value")
     );
     // Declared FEMALE, inferred UNKNOWN: no mismatch, SEX_MATCH is empty.
     let matched = check(&fixture_sex, "sex.match");
@@ -492,7 +492,7 @@ fn text_rule_reaches_its_statuses(preset: &Preset, rule: &Rule) {
             Status::Pass => assert_eq!(check.reason, None),
             _ => assert_eq!(
                 check.reason.as_deref(),
-                Some(format!("{} is {cell}, the {} value", rule.label, status.name()).as_str())
+                Some(format!("{}: {cell}, a {} value", rule.label, status.name()).as_str())
             ),
         }
     }

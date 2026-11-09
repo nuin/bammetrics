@@ -431,8 +431,10 @@ fn judge_row(rule: &Rule, block: &ClassBlock, row: usize) -> Outcome {
 }
 
 /// `Target bases at 20x is 0.91, below the fail limit of 0.95` (with
-/// ` in LibA` after the value when the row belongs to a unit); `Declared
-/// sex matches is N, the fail value` for a text bound.
+/// ` in LibA` after the value when the row belongs to a unit). A text
+/// bound writes the cell after a colon, `Declared sex matches: N, a fail
+/// value`, since its label is a noun phrase and `is` would read as part
+/// of the bound.
 fn reason_line(
     rule: &Rule,
     value: &str,
@@ -441,8 +443,9 @@ fn reason_line(
     unit: Option<&str>,
 ) -> String {
     let unit = unit.map(|u| format!(" in {u}")).unwrap_or_default();
+    let joined = if bound.is_text() { ":" } else { " is" };
     format!(
-        "{} is {value}{unit}, {}",
+        "{}{joined} {value}{unit}, {}",
         rule.label,
         bound.describe(status.name())
     )

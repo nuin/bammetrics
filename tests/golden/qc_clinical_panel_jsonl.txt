@@ -43,7 +43,7 @@ jsonl
 {"event":"check","sample":"insert_size","rule":"gaps.reportable-range","label":"Target bases at MIN_DEPTH","class":"CoverageGapMetrics","metric":"PCT_REPORTABLE","level":"ALL_READS","select":null,"unit":null,"value":0,"warn":"< 0.98","fail":"< 0.95","status":"fail","reason":"Target bases at MIN_DEPTH is 0, below the fail limit of 0.95","plot":"coverage"}
 {"event":"check","sample":"insert_size","rule":"gaps.targets-complete","label":"Targets without a gap","class":"CoverageGapMetrics","metric":"PCT_TARGETS_COMPLETE","level":"ALL_READS","select":null,"unit":null,"value":0,"warn":"< 0.95","fail":"< 0.9","status":"fail","reason":"Targets without a gap is 0, below the fail limit of 0.9","plot":"coverage"}
 {"event":"check","sample":"insert_size","rule":"sex.match","label":"Declared sex matches","class":"SexCheckMetrics","metric":"SEX_MATCH","level":"ALL_READS","select":null,"unit":null,"value":null,"text":"","warn":null,"fail":"is N","status":"pass","reason":null,"plot":null}
-{"event":"check","sample":"insert_size","rule":"sex.inferred","label":"Inferred sex","class":"SexCheckMetrics","metric":"INFERRED_SEX","level":"ALL_READS","select":null,"unit":null,"value":null,"text":"UNKNOWN","warn":"is UNKNOWN","fail":null,"status":"warn","reason":"Inferred sex is UNKNOWN, the warn value","plot":null}
+{"event":"check","sample":"insert_size","rule":"sex.inferred","label":"Inferred sex","class":"SexCheckMetrics","metric":"INFERRED_SEX","level":"ALL_READS","select":null,"unit":null,"value":null,"text":"UNKNOWN","warn":"is UNKNOWN","fail":null,"status":"warn","reason":"Inferred sex: UNKNOWN, a warn value","plot":null}
 {"event":"done","sample":"insert_size","status":"fail","counts":{"pass":9,"warn":1,"fail":7,"not_measured":1},"report":"OUT/sample.report.html","exit":0}
 ## stderr
 ## file sample.alignment_summary_metrics
@@ -893,7 +893,7 @@ AUTOSOME_READS	X_READS	Y_READS	AUTOSOME_LENGTH	X_LENGTH	Y_LENGTH	X_RATIO	Y_RATIO
       "warn": "is UNKNOWN",
       "fail": null,
       "status": "warn",
-      "reason": "Inferred sex is UNKNOWN, the warn value",
+      "reason": "Inferred sex: UNKNOWN, a warn value",
       "plot": null
     }
   ]

@@ -15,7 +15,7 @@ NA12878
 11
 ## stdout
 NA12878  INCOMPLETE  preset clinical-panel v3 (6f0d59)  4 collectors, 1 BAM read (10 records)
-WARN          sex.inferred        Inferred sex is UNKNOWN, the warn value
+WARN          sex.inferred        Inferred sex: UNKNOWN, a warn value
 NOT MEASURED  HsMetrics           9 rules, needs --hs BAITS TARGETS or --panel FILE
 NOT MEASURED  CoverageGapMetrics  2 rules, needs --hs BAITS TARGETS or --panel FILE
 PASS          6 checks
@@ -577,7 +577,7 @@ AUTOSOME_READS	X_READS	Y_READS	AUTOSOME_LENGTH	X_LENGTH	Y_LENGTH	X_RATIO	Y_RATIO
       "warn": "is UNKNOWN",
       "fail": null,
       "status": "warn",
-      "reason": "Inferred sex is UNKNOWN, the warn value",
+      "reason": "Inferred sex: UNKNOWN, a warn value",
       "plot": null
     }
   ]

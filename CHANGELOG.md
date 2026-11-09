@@ -26,16 +26,22 @@ in the rule language, and `clinical-panel` version 3.
   (`chrX`/`X`, `chrY`/`Y`, `chr1`..`chr22`/`1`..`22`, or `X_CONTIG`, `Y_CONTIG`,
   `AUTOSOMES`), the lengths from `@SQ` or from the merged `TARGET_INTERVALS`, `X_RATIO`
   and `Y_RATIO` to the autosomes, `INFERRED_SEX` (`FEMALE` at `X_RATIO >= 0.75` and
-  `Y_RATIO < 0.05`, `MALE` at `0.3 <= X_RATIO <= 0.75` and `Y_RATIO >= 0.1`, else
-  `UNKNOWN`; starting values), `DECLARED_SEX` from `EXPECTED_SEX`, `SEX_MATCH` and
-  `REASON`. One-pass collector, so `qc` runs it on the shared read.
-- `qc --sex male|female` (Python `qc(sex=...)`): `EXPECTED_SEX` of the sex check. `qc`
+  `Y_RATIO < 0.05`, `MALE` at `0.3 <= X_RATIO <= 0.75` and `Y_RATIO >= 0.03`, else
+  `UNKNOWN`; starting values measured on the HG002 exome, Y 0.052, and the NA12878
+  genome, Y 0.022), `DECLARED_SEX` from `EXPECTED_SEX`, `SEX_MATCH` and `REASON` (a
+  `STOP_AFTER` run with no X and no Y read says so). One-pass collector, so `qc` runs it
+  on the shared read.
+- `qc --sex male|female` (Python `qc(sex=...)`, any case): `EXPECTED_SEX` of the sex
+  check; a preset with no `SexCheckMetrics` rule refuses `--sex` (exit 2). `qc`
   writes `PREFIX.sex_check_metrics` for `generic`, `wgs` and `clinical-panel`, and with a
   panel `PREFIX.coverage_gaps` and `PREFIX.coverage_gaps.bed` (manifest kind `gaps`; the
   BED is no verdict input). The panel targets reach both collectors.
 - Rule language: an `is TEXT` bound (`fail = "is N"`, `warn = "is UNKNOWN"`) judges the
   cell's text; the check carries it in a new `text` field of `verdict.json` and of the
-  Python `Check` (present only on such a check), with `value` null. docs/verdict.md.
+  Python `Check` (present only on such a check), with `value` null; `check` prints the
+  text in its value column. The reason line reads `Declared sex matches: N, a fail
+  value`. An `is` bound on a column the glossary types as a number is a preset error, and
+  an unknown rule key is reported before a missing bound. docs/verdict.md.
 - Presets: `clinical-panel` version 3 (18 rules, note `reviewed defaults; gap and sex rules
   are starting values`) adds `gaps.reportable-range` (`PCT_REPORTABLE` warn `< 0.98`, fail
   `< 0.95`), `gaps.targets-complete` (`PCT_TARGETS_COMPLETE` warn `< 0.95`, fail `< 0.90`),
@@ -43,7 +49,11 @@ in the rule language, and `clinical-panel` version 3.
   version 2 add the two sex rules. A `report` or `check` over a directory of Picard output
   alone now reads INCOMPLETE under those three presets, since Picard writes no sex check.
 - Report page: a `Coverage gaps` table (the 200 longest gaps, from the BED beside the
-  metrics file) under the first warn or fail gap check; text checks show their text.
+  metrics file, the one sidecar the page reads; docs/05 section 4.9) under the first warn
+  or fail gap check; text checks show their text. `make a11y` also checks a `qc` page
+  with a panel and a declared sex.
+- `coverage-gaps`, `sex-check` and `hs-metrics` refuse `-o` or `--gaps-file` naming
+  their target or bait intervals, as every verb refuses an output that is its input.
 - Glossary rows for both classes and the gap histogram; 12 golden records; `tools` lists
   25 classes; docs/cli.md, docs/05 section 4.11 and decision 13, KNOWN_DIFFERENCES.md.
 

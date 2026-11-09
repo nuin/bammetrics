@@ -30,9 +30,11 @@ pub const CLASS: &str = "bammetrics.qc.SexCheckMetrics";
 pub const FEMALE_MIN_X: f64 = 0.75;
 pub const FEMALE_MAX_Y: f64 = 0.05;
 /// `MALE` when `X_RATIO` is within these and `Y_RATIO` at least [`MALE_MIN_Y`].
+/// `MALE_MIN_Y` is 0.03: the HG002 male exome measures 0.052 over the whole
+/// Y contig and the NA12878 female genome 0.022 (docs/06 section 4).
 pub const MALE_MIN_X: f64 = 0.3;
 pub const MALE_MAX_X: f64 = 0.75;
-pub const MALE_MIN_Y: f64 = 0.1;
+pub const MALE_MIN_Y: f64 = 0.03;
 
 /// A declared or inferred sex.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -143,8 +145,16 @@ impl Set {
     }
 }
 
-/// The row from the three sets and the declaration.
-pub fn row(autosomes: (i64, i64), x: (i64, i64), y: (i64, i64), declared: Option<Sex>) -> Row {
+/// The row from the three sets and the declaration. `stop_after` is the
+/// `STOP_AFTER` option: a cut-off run with no X and no Y read says so in
+/// `REASON`, since a coordinate-sorted file reaches the sex contigs last.
+pub fn row(
+    autosomes: (i64, i64),
+    x: (i64, i64),
+    y: (i64, i64),
+    declared: Option<Sex>,
+    stop_after: u64,
+) -> Row {
     let [autosomes, x, y] = [autosomes, x, y].map(|(reads, length)| Set { reads, length });
     let mut reasons: Vec<String> = Vec::new();
     for (set, what) in [(autosomes, "autosome"), (x, "X"), (y, "Y")] {
@@ -166,6 +176,9 @@ pub fn row(autosomes: (i64, i64), x: (i64, i64), y: (i64, i64), declared: Option
             Err(())
         }
     };
+    if stop_after > 0 && x.reads == 0 && y.reads == 0 {
+        reasons.push("STOP_AFTER ended the read before the sex contigs".to_owned());
+    }
     let sex_match = match (inferred, declared) {
         (_, None) => None,
         (Ok(i), Some(d)) if i == d => Some("Y".to_owned()),
@@ -203,6 +216,8 @@ pub struct Options {
     pub x_contig: Option<String>,
     pub y_contig: Option<String>,
     pub autosomes: Vec<String>,
+    /// `STOP_AFTER`, 0 for the whole file; only `REASON` reads it.
+    pub stop_after: u64,
 }
 
 impl Options {
@@ -229,6 +244,7 @@ impl Options {
             x_contig: inv.get("X_CONTIG").map(str::to_owned),
             y_contig: inv.get("Y_CONTIG").map(str::to_owned),
             autosomes: inv.all("AUTOSOMES").to_vec(),
+            stop_after: inv.limits()?.stop_after,
         })
     }
 }
@@ -288,6 +304,7 @@ pub struct SexCheck {
     targets: Option<OverlapIndex>,
     minimum_mapping_quality: u8,
     expected_sex: Option<Sex>,
+    stop_after: u64,
 }
 
 impl SexCheck {
@@ -317,6 +334,7 @@ impl SexCheck {
             targets,
             minimum_mapping_quality: opts.minimum_mapping_quality,
             expected_sex: opts.expected_sex,
+            stop_after: opts.stop_after,
         })
     }
 
@@ -375,6 +393,7 @@ impl Accumulator for SexCheck {
             self.set(Group::X),
             self.set(Group::Y),
             self.expected_sex,
+            self.stop_after,
         ))
     }
 }
@@ -432,10 +451,19 @@ mod tests {
         assert_eq!(infer(1.0, 0.01), Ok(Sex::Female));
         assert_eq!(infer(0.75, 0.049), Ok(Sex::Female));
         assert_eq!(infer(0.5, 0.3), Ok(Sex::Male));
-        assert_eq!(infer(0.3, 0.1), Ok(Sex::Male));
+        assert_eq!(infer(0.3, 0.03), Ok(Sex::Male));
         assert_eq!(infer(0.75, 0.1), Ok(Sex::Male));
-        assert!(infer(0.75, 0.07).is_err(), "Y between the two bands");
+        // HG002 exome over the whole Y contig (docs/06 section 4).
+        assert_eq!(infer(0.3857, 0.052227), Ok(Sex::Male));
+        // NA12878 genome.
+        assert_eq!(infer(0.975382, 0.02173), Ok(Sex::Female));
+        assert_eq!(
+            infer(0.75, 0.07),
+            Ok(Sex::Male),
+            "X at the edge, Y over the female limit"
+        );
         assert!(infer(0.6, 0.02).is_err(), "X low with no Y");
+        assert!(infer(0.6, 0.029).is_err(), "Y under the male limit");
         assert!(infer(1.0, 0.2).is_err(), "X high with Y");
         assert!(infer(0.2, 0.5).is_err(), "X under the male band");
         assert_eq!(
@@ -448,20 +476,20 @@ mod tests {
     #[test]
     fn rows_carry_the_match_and_the_reason() {
         // 1 read per 10 bases on the autosomes, half that on X, a fifth on Y.
-        let male = row((1000, 10_000), (50, 1000), (20, 1000), Some(Sex::Male));
+        let male = row((1000, 10_000), (50, 1000), (20, 1000), Some(Sex::Male), 0);
         assert_eq!(male.inferred_sex, "MALE");
         assert_eq!(male.x_ratio, 0.5);
         assert!((male.y_ratio - 0.2).abs() < 1e-12);
         assert_eq!(male.declared_sex.as_deref(), Some("MALE"));
         assert_eq!(male.sex_match.as_deref(), Some("Y"));
         assert_eq!(male.reason, None);
-        let mismatch = row((1000, 10_000), (100, 1000), (0, 1000), Some(Sex::Male));
+        let mismatch = row((1000, 10_000), (100, 1000), (0, 1000), Some(Sex::Male), 0);
         assert_eq!(mismatch.inferred_sex, "FEMALE");
         assert_eq!(mismatch.sex_match.as_deref(), Some("N"));
-        let undeclared = row((1000, 10_000), (100, 1000), (0, 1000), None);
+        let undeclared = row((1000, 10_000), (100, 1000), (0, 1000), None, 0);
         assert_eq!(undeclared.declared_sex, None);
         assert_eq!(undeclared.sex_match, None);
-        let unknown = row((1000, 10_000), (60, 1000), (2, 1000), Some(Sex::Female));
+        let unknown = row((1000, 10_000), (60, 1000), (2, 1000), Some(Sex::Female), 0);
         assert_eq!(unknown.inferred_sex, "UNKNOWN");
         assert_eq!(unknown.sex_match, None, "UNKNOWN is not a mismatch");
         assert_eq!(
@@ -470,12 +498,25 @@ mod tests {
                 "X_RATIO 0.6 and Y_RATIO 0.02 fit neither pattern; FEMALE declared, the inferred sex is UNKNOWN"
             )
         );
-        let no_y = row((1000, 10_000), (100, 1000), (0, 0), None);
+        let no_y = row((1000, 10_000), (100, 1000), (0, 0), None, 0);
         assert_eq!(no_y.inferred_sex, "UNKNOWN");
         assert!(no_y.y_ratio.is_nan());
         assert_eq!(no_y.reason.as_deref(), Some("no Y bases"));
-        let empty = row((0, 10_000), (0, 1000), (0, 1000), None);
+        let empty = row((0, 10_000), (0, 1000), (0, 1000), None, 0);
         assert_eq!(empty.reason.as_deref(), Some("no autosome reads"));
+        // A cut-off read that never reached X or Y names the cut-off.
+        let cut = row((1000, 10_000), (0, 1000), (0, 1000), Some(Sex::Female), 100);
+        assert_eq!(
+            cut.reason.as_deref(),
+            Some(
+                "X_RATIO 0 and Y_RATIO 0 fit neither pattern; STOP_AFTER ended the read before the sex contigs; FEMALE declared, the inferred sex is UNKNOWN"
+            )
+        );
+        let whole = row((1000, 10_000), (0, 1000), (0, 1000), None, 0);
+        assert_eq!(
+            whole.reason.as_deref(),
+            Some("X_RATIO 0 and Y_RATIO 0 fit neither pattern")
+        );
         assert_eq!(empty.values().len(), Row::COLUMNS.len());
         assert_eq!(empty.values()[8], Value::from("UNKNOWN"));
         assert_eq!(empty.values()[10], Value::Null);
@@ -524,6 +565,7 @@ mod tests {
         assert_eq!(opts.minimum_mapping_quality, 0);
         assert_eq!(opts.x_contig.as_deref(), Some("23"));
         assert_eq!(opts.autosomes, ["1", "2"]);
+        assert_eq!(opts.stop_after, 0);
         let err = TOOL
             .parse(&strings(&["I=x.bam", "EXPECTED_SEX=unknown"]))
             .and_then(|inv| Options::from_invocation(&inv))

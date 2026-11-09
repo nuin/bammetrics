@@ -20,7 +20,11 @@ Each rule gives one check with one status:
 
 A rule with an `is TEXT` bound judges the cell's text instead of a number: it breaks
 when the cell prints as `TEXT`, an empty cell is the empty string, and any other text
-passes (docs/06 section 2.5).
+passes (docs/06 section 2.5). The match is exact and case sensitive. The shipped text
+rules read `SexCheckMetrics.SEX_MATCH` (`Y`, `N` or empty) and
+`SexCheckMetrics.INFERRED_SEX` (`FEMALE`, `MALE` or `UNKNOWN`); an `is` bound on a column
+the glossary types as a number is a preset error. `check` prints the cell in its value
+column, `empty` for an empty cell.
 
 The band over all checks is `fail` when any check fails, else `incomplete` when any
 check is not measured, else `warn` when any check warns, else `pass`. A warn or fail
@@ -30,7 +34,7 @@ check carries one reason line in plain words with the value and the limit:
 Target bases at 20x is 0.91, below the fail limit of 0.95
 Median insert size is 900, outside the fail range 120 to 600
 Duplicate reads is 0.6 in LibC, above the fail limit of 0.5
-Declared sex matches is N, the fail value
+Declared sex matches: N, a fail value
 ```
 
 A not-measured check names what is missing: `no HsMetrics file`, `HsMetrics has no
@@ -63,7 +67,9 @@ Rules the parser enforces, each with the file and line in the error: unknown key
 unknown tables are errors; `fail` must be at least as strict as `warn` (`< 0.95` beside
 `< 0.98`, `outside 120..600` beside `outside 180..450`; two `is` bounds need the same
 text); a bound breaks when the value is on the named side of the threshold (`< 0.98`
-breaks at 0.97, holds at 0.98); an `is` bound takes one column, not a ratio.
+breaks at 0.97, holds at 0.98); an `is` bound takes one column, not a ratio, and not a
+column the glossary types as `int` or `float`. A rule with an unknown key is reported by
+that key before a missing bound, so `expect = "Y"` says `unknown key expect`.
 
 Row scope. `level` selects rows by their `SAMPLE`, `LIBRARY` and `READ_GROUP` cells:
 `ALL_READS` rows leave all three empty, a `SAMPLE` row fills only `SAMPLE`, a `LIBRARY`

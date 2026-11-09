@@ -371,7 +371,7 @@ of section 4.9: one run's files, no history, no cohort.
 | static file, no state | comments, assignments, alerts |
 | none | accounts, uploads, history |
 
-`verdict.json` (schema `bammetrics.verdict/1`: sample, preset hash, per-rule value, status, reason, input fingerprint) is the only bridge. Rules for the report crate, written into CLAUDE.md: no read of other run directories, no history store, no user identity, no network call, no comment field. A feature that needs one of these goes to the hosted product.
+`verdict.json` (schema `bammetrics.verdict/1`: sample, preset hash, per-rule value, status, reason, input fingerprint) is the only bridge. Rules for the report crate, written into CLAUDE.md: no read of other run directories, no history store, no user identity, no network call, no comment field. One exception, from docs/06: the page reads the gaps BED beside a `CoverageGapMetrics` file (`<metrics path>.bed`, in the same run directory) for its `Coverage gaps` table, so the page bytes depend on that sidecar too. A feature that needs one of the rest goes to the hosted product.
 
 ### 4.10 Terminal output
 

@@ -47,7 +47,9 @@ joined by `|`. Every count below is over the merged targets.
 ### 1.2 Gap runs
 
 A gap is a maximal run of consecutive bases of one merged target whose depth is below
-`MIN_DEPTH`. A run never spans two targets; two targets 1 base apart are one merged target.
+`MIN_DEPTH`. A run never spans two targets. Two targets that overlap or abut (end + 1 =
+start) are one merged target; a 1-base gap between them keeps them apart, so a run ends
+at the first target's end.
 Runs are found by one scan of each target's depth array (`gap_runs` in `coverage_gaps.rs`,
 unit tested on hand-written depth arrays: no gap, a whole-target gap, gaps at both ends,
 two gaps split by one base at the threshold).
@@ -119,8 +121,10 @@ the first `--hs BAITS TARGETS`. The argv is `INPUT=BAM OUTPUT=PREFIX.coverage_ga
 GAPS_FILE=PREFIX.coverage_gaps.bed TARGET_INTERVALS=FILE` (plus `REFERENCE_SEQUENCE` for
 a CRAM). The BED is recorded in the manifest with kind `gaps`, so the verdict, the page,
 `report DIR` and Python `Run.metrics` leave it out and `--resume` and the stale-file
-removal treat it like a metrics file. Without targets the two gap rules read
-`not measured` with the reason `needs --hs BAITS TARGETS or --panel FILE`.
+removal treat it like a metrics file. The page reads that BED beside the metrics file:
+the one file the report crate opens that is not a verdict input (docs/05 section 4.9).
+Without targets the two gap rules read `not measured` with the reason `needs --hs BAITS
+TARGETS or --panel FILE`.
 
 ### 1.7 Rules and report
 
@@ -177,19 +181,22 @@ One row.
 | `INFERRED_SEX` | string | `FEMALE`, `MALE` or `UNKNOWN` (section 2.3). |
 | `DECLARED_SEX` | string | `EXPECTED_SEX` upper-cased; empty without it. |
 | `SEX_MATCH` | string | `Y` when inferred equals declared, `N` when the inferred sex is `MALE` or `FEMALE` and differs; empty without a declaration or when the inferred sex is `UNKNOWN`. |
-| `REASON` | string | Why the sex is `UNKNOWN`, or why `SEX_MATCH` is empty with a declaration; empty otherwise. |
+| `REASON` | string | Why the sex is `UNKNOWN`, or why `SEX_MATCH` is empty with a declaration; empty otherwise. A `STOP_AFTER` run with no X and no Y read adds `STOP_AFTER ended the read before the sex contigs`, since a coordinate-sorted file reaches those contigs last. |
 
 ### 2.3 Thresholds (starting values)
 
 | Inferred | Condition |
 |---|---|
 | `FEMALE` | `X_RATIO >= 0.75` and `Y_RATIO < 0.05` |
-| `MALE` | `0.3 <= X_RATIO <= 0.75` and `Y_RATIO >= 0.1` |
+| `MALE` | `0.3 <= X_RATIO <= 0.75` and `Y_RATIO >= 0.03` |
 | `UNKNOWN` | anything else, or a ratio that is `?` |
 
 The female test runs first, so `X_RATIO` exactly 0.75 with `Y_RATIO` below 0.05 is
-`FEMALE`. These are starting values, not validated limits. Section 4 holds the values
-measured on HG002 (male) and NA12878 (female). `UNKNOWN` with a declaration leaves
+`FEMALE`. The male `Y_RATIO` limit is 0.03: the HG002 male exome measures 0.052 over the
+whole Y contig and the NA12878 female genome 0.022, so 0.03 calls both with a margin of
+0.008 over the female and 0.022 under the male (section 4). These are starting values
+from two samples, not validated limits; a female exome and a male genome are still to be
+measured. `UNKNOWN` with a declaration leaves
 `SEX_MATCH` empty: a sample the tool cannot call is not a mismatch, and the `sex.inferred`
 rule warns on it.
 
@@ -211,8 +218,13 @@ The rule language gains one text comparator: a bound `is TEXT` breaks when the c
 as `TEXT` (`Value::picard_text`; an empty cell is the empty string). It takes the same
 `warn` and `fail` keys as the numeric bounds, so `verdict.json` holds `"fail": "is N"`
 beside `"fail": "< 0.95"`. A check judged by a text bound carries the cell's text in a
-`text` field (present only then) and `value: null`. The reason line reads `Declared sex
-matches is N, the fail value`. A text rule with both bounds needs the same text in both.
+`text` field (present only then) and `value: null`; `check` prints the text in its value
+column (`empty` for an empty cell). The reason line reads `Declared sex matches: N, a
+fail value`. A text rule with both bounds needs the same text in both. Matching is exact
+and case sensitive: the cells of these two columns are `Y`, `N` and empty, and `FEMALE`,
+`MALE` and `UNKNOWN`. An `is` bound on a column the glossary types as a number is a
+preset error. `qc --sex` takes either case; a preset without a `SexCheckMetrics` rule
+refuses `--sex` (exit 2) instead of dropping it.
 
 | Rule | Preset | Metric | Warn | Fail |
 |---|---|---|---|---|
@@ -245,20 +257,22 @@ under `~/data/bammetrics-scale/clinical/`), 2026-11-09:
 
 | Input | Reads A / X / Y | X_RATIO | Y_RATIO | Inferred | Declared | Wall |
 |---|---|---|---|---|---|---|
-| HG002 exome BAM, 10 GB, hs37d5 (`1`..`22`, `X`, `Y`), no targets | 135,806,288 / 2,822,993 / 146,171 | 0.3857 | 0.052227 | UNKNOWN | MALE | 24.2 s |
-| NA12878 genome CRAM, `STOP_AFTER=50000000` | 39,196,583 / 0 / 0 | 0 | 0 | UNKNOWN | FEMALE | 19.2 s |
+| HG002 exome BAM, 10 GB, hs37d5 (`1`..`22`, `X`, `Y`), no targets | 135,806,288 / 2,822,993 / 146,171 | 0.3857 | 0.052227 | MALE, `SEX_MATCH=Y` | MALE | 15.2 s |
+| NA12878 genome CRAM, `STOP_AFTER=50000000` | 39,196,583 / 0 / 0 | 0 | 0 | UNKNOWN | FEMALE | 19.0 s |
 | NA12878 genome CRAM, whole file (16 GB) | 594,884,986 / 31,492,585 / 257,316 | 0.975382 | 0.02173 | FEMALE, `SEX_MATCH=Y` | FEMALE | 336.5 s |
 
 Findings. The female genome lands where the thresholds expect it (X 0.98, Y 0.02). The
 male exome without its capture targets has X_RATIO 0.39, inside the male band, and
-Y_RATIO 0.052: under the `MALE_MIN_Y` of 0.1, because reads per base over the whole Y
-contig (59 Mb, most of it unmappable or not captured) run far below the autosomes. With
+Y_RATIO 0.052: reads per base over the whole Y contig (59 Mb, most of it unmappable or
+not captured) run far below the autosomes, so a `MALE_MIN_Y` of 0.1 (the first draft)
+called this sample UNKNOWN. The limit is 0.03: it calls HG002 MALE and keeps NA12878
+FEMALE, 0.008 over the female genome and 0.022 under the male exome. With
 `TARGET_INTERVALS` the Y length is the targeted bases and the ratio rises; the kit's
-target file was not available for this run. A `MALE_MIN_Y` of 0.03 would call this
-sample MALE and keep NA12878 FEMALE; the margin above the female genome's 0.022 is 0.008,
-so the value stays at 0.1 until a female exome and a male genome are measured. The
-`STOP_AFTER` run shows that a coordinate-sorted genome needs the whole file: the first 50
-million records lie on chromosomes 1 to 3 and hold no X or Y read.
+target file was not available for this run. The `STOP_AFTER` run shows that a
+coordinate-sorted genome needs the whole file: the first 50 million records lie on
+chromosomes 1 to 3 and hold no X or Y read, and its `REASON` carries `STOP_AFTER ended
+the read before the sex contigs`. The whole-file row is the run of the first draft; the
+female test did not change.
 
 ## 5. Out of scope
 

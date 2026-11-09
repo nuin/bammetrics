@@ -58,11 +58,12 @@ A11Y := target/a11y
 a11y: release
 	npm install --no-audit --no-fund --prefix $(A11Y) playwright@1.64.1 axe-core@4.10.2
 	cd $(A11Y) && npx playwright install chromium
-	rm -rf $(A11Y)/pages $(A11Y)/run && mkdir -p $(A11Y)/run
+	rm -rf $(A11Y)/pages $(A11Y)/run $(A11Y)/qc && mkdir -p $(A11Y)/run
 	cargo run --release -q -p bammetrics-report --example fixture_pages -- $(A11Y)/pages
 	cp -R tests/data/picard/ $(A11Y)/run/
 	target/release/bammetrics report $(A11Y)/run --preset clinical-panel --date 2026-01-01 > /dev/null
-	node benches/a11y.mjs $(A11Y) tests/report/index.html $(A11Y)/pages/*.html $(A11Y)/run/*.html
+	target/release/bammetrics qc tests/data/insert_size.bam -o $(A11Y)/qc/S1 --preset clinical-panel --panel tests/data/targets.interval_list --sex male --date "2026-01-01 00:00:00 UTC" > /dev/null
+	node benches/a11y.mjs $(A11Y) tests/report/index.html $(A11Y)/pages/*.html $(A11Y)/run/*.html $(A11Y)/qc/*.html
 
 # Differential fuzzing (tests/concordance/fuzz.py): N seeded random BAMs through
 # Picard and bammetrics, failures shrunk into tests/concordance/regressions.

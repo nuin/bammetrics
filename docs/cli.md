@@ -691,7 +691,7 @@ MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE
 ```
 $ bammetrics qc tests/data/insert_size.bam -R tests/data/ref_100k.fa -o out/quick/S1
 insert_size  WARN  preset generic v2 (9094cb)  5 collectors, 1 BAM read (10 records)
-WARN          sex.inferred  Inferred sex is UNKNOWN, the warn value
+WARN          sex.inferred  Inferred sex: UNKNOWN, a warn value
 PASS          7 checks
 wrote 8 files to out/quick/S1.*, report out/quick/S1.report.html
 use --fail-on fail or bammetrics check to gate
