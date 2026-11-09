@@ -720,6 +720,19 @@ def create_sequence_dictionary(
     """CreateSequenceDictionary: one row per FASTA sequence (name, length, md5, assembly,
     uri, species, alternate_names); OUTPUT gets the .dict."""
 
+def check_duplicate_marking(
+    input: _Path,
+    *,
+    output: _Path | None = None,
+    mode: str | None = None,
+    verbosity: str | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CheckDuplicateMarking: one row per record whose duplicate flag differs from the
+    first record of its queryname (read_name, contig, start); no row when every
+    queryname agrees. OUTPUT gets the queryname of each such record, one per line. The
+    command line exits 1 when any is found."""
+
 # END registry tools
 
 def alignment_summary(

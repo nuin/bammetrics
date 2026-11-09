@@ -182,6 +182,10 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
         vec![reference.clone(), out("ref.dict")],
     );
     args.insert(
+        "CheckDuplicateMarking",
+        vec![bam.clone(), out("bad_querynames.txt")],
+    );
+    args.insert(
         "GenotypeConcordance",
         vec![
             format!("TRUTH_VCF={calls}"),

@@ -341,6 +341,16 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("GENOME_ASSEMBLY", "GRCh38")),
             picard_outputs: single,
         },
+        // The fixture has no duplicate flag set, so both faces exit 0 and
+        // write an empty file.
+        Case {
+            verb: "check-duplicate-marking",
+            class: "CheckDuplicateMarking",
+            verb_args: bam(&[]),
+            picard_args: picard_bam(&[]),
+            option: Some(("MODE", "PRIMARY_ONLY")),
+            picard_outputs: single,
+        },
     ]
 }
 
@@ -410,7 +420,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && **c != "AccumulateVariantCallingMetrics")
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 23);
+    assert_eq!(classes.len(), 24);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

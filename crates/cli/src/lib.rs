@@ -154,6 +154,10 @@ pub fn run() -> error::Result<u8> {
             if tool.name == bammetrics_core::compare_metrics::TOOL.name {
                 return Ok(bammetrics_core::compare_metrics::run_cli(rest)?);
             }
+            // Picard's exit code tells agreeing from disagreeing duplicate flags.
+            if tool.name == bammetrics_core::check_duplicate_marking::TOOL.name {
+                return Ok(bammetrics_core::check_duplicate_marking::run_cli(rest)?);
+            }
             // Picard's CreateSequenceDictionary names its .dict when O= is absent;
             // the verb and Python write standard output and rows instead.
             if tool.name == create_sequence_dictionary::TOOL.name {

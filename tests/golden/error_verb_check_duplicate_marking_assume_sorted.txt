@@ -1,0 +1,10 @@
+## argv
+check-duplicate-marking
+tests/data/duplicate_marking.bam
+--assume-sorted
+## exit
+2
+## stdout
+## stderr
+bammetrics check-duplicate-marking: unknown option --assume-sorted
+  every option: bammetrics help check-duplicate-marking
