@@ -252,7 +252,8 @@ arguments) or as `truth_vcf=` and `call_vcf=`. A double Picard prints as `?` (Na
 `create_sequence_dictionary(reference, ...)` returns one dict per `@SQ` line (`name`,
 `length`, `md5`, `assembly`, `uri`, `species`, `alternate_names`) and writes the `.dict`
 only with `output=`. `bam_index_stats(bam)` returns one dict per reference of the header
-(`reference`, `length`, `aligned`, `unaligned`, all but the name `int`) and a last dict
+(`reference`, `length`, `aligned`, `unaligned`, all but the name `int`; the stub types it
+as the `TypedDict` `_BamIndexRow`, so a checker knows each key's type) and a last dict
 `reference="*"` whose `unaligned` is the `NoCoordinateCount`; it takes no `output=`
 (`ValueError`, as Picard has no `OUTPUT`) and reads a CRAM with `reference_sequence=`.
 

@@ -34,6 +34,7 @@ const FIXTURES: &[(&str, &str)] = &[
         "tests/data/picard/NA12878/NA12878.duplicate_metrics",
     ),
     ("IS_CRAM", "tests/data/insert_size.cram"),
+    ("IS_BAI", "tests/data/insert_size.bam.bai"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -217,6 +218,7 @@ const FIXTURE_CASES: &[Case] = &[
     case!("verb_bam_index_stats_json", "bam-index-stats", "IS", "--format", "json", "--sample", "S1"),
     case!("error_bam_index_stats_no_index", "BamIndexStats", "I=OR"),
     case!("error_bam_index_stats_output", "BamIndexStats", "I=IS", "O=OUT/index_stats.txt"),
+    case!("error_bam_index_stats_overwrites_index", "bam-index-stats", "IS", "-o", "IS_BAI"),
     // CRAM input (tests/data/make_cram.py): told by its magic, decoded with R=.
     case!("picard_quality_yield_cram", "CollectQualityYieldMetrics", "I=IS_CRAM", "O=OUT/quality_yield.txt", "R=REF"),
     case!("picard_multiple_metrics_cram", "CollectMultipleMetrics", "I=IS_CRAM", "O=OUT/sample", "R=REF"),

@@ -39,6 +39,10 @@ pub const COLUMNS: [&str; 4] = ["reference", "length", "aligned", "unaligned"];
 /// The name of the last row, the records without a coordinate.
 pub const NO_COORDINATE: &str = "*";
 
+/// The `TypedDict` of one row in `bammetrics.pyi` (written by hand there,
+/// one key per [`COLUMNS`] entry), the return type of `bam_index_stats`.
+pub const PYTHON_ROW: &str = "_BamIndexRow";
+
 pub const TOOL: Tool = Tool {
     name: "BamIndexStats",
     summary: "one row per reference of the BAM header (reference, length, aligned, unaligned) \
@@ -343,26 +347,45 @@ mod tests {
         assert_eq!(java_int((1 << 32) + 5), 5);
     }
 
+    /// An empty file at `path`, created new with mode 0600; an existing
+    /// path (a planted link) fails the test.
+    fn touch(path: &Path) {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(path)
+            .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    }
+
     #[test]
     fn index_names_follow_htsjdk_order() {
-        let dir = std::env::temp_dir().join(format!("bammetrics-bai-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("temp dir");
+        use std::os::unix::fs::DirBuilderExt;
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        let dir =
+            std::env::temp_dir().join(format!("bammetrics-bai-{}-{nanos}", std::process::id()));
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&dir)
+            .expect("a new temp dir");
         let bam = dir.join("x.bam");
-        std::fs::write(&bam, b"").expect("bam");
+        touch(&bam);
         assert_eq!(find_index(&bam), None);
-        std::fs::write(dir.join("x.bam.csi"), b"").expect("csi");
+        touch(&dir.join("x.bam.csi"));
         assert_eq!(find_index(&bam), Some(dir.join("x.bam.csi")));
-        std::fs::write(dir.join("x.bam.bai"), b"").expect("bai");
+        touch(&dir.join("x.bam.bai"));
         assert_eq!(find_index(&bam), Some(dir.join("x.bam.bai")));
-        std::fs::write(dir.join("x.csi"), b"").expect("csi");
+        touch(&dir.join("x.csi"));
         assert_eq!(find_index(&bam), Some(dir.join("x.csi")));
-        std::fs::write(dir.join("x.bai"), b"").expect("bai");
+        touch(&dir.join("x.bai"));
         assert_eq!(find_index(&bam), Some(dir.join("x.bai")));
         let other = dir.join("y.sam");
-        std::fs::write(&other, b"").expect("sam");
-        std::fs::write(dir.join("y.sam.bai"), b"").expect("bai");
+        touch(&other);
+        touch(&dir.join("y.sam.bai"));
         assert_eq!(find_index(&other), Some(dir.join("y.sam.bai")));
-        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::remove_dir_all(&dir).expect("remove the temp dir");
     }
 }

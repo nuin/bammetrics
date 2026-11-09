@@ -19,14 +19,14 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use bammetrics_core::compare_metrics;
 use bammetrics_core::multiple_metrics::file_extensions;
-use bammetrics_core::pass;
 use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
+use bammetrics_core::{bam_index_stats, compare_metrics, cram, pass};
 
 use crate::error::VerbError;
 use crate::format::{self, Context, Format};
 use crate::grammar::{self, Flag, Given, Key, Parsed};
+use crate::report::write_atomic;
 
 /// How a verb names what it writes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -878,8 +878,9 @@ impl Verb {
         with_from(VerbError::core(self.name, e), from)
     }
 
-    /// The files the run reads: every `INPUT`, the reference and its `.fai`
-    /// and, for a tool without `INPUT`, its required options.
+    /// The files the run reads: every `INPUT`, the reference and its `.fai`,
+    /// for a tool without `INPUT` its required options, and for
+    /// `BamIndexStats` the `.bai` or `.csi` it reads beside each BAM.
     fn input_paths(&self, inv: &Invocation) -> Vec<PathBuf> {
         let tool = self.tool();
         let mut names = vec!["INPUT", "REFERENCE_SEQUENCE"];
@@ -896,12 +897,22 @@ impl Verb {
             .all("REFERENCE_SEQUENCE")
             .iter()
             .map(|fasta| format!("{fasta}.fai"));
-        names
+        let mut paths: Vec<PathBuf> = names
             .iter()
             .flat_map(|name| inv.all(name).iter().cloned())
             .chain(indexes)
             .map(PathBuf::from)
-            .collect()
+            .collect();
+        if tool.name == bam_index_stats::TOOL.name {
+            paths.extend(
+                inv.all("INPUT")
+                    .iter()
+                    .map(Path::new)
+                    .filter(|bam| !cram::is_cram(bam))
+                    .filter_map(bam_index_stats::find_index),
+            );
+        }
+        paths
     }
 
     /// The files the run writes under names it knows before it runs: `-o`,
@@ -1104,7 +1115,10 @@ fn write_single(
                 .write_all(text.as_bytes())
                 .map_err(output_error)?,
             Some(path) => {
-                fs::write(path, text).map_err(output_error)?;
+                write_atomic(path, text).map_err(|e| match e {
+                    crate::error::Error::Io { source, .. } => output_error(source),
+                    other => output_error(io::Error::other(other.to_string())),
+                })?;
                 written.push(path.to_path_buf());
             }
         }

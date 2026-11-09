@@ -18,6 +18,15 @@
   t3, the exome slice and the `tests/data` BAMs against Picard, each also with a CSI index
   and the two other index names, the verb forms, a CRAM, and error parity; seven golden
   records, `tests/data/insert_size.bam.bai`, and the `tools` listing gains one row.
+- `bam-index-stats` counts the `.bai` or `.csi` it reads as an input, so `-o` naming it
+  exits 2 (`is an input; writing it would destroy it`) and the index is kept; a golden
+  record and `crates/cli/tests/bam_index_stats.rs` cover the `.bai` and `.csi` names.
+  The stub types `bam_index_stats()` rows as the `TypedDict` `_BamIndexRow`.
+
+### Changed
+
+- A tool verb writes `-o` through a temporary file beside it and a rename
+  (`report::write_atomic`), so an interrupted run leaves the old file or none.
 
 ## 0.17.0
 
