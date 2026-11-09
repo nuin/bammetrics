@@ -6,4 +6,4 @@ O=OUT/artifact
 1
 ## stdout
 ## stderr
-bammetrics: CollectSequencingArtifactMetrics: REFERENCE_SEQUENCE is required
+bammetrics: Option 'REFERENCE_SEQUENCE' is required.

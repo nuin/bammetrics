@@ -196,9 +196,7 @@ impl Options {
             .clone()
             .ok_or_else(|| Error::Usage("Option 'OUTPUT' is required.".to_owned()))?;
         let reference = inv.get("REFERENCE_SEQUENCE").ok_or_else(|| {
-            Error::Usage(
-                "CollectSequencingArtifactMetrics: REFERENCE_SEQUENCE is required".to_owned(),
-            )
+            Error::Usage("Option 'REFERENCE_SEQUENCE' is required.".to_owned())
         })?;
         Ok(Self {
             prefix,
@@ -230,7 +228,14 @@ impl Options {
         if self.context_size < 0 {
             messages.push("CONTEXT_SIZE cannot be negative".to_owned());
         }
+        // `CONTEXTS_TO_PRINT` is a `HashSet`: its messages come in that order.
+        let mut contexts: Vec<&str> = Vec::new();
         for context in &self.contexts_to_print {
+            if !contexts.contains(&context.as_str()) {
+                contexts.push(context);
+            }
+        }
+        for context in hash_map_order(&contexts).into_iter().map(|i| contexts[i]) {
             if context.encode_utf16().count() as i64 != full_length {
                 messages.push(format!(
                     "Context {context} is not the length implied by CONTEXT_SIZE: {full_length}"
@@ -420,8 +425,9 @@ impl Artifacts {
         let db_snp = match &opts.db_snp {
             Some(path) => {
                 if regions.is_some() && !vcf::index_exists(path) {
+                    // htsjdk opens the VCF for indexed queries over INTERVALS.
                     return Err(Error::Usage(format!(
-                        "An index is required but was not found for file {}: DB_SNP with INTERVALS reads it through its index",
+                        "An index is required, but none found with file ending .idx, for input source: {}",
                         path.display()
                     )));
                 }
