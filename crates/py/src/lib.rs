@@ -751,15 +751,17 @@ fn picard_text(value: &Bound<'_, PyAny>) -> PyResult<String> {
 /// upper-cased, so the parser rejects it with the Picard face's message.
 /// Lists and tuples are repeated options, `None` is skipped, and `output`
 /// names the tool's metrics file option (`METRICS_FILE` for
-/// `CollectDuplicateMetrics`).
+/// `CollectDuplicateMetrics`), except in `mark_duplicates`, where `output`
+/// is the BAM and `metrics_file` the metrics.
 fn keyword_arguments(tool: &Tool, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Vec<String>> {
     let mut args = Vec::new();
     let Some(kwargs) = kwargs else {
         return Ok(args);
     };
+    let metrics_kwarg = tool.metrics_kwarg();
     for (key, value) in kwargs.iter() {
         let key = key.extract::<String>()?;
-        let name = if key == "output" {
+        let name = if key == metrics_kwarg {
             tool.output_name().to_owned()
         } else {
             tool.option(&key)

@@ -1,0 +1,11 @@
+## argv
+MarkDuplicates
+I=tests/data/markdup.bam
+O=OUT/marked.bam
+M=OUT/markdup_metrics.txt
+FLOW_MODE=true
+## exit
+1
+## stdout
+## stderr
+bammetrics: MarkDuplicates: option FLOW_MODE is not implemented (it may change the metrics)

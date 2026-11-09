@@ -720,6 +720,44 @@ def create_sequence_dictionary(
     """CreateSequenceDictionary: one row per FASTA sequence (name, length, md5, assembly,
     uri, species, alternate_names); OUTPUT gets the .dict."""
 
+def mark_duplicates(
+    input: _Paths,
+    *,
+    output: _Path,
+    metrics_file: _Path,
+    remove_duplicates: bool | None = None,
+    remove_sequencing_duplicates: bool | None = None,
+    assume_sorted: bool | None = None,
+    assume_sort_order: str | None = None,
+    duplicate_scoring_strategy: str | None = None,
+    program_record_id: str | None = None,
+    program_group_version: str | None = None,
+    program_group_command_line: str | None = None,
+    program_group_name: str | None = None,
+    add_pg_tag_to_reads: bool | None = None,
+    comment: str | Sequence[str] | None = None,
+    barcode_tag: str | None = None,
+    read_one_barcode_tag: str | None = None,
+    read_two_barcode_tag: str | None = None,
+    tag_duplicate_set_members: bool | None = None,
+    tagging_policy: str | None = None,
+    clear_dt: bool | None = None,
+    duplex_umi: bool | None = None,
+    molecular_identifier_tag: str | None = None,
+    read_name_regex: str | None = None,
+    optical_duplicate_pixel_distance: int | None = None,
+    max_optical_duplicate_set_size: int | None = None,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    tmp_dir: _Path | Sequence[_Path] | None = None,
+    max_records_in_ram: int | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """MarkDuplicates: one row per library (DuplicationMetrics) plus the set_size
+    histograms; OUTPUT gets every record with the duplicate flag set or cleared,
+    METRICS_FILE the metrics."""
+
 # END registry tools
 
 def alignment_summary(
