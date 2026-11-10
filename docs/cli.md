@@ -853,7 +853,7 @@ purpose is listed in KNOWN_DIFFERENCES.md.
 
 The worked examples of docs/05 section 2.5 that work today, written against the committed
 fixtures so each runs from the repository root as shown (`tests/data/insert_size.bam` has
-no `@RG SM`, so the sample is the BAM name). Output is what 0.18.0 prints; long lines are
+no `@RG SM`, so the sample is the BAM name). Output is what 0.19.0 prints; long lines are
 cut.
 
 **1 and 2. One tool, as Picard text or machine-readable.**

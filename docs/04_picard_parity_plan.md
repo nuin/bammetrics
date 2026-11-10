@@ -49,19 +49,19 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | UmiAwareMarkDuplicatesWithMateCigar | Duplicates | later | UMI graph, fails on multi-library input in Picard. L | fgbio, UMI-tools (partial) |
 | CollectDuplicateMetrics | Duplicates | core | Pure flag counting, builds the DuplicationMetrics block. S | samtools stats (partial) |
 | EstimateLibraryComplexity | Duplicates | core | Works on unaligned input, no BAM output. M | none |
-| CheckDuplicateMarking | Duplicates | later | Validator, exit code is the output. S | none |
+| CheckDuplicateMarking | Duplicates | core | Validator, exit code is the output. Shipped in 0.19.0. S | none |
 | CollectUmiPrevalenceMetrics | Duplicates | later | Small output, but inverted barcode filter to copy. M | none |
 | CollectIndependentReplicateMetrics | Duplicates | out | Alpha research tool, niche protocol. L | none |
 | CollectGcBiasMetrics | Metrics | core | Standard WGS bias QC, reference windows plus read starts. M | Picard only (deepTools computeGCBias, partial) |
-| CollectSequencingArtifactMetrics | Metrics | later | 5 output files, pro/con rules. FFPE and OxoG use. L | none |
-| CollectOxoGMetrics | Metrics | later | Needs pileup, Java hash row order. M | none |
-| ConvertSequencingArtifactToOxoG | Metrics | later | Text conversion, needs the artifact tool. S | none |
+| CollectSequencingArtifactMetrics | Metrics | core | 5 output files, pro/con rules. FFPE and OxoG use. Shipped in 0.19.0. L | none |
+| CollectOxoGMetrics | Metrics | core | Needs pileup, Java hash row order. Shipped in 0.19.0. M | none |
+| ConvertSequencingArtifactToOxoG | Metrics | core | Text conversion, needs the artifact tool. Shipped in 0.19.0. S | none |
 | CollectSamErrorMetrics | Metrics | later | About 30 stratifiers, research tool. XL | none |
 | CollectRrbsMetrics | Metrics | later | RRBS niche, level quirks. M | Bismark reports (partial) |
 | CollectRnaSeqMetrics | Metrics | core | Mainstream RNA-seq QC (nf-core/rnaseq). L | RSeQC, Qualimap (partial) |
-| CollectJumpingLibraryMetrics | Metrics | core | Mate-pair libraries are rare. Shipped in the release after 0.18.0. S | none |
+| CollectJumpingLibraryMetrics | Metrics | core | Mate-pair libraries are rare. Shipped in 0.19.0. S | none |
 | CollectMultipleMetrics | Metrics | core | Most users call this wrapper. Single pass is a speed argument. M | none |
-| BamIndexStats | Metrics | later | Same numbers as samtools idxstats. S | samtools idxstats |
+| BamIndexStats | Metrics | core | Same numbers as samtools idxstats. Shipped in 0.19.0. S | samtools idxstats |
 | ValidateSamFile | Diagnostics | out | Defined by htsjdk parser behaviour over about 70 rules. XL | samtools quickcheck (partial) |
 | CompareMetrics | Diagnostics | core | The oracle comparator. Its semantics go into the harness. S | none |
 | CompareSAMs | Diagnostics | later | Pipeline regression check. Quirks to copy. M | none |

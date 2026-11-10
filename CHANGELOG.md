@@ -1,9 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.19.0
 
-Two clinical checks Picard does not have (docs/06_clinical_checks.md), a text comparator
-in the rule language, and `clinical-panel` version 3.
+Eight tools: `CollectSequencingArtifactMetrics`, `ConvertSequencingArtifactToOxoG`,
+`CollectOxoGMetrics`, `BamIndexStats`, `CheckDuplicateMarking`,
+`CollectJumpingLibraryMetrics`, and the two clinical checks Picard does not have,
+`CollectCoverageGaps` and `CollectSexCheckMetrics` (docs/06_clinical_checks.md), with the
+`is TEXT` comparator in the rule language and `clinical-panel` version 3.
 
 ### Added
 
