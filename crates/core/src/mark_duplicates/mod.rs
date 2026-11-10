@@ -597,16 +597,12 @@ fn spool_streams(inputs: &[PathBuf], temp: &TempDir) -> Result<Vec<PathBuf>> {
             if regular && !input.starts_with("/dev") {
                 return Ok(input.clone());
             }
-            let copy = temp.file("input")?;
             let read_error = |source| Error::Input {
                 path: input.clone(),
                 source,
             };
             let mut source = File::open(input).map_err(read_error)?;
-            let mut sink = File::create(&copy).map_err(|source| Error::Output {
-                path: copy.clone(),
-                source,
-            })?;
+            let (copy, mut sink) = temp.create_file("input")?;
             copy_all(&mut source, &mut sink).map_err(read_error)?;
             Ok(copy)
         })

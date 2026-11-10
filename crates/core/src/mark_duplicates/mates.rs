@@ -129,7 +129,8 @@ impl ByReference<'_> {
             let path = match self.files.get(&reference) {
                 Some(path) => path.clone(),
                 None => {
-                    let path = self.dir.file("mates")?;
+                    // Created readable by this user only; later flushes append.
+                    let (path, _) = self.dir.create_file("mates")?;
                     self.files.insert(reference, path.clone());
                     path
                 }

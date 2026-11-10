@@ -99,11 +99,27 @@ impl AtomicFile {
     }
 
     /// Create the file to write: the temporary one, or `path` in place.
+    /// When `path` already exists, the temporary file starts out readable by
+    /// this user only and then takes the permissions `path` has, so the
+    /// rename keeps the mode the user gave the file. A new `path` gets the
+    /// umask default.
     pub fn create(&self) -> io::Result<File> {
-        match &self.temp {
-            Some(temp) => File::options().write(true).create_new(true).open(temp),
-            None => File::create(&self.path),
+        let Some(temp) = &self.temp else {
+            return File::create(&self.path);
+        };
+        let mut options = File::options();
+        options.write(true).create_new(true);
+        let existing = fs::metadata(&self.path).ok().map(|m| m.permissions());
+        #[cfg(unix)]
+        if existing.is_some() {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
         }
+        let file = options.open(temp)?;
+        if let Some(permissions) = existing {
+            file.set_permissions(permissions)?;
+        }
+        Ok(file)
     }
 
     /// Rename the temporary file over `path`.
@@ -168,6 +184,22 @@ mod tests {
         write_atomically(&path, |out| out.write_all(b"new")).expect("write");
         assert_eq!(fs::read_to_string(&path).expect("read"), "new");
         assert_eq!(fs::read_dir(&dir).expect("dir").count(), 1);
+        fs::remove_file(&path).expect("remove");
+        fs::remove_dir(&dir).expect("remove dir");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_replaced_file_keeps_its_mode() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = scratch("mode");
+        let path = dir.join("out.txt");
+        fs::write(&path, "old").expect("old");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o640)).expect("chmod");
+        write_atomically(&path, |out| out.write_all(b"new")).expect("write");
+        let mode = fs::metadata(&path).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o640);
+        assert_eq!(fs::read_to_string(&path).expect("read"), "new");
         fs::remove_file(&path).expect("remove");
         fs::remove_dir(&dir).expect("remove dir");
     }

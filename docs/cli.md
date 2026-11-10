@@ -543,11 +543,12 @@ The verb runs `MarkDuplicates`, Picard 3.5.0's duplicate marker (0.18.0). `-o BA
   name one file, exit 2 before anything is read.
 - A CRAM input needs `-R`. Its records come out with the `MD` and `NM` tags htsjdk
   rebuilds while decoding. The output is always BAM: an `-o` ending in `.sam` or `.cram`
-  exits 1. SAM input, plain or bgzipped, exits 1 (`SAM input is not supported`);
-  convert it with `samtools view -b`.
+  exits 2 (the Picard face exits 1). SAM input, plain or bgzipped, exits 1 on both faces
+  (`SAM input is not supported`); convert it with `samtools view -b`.
 - `--create-index` writes `marked.bai` beside a coordinate-sorted BAM;
   `--create-md5-file` writes `marked.bam.md5`. `--compression-level` sets the BGZF level
-  (default 5). `--threads` sets the decompression and compression workers.
+  (default 5). `--threads` sets the BGZF decompression threads, or the CRAM container
+  decoders, and the BGZF compression workers of the output.
 
 KNOWN_DIFFERENCES.md lists what differs from Picard: the `@PG` `VN` and `CL`, the flow
 options it refuses, the `READ_NAME_REGEX` syntax and the `MAX_RECORDS_IN_RAM` meaning.

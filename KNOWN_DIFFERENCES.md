@@ -760,7 +760,7 @@ the differences below are on purpose or cannot be avoided.
   record keeps its bytes, as htsjdk keeps them.
 - `CREATE_MD5_FILE` writes the MD5 of bammetrics' bytes; the index of `CREATE_INDEX` is
   noodles' BAI of them. Both are named as Picard names them (`OUT.bam.md5`, `OUT.bai`).
-- `OUTPUT` is always BAM. A name ending in `.sam` or `.cram` exits 1 before anything is
+- `OUTPUT` is always BAM. A name ending in `.sam` or `.cram` exits 1 on the Picard face and 2 on the verb before anything is
   read (`bammetrics writes BAM only`); Picard writes SAM or CRAM by the extension.
 - `MAX_RECORDS_IN_RAM` is the number of read ends each sorted list holds in memory before
   it spills a run to `TMP_DIR` (1 or more, default 4,000,000; 0 exits 1); Picard sets

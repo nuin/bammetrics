@@ -72,7 +72,7 @@ impl TempDir {
             let path = self
                 .base
                 .join(format!("bammetrics-markdup.{}.{n}", std::process::id()));
-            match fs::create_dir(&path) {
+            match create_private_dir(&path) {
                 Ok(()) => {
                     crate::cleanup::register(&path);
                     return Ok(self.path.get_or_init(|| path));
@@ -94,6 +94,15 @@ impl TempDir {
             files.push(path.clone());
         }
         Ok(path)
+    }
+
+    /// A new file in the directory, created for writing and readable by
+    /// this user only (mode 0600): spilled read ends and spooled inputs hold
+    /// read data, and `TMP_DIR` is often shared.
+    pub fn create_file(&self, stem: &str) -> Result<(PathBuf, File)> {
+        let path = self.file(stem)?;
+        let file = create_private_file(&path).map_err(write_error(&path))?;
+        Ok((path, file))
     }
 
     /// Remove one file made by [`TempDir::file`] before the directory goes.
@@ -121,6 +130,31 @@ impl Drop for TempDir {
             crate::cleanup::unregister(path);
         }
     }
+}
+
+/// A directory this user alone can enter (mode 0700). Fails when the path
+/// exists.
+fn create_private_dir(path: &Path) -> io::Result<()> {
+    let mut builder = fs::DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(path)
+}
+
+/// A new file this user alone can read (mode 0600). Fails when the path
+/// exists, so a name planted in `TMP_DIR` is never written through.
+fn create_private_file(path: &Path) -> io::Result<File> {
+    let mut options = File::options();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)
 }
 
 fn write_error(path: &Path) -> impl Fn(io::Error) -> Error + '_ {
@@ -176,8 +210,7 @@ impl<'d, T: Spill + Ord> Sorter<'d, T> {
 
     fn spill(&mut self) -> Result<()> {
         self.buffer.sort();
-        let path = self.dir.file(self.stem)?;
-        let file = File::create(&path).map_err(write_error(&path))?;
+        let (path, file) = self.dir.create_file(self.stem)?;
         let mut out = BufWriter::with_capacity(1 << 20, file);
         let mut bytes = Vec::with_capacity(64);
         for item in self.buffer.drain(..) {
@@ -240,8 +273,7 @@ impl<'d, T: Spill + Ord> Sorter<'d, T> {
         let mut source: Sorted<'_, T> = Sorted {
             source: open_runs(self.dir, group.to_vec())?,
         };
-        let path = self.dir.file(self.stem)?;
-        let file = File::create(&path).map_err(write_error(&path))?;
+        let (path, file) = self.dir.create_file(self.stem)?;
         let mut out = BufWriter::with_capacity(1 << 20, file);
         let mut bytes = Vec::with_capacity(64);
         while let Some(item) = source.next_item()? {
@@ -446,6 +478,20 @@ mod tests {
         let path = dir.path().expect("created").to_path_buf();
         drop(dir);
         assert!(!path.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_directory_and_its_files_belong_to_this_user_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = TempDir::new(None);
+        let (path, file) = dir.create_file("n").expect("create");
+        drop(file);
+        let mode = |p: &Path| fs::metadata(p).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!(mode(dir.path().expect("created")), 0o700);
+        assert_eq!(mode(&path), 0o600);
+        // A name that already exists is never written through.
+        assert!(create_private_file(&path).is_err());
     }
 
     #[test]
