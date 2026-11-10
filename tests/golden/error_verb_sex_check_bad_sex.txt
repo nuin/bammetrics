@@ -1,0 +1,10 @@
+## argv
+sex-check
+tests/data/insert_size.bam
+--sex
+unknown
+## exit
+2
+## stdout
+## stderr
+bammetrics sex-check: EXPECTED_SEX=unknown: expected MALE or FEMALE (from --sex)

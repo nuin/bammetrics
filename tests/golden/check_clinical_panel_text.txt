@@ -6,7 +6,7 @@ clinical-panel
 ## exit
 10
 ## stdout
-NA12878  FAIL  5 fail, 0 warn, 8 pass, 1 not measured  preset clinical-panel v2 (e62755)
+NA12878  FAIL  5 fail, 0 warn, 8 pass, 5 not measured  preset clinical-panel v3 (6f0d59)
   FAIL          hs.mean-target-coverage      0.377778  warn < 200, fail < 100                        Mean target coverage is 0.377778, below the fail limit of 100
   FAIL          hs.target-20x                       0  warn < 0.98, fail < 0.95                      Target bases at 20x is 0, below the fail limit of 0.95
   FAIL          hs.target-100x                      0  warn < 0.8, fail < 0.6                        Target bases at 100x is 0, below the fail limit of 0.6
@@ -21,5 +21,9 @@ NA12878  FAIL  5 fail, 0 warn, 8 pass, 1 not measured  preset clinical-panel v2 
   PASS          alignment.chimeras                  0  warn > 0.05, fail > 0.1
   PASS          insert.median                     310  warn outside 180..450, fail outside 120..600
   PASS          yield.q30                           1  warn < 0.85, fail < 0.75
+  NOT MEASURED  gaps.reportable-range               ?  warn < 0.98, fail < 0.95                      no CoverageGapMetrics file
+  NOT MEASURED  gaps.targets-complete               ?  warn < 0.95, fail < 0.9                       no CoverageGapMetrics file
+  NOT MEASURED  sex.match                           ?  fail is N                                     no SexCheckMetrics file
+  NOT MEASURED  sex.inferred                        ?  warn is UNKNOWN                               no SexCheckMetrics file
 exit 10: a sample reaches --fail-on fail
 ## stderr

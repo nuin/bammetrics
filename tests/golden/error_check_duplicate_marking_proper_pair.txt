@@ -1,0 +1,10 @@
+## argv
+CheckDuplicateMarking
+I=tests/data/duplicate_marking.bam
+MODE=PRIMARY_PROPER_PAIR_ONLY
+O=OUT/bad_querynames.txt
+## exit
+1
+## stdout
+## stderr
+bammetrics: Inappropriate call if not paired read

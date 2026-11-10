@@ -55,6 +55,15 @@ class _VerdictDict(TypedDict):
     files: list[_VerdictFile]
     checks: list[_VerdictCheck]
 
+class _BamIndexRow(TypedDict):
+    """One row of bam_index_stats(): a reference of the BAM header with its length and
+    the aligned and unaligned record counts of the index, then a last row whose
+    reference is "*" and whose unaligned count is Picard's NoCoordinateCount."""
+    reference: str
+    length: int
+    aligned: int
+    unaligned: int
+
 class BammetricsError(Exception):
     """Base of UsageError, InputError and VerdictError."""
 
@@ -92,11 +101,13 @@ class PresetInfo(str):
 
 class Check:
     """One check of a verdict. status is "pass", "warn", "fail" or "not_measured";
+    text is the cell's text for a rule with an "is TEXT" bound (value is then None);
     limit is the fail bound of a fail, else the warn bound (or the fail bound
     when the rule has none); why is the reason in plain words, None for a pass."""
     rule: str
     status: str
     value: float | None
+    text: str | None
     limit: str | None
     why: str | None
     label: str
@@ -473,6 +484,9 @@ def collect_multiple_metrics(
     file_extension: str | None = None,
     program: str | Sequence[str] | None = None,
     extra_argument: str | Sequence[str] | None = None,
+    intervals: _Path | None = None,
+    db_snp: _Path | None = None,
+    include_unpaired: bool | None = None,
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
     """CollectMultipleMetrics: every PROGRAM on one read of the BAM, each written to OUTPUT
@@ -767,6 +781,143 @@ def mark_duplicates(
     histograms; OUTPUT gets every record with the duplicate flag set or cleared,
     METRICS_FILE the metrics."""
 
+def collect_sequencing_artifact_metrics(
+    input: _Path,
+    *,
+    output: _Path,
+    reference_sequence: _Path,
+    intervals: _Path | None = None,
+    db_snp: _Path | None = None,
+    minimum_quality_score: int | None = None,
+    minimum_mapping_quality: int | None = None,
+    minimum_insert_size: int | None = None,
+    maximum_insert_size: int | None = None,
+    include_unpaired: bool | None = None,
+    include_duplicates: bool | None = None,
+    include_non_pf_reads: bool | None = None,
+    tandem_reads: bool | None = None,
+    use_oq: bool | None = None,
+    context_size: int | None = None,
+    contexts_to_print: str | Sequence[str] | None = None,
+    file_extension: str | None = None,
+    stop_after: int | None = None,
+    assume_sorted: bool | None = None,
+) -> list[dict[str, Any]]:
+    """CollectSequencingArtifactMetrics: OUTPUT is a prefix:
+    PREFIX.pre_adapter_detail_metrics, .pre_adapter_summary_metrics,
+    .bait_bias_detail_metrics, .bait_bias_summary_metrics and .error_summary_metrics
+    (plus FILE_EXTENSION); Python returns one row per file: file and rows."""
+
+def convert_sequencing_artifact_to_oxo_g(
+    *,
+    output: _Path | None = None,
+    input_base: _Path | None = None,
+    pre_adapter_in: _Path | None = None,
+    bait_bias_in: _Path | None = None,
+    oxog_out: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """ConvertSequencingArtifactToOxoG: one CpcgMetrics row per library and C-centred
+    context, read from the CollectSequencingArtifactMetrics detail files of INPUT_BASE;
+    the file is OUTPUT_BASE.oxog_metrics. Python returns one row per file: file and
+    rows."""
+
+def collect_oxo_g_metrics(
+    input: _Path,
+    *,
+    reference_sequence: _Path,
+    intervals: _Path | None = None,
+    db_snp: _Path | None = None,
+    minimum_quality_score: int | None = None,
+    minimum_mapping_quality: int | None = None,
+    minimum_insert_size: int | None = None,
+    maximum_insert_size: int | None = None,
+    include_non_pf_reads: bool | None = None,
+    use_oq: bool | None = None,
+    context_size: int | None = None,
+    contexts: str | Sequence[str] | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectOxoGMetrics: one CpcgMetrics row per sequence context and library: reference
+    and alternate base counts at C and G sites split by read and strand, the oxidation
+    error rate and its Phred score."""
+
+def collect_coverage_gaps(
+    input: _Path,
+    *,
+    target_intervals: _Path | Sequence[_Path],
+    gaps_file: _Path | None = None,
+    min_depth: int | None = None,
+    minimum_mapping_quality: int | None = None,
+    minimum_base_quality: int | None = None,
+    clip_overlapping_reads: bool | None = None,
+    include_indels: bool | None = None,
+    count_unpaired: bool | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectCoverageGaps: one row of the 10 CoverageGapMetrics columns: the target bases
+    under MIN_DEPTH as maximal runs, with the depth CollectHsMetrics writes per base;
+    the metrics file adds a histogram of gap lengths, and GAPS_FILE a BED of the gaps.
+    Not a Picard tool (docs/06)."""
+
+def collect_sex_check_metrics(
+    input: _Path,
+    *,
+    expected_sex: str | None = None,
+    minimum_mapping_quality: int | None = None,
+    target_intervals: _Path | Sequence[_Path] | None = None,
+    x_contig: str | None = None,
+    y_contig: str | None = None,
+    autosomes: str | Sequence[str] | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectSexCheckMetrics: one row of the 12 SexCheckMetrics columns: reads per base on
+    the X contig, the Y contig and the autosomes, their ratios, the sex they imply
+    (FEMALE, MALE or UNKNOWN) and whether it matches EXPECTED_SEX. Not a Picard tool
+    (docs/06)."""
+
+def bam_index_stats(
+    input: _Path,
+    *,
+    reference_sequence: _Path | None = None,
+) -> list[_BamIndexRow]:
+    """BamIndexStats: one row per reference of the BAM header (reference, length, aligned,
+    unaligned) read from the .bai or .csi beside INPUT, then a * row whose unaligned
+    count is the NoCoordinateCount; the command prints the text Picard prints."""
+
+def check_duplicate_marking(
+    input: _Path,
+    *,
+    output: _Path | None = None,
+    mode: str | None = None,
+    verbosity: str | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CheckDuplicateMarking: one row per record whose duplicate flag differs from the
+    first record of its queryname (read_name, contig, start); no row when every
+    queryname agrees. OUTPUT gets the queryname of each such record, one per line. The
+    command line exits 1 when any is found."""
+
+def collect_jumping_library_metrics(
+    input: _Paths,
+    *,
+    minimum_mapping_quality: int | None = None,
+    tail_limit: int | None = None,
+    chimera_kb_min: int | None = None,
+    output: _Path | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectJumpingLibraryMetrics: one row over every input: outward-facing (jump) and
+    inward-facing (non-jump) pairs with their duplicate fraction, library size and
+    insert size mean and SD, chimeric pairs, fragments and the three fractions; the
+    inputs may be several coordinate-sorted BAMs, read in turn."""
+
 # END registry tools
 
 def alignment_summary(
@@ -890,6 +1041,8 @@ _CollectorVerb = Literal[
     "hs-metrics",
     "gc-bias",
     "rna-seq",
+    "sex-check",
+    "coverage-gaps",
 ]
 
 def qc(
@@ -903,6 +1056,7 @@ def qc(
     ref_flat: _Path | None = None,
     strand: Literal["NONE", "FIRST_READ_TRANSCRIPTION_STRAND", "SECOND_READ_TRANSCRIPTION_STRAND"] | None = None,
     ribosomal_intervals: _Path | None = None,
+    sex: Literal["male", "female"] | None = None,
     sample: str | None = None,
     fail_on: Literal["warn", "fail"] | None = None,
     resume: bool = False,

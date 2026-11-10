@@ -1,0 +1,8 @@
+## argv
+BamIndexStats
+I=tests/data/orientation.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: No index for bam file tests/data/orientation.bam

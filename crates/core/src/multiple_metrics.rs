@@ -14,10 +14,12 @@
 //!   argument for a program not in `PROGRAM`, or for an unknown program, is
 //!   an error, as is an option the program does not take.
 //! * `STOP_AFTER` and `ASSUME_SORTED` apply to the shared read.
-//! * `INTERVALS`, `DB_SNP`, `REF_FLAT`, `IGNORE_SEQUENCE` and
-//!   `INCLUDE_UNPAIRED` serve only `RnaSeqMetrics` and
-//!   `CollectSequencingArtifactMetrics`, which are not implemented: naming
-//!   either program is an error, so the five options are accepted and
+//! * `CollectSequencingArtifactMetrics` takes `OUTPUT` as its prefix with
+//!   `FILE_EXTENSION`, and the run's `INTERVALS`, `DB_SNP` and
+//!   `INCLUDE_UNPAIRED`; it never runs the checks of its stand-alone command
+//!   line (`CONTEXTS_TO_PRINT` lengths, insert size bounds), as in Picard.
+//! * `REF_FLAT` and `IGNORE_SEQUENCE` serve only `RnaSeqMetrics`, which is
+//!   not implemented here: naming it is an error, so both are accepted and
 //!   dropped.
 //! * Every program's `StringHeader` lines carry this tool's command line.
 
@@ -37,6 +39,10 @@ struct Program {
     files: &'static [(&'static str, &'static str)],
     levels: bool,
     reference: Reference,
+    /// The program takes `OUTPUT` as its own prefix with `FILE_EXTENSION`,
+    /// and the run's `INTERVALS`, `DB_SNP` and `INCLUDE_UNPAIRED`
+    /// (`CollectSequencingArtifactMetrics`).
+    prefix: bool,
 }
 
 /// Whether the program reads `REFERENCE_SEQUENCE`, and must have one.
@@ -54,6 +60,7 @@ const PROGRAMS: &[Program] = &[
         files: &[("OUTPUT", ".alignment_summary_metrics")],
         levels: true,
         reference: Reference::Optional,
+        prefix: false,
     },
     Program {
         name: "CollectInsertSizeMetrics",
@@ -61,6 +68,7 @@ const PROGRAMS: &[Program] = &[
         files: &[("OUTPUT", ".insert_size_metrics")],
         levels: true,
         reference: Reference::Unused,
+        prefix: false,
     },
     Program {
         name: "QualityScoreDistribution",
@@ -68,6 +76,7 @@ const PROGRAMS: &[Program] = &[
         files: &[("OUTPUT", ".quality_distribution_metrics")],
         levels: false,
         reference: Reference::Unused,
+        prefix: false,
     },
     Program {
         name: "MeanQualityByCycle",
@@ -75,6 +84,7 @@ const PROGRAMS: &[Program] = &[
         files: &[("OUTPUT", ".quality_by_cycle_metrics")],
         levels: false,
         reference: Reference::Unused,
+        prefix: false,
     },
     Program {
         name: "CollectBaseDistributionByCycle",
@@ -82,6 +92,7 @@ const PROGRAMS: &[Program] = &[
         files: &[("OUTPUT", ".base_distribution_by_cycle_metrics")],
         levels: false,
         reference: Reference::Unused,
+        prefix: false,
     },
     Program {
         name: "CollectGcBiasMetrics",
@@ -92,6 +103,7 @@ const PROGRAMS: &[Program] = &[
         ],
         levels: true,
         reference: Reference::Required,
+        prefix: false,
     },
     Program {
         name: "CollectQualityYieldMetrics",
@@ -99,6 +111,15 @@ const PROGRAMS: &[Program] = &[
         files: &[("OUTPUT", ".quality_yield_metrics")],
         levels: false,
         reference: Reference::Unused,
+        prefix: false,
+    },
+    Program {
+        name: "CollectSequencingArtifactMetrics",
+        tool: &crate::sequencing_artifact::TOOL,
+        files: &[("OUTPUT", "")],
+        levels: false,
+        reference: Reference::Required,
+        prefix: true,
     },
 ];
 
@@ -123,6 +144,17 @@ const OTHER_FILES: &[(&str, &[(&str, &str)])] = &[
     ),
     ("CollectWgsMetrics", &[("OUTPUT", ".wgs_metrics")]),
     ("CollectRnaSeqMetrics", &[("OUTPUT", ".rna_metrics")]),
+    (
+        "CollectCoverageGaps",
+        &[
+            ("OUTPUT", ".coverage_gaps"),
+            ("GAPS_FILE", ".coverage_gaps.bed"),
+        ],
+    ),
+    (
+        "CollectSexCheckMetrics",
+        &[("OUTPUT", ".sex_check_metrics")],
+    ),
 ];
 
 /// The files `tool` writes under an output prefix, as (file option,
@@ -143,7 +175,7 @@ pub fn file_extensions(tool: &str) -> Option<&'static [(&'static str, &'static s
 }
 
 /// Programs Picard 3.5.0 lists that bammetrics does not have.
-const NOT_IMPLEMENTED: [&str; 2] = ["RnaSeqMetrics", "CollectSequencingArtifactMetrics"];
+const NOT_IMPLEMENTED: [&str; 1] = ["RnaSeqMetrics"];
 
 /// Options `EXTRA_ARGUMENT` cannot set per program: Picard parses them
 /// into the program and then reads the run's own values.
@@ -182,16 +214,19 @@ pub const TOOL: Tool = Tool {
             "PROGRAM::KEY=VALUE, an option for one program.",
         )
         .repeated(),
-        Opt::ignored(&["INTERVALS"], "only RnaSeqMetrics reads it"),
-        Opt::ignored(
+        Opt::path(
+            &["INTERVALS"],
+            "Intervals for CollectSequencingArtifactMetrics, the one program here that reads them.",
+        ),
+        Opt::path(
             &["DB_SNP"],
-            "only CollectSequencingArtifactMetrics reads it",
+            "A dbSNP VCF for CollectSequencingArtifactMetrics, the one program that reads it.",
         ),
         Opt::ignored(&["REF_FLAT"], "only RnaSeqMetrics reads it"),
         Opt::ignored(&["IGNORE_SEQUENCE"], "only RnaSeqMetrics reads it"),
-        Opt::ignored_bool(
+        Opt::bool(
             &["INCLUDE_UNPAIRED", "UNPAIRED"],
-            "only CollectSequencingArtifactMetrics reads it",
+            "CollectSequencingArtifactMetrics counts unpaired reads (default false).",
         ),
         Opt::ignored_bool(&["DO_NOT_CREATE_PLOTS"], "no plot is drawn"),
     ],
@@ -330,7 +365,17 @@ fn plan(inv: &Invocation) -> Result<Vec<(&'static Program, Invocation)>> {
         for (option, extension) in p.files {
             args.push(format!(
                 "{option}={}",
-                file_name(&base, extension, file_extension).display()
+                file_name(&base, extension, if p.prefix { "" } else { file_extension }).display()
+            ));
+        }
+        if p.prefix {
+            args.push(format!("FILE_EXTENSION={file_extension}"));
+            for name in ["INTERVALS", "DB_SNP"] {
+                args.extend(inv.get(name).map(|v| format!("{name}={v}")));
+            }
+            args.push(format!(
+                "INCLUDE_UNPAIRED={}",
+                inv.flag("INCLUDE_UNPAIRED", false)?
             ));
         }
         if p.levels {
@@ -346,6 +391,18 @@ fn plan(inv: &Invocation) -> Result<Vec<(&'static Program, Invocation)>> {
             );
         }
         if let Some((_, extra)) = extras.iter().find(|(name, _)| *name == p.name) {
+            // Picard parses the extra arguments into the program, whose
+            // reference argument the run never set: one must name it.
+            let names_reference = extra.iter().any(|a| {
+                let name = a.split_once('=').map_or(a.as_str(), |(n, _)| n);
+                matches!(name, "REFERENCE_SEQUENCE" | "R")
+            });
+            if p.prefix && !names_reference {
+                return Err(Error::Usage(format!(
+                    "Failed to parse arguments for {}: Option 'REFERENCE_SEQUENCE' is required.",
+                    p.name
+                )));
+            }
             let extra = without_run_level(extra.clone());
             let named: Vec<&str> = extra.iter().filter_map(|a| single(p.tool, a)).collect();
             args.retain(|a| single(p.tool, a).is_none_or(|n| !named.contains(&n)));
@@ -479,6 +536,54 @@ mod tests {
                 "dir/s1.quality_distribution_metrics.txt"
             ))
         );
+    }
+
+    #[test]
+    fn the_artifact_program_takes_the_prefix_and_the_run_options() {
+        let inv = parse(&[
+            "I=x.bam",
+            "O=dir/s1",
+            "R=ref.fa",
+            "EXT=.txt",
+            "PROGRAM=null",
+            "PROGRAM=CollectSequencingArtifactMetrics",
+            "INTERVALS=t.interval_list",
+            "DB_SNP=d.vcf",
+            "UNPAIRED=true",
+        ]);
+        let planned = plan(&inv).expect("plan");
+        let (_, artifact) = &planned[0];
+        assert_eq!(
+            artifact.output.as_deref(),
+            Some(std::path::Path::new("dir/s1"))
+        );
+        assert_eq!(artifact.get("FILE_EXTENSION"), Some(".txt"));
+        assert_eq!(artifact.get("INTERVALS"), Some("t.interval_list"));
+        assert_eq!(artifact.get("DB_SNP"), Some("d.vcf"));
+        assert_eq!(artifact.get("INCLUDE_UNPAIRED"), Some("true"));
+        let extra = |args: &[&str]| {
+            let mut all = vec![
+                "I=x.bam",
+                "O=out",
+                "R=ref.fa",
+                "PROGRAM=CollectSequencingArtifactMetrics",
+            ];
+            all.extend(args);
+            plan(&parse(&all))
+        };
+        let refused = extra(&["EXTRA_ARGUMENT=CollectSequencingArtifactMetrics::CONTEXT_SIZE=2"]);
+        assert!(
+            matches!(&refused, Err(e) if e.to_string().contains("REFERENCE_SEQUENCE' is required")),
+            "Picard's parser wants the program's own reference"
+        );
+        let planned = extra(&[
+            "EXTRA_ARGUMENT=CollectSequencingArtifactMetrics::CONTEXT_SIZE=2",
+            "EXTRA_ARGUMENT=CollectSequencingArtifactMetrics::R=other.fa",
+        ])
+        .expect("plan");
+        let (_, artifact) = planned.last().expect("artifact");
+        assert_eq!(artifact.get("CONTEXT_SIZE"), Some("2"));
+        assert_eq!(artifact.get("REFERENCE_SEQUENCE"), Some("ref.fa"));
     }
 
     #[test]

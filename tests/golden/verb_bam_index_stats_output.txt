@@ -1,0 +1,12 @@
+## argv
+bam-index-stats
+tests/data/insert_size.bam
+-o
+OUT/index_stats.txt
+## exit
+0
+## stdout
+## stderr
+## file index_stats.txt
+chr1 length=	100000	Aligned= 10	Unaligned= 0
+NoCoordinateCount= 0

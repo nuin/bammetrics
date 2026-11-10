@@ -57,10 +57,11 @@ def test_clinical_panel_is_incomplete_without_hs_metrics(metrics_files):
     verdict = bammetrics.evaluate("clinical-panel", list(metrics_files.values()), sample="NA12878")
     assert verdict["sample"] == "NA12878"
     assert verdict["status"] == "incomplete"
-    assert verdict["counts"]["not_measured"] == 9
+    assert verdict["counts"]["not_measured"] == 13
     assert verdict["counts"]["pass"] == 5
     missing = [c for c in verdict["checks"] if c["status"] == "not_measured"]
-    assert all(c["reason"] == "no HsMetrics file" for c in missing)
+    reasons = {c["reason"] for c in missing}
+    assert reasons == {"no HsMetrics file", "no CoverageGapMetrics file", "no SexCheckMetrics file"}
     assert all(c["value"] is None for c in missing)
 
 

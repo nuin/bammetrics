@@ -1,0 +1,23 @@
+## argv
+CollectJumpingLibraryMetrics
+I=tests/data/orientation.bam
+I=tests/data/insert_size.bam
+O=OUT/jumping_library.txt
+MQ=20
+T=100
+CHIMERA_KB_MIN=1000
+## exit
+0
+## stdout
+## stderr
+## file jumping_library.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectJumpingLibraryMetrics INPUT=tests/data/orientation.bam INPUT=tests/data/insert_size.bam OUTPUT=OUT/jumping_library.txt MINIMUM_MAPPING_QUALITY=20 TAIL_LIMIT=100 CHIMERA_KB_MIN=1000
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.JumpingLibraryMetrics
+JUMP_PAIRS	JUMP_DUPLICATE_PAIRS	JUMP_DUPLICATE_PCT	JUMP_LIBRARY_SIZE	JUMP_MEAN_INSERT_SIZE	JUMP_STDEV_INSERT_SIZE	NONJUMP_PAIRS	NONJUMP_DUPLICATE_PAIRS	NONJUMP_DUPLICATE_PCT	NONJUMP_LIBRARY_SIZE	NONJUMP_MEAN_INSERT_SIZE	NONJUMP_STDEV_INSERT_SIZE	CHIMERIC_PAIRS	FRAGMENTS	PCT_JUMPS	PCT_NONJUMPS	PCT_CHIMERAS
+2	0	0	0	400	0	42	0	0	0	297.368421	16.222142	1	0	0.044444	0.933333	0.022222
+
+

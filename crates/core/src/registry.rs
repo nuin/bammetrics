@@ -90,6 +90,10 @@ pub struct Opt {
     pub repeated: bool,
     /// Picard fails without it.
     pub required: bool,
+    /// A path option naming a file the tool writes. Every other path
+    /// option names a file it reads, which [`write_files`] refuses to
+    /// replace.
+    pub written: bool,
     pub help: &'static str,
 }
 
@@ -101,8 +105,15 @@ impl Opt {
             ty,
             repeated: false,
             required: false,
+            written: false,
             help,
         }
+    }
+
+    /// The path option names a file the tool writes.
+    pub const fn written(mut self) -> Self {
+        self.written = true;
+        self
     }
 
     pub const fn bool(names: &'static [&'static str], help: &'static str) -> Self {
@@ -316,6 +327,14 @@ pub const TOOLS: &[&Tool] = &[
     &crate::compare_metrics::TOOL,
     &crate::create_sequence_dictionary::TOOL,
     &crate::mark_duplicates::TOOL,
+    &crate::sequencing_artifact::TOOL,
+    &crate::artifact_to_oxog::TOOL,
+    &crate::oxog_metrics::TOOL,
+    &crate::coverage_gaps::TOOL,
+    &crate::sex_check::TOOL,
+    &crate::bam_index_stats::TOOL,
+    &crate::check_duplicate_marking::TOOL,
+    &crate::jumping_library::TOOL,
 ];
 
 /// The tool named `name`.
@@ -336,6 +355,9 @@ pub struct Invocation {
     pub command: String,
     /// One line per ignored option, for standard error.
     pub notes: Vec<String>,
+    /// The files the tool reads by name: `INPUT`, `REFERENCE_SEQUENCE` and
+    /// every path option not marked [`Opt::written`].
+    pub inputs: Vec<PathBuf>,
 }
 
 impl Invocation {
@@ -587,6 +609,7 @@ impl Tool {
                     }
                     inv.notes.push(format!("ignoring {name}={value}: {why}"));
                     if opt.names[0] == "REFERENCE_SEQUENCE" {
+                        inv.inputs.push(PathBuf::from(&value));
                         inv.values.entry(opt.names[0]).or_default().push(value);
                     }
                 }
@@ -595,6 +618,9 @@ impl Tool {
                 Kind::Value => {
                     if opt.names[0] == "INPUT" {
                         input = Some(PathBuf::from(&value));
+                    }
+                    if opt.ty == Ty::Path && !opt.written && value != "null" {
+                        inv.inputs.push(PathBuf::from(&value));
                     }
                     inv.values.entry(opt.names[0]).or_default().push(value);
                 }
@@ -660,6 +686,13 @@ impl Tool {
 /// Write a tool's files: `OUTPUT` (standard output without a path) and the
 /// extra files, each with the invocation's `StringHeader` lines.
 pub fn write_files(inv: &Invocation, output: &ToolOutput) -> Result<()> {
+    let targets = output
+        .main
+        .as_ref()
+        .and(inv.output.as_deref())
+        .into_iter()
+        .chain(output.extra.iter().map(|(path, _)| path.as_path()));
+    check_writable(targets, &inv.inputs)?;
     if let Some(main) = &output.main {
         let path = inv.output.as_deref();
         write_to(path, |out| main.write(main.headers(&inv.command), out))?;
@@ -668,6 +701,52 @@ pub fn write_files(inv: &Invocation, output: &ToolOutput) -> Result<()> {
         write_to(Some(path), |out| {
             file.write(file.headers(&inv.command), out)
         })?;
+    }
+    Ok(())
+}
+
+/// Fail before any file is written when one of `targets` cannot be
+/// written, as Picard's `assertFileIsWritable` does for every output first:
+/// a directory, a file without write permission, a missing parent
+/// directory. A target that is one of `inputs` fails too, so a run never
+/// replaces a file it reads.
+pub fn check_writable<'a>(
+    targets: impl IntoIterator<Item = &'a Path>,
+    inputs: &[PathBuf],
+) -> Result<()> {
+    let inputs: Vec<PathBuf> = inputs
+        .iter()
+        .filter_map(|p| p.canonicalize().ok())
+        .collect();
+    for target in targets {
+        let output_error = |source| Error::Output {
+            path: target.to_path_buf(),
+            source,
+        };
+        match std::fs::metadata(target) {
+            Ok(meta) if meta.is_dir() || meta.is_file() => {
+                if target.canonicalize().is_ok_and(|t| inputs.contains(&t)) {
+                    return Err(Error::Usage(format!(
+                        "{} is an input; writing it would destroy it",
+                        target.display()
+                    )));
+                }
+                // Opening for write without truncation changes nothing; a
+                // directory fails with the error `File::create` would give.
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .open(target)
+                    .map_err(output_error)?;
+            }
+            // A device or pipe (`/dev/stdout`) is opened once, when written.
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                if let Some(parent) = target.parent().filter(|p| !p.as_os_str().is_empty()) {
+                    std::fs::metadata(parent).map_err(output_error)?;
+                }
+            }
+            Err(error) => return Err(output_error(error)),
+        }
     }
     Ok(())
 }
@@ -865,7 +944,7 @@ pub fn python_stub(tool: &Tool) -> String {
     for param in params {
         text.push_str(&format!("    {param},\n"));
     }
-    text.push_str(") -> list[dict[str, Any]]:\n");
+    text.push_str(&format!(") -> list[{}]:\n", python_row_type(tool)));
     let mut doc = wrap(&format!("{}: {}", tool.name, tool.summary), "    ", 88);
     doc[0] = format!("    \"\"\"{}", doc[0].trim_start());
     let last = doc.len() - 1;
@@ -875,6 +954,17 @@ pub fn python_stub(tool: &Tool) -> String {
         text.push('\n');
     }
     text
+}
+
+/// The Python type of one row: a `TypedDict` written by hand in
+/// `bammetrics.pyi` for a tool whose columns are fixed, a plain dict for a
+/// tool whose columns follow the Picard class.
+fn python_row_type(tool: &Tool) -> &'static str {
+    if tool.name == crate::bam_index_stats::TOOL.name {
+        crate::bam_index_stats::PYTHON_ROW
+    } else {
+        "dict[str, Any]"
+    }
 }
 
 /// The generated block of `bammetrics.pyi`: every tool in [`TOOLS`] order,
@@ -1009,6 +1099,43 @@ mod tests {
             generated,
             "bammetrics.pyi is stale: UPDATE_PYI=1 cargo test -p bammetrics-core python_stubs"
         );
+    }
+
+    #[test]
+    fn path_options_that_name_outputs_are_written() {
+        for tool in TOOLS {
+            for opt in tool.table() {
+                let name = opt.picard();
+                let looks_written =
+                    name.contains("OUT") || name.starts_with("PER_") || name == "GAPS_FILE";
+                if opt.kind == Kind::Value && opt.ty == Ty::Path {
+                    assert_eq!(opt.written, looks_written, "{}: {name}", tool.name);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn an_output_that_is_an_input_or_a_directory_is_refused_first() {
+        let dir = std::env::temp_dir().join(format!("bammetrics-writable-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let input = dir.join("in.txt");
+        std::fs::write(&input, "keep").unwrap();
+        let fresh = dir.join("fresh.txt");
+        let error = check_writable(
+            [fresh.as_path(), input.as_path()],
+            std::slice::from_ref(&input),
+        );
+        assert!(error.unwrap_err().to_string().contains("is an input"));
+        assert_eq!(std::fs::read_to_string(&input).unwrap(), "keep");
+        let error = check_writable([dir.as_path()], &[]).unwrap_err();
+        assert!(matches!(error, Error::Output { .. }), "{error}");
+        let error = check_writable([dir.join("no/such/file").as_path()], &[]).unwrap_err();
+        assert!(matches!(error, Error::Output { .. }), "{error}");
+        assert!(check_writable([fresh.as_path(), Path::new("/dev/stdout")], &[]).is_ok());
+        assert!(!fresh.exists());
+        std::fs::remove_file(&input).unwrap();
+        std::fs::remove_dir(&dir).unwrap();
     }
 
     #[test]

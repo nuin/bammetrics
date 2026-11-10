@@ -1,0 +1,15 @@
+## argv
+coverage-gaps
+tests/data/insert_size.bam
+--panel
+tests/data/targets.bed
+--min-depth
+1
+--format
+tsv
+## exit
+0
+## stdout
+TARGET_TERRITORY	TARGET_COUNT	MIN_DEPTH	BASES_AT_OR_ABOVE_MIN_DEPTH	PCT_REPORTABLE	GAP_BASES	GAP_COUNT	LARGEST_GAP	TARGETS_WITH_GAP	PCT_TARGETS_COMPLETE
+1800	5	1	680	0.377778	1120	7	300	5	0
+## stderr

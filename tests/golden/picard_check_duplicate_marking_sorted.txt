@@ -1,0 +1,11 @@
+## argv
+CheckDuplicateMarking
+I=tests/data/insert_size.bam
+O=OUT/bad_querynames.txt
+## exit
+0
+## stdout
+## stderr
+INFO	CheckDuplicateMarking	Input file isn't queryname sorted. Sorting into temp space.
+INFO	CheckDuplicateMarking	All records' duplicate markings agree.
+## file bad_querynames.txt

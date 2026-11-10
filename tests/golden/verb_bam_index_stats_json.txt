@@ -1,0 +1,31 @@
+## argv
+bam-index-stats
+tests/data/insert_size.bam
+--format
+json
+--sample
+S1
+## exit
+0
+## stdout
+{
+  "tool": "BamIndexStats",
+  "sample": "S1",
+  "class": null,
+  "metrics": [
+    {
+      "reference": "chr1",
+      "length": 100000,
+      "aligned": 10,
+      "unaligned": 0
+    },
+    {
+      "reference": "*",
+      "length": 0,
+      "aligned": 0,
+      "unaligned": 0
+    }
+  ],
+  "histogram": null
+}
+## stderr

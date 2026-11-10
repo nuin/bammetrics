@@ -454,6 +454,60 @@ picard.analysis.directed.TargetedPcrMetrics	HET_SNP_Q	float	HET_SNP_SENSITIVITY 
 picard.analysis.directed.TargetedPcrMetrics	SAMPLE	string	Sample (@RG SM) of the accumulation unit. Empty on the ALL_READS rows.
 picard.analysis.directed.TargetedPcrMetrics	LIBRARY	string	Library (@RG LB) of the accumulation unit. Empty on ALL_READS and SAMPLE rows.
 picard.analysis.directed.TargetedPcrMetrics	READ_GROUP	string	Platform unit (@RG PU) of the read group. Empty except on READ_GROUP rows.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterSummaryMetrics	SAMPLE_ALIAS	string	Every sample of the BAM header's @RG lines, joined by commas in Java HashSet order. The same text on every row.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterSummaryMetrics	LIBRARY	string	Library (@RG LB, UnknownLibrary for a read group without one). One block of 12 rows per library, libraries in Java HashMap order.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterSummaryMetrics	REF_BASE	string	Reference base of the substitution: A, C, G or T.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterSummaryMetrics	ALT_BASE	string	Base the read shows in place of REF_BASE. The 12 rows of a library cover every REF_BASE and ALT_BASE pair that differ.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterSummaryMetrics	TOTAL_QSCORE	float	Pre-adapter Phred score of the substitution with the counts of every context summed: -10 log10 of (PRO_ALT - CON_ALT) / (all four counts), at least 1e-10, rounded to an integer. 100 when the pro reads show no excess.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterSummaryMetrics	WORST_CXT	string	Reference context with the lowest pre-adapter QSCORE for this substitution; the alphabetically first one on a tie.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterSummaryMetrics	WORST_CXT_QSCORE	float	QSCORE of WORST_CXT in the pre-adapter detail file.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterSummaryMetrics	WORST_PRE_CXT	string	Worst context counting only the bases before the substituted one, the bases after it written as N (AAN). The centre base alone when CONTEXT_SIZE is 0.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterSummaryMetrics	WORST_PRE_CXT_QSCORE	float	Pre-adapter QSCORE of WORST_PRE_CXT, its counts summed over every full context sharing those leading bases.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterSummaryMetrics	WORST_POST_CXT	string	Worst context counting only the bases after the substituted one, the bases before it written as N (NAA). The centre base alone when CONTEXT_SIZE is 0.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterSummaryMetrics	WORST_POST_CXT_QSCORE	float	Pre-adapter QSCORE of WORST_POST_CXT, its counts summed over every full context sharing those trailing bases.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterSummaryMetrics	ARTIFACT_NAME	string	OxoG for G>T, Deamination for C>T, NA for the other ten substitutions.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasSummaryMetrics	SAMPLE_ALIAS	string	Every sample of the BAM header's @RG lines, joined by commas in Java HashSet order. The same text on every row.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasSummaryMetrics	LIBRARY	string	Library (@RG LB, UnknownLibrary for a read group without one). One block of 12 rows per library, libraries in Java HashMap order.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasSummaryMetrics	REF_BASE	string	Reference base of the substitution: A, C, G or T.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasSummaryMetrics	ALT_BASE	string	Base the read shows in place of REF_BASE. The 12 rows of a library cover every REF_BASE and ALT_BASE pair that differ.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasSummaryMetrics	TOTAL_QSCORE	float	Bait-bias Phred score of the substitution over every context: -10 log10 of the forward-strand alt fraction minus the reverse-complement alt fraction, at least 1e-10, rounded to an integer. 100 when there is no excess.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasSummaryMetrics	WORST_CXT	string	Reference context with the lowest bait-bias QSCORE for this substitution; the alphabetically first one on a tie.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasSummaryMetrics	WORST_CXT_QSCORE	float	QSCORE of WORST_CXT in the bait-bias detail file.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasSummaryMetrics	WORST_PRE_CXT	string	Worst context counting only the bases before the substituted one, the bases after it written as N (AAN). The centre base alone when CONTEXT_SIZE is 0.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasSummaryMetrics	WORST_PRE_CXT_QSCORE	float	Bait-bias QSCORE of WORST_PRE_CXT, its counts summed over every full context sharing those leading bases.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasSummaryMetrics	WORST_POST_CXT	string	Worst context counting only the bases after the substituted one, the bases before it written as N (NAA). The centre base alone when CONTEXT_SIZE is 0.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasSummaryMetrics	WORST_POST_CXT_QSCORE	float	Bait-bias QSCORE of WORST_POST_CXT, its counts summed over every full context sharing those trailing bases.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasSummaryMetrics	ARTIFACT_NAME	string	Gref for G>T, Cref for C>A, NA for the other ten substitutions.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterDetailMetrics	SAMPLE_ALIAS	string	Every sample of the BAM header's @RG lines, joined by commas in Java HashSet order. The same text on every row.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterDetailMetrics	LIBRARY	string	Library (@RG LB, UnknownLibrary for a read group without one). Libraries in Java HashMap order.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterDetailMetrics	REF_BASE	string	Reference base at the centre of CONTEXT.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterDetailMetrics	ALT_BASE	string	Base the read shows in place of REF_BASE. Rows run by substitution, then by CONTEXT in alphabetical order.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterDetailMetrics	CONTEXT	string	Reference bases around the counted base, CONTEXT_SIZE (default 1) on each side, on the reference strand.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterDetailMetrics	PRO_REF_BASES	int	REF_BASE calls in reads oriented the way a pre-adapter artifact shows: first-of-pair forward or second-of-pair reverse over this context, the opposite pair over its reverse complement (with TANDEM_READS both ends count like first-of-pair).
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterDetailMetrics	PRO_ALT_BASES	int	ALT_BASE calls in reads of the pro orientation (see PRO_REF_BASES).
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterDetailMetrics	CON_REF_BASES	int	REF_BASE calls in reads of the other orientation, which a pre-adapter artifact does not affect.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterDetailMetrics	CON_ALT_BASES	int	ALT_BASE calls in reads of the con orientation.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterDetailMetrics	ERROR_RATE	float	(PRO_ALT_BASES - CON_ALT_BASES) / (all four counts), at least 1e-10 (printed 0). 1e-10 when the four counts are 0.
+picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterDetailMetrics	QSCORE	float	-10 log10(ERROR_RATE) rounded to an integer; 100 at the 1e-10 floor.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasDetailMetrics	SAMPLE_ALIAS	string	Every sample of the BAM header's @RG lines, joined by commas in Java HashSet order. The same text on every row.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasDetailMetrics	LIBRARY	string	Library (@RG LB, UnknownLibrary for a read group without one). Libraries in Java HashMap order.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasDetailMetrics	REF_BASE	string	Reference base at the centre of CONTEXT.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasDetailMetrics	ALT_BASE	string	Base the read shows in place of REF_BASE. Rows run by substitution, then by CONTEXT in alphabetical order.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasDetailMetrics	CONTEXT	string	Reference bases around the counted base, CONTEXT_SIZE (default 1) on each side, on the reference strand.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasDetailMetrics	FWD_CXT_REF_BASES	int	REF_BASE calls at sites where the reference strand reads CONTEXT, every read end and strand.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasDetailMetrics	FWD_CXT_ALT_BASES	int	ALT_BASE calls at sites where the reference strand reads CONTEXT.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasDetailMetrics	REV_CXT_REF_BASES	int	Calls of the complement of REF_BASE at sites where the reference strand reads the reverse complement of CONTEXT.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasDetailMetrics	REV_CXT_ALT_BASES	int	Calls of the complement of ALT_BASE at sites where the reference strand reads the reverse complement of CONTEXT.
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasDetailMetrics	FWD_ERROR_RATE	float	FWD_CXT_ALT_BASES / (FWD_CXT_REF_BASES + FWD_CXT_ALT_BASES), at least 1e-10 (printed 0).
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasDetailMetrics	REV_ERROR_RATE	float	REV_CXT_ALT_BASES / (REV_CXT_REF_BASES + REV_CXT_ALT_BASES), at least 1e-10 (printed 0).
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasDetailMetrics	ERROR_RATE	float	FWD_ERROR_RATE - REV_ERROR_RATE, at least 1e-10 (printed 0).
+picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasDetailMetrics	QSCORE	float	-10 log10(ERROR_RATE) rounded to an integer; 100 at the 1e-10 floor.
+picard.analysis.artifacts.ErrorSummaryMetrics	REF_BASE	string	Reference base of the substitution, A or C: a G or T reference row is folded into its complement.
+picard.analysis.artifacts.ErrorSummaryMetrics	ALT_BASE	string	Called base of the substitution after the same folding.
+picard.analysis.artifacts.ErrorSummaryMetrics	SUBSTITUTION	string	REF_BASE>ALT_BASE; six rows in alphabetical order, from the printed pre-adapter rows only.
+picard.analysis.artifacts.ErrorSummaryMetrics	REF_COUNT	int	PRO_REF_BASES + CON_REF_BASES summed over the printed pre-adapter rows of the substitution and its complement, every library and context.
+picard.analysis.artifacts.ErrorSummaryMetrics	ALT_COUNT	int	PRO_ALT_BASES + CON_ALT_BASES summed over the same rows.
+picard.analysis.artifacts.ErrorSummaryMetrics	SUBSTITUTION_RATE	float	ALT_COUNT / (REF_COUNT + ALT_COUNT); 0 when both are 0.
 CollectInsertSizeMetrics	insert_size	int	Histogram key: insert size in bases.
 CollectInsertSizeMetrics	*.fr_count	float	Pairs with this insert size and FR orientation in the unit named before the dot (All_Reads, or the sample, library or read group PU). Sizes above the trim width (median + DEVIATIONS x MAD, or HISTOGRAM_WIDTH) are not listed, so the column can sum to less than READ_PAIRS.
 CollectInsertSizeMetrics	*.rf_count	float	As for fr_count, with RF: sizes above the trim width are not listed, so the column can sum to less than READ_PAIRS.
@@ -497,3 +551,64 @@ CollectTargetedPcrMetrics	high_quality_coverage_count	float	Target bases whose h
 CollectTargetedPcrMetrics	unfiltered_baseq_count	float	On-target bases with this base quality, from reads that pass the duplicate, adapter and MAPQ filters, after mate-overlap clipping but before the MINIMUM_BASE_QUALITY filter. Bases at quality 2 or below and inserted bases are left out. No coverage cap is applied.
 CollectRnaSeqMetrics	normalized_position	int	Histogram key: position along the transcript in percent of its length, 0 at the 5' end to 100 at the 3' end.
 CollectRnaSeqMetrics	*.normalized_coverage	float	Coverage within 0.5% of the transcript length around this position, divided by the transcript's mean coverage, averaged over the picked transcripts of the unit named before the dot (All_Reads, or the read group, library or sample). 1 is flat; the last base of each alignment block is not counted.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	SAMPLE_ALIAS	string	Every @RG sample of the input joined with commas, in Java HashSet order; UnknownSample stands for a read group without SM. The same text on every row.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	LIBRARY	string	The library this row counts: an @RG LB value, or UnknownLibrary for a read group without LB.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	CONTEXT	string	The reference context: CONTEXT_SIZE bases (default 1) on each side of a central C, upper case. A G site is read on the other strand, so its context is reverse-complemented.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	TOTAL_SITES	int	Reference C and G sites in this context where at least one base of this library passed the read filters and MINIMUM_QUALITY_SCORE and was a reference or alternate base.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	TOTAL_BASES	int	Reference and alternate bases counted at those sites: REF_TOTAL_BASES + ALT_NONOXO_BASES + ALT_OXO_BASES. Any other base is not counted.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	REF_NONOXO_BASES	int	Reference bases sequenced as C in read 1 or as G in read 2 (the base as the sequencer read it, complemented back on the reverse strand): the orientation oxidation of G cannot produce.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	REF_OXO_BASES	int	Reference bases sequenced as G in read 1 or as C in read 2: the orientation in which 8-oxoguanine damage would show.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	REF_TOTAL_BASES	int	REF_NONOXO_BASES + REF_OXO_BASES.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	ALT_NONOXO_BASES	int	Alternate bases (A at a C site, T at a G site) sequenced as A in read 1 or as T in read 2: substitutions in the orientation oxidation does not produce, taken as the background error.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	ALT_OXO_BASES	int	Alternate bases sequenced as T in read 1 or as A in read 2: G to T substitutions in the orientation 8-oxoguanine damage produces.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	OXIDATION_ERROR_RATE	float	max(ALT_OXO_BASES - ALT_NONOXO_BASES, 1) / TOTAL_BASES: the excess of oxo-oriented substitutions over the background. ? when TOTAL_BASES is 0.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	OXIDATION_Q	float	-10 * log10(OXIDATION_ERROR_RATE), a Phred score: lower means more oxidative damage. -? when TOTAL_BASES is 0.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	C_REF_REF_BASES	int	Reference bases counted at sites whose reference base is C.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	G_REF_REF_BASES	int	Reference bases counted at sites whose reference base is G.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	C_REF_ALT_BASES	int	Alternate bases (A) counted at sites whose reference base is C.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	G_REF_ALT_BASES	int	Alternate bases (T) counted at sites whose reference base is G.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	C_REF_OXO_ERROR_RATE	float	The alternate fraction at C sites minus the alternate fraction at G sites, raised to 1e-10 (printed 0): substitutions biased to C reference sites. ? when either side has no counted base.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	C_REF_OXO_Q	float	-10 * log10(C_REF_OXO_ERROR_RATE); 100 at the 1e-10 floor.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	G_REF_OXO_ERROR_RATE	float	The alternate fraction at G sites minus the alternate fraction at C sites, raised to 1e-10 (printed 0): substitutions biased to G reference sites. ? when either side has no counted base.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	G_REF_OXO_Q	float	-10 * log10(G_REF_OXO_ERROR_RATE); 100 at the 1e-10 floor.
+bammetrics.qc.CoverageGapMetrics	TARGET_TERRITORY	int	Bases in the merged target intervals (overlapping and abutting targets merged, as CollectHsMetrics merges them).
+bammetrics.qc.CoverageGapMetrics	TARGET_COUNT	int	Number of merged targets; the denominator of PCT_TARGETS_COMPLETE.
+bammetrics.qc.CoverageGapMetrics	MIN_DEPTH	int	The MIN_DEPTH option (default 20): a target base at or above this high-quality depth is reportable.
+bammetrics.qc.CoverageGapMetrics	BASES_AT_OR_ABOVE_MIN_DEPTH	int	Target bases whose high-quality depth, as CollectHsMetrics PER_BASE_COVERAGE counts it, is at or above MIN_DEPTH.
+bammetrics.qc.CoverageGapMetrics	PCT_REPORTABLE	float	BASES_AT_OR_ABOVE_MIN_DEPTH divided by TARGET_TERRITORY. At MIN_DEPTH 20 this equals PCT_TARGET_BASES_20X of CollectHsMetrics on the same input and filters. ? when the territory is 0.
+bammetrics.qc.CoverageGapMetrics	GAP_BASES	int	Target bases below MIN_DEPTH: TARGET_TERRITORY minus BASES_AT_OR_ABOVE_MIN_DEPTH.
+bammetrics.qc.CoverageGapMetrics	GAP_COUNT	int	Number of gap runs: maximal runs of consecutive bases of one merged target below MIN_DEPTH.
+bammetrics.qc.CoverageGapMetrics	LARGEST_GAP	int	Length in bases of the longest gap run; 0 without a gap.
+bammetrics.qc.CoverageGapMetrics	TARGETS_WITH_GAP	int	Merged targets that hold at least one gap run.
+bammetrics.qc.CoverageGapMetrics	PCT_TARGETS_COMPLETE	float	Merged targets without a gap run, divided by TARGET_COUNT. ? when there is no target.
+CollectCoverageGaps	gap_length	int	Histogram key: the length in bases of a gap run.
+CollectCoverageGaps	gap_count	float	Number of gap runs of this length.
+bammetrics.qc.SexCheckMetrics	AUTOSOME_READS	int	Primary mapped reads on the autosomes (chr1 to chr22 or 1 to 22, or the AUTOSOMES option) that are not duplicates or QC failures and have MAPQ at or above MINIMUM_MAPPING_QUALITY. With TARGET_INTERVALS, only reads over a target.
+bammetrics.qc.SexCheckMetrics	X_READS	int	Reads counted as for AUTOSOME_READS on the X contig (chrX or X, or X_CONTIG).
+bammetrics.qc.SexCheckMetrics	Y_READS	int	Reads counted as for AUTOSOME_READS on the Y contig (chrY or Y, or Y_CONTIG).
+bammetrics.qc.SexCheckMetrics	AUTOSOME_LENGTH	int	Bases of the autosomes: the @SQ lengths summed, or with TARGET_INTERVALS the merged target bases on them.
+bammetrics.qc.SexCheckMetrics	X_LENGTH	int	Bases of the X contig: its @SQ length, or with TARGET_INTERVALS the merged target bases on it.
+bammetrics.qc.SexCheckMetrics	Y_LENGTH	int	Bases of the Y contig: its @SQ length, or with TARGET_INTERVALS the merged target bases on it.
+bammetrics.qc.SexCheckMetrics	X_RATIO	float	X reads per X base divided by autosome reads per autosome base. Near 1 for two X chromosomes, near 0.5 for one. ? when a length or the autosome read count is 0.
+bammetrics.qc.SexCheckMetrics	Y_RATIO	float	Y reads per Y base divided by autosome reads per autosome base. Near 0 without a Y chromosome. ? when a length or the autosome read count is 0.
+bammetrics.qc.SexCheckMetrics	INFERRED_SEX	string	FEMALE when X_RATIO is at least 0.75 and Y_RATIO under 0.05; MALE when X_RATIO is between 0.3 and 0.75 and Y_RATIO at least 0.1; UNKNOWN otherwise. Starting values (docs/06).
+bammetrics.qc.SexCheckMetrics	DECLARED_SEX	string	The EXPECTED_SEX option, upper-cased; empty when none was given.
+bammetrics.qc.SexCheckMetrics	SEX_MATCH	string	Y when INFERRED_SEX equals DECLARED_SEX, N when the inferred sex is MALE or FEMALE and differs; empty without a declaration or when the inferred sex is UNKNOWN.
+bammetrics.qc.SexCheckMetrics	REASON	string	Why INFERRED_SEX is UNKNOWN (a contig set with no bases, no autosome reads, or ratios that fit neither pattern), and why SEX_MATCH is empty with a declaration; empty otherwise.
+picard.analysis.JumpingLibraryMetrics	JUMP_PAIRS	int	First-of-pair records whose pair is outward facing (RF) on one contig, both mates mapped at or above MINIMUM_MAPPING_QUALITY, with |TLEN| at or below the chimera size. Secondary, supplementary, QC-failed and duplicate records count.
+picard.analysis.JumpingLibraryMetrics	JUMP_DUPLICATE_PAIRS	int	JUMP_PAIRS whose first-of-pair record carries the duplicate flag.
+picard.analysis.JumpingLibraryMetrics	JUMP_DUPLICATE_PCT	float	JUMP_DUPLICATE_PAIRS / JUMP_PAIRS, a fraction; 0 without jump pairs.
+picard.analysis.JumpingLibraryMetrics	JUMP_LIBRARY_SIZE	int	Lander-Waterman estimate of distinct outward-facing molecules from JUMP_PAIRS and JUMP_PAIRS - JUMP_DUPLICATE_PAIRS (DuplicationMetrics.estimateLibrarySize, truncated); 0 without jump pairs or without jump duplicates.
+picard.analysis.JumpingLibraryMetrics	JUMP_MEAN_INSERT_SIZE	float	Mean |TLEN| of the jump pairs over the histogram cut by TAIL_LIMIT: every bin up to the mode, then the consecutive bins holding at least mode count / TAIL_LIMIT pairs. ? without jump pairs.
+picard.analysis.JumpingLibraryMetrics	JUMP_STDEV_INSERT_SIZE	float	Sample standard deviation (n - 1) of |TLEN| over the same cut histogram as JUMP_MEAN_INSERT_SIZE. -0 without jump pairs, ? with one.
+picard.analysis.JumpingLibraryMetrics	NONJUMP_PAIRS	int	First-of-pair records whose pair is inward facing (FR) on one contig, both mates mapped at or above MINIMUM_MAPPING_QUALITY, with |TLEN| at or below the chimera size. Secondary, supplementary, QC-failed and duplicate records count.
+picard.analysis.JumpingLibraryMetrics	NONJUMP_DUPLICATE_PAIRS	int	NONJUMP_PAIRS whose first-of-pair record carries the duplicate flag.
+picard.analysis.JumpingLibraryMetrics	NONJUMP_DUPLICATE_PCT	float	NONJUMP_DUPLICATE_PAIRS / NONJUMP_PAIRS, a fraction; 0 without non-jump pairs.
+picard.analysis.JumpingLibraryMetrics	NONJUMP_LIBRARY_SIZE	int	Lander-Waterman estimate of distinct inward-facing molecules from NONJUMP_PAIRS and NONJUMP_PAIRS - NONJUMP_DUPLICATE_PAIRS; 0 without non-jump pairs or without non-jump duplicates.
+picard.analysis.JumpingLibraryMetrics	NONJUMP_MEAN_INSERT_SIZE	float	Mean |TLEN| of the non-jump pairs over the histogram cut by TAIL_LIMIT as for JUMP_MEAN_INSERT_SIZE. ? without non-jump pairs.
+picard.analysis.JumpingLibraryMetrics	NONJUMP_STDEV_INSERT_SIZE	float	Sample standard deviation (n - 1) of |TLEN| over the same cut histogram as NONJUMP_MEAN_INSERT_SIZE. -0 without non-jump pairs, ? with one.
+picard.analysis.JumpingLibraryMetrics	CHIMERIC_PAIRS	int	First-of-pair records, both mates mapped and passing the mapping quality test, with |TLEN| above the greater of CHIMERA_KB_MIN and the mode of the first 50000 outward-facing pairs sampled, or on the same strand as the mate, or on another contig than the mate.
+picard.analysis.JumpingLibraryMetrics	FRAGMENTS	int	First-of-pair records with exactly one mate mapped: the read unmapped and the mate mapped, or the read mapped and the mate unmapped. Not subject to the mapping quality test.
+picard.analysis.JumpingLibraryMetrics	PCT_JUMPS	float	JUMP_PAIRS / (JUMP_PAIRS + NONJUMP_PAIRS + CHIMERIC_PAIRS), a fraction; 0 without any.
+picard.analysis.JumpingLibraryMetrics	PCT_NONJUMPS	float	NONJUMP_PAIRS / (JUMP_PAIRS + NONJUMP_PAIRS + CHIMERIC_PAIRS), a fraction; 0 without any.
+picard.analysis.JumpingLibraryMetrics	PCT_CHIMERAS	float	CHIMERIC_PAIRS / (JUMP_PAIRS + NONJUMP_PAIRS + CHIMERIC_PAIRS), a fraction; 0 without any.

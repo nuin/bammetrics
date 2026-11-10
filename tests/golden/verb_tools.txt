@@ -3,31 +3,39 @@ tools
 ## exit
 0
 ## stdout
-VERB                        PICARD CLASS
-insert-size                 CollectInsertSizeMetrics
-alignment-summary           CollectAlignmentSummaryMetrics
-quality-yield               CollectQualityYieldMetrics
-hs-metrics                  CollectHsMetrics
-gc-bias                     CollectGcBiasMetrics
-quality-score-distribution  QualityScoreDistribution
-mean-quality-by-cycle       MeanQualityByCycle
-base-distribution-by-cycle  CollectBaseDistributionByCycle
-duplicate-metrics           CollectDuplicateMetrics
-library-complexity          EstimateLibraryComplexity
-multiple-metrics            CollectMultipleMetrics
-accumulate-quality-yield    AccumulateQualityYieldMetrics
-wgs                         CollectWgsMetrics
-raw-wgs                     CollectRawWgsMetrics
-wgs-with-non-zero-coverage  CollectWgsMetricsWithNonZeroCoverage
-targeted-pcr                CollectTargetedPcrMetrics
-rna-seq                     CollectRnaSeqMetrics
-variant-calling             CollectVariantCallingMetrics
-accumulate-variant-calling  AccumulateVariantCallingMetrics
-genotype-concordance        GenotypeConcordance
-bed-to-interval-list        BedToIntervalList
-compare-metrics             CompareMetrics
-create-sequence-dictionary  CreateSequenceDictionary
-mark-duplicates             MarkDuplicates
+VERB                                  PICARD CLASS
+insert-size                           CollectInsertSizeMetrics
+alignment-summary                     CollectAlignmentSummaryMetrics
+quality-yield                         CollectQualityYieldMetrics
+hs-metrics                            CollectHsMetrics
+gc-bias                               CollectGcBiasMetrics
+quality-score-distribution            QualityScoreDistribution
+mean-quality-by-cycle                 MeanQualityByCycle
+base-distribution-by-cycle            CollectBaseDistributionByCycle
+duplicate-metrics                     CollectDuplicateMetrics
+library-complexity                    EstimateLibraryComplexity
+multiple-metrics                      CollectMultipleMetrics
+accumulate-quality-yield              AccumulateQualityYieldMetrics
+wgs                                   CollectWgsMetrics
+raw-wgs                               CollectRawWgsMetrics
+wgs-with-non-zero-coverage            CollectWgsMetricsWithNonZeroCoverage
+targeted-pcr                          CollectTargetedPcrMetrics
+rna-seq                               CollectRnaSeqMetrics
+variant-calling                       CollectVariantCallingMetrics
+accumulate-variant-calling            AccumulateVariantCallingMetrics
+genotype-concordance                  GenotypeConcordance
+bed-to-interval-list                  BedToIntervalList
+compare-metrics                       CompareMetrics
+create-sequence-dictionary            CreateSequenceDictionary
+mark-duplicates                       MarkDuplicates
+sequencing-artifact                   CollectSequencingArtifactMetrics
+convert-sequencing-artifact-to-oxo-g  ConvertSequencingArtifactToOxoG
+oxo-g                                 CollectOxoGMetrics
+coverage-gaps                         CollectCoverageGaps
+sex-check                             CollectSexCheckMetrics
+bam-index-stats                       BamIndexStats
+check-duplicate-marking               CheckDuplicateMarking
+jumping-library                       CollectJumpingLibraryMetrics
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

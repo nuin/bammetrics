@@ -19,14 +19,14 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use bammetrics_core::compare_metrics;
 use bammetrics_core::multiple_metrics::file_extensions;
-use bammetrics_core::pass;
 use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
+use bammetrics_core::{bam_index_stats, check_duplicate_marking, compare_metrics, cram, pass};
 
 use crate::error::VerbError;
 use crate::format::{self, Context, Format};
 use crate::grammar::{self, Flag, Given, Key, Parsed};
+use crate::report::write_atomic;
 
 /// How a verb names what it writes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -75,6 +75,10 @@ pub struct Verb {
     /// Shared flags the verb accepts and ignores, with the reason `--help`
     /// prints.
     pub ignores: &'static [(Key, &'static str)],
+    /// `-` reads standard input. False for a tool that reads each input
+    /// twice (`jumping-library`): its `--help` says standard input is
+    /// refused, and the tool exits 2 on `-`, `/dev/stdin` or a pipe.
+    pub reads_stdin: bool,
 }
 
 const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
@@ -91,6 +95,7 @@ const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
         reads: &[],
         also_writes: &[],
         ignores: &[],
+        reads_stdin: true,
     }
 }
 
@@ -124,6 +129,7 @@ pub const VERBS: &[Verb] = &[
     Verb {
         aliases: &[("BAITS", "BAIT_INTERVALS"), ("TARGETS", "TARGET_INTERVALS")],
         header: Some(bammetrics_core::hs_metrics::subcommand_header),
+        reads: &["BAIT_INTERVALS", "TARGET_INTERVALS"],
         ..verb("hs-metrics", "CollectHsMetrics", Files::Single)
     },
     verb("gc-bias", "CollectGcBiasMetrics", Files::Prefix),
@@ -251,6 +257,70 @@ pub const VERBS: &[Verb] = &[
         aliases: &[("METRICS", "METRICS_FILE")],
         ..verb("mark-duplicates", "MarkDuplicates", Files::Bam)
     },
+    verb(
+        "sequencing-artifact",
+        "CollectSequencingArtifactMetrics",
+        Files::Prefix,
+    ),
+    Verb {
+        input: "PREFIX",
+        reads: &["PRE_ADAPTER_IN", "BAIT_BIAS_IN"],
+        also_writes: &["OXOG_OUT"],
+        ignores: &[(Key::Threads, "no BAM is read")],
+        ..verb(
+            "convert-sequencing-artifact-to-oxo-g",
+            "ConvertSequencingArtifactToOxoG",
+            Files::Prefix,
+        )
+    },
+    verb("oxo-g", "CollectOxoGMetrics", Files::Single),
+    Verb {
+        aliases: &[
+            ("TARGETS", "TARGET_INTERVALS"),
+            ("PANEL", "TARGET_INTERVALS"),
+        ],
+        reads: &["TARGET_INTERVALS"],
+        also_writes: &["GAPS_FILE"],
+        ..verb("coverage-gaps", "CollectCoverageGaps", Files::Single)
+    },
+    Verb {
+        aliases: &[("TARGETS", "TARGET_INTERVALS"), ("SEX", "EXPECTED_SEX")],
+        reads: &["TARGET_INTERVALS"],
+        ..verb("sex-check", "CollectSexCheckMetrics", Files::Single)
+    },
+    Verb {
+        about: Some(
+            "prints Picard's index statistics: one line per reference of the BAM header with \
+             its length and the Aligned= and Unaligned= counts of the .bai or .csi beside the \
+             BAM, then NoCoordinateCount=. A CRAM, or a BAM on standard input, is read whole \
+             and its records counted.",
+        ),
+        writes: "index statistics",
+        ..verb("bam-index-stats", "BamIndexStats", Files::Single)
+    },
+    Verb {
+        about: Some(
+            "checks that every record of a queryname carries the same duplicate flag, as \
+             Picard's CheckDuplicateMarking does: the bad querynames (one line per record that \
+             disagrees) to -o or standard output, the summary on standard error (dropped by \
+             --verbosity as Picard's log line is), exit 1 when any record disagrees. A BAM \
+             that is not queryname sorted is sorted in memory.",
+        ),
+        writes: "bad querynames",
+        ..verb(
+            "check-duplicate-marking",
+            "CheckDuplicateMarking",
+            Files::Single,
+        )
+    },
+    Verb {
+        reads_stdin: false,
+        ..verb(
+            "jumping-library",
+            "CollectJumpingLibraryMetrics",
+            Files::Single,
+        )
+    },
 ];
 
 /// Verb spellings every verb's rows take, beside a verb's own
@@ -313,15 +383,17 @@ impl Verb {
         let table = tool.table();
         let mut flags = Vec::new();
         if let Some(input) = table.iter().find(|o| o.picard() == "INPUT") {
+            let stdin = if self.reads_stdin {
+                "; - reads standard input."
+            } else {
+                ". Standard input and pipes are refused: the tool reads each input twice."
+            };
             let mut flag = Flag::new(
                 Key::Input,
                 "input",
                 &["i"],
                 Ty::Path,
-                &format!(
-                    "{} The positional argument; - reads standard input.",
-                    input.help
-                ),
+                &format!("{} The positional argument{stdin}", input.help),
             )
             .names(input.names)
             .placeholder(self.input);
@@ -536,6 +608,13 @@ impl Verb {
         let (result, status) = if tool.name == compare_metrics::TOOL.name {
             self.compare(&inv, output.as_deref(), format, quiet)
                 .map_err(core)?
+        } else if tool.name == check_duplicate_marking::TOOL.name {
+            let check = check_duplicate_marking::check(&inv).map_err(core)?;
+            if let Some(summary) = check.summary_shown().filter(|_| !quiet) {
+                eprintln!("bammetrics {}: {summary}", self.name);
+            }
+            let status = check.status();
+            (check.output, status)
         } else {
             ((tool.run)(&inv).map_err(core)?, 0)
         };
@@ -644,7 +723,7 @@ impl Verb {
     /// The Picard arguments of every option given, in order: `KEY=VALUE`
     /// with the row's long name. Positional arguments are the inputs
     /// (`INPUT`, or the tool's first required options when it has no
-    /// `INPUT`).
+    /// `INPUT`, or its first value option when it has neither).
     fn picard_arguments(&self, parsed: &Parsed, flags: &[Flag]) -> Result<Vec<String>, VerbError> {
         let tool = self.tool();
         let mut picard = Vec::new();
@@ -680,11 +759,16 @@ impl Verb {
             }
             picard.extend(inputs.iter().map(|i| format!("INPUT={i}")));
         } else {
-            let slots: Vec<&str> = flags
+            let mut slots: Vec<&str> = flags
                 .iter()
                 .filter(|f| f.required)
                 .filter_map(Flag::picard)
                 .collect();
+            if slots.is_empty() {
+                // No required option (`INPUT_BASE` of the OxoG converter is
+                // optional): the first value option takes the argument.
+                slots.extend(tool.value_options().next());
+            }
             if inputs.len() > slots.len() {
                 return Err(VerbError::usage(
                     self.name,
@@ -761,6 +845,7 @@ impl Verb {
                     .find_map(|a| {
                         a.strip_prefix("INPUT=")
                             .or_else(|| a.strip_prefix("CALL_VCF="))
+                            .or_else(|| a.strip_prefix("INPUT_BASE="))
                     })
                     .map(stem);
                 let path = match (given, stem) {
@@ -783,6 +868,16 @@ impl Verb {
                         }
                         path
                     }
+                    // `--oxog-out` names the one file: no prefix is needed.
+                    (None, None)
+                        if self.also_writes.iter().any(|name| {
+                            picard
+                                .iter()
+                                .any(|a| a.strip_prefix(name).is_some_and(|v| v.starts_with('=')))
+                        }) =>
+                    {
+                        return Ok(None);
+                    }
                     (None, None) => {
                         return Err(VerbError::usage(self.name, "missing -o PREFIX"));
                     }
@@ -794,9 +889,10 @@ impl Verb {
 
     /// The tool's file options for output `path`: `OUTPUT` for a
     /// single-file verb in the Picard form (another form is written by the
-    /// verb itself), the prefix as `OUTPUT` for a tool whose Picard
-    /// `OUTPUT` is a prefix, or one name per file of [`file_extensions`]
-    /// (an option the user gave keeps its value).
+    /// verb itself; a tool without an output option, `BamIndexStats`, gets
+    /// none and the verb writes `-o` itself), the prefix as `OUTPUT` for a
+    /// tool whose Picard `OUTPUT` is a prefix, or one name per file of
+    /// [`file_extensions`] (an option the user gave keeps its value).
     fn name_outputs(&self, path: &Path, parsed: &Parsed, picard: &mut Vec<String>, format: Format) {
         let tool = self.tool();
         let output = tool.output_name();
@@ -805,7 +901,8 @@ impl Verb {
             return;
         }
         if self.files == Files::Single {
-            if format == Format::Picard {
+            let has_output = tool.table().iter().any(|o| o.kind == Kind::Output);
+            if format == Format::Picard && has_output {
                 picard.push(format!("{output}={}", path.display()));
             }
             return;
@@ -837,8 +934,11 @@ impl Verb {
                 self.name,
                 format!("missing --{} (Picard: {name})", flag.long),
             );
-            if name == "BAIT_INTERVALS" || name == "TARGET_INTERVALS" {
+            if self.name == "hs-metrics" && (name == "BAIT_INTERVALS" || name == "TARGET_INTERVALS")
+            {
                 error = error.hint("Use --panel FILE when baits and targets are the same file.");
+            } else if name == "TARGET_INTERVALS" {
+                error = error.hint("--targets FILE and --panel FILE spell it too.");
             }
             if name == "SEQUENCE_DICTIONARY" {
                 error = error.hint(
@@ -911,8 +1011,9 @@ impl Verb {
         with_from(VerbError::core(self.name, e), from)
     }
 
-    /// The files the run reads: every `INPUT`, the reference and its `.fai`
-    /// and, for a tool without `INPUT`, its required options.
+    /// The files the run reads: every `INPUT`, the reference and its `.fai`,
+    /// for a tool without `INPUT` its required options, and for
+    /// `BamIndexStats` the `.bai` or `.csi` it reads beside each BAM.
     fn input_paths(&self, inv: &Invocation) -> Vec<PathBuf> {
         let tool = self.tool();
         let mut names = vec!["INPUT", "REFERENCE_SEQUENCE"];
@@ -929,12 +1030,22 @@ impl Verb {
             .all("REFERENCE_SEQUENCE")
             .iter()
             .map(|fasta| format!("{fasta}.fai"));
-        names
+        let mut paths: Vec<PathBuf> = names
             .iter()
             .flat_map(|name| inv.all(name).iter().cloned())
             .chain(indexes)
             .map(PathBuf::from)
-            .collect()
+            .collect();
+        if tool.name == bam_index_stats::TOOL.name {
+            paths.extend(
+                inv.all("INPUT")
+                    .iter()
+                    .map(Path::new)
+                    .filter(|bam| !cram::is_cram(bam))
+                    .filter_map(bam_index_stats::find_index),
+            );
+        }
+        paths
     }
 
     /// The files the run writes under names it knows before it runs: `-o`,
@@ -1156,7 +1267,10 @@ fn write_single(
                 .write_all(text.as_bytes())
                 .map_err(output_error)?,
             Some(path) => {
-                fs::write(path, text).map_err(output_error)?;
+                write_atomic(path, text).map_err(|e| match e {
+                    crate::error::Error::Io { source, .. } => output_error(source),
+                    other => output_error(io::Error::other(other.to_string())),
+                })?;
                 written.push(path.to_path_buf());
             }
         }

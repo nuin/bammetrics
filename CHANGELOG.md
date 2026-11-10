@@ -1,5 +1,182 @@
 # Changelog
 
+## 0.19.0
+
+Eight tools: `CollectSequencingArtifactMetrics`, `ConvertSequencingArtifactToOxoG`,
+`CollectOxoGMetrics`, `BamIndexStats`, `CheckDuplicateMarking`,
+`CollectJumpingLibraryMetrics`, and the two clinical checks Picard does not have,
+`CollectCoverageGaps` and `CollectSexCheckMetrics` (docs/06_clinical_checks.md), with the
+`is TEXT` comparator in the rule language and `clinical-panel` version 3.
+
+### Added
+
+- `CollectSequencingArtifactMetrics` (Picard face, the `sequencing-artifact` verb, Python
+  `collect_sequencing_artifact_metrics()` and a `CollectMultipleMetrics` program): the five
+  files of Picard 3.5.0 from one read of the BAM, the pre-adapter and bait-bias detail and
+  summary files and the error summary. Every option: `MINIMUM_QUALITY_SCORE`,
+  `MINIMUM_MAPPING_QUALITY`, `MINIMUM_INSERT_SIZE`, `MAXIMUM_INSERT_SIZE`,
+  `INCLUDE_UNPAIRED`, `INCLUDE_DUPLICATES`, `INCLUDE_NON_PF_READS`, `TANDEM_READS`, `USE_OQ`,
+  `CONTEXT_SIZE`, `CONTEXTS_TO_PRINT`, `FILE_EXTENSION`, `INTERVALS`, `DB_SNP` (a VCF, every
+  record type), `STOP_AFTER`, `ASSUME_SORTED`. Libraries and samples come in Java `HashMap`
+  order. `CollectMultipleMetrics` passes the program its `INTERVALS`, `DB_SNP` and
+  `INCLUDE_UNPAIRED`, which it used to drop.
+- `ConvertSequencingArtifactToOxoG` (Picard face, the `convert-sequencing-artifact-to-oxo-g`
+  verb, Python `convert_sequencing_artifact_to_oxo_g()`): the `CpcgMetrics` rows of
+  `CollectOxoGMetrics` from the two detail files, with Picard's failures for a missing row,
+  an empty or swapped file.
+- `tests/concordance/test_sequencing_artifact.py`: both tools against Picard 3.5.0 on the
+  foundation corpus, t1 to t3, the exome slice and three built BAMs (`artifact_bams.py`),
+  `CONTEXT_SIZE` 0 to 2, every option, `INTERVALS`, `DB_SNP`, error parity and the
+  distinct-value gate. `tests/data/artifact.bam` (`make_artifact_bam.py`) and Picard's five
+  files for it in `tests/data/artifact`; ten golden records, and the `tools` listing gains
+  two rows.
+- A verb whose tool has no required option takes its first value option as the positional
+  argument (`INPUT_BASE` of the converter).
+
+- `CollectOxoGMetrics` (Picard face and Python `collect_oxo_g_metrics()`) and the `oxo-g`
+  verb: one `CpcgMetrics` row per sequence context and library, as Picard 3.5.0 writes
+  it, over the pileup engine. Every option: `REFERENCE_SEQUENCE`, `INTERVALS`, `DB_SNP`,
+  `MINIMUM_QUALITY_SCORE`, `MINIMUM_MAPPING_QUALITY`, `MINIMUM_INSERT_SIZE`,
+  `MAXIMUM_INSERT_SIZE`, `INCLUDE_NON_PF_READS`, `USE_OQ`, `CONTEXT_SIZE` (0 to 4 without
+  `CONTEXTS`), `CONTEXTS`, `STOP_AFTER`. Rows in the `HashMap` order of the contexts.
+  `tests/concordance/test_oxog_metrics.py` compares every cell with Picard on the tiers,
+  the foundation corpus, the exome slice and `oxog_bams.py` (per-library oxidation on an
+  IUPAC and soft-masked reference), with error parity and the distinct-value gate.
+- `locus.rs`: `Setup::OxoG` (the secondary, duplicate, MAPQ and insert size filters,
+  non-PF reads optional, covered loci only, `RG` and `OQ` per read), `Sink::done`, and
+  `check_sort_order`. `java::hash_map_order_checked` grows the table as `putVal` does and
+  reports a bin that would turn into a tree. `vcf::DbSnpBitSet::load_all`.
+- `tests/data/oxog.bam` (`tests/data/make_oxog.py`): 60 pairs on `ref_100k.fa` with two
+  libraries and oxidation damage, for the golden records and the glossary test.
+
+- `CollectCoverageGaps` (verb `coverage-gaps`, Python `collect_coverage_gaps()`), class
+  `bammetrics.qc.CoverageGapMetrics`: the target bases under `MIN_DEPTH` (default 20) as
+  one row (`TARGET_TERRITORY`, `TARGET_COUNT`, `MIN_DEPTH`, `BASES_AT_OR_ABOVE_MIN_DEPTH`,
+  `PCT_REPORTABLE`, `GAP_BASES`, `GAP_COUNT`, `LARGEST_GAP`, `TARGETS_WITH_GAP`,
+  `PCT_TARGETS_COMPLETE`), a histogram of gap lengths, and `GAPS_FILE`, a BED of the
+  maximal runs under the depth with the target name and the run's mean and minimum depth.
+  The depth is the `CollectHsMetrics` per-base depth (the Hs accumulator is reused through
+  `CaptureMetrics::into_target_depths`), so `PCT_REPORTABLE` at `MIN_DEPTH=20` equals
+  `PCT_TARGET_BASES_20X` (`crates/core/tests/coverage_gaps.rs`,
+  `tests/python/test_clinical_checks.py` on the exome slice). Options
+  `TARGET_INTERVALS`, `GAPS_FILE`, `MIN_DEPTH`, `MINIMUM_MAPPING_QUALITY`,
+  `MINIMUM_BASE_QUALITY`, `CLIP_OVERLAPPING_READS`, `INCLUDE_INDELS`, `COUNT_UNPAIRED`
+  (default true, as Hs counts unpaired reads), `STOP_AFTER`.
+- `CollectSexCheckMetrics` (verb `sex-check`, Python `collect_sex_check_metrics()`), class
+  `bammetrics.qc.SexCheckMetrics`: primary, mapped, non-duplicate, non-QC-fail reads at or
+  above `MINIMUM_MAPPING_QUALITY` (20) on the X contig, the Y contig and the autosomes
+  (`chrX`/`X`, `chrY`/`Y`, `chr1`..`chr22`/`1`..`22`, or `X_CONTIG`, `Y_CONTIG`,
+  `AUTOSOMES`), the lengths from `@SQ` or from the merged `TARGET_INTERVALS`, `X_RATIO`
+  and `Y_RATIO` to the autosomes, `INFERRED_SEX` (`FEMALE` at `X_RATIO >= 0.75` and
+  `Y_RATIO < 0.05`, `MALE` at `0.3 <= X_RATIO <= 0.75` and `Y_RATIO >= 0.03`, else
+  `UNKNOWN`; starting values measured on the HG002 exome, Y 0.052, and the NA12878
+  genome, Y 0.022), `DECLARED_SEX` from `EXPECTED_SEX`, `SEX_MATCH` and `REASON` (a
+  `STOP_AFTER` run with no X and no Y read says so). One-pass collector, so `qc` runs it
+  on the shared read.
+- `qc --sex male|female` (Python `qc(sex=...)`, any case): `EXPECTED_SEX` of the sex
+  check; a preset with no `SexCheckMetrics` rule refuses `--sex` (exit 2). `qc`
+  writes `PREFIX.sex_check_metrics` for `clinical-panel` only, and with a
+  panel `PREFIX.coverage_gaps` and `PREFIX.coverage_gaps.bed` (manifest kind `gaps`; the
+  BED is no verdict input). The panel targets reach both collectors.
+- Rule language: an `is TEXT` bound (`fail = "is N"`, `warn = "is UNKNOWN"`) judges the
+  cell's text; the check carries it in a new `text` field of `verdict.json` and of the
+  Python `Check` (present only on such a check), with `value` null; `check` prints the
+  text in its value column. The reason line reads `Declared sex matches: N, a fail
+  value`. An `is` bound on a column the glossary types as a number is a preset error, and
+  an unknown rule key is reported before a missing bound. docs/verdict.md.
+- Presets: `clinical-panel` version 3 (18 rules, note `reviewed defaults; gap and sex rules
+  are starting values`) adds `gaps.reportable-range` (`PCT_REPORTABLE` warn `< 0.98`, fail
+  `< 0.95`), `gaps.targets-complete` (`PCT_TARGETS_COMPLETE` warn `< 0.95`, fail `< 0.90`),
+  `sex.match` (fail `is N`) and `sex.inferred` (warn `is UNKNOWN`). `generic` and `wgs`
+  are unchanged (version 1, byte-identical to 0.18.0): the sex rules stay in
+  `clinical-panel`, so they add no not-measured check under `generic` or `wgs`. `qc --sex`
+  under a preset without a `SexCheckMetrics` rule exits 2.
+- Report page: a `Coverage gaps` table (the 200 longest gaps, from the BED beside the
+  metrics file, the one sidecar the page reads; docs/05 section 4.9) under the first warn
+  or fail gap check; text checks show their text. `make a11y` also checks a `qc` page
+  with a panel and a declared sex.
+- `coverage-gaps`, `sex-check` and `hs-metrics` refuse `-o` or `--gaps-file` naming
+  their target or bait intervals, as every verb refuses an output that is its input.
+- Glossary rows for both classes and the gap histogram; 12 golden records; `tools` lists
+  25 classes; docs/cli.md, docs/05 section 4.11 and decision 13, KNOWN_DIFFERENCES.md.
+
+- `BamIndexStats` (Picard face and Python `bam_index_stats()`) and the `bam-index-stats`
+  verb: the text Picard 3.5.0 prints from the `.bai` or `.csi` beside a BAM, byte for
+  byte on standard output (`NAME length=<tab>LENGTH<tab>Aligned= N<tab>Unaligned= N` per
+  header reference, then `NoCoordinateCount= N`). The index is found under the names
+  htsjdk tries; a header with more references than the index, a missing index, the index
+  as `INPUT`, `O=` and `ASSUME_SORTED=` fail as in Picard. A CRAM (with `R=`) or a BAM on
+  standard input is read whole and its records counted, where Picard fails on a CRAM
+  (KNOWN_DIFFERENCES.md). `--format tsv` prints the rows `samtools idxstats` prints, with
+  a header line; Python returns one dict per reference and a `*` row. The noodles `csi`
+  feature is enabled for the CSI reader (no new package).
+- `tests/concordance/test_bam_index_stats.py`: the foundation corpus, corpus tiers t0 to
+  t3, the exome slice and the `tests/data` BAMs against Picard, each also with a CSI index
+  and the two other index names, the verb forms, a CRAM, and error parity; seven golden
+  records, `tests/data/insert_size.bam.bai`, and the `tools` listing gains one row.
+- `bam-index-stats` counts the `.bai` or `.csi` it reads as an input, so `-o` naming it
+  exits 2 (`is an input; writing it would destroy it`) and the index is kept; a golden
+  record and `crates/cli/tests/bam_index_stats.rs` cover the `.bai` and `.csi` names.
+  The stub types `bam_index_stats()` rows as the `TypedDict` `_BamIndexRow`.
+
+- `CheckDuplicateMarking` (Picard face and Python `check_duplicate_marking()`) and the
+  `check-duplicate-marking` verb: every record of a queryname must carry the same
+  duplicate flag, as Picard 3.5.0 checks it. `MODE` (`ALL`, `PRIMARY_ONLY`,
+  `PRIMARY_MAPPED_ONLY`, `PRIMARY_PROPER_PAIR_ONLY`), `OUTPUT` (one queryname per bad
+  record) and `VERBOSITY`; exit 0 when every name agrees, 1 otherwise. The log lines
+  (without their timestamp and without Picard's progress lines) and the `OUTPUT` file
+  are compared with Picard's by `tests/concordance/test_check_duplicate_marking.py`
+  (hand-written BAMs for every flag shape, 105 bad records, names beyond ASCII, string
+  and float `HI` tags, the foundation corpus coordinate sorted, queryname sorted and as
+  CRAM, corpus t1, error parity). A header
+  without `SO:queryname` is sorted in memory in `SAMRecordQueryNameComparator` order,
+  as Picard sorts it into temp space (`TMP_DIR` and `MAX_RECORDS_IN_RAM` change nothing);
+  its CRAM input works as for every other tool. Read names are decoded byte by byte, as
+  htsjdk decodes them. An `OUTPUT` that is the `INPUT` is refused. Python returns one row
+  per bad record (`read_name`, `contig`, `start`) and an empty list when every name
+  agrees. `tests/data/duplicate_marking.bam` (`tests/data/make_duplicate_marking.py`) is
+  the fixture of its 10 golden records; the `tools` listing gains one row.
+- A file whose BAM header cannot be read (a SAM text file, an empty file) fails with
+  `not a BAM or CRAM file`, and a BAM cut inside its records with `truncated BAM`, in
+  place of `failed to fill whole buffer`; every tool that reads a BAM.
+
+- `CollectJumpingLibraryMetrics` (Picard face and Python `collect_jumping_library_metrics()`)
+  and the `jumping-library` verb: the one `JumpingLibraryMetrics` row Picard 3.5.0 writes
+  over one or several coordinate-sorted BAMs or CRAMs, with `MINIMUM_MAPPING_QUALITY`,
+  `TAIL_LIMIT` and `CHIMERA_KB_MIN`. The mode pass over the first 50000 outward-facing
+  pairs, the chimera order, the stop at the unaligned tail of each file and the error on an
+  unpaired record follow the source. Every cell matches Picard on the `jumping_bams.py`
+  corpus, the foundation corpus and tiers t1 and t2 (`tests/concordance/test_jumping_library_metrics.py`).
+- `Histogram::trim_by_tail_limit` (htsjdk `trimByTailLimit`) and `pass::sort_order`.
+
+### Changed
+
+- Every tool checks all its output paths before it writes the first file: a directory, a
+  read-only file or a missing parent fails the run with no file written. An output path
+  that is one of the run's inputs fails with `is an input; writing it would destroy it`
+  (Picard replaces the input). `Opt::written` marks the path options a tool writes.
+- An `OQ` character below `!` fails the run (`Invalid fastq character`), as in Picard. It
+  used to decode as a negative quality.
+- An interval list interval past the end of its contig fails the VCF tools and
+  `CollectSequencingArtifactMetrics`, as in Picard.
+- A VCF record at `POS` 0 reads as position 0. It used to fail with `missing position`.
+
+- `Bound` in `bammetrics-verdict` is `Clone`, not `Copy`, and holds the text of an `is`
+  bound.
+
+- A tool verb writes `-o` through a temporary file beside it and a rename
+  (`report::write_atomic`), so an interrupted run leaves the old file or none.
+
+### Fixed
+
+- `CollectSequencingArtifactMetrics` printed `-0` for `QSCORE`, `TOTAL_QSCORE` and the
+  `WORST_*_QSCORE` columns of an error rate of 1; Picard prints `0`.
+- `FILE_EXTENSION=null`, `INTERVALS=null` and `DB_SNP=null` leave the option unset, as in
+  Picard. They used to name a file `null`.
+- A `DB_SNP` VCF without `##contig` lines runs, as in Picard.
+- `convert-sequencing-artifact-to-oxo-g --pre-adapter-in A --bait-bias-in B --oxog-out C`
+  runs without `-o`.
+
 ## 0.18.0
 
 MarkDuplicates, the first bammetrics tool that writes reads.

@@ -1,0 +1,105 @@
+## argv
+CollectSequencingArtifactMetrics
+I=tests/data/artifact.bam
+O=OUT/artifact
+R=tests/data/ref_100k.fa
+CONTEXT_SIZE=0
+CONTEXTS_TO_PRINT=G
+CONTEXTS_TO_PRINT=C
+EXT=.txt
+TANDEM_READS=true
+INCLUDE_DUPLICATES=true
+Q=10
+## exit
+0
+## stdout
+## stderr
+## file artifact.bait_bias_detail_metrics.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectSequencingArtifactMetrics INPUT=tests/data/artifact.bam OUTPUT=OUT/artifact REFERENCE_SEQUENCE=tests/data/ref_100k.fa CONTEXT_SIZE=0 CONTEXTS_TO_PRINT=G CONTEXTS_TO_PRINT=C FILE_EXTENSION=.txt TANDEM_READS=true INCLUDE_DUPLICATES=true MINIMUM_QUALITY_SCORE=10
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasDetailMetrics
+SAMPLE_ALIAS	LIBRARY	REF_BASE	ALT_BASE	CONTEXT	FWD_CXT_REF_BASES	FWD_CXT_ALT_BASES	REV_CXT_REF_BASES	REV_CXT_ALT_BASES	FWD_ERROR_RATE	REV_ERROR_RATE	ERROR_RATE	QSCORE
+NA12878	lib1	C	A	C	205	19	180	33	0.084821	0.15493	0	100
+NA12878	lib1	C	G	C	205	0	180	0	0	0	0	100
+NA12878	lib1	C	T	C	205	0	180	0	0	0	0	100
+NA12878	lib1	G	A	G	180	0	205	0	0	0	0	100
+NA12878	lib1	G	C	G	180	0	205	0	0	0	0	100
+NA12878	lib1	G	T	G	180	33	205	19	0.15493	0.084821	0.070108	12
+
+
+## file artifact.bait_bias_summary_metrics.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectSequencingArtifactMetrics INPUT=tests/data/artifact.bam OUTPUT=OUT/artifact REFERENCE_SEQUENCE=tests/data/ref_100k.fa CONTEXT_SIZE=0 CONTEXTS_TO_PRINT=G CONTEXTS_TO_PRINT=C FILE_EXTENSION=.txt TANDEM_READS=true INCLUDE_DUPLICATES=true MINIMUM_QUALITY_SCORE=10
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.artifacts.SequencingArtifactMetrics$BaitBiasSummaryMetrics
+SAMPLE_ALIAS	LIBRARY	REF_BASE	ALT_BASE	TOTAL_QSCORE	WORST_CXT	WORST_CXT_QSCORE	WORST_PRE_CXT	WORST_PRE_CXT_QSCORE	WORST_POST_CXT	WORST_POST_CXT_QSCORE	ARTIFACT_NAME
+NA12878	lib1	A	C	100	A	100	A	100	A	100	NA
+NA12878	lib1	A	G	100	A	100	A	100	A	100	NA
+NA12878	lib1	A	T	100	A	100	A	100	A	100	NA
+NA12878	lib1	C	A	100	C	100	C	100	C	100	Cref
+NA12878	lib1	C	G	100	C	100	C	100	C	100	NA
+NA12878	lib1	C	T	100	C	100	C	100	C	100	NA
+NA12878	lib1	G	A	100	G	100	G	100	G	100	NA
+NA12878	lib1	G	C	100	G	100	G	100	G	100	NA
+NA12878	lib1	G	T	12	G	12	G	12	G	12	Gref
+NA12878	lib1	T	A	100	T	100	T	100	T	100	NA
+NA12878	lib1	T	C	100	T	100	T	100	T	100	NA
+NA12878	lib1	T	G	100	T	100	T	100	T	100	NA
+
+
+## file artifact.error_summary_metrics.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectSequencingArtifactMetrics INPUT=tests/data/artifact.bam OUTPUT=OUT/artifact REFERENCE_SEQUENCE=tests/data/ref_100k.fa CONTEXT_SIZE=0 CONTEXTS_TO_PRINT=G CONTEXTS_TO_PRINT=C FILE_EXTENSION=.txt TANDEM_READS=true INCLUDE_DUPLICATES=true MINIMUM_QUALITY_SCORE=10
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.artifacts.ErrorSummaryMetrics
+REF_BASE	ALT_BASE	SUBSTITUTION	REF_COUNT	ALT_COUNT	SUBSTITUTION_RATE
+C	A	C>A	770	104	0.118993
+C	G	C>G	770	0	0
+C	T	C>T	770	0	0
+
+
+## file artifact.pre_adapter_detail_metrics.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectSequencingArtifactMetrics INPUT=tests/data/artifact.bam OUTPUT=OUT/artifact REFERENCE_SEQUENCE=tests/data/ref_100k.fa CONTEXT_SIZE=0 CONTEXTS_TO_PRINT=G CONTEXTS_TO_PRINT=C FILE_EXTENSION=.txt TANDEM_READS=true INCLUDE_DUPLICATES=true MINIMUM_QUALITY_SCORE=10
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterDetailMetrics
+SAMPLE_ALIAS	LIBRARY	REF_BASE	ALT_BASE	CONTEXT	PRO_REF_BASES	PRO_ALT_BASES	CON_REF_BASES	CON_ALT_BASES	ERROR_RATE	QSCORE
+NA12878	lib1	C	A	C	215	9	170	43	0	100
+NA12878	lib1	C	G	C	215	0	170	0	0	100
+NA12878	lib1	C	T	C	215	0	170	0	0	100
+NA12878	lib1	G	A	G	170	0	215	0	0	100
+NA12878	lib1	G	C	G	170	0	215	0	0	100
+NA12878	lib1	G	T	G	170	43	215	9	0.077803	11
+
+
+## file artifact.pre_adapter_summary_metrics.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectSequencingArtifactMetrics INPUT=tests/data/artifact.bam OUTPUT=OUT/artifact REFERENCE_SEQUENCE=tests/data/ref_100k.fa CONTEXT_SIZE=0 CONTEXTS_TO_PRINT=G CONTEXTS_TO_PRINT=C FILE_EXTENSION=.txt TANDEM_READS=true INCLUDE_DUPLICATES=true MINIMUM_QUALITY_SCORE=10
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.artifacts.SequencingArtifactMetrics$PreAdapterSummaryMetrics
+SAMPLE_ALIAS	LIBRARY	REF_BASE	ALT_BASE	TOTAL_QSCORE	WORST_CXT	WORST_CXT_QSCORE	WORST_PRE_CXT	WORST_PRE_CXT_QSCORE	WORST_POST_CXT	WORST_POST_CXT_QSCORE	ARTIFACT_NAME
+NA12878	lib1	A	C	100	A	100	A	100	A	100	NA
+NA12878	lib1	A	G	100	A	100	A	100	A	100	NA
+NA12878	lib1	A	T	100	A	100	A	100	A	100	NA
+NA12878	lib1	C	A	100	C	100	C	100	C	100	NA
+NA12878	lib1	C	G	100	C	100	C	100	C	100	NA
+NA12878	lib1	C	T	100	C	100	C	100	C	100	Deamination
+NA12878	lib1	G	A	100	G	100	G	100	G	100	NA
+NA12878	lib1	G	C	100	G	100	G	100	G	100	NA
+NA12878	lib1	G	T	11	G	11	G	11	G	11	OxoG
+NA12878	lib1	T	A	100	T	100	T	100	T	100	NA
+NA12878	lib1	T	C	100	T	100	T	100	T	100	NA
+NA12878	lib1	T	G	100	T	100	T	100	T	100	NA
+
+

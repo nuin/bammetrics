@@ -1,0 +1,10 @@
+## argv
+bam-index-stats
+tests/data/insert_size.bam
+-o
+tests/data/insert_size.bam.bai
+## exit
+2
+## stdout
+## stderr
+bammetrics bam-index-stats: tests/data/insert_size.bam.bai is an input; writing it would destroy it (from -o)

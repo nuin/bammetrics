@@ -35,6 +35,10 @@ const FIXTURES: &[(&str, &str)] = &[
     ),
     ("IS_CRAM", "tests/data/insert_size.cram"),
     ("MD", "tests/data/markdup.bam"),
+    ("ART", "tests/data/artifact.bam"),
+    ("OXOG", "tests/data/oxog.bam"),
+    ("IS_BAI", "tests/data/insert_size.bam.bai"),
+    ("DM", "tests/data/duplicate_marking.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -109,6 +113,11 @@ const FIXTURE_CASES: &[Case] = &[
     case!("picard_hs_metrics", "CollectHsMetrics", "I=IS", "O=OUT/hs_metrics.txt", "BAIT_INTERVALS=IL", "TARGET_INTERVALS=IL", "R=REF"),
     case!("picard_hs_metrics_stdout", "CollectHsMetrics", "I=IS", "BAIT_INTERVALS=IL", "TARGET_INTERVALS=IL", "SAMPLE_SIZE=1000"),
     case!("picard_hs_metrics_per_base", "CollectHsMetrics", "I=IS", "O=OUT/hs_metrics.txt", "BI=IL", "TI=IL", "N=panel", "PER_BASE_COVERAGE=OUT/per_base.txt", "SAMPLE_SIZE=1000", "VALIDATION_STRINGENCY=SILENT"),
+    // The two clinical checks of docs/06 (not Picard tools).
+    case!("picard_coverage_gaps", "CollectCoverageGaps", "I=IS", "O=OUT/coverage_gaps.txt", "TI=IL", "GAPS_FILE=OUT/gaps.bed", "MIN_DEPTH=1"),
+    case!("picard_coverage_gaps_stdout", "CollectCoverageGaps", "I=IS", "TI=BED"),
+    case!("picard_sex_check", "CollectSexCheckMetrics", "I=IS", "O=OUT/sex_check.txt", "EXPECTED_SEX=female", "TI=IL"),
+    case!("picard_sex_check_stdout", "CollectSexCheckMetrics", "I=IS", "X_CONTIG=chr1", "MQ=0"),
     // The five 0.12 subcommands, verbs since 0.13.0.
     case!("insert_size_stdout", "insert-size", "IS"),
     case!("insert_size_output", "insert-size", "IS", "-O", "OUT/insert_size.txt", "-M", "0.05"),
@@ -137,6 +146,12 @@ const FIXTURE_CASES: &[Case] = &[
     case!("verb_duplicate_metrics", "duplicate-metrics", "IS", "-o", "OUT/duplicate_metrics.txt"),
     case!("verb_accumulate_quality_yield", "accumulate-quality-yield", "QY_A", "QY_B"),
     case!("verb_hs_metrics_panel", "hs-metrics", "IS", "--panel", "IL", "--sample-size", "1000", "--no-clip-overlapping-reads"),
+    case!("verb_coverage_gaps_tsv", "coverage-gaps", "IS", "--panel", "BED", "--min-depth", "1", "--format", "tsv"),
+    case!("verb_coverage_gaps_output", "coverage-gaps", "IS", "--targets", "IL", "-o", "OUT/gaps.txt", "--gaps-file", "OUT/gaps.bed", "--no-clip-overlapping-reads"),
+    case!("verb_sex_check_json", "sex-check", "IS", "--sex", "male", "--format", "json"),
+    case!("verb_sex_check_targets", "sex-check", "IS", "--targets", "BED", "-o", "OUT/sex_check.txt"),
+    case!("error_verb_coverage_gaps_no_targets", "coverage-gaps", "IS"),
+    case!("error_verb_sex_check_bad_sex", "sex-check", "IS", "--sex", "unknown"),
     case!("verb_tools", "tools"),
     case!("verb_presets", "presets"),
     case!("error_verb_unknown_option", "insert-size", "IS", "--minmum-pct", "0.1"),
@@ -180,7 +195,10 @@ const FIXTURE_CASES: &[Case] = &[
     case!("qc_generic", "qc", "IS", "-o", "OUT/sample", "--date", "2026-01-02 03:04:05 UTC"),
     case!("qc_clinical_panel_jsonl", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--panel", "IL", "-R", "REF", "--format", "jsonl", "--date", "2026-01-02 03:04:05 UTC"),
     case!("qc_fail_on_incomplete", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--fail-on", "fail", "--sample", "NA12878", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("qc_clinical_panel_sex", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--panel", "IL", "--sex", "male", "--date", "2026-01-02 03:04:05 UTC"),
     case!("plan_generic", "plan", "IS", "-o", "OUT/sample"),
+    case!("plan_sex", "plan", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--sex", "female", "--format", "jsonl"),
+    case!("error_qc_sex_without_rule", "qc", "IS", "-o", "OUT/sample", "--sex", "female"),
     case!("plan_wgs_jsonl", "plan", "IS", "-o", "OUT/sample", "-R", "REF", "--preset", "wgs", "--format", "jsonl"),
     case!("error_qc_missing_bam", "qc", "tests/data/nope.bam", "-o", "OUT/sample"),
     // bed-to-interval-list (0.14.0): docs/05 example 7, and qc --panel BED.
@@ -209,6 +227,16 @@ const FIXTURE_CASES: &[Case] = &[
     case!("verb_create_sequence_dictionary_json", "create-sequence-dictionary", "REF", "--format", "json", "--uri", "ref_100k.fa"),
     case!("error_create_sequence_dictionary_exists", "CreateSequenceDictionary", "R=REF", "O=DICT"),
     case!("error_verb_create_sequence_dictionary_no_fasta", "create-sequence-dictionary"),
+    // BamIndexStats: Picard's text on standard output from the .bai beside the BAM
+    // (tests/data/insert_size.bam.bai); no OUTPUT option; a CRAM is counted.
+    case!("picard_bam_index_stats", "BamIndexStats", "I=IS"),
+    case!("picard_bam_index_stats_cram", "BamIndexStats", "I=IS_CRAM", "R=REF"),
+    case!("verb_bam_index_stats_output", "bam-index-stats", "IS", "-o", "OUT/index_stats.txt"),
+    case!("verb_bam_index_stats_tsv", "bam-index-stats", "IS", "--format", "tsv"),
+    case!("verb_bam_index_stats_json", "bam-index-stats", "IS", "--format", "json", "--sample", "S1"),
+    case!("error_bam_index_stats_no_index", "BamIndexStats", "I=OR"),
+    case!("error_bam_index_stats_output", "BamIndexStats", "I=IS", "O=OUT/index_stats.txt"),
+    case!("error_bam_index_stats_overwrites_index", "bam-index-stats", "IS", "-o", "IS_BAI"),
     // CRAM input (tests/data/make_cram.py): told by its magic, decoded with R=.
     case!("picard_quality_yield_cram", "CollectQualityYieldMetrics", "I=IS_CRAM", "O=OUT/quality_yield.txt", "R=REF"),
     case!("picard_multiple_metrics_cram", "CollectMultipleMetrics", "I=IS_CRAM", "O=OUT/sample", "R=REF"),
@@ -233,6 +261,47 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_mark_duplicates_assume_both", "MarkDuplicates", "I=MD", "O=OUT/marked.bam", "M=OUT/markdup_metrics.txt", "AS=true", "ASO=coordinate"),
     case!("error_verb_mark_duplicates_no_output", "mark-duplicates", "MD", "--metrics", "OUT/markdup_metrics.txt"),
     case!("error_verb_mark_duplicates_format", "mark-duplicates", "MD", "-o", "OUT/marked.bam", "--metrics", "OUT/markdup_metrics.txt", "--format", "json"),
+    // CollectSequencingArtifactMetrics on tests/data/artifact.bam (make_artifact_bam.py), and
+    // ConvertSequencingArtifactToOxoG on Picard 3.5.0's files for it in tests/data/artifact.
+    case!("picard_sequencing_artifact", "CollectSequencingArtifactMetrics", "I=ART", "O=OUT/artifact", "R=REF"),
+    case!("picard_sequencing_artifact_options", "CollectSequencingArtifactMetrics", "I=ART", "O=OUT/artifact", "R=REF", "CONTEXT_SIZE=0", "CONTEXTS_TO_PRINT=G", "CONTEXTS_TO_PRINT=C", "EXT=.txt", "TANDEM_READS=true", "INCLUDE_DUPLICATES=true", "Q=10"),
+    case!("picard_multiple_metrics_artifact", "CollectMultipleMetrics", "I=ART", "O=OUT/sample", "R=REF", "PROGRAM=null", "PROGRAM=CollectSequencingArtifactMetrics", "EXTRA_ARGUMENT=CollectSequencingArtifactMetrics::CONTEXT_SIZE=0", "EXTRA_ARGUMENT=CollectSequencingArtifactMetrics::R=tests/data/ref_100k.fa"),
+    case!("picard_convert_sequencing_artifact_to_oxog", "ConvertSequencingArtifactToOxoG", "I=tests/data/artifact/artifact", "O=OUT/artifact"),
+    case!("verb_sequencing_artifact", "sequencing-artifact", "ART", "-R", "REF", "-o", "OUT/sample", "--min-ins", "100"),
+    case!("verb_convert_sequencing_artifact_to_oxo_g", "convert-sequencing-artifact-to-oxo-g", "tests/data/artifact/artifact", "-o", "OUT/sample"),
+    case!("error_sequencing_artifact_no_reference", "CollectSequencingArtifactMetrics", "I=ART", "O=OUT/artifact"),
+    case!("error_sequencing_artifact_no_read_group", "CollectSequencingArtifactMetrics", "I=IS", "O=OUT/artifact", "R=REF"),
+    case!("error_sequencing_artifact_context_length", "CollectSequencingArtifactMetrics", "I=ART", "O=OUT/artifact", "R=REF", "CONTEXTS_TO_PRINT=AC"),
+    case!("error_convert_sequencing_artifact_no_input", "ConvertSequencingArtifactToOxoG", "O=OUT/artifact"),
+    // CollectOxoGMetrics on tests/data/oxog.bam (make_oxog.py): two libraries, read 1 G>T damage.
+    case!("picard_oxog_metrics", "CollectOxoGMetrics", "I=OXOG", "O=OUT/oxog_metrics.txt", "R=REF"),
+    case!("picard_oxog_metrics_contexts_stdout", "CollectOxoGMetrics", "I=OXOG", "R=REF", "CONTEXT_SIZE=2", "CONTEXTS=AACGT", "CONTEXTS=TGCAC", "Q=30", "STOP_AFTER=50"),
+    case!("verb_oxo_g_tsv", "oxo-g", "OXOG", "-R", "REF", "--context-size", "0", "--format", "tsv"),
+    case!("verb_oxo_g_output", "oxo-g", "OXOG", "-R", "REF", "--no-use-oq", "--minimum-insert-size", "0", "--maximum-insert-size", "0", "-o", "OUT/oxog_metrics.txt"),
+    case!("error_oxog_no_read_groups", "CollectOxoGMetrics", "I=IS", "R=REF"),
+    case!("error_oxog_contexts", "CollectOxoGMetrics", "I=OXOG", "R=REF", "CONTEXTS=AC", "CONTEXTS=AGA"),
+    case!("error_verb_oxo_g_no_reference", "oxo-g", "OXOG"),
+    // CheckDuplicateMarking: exit 0 when every queryname agrees, 1 otherwise; the
+    // Picard face writes O= only, the verb prints the bad querynames without -o.
+    // tests/data/duplicate_marking.bam (tests/data/make_duplicate_marking.py) has six
+    // bad records; the coordinate-sorted fixture is sorted first and agrees.
+    case!("picard_check_duplicate_marking", "CheckDuplicateMarking", "I=DM", "O=OUT/bad_querynames.txt"),
+    case!("picard_check_duplicate_marking_mode", "CheckDuplicateMarking", "I=DM", "MODE=PRIMARY_MAPPED_ONLY", "VERBOSITY=WARNING"),
+    case!("picard_check_duplicate_marking_sorted", "CheckDuplicateMarking", "I=IS", "O=OUT/bad_querynames.txt"),
+    case!("picard_check_duplicate_marking_cram", "CheckDuplicateMarking", "I=IS_CRAM", "R=REF", "VERBOSITY=ERROR"),
+    case!("verb_check_duplicate_marking_stdout", "check-duplicate-marking", "DM"),
+    case!("verb_check_duplicate_marking_json", "check-duplicate-marking", "DM", "--mode", "PRIMARY_ONLY", "--format", "json"),
+    case!("verb_check_duplicate_marking_output", "check-duplicate-marking", "IS", "-o", "OUT/bad_querynames.txt", "--format", "tsv"),
+    case!("error_check_duplicate_marking_mode", "CheckDuplicateMarking", "I=DM", "MODE=NOPE"),
+    case!("error_check_duplicate_marking_proper_pair", "CheckDuplicateMarking", "I=DM", "MODE=PRIMARY_PROPER_PAIR_ONLY", "O=OUT/bad_querynames.txt"),
+    case!("error_verb_check_duplicate_marking_assume_sorted", "check-duplicate-marking", "DM", "--assume-sorted"),
+    // CollectJumpingLibraryMetrics: one row over every INPUT, read in turn.
+    case!("picard_jumping_library", "CollectJumpingLibraryMetrics", "I=IS", "O=OUT/jumping_library.txt"),
+    case!("picard_jumping_library_stdout", "CollectJumpingLibraryMetrics", "I=IS"),
+    case!("picard_jumping_library_two_inputs", "CollectJumpingLibraryMetrics", "I=OR", "I=IS", "O=OUT/jumping_library.txt", "MQ=20", "T=100", "CHIMERA_KB_MIN=1000"),
+    case!("picard_jumping_library_cram", "CollectJumpingLibraryMetrics", "I=IS_CRAM", "O=OUT/jumping_library.txt", "R=REF"),
+    case!("verb_jumping_library_json", "jumping-library", "OR", "IS", "--tail-limit", "100", "--format", "json"),
+    case!("error_jumping_library_assume_sorted", "CollectJumpingLibraryMetrics", "I=IS", "ASSUME_SORTED=true"),
 ];
 
 /// The same tools on corpus BAM t1, with its reference and interval lists.
@@ -255,6 +324,9 @@ const T1_CASES: &[Case] = &[
     case!("t1_hs_metrics", "hs-metrics", "T1", "-O", "OUT/hs_metrics.txt", "-R", "T1_REF", "--bait-intervals", "T1_BAITS", "--target-intervals", "T1_TARGETS"),
     case!("t1_collect", "collect", "T1", "-O", "OUT/sample", "-R", "T1_REF", "--hs", "T1_BAITS", "T1_TARGETS"),
     case!("t1_picard_mark_duplicates", "MarkDuplicates", "I=T1", "O=/dev/null", "M=OUT/markdup_metrics.txt"),
+    case!("t1_picard_oxog_metrics", "CollectOxoGMetrics", "I=T1", "O=OUT/oxog_metrics.txt", "R=T1_REF", "INTERVALS=T1_BAITS"),
+    case!("t1_oxo_g", "oxo-g", "T1", "-R", "T1_REF", "-o", "OUT/oxog_metrics.txt"),
+    case!("t1_picard_jumping_library", "CollectJumpingLibraryMetrics", "I=T1", "O=OUT/jumping_library.txt"),
 ];
 
 fn root() -> PathBuf {

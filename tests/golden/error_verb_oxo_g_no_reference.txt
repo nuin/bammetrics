@@ -1,0 +1,9 @@
+## argv
+oxo-g
+tests/data/oxog.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics oxo-g: missing --reference-sequence (Picard: REFERENCE_SEQUENCE)
+  every option: bammetrics help oxo-g

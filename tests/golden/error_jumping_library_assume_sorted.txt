@@ -1,0 +1,9 @@
+## argv
+CollectJumpingLibraryMetrics
+I=tests/data/insert_size.bam
+ASSUME_SORTED=true
+## exit
+1
+## stdout
+## stderr
+bammetrics: CollectJumpingLibraryMetrics: Unrecognized option: ASSUME_SORTED

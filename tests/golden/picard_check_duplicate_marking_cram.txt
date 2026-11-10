@@ -1,0 +1,9 @@
+## argv
+CheckDuplicateMarking
+I=tests/data/insert_size.cram
+R=tests/data/ref_100k.fa
+VERBOSITY=ERROR
+## exit
+0
+## stdout
+## stderr
