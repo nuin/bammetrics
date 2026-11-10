@@ -46,10 +46,10 @@ mod tests;
 pub use exec::run_chain;
 pub use sinks::{CollectorSink, WriteOptions};
 
-/// Records per batch. A batch of 1024 exome records is about 360 KB, so
-/// the transform reads what the reader just wrote from the nearest cache;
-/// with the 4096 of [`pass`] a `MarkDuplicates` chain took 10 percent
-/// longer (docs/chaining.md section 9).
+/// Records per batch. Measured: with the 4096 of [`pass`] a
+/// `MarkDuplicates` chain took 10 percent longer, and 512 cost more system
+/// time for the same wall time (docs/chaining.md section 9.3). 1024 exome
+/// records are about 360 KB, 4096 about 1.4 MB.
 pub const BATCH_RECORDS: usize = 1024;
 /// Batches a tap or sink thread may have queued before the reader waits.
 pub(crate) const QUEUED_BATCHES: usize = 8;
