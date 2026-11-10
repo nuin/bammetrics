@@ -208,6 +208,10 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
     // No OUTPUT option; the text goes to standard output.
     args.insert("BamIndexStats", vec![bam.clone()]);
     args.insert(
+        "CheckDuplicateMarking",
+        vec![bam.clone(), out("bad_querynames.txt")],
+    );
+    args.insert(
         "GenotypeConcordance",
         vec![
             format!("TRUTH_VCF={calls}"),

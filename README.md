@@ -123,6 +123,7 @@ under the failing check it explains. The presets, the rule language and `verdict
 | CollectCoverageGaps (not a Picard tool, [docs/06](docs/06_clinical_checks.md): target bases under `MIN_DEPTH` as a metrics row and a BED of gap runs, with the CollectHsMetrics depth) | | `collect_coverage_gaps()` |
 | CollectSexCheckMetrics (not a Picard tool, docs/06: reads per base on X, Y and the autosomes, the inferred sex against `EXPECTED_SEX`) | | `collect_sex_check_metrics()` |
 | BamIndexStats (Picard's text from the `.bai` or `.csi`; a CRAM counted with `R=`) | | `bam_index_stats()` |
+| CheckDuplicateMarking (`MODE`, `OUTPUT`, `VERBOSITY`; Picard's log lines and exit code; a BAM that is not queryname sorted is sorted first) | | `check_duplicate_marking()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 

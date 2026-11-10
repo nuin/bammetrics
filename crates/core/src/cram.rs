@@ -90,12 +90,16 @@ fn not_bam_or_cram() -> io::Error {
 
 /// The error of a BAM header read: noodles' `invalid BAM header` (a BGZF
 /// file without the BAM magic, such as a bgzipped SAM) named as
-/// [`not_bam_or_cram`] names it.
+/// [`not_bam_or_cram`] names it; any other failure (an empty file, a file
+/// cut inside its header) named in place of `failed to fill whole buffer`.
 pub(crate) fn bam_header_error(e: io::Error) -> io::Error {
     if e.kind() == io::ErrorKind::InvalidData && e.to_string() == "invalid BAM header" {
         return not_bam_or_cram();
     }
-    e
+    io::Error::new(
+        e.kind(),
+        format!("not a BAM or CRAM file (the header could not be read: {e})"),
+    )
 }
 
 /// Whether the first bytes of `path` can be read ahead of the pass: a

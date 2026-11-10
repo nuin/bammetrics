@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 
 use bammetrics_core::multiple_metrics::file_extensions;
 use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
-use bammetrics_core::{bam_index_stats, compare_metrics, cram, pass};
+use bammetrics_core::{bam_index_stats, check_duplicate_marking, compare_metrics, cram, pass};
 
 use crate::error::VerbError;
 use crate::format::{self, Context, Format};
@@ -292,6 +292,21 @@ pub const VERBS: &[Verb] = &[
         ),
         writes: "index statistics",
         ..verb("bam-index-stats", "BamIndexStats", Files::Single)
+    },
+    Verb {
+        about: Some(
+            "checks that every record of a queryname carries the same duplicate flag, as \
+             Picard's CheckDuplicateMarking does: the bad querynames (one line per record that \
+             disagrees) to -o or standard output, the summary on standard error (dropped by \
+             --verbosity as Picard's log line is), exit 1 when any record disagrees. A BAM \
+             that is not queryname sorted is sorted in memory.",
+        ),
+        writes: "bad querynames",
+        ..verb(
+            "check-duplicate-marking",
+            "CheckDuplicateMarking",
+            Files::Single,
+        )
     },
 ];
 
@@ -578,6 +593,13 @@ impl Verb {
         let (result, status) = if tool.name == compare_metrics::TOOL.name {
             self.compare(&inv, output.as_deref(), format, quiet)
                 .map_err(core)?
+        } else if tool.name == check_duplicate_marking::TOOL.name {
+            let check = check_duplicate_marking::check(&inv).map_err(core)?;
+            if let Some(summary) = check.summary_shown().filter(|_| !quiet) {
+                eprintln!("bammetrics {}: {summary}", self.name);
+            }
+            let status = check.status();
+            (check.output, status)
         } else {
             ((tool.run)(&inv).map_err(core)?, 0)
         };

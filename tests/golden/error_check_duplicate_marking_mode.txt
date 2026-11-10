@@ -1,0 +1,9 @@
+## argv
+CheckDuplicateMarking
+I=tests/data/duplicate_marking.bam
+MODE=NOPE
+## exit
+1
+## stdout
+## stderr
+bammetrics: 'NOPE' is not a valid value for Mode.

@@ -38,6 +38,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("ART", "tests/data/artifact.bam"),
     ("OXOG", "tests/data/oxog.bam"),
     ("IS_BAI", "tests/data/insert_size.bam.bai"),
+    ("DM", "tests/data/duplicate_marking.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -280,6 +281,20 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_oxog_no_read_groups", "CollectOxoGMetrics", "I=IS", "R=REF"),
     case!("error_oxog_contexts", "CollectOxoGMetrics", "I=OXOG", "R=REF", "CONTEXTS=AC", "CONTEXTS=AGA"),
     case!("error_verb_oxo_g_no_reference", "oxo-g", "OXOG"),
+    // CheckDuplicateMarking: exit 0 when every queryname agrees, 1 otherwise; the
+    // Picard face writes O= only, the verb prints the bad querynames without -o.
+    // tests/data/duplicate_marking.bam (tests/data/make_duplicate_marking.py) has six
+    // bad records; the coordinate-sorted fixture is sorted first and agrees.
+    case!("picard_check_duplicate_marking", "CheckDuplicateMarking", "I=DM", "O=OUT/bad_querynames.txt"),
+    case!("picard_check_duplicate_marking_mode", "CheckDuplicateMarking", "I=DM", "MODE=PRIMARY_MAPPED_ONLY", "VERBOSITY=WARNING"),
+    case!("picard_check_duplicate_marking_sorted", "CheckDuplicateMarking", "I=IS", "O=OUT/bad_querynames.txt"),
+    case!("picard_check_duplicate_marking_cram", "CheckDuplicateMarking", "I=IS_CRAM", "R=REF", "VERBOSITY=ERROR"),
+    case!("verb_check_duplicate_marking_stdout", "check-duplicate-marking", "DM"),
+    case!("verb_check_duplicate_marking_json", "check-duplicate-marking", "DM", "--mode", "PRIMARY_ONLY", "--format", "json"),
+    case!("verb_check_duplicate_marking_output", "check-duplicate-marking", "IS", "-o", "OUT/bad_querynames.txt", "--format", "tsv"),
+    case!("error_check_duplicate_marking_mode", "CheckDuplicateMarking", "I=DM", "MODE=NOPE"),
+    case!("error_check_duplicate_marking_proper_pair", "CheckDuplicateMarking", "I=DM", "MODE=PRIMARY_PROPER_PAIR_ONLY", "O=OUT/bad_querynames.txt"),
+    case!("error_verb_check_duplicate_marking_assume_sorted", "check-duplicate-marking", "DM", "--assume-sorted"),
 ];
 
 /// The same tools on corpus BAM t1, with its reference and interval lists.

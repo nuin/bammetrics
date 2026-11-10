@@ -257,6 +257,26 @@ behaves how.
   exits 1 with that line as the error. A truncated index exits 1 in both with each
   reader's own message. Both ignore an `x.bam.crai` beside a BAM where htsjdk would pick
   it before `x.bam.bai` and fail.
+- `CheckDuplicateMarking` prints Picard's log lines the same way (`WARNING` per bad
+  record, `ERROR` or `INFO` summary, the `INFO` sorting line), the Picard face writes
+  `O=` only, the verb prints the bad querynames to standard output without `-o` and the
+  summary on standard error. Both exit 1 when a record disagrees. A file whose header is
+  not `SO:queryname` is sorted in memory (name, flags, position and `HI` of every record);
+  Picard sorts whole records through `SortingCollection`, spilling to `TMP_DIR` past
+  `MAX_RECORDS_IN_RAM`, so neither option changes anything here and memory grows with the
+  file. The order is the same, since both sorts are stable. A read name is compared by its
+  bytes, as Picard compares it: htsjdk decodes a BAM read name byte by byte (Latin-1), so
+  `String.compareTo` over those characters is byte order. The same decoding prints the
+  name: the UTF-8 bytes `C3 A9` of an e-acute print as `Ã©` in the log, in `OUTPUT` and
+  in the Python `read_name`, and a byte that is not UTF-8 prints as one character.
+  Picard's `ProgressLogger` lines (`Checked.` every 1,000,000 checked records,
+  `Read into sorter` every 1,000,000 records sorted, at `INFO`, timings included) are not
+  printed, so the log lines match below 1,000,000 records and the concordance test drops
+  them above. An `OUTPUT` that is the `INPUT` file is refused as a usage error on every
+  face; Picard truncates the file under its own reader. A SAM text file and an empty file
+  are errors here (`not a BAM or CRAM file`), Picard reads the SAM and reports that the
+  empty file agrees; a BAM cut inside its records exits 1 here (`truncated BAM`), Picard
+  reports that every record agrees.
 
 ## Charts
 
@@ -288,6 +308,14 @@ only with `output=`. `bam_index_stats(bam)` returns one dict per reference of th
 as the `TypedDict` `_BamIndexRow`, so a checker knows each key's type) and a last dict
 `reference="*"` whose `unaligned` is the `NoCoordinateCount`; it takes no `output=`
 (`ValueError`, as Picard has no `OUTPUT`) and reads a CRAM with `reference_sequence=`.
+
+`check_duplicate_marking(bam, mode=..., output=...)` returns one dict per record whose
+duplicate flag differs from the first record of its queryname (`read_name`, `contig`,
+`start`; `contig` is `None` for an unmapped record; `read_name` decoded byte by byte, as
+Picard prints it), in the order Picard logs them. An
+empty list means every queryname agrees; the exit code 1 of the command line is not an
+exception, as `compare_metrics` returns differences without raising. `output=` writes the
+names file.
 
 `compare_metrics([a, b], ...)` returns one dict per line Picard logs as a difference:
 `KEY`, `METRIC`, `VALUE1` and `VALUE2` (typed as the metric's field) for a value
@@ -791,6 +819,24 @@ found as `x.bai`, `x.csi`, `x.bam.bai`, `x.bam.csi`, then beside the target of a
 link; an index with more references than the header printing the header's references
 only; `No index for bam file INPUT` without one.
 
+`CheckDuplicateMarking` behaviour reproduced from Picard 3.5.0
+(`tests/concordance/test_check_duplicate_marking.py`): the first checked record of a
+queryname sets the flag, each later record of that name with the other flag is one bad
+record (so a name with three records, two marked and the first not, counts two); a
+dropped record (`MODE`) leaves the current name unchanged; the warning's contig is `null`
+for any unmapped record, placed or not, and its start is the alignment start, 0 without
+one; the 100th bad record is followed by `Further warnings will be suppressed.`;
+`Found 1 records ...` keeps Picard's grammar; `OUTPUT` holds one name per bad record and
+is an empty file when every name agrees; `VERBOSITY=ERROR` leaves the `ERROR` line only
+and `QUIET=true` leaves every log line; a header without `SO:queryname` is sorted in
+`SAMRecordQueryNameComparator` order (name bytes, paired before unpaired, first before
+second of pair, forward before reverse, primary before supplementary before secondary,
+`HI` ascending after records without `HI`, stable), and `SO:queryname` is trusted, so a
+name that comes back after another starts a new group. The sort reads `HI` as
+`getIntegerAttribute` does: a float is truncated, a string, character or array value
+fails the run with `Value for tag HI is not Number: class java.lang.String` (the Java
+class of the value), and a `SO:queryname` file never reads the tag.
+
 ## Failures
 
 `CollectSequencingArtifactMetrics` fails where Picard fails, each with Picard's message:
@@ -853,6 +899,16 @@ with the same message (`test_bad_fasta_fails_in_both`, `test_alt_name_errors`).
 With `CREATE_MD5_FILE=true` and a directory at `OUTPUT.md5`, Picard writes `OUTPUT` and
 then exits 1 (`Can't write to or close output file`); bammetrics exits 1 with that message
 before it writes anything (`test_md5_path_is_a_directory`).
+
+`CheckDuplicateMarking MODE=PRIMARY_PROPER_PAIR_ONLY` on an unpaired record exits 1 in both
+tools with `Inappropriate call if not paired read` (htsjdk's `getProperPairFlag`). Picard
+has opened `OUTPUT` before the first record and leaves the names written up to that
+record, after the warnings it logged; bammetrics writes no file and prints no log line.
+A bad `MODE` exits 1 in both with `'X' is not a valid value for Mode.`; Picard follows it
+with its usage text. An `OUTPUT` whose directory does not exist exits 1 in both before the
+read with `Neither file nor parent directory exist.`; a missing `INPUT` exits 1 in both
+(Picard: `Cannot read non-existent file`; bammetrics: the path and `No such file or
+directory`).
 
 ## Threads
 

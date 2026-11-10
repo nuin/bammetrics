@@ -1,0 +1,14 @@
+## argv
+check-duplicate-marking
+tests/data/duplicate_marking.bam
+## exit
+1
+## stdout
+r2
+r4
+r4
+r5
+r6
+r7
+## stderr
+bammetrics check-duplicate-marking: Found 6 records that do not agree on their duplicate flag.

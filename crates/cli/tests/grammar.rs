@@ -419,6 +419,16 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("VALIDATION_STRINGENCY", "SILENT")),
             picard_outputs: no_output,
         },
+        // The fixture has no duplicate flag set, so both faces exit 0 and
+        // write an empty file.
+        Case {
+            verb: "check-duplicate-marking",
+            class: "CheckDuplicateMarking",
+            verb_args: bam(&[]),
+            picard_args: picard_bam(&[]),
+            option: Some(("MODE", "PRIMARY_ONLY")),
+            picard_outputs: single,
+        },
     ]
 }
 
@@ -506,7 +516,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && **c != "AccumulateVariantCallingMetrics")
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 30);
+    assert_eq!(classes.len(), 31);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

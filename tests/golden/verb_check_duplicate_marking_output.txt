@@ -1,0 +1,14 @@
+## argv
+check-duplicate-marking
+tests/data/insert_size.bam
+-o
+OUT/bad_querynames.txt
+--format
+tsv
+## exit
+0
+## stdout
+## stderr
+bammetrics check-duplicate-marking: All records' duplicate markings agree.
+## file bad_querynames.txt
+read_name	contig	start

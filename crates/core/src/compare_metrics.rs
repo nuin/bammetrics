@@ -336,7 +336,7 @@ impl JavaFile {
 }
 
 /// `IOUtil.assertFileIsWritable` on `OUTPUT`.
-fn check_writable(output: &str) -> Result<()> {
+pub(crate) fn check_writable(output: &str) -> Result<()> {
     let file = JavaFile::new(output);
     let path = Path::new(&file.absolute);
     if path.is_dir() {
