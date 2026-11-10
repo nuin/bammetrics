@@ -1,0 +1,23 @@
+## argv
+convert
+tests/data/picard/NA12878/NA12878.duplicate_metrics
+--format
+md
+## exit
+0
+## stdout
+## picard.sam.DuplicationMetrics
+
+| Column | 1 |
+| --- | --- |
+| LIBRARY | Unknown Library |
+| UNPAIRED_READS_EXAMINED | 0 |
+| READ_PAIRS_EXAMINED | 5 |
+| SECONDARY_OR_SUPPLEMENTARY_RDS | 0 |
+| UNMAPPED_READS | 0 |
+| UNPAIRED_READ_DUPLICATES | 0 |
+| READ_PAIR_DUPLICATES | 0 |
+| READ_PAIR_OPTICAL_DUPLICATES | 0 |
+| PERCENT_DUPLICATION | 0 |
+| ESTIMATED_LIBRARY_SIZE |  |
+## stderr

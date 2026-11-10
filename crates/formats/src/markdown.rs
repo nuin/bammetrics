@@ -23,8 +23,9 @@ const CUT_NOTE: usize = 160;
 const SIDEWAYS_COLUMNS: usize = 8;
 const SIDEWAYS_ROWS: usize = 8;
 
-/// `text` as the content of a table cell: `|` and the characters that
-/// start Markdown or HTML are escaped, a line break is `<br>`. An
+/// `text` as the content of a table cell: `|`, the characters that start
+/// Markdown and a `<` that would open a tag are escaped, a line break is
+/// `<br>`. An
 /// underscore inside a word (`READ_PAIRS`) stays as it is; GFM does not
 /// read it as emphasis.
 pub fn escape(text: &str) -> String {
@@ -46,8 +47,14 @@ pub fn escape(text: &str) -> String {
                 }
                 out.push('_');
             }
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
+            // `<` opens a tag only before a letter, `/`, `!` or `?`; a
+            // bound such as `< 0.9` stays readable in the raw text.
+            '<' if chars
+                .get(i + 1)
+                .is_some_and(|n| n.is_ascii_alphabetic() || matches!(n, '/' | '!' | '?')) =>
+            {
+                out.push_str("&lt;");
+            }
             '&' => out.push_str("&amp;"),
             '\n' => out.push_str("<br>"),
             '\r' => {}
@@ -123,13 +130,17 @@ impl Page {
     }
 
     fn verdict(&mut self, verdict: &VerdictSummary) {
-        self.push(&format!(
-            "# {}: {}\n\nPreset {}. {}.\n\n",
+        let fits = self.push(&format!(
+            "\n# {}: {}\n\nPreset {}. {}.\n\n",
             escape(&verdict.sample),
             verdict.status.to_uppercase(),
             escape(&verdict.preset),
             verdict.counts_line()
         ));
+        if !fits {
+            self.cut_rows += verdict.checks.len();
+            return;
+        }
         if verdict.checks.is_empty() {
             return;
         }
@@ -152,16 +163,15 @@ impl Page {
     }
 }
 
-/// `docs` as Markdown, each under its tables' class names, with the
-/// verdict of the sample first when `verdict` is given. At most [`CAP`]
-/// characters.
-pub fn write(docs: &[&Document], verdict: Option<&VerdictSummary>) -> String {
+/// The verdict of each sample in `verdicts` first, then `docs`, each
+/// under its tables' class names. At most [`CAP`] characters.
+pub fn write(docs: &[&Document], verdicts: &[VerdictSummary]) -> String {
     let mut page = Page {
         text: String::new(),
         chars: 0,
         cut_rows: 0,
     };
-    if let Some(verdict) = verdict {
+    for verdict in verdicts {
         page.verdict(verdict);
     }
     for doc in docs {
@@ -194,7 +204,7 @@ pub fn write(docs: &[&Document], verdict: Option<&VerdictSummary>) -> String {
             page.cut_rows
         ));
     }
-    // A page without a verdict starts at its first heading.
+    // Every heading is written after a blank line; the first needs none.
     if page.text.starts_with('\n') {
         page.text.remove(0);
     }
@@ -240,14 +250,14 @@ mod tests {
         assert_eq!(escape("READ_PAIRS"), "READ_PAIRS");
         assert_eq!(
             escape("_x_ a|b *c* <i> `d` [l] ~s~ \\"),
-            "\\_x\\_ a\\|b \\*c\\* &lt;i&gt; \\`d\\` \\[l\\] \\~s\\~ \\\\"
+            "\\_x\\_ a\\|b \\*c\\* &lt;i> \\`d\\` \\[l\\] \\~s\\~ \\\\"
         );
         assert_eq!(escape("a\r\nb & c"), "a<br>b &amp; c");
     }
 
     #[test]
     fn a_narrow_table_is_a_gfm_table() {
-        let text = write(&[&doc(vec![table(3, 2)])], None);
+        let text = write(&[&doc(vec![table(3, 2)])], &[]);
         assert_eq!(
             text,
             "## picard.analysis.Demo\n\n\
@@ -260,23 +270,23 @@ mod tests {
 
     #[test]
     fn a_wide_short_table_lies_on_its_side() {
-        let text = write(&[&doc(vec![table(9, 2)])], None);
+        let text = write(&[&doc(vec![table(9, 2)])], &[]);
         assert!(
             text.contains("| Column | 1 | 2 |\n| --- | --- | --- |\n| COL_0 | r0\\|x | r1\\|x |\n")
         );
         assert!(text.contains("| COL_8 | 0 | 8 |\n"));
-        let long = write(&[&doc(vec![table(9, 9)])], None);
+        let long = write(&[&doc(vec![table(9, 9)])], &[]);
         assert!(long.contains("| COL_0 | COL_1 |"));
     }
 
     #[test]
     fn the_verdict_comes_first() {
-        let text = write(&[&doc(vec![table(2, 1)])], Some(&verdict()));
+        let text = write(&[&doc(vec![table(2, 1)])], &[verdict()]);
         assert!(text.starts_with(
             "# NA\\|12878: FAIL\n\nPreset generic v3 (0123ab). 1 fail, 1 warn, 1 pass, 1 not measured.\n\n\
              | Status | Rule | Value | Warn | Fail | Reason |\n\
              | --- | --- | ---: | --- | --- | --- |\n\
-             | FAIL | dup.rate | 0.31 | &gt; 0.2 | &gt; 0.3 | dup.rate &lt;is&gt; \"off\" &amp; more |\n"
+             | FAIL | dup.rate | 0.31 | > 0.2 | > 0.3 | dup.rate &lt;is> \"off\" &amp; more |\n"
         ));
         assert!(text.contains("| NOT MEASURED | wgs.depth | ? |"));
         assert!(text.contains("\n## picard.analysis.Demo\n"));
@@ -285,7 +295,7 @@ mod tests {
     #[test]
     fn the_text_is_cut_at_the_cap() {
         let big = doc(vec![table(4, 20_000), table(4, 3)]);
-        let text = write(&[&big], Some(&verdict()));
+        let text = write(&[&big], &[verdict()]);
         let chars = text.chars().count();
         assert!(chars <= CAP, "{chars}");
         assert!(chars > CAP - 400, "{chars}");
@@ -299,7 +309,7 @@ mod tests {
             .parse()
             .expect("number");
         assert_eq!(shown + cut, 20_003);
-        let small = write(&[&doc(vec![table(4, 3)])], None);
+        let small = write(&[&doc(vec![table(4, 3)])], &[]);
         assert!(!small.contains("left out"));
     }
 
@@ -314,7 +324,7 @@ mod tests {
             ],
             rows: vec![vec![Value::Int(300), Value::Float(f64::NAN)]],
         });
-        let text = write(&[&d], None);
+        let text = write(&[&d], &[]);
         assert!(text.contains("## picard.analysis.Demo\n\nNo rows.\n"));
         assert!(text.contains(
             "## Histogram of picard.analysis.Demo, by insert_size\n\n| insert_size | n |\n| ---: | ---: |\n| 300 | ? |\n"

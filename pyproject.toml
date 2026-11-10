@@ -23,6 +23,12 @@ classifiers = [
     "Typing :: Typed",
 ]
 
+# read_table(...).to_pandas() and .to_polars() import these on their first
+# call; nothing else in the module needs them.
+[project.optional-dependencies]
+pandas = ["pandas"]
+polars = ["polars"]
+
 [project.urls]
 Repository = "https://github.com/nuin/bammetrics"
 Changelog = "https://github.com/nuin/bammetrics/blob/main/CHANGELOG.md"

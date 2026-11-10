@@ -13,3 +13,4 @@ json
 ## stderr
 bammetrics mark-duplicates: --format json needs a single-file verb (from --format)
   this verb writes a BAM to -o and its metrics to --metrics-file
+  picard,json writes the Picard files and each as FILE.json beside it

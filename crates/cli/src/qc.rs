@@ -33,6 +33,7 @@ use bammetrics_core::registry::{self, Invocation, Tool};
 use bammetrics_verdict::{Preset, bytes_hash};
 use clap::{ArgAction, Args, ValueEnum};
 
+use crate::also::Also;
 use crate::check::{EXIT_CODES, FailOn};
 use crate::error::{Error, Result};
 use crate::manifest::{Fingerprint, Key, Manifest, Output, Status, StepRecord};
@@ -94,6 +95,9 @@ fn after_help() -> String {
 @SQ lines from the BAM header); then PREFIX.verdict.json, PREFIX.report.html \
 and PREFIX.manifest.json. Each metrics file is byte for byte the one `bammetrics <Tool> \
 INPUT=BAM OUTPUT=FILE` writes, apart from the Started on line.\n\n\
+--also json, jsonl, tsv or csv adds FILE.json (.jsonl, .tsv, .csv) beside every metrics file; \
+markdown adds PREFIX.report.md, junit PREFIX.junit.xml, multiqc PREFIX.verdict_mqc.json. The \
+manifest lists them under the step `also`.\n\n\
 Without --fail-on, qc exits 0 on any verdict; bammetrics check always gates.\n\n{EXIT_CODES}\n  \
 qc also exits 1 when a collector failed, after it writes the files the others made."
     )
@@ -160,6 +164,15 @@ pub struct QcArgs {
     pub threads: usize,
     #[arg(long, value_enum, default_value_t = Format::Text)]
     pub format: Format,
+    /// Further formats beside the Picard files, one or a list
+    /// (json,markdown).
+    #[arg(
+        long,
+        value_enum,
+        value_delimiter = ',',
+        value_name = "FORMAT[,FORMAT]"
+    )]
+    pub also: Vec<Also>,
     /// No progress line on stderr.
     #[arg(short = 'q', long)]
     pub quiet: bool,

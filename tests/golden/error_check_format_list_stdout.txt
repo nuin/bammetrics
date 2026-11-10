@@ -1,0 +1,11 @@
+## argv
+check
+tests/data/picard
+--format
+text,junit
+## exit
+2
+## stdout
+## stderr
+bammetrics check: --format text,junit writes 2 files; standard output holds one (from --format)
+  give -o FILE: the further formats are written beside it

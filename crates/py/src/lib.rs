@@ -914,6 +914,79 @@ fn doc_dict<'py>(py: Python<'py>, doc: &MetricsDoc) -> PyResult<Bound<'py, PyDic
     Ok(result)
 }
 
+/// One table of a document as the Python `Table`: a list per column and
+/// the dtype map. A column name the table repeats (Picard repeats the
+/// histogram columns of `CollectHsMetrics` once per unit) gets `.1`, `.2`
+/// after it, so no column is lost in the dict.
+fn table_object<'py>(
+    py: Python<'py>,
+    doc: &bammetrics_formats::Document,
+    table: &bammetrics_formats::Table,
+    histogram: Option<Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let columns = PyDict::new(py);
+    let dtypes = PyDict::new(py);
+    for (j, (name, ty)) in table.columns.iter().enumerate() {
+        let earlier = table.columns[..j].iter().filter(|(n, _)| n == name).count();
+        let key = match earlier {
+            0 => name.clone(),
+            n => format!("{name}.{n}"),
+        };
+        let cells = PyList::empty(py);
+        for row in &table.rows {
+            cells.append(value_object(py, &row[j])?)?;
+        }
+        columns.set_item(&key, cells)?;
+        dtypes.set_item(&key, ty.name())?;
+    }
+    verbs::table_class(py).call1((
+        &table.class,
+        columns,
+        dtypes,
+        histogram,
+        &doc.headers,
+        &doc.tool,
+        &doc.sample,
+    ))
+}
+
+/// Read one table of a metrics file with the glossary's column types. The
+/// file is Picard text or the JSON `--format json` writes. `table` names
+/// the table: "metrics" (the first class), "histogram", or a class name;
+/// by default the metrics class, or the histogram of a file without one.
+/// Returns a `Table`: `columns` ({name: list}), `dtypes` ({name: "int",
+/// "float" or "string"}), `histogram` (the file's histogram as a `Table`,
+/// or None), `headers`, `tool`, `sample`, and `to_pandas()` and
+/// `to_polars()`, which import their library on the first call.
+#[pyfunction]
+#[pyo3(signature = (path, table = None))]
+fn read_table<'py>(
+    py: Python<'py>,
+    path: PathBuf,
+    table: Option<&str>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let doc = py
+        .detach(|| {
+            let text =
+                std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            bammetrics_formats::read(&text).map_err(|e| format!("{}: {e}", path.display()))
+        })
+        .map_err(input_error)?;
+    let picked = match table {
+        Some(name) => doc
+            .table(name)
+            .ok_or_else(|| usage_error(format!("{} has no table {name:?}", path.display())))?,
+        None => doc.main_table().expect("a document that read has a table"),
+    };
+    let histogram = match &doc.histogram {
+        Some(histogram) if !std::ptr::eq(histogram, picked) => {
+            Some(table_object(py, &doc, histogram, None)?)
+        }
+        _ => None,
+    };
+    table_object(py, &doc, picked, histogram)
+}
+
 /// A preset error is a ValueError (the file or name is wrong); a metrics
 /// file that cannot be read is an OSError, as elsewhere in the module.
 fn verdict_error(e: &bammetrics_verdict::Error) -> PyErr {
@@ -954,6 +1027,7 @@ fn bammetrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     add_registered_tools(m)?;
     m.add_function(wrap_pyfunction!(verbs::py_tools, m)?)?;
     m.add_function(wrap_pyfunction!(read_metrics, m)?)?;
+    m.add_function(wrap_pyfunction!(read_table, m)?)?;
     m.add_function(wrap_pyfunction!(verbs::py_presets, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate, m)?)?;
     m.add_function(wrap_pyfunction!(verbs::py_qc, m)?)?;

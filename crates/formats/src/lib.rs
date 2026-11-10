@@ -92,12 +92,6 @@ impl Format {
             Format::Markdown => "md",
         }
     }
-
-    /// True for a format that prints one table: the metrics class, or the
-    /// histogram of a file without one.
-    pub fn is_one_table(self) -> bool {
-        matches!(self, Format::Tsv | Format::Csv | Format::Human)
-    }
 }
 
 /// The names `--format` takes, in `--help` order.
@@ -137,7 +131,7 @@ pub fn render(format: Format, doc: &Document, table: Option<&Table>) -> String {
         Format::Tsv => one().map(delimited::tsv).unwrap_or_default(),
         Format::Csv => one().map(delimited::csv).unwrap_or_default(),
         Format::Human => one().map(delimited::human).unwrap_or_default(),
-        Format::Markdown => markdown::write(&[doc], None),
+        Format::Markdown => markdown::write(&[doc], &[]),
     }
 }
 

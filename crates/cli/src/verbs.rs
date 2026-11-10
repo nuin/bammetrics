@@ -431,11 +431,19 @@ impl Verb {
                 .placeholder(placeholder),
         );
         let format_help = match self.files {
-            Files::Single => format!("picard (the {}), json, tsv, jsonl or human.", self.writes),
-            Files::Prefix => "picard only: this verb writes several Picard files.".to_owned(),
-            Files::Bam => {
-                "picard only: this verb writes a BAM and a Picard metrics file.".to_owned()
-            }
+            Files::Single => format!(
+                "picard (the {}), json, tsv, jsonl, human, csv or markdown. A list (picard,json) \
+                 writes the first to -o and each further one beside it, as FILE.json.",
+                self.writes
+            ),
+            Files::Prefix => "picard first: this verb writes several Picard files. A list \
+                              (picard,json) adds each further format beside every metrics file, \
+                              as FILE.json."
+                .to_owned(),
+            Files::Bam => "picard first: this verb writes a BAM and a Picard metrics file. A list \
+                           (picard,json) adds each further format beside the metrics file, as \
+                           FILE.json."
+                .to_owned(),
         };
         flags.push(
             Flag::new(Key::Format, "format", &[], Ty::Text, &format_help).placeholder("FORMAT"),
@@ -548,18 +556,11 @@ impl Verb {
             return Ok(0);
         }
         let tool = self.tool();
-        let format = match parsed.last(Key::Format) {
-            None => Format::Picard,
-            Some(given) => Format::parse(&given.values[0]).ok_or_else(|| {
-                let mut error =
-                    VerbError::usage(self.name, format!("no format {:?}", given.values[0]))
-                        .from(given.spelled.clone());
-                if let Some(best) = registry::did_you_mean(&given.values[0], format::NAMES) {
-                    error = error.hint(format!("did you mean {best}?"));
-                }
-                error.hint(format!("formats: {}", format::NAMES.join(", ")))
-            })?,
+        let formats = match parsed.last(Key::Format) {
+            None => vec![Format::Picard],
+            Some(given) => format::parse_list(self.name, &given.values[0], &given.spelled)?,
         };
+        let format = formats[0];
         if self.files != Files::Single
             && format != Format::Picard
             && let Some(given) = parsed.last(Key::Format)
@@ -573,7 +574,12 @@ impl Verb {
                 format!("--format {} needs a single-file verb", given.values[0]),
             )
             .from(given.spelled.clone())
-            .hint(hint));
+            .hint(hint)
+            .hint(format!(
+                "picard,{} writes the Picard files and each as FILE.{} beside it",
+                format.name(),
+                format.extension()
+            )));
         }
         self.check_one_spelling(&parsed, &flags)?;
         let mut picard = self.picard_arguments(&parsed, &flags)?;
@@ -587,7 +593,30 @@ impl Verb {
         let core = |e: bammetrics_core::Error| self.core_error(&parsed, &e);
         let mut inv = tool.parse(&picard).map_err(core)?;
         let read = self.input_paths(&inv);
-        for written in self.output_paths(&inv, output.as_deref()) {
+        // A single-file verb writes each further format beside `-o`.
+        let siblings: Vec<PathBuf> = match (&output, self.files) {
+            (Some(path), Files::Single) => formats[1..]
+                .iter()
+                .map(|f| format::sibling(path, f.extension()))
+                .collect(),
+            (None, Files::Single) if formats.len() > 1 => {
+                let given = parsed.last(Key::Format).expect("a list was given");
+                return Err(VerbError::usage(
+                    self.name,
+                    format!(
+                        "--format {} writes {} files; standard output holds one",
+                        given.values[0],
+                        formats.len()
+                    ),
+                )
+                .from(given.spelled.clone())
+                .hint("give -o FILE: the further formats are written beside it"));
+            }
+            _ => Vec::new(),
+        };
+        let mut writes = self.output_paths(&inv, output.as_deref());
+        writes.extend(siblings);
+        for written in writes {
             refuse_overwriting_inputs(self.name, &read, std::slice::from_ref(&written))
                 .map_err(|e| with_from(e, flag_for_path(&parsed, &written).or_else(output_flag)))?;
         }
@@ -606,7 +635,8 @@ impl Verb {
             eprintln!("bammetrics {}: {}", self.name, inv.command);
         }
         let (result, status) = if tool.name == compare_metrics::TOOL.name {
-            self.compare(&inv, output.as_deref(), format, quiet)
+            let picard = formats.contains(&Format::Picard);
+            self.compare(&inv, output.as_deref(), picard, quiet)
                 .map_err(core)?
         } else if tool.name == check_duplicate_marking::TOOL.name {
             let check = check_duplicate_marking::check(&inv).map_err(core)?;
@@ -626,7 +656,12 @@ impl Verb {
         let sample = match parsed.last(Key::Sample) {
             _ if self.ignored(Key::Sample) => None,
             Some(given) => Some(given.values[0].clone()),
-            None if matches!(format, Format::Json | Format::Jsonl) => self.default_sample(&inv),
+            None if formats
+                .iter()
+                .any(|f| matches!(f, Format::Json | Format::Jsonl)) =>
+            {
+                self.default_sample(&inv)
+            }
             None => None,
         };
         let context = Context {
@@ -635,15 +670,22 @@ impl Verb {
             sample: sample.as_deref(),
         };
         let written = match self.files {
-            Files::Single => write_single(&inv, &result, format, &context, output.as_deref()),
-            Files::Prefix => {
-                registry::write_files(&inv, &result).map(|()| written_paths(&inv, &result))
-            }
-            Files::Bam => registry::write_files(&inv, &result).map(|()| {
-                let mut paths: Vec<PathBuf> = output.iter().cloned().collect();
-                paths.extend(written_paths(&inv, &result));
-                paths
-            }),
+            Files::Single => write_single(&inv, &result, &formats, &context, output.as_deref()),
+            Files::Prefix => registry::write_files(&inv, &result)
+                .and_then(|()| write_siblings(&inv, &result, &formats, &context))
+                .map(|siblings| {
+                    let mut paths = written_paths(&inv, &result);
+                    paths.extend(siblings);
+                    paths
+                }),
+            Files::Bam => registry::write_files(&inv, &result)
+                .and_then(|()| write_siblings(&inv, &result, &formats, &context))
+                .map(|siblings| {
+                    let mut paths: Vec<PathBuf> = output.iter().cloned().collect();
+                    paths.extend(written_paths(&inv, &result));
+                    paths.extend(siblings);
+                    paths
+                }),
         }
         .map_err(core)?;
         if verbose {
@@ -662,13 +704,11 @@ impl Verb {
         &self,
         inv: &Invocation,
         output: Option<&Path>,
-        format: Format,
+        picard: bool,
         quiet: bool,
     ) -> bammetrics_core::Result<(bammetrics_core::metric::ToolOutput, u8)> {
         let mut comparison = compare_metrics::compare(inv)?;
-        if format == Format::Picard
-            && let Some(main) = comparison.output.main.as_mut()
-        {
+        if picard && let Some(main) = comparison.output.main.as_mut() {
             let mut text = comparison.report.clone();
             if output.is_none() && !text.ends_with('\n') {
                 text.push('\n');
@@ -1245,33 +1285,47 @@ fn create_parent(verb: &str, path: &Path) -> Result<(), VerbError> {
     }
 }
 
-/// The main file in `format` to `target` (standard output for `None`),
-/// and every further file as Picard text.
+/// `text` to `path` through a temporary file, as a core output error.
+fn write_text(path: &Path, text: String) -> bammetrics_core::Result<()> {
+    write_atomic(path, text).map_err(|e| bammetrics_core::Error::Output {
+        path: path.to_path_buf(),
+        source: match e {
+            crate::error::Error::Io { source, .. } => source,
+            other => io::Error::other(other.to_string()),
+        },
+    })
+}
+
+/// The main file in the first of `formats` to `target` (standard output
+/// for `None`) and in each further one beside it, and every further file
+/// as Picard text.
 fn write_single(
     inv: &Invocation,
     result: &bammetrics_core::metric::ToolOutput,
-    format: Format,
+    formats: &[Format],
     context: &Context<'_>,
     target: Option<&Path>,
 ) -> bammetrics_core::Result<Vec<PathBuf>> {
     let mut written = Vec::new();
     if let Some(main) = &result.main {
-        let text = format::render(format, context, main);
-        let output_error = |source| bammetrics_core::Error::Output {
-            path: target.map_or_else(|| PathBuf::from("-"), Path::to_path_buf),
-            source,
-        };
+        let mut texts = format::render_all(formats, context, main).into_iter();
+        let text = texts.next().expect("one text per format");
         match target {
             None => io::stdout()
                 .lock()
                 .write_all(text.as_bytes())
-                .map_err(output_error)?,
+                .map_err(|source| bammetrics_core::Error::Output {
+                    path: PathBuf::from("-"),
+                    source,
+                })?,
             Some(path) => {
-                write_atomic(path, text).map_err(|e| match e {
-                    crate::error::Error::Io { source, .. } => output_error(source),
-                    other => output_error(io::Error::other(other.to_string())),
-                })?;
+                write_text(path, text)?;
                 written.push(path.to_path_buf());
+                for (format, text) in formats[1..].iter().zip(texts) {
+                    let sibling = format::sibling(path, format.extension());
+                    write_text(&sibling, text)?;
+                    written.push(sibling);
+                }
             }
         }
     }
@@ -1280,6 +1334,35 @@ fn write_single(
             file.write(file.headers(&inv.command), out)
         })?;
         written.push(path.clone());
+    }
+    Ok(written)
+}
+
+/// Every metrics file `result` holds in each format after the first, as
+/// `FILE.<extension>` beside the Picard file a multi-file verb wrote. A
+/// file that is not a metrics file (a BED of gaps) gets none.
+fn write_siblings(
+    inv: &Invocation,
+    result: &bammetrics_core::metric::ToolOutput,
+    formats: &[Format],
+    context: &Context<'_>,
+) -> bammetrics_core::Result<Vec<PathBuf>> {
+    let mut written = Vec::new();
+    if formats.len() < 2 {
+        return Ok(written);
+    }
+    let main = result.main.as_ref().zip(inv.output.as_ref());
+    let files = main
+        .into_iter()
+        .chain(result.extra.iter().map(|(path, file)| (file, path)))
+        .filter(|(file, _)| file.text.is_none());
+    for (file, path) in files {
+        let texts = format::render_all(&formats[1..], context, file);
+        for (format, text) in formats[1..].iter().zip(texts) {
+            let sibling = format::sibling(path, format.extension());
+            write_text(&sibling, text)?;
+            written.push(sibling);
+        }
     }
     Ok(written)
 }

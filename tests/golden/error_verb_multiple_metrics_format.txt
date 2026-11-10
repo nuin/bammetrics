@@ -1,0 +1,14 @@
+## argv
+multiple-metrics
+tests/data/insert_size.bam
+-o
+OUT/sample
+--format
+json,picard
+## exit
+2
+## stdout
+## stderr
+bammetrics multiple-metrics: --format json,picard needs a single-file verb (from --format)
+  this verb writes several Picard files under -o PREFIX
+  picard,json writes the Picard files and each as FILE.json beside it

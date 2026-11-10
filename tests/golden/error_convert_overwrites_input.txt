@@ -1,0 +1,10 @@
+## argv
+convert
+tests/data/insert_size_metrics.json
+-o
+tests/data/insert_size_metrics.json
+## exit
+2
+## stdout
+## stderr
+bammetrics convert: tests/data/insert_size_metrics.json is an input; writing it would destroy it

@@ -9,9 +9,23 @@ S1
 0
 ## stdout
 {
+  "schema": "bammetrics.metrics/1",
   "tool": "BamIndexStats",
   "sample": "S1",
+  "headers": [],
   "class": null,
+  "columns": [
+    "reference",
+    "length",
+    "aligned",
+    "unaligned"
+  ],
+  "types": [
+    "string",
+    "int",
+    "int",
+    "int"
+  ],
   "metrics": [
     {
       "reference": "chr1",
@@ -26,6 +40,7 @@ S1
       "unaligned": 0
     }
   ],
+  "non_finite": [],
   "histogram": null
 }
 ## stderr

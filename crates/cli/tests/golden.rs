@@ -39,6 +39,11 @@ const FIXTURES: &[(&str, &str)] = &[
     ("OXOG", "tests/data/oxog.bam"),
     ("IS_BAI", "tests/data/insert_size.bam.bai"),
     ("DM", "tests/data/duplicate_marking.bam"),
+    (
+        "PIC_INS",
+        "tests/data/picard/NA12878/NA12878.insert_size_metrics",
+    ),
+    ("INS_JSON", "tests/data/insert_size_metrics.json"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -304,6 +309,45 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_jumping_library_assume_sorted", "CollectJumpingLibraryMetrics", "I=IS", "ASSUME_SORTED=true"),
 ];
 
+/// Formats (docs/formats.md): `convert` in both directions and to every
+/// format, `--format` lists on a single-file, a multi-file and a BAM verb,
+/// the new formats of `check`, and `qc --also`. `tests/data/insert_size_metrics.json`
+/// is `convert` of Picard 3.5.0's insert size file for the fixture BAM.
+#[rustfmt::skip]
+const FORMAT_CASES: &[Case] = &[
+    case!("convert_picard_to_json", "convert", "PIC_ASM"),
+    case!("convert_json_to_picard", "convert", "INS_JSON"),
+    case!("convert_csv_histogram", "convert", "PIC_INS", "--format", "csv", "--table", "histogram"),
+    case!("convert_markdown", "convert", "PIC_DUP", "--format", "md"),
+    case!("convert_jsonl_sample", "convert", "INS_JSON", "--format", "jsonl", "--sample", "S1"),
+    case!("convert_list_output", "convert", "PIC_INS", "--format", "tsv,json,csv,jsonl,markdown,human,picard", "-o", "OUT/insert_size.tsv"),
+    case!("error_convert_not_metrics", "convert", "REF"),
+    case!("error_convert_missing", "convert", "tests/data/nope.txt"),
+    case!("error_convert_list_stdout", "convert", "PIC_INS", "--format", "json,csv"),
+    case!("error_convert_table", "convert", "PIC_INS", "--format", "tsv", "--table", "HsMetrics"),
+    case!("error_convert_overwrites_input", "convert", "INS_JSON", "-o", "INS_JSON"),
+    case!("verb_insert_size_csv", "insert-size", "IS", "--format", "csv"),
+    case!("verb_insert_size_jsonl", "insert-size", "IS", "--format", "jsonl", "--sample", "S1"),
+    case!("verb_quality_yield_markdown", "quality-yield", "IS", "--format", "markdown"),
+    case!("verb_insert_size_format_list", "insert-size", "IS", "--format", "picard,json,tsv", "-o", "OUT/insert_size.txt", "--sample", "S1"),
+    case!("verb_multiple_metrics_format_list", "multiple-metrics", "IS", "-o", "OUT/sample", "--program", "CollectQualityYieldMetrics", "--program", "CollectInsertSizeMetrics", "--format", "picard,csv"),
+    case!("verb_mark_duplicates_format_list", "mark-duplicates", "MD", "-o", "OUT/marked.bam", "--metrics", "OUT/markdup_metrics.txt", "--format", "picard,json"),
+    case!("error_verb_format_list_stdout", "insert-size", "IS", "--format", "json,tsv"),
+    case!("error_verb_format_twice", "insert-size", "IS", "--format", "tsv,tsv", "-o", "OUT/insert_size.tsv"),
+    case!("error_verb_multiple_metrics_format", "multiple-metrics", "IS", "-o", "OUT/sample", "--format", "json,picard"),
+    case!("check_generic_junit", "check", "PICARD", "--format", "junit"),
+    case!("check_junit_fail_on_warn", "check", "PICARD", "--format", "junit", "--fail-on", "warn"),
+    case!("check_clinical_panel_markdown", "check", "PICARD", "--preset", "clinical-panel", "--format", "markdown"),
+    case!("check_generic_multiqc", "check", "PICARD", "--format", "multiqc"),
+    case!("check_format_list", "check", "PICARD", "--format", "text,junit,markdown,multiqc,json,jsonl", "-o", "OUT/check.txt"),
+    case!("error_check_format_list_stdout", "check", "PICARD", "--format", "text,junit"),
+    case!("error_check_format", "check", "PICARD", "--format", "xml"),
+    case!("qc_also", "qc", "IS", "-o", "OUT/sample", "--also", "json,tsv,markdown,junit,multiqc", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("error_qc_also", "qc", "IS", "-o", "OUT/sample", "--also", "parquet"),
+    case!("plan_also", "plan", "IS", "-o", "OUT/sample", "--also", "json,markdown"),
+    case!("plan_also_jsonl", "plan", "IS", "-o", "OUT/sample", "--also", "csv,junit,multiqc", "--format", "jsonl"),
+];
+
 /// The same tools on corpus BAM t1, with its reference and interval lists.
 #[rustfmt::skip]
 const T1_CASES: &[Case] = &[
@@ -508,6 +552,11 @@ fn normalize(text: &str, out: &str) -> String {
         if line.starts_with("# Started on: ") {
             normalized.push_str("# Started on: <time>");
         } else if let Some(indent) = line.strip_suffix(line.trim_start())
+            && line.trim_start().starts_with("\"Started on: ")
+        {
+            // The same header in the `headers` array of the JSON form.
+            normalized.push_str(&format!("{indent}\"Started on: <time>\""));
+        } else if let Some(indent) = line.strip_suffix(line.trim_start())
             && let Some(key) = ["mtime", "argv_hash"]
                 .into_iter()
                 .find(|key| line.trim_start().starts_with(&format!("\"{key}\": ")))
@@ -583,6 +632,11 @@ fn documented_commands_on_the_fixtures() {
     check(FIXTURE_CASES);
 }
 
+#[test]
+fn documented_format_commands_on_the_fixtures() {
+    check(FORMAT_CASES);
+}
+
 /// The t1 records were written from one machine's bwa alignments, so a bwa
 /// version difference on CI would fail them. They run only when asked for.
 #[test]
@@ -607,6 +661,7 @@ fn documented_commands_on_corpus_t1() {
 fn case_names_are_unique() {
     let mut names: Vec<&str> = FIXTURE_CASES
         .iter()
+        .chain(FORMAT_CASES)
         .chain(T1_CASES)
         .map(|c| c.name)
         .collect();

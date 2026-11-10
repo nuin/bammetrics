@@ -69,4 +69,78 @@ class PresetInfo(str):
         return (self.name, self.version, self.hash, self.rules, self.note)
 
     def __repr__(self):
-        return f"PresetInfo({self.name!r}, version={self.version}, hash={self.hash[:6]!r})"
+        return (
+            f"PresetInfo({self.name!r}, version={self.version}, hash={self.hash[:6]!r})"
+        )
+
+
+class Table:
+    """One table of a metrics file, column by column, as read_table returns it.
+
+    name is the metrics class (for a histogram, the Java class of its key).
+    columns maps each column to its values in row order; dtypes maps it to
+    "int", "float" or "string", the glossary's type for that column. An empty
+    cell is None and "?" is nan. histogram is the file's ## HISTOGRAM section
+    as a Table, or None. headers are the StringHeader texts; tool and sample
+    are set when the file names them."""
+
+    def __init__(
+        self, name, columns, dtypes, histogram=None, headers=(), tool=None, sample=None
+    ):
+        self.name = name
+        self.columns = columns
+        self.dtypes = dtypes
+        self.histogram = histogram
+        self.headers = list(headers)
+        self.tool = tool
+        self.sample = sample
+
+    def __reduce__(self):
+        return (
+            type(self),
+            (
+                self.name,
+                self.columns,
+                self.dtypes,
+                self.histogram,
+                self.headers,
+                self.tool,
+                self.sample,
+            ),
+        )
+
+    def __len__(self):
+        return len(next(iter(self.columns.values()), ()))
+
+    def __repr__(self):
+        return f"Table({self.name!r}, {len(self)} rows, {len(self.columns)} columns)"
+
+    def rows(self):
+        """The rows as dicts keyed by column."""
+        names = list(self.columns)
+        return [dict(zip(names, cells)) for cells in zip(*self.columns.values())]
+
+    def to_pandas(self):
+        """A pandas DataFrame with Int64, float64 and string columns. pandas is
+        imported here, on the first call. An empty float cell and nan are both
+        NaN."""
+        import pandas
+
+        kinds = {"int": "Int64", "float": "float64", "string": "string"}
+        return pandas.DataFrame(
+            {
+                name: pandas.array(values, dtype=kinds[self.dtypes[name]])
+                for name, values in self.columns.items()
+            }
+        )
+
+    def to_polars(self):
+        """A polars DataFrame with Int64, Float64 and String columns. polars is
+        imported here, on the first call. An empty cell is null, "?" is NaN."""
+        import polars
+
+        kinds = {"int": polars.Int64, "float": polars.Float64, "string": polars.String}
+        return polars.DataFrame(
+            self.columns,
+            schema={name: kinds[kind] for name, kind in self.dtypes.items()},
+        )

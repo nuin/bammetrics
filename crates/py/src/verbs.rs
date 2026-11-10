@@ -34,18 +34,20 @@ struct Types {
     verdict: Py<PyType>,
     tool: Py<PyType>,
     preset: Py<PyType>,
+    table: Py<PyType>,
 }
 
 static TYPES: PyOnceLock<Types> = PyOnceLock::new();
 
 /// The class names `types.py` defines, all exported.
-const TYPE_NAMES: [&str; 6] = [
+const TYPE_NAMES: [&str; 7] = [
     "BammetricsError",
     "UsageError",
     "InputError",
     "VerdictError",
     "Tool",
     "PresetInfo",
+    "Table",
 ];
 
 /// Run `types.py` and add its classes to `m`, as members of `bammetrics`.
@@ -69,6 +71,7 @@ pub fn add_types(m: &Bound<'_, PyModule>) -> PyResult<()> {
             verdict: class("VerdictError")?,
             tool: class("Tool")?,
             preset: class("PresetInfo")?,
+            table: class("Table")?,
         },
     );
     Ok(())
@@ -76,6 +79,11 @@ pub fn add_types(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 fn types(py: Python<'_>) -> &Types {
     TYPES.get(py).expect("add_types ran at import")
+}
+
+/// The `Table` class of `types.py`.
+pub fn table_class(py: Python<'_>) -> &Bound<'_, PyType> {
+    types(py).table.bind(py)
 }
 
 /// `UsageError(message)`.
@@ -206,6 +214,15 @@ fn argv<'py>(
                 "{flag}={}",
                 keyword_text(verb.name, keyword, &value)?
             )),
+            Shape::List => {
+                let texts = items(&value)?
+                    .iter()
+                    .map(|v| keyword_text(verb.name, keyword, v))
+                    .collect::<PyResult<Vec<String>>>()?;
+                if !texts.is_empty() {
+                    args.push(format!("{flag}={}", texts.join(",")));
+                }
+            }
             Shape::Pairs => {
                 let first = items(&value)?;
                 let pairs = match first.first() {
@@ -812,6 +829,7 @@ fn verb(name: &str) -> &'static table::Verb {
     text_signature = "(bam, *, output=None, reference=None, preset='generic', hs=None, \
                       panel=None, ref_flat=None, strand=None, ribosomal_intervals=None, \
                       sex=None, sample=None, fail_on=None, resume=False, force=False, threads=None, \
+                      also=None, \
                       all_plots=False, date=None, report=True)"
 )]
 pub fn py_qc<'py>(

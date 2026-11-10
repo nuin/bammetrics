@@ -1,0 +1,115 @@
+## argv
+check
+tests/data/picard
+--format
+multiqc
+## exit
+0
+## stdout
+{
+  "id": "bammetrics_verdict",
+  "section_name": "bammetrics verdict",
+  "description": "The bammetrics verdict per sample and the value each rule judged. Preset generic v1 (6dd89e).",
+  "plot_type": "table",
+  "pconfig": {
+    "id": "bammetrics_verdict_table",
+    "title": "bammetrics: verdict",
+    "namespace": "bammetrics"
+  },
+  "headers": {
+    "verdict": {
+      "title": "Verdict",
+      "description": "pass, warn, fail, or incomplete when a rule could not be measured",
+      "scale": false,
+      "cond_formatting_rules": {
+        "pass": [
+          {
+            "s_eq": "pass"
+          }
+        ],
+        "warn": [
+          {
+            "s_eq": "warn"
+          },
+          {
+            "s_eq": "incomplete"
+          }
+        ],
+        "fail": [
+          {
+            "s_eq": "fail"
+          }
+        ]
+      }
+    },
+    "checks_failed": {
+      "title": "Failed",
+      "description": "Checks that failed",
+      "format": "{:,d}",
+      "scale": false
+    },
+    "checks_warned": {
+      "title": "Warned",
+      "description": "Checks that warned",
+      "format": "{:,d}",
+      "scale": false
+    },
+    "checks_not_measured": {
+      "title": "Not measured",
+      "description": "Checks whose file, row or column is missing",
+      "format": "{:,d}",
+      "scale": false
+    },
+    "alignment.pf-reads-aligned": {
+      "title": "alignment.pf-reads-aligned",
+      "description": "PF reads aligned: AlignmentSummaryMetrics PCT_PF_READS_ALIGNED, warn < 0.9, fail < 0.8",
+      "format": "{:,.6g}",
+      "scale": false
+    },
+    "alignment.adapter": {
+      "title": "alignment.adapter",
+      "description": "Adapter reads: AlignmentSummaryMetrics PCT_ADAPTER, warn > 0.01, fail > 0.05",
+      "format": "{:,.6g}",
+      "scale": false
+    },
+    "alignment.chimeras": {
+      "title": "alignment.chimeras",
+      "description": "Chimeric pairs: AlignmentSummaryMetrics PCT_CHIMERAS, warn > 0.05, fail > 0.1",
+      "format": "{:,.6g}",
+      "scale": false
+    },
+    "insert.median": {
+      "title": "insert.median",
+      "description": "Median insert size: InsertSizeMetrics MEDIAN_INSERT_SIZE, warn outside 100..1000, fail outside 50..2000",
+      "format": "{:,.6g}",
+      "scale": false
+    },
+    "yield.q30": {
+      "title": "yield.q30",
+      "description": "Q30 fraction of PF bases: QualityYieldMetrics PF_Q30_BASES / PF_BASES, warn < 0.8, fail < 0.7",
+      "format": "{:,.6g}",
+      "scale": false
+    },
+    "duplication.percent": {
+      "title": "duplication.percent",
+      "description": "Duplicate reads: DuplicationMetrics PERCENT_DUPLICATION, warn > 0.3, fail > 0.5",
+      "format": "{:,.6g}",
+      "scale": false
+    }
+  },
+  "data": {
+    "NA12878": {
+      "verdict": "pass",
+      "checks_failed": 0,
+      "checks_warned": 0,
+      "checks_not_measured": 0,
+      "alignment.pf-reads-aligned": 1,
+      "alignment.adapter": 0,
+      "alignment.chimeras": 0,
+      "insert.median": 310,
+      "yield.q30": 1,
+      "duplication.percent": 0
+    }
+  }
+}
+## stderr

@@ -1,0 +1,14 @@
+## argv
+qc
+tests/data/insert_size.bam
+-o
+OUT/sample
+--also
+parquet
+## exit
+2
+## stdout
+## stderr
+bammetrics qc: invalid value "parquet" (from --also)
+  one of: json, jsonl, tsv, csv, markdown, junit, multiqc
+  every option: bammetrics help qc

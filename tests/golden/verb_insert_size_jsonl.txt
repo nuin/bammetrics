@@ -1,0 +1,15 @@
+## argv
+insert-size
+tests/data/insert_size.bam
+--format
+jsonl
+--sample
+S1
+## exit
+0
+## stdout
+{"sample":"S1","MEDIAN_INSERT_SIZE":310,"MODE_INSERT_SIZE":310,"MEDIAN_ABSOLUTE_DEVIATION":10,"MIN_INSERT_SIZE":300,"MAX_INSERT_SIZE":500,"MEAN_INSERT_SIZE":310,"STANDARD_DEVIATION":8.16496580927726,"READ_PAIRS":5,"PAIR_ORIENTATION":"FR","WIDTH_OF_10_PERCENT":1,"WIDTH_OF_20_PERCENT":1,"WIDTH_OF_30_PERCENT":1,"WIDTH_OF_40_PERCENT":1,"WIDTH_OF_50_PERCENT":21,"WIDTH_OF_60_PERCENT":21,"WIDTH_OF_70_PERCENT":21,"WIDTH_OF_80_PERCENT":21,"WIDTH_OF_90_PERCENT":381,"WIDTH_OF_95_PERCENT":381,"WIDTH_OF_99_PERCENT":381,"SAMPLE":null,"LIBRARY":null,"READ_GROUP":null}
+{"histogram":true,"sample":"S1","insert_size":300,"All_Reads.fr_count":1}
+{"histogram":true,"sample":"S1","insert_size":310,"All_Reads.fr_count":2}
+{"histogram":true,"sample":"S1","insert_size":320,"All_Reads.fr_count":1}
+## stderr
