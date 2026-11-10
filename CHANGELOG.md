@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+Two clinical checks Picard does not have (docs/06_clinical_checks.md), a text comparator
+in the rule language, and `clinical-panel` version 3.
+
 ### Added
 
 - `CollectSequencingArtifactMetrics` (Picard face, the `sequencing-artifact` verb, Python
@@ -43,6 +46,57 @@
 - `tests/data/oxog.bam` (`tests/data/make_oxog.py`): 60 pairs on `ref_100k.fa` with two
   libraries and oxidation damage, for the golden records and the glossary test.
 
+- `CollectCoverageGaps` (verb `coverage-gaps`, Python `collect_coverage_gaps()`), class
+  `bammetrics.qc.CoverageGapMetrics`: the target bases under `MIN_DEPTH` (default 20) as
+  one row (`TARGET_TERRITORY`, `TARGET_COUNT`, `MIN_DEPTH`, `BASES_AT_OR_ABOVE_MIN_DEPTH`,
+  `PCT_REPORTABLE`, `GAP_BASES`, `GAP_COUNT`, `LARGEST_GAP`, `TARGETS_WITH_GAP`,
+  `PCT_TARGETS_COMPLETE`), a histogram of gap lengths, and `GAPS_FILE`, a BED of the
+  maximal runs under the depth with the target name and the run's mean and minimum depth.
+  The depth is the `CollectHsMetrics` per-base depth (the Hs accumulator is reused through
+  `CaptureMetrics::into_target_depths`), so `PCT_REPORTABLE` at `MIN_DEPTH=20` equals
+  `PCT_TARGET_BASES_20X` (`crates/core/tests/coverage_gaps.rs`,
+  `tests/python/test_clinical_checks.py` on the exome slice). Options
+  `TARGET_INTERVALS`, `GAPS_FILE`, `MIN_DEPTH`, `MINIMUM_MAPPING_QUALITY`,
+  `MINIMUM_BASE_QUALITY`, `CLIP_OVERLAPPING_READS`, `INCLUDE_INDELS`, `COUNT_UNPAIRED`
+  (default true, as Hs counts unpaired reads), `STOP_AFTER`.
+- `CollectSexCheckMetrics` (verb `sex-check`, Python `collect_sex_check_metrics()`), class
+  `bammetrics.qc.SexCheckMetrics`: primary, mapped, non-duplicate, non-QC-fail reads at or
+  above `MINIMUM_MAPPING_QUALITY` (20) on the X contig, the Y contig and the autosomes
+  (`chrX`/`X`, `chrY`/`Y`, `chr1`..`chr22`/`1`..`22`, or `X_CONTIG`, `Y_CONTIG`,
+  `AUTOSOMES`), the lengths from `@SQ` or from the merged `TARGET_INTERVALS`, `X_RATIO`
+  and `Y_RATIO` to the autosomes, `INFERRED_SEX` (`FEMALE` at `X_RATIO >= 0.75` and
+  `Y_RATIO < 0.05`, `MALE` at `0.3 <= X_RATIO <= 0.75` and `Y_RATIO >= 0.03`, else
+  `UNKNOWN`; starting values measured on the HG002 exome, Y 0.052, and the NA12878
+  genome, Y 0.022), `DECLARED_SEX` from `EXPECTED_SEX`, `SEX_MATCH` and `REASON` (a
+  `STOP_AFTER` run with no X and no Y read says so). One-pass collector, so `qc` runs it
+  on the shared read.
+- `qc --sex male|female` (Python `qc(sex=...)`, any case): `EXPECTED_SEX` of the sex
+  check; a preset with no `SexCheckMetrics` rule refuses `--sex` (exit 2). `qc`
+  writes `PREFIX.sex_check_metrics` for `generic`, `wgs` and `clinical-panel`, and with a
+  panel `PREFIX.coverage_gaps` and `PREFIX.coverage_gaps.bed` (manifest kind `gaps`; the
+  BED is no verdict input). The panel targets reach both collectors.
+- Rule language: an `is TEXT` bound (`fail = "is N"`, `warn = "is UNKNOWN"`) judges the
+  cell's text; the check carries it in a new `text` field of `verdict.json` and of the
+  Python `Check` (present only on such a check), with `value` null; `check` prints the
+  text in its value column. The reason line reads `Declared sex matches: N, a fail
+  value`. An `is` bound on a column the glossary types as a number is a preset error, and
+  an unknown rule key is reported before a missing bound. docs/verdict.md.
+- Presets: `clinical-panel` version 3 (18 rules, note `reviewed defaults; gap and sex rules
+  are starting values`) adds `gaps.reportable-range` (`PCT_REPORTABLE` warn `< 0.98`, fail
+  `< 0.95`), `gaps.targets-complete` (`PCT_TARGETS_COMPLETE` warn `< 0.95`, fail `< 0.90`),
+  `sex.match` (fail `is N`) and `sex.inferred` (warn `is UNKNOWN`). `generic` and `wgs`
+  are unchanged (version 1): the sex rules stay in `clinical-panel`, so `report` and
+  `check` over a directory of Picard output alone still complete under them. `qc --sex`
+  under a preset without a `SexCheckMetrics` rule exits 2.
+- Report page: a `Coverage gaps` table (the 200 longest gaps, from the BED beside the
+  metrics file, the one sidecar the page reads; docs/05 section 4.9) under the first warn
+  or fail gap check; text checks show their text. `make a11y` also checks a `qc` page
+  with a panel and a declared sex.
+- `coverage-gaps`, `sex-check` and `hs-metrics` refuse `-o` or `--gaps-file` naming
+  their target or bait intervals, as every verb refuses an output that is its input.
+- Glossary rows for both classes and the gap histogram; 12 golden records; `tools` lists
+  25 classes; docs/cli.md, docs/05 section 4.11 and decision 13, KNOWN_DIFFERENCES.md.
+
 ### Changed
 
 - Every tool checks all its output paths before it writes the first file: a directory, a
@@ -54,6 +108,9 @@
 - An interval list interval past the end of its contig fails the VCF tools and
   `CollectSequencingArtifactMetrics`, as in Picard.
 - A VCF record at `POS` 0 reads as position 0. It used to fail with `missing position`.
+
+- `Bound` in `bammetrics-verdict` is `Clone`, not `Copy`, and holds the text of an `is`
+  bound.
 
 ### Fixed
 

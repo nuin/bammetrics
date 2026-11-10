@@ -6,8 +6,12 @@
 //! CSS by `include_str!`, the four plots as inline SVG.
 //!
 //! The rules of docs/05 section 4.9 apply as in the verdict crate: the page
-//! is built from the inputs it is given and nothing else.
+//! is built from the inputs it is given, with one exception. The `Coverage
+//! gaps` table reads the BED beside a `CoverageGapMetrics` input
+//! (`<metrics path>.bed`, the name `qc` writes, in the same run directory;
+//! docs/06 section 1.7), so the page bytes depend on that file too.
 
+pub mod gaps;
 pub mod html;
 pub mod index;
 pub mod page;

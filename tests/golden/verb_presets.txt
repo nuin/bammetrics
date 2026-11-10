@@ -4,7 +4,7 @@ presets
 0
 ## stdout
 generic          v1  6dd89e  6 rules  starting values
-clinical-panel   v2  e62755  14 rules  reviewed defaults
+clinical-panel   v3  6f0d59  18 rules  reviewed defaults; gap and sex rules are starting values
 wgs              v1  8a5fc4  10 rules  starting values
 rna-seq          v1  2d1283  8 rules  starting values
 ## stderr

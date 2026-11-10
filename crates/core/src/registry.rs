@@ -330,6 +330,8 @@ pub const TOOLS: &[&Tool] = &[
     &crate::sequencing_artifact::TOOL,
     &crate::artifact_to_oxog::TOOL,
     &crate::oxog_metrics::TOOL,
+    &crate::coverage_gaps::TOOL,
+    &crate::sex_check::TOOL,
 ];
 
 /// The tool named `name`.
@@ -1090,7 +1092,8 @@ mod tests {
         for tool in TOOLS {
             for opt in tool.table() {
                 let name = opt.picard();
-                let looks_written = name.contains("OUT") || name.starts_with("PER_");
+                let looks_written =
+                    name.contains("OUT") || name.starts_with("PER_") || name == "GAPS_FILE";
                 if opt.kind == Kind::Value && opt.ty == Ty::Path {
                     assert_eq!(opt.written, looks_written, "{}: {name}", tool.name);
                 }

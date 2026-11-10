@@ -135,7 +135,7 @@ fn every_metrics_file_is_the_picard_face_output_for_its_recorded_argv() {
     assert_eq!(code(&run), 0, "{}", stderr(&run));
     let all = steps(&dir);
     let collectors: Vec<&Json> = all.iter().filter(|s| text(s, "stage") == "pass").collect();
-    assert_eq!(collectors.len(), 4);
+    assert_eq!(collectors.len(), 6);
     for step in collectors {
         let tool = text(step, "tool");
         let ours: Vec<String> = step
@@ -282,13 +282,23 @@ fn a_failing_collector_fails_alone_and_the_run_exits_1() {
         "{summary}"
     );
     assert!(summary.contains("(9 rules not measured)"), "{summary}");
-    // The BED fails its conversion to PREFIX.panel.interval_list too.
+    // The BED fails its conversion to PREFIX.panel.interval_list too, and
+    // the two clinical checks that read the panel fail with it.
     assert!(
-        summary.contains("ERROR         BedToIntervalList  Sequence 'chrNope' was not found"),
+        summary.contains("ERROR         BedToIntervalList")
+            && summary.contains("Sequence 'chrNope' was not found"),
         "{summary}"
     );
     assert!(
-        summary.ends_with("exit 1: 1 collector(s) and 1 prepare step(s) failed\n"),
+        summary.contains("ERROR         CollectCoverageGaps"),
+        "{summary}"
+    );
+    assert!(
+        summary.contains("ERROR         CollectSexCheckMetrics"),
+        "{summary}"
+    );
+    assert!(
+        summary.ends_with("exit 1: 3 collector(s) and 1 prepare step(s) failed\n"),
         "{summary}"
     );
     assert!(summary.lines().count() <= 12, "{summary}");
@@ -512,7 +522,15 @@ fn an_interval_file_edited_in_place_reruns_hs_under_resume() {
     text_of.push_str(&last);
     text_of.push('\n');
     fs::write(panel, text_of).expect("edit panel");
-    assert_eq!(written_steps(&qc(&dir, &resume)), ["CollectHsMetrics"]);
+    // The sex check and the gap check read the panel too.
+    assert_eq!(
+        written_steps(&qc(&dir, &resume)),
+        [
+            "CollectHsMetrics",
+            "CollectSexCheckMetrics",
+            "CollectCoverageGaps"
+        ]
+    );
     let _ = fs::remove_dir_all(&dir);
 }
 
@@ -739,4 +757,194 @@ fn a_bed_panel_named_as_its_own_interval_list_is_refused() {
     );
     assert_eq!(names(&dir), ["s.panel.interval_list"]);
     let _ = fs::remove_dir_all(&dir);
+}
+
+/// The argv of a manifest step.
+fn argv(step: &Json) -> Vec<String> {
+    step.get("argv")
+        .and_then(Json::as_array)
+        .expect("argv")
+        .iter()
+        .map(|a| a.as_str().expect("text").to_owned())
+        .collect()
+}
+
+/// The two clinical checks of docs/06 under `qc`: `--sex` reaches
+/// `CollectSexCheckMetrics` as `EXPECTED_SEX`, the panel targets reach both
+/// collectors, the gaps BED is a `gaps` file (never a verdict input), both
+/// files are the Picard face's bytes, and without targets the gap rules read
+/// not measured while the sex check still runs.
+#[test]
+fn sex_and_gap_files_follow_the_panel_and_the_declared_sex() {
+    let dir = fresh_dir("clinical");
+    let run = qc(
+        &dir,
+        &[
+            "--preset",
+            "clinical-panel",
+            "--panel",
+            PANEL,
+            "--sex",
+            "male",
+        ],
+    );
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    for name in [
+        "s.sex_check_metrics",
+        "s.coverage_gaps",
+        "s.coverage_gaps.bed",
+    ] {
+        assert!(dir.join(name).is_file(), "{name}");
+    }
+    let all = steps(&dir);
+    let step = |id: &str| {
+        all.iter()
+            .find(|s| text(s, "id") == id)
+            .unwrap_or_else(|| panic!("step {id}"))
+    };
+    let sex = step("CollectSexCheckMetrics");
+    assert_eq!(text(sex, "stage"), "pass");
+    assert!(
+        argv(sex).contains(&"EXPECTED_SEX=MALE".to_owned()),
+        "{:?}",
+        argv(sex)
+    );
+    assert!(argv(sex).contains(&format!("TARGET_INTERVALS={PANEL}")));
+    let gaps = step("CollectCoverageGaps");
+    let kinds: Vec<(String, String)> = gaps
+        .get("outputs")
+        .and_then(Json::as_array)
+        .expect("outputs")
+        .iter()
+        .map(|o| {
+            let name = Path::new(text(o, "path")).file_name().expect("name");
+            (
+                name.to_string_lossy().into_owned(),
+                text(o, "kind").to_owned(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            ("s.coverage_gaps".to_owned(), "metrics".to_owned()),
+            ("s.coverage_gaps.bed".to_owned(), "gaps".to_owned()),
+        ]
+    );
+    // Both files are the Picard face's bytes for the recorded argv.
+    for (name, option) in [
+        ("s.coverage_gaps", "OUTPUT"),
+        ("s.coverage_gaps.bed", "GAPS_FILE"),
+    ] {
+        let face_dir = fresh_dir(&format!("clinical-face-{name}"));
+        fs::create_dir_all(&face_dir).expect("dir");
+        let out = face_dir.join(name);
+        let mut args: Vec<String> = vec!["CollectCoverageGaps".to_owned()];
+        args.extend(argv(gaps).into_iter().map(|a| {
+            if a.starts_with(&format!("{option}=")) {
+                format!("{option}={}", out.display())
+            } else {
+                a
+            }
+        }));
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let face = bammetrics(&args);
+        assert_eq!(code(&face), 0, "{}", stderr(&face));
+        // The command line header names the output path, which differs.
+        let body = |text: &str| -> String {
+            text.lines()
+                .filter(|l| !l.starts_with("# "))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        assert_eq!(
+            body(&fs::read_to_string(&out).expect("face file")),
+            body(&fs::read_to_string(dir.join(name)).expect("qc file")),
+            "{name}"
+        );
+        let _ = fs::remove_dir_all(&face_dir);
+    }
+    let verdict = Json::parse(&fs::read_to_string(dir.join("s.verdict.json")).expect("verdict"))
+        .expect("json");
+    let checks = verdict
+        .get("checks")
+        .and_then(Json::as_array)
+        .expect("checks");
+    let check = |rule: &str| {
+        checks
+            .iter()
+            .find(|c| text(c, "rule") == rule)
+            .unwrap_or_else(|| panic!("check {rule}"))
+    };
+    // The fixture has chr1 only: no sex is inferred, a declaration is no mismatch.
+    assert_eq!(text(check("sex.inferred"), "status"), "warn");
+    assert_eq!(text(check("sex.inferred"), "text"), "UNKNOWN");
+    assert_eq!(text(check("sex.match"), "status"), "pass");
+    assert_eq!(text(check("sex.match"), "text"), "");
+    assert_eq!(check("sex.match").get("value"), Some(&Json::Null));
+    assert_eq!(text(check("gaps.reportable-range"), "status"), "fail");
+    assert!(check("hs.target-20x").get("text").is_none());
+    assert!(
+        stdout(&run).contains("FAIL          gaps.reportable-range"),
+        "{}",
+        stdout(&run)
+    );
+    let page = fs::read_to_string(dir.join("s.report.html")).expect("page");
+    assert!(page.contains("<h4>Coverage gaps <span class=\"muted\">5 gaps</span></h4>"));
+    assert!(page.contains("<h3>Sex check metrics</h3>"));
+
+    // Without targets the gap rules are not measured and the sex check runs
+    // on the contig lengths.
+    let plain = fresh_dir("clinical-plain");
+    let run = qc(&plain, &["--preset", "clinical-panel", "--sex", "female"]);
+    assert_eq!(code(&run), 0, "{}", stderr(&run));
+    assert!(plain.join("s.sex_check_metrics").is_file());
+    assert!(!plain.join("s.coverage_gaps").exists());
+    assert!(!plain.join("s.coverage_gaps.bed").exists());
+    assert!(
+        stdout(&run).contains(
+            "NOT MEASURED  CoverageGapMetrics  2 rules, needs --hs BAITS TARGETS or --panel FILE"
+        ),
+        "{}",
+        stdout(&run)
+    );
+    let sex = fs::read_to_string(plain.join("s.sex_check_metrics")).expect("sex file");
+    assert!(
+        sex.contains("\tFEMALE\t\tno X bases; no Y bases; FEMALE declared"),
+        "{sex}"
+    );
+    let _ = fs::remove_dir_all(&dir);
+    let _ = fs::remove_dir_all(&plain);
+}
+
+/// `--sex` takes any case, and a preset with no `SexCheckMetrics` rule
+/// refuses it (exit 2) instead of dropping it in silence.
+#[test]
+fn sex_takes_any_case_and_needs_a_sex_rule() {
+    let dir = fresh_dir("sex-case");
+    let plan = bammetrics(&[
+        "plan",
+        BAM,
+        "-o",
+        dir.join("s").to_str().expect("utf-8"),
+        "--preset",
+        "clinical-panel",
+        "--sex",
+        "MALE",
+        "--format",
+        "jsonl",
+    ]);
+    assert_eq!(code(&plan), 0, "{}", stderr(&plan));
+    assert!(
+        stdout(&plan).contains("EXPECTED_SEX=MALE"),
+        "{}",
+        stdout(&plan)
+    );
+    let dropped = qc(&dir, &["--preset", "rna-seq", "--sex", "male"]);
+    assert_eq!(code(&dropped), 2, "{}", stderr(&dropped));
+    assert_eq!(
+        stderr(&dropped),
+        "bammetrics qc: --sex given, but preset rna-seq has no SexCheckMetrics rule, so no sex check would run\n"
+    );
+    assert!(!dir.exists(), "nothing written");
 }

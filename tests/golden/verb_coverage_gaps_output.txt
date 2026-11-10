@@ -1,0 +1,38 @@
+## argv
+coverage-gaps
+tests/data/insert_size.bam
+--targets
+tests/data/targets.interval_list
+-o
+OUT/gaps.txt
+--gaps-file
+OUT/gaps.bed
+--no-clip-overlapping-reads
+## exit
+0
+## stdout
+## stderr
+## file gaps.bed
+#chrom	start	end	target	mean_depth	min_depth
+chr1	1000	1200	t1	0.5	0
+chr1	2000	2400	t2	0.5	0
+chr1	4000	4300	t3	0.6	0
+chr1	5000	5600	t4	0.333333	0
+chr1	8000	8300	t5	0	0
+## file gaps.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectCoverageGaps INPUT=tests/data/insert_size.bam TARGET_INTERVALS=tests/data/targets.interval_list GAPS_FILE=OUT/gaps.bed CLIP_OVERLAPPING_READS=false OUTPUT=OUT/gaps.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.CoverageGapMetrics
+TARGET_TERRITORY	TARGET_COUNT	MIN_DEPTH	BASES_AT_OR_ABOVE_MIN_DEPTH	PCT_REPORTABLE	GAP_BASES	GAP_COUNT	LARGEST_GAP	TARGETS_WITH_GAP	PCT_TARGETS_COMPLETE
+1800	5	20	0	0	1800	5	600	5	0
+
+## HISTOGRAM	java.lang.Integer
+gap_length	gap_count
+200	1
+300	2
+400	1
+600	1
+

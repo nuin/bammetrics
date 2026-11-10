@@ -10,6 +10,7 @@ use bammetrics_core::metric::Value;
 use bammetrics_core::metrics_file::{ClassBlock, HistogramBlock, MetricsDoc};
 use bammetrics_verdict::{Band, Check, Input, Status, Verdict};
 
+use crate::gaps;
 use crate::html::{escape, number, thousands};
 use crate::plots::{Family, figure_with, thin_indices};
 use crate::theme::{CSS, scoped_css};
@@ -34,6 +35,7 @@ pub fn render(verdict: &Verdict, inputs: &[Input], options: &Options) -> String 
         inputs,
         options,
         drawn: Vec::new(),
+        gaps_drawn: false,
         max_points: None,
     };
     page.head();
@@ -64,6 +66,7 @@ pub fn fragment(verdict: &Verdict, inputs: &[Input], options: &Options) -> Strin
         inputs,
         options,
         drawn: Vec::new(),
+        gaps_drawn: false,
         max_points: Some(FRAGMENT_POINTS),
     };
     let scope = format!(".{FRAGMENT_CLASS}");
@@ -96,8 +99,20 @@ struct Page<'a> {
     options: &'a Options<'a>,
     /// Plot families already on the page.
     drawn: Vec<Family>,
+    /// The coverage gaps table is on the page.
+    gaps_drawn: bool,
     /// The most points per series and rows per histogram table.
     max_points: Option<usize>,
+}
+
+/// A text value as the page shows it: the text, or `empty` for an empty
+/// cell.
+fn shown_text(text: &str) -> String {
+    if text.is_empty() {
+        "empty".to_owned()
+    } else {
+        text.to_owned()
+    }
 }
 
 pub(crate) fn status_class(status: Status) -> &'static str {
@@ -399,6 +414,12 @@ impl<'a> Page<'a> {
                 "<div><dt>value</dt><dd>{}</dd></div>",
                 number(value)
             );
+        } else if let Some(text) = &check.text {
+            let _ = write!(
+                self.out,
+                "<div><dt>value</dt><dd>{}</dd></div>",
+                escape(&shown_text(text))
+            );
         }
         for (name, bound) in [("warn", &check.warn), ("fail", &check.fail)] {
             if let Some(bound) = bound {
@@ -419,7 +440,80 @@ impl<'a> Page<'a> {
         {
             self.plot(family);
         }
+        if short_class(&check.class) == gaps::CLASS && !self.gaps_drawn {
+            self.gaps_drawn = true;
+            self.gaps_table();
+        }
         self.out.push_str("</article>\n");
+    }
+
+    /// The `Coverage gaps` table of docs/06 section 1.7, under the first
+    /// warn or fail gap check: the longest [`gaps::SHOWN`] gaps from the BED
+    /// beside the `CoverageGapMetrics` file, or one line when the BED is
+    /// not there. This read is the one exception to the crate's rule of
+    /// inputs only (docs/05 section 4.9): the sidecar lives in the same run
+    /// directory under the name `qc` writes.
+    fn gaps_table(&mut self) {
+        let Some(input) = self
+            .inputs
+            .iter()
+            .find(|i| i.doc.class(gaps::CLASS).is_some())
+        else {
+            return;
+        };
+        let bed = format!("{}.bed", input.path);
+        let table = match std::fs::read_to_string(&bed) {
+            Ok(text) => gaps::parse(&text),
+            Err(_) => {
+                let _ = write!(
+                    self.out,
+                    "<p class=\"muted\">Coverage gaps not listed: no gaps file at {}.</p>",
+                    escape(file_name(&bed))
+                );
+                return;
+            }
+        };
+        let (shown, total) = gaps::longest(&table, gaps::SHOWN);
+        let _ = write!(
+            self.out,
+            "<h4>Coverage gaps <span class=\"muted\">{}</span></h4>",
+            escape(&if shown.len() == total {
+                count(total, "gap")
+            } else {
+                format!("{} longest of {total}", shown.len())
+            })
+        );
+        if shown.is_empty() {
+            return;
+        }
+        table_region(&mut self.out, "Coverage gaps");
+        self.out.push_str(
+            "<table class=\"wide\"><thead><tr><th scope=\"col\">Target</th><th scope=\"col\">Region</th>\
+             <th scope=\"col\" class=\"num\">Length</th><th scope=\"col\" class=\"num\">Mean depth</th>\
+             <th scope=\"col\" class=\"num\">Min depth</th></tr></thead><tbody>",
+        );
+        for gap in &shown {
+            let _ = write!(
+                self.out,
+                "<tr><th scope=\"row\">{}</th><td>{}:{}-{}</td><td class=\"num\">{}</td><td class=\"num\">{}</td><td class=\"num\">{}</td></tr>",
+                escape(&gap.target),
+                escape(&gap.chrom),
+                thousands(gap.start + 1),
+                thousands(gap.end),
+                thousands(gap.end - gap.start),
+                escape(&gap.mean_depth),
+                escape(&gap.min_depth)
+            );
+        }
+        self.out.push_str("</tbody></table></div>");
+        if shown.len() < total {
+            let _ = write!(
+                self.out,
+                "<p class=\"muted\">{} more in {}.</p>",
+                count(total - shown.len(), "gap"),
+                escape(file_name(&bed))
+            );
+        }
     }
 
     fn plot(&mut self, family: Family) {
@@ -447,9 +541,10 @@ impl<'a> Page<'a> {
              <th scope=\"col\">Fail</th></tr></thead><tbody>",
         );
         for check in &self.verdict.checks {
-            let value = match check.value {
-                Some(v) => number(v),
-                None => "?".to_owned(),
+            let value = match (check.value, &check.text) {
+                (Some(v), _) => number(v),
+                (None, Some(text)) => shown_text(text),
+                (None, None) => "?".to_owned(),
             };
             let mut unit = check
                 .unit
@@ -782,6 +877,8 @@ mod tests {
                 "Targeted PCR metrics",
             ),
             ("picard.analysis.WgsMetrics", "WGS metrics"),
+            ("bammetrics.qc.CoverageGapMetrics", "Coverage gap metrics"),
+            ("bammetrics.qc.SexCheckMetrics", "Sex check metrics"),
         ] {
             assert_eq!(class_title(class), title, "{class}");
         }

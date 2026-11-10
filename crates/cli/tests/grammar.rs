@@ -184,6 +184,22 @@ fn cases(built: &Built) -> Vec<Case> {
             picard_outputs: single,
         },
         Case {
+            verb: "coverage-gaps",
+            class: "CollectCoverageGaps",
+            verb_args: bam(&["--target-intervals", IL]),
+            picard_args: picard_bam(&[&format!("TI={IL}")]),
+            option: Some(("MIN_DEPTH", "5")),
+            picard_outputs: single,
+        },
+        Case {
+            verb: "sex-check",
+            class: "CollectSexCheckMetrics",
+            verb_args: bam(&[]),
+            picard_args: picard_bam(&[]),
+            option: Some(("MINIMUM_MAPPING_QUALITY", "0")),
+            picard_outputs: single,
+        },
+        Case {
             verb: "gc-bias",
             class: "CollectGcBiasMetrics",
             verb_args: bam(&["-R", REF]),
@@ -469,7 +485,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && **c != "AccumulateVariantCallingMetrics")
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 27);
+    assert_eq!(classes.len(), 29);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names
@@ -873,4 +889,42 @@ fn completions_list_every_spelling() {
     for spelling in ["'*-M+", "--level", "--no-include-duplicates", "--input"] {
         assert!(text.contains(spelling), "{spelling}");
     }
+}
+
+/// The target intervals of `coverage-gaps`, `sex-check` and `hs-metrics`
+/// are inputs: neither `-o` nor `--gaps-file` may name them.
+#[test]
+fn an_output_that_is_the_targets_file_is_refused() {
+    let dir = fresh_dir("overwrite-targets");
+    let targets = dir.join("targets.interval_list");
+    fs::copy(root().join(IL), &targets).expect("copy");
+    let before = fs::read(&targets).expect("targets");
+    let path = targets.to_str().expect("utf-8");
+    let out = dir.join("out.txt");
+    let out = out.to_str().expect("utf-8");
+    for args in [
+        strings(&["coverage-gaps", IS, "--targets", path, "-o", path]),
+        strings(&[
+            "coverage-gaps",
+            IS,
+            "--targets",
+            path,
+            "--gaps-file",
+            path,
+            "-o",
+            out,
+        ]),
+        strings(&["sex-check", IS, "--targets", path, "-o", path]),
+        strings(&["hs-metrics", IS, "--panel", path, "-o", path]),
+    ] {
+        let run = bammetrics(&args);
+        assert_eq!(run.status.code(), Some(2), "{args:?}");
+        assert!(
+            String::from_utf8_lossy(&run.stderr).contains("is an input"),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+    }
+    assert_eq!(fs::read(&targets).expect("targets"), before);
+    assert!(!Path::new(out).exists());
 }

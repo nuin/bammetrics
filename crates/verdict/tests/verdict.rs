@@ -40,7 +40,24 @@ fn fixture_set() -> Vec<Input> {
         golden_input("picard_quality_yield", "quality_yield.txt"),
         golden_input("picard_duplicate_metrics", "duplicate_metrics.txt"),
         golden_input("picard_hs_metrics", "hs_metrics.txt"),
+        sex_check_input(),
+        golden_input("picard_coverage_gaps", "coverage_gaps.txt"),
     ]
+}
+
+/// A `CollectSexCheckMetrics` row of a male sample declared male. The
+/// fixture BAM has chr1 only, so its own row reads UNKNOWN (the golden
+/// record `picard_sex_check`); this one lets the shipped presets pass.
+fn sex_check_input() -> Input {
+    Input {
+        path: "fixture.sex_check_metrics".to_owned(),
+        doc: MetricsDoc::parse(
+            "## METRICS CLASS\tbammetrics.qc.SexCheckMetrics\n\
+             AUTOSOME_READS\tX_READS\tY_READS\tAUTOSOME_LENGTH\tX_LENGTH\tY_LENGTH\tX_RATIO\tY_RATIO\tINFERRED_SEX\tDECLARED_SEX\tSEX_MATCH\tREASON\n\
+             1000000\t25000\t5000\t2875000000\t156000000\t57000000\t0.460737\t0.252193\tMALE\tMALE\tY\t\n\n",
+        )
+        .expect("parses"),
+    }
 }
 
 fn builtin(name: &str) -> Preset {
@@ -98,11 +115,15 @@ fn doc_for(rule: &Rule, value: &str) -> Input {
 
 /// A value of the metric that lands on `status`, from the rule's bounds.
 fn value_for(rule: &Rule, status: Status) -> f64 {
-    let (warn, fail) = (rule.warn.expect("warn"), rule.fail.expect("fail"));
+    let (warn, fail) = (
+        rule.warn.clone().expect("warn"),
+        rule.fail.clone().expect("fail"),
+    );
     let step = |bound: Bound, direction: f64| match bound.comparator {
         Comparator::Lt | Comparator::Le => bound.low - direction,
         Comparator::Gt | Comparator::Ge => bound.low + direction,
         Comparator::Outside => bound.low - direction,
+        Comparator::Is => unreachable!("a text rule has no numeric value"),
     };
     match status {
         Status::Fail => step(fail, 1.0),
@@ -126,32 +147,46 @@ fn check<'a>(verdict: &'a Verdict, rule: &str) -> &'a Check {
 #[test]
 fn shipped_presets_parse_with_their_rule_counts_and_notes() {
     let counts = [
-        ("generic", 6),
-        ("clinical-panel", 14),
-        ("wgs", 10),
-        ("rna-seq", 8),
+        ("generic", 6, 1, "starting values"),
+        (
+            "clinical-panel",
+            18,
+            3,
+            "reviewed defaults; gap and sex rules are starting values",
+        ),
+        ("wgs", 10, 1, "starting values"),
+        ("rna-seq", 8, 1, "starting values"),
     ];
-    assert_eq!(names(), counts.map(|(name, _)| name));
-    for (name, rules) in counts {
+    assert_eq!(names(), counts.map(|(name, ..)| name));
+    for (name, rules, version, note) in counts {
         let preset = builtin(name);
         assert_eq!(preset.name, name);
-        let (version, note) = if name == "clinical-panel" {
-            (2, "reviewed defaults")
-        } else {
-            (1, "starting values")
-        };
         assert_eq!(preset.version, version, "{name}");
         assert_eq!(preset.note, note, "{name}");
         assert_eq!(preset.source, "built-in");
         assert_eq!(preset.rules.len(), rules, "{name}");
         for rule in &preset.rules {
+            // A text rule names the one value that breaks it; a numeric
+            // rule has both bounds.
             assert!(
-                rule.warn.is_some() && rule.fail.is_some(),
+                rule.is_text() || (rule.warn.is_some() && rule.fail.is_some()),
                 "{name} {}",
                 rule.id
             );
             assert_ne!(rule.label, rule.id, "{name} {} has no label", rule.id);
         }
+        let text_rules: Vec<&str> = preset
+            .rules
+            .iter()
+            .filter(|r| r.is_text())
+            .map(|r| r.id.as_str())
+            .collect();
+        let expected: &[&str] = if name == "clinical-panel" {
+            &["sex.match", "sex.inferred"]
+        } else {
+            &[]
+        };
+        assert_eq!(text_rules, expected, "{name}");
     }
 }
 
@@ -161,7 +196,7 @@ fn shipped_presets_parse_with_their_rule_counts_and_notes() {
 fn shipped_preset_hashes_are_pinned() {
     let pinned = [
         ("generic", "6dd89ed0478fd5e4"),
-        ("clinical-panel", "e6275515a0d3de26"),
+        ("clinical-panel", "6f0d59319750923f"),
         ("wgs", "8a5fc4360f357d10"),
         ("rna-seq", "2d1283287b120a2e"),
     ];
@@ -175,18 +210,13 @@ fn shipped_preset_hashes_are_pinned() {
 }
 
 #[test]
-fn clinical_panel_has_the_14_starting_values_of_the_design() {
+fn clinical_panel_has_the_14_reviewed_values_and_the_4_clinical_checks() {
     let preset = builtin("clinical-panel");
+    let text = |bound: &Option<Bound>| bound.as_ref().map_or(String::new(), ToString::to_string);
     let bounds: Vec<(String, String, String)> = preset
         .rules
         .iter()
-        .map(|r| {
-            (
-                r.metric_text(),
-                r.warn.expect("warn").to_string(),
-                r.fail.expect("fail").to_string(),
-            )
-        })
+        .map(|r| (r.metric_text(), text(&r.warn), text(&r.fail)))
         .collect();
     let expected = [
         ("MEAN_TARGET_COVERAGE", "< 200", "< 100"),
@@ -203,6 +233,10 @@ fn clinical_panel_has_the_14_starting_values_of_the_design() {
         ("PCT_CHIMERAS", "> 0.05", "> 0.1"),
         ("MEDIAN_INSERT_SIZE", "outside 180..450", "outside 120..600"),
         ("PF_Q30_BASES / PF_BASES", "< 0.85", "< 0.75"),
+        ("PCT_REPORTABLE", "< 0.98", "< 0.95"),
+        ("PCT_TARGETS_COMPLETE", "< 0.95", "< 0.9"),
+        ("SEX_MATCH", "", "is N"),
+        ("INFERRED_SEX", "is UNKNOWN", ""),
     ];
     let expected: Vec<(String, String, String)> = expected
         .iter()
@@ -236,6 +270,11 @@ fn generic_passes_on_the_fixture_set() {
         (6, 0, 0, 0)
     );
     assert!(verdict.checks.iter().all(|c| c.reason.is_none()));
+    // The two text rules (clinical-panel only) carry the cell's text and no number.
+    let panel = evaluate(&builtin("clinical-panel"), &fixture_set(), None);
+    let sex = check(&panel, "sex.match");
+    assert_eq!((sex.value, sex.text.as_deref()), (None, Some("Y")));
+    assert_eq!(check(&panel, "sex.inferred").text.as_deref(), Some("MALE"));
     assert_eq!(check(&verdict, "insert.median").value, Some(310.0));
     assert_eq!(check(&verdict, "yield.q30").value, Some(1.0));
     let duplicates = check(&verdict, "duplication.percent");
@@ -244,7 +283,7 @@ fn generic_passes_on_the_fixture_set() {
     assert_eq!(duplicates.unit.as_deref(), Some("Unknown Library"));
     // No SAMPLE cell is filled on the fixture: the name falls back to the file stem.
     assert_eq!(verdict.sample, "fixture");
-    assert_eq!(verdict.files.len(), 5);
+    assert_eq!(verdict.files.len(), 7);
     assert_eq!(
         verdict.files[4].classes,
         ["picard.analysis.directed.HsMetrics"]
@@ -275,12 +314,37 @@ fn clinical_panel_fails_the_fixture_on_coverage_with_plain_reasons() {
             "hs.target-100x",
             "hs.zero-coverage-targets",
             "hs.gc-dropout",
+            "gaps.reportable-range",
+            "gaps.targets-complete",
         ]
     );
     assert_eq!(by_status(Status::Warn), Vec::<&str>::new());
     // FOLD_80_BASE_PENALTY prints `?` on the fixture.
     assert_eq!(by_status(Status::NotMeasured), ["hs.evenness"]);
-    assert_eq!(by_status(Status::Pass).len(), 8);
+    assert_eq!(by_status(Status::Pass).len(), 10);
+    // The golden gaps record runs at MIN_DEPTH=1: 680 of 1800 target bases.
+    assert_eq!(
+        check(&verdict, "gaps.reportable-range").reason.as_deref(),
+        Some("Target bases at MIN_DEPTH is 0.377778, below the fail limit of 0.95")
+    );
+    // The fixture's own sex row (chr1 only) reads UNKNOWN and warns.
+    let fixture_sex = evaluate(
+        &builtin("clinical-panel"),
+        &[golden_input("picard_sex_check", "sex_check.txt")],
+        Some("S1"),
+    );
+    let inferred = check(&fixture_sex, "sex.inferred");
+    assert_eq!(inferred.status, Status::Warn);
+    assert_eq!(
+        inferred.reason.as_deref(),
+        Some("Inferred sex: UNKNOWN, a warn value")
+    );
+    // Declared FEMALE, inferred UNKNOWN: no mismatch, SEX_MATCH is empty.
+    let matched = check(&fixture_sex, "sex.match");
+    assert_eq!(
+        (matched.status, matched.text.as_deref()),
+        (Status::Pass, Some(""))
+    );
     assert_eq!(
         (
             verdict.counts.pass,
@@ -288,7 +352,7 @@ fn clinical_panel_fails_the_fixture_on_coverage_with_plain_reasons() {
             verdict.counts.fail,
             verdict.counts.not_measured
         ),
-        (8, 0, 5, 1)
+        (10, 0, 7, 1)
     );
     assert_eq!(
         check(&verdict, "hs.mean-target-coverage").reason.as_deref(),
@@ -362,6 +426,10 @@ fn every_shipped_rule_reaches_every_status() {
     for name in names() {
         let preset = builtin(name);
         for rule in &preset.rules {
+            if rule.is_text() {
+                text_rule_reaches_its_statuses(&preset, rule);
+                continue;
+            }
             for status in [Status::Fail, Status::Warn, Status::Pass] {
                 let value = value_for(rule, status);
                 let verdict = evaluate(&preset, &[doc_for(rule, &value.to_string())], None);
@@ -397,6 +465,45 @@ fn every_shipped_rule_reaches_every_status() {
             );
         }
     }
+}
+
+/// A text rule (`is TEXT`): the bound's text reaches the bound's status, any
+/// other text and an empty cell pass, the cell's text is in `text` and
+/// `value` is null, and the reason names the value.
+fn text_rule_reaches_its_statuses(preset: &Preset, rule: &Rule) {
+    let (bound, status) = match (&rule.fail, &rule.warn) {
+        (Some(fail), _) => (fail, Status::Fail),
+        (None, Some(warn)) => (warn, Status::Warn),
+        (None, None) => unreachable!("a rule has a bound"),
+    };
+    for (cell, expected) in [
+        (bound.text.as_str(), status),
+        ("OTHER", Status::Pass),
+        ("", Status::Pass),
+    ] {
+        let verdict = evaluate(preset, &[doc_for(rule, cell)], None);
+        let check = check(&verdict, &rule.id);
+        assert_eq!(check.status, expected, "{} at {cell:?}: {check:?}", rule.id);
+        assert_eq!(check.value, None);
+        assert_eq!(check.text.as_deref(), Some(cell));
+        match expected {
+            Status::Pass => assert_eq!(check.reason, None),
+            _ => assert_eq!(
+                check.reason.as_deref(),
+                Some(format!("{}: {cell}, a {} value", rule.label, status.name()).as_str())
+            ),
+        }
+    }
+    let json = evaluate(preset, &[doc_for(rule, &bound.text)], None).to_json();
+    assert!(
+        json.contains(&format!("\"text\": \"{}\"", bound.text)),
+        "{json}"
+    );
+    let back = Verdict::from_json(&json).expect("reads back");
+    assert_eq!(
+        check(&back, &rule.id).text.as_deref(),
+        Some(bound.text.as_str())
+    );
 }
 
 #[test]
@@ -575,7 +682,10 @@ fn verdict_json_round_trips() {
     assert!(text.contains("\"not_measured\": 1"));
     assert!(text.contains("\"value\": null"));
     assert!(text.contains("\"select\": \"CATEGORY=PAIR\""));
-    assert!(text.contains("\"note\": \"reviewed defaults\""));
+    assert!(
+        text.contains("\"note\": \"reviewed defaults; gap and sex rules are starting values\"")
+    );
+    assert!(text.contains("\"text\": \"Y\""));
     let back = Verdict::from_json(&text).expect("reads back");
     assert_eq!(back, verdict);
     assert_eq!(back.to_json(), text);

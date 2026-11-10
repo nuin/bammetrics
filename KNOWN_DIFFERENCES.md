@@ -926,6 +926,15 @@ the differences below are on purpose or cannot be avoided.
   `REMOVE_SEQUENCING_DUPLICATES` and `TAGGING_POLICY`; so does bammetrics, and the
   harness compares each.
 
+## Not in Picard
+
+`CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))
+have no Picard counterpart, so the concordance harness and the fuzzer never run them. Their
+metrics classes are `bammetrics.qc.CoverageGapMetrics` and `bammetrics.qc.SexCheckMetrics`.
+The gap depth is the `CollectHsMetrics` per-base depth, and `crates/core/tests/coverage_gaps.rs`
+and `tests/python/test_clinical_checks.py` check that `PCT_REPORTABLE` at `MIN_DEPTH=20`
+equals `PCT_TARGET_BASES_20X`.
+
 ## Not implemented
 
 `FindMendelianViolations`, `GenotypeConcordance OUTPUT_VCF` (see Options), the

@@ -129,6 +129,17 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
                 "STRAND_SPECIFICITY=NONE".to_owned(),
             ],
         ),
+        (
+            "CollectCoverageGaps",
+            vec![
+                format!("TI={targets}"),
+                format!("GAPS_FILE={}", dir.join("gaps.bed").display()),
+            ],
+        ),
+        (
+            "CollectSexCheckMetrics",
+            vec!["EXPECTED_SEX=female".to_owned()],
+        ),
     ] {
         let mut list = vec![bam.clone(), out(tool)];
         list.extend(extra);
@@ -275,7 +286,7 @@ fn every_column_every_tool_writes_has_a_definition() {
             }
         }
     }
-    assert!(classes >= 19, "only {classes} metrics files written");
+    assert!(classes >= 21, "only {classes} metrics files written");
     assert!(
         missing.is_empty(),
         "no glossary row for:\n{}",

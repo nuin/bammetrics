@@ -275,9 +275,11 @@ pub fn render_index(samples: &[SampleSummary], options: &Options) -> String {
 /// alternative text (`td.cell.<status> { --glyph }`), so a screen reader
 /// reads the word alone and the markup holds no glyph per cell.
 fn cell(out: &mut String, check: &Check) {
-    let value = match check.value {
-        Some(v) => number(v),
-        None => "?".to_owned(),
+    let value = match (check.value, &check.text) {
+        (Some(v), _) => number(v),
+        (None, Some(text)) if !text.is_empty() => text.clone(),
+        (None, Some(_)) => "empty".to_owned(),
+        (None, None) => "?".to_owned(),
     };
     let _ = write!(out, "<td class=\"cell {}\"", status_class(check.status));
     if let Some(reason) = &check.reason {

@@ -1,0 +1,855 @@
+## argv
+qc
+tests/data/insert_size.bam
+-o
+OUT/sample
+--preset
+clinical-panel
+--panel
+tests/data/targets.interval_list
+--sex
+male
+--date
+2026-01-02 03:04:05 UTC
+## exit
+0
+## stdout
+insert_size  FAIL  preset clinical-panel v3 (6f0d59)  6 collectors, 1 BAM read (10 records)
+FAIL          hs.mean-target-coverage   Mean target coverage is 0.377778, below the fail limit of 100
+FAIL          hs.target-20x             Target bases at 20x is 0, below the fail limit of 0.95
+FAIL          hs.target-100x            Target bases at 100x is 0, below the fail limit of 0.6
+FAIL          hs.zero-coverage-targets  Targets with zero coverage is 0.2, above the fail limit of 0.03
+FAIL          gaps.reportable-range     Target bases at MIN_DEPTH is 0, below the fail limit of 0.95
+FAIL          gaps.targets-complete     Targets without a gap is 0, below the fail limit of 0.9
+WARN          sex.inferred              Inferred sex: UNKNOWN, a warn value
+NOT MEASURED  hs.evenness               FOLD_80_BASE_PENALTY is ?
+PASS          10 checks
+wrote 10 files to OUT/sample.*, report OUT/sample.report.html
+use --fail-on fail or bammetrics check to gate
+## stderr
+## file sample.alignment_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectAlignmentSummaryMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.alignment_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.AlignmentSummaryMetrics
+CATEGORY	TOTAL_READS	PF_READS	PCT_PF_READS	PF_NOISE_READS	PF_READS_ALIGNED	PCT_PF_READS_ALIGNED	PF_ALIGNED_BASES	PF_HQ_ALIGNED_READS	PF_HQ_ALIGNED_BASES	PF_HQ_ALIGNED_Q20_BASES	PF_HQ_MEDIAN_MISMATCHES	PF_MISMATCH_RATE	PF_HQ_ERROR_RATE	PF_INDEL_RATE	MEAN_READ_LENGTH	SD_READ_LENGTH	MEDIAN_READ_LENGTH	MAD_READ_LENGTH	MIN_READ_LENGTH	MAX_READ_LENGTH	MEAN_ALIGNED_READ_LENGTH	READS_ALIGNED_IN_PAIRS	PCT_READS_ALIGNED_IN_PAIRS	PF_READS_IMPROPER_PAIRS	PCT_PF_READS_IMPROPER_PAIRS	BAD_CYCLES	STRAND_BALANCE	PCT_CHIMERAS	PCT_ADAPTER	PCT_SOFTCLIP	PCT_HARDCLIP	AVG_POS_3PRIME_SOFTCLIP_LENGTH	SAMPLE	LIBRARY	READ_GROUP
+FIRST_OF_PAIR	5	5	1	0	5	1	500	5	500	500	0	0	0	0	100	0	100	0	100	100	100	5	1	0	0	0	1	0	0	0	0	0			
+SECOND_OF_PAIR	5	5	1	0	5	1	500	5	500	500	0	0	0	0	100	0	100	0	100	100	100	5	1	0	0	0	0	0	0	0	0	0			
+PAIR	10	10	1	0	10	1	1000	10	1000	1000	0	0	0	0	100	0	100	0	100	100	100	10	1	0	0	0	0.5	0	0	0	0	0			
+
+## HISTOGRAM	java.lang.Integer
+READ_LENGTH	PAIRED_TOTAL_LENGTH_COUNT	PAIRED_ALIGNED_LENGTH_COUNT
+100	10	10
+
+## file sample.coverage_gaps
+## htsjdk.samtools.metrics.StringHeader
+# CollectCoverageGaps INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.coverage_gaps GAPS_FILE=OUT/sample.coverage_gaps.bed TARGET_INTERVALS=tests/data/targets.interval_list
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.CoverageGapMetrics
+TARGET_TERRITORY	TARGET_COUNT	MIN_DEPTH	BASES_AT_OR_ABOVE_MIN_DEPTH	PCT_REPORTABLE	GAP_BASES	GAP_COUNT	LARGEST_GAP	TARGETS_WITH_GAP	PCT_TARGETS_COMPLETE
+1800	5	20	0	0	1800	5	600	5	0
+
+## HISTOGRAM	java.lang.Integer
+gap_length	gap_count
+200	1
+300	2
+400	1
+600	1
+
+## file sample.coverage_gaps.bed
+#chrom	start	end	target	mean_depth	min_depth
+chr1	1000	1200	t1	0.5	0
+chr1	2000	2400	t2	0.5	0
+chr1	4000	4300	t3	0.6	0
+chr1	5000	5600	t4	0.333333	0
+chr1	8000	8300	t5	0	0
+## file sample.hs_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectHsMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.hs_metrics BAIT_INTERVALS=tests/data/targets.interval_list TARGET_INTERVALS=tests/data/targets.interval_list
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.directed.HsMetrics
+BAIT_SET	BAIT_TERRITORY	BAIT_DESIGN_EFFICIENCY	ON_BAIT_BASES	NEAR_BAIT_BASES	OFF_BAIT_BASES	PCT_SELECTED_BASES	PCT_OFF_BAIT	ON_BAIT_VS_SELECTED	MEAN_BAIT_COVERAGE	PCT_USABLE_BASES_ON_BAIT	PCT_USABLE_BASES_ON_TARGET	FOLD_ENRICHMENT	HS_LIBRARY_SIZE	HS_PENALTY_10X	HS_PENALTY_20X	HS_PENALTY_30X	HS_PENALTY_40X	HS_PENALTY_50X	HS_PENALTY_100X	TARGET_TERRITORY	GENOME_SIZE	TOTAL_READS	PF_READS	PF_BASES	PF_UNIQUE_READS	PF_UQ_READS_ALIGNED	PF_BASES_ALIGNED	PF_UQ_BASES_ALIGNED	ON_TARGET_BASES	PCT_PF_READS	PCT_PF_UQ_READS	PCT_PF_UQ_READS_ALIGNED	MEAN_TARGET_COVERAGE	MEDIAN_TARGET_COVERAGE	MAX_TARGET_COVERAGE	MIN_TARGET_COVERAGE	ZERO_CVG_TARGETS_PCT	PCT_EXC_DUPE	PCT_EXC_ADAPTER	PCT_EXC_MAPQ	PCT_EXC_BASEQ	PCT_EXC_OVERLAP	PCT_EXC_OFF_TARGET	FOLD_80_BASE_PENALTY	PCT_TARGET_BASES_1X	PCT_TARGET_BASES_2X	PCT_TARGET_BASES_10X	PCT_TARGET_BASES_20X	PCT_TARGET_BASES_30X	PCT_TARGET_BASES_40X	PCT_TARGET_BASES_50X	PCT_TARGET_BASES_100X	PCT_TARGET_BASES_250X	PCT_TARGET_BASES_500X	PCT_TARGET_BASES_1000X	PCT_TARGET_BASES_2500X	PCT_TARGET_BASES_5000X	PCT_TARGET_BASES_10000X	PCT_TARGET_BASES_25000X	PCT_TARGET_BASES_50000X	PCT_TARGET_BASES_100000X	AT_DROPOUT	GC_DROPOUT	HET_SNP_SENSITIVITY	HET_SNP_Q	SAMPLE	LIBRARY	READ_GROUP
+targets	1800	1	680	120	200	0.8	0.2	0.85	0.377778	0.68	0.68	37.777778		0	0	0	0	0	0	1800	100000	10	10	1000	10	10	1000	1000	680	1	1	1	0.377778	0	1	0	0.2	0	0	0	0	0	0.32	?	0.377778	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0.18717	1			
+
+## HISTOGRAM	java.lang.Integer
+coverage_or_base_quality	high_quality_coverage_count	unfiltered_baseq_count
+0	1120	0
+1	680	0
+2	0	0
+3	0	0
+4	0	0
+5	0	0
+6	0	0
+7	0	0
+8	0	0
+9	0	0
+10	0	0
+11	0	0
+12	0	0
+13	0	0
+14	0	0
+15	0	0
+16	0	0
+17	0	0
+18	0	0
+19	0	0
+20	0	0
+21	0	0
+22	0	0
+23	0	0
+24	0	0
+25	0	0
+26	0	0
+27	0	0
+28	0	0
+29	0	0
+30	0	0
+31	0	0
+32	0	0
+33	0	0
+34	0	0
+35	0	0
+36	0	0
+37	0	0
+38	0	0
+39	0	0
+40	0	680
+41	0	0
+42	0	0
+43	0	0
+44	0	0
+45	0	0
+46	0	0
+47	0	0
+48	0	0
+49	0	0
+50	0	0
+51	0	0
+52	0	0
+53	0	0
+54	0	0
+55	0	0
+56	0	0
+57	0	0
+58	0	0
+59	0	0
+60	0	0
+61	0	0
+62	0	0
+63	0	0
+64	0	0
+65	0	0
+66	0	0
+67	0	0
+68	0	0
+69	0	0
+70	0	0
+71	0	0
+72	0	0
+73	0	0
+74	0	0
+75	0	0
+76	0	0
+77	0	0
+78	0	0
+79	0	0
+80	0	0
+81	0	0
+82	0	0
+83	0	0
+84	0	0
+85	0	0
+86	0	0
+87	0	0
+88	0	0
+89	0	0
+90	0	0
+91	0	0
+92	0	0
+93	0	0
+94	0	0
+95	0	0
+96	0	0
+97	0	0
+98	0	0
+99	0	0
+100	0	0
+101	0	0
+102	0	0
+103	0	0
+104	0	0
+105	0	0
+106	0	0
+107	0	0
+108	0	0
+109	0	0
+110	0	0
+111	0	0
+112	0	0
+113	0	0
+114	0	0
+115	0	0
+116	0	0
+117	0	0
+118	0	0
+119	0	0
+120	0	0
+121	0	0
+122	0	0
+123	0	0
+124	0	0
+125	0	0
+126	0	0
+
+## file sample.insert_size_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.insert_size_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.InsertSizeMetrics
+MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MAX_INSERT_SIZE	MEAN_INSERT_SIZE	STANDARD_DEVIATION	READ_PAIRS	PAIR_ORIENTATION	WIDTH_OF_10_PERCENT	WIDTH_OF_20_PERCENT	WIDTH_OF_30_PERCENT	WIDTH_OF_40_PERCENT	WIDTH_OF_50_PERCENT	WIDTH_OF_60_PERCENT	WIDTH_OF_70_PERCENT	WIDTH_OF_80_PERCENT	WIDTH_OF_90_PERCENT	WIDTH_OF_95_PERCENT	WIDTH_OF_99_PERCENT	SAMPLE	LIBRARY	READ_GROUP
+310	310	10	300	500	310	8.164966	5	FR	1	1	1	1	21	21	21	21	381	381	381			
+
+## HISTOGRAM	java.lang.Integer
+insert_size	All_Reads.fr_count
+300	1
+310	2
+320	1
+
+## file sample.manifest.json
+{
+  "schema": "bammetrics.manifest/1",
+  "tool_version": "0.18.0",
+  "sample": "insert_size",
+  "bam": "tests/data/insert_size.bam",
+  "prefix": "OUT/sample",
+  "preset": {
+    "name": "clinical-panel",
+    "hash": "6f0d59319750923f"
+  },
+  "steps": [
+    {
+      "id": "CollectQualityYieldMetrics",
+      "stage": "pass",
+      "tool": "CollectQualityYieldMetrics",
+      "argv": [
+        "INPUT=tests/data/insert_size.bam",
+        "OUTPUT=OUT/sample.quality_yield_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.18.0",
+      "preset_hash": "6f0d59319750923f",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.quality_yield_metrics",
+          "tool": "CollectQualityYieldMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "CollectAlignmentSummaryMetrics",
+      "stage": "pass",
+      "tool": "CollectAlignmentSummaryMetrics",
+      "argv": [
+        "INPUT=tests/data/insert_size.bam",
+        "OUTPUT=OUT/sample.alignment_summary_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.18.0",
+      "preset_hash": "6f0d59319750923f",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.alignment_summary_metrics",
+          "tool": "CollectAlignmentSummaryMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "CollectInsertSizeMetrics",
+      "stage": "pass",
+      "tool": "CollectInsertSizeMetrics",
+      "argv": [
+        "INPUT=tests/data/insert_size.bam",
+        "OUTPUT=OUT/sample.insert_size_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.18.0",
+      "preset_hash": "6f0d59319750923f",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.insert_size_metrics",
+          "tool": "CollectInsertSizeMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "CollectHsMetrics",
+      "stage": "pass",
+      "tool": "CollectHsMetrics",
+      "argv": [
+        "INPUT=tests/data/insert_size.bam",
+        "OUTPUT=OUT/sample.hs_metrics",
+        "BAIT_INTERVALS=tests/data/targets.interval_list",
+        "TARGET_INTERVALS=tests/data/targets.interval_list"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.18.0",
+      "preset_hash": "6f0d59319750923f",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [
+        {
+          "path": "tests/data/targets.interval_list",
+          "size": 147,
+          "mtime": "<mtime>",
+          "edges_hash": "76d72c2a1a5c81e5"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "OUT/sample.hs_metrics",
+          "tool": "CollectHsMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "CollectSexCheckMetrics",
+      "stage": "pass",
+      "tool": "CollectSexCheckMetrics",
+      "argv": [
+        "INPUT=tests/data/insert_size.bam",
+        "OUTPUT=OUT/sample.sex_check_metrics",
+        "EXPECTED_SEX=MALE",
+        "TARGET_INTERVALS=tests/data/targets.interval_list"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.18.0",
+      "preset_hash": "6f0d59319750923f",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [
+        {
+          "path": "tests/data/targets.interval_list",
+          "size": 147,
+          "mtime": "<mtime>",
+          "edges_hash": "76d72c2a1a5c81e5"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "OUT/sample.sex_check_metrics",
+          "tool": "CollectSexCheckMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "CollectCoverageGaps",
+      "stage": "pass",
+      "tool": "CollectCoverageGaps",
+      "argv": [
+        "INPUT=tests/data/insert_size.bam",
+        "OUTPUT=OUT/sample.coverage_gaps",
+        "GAPS_FILE=OUT/sample.coverage_gaps.bed",
+        "TARGET_INTERVALS=tests/data/targets.interval_list"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.18.0",
+      "preset_hash": "6f0d59319750923f",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [
+        {
+          "path": "tests/data/targets.interval_list",
+          "size": 147,
+          "mtime": "<mtime>",
+          "edges_hash": "76d72c2a1a5c81e5"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "OUT/sample.coverage_gaps",
+          "tool": "CollectCoverageGaps",
+          "kind": "metrics"
+        },
+        {
+          "path": "OUT/sample.coverage_gaps.bed",
+          "tool": "CollectCoverageGaps",
+          "kind": "gaps"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "verdict",
+      "stage": "post",
+      "tool": "bammetrics",
+      "argv": [
+        "--preset=clinical-panel",
+        "OUT/sample.alignment_summary_metrics",
+        "OUT/sample.coverage_gaps",
+        "OUT/sample.hs_metrics",
+        "OUT/sample.insert_size_metrics",
+        "OUT/sample.quality_yield_metrics",
+        "OUT/sample.sex_check_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.18.0",
+      "preset_hash": "6f0d59319750923f",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [],
+      "outputs": [],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "report",
+      "stage": "report",
+      "tool": "bammetrics",
+      "argv": [
+        "--all-plots=false",
+        "--date=2026-01-02 03:04:05 UTC"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.18.0",
+      "preset_hash": "6f0d59319750923f",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.verdict.json",
+          "tool": "bammetrics",
+          "kind": "verdict"
+        },
+        {
+          "path": "OUT/sample.report.html",
+          "tool": "bammetrics",
+          "kind": "report"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    }
+  ]
+}
+## file sample.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectQualityYieldMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+10	10	100	1000	1000	1000	1000	1000	1000	2000	2000
+
+
+## file sample.report.html
+<page not recorded>
+## file sample.sex_check_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectSexCheckMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.sex_check_metrics EXPECTED_SEX=MALE TARGET_INTERVALS=tests/data/targets.interval_list
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.SexCheckMetrics
+AUTOSOME_READS	X_READS	Y_READS	AUTOSOME_LENGTH	X_LENGTH	Y_LENGTH	X_RATIO	Y_RATIO	INFERRED_SEX	DECLARED_SEX	SEX_MATCH	REASON
+7	0	0	1800	0	0	?	?	UNKNOWN	MALE		no X bases; no Y bases; MALE declared, the inferred sex is UNKNOWN
+
+
+## file sample.verdict.json
+{
+  "schema": "bammetrics.verdict/1",
+  "tool_version": "0.18.0",
+  "sample": "insert_size",
+  "preset": {
+    "name": "clinical-panel",
+    "version": 3,
+    "hash": "6f0d59319750923f",
+    "source": "built-in",
+    "note": "reviewed defaults; gap and sex rules are starting values"
+  },
+  "status": "fail",
+  "counts": {
+    "pass": 10,
+    "warn": 1,
+    "fail": 6,
+    "not_measured": 1
+  },
+  "files": [
+    {
+      "path": "OUT/sample.alignment_summary_metrics",
+      "classes": [
+        "picard.analysis.AlignmentSummaryMetrics"
+      ]
+    },
+    {
+      "path": "OUT/sample.coverage_gaps",
+      "classes": [
+        "bammetrics.qc.CoverageGapMetrics"
+      ]
+    },
+    {
+      "path": "OUT/sample.hs_metrics",
+      "classes": [
+        "picard.analysis.directed.HsMetrics"
+      ]
+    },
+    {
+      "path": "OUT/sample.insert_size_metrics",
+      "classes": [
+        "picard.analysis.InsertSizeMetrics"
+      ]
+    },
+    {
+      "path": "OUT/sample.quality_yield_metrics",
+      "classes": [
+        "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics"
+      ]
+    },
+    {
+      "path": "OUT/sample.sex_check_metrics",
+      "classes": [
+        "bammetrics.qc.SexCheckMetrics"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "rule": "hs.mean-target-coverage",
+      "label": "Mean target coverage",
+      "class": "HsMetrics",
+      "metric": "MEAN_TARGET_COVERAGE",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0.377778,
+      "warn": "< 200",
+      "fail": "< 100",
+      "status": "fail",
+      "reason": "Mean target coverage is 0.377778, below the fail limit of 100",
+      "plot": "coverage"
+    },
+    {
+      "rule": "hs.target-20x",
+      "label": "Target bases at 20x",
+      "class": "HsMetrics",
+      "metric": "PCT_TARGET_BASES_20X",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0,
+      "warn": "< 0.98",
+      "fail": "< 0.95",
+      "status": "fail",
+      "reason": "Target bases at 20x is 0, below the fail limit of 0.95",
+      "plot": "coverage"
+    },
+    {
+      "rule": "hs.target-100x",
+      "label": "Target bases at 100x",
+      "class": "HsMetrics",
+      "metric": "PCT_TARGET_BASES_100X",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0,
+      "warn": "< 0.8",
+      "fail": "< 0.6",
+      "status": "fail",
+      "reason": "Target bases at 100x is 0, below the fail limit of 0.6",
+      "plot": "coverage"
+    },
+    {
+      "rule": "hs.evenness",
+      "label": "Fold-80 base penalty",
+      "class": "HsMetrics",
+      "metric": "FOLD_80_BASE_PENALTY",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": null,
+      "warn": "> 2",
+      "fail": "> 3",
+      "status": "not_measured",
+      "reason": "FOLD_80_BASE_PENALTY is ?",
+      "plot": "coverage"
+    },
+    {
+      "rule": "hs.usable-on-target",
+      "label": "Usable bases on target",
+      "class": "HsMetrics",
+      "metric": "PCT_USABLE_BASES_ON_TARGET",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0.68,
+      "warn": "< 0.5",
+      "fail": "< 0.3",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "hs.selected-bases",
+      "label": "Selected bases",
+      "class": "HsMetrics",
+      "metric": "PCT_SELECTED_BASES",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0.8,
+      "warn": "< 0.7",
+      "fail": "< 0.5",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "hs.excluded-duplicates",
+      "label": "Bases excluded as duplicates",
+      "class": "HsMetrics",
+      "metric": "PCT_EXC_DUPE",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0,
+      "warn": "> 0.3",
+      "fail": "> 0.5",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "hs.zero-coverage-targets",
+      "label": "Targets with zero coverage",
+      "class": "HsMetrics",
+      "metric": "ZERO_CVG_TARGETS_PCT",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0.2,
+      "warn": "> 0.01",
+      "fail": "> 0.03",
+      "status": "fail",
+      "reason": "Targets with zero coverage is 0.2, above the fail limit of 0.03",
+      "plot": "coverage"
+    },
+    {
+      "rule": "hs.gc-dropout",
+      "label": "GC dropout",
+      "class": "HsMetrics",
+      "metric": "GC_DROPOUT",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0,
+      "warn": "> 5",
+      "fail": "> 10",
+      "status": "pass",
+      "reason": null,
+      "plot": "gc-bias"
+    },
+    {
+      "rule": "alignment.pf-reads-aligned",
+      "label": "PF reads aligned",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_PF_READS_ALIGNED",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 1,
+      "warn": "< 0.98",
+      "fail": "< 0.95",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "alignment.adapter",
+      "label": "Adapter reads",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_ADAPTER",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 0,
+      "warn": "> 0.005",
+      "fail": "> 0.02",
+      "status": "pass",
+      "reason": null,
+      "plot": "insert-size"
+    },
+    {
+      "rule": "alignment.chimeras",
+      "label": "Chimeric pairs",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_CHIMERAS",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 0,
+      "warn": "> 0.05",
+      "fail": "> 0.1",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "insert.median",
+      "label": "Median insert size",
+      "class": "InsertSizeMetrics",
+      "metric": "MEDIAN_INSERT_SIZE",
+      "level": "ALL_READS",
+      "select": "PAIR_ORIENTATION=FR",
+      "unit": null,
+      "value": 310,
+      "warn": "outside 180..450",
+      "fail": "outside 120..600",
+      "status": "pass",
+      "reason": null,
+      "plot": "insert-size"
+    },
+    {
+      "rule": "yield.q30",
+      "label": "Q30 fraction of PF bases",
+      "class": "QualityYieldMetrics",
+      "metric": "PF_Q30_BASES / PF_BASES",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 1,
+      "warn": "< 0.85",
+      "fail": "< 0.75",
+      "status": "pass",
+      "reason": null,
+      "plot": "cycle-quality"
+    },
+    {
+      "rule": "gaps.reportable-range",
+      "label": "Target bases at MIN_DEPTH",
+      "class": "CoverageGapMetrics",
+      "metric": "PCT_REPORTABLE",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0,
+      "warn": "< 0.98",
+      "fail": "< 0.95",
+      "status": "fail",
+      "reason": "Target bases at MIN_DEPTH is 0, below the fail limit of 0.95",
+      "plot": "coverage"
+    },
+    {
+      "rule": "gaps.targets-complete",
+      "label": "Targets without a gap",
+      "class": "CoverageGapMetrics",
+      "metric": "PCT_TARGETS_COMPLETE",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0,
+      "warn": "< 0.95",
+      "fail": "< 0.9",
+      "status": "fail",
+      "reason": "Targets without a gap is 0, below the fail limit of 0.9",
+      "plot": "coverage"
+    },
+    {
+      "rule": "sex.match",
+      "label": "Declared sex matches",
+      "class": "SexCheckMetrics",
+      "metric": "SEX_MATCH",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": null,
+      "text": "",
+      "warn": null,
+      "fail": "is N",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "sex.inferred",
+      "label": "Inferred sex",
+      "class": "SexCheckMetrics",
+      "metric": "INFERRED_SEX",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": null,
+      "text": "UNKNOWN",
+      "warn": "is UNKNOWN",
+      "fail": null,
+      "status": "warn",
+      "reason": "Inferred sex: UNKNOWN, a warn value",
+      "plot": null
+    }
+  ]
+}

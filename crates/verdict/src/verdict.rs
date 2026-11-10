@@ -143,9 +143,12 @@ pub struct Check {
     pub select: Option<String>,
     /// The sample, library or read group of the row judged; `None` at `ALL_READS`.
     pub unit: Option<String>,
-    /// The value judged; `None` when not measured or not finite.
+    /// The value judged; `None` when not measured, not finite, or judged
+    /// as text.
     pub value: Option<f64>,
-    /// The bounds as written: `< 0.98`.
+    /// The cell's text, for a rule with an `is TEXT` bound; `None` otherwise.
+    pub text: Option<String>,
+    /// The bounds as written: `< 0.98`, `is N`.
     pub warn: Option<String>,
     pub fail: Option<String>,
     pub status: Status,
@@ -246,6 +249,7 @@ fn sample_name(inputs: &[Input]) -> String {
 struct Outcome {
     status: Status,
     value: Option<f64>,
+    text: Option<String>,
     unit: Option<String>,
     reason: Option<String>,
 }
@@ -255,6 +259,7 @@ impl Outcome {
         Outcome {
             status: Status::NotMeasured,
             value: None,
+            text: None,
             unit: None,
             reason: Some(reason),
         }
@@ -272,8 +277,9 @@ fn check(rule: &Rule, inputs: &[Input]) -> Check {
         select: rule.select_text(),
         unit: outcome.unit,
         value: outcome.value,
-        warn: rule.warn.map(|b| b.to_string()),
-        fail: rule.fail.map(|b| b.to_string()),
+        text: outcome.text,
+        warn: rule.warn.as_ref().map(ToString::to_string),
+        fail: rule.fail.as_ref().map(ToString::to_string),
         status: outcome.status,
         reason: outcome.reason,
         plot: rule.plot.clone(),
@@ -344,7 +350,38 @@ fn unit_of(block: &ClassBlock, row: usize, level: Level) -> Option<String> {
     block.get(row, column).map(Value::picard_text)
 }
 
+/// The status and the bound a value or text broke: the fail bound first,
+/// then the warn bound.
+fn broken(rule: &Rule, breaks: impl Fn(&Bound) -> bool) -> (Status, Option<&Bound>) {
+    match (&rule.fail, &rule.warn) {
+        (Some(fail), _) if breaks(fail) => (Status::Fail, Some(fail)),
+        (_, Some(warn)) if breaks(warn) => (Status::Warn, Some(warn)),
+        _ => (Status::Pass, None),
+    }
+}
+
+/// A rule with `is TEXT` bounds judges the cell's text: an empty cell is
+/// the empty string, a number its printed form.
+fn judge_text(rule: &Rule, block: &ClassBlock, row: usize) -> Outcome {
+    let unit = unit_of(block, row, rule.level);
+    let text = block
+        .get(row, &rule.metric)
+        .expect("column checked above")
+        .picard_text();
+    let (status, bound) = broken(rule, |b| b.breaks_text(&text));
+    Outcome {
+        status,
+        value: None,
+        reason: bound.map(|bound| reason_line(rule, &text, status, bound, unit.as_deref())),
+        text: Some(text),
+        unit,
+    }
+}
+
 fn judge_row(rule: &Rule, block: &ClassBlock, row: usize) -> Outcome {
+    if rule.is_text() {
+        return judge_text(rule, block, row);
+    }
     let unit = unit_of(block, row, rule.level);
     let number = |column: &str| -> std::result::Result<f64, String> {
         let cell = block.get(row, column).expect("column checked above");
@@ -382,33 +419,34 @@ fn judge_row(rule: &Rule, block: &ClassBlock, row: usize) -> Outcome {
             };
         }
     };
-    let (status, broken) = match (rule.fail, rule.warn) {
-        (Some(fail), _) if fail.breaks(value) => (Status::Fail, Some(fail)),
-        (_, Some(warn)) if warn.breaks(value) => (Status::Warn, Some(warn)),
-        _ => (Status::Pass, None),
-    };
+    let (status, bound) = broken(rule, |b| b.breaks(value));
     Outcome {
         status,
         value: Some(value),
-        reason: broken.map(|bound| reason_line(rule, value, status, bound, unit.as_deref())),
+        text: None,
+        reason: bound
+            .map(|bound| reason_line(rule, &format_double(value), status, bound, unit.as_deref())),
         unit,
     }
 }
 
 /// `Target bases at 20x is 0.91, below the fail limit of 0.95` (with
-/// ` in LibA` after the value when the row belongs to a unit).
+/// ` in LibA` after the value when the row belongs to a unit). A text
+/// bound writes the cell after a colon, `Declared sex matches: N, a fail
+/// value`, since its label is a noun phrase and `is` would read as part
+/// of the bound.
 fn reason_line(
     rule: &Rule,
-    value: f64,
+    value: &str,
     status: Status,
-    bound: Bound,
+    bound: &Bound,
     unit: Option<&str>,
 ) -> String {
     let unit = unit.map(|u| format!(" in {u}")).unwrap_or_default();
+    let joined = if bound.is_text() { ":" } else { " is" };
     format!(
-        "{} is {}{unit}, {}",
+        "{}{joined} {value}{unit}, {}",
         rule.label,
-        format_double(value),
         bound.describe(status.name())
     )
 }
@@ -416,7 +454,7 @@ fn reason_line(
 impl Check {
     /// This check as the object `verdict.json` holds under `checks`.
     pub fn to_json(&self) -> Json {
-        Json::Object(vec![
+        let mut fields = vec![
             ("rule".into(), Json::text(&self.rule)),
             ("label".into(), Json::text(&self.label)),
             ("class".into(), Json::text(&self.class)),
@@ -425,12 +463,20 @@ impl Check {
             ("select".into(), Json::option_text(self.select.as_deref())),
             ("unit".into(), Json::option_text(self.unit.as_deref())),
             ("value".into(), Json::number(self.value)),
+        ];
+        // Present only on a check judged as text, so a numeric check's
+        // object is unchanged.
+        if let Some(text) = &self.text {
+            fields.push(("text".into(), Json::text(text)));
+        }
+        fields.extend([
             ("warn".into(), Json::option_text(self.warn.as_deref())),
             ("fail".into(), Json::option_text(self.fail.as_deref())),
             ("status".into(), Json::text(self.status.name())),
             ("reason".into(), Json::option_text(self.reason.as_deref())),
             ("plot".into(), Json::option_text(self.plot.as_deref())),
-        ])
+        ]);
+        Json::Object(fields)
     }
 }
 
@@ -537,6 +583,7 @@ impl Verdict {
                     select: optional_string(c, "select")?,
                     unit: optional_string(c, "unit")?,
                     value: c.get("value").and_then(Json::as_f64),
+                    text: optional_string(c, "text")?,
                     warn: optional_string(c, "warn")?,
                     fail: optional_string(c, "fail")?,
                     status: Status::parse(&status_text).ok_or_else(|| {

@@ -79,7 +79,9 @@ bammetrics check runs/ --preset clinical-panel             # exit 10 on a failed
 `qc` reads the BAM once for every collector the preset needs and writes
 `out/NA12878.*`: the metrics files, `.verdict.json`, `.report.html` and a manifest that
 `--resume` uses to skip finished collectors; `bammetrics plan` with the same options shows
-what would run.
+what would run. `--sex male|female` declares the sample's sex for the sex check, and a
+panel adds the coverage gap check (`.coverage_gaps` and a BED of the gaps); both are
+bammetrics checks with no Picard counterpart ([docs/06](docs/06_clinical_checks.md)).
 
 `report` finds the metrics files by their `## METRICS CLASS` block in any directory of
 Picard output, no bammetrics run needed, and judges each sample against a preset of
@@ -118,6 +120,8 @@ under the failing check it explains. The presets, the rule language and `verdict
 | CollectSequencingArtifactMetrics (`CONTEXT_SIZE`, `CONTEXTS_TO_PRINT`, `INTERVALS`, `DB_SNP`, `TANDEM_READS`, `USE_OQ`; pre-adapter, bait-bias and error summary files; also a `CollectMultipleMetrics` program) | per library | `collect_sequencing_artifact_metrics()` |
 | ConvertSequencingArtifactToOxoG (the `CollectOxoGMetrics` rows from the two detail files) | per library | `convert_sequencing_artifact_to_oxo_g()` |
 | CollectOxoGMetrics (`CONTEXT_SIZE`, `CONTEXTS`, `INTERVALS`, `DB_SNP`, `USE_OQ`, insert size and quality filters; one row per context and library) | | `collect_oxo_g_metrics()` |
+| CollectCoverageGaps (not a Picard tool, [docs/06](docs/06_clinical_checks.md): target bases under `MIN_DEPTH` as a metrics row and a BED of gap runs, with the CollectHsMetrics depth) | | `collect_coverage_gaps()` |
+| CollectSexCheckMetrics (not a Picard tool, docs/06: reads per base on X, Y and the autosomes, the inferred sex against `EXPECTED_SEX`) | | `collect_sex_check_metrics()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 

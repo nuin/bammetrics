@@ -144,6 +144,17 @@ const OTHER_FILES: &[(&str, &[(&str, &str)])] = &[
     ),
     ("CollectWgsMetrics", &[("OUTPUT", ".wgs_metrics")]),
     ("CollectRnaSeqMetrics", &[("OUTPUT", ".rna_metrics")]),
+    (
+        "CollectCoverageGaps",
+        &[
+            ("OUTPUT", ".coverage_gaps"),
+            ("GAPS_FILE", ".coverage_gaps.bed"),
+        ],
+    ),
+    (
+        "CollectSexCheckMetrics",
+        &[("OUTPUT", ".sex_check_metrics")],
+    ),
 ];
 
 /// The files `tool` writes under an output prefix, as (file option,
