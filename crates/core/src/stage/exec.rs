@@ -242,6 +242,34 @@ impl<'scope> SinkWorker<'scope> {
     }
 }
 
+/// The batches the sinks may still hold, oldest first. The reader keeps
+/// one reference to each, so a sink thread never frees a batch, and takes
+/// a batch back once it is the only holder: the records of the next read
+/// go into the buffers of that batch, with no allocation per record.
+#[derive(Default)]
+struct Pool {
+    in_flight: VecDeque<Shared>,
+}
+
+impl Pool {
+    /// The oldest batch when every sink is done with it, else a new one.
+    fn take(&mut self) -> Vec<RawRecord> {
+        let free = self
+            .in_flight
+            .front_mut()
+            .and_then(Arc::get_mut)
+            .map(std::mem::take);
+        if free.is_some() {
+            self.in_flight.pop_front();
+        }
+        free.unwrap_or_default()
+    }
+
+    fn put(&mut self, batch: Option<Shared>) {
+        self.in_flight.extend(batch);
+    }
+}
+
 /// A stage of a segment with the index of its step.
 type Indexed<T> = (usize, T);
 
@@ -293,11 +321,17 @@ impl Segment<'_, '_> {
     }
 
     /// Send `batch`, the stream at position `from`, down the segment.
-    fn flow(&mut self, mut batch: Vec<RawRecord>, from: usize) -> std::result::Result<(), Failure> {
+    /// The batch that reached the last position comes back, shared with
+    /// the sinks there, so the reader can use its buffers again.
+    fn flow(
+        &mut self,
+        mut batch: Vec<RawRecord>,
+        from: usize,
+    ) -> std::result::Result<Option<Shared>, Failure> {
         let last = self.transforms.len();
         for position in from..last {
             if batch.is_empty() {
-                return Ok(());
+                return Ok(None);
             }
             let sinks = &self.positions[position];
             if sinks.iter().any(SinkWorker::listening) {
@@ -310,16 +344,16 @@ impl Segment<'_, '_> {
                 .map_err(|e| Failure::Step(*step, e))?;
         }
         if batch.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
         let shared: Shared = Arc::new(batch);
         self.positions[last]
             .iter()
             .for_each(|sink| sink.send(&shared));
-        match self.barrier.as_mut() {
-            Some((step, barrier)) => barrier.push(&shared).map_err(|e| Failure::Step(*step, e)),
-            None => Ok(()),
+        if let Some((step, barrier)) = self.barrier.as_mut() {
+            barrier.push(&shared).map_err(|e| Failure::Step(*step, e))?;
         }
+        Ok(Some(shared))
     }
 
     /// The records each transform still holds, sent down from its
@@ -491,22 +525,25 @@ impl<'t> Chain<'t, '_> {
         segment: &mut Segment<'_, 't>,
         records: &mut dyn Records,
     ) -> std::result::Result<(), Failure> {
-        let mut batch = Vec::new();
+        let mut pool = Pool::default();
         loop {
             if let Some(step) = segment.failed_writer() {
                 return Err(Failure::Sink(step));
             }
-            if segment.idle() || !records.next_batch(&mut batch).map_err(Failure::Source)? {
+            if segment.idle() {
+                break;
+            }
+            let mut batch = pool.take();
+            if !records.next_batch(&mut batch).map_err(Failure::Source)? {
                 break;
             }
             self.records += batch.len() as u64;
             self.report();
-            let mut batch = std::mem::take(&mut batch);
             if let Some((step, head)) = segment.head.as_mut() {
                 head.apply(&mut batch)
                     .map_err(|e| Failure::Step(*step, e))?;
             }
-            segment.flow(batch, 0)?;
+            pool.put(segment.flow(batch, 0)?);
         }
         self.report();
         segment.flush()
@@ -667,5 +704,24 @@ impl<'t> Chain<'t, '_> {
             .into_iter()
             .map(|result| result.unwrap_or_else(|| Err(Error::Metric("not run".to_owned()))))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_pool_hands_back_a_batch_only_when_no_sink_holds_it() {
+        let mut pool = Pool::default();
+        let batch: Shared = Arc::new(vec![RawRecord::default(); 3]);
+        let held_by_a_sink = Arc::clone(&batch);
+        pool.put(Some(batch));
+        assert!(pool.take().is_empty());
+        drop(held_by_a_sink);
+        assert_eq!(pool.take().len(), 3);
+        assert!(pool.take().is_empty());
+        pool.put(None);
+        assert!(pool.in_flight.is_empty());
     }
 }

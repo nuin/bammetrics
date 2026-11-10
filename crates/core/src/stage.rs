@@ -46,8 +46,11 @@ mod tests;
 pub use exec::run_chain;
 pub use sinks::{CollectorSink, WriteOptions};
 
-/// Records per batch, the batch size of [`pass`].
-pub const BATCH_RECORDS: usize = pass::BATCH_RECORDS;
+/// Records per batch. A batch of 1024 exome records is about 360 KB, so
+/// the transform reads what the reader just wrote from the nearest cache;
+/// with the 4096 of [`pass`] a `MarkDuplicates` chain took 10 percent
+/// longer (docs/chaining.md section 9).
+pub const BATCH_RECORDS: usize = 1024;
 /// Batches a tap or sink thread may have queued before the reader waits.
 pub(crate) const QUEUED_BATCHES: usize = 8;
 
@@ -209,18 +212,23 @@ struct StreamRecords<'a> {
 
 impl Records for StreamRecords<'_> {
     fn next_batch(&mut self, out: &mut Vec<RawRecord>) -> Result<bool> {
-        out.clear();
-        while out.len() < BATCH_RECORDS {
-            let mut record = RawRecord::default();
-            let more = record
+        // The records `out` came with are overwritten in place, so a
+        // recycled batch costs no allocation.
+        let mut filled = 0;
+        while filled < BATCH_RECORDS {
+            if filled == out.len() {
+                out.push(RawRecord::default());
+            }
+            let more = out[filled]
                 .read_from(self.reader)
                 .map_err(|e| pass::read_error(self.path, self.cram, e))?;
             if !more {
                 break;
             }
-            out.push(record);
+            filled += 1;
         }
-        Ok(!out.is_empty())
+        out.truncate(filled);
+        Ok(filled > 0)
     }
 }
 
