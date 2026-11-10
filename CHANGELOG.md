@@ -19,6 +19,17 @@
   `COMPRESSION_LEVEL`, `CREATE_INDEX` and `CREATE_MD5_FILE`.
 - `bammetrics __chain`, a hidden test entry (`I=in.bam STEP=<Picard class or write>
   [KEY=VALUE ...] ...`). The `chain` verb replaces it in the next wave.
+- A chain refuses two outputs in one file before the first read (exit 2;
+  `stage::check_distinct_outputs` over each tap's files, the `METRICS_FILE` of
+  `MarkDuplicates` and the BAM, `.bai` and `.md5` of `write`). A file a prefix tool
+  names at its end fails that tool alone when another step writes it.
+- A chain refuses a second replaying stage from the plan, before the first read
+  (`run_chain` returns the usage error; exit 2). A `.sam` or `.cram` name on `write`
+  exits 2 before the run too (`WriteOptions::check`).
+- `write CREATE_INDEX=true` on a stream that is not coordinate sorted prints a note
+  (`Products::notes`) and writes no `.bai`.
+- Chain messages name each step once. A step name given twice is numbered
+  (`CollectGcBiasMetrics#1`), and an output that cannot be written carries its step.
 - `crates/cli/tests/chain.rs`: one chain of `MarkDuplicates`, 8 one-pass tools and `write`
   against the staged runs on the fixture, corpus t1 and the foundation corpus (metrics
   bodies and BAM records byte for byte), `STOP_AFTER` in the middle of a chain, a failing

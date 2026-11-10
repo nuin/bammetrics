@@ -10,7 +10,7 @@ use super::{Frame, Products, Sink};
 use crate::bam_raw::RawRecord;
 use crate::bam_writer::{self, BamWriter, Companions};
 use crate::error::{Error, Result};
-use crate::mark_duplicates;
+use crate::mark_duplicates::{self, SortOrder};
 use crate::metric::ToolOutput;
 use crate::pass::Collector;
 
@@ -136,6 +136,37 @@ impl WriteOptions {
             create_md5: false,
         }
     }
+
+    /// A usage error for a name the step cannot write: the file is always
+    /// a BAM. The caller of a chain asks before the first read; the step
+    /// asks again when it is built.
+    pub fn check(&self) -> Result<()> {
+        let extension = |wanted: &str| {
+            self.path
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case(wanted))
+        };
+        if extension("sam") || extension("cram") {
+            return Err(Error::Usage(format!(
+                "{}: bammetrics writes BAM only (SAM and CRAM output are not supported)",
+                self.path.display()
+            )));
+        }
+        Ok(())
+    }
+
+    /// Every file the step may write: the BAM, then the `.bai` and the
+    /// `.md5` when asked for.
+    pub fn files(&self) -> Vec<PathBuf> {
+        let mut files = vec![self.path.clone()];
+        if self.create_index {
+            files.push(self.path.with_extension("bai"));
+        }
+        if self.create_md5 {
+            files.push(bam_writer::md5_path(&self.path));
+        }
+        files
+    }
 }
 
 /// The `write` step: a BAM of the records at its position.
@@ -150,24 +181,15 @@ pub(super) fn write_sink(
     threads: usize,
     frame: &Frame,
 ) -> Result<Box<dyn Sink>> {
+    options.check()?;
     let path = &options.path;
-    let extension = |wanted: &str| {
-        path.extension()
-            .is_some_and(|e| e.eq_ignore_ascii_case(wanted))
-    };
-    if extension("sam") || extension("cram") {
-        return Err(Error::Usage(format!(
-            "write {}: bammetrics writes BAM only (SAM and CRAM output are not supported)",
-            path.display()
-        )));
-    }
     if let Some(read) = frame
         .reads
         .iter()
         .find(|read| mark_duplicates::same_file(read, path))
     {
         return Err(Error::Usage(format!(
-            "write {}: it is the input {}; writing it would destroy it",
+            "{}: it is the input {}; writing it would destroy it",
             path.display(),
             read.display()
         )));
@@ -191,8 +213,17 @@ impl Sink for WriteSink {
 
     fn finish(self: Box<Self>) -> Result<Products> {
         let files = bam_writer::finish(self.writer, &self.header, self.companions)?;
+        let order = SortOrder::of(&self.header);
+        let mut notes = Vec::new();
+        if self.companions.index && order != SortOrder::Coordinate {
+            notes.push(format!(
+                "CREATE_INDEX: no index written, the sort order is {} and a .bai needs coordinate",
+                order.name()
+            ));
+        }
         Ok(Products {
             files,
+            notes,
             ..Products::default()
         })
     }

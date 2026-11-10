@@ -13,17 +13,41 @@ use noodles::sam;
 use super::sinks::Limited;
 use super::{
     Barrier, BuildCollector, ChainPlan, CollectorSink, Frame, Next, Products, QUEUED_BATCHES,
-    Records, Sink, Source, Stage, StepKind, Transform,
+    Records, Sink, Source, Stage, Step, StepKind, Transform,
 };
 use crate::bam_raw::RawRecord;
 use crate::error::{Error, Result};
 use crate::pass::{self, Collector, Limits, OnProgress, Progress};
 use crate::spill::TempDir;
 
-/// Run `plan`. One result per step, in step order. `Err` only when the
-/// source cannot be read in the first segment, as [`pass::run_isolated`]
-/// fails; any later failure is in the results.
+/// A usage error for a stage that replays the source behind another
+/// stage: only the source itself can be read again in this version. Found
+/// from the plan, so no segment reads the source for a chain that cannot
+/// finish.
+fn check_replays(steps: &[Step]) -> Result<()> {
+    let mut front: Option<&str> = None;
+    for step in steps {
+        let StepKind::Stage(builder) = &step.kind else {
+            continue;
+        };
+        if let (true, Some(front)) = (builder.replays(), front) {
+            return Err(Error::Usage(format!(
+                "{} reads its input twice and cannot follow {front}: only a file source can be \
+                 read again in this version",
+                step.label
+            )));
+        }
+        front = Some(&step.label);
+    }
+    Ok(())
+}
+
+/// Run `plan`. One result per step, in step order. `Err` when the plan is
+/// refused before the first read (a replaying stage behind another stage)
+/// or when the source cannot be read in the first segment, as
+/// [`pass::run_isolated`] fails; any later failure is in the results.
 pub fn run_chain(plan: ChainPlan, progress: Option<OnProgress>) -> Result<Vec<Result<Products>>> {
+    check_replays(&plan.steps)?;
     let taps_only = plan
         .steps
         .iter()
@@ -493,13 +517,6 @@ impl<'t> Chain<'t, '_> {
                     segment.positions.last_mut().expect("one").push(worker);
                 }
                 StepKind::Stage(builder) => {
-                    if builder.replays() && !(segment.replayable && segment.transforms.is_empty()) {
-                        return Err(failed(Error::Usage(format!(
-                            "{} reads its input twice and cannot follow {}: only a file source \
-                             can be read again in this version",
-                            self.labels[step], segment.frame.label
-                        ))));
-                    }
                     match builder.build(&segment.frame, self.temp).map_err(failed)? {
                         Stage::Transform(transform) => {
                             let header = transform.header(&segment.frame.header).map_err(failed)?;

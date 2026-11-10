@@ -395,14 +395,13 @@ fn a_failing_tap_fails_alone_and_a_failing_stage_stops_its_segment() {
     ]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(1), "{stderr}");
-    assert_eq!(
-        stderr
-            .matches("CollectGcBiasMetrics: CollectGcBiasMetrics: REFERENCE_SEQUENCE is required")
-            .count(),
-        2,
-        "{stderr}"
-    );
+    // Each failure names its step once: a name given twice is numbered.
+    for step in ["CollectGcBiasMetrics#1", "CollectGcBiasMetrics#2"] {
+        let line = format!("bammetrics __chain: {step}: REFERENCE_SEQUENCE is required");
+        assert!(stderr.lines().any(|l| l.starts_with(&line)), "{stderr}");
+    }
     assert_eq!(names(&dir), ["insert.txt", "marked.bam"]);
+    fs::remove_dir_all(&dir).expect("cleanup");
 
     // insert_size.bam has no read group: MarkDuplicates fails on its
     // second record, as Picard does. Nothing of its segment or after it
@@ -530,13 +529,222 @@ fn a_cram_source_feeds_taps_and_write() {
     fs::remove_dir_all(&dir).expect("cleanup");
 }
 
+/// Run `__chain` with `args`; the exit code and standard error.
+fn chain(args: &[&str]) -> (Option<i32>, String) {
+    let mut argv = vec!["__chain".to_owned()];
+    argv.extend(args.iter().map(|a| (*a).to_owned()));
+    let output = bammetrics(&argv);
+    (
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
+}
+
+/// Two steps that name one file are refused before the first read, so no
+/// step replaces the file of another (the metrics are written after the
+/// run, which would put a tap's text over the renamed BAM).
+#[test]
+fn two_steps_cannot_write_one_file() {
+    let dir = fresh_dir("one-file");
+    let input = format!("I={}", FIXTURE.0);
+    let quality = "STEP=CollectQualityYieldMetrics";
+    let insert = "STEP=CollectInsertSizeMetrics";
+    let gc = "STEP=CollectGcBiasMetrics";
+    let reference = format!("R={}", FIXTURE.1);
+    let file = |name: &str, key: &str| arg(key, &dir.join(name));
+    let x = file("x.out", "O");
+    let bam = file("x.bam", "O");
+    let cases: [(&[&str], &str); 8] = [
+        (
+            &["STEP=MarkDuplicates", quality, &x, "STEP=write", &x],
+            "CollectQualityYieldMetrics and write both write",
+        ),
+        (
+            &[quality, &x, insert, &x],
+            "CollectQualityYieldMetrics and CollectInsertSizeMetrics both write",
+        ),
+        (
+            &[quality, &x, quality, &x],
+            "CollectQualityYieldMetrics#1 and CollectQualityYieldMetrics#2 both write",
+        ),
+        (
+            &["STEP=MarkDuplicates", &file("x.out", "M"), quality, &x],
+            "MarkDuplicates and CollectQualityYieldMetrics both write",
+        ),
+        (
+            &["STEP=write", &bam, "STEP=write", &bam],
+            "write#1 and write#2 both write",
+        ),
+        // The index and the MD5 of `write` are its files too.
+        (
+            &[
+                "STEP=write",
+                &bam,
+                "CREATE_INDEX=true",
+                quality,
+                &file("x.bai", "O"),
+            ],
+            "write and CollectQualityYieldMetrics both write",
+        ),
+        (
+            &[
+                quality,
+                &file("x.bam.md5", "O"),
+                "STEP=write",
+                &bam,
+                "CREATE_MD5_FILE=true",
+            ],
+            "CollectQualityYieldMetrics and write both write",
+        ),
+        // The second file of a tool (`SUMMARY_OUTPUT`).
+        (
+            &[
+                gc,
+                &file("gc.txt", "O"),
+                &file("x.out", "S"),
+                &reference,
+                quality,
+                &x,
+            ],
+            "CollectGcBiasMetrics and CollectQualityYieldMetrics both write",
+        ),
+    ];
+    for (steps, text) in cases {
+        let mut args = vec![input.as_str()];
+        args.extend(steps);
+        let (code, stderr) = chain(&args);
+        assert_eq!(code, Some(2), "{args:?}: {stderr}");
+        assert!(stderr.starts_with("bammetrics __chain: "), "{stderr}");
+        assert!(stderr.contains(text), "{args:?}: {stderr}");
+        assert!(
+            stderr.contains("every output of a chain needs its own file"),
+            "{stderr}"
+        );
+        assert!(names(&dir).is_empty(), "{args:?}: {:?}", names(&dir));
+    }
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+/// A tool whose `OUTPUT` is a prefix names its files when it finishes. One
+/// that another step writes fails that tool alone, and the file keeps the
+/// other step's content.
+#[test]
+fn a_file_under_a_prefix_never_replaces_the_file_of_another_step() {
+    let dir = fresh_dir("prefix");
+    let taken = dir.join("art.pre_adapter_detail_metrics");
+    let (code, stderr) = chain(&[
+        "I=tests/data/artifact.bam",
+        &format!("R={}", FIXTURE.1),
+        "STEP=CollectSequencingArtifactMetrics",
+        &arg("O", &dir.join("art")),
+        "STEP=CollectQualityYieldMetrics",
+        &arg("O", &taken),
+    ]);
+    assert_eq!(code, Some(1), "{stderr}");
+    assert!(
+        stderr.contains(&format!(
+            "bammetrics __chain: CollectSequencingArtifactMetrics: {} is a file of \
+             CollectQualityYieldMetrics",
+            taken.display()
+        )),
+        "{stderr}"
+    );
+    assert_eq!(names(&dir), ["art.pre_adapter_detail_metrics"]);
+    assert!(body(&taken).contains("QualityYieldMetrics"));
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+/// What `write` cannot do is said: an index of a stream that is not
+/// coordinate sorted is not written, with a note.
+#[test]
+fn write_says_when_it_writes_no_index() {
+    let dir = fresh_dir("no-index");
+    let (code, stderr) = chain(&[
+        "I=tests/data/duplicate_marking.bam",
+        "STEP=write",
+        &arg("O", &dir.join("q.bam")),
+        "CREATE_INDEX=true",
+        "CREATE_MD5_FILE=true",
+    ]);
+    assert_eq!(code, Some(0), "{stderr}");
+    assert_eq!(
+        stderr,
+        "bammetrics __chain: write: CREATE_INDEX: no index written, the sort order is queryname \
+         and a .bai needs coordinate\n"
+    );
+    assert_eq!(names(&dir), ["q.bam", "q.bam.md5"]);
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+/// A file that cannot be written is found before the first read and exits
+/// 1 under the step's label, as the Picard face exits for its `OUTPUT`.
+#[test]
+fn an_output_that_cannot_be_written_exits_1_before_anything_runs() {
+    let dir = fresh_dir("unwritable");
+    let input = format!("I={}", FIXTURE.0);
+    let missing = dir.join("missing");
+    let dup = arg("M", &dir.join("dup.txt"));
+    let cases: [(&[&str], &str); 3] = [
+        (
+            &["STEP=write", &arg("O", &missing.join("x.bam"))],
+            "bammetrics __chain: write: ",
+        ),
+        (
+            &[
+                "STEP=MarkDuplicates",
+                &dup,
+                "STEP=CollectQualityYieldMetrics",
+                &arg("O", &missing.join("x.txt")),
+            ],
+            "bammetrics __chain: CollectQualityYieldMetrics: ",
+        ),
+        (
+            &["STEP=MarkDuplicates", &arg("M", &missing.join("dup.txt"))],
+            "bammetrics __chain: MarkDuplicates: ",
+        ),
+    ];
+    for (steps, start) in cases {
+        let mut args = vec![input.as_str()];
+        args.extend(steps);
+        let (code, stderr) = chain(&args);
+        assert_eq!(code, Some(1), "{args:?}: {stderr}");
+        assert!(stderr.starts_with(start), "{stderr}");
+        assert!(stderr.contains("No such file or directory"), "{stderr}");
+        assert_eq!(stderr.lines().count(), 1, "{stderr}");
+        assert!(names(&dir).is_empty(), "{args:?}: {:?}", names(&dir));
+    }
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
 #[test]
 fn usage_errors_exit_2_before_anything_runs() {
     let dir = fresh_dir("usage");
     let out = arg("O", &dir.join("out.txt"));
+    let sam = arg("O", &dir.join("out.sam"));
+    let cram = arg("O", &dir.join("out.cram"));
     let input = format!("I={}", FIXTURE.0);
     let onto_input = format!("O={}", FIXTURE.0);
-    let cases: [(&[&str], &str); 8] = [
+    let cases: [(&[&str], &str); 11] = [
+        (
+            &[&input, "STEP=write", &sam],
+            "out.sam: bammetrics writes BAM only",
+        ),
+        (
+            &[&input, "STEP=MarkDuplicates", "STEP=write", &cram],
+            "out.cram: bammetrics writes BAM only",
+        ),
+        // Refused from the command line: the first MarkDuplicates reads
+        // nothing for a chain that cannot finish.
+        (
+            &[
+                &input,
+                "STEP=MarkDuplicates",
+                "STEP=CollectQualityYieldMetrics",
+                &out,
+                "STEP=MarkDuplicates",
+            ],
+            "MarkDuplicates#2 reads its input twice and cannot follow MarkDuplicates#1",
+        ),
         (&[&input], "no STEP= given"),
         (
             &[&input, "STEP=MarkDuplicates", "STEP=write", &onto_input],

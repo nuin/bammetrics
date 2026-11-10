@@ -1076,9 +1076,17 @@ are equal byte for byte. A chain differs from the staged sequence on purpose her
 - When a stage fails on a record, every step of its segment writes nothing, a tap on the
   source included: it saw part of the stream. In the staged sequence that tap would have
   finished before `MarkDuplicates` started. Steps of an earlier segment keep their files.
-- A usage error inside a step's own options (`READ_NAME_REGEX=(`) is found when the step
-  is built and exits 1, with the other steps of its segment stopped. The tool alone
-  exits 1 too; the verbs exit 2.
+- A usage error inside a stage's own options (`READ_NAME_REGEX=(`, `OUTPUT` on
+  `MarkDuplicates`) is found when the stage is built and exits 1, with the other steps of
+  its segment stopped. The tool alone exits 1 too; the verbs exit 2. Every other usage
+  error of a chain exits 2 before the first read: an unknown step or option, a `.sam` or
+  `.cram` name on `write`, a second `MarkDuplicates`.
+- Two steps that name one output file are a usage error (exit 2, nothing read or
+  written). The staged sequence runs and the later tool replaces the earlier file.
+- `write CREATE_INDEX=true` on a stream that is not coordinate sorted writes no `.bai`
+  and prints a note. The `MarkDuplicates` tool writes no `.bai` either and prints nothing.
+- An output whose directory is missing exits 1 before the first read, under the step's
+  label. The Picard face exits 1 for the same `OUTPUT`; the verbs create the directory.
 
 ## Not in Picard
 

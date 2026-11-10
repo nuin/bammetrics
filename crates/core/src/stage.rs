@@ -31,7 +31,7 @@ use noodles::sam;
 
 use crate::bam_raw::RawRecord;
 use crate::bam_writer::BamWriter;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::mark_duplicates::{self, SortOrder};
 use crate::metric::ToolOutput;
 use crate::pass::{self, Collector, Limits};
@@ -271,6 +271,9 @@ pub struct Products {
     pub files: Vec<PathBuf>,
     /// A stage's record counts.
     pub counters: Option<Counters>,
+    /// Lines for standard error: what the step did not do and why (an
+    /// index asked for on a stream that is not coordinate sorted).
+    pub notes: Vec<String>,
 }
 
 impl Products {
@@ -461,6 +464,36 @@ impl Step {
             Box::new(move |frame| sinks::write_sink(&options, threads, frame)),
         )
     }
+}
+
+/// The step among `outputs` (a step's label, a file it writes) that writes
+/// `path`: the same file through a link, `..` or a relative spelling
+/// counts.
+pub fn writer_of<'a>(outputs: &'a [(String, PathBuf)], path: &Path) -> Option<&'a str> {
+    outputs
+        .iter()
+        .find(|(_, other)| mark_duplicates::same_file(other, path))
+        .map(|(label, _)| label.as_str())
+}
+
+/// Fail when two of `outputs` (a step's label, a file it writes) are one
+/// file. [`run_chain`] hands each step's metrics to the caller, which
+/// writes them after the run: without this check the later write replaces
+/// the earlier file and nothing fails.
+pub fn check_distinct_outputs(outputs: &[(String, PathBuf)]) -> Result<()> {
+    for (i, (label, path)) in outputs.iter().enumerate() {
+        if let Some(other) = writer_of(&outputs[..i], path) {
+            let whose = if other == label {
+                format!("{label} writes {} twice", path.display())
+            } else {
+                format!("{other} and {label} both write {}", path.display())
+            };
+            return Err(Error::Usage(format!(
+                "{whose}: every output of a chain needs its own file"
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// A chain: the source and its steps in order.

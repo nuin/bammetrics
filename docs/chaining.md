@@ -67,10 +67,44 @@ bammetrics __chain I=in.bam [R=ref.fa] [threads=N] [TMP_DIR=dir] \
 - `write` takes `OUTPUT` (`O`), `COMPRESSION_LEVEL` (0 to 9, default 5),
   `CREATE_INDEX` and `CREATE_MD5_FILE`. The file is always BAM. A name ending in
   `.sam` or `.cram` is refused. A path that is the source or the reference is refused.
+- `CREATE_INDEX=true` writes `<name>.bai` only for a coordinate-sorted stream. For any
+  other sort order `write` writes no index and prints
+  `write: CREATE_INDEX: no index written, the sort order is queryname and a .bai needs coordinate`.
+  The exit code stays 0. The `MarkDuplicates` tool skips the index the same way and
+  prints nothing.
+- Every output needs its own file. The outputs are each tap's file option and its other
+  written files (`SUMMARY_OUTPUT`), the `METRICS_FILE` of `MarkDuplicates`, and the BAM
+  of `write` with its `.bai` and `.md5`. Two outputs that are one file (links and `..`
+  resolved) are a usage error:
+  `CollectQualityYieldMetrics and write both write x.out: every output of a chain needs its own file`.
+  Nothing is read and nothing is written.
+- A tool whose `OUTPUT` is a prefix (`CollectSequencingArtifactMetrics`) names its
+  files when it finishes. If one of them is the file of another step, that tool fails
+  alone (`<file> is a file of <step>`, exit 1) and the other step's file stays.
 
-Exit codes: 0, 1 when a step failed, 2 for a usage error found before the run. A failed
-step prints `bammetrics __chain: <step>: <error>`. The other steps still write their
-files.
+Step labels: a message names a step by its tool (`MarkDuplicates`, `write`). A name
+given more than once is numbered in step order: `CollectGcBiasMetrics#1`,
+`CollectGcBiasMetrics#2`.
+
+Exit codes:
+
+| Code | When | Found |
+|---|---|---|
+| 0 | Every step finished | |
+| 2 | A usage error: an unknown step or option, a missing `OUTPUT`, a `.sam` or `.cram` name on `write`, two outputs in one file, an output that is an input, a second replaying stage (section 5) | Before the first read. No file is written |
+| 1 | An output that cannot be written (its directory is missing, the file is read only) | Before the first read, as the Picard face exits for its `OUTPUT` |
+| 1 | A step failed | During the run. The other steps still write their files |
+
+Every one of these prints `bammetrics __chain: <step>: <error>`. An error of the chain's
+own options (`INPUT is required`) has no step. The options of a stage are parsed when
+the stage is built, so a bad value there (`READ_NAME_REGEX=(`) exits 1 (W04 moves that
+check in front of the run).
+
+Tests in `crates/cli/tests/chain.rs`: `two_steps_cannot_write_one_file` (8 command
+lines), `a_file_under_a_prefix_never_replaces_the_file_of_another_step`,
+`write_says_when_it_writes_no_index`,
+`an_output_that_cannot_be_written_exits_1_before_anything_runs` and
+`usage_errors_exit_2_before_anything_runs` (11 command lines).
 
 ## 3. The Rust API
 
@@ -91,8 +125,11 @@ files.
 | `Emit` | Where a producer puts each record. `BamWriter` and `Vec<RawRecord>` implement it |
 | `Step` | `tap`, `tool_tap(tool, inv)`, `tool_stage(tool, inv)`, `stage`, `sink`, `write(WriteOptions, threads)` |
 | `ChainPlan` | `source`, `steps`, `threads`, `tmp_dir`, `lower` |
-| `run_chain(plan, progress)` | One `Result<Products>` per step, in step order |
-| `Products` | `output` (metrics the caller writes), `files` (a writer's renamed files), `counters` (a stage's records in, out, changed) |
+| `run_chain(plan, progress)` | One `Result<Products>` per step, in step order. `Err` for a plan refused before the first read (section 5) or a source that cannot be read in the first segment |
+| `Products` | `output` (metrics the caller writes), `files` (a writer's renamed files), `counters` (a stage's records in, out, changed), `notes` (lines for standard error, such as the index `write` did not write) |
+| `WriteOptions` | `path`, `compression_level`, `create_index`, `create_md5`. `check()` refuses a `.sam` or `.cram` name. `files()` lists the BAM, the `.bai` and the `.md5` |
+| `check_distinct_outputs(outputs)` | A usage error when two `(step label, path)` pairs are one file. The caller writes the metrics, so the caller calls it before `run_chain` |
+| `writer_of(outputs, path)` | The label of the step that writes `path`, if any |
 | `stage_of(tool)` | The stage function of a registry tool. One row: `MarkDuplicates` |
 
 `crates/core/src/bam_writer.rs` holds `BamWriter` (the header byte for byte, BGZF on
@@ -147,9 +184,11 @@ to `TMP_DIR` once, as the tool does. Read ends spill to `TMP_DIR` as in the tool
 A step after the barrier is built from the sealed header, so it sees the new `@PG` line.
 
 Limit of W03: a stage that replays must sit directly behind a file source. A replaying
-stage behind another stage is refused when its segment is built, before that segment
-reads a record (`reads its input twice and cannot follow ...`). W05 adds the spool and
-the planner that lift this.
+stage behind another stage is refused by `run_chain` from the plan, before the first
+read of the source: `MarkDuplicates#2 reads its input twice and cannot follow
+MarkDuplicates#1: only a file source can be read again in this version`. It is a usage
+error (exit 2). No step runs and no file is written. W05 adds the spool and the planner
+that lift this.
 
 ## 6. Options in the middle of a chain
 
@@ -306,7 +345,7 @@ record without a copy. `Transform::products` carries the `MarkDuplicates` metric
 
 | Wave | Adds |
 |---|---|
-| W04 | The `chain` verb with the `+` grammar and did-you-mean per step, `plan` for a chain, the TOML plan file, Python `bm.chain` and `bm.step`, `Run.stages` from `Products::counters`, the final form of the `StringHeader` line, product naming (`PREFIX.<label>.<ext>`). `__chain` and `crates/cli/src/chain.rs` are replaced. `Step::tool_tap`, `Step::tool_stage`, `Step::write` and `run_chain` stay |
+| W04 | The `chain` verb with the `+` grammar and did-you-mean per step, `plan` for a chain, the TOML plan file, Python `bm.chain` and `bm.step`, `Run.stages` from `Products::counters`, the final form of the `StringHeader` line, product naming (`PREFIX.<label>.<ext>`), stage options checked before the run. `__chain` and `crates/cli/src/chain.rs` are replaced. `Step::tool_tap`, `Step::tool_stage`, `Step::write`, `run_chain`, `check_distinct_outputs` and `Products::notes` stay: the verb must call the output check and print the notes |
 | W05 | The sort barrier (`Next::Records`), the planner (`Frame` per position, `requires`, free-space check), the spool for a replay behind another stage, `--sort-memory`, `write --index` through the BAI writer |
 | W09 on | Each BAM-writing tool registers its stage in `stage_of` |
 | W14 | `qc` as the last step of a chain, manifest 2, resume per step, kept products, the spool for tools that read their input their own way |

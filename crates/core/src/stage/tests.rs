@@ -480,21 +480,83 @@ fn a_stage_that_replays_is_refused_behind_another_stage() {
         Make::Hold(Hold::default()),
         Make::Replayer,
     ] {
-        let behind_replay = matches!(first, Make::Replayer);
-        let steps = vec![stage("first", first), stage("replay", Make::Replayer)];
+        let steps = vec![
+            tap(0, None),
+            stage("first", first),
+            tap(0, None),
+            stage("replay", Make::Replayer),
+        ];
         let (plan, reads) = Memory::plan(4, steps);
-        let results = texts(run_chain(plan, None).expect("the chain runs"));
-        assert!(
-            results[1].starts_with("ERR replay reads its input twice and cannot follow memory"),
-            "{}",
-            results[1]
-        );
-        // The source is opened once, and once more for the stage in
-        // front when that one replays.
+        let Err(Error::Usage(refused)) = run_chain(plan, None) else {
+            panic!("the plan is refused");
+        };
         assert_eq!(
-            reads.load(Ordering::Relaxed),
-            1 + usize::from(behind_replay)
+            refused,
+            "replay reads its input twice and cannot follow first: only a file source can be \
+             read again in this version"
         );
+        // Refused before the first read: no stage opens the source.
+        assert_eq!(reads.load(Ordering::Relaxed), 0);
+    }
+}
+
+#[test]
+fn two_outputs_that_are_one_file_are_refused() {
+    let dir = scratch("outputs");
+    let file = |name: &str| dir.join(name);
+    let step = |label: &str, path: PathBuf| (label.to_owned(), path);
+    let distinct = [
+        step("a", file("x.txt")),
+        step("b", file("y.txt")),
+        step("write", file("x.bam")),
+    ];
+    check_distinct_outputs(&distinct).expect("three files");
+    assert_eq!(writer_of(&distinct, &file("y.txt")), Some("b"));
+    assert_eq!(writer_of(&distinct, &file("z.txt")), None);
+
+    // One file under two spellings, existing or not.
+    let respelled = dir.join("sub/../x.txt");
+    std::fs::create_dir(dir.join("sub")).expect("a directory");
+    for exists in [false, true] {
+        if exists {
+            std::fs::write(file("x.txt"), "").expect("a file");
+        }
+        let clash = [step("a", file("x.txt")), step("write", respelled.clone())];
+        let Err(Error::Usage(text)) = check_distinct_outputs(&clash) else {
+            panic!("one file twice");
+        };
+        assert_eq!(
+            text,
+            format!(
+                "a and write both write {}: every output of a chain needs its own file",
+                respelled.display()
+            )
+        );
+    }
+    let twice = [step("a", file("x.txt")), step("a", file("x.txt"))];
+    let Err(Error::Usage(text)) = check_distinct_outputs(&twice) else {
+        panic!("one file twice");
+    };
+    assert!(text.starts_with("a writes "), "{text}");
+    std::fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+#[test]
+fn write_options_name_their_files_and_refuse_sam_and_cram() {
+    let mut options = WriteOptions::new(Path::new("dir/out.bam"));
+    assert_eq!(options.files(), [PathBuf::from("dir/out.bam")]);
+    options.create_index = true;
+    options.create_md5 = true;
+    assert_eq!(
+        options.files(),
+        ["dir/out.bam", "dir/out.bai", "dir/out.bam.md5"].map(PathBuf::from)
+    );
+    options.check().expect("a BAM name");
+    for name in ["out.sam", "out.CRAM"] {
+        let Err(Error::Usage(text)) = WriteOptions::new(Path::new(name)).check() else {
+            panic!("{name} is refused");
+        };
+        assert!(text.starts_with(name) && text.contains("bammetrics writes BAM only"));
     }
 }
 
@@ -655,13 +717,34 @@ fn the_write_step_copies_the_stream_into_a_bam_with_its_index_and_md5() {
         compression_level: 1,
         ..WriteOptions::new(&out)
     };
-    let results = run_chain(write_plan(&source, options), None).expect("the chain runs");
-    let files = &results[0].as_ref().expect("written").files;
+    let results = run_chain(write_plan(&source, options.clone()), None).expect("the chain runs");
+    let written = results[0].as_ref().expect("written");
     let expected = [out.clone(), dir.join("copy.bai"), dir.join("copy.bam.md5")];
-    assert_eq!(files.as_slice(), expected.as_slice());
+    assert_eq!(written.files.as_slice(), expected.as_slice());
+    assert!(written.notes.is_empty(), "{:?}", written.notes);
     assert!(expected.iter().all(|path| path.is_file()));
     assert_eq!(read_bam(&out), read_bam(&source));
     assert_eq!(std::fs::read_dir(&dir).expect("dir").count(), 3);
+
+    // A stream that is not coordinate sorted gets no index, and a note.
+    let by_name = dir.join("by_name");
+    std::fs::create_dir(&by_name).expect("a directory");
+    let options = WriteOptions {
+        path: by_name.join("copy.bam"),
+        ..options
+    };
+    let results = run_chain(write_plan(&data("duplicate_marking.bam"), options), None)
+        .expect("the chain runs");
+    let written = results[0].as_ref().expect("written");
+    assert_eq!(
+        written.files,
+        [by_name.join("copy.bam"), by_name.join("copy.bam.md5")]
+    );
+    assert_eq!(
+        written.notes,
+        ["CREATE_INDEX: no index written, the sort order is queryname and a .bai needs coordinate"]
+    );
+    std::fs::remove_dir_all(&by_name).expect("cleanup");
 
     let refusals = [
         (source.clone(), "it is the input"),
