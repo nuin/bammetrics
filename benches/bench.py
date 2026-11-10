@@ -22,17 +22,28 @@ the table says whether the text is identical. Wall time is the median of
 Markdown table and to DIR/results.json.
 """
 import argparse
+import contextlib
 import json
 import os
 import platform
 import re
 import statistics
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BAMMETRICS = ROOT / "target" / "release" / "bammetrics"
 FAKE_R = ROOT / "target" / "fakeR"
+
+sys.path.insert(0, str(ROOT / "tests" / "concordance"))
+import picard_lock  # noqa: E402
+
+
+def queued(cmd):
+    """The Picard queue lock while a `picard` command runs, so the wait for a
+    free slot stays outside the timed run; nothing for any other command."""
+    return picard_lock.held(cmd) if cmd[0] == "picard" else contextlib.nullcontext()
 
 
 def picard_env():
@@ -48,7 +59,8 @@ def picard_env():
 
 def timed(cmd, env):
     """Wall seconds and peak RSS in MB of one run, from /usr/bin/time -l."""
-    out = subprocess.run(["/usr/bin/time", "-l", *cmd], env=env, capture_output=True, text=True)
+    with queued(cmd):
+        out = subprocess.run(["/usr/bin/time", "-l", *cmd], env=env, capture_output=True, text=True)
     if out.returncode:
         raise SystemExit(f"failed: {' '.join(cmd)}\n{out.stderr[-2000:]}")
     wall = float(re.search(r"([\d.]+) real", out.stderr).group(1))
@@ -68,7 +80,8 @@ def body(path):
 
 def versions():
     def first_line(cmd):
-        out = subprocess.run(cmd, capture_output=True, text=True)
+        with queued(cmd):
+            out = subprocess.run(cmd, capture_output=True, text=True)
         return (out.stdout + out.stderr).strip().splitlines()[0]
 
     model = first_line(["sysctl", "-n", "hw.model"])
