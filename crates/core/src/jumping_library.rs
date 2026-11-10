@@ -184,6 +184,12 @@ pub const TOOL: Tool = Tool {
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let opts = Options::from_invocation(inv)?;
     let inputs = inv.all("INPUT");
+    if let Some(stream) = inputs.iter().find(|i| is_standard_input(i)) {
+        return Err(Error::Usage(format!(
+            "INPUT={stream}: CollectJumpingLibraryMetrics reads each input twice (the mode \
+             pass, then the counts), so it needs a file, not standard input"
+        )));
+    }
     let mode = outie_mode(inv, &opts, inputs)?;
     let mut counts = Counts::new(opts, mode);
     for input in inputs {
@@ -195,6 +201,12 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
         })?;
     }
     Ok(MetricsOutput::from_rows(&[counts.finish()], None).into())
+}
+
+/// `-` (the verb grammar maps it to `/dev/stdin`) or the device itself: a
+/// stream the second pass could not read again.
+fn is_standard_input(input: &str) -> bool {
+    input == "-" || input == "/dev/stdin" || input == "/dev/fd/0"
 }
 
 /// Picard's `PicardException` on a header whose sort order is not
@@ -250,10 +262,13 @@ fn mate_mapping_quality(record: &bam::Record) -> Result<Option<i64>> {
     match record.data().get(&Tag::MATE_MAPPING_QUALITY) {
         None => Ok(None),
         Some(Err(e)) => Err(e.into()),
-        Some(Ok(value)) => value.as_int().map(Some).ok_or_else(|| Error::MalformedRecord {
-            name: record_name(record),
-            what: "MQ tag is not an integer",
-        }),
+        Some(Ok(value)) => value
+            .as_int()
+            .map(Some)
+            .ok_or_else(|| Error::MalformedRecord {
+                name: record_name(record),
+                what: "MQ tag is not an integer",
+            }),
     }
 }
 
@@ -396,7 +411,7 @@ impl Counts {
             if whole != 0 {
                 part as f64 / whole as f64
             } else {
-                 0.0
+                0.0
             }
         };
         let library_size = |pairs: i64, duplicates: i64| {
@@ -465,8 +480,16 @@ impl Accumulator for Counts {
             self.cross_contig += 1;
         } else {
             let (histogram, pairs, dupes) = match orientation(record)? {
-                Orientation::Rf => (&mut self.outie_histogram, &mut self.outies, &mut self.outie_dupes),
-                Orientation::Fr => (&mut self.innie_histogram, &mut self.innies, &mut self.innie_dupes),
+                Orientation::Rf => (
+                    &mut self.outie_histogram,
+                    &mut self.outies,
+                    &mut self.outie_dupes,
+                ),
+                Orientation::Fr => (
+                    &mut self.innie_histogram,
+                    &mut self.innies,
+                    &mut self.innie_dupes,
+                ),
                 // The same-strand test above already took every tandem pair.
                 Orientation::Tandem => {
                     return Err(Error::MalformedRecord {
@@ -524,7 +547,10 @@ mod tests {
         }
         let row = c.finish();
         assert_eq!(row.jump_library_size, 0);
-        assert_eq!(row.nonjump_library_size, estimate_library_size(10, 8).unwrap());
+        assert_eq!(
+            row.nonjump_library_size,
+            estimate_library_size(10, 8).unwrap()
+        );
         assert_eq!(row.nonjump_duplicate_pct, 0.2);
         assert_eq!(row.pct_jumps, 0.5);
         // TAIL_LIMIT 10000: mode 300 (count 3), 301 is missing, so the mean
@@ -533,12 +559,28 @@ mod tests {
     }
 
     #[test]
+    fn standard_input_is_refused() {
+        assert!(is_standard_input("-"));
+        assert!(is_standard_input("/dev/stdin"));
+        assert!(!is_standard_input("in.bam"));
+        let args: Vec<String> = ["I=-", "O=out.txt"]
+            .iter()
+            .map(|s| (*s).to_owned())
+            .collect();
+        let err = TOOL.execute(&args).expect_err("refused");
+        assert!(err.to_string().contains("standard input"), "{err}");
+    }
+
+    #[test]
     fn chimera_threshold_is_the_greater_of_mode_and_option() {
         let opts = Options {
             chimera_kb_min: 1000,
             ..Options::default()
         };
-        assert_eq!(Counts::new(opts.clone(), 2500.0).chimera_size_minimum, 2500.0);
+        assert_eq!(
+            Counts::new(opts.clone(), 2500.0).chimera_size_minimum,
+            2500.0
+        );
         assert_eq!(Counts::new(opts, 20.0).chimera_size_minimum, 1000.0);
     }
 }

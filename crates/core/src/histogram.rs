@@ -302,7 +302,14 @@ mod tests {
         // Mode 10 (count 8). 11 and 12 follow and hold at least 8 / 4 = 2;
         // 13 holds 1, so 13 and everything after it go. Bins below the
         // mode stay whatever their count.
-        let mut h = hist(&[(2, 1.0), (10, 8.0), (11, 3.0), (12, 2.0), (13, 1.0), (14, 5.0)]);
+        let mut h = hist(&[
+            (2, 1.0),
+            (10, 8.0),
+            (11, 3.0),
+            (12, 2.0),
+            (13, 1.0),
+            (14, 5.0),
+        ]);
         h.trim_by_tail_limit(4);
         assert_eq!(h.keys().collect::<Vec<_>>(), [2, 10, 11, 12]);
         // A gap after the mode ends the walk even with a large count.
