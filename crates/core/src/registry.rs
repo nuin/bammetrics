@@ -332,6 +332,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::oxog_metrics::TOOL,
     &crate::coverage_gaps::TOOL,
     &crate::sex_check::TOOL,
+    &crate::bam_index_stats::TOOL,
 ];
 
 /// The tool named `name`.
@@ -941,7 +942,7 @@ pub fn python_stub(tool: &Tool) -> String {
     for param in params {
         text.push_str(&format!("    {param},\n"));
     }
-    text.push_str(") -> list[dict[str, Any]]:\n");
+    text.push_str(&format!(") -> list[{}]:\n", python_row_type(tool)));
     let mut doc = wrap(&format!("{}: {}", tool.name, tool.summary), "    ", 88);
     doc[0] = format!("    \"\"\"{}", doc[0].trim_start());
     let last = doc.len() - 1;
@@ -951,6 +952,17 @@ pub fn python_stub(tool: &Tool) -> String {
         text.push('\n');
     }
     text
+}
+
+/// The Python type of one row: a `TypedDict` written by hand in
+/// `bammetrics.pyi` for a tool whose columns are fixed, a plain dict for a
+/// tool whose columns follow the Picard class.
+fn python_row_type(tool: &Tool) -> &'static str {
+    if tool.name == crate::bam_index_stats::TOOL.name {
+        crate::bam_index_stats::PYTHON_ROW
+    } else {
+        "dict[str, Any]"
+    }
 }
 
 /// The generated block of `bammetrics.pyi`: every tool in [`TOOLS`] order,

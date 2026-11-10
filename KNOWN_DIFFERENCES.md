@@ -243,6 +243,20 @@ behaves how.
 - The `compare-metrics` verb writes the comparison to standard output without `-o`; the
   Picard face, as Picard, writes it only to `O=`. Both exit 1 when the files are NOT
   equal, where other tool verbs keep 1 for an input error.
+- `BamIndexStats` prints Picard's text on standard output and takes no `OUTPUT` (`O=`
+  exits 1 with `Unrecognized option: O`, as in Picard); the `bam-index-stats` verb writes
+  `-o`. A CRAM, which Picard opens as a BAM and fails on (`Unexpected compressed block
+  length`), is read whole with `R=` and its records counted by reference and unmapped
+  flag, the numbers `samtools index` stores; a BAM on standard input is counted the same
+  way. A header with more `@SQ` lines than the index has references exits 1 in both:
+  Picard prints the lines up to the missing reference and throws
+  `ArrayIndexOutOfBoundsException: Index 1 out of bounds for length 1`, bammetrics prints
+  nothing and says `the index holds 1 reference sequences, the header 2 (Picard: Index 1
+  out of bounds for length 1)`. The index file as `INPUT` is Picard's warning `INPUT
+  should be the BAM file name, not its index file` followed by a read error; bammetrics
+  exits 1 with that line as the error. A truncated index exits 1 in both with each
+  reader's own message. Both ignore an `x.bam.crai` beside a BAM where htsjdk would pick
+  it before `x.bam.bai` and fail.
 
 ## Charts
 
@@ -269,7 +283,11 @@ arguments) or as `truth_vcf=` and `call_vcf=`. A double Picard prints as `?` (Na
 `HET_SPECIFICITY`, a ratio over zero) is `float("nan")` in the dicts.
 `create_sequence_dictionary(reference, ...)` returns one dict per `@SQ` line (`name`,
 `length`, `md5`, `assembly`, `uri`, `species`, `alternate_names`) and writes the `.dict`
-only with `output=`.
+only with `output=`. `bam_index_stats(bam)` returns one dict per reference of the header
+(`reference`, `length`, `aligned`, `unaligned`, all but the name `int`; the stub types it
+as the `TypedDict` `_BamIndexRow`, so a checker knows each key's type) and a last dict
+`reference="*"` whose `unaligned` is the `NoCoordinateCount`; it takes no `output=`
+(`ValueError`, as Picard has no `OUTPUT`) and reads a CRAM with `reference_sequence=`.
 
 `compare_metrics([a, b], ...)` returns one dict per line Picard logs as a difference:
 `KEY`, `METRIC`, `VALUE1` and `VALUE2` (typed as the metric's field) for a value
@@ -763,6 +781,15 @@ sequence line and kept inside it; `M5` over the bases with `a` to `z` upper-case
 at least one sequence and reading one more; `ALT_NAMES` in `HashSet` order; gzip by
 the name only (a gzip file named `.fa` fails at `chr(31)`); `CREATE_MD5_FILE` writing
 the 32 hex digits without a line end.
+
+`BamIndexStats` output reproduced from Picard 3.5.0
+(`tests/concordance/test_bam_index_stats.py`): `NAME length=<tab>LENGTH<tab>Aligned=
+N<tab>Unaligned= N` per header reference, then `NoCoordinateCount= N`; the counts from the
+metadata bin of a `.bai` or `.csi`, cast to a Java `int`; `0` and `0` for a reference
+without metadata; an index with no reference read as one empty reference; the index
+found as `x.bai`, `x.csi`, `x.bam.bai`, `x.bam.csi`, then beside the target of a symbolic
+link; an index with more references than the header printing the header's references
+only; `No index for bam file INPUT` without one.
 
 ## Failures
 

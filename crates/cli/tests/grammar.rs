@@ -139,6 +139,12 @@ fn prefix(out: &str) -> Vec<String> {
     vec![format!("O={out}")]
 }
 
+/// A tool without an `OUTPUT` option: the Picard face prints, and the
+/// runner saves its standard output as the file.
+fn no_output(_out: &str) -> Vec<String> {
+    Vec::new()
+}
+
 fn cases(built: &Built) -> Vec<Case> {
     let bam = |extra: &[&str]| strings(&[&[IS], extra].concat());
     let picard_bam = |extra: &[&str]| strings(&[&[&format!("I={IS}")[..]], extra].concat());
@@ -403,6 +409,16 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("CONTEXT_SIZE", "0")),
             picard_outputs: single,
         },
+        // No OUTPUT option: the Picard face prints, so the Picard side goes to
+        // the verb's own `-o` through `no_output`.
+        Case {
+            verb: "bam-index-stats",
+            class: "BamIndexStats",
+            verb_args: bam(&[]),
+            picard_args: picard_bam(&[]),
+            option: Some(("VALIDATION_STRINGENCY", "SILENT")),
+            picard_outputs: no_output,
+        },
     ]
 }
 
@@ -432,8 +448,13 @@ fn every_verb_reads_three_spellings_as_the_picard_face_does() {
         if let Some((name, value)) = case.option {
             args.push(format!("{name}={value}"));
         }
-        args.extend((case.picard_outputs)(&out));
-        run_ok(&args);
+        let outputs = (case.picard_outputs)(&out);
+        let printed = outputs.is_empty();
+        args.extend(outputs);
+        let run = run_ok(&args);
+        if printed {
+            fs::write(&out, &run.stdout).expect("standard output as the file");
+        }
         let expected = bodies(&picard_dir);
         assert!(
             !expected.is_empty(),
@@ -485,7 +506,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && **c != "AccumulateVariantCallingMetrics")
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 29);
+    assert_eq!(classes.len(), 30);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

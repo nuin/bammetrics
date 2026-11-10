@@ -19,14 +19,14 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use bammetrics_core::compare_metrics;
 use bammetrics_core::multiple_metrics::file_extensions;
-use bammetrics_core::pass;
 use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
+use bammetrics_core::{bam_index_stats, compare_metrics, cram, pass};
 
 use crate::error::VerbError;
 use crate::format::{self, Context, Format};
 use crate::grammar::{self, Flag, Given, Key, Parsed};
+use crate::report::write_atomic;
 
 /// How a verb names what it writes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -282,6 +282,16 @@ pub const VERBS: &[Verb] = &[
         aliases: &[("TARGETS", "TARGET_INTERVALS"), ("SEX", "EXPECTED_SEX")],
         reads: &["TARGET_INTERVALS"],
         ..verb("sex-check", "CollectSexCheckMetrics", Files::Single)
+    },
+    Verb {
+        about: Some(
+            "prints Picard's index statistics: one line per reference of the BAM header with \
+             its length and the Aligned= and Unaligned= counts of the .bai or .csi beside the \
+             BAM, then NoCoordinateCount=. A CRAM, or a BAM on standard input, is read whole \
+             and its records counted.",
+        ),
+        writes: "index statistics",
+        ..verb("bam-index-stats", "BamIndexStats", Files::Single)
     },
 ];
 
@@ -842,9 +852,10 @@ impl Verb {
 
     /// The tool's file options for output `path`: `OUTPUT` for a
     /// single-file verb in the Picard form (another form is written by the
-    /// verb itself), the prefix as `OUTPUT` for a tool whose Picard
-    /// `OUTPUT` is a prefix, or one name per file of [`file_extensions`]
-    /// (an option the user gave keeps its value).
+    /// verb itself; a tool without an output option, `BamIndexStats`, gets
+    /// none and the verb writes `-o` itself), the prefix as `OUTPUT` for a
+    /// tool whose Picard `OUTPUT` is a prefix, or one name per file of
+    /// [`file_extensions`] (an option the user gave keeps its value).
     fn name_outputs(&self, path: &Path, parsed: &Parsed, picard: &mut Vec<String>, format: Format) {
         let tool = self.tool();
         let output = tool.output_name();
@@ -853,7 +864,8 @@ impl Verb {
             return;
         }
         if self.files == Files::Single {
-            if format == Format::Picard {
+            let has_output = tool.table().iter().any(|o| o.kind == Kind::Output);
+            if format == Format::Picard && has_output {
                 picard.push(format!("{output}={}", path.display()));
             }
             return;
@@ -962,8 +974,9 @@ impl Verb {
         with_from(VerbError::core(self.name, e), from)
     }
 
-    /// The files the run reads: every `INPUT`, the reference and its `.fai`
-    /// and, for a tool without `INPUT`, its required options.
+    /// The files the run reads: every `INPUT`, the reference and its `.fai`,
+    /// for a tool without `INPUT` its required options, and for
+    /// `BamIndexStats` the `.bai` or `.csi` it reads beside each BAM.
     fn input_paths(&self, inv: &Invocation) -> Vec<PathBuf> {
         let tool = self.tool();
         let mut names = vec!["INPUT", "REFERENCE_SEQUENCE"];
@@ -980,12 +993,22 @@ impl Verb {
             .all("REFERENCE_SEQUENCE")
             .iter()
             .map(|fasta| format!("{fasta}.fai"));
-        names
+        let mut paths: Vec<PathBuf> = names
             .iter()
             .flat_map(|name| inv.all(name).iter().cloned())
             .chain(indexes)
             .map(PathBuf::from)
-            .collect()
+            .collect();
+        if tool.name == bam_index_stats::TOOL.name {
+            paths.extend(
+                inv.all("INPUT")
+                    .iter()
+                    .map(Path::new)
+                    .filter(|bam| !cram::is_cram(bam))
+                    .filter_map(bam_index_stats::find_index),
+            );
+        }
+        paths
     }
 
     /// The files the run writes under names it knows before it runs: `-o`,
@@ -1207,7 +1230,10 @@ fn write_single(
                 .write_all(text.as_bytes())
                 .map_err(output_error)?,
             Some(path) => {
-                fs::write(path, text).map_err(output_error)?;
+                write_atomic(path, text).map_err(|e| match e {
+                    crate::error::Error::Io { source, .. } => output_error(source),
+                    other => output_error(io::Error::other(other.to_string())),
+                })?;
                 written.push(path.to_path_buf());
             }
         }

@@ -205,6 +205,8 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
         "ConvertSequencingArtifactToOxoG",
         vec![format!("I={}", artifact.display())],
     );
+    // No OUTPUT option; the text goes to standard output.
+    args.insert("BamIndexStats", vec![bam.clone()]);
     args.insert(
         "GenotypeConcordance",
         vec![

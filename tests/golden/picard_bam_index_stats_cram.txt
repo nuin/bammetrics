@@ -1,0 +1,10 @@
+## argv
+BamIndexStats
+I=tests/data/insert_size.cram
+R=tests/data/ref_100k.fa
+## exit
+0
+## stdout
+chr1 length=	100000	Aligned= 10	Unaligned= 0
+NoCoordinateCount= 0
+## stderr

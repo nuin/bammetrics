@@ -250,6 +250,7 @@ table.
 | `oxo-g` | CollectOxoGMetrics (needs `-R`) | one |
 | `coverage-gaps` | CollectCoverageGaps (not a Picard tool, [docs/06](06_clinical_checks.md); `--targets` or `--panel`) | one (plus the `--gaps-file` BED) |
 | `sex-check` | CollectSexCheckMetrics (not a Picard tool, docs/06; `--sex male|female`, `--targets` for a panel) | one |
+| `bam-index-stats` | BamIndexStats (reads the `.bai` or `.csi` beside the BAM) | Picard's text on standard output |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -343,6 +344,44 @@ bammetrics collect in.bam -o out/sample -R ref.fa \
 
 For the by-cycle tools and gc bias on one read, use `multiple-metrics` (see the chaining
 examples).
+
+### bam-index-stats
+
+```bash
+bammetrics bam-index-stats sample.bam
+bammetrics bam-index-stats sample.bam --format tsv       # the lines samtools idxstats prints
+bammetrics bam-index-stats sample.cram -R ref.fa -o stats.txt
+bammetrics BamIndexStats I=sample.bam
+```
+
+Picard's `BamIndexStats` reads the index beside the BAM and prints one line per `@SQ`
+line of the header, `NAME length=<tab>LENGTH<tab>Aligned= N<tab>Unaligned= N`, then
+`NoCoordinateCount= N`. The counts are the mapped and unmapped record counts `samtools
+index` stores in the metadata bin of each reference and the trailing count of records
+without a coordinate. Both faces print that text byte for byte; the verb writes it to `-o`.
+Picard has no `OUTPUT` option, so `O=` on the Picard face exits 1 with `Unrecognized
+option: O`, as in Picard.
+
+- The index is found as htsjdk finds it: `x.bai`, `x.csi`, `x.bam.bai`, `x.bam.csi` beside
+  `x.bam`, in that order, then the same names beside the file a symbolic link points to.
+  A CSI index holds the same counts. Without one both tools exit 1 with `No index for bam
+  file x.bam`.
+- A reference the index has no metadata for prints `Aligned= 0` and `Unaligned= 0`. A header
+  with more `@SQ` lines than the index has references exits 1 (Picard throws
+  `ArrayIndexOutOfBoundsException` after printing the lines it could; bammetrics prints
+  nothing and names both counts). An index with more references than the header prints the
+  header's references, as Picard does.
+- A CRAM has no `.bai`: with `-R` its records are counted (a record without a reference has
+  no coordinate, one with a reference is unaligned when its unmapped flag is set, aligned
+  otherwise), which gives the text Picard prints for the BAM of the same records. Picard
+  3.5.0 opens the CRAM as a BAM and fails. A BAM on standard input (`-`) is counted the same
+  way; `--threads` applies to those reads only.
+- `--format json`, `jsonl`, `tsv` and `human` print one row per reference (`reference`,
+  `length`, `aligned`, `unaligned`) and a last row `*` whose `unaligned` is the
+  `NoCoordinateCount`, the row `samtools idxstats` prints; the tsv body is that command's
+  output. The json forms carry `--sample` (default the first `@RG SM`).
+- `ASSUME_SORTED` is rejected, as Picard rejects it. `VALIDATION_STRINGENCY`, `QUIET` and
+  the other plumbing options are accepted and ignored.
 
 ### qc
 

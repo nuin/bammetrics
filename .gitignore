@@ -2,6 +2,7 @@ target/
 .venv/
 *.so
 *.bai
+!tests/data/insert_size.bam.bai
 test.bam
 __pycache__/
 tests/corpus/out/

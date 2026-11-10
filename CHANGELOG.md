@@ -97,6 +97,25 @@ in the rule language, and `clinical-panel` version 3.
 - Glossary rows for both classes and the gap histogram; 12 golden records; `tools` lists
   25 classes; docs/cli.md, docs/05 section 4.11 and decision 13, KNOWN_DIFFERENCES.md.
 
+- `BamIndexStats` (Picard face and Python `bam_index_stats()`) and the `bam-index-stats`
+  verb: the text Picard 3.5.0 prints from the `.bai` or `.csi` beside a BAM, byte for
+  byte on standard output (`NAME length=<tab>LENGTH<tab>Aligned= N<tab>Unaligned= N` per
+  header reference, then `NoCoordinateCount= N`). The index is found under the names
+  htsjdk tries; a header with more references than the index, a missing index, the index
+  as `INPUT`, `O=` and `ASSUME_SORTED=` fail as in Picard. A CRAM (with `R=`) or a BAM on
+  standard input is read whole and its records counted, where Picard fails on a CRAM
+  (KNOWN_DIFFERENCES.md). `--format tsv` prints the rows `samtools idxstats` prints, with
+  a header line; Python returns one dict per reference and a `*` row. The noodles `csi`
+  feature is enabled for the CSI reader (no new package).
+- `tests/concordance/test_bam_index_stats.py`: the foundation corpus, corpus tiers t0 to
+  t3, the exome slice and the `tests/data` BAMs against Picard, each also with a CSI index
+  and the two other index names, the verb forms, a CRAM, and error parity; seven golden
+  records, `tests/data/insert_size.bam.bai`, and the `tools` listing gains one row.
+- `bam-index-stats` counts the `.bai` or `.csi` it reads as an input, so `-o` naming it
+  exits 2 (`is an input; writing it would destroy it`) and the index is kept; a golden
+  record and `crates/cli/tests/bam_index_stats.rs` cover the `.bai` and `.csi` names.
+  The stub types `bam_index_stats()` rows as the `TypedDict` `_BamIndexRow`.
+
 ### Changed
 
 - Every tool checks all its output paths before it writes the first file: a directory, a
@@ -111,6 +130,9 @@ in the rule language, and `clinical-panel` version 3.
 
 - `Bound` in `bammetrics-verdict` is `Clone`, not `Copy`, and holds the text of an `is`
   bound.
+
+- A tool verb writes `-o` through a temporary file beside it and a rename
+  (`report::write_atomic`), so an interrupted run leaves the old file or none.
 
 ### Fixed
 

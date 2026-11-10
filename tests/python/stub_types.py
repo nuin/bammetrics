@@ -27,3 +27,7 @@ def forms(names: list[str]) -> None:
         assert_type(e.run, bm.Run[bm.Verdict] | None)
     assert_type(bm.tools()[0].verb, str)
     assert_type(bm.presets()[0].hash, str)
+    row = bm.bam_index_stats("x.bam")[0]
+    assert_type(row["reference"], str)
+    assert_type(row["aligned"], int)
+    assert_type(bm.create_sequence_dictionary("r.fa")[0], dict[str, Any])

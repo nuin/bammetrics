@@ -55,6 +55,15 @@ class _VerdictDict(TypedDict):
     files: list[_VerdictFile]
     checks: list[_VerdictCheck]
 
+class _BamIndexRow(TypedDict):
+    """One row of bam_index_stats(): a reference of the BAM header with its length and
+    the aligned and unaligned record counts of the index, then a last row whose
+    reference is "*" and whose unaligned count is Picard's NoCoordinateCount."""
+    reference: str
+    length: int
+    aligned: int
+    unaligned: int
+
 class BammetricsError(Exception):
     """Base of UsageError, InputError and VerdictError."""
 
@@ -872,6 +881,15 @@ def collect_sex_check_metrics(
     the X contig, the Y contig and the autosomes, their ratios, the sex they imply
     (FEMALE, MALE or UNKNOWN) and whether it matches EXPECTED_SEX. Not a Picard tool
     (docs/06)."""
+
+def bam_index_stats(
+    input: _Path,
+    *,
+    reference_sequence: _Path | None = None,
+) -> list[_BamIndexRow]:
+    """BamIndexStats: one row per reference of the BAM header (reference, length, aligned,
+    unaligned) read from the .bai or .csi beside INPUT, then a * row whose unaligned
+    count is the NoCoordinateCount; the command prints the text Picard prints."""
 
 # END registry tools
 
