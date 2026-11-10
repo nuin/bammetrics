@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- The stage layer of in-process chaining (docs/chaining.md, wave W03 of docs/07):
+  `bammetrics_core::stage` with `Source`, `Records`, `Transform`, `Barrier`, `Sink`, `Emit`,
+  `Step`, `ChainPlan` and `run_chain`. Steps are cut into segments at barriers; each
+  segment is one read, with one thread per tap and sink. A chain of taps alone is lowered
+  to `pass::run_isolated`, the read of `qc`.
+- `MarkDuplicates` as the first stage, a barrier: its first read takes the batches of the
+  step before, its second read replays the file source and hands each record to the next
+  step. No BAM is written between the steps and nothing is spooled for a regular file.
+- The tap adapter (`CollectorSink`): each of the 13 one-pass tools runs on the records a
+  stage emits, with its own `STOP_AFTER` and `ASSUME_SORTED`.
+- The `write` step: the records of its position into a BAM through
+  `crates/core/src/bam_writer.rs`, written under a temporary name, with
+  `COMPRESSION_LEVEL`, `CREATE_INDEX` and `CREATE_MD5_FILE`.
+- `bammetrics __chain`, a hidden test entry (`I=in.bam STEP=<Picard class or write>
+  [KEY=VALUE ...] ...`). The `chain` verb replaces it in the next wave.
+- `crates/cli/tests/chain.rs`: one chain of `MarkDuplicates`, 8 one-pass tools and `write`
+  against the staged runs on the fixture, corpus t1 and the foundation corpus (metrics
+  bodies and BAM records byte for byte), `STOP_AFTER` in the middle of a chain, a failing
+  tap and a failing stage.
+
+### Changed
+
+- `MarkDuplicates` writes its BAM through `bam_writer.rs` and reads through
+  `Builder::push` and `Copier::copy`. Its files are unchanged byte for byte (golden
+  suite, `test_mark_duplicates.py`).
+
 ## 0.19.0
 
 Eight tools: `CollectSequencingArtifactMetrics`, `ConvertSequencingArtifactToOxoG`,
