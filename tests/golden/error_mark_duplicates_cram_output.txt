@@ -1,0 +1,11 @@
+## argv
+MarkDuplicates
+I=tests/data/markdup.bam
+O=OUT/marked.cram
+M=OUT/markdup_metrics.txt
+R=tests/data/ref_100k.fa
+## exit
+1
+## stdout
+## stderr
+bammetrics: OUTPUT=OUT/marked.cram: bammetrics writes BAM only (SAM and CRAM output are not supported)

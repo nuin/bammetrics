@@ -63,19 +63,20 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-cli"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "bammetrics-core",
  "bammetrics-report",
  "bammetrics-verdict",
  "clap",
  "clap_complete",
+ "signal-hook",
  "thiserror",
 ]
 
 [[package]]
 name = "bammetrics-core"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "noodles",
  "regex",
@@ -85,7 +86,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-py"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "bammetrics-cli",
  "bammetrics-core",
@@ -96,7 +97,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-report"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "bammetrics-core",
  "bammetrics-verdict",
@@ -104,7 +105,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-verdict"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "bammetrics-core",
  "thiserror",
@@ -331,6 +332,16 @@ name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
+
+[[package]]
+name = "errno"
+version = "0.3.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
+dependencies = [
+ "libc",
+ "windows-sys",
+]
 
 [[package]]
 name = "flate2"
@@ -807,6 +818,26 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest",
+]
+
+[[package]]
+name = "signal-hook"
+version = "0.3.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d881a16cf4426aa584979d30bd82cb33429027e42122b169753d6ef1085ed6e2"
+dependencies = [
+ "libc",
+ "signal-hook-registry",
+]
+
+[[package]]
+name = "signal-hook-registry"
+version = "1.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b"
+dependencies = [
+ "errno",
+ "libc",
 ]
 
 [[package]]

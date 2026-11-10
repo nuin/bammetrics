@@ -30,7 +30,7 @@ Library underneath (permissive, adoption), application + cloud on top (AGPL, mon
 Remaining for bammetrics:
 
 - `CollectVariantCallingMetrics` (the variant-concordance engine).
-- `MarkDuplicates` (optical duplicates, duplicate scoring, library complexity; reuses `duplication`).
+- `MarkDuplicates`: shipped in 0.18.0, every option but the flow-based ones.
 - `CollectWgsMetrics` (reuses `intervals::OverlapIndex` and the `pass` reader).
 - `METRIC_ACCUMULATION_LEVEL` `LIBRARY` and `READ_GROUP`: needs the read-group to library map and
   per-level histogram labels. The corpus BAMs t1 and t2 already carry two libraries.

@@ -23,7 +23,7 @@ Verbs:
 | Group | Verbs |
 |---|---|
 | Run | `qc` (preset or metric set, one pass, files, verdict, report), `collect` (same engine, no verdict, kept), one verb per tool |
-| Prepare | `bed-to-interval-list` (P4 library piece pulled forward; 0.14.0), `mark-duplicates` (reserved, arrives with parity plan P9) |
+| Prepare | `bed-to-interval-list` (P4 library piece pulled forward; 0.14.0), `mark-duplicates` (0.18.0) |
 | Post | `accumulate-quality-yield`, `compare-metrics`, `report`, `check` |
 | Info | `tools`, `presets`, `plan`, `completions <shell>`, `help <verb or Picard class>` |
 
@@ -165,12 +165,12 @@ bammetrics accumulate-quality-yield out/*.qy -o out/sample.qy
 ```
 Files in, file out. `AccumulateQualityYieldMetrics I=... I=... O=...` still works.
 
-**9. Chain: MarkDuplicates to CollectDuplicateMetrics (when P9 ships).**
+**9. Chain: MarkDuplicates to CollectDuplicateMetrics.**
 ```
 bammetrics mark-duplicates in.bam --metrics out/s.markdup_metrics -o - \
   | tee out/s.marked.bam | bammetrics duplicate-metrics - -o out/s.dup
 ```
-The marker reads its input twice, so `in.bam` must be a file. From stdin it spools to `--tmp-dir`. Until P9 the verb exits 2 with `mark-duplicates is not implemented yet (parity plan P9)`. `duplicate-metrics marked.bam` works today on a BAM marked by another tool.
+The marker reads its input twice, so `in.bam` must be a file. From stdin it spools to `--tmp-dir`. Shipped in 0.18.0 (docs/cli.md); `duplicate-metrics marked.bam` reads the flags it sets.
 
 **10. One read, seven collectors, stdin.**
 ```
@@ -213,7 +213,7 @@ Three layers. No workflow language.
 
 | Stage | Content | BAM reads |
 |---|---|---|
-| prepare | bed-to-interval-list (reads BED; `qc --panel BED` since 0.14.0), mark-duplicates (later) | 0, or 2 for mark-duplicates |
+| prepare | bed-to-interval-list (reads BED; `qc --panel BED` since 0.14.0), mark-duplicates (writes a BAM) | 0 |
 | pass | quality-yield, alignment-summary, insert-size, any number of hs, gc-bias, by-cycle tools, duplicate-metrics | 1, shared through pass.rs |
 | post | accumulate-quality-yield, verdict | 0 |
 | report | HTML and JSON | 0 |

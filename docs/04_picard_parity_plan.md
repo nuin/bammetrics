@@ -43,7 +43,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | CollectWgsMetricsWithNonZeroCoverage | Metrics | later | About 60 lines after WGS. Chart needs R, skipped. S | none |
 | CollectHsMetrics | Metrics | core | Main clinical capture metric, 70 columns. XL | mosdepth plus scripts (partial) |
 | CollectTargetedPcrMetrics | Metrics | later | Same collector as Hs with other defaults. M | none |
-| MarkDuplicates | Duplicates | later | Most-used tool, writes BAMs, needs ReadEnds. XL | samtools markdup (different algorithm) |
+| MarkDuplicates | Duplicates | core | Most-used tool, writes BAMs, needs ReadEnds. Shipped in 0.18.0. XL | samtools markdup (different algorithm) |
 | MarkDuplicatesWithMateCigar | Duplicates | out | Gives different flags than MarkDuplicates on the same input. L | none |
 | SimpleMarkDuplicatesWithMateCigar | Duplicates | out | Test aid in the Picard source. M | none |
 | UmiAwareMarkDuplicatesWithMateCigar | Duplicates | later | UMI graph, fails on multi-library input in Picard. L | fgbio, UMI-tools (partial) |

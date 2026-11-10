@@ -7,8 +7,12 @@
 //! 5 or 7 fields. Each field is read with `rapidParseInt`: an optional `-`,
 //! then the leading digits, with 32-bit wrap; no digit at all means the
 //! name has no location. The tile is cut to 16 bits (Java's `(short)`).
-//! Any other value is a Java regex matched against the whole name with
-//! three capture groups; `null` turns location parsing off.
+//! Any other value is a regex matched against the whole name with three
+//! capture groups; `null` turns location parsing off. Picard compiles it as
+//! a Java regex, bammetrics with the Rust `regex` crate: the common syntax
+//! (classes, groups, named groups, `(?i)`, `\b`, `\p{..}`, lazy quantifiers)
+//! means the same, while look-around and `\Q...\E` are refused with an
+//! error.
 //!
 //! Two reads are an optical duplicate pair when both have a location, share
 //! the read group index and the tile, and are within the pixel distance on
@@ -91,6 +95,38 @@ impl ReadNameParser {
                 let captures = regex.captures(name)?;
                 let group = |i: usize| captures.get(i)?.as_str().parse::<i32>().ok();
                 Some((group(1)? as i16, group(2)?, group(3)?))
+            }
+        }
+    }
+}
+
+impl ReadNameParser {
+    /// `readLocationInformation` into `loc`: true when the name gave tile,
+    /// x and y. With a regex the fields are set one by one, so a name whose
+    /// x or y is not a Java `int` leaves the tile (and x) set and returns
+    /// false, as Picard does.
+    pub fn read_location(&self, name: &str, loc: &mut Location) -> bool {
+        match self {
+            Self::None => false,
+            Self::Default => match self.location(name) {
+                Some((tile, x, y)) => {
+                    (loc.tile, loc.x, loc.y) = (tile, x, y);
+                    true
+                }
+                None => false,
+            },
+            Self::Regex(regex) => {
+                let Some(captures) = regex.captures(name) else {
+                    return false;
+                };
+                let group = |i: usize| captures.get(i)?.as_str().parse::<i32>().ok();
+                let Some(tile) = group(1) else { return false };
+                loc.tile = tile as i16;
+                let Some(x) = group(2) else { return false };
+                loc.x = x;
+                let Some(y) = group(3) else { return false };
+                loc.y = y;
+                true
             }
         }
     }
@@ -188,6 +224,23 @@ impl OpticalDuplicateFinder {
     /// read that is an optical duplicate of another. `keeper` is the index
     /// of the read that must stay unflagged.
     pub fn find_optical_duplicates(&self, list: &[Location], keeper: Option<usize>) -> Vec<bool> {
+        self.find_with_keeper(list, keeper, keeper.is_some())
+    }
+
+    /// `findOpticalDuplicates` with a keeper that is not in `list`
+    /// (`MarkDuplicates` splits a set by strand and passes the set's keeper
+    /// to both halves): no read is kept, and the graph starts at 4 reads,
+    /// as with a keeper.
+    pub fn find_optical_duplicates_keeper_elsewhere(&self, list: &[Location]) -> Vec<bool> {
+        self.find_with_keeper(list, None, true)
+    }
+
+    fn find_with_keeper(
+        &self,
+        list: &[Location],
+        keeper: Option<usize>,
+        keeper_given: bool,
+    ) -> Vec<bool> {
         let length = list.len();
         let mut flags = vec![false; length];
         if matches!(self.parser, ReadNameParser::None)
@@ -197,7 +250,7 @@ impl OpticalDuplicateFinder {
             return flags;
         }
         let actual_keeper = keeper.filter(|&k| list[k].has_location());
-        if length >= if keeper.is_some() { 4 } else { 3 } {
+        if length >= if keeper_given { 4 } else { 3 } {
             self.flags_with_graph(list, actual_keeper, &mut flags);
         } else {
             self.flags_fast(list, actual_keeper, &mut flags);
@@ -272,7 +325,14 @@ impl OpticalDuplicateFinder {
             representative[clusters[k]] = Some(k);
             clusters[k]
         });
-        for (i, &cluster) in clusters.iter().enumerate() {
+        // `GraphUtils.cluster` returns a `HashMap<Integer, Integer>`, whose
+        // keys come out by `i ^ (i >>> 16)`: the natural order below 65536.
+        let mut order: Vec<usize> = (0..list.len()).collect();
+        if list.len() > 1 << 16 {
+            order.sort_unstable_by_key(|&i| i ^ (i >> 16));
+        }
+        for i in order {
+            let cluster = clusters[i];
             match representative[cluster] {
                 Some(rep) if Some(i) != keeper => {
                     let (current, best) = (&list[i], &list[rep]);

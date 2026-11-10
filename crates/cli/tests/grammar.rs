@@ -16,6 +16,7 @@ const REF: &str = "tests/data/ref_100k.fa";
 const IL: &str = "tests/data/targets.interval_list";
 const QY_A: &str = "tests/data/quality_yield_a.txt";
 const QY_B: &str = "tests/data/quality_yield_b.txt";
+const MD: &str = "tests/data/markdup.bam";
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -55,11 +56,15 @@ fn run_ok(args: &[String]) -> Output {
 }
 
 /// Every file under `dir` by name, with the `StringHeader` text lines
-/// (the command line and the clock) left out.
+/// (the command line and the clock) left out. A BAM is left out: its
+/// `@PG` line holds the command line.
 fn bodies(dir: &Path) -> BTreeMap<String, String> {
     let mut files = BTreeMap::new();
     for entry in fs::read_dir(dir).expect("list") {
         let path = entry.expect("entry").path();
+        if path.extension().is_some_and(|e| e == "bam") {
+            continue;
+        }
         let text = fs::read_to_string(&path).expect("read");
         let body: Vec<&str> = text.lines().filter(|l| !l.starts_with("# ")).collect();
         let name = path
@@ -80,8 +85,10 @@ struct Built {
     vcf: String,
 }
 
-fn build_inputs() -> Built {
-    let dir = fresh_dir("inputs");
+/// The input files, in a directory of `test`'s own: two tests building one
+/// directory at once would remove each other's files.
+fn build_inputs(test: &str) -> Built {
+    let dir = fresh_dir(&format!("inputs-{test}"));
     let bed = dir.join("panel.bed");
     fs::write(&bed, "chr1\t1000\t1100\nchr1\t2000\t2050\n").expect("bed");
     let ref_flat = dir.join("genes.refflat");
@@ -341,7 +348,20 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("GENOME_ASSEMBLY", "GRCh38")),
             picard_outputs: single,
         },
+        // -o is the BAM; the metrics file is compared.
+        Case {
+            verb: "mark-duplicates",
+            class: "MarkDuplicates",
+            verb_args: strings(&[MD]),
+            picard_args: strings(&[&format!("I={MD}")]),
+            option: Some(("TAGGING_POLICY", "All")),
+            picard_outputs: marked,
+        },
     ]
+}
+
+fn marked(out: &str) -> Vec<String> {
+    vec![format!("O={out}.bam"), format!("M={out}")]
 }
 
 /// The three spellings of `name` with `value`.
@@ -356,7 +376,7 @@ fn spellings(name: &str, value: &str) -> [Vec<String>; 3] {
 
 #[test]
 fn every_verb_reads_three_spellings_as_the_picard_face_does() {
-    let built = build_inputs();
+    let built = build_inputs("spellings");
     let cases = cases(&built);
     for case in &cases {
         let picard_dir = fresh_dir(&format!("{}-picard", case.verb));
@@ -384,7 +404,16 @@ fn every_verb_reads_three_spellings_as_the_picard_face_does() {
             let mut args = vec![case.verb.to_owned()];
             args.extend(case.verb_args.iter().cloned());
             args.extend(form.iter().cloned());
-            args.extend(["-o".to_owned(), out]);
+            if case.verb == "mark-duplicates" {
+                args.extend([
+                    "-o".to_owned(),
+                    format!("{out}.bam"),
+                    "--metrics".to_owned(),
+                ]);
+            } else {
+                args.push("-o".to_owned());
+            }
+            args.push(out);
             run_ok(&args);
             assert_eq!(bodies(&dir), expected, "{} {form:?}", case.verb);
             let _ = fs::remove_dir_all(&dir);
@@ -395,7 +424,7 @@ fn every_verb_reads_three_spellings_as_the_picard_face_does() {
 
 #[test]
 fn every_registry_tool_is_in_the_matrix() {
-    let built = build_inputs();
+    let built = build_inputs("matrix");
     let listed = run_ok(&strings(&["tools"]));
     let text = String::from_utf8_lossy(&listed.stdout);
     let classes: Vec<&str> = text
@@ -410,7 +439,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && **c != "AccumulateVariantCallingMetrics")
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 23);
+    assert_eq!(classes.len(), 24);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

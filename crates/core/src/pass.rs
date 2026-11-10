@@ -157,7 +157,7 @@ pub fn read_header(path: &Path) -> Result<sam::Header> {
     } else {
         bam::io::Reader::new(sniffed.reader)
             .read_header()
-            .map_err(input)
+            .map_err(|e| input(cram::bam_header_error(e)))
     }
 }
 
@@ -175,6 +175,44 @@ where
     F: FnOnce(&sam::Header) -> Result<A>,
 {
     read(path, reference, threads, limits, None, build)
+}
+
+/// Open the BAM or CRAM at `path` and hand `consume` its header and the
+/// inflated record stream: each record as `block_size` and its bytes
+/// ([`crate::bam_raw::RawRecord::read_from`]). A BAM is inflated by
+/// `threads` BGZF workers, a CRAM decoded by `threads` container workers
+/// with `reference`. The second flag is true for a CRAM.
+pub fn with_record_stream<T>(
+    path: &Path,
+    reference: Option<&Path>,
+    threads: usize,
+    consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), bool) -> Result<T>,
+) -> Result<T> {
+    let input = |source| Error::Input {
+        path: path.to_path_buf(),
+        source,
+    };
+    let sniffed = cram::sniff(File::open(path).map_err(input)?).map_err(input)?;
+    let workers = NonZero::new(threads).unwrap_or(NonZero::<usize>::MIN);
+    if sniffed.cram {
+        let mut reader =
+            noodles::cram::io::Reader::new(cram::Peek::new(BufReader::new(sniffed.reader)));
+        let header = reader
+            .read_header()
+            .map_err(|e| input(cram::truncated(e, true)))?;
+        cram::decode(reader, &header, reference, workers, |records| {
+            consume(&header, records.get_mut(), true)
+        })
+    } else {
+        let mut reader = bam::io::Reader::from(bgzf::io::MultithreadedReader::with_worker_count(
+            workers,
+            sniffed.reader,
+        ));
+        let header = reader
+            .read_header()
+            .map_err(|e| input(cram::bam_header_error(e)))?;
+        consume(&header, reader.get_mut(), false)
+    }
 }
 
 /// How far a pass has got: records handed to the accumulator and
@@ -250,7 +288,9 @@ where
             workers,
             sniffed.reader,
         ));
-        let header = reader.read_header().map_err(input)?;
+        let header = reader
+            .read_header()
+            .map_err(|e| input(cram::bam_header_error(e)))?;
         pass.drive(&mut reader, &header, build)
     }
 }

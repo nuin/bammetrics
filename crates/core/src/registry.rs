@@ -15,7 +15,6 @@
 //! change the numbers silently.
 
 use std::collections::HashMap;
-use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -157,6 +156,17 @@ impl Opt {
 
     pub const fn ignored(names: &'static [&'static str], why: &'static str) -> Self {
         Self::new(names, Kind::Ignored(why), Ty::Text, why)
+    }
+
+    /// An ignored Picard integer: a value that is not one is an error, as
+    /// in Picard.
+    pub const fn ignored_int(names: &'static [&'static str], why: &'static str) -> Self {
+        Self::new(names, Kind::Ignored(why), Ty::Int, why)
+    }
+
+    /// An ignored Picard number: a value that is not one is an error.
+    pub const fn ignored_float(names: &'static [&'static str], why: &'static str) -> Self {
+        Self::new(names, Kind::Ignored(why), Ty::Float, why)
     }
 
     /// An ignored Picard boolean (`CREATE_INDEX`): the verb grammar reads
@@ -305,6 +315,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::genotype_concordance::TOOL,
     &crate::compare_metrics::TOOL,
     &crate::create_sequence_dictionary::TOOL,
+    &crate::mark_duplicates::TOOL,
 ];
 
 /// The tool named `name`.
@@ -483,6 +494,20 @@ impl Tool {
         self.option(best)
     }
 
+    /// The Python keyword of the metrics file: `output`, or the metrics
+    /// row's own keyword (`metrics_file`) for a tool whose `OUTPUT` is a
+    /// value of its own (`MarkDuplicates` writes its BAM there).
+    pub fn metrics_kwarg(&self) -> String {
+        let own_output = self
+            .options
+            .iter()
+            .any(|o| o.kind == Kind::Value && o.picard() == "OUTPUT");
+        match self.lookup(self.output_name()) {
+            Some(metrics) if own_output => metrics.kwarg(),
+            _ => "output".to_owned(),
+        }
+    }
+
     /// Long name of the option that names the metrics file.
     pub fn output_name(&self) -> &'static str {
         self.options
@@ -551,6 +576,15 @@ impl Tool {
             inv.command.push_str(&format!(" {}={value}", opt.names[0]));
             match opt.kind {
                 Kind::Ignored(why) => {
+                    let typed = value == "null"
+                        || match opt.ty {
+                            Ty::Int => value.parse::<i64>().is_ok(),
+                            Ty::Float => value.parse::<f64>().is_ok(),
+                            _ => true,
+                        };
+                    if !typed {
+                        return Err(Error::Usage(format!("{name}={value}: not a valid value")));
+                    }
                     inv.notes.push(format!("ignoring {name}={value}: {why}"));
                     if opt.names[0] == "REFERENCE_SEQUENCE" {
                         inv.values.entry(opt.names[0]).or_default().push(value);
@@ -658,6 +692,9 @@ pub fn picard_list<T, S: AsRef<str>>(
 }
 
 /// Run `write` against `path`, or standard output when `path` is `None`.
+/// A file is written under a temporary name and renamed over `path` once
+/// complete ([`crate::cleanup::AtomicFile`]), so a failed write leaves the
+/// old file, or none.
 pub fn write_to(
     path: Option<&Path>,
     write: impl FnOnce(&mut BufWriter<Box<dyn Write>>) -> io::Result<()>,
@@ -666,13 +703,19 @@ pub fn write_to(
         path: path.map_or_else(|| PathBuf::from("-"), Path::to_path_buf),
         source,
     };
-    let sink: Box<dyn Write> = match path {
-        Some(p) => Box::new(File::create(p).map_err(output_error)?),
+    let file = path.map(crate::cleanup::AtomicFile::new);
+    let sink: Box<dyn Write> = match &file {
+        Some(file) => Box::new(file.create().map_err(output_error)?),
         None => Box::new(io::stdout().lock()),
     };
     let mut out = BufWriter::new(sink);
     write(&mut out).map_err(output_error)?;
-    out.flush().map_err(output_error)
+    out.flush().map_err(output_error)?;
+    drop(out);
+    match file {
+        Some(file) => file.commit().map_err(output_error),
+        None => Ok(()),
+    }
 }
 
 /// The candidate closest to `word` by edit distance, ignoring case, when it
@@ -795,8 +838,10 @@ pub fn python_stub(tool: &Tool) -> String {
             continue;
         }
         match opt.kind {
-            Kind::Output if opt.required => keywords.push("output: _Path".to_owned()),
-            Kind::Output => keywords.push("output: _Path | None = None".to_owned()),
+            Kind::Output if opt.required => {
+                keywords.push(format!("{}: _Path", tool.metrics_kwarg()));
+            }
+            Kind::Output => keywords.push(format!("{}: _Path | None = None", tool.metrics_kwarg())),
             Kind::Value if opt.required => {
                 keywords.push(format!("{}: {}", opt.kwarg(), python_annotation(opt)));
             }

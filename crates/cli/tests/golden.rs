@@ -34,6 +34,7 @@ const FIXTURES: &[(&str, &str)] = &[
         "tests/data/picard/NA12878/NA12878.duplicate_metrics",
     ),
     ("IS_CRAM", "tests/data/insert_size.cram"),
+    ("MD", "tests/data/markdup.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -219,6 +220,19 @@ const FIXTURE_CASES: &[Case] = &[
     case!("qc_generic_cram", "qc", "IS_CRAM", "-R", "REF", "-o", "OUT/sample", "--date", "2026-01-02 03:04:05 UTC"),
     case!("plan_cram", "plan", "IS_CRAM", "-R", "REF", "-o", "OUT/sample"),
     case!("error_qc_cram_no_reference", "qc", "IS_CRAM", "-o", "OUT/sample"),
+    // MarkDuplicates (0.18.0): the BAM recorded as text, the metrics, the error paths.
+    case!("picard_mark_duplicates", "MarkDuplicates", "I=MD", "O=OUT/marked.bam", "M=OUT/markdup_metrics.txt"),
+    case!("picard_mark_duplicates_tags", "MarkDuplicates", "I=MD", "O=OUT/marked.bam", "M=OUT/markdup_metrics.txt", "TAGGING_POLICY=All", "TAG_DUPLICATE_SET_MEMBERS=true", "BARCODE_TAG=RX", "MOLECULAR_IDENTIFIER_TAG=MI", "COMMENT=marked", "PROGRAM_RECORD_ID=bwa", "CREATE_INDEX=true"),
+    case!("picard_mark_duplicates_remove", "MarkDuplicates", "I=MD", "O=OUT/marked.bam", "M=OUT/markdup_metrics.txt", "REMOVE_DUPLICATES=true", "READ_NAME_REGEX=null", "DUPLICATE_SCORING_STRATEGY=RANDOM", "CLEAR_DT=false", "ADD_PG_TAG_TO_READS=false"),
+    case!("picard_mark_duplicates_two_inputs", "MarkDuplicates", "--INPUT", "MD", "-I", "MD", "O=OUT/marked.bam", "M=OUT/markdup_metrics.txt", "ASSUME_SORT_ORDER=coordinate", "REMOVE_SEQUENCING_DUPLICATES=true"),
+    case!("verb_mark_duplicates", "mark-duplicates", "MD", "-o", "OUT/marked.bam", "--metrics", "OUT/markdup_metrics.txt", "--tagging-policy", "OpticalOnly"),
+    case!("error_mark_duplicates_no_metrics", "MarkDuplicates", "I=MD", "O=OUT/marked.bam"),
+    case!("error_mark_duplicates_no_read_group", "MarkDuplicates", "I=IS", "O=OUT/marked.bam", "M=OUT/markdup_metrics.txt"),
+    case!("error_mark_duplicates_flow_mode", "MarkDuplicates", "I=MD", "O=OUT/marked.bam", "M=OUT/markdup_metrics.txt", "FLOW_MODE=true"),
+    case!("error_mark_duplicates_cram_output", "MarkDuplicates", "I=MD", "O=OUT/marked.cram", "M=OUT/markdup_metrics.txt", "R=REF"),
+    case!("error_mark_duplicates_assume_both", "MarkDuplicates", "I=MD", "O=OUT/marked.bam", "M=OUT/markdup_metrics.txt", "AS=true", "ASO=coordinate"),
+    case!("error_verb_mark_duplicates_no_output", "mark-duplicates", "MD", "--metrics", "OUT/markdup_metrics.txt"),
+    case!("error_verb_mark_duplicates_format", "mark-duplicates", "MD", "-o", "OUT/marked.bam", "--metrics", "OUT/markdup_metrics.txt", "--format", "json"),
 ];
 
 /// The same tools on corpus BAM t1, with its reference and interval lists.
@@ -240,6 +254,7 @@ const T1_CASES: &[Case] = &[
     case!("t1_quality_yield", "quality-yield", "T1", "-O", "OUT/quality_yield.txt"),
     case!("t1_hs_metrics", "hs-metrics", "T1", "-O", "OUT/hs_metrics.txt", "-R", "T1_REF", "--bait-intervals", "T1_BAITS", "--target-intervals", "T1_TARGETS"),
     case!("t1_collect", "collect", "T1", "-O", "OUT/sample", "-R", "T1_REF", "--hs", "T1_BAITS", "T1_TARGETS"),
+    case!("t1_picard_mark_duplicates", "MarkDuplicates", "I=T1", "O=/dev/null", "M=OUT/markdup_metrics.txt"),
 ];
 
 fn root() -> PathBuf {
@@ -323,12 +338,65 @@ fn record(case: &Case) -> String {
             text.push_str("<page not recorded>\n");
             continue;
         }
+        // A BAM is compressed; its header and records are recorded as text.
+        // A BAI holds offsets into those compressed bytes.
+        if name.ends_with(".bam") {
+            text.push_str(&bam_text(&path));
+            continue;
+        }
+        if name.ends_with(".bai") {
+            text.push_str("<index not recorded>\n");
+            continue;
+        }
         text.push_str(&String::from_utf8_lossy(
             &fs::read(path).expect("read output file"),
         ));
     }
     let _ = fs::remove_dir_all(&out_dir);
     normalize(&text, out)
+}
+
+/// A BAM as text: its SAM header, then one line per record with the name,
+/// flag, reference index, 1-based start and every tag in file order. The
+/// bammetrics version in the `@PG` line reads `<version>`.
+fn bam_text(path: &Path) -> String {
+    use bammetrics_core::bam_raw::{RawRecord, TagIter, TagValue, header_text};
+    let render = |value: &TagValue| match value {
+        TagValue::Char(c) => format!("A:{}", char::from(*c)),
+        TagValue::Int(v) => format!("i:{v}"),
+        TagValue::Float(v) => format!("f:{v}"),
+        TagValue::String(s) => format!("Z:{}", String::from_utf8_lossy(s)),
+        TagValue::Hex(bytes) => format!("H:{bytes:02X?}"),
+        TagValue::Array(subtype, count, _) => format!("B:{}x{count}", char::from(*subtype)),
+    };
+    let text = bammetrics_core::pass::with_record_stream(path, None, 1, |header, reader, _| {
+        let mut text = header_text(header).map_err(bammetrics_core::Error::Record)?;
+        let mut record = RawRecord::default();
+        while record
+            .read_from(reader)
+            .map_err(bammetrics_core::Error::Record)?
+        {
+            text.push_str(&format!(
+                "{}\t{}\t{}\t{}",
+                String::from_utf8_lossy(record.name()),
+                record.flags(),
+                record.reference_id(),
+                record.alignment_start()
+            ));
+            for field in TagIter::new(record.tag_bytes()) {
+                let (tag, value) = field.map_err(bammetrics_core::Error::Record)?;
+                text.push_str(&format!(
+                    "\t{}:{}",
+                    String::from_utf8_lossy(&tag),
+                    render(&value)
+                ));
+            }
+            text.push('\n');
+        }
+        Ok(text)
+    });
+    text.unwrap_or_else(|e| format!("<unreadable BAM: {e}>\n"))
+        .replace(env!("CARGO_PKG_VERSION"), "<version>")
 }
 
 fn collect_files(base: &Path, dir: &Path, files: &mut Vec<(String, PathBuf)>) {
