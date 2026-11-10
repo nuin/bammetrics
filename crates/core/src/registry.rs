@@ -334,6 +334,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::sex_check::TOOL,
     &crate::bam_index_stats::TOOL,
     &crate::check_duplicate_marking::TOOL,
+    &crate::jumping_library::TOOL,
 ];
 
 /// The tool named `name`.

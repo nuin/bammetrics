@@ -35,6 +35,7 @@ coverage-gaps                         CollectCoverageGaps
 sex-check                             CollectSexCheckMetrics
 bam-index-stats                       BamIndexStats
 check-duplicate-marking               CheckDuplicateMarking
+jumping-library                       CollectJumpingLibraryMetrics
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

@@ -277,6 +277,28 @@ behaves how.
   are errors here (`not a BAM or CRAM file`), Picard reads the SAM and reports that the
   empty file agrees; a BAM cut inside its records exits 1 here (`truncated BAM`), Picard
   reports that every record agrees.
+- `CollectJumpingLibraryMetrics` is no `SinglePassSamProgram`: `ASSUME_SORTED` and
+  `STOP_AFTER` are rejected as Picard rejects them (`Unrecognized option`, exit 1), and a
+  header whose sort order is not `coordinate` exits 1 with `the header says the sort order
+  is <order>` where Picard throws `must be sorted in coordintate order`. An unpaired record
+  exits 1 with `not paired; CollectJumpingLibraryMetrics reads paired records only`
+  (Picard: `Inappropriate call if not paired read`); an `MQ` tag that is not a number
+  (`MQ:Z:sixty`) exits 1 with `MQ tag is not a number` (Picard: `Value for tag MQ is not
+  Number`), one beyond the 32-bit range (`MQ:i:4000000000`) with `MQ tag is outside the
+  32-bit integer range` (Picard: `not in Integer range`); a float `MQ` (`MQ:f:10.5`) is
+  truncated toward zero in both, as `Number.intValue` does. A value that does not parse
+  (`TAIL_LIMIT=ten`) or does not fit a Java `int` (`CHIMERA_KB_MIN=2147483648`) exits 2 on
+  the verb and 1 on the Picard face, as every usage error does; Picard exits 1. Picard's
+  `--help` says the chimera size is `2 times the mode`; its code takes the greater of
+  `CHIMERA_KB_MIN` and the mode itself, and so does bammetrics. The tool reads each input
+  twice (the mode pass, then the counts), so `jumping-library -`, `jumping-library
+  <(cat in.bam)` and `I=/dev/stdin` are refused with a usage error (exit 2 on the verb, 1
+  on the Picard face) where every other verb reads standard input; the verb's `--help`
+  says so. A BAM cut inside a BGZF block exits 1 with `failed to fill whole buffer` and
+  writes no file. Picard 3.5.0 exits 0 and writes an all-zero row when the cut falls
+  inside the first block after the header block (`tests/data/insert_size.bam` cut at 120
+  or 250 bytes, `jumping_bams.py` `main` cut at 1000), and throws `FileTruncatedException`
+  (exit 1) when it falls in a later block (`main` cut at 60000 or at half its length).
 
 ## Charts
 
@@ -836,6 +858,26 @@ name that comes back after another starts a new group. The sort reads `HI` as
 `getIntegerAttribute` does: a float is truncated, a string, character or array value
 fails the run with `Value for tag HI is not Number: class java.lang.String` (the Java
 class of the value), and a `SO:queryname` file never reads the tag.
+
+`CollectJumpingLibraryMetrics` behaviour reproduced from Picard 3.5.0
+(`tests/concordance/test_jumping_library_metrics.py`): only first-of-pair records count,
+secondary, supplementary, QC-failed and duplicate ones included; a first read unmapped
+with an unmapped mate and no reference index ends the read of that file, so nothing after
+the unaligned tail counts, while a placed unmapped pair is skipped; `FRAGMENTS` counts a
+pair with exactly one mate mapped before the mapping quality test; a missing `MQ` tag
+passes the mate; the chimera tests run in the order supersized (`|TLEN|` strictly above
+the greater of `CHIMERA_KB_MIN` and the mode), same strand, other contig, so a same-strand
+or two-contig pair far apart is supersized; the mode comes from the first
+`50000 / inputs` outward-facing pairs of each file in file order (on `big.bam` 2000 alone
+and 1800 as the first of two inputs, where every pair gives 2600); the mode of
+`|TLEN|` is the lowest key on a tie, so a corpus with a few `TLEN` 0 records and spread
+inserts (the foundation corpus) gets a mode of 0 and a mean and SD of 0 after the
+`TAIL_LIMIT` cut; `TAIL_LIMIT` keeps every bin up to the mode and then the consecutive
+bins with at least mode count / `TAIL_LIMIT` pairs (`0` keeps none past the mode, a
+negative value every consecutive bin); an empty histogram prints `?` for the mean and
+`-0` for the SD, one pair `?` for the SD; the library size is 0 without duplicates and
+0 when every pair is a duplicate; dovetailed pairs orient by `MC` when present and by
+`TLEN` without it.
 
 ## Failures
 

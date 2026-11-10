@@ -75,6 +75,10 @@ pub struct Verb {
     /// Shared flags the verb accepts and ignores, with the reason `--help`
     /// prints.
     pub ignores: &'static [(Key, &'static str)],
+    /// `-` reads standard input. False for a tool that reads each input
+    /// twice (`jumping-library`): its `--help` says standard input is
+    /// refused, and the tool exits 2 on `-`, `/dev/stdin` or a pipe.
+    pub reads_stdin: bool,
 }
 
 const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
@@ -91,6 +95,7 @@ const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
         reads: &[],
         also_writes: &[],
         ignores: &[],
+        reads_stdin: true,
     }
 }
 
@@ -308,6 +313,14 @@ pub const VERBS: &[Verb] = &[
             Files::Single,
         )
     },
+    Verb {
+        reads_stdin: false,
+        ..verb(
+            "jumping-library",
+            "CollectJumpingLibraryMetrics",
+            Files::Single,
+        )
+    },
 ];
 
 /// Verb spellings every verb's rows take, beside a verb's own
@@ -370,15 +383,17 @@ impl Verb {
         let table = tool.table();
         let mut flags = Vec::new();
         if let Some(input) = table.iter().find(|o| o.picard() == "INPUT") {
+            let stdin = if self.reads_stdin {
+                "; - reads standard input."
+            } else {
+                ". Standard input and pipes are refused: the tool reads each input twice."
+            };
             let mut flag = Flag::new(
                 Key::Input,
                 "input",
                 &["i"],
                 Ty::Path,
-                &format!(
-                    "{} The positional argument; - reads standard input.",
-                    input.help
-                ),
+                &format!("{} The positional argument{stdin}", input.help),
             )
             .names(input.names)
             .placeholder(self.input);

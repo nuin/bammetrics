@@ -88,6 +88,7 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
             ],
         ),
         ("EstimateLibraryComplexity", vec![]),
+        ("CollectJumpingLibraryMetrics", vec![]),
         (
             "CollectWgsMetrics",
             vec![reference.clone(), "SAMPLE_SIZE=10".to_owned()],

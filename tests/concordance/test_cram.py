@@ -112,6 +112,7 @@ def cases(ref, baits, targets, refflat):
                          [f"AMPLICON_INTERVALS={baits}", f"TARGET_INTERVALS={targets}"]),
         "rna_seq": ("CollectRnaSeqMetrics", None,
                     [f"REF_FLAT={refflat}", "STRAND=SECOND_READ_TRANSCRIPTION_STRAND", *LEVELS]),
+        "jumping_library": ("CollectJumpingLibraryMetrics", None, []),
     }
     return {label: (tool, outputs, [SILENT, f"R={ref}", *args])
             for label, (tool, outputs, args) in listed.items()}

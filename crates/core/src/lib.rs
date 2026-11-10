@@ -31,6 +31,7 @@ pub mod hs_metrics;
 pub mod insert_size;
 pub mod intervals;
 pub mod java;
+pub mod jumping_library;
 pub mod levels;
 pub mod library_complexity;
 pub mod locus;

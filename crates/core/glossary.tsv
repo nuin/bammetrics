@@ -595,3 +595,20 @@ bammetrics.qc.SexCheckMetrics	INFERRED_SEX	string	FEMALE when X_RATIO is at leas
 bammetrics.qc.SexCheckMetrics	DECLARED_SEX	string	The EXPECTED_SEX option, upper-cased; empty when none was given.
 bammetrics.qc.SexCheckMetrics	SEX_MATCH	string	Y when INFERRED_SEX equals DECLARED_SEX, N when the inferred sex is MALE or FEMALE and differs; empty without a declaration or when the inferred sex is UNKNOWN.
 bammetrics.qc.SexCheckMetrics	REASON	string	Why INFERRED_SEX is UNKNOWN (a contig set with no bases, no autosome reads, or ratios that fit neither pattern), and why SEX_MATCH is empty with a declaration; empty otherwise.
+picard.analysis.JumpingLibraryMetrics	JUMP_PAIRS	int	First-of-pair records whose pair is outward facing (RF) on one contig, both mates mapped at or above MINIMUM_MAPPING_QUALITY, with |TLEN| at or below the chimera size. Secondary, supplementary, QC-failed and duplicate records count.
+picard.analysis.JumpingLibraryMetrics	JUMP_DUPLICATE_PAIRS	int	JUMP_PAIRS whose first-of-pair record carries the duplicate flag.
+picard.analysis.JumpingLibraryMetrics	JUMP_DUPLICATE_PCT	float	JUMP_DUPLICATE_PAIRS / JUMP_PAIRS, a fraction; 0 without jump pairs.
+picard.analysis.JumpingLibraryMetrics	JUMP_LIBRARY_SIZE	int	Lander-Waterman estimate of distinct outward-facing molecules from JUMP_PAIRS and JUMP_PAIRS - JUMP_DUPLICATE_PAIRS (DuplicationMetrics.estimateLibrarySize, truncated); 0 without jump pairs or without jump duplicates.
+picard.analysis.JumpingLibraryMetrics	JUMP_MEAN_INSERT_SIZE	float	Mean |TLEN| of the jump pairs over the histogram cut by TAIL_LIMIT: every bin up to the mode, then the consecutive bins holding at least mode count / TAIL_LIMIT pairs. ? without jump pairs.
+picard.analysis.JumpingLibraryMetrics	JUMP_STDEV_INSERT_SIZE	float	Sample standard deviation (n - 1) of |TLEN| over the same cut histogram as JUMP_MEAN_INSERT_SIZE. -0 without jump pairs, ? with one.
+picard.analysis.JumpingLibraryMetrics	NONJUMP_PAIRS	int	First-of-pair records whose pair is inward facing (FR) on one contig, both mates mapped at or above MINIMUM_MAPPING_QUALITY, with |TLEN| at or below the chimera size. Secondary, supplementary, QC-failed and duplicate records count.
+picard.analysis.JumpingLibraryMetrics	NONJUMP_DUPLICATE_PAIRS	int	NONJUMP_PAIRS whose first-of-pair record carries the duplicate flag.
+picard.analysis.JumpingLibraryMetrics	NONJUMP_DUPLICATE_PCT	float	NONJUMP_DUPLICATE_PAIRS / NONJUMP_PAIRS, a fraction; 0 without non-jump pairs.
+picard.analysis.JumpingLibraryMetrics	NONJUMP_LIBRARY_SIZE	int	Lander-Waterman estimate of distinct inward-facing molecules from NONJUMP_PAIRS and NONJUMP_PAIRS - NONJUMP_DUPLICATE_PAIRS; 0 without non-jump pairs or without non-jump duplicates.
+picard.analysis.JumpingLibraryMetrics	NONJUMP_MEAN_INSERT_SIZE	float	Mean |TLEN| of the non-jump pairs over the histogram cut by TAIL_LIMIT as for JUMP_MEAN_INSERT_SIZE. ? without non-jump pairs.
+picard.analysis.JumpingLibraryMetrics	NONJUMP_STDEV_INSERT_SIZE	float	Sample standard deviation (n - 1) of |TLEN| over the same cut histogram as NONJUMP_MEAN_INSERT_SIZE. -0 without non-jump pairs, ? with one.
+picard.analysis.JumpingLibraryMetrics	CHIMERIC_PAIRS	int	First-of-pair records, both mates mapped and passing the mapping quality test, with |TLEN| above the greater of CHIMERA_KB_MIN and the mode of the first 50000 outward-facing pairs sampled, or on the same strand as the mate, or on another contig than the mate.
+picard.analysis.JumpingLibraryMetrics	FRAGMENTS	int	First-of-pair records with exactly one mate mapped: the read unmapped and the mate mapped, or the read mapped and the mate unmapped. Not subject to the mapping quality test.
+picard.analysis.JumpingLibraryMetrics	PCT_JUMPS	float	JUMP_PAIRS / (JUMP_PAIRS + NONJUMP_PAIRS + CHIMERIC_PAIRS), a fraction; 0 without any.
+picard.analysis.JumpingLibraryMetrics	PCT_NONJUMPS	float	NONJUMP_PAIRS / (JUMP_PAIRS + NONJUMP_PAIRS + CHIMERIC_PAIRS), a fraction; 0 without any.
+picard.analysis.JumpingLibraryMetrics	PCT_CHIMERAS	float	CHIMERIC_PAIRS / (JUMP_PAIRS + NONJUMP_PAIRS + CHIMERIC_PAIRS), a fraction; 0 without any.

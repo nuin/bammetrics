@@ -295,6 +295,13 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_check_duplicate_marking_mode", "CheckDuplicateMarking", "I=DM", "MODE=NOPE"),
     case!("error_check_duplicate_marking_proper_pair", "CheckDuplicateMarking", "I=DM", "MODE=PRIMARY_PROPER_PAIR_ONLY", "O=OUT/bad_querynames.txt"),
     case!("error_verb_check_duplicate_marking_assume_sorted", "check-duplicate-marking", "DM", "--assume-sorted"),
+    // CollectJumpingLibraryMetrics: one row over every INPUT, read in turn.
+    case!("picard_jumping_library", "CollectJumpingLibraryMetrics", "I=IS", "O=OUT/jumping_library.txt"),
+    case!("picard_jumping_library_stdout", "CollectJumpingLibraryMetrics", "I=IS"),
+    case!("picard_jumping_library_two_inputs", "CollectJumpingLibraryMetrics", "I=OR", "I=IS", "O=OUT/jumping_library.txt", "MQ=20", "T=100", "CHIMERA_KB_MIN=1000"),
+    case!("picard_jumping_library_cram", "CollectJumpingLibraryMetrics", "I=IS_CRAM", "O=OUT/jumping_library.txt", "R=REF"),
+    case!("verb_jumping_library_json", "jumping-library", "OR", "IS", "--tail-limit", "100", "--format", "json"),
+    case!("error_jumping_library_assume_sorted", "CollectJumpingLibraryMetrics", "I=IS", "ASSUME_SORTED=true"),
 ];
 
 /// The same tools on corpus BAM t1, with its reference and interval lists.
@@ -319,6 +326,7 @@ const T1_CASES: &[Case] = &[
     case!("t1_picard_mark_duplicates", "MarkDuplicates", "I=T1", "O=/dev/null", "M=OUT/markdup_metrics.txt"),
     case!("t1_picard_oxog_metrics", "CollectOxoGMetrics", "I=T1", "O=OUT/oxog_metrics.txt", "R=T1_REF", "INTERVALS=T1_BAITS"),
     case!("t1_oxo_g", "oxo-g", "T1", "-R", "T1_REF", "-o", "OUT/oxog_metrics.txt"),
+    case!("t1_picard_jumping_library", "CollectJumpingLibraryMetrics", "I=T1", "O=OUT/jumping_library.txt"),
 ];
 
 fn root() -> PathBuf {

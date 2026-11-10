@@ -137,6 +137,15 @@ in the rule language, and `clinical-panel` version 3.
   `not a BAM or CRAM file`, and a BAM cut inside its records with `truncated BAM`, in
   place of `failed to fill whole buffer`; every tool that reads a BAM.
 
+- `CollectJumpingLibraryMetrics` (Picard face and Python `collect_jumping_library_metrics()`)
+  and the `jumping-library` verb: the one `JumpingLibraryMetrics` row Picard 3.5.0 writes
+  over one or several coordinate-sorted BAMs or CRAMs, with `MINIMUM_MAPPING_QUALITY`,
+  `TAIL_LIMIT` and `CHIMERA_KB_MIN`. The mode pass over the first 50000 outward-facing
+  pairs, the chimera order, the stop at the unaligned tail of each file and the error on an
+  unpaired record follow the source. Every cell matches Picard on the `jumping_bams.py`
+  corpus, the foundation corpus and tiers t1 and t2 (`tests/concordance/test_jumping_library_metrics.py`).
+- `Histogram::trim_by_tail_limit` (htsjdk `trimByTailLimit`) and `pass::sort_order`.
+
 ### Changed
 
 - Every tool checks all its output paths before it writes the first file: a directory, a

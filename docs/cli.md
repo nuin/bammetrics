@@ -146,7 +146,8 @@ above where a verb has them.
   written.
 - `-` as the input reads the BAM or CRAM from standard input on the verbs only; the header line
   reads `INPUT=-`. The Picard face reads a file named `-` and writes `O=-` to a file named
-  `-`, as listed in KNOWN_DIFFERENCES.md.
+  `-`, as listed in KNOWN_DIFFERENCES.md. `jumping-library` is the one exception: it reads
+  each input twice, so `-`, `/dev/stdin` and a pipe are a usage error (exit 2).
 - The sample name is never written into a Picard file, which stays byte-compatible. It goes
   into the json forms, the verdict, the page and the manifest.
 
@@ -254,6 +255,7 @@ table.
 | `sex-check` | CollectSexCheckMetrics (not a Picard tool, docs/06; `--sex male|female`, `--targets` for a panel) | one |
 | `bam-index-stats` | BamIndexStats (reads the `.bai` or `.csi` beside the BAM) | Picard's text on standard output |
 | `check-duplicate-marking` | CheckDuplicateMarking | the bad querynames, one line per record |
+| `jumping-library` | CollectJumpingLibraryMetrics (one or more coordinate-sorted BAMs as positionals, read in turn; standard input refused) | one metrics file |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -832,6 +834,7 @@ bammetrics CollectInsertSizeMetrics --INPUT in.bam --OUTPUT out.txt \
 bammetrics CollectAlignmentSummaryMetrics I=in.bam O=out.txt R=ref.fa
 bammetrics CollectHsMetrics I=in.bam O=out.txt R=ref.fa \
     BAIT_INTERVALS=panel.interval_list TARGET_INTERVALS=panel.interval_list
+bammetrics CollectJumpingLibraryMetrics I=lane1.bam I=lane2.bam O=out.txt MQ=20 T=100
 ```
 
 The Picard face takes `KEY=VALUE`, `--KEY VALUE`, `--KEY=VALUE` and `-K VALUE` with long
