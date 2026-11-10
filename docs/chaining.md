@@ -81,7 +81,7 @@ files.
 |---|---|
 | `Source` | Opens the stream. `read(threads, bytes, consume)` hands `consume` the `Frame` and the `Records`. `replayable()` is true for a regular file. `spool(temp)` copies a pipe. `file()` names the file a lowered chain reads |
 | `FileSource` | A BAM or CRAM by its magic bytes, read through `pass::with_counted_stream` |
-| `Records` | `next_batch(&mut Vec<RawRecord>)`: at most 4096 records per batch |
+| `Records` | `next_batch(&mut Vec<RawRecord>)`: at most 1024 records per batch (`BATCH_RECORDS`) |
 | `Frame` | The stream at one position: `kind`, `order`, `header`, `cram`, `label`, `reads` (the files a writer must not replace) |
 | `Transform` | `apply(batch)` in place, `finish(out)` for held records, `header(up)`, `counters()`, `products()` |
 | `Barrier` | `push(batch)`, then `seal()` gives `Sealed { header, next }` |
@@ -106,10 +106,13 @@ The executor cuts the steps at barriers. Each part is a segment.
 
 - One segment is one read of its input on the calling thread. That thread also runs the
   transforms and feeds the barrier.
-- Every tap and every sink has its own thread. It takes batches of at most 4096 records
+- Every tap and every sink has its own thread. It takes batches of at most 1024 records
   through a queue of 8 batches. A batch is shared by the sinks of one position
   (`Arc<Vec<RawRecord>>`). A position in front of a transform copies its batch once,
   and only when a sink listens there.
+- The reader keeps one reference to each batch in flight (`Pool`). It reads the next
+  records into the buffers of the oldest batch no sink holds any more. A segment
+  allocates no record in steady state, and no sink thread frees one.
 - BGZF blocks are inflated on `threads` workers. `write` compresses on `threads`
   workers.
 - Segments run in turn. Peak memory is the largest segment, not the sum.
@@ -215,45 +218,67 @@ What differs on purpose (also in KNOWN_DIFFERENCES.md):
 ## 9. Measurements
 
 Mac Studio, Apple M1 Ultra, 20 cores, 64 GB. Release build, 8 threads, `/usr/bin/time -l`.
-Other builds ran on the machine during both runs.
+Other builds and test runs used the machine during every run.
 
-Transform-free chain against `qc` (the W03 gate, 5 percent). Input: chr20, 21 and 22 of
-the HG002 exome, 573 MB, 8.4 M records. Four collectors on one read (quality yield,
-alignment summary, insert size, duplicate metrics), the pass of `qc --preset wgs`.
-Seven runs each, interleaved.
+### 9.1 A chain without a stage against `qc` (the W03 gate, 5 percent)
 
-| Run | Median wall | Range | Against `qc` | Max RSS |
+Input: chr20, 21 and 22 of the HG002 exome, 573 MB, 8.4 M records
+(`~/data/bammetrics-scale/waves/w03/chr20_21_22.bam`). Four collectors on one read
+(quality yield, alignment summary, insert size, duplicate metrics), the pass of
+`qc --preset wgs`. Seven runs each, interleaved.
+
+| Run | Median wall | Range | Against `qc` | Median max RSS |
 |---|---:|---|---:|---:|
-| `qc --preset wgs` (also writes the verdict and the page) | 6.52 s | 6.43 to 6.88 | | 43 MiB |
-| `__chain`, lowered to `pass::run_isolated` | 6.43 s | 6.36 to 6.48 | -1.4 % | 42 MiB |
-| `__chain LOWER=false`, the stage executor | 6.59 s | 6.55 to 6.91 | +1.1 % | 42 MiB (78 MiB in run 1) |
+| `qc --preset wgs` (also writes the verdict and the page) | 6.49 s | 6.48 to 6.72 | | 44 MiB |
+| `__chain`, lowered to `pass::run_isolated` | 6.44 s | 6.40 to 6.50 | -0.8 % | 42 MiB |
+| `__chain LOWER=false`, the stage executor | 6.65 s | 6.54 to 6.95 | +2.5 % | 19 MiB |
 
 Both forms are inside the gate. The kill rule of docs/07 does not apply. A chain of taps
-is lowered anyway: it is the same code as `qc`, and it was 2.5 percent faster than the
+is lowered anyway: it is the same code as `qc`, and it was 3.3 percent faster than the
 stage executor here. The four files of the three runs are equal after their
 `StringHeader` lines.
 
-Chain against the staged sequence on the HG002 exome (10,339,495,604 bytes, 150,538,907
-records, coordinate sorted). One run each, default options, `PROGRAM_GROUP_COMMAND_LINE`
-given on both sides so the BAMs can be compared whole.
+### 9.2 One chain against the staged sequence (HG002 exome)
+
+Input: 10,339,495,604 bytes, 150,538,907 records, coordinate sorted. One run each, default
+options, `PROGRAM_GROUP_COMMAND_LINE` given on both sides so the BAMs can be compared whole.
 
 | Run | Wall | Max RSS |
 |---|---:|---:|
-| `MarkDuplicates` to a file (staged, step 1) | 300.8 s | 764 MiB |
-| The four collectors on the marked BAM, one shared read (staged, step 2) | 107.7 s | 72 MiB |
-| Staged sequence, both steps | 408.4 s | 764 MiB |
-| `__chain`: `MarkDuplicates` + 4 collectors + `write` | 345.2 s | 770 MiB |
+| `MarkDuplicates` to a file (staged, step 1) | 308.3 s | 800 MiB |
+| The four collectors on the marked BAM, one shared read (staged, step 2) | 106.0 s | 95 MiB |
+| Staged sequence, both steps | 414.3 s | 800 MiB |
+| `__chain`: `MarkDuplicates` + 4 collectors + `write` | 316.0 s | 807 MiB |
 
-The chain takes 15.5 percent less wall time than the staged sequence and 6 MiB more
-memory at its peak. Both BAMs are 10,210,246,600 bytes and `cmp` finds no difference.
+The chain takes 23.7 percent less wall time than the staged sequence and 7 MiB more
+memory at its peak. It takes 2.5 percent longer than `MarkDuplicates` alone and also runs
+the four collectors. Both BAMs are 10,210,246,600 bytes and `cmp` finds no difference.
 The five metrics files are equal after their `StringHeader` lines. The chain reads the
 10 GB input twice and the marked BAM never; the staged sequence reads the input twice and
-the marked BAM once. The chain's second segment took about 44 s longer than the tool's
-second read. The tool reuses one record buffer; a chain allocates each record of a batch
-(opinion: that is the cost; an arena batch in W05 would show it).
+the marked BAM once.
 
 `MarkDuplicates` alone was measured at 299 s and 783 MiB before this wave
 (docs/benchmarks.md), so the tool did not slow down.
+
+### 9.3 Batch size and the pool
+
+The first build of the executor used batches of 4096 records and allocated every record.
+On the exome it took 345.2 s for the chain of 9.2 (the tool 300.8 s, the staged sequence
+408.4 s, same BAM bytes). Two changes followed, each measured on the slice with 4
+interleaved runs, medians:
+
+| Build | `MarkDuplicates` + `write` | + 4 collectors | Stage executor, no stage |
+|---|---:|---:|---:|
+| 4096 records, every record allocated | 18.9 s | 20.4 s | 6.73 s |
+| 4096 records, pool | 18.0 s | 19.3 s | 6.70 s |
+| 1024 records, pool (as built) | 15.4 s | 17.0 s | 6.6 s |
+| 512 records, pool | 15.9 s | 17.0 s | 6.76 s |
+
+The rows come from three sessions with different machine load, so compare within a pair:
+no pool against pool (first two rows), 4096 against 512 (17.0 s against 15.2 s for
+`write`, 18.7 s against 17.0 s with the collectors), 1024 against 512 (last two rows).
+The `MarkDuplicates` tool alone took 16.2 to 16.9 s in those sessions. With 512 records
+the system time of the chain rose from 12 s to 16 s for the same wall time.
 
 ## 10. Departures from docs/07 section 2
 
@@ -263,7 +288,8 @@ second read. The tool reuses one record buffer; a chain allocates each record of
 | `Tool` gains `stage`, `source`, `sink`, `tier` fields | `stage::stage_of(tool)`, a table by name | A new field breaks every `Tool { ... }` literal, including those on the two branches built at the same time. One tool has a stage |
 | `Transform::requires()` checked at plan time | A stage is built from the `Frame` of its position and fails there with the tool's own message | The planner is W05. `MarkDuplicates` accepts two orders, which one `Order` value cannot say |
 | `Worker` and `Fanout` of `pass.rs` reused for the taps | `SinkWorker` in `stage/exec.rs`, the same shape | `pass::Worker` carries `bam::Record` batches. A sink takes `RawRecord` batches and needs the done, failed and stopped signals |
-| One reader thread and one transform thread | The transforms run on the reader thread | The tool does the same. A second thread adds one queue hop per batch. Measured on the exome: the chain takes 345 s, the tool alone 301 s, the staged sequence 408 s (section 9) |
+| Batches of at most 4096 records | 1024 records, and a pool that reuses the buffers of finished batches | Measured on the exome slice (section 9): with 4096 and no pool the chain `MarkDuplicates` + `write` was slower than the tool. A batch of 4096 exome records is 1.4 MB, so the transform reads it back from a far cache; 1024 records are 360 KB. 512 gave the same wall time and more system time |
+| One reader thread and one transform thread | The transforms run on the reader thread | The tool does the same. A second thread adds one queue hop per batch. Measured on the exome: the chain takes 316 s, the tool alone 308 s (section 9) |
 | 4 deflate workers per writer | `threads` workers, as the tool uses | The written BAM is then the tool's BAM byte for byte at any thread count, and compression is the slowest part of the chain |
 | `Barrier::seal` on a `Send` trait | `Transform` and `Barrier` are not `Send` | They run on the calling thread and borrow the chain's `TempDir` |
 | `write` picks BAM, SAM, CRAM or FASTQ by extension, `--index` | BAM only, `CREATE_INDEX`, `CREATE_MD5_FILE` | SAM text is W05, the CRAM writer W15, FASTQ W22 |

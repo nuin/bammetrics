@@ -138,22 +138,22 @@ SHA-256 over all records, `5a90c21f...fafb396`). The headers differ in the `@PG`
 ## Chains (HG002 exome)
 
 `bammetrics __chain` (docs/chaining.md section 9), release build, 8 threads,
-`/usr/bin/time -l`, other builds running on the machine.
+`/usr/bin/time -l`, other builds and test runs on the machine.
 
 A chain without a stage against `qc --preset wgs`, on chr20, 21 and 22 of the exome
 (573 MB, 8.4 M records, four collectors on one read), median of 7 interleaved runs: `qc`
-6.52 s, the chain lowered to `pass::run_isolated` 6.43 s (-1.4 %), the stage executor
-forced with `LOWER=false` 6.59 s (+1.1 %). Max RSS 42 to 43 MiB for all three.
+6.49 s, the chain lowered to `pass::run_isolated` 6.44 s (-0.8 %), the stage executor
+forced with `LOWER=false` 6.65 s (+2.5 %). Max RSS 44, 42 and 19 MiB.
 
 `MarkDuplicates` + 4 collectors + `write` as one chain against the staged sequence, on
 the whole exome, one run each:
 
 | run | wall | max RSS |
 |---|---:|---:|
-| `MarkDuplicates` to a file | 300.8 s | 764 MiB |
-| 4 collectors on the marked BAM, one shared read | 107.7 s | 72 MiB |
-| staged sequence, both | 408.4 s | 764 MiB |
-| one chain | 345.2 s | 770 MiB |
+| `MarkDuplicates` to a file | 308.3 s | 800 MiB |
+| 4 collectors on the marked BAM, one shared read | 106.0 s | 95 MiB |
+| staged sequence, both | 414.3 s | 800 MiB |
+| one chain | 316.0 s | 807 MiB |
 
 Both BAMs are 10,210,246,600 bytes and equal under `cmp` (`PROGRAM_GROUP_COMMAND_LINE`
 given on both sides); the five metrics files are equal after their `StringHeader` lines.
