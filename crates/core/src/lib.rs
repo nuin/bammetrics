@@ -38,6 +38,7 @@ pub mod metric;
 pub mod metrics_file;
 pub mod multiple_metrics;
 pub mod optical;
+pub mod oxog_metrics;
 pub mod pass;
 pub mod picard_classes;
 pub mod quality;

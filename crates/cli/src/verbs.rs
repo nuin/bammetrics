@@ -267,6 +267,7 @@ pub const VERBS: &[Verb] = &[
             Files::Prefix,
         )
     },
+    verb("oxo-g", "CollectOxoGMetrics", Files::Single),
 ];
 
 /// Verb spellings every verb's rows take, beside a verb's own

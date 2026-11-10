@@ -19,6 +19,7 @@ const QY_B: &str = "tests/data/quality_yield_b.txt";
 const MD: &str = "tests/data/markdup.bam";
 const ART: &str = "tests/data/artifact.bam";
 const ART_PREFIX: &str = "tests/data/artifact/artifact";
+const OXOG: &str = "tests/data/oxog.bam";
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -378,6 +379,14 @@ fn cases(built: &Built) -> Vec<Case> {
             )),
             picard_outputs: prefix,
         },
+        Case {
+            verb: "oxo-g",
+            class: "CollectOxoGMetrics",
+            verb_args: strings(&[OXOG, "-R", REF]),
+            picard_args: strings(&[&format!("I={OXOG}"), &r]),
+            option: Some(("CONTEXT_SIZE", "0")),
+            picard_outputs: single,
+        },
     ]
 }
 
@@ -460,7 +469,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && **c != "AccumulateVariantCallingMetrics")
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 26);
+    assert_eq!(classes.len(), 27);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

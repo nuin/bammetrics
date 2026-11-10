@@ -508,26 +508,6 @@ picard.analysis.artifacts.ErrorSummaryMetrics	SUBSTITUTION	string	REF_BASE>ALT_B
 picard.analysis.artifacts.ErrorSummaryMetrics	REF_COUNT	int	PRO_REF_BASES + CON_REF_BASES summed over the printed pre-adapter rows of the substitution and its complement, every library and context.
 picard.analysis.artifacts.ErrorSummaryMetrics	ALT_COUNT	int	PRO_ALT_BASES + CON_ALT_BASES summed over the same rows.
 picard.analysis.artifacts.ErrorSummaryMetrics	SUBSTITUTION_RATE	float	ALT_COUNT / (REF_COUNT + ALT_COUNT); 0 when both are 0.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	SAMPLE_ALIAS	string	SAMPLE_ALIAS of the first pre-adapter detail row the converter reads.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	LIBRARY	string	Library of the detail rows. Rows run by library, then by context, both in Java HashSet order.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	CONTEXT	string	Reference context with C at its centre.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	TOTAL_SITES	int	Always 0: the detail files carry no site count.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	TOTAL_BASES	int	All four counts of the G>T pre-adapter row of the reverse complement of CONTEXT.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	REF_NONOXO_BASES	int	CON_REF_BASES of that G>T pre-adapter row.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	REF_OXO_BASES	int	PRO_REF_BASES of that G>T pre-adapter row.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	REF_TOTAL_BASES	int	REF_OXO_BASES + REF_NONOXO_BASES.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	ALT_NONOXO_BASES	int	CON_ALT_BASES of that G>T pre-adapter row.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	ALT_OXO_BASES	int	PRO_ALT_BASES of that G>T pre-adapter row.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	OXIDATION_ERROR_RATE	float	max(ALT_OXO_BASES - ALT_NONOXO_BASES, 1) / TOTAL_BASES. ? when TOTAL_BASES is 0.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	OXIDATION_Q	float	-10 log10(OXIDATION_ERROR_RATE), not rounded.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	C_REF_REF_BASES	int	FWD_CXT_REF_BASES of the C>A bait-bias row of CONTEXT.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	G_REF_REF_BASES	int	REV_CXT_REF_BASES of that C>A bait-bias row.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	C_REF_ALT_BASES	int	FWD_CXT_ALT_BASES of that C>A bait-bias row.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	G_REF_ALT_BASES	int	REV_CXT_ALT_BASES of that C>A bait-bias row.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	C_REF_OXO_ERROR_RATE	float	C_REF alt fraction minus G_REF alt fraction, at least 1e-10 (printed 0). ? when either fraction has no bases.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	C_REF_OXO_Q	float	-10 log10(C_REF_OXO_ERROR_RATE), not rounded; 100 at the floor.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	G_REF_OXO_ERROR_RATE	float	G_REF alt fraction minus C_REF alt fraction, at least 1e-10 (printed 0). ? when either fraction has no bases.
-picard.analysis.CollectOxoGMetrics$CpcgMetrics	G_REF_OXO_Q	float	-10 log10(G_REF_OXO_ERROR_RATE), not rounded; 100 at the floor.
 CollectInsertSizeMetrics	insert_size	int	Histogram key: insert size in bases.
 CollectInsertSizeMetrics	*.fr_count	float	Pairs with this insert size and FR orientation in the unit named before the dot (All_Reads, or the sample, library or read group PU). Sizes above the trim width (median + DEVIATIONS x MAD, or HISTOGRAM_WIDTH) are not listed, so the column can sum to less than READ_PAIRS.
 CollectInsertSizeMetrics	*.rf_count	float	As for fr_count, with RF: sizes above the trim width are not listed, so the column can sum to less than READ_PAIRS.
@@ -571,3 +551,23 @@ CollectTargetedPcrMetrics	high_quality_coverage_count	float	Target bases whose h
 CollectTargetedPcrMetrics	unfiltered_baseq_count	float	On-target bases with this base quality, from reads that pass the duplicate, adapter and MAPQ filters, after mate-overlap clipping but before the MINIMUM_BASE_QUALITY filter. Bases at quality 2 or below and inserted bases are left out. No coverage cap is applied.
 CollectRnaSeqMetrics	normalized_position	int	Histogram key: position along the transcript in percent of its length, 0 at the 5' end to 100 at the 3' end.
 CollectRnaSeqMetrics	*.normalized_coverage	float	Coverage within 0.5% of the transcript length around this position, divided by the transcript's mean coverage, averaged over the picked transcripts of the unit named before the dot (All_Reads, or the read group, library or sample). 1 is flat; the last base of each alignment block is not counted.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	SAMPLE_ALIAS	string	Every @RG sample of the input joined with commas, in Java HashSet order; UnknownSample stands for a read group without SM. The same text on every row.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	LIBRARY	string	The library this row counts: an @RG LB value, or UnknownLibrary for a read group without LB.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	CONTEXT	string	The reference context: CONTEXT_SIZE bases (default 1) on each side of a central C, upper case. A G site is read on the other strand, so its context is reverse-complemented.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	TOTAL_SITES	int	Reference C and G sites in this context where at least one base of this library passed the read filters and MINIMUM_QUALITY_SCORE and was a reference or alternate base.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	TOTAL_BASES	int	Reference and alternate bases counted at those sites: REF_TOTAL_BASES + ALT_NONOXO_BASES + ALT_OXO_BASES. Any other base is not counted.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	REF_NONOXO_BASES	int	Reference bases sequenced as C in read 1 or as G in read 2 (the base as the sequencer read it, complemented back on the reverse strand): the orientation oxidation of G cannot produce.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	REF_OXO_BASES	int	Reference bases sequenced as G in read 1 or as C in read 2: the orientation in which 8-oxoguanine damage would show.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	REF_TOTAL_BASES	int	REF_NONOXO_BASES + REF_OXO_BASES.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	ALT_NONOXO_BASES	int	Alternate bases (A at a C site, T at a G site) sequenced as A in read 1 or as T in read 2: substitutions in the orientation oxidation does not produce, taken as the background error.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	ALT_OXO_BASES	int	Alternate bases sequenced as T in read 1 or as A in read 2: G to T substitutions in the orientation 8-oxoguanine damage produces.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	OXIDATION_ERROR_RATE	float	max(ALT_OXO_BASES - ALT_NONOXO_BASES, 1) / TOTAL_BASES: the excess of oxo-oriented substitutions over the background. ? when TOTAL_BASES is 0.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	OXIDATION_Q	float	-10 * log10(OXIDATION_ERROR_RATE), a Phred score: lower means more oxidative damage. -? when TOTAL_BASES is 0.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	C_REF_REF_BASES	int	Reference bases counted at sites whose reference base is C.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	G_REF_REF_BASES	int	Reference bases counted at sites whose reference base is G.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	C_REF_ALT_BASES	int	Alternate bases (A) counted at sites whose reference base is C.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	G_REF_ALT_BASES	int	Alternate bases (T) counted at sites whose reference base is G.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	C_REF_OXO_ERROR_RATE	float	The alternate fraction at C sites minus the alternate fraction at G sites, raised to 1e-10 (printed 0): substitutions biased to C reference sites. ? when either side has no counted base.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	C_REF_OXO_Q	float	-10 * log10(C_REF_OXO_ERROR_RATE); 100 at the 1e-10 floor.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	G_REF_OXO_ERROR_RATE	float	The alternate fraction at G sites minus the alternate fraction at C sites, raised to 1e-10 (printed 0): substitutions biased to G reference sites. ? when either side has no counted base.
+picard.analysis.CollectOxoGMetrics$CpcgMetrics	G_REF_OXO_Q	float	-10 * log10(G_REF_OXO_ERROR_RATE); 100 at the 1e-10 floor.

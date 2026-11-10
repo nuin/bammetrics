@@ -30,6 +30,7 @@ create-sequence-dictionary            CreateSequenceDictionary
 mark-duplicates                       MarkDuplicates
 sequencing-artifact                   CollectSequencingArtifactMetrics
 convert-sequencing-artifact-to-oxo-g  ConvertSequencingArtifactToOxoG
+oxo-g                                 CollectOxoGMetrics
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

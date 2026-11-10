@@ -27,6 +27,22 @@
 - A verb whose tool has no required option takes its first value option as the positional
   argument (`INPUT_BASE` of the converter).
 
+- `CollectOxoGMetrics` (Picard face and Python `collect_oxo_g_metrics()`) and the `oxo-g`
+  verb: one `CpcgMetrics` row per sequence context and library, as Picard 3.5.0 writes
+  it, over the pileup engine. Every option: `REFERENCE_SEQUENCE`, `INTERVALS`, `DB_SNP`,
+  `MINIMUM_QUALITY_SCORE`, `MINIMUM_MAPPING_QUALITY`, `MINIMUM_INSERT_SIZE`,
+  `MAXIMUM_INSERT_SIZE`, `INCLUDE_NON_PF_READS`, `USE_OQ`, `CONTEXT_SIZE` (0 to 4 without
+  `CONTEXTS`), `CONTEXTS`, `STOP_AFTER`. Rows in the `HashMap` order of the contexts.
+  `tests/concordance/test_oxog_metrics.py` compares every cell with Picard on the tiers,
+  the foundation corpus, the exome slice and `oxog_bams.py` (per-library oxidation on an
+  IUPAC and soft-masked reference), with error parity and the distinct-value gate.
+- `locus.rs`: `Setup::OxoG` (the secondary, duplicate, MAPQ and insert size filters,
+  non-PF reads optional, covered loci only, `RG` and `OQ` per read), `Sink::done`, and
+  `check_sort_order`. `java::hash_map_order_checked` grows the table as `putVal` does and
+  reports a bin that would turn into a tree. `vcf::DbSnpBitSet::load_all`.
+- `tests/data/oxog.bam` (`tests/data/make_oxog.py`): 60 pairs on `ref_100k.fa` with two
+  libraries and oxidation damage, for the golden records and the glossary test.
+
 ### Changed
 
 - Every tool checks all its output paths before it writes the first file: a directory, a

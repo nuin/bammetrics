@@ -36,6 +36,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("IS_CRAM", "tests/data/insert_size.cram"),
     ("MD", "tests/data/markdup.bam"),
     ("ART", "tests/data/artifact.bam"),
+    ("OXOG", "tests/data/oxog.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -246,6 +247,14 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_sequencing_artifact_no_read_group", "CollectSequencingArtifactMetrics", "I=IS", "O=OUT/artifact", "R=REF"),
     case!("error_sequencing_artifact_context_length", "CollectSequencingArtifactMetrics", "I=ART", "O=OUT/artifact", "R=REF", "CONTEXTS_TO_PRINT=AC"),
     case!("error_convert_sequencing_artifact_no_input", "ConvertSequencingArtifactToOxoG", "O=OUT/artifact"),
+    // CollectOxoGMetrics on tests/data/oxog.bam (make_oxog.py): two libraries, read 1 G>T damage.
+    case!("picard_oxog_metrics", "CollectOxoGMetrics", "I=OXOG", "O=OUT/oxog_metrics.txt", "R=REF"),
+    case!("picard_oxog_metrics_contexts_stdout", "CollectOxoGMetrics", "I=OXOG", "R=REF", "CONTEXT_SIZE=2", "CONTEXTS=AACGT", "CONTEXTS=TGCAC", "Q=30", "STOP_AFTER=50"),
+    case!("verb_oxo_g_tsv", "oxo-g", "OXOG", "-R", "REF", "--context-size", "0", "--format", "tsv"),
+    case!("verb_oxo_g_output", "oxo-g", "OXOG", "-R", "REF", "--no-use-oq", "--minimum-insert-size", "0", "--maximum-insert-size", "0", "-o", "OUT/oxog_metrics.txt"),
+    case!("error_oxog_no_read_groups", "CollectOxoGMetrics", "I=IS", "R=REF"),
+    case!("error_oxog_contexts", "CollectOxoGMetrics", "I=OXOG", "R=REF", "CONTEXTS=AC", "CONTEXTS=AGA"),
+    case!("error_verb_oxo_g_no_reference", "oxo-g", "OXOG"),
 ];
 
 /// The same tools on corpus BAM t1, with its reference and interval lists.
@@ -268,6 +277,8 @@ const T1_CASES: &[Case] = &[
     case!("t1_hs_metrics", "hs-metrics", "T1", "-O", "OUT/hs_metrics.txt", "-R", "T1_REF", "--bait-intervals", "T1_BAITS", "--target-intervals", "T1_TARGETS"),
     case!("t1_collect", "collect", "T1", "-O", "OUT/sample", "-R", "T1_REF", "--hs", "T1_BAITS", "T1_TARGETS"),
     case!("t1_picard_mark_duplicates", "MarkDuplicates", "I=T1", "O=/dev/null", "M=OUT/markdup_metrics.txt"),
+    case!("t1_picard_oxog_metrics", "CollectOxoGMetrics", "I=T1", "O=OUT/oxog_metrics.txt", "R=T1_REF", "INTERVALS=T1_BAITS"),
+    case!("t1_oxo_g", "oxo-g", "T1", "-R", "T1_REF", "-o", "OUT/oxog_metrics.txt"),
 ];
 
 fn root() -> PathBuf {

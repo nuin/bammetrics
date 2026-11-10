@@ -810,6 +810,27 @@ def convert_sequencing_artifact_to_oxo_g(
     the file is OUTPUT_BASE.oxog_metrics. Python returns one row per file: file and
     rows."""
 
+def collect_oxo_g_metrics(
+    input: _Path,
+    *,
+    reference_sequence: _Path,
+    intervals: _Path | None = None,
+    db_snp: _Path | None = None,
+    minimum_quality_score: int | None = None,
+    minimum_mapping_quality: int | None = None,
+    minimum_insert_size: int | None = None,
+    maximum_insert_size: int | None = None,
+    include_non_pf_reads: bool | None = None,
+    use_oq: bool | None = None,
+    context_size: int | None = None,
+    contexts: str | Sequence[str] | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectOxoGMetrics: one CpcgMetrics row per sequence context and library: reference
+    and alternate base counts at C and G sites split by read and strand, the oxidation
+    error rate and its Phred score."""
+
 # END registry tools
 
 def alignment_summary(

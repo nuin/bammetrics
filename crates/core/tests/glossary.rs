@@ -210,6 +210,11 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
             format!("M={}", dir.join("markdup_metrics").display()),
         ],
     );
+    // The fixture BAM has no @RG line, which CollectOxoGMetrics refuses.
+    args.insert(
+        "CollectOxoGMetrics",
+        vec![format!("I={DATA}/oxog.bam"), reference.clone(), out("oxog")],
+    );
     args
 }
 

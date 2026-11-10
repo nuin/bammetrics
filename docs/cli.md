@@ -247,12 +247,23 @@ table.
 | `create-sequence-dictionary` | CreateSequenceDictionary (input is a FASTA) | one `.dict` |
 | `sequencing-artifact` | CollectSequencingArtifactMetrics (needs `-R`) | `PREFIX.{pre_adapter,bait_bias}_{detail,summary}_metrics`, `PREFIX.error_summary_metrics` |
 | `convert-sequencing-artifact-to-oxo-g` | ConvertSequencingArtifactToOxoG (input is a `sequencing-artifact` prefix) | `PREFIX.oxog_metrics` |
+| `oxo-g` | CollectOxoGMetrics (needs `-R`) | one |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
 S=P.gc_bias.summary_metrics` write the same metrics (the `StringHeader` command line lists
 the options in the order the verb passes them). `crates/cli/tests/grammar.rs` checks that
 for every tool.
+
+`oxo-g` follows the naming rule: `CollectOxoGMetrics` without `Collect` and `Metrics` is
+`OxoG`, two words in kebab case. It writes one `CpcgMetrics` row per context and library.
+`--context-size N` sets the bases on each side of the C (default 1, at most 4 without
+`--contexts`), and each `--contexts ACA` adds one context to report:
+
+```bash
+bammetrics oxo-g sample.bam -R ref.fa -o sample.oxog_metrics
+bammetrics oxo-g sample.bam -R ref.fa --contexts CCG --contexts TCG --db-snp dbsnp.vcf
+```
 
 `multiple-metrics --program X` adds to Picard's default five programs, as `PROGRAM=` does;
 `--program null` first clears them. The accumulate verbs and `bed-to-interval-list` are

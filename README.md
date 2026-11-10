@@ -117,6 +117,7 @@ under the failing check it explains. The presets, the rule language and `verdict
 | MarkDuplicates (writes the BAM with 0x400 set and a `@PG` line; `DT`, `DS`, `DI`, `MI` tags; UMIs, barcodes, optical duplicates, several inputs, query-name input; spills to `TMP_DIR`) | | `mark_duplicates()` |
 | CollectSequencingArtifactMetrics (`CONTEXT_SIZE`, `CONTEXTS_TO_PRINT`, `INTERVALS`, `DB_SNP`, `TANDEM_READS`, `USE_OQ`; pre-adapter, bait-bias and error summary files; also a `CollectMultipleMetrics` program) | per library | `collect_sequencing_artifact_metrics()` |
 | ConvertSequencingArtifactToOxoG (the `CollectOxoGMetrics` rows from the two detail files) | per library | `convert_sequencing_artifact_to_oxo_g()` |
+| CollectOxoGMetrics (`CONTEXT_SIZE`, `CONTEXTS`, `INTERVALS`, `DB_SNP`, `USE_OQ`, insert size and quality filters; one row per context and library) | | `collect_oxo_g_metrics()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 

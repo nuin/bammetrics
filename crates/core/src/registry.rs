@@ -329,6 +329,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::mark_duplicates::TOOL,
     &crate::sequencing_artifact::TOOL,
     &crate::artifact_to_oxog::TOOL,
+    &crate::oxog_metrics::TOOL,
 ];
 
 /// The tool named `name`.

@@ -31,7 +31,8 @@ use crate::error::{Error, Result};
 use crate::histogram::Histogram;
 use crate::intervals::{self, uniqued};
 use crate::locus::{
-    BaseEntry, Classic, Edge, EdgeEntry, Engine, Filters, Finished, NameSet, Settings, Sink,
+    BaseEntry, Classic, Edge, EdgeEntry, Engine, Filters, Finished, NameSet, Settings, Setup, Sink,
+    check_sort_order,
 };
 use crate::metric::{HistogramSection, HistogramSeries, MetricsOutput, ToolOutput, Value};
 use crate::metrics_file::KeyClass;
@@ -872,12 +873,15 @@ fn run_variant(inv: &Invocation, variant: Variant) -> Result<ToolOutput> {
     let opts = Options::from_invocation(inv, variant)?;
     let settings = |locus_cap: Option<usize>| Settings {
         minimum_mapping_quality: opts.minimum_mapping_quality,
-        count_unpaired: opts.count_unpaired,
+        setup: Setup::Wgs {
+            count_unpaired: opts.count_unpaired,
+        },
         locus_accumulation_cap: locus_cap,
         stop_after: opts.stop_after,
     };
     let setup = |header: &sam::Header| -> Result<(Reference, Option<Vec<intervals::Interval>>)> {
         let reference = Reference::open(&opts.reference, header)?;
+        check_sort_order(header)?;
         let unique = match &opts.intervals {
             Some(path) => Some(uniqued(&intervals::read_files(&[path], header)?)),
             None => None,
@@ -1051,6 +1055,9 @@ mod tests {
             start: 2,
             end: 5,
             blocks: Vec::new(),
+            flags: Default::default(),
+            read_group: None,
+            original_qualities: None,
         });
         let event = EdgeEntry {
             read,

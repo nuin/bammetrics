@@ -107,9 +107,20 @@ pub fn is_interval_list(text: &str) -> bool {
         .is_some_and(|l| l.starts_with('@'))
 }
 
+/// True for a file [`read_files`] reads as an interval list: a name ending
+/// in `.interval_list` (htsjdk `IOUtil.INTERVAL_LIST_FILE_EXTENSION`), or
+/// text that [`is_interval_list`] accepts. A headerless `.interval_list`
+/// then fails for its missing `@SQ` lines, as in Picard.
+pub fn is_interval_list_file(path: &Path, text: &str) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.ends_with(".interval_list"))
+        || is_interval_list(text)
+}
+
 /// Read and concatenate interval files (`IntervalList.fromFiles`), in file
-/// order and without merging. A file whose first non-blank line starts with
-/// `@` is an interval list, anything else is BED.
+/// order and without merging. A file named `*.interval_list`, or whose first
+/// non-blank line starts with `@`, is an interval list; anything else is BED.
 pub fn read_files<P: AsRef<Path>>(paths: &[P], header: &sam::Header) -> Result<Vec<Interval>> {
     Ok(read_named_files(paths, header)?
         .into_iter()
@@ -129,7 +140,7 @@ pub fn read_named_files<P: AsRef<Path>>(
             path: path.to_path_buf(),
             source,
         })?;
-        let parsed = if is_interval_list(&text) {
+        let parsed = if is_interval_list_file(path, &text) {
             parse_interval_list(&text, header)
         } else {
             parse_bed(&text, header)
@@ -226,6 +237,9 @@ fn check_dictionary(
     dictionary: &[(String, i64)],
     header: &sam::Header,
 ) -> std::result::Result<(), String> {
+    if dictionary.is_empty() {
+        return Err("the interval list has no @SQ lines, so no sequence dictionary".to_owned());
+    }
     let bam: Vec<(String, i64)> = header
         .reference_sequences()
         .iter()
@@ -451,6 +465,18 @@ mod tests {
         assert!(parse_interval_list(four, &header).is_err());
         let past_end = "@SQ\tSN:chr1\tLN:1000\n@SQ\tSN:chr2\tLN:500\nchr2\t5\t501\t+\ta\n";
         assert!(parse_interval_list(past_end, &header).is_err());
+        let headerless = "chr1\t5\t10\t+\ta\n";
+        let message = parse_interval_list(headerless, &header).expect_err("no dictionary");
+        assert!(message.contains("no @SQ lines"), "{message}");
+    }
+
+    #[test]
+    fn interval_list_name_or_header_selects_the_parser() {
+        let records = "chr1\t5\t10\t+\ta\n";
+        assert!(is_interval_list_file(Path::new("t.interval_list"), records));
+        assert!(!is_interval_list_file(Path::new("t.bed"), records));
+        assert!(!is_interval_list_file(Path::new("t.txt"), records));
+        assert!(is_interval_list_file(Path::new("t.txt"), "@HD\tVN:1.6\n"));
     }
 
     #[test]
