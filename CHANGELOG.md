@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.21.0
+
+The stage layer of in-process chaining (`bammetrics_core::stage`, docs/chaining.md):
+`MarkDuplicates` as a barrier, the 13 one-pass tools as taps, the `write` step and the
+hidden `__chain` entry. No new verb and no change to any file a tool writes.
 
 ### Added
 
