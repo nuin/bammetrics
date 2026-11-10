@@ -83,9 +83,10 @@ Every file is written under a temporary name and renamed into place. A file that
 replaced keeps its permissions: a 0600 output stays 0600 under any umask. This holds for
 `-o`, every sibling, `convert`, `check -o`, `report` and every file of `qc`. The temporary
 name has a random part, and a file already at that name is an error and is left alone.
-Three kinds of output are written in place: a path under `/dev`, a named pipe or device,
-and a symbolic link the user owns (the write follows it). A symbolic link another user owns
-is an error that names the path.
+Three kinds of output are written in place: a path under `/dev` with no `..` in it
+(`/dev/stdout`), a named pipe, socket or device the user owns, and a symbolic link the user
+owns (the write follows it). Outside `/dev`, a symbolic link or a non-regular file another
+user owns is an error that names the path.
 
 ## `qc --also`
 
@@ -244,7 +245,9 @@ tab or carriage return can hide one. Sample, library and read group names come f
 header, so a file from elsewhere can carry such a cell. In both formats a string cell or a
 column name whose first character is one of those six is written after a `'`:
 `=HYPERLINK(...)` prints `'=HYPERLINK(...)`, and a library named `-80C` prints `'-80C`. A
-number is never changed: `-3` prints `-3`, and negative infinity prints `-?` or `-inf`. No
+number is never changed: `-3` prints `-3`, and negative infinity prints `-?` or `-inf`. A
+cell or column name that is `+` or `-` alone, such as the strand of an interval, is not
+changed either: it has no formula body and a spreadsheet reads it as text. No
 flag turns the rule off. Such a cell does not come back from TSV or CSV as it was, because
 a reader sees the `'`. JSON (`--format json`) holds every cell unchanged and reads back.
 
