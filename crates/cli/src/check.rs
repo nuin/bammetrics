@@ -369,7 +369,13 @@ pub fn run(args: CheckArgs) -> Result<u8> {
     let first = render(args.format[0], &verdicts, code, args.fail_on);
     match &args.output {
         None => print_stdout(&first),
-        Some(path) => write_atomic(path, first)?,
+        Some(path) => {
+            // Missing output directories are created (docs/05 section 2.3).
+            if let Some(parent) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+                fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
+            }
+            write_atomic(path, first)?;
+        }
     }
     for (format, path) in further {
         write_atomic(&path, render(format, &verdicts, code, args.fail_on))?;

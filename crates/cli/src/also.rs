@@ -16,7 +16,7 @@ use clap::ValueEnum;
 use crate::check::FailOn;
 use crate::error::{Error, Result};
 use crate::format::{sibling, summary};
-use crate::qc::with_suffix;
+use crate::qc::{manifest_path, verdict_path, with_suffix};
 
 /// A format `qc --also` writes beside the Picard files.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
@@ -76,9 +76,23 @@ impl Also {
     }
 }
 
-/// True for the manifest kind of an `--also` file: a format name.
-pub fn is_kind(kind: &str) -> bool {
-    Also::value_variants().iter().any(|a| a.name() == kind)
+/// True when `path` is a file the format named `kind` writes for
+/// `prefix`: the prefix plus the format's suffix, or a path with the
+/// format's extension that is not the run's verdict or manifest. An
+/// earlier manifest is a file on disk, so before `qc` removes a stale
+/// `--also` file it checks the path against the names it computes itself.
+pub fn is_target(prefix: &Path, path: &Path, kind: &str) -> bool {
+    let Some(also) = Also::value_variants().iter().find(|a| a.name() == kind) else {
+        return false;
+    };
+    match also.per_file() {
+        Some(format) => {
+            path.extension().and_then(|e| e.to_str()) == Some(format.extension())
+                && path != verdict_path(prefix)
+                && path != manifest_path(prefix)
+        }
+        None => path == with_suffix(prefix, also.run_suffix()),
+    }
 }
 
 /// One file `--also` writes.
@@ -182,12 +196,31 @@ mod tests {
     }
 
     #[test]
-    fn every_format_name_is_a_manifest_kind() {
-        for also in Also::value_variants() {
-            assert!(is_kind(also.name()));
+    fn a_stale_file_is_removed_only_under_a_name_also_writes() {
+        let prefix = Path::new("out/s");
+        let metrics = [Path::new("out/s.insert_size_metrics")];
+        for target in targets(prefix, &metrics, Also::value_variants()) {
+            assert!(
+                is_target(prefix, &target.path, target.also.name()),
+                "{}",
+                target.path.display()
+            );
         }
-        for kind in ["metrics", "verdict", "report", "intervals", "gaps"] {
-            assert!(!is_kind(kind));
+        // The BAM, a metrics file and another run's page are never one.
+        for (path, kind) in [
+            ("out/s.bam", "json"),
+            ("out/s.insert_size_metrics", "csv"),
+            ("out/s.insert_size_metrics.json", "metrics"),
+            ("out/t.junit.xml", "junit"),
+            ("out/s.report.html", "markdown"),
+            ("out/s.verdict.json", "multiqc"),
+            ("out/s.verdict.json", "json"),
+            ("out/s.manifest.json", "json"),
+        ] {
+            assert!(
+                !is_target(prefix, Path::new(path), kind),
+                "{path} as {kind}"
+            );
         }
     }
 }

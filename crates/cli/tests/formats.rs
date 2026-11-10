@@ -274,7 +274,9 @@ fn qc_also_lists_its_files_and_a_later_run_removes_them() {
 
 #[test]
 fn check_writes_every_format_of_its_list_beside_the_output() {
-    let dir = fresh_dir("check");
+    let base = fresh_dir("check");
+    // A missing output directory is created.
+    let dir = base.join("ci");
     let out = dir.join("check.xml");
     let run = bammetrics(&[
         "check",
@@ -314,7 +316,7 @@ fn check_writes_every_format_of_its_list_beside_the_output() {
     assert_eq!(code(&gated), 10);
     let xml = String::from_utf8_lossy(&gated.stdout).into_owned();
     assert!(xml.contains("<failure type=\"fail\""), "{xml}");
-    let _ = fs::remove_dir_all(&dir);
+    let _ = fs::remove_dir_all(&base);
 }
 
 /// The `multiqc` on PATH, or the one `MULTIQC` names.

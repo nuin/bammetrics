@@ -374,8 +374,9 @@ fn post_and_report(
 /// `--also`: write the files of [`also::texts`] and return their manifest
 /// step, `also`; `None` without the option. An `--also` file the earlier
 /// run's manifest lists and this run does not write is removed, under the
-/// rules of [`remove_dropped`]: a path owned by the prefix, a regular
-/// file, never through a symlink.
+/// rules of [`remove_dropped`] (a path owned by the prefix, a regular
+/// file, never through a symlink) and only under a name `--also` writes
+/// ([`also::is_target`]).
 fn write_also(
     plan: &Plan,
     args: &QcArgs,
@@ -411,7 +412,7 @@ fn write_also(
             .iter()
             .filter(|s| s.id == "also")
             .flat_map(|s| &s.outputs)
-            .filter(|o| also::is_kind(&o.kind))
+            .filter(|o| also::is_target(&plan.prefix, &o.path, &o.kind))
             .filter(|o| !outputs.iter().any(|new| new.path == o.path));
         for output in stale {
             if owned_by_prefix(&plan.prefix, &output.path)
