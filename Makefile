@@ -5,6 +5,7 @@ UV_RUN := uv run --no-project
 CORPUS := tests/corpus/out
 
 .PHONY: all test lint release corpus reference-metrics concordance golden golden-update budgets a11y python-test wheel wheel-check clean-corpus bench-bam bench bench-wgs fuzz picard-fields
+.PHONY: harness-test deny deflater-spike
 
 all: test lint concordance
 
@@ -28,8 +29,13 @@ $(CORPUS)/corpus.json: tests/corpus/generate.py
 reference-metrics: corpus
 	$(UV_RUN) python tests/concordance/run_picard.py
 
-concordance: reference-metrics release golden
+concordance: reference-metrics release golden harness-test
 	$(UV_RUN) --with pytest --with pysam python -m pytest tests/concordance -q
+
+# The harness's own tests (tests/harness): the Picard queue, compare_bam and
+# compare_vcf on stand-in tools, the spec script. Needs samtools; starts no JVM.
+harness-test:
+	$(UV_RUN) --with pytest python -m pytest tests/harness -q
 
 # Golden suite (crates/cli/tests/golden.rs): every documented command form on
 # tests/data (and on corpus t1 with GOLDEN_CORPUS=1, since those records depend
@@ -124,4 +130,17 @@ bench-wgs: release
 	$(UV_RUN) --with pysam --with numpy python benches/wgs_bench.py
 
 clean-corpus:
-	rm -rf $(CORPUS) target/concordance target/fakeR
+	rm -rf $(CORPUS) target/concordance target/fakeR target/picard-queue
+
+# Licences, banned and duplicated crates, registries and RustSec advisories of
+# the dependency graph (deny.toml). Needs cargo-deny: cargo install cargo-deny --locked.
+# Not run in CI.
+deny:
+	cargo deny check
+
+# Deflater spike of docs/concordance.md ("BAM bytes"): Picard MarkDuplicates with
+# each of its deflaters against bammetrics and three Rust-callable deflaters
+# (benches/deflater_spike, a package outside the workspace). Needs picard.
+SPIKE_BAMS ?= tests/data/markdup.bam
+deflater-spike: release
+	python3 benches/deflater_spike.py $(SPIKE_BAMS)
