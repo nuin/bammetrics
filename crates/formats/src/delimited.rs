@@ -19,7 +19,8 @@
 //! column name or a string cell with such a first character is written
 //! after a `'` ([`guarded`]), which makes it text. A sample or library
 //! name comes from the BAM header, so a file from elsewhere could carry
-//! one. A numeric cell is never changed: `-3` stays `-3`.
+//! one. A numeric cell is never changed: `-3` stays `-3`. A text that is
+//! `+` or `-` alone, a strand, is not changed either.
 
 use std::borrow::Cow;
 
@@ -31,9 +32,12 @@ use crate::table::{Document, Table};
 
 /// `text` (a column name or a string cell) as a spreadsheet reads as
 /// text: after a `'` when its first character is `=`, `+`, `-`, `@`, a
-/// tab or a carriage return.
+/// tab or a carriage return. A text that is `+` or `-` alone (a strand)
+/// stays as it is: it has no formula body and a spreadsheet reads it as
+/// text.
 fn guarded(text: &str) -> Cow<'_, str> {
-    if text.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+    let strand = matches!(text, "+" | "-");
+    if !strand && text.starts_with(['=', '+', '-', '@', '\t', '\r']) {
         Cow::Owned(format!("'{text}"))
     } else {
         Cow::Borrowed(text)
@@ -293,6 +297,32 @@ mod tests {
             let table = one_cell("S", Value::Str(cell.to_owned()));
             assert_eq!(tsv(&table), format!("S\n{cell}\n"), "{cell:?}");
             assert_eq!(csv(&table), format!("S\r\n{cell}\r\n"), "{cell:?}");
+        }
+    }
+
+    /// A strand cell or column name (`+` or `-` alone) is unchanged;
+    /// anything longer with that first character is guarded.
+    #[test]
+    fn a_lone_plus_or_minus_is_written_as_it_was() {
+        for sign in ["+", "-"] {
+            let cell = one_cell("strand", Value::Str(sign.to_owned()));
+            assert_eq!(tsv(&cell), format!("strand\n{sign}\n"));
+            assert_eq!(csv(&cell), format!("strand\r\n{sign}\r\n"));
+            let name = one_cell(sign, Value::Int(1));
+            assert_eq!(tsv(&name), format!("{sign}\n1\n"));
+            assert_eq!(csv(&name), format!("{sign}\r\n1\r\n"));
+        }
+        for longer in ["+1", "-x", "--", "+ ", "-\t"] {
+            let cell = one_cell("S", Value::Str(longer.to_owned()));
+            assert!(tsv(&cell).starts_with("S\n'"), "{longer:?}");
+            assert!(csv(&cell).starts_with("S\r\n'"), "{longer:?}");
+            let name = one_cell(longer, Value::Int(1));
+            assert!(tsv(&name).starts_with('\''), "{longer:?}");
+            assert!(csv(&name).starts_with('\''), "{longer:?}");
+        }
+        for other in ["=", "@"] {
+            let cell = one_cell("S", Value::Str(other.to_owned()));
+            assert_eq!(csv(&cell), format!("S\r\n'{other}\r\n"));
         }
     }
 
