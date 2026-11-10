@@ -12,7 +12,8 @@ output, error, the exit code and the environment are the real command's:
 `JAVA_OPTS` reaches the Homebrew `picard` wrapper unchanged.
 
 No test calls this file by name. `run_picard.picard_env()` puts `shim()`, a
-two-line `picard` script in `target/picard-queue`, first on `PATH`, so every
+two-line `picard` script in a directory of `target/picard-queue` named after
+the script's own text, first on `PATH`, so every
 `subprocess.run(["picard", ...], env=picard_env())` of the harness queues here.
 A cached Picard result (`target/fuzz/cache`, the `run_picard.py` manifest) starts
 no process and takes no lock. `held()` is the same lock for a caller that times
@@ -22,7 +23,8 @@ Environment:
 
   PICARD_LOCK_FILE          the lock file (default ~/.cache/bammetrics/picard.lock)
   PICARD_LOCK_TIMEOUT       seconds to wait for the lock and for other JVMs; unset
-                            waits without limit; exit 75 when it runs out
+                            waits without limit; exit 75 when it runs out, exit 2
+                            when the value is not a number of seconds
   PICARD_LOCK_WAIT_FOREIGN  0 skips the wait for JVMs started outside the lock
 
 The wait for other JVMs covers a harness of a branch older than this file and a
@@ -31,6 +33,8 @@ outside the lock during a queued run is not seen.
 """
 import contextlib
 import fcntl
+import hashlib
+import math
 import os
 import shlex
 import shutil
@@ -42,6 +46,8 @@ from pathlib import Path
 DEFAULT_LOCK = Path.home() / ".cache" / "bammetrics" / "picard.lock"
 # Exit code when PICARD_LOCK_TIMEOUT runs out: EX_TEMPFAIL of sysexits.h.
 TIMED_OUT = 75
+# Exit code for a PICARD_LOCK_TIMEOUT that is not a number of seconds.
+USAGE = 2
 # Set for the JVM and its children: a nested call must not wait for its own lock.
 HELD = "PICARD_LOCK_HELD"
 LOCK_POLL = 0.05
@@ -57,9 +63,18 @@ def lock_path(env=os.environ):
 
 
 def timeout(env=os.environ):
-    """PICARD_LOCK_TIMEOUT as seconds, None when unset or empty."""
+    """PICARD_LOCK_TIMEOUT as seconds, None when unset or empty. A value that
+    is not a finite number from 0 up is a ValueError naming the variable."""
     text = env.get("PICARD_LOCK_TIMEOUT", "")
-    return float(text) if text else None
+    if not text:
+        return None
+    try:
+        seconds = float(text)
+    except ValueError:
+        seconds = math.nan
+    if not (math.isfinite(seconds) and seconds >= 0):
+        raise ValueError(f"PICARD_LOCK_TIMEOUT must be seconds, not {text!r}")
+    return seconds
 
 
 def open_lock(path):
@@ -162,14 +177,17 @@ def held(argv=("held",), env=os.environ):
 
 
 def shim(directory, python=sys.executable):
-    """Write `directory/picard`, a script that runs this file with its
-    arguments, and return the directory. The script is replaced by rename, and
-    only when its text changes, so a process starting it never reads half."""
-    directory = Path(directory)
-    directory.mkdir(parents=True, exist_ok=True)
-    return write_script(directory / "picard",
-                        f'#!/bin/sh\nexec {shlex.quote(str(python))} '
-                        f'{shlex.quote(str(Path(__file__).resolve()))} "$@"\n').parent
+    """Write `directory/<key>/picard`, a script that runs this file with its
+    arguments under `python`, and return its directory. `<key>` is 12 hex
+    characters of the SHA-256 of the script's text, so the script at one path
+    never changes: two harness processes started from different interpreters
+    (a uv environment and `.venv`) each use a script of their own, and neither
+    replaces the one a queued call of the other is about to start."""
+    text = (f'#!/bin/sh\nexec {shlex.quote(str(python))} '
+            f'{shlex.quote(str(Path(__file__).resolve()))} "$@"\n')
+    home = Path(directory) / hashlib.sha256(text.encode()).hexdigest()[:12]
+    home.mkdir(parents=True, exist_ok=True)
+    return write_script(home / "picard", text).parent
 
 
 def write_script(path, text):
@@ -221,7 +239,11 @@ def main(argv):
         return 0
     picard = real_picard()
     if not os.environ.get(HELD):
-        deadline = deadline_from()
+        try:
+            deadline = deadline_from()
+        except ValueError as error:
+            print(f"picard_lock: {error}", file=sys.stderr)
+            return USAGE
         try:
             fd = acquire(lock_path(), deadline)
             note_holder(fd, ["picard", *argv])

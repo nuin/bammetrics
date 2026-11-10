@@ -45,8 +45,12 @@ an integer tag.
 `compare_vcf` is the same for a tool that writes a VCF, plain or gzip: the
 header lines other than the date and command lines (`VCF_VOLATILE`, plus the
 keys in `drop`), in order, and every record line.
+
+Both split text at `\n` only (`text_lines`), and both require the 28-byte
+end-of-file block of a BGZF file, a BAM or a bgzip VCF (`missing_bgzf_eof`).
 """
 import gzip
+import os
 import re
 import struct
 import subprocess
@@ -242,14 +246,49 @@ class Written:
     cells: int = 0
 
 
+def text_lines(data):
+    """The lines of `data`, one character per byte, split at `\n` only.
+    `str.splitlines` also splits at `\r`, `\x0b`, `\x0c`, `\x1c` to `\x1e` and
+    `\x85`, which a tag value or an INFO field may hold: it would cut one
+    record in two and drop the byte, so two files differing in that byte
+    would compare equal."""
+    lines = data.decode("latin-1").split("\n")
+    return lines[:-1] if lines[-1] == "" else lines
+
+
+# The empty BGZF block that ends a BAM or a bgzip file (SAM specification 4.1.2).
+BGZF_EOF = bytes.fromhex("1f8b08040000000000ff0600424302001b0003000000000000000000")
+
+
+def missing_bgzf_eof(who, path):
+    """One problem line when the BGZF file at `path` does not end with the
+    end-of-file block, empty otherwise and for a file that is not BGZF (SAM,
+    CRAM, plain VCF, plain gzip). `samtools view` exits 0 without the block
+    and `gzip.decompress` does not look for it, so a file cut at a block
+    boundary, or one whose writer never finished, reads as whole."""
+    with open(path, "rb") as handle:
+        head = handle.read(14)
+        if head[:4] != BGZF_EOF[:4] or head[12:14] != b"BC":
+            return []
+        size = handle.seek(0, os.SEEK_END)
+        handle.seek(max(0, size - len(BGZF_EOF)))
+        if handle.read() == BGZF_EOF:
+            return []
+    return [f"{who} {Path(path).suffix or 'file'}: no BGZF end-of-file block (a cut file, or a "
+            "writer that never finished)"]
+
+
+def missing_eofs(picard_path, ours_path):
+    return missing_bgzf_eof("Picard", picard_path) + missing_bgzf_eof("bammetrics", ours_path)
+
+
 def sam_view(path, header=False, reference=None):
     """`samtools view` lines of a BAM, SAM or CRAM, one character per byte
     (htsjdk writes text from the command line one byte per character, so it
     need not be UTF-8)."""
     args = ["samtools", "view", "--no-PG", *(["-H"] if header else []),
             *(["-T", str(reference)] if reference else []), str(path)]
-    out = subprocess.run(args, check=True, capture_output=True).stdout
-    return out.decode("latin-1").splitlines()
+    return text_lines(subprocess.run(args, check=True, capture_output=True).stdout)
 
 
 def bam_header_lines(lines):
@@ -298,9 +337,11 @@ def diff_sam_lines(picard_header, picard_records, ours_header, ours_records):
 
 def diff_bam(picard_bam, ours_bam, reference=None):
     """Difference lines between two BAM, SAM or CRAM files, empty when they
-    hold the same header (by the rules of the module doc) and records."""
-    return diff_sam_lines(sam_view(picard_bam, True, reference), sam_view(picard_bam, False, reference),
-                          sam_view(ours_bam, True, reference), sam_view(ours_bam, False, reference))
+    hold the same header (by the rules of the module doc) and records, and
+    each BAM ends with the BGZF end-of-file block."""
+    return missing_eofs(picard_bam, ours_bam) + diff_sam_lines(
+        sam_view(picard_bam, True, reference), sam_view(picard_bam, False, reference),
+        sam_view(ours_bam, True, reference), sam_view(ours_bam, False, reference))
 
 
 # Where each fixed field of a BAM record starts, to name a differing byte.
@@ -331,7 +372,11 @@ def bam_records(path):
 def diff_bam_bytes(picard_bam, ours_bam):
     """One difference line for the first record whose bytes differ after
     BGZF inflation, naming the field of the first differing byte. Empty when
-    every record is byte for byte the same."""
+    every record is byte for byte the same and both files end with the BGZF
+    end-of-file block."""
+    problems = missing_eofs(picard_bam, ours_bam)
+    if problems:
+        return problems
     picard, ours = bam_records(picard_bam), bam_records(ours_bam)
     for index, (p, o) in enumerate(zip(picard, ours)):
         if p != o:
@@ -354,7 +399,7 @@ def vcf_lines(path):
     data = Path(path).read_bytes()
     if data[:2] == b"\x1f\x8b":
         data = gzip.decompress(data)
-    return data.decode("latin-1").splitlines()
+    return text_lines(data)
 
 
 def vcf_header_lines(lines, drop=()):
@@ -371,10 +416,12 @@ def vcf_records(lines):
 
 def diff_vcf(picard_vcf, ours_vcf, drop=()):
     """Difference lines between two VCFs, empty when the compared header
-    lines and every record line are equal, in file order."""
+    lines and every record line are equal, in file order, and each bgzip
+    file ends with the BGZF end-of-file block."""
     picard, ours = vcf_lines(picard_vcf), vcf_lines(ours_vcf)
-    problems = first_line_difference("header line (date and command lines aside)",
-                                     vcf_header_lines(picard, drop), vcf_header_lines(ours, drop))
+    problems = missing_eofs(picard_vcf, ours_vcf)
+    problems += first_line_difference("header line (date and command lines aside)",
+                                      vcf_header_lines(picard, drop), vcf_header_lines(ours, drop))
     return problems + first_line_difference("record", vcf_records(picard), vcf_records(ours))
 
 
@@ -456,6 +503,7 @@ def compare_bam(tool, inputs, picard_args=(), bam_args=None, workdir=None, outco
         metrics, problems, cells = (diff_metrics_files(picard_txt, ours_txt) if metrics_key
                                     else (None, [], 0))
         header, records = sam_view(picard_out, True, reference), sam_view(picard_out, False, reference)
+        problems += missing_eofs(picard_out, ours_out)
         problems += diff_sam_lines(header, records, sam_view(ours_out, True, reference),
                                    sam_view(ours_out, False, reference))
         if record_bytes and not problems:

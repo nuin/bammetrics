@@ -16,10 +16,15 @@ then one row per option:
   OPT      the registry row it suggests: bool, int, float, path or text
            (crates/core/src/registry.rs `Opt`)
   DEFAULT  Picard's `Default value:`, empty for a required option
-  NOTES    required, repeated, advanced; `values A|B`; `excludes X`; `common`
-           for a name the registry's COMMON rows already take; `parser` for an
-           option of Picard's command line parser, which needs no row
+  NOTES    required, repeated, advanced; `values A|B` (from `Possible values:
+           {A, B}`, or from the `A (what it does)` lines Picard prints for an
+           enum with a text per value); `excludes X`; `common` for a name the
+           registry's COMMON rows already take; `parser` for an option of
+           Picard's command line parser, which needs no row
   DOC      Picard's help text on one line
+
+A name Picard does not know exits 1 with one line that names it and Picard's
+own suggestion. The terminal colour codes Picard prints are dropped.
 
 The table says what Picard accepts. It does not say what an option does to the
 output: read the Picard 3.5.0 source for that before writing the tool.
@@ -44,6 +49,12 @@ OPTION = re.compile(
 SECTION = re.compile(r"(?P<name>\w+) Arguments.*:$")
 DEFAULT = re.compile(r"Default value: (.*?)\.\s*(?:Possible values:|Cannot be used|$)")
 VALUES = re.compile(r"Possible values: \{([^}]*)\}")
+# Where the `NAME (what it does)` list of an enum starts, and one item's start.
+PROSE = re.compile(r"(?:Required\.|Default value: \S+\.)\s+(?=\w+ \()")
+PROSE_VALUE = re.compile(r"\s*(\w+) \(")
+# The colour codes of Picard's tool list.
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+UNKNOWN = re.compile(r"'[^']*' is not a valid command\.")
 EXCLUDES = re.compile(r"Cannot be used in conjunction with argument\(s\)\s*(.*)$")
 REPEATED = re.compile(
     r"This argument (may|must) be specified (0 or more times|at least once)"
@@ -80,7 +91,7 @@ class Option:
 
     @property
     def default(self):
-        found = DEFAULT.search(self.doc)
+        found = DEFAULT.search(self.doc[: prose_values(self.doc)[0]])
         return found.group(1).strip() if found else ""
 
     def row(self):
@@ -115,6 +126,26 @@ def common_names(registry=REGISTRY):
     }
 
 
+def prose_values(doc):
+    """Where the `NAME (what it does)` list of an enum starts in `doc`, and
+    its names: `Required. queryname (Sorts ...) coordinate (Sorts ...)`.
+    Picard prints that list in place of `Possible values: {...}` for an enum
+    that has a text per value. `(len(doc), [])` without one."""
+    start = PROSE.search(doc)
+    if not start:
+        return len(doc), []
+    names, at = [], start.end()
+    while item := PROSE_VALUE.match(doc, at):
+        depth, at = 1, item.end()
+        while depth and at < len(doc):
+            depth += {"(": 1, ")": -1}.get(doc[at], 0)
+            at += 1
+        if depth:
+            break
+        names.append(item.group(1))
+    return (start.end(), names) if names else (len(doc), [])
+
+
 def notes(option, common):
     """The NOTES of one option, from its section, its help text and its name."""
     found = []
@@ -125,10 +156,13 @@ def notes(option, common):
     if option.section not in ("Required", "Optional"):
         found.append(option.section.lower())
     values = VALUES.search(option.doc)
-    if values and option.type != "Boolean":
-        found.append(
-            "values " + "|".join(v.strip() for v in values.group(1).split(","))
-        )
+    listed = (
+        [v.strip() for v in values.group(1).split(",")]
+        if values
+        else prose_values(option.doc)[1]
+    )
+    if listed and option.type != "Boolean":
+        found.append("values " + "|".join(listed))
     excludes = EXCLUDES.search(option.doc)
     if excludes:
         found.append("excludes " + excludes.group(1).strip())
@@ -140,11 +174,21 @@ def notes(option, common):
 
 
 def parse_help(text, common=frozenset()):
-    """The `Spec` in the text `picard <Tool> --help` prints."""
+    """The `Spec` in the text `picard <Tool> --help` prints. A ValueError
+    says why the text is not one: Picard's `is not a valid command` line with
+    the names it suggests, or no `USAGE:` line."""
+    text = ANSI.sub("", text)
     lines = text.splitlines()
+    unknown = UNKNOWN.search(text)
+    if unknown:
+        suggested = text[unknown.end() :].partition("Did you mean this?")[2].split()
+        hint = f"; Picard suggests {', '.join(suggested)}" if suggested else ""
+        raise ValueError(f"not a Picard tool{hint}")
     usage = next((i for i, line in enumerate(lines) if line.startswith("USAGE:")), None)
     if usage is None:
-        raise ValueError("no USAGE line: not the --help of a Picard tool")
+        raise ValueError(
+            "no USAGE line: not the --help of a Picard tool\n" + text[-2000:].rstrip()
+        )
     version = next(
         (
             line.split(":", 1)[1].strip()
@@ -228,7 +272,7 @@ def main(argv=None):
     try:
         spec = parse_help(text, common_names())
     except ValueError as error:
-        print(f"spec_agent: {error}\n{text[-2000:]}", file=sys.stderr)
+        print(f"spec_agent: {args.tool or args.from_help}: {error}", file=sys.stderr)
         return 1
     if not spec.options:
         print(

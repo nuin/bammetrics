@@ -143,15 +143,40 @@ def test_wait_for_foreign_polls_until_no_jvm_is_listed():
                                      sleep=naps.append)
 
 
-def test_shim_is_rewritten_only_when_its_text_changes(tmp_path):
+def test_each_interpreter_has_a_shim_that_is_never_rewritten(tmp_path):
+    """Two harness processes started from different interpreters must not
+    replace each other's script: a queued call would start an interpreter
+    its own process never named."""
     script = picard_lock.shim(tmp_path / "queue") / "picard"
     assert os.access(script, os.X_OK) and picard_lock.is_shim(script)
-    before = script.stat().st_ino
-    picard_lock.shim(tmp_path / "queue")
-    assert script.stat().st_ino == before
-    picard_lock.shim(tmp_path / "queue", python="/another/python")
-    assert script.stat().st_ino != before and "/another/python" in script.read_text()
-    assert [p.name for p in (tmp_path / "queue").iterdir()] == ["picard"]
+    assert sys.executable in script.read_text()
+    before = (script.stat().st_ino, script.read_text())
+    other = picard_lock.shim(tmp_path / "queue", python="/another/python") / "picard"
+    assert other != script and "/another/python" in other.read_text()
+    assert picard_lock.shim(tmp_path / "queue") / "picard" == script
+    assert (script.stat().st_ino, script.read_text()) == before
+    homes = sorted(p.name for p in (tmp_path / "queue").iterdir())
+    assert homes == sorted([script.parent.name, other.parent.name])
+    assert all(re.fullmatch("[0-9a-f]{12}", name) for name in homes)
+    assert [p.name for p in script.parent.iterdir()] == ["picard"]
+
+
+@pytest.mark.parametrize("value", ["abc", "nan", "-1", "inf", "1s"])
+def test_a_timeout_that_is_not_seconds_is_a_usage_error(slow_picard, monkeypatch, value):
+    monkeypatch.setenv("PICARD_LOCK_TIMEOUT", value)
+    done = subprocess.run(["picard", "X"], env=picard_env(), capture_output=True, text=True)
+    assert done.returncode == picard_lock.USAGE == 2
+    assert done.stderr == f"picard_lock: PICARD_LOCK_TIMEOUT must be seconds, not {value!r}\n"
+    assert not slow_picard.exists()
+    with pytest.raises(ValueError, match="PICARD_LOCK_TIMEOUT must be seconds"):
+        with picard_lock.held():
+            pass
+
+
+def test_timeout_values():
+    assert picard_lock.timeout({}) is None and picard_lock.timeout({"PICARD_LOCK_TIMEOUT": ""}) is None
+    assert picard_lock.timeout({"PICARD_LOCK_TIMEOUT": "0"}) == 0
+    assert picard_lock.timeout({"PICARD_LOCK_TIMEOUT": "1.5"}) == 1.5
 
 
 # --- every harness call goes through the queue --------------------------------------

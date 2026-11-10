@@ -153,6 +153,12 @@ per byte.
 - The `@PG` lines must carry the same `ID` and `PP`, in order. `VN` and `CL` name the program
   that wrote the file and are not compared.
 - Every record must be equal as `samtools view` prints it: every field, every tag, file order.
+  The text is split at `\n` only. `str.splitlines` also splits at `\r`, `\x0b`, `\x0c`, `\x1c`
+  to `\x1e` and `\x85`, so a tag value holding one of them would be cut in two and the byte
+  itself never compared.
+- Each BAM must end with the 28-byte BGZF end-of-file block. `samtools view` exits 0 without
+  it and prints every record, so a writer that never wrote it would pass otherwise. The same
+  check runs on a bgzip VCF and under `record_bytes`.
 - The failure names the first differing header line or record by its index, from 0, with both
   lines.
 - `metrics_key="M"` also compares a metrics file as `compare_metrics` does.
@@ -169,14 +175,15 @@ per byte.
 input_key="I", output_key="O", suffix=".vcf", drop=(), label=None)` does the same for a VCF,
 plain or gzip. The header lines must be equal in order, without the date and command lines
 (`##fileDate=`, any key ending in `CommandLine` or `Command`) and without the keys in `drop`.
-Every record line must be equal. `drop` takes the lines one Picard writer adds that name the
+Every record line must be equal, split at `\n` only. `drop` takes the lines one Picard writer adds that name the
 run, for example `drop=["liftOverTime"]`. Picard 3.5.0 `SortVcf` and `MakeSitesOnlyVcf` add no
 such line and write `##FORMAT` before `##contig`. No registered tool writes a VCF yet, so
 `compare_vcf` is tested on stand-in tools only.
 
 ## BAM bytes
 
-Decision (2026-11-10, docs/07 wave W02): a tool that writes a BAM is compared at tier B,
+Decision (2026-11-10, wave W02 of the full parity program plan): a tool that writes a BAM is
+compared at tier B,
 decoded records. BAM bytes are not compared and bammetrics does not try to write Picard's
 bytes. The same holds for CRAM and for a gzip VCF.
 
@@ -229,9 +236,10 @@ Why tier B:
 
 1. Neither pure-Rust deflater writes a single Picard block. zlib-rs is the deflater under
    noodles-bgzf 0.52, so every BAM bammetrics writes goes through it.
-2. Picard has no one byte stream. Two runs of one Picard on one machine differ by 39,898 bytes
-   on t2, and the default stream depends on the platform (Intel GKL on x86_64, the machine's
-   libz elsewhere) and on the libz and libdeflate versions.
+2. Picard has no one byte stream. Picard at its defaults and with `USE_JDK_DEFLATER=true`
+   differ by 39,898 bytes on t2, on one machine. Two runs of the same command write the same
+   blocks. The default stream depends on the platform (Intel GKL on x86_64, the machine's libz
+   elsewhere) and on the libz and libdeflate versions.
 3. Both streams are reachable only through a C library pinned to Picard's version (libz
    1.2.12 here, libdeflate at level 5), which the shipped crates do not link today.
 4. Bytes would still differ. htsjdk cuts blocks at 65,498 bytes and noodles-bgzf at 65,495.
@@ -257,7 +265,10 @@ What tier B still proves, and what it does not:
 ## Picard queue
 
 One Picard JVM runs at a time per user and machine. `run_picard.picard_env()` puts
-`target/picard-queue/picard` first on `PATH`. That script runs
+`target/picard-queue/<key>/picard` first on `PATH`. `<key>` is 12 hex characters of the
+SHA-256 of the script's text, which holds the interpreter path. A script at one path never
+changes, so two harness processes started from different interpreters (a uv environment and
+`.venv`) never replace each other's script. That script runs
 `tests/concordance/picard_lock.py`, which:
 
 1. takes an exclusive `flock` on `~/.cache/bammetrics/picard.lock` (file mode 0600,
@@ -281,7 +292,7 @@ python3 tests/concordance/picard_lock.py SortSam --help    # one queued Picard c
 | Variable | Effect |
 |---|---|
 | `PICARD_LOCK_FILE` | another lock file |
-| `PICARD_LOCK_TIMEOUT` | seconds to wait, then exit 75; unset waits without limit |
+| `PICARD_LOCK_TIMEOUT` | seconds to wait, then exit 75; unset waits without limit; a value that is not a finite number from 0 up exits 2 with one line |
 | `PICARD_LOCK_WAIT_FOREIGN` | `0` skips step 3 |
 
 `benches/bench.py` and `benches/wgs_bench.py` hold the same lock around each timed Picard run
@@ -296,7 +307,9 @@ queued. `tests/harness/test_picard_lock.py` fails when a file under `tests`, `be
 `crates/cli/tests/registration.rs` fails while a tool in `TOOLS` lacks any of:
 
 1. a verb in `VERBS`;
-2. an argument list in `crates/core/tests/glossary.rs`, or a line in its `EXEMPT` table;
+2. an argument list in `crates/core/tests/glossary.rs`, or a line in its `EXEMPT` table. The
+   test reads the keys of that file's `args()` map and the first field of each `EXEMPT` line.
+   A name in a comment or in an argument value does not count;
 3. a concordance module that names it: `tests/concordance/test_<verb>.py` or
    `test_<picard_name_in_snake_case>.py`, a line in `CONCORDANCE` (tool, shared module), or a
    line in `NO_PICARD_ORACLE` with the reason;
@@ -322,7 +335,11 @@ starting spec: `KEY`, `SHORT`, `TYPE` (Picard's Java type), `OPT` (the registry 
 suggests: bool, int, float, path, text), `DEFAULT`, `NOTES` and `DOC`. `NOTES` holds
 `required`, `repeated`, `advanced`, `values A|B`, `excludes X`, `common` for a name the
 registry's `COMMON` rows take, and `parser` for the four options of Picard's command line
-parser. One JVM runs, through the queue, with `JAVA_OPTS=-Xmx1g` unless `JAVA_OPTS` is set.
+parser. `values` comes from `Possible values: {A, B}`, or from the `A (what it does)` lines
+Picard prints for an enum with a text per value (`SORT_ORDER` of `SortSam`, `MODE` of
+`CheckDuplicateMarking`). A name Picard does not know exits 1 with one line, for example
+`spec_agent: SortBam: not a Picard tool; Picard suggests SortSam`. Picard's colour codes are
+dropped. One JVM runs, through the queue, with `JAVA_OPTS=-Xmx1g` unless `JAVA_OPTS` is set.
 The table says what Picard accepts. What an option does to the output comes from the Picard
 3.5.0 source.
 
@@ -351,14 +368,15 @@ version that a later dependency brings in needs a `skip` entry with its reason.
 ## Harness tests
 
 ```bash
-make harness-test    # pytest tests/harness: 63 tests, about 9 s, needs samtools
+make harness-test    # pytest tests/harness: 79 tests, about 12 s, needs samtools
 ```
 
 `tests/harness` tests the harness with stand-in tools, so it starts no JVM and needs no release
 build: the queue (`test_picard_lock.py`), `compare_bam` and `compare_vcf` on files with one
 planted difference each (`test_compare_bam.py`: one flag, one tag, one base quality, one `@PG`
-ID, one `bin` field), and the spec script on the `--help` text of `MarkDuplicates`
-(`test_spec_agent.py`). `make concordance` runs it first.
+ID, one `bin` field, one separator byte in a tag, a missing end-of-file block), and the spec
+script on the `--help` text of `MarkDuplicates` and `SortSam` (`test_spec_agent.py`). It is a
+step of `make concordance`, before the pytest run.
 
 ## Python module tests
 

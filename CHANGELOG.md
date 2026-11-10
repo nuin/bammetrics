@@ -2,12 +2,14 @@
 
 ## Unreleased
 
-### Harness (docs/07 wave W02, part C)
+### Harness (full parity program, wave W02, part C)
 
 - `compare_bam` and `compare_vcf` in `tests/concordance/compare.py`, for tools that write
   reads or variants: header lines other than `@PG` (the `@RG` `DT` field aside), the `@PG`
   `ID` and `PP`, every record as `samtools view` prints it, the first difference named by
-  its index; `record_bytes=True` adds each record as bytes after BGZF inflation.
+  its index; `record_bytes=True` adds each record as bytes after BGZF inflation. Text is
+  split at `\n` only, and a BAM or bgzip VCF without the BGZF end-of-file block is a
+  difference.
   `test_mark_duplicates.py` runs its 160 cases through `compare_bam`, and a case where both
   tools fail now also requires that bammetrics left no output.
 - BAM outputs are compared at tier B, decoded records (docs/concordance.md, "BAM bytes").
@@ -17,14 +19,18 @@
   1.26.1 at level 5 each reproduce 585 of 585 blocks of one stream.
 - The Picard queue, `tests/concordance/picard_lock.py`: every harness call to `picard` takes
   one file lock, so one JVM runs at a time across pytest processes, worktrees and agents.
-  `JAVA_OPTS` passes through, and the CI `picard` wrapper now expands it.
+  `JAVA_OPTS` passes through, and the CI `picard` wrapper now expands it. Each interpreter
+  gets a shim script of its own under `target/picard-queue`, and a `PICARD_LOCK_TIMEOUT` that
+  is not seconds exits 2.
 - `crates/cli/tests/registration.rs`, the registration rule: every tool in `TOOLS` needs a
-  verb, a glossary argument list, a concordance module that names it, a `docs/cli.md`
-  mention and a README row. The 32 tools pass.
-- `tools/spec_agent.py`: the option table of a Picard tool's `--help` as a starting spec.
+  verb, a glossary argument list (the keys of `args()` in `crates/core/tests/glossary.rs`,
+  or an `EXEMPT` line), a concordance module that names it, a `docs/cli.md` mention and a
+  README row. The 32 tools pass.
+- `tools/spec_agent.py`: the option table of a Picard tool's `--help` as a starting spec,
+  enum values from either form Picard prints them in; an unknown tool is one line.
 - `deny.toml` and `make deny` (cargo-deny: licences, bans, sources, advisories). Clean on the
   104 packages of `Cargo.lock`.
-- `tests/harness` and `make harness-test`: 63 tests of the harness on stand-in tools.
+- `tests/harness` and `make harness-test`: 79 tests of the harness on stand-in tools.
 
 ## 0.19.0
 

@@ -9,7 +9,8 @@ import pytest
 
 import compare
 from compare import (bam_header_lines, bam_programs, bam_records, compare_bam, compare_vcf, diff_bam,
-                     diff_bam_bytes, diff_vcf, first_line_difference, vcf_header_lines)
+                     diff_bam_bytes, diff_vcf, first_line_difference, missing_bgzf_eof, sam_view,
+                     text_lines, vcf_header_lines, vcf_lines)
 
 HEADER = ["@HD\tVN:1.6\tSO:coordinate",
           "@SQ\tSN:chr1\tLN:1000",
@@ -27,7 +28,7 @@ RECORDS = ["r1\t99\tchr1\t10\t60\t10M\t=\t50\t50\tACGTACGTAC\tIIIIIIIIII\tRG:Z:a
 
 def write_bam(path, header=HEADER, records=RECORDS):
     sam = path.with_suffix(".sam")
-    sam.write_text("\n".join([*header, *records]) + "\n")
+    sam.write_bytes(("\n".join([*header, *records]) + "\n").encode("latin-1"))
     subprocess.run(["samtools", "view", "--no-PG", "-b", "-o", str(path), str(sam)], check=True)
     sam.unlink()
     return path
@@ -49,7 +50,7 @@ def test_equal_files_have_no_difference(tmp_path, base):
 
 
 def test_one_flag_is_reported_with_the_record_index(tmp_path, base):
-    """The planted difference of docs/07 W02: record 2 loses its duplicate flag."""
+    """The planted difference wave W02 asks for: record 2 loses its duplicate flag."""
     flagged = write_bam(tmp_path / "flagged.bam", records=edited(RECORDS, 2, "\t99\t", "\t1123\t"))
     problems = diff_bam(flagged, base)
     assert len(problems) == 1
@@ -98,6 +99,28 @@ def test_header_differences_are_reported(tmp_path, base, index, old, new, expect
     assert len(problems) == 1 and problems[0].startswith(expected), problems
 
 
+# Every character `str.splitlines` ends a line at, other than `\n`.
+SEPARATORS = ["\r", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85"]
+
+
+def test_text_is_split_at_newlines_only():
+    data = "".join(f"a{c}b\n" for c in SEPARATORS).encode("latin-1")
+    assert text_lines(data) == [f"a{c}b" for c in SEPARATORS]
+    assert text_lines(b"") == [] and text_lines(b"a\n\nb") == ["a", "", "b"]
+
+
+@pytest.mark.parametrize("one, other", [("\x85", "\x0b"), ("\x0c", "\x1c"), ("\x1d", "\x1e")])
+def test_a_separator_byte_in_a_tag_is_one_record_and_is_compared(tmp_path, base, one, other):
+    """The planted difference `str.splitlines` hid: one byte of a tag value."""
+    first = write_bam(tmp_path / "first.bam", records=edited(RECORDS, 1, "RG:Z:a", f"RG:Z:a\tXX:Z:a{one}b"))
+    second = write_bam(tmp_path / "second.bam",
+                       records=edited(RECORDS, 1, "RG:Z:a", f"RG:Z:a\tXX:Z:a{other}b"))
+    assert len(sam_view(first)) == 6 and f"\tXX:Z:a{one}b\t" in sam_view(first)[1]
+    problems = diff_bam(first, second)
+    assert len(problems) == 1 and problems[0].startswith("record 1:\n"), problems
+    assert diff_bam(first, first) == []
+
+
 def test_header_helpers():
     assert bam_header_lines(HEADER) == [HEADER[0], HEADER[1], "@RG\tID:a\tSM:s\tLB:l", HEADER[5]]
     assert bam_programs(HEADER) == [("bwa", None), ("MarkDuplicates", "bwa")]
@@ -110,14 +133,58 @@ def test_header_helpers():
 BGZF_EOF = bytes.fromhex("1f8b08040000000000ff0600424302001b0003000000000000000000")
 
 
-def write_bgzf(path, data):
-    """`data` as one BGZF block and the end-of-file block."""
+def write_bgzf(path, data, eof=True):
+    """`data` as one BGZF block and, with `eof`, the end-of-file block."""
     encoder = zlib.compressobj(6, zlib.DEFLATED, -15)
     stream = encoder.compress(data) + encoder.flush()
     block = (struct.pack("<4BI2BH2BHH", 31, 139, 8, 4, 0, 0, 255, 6, 66, 67, 2, len(stream) + 25)
              + stream + struct.pack("<II", zlib.crc32(data), len(data)))
-    path.write_bytes(block + BGZF_EOF)
+    path.write_bytes(block + (BGZF_EOF if eof else b""))
     return path
+
+
+def without_eof(tmp_path, bam):
+    """A copy of `bam` cut before its 28-byte end-of-file block."""
+    data = bam.read_bytes()
+    assert data.endswith(BGZF_EOF) and compare.BGZF_EOF == BGZF_EOF and len(BGZF_EOF) == 28
+    cut = tmp_path / "cut.bam"
+    cut.write_bytes(data[:-28])
+    return cut
+
+
+def test_a_bam_without_the_end_of_file_block_is_a_difference(tmp_path, base):
+    """The planted difference samtools does not report: `samtools view` exits 0
+    on the cut file and prints every record."""
+    cut = without_eof(tmp_path, base)
+    assert sam_view(cut) == RECORDS and bam_records(cut) == bam_records(base)
+    said = "no BGZF end-of-file block (a cut file, or a writer that never finished)"
+    assert diff_bam(base, cut) == [f"bammetrics .bam: {said}"]
+    assert diff_bam(cut, base) == [f"Picard .bam: {said}"]
+    assert diff_bam_bytes(base, cut) == [f"bammetrics .bam: {said}"]
+    assert len(diff_bam(cut, cut)) == 2
+
+
+def test_only_a_bgzf_file_needs_the_end_of_file_block(tmp_path, base):
+    assert missing_bgzf_eof("Picard", base) == []
+    assert missing_bgzf_eof("Picard", write_bgzf(tmp_path / "empty.bam", b"")) == []
+    sam = tmp_path / "plain.sam"
+    sam.write_text("\n".join([*HEADER, *RECORDS]) + "\n")
+    gz = tmp_path / "plain.vcf.gz"
+    gz.write_bytes(gzip.compress(b"##fileformat=VCFv4.2\n"))
+    short = tmp_path / "short.bam"
+    short.write_bytes(BGZF_EOF[:20])
+    assert [missing_bgzf_eof("Picard", path) for path in (sam, gz)] == [[], []]
+    assert missing_bgzf_eof("Picard", short) == [
+        "Picard .bam: no BGZF end-of-file block (a cut file, or a writer that never finished)"]
+    assert diff_bam(sam, base) == []
+
+
+def test_compare_bam_fails_on_a_missing_end_of_file_block(tmp_path, base, fake_tools, monkeypatch):
+    monkeypatch.setenv("FAKE_PLANTED", str(without_eof(tmp_path, base)))
+    monkeypatch.setenv("FAKE_PLANT", "bammetrics")
+    for record_bytes in (False, True):
+        with pytest.raises(AssertionError, match=r"bammetrics \.bam: no BGZF end-of-file block"):
+            compare_bam("X", base, workdir=tmp_path, record_bytes=record_bytes)
 
 
 def with_record_bytes(tmp_path, base, index, offset, new):
@@ -218,7 +285,7 @@ VCF = ["##fileformat=VCFv4.2",
 
 
 def write_vcf(path, lines=VCF):
-    data = ("\n".join(lines) + "\n").encode()
+    data = ("\n".join(lines) + "\n").encode("latin-1")
     path.write_bytes(gzip.compress(data) if path.suffix == ".gz" else data)
     return path
 
@@ -246,6 +313,20 @@ def test_vcf_differences_are_reported(tmp_path, index, old, new, expected):
     problems = diff_vcf(write_vcf(tmp_path / "p.vcf"),
                         write_vcf(tmp_path / "o.vcf", edited(VCF, index, old, new)))
     assert len(problems) == 1 and problems[0].startswith(expected), problems
+
+
+def test_vcf_separator_bytes_and_the_bgzip_end_of_file_block(tmp_path):
+    """A VCF line ends at `\\n` only, and a bgzip VCF needs its last block."""
+    one = write_vcf(tmp_path / "one.vcf", edited(VCF, 7, "PASS\t.", "PASS\tX=a\x85b"))
+    other = write_vcf(tmp_path / "other.vcf", edited(VCF, 7, "PASS\t.", "PASS\tX=a\x0bb"))
+    assert len(vcf_lines(one)) == len(VCF)
+    assert diff_vcf(one, other)[0].startswith("record 0:\n")
+    data = ("\n".join(VCF) + "\n").encode()
+    whole = write_bgzf(tmp_path / "whole.vcf.gz", data)
+    cut = write_bgzf(tmp_path / "cut.vcf.gz", data, eof=False)
+    assert vcf_lines(cut) == VCF and diff_vcf(whole, whole) == []
+    assert diff_vcf(whole, cut) == [
+        "bammetrics .gz: no BGZF end-of-file block (a cut file, or a writer that never finished)"]
 
 
 def test_vcf_header_order_and_record_count_matter(tmp_path):

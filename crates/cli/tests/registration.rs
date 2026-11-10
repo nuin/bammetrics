@@ -1,11 +1,13 @@
-//! The registration rule (docs/07 section 4): a tool in `TOOLS` is complete
-//! only when every place that lists tools lists it. For each registered tool
-//! the test asks for
+//! The registration rule of the full parity program plan: a tool in `TOOLS`
+//! is complete only when every place that lists tools lists it. For each
+//! registered tool the test asks for
 //!
 //! 1. a verb in `VERBS`;
 //! 2. an argument list in `crates/core/tests/glossary.rs`, the test that
 //!    checks every column the tool writes against the glossary, or a line in
-//!    that file's `EXEMPT` table;
+//!    that file's `EXEMPT` table. [`glossary_tools`] reads the keys of
+//!    `args()` and the first field of each `EXEMPT` line, so a name in a
+//!    comment or in an argument value does not count;
 //! 3. a concordance module that names it: `tests/concordance/test_<verb>.py`
 //!    or `test_<picard_name_in_snake_case>.py`, or the module [`CONCORDANCE`]
 //!    gives it, or a line in [`NO_PICARD_ORACLE`] with the reason;
@@ -15,6 +17,7 @@
 //! Every gap of every tool is reported in one failure, each with the edit
 //! that closes it. A tool added to `TOOLS` alone fails with five lines.
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -73,9 +76,10 @@ fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// The texts and the directory the rule reads.
+/// The texts and the directory the rule reads. `glossary` holds the tools
+/// the glossary test runs or exempts.
 struct Sources {
-    glossary_test: String,
+    glossary: BTreeSet<String>,
     cli_doc: String,
     readme: String,
     concordance: PathBuf,
@@ -87,12 +91,69 @@ impl Sources {
             fs::read_to_string(root().join(path)).unwrap_or_else(|e| panic!("{path}: {e}"))
         };
         Self {
-            glossary_test: text("crates/core/tests/glossary.rs"),
+            glossary: glossary_tools(&text("crates/core/tests/glossary.rs")),
             cli_doc: text("docs/cli.md"),
             readme: text("README.md"),
             concordance: root().join("tests/concordance"),
         }
     }
+}
+
+/// `source` from the first `start` to the first `end` after it, empty
+/// without `start`.
+fn section<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+    let Some(at) = source.find(start) else {
+        return "";
+    };
+    let rest = &source[at..];
+    &rest[..rest.find(end).unwrap_or(rest.len())]
+}
+
+/// The string literals of `code` that open a tuple or a function call: each
+/// follows `(` and is followed by `,`, as in `("CollectX", vec![])` and
+/// `args.insert("CollectX", ...)`. A macro's first argument
+/// (`format!("S={}", path)`) is not one. Lines that start with `//` are
+/// skipped.
+fn leading_literals(code: &str) -> Vec<String> {
+    let code: Vec<&str> = code
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect();
+    let code = code.join("\n");
+    let mut found = Vec::new();
+    let mut rest = code.as_str();
+    while let Some(open) = rest.find('"') {
+        let opens = rest[..open]
+            .trim_end()
+            .strip_suffix('(')
+            .is_some_and(|before| !before.ends_with('!'));
+        let body = &rest[open + 1..];
+        let mut escaped = false;
+        let close = body.char_indices().find(|&(_, c)| {
+            let ends = c == '"' && !escaped;
+            escaped = c == '\\' && !escaped;
+            ends
+        });
+        let Some((close, _)) = close else {
+            break;
+        };
+        rest = &body[close + 1..];
+        if opens && rest.trim_start().starts_with(',') {
+            found.push(body[..close].to_owned());
+        }
+    }
+    found
+}
+
+/// The tools the glossary test (`crates/core/tests/glossary.rs`) covers:
+/// the keys of its `args()` map and the tools of its `EXEMPT` table.
+fn glossary_tools(source: &str) -> BTreeSet<String> {
+    let args = section(source, "fn args(", "\n}\n");
+    let exempt = section(source, "const EXEMPT", "];");
+    leading_literals(args)
+        .into_iter()
+        .chain(leading_literals(exempt))
+        .collect()
 }
 
 fn is_word(c: char) -> bool {
@@ -141,7 +202,7 @@ fn gaps(name: &str, sources: &Sources) -> Vec<String> {
              crates/cli/src/verbs.rs"
         ));
     }
-    if !sources.glossary_test.contains(&format!("\"{name}\"")) {
+    if !sources.glossary.contains(name) {
         gaps.push(format!(
             "{name}: no glossary argument list; add one to args() in \
              crates/core/tests/glossary.rs, or a line with the reason to its EXEMPT table"
@@ -243,7 +304,7 @@ fn each_surface_is_checked_on_its_own() {
     )
     .expect("module");
     let sources = Sources {
-        glossary_test: "(\"CollectWgsMetrics\", vec![])".to_owned(),
+        glossary: glossary_tools("fn args() {\n(\"CollectWgsMetrics\", vec![]),\n}\n"),
         cli_doc: "`wgs` runs CollectWgsMetricsWithNonZeroCoverage.".to_owned(),
         readme: "| CollectWgsMetricsWithNonZeroCoverage | | |\n\
                  The table above lists CollectWgsMetrics.\n"
@@ -268,6 +329,67 @@ fn each_surface_is_checked_on_its_own() {
     };
     assert_eq!(gaps("CollectWgsMetrics", &sources), Vec::<String>::new());
     fs::remove_dir_all(&dir).expect("remove the work directory");
+}
+
+#[test]
+fn the_glossary_surface_is_an_args_key_or_an_exempt_line() {
+    let source = r#"
+//! A tool added to `TOOLS` needs an entry: ("InADocComment", vec![]).
+const CALLS: &str = "a \"quoted\" word";
+const NOTE: (&str, &str) = ("OutsideBoth", "a tuple that is neither table");
+const EXEMPT: &[(&str, &str)] = &[
+    // ("ExemptInAComment", "a comment line"),
+    ("ExemptTool", "no committed fixture drives it"),
+    (
+        "ExemptOnItsOwnLine",
+        "the reason, which names \"ReasonTool\", is not a tool",
+    ),
+];
+fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
+    for (tool, extra) in [
+        ("OneLine", vec![]),
+        (
+            "SplitTuple",
+            vec![reference.clone(), "PROGRAM=AsAValue".to_owned()],
+        ),
+        ("WithAMacro", vec![format!("MacroArgument={}", dir.display())]),
+    ] {
+        args.insert(tool, list);
+    }
+    // The fixture has no @RG line, which ("InAComment", ...) refuses.
+    args.insert("Inserted", vec![bam.clone()]);
+    args.insert(
+        "InsertedSplit",
+        vec![format!("I={DATA}/a.bam"), out("AsAnArgument")],
+    );
+    args
+}
+fn files() {
+    covered.insert("AfterArgs", vec![]);
+}
+"#;
+    let found: Vec<String> = glossary_tools(source).into_iter().collect();
+    assert_eq!(
+        found,
+        [
+            "ExemptOnItsOwnLine",
+            "ExemptTool",
+            "Inserted",
+            "InsertedSplit",
+            "OneLine",
+            "SplitTuple",
+            "WithAMacro"
+        ]
+    );
+    assert!(glossary_tools("no tables here").is_empty());
+
+    let real = Sources::read().glossary;
+    for tool in TOOLS {
+        assert!(real.contains(tool.name), "{}", tool.name);
+    }
+    for name in &real {
+        assert!(registry::find(name).is_some(), "{name} is not a tool");
+    }
 }
 
 #[test]
