@@ -535,8 +535,13 @@ fn usage_errors_exit_2_before_anything_runs() {
     let dir = fresh_dir("usage");
     let out = arg("O", &dir.join("out.txt"));
     let input = format!("I={}", FIXTURE.0);
-    let cases: [(&[&str], &str); 7] = [
+    let onto_input = format!("O={}", FIXTURE.0);
+    let cases: [(&[&str], &str); 8] = [
         (&[&input], "no STEP= given"),
+        (
+            &[&input, "STEP=MarkDuplicates", "STEP=write", &onto_input],
+            "is an input; writing it would destroy it",
+        ),
         (&["STEP=write", &out], "INPUT is required"),
         (&[&input, "STEP=NoSuchTool"], "unknown step \"NoSuchTool\""),
         (

@@ -178,7 +178,9 @@ fn tool_step(
     let args = tool_args(tool, globals, own);
     let parse = || tool.parse(&args).map_err(core);
     if let Some(step) = stage::Step::tool_stage(tool, parse()?) {
-        return Ok((step, Role::Stage(parse()?)));
+        let inv = parse()?;
+        registry::check_writable(inv.output.as_deref(), &inv.inputs).map_err(core)?;
+        return Ok((step, Role::Stage(inv)));
     }
     let Some(step) = stage::Step::tool_tap(tool, parse()?).map_err(core)? else {
         return Err(usage(format!(
@@ -226,10 +228,16 @@ pub fn run(args: &[String]) -> Result<u8> {
     let mut stages: Vec<String> = Vec::new();
     for (name, own) in &named {
         let (step, role) = if name == "write" {
-            (
-                Step::write(write_options(own)?, globals.threads),
-                Role::Write,
-            )
+            let options = write_options(own)?;
+            // Found before the first read, which a barrier in front of
+            // the step would otherwise finish first.
+            let reads: Vec<PathBuf> = std::iter::once(&globals.input)
+                .chain(&globals.reference)
+                .map(PathBuf::from)
+                .collect();
+            registry::check_writable([options.path.as_path()], &reads)
+                .map_err(|e| VerbError::core(ENTRY, &e))?;
+            (Step::write(options, globals.threads), Role::Write)
         } else {
             tool_step(name, &globals, own, &stages)?
         };
