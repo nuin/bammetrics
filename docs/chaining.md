@@ -77,7 +77,8 @@ bammetrics __chain I=in.bam [R=ref.fa] [threads=N] [TMP_DIR=dir] \
   of `write` with its `.bai` and `.md5`. Two outputs that are one file (links and `..`
   resolved) are a usage error:
   `CollectQualityYieldMetrics and write both write x.out: every output of a chain needs its own file`.
-  Nothing is read and nothing is written.
+  Nothing is read and nothing is written. A device or a pipe is exempt: several taps
+  may name `/dev/null`.
 - A tool whose `OUTPUT` is a prefix (`CollectSequencingArtifactMetrics`) names its
   files when it finishes. If one of them is the file of another step, that tool fails
   alone (`<file> is a file of <step>`, exit 1) and the other step's file stays.

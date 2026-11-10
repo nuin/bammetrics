@@ -538,6 +538,9 @@ fn two_outputs_that_are_one_file_are_refused() {
         panic!("one file twice");
     };
     assert!(text.starts_with("a writes "), "{text}");
+    // A device replaces nothing: two steps may discard their files.
+    let null = PathBuf::from("/dev/null");
+    check_distinct_outputs(&[step("a", null.clone()), step("b", null)]).expect("a device");
     std::fs::remove_dir_all(&dir).expect("cleanup");
 }
 

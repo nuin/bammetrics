@@ -468,8 +468,12 @@ impl Step {
 
 /// The step among `outputs` (a step's label, a file it writes) that writes
 /// `path`: the same file through a link, `..` or a relative spelling
-/// counts.
+/// counts. A device or a pipe (`/dev/null`, `/dev/stdout`) has no writer:
+/// nothing is replaced there, so several steps may name it.
 pub fn writer_of<'a>(outputs: &'a [(String, PathBuf)], path: &Path) -> Option<&'a str> {
+    if std::fs::metadata(path).is_ok_and(|meta| !meta.is_file() && !meta.is_dir()) {
+        return None;
+    }
     outputs
         .iter()
         .find(|(_, other)| mark_duplicates::same_file(other, path))
