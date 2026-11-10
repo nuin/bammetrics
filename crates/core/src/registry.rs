@@ -316,6 +316,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::compare_metrics::TOOL,
     &crate::create_sequence_dictionary::TOOL,
     &crate::mark_duplicates::TOOL,
+    &crate::jumping_library::TOOL,
 ];
 
 /// The tool named `name`.

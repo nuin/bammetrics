@@ -1,0 +1,39 @@
+## argv
+jumping-library
+tests/data/orientation.bam
+tests/data/insert_size.bam
+--tail-limit
+100
+--format
+json
+## exit
+0
+## stdout
+{
+  "tool": "CollectJumpingLibraryMetrics",
+  "sample": "orientation",
+  "class": "picard.analysis.JumpingLibraryMetrics",
+  "metrics": [
+    {
+      "JUMP_PAIRS": 2,
+      "JUMP_DUPLICATE_PAIRS": 0,
+      "JUMP_DUPLICATE_PCT": 0,
+      "JUMP_LIBRARY_SIZE": 0,
+      "JUMP_MEAN_INSERT_SIZE": 400,
+      "JUMP_STDEV_INSERT_SIZE": 0,
+      "NONJUMP_PAIRS": 42,
+      "NONJUMP_DUPLICATE_PAIRS": 0,
+      "NONJUMP_DUPLICATE_PCT": 0,
+      "NONJUMP_LIBRARY_SIZE": 0,
+      "NONJUMP_MEAN_INSERT_SIZE": 297.36842105263156,
+      "NONJUMP_STDEV_INSERT_SIZE": 16.222142113076256,
+      "CHIMERIC_PAIRS": 1,
+      "FRAGMENTS": 0,
+      "PCT_JUMPS": 0.044444444444444446,
+      "PCT_NONJUMPS": 0.9333333333333333,
+      "PCT_CHIMERAS": 0.022222222222222223
+    }
+  ],
+  "histogram": null
+}
+## stderr

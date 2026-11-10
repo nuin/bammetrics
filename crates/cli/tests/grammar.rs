@@ -357,6 +357,14 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("TAGGING_POLICY", "All")),
             picard_outputs: marked,
         },
+        Case {
+            verb: "jumping-library",
+            class: "CollectJumpingLibraryMetrics",
+            verb_args: bam(&[]),
+            picard_args: picard_bam(&[]),
+            option: Some(("TAIL_LIMIT", "100")),
+            picard_outputs: single,
+        },
     ]
 }
 
@@ -439,7 +447,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && **c != "AccumulateVariantCallingMetrics")
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 24);
+    assert_eq!(classes.len(), 25);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

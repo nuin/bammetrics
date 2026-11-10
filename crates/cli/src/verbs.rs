@@ -251,6 +251,11 @@ pub const VERBS: &[Verb] = &[
         aliases: &[("METRICS", "METRICS_FILE")],
         ..verb("mark-duplicates", "MarkDuplicates", Files::Bam)
     },
+    verb(
+        "jumping-library",
+        "CollectJumpingLibraryMetrics",
+        Files::Single,
+    ),
 ];
 
 /// Verb spellings every verb's rows take, beside a verb's own

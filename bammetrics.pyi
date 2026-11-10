@@ -767,6 +767,20 @@ def mark_duplicates(
     histograms; OUTPUT gets every record with the duplicate flag set or cleared,
     METRICS_FILE the metrics."""
 
+def collect_jumping_library_metrics(
+    input: _Paths,
+    *,
+    minimum_mapping_quality: int | None = None,
+    tail_limit: int | None = None,
+    chimera_kb_min: int | None = None,
+    output: _Path | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectJumpingLibraryMetrics: one row over every input: outward-facing (jump) and
+    inward-facing (non-jump) pairs with their duplicate fraction, library size and
+    insert size mean and SD, chimeric pairs, fragments and the three fractions; the
+    inputs may be several coordinate-sorted BAMs, read in turn."""
+
 # END registry tools
 
 def alignment_summary(

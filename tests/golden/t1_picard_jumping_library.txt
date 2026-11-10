@@ -1,0 +1,19 @@
+## argv
+CollectJumpingLibraryMetrics
+I=tests/corpus/out/t1.bam
+O=OUT/jumping_library.txt
+## exit
+0
+## stdout
+## stderr
+## file jumping_library.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectJumpingLibraryMetrics INPUT=tests/corpus/out/t1.bam OUTPUT=OUT/jumping_library.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.JumpingLibraryMetrics
+JUMP_PAIRS	JUMP_DUPLICATE_PAIRS	JUMP_DUPLICATE_PCT	JUMP_LIBRARY_SIZE	JUMP_MEAN_INSERT_SIZE	JUMP_STDEV_INSERT_SIZE	NONJUMP_PAIRS	NONJUMP_DUPLICATE_PAIRS	NONJUMP_DUPLICATE_PCT	NONJUMP_LIBRARY_SIZE	NONJUMP_MEAN_INSERT_SIZE	NONJUMP_STDEV_INSERT_SIZE	CHIMERIC_PAIRS	FRAGMENTS	PCT_JUMPS	PCT_NONJUMPS	PCT_CHIMERAS
+0	0	0	0	?	-0	20000	3	0.00015	66659999	300.052109	58.546352	0	0	0	1	0
+
+

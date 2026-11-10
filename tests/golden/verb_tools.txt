@@ -28,6 +28,7 @@ bed-to-interval-list        BedToIntervalList
 compare-metrics             CompareMetrics
 create-sequence-dictionary  CreateSequenceDictionary
 mark-duplicates             MarkDuplicates
+jumping-library             CollectJumpingLibraryMetrics
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.
