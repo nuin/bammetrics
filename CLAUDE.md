@@ -23,6 +23,7 @@ make python-test                            # maturin develop into .venv, pytest
 make wheel-check                            # maturin build, fresh venv, mypy on the stub, import, stub vs dir(bammetrics)
 make fuzz SEED=1 N=200                      # tests/concordance/fuzz.py: random BAMs through both tools
 make bench-wgs                              # T4 scale run of the coverage tools (benches/wgs_bench.py)
+cargo test -p bammetrics-cli --test chain   # chained equals staged (docs/chaining.md); the t1 and foundation cases need tests/corpus/out
 make picard-fields                          # crates/core/picard_fields.tsv from picard.jar (CompareMetrics types)
 make budgets                                # docs/05 4.8 size and speed budgets (crates/cli/tests/budgets.rs), fails at 2x a target
 make a11y                                   # axe-core, reflow and Tab check of the report pages (benches/a11y.mjs; needs node and npm)
