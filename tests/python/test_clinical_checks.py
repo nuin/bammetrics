@@ -116,7 +116,10 @@ def test_qc_runs_both_checks_with_a_panel_and_a_declared_sex(tmp_path):
     # multiprocessing pool would do it.
     back = pickle.loads(pickle.dumps(inferred))
     assert (back.rule, back.text, back.status) == ("sex.inferred", "UNKNOWN", "warn")
-    without_panel = bammetrics.qc(FIXTURE, output=str(tmp_path / "t"), sex="female",
-                                  report=False)
+    without_panel = bammetrics.qc(FIXTURE, output=str(tmp_path / "t"), preset="clinical-panel",
+                                  sex="female", report=False)
     assert "coverage-gaps" not in without_panel.metrics
     assert without_panel.metrics["sex-check"]["classes"][0]["rows"][0]["DECLARED_SEX"] == "FEMALE"
+    # The sex rules live in clinical-panel only: generic refuses a declared sex.
+    with pytest.raises(bammetrics.UsageError, match="preset generic has no SexCheckMetrics rule"):
+        bammetrics.qc(FIXTURE, output=str(tmp_path / "u"), sex="female", report=False)
