@@ -211,6 +211,18 @@ behaves how.
 - The `compare-metrics` verb writes the comparison to standard output without `-o`; the
   Picard face, as Picard, writes it only to `O=`. Both exit 1 when the files are NOT
   equal, where other tool verbs keep 1 for an input error.
+- `CollectJumpingLibraryMetrics` is no `SinglePassSamProgram`: `ASSUME_SORTED` and
+  `STOP_AFTER` are rejected as Picard rejects them (`Unrecognized option`, exit 1), and a
+  header whose sort order is not `coordinate` exits 1 with `the header says the sort order
+  is <order>` where Picard throws `must be sorted in coordintate order`. An unpaired record
+  exits 1 with `not paired; CollectJumpingLibraryMetrics reads paired records only`
+  (Picard: `Inappropriate call if not paired read`); an `MQ` tag that is not an integer
+  exits 1 with `MQ tag is not an integer` (Picard: `Value for tag MQ is not an Integer`). A
+  value that does not parse (`TAIL_LIMIT=ten`) exits 2, as every usage error does; Picard
+  exits 1. Picard's `--help` says the chimera size is `2 times the mode`; its code takes
+  the greater of `CHIMERA_KB_MIN` and the mode itself, and so does bammetrics. The tool
+  reads each input twice (the mode pass, then the counts), so `jumping-library -` and
+  `I=/dev/stdin` exit 2 with a usage error where every other verb reads standard input.
 
 ## Charts
 
@@ -670,6 +682,26 @@ sequence line and kept inside it; `M5` over the bases with `a` to `z` upper-case
 at least one sequence and reading one more; `ALT_NAMES` in `HashSet` order; gzip by
 the name only (a gzip file named `.fa` fails at `chr(31)`); `CREATE_MD5_FILE` writing
 the 32 hex digits without a line end.
+
+`CollectJumpingLibraryMetrics` behaviour reproduced from Picard 3.5.0
+(`tests/concordance/test_jumping_library_metrics.py`): only first-of-pair records count,
+secondary, supplementary, QC-failed and duplicate ones included; a first read unmapped
+with an unmapped mate and no reference index ends the read of that file, so nothing after
+the unaligned tail counts, while a placed unmapped pair is skipped; `FRAGMENTS` counts a
+pair with exactly one mate mapped before the mapping quality test; a missing `MQ` tag
+passes the mate; the chimera tests run in the order supersized (`|TLEN|` strictly above
+the greater of `CHIMERA_KB_MIN` and the mode), same strand, other contig, so a same-strand
+or two-contig pair far apart is supersized; the mode comes from the first
+`50000 / inputs` outward-facing pairs of each file in file order (on `big.bam` 2000 alone
+and 1800 as the first of two inputs, where every pair gives 2600); the mode of
+`|TLEN|` is the lowest key on a tie, so a corpus with a few `TLEN` 0 records and spread
+inserts (the foundation corpus) gets a mode of 0 and a mean and SD of 0 after the
+`TAIL_LIMIT` cut; `TAIL_LIMIT` keeps every bin up to the mode and then the consecutive
+bins with at least mode count / `TAIL_LIMIT` pairs (`0` keeps none past the mode, a
+negative value every consecutive bin); an empty histogram prints `?` for the mean and
+`-0` for the SD, one pair `?` for the SD; the library size is 0 without duplicates and
+0 when every pair is a duplicate; dovetailed pairs orient by `MC` when present and by
+`TLEN` without it.
 
 ## Failures
 

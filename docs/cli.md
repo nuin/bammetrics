@@ -244,6 +244,7 @@ table.
 | `bed-to-interval-list` | BedToIntervalList | one interval list |
 | `compare-metrics` | CompareMetrics (two metrics files as positionals) | the comparison text |
 | `create-sequence-dictionary` | CreateSequenceDictionary (input is a FASTA) | one `.dict` |
+| `jumping-library` | CollectJumpingLibraryMetrics (one or more coordinate-sorted BAMs as positionals, read in turn) | one |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -689,6 +690,7 @@ bammetrics CollectInsertSizeMetrics --INPUT in.bam --OUTPUT out.txt \
 bammetrics CollectAlignmentSummaryMetrics I=in.bam O=out.txt R=ref.fa
 bammetrics CollectHsMetrics I=in.bam O=out.txt R=ref.fa \
     BAIT_INTERVALS=panel.interval_list TARGET_INTERVALS=panel.interval_list
+bammetrics CollectJumpingLibraryMetrics I=lane1.bam I=lane2.bam O=out.txt MQ=20 T=100
 ```
 
 The Picard face takes `KEY=VALUE`, `--KEY VALUE`, `--KEY=VALUE` and `-K VALUE` with long
