@@ -1,0 +1,13 @@
+[package]
+name = "bammetrics-formats"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "One typed table per metrics class, written as Picard text, JSON, JSON Lines, TSV, CSV, Markdown, JUnit XML and MultiQC custom content"
+
+[lib]
+name = "bammetrics_formats"
+
+[dependencies]
+bammetrics-core.workspace = true
