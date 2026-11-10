@@ -59,11 +59,13 @@ fn remove_newest_first(paths: impl DoubleEndedIterator<Item = PathBuf>) {
 /// renamed over `path` by [`AtomicFile::commit`]. Dropped without a commit,
 /// the temporary file is removed and `path` is left as it was.
 ///
-/// Three kinds of path are written in place: a path under `/dev`, an
-/// existing file that is neither regular nor a symbolic link (a named
-/// pipe, a character device), and a symbolic link this user owns, which
-/// the write follows. A symbolic link another user owns is refused by
-/// [`AtomicFile::create`]: that user chose the file the write would reach.
+/// Three kinds of path are written in place: a path under `/dev` with no
+/// `..` component (`/dev/stdout`, `/dev/fd/3`; only root makes files
+/// there), an existing file this user owns that is neither regular nor a
+/// symbolic link (a named pipe, a socket, a device), and a symbolic link
+/// this user owns, which the write follows. Outside `/dev`, a symbolic
+/// link or a non-regular file another user owns is refused by
+/// [`AtomicFile::create`]: that user chose where the bytes would go.
 ///
 /// The temporary name carries a random part and is opened with
 /// `create_new`. A path already there was made by someone else, so the
@@ -128,7 +130,10 @@ fn effective_uid(beside: &Path) -> io::Result<u32> {
 #[cfg(unix)]
 fn target(path: &Path) -> Target {
     use std::os::unix::fs::MetadataExt;
-    if path.starts_with("/dev") {
+    let leaves_dev = path
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir));
+    if path.starts_with("/dev") && !leaves_dev {
         return Target::InPlace;
     }
     let Ok(metadata) = fs::symlink_metadata(path) else {
@@ -138,9 +143,11 @@ fn target(path: &Path) -> Target {
     if kind.is_file() {
         return Target::Rename;
     }
-    if !kind.is_symlink() {
-        return Target::InPlace;
-    }
+    let what = if kind.is_symlink() {
+        "a symbolic link"
+    } else {
+        "not a regular file"
+    };
     let parent = match path.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => parent,
         _ => Path::new("."),
@@ -148,11 +155,11 @@ fn target(path: &Path) -> Target {
     match effective_uid(parent) {
         Ok(uid) if uid == metadata.uid() => Target::InPlace,
         Ok(_) => Target::Refused(format!(
-            "{} is a symbolic link owned by another user; not written through it",
+            "{} is {what} owned by another user; not written in place",
             path.display()
         )),
         Err(e) => Target::Refused(format!(
-            "{} is a symbolic link and its owner cannot be compared with this user: {e}",
+            "{} is {what} and its owner cannot be compared with this user: {e}",
             path.display()
         )),
     }
@@ -378,6 +385,72 @@ mod tests {
         assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
         let text = error.to_string();
         assert!(text.contains(&link.display().to_string()), "{text}");
+        assert!(text.contains("owned by another user"), "{text}");
+    }
+
+    /// `/dev/stdout` and its kin are in place with no owner check; a
+    /// path that leaves `/dev` through `..` gets the rules of any path.
+    #[cfg(unix)]
+    #[test]
+    fn the_dev_shortcut_needs_a_path_without_parent_components() {
+        for path in ["/dev/stdout", "/dev/stderr", "/dev/fd/1", "/dev/null"] {
+            assert!(matches!(target(Path::new(path)), Target::InPlace), "{path}");
+        }
+        let dir = scratch("dev-parent");
+        let outside = PathBuf::from(format!("/dev/..{}/x", dir.display()));
+        assert!(outside.starts_with("/dev"));
+        assert!(matches!(target(&outside), Target::Rename));
+        let file = AtomicFile::new(&outside);
+        assert_ne!(file.writing(), outside);
+        drop(file);
+        fs::write(dir.join("x"), "old").expect("old");
+        assert!(matches!(target(&outside), Target::Rename));
+        fs::remove_dir_all(&dir).expect("remove dir");
+    }
+
+    /// A named pipe this user made is written in place. Only the
+    /// classification is checked: opening a pipe with no reader blocks.
+    #[cfg(unix)]
+    #[test]
+    fn a_pipe_owned_by_this_user_is_in_place() {
+        let dir = scratch("fifo");
+        let pipe = dir.join("pipe");
+        let made = std::process::Command::new("mkfifo")
+            .arg(&pipe)
+            .status()
+            .expect("mkfifo runs");
+        assert!(made.success());
+        assert!(matches!(target(&pipe), Target::InPlace));
+        assert_eq!(AtomicFile::new(&pipe).writing(), pipe);
+        fs::remove_dir_all(&dir).expect("remove dir");
+    }
+
+    /// A non-regular file another user owns is refused outside `/dev`.
+    /// The test needs one on the machine (a root-owned socket under
+    /// `/var/run` or `/run`) and passes without one. Nothing is opened.
+    #[cfg(unix)]
+    #[test]
+    fn a_non_regular_file_owned_by_another_user_is_refused() {
+        use std::os::unix::fs::{FileTypeExt, MetadataExt};
+        let me = effective_uid(&std::env::temp_dir()).expect("uid");
+        let foreign = ["/var/run", "/run"]
+            .into_iter()
+            .filter_map(|dir| fs::read_dir(dir).ok())
+            .flatten()
+            .filter_map(|entry| entry.ok().map(|e| e.path()))
+            .find(|p| {
+                fs::symlink_metadata(p).is_ok_and(|m| {
+                    let kind = m.file_type();
+                    (kind.is_socket() || kind.is_fifo()) && m.uid() != me
+                })
+            });
+        let Some(path) = foreign else {
+            return;
+        };
+        let error = AtomicFile::new(&path).create().expect_err("refused");
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        let text = error.to_string();
+        assert!(text.contains(&path.display().to_string()), "{text}");
         assert!(text.contains("owned by another user"), "{text}");
     }
 
