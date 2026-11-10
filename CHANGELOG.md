@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.20.0
+
+Output formats from one typed table (`crates/formats`, `convert`, `--format` lists,
+`qc --also`) and the concordance harness for tools that write reads or variants
+(`compare_bam`, the Picard queue, the registration rule).
 
 ### Added
 
@@ -115,7 +119,7 @@
 - `tools/spec_agent.py`: the option table of a Picard tool's `--help` as a starting spec,
   enum values from either form Picard prints them in; an unknown tool is one line.
 - `deny.toml` and `make deny` (cargo-deny: licences, bans, sources, advisories). Clean on the
-  104 packages of `Cargo.lock`.
+  105 packages of `Cargo.lock`.
 - `tests/harness` and `make harness-test`: 79 tests of the harness on stand-in tools.
 
 ## 0.19.0

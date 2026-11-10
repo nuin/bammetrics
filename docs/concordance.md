@@ -316,7 +316,7 @@ queued. `tests/harness/test_picard_lock.py` fails when a file under `tests`, `be
 4. its name in `docs/cli.md`;
 5. a row of the README tool table that starts with its name.
 
-One failure lists every gap of every tool with the edit that closes it. At 0.19.0 the 32 tools
+One failure lists every gap of every tool with the edit that closes it. At 0.20.0 the 32 tools
 pass: 12 have a module named after them, 18 are mapped in `CONCORDANCE` to a shared module
 (`test_read_level.py` 6, `test_wgs_metrics.py` 3, `test_variant_tools.py` 3, six others 1
 each), and `CollectCoverageGaps` and `CollectSexCheckMetrics` are in `NO_PICARD_ORACLE`
@@ -350,7 +350,7 @@ cargo install cargo-deny --locked    # once; 0.20.2 was used
 make deny                            # cargo deny check
 ```
 
-`deny.toml` checks the 104 packages of `Cargo.lock`. Result at 0.19.0: advisories ok, bans
+`deny.toml` checks the 105 packages of `Cargo.lock`. Result at 0.20.0: advisories ok, bans
 ok, licenses ok, sources ok.
 
 - Licences allowed: MIT, Apache-2.0, Unicode-3.0 (unicode-ident), Zlib (zlib-rs),

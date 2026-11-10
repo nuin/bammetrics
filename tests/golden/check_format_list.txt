@@ -21,7 +21,7 @@ exit 0: no sample reaches --fail-on fail
 ## file check.txt.json
 [{
   "schema": "bammetrics.verdict/1",
-  "tool_version": "0.19.0",
+  "tool_version": "0.20.0",
   "sample": "NA12878",
   "preset": {
     "name": "generic",

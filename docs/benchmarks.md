@@ -180,6 +180,12 @@ The other rows at 0.19.0, same run: render 1.65 ms and 0.72 ms, sample page 96.5
 (98,790 bytes with every plot), index 190.7 KB (195,237 bytes, 18 rule cells per row), 0
 added passes.
 
+At 0.20.0 (2026-11-10, release/0.20.0 with feat/formats and feat/harness merged), one
+`make budgets` run: render 1.61 ms and 0.69 ms, sample page 96.5 KB (98,790 bytes), index
+190.7 KB (195,237 bytes), binary growth 371.5 KB (380,416 bytes stripped, over the 300 KB
+target and under the 600 KB limit, as at 0.19.0), formats growth 129.2 KB (132,304 bytes
+stripped), 0 added passes.
+
 The fixture metrics are the seven files the golden records hold for
 `tests/data/insert_size.bam` (alignment summary, insert size, quality yield, duplicate
 metrics, hs metrics, gc bias, mean quality by cycle). A KB is 1024 bytes.
@@ -204,6 +210,7 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 0.16.0 | 2026-11-05 | 4,870,352 | 4,161,072 |
 | 0.19.0 | 2026-11-09, release/0.19.0 at d221376 | 6,899,008 | 5,833,632 |
 | formats | 2026-11-10, feat/formats: `crates/formats`, `convert`, `qc --also`, the format lists | 7,124,416 | 6,032,112 |
+| 0.20.0 | 2026-11-10, release/0.20.0: feat/formats and feat/harness merged at 5a8f478, the version set | 7,124,320 | 6,032,104 |
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and

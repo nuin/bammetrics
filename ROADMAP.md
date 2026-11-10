@@ -32,7 +32,9 @@ Shipped since: every accumulation level, `CollectHsMetrics` `PER_TARGET_COVERAGE
 (0.11.0), the `qc`, `check` and `report` verbs (0.12.0 to 0.16.0), `MarkDuplicates` (0.18.0),
 `CollectSequencingArtifactMetrics`, `CollectOxoGMetrics`, `ConvertSequencingArtifactToOxoG`,
 `BamIndexStats`, `CheckDuplicateMarking`, `CollectJumpingLibraryMetrics` and the two clinical
-checks `CollectCoverageGaps` and `CollectSexCheckMetrics` (0.19.0). CHANGELOG.md has each.
+checks `CollectCoverageGaps` and `CollectSexCheckMetrics` (0.19.0), the output formats
+(`convert`, `--format` lists, `qc --also`) and the harness for tools that write reads
+(0.20.0). CHANGELOG.md has each.
 
 Remaining for bammetrics:
 

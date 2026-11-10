@@ -1,5 +1,5 @@
 # cargo-deny configuration: `make deny` (cargo install cargo-deny --locked).
-# Checks the dependency graph of the five workspace crates and the vendored
+# Checks the dependency graph of the six workspace crates and the vendored
 # noodles-cram: licences, banned and duplicated crates, registries, and the
 # RustSec advisory database. Every exception below carries its reason.
 
