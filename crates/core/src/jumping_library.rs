@@ -12,7 +12,9 @@
 //!   unaligned records at the end of a coordinate-sorted BAM); one with a
 //!   reference index is skipped.
 //! * A pair is skipped when the read's mapping quality, or its `MQ` tag
-//!   when present, is below `MINIMUM_MAPPING_QUALITY`.
+//!   when present, is below `MINIMUM_MAPPING_QUALITY`. The tag is read as
+//!   `getIntegerAttribute` reads it: a float truncated toward zero, an
+//!   error for a string or a value outside the 32-bit range.
 //! * `|TLEN|` above the greater of `CHIMERA_KB_MIN` and the outward-facing
 //!   mode is a supersized chimera; otherwise a same-strand pair is a tandem
 //!   chimera; otherwise a pair on two contigs is a cross-contig chimera;
@@ -31,11 +33,14 @@
 //!   when both pairs and duplicates are above 0, else 0; the percentages
 //!   divide by the pairs of that orientation, or by jumps + non-jumps +
 //!   chimeras, and are 0 without any.
-//! * Every `INPUT` must be coordinate sorted by its header.
+//! * Every `INPUT` must be coordinate sorted by its header, and a file: the
+//!   two passes read it twice, so standard input and pipes are refused.
+//! * The three integer options are Java `int`s: a value outside the 32-bit
+//!   range is a usage error.
 
 use std::path::Path;
 
-use noodles::sam::alignment::record::data::field::Tag;
+use noodles::sam::alignment::record::data::field::{Tag, Value as TagValue};
 use noodles::{bam, sam};
 
 use crate::duplication::estimate_library_size;
@@ -50,11 +55,12 @@ use crate::registry::{Invocation, Opt, Tool};
 /// mode that sets the chimera size.
 const SAMPLE_FOR_MODE: usize = 50_000;
 
+/// The three options, `int`s in Picard.
 #[derive(Clone, Debug)]
 pub struct Options {
-    pub minimum_mapping_quality: i64,
-    pub tail_limit: i64,
-    pub chimera_kb_min: i64,
+    pub minimum_mapping_quality: i32,
+    pub tail_limit: i32,
+    pub chimera_kb_min: i32,
 }
 
 impl Options {
@@ -184,10 +190,10 @@ pub const TOOL: Tool = Tool {
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let opts = Options::from_invocation(inv)?;
     let inputs = inv.all("INPUT");
-    if let Some(stream) = inputs.iter().find(|i| is_standard_input(i)) {
+    if let Some(stream) = inputs.iter().find(|i| is_stream(i)) {
         return Err(Error::Usage(format!(
             "INPUT={stream}: CollectJumpingLibraryMetrics reads each input twice (the mode \
-             pass, then the counts), so it needs a file, not standard input"
+             pass, then the counts), so it needs a file, not standard input or a pipe"
         )));
     }
     let mode = outie_mode(inv, &opts, inputs)?;
@@ -203,10 +209,25 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     Ok(MetricsOutput::from_rows(&[counts.finish()], None).into())
 }
 
-/// `-` (the verb grammar maps it to `/dev/stdin`) or the device itself: a
-/// stream the second pass could not read again.
-fn is_standard_input(input: &str) -> bool {
-    input == "-" || input == "/dev/stdin" || input == "/dev/fd/0"
+/// A stream the second pass could not read again: `-` (the verb grammar
+/// maps it to `/dev/stdin`), the device itself, or a named pipe or socket
+/// (`<(cat in.bam)` is `/dev/fd/63`).
+fn is_stream(input: &str) -> bool {
+    input == "-" || input == "/dev/stdin" || input == "/dev/fd/0" || is_pipe(Path::new(input))
+}
+
+#[cfg(unix)]
+fn is_pipe(path: &Path) -> bool {
+    use std::os::unix::fs::FileTypeExt;
+    std::fs::metadata(path).is_ok_and(|m| {
+        let kind = m.file_type();
+        kind.is_fifo() || kind.is_socket()
+    })
+}
+
+#[cfg(not(unix))]
+fn is_pipe(_: &Path) -> bool {
+    false
 }
 
 /// Picard's `PicardException` on a header whose sort order is not
@@ -256,20 +277,28 @@ fn require_paired(record: &bam::Record) -> Result<()> {
     })
 }
 
-/// The `MQ` tag as `getIntegerAttribute` returns it: `None` without the
-/// tag, an error for a value that is not an integer.
+/// The `MQ` tag as `SAMRecord.getIntegerAttribute` returns it: `None`
+/// without the tag, a float truncated toward zero (`Number.intValue`, the
+/// `long` cast saturating and taking NaN as 0), an error for a value that
+/// is not a number or whose `long` value is outside the `int` range.
 fn mate_mapping_quality(record: &bam::Record) -> Result<Option<i64>> {
-    match record.data().get(&Tag::MATE_MAPPING_QUALITY) {
-        None => Ok(None),
-        Some(Err(e)) => Err(e.into()),
-        Some(Ok(value)) => value
-            .as_int()
-            .map(Some)
-            .ok_or_else(|| Error::MalformedRecord {
-                name: record_name(record),
-                what: "MQ tag is not an integer",
-            }),
+    let Some(value) = record.data().get(&Tag::MATE_MAPPING_QUALITY) else {
+        return Ok(None);
+    };
+    let value = value?;
+    let malformed = |what| Error::MalformedRecord {
+        name: record_name(record),
+        what,
+    };
+    let number = match (value.as_int(), value) {
+        (Some(n), _) => n,
+        (None, TagValue::Float(f)) => f64::from(f) as i64,
+        (None, _) => return Err(malformed("MQ tag is not a number")),
+    };
+    if i32::try_from(number).is_err() {
+        return Err(malformed("MQ tag is outside the 32-bit integer range"));
     }
+    Ok(Some(number))
 }
 
 /// `getMappingQuality`: 255 for a record without one.
@@ -279,7 +308,8 @@ fn mapping_quality(record: &bam::Record) -> i64 {
 
 /// The mapping quality test of both passes: the read's own quality and,
 /// when the tag is present, the mate's.
-fn passes_mapping_quality(record: &bam::Record, minimum: i64) -> Result<bool> {
+fn passes_mapping_quality(record: &bam::Record, minimum: i32) -> Result<bool> {
+    let minimum = i64::from(minimum);
     let mate_ok = mate_mapping_quality(record)?.is_none_or(|mq| mq >= minimum);
     Ok(mate_ok && mapping_quality(record) >= minimum)
 }
@@ -304,7 +334,7 @@ fn ends_aligned_records(record: &bam::Record) -> bool {
 
 /// The first pass over each input (`getOutieMode`).
 struct ModeSampler {
-    minimum_mapping_quality: i64,
+    minimum_mapping_quality: i32,
     per_file: usize,
     sampled: usize,
     stop: bool,
@@ -368,7 +398,7 @@ struct Counts {
 
 impl Counts {
     fn new(opts: Options, mode: f64) -> Self {
-        let chimera_size_minimum = mode.max(opts.chimera_kb_min as f64);
+        let chimera_size_minimum = mode.max(f64::from(opts.chimera_kb_min));
         Self {
             opts,
             chimera_size_minimum,
@@ -421,8 +451,8 @@ impl Counts {
                 0
             }
         };
-        outie_histogram.trim_by_tail_limit(opts.tail_limit);
-        innie_histogram.trim_by_tail_limit(opts.tail_limit);
+        outie_histogram.trim_by_tail_limit(i64::from(opts.tail_limit));
+        innie_histogram.trim_by_tail_limit(i64::from(opts.tail_limit));
         let chimeric_pairs = cross_contig + super_sized + tandem;
         let total = outies + innies + chimeric_pairs;
         Row {
@@ -560,15 +590,33 @@ mod tests {
 
     #[test]
     fn standard_input_is_refused() {
-        assert!(is_standard_input("-"));
-        assert!(is_standard_input("/dev/stdin"));
-        assert!(!is_standard_input("in.bam"));
+        assert!(is_stream("-"));
+        assert!(is_stream("/dev/stdin"));
+        assert!(!is_stream("in.bam"));
+        assert!(!is_stream(env!("CARGO_MANIFEST_PATH")));
         let args: Vec<String> = ["I=-", "O=out.txt"]
             .iter()
             .map(|s| (*s).to_owned())
             .collect();
         let err = TOOL.execute(&args).expect_err("refused");
         assert!(err.to_string().contains("standard input"), "{err}");
+    }
+
+    #[test]
+    fn options_are_32_bit_integers() {
+        for (option, value) in [
+            ("TAIL_LIMIT", "2147483648"),
+            ("MINIMUM_MAPPING_QUALITY", "2147483648"),
+            ("CHIMERA_KB_MIN", "-2147483649"),
+        ] {
+            let args: Vec<String> = ["I=in.bam", "O=out.txt", &format!("{option}={value}")]
+                .iter()
+                .map(|s| (*s).to_owned())
+                .collect();
+            let err = TOOL.execute(&args).expect_err("out of range");
+            assert!(matches!(err, Error::Usage(_)), "{option}: {err}");
+            assert!(err.to_string().contains(option), "{err}");
+        }
     }
 
     #[test]

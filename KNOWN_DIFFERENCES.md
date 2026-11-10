@@ -216,13 +216,23 @@ behaves how.
   header whose sort order is not `coordinate` exits 1 with `the header says the sort order
   is <order>` where Picard throws `must be sorted in coordintate order`. An unpaired record
   exits 1 with `not paired; CollectJumpingLibraryMetrics reads paired records only`
-  (Picard: `Inappropriate call if not paired read`); an `MQ` tag that is not an integer
-  exits 1 with `MQ tag is not an integer` (Picard: `Value for tag MQ is not an Integer`). A
-  value that does not parse (`TAIL_LIMIT=ten`) exits 2, as every usage error does; Picard
-  exits 1. Picard's `--help` says the chimera size is `2 times the mode`; its code takes
-  the greater of `CHIMERA_KB_MIN` and the mode itself, and so does bammetrics. The tool
-  reads each input twice (the mode pass, then the counts), so `jumping-library -` and
-  `I=/dev/stdin` exit 2 with a usage error where every other verb reads standard input.
+  (Picard: `Inappropriate call if not paired read`); an `MQ` tag that is not a number
+  (`MQ:Z:sixty`) exits 1 with `MQ tag is not a number` (Picard: `Value for tag MQ is not
+  Number`), one beyond the 32-bit range (`MQ:i:4000000000`) with `MQ tag is outside the
+  32-bit integer range` (Picard: `not in Integer range`); a float `MQ` (`MQ:f:10.5`) is
+  truncated toward zero in both, as `Number.intValue` does. A value that does not parse
+  (`TAIL_LIMIT=ten`) or does not fit a Java `int` (`CHIMERA_KB_MIN=2147483648`) exits 2 on
+  the verb and 1 on the Picard face, as every usage error does; Picard exits 1. Picard's
+  `--help` says the chimera size is `2 times the mode`; its code takes the greater of
+  `CHIMERA_KB_MIN` and the mode itself, and so does bammetrics. The tool reads each input
+  twice (the mode pass, then the counts), so `jumping-library -`, `jumping-library
+  <(cat in.bam)` and `I=/dev/stdin` are refused with a usage error (exit 2 on the verb, 1
+  on the Picard face) where every other verb reads standard input; the verb's `--help`
+  says so. A BAM cut inside a BGZF block exits 1 with `failed to fill whole buffer` and
+  writes no file. Picard 3.5.0 exits 0 and writes an all-zero row when the cut falls
+  inside the first block after the header block (`tests/data/insert_size.bam` cut at 120
+  or 250 bytes, `jumping_bams.py` `main` cut at 1000), and throws `FileTruncatedException`
+  (exit 1) when it falls in a later block (`main` cut at 60000 or at half its length).
 
 ## Charts
 

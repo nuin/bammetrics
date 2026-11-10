@@ -79,7 +79,7 @@ OPTIONS = {
     "reference_ignored": [f"R={CORPUS / 'reference.fa'}"],
     "stringency_silent": ["VALIDATION_STRINGENCY=SILENT"],
 }
-OPTION_INPUTS = ["main", "second", "dupes", "no_jumps", "foundation"]
+OPTION_INPUTS = ["main", "second", "dupes", "no_jumps", "foundation", "t1"]
 
 
 @pytest.mark.parametrize("name", OPTION_INPUTS)
@@ -88,11 +88,24 @@ def test_options(built, corpus, option, name):
     compare(bam_path(name, built, corpus), OPTIONS[option], f"{name} {option}")
 
 
-@pytest.mark.parametrize("option", ["chimera_1000", "chimera_2000", "chimera_2500", "mq_20"])
+BIG_OPTIONS = {
+    "chimera_1000": OPTIONS["chimera_1000"],
+    "chimera_2000": ["CHIMERA_KB_MIN=2000"],
+    "chimera_2500": ["CHIMERA_KB_MIN=2500"],
+    "mq_20": OPTIONS["mq_20"],
+}
+
+
+@pytest.mark.parametrize("option", BIG_OPTIONS)
 def test_big_mode_sample(built, option):
     """The mode comes from the first 50000 RF pairs: 2000 here, 2600 over every pair."""
-    args = {"chimera_2000": ["CHIMERA_KB_MIN=2000"], "chimera_2500": ["CHIMERA_KB_MIN=2500"]}
-    compare(built["big"], args.get(option, OPTIONS[option]), f"big {option}")
+    compare(built["big"], BIG_OPTIONS[option], f"big {option}")
+
+
+@pytest.mark.parametrize("args", [[], ["MQ=10"], ["MQ=11"]], ids=["defaults", "mq_10", "mq_11"])
+def test_float_mq_tag_is_truncated(built, args):
+    """`MQ:f:10.5` counts at MINIMUM_MAPPING_QUALITY 10 and is skipped at 11 in both tools."""
+    compare(built["float_mq"], args, f"float_mq {' '.join(args)}")
 
 
 # --- several inputs ---------------------------------------------------------------
@@ -117,6 +130,16 @@ def test_big_second_of_two(built):
 
 def test_same_input_twice(built):
     compare(built["dupes"], [], "dupes twice", [built["dupes"]])
+
+
+def test_t1_with_foundation(corpus):
+    compare(CORPUS / "t1.bam", ["CHIMERA_KB_MIN=500"], "t1 with foundation",
+            [corpus / "corpus.bam"])
+
+
+def test_t1_with_foundation_and_options(corpus):
+    compare(CORPUS / "t1.bam", ["MQ=20", "T=2", "CHIMERA_KB_MIN=300"],
+            "t1 with foundation, options", [corpus / "corpus.bam"])
 
 
 def test_three_inputs(built, corpus):
@@ -164,8 +187,12 @@ FAILURES = {
     "queryname_sorted": ("queryname", [], "sort order"),
     "unpaired_record": ("unpaired", [], "paired"),
     "mq_tag_not_an_integer": ("bad_mq", [], "MQ tag"),
+    "mq_tag_beyond_int": ("huge_mq", [], "MQ tag"),
     "missing_input": ("main", ["I=/nonexistent/x.bam"], None),
     "bad_tail_limit": ("main", ["TAIL_LIMIT=ten"], "TAIL_LIMIT"),
+    "tail_limit_beyond_int": ("main", ["TAIL_LIMIT=2147483648"], "TAIL_LIMIT"),
+    "mq_beyond_int": ("main", ["MQ=2147483648"], "MINIMUM_MAPPING_QUALITY"),
+    "chimera_beyond_int": ("main", ["CHIMERA_KB_MIN=-2147483649"], "CHIMERA_KB_MIN"),
 }
 
 

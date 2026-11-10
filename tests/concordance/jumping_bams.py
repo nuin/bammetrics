@@ -22,9 +22,10 @@ position and unmapped pairs without one at the end of the file.
 has no RF pair (the jump columns print 0, ? and -0), `big` holds 60000 RF
 pairs whose mode over the first 50000 (or the first 25000, with two
 inputs) differs from the mode over all of them, `empty` has no record and
-`unmapped_only` only the unaligned tail. `queryname`, `unpaired` and
-`bad_mq` are the error cases: a name-sorted header, one unpaired record,
-an MQ tag that is a string.
+`unmapped_only` only the unaligned tail. `float_mq` carries one `MQ:f:10.5`
+tag, read as 10. `queryname`, `unpaired`, `bad_mq` and `huge_mq` are the
+error cases: a name-sorted header, one unpaired record, an MQ tag that is a
+string, an MQ tag of 4000000000.
 """
 import random
 from pathlib import Path
@@ -301,13 +302,28 @@ def unpaired(sam):
     sam.single("lonely", 0, "j1", 50_000, sam.ref_seq("j1", 50_000, READ_LENGTH), rg="rgJ")
 
 
-def bad_mq(sam):
+def mq_tagged_pair(sam, name, mq):
+    """One FR pair at 40000 whose first read carries the given MQ tag text."""
     library(sam, 3000, 20, 300, 20, 0.1, chimeras=False, prefix="q")
     seq1, seq2 = sam.seqs("j1", 40_000, 40_300)
-    sam.record("badmq", PAIRED | FIRST | MATE_REVERSE, "j1", 40_000, 60, "50M", "=", 40_300, 350,
-               seq1, None, ("MC:Z:50M", "MQ:Z:sixty", "RG:Z:rgJ"))
-    sam.record("badmq", PAIRED | SECOND | REVERSE, "j1", 40_300, 60, "50M", "=", 40_000, -350,
+    sam.record(name, PAIRED | FIRST | MATE_REVERSE, "j1", 40_000, 60, "50M", "=", 40_300, 350,
+               seq1, None, ("MC:Z:50M", mq, "RG:Z:rgJ"))
+    sam.record(name, PAIRED | SECOND | REVERSE, "j1", 40_300, 60, "50M", "=", 40_000, -350,
                seq2, None, ("MC:Z:50M", "MQ:i:60", "RG:Z:rgJ"))
+
+
+def bad_mq(sam):
+    mq_tagged_pair(sam, "badmq", "MQ:Z:sixty")
+
+
+def float_mq(sam):
+    """`MQ:f:10.5`: both tools read it as 10 (`Number.intValue`)."""
+    mq_tagged_pair(sam, "floatmq", "MQ:f:10.5")
+
+
+def huge_mq(sam):
+    """`MQ:i:4000000000`, stored as a `I` tag: outside Java's int range in both tools."""
+    mq_tagged_pair(sam, "hugemq", "MQ:i:4000000000")
 
 
 CASES = {
@@ -321,6 +337,8 @@ CASES = {
     "queryname": (main, "queryname"),
     "unpaired": (unpaired, "coordinate"),
     "bad_mq": (bad_mq, "coordinate"),
+    "float_mq": (float_mq, "coordinate"),
+    "huge_mq": (huge_mq, "coordinate"),
 }
 
 

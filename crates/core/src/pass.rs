@@ -558,8 +558,6 @@ impl Accumulator for Fanout {
     }
 }
 
-/// `SinglePassSamProgram.makeItSo` with `ASSUME_SORTED=false`: the header
-/// must say `SO:coordinate`.
 /// The header's `@HD SO` value, `unsorted` without one (htsjdk's
 /// `getSortOrder` on a header without the tag).
 pub fn sort_order(header: &sam::Header) -> String {
@@ -569,6 +567,8 @@ pub fn sort_order(header: &sam::Header) -> String {
         .map_or_else(|| "unsorted".to_owned(), ToString::to_string)
 }
 
+/// `SinglePassSamProgram.makeItSo` with `ASSUME_SORTED=false`: the header
+/// must say `SO:coordinate`.
 fn check_coordinate_sorted(path: &Path, header: &sam::Header) -> Result<()> {
     let order = sort_order(header);
     if order == "coordinate" {

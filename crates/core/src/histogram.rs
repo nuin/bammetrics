@@ -4,6 +4,7 @@
 //! does, so medians and modes match Picard bin for bin.
 
 use std::collections::BTreeMap;
+use std::ops::Bound;
 
 #[derive(Clone, Default, Debug, PartialEq)]
 pub struct Histogram {
@@ -174,19 +175,18 @@ impl Histogram {
             return;
         };
         let minimum = self.bins[&mode] / tail_limit as f64;
-        let mut keep = Vec::new();
-        let mut last: Option<i64> = None;
-        for (&key, &count) in &self.bins {
-            if key <= mode {
-                keep.push(key);
-            } else if last.is_some_and(|l| l != key - 1) || count < minimum {
-                break;
-            } else {
-                keep.push(key);
-            }
-            last = Some(key);
+        let mut last = mode;
+        let cut = self
+            .bins
+            .range((Bound::Excluded(mode), Bound::Unbounded))
+            .find_map(|(&key, &count)| {
+                let stop = key != last + 1 || count < minimum;
+                last = key;
+                stop.then_some(key)
+            });
+        if let Some(cut) = cut {
+            self.bins.split_off(&cut);
         }
-        self.bins.retain(|k, _| keep.contains(k));
     }
 }
 
