@@ -81,7 +81,11 @@ in its headers.
 
 Every file is written under a temporary name and renamed into place. A file that is
 replaced keeps its permissions: a 0600 output stays 0600 under any umask. This holds for
-`-o`, every sibling, `convert`, `check -o`, `report` and every file of `qc`.
+`-o`, every sibling, `convert`, `check -o`, `report` and every file of `qc`. The temporary
+name has a random part, and a file already at that name is an error and is left alone.
+Three kinds of output are written in place: a path under `/dev`, a named pipe or device,
+and a symbolic link the user owns (the write follows it). A symbolic link another user owns
+is an error that names the path.
 
 ## `qc --also`
 
@@ -234,6 +238,15 @@ Both print one table with a header line.
 A TSV row is always one line with one cell per column. `pandas.read_csv(path, sep="\t",
 na_values=["?"])` reads the TSV. `pandas.read_csv(path)` and `polars.read_csv(path)` read
 the CSV with NaN as NaN. An empty string and a null are the same empty field in both.
+
+A spreadsheet runs a cell that starts with `=`, `+`, `-` or `@` as a formula, and a leading
+tab or carriage return can hide one. Sample, library and read group names come from the BAM
+header, so a file from elsewhere can carry such a cell. In both formats a string cell or a
+column name whose first character is one of those six is written after a `'`:
+`=HYPERLINK(...)` prints `'=HYPERLINK(...)`, and a library named `-80C` prints `'-80C`. A
+number is never changed: `-3` prints `-3`, and negative infinity prints `-?` or `-inf`. No
+flag turns the rule off. Such a cell does not come back from TSV or CSV as it was, because
+a reader sees the `'`. JSON (`--format json`) holds every cell unchanged and reads back.
 
 ## JSON Lines
 
