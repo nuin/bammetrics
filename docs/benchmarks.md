@@ -153,6 +153,7 @@ and CI runs it on the Linux and macOS runners after the unit tests.
 | Index size, 100 samples | 200 KB | 400 KB | 151.9 KB | 155,513 bytes, 14 rule cells per row |
 | Binary growth | 300 KB | 600 KB | 290.8 KB | 297,808 bytes: stripped `size_report` less stripped `size_base`; the probe leaves out the verbs' code (see below) |
 | Binary growth, 0.19.0 | 300 KB | 600 KB | 371.5 KB | 380,400 bytes stripped (408,768 unstripped), measured 2026-11-09 by `make budgets` on the same machine: over the 300 KB target, under the 600 KB limit, so the test prints `over target` and passes; 80.7 KB more than the 0.16.0 row |
+| Formats growth, W02 | 150 KB | 300 KB | 129.2 KB | 132,304 bytes stripped (148,480 unstripped), measured 2026-11-10 by `make budgets`: stripped `size_formats` less stripped `size_formats_base` (`crates/formats/examples`); see below |
 | Added passes over the BAM | 0 | 1 | 0 | `qc` reports 1 BAM read with the verdict and page; `report` and `check` run with the BAM deleted |
 
 The other rows at 0.19.0, same run: render 1.65 ms and 0.72 ms, sample page 96.5 KB
@@ -182,12 +183,34 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | f82df56 | the `report` and `check` verbs link both crates | 3,778,528 | 3,216,936 |
 | 0.16.0 | 2026-11-05 | 4,870,352 | 4,161,072 |
 | 0.19.0 | 2026-11-09, release/0.19.0 at d221376 | 6,899,008 | 5,833,632 |
+| formats | 2026-11-10, feat/formats: `crates/formats`, `convert`, `qc --also`, the format lists | 7,124,416 | 6,032,112 |
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and
 under twice it. The growth from 10d7f47 to 0.16.0 (1,479,520 bytes) is mostly the tools
 added since (the capture, RNA and variant tools, the `qc` engine and the verb grammar), so
 it does not measure the report.
+
+Formats growth (docs/07 W02). main at b97a24d, built the same day, is 5,833,648 bytes
+stripped; the formats branch is 6,032,112, so the formats work adds 198,464 bytes stripped
+(193.8 KB, 3.4%). docs/07 section 3.2 priced the W02 formats at about 16 KB before the code
+existed; the measured size is 12 times that. By symbol size (`nm -n` on both binaries, the
+crate hash cut from each name): `bammetrics_formats` 105,768 bytes, new or grown
+`bammetrics_cli` symbols 67,224 (`render_all`, `parse_list`, the `check` renderers,
+`convert`, `--also`, the clap value parsers), `bammetrics_core` 8,360 (`TextDoc`). The
+largest parts of the crate are its JSON value and parser (18,172 bytes; the crate depends
+on the core only, so it cannot use the one in `crates/verdict`), `render` with the
+delimited writers inlined (18,044), `metrics_json` (16,600), `markdown` (14,160), `junit`
+(9,472), `table` (8,984) and `multiqc` (8,244). `cargo-bloat` was not installed; the symbol
+sizes come from address gaps.
+
+The `formats growth` row uses two probes as the report row does. `size_formats_base` reads
+metrics files with the core reader, looks the tool up in the registry and its columns in
+the glossary, and touches the Unicode case tables; `bammetrics` holds all of these without
+the formats crate. `size_formats` adds both readers, the seven formats of a metrics file
+and the Markdown, JUnit and MultiQC forms of a verdict. The difference, 132,304 bytes, is
+the crate's code and data. The command's own format code in `crates/cli` is outside the
+probe. The 150 KB target is the measured size plus 16%; the test fails at 300 KB.
 
 ## Report accessibility
 

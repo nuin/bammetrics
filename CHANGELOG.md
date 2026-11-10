@@ -18,7 +18,7 @@
 - `bammetrics convert FILE`: Picard text or JSON in, any format out, `-` for standard input
   and output, `--table metrics|histogram|CLASS` for the one-table formats. Picard text to
   JSON to Picard text is byte for byte the first file; a test runs it on the 10 Picard
-  files of `tests/data/picard` and the 186 metrics files of the golden records.
+  files of `tests/data/picard` and every metrics file of the golden records.
 - `qc --also FORMAT[,FORMAT]` (`json`, `jsonl`, `tsv`, `csv`, `markdown`, `junit`,
   `multiqc`): `FILE.json` and its siblings beside every metrics file, `PREFIX.report.md`,
   `PREFIX.junit.xml` and `PREFIX.verdict_mqc.json`, listed in the manifest under the step
@@ -35,6 +35,28 @@
   extras.
 - `docs/schema/metrics-1.json`, the JSON Schema of `--format json`; a test validates the
   writer's output under it.
+- JSON and JSON Lines give a repeated column name a member of its own. The histogram of
+  `CollectHsMetrics` with two units repeats its three columns; `columns` and the row objects
+  hold `high_quality_coverage_count` and `high_quality_coverage_count.1`, and
+  `picard_columns` holds the names of the file. `json.load` and `jq` keep one value per
+  member, so repeated members lost every series but the last. The round-trip test fails on
+  a repeated member.
+- `convert --format picard` exits 1 and writes nothing for a JSON cell, column name or
+  class with a tab, line feed or carriage return, and for a header with a line feed or
+  carriage return, for a row that would be a blank line and for a first cell that starts
+  with `## `. Picard text has no escape, and the file would read back with other rows. The
+  error names the row and the column.
+- `convert` drops a byte order mark before either form and reads text that starts with
+  `[` as JSON, so the error is the JSON one.
+- `qc --also` exits 0 on a BAM with no read, as `qc` without it does. The headers-only
+  file of `CollectDuplicateMetrics` gets a `.json` sibling with no row and empty `.tsv`,
+  `.csv` and `.jsonl` siblings. Fixture `tests/data/no_reads.bam`.
+- In `--format json,picard -o a.json` the Picard sibling `a.json.txt` names itself as
+  `OUTPUT` in its header, as `-o a.json.txt` alone does.
+- `make budgets` gains the row `formats growth`: the stripped `size_formats` probe less
+  `size_formats_base` (`crates/formats/examples`), 129.2 KB against a 150 KB target. The
+  whole binary grew 198,464 bytes stripped over 0.19.0, 12 times the 16 KB docs/07 section
+  3.2 priced the formats at (docs/benchmarks.md has the split by crate).
 
 ### Changed
 
@@ -56,6 +78,15 @@
 - An unknown `--format` lists seven formats, and a non-Picard `--format` on a multi-file
   verb names the `picard,json` form: two golden error records changed. `bammetrics tools`
   lists `convert`.
+- An output that is replaced keeps its permissions. `report`, `check -o`, `convert`, the
+  non-Picard `--format` files and every file of `qc` are written through
+  `cleanup::AtomicFile`, as the Picard files of the tool verbs are: a 0600 file stays 0600
+  under any umask, the temporary file is 0600 from the start and a signal removes it.
+  Through 0.19.0 the verdict, the page and the manifest came back with the umask default.
+  A target that is a symbolic link is written through the link.
+- `check -o FILE` refuses a `FILE`, or a sibling of a `--format` list, that is a metrics
+  file or a `verdict.json` it reads (exit 2). Before, only the directory arguments were
+  compared, and `check DIR -o DIR/S1.insert_size_metrics` replaced the metrics file.
 
 ## 0.19.0
 

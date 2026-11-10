@@ -497,7 +497,9 @@ beside every metrics file. `markdown` adds `PREFIX.report.md` (the verdict, then
 metrics table, at most 65,536 characters), `junit` adds `PREFIX.junit.xml` (a testcase per
 rule) and `multiqc` adds `PREFIX.verdict_mqc.json` (MultiQC custom content). The manifest
 lists them under the step `also`. A later run without `--also` removes the ones the earlier
-manifest lists ([docs/formats.md](formats.md)).
+manifest lists ([docs/formats.md](formats.md)). `--also` does not change the exit code: a
+BAM with no read exits 0 with it as without it, and a metrics file with headers only gets a
+sibling with no row.
 
 `qc` exits 0 on any verdict unless `--fail-on` is given; then 10 when the verdict reaches it
 and 11 when the verdict is incomplete, as `check` does. A failed collector exits 1 after the
@@ -829,8 +831,10 @@ that ends in `_mqc.json`.
 Without `-o` the output goes to standard output and no file is written. `-o FILE` writes
 the first format to `FILE`. `--format` takes a list (`text,junit`): each further format is
 written beside `-o` as `FILE.txt`, `FILE.json`, `FILE.jsonl`, `FILE.junit.xml`, `FILE.md`
-or `FILE.verdict_mqc.json`, and a list needs `-o`. Exit codes: the table above, with
-`--fail-on fail` by default, whatever the format.
+or `FILE.verdict_mqc.json`, and a list needs `-o`. `check` refuses an `-o` or a sibling that
+is a file it reads (exit 2): a metrics file under an input directory, or a `verdict.json`
+given or found there. A new file in an input directory is written. Exit codes: the table
+above, with `--fail-on fail` by default, whatever the format.
 
 ### convert
 
@@ -840,7 +844,8 @@ bammetrics convert FILE [--format FORMAT[,FORMAT]] [-o FILE] [--table NAME] [--s
 
 `convert` reads one metrics file and writes it in another format. The input is Picard text
 or the JSON of `--format json` (schema `bammetrics.metrics/1`), told apart by its first
-character; `-` reads standard input. `--format` takes `picard`, `json`, `jsonl`, `tsv`,
+character (`{` or `[` is JSON; a byte order mark before it is dropped); `-` reads standard
+input. `--format` takes `picard`, `json`, `jsonl`, `tsv`,
 `csv`, `markdown` or `human`, one or a list; without it the output is `json` for Picard
 text and `picard` for JSON. Picard text to JSON to Picard text is byte for byte the first
 file, for a file Picard or bammetrics wrote.
@@ -857,6 +862,9 @@ bammetrics convert S1.insert_size_metrics | bammetrics convert - | cmp - S1.inse
 - `--sample NAME` sets the sample of the `json` and `jsonl` forms.
 - A file that is neither form exits 1 with the reason. [docs/formats.md](formats.md) lists
   what a round trip does not keep.
+- `--format picard` exits 1 and writes nothing for a JSON cell with a tab or a line end, a
+  row that would be a blank line and a first cell that starts with `## `: Picard text has no
+  escape for them. The error names the row and the column.
 
 ## Info verbs
 

@@ -73,8 +73,15 @@ format given twice is a usage error.
 - `qc` and `plan` keep one `--format` (`text` or `jsonl`): it names the event stream on
   standard output, which is one stream. `qc` writes further file formats with `--also`.
 
-The files of one list carry the same `Started on` time. Every file is written under a
-temporary name and renamed into place.
+The files of one list carry the same `Started on` time and the same command line. When
+`picard` is in the list of a single-file verb, the command line names the Picard file as
+`OUTPUT`: `-o is.txt` for `picard,json`, `-o is.json` plus `.txt` for `json,picard`. That
+sibling is the file `-o is.json.txt` alone writes. A list without `picard` has no `OUTPUT`
+in its headers.
+
+Every file is written under a temporary name and renamed into place. A file that is
+replaced keeps its permissions: a 0600 output stays 0600 under any umask. This holds for
+`-o`, every sibling, `convert`, `check -o`, `report` and every file of `qc`.
 
 ## `qc --also`
 
@@ -94,6 +101,11 @@ files are written from the metrics files on disk, so a file `--resume` kept is e
 like one the run wrote. They are rewritten on every run. A run without `--also` removes the
 `--also` files the earlier manifest lists; a file no run of the prefix wrote stays. The
 JSON forms carry the run's sample name.
+
+`--also` does not change the exit code of the run. `CollectDuplicateMetrics` writes a file
+with headers only for a BAM with no read. Its `.json` sibling is a document with the
+headers, `class` null and no row; its `.tsv`, `.csv` and `.jsonl` siblings are empty files.
+`junit` and `multiqc` print the verdict and read no metrics file.
 
 ## JSON, schema `bammetrics.metrics/1`
 
@@ -136,6 +148,14 @@ schema changes only by adding members.
   `convert` and `read_table` put the float back, so Picard text prints `?` where it had `?`.
 - A file with more than one metrics class, which Picard never writes, carries the further
   ones under `more_classes`.
+- `columns` holds the members of a row object, and no two are equal. A table that repeats a
+  column name gets `.1`, `.2` after the repeats, and `picard_columns` holds the names of
+  the file. The histogram of `CollectHsMetrics` with two units repeats its three columns:
+  `columns` is `coverage_or_base_quality`, `high_quality_coverage_count`,
+  `all_bases_coverage_count`, `coverage_or_base_quality.1`, `high_quality_coverage_count.1`,
+  `all_bases_coverage_count.1`. `json.load` and `jq` keep one value per member, so each
+  series needs a member of its own. `picard_columns` is absent when no name repeats.
+  `non_finite` names a column as `columns` does. JSON Lines rows use the same members.
 
 Changes from 0.19.0. New members: `schema`, `headers`, `columns`, `types`, `non_finite`,
 `histogram.key_class`, `histogram.types` and `histogram.non_finite`. `tool`, `sample`,
@@ -147,7 +167,8 @@ with no bin is `null`; it was an object with empty lists.
 ## The round trip
 
 Picard text to JSON to Picard text is byte for byte the first file. `convert` reads either
-form, told apart by the first character, and writes the other one by default:
+form and writes the other one by default. Text whose first character is `{` or `[` is JSON;
+a byte order mark before either form is dropped:
 
 ```bash
 bammetrics convert S1.insert_size_metrics -o S1.insert_size_metrics.json
@@ -155,9 +176,10 @@ bammetrics convert S1.insert_size_metrics.json | cmp - S1.insert_size_metrics
 ```
 
 `crates/formats/tests/round_trip.rs` runs this on the 10 Picard 3.5.0 files of
-`tests/data/picard` and on the 186 metrics files in the golden records.
-`crates/cli/tests/formats.rs` runs it through the command. It holds for a file Picard or
-bammetrics wrote. What does not come back as it was:
+`tests/data/picard` and on every metrics file in the golden records (the test prints the
+count). It also fails when an object of the JSON or of the JSON Lines form repeats a
+member. `crates/cli/tests/formats.rs` runs the round trip through the command. It holds for
+a file Picard or bammetrics wrote. What does not come back as it was:
 
 - A header class other than `StringHeader` is written as a `StringHeader`.
 - `\r\n` line ends come back as `\n`. A row shorter than its column line is filled.
@@ -167,6 +189,16 @@ bammetrics wrote. What does not come back as it was:
 
 A JSON file from a tool run holds full doubles. Converted to Picard text it prints the 6
 fraction digits the tool's own Picard file has.
+
+Picard text has no escape. A JSON document can hold a string cell with a tab, a line feed
+or a carriage return; written raw, the tab makes a further cell and the line feed a further
+row. `--format picard` refuses such a document (exit 1, no file written) and names the
+place: `Picard text cannot hold the tab in metrics row 0, column LIBRARY: "a\tb"`. The
+same holds for a column name and a class, and for a line feed or carriage return in a
+header. Two rows are refused for the same reason: a row whose line would be blank (a table
+of one column with an empty cell), because a blank line ends the table, and a row whose
+first cell starts with `## `, because that starts a section. `tsv`, `csv`, `jsonl` and
+`markdown` hold all of these. A file read from Picard text never holds one.
 
 ## `convert`
 
@@ -182,8 +214,10 @@ bammetrics convert FILE [--format FORMAT[,FORMAT]] [-o FILE] [--table NAME] [--s
   `histogram`, or a class name. Without it they print the metrics class, or the histogram of
   a file without one.
 - `--sample` sets the sample of the `json` and `jsonl` forms.
-- Exit 1 for a file that is neither form, with the reason. `convert` does not read BAM,
-  VCF or interval lists.
+- Exit 1 for a file that is neither form, with the reason: the JSON error for text that
+  starts with `{` or `[`, else `not a metrics file`. `convert` does not read BAM, VCF or
+  interval lists.
+- Exit 1 for `--format picard` on a JSON cell Picard text cannot hold (see the round trip).
 
 ## TSV and CSV
 
@@ -204,7 +238,8 @@ the CSV with NaN as NaN. An empty string and a null are the same empty field in 
 ## JSON Lines
 
 One object per row. A metrics row holds its columns. A histogram row has `"histogram": true`
-first. `sample`, when known, comes before the columns. NaN and infinity are `null`.
+first. `sample`, when known, comes before the columns. NaN and infinity are `null`. A
+column name the table repeats gets `.1`, `.2` after it, as in `columns` of the JSON form.
 
 ```
 {"sample":"S1","MEDIAN_INSERT_SIZE":310,"READ_PAIRS":5,"PAIR_ORIENTATION":"FR"}

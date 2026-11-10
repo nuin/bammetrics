@@ -83,7 +83,7 @@ One path giving one sample returns a `Verdict`; a list of paths, or a directory 
 
 ## read_table
 
-`read_table(path, table=None)` reads one table of a metrics file and returns a `Table`. The file is Picard text or the JSON `--format json` writes (schema `bammetrics.metrics/1`), told apart by its first character.
+`read_table(path, table=None)` reads one table of a metrics file and returns a `Table`. The file is Picard text or the JSON `--format json` writes (schema `bammetrics.metrics/1`), told apart by its first character (`{` or `[` is JSON; a byte order mark is dropped).
 
 ```python
 t = bm.read_table("out/s.insert_size_metrics")
@@ -108,7 +108,7 @@ t.headers, t.tool, t.sample
 - The dtype is the glossary's type of the column (`crates/core/glossary.tsv`), where `read_metrics` types each cell from its text. `MEDIAN_INSERT_SIZE` prints `310`: `read_metrics` gives the int 310, `read_table` the float 310.0 under dtype `float`. A column the glossary lacks is typed from its cells, and a cell that does not fit widens its column (docs/formats.md).
 - An empty cell is `None`. `?` is `nan`, `-?` is `-inf`.
 - `table` is `"metrics"` (the first class), `"histogram"`, or a class name by its full or short name. Without it the function returns the metrics class, or the histogram of a file without one (`QualityScoreDistribution`). A name the file lacks raises `UsageError`.
-- A column name a table repeats gets `.1`, `.2` after it. Picard repeats the histogram columns of `CollectHsMetrics` once per unit.
+- A column name a table repeats gets `.1`, `.2` after it, the members the JSON form holds under `columns`. Picard repeats the histogram columns of `CollectHsMetrics` once per unit.
 - A missing file, or one that is neither form, raises `InputError`.
 - `to_pandas()` gives `Int64`, `float64` and `string` columns; an empty float cell and NaN are both NaN there. `to_polars()` gives `Int64`, `Float64` and `String` columns; an empty cell is null and `?` is NaN. Each imports its library on the first call. The module imports neither, and the wheel does not depend on them (`pip install bammetrics[pandas]` or `bammetrics[polars]` adds one). No Rust dependency is involved: the frames are built from the lists.
 - A `Table` copies and pickles.
