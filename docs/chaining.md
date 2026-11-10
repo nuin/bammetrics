@@ -147,8 +147,9 @@ to `TMP_DIR` once, as the tool does. Read ends spill to `TMP_DIR` as in the tool
 A step after the barrier is built from the sealed header, so it sees the new `@PG` line.
 
 Limit of W03: a stage that replays must sit directly behind a file source. A replaying
-stage behind another stage is refused before any record is read (`reads its input
-twice and cannot follow ...`). W05 adds the spool and the planner that lift this.
+stage behind another stage is refused when its segment is built, before that segment
+reads a record (`reads its input twice and cannot follow ...`). W05 adds the spool and
+the planner that lift this.
 
 ## 6. Options in the middle of a chain
 
