@@ -137,7 +137,27 @@ SHA-256 over all records, `5a90c21f...fafb396`). The headers differ in the `@PG`
 
 ## 0.19.0 tools (HG002 exome)
 
-The HG002 timings of the five new BAM-reading tools of 0.19.0 (`CollectSequencingArtifactMetrics`, `CollectOxoGMetrics`, `CollectJumpingLibraryMetrics`, `CollectCoverageGaps`, `CollectSexCheckMetrics`) follow; they are being measured separately on the same machine.
+Same machine and file as the MarkDuplicates run above, bammetrics 0.19.0 (d221376),
+default options and threads, one run each, `/usr/bin/time -l`, nothing else running.
+Picard 3.5.0 numbers are the ones the feature branches measured on the same file
+(`JAVA_OPTS=-Xmx8g`); a blank cell means Picard was not timed for that tool.
+
+| tool | Picard wall | Picard peak RSS | bammetrics wall | bammetrics peak RSS | output |
+|---|---:|---:|---:|---:|---|
+| BamIndexStats | 0.74 s | | 0.03 s | 30 MB | 87 lines identical |
+| CollectJumpingLibraryMetrics | | | 31.0 s | 7 MB | 4,653 jump pairs, 74,693,734 non-jump pairs |
+| CollectSequencingArtifactMetrics | 783.8 s | 2.50 GB | 153.8 s (5.1x) | 3.75 GB | all five files identical |
+| CollectOxoGMetrics | 1,065.5 s | 2.38 GB | 299.3 s (3.6x) | 2.47 GB | 16 rows identical |
+| ConvertSequencingArtifactToOxoG | | | 0.00 s | 4 MB | |
+| CheckDuplicateMarking | | | 147.4 s | 14.14 GB | exit 1: 144,979 records disagree |
+
+`CheckDuplicateMarking` on a coordinate-sorted BAM sorts every record by query name in
+memory, as its port of Picard does without `SortingCollection`; 150.5M records took
+14.14 GB. A queryname-sorted input streams at a few MB. A disk-spilling sort for it is
+open. The exit 1 is the file's own state: GIAB's HG002 exome holds 144,979 records whose
+mates disagree on the duplicate flag, and Picard reports the same.
+`CollectSequencingArtifactMetrics` holds the current contig twice (the reference and an
+upper-cased copy), which is most of its 3.75 GB; one copy could go.
 
 ## Report budgets (docs/05 section 4.8)
 
