@@ -13,12 +13,36 @@
 //!   repeats is a member of its own (`v`, `v.1`: `Table::keys`).
 //! * Aligned text: a table when it has at most 6 columns, else each row as
 //!   one `COLUMN  value` line per column.
+//!
+//! A spreadsheet runs a TSV or CSV cell that starts with `=`, `+`, `-` or
+//! `@` as a formula, and a leading tab or carriage return can hide one. A
+//! column name or a string cell with such a first character is written
+//! after a `'` ([`guarded`]), which makes it text. A sample or library
+//! name comes from the BAM header, so a file from elsewhere could carry
+//! one. A numeric cell is never changed: `-3` stays `-3`. A text that is
+//! `+` or `-` alone, a strand, is not changed either.
+
+use std::borrow::Cow;
 
 use bammetrics_core::metric::Value;
 
 use crate::json::Json;
 use crate::metrics_json::record;
 use crate::table::{Document, Table};
+
+/// `text` (a column name or a string cell) as a spreadsheet reads as
+/// text: after a `'` when its first character is `=`, `+`, `-`, `@`, a
+/// tab or a carriage return. A text that is `+` or `-` alone (a strand)
+/// stays as it is: it has no formula body and a spreadsheet reads it as
+/// text.
+fn guarded(text: &str) -> Cow<'_, str> {
+    let strand = matches!(text, "+" | "-");
+    if !strand && text.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+        Cow::Owned(format!("'{text}"))
+    } else {
+        Cow::Borrowed(text)
+    }
+}
 
 fn tsv_escape(text: &str, out: &mut String) {
     for c in text.chars() {
@@ -39,7 +63,7 @@ pub fn tsv(table: &Table) -> String {
         if j > 0 {
             text.push('\t');
         }
-        tsv_escape(name, &mut text);
+        tsv_escape(&guarded(name), &mut text);
     }
     text.push('\n');
     for row in &table.rows {
@@ -48,7 +72,7 @@ pub fn tsv(table: &Table) -> String {
                 text.push('\t');
             }
             match value {
-                Value::Str(s) => tsv_escape(s, &mut text),
+                Value::Str(s) => tsv_escape(&guarded(s), &mut text),
                 other => text.push_str(&other.picard_text()),
             }
         }
@@ -67,12 +91,13 @@ fn csv_field(text: &str, out: &mut String) {
     }
 }
 
-fn csv_cell(value: &Value) -> String {
+fn csv_cell(value: &Value) -> Cow<'_, str> {
     match value {
-        Value::Float(v) if v.is_nan() => "NaN".to_owned(),
-        Value::Float(v) if v.is_infinite() => if *v > 0.0 { "inf" } else { "-inf" }.to_owned(),
-        Value::Float(v) => v.to_string(),
-        other => other.picard_text(),
+        Value::Str(s) => guarded(s),
+        Value::Float(v) if v.is_nan() => "NaN".into(),
+        Value::Float(v) if v.is_infinite() => if *v > 0.0 { "inf" } else { "-inf" }.into(),
+        Value::Float(v) => v.to_string().into(),
+        other => other.picard_text().into(),
     }
 }
 
@@ -83,7 +108,7 @@ pub fn csv(table: &Table) -> String {
         if j > 0 {
             text.push(',');
         }
-        csv_field(name, &mut text);
+        csv_field(&guarded(name), &mut text);
     }
     text.push_str("\r\n");
     for row in &table.rows {
@@ -230,6 +255,99 @@ mod tests {
             rows: vec![vec![Value::Float(f64::INFINITY)], vec![Value::Float(310.0)]],
         };
         assert_eq!(csv(&header), "\"a,b\"\r\ninf\r\n310\r\n");
+    }
+
+    fn one_cell(name: &str, value: Value) -> Table {
+        let ty = match value {
+            Value::Int(_) => Ty::Int,
+            Value::Float(_) => Ty::Float,
+            _ => Ty::Str,
+        };
+        Table {
+            class: String::new(),
+            columns: vec![(name.to_owned(), ty)],
+            rows: vec![vec![value]],
+        }
+    }
+
+    /// Each first character a spreadsheet takes for a formula, in a
+    /// string cell: (cell, TSV line, CSV record).
+    const FORMULA_CELLS: [(&str, &str, &str); 6] = [
+        ("=1+1", "'=1+1", "'=1+1"),
+        ("+1", "'+1", "'+1"),
+        ("-1", "'-1", "'-1"),
+        ("@SUM(A1)", "'@SUM(A1)", "'@SUM(A1)"),
+        ("\t=1+1", "'\\t=1+1", "'\t=1+1"),
+        ("\r=1+1", "'\\r=1+1", "\"'\r=1+1\""),
+    ];
+
+    #[test]
+    fn a_string_cell_that_starts_a_formula_gets_a_quote_mark() {
+        for (cell, tsv_line, csv_record) in FORMULA_CELLS {
+            let table = one_cell("S", Value::Str(cell.to_owned()));
+            assert_eq!(tsv(&table), format!("S\n{tsv_line}\n"), "{cell:?}");
+            assert_eq!(csv(&table), format!("S\r\n{csv_record}\r\n"), "{cell:?}");
+        }
+        let quoted = one_cell("S", Value::Str("=HYPERLINK(\"u\",\"x\"), 1".to_owned()));
+        assert_eq!(
+            csv(&quoted),
+            "S\r\n\"'=HYPERLINK(\"\"u\"\",\"\"x\"\"), 1\"\r\n"
+        );
+        for cell in ["a=1", "1-2", "?", "'=1", " =1", "Y", ""] {
+            let table = one_cell("S", Value::Str(cell.to_owned()));
+            assert_eq!(tsv(&table), format!("S\n{cell}\n"), "{cell:?}");
+            assert_eq!(csv(&table), format!("S\r\n{cell}\r\n"), "{cell:?}");
+        }
+    }
+
+    /// A strand cell or column name (`+` or `-` alone) is unchanged;
+    /// anything longer with that first character is guarded.
+    #[test]
+    fn a_lone_plus_or_minus_is_written_as_it_was() {
+        for sign in ["+", "-"] {
+            let cell = one_cell("strand", Value::Str(sign.to_owned()));
+            assert_eq!(tsv(&cell), format!("strand\n{sign}\n"));
+            assert_eq!(csv(&cell), format!("strand\r\n{sign}\r\n"));
+            let name = one_cell(sign, Value::Int(1));
+            assert_eq!(tsv(&name), format!("{sign}\n1\n"));
+            assert_eq!(csv(&name), format!("{sign}\r\n1\r\n"));
+        }
+        for longer in ["+1", "-x", "--", "+ ", "-\t"] {
+            let cell = one_cell("S", Value::Str(longer.to_owned()));
+            assert!(tsv(&cell).starts_with("S\n'"), "{longer:?}");
+            assert!(csv(&cell).starts_with("S\r\n'"), "{longer:?}");
+            let name = one_cell(longer, Value::Int(1));
+            assert!(tsv(&name).starts_with('\''), "{longer:?}");
+            assert!(csv(&name).starts_with('\''), "{longer:?}");
+        }
+        for other in ["=", "@"] {
+            let cell = one_cell("S", Value::Str(other.to_owned()));
+            assert_eq!(csv(&cell), format!("S\r\n'{other}\r\n"));
+        }
+    }
+
+    #[test]
+    fn a_negative_number_cell_is_written_as_it_was() {
+        let int = one_cell("N", Value::Int(-3));
+        assert_eq!(tsv(&int), "N\n-3\n");
+        assert_eq!(csv(&int), "N\r\n-3\r\n");
+        let float = one_cell("X", Value::Float(-0.5));
+        assert_eq!(tsv(&float), "X\n-0.5\n");
+        assert_eq!(csv(&float), "X\r\n-0.5\r\n");
+        let infinity = one_cell("X", Value::Float(f64::NEG_INFINITY));
+        assert_eq!(tsv(&infinity), "X\n-?\n");
+        assert_eq!(csv(&infinity), "X\r\n-inf\r\n");
+    }
+
+    #[test]
+    fn a_column_name_that_starts_a_formula_gets_a_quote_mark() {
+        for (name, tsv_line, csv_record) in FORMULA_CELLS {
+            let table = one_cell(name, Value::Int(1));
+            assert_eq!(tsv(&table), format!("{tsv_line}\n1\n"), "{name:?}");
+            assert_eq!(csv(&table), format!("{csv_record}\r\n1\r\n"), "{name:?}");
+        }
+        let plain = one_cell("PCT_EXC_MAPQ", Value::Float(0.5));
+        assert_eq!(csv(&plain), "PCT_EXC_MAPQ\r\n0.5\r\n");
     }
 
     #[test]

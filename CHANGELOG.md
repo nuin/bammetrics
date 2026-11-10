@@ -137,6 +137,25 @@ Output formats from one typed table (`crates/formats`, `convert`, `--format` lis
   file or a `verdict.json` it reads (exit 2). Before, only the directory arguments were
   compared, and `check DIR -o DIR/S1.insert_size_metrics` replaced the metrics file.
 
+### Security
+
+- `--format tsv` and `--format csv` write a string cell or a column name that starts with
+  `=`, `+`, `-`, `@`, a tab or a carriage return after a `'`, so a spreadsheet reads it as
+  text and runs no formula from a sample or library name. Numbers are unchanged (`-3` stays
+  `-3`), and so is a text that is `+` or `-` alone (a strand). No flag turns it off; such a cell does not round-trip through TSV or CSV, and JSON
+  holds it unchanged (docs/formats.md).
+- `Table::keys` (the members of `--format json` and `jsonl` for a repeated column name)
+  takes linear time. It compared every key with every earlier one, so a JSON document with
+  100,000 columns of one name held `convert` for minutes. The keys are the same.
+- `cleanup::AtomicFile`: an output that is a symbolic link owned by another user is an error
+  that names the path; a link the user owns is still written through. The same holds for a
+  named pipe, socket or device outside `/dev`: in place when the user owns it, an error
+  otherwise. The `/dev` rule (in place, no owner check) applies only to a path with no `..`
+  component, so `/dev/../tmp/x` gets the rules of any path. The temporary name
+  has a random part. A file already at the temporary name fails the write and is no longer
+  removed or renamed, and the temporary file is registered for signal cleanup only once
+  this process has made it.
+
 ### Harness (full parity program, wave W02, part C)
 
 - `compare_bam` and `compare_vcf` in `tests/concordance/compare.py`, for tools that write
