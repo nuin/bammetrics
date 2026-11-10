@@ -269,6 +269,12 @@ fn stage_files(inv: &Invocation) -> Result<(PathBuf, PathBuf)> {
              records to the next step"
         )));
     }
+    if inv.all("INPUT").len() > 1 {
+        return Err(Error::Usage(
+            "MarkDuplicates in a chain reads the chain's one source: a second INPUT is not merged"
+                .to_owned(),
+        ));
+    }
     Ok((PathBuf::new(), inv.output.clone().unwrap_or_default()))
 }
 

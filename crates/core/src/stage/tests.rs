@@ -742,7 +742,14 @@ fn mark_duplicates_in_a_chain_refuses_the_options_of_the_file_it_does_not_write(
     let source = data("markdup.bam");
     let tool = registry::find("MarkDuplicates").expect("registered");
     let input = format!("I={}", source.display());
-    for option in ["O=/dev/null", "CREATE_INDEX=true", "COMPRESSION_LEVEL=1"] {
+    let write_step = "belongs to the write step";
+    let cases = [
+        ("O=/dev/null", write_step),
+        ("CREATE_INDEX=true", write_step),
+        ("COMPRESSION_LEVEL=1", write_step),
+        (input.as_str(), "a second INPUT is not merged"),
+    ];
+    for (option, text) in cases {
         let inv = tool
             .parse(&[input.clone(), option.to_owned()])
             .expect("arguments");
@@ -754,11 +761,7 @@ fn mark_duplicates_in_a_chain_refuses_the_options_of_the_file_it_does_not_write(
             lower: true,
         };
         let results = texts(run_chain(plan, None).expect("the chain runs"));
-        assert!(
-            results[0].contains("belongs to the write step"),
-            "{}",
-            results[0]
-        );
+        assert!(results[0].contains(text), "{}", results[0]);
         assert!(results[1].starts_with("ERR not run: MarkDuplicates failed"));
     }
 }

@@ -439,6 +439,97 @@ fn a_failing_tap_fails_alone_and_a_failing_stage_stops_its_segment() {
     fs::remove_dir_all(&dir).expect("cleanup");
 }
 
+/// A pipe cannot be read twice: it is copied to `TMP_DIR` once, as the
+/// tool copies it, and the copy is removed.
+#[test]
+fn a_pipe_source_is_copied_once_for_the_second_read() {
+    use std::io::Write as _;
+    use std::process::Stdio;
+
+    let dir = fresh_dir("pipe");
+    let pinned = "PROGRAM_GROUP_COMMAND_LINE=pinned";
+    run(&[
+        "MarkDuplicates".to_owned(),
+        format!("I={}", FIXTURE.0),
+        arg("O", &dir.join("file.bam")),
+        arg("M", &dir.join("file.txt")),
+        pinned.to_owned(),
+    ]);
+    let mut child = Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+        .args([
+            "__chain".to_owned(),
+            "I=/dev/stdin".to_owned(),
+            arg("TMP_DIR", &dir.join("tmp")),
+            "STEP=MarkDuplicates".to_owned(),
+            pinned.to_owned(),
+            arg("M", &dir.join("pipe.txt")),
+            "STEP=CollectQualityYieldMetrics".to_owned(),
+            arg("O", &dir.join("pipe.quality.txt")),
+            "STEP=write".to_owned(),
+            arg("O", &dir.join("pipe.bam")),
+        ])
+        .current_dir(root())
+        .stdin(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("run bammetrics");
+    let bytes = fs::read(root().join(FIXTURE.0)).expect("fixture");
+    child
+        .stdin
+        .take()
+        .expect("a pipe")
+        .write_all(&bytes)
+        .expect("write the BAM");
+    let output = child.wait_with_output().expect("exit");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read(dir.join("pipe.bam")).expect("chained"),
+        fs::read(dir.join("file.bam")).expect("staged")
+    );
+    assert_eq!(body(&dir.join("pipe.txt")), body(&dir.join("file.txt")));
+    assert!(names(&dir.join("tmp")).is_empty());
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+/// A CRAM source is decoded once per segment with the chain's `R=`: the
+/// tap and the written BAM hold what the tool reads from the CRAM.
+#[test]
+fn a_cram_source_feeds_taps_and_write() {
+    let dir = fresh_dir("cram");
+    let cram = "tests/data/insert_size.cram";
+    let reference = format!("R={}", FIXTURE.1);
+    let tool = "CollectInsertSizeMetrics";
+    run(&[
+        "__chain".to_owned(),
+        format!("I={cram}"),
+        reference.clone(),
+        format!("STEP={tool}"),
+        arg("O", &dir.join("chain.txt")),
+        "STEP=write".to_owned(),
+        arg("O", &dir.join("chain.bam")),
+    ]);
+    run(&[
+        tool.to_owned(),
+        format!("I={cram}"),
+        reference,
+        arg("O", &dir.join("cram.txt")),
+    ]);
+    run(&[
+        tool.to_owned(),
+        arg("I", &dir.join("chain.bam")),
+        arg("O", &dir.join("bam.txt")),
+    ]);
+    let chained = body(&dir.join("chain.txt"));
+    assert_eq!(chained, body(&dir.join("cram.txt")));
+    assert_eq!(chained, body(&dir.join("bam.txt")));
+    assert_eq!(bam(&dir.join("chain.bam")).1.len(), 10);
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
 #[test]
 fn usage_errors_exit_2_before_anything_runs() {
     let dir = fresh_dir("usage");
