@@ -1,5 +1,62 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Output formats from one typed table (docs/formats.md, docs/07 W02 parts A and B). New
+  crate `crates/formats` (`bammetrics-formats`, `std` and the core only): `Table { class,
+  columns: Vec<(name, Ty)>, rows }` takes each column's type (`int`, `float`, `string`) from
+  the glossary and infers only what the glossary lacks; the histogram is a second table and
+  the `StringHeader` texts travel as `headers`. Picard text stays the default and
+  byte-identical.
+- `--format` takes `csv` (RFC 4180, full doubles, `NaN` for NaN) and `markdown` (GFM tables,
+  at most 65,536 characters) beside `picard`, `json`, `tsv`, `jsonl` and `human`, and takes
+  a list: `--format picard,json,csv -o out.txt` writes `out.txt`, `out.txt.json` and
+  `out.txt.csv`. A multi-file verb and `mark-duplicates` take `picard` first and write each
+  further format beside every metrics file.
+- `bammetrics convert FILE`: Picard text or JSON in, any format out, `-` for standard input
+  and output, `--table metrics|histogram|CLASS` for the one-table formats. Picard text to
+  JSON to Picard text is byte for byte the first file; a test runs it on the 10 Picard
+  files of `tests/data/picard` and the 186 metrics files of the golden records.
+- `qc --also FORMAT[,FORMAT]` (`json`, `jsonl`, `tsv`, `csv`, `markdown`, `junit`,
+  `multiqc`): `FILE.json` and its siblings beside every metrics file, `PREFIX.report.md`,
+  `PREFIX.junit.xml` and `PREFIX.verdict_mqc.json`, listed in the manifest under the step
+  `also`. `plan --also` lists them. Python: `qc(also=["json", "markdown"])`.
+- `check --format junit` (a testsuite per sample, a testcase per rule), `markdown` and
+  `multiqc`, a `--format` list, and `-o FILE` for the first format with the further ones
+  beside it.
+- MultiQC custom content: `PREFIX.verdict_mqc.json` is a table with a row per sample.
+  MultiQC 1.35 reads it (`crates/cli/tests/formats.rs`, skipped without `multiqc`).
+- Python `read_table(path, table=None)`: one table of a metrics file (Picard text or JSON)
+  as a `Table` with a list per column and the glossary dtypes, `histogram` as a second
+  `Table`, and `to_pandas()` and `to_polars()`, which import their library on the first
+  call. The wheel gains no dependency; `bammetrics[pandas]` and `bammetrics[polars]` are
+  extras.
+- `docs/schema/metrics-1.json`, the JSON Schema of `--format json`; a test validates the
+  writer's output under it.
+
+### Changed
+
+- `--format json` is schema `bammetrics.metrics/1`. Added members: `schema`, `headers`,
+  `columns`, `types`, `non_finite`, `histogram.key_class`, `histogram.types` and
+  `histogram.non_finite`; `tool`, `sample`, `class`, `metrics` and `histogram` keep their
+  place and shape. Three values differ from 0.19.0: an int column is a JSON integer over the
+  whole `i64` range (it was a double), a boolean cell is `"Y"` or `"N"` as Picard prints it
+  (it was `true` or `false`), and the histogram of a file with no bin is `null` (it was an
+  object with empty lists). NaN and infinity stay `null` and are now listed in
+  `non_finite`, so the Picard text comes back. Seven golden JSON records changed for this.
+- `--format jsonl` prints the histogram rows too, each with `"histogram": true` first. The
+  rows of a histogram-only tool gain that member.
+- `--format tsv` writes a tab, newline, carriage return or backslash in a string cell or a
+  column name as `\t`, `\n`, `\r` or `\\`, so a row is always one line. A cell without
+  those characters is unchanged.
+- `check` no longer fails on a closed standard output (`check DIR | head -1`); the rest of
+  the output is dropped and the exit code kept, as `qc` does.
+- An unknown `--format` lists seven formats, and a non-Picard `--format` on a multi-file
+  verb names the `picard,json` form: two golden error records changed. `bammetrics tools`
+  lists `convert`.
+
 ## 0.19.0
 
 Eight tools: `CollectSequencingArtifactMetrics`, `ConvertSequencingArtifactToOxoG`,
