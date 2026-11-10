@@ -1,0 +1,8 @@
+## argv
+convert
+tests/data/ref_100k.fa
+## exit
+1
+## stdout
+## stderr
+bammetrics convert: tests/data/ref_100k.fa: not a metrics file: no ## METRICS CLASS and no ## HISTOGRAM section

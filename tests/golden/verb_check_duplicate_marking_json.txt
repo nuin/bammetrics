@@ -9,9 +9,21 @@ json
 1
 ## stdout
 {
+  "schema": "bammetrics.metrics/1",
   "tool": "CheckDuplicateMarking",
   "sample": "NA12878",
+  "headers": [],
   "class": null,
+  "columns": [
+    "read_name",
+    "contig",
+    "start"
+  ],
+  "types": [
+    "string",
+    "string",
+    "int"
+  ],
   "metrics": [
     {
       "read_name": "r2",
@@ -34,6 +46,7 @@ json
       "start": 0
     }
   ],
+  "non_finite": [],
   "histogram": null
 }
 ## stderr

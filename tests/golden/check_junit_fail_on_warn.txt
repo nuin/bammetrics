@@ -1,0 +1,26 @@
+## argv
+check
+tests/data/picard
+--format
+junit
+--fail-on
+warn
+## exit
+0
+## stdout
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="bammetrics check" tests="6" failures="0" errors="0" skipped="0">
+  <testsuite name="NA12878" tests="6" failures="0" errors="0" skipped="0">
+    <properties>
+      <property name="preset" value="generic v1 (6dd89e)"/>
+      <property name="verdict" value="pass"/>
+    </properties>
+    <testcase classname="bammetrics.NA12878" name="alignment.pf-reads-aligned"/>
+    <testcase classname="bammetrics.NA12878" name="alignment.adapter"/>
+    <testcase classname="bammetrics.NA12878" name="alignment.chimeras"/>
+    <testcase classname="bammetrics.NA12878" name="insert.median"/>
+    <testcase classname="bammetrics.NA12878" name="yield.q30"/>
+    <testcase classname="bammetrics.NA12878" name="duplication.percent"/>
+  </testsuite>
+</testsuites>
+## stderr

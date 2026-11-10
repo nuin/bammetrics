@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nuin/bammetrics/blob/main/docs/schema/metrics-1.json",
+  "title": "bammetrics.metrics/1",
+  "description": "One Picard metrics file as JSON: the StringHeader texts, the metrics class as typed rows, and the histogram as a second table. Written by --format json and by convert; read back by convert and by read_table. Until 1.0.0 the schema changes only by adding members.",
+  "type": "object",
+  "required": ["schema", "headers", "class", "columns", "types", "metrics", "non_finite", "histogram"],
+  "properties": {
+    "schema": {
+      "const": "bammetrics.metrics/1"
+    },
+    "tool": {
+      "description": "The Picard class that wrote the file. Absent when it is not known.",
+      "type": "string"
+    },
+    "sample": {
+      "description": "The sample named with --sample, or its default. Never part of a Picard file. Absent when it is not known.",
+      "type": "string"
+    },
+    "headers": {
+      "description": "The StringHeader texts in file order: the command line, then the Started on line.",
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "class": {
+      "description": "The Picard metrics class, or null for a file with a histogram only.",
+      "type": ["string", "null"]
+    },
+    "columns": {"$ref": "#/$defs/columns"},
+    "picard_columns": {"$ref": "#/$defs/picard_columns"},
+    "types": {"$ref": "#/$defs/types"},
+    "metrics": {"$ref": "#/$defs/rows"},
+    "non_finite": {"$ref": "#/$defs/non_finite"},
+    "histogram": {
+      "description": "The HISTOGRAM section, or null for a file without one.",
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": ["key_class", "columns", "types", "rows", "non_finite"],
+          "properties": {
+            "key_class": {
+              "description": "The Java class of the key column: java.lang.Integer, java.lang.Byte or java.lang.Double.",
+              "type": "string"
+            },
+            "columns": {"$ref": "#/$defs/columns"},
+            "picard_columns": {"$ref": "#/$defs/picard_columns"},
+            "types": {"$ref": "#/$defs/types"},
+            "rows": {"$ref": "#/$defs/rows"},
+            "non_finite": {"$ref": "#/$defs/non_finite"}
+          }
+        }
+      ]
+    },
+    "more_classes": {
+      "description": "The metrics classes after the first, for a file with more than one. Picard writes one, so the member is absent for a Picard file.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["class", "columns", "types", "metrics", "non_finite"],
+        "properties": {
+          "class": {"type": ["string", "null"]},
+          "columns": {"$ref": "#/$defs/columns"},
+          "picard_columns": {"$ref": "#/$defs/picard_columns"},
+          "types": {"$ref": "#/$defs/types"},
+          "metrics": {"$ref": "#/$defs/rows"},
+          "non_finite": {"$ref": "#/$defs/non_finite"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "columns": {
+      "description": "The members of a row object in file order, no two equal: the column names. A name the file repeats (the histogram of CollectHsMetrics with two units) gets .1, .2 after it, and picard_columns holds the names of the file.",
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "picard_columns": {
+      "description": "The column names of the Picard file, one per member of columns. Present only when a name repeats, so columns is not the names.",
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "types": {
+      "description": "One type per column, in column order, from the glossary: int, float or string.",
+      "type": "array",
+      "items": {"enum": ["int", "float", "string"]}
+    },
+    "rows": {
+      "description": "One object per row with one member per column, in column order. An int is a JSON integer, a float a JSON number with the digits that read back as the same double, a string a JSON string. null is an empty cell, or a float JSON cannot hold when non_finite lists it.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": {"type": ["number", "string", "null"]}
+      }
+    },
+    "non_finite": {
+      "description": "The cells whose float is NaN or infinite. Each is null in its row; Picard text prints ? for NaN and Infinity, -? for -Infinity.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["row", "column", "value"],
+        "properties": {
+          "row": {"description": "The row index, from 0.", "type": "integer", "minimum": 0},
+          "column": {"description": "The column, as columns names it.", "type": "string"},
+          "value": {"enum": ["NaN", "Infinity", "-Infinity"]}
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

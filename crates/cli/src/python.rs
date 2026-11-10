@@ -28,6 +28,8 @@ pub enum Shape {
     Value,
     /// Pairs, repeatable: `--hs BAITS TARGETS`.
     Pairs,
+    /// One value or several: `--long=A,B`.
+    List,
     /// The positional argument, one or several values.
     Positional { many: bool },
 }
@@ -96,7 +98,7 @@ pub const VERBS: [Verb; 3] = [
     Verb {
         name: "check",
         command: check_command,
-        skipped: &["format"],
+        skipped: &["format", "output"],
         extra: &[],
         returns: "Verdict | list[Verdict]",
         doc: "bammetrics check: verdicts from directories of metrics files, verdict.json files or \
@@ -194,6 +196,13 @@ impl Verb {
                 (
                     Shape::Pairs,
                     "tuple[_Path, _Path] | Sequence[tuple[_Path, _Path]] | None".to_owned(),
+                    "None".to_owned(),
+                )
+            } else if arg.get_value_delimiter().is_some() {
+                let ty = value_type(arg);
+                (
+                    Shape::List,
+                    format!("{ty} | Sequence[{ty}] | None"),
                     "None".to_owned(),
                 )
             } else {

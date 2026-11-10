@@ -66,6 +66,7 @@ name = "bammetrics-cli"
 version = "0.19.0"
 dependencies = [
  "bammetrics-core",
+ "bammetrics-formats",
  "bammetrics-report",
  "bammetrics-verdict",
  "clap",
@@ -85,11 +86,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "bammetrics-formats"
+version = "0.19.0"
+dependencies = [
+ "bammetrics-core",
+]
+
+[[package]]
 name = "bammetrics-py"
 version = "0.19.0"
 dependencies = [
  "bammetrics-cli",
  "bammetrics-core",
+ "bammetrics-formats",
  "bammetrics-report",
  "bammetrics-verdict",
  "pyo3",

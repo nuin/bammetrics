@@ -1,0 +1,10 @@
+## argv
+check
+tests/data/picard
+-o
+tests/data/picard/NA12878/NA12878.insert_size_metrics
+## exit
+2
+## stdout
+## stderr
+bammetrics check: tests/data/picard/NA12878/NA12878.insert_size_metrics is an input; writing it would destroy it

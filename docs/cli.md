@@ -27,14 +27,14 @@ bammetrics <PicardClass> KEY=VALUE ...    the Picard drop-in, unchanged
 
 `run` in `crates/cli/src/lib.rs` dispatches in this order: a first argument that names a Picard class in the
 registry runs the Picard face, untouched; then a grammar verb (a tool verb, `collect`,
-`tools`, `presets`, `help`, `completions`); then the clap verbs `qc`, `plan`, `check` and
-`report`. Class names are CamelCase and verbs are kebab case, so the two cannot collide.
+`tools`, `presets`, `help`, `completions`); then the clap verbs `qc`, `plan`, `check`,
+`report` and `convert`. Class names are CamelCase and verbs are kebab case, so the two cannot collide.
 
 | Group | Verbs |
 |---|---|
 | Run | `qc` (the collectors a preset needs, one pass, files, verdict, page), `collect` (the same pass, no verdict), one verb per registry tool |
 | Prepare | `bed-to-interval-list`, `mark-duplicates` |
-| Post | `accumulate-quality-yield`, `accumulate-variant-calling`, `compare-metrics`, `check-duplicate-marking`, `report`, `check` |
+| Post | `accumulate-quality-yield`, `accumulate-variant-calling`, `compare-metrics`, `check-duplicate-marking`, `report`, `check`, `convert` |
 | Info | `tools`, `presets`, `plan`, `help`, `completions` |
 
 ```bash
@@ -83,7 +83,7 @@ On every tool verb:
 | `-R` | FASTA with a `.fai` | `R`, `REFERENCE_SEQUENCE` |
 | `--level` | accumulation level, repeatable | `LEVEL`, `METRIC_ACCUMULATION_LEVEL` |
 | `--stop-after N` | read limit | `STOP_AFTER` |
-| `--format` | `picard`, `json`, `tsv`, `jsonl`, `human` (single-file verbs) | none |
+| `--format` | `picard`, `json`, `tsv`, `jsonl`, `human`, `csv`, `markdown`, or a list (`picard,json`): the first to `-o`, each further one beside it as `FILE.json` | none |
 | `--sample NAME` | sample name in the json and jsonl forms, default the first `@RG SM`, else the input name without its extension (none for standard input); never written into a Picard file | none |
 | `-q`, `-v` | no notes on stderr; the Picard command line and each file written on stderr | `QUIET` |
 
@@ -153,17 +153,31 @@ above where a verb has them.
 
 ## Formats
 
-`--format picard` (the default) is the Picard metrics file. `json` is one object: `tool`,
-`sample` (`--sample`, else its default), `class`, `metrics` (one object per row, keyed by column) and
-`histogram` (`columns`, `rows`, or `null`). `jsonl` is one object per row, `tsv` a header
-line and one line per row, `human` an aligned table (a row per line up to 6 columns, else
-`COLUMN  value` lines per row). Numbers are JSON numbers, NaN and infinity `null`; the text
-forms print Picard's cell text. For `QualityScoreDistribution` and `MeanQualityByCycle`,
-whose file has no metrics class, the rows are the histogram. `--format` on a multi-file
-verb is a usage error that names the problem.
+[docs/formats.md](formats.md) is the reference: the typed table every format is written
+from, the JSON schema, the escapes of each text form and the round trip.
 
-`qc` and `plan` take `--format text|jsonl`, `check` takes `text|json|jsonl`; each is
-described under its verb.
+`--format picard` (the default) is the Picard metrics file. `json` is one object (schema
+`bammetrics.metrics/1`): `tool`, `sample` (`--sample`, else its default), `headers`, `class`,
+`columns`, `types` (`int`, `float` or `string` per column, from the glossary), `metrics` (one
+object per row, keyed by column), `non_finite` and `histogram` (`key_class`, `columns`,
+`types`, `rows`, `non_finite`, or `null`). `jsonl` is one object per row, a histogram row
+with `"histogram": true` first. `tsv` is a header line and one line per row, with tab,
+newline and backslash in a string cell written `\t`, `\n`, `\\`. `csv` is RFC 4180 with
+full doubles. `markdown` is a GFM table per class. `human` is an aligned table (a row per
+line up to 6 columns, else `COLUMN  value` lines per row). Numbers are JSON numbers, NaN and
+infinity `null` and listed in `non_finite`; `tsv` and `human` print Picard's cell text. For
+`QualityScoreDistribution` and `MeanQualityByCycle`, whose file has no metrics class, the
+rows of `tsv`, `csv` and `human` are the histogram.
+
+`--format` takes a list (`picard,json,csv`). The first format goes to `-o` or standard
+output, each further one beside `-o` as `FILE.json`, `FILE.csv`; a list needs `-o`. A
+multi-file verb and `mark-duplicates` take `picard` first and write each further format
+beside every metrics file. Another first format there is a usage error that names the
+problem.
+
+`qc` and `plan` take `--format text|jsonl`, the event stream on standard output; `qc --also`
+writes file formats. `check` takes `text`, `json`, `jsonl`, `junit`, `markdown` and
+`multiqc`, as a list too. Each is described under its verb.
 
 ## Exit codes
 
@@ -394,7 +408,7 @@ option: O`, as in Picard.
 bammetrics qc BAM [-o PREFIX] [-R FASTA] [--preset NAME|FILE] [--hs BAITS TARGETS]... [--panel FILE]
               [--ref-flat FILE --strand STRAND [--ribosomal-intervals FILE]] [--sex male|female]
               [--sample NAME] [--fail-on warn|fail] [--resume | --force] [--threads N]
-              [--format text|jsonl] [-q] [--all-plots] [--date ISO]
+              [--format text|jsonl] [--also FORMAT[,FORMAT]] [-q] [--all-plots] [--date ISO]
 ```
 
 `qc` runs the collectors the preset's rules need (`generic` without `--preset`; it never
@@ -476,6 +490,16 @@ second; `-q` turns it off. The output has no color. `--format jsonl` prints
 `--resume` kept), `error`, `check` and `done` events on stdout instead. A closed stdout
 (`| head -1`) drops the rest of the output; the run still writes its files and keeps its
 exit code. `--all-plots` and `--date` act as on `report`.
+
+`--also` writes further formats beside the Picard files, one or a list (`--also
+json,markdown`). `json`, `jsonl`, `tsv` and `csv` add `FILE.json` (`.jsonl`, `.tsv`, `.csv`)
+beside every metrics file. `markdown` adds `PREFIX.report.md` (the verdict, then every
+metrics table, at most 65,536 characters), `junit` adds `PREFIX.junit.xml` (a testcase per
+rule) and `multiqc` adds `PREFIX.verdict_mqc.json` (MultiQC custom content). The manifest
+lists them under the step `also`. A later run without `--also` removes the ones the earlier
+manifest lists ([docs/formats.md](formats.md)). `--also` does not change the exit code: a
+BAM with no read exits 0 with it as without it, and a metrics file with headers only gets a
+sibling with no row.
 
 `qc` exits 0 on any verdict unless `--fail-on` is given; then 10 when the verdict reaches it
 and 11 when the verdict is incomplete, as `check` does. A failed collector exits 1 after the
@@ -582,7 +606,8 @@ bammetrics MarkDuplicates I=in.bam O=marked.bam M=marked.markdup_metrics TMP_DIR
 The verb runs `MarkDuplicates`, Picard 3.5.0's duplicate marker (0.18.0). `-o BAM` is
 `OUTPUT`, the BAM it writes; `-o -` writes it to standard output. `--metrics-file`
 (`--metrics`, `-M`, `METRICS_FILE=`) is the `DuplicationMetrics` file. Both are required.
-`--format` takes `picard` only.
+`--format` takes `picard` first; `--format picard,json` adds `METRICS_FILE.json` beside the
+metrics file.
 
 - `OUTPUT` holds every input record in input order. The duplicate flag (0x400) is set on
   each duplicate and cleared on every other record, so a flag from an earlier run does
@@ -789,14 +814,57 @@ section 4.8, measured by `make budgets` ([docs/benchmarks.md](benchmarks.md)).
 ### check
 
 ```bash
-bammetrics check DIR|VERDICT.json... [--preset NAME|FILE] [--fail-on warn|fail] [--format text|json|jsonl]
+bammetrics check DIR|VERDICT.json... [--preset NAME|FILE] [--fail-on warn|fail]
+                 [--format FORMAT[,FORMAT]] [-o FILE]
 ```
 
 `check` is the gate. A directory is discovered and evaluated as `report` does; a
 `verdict.json` file is read back as is. `--format text` prints a band line per sample and
 every check under it; `json` prints a JSON array of verdicts, each as `verdict.json`;
 `jsonl` prints one object per line, a `check` event per check and a `verdict` event per
-sample. It writes no file. Exit codes: the table above, with `--fail-on fail` by default.
+sample. `junit` prints JUnit XML, a testsuite per sample and a testcase per rule: a fail is
+a `<failure>`, a rule not measured a `<skipped>`, a warn a `<failure>` only under `--fail-on
+warn`. `markdown` (`md`) prints the checks as GFM tables, at most 65,536 characters.
+`multiqc` prints MultiQC custom content, a table with a row per sample; save it under a name
+that ends in `_mqc.json`.
+
+Without `-o` the output goes to standard output and no file is written. `-o FILE` writes
+the first format to `FILE`. `--format` takes a list (`text,junit`): each further format is
+written beside `-o` as `FILE.txt`, `FILE.json`, `FILE.jsonl`, `FILE.junit.xml`, `FILE.md`
+or `FILE.verdict_mqc.json`, and a list needs `-o`. `check` refuses an `-o` or a sibling that
+is a file it reads (exit 2): a metrics file under an input directory, or a `verdict.json`
+given or found there. A new file in an input directory is written. Exit codes: the table
+above, with `--fail-on fail` by default, whatever the format.
+
+### convert
+
+```bash
+bammetrics convert FILE [--format FORMAT[,FORMAT]] [-o FILE] [--table NAME] [--sample NAME]
+```
+
+`convert` reads one metrics file and writes it in another format. The input is Picard text
+or the JSON of `--format json` (schema `bammetrics.metrics/1`), told apart by its first
+character (`{` or `[` is JSON; a byte order mark before it is dropped); `-` reads standard
+input. `--format` takes `picard`, `json`, `jsonl`, `tsv`,
+`csv`, `markdown` or `human`, one or a list; without it the output is `json` for Picard
+text and `picard` for JSON. Picard text to JSON to Picard text is byte for byte the first
+file, for a file Picard or bammetrics wrote.
+
+```bash
+bammetrics convert S1.hs_metrics --format csv > S1.hs_metrics.csv
+bammetrics convert S1.insert_size_metrics --format csv --table histogram
+bammetrics convert S1.insert_size_metrics | bammetrics convert - | cmp - S1.insert_size_metrics
+```
+
+- `-o FILE` writes the first format there; each further format of a list goes beside it.
+  `convert` refuses to write its input (exit 2).
+- `--table metrics|histogram|CLASS` picks the table `tsv`, `csv` and `human` print.
+- `--sample NAME` sets the sample of the `json` and `jsonl` forms.
+- A file that is neither form exits 1 with the reason. [docs/formats.md](formats.md) lists
+  what a round trip does not keep.
+- `--format picard` exits 1 and writes nothing for a JSON cell with a tab or a line end, a
+  row that would be a blank line and a first cell that starts with `## `: Picard text has no
+  escape for them. The error names the row and the column.
 
 ## Info verbs
 
@@ -806,7 +874,7 @@ sample. It writes no file. Exit codes: the table above, with `--fail-on fail` by
   defaults; gap and sex rules are starting values`). Every rule is listed in
   [docs/verdict.md](verdict.md).
 - `bammetrics help VERB|PicardClass`: the verb's options in every spelling; `help qc` (or
-  `plan`, `check`, `report`) prints clap's help.
+  `plan`, `check`, `report`, `convert`) prints clap's help.
 - `bammetrics completions bash|zsh|fish|elvish|powershell`: a completion script on stdout
   (`bammetrics completions zsh > ~/.zfunc/_bammetrics`).
 

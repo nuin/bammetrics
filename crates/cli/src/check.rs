@@ -1,18 +1,23 @@
 //! `bammetrics check`: the gate. Verdicts from directories of metrics
-//! files or from `verdict.json` files, printed as text, JSON or JSON
-//! lines, with the exit code of [`EXIT_CODES`].
+//! files or from `verdict.json` files, printed as text, JSON, JSON lines,
+//! JUnit XML, Markdown or MultiQC custom content, with the exit code of
+//! [`EXIT_CODES`]. `--format` takes a list: the first format goes to
+//! standard output or `-o FILE`, each further one beside that file.
 
 use std::fmt::Write as _;
 use std::fs;
 use std::path::PathBuf;
 
+use bammetrics_formats::{VerdictSummary, junit, markdown, multiqc};
 use bammetrics_verdict::json::Json;
 use bammetrics_verdict::{Band, Preset, Status, Verdict, evaluate};
 use clap::{Args, ValueEnum};
 
 use crate::discover::SAMPLE_RULE;
-use crate::error::{Error, Result};
-use crate::report::{FILE_RULE, PRESET_HELP, samples};
+use crate::error::{Error, Result, VerbError};
+use crate::events::print_stdout;
+use crate::format::{shown_value, sibling, summary};
+use crate::report::{FILE_RULE, PRESET_HELP, samples, write_atomic};
 
 /// The exit code table, as `--help` and docs/cli.md print it.
 pub const EXIT_CODES: &str = "Exit codes:\n  \
@@ -40,6 +45,41 @@ pub enum Format {
     /// One JSON object per line: a `check` event per check, then a
     /// `verdict` event per sample.
     Jsonl,
+    /// JUnit XML: a testsuite per sample, a testcase per rule. A fail is
+    /// a failure, a rule not measured is skipped; a warn is a failure
+    /// with --fail-on warn.
+    Junit,
+    /// The checks as Markdown tables, at most 65,536 characters.
+    #[value(alias = "md")]
+    Markdown,
+    /// MultiQC custom content: a table with a row per sample. MultiQC
+    /// reads a file whose name ends in _mqc.json.
+    Multiqc,
+}
+
+impl Format {
+    fn name(self) -> &'static str {
+        match self {
+            Format::Text => "text",
+            Format::Json => "json",
+            Format::Jsonl => "jsonl",
+            Format::Junit => "junit",
+            Format::Markdown => "markdown",
+            Format::Multiqc => "multiqc",
+        }
+    }
+
+    /// The extension of a further format's file beside `-o FILE`.
+    fn extension(self) -> &'static str {
+        match self {
+            Format::Text => "txt",
+            Format::Json => "json",
+            Format::Jsonl => "jsonl",
+            Format::Junit => "junit.xml",
+            Format::Markdown => "md",
+            Format::Multiqc => "verdict_mqc.json",
+        }
+    }
 }
 
 fn after_help() -> String {
@@ -59,8 +99,21 @@ pub struct CheckArgs {
     /// The verdict that exits 10.
     #[arg(long, value_enum, default_value_t = FailOn::Fail)]
     pub fail_on: FailOn,
-    #[arg(long, value_enum, default_value_t = Format::Text)]
-    pub format: Format,
+    /// One format, or a list (text,junit): the first goes to standard
+    /// output or to -o FILE, each further one beside it as FILE.txt,
+    /// FILE.json, FILE.jsonl, FILE.junit.xml, FILE.md or
+    /// FILE.verdict_mqc.json.
+    #[arg(
+        long,
+        value_enum,
+        value_delimiter = ',',
+        default_value = "text",
+        value_name = "FORMAT[,FORMAT]"
+    )]
+    pub format: Vec<Format>,
+    /// The file the first format is written to (default: standard output).
+    #[arg(short = 'o', long, value_name = "FILE")]
+    pub output: Option<PathBuf>,
 }
 
 /// The `*.verdict.json` files directly in `dir`, in name order. A directory
@@ -163,14 +216,7 @@ pub fn text(verdicts: &[Verdict], code: u8, fail_on: FailOn) -> String {
             .checks
             .iter()
             .map(|check| {
-                // A text check shows its cell (an empty cell as `empty`,
-                // as the page does), a not-measured check `?`.
-                let value = match (check.value, &check.text) {
-                    (Some(v), _) => bammetrics_core::metrics_file::format_double(v),
-                    (None, Some(text)) if text.is_empty() => "empty".to_owned(),
-                    (None, Some(text)) => text.clone(),
-                    (None, None) => "?".to_owned(),
-                };
+                let value = shown_value(check.value, check.text.as_deref());
                 let bounds: Vec<String> = [("warn", &check.warn), ("fail", &check.fail)]
                     .into_iter()
                     .filter_map(|(name, b)| b.as_ref().map(|b| format!("{name} {b}")))
@@ -253,19 +299,110 @@ pub fn jsonl(verdicts: &[Verdict]) -> String {
     out
 }
 
-pub fn run(args: CheckArgs) -> Result<u8> {
-    let verdicts = verdicts(&args.inputs, &args.preset)?;
-    let code = exit_code(&verdicts, args.fail_on);
-    match args.format {
-        Format::Text => print!("{}", text(&verdicts, code, args.fail_on)),
+/// `verdicts` in `format`, as `check` prints or writes it.
+pub fn render(format: Format, verdicts: &[Verdict], code: u8, fail_on: FailOn) -> String {
+    let summaries = || -> Vec<VerdictSummary> { verdicts.iter().map(summary).collect() };
+    match format {
+        Format::Text => text(verdicts, code, fail_on),
         Format::Json => {
             let items: Vec<String> = verdicts
                 .iter()
                 .map(|v| v.to_json().trim_end().to_owned())
                 .collect();
-            println!("[{}]", items.join(",\n"));
+            format!("[{}]\n", items.join(",\n"))
         }
-        Format::Jsonl => print!("{}", jsonl(&verdicts)),
+        Format::Jsonl => jsonl(verdicts),
+        Format::Junit => junit::write(&summaries(), fail_on == FailOn::Warn),
+        Format::Markdown => markdown::write(&[], &summaries()),
+        Format::Multiqc => multiqc::write(&summaries()),
+    }
+}
+
+/// The files of a `--format` list after the first, beside `-o FILE`. A
+/// format given twice, or a list with no `-o`, is a usage error.
+fn further_files(args: &CheckArgs) -> Result<Vec<(Format, PathBuf)>> {
+    let formats = &args.format;
+    for (i, format) in formats.iter().enumerate() {
+        if formats[..i].contains(format) {
+            return Err(VerbError::usage(
+                "check",
+                format!("format {} is given twice", format.name()),
+            )
+            .from("--format")
+            .into());
+        }
+    }
+    let Some(output) = &args.output else {
+        if formats.len() > 1 {
+            let names: Vec<&str> = formats.iter().map(|f| f.name()).collect();
+            return Err(VerbError::usage(
+                "check",
+                format!(
+                    "--format {} writes {} files; standard output holds one",
+                    names.join(","),
+                    formats.len()
+                ),
+            )
+            .from("--format")
+            .hint("give -o FILE: the further formats are written beside it")
+            .into());
+        }
+        return Ok(Vec::new());
+    };
+    Ok(formats[1..]
+        .iter()
+        .map(|f| (*f, sibling(output, f.extension())))
+        .collect())
+}
+
+/// Every file `check` reads for `inputs`: a file as given; under a
+/// directory its metrics files at any depth, or, when it has none, the
+/// `*.verdict.json` files directly in it. A directory that cannot be
+/// listed gives none: [`verdicts`] reports it before anything is written.
+fn files_read(inputs: &[PathBuf]) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    for input in inputs {
+        if !input.is_dir() {
+            files.push(input.clone());
+            continue;
+        }
+        let metrics = crate::discover::find(input).unwrap_or_default();
+        if metrics.is_empty() {
+            files.extend(verdict_files(input).unwrap_or_default());
+        }
+        files.extend(metrics);
+    }
+    files
+}
+
+pub fn run(args: CheckArgs) -> Result<u8> {
+    let further = further_files(&args)?;
+    let written: Vec<PathBuf> = args
+        .output
+        .iter()
+        .cloned()
+        .chain(further.iter().map(|(_, path)| path.clone()))
+        .collect();
+    if !written.is_empty() {
+        let mut read = files_read(&args.inputs);
+        read.extend(args.inputs.iter().cloned());
+        crate::verbs::refuse_overwriting_inputs("check", &read, &written)?;
+    }
+    let verdicts = verdicts(&args.inputs, &args.preset)?;
+    let code = exit_code(&verdicts, args.fail_on);
+    let first = render(args.format[0], &verdicts, code, args.fail_on);
+    match &args.output {
+        None => print_stdout(&first),
+        Some(path) => {
+            // Missing output directories are created (docs/05 section 2.3).
+            if let Some(parent) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+                fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
+            }
+            write_atomic(path, first)?;
+        }
+    }
+    for (format, path) in further {
+        write_atomic(&path, render(format, &verdicts, code, args.fail_on))?;
     }
     Ok(code)
 }

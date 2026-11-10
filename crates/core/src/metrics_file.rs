@@ -314,20 +314,9 @@ pub struct MetricsFile<'a> {
 
 impl MetricsFile<'_> {
     pub fn write(&self, out: &mut impl Write) -> io::Result<()> {
-        for header in &self.headers {
-            writeln!(out, "## htsjdk.samtools.metrics.StringHeader")?;
-            writeln!(out, "# {header}")?;
-        }
+        write_headers(out, &self.headers)?;
         writeln!(out)?;
-        // `printBeanMetrics` prints nothing, not even the class line, without
-        // a row; a histogram-only file has two blank lines here.
-        if !self.rows.is_empty() {
-            writeln!(out, "## METRICS CLASS\t{}", self.class)?;
-            writeln!(out, "{}", self.columns.join("\t"))?;
-            for row in &self.rows {
-                writeln!(out, "{}", row.join("\t"))?;
-            }
-        }
+        write_class(out, self.class, self.columns.iter().copied(), &self.rows)?;
         writeln!(out)?;
         if let Some(table) = &self.histogram {
             table.write(out)?;
@@ -336,6 +325,52 @@ impl MetricsFile<'_> {
         // histogram was printed.
         writeln!(out)
     }
+}
+
+/// One `## htsjdk.samtools.metrics.StringHeader` line and its `# ` text
+/// line per header.
+fn write_headers(out: &mut impl Write, headers: &[String]) -> io::Result<()> {
+    for header in headers {
+        writeln!(out, "## htsjdk.samtools.metrics.StringHeader")?;
+        writeln!(out, "# {header}")?;
+    }
+    Ok(())
+}
+
+/// `printBeanMetrics`: the class line, the column line and one line per
+/// row. Nothing, not even the class line, without a row; a histogram-only
+/// file has two blank lines there.
+fn write_class<'c>(
+    out: &mut impl Write,
+    class: &str,
+    columns: impl Iterator<Item = &'c str>,
+    rows: &[Vec<String>],
+) -> io::Result<()> {
+    if rows.is_empty() {
+        return Ok(());
+    }
+    writeln!(out, "## METRICS CLASS\t{class}")?;
+    writeln!(out, "{}", columns.collect::<Vec<_>>().join("\t"))?;
+    for row in rows {
+        writeln!(out, "{}", row.join("\t"))?;
+    }
+    Ok(())
+}
+
+/// The `## HISTOGRAM` line, the label line (the key label first) and one
+/// line per row.
+fn write_histogram_lines<'c>(
+    out: &mut impl Write,
+    key_class: &str,
+    labels: impl Iterator<Item = &'c str>,
+    rows: impl Iterator<Item = Vec<String>>,
+) -> io::Result<()> {
+    writeln!(out, "## HISTOGRAM\t{key_class}")?;
+    writeln!(out, "{}", labels.collect::<Vec<_>>().join("\t"))?;
+    for row in rows {
+        writeln!(out, "{}", row.join("\t"))?;
+    }
+    Ok(())
 }
 
 impl HistogramTable<'_> {
@@ -350,18 +385,21 @@ impl HistogramTable<'_> {
         if columns.is_empty() {
             return Ok(());
         }
-        writeln!(out, "## HISTOGRAM\t{}", self.key_class.java_name())?;
-        let labels: Vec<&str> = columns.iter().map(|c| c.label.as_str()).collect();
-        writeln!(out, "{}\t{}", self.key_label, labels.join("\t"))?;
         let keys: BTreeSet<i64> = columns.iter().flat_map(|c| c.histogram.keys()).collect();
-        for key in keys {
-            let values: Vec<String> = columns
-                .iter()
-                .map(|c| format_double(c.histogram.get(key).unwrap_or(0.0)))
-                .collect();
-            writeln!(out, "{}\t{}", self.key_class.format(key), values.join("\t"))?;
-        }
-        Ok(())
+        write_histogram_lines(
+            out,
+            self.key_class.java_name(),
+            std::iter::once(self.key_label).chain(columns.iter().map(|c| c.label.as_str())),
+            keys.into_iter().map(|key| {
+                std::iter::once(self.key_class.format(key))
+                    .chain(
+                        columns
+                            .iter()
+                            .map(|c| format_double(c.histogram.get(key).unwrap_or(0.0))),
+                    )
+                    .collect()
+            }),
+        )
     }
 }
 
@@ -415,43 +453,37 @@ impl MetricsDoc {
     /// line after it, a row with more cells than columns, and a second
     /// `## HISTOGRAM` section.
     pub fn parse(text: &str) -> Result<Self> {
-        let mut doc = Self::default();
-        let mut lines = text.lines().map(|l| l.trim_end_matches('\r')).peekable();
-        while let Some(line) = lines.next() {
-            if let Some(class) = line.strip_prefix(METRICS_CLASS_LINE) {
-                let class = class.trim().to_owned();
-                let (columns, rows) = read_table(&mut lines, &class, |_, cell| parse_value(cell))?;
-                doc.classes.push(ClassBlock {
-                    class,
-                    columns,
-                    rows,
-                });
-            } else if let Some(key_class) = line.strip_prefix(HISTOGRAM_LINE) {
-                if doc.histogram.is_some() {
-                    return Err(bad("a second ## HISTOGRAM section".to_owned()));
-                }
-                let key_class = key_class.trim().to_owned();
-                let (columns, rows) = read_table(&mut lines, "HISTOGRAM", |i, cell| {
+        let text = TextDoc::parse(text)?;
+        let typed = |block: &TextBlock, cell: &dyn Fn(usize, &str) -> Value| -> Vec<Vec<Value>> {
+            block
+                .rows
+                .iter()
+                .map(|row| row.iter().enumerate().map(|(i, c)| cell(i, c)).collect())
+                .collect()
+        };
+        Ok(Self {
+            headers: text.headers,
+            classes: text
+                .classes
+                .into_iter()
+                .map(|block| ClassBlock {
+                    rows: typed(&block, &|_, cell| parse_value(cell)),
+                    class: block.class,
+                    columns: block.columns,
+                })
+                .collect(),
+            histogram: text.histogram.map(|block| HistogramBlock {
+                rows: typed(&block, &|i, cell| {
                     if i == 0 {
                         parse_value(cell)
                     } else {
                         parse_series_value(cell)
                     }
-                })?;
-                doc.histogram = Some(HistogramBlock {
-                    key_class,
-                    columns,
-                    rows,
-                });
-            } else if line.starts_with(MAJOR_HEADER) {
-                // `## <header class>` then `# <text>`; a header class without
-                // its text line contributes nothing.
-                if let Some(text) = lines.next_if(|l| l.starts_with(MINOR_HEADER)) {
-                    doc.headers.push(text[MINOR_HEADER.len()..].to_owned());
-                }
-            }
-        }
-        Ok(doc)
+                }),
+                key_class: block.class,
+                columns: block.columns,
+            }),
+        })
     }
 
     /// Read and parse the file at `path`.
@@ -540,13 +572,12 @@ fn split_cells(line: &str) -> Vec<String> {
 }
 
 /// The column line and the rows under a `## METRICS CLASS` or `## HISTOGRAM`
-/// line: rows run to a blank line, a `## ` line or the end. `cell` types
-/// the text at column index `i`.
+/// line: rows run to a blank line, a `## ` line or the end. A row shorter
+/// than the column line is filled with empty cells.
 fn read_table<'a>(
     lines: &mut std::iter::Peekable<impl Iterator<Item = &'a str>>,
     what: &str,
-    cell: impl Fn(usize, &str) -> Value,
-) -> Result<(Vec<String>, Vec<Vec<Value>>)> {
+) -> Result<(Vec<String>, Vec<Vec<String>>)> {
     let columns = split_cells(
         lines
             .next()
@@ -554,7 +585,7 @@ fn read_table<'a>(
     );
     let mut rows = Vec::new();
     while let Some(row) = lines.next_if(|l| !l.is_empty() && !l.starts_with(MAJOR_HEADER)) {
-        let cells = split_cells(row);
+        let mut cells = split_cells(row);
         if cells.len() > columns.len() {
             return Err(bad(format!(
                 "{what} row {} has {} cells for {} columns",
@@ -563,11 +594,97 @@ fn read_table<'a>(
                 columns.len()
             )));
         }
-        let mut values: Vec<Value> = cells.iter().enumerate().map(|(i, c)| cell(i, c)).collect();
-        values.resize(columns.len(), Value::Null);
-        rows.push(values);
+        cells.resize(columns.len(), String::new());
+        rows.push(cells);
     }
     Ok((columns, rows))
+}
+
+/// One table of a metrics file as text: the class of a `## METRICS CLASS`
+/// block, or the key's Java class of the `## HISTOGRAM` section, the
+/// column line and every cell as the file holds it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TextBlock {
+    pub class: String,
+    pub columns: Vec<String>,
+    pub rows: Vec<Vec<String>>,
+}
+
+/// A metrics file with every cell as text: what [`MetricsDoc::parse`]
+/// types, and what a converter needs to write a file back byte for byte
+/// (`crates/formats`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TextDoc {
+    /// The `# ` text under each `## <header class>` line, in file order.
+    pub headers: Vec<String>,
+    pub classes: Vec<TextBlock>,
+    pub histogram: Option<TextBlock>,
+}
+
+impl TextDoc {
+    /// Parse the text of a metrics file; see [`MetricsDoc::parse`] for what
+    /// is tolerated and what is an error.
+    pub fn parse(text: &str) -> Result<Self> {
+        let mut doc = Self::default();
+        let mut lines = text.lines().map(|l| l.trim_end_matches('\r')).peekable();
+        while let Some(line) = lines.next() {
+            if let Some(class) = line.strip_prefix(METRICS_CLASS_LINE) {
+                let class = class.trim().to_owned();
+                let (columns, rows) = read_table(&mut lines, &class)?;
+                doc.classes.push(TextBlock {
+                    class,
+                    columns,
+                    rows,
+                });
+            } else if let Some(key_class) = line.strip_prefix(HISTOGRAM_LINE) {
+                if doc.histogram.is_some() {
+                    return Err(bad("a second ## HISTOGRAM section".to_owned()));
+                }
+                let (columns, rows) = read_table(&mut lines, "HISTOGRAM")?;
+                doc.histogram = Some(TextBlock {
+                    class: key_class.trim().to_owned(),
+                    columns,
+                    rows,
+                });
+            } else if line.starts_with(MAJOR_HEADER) {
+                // `## <header class>` then `# <text>`; a header class without
+                // its text line contributes nothing.
+                if let Some(text) = lines.next_if(|l| l.starts_with(MINOR_HEADER)) {
+                    doc.headers.push(text[MINOR_HEADER.len()..].to_owned());
+                }
+            }
+        }
+        Ok(doc)
+    }
+
+    /// Write the file in the layout of [`MetricsFile::write`], through the
+    /// same line writers: the headers as `StringHeader` lines, each class
+    /// block that has a row, then the histogram section as it is held.
+    pub fn write(&self, out: &mut impl Write) -> io::Result<()> {
+        write_headers(out, &self.headers)?;
+        writeln!(out)?;
+        for (i, block) in self.classes.iter().enumerate() {
+            if i > 0 {
+                writeln!(out)?;
+            }
+            write_class(
+                out,
+                &block.class,
+                block.columns.iter().map(String::as_str),
+                &block.rows,
+            )?;
+        }
+        writeln!(out)?;
+        if let Some(histogram) = &self.histogram {
+            write_histogram_lines(
+                out,
+                &histogram.class,
+                histogram.columns.iter().map(String::as_str),
+                histogram.rows.iter().cloned(),
+            )?;
+        }
+        writeln!(out)
+    }
 }
 
 /// A cell typed from its text. Empty is null; `?` is NaN and `-?` negative
@@ -923,6 +1040,23 @@ insert_size\tAll_Reads.fr_count\n\
         );
         let missing = MetricsDoc::read(Path::new("/nonexistent/metrics.txt")).expect_err("missing");
         assert!(missing.to_string().contains("metrics.txt"));
+    }
+
+    /// `TextDoc` keeps every cell as text, so a file in Picard's layout
+    /// writes back byte for byte.
+    #[test]
+    fn text_doc_writes_back_what_it_read() {
+        let histogram_only = "## htsjdk.samtools.metrics.StringHeader\n# QualityScoreDistribution INPUT=x.bam\n\n\n\
+                              ## HISTOGRAM\tjava.lang.Byte\nQUALITY\tCOUNT_OF_Q\n2\t15\n30\t985\n\n";
+        let no_headers = "\n## METRICS CLASS\tpicard.analysis.X\nA\tB\n1.50\t\n\n\n";
+        for text in [PICARD_INSERT_SIZE, histogram_only, no_headers] {
+            let doc = TextDoc::parse(text).expect("parses");
+            let mut out = Vec::new();
+            doc.write(&mut out).expect("write to Vec");
+            assert_eq!(String::from_utf8(out).expect("utf8"), text);
+        }
+        let doc = TextDoc::parse(no_headers).expect("parses");
+        assert_eq!(doc.classes[0].rows, [["1.50", ""]]);
     }
 
     #[test]

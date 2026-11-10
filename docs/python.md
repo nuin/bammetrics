@@ -18,6 +18,10 @@ v = bm.check("out", preset="clinical-panel", fail_on=None)
 bm.report(["runs/a", "runs/b"], preset="clinical-panel", output="site/")
 run = bm.collect("s.bam", metrics=["quality-yield", "insert-size", "gc-bias"],
                  reference="ref.fa", output="out/s", threads=4)
+
+t = bm.read_table("out/s.insert_size_metrics")   # columns as lists, glossary dtypes
+t.dtypes["MEDIAN_INSERT_SIZE"]      # "float", though the file prints 310
+t.to_polars()                       # or t.to_pandas(); imported on the first call
 ```
 
 ## Keywords
@@ -26,6 +30,7 @@ The keywords of `qc`, `check` and `report` are the command's long flags in snake
 
 - A flag takes `True` or `False`. A path (`bam`, `output`, `reference`, `panel`, `hs`, ...) takes a str or an `os.PathLike`; any other object raises `TypeError`. Another value takes a str or a number. `None` leaves the option at the command's default.
 - `hs` takes one `(baits, targets)` pair or a list of pairs, as `--hs BAITS TARGETS` repeated.
+- `also` takes one format or a list (`also=["json", "markdown"]`), as `--also json,markdown`; a str with commas is a list too. The files are in `Run.files` (docs/formats.md).
 - A CRAM is read wherever a BAM is, with its FASTA as `reference` (`qc`, `collect`,
   `alignment_summary`, `hs_metrics`, `insert_size`, `quality_yield`) or `reference_sequence`
   (every registry function that reads a BAM, such as
@@ -39,13 +44,13 @@ The keywords of `qc`, `check` and `report` are the command's long flags in snake
   take their Picard defaults only. The module installs no signal handler: a Python
   process killed mid-run leaves its spill directory (`bammetrics-markdup.<pid>.<n>`) and
   its temporary output (`.NAME.<pid>.<n>.tmp`) behind.
-- `--format` and `--quiet` have no keyword: no progress line, no event and no step error is printed (step errors are in `Run.errors`). Three warnings still go to stderr: a `resume` over a manifest that cannot be read (`... is not a whole manifest; running every step`), a core tool's own warning (`CollectInsertSizeMetrics` when every orientation falls under `MINIMUM_PCT`), and `check` skipping an unparsable metrics file (`bammetrics: skipped ...`).
+- `--format` and `--quiet` have no keyword, nor has `-o` of `check`: no progress line, no event and no step error is printed (step errors are in `Run.errors`). Three warnings still go to stderr: a `resume` over a manifest that cannot be read (`... is not a whole manifest; running every step`), a core tool's own warning (`CollectInsertSizeMetrics` when every orientation falls under `MINIMUM_PCT`), and `check` skipping an unparsable metrics file (`bammetrics: skipped ...`).
 - `qc(report=False)` is the one keyword the command lacks: no `PREFIX.report.html` is written. An earlier run's page under the same prefix is removed only when that run's manifest lists it as its `report` file; a page no run wrote stays. `PREFIX.verdict.json` is still written.
 - Messages are the command's lines, with its spelling: `bammetrics qc: out/s.manifest.json holds an earlier run: --resume skips its finished steps, --force reruns them` means `resume=True` or `force=True`. A manifest that cannot be read is named with its reason (`out/s.manifest.json is not a whole manifest: --resume or --force runs every step`). An `output` or `sample` holding a NUL byte is a `UsageError`.
 
 ## qc
 
-`qc(bam, *, output, reference, preset, hs, panel, ref_flat, strand, ribosomal_intervals, sample, fail_on, resume, force, threads, all_plots, date, report)` returns a `Run`.
+`qc(bam, *, output, reference, preset, hs, panel, ref_flat, strand, ribosomal_intervals, sex, sample, fail_on, resume, force, threads, also, all_plots, date, report)` returns a `Run`.
 
 | Outcome | Command exit | Python |
 |---|---|---|
@@ -76,6 +81,38 @@ One path giving one sample returns a `Verdict`; a list of paths, or a directory 
 
 `report(dirs, *, preset="generic", output=None, all_plots=False, date=None)` writes `SAMPLE.verdict.json` and `SAMPLE.report.html` per sample and `index.html`, the bytes `bammetrics report` writes, and returns the paths in write order. Without `output`, one directory is also the output; several directories without `output` raise `UsageError`.
 
+## read_table
+
+`read_table(path, table=None)` reads one table of a metrics file and returns a `Table`. The file is Picard text or the JSON `--format json` writes (schema `bammetrics.metrics/1`), told apart by its first character (`{` or `[` is JSON; a byte order mark is dropped).
+
+```python
+t = bm.read_table("out/s.insert_size_metrics")
+t.name                  # "picard.analysis.InsertSizeMetrics"
+t.columns["READ_PAIRS"] # [5]: one list per column, in row order
+t.dtypes                # {"MEDIAN_INSERT_SIZE": "float", "READ_PAIRS": "int", "PAIR_ORIENTATION": "string", ...}
+t.rows()                # [{"MEDIAN_INSERT_SIZE": 310.0, ...}]
+t.histogram.columns     # {"insert_size": [300, 310, ...], "All_Reads.fr_count": [1.0, 2.0, ...]}
+t.headers, t.tool, t.sample
+```
+
+| Field or method | Value |
+|---|---|
+| `name` | the metrics class; for a histogram the Java class of its key (`java.lang.Integer`) |
+| `columns` | `{column: list}`, plain Python lists in row order |
+| `dtypes` | `{column: "int" | "float" | "string"}` |
+| `histogram` | the file's `## HISTOGRAM` section as a `Table`, or `None` |
+| `headers`, `tool`, `sample` | the `StringHeader` texts; the tool and sample when the file names them |
+| `len(t)`, `t.rows()` | the row count; the rows as dicts |
+| `to_pandas()`, `to_polars()` | a frame with the dtypes below |
+
+- The dtype is the glossary's type of the column (`crates/core/glossary.tsv`), where `read_metrics` types each cell from its text. `MEDIAN_INSERT_SIZE` prints `310`: `read_metrics` gives the int 310, `read_table` the float 310.0 under dtype `float`. A column the glossary lacks is typed from its cells, and a cell that does not fit widens its column (docs/formats.md).
+- An empty cell is `None`. `?` is `nan`, `-?` is `-inf`.
+- `table` is `"metrics"` (the first class), `"histogram"`, or a class name by its full or short name. Without it the function returns the metrics class, or the histogram of a file without one (`QualityScoreDistribution`). A name the file lacks raises `UsageError`.
+- A column name a table repeats gets `.1`, `.2` after it, the members the JSON form holds under `columns`. Picard repeats the histogram columns of `CollectHsMetrics` once per unit.
+- A missing file, or one that is neither form, raises `InputError`.
+- `to_pandas()` gives `Int64`, `float64` and `string` columns; an empty float cell and NaN are both NaN there. `to_polars()` gives `Int64`, `Float64` and `String` columns; an empty cell is null and `?` is NaN. Each imports its library on the first call. The module imports neither, and the wheel does not depend on them (`pip install bammetrics[pandas]` or `bammetrics[polars]` adds one). No Rust dependency is involved: the frames are built from the lists.
+- A `Table` copies and pickles.
+
 ## collect
 
 `collect` has two forms. The 0.12 form takes snake-case metric names and returns `{name: rows}`:
@@ -103,7 +140,7 @@ Every class copies and pickles (`copy.deepcopy`, `pickle`, a `ProcessPoolExecuto
 
 ## Threads and the GIL
 
-`qc`, `check`, `report`, `collect`, the generated per-tool functions, the typed functions (`insert_size`, `alignment_summary`, `quality_yield`, `hs_metrics`), `read_metrics` and `evaluate` release the GIL while they read and write, so other Python threads run meanwhile. `threads` is the BGZF decompression thread count (default: cores, at most 8).
+`qc`, `check`, `report`, `collect`, the generated per-tool functions, the typed functions (`insert_size`, `alignment_summary`, `quality_yield`, `hs_metrics`), `read_metrics`, `read_table` and `evaluate` release the GIL while they read and write, so other Python threads run meanwhile. `threads` is the BGZF decompression thread count (default: cores, at most 8).
 
 ## Notebook view
 
@@ -115,4 +152,4 @@ Every class copies and pickles (`copy.deepcopy`, `pickle`, a `ProcessPoolExecuto
 
 ## Stub and wheel
 
-`bammetrics.pyi` names every public module attribute and nothing else; its typing-only dicts start with an underscore. The function entries of `qc`, `check` and `report` and the `_CollectorVerb` names are generated from the option table; the class entries (`Run`, `Verdict`, `Check`, the errors, `Tool`, `PresetInfo`) are written by hand. `tests/python/test_mirror.py` compares the stub with `dir(bammetrics)` both ways, with the fields of `Run`, `Verdict` and `Check`, and with `help()` of `qc`, `check` and `report` (signature and docstring). `make wheel-check` builds the wheel with `maturin build`, installs it into a fresh venv, runs `mypy` over the stub and `tests/python/stub_types.py` (the type of each call form), imports the module from there, compares the stub the wheel ships with `bammetrics.pyi`, and runs the stub tests, which catches a stale wheel.
+`bammetrics.pyi` names every public module attribute and nothing else; its typing-only dicts start with an underscore. The function entries of `qc`, `check` and `report` and the `_CollectorVerb` names are generated from the option table; the class entries (`Run`, `Verdict`, `Check`, `Table`, the errors, `Tool`, `PresetInfo`) and `read_table` are written by hand. `tests/python/test_mirror.py` compares the stub with `dir(bammetrics)` both ways, with the fields of `Run`, `Verdict` and `Check`, and with `help()` of `qc`, `check` and `report` (signature and docstring). `make wheel-check` builds the wheel with `maturin build`, installs it into a fresh venv, runs `mypy` over the stub and `tests/python/stub_types.py` (the type of each call form), imports the module from there, compares the stub the wheel ships with `bammetrics.pyi`, and runs the stub tests, which catches a stale wheel.

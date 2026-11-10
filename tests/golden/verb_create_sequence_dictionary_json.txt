@@ -9,8 +9,28 @@ ref_100k.fa
 0
 ## stdout
 {
+  "schema": "bammetrics.metrics/1",
   "tool": "CreateSequenceDictionary",
+  "headers": [],
   "class": null,
+  "columns": [
+    "name",
+    "length",
+    "md5",
+    "assembly",
+    "uri",
+    "species",
+    "alternate_names"
+  ],
+  "types": [
+    "string",
+    "int",
+    "string",
+    "string",
+    "string",
+    "string",
+    "string"
+  ],
   "metrics": [
     {
       "name": "chr1",
@@ -22,6 +42,7 @@ ref_100k.fa
       "alternate_names": null
     }
   ],
+  "non_finite": [],
   "histogram": null
 }
 ## stderr

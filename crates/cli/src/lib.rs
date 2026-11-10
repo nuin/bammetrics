@@ -8,8 +8,10 @@ use bammetrics_core::{create_sequence_dictionary, registry};
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 
+pub mod also;
 pub mod check;
 pub mod collect;
+pub mod convert;
 pub mod discover;
 pub mod engine;
 pub mod error;
@@ -61,6 +63,9 @@ pub enum Command {
     /// share the BAM read and why any does not, which steps --resume would
     /// skip. Nothing runs.
     Plan(qc::QcArgs),
+    /// One metrics file in another format: Picard text or JSON in; Picard
+    /// text, json, jsonl, tsv, csv, markdown or human out.
+    Convert(convert::ConvertArgs),
 }
 
 /// The text of one clap context value.
@@ -136,7 +141,8 @@ pub fn clap_error(verb: &str, e: &clap::Error) -> VerbError {
 /// Dispatch, in the order of docs/05 section 2.1: (1) a Picard class name
 /// runs the Picard face, untouched; (2) a grammar verb (a tool verb,
 /// `collect`, `tools`, `presets`, `help`, `completions`); (3) the clap
-/// verbs `report`, `check`, `qc` and `plan`. The exit code of the command:
+/// verbs `report`, `check`, `qc`, `plan` and `convert`. The exit code of
+/// the command:
 /// the Picard face exits 0 or 1, the grammar verbs 0, 1 or 2, `check` and
 /// `qc --fail-on` 10 or 11 on a bad verdict (`bammetrics help check`).
 pub fn run() -> error::Result<u8> {
@@ -219,6 +225,7 @@ pub fn run() -> error::Result<u8> {
         Command::Check(args) => check::run(args),
         Command::Qc(args) => Ok(engine::run(&args)),
         Command::Plan(args) => Ok(plan::run(&args)),
+        Command::Convert(args) => convert::run(&args),
     }
 }
 

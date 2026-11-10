@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/verdict", "crates/report", "crates/cli", "crates/py"]
+members = ["crates/core", "crates/verdict", "crates/report", "crates/formats", "crates/cli", "crates/py"]
 exclude = ["vendor"]
 
 [workspace.package]
@@ -13,6 +13,7 @@ rust-version = "1.88"
 bammetrics-core = { path = "crates/core", version = "0.19.0" }
 bammetrics-verdict = { path = "crates/verdict", version = "0.19.0" }
 bammetrics-report = { path = "crates/report", version = "0.19.0" }
+bammetrics-formats = { path = "crates/formats", version = "0.19.0" }
 clap = { version = "4", features = ["derive", "string"] }
 noodles = { version = "0.119", features = ["bam", "sam", "bgzf", "core", "cram", "csi", "fasta", "vcf", "tabix"] }
 pyo3 = { version = "0.30", features = ["extension-module"] }

@@ -1,0 +1,15 @@
+## argv
+convert
+tests/data/picard/NA12878/NA12878.insert_size_metrics
+--format
+csv
+--table
+histogram
+## exit
+0
+## stdout
+insert_size,All_Reads.fr_count
+300,1
+310,2
+320,1
+## stderr

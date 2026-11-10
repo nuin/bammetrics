@@ -44,10 +44,12 @@ golden-update: release
 
 # Size and speed budgets of docs/05 section 4.8 (crates/cli/tests/budgets.rs):
 # the fixture pages and a 100-sample index timed (median of 31 renders) and
-# sized, the binary growth between the two probe examples of crates/report,
-# and the BAM reads the report adds to qc. Fails at 2x any target.
+# sized, the binary growth between the two probe examples of crates/report
+# and between the two of crates/formats, and the BAM reads the report adds to
+# qc. Fails at 2x any target.
 budgets:
 	cargo build --release -p bammetrics-report --example size_base --example size_report
+	cargo build --release -p bammetrics-formats --example size_formats_base --example size_formats
 	cargo test --release -p bammetrics-cli --test budgets -- --ignored --nocapture
 
 # Accessibility check of the report pages (benches/a11y.mjs): axe-core in

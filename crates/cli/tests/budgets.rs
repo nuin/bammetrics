@@ -4,7 +4,7 @@
 //! 8) and prints `over target` when it passes the target alone.
 //!
 //! Ignored by `cargo test`, because the times only mean something on a
-//! release build and the binary growth needs the two probe examples built:
+//! release build and the binary growth needs the four probe examples built:
 //!
 //! ```text
 //! make budgets
@@ -22,6 +22,12 @@
 //!   already reads metrics files. Both are built with the release profile
 //!   of the workspace, on the machine that runs the test, so the number
 //!   holds on any CI runner. The unstripped difference is printed too.
+//! - Formats growth is the same measure for `crates/formats`: the stripped
+//!   `size_formats` example less the stripped `size_formats_base` example
+//!   (`crates/formats/examples`), the code the format writers and readers
+//!   add to a binary that already holds the registry and the glossary. The
+//!   target is 150 KB: the crate measured 129.2 KB when the row was added
+//!   (docs/benchmarks.md; the estimate of docs/07 section 3.2 was 16 KB).
 //! - Added BAM passes: `qc` reports one BAM read for the collectors, the
 //!   verdict and the page together, and `report` and `check` run on the
 //!   `qc` output after the BAM is deleted.
@@ -287,6 +293,14 @@ fn budgets_of_docs_05_section_4_8() {
     let raw_growth = size(&report) as f64 - size(&base) as f64;
     let growth = stripped_size(&report, &dir) as f64 - stripped_size(&base, &dir) as f64;
 
+    let (formats_base, formats) = (
+        examples.join("size_formats_base"),
+        examples.join("size_formats"),
+    );
+    let formats_raw_growth = size(&formats) as f64 - size(&formats_base) as f64;
+    let formats_growth =
+        stripped_size(&formats, &dir) as f64 - stripped_size(&formats_base, &dir) as f64;
+
     let passes = added_bam_passes(&dir);
     let _ = fs::remove_dir_all(&dir);
 
@@ -322,6 +336,12 @@ fn budgets_of_docs_05_section_4_8() {
             unit: "KB",
         },
         Budget {
+            name: "formats growth",
+            target: 150.0,
+            measured: formats_growth / KB,
+            unit: "KB",
+        },
+        Budget {
             name: "added passes over the BAM",
             target: 0.0,
             measured: passes,
@@ -352,6 +372,13 @@ fn budgets_of_docs_05_section_4_8() {
         raw_growth,
         report.display(),
         base.display()
+    );
+    println!(
+        "formats growth: {:.0} bytes stripped, {:.0} bytes unstripped ({} less {})",
+        formats_growth,
+        formats_raw_growth,
+        formats.display(),
+        formats_base.display()
     );
     let failed: Vec<&str> = budgets
         .iter()
