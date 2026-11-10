@@ -58,9 +58,9 @@ pub struct ReportArgs {
 /// existing path and never follows a symlink, so a pre-placed link cannot
 /// redirect the write. A file that is replaced keeps its permissions (a
 /// 0600 output stays 0600; its temporary file is 0600 from the start), and
-/// a signal removes the temporary file. A `path` that is a symbolic link or
-/// not a regular file (`/dev/stdout`) is written in place, as `-o` of the
-/// tool verbs is.
+/// a signal removes the temporary file. A `path` under `/dev`, a named pipe
+/// or device, and a symbolic link this user owns are written in place, as
+/// `-o` of the tool verbs is; a symbolic link another user owns is an error.
 pub fn write_atomic(path: &Path, contents: impl AsRef<[u8]>) -> Result<()> {
     write_through(AtomicFile::new(path), contents.as_ref())
 }
