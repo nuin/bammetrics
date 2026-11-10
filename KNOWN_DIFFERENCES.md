@@ -217,9 +217,20 @@ behaves how.
   summary on standard error. Both exit 1 when a record disagrees. A file whose header is
   not `SO:queryname` is sorted in memory (name, flags, position and `HI` of every record);
   Picard sorts whole records through `SortingCollection`, spilling to `TMP_DIR` past
-  `MAX_RECORDS_IN_RAM`. The order is the same, since both sorts are stable. A read name
-  is compared by its bytes; Java compares UTF-16 units, which differs only for names mixing
-  characters above U+FFFF with characters from U+E000 to U+FFFF.
+  `MAX_RECORDS_IN_RAM`, so neither option changes anything here and memory grows with the
+  file. The order is the same, since both sorts are stable. A read name is compared by its
+  bytes, as Picard compares it: htsjdk decodes a BAM read name byte by byte (Latin-1), so
+  `String.compareTo` over those characters is byte order. The same decoding prints the
+  name: the UTF-8 bytes `C3 A9` of an e-acute print as `Ã©` in the log, in `OUTPUT` and
+  in the Python `read_name`, and a byte that is not UTF-8 prints as one character.
+  Picard's `ProgressLogger` lines (`Checked.` every 1,000,000 checked records,
+  `Read into sorter` every 1,000,000 records sorted, at `INFO`, timings included) are not
+  printed, so the log lines match below 1,000,000 records and the concordance test drops
+  them above. An `OUTPUT` that is the `INPUT` file is refused as a usage error on every
+  face; Picard truncates the file under its own reader. A SAM text file and an empty file
+  are errors here (`not a BAM or CRAM file`), Picard reads the SAM and reports that the
+  empty file agrees; a BAM cut inside its records exits 1 here (`truncated BAM`), Picard
+  reports that every record agrees.
 
 ## Charts
 
@@ -250,7 +261,8 @@ only with `output=`.
 
 `check_duplicate_marking(bam, mode=..., output=...)` returns one dict per record whose
 duplicate flag differs from the first record of its queryname (`read_name`, `contig`,
-`start`; `contig` is `None` for an unmapped record), in the order Picard logs them. An
+`start`; `contig` is `None` for an unmapped record; `read_name` decoded byte by byte, as
+Picard prints it), in the order Picard logs them. An
 empty list means every queryname agrees; the exit code 1 of the command line is not an
 exception, as `compare_metrics` returns differences without raising. `output=` writes the
 names file.
@@ -700,7 +712,10 @@ and `QUIET=true` leaves every log line; a header without `SO:queryname` is sorte
 `SAMRecordQueryNameComparator` order (name bytes, paired before unpaired, first before
 second of pair, forward before reverse, primary before supplementary before secondary,
 `HI` ascending after records without `HI`, stable), and `SO:queryname` is trusted, so a
-name that comes back after another starts a new group.
+name that comes back after another starts a new group. The sort reads `HI` as
+`getIntegerAttribute` does: a float is truncated, a string, character or array value
+fails the run with `Value for tag HI is not Number: class java.lang.String` (the Java
+class of the value), and a `SO:queryname` file never reads the tag.
 
 ## Failures
 

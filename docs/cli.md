@@ -587,7 +587,15 @@ suppressed.`, then the summary at `ERROR` or `INFO`.
   dropped), `PRIMARY_MAPPED_ONLY` (unmapped records dropped too) or
   `PRIMARY_PROPER_PAIR_ONLY` (proper pairs only; an unpaired record is an error, as
   Picard's `getProperPairFlag` throws). A dropped record does not change the current name.
-- `--verbosity ERROR` drops the INFO and WARNING log lines, `WARNING` the INFO lines.
+- `--verbosity ERROR` drops the INFO and WARNING log lines, `WARNING` the INFO lines. The
+  verb's summary on standard error follows the same rule: it is an INFO line when every
+  name agrees and an ERROR line otherwise, so `--verbosity ERROR` prints it only on a bad
+  marking.
+- `--tmp-dir` and `--max-records-in-ram` are accepted and ignored: a file without
+  `SO:queryname` is sorted in memory, so memory grows with the file.
+- Read names print byte by byte, as htsjdk decodes them: a name holding UTF-8 bytes
+  above 127 prints each byte as one character, as Picard prints it.
+- An `-o` (or `O=`) that is the input file is refused before the read.
 - `--format json`, `jsonl`, `tsv` and `human` print one row per bad record: `read_name`,
   `contig` (empty for an unmapped record) and `start` (0 without a position).
 - `ASSUME_SORTED` and `STOP_AFTER` are not options of Picard's tool and exit 1 on the

@@ -9,12 +9,15 @@ without a position; a name that comes back after another under a queryname heade
 105 bad records (the warnings stop at 100); the same records under coordinate and
 unsorted headers (Picard sorts them, so the order between first and second of pair,
 paired and unpaired, strands, secondary, supplementary and HI decides which record
-is first); the foundation corpus as written (coordinate sorted, duplicates flagged),
-queryname sorted by samtools, and as CRAM 3.0; corpus t1. Error parity: a bad MODE,
-a missing INPUT, an OUTPUT whose directory does not exist, and
-PRIMARY_PROPER_PAIR_ONLY on an unpaired record, which throws in Picard. Both tools
-exit non-zero with Picard's message; bammetrics writes no OUTPUT on an error where
-Picard leaves the names written so far (KNOWN_DIFFERENCES.md).
+is first); names beyond ASCII (decoded byte by byte, as htsjdk does); a string HI tag
+(read by the sort alone) and a float one; the foundation corpus as written
+(coordinate sorted, duplicates flagged), queryname sorted by samtools, and as CRAM
+3.0; corpus t1. Error parity: a bad MODE, a missing INPUT, an OUTPUT whose directory
+does not exist, PRIMARY_PROPER_PAIR_ONLY on an unpaired record, which throws in
+Picard, and a string HI under a header that is sorted. Both tools exit non-zero with
+Picard's message; bammetrics writes no OUTPUT on an error where Picard leaves the
+names written so far (KNOWN_DIFFERENCES.md). bammetrics alone refuses OUTPUT equal
+to INPUT and names a file that is not a BAM.
 
 Picard runs with QUIET=true, so its standard error carries only the tool's log lines,
 and JAVA_OPTS=-Xmx8g. Needs picard and samtools; run `make concordance`.
@@ -31,9 +34,14 @@ from run_picard import picard_env
 
 TOOL = "CheckDuplicateMarking"
 MODES = ["ALL", "PRIMARY_ONLY", "PRIMARY_MAPPED_ONLY", "PRIMARY_PROPER_PAIR_ONLY"]
-LOG = re.compile(r"^(INFO|WARNING|ERROR)\t\S+ \S+\tCheckDuplicateMarking\t(.*)$")
-OURS_LOG = re.compile(r"^(INFO|WARNING|ERROR)\tCheckDuplicateMarking\t(.*)$")
+# `(.+)`: Picard prints an empty INFO line (its banner) before the tool's lines.
+LOG = re.compile(r"^(INFO|WARNING|ERROR)\t\S+ \S+\tCheckDuplicateMarking\t(.+)$")
+OURS_LOG = re.compile(r"^(INFO|WARNING|ERROR)\tCheckDuplicateMarking\t(.+)$")
+# Picard's ProgressLogger lines every 1,000,000 records carry timings; bammetrics
+# prints none (KNOWN_DIFFERENCES.md).
+PROGRESS = ("Checked. ", "Read into sorter ")
 UNPAIRED = "Inappropriate call if not paired read"
+HI_STRING = "Value for tag HI is not Number: class java.lang.String"
 DUP = 1024
 
 
@@ -97,6 +105,16 @@ ORDER = [
     rec("N3", 0 | DUP, 100), rec("N3", 0, 200),
     rec("g10", 4 | DUP, 0), rec("g10", 4, 0),
 ]
+# A string HI: Picard's sort throws, so only a header without SO:queryname reads it.
+HI_STR = [rec("h1", 0 | DUP, 100, tags="\tHI:Z:abc"), rec("h1", 0, 200, tags="\tHI:Z:abc")]
+# A float HI is truncated (1.5 sorts as 1, before 2).
+HI_FLOAT = [rec("f1", 0 | DUP, 100, tags="\tHI:i:2"), rec("f1", 0, 200, tags="\tHI:f:1.5")]
+# Names beyond ASCII: htsjdk decodes each byte as one character, so the UTF-8 bytes of
+# an e-acute print as two characters and a byte that is not UTF-8 prints as one.
+NON_ASCII = [line.encode() for line in pair("é1", 99, 147 | DUP)
+             + pair("z1", 99, 147 | DUP)
+             + pair("一", 99, 147 | DUP)] + [
+    line.encode().replace(b"ff1", b"\xff1") for line in pair("ff1", 99, 147 | DUP)]
 HAND_BAMS = {
     "agree": ("queryname", AGREE),
     "disagree": ("queryname", DISAGREE),
@@ -109,6 +127,10 @@ HAND_BAMS = {
     "order_unsorted": ("unsorted", ORDER),
     "order_unknown": ("unknown", ORDER),
     "proper_coordinate": ("coordinate", PROPER),
+    "hi_string_queryname": ("queryname", HI_STR),
+    "hi_float_unsorted": ("unsorted", HI_FLOAT),
+    "non_ascii": ("queryname", NON_ASCII),
+    "non_ascii_unsorted": ("unsorted", NON_ASCII),
 }
 # Hand-written BAMs hold records htsjdk's strict validation refuses (an unmapped
 # record with a mapping quality, a mate position on an unpaired read).
@@ -116,8 +138,10 @@ SILENT = "VALIDATION_STRINGENCY=SILENT"
 
 
 def write_bam(directory, name, sort_order, records):
+    """`records` are SAM lines, as text or as bytes (names outside UTF-8)."""
     sam = directory / f"{name}.sam"
-    sam.write_text(header(sort_order) + "".join(records))
+    lines = [line if isinstance(line, bytes) else line.encode() for line in records]
+    sam.write_bytes(header(sort_order).encode() + b"".join(lines))
     bam = directory / f"{name}.bam"
     if sort_order == "coordinate":
         subprocess.run(["samtools", "sort", "-o", str(bam), str(sam)], check=True,
@@ -160,7 +184,12 @@ def run(side, args):
 
 def log_lines(side, stderr):
     pattern = LOG if side == "picard" else OURS_LOG
-    return [m.groups() for m in map(pattern.match, stderr.splitlines()) if m]
+    return [m.groups() for m in map(pattern.match, stderr.splitlines())
+            if m and not m.group(2).startswith(PROGRESS)]
+
+
+def flag_of(line):
+    return int(line.split(b"\t" if isinstance(line, bytes) else "\t")[1])
 
 
 def compare(bam, args, tmp_path, label, extra=()):
@@ -200,11 +229,34 @@ def assert_both_fail(args, message, tmp_path, label):
 @pytest.mark.parametrize("mode", MODES)
 @pytest.mark.parametrize("name", list(HAND_BAMS))
 def test_hand_bams(bams, tmp_path, name, mode):
-    unpaired = any(int(line.split("\t")[1]) & 1 == 0 for line in HAND_BAMS[name][1])
+    unpaired = any(flag_of(line) & 1 == 0 for line in HAND_BAMS[name][1])
     if mode == "PRIMARY_PROPER_PAIR_ONLY" and unpaired:
         assert_both_fail([f"I={bams[name]}", f"MODE={mode}"], UNPAIRED, tmp_path, f"{name} {mode}")
         return
     compare(bams[name], [f"MODE={mode}"], tmp_path, f"{name} {mode}")
+
+
+def test_names_print_byte_by_byte(bams, tmp_path):
+    """The UTF-8 bytes of an e-acute print as two characters (then re-encoded), a 0xff
+    byte as one; a queryname header and a sorted file give the same four names."""
+    for name in ("non_ascii", "non_ascii_unsorted"):
+        code, lines = compare(bams[name], [], tmp_path, f"{name} bytes")
+        assert code == 1
+        names = [m.split()[3] for level, m in lines if level == "WARNING"]
+        assert sorted(names) == sorted(["Ã©1", "z1", "ä¸\u0080", "ÿ1"])
+    out = (tmp_path / "non_ascii bytes.ours.txt").read_bytes()
+    assert out == "Ã©1\nz1\nä¸\u0080\nÿ1\n".encode()
+
+
+def test_a_string_hi_tag_fails_the_sort_only(bams, tmp_path):
+    """Picard reads HI in SAMRecordQueryNameComparator alone: a queryname header never
+    sees it, any other header throws in getIntegerAttribute."""
+    code, lines = compare(bams["hi_string_queryname"], [], tmp_path, "hi string queryname")
+    assert code == 1 and len(lines) == 2
+    unsorted = write_bam(tmp_path, "hi_string_unsorted", "unsorted", HI_STR)
+    assert_both_fail([f"I={unsorted}"], HI_STRING, tmp_path, "hi string unsorted")
+    _, lines = compare(bams["hi_float_unsorted"], [], tmp_path, "hi float")
+    assert ("WARNING", "Reads with queryname f1 have different duplicate flags (at chr1:100)") in lines
 
 
 def test_bad_records_are_found(bams, tmp_path):
@@ -275,6 +327,41 @@ def test_errors(bams, tmp_path):
     assert "Neither file nor parent directory exist" in picard.stderr
     assert "Neither file nor parent directory exist" in ours.stderr
     RESULTS.append((f"{TOOL} output directory missing", 0, 0, "both exit non-zero"))
+
+
+def test_an_output_that_is_the_input_is_refused(bams, tmp_path):
+    """bammetrics only: Picard truncates INPUT under its own reader."""
+    copy = tmp_path / "copy.bam"
+    copy.write_bytes(bams["disagree"].read_bytes())
+    before = copy.read_bytes()
+    ours = run("ours", [f"I={copy}", f"O={copy}"])
+    assert ours.returncode != 0
+    assert "is the INPUT file; writing it would destroy it" in ours.stderr
+    assert copy.read_bytes() == before
+    RESULTS.append((f"{TOOL} output is input", 0, 0, "bammetrics refuses"))
+
+
+def test_files_that_are_not_bams(bams, tmp_path):
+    """Picard reads a SAM and treats an empty or cut file as agreeing; bammetrics
+    names the failure (KNOWN_DIFFERENCES.md)."""
+    sam = tmp_path / "disagree.sam"
+    sam.write_bytes(header("queryname").encode() + "".join(DISAGREE).encode())
+    picard = run("picard", [f"I={sam}", SILENT])
+    ours = run("ours", [f"I={sam}"])
+    assert picard.returncode == 1 and ours.returncode == 1
+    assert log_lines("picard", picard.stderr)[-1][0] == "ERROR"
+    assert "not a BAM or CRAM file" in ours.stderr
+    empty = tmp_path / "empty.bam"
+    empty.write_bytes(b"")
+    assert run("picard", [f"I={empty}", SILENT]).returncode == 0
+    ours = run("ours", [f"I={empty}"])
+    assert ours.returncode == 1 and "not a BAM or CRAM file" in ours.stderr
+    whole = bams["many"].read_bytes()
+    cut = tmp_path / "cut.bam"
+    cut.write_bytes(whole[:len(whole) - 40])
+    ours = run("ours", [f"I={cut}"])
+    assert ours.returncode == 1 and "truncated BAM" in ours.stderr
+    RESULTS.append((f"{TOOL} not a BAM", 0, 0, "documented difference"))
 
 
 def test_without_output_neither_tool_writes_standard_output(bams):

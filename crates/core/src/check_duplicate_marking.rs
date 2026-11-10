@@ -17,7 +17,19 @@
 //! records without `HI` before those with one and `HI` ascending, and file
 //! order between records that compare equal (the sort is stable, as
 //! `SortingCollection` is). bammetrics keeps the sort keys in memory and
-//! writes no temporary file.
+//! writes no temporary file, so `TMP_DIR` and `MAX_RECORDS_IN_RAM` change
+//! nothing. The sort reads `HI` as `SAMRecord.getIntegerAttribute` does: a
+//! float is truncated, a string, character or array is an error (`Value for
+//! tag HI is not Number`), a value past `Integer` is an error too. A
+//! `SO:queryname` file never reads `HI`.
+//!
+//! htsjdk decodes a read name byte by byte (Latin-1), so a name holding
+//! bytes above 127 prints each byte as one character; [`latin1`] does the
+//! same for the log, `OUTPUT` and the rows.
+//!
+//! Picard's `ProgressLogger` lines (`Checked.` every 1,000,000 checked
+//! records, `Read into sorter` every 1,000,000 records sorted) carry
+//! timings and are not printed.
 //!
 //! `MODE` filters the records checked: `ALL` every one; `PRIMARY_ONLY`
 //! drops secondary and supplementary records; `PRIMARY_MAPPED_ONLY` drops
@@ -34,7 +46,8 @@
 //! at ERROR (exit 1) or `All records' duplicate markings agree.` at INFO
 //! (exit 0). `OUTPUT`, when given, gets the queryname of each bad record on
 //! its own line, so a name repeats when several of its records disagree,
-//! and is an empty file when all agree. [`run_cli`] prints the log lines
+//! and is an empty file when all agree. An `OUTPUT` that is the `INPUT`
+//! file is refused before the read. [`run_cli`] prints the log lines
 //! without the timestamp field and returns the exit code.
 
 use std::cmp::Ordering;
@@ -67,6 +80,14 @@ pub const TOOL: Tool = Tool {
             "ERROR drops the INFO and WARNING log lines, WARNING the INFO lines (default INFO).",
         ),
         Opt::rejected(&["ASSUME_SORTED", "AS"]),
+        Opt::ignored(
+            &["TMP_DIR"],
+            "a file without SO:queryname is sorted in memory and no temporary file is written",
+        ),
+        Opt::ignored(
+            &["MAX_RECORDS_IN_RAM"],
+            "a file without SO:queryname is sorted in memory whatever the value",
+        ),
     ],
     run: run_tool,
     collector: None,
@@ -77,6 +98,12 @@ pub const COLUMNS: &[&str] = &["read_name", "contig", "start"];
 
 /// Picard's `NUM_WARNINGS`: bad records logged one by one.
 const NUM_WARNINGS: usize = 100;
+
+/// A read name as htsjdk's `BAMRecord` decodes it: each byte is one
+/// character, so `0xC3 0xA9` is `Ã©` and `0xFF` is `ÿ`.
+pub fn latin1(bytes: &[u8]) -> String {
+    bytes.iter().map(|&b| char::from(b)).collect()
+}
 
 /// Picard's `Mode`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -208,6 +235,17 @@ impl Check {
         }
     }
 
+    /// The summary when `VERBOSITY` shows it: an agreeing summary is
+    /// `INFO`, a disagreeing one `ERROR`. `None` under `VERBOSITY=ERROR`
+    /// or `WARNING` when every name agrees.
+    pub fn summary_shown(&self) -> Option<String> {
+        let summary = self.summary();
+        self.log
+            .last()
+            .filter(|(_, message)| *message == summary)
+            .map(|_| summary)
+    }
+
     /// Each log line as Picard prints it, without the timestamp field:
     /// `WARNING\tCheckDuplicateMarking\t<message>`.
     pub fn print_log(&self) {
@@ -268,11 +306,13 @@ struct Key {
 }
 
 impl Key {
-    fn read(record: &bam::Record) -> Result<Self> {
+    /// The fields of `record`; `HI` is read only for a file that is
+    /// sorted, as only `SAMRecordQueryNameComparator` asks for it.
+    fn read(record: &bam::Record, sorted: bool) -> Result<Self> {
         let hit_index = match record.data().get(&Tag::HIT_INDEX) {
-            None => None,
+            Some(Ok(value)) if sorted => Some(hit_index(&value)?),
             Some(Err(e)) => return Err(e.into()),
-            Some(Ok(value)) => value.as_int(),
+            _ => None,
         };
         Ok(Self {
             // htsjdk keeps `*` as the name of a record without one.
@@ -338,6 +378,37 @@ impl Key {
     }
 }
 
+/// `SAMRecord.getIntegerAttribute("HI")`: an integer as it is, a float
+/// through `Number.longValue` (truncated), anything else a
+/// `RuntimeException` naming the Java class; a value outside `Integer` is
+/// an error too.
+fn hit_index(value: &sam::alignment::record::data::field::Value<'_>) -> Result<i64> {
+    use sam::alignment::record::data::field::Value;
+    use sam::alignment::record::data::field::value::Array;
+    let number = match value {
+        Value::Float(f) => Some(*f as i64),
+        other => other.as_int(),
+    };
+    let class = match value {
+        Value::Character(_) => "java.lang.Character",
+        Value::String(_) => "java.lang.String",
+        Value::Hex(_) | Value::Array(Array::Int8(_) | Array::UInt8(_)) => "[B",
+        Value::Array(Array::Int16(_) | Array::UInt16(_)) => "[S",
+        Value::Array(Array::Int32(_) | Array::UInt32(_)) => "[I",
+        Value::Array(Array::Float(_)) => "[F",
+        _ => "",
+    };
+    match number {
+        Some(n) if i64::from(i32::MIN) <= n && n <= i64::from(i32::MAX) => Ok(n),
+        Some(_) => Err(Error::Metric(
+            "Value for tag HI is not in Integer range".to_owned(),
+        )),
+        None => Err(Error::Metric(format!(
+            "Value for tag HI is not Number: class {class}"
+        ))),
+    }
+}
+
 /// `checkDuplicateMarkingsInIterator` over the records as they come
 /// (`SO:queryname`), or over the sorted keys.
 struct Checker {
@@ -400,7 +471,7 @@ impl Checker {
         }
         if flags.is_duplicate() != self.current_duplicate {
             self.bad.push(BadRecord {
-                read_name: String::from_utf8_lossy(&key.name).into_owned(),
+                read_name: latin1(&key.name),
                 contig: if flags.is_unmapped() {
                     None
                 } else {
@@ -425,7 +496,7 @@ impl Accumulator for Checker {
     type Output = (Vec<BadRecord>, bool);
 
     fn accept(&mut self, record: &bam::Record) -> Result<()> {
-        let key = Key::read(record)?;
+        let key = Key::read(record, self.sorted)?;
         if self.sorted {
             self.pending.push(key);
             Ok(())
@@ -445,15 +516,30 @@ impl Accumulator for Checker {
 }
 
 /// Parse the options and check `INPUT`. `OUTPUT` must be writable before
-/// the read starts, as `IOUtil.assertFileIsWritable` requires.
+/// the read starts, as `IOUtil.assertFileIsWritable` requires, and must
+/// not be the `INPUT` file (Picard truncates it under its own reader).
 pub fn check(inv: &Invocation) -> Result<Check> {
     let options = Options::from_invocation(inv)?;
     if let Some(output) = &inv.output {
         crate::compare_metrics::check_writable(&output.to_string_lossy())?;
+        if same_file(output, &inv.input) {
+            return Err(Error::Usage(format!(
+                "OUTPUT {} is the INPUT file; writing it would destroy it",
+                output.display()
+            )));
+        }
     }
     let (bad, sorted) =
         inv.read_whole(&inv.input, |header| Ok(Checker::new(header, options.mode)))?;
     Ok(Check::build(bad, sorted, options.verbosity))
+}
+
+/// True when both paths name one existing file, links and `..` resolved.
+fn same_file(a: &std::path::Path, b: &std::path::Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
 }
 
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
@@ -578,6 +664,101 @@ mod tests {
         assert!(warnings[NUM_WARNINGS - 1].contains("r99 "));
         let text = check.output.main.as_ref().and_then(|m| m.text.clone());
         assert_eq!(text.map(|t| t.lines().count()), Some(NUM_WARNINGS + 5));
+    }
+
+    #[test]
+    fn names_decode_byte_by_byte_as_htsjdk_does() {
+        assert_eq!(latin1(b"z1"), "z1");
+        assert_eq!(latin1("é1".as_bytes()), "\u{c3}\u{a9}1");
+        assert_eq!(latin1(b"\xff"), "\u{ff}");
+    }
+
+    #[test]
+    fn hit_index_reads_as_get_integer_attribute_does() {
+        use sam::alignment::record::data::field::Value;
+        assert_eq!(hit_index(&Value::Int32(2)).ok(), Some(2));
+        assert_eq!(hit_index(&Value::UInt8(7)).ok(), Some(7));
+        assert_eq!(hit_index(&Value::Float(1.5)).ok(), Some(1));
+        assert_eq!(
+            hit_index(&Value::String(b"abc".into()))
+                .unwrap_err()
+                .to_string(),
+            "Value for tag HI is not Number: class java.lang.String"
+        );
+        assert_eq!(
+            hit_index(&Value::Character(b'x')).unwrap_err().to_string(),
+            "Value for tag HI is not Number: class java.lang.Character"
+        );
+        assert_eq!(
+            hit_index(&Value::UInt32(u32::MAX)).unwrap_err().to_string(),
+            "Value for tag HI is not in Integer range"
+        );
+    }
+
+    #[test]
+    fn a_queryname_file_never_reads_hi() {
+        use noodles::sam::alignment::io::Write as _;
+        use noodles::sam::alignment::record_buf::RecordBuf;
+        use noodles::sam::alignment::record_buf::data::field::Value as BufValue;
+
+        let mut buf = RecordBuf::default();
+        buf.data_mut()
+            .insert(Tag::HIT_INDEX, BufValue::from("abc".to_owned()));
+        let header = sam::Header::default();
+        let mut writer = bam::io::Writer::new(Vec::new());
+        writer.write_header(&header).expect("header");
+        writer
+            .write_alignment_record(&header, &buf)
+            .expect("encode");
+        let bytes = writer.into_inner().finish().expect("finish");
+        let mut reader = bam::io::Reader::new(bytes.as_slice());
+        reader.read_header().expect("header");
+        let mut record = bam::Record::default();
+        reader.read_record(&mut record).expect("decode");
+        assert!(Key::read(&record, false).is_ok());
+        let err = Key::read(&record, true).unwrap_err().to_string();
+        assert_eq!(
+            err,
+            "Value for tag HI is not Number: class java.lang.String"
+        );
+    }
+
+    #[test]
+    fn an_output_that_is_the_input_is_refused_before_the_read() {
+        let bam = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/data/duplicate_marking.bam"
+        );
+        let args: Vec<String> = [format!("I={bam}"), format!("O={bam}")].to_vec();
+        let inv = TOOL.parse(&args).expect("parses");
+        let err = check(&inv).unwrap_err();
+        assert!(matches!(err, Error::Usage(_)), "{err}");
+        assert!(
+            err.to_string()
+                .ends_with("is the INPUT file; writing it would destroy it")
+        );
+        assert_eq!(std::fs::metadata(bam).expect("fixture").len(), 363);
+    }
+
+    #[test]
+    fn the_verb_summary_follows_the_verbosity() {
+        let agree = Check::build(Vec::new(), false, Level::Warning);
+        assert_eq!(agree.summary_shown(), None);
+        let agree = Check::build(Vec::new(), false, Level::Info);
+        assert_eq!(
+            agree.summary_shown().as_deref(),
+            Some("All records' duplicate markings agree.")
+        );
+        let bad = vec![BadRecord {
+            read_name: "r2".to_owned(),
+            contig: None,
+            start: 30,
+        }];
+        let disagree = Check::build(bad, false, Level::Error);
+        assert_eq!(
+            disagree.summary_shown().as_deref(),
+            Some("Found 1 records that do not agree on their duplicate flag.")
+        );
     }
 
     #[test]

@@ -157,7 +157,7 @@ pub fn read_header(path: &Path) -> Result<sam::Header> {
     } else {
         bam::io::Reader::new(sniffed.reader)
             .read_header()
-            .map_err(input)
+            .map_err(|e| input(not_a_bam(e)))
     }
 }
 
@@ -250,9 +250,20 @@ where
             workers,
             sniffed.reader,
         ));
-        let header = reader.read_header().map_err(input)?;
+        let header = reader.read_header().map_err(|e| input(not_a_bam(e)))?;
         pass.drive(&mut reader, &header, build)
     }
+}
+
+/// A BAM header that could not be read: a SAM text file, an empty file, a
+/// file cut inside its header or any other file. htsjdk reads the SAM;
+/// bammetrics names the failure in place of `failed to fill whole
+/// buffer`.
+fn not_a_bam(e: io::Error) -> io::Error {
+    io::Error::new(
+        e.kind(),
+        format!("not a BAM or CRAM file (the header could not be read: {e})"),
+    )
 }
 
 /// One read's settings: the record loop over a BAM record stream.
@@ -298,6 +309,16 @@ impl Pass<'_, '_> {
                 Error::Input {
                     path: self.path.to_path_buf(),
                     source,
+                }
+            } else if source.kind() == io::ErrorKind::UnexpectedEof {
+                // A BAM ends with an empty BGZF block, so a stream that
+                // ends inside a record or a block was cut.
+                Error::Input {
+                    path: self.path.to_path_buf(),
+                    source: io::Error::new(
+                        source.kind(),
+                        "truncated BAM: the file ends inside a record or a block",
+                    ),
                 }
             } else {
                 Error::Record(source)
@@ -672,5 +693,58 @@ mod tests {
         })
         .expect_err("no file");
         assert!(matches!(err, Error::Input { .. }));
+    }
+
+    /// A file that is not a BAM (a SAM text, an empty file) and a BAM cut
+    /// inside its records name the failure, in place of `failed to fill
+    /// whole buffer`.
+    #[test]
+    fn a_file_without_a_bam_header_and_a_cut_bam_name_the_failure() {
+        use std::io::Write as _;
+        use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+
+        let dir = std::env::temp_dir().join(format!("bammetrics-pass-{}", std::process::id()));
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&dir)
+            .expect("temp dir");
+        let write = |name: &str, bytes: &[u8]| {
+            let path = dir.join(name);
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&path)
+                .and_then(|mut f| f.write_all(bytes))
+                .expect(name);
+            path
+        };
+        let sam = write(
+            "hdr_only.sam",
+            b"@HD\tVN:1.6\tSO:queryname\n@SQ\tSN:chr1\tLN:1000\n",
+        );
+        let empty = write("empty.bam", b"");
+        let whole = std::fs::read(fixture()).expect("fixture");
+        let cut = write("cut.bam", &whole[..whole.len() - 40]);
+        for (path, text) in [
+            (&sam, "not a BAM or CRAM file"),
+            (&empty, "not a BAM or CRAM file"),
+            (&cut, "truncated BAM"),
+        ] {
+            let err = run(path, 1, |_| {
+                Ok(Counter {
+                    seen: 0,
+                    panic_on_second: false,
+                })
+            })
+            .expect_err("fails");
+            assert!(
+                matches!(err, Error::Input { .. }),
+                "{}: {err}",
+                path.display()
+            );
+            assert!(err.to_string().contains(text), "{}: {err}", path.display());
+        }
+        std::fs::remove_dir_all(&dir).expect("cleanup");
     }
 }

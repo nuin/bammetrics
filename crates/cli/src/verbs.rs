@@ -242,8 +242,9 @@ pub const VERBS: &[Verb] = &[
         about: Some(
             "checks that every record of a queryname carries the same duplicate flag, as \
              Picard's CheckDuplicateMarking does: the bad querynames (one line per record that \
-             disagrees) to -o or standard output, the summary on standard error, exit 1 when \
-             any record disagrees. A BAM that is not queryname sorted is sorted in memory.",
+             disagrees) to -o or standard output, the summary on standard error (dropped by \
+             --verbosity as Picard's log line is), exit 1 when any record disagrees. A BAM \
+             that is not queryname sorted is sorted in memory.",
         ),
         writes: "bad querynames",
         ..verb(
@@ -524,8 +525,8 @@ impl Verb {
                 .map_err(core)?
         } else if tool.name == check_duplicate_marking::TOOL.name {
             let check = check_duplicate_marking::check(&inv).map_err(core)?;
-            if !quiet {
-                eprintln!("bammetrics {}: {}", self.name, check.summary());
+            if let Some(summary) = check.summary_shown().filter(|_| !quiet) {
+                eprintln!("bammetrics {}: {summary}", self.name);
             }
             let status = check.status();
             (check.output, status)
