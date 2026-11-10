@@ -1,0 +1,9 @@
+## argv
+MarkDuplicates
+I=tests/data/markdup.bam
+O=OUT/marked.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: MarkDuplicates: METRICS_FILE is required

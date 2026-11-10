@@ -23,7 +23,7 @@ Verbs:
 | Group | Verbs |
 |---|---|
 | Run | `qc` (preset or metric set, one pass, files, verdict, report), `collect` (same engine, no verdict, kept), one verb per tool |
-| Prepare | `bed-to-interval-list` (P4 library piece pulled forward; 0.14.0), `mark-duplicates` (reserved, arrives with parity plan P9) |
+| Prepare | `bed-to-interval-list` (P4 library piece pulled forward; 0.14.0), `mark-duplicates` (0.18.0) |
 | Post | `accumulate-quality-yield`, `compare-metrics`, `report`, `check` |
 | Info | `tools`, `presets`, `plan`, `completions <shell>`, `help <verb or Picard class>` |
 
@@ -165,12 +165,12 @@ bammetrics accumulate-quality-yield out/*.qy -o out/sample.qy
 ```
 Files in, file out. `AccumulateQualityYieldMetrics I=... I=... O=...` still works.
 
-**9. Chain: MarkDuplicates to CollectDuplicateMetrics (when P9 ships).**
+**9. Chain: MarkDuplicates to CollectDuplicateMetrics.**
 ```
 bammetrics mark-duplicates in.bam --metrics out/s.markdup_metrics -o - \
   | tee out/s.marked.bam | bammetrics duplicate-metrics - -o out/s.dup
 ```
-The marker reads its input twice, so `in.bam` must be a file. From stdin it spools to `--tmp-dir`. Until P9 the verb exits 2 with `mark-duplicates is not implemented yet (parity plan P9)`. `duplicate-metrics marked.bam` works today on a BAM marked by another tool.
+The marker reads its input twice, so `in.bam` must be a file. From stdin it spools to `--tmp-dir`. Shipped in 0.18.0 (docs/cli.md); `duplicate-metrics marked.bam` reads the flags it sets.
 
 **10. One read, seven collectors, stdin.**
 ```
@@ -213,7 +213,7 @@ Three layers. No workflow language.
 
 | Stage | Content | BAM reads |
 |---|---|---|
-| prepare | bed-to-interval-list (reads BED; `qc --panel BED` since 0.14.0), mark-duplicates (later) | 0, or 2 for mark-duplicates |
+| prepare | bed-to-interval-list (reads BED; `qc --panel BED` since 0.14.0), mark-duplicates (writes a BAM) | 0 |
 | pass | quality-yield, alignment-summary, insert-size, any number of hs, gc-bias, by-cycle tools, duplicate-metrics | 1, shared through pass.rs |
 | post | accumulate-quality-yield, verdict | 0 |
 | report | HTML and JSON | 0 |
@@ -356,11 +356,26 @@ One row per sample, worst first. Sort: verdict rank (fail, warn, incomplete, pas
 | static file, no state | comments, assignments, alerts |
 | none | accounts, uploads, history |
 
-`verdict.json` (schema `bammetrics.verdict/1`: sample, preset hash, per-rule value, status, reason, input fingerprint) is the only bridge. Rules for the report crate, written into CLAUDE.md: no read of other run directories, no history store, no user identity, no network call, no comment field. A feature that needs one of these goes to the hosted product.
+`verdict.json` (schema `bammetrics.verdict/1`: sample, preset hash, per-rule value, status, reason, input fingerprint) is the only bridge. Rules for the report crate, written into CLAUDE.md: no read of other run directories, no history store, no user identity, no network call, no comment field. One exception, from docs/06: the page reads the gaps BED beside a `CoverageGapMetrics` file (`<metrics path>.bed`, in the same run directory) for its `Coverage gaps` table, so the page bytes depend on that sidecar too. A feature that needs one of the rest goes to the hosted product.
 
 ### 4.10 Terminal output
 
 Progress goes to stderr, only on a terminal, 10 updates per second: `reading 12.4M reads  1.9M/s  62%`. Percent is compressed bytes read over file size, so stdin shows none. `NO_COLOR` and `-q` are honored. The summary is at most 12 lines: header (sample, band, preset, collectors, BAM reads, records read; no elapsed time, so stdout is reproducible), every fail, every warn, a pass count, files written, report path. Extra failures collapse to `+N more, see report`. `--format jsonl` emits `start`, `progress`, `file`, `error`, `check` and `done` events, one per line. An error that stops the run emits an `error` event and a `done` event with its exit code.
+
+### 4.11 Clinical checks (docs/06)
+
+Two single-sample checks Picard does not have, specified in
+[docs/06_clinical_checks.md](06_clinical_checks.md): `CollectCoverageGaps` (verb
+`coverage-gaps`, class `bammetrics.qc.CoverageGapMetrics`, a BED of the target runs under
+`MIN_DEPTH`, the Hs per-base depth) and `CollectSexCheckMetrics` (verb `sex-check`, class
+`bammetrics.qc.SexCheckMetrics`, reads per base on X, Y and the autosomes against
+`EXPECTED_SEX`, `qc --sex`). The rule language gains one text comparator, `is TEXT`, for
+`sex.match` (fail `is N`) and `sex.inferred` (warn `is UNKNOWN`); `verdict.json` checks
+judged as text carry a `text` field. `clinical-panel` version 3 adds the four rules
+(`gaps.reportable-range`, `gaps.targets-complete`, `sex.match`, `sex.inferred`); `generic`
+and `wgs` are unchanged. The page lists the 200 longest gaps under the first
+warn or fail gap check, from the BED beside the metrics file. Both stay inside the rules
+of section 4.9: one run's files, no history, no cohort.
 
 ## 5. Python mirror
 
@@ -446,5 +461,6 @@ Risks, each with its mitigation:
 10. Does `mark-duplicates` ship in the P9 PR train, and should the verb slot exist as an error stub from 0.9? Decided: MarkDuplicates is the next feature release after 0.17.0; no stub, so `mark-duplicates` stays an unknown verb until then (2026-11-06).
 11. Do the size and speed budgets in 4.8 become hard CI failures? Decided: yes, at 2x the target. `make budgets` fails the CI job when a measured value reaches twice its target and prints `over target` when it passes the target alone (0.16.0).
 12. Which name for the report file: `SAMPLE.report.html` (this proposal) or `SAMPLE.html`? Decided: `SAMPLE.report.html`, as shipped since 0.12.0 (2026-11-06).
+13. Do the coverage gap and sex check rules of docs/06 join `clinical-panel`, and how are their thresholds labelled? Decided: `clinical-panel` version 3 (hash `6f0d59`) carries all four with the note `reviewed defaults; gap and sex rules are starting values`; `generic` and `wgs` are unchanged at version 1 (hashes `6dd89e` and `8a5fc4`, byte-identical to 0.18.0), so `qc --sex` under them exits 2 and no not-measured sex check appears under them. The sex thresholds are starting values measured on HG002 and NA12878 (docs/06 section 4); the 14 reviewed values are unchanged (reviewer decision, 0.19.0, 2026-11-09).
 
 Result: 12 verbs and 1 prefix cover every chain in the audit, the Picard face stays byte-identical, and the verdict report ships first at day 40.

@@ -4,17 +4,17 @@ members = ["crates/core", "crates/verdict", "crates/report", "crates/cli", "crat
 exclude = ["vendor"]
 
 [workspace.package]
-version = "0.17.0"
+version = "0.19.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.88"
 
 [workspace.dependencies]
-bammetrics-core = { path = "crates/core", version = "0.17.0" }
-bammetrics-verdict = { path = "crates/verdict", version = "0.17.0" }
-bammetrics-report = { path = "crates/report", version = "0.17.0" }
+bammetrics-core = { path = "crates/core", version = "0.19.0" }
+bammetrics-verdict = { path = "crates/verdict", version = "0.19.0" }
+bammetrics-report = { path = "crates/report", version = "0.19.0" }
 clap = { version = "4", features = ["derive", "string"] }
-noodles = { version = "0.119", features = ["bam", "sam", "bgzf", "core", "cram", "fasta", "vcf", "tabix"] }
+noodles = { version = "0.119", features = ["bam", "sam", "bgzf", "core", "cram", "csi", "fasta", "vcf", "tabix"] }
 pyo3 = { version = "0.30", features = ["extension-module"] }
 regex = "1"
 thiserror = "2"

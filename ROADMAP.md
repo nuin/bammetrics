@@ -31,15 +31,18 @@ Owner direction (2026-11-09): every one of the 121 Picard 3.5.0 tools (23 on mai
 - [x] CI workflow (fmt, clippy, tests, concordance, wheel), MIT OR Apache-2.0 licence files, CHANGELOG.
 - [ ] vcfclick: settle the engine question — **DuckDB** for the open/embeddable core (conda-packageable; chDB is not), chDB reserved for cloud scale.
 
+Shipped since: every accumulation level, `CollectHsMetrics` `PER_TARGET_COVERAGE` and
+`THEORETICAL_SENSITIVITY_OUTPUT`, `CollectWgsMetrics` (0.8.0), `CollectVariantCallingMetrics`
+(0.11.0), the `qc`, `check` and `report` verbs (0.12.0 to 0.16.0), `MarkDuplicates` (0.18.0),
+`CollectSequencingArtifactMetrics`, `CollectOxoGMetrics`, `ConvertSequencingArtifactToOxoG`,
+`BamIndexStats`, `CheckDuplicateMarking`, `CollectJumpingLibraryMetrics` and the two clinical
+checks `CollectCoverageGaps` and `CollectSexCheckMetrics` (0.19.0). CHANGELOG.md has each.
+
 Remaining for bammetrics:
 
-- `CollectVariantCallingMetrics` (the variant-concordance engine).
-- `MarkDuplicates` (optical duplicates, duplicate scoring, library complexity; reuses `duplication`).
-- `CollectWgsMetrics` (reuses `intervals::OverlapIndex` and the `pass` reader).
-- `METRIC_ACCUMULATION_LEVEL` `LIBRARY` and `READ_GROUP`: needs the read-group to library map and
-  per-level histogram labels. The corpus BAMs t1 and t2 already carry two libraries.
-- `CollectHsMetrics` `PER_TARGET_COVERAGE`, `THEORETICAL_SENSITIVITY_OUTPUT` (`PER_BASE_COVERAGE` is done in 0.3.0).
 - bioconda recipe and a PyPI release (first push of the branch runs the CI workflow).
+- The Picard tools still to build, chaining, formats and reports: the program plan of PR #29
+  (`docs/07_full_parity_program.md`, not merged); docs/04 section 4 holds the P9 queue.
 
 Exit criterion: a `pip install`-able library that produces correct, hand-verified numbers.
 

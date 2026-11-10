@@ -248,6 +248,8 @@ pub struct Check {
     /// `pass`, `warn`, `fail` or `not_measured`.
     status: String,
     value: Option<f64>,
+    /// The cell's text for a rule with an `is TEXT` bound; `None` otherwise.
+    text: Option<String>,
     /// The bound the status reports: the fail bound of a fail, else the
     /// warn bound (the fail bound when the rule has no warn bound).
     limit: Option<String>,
@@ -268,6 +270,7 @@ type CheckState = (
     Option<f64>,
     Option<String>,
     Option<String>,
+    Option<String>,
     String,
     String,
     String,
@@ -280,11 +283,12 @@ type CheckState = (
 impl Check {
     #[staticmethod]
     fn _restore(state: CheckState) -> Self {
-        let (rule, status, value, limit, why, label, metric, level, unit, warn, fail) = state;
+        let (rule, status, value, text, limit, why, label, metric, level, unit, warn, fail) = state;
         Check {
             rule,
             status,
             value,
+            text,
             limit,
             why,
             label,
@@ -302,6 +306,7 @@ impl Check {
             c.rule.clone(),
             c.status.clone(),
             c.value,
+            c.text.clone(),
             c.limit.clone(),
             c.why.clone(),
             c.label.clone(),
@@ -446,6 +451,7 @@ fn check_of(c: &bammetrics_verdict::Check) -> Check {
         rule: c.rule.clone(),
         status: c.status.name().to_owned(),
         value: c.value,
+        text: c.text.clone(),
         limit,
         why: c.reason.clone(),
         label: c.label.clone(),
@@ -805,7 +811,7 @@ fn verb(name: &str) -> &'static table::Verb {
     signature = (bam, **options),
     text_signature = "(bam, *, output=None, reference=None, preset='generic', hs=None, \
                       panel=None, ref_flat=None, strand=None, ribosomal_intervals=None, \
-                      sample=None, fail_on=None, resume=False, force=False, threads=None, \
+                      sex=None, sample=None, fail_on=None, resume=False, force=False, threads=None, \
                       all_plots=False, date=None, report=True)"
 )]
 pub fn py_qc<'py>(

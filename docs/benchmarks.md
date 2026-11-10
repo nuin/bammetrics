@@ -109,6 +109,56 @@ grows with the decoder count, about 90 MiB per decoder, plus the contigs in use
 (chr21 is 47 MB, chr1 249 MB). Picard read the CRAM through an APFS clone with no `.crai`
 beside it (KNOWN_DIFFERENCES.md); both files agree in every cell.
 
+## MarkDuplicates (HG002 exome)
+
+Mac Studio, Apple M1 Ultra, 20 cores, 64 GB. HG002.exome.bam: 10,339,495,604 bytes,
+150,538,907 records (150,113,954 mapped), coordinate sorted, one read group, on hs37d5.
+Default options and threads (8), `TMP_DIR` on the same disk, one run each,
+`/usr/bin/time -l`.
+
+| run | wall | max RSS | output BAM |
+|---|---:|---:|---:|
+| bammetrics MarkDuplicates | 303 s | 765 MiB | 10,210,233,747 bytes |
+| Picard 3.5.0 MarkDuplicates | 1,364 s | 11,256 MiB | 10,347,171,256 bytes |
+
+bammetrics reads the BAM twice on 8 BGZF workers and compresses on 8; its read ends
+spill to `TMP_DIR` in runs of 4,000,000 entries of about 29 bytes each, and mates
+waiting for a later reference spill to one file per reference. `TMP_DIR` peaked at
+6.5 GiB (6,799,788 KiB, sampled every 10 s) and was empty again at the end. The
+bammetrics row was measured again after the waiting-mate spill (0.18.0 development,
+a concordance test of another tool running on the same machine); the first run took
+299 s and 783 MiB. A 768.6M-record genome CRAM peaked at 2.75 GB and 42.1 GiB of
+`TMP_DIR`.
+Picard ran with the JVM's default heap (16 GiB). The two metrics files are equal byte for
+byte from `## METRICS CLASS` on. Both BAMs hold 150,538,907 records with 7,305,282
+duplicate flags, and `samtools view --no-PG` prints the same text for every record (equal
+SHA-256 over all records, `5a90c21f...fafb396`). The headers differ in the `@PG` line each tool adds and in the
+`@RG DT` value, which htsjdk writes in the JVM's time zone (KNOWN_DIFFERENCES.md).
+
+## 0.19.0 tools (HG002 exome)
+
+Same machine and file as the MarkDuplicates run above, bammetrics 0.19.0 (d221376),
+default options and threads, one run each, `/usr/bin/time -l`, nothing else running.
+Picard 3.5.0 numbers are the ones the feature branches measured on the same file
+(`JAVA_OPTS=-Xmx8g`); a blank cell means Picard was not timed for that tool.
+
+| tool | Picard wall | Picard peak RSS | bammetrics wall | bammetrics peak RSS | output |
+|---|---:|---:|---:|---:|---|
+| BamIndexStats | 0.74 s | | 0.03 s | 30 MB | 87 lines identical |
+| CollectJumpingLibraryMetrics | | | 31.0 s | 7 MB | 4,653 jump pairs, 74,693,734 non-jump pairs |
+| CollectSequencingArtifactMetrics | 783.8 s | 2.50 GB | 153.8 s (5.1x) | 3.75 GB | all five files identical |
+| CollectOxoGMetrics | 1,065.5 s | 2.38 GB | 299.3 s (3.6x) | 2.47 GB | 16 rows identical |
+| ConvertSequencingArtifactToOxoG | | | 0.00 s | 4 MB | |
+| CheckDuplicateMarking | | | 147.4 s | 14.14 GB | exit 1: 144,979 records disagree |
+
+`CheckDuplicateMarking` on a coordinate-sorted BAM sorts every record by query name in
+memory, as its port of Picard does without `SortingCollection`; 150.5M records took
+14.14 GB. A queryname-sorted input streams at a few MB. A disk-spilling sort for it is
+open. The exit 1 is the file's own state: GIAB's HG002 exome holds 144,979 records whose
+mates disagree on the duplicate flag, and Picard reports the same.
+`CollectSequencingArtifactMetrics` holds the current contig twice (the reference and an
+upper-cased copy), which is most of its 3.75 GB; one copy could go.
+
 ## Report budgets (docs/05 section 4.8)
 
 Measured 2026-11-05 with bammetrics 0.16.0, rustc 1.99.1, same machine, by `make budgets`
@@ -122,7 +172,12 @@ and CI runs it on the Linux and macOS runners after the unit tests.
 | Sample page size | 100 KB | 200 KB | 88.6 KB | the largest of the three fixture pages: 71,767 bytes passing, 84,699 failing, 90,776 failing with every plot |
 | Index size, 100 samples | 200 KB | 400 KB | 151.9 KB | 155,513 bytes, 14 rule cells per row |
 | Binary growth | 300 KB | 600 KB | 290.8 KB | 297,808 bytes: stripped `size_report` less stripped `size_base`; the probe leaves out the verbs' code (see below) |
+| Binary growth, 0.19.0 | 300 KB | 600 KB | 371.5 KB | 380,400 bytes stripped (408,768 unstripped), measured 2026-11-09 by `make budgets` on the same machine: over the 300 KB target, under the 600 KB limit, so the test prints `over target` and passes; 80.7 KB more than the 0.16.0 row |
 | Added passes over the BAM | 0 | 1 | 0 | `qc` reports 1 BAM read with the verdict and page; `report` and `check` run with the BAM deleted |
+
+The other rows at 0.19.0, same run: render 1.65 ms and 0.72 ms, sample page 96.5 KB
+(98,790 bytes with every plot), index 190.7 KB (195,237 bytes, 18 rule cells per row), 0
+added passes.
 
 The fixture metrics are the seven files the golden records hold for
 `tests/data/insert_size.bam` (alignment summary, insert size, quality yield, duplicate
@@ -145,7 +200,8 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 10d7f47 | last commit before `crates/verdict` and `crates/report` | 3,390,832 | 2,869,432 |
 | 28647a8 | both crates exist; the binary links neither | 3,390,576 | 2,869,432 |
 | f82df56 | the `report` and `check` verbs link both crates | 3,778,528 | 3,216,936 |
-| 0.16.0 | today | 4,870,352 | 4,161,072 |
+| 0.16.0 | 2026-11-05 | 4,870,352 | 4,161,072 |
+| 0.19.0 | 2026-11-09, release/0.19.0 at d221376 | 6,899,008 | 5,833,632 |
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and

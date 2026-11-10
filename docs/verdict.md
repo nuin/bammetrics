@@ -16,7 +16,15 @@ Each rule gives one check with one status:
 | `pass` | the value breaks neither bound |
 | `warn` | the value breaks the warn bound and not the fail bound |
 | `fail` | the value breaks the fail bound |
-| `not_measured` | the metrics file, the row, the column or the value is absent (`?`, empty, text), or the ratio's divisor is 0. Never a pass. |
+| `not_measured` | the metrics file, the row, the column or the value is absent (`?`, empty, text under a numeric bound), or the ratio's divisor is 0. Never a pass. |
+
+A rule with an `is TEXT` bound judges the cell's text instead of a number: it breaks
+when the cell prints as `TEXT`, an empty cell is the empty string, and any other text
+passes (docs/06 section 2.5). The match is exact and case sensitive. The shipped text
+rules read `SexCheckMetrics.SEX_MATCH` (`Y`, `N` or empty) and
+`SexCheckMetrics.INFERRED_SEX` (`FEMALE`, `MALE` or `UNKNOWN`); an `is` bound on a column
+the glossary types as a number is a preset error. `check` prints the cell in its value
+column, `empty` for an empty cell.
 
 The band over all checks is `fail` when any check fails, else `incomplete` when any
 check is not measured, else `warn` when any check warns, else `pass`. A warn or fail
@@ -26,6 +34,7 @@ check carries one reason line in plain words with the value and the limit:
 Target bases at 20x is 0.91, below the fail limit of 0.95
 Median insert size is 900, outside the fail range 120 to 600
 Duplicate reads is 0.6 in LibC, above the fail limit of 0.5
+Declared sex matches: N, a fail value
 ```
 
 A not-measured check names what is missing: `no HsMetrics file`, `HsMetrics has no
@@ -49,15 +58,18 @@ class = "HsMetrics"             # metrics class, short name or full Java name
 metric = "PCT_TARGET_BASES_20X" # a column, or a ratio: "PF_Q30_BASES / PF_BASES"
 level = "ALL_READS"             # ALL_READS (default), SAMPLE, LIBRARY or READ_GROUP
 select = "CATEGORY=PAIR"        # optional: only rows whose column prints as the value
-warn = "< 0.98"                 # bound: < N, <= N, > N, >= N, outside A..B
+warn = "< 0.98"                 # bound: < N, <= N, > N, >= N, outside A..B, is TEXT
 fail = "< 0.95"                 # at least one of warn and fail; same comparator in both
 plot = "coverage"               # optional plot family for the report
 ```
 
 Rules the parser enforces, each with the file and line in the error: unknown keys and
 unknown tables are errors; `fail` must be at least as strict as `warn` (`< 0.95` beside
-`< 0.98`, `outside 120..600` beside `outside 180..450`); a bound breaks when the value
-is on the named side of the threshold (`< 0.98` breaks at 0.97, holds at 0.98).
+`< 0.98`, `outside 120..600` beside `outside 180..450`; two `is` bounds need the same
+text); a bound breaks when the value is on the named side of the threshold (`< 0.98`
+breaks at 0.97, holds at 0.98); an `is` bound takes one column, not a ratio, and not a
+column the glossary types as `int` or `float`. A rule with an unknown key is reported by
+that key before a missing bound, so `expect = "Y"` says `unknown key expect`.
 
 Row scope. `level` selects rows by their `SAMPLE`, `LIBRARY` and `READ_GROUP` cells:
 `ALL_READS` rows leave all three empty, a `SAMPLE` row fills only `SAMPLE`, a `LIBRARY`
@@ -90,22 +102,29 @@ docs/05 section 4.3 is not built).
 
 ## Shipped presets
 
-`clinical-panel` version 2 carries `note = "reviewed defaults"`: the maintainer reviewed
-its 14 thresholds on 2026-11-06 and kept the version 1 values (decision 2 of docs/05
-section 8). `generic`, `wgs` and `rna-seq` carry `note = "starting values"`. No shipped
-number is a validated limit for any assay: a lab validates and owns its own copy, and the
-verdict is not a release decision.
+`clinical-panel` version 3 carries `note = "reviewed defaults; gap and sex rules are
+starting values"`: the maintainer reviewed its first 14 thresholds on 2026-11-06 and kept
+the version 1 values (decision 2 of docs/05 section 8); the four rules of version 3
+(`gaps.reportable-range`, `gaps.targets-complete`, `sex.match`, `sex.inferred`,
+[docs/06](06_clinical_checks.md)) are starting values. The sex rules live in
+`clinical-panel` only: `generic` and `wgs` stay at version 1, so a `report` or `check` over
+Picard output alone still completes under them. `generic`, `wgs` and `rna-seq` carry
+`note = "starting values"`.
+No shipped number is a validated limit for any assay: a lab validates and owns its own
+copy, and the verdict is not a release decision.
 
 | Preset | Rules | Reads | What completes it |
 |---|---|---|---|
 | `generic` | 6 | alignment summary (3), insert size, quality yield, duplicate metrics | `qc BAM` |
-| `clinical-panel` | 14 | hs metrics (9), alignment summary (3), insert size, quality yield | `qc BAM --panel FILE` (or `--hs BAITS TARGETS`); `-R` for `GC_DROPOUT` |
+| `clinical-panel` | 18 | hs metrics (9), alignment summary (3), insert size, quality yield, coverage gaps (2), sex check (2) | `qc BAM --panel FILE` (or `--hs BAITS TARGETS`); `-R` for `GC_DROPOUT`; `--sex male|female` for `sex.match` to judge a declaration |
 | `wgs` | 10 | `WgsMetrics` (4), alignment summary (3), insert size, quality yield, duplicate metrics | `qc BAM -R FASTA`; `CollectWgsMetrics` reads the BAM on its own |
 | `rna-seq` | 8 | `RnaSeqMetrics` (4), alignment summary (2), quality yield, duplicate metrics | `qc BAM --ref-flat FILE --strand S`; `PCT_RIBOSOMAL_BASES` prints empty without `--ribosomal-intervals`, so that rule reads not measured |
 
 The alignment rules select `CATEGORY=PAIR`; a single-end BAM has no such row, so they
 read not measured and the band is INCOMPLETE until the lab's preset selects `UNPAIRED`.
-The insert size rules select `PAIR_ORIENTATION=FR`.
+The insert size rules select `PAIR_ORIENTATION=FR`. `sex.match` (`fail = "is N"`) passes
+on `Y` and on the empty cell a run without `--sex` writes; `sex.inferred`
+(`warn = "is UNKNOWN"`) warns when the reads give no sex.
 
 The four tables below are rendered from the compiled presets by
 `crates/verdict/tests/doc_presets.rs`, which fails when a table differs from
@@ -133,7 +152,7 @@ Version 1, 6 rules, note `starting values`, hash `6dd89ed0478fd5e4` (the report 
 The table of docs/05 section 4.3, with the rule ids and selectors.
 
 <!-- preset clinical-panel -->
-Version 2, 14 rules, note `reviewed defaults`, hash `e6275515a0d3de26` (the report prints `e62755`).
+Version 3, 18 rules, note `reviewed defaults; gap and sex rules are starting values`, hash `6f0d59319750923f` (the report prints `6f0d59`).
 
 | Rule | Label | Metric | Rows | Warn | Fail | Plot |
 |---|---|---|---|---|---|---|
@@ -151,6 +170,10 @@ Version 2, 14 rules, note `reviewed defaults`, hash `e6275515a0d3de26` (the repo
 | `alignment.chimeras` | Chimeric pairs | `AlignmentSummaryMetrics.PCT_CHIMERAS` | `CATEGORY=PAIR` | `> 0.05` | `> 0.1` |  |
 | `insert.median` | Median insert size | `InsertSizeMetrics.MEDIAN_INSERT_SIZE` | `PAIR_ORIENTATION=FR` | `outside 180..450` | `outside 120..600` | `insert-size` |
 | `yield.q30` | Q30 fraction of PF bases | `QualityYieldMetrics.PF_Q30_BASES / PF_BASES` |  | `< 0.85` | `< 0.75` | `cycle-quality` |
+| `gaps.reportable-range` | Target bases at MIN_DEPTH | `CoverageGapMetrics.PCT_REPORTABLE` |  | `< 0.98` | `< 0.95` | `coverage` |
+| `gaps.targets-complete` | Targets without a gap | `CoverageGapMetrics.PCT_TARGETS_COMPLETE` |  | `< 0.95` | `< 0.9` | `coverage` |
+| `sex.match` | Declared sex matches | `SexCheckMetrics.SEX_MATCH` |  |  | `is N` |  |
+| `sex.inferred` | Inferred sex | `SexCheckMetrics.INFERRED_SEX` |  | `is UNKNOWN` |  |  |
 <!-- end preset clinical-panel -->
 
 ### wgs
@@ -201,8 +224,8 @@ nothing else from a run. Written by `Verdict::to_json`, read back by
   "schema": "bammetrics.verdict/1",
   "tool_version": "0.16.0",
   "sample": "NA12878",
-  "preset": {"name": "clinical-panel", "version": 2, "hash": "e6275515a0d3de26",
-             "source": "built-in", "note": "reviewed defaults"},
+  "preset": {"name": "clinical-panel", "version": 3, "hash": "6f0d59319750923f",
+             "source": "built-in", "note": "reviewed defaults; gap and sex rules are starting values"},
   "status": "fail",
   "counts": {"pass": 8, "warn": 0, "fail": 5, "not_measured": 1},
   "files": [{"path": "s.hs_metrics", "classes": ["picard.analysis.directed.HsMetrics"]}],
@@ -225,7 +248,7 @@ nothing else from a run. Written by `Verdict::to_json`, read back by
 | `status` | `pass`, `warn`, `fail` or `incomplete` |
 | `counts` | checks per status: `pass`, `warn`, `fail`, `not_measured` |
 | `files` | each metrics file read, with its path and the metrics classes it holds, in the order given |
-| `checks` | one per rule, in preset order: `rule`, `label`, `class`, `metric` (`A / B` for a ratio), `level`, `select` (`COLUMN=VALUE` or null), `unit` (the row's sample, library or read group, or null at `ALL_READS`), `value` (a number, or null when not measured), `warn` and `fail` (the bounds as parsed, or null), `status`, `reason` (null on a pass), `plot` (or null) |
+| `checks` | one per rule, in preset order: `rule`, `label`, `class`, `metric` (`A / B` for a ratio), `level`, `select` (`COLUMN=VALUE` or null), `unit` (the row's sample, library or read group, or null at `ALL_READS`), `value` (a number, or null when not measured or judged as text), `text` (the cell's text, present only on a check with an `is TEXT` bound), `warn` and `fail` (the bounds as parsed, or null), `status`, `reason` (null on a pass), `plot` (or null) |
 
 Numbers are JSON numbers; a value that is NaN or infinite is written as null, and the
 check is not measured. The input fingerprint (BAM size, mtime and the hash of its first

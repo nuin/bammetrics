@@ -1,0 +1,12 @@
+## argv
+qc
+tests/data/insert_size.bam
+-o
+OUT/sample
+--sex
+female
+## exit
+2
+## stdout
+## stderr
+bammetrics qc: --sex given, but preset generic has no SexCheckMetrics rule, so no sex check would run

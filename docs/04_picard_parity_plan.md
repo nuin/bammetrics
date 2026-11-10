@@ -27,7 +27,7 @@ Sources: the per-tool inventory (49 tools, each run on Picard 3.5.0), a triage o
 
 ### 1.2 Table of all tools
 
-The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10 groups: Diagnostics and Quality Control 47, Read Data Manipulation 31, Variant Manipulation 12, Genotyping Arrays Manipulation 9, Base Calling 7, Reference 6, Intervals Manipulation 4, Other 2, Variant Evaluation and Refinement 2, Variant Filtering 1. For example CollectGcBiasMetrics, MarkDuplicates and the fingerprint tools all sit in Diagnostics and Quality Control. "Covered elsewhere by" names a tool that gives the same or a similar answer. "Partial" means the numbers differ in definition, so it is not a substitute for concordance.
+The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10 groups: Diagnostics and Quality Control 47, Read Data Manipulation 31, Variant Manipulation 12, Genotyping Arrays Manipulation 9, Base Calling 7, Reference 6, Intervals Manipulation 4, Other 2, Variant Evaluation and Refinement 2, Variant Filtering 1. For example CollectGcBiasMetrics, MarkDuplicates and the fingerprint tools all sit in Diagnostics and Quality Control. "Covered elsewhere by" names a tool that gives the same or a similar answer. "Partial" means the numbers differ in definition, so it is not a substitute for concordance. The two `Clinical` rows (CollectCoverageGaps, CollectSexCheckMetrics) are bammetrics tools with no Picard counterpart and are outside the counts of 1.1.
 
 | Tool | Topic (ours) | Decision | Reason | Covered elsewhere by |
 |---|---|---|---|---|
@@ -44,25 +44,27 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | CollectWgsMetricsWithNonZeroCoverage | Metrics | later | About 60 lines after WGS. Chart needs R, skipped. S | none |
 | CollectHsMetrics | Metrics | core | Main clinical capture metric, 70 columns. XL | mosdepth plus scripts (partial) |
 | CollectTargetedPcrMetrics | Metrics | later | Same collector as Hs with other defaults. M | none |
-| MarkDuplicates | Duplicates | later | Most-used tool, writes BAMs, needs ReadEnds. XL | samtools markdup (different algorithm) |
+| MarkDuplicates | Duplicates | core | Most-used tool, writes BAMs, needs ReadEnds. Shipped in 0.18.0. XL | samtools markdup (different algorithm) |
 | MarkDuplicatesWithMateCigar | Duplicates | out | Gives different flags than MarkDuplicates on the same input. L | none |
 | SimpleMarkDuplicatesWithMateCigar | Duplicates | out | Test aid in the Picard source. M | none |
 | UmiAwareMarkDuplicatesWithMateCigar | Duplicates | later | UMI graph, fails on multi-library input in Picard. L | fgbio, UMI-tools (partial) |
 | CollectDuplicateMetrics | Duplicates | core | Pure flag counting, builds the DuplicationMetrics block. S | samtools stats (partial) |
 | EstimateLibraryComplexity | Duplicates | core | Works on unaligned input, no BAM output. M | none |
-| CheckDuplicateMarking | Duplicates | later | Validator, exit code is the output. S | none |
+| CheckDuplicateMarking | Duplicates | core | Validator, exit code is the output. Shipped in 0.19.0. S | none |
 | CollectUmiPrevalenceMetrics | Duplicates | later | Small output, but inverted barcode filter to copy. M | none |
 | CollectIndependentReplicateMetrics | Duplicates | out | Alpha research tool, niche protocol. L | none |
 | CollectGcBiasMetrics | Metrics | core | Standard WGS bias QC, reference windows plus read starts. M | Picard only (deepTools computeGCBias, partial) |
-| CollectSequencingArtifactMetrics | Metrics | later | 5 output files, pro/con rules. FFPE and OxoG use. L | none |
-| CollectOxoGMetrics | Metrics | later | Needs pileup, Java hash row order. M | none |
-| ConvertSequencingArtifactToOxoG | Metrics | later | Text conversion, needs the artifact tool. S | none |
+| CollectSequencingArtifactMetrics | Metrics | core | 5 output files, pro/con rules. FFPE and OxoG use. Shipped in 0.19.0. L | none |
+| CollectOxoGMetrics | Metrics | core | Needs pileup, Java hash row order. Shipped in 0.19.0. M | none |
+| ConvertSequencingArtifactToOxoG | Metrics | core | Text conversion, needs the artifact tool. Shipped in 0.19.0. S | none |
 | CollectSamErrorMetrics | Metrics | later | About 30 stratifiers, research tool. XL | none |
 | CollectRrbsMetrics | Metrics | later | RRBS niche, level quirks. M | Bismark reports (partial) |
 | CollectRnaSeqMetrics | Metrics | core | Mainstream RNA-seq QC (nf-core/rnaseq). L | RSeQC, Qualimap (partial) |
-| CollectJumpingLibraryMetrics | Metrics | later | Mate-pair libraries are rare. S | none |
+| CollectJumpingLibraryMetrics | Metrics | core | Mate-pair libraries are rare. Shipped in 0.19.0. S | none |
 | CollectMultipleMetrics | Metrics | core | Most users call this wrapper. Single pass is a speed argument. M | none |
-| BamIndexStats | Metrics | later | Same numbers as samtools idxstats. S | samtools idxstats |
+| BamIndexStats | Metrics | core | Same numbers as samtools idxstats. Shipped in 0.19.0. S | samtools idxstats |
+| CollectCoverageGaps | Clinical | core | Not a Picard tool, shipped 0.19.0, see docs/06. Target runs under MIN_DEPTH as a BED. S | mosdepth plus scripts (partial) |
+| CollectSexCheckMetrics | Clinical | core | Not a Picard tool, shipped 0.19.0, see docs/06. X and Y read ratios against EXPECTED_SEX. S | somalier, peddy (different method) |
 | ValidateSamFile | Diagnostics | out | Defined by htsjdk parser behaviour over about 70 rules. XL | samtools quickcheck (partial) |
 | CompareMetrics | Diagnostics | core | The oracle comparator. Its semantics go into the harness. S | none |
 | CompareSAMs | Diagnostics | later | Pipeline regression check. Quirks to copy. M | none |
@@ -436,7 +438,7 @@ Release rule: a phase ends in a tagged release. A tool is listed "concordant" in
 | P6 RNA | 0.10.0 | M17. CollectRnaSeqMetrics with ribosomal intervals and the 101-row histogram | CollectRnaSeqMetrics | nf-core-style stranded RNA slice matches |
 | P7 Variants | 0.11.0 | M20, M21, M22. CollectVariantCallingMetrics, GenotypeConcordance, then AccumulateVariantCallingMetrics (needs M22; move it to the later queue instead if M22 is not ready) | CollectVariantCallingMetrics, GenotypeConcordance | Scheme table cells all hit by the corpus. Zero `UNTESTED` columns |
 | P8 Release 1.0 | 1.0.0 | CompareMetrics CLI. Stability gate (two clean releases). Full validation pack. Register frozen | All 19 core tools at C2, a subset at C3 | Section 5.9 criteria |
-| P9 Later queue | 1.x | In order: MarkDuplicates (metrics and flags, needs M13, M18, M19), SequencingArtifact + ConvertToOxoG + OxoG (need M22), Jumping, Rrbs, BamIndexStats, ReadGroupChecksum, CheckTerminatorBlock, FindMendelianViolations, SNVQ, UmiPrevalence, UmiAware (M19), fingerprint family (M22), SamErrorMetrics | Each at C2 before its release note | Each later tool re-reads the Picard source for its unread parts first (ArtifactCounter, BaseCalculator, ConvertSequencingArtifactToOxoG) |
+| P9 Later queue | 1.x | Shipped from this queue: MarkDuplicates (0.18.0), SequencingArtifact, ConvertToOxoG, OxoG and BamIndexStats (0.19.0). Still in order: Rrbs, ReadGroupChecksum, CheckTerminatorBlock, FindMendelianViolations, SNVQ, UmiPrevalence, UmiAware (M19), fingerprint family (M22), SamErrorMetrics | Each at C2 before its release note | Each later tool re-reads the Picard source for its unread parts first |
 
 P2 status (2026-11-02, branch `feat/p2-read-level`): built. M11 is `quality.rs`, M12 is `cycle.rs`. QualityScoreDistribution, MeanQualityByCycle, CollectBaseDistributionByCycle, CollectDuplicateMetrics (not on main before P2; built here) and AccumulateQualityYieldMetrics are in the registry; CollectQualityYieldMetrics moved there. `tests/concordance/test_read_level.py` runs 332 file comparisons and 8 error-parity cases on T0 to T3, the foundation corpus and the `read_level_bams.py` BAMs: 152,643 cells, all identical, and every file body identical byte for byte after the header lines, histogram-only files included. Gate 2: every option that changes a number has a non-default case (`ASSUME_SORTED=false` and `FLOW_MODE=true` as error parity). Gate 5: every column has 3 distinct non-default values except CollectBaseDistributionByCycle READ_END (1 or 2) and CollectDuplicateMetrics READ_PAIR_OPTICAL_DUPLICATES (always 0). Gate 3 was checked by hand: seven planted faults (no second-end offset rule, unpaired second flag as second end, no reverse flip, no-calls counted, pairs not halved, `=` as C, Accumulate READ_LENGTH off by one) each fail cases; there is no `tests/concordance/faults/` runner yet. Claim level: C1 for the six tools (T1 seeds, T2 slices and fuzz are not run).
 
@@ -458,7 +460,7 @@ Order rationale:
 - P3 holds M18 because EstimateLibraryComplexity needs the optical duplicate finder.
 - P4 (pileup) is independent of Hs on main, so it follows the verified tools and is not a prerequisite for P5.
 - P7 is last of the core because the VCF layer shares nothing with the BAM path.
-- MarkDuplicates leads the later queue because it is the most used tool, but it needs M19 and BAM writing, which doubles the surface to validate.
+- MarkDuplicates led the later queue because it is the most used tool; it needed M19 and BAM writing, which doubled the surface to validate, and shipped in 0.18.0.
 
 ## 5. Validation model
 

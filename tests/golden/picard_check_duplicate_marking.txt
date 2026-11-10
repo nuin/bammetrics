@@ -1,0 +1,22 @@
+## argv
+CheckDuplicateMarking
+I=tests/data/duplicate_marking.bam
+O=OUT/bad_querynames.txt
+## exit
+1
+## stdout
+## stderr
+WARNING	CheckDuplicateMarking	Reads with queryname r2 have different duplicate flags (at chr1:1060)
+WARNING	CheckDuplicateMarking	Reads with queryname r4 have different duplicate flags (at chr1:1060)
+WARNING	CheckDuplicateMarking	Reads with queryname r4 have different duplicate flags (at chr1:1070)
+WARNING	CheckDuplicateMarking	Reads with queryname r5 have different duplicate flags (at null:1030)
+WARNING	CheckDuplicateMarking	Reads with queryname r6 have different duplicate flags (at chr1:1080)
+WARNING	CheckDuplicateMarking	Reads with queryname r7 have different duplicate flags (at null:0)
+ERROR	CheckDuplicateMarking	Found 6 records that do not agree on their duplicate flag.
+## file bad_querynames.txt
+r2
+r4
+r4
+r5
+r6
+r7

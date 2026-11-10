@@ -1,0 +1,11 @@
+## argv
+CollectSequencingArtifactMetrics
+I=tests/data/artifact.bam
+O=OUT/artifact
+R=tests/data/ref_100k.fa
+CONTEXTS_TO_PRINT=AC
+## exit
+1
+## stdout
+## stderr
+bammetrics: Context AC is not the length implied by CONTEXT_SIZE: 3

@@ -45,8 +45,8 @@ fn block(preset: &Preset) -> String {
             rule.class,
             rule.metric_text(),
             rows.join(", "),
-            code(rule.warn.map(|b| b.to_string())),
-            code(rule.fail.map(|b| b.to_string())),
+            code(rule.warn.as_ref().map(ToString::to_string)),
+            code(rule.fail.as_ref().map(ToString::to_string)),
             code(rule.plot.clone()),
         ));
     }
@@ -125,10 +125,11 @@ fn verdict_md_summary_counts_match_the_compiled_presets() {
 }
 
 /// The shipped note: `clinical-panel` was reviewed (decision 2 of docs/05
-/// section 8), the other presets still carry starting values.
+/// section 8) and its version 3 gap and sex rules are starting values
+/// (docs/06); the other presets still carry starting values.
 fn expected_note(name: &str) -> &'static str {
     if name == "clinical-panel" {
-        "reviewed defaults"
+        "reviewed defaults; gap and sex rules are starting values"
     } else {
         "starting values"
     }

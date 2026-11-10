@@ -163,10 +163,14 @@ pub fn text(verdicts: &[Verdict], code: u8, fail_on: FailOn) -> String {
             .checks
             .iter()
             .map(|check| {
-                let value = check.value.map_or_else(
-                    || "?".to_owned(),
-                    bammetrics_core::metrics_file::format_double,
-                );
+                // A text check shows its cell (an empty cell as `empty`,
+                // as the page does), a not-measured check `?`.
+                let value = match (check.value, &check.text) {
+                    (Some(v), _) => bammetrics_core::metrics_file::format_double(v),
+                    (None, Some(text)) if text.is_empty() => "empty".to_owned(),
+                    (None, Some(text)) => text.clone(),
+                    (None, None) => "?".to_owned(),
+                };
                 let bounds: Vec<String> = [("warn", &check.warn), ("fail", &check.fail)]
                     .into_iter()
                     .filter_map(|(name, b)| b.as_ref().map(|b| format!("{name} {b}")))

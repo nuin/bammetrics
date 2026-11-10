@@ -1,0 +1,12 @@
+## argv
+MarkDuplicates
+I=tests/data/markdup.bam
+O=OUT/marked.bam
+M=OUT/markdup_metrics.txt
+AS=true
+ASO=coordinate
+## exit
+1
+## stdout
+## stderr
+bammetrics: ASSUME_SORTED and ASSUME_SORT_ORDER cannot be used together

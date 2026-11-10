@@ -33,8 +33,8 @@ registry runs the Picard face, untouched; then a grammar verb (a tool verb, `col
 | Group | Verbs |
 |---|---|
 | Run | `qc` (the collectors a preset needs, one pass, files, verdict, page), `collect` (the same pass, no verdict), one verb per registry tool |
-| Prepare | `bed-to-interval-list`; `mark-duplicates` is reserved for parity plan P9 and not built |
-| Post | `accumulate-quality-yield`, `accumulate-variant-calling`, `compare-metrics`, `report`, `check` |
+| Prepare | `bed-to-interval-list`, `mark-duplicates` |
+| Post | `accumulate-quality-yield`, `accumulate-variant-calling`, `compare-metrics`, `check-duplicate-marking`, `report`, `check` |
 | Info | `tools`, `presets`, `plan`, `help`, `completions` |
 
 ```bash
@@ -123,17 +123,18 @@ above where a verb has them.
 - A single-file verb writes `-o FILE`. Without `-o`, or with `-o -`, the file goes to
   standard output.
 - A multi-file verb (`gc-bias`, `multiple-metrics`, `variant-calling`,
-  `accumulate-variant-calling`, `genotype-concordance`, `collect`, `qc`) writes under `-o
-  PREFIX`. Without `-o` the prefix is `./` plus the input name without its extension, and
-  stderr (the summary for `qc`) says so. An `-o` that ends in `/` or names an existing
-  directory gets that name as the file part (`-o out/` writes `out/NA12878.*`). `-o -` is
-  an error.
+  `accumulate-variant-calling`, `genotype-concordance`, `sequencing-artifact`,
+  `convert-sequencing-artifact-to-oxo-g`, `collect`, `qc`) writes under `-o PREFIX`.
+  Without `-o` the prefix is `./` plus the input name without its extension, and stderr
+  (the summary for `qc`) says so. An `-o` that ends in `/` or names an existing directory
+  gets that name as the file part (`-o out/` writes `out/NA12878.*`). `-o -` is an error.
 - The names after the prefix come from one table, `multiple_metrics::file_extensions`, the
   `CollectMultipleMetrics` program extensions (`.alignment_summary_metrics`,
   `.insert_size_metrics`, `.quality_yield_metrics`, `.gc_bias.detail_metrics`, ...) plus
   `.hs_metrics`, `.duplicate_metrics`, `.wgs_metrics` and `.rna_metrics`. `collect`, `qc`
   and the verbs read it; a test pins it, and another checks the verbs against
-  `CollectMultipleMetrics O=PREFIX`.
+  `CollectMultipleMetrics O=PREFIX`. The `CollectSequencingArtifactMetrics` entry is
+  `("OUTPUT", "")`: the program takes the prefix itself and adds its five extensions.
 - Several Hs runs write `PREFIX.<BAIT_SET>.hs_metrics`, `BAIT_SET` being the bait file name
   up to its first dot. Two bait files with one stem are an error.
 - Run files of `qc`: `PREFIX.manifest.json`, `PREFIX.verdict.json`, `PREFIX.report.html`,
@@ -145,7 +146,8 @@ above where a verb has them.
   written.
 - `-` as the input reads the BAM or CRAM from standard input on the verbs only; the header line
   reads `INPUT=-`. The Picard face reads a file named `-` and writes `O=-` to a file named
-  `-`, as listed in KNOWN_DIFFERENCES.md.
+  `-`, as listed in KNOWN_DIFFERENCES.md. `jumping-library` is the one exception: it reads
+  each input twice, so `-`, `/dev/stdin` and a pipe are a usage error (exit 2).
 - The sample name is never written into a Picard file, which stays byte-compatible. It goes
   into the json forms, the verdict, the page and the manifest.
 
@@ -180,7 +182,9 @@ killed by a bad sample, and its summary prints `use --fail-on fail or bammetrics
 gate`. `report` exits 0 on any verdict. `check` always gates. A `qc` run with a failed
 collector exits 1 after it writes the other files, the verdict and the page. The tool verbs
 and `collect` exit 0, 1 or 2; the Picard face keeps 0 and 1. `compare-metrics` and
-`CompareMetrics` exit 1 when the two files are NOT equal, as Picard does.
+`CompareMetrics` exit 1 when the two files are NOT equal, as Picard does;
+`check-duplicate-marking` and `CheckDuplicateMarking` exit 1 when a record's duplicate flag
+differs from the first record of its queryname.
 
 ## Errors
 
@@ -244,6 +248,14 @@ table.
 | `bed-to-interval-list` | BedToIntervalList | one interval list |
 | `compare-metrics` | CompareMetrics (two metrics files as positionals) | the comparison text |
 | `create-sequence-dictionary` | CreateSequenceDictionary (input is a FASTA) | one `.dict` |
+| `sequencing-artifact` | CollectSequencingArtifactMetrics (needs `-R`) | `PREFIX.{pre_adapter,bait_bias}_{detail,summary}_metrics`, `PREFIX.error_summary_metrics` |
+| `convert-sequencing-artifact-to-oxo-g` | ConvertSequencingArtifactToOxoG (input is a `sequencing-artifact` prefix) | `PREFIX.oxog_metrics` |
+| `oxo-g` | CollectOxoGMetrics (needs `-R`) | one |
+| `coverage-gaps` | CollectCoverageGaps (not a Picard tool, [docs/06](06_clinical_checks.md); `--targets` or `--panel`) | one (plus the `--gaps-file` BED) |
+| `sex-check` | CollectSexCheckMetrics (not a Picard tool, docs/06; `--sex male|female`, `--targets` for a panel) | one |
+| `bam-index-stats` | BamIndexStats (reads the `.bai` or `.csi` beside the BAM) | Picard's text on standard output |
+| `check-duplicate-marking` | CheckDuplicateMarking | the bad querynames, one line per record |
+| `jumping-library` | CollectJumpingLibraryMetrics (one or more coordinate-sorted BAMs as positionals, read in turn; standard input refused) | one metrics file |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -251,10 +263,31 @@ S=P.gc_bias.summary_metrics` write the same metrics (the `StringHeader` command 
 the options in the order the verb passes them). `crates/cli/tests/grammar.rs` checks that
 for every tool.
 
+`oxo-g` follows the naming rule: `CollectOxoGMetrics` without `Collect` and `Metrics` is
+`OxoG`, two words in kebab case. It writes one `CpcgMetrics` row per context and library.
+`--context-size N` sets the bases on each side of the C (default 1, at most 4 without
+`--contexts`), and each `--contexts ACA` adds one context to report:
+
+```bash
+bammetrics oxo-g sample.bam -R ref.fa -o sample.oxog_metrics
+bammetrics oxo-g sample.bam -R ref.fa --contexts CCG --contexts TCG --db-snp dbsnp.vcf
+```
+
 `multiple-metrics --program X` adds to Picard's default five programs, as `PROGRAM=` does;
 `--program null` first clears them. The accumulate verbs and `bed-to-interval-list` are
 listed here because the registry runs them; they are described under post and prepare,
 as is `create-sequence-dictionary`.
+
+`coverage-gaps` and `sex-check` are the two clinical checks of
+[docs/06](06_clinical_checks.md), with no Picard counterpart. `bammetrics coverage-gaps
+BAM --panel panel.bed --gaps-file gaps.bed -o gaps.txt` writes one
+`CoverageGapMetrics` row (`PCT_REPORTABLE`, `GAP_COUNT`, `LARGEST_GAP`,
+`PCT_TARGETS_COMPLETE`, a histogram of gap lengths) and the BED of maximal runs of target
+bases under `--min-depth` (default 20); its depth is the `CollectHsMetrics` per-base depth,
+so `--min-depth 20` gives `PCT_TARGET_BASES_20X`. `bammetrics sex-check BAM --sex male`
+writes one `SexCheckMetrics` row: reads per base on X, Y and the autosomes against the
+`@SQ` lengths (or the target bases with `--targets`), the ratios, `INFERRED_SEX`
+(`FEMALE`, `MALE`, `UNKNOWN`) and `SEX_MATCH` against the declaration.
 
 ### The 0.12 subcommands
 
@@ -317,19 +350,61 @@ bammetrics collect in.bam -o out/sample -R ref.fa \
 For the by-cycle tools and gc bias on one read, use `multiple-metrics` (see the chaining
 examples).
 
+### bam-index-stats
+
+```bash
+bammetrics bam-index-stats sample.bam
+bammetrics bam-index-stats sample.bam --format tsv       # the lines samtools idxstats prints
+bammetrics bam-index-stats sample.cram -R ref.fa -o stats.txt
+bammetrics BamIndexStats I=sample.bam
+```
+
+Picard's `BamIndexStats` reads the index beside the BAM and prints one line per `@SQ`
+line of the header, `NAME length=<tab>LENGTH<tab>Aligned= N<tab>Unaligned= N`, then
+`NoCoordinateCount= N`. The counts are the mapped and unmapped record counts `samtools
+index` stores in the metadata bin of each reference and the trailing count of records
+without a coordinate. Both faces print that text byte for byte; the verb writes it to `-o`.
+Picard has no `OUTPUT` option, so `O=` on the Picard face exits 1 with `Unrecognized
+option: O`, as in Picard.
+
+- The index is found as htsjdk finds it: `x.bai`, `x.csi`, `x.bam.bai`, `x.bam.csi` beside
+  `x.bam`, in that order, then the same names beside the file a symbolic link points to.
+  A CSI index holds the same counts. Without one both tools exit 1 with `No index for bam
+  file x.bam`.
+- A reference the index has no metadata for prints `Aligned= 0` and `Unaligned= 0`. A header
+  with more `@SQ` lines than the index has references exits 1 (Picard throws
+  `ArrayIndexOutOfBoundsException` after printing the lines it could; bammetrics prints
+  nothing and names both counts). An index with more references than the header prints the
+  header's references, as Picard does.
+- A CRAM has no `.bai`: with `-R` its records are counted (a record without a reference has
+  no coordinate, one with a reference is unaligned when its unmapped flag is set, aligned
+  otherwise), which gives the text Picard prints for the BAM of the same records. Picard
+  3.5.0 opens the CRAM as a BAM and fails. A BAM on standard input (`-`) is counted the same
+  way; `--threads` applies to those reads only.
+- `--format json`, `jsonl`, `tsv` and `human` print one row per reference (`reference`,
+  `length`, `aligned`, `unaligned`) and a last row `*` whose `unaligned` is the
+  `NoCoordinateCount`, the row `samtools idxstats` prints; the tsv body is that command's
+  output. The json forms carry `--sample` (default the first `@RG SM`).
+- `ASSUME_SORTED` is rejected, as Picard rejects it. `VALIDATION_STRINGENCY`, `QUIET` and
+  the other plumbing options are accepted and ignored.
+
 ### qc
 
 ```bash
 bammetrics qc BAM [-o PREFIX] [-R FASTA] [--preset NAME|FILE] [--hs BAITS TARGETS]... [--panel FILE]
-              [--ref-flat FILE --strand STRAND [--ribosomal-intervals FILE]] [--sample NAME]
-              [--fail-on warn|fail] [--resume | --force] [--threads N] [--format text|jsonl] [-q]
-              [--all-plots] [--date ISO]
+              [--ref-flat FILE --strand STRAND [--ribosomal-intervals FILE]] [--sex male|female]
+              [--sample NAME] [--fail-on warn|fail] [--resume | --force] [--threads N]
+              [--format text|jsonl] [-q] [--all-plots] [--date ISO]
 ```
 
 `qc` runs the collectors the preset's rules need (`generic` without `--preset`; it never
 picks a clinical preset by itself), on one read of the BAM, then writes the verdict and
 the page. `--hs` or `--panel` adds `CollectHsMetrics` and `--ref-flat` adds
-`CollectRnaSeqMetrics` whether or not a rule reads them. A rule whose collector cannot run
+`CollectRnaSeqMetrics` whether or not a rule reads them. `--sex` is the declared sex for
+`CollectSexCheckMetrics` (`EXPECTED_SEX`), which only the `clinical-panel` preset runs
+(`generic` and `wgs` have no `SexCheckMetrics` rule, so `--sex` under them exits 2); the
+panel targets (`--panel`, else the first `--hs` pair's targets) reach it and
+`CollectCoverageGaps`. A rule whose collector cannot run
 is listed as not measured with the reason (`needs --hs BAITS TARGETS or --panel FILE`,
 `needs -R FASTA`), and the verdict reads INCOMPLETE.
 
@@ -343,6 +418,8 @@ is listed as not measured with the reason (`needs --hs BAITS TARGETS or --panel 
 | GcBiasSummaryMetrics, GcBiasDetailMetrics | CollectGcBiasMetrics | `-R` | `PREFIX.gc_bias.detail_metrics`, `PREFIX.gc_bias.summary_metrics` |
 | RnaSeqMetrics | CollectRnaSeqMetrics | `--ref-flat`, `--strand` | `PREFIX.rna_metrics` |
 | WgsMetrics | CollectWgsMetrics, on a read of its own | `-R` | `PREFIX.wgs_metrics` |
+| SexCheckMetrics | CollectSexCheckMetrics | (`--sex`, the panel targets when given) | `PREFIX.sex_check_metrics` |
+| CoverageGapMetrics | CollectCoverageGaps | the panel targets | `PREFIX.coverage_gaps`, `PREFIX.coverage_gaps.bed` (manifest kind `gaps`, not a verdict input) |
 
 Each metrics file is byte for byte what `bammetrics <Collector> INPUT=BAM OUTPUT=FILE ...`
 writes for the argv the manifest records, apart from the `Started on` line. The header
@@ -496,9 +573,62 @@ the dictionary of `R=ref.fa`.
 
 ### mark-duplicates
 
-Reserved for parity plan P9 (docs/05 section 2.5, example 9). It is not built:
-`bammetrics mark-duplicates` exits 2 as an unknown verb. `duplicate-metrics marked.bam`
-works on a BAM marked by another tool.
+```bash
+bammetrics mark-duplicates in.bam -o marked.bam --metrics marked.markdup_metrics
+bammetrics mark-duplicates a.bam b.bam -o - --metrics ab.markdup_metrics --tagging-policy All | samtools flagstat -
+bammetrics MarkDuplicates I=in.bam O=marked.bam M=marked.markdup_metrics TMP_DIR=/scratch
+```
+
+The verb runs `MarkDuplicates`, Picard 3.5.0's duplicate marker (0.18.0). `-o BAM` is
+`OUTPUT`, the BAM it writes; `-o -` writes it to standard output. `--metrics-file`
+(`--metrics`, `-M`, `METRICS_FILE=`) is the `DuplicationMetrics` file. Both are required.
+`--format` takes `picard` only.
+
+- `OUTPUT` holds every input record in input order. The duplicate flag (0x400) is set on
+  each duplicate and cleared on every other record, so a flag from an earlier run does
+  not survive. `--remove-duplicates` leaves duplicates out, and
+  `--remove-sequencing-duplicates` leaves out optical duplicates.
+- The header gains one `@PG` line per distinct `PG` value of the input records, chained
+  with `PP` to that value, and each record's `PG` tag names its new line. The ID is
+  `MarkDuplicates`, then `MarkDuplicates.1` and so on when the ID is taken, as Picard
+  numbers them. `VN` is `bammetrics` and the version, `CL` the bammetrics command line;
+  `--program-group-version` and `--program-group-command-line` replace them.
+  `--program-record-id null` adds no line and changes no `PG` tag;
+  `--no-add-pg-tag-to-reads` keeps the lines and leaves the tags.
+- The metrics file has one row per library and the `set_size` histograms `all_sets`,
+  `optical_sets` and `non_optical_sets`; with one library and a size estimate the
+  `CoverageMult` column comes first and the key reads `BIN`.
+- The input may be coordinate sorted or query-name sorted (by the header or by
+  `--assume-sort-order`). In query-name order the secondary, supplementary and
+  unmapped records of a duplicate template are flagged too. Any other order exits 1
+  after the first read. Several `-i` inputs are merged as Picard merges them; their
+  dictionaries must be equal.
+- The input is read twice. Standard input and pipes are copied to `--tmp-dir` first.
+  Read ends and index lists are sorted in runs of `--max-records-in-ram` entries (1 or
+  more, default 4,000,000) spilled to `--tmp-dir` (default the system temporary
+  directory). Mates waiting for a mate on a later reference are spilled there too, one
+  file per reference; memory holds those waiting on the reference being read. The
+  directory `bammetrics-markdup.<pid>.<n>` is made at the first spill and removed at the
+  end, on an error, and on SIGINT, SIGTERM or SIGHUP; a SIGKILL leaves it.
+- `--tmp-dir` needs about 55 bytes per input record at its peak, during the first read:
+  6.5 GiB for the 150.5M-record HG002 exome, 42.1 GiB for a 768.6M-record genome (about
+  the size of the output BAM). Peak memory was 0.8 GB on the exome and 2.75 GB on the
+  genome at the default `--max-records-in-ram`.
+- `-o` and `--metrics-file` are written under temporary names in their directories and
+  renamed at the end, so a failed or interrupted run leaves an earlier file whole. An
+  output that is an input (by path, symbolic link or hard link), or two outputs that
+  name one file, exit 2 before anything is read.
+- A CRAM input needs `-R`. Its records come out with the `MD` and `NM` tags htsjdk
+  rebuilds while decoding. The output is always BAM: an `-o` ending in `.sam` or `.cram`
+  exits 2 (the Picard face exits 1). SAM input, plain or bgzipped, exits 1 on both faces
+  (`SAM input is not supported`); convert it with `samtools view -b`.
+- `--create-index` writes `marked.bai` beside a coordinate-sorted BAM;
+  `--create-md5-file` writes `marked.bam.md5`. `--compression-level` sets the BGZF level
+  (default 5). `--threads` sets the BGZF decompression threads, or the CRAM container
+  decoders, and the BGZF compression workers of the output.
+
+KNOWN_DIFFERENCES.md lists what differs from Picard: the `@PG` `VN` and `CL`, the flow
+options it refuses, the `READ_NAME_REGEX` syntax and the `MAX_RECORDS_IN_RAM` meaning.
 
 ## Post verbs
 
@@ -512,6 +642,25 @@ bammetrics AccumulateQualityYieldMetrics I=out/a.qy I=out/b.qy O=out/sample.qy
 Files in, file out; no BAM is read. The two forms write the same metrics.
 `accumulate-variant-calling` takes the prefixes `variant-calling` wrote and writes the two
 files under `-o PREFIX`, inverting the printed ratios into counts as Picard does.
+
+### convert-sequencing-artifact-to-oxo-g
+
+```bash
+bammetrics sequencing-artifact sample.bam -R ref.fa -o out/sample
+bammetrics convert-sequencing-artifact-to-oxo-g out/sample -o out/sample
+bammetrics ConvertSequencingArtifactToOxoG I=out/sample
+```
+
+Reads `PREFIX.pre_adapter_detail_metrics` and `PREFIX.bait_bias_detail_metrics` and writes
+`PREFIX.oxog_metrics`, the `CpcgMetrics` rows `CollectOxoGMetrics` writes: one per library
+and C-centred context. The positional argument is `INPUT_BASE`; `--pre-adapter-in` and
+`--bait-bias-in` name the two files when `FILE_EXTENSION` renamed them, `--oxog-out` the
+output. With `--pre-adapter-in`, `--bait-bias-in` and `--oxog-out` the verb needs neither a
+positional prefix nor `-o`. The Picard face defaults `OUTPUT_BASE` to `INPUT_BASE`; the verb,
+like every prefix verb, defaults `-o` to `./` plus the prefix's file name. `--oxog-out` may
+not name either detail file: the run fails and leaves both in place. A detail file cut by
+`CONTEXTS_TO_PRINT` that lacks a context the conversion needs fails the run, as in Picard.
+The name is the naming rule applied to the class (`oxo-g` from `OxoG`).
 
 ### compare-metrics
 
@@ -551,6 +700,55 @@ differences as a `CompareMetrics$MetricComparisonDifferences` metrics file.
   (standard input read twice) are usage errors (exit 2). The Picard face writes over an
   input as Picard does.
 - `-h` and `--help` print this help and exit 0; Picard prints its usage and exits 1.
+
+### check-duplicate-marking
+
+```bash
+bammetrics check-duplicate-marking marked.qname.bam
+bammetrics check-duplicate-marking marked.bam -o bad_querynames.txt --mode PRIMARY_MAPPED_ONLY
+bammetrics CheckDuplicateMarking I=marked.qname.bam O=bad_querynames.txt MODE=PRIMARY_ONLY
+```
+
+A marked BAM or CRAM in, the querynames whose records disagree on the duplicate flag
+(0x400) out; Picard 3.5.0's `CheckDuplicateMarking`, exit code included: 0 when every
+queryname agrees, 1 when a record differs from the first record of its queryname or on an
+error. Whether the marking is right is not checked. The verb writes one line per record
+that disagrees (a name repeats when two of its records do) to `-o`, or to standard output,
+and the summary (`All records' duplicate markings agree.` or `Found N records that do not
+agree on their duplicate flag.`) on standard error. The Picard face writes `O=` only and
+prints Picard's log lines on standard error without their timestamp: one `WARNING` per bad
+record for the first 100 (`Reads with queryname NAME have different duplicate flags (at
+CONTIG:START)`, `null` for an unmapped record), then `Further warnings will be
+suppressed.`, then the summary at `ERROR` or `INFO`.
+
+- `SO:queryname` is read in file order, and only adjacent records are one queryname: a
+  name that comes back later starts a new group, as Picard's single current name does.
+  Any other header (coordinate, unsorted, unknown, no `@HD`) logs `Input file isn't
+  queryname sorted. Sorting into temp space.` and is sorted first, in Picard's
+  `SAMRecordQueryNameComparator` order (name by bytes, first of pair before second,
+  paired before unpaired, forward before reverse, primary before supplementary before
+  secondary, `HI` ascending after records without one, file order between ties).
+  bammetrics keeps the sort keys in memory and writes no temporary file.
+- `--mode` (`MODE`) is `ALL` (default), `PRIMARY_ONLY` (secondary and supplementary records
+  dropped), `PRIMARY_MAPPED_ONLY` (unmapped records dropped too) or
+  `PRIMARY_PROPER_PAIR_ONLY` (proper pairs only; an unpaired record is an error, as
+  Picard's `getProperPairFlag` throws). A dropped record does not change the current name.
+- `--verbosity ERROR` drops the INFO and WARNING log lines, `WARNING` the INFO lines. The
+  verb's summary on standard error follows the same rule: it is an INFO line when every
+  name agrees and an ERROR line otherwise, so `--verbosity ERROR` prints it only on a bad
+  marking.
+- `--tmp-dir` and `--max-records-in-ram` are accepted and ignored: a file without
+  `SO:queryname` is sorted in memory, so memory grows with the file.
+- Read names print byte by byte, as htsjdk decodes them: a name holding UTF-8 bytes
+  above 127 prints each byte as one character, as Picard prints it.
+- An `-o` (or `O=`) that is the input file is refused before the read.
+- `--format json`, `jsonl`, `tsv` and `human` print one row per bad record: `read_name`,
+  `contig` (empty for an unmapped record) and `start` (0 without a position).
+- `ASSUME_SORTED` and `STOP_AFTER` are not options of Picard's tool and exit 1 on the
+  Picard face, 2 on the verb.
+- Python `check_duplicate_marking(bam, mode=..., output=...)` returns the rows; an empty
+  list means every queryname agrees. It raises nothing for a bad marking, only for an
+  error (a bad `mode`, an unpaired record under `PRIMARY_PROPER_PAIR_ONLY`).
 
 ### report
 
@@ -604,8 +802,9 @@ sample. It writes no file. Exit codes: the table above, with `--fail-on fail` by
 
 - `bammetrics tools`: every verb and the Picard class it runs, then the other verbs.
 - `bammetrics presets`: the built-in verdict presets with version, the first 6 characters
-  of the content hash, rule count and note (`clinical-panel   v2  e62755  14 rules  reviewed
-  defaults`). Every rule is listed in [docs/verdict.md](verdict.md).
+  of the content hash, rule count and note (`clinical-panel   v3  6f0d59  18 rules  reviewed
+  defaults; gap and sex rules are starting values`). Every rule is listed in
+  [docs/verdict.md](verdict.md).
 - `bammetrics help VERB|PicardClass`: the verb's options in every spelling; `help qc` (or
   `plan`, `check`, `report`) prints clap's help.
 - `bammetrics completions bash|zsh|fish|elvish|powershell`: a completion script on stdout
@@ -636,6 +835,7 @@ bammetrics CollectInsertSizeMetrics --INPUT in.bam --OUTPUT out.txt \
 bammetrics CollectAlignmentSummaryMetrics I=in.bam O=out.txt R=ref.fa
 bammetrics CollectHsMetrics I=in.bam O=out.txt R=ref.fa \
     BAIT_INTERVALS=panel.interval_list TARGET_INTERVALS=panel.interval_list
+bammetrics CollectJumpingLibraryMetrics I=lane1.bam I=lane2.bam O=out.txt MQ=20 T=100
 ```
 
 The Picard face takes `KEY=VALUE`, `--KEY VALUE`, `--KEY=VALUE` and `-K VALUE` with long
@@ -654,7 +854,7 @@ purpose is listed in KNOWN_DIFFERENCES.md.
 
 The worked examples of docs/05 section 2.5 that work today, written against the committed
 fixtures so each runs from the repository root as shown (`tests/data/insert_size.bam` has
-no `@RG SM`, so the sample is the BAM name). Output is what 0.17.0 prints; long lines are
+no `@RG SM`, so the sample is the BAM name). Output is what 0.19.0 prints; long lines are
 cut.
 
 **1 and 2. One tool, as Picard text or machine-readable.**
@@ -681,17 +881,23 @@ wrote 7 files to out/quick/S1.*, report out/quick/S1.report.html
 ```
 $ bammetrics qc tests/data/insert_size.bam --preset clinical-panel --panel tests/data/targets.bed \
       -R tests/data/ref_100k.fa -o out/NA12878
-insert_size  FAIL  preset clinical-panel v2 (e62755)  4 collectors, 1 BAM read (10 records)
+insert_size  FAIL  preset clinical-panel v3 (6f0d59)  6 collectors, 1 BAM read (10 records)
 FAIL          hs.mean-target-coverage   Mean target coverage is 0.377778, below the fail limit of 100
 FAIL          hs.target-20x             Target bases at 20x is 0, below the fail limit of 0.95
 FAIL          hs.target-100x            Target bases at 100x is 0, below the fail limit of 0.6
 FAIL          hs.zero-coverage-targets  Targets with zero coverage is 0.2, above the fail limit of 0.03
 FAIL          hs.gc-dropout             GC dropout is 20.588235, above the fail limit of 10
-NOT MEASURED  hs.evenness               FOLD_80_BASE_PENALTY is ?
-PASS          8 checks
-wrote 8 files to out/NA12878.*, report out/NA12878.report.html
+FAIL          gaps.reportable-range     Target bases at MIN_DEPTH is 0, below the fail limit of 0.95
+FAIL          gaps.targets-complete     Targets without a gap is 0, below the fail limit of 0.9
++2 more, see out/NA12878.report.html
+PASS          9 checks
+wrote 11 files to out/NA12878.*, report out/NA12878.report.html
 use --fail-on fail or bammetrics check to gate
 ```
+
+The two lines past the 12-line budget are `WARN sex.inferred` and `NOT MEASURED
+hs.evenness`. The 11 files add `NA12878.coverage_gaps`, `NA12878.coverage_gaps.bed` and
+`NA12878.sex_check_metrics` to the run of 0.17.0.
 
 **5. Vendor baits as a second Hs run.** Two bait files with one stem are an error, so the
 second run's baits get their own name.
@@ -717,8 +923,8 @@ $ for bam in bams/*.bam; do
         -o runs/2026-11-02/$(basename "$bam" .bam) -q > /dev/null
   done
 $ bammetrics report runs/2026-11-02/ --preset clinical-panel
-2 samples, preset clinical-panel v2 (e62755), bammetrics 0.17.0
-FAIL        NA1  5 fail, 8 pass, 1 not measured
+2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.17.0
+FAIL        NA1  7 fail, 1 warn, 9 pass, 1 not measured
   FAIL  Mean target coverage is 0.377778, below the fail limit of 100
   ...
 wrote 5 files to runs/2026-11-02/, index runs/2026-11-02/index.html
@@ -754,9 +960,16 @@ bammetrics accumulate-quality-yield out/*.qy -o out/sample.qy
 `AccumulateQualityYieldMetrics I=out/a.qy I=out/b.qy O=...` writes the same metrics. GNU
 `parallel` works in place of the loop.
 
-**9. MarkDuplicates to CollectDuplicateMetrics.** Not built: `mark-duplicates` waits for
-parity plan P9. `bammetrics duplicate-metrics tests/data/insert_size.bam -o out/s.dup`
-works on a BAM whose duplicates another tool marked.
+**9. MarkDuplicates to CollectDuplicateMetrics.**
+
+```bash
+bammetrics mark-duplicates tests/data/markdup.bam --metrics out/s.markdup_metrics -o - \
+  | tee out/s.marked.bam | bammetrics duplicate-metrics - -o out/s.dup
+```
+
+The marker reads its input twice, so the input must be a file (standard input is copied
+to `--tmp-dir` first). `duplicate-metrics` reads the flags it set: its pair and duplicate
+counts equal the marker's, and its `READ_PAIR_OPTICAL_DUPLICATES` is 0, as in Picard.
 
 **10. One read of standard input, several collectors.**
 

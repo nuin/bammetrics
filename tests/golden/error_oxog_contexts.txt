@@ -1,0 +1,12 @@
+## argv
+CollectOxoGMetrics
+I=tests/data/oxog.bam
+R=tests/data/ref_100k.fa
+CONTEXTS=AC
+CONTEXTS=AGA
+## exit
+1
+## stdout
+## stderr
+bammetrics: Context AC is not 3 long as implied by CONTEXT_SIZE=1
+Middle base of context sequence AGA must be C

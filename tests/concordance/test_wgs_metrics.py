@@ -294,6 +294,21 @@ def test_queryname_order_fails(built, tmp_path):
     both_fail(WGS, bam, [f"R={ref}", "USE_FAST_ALGORITHM=true"], tmp_path, "coordinate sorted")
 
 
+@pytest.mark.parametrize("tool", [WGS, RAW, NON_ZERO])
+def test_queryname_header_on_sorted_reads_fails(built, tmp_path, tool):
+    """Coordinate-sorted records under `SO:queryname`: SamLocusIterator reads the header."""
+    bam, ref = built["rl_reads"]
+    header = subprocess.run(["samtools", "view", "-H", str(bam)], check=True, capture_output=True,
+                            text=True).stdout.replace("SO:coordinate", "SO:queryname")
+    assert "SO:queryname" in header
+    (tmp_path / "header.sam").write_text(header)
+    renamed = tmp_path / "queryname_header.bam"
+    with renamed.open("wb") as out:
+        subprocess.run(["samtools", "reheader", str(tmp_path / "header.sam"), str(bam)], check=True,
+                       stdout=out)
+    both_fail(tool, renamed, [f"R={ref}"], tmp_path, "coordinate sorted")
+
+
 def test_coverage_cap_and_sample_size_must_be_positive(built, tmp_path):
     bam, ref = built["rl_reads"]
     both_fail(WGS, bam, [f"R={ref}", "CAP=0"], tmp_path, "Coverage cap must be positive")

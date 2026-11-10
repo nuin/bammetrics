@@ -1,0 +1,40 @@
+## argv
+check-duplicate-marking
+tests/data/duplicate_marking.bam
+--mode
+PRIMARY_ONLY
+--format
+json
+## exit
+1
+## stdout
+{
+  "tool": "CheckDuplicateMarking",
+  "sample": "NA12878",
+  "class": null,
+  "metrics": [
+    {
+      "read_name": "r2",
+      "contig": "chr1",
+      "start": 1060
+    },
+    {
+      "read_name": "r4",
+      "contig": "chr1",
+      "start": 1060
+    },
+    {
+      "read_name": "r5",
+      "contig": null,
+      "start": 1030
+    },
+    {
+      "read_name": "r7",
+      "contig": null,
+      "start": 0
+    }
+  ],
+  "histogram": null
+}
+## stderr
+bammetrics check-duplicate-marking: Found 4 records that do not agree on their duplicate flag.

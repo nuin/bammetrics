@@ -88,8 +88,34 @@ impl MetricRow for Row {
 }
 
 impl Row {
+    /// `DuplicationMetrics.addReadToLibraryMetrics` for a record with
+    /// SAM `flags`: pair counts are per read, halved by [`Row::finish`].
+    pub(crate) fn add_read(&mut self, flags: u16) {
+        if flags & 0x4 != 0 {
+            self.unmapped_reads += 1;
+        } else if flags & 0x900 != 0 {
+            self.secondary_or_supplementary_rds += 1;
+        } else if flags & 0x1 == 0 || flags & 0x8 != 0 {
+            self.unpaired_reads_examined += 1;
+        } else {
+            self.read_pairs_examined += 1;
+        }
+    }
+
+    /// `addDuplicateReadToMetrics`: mapped primary records only.
+    pub(crate) fn add_duplicate(&mut self, flags: u16) {
+        if flags & (0x4 | 0x900) != 0 {
+            return;
+        }
+        if flags & 0x1 == 0 || flags & 0x8 != 0 {
+            self.unpaired_read_duplicates += 1;
+        } else {
+            self.read_pair_duplicates += 1;
+        }
+    }
+
     /// `finalizeAndWriteMetrics` and `calculateDerivedFields`.
-    fn finish(mut self) -> Self {
+    pub(crate) fn finish(mut self) -> Self {
         self.read_pairs_examined /= 2;
         self.read_pair_duplicates /= 2;
         self.estimated_library_size = estimate_library_size(
@@ -106,7 +132,7 @@ impl Row {
     }
 
     /// `calculateRoiHistogram`: `None` without a library size.
-    fn roi_histogram(&self) -> Option<Histogram> {
+    pub(crate) fn roi_histogram(&self) -> Option<Histogram> {
         let size = self.estimated_library_size?;
         let unique = self.read_pairs_examined - self.read_pair_duplicates;
         let mut h = Histogram::new();
@@ -203,24 +229,10 @@ impl Accumulator for DuplicateMetrics {
             library: name.clone(),
             ..Row::default()
         });
-        let flags = record.flags();
-        let primary = !flags.is_secondary() && !flags.is_supplementary();
-        let unpaired = !flags.is_segmented() || flags.is_mate_unmapped();
-        if flags.is_unmapped() {
-            row.unmapped_reads += 1;
-        } else if !primary {
-            row.secondary_or_supplementary_rds += 1;
-        } else if unpaired {
-            row.unpaired_reads_examined += 1;
-        } else {
-            row.read_pairs_examined += 1;
-        }
-        if flags.is_duplicate() && primary && !flags.is_unmapped() {
-            if unpaired {
-                row.unpaired_read_duplicates += 1;
-            } else {
-                row.read_pair_duplicates += 1;
-            }
+        let flags = u16::from(record.flags());
+        row.add_read(flags);
+        if flags & 0x400 != 0 {
+            row.add_duplicate(flags);
         }
         Ok(())
     }

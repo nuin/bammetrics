@@ -4,6 +4,7 @@
 //! does, so medians and modes match Picard bin for bin.
 
 use std::collections::BTreeMap;
+use std::ops::Bound;
 
 #[derive(Clone, Default, Debug, PartialEq)]
 pub struct Histogram {
@@ -162,6 +163,31 @@ impl Histogram {
     pub fn trim_by_width(&mut self, width: i64) {
         self.bins.retain(|&k, _| k <= width);
     }
+
+    /// `Histogram.trimByTailLimit`: keep every bin up to the mode, then
+    /// each bin after it while its key follows the previous bin's key by
+    /// exactly 1 and its count is at least the mode's count / `tail_limit`
+    /// (a double division: 0 keeps nothing past the mode, a negative limit
+    /// keeps every consecutive bin). The first bin that fails ends the
+    /// walk, and every later bin is dropped with it.
+    pub fn trim_by_tail_limit(&mut self, tail_limit: i64) {
+        let Some(mode) = self.mode() else {
+            return;
+        };
+        let minimum = self.bins[&mode] / tail_limit as f64;
+        let mut last = mode;
+        let cut = self
+            .bins
+            .range((Bound::Excluded(mode), Bound::Unbounded))
+            .find_map(|(&key, &count)| {
+                let stop = key != last + 1 || count < minimum;
+                last = key;
+                stop.then_some(key)
+            });
+        if let Some(cut) = cut {
+            self.bins.split_off(&cut);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -269,6 +295,38 @@ mod tests {
     fn min_max_are_keys_not_counts() {
         let h = hist(&[(5, 100.0), (50, 1.0)]);
         assert_eq!((h.min(), h.max()), (Some(5), Some(50)));
+    }
+
+    #[test]
+    fn trim_by_tail_limit_walks_consecutive_bins_past_the_mode() {
+        // Mode 10 (count 8). 11 and 12 follow and hold at least 8 / 4 = 2;
+        // 13 holds 1, so 13 and everything after it go. Bins below the
+        // mode stay whatever their count.
+        let mut h = hist(&[
+            (2, 1.0),
+            (10, 8.0),
+            (11, 3.0),
+            (12, 2.0),
+            (13, 1.0),
+            (14, 5.0),
+        ]);
+        h.trim_by_tail_limit(4);
+        assert_eq!(h.keys().collect::<Vec<_>>(), [2, 10, 11, 12]);
+        // A gap after the mode ends the walk even with a large count.
+        let mut gap = hist(&[(10, 8.0), (12, 8.0)]);
+        gap.trim_by_tail_limit(10_000);
+        assert_eq!(gap.keys().collect::<Vec<_>>(), [10]);
+        // Limit 0: the minimum is infinite, nothing past the mode stays.
+        let mut zero = hist(&[(10, 8.0), (11, 8.0)]);
+        zero.trim_by_tail_limit(0);
+        assert_eq!(zero.keys().collect::<Vec<_>>(), [10]);
+        // A negative limit keeps every consecutive bin.
+        let mut negative = hist(&[(10, 8.0), (11, 1.0), (12, 1.0)]);
+        negative.trim_by_tail_limit(-1);
+        assert_eq!(negative.keys().collect::<Vec<_>>(), [10, 11, 12]);
+        let mut empty = Histogram::new();
+        empty.trim_by_tail_limit(10);
+        assert!(empty.is_empty());
     }
 
     #[test]

@@ -88,6 +88,7 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
             ],
         ),
         ("EstimateLibraryComplexity", vec![]),
+        ("CollectJumpingLibraryMetrics", vec![]),
         (
             "CollectWgsMetrics",
             vec![reference.clone(), "SAMPLE_SIZE=10".to_owned()],
@@ -128,6 +129,17 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
                 format!("REF_FLAT={ref_flat}"),
                 "STRAND_SPECIFICITY=NONE".to_owned(),
             ],
+        ),
+        (
+            "CollectCoverageGaps",
+            vec![
+                format!("TI={targets}"),
+                format!("GAPS_FILE={}", dir.join("gaps.bed").display()),
+            ],
+        ),
+        (
+            "CollectSexCheckMetrics",
+            vec!["EXPECTED_SEX=female".to_owned()],
         ),
     ] {
         let mut list = vec![bam.clone(), out(tool)];
@@ -181,6 +193,25 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
         "CreateSequenceDictionary",
         vec![reference.clone(), out("ref.dict")],
     );
+    let artifact = dir.join("artifact");
+    args.insert(
+        "CollectSequencingArtifactMetrics",
+        vec![
+            format!("I={DATA}/artifact.bam"),
+            reference.clone(),
+            format!("O={}", artifact.display()),
+        ],
+    );
+    args.insert(
+        "ConvertSequencingArtifactToOxoG",
+        vec![format!("I={}", artifact.display())],
+    );
+    // No OUTPUT option; the text goes to standard output.
+    args.insert("BamIndexStats", vec![bam.clone()]);
+    args.insert(
+        "CheckDuplicateMarking",
+        vec![bam.clone(), out("bad_querynames.txt")],
+    );
     args.insert(
         "GenotypeConcordance",
         vec![
@@ -188,6 +219,19 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
             format!("CALL_VCF={calls}"),
             out("concordance"),
         ],
+    );
+    args.insert(
+        "MarkDuplicates",
+        vec![
+            format!("I={DATA}/markdup.bam"),
+            out("marked.bam"),
+            format!("M={}", dir.join("markdup_metrics").display()),
+        ],
+    );
+    // The fixture BAM has no @RG line, which CollectOxoGMetrics refuses.
+    args.insert(
+        "CollectOxoGMetrics",
+        vec![format!("I={DATA}/oxog.bam"), reference.clone(), out("oxog")],
     );
     args
 }
@@ -249,7 +293,7 @@ fn every_column_every_tool_writes_has_a_definition() {
             }
         }
     }
-    assert!(classes >= 19, "only {classes} metrics files written");
+    assert!(classes >= 21, "only {classes} metrics files written");
     assert!(
         missing.is_empty(),
         "no glossary row for:\n{}",

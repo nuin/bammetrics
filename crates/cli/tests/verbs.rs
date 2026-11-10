@@ -62,8 +62,10 @@ fn report_on_a_picard_directory_writes_three_files_and_exits_zero() {
     ]);
     assert_eq!(code(&run), 0, "{}", stderr(&run));
     let text = stdout(&run);
-    assert!(text.starts_with("1 sample, preset clinical-panel v2 (e62755), bammetrics "));
-    assert!(text.contains("FAIL        NA12878  5 fail, 8 pass, 1 not measured\n"));
+    assert!(text.starts_with("1 sample, preset clinical-panel v3 (6f0d59), bammetrics "));
+    // A Picard directory has no sex check or coverage gaps file: those four
+    // rules of clinical-panel version 3 read not measured.
+    assert!(text.contains("FAIL        NA12878  5 fail, 8 pass, 5 not measured\n"));
     assert!(
         text.contains("  FAIL  Mean target coverage is 0.377778, below the fail limit of 100\n")
     );

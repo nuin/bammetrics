@@ -1,0 +1,10 @@
+## argv
+coverage-gaps
+tests/data/insert_size.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics coverage-gaps: missing --target-intervals (Picard: TARGET_INTERVALS)
+  --targets FILE and --panel FILE spell it too.
+  every option: bammetrics help coverage-gaps

@@ -94,7 +94,7 @@ fn remove_stale(step: &Step, written: &[Output], files: &mut Files) {
 
 /// The manifest kinds of the files a step writes: [`remove_dropped`]
 /// removes only these, never the verdict, page or manifest.
-const STEP_KINDS: &[&str] = &["metrics", "intervals"];
+const STEP_KINDS: &[&str] = &["metrics", "intervals", "gaps"];
 
 /// Remove the step files the earlier run's manifest lists that no step of
 /// this run wrote or kept (a collector the new options drop, the interval
