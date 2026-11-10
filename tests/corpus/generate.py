@@ -33,6 +33,9 @@ from pathlib import Path
 import numpy as np
 import pysam
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "concordance"))
+from run_picard import picard_env  # noqa: E402
+
 SEED = 20261028
 READ_LEN = 150
 CONTIGS = [("chr1", 300_000), ("chr2", 200_000), ("chrM", 16_000)]
@@ -306,7 +309,7 @@ def align(out, tier, per_library_fastqs, all_alignments):
     marked = work / "marked.bam"
     run(["picard", "MarkDuplicates", f"I={merged}", f"O={marked}",
          f"M={out / f'{tier}.duplicate_metrics.txt'}", "VALIDATION_STRINGENCY=SILENT",
-         "QUIET=true", "VERBOSITY=ERROR"], stderr=subprocess.DEVNULL)
+         "QUIET=true", "VERBOSITY=ERROR"], env=picard_env(), stderr=subprocess.DEVNULL)
     final = out / f"{tier}.bam"
     with pysam.AlignmentFile(str(marked)) as src, \
             pysam.AlignmentFile(str(final), "wb", template=src) as dst:

@@ -2,12 +2,12 @@
 cell and byte for byte from `## METRICS CLASS` on, and the BAM record by
 record. Every case runs Picard with VALIDATION_STRINGENCY=SILENT.
 
-The BAMs are compared as `samtools view --no-PG` text, one character per
-byte: the header lines other than @PG must be equal (an @RG DT field
-aside: htsjdk writes it in the JVM's time zone), and so must every record,
-in file order, with every field and every tag (the PG tag included). The
-@PG lines must carry the same IDs and PP links; their VN and CL name the
-program that wrote them. BAM bytes are never compared.
+The BAMs are compared by `compare.compare_bam`, as `samtools view --no-PG`
+text, one character per byte: the header lines other than @PG must be equal
+(an @RG DT field aside: htsjdk writes it in the JVM's time zone), and so
+must every record, in file order, with every field and every tag (the PG
+tag included). The @PG lines must carry the same IDs and PP links; their VN
+and CL name the program that wrote them. BAM bytes are never compared.
 
 Inputs: the markdup_bams BAMs (optical sets, barcodes, UMIs, clips, every
 record kind, a query-name copy, a second input with colliding read group
@@ -20,7 +20,6 @@ The last test checks that every metrics and histogram column took at
 least 3 distinct non-default values over all Picard files compared.
 """
 import subprocess
-import tempfile
 from collections import defaultdict
 from pathlib import Path
 
@@ -28,11 +27,10 @@ import pytest
 
 from asm_bams import build_all as build_asm
 from cases import BAMMETRICS, CORPUS
-from compare import body, diff_metrics, first_difference
+from compare import compare_bam
 from complexity_bams import build_all as build_complexity
 from conftest import RESULTS
 from markdup_bams import build_all as build_markdup
-from picard_metrics import parse_picard_metrics
 from read_level_bams import build_all as build_read_level
 from run_picard import picard_env
 
@@ -67,94 +65,21 @@ def bam_path(name, built, corpus, exome):
     return CORPUS / f"{name}.bam"
 
 
-def view(path, header=False):
-    """`samtools view` lines, one character per byte (htsjdk writes text
-    from the command line one byte per character, so it need not be UTF-8)."""
-    args = ["samtools", "view", "--no-PG", *(["-H"] if header else []), str(path)]
-    out = subprocess.run(args, check=True, capture_output=True).stdout
-    return out.decode("latin-1").splitlines()
-
-
-def header_lines(lines):
-    """The header lines other than @PG, the DT field cut from @RG lines."""
-    kept = []
-    for line in lines:
-        if line.startswith("@PG"):
-            continue
-        if line.startswith("@RG"):
-            line = "\t".join(f for f in line.split("\t") if not f.startswith("DT:"))
-        kept.append(line)
-    return kept
-
-
-def programs(lines):
-    """The ID and PP of each @PG line."""
-    out = []
-    for line in lines:
-        if line.startswith("@PG"):
-            fields = dict(f.split(":", 1) for f in line.split("\t")[1:] if ":" in f)
-            out.append((fields.get("ID"), fields.get("PP")))
-    return out
-
-
-def run_both(inputs, args, tmp):
-    picard_bam, ours_bam = tmp / "picard.bam", tmp / "bammetrics.bam"
-    picard_txt, ours_txt = tmp / "picard.txt", tmp / "bammetrics.txt"
-    ins = [f"I={i}" for i in inputs]
-    picard = subprocess.run(["picard", TOOL, *ins, f"O={picard_bam}", f"M={picard_txt}", SILENT,
-                             *args, "VERBOSITY=ERROR", "QUIET=true"], env=picard_env(),
-                            capture_output=True, text=True)
-    ours = subprocess.run([str(BAMMETRICS), TOOL, *ins, f"O={ours_bam}", f"M={ours_txt}", *args],
-                          capture_output=True, text=True)
-    return picard, ours, (picard_bam, ours_bam, picard_txt, ours_txt)
-
-
 def compare(inputs, args, label, outcome="equal"):
-    """Run both tools. `outcome` "equal": both succeed with equal output;
-    "fail": both fail and neither writes a metrics file; "same": either of
-    the two, decided by Picard. Returns the cells compared."""
+    """Run both tools through `compare_bam`. `outcome` "equal": both succeed
+    with equal output; "fail": both fail and neither writes a metrics file;
+    "same": either of the two, decided by Picard. Returns the cells compared."""
     inputs = [inputs] if isinstance(inputs, Path) else list(inputs)
-    with tempfile.TemporaryDirectory(dir=inputs[0].parent) as tmp:
-        picard, ours, (picard_bam, ours_bam, picard_txt, ours_txt) = run_both(
-            inputs, args, Path(tmp))
-        picard_failed = picard.returncode != 0
-        if outcome == "fail" or (outcome == "same" and picard_failed):
-            assert picard_failed, f"{label}: Picard succeeded"
-            assert ours.returncode != 0, f"{label}: Picard failed, bammetrics succeeded"
-            assert not picard_txt.exists() and not ours_txt.exists(), f"{label}: metrics written"
-            RESULTS.append((f"{TOOL} {label}", 0, 0, "both fail, no metrics file"))
-            return 0
-        assert not picard_failed, f"{label}: Picard failed:\n{picard.stderr[-2000:]}"
-        assert ours.returncode == 0, f"{label}: bammetrics failed: {ours.stderr}"
-        picard_metrics, ours_metrics = parse_picard_metrics(picard_txt), parse_picard_metrics(ours_txt)
-        problems = diff_metrics(picard_metrics, ours_metrics)
-        picard_body, ours_body = body(picard_txt), body(ours_txt)
-        if not problems and picard_body != ours_body:
-            problems.append("metrics file after the header lines differs: "
-                            + first_difference(picard_body, ours_body))
-        picard_header, ours_header = view(picard_bam, True), view(ours_bam, True)
-        if header_lines(picard_header) != header_lines(ours_header):
-            problems.append("BAM header lines other than @PG differ")
-        if programs(picard_header) != programs(ours_header):
-            problems.append(f"@PG IDs: Picard {programs(picard_header)}, "
-                            f"bammetrics {programs(ours_header)}")
-        picard_records, ours_records = view(picard_bam), view(ours_bam)
-        if picard_records != ours_records:
-            for i, (p, o) in enumerate(zip(picard_records, ours_records)):
-                if p != o:
-                    problems.append(f"record {i}:\n    Picard     {p}\n    bammetrics {o}")
-                    break
-            else:
-                problems.append(f"record counts: Picard {len(picard_records)}, "
-                                f"bammetrics {len(ours_records)}")
-        assert not problems, f"{TOOL} {label}:\n  " + "\n  ".join(problems[:20])
-    SEEN.append(picard_metrics)
-    duplicates = sum(1 for r in picard_records if int(r.split("\t")[1]) & 0x400)
-    cells = (len(picard_metrics.rows) * len(picard_metrics.columns)
-             + len(picard_metrics.histogram) * len(picard_metrics.histogram_columns))
-    RESULTS.append((f"{TOOL} {label}", cells, cells,
-                    f"{len(picard_records)} records equal, {duplicates} flagged"))
-    return cells
+    written = compare_bam(TOOL, inputs, [SILENT, *args], args, workdir=inputs[0].parent,
+                          outcome=outcome, metrics_key="M", label=label)
+    if written.outcome == "fail":
+        RESULTS.append((f"{TOOL} {label}", 0, 0, "both fail, no metrics file"))
+        return 0
+    SEEN.append(written.metrics)
+    duplicates = sum(1 for r in written.records if int(r.split("\t")[1]) & 0x400)
+    RESULTS.append((f"{TOOL} {label}", written.cells, written.cells,
+                    f"{len(written.records)} records equal, {duplicates} flagged"))
+    return written.cells
 
 
 # --- every input at the defaults ---------------------------------------------------

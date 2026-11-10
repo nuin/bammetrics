@@ -2,7 +2,8 @@
 //! VCF and refFlat files written here), and every metrics column and
 //! histogram label it writes must have a glossary row. A tool added to
 //! `TOOLS` without an entry in `args` fails the test, so a new tool cannot
-//! skip the check.
+//! skip the check. A tool no committed fixture can drive goes in `EXEMPT`
+//! with the reason (`crates/cli/tests/registration.rs` reads both).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -34,6 +35,9 @@ chr1\t1010\trs1\tA\tG\t.\tPASS\t.
 
 /// One transcript with two exons over the fixture reads at 1001 to 1300.
 const REF_FLAT: &str = "g1\tt1\tchr1\t+\t900\t1500\t950\t1400\t2\t900,1150,\t1100,1500,\n";
+
+/// Registered tools this test does not run: the tool, then why. None today.
+const EXEMPT: &[(&str, &str)] = &[];
 
 /// A directory of its own for this test's files.
 fn work_dir() -> PathBuf {
@@ -257,11 +261,16 @@ fn every_column_every_tool_writes_has_a_definition() {
     let dir = work_dir();
     let args = args(&dir);
     let registered: BTreeSet<&str> = TOOLS.iter().map(|t| t.name).collect();
-    let covered: BTreeSet<&str> = args.keys().copied().collect();
+    let exempt = EXEMPT.iter().map(|(tool, _)| *tool);
+    let covered: BTreeSet<&str> = args.keys().copied().chain(exempt).collect();
     assert_eq!(
         registered, covered,
-        "every registered tool needs an argument list in this test"
+        "every registered tool needs an argument list in this test, or a line in EXEMPT"
     );
+    for (tool, reason) in EXEMPT {
+        assert!(!args.contains_key(tool), "{tool} is run and exempt");
+        assert!(reason.len() >= 20, "EXEMPT: {tool}: say why");
+    }
 
     let mut missing = BTreeSet::new();
     let mut written: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();

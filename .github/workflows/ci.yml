@@ -59,12 +59,13 @@ jobs:
         run: brew install bwa samtools
 
       # The release jar behind a `picard` command, the name the harness calls.
+      # JAVA_OPTS reaches the JVM, as with the Homebrew wrapper.
       - name: Install Picard
         run: |
           mkdir -p "$HOME/picard/bin"
           curl -sSL --fail -o "$HOME/picard/picard.jar" \
             "https://github.com/broadinstitute/picard/releases/download/${PICARD_VERSION}/picard.jar"
-          printf '#!/bin/sh\nexec java -jar "%s/picard/picard.jar" "$@"\n' "$HOME" > "$HOME/picard/bin/picard"
+          printf '#!/bin/sh\nexec java $JAVA_OPTS -jar "%s/picard/picard.jar" "$@"\n' "$HOME" > "$HOME/picard/bin/picard"
           chmod +x "$HOME/picard/bin/picard"
           echo "$HOME/picard/bin" >> "$GITHUB_PATH"
 

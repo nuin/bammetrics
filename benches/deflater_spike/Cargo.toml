@@ -1,0 +1,22 @@
+# The deflater spike of docs/concordance.md ("BAM bytes"), run by
+# `make deflater-spike`. A package of its own, outside the workspace (the
+# empty [workspace] table), so its three deflaters are no dependency of any
+# shipped crate.
+[package]
+name = "deflater-spike"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+# The deflater noodles-bgzf 0.52 uses, so the one every BAM bammetrics writes
+# goes through.
+zlib-rs = "0.6"
+# The second pure-Rust route.
+miniz_oxide = "0.8"
+# C libdeflate, the library htsjdk loads under USE_JDK_DEFLATER=true. Not a
+# route for the shipped crates: it is here to tell a version difference from
+# an algorithm difference.
+libdeflater = "1.26"

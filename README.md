@@ -173,7 +173,9 @@ crates/verdict, crates/report   presets and verdicts; the HTML pages and the ind
 crates/formats   one typed table per metrics class; JSON, CSV, Markdown, JUnit, MultiQC
 crates/cli    the bammetrics command
 crates/py     the bammetrics Python module (PyO3)
-tests/        concordance/ (Picard harness), corpus/ (generator), python/, data/
+tests/        concordance/ (Picard harness), harness/ (tests of that harness), corpus/ (generator), python/, data/
+tools/        spec_agent.py: a Picard tool's --help option table as a starting spec
+deny.toml     cargo-deny configuration (make deny)
 docs/         cli.md, formats.md, verdict.md, python.md, concordance.md, benchmarks.md, 04_picard_parity_plan.md
 ```
 
