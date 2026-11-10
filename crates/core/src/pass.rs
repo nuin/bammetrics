@@ -188,11 +188,28 @@ pub fn with_record_stream<T>(
     threads: usize,
     consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), bool) -> Result<T>,
 ) -> Result<T> {
+    let bytes = Arc::new(AtomicU64::new(0));
+    with_counted_stream(path, reference, threads, &bytes, consume)
+}
+
+/// [`with_record_stream`], adding the compressed bytes read from the file
+/// to `bytes` as the reader takes them.
+pub(crate) fn with_counted_stream<T>(
+    path: &Path,
+    reference: Option<&Path>,
+    threads: usize,
+    bytes: &Arc<AtomicU64>,
+    consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), bool) -> Result<T>,
+) -> Result<T> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
     };
-    let sniffed = cram::sniff(File::open(path).map_err(input)?).map_err(input)?;
+    let file = Counted {
+        file: File::open(path).map_err(input)?,
+        bytes: Arc::clone(bytes),
+    };
+    let sniffed = cram::sniff(file).map_err(input)?;
     let workers = NonZero::new(threads).unwrap_or(NonZero::<usize>::MIN);
     if sniffed.cram {
         let mut reader =
@@ -333,26 +350,7 @@ impl Pass<'_, '_> {
                 });
             }
         };
-        let read_error = |source: io::Error| {
-            if self.cram {
-                Error::Input {
-                    path: self.path.to_path_buf(),
-                    source,
-                }
-            } else if source.kind() == io::ErrorKind::UnexpectedEof {
-                // A BAM ends with an empty BGZF block, so a stream that
-                // ends inside a record or a block was cut.
-                Error::Input {
-                    path: self.path.to_path_buf(),
-                    source: io::Error::new(
-                        source.kind(),
-                        "truncated BAM: the file ends inside a record or a block",
-                    ),
-                }
-            } else {
-                Error::Record(source)
-            }
-        };
+        let read_error = |source: io::Error| read_error(self.path, self.cram, source);
         while !accumulator.done() && reader.read_record(&mut record).map_err(read_error)? != 0 {
             accumulator.accept(&record)?;
             records += 1;
@@ -365,6 +363,30 @@ impl Pass<'_, '_> {
         }
         report(records);
         accumulator.finish()
+    }
+}
+
+/// The error of a failed record read. A CRAM decoding error names the
+/// input file; a BAM that ends inside a record or a block was cut; any
+/// other BAM error stays a bad record.
+pub(crate) fn read_error(path: &Path, cram: bool, source: io::Error) -> Error {
+    if cram {
+        Error::Input {
+            path: path.to_path_buf(),
+            source,
+        }
+    } else if source.kind() == io::ErrorKind::UnexpectedEof {
+        // A BAM ends with an empty BGZF block, so a stream that ends
+        // inside a record or a block was cut.
+        Error::Input {
+            path: path.to_path_buf(),
+            source: io::Error::new(
+                source.kind(),
+                "truncated BAM: the file ends inside a record or a block",
+            ),
+        }
+    } else {
+        Error::Record(source)
     }
 }
 
@@ -579,7 +601,7 @@ pub fn sort_order(header: &sam::Header) -> String {
 
 /// `SinglePassSamProgram.makeItSo` with `ASSUME_SORTED=false`: the header
 /// must say `SO:coordinate`.
-fn check_coordinate_sorted(path: &Path, header: &sam::Header) -> Result<()> {
+pub(crate) fn check_coordinate_sorted(path: &Path, header: &sam::Header) -> Result<()> {
     let order = sort_order(header);
     if order == "coordinate" {
         return Ok(());

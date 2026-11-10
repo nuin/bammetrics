@@ -1051,6 +1051,43 @@ the differences below are on purpose or cannot be avoided.
   `REMOVE_SEQUENCING_DUPLICATES` and `TAGGING_POLICY`; so does bammetrics, and the
   harness compares each.
 
+## Chains
+
+`bammetrics __chain` ([docs/chaining.md](docs/chaining.md)) runs `MarkDuplicates`, one-pass
+tools and `write` in one process. Picard has no chain, so the reference is the staged
+sequence of the same bammetrics tools: `MarkDuplicates` to a file, then each tool on that
+file. `crates/cli/tests/chain.rs` compares the two on the fixture, corpus t1 and the
+foundation corpus: every metrics file after its `StringHeader` lines and every BAM record
+are equal byte for byte. A chain differs from the staged sequence on purpose here:
+
+- The `StringHeader` command line of a tap names the chain's source as `INPUT`. Behind a
+  stage it ends in ` CHAIN=` and the stages in front of the tap, joined by `+`
+  (`# CollectInsertSizeMetrics INPUT=in.bam OUTPUT=x.txt CHAIN=MarkDuplicates`). The
+  staged file names the marked BAM. A tap on the source writes the line the tool writes.
+- The `CL` of the `@PG` line `MarkDuplicates` adds is the step's command line, which has
+  no `OUTPUT`. With `PROGRAM_GROUP_COMMAND_LINE` given, the chained BAM, its `.bai` and
+  its `.md5` equal the tool's files byte for byte.
+- `MarkDuplicates` as a step writes no BAM: `OUTPUT`, `COMPRESSION_LEVEL`, `CREATE_INDEX`
+  and `CREATE_MD5_FILE` on the step fail it, and the `write` step takes them.
+  `METRICS_FILE` is optional. A second `INPUT` fails the step: a chain has one source.
+- `write` writes BAM only and refuses a path that is the source or the reference.
+- `STOP_AFTER` on a tap limits that tap. The steps after it get every record. The staged
+  tool reading the marked BAM sees the same records.
+- When a stage fails on a record, every step of its segment writes nothing, a tap on the
+  source included: it saw part of the stream. In the staged sequence that tap would have
+  finished before `MarkDuplicates` started. Steps of an earlier segment keep their files.
+- A usage error inside a stage's own options (`READ_NAME_REGEX=(`, `OUTPUT` on
+  `MarkDuplicates`) is found when the stage is built and exits 1, with the other steps of
+  its segment stopped. The tool alone exits 1 too; the verbs exit 2. Every other usage
+  error of a chain exits 2 before the first read: an unknown step or option, a `.sam` or
+  `.cram` name on `write`, a second `MarkDuplicates`.
+- Two steps that name one output file are a usage error (exit 2, nothing read or
+  written). The staged sequence runs and the later tool replaces the earlier file.
+- `write CREATE_INDEX=true` on a stream that is not coordinate sorted writes no `.bai`
+  and prints a note. The `MarkDuplicates` tool writes no `.bai` either and prints nothing.
+- An output whose directory is missing exits 1 before the first read, under the step's
+  label. The Picard face exits 1 for the same `OUTPUT`; the verbs create the directory.
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))
