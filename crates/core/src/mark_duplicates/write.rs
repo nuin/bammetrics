@@ -30,14 +30,16 @@
 //!   htsjdk's `PgIdGenerator` does, with `VN`, `CL`, `PN` and `PP` (the old
 //!   value). `VN` defaults to `bammetrics <version>` and `CL` to the
 //!   bammetrics command line, where Picard writes its own.
+//!
+//! [`Copier`] holds the cursor of that read and decides one record per
+//! call, handing each kept record to an [`Emit`]: the BAM writer for the
+//! tool, the next step's batch for a chain ([`crate::stage`]), where the
+//! copier is the [`Transform`] the sealed barrier replays the source
+//! through.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fs::File;
-use std::io::{self, BufWriter, Read, Write};
-use std::num::NonZero;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use noodles::bgzf;
 use noodles::sam;
 use noodles::sam::header::record::value::Map;
 use noodles::sam::header::record::value::map::Program;
@@ -51,13 +53,14 @@ use super::mark::Marks;
 use super::md_nm::{self, ContigCache};
 use super::{Options, TaggingPolicy};
 use crate::bam_raw::{RawRecord, TagValue};
-use crate::cleanup::AtomicFile;
+use crate::bam_writer::{self, BamWriter, Companions};
 use crate::duplicate_metrics::Row;
 use crate::error::{Error, Result};
 use crate::metric::{HistogramSection, HistogramSeries, MetricsOutput};
 use crate::metrics_file::KeyClass;
 use crate::reference::Reference;
 use crate::spill::Sorted;
+use crate::stage::{Counters, Emit, Products, Transform};
 
 /// `MarkDuplicates.NO_SUCH_INDEX`.
 const NO_SUCH_INDEX: i64 = i64::MAX;
@@ -67,10 +70,10 @@ fn next_index(list: &mut Sorted<'_, u64>) -> Result<i64> {
 }
 
 /// The new `@PG` ID for each old `PG` value (`None` for no `PG` tag).
-type Chained = HashMap<Option<Vec<u8>>, Vec<u8>>;
+pub(super) type Chained = HashMap<Option<Vec<u8>>, Vec<u8>>;
 
 /// The output header and the new `@PG` ID for each old `PG` value.
-fn output_header(
+pub(super) fn output_header(
     header: &sam::Header,
     opts: &Options,
     pg_ids: &[Option<Vec<u8>>],
@@ -147,103 +150,9 @@ fn java_bytes(text: &str) -> Vec<u8> {
     text.encode_utf16().map(|unit| unit as u8).collect()
 }
 
-/// The fields of one header record as `(tag, value)` byte pairs.
-fn fields<'a, K, V>(
-    other: impl IntoIterator<Item = (&'a K, &'a V)>,
-) -> impl Iterator<Item = (&'a [u8], &'a [u8])>
-where
-    K: AsRef<[u8; 2]> + 'a,
-    V: AsRef<[u8]> + 'a,
-{
-    other
-        .into_iter()
-        .map(|(t, v)| (t.as_ref().as_slice(), v.as_ref()))
-}
-
-/// One header line: `kind`, then a tab and `TAG:value` per field.
-fn header_line<'a>(
-    text: &mut Vec<u8>,
-    kind: &[u8],
-    fields: impl IntoIterator<Item = (&'a [u8], &'a [u8])>,
-) {
-    text.extend_from_slice(kind);
-    for (tag, value) in fields {
-        text.push(b'\t');
-        text.extend_from_slice(tag);
-        text.push(b':');
-        text.extend_from_slice(value);
-    }
-    text.push(b'\n');
-}
-
-/// The SAM header text: `@HD`, `@SQ`, `@RG`, `@PG` and `@CO` lines in
-/// that order, each record's fields in the order noodles keeps them, the
-/// order noodles' own writer uses. Values are written byte for byte, as
-/// htsjdk writes them; noodles' writer refuses bytes outside printable
-/// ASCII, which a valid BAM may hold (`@RG SM:s\xc3\xa9`, a tab in `@CO`).
-fn header_text(header: &sam::Header) -> Vec<u8> {
-    let mut text = Vec::new();
-    if let Some(map) = header.header() {
-        let version = map.version();
-        let version = format!("{}.{}", version.major(), version.minor());
-        let vn = std::iter::once((b"VN".as_slice(), version.as_bytes()));
-        header_line(&mut text, b"@HD", vn.chain(fields(map.other_fields())));
-    }
-    for (name, map) in header.reference_sequences() {
-        let length = map.length().to_string();
-        let sn_ln = [
-            (b"SN".as_slice(), name.as_ref()),
-            (b"LN".as_slice(), length.as_bytes()),
-        ];
-        header_line(
-            &mut text,
-            b"@SQ",
-            sn_ln.into_iter().chain(fields(map.other_fields())),
-        );
-    }
-    for (id, map) in header.read_groups() {
-        let id = std::iter::once((b"ID".as_slice(), id.as_ref()));
-        header_line(&mut text, b"@RG", id.chain(fields(map.other_fields())));
-    }
-    for (id, map) in header.programs().as_ref() {
-        let id = std::iter::once((b"ID".as_slice(), id.as_ref()));
-        header_line(&mut text, b"@PG", id.chain(fields(map.other_fields())));
-    }
-    for comment in header.comments() {
-        text.extend_from_slice(b"@CO\t");
-        text.extend_from_slice(comment);
-        text.push(b'\n');
-    }
-    text
-}
-
-/// The BAM header: magic, the text, the reference list.
-fn write_bam_header(out: &mut impl Write, header: &sam::Header) -> io::Result<()> {
-    let invalid = |e| io::Error::new(io::ErrorKind::InvalidInput, e);
-    let text = header_text(header);
-    out.write_all(b"BAM\x01")?;
-    out.write_all(&i32::try_from(text.len()).map_err(invalid)?.to_le_bytes())?;
-    out.write_all(&text)?;
-    let references = header.reference_sequences();
-    out.write_all(
-        &i32::try_from(references.len())
-            .map_err(invalid)?
-            .to_le_bytes(),
-    )?;
-    for (name, map) in references {
-        let length = u32::try_from(name.len() + 1).map_err(invalid)?;
-        out.write_all(&length.to_le_bytes())?;
-        out.write_all(name)?;
-        out.write_all(&[0])?;
-        let length = i32::try_from(usize::from(map.length())).map_err(invalid)?;
-        out.write_all(&length.to_le_bytes())?;
-    }
-    Ok(())
-}
-
 /// `MarkDuplicates` second read: write `OUTPUT`, return the metrics file.
-pub fn run(opts: &Options, inputs: &[PathBuf], mut marks: Marks<'_>) -> Result<MetricsOutput> {
-    let rows = inputs::open(
+pub fn run(opts: &Options, inputs: &[PathBuf], marks: Marks<'_>) -> Result<MetricsOutput> {
+    let (copier, header, writer) = inputs::open(
         inputs,
         opts.reference.as_deref(),
         opts.threads,
@@ -252,84 +161,22 @@ pub fn run(opts: &Options, inputs: &[PathBuf], mut marks: Marks<'_>) -> Result<M
             let order = SortOrder::of(&stream.header);
             check_order(order, opts.assume_sort_order)?;
             let (header, chained) = output_header(&stream.header, opts, &marks.pg_ids);
-            let groups = ReadGroups::new(&stream.header);
-            let mut rows = BTreeMap::new();
-            for id in stream.header.read_groups().keys() {
-                let library = groups.library(Some(id.as_ref())).to_owned();
-                rows.entry(library.clone()).or_insert_with(|| Row {
-                    library,
-                    ..Row::default()
-                });
+            let mut writer =
+                BamWriter::create(&opts.output, opts.compression_level, opts.threads, &header)?;
+            let mut copier = Copier::new(opts, &stream.header, chained, stream.cram, marks)?;
+            let mut record = RawRecord::default();
+            while stream.next(&mut record)? {
+                copier.copy(&mut record, &mut writer)?;
             }
-            let mut writer = Writer::create(opts, &header)?;
-            let input_header = stream.header.clone();
-            let contigs = match (stream.cram, opts.reference.as_deref()) {
-                (true, Some(fasta)) => {
-                    Some(ContigCache::new(Reference::open(fasta, &input_header)?))
-                }
-                _ => None,
-            };
-            let mut copier = Copier {
-                opts,
-                header: &input_header,
-                queryname: order == SortOrder::Queryname,
-                chained: chained.as_ref(),
-                tags: TagCache::default(),
-                cram: stream.cram,
-                contigs,
-            };
-            copier.copy(&mut stream, &mut marks, &groups, &mut rows, &mut writer)?;
-            let output = writer.finish()?;
-            let coordinate = SortOrder::of(&header) == SortOrder::Coordinate;
-            Ok((rows, coordinate, output))
+            Ok((copier, header, writer))
         },
     )?;
-    let (rows, coordinate, output) = rows;
-    let output_error = |source| Error::Output {
-        path: opts.output.clone(),
-        source,
+    let companions = Companions {
+        index: opts.create_index,
+        md5: opts.create_md5_file,
     };
-    let index = if opts.create_index && coordinate {
-        Some(write_index(
-            output.writing(),
-            &opts.output.with_extension("bai"),
-        )?)
-    } else {
-        None
-    };
-    let md5 = if opts.create_md5_file {
-        Some(write_md5(output.writing(), &md5_path(&opts.output))?)
-    } else {
-        None
-    };
-    output.commit().map_err(output_error)?;
-    for file in index.into_iter().chain(md5) {
-        let path = file.path().to_path_buf();
-        file.commit()
-            .map_err(|source| Error::Output { path, source })?;
-    }
-    Ok(metrics(rows, &marks))
-}
-
-/// The BAI of the BAM at `bam`, into a file to be renamed to `target`.
-fn write_index(bam: &Path, target: &Path) -> Result<AtomicFile> {
-    let index = noodles::bam::fs::index(bam).map_err(|source| Error::Input {
-        path: bam.to_path_buf(),
-        source,
-    })?;
-    let noodles::bam::Index::Bai(index) = index else {
-        return Err(Error::Metric(
-            "CREATE_INDEX: a contig is too long for a BAI index".to_owned(),
-        ));
-    };
-    let file = AtomicFile::new(target);
-    file.create()
-        .and_then(|out| noodles::bam::bai::io::Writer::new(out).write_index(&index))
-        .map_err(|source| Error::Output {
-            path: target.to_path_buf(),
-            source,
-        })?;
-    Ok(file)
+    bam_writer::finish(writer, &header, companions)?;
+    Ok(copier.metrics())
 }
 
 /// `finalizeAndWriteMetrics`.
@@ -378,156 +225,6 @@ fn metrics(rows: BTreeMap<String, Row>, marks: &Marks<'_>) -> MetricsOutput {
     MetricsOutput::from_rows(&rows, histogram)
 }
 
-/// Where `CREATE_MD5_FILE` writes: `OUTPUT` with `.md5` appended.
-pub(super) fn md5_path(output: &Path) -> PathBuf {
-    let mut name = output.as_os_str().to_owned();
-    name.push(".md5");
-    PathBuf::from(name)
-}
-
-/// The hex MD5 of the BAM at `path`, as htsjdk writes it, into a file to
-/// be renamed to `target`.
-fn write_md5(path: &Path, target: &Path) -> Result<AtomicFile> {
-    let input = |source| Error::Input {
-        path: path.to_path_buf(),
-        source,
-    };
-    let mut file = File::open(path).map_err(input)?;
-    let mut md5 = crate::md5::Md5::new();
-    let mut buffer = vec![0u8; 1 << 20];
-    loop {
-        let n = file.read(&mut buffer).map_err(input)?;
-        if n == 0 {
-            break;
-        }
-        md5.update(&buffer[..n]);
-    }
-    let file = AtomicFile::new(target);
-    file.create()
-        .and_then(|mut out| out.write_all(crate::md5::hex(&md5.finish()).as_bytes()))
-        .map_err(|source| Error::Output {
-            path: target.to_path_buf(),
-            source,
-        })?;
-    Ok(file)
-}
-
-/// The BGZF output, compressed on worker threads. Records must come in the
-/// header's order, as htsjdk's presorted `SAMFileWriterImpl` asserts:
-/// coordinate (reference, then start) or query name; any other order is
-/// not checked.
-struct Writer {
-    path: PathBuf,
-    /// `OUTPUT` under its temporary name.
-    file: AtomicFile,
-    inner: noodles::bam::io::Writer<bgzf::io::MultithreadedWriter<BufWriter<File>>>,
-    order: SortOrder,
-    /// Reference and start of the last record written, and its name.
-    previous: Option<(i32, i32)>,
-    previous_name: Vec<u8>,
-}
-
-impl Writer {
-    /// `assertPresorted`.
-    fn check_order(&mut self, record: &RawRecord) -> Result<()> {
-        if let Some((reference, start)) = self.previous {
-            let out_of_order = match self.order {
-                SortOrder::Coordinate => {
-                    let next = record.reference_id();
-                    let by_reference = match (reference, next) {
-                        (-1, -1) => std::cmp::Ordering::Equal,
-                        (-1, _) => std::cmp::Ordering::Greater,
-                        (_, -1) => std::cmp::Ordering::Less,
-                        _ => reference.cmp(&next),
-                    };
-                    by_reference
-                        .then(start.cmp(&record.alignment_start()))
-                        .is_gt()
-                }
-                _ => self.previous_name.as_slice() > record.name(),
-            };
-            if out_of_order {
-                return Err(Error::Metric(format!(
-                    "Alignments added out of order in SAMFileWriterImpl.addAlignment for {}. \
-                     Sort order is {}. Offending records are at [{}] and [{}]",
-                    self.path.display(),
-                    self.order.name(),
-                    String::from_utf8_lossy(&self.previous_name),
-                    String::from_utf8_lossy(record.name())
-                )));
-            }
-        }
-        self.previous = Some((record.reference_id(), record.alignment_start()));
-        self.previous_name.clear();
-        self.previous_name.extend_from_slice(record.name());
-        Ok(())
-    }
-
-    fn create(opts: &Options, header: &sam::Header) -> Result<Self> {
-        let path = opts.output.clone();
-        let error = |source| Error::Output {
-            path: path.clone(),
-            source,
-        };
-        let atomic = AtomicFile::new(&path);
-        let file = atomic.create().map_err(error)?;
-        let level = bgzf::io::writer::CompressionLevel::try_from(opts.compression_level)
-            .map_err(|e| error(io::Error::new(io::ErrorKind::InvalidInput, e)))?;
-        let workers = NonZero::new(opts.threads).unwrap_or(NonZero::<usize>::MIN);
-        let bgzf = bgzf::io::multithreaded_writer::Builder::default()
-            .set_compression_level(level)
-            .set_worker_count(workers)
-            .build_from_writer(BufWriter::with_capacity(1 << 20, file));
-        let mut inner = noodles::bam::io::Writer::from(bgzf);
-        write_bam_header(inner.get_mut(), header).map_err(error)?;
-        Ok(Self {
-            path,
-            file: atomic,
-            inner,
-            order: SortOrder::of(header),
-            previous: None,
-            previous_name: Vec::new(),
-        })
-    }
-
-    fn write(&mut self, record: &RawRecord) -> Result<()> {
-        if matches!(self.order, SortOrder::Coordinate | SortOrder::Queryname) {
-            self.check_order(record)?;
-        }
-        record
-            .write_to(self.inner.get_mut())
-            .map_err(|source| Error::Output {
-                path: self.path.clone(),
-                source,
-            })
-    }
-
-    /// Write the last block and the EOF marker. The caller renames the
-    /// file into place.
-    fn finish(mut self) -> Result<AtomicFile> {
-        let error = |source| Error::Output {
-            path: self.path.clone(),
-            source,
-        };
-        let mut file = self.inner.get_mut().finish().map_err(error)?;
-        file.flush().map_err(error)?;
-        Ok(self.file)
-    }
-}
-
-/// One record's state for the copy.
-struct Copier<'a> {
-    opts: &'a Options,
-    header: &'a sam::Header,
-    queryname: bool,
-    chained: Option<&'a Chained>,
-    tags: TagCache,
-    /// Records come from a CRAM: every record is written with sorted tags.
-    cram: bool,
-    /// Reference bases for the `MD` and `NM` of CRAM records.
-    contigs: Option<ContigCache>,
-}
-
 /// The index of the next representative entry, the representative and the set size.
 #[derive(Clone, Copy)]
 struct SetEntry {
@@ -536,36 +233,77 @@ struct SetEntry {
     size: i32,
 }
 
-impl Copier<'_> {
-    /// `nextIndexIfNeeded`.
-    fn advance(
-        &self,
-        current: i64,
-        index: i64,
-        last_name: Option<&[u8]>,
-        name: &[u8],
-        list: Option<&mut Sorted<'_, u64>>,
-    ) -> Result<i64> {
-        let need = index > current && (!self.queryname || last_name != Some(name));
-        match list {
-            Some(list) if need => next_index(list),
-            _ => Ok(current),
-        }
+/// `nextIndexIfNeeded`.
+fn advance(
+    queryname: bool,
+    current: i64,
+    index: i64,
+    names: (Option<&[u8]>, &[u8]),
+    list: Option<&mut Sorted<'_, u64>>,
+) -> Result<i64> {
+    let (last_name, name) = names;
+    let need = index > current && (!queryname || last_name != Some(name));
+    match list {
+        Some(list) if need => next_index(list),
+        _ => Ok(current),
     }
+}
 
-    fn copy(
-        &mut self,
-        stream: &mut inputs::Inputs<'_>,
-        marks: &mut Marks<'_>,
-        groups: &ReadGroups,
-        rows: &mut BTreeMap<String, Row>,
-        writer: &mut Writer,
-    ) -> Result<()> {
-        let opts = self.opts;
-        let mut record = RawRecord::default();
-        let mut index: i64 = 0;
-        let mut next_duplicate = next_index(&mut marks.duplicates)?;
-        let mut next_optical = match marks.optical.as_mut() {
+/// One tag edit: the value to set, or `None` to remove the tag.
+type Edit = ([u8; 2], Option<TagValue>);
+
+/// The second read's cursor: the index lists, the record index and the
+/// names the query-name rules compare, plus the library rows it counts.
+pub(super) struct Copier<'d> {
+    opts: Options,
+    /// The header the records are read with.
+    header: sam::Header,
+    queryname: bool,
+    chained: Option<Chained>,
+    tags: TagCache,
+    /// Records come from a CRAM: every record is written with sorted tags.
+    cram: bool,
+    /// Reference bases for the `MD` and `NM` of CRAM records.
+    contigs: Option<ContigCache>,
+    groups: ReadGroups,
+    rows: BTreeMap<String, Row>,
+    marks: Marks<'d>,
+    mi_tag: Option<[u8; 2]>,
+    index: i64,
+    next_duplicate: i64,
+    next_optical: i64,
+    set: SetEntry,
+    duplicate_name: Option<Vec<u8>>,
+    representative_name: Option<Vec<u8>>,
+    counters: Counters,
+}
+
+impl<'d> Copier<'d> {
+    /// The cursor before the first record. `header` is the input's (with
+    /// `ASSUME_SORT_ORDER` applied), `chained` the second value of
+    /// [`output_header`].
+    pub(super) fn new(
+        opts: &Options,
+        header: &sam::Header,
+        chained: Option<Chained>,
+        cram: bool,
+        mut marks: Marks<'d>,
+    ) -> Result<Self> {
+        let groups = ReadGroups::new(header);
+        let mut rows = BTreeMap::new();
+        for id in header.read_groups().keys() {
+            let library = groups.library(Some(id.as_ref())).to_owned();
+            rows.entry(library.clone()).or_insert_with(|| Row {
+                library,
+                ..Row::default()
+            });
+        }
+        let contigs = match (cram, opts.reference.as_deref()) {
+            (true, Some(fasta)) => Some(ContigCache::new(Reference::open(fasta, header)?)),
+            _ => None,
+        };
+        let next_duplicate = next_index(&mut marks.duplicates)?;
+        let next_optical = match marks.optical.as_mut() {
             Some(list) => next_index(list)?,
             None => NO_SUCH_INDEX,
         };
@@ -583,122 +321,181 @@ impl Copier<'_> {
                 size: first.set_size,
             };
         }
-        let mut duplicate_name: Option<Vec<u8>> = None;
-        let mut representative_name: Option<Vec<u8>> = None;
         let mi_tag = match (&opts.barcode_tag, &opts.molecular_identifier_tag) {
             (Some(_), Some(tag)) => Some(tag_name(tag)?),
             _ => None,
         };
-        while stream.next(&mut record)? {
-            self.tags.load(&record)?;
-            let name = record.name().to_vec();
-            let flags = record.flags();
-            let library = groups.library(string_tag(&self.tags, *b"RG")?).to_owned();
-            let row = rows.entry(library).or_insert_with_key(|library| Row {
-                library: library.clone(),
-                ..Row::default()
-            });
-            row.add_read(flags);
-            next_duplicate = self.advance(
-                next_duplicate,
-                index,
-                duplicate_name.as_deref(),
-                &name,
-                Some(&mut marks.duplicates),
-            )?;
-            let duplicate = index == next_duplicate
-                || (self.queryname
-                    && index > next_duplicate
-                    && duplicate_name.as_deref() == Some(name.as_slice()));
-            let flags = if duplicate {
-                flags | 0x400
-            } else {
-                flags & !0x400
+        Ok(Self {
+            opts: opts.clone(),
+            header: header.clone(),
+            queryname: SortOrder::of(header) == SortOrder::Queryname,
+            chained,
+            tags: TagCache::default(),
+            cram,
+            contigs,
+            groups,
+            rows,
+            marks,
+            mi_tag,
+            index: 0,
+            next_duplicate,
+            next_optical,
+            set,
+            duplicate_name: None,
+            representative_name: None,
+            counters: Counters::default(),
+        })
+    }
+
+    /// Decide the next record of the input and hand it to `emit`, unless
+    /// the options remove it. Records must come in input order.
+    pub(super) fn copy(&mut self, record: &mut RawRecord, emit: &mut dyn Emit) -> Result<()> {
+        let index = self.index;
+        self.counters.records_in += 1;
+        self.tags.load(record)?;
+        let name = record.name().to_vec();
+        let input_flags = record.flags();
+        let library = self
+            .groups
+            .library(string_tag(&self.tags, *b"RG")?)
+            .to_owned();
+        let row = self.rows.entry(library).or_insert_with_key(|library| Row {
+            library: library.clone(),
+            ..Row::default()
+        });
+        row.add_read(input_flags);
+        self.next_duplicate = advance(
+            self.queryname,
+            self.next_duplicate,
+            index,
+            (self.duplicate_name.as_deref(), &name),
+            Some(&mut self.marks.duplicates),
+        )?;
+        let duplicate = index == self.next_duplicate
+            || (self.queryname
+                && index > self.next_duplicate
+                && self.duplicate_name.as_deref() == Some(name.as_slice()));
+        let flags = if duplicate {
+            input_flags | 0x400
+        } else {
+            input_flags & !0x400
+        };
+        record.set_flags(flags);
+        if flags != input_flags {
+            self.counters.changed += 1;
+        }
+        if duplicate {
+            row.add_duplicate(flags);
+        }
+        self.next_optical = advance(
+            self.queryname,
+            self.next_optical,
+            index,
+            (self.duplicate_name.as_deref(), &name),
+            self.marks.optical.as_mut(),
+        )?;
+        let optical = (self.queryname
+            && index > self.next_optical
+            && self.duplicate_name.as_deref() == Some(name.as_slice()))
+            || index == self.next_optical;
+        let mut edits: Vec<Edit> = Vec::new();
+        if self.opts.clear_dt {
+            edits.push((*b"DT", None));
+        }
+        if self.opts.tagging_policy != TaggingPolicy::DontTag && duplicate {
+            if optical {
+                edits.push((*b"DT", Some(TagValue::String(b"SQ".to_vec()))));
+            } else if self.opts.tagging_policy == TaggingPolicy::All {
+                edits.push((*b"DT", Some(TagValue::String(b"LB".to_vec()))));
+            }
+        }
+        self.set_members(index, &name, flags, &mut edits)?;
+        if let Some(tag) = self.mi_tag {
+            edits.push((
+                tag,
+                Some(TagValue::String(self.molecular_identifier(record)?)),
+            ));
+        }
+        if duplicate {
+            self.duplicate_name = Some(name);
+        }
+        self.index += 1;
+        if (self.opts.remove_duplicates && duplicate)
+            || (self.opts.remove_sequencing_duplicates && optical)
+        {
+            return Ok(());
+        }
+        if let Some(chained) = self.chained.as_ref()
+            && self.opts.add_pg_tag_to_reads
+        {
+            let old = string_tag(&self.tags, *b"PG")?.map(<[u8]>::to_vec);
+            let new = chained.get(&old).map(|id| TagValue::String(id.clone()));
+            edits.push((*b"PG", new));
+        }
+        self.edit_tags(record, edits)?;
+        self.counters.records_out += 1;
+        emit.emit(record)
+    }
+
+    /// Apply `edits` to the record's tags. A record with no edit keeps its
+    /// bytes, unless it came from a CRAM.
+    fn edit_tags(&mut self, record: &mut RawRecord, edits: Vec<Edit>) -> Result<()> {
+        if !self.cram && edits.is_empty() {
+            return Ok(());
+        }
+        let mut tags = record.tags().map_err(Error::Record)?;
+        if let Some(contigs) = self.contigs.as_mut() {
+            md_nm::restore(record, &mut tags, contigs)?;
+        }
+        for (tag, value) in edits {
+            match value {
+                Some(value) => tags.set(tag, value),
+                None => tags.remove(tag),
+            }
+        }
+        record.set_tags(&tags).map_err(Error::Record)
+    }
+
+    /// `TAG_DUPLICATE_SET_MEMBERS`: the `DI` and `DS` edits of a mapped
+    /// primary record of a pair set.
+    fn set_members(
+        &mut self,
+        index: i64,
+        name: &[u8],
+        flags: u16,
+        edits: &mut Vec<Edit>,
+    ) -> Result<()> {
+        let Some(list) = self.marks.representatives.as_mut() else {
+            return Ok(());
+        };
+        let need = index > self.set.read_index
+            && (!self.queryname || self.representative_name.as_deref() != Some(name));
+        if need && let Some(next) = list.next_item()? {
+            self.set = SetEntry {
+                read_index: i64::from(next.read_index),
+                representative: next.representative_index,
+                size: next.set_size,
             };
-            record.set_flags(flags);
-            if duplicate {
-                row.add_duplicate(flags);
-            }
-            next_optical = self.advance(
-                next_optical,
-                index,
-                duplicate_name.as_deref(),
-                &name,
-                marks.optical.as_mut(),
-            )?;
-            let optical = (self.queryname
-                && index > next_optical
-                && duplicate_name.as_deref() == Some(name.as_slice()))
-                || index == next_optical;
-            let mut edits: Vec<([u8; 2], Option<TagValue>)> = Vec::new();
-            if opts.clear_dt {
-                edits.push((*b"DT", None));
-            }
-            if opts.tagging_policy != TaggingPolicy::DontTag && duplicate {
-                if optical {
-                    edits.push((*b"DT", Some(TagValue::String(b"SQ".to_vec()))));
-                } else if opts.tagging_policy == TaggingPolicy::All {
-                    edits.push((*b"DT", Some(TagValue::String(b"LB".to_vec()))));
-                }
-            }
-            if let Some(list) = marks.representatives.as_mut() {
-                let need = index > set.read_index
-                    && (!self.queryname || representative_name.as_deref() != Some(name.as_slice()));
-                if need && let Some(next) = list.next_item()? {
-                    set = SetEntry {
-                        read_index: i64::from(next.read_index),
-                        representative: next.representative_index,
-                        size: next.set_size,
-                    };
-                }
-                let in_set = index == set.read_index
-                    || (self.queryname
-                        && index > set.read_index
-                        && representative_name.as_deref() == Some(name.as_slice()));
-                if in_set && flags & 0x900 == 0 && flags & 0x4 == 0 {
-                    edits.push((*b"DI", Some(TagValue::Int(i64::from(set.representative)))));
-                    edits.push((*b"DS", Some(TagValue::Int(i64::from(set.size)))));
-                    representative_name = Some(name.clone());
-                }
-            }
-            if let Some(tag) = mi_tag {
-                edits.push((
-                    tag,
-                    Some(TagValue::String(self.molecular_identifier(&record)?)),
-                ));
-            }
-            if duplicate {
-                duplicate_name = Some(name);
-            }
-            index += 1;
-            if (opts.remove_duplicates && duplicate)
-                || (opts.remove_sequencing_duplicates && optical)
-            {
-                continue;
-            }
-            if let Some(chained) = self.chained
-                && opts.add_pg_tag_to_reads
-            {
-                let old = string_tag(&self.tags, *b"PG")?.map(<[u8]>::to_vec);
-                let new = chained.get(&old).map(|id| TagValue::String(id.clone()));
-                edits.push((*b"PG", new));
-            }
-            if self.cram || !edits.is_empty() {
-                let mut tags = record.tags().map_err(Error::Record)?;
-                if let Some(contigs) = self.contigs.as_mut() {
-                    md_nm::restore(&record, &mut tags, contigs)?;
-                }
-                for (tag, value) in edits {
-                    match value {
-                        Some(value) => tags.set(tag, value),
-                        None => tags.remove(tag),
-                    }
-                }
-                record.set_tags(&tags).map_err(Error::Record)?;
-            }
-            writer.write(&record)?;
+        }
+        let in_set = index == self.set.read_index
+            || (self.queryname
+                && index > self.set.read_index
+                && self.representative_name.as_deref() == Some(name));
+        if in_set && flags & 0x900 == 0 && flags & 0x4 == 0 {
+            edits.push((
+                *b"DI",
+                Some(TagValue::Int(i64::from(self.set.representative))),
+            ));
+            edits.push((*b"DS", Some(TagValue::Int(i64::from(self.set.size)))));
+            self.representative_name = Some(name.to_vec());
         }
         Ok(())
+    }
+
+    /// The metrics of the records copied so far: the whole file after the
+    /// last record.
+    pub(super) fn metrics(&self) -> MetricsOutput {
+        metrics(self.rows.clone(), &self.marks)
     }
 
     /// `UmiUtil.setMolecularIdentifier` with an empty assigned UMI.
@@ -726,5 +523,30 @@ impl Copier<'_> {
             }
         }
         Ok(text.into_bytes())
+    }
+}
+
+/// The second read as a chain transform: each batch of the replayed
+/// source goes through [`Copier::copy`], and the kept records stay in the
+/// batch for the next step.
+impl Transform for Copier<'_> {
+    fn apply(&mut self, batch: &mut Vec<RawRecord>) -> Result<()> {
+        let mut kept = Vec::with_capacity(batch.len());
+        for mut record in batch.drain(..) {
+            self.copy(&mut record, &mut kept)?;
+        }
+        *batch = kept;
+        Ok(())
+    }
+
+    fn counters(&self) -> Counters {
+        self.counters
+    }
+
+    fn products(&mut self) -> Result<Products> {
+        Ok(Products {
+            output: self.metrics().into(),
+            ..Products::default()
+        })
     }
 }

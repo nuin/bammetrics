@@ -33,6 +33,7 @@ use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
+use crate::bam_raw::RawRecord;
 use crate::error::{Error, Result};
 use crate::metric::ToolOutput;
 use crate::optical::{
@@ -41,6 +42,7 @@ use crate::optical::{
 };
 use crate::registry::{Invocation, Opt, Tool};
 use crate::spill::TempDir;
+use crate::stage::{Barrier, Frame, Next, Sealed, Stage};
 
 pub use inputs::SortOrder;
 
@@ -115,6 +117,17 @@ impl Options {
     }
 
     pub fn from_invocation(inv: &Invocation) -> Result<Self> {
+        Self::parse(inv, false)
+    }
+
+    /// The options of the tool as a chain step ([`stage`]): it writes no
+    /// BAM itself, so `OUTPUT` and the options of that file are refused,
+    /// and `METRICS_FILE` is optional.
+    pub fn for_stage(inv: &Invocation) -> Result<Self> {
+        Self::parse(inv, true)
+    }
+
+    fn parse(inv: &Invocation, staged: bool) -> Result<Self> {
         let text = |name: &str| inv.get(name).filter(|v| *v != "null").map(str::to_owned);
         let given = |name: &str| inv.get(name).is_some();
         if given("ASSUME_SORTED") && given("ASSUME_SORT_ORDER") {
@@ -173,14 +186,17 @@ impl Options {
                 ))
             })?;
         refuse_flow_mode(inv)?;
-        let output = inv
-            .get("OUTPUT")
-            .map(PathBuf::from)
-            .ok_or_else(|| Error::Usage("MarkDuplicates: OUTPUT is required".to_owned()))?;
-        let metrics = inv
-            .output
-            .clone()
-            .ok_or_else(|| Error::Usage("MarkDuplicates: METRICS_FILE is required".to_owned()))?;
+        let (output, metrics) = if staged {
+            stage_files(inv)?
+        } else {
+            let required = |path: Option<PathBuf>, name: &str| {
+                path.ok_or_else(|| Error::Usage(format!("MarkDuplicates: {name} is required")))
+            };
+            (
+                required(inv.get("OUTPUT").map(PathBuf::from), "OUTPUT")?,
+                required(inv.output.clone(), "METRICS_FILE")?,
+            )
+        };
         Ok(Self {
             inputs: inv.all("INPUT").iter().map(PathBuf::from).collect(),
             output,
@@ -234,6 +250,26 @@ impl Options {
             command: inv.command.clone(),
         })
     }
+}
+
+/// The options of the BAM file, which a chain step does not write.
+const WRITER_OPTIONS: [&str; 4] = [
+    "OUTPUT",
+    "COMPRESSION_LEVEL",
+    "CREATE_INDEX",
+    "CREATE_MD5_FILE",
+];
+
+/// `OUTPUT` and `METRICS_FILE` of a chain step: no BAM, and the metrics
+/// path when one was given (the caller writes the file).
+fn stage_files(inv: &Invocation) -> Result<(PathBuf, PathBuf)> {
+    if let Some(name) = WRITER_OPTIONS.iter().find(|name| inv.get(name).is_some()) {
+        return Err(Error::Usage(format!(
+            "MarkDuplicates in a chain: {name} belongs to the write step; this step hands its \
+             records to the next step"
+        )));
+    }
+    Ok((PathBuf::new(), inv.output.clone().unwrap_or_default()))
 }
 
 /// The flow-based options with their Picard defaults. They are accepted at
@@ -485,6 +521,64 @@ pub fn run(opts: &Options) -> Result<crate::metric::MetricsOutput> {
     Ok(metrics)
 }
 
+/// `MarkDuplicates` as a step of a chain ([`crate::stage`]): a barrier.
+/// The records of the step before go through the first read
+/// ([`build::Builder::push`]); sealing it finds the duplicate sets and
+/// leaves the second read ([`write::Copier`]) as the transform the source
+/// is replayed through, so the next step sees every record with its
+/// duplicate flag, tags and `PG` decided, under the header with the new
+/// `@PG` line. Spilled runs go to `temp`.
+pub fn stage<'t>(inv: &Invocation, frame: &Frame, temp: &'t TempDir) -> Result<Stage<'t>> {
+    let opts = Options::for_stage(inv)?;
+    let mut header = frame.header.clone();
+    if let Some(order) = opts.assume_sort_order {
+        inputs::set_header_tag(&mut header, inputs::HeaderTag::SortOrder, order.name());
+    }
+    let builder = build::Builder::new(&opts, &header, temp)?;
+    Ok(Stage::Barrier(Box::new(Marking {
+        opts,
+        header,
+        cram: frame.cram,
+        builder,
+        temp,
+    })))
+}
+
+/// The barrier of [`stage`]: the first read, fed in batches.
+struct Marking<'t> {
+    opts: Options,
+    /// The header of the records pushed, `ASSUME_SORT_ORDER` applied.
+    header: noodles::sam::Header,
+    cram: bool,
+    builder: build::Builder<'t>,
+    temp: &'t TempDir,
+}
+
+impl<'t> Barrier<'t> for Marking<'t> {
+    fn push(&mut self, batch: &[RawRecord]) -> Result<()> {
+        batch
+            .iter()
+            .try_for_each(|record| self.builder.push(record))
+    }
+
+    fn seal(self: Box<Self>) -> Result<Sealed<'t>> {
+        let Marking {
+            opts,
+            header,
+            cram,
+            builder,
+            temp,
+        } = *self;
+        let marks = mark::run(&opts, builder.finish(), temp)?;
+        let (output, chained) = write::output_header(&header, &opts, &marks.pg_ids);
+        let copier = write::Copier::new(&opts, &header, chained, cram, marks)?;
+        Ok(Sealed {
+            header: output,
+            next: Next::Replay(Box::new(copier)),
+        })
+    }
+}
+
 /// The files a run writes, with the option that names each.
 fn written_files(opts: &Options) -> Vec<(&'static str, PathBuf)> {
     let mut files = vec![
@@ -495,7 +589,7 @@ fn written_files(opts: &Options) -> Vec<(&'static str, PathBuf)> {
         files.push(("CREATE_INDEX", opts.output.with_extension("bai")));
     }
     if opts.create_md5_file {
-        files.push(("CREATE_MD5_FILE", write::md5_path(&opts.output)));
+        files.push(("CREATE_MD5_FILE", crate::bam_writer::md5_path(&opts.output)));
     }
     files
 }
@@ -550,7 +644,7 @@ fn same_file_key(path: &Path) -> PathBuf {
     }
 }
 
-fn same_file(a: &Path, b: &Path) -> bool {
+pub(crate) fn same_file(a: &Path, b: &Path) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
@@ -590,7 +684,7 @@ fn check_writable(path: &Path) -> Result<()> {
 
 /// The inputs as files that can be read twice: a pipe or standard input
 /// is copied into the temporary directory first.
-fn spool_streams(inputs: &[PathBuf], temp: &TempDir) -> Result<Vec<PathBuf>> {
+pub(crate) fn spool_streams(inputs: &[PathBuf], temp: &TempDir) -> Result<Vec<PathBuf>> {
     inputs
         .iter()
         .map(|input| {

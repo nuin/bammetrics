@@ -369,10 +369,14 @@ fn top_strand_umi_hash(record: &RawRecord, tags: &TagCache, opts: &Options) -> R
     Ok(31i32.wrapping_add(java_hash(&normalized)))
 }
 
-/// The first read.
-struct Builder<'a, 'd> {
-    opts: &'a Options,
+/// The first read: every record of the input in order through
+/// [`Builder::push`], then [`Builder::finish`]. The tool reads its inputs
+/// into it; in a chain ([`crate::stage`]) the step before pushes its
+/// batches.
+pub struct Builder<'d> {
+    opts: Options,
     groups: ReadGroups,
+    order: SortOrder,
     queryname: bool,
     library_ids: HashMap<String, i16>,
     next_library: i16,
@@ -382,6 +386,15 @@ struct Builder<'a, 'd> {
     pg_seen: HashSet<Option<Vec<u8>>>,
     pg_ids: Vec<Option<Vec<u8>>>,
     tags: TagCache,
+    /// Index of the next record in the input.
+    index: i64,
+    /// In query-name order, the index of the first record with the
+    /// current name.
+    name_index: i64,
+    last_name: Option<Vec<u8>>,
+    /// True after the first unplaced record of a coordinate-sorted input:
+    /// the records after it are not read.
+    stopped: bool,
 }
 
 pub fn run<'d>(opts: &Options, inputs: &[PathBuf], temp: &'d TempDir) -> Result<Built<'d>> {
@@ -391,54 +404,12 @@ pub fn run<'d>(opts: &Options, inputs: &[PathBuf], temp: &'d TempDir) -> Result<
         opts.threads,
         opts.assume_sort_order,
         |mut stream| {
-            let order = SortOrder::of(&stream.header);
-            check_order(order, opts.assume_sort_order)?;
-            let mut builder = Builder {
-                opts,
-                groups: ReadGroups::new(&stream.header),
-                queryname: order == SortOrder::Queryname,
-                library_ids: HashMap::new(),
-                next_library: 1,
-                pending: Mates::new(order == SortOrder::Queryname, temp, opts.records_in_ram),
-                pairs: Sorter::new(temp, "pairs", opts.records_in_ram),
-                fragments: Sorter::new(temp, "fragments", opts.records_in_ram),
-                pg_seen: HashSet::new(),
-                pg_ids: Vec::new(),
-                tags: TagCache::default(),
-            };
+            let mut builder = Builder::new(opts, &stream.header, temp)?;
             let mut record = RawRecord::default();
-            let mut index: i64 = 0;
-            let mut name_index: i64 = i64::MAX;
-            let mut last_name: Option<Vec<u8>> = None;
-            while stream.next(&mut record)? {
-                builder.tags.load(&record)?;
-                if opts.program_record_id.is_some() {
-                    let pg = string_tag(&builder.tags, *b"PG")?.map(<[u8]>::to_vec);
-                    if builder.pg_seen.insert(pg.clone()) {
-                        builder.pg_ids.push(pg);
-                    }
-                }
-                if builder.queryname && last_name.as_deref() != Some(record.name()) {
-                    last_name = Some(record.name().to_vec());
-                    name_index = index;
-                }
-                let flags = record.flags();
-                if flags & 0x4 != 0 {
-                    if record.reference_id() == -1 && order == SortOrder::Coordinate {
-                        break;
-                    }
-                } else if flags & 0x900 == 0 {
-                    let index_for_read = if builder.queryname { name_index } else { index };
-                    builder.accept(&record, index_for_read)?;
-                }
-                index += 1;
+            while !builder.stopped && stream.next(&mut record)? {
+                builder.push(&record)?;
             }
-            Ok(Built {
-                pairs: builder.pairs,
-                fragments: builder.fragments,
-                library_ids: builder.library_ids,
-                pg_ids: builder.pg_ids,
-            })
+            Ok(builder.finish())
         },
     )
 }
@@ -458,7 +429,78 @@ pub fn check_order(order: SortOrder, assume: Option<SortOrder>) -> Result<()> {
     )))
 }
 
-impl Builder<'_, '_> {
+impl<'d> Builder<'d> {
+    /// The first read of an input whose header (with `ASSUME_SORT_ORDER`
+    /// applied) is `header`; spilled runs go to `temp`.
+    pub fn new(opts: &Options, header: &sam::Header, temp: &'d TempDir) -> Result<Self> {
+        let order = SortOrder::of(header);
+        check_order(order, opts.assume_sort_order)?;
+        let queryname = order == SortOrder::Queryname;
+        Ok(Self {
+            opts: opts.clone(),
+            groups: ReadGroups::new(header),
+            order,
+            queryname,
+            library_ids: HashMap::new(),
+            next_library: 1,
+            pending: Mates::new(queryname, temp, opts.records_in_ram),
+            pairs: Sorter::new(temp, "pairs", opts.records_in_ram),
+            fragments: Sorter::new(temp, "fragments", opts.records_in_ram),
+            pg_seen: HashSet::new(),
+            pg_ids: Vec::new(),
+            tags: TagCache::default(),
+            index: 0,
+            name_index: i64::MAX,
+            last_name: None,
+            stopped: false,
+        })
+    }
+
+    /// The next record of the input. After the first unplaced record of a
+    /// coordinate-sorted input every further record is ignored.
+    pub fn push(&mut self, record: &RawRecord) -> Result<()> {
+        if self.stopped {
+            return Ok(());
+        }
+        self.tags.load(record)?;
+        if self.opts.program_record_id.is_some() {
+            let pg = string_tag(&self.tags, *b"PG")?.map(<[u8]>::to_vec);
+            if self.pg_seen.insert(pg.clone()) {
+                self.pg_ids.push(pg);
+            }
+        }
+        if self.queryname && self.last_name.as_deref() != Some(record.name()) {
+            self.last_name = Some(record.name().to_vec());
+            self.name_index = self.index;
+        }
+        let flags = record.flags();
+        if flags & 0x4 != 0 {
+            if record.reference_id() == -1 && self.order == SortOrder::Coordinate {
+                self.stopped = true;
+                return Ok(());
+            }
+        } else if flags & 0x900 == 0 {
+            let index_for_read = if self.queryname {
+                self.name_index
+            } else {
+                self.index
+            };
+            self.accept(record, index_for_read)?;
+        }
+        self.index += 1;
+        Ok(())
+    }
+
+    /// The sorted lists and the IDs the later steps need.
+    pub fn finish(self) -> Built<'d> {
+        Built {
+            pairs: self.pairs,
+            fragments: self.fragments,
+            library_ids: self.library_ids,
+            pg_ids: self.pg_ids,
+        }
+    }
+
     fn library_id(&mut self, rg: Option<&[u8]>) -> i16 {
         let library = self.groups.library(rg).to_owned();
         if let Some(id) = self.library_ids.get(&library) {
@@ -497,7 +539,7 @@ impl Builder<'_, '_> {
         ends.x = location.x;
         ends.y = location.y;
         if self.opts.use_barcodes() {
-            ends.barcode = top_strand_umi_hash(record, &self.tags, self.opts)?;
+            ends.barcode = top_strand_umi_hash(record, &self.tags, &self.opts)?;
             if flags & 0x1 == 0 || flags & 0x40 != 0 {
                 ends.read_one_barcode =
                     barcode_value(&self.tags, self.opts.read_one_barcode_tag.as_deref())?;
