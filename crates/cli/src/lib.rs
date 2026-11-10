@@ -8,6 +8,7 @@ use bammetrics_core::{create_sequence_dictionary, registry};
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 
+pub mod chain;
 pub mod check;
 pub mod collect;
 pub mod discover;
@@ -172,6 +173,7 @@ pub fn run() -> error::Result<u8> {
         }
         match name.as_str() {
             "collect" => return Ok(collect::run(rest)?),
+            chain::ENTRY => return Ok(chain::run(rest)?),
             "tools" => {
                 print!("{}", info::tools(&Cli::command()));
                 return Ok(0);
