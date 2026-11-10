@@ -11,6 +11,7 @@ as Markdown for docs/concordance.md ("BAM bytes"):
   * which deflater each Picard run says it used (its log lines);
   * the three files byte against byte (size, first differing offset);
   * the BGZF layout of each file: data blocks and the largest block;
+  * how many records are equal as bytes once the blocks are inflated;
   * per Picard file, how many of its blocks each candidate deflater writes
     byte for byte at any level: the C zlib this Python links (the library
     `java.util.zip.Deflater` calls on the same machine), and the three
@@ -29,6 +30,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tests" / "concordance"))
+from compare import bam_records  # noqa: E402
 from run_picard import picard_env  # noqa: E402
 
 WORK = ROOT / "target" / "deflater-spike"
@@ -119,6 +121,10 @@ def main():
             print(f"| {name} | {path.stat().st_size} | {len(sizes)} | {max(sizes)} | "
                   f"{first_difference(path, files['picard_default'])} | "
                   f"{first_difference(path, files['picard_jdk'])} |")
+        picard_records, ours_records = bam_records(files["picard_default"]), bam_records(files["bammetrics"])
+        same = sum(p == o for p, o in zip(picard_records, ours_records))
+        print(f"\nRecords equal as bytes after inflation, bammetrics against picard_default: "
+              f"{same} of {len(picard_records)}.")
         print("\n| Picard file | candidate | best level | blocks equal |\n|---|---|---:|---:|")
         for name in RUNS:
             for candidate, ((equal, level), total) in candidates(files[name], spike).items():

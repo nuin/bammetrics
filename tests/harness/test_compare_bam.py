@@ -1,13 +1,15 @@
 """compare_bam and compare_vcf (tests/concordance/compare.py) on files with one
 planted difference each, and end to end on stand-in tools (conftest.py)."""
 import gzip
+import struct
 import subprocess
+import zlib
 
 import pytest
 
 import compare
-from compare import (bam_header_lines, bam_programs, compare_bam, compare_vcf, diff_bam, diff_vcf,
-                     first_line_difference, vcf_header_lines)
+from compare import (bam_header_lines, bam_programs, bam_records, compare_bam, compare_vcf, diff_bam,
+                     diff_bam_bytes, diff_vcf, first_line_difference, vcf_header_lines)
 
 HEADER = ["@HD\tVN:1.6\tSO:coordinate",
           "@SQ\tSN:chr1\tLN:1000",
@@ -101,6 +103,58 @@ def test_header_helpers():
     assert bam_programs(HEADER) == [("bwa", None), ("MarkDuplicates", "bwa")]
     assert first_line_difference("record", ["a"], ["a"]) == []
     assert first_line_difference("record", ["a", "b"], ["a"]) == ["record counts: Picard 2, bammetrics 1"]
+
+
+# --- record bytes ------------------------------------------------------------------------
+
+BGZF_EOF = bytes.fromhex("1f8b08040000000000ff0600424302001b0003000000000000000000")
+
+
+def write_bgzf(path, data):
+    """`data` as one BGZF block and the end-of-file block."""
+    encoder = zlib.compressobj(6, zlib.DEFLATED, -15)
+    stream = encoder.compress(data) + encoder.flush()
+    block = (struct.pack("<4BI2BH2BHH", 31, 139, 8, 4, 0, 0, 255, 6, 66, 67, 2, len(stream) + 25)
+             + stream + struct.pack("<II", zlib.crc32(data), len(data)))
+    path.write_bytes(block + BGZF_EOF)
+    return path
+
+
+def with_record_bytes(tmp_path, base, index, offset, new):
+    """A copy of `base` with `new` written at `offset` of record `index`."""
+    data = bytearray(gzip.decompress(base.read_bytes()))
+    record = bam_records(base)[index]
+    at = bytes(data).index(record) + offset
+    data[at:at + len(new)] = new
+    return write_bgzf(tmp_path / "planted.bam", bytes(data))
+
+
+def test_record_bytes_see_the_bin_field_samtools_does_not_print(tmp_path, base):
+    assert struct.unpack_from("<H", bam_records(base)[1], 10)[0] == 4681
+    planted = with_record_bytes(tmp_path, base, 1, 10, b"\x00\x00")
+    assert diff_bam(base, planted) == []
+    assert diff_bam_bytes(base, planted) == [
+        "record 1: bytes differ at offset 10 (bin): Picard 49120100, bammetrics 00000100"]
+    assert diff_bam_bytes(base, write_bam(tmp_path / "copy.bam")) == []
+
+
+def test_record_bytes_name_the_field_and_the_count(tmp_path, base):
+    assert len(bam_records(base)) == 6
+    flagged = with_record_bytes(tmp_path, base, 3, 14, struct.pack("<H", 1171))
+    assert diff_bam_bytes(base, flagged)[0].startswith("record 3: bytes differ at offset 15 (flag)")
+    short = write_bam(tmp_path / "short.bam", records=RECORDS[:-1])
+    assert diff_bam_bytes(base, short) == ["record counts: Picard 6, bammetrics 5"]
+    with pytest.raises(ValueError, match="not a BAM"):
+        bam_records(write_bgzf(tmp_path / "text.bam", b"@HD\tVN:1.6\n"))
+
+
+def test_compare_bam_with_record_bytes(tmp_path, base, fake_tools, monkeypatch):
+    planted = with_record_bytes(tmp_path, base, 1, 10, b"\x00\x00")
+    monkeypatch.setenv("FAKE_PLANTED", str(planted))
+    monkeypatch.setenv("FAKE_PLANT", "bammetrics")
+    assert compare_bam("X", base, workdir=tmp_path).outcome == "equal"
+    with pytest.raises(AssertionError, match=r"record 1: bytes differ at offset 10 \(bin\)"):
+        compare_bam("X", base, workdir=tmp_path, record_bytes=True)
 
 
 # --- compare_bam end to end ------------------------------------------------------------

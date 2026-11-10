@@ -37,7 +37,10 @@ and `CL` name the program that wrote them. Every record must be equal as
 `samtools view` prints it, every field and tag, in file order. The first
 differing header line or record is reported with its index. With
 `metrics_key` the metrics file is compared as `compare_metrics` compares it.
-BAM bytes are never compared.
+BAM bytes are never compared: the deflaters differ (docs/concordance.md).
+`record_bytes=True` adds the records as bytes after BGZF inflation, which
+holds what `samtools view` does not print: the `bin` field and the width of
+an integer tag.
 
 `compare_vcf` is the same for a tool that writes a VCF, plain or gzip: the
 header lines other than the date and command lines (`VCF_VOLATILE`, plus the
@@ -45,6 +48,7 @@ keys in `drop`), in order, and every record line.
 """
 import gzip
 import re
+import struct
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -299,6 +303,47 @@ def diff_bam(picard_bam, ours_bam, reference=None):
                           sam_view(ours_bam, True, reference), sam_view(ours_bam, False, reference))
 
 
+# Where each fixed field of a BAM record starts, to name a differing byte.
+BAM_FIELDS = ((0, "refID"), (4, "pos"), (8, "l_read_name"), (9, "mapq"), (10, "bin"),
+              (12, "n_cigar_op"), (14, "flag"), (16, "l_seq"), (20, "next_refID"),
+              (24, "next_pos"), (28, "tlen"), (32, "read name, CIGAR, bases, qualities or tags"))
+
+
+def bam_records(path):
+    """The records of a BAM as bytes after BGZF inflation, in file order,
+    each without its `block_size`."""
+    data = gzip.decompress(Path(path).read_bytes())
+    if data[:4] != b"BAM\x01":
+        raise ValueError(f"{path}: not a BAM")
+    at = 8 + struct.unpack_from("<i", data, 4)[0]
+    references = struct.unpack_from("<i", data, at)[0]
+    at += 4
+    for _ in range(references):
+        at += 8 + struct.unpack_from("<i", data, at)[0]
+    records = []
+    while at < len(data):
+        size = struct.unpack_from("<i", data, at)[0]
+        records.append(data[at + 4:at + 4 + size])
+        at += 4 + size
+    return records
+
+
+def diff_bam_bytes(picard_bam, ours_bam):
+    """One difference line for the first record whose bytes differ after
+    BGZF inflation, naming the field of the first differing byte. Empty when
+    every record is byte for byte the same."""
+    picard, ours = bam_records(picard_bam), bam_records(ours_bam)
+    for index, (p, o) in enumerate(zip(picard, ours)):
+        if p != o:
+            offset = next((i for i, (a, b) in enumerate(zip(p, o)) if a != b), min(len(p), len(o)))
+            name = [n for start, n in BAM_FIELDS if start <= offset][-1]
+            return [f"record {index}: bytes differ at offset {offset} ({name}): "
+                    f"Picard {p[offset:offset + 4].hex()}, bammetrics {o[offset:offset + 4].hex()}"]
+    if len(picard) != len(ours):
+        return [f"record counts: Picard {len(picard)}, bammetrics {len(ours)}"]
+    return []
+
+
 # A VCF header line whose key says when or how the file was written:
 # `##fileDate=`, `##GATKCommandLine=`, `##bcftools_viewCommand=`.
 VCF_VOLATILE = re.compile(r"##(fileDate|[^=]*command(line)?)=", re.IGNORECASE)
@@ -387,7 +432,7 @@ def as_list(inputs):
 
 def compare_bam(tool, inputs, picard_args=(), bam_args=None, workdir=None, outcome="equal",
                 input_key="I", output_key="O", metrics_key=None, suffix=".bam", reference=None,
-                label=None):
+                label=None, record_bytes=False):
     """Run both tools on `inputs` (one path or several, each as `I=`) with
     `O=<dir>/<side><suffix>` and assert the files hold the same reads.
 
@@ -397,7 +442,8 @@ def compare_bam(tool, inputs, picard_args=(), bam_args=None, workdir=None, outco
     `metrics_key` names a metrics file option (`M` for MarkDuplicates),
     compared as `compare_metrics` compares it. `suffix` picks the format
     (`.bam`, `.sam`, `.cram`), and `reference` is the FASTA `samtools view`
-    needs to read a CRAM back. Returns a `Written`."""
+    needs to read a CRAM back. `record_bytes` also requires every record of a
+    BAM output to be equal as bytes after inflation. Returns a `Written`."""
     inputs, picard_args = as_list(inputs), list(picard_args)
     bam_args = picard_args if bam_args is None else list(bam_args)
     what = f"{tool} {label if label is not None else ' '.join(picard_args)}"
@@ -412,6 +458,8 @@ def compare_bam(tool, inputs, picard_args=(), bam_args=None, workdir=None, outco
         header, records = sam_view(picard_out, True, reference), sam_view(picard_out, False, reference)
         problems += diff_sam_lines(header, records, sam_view(ours_out, True, reference),
                                    sam_view(ours_out, False, reference))
+        if record_bytes and not problems:
+            problems += diff_bam_bytes(picard_out, ours_out)
     assert not problems, f"{what}:\n  " + "\n  ".join(problems[:20])
     return Written("equal", header, records, metrics, cells)
 
