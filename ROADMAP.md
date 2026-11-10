@@ -16,6 +16,10 @@ Library underneath (permissive, adoption), application + cloud on top (AGPL, mon
 
 ---
 
+## Phase 0b: full Picard parity and more  *(program plan: docs/07)*
+
+Owner direction (2026-11-09): every one of the 121 Picard 3.5.0 tools (23 on main at 0.17.0, 7 in flight, 91 to build), analyses chained in one process without pipes or temp files (`chain`), every output in Picard text and in JSON, CSV, Parquet, XLSX and more, reports in HTML, PDF and DOCX, and 15 analyses beyond Picard (identity, contamination, FASTQ QC, per-exon coverage, doctor, VCF QC, benchmarking, relatedness, cfDNA fragmentomics). `docs/07_full_parity_program.md` holds the 48 waves (0.18.0 to 1.7.0, parity gate at 1.0.0), the machine schedule, the docs/04 and docs/05 changes and the open questions. The 4.9 boundary of docs/05 holds: stored cohorts, history and cross-run comparison stay in the hosted product below.
+
 ## Phase 0 — Finish the core  *(bammetrics done in 0.2.0; vcfclick open)*
 
 - [x] bammetrics: `CollectInsertSizeMetrics`, `CollectAlignmentSummaryMetrics`,
