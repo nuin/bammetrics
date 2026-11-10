@@ -10,6 +10,9 @@
 //! A [`Document`] is one metrics file: the `StringHeader` texts, the class
 //! tables (Picard writes one) and the histogram as a second table.
 
+use std::collections::hash_map::Entry;
+use std::collections::{HashMap, HashSet};
+
 use bammetrics_core::glossary;
 use bammetrics_core::metric::{MetricsOutput, Value};
 use bammetrics_core::metrics_file::parse_value;
@@ -250,20 +253,28 @@ impl Table {
     /// skipping a key that is the name of a column. Picard repeats the
     /// histogram columns of `CollectHsMetrics` once per unit.
     pub fn keys(&self) -> Vec<String> {
-        let names: Vec<&str> = self.names().collect();
-        let mut keys: Vec<String> = Vec::with_capacity(names.len());
-        for (j, name) in names.iter().enumerate() {
-            let key = if names[..j].contains(name) {
-                (1..)
-                    .map(|n| format!("{name}.{n}"))
-                    .find(|k| !names.contains(&k.as_str()) && !keys.contains(k))
-                    .expect("an unbounded range")
-            } else {
-                (*name).to_owned()
-            };
-            keys.push(key);
-        }
-        keys
+        // A key `name.N` is taken when a column has that name or an earlier
+        // repeat of `name` got it. No other name makes it: `N` has no dot,
+        // so `name` is all of the key before its last dot. `last` holds the
+        // highest `N` given per name, and every lower one is taken, so the
+        // work is linear in the number of columns.
+        let names: HashSet<&str> = self.names().collect();
+        let mut last: HashMap<&str, u64> = HashMap::with_capacity(names.len());
+        self.names()
+            .map(|name| match last.entry(name) {
+                Entry::Vacant(first) => {
+                    first.insert(0);
+                    name.to_owned()
+                }
+                Entry::Occupied(mut repeat) => loop {
+                    *repeat.get_mut() += 1;
+                    let key = format!("{name}.{}", repeat.get());
+                    if !names.contains(key.as_str()) {
+                        break key;
+                    }
+                },
+            })
+            .collect()
     }
 
     /// True for a histogram whose key prints as a Java double (`1.0`).
@@ -476,6 +487,85 @@ mod tests {
         // `v.1` is a column, so the second `v` takes the next number.
         assert_eq!(table(&["v", "v", "v.1"]).keys(), ["v", "v.2", "v.1"]);
         assert_eq!(table(&["v.1", "v", "v"]).keys(), ["v.1", "v", "v.2"]);
+    }
+
+    fn named(names: &[&str]) -> Table {
+        Table {
+            class: String::new(),
+            columns: names.iter().map(|n| ((*n).to_owned(), Ty::Float)).collect(),
+            rows: Vec::new(),
+        }
+    }
+
+    /// The keys as 0.20.0 first made them: for a repeat, the first
+    /// `name.N` that is no column name and no earlier key, by scanning.
+    fn keys_by_scanning(names: &[&str]) -> Vec<String> {
+        let mut keys: Vec<String> = Vec::with_capacity(names.len());
+        for (j, name) in names.iter().enumerate() {
+            let key = if names[..j].contains(name) {
+                (1..)
+                    .map(|n| format!("{name}.{n}"))
+                    .find(|k| !names.contains(&k.as_str()) && !keys.contains(k))
+                    .expect("an unbounded range")
+            } else {
+                (*name).to_owned()
+            };
+            keys.push(key);
+        }
+        keys
+    }
+
+    #[test]
+    fn keys_equal_the_scanned_keys() {
+        let cases: [&[&str]; 10] = [
+            &[],
+            &["X", "X", "X.1"],
+            &["X.1", "X", "X", "X"],
+            &["X", "X.1", "X", "X.2", "X", "X.4", "X", "X"],
+            &["X", "X", "X.1", "X.1", "X.1.1", "X", "X.1"],
+            &["X.1", "X.1", "X", "X", "X.1.1", "X.2"],
+            &["", "", ".1", "", "."],
+            &["a", "A", "a", "A", "a.1", "A.1"],
+            &["X", "X", "X.01", "X.1 ", "X", "X.+1"],
+            &["k", "v", "w", "k", "v", "w", "k", "v", "w"],
+        ];
+        for names in cases {
+            assert_eq!(named(names).keys(), keys_by_scanning(names), "{names:?}");
+        }
+        assert_eq!(
+            named(&["X", "X", "X.1", "X.1", "X"]).keys(),
+            ["X", "X.2", "X.1", "X.1.1", "X.3"]
+        );
+        // Every list of 6 names from a pool where a key of one name is
+        // another name.
+        let pool = ["X", "X.1", "X.2", "X.1.1"];
+        for code in 0..pool.len().pow(6) {
+            let names: Vec<&str> = (0..6)
+                .map(|i| pool[code / pool.len().pow(i) % pool.len()])
+                .collect();
+            let keys = named(&names).keys();
+            assert_eq!(keys, keys_by_scanning(&names), "{names:?}");
+            let distinct: HashSet<&String> = keys.iter().collect();
+            assert_eq!(distinct.len(), keys.len(), "{names:?}");
+        }
+    }
+
+    /// 100,000 columns of one name: the scan compared every key with
+    /// every earlier one, about 5e9 string comparisons.
+    #[test]
+    fn keys_of_100_000_repeats_take_linear_time() {
+        let mut names = vec!["X"; 100_000];
+        names.push("X.7");
+        let table = named(&names);
+        let started = std::time::Instant::now();
+        let keys = table.keys();
+        let elapsed = started.elapsed();
+        assert!(elapsed < std::time::Duration::from_secs(2), "{elapsed:?}");
+        assert_eq!(keys.len(), 100_001);
+        assert_eq!(keys[..3], ["X", "X.1", "X.2"]);
+        assert_eq!(keys[6..9], ["X.6", "X.8", "X.9"]);
+        assert_eq!(keys[99_999], "X.100000");
+        assert_eq!(keys[100_000], "X.7");
     }
 
     #[test]

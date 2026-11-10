@@ -2,7 +2,7 @@
 //! behind: spilled sort runs ([`crate::spill::TempDir`]) and the temporary
 //! file of an output written in place by rename ([`AtomicFile`]).
 //!
-//! Each path is registered by the code that computed it and unregistered
+//! Each path is registered by the code that made it and unregistered
 //! when that code removes or renames it. [`remove_registered`] removes what
 //! is still registered; the `bammetrics` binary calls it from its SIGINT,
 //! SIGTERM and SIGHUP handler, so an interrupted run leaves no spill file
@@ -11,8 +11,9 @@
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 static REGISTERED: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
 
@@ -56,35 +57,148 @@ fn remove_newest_first(paths: impl DoubleEndedIterator<Item = PathBuf>) {
 
 /// An output file written under a temporary name in its own directory and
 /// renamed over `path` by [`AtomicFile::commit`]. Dropped without a commit,
-/// the temporary file is removed and `path` is left as it was. A path that
-/// exists and is not a regular file (`/dev/stdout`, a named pipe) or is a
-/// symbolic link is written in place.
+/// the temporary file is removed and `path` is left as it was.
+///
+/// Three kinds of path are written in place: a path under `/dev` with no
+/// `..` component (`/dev/stdout`, `/dev/fd/3`; only root makes files
+/// there), an existing file this user owns that is neither regular nor a
+/// symbolic link (a named pipe, a socket, a device), and a symbolic link
+/// this user owns, which the write follows. Outside `/dev`, a symbolic
+/// link or a non-regular file another user owns is refused by
+/// [`AtomicFile::create`]: that user chose where the bytes would go.
+///
+/// The temporary name carries a random part and is opened with
+/// `create_new`. A path already there was made by someone else, so the
+/// open fails and neither the drop, the commit nor a signal removes it.
 pub struct AtomicFile {
     path: PathBuf,
     /// The temporary name, `None` when writing in place.
     temp: Option<PathBuf>,
+    /// True once [`AtomicFile::create`] has made the temporary file.
+    created: AtomicBool,
+    /// Why `path` is not written, told by [`AtomicFile::create`].
+    refused: Option<String>,
+}
+
+/// How a path is written.
+enum Target {
+    Rename,
+    InPlace,
+    Refused(String),
+}
+
+/// A number another process cannot predict: the standard library's hash
+/// key, which the system seeds at random, over the time, the process id
+/// and `counter`.
+fn nonce(counter: u64) -> u64 {
+    use std::hash::{BuildHasher, Hasher};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+    hasher.write_u128(nanos);
+    hasher.write_u32(std::process::id());
+    hasher.write_u64(counter);
+    hasher.finish()
+}
+
+/// The effective user id of this process: the owner of a file it creates
+/// (in the temporary directory, else in `beside`) and removes again. The
+/// standard library has no `geteuid`.
+#[cfg(unix)]
+fn effective_uid(beside: &Path) -> io::Result<u32> {
+    use std::os::unix::fs::MetadataExt;
+    static UID: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+    if let Some(uid) = UID.get() {
+        return Ok(*uid);
+    }
+    let probe = |dir: &Path| {
+        let path = dir.join(format!(
+            ".bammetrics-uid.{}.{:016x}.tmp",
+            std::process::id(),
+            nonce(0)
+        ));
+        let file = File::options().write(true).create_new(true).open(&path)?;
+        let uid = file.metadata().map(|m| m.uid());
+        let _ = fs::remove_file(&path);
+        uid
+    };
+    let uid = probe(&std::env::temp_dir()).or_else(|_| probe(beside))?;
+    Ok(*UID.get_or_init(|| uid))
+}
+
+#[cfg(unix)]
+fn target(path: &Path) -> Target {
+    use std::os::unix::fs::MetadataExt;
+    let leaves_dev = path
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir));
+    if path.starts_with("/dev") && !leaves_dev {
+        return Target::InPlace;
+    }
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        return Target::Rename;
+    };
+    let kind = metadata.file_type();
+    if kind.is_file() {
+        return Target::Rename;
+    }
+    let what = if kind.is_symlink() {
+        "a symbolic link"
+    } else {
+        "not a regular file"
+    };
+    let parent = match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
+    match effective_uid(parent) {
+        Ok(uid) if uid == metadata.uid() => Target::InPlace,
+        Ok(_) => Target::Refused(format!(
+            "{} is {what} owned by another user; not written in place",
+            path.display()
+        )),
+        Err(e) => Target::Refused(format!(
+            "{} is {what} and its owner cannot be compared with this user: {e}",
+            path.display()
+        )),
+    }
+}
+
+#[cfg(not(unix))]
+fn target(path: &Path) -> Target {
+    let in_place = fs::symlink_metadata(path).is_ok_and(|m| !m.file_type().is_file())
+        || path.starts_with("/dev");
+    if in_place {
+        Target::InPlace
+    } else {
+        Target::Rename
+    }
 }
 
 impl AtomicFile {
     pub fn new(path: &Path) -> Self {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
-        let in_place = fs::symlink_metadata(path).is_ok_and(|m| !m.file_type().is_file())
-            || path.starts_with("/dev");
-        let temp = (!in_place).then(|| {
+        let target = target(path);
+        let temp = matches!(target, Target::Rename).then(|| {
             let name = path
                 .file_name()
                 .map_or_else(|| "output".into(), |n| n.to_string_lossy().into_owned());
-            let temp = path.with_file_name(format!(
-                ".{name}.{}.{}.tmp",
+            let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
+            path.with_file_name(format!(
+                ".{name}.{}.{counter}.{:016x}.tmp",
                 std::process::id(),
-                COUNTER.fetch_add(1, Ordering::Relaxed)
-            ));
-            register(&temp);
-            temp
+                nonce(counter)
+            ))
         });
         Self {
             path: path.to_path_buf(),
             temp,
+            created: AtomicBool::new(false),
+            refused: match target {
+                Target::Refused(reason) => Some(reason),
+                Target::Rename | Target::InPlace => None,
+            },
         }
     }
 
@@ -102,8 +216,15 @@ impl AtomicFile {
     /// When `path` already exists, the temporary file starts out readable by
     /// this user only and then takes the permissions `path` has, so the
     /// rename keeps the mode the user gave the file. A new `path` gets the
-    /// umask default.
+    /// umask default. The temporary file is registered for removal on a
+    /// signal once this process has made it.
     pub fn create(&self) -> io::Result<File> {
+        if let Some(reason) = &self.refused {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                reason.clone(),
+            ));
+        }
         let Some(temp) = &self.temp else {
             return File::create(&self.path);
         };
@@ -116,16 +237,33 @@ impl AtomicFile {
             options.mode(0o600);
         }
         let file = options.open(temp)?;
+        self.created.store(true, Ordering::Release);
+        register(temp);
         if let Some(permissions) = existing {
             file.set_permissions(permissions)?;
         }
         Ok(file)
     }
 
-    /// Rename the temporary file over `path`.
+    /// The temporary path when this process made the file there, taken out
+    /// so the drop does nothing more.
+    fn take_created(&mut self) -> Option<PathBuf> {
+        let temp = self.temp.take()?;
+        self.created.load(Ordering::Acquire).then_some(temp)
+    }
+
+    /// Rename the temporary file over `path`. Without a file from
+    /// [`AtomicFile::create`] nothing is renamed: a file at the temporary
+    /// path is not this process's.
     pub fn commit(mut self) -> io::Result<()> {
-        let Some(temp) = self.temp.take() else {
+        if self.temp.is_none() {
             return Ok(());
+        }
+        let Some(temp) = self.take_created() else {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "no temporary file was created",
+            ));
         };
         let renamed = fs::rename(&temp, &self.path);
         if renamed.is_err() {
@@ -138,7 +276,7 @@ impl AtomicFile {
 
 impl Drop for AtomicFile {
     fn drop(&mut self) {
-        if let Some(temp) = self.temp.take() {
+        if let Some(temp) = self.take_created() {
             let _ = fs::remove_file(&temp);
             unregister(&temp);
         }
@@ -201,6 +339,184 @@ mod tests {
         assert_eq!(mode, 0o640);
         assert_eq!(fs::read_to_string(&path).expect("read"), "new");
         fs::remove_file(&path).expect("remove");
+        fs::remove_dir(&dir).expect("remove dir");
+    }
+
+    /// A link this user made is written through: the target takes the
+    /// text and the link stays a link.
+    #[cfg(unix)]
+    #[test]
+    fn a_link_owned_by_this_user_is_written_through() {
+        let dir = scratch("own-link");
+        let real = dir.join("real.txt");
+        fs::write(&real, "old").expect("old");
+        let link = dir.join("link.txt");
+        std::os::unix::fs::symlink(&real, &link).expect("symlink");
+        let file = AtomicFile::new(&link);
+        assert_eq!(file.writing(), link);
+        drop(file);
+        write_atomically(&link, |out| out.write_all(b"new")).expect("write");
+        assert_eq!(fs::read_to_string(&real).expect("read"), "new");
+        let kind = fs::symlink_metadata(&link).expect("link").file_type();
+        assert!(kind.is_symlink());
+        assert_eq!(fs::read_dir(&dir).expect("dir").count(), 2);
+        fs::remove_dir_all(&dir).expect("remove dir");
+    }
+
+    /// A link another user owns is refused with the path in the error.
+    /// The test needs such a link on the machine (`/tmp` and `/etc` on
+    /// macOS, `/bin` on a merged-usr Linux) and passes without one.
+    #[cfg(unix)]
+    #[test]
+    fn a_link_owned_by_another_user_is_refused() {
+        use std::os::unix::fs::MetadataExt;
+        let me = effective_uid(&std::env::temp_dir()).expect("uid");
+        let foreign = ["/tmp", "/etc", "/var", "/bin", "/sbin", "/lib"]
+            .into_iter()
+            .map(Path::new)
+            .find(|p| {
+                fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink() && m.uid() != me)
+            });
+        let Some(link) = foreign else {
+            return;
+        };
+        let file = AtomicFile::new(link);
+        let error = file.create().expect_err("refused");
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        let text = error.to_string();
+        assert!(text.contains(&link.display().to_string()), "{text}");
+        assert!(text.contains("owned by another user"), "{text}");
+    }
+
+    /// `/dev/stdout` and its kin are in place with no owner check; a
+    /// path that leaves `/dev` through `..` gets the rules of any path.
+    #[cfg(unix)]
+    #[test]
+    fn the_dev_shortcut_needs_a_path_without_parent_components() {
+        for path in ["/dev/stdout", "/dev/stderr", "/dev/fd/1", "/dev/null"] {
+            assert!(matches!(target(Path::new(path)), Target::InPlace), "{path}");
+        }
+        let dir = scratch("dev-parent");
+        let outside = PathBuf::from(format!("/dev/..{}/x", dir.display()));
+        assert!(outside.starts_with("/dev"));
+        assert!(matches!(target(&outside), Target::Rename));
+        let file = AtomicFile::new(&outside);
+        assert_ne!(file.writing(), outside);
+        drop(file);
+        fs::write(dir.join("x"), "old").expect("old");
+        assert!(matches!(target(&outside), Target::Rename));
+        fs::remove_dir_all(&dir).expect("remove dir");
+    }
+
+    /// A named pipe this user made is written in place. Only the
+    /// classification is checked: opening a pipe with no reader blocks.
+    #[cfg(unix)]
+    #[test]
+    fn a_pipe_owned_by_this_user_is_in_place() {
+        let dir = scratch("fifo");
+        let pipe = dir.join("pipe");
+        let made = std::process::Command::new("mkfifo")
+            .arg(&pipe)
+            .status()
+            .expect("mkfifo runs");
+        assert!(made.success());
+        assert!(matches!(target(&pipe), Target::InPlace));
+        assert_eq!(AtomicFile::new(&pipe).writing(), pipe);
+        fs::remove_dir_all(&dir).expect("remove dir");
+    }
+
+    /// A non-regular file another user owns is refused outside `/dev`.
+    /// The test needs one on the machine (a root-owned socket under
+    /// `/var/run` or `/run`) and passes without one. Nothing is opened.
+    #[cfg(unix)]
+    #[test]
+    fn a_non_regular_file_owned_by_another_user_is_refused() {
+        use std::os::unix::fs::{FileTypeExt, MetadataExt};
+        let me = effective_uid(&std::env::temp_dir()).expect("uid");
+        let foreign = ["/var/run", "/run"]
+            .into_iter()
+            .filter_map(|dir| fs::read_dir(dir).ok())
+            .flatten()
+            .filter_map(|entry| entry.ok().map(|e| e.path()))
+            .find(|p| {
+                fs::symlink_metadata(p).is_ok_and(|m| {
+                    let kind = m.file_type();
+                    (kind.is_socket() || kind.is_fifo()) && m.uid() != me
+                })
+            });
+        let Some(path) = foreign else {
+            return;
+        };
+        let error = AtomicFile::new(&path).create().expect_err("refused");
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        let text = error.to_string();
+        assert!(text.contains(&path.display().to_string()), "{text}");
+        assert!(text.contains("owned by another user"), "{text}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_effective_uid_is_the_owner_of_a_new_file() {
+        use std::os::unix::fs::MetadataExt;
+        let dir = scratch("uid");
+        let path = dir.join("mine");
+        fs::write(&path, "x").expect("file");
+        let owner = fs::metadata(&path).expect("metadata").uid();
+        assert_eq!(effective_uid(&dir).expect("uid"), owner);
+        assert_eq!(fs::read_dir(&dir).expect("dir").count(), 1);
+        fs::remove_dir_all(&dir).expect("remove dir");
+    }
+
+    /// A file already at the temporary path is not this process's: the
+    /// create fails, and the drop and the commit leave it where it is.
+    #[test]
+    fn a_file_planted_at_the_temporary_path_is_left_in_place() {
+        let dir = scratch("planted");
+        let path = dir.join("out.txt");
+        for commit in [false, true] {
+            let file = AtomicFile::new(&path);
+            let temp = file.writing().to_path_buf();
+            assert_ne!(temp, path);
+            fs::write(&temp, "planted").expect("plant");
+            let error = file.create().expect_err("create_new refuses it");
+            assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+            assert!(!registered().contains(&temp));
+            if commit {
+                assert!(file.commit().is_err());
+            } else {
+                drop(file);
+            }
+            assert_eq!(fs::read_to_string(&temp).expect("planted"), "planted");
+            assert!(!path.exists());
+            fs::remove_file(&temp).expect("remove");
+        }
+        fs::remove_dir(&dir).expect("remove dir");
+    }
+
+    /// The temporary file is registered while it exists, and two names
+    /// for one path differ in their random part.
+    #[test]
+    fn the_temporary_name_is_registered_once_created_and_has_a_random_part() {
+        let dir = scratch("names");
+        let path = dir.join("out.txt");
+        let first = AtomicFile::new(&path);
+        let second = AtomicFile::new(&path);
+        let random = |file: &AtomicFile| {
+            let name = file.writing().to_string_lossy().into_owned();
+            let parts: Vec<&str> = name.rsplit('.').collect();
+            assert_eq!(parts[0], "tmp");
+            assert_eq!(parts[1].len(), 16);
+            parts[1].to_owned()
+        };
+        assert_ne!(random(&first), random(&second));
+        let temp = first.writing().to_path_buf();
+        assert!(!registered().contains(&temp));
+        drop(first.create().expect("create"));
+        assert!(registered().contains(&temp));
+        drop(first);
+        assert!(!registered().contains(&temp));
+        assert!(!temp.exists());
+        drop(second);
         fs::remove_dir(&dir).expect("remove dir");
     }
 
