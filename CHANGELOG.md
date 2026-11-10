@@ -75,7 +75,7 @@ Eight tools: `CollectSequencingArtifactMetrics`, `ConvertSequencingArtifactToOxo
   on the shared read.
 - `qc --sex male|female` (Python `qc(sex=...)`, any case): `EXPECTED_SEX` of the sex
   check; a preset with no `SexCheckMetrics` rule refuses `--sex` (exit 2). `qc`
-  writes `PREFIX.sex_check_metrics` for `generic`, `wgs` and `clinical-panel`, and with a
+  writes `PREFIX.sex_check_metrics` for `clinical-panel` only, and with a
   panel `PREFIX.coverage_gaps` and `PREFIX.coverage_gaps.bed` (manifest kind `gaps`; the
   BED is no verdict input). The panel targets reach both collectors.
 - Rule language: an `is TEXT` bound (`fail = "is N"`, `warn = "is UNKNOWN"`) judges the
@@ -88,8 +88,8 @@ Eight tools: `CollectSequencingArtifactMetrics`, `ConvertSequencingArtifactToOxo
   are starting values`) adds `gaps.reportable-range` (`PCT_REPORTABLE` warn `< 0.98`, fail
   `< 0.95`), `gaps.targets-complete` (`PCT_TARGETS_COMPLETE` warn `< 0.95`, fail `< 0.90`),
   `sex.match` (fail `is N`) and `sex.inferred` (warn `is UNKNOWN`). `generic` and `wgs`
-  are unchanged (version 1): the sex rules stay in `clinical-panel`, so `report` and
-  `check` over a directory of Picard output alone still complete under them. `qc --sex`
+  are unchanged (version 1, byte-identical to 0.18.0): the sex rules stay in
+  `clinical-panel`, so they add no not-measured check under `generic` or `wgs`. `qc --sex`
   under a preset without a `SexCheckMetrics` rule exits 2.
 - Report page: a `Coverage gaps` table (the 200 longest gaps, from the BED beside the
   metrics file, the one sidecar the page reads; docs/05 section 4.9) under the first warn

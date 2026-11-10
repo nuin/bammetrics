@@ -135,6 +135,10 @@ duplicate flags, and `samtools view --no-PG` prints the same text for every reco
 SHA-256 over all records, `5a90c21f...fafb396`). The headers differ in the `@PG` line each tool adds and in the
 `@RG DT` value, which htsjdk writes in the JVM's time zone (KNOWN_DIFFERENCES.md).
 
+## 0.19.0 tools (HG002 exome)
+
+The HG002 timings of the five new BAM-reading tools of 0.19.0 (`CollectSequencingArtifactMetrics`, `CollectOxoGMetrics`, `CollectJumpingLibraryMetrics`, `CollectCoverageGaps`, `CollectSexCheckMetrics`) follow; they are being measured separately on the same machine.
+
 ## Report budgets (docs/05 section 4.8)
 
 Measured 2026-11-05 with bammetrics 0.16.0, rustc 1.99.1, same machine, by `make budgets`
@@ -148,7 +152,12 @@ and CI runs it on the Linux and macOS runners after the unit tests.
 | Sample page size | 100 KB | 200 KB | 88.6 KB | the largest of the three fixture pages: 71,767 bytes passing, 84,699 failing, 90,776 failing with every plot |
 | Index size, 100 samples | 200 KB | 400 KB | 151.9 KB | 155,513 bytes, 14 rule cells per row |
 | Binary growth | 300 KB | 600 KB | 290.8 KB | 297,808 bytes: stripped `size_report` less stripped `size_base`; the probe leaves out the verbs' code (see below) |
+| Binary growth, 0.19.0 | 300 KB | 600 KB | 371.5 KB | 380,400 bytes stripped (408,768 unstripped), measured 2026-11-09 by `make budgets` on the same machine: over the 300 KB target, under the 600 KB limit, so the test prints `over target` and passes; 80.7 KB more than the 0.16.0 row |
 | Added passes over the BAM | 0 | 1 | 0 | `qc` reports 1 BAM read with the verdict and page; `report` and `check` run with the BAM deleted |
+
+The other rows at 0.19.0, same run: render 1.65 ms and 0.72 ms, sample page 96.5 KB
+(98,790 bytes with every plot), index 190.7 KB (195,237 bytes, 18 rule cells per row), 0
+added passes.
 
 The fixture metrics are the seven files the golden records hold for
 `tests/data/insert_size.bam` (alignment summary, insert size, quality yield, duplicate
@@ -171,7 +180,8 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 10d7f47 | last commit before `crates/verdict` and `crates/report` | 3,390,832 | 2,869,432 |
 | 28647a8 | both crates exist; the binary links neither | 3,390,576 | 2,869,432 |
 | f82df56 | the `report` and `check` verbs link both crates | 3,778,528 | 3,216,936 |
-| 0.16.0 | today | 4,870,352 | 4,161,072 |
+| 0.16.0 | 2026-11-05 | 4,870,352 | 4,161,072 |
+| 0.19.0 | 2026-11-09, release/0.19.0 at d221376 | 6,899,008 | 5,833,632 |
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and

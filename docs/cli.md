@@ -401,8 +401,9 @@ bammetrics qc BAM [-o PREFIX] [-R FASTA] [--preset NAME|FILE] [--hs BAITS TARGET
 picks a clinical preset by itself), on one read of the BAM, then writes the verdict and
 the page. `--hs` or `--panel` adds `CollectHsMetrics` and `--ref-flat` adds
 `CollectRnaSeqMetrics` whether or not a rule reads them. `--sex` is the declared sex for
-`CollectSexCheckMetrics` (`EXPECTED_SEX`), which the `generic`, `wgs` and `clinical-panel`
-presets run; the panel targets (`--panel`, else the first `--hs` pair's targets) reach it and
+`CollectSexCheckMetrics` (`EXPECTED_SEX`), which only the `clinical-panel` preset runs
+(`generic` and `wgs` have no `SexCheckMetrics` rule, so `--sex` under them exits 2); the
+panel targets (`--panel`, else the first `--hs` pair's targets) reach it and
 `CollectCoverageGaps`. A rule whose collector cannot run
 is listed as not measured with the reason (`needs --hs BAITS TARGETS or --panel FILE`,
 `needs -R FASTA`), and the verdict reads INCOMPLETE.
@@ -870,14 +871,10 @@ MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE
 
 ```
 $ bammetrics qc tests/data/insert_size.bam -R tests/data/ref_100k.fa -o out/quick/S1
-insert_size  WARN  preset generic v2 (9094cb)  5 collectors, 1 BAM read (10 records)
-WARN          sex.inferred  Inferred sex: UNKNOWN, a warn value
-PASS          7 checks
-wrote 8 files to out/quick/S1.*, report out/quick/S1.report.html
-use --fail-on fail or bammetrics check to gate
+insert_size  PASS  preset generic v1 (6dd89e)  4 collectors, 1 BAM read (10 records)
+PASS          6 checks
+wrote 7 files to out/quick/S1.*, report out/quick/S1.report.html
 ```
-
-The fixture BAM has chr1 only, so the sex check infers no sex and its rule warns.
 
 **4. Clinical panel, one sample.**
 

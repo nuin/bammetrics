@@ -234,8 +234,11 @@ refuses `--sex` (exit 2) instead of dropping it.
 `sex.match` passes on `Y` and on an empty cell, so a run without `--sex` passes it.
 `clinical-panel` becomes version 3 with the note `reviewed defaults; gap and sex rules are
 starting values`. `generic`, `wgs` and `rna-seq` are unchanged (version 1): the sex rules
-stay in `clinical-panel`, so `report` and `check` over Picard output alone still complete
-under `generic` and `wgs` (reviewer decision, 0.19.0). The report page shows the row with its ratios in the metrics table of
+stay in `clinical-panel`, so they add no not-measured check under `generic` or `wgs`
+(reviewer decision, 0.19.0). `report` and `check` over Picard output alone complete under
+`generic` (`check tests/data/picard` exits 0); under `wgs` they complete once a
+`WgsMetrics` file is present (on `tests/data/picard`, which has none, the 4 `wgs.*` rules
+read not measured and `check` exits 11). The report page shows the row with its ratios in the metrics table of
 `PREFIX.sex_check_metrics` (`Sex check metrics`), and a failing or warning check as any
 other.
 
