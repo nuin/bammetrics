@@ -1,5 +1,54 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `CollectSequencingArtifactMetrics` (Picard face, the `sequencing-artifact` verb, Python
+  `collect_sequencing_artifact_metrics()` and a `CollectMultipleMetrics` program): the five
+  files of Picard 3.5.0 from one read of the BAM, the pre-adapter and bait-bias detail and
+  summary files and the error summary. Every option: `MINIMUM_QUALITY_SCORE`,
+  `MINIMUM_MAPPING_QUALITY`, `MINIMUM_INSERT_SIZE`, `MAXIMUM_INSERT_SIZE`,
+  `INCLUDE_UNPAIRED`, `INCLUDE_DUPLICATES`, `INCLUDE_NON_PF_READS`, `TANDEM_READS`, `USE_OQ`,
+  `CONTEXT_SIZE`, `CONTEXTS_TO_PRINT`, `FILE_EXTENSION`, `INTERVALS`, `DB_SNP` (a VCF, every
+  record type), `STOP_AFTER`, `ASSUME_SORTED`. Libraries and samples come in Java `HashMap`
+  order. `CollectMultipleMetrics` passes the program its `INTERVALS`, `DB_SNP` and
+  `INCLUDE_UNPAIRED`, which it used to drop.
+- `ConvertSequencingArtifactToOxoG` (Picard face, the `convert-sequencing-artifact-to-oxo-g`
+  verb, Python `convert_sequencing_artifact_to_oxo_g()`): the `CpcgMetrics` rows of
+  `CollectOxoGMetrics` from the two detail files, with Picard's failures for a missing row,
+  an empty or swapped file.
+- `tests/concordance/test_sequencing_artifact.py`: both tools against Picard 3.5.0 on the
+  foundation corpus, t1 to t3, the exome slice and three built BAMs (`artifact_bams.py`),
+  `CONTEXT_SIZE` 0 to 2, every option, `INTERVALS`, `DB_SNP`, error parity and the
+  distinct-value gate. `tests/data/artifact.bam` (`make_artifact_bam.py`) and Picard's five
+  files for it in `tests/data/artifact`; ten golden records, and the `tools` listing gains
+  two rows.
+- A verb whose tool has no required option takes its first value option as the positional
+  argument (`INPUT_BASE` of the converter).
+
+### Changed
+
+- Every tool checks all its output paths before it writes the first file: a directory, a
+  read-only file or a missing parent fails the run with no file written. An output path
+  that is one of the run's inputs fails with `is an input; writing it would destroy it`
+  (Picard replaces the input). `Opt::written` marks the path options a tool writes.
+- An `OQ` character below `!` fails the run (`Invalid fastq character`), as in Picard. It
+  used to decode as a negative quality.
+- An interval list interval past the end of its contig fails the VCF tools and
+  `CollectSequencingArtifactMetrics`, as in Picard.
+- A VCF record at `POS` 0 reads as position 0. It used to fail with `missing position`.
+
+### Fixed
+
+- `CollectSequencingArtifactMetrics` printed `-0` for `QSCORE`, `TOTAL_QSCORE` and the
+  `WORST_*_QSCORE` columns of an error rate of 1; Picard prints `0`.
+- `FILE_EXTENSION=null`, `INTERVALS=null` and `DB_SNP=null` leave the option unset, as in
+  Picard. They used to name a file `null`.
+- A `DB_SNP` VCF without `##contig` lines runs, as in Picard.
+- `convert-sequencing-artifact-to-oxo-g --pre-adapter-in A --bait-bias-in B --oxog-out C`
+  runs without `-o`.
+
 ## 0.18.0
 
 MarkDuplicates, the first bammetrics tool that writes reads.

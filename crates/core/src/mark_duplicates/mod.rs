@@ -284,6 +284,7 @@ pub const TOOL: Tool = Tool {
             &["OUTPUT", "O"],
             "The BAM to write: every record, duplicates flagged (0x400).",
         )
+        .written()
         .required(),
         Opt::output(&["METRICS_FILE", "M"])
             .with_help("The duplication metrics file.")

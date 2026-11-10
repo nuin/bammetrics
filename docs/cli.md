@@ -123,17 +123,18 @@ above where a verb has them.
 - A single-file verb writes `-o FILE`. Without `-o`, or with `-o -`, the file goes to
   standard output.
 - A multi-file verb (`gc-bias`, `multiple-metrics`, `variant-calling`,
-  `accumulate-variant-calling`, `genotype-concordance`, `collect`, `qc`) writes under `-o
-  PREFIX`. Without `-o` the prefix is `./` plus the input name without its extension, and
-  stderr (the summary for `qc`) says so. An `-o` that ends in `/` or names an existing
-  directory gets that name as the file part (`-o out/` writes `out/NA12878.*`). `-o -` is
-  an error.
+  `accumulate-variant-calling`, `genotype-concordance`, `sequencing-artifact`,
+  `convert-sequencing-artifact-to-oxo-g`, `collect`, `qc`) writes under `-o PREFIX`.
+  Without `-o` the prefix is `./` plus the input name without its extension, and stderr
+  (the summary for `qc`) says so. An `-o` that ends in `/` or names an existing directory
+  gets that name as the file part (`-o out/` writes `out/NA12878.*`). `-o -` is an error.
 - The names after the prefix come from one table, `multiple_metrics::file_extensions`, the
   `CollectMultipleMetrics` program extensions (`.alignment_summary_metrics`,
   `.insert_size_metrics`, `.quality_yield_metrics`, `.gc_bias.detail_metrics`, ...) plus
   `.hs_metrics`, `.duplicate_metrics`, `.wgs_metrics` and `.rna_metrics`. `collect`, `qc`
   and the verbs read it; a test pins it, and another checks the verbs against
-  `CollectMultipleMetrics O=PREFIX`.
+  `CollectMultipleMetrics O=PREFIX`. The `CollectSequencingArtifactMetrics` entry is
+  `("OUTPUT", "")`: the program takes the prefix itself and adds its five extensions.
 - Several Hs runs write `PREFIX.<BAIT_SET>.hs_metrics`, `BAIT_SET` being the bait file name
   up to its first dot. Two bait files with one stem are an error.
 - Run files of `qc`: `PREFIX.manifest.json`, `PREFIX.verdict.json`, `PREFIX.report.html`,
@@ -244,6 +245,8 @@ table.
 | `bed-to-interval-list` | BedToIntervalList | one interval list |
 | `compare-metrics` | CompareMetrics (two metrics files as positionals) | the comparison text |
 | `create-sequence-dictionary` | CreateSequenceDictionary (input is a FASTA) | one `.dict` |
+| `sequencing-artifact` | CollectSequencingArtifactMetrics (needs `-R`) | `PREFIX.{pre_adapter,bait_bias}_{detail,summary}_metrics`, `PREFIX.error_summary_metrics` |
+| `convert-sequencing-artifact-to-oxo-g` | ConvertSequencingArtifactToOxoG (input is a `sequencing-artifact` prefix) | `PREFIX.oxog_metrics` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -565,6 +568,25 @@ bammetrics AccumulateQualityYieldMetrics I=out/a.qy I=out/b.qy O=out/sample.qy
 Files in, file out; no BAM is read. The two forms write the same metrics.
 `accumulate-variant-calling` takes the prefixes `variant-calling` wrote and writes the two
 files under `-o PREFIX`, inverting the printed ratios into counts as Picard does.
+
+### convert-sequencing-artifact-to-oxo-g
+
+```bash
+bammetrics sequencing-artifact sample.bam -R ref.fa -o out/sample
+bammetrics convert-sequencing-artifact-to-oxo-g out/sample -o out/sample
+bammetrics ConvertSequencingArtifactToOxoG I=out/sample
+```
+
+Reads `PREFIX.pre_adapter_detail_metrics` and `PREFIX.bait_bias_detail_metrics` and writes
+`PREFIX.oxog_metrics`, the `CpcgMetrics` rows `CollectOxoGMetrics` writes: one per library
+and C-centred context. The positional argument is `INPUT_BASE`; `--pre-adapter-in` and
+`--bait-bias-in` name the two files when `FILE_EXTENSION` renamed them, `--oxog-out` the
+output. With `--pre-adapter-in`, `--bait-bias-in` and `--oxog-out` the verb needs neither a
+positional prefix nor `-o`. The Picard face defaults `OUTPUT_BASE` to `INPUT_BASE`; the verb,
+like every prefix verb, defaults `-o` to `./` plus the prefix's file name. `--oxog-out` may
+not name either detail file: the run fails and leaves both in place. A detail file cut by
+`CONTEXTS_TO_PRINT` that lacks a context the conversion needs fails the run, as in Picard.
+The name is the naming rule applied to the class (`oxo-g` from `OxoG`).
 
 ### compare-metrics
 

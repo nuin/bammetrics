@@ -17,6 +17,8 @@ const IL: &str = "tests/data/targets.interval_list";
 const QY_A: &str = "tests/data/quality_yield_a.txt";
 const QY_B: &str = "tests/data/quality_yield_b.txt";
 const MD: &str = "tests/data/markdup.bam";
+const ART: &str = "tests/data/artifact.bam";
+const ART_PREFIX: &str = "tests/data/artifact/artifact";
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -357,6 +359,25 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("TAGGING_POLICY", "All")),
             picard_outputs: marked,
         },
+        Case {
+            verb: "sequencing-artifact",
+            class: "CollectSequencingArtifactMetrics",
+            verb_args: strings(&[ART, "-R", REF]),
+            picard_args: strings(&[&format!("I={ART}"), &r]),
+            option: Some(("CONTEXT_SIZE", "0")),
+            picard_outputs: prefix,
+        },
+        Case {
+            verb: "convert-sequencing-artifact-to-oxo-g",
+            class: "ConvertSequencingArtifactToOxoG",
+            verb_args: strings(&[ART_PREFIX]),
+            picard_args: strings(&[&format!("I={ART_PREFIX}")]),
+            option: Some((
+                "BAIT_BIAS_IN",
+                "tests/data/artifact/artifact.bait_bias_detail_metrics",
+            )),
+            picard_outputs: prefix,
+        },
     ]
 }
 
@@ -439,7 +460,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && **c != "AccumulateVariantCallingMetrics")
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 24);
+    assert_eq!(classes.len(), 26);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

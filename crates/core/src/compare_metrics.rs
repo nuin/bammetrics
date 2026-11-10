@@ -64,7 +64,8 @@ pub const TOOL: Tool = Tool {
         Opt::path(
             &["OUTPUT_TABLE"],
             "The value differences as a metrics file (KEY, METRIC, VALUE1, VALUE2).",
-        ),
+        )
+        .written(),
         Opt::text(
             &["METRICS_TO_IGNORE", "MI"],
             "A column left out of the comparison; both files must still have it.",

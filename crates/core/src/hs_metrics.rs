@@ -279,11 +279,13 @@ const COMMON_OPTIONS: [Opt; 15] = [
     Opt::path(
         &["PER_TARGET_COVERAGE"],
         "Also write the coverage of every target to this file.",
-    ),
+    )
+    .written(),
     Opt::path(
         &["PER_BASE_COVERAGE"],
         "Also write the depth of every target base to this file; gzip when it ends in .gz.",
-    ),
+    )
+    .written(),
     Opt::int(
         &["NEAR_DISTANCE"],
         "Reads this close to a bait are near bait (default 250).",
@@ -315,7 +317,8 @@ const COMMON_OPTIONS: [Opt; 15] = [
     Opt::path(
         &["THEORETICAL_SENSITIVITY_OUTPUT"],
         "Also write the theoretical sensitivity per allele fraction to this file.",
-    ),
+    )
+    .written(),
     Opt::float(
         &["ALLELE_FRACTION"],
         "An allele fraction for THEORETICAL_SENSITIVITY_OUTPUT; each adds to the default list, null clears.",

@@ -1,0 +1,9 @@
+## argv
+ConvertSequencingArtifactToOxoG
+O=OUT/artifact
+## exit
+1
+## stdout
+## stderr
+bammetrics: Must specify either INPUT_BASE or PRE_ADAPTER_IN
+Must specify either INPUT_BASE or BAIT_BIAS_IN

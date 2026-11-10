@@ -473,6 +473,9 @@ def collect_multiple_metrics(
     file_extension: str | None = None,
     program: str | Sequence[str] | None = None,
     extra_argument: str | Sequence[str] | None = None,
+    intervals: _Path | None = None,
+    db_snp: _Path | None = None,
+    include_unpaired: bool | None = None,
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
     """CollectMultipleMetrics: every PROGRAM on one read of the BAM, each written to OUTPUT
@@ -766,6 +769,46 @@ def mark_duplicates(
     """MarkDuplicates: one row per library (DuplicationMetrics) plus the set_size
     histograms; OUTPUT gets every record with the duplicate flag set or cleared,
     METRICS_FILE the metrics."""
+
+def collect_sequencing_artifact_metrics(
+    input: _Path,
+    *,
+    output: _Path,
+    reference_sequence: _Path,
+    intervals: _Path | None = None,
+    db_snp: _Path | None = None,
+    minimum_quality_score: int | None = None,
+    minimum_mapping_quality: int | None = None,
+    minimum_insert_size: int | None = None,
+    maximum_insert_size: int | None = None,
+    include_unpaired: bool | None = None,
+    include_duplicates: bool | None = None,
+    include_non_pf_reads: bool | None = None,
+    tandem_reads: bool | None = None,
+    use_oq: bool | None = None,
+    context_size: int | None = None,
+    contexts_to_print: str | Sequence[str] | None = None,
+    file_extension: str | None = None,
+    stop_after: int | None = None,
+    assume_sorted: bool | None = None,
+) -> list[dict[str, Any]]:
+    """CollectSequencingArtifactMetrics: OUTPUT is a prefix:
+    PREFIX.pre_adapter_detail_metrics, .pre_adapter_summary_metrics,
+    .bait_bias_detail_metrics, .bait_bias_summary_metrics and .error_summary_metrics
+    (plus FILE_EXTENSION); Python returns one row per file: file and rows."""
+
+def convert_sequencing_artifact_to_oxo_g(
+    *,
+    output: _Path | None = None,
+    input_base: _Path | None = None,
+    pre_adapter_in: _Path | None = None,
+    bait_bias_in: _Path | None = None,
+    oxog_out: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """ConvertSequencingArtifactToOxoG: one CpcgMetrics row per library and C-centred
+    context, read from the CollectSequencingArtifactMetrics detail files of INPUT_BASE;
+    the file is OUTPUT_BASE.oxog_metrics. Python returns one row per file: file and
+    rows."""
 
 # END registry tools
 
