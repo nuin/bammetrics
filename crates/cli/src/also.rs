@@ -129,10 +129,29 @@ pub fn targets(prefix: &Path, metrics: &[&Path], also: &[Also]) -> Vec<Target> {
     targets
 }
 
-/// Each target with its text. The metrics files are read back from disk,
-/// so a file `--resume` kept is exported like one this run wrote; the JSON
-/// forms carry `sample`. `warn_fails` is the gate `--fail-on warn`, under
-/// which JUnit counts a warning as a failure.
+/// The metrics files of the run as documents, each with `sample`. A file
+/// with headers only is a document with no table: `CollectDuplicateMetrics`
+/// writes one for a BAM with no read, and the run that wrote it exits 0.
+fn documents(metrics: &[&Path], sample: &str) -> Result<Vec<Document>> {
+    metrics
+        .iter()
+        .map(|path| {
+            let text = fs::read_to_string(path).map_err(|e| Error::io(path, e))?;
+            let mut doc = bammetrics_formats::picard::read_or_empty(&text)
+                .map_err(|e| Error::Input(format!("{}: {e}", path.display())))?;
+            doc.sample = Some(sample.to_owned());
+            Ok(doc)
+        })
+        .collect()
+}
+
+/// Each target with its text. The metrics files are read back from disk
+/// when a format prints them (`junit` and `multiqc` print the verdict
+/// only), so a file `--resume` kept is exported like one this run wrote;
+/// the JSON forms carry `sample`. A metrics file with no table still gets
+/// its sibling: the JSON document with the headers, an empty `tsv`, `csv`
+/// or `jsonl` file. `warn_fails` is the gate `--fail-on warn`, under which
+/// JUnit counts a warning as a failure.
 pub fn texts(
     prefix: &Path,
     metrics: &[&Path],
@@ -142,30 +161,26 @@ pub fn texts(
     fail_on: Option<FailOn>,
 ) -> Result<Vec<(Target, String)>> {
     let targets = targets(prefix, metrics, also);
-    if targets.is_empty() {
-        return Ok(Vec::new());
-    }
-    let mut docs: Vec<Document> = Vec::with_capacity(metrics.len());
-    for path in metrics {
-        let text = fs::read_to_string(path).map_err(|e| Error::io(path, e))?;
-        let mut doc = bammetrics_formats::read(&text)
-            .map_err(|e| Error::Input(format!("{}: {e}", path.display())))?;
-        doc.sample = Some(sample.to_owned());
-        docs.push(doc);
-    }
+    let reads_metrics = |t: &Target| t.source.is_some() || t.also == Also::Markdown;
+    let docs = if targets.iter().any(reads_metrics) {
+        documents(metrics, sample)?
+    } else {
+        Vec::new()
+    };
     let verdicts = [summary(verdict)];
-    Ok(targets
+    targets
         .into_iter()
         .map(|target| {
             let text = match (target.also.per_file(), target.source, target.also) {
-                (Some(format), Some(j), _) => bammetrics_formats::render(format, &docs[j], None),
+                (Some(format), Some(j), _) => bammetrics_formats::render(format, &docs[j], None)
+                    .map_err(|e| Error::Input(format!("{}: {e}", metrics[j].display())))?,
                 (_, _, Also::Junit) => junit::write(&verdicts, fail_on == Some(FailOn::Warn)),
                 (_, _, Also::Multiqc) => multiqc::write(&verdicts),
                 _ => markdown::write(&docs.iter().collect::<Vec<_>>(), &verdicts),
             };
-            (target, text)
+            Ok((target, text))
         })
-        .collect())
+        .collect()
 }
 
 #[cfg(test)]

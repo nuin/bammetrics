@@ -121,24 +121,39 @@ pub enum ListError {
 }
 
 /// `doc` in `format`. A one-table format prints `table` (the main table
-/// without one).
-pub fn render(format: Format, doc: &Document, table: Option<&Table>) -> String {
+/// without one). Only `picard` fails: on a cell Picard text cannot hold
+/// ([`picard::write`]).
+pub fn render(format: Format, doc: &Document, table: Option<&Table>) -> Result<String> {
     let one = || table.or_else(|| doc.main_table());
-    match format {
-        Format::Picard => picard::write(doc),
+    Ok(match format {
+        Format::Picard => picard::write(doc)?,
         Format::Json => metrics_json::write(doc),
         Format::Jsonl => delimited::jsonl(doc),
         Format::Tsv => one().map(delimited::tsv).unwrap_or_default(),
         Format::Csv => one().map(delimited::csv).unwrap_or_default(),
         Format::Human => one().map(delimited::human).unwrap_or_default(),
         Format::Markdown => markdown::write(&[doc], &[]),
-    }
+    })
 }
 
-/// Read a metrics file in either form that reads back: JSON when the
-/// first character that is not whitespace is `{`, else Picard text.
+/// `text` without a leading byte order mark (U+FEFF), which some editors
+/// and exporters put before UTF-8 text.
+fn without_bom(text: &str) -> &str {
+    text.strip_prefix('\u{feff}').unwrap_or(text)
+}
+
+/// True when `text` is read as JSON: after a byte order mark and
+/// whitespace its first character is `{` or `[`. No Picard file starts
+/// with either.
+pub fn is_json(text: &str) -> bool {
+    without_bom(text).trim_start().starts_with(['{', '['])
+}
+
+/// Read a metrics file in either form that reads back: JSON by
+/// [`is_json`], else Picard text. A leading byte order mark is dropped.
 pub fn read(text: &str) -> Result<Document> {
-    if text.trim_start().starts_with('{') {
+    let text = without_bom(text);
+    if is_json(text) {
         metrics_json::read(text)
     } else {
         picard::read(text)
@@ -172,12 +187,49 @@ mod tests {
     fn read_tells_json_from_picard_text() {
         let picard = "\n## METRICS CLASS\tX\nA\n1\n\n\n";
         let doc = read(picard).expect("picard");
-        assert_eq!(render(Format::Picard, &doc, None), picard);
-        let json = render(Format::Json, &doc, None);
+        let render = |format| render(format, &doc, None).expect("renders");
+        assert_eq!(render(Format::Picard), picard);
+        let json = render(Format::Json);
         let back = read(&format!("  \n{json}")).expect("json");
         assert_eq!(back, doc);
-        assert_eq!(render(Format::Tsv, &doc, None), "A\n1\n");
-        assert_eq!(render(Format::Csv, &doc, None), "A\r\n1\r\n");
+        assert_eq!(render(Format::Tsv), "A\n1\n");
+        assert_eq!(render(Format::Csv), "A\r\n1\r\n");
         assert!(read("nothing").is_err());
+    }
+
+    /// A byte order mark before either form is dropped, and text that
+    /// starts as a JSON array is reported as JSON.
+    #[test]
+    fn a_byte_order_mark_and_a_json_array_are_told_apart() {
+        let picard = "\n## METRICS CLASS\tX\nA\n1\n\n\n";
+        let doc = read(picard).expect("picard");
+        let json = render(Format::Json, &doc, None).expect("renders");
+        assert_eq!(read(&format!("\u{feff}{json}")).expect("json"), doc);
+        assert_eq!(read(&format!("\u{feff}{picard}")).expect("picard"), doc);
+        assert!(is_json("\u{feff} \n{"));
+        assert!(is_json("[1]"));
+        assert!(!is_json("## METRICS CLASS\tX"));
+        assert_eq!(
+            read("[]").expect_err("an array").to_string(),
+            "not a metrics document: the JSON is not an object"
+        );
+        let deep = read(&"[".repeat(200_000))
+            .expect_err("too deep")
+            .to_string();
+        assert!(deep.starts_with("json: "), "{deep}");
+    }
+
+    #[test]
+    fn only_picard_text_refuses_a_cell() {
+        let cell = r#"{"schema": "bammetrics.metrics/1", "class": "X", "columns": ["A"],
+            "types": ["string"], "metrics": [{"A": "a\tb"}]}"#;
+        let doc = read(cell).expect("reads");
+        assert_eq!(render(Format::Tsv, &doc, None).expect("tsv"), "A\na\\tb\n");
+        for format in Format::ALL {
+            let rendered = render(format, &doc, None);
+            assert_eq!(rendered.is_err(), format == Format::Picard, "{format:?}");
+        }
+        let error = render(Format::Picard, &doc, None).expect_err("a tab");
+        assert!(matches!(error, Error::Picard(_)), "{error}");
     }
 }

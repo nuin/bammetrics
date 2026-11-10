@@ -25,6 +25,12 @@
 //! with `?` where it had `?`. `tool` and `sample` are present when known.
 //! A file with more than one metrics class, which Picard never writes,
 //! carries the further ones under `more_classes`.
+//!
+//! `columns` holds the members of a row object, so no two are equal. A
+//! table that repeats a column name (the histogram of `CollectHsMetrics`
+//! with two units) gets [`Table::keys`] there (`v`, `v.1`) and the names
+//! of the file under `picard_columns`, which is absent otherwise. A JSON
+//! parser that keeps one value per member then loses no series.
 
 use bammetrics_core::metric::Value;
 
@@ -44,12 +50,12 @@ pub fn cell(value: &Value) -> Json {
     }
 }
 
-/// One row as an object, a member per column in column order.
-pub fn record(table: &Table, row: &[Value]) -> Vec<(String, Json)> {
-    table
-        .names()
+/// One row as an object, a member per column in column order under the
+/// table's `keys` ([`Table::keys`]).
+pub fn record(keys: &[String], row: &[Value]) -> Vec<(String, Json)> {
+    keys.iter()
         .zip(row)
-        .map(|(name, value)| (name.to_owned(), cell(value)))
+        .map(|(key, value)| (key.clone(), cell(value)))
         .collect()
 }
 
@@ -63,8 +69,9 @@ fn non_finite_name(value: f64) -> &'static str {
     }
 }
 
-/// The members every table has: `columns`, `types`, the rows under
-/// `rows_key` and `non_finite`.
+/// The members every table has: `columns` (the row keys), `picard_columns`
+/// when a name repeats, `types`, the rows under `rows_key` and
+/// `non_finite`, which names a column by its key.
 fn table_members(table: Option<&Table>, rows_key: &str) -> Vec<(String, Json)> {
     let empty = Table {
         class: String::new(),
@@ -72,22 +79,29 @@ fn table_members(table: Option<&Table>, rows_key: &str) -> Vec<(String, Json)> {
         rows: Vec::new(),
     };
     let table = table.unwrap_or(&empty);
+    let keys = table.keys();
     let mut non_finite = Vec::new();
     for (i, row) in table.rows.iter().enumerate() {
-        for ((name, _), value) in table.columns.iter().zip(row) {
+        for (key, value) in keys.iter().zip(row) {
             if let Value::Float(v) = value
                 && !v.is_finite()
             {
                 non_finite.push(Json::Object(vec![
                     ("row".to_owned(), Json::int(i as i64)),
-                    ("column".to_owned(), Json::text(name)),
+                    ("column".to_owned(), Json::text(key)),
                     ("value".to_owned(), Json::text(non_finite_name(*v))),
                 ]));
             }
         }
     }
-    vec![
-        ("columns".to_owned(), Json::strings(table.names())),
+    let mut members = vec![(
+        "columns".to_owned(),
+        Json::strings(keys.iter().map(String::as_str)),
+    )];
+    if table.names().ne(keys.iter().map(String::as_str)) {
+        members.push(("picard_columns".to_owned(), Json::strings(table.names())));
+    }
+    members.extend([
         (
             "types".to_owned(),
             Json::strings(table.columns.iter().map(|(_, ty)| ty.name())),
@@ -98,12 +112,13 @@ fn table_members(table: Option<&Table>, rows_key: &str) -> Vec<(String, Json)> {
                 table
                     .rows
                     .iter()
-                    .map(|row| Json::Object(record(table, row)))
+                    .map(|row| Json::Object(record(&keys, row)))
                     .collect(),
             ),
         ),
         ("non_finite".to_owned(), Json::Array(non_finite)),
-    ]
+    ]);
+    members
 }
 
 fn class_members(table: Option<&Table>) -> Vec<(String, Json)> {
@@ -212,9 +227,9 @@ fn row_cells<'a>(row: &'a Json, columns: &[String], what: &str, i: usize) -> Res
         .collect())
 }
 
-/// Put back the floats `non_finite` lists: each names a row and a column
-/// whose cell is `null`.
-fn restore_non_finite(table: &mut Table, json: &Json, what: &str) -> Result<()> {
+/// Put back the floats `non_finite` lists: each names a row and, by its
+/// key in `keys`, a column whose cell is `null`.
+fn restore_non_finite(table: &mut Table, keys: &[String], json: &Json, what: &str) -> Result<()> {
     let Some(entries) = json.get("non_finite") else {
         return Ok(());
     };
@@ -244,13 +259,14 @@ fn restore_non_finite(table: &mut Table, json: &Json, what: &str) -> Result<()> 
                 )));
             }
         };
-        // The first float column of that name whose cell is still null.
-        let index = table
-            .columns
+        // The first float column of that key whose cell is still null (a
+        // document written by hand may repeat a key).
+        let index = keys
             .iter()
+            .zip(&table.columns)
             .enumerate()
-            .position(|(j, (name, ty))| {
-                name == column && *ty == Ty::Float && table.rows[row][j].is_null()
+            .position(|(j, (key, (_, ty)))| {
+                key == column && *ty == Ty::Float && table.rows[row][j].is_null()
             })
             .ok_or_else(|| {
                 bad(format!(
@@ -262,9 +278,10 @@ fn restore_non_finite(table: &mut Table, json: &Json, what: &str) -> Result<()> 
     Ok(())
 }
 
-/// The table of `json`: `columns`, optional `types`, the rows under
-/// `rows_key` and `non_finite`. `untyped` builds the table from text cells
-/// when `types` is absent.
+/// The table of `json`: `columns` (the row keys), optional
+/// `picard_columns` (the names, when they are not the keys), optional
+/// `types`, the rows under `rows_key` and `non_finite`. `untyped` builds
+/// the table from text cells when `types` is absent.
 fn read_table(
     json: &Json,
     class: &str,
@@ -291,6 +308,18 @@ fn read_table(
         .enumerate()
         .map(|(i, row)| row_cells(row, &columns, what, i))
         .collect::<Result<Vec<_>>>()?;
+    let keys = columns;
+    let columns = match strings(json, "picard_columns")? {
+        Some(names) if names.len() == keys.len() => names,
+        Some(names) => {
+            return Err(bad(format!(
+                "{what} has {} picard_columns for {} columns",
+                names.len(),
+                keys.len()
+            )));
+        }
+        None => keys.clone(),
+    };
     let mut table = match strings(json, "types")? {
         None => {
             let text = cells
@@ -337,7 +366,7 @@ fn read_table(
             }
         }
     };
-    restore_non_finite(&mut table, json, what)?;
+    restore_non_finite(&mut table, &keys, json, what)?;
     Ok(table)
 }
 
@@ -463,7 +492,10 @@ mod tests {
         assert!(text.contains("\"value\": \"-Infinity\""));
         let back = read(&text).expect("reads");
         // NaN is not equal to itself: compare the Picard text.
-        assert_eq!(picard::write(&back), picard::write(&doc));
+        assert_eq!(
+            picard::write(&back).expect("writes"),
+            picard::write(&doc).expect("writes")
+        );
         assert_eq!(back.sample, doc.sample);
         assert_eq!(back.tables[0].columns, doc.tables[0].columns);
         assert_eq!(back.tables[0].rows[1], doc.tables[0].rows[1]);
@@ -506,6 +538,62 @@ mod tests {
         let row = &doc.histogram.expect("histogram").rows[0];
         assert_eq!(row[1], Value::Float(2.0));
         assert!(matches!(row[2], Value::Float(v) if v.is_nan()));
+    }
+
+    /// The CollectHsMetrics shape with two units: every series is a member
+    /// of its own, so a parser that keeps one value per member loses none.
+    #[test]
+    fn a_repeated_column_is_a_member_of_its_own() {
+        let doc = Document {
+            histogram: Some(Table {
+                class: "java.lang.Integer".to_owned(),
+                columns: ["k", "v", "k", "v"]
+                    .iter()
+                    .map(|n| ((*n).to_owned(), Ty::Float))
+                    .collect(),
+                rows: vec![vec![
+                    Value::Float(0.0),
+                    Value::Float(1.0),
+                    Value::Float(0.0),
+                    Value::Float(f64::NAN),
+                ]],
+            }),
+            ..Document::default()
+        };
+        let text = write(&doc);
+        let json = Json::parse(&text).expect("valid JSON");
+        let histogram = json.get("histogram").expect("histogram");
+        assert_eq!(
+            histogram.get("columns"),
+            Some(&Json::strings(["k", "v", "k.1", "v.1"]))
+        );
+        assert_eq!(
+            histogram.get("picard_columns"),
+            Some(&Json::strings(["k", "v", "k", "v"]))
+        );
+        let rows = histogram
+            .get("rows")
+            .and_then(Json::as_array)
+            .expect("rows");
+        let members: Vec<&str> = rows[0]
+            .as_object()
+            .expect("a row object")
+            .iter()
+            .map(|(k, _)| k.as_str())
+            .collect();
+        assert_eq!(members, ["k", "v", "k.1", "v.1"]);
+        assert!(text.contains("\"column\": \"v.1\""));
+        let back = read(&text).expect("reads");
+        assert_eq!(
+            picard::write(&back).expect("writes"),
+            picard::write(&doc).expect("writes")
+        );
+        assert_eq!(
+            back.histogram.expect("histogram").columns,
+            doc.histogram.expect("histogram").columns
+        );
+        // No table of the other fixture repeats a name: no further member.
+        assert!(!write(&document()).contains("picard_columns"));
     }
 
     #[test]
@@ -558,6 +646,10 @@ mod tests {
             (
                 r#"{"schema": "bammetrics.metrics/1", "histogram": {"columns": []}}"#,
                 "histogram has no key_class",
+            ),
+            (
+                r#"{"schema": "bammetrics.metrics/1", "columns": ["A", "A.1"], "picard_columns": ["A"]}"#,
+                "1 picard_columns for 2 columns",
             ),
             ("{\"schema\": ", "json: byte"),
         ];

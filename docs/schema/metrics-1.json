@@ -27,6 +27,7 @@
       "type": ["string", "null"]
     },
     "columns": {"$ref": "#/$defs/columns"},
+    "picard_columns": {"$ref": "#/$defs/picard_columns"},
     "types": {"$ref": "#/$defs/types"},
     "metrics": {"$ref": "#/$defs/rows"},
     "non_finite": {"$ref": "#/$defs/non_finite"},
@@ -43,6 +44,7 @@
               "type": "string"
             },
             "columns": {"$ref": "#/$defs/columns"},
+            "picard_columns": {"$ref": "#/$defs/picard_columns"},
             "types": {"$ref": "#/$defs/types"},
             "rows": {"$ref": "#/$defs/rows"},
             "non_finite": {"$ref": "#/$defs/non_finite"}
@@ -59,6 +61,7 @@
         "properties": {
           "class": {"type": ["string", "null"]},
           "columns": {"$ref": "#/$defs/columns"},
+          "picard_columns": {"$ref": "#/$defs/picard_columns"},
           "types": {"$ref": "#/$defs/types"},
           "metrics": {"$ref": "#/$defs/rows"},
           "non_finite": {"$ref": "#/$defs/non_finite"}
@@ -68,7 +71,12 @@
   },
   "$defs": {
     "columns": {
-      "description": "The column names in file order.",
+      "description": "The members of a row object in file order, no two equal: the column names. A name the file repeats (the histogram of CollectHsMetrics with two units) gets .1, .2 after it, and picard_columns holds the names of the file.",
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "picard_columns": {
+      "description": "The column names of the Picard file, one per member of columns. Present only when a name repeats, so columns is not the names.",
       "type": "array",
       "items": {"type": "string"}
     },
@@ -93,7 +101,7 @@
         "required": ["row", "column", "value"],
         "properties": {
           "row": {"description": "The row index, from 0.", "type": "integer", "minimum": 0},
-          "column": {"type": "string"},
+          "column": {"description": "The column, as columns names it.", "type": "string"},
           "value": {"enum": ["NaN", "Infinity", "-Infinity"]}
         },
         "additionalProperties": false

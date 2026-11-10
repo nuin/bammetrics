@@ -85,7 +85,8 @@ pub fn render_all(
                     .expect("writing to memory");
                 String::from_utf8_lossy(&bytes).into_owned()
             }
-            (format, Some(doc)) => bammetrics_formats::render(*format, doc, None),
+            (format, Some(doc)) => bammetrics_formats::render(*format, doc, None)
+                .expect("only the Picard writer refuses a document"),
         })
         .collect()
 }
@@ -232,7 +233,7 @@ mod tests {
         assert!(all[1].contains(&format!("\"Started on: {started}\"")));
         let back = bammetrics_formats::read(&all[1]).expect("the JSON reads");
         assert_eq!(
-            bammetrics_formats::render(Format::Picard, &back, None),
+            bammetrics_formats::render(Format::Picard, &back, None).expect("writes"),
             all[0]
         );
     }

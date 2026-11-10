@@ -163,12 +163,29 @@ fn the_writer_output_is_valid_under_the_committed_schema() {
         let text = fs::read_to_string(&path).expect("read fixture");
         let Ok(mut doc) = read(&text) else { continue };
         doc.sample = Some("S1".to_owned());
-        let json = Json::parse(&render(Format::Json, &doc, None)).expect("valid JSON");
+        let json =
+            Json::parse(&render(Format::Json, &doc, None).expect("renders")).expect("valid JSON");
         validate(&schema, &json, &schema, "$")
             .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
         checked += 1;
     }
     assert!(checked >= 8, "{checked} files");
+}
+
+/// A table that repeats a column name carries `picard_columns`; the
+/// document is valid and the member is an array of strings.
+#[test]
+fn a_document_with_picard_columns_is_valid() {
+    let schema = schema();
+    let text = "\n## HISTOGRAM\tjava.lang.Integer\nk\tv\tk\tv\n0\t1\t0\t2\n\n";
+    let doc = read(text).expect("reads");
+    let rendered = render(Format::Json, &doc, None).expect("renders");
+    assert!(rendered.contains("\"picard_columns\""), "{rendered}");
+    let json = Json::parse(&rendered).expect("valid JSON");
+    validate(&schema, &json, &schema, "$").expect("valid");
+    let wrong = rendered.replacen("\"picard_columns\": [", "\"picard_columns\": [1, ", 1);
+    let json = Json::parse(&wrong).expect("valid JSON");
+    assert!(validate(&schema, &json, &schema, "$").is_err());
 }
 
 #[test]

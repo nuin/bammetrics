@@ -355,6 +355,26 @@ fn further_files(args: &CheckArgs) -> Result<Vec<(Format, PathBuf)>> {
         .collect())
 }
 
+/// Every file `check` reads for `inputs`: a file as given; under a
+/// directory its metrics files at any depth, or, when it has none, the
+/// `*.verdict.json` files directly in it. A directory that cannot be
+/// listed gives none: [`verdicts`] reports it before anything is written.
+fn files_read(inputs: &[PathBuf]) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    for input in inputs {
+        if !input.is_dir() {
+            files.push(input.clone());
+            continue;
+        }
+        let metrics = crate::discover::find(input).unwrap_or_default();
+        if metrics.is_empty() {
+            files.extend(verdict_files(input).unwrap_or_default());
+        }
+        files.extend(metrics);
+    }
+    files
+}
+
 pub fn run(args: CheckArgs) -> Result<u8> {
     let further = further_files(&args)?;
     let written: Vec<PathBuf> = args
@@ -363,7 +383,11 @@ pub fn run(args: CheckArgs) -> Result<u8> {
         .cloned()
         .chain(further.iter().map(|(_, path)| path.clone()))
         .collect();
-    crate::verbs::refuse_overwriting_inputs("check", &args.inputs, &written)?;
+    if !written.is_empty() {
+        let mut read = files_read(&args.inputs);
+        read.extend(args.inputs.iter().cloned());
+        crate::verbs::refuse_overwriting_inputs("check", &read, &written)?;
+    }
     let verdicts = verdicts(&args.inputs, &args.preset)?;
     let code = exit_code(&verdicts, args.fail_on);
     let first = render(args.format[0], &verdicts, code, args.fail_on);

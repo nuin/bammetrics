@@ -244,6 +244,28 @@ impl Table {
         self.columns.iter().map(|(name, _)| name.as_str())
     }
 
+    /// One key per column, no two equal, for a format that holds a row as
+    /// an object (JSON, JSON Lines, a Python dict): the column's name, and
+    /// for a name the table repeats the name plus `.1`, `.2` and so on,
+    /// skipping a key that is the name of a column. Picard repeats the
+    /// histogram columns of `CollectHsMetrics` once per unit.
+    pub fn keys(&self) -> Vec<String> {
+        let names: Vec<&str> = self.names().collect();
+        let mut keys: Vec<String> = Vec::with_capacity(names.len());
+        for (j, name) in names.iter().enumerate() {
+            let key = if names[..j].contains(name) {
+                (1..)
+                    .map(|n| format!("{name}.{n}"))
+                    .find(|k| !names.contains(&k.as_str()) && !keys.contains(k))
+                    .expect("an unbounded range")
+            } else {
+                (*name).to_owned()
+            };
+            keys.push(key);
+        }
+        keys
+    }
+
     /// True for a histogram whose key prints as a Java double (`1.0`).
     pub fn has_double_key(&self) -> bool {
         self.class == "java.lang.Double"
@@ -437,6 +459,23 @@ mod tests {
             [[Value::Float(310.0), Value::Str("Y".to_owned()), Value::Null]]
         );
         assert_eq!(table.columns[1].1, Ty::Str);
+    }
+
+    #[test]
+    fn a_repeated_column_gets_a_key_of_its_own() {
+        let table = |names: &[&str]| Table {
+            class: String::new(),
+            columns: names.iter().map(|n| ((*n).to_owned(), Ty::Float)).collect(),
+            rows: Vec::new(),
+        };
+        assert_eq!(table(&["k", "v", "w"]).keys(), ["k", "v", "w"]);
+        assert_eq!(
+            table(&["k", "v", "k", "v", "k", "v"]).keys(),
+            ["k", "v", "k.1", "v.1", "k.2", "v.2"]
+        );
+        // `v.1` is a column, so the second `v` takes the next number.
+        assert_eq!(table(&["v", "v", "v.1"]).keys(), ["v", "v.2", "v.1"]);
+        assert_eq!(table(&["v.1", "v", "v"]).keys(), ["v.1", "v", "v.2"]);
     }
 
     #[test]

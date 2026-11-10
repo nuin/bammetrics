@@ -1,9 +1,11 @@
 //! `bammetrics convert`: one metrics file in, the same file in another
 //! format out (docs/formats.md). The input is Picard text or the JSON of
 //! `--format json` (schema `bammetrics.metrics/1`), told apart by its
-//! first character; `-` reads standard input. Without `--format` the
-//! output is the other readable form, so `convert` applied twice gives the
-//! first file back byte for byte.
+//! first character (`{` or `[` is JSON; a byte order mark before it is
+//! dropped); `-` reads standard input. Without `--format` the output is
+//! the other readable form, so `convert` applied twice gives the first
+//! file back byte for byte. A JSON cell with a tab or a line end has no
+//! Picard text form: `--format picard` is then an error and writes nothing.
 
 use std::fs;
 use std::io::Read as _;
@@ -91,7 +93,7 @@ fn pick_table<'d>(doc: &'d Document, name: &str) -> std::result::Result<&'d Tabl
 
 pub fn run(args: &ConvertArgs) -> Result<u8> {
     let text = read_input(&args.input)?;
-    let json_input = text.trim_start().starts_with('{');
+    let json_input = bammetrics_formats::is_json(&text);
     let formats = match &args.format {
         Some(list) => parse_list(VERB, list, "--format")?,
         None if json_input => vec![Format::Picard],
@@ -117,14 +119,15 @@ pub fn run(args: &ConvertArgs) -> Result<u8> {
         targets.extend(formats[1..].iter().map(|f| sibling(path, f.extension())));
     }
     refuse_overwriting_inputs(VERB, std::slice::from_ref(&args.input), &targets)?;
-    let mut doc = bammetrics_formats::read(&text).map_err(|e| {
+    let input_error = |e: bammetrics_formats::Error| {
         let name = if args.input == Path::new("-") {
             "standard input".to_owned()
         } else {
             args.input.display().to_string()
         };
         VerbError::input(VERB, format!("{name}: {e}"))
-    })?;
+    };
+    let mut doc = bammetrics_formats::read(&text).map_err(input_error)?;
     if let Some(sample) = &args.sample {
         doc.sample = Some(sample.clone());
     }
@@ -132,9 +135,15 @@ pub fn run(args: &ConvertArgs) -> Result<u8> {
         Some(name) => Some(pick_table(&doc, name)?),
         None => None,
     };
+    // Every format is rendered before the first file is written, so a
+    // document Picard text cannot hold leaves no file behind.
     let texts = formats
         .iter()
-        .map(|format| bammetrics_formats::render(*format, &doc, table));
+        .map(|format| bammetrics_formats::render(*format, &doc, table))
+        .collect::<std::result::Result<Vec<String>, _>>()
+        .map_err(|e| {
+            input_error(e).hint("the other formats hold it: json, jsonl, tsv, csv, markdown")
+        })?;
     if targets.is_empty() {
         for text in texts {
             print_stdout(&text);

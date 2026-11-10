@@ -586,7 +586,7 @@ impl Verb {
         let output = self.output_path(&parsed, &picard)?;
         let output_flag = || parsed.last(Key::Output).map(|g| g.spelled.clone());
         if let Some(path) = &output {
-            self.name_outputs(path, &parsed, &mut picard, format);
+            self.name_outputs(path, &parsed, &mut picard, &formats);
         }
         self.check_required(&flags, &picard)?;
         self.check_inputs(&parsed, &picard)?;
@@ -928,12 +928,21 @@ impl Verb {
     }
 
     /// The tool's file options for output `path`: `OUTPUT` for a
-    /// single-file verb in the Picard form (another form is written by the
-    /// verb itself; a tool without an output option, `BamIndexStats`, gets
-    /// none and the verb writes `-o` itself), the prefix as `OUTPUT` for a
-    /// tool whose Picard `OUTPUT` is a prefix, or one name per file of
+    /// single-file verb that writes the Picard form, naming the Picard file
+    /// (`path` when `picard` is the first format, its `.txt` sibling when
+    /// it is a further one, so the sibling's `StringHeader` is the one
+    /// `-o` of that file alone writes; a list without `picard` gets none,
+    /// the verb writes those forms itself, and so does a tool without an
+    /// output option, `BamIndexStats`), the prefix as `OUTPUT` for a tool
+    /// whose Picard `OUTPUT` is a prefix, or one name per file of
     /// [`file_extensions`] (an option the user gave keeps its value).
-    fn name_outputs(&self, path: &Path, parsed: &Parsed, picard: &mut Vec<String>, format: Format) {
+    fn name_outputs(
+        &self,
+        path: &Path,
+        parsed: &Parsed,
+        picard: &mut Vec<String>,
+        formats: &[Format],
+    ) {
         let tool = self.tool();
         let output = tool.output_name();
         if self.files == Files::Bam {
@@ -942,8 +951,13 @@ impl Verb {
         }
         if self.files == Files::Single {
             let has_output = tool.table().iter().any(|o| o.kind == Kind::Output);
-            if format == Format::Picard && has_output {
-                picard.push(format!("{output}={}", path.display()));
+            let picard_file = match formats.iter().position(|f| *f == Format::Picard) {
+                Some(0) => Some(path.to_path_buf()),
+                Some(_) => Some(format::sibling(path, Format::Picard.extension())),
+                None => None,
+            };
+            if let Some(file) = picard_file.filter(|_| has_output) {
+                picard.push(format!("{output}={}", file.display()));
             }
             return;
         }

@@ -9,7 +9,8 @@
 //!   keeps every digit; NaN is `NaN`, infinity `inf` and `-inf`; an empty
 //!   cell is an empty field.
 //! * JSON Lines: one object per row, a metrics row as its columns, a
-//!   histogram row with `"histogram": true` first.
+//!   histogram row with `"histogram": true` first. A column name the table
+//!   repeats is a member of its own (`v`, `v.1`: `Table::keys`).
 //! * Aligned text: a table when it has at most 6 columns, else each row as
 //!   one `COLUMN  value` line per column.
 
@@ -104,6 +105,7 @@ pub fn jsonl(doc: &Document) -> String {
     let mut text = String::new();
     let tables = doc.tables.iter().map(|t| (t, false));
     for (table, histogram) in tables.chain(doc.histogram.iter().map(|t| (t, true))) {
+        let keys = table.keys();
         for row in &table.rows {
             let mut members = Vec::with_capacity(row.len() + 2);
             if histogram {
@@ -112,7 +114,7 @@ pub fn jsonl(doc: &Document) -> String {
             if let Some(sample) = &doc.sample {
                 members.push(("sample".to_owned(), Json::text(sample)));
             }
-            members.extend(record(table, row));
+            members.extend(record(&keys, row));
             text.push_str(&Json::Object(members).render_line());
             text.push('\n');
         }
@@ -256,6 +258,21 @@ mod tests {
         for line in lines {
             assert!(Json::parse(line).is_ok(), "{line}");
         }
+        let repeated = Document {
+            histogram: Some(Table {
+                class: "java.lang.Integer".to_owned(),
+                columns: ["k", "v", "k", "v"]
+                    .iter()
+                    .map(|n| ((*n).to_owned(), Ty::Int))
+                    .collect(),
+                rows: vec![(0..4).map(Value::Int).collect()],
+            }),
+            ..Document::default()
+        };
+        assert_eq!(
+            jsonl(&repeated),
+            "{\"histogram\":true,\"k\":0,\"v\":1,\"k.1\":2,\"v.1\":3}\n"
+        );
     }
 
     #[test]

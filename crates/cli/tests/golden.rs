@@ -44,6 +44,7 @@ const FIXTURES: &[(&str, &str)] = &[
         "tests/data/picard/NA12878/NA12878.insert_size_metrics",
     ),
     ("INS_JSON", "tests/data/insert_size_metrics.json"),
+    ("NO_READS", "tests/data/no_reads.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -312,7 +313,8 @@ const FIXTURE_CASES: &[Case] = &[
 /// Formats (docs/formats.md): `convert` in both directions and to every
 /// format, `--format` lists on a single-file, a multi-file and a BAM verb,
 /// the new formats of `check`, and `qc --also`. `tests/data/insert_size_metrics.json`
-/// is `convert` of Picard 3.5.0's insert size file for the fixture BAM.
+/// is `convert` of Picard 3.5.0's insert size file for the fixture BAM;
+/// `tests/data/no_reads.bam` is that BAM's header and no read.
 #[rustfmt::skip]
 const FORMAT_CASES: &[Case] = &[
     case!("convert_picard_to_json", "convert", "PIC_ASM"),
@@ -346,6 +348,9 @@ const FORMAT_CASES: &[Case] = &[
     case!("error_qc_also", "qc", "IS", "-o", "OUT/sample", "--also", "parquet"),
     case!("plan_also", "plan", "IS", "-o", "OUT/sample", "--also", "json,markdown"),
     case!("plan_also_jsonl", "plan", "IS", "-o", "OUT/sample", "--also", "csv,junit,multiqc", "--format", "jsonl"),
+    case!("verb_insert_size_json_picard", "insert-size", "IS", "--format", "json,picard", "-o", "OUT/insert_size.json"),
+    case!("error_check_overwrites_input", "check", "PICARD", "-o", "PIC_INS"),
+    case!("qc_also_no_reads", "qc", "NO_READS", "-o", "OUT/sample", "--also", "json,csv,junit", "--date", "2026-01-02 03:04:05 UTC"),
 ];
 
 /// The same tools on corpus BAM t1, with its reference and interval lists.

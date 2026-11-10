@@ -1,5 +1,6 @@
 //! The crate's error: text that is not JSON, JSON that is not a
-//! `bammetrics.metrics/1` document, or text that is not a metrics file.
+//! `bammetrics.metrics/1` document, text that is not a metrics file, or a
+//! document Picard text cannot hold.
 
 use std::fmt;
 
@@ -11,13 +12,17 @@ pub enum Error {
     Document(String),
     /// The text is not a Picard metrics file.
     Metrics(String),
+    /// The document holds a cell Picard text has no form for.
+    Picard(String),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Json(message) => write!(f, "json: {message}"),
-            Error::Document(message) | Error::Metrics(message) => f.write_str(message),
+            Error::Document(message) | Error::Metrics(message) | Error::Picard(message) => {
+                f.write_str(message)
+            }
         }
     }
 }

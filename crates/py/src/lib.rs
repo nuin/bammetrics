@@ -917,7 +917,8 @@ fn doc_dict<'py>(py: Python<'py>, doc: &MetricsDoc) -> PyResult<Bound<'py, PyDic
 /// One table of a document as the Python `Table`: a list per column and
 /// the dtype map. A column name the table repeats (Picard repeats the
 /// histogram columns of `CollectHsMetrics` once per unit) gets `.1`, `.2`
-/// after it, so no column is lost in the dict.
+/// after it (`Table::keys`, the members of a JSON row), so no column is
+/// lost in the dict.
 fn table_object<'py>(
     py: Python<'py>,
     doc: &bammetrics_formats::Document,
@@ -926,18 +927,13 @@ fn table_object<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let columns = PyDict::new(py);
     let dtypes = PyDict::new(py);
-    for (j, (name, ty)) in table.columns.iter().enumerate() {
-        let earlier = table.columns[..j].iter().filter(|(n, _)| n == name).count();
-        let key = match earlier {
-            0 => name.clone(),
-            n => format!("{name}.{n}"),
-        };
+    for (j, (key, (_, ty))) in table.keys().iter().zip(&table.columns).enumerate() {
         let cells = PyList::empty(py);
         for row in &table.rows {
             cells.append(value_object(py, &row[j])?)?;
         }
-        columns.set_item(&key, cells)?;
-        dtypes.set_item(&key, ty.name())?;
+        columns.set_item(key, cells)?;
+        dtypes.set_item(key, ty.name())?;
     }
     verbs::table_class(py).call1((
         &table.class,

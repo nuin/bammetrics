@@ -319,6 +319,347 @@ fn check_writes_every_format_of_its_list_beside_the_output() {
     let _ = fs::remove_dir_all(&base);
 }
 
+/// `tests/data/no_reads.bam` is the header of the fixture BAM and no read
+/// (`samtools view -b -H --no-PG tests/data/insert_size.bam`).
+/// `CollectDuplicateMetrics` writes a file with headers only for it, and
+/// `qc` exits 0. `--also` exits 0 too, in every format, and each metrics
+/// file has its sibling.
+#[test]
+fn qc_also_on_a_bam_with_no_read_exits_as_qc_does() {
+    let dir = fresh_dir("no-reads");
+    let prefix = dir.join("s");
+    let run = |extra: &[&str]| {
+        let mut args = vec![
+            "qc",
+            "tests/data/no_reads.bam",
+            "-o",
+            prefix.to_str().expect("utf-8"),
+            "--date",
+            DATE,
+            "--force",
+        ];
+        args.extend_from_slice(extra);
+        bammetrics(&args)
+    };
+    let plain = run(&[]);
+    assert_eq!(code(&plain), 0, "{}", stderr(&plain));
+    let duplicate = dir.join("s.duplicate_metrics");
+    let headers_only = fs::read_to_string(&duplicate).expect("duplicate metrics");
+    assert!(!headers_only.contains("## METRICS CLASS"), "{headers_only}");
+    for format in [
+        "json", "jsonl", "tsv", "csv", "markdown", "junit", "multiqc",
+    ] {
+        let also = run(&["--also", format]);
+        assert_eq!(code(&also), 0, "--also {format}: {}", stderr(&also));
+    }
+    let all = run(&["--also", "json,jsonl,tsv,csv,markdown,junit,multiqc"]);
+    assert_eq!(code(&all), 0, "{}", stderr(&all));
+    let metrics: Vec<String> = manifest_outputs(&dir, "also")
+        .into_iter()
+        .filter(|(_, kind)| kind == "json")
+        .map(|(name, _)| name)
+        .collect();
+    assert!(metrics.contains(&"s.duplicate_metrics.json".to_owned()));
+    for name in &metrics {
+        let json = dir.join(name);
+        let back = bammetrics(&["convert", json.to_str().expect("utf-8")]);
+        assert_eq!(code(&back), 0, "{name}: {}", stderr(&back));
+        let picard = dir.join(name.trim_end_matches(".json"));
+        assert_eq!(back.stdout, fs::read(picard).expect("metrics"), "{name}");
+    }
+    for extension in ["jsonl", "tsv", "csv"] {
+        let sibling = dir.join(format!("s.duplicate_metrics.{extension}"));
+        assert_eq!(fs::read(sibling).expect(extension), b"", "{extension}");
+    }
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// A JSON cell with a tab or a line end has no Picard text form: `convert
+/// --format picard` exits 1, names the cell and writes no file. The forms
+/// with an escape take it.
+#[test]
+fn convert_refuses_picard_text_for_a_cell_it_cannot_hold() {
+    let dir = fresh_dir("unwritable");
+    let input = dir.join("in.json");
+    fs::write(
+        &input,
+        r#"{"schema": "bammetrics.metrics/1", "headers": ["x"],
+            "class": "picard.sam.DuplicationMetrics",
+            "columns": ["LIBRARY", "READ_PAIRS_EXAMINED"], "types": ["string", "int"],
+            "metrics": [{"LIBRARY": "ok", "READ_PAIRS_EXAMINED": 1},
+                        {"LIBRARY": "a\tb\nc", "READ_PAIRS_EXAMINED": 2}],
+            "non_finite": [], "histogram": null}"#,
+    )
+    .expect("write input");
+    let input = input.to_str().expect("utf-8");
+    let out = dir.join("out.tsv");
+    let refused = bammetrics(&[
+        "convert",
+        input,
+        "--format",
+        "tsv,picard",
+        "-o",
+        out.to_str().expect("utf-8"),
+    ]);
+    assert_eq!(code(&refused), 1);
+    assert!(refused.stdout.is_empty());
+    assert!(
+        stderr(&refused).contains(
+            "Picard text cannot hold the tab in metrics row 1, column LIBRARY: \"a\\tb\\nc\""
+        ),
+        "{}",
+        stderr(&refused)
+    );
+    assert_eq!(names(&dir), ["in.json"]);
+    let tsv = bammetrics(&["convert", input, "--format", "tsv"]);
+    assert_eq!(code(&tsv), 0, "{}", stderr(&tsv));
+    assert_eq!(
+        String::from_utf8_lossy(&tsv.stdout),
+        "LIBRARY\tREAD_PAIRS_EXAMINED\nok\t1\na\\tb\\nc\t2\n"
+    );
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// A byte order mark before the JSON is dropped; text that starts as a
+/// JSON array is reported as JSON.
+#[test]
+fn convert_reads_json_after_a_byte_order_mark() {
+    let picard = root()
+        .join(PICARD)
+        .join("NA12878/NA12878.insert_size_metrics");
+    let original = fs::read(&picard).expect("read fixture");
+    let json = bammetrics(&["convert", picard.to_str().expect("utf-8")]);
+    let mut marked = b"\xef\xbb\xbf".to_vec();
+    marked.extend_from_slice(&json.stdout);
+    let back = piped(&["convert", "-"], &marked);
+    assert_eq!(code(&back), 0, "{}", stderr(&back));
+    assert_eq!(back.stdout, original);
+    let array = piped(&["convert", "-"], "[".repeat(200_000).as_bytes());
+    assert_eq!(code(&array), 1);
+    assert!(
+        stderr(&array).starts_with("bammetrics convert: standard input: json: "),
+        "{}",
+        stderr(&array)
+    );
+}
+
+/// In a list whose first format is not `picard`, the Picard sibling is the
+/// file `-o` of that name alone writes: its header names it as `OUTPUT`.
+#[test]
+fn the_picard_sibling_names_itself_as_output() {
+    let dir = fresh_dir("sibling");
+    let json = dir.join("a.json");
+    let listed = bammetrics(&[
+        "insert-size",
+        BAM,
+        "--format",
+        "json,picard",
+        "-o",
+        json.to_str().expect("utf-8"),
+    ]);
+    assert_eq!(code(&listed), 0, "{}", stderr(&listed));
+    assert_eq!(names(&dir), ["a.json", "a.json.txt"]);
+    let sibling = dir.join("a.json.txt");
+    let command = |path: &Path| {
+        fs::read_to_string(path)
+            .expect("a Picard file")
+            .lines()
+            .nth(1)
+            .expect("the command line")
+            .to_owned()
+    };
+    let expected = format!("OUTPUT={}", sibling.display());
+    assert!(
+        command(&sibling).ends_with(&expected),
+        "{}",
+        command(&sibling)
+    );
+    let alone = dir.join("alone.txt");
+    let plain = bammetrics(&["insert-size", BAM, "-o", alone.to_str().expect("utf-8")]);
+    assert_eq!(code(&plain), 0, "{}", stderr(&plain));
+    assert_eq!(
+        command(&alone),
+        command(&sibling).replace("a.json.txt", "alone.txt")
+    );
+    // The JSON beside it converts to the sibling byte for byte.
+    let back = bammetrics(&["convert", json.to_str().expect("utf-8")]);
+    assert_eq!(back.stdout, fs::read(&sibling).expect("the sibling"));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// `check -o` refuses a metrics file or a verdict it reads, though the
+/// input argument is its directory; a new file in that directory is fine.
+#[test]
+fn check_refuses_to_overwrite_a_file_it_reads() {
+    let dir = fresh_dir("check-input");
+    let source = root().join(PICARD).join("NA12878");
+    for entry in fs::read_dir(&source).expect("fixture directory") {
+        let path = entry.expect("entry").path();
+        fs::copy(&path, dir.join(path.file_name().expect("a name"))).expect("copy");
+    }
+    let dir_text = dir.to_str().expect("utf-8");
+    let metrics = dir.join("NA12878.insert_size_metrics");
+    let before = fs::read(&metrics).expect("metrics");
+    for format in ["text", "junit,text"] {
+        let run = bammetrics(&[
+            "check",
+            dir_text,
+            "--format",
+            format,
+            "-o",
+            metrics.to_str().expect("utf-8"),
+        ]);
+        assert_eq!(code(&run), 2, "{format}: {}", stderr(&run));
+        assert!(
+            stderr(&run).contains("is an input; writing it would destroy it"),
+            "{}",
+            stderr(&run)
+        );
+        assert_eq!(fs::read(&metrics).expect("metrics"), before);
+    }
+    // A sibling of the list that is an input is refused too.
+    let hs = dir.join("NA12878.hs_metrics");
+    fs::copy(&hs, dir.join("check.txt")).expect("an input named as the sibling");
+    let sibling = bammetrics(&[
+        "check",
+        dir_text,
+        "--format",
+        "junit,text",
+        "-o",
+        dir.join("check").to_str().expect("utf-8"),
+    ]);
+    assert_eq!(code(&sibling), 2, "{}", stderr(&sibling));
+    fs::remove_file(dir.join("check.txt")).expect("remove");
+    let fine = bammetrics(&[
+        "check",
+        dir_text,
+        "-o",
+        dir.join("check.txt").to_str().expect("utf-8"),
+    ]);
+    assert_eq!(code(&fine), 0, "{}", stderr(&fine));
+
+    // A directory of verdicts: each *.verdict.json is an input.
+    let verdicts = fresh_dir("check-verdicts");
+    let report = bammetrics(&["report", dir_text, "-o", verdicts.to_str().expect("utf-8")]);
+    assert_eq!(code(&report), 0, "{}", stderr(&report));
+    let verdict = verdicts.join("NA12878.verdict.json");
+    let before = fs::read(&verdict).expect("verdict");
+    let run = bammetrics(&[
+        "check",
+        verdicts.to_str().expect("utf-8"),
+        "--format",
+        "json",
+        "-o",
+        verdict.to_str().expect("utf-8"),
+    ]);
+    assert_eq!(code(&run), 2, "{}", stderr(&run));
+    assert_eq!(fs::read(&verdict).expect("verdict"), before);
+    let _ = fs::remove_dir_all(&dir);
+    let _ = fs::remove_dir_all(&verdicts);
+}
+
+/// A 0600 output keeps its mode when it is replaced, under any umask: the
+/// main file and the siblings of `convert`, of a tool verb and of `check`,
+/// and every file `qc --also` rewrites.
+#[cfg(unix)]
+#[test]
+fn a_replaced_output_keeps_its_mode() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = fresh_dir("mode");
+    let private = |path: &Path| {
+        if !path.exists() {
+            fs::write(path, "old").expect("an earlier file");
+        }
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600)).expect("chmod");
+    };
+    let mode = |path: &Path| fs::metadata(path).expect("metadata").permissions().mode() & 0o777;
+    let picard = root()
+        .join(PICARD)
+        .join("NA12878/NA12878.insert_size_metrics");
+
+    let converted = dir.join("conv.json");
+    let verb = dir.join("verb.json");
+    let listed = dir.join("list.txt");
+    let checked = dir.join("check.txt");
+    let files = [
+        converted.clone(),
+        dir.join("conv.json.csv"),
+        verb.clone(),
+        listed.clone(),
+        dir.join("list.txt.json"),
+        checked.clone(),
+        dir.join("check.txt.junit.xml"),
+    ];
+    for file in &files {
+        private(file);
+    }
+    let text = |path: &Path| path.to_str().expect("utf-8").to_owned();
+    let runs = [
+        vec![
+            "convert".to_owned(),
+            text(&picard),
+            "--format".to_owned(),
+            "json,csv".to_owned(),
+            "-o".to_owned(),
+            text(&converted),
+        ],
+        vec![
+            "insert-size".to_owned(),
+            BAM.to_owned(),
+            "--format".to_owned(),
+            "json".to_owned(),
+            "-o".to_owned(),
+            text(&verb),
+        ],
+        vec![
+            "insert-size".to_owned(),
+            BAM.to_owned(),
+            "--format".to_owned(),
+            "picard,json".to_owned(),
+            "-o".to_owned(),
+            text(&listed),
+        ],
+        vec![
+            "check".to_owned(),
+            PICARD.to_owned(),
+            "--format".to_owned(),
+            "text,junit".to_owned(),
+            "-o".to_owned(),
+            text(&checked),
+        ],
+    ];
+    for argv in &runs {
+        let args: Vec<&str> = argv.iter().map(String::as_str).collect();
+        let run = bammetrics(&args);
+        assert_eq!(code(&run), 0, "{argv:?}: {}", stderr(&run));
+    }
+    for file in &files {
+        assert_ne!(
+            fs::read(file).expect("written"),
+            b"old",
+            "{}",
+            file.display()
+        );
+        assert_eq!(mode(file), 0o600, "{}", file.display());
+    }
+
+    let run_dir = dir.join("qc");
+    fs::create_dir(&run_dir).expect("run directory");
+    let first = qc(&run_dir, &["--also", "json,junit"]);
+    assert_eq!(code(&first), 0, "{}", stderr(&first));
+    let written = names(&run_dir);
+    for name in &written {
+        private(&run_dir.join(name));
+    }
+    let again = qc(&run_dir, &["--also", "json,junit", "--force"]);
+    assert_eq!(code(&again), 0, "{}", stderr(&again));
+    assert_eq!(names(&run_dir), written, "no temporary file stays");
+    for name in &written {
+        assert_eq!(mode(&run_dir.join(name)), 0o600, "{name}");
+    }
+    let _ = fs::remove_dir_all(&dir);
+}
+
 /// The `multiqc` on PATH, or the one `MULTIQC` names.
 fn multiqc() -> Option<PathBuf> {
     let program =

@@ -2,9 +2,11 @@
 //! every file Picard 3.5.0 wrote under `tests/data/picard` and on every
 //! metrics file a golden record holds (a written file or standard output).
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use bammetrics_formats::json::Json;
 use bammetrics_formats::{Format, Ty, read, render};
 
 fn root() -> PathBuf {
@@ -57,12 +59,41 @@ fn golden_sections(record: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-/// `text` through JSON and back; the error names what differs first.
+/// A member some object of `json` holds twice. A JSON parser that keeps
+/// one value per member (Python's, jq's) would drop the others.
+fn repeated_member(json: &Json) -> Option<String> {
+    match json {
+        Json::Array(items) => items.iter().find_map(repeated_member),
+        Json::Object(members) => {
+            let mut seen = HashSet::new();
+            members
+                .iter()
+                .find(|(key, _)| !seen.insert(key.as_str()))
+                .map(|(key, _)| key.clone())
+                .or_else(|| members.iter().find_map(|(_, v)| repeated_member(v)))
+        }
+        _ => None,
+    }
+}
+
+/// `text` through JSON and back; the error names what differs first. No
+/// object of the JSON or of the JSON Lines form repeats a member.
 fn round_trip(text: &str) -> Result<(), String> {
     let doc = read(text).map_err(|e| format!("does not read: {e}"))?;
-    let json = render(Format::Json, &doc, None);
+    let json = render(Format::Json, &doc, None).map_err(|e| format!("no JSON: {e}"))?;
+    let value = Json::parse(&json).map_err(|e| format!("its JSON does not parse: {e}"))?;
+    if let Some(key) = repeated_member(&value) {
+        return Err(format!("its JSON repeats the member {key:?} in one object"));
+    }
+    let lines = render(Format::Jsonl, &doc, None).map_err(|e| format!("no JSON Lines: {e}"))?;
+    for line in lines.lines() {
+        let value = Json::parse(line).map_err(|e| format!("a JSON line does not parse: {e}"))?;
+        if let Some(key) = repeated_member(&value) {
+            return Err(format!("a JSON line repeats the member {key:?}"));
+        }
+    }
     let back = read(&json).map_err(|e| format!("its JSON does not read: {e}"))?;
-    let again = render(Format::Picard, &back, None);
+    let again = render(Format::Picard, &back, None).map_err(|e| format!("no Picard text: {e}"))?;
     if again == text {
         return Ok(());
     }
@@ -106,6 +137,57 @@ fn every_picard_fixture_round_trips_through_json() {
     assert!(
         checked >= 8,
         "only {checked} Picard files under tests/data/picard"
+    );
+}
+
+/// The histogram of `CollectHsMetrics` with two units repeats its three
+/// columns. Every series is in the JSON under a member of its own, and the
+/// Picard text comes back with the repeated names.
+#[test]
+fn a_histogram_that_repeats_its_columns_round_trips() {
+    let text = "## htsjdk.samtools.metrics.StringHeader\n# CollectHsMetrics INPUT=x.bam\n\n\
+                ## METRICS CLASS\tpicard.analysis.directed.HsMetrics\nBAIT_SET\tSAMPLE\n\
+                panel\t\npanel\tS1\n\n## HISTOGRAM\tjava.lang.Integer\n\
+                coverage_or_base_quality\thigh_quality_coverage_count\tall_bases_coverage_count\t\
+                coverage_or_base_quality\thigh_quality_coverage_count\tall_bases_coverage_count\n\
+                0\t3\t4\t0\t5\t?\n1\t1\t2\t1\t6\t7\n\n";
+    round_trip(text).expect("round trips");
+    let doc = read(text).expect("reads");
+    let json = Json::parse(&render(Format::Json, &doc, None).expect("JSON")).expect("parses");
+    let histogram = json.get("histogram").expect("histogram");
+    let row = histogram
+        .get("rows")
+        .and_then(Json::as_array)
+        .expect("rows")[0]
+        .as_object()
+        .expect("a row object");
+    let members: Vec<&str> = row.iter().map(|(key, _)| key.as_str()).collect();
+    assert_eq!(
+        members,
+        [
+            "coverage_or_base_quality",
+            "high_quality_coverage_count",
+            "all_bases_coverage_count",
+            "coverage_or_base_quality.1",
+            "high_quality_coverage_count.1",
+            "all_bases_coverage_count.1",
+        ]
+    );
+    assert_eq!(
+        histogram.get("columns"),
+        Some(&Json::strings(members.iter().copied()))
+    );
+    assert_eq!(
+        row[4],
+        (
+            "high_quality_coverage_count.1".to_owned(),
+            Json::Number("5".to_owned())
+        )
+    );
+    let lines = render(Format::Jsonl, &doc, None).expect("JSON Lines");
+    assert!(
+        lines.contains("\"high_quality_coverage_count.1\":6"),
+        "{lines}"
     );
 }
 

@@ -84,6 +84,37 @@ def test_the_json_form_reads_the_same(tmp_path):
     assert from_json.headers == from_text.headers
 
 
+def test_a_repeated_column_is_one_member_in_json_and_one_key_here(tmp_path):
+    """The CollectHsMetrics histogram with two units repeats its columns. json.load
+    keeps one value per member, so each series has a member of its own, and
+    read_table gives the same keys from both forms."""
+    labels = ["coverage_or_base_quality", "high_quality_coverage_count",
+              "all_bases_coverage_count"]
+    text = tmp_path / "s.hs_metrics"
+    text.write_text(
+        "## htsjdk.samtools.metrics.StringHeader\n# CollectHsMetrics INPUT=x.bam\n\n"
+        "## METRICS CLASS\tpicard.analysis.directed.HsMetrics\nBAIT_SET\npanel\n\n"
+        "## HISTOGRAM\tjava.lang.Integer\n" + "\t".join(labels + labels) + "\n"
+        "0\t3\t4\t0\t5\t6\n1\t1\t2\t1\t7\t8\n\n"
+    )
+    out = tmp_path / "s.hs_metrics.json"
+    done = subprocess.run(["target/release/bammetrics", "convert", str(text), "-o", str(out)],
+                          capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    histogram = json.loads(out.read_text())["histogram"]
+    keys = labels + [label + ".1" for label in labels]
+    assert histogram["columns"] == keys
+    assert histogram["picard_columns"] == labels + labels
+    assert histogram["rows"][0] == dict(zip(keys, [0, 3, 4, 0, 5, 6]))
+    for path in (text, out):
+        table = bammetrics.read_table(path, table="histogram")
+        assert list(table.columns) == keys
+        assert table.columns["high_quality_coverage_count.1"] == [5, 7]
+    back = subprocess.run(["target/release/bammetrics", "convert", str(out)],
+                          capture_output=True, text=True)
+    assert back.stdout == text.read_text()
+
+
 def test_errors():
     with pytest.raises(bammetrics.InputError, match="nope.txt"):
         bammetrics.read_table("tests/data/nope.txt")
