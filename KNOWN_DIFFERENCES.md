@@ -1184,8 +1184,8 @@ below. bammetrics differs here:
 - A record a BAM cannot hold. Under `LENIENT` or `SILENT` htsjdk keeps a bad field as
   text and `ViewSam` prints it back. bammetrics holds BAM records, as Picard does once it
   writes a BAM. A reference name the header lacks is read as no reference (`*`). A base
-  outside `=ACMGRSVTWYHKDBN.` is read as `N`. A `MAPQ` above 255 keeps its low byte, a
-  flag above 65535 its low 16 bits. These are errors at every stringency: a `QUAL` whose
+  outside `=ACMGRSVTWYHKDBN.` is read as `N`. A `MAPQ` outside 0 to 255 keeps its low byte, a
+  flag above 65535 its low 16 bits, as htsjdk writes both into a BAM. These are errors at every stringency: a `QUAL` whose
   length differs from `SEQ`, a `QUAL` without `SEQ`, a CIGAR that does not parse (htsjdk
   reads one under `SILENT`), a read name over 254 bytes, more than 65535 CIGAR operators
   (htsjdk moves those to a `CG` tag). All fail at `STRICT` in both tools.
@@ -1194,7 +1194,9 @@ below. bammetrics differs here:
   7`), without the Java stack trace. A header line fails as `x.sam: Error parsing SAM
   header. @RG line missing SM tag. Line: ...`. Under `LENIENT` the warnings start with
   `Ignoring SAM validation error`, as htsjdk's do; a header warning lacks the
-  `ERROR::TYPE:` prefix htsjdk prints.
+  `ERROR::TYPE:` prefix htsjdk prints. htsjdk reports one `ADJACENT_INDEL_IN_CIGAR`
+  warning per pair of `I` or `D` operators with no `M` or `N` between them; bammetrics
+  reports the first 100 of a record. A line over 1 GiB is an error.
 - The header. bammetrics hands the lines htsjdk keeps to the noodles parser, as it does
   for a BAM header, so a header noodles refuses fails here where htsjdk reads it: an
   `@HD VN` that is not `major.minor`, two `@HD` lines, an `@CO` line without a tab. An
@@ -1207,8 +1209,9 @@ below. bammetrics differs here:
   each UTF-16 code unit, so `é` (bytes `C3 A9`) comes out as the byte `E9`. bammetrics
   does the same. htsjdk orders such names by code unit while they are in memory;
   bammetrics orders the bytes it holds, which differs for characters above U+00FF.
-- `VALIDATION_STRINGENCY` is carried by every tool, verb and Python function. A chain
-  reads its source at `STRICT`. `qc` reads SAM text at `STRICT`.
+- `VALIDATION_STRINGENCY` is carried by every tool on the Picard face and by every
+  verb. The Python functions have no keyword for it and read SAM text at `STRICT`, as a
+  chain reads its source and `qc` its input.
 - The note `ignoring VALIDATION_STRINGENCY=X: records are not validated` is printed for
   a BAM, a CRAM and a pipe. For a SAM text file it is not.
 - `BamIndexStats` on SAM text exits 1 (`No index for bam file x.sam`). Picard exits 1

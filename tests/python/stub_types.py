@@ -31,6 +31,7 @@ def forms(names: list[str]) -> None:
     assert_type(row["reference"], str)
     assert_type(row["aligned"], int)
     assert_type(bm.create_sequence_dictionary("r.fa")[0], dict[str, Any])
+    assert_type(bm.view_sam("x.sam", alignment_status="Aligned", header_only=False), list[dict[str, Any]])
     table = bm.read_table("x.insert_size_metrics")
     assert_type(table, bm.Table)
     assert_type(table.dtypes["READ_PAIRS"], Literal["int", "float", "string"])

@@ -28,10 +28,10 @@ emits.
 
 | Step | What it is | Today |
 |---|---|---|
-| source | One BAM or CRAM file, or a pipe holding one | the positional argument, `-` for standard input |
+| source | One BAM, CRAM or SAM text file, or a pipe holding one | the positional argument, `-` for standard input |
 | transform | A tool that changes the records later steps see. A barrier needs every record before one goes on | `mark-duplicates` (a barrier) |
 | tap | A one-pass tool on the records of its position. It changes nothing | 13 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check` |
-| write | A tap that writes the records of its position as a BAM | `write [PATH]` |
+| write | A tap that writes the records of its position as a BAM, or as SAM text | `write [PATH]` |
 
 A tap or `write` does not change the stream, so the step after it sees the same records.
 `in.bam + tap + mark-duplicates + tap + write` gives the first tap the source records and
@@ -425,7 +425,7 @@ the sort order each step requires.
 | Item | Role |
 |---|---|
 | `Source` | Opens the stream. `read(threads, bytes, consume)` hands `consume` the `Frame` and the `Records`. `replayable()` is true for a regular file. `spool(temp)` copies a pipe. `file()` names the file a lowered chain reads |
-| `FileSource` | A BAM or CRAM by its magic bytes, read through `pass::with_counted_stream` |
+| `FileSource` | A BAM, CRAM or SAM text by its first bytes, read through `pass::with_counted_stream` |
 | `Records` | `next_batch(&mut Vec<RawRecord>)`: at most 1024 records per batch (`BATCH_RECORDS`) |
 | `Frame` | The stream at one position: `kind`, `order`, `header`, `cram`, `label`, `reads` (the files a writer must not replace) |
 | `Transform` | `apply(batch)` in place, `finish(out)` for held records, `header(up)`, `counters()`, `products()` |
@@ -439,7 +439,7 @@ the sort order each step requires.
 | `run_chain(plan, progress)` | One `Result<Products>` per step, in step order. `Err` for a plan refused before the first read or a source that cannot be read in the first segment |
 | `Products` | `output` (metrics the caller writes), `files` (a writer's renamed files), `counters` (a stage's records in, out, changed), `notes` (lines for standard error) |
 | `halt(error)`, `Halt` | `Stopped` or `NotRun` for the result of a step another step halted, `None` for a step's own failure |
-| `WriteOptions` | `path`, `compression_level`, `create_index`, `create_md5`. `check()` refuses a name of a later wave. `files()` lists the BAM, the `.bai` and the `.md5` |
+| `WriteOptions` | `path`, `format` (`WriteFormat::Bam` or `Sam`, from the name), `compression_level`, `create_index`, `create_md5`. `check()` refuses a name of a later wave and an index beside SAM text. `files()` lists the BAM or SAM, the `.bai` and the `.md5` |
 | `later_kind(path)` | The kind and wave of a name `write` cannot make yet: `("CRAM", "W15")` |
 | `Outputs` | The files of a chain's steps in a hash map, keyed by device and inode or by the resolved path. `claim(label, path)` is a usage error when a step already writes the file. `owner(path)` |
 | `check_distinct_outputs(outputs)`, `writer_of(outputs, path)` | The same check over a slice |
