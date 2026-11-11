@@ -3,8 +3,8 @@
 ## Unreleased
 
 The `chain` verb (wave W04 of docs/07, docs/chaining.md): several steps on one BAM in one
-process, from the command line or from a TOML plan file. No change to any file a tool, a
-verb or `qc` writes.
+process, from the command line, from a TOML plan file or from Python (`bammetrics.chain`,
+`bammetrics.step`). No change to any file a tool, a verb or `qc` writes.
 
 ### Added
 
@@ -46,6 +46,29 @@ verb or `qc` writes.
   --help` and the completion scripts.
 - The library entry `bammetrics_cli::chain`: `Spec`, `prepare`, `execute`, and an `Outcome`
   with one `StepOutcome` per step (status, files written, a transform's record counters).
+- Python `bammetrics.chain(source, steps, *, output, reference, threads, tmp_dir, format,
+  also, sample, plan, dry_run)` (docs/python.md). It runs the verb in the process with the
+  GIL released and returns the `Run`. `steps` holds verb names (`"insert_size"`) and
+  `step(...)` objects. `plan=` reads a plan file, and a keyword given replaces the file's
+  value. `dry_run=True` returns the plan text. A failed step raises `InputError` after the
+  other steps wrote their files, with the `Run` in `.run`. A usage error raises
+  `UsageError` before the first read.
+- Python `bammetrics.step(verb, **options)` and the `Step` class. A step is checked when it
+  is made, against the keywords of the tool's function in `bammetrics.pyi`: an unknown
+  verb or keyword raises `UsageError` with the closest name. `output` is the step's own
+  file or prefix, `format` its own format list, `as_` the stream name of a transform.
+  `step("write", output=, index=, md5=, compression_level=)` writes the BAM. A `Step`
+  compares, hashes, copies and pickles.
+- `Run.stages`: one `Stage` per step of a chain run (`number`, `verb`, `role`, `status`,
+  `error`, `reads`, `leaves`, `segment`, `files`, and `records_in`, `records_out`,
+  `changed` for a transform). It is an empty list after `qc` and `collect`. `Run.metrics`
+  of a chain is keyed by verb, with `STREAM.verb` for a tap in front of a transform
+  (`in.quality-yield`).
+- `bammetrics.pyi`: `step`, the `_StepVerb` names and three `chain` overloads in the
+  generated verb block (`crates/cli/src/chain/python.rs`), the `Step` and `Stage` classes,
+  `Run.stages`. `tests/python/test_chain.py` holds 59 tests on the fixture BAMs.
+- `bammetrics_core::registry::python_keywords(tool)`: the keyword arguments of a tool's
+  Python function, the list the generated stub prints.
 - `bammetrics_core::toml`: the TOML subset reader, moved from the verdict crate, with
   one-line arrays of scalars. No dependency was added.
 - `bammetrics_core::stage`: `Outputs` (the one-file-twice check in linear time), `halt`,

@@ -399,9 +399,14 @@ m = bm.read_metrics("out/s.insert_size_metrics")    # rows and histograms
 v = bm.check("out/s", preset="clinical-panel")
 bm.report(["runs/a", "runs/b"], preset="clinical-panel", output="site/")
 bm.tools(); bm.presets()
+
+run = bm.chain("s.bam", [bm.step("mark_duplicates"), "insert_size", bm.step("write", index=True)],
+               output="out/s")       # W04 of docs/07: the chain verb, one process
+run.stages[0].records_out           # one Stage per step
 ```
 
-- `qc`, `collect` and `report` release the GIL.
+- `qc`, `collect`, `report` and `chain` release the GIL.
+- `chain` and `step` mirror the `chain` verb (docs/python.md, docs/chaining.md section 5.3). A step is a verb name or `step(verb, **options)`, checked when it is made against the keywords of the tool's function. This is a list of steps, as on the command line. It is no fluent builder.
 - A failed verdict is a value. It raises only with `fail_on="fail"`.
 - Errors: `UsageError(ValueError)` and `InputError(OSError)`. Existing `except ValueError` and `except OSError` keep working.
 - Option names come from the same table as the CLI, and `.pyi` is generated from it. This ends `reference` against `reference_sequence` and `path` against `input` for new functions. Old functions keep their signatures and are documented as aliases.

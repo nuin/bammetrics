@@ -3,7 +3,8 @@
 A chain runs several steps on one BAM in one process. Records move from step to step in
 memory. No shell pipe and no intermediate file is used. This page describes what waves W03
 and W04 of docs/07_full_parity_program.md (section 2) built: the stage layer and its
-executor (W03, 0.21.0), then the `chain` verb, its plan file and its plan text (W04).
+executor (W03, 0.21.0), then the `chain` verb, its plan file, its plan text and the Python
+`chain` and `step` (W04).
 
 ```bash
 # MarkDuplicates, four collectors on the marked records and the marked BAM, one process
@@ -395,7 +396,9 @@ it.
 ### 5.2 The verb as a library
 
 `bammetrics_cli::chain` (`crates/cli/src/chain.rs` and `chain/`). A caller that is not the
-command line (the Python module) builds a `Spec`, calls `prepare`, then `execute`.
+command line builds a `Spec`, calls `prepare`, then `execute`. The Python module spells the
+argv of its keywords and calls `parse`, so one parser builds the `Spec` of a command line
+and of a Python call (section 5.3).
 
 | Item | Role |
 |---|---|
@@ -411,10 +414,56 @@ command line (the Python module) builds a `Spec`, calls `prepare`, then `execute
 | `StepOutcome` | One per step: `number`, `status` (`StepStatus::Ok`, `Failed`, `Stopped`, `NotRun`), `error`, `files` (`Written { path, kind }`), `counters` (a transform's `records_in`, `records_out`, `changed`), `notes` |
 | `summary(&Outcome)` | The lines the command prints on standard error |
 | `global_flags()`, `step_flags(verb)`, `write_flags()` | The option tables, as `grammar::Flag`s: the source of `--help`, of the completions, and of a caller's keyword list |
+| `sample_name(&Chain)` | `--sample`, else the first `@RG SM` of a file source, else the source name: the Python `Run.sample` |
+| `Chain::last_stream()` | The stream after the last transform, `in` without one: a tap on it writes the names `qc` writes |
 | `run(args)`, `run_plan(args)` | The command and its `plan` form: the exit code |
 
 `crates/cli/tests/chain.rs::the_library_entry_returns_one_outcome_per_step` pins this
 entry.
+
+### 5.3 Python
+
+`bammetrics.chain(source, steps, output=, reference=, threads=, tmp_dir=, format=, also=,
+sample=, plan=, dry_run=)` and `bammetrics.step(verb, **options)` run this verb in the
+process. docs/python.md is their reference.
+
+```python
+import bammetrics as bm
+
+run = bm.chain("in.bam", [
+    bm.step("mark_duplicates"),
+    "alignment_summary", "insert_size", "quality_yield", "duplicate_metrics",
+    bm.step("write", index=True),
+], reference="ref.fa", output="out/NA12878")
+run.stages[0].records_in            # a transform's record counts
+run.metrics["insert-size"]          # out/NA12878.insert_size_metrics, parsed
+```
+
+`crates/cli/src/chain/python.rs` holds the tables both sides share:
+
+| Item | Role |
+|---|---|
+| `chain_keywords()`, `chain_keyword(name)`, `source_keyword()` | The keywords of `chain`: every flag of `global_flags()` in snake case (`output` for `--output-prefix`), without the source, `--quiet`, `--verbose` and `--help` |
+| `step_table(name)` | A `StepTable` for a verb named in snake or kebab case, by its Picard class or by its function name: `verb`, `role`, `keywords`. An unknown name is a usage error with the closest step |
+| `StepTable::keyword(name)` | One keyword, or the usage error with the closest name. `input`, and `output` of `mark_duplicates`, are refused with the reason |
+| `Keyword` | `name`, `long` (the flag it spells), `ty`, `many` (`One`, `Repeated`: one occurrence per item, `Joined`: one comma list) |
+| `step_names()` | The 15 names `step` takes, snake case, in `bammetrics tools` order, `write` last |
+| `metric_key(chain, step, path)` | The key of a metrics file in `Run.metrics`: the verb, `STREAM.` in front for a tap that does not read the last stream, `.FILE` after it for a further file |
+| `stubs()` | The `bammetrics.pyi` entries: `_StepVerb`, `step`, three `chain` overloads |
+
+A step's keywords are those of the tool's Python function
+(`bammetrics_core::registry::python_keywords`, the list the generated registry stub
+prints), each matched to its flag in `step_flags(verb)`, plus `format` and, on a
+transform, `as_`. The test `no_keyword_of_a_step_verb_is_lost` fails when a keyword of a
+function has no flag.
+
+`crates/py/src/chain.rs` holds `Step`, `Stage`, `chain` and `step`. A call builds the argv
+(`--long=VALUE` per keyword, `+ VERB --long=VALUE ...` per step), then runs `parse`,
+`prepare` and `execute` with the GIL released, reads every metrics file back, and returns
+the `Run`. `dry_run=True` returns `plan_text`. `tests/python/test_chain.py` (59 tests)
+checks chained equals staged through the Python functions, both plan files against their
+inline steps, the bytes of a Python call against the command's, `Run.stages`,
+`Run.metrics`, one error per misuse, pickling and the GIL release.
 
 ## 6. Segments and threads
 
@@ -698,6 +747,21 @@ W04:
 | `plan` gains the chain form | `plan` with a `+` step, with `--plan FILE`, or with the word `chain` first | `plan` is a clap verb with the arguments of `qc`. A `qc` command line holds no `+` and no `--plan`, so the two cannot be mistaken |
 | Text-valued options are checked before the first read | Option names, int and float values, required options, input files and every option of a transform are. A text value only the tool can judge fails its tap when it is built | A collector parses its own options when it is built from the header of its position. Building each one twice would read each reference and interval list twice |
 
+W04, Python (docs/07 section 2.2, the `crates/py` paragraph):
+
+| docs/07 | As built | Reason |
+|---|---|---|
+| `crates/py/src/verbs.rs` holds `bm.chain` | `crates/py/src/chain.rs` | `verbs.rs` has 1,138 lines. The chain classes and functions are one file of 610 |
+| `bm.chain(..., resume=)` | No `resume` keyword | Resume per step is W14 (manifest 2). A keyword that does nothing would be a lie in the signature |
+| `Run.stages` holds the transform counters | One `Stage` per step: `status`, `error`, `files`, `reads`, `leaves`, `segment`, and `records_in`, `records_out`, `changed` for a transform (`None` for a tap and `write`) | A failed run needs the status of every step, and `Products::counters` exists for a stage only. A chain of taps lowers to the read of `qc`, which counts no records |
+| `bm.step` validates against the generated registry signature | It does, through `registry::python_keywords`. `input` is refused, `output` is the step's own `-o` (a prefix for a tool that writes several files), `mark_duplicates` takes no `output`, and `format` and `as_` are added | A step has no input of its own, a transform writes no BAM in a chain, and `--format` and `--as` are step options with no row in the registry |
+| Steps are named `"sort_sam"`, `"insert_size"` | Snake case, and also kebab case, the Picard class and the function name | `Run.metrics` and `collect(metrics=[...])` already spell verbs with a dash, and `tools()` gives the class |
+| The keywords of `bm.chain` are `output`, `reference`, `resume` | `output`, `reference`, `threads`, `tmp_dir`, `format`, `also`, `sample`, `plan`, `dry_run` | Every option of the verb that is not about printing. The table is read from `global_flags()`, so a new option becomes a keyword |
+| No word on `dry_run` | `dry_run=True` returns the plan text as a str | The command prints that text. The stub has three overloads, so `chain(...)` types as `Run[None]` and `chain(..., dry_run=True)` as `str` |
+| No word on a failed step | `InputError` after the other steps wrote their files, with `.run` | `qc` and `collect` do the same for a failed collector |
+| The Python module builds a `Spec` (section 5.2 as W04 part A wrote it) | It builds the argv and calls `parse` | `qc`, `check` and `report` already work that way. `--plan` with its replacement rule, the `+` refusal beside a plan and every option check then have one implementation |
+| `fifo-buffer` in W04 | Not built | It was not in the work order of this part |
+
 Added beyond the list of docs/07: `Emit` takes `&mut RawRecord` so a batch can take the
 record without a copy. `Transform::products` carries the `MarkDuplicates` metrics.
 `Frame` has `cram` (htsjdk rebuilds `MD` and `NM` for CRAM records), `label` and
@@ -708,9 +772,9 @@ check linear in the number of steps.
 
 | Wave | Adds |
 |---|---|
-| W04, part C | Python `bm.chain` and `bm.step` over `chain::prepare` and `chain::execute`, `Run.stages` from `StepOutcome::counters`, `fifo-buffer` |
+| W04, rest | `fifo-buffer` (FifoBuffer) |
 | W05 | The sort barrier (`Next::Records`), the planner (`Frame` per position, `requires`, the free-space refusal), the spool for a replay behind another transform, `--sort-memory`, SAM output of `write`, `write --index` through the BAI writer |
 | W09 on | Each BAM-writing tool registers its stage in `stage_of` and its stream name in `label_of` |
-| W14 | `qc` as the last step of a chain, manifest 2, resume per step, kept products, the spool for tools that read their input their own way, a progress line |
+| W14 | `qc` as the last step of a chain, manifest 2, resume per step (`resume=` in Python), kept products, the spool for tools that read their input their own way, a progress line |
 | W15, W22 | `write` to CRAM, FASTQ |
 | W46 | Variant streams (`Kind`), pileup and capture sinks |

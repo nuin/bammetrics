@@ -1,6 +1,6 @@
 # Python API (docs/python.md)
 
-The `bammetrics` module runs the command's own code: `qc`, `check`, `report` and `collect` call the engine, discovery and report code of `crates/cli`, so a Python call writes the bytes the command writes for the same arguments. This page covers the verb functions of docs/05 section 5 (0.15.0). The per-tool functions (`collect_insert_size_metrics`, ...) and the typed functions (`insert_size`, `alignment_summary`, `quality_yield`, `hs_metrics`) are unchanged; README.md shows them.
+The `bammetrics` module runs the command's own code: `qc`, `check`, `report`, `collect` and `chain` call the engine, discovery, report and chain code of `crates/cli`, so a Python call writes the bytes the command writes for the same arguments. This page covers the verb functions of docs/05 section 5 (0.15.0) and `chain` and `step` (wave W04 of docs/07). The per-tool functions (`collect_insert_size_metrics`, ...) and the typed functions (`insert_size`, `alignment_summary`, `quality_yield`, `hs_metrics`) are unchanged; README.md shows them.
 
 ```python
 import bammetrics as bm
@@ -22,6 +22,10 @@ run = bm.collect("s.bam", metrics=["quality-yield", "insert-size", "gc-bias"],
 t = bm.read_table("out/s.insert_size_metrics")   # columns as lists, glossary dtypes
 t.dtypes["MEDIAN_INSERT_SIZE"]      # "float", though the file prints 310
 t.to_polars()                       # or t.to_pandas(); imported on the first call
+
+run = bm.chain("s.bam", [bm.step("mark_duplicates"), "insert_size", bm.step("write", index=True)],
+               output="out/s")       # three steps, one process, no intermediate file
+run.stages[0].records_out           # the records mark-duplicates handed on
 ```
 
 ## Keywords
@@ -61,7 +65,7 @@ The keywords of `qc`, `check` and `report` are the command's long flags in snake
 | usage error, nothing ran | 2 | raises `UsageError` |
 | an input cannot be read | 1 | raises `InputError` |
 
-`Run` fields: `sample`, `prefix`, `files` (every file written or kept by `resume`, the manifest last), `manifest`, `exit_code`, `errors` (`{step: message}`), `metrics`, `verdict`. The stub types a `qc` run as `Run[Verdict]` and a `collect` run as `Run[None]`, so `run.verdict.status` type-checks after `qc`.
+`Run` fields: `sample`, `prefix`, `files` (every file written or kept by `resume`, the manifest last), `manifest`, `exit_code`, `errors` (`{step: message}`), `metrics`, `verdict`, `stages` (one `Stage` per step of a `chain` run, an empty list after `qc` and `collect`). The stub types a `qc` run as `Run[Verdict]` and a `collect` or `chain` run as `Run[None]`, so `run.verdict.status` type-checks after `qc`.
 
 `run.metrics` maps a name to the parsed file, in the dict form of `read_metrics`. The name is the verb of the tool that wrote it (`quality-yield`, `alignment-summary`, `insert-size`, `hs-metrics`, `duplicate-metrics`, `gc-bias`, `rna-seq`, `wgs`). Two suffixes make names unique: `.BAIT_SET` for one of several hs runs (`hs-metrics.exome`), and the file option for a tool's further file (`gc-bias.summary` for `SUMMARY_OUTPUT`).
 
@@ -125,26 +129,135 @@ bm.collect("s.bam", metrics=["insert_size"], output_prefix="out/s", hs_per_base=
 
 The docs/05 form is taken when a metric name holds a dash or a keyword after `*` is given (`output`, `panel`, `ref_flat`, `strand`, `ribosomal_intervals`). It runs the named collectors as `qc` builds them, on one read of the BAM, writes their files under `output` (default `./<bam stem>`, as `bammetrics collect`) and returns a `Run` with `metrics` and `files`; `verdict` and `manifest` are `None`. Names are verbs `qc` can run, plus `hs` as `bammetrics collect --metric hs` spells it. `output_prefix` and `hs_per_base` belong to the old form and raise `UsageError` here. An `output` that holds a `qc` run (`PREFIX.manifest.json` present) raises `UsageError`: the collect files would replace the run's files and leave its manifest and verdict stale. A wrong-typed argument of the old form raises `TypeError` naming it (`argument 'path': ...`).
 
+## chain and step
+
+`chain` runs `bammetrics chain` in the process: several steps on one BAM, the records handed from step to step in memory, no pipe and no intermediate file (docs/chaining.md). It returns a `Run`.
+
+```python
+import bammetrics as bm
+
+# Example 1. MarkDuplicates, four collectors on the marked records, the marked BAM and its index.
+run = bm.chain("in.bam", [
+    bm.step("mark_duplicates"),
+    "alignment_summary", "insert_size", "quality_yield", "duplicate_metrics",
+    bm.step("write", index=True),
+], reference="ref.fa", output="out/NA12878")
+
+marked = run.stages[0]              # Stage(number=1, verb="mark-duplicates", role="transform", ...)
+marked.records_in, marked.records_out, marked.changed
+run.metrics["insert-size"]          # out/NA12878.insert_size_metrics, parsed
+run.metrics["mark-duplicates"]      # out/NA12878.marked.duplication_metrics, parsed
+run.files                           # 5 metrics files, out/NA12878.marked.bam, out/NA12878.marked.bai
+
+# Example 2. Four collectors with options on one read, each metrics file also as JSON.
+run = bm.chain("in.bam", [
+    bm.step("quality_yield", use_original_qualities=False),
+    bm.step("alignment_summary", metric_accumulation_level=["SAMPLE", "LIBRARY"], stop_after=8),
+    bm.step("insert_size", minimum_pct=0.1),
+    "duplicate_metrics",
+], output="out/sample", format=["picard", "json"], sample="S1")
+```
+
+These are the two examples of docs/chaining.md. `tests/data/chain_markdup.toml` and `tests/data/chain_taps.toml` hold them as plan files, and `bm.chain(plan="tests/data/chain_markdup.toml", output="out/sample")` runs the first. `tests/python/test_chain.py` checks that each plan file and its Python steps write the same files.
+
+### chain
+
+`chain(source=None, steps=None, *, output, reference, threads, tmp_dir, format, also, sample, plan, dry_run)`.
+
+| Argument | Command | Value |
+|---|---|---|
+| `source` | the positional `BAM` | A BAM, or a CRAM with `reference`. `"-"` reads the standard input of the process. `None` when the plan file names it |
+| `steps` | `+ STEP ...` | A list of verb names and `step(...)` objects, in order. One name or one `Step` is a chain of one step |
+| `output` | `-o PREFIX` | The prefix of every step that names no file of its own. Default `./<source name>` |
+| `reference` | `-R FASTA` | Decodes a CRAM source, and goes to every step that reads a reference and names none |
+| `threads` | `--threads N` | BGZF threads of each read and of `write` |
+| `tmp_dir` | `--tmp-dir DIR` | Where a transform spills and a piped source is copied |
+| `format` | `--format LIST` | `picard` first. `["picard", "json"]` adds `FILE.json` beside every metrics file |
+| `also` | `--also LIST` | `json`, `jsonl`, `tsv`, `csv` beside every metrics file, `markdown` as `PREFIX.report.md` |
+| `sample` | `--sample NAME` | The sample of the json forms and of `Run.sample` |
+| `plan` | `--plan FILE` | A TOML plan file in place of `steps`. A keyword given replaces the file's value. `steps` beside `plan` raises `UsageError` |
+| `dry_run` | `--dry-run` | `True` returns the plan text as a str and runs nothing |
+
+`--quiet` and `--verbose` have no keyword: `chain` prints nothing. A core tool's own warning still goes to stderr. `write` to `"-"` writes the BAM to the standard output of the process, as the command does.
+
+The keywords spell the command's argv, and the command's parser, `prepare` and `execute` (`bammetrics_cli::chain`) check and run it. So a message is the command's line with its spelling: `bammetrics chain: step 2 (insert-size): ...`, `--plan gives the steps: a + step on the command line cannot be added`. Every usage error is raised before the first read, and nothing is written.
+
+### step
+
+`step(verb, /, **options)` returns a `Step`. It is checked when it is made: an unknown verb or keyword raises `UsageError` with the closest name, before any chain runs.
+
+```python
+bm.step("inser_size")                      # UsageError: unknown step "inser_size" / did you mean insert_size?
+bm.step("insert_size", minmum_pct=0.1)     # UsageError: unknown keyword "minmum_pct" / did you mean minimum_pct?
+bm.step("insert_size", minimum_pct="0.1")  # UsageError: minimum_pct takes a number, not str
+bm.step("wgs")                             # UsageError: CollectWgsMetrics ... cannot be a step
+```
+
+- The verb is a tool verb in snake case (`insert_size`, `mark_duplicates`), or `write`. The kebab form (`insert-size`), the Picard class (`CollectInsertSizeMetrics`) and the function name (`collect_insert_size_metrics`) name the same step. The stub lists the 15 names as `_StepVerb`: `mark_duplicates` (a transform), 13 taps (`insert_size`, `alignment_summary`, `quality_yield`, `hs_metrics`, `gc_bias`, `quality_score_distribution`, `mean_quality_by_cycle`, `base_distribution_by_cycle`, `duplicate_metrics`, `rna_seq`, `sequencing_artifact`, `coverage_gaps`, `sex_check`) and `write`.
+- The keywords are those of the tool's function in `bammetrics.pyi` (`registry::python_keywords`, the list the generated stub prints): `step("insert_size", minimum_pct=0.1)` takes what `collect_insert_size_metrics(bam, minimum_pct=0.1)` takes. `input` is refused: the chain's source feeds every step.
+- `output` is the step's own `-o`: the file of a tap that writes one file, a prefix for a tap that writes several (`gc_bias`). Without it the chain's prefix names the files. `mark_duplicates` takes no `output`, since a transform writes no BAM in a chain; `step("write", output=...)` after it writes the BAM, and `metrics_file` names its metrics.
+- `format` is the step's own `--format` list. `as_` on a transform is `--as NAME`, the name of the stream it leaves (`as` is a Python keyword).
+- `write` takes `output`, `index`, `md5` and `compression_level`.
+- A bool option takes `True` or `False`, an int option an int, a float option a number, a path a str or an `os.PathLike` (`TypeError` otherwise). A list or tuple is a repeated option (`metric_accumulation_level`, `comment`). `None` leaves the option out.
+
+`Step` fields: `verb` (as the command spells it, `insert-size`), `role` (`transform`, `tap` or `write`), `options` (the keywords given, a list kept as a tuple), `args` (what they spell for the command, `["--minimum-pct=0.1"]`). Two steps with the same verb and args are equal and hash alike. `Step(verb, **options)` is the same call as `step`.
+
+### The Run of a chain
+
+`verdict` and `manifest` are `None`. `sample` is `sample=`, else the first `@RG SM` of a file source, else the source name (`stdin` for a pipe). `files` lists every file written, in step order, then `PREFIX.report.md`.
+
+`run.metrics` maps a name to the parsed file, as for `qc`. The name is the step's verb (`insert-size`, `mark-duplicates`), with four additions:
+
+| Case | Key | File |
+|---|---|---|
+| A tap in front of a transform | `in.quality-yield` | `PREFIX.in.quality_yield_metrics` |
+| A step's further file | `gc-bias.summary` | `PREFIX.gc_bias.summary_metrics` |
+| A tool that names its files when it finishes | `sequencing-artifact.pre_adapter_detail_metrics` | `PREFIX.pre_adapter_detail_metrics` |
+| A second tap of one tool on one stream | `quality-yield#3` (the step's number) | the file its own `output` names |
+
+`run.stages` holds one `Stage` per step, in step order:
+
+| Field | Value |
+|---|---|
+| `number`, `verb`, `role` | The step's place from 1, its verb, `transform`, `tap` or `write` |
+| `status` | `ok`, `failed`, `stopped` (another step of its segment failed while it ran) or `not_run` (a step in front of it failed) |
+| `error` | Why, for a status that is not `ok`. `None` otherwise |
+| `reads`, `leaves` | The stream the step read (`in`, or the name a transform in front left). The stream a transform leaves (`marked`), `None` otherwise |
+| `segment` | The segment it ran in, from 1. A transform starts the next one |
+| `files` | The files the step wrote |
+| `records_in`, `records_out`, `changed` | A transform's record counts. `None` for a tap and for `write`: a chain of taps runs on the read `qc` uses, which counts no records |
+
+| Outcome | Command exit | Python |
+|---|---|---|
+| every step finished | 0 | returns the `Run` |
+| a step failed | 1 | raises `InputError` after the other steps wrote their files. `.run` holds the `Run`, `run.errors` maps `step N (verb)` to each message, `run.stages` holds each status |
+| usage error, nothing ran | 2 | raises `UsageError` |
+| the source, the reference or the plan file cannot be read, or an output cannot be written | 1 | raises `InputError` (`.run` is `None`) |
+
+A tap that fails fails alone: the other steps finish. A transform or `write` that fails stops its segment: the message names it and counts the rest (`1 step(s) failed: step 2 (mark-duplicates): ...; 1 stopped; 2 not run`).
+
+`resume` is not a keyword: resume per step is wave W14. A second transform is a `UsageError` until W05.
+
 ## Errors
 
 | Class | Bases | Raised for |
 |---|---|---|
 | `BammetricsError` | `Exception` | base of the three below |
 | `UsageError` | `BammetricsError`, `ValueError` | bad arguments, unknown keywords, an earlier run without `resume` or `force` (exit 2) |
-| `InputError` | `BammetricsError`, `OSError` | a missing or unreadable BAM, FASTA, `.fai`, interval or preset file, a failed collector (exit 1); `.run` holds the run after a failed collector, else `None` |
+| `InputError` | `BammetricsError`, `OSError` | a missing or unreadable BAM, FASTA, `.fai`, interval, preset or plan file, a failed collector, a failed step of a chain (exit 1); `.run` holds the run after a failed collector or step, else `None` |
 | `VerdictError` | `BammetricsError` | a verdict reached `fail_on` (exit 10); `.verdicts`, `.run`, `.code` |
 
 Every function raised `ValueError` and `OSError` before 0.15.0, and the new classes subclass them, so `except ValueError` and `except OSError` keep working.
 
-Every class copies and pickles (`copy.deepcopy`, `pickle`, a `ProcessPoolExecutor` result or exception): `Tool`, `PresetInfo`, the errors, `Verdict` (through its `verdict.json` text), `Check` and `Run` (with its parsed files, so `_repr_html_` renders after unpickling).
+Every class copies and pickles (`copy.deepcopy`, `pickle`, a `ProcessPoolExecutor` argument, result or exception): `Tool`, `PresetInfo`, the errors, `Verdict` (through its `verdict.json` text), `Check`, `Step` (through its verb and keywords, checked again when rebuilt), `Stage` and `Run` (with its parsed files and its stages, so `_repr_html_` renders after unpickling).
 
 ## Threads and the GIL
 
-`qc`, `check`, `report`, `collect`, the generated per-tool functions, the typed functions (`insert_size`, `alignment_summary`, `quality_yield`, `hs_metrics`), `read_metrics`, `read_table` and `evaluate` release the GIL while they read and write, so other Python threads run meanwhile. `threads` is the BGZF decompression thread count (default: cores, at most 8).
+`qc`, `check`, `report`, `collect`, `chain`, the generated per-tool functions, the typed functions (`insert_size`, `alignment_summary`, `quality_yield`, `hs_metrics`), `read_metrics`, `read_table` and `evaluate` release the GIL while they read and write, so other Python threads run meanwhile. `threads` is the BGZF decompression thread count (default: cores, at most 8).
 
 ## Notebook view
 
-`Run._repr_html_()` returns the report body: one `<div class="bm">` holding the page stylesheet with every rule limited to the div, then the sections of the sample page with inline SVG. Each plot series and histogram table is cut to 200 evenly spaced points. It holds no script and no external resource, and every header string (sample, read group, path) is escaped. A `collect` run returns `None`, so the notebook shows its repr.
+`Run._repr_html_()` returns the report body: one `<div class="bm">` holding the page stylesheet with every rule limited to the div, then the sections of the sample page with inline SVG. Each plot series and histogram table is cut to 200 evenly spaced points. It holds no script and no external resource, and every header string (sample, read group, path) is escaped. A `collect` or `chain` run returns `None`, so the notebook shows its repr.
 
 ## tools and presets
 
@@ -152,4 +265,4 @@ Every class copies and pickles (`copy.deepcopy`, `pickle`, a `ProcessPoolExecuto
 
 ## Stub and wheel
 
-`bammetrics.pyi` names every public module attribute and nothing else; its typing-only dicts start with an underscore. The function entries of `qc`, `check` and `report` and the `_CollectorVerb` names are generated from the option table; the class entries (`Run`, `Verdict`, `Check`, `Table`, the errors, `Tool`, `PresetInfo`) and `read_table` are written by hand. `tests/python/test_mirror.py` compares the stub with `dir(bammetrics)` both ways, with the fields of `Run`, `Verdict` and `Check`, and with `help()` of `qc`, `check` and `report` (signature and docstring). `make wheel-check` builds the wheel with `maturin build`, installs it into a fresh venv, runs `mypy` over the stub and `tests/python/stub_types.py` (the type of each call form), imports the module from there, compares the stub the wheel ships with `bammetrics.pyi`, and runs the stub tests, which catches a stale wheel.
+`bammetrics.pyi` names every public module attribute and nothing else; its typing-only dicts start with an underscore. The function entries of `qc`, `check` and `report` and the `_CollectorVerb` names are generated from the option table. So are `step`, the `_StepVerb` names and the three `chain` overloads (`dry_run` picks `Run[None]` or `str`), from the chain's flags (`crates/cli/src/chain/python.rs`). The class entries (`Run`, `Step`, `Stage`, `Verdict`, `Check`, `Table`, the errors, `Tool`, `PresetInfo`) and `read_table` are written by hand. `tests/python/test_mirror.py` compares the stub with `dir(bammetrics)` both ways, with the fields of `Run`, `Step`, `Stage`, `Verdict` and `Check`, with `help()` of `qc`, `check`, `report`, `chain` and `step` (signature and docstring), and the `_StepVerb` names with the names `step` takes. `make wheel-check` builds the wheel with `maturin build`, installs it into a fresh venv, runs `mypy` over the stub and `tests/python/stub_types.py` (the type of each call form), imports the module from there, compares the stub the wheel ships with `bammetrics.pyi`, and runs the stub tests, which catches a stale wheel.

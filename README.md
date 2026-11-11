@@ -96,6 +96,20 @@ spelling. A usage error in any step is found before the first read and names the
 `--dry-run` prints the plan, and `--plan plan.toml` reads the chain from a file. The
 reference is [docs/chaining.md](docs/chaining.md).
 
+The same chain from Python ([docs/python.md](docs/python.md)):
+
+```python
+import bammetrics as bm
+
+run = bm.chain("sample.bam", [
+    bm.step("mark_duplicates"),
+    "alignment_summary", "insert_size", "quality_yield", "duplicate_metrics",
+    bm.step("write", index=True),
+], reference="ref.fa", output="out/NA12878")
+run.stages[0].records_out            # the records mark-duplicates handed on
+run.metrics["insert-size"]           # the parsed metrics file
+```
+
 ## Report
 
 ```bash

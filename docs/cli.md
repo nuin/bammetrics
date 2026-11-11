@@ -1214,5 +1214,6 @@ and `crates/core/glossary.tsv` defines every column the tools write.
 name from `bammetrics.presets()`, or the path of a preset file) over one sample's
 metrics files and returns `verdict.json` as dicts: band `status`, `counts`, and one
 check per rule with its value, bounds, status and reason. `qc`, `check`, `report`,
-`tools` and `presets` run the command's code (0.15.0). Every function and type is in
-[docs/python.md](python.md).
+`tools` and `presets` run the command's code (0.15.0). `chain(source, steps, ...)` runs
+the `chain` verb, with `step(verb, **options)` for a step that has options. Every function
+and type is in [docs/python.md](python.md).
