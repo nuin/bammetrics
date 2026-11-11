@@ -1,0 +1,84 @@
+# The memory gate table: one [[command]] per measured command (benches/memgate.py).
+#
+#   make memgate               the fixture rows: committed BAMs, a few seconds
+#   make memgate TIER=scale    the scale rows: real data outside the repository
+#
+# Keys: name (unique), tier (fixture or scale), argv, max_rss_mib (required), and
+# optionally max_seconds, needs (files the command reads), spill_dir with
+# max_spill_mib. {bin} is the release binary, {out} a directory of the row's own that
+# is removed after the measurement. docs/benchmarks.md ("Memory gate") holds the
+# numbers measured and how a row is added.
+#
+# Fixture limits are 8 times the peak measured on the Mac Studio, at least 64 MiB:
+# they catch a buffer that grows with nothing to hold, not a regression of a few MiB.
+
+[[command]]
+name = "build-bam-index"
+argv = ["{bin}", "build-bam-index", "tests/data/orientation.bam", "-o", "{out}/orientation.bai"]
+needs = ["tests/data/orientation.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "mark-duplicates"
+argv = [
+    "{bin}", "mark-duplicates", "tests/data/markdup.bam", "-o", "{out}/marked.bam",
+    "--metrics-file", "{out}/metrics.txt", "--create-index", "--create-md5-file",
+    "--tmp-dir", "{out}/tmp",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+
+# A chain without a transform: two collectors and a writer on one read.
+[[command]]
+name = "chain write --index"
+argv = [
+    "{bin}", "chain", "tests/data/markdup.bam", "-o", "{out}/sample", "+", "insert-size",
+    "+", "quality-yield", "+", "write", "{out}/kept.bam", "--index", "--md5",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+# Scale rows. The limits are the targets of docs/07 section 6: a streaming writer or
+# reader stays under 1 GiB whatever the input size. The data is listed in
+# docs/benchmarks.md; a row whose file is missing is skipped. Give
+# --out-root ~/data/bammetrics-scale/waves/w05 so the outputs land on the data disk.
+
+[[command]]
+name = "build-bam-index slice"
+tier = "scale"
+argv = ["{bin}", "build-bam-index", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "-o", "{out}/slice.bai"]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 1024
+
+[[command]]
+name = "build-bam-index exome"
+tier = "scale"
+argv = ["{bin}", "build-bam-index", "~/data/bammetrics-scale/exome/HG002.exome.bam", "-o", "{out}/exome.bai"]
+needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
+max_rss_mib = 1024
+
+[[command]]
+name = "chain write --index slice"
+tier = "scale"
+argv = [
+    "{bin}", "chain", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "+", "write",
+    "{out}/kept.bam", "--index", "--md5",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 1024
+
+[[command]]
+name = "mark-duplicates slice"
+tier = "scale"
+argv = [
+    "{bin}", "mark-duplicates", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "-o",
+    "{out}/marked.bam", "--metrics-file", "{out}/metrics.txt", "--create-index",
+    "--tmp-dir", "{out}/tmp",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 1024
+spill_dir = "{out}/tmp"
