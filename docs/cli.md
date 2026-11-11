@@ -295,6 +295,7 @@ table.
 | `jumping-library` | CollectJumpingLibraryMetrics (one or more coordinate-sorted BAMs as positionals, read in turn; standard input refused) | one metrics file |
 | `fifo-buffer` | FifoBuffer (standard input to standard output; no input argument, no `-o`) | no file: the bytes it read, on standard output |
 | `view-sam` | ViewSam (SAM, BAM or CRAM in) | SAM text on standard output, or in `-o` |
+| `sort-sam` | SortSam (`--sort-order queryname|coordinate|duplicate`) | `-o` BAM, or SAM text for a name ending in `.sam` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -469,6 +470,39 @@ text is byte for byte what Picard prints (`tests/concordance/test_view_sam.py`).
 - A closed standard output (`| head`) ends the run with exit 1 and no message, as
   Picard's `PrintStream.checkError` does.
 
+### sort-sam
+
+```bash
+bammetrics sort-sam sample.bam -o sample.qname.bam --sort-order queryname
+bammetrics sort-sam sample.qname.bam -o sample.sorted.bam --sort-order coordinate --create-index
+bammetrics sort-sam reads.sam -o reads.sorted.sam --sort-order coordinate
+bammetrics sort-sam big.bam -o big.sorted.bam -SO coordinate --max-records-in-ram 2000000 --tmp-dir /scratch
+bammetrics SortSam I=sample.bam O=sample.sorted.bam SORT_ORDER=coordinate
+```
+
+Picard's `SortSam`: every record of a BAM, CRAM or SAM in `queryname`, `coordinate` or
+`duplicate` order (the three Picard 3.5.0 takes; `unsorted` and `unknown` exit as Picard
+exits). The output is a BAM, or SAM text for a name ending in `.sam`, the records Picard
+writes in Picard's order (`tests/concordance/test_sort_sam.py`: decoded records for BAM,
+bytes for SAM text).
+
+- The header is the input's with `SO` set and `@HD VN:1.6`. `GO`, `SS`, every other line
+  and every field stay, and no `@PG` line is added, as in Picard.
+- `queryname` is htsjdk's `SAMRecordQueryNameComparator` (name by bytes, first of pair
+  before second, forward before reverse, primary before secondary and supplementary, `HI`),
+  `coordinate` its coordinate comparator (unplaced records last), `duplicate` its duplicate
+  comparator, which needs the `MC` tag on every paired record with a mapped mate.
+  Records with equal keys keep their input order.
+- `--max-records-in-ram N` (default 500,000) records are sorted in memory per run; more
+  spill to `--tmp-dir` as sorted runs (BGZF level 3, mode 0600, removed at the end, on a
+  failure and on a signal) and are merged with ties to the earlier run.
+- `--create-index` writes `out.bai` beside a coordinate-sorted BAM and nothing beside SAM
+  text, as Picard; `--create-md5-file` writes `out.bam.md5` (or `out.sam.md5`);
+  `--compression-level` sets the BGZF level. A CRAM input needs `-R`, and its records get
+  the `MD` and `NM` tags htsjdk rebuilds.
+- `-o out.cram` exits 2 naming wave W15. An `-o` that is the input (a link or a hard link
+  included) exits 2 and replaces nothing.
+
 ### qc
 
 ```bash
@@ -582,6 +616,9 @@ bammetrics chain in.bam -R ref.fa -o out/NA12878 \
     + mark-duplicates \
     + alignment-summary + insert-size + quality-yield + duplicate-metrics \
     + write --index
+bammetrics chain in.bam -o out/NA12878 --sort-memory 4G \
+    + sort-sam --sort-order queryname + mark-duplicates \
+    + sort-sam --sort-order coordinate + write out/NA12878.bam --index
 samtools view -b in.bam chr20 | bammetrics chain - + mark-duplicates + write - | samtools flagstat -
 bammetrics chain --plan plan.toml -o out/NA12878 --dry-run
 ```
@@ -592,8 +629,9 @@ is the short form.
 
 - The chain's options and the source (a BAM, a CRAM with `-R`, `-` for standard input)
   come before the first `+`. Every `+` starts a step.
-- A step is a tool verb, its Picard class, or `write`. A transform (`mark-duplicates`)
-  changes the records later steps see. A tap (the 13 one-pass tool verbs) reads the
+- A step is a tool verb, its Picard class, or `write`. A transform (`mark-duplicates`,
+  `sort-sam`) changes the records later steps see; any number may follow one another. A
+  tap (the 13 one-pass tool verbs) reads the
   records of its position and changes nothing. `write [PATH]` writes those records as a
   BAM, or as SAM text for a name ending in `.sam`; `-` is standard output, and `write -
   --output-format sam` prints SAM text there. A `.cram` or `.fastq` name is refused with
@@ -613,9 +651,15 @@ is the short form.
   the closest name. Paths in the file are read relative to the working directory. The
   plan file is an input: no step may write it. docs/chaining.md section 3 lists the part
   of TOML the reader takes.
-- `--dry-run` prints the plan: the segments, whether `mark-duplicates` reads the file
-  twice (replay) or a copy of the pipe (spool), the files of each step, the estimated
-  temporary disk. `bammetrics plan` with a chain's arguments prints the same.
+- `--dry-run` prints the plan: the segments, one line per barrier (`sort-sam` holds its
+  records; `mark-duplicates` replays the source, a copy of the pipe, or a spool of its
+  input behind another transform), the bytes each spills, the files of each step, the
+  estimated temporary and output disk and the peak memory. `bammetrics plan` with a
+  chain's arguments prints the same.
+- `--sort-memory BYTES` (default 2G) bounds what a `sort-sam` step holds before it
+  spills. A chain whose estimate exceeds the free space of a file system it writes to
+  exits 1 before the first read; `--force-space` runs it. `--validation-stringency`
+  sets how a SAM text source is checked.
 - Standard error gets each transform's record counts, each failed step and one summary
   line. `-q` leaves only the errors.
 

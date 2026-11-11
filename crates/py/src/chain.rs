@@ -606,8 +606,8 @@ fn run_object(py: Python<'_>, done: &Finished) -> PyResult<Py<Run>> {
     name = "chain",
     signature = (source = None, steps = None, **options),
     text_signature = "(source=None, steps=None, *, output=None, reference=None, threads=None, \
-                      tmp_dir=None, format=None, also=None, sample=None, plan=None, \
-                      dry_run=False)"
+                      tmp_dir=None, format=None, also=None, sample=None, sort_memory=None, \
+                      force_space=None, validation_stringency=None, plan=None, dry_run=False)"
 )]
 pub fn py_chain<'py>(
     py: Python<'py>,

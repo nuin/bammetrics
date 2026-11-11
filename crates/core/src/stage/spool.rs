@@ -4,7 +4,7 @@
 //! second read replays that file (docs/07 section 2.3, replay or spool).
 //!
 //! The file is the record stream of a BAM without its header: each record
-//! as `block_size` and its bytes, in BGZF blocks at level 1
+//! as `block_size` and its bytes, in BGZF blocks at level 3
 //! ([`crate::sam_sort::SPILL_LEVEL`]), compressed on the chain's threads.
 //! It is made by [`TempDir::create_file`] (mode 0600, a new name) and
 //! removed when the replay is done, or with the directory.
