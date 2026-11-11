@@ -376,7 +376,7 @@ impl Eq for Key {}
 
 impl PartialOrd for Key {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.compare(other))
+        Some(self.cmp(other))
     }
 }
 
@@ -843,7 +843,7 @@ mod tests {
         let temp = TempDir::new(None);
         let both = 0x1 | 0x40 | 0x80;
         let keys =
-            || (0..200u16).map(move |i| key(&format!("q{}", i % 7), both | (i % 2) * 0x10, None));
+            || (0..200u16).map(move |i| key(&format!("q{}", i % 7), both | ((i % 2) * 0x10), None));
         let mut spilled = Sorter::new(&temp, "names", 3);
         for k in keys() {
             spilled.push(k).expect("push");

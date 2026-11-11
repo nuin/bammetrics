@@ -666,7 +666,7 @@ mod tests {
         };
         let a = check(
             (0..200).map(|i| format!("r{}", i % 7)).collect(),
-            (0..200).map(|i| both | (i % 2) * 0x10).collect(),
+            (0..200).map(|i| both | ((i % 2) * 0x10)).collect(),
         );
         assert_eq!(a, None);
         let b = check(
@@ -676,7 +676,7 @@ mod tests {
         assert_eq!(b, None);
         let c = check(
             (0..20).map(|i| format!("q{}", i % 2)).collect(),
-            (0..20).map(|i| both | (i % 3) * 0x10).collect(),
+            (0..20).map(|i| both | ((i % 3) * 0x10)).collect(),
         );
         assert_eq!(c, Some(599_806_246));
         let choices: [u16; 8] = [0x41, 0x81, both, 0x1, 0x0, 0x51, 0x141, 0x841];

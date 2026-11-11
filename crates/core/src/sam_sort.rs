@@ -390,7 +390,7 @@ mod tests {
             .map(|i| {
                 build(
                     &format!("r{}", i % 7),
-                    both | (i % 2) * 0x10,
+                    both | ((i % 2) * 0x10),
                     0,
                     1,
                     &[],
@@ -426,17 +426,7 @@ mod tests {
     #[test]
     fn ties_keep_file_order_through_three_merge_levels() {
         let records: Vec<RawRecord> = (0..9000)
-            .map(|i| {
-                build(
-                    &format!("n{:05}", i),
-                    0,
-                    0,
-                    (i % 3) as i32 + 1,
-                    &[],
-                    &[],
-                    b"",
-                )
-            })
+            .map(|i| build(&format!("n{:05}", i), 0, 0, (i % 3) + 1, &[], &[], b""))
             .collect();
         let (out, stats) = sort(Order::Coordinate, records.clone(), 2);
         assert!(stats.merge_levels >= 3, "{stats:?}");
