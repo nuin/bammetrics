@@ -279,9 +279,29 @@ pub fn closest(flags: &[Flag], name: &str) -> Option<String> {
     Some(format!("{best}{picard}"))
 }
 
+/// How the message of [`unknown`] starts.
+const UNKNOWN_OPTION: &str = "unknown option ";
+
+/// The option an error of [`unknown`] is about, as it was spelled
+/// (`--also`, `-q`, `ALSO=`); `None` for any other error.
+pub fn unknown_option(error: &VerbError) -> Option<&str> {
+    error.what.strip_prefix(UNKNOWN_OPTION)
+}
+
+/// The flag an option as spelled on a command line (`--also`, `-q`,
+/// `ALSO=`, `--no-dry-run`) refers to.
+pub fn spelled<'a>(flags: &'a [Flag], spelled: &str) -> Option<&'a Flag> {
+    let dashes = spelled.len() - spelled.trim_start_matches('-').len();
+    let name = spelled[dashes..].trim_end_matches('=');
+    find(flags, dashes, name).or_else(|| {
+        let positive = name.strip_prefix("no-").filter(|_| dashes == 2)?;
+        find(flags, 2, positive).filter(|flag| flag.ty == Ty::Bool)
+    })
+}
+
 /// The error for an option no flag has, with the closest spelling.
 fn unknown(verb: &str, flags: &[Flag], spelled: &str, name: &str) -> VerbError {
-    let mut error = VerbError::usage(verb, format!("unknown option {spelled}"));
+    let mut error = VerbError::usage(verb, format!("{UNKNOWN_OPTION}{spelled}"));
     if let Some(best) = closest(flags, name) {
         error = error.hint(format!("did you mean --{best}?"));
     }

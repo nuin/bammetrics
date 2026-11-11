@@ -521,10 +521,16 @@ pub fn run(opts: &Options) -> Result<crate::metric::MetricsOutput> {
     refuse_overlaps(opts)?;
     let temp = TempDir::new(opts.tmp_dir.as_deref());
     let inputs = spool_streams(&opts.inputs, &temp)?;
-    let built = build::run(opts, &inputs, &temp)?;
+    // An input copied from a pipe fails under the name the user gave.
+    let named = |mut error: Error| {
+        for (copy, given) in inputs.iter().zip(&opts.inputs) {
+            error = error.naming_input(copy, given);
+        }
+        error
+    };
+    let built = build::run(opts, &inputs, &temp).map_err(named)?;
     let marks = mark::run(opts, built, &temp)?;
-    let metrics = write::run(opts, &inputs, marks)?;
-    Ok(metrics)
+    write::run(opts, &inputs, marks).map_err(named)
 }
 
 /// `MarkDuplicates` as a step of a chain ([`crate::stage`]): a barrier.

@@ -161,6 +161,9 @@ impl Source for FileSource {
         bytes: &Arc<AtomicU64>,
         consume: &mut dyn FnMut(Frame, &mut dyn Records) -> Result<()>,
     ) -> Result<()> {
+        // A spooled copy of a pipe fails under the name the user gave,
+        // never under the copy's.
+        let shown = Path::new(&self.label);
         pass::with_counted_stream(
             &self.path,
             self.reference.as_deref(),
@@ -177,12 +180,13 @@ impl Source for FileSource {
                     frame,
                     &mut StreamRecords {
                         reader,
-                        path: &self.path,
+                        path: shown,
                         cram,
                     },
                 )
             },
         )
+        .map_err(|e| e.naming_input(&self.path, shown))
     }
 
     fn replayable(&self) -> bool {

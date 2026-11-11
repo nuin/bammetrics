@@ -24,21 +24,33 @@ fn is_listed(value: &Bound<'_, PyAny>) -> bool {
 }
 
 /// One value of `keyword` as the text the command takes. `label` is empty
-/// for a chain option and `step VERB: ` for a step's. A value of the wrong
-/// type is a `UsageError` naming the keyword; a path takes a str or an
-/// `os.PathLike` only (`TypeError`, as `qc`).
-fn value_text(label: &str, keyword: &Keyword, value: &Bound<'_, PyAny>) -> PyResult<String> {
+/// for a chain option and `step VERB: ` for a step's; `listed` says the
+/// value is an item of a list. A value of the wrong type is a `UsageError`
+/// naming the keyword: a float that is NaN or infinite, and an item of a
+/// list of texts that is not a str (one number alone stands for its
+/// text). A path takes a str or an `os.PathLike` only (`TypeError`, as
+/// `qc`).
+fn value_text(
+    label: &str,
+    keyword: &Keyword,
+    value: &Bound<'_, PyAny>,
+    listed: bool,
+) -> PyResult<String> {
     let is_bool = value.is_instance_of::<PyBool>();
     let is_int = value.is_instance_of::<PyInt>() && !is_bool;
-    let is_number = is_int || value.is_instance_of::<PyFloat>();
+    let is_float = value.is_instance_of::<PyFloat>();
+    let is_number = is_int || is_float;
     let is_text = value.is_instance_of::<PyString>();
+    let finite = !is_float || value.extract::<f64>()?.is_finite();
     let wanted = match keyword.ty {
         Ty::Bool if is_bool => None,
         Ty::Bool => Some("True or False"),
         Ty::Int if is_int => None,
         Ty::Int => Some("an int"),
+        Ty::Float | Ty::Text if !finite => Some("a finite number"),
         Ty::Float if is_number => None,
         Ty::Float => Some("a number"),
+        Ty::Text if listed && !is_text => Some("a list of str"),
         Ty::Text if is_bool || is_number || is_text => None,
         Ty::Text => Some("a str or a number"),
         Ty::Path if is_text || value.hasattr("__fspath__")? => None,
@@ -51,10 +63,16 @@ fn value_text(label: &str, keyword: &Keyword, value: &Bound<'_, PyAny>) -> PyRes
         }
     };
     if let Some(wanted) = wanted {
+        // `nan` and `inf` say more than `float` does.
+        let given = if finite {
+            value.get_type().name()?.to_string()
+        } else {
+            value.repr()?.to_string()
+        };
+        let holding = if listed && finite { "one holding " } else { "" };
         return Err(usage_error(format!(
-            "bammetrics {VERB}: {label}{} takes {wanted}, not {}",
-            keyword.name,
-            value.get_type().name()?
+            "bammetrics {VERB}: {label}{} takes {wanted}, not {holding}{given}",
+            keyword.name
         )));
     }
     let text = if is_bool {
@@ -85,10 +103,10 @@ fn keyword_args(label: &str, keyword: &Keyword, value: &Bound<'_, PyAny>) -> PyR
         }
         value
             .try_iter()?
-            .map(|item| value_text(label, keyword, &item?))
+            .map(|item| value_text(label, keyword, &item?, true))
             .collect::<PyResult<Vec<String>>>()?
     } else {
-        vec![value_text(label, keyword, value)?]
+        vec![value_text(label, keyword, value, false)?]
     };
     let flag = |text: &str| format!("--{}={text}", keyword.long);
     Ok(match keyword.many {
@@ -203,10 +221,12 @@ impl Step {
 /// One step of chain(): a tool verb in snake case (insert_size), its Picard
 /// class, or write. The keywords are those of the tool's function
 /// (minimum_pct=0.1) without its input, plus output (the step's own file,
-/// or prefix for a tool that writes several), format, and as_ on a
-/// transform (the name of the stream it leaves). write takes output, index,
-/// md5 and compression_level. An unknown verb or keyword raises UsageError
-/// here, with the closest name.
+/// or prefix for a tool that writes several), format, panel on hs_metrics
+/// (baits and targets in one file), and as_ on a transform (the name of the
+/// stream it leaves). write takes output, index, md5 and compression_level.
+/// An unknown verb or keyword raises UsageError here, with the closest
+/// name; so does a float that is NaN or infinite, and a list of texts with
+/// an item that is not a str.
 //
 // The docstring above is the stub's (tests/python/test_mirror.py compares
 // them).

@@ -546,9 +546,15 @@ is the short form.
 - Files go under `-o PREFIX` with the names `qc` writes (Output naming, above). A step's
   own `-o` names its file. `--format picard,json` and `--also csv,markdown` add further
   formats beside every metrics file.
+- The chain's options (`-o`, `--threads`, `--sample`, `--also`, `--plan`, `--dry-run`,
+  `-q`, `-v`) given after the first `+` are a usage error that says so: `step 1
+  (insert-size): --also belongs to the chain: give it before the first +`. An empty `-o`
+  and an empty file name of a step are usage errors too.
 - `--plan FILE` reads the source, the options and the steps from a TOML file. An option
   on the command line replaces the file's. An unknown key is an error with the line and
-  the closest name.
+  the closest name. Paths in the file are read relative to the working directory. The
+  plan file is an input: no step may write it. docs/chaining.md section 3 lists the part
+  of TOML the reader takes.
 - `--dry-run` prints the plan: the segments, whether `mark-duplicates` reads the file
   twice (replay) or a copy of the pipe (spool), the files of each step, the estimated
   temporary disk. `bammetrics plan` with a chain's arguments prints the same.

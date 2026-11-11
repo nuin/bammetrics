@@ -21,10 +21,11 @@ use bammetrics_core::{cram, java, pass};
 use clap::ValueEnum;
 
 use super::args::{
-    AS, CHAIN_KEYS, COMPRESSION_LEVEL, INDEX, MD5, find_step, is_transform, step_parser_flags,
-    unknown_step, write_flags,
+    AS, CHAIN_KEYS, COMPRESSION_LEVEL, INDEX, MD5, belongs_to_chain, chain_option_on_step,
+    find_step, is_transform, step_parser_flags, unknown_step, write_flags,
 };
-use super::{Spec, StepSpec, VERB, WRITE, usage};
+use super::claims::{Read, check_one_stdout, claim_outputs, inputs_of, refuse_overwriting_inputs};
+use super::{EMPTY_PREFIX_HINT, Spec, StepSpec, VERB, WRITE, usage};
 use crate::also::Also;
 use crate::error::VerbError;
 use crate::format::{self, Format};
@@ -253,6 +254,25 @@ fn tool_role(spec: &StepSpec, number: usize) -> Result<(&'static Verb, Role), Ve
     .hint("the steps: bammetrics chain --help"))
 }
 
+/// The spelling of a file a step names by an empty value (`-o ''`, a
+/// `PATH` of `write` that is `''`). As a prefix it would name hidden files
+/// (`.gc_bias.detail_metrics`); as a file it fails when the step writes.
+fn empty_path<'a>(draft: &'a Draft) -> Option<&'a str> {
+    let is_path = |key: Key| {
+        let mut flags = draft.flags.iter();
+        flags.any(|f| f.key == key && f.ty == Ty::Path)
+    };
+    let empty = |given: &&grammar::Given| given.values.iter().any(String::is_empty);
+    let mut options = draft.parsed.given.iter().filter(|g| is_path(g.key));
+    // Only `write` takes a positional argument, its PATH.
+    let path =
+        matches!(draft.what, What::Write) && draft.parsed.positional.iter().any(String::is_empty);
+    options
+        .find(empty)
+        .map(|given| given.spelled.as_str())
+        .or_else(|| path.then_some("PATH"))
+}
+
 /// Step `number` with its arguments parsed, and the arguments that belong
 /// to the chain refused.
 fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
@@ -264,6 +284,9 @@ fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
     };
     let label = format!("step {number} ({name})");
     let parsed = grammar::parse(name, &flags, &spec.args).map_err(|mut error| {
+        if let Some(belongs) = chain_option_on_step(&error, &place(spec, &label)) {
+            return belongs;
+        }
         error.what = format!("{}: {}", place(spec, &label), error.what);
         VERB.clone_into(&mut error.verb);
         // `write` is a step, not a verb: the chain's help lists its options.
@@ -281,6 +304,11 @@ fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
         flags,
         parsed,
     };
+    if let Some(spelled) = empty_path(&draft) {
+        return Err(draft
+            .usage(format!("{spelled} names no file: its value is empty"))
+            .from(spelled));
+    }
     let What::Tool(verb, role) = draft.what else {
         return Ok(draft);
     };
@@ -299,12 +327,7 @@ fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
         .iter()
         .find(|given| CHAIN_KEYS.contains(&given.key))
     {
-        return Err(draft
-            .usage(format!(
-                "{} belongs to the chain: give it before the first +",
-                given.spelled
-            ))
-            .from(given.spelled.clone()));
+        return Err(belongs_to_chain(&draft.place(), &given.spelled));
     }
     if let (Role::Transform, Files::Bam, Some(given)) =
         (role, verb.files, draft.parsed.last(Key::Output))
@@ -863,6 +886,10 @@ fn reference(spec: &Spec, source: &Path) -> Result<bool, VerbError> {
 /// it names a directory, else `./` plus the source name.
 fn prefix(spec: &Spec, source: &str) -> Result<(PathBuf, PrefixOrigin), VerbError> {
     match spec.prefix.as_deref() {
+        // It would name hidden files: `.insert_size_metrics`.
+        Some("") => Err(usage("the output prefix is empty")
+            .from("-o")
+            .hint(EMPTY_PREFIX_HINT)),
         Some("-") => Err(
             usage("standard output takes one file; a chain writes several")
                 .from("-o")
@@ -929,85 +956,6 @@ fn also(spec: &Spec) -> Result<Vec<Also>, VerbError> {
     Ok(formats)
 }
 
-/// Every planned file is claimed by its step: two steps that name one
-/// file are a usage error.
-fn claim_outputs(steps: &[Planned], report: Option<&Path>) -> Result<Outputs, VerbError> {
-    let mut outputs = Outputs::default();
-    for step in steps {
-        for file in &step.files {
-            outputs.claim(&step.label, &file.path).map_err(|e| {
-                VerbError::core(VERB, &e)
-                    .hint("a step's own -o names another file (bammetrics chain --help)")
-            })?;
-        }
-    }
-    if let Some(report) = report {
-        outputs
-            .claim("--also markdown", report)
-            .map_err(|e| VerbError::core(VERB, &e))?;
-    }
-    Ok(outputs)
-}
-
-/// The files a chain reads: the source, the reference with its index, and
-/// every file a step reads by name. The same file through a link or `..`
-/// counts as one.
-fn inputs_of(source: &Path, reference: Option<&Path>, steps: &[Planned]) -> Outputs {
-    let mut inputs = Outputs::default();
-    let fai = reference.map(|reference| with_suffix(reference, ".fai"));
-    let read = std::iter::once(source)
-        .chain(reference)
-        .chain(fai.as_deref())
-        .chain(
-            steps
-                .iter()
-                .flat_map(|step| &step.inputs)
-                .map(PathBuf::as_path),
-        );
-    for path in read {
-        // One file read by several steps is claimed once; the error of a
-        // second claim says nothing new.
-        let _ = inputs.claim("an input", path);
-    }
-    inputs
-}
-
-/// A planned file that is a file the chain reads would destroy it: a usage
-/// error.
-fn refuse_overwriting_inputs(
-    inputs: &Outputs,
-    steps: &[Planned],
-    report: Option<&Path>,
-) -> Result<(), VerbError> {
-    let also = "--also markdown".to_owned();
-    let planned = steps
-        .iter()
-        .flat_map(|step| step.files.iter().map(move |file| (&step.label, &file.path)))
-        .map(|(label, path)| (label, path.as_path()))
-        .chain(report.map(|report| (&also, report)));
-    for (label, path) in planned {
-        if inputs.owner(path).is_some() {
-            return Err(usage(format!(
-                "{label}: {} is an input; writing it would destroy it",
-                path.display()
-            )));
-        }
-    }
-    Ok(())
-}
-
-/// At most one step writes standard output.
-fn check_one_stdout(steps: &[Planned]) -> Result<(), VerbError> {
-    let mut writers = steps.iter().filter(|step| step.stdout);
-    match (writers.next(), writers.next()) {
-        (Some(first), Some(second)) => Err(usage(format!(
-            "{} and {} both write standard output; it takes one file",
-            first.label, second.label
-        ))),
-        _ => Ok(()),
-    }
-}
-
 /// Prepare: everything checked and named, nothing read or written.
 pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
     let (source, source_path) = source(spec)?;
@@ -1062,7 +1010,12 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
     check_one_stdout(&steps)?;
     let outputs = claim_outputs(&steps, report.as_deref())?;
     let reference = spec.reference.as_ref().map(PathBuf::from);
-    let inputs = inputs_of(&source_path, reference.as_deref(), &steps);
+    let read = Read {
+        source: &source_path,
+        reference: reference.as_deref(),
+        plan_file: spec.plan_file.as_deref().map(Path::new),
+    };
+    let inputs = inputs_of(&read, &steps);
     refuse_overwriting_inputs(&inputs, &steps, report.as_deref())?;
     Ok(Chain {
         source,

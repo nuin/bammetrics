@@ -1194,6 +1194,193 @@ fn a_file_under_a_prefix_never_replaces_the_file_of_another_step() {
     fs::remove_dir_all(&dir).expect("cleanup");
 }
 
+/// The plan file is a file the chain reads: a step that names it as its
+/// output, by its name, through a symbolic link, a hard link or `..`, is a
+/// usage error, and so is a report or a late file that would land on it.
+/// The plan keeps its bytes and nothing else is written.
+#[test]
+fn no_step_writes_the_plan_file() {
+    let dir = fresh_dir("plan-input");
+    let plan = dir.join("plan.toml");
+    let path = |name: &str| dir.join(name).display().to_string();
+    std::os::unix::fs::symlink(&plan, dir.join("link.toml")).expect("a symbolic link");
+    fs::create_dir_all(dir.join("sub")).expect("a directory");
+    let source = root().join(FIXTURE.0).display().to_string();
+    let write_plan = |body: &str| {
+        let text = format!("[chain]\nsource = \"{source}\"\n{body}");
+        fs::write(&plan, &text).expect("write the plan");
+        text
+    };
+    let spellings = [
+        path("plan.toml"),
+        path("link.toml"),
+        path("hard.toml"),
+        path("sub/../plan.toml"),
+    ];
+    for output in &spellings {
+        let text = write_plan(&format!(
+            "[[step]]\nverb = \"quality-yield\"\n\n[[step]]\nverb = \"insert-size\"\n\
+             output = \"{output}\"\n"
+        ));
+        let _ = fs::remove_file(dir.join("hard.toml"));
+        fs::hard_link(&plan, dir.join("hard.toml")).expect("a hard link");
+        // Through `--plan` under each of its names too.
+        for given in [&path("plan.toml"), &path("link.toml")] {
+            let (code, stderr) = chain(&["--plan", given, "-o", &path("s")]);
+            assert_eq!(code, Some(2), "{output} as {given}: {stderr}");
+            assert!(
+                stderr.contains(&format!(
+                    "step 2 (insert-size): {output} is an input; writing it would destroy it"
+                )),
+                "{stderr}"
+            );
+            assert_eq!(fs::read_to_string(&plan).expect("the plan"), text);
+        }
+        assert_eq!(
+            names(&dir),
+            ["hard.toml", "link.toml", "plan.toml", "sub"],
+            "{output}"
+        );
+    }
+    fs::remove_file(dir.join("hard.toml")).expect("remove the hard link");
+    // A further format beside a metrics file, and the markdown report.
+    let sibling = dir.join("q.txt.json");
+    let cases = [
+        (
+            sibling.clone(),
+            format!(
+                "format = \"picard,json\"\n[[step]]\nverb = \"quality-yield\"\noutput = \"{}\"\n",
+                path("q.txt")
+            ),
+            format!("step 1 (quality-yield): {}", sibling.display()),
+        ),
+        (
+            dir.join("s.report.md"),
+            "also = \"markdown\"\n[[step]]\nverb = \"quality-yield\"\n".to_owned(),
+            format!("--also markdown: {}", path("s.report.md")),
+        ),
+    ];
+    for (file, body, start) in cases {
+        let text = format!("[chain]\nsource = \"{source}\"\n{body}");
+        fs::write(&file, &text).expect("write the plan");
+        let given = file.display().to_string();
+        let (code, stderr) = chain(&["--plan", &given, "-o", &path("s")]);
+        assert_eq!(code, Some(2), "{stderr}");
+        assert!(
+            stderr.contains(&format!("{start} is an input; writing it would destroy it")),
+            "{stderr}"
+        );
+        assert_eq!(fs::read_to_string(&file).expect("the plan"), text);
+        fs::remove_file(&file).expect("remove the plan");
+    }
+    // A file a tool names when it finishes: the tool fails alone.
+    let late = dir.join("art.pre_adapter_detail_metrics");
+    let text = format!(
+        "[chain]\nsource = \"{}\"\nreference = \"{}\"\n[[step]]\n\
+         verb = \"sequencing-artifact\"\n",
+        root().join("tests/data/artifact.bam").display(),
+        root().join(FIXTURE.1).display()
+    );
+    fs::write(&late, &text).expect("write the plan");
+    let (code, stderr) = chain(&["--plan", &late.display().to_string(), "-o", &path("art")]);
+    assert_eq!(code, Some(1), "{stderr}");
+    assert!(
+        stderr.contains(&format!(
+            "step 1 (sequencing-artifact): failed alone: {} is an input; writing it would \
+             destroy it",
+            late.display()
+        )),
+        "{stderr}"
+    );
+    assert_eq!(fs::read_to_string(&late).expect("the plan"), text);
+    assert_eq!(
+        names(&dir),
+        [
+            "art.pre_adapter_detail_metrics",
+            "link.toml",
+            "plan.toml",
+            "sub"
+        ]
+    );
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+/// A pipe that holds no BAM, or a cut one, fails under the name of
+/// standard input in front of a transform too: the copy the transform
+/// reads twice is never named.
+#[test]
+fn a_bad_pipe_fails_under_the_name_of_standard_input() {
+    use std::io::Write as _;
+    use std::process::Stdio;
+
+    let dir = fresh_dir("bad-pipe");
+    let tmp = dir.join("tmp");
+    fs::create_dir_all(&tmp).expect("temporary directory");
+    let bam = fs::read(root().join(FIXTURE.0)).expect("fixture");
+    let piped = |bytes: &[u8], args: &[&str]| {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+            .args(args)
+            .current_dir(root())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("run bammetrics");
+        child
+            .stdin
+            .take()
+            .expect("a pipe")
+            .write_all(bytes)
+            .expect("write the bytes");
+        let output = child.wait_with_output().expect("exit");
+        (
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr).into_owned(),
+        )
+    };
+    let tmp_dir = tmp.display().to_string();
+    let prefix = dir.join("s").display().to_string();
+    let chained = [
+        "chain",
+        "-",
+        "--tmp-dir",
+        &tmp_dir,
+        "-o",
+        &prefix,
+        "+",
+        "mark-duplicates",
+        "+",
+        "insert-size",
+    ];
+    let tool = [
+        "MarkDuplicates",
+        "I=/dev/stdin",
+        &format!("O={}", dir.join("out.bam").display()),
+        &format!("M={}", dir.join("out.txt").display()),
+        &format!("TMP_DIR={tmp_dir}"),
+    ];
+    // The tool names no file for a record it cannot read (`bad record`).
+    let not_a_bam = "/dev/stdin: not a BAM or CRAM file";
+    let cases: [(&[u8], &str, &str); 2] = [
+        (b"not a bam\n", not_a_bam, not_a_bam),
+        (&bam[..600], "/dev/stdin: truncated BAM", "bad record"),
+    ];
+    for (bytes, in_chain, in_tool) in cases {
+        for (args, cause) in [(&chained[..], in_chain), (&tool[..], in_tool)] {
+            let (code, stderr) = piped(bytes, args);
+            assert_eq!(code, Some(1), "{args:?}: {stderr}");
+            assert!(stderr.contains(cause), "{args:?}: {stderr}");
+            assert!(
+                !stderr.contains("bammetrics-markdup.") && !stderr.contains(".tmp"),
+                "{args:?}: {stderr}"
+            );
+            assert!(names(&tmp).is_empty(), "{args:?}: {:?}", names(&tmp));
+        }
+    }
+    assert_eq!(names(&dir), ["tmp"]);
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
 /// What `write` cannot do is said: an index of a stream that is not
 /// coordinate sorted is not written, with a note.
 #[test]
@@ -1297,7 +1484,7 @@ fn usage_errors_exit_2_before_anything_runs() {
     let cram = file("out.cram");
     let fastq = file("out.fastq.gz");
     let source = FIXTURE.0;
-    let cases: [(&[&str], &str); 24] = [
+    let cases: [(&[&str], &str); 33] = [
         (&[source, "+", "write", &sam], "step 1 (write): "),
         (
             &[source, "+", "mark-duplicates", "+", "write", &cram],
@@ -1406,6 +1593,55 @@ fn usage_errors_exit_2_before_anything_runs() {
             &[source, "+", "mark-duplicates", "--as", "in"],
             "step 1 (mark-duplicates): the stream name in is taken",
         ),
+        // A chain option after the first + says where it belongs; the
+        // step's parser would offer --as for --also.
+        (
+            &[source, "+", "insert-size", "--also", "json"],
+            "step 1 (insert-size): --also belongs to the chain: give it before the first + \
+             (from --also)",
+        ),
+        (
+            &[source, "+", "insert-size", "--plan", "p.toml"],
+            "step 1 (insert-size): --plan belongs to the chain: give it before the first +",
+        ),
+        (
+            &[
+                source,
+                "+",
+                "quality-yield",
+                "+",
+                "write",
+                "--index",
+                "--dry-run",
+            ],
+            "step 2 (write): --dry-run belongs to the chain: give it before the first +",
+        ),
+        (
+            &[source, "+", "insert-size", "--output-prefix", "x"],
+            "step 1 (insert-size): --output-prefix belongs to the chain: give it before the \
+             first + (from --output-prefix)\n  a step's own file is -o FILE",
+        ),
+        (
+            &[source, "+", "write", "--threads", "2"],
+            "step 1 (write): --threads belongs to the chain",
+        ),
+        // A file named by an empty value.
+        (
+            &[source, "+", "insert-size", "-o", ""],
+            "step 1 (insert-size): -o names no file: its value is empty (from -o)",
+        ),
+        (
+            &[source, "+", "gc-bias", "--summary-output="],
+            "step 1 (gc-bias): --summary-output names no file: its value is empty",
+        ),
+        (
+            &[source, "+", "mark-duplicates", "--metrics-file", ""],
+            "step 1 (mark-duplicates): --metrics-file names no file: its value is empty",
+        ),
+        (
+            &[source, "+", "write", ""],
+            "step 1 (write): PATH names no file: its value is empty",
+        ),
     ];
     for (args, text) in cases {
         let mut argv = vec!["-o", prefix.as_str()];
@@ -1416,6 +1652,25 @@ fn usage_errors_exit_2_before_anything_runs() {
         assert!(stderr.contains(text), "{argv:?}: {stderr}");
     }
     assert!(names(&dir).is_empty());
+    // An empty prefix would name hidden files in the working directory
+    // (`.insert_size_metrics`): a usage error, as `qc -o ''` is.
+    for args in [
+        &["-o", "", source, "+", "insert-size"][..],
+        &["--output-prefix=", source, "+", "insert-size"],
+        &["O=", source, "+", "gc-bias", "-R", FIXTURE.1],
+    ] {
+        let (code, stderr) = chain(args);
+        assert_eq!(code, Some(2), "{args:?}: {stderr}");
+        assert!(
+            stderr.starts_with(
+                "bammetrics chain: the output prefix is empty (from -o)\n  leave the prefix out"
+            ),
+            "{stderr}"
+        );
+    }
+    for hidden in [".insert_size_metrics", ".gc_bias.detail_metrics"] {
+        assert!(!root().join(hidden).exists(), "{hidden}");
+    }
     // An input that is not there exits 1, as on every verb.
     for args in [
         &["tests/data/nope.bam", "+", "quality-yield"][..],

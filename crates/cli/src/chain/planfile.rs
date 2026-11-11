@@ -25,18 +25,24 @@
 //! `[[step]]` is `verb`, or the long name of an option of that verb (its
 //! Picard name works too). A repeatable option takes a list. Every key is
 //! checked here, with the line it is on; an unknown one is an error with
-//! the closest name.
+//! the closest name, and so is an option given twice, under one spelling
+//! or two. [`read`] records the file in [`Spec::plan_file`]: the chain
+//! reads it, so no step may write it.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::io;
 use std::path::Path;
 
 use bammetrics_core::registry::{Ty, did_you_mean};
 use bammetrics_core::toml::{Entry, Scalar, Table, parse_tables};
 
-use super::args::{find_step, step_parser_flags, unknown_step, write_flags};
-use super::{Spec, StepSpec, VERB, WRITE};
+use super::args::{
+    CHAIN_KEYS as CHAIN_FLAGS, chain_option, find_step, step_parser_flags, unknown_step,
+    write_flags,
+};
+use super::{EMPTY_PREFIX_HINT, Spec, StepSpec, VERB, WRITE};
 use crate::error::VerbError;
-use crate::grammar::{self, Flag};
+use crate::grammar::{self, Flag, Key};
 
 /// The keys of `[chain]`.
 const CHAIN_KEYS: [&str; 10] = [
@@ -164,7 +170,15 @@ fn chain_table(at: &At, table: &Table, spec: &mut Spec) -> Result<(), VerbError>
         check_no_repeat(at, &mut seen, entry)?;
         match entry.key.as_str() {
             "source" => spec.source = Some(string(at, entry)?),
-            "output-prefix" => spec.prefix = Some(string(at, entry)?),
+            "output-prefix" => {
+                let prefix = string(at, entry)?;
+                if prefix.is_empty() {
+                    return Err(at
+                        .error(entry.line, "output-prefix is empty")
+                        .hint(EMPTY_PREFIX_HINT));
+                }
+                spec.prefix = Some(prefix);
+            }
             "reference" => spec.reference = Some(string(at, entry)?),
             "tmp-dir" => spec.tmp_dir = Some(string(at, entry)?),
             "sample" => spec.sample = Some(string(at, entry)?),
@@ -204,15 +218,39 @@ fn option_args(at: &At, label: &str, flag: &Flag, entry: &Entry) -> Result<Vec<S
         Scalar::List(items) => items,
         one => std::slice::from_ref(one),
     };
+    // A number stands for its text as the one value of a text option
+    // (`program-record-id = 7`); a list of texts holds strings only.
+    let listed = matches!(entry.value, Scalar::List(_));
+    let is_text = matches!(flag.ty, Ty::Text | Ty::Path);
     items
         .iter()
         .map(|item| {
-            let text = scalar_text(item).filter(|_| fits(flag.ty, item));
+            let fits = fits(flag.ty, item) && !(listed && is_text && !is_string(item));
+            let text = scalar_text(item).filter(|_| fits);
             let text = text
                 .ok_or_else(|| bad(format!("expected {}, got {}", wanted(flag.ty), item.kind())))?;
             Ok(format!("--{}={text}", flag.long))
         })
         .collect()
+}
+
+fn is_string(value: &Scalar) -> bool {
+    matches!(value, Scalar::Str(_))
+}
+
+/// Where a chain option goes in a plan file: its key of `[chain]`, or the
+/// command line for one without a key (`--plan`, `--dry-run`).
+fn chain_place(chain: &Flag) -> String {
+    let key = if chain.key == Key::Input {
+        "source"
+    } else {
+        chain.long.as_str()
+    };
+    if CHAIN_KEYS.contains(&key) {
+        format!("{key} under [chain]")
+    } else {
+        format!("--{} on the command line", chain.long)
+    }
 }
 
 /// One `[[step]]` table as a step: `number` counts from 1.
@@ -241,12 +279,35 @@ fn step_table(at: &At, table: &Table, number: usize) -> Result<StepSpec, VerbErr
     let label = format!("step {number} ({name})");
     let mut args = Vec::new();
     let mut seen = HashSet::new();
+    // The option each key names, by its long name: two spellings of one
+    // option (`minimum-pct` and `MINIMUM_PCT`) are one key given twice.
+    let mut options: HashMap<&str, &Entry> = HashMap::new();
     for entry in &table.entries {
         check_no_repeat(at, &mut seen, entry)?;
         if entry.key == "verb" {
             continue;
         }
-        let Some(flag) = grammar::lookup(&flags, &entry.key) else {
+        let found = grammar::lookup(&flags, &entry.key);
+        // A chain option: one the verb's own flags hold (`threads`), or
+        // one no step has (`also`).
+        let of_chain = match found {
+            Some(flag) if CHAIN_FLAGS.contains(&flag.key) => {
+                chain_option(&format!("--{}", flag.long))
+            }
+            Some(_) => None,
+            None => chain_option(&format!("--{}", entry.key)),
+        };
+        if let Some(chain) = of_chain {
+            return Err(at.error(
+                entry.line,
+                format!(
+                    "{label}: {} belongs to the chain: write {}",
+                    entry.key,
+                    chain_place(&chain)
+                ),
+            ));
+        }
+        let Some(flag) = found else {
             let mut error = at.error(entry.line, format!("{label}: unknown key {}", entry.key));
             if let Some(best) = grammar::closest(&flags, &entry.key) {
                 error = error.hint(format!("did you mean {best}?"));
@@ -255,6 +316,15 @@ fn step_table(at: &At, table: &Table, number: usize) -> Result<StepSpec, VerbErr
                 "every option: bammetrics chain BAM + {name} --help"
             )));
         };
+        if let Some(first) = options.insert(flag.long.as_str(), entry) {
+            return Err(at.error(
+                entry.line,
+                format!(
+                    "{label}: {} is given twice: line {} spells it {}",
+                    entry.key, first.line, first.key
+                ),
+            ));
+        }
         args.extend(option_args(at, &label, flag, entry)?);
     }
     Ok(StepSpec {
@@ -303,11 +373,26 @@ pub fn parse(text: &str, file: &str) -> Result<Spec, VerbError> {
     Ok(spec)
 }
 
-/// The plan file at `path`.
+/// The plan file at `path`. A file that cannot be read is an input error
+/// (exit 1); one that is not UTF-8 text is no plan, a usage error (exit 2)
+/// as every other malformed plan.
 pub fn read(path: &Path) -> Result<Spec, VerbError> {
-    let text = std::fs::read_to_string(path)
-        .map_err(|e| VerbError::input(VERB, format!("{}: {e}", path.display())).from("--plan"))?;
-    parse(&text, &path.display().to_string())
+    let file = path.display().to_string();
+    let text = std::fs::read_to_string(path).map_err(|e| {
+        if e.kind() == io::ErrorKind::InvalidData {
+            VerbError::usage(
+                VERB,
+                format!("{file}: not a plan file: it is not UTF-8 text"),
+            )
+            .from("--plan")
+            .hint("a plan file is TOML text (docs/chaining.md)")
+        } else {
+            VerbError::input(VERB, format!("{file}: {e}")).from("--plan")
+        }
+    })?;
+    let mut spec = parse(&text, &file)?;
+    spec.plan_file = Some(file);
+    Ok(spec)
 }
 
 #[cfg(test)]
@@ -455,11 +540,65 @@ mod tests {
                 "[[step]]\nverb = unquoted\n",
                 "p.toml:2: verb: expected a quoted string",
             ),
+            (
+                "[[step]]\nverb = \"insert-size\"\nminimum-pct = 0.1\nMINIMUM_PCT = 0.9\n",
+                "p.toml:4: step 1 (insert-size): MINIMUM_PCT is given twice: line 3 spells it \
+                 minimum-pct",
+            ),
+            (
+                "[[step]]\nverb = \"insert-size\"\nlevel = [\"SAMPLE\"]\n\
+                 metric-accumulation-level = [\"LIBRARY\"]\n",
+                "p.toml:4: step 1 (insert-size): metric-accumulation-level is given twice: line \
+                 3 spells it level",
+            ),
+            (
+                "[[step]]\nverb = \"write\"\nindex = true\nCREATE_INDEX = false\n",
+                "p.toml:4: step 1 (write): CREATE_INDEX is given twice: line 3 spells it index",
+            ),
+            (
+                "[[step]]\nverb = \"insert-size\"\nlevel = [1, \"SAMPLE\"]\n",
+                "p.toml:3: step 1 (insert-size): level: expected a string, got an integer",
+            ),
+            (
+                "[[step]]\nverb = \"mark-duplicates\"\ncomment = [\"a\", 2.5]\n",
+                "p.toml:3: step 1 (mark-duplicates): comment: expected a string, got a decimal",
+            ),
+            (
+                "[[step]]\nverb = \"insert-size\"\nminimum-pct = 1e400\n",
+                "p.toml:3: minimum-pct: expected a quoted string, a number, true or false",
+            ),
+            (
+                "[chain]\noutput-prefix = \"\"\n",
+                "p.toml:2: output-prefix is empty\n  leave the prefix out",
+            ),
+            (
+                "[chain]\nalso = [\n  \"json\"\n]\n",
+                "p.toml:2: also: expected a quoted string, a number, true or false, got \"[\" \
+                 (multi-line arrays are not read: write the array on one line)",
+            ),
+            (
+                "[chain]\nsource = 'in.bam'\n",
+                "(literal strings in single quotes are not read: use double quotes)",
+            ),
         ];
         for (text, needle) in cases {
-            let error = parse(text, "p.toml").expect_err(text).to_string();
+            let error = parse(text, "p.toml").expect_err(text);
+            assert_eq!(error.code, 2, "{text:?}");
+            let error = error.to_string();
             assert!(error.contains(needle), "{text:?}: {error}");
         }
+    }
+
+    /// One number is the text of a text option; a byte order mark and the
+    /// escapes of a TOML basic string are read.
+    #[test]
+    fn a_number_is_the_text_of_one_text_value() {
+        let text = "\u{feff}[chain]\nsource = \"caf\\u00e9.bam\"\n[[step]]\n\
+                    verb = \"mark-duplicates\"\nprogram-record-id = 7\n";
+        let spec = parse(text, "p.toml").expect("parses");
+        assert_eq!(spec.source.as_deref(), Some("caf\u{e9}.bam"));
+        assert_eq!(spec.steps[0].args, ["--program-record-id=7"]);
+        assert_eq!(spec.plan_file, None);
     }
 
     #[test]
@@ -467,5 +606,28 @@ mod tests {
         let error = read(Path::new("tests/data/no-such-plan.toml")).expect_err("absent");
         assert_eq!(error.code, 1);
         assert!(error.to_string().ends_with("(from --plan)"), "{error}");
+    }
+
+    /// A file that is not UTF-8 text is no plan: a usage error, as a plan
+    /// that does not parse. A plan that is read names its file as an input.
+    #[test]
+    fn a_file_that_is_not_text_is_a_usage_error() {
+        let dir = std::env::temp_dir().join(format!("bammetrics-planfile-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let binary = dir.join("binary.toml");
+        std::fs::write(&binary, [0xff, 0xfe, 0x00]).expect("write");
+        let error = read(&binary).expect_err("not text");
+        assert_eq!(error.code, 2);
+        assert!(
+            error
+                .to_string()
+                .contains("not a plan file: it is not UTF-8 text (from --plan)"),
+            "{error}"
+        );
+        let plan = dir.join("plan.toml");
+        std::fs::write(&plan, "[chain]\nsource = \"in.bam\"\n").expect("write");
+        let spec = read(&plan).expect("a plan");
+        assert_eq!(spec.plan_file, Some(plan.display().to_string()));
+        std::fs::remove_dir_all(&dir).expect("remove the temp dir");
     }
 }

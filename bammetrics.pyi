@@ -1203,9 +1203,11 @@ def step(verb: _StepVerb | str, /, **options: Any) -> Step:
     """One step of chain(): a tool verb in snake case (insert_size), its Picard class, or
     write. The keywords are those of the tool's function (minimum_pct=0.1) without its
     input, plus output (the step's own file, or prefix for a tool that writes several),
-    format, and as_ on a transform (the name of the stream it leaves). write takes
-    output, index, md5 and compression_level. An unknown verb or keyword raises
-    UsageError here, with the closest name."""
+    format, panel on hs_metrics (baits and targets in one file), and as_ on a transform
+    (the name of the stream it leaves). write takes output, index, md5 and
+    compression_level. An unknown verb or keyword raises UsageError here, with the
+    closest name; so does a float that is NaN or infinite, and a list of texts with an
+    item that is not a str."""
 
 @overload
 def chain(

@@ -1,0 +1,9 @@
+## argv
+chain
+--plan
+tests/data/chain_writes_plan.toml
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (insert-size): tests/data/chain_writes_plan.toml is an input; writing it would destroy it

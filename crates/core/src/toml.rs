@@ -6,10 +6,14 @@
 //! two formats need and rejects the rest with a line number: full-line and
 //! trailing `#` comments, a `[name]` table, a `[[name]]` array of tables,
 //! and `key = value` lines where the value is a basic string in double
-//! quotes (escapes `\"`, `\\`, `\n`, `\t`), an integer, a decimal, `true`
-//! or `false`, or a one-line array of those (`["a", "b"]`). Keys are bare
-//! (`[A-Za-z0-9_-]`). Not accepted: dotted or quoted keys, inline tables,
-//! nested or multi-line arrays, multi-line or literal strings, dates.
+//! quotes (every escape of a TOML basic string: `\"`, `\\`, `\b`, `\t`,
+//! `\n`, `\f`, `\r`, `\uXXXX`, `\UXXXXXXXX`), an integer, a decimal,
+//! `true` or `false`, or a one-line array of those (`["a", "b"]`). Keys
+//! are bare (`[A-Za-z0-9_-]`). A UTF-8 byte order mark in front of the
+//! first line is skipped. Not accepted: dotted or quoted keys, inline
+//! tables, nested or multi-line arrays, multi-line or literal strings,
+//! dates, `inf` and `nan`. The error for a value in one of those forms
+//! names the form (`unread`).
 //!
 //! Decision 4 of docs/05 (the `toml` crate or a hand-written format) is
 //! hand-written. [`parse_tables`] is the one function a switch to the
@@ -97,6 +101,7 @@ fn table_header(content: &str) -> Option<Result<(String, bool), String>> {
 /// any table header is an error: both formats keep every key under a table.
 pub fn parse_tables(text: &str) -> Result<Vec<Table>, ParseError> {
     let mut tables: Vec<Table> = Vec::new();
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     for (index, raw) in text.lines().enumerate() {
         let line = index + 1;
         let bad = |message: String| ParseError { line, message };
@@ -119,8 +124,9 @@ pub fn parse_tables(text: &str) -> Result<Vec<Table>, ParseError> {
             .ok_or_else(|| bad("expected [table], [[table]] or key = value".to_owned()))?;
         let key = bare_key(key.trim()).ok_or_else(|| bad(format!("bad key {:?}", key.trim())))?;
         let value = parse_value(value.trim()).ok_or_else(|| {
+            let form = unread(value.trim()).map_or_else(String::new, |why| format!(" ({why})"));
             bad(format!(
-                "{key}: expected a quoted string, a number, true or false, got {:?}",
+                "{key}: expected a quoted string, a number, true or false, got {:?}{form}",
                 value.trim()
             ))
         })?;
@@ -130,6 +136,31 @@ pub fn parse_tables(text: &str) -> Result<Vec<Table>, ParseError> {
         table.entries.push(Entry { key, value, line });
     }
     Ok(tables)
+}
+
+/// The opening brace of an inline table.
+const INLINE_TABLE: char = '\u{7b}';
+
+/// The TOML form of a value [`parse_value`] rejects, when it is one this
+/// reader leaves out: what the error says after the value.
+fn unread(value: &str) -> Option<&'static str> {
+    let array = value.starts_with('[');
+    let item = value.trim_start_matches('[').trim_start();
+    if item.starts_with("\"\"\"") || item.starts_with("'''") {
+        Some("multi-line strings are not read: write one line in double quotes")
+    } else if item.starts_with('\'') {
+        Some("literal strings in single quotes are not read: use double quotes")
+    } else if array && !value.ends_with(']') {
+        Some("multi-line arrays are not read: write the array on one line")
+    } else if array && value[1..].trim_start().starts_with('[') {
+        Some("nested arrays are not read")
+    } else if item.starts_with(INLINE_TABLE) {
+        Some("inline tables are not read")
+    } else if matches!(item.trim_start_matches(['+', '-']), "inf" | "nan") {
+        Some("inf and nan are not read")
+    } else {
+        None
+    }
 }
 
 /// The line without a trailing `#` comment; a `#` inside a quoted string
@@ -220,11 +251,22 @@ fn parse_scalar(text: &str) -> Option<Scalar> {
     if !plain {
         return None;
     }
-    text.parse::<f64>().ok().map(Scalar::Float)
+    // `1e400` overflows to infinity: no value of an option.
+    let float = text.parse::<f64>().ok().filter(|x| x.is_finite());
+    float.map(Scalar::Float)
 }
 
-/// The text between the quotes with TOML's basic escapes applied; `None`
-/// for an unknown escape or an unescaped `"` inside.
+/// The character of `\uXXXX` (`digits` 4) or `\UXXXXXXXX` (`digits` 8):
+/// exactly that many hexadecimal digits naming a Unicode scalar value.
+fn unicode_escape(chars: &mut std::str::Chars, digits: usize) -> Option<char> {
+    let hex: String = chars.take(digits).collect();
+    let valid = hex.len() == digits && hex.bytes().all(|b| b.is_ascii_hexdigit());
+    let code = valid.then(|| u32::from_str_radix(&hex, 16).ok()).flatten();
+    code.and_then(char::from_u32)
+}
+
+/// The text between the quotes with the escapes of a TOML basic string
+/// applied; `None` for an unknown escape or an unescaped `"` inside.
 fn unescape(inner: &str) -> Option<String> {
     let mut out = String::with_capacity(inner.len());
     let mut chars = inner.chars();
@@ -233,8 +275,13 @@ fn unescape(inner: &str) -> Option<String> {
             '\\' => out.push(match chars.next()? {
                 '"' => '"',
                 '\\' => '\\',
-                'n' => '\n',
+                'b' => '\u{8}',
                 't' => '\t',
+                'n' => '\n',
+                'f' => '\u{c}',
+                'r' => '\r',
+                'u' => unicode_escape(&mut chars, 4)?,
+                'U' => unicode_escape(&mut chars, 8)?,
                 _ => return None,
             }),
             '"' => return None,
@@ -320,10 +367,81 @@ mod tests {
         assert_eq!(parse_scalar("0.5"), Some(Scalar::Float(0.5)));
         assert_eq!(parse_scalar("1e3"), Some(Scalar::Float(1000.0)));
         assert_eq!(parse_scalar("\"\""), Some(Scalar::Str(String::new())));
+        assert_eq!(parse_scalar("1e400"), None);
         assert_eq!(parse_scalar("inf"), None);
         assert_eq!(parse_scalar("nan"), None);
         assert_eq!(parse_scalar("'single'"), None);
         assert_eq!(parse_scalar("\"a\" \"b\""), None);
+    }
+
+    #[test]
+    fn every_escape_of_a_basic_string_is_read() {
+        assert_eq!(
+            unescape(r#"a\"b\\c\td\ne\rf\bg\fh"#).as_deref(),
+            Some("a\"b\\c\td\ne\rf\u{8}g\u{c}h")
+        );
+        assert_eq!(unescape(r"café").as_deref(), Some("caf\u{e9}"));
+        assert_eq!(unescape(r"\U0001F600!").as_deref(), Some("\u{1F600}!"));
+        // Too few digits, a digit that is not hexadecimal, a surrogate, a
+        // value past the last scalar, an escape TOML does not have, and a
+        // backslash at the end.
+        for bad in [r"\u00e", r"\u00zz", r"\uD800", r"\U00110000", r"\q", r"\"] {
+            assert_eq!(unescape(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_byte_order_mark_in_front_is_skipped() {
+        let tables = parse_tables("\u{feff}[chain]\nsource = \"a\"\n").expect("parses");
+        assert_eq!(tables[0].name, "chain");
+        assert_eq!(tables[0].entries[0].value, Scalar::Str("a".into()));
+        // Only in front of the first line.
+        assert!(parse_tables("[chain]\n\u{feff}source = \"a\"\n").is_err());
+    }
+
+    #[test]
+    fn a_rejected_value_names_the_toml_form_it_has() {
+        let cases = [
+            (
+                "x = [",
+                "(multi-line arrays are not read: write the array on one line)",
+            ),
+            (
+                "x = [\"a\",",
+                "(multi-line arrays are not read: write the array on one line)",
+            ),
+            (
+                "x = 'a'",
+                "(literal strings in single quotes are not read: use double quotes)",
+            ),
+            (
+                "x = ['a']",
+                "(literal strings in single quotes are not read: use double quotes)",
+            ),
+            (
+                "x = \"\"\"",
+                "(multi-line strings are not read: write one line in double quotes)",
+            ),
+            (
+                "x = '''a",
+                "(multi-line strings are not read: write one line in double quotes)",
+            ),
+            ("x = [[1], [2]]", "(nested arrays are not read)"),
+            ("x = { a = 1 }", "(inline tables are not read)"),
+            ("x = -inf", "(inf and nan are not read)"),
+            ("x = nan", "(inf and nan are not read)"),
+        ];
+        for (line, why) in cases {
+            let error = parse_tables(&format!("[t]\n{line}\n")).expect_err(line);
+            assert!(
+                error.message.contains("expected a quoted string"),
+                "{error}"
+            );
+            assert!(error.message.ends_with(why), "{line}: {error}");
+        }
+        // A value of no TOML form gets no such note.
+        let plain = parse_tables("[t]\nx = unquoted\n").expect_err("unquoted");
+        assert!(plain.message.ends_with("got \"unquoted\""), "{plain}");
     }
 
     #[test]

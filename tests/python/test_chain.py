@@ -212,6 +212,49 @@ def test_a_keyword_replaces_the_plan_files_value(tmp_path, monkeypatch):
                                "s.marked.duplication_metrics", "s.quality_yield_metrics"]
 
 
+def test_no_step_writes_the_plan_file(tmp_path):
+    """The chain reads its plan file, so a step that names it as its output
+    (by its name or through a link) is a UsageError and the plan stays whole;
+    a plan that is not text is one too."""
+    plan = tmp_path / "plan.toml"
+    link = tmp_path / "link.toml"
+    link.symlink_to(plan)
+    for output in (plan, link):
+        text = (f'[chain]\nsource = "{BAM}"\noutput-prefix = "{tmp_path / "s"}"\n'
+                f'[[step]]\nverb = "quality-yield"\n[[step]]\nverb = "insert-size"\n'
+                f'output = "{output}"\n')
+        plan.write_text(text)
+        for given in (plan, link):
+            with pytest.raises(bm.UsageError, match=r"step 2 \(insert-size\): .*\.toml is an "
+                                                    "input; writing it would destroy it"):
+                bm.chain(plan=given)
+            assert plan.read_text() == text
+    binary = tmp_path / "binary.toml"
+    binary.write_bytes(b"\xff\xfe\x00")
+    with pytest.raises(bm.UsageError, match=r"binary.toml: not a plan file: it is not UTF-8 "
+                                            r"text \(from --plan\)"):
+        bm.chain(plan=binary)
+    assert names(tmp_path) == ["binary.toml", "link.toml", "plan.toml"]
+
+
+def test_panel_names_the_baits_and_the_targets_of_hs_metrics(tmp_path):
+    """The command's error for missing intervals names --panel, so a step
+    takes panel= too: one file as BAIT_INTERVALS and TARGET_INTERVALS."""
+    targets = DATA / "targets.interval_list"
+    with pytest.raises(bm.UsageError, match="Use --panel FILE when baits and targets are the "
+                                            "same file"):
+        bm.chain(BAM, ["hs_metrics"], output=tmp_path / "none")
+    step = bm.step("hs_metrics", panel=targets, sample_size=1000)
+    assert step.args == [f"--panel={targets}", "--sample-size=1000"]
+    one = bm.chain(BAM, [step], reference=REFERENCE, output=tmp_path / "one")
+    bm.chain(BAM, [bm.step("hs_metrics", bait_intervals=targets, target_intervals=targets,
+                           sample_size=1000)],
+             reference=REFERENCE, output=tmp_path / "two")
+    assert list(one.metrics) == ["hs-metrics"]
+    assert body(tmp_path / "one.hs_metrics") == body(tmp_path / "two.hs_metrics")
+    assert all(copied == step for copied in round_trips(step))
+
+
 def test_stages_hold_each_steps_status_files_and_record_counts(tmp_path):
     run = bm.chain(MARKDUP, ["quality_yield", bm.step("mark_duplicates", as_="dedup",
                                                       remove_duplicates=True),
@@ -349,6 +392,20 @@ def test_a_step_is_checked_when_it_is_made():
      "step insert-size: output takes a str or os.PathLike, not int"),
     (lambda: bm.step("mark_duplicates", comment="a\0b"), bm.UsageError,
      "comment cannot hold a NUL byte"),
+    # A float no option can hold, and a list of texts with another type in it:
+    # found here, not when the tap is built.
+    (lambda: bm.step("insert_size", minimum_pct=float("nan")), bm.UsageError,
+     "step insert-size: minimum_pct takes a finite number, not nan"),
+    (lambda: bm.step("insert_size", minimum_pct=float("-inf")), bm.UsageError,
+     "minimum_pct takes a finite number, not -inf"),
+    (lambda: bm.step("mark_duplicates", program_record_id=float("inf")), bm.UsageError,
+     "program_record_id takes a finite number, not inf"),
+    (lambda: bm.step("insert_size", metric_accumulation_level=["SAMPLE", 1]), bm.UsageError,
+     "step insert-size: metric_accumulation_level takes a list of str, not one holding int"),
+    (lambda: bm.step("mark_duplicates", comment=("a", 2.5)), bm.UsageError,
+     "comment takes a list of str, not one holding float"),
+    (lambda: bm.step("insert_size", panel="targets.interval_list"), bm.UsageError,
+     'step insert-size: unknown keyword "panel"'),
     (lambda: bm.step(3), TypeError, "verb"),
 ])
 def test_a_misused_step_raises_when_it_is_made(call, error, message):
@@ -432,6 +489,18 @@ def test_a_step_takes_the_keywords_of_its_tools_function():
      bm.UsageError, "both write standard output; it takes one file"),
     (lambda out: bm.chain(DATA / "insert_size.cram", ["insert_size"], output=out), bm.UsageError,
      "is a CRAM: give the reference"),
+    # An empty prefix would name hidden files (.insert_size_metrics) in the
+    # working directory; an empty file name names no file.
+    (lambda out: bm.chain(BAM, ["insert_size"], output=""), bm.UsageError,
+     r"chain: the output prefix is empty \(from -o\)"),
+    (lambda out: bm.chain(BAM, [bm.step("insert_size", output="")], output=out), bm.UsageError,
+     r"step 1 \(insert-size\): --output names no file: its value is empty"),
+    (lambda out: bm.chain(BAM, [bm.step("write", output="")], output=out), bm.UsageError,
+     r"step 1 \(write\): --output names no file: its value is empty"),
+    (lambda out: bm.chain(BAM, ["insert_size"], output=out, also=["json", 1]), bm.UsageError,
+     "chain: also takes a list of str, not one holding int"),
+    (lambda out: bm.chain(BAM, ["insert_size"], output=out, sample=float("nan")),
+     bm.UsageError, "chain: sample takes a finite number, not nan"),
 ])
 def test_a_misused_chain_raises_before_anything_runs(tmp_path, call, error, message):
     with pytest.raises(error, match=message) as caught:

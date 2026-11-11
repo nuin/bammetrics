@@ -168,14 +168,14 @@ These are the two examples of docs/chaining.md. `tests/data/chain_markdup.toml` 
 |---|---|---|
 | `source` | the positional `BAM` | A BAM, or a CRAM with `reference`. `"-"` reads the standard input of the process. `None` when the plan file names it |
 | `steps` | `+ STEP ...` | A list of verb names and `step(...)` objects, in order. One name or one `Step` is a chain of one step |
-| `output` | `-o PREFIX` | The prefix of every step that names no file of its own. Default `./<source name>` |
+| `output` | `-o PREFIX` | The prefix of every step that names no file of its own. Default `./<source name>`. `""` raises `UsageError`: it would name hidden files (`.insert_size_metrics`) |
 | `reference` | `-R FASTA` | Decodes a CRAM source, and goes to every step that reads a reference and names none |
 | `threads` | `--threads N` | BGZF threads of each read and of `write` |
 | `tmp_dir` | `--tmp-dir DIR` | Where a transform spills and a piped source is copied |
 | `format` | `--format LIST` | `picard` first. `["picard", "json"]` adds `FILE.json` beside every metrics file |
 | `also` | `--also LIST` | `json`, `jsonl`, `tsv`, `csv` beside every metrics file, `markdown` as `PREFIX.report.md` |
 | `sample` | `--sample NAME` | The sample of the json forms and of `Run.sample` |
-| `plan` | `--plan FILE` | A TOML plan file in place of `steps`. A keyword given replaces the file's value. `steps` beside `plan` raises `UsageError` |
+| `plan` | `--plan FILE` | A TOML plan file in place of `steps`. A keyword given replaces the file's value. `steps` beside `plan` raises `UsageError`. Paths in the file are read relative to the working directory of the process, never to the file's directory. A step that names the plan file as its output raises `UsageError` |
 | `dry_run` | `--dry-run` | `True` returns the plan text as a str and runs nothing |
 
 `--quiet` and `--verbose` have no keyword: `chain` prints nothing. A core tool's own warning still goes to stderr. `write` to `"-"` writes the BAM to the standard output of the process, as the command does.
@@ -197,8 +197,10 @@ bm.step("wgs")                             # UsageError: CollectWgsMetrics ... c
 - The keywords are those of the tool's function in `bammetrics.pyi` (`registry::python_keywords`, the list the generated stub prints): `step("insert_size", minimum_pct=0.1)` takes what `collect_insert_size_metrics(bam, minimum_pct=0.1)` takes. `input` is refused: the chain's source feeds every step.
 - `output` is the step's own `-o`: the file of a tap that writes one file, a prefix for a tap that writes several (`gc_bias`). Without it the chain's prefix names the files. `mark_duplicates` takes no `output`, since a transform writes no BAM in a chain; `step("write", output=...)` after it writes the BAM, and `metrics_file` names its metrics.
 - `format` is the step's own `--format` list. `as_` on a transform is `--as NAME`, the name of the stream it leaves (`as` is a Python keyword).
+- `panel` on `hs_metrics` is the verb flag `--panel FILE`: one file as `bait_intervals` and `target_intervals`. The command's error for missing intervals names `--panel`, and `qc` takes `panel=` too.
 - `write` takes `output`, `index`, `md5` and `compression_level`.
-- A bool option takes `True` or `False`, an int option an int, a float option a number, a path a str or an `os.PathLike` (`TypeError` otherwise). A list or tuple is a repeated option (`metric_accumulation_level`, `comment`). `None` leaves the option out.
+- A bool option takes `True` or `False`, an int option an int, a float option a number, a path a str or an `os.PathLike` (`TypeError` otherwise). A text option takes a str, or one number as its text. A list or tuple is a repeated option (`metric_accumulation_level`, `comment`); a list of a text option holds `str` items only. `None` leaves the option out.
+- A float that is NaN or infinite is a `UsageError` here (`minimum_pct takes a finite number, not nan`). So is a list of a text option with another type in it (`metric_accumulation_level takes a list of str, not one holding int`). Neither waits for the tap to be built.
 
 `Step` fields: `verb` (as the command spells it, `insert-size`), `role` (`transform`, `tap` or `write`), `options` (the keywords given, a list kept as a tuple), `args` (what they spell for the command, `["--minimum-pct=0.1"]`). Two steps with the same verb and args are equal and hash alike. `Step(verb, **options)` is the same call as `step`.
 
@@ -231,7 +233,7 @@ bm.step("wgs")                             # UsageError: CollectWgsMetrics ... c
 |---|---|---|
 | every step finished | 0 | returns the `Run` |
 | a step failed | 1 | raises `InputError` after the other steps wrote their files. `.run` holds the `Run`, `run.errors` maps `step N (verb)` to each message, `run.stages` holds each status |
-| usage error, nothing ran | 2 | raises `UsageError` |
+| usage error, nothing ran (a plan file that is not UTF-8 text included) | 2 | raises `UsageError` |
 | the source, the reference or the plan file cannot be read, or an output cannot be written | 1 | raises `InputError` (`.run` is `None`) |
 
 A tap that fails fails alone: the other steps finish. A transform or `write` that fails stops its segment: the message names it and counts the rest (`1 step(s) failed: step 2 (mark-duplicates): ...; 1 stopped; 2 not run`).

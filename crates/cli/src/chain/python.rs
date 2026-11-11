@@ -197,8 +197,13 @@ fn unknown_step(name: &str) -> VerbError {
     error.hint(format!("steps: {}", names.join(", ")))
 }
 
+/// The verb flag `--panel FILE` of `hs-metrics`: baits and targets in one
+/// file.
+const PANEL: Key = Key::Own("panel");
+
 /// The keywords of a tool step: those of the tool's Python function that
-/// a step can take, then `format`, then `as_` on a transform.
+/// a step can take, then `panel` on `hs_metrics`, `format`, and `as_` on a
+/// transform.
 fn tool_keywords(verb: &Verb) -> (Vec<Keyword>, Vec<(&'static str, String)>) {
     let flags = step_flags(verb);
     let tool = verb.tool();
@@ -225,7 +230,10 @@ fn tool_keywords(verb: &Verb) -> (Vec<Keyword>, Vec<(&'static str, String)>) {
             keywords.push(Keyword::of(&keyword.name, flag));
         }
     }
-    let own = [(Key::Format, "format"), (AS, "as_")];
+    // `--panel` of `hs-metrics` is no row of the tool's table, so its
+    // function has no such keyword; the verb's missing-intervals error
+    // names it, and `qc` takes `panel=` too.
+    let own = [(PANEL, "panel"), (Key::Format, "format"), (AS, "as_")];
     for (key, name) in own {
         if let Some(flag) = flags.iter().find(|flag| flag.key == key) {
             keywords.push(Keyword::of(name, flag));
@@ -311,9 +319,11 @@ pub fn metric_key(chain: &Chain, step: &Planned, path: &Path) -> String {
 pub const STEP_DOC: &str = "One step of chain(): a tool verb in snake case (insert_size), its \
      Picard class, or write. The keywords are those of the tool's function (minimum_pct=0.1) \
      without its input, plus output (the step's own file, or prefix for a tool that writes \
-     several), format, and as_ on a transform (the name of the stream it leaves). write takes \
-     output, index, md5 and compression_level. An unknown verb or keyword raises UsageError \
-     here, with the closest name.";
+     several), format, panel on hs_metrics (baits and targets in one file), and as_ on a \
+     transform (the name of the stream it leaves). write takes output, index, md5 and \
+     compression_level. An unknown verb or keyword raises UsageError here, with the closest \
+     name; so does a float that is NaN or infinite, and a list of texts with an item that \
+     is not a str.";
 
 /// The docstring of `chain`.
 pub const CHAIN_DOC: &str = "bammetrics chain: several steps on one BAM in one process, the \
@@ -459,6 +469,15 @@ mod tests {
             names(&write.keywords),
             ["output", "index", "md5", "compression_level"]
         );
+        // `--panel`, which the error for missing intervals names, is a
+        // keyword of the one verb that has the flag.
+        let hs = step_table("hs_metrics").expect("a step");
+        let panel = hs.keyword("panel").expect("panel");
+        assert_eq!(
+            (panel.long.as_str(), panel.ty, panel.many),
+            ("panel", Ty::Path, Many::One)
+        );
+        assert!(!names(&table.keywords).contains(&"panel"));
     }
 
     /// Every keyword of the tool's Python function is a keyword of its

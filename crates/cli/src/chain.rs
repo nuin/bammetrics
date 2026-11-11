@@ -21,6 +21,9 @@
 //! * [`prepare`]: a [`Spec`] into a [`Chain`]. Every usage error is found
 //!   here, before the first read: nothing is opened for records and
 //!   nothing is written.
+//! * [`claims`]: the files the steps write and the files the chain reads
+//!   (the plan file among them), by device and inode: two steps never
+//!   write one file and no step writes an input.
 //! * [`describe`]: the plan text of `--dry-run` and of the `plan` verb.
 //! * [`run`]: [`execute`], which runs a [`Chain`] through
 //!   [`bammetrics_core::stage::run_chain`], writes every file and returns
@@ -33,6 +36,7 @@
 //! its keywords, so [`parse`] builds its [`Spec`].
 
 mod args;
+mod claims;
 mod describe;
 mod planfile;
 mod prepare;
@@ -79,6 +83,9 @@ pub struct Spec {
     /// Run a chain of taps through the stage executor in place of the
     /// shared read of `qc`, to measure the executor.
     pub stage_executor: bool,
+    /// The plan file the chain was read from. The chain reads it, so no
+    /// step may write it.
+    pub plan_file: Option<String>,
     pub steps: Vec<StepSpec>,
 }
 
@@ -102,6 +109,11 @@ impl StepSpec {
         }
     }
 }
+
+/// The hint of the error for an empty output prefix, which would name
+/// hidden files (`.insert_size_metrics`) in the working directory.
+pub(crate) const EMPTY_PREFIX_HINT: &str =
+    "leave the prefix out and the files go to ./ plus the source name";
 
 /// A usage error of the chain itself.
 pub(crate) fn usage(what: impl Into<String>) -> VerbError {

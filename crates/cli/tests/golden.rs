@@ -48,6 +48,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("PLAN_MD", "tests/data/chain_markdup.toml"),
     ("PLAN_TAPS", "tests/data/chain_taps.toml"),
     ("PLAN_BAD", "tests/data/chain_bad_key.toml"),
+    ("PLAN_SELF", "tests/data/chain_writes_plan.toml"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -362,7 +363,8 @@ const FORMAT_CASES: &[Case] = &[
 /// text of `--dry-run` and `plan`; and the usage errors, each found before
 /// the first read. `tests/data/chain_markdup.toml` and `chain_taps.toml`
 /// are the plan files of the two examples; `chain_bad_key.toml` has a
-/// misspelled option.
+/// misspelled option and `chain_writes_plan.toml` names itself as the
+/// output of its step.
 #[rustfmt::skip]
 const CHAIN_CASES: &[Case] = &[
     // Example 1: mark-duplicates, four collectors on the marked records, the marked BAM.
@@ -421,6 +423,10 @@ const CHAIN_CASES: &[Case] = &[
     case!("error_chain_cram_no_reference", "chain", "IS_CRAM", "+", "insert-size"),
     case!("error_chain_plan_unknown_key", "chain", "--plan", "PLAN_BAD"),
     case!("error_chain_plan_and_steps", "chain", "--plan", "PLAN_MD", "+", "write"),
+    case!("error_chain_plan_overwrites_itself", "chain", "--plan", "PLAN_SELF"),
+    case!("error_chain_empty_prefix", "chain", "IS", "-o", "", "+", "insert-size"),
+    case!("error_chain_step_also", "chain", "IS", "+", "insert-size", "--also", "json"),
+    case!("error_chain_step_empty_output", "chain", "IS", "+", "gc-bias", "-o", ""),
     case!("error_plan_chain_unknown_step", "plan", "IS", "+", "inser-size"),
     // An input that is not there: exit 1, as on every verb.
     case!("error_chain_missing_source", "chain", "tests/data/nope.bam", "+", "quality-yield"),

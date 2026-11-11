@@ -74,8 +74,13 @@ works in a step: `--minimum-pct 0.1`, `--MINIMUM_PCT 0.1`, `MINIMUM_PCT=0.1`, `-
 | `--dry-run` | Print the plan and run nothing (section 4) |
 | `-q`, `-v` | No notes and no summary; or each command line and each file written |
 
-The source, `--threads`, `--sample`, `-q` and `-v` belong to the chain. Given on a step
-they are a usage error that says so.
+The source, `--output-prefix`, `--threads`, `--sample`, `--also`, `--plan`, `--dry-run`,
+`-q` and `-v` belong to the chain. Given after the first `+` they are a usage error that
+says so: `step 1 (insert-size): --also belongs to the chain: give it before the first +`.
+`write` has none of the chain's options, so every one of them gets that error there.
+
+An empty prefix (`-o ''`) is a usage error, as in `qc`. It would name hidden files in the
+working directory (`.insert_size_metrics`).
 
 ### 2.2 Step options
 
@@ -93,6 +98,8 @@ they are a usage error that says so.
   W05, CRAM is W15, FASTQ is W22.
 - `--index` writes `<name>.bai` only for a coordinate-sorted stream. For any other sort
   order `write` writes no index and says so on standard error. The exit code stays 0.
+- A file option with an empty value (`-o ''`, `--metrics-file ''`, `write ''`) is a usage
+  error: `step 1 (gc-bias): -o names no file: its value is empty`.
 
 ### 2.3 Files and names
 
@@ -143,8 +150,10 @@ Rules:
 - A tool whose `OUTPUT` is a prefix (`sequencing-artifact`) names its files when it
   finishes. If one of them is the file of another step, or a file the chain reads, that
   tool fails alone, writes none of its files, and the other file stays.
-- An output that is a file the chain reads (the source, the reference, an interval list
-  of a step) is a usage error. Nothing is read and nothing is written.
+- An output that is a file the chain reads (the source, the reference and its `.fai`, an
+  interval list of a step, the plan file of `--plan`) is a usage error. Nothing is read
+  and nothing is written. The same file through a symbolic link, a hard link or `..`
+  counts: `step 1 (insert-size): plan.toml is an input; writing it would destroy it`.
 - Missing directories above an output are created, as every verb creates them.
 - At most one step writes standard output (`write -`, or `-o -` on a single-file tap).
 
@@ -178,8 +187,8 @@ A message names a step by its number and verb: `step 3 (insert-size)`.
 | Code | When | Found |
 |---|---|---|
 | 0 | Every step finished | |
-| 2 | A usage error: an unknown step or option, a value that is no number, a missing required option, a name `write` cannot write yet, two outputs in one file, an output that is an input, a second transform, a bad plan file | Before the first read. No file is written and no directory is made |
-| 1 | An input that is not there (the source, `-R`, the plan file) | Before the first read |
+| 2 | A usage error: an unknown step or option, a chain option on a step, a value that is no number, a missing required option, an empty prefix or file name, a name `write` cannot write yet, two outputs in one file, an output that is an input, a second transform, a bad plan file (one that is not UTF-8 text included) | Before the first read. No file is written and no directory is made |
+| 1 | An input that is not there or cannot be read (the source, `-R`, the plan file) | Before the first read |
 | 1 | An output that cannot be written (its directory cannot be made, the file is read only) | Before the first read, as the Picard face exits for its `OUTPUT` |
 | 1 | A step failed | During the run. The other steps still write their files (section 9) |
 
@@ -284,19 +293,29 @@ The format:
 
 - One `[chain]` table. Its keys: `source`, `output-prefix`, `reference`, `threads`,
   `tmp-dir`, `format`, `also`, `sample`, `quiet`, `verbose`. `format` and `also` take a
-  string (`"picard,json"`) or a list of strings.
+  string (`"picard,json"`) or a list of strings. An empty `output-prefix` is an error.
 - One `[[step]]` table per step, in chain order. `verb` is required: a tool verb, a
   Picard class, or `write`. Every other key is the long name of an option of that verb
   (`minimum-pct`), or its Picard name (`MINIMUM_PCT`). A boolean option takes `true` or
   `false`, an int option an integer, a float option a number, a text or path option a
-  string. A repeatable option takes a list. The keys of `write` are `output`, `index`,
-  `md5` and `compression-level`.
-- A path is read as the command line reads it: relative to the working directory.
+  string. One number also stands for the text of a text option (`program-record-id = 7`).
+  A repeatable option takes a list; a list of a text option holds strings only. The keys
+  of `write` are `output`, `index`, `md5` and `compression-level`.
+- A path is read as the command line reads it: relative to the working directory of the
+  command. It is never read relative to the directory of the plan file.
+- The plan file is a file the chain reads. A step that names it as an output is a usage
+  error (section 2.3).
 - An option on the command line replaces the file's: `chain --plan FILE -o out/other
   other.bam` runs the file's steps on another source under another prefix. A `+` step
   beside `--plan` is a usage error.
 - An unknown table, an unknown key, a key given twice and a value of the wrong type are
-  usage errors with the file, the line and the closest name:
+  usage errors with the file, the line and the closest name. Two spellings of one option
+  in one step are that option given twice:
+  `plan.toml:7: step 1 (insert-size): MINIMUM_PCT is given twice: line 6 spells it minimum-pct`.
+  A chain option in a `[[step]]` says where it goes:
+  `plan.toml:5: step 1 (insert-size): also belongs to the chain: write also under [chain]`.
+- A file that cannot be read exits 1. A file that is read and is no plan exits 2; a file
+  that is not UTF-8 text is one of those.
 
 ```
 $ bammetrics chain --plan tests/data/chain_bad_key.toml
@@ -307,7 +326,25 @@ bammetrics chain: tests/data/chain_bad_key.toml:8: step 1 (insert-size): unknown
 
 The reader is `bammetrics_core::toml::parse_tables`, the subset of TOML the verdict
 presets use (it moved from `crates/verdict/src/table.rs` in this wave). It gained one-line
-arrays of scalars for repeatable options. No dependency was added.
+arrays of scalars for repeatable options. No dependency was added. Every file it reads is
+valid TOML. It does not read all of TOML:
+
+| Read | Not read |
+|---|---|
+| `# comment`, on a line of its own or after a value | |
+| `[table]` and `[[table]]` headers | Dotted names (`[a.b]`), inline tables (`{ a = 1 }`) |
+| Bare keys: letters, digits, `_`, `-` | Quoted and dotted keys |
+| Basic strings in double quotes on one line, with every TOML escape: `\"`, `\\`, `\b`, `\t`, `\n`, `\f`, `\r`, `\uXXXX`, `\UXXXXXXXX` | Literal strings in single quotes, multi-line strings (`"""`, `'''`) |
+| Integers, decimals (`0.5`, `1e3`), `true`, `false` | `inf`, `nan`, a decimal too large for a double, dates and times, hexadecimal, octal and binary integers, `_` between digits |
+| One-line arrays of those values (`["a", "b"]`), a trailing comma allowed | Arrays over several lines, arrays in arrays |
+| A UTF-8 byte order mark in front of the first line | Any other encoding |
+
+A value in a form of the right column is an error that names the form:
+
+```
+bammetrics chain: plan.toml:3: also: expected a quoted string, a number, true or false, got "[" (multi-line arrays are not read: write the array on one line)
+bammetrics chain: plan.toml:2: source: expected a quoted string, a number, true or false, got "'in.bam'" (literal strings in single quotes are not read: use double quotes)
+```
 
 ## 4. The plan
 
@@ -453,14 +490,20 @@ run.metrics["insert-size"]          # out/NA12878.insert_size_metrics, parsed
 
 A step's keywords are those of the tool's Python function
 (`bammetrics_core::registry::python_keywords`, the list the generated registry stub
-prints), each matched to its flag in `step_flags(verb)`, plus `format` and, on a
-transform, `as_`. The test `no_keyword_of_a_step_verb_is_lost` fails when a keyword of a
-function has no flag.
+prints), each matched to its flag in `step_flags(verb)`, plus `format`, `panel` on
+`hs_metrics` (the verb flag `--panel`, which the error for missing intervals names) and,
+on a transform, `as_`. The test `no_keyword_of_a_step_verb_is_lost` fails when a keyword
+of a function has no flag.
+
+`step` and `chain` check each value when the call is made (`value_text` in
+`crates/py/src/chain.rs`): the type of the option, a float that is NaN or infinite, and a
+list of a text option, which holds `str` items only. Each is a `UsageError` naming the
+keyword. One number alone stands for the text of a text option, as in a plan file.
 
 `crates/py/src/chain.rs` holds `Step`, `Stage`, `chain` and `step`. A call builds the argv
 (`--long=VALUE` per keyword, `+ VERB --long=VALUE ...` per step), then runs `parse`,
 `prepare` and `execute` with the GIL released, reads every metrics file back, and returns
-the `Run`. `dry_run=True` returns `plan_text`. `tests/python/test_chain.py` (59 tests)
+the `Run`. `dry_run=True` returns `plan_text`. `tests/python/test_chain.py` (72 tests)
 checks chained equals staged through the Python functions, both plan files against their
 inline steps, the bytes of a Python call against the command's, `Run.stages`,
 `Run.metrics`, one error per misuse, pickling and the GIL release.
@@ -545,6 +588,11 @@ this against the staged runs. `mark-duplicates` has no `STOP_AFTER`.
 | `write` on a record | The segment stops as for a transform when the reader sees the failure between two batches. When the stream ended first, the taps keep their results. Later steps are `not run` either way |
 | The source in the first segment | `run_chain` returns the error, as `pass::run_isolated` does. The chain exits 1 |
 | The source in a later segment | The steps of that segment are `stopped`, later steps `not run` |
+
+A piped source in front of a transform is read from its copy in the temporary directory.
+An error of that read names the source as given (`/dev/stdin: not a BAM or CRAM file`),
+never the copy (`FileSource::read`, `Error::naming_input`). The `MarkDuplicates` tool
+names its piped `INPUT` the same way.
 
 Steps of an earlier segment keep their results. A written BAM is renamed into place only
 when its segment finished. A failed or stopped writer leaves no file and no temporary

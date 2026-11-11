@@ -31,7 +31,7 @@ pub enum Asked {
     /// `--help`, on the chain or on a step: the text to print.
     Help(String),
     /// A chain to run, or to print the plan of with `--dry-run`.
-    Chain { spec: Spec, dry_run: bool },
+    Chain { spec: Box<Spec>, dry_run: bool },
 }
 
 /// The chain's options: the flags in front of the first `+`.
@@ -249,6 +249,36 @@ pub(crate) const CHAIN_KEYS: [Key; 5] = [
     Key::Sample,
 ];
 
+/// The error for a chain option given on the step at `place`.
+pub(crate) fn belongs_to_chain(place: &str, spelled: &str) -> VerbError {
+    usage(format!(
+        "{place}: {spelled} belongs to the chain: give it before the first +"
+    ))
+    .from(spelled)
+}
+
+/// The chain option `name` (a flag as spelled, or a plan file's key) is
+/// when no flag of the step has that name: `--also`, `--dry-run`, `--plan`
+/// and `--output-prefix` everywhere, and on `write` every chain option.
+pub(crate) fn chain_option(name: &str) -> Option<Flag> {
+    let flags = global_flags();
+    let flag = grammar::spelled(&flags, name).filter(|flag| flag.key != Key::Help)?;
+    Some(flag.clone())
+}
+
+/// An unknown-option error of a step, when the option is one of the
+/// chain's: the error that says where it belongs. The step's own parser
+/// would only offer its closest name (`--as` for `--also`).
+pub(crate) fn chain_option_on_step(error: &VerbError, place: &str) -> Option<VerbError> {
+    let spelled = grammar::unknown_option(error)?;
+    let flag = chain_option(spelled)?;
+    let mut error = belongs_to_chain(place, spelled);
+    if flag.key == Key::Output {
+        error = error.hint("a step's own file is -o FILE");
+    }
+    Some(error)
+}
+
 /// The flags of `verb` as a step, for `--help` and for a caller that
 /// builds a step's arguments: the verb's own without the chain-level ones
 /// and, for a transform, without the options of the BAM `write` writes.
@@ -342,8 +372,9 @@ pub fn step_help(name: &str) -> Result<String, VerbError> {
     Ok(format!(
         "bammetrics chain ... + {} [OPTIONS]: {}, {kind}.\n\n\
          Every option also reads as --PICARD_KEY VALUE and PICARD_KEY=VALUE. A boolean takes \
-         --x, --no-x, --x=false or --x false. The source, --threads, --sample, -q and -v \
-         belong to the chain.\n\nOptions:\n{}",
+         --x, --no-x, --x=false or --x false. The source, --output-prefix, --threads, \
+         --sample, --also, --plan, --dry-run, -q and -v belong to the chain: give them before \
+         the first +.\n\nOptions:\n{}",
         verb.name,
         tool.name,
         option_lines(&step_flags(verb))
@@ -479,7 +510,7 @@ pub fn parse(args: &[String]) -> Result<Asked, VerbError> {
     }
     apply_globals(&parsed, &mut spec)?;
     Ok(Asked::Chain {
-        spec,
+        spec: Box::new(spec),
         dry_run: parsed.flag(DRY_RUN),
     })
 }
@@ -494,7 +525,7 @@ mod tests {
 
     fn spec(args: &[&str]) -> (Spec, bool) {
         match parse(&strings(args)).expect("parses") {
-            Asked::Chain { spec, dry_run } => (spec, dry_run),
+            Asked::Chain { spec, dry_run } => (*spec, dry_run),
             Asked::Help(_) => panic!("help"),
         }
     }
@@ -578,6 +609,50 @@ mod tests {
         assert!(error(&["a.bam", "--threads", "x", "+", "write"]).contains("is not a number"));
     }
 
+    /// A chain option no step has, given after the first `+`, gets the
+    /// error that says where it belongs in place of the step's closest
+    /// name (`--as` for `--also`).
+    #[test]
+    fn a_chain_option_on_a_step_says_where_it_belongs() {
+        let verb = find_step("insert-size").expect("a verb");
+        let on_step = |flags: &[Flag], args: &[&str]| {
+            let error = grammar::parse("insert-size", flags, &strings(args)).expect_err("unknown");
+            chain_option_on_step(&error, "step 2 (insert-size)").map(|e| e.to_string())
+        };
+        let step = step_parser_flags(verb);
+        for spelled in ["--also", "--dry-run", "--no-dry-run", "--plan", "ALSO="] {
+            let arg = if spelled.ends_with('=') {
+                format!("{spelled}json")
+            } else {
+                spelled.to_owned()
+            };
+            assert_eq!(
+                on_step(&step, &[&arg, "x"]).as_deref(),
+                Some(
+                    format!(
+                        "bammetrics chain: step 2 (insert-size): {spelled} belongs to the chain: \
+                         give it before the first + (from {spelled})"
+                    )
+                    .as_str()
+                ),
+                "{spelled}"
+            );
+        }
+        let prefix = on_step(&step, &["--output-prefix", "x"]).expect("the chain's");
+        assert!(
+            prefix.ends_with("(from --output-prefix)\n  a step's own file is -o FILE"),
+            "{prefix}"
+        );
+        // `write` has none of the chain's options among its flags.
+        for spelled in ["--threads", "-q", "--sample", "-@"] {
+            let error = on_step(&write_flags(), &[spelled, "2"]).expect(spelled);
+            assert!(error.contains(&format!("{spelled} belongs to the chain")));
+        }
+        // A name that is no option of the chain stays an unknown option.
+        assert_eq!(on_step(&step, &["--als", "json"]), None);
+        assert_eq!(on_step(&step, &["--lower"]), None);
+    }
+
     #[test]
     fn help_is_asked_on_the_chain_or_on_a_step() {
         let text = |args: &[&str]| match parse(&strings(args)).expect("parses") {
@@ -595,7 +670,10 @@ mod tests {
         assert!(!step.contains("-@, --threads"));
         let marked = text(&["in.bam", "+", "mark-duplicates", "-h"]);
         assert!(marked.contains("a transform") && marked.contains("--as NAME"));
-        assert!(!marked.contains("--output"));
+        // No option line for the BAM; `--output-prefix` is named as the
+        // chain's.
+        assert!(!marked.contains("--output "));
+        assert!(marked.contains("--output-prefix, --threads"));
         assert!(text(&["in.bam", "+", "write", "--help"]).contains("--compression-level"));
     }
 
