@@ -1015,6 +1015,19 @@ def fifo_buffer(
     each other. A command only: it returns no rows, and the Python function raises
     UsageError, because a Python call has no pipe to buffer."""
 
+def view_sam(
+    input: _Path,
+    *,
+    alignment_status: str | None = None,
+    pf_status: str | None = None,
+    header_only: bool | None = None,
+    records_only: bool | None = None,
+    interval_list: _Path | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """ViewSam: the header and each record of a SAM, BAM or CRAM as SAM text, as htsjdk
+    writes it; one row per record, the 11 SAM fields and the tags."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1217,10 +1230,10 @@ def step(verb: _StepVerb | str, /, **options: Any) -> Step:
     write. The keywords are those of the tool's function (minimum_pct=0.1) without its
     input, plus output (the step's own file, or prefix for a tool that writes several),
     format, panel on hs_metrics (baits and targets in one file), and as_ on a transform
-    (the name of the stream it leaves). write takes output, index, md5 and
-    compression_level. An unknown verb or keyword raises UsageError here, with the
-    closest name; so does a float that is NaN or infinite, and a list of texts with an
-    item that is not a str."""
+    (the name of the stream it leaves). write takes output, index, md5,
+    compression_level and output_format ("bam" or "sam"). An unknown verb or keyword
+    raises UsageError here, with the closest name; so does a float that is NaN or
+    infinite, and a list of texts with an item that is not a str."""
 
 @overload
 def chain(

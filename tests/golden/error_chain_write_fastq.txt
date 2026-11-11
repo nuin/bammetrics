@@ -8,4 +8,4 @@ OUT/x.fastq.gz
 2
 ## stdout
 ## stderr
-bammetrics chain: step 1 (write): OUT/x.fastq.gz: bammetrics writes BAM only: FASTQ output is wave W22 of docs/07_full_parity_program.md
+bammetrics chain: step 1 (write): OUT/x.fastq.gz: bammetrics writes BAM and SAM only: FASTQ output is wave W22 of docs/07_full_parity_program.md

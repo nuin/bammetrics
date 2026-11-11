@@ -22,6 +22,7 @@ use std::path::{Path, PathBuf};
 use bammetrics_core::fifo_buffer;
 use bammetrics_core::multiple_metrics::file_extensions;
 use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
+use bammetrics_core::view_sam;
 use bammetrics_core::{bam_index_stats, check_duplicate_marking, compare_metrics, cram, pass};
 
 use crate::error::VerbError;
@@ -335,6 +336,16 @@ pub const VERBS: &[Verb] = &[
         writes: "copied bytes",
         ignores: &[(Key::Threads, "one thread reads and one writes")],
         ..verb("fifo-buffer", "FifoBuffer", Files::Single)
+    },
+    Verb {
+        about: Some(
+            "prints the header and each record of a SAM, BAM or CRAM as SAM text, as Picard's \
+             ViewSam does, to -o or standard output, as the file is read. --format json, jsonl \
+             or tsv gives one row per record instead and holds at most 256 MiB of SAM text.",
+        ),
+        writes: "SAM text",
+        reads: &["INTERVAL_LIST"],
+        ..verb("view-sam", "ViewSam", Files::Single)
     },
 ];
 
@@ -684,6 +695,16 @@ impl Verb {
             }
             let status = check.status();
             (check.output, status)
+        } else if tool.name == view_sam::TOOL.name && formats == [Format::Picard] {
+            // The SAM text goes out as it is read: no rows are held.
+            let status = match &output {
+                Some(path) => view_sam::write_file(&inv, path).map(|()| 0),
+                None => view_sam::print(&inv),
+            };
+            (
+                bammetrics_core::metric::ToolOutput::NONE,
+                status.map_err(core)?,
+            )
         } else {
             ((tool.run)(&inv).map_err(core)?, 0)
         };

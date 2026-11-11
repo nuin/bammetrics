@@ -1,0 +1,10 @@
+## argv
+ViewSam
+I=tests/data/insert_size.bam
+HEADER_ONLY=true
+RECORDS_ONLY=true
+## exit
+1
+## stdout
+## stderr
+bammetrics: Cannot specify both HEADER_ONLY=true and RECORDS_ONLY=true.

@@ -239,6 +239,7 @@ fn bam_kind(path: &Path) -> &'static str {
     match path.extension().and_then(|e| e.to_str()) {
         Some("bai") => "index",
         Some("md5") => "md5",
+        Some("sam") => "sam",
         _ => "bam",
     }
 }

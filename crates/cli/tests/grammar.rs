@@ -437,6 +437,15 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("TAIL_LIMIT", "100")),
             picard_outputs: single,
         },
+        // No OUTPUT option: the Picard face prints the SAM text.
+        Case {
+            verb: "view-sam",
+            class: "ViewSam",
+            verb_args: bam(&[]),
+            picard_args: picard_bam(&[]),
+            option: Some(("ALIGNMENT_STATUS", "Aligned")),
+            picard_outputs: no_output,
+        },
     ]
 }
 
@@ -526,7 +535,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 33);
+    assert_eq!(classes.len(), 34);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

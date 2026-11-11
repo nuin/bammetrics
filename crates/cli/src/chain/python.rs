@@ -316,8 +316,8 @@ pub const STEP_DOC: &str = "One step of chain(): a tool verb in snake case (inse
      Picard class, or write. The keywords are those of the tool's function (minimum_pct=0.1) \
      without its input, plus output (the step's own file, or prefix for a tool that writes \
      several), format, panel on hs_metrics (baits and targets in one file), and as_ on a \
-     transform (the name of the stream it leaves). write takes output, index, md5 and \
-     compression_level. An unknown verb or keyword raises UsageError here, with the closest \
+     transform (the name of the stream it leaves). write takes output, index, md5, \
+     compression_level and output_format (\"bam\" or \"sam\"). An unknown verb or keyword raises UsageError here, with the closest \
      name; so does a float that is NaN or infinite, and a list of texts with an item that \
      is not a str.";
 
@@ -463,7 +463,13 @@ mod tests {
         let write = step_table("write").expect("a step");
         assert_eq!(
             names(&write.keywords),
-            ["output", "index", "md5", "compression_level"]
+            [
+                "output",
+                "index",
+                "md5",
+                "compression_level",
+                "output_format"
+            ]
         );
         // `--panel`, which the error for missing intervals names, is a
         // keyword of the one verb that has the flag.

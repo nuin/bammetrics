@@ -1,0 +1,9 @@
+## argv
+ViewSam
+I=tests/data/insert_size.bam
+ALIGNMENT_STATUS=aligned
+## exit
+1
+## stdout
+## stderr
+bammetrics: ALIGNMENT_STATUS=aligned: expected Aligned, Unaligned or All

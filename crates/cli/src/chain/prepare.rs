@@ -16,12 +16,12 @@ use std::path::{Path, PathBuf};
 
 use bammetrics_core::multiple_metrics::file_extensions;
 use bammetrics_core::registry::{Kind, Tool, Ty};
-use bammetrics_core::stage::{self, Outputs, WriteOptions};
+use bammetrics_core::stage::{self, Outputs, WriteFormat, WriteOptions};
 use bammetrics_core::{cram, java, pass};
 use clap::ValueEnum;
 
 use super::args::{
-    AS, CHAIN_KEYS, COMPRESSION_LEVEL, INDEX, MD5, STEPS_HINT, belongs_to_chain,
+    AS, CHAIN_KEYS, COMPRESSION_LEVEL, INDEX, MD5, OUTPUT_FORMAT, STEPS_HINT, belongs_to_chain,
     chain_option_on_step, find_step, is_transform, not_a_step, step_parser_flags, unknown_step,
     write_flags,
 };
@@ -756,7 +756,7 @@ fn tool_step(
 /// The kind of a file `write` makes, by its place in
 /// [`WriteOptions::files`].
 fn write_kinds(options: &WriteOptions) -> Vec<&'static str> {
-    let mut kinds = vec!["bam"];
+    let mut kinds = vec![options.format.name()];
     if options.create_index {
         kinds.push("index");
     }
@@ -784,15 +784,29 @@ fn write_step(
             .usage(format!("one PATH expected, got {}", paths.len()))
             .from((*second).clone()));
     }
+    let format = parsed
+        .last(OUTPUT_FORMAT)
+        .map(|given| {
+            WriteFormat::parse(&given.values[0]).ok_or_else(|| {
+                draft
+                    .usage(format!("expected bam or sam, got {:?}", given.values[0]))
+                    .from(given.spelled.clone())
+            })
+        })
+        .transpose()?;
     let (path, stdout, uses_prefix) = match paths.first().map(|path| path.as_str()) {
         Some("-") => (PathBuf::from("/dev/stdout"), true, false),
         Some(path) => (PathBuf::from(path), false, false),
         None => {
-            let name = format!(".{}.bam", position.reads);
+            let extension = format.unwrap_or(WriteFormat::Bam).name();
+            let name = format!(".{}.{extension}", position.reads);
             (with_suffix(cx.prefix, &name), false, true)
         }
     };
     let mut options = WriteOptions::new(&path);
+    if let Some(format) = format {
+        options.format = format;
+    }
     if let Some(given) = parsed.last(COMPRESSION_LEVEL) {
         options.compression_level = given.values[0]
             .parse()
@@ -812,7 +826,7 @@ fn write_step(
     if let (true, Some(given)) = (stdout, parsed.last(INDEX).or_else(|| parsed.last(MD5))) {
         return Err(draft
             .usage(format!(
-                "{} needs a file: standard output takes the BAM alone",
+                "{} needs a file: standard output takes the records alone",
                 given.spelled
             ))
             .from(given.spelled.clone()));
