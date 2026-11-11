@@ -33,8 +33,8 @@ Wave W05 part C of docs/07: the BAM index writer, `BuildBamIndex` (tool 34) and
   rows (`build-bam-index`, `mark-duplicates`, a chain with `write --index`) run in
   seconds; `make memgate TIER=scale` runs four rows on the real data of
   docs/benchmarks.md, where a row whose file is missing is skipped.
-  `tests/harness/test_memgate.py` holds 21 tests of the harness.
-- `tests/concordance/test_build_bam_index.py`: 107 tests against Picard 3.5.0, with the
+  `tests/harness/test_memgate.py` holds 22 tests of the harness.
+- `tests/concordance/test_build_bam_index.py`: 108 tests against Picard 3.5.0, with the
   BAMs `index_bams.py` writes byte by byte. `tests/data/bai` holds the six fixture
   indexes Picard wrote, which `crates/cli/tests/build_bam_index.rs` compares without a
   JVM.
@@ -60,6 +60,12 @@ Wave W05 part C of docs/07: the BAM index writer, `BuildBamIndex` (tool 34) and
   buffer to `block_size` before it read: a BAM of 211 bytes with a `block_size` of
   0xFFFFFF00 took 4.3 GB of RSS before `truncated BAM`. The buffer now grows 1 MiB at
   a time with the bytes read (`bam_raw::read_append`), and the same file takes 5 MiB.
+- `BuildBamIndex R=missing.fa` exits 1 with `Error opening file`, as Picard does. Before,
+  the missing file was ignored with a note. `R=null` names no file.
+- An index error of `MarkDuplicates CREATE_INDEX` or `write --index` names the BAM the
+  user gave. Before, it named the temporary file the BAM is written under.
+- `benches/memgate.toml` refuses a `max_seconds` below 0.05: `time` reports wall time
+  in steps of 0.01 s.
 
 ### Measured
 

@@ -64,6 +64,8 @@ def test_the_committed_table_parses_and_names_both_tiers():
     ("[[command]]\nname = 'a'\nargv = ['x']\nmax_rss_mib = 1\nrss = 2\n", "a: unknown key 'rss'"),
     ("[[command]]\nname = 'a'\nargv = ['x']\nmax_rss_mib = 1\ntier = 'big'\n", "a: tier must be one of"),
     ("[[command]]\nname = 'a'\nargv = ['x']\nmax_rss_mib = 1\nmax_spill_mib = 1\n", "needs spill_dir"),
+    ("[[command]]\nname = 'a'\nargv = ['x']\nmax_rss_mib = 1\nmax_seconds = 0.001\n",
+     "a: max_seconds must be at least 0.05"),
     ("[[command]]\nname = 'a'\nargv = ['x']\nmax_rss_mib = 1\n" * 2, "a: the name is used twice"),
     ("[[commands]]\nname = 'a'\n", "unknown table 'commands'"),
     ("name = ", "not TOML"),

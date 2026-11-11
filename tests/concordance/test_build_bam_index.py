@@ -425,6 +425,19 @@ def test_inputs_that_are_no_bam_fail_in_both(corpus, tmp_path):
     assert b"Input file must be bam file, not sam file" in ours_cram.stderr
 
 
+def test_missing_reference_fails_in_both(corpus, tmp_path):
+    """Picard opens REFERENCE_SEQUENCE before INPUT and exits 1 when it cannot; R=null is no
+    file in either tool."""
+    out = tmp_path / "x.bai"
+    args = [f"I={corpus / 'corpus.bam'}", f"O={out}", SILENT, f"R={tmp_path / 'none.fa'}"]
+    picard, ours = run_picard(args), run_ours(args)
+    assert picard.returncode == 1 and ours.returncode == 1
+    assert b"Error opening file" in picard.stderr and b"Error opening file" in ours.stderr
+    assert not out.exists()
+    assert run_ours([*args[:3], "R=null"]).returncode == 0 and out.exists()
+    RESULTS.append((f"{TOOL} R missing", 0, 0, "both exit 1, Error opening file"))
+
+
 def test_unwritable_output_fails_in_both(corpus, tmp_path):
     bam = corpus / "corpus.bam"
     directory = tmp_path / "a_directory"

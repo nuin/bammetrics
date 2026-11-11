@@ -13,7 +13,7 @@ A row of the table:
     tier = "fixture"                  # fixture (the default) or scale
     argv = ["{bin}", "build-bam-index", "tests/data/markdup.bam", "-o", "{out}/x.bai"]
     max_rss_mib = 64                  # required: fail above this peak RSS
-    max_seconds = 30                  # optional: fail above this wall time
+    max_seconds = 30                  # optional: fail above this wall time, at least 0.05
     needs = ["tests/data/markdup.bam"]  # optional: files the row reads
     spill_dir = "{out}/tmp"           # optional: a directory whose size is sampled
     max_spill_mib = 100               # optional: fail above this sampled peak
@@ -29,7 +29,8 @@ skipped and says so, because the scale data lives outside the repository; --stri
 makes that a failure too.
 
 The peak RSS is the `maximum resident set size` line of `/usr/bin/time -l` (bytes, macOS
-and the BSDs) or of GNU `time -v` (kilobytes, Linux). The spill size is sampled five
+and the BSDs) or of GNU `time -v` (kilobytes, Linux). The wall time comes in steps of
+0.01 s, so a `max_seconds` below 0.05 is refused. The spill size is sampled five
 times a second, so a peak shorter than that can be missed.
 
 Exit code: 0 when every row ran within its limits, 1 when a row failed, went over a limit
@@ -55,6 +56,7 @@ TIERS = ("fixture", "scale")
 KEYS = {"name", "tier", "argv", "max_rss_mib", "max_seconds", "needs", "spill_dir", "max_spill_mib"}
 MIB = 1024 * 1024
 SAMPLE_SECONDS = 0.2
+MIN_SECONDS = 0.05
 
 
 class TableError(Exception):
@@ -127,9 +129,13 @@ def parse_table(text):
             raise TableError(f"{name}: spill_dir must be a string")
         if raw.get("max_spill_mib") is not None and spill_dir is None:
             raise TableError(f"{name}: max_spill_mib needs spill_dir")
+        max_seconds = number(raw, "max_seconds")
+        if max_seconds is not None and max_seconds < MIN_SECONDS:
+            raise TableError(f"{name}: max_seconds must be at least {MIN_SECONDS}: time reports "
+                             f"wall time in steps of 0.01 s")
         rows.append(Row(name=name, argv=strings(raw, "argv", required=True),
                         max_rss_mib=number(raw, "max_rss_mib", required=True), tier=tier,
-                        max_seconds=number(raw, "max_seconds"), needs=strings(raw, "needs"),
+                        max_seconds=max_seconds, needs=strings(raw, "needs"),
                         spill_dir=spill_dir, max_spill_mib=number(raw, "max_spill_mib")))
     if not rows:
         raise TableError("the table has no [[command]]")

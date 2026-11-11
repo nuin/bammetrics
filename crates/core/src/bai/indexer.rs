@@ -381,8 +381,14 @@ impl BamSource {
     /// inflate its blocks. A CRAM, a SAM and any other file are refused: a
     /// `.bai` indexes a BAM.
     pub fn open(path: &Path, threads: usize) -> Result<Self> {
+        Self::open_as(path, path, threads)
+    }
+
+    /// [`open`](Self::open) the BAM at `path`; every message names `shown`,
+    /// the path a BAM written under a temporary name is renamed to.
+    pub fn open_as(path: &Path, shown: &Path, threads: usize) -> Result<Self> {
         let input = |source| Error::Input {
-            path: path.to_path_buf(),
+            path: shown.to_path_buf(),
             source,
         };
         let sniffed = cram::sniff(File::open(path).map_err(input)?).map_err(input)?;
@@ -390,7 +396,7 @@ impl BamSource {
             return Err(Error::Usage(format!(
                 "{}: a .bai indexes a BAM and this is a CRAM, whose index is a .crai (Picard: \
                  Input file must be bam file, not sam file.)",
-                path.display()
+                shown.display()
             )));
         }
         let workers = NonZero::new(threads).unwrap_or(NonZero::<usize>::MIN);
@@ -399,7 +405,7 @@ impl BamSource {
         let header =
             IndexHeader::read(&mut reader).map_err(|e| input(cram::bam_header_error(e)))?;
         Ok(Self {
-            path: path.to_path_buf(),
+            path: shown.to_path_buf(),
             header,
             reader,
         })
@@ -445,13 +451,14 @@ impl BamSource {
     }
 }
 
-/// The `.bai` of the BAM at `path`, written to `out`, the file `target`
-/// names in a write error.
+/// The `.bai` of the BAM at `path`, written to `out`. Messages name the BAM
+/// `shown` and, for a write error, the index `target`.
 pub fn index_bam<W: Write>(
     path: &Path,
+    shown: &Path,
     threads: usize,
     out: W,
     target: &Path,
 ) -> Result<(W, Counts)> {
-    BamSource::open(path, threads)?.index(out, target)
+    BamSource::open_as(path, shown, threads)?.index(out, target)
 }

@@ -268,7 +268,7 @@ A `.bai` is tier A for a given BAM. `tests/concordance/test_build_bam_index.py` 
 `BuildBamIndex` through both tools on the same file and compares the two indexes with
 `==` on their bytes: the six coordinate-sorted BAMs of `tests/data`, the foundation
 corpus, every coordinate-sorted tier BAM (t0 to t3), the exome slice and 26 BAMs that
-`index_bams.py` writes byte by byte. 107 tests, 68 indexes compared.
+`index_bams.py` writes byte by byte. 108 tests, 68 indexes compared.
 
 `index_bams.py` packs each record with `struct` and each BGZF block with `zlib`, because
 an index depends on where the blocks end and pysam and samtools choose that themselves.
@@ -395,9 +395,8 @@ queued. `tests/harness/test_picard_lock.py` fails when a file under `tests`, `be
 
 One failure lists every gap of every tool with the edit that closes it. `BuildBamIndex`
 (wave W05 of docs/07) is tool 34, with `tests/concordance/test_build_bam_index.py` as its
-module and an argument list in the glossary test (it returns rows without a class). At
-0.22.0 the 33 tools
-pass: 13 have a module named after them, 18 are mapped in `CONCORDANCE` to a shared module
+module and an argument list in the glossary test (it returns rows without a class). The 34
+tools pass: 14 have a module named after them, 18 are mapped in `CONCORDANCE` to a shared module
 (`test_read_level.py` 6, `test_wgs_metrics.py` 3, `test_variant_tools.py` 3, six others 1
 each), and `CollectCoverageGaps` and `CollectSexCheckMetrics` are in `NO_PICARD_ORACLE`
 (docs/06, not Picard tools). `FifoBuffer` (wave W04 of docs/07) is tool 33. Its module is

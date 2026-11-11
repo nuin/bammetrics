@@ -252,6 +252,7 @@ pub fn finish(
     let index = if companions.index && coordinate {
         Some(write_index(
             output.writing(),
+            &target,
             &target.with_extension("bai"),
             threads,
         )?)
@@ -282,15 +283,16 @@ pub fn finish(
 /// The BAI of the BAM at `bam`, into a file to be renamed to `target`:
 /// the bytes htsjdk's `BAMIndexer` writes for that file ([`crate::bai`]).
 /// The finished BAM is read once more, its blocks inflated by `threads`
-/// workers, so the offsets are the ones of the file as written.
-fn write_index(bam: &Path, target: &Path, threads: usize) -> Result<AtomicFile> {
+/// workers, so the offsets are the ones of the file as written. Messages
+/// name `shown`, the path the BAM is renamed to.
+fn write_index(bam: &Path, shown: &Path, target: &Path, threads: usize) -> Result<AtomicFile> {
     let output = |source| Error::Output {
         path: target.to_path_buf(),
         source,
     };
     let file = AtomicFile::new(target);
     let out = BufWriter::with_capacity(1 << 16, file.create().map_err(output)?);
-    let (mut out, _) = crate::bai::index_bam(bam, threads, out, target)?;
+    let (mut out, _) = crate::bai::index_bam(bam, shown, threads, out, target)?;
     out.flush().map_err(output)?;
     Ok(file)
 }
@@ -327,4 +329,52 @@ fn write_md5(path: &Path, target: &Path) -> Result<AtomicFile> {
             source,
         })?;
     Ok(file)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::DirBuilderExt;
+
+    use super::*;
+    use crate::bam_raw::build;
+
+    #[test]
+    fn an_index_error_names_the_output_and_leaves_no_file() {
+        let dir = std::env::temp_dir().join(format!("bammetrics-writer-{}", std::process::id()));
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&dir)
+            .expect("scratch dir");
+        let header: sam::Header = "@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:big\tLN:600000000\n"
+            .parse()
+            .expect("header");
+        let out = dir.join("out.bam");
+        let mut writer = BamWriter::create(&out, 1, 1, &header).expect("writer");
+        writer
+            .write(&build(
+                "a",
+                0,
+                0,
+                (1 << 29) - 10,
+                &[(50, 0)],
+                &[30; 50],
+                b"",
+            ))
+            .expect("record");
+        let companions = Companions {
+            index: true,
+            md5: false,
+        };
+        let message = finish(writer, &header, companions)
+            .expect_err("past the last BAI bin")
+            .to_string();
+        assert!(
+            message.starts_with(&format!("{}: ", out.display())),
+            "{message}"
+        );
+        assert!(message.contains("Read position too high"), "{message}");
+        let left = std::fs::read_dir(&dir).expect("scratch dir").count();
+        std::fs::remove_dir(&dir).expect("scratch dir empty");
+        assert_eq!(left, 0);
+    }
 }

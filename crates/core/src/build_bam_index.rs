@@ -179,9 +179,26 @@ fn stats(mut rows: Vec<Row>, counts: &Counts) -> Stats {
     }
 }
 
+/// `REFERENCE_SEQUENCE` is not read, but Picard opens it before `INPUT`
+/// and fails when it cannot (`Error opening file`); `null` is no file.
+fn check_reference(inv: &Invocation) -> Result<()> {
+    match inv.reference() {
+        Some(path) if path != Path::new("null") => {
+            std::fs::File::open(path)
+                .map(drop)
+                .map_err(|source| Error::Reference {
+                    path: path.to_path_buf(),
+                    message: format!("Error opening file: {source}"),
+                })
+        }
+        _ => Ok(()),
+    }
+}
+
 /// The tool writes its own file, so the output holds rows and no text:
 /// the registry writer has nothing to print.
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
+    check_reference(inv)?;
     let output = output_path(inv)?;
     let stats = build(&inv.input, &output, inv.threads)?;
     Ok(MetricsOutput::text(&COLUMNS, stats.values(), String::new()).into())
@@ -248,6 +265,25 @@ mod tests {
         }
         assert!(parse(&["O=y.bai"]).is_err(), "INPUT is required");
         assert!(parse(&["I=x.bam", "O=a", "O=b"]).is_err(), "one OUTPUT");
+    }
+
+    #[test]
+    fn a_reference_that_cannot_be_opened_fails_as_in_picard() {
+        let args = |r: &str| -> Vec<String> {
+            ["I=missing.bam", "O=never.bai", r]
+                .iter()
+                .map(|a| (*a).to_owned())
+                .collect()
+        };
+        let inv = TOOL.parse(&args("R=no/such/ref.fa")).expect("parses");
+        let error = run_tool(&inv).expect_err("no reference file");
+        assert_eq!(
+            error.to_string(),
+            "no/such/ref.fa: Error opening file: No such file or directory (os error 2)"
+        );
+        let inv = TOOL.parse(&args("R=null")).expect("parses");
+        let error = run_tool(&inv).expect_err("no BAM");
+        assert!(error.to_string().starts_with("missing.bam: "), "{error}");
     }
 
     /// A scratch directory of this test, readable by this user only.
