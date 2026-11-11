@@ -124,6 +124,8 @@ pub struct BamWriter {
     file: AtomicFile,
     inner: noodles::bam::io::Writer<bgzf::io::MultithreadedWriter<BufWriter<File>>>,
     order: SortOrder,
+    /// The BGZF workers, which also read the file back for its index.
+    threads: usize,
     /// Reference and start of the last record written, and its name.
     previous: Option<(i32, i32)>,
     previous_name: Vec<u8>,
@@ -159,6 +161,7 @@ impl BamWriter {
             file: atomic,
             inner,
             order: SortOrder::of(header),
+            threads,
             previous: None,
             previous_name: Vec::new(),
         })
@@ -242,6 +245,7 @@ pub fn finish(
     header: &sam::Header,
     companions: Companions,
 ) -> Result<Vec<PathBuf>> {
+    let threads = writer.threads;
     let output = writer.close()?;
     let target = output.path().to_path_buf();
     let coordinate = SortOrder::of(header) == SortOrder::Coordinate;
@@ -249,6 +253,7 @@ pub fn finish(
         Some(write_index(
             output.writing(),
             &target.with_extension("bai"),
+            threads,
         )?)
     } else {
         None
@@ -274,24 +279,19 @@ pub fn finish(
     Ok(written)
 }
 
-/// The BAI of the BAM at `bam`, into a file to be renamed to `target`.
-fn write_index(bam: &Path, target: &Path) -> Result<AtomicFile> {
-    let index = noodles::bam::fs::index(bam).map_err(|source| Error::Input {
-        path: bam.to_path_buf(),
+/// The BAI of the BAM at `bam`, into a file to be renamed to `target`:
+/// the bytes htsjdk's `BAMIndexer` writes for that file ([`crate::bai`]).
+/// The finished BAM is read once more, its blocks inflated by `threads`
+/// workers, so the offsets are the ones of the file as written.
+fn write_index(bam: &Path, target: &Path, threads: usize) -> Result<AtomicFile> {
+    let output = |source| Error::Output {
+        path: target.to_path_buf(),
         source,
-    })?;
-    let noodles::bam::Index::Bai(index) = index else {
-        return Err(Error::Metric(
-            "CREATE_INDEX: a contig is too long for a BAI index".to_owned(),
-        ));
     };
     let file = AtomicFile::new(target);
-    file.create()
-        .and_then(|out| noodles::bam::bai::io::Writer::new(out).write_index(&index))
-        .map_err(|source| Error::Output {
-            path: target.to_path_buf(),
-            source,
-        })?;
+    let out = BufWriter::with_capacity(1 << 16, file.create().map_err(output)?);
+    let (mut out, _) = crate::bai::index_bam(bam, threads, out, target)?;
+    out.flush().map_err(output)?;
     Ok(file)
 }
 

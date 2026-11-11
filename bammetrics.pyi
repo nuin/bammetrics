@@ -1015,6 +1015,16 @@ def fifo_buffer(
     each other. A command only: it returns no rows, and the Python function raises
     UsageError, because a Python call has no pipe to buffer."""
 
+def build_bam_index(
+    input: _Path,
+    *,
+    output: _Path | None = None,
+) -> list[_BamIndexRow]:
+    """BuildBamIndex: writes the .bai of a coordinate-sorted BAM, byte for byte the index
+    Picard writes for the same file: OUTPUT, or beside INPUT as x.bai for x.bam. Returns
+    one row per reference of the header (reference, length, aligned, unaligned), then a
+    * row whose unaligned count is the records without a coordinate."""
+
 # END registry tools
 
 def alignment_summary(
