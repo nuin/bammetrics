@@ -39,17 +39,16 @@ Shipped since: every accumulation level, `CollectHsMetrics` `PER_TARGET_COVERAGE
 checks `CollectCoverageGaps` and `CollectSexCheckMetrics` (0.19.0), the output formats
 (`convert`, `--format` lists, `qc --also`) and the harness for tools that write reads
 (0.20.0), the stage layer of in-process chaining (0.21.0), and the `chain` verb with
-its plan file, its plan text and the Python `chain` and `step` (unreleased, wave W04 of
-docs/07; docs/chaining.md, docs/python.md).
+its plan file, its plan text and the Python `chain` and `step`, with `FifoBuffer` as
+registry tool 33 (0.22.0, wave W04 of docs/07; docs/chaining.md, docs/python.md).
 CHANGELOG.md has each.
 
 Remaining for bammetrics:
 
 - bioconda recipe and a PyPI release (first push of the branch runs the CI workflow).
-- The Picard tools still to build, `fifo-buffer`, the sort barrier and the planner,
-  further formats and PDF reports: the program plan `docs/07_full_parity_program.md`
-  (the rest of W04, then W05 onward); docs/04 section 4
-  holds the P9 queue.
+- The Picard tools still to build, the sort barrier and the planner, further formats
+  and PDF reports: the program plan `docs/07_full_parity_program.md` (waves W05 onward);
+  docs/04 section 4 holds the P9 queue.
 
 Exit criterion: a `pip install`-able library that produces correct, hand-verified numbers.
 

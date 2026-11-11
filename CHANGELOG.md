@@ -1,13 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.22.0
 
-The `chain` verb (wave W04 of docs/07, docs/chaining.md): several steps on one BAM in one
-process, from the command line, from a TOML plan file or from Python (`bammetrics.chain`,
-`bammetrics.step`). No change to any file a tool, a verb or `qc` writes.
+The `chain` verb, its plan file, Python `chain` and `step`, and `FifoBuffer` (tool 33).
 
 ### Added
 
+- Wave W04 of docs/07 (docs/chaining.md): several steps on one BAM in one process, from
+  the command line, from a TOML plan file or from Python (`bammetrics.chain`,
+  `bammetrics.step`). No file a tool, a verb or `qc` writes changed.
 - `bammetrics chain [OPTIONS] BAM + STEP [STEP OPTIONS] [+ STEP ...]`. The chain's options
   and the source (a BAM, a CRAM with `-R`, `-` for standard input) come before the first
   `+`. A step is a tool verb, its Picard class, or `write`: a transform
@@ -160,6 +161,10 @@ process, from the command line, from a TOML plan file or from Python (`bammetric
 - `bammetrics chain BAM + VERB --help` for a verb that cannot be a step (`wgs`,
   `fifo-buffer`) prints the refusal a run prints and exits 2. It printed that verb's
   options under the words `a tap`.
+- `make harness-test`: the check that every `picard` call takes the queue
+  (`tests/harness/test_picard_lock.py`) skips a list of two or more output format names.
+  It read `format=["picard", "json"]` in `tests/python/test_chain.py` as a Picard command
+  and failed.
 
 ## 0.21.0
 
@@ -303,8 +308,9 @@ Output formats from one typed table (`crates/formats`, `convert`, `--format` lis
 - `--format tsv` and `--format csv` write a string cell or a column name that starts with
   `=`, `+`, `-`, `@`, a tab or a carriage return after a `'`, so a spreadsheet reads it as
   text and runs no formula from a sample or library name. Numbers are unchanged (`-3` stays
-  `-3`), and so is a text that is `+` or `-` alone (a strand). No flag turns it off; such a cell does not round-trip through TSV or CSV, and JSON
-  holds it unchanged (docs/formats.md).
+  `-3`), and so is a text that is `+` or `-` alone (a strand). No flag turns it off; such
+  a cell does not round-trip through TSV or CSV, and JSON holds it unchanged
+  (docs/formats.md).
 - `Table::keys` (the members of `--format json` and `jsonl` for a repeated column name)
   takes linear time. It compared every key with every earlier one, so a JSON document with
   100,000 columns of one name held `convert` for minutes. The keys are the same.

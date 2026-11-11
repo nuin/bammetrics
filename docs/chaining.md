@@ -4,7 +4,7 @@ A chain runs several steps on one BAM in one process. Records move from step to 
 memory. No shell pipe and no intermediate file is used. This page describes what waves W03
 and W04 of docs/07_full_parity_program.md (section 2) built: the stage layer and its
 executor (W03, 0.21.0), then the `chain` verb, its plan file, its plan text and the Python
-`chain` and `step` (W04).
+`chain` and `step` (W04, 0.22.0).
 
 ```bash
 # MarkDuplicates, four collectors on the marked records and the marked BAM, one process
