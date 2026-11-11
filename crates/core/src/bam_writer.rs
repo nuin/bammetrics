@@ -302,9 +302,9 @@ pub fn md5_path(output: &Path) -> PathBuf {
     PathBuf::from(name)
 }
 
-/// The hex MD5 of the BAM at `path`, as htsjdk writes it, into a file to
+/// The hex MD5 of the file at `path`, as htsjdk writes it, into a file to
 /// be renamed to `target`.
-fn write_md5(path: &Path, target: &Path) -> Result<AtomicFile> {
+pub(crate) fn write_md5(path: &Path, target: &Path) -> Result<AtomicFile> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,

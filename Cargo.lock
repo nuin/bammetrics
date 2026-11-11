@@ -71,6 +71,7 @@ dependencies = [
  "bammetrics-verdict",
  "clap",
  "clap_complete",
+ "libc",
  "signal-hook",
  "thiserror",
 ]

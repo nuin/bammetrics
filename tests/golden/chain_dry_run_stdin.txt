@@ -23,6 +23,8 @@ segment 2  a read of the spooled copy through step 1
   step 1  mark-duplicates  stream marked          ./stdin.marked.duplication_metrics
   step 2  quality-yield    tap on marked          ./stdin.quality_yield_metrics
   step 3  write            BAM of marked          standard output
-temp disk  in OUT/tmp: the whole input once (the spool; a pipe has no size to read), plus about 59 bytes per record when mark-duplicates holds more than 4,000,000 records (MAX_RECORDS_IN_RAM)
+barrier    step 1 mark-duplicates: replays a copy of the piped source; spills past MAX_RECORDS_IN_RAM 4,000,000; memory unknown
+temp disk  unknown (a pipe has no size to read) in OUT/tmp
+memory     unknown (a pipe has no size to read) at the peak
 nothing ran: this is a plan
 ## stderr

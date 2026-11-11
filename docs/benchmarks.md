@@ -189,10 +189,14 @@ Picard 3.5.0 numbers are the ones the feature branches measured on the same file
 | ConvertSequencingArtifactToOxoG | | | 0.00 s | 4 MB | |
 | CheckDuplicateMarking | | | 147.4 s | 14.14 GB | exit 1: 144,979 records disagree |
 
-`CheckDuplicateMarking` on a coordinate-sorted BAM sorts every record by query name in
-memory, as its port of Picard does without `SortingCollection`; 150.5M records took
-14.14 GB. A queryname-sorted input streams at a few MB. A disk-spilling sort for it is
-open. The exit 1 is the file's own state: GIAB's HG002 exome holds 144,979 records whose
+`CheckDuplicateMarking` on a coordinate-sorted BAM sorted every record by query name in
+memory in 0.19.0; 150.5M records took 14.14 GB. Since W05 part B it sorts through the
+spilling sorter (`MAX_RECORDS_IN_RAM` 500,000 keys, runs in `TMP_DIR`): 166.5 s and
+131 MiB (137,625,600 bytes), the same 144,979 lines. The exome holds no record flagged
+both first and second of a pair and no paired record flagged neither (`samtools view -c
+-f 0xC0` and `-f 0x1 -F 0xC0` both 0), so its queryname order is total and the spilled
+sort gives the order of the sort in memory. A queryname-sorted input streams at a few MB.
+The exit 1 is the file's own state: GIAB's HG002 exome holds 144,979 records whose
 mates disagree on the duplicate flag, and Picard reports the same.
 `CollectSequencingArtifactMetrics` holds the current contig twice (the reference and an
 upper-cased copy), which is most of its 3.75 GB; one copy could go.
@@ -215,6 +219,76 @@ With a reader that takes nothing for 3 seconds the default buffer fills
 (540,049,408 bytes) for the 512 MiB buffer. Picard allocates the 512 MiB at its start,
 which is its 630 MiB with a reader that keeps up. bammetrics reserves the bytes and
 writes only a window of them, 64 KiB at first, doubled when the bytes held fill it.
+
+## SAM text (HG002 exome)
+
+Wave W05 part A, the SAM text reader and writer, on the HG002 exome BAM (10,339,495,604
+bytes, 150,538,907 records) and on its chromosomes 20 and 21 (5,270,660 records, a
+355,705,146-byte BAM, 2,289,237,081 bytes of SAM text, 434 bytes per record). One run
+each with `/usr/bin/time -l`, 8 threads, on the machine of the Setup section.
+
+| Command | Input | Wall | Peak RSS |
+|---|---|---|---|
+| `view-sam -o /dev/null` | the exome BAM | 105.3 s | 9 MiB |
+| `samtools view -h -@7 -o /dev/null` | the exome BAM | 23.7 s | 22 MiB |
+| `view-sam -o slice.sam` | the slice BAM | 5.8 s | 8 MiB |
+| `chain slice.bam + write x.sam` | the slice BAM | 5.2 s | 20 MiB |
+| `view-sam -o /dev/null` | the slice as SAM text | 12.2 s | 7 MiB |
+| `CollectQualityYieldMetrics` | the slice as SAM text, `STRICT` | 10.0 s | 5 MiB |
+| `CollectQualityYieldMetrics` | the slice as SAM text in BGZF blocks | 12.0 s | 6 MiB |
+| `CollectQualityYieldMetrics` | the slice BAM | 1.2 s | 7 MiB |
+| `CollectInsertSizeMetrics` | the slice as SAM text, `STRICT` | 10.0 s | 6 MiB |
+| `CollectInsertSizeMetrics` | the slice BAM | 1.4 s | 7 MiB |
+
+- The writer prints 1.43 million records per second and holds one record. docs/07
+  section 6 allows a streaming writer 1.0 GiB.
+- The reader parses and validates 0.53 million records per second (230 MB of text) on
+  one thread. The BAM of the same records is read 8 times faster, its blocks inflated on
+  8 threads.
+- On the slice `ViewSam` prints Picard's bytes and `write x.sam` writes Picard
+  `SamFormatConverter`'s file, both apart from the `@RG DT` field (KNOWN_DIFFERENCES.md,
+  SAM text): MD5 `3755f1ca63f78d09f5b288fd92c99bcc` and
+  `76b5d683f749468a1ae3d10369c8416e` with that field left out of both.
+  `CollectQualityYieldMetrics`, `CollectInsertSizeMetrics` and `MarkDuplicates` write the
+  same metrics for the SAM text as for the BAM.
+
+## Sort barrier and planner (chromosomes 20 to 22 of the HG002 exome)
+
+Wave W05 part B on `chr20_21_22.bam` (573,136,551 bytes, 8,445,233 records, 2,951,869,900
+bytes inflated, coordinate sorted), one run each with `/usr/bin/time -l`, 8 threads, with
+other agents' builds on the machine. The constants of the planner
+(`crates/cli/src/chain/planner.rs`) come from these runs.
+
+| Command | Wall | Peak RSS | Spilled or spooled |
+|---|---:|---:|---:|
+| `chain + sort-sam --sort-order queryname + write`, `--sort-memory 16G` (in memory) | 16.7 s | 4,187 MiB | 0 |
+| the same, `--sort-memory 256M`, BGZF level 1 runs | 16.5 s | 407 MiB | 1,142,443,761 |
+| the same, `--sort-memory 256M`, BGZF level 3 runs (as built) | 17.5 s | 405 MiB | 871,834,880 |
+| `chain + sort-sam --sort-order coordinate + write` on the queryname BAM, 256M, level 1 | 8.1 s | 408 MiB | 820,851,148 |
+| the same, level 3 (as built) | 8.9 s | 406 MiB | 616,683,279 |
+| `SortSam SORT_ORDER=coordinate` (500,000 records per run) | 8.3 s | 302 MiB | |
+| `chain + mark-duplicates + write` (replay) | 14.9 s | 646 MiB | 0 |
+| `chain + sort-sam queryname + mark-duplicates + sort-sam coordinate + write --index`, `--sort-memory 1G` | 52.5 s | 1,689 MiB | 877,285,505 + 879,914,157 (spool) + 639,427,369 |
+| staged: `SortSam` queryname, `MarkDuplicates`, `SortSam` coordinate | 16.9 + 16.3 + 14.6 s | 307, 655, 284 MiB | |
+
+- The two-barrier chain and the staged sequence give the same records and the same header
+  lines apart from `@PG CL` (MD5 of `samtools view` `c793ee54b6d2ea44725dc5ef5c53c325` on
+  both). Its peak, 1.65 GiB at `--sort-memory 1G`, is under the docs/07 section 6 bound of
+  `--sort-memory` plus 1 GiB. The chain took 52.5 s against 47.8 s staged: its sorts hold
+  2.5 million records per run where the tool holds 500,000, and the spool is written on
+  the reader's thread.
+- A queryname run spills 1.52 times the coordinate BAM it came from at level 3 (1.99 at
+  level 1); a coordinate run 1.08 times (1.43). The queryname-sorted BAM at level 5 is
+  856,813,333 bytes, 1.49 times the coordinate one, so no level of BGZF brings a
+  queryname spill under the 1.2 times of docs/07 section 6. `bgzip` (libdeflate) at
+  levels 1 to 6 gave 890.6 to 855.8 MB for the queryname records and 626.6 to 574.7 MB for
+  the coordinate ones; the zlib-rs level 1 of noodles is the outlier, so runs are level 3.
+- The planner counts 8,306,326 records from the file size (1.6 percent short) and, with
+  105 and 76 bytes per record, estimates 831.8 MiB, 831.8 MiB and 602.0 MiB for the three
+  files of the two-barrier chain (measured 836.6, 839.2 and 609.8 MiB). Its first memory
+  rule gave 1.3 GiB against the measured 1.65 GiB; the rule as built adds the memory of
+  the barrier before, because the allocator keeps what that one freed, and estimates
+  above the peak.
 
 ## Report budgets (docs/05 section 4.8)
 

@@ -39,6 +39,7 @@ mod args;
 mod claims;
 mod describe;
 mod planfile;
+mod planner;
 mod prepare;
 pub mod python;
 mod run;
@@ -87,6 +88,15 @@ pub struct Spec {
     /// step may write it.
     pub plan_file: Option<String>,
     pub steps: Vec<StepSpec>,
+    /// `--sort-memory`: the bytes a sort step holds, as given (`2G`).
+    pub sort_memory: Option<String>,
+    /// `--force-space`: run when the estimate exceeds the free space.
+    pub force_space: bool,
+    /// `--validation-stringency`: how a SAM text source is checked.
+    pub stringency: Option<String>,
+    /// The free bytes the planner assumes in every directory, in place of
+    /// the file system's answer (a test hook, not in `--help`).
+    pub free_space: Option<u64>,
 }
 
 /// One step as asked for: its verb and its own arguments.

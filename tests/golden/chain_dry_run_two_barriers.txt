@@ -1,0 +1,47 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
+--sort-memory
+4K
+--dry-run
++
+sort-sam
+--sort-order
+queryname
++
+mark-duplicates
++
+sort-sam
+--sort-order
+coordinate
++
+write
+OUT/out.bam
+--index
+## exit
+0
+## stdout
+chain plan for tests/data/markdup.bam
+  source    tests/data/markdup.bam (BAM, 1,158 bytes, sort order coordinate; a file, it can be read again)
+  prefix    OUT/s (from -o)
+segment 1  one read of tests/data/markdup.bam
+  step 1  sort-sam         transform, first read  takes every record and sorts them by queryname
+segment 2  the records step 1 holds, sorted by queryname
+  step 1  sort-sam         stream sorted          no file
+  step 2  mark-duplicates  transform, first read  takes every record, then finds the duplicate sets
+segment 3  a read of the spool of step 2's input through step 2 (spool: its input is no file)
+  step 2  mark-duplicates  stream marked          OUT/s.marked.duplication_metrics
+  step 3  sort-sam         transform, first read  takes every record and sorts them by coordinate
+segment 4  the records step 3 holds, sorted by coordinate
+  step 3  sort-sam         stream sorted-2        no file
+  step 4  write            BAM of sorted-2        OUT/out.bam, OUT/out.bai
+barrier    step 1 sort-sam: holds its records; spills about 1.6 KiB (--sort-memory 4.0 KiB); memory about 100.0 MiB
+barrier    step 2 mark-duplicates: spools its input, about 1.6 KiB; about 16 records by the file size, no spill under MAX_RECORDS_IN_RAM 4,000,000; memory about 100.0 MiB
+barrier    step 3 sort-sam: holds its records; spills about 1.2 KiB (--sort-memory 4.0 KiB); memory about 100.0 MiB
+temp disk  about 4.5 KiB in the system temporary directory
+output     about 1.1 KiB written by write
+memory     about 100.0 MiB at the peak
+nothing ran: this is a plan
+## stderr

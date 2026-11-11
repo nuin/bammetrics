@@ -41,10 +41,13 @@ use crate::optical::{
     ReadNameParser,
 };
 use crate::registry::{Invocation, Opt, Tool};
+use crate::sam_text::Stringency;
 use crate::spill::TempDir;
 use crate::stage::{Barrier, Frame, Next, Sealed, Stage};
 
+pub use build::unclipped;
 pub use inputs::SortOrder;
+pub use md_nm::{ContigCache, restore as restore_md_and_nm};
 
 /// `DuplicateScoringStrategy.ScoringStrategy`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -73,6 +76,8 @@ pub struct Options {
     pub metrics: PathBuf,
     pub reference: Option<PathBuf>,
     pub threads: usize,
+    /// `VALIDATION_STRINGENCY`: how SAM text inputs are checked.
+    pub stringency: Stringency,
     pub remove_duplicates: bool,
     pub remove_sequencing_duplicates: bool,
     /// `ASSUME_SORT_ORDER`, or `coordinate` for `ASSUME_SORTED=true`.
@@ -245,6 +250,7 @@ impl Options {
             compression_level,
             create_index: inv.flag("CREATE_INDEX", false)?,
             create_md5_file: inv.flag("CREATE_MD5_FILE", false)?,
+            stringency: inv.stringency()?,
             tmp_dir: inv.all("TMP_DIR").first().map(PathBuf::from),
             records_in_ram,
             command: inv.command.clone(),
@@ -587,6 +593,7 @@ impl<'t> Barrier<'t> for Marking<'t> {
         Ok(Sealed {
             header: output,
             next: Next::Replay(Box::new(copier)),
+            products: crate::stage::Products::default(),
         })
     }
 }

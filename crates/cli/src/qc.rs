@@ -162,6 +162,10 @@ pub struct QcArgs {
     /// available cores, at most 8).
     #[arg(long, default_value_t = pass::default_threads())]
     pub threads: usize,
+    /// How SAM text input is checked: STRICT (default), LENIENT or SILENT.
+    /// A BAM or CRAM is read the same at every value.
+    #[arg(long, value_name = "LEVEL", value_parser = ["STRICT", "LENIENT", "SILENT"])]
+    pub validation_stringency: Option<String>,
     #[arg(long, value_enum, default_value_t = Format::Text)]
     pub format: Format,
     /// Further formats beside the Picard files, one or a list
@@ -520,6 +524,11 @@ impl Context<'_> {
         if let Some(r) = reference {
             argv.push(format!("REFERENCE_SEQUENCE={}", r.display()));
         }
+        // SAM text, or a pipe that may hold it, is read at the level given.
+        let text = cram::is_sam(&self.args.bam) || !self.args.bam.is_file();
+        if let (Some(level), true) = (&self.args.validation_stringency, text) {
+            argv.push(format!("VALIDATION_STRINGENCY={level}"));
+        }
         argv.extend(extra.iter().cloned());
         argv
     }
@@ -869,12 +878,21 @@ fn unmet(cx: &Context, tools: &[&str]) -> Vec<Unmet> {
     unmet
 }
 
+/// `--validation-stringency` of `args`, `STRICT` without it. The parser
+/// takes the three values only.
+pub fn stringency_of(args: &QcArgs) -> bammetrics_core::sam_text::Stringency {
+    args.validation_stringency
+        .as_deref()
+        .and_then(bammetrics_core::sam_text::Stringency::parse)
+        .unwrap_or(bammetrics_core::sam_text::Stringency::Strict)
+}
+
 /// The sample: `--sample`, else the first `@RG` with an `SM`, else the
 /// BAM name. The header is read either way, so a file that is not a BAM
 /// stops the run here.
 fn sample(args: &QcArgs) -> Result<(String, Origin)> {
-    let header =
-        pass::read_header(&args.bam).map_err(|e| Error::Input(format!("{e} (from BAM)")))?;
+    let header = pass::read_header_at(&args.bam, stringency_of(args))
+        .map_err(|e| Error::Input(format!("{e} (from BAM)")))?;
     if let Some(name) = &args.sample {
         if name.contains('\0') {
             return Err(Error::Usage(format!(

@@ -25,7 +25,7 @@ make golden-update   # rewrite tests/golden after an intended command-line chang
 root: each registry tool in Picard syntax with and without `O=`, the five 0.12
 subcommands (verbs since 0.13.0) with and without `-O`, the verb grammar's spellings,
 formats, prefixes and info verbs, `check`, `report`, `qc` and `plan`, and the documented
-error paths, 198 cases on the committed fixtures and 20 more on corpus t1 when
+error paths, 316 cases on the committed fixtures and 22 more on corpus t1 when
 `GOLDEN_CORPUS=1` is set and `tests/corpus/out` exists. A case that writes into `.`
 (`collect` without `-o`) runs in its output directory and records the fixture paths as
 `ROOT/...`. One

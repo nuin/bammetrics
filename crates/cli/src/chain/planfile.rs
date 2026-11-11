@@ -45,7 +45,7 @@ use crate::error::VerbError;
 use crate::grammar::{self, Flag, Key};
 
 /// The keys of `[chain]`.
-const CHAIN_KEYS: [&str; 10] = [
+const CHAIN_KEYS: [&str; 13] = [
     "source",
     "output-prefix",
     "reference",
@@ -56,6 +56,9 @@ const CHAIN_KEYS: [&str; 10] = [
     "sample",
     "quiet",
     "verbose",
+    "sort-memory",
+    "force-space",
+    "validation-stringency",
 ];
 
 /// A plan file and the line an error is on.
@@ -186,6 +189,22 @@ fn chain_table(at: &At, table: &Table, spec: &mut Spec) -> Result<(), VerbError>
             "also" => spec.also = Some(name_list(at, entry)?),
             "quiet" => spec.quiet = boolean(at, entry)?,
             "verbose" => spec.verbose = boolean(at, entry)?,
+            "force-space" => spec.force_space = boolean(at, entry)?,
+            "validation-stringency" => spec.stringency = Some(string(at, entry)?),
+            "sort-memory" => {
+                let text = match &entry.value {
+                    Scalar::Str(text) => Some(text.clone()),
+                    Scalar::Int(n) if *n > 0 => Some(n.to_string()),
+                    _ => None,
+                };
+                spec.sort_memory = Some(text.ok_or_else(|| {
+                    at.error(
+                        entry.line,
+                        "sort-memory: expected bytes as a whole number or a string with a \
+                         suffix (\"2G\")",
+                    )
+                })?);
+            }
             "threads" => {
                 let threads = match &entry.value {
                     Scalar::Int(n) => usize::try_from(*n).ok(),

@@ -22,6 +22,7 @@ use std::path::{Path, PathBuf};
 use bammetrics_core::fifo_buffer;
 use bammetrics_core::multiple_metrics::file_extensions;
 use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
+use bammetrics_core::view_sam;
 use bammetrics_core::{bam_index_stats, check_duplicate_marking, compare_metrics, cram, pass};
 
 use crate::error::VerbError;
@@ -336,6 +337,26 @@ pub const VERBS: &[Verb] = &[
         ignores: &[(Key::Threads, "one thread reads and one writes")],
         ..verb("fifo-buffer", "FifoBuffer", Files::Single)
     },
+    Verb {
+        about: Some(
+            "prints the header and each record of a SAM, BAM or CRAM as SAM text, as Picard's \
+             ViewSam does, to -o or standard output, as the file is read. --format json, jsonl \
+             or tsv gives one row per record instead and holds at most 256 MiB of SAM text.",
+        ),
+        writes: "SAM text",
+        reads: &["INTERVAL_LIST"],
+        ..verb("view-sam", "ViewSam", Files::Single)
+    },
+    Verb {
+        about: Some(
+            "sorts the records of a BAM, CRAM or SAM by --sort-order (queryname, coordinate or \
+             duplicate) as Picard's SortSam does: -o gets a BAM, or SAM text for a name ending \
+             in .sam, under the input header with SO set. Runs of --max-records-in-ram records \
+             spill to --tmp-dir.",
+        ),
+        writes: "sorted BAM",
+        ..verb("sort-sam", "SortSam", Files::Bam)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
@@ -531,6 +552,11 @@ impl Verb {
                 {
                     format!("Decodes a CRAM input; for a BAM accepted and ignored: {why}.")
                 }
+                Kind::Ignored(registry::STRINGENCY_UNREAD) => {
+                    "How SAM text input is checked: STRICT (default), LENIENT or SILENT. A BAM \
+                     or CRAM is read the same at every value."
+                        .to_owned()
+                }
                 Kind::Ignored(why) => format!("Accepted and ignored: {why}."),
                 _ if opt.required => format!("{} Required.", opt.help),
                 _ => opt.help.to_owned(),
@@ -684,6 +710,16 @@ impl Verb {
             }
             let status = check.status();
             (check.output, status)
+        } else if tool.name == view_sam::TOOL.name && formats == [Format::Picard] {
+            // The SAM text goes out as it is read: no rows are held.
+            let status = match &output {
+                Some(path) => view_sam::write_file(&inv, path).map(|()| 0),
+                None => view_sam::print(&inv),
+            };
+            (
+                bammetrics_core::metric::ToolOutput::NONE,
+                status.map_err(core)?,
+            )
         } else {
             ((tool.run)(&inv).map_err(core)?, 0)
         };
@@ -1373,14 +1409,33 @@ fn with_from(error: VerbError, from: Option<String>) -> VerbError {
     }
 }
 
+/// The device and inode of an existing regular file; `None` for a device,
+/// a pipe or a missing file, which writing does not destroy.
+fn file_identity(path: &Path) -> Option<(u64, u64)> {
+    let meta = fs::metadata(path).ok().filter(fs::Metadata::is_file)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        Some((meta.dev(), meta.ino()))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = meta;
+        None
+    }
+}
+
 /// An output that is one of the inputs would overwrite it: a usage error.
-/// Only existing files compare equal, after resolving links and `..`.
+/// Only existing files compare equal: after resolving links and `..`, or
+/// by device and inode, so a hard link to an input counts too.
 pub fn refuse_overwriting_inputs(
     verb: &str,
     inputs: &[PathBuf],
     outputs: &[PathBuf],
 ) -> Result<(), VerbError> {
-    let inputs: Vec<PathBuf> = inputs
+    let identities: std::collections::HashSet<(u64, u64)> =
+        inputs.iter().filter_map(|p| file_identity(p)).collect();
+    let inputs: std::collections::HashSet<PathBuf> = inputs
         .iter()
         .filter_map(|p| p.canonicalize().ok())
         .collect();
@@ -1388,7 +1443,8 @@ pub fn refuse_overwriting_inputs(
         let Ok(resolved) = output.canonicalize() else {
             continue;
         };
-        if inputs.contains(&resolved) {
+        let linked = file_identity(output).is_some_and(|id| identities.contains(&id));
+        if linked || inputs.contains(&resolved) {
             return Err(VerbError::usage(
                 verb,
                 format!(

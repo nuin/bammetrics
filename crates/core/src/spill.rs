@@ -4,25 +4,54 @@
 //!
 //! Records are sorted stably, and runs merge with ties going to the earlier
 //! run, so equal records come back in the order they were added, as
-//! htsjdk's collections give them. A run file holds each record as LEB128
-//! varints ([`Spill`]). The directory and every run file are created here
-//! and removed when the [`TempDir`] is dropped; nothing else is deleted.
+//! htsjdk's collections give them. A run is sorted by [`Spill::sort_run`]:
+//! the standard library's stable sort for a total order, the port of Java's
+//! `TimSort` ([`crate::timsort`]) for an order that may not be one. Runs
+//! merge through the port of Java's `TreeSet` ([`crate::tree_set`]) keyed
+//! by the head record and then the run index, as htsjdk's `MergingIterator`
+//! merges them, so an order that is not total takes htsjdk's records first
+//! while at most 64 runs exist. A run file holds each record as
+//! [`Spill::encode`] writes it, plain or in BGZF blocks
+//! ([`Sorter::compressed`]). The buffer holds at most a set number of
+//! records and, with [`Sorter::byte_limit`], a set number of bytes. The
+//! directory and every run file are created here and removed when the
+//! [`TempDir`] is dropped; nothing else is deleted.
 
-use std::cmp::{Ordering, Reverse};
-use std::collections::BinaryHeap;
+use std::cmp::Ordering;
 use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, BufWriter, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
+use std::num::NonZero;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Mutex, OnceLock};
 
+use noodles::bgzf;
+
 use crate::error::{Error, Result};
+use crate::tree_set::TreeSet;
 
 /// A record that can be written to and read back from a run file.
 pub trait Spill: Sized {
     fn encode(&self, out: &mut Vec<u8>);
     /// The next record, `None` at the end of the file.
     fn decode(input: &mut impl BufRead) -> io::Result<Option<Self>>;
+
+    /// Bytes the record holds in memory, counted against
+    /// [`Sorter::byte_limit`].
+    fn memory(&self) -> usize {
+        std::mem::size_of::<Self>()
+    }
+
+    /// Sort one run in memory, stably. The default suits a total order. A
+    /// type whose order may not be one sorts as Java does
+    /// ([`crate::timsort`]), so it never panics.
+    fn sort_run(run: &mut Vec<Self>) -> Result<()>
+    where
+        Self: Ord,
+    {
+        run.sort();
+        Ok(())
+    }
 }
 
 /// A directory of run files, removed with everything this process put in it.
@@ -164,16 +193,39 @@ fn write_error(path: &Path) -> impl Fn(io::Error) -> Error + '_ {
     }
 }
 
+/// How run files are written.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RunFormat {
+    Plain,
+    /// BGZF blocks at this level, compressed on `workers` threads.
+    Bgzf {
+        level: u8,
+        workers: usize,
+    },
+}
+
 /// Records added in any order, given back sorted.
 pub struct Sorter<'d, T> {
     dir: &'d TempDir,
     stem: &'static str,
     limit: usize,
+    /// Most bytes ([`Spill::memory`]) the buffer holds; `usize::MAX` for no
+    /// bound.
+    byte_limit: usize,
+    /// Bytes the buffer holds now.
+    held: usize,
+    format: RunFormat,
     buffer: Vec<T>,
     runs: Vec<PathBuf>,
     /// How many merges made each run: 0 for a spilled buffer.
     levels: Vec<u32>,
     count: u64,
+    /// Bytes written to run files so far, merged runs included.
+    spilled: u64,
+    peak_records: usize,
+    peak_bytes: usize,
+    /// The deepest level of merges made while spilling.
+    merge_levels: u32,
 }
 
 impl<'d, T: Spill + Ord> Sorter<'d, T> {
@@ -183,20 +235,65 @@ impl<'d, T: Spill + Ord> Sorter<'d, T> {
             dir,
             stem,
             limit: limit.max(1),
+            byte_limit: usize::MAX,
+            held: 0,
+            format: RunFormat::Plain,
             buffer: Vec::new(),
             runs: Vec::new(),
             levels: Vec::new(),
             count: 0,
+            spilled: 0,
+            peak_records: 0,
+            peak_bytes: 0,
+            merge_levels: 0,
         }
     }
 
+    /// Also spill before the buffer would hold more than `bytes` bytes of
+    /// records ([`Spill::memory`]). A record larger than `bytes` is held
+    /// alone.
+    #[must_use]
+    pub fn byte_limit(mut self, bytes: usize) -> Self {
+        self.byte_limit = bytes.max(1);
+        self
+    }
+
+    /// Write run files as BGZF blocks at `level` (0 to 9), compressed on
+    /// `workers` threads.
+    #[must_use]
+    pub fn compressed(mut self, level: u8, workers: usize) -> Self {
+        self.format = RunFormat::Bgzf {
+            level: level.min(9),
+            workers: workers.max(1),
+        };
+        self
+    }
+
     pub fn push(&mut self, item: T) -> Result<()> {
-        if self.buffer.len() >= self.limit {
+        let size = item.memory();
+        let over_bytes =
+            !self.buffer.is_empty() && self.held.saturating_add(size) > self.byte_limit;
+        if self.buffer.len() >= self.limit || over_bytes {
             self.spill()?;
         }
         self.buffer.push(item);
+        self.held += size;
         self.count += 1;
+        self.peak_records = self.peak_records.max(self.buffer.len());
+        self.peak_bytes = self.peak_bytes.max(self.held);
         Ok(())
+    }
+
+    /// What the sort has done so far.
+    pub fn stats(&self) -> SortStats {
+        SortStats {
+            records: self.count,
+            runs: self.runs.len(),
+            spilled_bytes: self.spilled,
+            peak_records: self.peak_records,
+            peak_bytes: self.peak_bytes,
+            merge_levels: self.merge_levels,
+        }
     }
 
     /// Records added so far.
@@ -209,16 +306,17 @@ impl<'d, T: Spill + Ord> Sorter<'d, T> {
     }
 
     fn spill(&mut self) -> Result<()> {
-        self.buffer.sort();
+        T::sort_run(&mut self.buffer)?;
         let (path, file) = self.dir.create_file(self.stem)?;
-        let mut out = BufWriter::with_capacity(1 << 20, file);
+        let mut out = RunWriter::new(file, self.format);
         let mut bytes = Vec::with_capacity(64);
         for item in self.buffer.drain(..) {
             bytes.clear();
             item.encode(&mut bytes);
             out.write_all(&bytes).map_err(write_error(&path))?;
         }
-        out.flush().map_err(write_error(&path))?;
+        self.held = 0;
+        self.spilled += out.finish().map_err(write_error(&path))?;
         self.runs.push(path);
         self.levels.push(0);
         // The last MAX_OPEN_RUNS runs of one level merge into one run of
@@ -230,77 +328,197 @@ impl<'d, T: Spill + Ord> Sorter<'d, T> {
             if self.levels[from..].iter().any(|l| *l != level) {
                 break;
             }
-            let merged = self.merge_into_run(&self.runs[from..])?;
+            let group = self.runs[from..].to_vec();
+            let merged = self.merge_into_run(&group)?;
             self.runs.truncate(from);
             self.levels.truncate(from);
             self.runs.push(merged);
             self.levels.push(level + 1);
+            self.merge_levels = self.merge_levels.max(level + 1);
         }
         Ok(())
     }
 
     /// Every record in order.
-    pub fn finish(mut self) -> Result<Sorted<'d, T>> {
+    pub fn finish(self) -> Result<Sorted<'d, T>> {
+        self.finish_with_stats().map(|(sorted, _)| sorted)
+    }
+
+    /// [`Sorter::finish`], and what the sort did with the last merge
+    /// counted.
+    pub fn finish_with_stats(mut self) -> Result<(Sorted<'d, T>, SortStats)> {
         if self.runs.is_empty() {
-            self.buffer.sort();
-            return Ok(Sorted {
-                source: Source::Memory(self.buffer.into_iter()),
-            });
+            T::sort_run(&mut self.buffer)?;
+            let stats = self.stats();
+            let items = std::mem::take(&mut self.buffer).into_iter();
+            return Ok((
+                Sorted {
+                    source: Source::Memory(items),
+                },
+                stats,
+            ));
         }
         if !self.buffer.is_empty() {
             self.spill()?;
         }
         // Consecutive runs merge into one until few enough files stay open;
         // a merged run takes its place in the list, so ties keep their order.
+        let mut level = self.merge_levels;
         while self.runs.len() > MAX_OPEN_RUNS {
             let mut merged = Vec::with_capacity(self.runs.len() / MAX_OPEN_RUNS + 1);
             for group in std::mem::take(&mut self.runs).chunks(MAX_OPEN_RUNS) {
                 merged.push(self.merge_into_run(group)?);
             }
             self.runs = merged;
+            level += 1;
         }
+        self.merge_levels = level + 1;
         self.levels.clear();
-        Ok(Sorted {
-            source: open_runs(self.dir, std::mem::take(&mut self.runs))?,
-        })
+        let stats = self.stats();
+        let runs = std::mem::take(&mut self.runs);
+        Ok((
+            Sorted {
+                source: open_runs(self.dir, runs, self.format)?,
+            },
+            stats,
+        ))
     }
 
     /// Merge `group` into one new run file; the files of `group` are removed.
-    fn merge_into_run(&self, group: &[PathBuf]) -> Result<PathBuf> {
+    fn merge_into_run(&mut self, group: &[PathBuf]) -> Result<PathBuf> {
         if let [only] = group {
             return Ok(only.clone());
         }
         let mut source: Sorted<'_, T> = Sorted {
-            source: open_runs(self.dir, group.to_vec())?,
+            source: open_runs(self.dir, group.to_vec(), self.format)?,
         };
         let (path, file) = self.dir.create_file(self.stem)?;
-        let mut out = BufWriter::with_capacity(1 << 20, file);
+        let mut out = RunWriter::new(file, self.format);
         let mut bytes = Vec::with_capacity(64);
         while let Some(item) = source.next_item()? {
             bytes.clear();
             item.encode(&mut bytes);
             out.write_all(&bytes).map_err(write_error(&path))?;
         }
-        out.flush().map_err(write_error(&path))?;
+        self.spilled += out.finish().map_err(write_error(&path))?;
         Ok(path)
     }
+}
+
+/// What a [`Sorter`] did.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SortStats {
+    pub records: u64,
+    /// Run files read by the last merge.
+    pub runs: usize,
+    /// Bytes written to run files, merged runs included.
+    pub spilled_bytes: u64,
+    /// Most records the buffer held at once.
+    pub peak_records: usize,
+    /// Most bytes ([`Spill::memory`]) the buffer held at once.
+    pub peak_bytes: usize,
+    /// 0 for a sort in memory, 1 for one merge of the spilled runs, one
+    /// more per level of merges made before that.
+    pub merge_levels: u32,
 }
 
 /// Most run files read at once; more are merged in groups first.
 const MAX_OPEN_RUNS: usize = 64;
 
+/// A run file being written: plain, or BGZF blocks.
+enum RunWriter {
+    Plain(BufWriter<File>),
+    Bgzf(bgzf::io::MultithreadedWriter<BufWriter<File>>),
+}
+
+impl RunWriter {
+    fn new(file: File, format: RunFormat) -> Self {
+        let out = BufWriter::with_capacity(1 << 20, file);
+        match format {
+            RunFormat::Plain => Self::Plain(out),
+            RunFormat::Bgzf { level, workers } => {
+                let level = bgzf::io::writer::CompressionLevel::new(level)
+                    .unwrap_or(bgzf::io::writer::CompressionLevel::FAST);
+                let workers = NonZero::new(workers).unwrap_or(NonZero::<usize>::MIN);
+                Self::Bgzf(
+                    bgzf::io::multithreaded_writer::Builder::default()
+                        .set_compression_level(level)
+                        .set_worker_count(workers)
+                        .build_from_writer(out),
+                )
+            }
+        }
+    }
+
+    fn write_all(&mut self, bytes: &[u8]) -> io::Result<()> {
+        match self {
+            Self::Plain(out) => out.write_all(bytes),
+            Self::Bgzf(out) => out.write_all(bytes),
+        }
+    }
+
+    /// Flush the file; its size in bytes.
+    fn finish(self) -> io::Result<u64> {
+        let mut file = match self {
+            Self::Plain(out) => out,
+            Self::Bgzf(mut out) => out.finish()?,
+        };
+        file.flush()?;
+        file.get_ref().metadata().map(|m| m.len())
+    }
+}
+
+/// A run file being read.
+enum RunReader {
+    Plain(BufReader<File>),
+    Bgzf(bgzf::io::Reader<BufReader<File>>),
+}
+
+impl Read for RunReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Self::Plain(r) => r.read(buf),
+            Self::Bgzf(r) => r.read(buf),
+        }
+    }
+}
+
+impl BufRead for RunReader {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        match self {
+            Self::Plain(r) => r.fill_buf(),
+            Self::Bgzf(r) => r.fill_buf(),
+        }
+    }
+
+    fn consume(&mut self, amount: usize) {
+        match self {
+            Self::Plain(r) => r.consume(amount),
+            Self::Bgzf(r) => r.consume(amount),
+        }
+    }
+}
+
 /// The k-way merge over `paths`, ties to the earlier run.
-fn open_runs<T: Spill + Ord>(dir: &TempDir, paths: Vec<PathBuf>) -> Result<Source<'_, T>> {
+fn open_runs<T: Spill + Ord>(
+    dir: &TempDir,
+    paths: Vec<PathBuf>,
+    format: RunFormat,
+) -> Result<Source<'_, T>> {
     let mut readers = Vec::with_capacity(paths.len());
-    let mut heap = BinaryHeap::with_capacity(paths.len());
+    let mut queue = TreeSet::with_capacity(paths.len());
     for (run, path) in paths.iter().enumerate() {
         let file = File::open(path).map_err(|source| Error::Input {
             path: path.clone(),
             source,
         })?;
-        let mut reader = BufReader::with_capacity(1 << 18, file);
+        let buffered = BufReader::with_capacity(1 << 18, file);
+        let mut reader = match format {
+            RunFormat::Plain => RunReader::Plain(buffered),
+            RunFormat::Bgzf { .. } => RunReader::Bgzf(bgzf::io::Reader::new(buffered)),
+        };
         if let Some(item) = T::decode(&mut reader).map_err(Error::Record)? {
-            heap.push(Reverse(Head { item, run }));
+            queue.add(Head { item, run }, head_order);
         }
         readers.push(reader);
     }
@@ -308,34 +526,20 @@ fn open_runs<T: Spill + Ord>(dir: &TempDir, paths: Vec<PathBuf>) -> Result<Sourc
         dir,
         paths,
         readers,
-        heap,
+        queue,
     })
 }
 
-/// The smallest unread record of one run; ties go to the earlier run.
+/// The smallest unread record of one run.
 struct Head<T> {
     item: T,
     run: usize,
 }
 
-impl<T: Ord> PartialEq for Head<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == Ordering::Equal
-    }
-}
-
-impl<T: Ord> Eq for Head<T> {}
-
-impl<T: Ord> PartialOrd for Head<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<T: Ord> Ord for Head<T> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.item.cmp(&other.item).then(self.run.cmp(&other.run))
-    }
+/// htsjdk's `PeekFileRecordIteratorComparator`: the records, then the run
+/// index, so ties go to the earlier run.
+fn head_order<T: Ord>(a: &Head<T>, b: &Head<T>) -> Ordering {
+    a.item.cmp(&b.item).then(a.run.cmp(&b.run))
 }
 
 enum Source<'d, T> {
@@ -343,8 +547,8 @@ enum Source<'d, T> {
     Runs {
         dir: &'d TempDir,
         paths: Vec<PathBuf>,
-        readers: Vec<BufReader<File>>,
-        heap: BinaryHeap<Reverse<Head<T>>>,
+        readers: Vec<RunReader>,
+        queue: TreeSet<Head<T>>,
     },
 }
 
@@ -358,12 +562,12 @@ impl<T: Spill + Ord> Sorted<'_, T> {
     pub fn next_item(&mut self) -> Result<Option<T>> {
         match &mut self.source {
             Source::Memory(items) => Ok(items.next()),
-            Source::Runs { readers, heap, .. } => {
-                let Some(Reverse(Head { item, run })) = heap.pop() else {
+            Source::Runs { readers, queue, .. } => {
+                let Some(Head { item, run }) = queue.poll_first() else {
                     return Ok(None);
                 };
                 if let Some(next) = T::decode(&mut readers[run]).map_err(Error::Record)? {
-                    heap.push(Reverse(Head { item: next, run }));
+                    queue.add(Head { item: next, run }, head_order);
                 }
                 Ok(Some(item))
             }

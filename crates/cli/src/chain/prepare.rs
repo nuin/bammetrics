@@ -12,20 +12,23 @@
 //! without a path writes `PREFIX.<stream>.bam`. A step's own `-o` replaces
 //! the name.
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use bammetrics_core::multiple_metrics::file_extensions;
 use bammetrics_core::registry::{Kind, Tool, Ty};
-use bammetrics_core::stage::{self, Outputs, WriteOptions};
+use bammetrics_core::sam_text::Stringency;
+use bammetrics_core::stage::{self, Outputs, WriteFormat, WriteOptions};
 use bammetrics_core::{cram, java, pass};
 use clap::ValueEnum;
 
 use super::args::{
-    AS, CHAIN_KEYS, COMPRESSION_LEVEL, INDEX, MD5, STEPS_HINT, belongs_to_chain,
+    AS, CHAIN_KEYS, COMPRESSION_LEVEL, INDEX, MD5, OUTPUT_FORMAT, STEPS_HINT, belongs_to_chain,
     chain_option_on_step, find_step, is_transform, not_a_step, step_parser_flags, unknown_step,
     write_flags,
 };
 use super::claims::{Read, check_one_stdout, claim_outputs, inputs_of, refuse_overwriting_inputs};
+use super::planner;
 use super::{EMPTY_PREFIX_HINT, Spec, StepSpec, VERB, WRITE, usage};
 use crate::also::Also;
 use crate::error::VerbError;
@@ -138,6 +141,14 @@ pub struct Chain {
     pub quiet: bool,
     pub verbose: bool,
     pub stage_executor: bool,
+    /// Bytes a sort step holds before it spills (`--sort-memory`).
+    pub sort_memory: u64,
+    /// Run when the estimate exceeds the free space (`--force-space`).
+    pub force_space: bool,
+    /// How a SAM text source is checked (`--validation-stringency`).
+    pub stringency: Stringency,
+    /// The free bytes assumed in every directory, for tests.
+    pub free_space: Option<u64>,
     pub steps: Vec<Planned>,
     /// `PREFIX.report.md` of `--also markdown`.
     pub report: Option<PathBuf>,
@@ -334,12 +345,25 @@ fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
                 given.spelled
             ))
             .from(given.spelled.clone())
-            .hint(format!(
-                "add + write {} after it; --metrics-file names its metrics",
-                given.values[0]
-            )));
+            .hint(transform_output_hint(verb.tool(), &given.values[0])));
     }
     Ok(draft)
+}
+
+/// How to write the records of a transform given `-o NAME`; a transform
+/// with a metrics file (`MarkDuplicates`) also names the flag for it.
+fn transform_output_hint(tool: &Tool, name: &str) -> String {
+    let metrics = tool
+        .options
+        .iter()
+        .find(|opt| matches!(opt.kind, Kind::Output));
+    match metrics {
+        Some(opt) => format!(
+            "add + write {name} after it; --{} names its metrics",
+            opt.kebab()
+        ),
+        None => format!("add + write {name} after it"),
+    }
 }
 
 /// Where a step stands in the chain.
@@ -379,14 +403,20 @@ fn stream_name(draft: &Draft, verb: &Verb) -> Result<String, VerbError> {
     Ok(name.clone())
 }
 
-/// The stream each step reads and the segment it runs in. A second
-/// transform is refused: it reads its input twice, and only the source
-/// can be read again in this version.
+/// The stream each step reads and the segment it runs in. Every transform
+/// is a barrier and starts a segment. One that reads its input twice
+/// behind another transform replays a spool of its input (docs/07 section
+/// 2.3), so any number of transforms may follow one another. Stream names
+/// are unique, so every file named after one is too: a default name an
+/// earlier transform took gets `-2`, `-3` (`sorted-2`), and an `--as` name
+/// that is taken is a usage error.
 fn positions(drafts: &[Draft]) -> Result<Vec<Position>, VerbError> {
     let mut stream = SOURCE_STREAM.to_owned();
     let mut segment = 1;
     let mut behind: Vec<&str> = Vec::new();
-    let mut first: Option<&Draft> = None;
+    let mut taken: HashSet<String> = HashSet::from([SOURCE_STREAM.to_owned()]);
+    // The next number to try after each default name.
+    let mut next: HashMap<String, usize> = HashMap::new();
     let mut positions = Vec::with_capacity(drafts.len());
     for draft in drafts {
         let mut position = Position {
@@ -396,17 +426,25 @@ fn positions(drafts: &[Draft]) -> Result<Vec<Position>, VerbError> {
             behind: behind.join("+"),
         };
         if let What::Tool(verb, Role::Transform) = draft.what {
-            if let Some(first) = first {
-                return Err(draft
-                    .usage(format!(
-                        "it reads its input twice and cannot follow {}: only a file source \
-                         can be read again in this version",
-                        first.label
-                    ))
-                    .hint("wave W05 of docs/07 spools the stream for a second transform"));
-            }
-            first = Some(draft);
             stream = stream_name(draft, verb)?;
+            if taken.contains(&stream) {
+                if let Some(given) = draft.parsed.last(AS) {
+                    return Err(draft
+                        .usage(format!(
+                            "the stream name {stream} is taken by an earlier transform"
+                        ))
+                        .from(given.spelled.clone()));
+                }
+                let n = next.entry(stream.clone()).or_insert(2);
+                let mut name = format!("{stream}-{n}");
+                while taken.contains(&name) {
+                    *n += 1;
+                    name = format!("{stream}-{n}");
+                }
+                *n += 1;
+                stream = name;
+            }
+            taken.insert(stream.clone());
             position.leaves = Some(stream.clone());
             behind.push(verb.class);
             segment += 1;
@@ -756,7 +794,7 @@ fn tool_step(
 /// The kind of a file `write` makes, by its place in
 /// [`WriteOptions::files`].
 fn write_kinds(options: &WriteOptions) -> Vec<&'static str> {
-    let mut kinds = vec!["bam"];
+    let mut kinds = vec![options.format.name()];
     if options.create_index {
         kinds.push("index");
     }
@@ -784,15 +822,29 @@ fn write_step(
             .usage(format!("one PATH expected, got {}", paths.len()))
             .from((*second).clone()));
     }
+    let format = parsed
+        .last(OUTPUT_FORMAT)
+        .map(|given| {
+            WriteFormat::parse(&given.values[0]).ok_or_else(|| {
+                draft
+                    .usage(format!("expected bam or sam, got {:?}", given.values[0]))
+                    .from(given.spelled.clone())
+            })
+        })
+        .transpose()?;
     let (path, stdout, uses_prefix) = match paths.first().map(|path| path.as_str()) {
         Some("-") => (PathBuf::from("/dev/stdout"), true, false),
         Some(path) => (PathBuf::from(path), false, false),
         None => {
-            let name = format!(".{}.bam", position.reads);
+            let extension = format.unwrap_or(WriteFormat::Bam).name();
+            let name = format!(".{}.{extension}", position.reads);
             (with_suffix(cx.prefix, &name), false, true)
         }
     };
     let mut options = WriteOptions::new(&path);
+    if let Some(format) = format {
+        options.format = format;
+    }
     if let Some(given) = parsed.last(COMPRESSION_LEVEL) {
         options.compression_level = given.values[0]
             .parse()
@@ -812,7 +864,7 @@ fn write_step(
     if let (true, Some(given)) = (stdout, parsed.last(INDEX).or_else(|| parsed.last(MD5))) {
         return Err(draft
             .usage(format!(
-                "{} needs a file: standard output takes the BAM alone",
+                "{} needs a file: standard output takes the records alone",
                 given.spelled
             ))
             .from(given.spelled.clone()));
@@ -959,6 +1011,8 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
     let (prefix, prefix_origin) = prefix(spec, &source)?;
     let formats = chain_formats(spec)?;
     let also = also(spec)?;
+    let sort_memory = planner::sort_memory(spec)?;
+    let stringency = planner::stringency(spec)?;
     if spec.steps.is_empty() {
         return Err(usage("no step: a chain needs at least one + STEP")
             .hint("bammetrics chain [OPTIONS] BAM + STEP [STEP OPTIONS] [+ STEP ...]")
@@ -1026,6 +1080,10 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         quiet: spec.quiet,
         verbose: spec.verbose,
         stage_executor: spec.stage_executor,
+        sort_memory,
+        force_space: spec.force_space,
+        stringency,
+        free_space: spec.free_space,
         steps,
         report,
         outputs,

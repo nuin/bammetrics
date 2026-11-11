@@ -444,6 +444,7 @@ def collect_insert_size_metrics(
     include_duplicates: bool | None = None,
     metric_accumulation_level: str | Sequence[str] | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
     assume_sorted: bool | None = None,
     reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
@@ -462,6 +463,7 @@ def collect_alignment_summary_metrics(
     collect_alignment_information: bool | None = None,
     stop_after: int | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
     """CollectAlignmentSummaryMetrics: one row per CATEGORY of each accumulation unit,
@@ -476,6 +478,7 @@ def collect_quality_yield_metrics(
     flow_mode: bool | None = None,
     stop_after: int | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
     assume_sorted: bool | None = None,
     reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
@@ -489,6 +492,7 @@ def quality_score_distribution(
     include_no_calls: bool | None = None,
     stop_after: int | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
     assume_sorted: bool | None = None,
     reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
@@ -502,6 +506,7 @@ def mean_quality_by_cycle(
     pf_reads_only: bool | None = None,
     stop_after: int | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
     assume_sorted: bool | None = None,
     reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
@@ -515,6 +520,7 @@ def collect_base_distribution_by_cycle(
     pf_reads_only: bool | None = None,
     stop_after: int | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
     assume_sorted: bool | None = None,
     reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
@@ -526,6 +532,7 @@ def collect_duplicate_metrics(
     *,
     output: _Path | None = None,
     stop_after: int | None = None,
+    validation_stringency: str | None = None,
     assume_sorted: bool | None = None,
     reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
@@ -536,6 +543,7 @@ def accumulate_quality_yield_metrics(
     input: _Paths,
     *,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """AccumulateQualityYieldMetrics: QualityYieldMetrics files (a list of paths) merged
     into one row."""
@@ -552,6 +560,7 @@ def collect_gc_bias_metrics(
     also_ignore_duplicates: bool | None = None,
     stop_after: int | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
     """CollectGcBiasMetrics: the detail rows (Picard's OUTPUT file), one row per GC bin,
@@ -571,6 +580,7 @@ def collect_multiple_metrics(
     intervals: _Path | None = None,
     db_snp: _Path | None = None,
     include_unpaired: bool | None = None,
+    validation_stringency: str | None = None,
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
     """CollectMultipleMetrics: every PROGRAM on one read of the BAM, each written to OUTPUT
@@ -593,6 +603,7 @@ def estimate_library_complexity(
     optical_duplicate_pixel_distance: int | None = None,
     max_optical_duplicate_set_size: int | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
     reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """EstimateLibraryComplexity: one row per library (DuplicationMetrics columns) from
@@ -615,6 +626,7 @@ def collect_wgs_metrics(
     use_fast_algorithm: bool | None = None,
     read_length: int | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """CollectWgsMetrics: one row of the 32 WgsMetrics columns; the metrics file adds the
     coverage histogram."""
@@ -635,6 +647,7 @@ def collect_raw_wgs_metrics(
     use_fast_algorithm: bool | None = None,
     read_length: int | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """CollectRawWgsMetrics: CollectWgsMetrics with MINIMUM_MAPPING_QUALITY 0,
     MINIMUM_BASE_QUALITY 3, COVERAGE_CAP 100000 and LOCUS_ACCUMULATION_CAP 200000 as
@@ -656,6 +669,7 @@ def collect_wgs_metrics_with_non_zero_coverage(
     use_fast_algorithm: bool | None = None,
     read_length: int | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """CollectWgsMetricsWithNonZeroCoverage: two rows, CATEGORY WHOLE_GENOME and
     NON_ZERO_REGIONS (the zero-depth loci left out), with the WgsMetrics columns."""
@@ -669,6 +683,7 @@ def bed_to_interval_list(
     drop_missing_contigs: bool | None = None,
     keep_length_zero_intervals: bool | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """BedToIntervalList: one row per interval written (contig, start, end, strand, name);
     OUTPUT gets the interval list."""
@@ -693,6 +708,7 @@ def collect_hs_metrics(
     bait_intervals: _Path | Sequence[_Path],
     bait_set_name: str | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """CollectHsMetrics: one row of the 69 HsMetrics columns per accumulation unit; the
     metrics file adds the coverage and base quality histograms."""
@@ -717,6 +733,7 @@ def collect_targeted_pcr_metrics(
     amplicon_intervals: _Path,
     custom_amplicon_set_name: str | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """CollectTargetedPcrMetrics: one row of the 62 TargetedPcrMetrics columns per
     accumulation unit, from the CollectHsMetrics collector with MINIMUM_MAPPING_QUALITY
@@ -735,6 +752,7 @@ def collect_rna_seq_metrics(
     end_bias_bases: int | None = None,
     stop_after: int | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
     assume_sorted: bool | None = None,
     reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
@@ -751,6 +769,7 @@ def collect_variant_calling_metrics(
     sequence_dictionary: _Path | None = None,
     gvcf_input: bool | None = None,
     thread_count: int | None = None,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """CollectVariantCallingMetrics: the input is a VCF (plain or bgzip). OUTPUT is a
     prefix: PREFIX.variant_calling_summary_metrics and
@@ -761,6 +780,7 @@ def accumulate_variant_calling_metrics(
     input: _Paths,
     *,
     output: _Path,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """AccumulateVariantCallingMetrics: the prefixes of CollectVariantCallingMetrics shards
     merged as Picard merges them; OUTPUT is the prefix of the two files. Python returns
@@ -781,6 +801,7 @@ def genotype_concordance(
     use_vcf_index: bool | None = None,
     missing_sites_hom_ref: bool | None = None,
     ignore_filter_status: bool | None = None,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """GenotypeConcordance: the truth and call VCFs compared by position. OUTPUT is a
     prefix: PREFIX.genotype_concordance_summary_metrics, _detail_metrics and
@@ -797,6 +818,7 @@ def compare_metrics(
     ignore_histogram_differences: bool | None = None,
     key: str | Sequence[str] | None = None,
     verbosity: str | None = None,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """CompareMetrics: one row per difference Picard reports between two metrics files:
     KEY, METRIC, VALUE1 and VALUE2 for a value, DIFFERENCE (the line Picard logs) for
@@ -814,6 +836,7 @@ def create_sequence_dictionary(
     alt_names: _Path | None = None,
     create_md5_file: bool | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """CreateSequenceDictionary: one row per FASTA sequence (name, length, md5, assembly,
     uri, species, alternate_names); OUTPUT gets the .dict."""
@@ -860,6 +883,7 @@ def mark_duplicates(
     flow_use_end_in_unpaired_reads: bool | None = None,
     flow_use_unpaired_clipped_end: bool | None = None,
     reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """MarkDuplicates: one row per library (DuplicationMetrics) plus the set_size
     histograms; OUTPUT gets every record with the duplicate flag set or cleared,
@@ -885,6 +909,7 @@ def collect_sequencing_artifact_metrics(
     contexts_to_print: str | Sequence[str] | None = None,
     file_extension: str | None = None,
     stop_after: int | None = None,
+    validation_stringency: str | None = None,
     assume_sorted: bool | None = None,
 ) -> list[dict[str, Any]]:
     """CollectSequencingArtifactMetrics: OUTPUT is a prefix:
@@ -899,6 +924,7 @@ def convert_sequencing_artifact_to_oxo_g(
     pre_adapter_in: _Path | None = None,
     bait_bias_in: _Path | None = None,
     oxog_out: _Path | None = None,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """ConvertSequencingArtifactToOxoG: one CpcgMetrics row per library and C-centred
     context, read from the CollectSequencingArtifactMetrics detail files of INPUT_BASE;
@@ -921,6 +947,7 @@ def collect_oxo_g_metrics(
     contexts: str | Sequence[str] | None = None,
     stop_after: int | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """CollectOxoGMetrics: one CpcgMetrics row per sequence context and library: reference
     and alternate base counts at C and G sites split by read and strand, the oxidation
@@ -939,6 +966,7 @@ def collect_coverage_gaps(
     count_unpaired: bool | None = None,
     stop_after: int | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
     assume_sorted: bool | None = None,
     reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
@@ -958,6 +986,7 @@ def collect_sex_check_metrics(
     autosomes: str | Sequence[str] | None = None,
     stop_after: int | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
     assume_sorted: bool | None = None,
     reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
@@ -969,6 +998,7 @@ def collect_sex_check_metrics(
 def bam_index_stats(
     input: _Path,
     *,
+    validation_stringency: str | None = None,
     reference_sequence: _Path | None = None,
 ) -> list[_BamIndexRow]:
     """BamIndexStats: one row per reference of the BAM header (reference, length, aligned,
@@ -981,6 +1011,9 @@ def check_duplicate_marking(
     output: _Path | None = None,
     mode: str | None = None,
     verbosity: str | None = None,
+    tmp_dir: _Path | Sequence[_Path] | None = None,
+    max_records_in_ram: int | None = None,
+    validation_stringency: str | None = None,
     reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """CheckDuplicateMarking: one row per record whose duplicate flag differs from the
@@ -995,6 +1028,7 @@ def collect_jumping_library_metrics(
     tail_limit: int | None = None,
     chimera_kb_min: int | None = None,
     output: _Path | None = None,
+    validation_stringency: str | None = None,
     reference_sequence: _Path | None = None,
 ) -> list[dict[str, Any]]:
     """CollectJumpingLibraryMetrics: one row over every input: outward-facing (jump) and
@@ -1009,11 +1043,43 @@ def fifo_buffer(
     debug_frequency: int | None = None,
     name: str | None = None,
     verbosity: str | None = None,
+    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """FifoBuffer: standard input copied to standard output through a memory buffer of
     BUFFER_SIZE bytes, so a producer and a consumer that work in bursts do not wait for
     each other. A command only: it returns no rows, and the Python function raises
     UsageError, because a Python call has no pipe to buffer."""
+
+def view_sam(
+    input: _Path,
+    *,
+    alignment_status: str | None = None,
+    pf_status: str | None = None,
+    header_only: bool | None = None,
+    records_only: bool | None = None,
+    interval_list: _Path | None = None,
+    validation_stringency: str | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """ViewSam: the header and each record of a SAM, BAM or CRAM as SAM text, as htsjdk
+    writes it; one row per record, the 11 SAM fields and the tags."""
+
+def sort_sam(
+    input: _Path,
+    *,
+    output: _Path,
+    sort_order: str,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    max_records_in_ram: int | None = None,
+    tmp_dir: _Path | Sequence[_Path] | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """SortSam: no rows; OUTPUT gets every record in SORT_ORDER (queryname, coordinate or
+    duplicate) under the input header with SO set, as a BAM, or as SAM text for a name
+    ending in .sam."""
 
 # END registry tools
 
@@ -1159,6 +1225,7 @@ def qc(
     resume: bool = False,
     force: bool = False,
     threads: int | None = None,
+    validation_stringency: Literal["STRICT", "LENIENT", "SILENT"] | None = None,
     also: Literal["json", "jsonl", "tsv", "csv", "markdown", "junit", "multiqc"] | Sequence[Literal["json", "jsonl", "tsv", "csv", "markdown", "junit", "multiqc"]] | None = None,
     all_plots: bool = False,
     date: str | None = None,
@@ -1209,6 +1276,7 @@ _StepVerb = Literal[
     "sequencing_artifact",
     "coverage_gaps",
     "sex_check",
+    "sort_sam",
     "write",
 ]
 
@@ -1217,10 +1285,10 @@ def step(verb: _StepVerb | str, /, **options: Any) -> Step:
     write. The keywords are those of the tool's function (minimum_pct=0.1) without its
     input, plus output (the step's own file, or prefix for a tool that writes several),
     format, panel on hs_metrics (baits and targets in one file), and as_ on a transform
-    (the name of the stream it leaves). write takes output, index, md5 and
-    compression_level. An unknown verb or keyword raises UsageError here, with the
-    closest name; so does a float that is NaN or infinite, and a list of texts with an
-    item that is not a str."""
+    (the name of the stream it leaves). write takes output, index, md5,
+    compression_level and output_format ("bam" or "sam"). An unknown verb or keyword
+    raises UsageError here, with the closest name; so does a float that is NaN or
+    infinite, and a list of texts with an item that is not a str."""
 
 @overload
 def chain(
@@ -1234,17 +1302,21 @@ def chain(
     format: str | Sequence[str] | None = None,
     also: str | Sequence[str] | None = None,
     sample: str | None = None,
+    sort_memory: str | None = None,
+    force_space: bool | None = None,
+    validation_stringency: str | None = None,
     plan: _Path | None = None,
     dry_run: Literal[False] = False,
 ) -> Run[None]:
     """bammetrics chain: several steps on one BAM in one process, the records handed from
     step to step in memory. steps holds verb names (insert_size) or step(...) objects,
-    in order: mark_duplicates is a transform, a one-pass tool is a tap on the records of
-    its position, write writes them as a BAM. plan names a TOML plan file in place of
-    steps; a keyword given replaces the file's. Returns a Run: files, metrics (keyed by
-    verb, STREAM.verb in front of a transform) and stages (one Stage per step).
-    dry_run=True returns the plan text and runs nothing. A failed step raises InputError
-    after the other steps wrote their files (its .run holds the Run)."""
+    in order: mark_duplicates and sort_sam are transforms, a one-pass tool is a tap on
+    the records of its position, write writes them as a BAM, or as SAM text for a .sam
+    name or output_format "sam". plan names a TOML plan file in place of steps; a
+    keyword given replaces the file's. Returns a Run: files, metrics (keyed by verb,
+    STREAM.verb in front of a transform) and stages (one Stage per step). dry_run=True
+    returns the plan text and runs nothing. A failed step raises InputError after the
+    other steps wrote their files (its .run holds the Run)."""
 @overload
 def chain(
     source: _Path | None = None,
@@ -1257,6 +1329,9 @@ def chain(
     format: str | Sequence[str] | None = None,
     also: str | Sequence[str] | None = None,
     sample: str | None = None,
+    sort_memory: str | None = None,
+    force_space: bool | None = None,
+    validation_stringency: str | None = None,
     plan: _Path | None = None,
     dry_run: Literal[True],
 ) -> str: ...
@@ -1272,6 +1347,9 @@ def chain(
     format: str | Sequence[str] | None = None,
     also: str | Sequence[str] | None = None,
     sample: str | None = None,
+    sort_memory: str | None = None,
+    force_space: bool | None = None,
+    validation_stringency: str | None = None,
     plan: _Path | None = None,
     dry_run: bool,
 ) -> Run[None] | str: ...

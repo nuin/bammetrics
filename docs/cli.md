@@ -107,7 +107,20 @@ whose bases do not match a slice's MD5 fails there (`the MD5 of the reference ba
 match the CRAM slice`), as one without the CRAM's contigs does (`no contig chr1 in the
 reference`). `--threads` is then the number of container decoders. CRAM 3.0 and 3.1 are
 read; another version fails (`CRAM 2.1 is not supported (3.0 and 3.1 are)`), and so does a
-cut file (`truncated CRAM: the file ends inside a container`). The `.crai` is never opened. `-` reads a CRAM from standard input too:
+cut file (`truncated CRAM: the file ends inside a container`). The `.crai` is never opened.
+
+SAM text. Every verb and Picard-face tool that reads a BAM reads SAM text, plain or in
+gzip members (`bgzip` or `gzip`), from a file, a pipe or `-`. The first bytes tell: a
+gzip member that inflates to `BAM\1` is a BAM, any other gzip file whose text starts with
+`@` or with a line of 11 tab-separated fields is SAM, and so is plain text that starts
+that way. Each line is read as htsjdk's `SAMLineParser` reads it into the record a BAM
+would hold, so a tool writes the same file for the SAM as for the BAM Picard makes of
+it. `--validation-stringency` (`VALIDATION_STRINGENCY`) applies to SAM text: `STRICT`
+(the default) exits 1 at the first line htsjdk refuses, with htsjdk's message (`Error
+parsing text SAM file. MRNM specified but flags indicate unpaired; File x.sam; Line 7`);
+`LENIENT` prints `Ignoring SAM validation error` on standard error and reads on;
+`SILENT` checks only what cannot be read at all. A BAM or a CRAM is read the same at
+every value, and the note `ignoring VALIDATION_STRINGENCY=...` is printed for those. `-` reads a CRAM from standard input too:
 `samtools view -C -T ref.fa in.bam | bammetrics quality-yield - -R ref.fa`.
 
 Options Picard has that cannot change a metric (`VALIDATION_STRINGENCY`, `TMP_DIR`,
@@ -281,6 +294,8 @@ table.
 | `check-duplicate-marking` | CheckDuplicateMarking | the bad querynames, one line per record |
 | `jumping-library` | CollectJumpingLibraryMetrics (one or more coordinate-sorted BAMs as positionals, read in turn; standard input refused) | one metrics file |
 | `fifo-buffer` | FifoBuffer (standard input to standard output; no input argument, no `-o`) | no file: the bytes it read, on standard output |
+| `view-sam` | ViewSam (SAM, BAM or CRAM in) | SAM text on standard output, or in `-o` |
+| `sort-sam` | SortSam (`--sort-order` queryname, coordinate or duplicate) | `-o` BAM, or SAM text for a name ending in `.sam` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -413,6 +428,81 @@ option: O`, as in Picard.
 - `ASSUME_SORTED` is rejected, as Picard rejects it. `VALIDATION_STRINGENCY`, `QUIET` and
   the other plumbing options are accepted and ignored.
 
+### view-sam
+
+```bash
+bammetrics view-sam sample.bam | less -S
+bammetrics view-sam sample.bam --header-only
+bammetrics view-sam sample.cram -R ref.fa --alignment-status Unaligned --records-only
+bammetrics view-sam sample.bam --interval-list targets.interval_list -o on_target.sam
+bammetrics view-sam reads.sam.gz --validation-stringency LENIENT
+bammetrics ViewSam I=sample.bam PF_STATUS=PF
+```
+
+Picard's `ViewSam`: the header and every record as SAM text, as htsjdk writes it. Both
+faces print it on standard output as the file is read; the verb writes it to `-o`. The
+text is byte for byte what Picard prints (`tests/concordance/test_view_sam.py`).
+
+- The header is re-encoded: an `@HD` line first with `VN` in front (`@HD VN:1.6` when the
+  input has none), then the `@SQ`, `@RG`, `@PG` and `@CO` lines, each with `SN` and `LN`
+  or `ID` first. The version the file states is kept.
+- A record's tags come in htsjdk's order (by the second character of the name, then the
+  first), a repeated tag once with its last value, every integer as `i`, an `H` value as
+  `B:c`, a float as Java prints it (`1.5`, `1.0E-10`).
+- `--alignment-status Aligned|Unaligned|All` keeps records by the unmapped flag,
+  `--pf-status PF|NonPF|All` by the QC-fail flag. The values are case-sensitive, as in
+  Picard.
+- `--header-only` prints the header and reads no record. `--records-only` prints no
+  header. Both together exit 1 (`Cannot specify both HEADER_ONLY=true and
+  RECORDS_ONLY=true.`).
+- `--interval-list FILE` keeps the records that overlap an interval of the list. Picard
+  has two paths and bammetrics follows the one Picard would take. With a `.bai`, `.csi`
+  or `.crai` beside the input, Picard queries the index: an unmapped record placed with
+  its mate matches by its start. Without one (SAM text, a pipe), Picard scans: reading
+  stops after the last interval and an unmapped record never matches. bammetrics opens
+  no index. It reads the whole file and applies the same test.
+- Picard has no `OUTPUT` option: `O=` on the Picard face exits 1 (`Unrecognized option:
+  O`). `ASSUME_SORTED` is rejected too.
+- `--format json`, `jsonl`, `tsv` and `human` give one row per record (`QNAME`, `FLAG`,
+  `RNAME`, `POS`, `MAPQ`, `CIGAR`, `RNEXT`, `PNEXT`, `TLEN`, `SEQ`, `QUAL`, `TAGS`) and
+  no header line of the SAM. Rows are held in memory: at most 256 MiB of SAM text. The
+  default form streams and has no limit.
+- A closed standard output (`| head`) ends the run with exit 1 and no message, as
+  Picard's `PrintStream.checkError` does.
+
+### sort-sam
+
+```bash
+bammetrics sort-sam sample.bam -o sample.qname.bam --sort-order queryname
+bammetrics sort-sam sample.qname.bam -o sample.sorted.bam --sort-order coordinate --create-index
+bammetrics sort-sam reads.sam -o reads.sorted.sam --sort-order coordinate
+bammetrics sort-sam big.bam -o big.sorted.bam -SO coordinate --max-records-in-ram 2000000 --tmp-dir /scratch
+bammetrics SortSam I=sample.bam O=sample.sorted.bam SORT_ORDER=coordinate
+```
+
+Picard's `SortSam`: every record of a BAM, CRAM or SAM in `queryname`, `coordinate` or
+`duplicate` order (the three Picard 3.5.0 takes; `unsorted` and `unknown` exit as Picard
+exits). The output is a BAM, or SAM text for a name ending in `.sam`, the records Picard
+writes in Picard's order (`tests/concordance/test_sort_sam.py`: decoded records for BAM,
+bytes for SAM text).
+
+- The header is the input's with `SO` set and `@HD VN:1.6`. `GO`, `SS`, every other line
+  and every field stay, and no `@PG` line is added, as in Picard.
+- `queryname` is htsjdk's `SAMRecordQueryNameComparator` (name by bytes, first of pair
+  before second, forward before reverse, primary before secondary and supplementary, `HI`),
+  `coordinate` its coordinate comparator (unplaced records last), `duplicate` its duplicate
+  comparator, which needs the `MC` tag on every paired record with a mapped mate.
+  Records with equal keys keep their input order.
+- `--max-records-in-ram N` (default 500,000) records are sorted in memory per run; more
+  spill to `--tmp-dir` as sorted runs (BGZF level 3, mode 0600, removed at the end, on a
+  failure and on a signal) and are merged with ties to the earlier run.
+- `--create-index` writes `out.bai` beside a coordinate-sorted BAM and nothing beside SAM
+  text, as Picard; `--create-md5-file` writes `out.bam.md5` (or `out.sam.md5`);
+  `--compression-level` sets the BGZF level. A CRAM input needs `-R`, and its records get
+  the `MD` and `NM` tags htsjdk rebuilds.
+- `-o out.cram` exits 2 naming wave W15. An `-o` that is the input (a link or a hard link
+  included) exits 2 and replaces nothing.
+
 ### qc
 
 ```bash
@@ -526,6 +616,9 @@ bammetrics chain in.bam -R ref.fa -o out/NA12878 \
     + mark-duplicates \
     + alignment-summary + insert-size + quality-yield + duplicate-metrics \
     + write --index
+bammetrics chain in.bam -o out/NA12878 --sort-memory 4G \
+    + sort-sam --sort-order queryname + mark-duplicates \
+    + sort-sam --sort-order coordinate + write out/NA12878.bam --index
 samtools view -b in.bam chr20 | bammetrics chain - + mark-duplicates + write - | samtools flagstat -
 bammetrics chain --plan plan.toml -o out/NA12878 --dry-run
 ```
@@ -536,11 +629,13 @@ is the short form.
 
 - The chain's options and the source (a BAM, a CRAM with `-R`, `-` for standard input)
   come before the first `+`. Every `+` starts a step.
-- A step is a tool verb, its Picard class, or `write`. A transform (`mark-duplicates`)
-  changes the records later steps see. A tap (the 13 one-pass tool verbs) reads the
+- A step is a tool verb, its Picard class, or `write`. A transform (`mark-duplicates`,
+  `sort-sam`) changes the records later steps see; any number may follow one another. A
+  tap (the 13 one-pass tool verbs) reads the
   records of its position and changes nothing. `write [PATH]` writes those records as a
-  BAM; `-` is standard output. A `.sam`, `.cram` or `.fastq` name is refused with the wave
-  of docs/07 that adds it.
+  BAM, or as SAM text for a name ending in `.sam`; `-` is standard output, and `write -
+  --output-format sam` prints SAM text there. A `.cram` or `.fastq` name is refused with
+  the wave of docs/07 that adds it.
 - Each step takes its verb's own options in every spelling (`--minimum-pct 0.1`,
   `--MINIMUM_PCT 0.1`, `MINIMUM_PCT=0.1`), with did-you-mean per step. `bammetrics chain
   BAM + VERB --help` lists them.
@@ -556,9 +651,15 @@ is the short form.
   the closest name. Paths in the file are read relative to the working directory. The
   plan file is an input: no step may write it. docs/chaining.md section 3 lists the part
   of TOML the reader takes.
-- `--dry-run` prints the plan: the segments, whether `mark-duplicates` reads the file
-  twice (replay) or a copy of the pipe (spool), the files of each step, the estimated
-  temporary disk. `bammetrics plan` with a chain's arguments prints the same.
+- `--dry-run` prints the plan: the segments, one line per barrier (`sort-sam` holds its
+  records; `mark-duplicates` replays the source, a copy of the pipe, or a spool of its
+  input behind another transform), the bytes each spills, the files of each step, the
+  estimated temporary and output disk and the peak memory. `bammetrics plan` with a
+  chain's arguments prints the same.
+- `--sort-memory BYTES` (default 2G) bounds what a `sort-sam` step holds before it
+  spills. A chain whose estimate exceeds the free space of a file system it writes to
+  exits 1 before the first read; `--force-space` runs it. `--validation-stringency`
+  sets how a SAM text source is checked.
 - Standard error gets each transform's record counts, each failed step and one summary
   line. `-q` leaves only the errors.
 
@@ -711,8 +812,9 @@ metrics file.
   name one file, exit 2 before anything is read.
 - A CRAM input needs `-R`. Its records come out with the `MD` and `NM` tags htsjdk
   rebuilds while decoding. The output is always BAM: an `-o` ending in `.sam` or `.cram`
-  exits 2 (the Picard face exits 1). SAM input, plain or bgzipped, exits 1 on both faces
-  (`SAM input is not supported`); convert it with `samtools view -b`.
+  exits 2 (the Picard face exits 1); `bammetrics chain IN + mark-duplicates + write
+  out.sam` writes SAM text. SAM text input is read, plain or in gzip members, at
+  `--validation-stringency`.
 - `--create-index` writes `marked.bai` beside a coordinate-sorted BAM;
   `--create-md5-file` writes `marked.bam.md5`. `--compression-level` sets the BGZF level
   (default 5). `--threads` sets the BGZF decompression threads, or the CRAM container

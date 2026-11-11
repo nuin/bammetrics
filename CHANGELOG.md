@@ -1,5 +1,125 @@
 # Changelog
 
+## Unreleased
+
+Wave W05 part A of docs/07: SAM text in and out, htsjdk's record orders, and `ViewSam`
+(tool 34). Part B: `SortSam` (tool 35), the sort barrier of a chain, two barriers in one
+chain through a spool, the planner and its free-space refusal.
+
+### Added
+
+- `SortSam` (`bammetrics SortSam I= O= SORT_ORDER=`, `bammetrics sort-sam in.bam -o
+  out.bam --sort-order queryname`, `sort_sam()` in Python): `queryname`, `coordinate` or
+  `duplicate`, the three Picard 3.5.0 takes. BAM output, or SAM text for a name ending in
+  `.sam`. `CREATE_INDEX`, `CREATE_MD5_FILE`, `COMPRESSION_LEVEL`, `MAX_RECORDS_IN_RAM`
+  (default 500,000), `TMP_DIR`, `REFERENCE_SEQUENCE` for a CRAM. The header gets `SO` and
+  `VN:1.6`; `GO`, `SS` and every other line stay, and no `@PG` is added, as in Picard.
+  `tests/concordance/test_sort_sam.py`: 62 cases against Picard.
+- `sort-sam` as a chain step: a barrier that holds its records under `--sort-memory`
+  (default 2 GiB, a byte count with K, M, G or T) and hands them on sorted. Its stream is
+  `sorted`. `chain in.bam + sort-sam --sort-order queryname + mark-duplicates + sort-sam
+  --sort-order coordinate + write out.bam --index` runs in one process and equals the
+  staged tools.
+- Replay or spool (docs/07 section 2.3): a transform that reads its input twice behind
+  another transform replays a spool of its input in `--tmp-dir`. A second
+  `mark-duplicates` runs (stream `marked-2`).
+- The planner: `plan` and `chain --dry-run` print one line per barrier (holds its records,
+  replays the source, or spools its input; the bytes it spills; its memory), the
+  temporary and output disk and the peak memory, from constants measured on 8,445,233
+  exome records. A chain whose estimate exceeds the free space of a file system it
+  writes to exits 1 before the first read; `--force-space` runs it.
+- `chain --validation-stringency` for a SAM text source, `qc --validation-stringency`,
+  and `validation_stringency=` on every Python tool function, `chain` and `qc`.
+- `bammetrics_core::timsort` (Java's `TimSort`), `sam_sort` (records keyed for a sort,
+  runs as BGZF level 3), `sort_sam`, `header_merge` (htsjdk's header and record merge,
+  lifted from `MarkDuplicates`), `stage::spool`; `Sorter::byte_limit`,
+  `Sorter::compressed`, `SortStats`.
+- 12 golden cases; `crates/cli/tests/sort_barrier.rs` (chained equals staged for a sort at
+  any position, spilled and in memory, the plan, the refusal, hard links, a piped SAM).
+
+- SAM text input for every tool, verb, `qc`, `chain` and Python function that reads a
+  BAM: plain text, `bgzip` or `gzip`, from a file, a pipe or `-`. The first bytes tell (a
+  gzip member that inflates to `BAM\1` is a BAM; text that starts with `@` or with a line
+  of 11 tab-separated fields is SAM). Each line is read as htsjdk 5.0.0 reads it
+  (`SAMLineParser`, `TextTagCodec`, `SAMTextHeaderCodec`) into the record htsjdk's BAM
+  codec writes for it: tags in htsjdk's order and types, the `*` forms, the indexing bin.
+  A tool writes the same file for SAM text as for the BAM of the same records.
+- `VALIDATION_STRINGENCY` (`--validation-stringency`) applies to SAM text. `STRICT`, the
+  default, exits 1 at the first line htsjdk refuses, with htsjdk's message. `LENIENT`
+  prints `Ignoring SAM validation error` and reads on. `SILENT` skips
+  `SAMRecord.isValid`. A value other than the three is a usage error. A BAM or a CRAM is
+  read as before, and the note about the ignored option is still printed for those.
+- `ViewSam` (`bammetrics ViewSam I=in.bam`, `bammetrics view-sam in.bam [-o out.sam]`,
+  `view_sam()` in Python): the header and every record as SAM text, as htsjdk writes it,
+  byte for byte Picard's standard output. `ALIGNMENT_STATUS`, `PF_STATUS`, `HEADER_ONLY`,
+  `RECORDS_ONLY` and `INTERVAL_LIST`. The text is printed as the file is read.
+  `--format json|jsonl|tsv|human` and the Python function give one row per record (at
+  most 256 MiB of text). A CRAM record gets the `MD` and `NM` tags htsjdk rebuilds.
+- `chain ... + write out.sam` writes SAM text, and `write - --output-format sam` prints
+  it (`output_format=` in Python, `output-format` in a plan file). The file is the one
+  Picard `SamFormatConverter` writes, byte for byte. `--md5` works; `--index` with SAM
+  text is a usage error.
+- `crates/core/src/sam_text.rs`: `Reader`, `Records`, `RecordStream`, `LineParser`,
+  `parse_cigar`, `write_record`, `header_text`, `SamWriter`, `Stringency`.
+- `crates/core/src/sam_order.rs`: htsjdk's record orders in one module. `Order`
+  (`unsorted`, `queryname`, `coordinate`, `duplicate`, the `SORT_ORDER` values of Picard
+  3.5.0 `SortSam`), `CoordinateKey`, `QuerynameKey`, `DuplicateKey` with `Libraries`,
+  `coordinate_order`, `queryname_order`, `hit_index`. A property test checks each order
+  is total over random keys. `tests/concordance/test_sam_order.py` sorts a shuffled
+  foundation corpus, t1 and a hand-written file of ties and finds every record where
+  Picard `SortSam` puts it, in all three orders.
+- `RawRecord::from_fields` builds a BAM record from its fields as htsjdk encodes one.
+- `tests/concordance/test_view_sam.py`: 144 cases against Picard.
+- 19 golden cases; `tests/data/markdup.sam`; `tests/python/test_view_sam.py`.
+- docs/benchmarks.md, SAM text: on the HG002 exome `view-sam` prints 150.5 million
+  records in 105 s with 9 MiB of memory, and SAM text is read at 0.53 million records
+  per second. On 5.27 million of its records `ViewSam` and `write x.sam` equal Picard
+  apart from the `@RG DT` field.
+
+### Changed
+
+- A SAM text input is read where it was refused (`not a BAM or CRAM file (SAM input is
+  not supported ...)`). A file that is no BAM, CRAM or SAM text now says `not a BAM or
+  CRAM file (and not SAM text: the first line is no header line and has fewer than 11
+  tab-separated fields)`. An empty file is still an error.
+- `chain` refuses a `.cram` or `.fastq` name of `write` with `bammetrics writes BAM and
+  SAM only` (was `BAM only`). Two golden records changed for that wording, one for the
+  `tools` listing, and `error_chain_write_sam` became `chain_write_sam`.
+- `CheckDuplicateMarking` sorts with `sam_order::QuerynameKey`, and `MarkDuplicates`
+  merges with the comparators of `sam_order`. Their output is unchanged.
+- `MarkDuplicates` carries `VALIDATION_STRINGENCY` to its SAM text inputs.
+- KNOWN_DIFFERENCES.md has two new sections, SAM text and ViewSam.
+- Every sort of records in the core runs Java's `TimSort` per run: records flagged both
+  first and second of a pair (a queryname order that is not total) sort as Picard sorts
+  them, or end in Picard's `Comparison method violates its general contract!`. Before,
+  `CheckDuplicateMarking` could panic (exit 101) there.
+- `CheckDuplicateMarking` sorts a file without `SO:queryname` through the spilling
+  sorter: `MAX_RECORDS_IN_RAM` (default 500,000) and `TMP_DIR` apply. On the HG002 exome
+  its peak memory fell from 14.14 GB to 131 MiB (166.5 s). Output unchanged.
+- A chain no longer refuses a second transform. The golden record
+  `error_chain_two_transforms` became `chain_two_mark_duplicates`.
+- The plan text of a chain: one `barrier` line per transform, the output and memory
+  lines; the `temp disk` line is shorter. A `write` of SAM text reads `SAM text of`.
+- The `qc` summary and plan say `SAM read` for a SAM text input.
+- The help of `INPUT` says BAM, CRAM or SAM; `VALIDATION_STRINGENCY` says what it does
+  for SAM text, and its note reads `a BAM or CRAM is not validated; SAM text is checked
+  at the level given` (two golden records).
+- An output that is a hard link to an input is refused by every verb (device and inode).
+- A bad SAM line piped to `MarkDuplicates` names `/dev/stdin`, not the copy in
+  `TMP_DIR`.
+- KNOWN_DIFFERENCES.md: five `@SQ` and `@RG` header shapes, a read name over 254 bytes
+  and a CIGAR operator of 2^28 bases, which Picard reads; a SortSam section.
+- Spilled runs merge through a port of Java's `TreeSet` (`crates/core/src/tree_set.rs`),
+  keyed as htsjdk's `SortingCollection` keys its run heads. A queryname sort of records
+  flagged both first and second of a pair gives Picard's order with 64 runs or fewer
+  (before: any spill could differ), and `CheckDuplicateMarking` gives Picard's lines on
+  such records in runs of 3. Output for a total order is unchanged.
+- The `VALIDATION_STRINGENCY` note is not printed for a pipe, which may hold SAM text.
+- A cut gzip stream of SAM text fails as `truncated gzip stream`, not `truncated BAM`.
+- The chain plan's barrier line reads `about N records by the file size, no spill under`
+  the bound (four golden records). The refusal of `-o` on a `sort-sam` step names no
+  `--metrics-file`.
+
 ## 0.22.0
 
 The `chain` verb, its plan file, Python `chain` and `step`, and `FifoBuffer` (tool 33).
