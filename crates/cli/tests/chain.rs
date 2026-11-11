@@ -1780,6 +1780,16 @@ fn usage_errors_exit_2_before_anything_runs() {
         assert!(stderr.starts_with("bammetrics chain: "), "{stderr}");
         assert!(stderr.contains(text), "{argv:?}: {stderr}");
     }
+    // sort-sam writes no metrics: its hint names no --metrics-file.
+    let (code, stderr) = chain(&[source, "+", "sort-sam", "-o", &file("x.bam")]);
+    assert_eq!(code, Some(2), "{stderr}");
+    assert!(
+        stderr.ends_with(&format!(
+            "(from -o)\n  add + write {} after it\n",
+            file("x.bam")
+        )),
+        "{stderr}"
+    );
     assert!(names(&dir).is_empty());
     // An empty prefix would name hidden files in the working directory
     // (`.insert_size_metrics`): a usage error, as `qc -o ''` is.

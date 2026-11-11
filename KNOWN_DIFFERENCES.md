@@ -1198,7 +1198,9 @@ below. bammetrics differs here:
   text and `ViewSam` prints it back. bammetrics holds BAM records, as Picard does once it
   writes a BAM. A reference name the header lacks is read as no reference (`*`). A base
   outside `=ACMGRSVTWYHKDBN.` is read as `N`. A `MAPQ` outside 0 to 255 keeps its low byte, a
-  flag above 65535 its low 16 bits, as htsjdk writes both into a BAM. These are errors at every stringency: a `QUAL` whose
+  flag above 65535 its low 16 bits, as htsjdk writes both into a BAM. A negative `MAPQ` passes
+  `STRICT` in htsjdk (it checks only `MAPQ < 256`), so `ViewSam` and a SAM `SortSam` print
+  `-1` at every stringency where bammetrics prints `255`. These are errors at every stringency: a `QUAL` whose
   length differs from `SEQ`, a `QUAL` without `SEQ`, a CIGAR that does not parse (htsjdk
   reads one under `SILENT`). Those fail at `STRICT` in htsjdk too. Three more are errors
   here at every stringency and read by htsjdk at every stringency, `STRICT` included
@@ -1237,8 +1239,8 @@ below. bammetrics differs here:
   source and `qc --validation-stringency`. A step of a chain refuses it: the chain reads
   the source.
 - The note `ignoring VALIDATION_STRINGENCY=X: a BAM or CRAM is not validated; SAM text is
-  checked at the level given` is printed for a BAM, a CRAM and a pipe. For a SAM text
-  file it is not.
+  checked at the level given` is printed for a BAM file and a CRAM file. For a SAM text
+  file and a pipe, which may hold SAM text, it is not.
 - `BamIndexStats` on SAM text exits 1 (`No index for bam file x.sam`). Picard exits 1
   too (`Premature end of file`): SAM text has no index.
 
@@ -1287,12 +1289,17 @@ differs here:
 - Records flagged both first and second of a pair make the queryname order not total.
   A run in memory sorts as Java's `TimSort` sorts it, Java's `Comparison method violates
   its general contract!` included, which then fails the run as it fails Picard. Spilled
-  runs merge through a binary heap, at most 64 at a time, where htsjdk's
-  `SortingCollection` merges every run at once through its own queue; for such records the
-  two merges take different records first. Both complete and write the same records (300
-  records in runs of 3, `test_sort_sam.py`). `CheckDuplicateMarking` sorts the same way:
-  on such records spilled in runs it can count other records as disagreeing (20 records
-  in runs of 3: Picard 5, bammetrics 8; both exit 1). In memory it gives Picard's lines.
+  runs merge through a port of Java's `TreeSet`, keyed by the head record and then the
+  run index as htsjdk's `SortingCollection` keys it, so with 64 runs or fewer the order is
+  Picard's (300 records in runs of 7, 43 runs, byte for byte; 3000 records with 18 flag
+  shapes at 30, 60 and 64 runs). With more than 64 runs bammetrics merges groups of 64
+  first, where htsjdk merges every run at once, and the two merges take different records
+  first; both write the same records (300 records in runs of 3, `test_sort_sam.py`).
+  `CheckDuplicateMarking` sorts the same way and gives Picard's lines on 20 such records
+  in runs of 3. A run of more than 8192 records sorts in Java through `Arrays.parallelSort`,
+  whose fork-join merge differs from `TimSort` for such records on a machine with more
+  than one core; bammetrics sorts every run with the `TimSort` port. Those orders were
+  not compared.
 - Sorted runs spill to `TMP_DIR` as BGZF level 3, not as htsjdk's temporary files. Picard's
   log lines (`Finished reading inputs`, the progress lines) are not printed.
 

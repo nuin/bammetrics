@@ -109,6 +109,16 @@ chain through a spool, the planner and its free-space refusal.
   `TMP_DIR`.
 - KNOWN_DIFFERENCES.md: five `@SQ` and `@RG` header shapes, a read name over 254 bytes
   and a CIGAR operator of 2^28 bases, which Picard reads; a SortSam section.
+- Spilled runs merge through a port of Java's `TreeSet` (`crates/core/src/tree_set.rs`),
+  keyed as htsjdk's `SortingCollection` keys its run heads. A queryname sort of records
+  flagged both first and second of a pair gives Picard's order with 64 runs or fewer
+  (before: any spill could differ), and `CheckDuplicateMarking` gives Picard's lines on
+  such records in runs of 3. Output for a total order is unchanged.
+- The `VALIDATION_STRINGENCY` note is not printed for a pipe, which may hold SAM text.
+- A cut gzip stream of SAM text fails as `truncated gzip stream`, not `truncated BAM`.
+- The chain plan's barrier line reads `about N records by the file size, no spill under`
+  the bound (four golden records). The refusal of `-o` on a `sort-sam` step names no
+  `--metrics-file`.
 
 ## 0.22.0
 

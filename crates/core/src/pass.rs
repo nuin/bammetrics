@@ -163,12 +163,40 @@ fn sam_reader<R: Read + 'static>(
     let inner: Box<dyn BufRead> = if sniffed.kind == Kind::GzipSam {
         Box::new(BufReader::with_capacity(
             SAM_BUFFER,
-            GzipReader::new(BufReader::new(sniffed.reader)),
+            CutGzip(GzipReader::new(BufReader::new(sniffed.reader))),
         ))
     } else {
         Box::new(BufReader::with_capacity(SAM_BUFFER, sniffed.reader))
     };
     sam_text::Reader::new(inner, stringency, Some(path))
+}
+
+/// A gzip stream of SAM text that ends inside a member: named as such, so
+/// [`read_error`] does not call it a truncated BAM.
+#[derive(Debug)]
+pub(crate) struct TruncatedGzip;
+
+impl std::fmt::Display for TruncatedGzip {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("truncated gzip stream: the file ends inside a gzip member")
+    }
+}
+
+impl std::error::Error for TruncatedGzip {}
+
+/// The gzip reader of SAM text, a cut stream reported as [`TruncatedGzip`].
+struct CutGzip<R>(GzipReader<R>);
+
+impl<R: BufRead> Read for CutGzip<R> {
+    fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+        self.0.read(out).map_err(|e| {
+            if e.kind() == io::ErrorKind::UnexpectedEof {
+                io::Error::new(io::ErrorKind::UnexpectedEof, TruncatedGzip)
+            } else {
+                e
+            }
+        })
+    }
 }
 
 /// The header of the BAM, CRAM or SAM at `path`, no record read. A CRAM
@@ -434,10 +462,14 @@ impl Pass<'_, '_> {
 }
 
 /// The error of a failed record read. A CRAM decoding error names the
-/// input file; a BAM that ends inside a record or a block was cut; any
-/// other BAM error stays a bad record.
+/// input file, as does a cut gzip stream of SAM text; a BAM that ends
+/// inside a record or a block was cut; any other BAM error stays a bad
+/// record.
 pub(crate) fn read_error(path: &Path, cram: bool, source: io::Error) -> Error {
-    if cram {
+    let cut_gzip = source
+        .get_ref()
+        .is_some_and(|inner| inner.is::<TruncatedGzip>());
+    if cram || cut_gzip {
         Error::Input {
             path: path.to_path_buf(),
             source,
@@ -942,6 +974,15 @@ mod tests {
             "{error}"
         );
         assert_eq!(count(&bad, Stringency::Silent).expect("silent"), 1);
+        // A gzip stream cut inside its member is no truncated BAM.
+        let cut = write("cut.sam.gz", &compressed[..compressed.len() - 40]);
+        let error = count(&cut, Stringency::Strict).expect_err("cut");
+        assert!(matches!(error, Error::Input { .. }), "{error}");
+        assert!(
+            error.to_string().contains("truncated gzip stream")
+                && !error.to_string().contains("BAM"),
+            "{error}"
+        );
         std::fs::remove_dir_all(&dir).expect("cleanup");
     }
 }

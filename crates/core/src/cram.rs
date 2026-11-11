@@ -204,6 +204,17 @@ pub fn is_sam(path: &Path) -> bool {
     matches!(kind_of(path), Some(Kind::Sam | Kind::GzipSam))
 }
 
+/// True for SAM text, a pipe, a device, and `-` when no file has that name:
+/// only a regular file that holds no SAM text is known to hold none before
+/// the pass reads it.
+pub fn may_be_sam(path: &Path) -> bool {
+    match sniffable(path) {
+        None => path == Path::new("-"),
+        Some(false) => true,
+        Some(true) => is_sam(path),
+    }
+}
+
 /// True for a pipe, a device, a CRAM, and `-` when no file has that name
 /// (the verbs read it from standard input): only a regular file that is no
 /// CRAM, or a missing one, is known to hold none before the pass reads it.

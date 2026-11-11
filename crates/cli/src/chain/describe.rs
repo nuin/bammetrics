@@ -201,7 +201,10 @@ fn barrier_line(chain: &Chain, records: Option<u64>, barrier: &Barrier) -> Strin
         (_, n) => format!("MAX_RECORDS_IN_RAM {}", thousands(n.unwrap_or(0))),
     };
     let spill = match (barrier.spill, records) {
-        (Some(0), Some(n)) => format!("about {} records fit under {bound}", thousands(n)),
+        (Some(0), Some(n)) => format!(
+            "about {} records by the file size, no spill under {bound}",
+            thousands(n)
+        ),
         (Some(bytes), _) => format!("spills about {} ({bound})", human(bytes)),
         (None, _) => format!("spills past {bound}"),
     };

@@ -68,6 +68,7 @@ pub mod spill;
 pub mod stage;
 pub mod timsort;
 pub mod toml;
+pub mod tree_set;
 pub mod variant_calling_metrics;
 pub mod vcf;
 pub mod view_sam;

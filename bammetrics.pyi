@@ -1310,12 +1310,13 @@ def chain(
 ) -> Run[None]:
     """bammetrics chain: several steps on one BAM in one process, the records handed from
     step to step in memory. steps holds verb names (insert_size) or step(...) objects,
-    in order: mark_duplicates is a transform, a one-pass tool is a tap on the records of
-    its position, write writes them as a BAM. plan names a TOML plan file in place of
-    steps; a keyword given replaces the file's. Returns a Run: files, metrics (keyed by
-    verb, STREAM.verb in front of a transform) and stages (one Stage per step).
-    dry_run=True returns the plan text and runs nothing. A failed step raises InputError
-    after the other steps wrote their files (its .run holds the Run)."""
+    in order: mark_duplicates and sort_sam are transforms, a one-pass tool is a tap on
+    the records of its position, write writes them as a BAM, or as SAM text for a .sam
+    name or output_format "sam". plan names a TOML plan file in place of steps; a
+    keyword given replaces the file's. Returns a Run: files, metrics (keyed by verb,
+    STREAM.verb in front of a transform) and stages (one Stage per step). dry_run=True
+    returns the plan text and runs nothing. A failed step raises InputError after the
+    other steps wrote their files (its .run holds the Run)."""
 @overload
 def chain(
     source: _Path | None = None,

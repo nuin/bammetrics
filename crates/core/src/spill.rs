@@ -6,15 +6,18 @@
 //! run, so equal records come back in the order they were added, as
 //! htsjdk's collections give them. A run is sorted by [`Spill::sort_run`]:
 //! the standard library's stable sort for a total order, the port of Java's
-//! `TimSort` ([`crate::timsort`]) for an order that may not be one. A run
-//! file holds each record as [`Spill::encode`] writes it, plain or in BGZF
-//! blocks ([`Sorter::compressed`]). The buffer holds at most a set number
-//! of records and, with [`Sorter::byte_limit`], a set number of bytes. The
+//! `TimSort` ([`crate::timsort`]) for an order that may not be one. Runs
+//! merge through the port of Java's `TreeSet` ([`crate::tree_set`]) keyed
+//! by the head record and then the run index, as htsjdk's `MergingIterator`
+//! merges them, so an order that is not total takes htsjdk's records first
+//! while at most 64 runs exist. A run file holds each record as
+//! [`Spill::encode`] writes it, plain or in BGZF blocks
+//! ([`Sorter::compressed`]). The buffer holds at most a set number of
+//! records and, with [`Sorter::byte_limit`], a set number of bytes. The
 //! directory and every run file are created here and removed when the
 //! [`TempDir`] is dropped; nothing else is deleted.
 
-use std::cmp::{Ordering, Reverse};
-use std::collections::BinaryHeap;
+use std::cmp::Ordering;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::num::NonZero;
@@ -25,6 +28,7 @@ use std::sync::{Mutex, OnceLock};
 use noodles::bgzf;
 
 use crate::error::{Error, Result};
+use crate::tree_set::TreeSet;
 
 /// A record that can be written to and read back from a run file.
 pub trait Spill: Sized {
@@ -502,7 +506,7 @@ fn open_runs<T: Spill + Ord>(
     format: RunFormat,
 ) -> Result<Source<'_, T>> {
     let mut readers = Vec::with_capacity(paths.len());
-    let mut heap = BinaryHeap::with_capacity(paths.len());
+    let mut queue = TreeSet::with_capacity(paths.len());
     for (run, path) in paths.iter().enumerate() {
         let file = File::open(path).map_err(|source| Error::Input {
             path: path.clone(),
@@ -514,7 +518,7 @@ fn open_runs<T: Spill + Ord>(
             RunFormat::Bgzf { .. } => RunReader::Bgzf(bgzf::io::Reader::new(buffered)),
         };
         if let Some(item) = T::decode(&mut reader).map_err(Error::Record)? {
-            heap.push(Reverse(Head { item, run }));
+            queue.add(Head { item, run }, head_order);
         }
         readers.push(reader);
     }
@@ -522,34 +526,20 @@ fn open_runs<T: Spill + Ord>(
         dir,
         paths,
         readers,
-        heap,
+        queue,
     })
 }
 
-/// The smallest unread record of one run; ties go to the earlier run.
+/// The smallest unread record of one run.
 struct Head<T> {
     item: T,
     run: usize,
 }
 
-impl<T: Ord> PartialEq for Head<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == Ordering::Equal
-    }
-}
-
-impl<T: Ord> Eq for Head<T> {}
-
-impl<T: Ord> PartialOrd for Head<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<T: Ord> Ord for Head<T> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.item.cmp(&other.item).then(self.run.cmp(&other.run))
-    }
+/// htsjdk's `PeekFileRecordIteratorComparator`: the records, then the run
+/// index, so ties go to the earlier run.
+fn head_order<T: Ord>(a: &Head<T>, b: &Head<T>) -> Ordering {
+    a.item.cmp(&b.item).then(a.run.cmp(&b.run))
 }
 
 enum Source<'d, T> {
@@ -558,7 +548,7 @@ enum Source<'d, T> {
         dir: &'d TempDir,
         paths: Vec<PathBuf>,
         readers: Vec<RunReader>,
-        heap: BinaryHeap<Reverse<Head<T>>>,
+        queue: TreeSet<Head<T>>,
     },
 }
 
@@ -572,12 +562,12 @@ impl<T: Spill + Ord> Sorted<'_, T> {
     pub fn next_item(&mut self) -> Result<Option<T>> {
         match &mut self.source {
             Source::Memory(items) => Ok(items.next()),
-            Source::Runs { readers, heap, .. } => {
-                let Some(Reverse(Head { item, run })) = heap.pop() else {
+            Source::Runs { readers, queue, .. } => {
+                let Some(Head { item, run }) = queue.poll_first() else {
                     return Ok(None);
                 };
                 if let Some(next) = T::decode(&mut readers[run]).map_err(Error::Record)? {
-                    heap.push(Reverse(Head { item: next, run }));
+                    queue.add(Head { item: next, run }, head_order);
                 }
                 Ok(Some(item))
             }

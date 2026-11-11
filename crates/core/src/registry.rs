@@ -245,9 +245,9 @@ pub const COMMON: &[Opt] = &[
     Opt::ignored(&["REFERENCE_SEQUENCE", "R"], REFERENCE_UNREAD),
 ];
 
-/// Why `VALIDATION_STRINGENCY` is ignored for a BAM or a CRAM. SAM text is
-/// checked at the value given ([`Invocation::stringency`]), and then no
-/// note is written.
+/// Why `VALIDATION_STRINGENCY` is ignored for a BAM or a CRAM file. SAM
+/// text is checked at the value given ([`Invocation::stringency`]), and
+/// then no note is written; nor for a pipe, which may hold SAM text.
 pub const STRINGENCY_UNREAD: &str =
     "a BAM or CRAM is not validated; SAM text is checked at the level given";
 
@@ -678,9 +678,10 @@ impl Tool {
         if inv
             .all("INPUT")
             .iter()
-            .any(|path| cram::is_sam(Path::new(path)))
+            .any(|path| cram::may_be_sam(Path::new(path)))
         {
-            // SAM text is checked at the stringency given.
+            // SAM text is checked at the stringency given. A pipe may hold
+            // it.
             inv.notes.retain(|note| !note.ends_with(STRINGENCY_UNREAD));
         }
         Ok(inv)
@@ -1129,6 +1130,14 @@ mod tests {
             .parse(&strings(&["I=x.bam", "QUIET=true", "R=ref.fa"]))
             .expect("parses");
         assert_eq!(inv.notes.len(), 2);
+        let inv = tool()
+            .parse(&strings(&["I=-", "VALIDATION_STRINGENCY=SILENT"]))
+            .expect("parses");
+        assert!(
+            inv.notes.is_empty(),
+            "a pipe may hold SAM text: {:?}",
+            inv.notes
+        );
         let err = tool()
             .parse(&strings(&["I=x.bam", "STOP_AFTER=10"]))
             .expect_err("unknown");

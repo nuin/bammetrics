@@ -400,7 +400,7 @@ segment 2  a second read of tests/data/markdup.bam through step 1 (replay: nothi
   step 4  quality-yield      tap on marked          out/sample.quality_yield_metrics
   step 5  duplicate-metrics  tap on marked          out/sample.duplicate_metrics
   step 6  write              BAM of marked          out/sample.marked.bam, out/sample.marked.bai
-barrier    step 1 mark-duplicates: replays the source; about 16 records fit under MAX_RECORDS_IN_RAM 4,000,000; memory about 100.0 MiB
+barrier    step 1 mark-duplicates: replays the source; about 16 records by the file size, no spill under MAX_RECORDS_IN_RAM 4,000,000; memory about 100.0 MiB
 temp disk  none expected
 output     about 1.1 KiB written by write
 memory     about 100.0 MiB at the peak
@@ -417,9 +417,11 @@ The plan lists:
   formats included. A tool whose `OUTPUT` is a prefix is listed as `PREFIX.*`.
 - One `barrier` line per transform (section 15): whether it holds its records, replays the
   source, replays a copy of the piped source, or spools its input; the bytes it spills or
-  the bound its records fit under; its memory. The record count comes from the file size:
-  69 compressed bytes per record for a BAM, 21 for a CRAM (the HG002 exome BAM and the
-  NA12878 genome CRAM of docs/benchmarks.md). `mark-duplicates` above
+  the estimated record count with the bound under which nothing spills; its memory. The
+  record count comes from the file size: 69 compressed bytes per record for a BAM, 21 for a
+  CRAM (the HG002 exome BAM and the NA12878 genome CRAM of docs/benchmarks.md). A file that
+  compresses better gets a low count and a low spill estimate: a 22 MB BAM of 3,000,000
+  identical-pattern records (7.3 bytes each) is estimated at 318,938 records. `mark-duplicates` above
   `MAX_RECORDS_IN_RAM` records spills 59 bytes per record, the larger of the two peaks
   measured there (46 and 59): 8.2 GiB for the exome BAM (measured 6.5 GiB) and 41.3 GiB
   for the genome CRAM (measured 42.1 GiB).

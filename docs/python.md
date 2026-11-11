@@ -266,7 +266,7 @@ bm.step("fifo_buffer")                     # UsageError: FifoBuffer buffers the 
 
 A tap that fails fails alone: the other steps finish. A transform or `write` that fails stops its segment: the message names it and counts the rest (`1 step(s) failed: step 2 (mark-duplicates): ...; 1 stopped; 2 not run`).
 
-`resume` is not a keyword: resume per step is wave W14. A second transform is a `UsageError` until W05.
+`resume` is not a keyword: resume per step is wave W14. A second transform replays the source or spools its input ([docs/chaining.md](chaining.md) section 15).
 
 ## Errors
 

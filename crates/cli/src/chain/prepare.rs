@@ -345,12 +345,25 @@ fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
                 given.spelled
             ))
             .from(given.spelled.clone())
-            .hint(format!(
-                "add + write {} after it; --metrics-file names its metrics",
-                given.values[0]
-            )));
+            .hint(transform_output_hint(verb.tool(), &given.values[0])));
     }
     Ok(draft)
+}
+
+/// How to write the records of a transform given `-o NAME`; a transform
+/// with a metrics file (`MarkDuplicates`) also names the flag for it.
+fn transform_output_hint(tool: &Tool, name: &str) -> String {
+    let metrics = tool
+        .options
+        .iter()
+        .find(|opt| matches!(opt.kind, Kind::Output));
+    match metrics {
+        Some(opt) => format!(
+            "add + write {name} after it; --{} names its metrics",
+            opt.kebab()
+        ),
+        None => format!("add + write {name} after it"),
+    }
 }
 
 /// Where a step stands in the chain.

@@ -183,12 +183,16 @@ def first_and_second(directory, count, name):
 def test_records_flagged_first_and_second(tmp_path):
     """A small file sorts by binary insertion and gives Picard's order; a large one ends
     in Java's `Comparison method violates its general contract!` in both, in memory.
-    With runs of three records both complete and hold the same records; the merge of
-    runs takes another order for these records (KNOWN_DIFFERENCES.md, SortSam)."""
+    Spilled in runs of 7 (43 runs) the merge through the port of Java's `TreeSet` gives
+    Picard's SAM text byte for byte. In runs of 3 (100 runs, more than 64) bammetrics
+    merges in groups first: both complete and hold the same records (KNOWN_DIFFERENCES.md,
+    SortSam)."""
     small = first_and_second(tmp_path, 20, "small")
     compare(small, ["SORT_ORDER=queryname"], "first and second, 20 records", "equal", silent=False)
     large = first_and_second(tmp_path, 300, "large")
     compare(large, ["SORT_ORDER=queryname"], "first and second, 300 records", "same", silent=False)
+    compare_sam(large, ["SORT_ORDER=queryname", "MAX_RECORDS_IN_RAM=7"], tmp_path,
+                "first and second, 300 records, runs of 7", silent=False)
     outs = []
     for side, run in (("picard", picard), ("bammetrics", ours)):
         out = tmp_path / f"{side}.runs.bam"
