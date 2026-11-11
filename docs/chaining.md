@@ -83,7 +83,7 @@ works in a step: `--minimum-pct 0.1`, `--MINIMUM_PCT 0.1`, `MINIMUM_PCT=0.1`, `-
 | `BAM`, `-i`, `I=` | The source: a BAM, or a CRAM with `-R`. `-` reads standard input |
 | `-o`, `--output-prefix`, `O=` | The prefix of every step that names no file of its own. Default `./` plus the source name without its extension, and standard error says so. A directory (an existing one, or a path ending in `/`) gets the source name as the file part |
 | `-R`, `--reference`, `R=` | Reference FASTA with a `.fai`. It decodes a CRAM source. It goes to every step that reads a reference and names none |
-| `-@`, `--threads` | BGZF threads of each read and of `write` (default: cores, at most 8) |
+| `-@`, `--threads` | BGZF threads of each read and of `write` (default: cores, at most 8; at most 256 may be asked for) |
 | `--tmp-dir`, `TMP_DIR=` | Where a transform spills and a piped source is copied |
 | `--format LIST` | `picard` first. Each further format is written beside every metrics file |
 | `--also LIST` | `json`, `jsonl`, `tsv`, `csv` beside every metrics file; `markdown` as `PREFIX.report.md` |
@@ -190,6 +190,22 @@ The json, tsv and csv siblings are written from the values in memory, as `--form
 picard,json` of a tool verb writes them, so a double keeps its full precision. `qc --also`
 reads each Picard file back and so writes the 6 fraction digits of that file.
 
+On a chain `--format` names the formats of the metrics files. `qc`, and `plan` with `qc`
+arguments, give the same flag another meaning: `--format text|jsonl` there picks how
+progress and the plan are printed. So `bammetrics plan BAM --format jsonl + STEP` is a
+chain and is refused with exit 2: `--format jsonl starts with jsonl: a chain names Picard
+files`. A chain has no event stream in this version. What it gives in its place:
+
+- Standard error carries the lines of section 2.5. `-v` adds each step's command line and
+  each file written.
+- `--dry-run` and `plan` print the plan as text (section 4).
+- `bm.chain` returns `Run.stages`: one entry per step with its status, error, files and
+  record counts (section 5.3).
+- `--also jsonl` writes each metrics file as JSON Lines beside the Picard file. That is a
+  file format, with no events in it.
+
+`qc --format jsonl` stays the event stream of a `qc` run.
+
 ### 2.5 What it prints, and exit codes
 
 Standard output is empty unless a step writes there. Standard error gets one line per
@@ -226,8 +242,62 @@ bammetrics chain: step 1 (write): out/x.sam: bammetrics writes BAM only: SAM out
 What is checked before the first read: the step name, every option name, every value of
 an int or float option, required options, files a step reads, `STOP_AFTER`, every option
 of `mark-duplicates` (`stage::check_stage_options`), the names and the writability of
-every output. A text value only the tool can judge (`--level NOPE` on a tap) is found when
-that tap is built: the tap fails alone and the chain exits 1.
+every output. Section 2.6 adds five checks.
+
+### 2.6 More that is refused before the first read
+
+The 0.22.0 release review found these. Tests: `crates/cli/tests/chain_safety.rs` (7
+tests), `tests/python/test_chain_safety.py` and 8 golden records.
+
+| What | The message says | Exit |
+|---|---|---|
+| A text value only the tool can judge on a tap (`--level NOPE`, `--expected-sex NOPE`) | The tool's own words under the step's label: `step 2 (insert-size): METRIC_ACCUMULATION_LEVEL "NOPE": expected ALL_READS, SAMPLE, LIBRARY or READ_GROUP` | 2 |
+| `--threads` over 256, or `threads` over 256 in a plan file | `100000000 is more than the maximum of 256 threads` | 2 |
+| An output through a directory that does not exist with a `..` behind it (`missing/../in.bam`) | `missing does not exist, so the .. behind it names no directory` | 2 |
+| A plan file over 1 MiB (1,048,576 bytes) | `not a plan file: it is larger than 1 MiB` | 2 |
+| An output that is a symbolic link, pipe, socket or device another user owns | `owned by another user; not written in place`, the words and the exit code of the tool verb | 1 |
+
+Values. `bammetrics_core::tap_options::check` holds one row per one-pass tool (13). Each
+row calls the option parser that the tool's own collector calls, with no header and no
+file opened. A unit test fails when a one-pass tool has no row. In 0.22.0 the tap failed
+alone when it was built, after the transform in front of it had read the whole source,
+and the chain exited 1. A value the tool judges against the header of its stream, or
+against a file it reads, is still found when the tap is built, and that tap fails alone
+with exit 1: a sort order it requires (`--no-assume-sorted` on a queryname stream), an
+interval list with a contig the header lacks. The reason: the header of a piped source
+can be read once, and the header behind a transform exists only after the transform ran.
+
+Threads. `pass::check_threads` is the one check and `pass::MAX_THREADS` is 256. Every
+place that parses a thread count asks it: the tool verbs, `chain`, the plan file, `qc`,
+`plan`, `collect`, `threads=` on the Picard face (exit 1 there, as every error of that
+face) and the Python `chain`, `qc` and `collect`. In 0.22.0 and before,
+`--threads 100000000` started threads for about two minutes and then panicked inside
+`noodles-bgzf` with exit 101, on every verb.
+
+Paths. A run makes the directories that are missing above its outputs. `missing/../in.bam`
+names no file before the run and names `in.bam` once `missing` is made, so neither the
+one-file-twice check nor the input check saw the file. In 0.22.0 `write missing/../in.bam`
+failed at write time with exit 1 and left `missing/` behind, and a tap with that `-o`
+replaced the source BAM with its metrics file. The tool verbs had the same hole
+(`insert-size in.bam -o missing/../in.bam`) and refuse the path with the same words. A
+`..` behind a directory that exists resolves and is checked as any spelling. Two
+spellings of one new file under a directory that does not exist yet (`link/new/a.txt`
+and `new/a.txt`, `link` leading to the working directory) are one file: the deepest
+directory that exists is resolved (`mark_duplicates::same_file_key`).
+
+Directories. `cleanup::MadeDirs` records each directory the run makes above an output. A
+run that ends with exit 1, before the first read or after it, removes those that are
+still empty, deepest first. A directory that was there before, or that holds a file,
+stays. A signal removes them under the same rule. A run that finishes keeps every one.
+
+Files read whole. `crates/cli/src/chain` reads two files whole, each through
+`chain::read_capped`, which stops one byte past its cap. The plan file holds at most
+1 MiB (`PLAN_FILE_CAP`). `--also markdown` reads back each metrics file the run wrote, at
+most 64 MiB each (`REPORT_FILE_CAP`); over that the report fails with exit 1 after every
+other file is written.
+
+The help of a step that is no verb names the step by its number, as a run does:
+`chain BAM + quality-yield + inser-size --help` prints `step 2: unknown step "inser-size"`.
 
 ## 3. The plan file
 
@@ -828,7 +898,7 @@ W04:
 | `parse_tables` moves to core | It moved, and it reads one-line arrays of scalars as well | A repeatable option of a step (`level`, `comment`) needs a list. A preset still takes no list |
 | `chain --plan plan.toml` reads the same steps | It reads the source and the chain's options too, and the command line may replace them | One file then describes one run, and one file can run on many sources (`--plan FILE other.bam -o other`) |
 | `plan` gains the chain form | `plan` with a `+` step, with `--plan FILE`, or with the word `chain` first | `plan` is a clap verb with the arguments of `qc`. A `qc` command line holds no `+` and no `--plan`, so the two cannot be mistaken |
-| Text-valued options are checked before the first read | Option names, int and float values, required options, input files and every option of a transform are. A text value only the tool can judge fails its tap when it is built | A collector parses its own options when it is built from the header of its position. Building each one twice would read each reference and interval list twice |
+| Text-valued options are checked before the first read | They are, since the 0.22.0 review: `tap_options::check` runs each one-pass tool's option parser without a header (section 2.6). A value judged against the header or a file still fails its tap when it is built | A collector parses its options and then builds from the header of its position. The parser alone needs no header and opens no file, so no reference or interval list is read twice |
 
 W04, Python (docs/07 section 2.2, the `crates/py` paragraph):
 

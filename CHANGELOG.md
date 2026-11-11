@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+Six findings of the 0.22.0 release review, and one more found on the way (docs/chaining.md
+section 2.6; `crates/cli/tests/chain_safety.rs`, `tests/python/test_chain_safety.py`, 8
+golden records). No Picard file, no `qc` output and no earlier golden record changed.
+
+- A chain output that is a symbolic link another user owns is refused before the first
+  read with the words and the exit code (1) of the tool verb: `owned by another user; not
+  written in place`. 0.22.0 said `Is a directory (os error 21)` for `/etc`.
+  `registry::check_writable` asks `cleanup::refusal`, so the Picard face says it too.
+- An output through a directory that does not exist with a `..` behind it
+  (`missing/../in.bam`) is a usage error (exit 2) before the first read, on `chain` and on
+  every tool verb. The run made `missing` and the path then named the input: 0.22.0 failed
+  `write` at write time and left the empty directory, and a tap or a tool verb with that
+  `-o` replaced its input BAM with the metrics file.
+- A chain that exits 1 removes the output directories it made that are still empty
+  (`cleanup::MadeDirs`). A directory that was there, or that holds a file, stays.
+- Two spellings of one new file under a directory that does not exist yet
+  (`link/new/a.txt` and `new/a.txt`) are one file for the one-file-twice check.
+- `chain --plan FILE` reads at most 1 MiB; a larger file is `not a plan file: it is larger
+  than 1 MiB` (exit 2). `--also markdown` reads back at most 64 MiB per metrics file.
+- `chain BAM + inser-size --help` names the unknown step with its number (`step 1`).
+- `--threads` over 256 is a usage error where it is parsed: the tool verbs, `chain`, the
+  plan file, `qc`, `plan`, `collect` (exit 2), `threads=` on the Picard face (exit 1) and
+  the Python `chain`, `qc` and `collect` (`UsageError`). `--threads 100000000` used to
+  start threads for about two minutes and panic in `noodles-bgzf` with exit 101.
+- A text value only the tool can judge on a tap (`--level NOPE`) is a usage error before
+  the first read (exit 2, `UsageError` in Python), as on the tool's verb. 0.22.0 failed
+  the tap when it was built and exited 1. `tap_options::check` runs the option parser of
+  each of the 13 one-pass tools without a header.
+
+### Changed
+
+- docs/chaining.md says that `--format` on a chain names the formats of the metrics
+  files, why `plan BAM --format jsonl + STEP` is refused, and what a chain gives in place
+  of an event stream.
+
 ## 0.22.0
 
 The `chain` verb, its plan file, Python `chain` and `step`, and `FifoBuffer` (tool 33).
