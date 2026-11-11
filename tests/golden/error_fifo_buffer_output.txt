@@ -1,0 +1,8 @@
+## argv
+FifoBuffer
+O=OUT/copy.bin
+## exit
+1
+## stdout
+## stderr
+bammetrics: FifoBuffer: Unrecognized option: O

@@ -1,0 +1,6 @@
+## argv
+FifoBuffer
+## exit
+0
+## stdout
+## stderr

@@ -308,6 +308,17 @@ const FIXTURE_CASES: &[Case] = &[
     case!("picard_jumping_library_cram", "CollectJumpingLibraryMetrics", "I=IS_CRAM", "O=OUT/jumping_library.txt", "R=REF"),
     case!("verb_jumping_library_json", "jumping-library", "OR", "IS", "--tail-limit", "100", "--format", "json"),
     case!("error_jumping_library_assume_sorted", "CollectJumpingLibraryMetrics", "I=IS", "ASSUME_SORTED=true"),
+    // FifoBuffer: standard input (closed here, so no byte) to standard output. The log
+    // line of DEBUG_FREQUENCY, the verb's note about chain, the options Picard refuses.
+    // crates/cli/tests/fifo_buffer.rs copies bytes through pipes.
+    case!("picard_fifo_buffer", "FifoBuffer"),
+    case!("picard_fifo_buffer_debug", "FifoBuffer", "BUFFER_SIZE=1024", "IO_SIZE=16", "DEBUG_FREQUENCY=1", "NAME=lane1", "VALIDATION_STRINGENCY=SILENT"),
+    case!("verb_fifo_buffer", "fifo-buffer", "--buffer-size", "1024", "--debug-frequency", "1"),
+    case!("verb_fifo_buffer_quiet", "fifo-buffer", "-q", "--io-size", "16", "--verbosity", "ERROR", "--debug-frequency", "1"),
+    case!("error_fifo_buffer_output", "FifoBuffer", "O=OUT/copy.bin"),
+    case!("error_fifo_buffer_size", "FifoBuffer", "BUFFER_SIZE=0"),
+    case!("error_verb_fifo_buffer_positional", "fifo-buffer", "IS"),
+    case!("error_verb_fifo_buffer_io_size", "fifo-buffer", "--io-size", "64k"),
 ];
 
 /// Formats (docs/formats.md): `convert` in both directions and to every

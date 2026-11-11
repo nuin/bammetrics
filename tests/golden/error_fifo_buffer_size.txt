@@ -1,0 +1,8 @@
+## argv
+FifoBuffer
+BUFFER_SIZE=0
+## exit
+1
+## stdout
+## stderr
+bammetrics: BUFFER_SIZE=0: a size from 1 to 2147483645 bytes is needed
