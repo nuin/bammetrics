@@ -188,10 +188,22 @@ STARTERS = {"run", "Popen", "call", "check_call", "check_output"}
 QUEUED_RUN = re.compile(r"from (asm_bams|make_corpus) import [^)]*\brun\b")
 
 
+# The output formats of `--format` and `--also` (docs/formats.md).
+FORMATS = {"picard", "json", "jsonl", "tsv", "csv", "human", "markdown", "junit", "multiqc"}
+
+
+def format_list(node):
+    """A list of two or more format names, such as `format=["picard", "json"]`
+    of the Python `chain`: the names of files to write, not a command."""
+    return len(node.elts) > 1 and all(
+        isinstance(item, ast.Constant) and item.value in FORMATS for item in node.elts)
+
+
 def starts_picard(node):
-    """A list literal whose first element is the string "picard"."""
+    """A list literal whose first element is the string "picard", unless it
+    is a `format_list`."""
     return (isinstance(node, ast.List) and node.elts and isinstance(node.elts[0], ast.Constant)
-            and node.elts[0].value == "picard")
+            and node.elts[0].value == "picard" and not format_list(node))
 
 
 def unqueued_calls(path, name):
@@ -235,6 +247,12 @@ def test_the_check_catches_a_direct_call(tmp_path):
             (f"import subprocess\nfrom run_picard import picard_env\n{call}, env=picard_env())\n", []),
             ('cmd = ["picard", "SortSam"]\n', ["new:1: builds a picard command without picard_env()"]),
             ('launch(["picard", "SortSam"])\n', ["new:1: picard command handed to an unknown runner"]),
+            # A `--format` list names output formats and starts no JVM.
+            ('chain(bam, ["insert_size"], format=["picard", "json"])\n', []),
+            ('plan = {"format": ["picard", "json", "csv"]}\n', []),
+            ('cmd = ["picard"]\n', ["new:1: builds a picard command without picard_env()"]),
+            ('cmd = ["picard", "json", "SortSam"]\n',
+             ["new:1: builds a picard command without picard_env()"]),
             ('from asm_bams import (Sam,\n    run)\nrun(["picard", "SortSam"])\n', [])):
         new.write_text(source)
         assert unqueued_calls(new, "new") == expected, source
