@@ -340,6 +340,10 @@ behaves how.
     `QUIET=true`). The `fifo-buffer` verb prints one line Picard has not: `bammetrics
     chain runs its steps in one process and removes the pipe this buffer serves`; `-q`
     or `QUIET=true` drops it, and the Picard face never prints it.
+  - `fifo-buffer` is no step of `bammetrics chain`: a chain has no pipe between its
+    steps. `chain BAM + fifo-buffer` exits 2 before the first read
+    (`FifoBuffer buffers the pipe between two commands and a chain has no pipe: it cannot
+    be a step`). On a pipe into or out of a chain the verb works as on any pipe.
 
 ## Charts
 

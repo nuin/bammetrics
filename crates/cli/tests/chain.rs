@@ -1687,6 +1687,167 @@ fn usage_errors_exit_2_before_anything_runs() {
     fs::remove_dir_all(&dir).expect("cleanup");
 }
 
+/// The whole refusal of `fifo-buffer` as the step at `place`.
+fn fifo_refusal(place: &str) -> String {
+    format!(
+        "bammetrics chain: {place}: FifoBuffer buffers the pipe between two commands and a \
+         chain has no pipe: it cannot be a step\n  \
+         leave the step out, or put the buffer on a pipe outside the chain: bammetrics chain \
+         BAM + write - | bammetrics fifo-buffer | ...\n  \
+         the steps: bammetrics chain --help\n"
+    )
+}
+
+/// `fifo-buffer` is refused as a step in every spelling, from the command
+/// line, a plan file and `plan`, with a reason of its own: it buffers a
+/// pipe and a chain has none. Exit 2 before the first read, nothing
+/// written. A tool that is no step for another reason keeps its message.
+#[test]
+fn fifo_buffer_is_refused_as_a_step() {
+    let dir = fresh_dir("fifo-step");
+    let prefix = dir.join("s").display().to_string();
+    let source = FIXTURE.0;
+    let cases: [(&[&str], &str); 4] = [
+        (&["+", "fifo-buffer"], "step 1 (fifo-buffer)"),
+        (
+            &["+", "FifoBuffer", "BUFFER_SIZE=1024"],
+            "step 1 (fifo-buffer)",
+        ),
+        (
+            &[
+                "+",
+                "mark-duplicates",
+                "+",
+                "fifo-buffer",
+                "--buffer-size",
+                "1024",
+                "+",
+                "write",
+                "-",
+            ],
+            "step 2 (fifo-buffer)",
+        ),
+        // The help of a step that cannot be one is the refusal too.
+        (&["+", "fifo-buffer", "--help"], "step 1 (fifo-buffer)"),
+    ];
+    for (steps, place) in cases {
+        let args = [&["chain", source, "-o", &prefix][..], steps].concat();
+        let output = bammetrics(&strings(&args));
+        assert_eq!(output.status.code(), Some(2), "{args:?}");
+        assert!(output.stdout.is_empty(), "{args:?}");
+        assert_eq!(
+            String::from_utf8_lossy(&output.stderr),
+            fifo_refusal(place),
+            "{args:?}"
+        );
+    }
+    let planned = bammetrics(&strings(&["plan", source, "+", "fifo-buffer"]));
+    assert_eq!(planned.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&planned.stderr).contains("a chain has no pipe"));
+    let plan = dir.join("fifo.toml");
+    fs::write(
+        &plan,
+        format!("[chain]\nsource = \"{source}\"\n\n[[step]]\nverb = \"fifo-buffer\"\n"),
+    )
+    .expect("plan file");
+    let (code, stderr) = chain(&["--plan", &plan.display().to_string(), "-o", &prefix]);
+    assert_eq!(code, Some(2), "{stderr}");
+    assert!(
+        stderr.contains("step 1 (fifo-buffer): FifoBuffer buffers the pipe"),
+        "{stderr}"
+    );
+    assert_eq!(names(&dir), ["fifo.toml"]);
+    let (code, stderr) = chain(&[source, "+", "wgs", "--help"]);
+    assert_eq!(code, Some(2));
+    assert!(
+        stderr.starts_with(
+            "bammetrics chain: step 1 (wgs): CollectWgsMetrics has no stage and does not read \
+             a BAM in one pass: it cannot be a step\n  wave W14"
+        ),
+        "{stderr}"
+    );
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+/// What the refusal tells the user to do works: `chain ... + write - |
+/// fifo-buffer` gives the BAM the chain writes to a file, and a chain
+/// reads the BAM `fifo-buffer` hands it.
+#[test]
+fn fifo_buffer_copies_the_bam_on_a_pipe_into_or_out_of_a_chain() {
+    use std::process::Stdio;
+
+    let dir = fresh_dir("fifo-pipe");
+    let prefix = dir.join("s").display().to_string();
+    let tmp = dir.display().to_string();
+    let steps = |source: &str, write: &str| {
+        strings(&[
+            "chain",
+            source,
+            "-q",
+            "-o",
+            &prefix,
+            "--tmp-dir",
+            &tmp,
+            "+",
+            "mark-duplicates",
+            "PROGRAM_GROUP_COMMAND_LINE=pinned",
+            "+",
+            "write",
+            write,
+        ])
+    };
+    let buffer = |input: Stdio| {
+        Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+            .args([
+                "fifo-buffer",
+                "-q",
+                "--buffer-size",
+                "4096",
+                "--io-size",
+                "512",
+            ])
+            .stdin(input)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("run fifo-buffer")
+    };
+    let file = dir.join("file.bam");
+    run(&steps(FIXTURE.0, &file.display().to_string()));
+    let marked = fs::read(&file).expect("the chain's BAM");
+
+    let mut producer = Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+        .args(steps(FIXTURE.0, "-"))
+        .current_dir(root())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("run the chain");
+    let behind = buffer(producer.stdout.take().expect("the chain's output").into())
+        .wait_with_output()
+        .expect("fifo-buffer ends");
+    assert!(producer.wait().expect("the chain ends").success());
+    assert!(behind.status.success());
+    assert!(behind.stderr.is_empty());
+    assert_eq!(behind.stdout, marked);
+
+    let source = fs::File::open(root().join(FIXTURE.0)).expect("the fixture");
+    let mut in_front = buffer(source.into());
+    let consumer = Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+        .args(steps("-", "-"))
+        .current_dir(root())
+        .stdin(in_front.stdout.take().expect("the buffer's output"))
+        .output()
+        .expect("run the chain");
+    assert!(in_front.wait().expect("fifo-buffer ends").success());
+    assert!(
+        consumer.status.success(),
+        "{}",
+        String::from_utf8_lossy(&consumer.stderr)
+    );
+    assert_eq!(consumer.stdout, marked);
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
 /// The hidden `__chain` entry of 0.21.0 is gone, and the verb is listed
 /// where the other verbs are.
 #[test]

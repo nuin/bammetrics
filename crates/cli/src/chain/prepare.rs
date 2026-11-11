@@ -21,8 +21,9 @@ use bammetrics_core::{cram, java, pass};
 use clap::ValueEnum;
 
 use super::args::{
-    AS, CHAIN_KEYS, COMPRESSION_LEVEL, INDEX, MD5, belongs_to_chain, chain_option_on_step,
-    find_step, is_transform, step_parser_flags, unknown_step, write_flags,
+    AS, CHAIN_KEYS, COMPRESSION_LEVEL, INDEX, MD5, STEPS_HINT, belongs_to_chain,
+    chain_option_on_step, find_step, is_transform, not_a_step, step_parser_flags, unknown_step,
+    write_flags,
 };
 use super::claims::{Read, check_one_stdout, claim_outputs, inputs_of, refuse_overwriting_inputs};
 use super::{EMPTY_PREFIX_HINT, Spec, StepSpec, VERB, WRITE, usage};
@@ -245,13 +246,8 @@ fn tool_role(spec: &StepSpec, number: usize) -> Result<(&'static Verb, Role), Ve
     if verb.tool().collector.is_some() {
         return Ok((verb, Role::Tap));
     }
-    Err(usage(format!(
-        "{}: {} has no stage and does not read a BAM in one pass: it cannot be a step",
-        place(spec, &format!("step {number} ({})", verb.name)),
-        verb.class
-    ))
-    .hint("wave W14 of docs/07 runs such a tool on a spooled copy of the stream")
-    .hint("the steps: bammetrics chain --help"))
+    let label = format!("step {number} ({})", verb.name);
+    Err(not_a_step(verb, &place(spec, &label)).hint(STEPS_HINT))
 }
 
 /// The spelling of a file a step names by an empty value (`-o ''`, a

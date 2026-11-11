@@ -14,7 +14,7 @@ use std::path::Path;
 use bammetrics_core::registry::{Ty, did_you_mean, python_keywords, snake_case, wrap};
 
 use super::args::{
-    ALSO, AS, find_step, global_flags, is_step, is_transform, step_flags, write_flags,
+    ALSO, AS, find_step, global_flags, is_step, is_transform, not_a_step, step_flags, write_flags,
 };
 use super::prepare::{Chain, Planned, Role};
 use super::{WRITE, usage};
@@ -260,12 +260,8 @@ pub fn step_table(name: &str) -> Result<StepTable, VerbError> {
     }
     let verb = find_verb(name).ok_or_else(|| unknown_step(name))?;
     if !is_step(verb) {
-        return Err(usage(format!(
-            "step {}: {} has no stage and does not read a BAM in one pass: it cannot be a step",
-            verb.name, verb.class
-        ))
-        .hint("wave W14 of docs/07 runs such a tool on a spooled copy of the stream")
-        .hint(format!("steps: {}", step_names().join(", "))));
+        return Err(not_a_step(verb, &format!("step {}", verb.name))
+            .hint(format!("steps: {}", step_names().join(", "))));
     }
     let role = if is_transform(verb) {
         Role::Transform
@@ -522,7 +518,14 @@ mod tests {
             (
                 "wgs",
                 "bammetrics chain: step wgs: CollectWgsMetrics has no stage and does not read a \
-                 BAM in one pass: it cannot be a step",
+                 BAM in one pass: it cannot be a step\n  wave W14 of docs/07",
+            ),
+            (
+                "fifo_buffer",
+                "bammetrics chain: step fifo-buffer: FifoBuffer buffers the pipe between two \
+                 commands and a chain has no pipe: it cannot be a step\n  leave the step out, \
+                 or put the buffer on a pipe outside the chain: bammetrics chain BAM + write - \
+                 | bammetrics fifo-buffer | ...\n  steps: insert_size, ",
             ),
         ];
         for (name, start) in cases {

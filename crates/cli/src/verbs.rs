@@ -1250,7 +1250,7 @@ fn names_a_file(key: Key) -> bool {
 impl Verb {
     /// True for the verb of `FifoBuffer`: standard input to standard
     /// output, so it has no input argument, no `-o` and no `--format`.
-    fn copies_stream(&self) -> bool {
+    pub(crate) fn copies_stream(&self) -> bool {
         self.class == fifo_buffer::TOOL.name
     }
 

@@ -762,6 +762,12 @@ exits 2 with the usage line `bammetrics fifo-buffer [OPTIONS] < IN > OUT`.
   `OUTPUT`, `ASSUME_SORTED`, `GA4GH_CLIENT_SECRETS`) exits 2 on the verb and 1 on the
   Picard face, before one byte is copied.
 
+`fifo-buffer` is no step of `bammetrics chain`. A chain hands records from step to step
+in memory and has no pipe to buffer, so `chain BAM + fifo-buffer` exits 2 and says so
+([docs/chaining.md](chaining.md) section 1). The verb still serves a pipe into or out of
+a chain: `bammetrics chain in.bam + mark-duplicates + write - | bammetrics fifo-buffer |
+samtools flagstat -`.
+
 `fifo_buffer()` in Python raises `UsageError`: a Python call has no pipe to buffer
 ([docs/python.md](python.md)). KNOWN_DIFFERENCES.md lists what differs from Picard: the
 first log line, a size of 0, a closed or failed standard output.

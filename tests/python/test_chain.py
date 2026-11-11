@@ -371,6 +371,13 @@ def test_a_step_is_checked_when_it_is_made():
     (lambda: bm.Step("mark_duplicats"), bm.UsageError, r"did you mean mark_duplicates\?"),
     (lambda: bm.step("wgs"), bm.UsageError,
      "step wgs: CollectWgsMetrics has no stage and does not read a BAM in one pass"),
+    # FifoBuffer buffers a pipe, and a chain has none: its own reason, in every spelling.
+    (lambda: bm.step("fifo_buffer"), bm.UsageError,
+     "step fifo-buffer: FifoBuffer buffers the pipe between two commands and a chain has no "
+     r"pipe: it cannot be a step\n  leave the step out, or put the buffer on a pipe outside"),
+    (lambda: bm.step("FifoBuffer", buffer_size=1024), bm.UsageError, "a chain has no pipe"),
+    (lambda: bm.chain(MARKDUP, ["mark_duplicates", "fifo-buffer", "write"]), bm.UsageError,
+     r"fifo-buffer\)?: FifoBuffer buffers the pipe"),
     (lambda: bm.step("insert_size", minmum_pct=0.1), bm.UsageError,
      r'step insert-size: unknown keyword "minmum_pct"\n  did you mean minimum_pct\?\n'
      "  keywords: deviations, "),

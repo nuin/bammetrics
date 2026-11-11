@@ -97,7 +97,7 @@ process, from the command line, from a TOML plan file or from Python (`bammetric
   the form. docs/chaining.md section 3 lists what is read. No dependency was added.
 - `bammetrics_core::stage`: `Outputs` (the one-file-twice check in linear time), `halt`,
   `label_of`, `check_stage_options`, `later_kind`.
-- Golden records: 57 chain forms on the fixtures and 2 on corpus t1. The suite asserts
+- Golden records: 58 chain forms on the fixtures and 2 on corpus t1. The suite asserts
   that a plan file and its command line record the same files, and that a chain without a
   transform records the four metrics files `qc` records.
 - `FifoBuffer`, registry tool 33 (wave W04 of docs/07): Picard 3.5.0's memory buffer
@@ -128,6 +128,13 @@ process, from the command line, from a TOML plan file or from Python (`bammetric
   21 bad argument lists, a size of 0 (Picard never ends, bammetrics exits 1) and a
   closed standard output. `crates/cli/tests/fifo_buffer.rs` runs the same shapes on
   pipes without Picard; 8 golden cases.
+- `fifo-buffer` is refused as a step of `chain`, with its own reason: `step 2
+  (fifo-buffer): FifoBuffer buffers the pipe between two commands and a chain has no
+  pipe: it cannot be a step`. Exit 2 before the first read, in every spelling, on the
+  command line, in a plan file, in `plan` and from `bammetrics.step("fifo_buffer")`. The
+  hint names what works: `bammetrics chain BAM + write - | bammetrics fifo-buffer | ...`.
+  `crates/cli/tests/chain.rs` checks the refusal and that the bytes behind the buffer
+  equal the BAM the chain writes to a file; golden record `error_chain_fifo_buffer`.
 
 ### Changed
 
@@ -150,6 +157,9 @@ process, from the command line, from a TOML plan file or from Python (`bammetric
   follow D7, D8, D9 and D12 of docs/07.
 - `bammetrics tools`, the top-level `--help` and the completion scripts list
   `fifo-buffer`. The golden record `verb_tools` gained that row; no other record changed.
+- `bammetrics chain BAM + VERB --help` for a verb that cannot be a step (`wgs`,
+  `fifo-buffer`) prints the refusal a run prints and exits 2. It printed that verb's
+  options under the words `a tap`.
 
 ## 0.21.0
 

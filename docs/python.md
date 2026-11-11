@@ -198,6 +198,7 @@ bm.step("inser_size")                      # UsageError: unknown step "inser_siz
 bm.step("insert_size", minmum_pct=0.1)     # UsageError: unknown keyword "minmum_pct" / did you mean minimum_pct?
 bm.step("insert_size", minimum_pct="0.1")  # UsageError: minimum_pct takes a number, not str
 bm.step("wgs")                             # UsageError: CollectWgsMetrics ... cannot be a step
+bm.step("fifo_buffer")                     # UsageError: FifoBuffer buffers the pipe between two commands and a chain has no pipe
 ```
 
 - The verb is a tool verb in snake case (`insert_size`, `mark_duplicates`), or `write`. The kebab form (`insert-size`), the Picard class (`CollectInsertSizeMetrics`) and the function name (`collect_insert_size_metrics`) name the same step. The stub lists the 15 names as `_StepVerb`: `mark_duplicates` (a transform), 13 taps (`insert_size`, `alignment_summary`, `quality_yield`, `hs_metrics`, `gc_bias`, `quality_score_distribution`, `mean_quality_by_cycle`, `base_distribution_by_cycle`, `duplicate_metrics`, `rna_seq`, `sequencing_artifact`, `coverage_gaps`, `sex_check`) and `write`.

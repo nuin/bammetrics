@@ -41,6 +41,24 @@ A tool without a collector and without a stage (`wgs`, `targeted-pcr`,
 `library-complexity`, `multiple-metrics`, every tool that reads no BAM) cannot be a step.
 W14 spools the stream for those.
 
+`fifo-buffer` is never a step. `FifoBuffer` copies the bytes of a pipe between two
+commands. The steps of a chain hand records on in memory, so a chain has no pipe for it
+to buffer. The chain refuses it with exit 2 before the first read, in every spelling, on
+the command line, in a plan file, in `plan` and in Python:
+
+```
+$ bammetrics chain in.bam + mark-duplicates + fifo-buffer --buffer-size 1024 + write -
+bammetrics chain: step 2 (fifo-buffer): FifoBuffer buffers the pipe between two commands and a chain has no pipe: it cannot be a step
+  leave the step out, or put the buffer on a pipe outside the chain: bammetrics chain BAM + write - | bammetrics fifo-buffer | ...
+  the steps: bammetrics chain --help
+```
+
+On a pipe into or out of a chain the verb works as on any pipe:
+`bammetrics chain in.bam + mark-duplicates + write - | bammetrics fifo-buffer | samtools
+flagstat -`, or `producer | bammetrics fifo-buffer | bammetrics chain - + insert-size`.
+`crates/cli/tests/chain.rs` checks both: the bytes behind the buffer equal the BAM the
+chain writes to a file.
+
 ## 2. The chain verb
 
 ```
@@ -825,7 +843,14 @@ W04, Python (docs/07 section 2.2, the `crates/py` paragraph):
 | No word on `dry_run` | `dry_run=True` returns the plan text as a str | The command prints that text. The stub has three overloads, so `chain(...)` types as `Run[None]` and `chain(..., dry_run=True)` as `str` |
 | No word on a failed step | `InputError` after the other steps wrote their files, with `.run` | `qc` and `collect` do the same for a failed collector |
 | The Python module builds a `Spec` (section 5.2 as W04 part A wrote it) | It builds the argv and calls `parse` | `qc`, `check` and `report` already work that way. `--plan` with its replacement rule, the `+` refusal beside a plan and every option check then have one implementation |
-| `fifo-buffer` in W04 | Not built | It was not in the work order of this part |
+
+W04, `fifo-buffer` (docs/07 section 2.2, the `chain.rs` paragraph):
+
+| docs/07 | As built | Reason |
+|---|---|---|
+| `fifo-buffer` copies stdin to stdout and prints that chaining removed the pipe it buffered | It does, as registry tool 33 with a Picard face (`FifoBuffer`) and the verb. The line is on standard error and `-q` drops it. The Picard face never prints it | The Picard face prints what Picard prints. Standard output carries the copied bytes |
+| No word on `fifo-buffer` inside a chain | Refused as a step: a usage error with its own reason (section 1) | It moves bytes between two commands and writes no record. A chain has no pipe between its steps. The generic refusal named W14, which will not make it a step |
+| No word on the help of a step that cannot be one | `chain BAM + VERB --help` for such a verb prints the refusal and exits 2 | It printed the options of `wgs` and of `fifo-buffer` under the words `a tap` |
 
 Added beyond the list of docs/07: `Emit` takes `&mut RawRecord` so a batch can take the
 record without a copy. `Transform::products` carries the `MarkDuplicates` metrics.
@@ -837,7 +862,6 @@ check linear in the number of steps.
 
 | Wave | Adds |
 |---|---|
-| W04, rest | `fifo-buffer` (FifoBuffer) |
 | W05 | The sort barrier (`Next::Records`), the planner (`Frame` per position, `requires`, the free-space refusal), the spool for a replay behind another transform, `--sort-memory`, SAM output of `write`, `write --index` through the BAI writer |
 | W09 on | Each BAM-writing tool registers its stage in `stage_of` and its stream name in `label_of` |
 | W14 | `qc` as the last step of a chain, manifest 2, resume per step (`resume=` in Python), kept products, the spool for tools that read their input their own way, a progress line |

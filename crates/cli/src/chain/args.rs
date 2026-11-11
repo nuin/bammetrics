@@ -25,6 +25,8 @@ pub(crate) const MD5: Key = Key::Own("md5");
 pub(crate) const COMPRESSION_LEVEL: Key = Key::Own("compression-level");
 
 const USAGE: &str = "bammetrics chain [OPTIONS] BAM + STEP [STEP OPTIONS] [+ STEP ...]";
+/// The last hint of a command-line error about a step that cannot be one.
+pub(crate) const STEPS_HINT: &str = "the steps: bammetrics chain --help";
 
 /// What a command line asks for.
 pub enum Asked {
@@ -216,6 +218,32 @@ pub(crate) fn is_step(verb: &Verb) -> bool {
     is_transform(verb) || verb.tool().collector.is_some()
 }
 
+/// The usage error for a verb that cannot be a step, named `place`
+/// (`step 2 (wgs)`), with one hint. The caller adds the second and last
+/// hint, the one that lists the steps.
+///
+/// `fifo-buffer` has its own reason. It copies the bytes of a pipe between
+/// two commands, and the steps of a chain hand records on in memory, so no
+/// later wave makes it a step.
+pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
+    if verb.copies_stream() {
+        return usage(format!(
+            "{place}: {} buffers the pipe between two commands and a chain has no pipe: it \
+             cannot be a step",
+            verb.class
+        ))
+        .hint(
+            "leave the step out, or put the buffer on a pipe outside the chain: bammetrics \
+             chain BAM + write - | bammetrics fifo-buffer | ...",
+        );
+    }
+    usage(format!(
+        "{place}: {} has no stage and does not read a BAM in one pass: it cannot be a step",
+        verb.class
+    ))
+    .hint("wave W14 of docs/07 runs such a tool on a spooled copy of the stream")
+}
+
 /// The flags the parser takes for a step of `verb`: the verb's own, plus
 /// `--as` on a transform. The chain-level ones stay in, so the error for
 /// one given on a step says where it belongs.
@@ -353,8 +381,9 @@ pub fn help() -> String {
     text
 }
 
-/// The help of one step: `write`, or a tool verb as a step.
-pub fn step_help(name: &str) -> Result<String, VerbError> {
+/// The help of step `number`: `write`, or a tool verb as a step. A verb
+/// that cannot be a step gets the refusal a run gives it.
+pub fn step_help(name: &str, number: usize) -> Result<String, VerbError> {
     if name == WRITE {
         return Ok(format!(
             "bammetrics chain ... + write [PATH] [OPTIONS]: the records of its position as a \
@@ -363,6 +392,10 @@ pub fn step_help(name: &str) -> Result<String, VerbError> {
         ));
     }
     let verb = find_step(name).ok_or_else(|| unknown_step(name, None))?;
+    if !is_step(verb) {
+        let place = format!("step {number} ({})", verb.name);
+        return Err(not_a_step(verb, &place).hint(STEPS_HINT));
+    }
     let tool = verb.tool();
     let kind = if is_transform(verb) {
         "a transform: later steps see the records it emits"
@@ -489,9 +522,9 @@ pub fn parse(args: &[String]) -> Result<Asked, VerbError> {
         return Ok(Asked::Help(help()));
     }
     let steps = steps(&rest)?;
-    let wants_help = |step: &&StepSpec| step.args.iter().any(|a| a == "--help" || a == "-h");
-    if let Some(step) = steps.iter().find(wants_help) {
-        return step_help(&step.verb).map(Asked::Help);
+    let wants_help = |step: &StepSpec| step.args.iter().any(|a| a == "--help" || a == "-h");
+    if let Some(index) = steps.iter().position(wants_help) {
+        return step_help(&steps[index].verb, index + 1).map(Asked::Help);
     }
     let mut spec = match parsed.last(PLAN) {
         None => Spec::default(),
