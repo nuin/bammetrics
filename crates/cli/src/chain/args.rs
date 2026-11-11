@@ -222,7 +222,8 @@ pub(crate) fn is_step(verb: &Verb) -> bool {
 /// (`step 2 (wgs)`), with one hint. The caller adds the second and last
 /// hint, the one that lists the steps.
 ///
-/// `fifo-buffer` has its own reason. It copies the bytes of a pipe between
+/// `build-bam-index` names the `write --index` that does its work in a
+/// chain. `fifo-buffer` has its own reason. It copies the bytes of a pipe between
 /// two commands, and the steps of a chain hand records on in memory, so no
 /// later wave makes it a step.
 pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
@@ -235,6 +236,16 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
         .hint(
             "leave the step out, or put the buffer on a pipe outside the chain: bammetrics \
              chain BAM + write - | bammetrics fifo-buffer | ...",
+        );
+    }
+    if verb.class == bammetrics_core::build_bam_index::TOOL.name {
+        return usage(format!(
+            "{place}: {} indexes a BAM file and a chain hands on records: it cannot be a step",
+            verb.class
+        ))
+        .hint(
+            "write --index writes the .bai of the BAM a chain writes: bammetrics chain BAM + \
+             ... + write out.bam --index",
         );
     }
     usage(format!(
