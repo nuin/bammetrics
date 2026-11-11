@@ -402,6 +402,52 @@ fn bad_options_exit_before_a_byte_is_copied() {
     );
 }
 
+/// `-o`, `--format` and `--sample` in any spelling exit 2 with the usage
+/// line of the verb; a misspelled option keeps the plain message.
+#[test]
+fn a_file_option_on_the_verb_names_the_streams() {
+    let cases: [(&[&str], &str); 9] = [
+        (&["-o", "x"], "-o"),
+        (&["-ox"], "-o"),
+        (&["-O", "x"], "-O"),
+        (&["--output", "x"], "--output"),
+        (&["--output=x"], "--output"),
+        (&["O=x"], "O="),
+        (&["OUTPUT=x"], "OUTPUT="),
+        (&["--format", "json"], "--format"),
+        (&["--buffer-size", "16", "--sample", "s"], "--sample"),
+    ];
+    for (options, spelled) in cases {
+        let mut args = vec!["fifo-buffer"];
+        args.extend(options);
+        let run = run(&args, b"never copied");
+        assert_eq!(run.status.code(), Some(2), "{args:?}");
+        assert_eq!(run.stdout, b"", "{args:?}");
+        assert_eq!(
+            text(&run.stderr),
+            format!(
+                "bammetrics fifo-buffer: {spelled} is no option of this verb: the bytes go to \
+                 standard output unchanged\n  bammetrics fifo-buffer [OPTIONS] < IN > OUT\n  \
+                 every option: bammetrics help fifo-buffer\n"
+            ),
+            "{args:?}"
+        );
+    }
+    let misspelled = run(&["fifo-buffer", "--outptu", "x"], b"");
+    assert_eq!(
+        text(&misspelled.stderr),
+        "bammetrics fifo-buffer: unknown option --outptu\n  every option: bammetrics help \
+         fifo-buffer\n"
+    );
+    // Another verb's unknown option is not read as a file option.
+    let other = run(&["quality-yield", "--buffer-size", "16"], b"");
+    assert_eq!(other.status.code(), Some(2));
+    assert!(
+        text(&other.stderr).starts_with("bammetrics quality-yield: unknown option --buffer-size\n"),
+        "{other:?}"
+    );
+}
+
 /// The options Picard's FifoBuffer takes from `CommandLineProgram` are
 /// accepted and noted; the copy is the same.
 #[test]

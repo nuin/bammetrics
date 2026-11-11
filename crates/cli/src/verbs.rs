@@ -399,6 +399,17 @@ impl Verb {
     /// The verb's flags: input, output, `--format` and `--sample`, every
     /// row of the tool's option table, then the shared flags.
     pub fn flags(&self) -> Vec<Flag> {
+        let mut flags = self.flags_with_files();
+        if self.copies_stream() {
+            // Bytes to standard output: no file, no format, no sample.
+            flags.retain(|f| !names_a_file(f.key));
+        }
+        flags
+    }
+
+    /// [`Verb::flags`] with the `-o`, `--format` and `--sample` a stream
+    /// verb drops: [`Verb::file_option_error`] parses against them.
+    fn flags_with_files(&self) -> Vec<Flag> {
         let tool = self.tool();
         let table = tool.table();
         let mut flags = Vec::new();
@@ -537,10 +548,6 @@ impl Verb {
                 flag.help = format!("Accepted and ignored: {why}.");
             }
         }
-        if self.copies_stream() {
-            // Bytes to standard output: no file, no format, no sample.
-            flags.retain(|f| !matches!(f.key, Key::Output | Key::Format | Key::Sample));
-        }
         flags
     }
 
@@ -578,7 +585,8 @@ impl Verb {
     /// theirs (2 for usage, 1 for inputs and failed tools).
     pub fn run(&self, args: &[String]) -> Result<u8, VerbError> {
         let flags = self.flags();
-        let parsed = grammar::parse(self.name, &flags, args)?;
+        let parsed = grammar::parse(self.name, &flags, args)
+            .map_err(|e| self.file_option_error(args).unwrap_or(e))?;
         if parsed.flag(Key::Help) {
             print!("{}", self.help());
             return Ok(0);
@@ -1221,12 +1229,39 @@ impl Verb {
     }
 }
 
+/// The flags of a file a verb writes, which a stream verb has not.
+fn names_a_file(key: Key) -> bool {
+    matches!(key, Key::Output | Key::Format | Key::Sample)
+}
+
 /// `fifo-buffer`: the one verb that moves bytes and writes no file.
 impl Verb {
     /// True for the verb of `FifoBuffer`: standard input to standard
     /// output, so it has no input argument, no `-o` and no `--format`.
     fn copies_stream(&self) -> bool {
         self.class == fifo_buffer::TOOL.name
+    }
+
+    /// A usage error of a stream verb, with the usage line as its hint.
+    fn stream_usage(&self, what: String) -> VerbError {
+        VerbError::usage(self.name, what)
+            .hint(format!("bammetrics {} [OPTIONS] < IN > OUT", self.name))
+            .hint(format!("every option: bammetrics help {}", self.name))
+    }
+
+    /// The error for `-o`, `--format` or `--sample` on a stream verb, in
+    /// any spelling: `args` parse once those flags are back and one of
+    /// them was given. `None` for every other verb and every other error.
+    fn file_option_error(&self, args: &[String]) -> Option<VerbError> {
+        if !self.copies_stream() {
+            return None;
+        }
+        let parsed = grammar::parse(self.name, &self.flags_with_files(), args).ok()?;
+        let given = parsed.given.iter().find(|g| names_a_file(g.key))?;
+        Some(self.stream_usage(format!(
+            "{} is no option of this verb: the bytes go to standard output unchanged",
+            given.spelled
+        )))
     }
 
     /// Copy standard input to standard output through the buffer. On
@@ -1236,12 +1271,9 @@ impl Verb {
     /// output ends the copy with exit 0 and no message.
     fn copy_stream(&self, parsed: &Parsed, flags: &[Flag]) -> Result<u8, VerbError> {
         if let Some(word) = parsed.positional.first() {
-            return Err(VerbError::usage(
-                self.name,
-                format!("{word:?} is no option: the bytes come from standard input"),
-            )
-            .hint(format!("bammetrics {} [OPTIONS] < IN > OUT", self.name))
-            .hint(format!("every option: bammetrics help {}", self.name)));
+            return Err(self.stream_usage(format!(
+                "{word:?} is no option: the bytes come from standard input"
+            )));
         }
         let core = |e: bammetrics_core::Error| self.core_error(parsed, &e);
         let picard = self.picard_arguments(parsed, flags)?;

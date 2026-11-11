@@ -15,12 +15,16 @@
   `--debug-frequency`, `--name` and `--verbosity`, no input argument and no `-o`. It
   prints one line on standard error, `bammetrics chain runs its steps in one process and
   removes the pipe this buffer serves`; `-q` or `QUIET=true` drops it. A usage error
-  exits 2 before one byte is copied.
+  exits 2 before one byte is copied. `-o`, `--format` or `--sample` in any spelling
+  answers `is no option of this verb` with the usage line `bammetrics fifo-buffer
+  [OPTIONS] < IN > OUT`.
 - A reader that closes standard output ends the copy with exit 0 and no message. A
   failed write of another kind exits 1.
 - Memory follows the bytes held: a 4 GiB copy to a reader that keeps up peaked at 7 to
   11 MiB and took 0.71 to 1.10 s (Picard 3.5.0: 630 to 646 MiB, 1.54 to 2.16 s); a full
-  default buffer peaked at 515 MiB (docs/benchmarks.md).
+  default buffer peaked at 515 MiB (docs/benchmarks.md). The read chunk and the write
+  chunk are `IO_SIZE` bytes each, cut to `BUFFER_SIZE`: `IO_SIZE=1073741824
+  BUFFER_SIZE=10` peaks at 2.8 MiB.
 - `fifo_buffer()` in Python checks its keywords and raises `UsageError`: a Python call
   has no pipe to buffer (docs/python.md).
 - `tests/concordance/test_fifo_buffer.py`: six input shapes under every option through

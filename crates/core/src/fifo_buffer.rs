@@ -30,9 +30,10 @@
 //! - `BUFFER_SIZE` bytes are reserved and the ring uses a window of them:
 //!   64 KiB at first, doubled in place when the bytes held fill it. An
 //!   empty ring starts again at its first byte. Resident memory is the
-//!   widest window reached: at most twice the most bytes ever held and at
-//!   most `BUFFER_SIZE`. Picard allocates and zeroes `BUFFER_SIZE` bytes of
-//!   heap first.
+//!   widest window reached (at most twice the most bytes ever held and at
+//!   most `BUFFER_SIZE`) plus the two chunks of one read and one write,
+//!   each `IO_SIZE` bytes cut to `BUFFER_SIZE` (128 KiB by default). Picard
+//!   allocates and zeroes `BUFFER_SIZE` bytes of heap first.
 //!
 //! The registry row gives the Picard face, the `fifo-buffer` verb and the
 //! Python keywords. [`TOOL`]'s `run` refuses: a call that returns rows has
@@ -218,7 +219,9 @@ fn reserved(size: usize, option: &str) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// A zeroed chunk of `IO_SIZE` bytes: what one read or one write moves.
+/// A zeroed chunk of `io_size` bytes: what one read or one write moves.
+/// [`copy`] passes `IO_SIZE` cut to `BUFFER_SIZE`. Every byte is written
+/// here, so both chunks are resident from the start.
 fn chunk(io_size: usize) -> Result<Vec<u8>> {
     let mut bytes = reserved(io_size, "IO_SIZE")?;
     bytes.resize(io_size, 0);
@@ -473,8 +476,11 @@ where
         ));
     }
     let fifo = Arc::new(Fifo::new(capacity)?);
+    // The ring takes at most `capacity` bytes in one put and gives at most
+    // that many in one take, so a chunk above it would hold bytes never used.
+    let io_size = options.io_size.min(capacity);
     // A size the allocator refuses returns here, before a thread starts.
-    let (read_chunk, mut chunk) = (chunk(options.io_size)?, chunk(options.io_size)?);
+    let (read_chunk, mut chunk) = (chunk(io_size)?, chunk(io_size)?);
     let stop = Arc::new(Stop {
         stopped: Mutex::new(false),
         changed: Condvar::new(),
@@ -637,6 +643,51 @@ mod tests {
                     written: len as u64,
                     output_closed: false
                 }
+            );
+        }
+    }
+
+    /// An input that records the longest slice one read was given.
+    struct Widest {
+        data: io::Cursor<Vec<u8>>,
+        widest: Arc<Mutex<usize>>,
+    }
+
+    impl Read for Widest {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            let mut widest = self.widest.lock().expect("lock");
+            *widest = (*widest).max(buf.len());
+            drop(widest);
+            self.data.read(buf)
+        }
+    }
+
+    /// `IO_SIZE` above `BUFFER_SIZE` allocates chunks of `BUFFER_SIZE`
+    /// bytes: 1 GiB of `IO_SIZE` over a 10-byte buffer reads 10 bytes at a
+    /// time.
+    #[test]
+    fn a_chunk_is_no_longer_than_the_buffer() {
+        for (buffer_size, io_size, expected) in [
+            (10, 1 << 30, 10),
+            (4096, 1 << 30, 4096),
+            (4096, 64, 64),
+            (64, 64, 64),
+        ] {
+            let data = bytes(100_000);
+            let widest = Arc::new(Mutex::new(0));
+            let input = Widest {
+                data: io::Cursor::new(data.clone()),
+                widest: Arc::clone(&widest),
+            };
+            let mut out = Vec::new();
+            let result =
+                copy(input, &mut out, &options(buffer_size, io_size), |_| {}).expect("copy");
+            assert_eq!(out, data, "buffer {buffer_size}, io {io_size}");
+            assert_eq!((result.read, result.written), (100_000, 100_000));
+            assert_eq!(
+                *widest.lock().expect("lock"),
+                expected,
+                "buffer {buffer_size}, io {io_size}"
             );
         }
     }

@@ -666,15 +666,19 @@ producer | bammetrics FifoBuffer BUFFER_SIZE=1073741824 DEBUG_FREQUENCY=10 NAME=
 
 The verb runs `FifoBuffer`, Picard 3.5.0's memory buffer between two commands of a pipe. It
 copies standard input to standard output. Any bytes pass unchanged: text, BAM, an empty
-input. The verb takes no input argument, no `-o` and no `--format`; a positional argument
-or `-o` exits 2.
+input. The verb takes no input argument, no `-o`, no `--format` and no `--sample`; each
+exits 2 with the usage line `bammetrics fifo-buffer [OPTIONS] < IN > OUT`.
 
 - `--buffer-size` (`BUFFER_SIZE`) is the most bytes held, 1 to 2147483645, default
   536870912 (512 MiB). The producer waits only when that many bytes are held. The bytes
-  are reserved, and written only as the buffer fills: resident memory is at most twice
-  the most bytes ever held and at most the buffer size. A 4 GiB copy to a reader that
-  keeps up peaked at 7 to 11 MiB, a full default buffer at 515 MiB (docs/benchmarks.md).
+  are reserved, and written only as the buffer fills: the buffer's resident memory is at
+  most twice the most bytes ever held and at most the buffer size. A 4 GiB copy to a
+  reader that keeps up peaked at 7 to 11 MiB, a full default buffer at 515 MiB
+  (docs/benchmarks.md).
 - `--io-size` (`IO_SIZE`) is the most bytes one read or one write moves, default 65536.
+  The reader and the writer each hold one chunk of that size, cut to the buffer size:
+  128 KiB at the defaults. On an empty input `--io-size 1073741824 --buffer-size 10`
+  peaked at 2.8 MiB and `--io-size 1073741824 --buffer-size 1073741824` at 1.76 GiB.
 - `--debug-frequency N` (`DEBUG_FREQUENCY`) logs the bytes held on standard error: one line
   before the first read, then one every N seconds. 0 or less logs none. `--name`
   (`NAME`) puts a name in the line. `--verbosity WARNING` or `ERROR` drops the lines.

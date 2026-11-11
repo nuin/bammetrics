@@ -327,9 +327,13 @@ behaves how.
     write, so by its source it exits 0 with a short output (not run on a full disk).
   - `BUFFER_SIZE` bytes are reserved and written only as the buffer fills: the ring uses
     a window of them, 64 KiB at first, doubled when the bytes held fill it, and an empty
-    ring starts again at its first byte. Resident memory is at most twice the most
-    bytes ever held and at most `BUFFER_SIZE`: 7 to 11 MiB for a 4 GiB copy to a reader
-    that keeps up, 515 MiB with the default buffer full. Picard allocates `BUFFER_SIZE`
+    ring starts again at its first byte. The ring's resident memory is at most twice
+    the most bytes ever held and at most `BUFFER_SIZE`. One read chunk and one write
+    chunk add `IO_SIZE` bytes each, cut to `BUFFER_SIZE` (128 KiB by default;
+    `IO_SIZE=1073741824 BUFFER_SIZE=10` peaks at 2.8 MiB, `IO_SIZE=1073741824
+    BUFFER_SIZE=1073741824` at 1.76 GiB on an empty input). The total was 7 to 11 MiB
+    for a 4 GiB copy to a reader that keeps up, 515 MiB with the default buffer full.
+    Picard allocates `BUFFER_SIZE`
     bytes of heap at its start (630 to 646 MiB resident for the same copy), so it needs
     `-Xmx` above the buffer size.
   - `QUIET=false` prints no start and end lines (Picard's default for this tool is
