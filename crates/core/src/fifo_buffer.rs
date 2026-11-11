@@ -27,8 +27,12 @@
 //!   exits 0. Picard reads the rest of its input and drops it.
 //! - A failed write of another kind (a full disk) exits 1. Picard's
 //!   `PrintStream` hides it and exits 0.
-//! - The ring starts again at its first byte whenever it is empty, so the
-//!   memory touched follows the most bytes ever held.
+//! - `BUFFER_SIZE` bytes are reserved and the ring uses a window of them:
+//!   64 KiB at first, doubled in place when the bytes held fill it. An
+//!   empty ring starts again at its first byte. Resident memory is the
+//!   widest window reached: at most twice the most bytes ever held and at
+//!   most `BUFFER_SIZE`. Picard allocates and zeroes `BUFFER_SIZE` bytes of
+//!   heap first.
 //!
 //! The registry row gives the Picard face, the `fifo-buffer` verb and the
 //! Python keywords. [`TOOL`]'s `run` refuses: a call that returns rows has
@@ -204,9 +208,36 @@ pub fn debug_line(name: Option<&str>, used: usize, capacity: usize) -> String {
     )
 }
 
+/// An empty vector with room for `size` bytes, or the usage error of
+/// `option` when the allocator refuses that many.
+fn reserved(size: usize, option: &str) -> Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    bytes
+        .try_reserve_exact(size)
+        .map_err(|_| Error::Usage(format!("{option}={size}: the memory cannot be allocated")))?;
+    Ok(bytes)
+}
+
+/// A zeroed chunk of `IO_SIZE` bytes: what one read or one write moves.
+fn chunk(io_size: usize) -> Result<Vec<u8>> {
+    let mut bytes = reserved(io_size, "IO_SIZE")?;
+    bytes.resize(io_size, 0);
+    Ok(bytes)
+}
+
+/// The window of the store the ring uses at first. It doubles when it is
+/// full, up to `BUFFER_SIZE`.
+const FIRST_WINDOW: usize = 64 * 1024;
+
 /// The bytes held between the reader and the writer.
 struct Ring {
+    /// The window: the ring is this whole vector. Its allocation is
+    /// `capacity` bytes from the start, so widening it never moves it, and
+    /// a byte beyond the window was never written, so its page is not
+    /// resident. (`vec![0; capacity]` would write every page on macOS.)
     bytes: Vec<u8>,
+    /// `BUFFER_SIZE`: the most bytes held.
+    capacity: usize,
     /// Index of the oldest byte.
     start: usize,
     /// Bytes held.
@@ -221,13 +252,46 @@ struct Ring {
 }
 
 impl Ring {
-    /// Copy as much of `data` as fits behind the newest byte. Returns the
-    /// count.
+    /// A ring of `capacity` bytes, 1 or more. A size the allocator refuses
+    /// is a usage error.
+    fn new(capacity: usize) -> Result<Self> {
+        let mut bytes = reserved(capacity, "BUFFER_SIZE")?;
+        bytes.resize(capacity.min(FIRST_WINDOW), 0);
+        Ok(Self {
+            bytes,
+            capacity,
+            start: 0,
+            len: 0,
+            input_done: false,
+            output_done: false,
+            input_error: None,
+            read: 0,
+        })
+    }
+
+    /// A window of `needed` bytes or more: twice the old one where the
+    /// capacity allows. The bytes that had wrapped to the front of the old
+    /// window move behind its end, in place.
+    fn widen(&mut self, needed: usize) {
+        let old = self.bytes.len();
+        let window = needed.max(old.saturating_mul(2)).min(self.capacity);
+        self.bytes.resize(window, 0);
+        let wrapped = (self.start + self.len).saturating_sub(old);
+        let moved = wrapped.min(window - old);
+        self.bytes.copy_within(..moved, old);
+        self.bytes.copy_within(moved..wrapped, 0);
+    }
+
+    /// Copy as much of `data` as the capacity allows behind the newest
+    /// byte. Returns the count.
     fn put(&mut self, data: &[u8]) -> usize {
-        let capacity = self.bytes.len();
-        let count = data.len().min(capacity - self.len);
-        let end = (self.start + self.len) % capacity;
-        let first = count.min(capacity - end);
+        let count = data.len().min(self.capacity - self.len);
+        if self.len + count > self.bytes.len() {
+            self.widen(self.len + count);
+        }
+        let window = self.bytes.len();
+        let end = (self.start + self.len) % window;
+        let first = count.min(window - end);
         self.bytes[end..end + first].copy_from_slice(&data[..first]);
         self.bytes[..count - first].copy_from_slice(&data[first..count]);
         self.len += count;
@@ -238,16 +302,16 @@ impl Ring {
     /// Move the oldest bytes into `out`. Returns the count. An empty ring
     /// starts again at its first byte.
     fn take(&mut self, out: &mut [u8]) -> usize {
-        let capacity = self.bytes.len();
+        let window = self.bytes.len();
         let count = out.len().min(self.len);
-        let first = count.min(capacity - self.start);
+        let first = count.min(window - self.start);
         out[..first].copy_from_slice(&self.bytes[self.start..self.start + first]);
         out[first..count].copy_from_slice(&self.bytes[..count - first]);
         self.len -= count;
         self.start = if self.len == 0 {
             0
         } else {
-            (self.start + count) % capacity
+            (self.start + count) % window
         };
         count
     }
@@ -262,20 +326,12 @@ struct Fifo {
 }
 
 impl Fifo {
-    fn new(capacity: usize) -> Self {
-        Self {
-            ring: Mutex::new(Ring {
-                bytes: vec![0; capacity],
-                start: 0,
-                len: 0,
-                input_done: false,
-                output_done: false,
-                input_error: None,
-                read: 0,
-            }),
+    fn new(capacity: usize) -> Result<Self> {
+        Ok(Self {
+            ring: Mutex::new(Ring::new(capacity)?),
             filled: Condvar::new(),
             drained: Condvar::new(),
-        }
+        })
     }
 
     /// The ring. A thread that panicked while holding it left counters
@@ -289,7 +345,7 @@ impl Fifo {
     fn put(&self, mut data: &[u8]) -> bool {
         let mut ring = self.lock();
         while !data.is_empty() {
-            while ring.len == ring.bytes.len() && !ring.output_done {
+            while ring.len == ring.capacity && !ring.output_done {
                 ring = self
                     .drained
                     .wait(ring)
@@ -335,10 +391,9 @@ impl Fifo {
     }
 }
 
-/// The reader thread: `input` into the ring, `io_size` bytes at a time,
-/// until it ends, fails or the output ends.
-fn fill(fifo: &Fifo, mut input: impl Read, io_size: usize) {
-    let mut chunk = vec![0; io_size];
+/// The reader thread: `input` into the ring, one `chunk` at a time, until
+/// it ends, fails or the output ends.
+fn fill(fifo: &Fifo, mut input: impl Read, mut chunk: Vec<u8>) {
     let error = loop {
         match input.read(&mut chunk) {
             Ok(0) => break None,
@@ -374,7 +429,7 @@ fn report(fifo: &Fifo, stop: &Stop, period: Duration, name: Option<&str>, log: i
         }
         if wait.timed_out() {
             let ring = fifo.lock();
-            let (used, capacity) = (ring.len, ring.bytes.len());
+            let (used, capacity) = (ring.len, ring.capacity);
             drop(ring);
             log(&debug_line(name, used, capacity));
         }
@@ -417,13 +472,9 @@ where
             "BUFFER_SIZE and IO_SIZE must be 1 or more".to_owned(),
         ));
     }
-    // A size the allocator refuses is an error here, not an abort below.
-    Vec::<u8>::new().try_reserve_exact(capacity).map_err(|_| {
-        Error::Usage(format!(
-            "BUFFER_SIZE={capacity}: the memory cannot be allocated"
-        ))
-    })?;
-    let fifo = Arc::new(Fifo::new(capacity));
+    let fifo = Arc::new(Fifo::new(capacity)?);
+    // A size the allocator refuses returns here, before a thread starts.
+    let (read_chunk, mut chunk) = (chunk(options.io_size)?, chunk(options.io_size)?);
     let stop = Arc::new(Stop {
         stopped: Mutex::new(false),
         changed: Condvar::new(),
@@ -442,13 +493,11 @@ where
             );
         })
     });
-    let io_size = options.io_size;
     let reader = {
         let fifo = Arc::clone(&fifo);
-        thread::spawn(move || fill(&fifo, input, io_size))
+        thread::spawn(move || fill(&fifo, input, read_chunk))
     };
 
-    let mut chunk = vec![0; io_size];
     let mut written = 0u64;
     let outcome = loop {
         let count = fifo.take(&mut chunk);
@@ -593,8 +642,73 @@ mod tests {
     }
 
     #[test]
+    fn the_window_widens_in_place_with_the_bytes_held() {
+        let mut ring = Ring::new(16 * 1024 * 1024).expect("ring");
+        assert_eq!(ring.bytes.len(), FIRST_WINDOW);
+        assert!(ring.bytes.capacity() >= 16 * 1024 * 1024);
+        let store = ring.bytes.as_ptr();
+        let data = bytes(10 * 1024 * 1024);
+        let mut out = vec![0; data.len()];
+        // Wrapped inside the first window, then widened twice with the order kept.
+        assert_eq!(ring.put(&data[..60_000]), 60_000);
+        assert_eq!(ring.take(&mut out[..50_000]), 50_000);
+        assert_eq!(ring.put(&data[60_000..100_000]), 40_000);
+        assert_eq!(
+            (ring.bytes.len(), ring.start, ring.len),
+            (FIRST_WINDOW, 50_000, 50_000)
+        );
+        assert_eq!(ring.put(&data[100_000..200_000]), 100_000);
+        assert_eq!(
+            (ring.bytes.len(), ring.start, ring.len),
+            (150_000, 50_000, 150_000)
+        );
+        assert_eq!(ring.put(&data[200_000..]), data.len() - 200_000);
+        assert_eq!(ring.bytes.len(), data.len() - 50_000);
+        assert_eq!(ring.take(&mut out[50_000..]), data.len() - 50_000);
+        assert!(out == data, "the bytes come out in order");
+        assert_eq!((ring.start, ring.len), (0, 0));
+        assert_eq!(ring.bytes.as_ptr(), store, "widened in place");
+        // A steady flow of small chunks stays in the first window.
+        let mut steady = Ring::new(16 * 1024 * 1024).expect("ring");
+        let mut chunk = vec![0; 4096];
+        for round in 0..1000 {
+            let from = round * 4096;
+            assert_eq!(steady.put(&data[from..from + 8192]), 8192);
+            assert_eq!(steady.take(&mut chunk), 4096);
+            assert_eq!(steady.take(&mut chunk), 4096);
+            assert_eq!(chunk, data[from + 4096..from + 8192]);
+        }
+        assert_eq!(steady.bytes.len(), FIRST_WINDOW);
+    }
+
+    /// The window meets the capacity before it has room for every wrapped
+    /// byte: the rest slides to the front.
+    #[test]
+    fn a_window_cut_by_the_capacity_keeps_the_order() {
+        let capacity = FIRST_WINDOW + 1000;
+        let data = bytes(2 * capacity);
+        let mut ring = Ring::new(capacity).expect("ring");
+        let mut out = vec![0; capacity];
+        assert_eq!(ring.put(&data[..FIRST_WINDOW]), FIRST_WINDOW);
+        assert_eq!(ring.take(&mut out[..60_000]), 60_000);
+        // 5536 bytes at the end of the window, 54464 wrapped to its front.
+        assert_eq!(ring.put(&data[FIRST_WINDOW..FIRST_WINDOW + 54_464]), 54_464);
+        assert_eq!((ring.bytes.len(), ring.len), (FIRST_WINDOW, 60_000));
+        // 1000 more bytes of window for 54464 wrapped ones.
+        let from = FIRST_WINDOW + 54_464;
+        assert_eq!(ring.put(&data[from..]), capacity - 60_000);
+        assert_eq!((ring.bytes.len(), ring.len), (capacity, capacity));
+        assert_eq!(ring.put(&data[..10]), 0, "full at the capacity");
+        assert_eq!(ring.take(&mut out), capacity);
+        assert!(
+            out == data[60_000..60_000 + capacity],
+            "the bytes come out in order"
+        );
+    }
+
+    #[test]
     fn the_ring_wraps_and_starts_again_when_empty() {
-        let mut ring = Fifo::new(8).ring.into_inner().expect("ring");
+        let mut ring = Ring::new(8).expect("ring");
         assert_eq!(ring.put(b"abcdef"), 6);
         let mut out = [0; 4];
         assert_eq!(ring.take(&mut out), 4);
