@@ -90,6 +90,8 @@ process, from the command line, from a TOML plan file or from Python (`bammetric
 - A bad option of `mark-duplicates` in a chain exits 2 before the first read. Under
   `__chain` it exited 1 when the stage was built.
 - `bammetrics tools` lists `chain` (golden record `verb_tools`).
+- A pickled `Run` holds its stages as a twelfth field. A `Run` pickled by 0.21.0 or
+  earlier does not load in this version.
 - docs/05: the non-goals, the dispatch, the chaining model and example 9, and decision 4
   follow D7, D8, D9 and D12 of docs/07.
 

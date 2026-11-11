@@ -65,7 +65,7 @@ def test_stub_functions_exist():
     registered = {snake_case(name) for name in bammetrics.tools()}
     assert defined == {"insert_size", "alignment_summary", "quality_yield", "hs_metrics", "collect",
                        "tools", "read_metrics", "read_table", "presets", "evaluate", "qc",
-                       "check", "report"} | registered
+                       "check", "report", "chain", "step"} | registered
     assert all(callable(getattr(bammetrics, f)) for f in defined)
 
 
