@@ -42,6 +42,30 @@ fn check_replays(steps: &[Step]) -> Result<()> {
     Ok(())
 }
 
+/// How the error of a step that did not fail by itself starts.
+const STOPPED: &str = "stopped: ";
+const NOT_RUN: &str = "not run: ";
+
+/// Why a step has an error that is not its own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Halt {
+    /// Another step of its segment failed while this one ran: it saw part
+    /// of the stream.
+    Stopped,
+    /// A step in front of it failed before this one started.
+    NotRun,
+}
+
+/// `Some` when `error` is the result [`run_chain`] gives a step another
+/// step halted; `None` for the step's own failure.
+pub fn halt(error: &Error) -> Option<Halt> {
+    match error {
+        Error::Metric(text) if text.starts_with(STOPPED) => Some(Halt::Stopped),
+        Error::Metric(text) if text.starts_with(NOT_RUN) => Some(Halt::NotRun),
+        _ => None,
+    }
+}
+
 /// Run `plan`. One result per step, in step order. `Err` when the plan is
 /// refused before the first read (a replaying stage behind another stage)
 /// or when the source cannot be read in the first segment, as
@@ -679,7 +703,7 @@ impl<'t> Chain<'t, '_> {
         };
         let name = failing.map_or_else(|| "the source".to_owned(), |s| self.labels[s].clone());
         let text = cause.to_string();
-        let stopped = || Error::Metric(format!("stopped: {name} failed: {text}"));
+        let stopped = || Error::Metric(format!("{STOPPED}{name} failed: {text}"));
         for (step, ended) in ended {
             self.results[step] = Some(match ended {
                 // A tap that failed by itself keeps its own error.
@@ -711,7 +735,7 @@ impl<'t> Chain<'t, '_> {
         self.steps.clear();
         for result in self.results.iter_mut().filter(|r| r.is_none()) {
             *result = Some(Err(Error::Metric(format!(
-                "not run: {name} failed: {cause}"
+                "{NOT_RUN}{name} failed: {cause}"
             ))));
         }
     }

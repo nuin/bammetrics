@@ -637,7 +637,7 @@ fn refuse_overlaps(opts: &Options) -> Result<()> {
 
 /// `path` absolute with its links resolved, or with its directory resolved
 /// when the file does not exist yet.
-fn same_file_key(path: &Path) -> PathBuf {
+pub(crate) fn same_file_key(path: &Path) -> PathBuf {
     if let Ok(resolved) = path.canonicalize() {
         return resolved;
     }
