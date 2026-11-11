@@ -1409,14 +1409,33 @@ fn with_from(error: VerbError, from: Option<String>) -> VerbError {
     }
 }
 
+/// The device and inode of an existing regular file; `None` for a device,
+/// a pipe or a missing file, which writing does not destroy.
+fn file_identity(path: &Path) -> Option<(u64, u64)> {
+    let meta = fs::metadata(path).ok().filter(fs::Metadata::is_file)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        Some((meta.dev(), meta.ino()))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = meta;
+        None
+    }
+}
+
 /// An output that is one of the inputs would overwrite it: a usage error.
-/// Only existing files compare equal, after resolving links and `..`.
+/// Only existing files compare equal: after resolving links and `..`, or
+/// by device and inode, so a hard link to an input counts too.
 pub fn refuse_overwriting_inputs(
     verb: &str,
     inputs: &[PathBuf],
     outputs: &[PathBuf],
 ) -> Result<(), VerbError> {
-    let inputs: Vec<PathBuf> = inputs
+    let identities: std::collections::HashSet<(u64, u64)> =
+        inputs.iter().filter_map(|p| file_identity(p)).collect();
+    let inputs: std::collections::HashSet<PathBuf> = inputs
         .iter()
         .filter_map(|p| p.canonicalize().ok())
         .collect();
@@ -1424,7 +1443,8 @@ pub fn refuse_overwriting_inputs(
         let Ok(resolved) = output.canonicalize() else {
             continue;
         };
-        if inputs.contains(&resolved) {
+        let linked = file_identity(output).is_some_and(|id| identities.contains(&id));
+        if linked || inputs.contains(&resolved) {
             return Err(VerbError::usage(
                 verb,
                 format!(

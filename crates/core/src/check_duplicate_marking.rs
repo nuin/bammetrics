@@ -834,6 +834,37 @@ mod tests {
         );
     }
 
+    /// Keys flagged both first and second of a pair, whose order is not
+    /// total: in memory and spilled the sort never panics. A run of three
+    /// sorts by binary insertion and completes; one run of 200 ends in the
+    /// violation Java's `TimSort` throws for the same keys.
+    #[test]
+    fn keys_flagged_first_and_second_sort_without_a_panic() {
+        let temp = TempDir::new(None);
+        let both = 0x1 | 0x40 | 0x80;
+        let keys =
+            || (0..200u16).map(move |i| key(&format!("q{}", i % 7), both | (i % 2) * 0x10, None));
+        let mut spilled = Sorter::new(&temp, "names", 3);
+        for k in keys() {
+            spilled.push(k).expect("push");
+        }
+        let mut sorted = spilled.finish().expect("finish");
+        let mut count = 0;
+        while sorted.next_item().expect("next").is_some() {
+            count += 1;
+        }
+        assert_eq!(count, 200);
+        let mut whole = Sorter::new(&temp, "names", 1000);
+        for k in keys() {
+            whole.push(k).expect("push");
+        }
+        let error = whole.finish().err().expect("the violation");
+        assert_eq!(
+            error.to_string(),
+            "Comparison method violates its general contract!"
+        );
+    }
+
     #[test]
     fn mode_parses_picard_constants_only() {
         assert_eq!(Mode::parse("PRIMARY_ONLY").ok(), Some(Mode::PrimaryOnly));

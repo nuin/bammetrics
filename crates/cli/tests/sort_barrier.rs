@@ -424,3 +424,74 @@ fn the_chain_reads_a_sam_source_at_its_stringency() {
     assert_eq!(code, Some(2), "{stderr}");
     fs::remove_dir_all(&dir).expect("cleanup");
 }
+
+/// A bad line of SAM text piped to `MarkDuplicates` is reported under the
+/// name the user gave, never under the copy in the temporary directory.
+#[test]
+fn a_bad_piped_sam_line_names_standard_input() {
+    let dir = fresh_dir("piped-sam");
+    let sam = dir.join("bad.sam");
+    fs::write(
+        &sam,
+        "@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:c1\tLN:100\n@RG\tID:a\tLB:l\tSM:s\n\
+         r1\t0\tc1\t5\t300\t4M\t*\t0\t0\tACGT\tIIII\tRG:Z:a\n",
+    )
+    .expect("sam");
+    let output = Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+        .args([
+            "MarkDuplicates".to_owned(),
+            "I=/dev/stdin".to_owned(),
+            format!("O={}", dir.join("out.bam").display()),
+            format!("M={}", dir.join("m.txt").display()),
+            format!("TMP_DIR={}", dir.display()),
+        ])
+        .stdin(fs::File::open(&sam).expect("open"))
+        .output()
+        .expect("run");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("/dev/stdin"), "{stderr}");
+    assert!(!stderr.contains(".tmp"), "{stderr}");
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+/// An output that is a hard link to the input is the input: `view-sam`,
+/// `sort-sam` and the `SortSam` face refuse it and the input keeps its
+/// bytes.
+#[test]
+fn a_hard_link_to_the_input_is_never_an_output() {
+    let dir = fresh_dir("hardlink");
+    let input = dir.join("in.bam");
+    fs::copy(root().join(MARKDUP), &input).expect("copy");
+    let link = dir.join("link.bam");
+    fs::hard_link(&input, &link).expect("hard link");
+    let before = fs::read(&input).expect("input");
+    let (i, l) = (input.display().to_string(), link.display().to_string());
+    // The verbs exit 2 for a usage error, the Picard face 1 as Picard does.
+    for (args, code) in [
+        (
+            vec!["view-sam".to_owned(), i.clone(), "-o".to_owned(), l.clone()],
+            2,
+        ),
+        (
+            strings(&["sort-sam", &i, "-o", &l, "--sort-order", "queryname"]),
+            2,
+        ),
+        (
+            vec![
+                "SortSam".to_owned(),
+                format!("I={i}"),
+                format!("O={l}"),
+                "SORT_ORDER=queryname".to_owned(),
+            ],
+            1,
+        ),
+    ] {
+        let output = bammetrics(&args);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(code), "{args:?}: {stderr}");
+        assert!(stderr.contains("writing it would destroy it"), "{stderr}");
+        assert_eq!(fs::read(&input).expect("input"), before);
+    }
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
