@@ -85,6 +85,15 @@ impl Sex {
     }
 }
 
+/// `--threads`: a whole number, at most [`pass::MAX_THREADS`]. Text that
+/// is no number keeps the words of clap's own parser.
+fn parse_threads(text: &str) -> std::result::Result<usize, String> {
+    let threads = text
+        .parse()
+        .map_err(|e: std::num::ParseIntError| e.to_string())?;
+    pass::check_threads(threads)
+}
+
 fn after_help() -> String {
     format!(
         "Files: PREFIX plus the CollectMultipleMetrics extensions (.alignment_summary_metrics, \
@@ -160,7 +169,7 @@ pub struct QcArgs {
     pub force: bool,
     /// BGZF decompression threads, or CRAM container decoders (default:
     /// available cores, at most 8).
-    #[arg(long, default_value_t = pass::default_threads())]
+    #[arg(long, default_value_t = pass::default_threads(), value_parser = parse_threads)]
     pub threads: usize,
     #[arg(long, value_enum, default_value_t = Format::Text)]
     pub format: Format,

@@ -11,6 +11,7 @@
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
+use bammetrics_core::cleanup::MadeDirs;
 use bammetrics_core::metric::MetricsOutput;
 use bammetrics_core::registry;
 use bammetrics_core::stage::{self, ChainPlan, Counters, FileSource, Halt, Products, Step};
@@ -94,12 +95,15 @@ fn step_error(label: &str, e: &bammetrics_core::Error) -> VerbError {
 
 /// Create the directories above every planned file, then fail when a file
 /// cannot be written, as the Picard face fails for its `OUTPUT`: before
-/// the first read, exit 1.
-fn check_writable(chain: &Chain) -> Result<(), VerbError> {
-    let labelled = |label: &str, mut error: VerbError| {
-        error.what = format!("{label}: {}", error.what);
-        VERB.clone_into(&mut error.verb);
-        error
+/// the first read, exit 1. A file the write itself would refuse (a link
+/// another user owns) fails here with that refusal. `made` gets every
+/// directory created, so a run that fails removes the empty ones.
+fn check_writable(chain: &Chain, made: &mut MadeDirs) -> Result<(), VerbError> {
+    let mut create_parent = |label: &str, path: &Path| {
+        made.create_parent(path).map_err(|e| {
+            let parent = path.parent().unwrap_or(path).display();
+            VerbError::input(VERB, format!("{label}: {parent}: {e}"))
+        })
     };
     for step in &chain.steps {
         let paths = step
@@ -108,13 +112,13 @@ fn check_writable(chain: &Chain) -> Result<(), VerbError> {
             .map(|file| file.path.as_path())
             .chain(step.late_prefix.as_deref());
         for path in paths {
-            verbs::create_parent(VERB, path).map_err(|e| labelled(&step.label, e))?;
+            create_parent(&step.label, path)?;
         }
         let files = step.files.iter().map(|file| file.path.as_path());
         registry::check_writable(files, &[]).map_err(|e| step_error(&step.label, &e))?;
     }
     if let Some(report) = &chain.report {
-        verbs::create_parent(VERB, report)?;
+        create_parent("--also markdown", report)?;
         registry::check_writable([report.as_path()], &[])
             .map_err(|e| step_error("--also markdown", &e))?;
     }
@@ -347,7 +351,7 @@ fn write_report(
             path: file.path.clone(),
             source,
         };
-        let text = std::fs::read_to_string(&file.path).map_err(unreadable)?;
+        let text = super::read_capped(&file.path, super::REPORT_FILE_CAP).map_err(unreadable)?;
         let mut doc: Document = bammetrics_formats::picard::read_or_empty(&text)
             .map_err(|e| unreadable(std::io::Error::other(e.to_string())))?;
         doc.sample = sample.map(str::to_owned);
@@ -365,8 +369,21 @@ fn write_report(
 /// before its first record: an output that cannot be written, a source
 /// that cannot be read. A step that fails is in the [`Outcome`]: the
 /// other steps still write their files. Nothing is printed.
-pub fn execute(mut chain: Chain) -> Result<Outcome, VerbError> {
-    check_writable(&chain)?;
+///
+/// A run that does not end with every step finished removes the output
+/// directories it made that are still empty, and no other directory.
+pub fn execute(chain: Chain) -> Result<Outcome, VerbError> {
+    let mut made = MadeDirs::default();
+    let outcome = run_steps(chain, &mut made)?;
+    if outcome.code == 0 {
+        made.keep();
+    }
+    Ok(outcome)
+}
+
+/// [`execute`], with the directories it makes recorded in `made`.
+fn run_steps(mut chain: Chain, made: &mut MadeDirs) -> Result<Outcome, VerbError> {
+    check_writable(&chain, made)?;
     let steps = chain
         .steps
         .iter()

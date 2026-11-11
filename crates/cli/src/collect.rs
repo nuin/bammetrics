@@ -243,10 +243,13 @@ pub fn run(args: &[String]) -> Result<u8, VerbError> {
     };
     let threads = match parsed.last(Key::Threads) {
         None => pass::default_threads(),
-        Some(given) => given.values[0].parse().map_err(|_| {
-            VerbError::usage(VERB, format!("{:?} is not a number", given.values[0]))
-                .from(given.spelled.clone())
-        })?,
+        Some(given) => given.values[0]
+            .parse()
+            .map_err(|_| format!("{:?} is not a number", given.values[0]))
+            .and_then(|threads: usize| {
+                pass::check_threads(threads).map_err(|e| format!("{threads} is {e}"))
+            })
+            .map_err(|what| VerbError::usage(VERB, what).from(given.spelled.clone()))?,
     };
     let source = if bam == Path::new("-") {
         PathBuf::from("/dev/stdin")

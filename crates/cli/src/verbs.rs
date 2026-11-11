@@ -656,14 +656,20 @@ impl Verb {
         let mut writes = self.output_paths(&inv, output.as_deref());
         writes.extend(siblings);
         for written in writes {
+            let flag = || flag_for_path(&parsed, &written).or_else(output_flag);
+            if let Some(what) = unresolved_output(&written) {
+                let error = VerbError::usage(self.name, what).hint(UNRESOLVED_HINT);
+                return Err(with_from(error, flag()));
+            }
             refuse_overwriting_inputs(self.name, &read, std::slice::from_ref(&written))
-                .map_err(|e| with_from(e, flag_for_path(&parsed, &written).or_else(output_flag)))?;
+                .map_err(|e| with_from(e, flag()))?;
         }
         self.refuse_one_file_twice(&inv, output.as_deref())?;
+        // The last usage error, so none leaves a directory it made.
+        inv.threads = self.threads(&parsed)?;
         if let Some(path) = &output {
             create_parent(self.name, path).map_err(|e| with_from(e, output_flag()))?;
         }
-        inv.threads = self.threads(&parsed)?;
         if let Some(header) = self.header {
             inv.command = header(&inv).map_err(core)?;
         }
@@ -1234,9 +1240,12 @@ impl Verb {
         let Some(given) = given else {
             return Ok(pass::default_threads());
         };
-        given.values[0].parse().map_err(|_| {
+        let threads = given.values[0].parse().map_err(|_| {
             VerbError::usage(self.name, format!("{:?} is not a number", given.values[0]))
                 .from(given.spelled.clone())
+        })?;
+        pass::check_threads(threads).map_err(|e| {
+            VerbError::usage(self.name, format!("{threads} is {e}")).from(given.spelled.clone())
         })
     }
 }
@@ -1400,6 +1409,24 @@ pub fn refuse_overwriting_inputs(
     }
     Ok(())
 }
+
+/// What is wrong with an output spelled through a directory that does not
+/// exist, with a `..` behind it. The run makes missing directories, and the
+/// path then leads back out of the new one, to a file no check has seen:
+/// an input, which [`refuse_overwriting_inputs`] passed because the path
+/// did not resolve. `None` for every other path.
+pub(crate) fn unresolved_output(path: &Path) -> Option<String> {
+    let missing = bammetrics_core::cleanup::unresolved_parent(path)?;
+    Some(format!(
+        "{}: {} does not exist, so the .. behind it names no directory",
+        path.display(),
+        missing.display()
+    ))
+}
+
+/// The hint of [`unresolved_output`].
+pub(crate) const UNRESOLVED_HINT: &str =
+    "name the output without the ..: a run makes the directories that are missing";
 
 /// `path` with its directory resolved where it exists, so `a.txt` and
 /// `./a.txt` compare equal before either file is written.

@@ -391,7 +391,8 @@ pub fn step_help(name: &str, number: usize) -> Result<String, VerbError> {
             option_lines(&write_flags())
         ));
     }
-    let verb = find_step(name).ok_or_else(|| unknown_step(name, None))?;
+    let verb =
+        find_step(name).ok_or_else(|| unknown_step(name, Some(&format!("step {number}"))))?;
     if !is_step(verb) {
         let place = format!("step {number} ({})", verb.name);
         return Err(not_a_step(verb, &place).hint(STEPS_HINT));
@@ -475,6 +476,8 @@ fn apply_globals(parsed: &Parsed, spec: &mut Spec) -> Result<(), VerbError> {
         let threads = given.values[0].parse().map_err(|_| {
             usage(format!("{:?} is not a number", given.values[0])).from(given.spelled.clone())
         })?;
+        let threads = pass::check_threads(threads)
+            .map_err(|e| usage(format!("{threads} is {e}")).from(given.spelled.clone()))?;
         spec.threads = Some(threads);
     }
     let flags = [
@@ -640,6 +643,27 @@ mod tests {
                 .starts_with("bammetrics chain: --plan gives the steps")
         );
         assert!(error(&["a.bam", "--threads", "x", "+", "write"]).contains("is not a number"));
+        for threads in ["257", "100000000"] {
+            assert_eq!(
+                error(&["a.bam", "-@", threads, "+", "write"]),
+                format!(
+                    "bammetrics chain: {threads} is more than the maximum of 256 threads (from -@)"
+                )
+            );
+        }
+        // The help of a step that is no verb names the step by its number,
+        // as a run names it.
+        assert!(
+            error(&["a.bam", "+", "write", "+", "inser-size", "--help"]).starts_with(
+                "bammetrics chain: step 2: unknown step \"inser-size\"\n  did you mean insert-size?"
+            )
+        );
+    }
+
+    #[test]
+    fn the_most_threads_are_taken() {
+        let (spec, _) = spec(&["a.bam", "--threads", "256", "+", "write"]);
+        assert_eq!(spec.threads, Some(pass::MAX_THREADS));
     }
 
     /// A chain option no step has, given after the first `+`, gets the
