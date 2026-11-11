@@ -521,7 +521,7 @@ keyword. One number alone stands for the text of a text option, as in a plan fil
 `crates/py/src/chain.rs` holds `Step`, `Stage`, `chain` and `step`. A call builds the argv
 (`--long=VALUE` per keyword, `+ VERB --long=VALUE ...` per step), then runs `parse`,
 `prepare` and `execute` with the GIL released, reads every metrics file back, and returns
-the `Run`. `dry_run=True` returns `plan_text`. `tests/python/test_chain.py` (72 tests)
+the `Run`. `dry_run=True` returns `plan_text`. `tests/python/test_chain.py` (75 tests)
 checks chained equals staged through the Python functions, both plan files against their
 inline steps, the bytes of a Python call against the command's, `Run.stages`,
 `Run.metrics`, one error per misuse, pickling and the GIL release.

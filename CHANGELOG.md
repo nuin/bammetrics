@@ -87,7 +87,7 @@ The `chain` verb, its plan file, Python `chain` and `step`, and `FifoBuffer` (to
   (`in.quality-yield`).
 - `bammetrics.pyi`: `step`, the `_StepVerb` names and three `chain` overloads in the
   generated verb block (`crates/cli/src/chain/python.rs`), the `Step` and `Stage` classes,
-  `Run.stages`. `tests/python/test_chain.py` holds 72 tests on the fixture BAMs.
+  `Run.stages`. `tests/python/test_chain.py` holds 75 tests on the fixture BAMs.
 - `bammetrics_core::registry::python_keywords(tool)`: the keyword arguments of a tool's
   Python function, the list the generated stub prints.
 - `bammetrics_core::toml`: the TOML subset reader, moved from the verdict crate, with
