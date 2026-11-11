@@ -25,6 +25,7 @@ use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple, PyType};
 
+use crate::chain::Stage;
 use crate::doc_dict;
 
 /// The classes `types.py` defines, kept for raising and building.
@@ -101,7 +102,7 @@ pub fn input_error(message: impl Into<String>) -> PyErr {
 /// A command's error as the exception of its exit code: 2 is a
 /// `UsageError`, 1 an `InputError`. The message is the line the command
 /// prints, `bammetrics qc: ...`.
-fn verb_error(e: &VerbError) -> PyErr {
+pub(crate) fn verb_error(e: &VerbError) -> PyErr {
     if e.code == 2 {
         usage_error(e.to_string())
     } else {
@@ -122,7 +123,7 @@ fn cli_error(verb: &str, e: &CliError) -> PyErr {
 }
 
 /// A keyword value as argv text: `os.fspath` for a path, `str` otherwise.
-fn text(value: &Bound<'_, PyAny>) -> PyResult<String> {
+pub(crate) fn text(value: &Bound<'_, PyAny>) -> PyResult<String> {
     if value.is_instance_of::<PyString>() {
         return value.extract();
     }
@@ -480,32 +481,34 @@ fn check_of(c: &bammetrics_verdict::Check) -> Check {
     }
 }
 
-/// A `qc` run, or a `collect(metrics=[...])` run (no verdict).
+/// A `qc` run, or a `collect(metrics=[...])` or `chain` run (no verdict).
 #[pyclass(module = "bammetrics", frozen)]
 pub struct Run {
     #[pyo3(get)]
-    sample: String,
+    pub(crate) sample: String,
     #[pyo3(get)]
-    prefix: String,
+    pub(crate) prefix: String,
     /// Every file the run wrote or kept, the manifest last.
     #[pyo3(get)]
-    files: Vec<String>,
-    /// `PREFIX.manifest.json`; `None` for a collect run.
+    pub(crate) files: Vec<String>,
+    /// `PREFIX.manifest.json`; `None` for a collect or chain run.
     #[pyo3(get)]
-    manifest: Option<String>,
-    /// The exit code `bammetrics qc` gives the run: 0, 1, 10 or 11.
+    pub(crate) manifest: Option<String>,
+    /// The exit code the command gives the run: 0, 1, 10 or 11.
     #[pyo3(get)]
-    exit_code: u8,
+    pub(crate) exit_code: u8,
     /// `{step: message}` for every step that failed.
     #[pyo3(get)]
-    errors: Py<PyDict>,
-    metrics: Py<PyDict>,
-    verdict: Option<Py<Verdict>>,
+    pub(crate) errors: Py<PyDict>,
+    pub(crate) metrics: Py<PyDict>,
+    pub(crate) verdict: Option<Py<Verdict>>,
+    /// One per step of a chain run, in step order; empty otherwise.
+    pub(crate) stages: Vec<Py<Stage>>,
     /// What the notebook view renders.
-    inputs: Vec<Input>,
-    rust_verdict: Option<RustVerdict>,
-    all_plots: bool,
-    date: String,
+    pub(crate) inputs: Vec<Input>,
+    pub(crate) rust_verdict: Option<RustVerdict>,
+    pub(crate) all_plots: bool,
+    pub(crate) date: String,
 }
 
 /// A class block or the histogram as pickle stores it: the name (class or
@@ -528,6 +531,7 @@ type RunState = (
     Vec<(String, DocState)>,
     bool,
     String,
+    Vec<Py<Stage>>,
 );
 
 fn table_state(
@@ -621,6 +625,7 @@ impl Run {
             inputs,
             all_plots,
             date,
+            stages,
         ) = state;
         let inputs = inputs
             .into_iter()
@@ -641,6 +646,7 @@ impl Run {
             errors,
             metrics,
             verdict,
+            stages,
             inputs,
             rust_verdict,
             all_plots,
@@ -668,6 +674,7 @@ impl Run {
             inputs,
             r.all_plots,
             r.date.clone(),
+            r.stages.iter().map(|s| s.clone_ref(py)).collect(),
         );
         Ok((slf.get_type().getattr("_restore")?, (state,)))
     }
@@ -696,6 +703,14 @@ impl Run {
     #[getter]
     fn verdict<'py>(&self, py: Python<'py>) -> Option<Bound<'py, Verdict>> {
         self.verdict.as_ref().map(|v| v.bind(py).clone())
+    }
+
+    /// One `Stage` per step of a chain run, in step order: its status, its
+    /// files and, for a transform, its record counts. Empty for a qc or
+    /// collect run.
+    #[getter]
+    fn stages(&self, py: Python<'_>) -> Vec<Py<Stage>> {
+        self.stages.iter().map(|s| s.clone_ref(py)).collect()
     }
 
     /// The report body for a notebook: one `<div class="bm">` with its
@@ -884,6 +899,7 @@ pub fn py_qc<'py>(
             errors: errors_of(py, &records)?.unbind(),
             metrics: metrics_of(py, &records, &inputs)?.unbind(),
             verdict: Some(py_verdict.clone_ref(py)),
+            stages: Vec::new(),
             inputs,
             rust_verdict: Some(verdict.clone()),
             all_plots: args.all_plots,
@@ -1078,6 +1094,7 @@ pub fn collect_run<'py>(
             errors: errors_of(py, &records)?.unbind(),
             metrics: metrics_of(py, &records, &inputs)?.unbind(),
             verdict: None,
+            stages: Vec::new(),
             inputs: Vec::new(),
             rust_verdict: None,
             all_plots: false,

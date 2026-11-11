@@ -154,6 +154,16 @@ impl Chain {
             && !self.source_path.starts_with("/dev")
     }
 
+    /// The stream after the last transform: `in` for a chain without one.
+    /// A tap on it writes `PREFIX<extension>`, the names `qc` writes.
+    pub fn last_stream(&self) -> &str {
+        self.steps
+            .iter()
+            .rev()
+            .find_map(|step| step.leaves.as_deref())
+            .unwrap_or(SOURCE_STREAM)
+    }
+
     /// The segments: one, plus one per transform.
     pub fn segments(&self) -> usize {
         1 + self

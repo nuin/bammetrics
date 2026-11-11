@@ -25,14 +25,18 @@
 //! * [`run`]: [`execute`], which runs a [`Chain`] through
 //!   [`bammetrics_core::stage::run_chain`], writes every file and returns
 //!   the [`Outcome`] with one [`StepOutcome`] per step.
+//! * [`python`]: the keyword tables of the Python `chain` and `step`, and
+//!   their `bammetrics.pyi` entries.
 //!
-//! A caller that is not the command line (the Python module) builds a
-//! [`Spec`], calls [`prepare`] and then [`execute`].
+//! A caller that is not the command line builds a [`Spec`], calls
+//! [`prepare`] and then [`execute`]. The Python module spells the argv of
+//! its keywords, so [`parse`] builds its [`Spec`].
 
 mod args;
 mod describe;
 mod planfile;
 mod prepare;
+pub mod python;
 mod run;
 
 use crate::error::VerbError;
@@ -41,7 +45,7 @@ pub use args::{Asked, global_flags, help, parse, step_flags, step_help, write_fl
 pub use describe::text as plan_text;
 pub use planfile::{parse as parse_plan, read as read_plan};
 pub use prepare::{Chain, Planned, PlannedFile, PrefixOrigin, Role, prepare};
-pub use run::{Outcome, StepOutcome, StepStatus, Written, execute, summary};
+pub use run::{Outcome, StepOutcome, StepStatus, Written, execute, sample_name, summary};
 
 /// The verb.
 pub const VERB: &str = "chain";

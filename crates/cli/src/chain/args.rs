@@ -212,7 +212,7 @@ pub(crate) fn is_transform(verb: &Verb) -> bool {
 }
 
 /// True for a verb that can be a step: a transform or a one-pass tool.
-fn is_step(verb: &Verb) -> bool {
+pub(crate) fn is_step(verb: &Verb) -> bool {
     is_transform(verb) || verb.tool().collector.is_some()
 }
 

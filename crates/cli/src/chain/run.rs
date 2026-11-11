@@ -299,32 +299,35 @@ fn failed_step(step: &Planned, error: &bammetrics_core::Error) -> StepOutcome {
     }
 }
 
-/// The sample of the json and jsonl forms: `--sample`, else the first
-/// `@RG SM` of the source, else the source name. A piped source has
-/// neither. Asked only when a step writes one of those forms.
+/// The sample a chain is about: `--sample`, else the first `@RG SM` of a
+/// file source, else the source name (`stdin` for a pipe, whose header
+/// cannot be read a second time). The Python `Run.sample`.
+pub fn sample_name(chain: &Chain) -> String {
+    if let Some(sample) = &chain.sample {
+        return sample.clone();
+    }
+    let from_header = chain
+        .replayable()
+        .then(|| bammetrics_core::pass::read_header(&chain.source_path).ok())
+        .flatten()
+        .and_then(|header| {
+            bammetrics_core::levels::read_groups(&header)
+                .into_iter()
+                .find_map(|group| group.sample)
+        });
+    from_header.unwrap_or_else(|| verbs::stem(&chain.source))
+}
+
+/// The sample of the json and jsonl forms: [`sample_name`], and none for a
+/// piped source without `--sample`. Asked only when a step writes one of
+/// those forms.
 fn sample(chain: &Chain) -> Option<String> {
     let wanted = chain.steps.iter().any(|step| {
         step.formats
             .iter()
             .any(|f| matches!(f, Format::Json | Format::Jsonl))
     });
-    if !wanted {
-        return None;
-    }
-    if chain.sample.is_some() {
-        return chain.sample.clone();
-    }
-    if !chain.replayable() {
-        return None;
-    }
-    let from_header = bammetrics_core::pass::read_header(&chain.source_path)
-        .ok()
-        .and_then(|header| {
-            bammetrics_core::levels::read_groups(&header)
-                .into_iter()
-                .find_map(|group| group.sample)
-        });
-    Some(from_header.unwrap_or_else(|| verbs::stem(&chain.source)))
+    (wanted && (chain.sample.is_some() || chain.replayable())).then(|| sample_name(chain))
 }
 
 /// `PREFIX.report.md` of `--also markdown`: every metrics table the run
