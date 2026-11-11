@@ -1,0 +1,9 @@
+## argv
+chain
+--plan
+tests/data/nope.toml
+## exit
+1
+## stdout
+## stderr
+bammetrics chain: tests/data/nope.toml: No such file or directory (os error 2) (from --plan)

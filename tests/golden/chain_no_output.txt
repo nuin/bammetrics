@@ -1,0 +1,22 @@
+## argv
+chain
+ROOT/tests/data/insert_size.bam
++
+quality-yield
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: no -o, files go to ./insert_size.*
+bammetrics chain: 1 step finished, 1 file written
+## file insert_size.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectQualityYieldMetrics INPUT=ROOT/tests/data/insert_size.bam OUTPUT=./insert_size.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+10	10	100	1000	1000	1000	1000	1000	1000	2000	2000
+
+

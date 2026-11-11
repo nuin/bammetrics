@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+hs-metrics
+--baits
+tests/data/targets.interval_list
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (hs-metrics): missing --target-intervals (Picard: TARGET_INTERVALS)
+  Use --panel FILE when baits and targets are the same file.
+  every option: bammetrics help hs-metrics

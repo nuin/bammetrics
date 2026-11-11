@@ -1,0 +1,10 @@
+## argv
+chain
+tests/data/insert_size.cram
++
+insert-size
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: tests/data/insert_size.cram is a CRAM: give the reference it was written with as -R FASTA

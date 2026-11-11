@@ -1,0 +1,18 @@
+## argv
+plan
+--plan
+tests/data/chain_taps.toml
+## exit
+0
+## stdout
+chain plan for tests/data/insert_size.bam
+  source    tests/data/insert_size.bam (BAM, 328 bytes, sort order coordinate; a file, it can be read again)
+  prefix    ./insert_size (from the source name, no -o)
+segment 1  one read of tests/data/insert_size.bam, shared by its taps as qc shares it
+  step 1  quality-yield      tap on in  ./insert_size.quality_yield_metrics, ./insert_size.quality_yield_metrics.json
+  step 2  alignment-summary  tap on in  ./insert_size.alignment_summary_metrics, ./insert_size.alignment_summary_metrics.json
+  step 3  insert-size        tap on in  ./insert_size.insert_size_metrics, ./insert_size.insert_size_metrics.json
+  step 4  duplicate-metrics  tap on in  ./insert_size.duplicate_metrics, ./insert_size.duplicate_metrics.json
+temp disk  none: no step spills
+nothing ran: this is a plan
+## stderr

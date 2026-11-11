@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/insert_size.bam
+--format
+json
++
+insert-size
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: --format json starts with json: a chain names Picard files (from --format)
+  picard,json writes the Picard files and each as FILE.json beside it

@@ -1,0 +1,10 @@
+## argv
+chain
+tests/data/insert_size.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: no step: a chain needs at least one + STEP
+  bammetrics chain [OPTIONS] BAM + STEP [STEP OPTIONS] [+ STEP ...]
+  the steps: bammetrics chain --help

@@ -1,0 +1,22 @@
+## argv
+chain
+tests/data/insert_size.bam
+-o
+OUT/s
++
+quality-yield
++
+mark-duplicates
++
+insert-size
++
+write
+## exit
+1
+## stdout
+## stderr
+bammetrics chain: step 1 (quality-yield): stopped: step 2 (mark-duplicates) failed: Cannot invoke "htsjdk.samtools.SAMReadGroupRecord.getReadGroupId()" because the return value of "htsjdk.samtools.SAMRecord.getReadGroup()" is null (read r0)
+bammetrics chain: step 2 (mark-duplicates): failed and stopped its segment: Cannot invoke "htsjdk.samtools.SAMReadGroupRecord.getReadGroupId()" because the return value of "htsjdk.samtools.SAMRecord.getReadGroup()" is null (read r0)
+bammetrics chain: step 3 (insert-size): not run: step 2 (mark-duplicates) failed: Cannot invoke "htsjdk.samtools.SAMReadGroupRecord.getReadGroupId()" because the return value of "htsjdk.samtools.SAMRecord.getReadGroup()" is null (read r0)
+bammetrics chain: step 4 (write): not run: step 2 (mark-duplicates) failed: Cannot invoke "htsjdk.samtools.SAMReadGroupRecord.getReadGroupId()" because the return value of "htsjdk.samtools.SAMRecord.getReadGroup()" is null (read r0)
+bammetrics chain: 0 of 4 steps finished, 1 failed, 1 stopped, 2 not run; 0 files written

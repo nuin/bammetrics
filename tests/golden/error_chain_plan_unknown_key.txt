@@ -1,0 +1,11 @@
+## argv
+chain
+--plan
+tests/data/chain_bad_key.toml
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: tests/data/chain_bad_key.toml:8: step 1 (insert-size): unknown key minmum-pct
+  did you mean minimum-pct (Picard MINIMUM_PCT)?
+  every option: bammetrics chain BAM + insert-size --help
