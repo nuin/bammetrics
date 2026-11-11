@@ -3,7 +3,9 @@
 //! are decoded and handed to an [`Accumulator`] on the calling thread, in
 //! file order. Results therefore do not depend on the worker count. A CRAM
 //! (told by its magic bytes) is decoded by [`crate::cram`] into the same
-//! record stream, its containers on worker threads.
+//! record stream, its containers on worker threads. SAM text, plain or in
+//! gzip members, is parsed by [`crate::sam_text`] into the same stream, one
+//! record at a time on the reading thread.
 //!
 //! Several tools can share one read ([`run_many`]): each one is a boxed
 //! [`Collector`] fed from batches on a thread of its own, the way Picard's
@@ -13,7 +15,7 @@
 
 use std::any::Any;
 use std::fs::File;
-use std::io::{self, BufReader, Read};
+use std::io::{self, BufRead, BufReader, Read};
 use std::num::NonZero;
 use std::path::Path;
 use std::sync::Arc;
@@ -24,9 +26,11 @@ use std::thread::{self, JoinHandle};
 use noodles::sam::header::record::value::map::header::tag::SORT_ORDER;
 use noodles::{bam, bgzf, sam};
 
-use crate::cram;
+use crate::cram::{self, Kind};
 use crate::error::{Error, Result};
+use crate::gzip::GzipReader;
 use crate::metric::ToolOutput;
+use crate::sam_text::{self, Stringency};
 
 /// Cap on the default worker count. BGZF inflation stops being the
 /// bottleneck well before this on the corpus benchmark (docs/benchmarks.md).
@@ -131,6 +135,9 @@ pub struct Limits {
     /// `ASSUME_SORTED`: when false, a header whose sort order is not
     /// `coordinate` (or that has none) is an error, as Picard throws.
     pub assume_sorted: bool,
+    /// `VALIDATION_STRINGENCY` for SAM text input ([`crate::sam_text`]). A
+    /// BAM or a CRAM is read the same at every value.
+    pub stringency: Stringency,
 }
 
 impl Default for Limits {
@@ -138,26 +145,55 @@ impl Default for Limits {
         Self {
             stop_after: 0,
             assume_sorted: true,
+            stringency: Stringency::Strict,
         }
     }
 }
 
-/// The header of the BAM or CRAM at `path`, no record read. A CRAM header
-/// needs no reference.
+/// Bytes of SAM text read from the file at a time.
+const SAM_BUFFER: usize = 1 << 20;
+
+/// The SAM text reader over a sniffed input, its header read: plain text,
+/// or gzip members inflated first. `path` is named in htsjdk's messages.
+fn sam_reader<R: Read + 'static>(
+    sniffed: cram::Sniffed<R>,
+    stringency: Stringency,
+    path: &Path,
+) -> io::Result<sam_text::Reader<Box<dyn BufRead>>> {
+    let inner: Box<dyn BufRead> = if sniffed.kind == Kind::GzipSam {
+        Box::new(BufReader::with_capacity(
+            SAM_BUFFER,
+            GzipReader::new(BufReader::new(sniffed.reader)),
+        ))
+    } else {
+        Box::new(BufReader::with_capacity(SAM_BUFFER, sniffed.reader))
+    };
+    sam_text::Reader::new(inner, stringency, Some(path))
+}
+
+/// The header of the BAM, CRAM or SAM at `path`, no record read. A CRAM
+/// header needs no reference. A SAM header is checked at `STRICT`.
 pub fn read_header(path: &Path) -> Result<sam::Header> {
+    read_header_at(path, Stringency::Strict)
+}
+
+/// [`read_header`] with a SAM header checked at `stringency`.
+pub fn read_header_at(path: &Path, stringency: Stringency) -> Result<sam::Header> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
     };
     let sniffed = cram::sniff(File::open(path).map_err(input)?).map_err(input)?;
-    if sniffed.cram {
-        noodles::cram::io::Reader::new(BufReader::new(sniffed.reader))
+    match sniffed.kind {
+        Kind::Cram => noodles::cram::io::Reader::new(BufReader::new(sniffed.reader))
             .read_header()
-            .map_err(|e| input(cram::truncated(e, true)))
-    } else {
-        bam::io::Reader::new(sniffed.reader)
+            .map_err(|e| input(cram::truncated(e, true))),
+        Kind::Bam => bam::io::Reader::new(sniffed.reader)
             .read_header()
-            .map_err(|e| input(cram::bam_header_error(e)))
+            .map_err(|e| input(cram::bam_header_error(e))),
+        Kind::Sam | Kind::GzipSam => sam_reader(sniffed, stringency, path)
+            .and_then(|reader| reader.header())
+            .map_err(input),
     }
 }
 
@@ -177,27 +213,40 @@ where
     read(path, reference, threads, limits, None, build)
 }
 
-/// Open the BAM or CRAM at `path` and hand `consume` its header and the
-/// inflated record stream: each record as `block_size` and its bytes
+/// Open the BAM, CRAM or SAM at `path` and hand `consume` its header and
+/// the inflated record stream: each record as `block_size` and its bytes
 /// ([`crate::bam_raw::RawRecord::read_from`]). A BAM is inflated by
 /// `threads` BGZF workers, a CRAM decoded by `threads` container workers
-/// with `reference`. The second flag is true for a CRAM.
+/// with `reference`, SAM text parsed at `STRICT`. The second flag is true
+/// for a CRAM.
 pub fn with_record_stream<T>(
     path: &Path,
     reference: Option<&Path>,
     threads: usize,
     consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), bool) -> Result<T>,
 ) -> Result<T> {
+    with_record_stream_at(path, reference, threads, Stringency::Strict, consume)
+}
+
+/// [`with_record_stream`] with SAM text parsed at `stringency`.
+pub fn with_record_stream_at<T>(
+    path: &Path,
+    reference: Option<&Path>,
+    threads: usize,
+    stringency: Stringency,
+    consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), bool) -> Result<T>,
+) -> Result<T> {
     let bytes = Arc::new(AtomicU64::new(0));
-    with_counted_stream(path, reference, threads, &bytes, consume)
+    with_counted_stream(path, reference, threads, stringency, &bytes, consume)
 }
 
 /// [`with_record_stream`], adding the compressed bytes read from the file
-/// to `bytes` as the reader takes them.
+/// to `bytes` as the reader takes them. SAM text is parsed at `stringency`.
 pub(crate) fn with_counted_stream<T>(
     path: &Path,
     reference: Option<&Path>,
     threads: usize,
+    stringency: Stringency,
     bytes: &Arc<AtomicU64>,
     consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), bool) -> Result<T>,
 ) -> Result<T> {
@@ -211,24 +260,32 @@ pub(crate) fn with_counted_stream<T>(
     };
     let sniffed = cram::sniff(file).map_err(input)?;
     let workers = NonZero::new(threads).unwrap_or(NonZero::<usize>::MIN);
-    if sniffed.cram {
-        let mut reader =
-            noodles::cram::io::Reader::new(cram::Peek::new(BufReader::new(sniffed.reader)));
-        let header = reader
-            .read_header()
-            .map_err(|e| input(cram::truncated(e, true)))?;
-        cram::decode(reader, &header, reference, workers, |records| {
-            consume(&header, records.get_mut(), true)
-        })
-    } else {
-        let mut reader = bam::io::Reader::from(bgzf::io::MultithreadedReader::with_worker_count(
-            workers,
-            sniffed.reader,
-        ));
-        let header = reader
-            .read_header()
-            .map_err(|e| input(cram::bam_header_error(e)))?;
-        consume(&header, reader.get_mut(), false)
+    match sniffed.kind {
+        Kind::Cram => {
+            let mut reader =
+                noodles::cram::io::Reader::new(cram::Peek::new(BufReader::new(sniffed.reader)));
+            let header = reader
+                .read_header()
+                .map_err(|e| input(cram::truncated(e, true)))?;
+            cram::decode(reader, &header, reference, workers, |records| {
+                consume(&header, records.get_mut(), true)
+            })
+        }
+        Kind::Bam => {
+            let mut reader = bam::io::Reader::from(
+                bgzf::io::MultithreadedReader::with_worker_count(workers, sniffed.reader),
+            );
+            let header = reader
+                .read_header()
+                .map_err(|e| input(cram::bam_header_error(e)))?;
+            consume(&header, reader.get_mut(), false)
+        }
+        Kind::Sam | Kind::GzipSam => {
+            let reader = sam_reader(sniffed, stringency, path).map_err(input)?;
+            let header = reader.header().map_err(input)?;
+            let mut records = sam_text::RecordStream::new(reader.records(&header));
+            consume(&header, &mut records, false)
+        }
     }
 }
 
@@ -260,7 +317,8 @@ impl Read for Counted {
 
 /// The read loop behind [`run_limited`] and [`run_isolated`]. A BAM is
 /// inflated by `threads` BGZF workers; a CRAM ([`crate::cram`]) is decoded
-/// by `threads` container workers into the same BAM record stream.
+/// by `threads` container workers into the same BAM record stream; SAM
+/// text ([`crate::sam_text`]) is parsed into it at `limits.stringency`.
 fn read<A, F>(
     path: &Path,
     reference: Option<&Path>,
@@ -286,29 +344,38 @@ where
     let workers = NonZero::new(threads).unwrap_or(NonZero::<usize>::MIN);
     let pass = Pass {
         path,
-        cram: sniffed.cram,
+        cram: sniffed.kind == Kind::Cram,
         limits,
         progress,
         bytes: &bytes,
     };
-    if sniffed.cram {
-        let mut reader =
-            noodles::cram::io::Reader::new(cram::Peek::new(BufReader::new(sniffed.reader)));
-        let header = reader
-            .read_header()
-            .map_err(|e| input(cram::truncated(e, true)))?;
-        cram::decode(reader, &header, reference, workers, |records| {
-            pass.drive(records, &header, build)
-        })
-    } else {
-        let mut reader = bam::io::Reader::from(bgzf::io::MultithreadedReader::with_worker_count(
-            workers,
-            sniffed.reader,
-        ));
-        let header = reader
-            .read_header()
-            .map_err(|e| input(cram::bam_header_error(e)))?;
-        pass.drive(&mut reader, &header, build)
+    match sniffed.kind {
+        Kind::Cram => {
+            let mut reader =
+                noodles::cram::io::Reader::new(cram::Peek::new(BufReader::new(sniffed.reader)));
+            let header = reader
+                .read_header()
+                .map_err(|e| input(cram::truncated(e, true)))?;
+            cram::decode(reader, &header, reference, workers, |records| {
+                pass.drive(records, &header, build)
+            })
+        }
+        Kind::Bam => {
+            let mut reader = bam::io::Reader::from(
+                bgzf::io::MultithreadedReader::with_worker_count(workers, sniffed.reader),
+            );
+            let header = reader
+                .read_header()
+                .map_err(|e| input(cram::bam_header_error(e)))?;
+            pass.drive(&mut reader, &header, build)
+        }
+        Kind::Sam | Kind::GzipSam => {
+            let reader = sam_reader(sniffed, limits.stringency, path).map_err(input)?;
+            let header = reader.header().map_err(input)?;
+            let mut records =
+                bam::io::Reader::from(sam_text::RecordStream::new(reader.records(&header)));
+            pass.drive(&mut records, &header, build)
+        }
     }
 }
 
@@ -752,9 +819,9 @@ mod tests {
         assert!(matches!(err, Error::Input { .. }));
     }
 
-    /// A file that is not a BAM (a SAM text, an empty file) and a BAM cut
-    /// inside its records name the failure, in place of `failed to fill
-    /// whole buffer`.
+    /// A file that is not a BAM (plain text that is no SAM, an empty file)
+    /// and a BAM cut inside its records name the failure, in place of
+    /// `failed to fill whole buffer`.
     #[test]
     fn a_file_without_a_bam_header_and_a_cut_bam_name_the_failure() {
         use std::io::Write as _;
@@ -776,15 +843,12 @@ mod tests {
                 .expect(name);
             path
         };
-        let sam = write(
-            "hdr_only.sam",
-            b"@HD\tVN:1.6\tSO:queryname\n@SQ\tSN:chr1\tLN:1000\n",
-        );
+        let text = write("notes.txt", b"reads of sample 1\nreads of sample 2\n");
         let empty = write("empty.bam", b"");
         let whole = std::fs::read(fixture()).expect("fixture");
         let cut = write("cut.bam", &whole[..whole.len() - 40]);
         for (path, text) in [
-            (&sam, "not a BAM or CRAM file"),
+            (&text, "not a BAM or CRAM file"),
             (&empty, "not a BAM or CRAM file"),
             (&cut, "truncated BAM"),
         ] {
@@ -802,6 +866,82 @@ mod tests {
             );
             assert!(err.to_string().contains(text), "{}: {err}", path.display());
         }
+        std::fs::remove_dir_all(&dir).expect("cleanup");
+    }
+
+    /// SAM text, plain and in BGZF blocks, reaches an accumulator as the
+    /// records of a BAM do; a bad line fails under `STRICT` and is read
+    /// under `SILENT`.
+    #[test]
+    fn sam_text_is_read_plain_and_compressed_at_the_stringency_given() {
+        use std::io::Write as _;
+        use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+
+        let dir = std::env::temp_dir().join(format!("bammetrics-pass-sam-{}", std::process::id()));
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&dir)
+            .expect("temp dir");
+        let write = |name: &str, bytes: &[u8]| {
+            let path = dir.join(name);
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&path)
+                .and_then(|mut f| f.write_all(bytes))
+                .expect(name);
+            path
+        };
+        let text = b"@HD\tVN:1.6\tSO:queryname\n@SQ\tSN:chr1\tLN:1000\n\
+                     r1\t0\tchr1\t10\t60\t4M\t*\t0\t0\tACGT\tIIII\n\
+                     r2\t4\t*\t0\t0\t*\t*\t0\t0\t*\t*\n";
+        let mut blocks = bgzf::io::Writer::new(Vec::new());
+        blocks.write_all(text).expect("bgzf");
+        let compressed = blocks.finish().expect("bgzf");
+        let header_only = b"@HD\tVN:1.6\n@SQ\tSN:chr1\tLN:1000\n";
+        let count = |path: &Path, stringency| {
+            let limits = Limits {
+                stringency,
+                ..Limits::default()
+            };
+            run_limited(path, None, 1, limits, |header| {
+                assert_eq!(header.reference_sequences().len(), 1);
+                Ok(Counter {
+                    seen: 0,
+                    panic_on_second: false,
+                })
+            })
+        };
+        for (name, bytes, records) in [
+            ("plain.sam", text.as_slice(), 2),
+            ("blocks.sam.gz", compressed.as_slice(), 2),
+            ("header.sam", header_only.as_slice(), 0),
+        ] {
+            let path = write(name, bytes);
+            assert_eq!(count(&path, Stringency::Strict).expect(name), records);
+            assert_eq!(
+                sort_order(&read_header(&path).expect(name)),
+                if records == 0 {
+                    "unsorted"
+                } else {
+                    "queryname"
+                }
+            );
+        }
+        // An unpaired read that names a mate reference.
+        let bad = write(
+            "bad.sam",
+            b"@SQ\tSN:chr1\tLN:1000\nr1\t0\tchr1\t10\t60\t4M\tchr1\t9\t0\tACGT\tIIII\n",
+        );
+        let error = count(&bad, Stringency::Strict).expect_err("strict");
+        assert!(
+            error
+                .to_string()
+                .contains("MRNM specified but flags indicate unpaired"),
+            "{error}"
+        );
+        assert_eq!(count(&bad, Stringency::Silent).expect("silent"), 1);
         std::fs::remove_dir_all(&dir).expect("cleanup");
     }
 }

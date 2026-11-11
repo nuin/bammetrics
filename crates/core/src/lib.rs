@@ -55,6 +55,8 @@ pub mod ref_flat;
 pub mod reference;
 pub mod registry;
 pub mod rna_seq_metrics;
+pub mod sam_order;
+pub mod sam_text;
 pub mod sensitivity;
 pub mod sequence;
 pub mod sequencing_artifact;
@@ -64,6 +66,7 @@ pub mod stage;
 pub mod toml;
 pub mod variant_calling_metrics;
 pub mod vcf;
+pub mod view_sam;
 pub mod wgs_metrics;
 
 pub use error::{Error, Result};

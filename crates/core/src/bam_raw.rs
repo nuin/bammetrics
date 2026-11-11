@@ -130,8 +130,62 @@ impl RawRecord {
         self.buf[14..16].copy_from_slice(&flags.to_le_bytes());
     }
 
-    fn sequence_length(&self) -> usize {
+    /// `l_seq`: the number of read bases.
+    pub fn sequence_length(&self) -> usize {
         self.i32_at(16) as usize
+    }
+
+    /// The record built from its fields, as htsjdk's `BAMRecordCodec`
+    /// encodes a record that was not read from a BAM: the indexing bin
+    /// computed from the start and the CIGAR, the tags in the order and
+    /// types of [`Tags`].
+    pub fn from_fields(fields: &Fields<'_>) -> io::Result<Self> {
+        let name_len =
+            u8::try_from(fields.name.len() + 1).map_err(|_| invalid("read name over 254 bytes"))?;
+        let cigar_ops = u16::try_from(fields.cigar.len())
+            .map_err(|_| invalid("more than 65535 CIGAR operators"))?;
+        let l_seq = i32::try_from(fields.bases.len()).map_err(|_| invalid("read too long"))?;
+        if fields
+            .qualities
+            .is_some_and(|quals| quals.len() != fields.bases.len())
+        {
+            return Err(invalid("read length and quality length differ"));
+        }
+        let mut buf = Vec::with_capacity(FIXED + fields.name.len() + 1 + 2 * fields.bases.len());
+        buf.extend_from_slice(&fields.reference_id.to_le_bytes());
+        buf.extend_from_slice(&fields.alignment_start.wrapping_sub(1).to_le_bytes());
+        buf.push(name_len);
+        buf.push(fields.mapping_quality);
+        buf.extend_from_slice(&indexing_bin(fields).to_le_bytes());
+        buf.extend_from_slice(&cigar_ops.to_le_bytes());
+        buf.extend_from_slice(&fields.flags.to_le_bytes());
+        buf.extend_from_slice(&l_seq.to_le_bytes());
+        buf.extend_from_slice(&fields.mate_reference_id.to_le_bytes());
+        buf.extend_from_slice(&fields.mate_alignment_start.wrapping_sub(1).to_le_bytes());
+        buf.extend_from_slice(&fields.template_length.to_le_bytes());
+        buf.extend_from_slice(fields.name);
+        buf.push(0);
+        for &(len, op) in fields.cigar {
+            if len >= 1 << 28 || op > 8 {
+                return Err(invalid("CIGAR operator out of the BAM range"));
+            }
+            buf.extend_from_slice(&(len << 4 | u32::from(op)).to_le_bytes());
+        }
+        for pair in fields.bases.chunks(2) {
+            let low = pair.get(1).map_or(0, |&b| base_code(b));
+            buf.push(base_code(pair[0]) << 4 | low);
+        }
+        match fields.qualities {
+            Some(quals) => buf.extend_from_slice(quals),
+            None => buf.extend(std::iter::repeat_n(0xFF, fields.bases.len())),
+        }
+        fields.tags.encode(&mut buf)?;
+        Self::from_bytes(buf)
+    }
+
+    /// The reference bases the CIGAR covers (`M`, `D`, `N`, `=`, `X`).
+    pub fn reference_length(&self) -> i32 {
+        reference_length(self.cigar())
     }
 
     pub fn mate_reference_id(&self) -> i32 {
@@ -232,6 +286,93 @@ impl RawRecord {
         self.buf.truncate(start);
         tags.encode(&mut self.buf)
     }
+}
+
+/// The fields of a record to build ([`RawRecord::from_fields`]).
+#[derive(Clone, Copy, Debug)]
+pub struct Fields<'a> {
+    pub name: &'a [u8],
+    pub flags: u16,
+    /// `refID`, -1 for none.
+    pub reference_id: i32,
+    /// 1-based, 0 for none.
+    pub alignment_start: i32,
+    pub mapping_quality: u8,
+    /// `(length, op)` with op the BAM code (`MIDNSHP=X`).
+    pub cigar: &'a [(u32, u8)],
+    pub mate_reference_id: i32,
+    /// 1-based, 0 for none.
+    pub mate_alignment_start: i32,
+    pub template_length: i32,
+    /// The bases as letters; a letter outside `=ACMGRSVTWYHKDBN` (either
+    /// case) is stored as `N`.
+    pub bases: &'a [u8],
+    /// Phred scores, one per base; `None` for a record without them.
+    pub qualities: Option<&'a [u8]>,
+    pub tags: &'a Tags,
+}
+
+/// The 4-bit BAM code of a base letter.
+fn base_code(base: u8) -> u8 {
+    match base.to_ascii_uppercase() {
+        b'=' => 0,
+        b'A' => 1,
+        b'C' => 2,
+        b'M' => 3,
+        b'G' => 4,
+        b'R' => 5,
+        b'S' => 6,
+        b'V' => 7,
+        b'T' => 8,
+        b'W' => 9,
+        b'Y' => 10,
+        b'H' => 11,
+        b'K' => 12,
+        b'D' => 13,
+        b'B' => 14,
+        _ => 15,
+    }
+}
+
+/// The reference bases the operators cover: `M`, `D`, `N`, `=` and `X`.
+pub fn reference_length(cigar: impl Iterator<Item = (u32, u8)>) -> i32 {
+    cigar
+        .filter(|(_, op)| matches!(op, 0 | 2 | 3 | 7 | 8))
+        .fold(0i32, |sum, (len, _)| sum.wrapping_add(len as i32))
+}
+
+/// htsjdk `GenomicIndexUtil.regionToBin` on a 0-based half-open range.
+fn region_to_bin(beg: i32, end: i32) -> i32 {
+    let end = end.wrapping_sub(1);
+    for (shift, bits) in [(14, 15), (17, 12), (20, 9), (23, 6), (26, 3)] {
+        if beg >> shift == end >> shift {
+            return ((1 << bits) - 1) / 7 + (beg >> shift);
+        }
+    }
+    0
+}
+
+/// The `bin` field as `BAMRecordCodec.encode` computes it: 0 for a record
+/// without a start, else the bin of the alignment, one base long for an
+/// unmapped record or a CIGAR that covers no reference base.
+fn indexing_bin(fields: &Fields<'_>) -> u16 {
+    if fields.alignment_start == 0 {
+        return 0;
+    }
+    let start = fields.alignment_start.wrapping_sub(1);
+    let unmapped = fields.flags & 0x4 != 0;
+    let mut end = if unmapped {
+        0
+    } else {
+        fields
+            .alignment_start
+            .wrapping_add(reference_length(fields.cigar.iter().copied()))
+            .wrapping_sub(1)
+    };
+    if end <= 0 {
+        end = start.wrapping_add(1);
+    }
+    region_to_bin(start, end) as u16
 }
 
 /// One tag value as htsjdk holds it.
@@ -409,8 +550,13 @@ impl Tags {
         }
     }
 
+    /// The fields in htsjdk's order.
+    pub fn iter(&self) -> impl Iterator<Item = &([u8; 2], TagValue)> {
+        self.fields.iter()
+    }
+
     /// `BinaryTagCodec.writeTag` for each field in order.
-    fn encode(&self, out: &mut Vec<u8>) -> io::Result<()> {
+    pub fn encode(&self, out: &mut Vec<u8>) -> io::Result<()> {
         for (name, value) in &self.fields {
             out.extend_from_slice(name);
             match value {

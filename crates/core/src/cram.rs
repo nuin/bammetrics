@@ -38,19 +38,59 @@ use crate::pass;
 /// The CRAM file definition starts with these bytes.
 pub const MAGIC: [u8; 4] = *b"CRAM";
 
+/// What a file holds, told from its first bytes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Kind {
+    Bam,
+    Cram,
+    /// SAM text.
+    Sam,
+    /// SAM text in gzip members (`bgzip` or `gzip`).
+    GzipSam,
+}
+
 /// A reader whose first bytes were looked at and are put back in front.
 pub(crate) struct Sniffed<R> {
-    pub(crate) cram: bool,
+    pub(crate) kind: Kind,
     pub(crate) reader: Chain<Cursor<Vec<u8>>, R>,
 }
 
 /// The magic and the major and minor version of the file definition.
 const DEFINITION_HEAD: usize = MAGIC.len() + 2;
 
-/// Read the first bytes of `inner` (fewer for a shorter file) and tell a
-/// CRAM by its magic. Nothing is lost: the bytes read come first again. A
-/// CRAM of a version other than 3.0 or 3.1 is an error, as htsjdk raises
-/// for 4.x; htsjdk reads 2.1, which noodles does not.
+/// The bytes looked at to tell a BAM from compressed SAM text, and SAM
+/// text from anything else: one BGZF block at most.
+const SNIFF_HEAD: usize = 1 << 16;
+
+/// The magic of a BAM: the first bytes its first BGZF block inflates to.
+const BAM_MAGIC: [u8; 4] = *b"BAM\x01";
+
+/// Tabs in a SAM record line: 11 mandatory fields.
+const SAM_TABS: usize = 10;
+
+/// True when `text` starts as SAM text does: a header line (`@`), or a
+/// first line with the tabs of a record and no NUL. A first line longer
+/// than `text` is judged on the part at hand.
+fn looks_like_sam(text: &[u8]) -> bool {
+    if text.first() == Some(&b'@') {
+        return true;
+    }
+    let line = text
+        .split(|&b| b == b'\n' || b == b'\r')
+        .next()
+        .unwrap_or_default();
+    line.iter().filter(|&&b| b == b'\t').count() >= SAM_TABS && !line.contains(&0)
+}
+
+/// Read the first bytes of `inner` (fewer for a shorter file) and tell
+/// what it holds, as htsjdk's `SamReaderFactory` does: a CRAM by its
+/// magic, a BAM by the magic its first gzip member inflates to, any other
+/// gzip file as compressed SAM text. htsjdk reads every other file as SAM
+/// text; here it must also start as SAM text does ([`looks_like_sam`]), so
+/// a file of another kind is named as such. Nothing is lost: the bytes
+/// read come first again. A CRAM of a version other than 3.0 or 3.1 is an
+/// error, as htsjdk raises for 4.x; htsjdk reads 2.1, which noodles does
+/// not.
 pub(crate) fn sniff<R: Read>(mut inner: R) -> io::Result<Sniffed<R>> {
     let mut head = Vec::with_capacity(DEFINITION_HEAD);
     (&mut inner)
@@ -66,12 +106,42 @@ pub(crate) fn sniff<R: Read>(mut inner: R) -> io::Result<Sniffed<R>> {
             format!("CRAM {major}.{minor} is not supported (3.0 and 3.1 are)"),
         ));
     }
-    let cut_cram = MAGIC.starts_with(&head[..head.len().min(MAGIC.len())]);
-    if !cram && !cut_cram && head.len() >= 2 && head[..2] != GZIP_MAGIC {
-        return Err(not_bam_or_cram());
+    if !cram && head.len() == DEFINITION_HEAD {
+        (&mut inner)
+            .take((SNIFF_HEAD - DEFINITION_HEAD) as u64)
+            .read_to_end(&mut head)?;
     }
+    let kind = if cram {
+        Kind::Cram
+    } else if head.starts_with(&GZIP_MAGIC) {
+        let mut inflated = crate::gzip::GzipReader::new(head.as_slice());
+        let mut start = Vec::new();
+        // An error here (a cut or damaged member) leaves what was
+        // inflated before it; the reader of the kind chosen reports it.
+        let _ = (&mut inflated)
+            .take(BAM_MAGIC.len() as u64)
+            .read_to_end(&mut start);
+        if start == BAM_MAGIC {
+            Kind::Bam
+        } else {
+            let _ = inflated.take(SNIFF_HEAD as u64).read_to_end(&mut start);
+            if looks_like_sam(&start) {
+                Kind::GzipSam
+            } else {
+                Kind::Bam
+            }
+        }
+    } else if looks_like_sam(&head) {
+        Kind::Sam
+    } else {
+        let cut_cram = MAGIC.starts_with(&head[..head.len().min(MAGIC.len())]);
+        if !cut_cram && head.len() >= 2 {
+            return Err(not_bam_or_cram());
+        }
+        Kind::Bam
+    };
     Ok(Sniffed {
-        cram,
+        kind,
         reader: Cursor::new(head).chain(inner),
     })
 }
@@ -79,17 +149,17 @@ pub(crate) fn sniff<R: Read>(mut inner: R) -> io::Result<Sniffed<R>> {
 /// A BGZF file, as every BAM, starts with the gzip magic.
 const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
 
-/// The error for a file that is neither BAM nor CRAM; a SAM, plain or
-/// compressed, is the likely one.
+/// The error for a file that is not BAM, CRAM or SAM text.
 fn not_bam_or_cram() -> io::Error {
     io::Error::new(
         io::ErrorKind::InvalidData,
-        "not a BAM or CRAM file (SAM input is not supported; convert it with samtools view -b)",
+        "not a BAM or CRAM file (and not SAM text: the first line is no header line and has \
+         fewer than 11 tab-separated fields)",
     )
 }
 
 /// The error of a BAM header read: noodles' `invalid BAM header` (a BGZF
-/// file without the BAM magic, such as a bgzipped SAM) named as
+/// file without the BAM magic that holds no SAM text either) named as
 /// [`not_bam_or_cram`] names it; any other failure (an empty file, a file
 /// cut inside its header) named in place of `failed to fill whole buffer`.
 pub(crate) fn bam_header_error(e: io::Error) -> io::Error {
@@ -113,10 +183,25 @@ fn sniffable(path: &Path) -> Option<bool> {
     Some(regular && !device)
 }
 
+/// What the regular file at `path` holds; `None` for a pipe, a device, a
+/// missing file or one of no known kind.
+fn kind_of(path: &Path) -> Option<Kind> {
+    (sniffable(path) == Some(true))
+        .then(|| File::open(path).ok())
+        .flatten()
+        .and_then(|file| sniff(file).ok())
+        .map(|sniffed| sniffed.kind)
+}
+
 /// True when `path` is a regular file that starts with the CRAM magic.
 pub fn is_cram(path: &Path) -> bool {
-    sniffable(path) == Some(true)
-        && File::open(path).is_ok_and(|file| sniff(file).is_ok_and(|s| s.cram))
+    kind_of(path) == Some(Kind::Cram)
+}
+
+/// True when `path` is a regular file holding SAM text, plain or in gzip
+/// members.
+pub fn is_sam(path: &Path) -> bool {
+    matches!(kind_of(path), Some(Kind::Sam | Kind::GzipSam))
 }
 
 /// True for a pipe, a device, a CRAM, and `-` when no file has that name
@@ -577,7 +662,7 @@ mod tests {
             b"",
         ] {
             let mut sniffed = sniff(data).expect("read");
-            assert_eq!(sniffed.cram, data.starts_with(&MAGIC));
+            assert_eq!(sniffed.kind == Kind::Cram, data.starts_with(&MAGIC));
             let mut all = Vec::new();
             sniffed.reader.read_to_end(&mut all).expect("read");
             assert_eq!(all, data);
@@ -585,12 +670,44 @@ mod tests {
     }
 
     #[test]
-    fn a_sam_is_named_as_such() {
-        let err = sniff(&b"@HD\tVN:1.6\n"[..]).err().expect("not BAM");
-        assert!(
-            err.to_string().contains("SAM input is not supported"),
-            "{err}"
-        );
+    fn sam_text_is_told_by_its_first_line() {
+        let record = b"r1\t4\t*\t0\t0\t*\t*\t0\t0\t*\t*\n";
+        let long: Vec<u8> = std::iter::repeat_n(b"@CO\tx\n".as_slice(), 20_000)
+            .flatten()
+            .copied()
+            .collect();
+        for (data, kind) in [
+            (&b"@HD\tVN:1.6\n"[..], Some(Kind::Sam)),
+            (b"@", Some(Kind::Sam)),
+            (record, Some(Kind::Sam)),
+            (long.as_slice(), Some(Kind::Sam)),
+            // Ten fields are no record line, and a NUL is no text.
+            (b"r1\t4\t*\t0\t0\t*\t*\t0\t0\t*\n", None),
+            (b"r1\t4\t*\t0\t0\t*\t*\t0\t0\t*\t\0\n", None),
+            (b"hello world\n", None),
+            (b"", Some(Kind::Bam)),
+        ] {
+            match (sniff(data), kind) {
+                (Ok(mut sniffed), Some(kind)) => {
+                    assert_eq!(sniffed.kind, kind);
+                    let mut all = Vec::new();
+                    sniffed.reader.read_to_end(&mut all).expect("read");
+                    assert_eq!(all, data);
+                }
+                (Err(e), None) => assert!(e.to_string().contains("not a BAM or CRAM file")),
+                (found, expected) => panic!(
+                    "{:?}: expected {expected:?}, found {:?}",
+                    String::from_utf8_lossy(&data[..data.len().min(20)]),
+                    found.map(|s| s.kind).map_err(|e| e.to_string())
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn a_file_of_no_known_kind_is_named_as_such() {
+        let err = sniff(&b"hello world\n"[..]).err().expect("not BAM");
+        assert!(err.to_string().contains("and not SAM text"), "{err}");
         let header = io::Error::new(io::ErrorKind::InvalidData, "invalid BAM header");
         assert!(
             bam_header_error(header)

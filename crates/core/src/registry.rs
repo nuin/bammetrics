@@ -25,6 +25,7 @@ use crate::cram;
 use crate::error::{Error, Result};
 use crate::metric::ToolOutput;
 use crate::pass::{self, Accumulator, Collector, Limits, default_threads};
+use crate::sam_text::Stringency;
 
 /// What an option does once recognised.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -227,7 +228,7 @@ pub fn normalize(name: &str) -> String {
 pub const COMMON: &[Opt] = &[
     Opt::path(&["INPUT", "I"], "The BAM or CRAM to read.").required(),
     Opt::output(&["OUTPUT", "O"]),
-    Opt::ignored(&["VALIDATION_STRINGENCY"], "records are not validated"),
+    Opt::ignored(&["VALIDATION_STRINGENCY"], STRINGENCY_UNREAD),
     Opt::ignored(&["TMP_DIR"], "no temporary files are written"),
     Opt::ignored_bool(&["QUIET"], "progress is not logged"),
     Opt::ignored(&["VERBOSITY"], "progress is not logged"),
@@ -243,6 +244,11 @@ pub const COMMON: &[Opt] = &[
     ),
     Opt::ignored(&["REFERENCE_SEQUENCE", "R"], REFERENCE_UNREAD),
 ];
+
+/// Why `VALIDATION_STRINGENCY` is ignored for a BAM or a CRAM. SAM text is
+/// checked at the value given ([`Invocation::stringency`]), and then no
+/// note is written.
+const STRINGENCY_UNREAD: &str = "records are not validated";
 
 /// Why `REFERENCE_SEQUENCE` is ignored by a tool whose metrics do not read
 /// it. A CRAM input is decoded with it, and then no note is written.
@@ -336,6 +342,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::check_duplicate_marking::TOOL,
     &crate::jumping_library::TOOL,
     &crate::fifo_buffer::TOOL,
+    &crate::view_sam::TOOL,
 ];
 
 /// The tool named `name`.
@@ -405,7 +412,22 @@ impl Invocation {
         Ok(Limits {
             stop_after: u64::try_from(stop_after).unwrap_or(0),
             assume_sorted: self.flag("ASSUME_SORTED", true)?,
+            stringency: self.stringency()?,
         })
+    }
+
+    /// `VALIDATION_STRINGENCY` (default `STRICT`): how SAM text input is
+    /// checked ([`crate::sam_text`]). A BAM or a CRAM is read the same at
+    /// every value.
+    pub fn stringency(&self) -> Result<Stringency> {
+        match self.get("VALIDATION_STRINGENCY") {
+            None => Ok(Stringency::Strict),
+            Some(value) => Stringency::parse(value).ok_or_else(|| {
+                Error::Usage(format!(
+                    "VALIDATION_STRINGENCY={value}: expected STRICT, LENIENT or SILENT"
+                ))
+            }),
+        }
     }
 
     /// Read `INPUT` once with [`Invocation::limits`] applied, the
@@ -436,7 +458,10 @@ impl Invocation {
             path,
             self.reference(),
             self.threads,
-            Limits::default(),
+            Limits {
+                stringency: self.stringency()?,
+                ..Limits::default()
+            },
             build,
         )
     }
@@ -612,6 +637,8 @@ impl Tool {
                     if opt.names[0] == "REFERENCE_SEQUENCE" {
                         inv.inputs.push(PathBuf::from(&value));
                         inv.values.entry(opt.names[0]).or_default().push(value);
+                    } else if opt.names[0] == "VALIDATION_STRINGENCY" {
+                        inv.values.entry(opt.names[0]).or_default().push(value);
                     }
                 }
                 Kind::Rejected => unreachable!("rejected above"),
@@ -642,6 +669,14 @@ impl Tool {
             // A CRAM is decoded with the reference: it is not ignored. A
             // pipe may hold one.
             inv.notes.retain(|note| !note.ends_with(REFERENCE_UNREAD));
+        }
+        if inv
+            .all("INPUT")
+            .iter()
+            .any(|path| cram::is_sam(Path::new(path)))
+        {
+            // SAM text is checked at the stringency given.
+            inv.notes.retain(|note| !note.ends_with(STRINGENCY_UNREAD));
         }
         Ok(inv)
     }

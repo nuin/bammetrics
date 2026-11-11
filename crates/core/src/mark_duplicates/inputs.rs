@@ -32,6 +32,8 @@ use noodles::sam::header::record::value::map::{Program, ReadGroup};
 use crate::bam_raw::{RawRecord, TagValue};
 use crate::error::{Error, Result};
 use crate::pass;
+pub use crate::sam_order::{coordinate_order, queryname_order};
+use crate::sam_text::Stringency;
 
 /// `SAMFileHeader.SortOrder`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -126,11 +128,13 @@ impl Inputs<'_> {
 
 /// Open every input and hand `f` the merged view. `assume` is
 /// `ASSUME_SORT_ORDER` (with `ASSUME_SORTED=true` as `coordinate`): it is
-/// written into the first header, as Picard does.
+/// written into the first header, as Picard does. SAM text is read at
+/// `stringency`.
 pub fn open<T>(
     paths: &[PathBuf],
     reference: Option<&Path>,
     threads: usize,
+    stringency: Stringency,
     assume: Option<SortOrder>,
     f: impl FnOnce(Inputs<'_>) -> Result<T>,
 ) -> Result<T> {
@@ -139,24 +143,47 @@ pub fn open<T>(
         let f = f.take().expect("called once");
         f(combine(streams, assume)?)
     };
-    open_nested(paths, reference, threads, Vec::new(), &mut call)
+    let decoding = Decoding {
+        reference,
+        threads,
+        stringency,
+    };
+    open_nested(paths, decoding, Vec::new(), &mut call)
+}
+
+/// How every input is decoded.
+#[derive(Clone, Copy)]
+struct Decoding<'a> {
+    reference: Option<&'a Path>,
+    threads: usize,
+    stringency: Stringency,
 }
 
 fn open_nested<T>(
     paths: &[PathBuf],
-    reference: Option<&Path>,
-    threads: usize,
+    decoding: Decoding<'_>,
     opened: Vec<Stream<'_>>,
     f: &mut dyn FnMut(Vec<Stream<'_>>) -> Result<T>,
 ) -> Result<T> {
     match paths.split_first() {
         None => f(opened),
         Some((first, rest)) => {
-            pass::with_record_stream(first, reference, threads, |header, reader, cram| {
-                let mut opened = opened;
-                opened.push((header.clone(), reader, cram));
-                open_nested(rest, reference, threads, opened, f)
-            })
+            let Decoding {
+                reference,
+                threads,
+                stringency,
+            } = decoding;
+            pass::with_record_stream_at(
+                first,
+                reference,
+                threads,
+                stringency,
+                |header, reader, cram| {
+                    let mut opened = opened;
+                    opened.push((header.clone(), reader, cram));
+                    open_nested(rest, decoding, opened, f)
+                },
+            )
         }
     }
 }
@@ -613,83 +640,6 @@ fn translate_tag(record: &mut RawRecord, tag: [u8; 2], table: &HashMap<Id, Id>) 
         None => tags.remove(tag),
     }
     record.set_tags(&tags).map_err(Error::Record)
-}
-
-/// `SAMRecordCoordinateComparator.compare`.
-pub fn coordinate_order(a: &RawRecord, b: &RawRecord) -> Ordering {
-    let (ra, rb) = (a.reference_id(), b.reference_id());
-    let file = if ra == -1 {
-        if rb == -1 {
-            Ordering::Equal
-        } else {
-            Ordering::Greater
-        }
-    } else if rb == -1 {
-        Ordering::Less
-    } else {
-        ra.wrapping_sub(rb).cmp(&0).then_with(|| {
-            a.alignment_start()
-                .wrapping_sub(b.alignment_start())
-                .cmp(&0)
-        })
-    };
-    if file != Ordering::Equal {
-        return file;
-    }
-    let (na, nb) = (a.flags() & 0x10 != 0, b.flags() & 0x10 != 0);
-    if na != nb {
-        return if na {
-            Ordering::Greater
-        } else {
-            Ordering::Less
-        };
-    }
-    a.name()
-        .cmp(b.name())
-        .then(a.flags().cmp(&b.flags()))
-        .then(a.mapping_quality().cmp(&b.mapping_quality()))
-        .then(a.mate_reference_id().cmp(&b.mate_reference_id()))
-        .then(a.mate_alignment_start().cmp(&b.mate_alignment_start()))
-        .then(a.template_length().cmp(&b.template_length()))
-}
-
-/// `SAMRecordQueryNameComparator.compare`.
-pub fn queryname_order(a: &RawRecord, b: &RawRecord) -> Ordering {
-    let by_name = a.name().cmp(b.name());
-    if by_name != Ordering::Equal {
-        return by_name;
-    }
-    let (fa, fb) = (a.flags(), b.flags());
-    let paired = |f: u16| f & 0x1 != 0;
-    if paired(fa) || paired(fb) {
-        if !paired(fa) {
-            return Ordering::Greater;
-        } else if !paired(fb) || (fa & 0x40 != 0 && fb & 0x80 != 0) {
-            return Ordering::Less;
-        } else if fa & 0x80 != 0 && fb & 0x40 != 0 {
-            return Ordering::Greater;
-        }
-    }
-    let flag = |f: u16, bit: u16| f & bit != 0;
-    for bit in [0x10, 0x100, 0x800] {
-        if flag(fa, bit) != flag(fb, bit) {
-            return if flag(fa, bit) {
-                Ordering::Greater
-            } else {
-                Ordering::Less
-            };
-        }
-    }
-    let hit = |r: &RawRecord| match r.tag(*b"HI") {
-        Ok(Some(TagValue::Int(v))) => Some(v),
-        _ => None,
-    };
-    match (hit(a), hit(b)) {
-        (Some(x), Some(y)) => x.cmp(&y),
-        (Some(_), None) => Ordering::Greater,
-        (None, Some(_)) => Ordering::Less,
-        (None, None) => Ordering::Equal,
-    }
 }
 
 #[cfg(test)]

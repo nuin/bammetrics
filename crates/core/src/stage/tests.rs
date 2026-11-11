@@ -123,6 +123,7 @@ fn tap(stop_after: u64, fail_at: Option<usize>) -> Step {
     let limits = Limits {
         stop_after,
         assume_sorted: true,
+        ..Limits::default()
     };
     Step::tap(
         "names",
@@ -585,7 +586,6 @@ fn write_options_name_their_files_and_refuse_the_kinds_of_later_waves() {
     );
     options.check().expect("a BAM name");
     for (name, kind, wave) in [
-        ("out.sam", "SAM", "W05"),
         ("out.CRAM", "CRAM", "W15"),
         ("dir/reads.fastq", "FASTQ", "W22"),
         ("reads.fq.gz", "FASTQ", "W22"),
@@ -597,11 +597,33 @@ fn write_options_name_their_files_and_refuse_the_kinds_of_later_waves() {
         assert_eq!(
             text,
             format!(
-                "{name}: bammetrics writes BAM only: {kind} output is wave {wave} of \
+                "{name}: bammetrics writes BAM and SAM only: {kind} output is wave {wave} of \
                  docs/07_full_parity_program.md"
             )
         );
     }
+    // SAM text by the name: no index beside it, no gzip around it.
+    let mut sam = WriteOptions::new(Path::new("dir/out.sam"));
+    assert_eq!(sam.format, WriteFormat::Sam);
+    sam.check().expect("a SAM name");
+    sam.create_md5 = true;
+    assert_eq!(
+        sam.files(),
+        ["dir/out.sam", "dir/out.sam.md5"].map(PathBuf::from)
+    );
+    sam.create_index = true;
+    assert!(
+        matches!(sam.check(), Err(Error::Usage(text)) if text.contains("an index needs a BAM"))
+    );
+    assert!(matches!(
+        WriteOptions::new(Path::new("out.sam.gz")).check(),
+        Err(Error::Usage(text)) if text.contains("written uncompressed")
+    ));
+    assert_eq!(WriteFormat::of(Path::new("out.bam")), WriteFormat::Bam);
+    assert_eq!(WriteFormat::of(Path::new("/dev/stdout")), WriteFormat::Bam);
+    assert_eq!(WriteFormat::parse("sam"), Some(WriteFormat::Sam));
+    assert_eq!(WriteFormat::parse("cram"), None);
+    assert_eq!(WriteFormat::Sam.name(), "sam");
     for name in [
         "out.bam",
         "out",
@@ -844,9 +866,36 @@ fn the_write_step_copies_the_stream_into_a_bam_with_its_index_and_md5() {
     );
     std::fs::remove_dir_all(&by_name).expect("cleanup");
 
+    // A name ending in .sam gets SAM text: htsjdk's header, then one line
+    // per record of the stream, and the MD5 of that text.
+    let text_dir = dir.join("text");
+    std::fs::create_dir(&text_dir).expect("a directory");
+    let sam = text_dir.join("copy.sam");
+    let options = WriteOptions {
+        create_md5: true,
+        ..WriteOptions::new(&sam)
+    };
+    let results = run_chain(write_plan(&source, options), None).expect("the chain runs");
+    let written = results[0].as_ref().expect("written");
+    assert_eq!(written.files, [sam.clone(), text_dir.join("copy.sam.md5")]);
+    let header = pass::read_header(&source).expect("the header");
+    let records = read_bam(&source).1;
+    let mut expected = crate::sam_text::header_text(&header, false);
+    let references: Vec<Vec<u8>> = header
+        .reference_sequences()
+        .keys()
+        .map(|name| name.to_vec())
+        .collect();
+    for record in &records {
+        crate::sam_text::write_record(&mut expected, record, &references).expect("a line");
+    }
+    assert_eq!(std::fs::read(&sam).expect("the SAM"), expected);
+    assert_eq!(read_bam(&sam).1.len(), records.len());
+    std::fs::remove_dir_all(&text_dir).expect("cleanup");
+
     let refusals = [
         (source.clone(), "it is the input"),
-        (dir.join("out.sam"), "bammetrics writes BAM only"),
+        (dir.join("out.cram"), "bammetrics writes BAM and SAM only"),
         (dir.join("missing").join("out.bam"), "No such file"),
     ];
     for (path, text) in refusals {

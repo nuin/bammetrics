@@ -147,6 +147,7 @@ fn lowered(plan: ChainPlan, progress: Option<OnProgress>) -> Result<Vec<Result<P
     let limits = Limits {
         stop_after: read_limit(taps.iter().map(|(limits, _)| limits.stop_after)),
         assume_sorted: true,
+        ..Limits::default()
     };
     let results = pass::run_isolated(path, reference, plan.threads, limits, progress, |header| {
         taps.into_iter()

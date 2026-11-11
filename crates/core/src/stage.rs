@@ -44,7 +44,7 @@ mod sinks;
 mod tests;
 
 pub use exec::{Halt, halt, run_chain};
-pub use sinks::{CollectorSink, WriteOptions, later_kind};
+pub use sinks::{CollectorSink, WriteFormat, WriteOptions, later_kind};
 
 /// Records per batch. Measured: with the 4096 of [`pass`] a
 /// `MarkDuplicates` chain took 10 percent longer, and 512 cost more system
@@ -134,7 +134,8 @@ pub trait Source {
     }
 }
 
-/// A BAM or CRAM file (told by its magic bytes), or a pipe holding one.
+/// A BAM, CRAM or SAM file (told by its first bytes), or a pipe holding
+/// one. SAM text is read at `VALIDATION_STRINGENCY=STRICT`.
 #[derive(Clone, Debug)]
 pub struct FileSource {
     path: PathBuf,
@@ -168,6 +169,7 @@ impl Source for FileSource {
             &self.path,
             self.reference.as_deref(),
             threads,
+            crate::sam_text::Stringency::Strict,
             bytes,
             |header, reader, cram| {
                 let mut frame = Frame::new(header.clone(), self.label.clone());

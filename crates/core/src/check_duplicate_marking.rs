@@ -60,6 +60,7 @@ use crate::error::{Error, Result};
 use crate::metric::{MetricsOutput, ToolOutput, Value};
 use crate::pass::Accumulator;
 use crate::registry::{Invocation, Opt, Tool, write_files};
+use crate::sam_order::QuerynameKey;
 
 pub const TOOL: Tool = Tool {
     name: "CheckDuplicateMarking",
@@ -327,54 +328,14 @@ impl Key {
         })
     }
 
-    /// `SAMRecordQueryNameComparator.compare`.
+    /// The fields `SAMRecordQueryNameComparator` reads.
+    fn order_key(&self) -> QuerynameKey<'_> {
+        QuerynameKey::new(&self.name, self.flags.bits(), self.hit_index)
+    }
+
+    /// `SAMRecordQueryNameComparator.compare` ([`QuerynameKey::compare`]).
     fn compare(&self, other: &Self) -> Ordering {
-        let order = self.name.cmp(&other.name);
-        if order != Ordering::Equal {
-            return order;
-        }
-        let (a, b) = (self.flags, other.flags);
-        if a.is_segmented() || b.is_segmented() {
-            if !a.is_segmented() {
-                return Ordering::Greater;
-            }
-            if !b.is_segmented() {
-                return Ordering::Less;
-            }
-            if a.is_first_segment() && b.is_last_segment() {
-                return Ordering::Less;
-            }
-            if a.is_last_segment() && b.is_first_segment() {
-                return Ordering::Greater;
-            }
-        }
-        if a.is_reverse_complemented() != b.is_reverse_complemented() {
-            return if a.is_reverse_complemented() {
-                Ordering::Greater
-            } else {
-                Ordering::Less
-            };
-        }
-        if a.is_secondary() != b.is_secondary() {
-            return if b.is_secondary() {
-                Ordering::Less
-            } else {
-                Ordering::Greater
-            };
-        }
-        if a.is_supplementary() != b.is_supplementary() {
-            return if b.is_supplementary() {
-                Ordering::Less
-            } else {
-                Ordering::Greater
-            };
-        }
-        match (self.hit_index, other.hit_index) {
-            (Some(x), Some(y)) => x.cmp(&y),
-            (Some(_), None) => Ordering::Greater,
-            (None, Some(_)) => Ordering::Less,
-            (None, None) => Ordering::Equal,
-        }
+        self.order_key().compare(&other.order_key())
     }
 }
 
