@@ -55,7 +55,7 @@ fn human(bytes: u64) -> String {
 
 /// What the plan knows about the source without reading a record.
 struct Source {
-    /// `BAM` or `CRAM`.
+    /// `BAM`, `CRAM` or `SAM`.
     kind: &'static str,
     /// The size of a regular file.
     bytes: Option<u64>,
@@ -67,7 +67,7 @@ impl Source {
     fn of(chain: &Chain) -> Result<Self, VerbError> {
         if !chain.replayable() {
             return Ok(Self {
-                kind: "BAM or CRAM",
+                kind: "BAM, CRAM or SAM",
                 bytes: None,
                 order: None,
             });
@@ -77,6 +77,8 @@ impl Source {
         Ok(Self {
             kind: if cram::is_cram(&chain.source_path) {
                 "CRAM"
+            } else if cram::is_sam(&chain.source_path) {
+                "SAM"
             } else {
                 "BAM"
             },

@@ -272,12 +272,9 @@ impl RawRecord {
 
     /// The decoded tag list, for edits.
     pub fn tags(&self) -> io::Result<Tags> {
-        let mut tags = Tags::default();
-        for field in TagIter::new(self.tag_bytes()) {
-            let (name, value) = field?;
-            tags.set(name, value);
-        }
-        Ok(tags)
+        TagIter::new(self.tag_bytes())
+            .collect::<io::Result<Vec<_>>>()
+            .map(Tags::from_unsorted)
     }
 
     /// Replace the tag block by `tags` encoded.
@@ -529,6 +526,21 @@ impl Tags {
         let key = binary_tag(name);
         self.fields
             .binary_search_by(|(n, _)| binary_tag(*n).cmp(&key))
+    }
+
+    /// The list `fields` leave when [`Tags::set`] takes each in turn: in
+    /// htsjdk's order, a repeated tag with its last value. One sort, so a
+    /// record with many tags costs no more per tag than one with few.
+    pub fn from_unsorted(mut fields: Vec<([u8; 2], TagValue)>) -> Self {
+        fields.sort_by_key(|(name, _)| binary_tag(*name));
+        let mut kept: Vec<([u8; 2], TagValue)> = Vec::with_capacity(fields.len());
+        for field in fields {
+            match kept.last_mut() {
+                Some(last) if last.0 == field.0 => *last = field,
+                _ => kept.push(field),
+            }
+        }
+        Self { fields: kept }
     }
 
     pub fn get(&self, name: [u8; 2]) -> Option<&TagValue> {

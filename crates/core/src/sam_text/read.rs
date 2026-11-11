@@ -1,6 +1,7 @@
 //! `SAMTextReader`: the header lines, then one record per line, and the
 //! same records as a BAM record stream for [`crate::pass`].
 
+use std::collections::HashMap;
 use std::io::{self, BufRead, Read};
 use std::path::{Path, PathBuf};
 
@@ -19,6 +20,10 @@ const SORT_ORDERS: [&[u8]; 5] = [
 ];
 /// `SAMFileHeader.GroupOrder`.
 const GROUP_ORDERS: [&[u8]; 3] = [b"none", b"query", b"reference"];
+
+/// The bytes of one line held at most: a line is read whole into memory.
+/// A Java `String`, which htsjdk reads a line into, holds 2^31 characters.
+const MAX_LINE_BYTES: usize = 1 << 30;
 
 /// Lines as `BufferedReader.readLine` ends them: at `\n`, `\r` or `\r\n`.
 struct LineReader<R> {
@@ -72,6 +77,12 @@ impl<R: BufRead> LineReader<R> {
                     let taken = buffer.len();
                     self.inner.consume(taken);
                 }
+            }
+            if line.len() > MAX_LINE_BYTES {
+                return Err(invalid(format!(
+                    "SAM text line {} is over {MAX_LINE_BYTES} bytes",
+                    self.number + 1
+                )));
             }
         }
         self.number += 1;
@@ -130,8 +141,14 @@ impl HeaderLine<'_> {
             }
         };
         let kind = String::from_utf8_lossy(kind);
+        let mut fields: Vec<&[u8]> = fields.collect();
+        // `StringUtil.split` drops an empty last token.
+        if fields.last().is_some_and(|field| field.is_empty()) {
+            fields.pop();
+        }
         let mut kept: Vec<(&[u8], &[u8])> = Vec::new();
-        for field in fields.filter(|field| !field.is_empty()) {
+        let mut index: HashMap<&[u8], usize> = HashMap::new();
+        for field in fields {
             let colon = field.iter().position(|&b| b == b':');
             let Some((key, value)) = colon
                 .map(|at| (&field[..at], &field[at + 1..]))
@@ -141,7 +158,8 @@ impl HeaderLine<'_> {
                 continue;
             };
             let show = |text: &[u8]| String::from_utf8_lossy(text).into_owned();
-            if let Some((_, earlier)) = kept.iter().find(|(k, v)| *k == key && *v != value) {
+            let earlier = index.get(key).map(|&at| kept[at].1);
+            if let Some(earlier) = earlier.filter(|earlier| *earlier != value) {
                 self.report(&format!(
                     "Problem parsing {kind} key:value pair {0}:{1} clashes with {0}:{2}",
                     show(key),
@@ -176,11 +194,12 @@ impl HeaderLine<'_> {
             } else {
                 value
             };
-            if !kept.iter().any(|(k, _)| *k == key) {
+            if earlier.is_none() {
+                index.insert(key, kept.len());
                 kept.push((key, value));
             }
         }
-        let value_of = |tag: &[u8]| kept.iter().find(|(k, _)| *k == tag).map(|(_, v)| *v);
+        let value_of = |tag: &[u8]| index.get(tag).map(|&at| kept[at].1);
         for tag in required {
             if value_of(tag).is_none() {
                 self.report(&format!(

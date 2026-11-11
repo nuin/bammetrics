@@ -541,3 +541,136 @@ pub fn run_cli(args: &[String]) -> Result<u8> {
     }
     print(&inv)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bam_raw::{Fields, Tags};
+
+    fn record(flags: u16, reference_id: i32, start: i32, cigar: &[(u32, u8)]) -> RawRecord {
+        RawRecord::from_fields(&Fields {
+            name: b"r",
+            flags,
+            reference_id,
+            alignment_start: start,
+            mapping_quality: 0,
+            cigar,
+            mate_reference_id: -1,
+            mate_alignment_start: 0,
+            template_length: 0,
+            bases: b"",
+            qualities: None,
+            tags: &Tags::default(),
+        })
+        .expect("a record")
+    }
+
+    fn filter(query: bool) -> IntervalFilter {
+        let region = |reference, start, end| Region {
+            reference,
+            start,
+            end,
+        };
+        IntervalFilter {
+            regions: vec![region(0, 100, 200), region(1, 50, 60)],
+            at: 0,
+            query,
+        }
+    }
+
+    #[test]
+    fn the_index_query_and_the_scan_keep_overlapping_records() {
+        for query in [true, false] {
+            let mut filter = filter(query);
+            let steps: Vec<Step> = [
+                record(0, 0, 80, &[(10, 0)]),
+                record(0, 0, 91, &[(10, 0)]),
+                record(0, 0, 200, &[(10, 0)]),
+                record(0, 0, 201, &[(10, 0)]),
+                record(0, 1, 40, &[(5, 0), (20, 3), (5, 0)]),
+                record(0, 1, 60, &[(1, 0)]),
+            ]
+            .iter()
+            .map(|record| filter.step(record))
+            .collect();
+            assert_eq!(
+                steps,
+                [
+                    Step::Skip,
+                    Step::Print,
+                    Step::Print,
+                    Step::Skip,
+                    Step::Print,
+                    Step::Print
+                ],
+                "query {query}"
+            );
+        }
+    }
+
+    #[test]
+    fn only_the_index_query_keeps_an_unmapped_record_placed_with_its_mate() {
+        let placed = record(0x4, 0, 150, &[]);
+        assert_eq!(filter(true).step(&placed), Step::Print);
+        assert_eq!(filter(false).step(&placed), Step::Skip);
+    }
+
+    #[test]
+    fn the_scan_stops_after_the_last_interval_and_at_a_record_without_a_reference() {
+        let past = record(0, 1, 61, &[(10, 0)]);
+        let unplaced = record(0x4, -1, 0, &[]);
+        assert_eq!(filter(false).step(&past), Step::Stop);
+        assert_eq!(filter(false).step(&unplaced), Step::Stop);
+        // The query stops once every interval is behind the record.
+        assert_eq!(filter(true).step(&past), Step::Stop);
+        assert_eq!(filter(true).step(&unplaced), Step::Skip);
+        let mut none = IntervalFilter {
+            regions: Vec::new(),
+            at: 0,
+            query: false,
+        };
+        assert_eq!(none.step(&record(0, 0, 1, &[(1, 0)])), Step::Stop);
+    }
+
+    #[test]
+    fn options_take_picards_values_in_picards_case() {
+        let parse = |args: &[&str]| {
+            let args: Vec<String> = std::iter::once("I=x.bam")
+                .chain(args.iter().copied())
+                .map(str::to_owned)
+                .collect();
+            TOOL.parse(&args)
+                .and_then(|inv| Options::from_invocation(&inv))
+        };
+        let options = parse(&["ALIGNMENT_STATUS=Unaligned", "PF_STATUS=PF"]).expect("options");
+        assert_eq!((options.alignment, options.pf), (Keep::Set, Keep::Clear));
+        assert!(Keep::Set.takes(0x4, UNMAPPED) && !Keep::Set.takes(0, UNMAPPED));
+        assert!(Keep::Clear.takes(0, QC_FAIL) && !Keep::Clear.takes(0x200, QC_FAIL));
+        assert!(matches!(parse(&["PF_STATUS=pf"]), Err(Error::Usage(_))));
+        assert!(matches!(
+            parse(&["HEADER_ONLY=true", "RECORDS_ONLY=true"]),
+            Err(Error::Usage(text)) if text.starts_with("Cannot specify both")
+        ));
+        assert!(matches!(parse(&["O=x.sam"]), Err(Error::Usage(_))));
+        assert!(
+            parse(&["INTERVAL_LIST=null"])
+                .expect("null")
+                .interval_list
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn held_text_has_a_limit_and_rows_have_the_twelve_columns() {
+        let mut held = Held::default();
+        held.header(b"@HD\tVN:1.6\n").expect("header");
+        held.record(b"r1\t4\t*\t0\t0\t*\t*\t0\t0\t*\t*\tXA:i:1\tXB:Z:a b\n")
+            .expect("record");
+        assert_eq!(held.rows.len(), 1);
+        assert_eq!(held.rows[0].len(), COLUMNS.len());
+        assert!(matches!(held.rows[0][1], Value::Int(4)));
+        assert!(matches!(&held.rows[0][11], Value::Str(tags) if tags == "XA:i:1\tXB:Z:a b"));
+        held.text = vec![0; MAX_TEXT_BYTES];
+        assert!(held.header(b"x").is_err());
+    }
+}

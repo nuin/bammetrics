@@ -329,6 +329,9 @@ fn the_header_is_checked_as_the_text_header_codec_checks_it() {
     };
     assert!(strict("@RG\tID:a\n").contains("@RG line missing SM tag"));
     assert!(strict("@XX\tID:a\n").contains("Unrecognized header record type"));
+    // An empty field inside the line is a bad pair; one at the end is dropped.
+    assert!(strict("@PG\tID:a\t\tPN:x\n").contains("Problem parsing @PG key:value pair"));
+    assert!(read("@PG\tID:a\tPN:x\t\n", Stringency::Strict).is_ok());
     assert!(strict("@SQ\tSN:a\n").contains("@SQ line missing LN tag"));
     assert!(
         strict("@HD\tVN:1.6\tSO:sorted\n").contains("Found non-conforming header SO tag: sorted")
@@ -415,6 +418,55 @@ fn stringency_reads_picards_values_in_any_case() {
     assert_eq!(Stringency::parse("lenient"), Some(Stringency::Lenient));
     assert_eq!(Stringency::parse("Silent"), Some(Stringency::Silent));
     assert_eq!(Stringency::parse("LOUD"), None);
+}
+
+/// A CIGAR of 60,000 alternating insertions and deletions has about 900
+/// million pairs of the same operator with no match between them. htsjdk
+/// reports each; the parser walks the CIGAR once and reports 100.
+#[test]
+fn a_long_cigar_of_adjacent_indels_is_checked_in_one_walk() {
+    let cigar = "1I1D".repeat(30_000);
+    let line = format!(
+        "r\t0\tchr1\t100\t60\t{cigar}\t*\t0\t0\t{}\t*",
+        "A".repeat(30_000)
+    );
+    let started = std::time::Instant::now();
+    let record = parse(&line, Stringency::Lenient).expect("reads on");
+    assert_eq!(record.cigar().count(), 60_000);
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    let error = error_of(&line, Stringency::Strict);
+    assert!(error.contains("ADJACENT_INDEL_IN_CIGAR"), "{error}");
+}
+
+#[test]
+fn a_sam_file_is_written_through_a_temporary_name() {
+    let dir = std::env::temp_dir().join(format!("bammetrics-sam-text-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("scratch");
+    let path = dir.join("out.sam");
+    let header = header();
+    let record = parse(
+        "r1\t0\tchr2\t7\t9\t4M\t*\t0\t0\tACGT\tIIII\tNM:i:0",
+        Stringency::Strict,
+    )
+    .expect("a record");
+    let mut writer =
+        SamWriter::create(&path, &header, &header_text(&header, false)).expect("created");
+    writer.write(&record).expect("written");
+    assert!(!path.exists(), "the file has its name only once finished");
+    assert_eq!(writer.finish().expect("finished"), path);
+    let text = std::fs::read_to_string(&path).expect("the file");
+    assert_eq!(
+        text,
+        format!(
+            "{}r1\t0\tchr2\t7\t9\t4M\t*\t0\t0\tACGT\tIIII\tNM:i:0\n",
+            HEADER.replace("VN:1.5", "VN:1.6")
+        )
+    );
+    // A writer dropped before `finish` leaves nothing behind.
+    let unfinished = dir.join("unfinished.sam");
+    drop(SamWriter::create(&unfinished, &header, b"").expect("created"));
+    assert_eq!(std::fs::read_dir(&dir).expect("dir").count(), 1);
+    std::fs::remove_dir_all(&dir).expect("cleanup");
 }
 
 #[test]

@@ -81,12 +81,36 @@ fn read_length(cigar: &[(u32, u8)]) -> i64 {
         .sum()
 }
 
+/// The `ADJACENT_INDEL_IN_CIGAR` errors reported for one CIGAR at most.
+/// htsjdk reports one per pair of operators, a number that grows with the
+/// square of the CIGAR's length.
+const MAX_ADJACENT_INDEL_ERRORS: usize = 100;
+
 /// `Cigar.isValid`: each error as its `SAMValidationError` type (with the
 /// severity) and message.
 fn cigar_errors(cigar: &[(u32, u8)]) -> Vec<(&'static str, &'static str)> {
     const INVALID: &str = "ERROR::INVALID_CIGAR";
     let real = |op: u8| matches!(op, 0 | 1 | 2 | 3 | 7 | 8);
-    let indel = |op: u8| matches!(op, 1 | 2);
+    // htsjdk reports an `I` or `D` once for each later operator of the
+    // same kind before the next `M`, `N`, `=`, `X` or `P`. Counted from the
+    // right, so a long CIGAR is walked once.
+    let mut later_same = vec![0u32; cigar.len()];
+    let (mut insertions, mut deletions) = (0u32, 0u32);
+    for (i, &(_, op)) in cigar.iter().enumerate().rev() {
+        match op {
+            1 => {
+                later_same[i] = insertions;
+                insertions += 1;
+            }
+            2 => {
+                later_same[i] = deletions;
+                deletions += 1;
+            }
+            0 | 3 | 6 | 7 | 8 => (insertions, deletions) = (0, 0),
+            _ => {}
+        }
+    }
+    let mut adjacent = 0;
     let mut errors = Vec::new();
     let mut seen_real = false;
     let last = cigar.len().wrapping_sub(1);
@@ -122,23 +146,19 @@ fn cigar_errors(cigar: &[(u32, u8)]) -> Vec<(&'static str, &'static str)> {
             }
             _ if real(op) => {
                 seen_real = true;
-                if indel(op) {
-                    for &(_, next) in &cigar[i + 1..] {
-                        if (real(next) && !indel(next)) || next == 6 {
-                            break;
-                        }
-                        if next == op {
-                            errors.push((
-                                "WARNING::ADJACENT_INDEL_IN_CIGAR",
-                                if op == 1 {
-                                    "No M or N operator between pair of I operators in CIGAR"
-                                } else {
-                                    "No M or N operator between pair of D operators in CIGAR"
-                                },
-                            ));
-                        }
-                    }
-                }
+                // Zero for an operator that is no `I` and no `D`.
+                let message = if op == 1 {
+                    "No M or N operator between pair of I operators in CIGAR"
+                } else {
+                    "No M or N operator between pair of D operators in CIGAR"
+                };
+                let room = MAX_ADJACENT_INDEL_ERRORS.saturating_sub(adjacent);
+                let more = (later_same[i] as usize).min(room);
+                adjacent += more;
+                errors.extend(std::iter::repeat_n(
+                    ("WARNING::ADJACENT_INDEL_IN_CIGAR", message),
+                    more,
+                ));
             }
             6 => {
                 if i == 0 {
@@ -738,14 +758,15 @@ impl LineParser {
             Some(quals.iter().map(|q| q - 33).collect())
         };
 
-        let mut tags = Tags::default();
+        let mut tags = Vec::with_capacity(fields.len() - REQUIRED_FIELDS);
         for field in &fields[REQUIRED_FIELDS..] {
             match parse_tag(&java_bytes(field)) {
-                Ok((name, value)) => tags.set(name, value),
+                Ok(tag) => tags.push(tag),
                 Err(TagError::Format(message)) => at.report(&message)?,
                 Err(TagError::Fatal(message)) => return Err(invalid(message)),
             }
         }
+        let tags = Tags::from_unsorted(tags);
 
         Ok(Parsed {
             name: java_bytes(fields[0]),
