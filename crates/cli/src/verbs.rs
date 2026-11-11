@@ -347,6 +347,16 @@ pub const VERBS: &[Verb] = &[
         reads: &["INTERVAL_LIST"],
         ..verb("view-sam", "ViewSam", Files::Single)
     },
+    Verb {
+        about: Some(
+            "sorts the records of a BAM, CRAM or SAM by --sort-order (queryname, coordinate or \
+             duplicate) as Picard's SortSam does: -o gets a BAM, or SAM text for a name ending \
+             in .sam, under the input header with SO set. Runs of --max-records-in-ram records \
+             spill to --tmp-dir.",
+        ),
+        writes: "sorted BAM",
+        ..verb("sort-sam", "SortSam", Files::Bam)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
@@ -541,6 +551,11 @@ impl Verb {
                         && opt.kind != registry::REFERENCE_NOT_DECODED.kind =>
                 {
                     format!("Decodes a CRAM input; for a BAM accepted and ignored: {why}.")
+                }
+                Kind::Ignored(registry::STRINGENCY_UNREAD) => {
+                    "How SAM text input is checked: STRICT (default), LENIENT or SILENT. A BAM \
+                     or CRAM is read the same at every value."
+                        .to_owned()
                 }
                 Kind::Ignored(why) => format!("Accepted and ignored: {why}."),
                 _ if opt.required => format!("{} Required.", opt.help),

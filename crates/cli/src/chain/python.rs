@@ -210,6 +210,13 @@ fn tool_keywords(verb: &Verb) -> (Vec<Keyword>, Vec<(&'static str, String)>) {
     let mut refused = vec![("input", "the chain's source feeds every step".to_owned())];
     let mut keywords = Vec::new();
     for keyword in python_keywords(tool) {
+        if keyword.picard == "VALIDATION_STRINGENCY" {
+            refused.push((
+                "validation_stringency",
+                "the chain reads the source: chain(..., validation_stringency=...)".to_owned(),
+            ));
+            continue;
+        }
         // A transform that writes a BAM as a tool writes none in a chain.
         if verb.files == Files::Bam && keyword.picard == "OUTPUT" {
             refused.push((
@@ -411,6 +418,9 @@ mod tests {
                 "format",
                 "also",
                 "sample",
+                "sort_memory",
+                "force_space",
+                "validation_stringency",
                 "plan",
                 "dry_run"
             ]
@@ -483,16 +493,18 @@ mod tests {
     }
 
     /// Every keyword of the tool's Python function is a keyword of its
-    /// step, apart from the BAM of a transform.
+    /// step, apart from the BAM of a transform and the stringency of the
+    /// source, which belongs to the chain.
     #[test]
     fn no_keyword_of_a_step_verb_is_lost() {
         for verb in VERBS.iter().filter(|verb| is_step(verb)) {
             let table = step_table(verb.name).expect(verb.name);
             for keyword in python_keywords(verb.tool()) {
                 let bam = verb.files == Files::Bam && keyword.picard == "OUTPUT";
+                let chain_s = keyword.picard == "VALIDATION_STRINGENCY";
                 assert_eq!(
                     table.keywords.iter().any(|k| k.name == keyword.name),
-                    !bam,
+                    !bam && !chain_s,
                     "{}: {}",
                     verb.name,
                     keyword.name
@@ -561,6 +573,10 @@ mod tests {
         );
         let marked = step_table("mark_duplicates").expect("a step");
         assert!(error(&marked, "output").contains("add step(\"write\", output=...) after it"));
+        assert!(
+            error(&table, "validation_stringency")
+                .ends_with("chain(..., validation_stringency=...)")
+        );
     }
 
     #[test]

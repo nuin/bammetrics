@@ -1225,6 +1225,7 @@ def qc(
     resume: bool = False,
     force: bool = False,
     threads: int | None = None,
+    validation_stringency: Literal["STRICT", "LENIENT", "SILENT"] | None = None,
     also: Literal["json", "jsonl", "tsv", "csv", "markdown", "junit", "multiqc"] | Sequence[Literal["json", "jsonl", "tsv", "csv", "markdown", "junit", "multiqc"]] | None = None,
     all_plots: bool = False,
     date: str | None = None,
@@ -1275,6 +1276,7 @@ _StepVerb = Literal[
     "sequencing_artifact",
     "coverage_gaps",
     "sex_check",
+    "sort_sam",
     "write",
 ]
 
@@ -1300,6 +1302,9 @@ def chain(
     format: str | Sequence[str] | None = None,
     also: str | Sequence[str] | None = None,
     sample: str | None = None,
+    sort_memory: str | None = None,
+    force_space: bool | None = None,
+    validation_stringency: str | None = None,
     plan: _Path | None = None,
     dry_run: Literal[False] = False,
 ) -> Run[None]:
@@ -1323,6 +1328,9 @@ def chain(
     format: str | Sequence[str] | None = None,
     also: str | Sequence[str] | None = None,
     sample: str | None = None,
+    sort_memory: str | None = None,
+    force_space: bool | None = None,
+    validation_stringency: str | None = None,
     plan: _Path | None = None,
     dry_run: Literal[True],
 ) -> str: ...
@@ -1338,6 +1346,9 @@ def chain(
     format: str | Sequence[str] | None = None,
     also: str | Sequence[str] | None = None,
     sample: str | None = None,
+    sort_memory: str | None = None,
+    force_space: bool | None = None,
+    validation_stringency: str | None = None,
     plan: _Path | None = None,
     dry_run: bool,
 ) -> Run[None] | str: ...

@@ -1573,7 +1573,7 @@ fn usage_errors_exit_2_before_anything_runs() {
     let cram = file("out.cram");
     let fastq = file("out.fastq.gz");
     let source = FIXTURE.0;
-    let cases: [(&[&str], &str); 33] = [
+    let cases: [(&[&str], &str); 37] = [
         (
             &[source, "+", "write", &sam, "--index"],
             "out.sam: an index needs a BAM: SAM text has none",
@@ -1586,20 +1586,57 @@ fn usage_errors_exit_2_before_anything_runs() {
             &[source, "+", "write", &fastq],
             "out.fastq.gz: bammetrics writes BAM and SAM only: FASTQ output is wave W22",
         ),
-        // Refused from the command line: the first mark-duplicates reads
-        // nothing for a chain that cannot finish.
+        // A stream name another transform took.
         (
             &[
                 source,
                 "+",
                 "mark-duplicates",
                 "+",
-                "quality-yield",
-                "+",
-                "mark-duplicates",
+                "sort-sam",
+                "--sort-order",
+                "queryname",
+                "--as",
+                "marked",
             ],
-            "step 3 (mark-duplicates): it reads its input twice and cannot follow step 1 \
-             (mark-duplicates)",
+            "step 2 (sort-sam): the stream name marked is taken by an earlier transform",
+        ),
+        (
+            &[
+                source,
+                "--sort-memory",
+                "2X",
+                "+",
+                "sort-sam",
+                "-SO",
+                "queryname",
+            ],
+            "--sort-memory \"2X\": expected bytes above 0",
+        ),
+        (
+            &[source, "+", "sort-sam", "--sort-order", "unsorted"],
+            "step 1 (sort-sam): 'unsorted' is not a valid value for SortOrder",
+        ),
+        (
+            &[
+                source,
+                "+",
+                "sort-sam",
+                "-SO",
+                "coordinate",
+                "--create-index",
+            ],
+            "step 1 (sort-sam): SortSam in a chain: CREATE_INDEX belongs to the write step",
+        ),
+        (
+            &[
+                source,
+                "+",
+                "insert-size",
+                "--validation-stringency",
+                "LENIENT",
+            ],
+            "step 1 (insert-size): --validation-stringency belongs to the chain",
         ),
         (&[source], "no step: a chain needs at least one + STEP"),
         (

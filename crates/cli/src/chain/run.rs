@@ -130,6 +130,7 @@ fn core_step(chain: &Chain, step: &Planned) -> Result<Step, VerbError> {
         (None, Some(tool)) => {
             let mut inv = tool.parse(&step.argv).map_err(failed)?;
             inv.threads = chain.threads;
+            inv.sort_memory = Some(usize::try_from(chain.sort_memory).unwrap_or(usize::MAX));
             inv.read_dash_from_stdin();
             match step.role {
                 Role::Transform => Step::tool_stage(tool, inv).ok_or_else(unfit)?,
@@ -367,6 +368,7 @@ fn write_report(
 /// that cannot be read. A step that fails is in the [`Outcome`]: the
 /// other steps still write their files. Nothing is printed.
 pub fn execute(mut chain: Chain) -> Result<Outcome, VerbError> {
+    super::planner::check_space(&chain)?;
     check_writable(&chain)?;
     let steps = chain
         .steps
@@ -374,10 +376,10 @@ pub fn execute(mut chain: Chain) -> Result<Outcome, VerbError> {
         .map(|step| core_step(&chain, step))
         .collect::<Result<Vec<_>, _>>()?;
     let plan = ChainPlan {
-        source: Box::new(FileSource::new(
-            &chain.source_path,
-            chain.reference.as_deref(),
-        )),
+        source: Box::new(
+            FileSource::new(&chain.source_path, chain.reference.as_deref())
+                .with_stringency(chain.stringency),
+        ),
         steps,
         threads: chain.threads,
         tmp_dir: chain.tmp_dir.clone(),

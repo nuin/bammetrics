@@ -216,7 +216,10 @@ fn collect(plan: &Plan, args: &QcArgs, files: &mut Files, out: &mut Reporter) ->
             &plan.bam,
             args.reference.as_deref(),
             args.threads,
-            Limits::default(),
+            Limits {
+                stringency: crate::qc::stringency_of(args),
+                ..Limits::default()
+            },
             Some(&mut on_progress),
             |header| {
                 running
@@ -679,6 +682,16 @@ fn issue_lines(s: &Summary) -> Vec<String> {
         .collect()
 }
 
+/// What one read of `input` is called: `SAM read` for SAM text, `BAM read`
+/// for a BAM, a CRAM or a pipe, as before SAM text was read.
+pub(crate) fn read_word(input: &Path) -> &'static str {
+    if bammetrics_core::cram::is_sam(input) {
+        "SAM read"
+    } else {
+        "BAM read"
+    }
+}
+
 /// `./NA12878`: a bare prefix reads as a path in the current directory.
 fn shown_prefix(prefix: &Path) -> String {
     let text = prefix.display().to_string();
@@ -711,7 +724,7 @@ fn summary(s: &Summary) -> String {
         p.version,
         p.hash.get(..6).unwrap_or(&p.hash),
         plural(s.plan.steps.len(), "collector"),
-        plural(s.reads, "BAM read"),
+        plural(s.reads, read_word(&s.plan.bam)),
     );
     let tail = if s.code != 0 || (!s.gate && v.status != Band::Pass) {
         1
