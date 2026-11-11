@@ -30,6 +30,7 @@ def forms(names: list[str]) -> None:
     row = bm.bam_index_stats("x.bam")[0]
     assert_type(row["reference"], str)
     assert_type(row["aligned"], int)
+    assert_type(bm.build_bam_index("x.bam", output="x.bai")[0]["unaligned"], int)
     assert_type(bm.create_sequence_dictionary("r.fa")[0], dict[str, Any])
     assert_type(bm.view_sam("x.sam", alignment_status="Aligned", header_only=False), list[dict[str, Any]])
     table = bm.read_table("x.insert_size_metrics")

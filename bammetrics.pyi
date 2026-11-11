@@ -56,9 +56,10 @@ class _VerdictDict(TypedDict):
     checks: list[_VerdictCheck]
 
 class _BamIndexRow(TypedDict):
-    """One row of bam_index_stats(): a reference of the BAM header with its length and
-    the aligned and unaligned record counts of the index, then a last row whose
-    reference is "*" and whose unaligned count is Picard's NoCoordinateCount."""
+    """One row of bam_index_stats() and of build_bam_index(): a reference of the BAM
+    header with its length and the aligned and unaligned record counts of the index,
+    then a last row whose reference is "*" and whose unaligned count is Picard's
+    NoCoordinateCount."""
     reference: str
     length: int
     aligned: int
@@ -1080,6 +1081,19 @@ def sort_sam(
     """SortSam: no rows; OUTPUT gets every record in SORT_ORDER (queryname, coordinate or
     duplicate) under the input header with SO set, as a BAM, or as SAM text for a name
     ending in .sam."""
+
+def build_bam_index(
+    input: _Path,
+    *,
+    output: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[_BamIndexRow]:
+    """BuildBamIndex: writes the .bai of a coordinate-sorted BAM, byte for byte the index
+    Picard writes for the same file: to OUTPUT, or beside INPUT as x.bai for x.bam (the
+    BuildBamIndex command without OUTPUT writes that name into the current directory, as
+    Picard does). Returns one row per reference of the header (reference, length,
+    aligned, unaligned), then a * row whose unaligned count is the records without a
+    coordinate."""
 
 # END registry tools
 

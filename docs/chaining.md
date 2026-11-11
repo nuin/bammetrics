@@ -126,6 +126,9 @@ working directory (`.insert_size_metrics`).
   refused: SAM text is written uncompressed. Section 14 has the details.
 - `--index` writes `<name>.bai` only for a coordinate-sorted stream. For any other sort
   order `write` writes no index and says so on standard error. The exit code stays 0.
+  The `.bai` is the file Picard `BuildBamIndex` writes for the written BAM, byte for byte
+  (W05, `crates/core/src/bai.rs`). `build-bam-index` is no step: `chain BAM +
+  build-bam-index` exits 2 and names `write --index`.
 - A file option with an empty value (`-o ''`, `--metrics-file ''`, `write ''`) is a usage
   error: `step 1 (gc-bias): -o names no file: its value is empty`.
 
@@ -467,7 +470,8 @@ reads no record and nothing of a pipe.
 `crates/core/src/bam_writer.rs` holds `BamWriter` (the header byte for byte, BGZF on
 worker threads, htsjdk's order check, an `AtomicFile` under a temporary name) and
 `finish` (the `.bai` and `.md5`, then the renames). `MarkDuplicates` and `write` share
-it.
+it. The `.bai` comes from `bai::index_bam`: the finished BAM is read once more on the
+writer's BGZF workers, so its offsets are the ones of the file as written.
 
 ### 5.2 The verb as a library
 
@@ -880,7 +884,7 @@ check linear in the number of steps.
 
 | Wave | Adds |
 |---|---|
-| W05 (part C) | `write --index` through the BAI writer, `BuildBamIndex`, `make memgate` |
+| W05, done | The sort barrier (`Next::Records`), the planner (`Frame` per position, `requires`, the free-space refusal), the spool for a replay behind another transform, `--sort-memory`, SAM output of `write`; `write --index` writes Picard's `.bai` of the written BAM (`bai.rs`); `BuildBamIndex` and `make memgate` |
 | W09 on | Each BAM-writing tool registers its stage in `stage_of` and its stream name in `label_of` |
 | W14 | `qc` as the last step of a chain, manifest 2, resume per step (`resume=` in Python), kept products, the spool for tools that read their input their own way, a progress line |
 | W15, W22 | `write` to CRAM, FASTQ |

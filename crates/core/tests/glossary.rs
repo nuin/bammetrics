@@ -222,6 +222,8 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
     // No OUTPUT option; the text goes to standard output.
     args.insert("BamIndexStats", vec![bam.clone()]);
     args.insert("ViewSam", vec![bam.clone(), "HEADER_ONLY=true".to_owned()]);
+    // The tool writes the index itself and returns rows without a class.
+    args.insert("BuildBamIndex", vec![bam.clone(), out("fixture.bai")]);
     args.insert(
         "CheckDuplicateMarking",
         vec![bam.clone(), out("bad_querynames.txt")],

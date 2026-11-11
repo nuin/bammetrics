@@ -16,9 +16,19 @@ the foundation corpus, the exome slice, the bwa tiers t0 to t3, a CRAM.
 Where Picard fails (a pair without RG, a file htsjdk's writer refuses),
 bammetrics must fail too and neither may write a metrics file.
 
+CREATE_INDEX=true and CREATE_MD5_FILE=true: both tools write the same file
+names beside OUTPUT. Each BAM holds its own writer's compressed bytes, so
+the bammetrics .bai is compared with the index Picard BuildBamIndex builds
+from the bammetrics BAM (equal bytes), and each .md5 with the MD5 of its
+BAM. Picard's own .bai differs from its BuildBamIndex of the same BAM in
+one offset, the end of the last record of the file, when that record has a
+position: its writer reports the block it is still filling, its reader the
+block after it.
+
 The last test checks that every metrics and histogram column took at
 least 3 distinct non-default values over all Picard files compared.
 """
+import hashlib
 import subprocess
 from collections import defaultdict
 from pathlib import Path
@@ -394,6 +404,83 @@ def test_small_buffers_are_refused_and_sam_input_is_read(built, tmp_path):
 
 def test_missing_input_fails(tmp_path):
     compare(tmp_path / "nope.bam", [], "missing input", "fail")
+
+
+# --- CREATE_INDEX and CREATE_MD5_FILE ------------------------------------------------
+
+def run_both_with_companions(bam, tmp_path):
+    """MarkDuplicates with CREATE_INDEX=true and CREATE_MD5_FILE=true through both
+    tools, each into a directory of its own: {side: directory}."""
+    env = picard_env()
+    env.setdefault("JAVA_OPTS", "-Xmx8g")
+    directories = {}
+    for side, command in (("picard", ["picard", TOOL]), ("ours", [str(BAMMETRICS), TOOL])):
+        directory = tmp_path / side
+        directory.mkdir()
+        run = subprocess.run([*command, f"I={bam}", f"O={directory / 'out.bam'}",
+                              f"M={directory / 'metrics.txt'}", "CREATE_INDEX=true",
+                              "CREATE_MD5_FILE=true", SILENT, "QUIET=true", "VERBOSITY=ERROR"],
+                             env=env, capture_output=True)
+        assert run.returncode == 0, run.stderr[-800:]
+        directories[side] = directory
+    return directories, env
+
+
+def offsets_that_differ(index, other):
+    """The 8-byte words at which two indexes of one length differ, as (word of
+    `index`, word of `other`). Every offset and count of a .bai is such a word
+    once the 4-byte fields before it are passed, so words are compared at each
+    byte position a difference starts at."""
+    assert len(index) == len(other)
+    pairs, at = [], 0
+    while at < len(index):
+        if index[at] != other[at]:
+            start = at - at % 4
+            pairs.append((int.from_bytes(index[start:start + 8], "little"),
+                          int.from_bytes(other[start:start + 8], "little")))
+            at = start + 8
+        else:
+            at += 1
+    return pairs
+
+
+@pytest.mark.parametrize("name", ["md_markdup", "md_markdup_second", "foundation", "exome", "t2"])
+def test_index_and_md5_beside_the_output(built, corpus, exome, tmp_path, name):
+    """Both tools write out.bai and out.bam.md5. The bammetrics .bai is the index
+    Picard BuildBamIndex builds from the bammetrics BAM, byte for byte. Picard's own
+    .bai equals its BuildBamIndex of its BAM except where the last record of the file
+    ends: the writer's offset is inside the last block (the chunk end and the
+    reference's last offset), the reader's is the EOF block. Each .md5 is the hex MD5
+    of its BAM, with no line end."""
+    directories, env = run_both_with_companions(bam_path(name, built, corpus, exome), tmp_path)
+    eof_block = 28
+    for side, directory in directories.items():
+        assert sorted(p.name for p in directory.iterdir()) == [
+            "metrics.txt", "out.bai", "out.bam", "out.bam.md5"], side
+        rebuilt = tmp_path / f"{side}.rebuilt.bai"
+        index = subprocess.run(["picard", "BuildBamIndex", f"I={directory / 'out.bam'}", f"O={rebuilt}",
+                                SILENT, "QUIET=true", "VERBOSITY=ERROR"], env=env, capture_output=True)
+        assert index.returncode == 0, index.stderr[-800:]
+        beside, bam = (directory / "out.bai").read_bytes(), (directory / "out.bam").read_bytes()
+        if side == "ours":
+            assert beside == rebuilt.read_bytes(), "the bammetrics .bai is not Picard's index of its BAM"
+        else:
+            after_last_record = (len(bam) - eof_block) << 16
+            differing = offsets_that_differ(beside, rebuilt.read_bytes())
+            assert len(differing) <= 2, differing
+            for written, read in differing:
+                assert read == after_last_record and written >> 16 < read >> 16, differing
+        assert (directory / "out.bam.md5").read_bytes() == hashlib.md5(bam).hexdigest().encode(), side
+    size = (directories["ours"] / "out.bai").stat().st_size
+    RESULTS.append((f"{TOOL} CREATE_INDEX {name}", size, size, ".bai is Picard's index of the BAM; .md5 equal"))
+
+
+def test_no_index_for_a_queryname_output(built, tmp_path):
+    """A queryname-sorted OUTPUT gets no .bai from either tool; the .md5 is written."""
+    directories, _ = run_both_with_companions(built["md_markdup_queryname"], tmp_path)
+    for side, directory in directories.items():
+        assert sorted(p.name for p in directory.iterdir()) == ["metrics.txt", "out.bam", "out.bam.md5"], side
+    RESULTS.append((f"{TOOL} CREATE_INDEX queryname", 0, 0, "neither writes an index"))
 
 
 # --- every column exercised ----------------------------------------------------------

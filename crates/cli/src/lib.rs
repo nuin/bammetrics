@@ -181,6 +181,14 @@ pub fn run() -> error::Result<u8> {
                 tool.run_cli(&create_sequence_dictionary::with_default_output(rest)?)?;
                 return Ok(0);
             }
+            // Picard's BuildBamIndex without O= writes into the current directory;
+            // the verb and Python put the index beside the BAM.
+            if tool.name == bammetrics_core::build_bam_index::TOOL.name {
+                tool.run_cli(&bammetrics_core::build_bam_index::with_default_output(
+                    rest,
+                )?)?;
+                return Ok(0);
+            }
             tool.run_cli(rest)?;
             return Ok(0);
         }

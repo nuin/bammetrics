@@ -95,7 +95,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | FixMateInformation | Read data | later | Harness input prep (MC tag). | samtools fixmate -m |
 | SetNmMdAndUqTags | Read data | later | Harness prep. Metrics use the reference, not tags. | samtools calmd |
 | SetNmAndUqTags | Read data | out | Deprecated. | samtools calmd |
-| BuildBamIndex | Read data | later | Harness prep. | samtools index |
+| BuildBamIndex | Read data | core | Built in wave W05 of docs/07: the `.bai` byte for byte Picard's for the same BAM, the index behind `MarkDuplicates CREATE_INDEX`, `SortSam CREATE_INDEX` and `chain ... + write --index`. S | samtools index |
 | SortSam | Read data | core | Built in wave W05 of docs/07: `queryname`, `coordinate` and `duplicate` with htsjdk's comparators, BAM or SAM text out, runs spilled to `TMP_DIR`; also the sort step of a chain. B | samtools sort |
 | SamFormatConverter | Read data | out | Format conversion. | samtools view |
 | AddCommentsToBam | Read data | out | Header edit. | samtools reheader |

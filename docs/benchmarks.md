@@ -290,6 +290,85 @@ other agents' builds on the machine. The constants of the planner
   the barrier before, because the allocator keeps what that one freed, and estimates
   above the peak.
 
+## BuildBamIndex (HG002 exome)
+
+Mac Studio, Apple M1 Ultra, 20 cores, 64 GB. Release build of `feat/bam-index`, one run
+each under `/usr/bin/time -l`, other builds and test runs on the machine. Picard 3.5.0
+with `JAVA_OPTS=-Xmx8g` and `VALIDATION_STRINGENCY=SILENT`. `samtools index -@ 8`
+(samtools 1.25) is there for scale: it writes another file.
+
+| BAM | tool | wall | peak RSS | index bytes |
+|---|---|---:|---:|---:|
+| chr20 to chr22 of the exome, 573,136,551 bytes, 8.4 M records | `build-bam-index`, 8 threads | 0.67 s | 7.8 MiB | 346,128 |
+| | `build-bam-index --threads 1` | 3.65 s | 5.7 MiB | 346,128 |
+| | Picard `BuildBamIndex` | 5.49 s | 404 MiB | 346,128 |
+| | `samtools index -@ 8` | 0.58 s | 11.7 MiB | 195,448 |
+| HG002.exome.bam, 10,339,495,604 bytes, 150.5 M records | `build-bam-index`, 8 threads | 11.77 s | 9.1 MiB | 7,186,968 |
+| | `build-bam-index --threads 1` | 64.97 s | 6.5 MiB | 7,186,968 |
+| | Picard `BuildBamIndex` | 85.61 s | 487 MiB | 7,186,968 |
+| | `samtools index -@ 8` | 10.75 s | 28.5 MiB | 3,694,104 |
+| Picard's `MarkDuplicates` output of the exome, 10,347,171,256 bytes | `build-bam-index`, 8 threads | 11.36 s | 9.4 MiB | 7,188,776 |
+| | `build-bam-index --threads 1` | 64.66 s | 6.7 MiB | 7,188,776 |
+| | Picard `BuildBamIndex` | 83.07 s | 585 MiB | 7,188,776 |
+
+Each bammetrics index equals Picard's under `cmp`, at 1 thread and at 8. The index of
+HG002.exome.bam also equals the `HG002.exome.bam.bai` that came with the BAM. samtools
+reads the bammetrics index as its own: `samtools idxstats` prints the same text and
+`samtools view -c` the same count on four regions (63,188, 65,042, 3,174,573 and 513,783
+records) as through `samtools index`.
+
+The indexer holds the bins of one reference and writes them when the next reference
+starts, so memory does not grow with the file: 7.8 MiB at 573 MB and 9.1 MiB at 10.3 GB.
+Wall time follows the BGZF inflation: 1.14 s per GB at 8 threads. A 70 GB BAM at 30x
+(docs/07 section 6) is about 80 s at that rate: a linear extrapolation, no measurement.
+
+`MarkDuplicates CREATE_INDEX=true` and `write --index` read the finished BAM once more to
+build the index. On the 573 MB slice that read is about 0.7 s of the 16.8 s `mark-duplicates`
+takes with `--create-index`.
+
+## Memory gate
+
+`make memgate` runs each row of `benches/memgate.toml` under `/usr/bin/time -l` and fails
+when a row passes a limit (`benches/memgate.py`; `tests/harness/test_memgate.py` tests
+the harness). The fixture rows read `tests/data` and run in any wave. The scale rows read
+the data of this file and run alone on the machine, once per wave, in the integrator's
+slot (docs/07 section 6).
+
+Fixture tier (`make memgate`):
+
+| command | peak RSS MiB / limit | wall s / limit |
+|---|---|---|
+| `build-bam-index` | 4.3 / 64 | 0.00 / 30 |
+| `mark-duplicates --create-index --create-md5-file` | 5.8 / 64 | 0.00 / 30 |
+| `chain + insert-size + quality-yield + write --index --md5` | 5.8 / 64 | 0.00 / 30 |
+
+Scale tier (`make memgate TIER=scale MEMGATE_ARGS="--out-root
+~/data/bammetrics-scale/waves/w05/bam-index --markdown"`), 8 threads. The limit is the
+docs/07 target for a streaming reader or writer, 1 GiB:
+
+| command | input | peak RSS MiB / limit | wall s | spill MiB (sampled) |
+|---|---|---|---:|---:|
+| `build-bam-index slice` | chr20_21_22.bam, 573 MB | 7.8 / 1024 | 0.70 | |
+| `build-bam-index exome` | HG002.exome.bam, 10.3 GB | 9.0 / 1024 | 14.22 | |
+| `chain write --index slice` | chr20_21_22.bam | 43.2 / 1024 | 5.55 | |
+| `mark-duplicates slice` (`--create-index`) | chr20_21_22.bam | 642.9 / 1024 | 16.81 | 358.0 |
+
+To add a scale row:
+
+1. Keep the data under `~/data/bammetrics-scale`, never in the repository. Write nothing
+   into `genome` or `exome`.
+2. Append a `[[command]]` to `benches/memgate.toml` with `tier = "scale"`, the files it
+   reads in `needs`, and an `argv` that writes only under `{out}`. Set `max_rss_mib` to
+   the docs/07 target: 1024 for a streaming writer, `--sort-memory` in MiB plus 1024 for a
+   sort or a merge, 500 for a VCF writer.
+3. For a tool that spills, pass `--tmp-dir {out}/tmp`, set `spill_dir = "{out}/tmp"` and
+   `max_spill_mib` to 1.2 times the input size in MiB.
+4. Run `make memgate TIER=scale MEMGATE_ARGS="--only NAME --out-root
+   ~/data/bammetrics-scale/waves/wNN --markdown"` with no other job on `~/data`, and
+   paste the table here. The row's directory is removed after the measurement, so no
+   output stays on the data disk. A row whose `needs` file is missing is skipped;
+   `--strict` makes that a failure.
+
 ## Report budgets (docs/05 section 4.8)
 
 Measured 2026-11-05 with bammetrics 0.16.0, rustc 1.99.1, same machine, by `make budgets`
@@ -411,4 +490,5 @@ make a11y        # axe-core, reflow and keyboard check of the report pages (node
 make bench-bam   # target/bench/bench.bam, about 10 minutes (Python simulation, bwa, MarkDuplicates)
 make bench       # release build, then benches/bench.py: table on stdout, target/bench/results.json
 make bench-wgs   # target/bench_wgs on first use, then benches/wgs_bench.py: the coverage table, target/bench_wgs/results.json
+make memgate     # benches/memgate.py on the fixture rows of benches/memgate.toml; TIER=scale for the real data
 ```

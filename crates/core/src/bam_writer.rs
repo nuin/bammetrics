@@ -124,6 +124,8 @@ pub struct BamWriter {
     file: AtomicFile,
     inner: noodles::bam::io::Writer<bgzf::io::MultithreadedWriter<BufWriter<File>>>,
     order: SortOrder,
+    /// The BGZF workers, which also read the file back for its index.
+    threads: usize,
     /// Reference and start of the last record written, and its name.
     previous: Option<(i32, i32)>,
     previous_name: Vec<u8>,
@@ -159,6 +161,7 @@ impl BamWriter {
             file: atomic,
             inner,
             order: SortOrder::of(header),
+            threads,
             previous: None,
             previous_name: Vec::new(),
         })
@@ -242,13 +245,16 @@ pub fn finish(
     header: &sam::Header,
     companions: Companions,
 ) -> Result<Vec<PathBuf>> {
+    let threads = writer.threads;
     let output = writer.close()?;
     let target = output.path().to_path_buf();
     let coordinate = SortOrder::of(header) == SortOrder::Coordinate;
     let index = if companions.index && coordinate {
         Some(write_index(
             output.writing(),
+            &target,
             &target.with_extension("bai"),
+            threads,
         )?)
     } else {
         None
@@ -274,24 +280,20 @@ pub fn finish(
     Ok(written)
 }
 
-/// The BAI of the BAM at `bam`, into a file to be renamed to `target`.
-fn write_index(bam: &Path, target: &Path) -> Result<AtomicFile> {
-    let index = noodles::bam::fs::index(bam).map_err(|source| Error::Input {
-        path: bam.to_path_buf(),
+/// The BAI of the BAM at `bam`, into a file to be renamed to `target`:
+/// the bytes htsjdk's `BAMIndexer` writes for that file ([`crate::bai`]).
+/// The finished BAM is read once more, its blocks inflated by `threads`
+/// workers, so the offsets are the ones of the file as written. Messages
+/// name `shown`, the path the BAM is renamed to.
+fn write_index(bam: &Path, shown: &Path, target: &Path, threads: usize) -> Result<AtomicFile> {
+    let output = |source| Error::Output {
+        path: target.to_path_buf(),
         source,
-    })?;
-    let noodles::bam::Index::Bai(index) = index else {
-        return Err(Error::Metric(
-            "CREATE_INDEX: a contig is too long for a BAI index".to_owned(),
-        ));
     };
     let file = AtomicFile::new(target);
-    file.create()
-        .and_then(|out| noodles::bam::bai::io::Writer::new(out).write_index(&index))
-        .map_err(|source| Error::Output {
-            path: target.to_path_buf(),
-            source,
-        })?;
+    let out = BufWriter::with_capacity(1 << 16, file.create().map_err(output)?);
+    let (mut out, _) = crate::bai::index_bam(bam, shown, threads, out, target)?;
+    out.flush().map_err(output)?;
     Ok(file)
 }
 
@@ -327,4 +329,52 @@ pub(crate) fn write_md5(path: &Path, target: &Path) -> Result<AtomicFile> {
             source,
         })?;
     Ok(file)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::DirBuilderExt;
+
+    use super::*;
+    use crate::bam_raw::build;
+
+    #[test]
+    fn an_index_error_names_the_output_and_leaves_no_file() {
+        let dir = std::env::temp_dir().join(format!("bammetrics-writer-{}", std::process::id()));
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&dir)
+            .expect("scratch dir");
+        let header: sam::Header = "@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:big\tLN:600000000\n"
+            .parse()
+            .expect("header");
+        let out = dir.join("out.bam");
+        let mut writer = BamWriter::create(&out, 1, 1, &header).expect("writer");
+        writer
+            .write(&build(
+                "a",
+                0,
+                0,
+                (1 << 29) - 10,
+                &[(50, 0)],
+                &[30; 50],
+                b"",
+            ))
+            .expect("record");
+        let companions = Companions {
+            index: true,
+            md5: false,
+        };
+        let message = finish(writer, &header, companions)
+            .expect_err("past the last BAI bin")
+            .to_string();
+        assert!(
+            message.starts_with(&format!("{}: ", out.display())),
+            "{message}"
+        );
+        assert!(message.contains("Read position too high"), "{message}");
+        let left = std::fs::read_dir(&dir).expect("scratch dir").count();
+        std::fs::remove_dir(&dir).expect("scratch dir empty");
+        assert_eq!(left, 0);
+    }
 }

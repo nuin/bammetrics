@@ -36,10 +36,10 @@ ORDERS = ("queryname", "coordinate", "duplicate")
 REF = FIXTURES / "ref_100k.fa"
 
 
-def picard(args, cwd=None):
+def picard(args, cwd=None, tool=TOOL):
     env = picard_env()
     env.setdefault("JAVA_OPTS", "-Xmx8g")
-    return subprocess.run(["picard", TOOL, *args, "VERBOSITY=ERROR", "QUIET=true"], env=env,
+    return subprocess.run(["picard", tool, *args, "VERBOSITY=ERROR", "QUIET=true"], env=env,
                           capture_output=True, text=True, cwd=cwd)
 
 
@@ -231,6 +231,12 @@ def test_index_and_md5(tmp_path):
     stats = [subprocess.run(["samtools", "idxstats", str(tmp_path / f"{side}.bam")], check=True,
                             capture_output=True, text=True).stdout for side in ("picard", "bammetrics")]
     assert stats[0] == stats[1]
+    # The bammetrics .bai is Picard's BuildBamIndex of the bammetrics BAM, byte for byte
+    # (the writer of BuildBamIndex; test_mark_duplicates.py says where Picard's own differs).
+    rebuilt = tmp_path / "rebuilt.bai"
+    done = picard([f"I={tmp_path / 'bammetrics.bam'}", f"O={rebuilt}", SILENT], tool="BuildBamIndex")
+    assert done.returncode == 0, done.stderr
+    assert (tmp_path / "bammetrics.bai").read_bytes() == rebuilt.read_bytes()
     text_dir = tmp_path / "sam"
     text_dir.mkdir()
     pair = compare_sam(source, ["SORT_ORDER=queryname", "CREATE_INDEX=true", "CREATE_MD5_FILE=true"],

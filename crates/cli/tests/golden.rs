@@ -324,6 +324,17 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_fifo_buffer_size", "FifoBuffer", "BUFFER_SIZE=0"),
     case!("error_verb_fifo_buffer_positional", "fifo-buffer", "IS"),
     case!("error_verb_fifo_buffer_io_size", "fifo-buffer", "--io-size", "64k"),
+    // BuildBamIndex: the .bai of a fixture BAM, recorded as hex (the BAM's bytes fix it);
+    // crates/cli/tests/build_bam_index.rs holds Picard's files and the default name.
+    case!("picard_build_bam_index", "BuildBamIndex", "I=IS", "O=OUT/insert_size.bai"),
+    case!("picard_build_bam_index_options", "BuildBamIndex", "--INPUT", "MD", "-O", "OUT/markdup.bai", "VALIDATION_STRINGENCY=SILENT", "CREATE_MD5_FILE=true", "R=REF"),
+    case!("verb_build_bam_index", "build-bam-index", "OR", "-o", "OUT/orientation.bai", "-v"),
+    case!("verb_build_bam_index_no_reads", "build-bam-index", "NO_READS", "-o", "OUT/sub/no_reads.bai"),
+    case!("error_build_bam_index_queryname", "BuildBamIndex", "I=DM", "O=OUT/x.bai"),
+    case!("error_build_bam_index_assume_sorted", "BuildBamIndex", "I=IS", "O=OUT/x.bai", "ASSUME_SORTED=true"),
+    case!("error_verb_build_bam_index_cram", "build-bam-index", "IS_CRAM", "-o", "OUT/x.bai"),
+    case!("error_verb_build_bam_index_format", "build-bam-index", "IS", "-o", "OUT/x.bai", "--format", "picard,json"),
+    case!("error_verb_build_bam_index_overwrites_input", "build-bam-index", "IS", "-o", "IS"),
 ];
 
 /// Formats (docs/formats.md): `convert` in both directions and to every
@@ -423,6 +434,7 @@ const CHAIN_CASES: &[Case] = &[
     case!("error_chain_overwrites_input", "chain", "MD", "+", "mark-duplicates", "+", "write", "MD"),
     case!("error_chain_not_a_step", "chain", "IS", "+", "wgs"),
     case!("error_chain_fifo_buffer", "chain", "MD", "+", "mark-duplicates", "+", "fifo-buffer", "--buffer-size", "1024", "+", "write", "-"),
+    case!("error_chain_build_bam_index", "chain", "MD", "+", "mark-duplicates", "+", "build-bam-index", "+", "write", "OUT/marked.bam"),
     case!("error_chain_bad_number", "chain", "IS", "+", "insert-size", "--minimum-pct", "abc"),
     case!("error_chain_step_input", "chain", "IS", "+", "insert-size", "OR"),
     case!("error_chain_step_threads", "chain", "IS", "+", "insert-size", "--threads", "2"),
@@ -582,6 +594,8 @@ fn record(case: &Case) -> String {
     let mut files = Vec::new();
     collect_files(&out_dir, &out_dir, &mut files);
     files.sort();
+    // The index of a committed BAM is fixed by that BAM's bytes.
+    let wrote_bam = files.iter().any(|(name, _)| name.ends_with(".bam"));
     for (name, path) in files {
         text.push_str(&format!("## file {name}\n"));
         // A report page is about 50 KB of CSS and SVG; its bytes are pinned
@@ -596,8 +610,12 @@ fn record(case: &Case) -> String {
             text.push_str(&bam_text(&path));
             continue;
         }
-        if name.ends_with(".bai") {
+        if name.ends_with(".bai") && wrote_bam {
             text.push_str("<index not recorded>\n");
+            continue;
+        }
+        if name.ends_with(".bai") {
+            text.push_str(&hex_lines(&fs::read(path).expect("read the index")));
             continue;
         }
         text.push_str(&String::from_utf8_lossy(
@@ -606,6 +624,18 @@ fn record(case: &Case) -> String {
     }
     let _ = fs::remove_dir_all(&out_dir);
     normalize(&text, out)
+}
+
+/// Bytes as hex, 32 to a line.
+fn hex_lines(bytes: &[u8]) -> String {
+    let mut text = String::new();
+    for line in bytes.chunks(32) {
+        for byte in line {
+            text.push_str(&format!("{byte:02x}"));
+        }
+        text.push('\n');
+    }
+    text
 }
 
 /// A BAM as text: its SAM header, then one line per record with the name,

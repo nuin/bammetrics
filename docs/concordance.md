@@ -260,7 +260,82 @@ What tier B still proves, and what it does not:
   `record_bytes` off; a later writer that computes `bin` can turn it on.
 - A BAI that Picard writes beside its BAM (`CREATE_INDEX=true`) holds virtual offsets into
   Picard's compressed blocks. It cannot be byte-equal to an index of a BAM bammetrics wrote.
-  `BuildBamIndex` on one given BAM can be tier A.
+  `BuildBamIndex` on one given BAM can be tier A. It is: the next section.
+
+## BAM index
+
+A `.bai` is tier A for a given BAM. `tests/concordance/test_build_bam_index.py` runs
+`BuildBamIndex` through both tools on the same file and compares the two indexes with
+`==` on their bytes: the six coordinate-sorted BAMs of `tests/data`, the foundation
+corpus, every coordinate-sorted tier BAM (t0 to t3), the exome slice and 26 BAMs that
+`index_bams.py` writes byte by byte. 108 tests, 68 indexes compared.
+
+`index_bams.py` packs each record with `struct` and each BGZF block with `zlib`, because
+an index depends on where the blocks end and pysam and samtools choose that themselves.
+Its cases: blocks of 250 to 5000 bytes, records that span blocks, a header that shares
+its block with records, bins met again many blocks later (95 bins with more than one
+chunk over the module), a wrong bin field in every record, placed unmapped reads, reads
+on the edges of the 16384-base windows, unplaced reads only, no record, no reference,
+references without reads before, between and after the one with reads, a reference of
+2^29 + 40000 bases with reads up to position 2^29, a bin of each of the six levels, a
+file without its EOF block, a reference of length 0 (last, between two references with
+reads, alone).
+
+What running Picard 3.5.0 showed, each pinned by a test:
+
+1. htsjdk computes the bin of every record and never reads the bin field
+   (`stored_bin_zero`, `stored_bin_wrong`).
+2. Without `OUTPUT` the index goes into the current directory, under the file name of
+   `INPUT`. The help says beside the BAM (`test_default_output_name`).
+3. At the default `VALIDATION_STRINGENCY=STRICT` Picard refuses the foundation corpus (a
+   supplementary flag on an unmapped read). The corpora run with `SILENT` on both sides,
+   as in every other module. The three `lenient` BAMs show that bammetrics, which
+   validates nothing, writes the index Picard writes under `SILENT`.
+4. An end past position 2^29 is `Read position too high for BAI bin indexing.`, so no
+   bin above 37448 and no window above 32767 is ever written.
+5. An empty BGZF block in the middle of a file ends htsjdk's read: Picard indexes 101 of
+   300 records and exits 0. bammetrics indexes all 300 (KNOWN_DIFFERENCES.md).
+6. Picard's writer and its reader disagree on one offset. `MarkDuplicates
+   CREATE_INDEX=true` on corpus t2 ends the last chunk at `8374551:1514`, inside the
+   last block; `BuildBamIndex` of that BAM ends it at `8375239:0`, the EOF block. A BAM
+   that ends with unplaced reads shows no difference
+   (`test_index_and_md5_beside_the_output`).
+7. htsjdk reads a header with `@SQ LN:0` and Picard indexes the file. noodles holds a
+   length as a non-zero number and its header reader refuses it, so `bai/header.rs`
+   reads the header for `BuildBamIndex` (`empty_reference_between`,
+   `empty_reference_last`, `empty_reference_only`). Picard at `STRICT` refuses a record
+   placed on such a reference and indexes it under `SILENT`, as bammetrics does
+   (`records_on_an_empty_reference`). samtools 1.x prints no header with `LN:0` and
+   finds no region of the file; `samtools idxstats` reads the bammetrics index.
+
+16 BAMs both tools refuse (`index_bams.refused`): each of the five headers that are not
+`SO:coordinate`, references out of order, five alignments past 2^29, a position without
+a reference, a start past the reference, a reference the header lacks, a truncated file,
+a record whose `block_size` is 0xFFFFFF00 in a file of 227 bytes (Picard: `Invalid
+record length: -256`; bammetrics: `truncated BAM`). Picard leaves an empty `OUTPUT`;
+bammetrics leaves none and keeps the file that was there.
+`test_a_block_size_past_the_file_costs_the_bytes_present` runs `build-bam-index`,
+`mark-duplicates` and `chain + write --index` on that file and fails above 64 MiB of
+peak RSS: each takes 5 MiB. A buffer of `block_size` bytes took 4.3 GB.
+
+samtools reads each index as its own (`cross_check`): `samtools idxstats` and `samtools
+view -c` on four regions per reference give the same numbers through the bammetrics
+index and through `samtools index`. The two files differ: samtools writes 195,448 bytes
+for the 573 MB exome slice, Picard and bammetrics 346,128.
+
+A BAM bammetrics wrote holds its own compressed bytes (tier B), and its index is tier A
+against Picard's `BuildBamIndex` of that file: `chain BAM + write OUT --index` on five
+corpora at compression levels 1 and 5, and `MarkDuplicates CREATE_INDEX=true` on five
+inputs (`test_mark_duplicates.py`). The `.md5` beside it is the MD5 of the BAM, 32 hex
+digits and no line end, as Picard writes it.
+
+`tests/data/bai` holds the six fixture indexes Picard wrote (`tests/data/make_bai.py`).
+`crates/cli/tests/build_bam_index.rs` compares both faces and eight spellings with them,
+so `cargo test` holds Picard's bytes without a JVM; `test_fixtures` fails when those files
+go stale. The golden suite records the index of a committed BAM as hex.
+
+On real data (docs/benchmarks.md): the index of the HG002 exome BAM, 7,186,968 bytes, is
+equal to Picard's under `cmp`, and so is the index of its chr20 to chr22 slice.
 
 ## Picard queue
 
@@ -318,8 +393,10 @@ queued. `tests/harness/test_picard_lock.py` fails when a file under `tests`, `be
 4. its name in `docs/cli.md`;
 5. a row of the README tool table that starts with its name.
 
-One failure lists every gap of every tool with the edit that closes it. At 0.22.0 the 33 tools
-pass: 13 have a module named after them, 18 are mapped in `CONCORDANCE` to a shared module
+One failure lists every gap of every tool with the edit that closes it. `BuildBamIndex`
+(wave W05 of docs/07) is tool 34, with `tests/concordance/test_build_bam_index.py` as its
+module and an argument list in the glossary test (it returns rows without a class). The 34
+tools pass: 14 have a module named after them, 18 are mapped in `CONCORDANCE` to a shared module
 (`test_read_level.py` 6, `test_wgs_metrics.py` 3, `test_variant_tools.py` 3, six others 1
 each), and `CollectCoverageGaps` and `CollectSexCheckMetrics` are in `NO_PICARD_ORACLE`
 (docs/06, not Picard tools). `FifoBuffer` (wave W04 of docs/07) is tool 33. Its module is

@@ -34,7 +34,7 @@ a chain); then the clap verbs `qc`, `plan`, `check`,
 | Group | Verbs |
 |---|---|
 | Run | `qc` (the collectors a preset needs, one pass, files, verdict, page), `collect` (the same pass, no verdict), `chain` (several steps on one BAM in one process, records handed on in memory), one verb per registry tool |
-| Prepare | `bed-to-interval-list`, `mark-duplicates`, `fifo-buffer` |
+| Prepare | `bed-to-interval-list`, `mark-duplicates`, `build-bam-index`, `fifo-buffer` |
 | Post | `accumulate-quality-yield`, `accumulate-variant-calling`, `compare-metrics`, `check-duplicate-marking`, `report`, `check`, `convert` |
 | Info | `tools`, `presets`, `plan`, `help`, `completions` |
 
@@ -293,6 +293,7 @@ table.
 | `bam-index-stats` | BamIndexStats (reads the `.bai` or `.csi` beside the BAM) | Picard's text on standard output |
 | `check-duplicate-marking` | CheckDuplicateMarking | the bad querynames, one line per record |
 | `jumping-library` | CollectJumpingLibraryMetrics (one or more coordinate-sorted BAMs as positionals, read in turn; standard input refused) | one metrics file |
+| `build-bam-index` | BuildBamIndex (a coordinate-sorted BAM; `-o` names the index, default beside the BAM) | one `.bai`, no metrics file |
 | `fifo-buffer` | FifoBuffer (standard input to standard output; no input argument, no `-o`) | no file: the bytes it read, on standard output |
 | `view-sam` | ViewSam (SAM, BAM or CRAM in) | SAM text on standard output, or in `-o` |
 | `sort-sam` | SortSam (`--sort-order` queryname, coordinate or duplicate) | `-o` BAM, or SAM text for a name ending in `.sam` |
@@ -815,13 +816,52 @@ metrics file.
   exits 2 (the Picard face exits 1); `bammetrics chain IN + mark-duplicates + write
   out.sam` writes SAM text. SAM text input is read, plain or in gzip members, at
   `--validation-stringency`.
-- `--create-index` writes `marked.bai` beside a coordinate-sorted BAM;
+- `--create-index` writes `marked.bai` beside a coordinate-sorted BAM, the index Picard
+  `BuildBamIndex` writes for that BAM, byte for byte;
   `--create-md5-file` writes `marked.bam.md5`. `--compression-level` sets the BGZF level
   (default 5). `--threads` sets the BGZF decompression threads, or the CRAM container
   decoders, and the BGZF compression workers of the output.
 
 KNOWN_DIFFERENCES.md lists what differs from Picard: the `@PG` `VN` and `CL`, the flow
 options it refuses, the `READ_NAME_REGEX` syntax and the `MAX_RECORDS_IN_RAM` meaning.
+
+### build-bam-index
+
+```bash
+bammetrics build-bam-index sample.bam                         # sample.bai beside the BAM
+bammetrics build-bam-index sample.bam -o index/sample.bam.bai
+bammetrics build-bam-index sample.bam -o - > sample.bai
+samtools sort in.bam | tee sorted.bam | bammetrics build-bam-index - -o sorted.bai
+bammetrics BuildBamIndex I=sample.bam O=sample.bai
+```
+
+The verb runs `BuildBamIndex`. It writes the `.bai` Picard 3.5.0 writes for the same BAM,
+byte for byte: the bin htsjdk computes from each record's start and end, one chunk per
+run of records in one BGZF block, the linear index, the metadata bin 37450 of each
+reference and the count of records without a coordinate (`crates/core/src/bai.rs`).
+samtools and htsjdk read the index as they read their own. `samtools index` writes
+another file for the same BAM: 3,694,104 bytes against 7,186,968 on the HG002 exome.
+
+- The header must say `SO:coordinate`. `queryname`, `unsorted`, `unknown` and a header
+  without the tag exit 1 with Picard's `Input bam file must be sorted by coordinate`.
+- Without `-o` the verb writes beside the BAM: `x.bai` for `x.bam`, the name plus `.bai`
+  for any other name. `-o -` prints the index. Standard input (`-`) needs `-o`.
+- The Picard face without `O=` writes that file name into the current directory
+  (`BuildBamIndex I=dir/x.bam` writes `./x.bai`), as Picard 3.5.0 does. Picard's help says
+  beside the BAM.
+- The index is written under a temporary name and renamed. A refused or failed run
+  leaves no file and keeps an earlier index. `-o` may not name the input.
+- `--format` takes `picard` only: an index has one form. `build_bam_index()` in Python
+  returns the rows `bam-index-stats` prints for the index written.
+- A CRAM is refused: its index is a `.crai`. In a chain the index comes from `write
+  --index`; `build-bam-index` as a step exits 2 and says so.
+- `--threads` sets the BGZF decompression threads. The index is the same at any count.
+  The HG002 exome BAM (10.3 GB, 150.5 M records) takes 11.8 s and 9 MiB at 8 threads;
+  Picard takes 85.6 s and 487 MiB (docs/benchmarks.md).
+
+KNOWN_DIFFERENCES.md lists what differs from Picard: records are not validated, an empty
+BGZF block in the middle of a file does not end the read, and the verb's default
+directory.
 
 ### fifo-buffer
 

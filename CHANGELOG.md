@@ -2,9 +2,10 @@
 
 ## Unreleased
 
-Wave W05 part A of docs/07: SAM text in and out, htsjdk's record orders, and `ViewSam`
+Wave W05 of docs/07. Part A: SAM text in and out, htsjdk's record orders, and `ViewSam`
 (tool 34). Part B: `SortSam` (tool 35), the sort barrier of a chain, two barriers in one
-chain through a spool, the planner and its free-space refusal.
+chain through a spool, the planner and its free-space refusal. Part C: the BAM index
+writer, `BuildBamIndex` (tool 36) and `make memgate`.
 
 ### Added
 
@@ -75,6 +76,37 @@ chain through a spool, the planner and its free-space refusal.
   records in 105 s with 9 MiB of memory, and SAM text is read at 0.53 million records
   per second. On 5.27 million of its records `ViewSam` and `write x.sam` equal Picard
   apart from the `@RG DT` field.
+- `crates/core/src/bai.rs`, the `.bai` format. `Indexer` writes the bytes htsjdk 5.0.0
+  `BAMIndexer` writes: the bin computed from each record's start and end (the stored bin
+  field is not read), a chunk extended only inside one BGZF block, the linear index with
+  empty windows filled forward, the metadata bin 37450 and the count of records without
+  a coordinate. `index_bam` reads a BAM with its virtual offsets on the BGZF worker
+  threads. `Index::read` holds a whole index (at most 1 GiB), `Summary::read` the counts
+  and no bin.
+- `BuildBamIndex`, registry tool 36. `bammetrics BuildBamIndex I=x.bam [O=x.bai]` writes
+  the `.bai` Picard 3.5.0 writes for the same BAM, byte for byte. A header that is not
+  `SO:coordinate` exits 1 with Picard's `Input bam file must be sorted by coordinate`.
+  Without `O=` the index goes into the current directory under the file name of the
+  input, as Picard 3.5.0 does (its help says beside the BAM). `ASSUME_SORTED` and
+  `GA4GH_CLIENT_SECRETS` are `Unrecognized option`, as in Picard. A reference of length
+  0 (`@SQ LN:0`) is indexed, as Picard indexes it (`bai/header.rs`).
+- The `build-bam-index` verb: `bammetrics build-bam-index x.bam [-o FILE]`. Without `-o`
+  the index goes beside the BAM (`x.bai`); `-o -` prints it; standard input needs `-o`.
+  It takes `--format picard` only. As a step of `chain` it exits 2 and names `write
+  --index`.
+- `build_bam_index(bam, *, output=None)` in Python: the index at `output` or beside the
+  BAM, and the rows `bam_index_stats` reads from it.
+- `make memgate` (`benches/memgate.py`, `benches/memgate.toml`): each command of the
+  table runs under `/usr/bin/time`, and the run fails when its peak RSS, its wall time or
+  the sampled size of its spill directory passes the limit of its row. Three fixture
+  rows (`build-bam-index`, `mark-duplicates`, a chain with `write --index`) run in
+  seconds; `make memgate TIER=scale` runs four rows on the real data of
+  docs/benchmarks.md, where a row whose file is missing is skipped.
+  `tests/harness/test_memgate.py` holds 22 tests of the harness.
+- `tests/concordance/test_build_bam_index.py`: 108 tests against Picard 3.5.0, with the
+  BAMs `index_bams.py` writes byte by byte. `tests/data/bai` holds the six fixture
+  indexes Picard wrote, which `crates/cli/tests/build_bam_index.rs` compares without a
+  JVM.
 
 ### Changed
 
@@ -119,6 +151,37 @@ chain through a spool, the planner and its free-space refusal.
 - The chain plan's barrier line reads `about N records by the file size, no spill under`
   the bound (four golden records). The refusal of `-o` on a `sort-sam` step names no
   `--metrics-file`.
+- `MarkDuplicates CREATE_INDEX=true` and `chain ... + write --index` write the `.bai`
+  Picard `BuildBamIndex` writes for the BAM they wrote, byte for byte. Before, the index
+  came from noodles' indexer and its bytes differed. The finished BAM is read once more
+  on the writer's BGZF workers. `test_mark_duplicates.py` checks the index and the
+  `.md5` against Picard on five inputs.
+- `BamIndexStats` reads a `.bai` through `bai::Summary`: the counts of the header's
+  references and no bin. Its output is unchanged. An index that lists one bin twice is
+  read (htsjdk reads it too); before it was an error.
+- Golden suite: 10 new records. `verb_tools` gained the `build-bam-index` row; no other
+  record changed. The suite records the `.bai` of a committed BAM as hex and still lists
+  an index beside a BAM the case wrote.
+
+### Fixed
+
+- A record whose `block_size` claims more bytes than the file holds costs the bytes
+  present. `RawRecord::read_from` (`MarkDuplicates`, `chain`, `BuildBamIndex`) grew its
+  buffer to `block_size` before it read: a BAM of 211 bytes with a `block_size` of
+  0xFFFFFF00 took 4.3 GB of RSS before `truncated BAM`. The buffer now grows 1 MiB at
+  a time with the bytes read (`bam_raw::read_append`), and the same file takes 5 MiB.
+- `BuildBamIndex R=missing.fa` exits 1 with `Error opening file`, as Picard does. Before,
+  the missing file was ignored with a note. `R=null` names no file.
+- An index error of `MarkDuplicates CREATE_INDEX` or `write --index` names the BAM the
+  user gave. Before, it named the temporary file the BAM is written under.
+- `benches/memgate.toml` refuses a `max_seconds` below 0.05: `time` reports wall time
+  in steps of 0.01 s.
+
+### Measured
+
+- HG002 exome BAM, 10,339,495,604 bytes, 150,538,907 records: `build-bam-index` 11.8 s
+  and 9 MiB at 8 threads (65.0 s at 1), Picard 3.5.0 `BuildBamIndex` 85.6 s and 487 MiB.
+  The two indexes are 7,186,968 bytes and equal under `cmp`.
 
 ## 0.22.0
 

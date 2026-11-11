@@ -345,6 +345,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::fifo_buffer::TOOL,
     &crate::view_sam::TOOL,
     &crate::sort_sam::TOOL,
+    &crate::build_bam_index::TOOL,
 ];
 
 /// The tool named `name`.
@@ -1034,7 +1035,9 @@ pub fn python_stub(tool: &Tool) -> String {
 /// `bammetrics.pyi` for a tool whose columns are fixed, a plain dict for a
 /// tool whose columns follow the Picard class.
 fn python_row_type(tool: &Tool) -> &'static str {
-    if tool.name == crate::bam_index_stats::TOOL.name {
+    if tool.name == crate::bam_index_stats::TOOL.name
+        || tool.name == crate::build_bam_index::TOOL.name
+    {
         crate::bam_index_stats::PYTHON_ROW
     } else {
         "dict[str, Any]"

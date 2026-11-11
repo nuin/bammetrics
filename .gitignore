@@ -3,6 +3,7 @@ target/
 *.so
 *.bai
 !tests/data/insert_size.bam.bai
+!tests/data/bai/*.bai
 test.bam
 __pycache__/
 tests/corpus/out/
