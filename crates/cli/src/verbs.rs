@@ -725,7 +725,11 @@ impl Verb {
     /// An option of [`Verb::one_spelling`] given under two of its
     /// spellings: a usage error from the second. A verb alias is its own
     /// spelling; the row's Picard names and their kebab forms are one.
-    fn check_one_spelling(&self, parsed: &Parsed, flags: &[Flag]) -> Result<(), VerbError> {
+    pub(crate) fn check_one_spelling(
+        &self,
+        parsed: &Parsed,
+        flags: &[Flag],
+    ) -> Result<(), VerbError> {
         for &name in self.one_spelling {
             let spelling = |given: &Given| {
                 let word = normalize(given.spelled.trim_start_matches('-').trim_end_matches('='));
@@ -764,7 +768,11 @@ impl Verb {
     /// with the row's long name. Positional arguments are the inputs
     /// (`INPUT`, or the tool's first required options when it has no
     /// `INPUT`, or its first value option when it has neither).
-    fn picard_arguments(&self, parsed: &Parsed, flags: &[Flag]) -> Result<Vec<String>, VerbError> {
+    pub(crate) fn picard_arguments(
+        &self,
+        parsed: &Parsed,
+        flags: &[Flag],
+    ) -> Result<Vec<String>, VerbError> {
         let tool = self.tool();
         let mut picard = Vec::new();
         let inputs: Vec<&String> = parsed
@@ -978,7 +986,11 @@ impl Verb {
 
     /// A required row with no value: an error that names its flag and its
     /// Picard name.
-    fn check_required(&self, flags: &[Flag], picard: &[String]) -> Result<(), VerbError> {
+    pub(crate) fn check_required(
+        &self,
+        flags: &[Flag],
+        picard: &[String],
+    ) -> Result<(), VerbError> {
         for flag in flags.iter().filter(|f| f.required) {
             let Some(name) = flag.picard() else { continue };
             if picard.iter().any(|a| a.starts_with(&format!("{name}="))) {
@@ -1007,7 +1019,7 @@ impl Verb {
     /// Every `INPUT` that names a file must exist (`-` is standard input).
     /// The error says where the name came from: `-i` as spelled, else the
     /// positional argument by its placeholder (`BAM`, as docs/05 example 12).
-    fn check_inputs(&self, parsed: &Parsed, picard: &[String]) -> Result<(), VerbError> {
+    pub(crate) fn check_inputs(&self, parsed: &Parsed, picard: &[String]) -> Result<(), VerbError> {
         let stdin_reads = picard.iter().filter(|a| *a == "INPUT=-").count();
         if stdin_reads > 1 {
             return Err(VerbError::usage(
@@ -1046,7 +1058,7 @@ impl Verb {
 
     /// A core error with the option it names: `MINIMUM_PCT=abc: ...` comes
     /// from the flag that gave `MINIMUM_PCT`, a write error from `-o`.
-    fn core_error(&self, parsed: &Parsed, e: &bammetrics_core::Error) -> VerbError {
+    pub(crate) fn core_error(&self, parsed: &Parsed, e: &bammetrics_core::Error) -> VerbError {
         let from = match e {
             bammetrics_core::Error::Usage(message) => {
                 message.split_once('=').and_then(|(name, _)| {
@@ -1291,7 +1303,7 @@ fn same_file_key(path: &Path) -> PathBuf {
 
 /// Create the directories above `path` that do not exist (docs/05 section
 /// 2.3: missing output directories are created).
-fn create_parent(verb: &str, path: &Path) -> Result<(), VerbError> {
+pub(crate) fn create_parent(verb: &str, path: &Path) -> Result<(), VerbError> {
     match path.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => fs::create_dir_all(parent)
             .map_err(|e| VerbError::input(verb, format!("{}: {e}", parent.display()))),

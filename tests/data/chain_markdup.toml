@@ -1,0 +1,32 @@
+# bammetrics chain --plan tests/data/chain_markdup.toml -o out/sample
+#
+# MarkDuplicates, four collectors on the marked records and the marked BAM
+# with its index, in one process. The same chain on the command line:
+#
+#   bammetrics chain tests/data/markdup.bam -R tests/data/ref_100k.fa -o out/sample \
+#       + mark-duplicates \
+#       + alignment-summary + insert-size + quality-yield + duplicate-metrics \
+#       + write --index
+
+[chain]
+source = "tests/data/markdup.bam"
+reference = "tests/data/ref_100k.fa"
+
+[[step]]
+verb = "mark-duplicates"
+
+[[step]]
+verb = "alignment-summary"
+
+[[step]]
+verb = "insert-size"
+
+[[step]]
+verb = "quality-yield"
+
+[[step]]
+verb = "duplicate-metrics"
+
+[[step]]
+verb = "write"
+index = true
