@@ -713,6 +713,23 @@ no pool against pool (first two rows), 4096 against 512 (17.0 s against 15.2 s f
 The `MarkDuplicates` tool alone took 16.2 to 16.9 s in those sessions. With 512 records
 the system time of the chain rose from 12 s to 16 s for the same wall time.
 
+### 11.4 The Python call against the command
+
+W04, `bammetrics.chain` against `bammetrics chain` on the 573 MB slice: `mark-duplicates`,
+four collectors (quality yield, alignment summary, insert size, duplicate metrics) and
+`write`, 8 threads, `PROGRAM_GROUP_COMMAND_LINE` given on both sides. Three runs each,
+interleaved, each in its own process under `/usr/bin/time -l`. The Python time includes
+the interpreter start, the import and reading the five metrics files back.
+
+| Run | Median wall | Range | Median max RSS |
+|---|---:|---|---:|
+| `bammetrics chain` | 16.04 s | 15.95 to 16.24 | 646 MiB |
+| `bammetrics.chain(...)` | 16.13 s | 15.94 to 16.20 | 658 MiB |
+
+The Python call takes 0.6 percent longer and 12 MiB more. Both BAMs are 584,413,868 bytes
+and `cmp` finds no difference. The five metrics files are equal after their `StringHeader`
+lines. `Run.stages[0]` reports 8,445,233 records in, 8,445,233 out and 422 changed.
+
 ## 12. Departures from docs/07 section 2
 
 W03:

@@ -156,6 +156,11 @@ that slice, W04, median of 3 interleaved runs: `MarkDuplicates` to a file 15.69 
 22.18 s, one chain 16.49 s and 645 MiB (25.7 percent less than staged). Both BAMs are
 584,413,820 bytes and equal under `cmp`.
 
+The same chain from Python (`bammetrics.chain`, docs/python.md) against the command on
+that slice, median of 3 interleaved runs, each in its own process: the command 16.04 s
+and 646 MiB, the Python call 16.13 s and 658 MiB (0.6 percent longer, interpreter start
+and import included). Both BAMs are equal under `cmp`.
+
 The same on the whole exome, 0.21.0, one run each:
 
 | run | wall | max RSS |
