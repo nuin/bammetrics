@@ -22,7 +22,9 @@ use std::path::{Path, PathBuf};
 use bammetrics_core::fifo_buffer;
 use bammetrics_core::multiple_metrics::file_extensions;
 use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
-use bammetrics_core::{bam_index_stats, check_duplicate_marking, compare_metrics, cram, pass};
+use bammetrics_core::{
+    bam_index_stats, build_bam_index, check_duplicate_marking, compare_metrics, cram, pass,
+};
 
 use crate::error::VerbError;
 use crate::format::{self, Context, Format};
@@ -80,6 +82,10 @@ pub struct Verb {
     /// twice (`jumping-library`): its `--help` says standard input is
     /// refused, and the tool exits 2 on `-`, `/dev/stdin` or a pipe.
     pub reads_stdin: bool,
+    /// For a [`Files::Bam`] verb whose `-o` may be left out: the file it
+    /// then writes, from the input path (`build-bam-index` puts the index
+    /// beside the BAM, as Picard names it).
+    pub default_output: Option<fn(&Path) -> PathBuf>,
 }
 
 const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
@@ -97,6 +103,7 @@ const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
         also_writes: &[],
         ignores: &[],
         reads_stdin: true,
+        default_output: None,
     }
 }
 
@@ -322,6 +329,17 @@ pub const VERBS: &[Verb] = &[
             Files::Single,
         )
     },
+    Verb {
+        about: Some(
+            "writes the .bai index of a coordinate-sorted BAM, byte for byte the file Picard's \
+             BuildBamIndex writes for the same BAM: to -o, or beside the BAM (x.bai for x.bam, \
+             else the input name plus .bai). A BAM whose header does not say SO:coordinate is \
+             refused, as Picard refuses it.",
+        ),
+        writes: "BAM index",
+        default_output: Some(build_bam_index::default_output),
+        ..verb("build-bam-index", "BuildBamIndex", Files::Bam)
+    },
     // No input and no -o: standard input to standard output (`copy_stream`).
     Verb {
         input: "",
@@ -438,6 +456,14 @@ impl Verb {
             .chain(["OUTPUT", "O"])
             .collect();
         let (placeholder, help) = match self.files {
+            Files::Bam if self.default_output.is_some() => (
+                "FILE",
+                format!(
+                    "The {} to write; - writes standard output. Without -o it goes beside the \
+                     input, named as Picard names it.",
+                    self.writes
+                ),
+            ),
             Files::Bam => (
                 "BAM",
                 "The BAM to write; - writes standard output. Required.".to_owned(),
@@ -471,6 +497,9 @@ impl Verb {
                               (picard,json) adds each further format beside every metrics file, \
                               as FILE.json."
                 .to_owned(),
+            Files::Bam if !self.writes_metrics() => {
+                format!("picard only: the {} has no other form.", self.writes)
+            }
             Files::Bam => "picard first: this verb writes a BAM and a Picard metrics file. A list \
                            (picard,json) adds each further format beside the metrics file, as \
                            FILE.json."
@@ -525,9 +554,11 @@ impl Verb {
                     .map(|(alias, _)| *alias),
             );
             let help = match opt.kind {
+                // A tool's own ignored row (`build-bam-index`) decodes nothing.
                 Kind::Ignored(why)
                     if opt.picard() == "REFERENCE_SEQUENCE"
-                        && opt.kind != registry::REFERENCE_NOT_DECODED.kind =>
+                        && opt.kind != registry::REFERENCE_NOT_DECODED.kind
+                        && !tool.options.iter().any(|own| own.picard() == opt.picard()) =>
                 {
                     format!("Decodes a CRAM input; for a BAM accepted and ignored: {why}.")
                 }
@@ -600,6 +631,21 @@ impl Verb {
             Some(given) => format::parse_list(self.name, &given.values[0], &given.spelled)?,
         };
         let format = formats[0];
+        if self.files == Files::Bam
+            && !self.writes_metrics()
+            && formats != [Format::Picard]
+            && let Some(given) = parsed.last(Key::Format)
+        {
+            return Err(VerbError::usage(
+                self.name,
+                format!("--format {} has nothing to write", given.values[0]),
+            )
+            .from(given.spelled.clone())
+            .hint(format!(
+                "this verb writes the {} and no metrics file",
+                self.writes
+            )));
+        }
         if self.files != Files::Single
             && format != Format::Picard
             && let Some(given) = parsed.last(Key::Format)
@@ -913,10 +959,13 @@ impl Verb {
             Files::Bam => match given {
                 Some(g) if g.values[0] == "-" => Ok(Some(PathBuf::from("/dev/stdout"))),
                 Some(g) => Ok(Some(PathBuf::from(&g.values[0]))),
-                None => Err(
-                    VerbError::usage(self.name, "missing -o BAM (Picard: OUTPUT)")
-                        .hint("-o - writes the BAM to standard output"),
-                ),
+                None => match self.default_output {
+                    Some(beside) => self.output_beside_input(picard, beside).map(Some),
+                    None => Err(
+                        VerbError::usage(self.name, "missing -o BAM (Picard: OUTPUT)")
+                            .hint("-o - writes the BAM to standard output"),
+                    ),
+                },
             },
             Files::Prefix => {
                 if let Some(g) = given.filter(|g| g.values[0] == "-") {
@@ -972,6 +1021,36 @@ impl Verb {
                 Ok(Some(path))
             }
         }
+    }
+
+    /// The file a verb with [`Verb::default_output`] writes without `-o`:
+    /// `beside` the one input. Standard input has no name to derive it from.
+    fn output_beside_input(
+        &self,
+        picard: &[String],
+        beside: fn(&Path) -> PathBuf,
+    ) -> Result<PathBuf, VerbError> {
+        match picard.iter().find_map(|a| a.strip_prefix("INPUT=")) {
+            Some(input) if input != "-" => Ok(beside(Path::new(input))),
+            _ => Err(VerbError::usage(
+                self.name,
+                format!(
+                    "missing -o FILE: standard input has no name to put the {} beside",
+                    self.writes
+                ),
+            )
+            .hint(format!(
+                "-o - writes the {} to standard output",
+                self.writes
+            ))),
+        }
+    }
+
+    /// True when the tool has a metrics file option of its own
+    /// (`mark-duplicates --metrics-file`); false for a verb whose only
+    /// file is the one `-o` names (`build-bam-index`).
+    fn writes_metrics(&self) -> bool {
+        self.tool().table().iter().any(|o| o.kind == Kind::Output)
     }
 
     /// The tool's file options for output `path`: `OUTPUT` for a

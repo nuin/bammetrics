@@ -1,0 +1,11 @@
+## argv
+build-bam-index
+tests/data/no_reads.bam
+-o
+OUT/sub/no_reads.bai
+## exit
+0
+## stdout
+## stderr
+## file sub/no_reads.bai
+424149010100000000000000000000000000000000000000

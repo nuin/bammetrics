@@ -1,0 +1,9 @@
+## argv
+BuildBamIndex
+I=tests/data/duplicate_marking.bam
+O=OUT/x.bai
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/duplicate_marking.bam: Input bam file must be sorted by coordinate (its header says the sort order is queryname)

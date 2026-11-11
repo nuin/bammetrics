@@ -1,0 +1,13 @@
+## argv
+build-bam-index
+tests/data/insert_size.bam
+-o
+OUT/x.bai
+--format
+picard,json
+## exit
+2
+## stdout
+## stderr
+bammetrics build-bam-index: --format picard,json has nothing to write (from --format)
+  this verb writes the BAM index and no metrics file
