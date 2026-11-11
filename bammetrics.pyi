@@ -56,9 +56,10 @@ class _VerdictDict(TypedDict):
     checks: list[_VerdictCheck]
 
 class _BamIndexRow(TypedDict):
-    """One row of bam_index_stats(): a reference of the BAM header with its length and
-    the aligned and unaligned record counts of the index, then a last row whose
-    reference is "*" and whose unaligned count is Picard's NoCoordinateCount."""
+    """One row of bam_index_stats() and of build_bam_index(): a reference of the BAM
+    header with its length and the aligned and unaligned record counts of the index,
+    then a last row whose reference is "*" and whose unaligned count is Picard's
+    NoCoordinateCount."""
     reference: str
     length: int
     aligned: int
