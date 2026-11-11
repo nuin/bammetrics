@@ -216,6 +216,38 @@ With a reader that takes nothing for 3 seconds the default buffer fills
 which is its 630 MiB with a reader that keeps up. bammetrics reserves the bytes and
 writes only a window of them, 64 KiB at first, doubled when the bytes held fill it.
 
+## SAM text (HG002 exome)
+
+Wave W05 part A, the SAM text reader and writer, on the HG002 exome BAM (10,339,495,604
+bytes, 150,538,907 records) and on its chromosomes 20 and 21 (5,270,660 records, a
+355,705,146-byte BAM, 2,289,237,081 bytes of SAM text, 434 bytes per record). One run
+each with `/usr/bin/time -l`, 8 threads, on the machine of the Setup section.
+
+| Command | Input | Wall | Peak RSS |
+|---|---|---|---|
+| `view-sam -o /dev/null` | the exome BAM | 105.3 s | 9 MiB |
+| `samtools view -h -@7 -o /dev/null` | the exome BAM | 23.7 s | 22 MiB |
+| `view-sam -o slice.sam` | the slice BAM | 5.8 s | 8 MiB |
+| `chain slice.bam + write x.sam` | the slice BAM | 5.2 s | 20 MiB |
+| `view-sam -o /dev/null` | the slice as SAM text | 12.2 s | 7 MiB |
+| `CollectQualityYieldMetrics` | the slice as SAM text, `STRICT` | 10.0 s | 5 MiB |
+| `CollectQualityYieldMetrics` | the slice as SAM text in BGZF blocks | 12.0 s | 6 MiB |
+| `CollectQualityYieldMetrics` | the slice BAM | 1.2 s | 7 MiB |
+| `CollectInsertSizeMetrics` | the slice as SAM text, `STRICT` | 10.0 s | 6 MiB |
+| `CollectInsertSizeMetrics` | the slice BAM | 1.4 s | 7 MiB |
+
+- The writer prints 1.43 million records per second and holds one record. docs/07
+  section 6 allows a streaming writer 1.0 GiB.
+- The reader parses and validates 0.53 million records per second (230 MB of text) on
+  one thread. The BAM of the same records is read 8 times faster, its blocks inflated on
+  8 threads.
+- On the slice `ViewSam` prints Picard's bytes and `write x.sam` writes Picard
+  `SamFormatConverter`'s file, both apart from the `@RG DT` field (KNOWN_DIFFERENCES.md,
+  SAM text): MD5 `3755f1ca63f78d09f5b288fd92c99bcc` and
+  `76b5d683f749468a1ae3d10369c8416e` with that field left out of both.
+  `CollectQualityYieldMetrics`, `CollectInsertSizeMetrics` and `MarkDuplicates` write the
+  same metrics for the SAM text as for the BAM.
+
 ## Report budgets (docs/05 section 4.8)
 
 Measured 2026-11-05 with bammetrics 0.16.0, rustc 1.99.1, same machine, by `make budgets`

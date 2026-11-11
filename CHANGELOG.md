@@ -40,7 +40,11 @@ Wave W05 part A of docs/07: SAM text in and out, htsjdk's record orders, and `Vi
   Picard `SortSam` puts it, in all three orders.
 - `RawRecord::from_fields` builds a BAM record from its fields as htsjdk encodes one.
 - `tests/concordance/test_view_sam.py`: 144 cases against Picard.
-- 19 golden cases; `tests/data/markdup.sam`.
+- 19 golden cases; `tests/data/markdup.sam`; `tests/python/test_view_sam.py`.
+- docs/benchmarks.md, SAM text: on the HG002 exome `view-sam` prints 150.5 million
+  records in 105 s with 9 MiB of memory, and SAM text is read at 0.53 million records
+  per second. On 5.27 million of its records `ViewSam` and `write x.sam` equal Picard
+  apart from the `@RG DT` field.
 
 ### Changed
 
