@@ -55,6 +55,16 @@ The keywords of `qc`, `check` and `report` are the command's long flags in snake
   `BUFFER_SIZE=0`), then raises `UsageError` naming the command to run:
   `bammetrics fifo-buffer`. Standard input and output of the Python process are not
   touched.
+- `view_sam(input, *, alignment_status, pf_status, header_only, records_only,
+  interval_list, reference_sequence)` returns one dict per record with the keys `QNAME`,
+  `FLAG`, `RNAME`, `POS`, `MAPQ`, `CIGAR`, `RNEXT`, `PNEXT`, `TLEN`, `SEQ`, `QUAL` and
+  `TAGS` (`FLAG`, `POS`, `MAPQ`, `PNEXT` and `TLEN` as int, `TAGS` the tag fields joined
+  by tabs, in htsjdk's order). It prints nothing and holds the rows in memory, at most
+  256 MiB of SAM text; `bammetrics view-sam` prints a file of any size. It has no
+  `output`: `chain(source, [step("write", output="x.sam")])` writes SAM text.
+- Every function that takes a BAM takes SAM text too, plain or in gzip members, read as
+  htsjdk reads it at `VALIDATION_STRINGENCY=STRICT`. A line htsjdk refuses raises with
+  htsjdk's message. The functions have no keyword for the stringency.
 - `--format` and `--quiet` have no keyword, nor has `-o` of `check`: no progress line, no event and no step error is printed (step errors are in `Run.errors`). Three warnings still go to stderr: a `resume` over a manifest that cannot be read (`... is not a whole manifest; running every step`), a core tool's own warning (`CollectInsertSizeMetrics` when every orientation falls under `MINIMUM_PCT`), and `check` skipping an unparsable metrics file (`bammetrics: skipped ...`).
 - `qc(report=False)` is the one keyword the command lacks: no `PREFIX.report.html` is written. An earlier run's page under the same prefix is removed only when that run's manifest lists it as its `report` file; a page no run wrote stays. `PREFIX.verdict.json` is still written.
 - Messages are the command's lines, with its spelling: `bammetrics qc: out/s.manifest.json holds an earlier run: --resume skips its finished steps, --force reruns them` means `resume=True` or `force=True`. A manifest that cannot be read is named with its reason (`out/s.manifest.json is not a whole manifest: --resume or --force runs every step`). An `output` or `sample` holding a NUL byte is a `UsageError`.

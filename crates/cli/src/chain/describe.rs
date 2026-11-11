@@ -19,6 +19,10 @@ use crate::error::VerbError;
 /// NA12878 genome CRAM), both in docs/benchmarks.md.
 const BAM_BYTES_PER_RECORD: u64 = 69;
 const CRAM_BYTES_PER_RECORD: u64 = 21;
+/// Bytes of SAM text per record: 2,289,237,081 bytes over 5,270,660
+/// records (chromosomes 20 and 21 of that exome, as `view-sam` prints
+/// them).
+const SAM_BYTES_PER_RECORD: u64 = 434;
 /// Peak bytes in `TMP_DIR` per record of a `MarkDuplicates` run that
 /// spills: 46 on that BAM (6.5 GiB), 59 on that CRAM (42.1 GiB). The
 /// larger one, so the estimate errs high.
@@ -89,10 +93,10 @@ impl Source {
 
     /// The records of the source, estimated from its size.
     fn records(&self) -> Option<u64> {
-        let per_record = if self.kind == "CRAM" {
-            CRAM_BYTES_PER_RECORD
-        } else {
-            BAM_BYTES_PER_RECORD
+        let per_record = match self.kind {
+            "CRAM" => CRAM_BYTES_PER_RECORD,
+            "SAM" => SAM_BYTES_PER_RECORD,
+            _ => BAM_BYTES_PER_RECORD,
         };
         self.bytes.map(|bytes| bytes / per_record)
     }
