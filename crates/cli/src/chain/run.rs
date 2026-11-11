@@ -239,9 +239,13 @@ fn finish_step(
     products: &Products,
     sample: Option<&str>,
 ) -> bammetrics_core::Result<StepOutcome> {
+    // `write -` names /dev/stdout: the BAM went to the pipe, no file was
+    // written.
+    let piped = chain.steps[index].stdout;
     let mut files: Vec<Written> = products
         .files
         .iter()
+        .filter(|_| !piped)
         .map(|path| Written {
             path: path.clone(),
             kind: bam_kind(path),

@@ -1424,3 +1424,143 @@ fn the_verb_is_listed_and_the_test_entry_is_gone() {
         assert!(script.contains("dry-run"), "{shell}");
     }
 }
+
+/// The library entry a caller that is not the command line uses (the
+/// Python module): a `Spec` in, `prepare`, then `execute`, which returns
+/// one outcome per step with its status, its files and, for a transform,
+/// its record counters. Nothing is printed.
+#[test]
+fn the_library_entry_returns_one_outcome_per_step() {
+    use bammetrics_cli::chain::{Role, Spec, StepSpec, StepStatus, execute, prepare};
+
+    let dir = fresh_dir("library");
+    let source = root().join(FIXTURE.0).display().to_string();
+    let spec = Spec {
+        source: Some(source.clone()),
+        prefix: Some(dir.join("s").display().to_string()),
+        threads: Some(2),
+        steps: vec![
+            StepSpec::new("quality-yield", &[]),
+            StepSpec::new("mark-duplicates", &["--remove-duplicates"]),
+            StepSpec::new("insert-size", &["--minimum-pct=0.1"]),
+            StepSpec::new("write", &["--index"]),
+        ],
+        ..Spec::default()
+    };
+    let chain = prepare(&spec).expect("a chain");
+    assert_eq!(chain.segments(), 2);
+    assert!(chain.replayable() && chain.prefix_used);
+    // Each step: its number, verb, role, the stream it reads, the stream
+    // it leaves and its segment.
+    type Step<'a> = (usize, &'a str, Role, &'a str, Option<&'a str>, usize);
+    let planned: Vec<Step> = chain
+        .steps
+        .iter()
+        .map(|s| {
+            let leaves = s.leaves.as_deref();
+            (
+                s.number,
+                s.verb,
+                s.role,
+                s.reads.as_str(),
+                leaves,
+                s.segment,
+            )
+        })
+        .collect();
+    assert_eq!(
+        planned,
+        [
+            (1, "quality-yield", Role::Tap, "in", None, 1),
+            (
+                2,
+                "mark-duplicates",
+                Role::Transform,
+                "in",
+                Some("marked"),
+                1
+            ),
+            (3, "insert-size", Role::Tap, "marked", None, 2),
+            (4, "write", Role::Write, "marked", None, 2),
+        ]
+    );
+    assert_eq!(chain.steps[2].label, "step 3 (insert-size)");
+    let insert_size = dir.join("s.insert_size_metrics");
+    assert_eq!(
+        chain.steps[2].command,
+        Some(format!(
+            "CollectInsertSizeMetrics INPUT={source} OUTPUT={} MINIMUM_PCT=0.1 \
+             CHAIN=MarkDuplicates",
+            insert_size.display()
+        ))
+    );
+    let kinds: Vec<&str> = chain.steps[3].files.iter().map(|f| f.kind).collect();
+    assert_eq!(kinds, ["bam", "index"]);
+    assert!(names(&dir).is_empty(), "prepare writes nothing");
+
+    let outcome = execute(chain).expect("the chain runs");
+    assert_eq!(outcome.code, 0);
+    assert_eq!(outcome.steps.len(), 4);
+    assert!(outcome.steps.iter().all(|s| s.status == StepStatus::Ok));
+    let counters = outcome.steps[1].counters.expect("a transform counts");
+    assert_eq!(counters.records_in, 36);
+    assert!(counters.records_out < 36 && counters.records_out > 7);
+    assert!(outcome.steps[0].counters.is_none());
+    let written: Vec<(&str, String)> = outcome
+        .steps
+        .iter()
+        .flat_map(|s| &s.files)
+        .map(|f| {
+            let name = f.path.file_name().expect("a name").to_string_lossy();
+            (f.kind, name.into_owned())
+        })
+        .collect();
+    assert_eq!(
+        written,
+        [
+            ("metrics", "s.in.quality_yield_metrics".to_owned()),
+            ("metrics", "s.marked.duplication_metrics".to_owned()),
+            ("metrics", "s.insert_size_metrics".to_owned()),
+            ("bam", "s.marked.bam".to_owned()),
+            ("index", "s.marked.bai".to_owned()),
+        ]
+    );
+    assert_eq!(names(&dir).len(), 5);
+
+    // A step that fails is an outcome, not an error: the exit code is 1.
+    let no_read_group = root().join("tests/data/insert_size.bam");
+    let failing = Spec {
+        source: Some(no_read_group.display().to_string()),
+        prefix: Some(dir.join("t").display().to_string()),
+        steps: vec![
+            StepSpec::new("quality-yield", &[]),
+            StepSpec::new("mark-duplicates", &[]),
+            StepSpec::new("write", &[]),
+        ],
+        ..Spec::default()
+    };
+    let outcome = execute(prepare(&failing).expect("a chain")).expect("it runs");
+    assert_eq!(outcome.code, 1);
+    let statuses: Vec<StepStatus> = outcome.steps.iter().map(|s| s.status).collect();
+    assert_eq!(
+        statuses,
+        [StepStatus::Stopped, StepStatus::Failed, StepStatus::NotRun]
+    );
+    let cause = outcome.steps[1].error.as_deref().unwrap_or_default();
+    assert!(cause.starts_with("Cannot invoke"), "{cause}");
+    // A usage error is found by prepare, with the step in the message.
+    let bad = Spec {
+        steps: vec![StepSpec::new("insert-size", &["--minmum-pct", "1"])],
+        ..failing
+    };
+    let Err(error) = prepare(&bad) else {
+        panic!("an unknown option");
+    };
+    assert_eq!(error.code, 2);
+    assert!(
+        error
+            .what
+            .starts_with("step 1 (insert-size): unknown option --minmum-pct")
+    );
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
