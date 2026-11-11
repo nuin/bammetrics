@@ -273,9 +273,9 @@ behaves how.
   `Read into sorter` every 1,000,000 records sorted, at `INFO`, timings included) are not
   printed, so the log lines match below 1,000,000 records and the concordance test drops
   them above. An `OUTPUT` that is the `INPUT` file is refused as a usage error on every
-  face; Picard truncates the file under its own reader. A SAM text file and an empty file
-  are errors here (`not a BAM or CRAM file`), Picard reads the SAM and reports that the
-  empty file agrees; a BAM cut inside its records exits 1 here (`truncated BAM`), Picard
+  face; Picard truncates the file under its own reader. An empty file is an error here
+  (`not a BAM or CRAM file`), Picard reads it as SAM text without a record and reports
+  that it agrees; a BAM cut inside its records exits 1 here (`truncated BAM`), Picard
   reports that every record agrees.
 - `CollectJumpingLibraryMetrics` is no `SinglePassSamProgram`: `ASSUME_SORTED` and
   `STOP_AFTER` are rejected as Picard rejects them (`Unrecognized option`, exit 1), and a
@@ -552,10 +552,11 @@ CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `col
 
 ## Validation
 
-- bammetrics does not validate records. Where Picard's STRICT validation aborts, for
-  example on a read that runs off the end of a contig, bammetrics writes metrics. The
-  `t0_asm` and `t0_hs` cases run Picard with `VALIDATION_STRINGENCY=SILENT` for this
-  reason.
+- bammetrics does not validate the records of a BAM or a CRAM. Where Picard's STRICT
+  validation aborts, for example on a read that runs off the end of a contig, bammetrics
+  writes metrics. The `t0_asm` and `t0_hs` cases run Picard with
+  `VALIDATION_STRINGENCY=SILENT` for this reason. SAM text is validated as htsjdk
+  validates it (section SAM text).
 - A non-string `OQ` tag returns a malformed-record error in every tool that reads `OQ`.
   htsjdk throws `ClassCastException`.
 - `QualityScoreDistribution` on a read whose `OQ` is shorter than its `QUAL`, or with a
@@ -1080,16 +1081,17 @@ the differences below are on purpose or cannot be avoided.
 - Booleans take `true` or `false` in any case. Picard reads any other word
   (`REMOVE_DUPLICATES=yes`) as false; bammetrics exits 1, so a misspelt `true` never
   turns an option off.
-- SAM input, plain or bgzipped, exits 1 (`not a BAM or CRAM file`), for every tool;
-  Picard reads it.
+- SAM text input is read (section SAM text) and `VALIDATION_STRINGENCY` applies to it.
+  `OUTPUT` is a BAM: a name ending in `.sam` or `.cram` exits 1, where Picard writes
+  that kind.
 - CRAM input: htsjdk rebuilds `MD` and `NM` on each mapped record that lacks them while
   it decodes, and gives every record its tags in list order. bammetrics computes both
   from the reference given with `R=`, so the records match Picard's (`test_cram`).
   The last two contigs are held in memory, so a query-name sorted CRAM reloads contigs
   often.
-- `VALIDATION_STRINGENCY` is not applied (records are not validated), as for every tool;
-  Picard's default `STRICT` stops on records it finds invalid. The harness runs Picard
-  with `SILENT`.
+- `VALIDATION_STRINGENCY` is not applied to a BAM or a CRAM (their records are not
+  validated), as for every tool; Picard's default `STRICT` stops on records it finds
+  invalid. The harness runs Picard with `SILENT`.
 - Errors are raised where Picard raises them, with Picard's message where one exists: a
   paired record without a read group (Picard's `NullPointerException`), a pair key put
   twice for the reference being read (`Putting value into PairInfoMap that already
@@ -1134,9 +1136,15 @@ purpose here:
   and `CREATE_MD5_FILE` on the step are usage errors, and the `write` step takes them.
   Its metrics file is `PREFIX.marked.duplication_metrics` unless `--metrics-file` names
   another. A step takes no input of its own: a chain has one source.
-- `write` writes BAM only. A `.sam`, `.cram`, `.fastq` or `.fq` name is a usage error
-  that names the wave of docs/07 which adds that kind. A path that is a file the chain
-  reads is refused.
+- `write` writes a BAM, or SAM text for a name ending in `.sam` or with `--output-format
+  sam`. A `.cram`, `.fastq` or `.fq` name is a usage error that names the wave of docs/07
+  which adds that kind. A path that is a file the chain reads is refused. The SAM file is
+  the one Picard `SamFormatConverter` writes, byte for byte: its header is htsjdk's
+  `SAMFileWriter` header, with `@HD VN:1.6` whatever the source says. The BAM keeps the
+  header of the stream, version included, where htsjdk writes `VN:1.6` there too. `--index`
+  with SAM text is a usage error; `--md5` writes the MD5 of the text.
+- A chain reads a SAM text source at `VALIDATION_STRINGENCY=STRICT`. It has no option
+  for another value; the tools and verbs take `--validation-stringency`.
 - `STOP_AFTER` on a tap limits that tap. The steps after it get every record. The staged
   tool reading the marked BAM sees the same records.
 - When a transform fails on a record, every step of its segment writes nothing, a tap on
@@ -1159,6 +1167,82 @@ purpose here:
   values in memory, so a double keeps its full precision. `qc --also json` reads the
   Picard file back and writes its 6 fraction digits.
 
+## SAM text
+
+Every tool that reads a BAM reads SAM text, plain or in gzip members (`bgzip`, `gzip`),
+as htsjdk's `SAMTextReader` reads it (`crates/core/src/sam_text.rs`). Each line becomes
+the record htsjdk's `BAMRecordCodec` writes for it, so a tool sees a SAM file as it sees
+the BAM Picard makes of it. `tests/concordance/test_view_sam.py` compares 15 valid and
+40 bad lines, each at `STRICT`, `LENIENT` and `SILENT`, and 8 lines of the second item
+below. bammetrics differs here:
+
+- What a file is. htsjdk reads any file that is no BAM, no CRAM and no gzip file as SAM
+  text, an empty file included (an empty SAM: `ViewSam` prints `@HD VN:1.6`). bammetrics
+  reads it as SAM text when it starts with `@` or with a line of at least 11
+  tab-separated fields. Any other file exits 1 (`not a BAM or CRAM file (and not SAM
+  text: ...)`), where Picard fails later with `Not enough fields`. An empty file exits 1.
+- A record a BAM cannot hold. Under `LENIENT` or `SILENT` htsjdk keeps a bad field as
+  text and `ViewSam` prints it back. bammetrics holds BAM records, as Picard does once it
+  writes a BAM. A reference name the header lacks is read as no reference (`*`). A base
+  outside `=ACMGRSVTWYHKDBN.` is read as `N`. A `MAPQ` above 255 keeps its low byte, a
+  flag above 65535 its low 16 bits. These are errors at every stringency: a `QUAL` whose
+  length differs from `SEQ`, a `QUAL` without `SEQ`, a CIGAR that does not parse (htsjdk
+  reads one under `SILENT`), a read name over 254 bytes, more than 65535 CIGAR operators
+  (htsjdk moves those to a `CG` tag). All fail at `STRICT` in both tools.
+- Messages. A line htsjdk refuses fails with htsjdk's text after `bad record: ` (`Error
+  parsing text SAM file. MRNM specified but flags indicate unpaired; File x.sam; Line
+  7`), without the Java stack trace. A header line fails as `x.sam: Error parsing SAM
+  header. @RG line missing SM tag. Line: ...`. Under `LENIENT` the warnings start with
+  `Ignoring SAM validation error`, as htsjdk's do; a header warning lacks the
+  `ERROR::TYPE:` prefix htsjdk prints.
+- The header. bammetrics hands the lines htsjdk keeps to the noodles parser, as it does
+  for a BAM header, so a header noodles refuses fails here where htsjdk reads it: an
+  `@HD VN` that is not `major.minor`, two `@HD` lines, an `@CO` line without a tab. An
+  `@RG DT` value is not parsed as a date: an unparseable one passes at `STRICT`.
+- `@RG DT` on output. htsjdk parses the date and writes it back in the JVM's time zone
+  (`2020-01-02T03:04:05+0000` becomes `2020-01-01T20:04:05-0700` in Mountain time).
+  bammetrics writes the value it read. `ViewSam` and `write x.sam` differ from Picard in
+  that field only.
+- Characters outside ASCII. htsjdk decodes SAM text as UTF-8 and writes the low byte of
+  each UTF-16 code unit, so `é` (bytes `C3 A9`) comes out as the byte `E9`. bammetrics
+  does the same. htsjdk orders such names by code unit while they are in memory;
+  bammetrics orders the bytes it holds, which differs for characters above U+00FF.
+- `VALIDATION_STRINGENCY` is carried by every tool, verb and Python function. A chain
+  reads its source at `STRICT`. `qc` reads SAM text at `STRICT`.
+- The note `ignoring VALIDATION_STRINGENCY=X: records are not validated` is printed for
+  a BAM, a CRAM and a pipe. For a SAM text file it is not.
+- `BamIndexStats` on SAM text exits 1 (`No index for bam file x.sam`). Picard exits 1
+  too (`Premature end of file`): SAM text has no index.
+
+## ViewSam
+
+`ViewSam` prints Picard's bytes on the fixture BAMs, the foundation corpus, the corpus
+tiers, the exome slice, CRAM 3.0 and SAM text (`tests/concordance/test_view_sam.py`). It
+differs here:
+
+- Picard validates every BAM record at the default `STRICT` and stops at the first one
+  it refuses (the foundation corpus holds a supplementary unmapped record). bammetrics
+  validates SAM text only (section Validation), so it prints every record of a BAM. The
+  harness runs Picard with `SILENT` on BAM and CRAM input.
+- `INTERVAL_LIST`. Picard queries the index when one sits beside the input and scans
+  otherwise. The two paths keep different records (an unmapped record placed with its
+  mate matches the query and never the scan; the scan stops after the last interval).
+  bammetrics opens no index: it looks for the index as htsjdk does, then reads the whole
+  file with the test of the path Picard would take. On a coordinate-sorted file the
+  records are Picard's. On a file whose index does not describe it they are not.
+- `INTERVAL_LIST` must be an interval list. Its intervals must come in the order of the
+  input's `@SQ` lines after `IntervalList.uniqued()`, or the run exits 1 (`Intervals not
+  in order`), as both Picard paths do. An interval on a contig the input lacks matches
+  nothing; Picard's scan stops at the first record then, and its index query fails.
+- A CRAM record gets the `MD` and `NM` tags htsjdk rebuilds, from the reference given
+  with `R=`, as in `MarkDuplicates`.
+- The verb `view-sam` takes `-o FILE` and `--format json|jsonl|tsv|human`. The formats
+  give one row per record and hold at most 256 MiB of SAM text; `view_sam()` in Python
+  returns the same rows under the same limit. Picard prints text only.
+- A closed standard output ends the run with exit 1 and no message. Picard exits 1 too.
+- `OUTPUT` and `ASSUME_SORTED` are rejected with `Unrecognized option`, exit 1, as Picard
+  rejects them. Picard prints its usage text first.
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))
@@ -1171,7 +1255,8 @@ equals `PCT_TARGET_BASES_20X`.
 ## Not implemented
 
 `FindMendelianViolations`, `GenotypeConcordance OUTPUT_VCF` (see Options), the
-flow-based options of `MarkDuplicates`, SAM and CRAM output.
+flow-based options of `MarkDuplicates`, CRAM output, SAM output of `MarkDuplicates`
+(`chain ... + mark-duplicates + write out.sam` writes it).
 `CollectMultipleMetrics` still rejects `PROGRAM=RnaSeqMetrics`: the wrapper does not yet
 pass its `REF_FLAT`,
 `INTERVALS` and `IGNORE_SEQUENCE` to the RNA collector (Picard runs that program at

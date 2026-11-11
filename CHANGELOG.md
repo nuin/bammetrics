@@ -1,5 +1,61 @@
 # Changelog
 
+## Unreleased
+
+Wave W05 part A of docs/07: SAM text in and out, htsjdk's record orders, and `ViewSam`
+(tool 34).
+
+### Added
+
+- SAM text input for every tool, verb, `qc`, `chain` and Python function that reads a
+  BAM: plain text, `bgzip` or `gzip`, from a file, a pipe or `-`. The first bytes tell (a
+  gzip member that inflates to `BAM\1` is a BAM; text that starts with `@` or with a line
+  of 11 tab-separated fields is SAM). Each line is read as htsjdk 5.0.0 reads it
+  (`SAMLineParser`, `TextTagCodec`, `SAMTextHeaderCodec`) into the record htsjdk's BAM
+  codec writes for it: tags in htsjdk's order and types, the `*` forms, the indexing bin.
+  A tool writes the same file for SAM text as for the BAM of the same records.
+- `VALIDATION_STRINGENCY` (`--validation-stringency`) applies to SAM text. `STRICT`, the
+  default, exits 1 at the first line htsjdk refuses, with htsjdk's message. `LENIENT`
+  prints `Ignoring SAM validation error` and reads on. `SILENT` skips
+  `SAMRecord.isValid`. A value other than the three is a usage error. A BAM or a CRAM is
+  read as before, and the note about the ignored option is still printed for those.
+- `ViewSam` (`bammetrics ViewSam I=in.bam`, `bammetrics view-sam in.bam [-o out.sam]`,
+  `view_sam()` in Python): the header and every record as SAM text, as htsjdk writes it,
+  byte for byte Picard's standard output. `ALIGNMENT_STATUS`, `PF_STATUS`, `HEADER_ONLY`,
+  `RECORDS_ONLY` and `INTERVAL_LIST`. The text is printed as the file is read.
+  `--format json|jsonl|tsv|human` and the Python function give one row per record (at
+  most 256 MiB of text). A CRAM record gets the `MD` and `NM` tags htsjdk rebuilds.
+- `chain ... + write out.sam` writes SAM text, and `write - --output-format sam` prints
+  it (`output_format=` in Python, `output-format` in a plan file). The file is the one
+  Picard `SamFormatConverter` writes, byte for byte. `--md5` works; `--index` with SAM
+  text is a usage error.
+- `crates/core/src/sam_text.rs`: `Reader`, `Records`, `RecordStream`, `LineParser`,
+  `parse_cigar`, `write_record`, `header_text`, `SamWriter`, `Stringency`.
+- `crates/core/src/sam_order.rs`: htsjdk's record orders in one module. `Order`
+  (`unsorted`, `queryname`, `coordinate`, `duplicate`, the `SORT_ORDER` values of Picard
+  3.5.0 `SortSam`), `CoordinateKey`, `QuerynameKey`, `DuplicateKey` with `Libraries`,
+  `coordinate_order`, `queryname_order`, `hit_index`. A property test checks each order
+  is total over random keys. `tests/concordance/test_sam_order.py` sorts a shuffled
+  foundation corpus, t1 and a hand-written file of ties and finds every record where
+  Picard `SortSam` puts it, in all three orders.
+- `RawRecord::from_fields` builds a BAM record from its fields as htsjdk encodes one.
+- `tests/concordance/test_view_sam.py`: 144 cases against Picard.
+- 19 golden cases; `tests/data/markdup.sam`.
+
+### Changed
+
+- A SAM text input is read where it was refused (`not a BAM or CRAM file (SAM input is
+  not supported ...)`). A file that is no BAM, CRAM or SAM text now says `not a BAM or
+  CRAM file (and not SAM text: the first line is no header line and has fewer than 11
+  tab-separated fields)`. An empty file is still an error.
+- `chain` refuses a `.cram` or `.fastq` name of `write` with `bammetrics writes BAM and
+  SAM only` (was `BAM only`). Two golden records changed for that wording, one for the
+  `tools` listing, and `error_chain_write_sam` became `chain_write_sam`.
+- `CheckDuplicateMarking` sorts with `sam_order::QuerynameKey`, and `MarkDuplicates`
+  merges with the comparators of `sam_order`. Their output is unchanged.
+- `MarkDuplicates` carries `VALIDATION_STRINGENCY` to its SAM text inputs.
+- KNOWN_DIFFERENCES.md has two new sections, SAM text and ViewSam.
+
 ## 0.22.0
 
 The `chain` verb, its plan file, Python `chain` and `step`, and `FifoBuffer` (tool 33).

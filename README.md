@@ -168,8 +168,10 @@ under the failing check it explains. The presets, the rule language and `verdict
 | CheckDuplicateMarking (`MODE`, `OUTPUT`, `VERBOSITY`; Picard's log lines and exit code; a BAM that is not queryname sorted is sorted first) | | `check_duplicate_marking()` |
 | CollectJumpingLibraryMetrics (several `INPUT`s read in turn; `MINIMUM_MAPPING_QUALITY`, `TAIL_LIMIT`, `CHIMERA_KB_MIN`) | | `collect_jumping_library_metrics()` |
 | FifoBuffer (standard input to standard output through a memory buffer; `BUFFER_SIZE`, `IO_SIZE`, `DEBUG_FREQUENCY`, `NAME`; Picard's log lines) | | command only: `fifo_buffer()` raises `UsageError` |
+| ViewSam (the header and records of a SAM, BAM or CRAM as SAM text, as htsjdk writes it; `ALIGNMENT_STATUS`, `PF_STATUS`, `HEADER_ONLY`, `RECORDS_ONLY`, `INTERVAL_LIST`) | | `view_sam()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
+| SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | |
 
 Levels are `METRIC_ACCUMULATION_LEVEL`: `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`.
 A CRAM is told by its magic bytes, not its name, and gives the same files as the BAM of the

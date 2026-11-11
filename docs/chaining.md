@@ -111,9 +111,11 @@ working directory (`.insert_size_metrics`).
 - `write [PATH]` takes `--index` (`CREATE_INDEX`), `--md5` (`CREATE_MD5_FILE`) and
   `--compression-level N` (0 to 9, default 5). `-` as the path is standard output, so a
   pipe to another tool still works: `bammetrics chain in.bam + mark-duplicates + write -
-  | samtools flagstat -`. The file is always a BAM. A name ending in `.sam`, `.cram`,
-  `.fastq` or `.fq` (with `.gz` too) is refused with the wave that adds that kind: SAM is
-  W05, CRAM is W15, FASTQ is W22.
+  | samtools flagstat -`. The file is a BAM, or SAM text for a name ending in `.sam`.
+  `--output-format bam|sam` says which whatever the name is, so `write - --output-format
+  sam` prints SAM text. A name ending in `.cram`, `.fastq` or `.fq` (with `.gz` too) is
+  refused with the wave that adds that kind: CRAM is W15, FASTQ is W22. `.sam.gz` is
+  refused: SAM text is written uncompressed. Section 14 has the details.
 - `--index` writes `<name>.bai` only for a coordinate-sorted stream. For any other sort
   order `write` writes no index and says so on standard error. The exit code stays 0.
 - A file option with an empty value (`-o ''`, `--metrics-file ''`, `write ''`) is a usage
@@ -219,8 +221,8 @@ $ bammetrics chain in.bam + inser-size
 bammetrics chain: step 1: unknown step "inser-size"
   did you mean insert-size?
   a step is a tool verb (bammetrics tools lists them) or write
-$ bammetrics chain in.bam + write out/x.sam
-bammetrics chain: step 1 (write): out/x.sam: bammetrics writes BAM only: SAM output is wave W05 of docs/07_full_parity_program.md
+$ bammetrics chain in.bam + write out/x.cram
+bammetrics chain: step 1 (write): out/x.cram: bammetrics writes BAM and SAM only: CRAM output is wave W15 of docs/07_full_parity_program.md
 ```
 
 What is checked before the first read: the step name, every option name, every value of
@@ -438,7 +440,7 @@ the sort order each step requires.
 | `Products` | `output` (metrics the caller writes), `files` (a writer's renamed files), `counters` (a stage's records in, out, changed), `notes` (lines for standard error) |
 | `halt(error)`, `Halt` | `Stopped` or `NotRun` for the result of a step another step halted, `None` for a step's own failure |
 | `WriteOptions` | `path`, `compression_level`, `create_index`, `create_md5`. `check()` refuses a name of a later wave. `files()` lists the BAM, the `.bai` and the `.md5` |
-| `later_kind(path)` | The kind and wave of a name `write` cannot make yet: `("SAM", "W05")` |
+| `later_kind(path)` | The kind and wave of a name `write` cannot make yet: `("CRAM", "W15")` |
 | `Outputs` | The files of a chain's steps in a hash map, keyed by device and inode or by the resolved path. `claim(label, path)` is a usage error when a step already writes the file. `owner(path)` |
 | `check_distinct_outputs(outputs)`, `writer_of(outputs, path)` | The same check over a slice |
 | `stage_of(tool)`, `label_of(tool)`, `check_stage_options(tool, inv)` | The stage function of a registry tool, the default name of its stream (`marked`), and its options checked before a run. One tool: `MarkDuplicates` |
@@ -867,3 +869,33 @@ check linear in the number of steps.
 | W14 | `qc` as the last step of a chain, manifest 2, resume per step (`resume=` in Python), kept products, the spool for tools that read their input their own way, a progress line |
 | W15, W22 | `write` to CRAM, FASTQ |
 | W46 | Variant streams (`Kind`), pileup and capture sinks |
+
+## 14. W05 part A: SAM text
+
+W05 part A adds SAM text on both ends of a chain and the record orders the sort barrier
+will use. The sort barrier, the planner and `write --index` through the BAI writer are
+the rest of W05.
+
+- The source may be SAM text, plain or in gzip members, a file or a pipe. It is told by
+  its first bytes (`cram::Kind`) and parsed by `sam_text::Reader` into the records a BAM
+  holds, at `VALIDATION_STRINGENCY=STRICT`. A SAM text file can be read again, so
+  `mark-duplicates` replays it as it replays a BAM.
+- `write PATH` writes SAM text when `PATH` ends in `.sam` (`WriteFormat::of`), and
+  `--output-format bam|sam` (`output_format=` in Python, `output-format = "sam"` in a
+  plan file) says which whatever the name is. `write - --output-format sam` prints SAM
+  text on standard output. The plan lists the file as kind `sam`.
+- The file is the one Picard `SamFormatConverter` writes for the same records, byte for
+  byte (`tests/concordance/test_view_sam.py`): `sam_text::header_text(header, false)`,
+  which is `@HD VN:1.6` first, then one `sam_text::write_record` line per record, tags in
+  htsjdk's order. `--md5` writes `PATH.md5`. `--index` with SAM text is a usage error.
+  `--compression-level` changes nothing for SAM text.
+- `crates/core/src/sam_order.rs` holds the orders a sort barrier needs (`Order`,
+  `CoordinateKey`, `QuerynameKey`, `DuplicateKey`), each checked against Picard `SortSam`
+  (`tests/concordance/test_sam_order.py`).
+
+| docs/07 | As built | Reason |
+|---|---|---|
+| `write` picks BAM, SAM, CRAM or FASTQ by extension | BAM and SAM by extension, and `--output-format` | Standard output has no extension. CRAM and FASTQ stay W15 and W22 |
+| SAM text reader and writer in one infrastructure row with header-merge and the BAI reader and writer | The reader, the writer and the comparators only | Part A. Header merge exists in `mark_duplicates/inputs.rs` since 0.18.0; BAI and the sort barrier are parts B and C |
+| A chain carries `VALIDATION_STRINGENCY` | The source is read at `STRICT` | A chain has one source and no option of the source's own; the tools and verbs carry the option |
+| The SAM file of `write` has the header of the stream, as the BAM has | The SAM file has htsjdk's `SAMFileWriter` header (`VN:1.6`) | Picard is the oracle for SAM text. The BAM of `write` keeps the stream's `VN`, which htsjdk also rewrites; changing that would change the bytes 0.22.0 writes |

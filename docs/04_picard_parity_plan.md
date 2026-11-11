@@ -118,7 +118,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | SamToFastqWithTags | Read data | out | Export with tags. | samtools fastq -T |
 | SplitSamByLibrary | Read data | out | File split. | samtools split |
 | SplitSamByNumberOfReads | Read data | out | File split. | samtools split |
-| ViewSam | Diagnostics | out | Prints records. | samtools view |
+| ViewSam | Diagnostics | core | Prints the header and the records as htsjdk writes SAM text. Built in wave W05 of docs/07 with the SAM text reader and writer. S | samtools view |
 | CollectHiSeqXPfFailMetrics | Diagnostics | out | Needs basecall directory. | none |
 | CrosscheckReadGroupFingerprints | Diagnostics | out | Deprecated, CrosscheckFingerprints covers it. | CrosscheckFingerprints |
 | ConvertHaplotypeDatabaseToVcf | Diagnostics | out | Haplotype map conversion. | none |

@@ -173,7 +173,7 @@ These are the two examples of docs/chaining.md. `tests/data/chain_markdup.toml` 
 
 | Argument | Command | Value |
 |---|---|---|
-| `source` | the positional `BAM` | A BAM, or a CRAM with `reference`. `"-"` reads the standard input of the process. `None` when the plan file names it |
+| `source` | the positional `BAM` | A BAM, SAM text, or a CRAM with `reference`. `"-"` reads the standard input of the process. `None` when the plan file names it |
 | `steps` | `+ STEP ...` | A list of verb names and `step(...)` objects, in order. One name or one `Step` is a chain of one step |
 | `output` | `-o PREFIX` | The prefix of every step that names no file of its own. Default `./<source name>`. `""` raises `UsageError`: it would name hidden files (`.insert_size_metrics`) |
 | `reference` | `-R FASTA` | Decodes a CRAM source, and goes to every step that reads a reference and names none |
@@ -206,7 +206,7 @@ bm.step("fifo_buffer")                     # UsageError: FifoBuffer buffers the 
 - `output` is the step's own `-o`: the file of a tap that writes one file, a prefix for a tap that writes several (`gc_bias`). Without it the chain's prefix names the files. `mark_duplicates` takes no `output`, since a transform writes no BAM in a chain; `step("write", output=...)` after it writes the BAM, and `metrics_file` names its metrics.
 - `format` is the step's own `--format` list. `as_` on a transform is `--as NAME`, the name of the stream it leaves (`as` is a Python keyword).
 - `panel` on `hs_metrics` is the verb flag `--panel FILE`: one file as `bait_intervals` and `target_intervals`. The command's error for missing intervals names `--panel`, and `qc` takes `panel=` too.
-- `write` takes `output`, `index`, `md5` and `compression_level`.
+- `write` takes `output`, `index`, `md5`, `compression_level` and `output_format` (`"bam"` or `"sam"`; a name ending in `.sam` is SAM text without it).
 - A bool option takes `True` or `False`, an int option an int, a float option a number, a path a str or an `os.PathLike` (`TypeError` otherwise). A text option takes a str, or one number as its text. A list or tuple is a repeated option (`metric_accumulation_level`, `comment`); a list of a text option holds `str` items only. `None` leaves the option out.
 - A float that is NaN or infinite is a `UsageError` here (`minimum_pct takes a finite number, not nan`). So is a list of a text option with another type in it (`metric_accumulation_level takes a list of str, not one holding int`). Neither waits for the tap to be built.
 
