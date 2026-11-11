@@ -45,6 +45,10 @@ const FIXTURES: &[(&str, &str)] = &[
     ),
     ("INS_JSON", "tests/data/insert_size_metrics.json"),
     ("NO_READS", "tests/data/no_reads.bam"),
+    ("PLAN_MD", "tests/data/chain_markdup.toml"),
+    ("PLAN_TAPS", "tests/data/chain_taps.toml"),
+    ("PLAN_BAD", "tests/data/chain_bad_key.toml"),
+    ("PLAN_SELF", "tests/data/chain_writes_plan.toml"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -353,6 +357,82 @@ const FORMAT_CASES: &[Case] = &[
     case!("qc_also_no_reads", "qc", "NO_READS", "-o", "OUT/sample", "--also", "json,csv,junit", "--date", "2026-01-02 03:04:05 UTC"),
 ];
 
+/// `chain` (docs/chaining.md): the two documented examples from the command
+/// line and from their plan files, names and formats, both spellings, a
+/// CRAM, standard output, a failing tap and a failing transform; the plan
+/// text of `--dry-run` and `plan`; and the usage errors, each found before
+/// the first read. `tests/data/chain_markdup.toml` and `chain_taps.toml`
+/// are the plan files of the two examples; `chain_bad_key.toml` has a
+/// misspelled option and `chain_writes_plan.toml` names itself as the
+/// output of its step.
+#[rustfmt::skip]
+const CHAIN_CASES: &[Case] = &[
+    // Example 1: mark-duplicates, four collectors on the marked records, the marked BAM.
+    case!("chain_mark_duplicates", "chain", "MD", "-R", "REF", "-o", "OUT/sample", "+", "mark-duplicates", "+", "alignment-summary", "+", "insert-size", "+", "quality-yield", "+", "duplicate-metrics", "+", "write", "--index"),
+    case!("chain_plan_file", "chain", "--plan", "PLAN_MD", "-o", "OUT/sample"),
+    // Example 2: four collectors on one read, no transform (the pass of qc_generic).
+    case!("chain_taps", "chain", "IS", "-o", "OUT/sample", "+", "quality-yield", "+", "alignment-summary", "+", "insert-size", "+", "duplicate-metrics"),
+    case!("chain_taps_formats", "chain", "IS", "-o", "OUT/sample", "--format", "picard,json", "--sample", "S1", "+", "quality-yield", "--no-use-original-qualities", "+", "alignment-summary", "--level", "SAMPLE", "--level", "LIBRARY", "--stop-after", "8", "+", "insert-size", "--minimum-pct", "0.1", "+", "duplicate-metrics"),
+    case!("chain_taps_plan_file", "chain", "--plan", "PLAN_TAPS", "-o", "OUT/sample"),
+    // Names: a tap in front of the transform, --as, a step's own -o and --format, --also.
+    case!("chain_names", "chain", "MD", "-o", "OUT/s", "--also", "csv,markdown", "+", "quality-yield", "+", "mark-duplicates", "--as", "dedup", "--remove-duplicates", "+", "insert-size", "+", "quality-yield", "-o", "OUT/own.txt", "--format", "picard,tsv", "+", "write", "OUT/kept.bam", "--compression-level", "9"),
+    case!("chain_picard_spellings", "chain", "I=MD", "O=OUT/s", "+", "MarkDuplicates", "TAGGING_POLICY=All", "M=OUT/dup.txt", "+", "CollectInsertSizeMetrics", "M=0.1", "+", "write", "O=OUT/marked.bam", "CREATE_INDEX=true", "COMPRESSION_LEVEL=1"),
+    case!("chain_cram", "chain", "IS_CRAM", "-R", "REF", "-o", "OUT/s", "+", "insert-size", "+", "write"),
+    case!("chain_stdout_tap", "chain", "IS", "-q", "+", "quality-yield", "-o", "-"),
+    case!("chain_gc_bias_and_hs", "chain", "IS", "-R", "REF", "-o", "OUT/s", "+", "gc-bias", "+", "hs-metrics", "--panel", "IL", "--sample-size", "1000"),
+    case!("chain_sequencing_artifact", "chain", "ART", "-R", "REF", "-o", "OUT/s", "+", "sequencing-artifact", "+", "quality-yield"),
+    case!("chain_verbose", "chain", "MD", "-o", "OUT/s", "-v", "+", "mark-duplicates", "+", "write"),
+    case!("chain_write_no_index", "chain", "DM", "+", "write", "OUT/q.bam", "--index"),
+    case_in_out!("chain_no_output", "chain", "IS", "+", "quality-yield"),
+    // A failing tap fails alone; a failing transform stops its segment. Exit 1.
+    case!("chain_failing_tap", "chain", "DM", "-o", "OUT/s", "+", "quality-yield", "--no-assume-sorted", "+", "mark-duplicates", "+", "insert-size", "+", "write"),
+    case!("chain_failing_transform", "chain", "IS", "-o", "OUT/s", "+", "quality-yield", "+", "mark-duplicates", "+", "insert-size", "+", "write"),
+    // The plan: --dry-run, the plan file, the plan verb, a pipe, a spill estimate.
+    case!("chain_dry_run", "chain", "MD", "-R", "REF", "-o", "OUT/sample", "--dry-run", "+", "mark-duplicates", "+", "alignment-summary", "+", "insert-size", "+", "quality-yield", "+", "duplicate-metrics", "+", "write", "--index"),
+    case!("chain_dry_run_plan_file", "chain", "--plan", "PLAN_MD", "-o", "OUT/sample", "--dry-run"),
+    case!("plan_chain", "plan", "MD", "-o", "OUT/s", "+", "quality-yield", "+", "mark-duplicates", "--as", "dedup", "+", "insert-size", "+", "write"),
+    case!("plan_chain_taps", "plan", "chain", "IS", "-o", "OUT/s", "--format", "picard,json", "--also", "markdown", "+", "quality-yield", "+", "insert-size", "-o", "-"),
+    case!("plan_chain_plan_file", "plan", "--plan", "PLAN_TAPS"),
+    case!("chain_dry_run_stdin", "chain", "-", "--tmp-dir", "OUT/tmp", "--dry-run", "+", "mark-duplicates", "+", "quality-yield", "+", "write", "-"),
+    case!("chain_dry_run_spill", "chain", "IS_CRAM", "-R", "REF", "--dry-run", "+", "mark-duplicates", "--max-records-in-ram", "5", "+", "sequencing-artifact", "+", "write", "-"),
+    // Usage errors: exit 2 before the first read, the step named by number and verb.
+    case!("error_chain_unknown_option", "chain", "IS", "+", "quality-yield", "+", "insert-size", "--minmum-pct", "0.1"),
+    case!("error_chain_unknown_step", "chain", "IS", "+", "inser-size"),
+    case!("error_chain_no_step", "chain", "IS"),
+    case!("error_chain_no_source", "chain", "+", "write", "OUT/x.bam"),
+    case!("error_chain_empty_step", "chain", "IS", "+", "+", "write"),
+    case!("error_chain_two_sources", "chain", "IS", "OR", "+", "insert-size"),
+    case!("error_chain_unknown_chain_option", "chain", "IS", "--thread", "2", "+", "insert-size"),
+    case!("error_chain_write_sam", "chain", "IS", "+", "write", "OUT/x.sam"),
+    case!("error_chain_write_cram", "chain", "IS", "+", "write", "OUT/x.cram"),
+    case!("error_chain_write_fastq", "chain", "IS", "+", "write", "OUT/x.fastq.gz"),
+    case!("error_chain_write_option", "chain", "IS", "+", "write", "OUT/x.bam", "--indx"),
+    case!("error_chain_two_transforms", "chain", "MD", "+", "mark-duplicates", "+", "quality-yield", "+", "mark-duplicates"),
+    case!("error_chain_one_file_twice", "chain", "IS", "-o", "OUT/s", "+", "insert-size", "+", "insert-size"),
+    case!("error_chain_overwrites_input", "chain", "MD", "+", "mark-duplicates", "+", "write", "MD"),
+    case!("error_chain_not_a_step", "chain", "IS", "+", "wgs"),
+    case!("error_chain_bad_number", "chain", "IS", "+", "insert-size", "--minimum-pct", "abc"),
+    case!("error_chain_step_input", "chain", "IS", "+", "insert-size", "OR"),
+    case!("error_chain_step_threads", "chain", "IS", "+", "insert-size", "--threads", "2"),
+    case!("error_chain_missing_required", "chain", "IS", "+", "hs-metrics", "--baits", "IL"),
+    case!("error_chain_transform_output", "chain", "MD", "+", "mark-duplicates", "-o", "OUT/x.bam"),
+    case!("error_chain_transform_option", "chain", "MD", "+", "mark-duplicates", "--tagging-policy", "Some"),
+    case!("error_chain_format_first", "chain", "IS", "--format", "json", "+", "insert-size"),
+    case!("error_chain_also_junit", "chain", "IS", "--also", "junit", "+", "insert-size"),
+    case!("error_chain_two_stdout", "chain", "IS", "+", "quality-yield", "-o", "-", "+", "write", "-"),
+    case!("error_chain_cram_no_reference", "chain", "IS_CRAM", "+", "insert-size"),
+    case!("error_chain_plan_unknown_key", "chain", "--plan", "PLAN_BAD"),
+    case!("error_chain_plan_and_steps", "chain", "--plan", "PLAN_MD", "+", "write"),
+    case!("error_chain_plan_overwrites_itself", "chain", "--plan", "PLAN_SELF"),
+    case!("error_chain_empty_prefix", "chain", "IS", "-o", "", "+", "insert-size"),
+    case!("error_chain_step_also", "chain", "IS", "+", "insert-size", "--also", "json"),
+    case!("error_chain_step_empty_output", "chain", "IS", "+", "gc-bias", "-o", ""),
+    case!("error_plan_chain_unknown_step", "plan", "IS", "+", "inser-size"),
+    // An input that is not there: exit 1, as on every verb.
+    case!("error_chain_missing_source", "chain", "tests/data/nope.bam", "+", "quality-yield"),
+    case!("error_chain_plan_missing", "chain", "--plan", "tests/data/nope.toml"),
+];
+
 /// The same tools on corpus BAM t1, with its reference and interval lists.
 #[rustfmt::skip]
 const T1_CASES: &[Case] = &[
@@ -376,6 +456,8 @@ const T1_CASES: &[Case] = &[
     case!("t1_picard_oxog_metrics", "CollectOxoGMetrics", "I=T1", "O=OUT/oxog_metrics.txt", "R=T1_REF", "INTERVALS=T1_BAITS"),
     case!("t1_oxo_g", "oxo-g", "T1", "-R", "T1_REF", "-o", "OUT/oxog_metrics.txt"),
     case!("t1_picard_jumping_library", "CollectJumpingLibraryMetrics", "I=T1", "O=OUT/jumping_library.txt"),
+    case!("t1_chain_mark_duplicates", "chain", "T1", "-R", "T1_REF", "-o", "OUT/s", "+", "quality-yield", "+", "mark-duplicates", "+", "alignment-summary", "+", "insert-size", "+", "duplicate-metrics", "+", "write", "/dev/null"),
+    case!("t1_chain_taps", "chain", "T1", "-o", "OUT/s", "+", "quality-yield", "+", "alignment-summary", "+", "insert-size", "+", "duplicate-metrics"),
 ];
 
 fn root() -> PathBuf {
@@ -642,6 +724,64 @@ fn documented_format_commands_on_the_fixtures() {
     check(FORMAT_CASES);
 }
 
+/// The record of case `name`, as committed.
+fn recorded(name: &str) -> String {
+    let path = root().join("tests/golden").join(format!("{name}.txt"));
+    fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+}
+
+/// A record from its exit code on: stdout, stderr and every file.
+fn result_of(record: &str) -> &str {
+    &record[record.find("## exit\n").expect("an exit section")..]
+}
+
+/// The content of the file `name` in a record.
+fn file_in<'a>(record: &'a str, name: &str) -> &'a str {
+    let header = format!("## file {name}\n");
+    let start = record
+        .find(&header)
+        .unwrap_or_else(|| panic!("no file {name} in the record"))
+        + header.len();
+    let end = record[start..]
+        .find("\n## file ")
+        .map_or(record.len(), |offset| start + offset + 1);
+    &record[start..end]
+}
+
+/// The chain records, and what they prove about each other. The plan file
+/// of a chain and its command line give the same exit code, the same text
+/// and the same files, byte for byte (the clock line is `<time>` in every
+/// record). A chain without a transform writes the four metrics files `qc`
+/// writes for the same BAM and prefix.
+#[test]
+fn documented_chain_commands_on_the_fixtures() {
+    check(CHAIN_CASES);
+    for (from_file, from_line) in [
+        ("chain_plan_file", "chain_mark_duplicates"),
+        ("chain_taps_plan_file", "chain_taps_formats"),
+        ("chain_dry_run_plan_file", "chain_dry_run"),
+    ] {
+        let (file, line) = (recorded(from_file), recorded(from_line));
+        assert_eq!(result_of(&file), result_of(&line), "{from_file}");
+        assert!(result_of(&file).starts_with("## exit\n0\n"), "{from_file}");
+    }
+    let written = recorded("chain_plan_file");
+    assert!(written.contains("## file sample.marked.bam\n"));
+    assert!(written.contains("## file sample.insert_size_metrics\n"));
+    let (chain, qc) = (recorded("chain_taps"), recorded("qc_generic"));
+    for extension in [
+        "quality_yield_metrics",
+        "alignment_summary_metrics",
+        "insert_size_metrics",
+        "duplicate_metrics",
+    ] {
+        let name = format!("sample.{extension}");
+        let file = file_in(&chain, &name);
+        assert_eq!(file, file_in(&qc, &name), "{name}");
+        assert!(file.contains("## METRICS CLASS"), "{name}");
+    }
+}
+
 /// The t1 records were written from one machine's bwa alignments, so a bwa
 /// version difference on CI would fail them. They run only when asked for.
 #[test]
@@ -667,6 +807,7 @@ fn case_names_are_unique() {
     let mut names: Vec<&str> = FIXTURE_CASES
         .iter()
         .chain(FORMAT_CASES)
+        .chain(CHAIN_CASES)
         .chain(T1_CASES)
         .map(|c| c.name)
         .collect();

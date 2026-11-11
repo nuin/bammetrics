@@ -4,7 +4,8 @@
 //! (`--fail-on` is `fail_on`); [`parse`] runs the command's own parser on
 //! the argv the keywords spell, so a Python call and a command line are
 //! checked by one table. [`python_stubs`] writes the `bammetrics.pyi`
-//! entries from the same arguments.
+//! entries from the same arguments, and those of `chain` and `step` from
+//! [`crate::chain::python`].
 
 use std::any::TypeId;
 use std::path::{Path, PathBuf};
@@ -313,6 +314,8 @@ pub fn python_stubs() -> String {
         text.push_str(&verb.stub());
     }
     text.push('\n');
+    text.push_str(&crate::chain::python::stubs());
+    text.push('\n');
     text.push_str(STUB_END);
     text.push('\n');
     text
@@ -330,18 +333,25 @@ pub fn metric_key(record: &StepRecord, output: &Output) -> String {
         key.push('.');
         key.push_str(set);
     }
-    let name = output.path.to_string_lossy();
-    let further = file_extensions(&record.tool)
+    if let Some(further) = further_file(&record.tool, &output.path) {
+        key.push('.');
+        key.push_str(&further);
+    }
+    key
+}
+
+/// The name of a tool's further file at `path` (`summary` for the
+/// `SUMMARY_OUTPUT` of `CollectGcBiasMetrics`): its file option in lower
+/// case without `_output`. `None` for the tool's main file.
+pub fn further_file(tool: &str, path: &Path) -> Option<String> {
+    let name = path.to_string_lossy();
+    let (option, _) = file_extensions(tool)
         .unwrap_or_default()
         .iter()
         .skip(1)
-        .find(|(_, ext)| name.ends_with(ext));
-    if let Some((option, _)) = further {
-        let option = option.to_ascii_lowercase();
-        key.push('.');
-        key.push_str(option.strip_suffix("_output").unwrap_or(&option));
-    }
-    key
+        .find(|(_, ext)| name.ends_with(ext))?;
+    let option = option.to_ascii_lowercase();
+    Some(option.strip_suffix("_output").unwrap_or(&option).to_owned())
 }
 
 /// `PREFIX.verdict.json` for a path that names no file or directory but

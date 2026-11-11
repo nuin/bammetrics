@@ -1,5 +1,126 @@
 # Changelog
 
+## Unreleased
+
+The `chain` verb (wave W04 of docs/07, docs/chaining.md): several steps on one BAM in one
+process, from the command line, from a TOML plan file or from Python (`bammetrics.chain`,
+`bammetrics.step`). No change to any file a tool, a verb or `qc` writes.
+
+### Added
+
+- `bammetrics chain [OPTIONS] BAM + STEP [STEP OPTIONS] [+ STEP ...]`. The chain's options
+  and the source (a BAM, a CRAM with `-R`, `-` for standard input) come before the first
+  `+`. A step is a tool verb, its Picard class, or `write`: a transform
+  (`mark-duplicates`) changes the records later steps see, a tap (the 13 one-pass tool
+  verbs) reads the records of its position, `write [PATH]` writes them as a BAM (`-` is
+  standard output).
+- Each step is parsed by its own verb's flags: kebab flags, `--PICARD_KEY`, `KEY=VALUE`
+  and did-you-mean work per step. A usage error in any step is found before the first
+  read, exits 2 and names the step by number and verb
+  (`step 2 (insert-size): unknown option --minmum-pct`). The options of `mark-duplicates`
+  and every int or float value are checked there too.
+- File names under `-o PREFIX` follow `qc` (`multiple_metrics::file_extensions`): a tap on
+  the last stream writes `PREFIX.<extension>`, a tap in front of a transform
+  `PREFIX.<stream>.<extension>` (`PREFIX.in.*` on the source), `mark-duplicates`
+  `PREFIX.marked.duplication_metrics`, `write` without a path `PREFIX.marked.bam`. A
+  step's own `-o` names its file; `--as NAME` names the stream a transform leaves.
+- `chain --format picard,json` and `chain --also json|jsonl|tsv|csv|markdown`: further
+  formats beside every metrics file, through `crates/formats`. A step takes its own
+  `--format`.
+- `chain --plan FILE`: the source, the options and the steps from a TOML plan file (one
+  `[chain]` table, one `[[step]]` per step). An unknown table or key is an error with the
+  file, the line and the closest name. An option on the command line replaces the file's.
+  `tests/data/chain_markdup.toml` and `tests/data/chain_taps.toml` are the two documented
+  examples. Two spellings of one option in one step (`minimum-pct` and `MINIMUM_PCT`) are
+  that option given twice. A list of a text option holds strings only. A chain option in
+  a `[[step]]` says where it goes (`also belongs to the chain: write also under [chain]`).
+  A plan that is not UTF-8 text exits 2, as every other malformed plan; a plan that
+  cannot be read exits 1. Paths are read relative to the working directory.
+- No step of a chain writes a file the chain reads: the source, the reference and its
+  `.fai`, the files a step reads by name, and the plan file of `--plan`. The same file
+  through a symbolic link, a hard link or `..` counts. It is a usage error before the
+  first read (`step 1 (insert-size): plan.toml is an input; writing it would destroy
+  it`); a file a tool names when it finishes fails that tool alone.
+- A chain option given after the first `+` (`--also`, `--plan`, `--dry-run`,
+  `--output-prefix`, and on `write` also `--threads`, `--sample`, `-q`, `-v`) is a usage
+  error that says `belongs to the chain: give it before the first +`.
+- An empty output prefix (`-o ''`, `output-prefix = ""`, `output=""` in Python) is a
+  usage error, as in `qc`: it would name hidden files (`.insert_size_metrics`) in the
+  working directory. A step's file option with an empty value (`-o ''`, `write ''`) is
+  one too.
+- A piped source that is no BAM, or a cut one, fails under the name of standard input in
+  front of a transform. The copy in the temporary directory is never named.
+- `chain --dry-run`, and `plan` with a chain's arguments (`plan BAM + STEP ...`, `plan
+  --plan FILE`, `plan chain ...`): the segments, whether a transform replays a file or
+  spools a pipe, the files of each step, and the temporary disk estimated from the file
+  size.
+- The summary on standard error: a transform's record counts, and for a run with a failed
+  step how each step ended. A tap that fails reads `failed alone`; a transform or `write`
+  that halts other steps reads `failed and stopped its segment`; the others read
+  `stopped` or `not run`. Exit 1.
+- `write` refuses a `.sam`, `.cram`, `.fastq` or `.fq` name (`.gz` too) and names the wave
+  of docs/07 that adds that kind (W05, W15, W22).
+- `chain` in `bammetrics tools`, `bammetrics help chain`, `bammetrics chain BAM + VERB
+  --help` and the completion scripts.
+- The library entry `bammetrics_cli::chain`: `Spec`, `prepare`, `execute`, and an `Outcome`
+  with one `StepOutcome` per step (status, files written, a transform's record counters).
+- Python `bammetrics.chain(source, steps, *, output, reference, threads, tmp_dir, format,
+  also, sample, plan, dry_run)` (docs/python.md). It runs the verb in the process with the
+  GIL released and returns the `Run`. `steps` holds verb names (`"insert_size"`) and
+  `step(...)` objects. `plan=` reads a plan file, and a keyword given replaces the file's
+  value. `dry_run=True` returns the plan text. A failed step raises `InputError` after the
+  other steps wrote their files, with the `Run` in `.run`. A usage error raises
+  `UsageError` before the first read.
+- Python `bammetrics.step(verb, **options)` and the `Step` class. A step is checked when it
+  is made, against the keywords of the tool's function in `bammetrics.pyi`: an unknown
+  verb or keyword raises `UsageError` with the closest name. `output` is the step's own
+  file or prefix, `format` its own format list, `as_` the stream name of a transform,
+  `panel` on `hs_metrics` the verb flag `--panel` (baits and targets in one file).
+  `step("write", output=, index=, md5=, compression_level=)` writes the BAM. A `Step`
+  compares, hashes, copies and pickles. A float that is NaN or infinite and a list of a
+  text option with an item that is not a str raise `UsageError` when the step is made.
+- `Run.stages`: one `Stage` per step of a chain run (`number`, `verb`, `role`, `status`,
+  `error`, `reads`, `leaves`, `segment`, `files`, and `records_in`, `records_out`,
+  `changed` for a transform). It is an empty list after `qc` and `collect`. `Run.metrics`
+  of a chain is keyed by verb, with `STREAM.verb` for a tap in front of a transform
+  (`in.quality-yield`).
+- `bammetrics.pyi`: `step`, the `_StepVerb` names and three `chain` overloads in the
+  generated verb block (`crates/cli/src/chain/python.rs`), the `Step` and `Stage` classes,
+  `Run.stages`. `tests/python/test_chain.py` holds 72 tests on the fixture BAMs.
+- `bammetrics_core::registry::python_keywords(tool)`: the keyword arguments of a tool's
+  Python function, the list the generated stub prints.
+- `bammetrics_core::toml`: the TOML subset reader, moved from the verdict crate, with
+  one-line arrays of scalars, every escape of a TOML basic string (`\b`, `\f`, `\r`,
+  `\uXXXX`, `\UXXXXXXXX` beside `\"`, `\\`, `\n`, `\t`) and a UTF-8 byte order mark
+  skipped. A value in a TOML form it does not read (a multi-line array, a literal or
+  multi-line string, a nested array, an inline table, `inf`, `nan`) is an error that names
+  the form. docs/chaining.md section 3 lists what is read. No dependency was added.
+- `bammetrics_core::stage`: `Outputs` (the one-file-twice check in linear time), `halt`,
+  `label_of`, `check_stage_options`, `later_kind`.
+- Golden records: 57 chain forms on the fixtures and 2 on corpus t1. The suite asserts
+  that a plan file and its command line record the same files, and that a chain without a
+  transform records the four metrics files `qc` records.
+
+### Changed
+
+- The hidden `bammetrics __chain` entry of 0.21.0 is removed. Its tests run under `chain`
+  (`crates/cli/tests/chain.rs`).
+- In a chain, missing directories above an output are created, as every verb creates
+  them. `__chain` exited 1 for a missing directory.
+- A step is named `step N (verb)` in every message. `__chain` named it by its Picard class,
+  with `#1`, `#2` after a class given twice.
+- `mark-duplicates` in a chain writes `PREFIX.marked.duplication_metrics` under the
+  chain's prefix. Under `__chain` its metrics file was optional.
+- A bad option of `mark-duplicates` in a chain exits 2 before the first read. Under
+  `__chain` it exited 1 when the stage was built.
+- `bammetrics tools` lists `chain` (golden record `verb_tools`).
+- `MarkDuplicates` on a piped `INPUT` that is no BAM names the input as given
+  (`/dev/stdin: not a BAM or CRAM file`). It named its copy in the temporary directory.
+- A pickled `Run` holds its stages as a twelfth field. A `Run` pickled by 0.21.0 or
+  earlier does not load in this version.
+- docs/05: the non-goals, the dispatch, the chaining model and example 9, and decision 4
+  follow D7, D8, D9 and D12 of docs/07.
+
 ## 0.21.0
 
 The stage layer of in-process chaining (`bammetrics_core::stage`, docs/chaining.md):

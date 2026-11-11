@@ -1,7 +1,8 @@
 """The Python mirror of the verbs (docs/05 section 5 and section 7 row 10):
 qc, check, report, collect(metrics=[...]), tools and presets against the
-command on the committed fixtures, the stub against the module both ways,
-the error classes and the GIL release. Needs target/release/bammetrics
+command on the committed fixtures, the stub against the module both ways
+(chain and step included; tests/python/test_chain.py runs them), the error
+classes and the GIL release. Needs target/release/bammetrics
 (`cargo build --release`) for the byte comparisons."""
 import ast
 import concurrent.futures
@@ -78,7 +79,7 @@ def test_all_lists_every_public_name():
     assert set(native.__all__) == module_names()
 
 
-@pytest.mark.parametrize("name", ["Run", "Verdict", "Check"])
+@pytest.mark.parametrize("name", ["Run", "Verdict", "Check", "Step", "Stage"])
 def test_stub_classes_match_the_runtime_classes_both_ways(name):
     node = next(n for n in stub_tree().body if isinstance(n, ast.ClassDef) and n.name == name)
     declared = {n.target.id for n in node.body if isinstance(n, ast.AnnAssign)}
@@ -476,16 +477,24 @@ def stub_function(name):
     return next(n for n in stub_tree().body if isinstance(n, ast.FunctionDef) and n.name == name)
 
 
-@pytest.mark.parametrize("name", ["qc", "check", "report"])
+@pytest.mark.parametrize("name", ["qc", "check", "report", "chain", "step"])
 def test_help_shows_the_stub_signature_and_docstring(name):
+    # The first entry of an overloaded function (chain) carries the docstring
+    # and the defaults help() shows.
     node = stub_function(name)
     function = getattr(bm, name)
     assert " ".join(function.__doc__.split()) == " ".join(ast.get_docstring(node).split())
     args = node.args
-    expected = [(a.arg, inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.empty)
-                for a in args.args]
+    empty = inspect.Parameter.empty
+    expected = [(a.arg, inspect.Parameter.POSITIONAL_ONLY, empty) for a in args.posonlyargs]
+    defaults = [empty] * (len(args.args) - len(args.defaults)) + [
+        ast.literal_eval(d) for d in args.defaults]
+    expected += [(a.arg, inspect.Parameter.POSITIONAL_OR_KEYWORD, d)
+                 for a, d in zip(args.args, defaults)]
     expected += [(a.arg, inspect.Parameter.KEYWORD_ONLY, ast.literal_eval(d))
                  for a, d in zip(args.kwonlyargs, args.kw_defaults)]
+    if args.kwarg:
+        expected.append((args.kwarg.arg, inspect.Parameter.VAR_KEYWORD, empty))
     parameters = inspect.signature(function).parameters.values()
     assert [(p.name, p.kind, p.default) for p in parameters] == expected
 
@@ -498,3 +507,26 @@ def test_stub_collector_verbs_are_the_runtime_names():
         bm.collect(BAM, metrics=["no-such"])
     runtime = str(caught.value).split("one of: ")[1].split(", ")
     assert stub == [n for n in runtime if "-" in n]
+
+
+def test_stub_step_verbs_are_the_runtime_names():
+    node = next(n for n in stub_tree().body if isinstance(n, ast.Assign)
+                and n.targets[0].id == "_StepVerb")
+    stub = [e.value for e in node.value.slice.elts]
+    with pytest.raises(bm.UsageError) as caught:
+        bm.step("no_such")
+    assert stub == str(caught.value).split("steps: ")[1].split(", ")
+    assert stub[-1] == "write"
+    for name in stub:
+        assert bm.step(name).verb == name.replace("_", "-")
+
+
+def test_stub_chain_overloads_differ_in_dry_run_only():
+    overloads = [n for n in stub_tree().body
+                 if isinstance(n, ast.FunctionDef) and n.name == "chain"]
+    returns = [ast.unparse(n.returns) for n in overloads]
+    assert returns == ["Run[None]", "str", "Run[None] | str"]
+    keywords = [[a.arg for a in n.args.kwonlyargs] for n in overloads]
+    assert keywords[0] == keywords[1] == keywords[2] and keywords[0][-1] == "dry_run"
+    dry_run = [ast.unparse(n.args.kwonlyargs[-1].annotation) for n in overloads]
+    assert dry_run == ["Literal[False]", "Literal[True]", "bool"]

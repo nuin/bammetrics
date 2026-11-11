@@ -55,7 +55,7 @@ impl Also {
 
     /// The format written beside each metrics file; `None` for a format
     /// that is one file per run.
-    fn per_file(self) -> Option<Format> {
+    pub(crate) fn per_file(self) -> Option<Format> {
         match self {
             Also::Json => Some(Format::Json),
             Also::Jsonl => Some(Format::Jsonl),
@@ -66,7 +66,7 @@ impl Also {
     }
 
     /// The file of a one-file-per-run format: the prefix plus this.
-    fn run_suffix(self) -> &'static str {
+    pub(crate) fn run_suffix(self) -> &'static str {
         match self {
             Also::Markdown => ".report.md",
             Also::Junit => ".junit.xml",

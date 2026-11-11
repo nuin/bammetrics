@@ -7,16 +7,20 @@ use bammetrics_verdict::Preset;
 use clap::{Arg, ArgAction, Command};
 use clap_complete::Shell;
 
-use crate::collect;
 use crate::error::VerbError;
 use crate::grammar::{Flag, Key};
 use crate::verbs::{self, VERBS};
+use crate::{chain, collect};
 
 /// The verbs that are not tool verbs, with one line each.
 const OTHER_VERBS: &[(&str, &str)] = &[
     (
         "collect",
         "Several metrics from one read of the BAM, one Picard file each.",
+    ),
+    (
+        chain::VERB,
+        "Several steps on one BAM in one process: BAM + STEP [+ STEP ...], or --plan FILE.",
     ),
     ("tools", "List the verbs and the Picard class each runs."),
     (
@@ -29,6 +33,14 @@ const OTHER_VERBS: &[(&str, &str)] = &[
         "A completion script for bash, zsh, fish, elvish or powershell.",
     ),
 ];
+
+/// The one line of the verb `name` of [`OTHER_VERBS`].
+fn about(name: &str) -> String {
+    OTHER_VERBS
+        .iter()
+        .find(|(verb, _)| *verb == name)
+        .map_or_else(String::new, |(_, about)| (*about).to_owned())
+}
 
 /// The verbs clap parses (`main.rs`), in `tools` order.
 pub const CLAP_VERBS: [&str; 5] = ["qc", "plan", "check", "report", "convert"];
@@ -111,7 +123,8 @@ fn subcommand(name: &'static str, about: String, long_about: String, flags: &[Fl
 
 /// `base` (the clap verbs `qc`, `plan`, `check`, `report`) with every
 /// grammar verb added, so top-level `--help` and the completion scripts
-/// list all of them.
+/// list all of them. `chain` is listed with its own options; its steps
+/// follow a `+` and take the options of their verbs.
 pub fn command(base: Command) -> Command {
     let mut command = base.disable_help_subcommand(true);
     for name in CLAP_VERBS {
@@ -132,22 +145,29 @@ pub fn command(base: Command) -> Command {
             &verb.flags(),
         ));
     }
-    command = command.subcommand(subcommand(
-        "collect",
-        OTHER_VERBS[0].1.to_owned(),
-        OTHER_VERBS[0].1.to_owned(),
-        &collect::flags(),
-    ));
+    command = command
+        .subcommand(subcommand(
+            "collect",
+            about("collect"),
+            about("collect"),
+            &collect::flags(),
+        ))
+        .subcommand(subcommand(
+            chain::VERB,
+            about(chain::VERB),
+            about(chain::VERB),
+            &chain::global_flags(),
+        ));
     command
-        .subcommand(Command::new("tools").about(OTHER_VERBS[1].1))
-        .subcommand(Command::new("presets").about(OTHER_VERBS[2].1))
+        .subcommand(Command::new("tools").about(about("tools")))
+        .subcommand(Command::new("presets").about(about("presets")))
         .subcommand(
             Command::new("help")
-                .about(OTHER_VERBS[3].1)
+                .about(about("help"))
                 .arg(Arg::new("TOPIC")),
         )
         .subcommand(
-            Command::new("completions").about(OTHER_VERBS[4].1).arg(
+            Command::new("completions").about(about("completions")).arg(
                 Arg::new("SHELL")
                     .required(true)
                     .value_parser(clap::value_parser!(Shell)),
@@ -238,6 +258,9 @@ pub fn help(base: Command, args: &[String]) -> Result<String, VerbError> {
     }
     if topic == "collect" {
         return Ok(collect::help());
+    }
+    if topic == chain::VERB {
+        return Ok(chain::help());
     }
     let mut full = command(base).bin_name("bammetrics");
     full.build();

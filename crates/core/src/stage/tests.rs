@@ -544,8 +544,37 @@ fn two_outputs_that_are_one_file_are_refused() {
     std::fs::remove_dir_all(&dir).expect("cleanup");
 }
 
+/// [`Outputs`] is the index a caller builds once: a hard link to a claimed
+/// file is that file, and a file named late is checked against every step.
 #[test]
-fn write_options_name_their_files_and_refuse_sam_and_cram() {
+fn the_output_index_knows_one_file_under_any_name() {
+    let dir = scratch("output-index");
+    let file = |name: &str| dir.join(name);
+    let mut outputs = Outputs::default();
+    std::fs::write(file("x.txt"), "").expect("a file");
+    std::fs::hard_link(file("x.txt"), file("link.txt")).expect("a hard link");
+    outputs.claim("step 1", &file("x.txt")).expect("free");
+    outputs.claim("step 2", &file("new.txt")).expect("free");
+    assert_eq!(outputs.owner(&file("link.txt")), Some("step 1"));
+    assert_eq!(outputs.owner(&dir.join("./new.txt")), Some("step 2"));
+    assert_eq!(outputs.owner(&file("other.txt")), None);
+    assert_eq!(outputs.owner(Path::new("/dev/null")), None);
+    let Err(Error::Usage(text)) = outputs.claim("step 3", &file("link.txt")) else {
+        panic!("a hard link to a claimed file");
+    };
+    assert!(text.starts_with("step 1 and step 3 both write "), "{text}");
+    // 2,000 files are claimed with one lookup each.
+    for n in 0..2_000 {
+        outputs
+            .claim("many", &file(&format!("f{n}.txt")))
+            .expect("free");
+    }
+    assert_eq!(outputs.owner(&file("f1999.txt")), Some("many"));
+    std::fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+#[test]
+fn write_options_name_their_files_and_refuse_the_kinds_of_later_waves() {
     let mut options = WriteOptions::new(Path::new("dir/out.bam"));
     assert_eq!(options.files(), [PathBuf::from("dir/out.bam")]);
     options.create_index = true;
@@ -555,12 +584,78 @@ fn write_options_name_their_files_and_refuse_sam_and_cram() {
         ["dir/out.bam", "dir/out.bai", "dir/out.bam.md5"].map(PathBuf::from)
     );
     options.check().expect("a BAM name");
-    for name in ["out.sam", "out.CRAM"] {
+    for (name, kind, wave) in [
+        ("out.sam", "SAM", "W05"),
+        ("out.CRAM", "CRAM", "W15"),
+        ("dir/reads.fastq", "FASTQ", "W22"),
+        ("reads.fq.gz", "FASTQ", "W22"),
+    ] {
+        assert_eq!(later_kind(Path::new(name)), Some((kind, wave)), "{name}");
         let Err(Error::Usage(text)) = WriteOptions::new(Path::new(name)).check() else {
             panic!("{name} is refused");
         };
-        assert!(text.starts_with(name) && text.contains("bammetrics writes BAM only"));
+        assert_eq!(
+            text,
+            format!(
+                "{name}: bammetrics writes BAM only: {kind} output is wave {wave} of \
+                 docs/07_full_parity_program.md"
+            )
+        );
     }
+    for name in [
+        "out.bam",
+        "out",
+        "sam",
+        "out.sam.bam",
+        "/dev/stdout",
+        "x.gz",
+    ] {
+        assert_eq!(later_kind(Path::new(name)), None, "{name}");
+    }
+}
+
+/// The stage table: one tool has a stage, a default stream name and
+/// options checked before a run.
+#[test]
+fn mark_duplicates_is_the_one_stage_and_its_options_are_checked_early() {
+    let tool = registry::find("MarkDuplicates").expect("registered");
+    assert!(stage_of(tool).is_some());
+    assert_eq!(label_of(tool), Some("marked"));
+    let other = registry::find("CollectInsertSizeMetrics").expect("registered");
+    assert!(stage_of(other).is_none() && label_of(other).is_none());
+    let parse = |args: &[&str]| {
+        let args: Vec<String> = args.iter().map(|a| (*a).to_owned()).collect();
+        tool.parse(&args).expect("arguments")
+    };
+    check_stage_options(tool, &parse(&["I=x.bam", "REMOVE_DUPLICATES=true"])).expect("fine");
+    for bad in [
+        "CREATE_INDEX=true",
+        "TAGGING_POLICY=Some",
+        "MAX_RECORDS_IN_RAM=0",
+    ] {
+        let error = check_stage_options(tool, &parse(&["I=x.bam", bad])).expect_err(bad);
+        assert!(matches!(error, Error::Usage(_)), "{bad}: {error}");
+    }
+    check_stage_options(
+        other,
+        &other.parse(&["I=x.bam".to_owned()]).expect("arguments"),
+    )
+    .expect("a tool without a stage has nothing to check");
+}
+
+/// A step another step halted says so in a form [`halt`] reads back.
+#[test]
+fn halted_steps_are_told_from_failed_ones() {
+    assert_eq!(
+        halt(&Error::Metric("stopped: step 2 failed: boom".to_owned())),
+        Some(Halt::Stopped)
+    );
+    assert_eq!(
+        halt(&Error::Metric("not run: step 2 failed: boom".to_owned())),
+        Some(Halt::NotRun)
+    );
+    assert_eq!(halt(&Error::Metric("boom".to_owned())), None);
+    assert_eq!(halt(&Error::Usage("stopped: no".to_owned())), None);
 }
 
 fn tool_step(name: &str, args: &[&str]) -> Step {

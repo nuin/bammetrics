@@ -43,8 +43,8 @@ mod sinks;
 #[cfg(test)]
 mod tests;
 
-pub use exec::run_chain;
-pub use sinks::{CollectorSink, WriteOptions};
+pub use exec::{Halt, halt, run_chain};
+pub use sinks::{CollectorSink, WriteOptions, later_kind};
 
 /// Records per batch. Measured: with the 4096 of [`pass`] a
 /// `MarkDuplicates` chain took 10 percent longer, and 512 cost more system
@@ -161,6 +161,9 @@ impl Source for FileSource {
         bytes: &Arc<AtomicU64>,
         consume: &mut dyn FnMut(Frame, &mut dyn Records) -> Result<()>,
     ) -> Result<()> {
+        // A spooled copy of a pipe fails under the name the user gave,
+        // never under the copy's.
+        let shown = Path::new(&self.label);
         pass::with_counted_stream(
             &self.path,
             self.reference.as_deref(),
@@ -177,12 +180,13 @@ impl Source for FileSource {
                     frame,
                     &mut StreamRecords {
                         reader,
-                        path: &self.path,
+                        path: shown,
                         cram,
                     },
                 )
             },
         )
+        .map_err(|e| e.naming_input(&self.path, shown))
     }
 
     fn replayable(&self) -> bool {
@@ -373,6 +377,21 @@ pub fn stage_of(tool: &Tool) -> Option<StageFn> {
     (tool.name == mark_duplicates::TOOL.name).then_some(mark_duplicates::stage as StageFn)
 }
 
+/// The default name of the stream a tool's stage leaves (docs/07 section
+/// 2.2): `marked` after `MarkDuplicates`. `None` for a tool without a stage.
+pub fn label_of(tool: &Tool) -> Option<&'static str> {
+    (tool.name == mark_duplicates::TOOL.name).then_some("marked")
+}
+
+/// A usage error for options the stage of `tool` cannot take, asked before
+/// the first read of a chain. The stage asks again when it is built.
+pub fn check_stage_options(tool: &Tool, inv: &Invocation) -> Result<()> {
+    if tool.name == mark_duplicates::TOOL.name {
+        mark_duplicates::Options::for_stage(inv)?;
+    }
+    Ok(())
+}
+
 /// A registry tool with a stage and its parsed options.
 struct ToolStage {
     stage: StageFn,
@@ -466,27 +485,45 @@ impl Step {
     }
 }
 
-/// The step among `outputs` (a step's label, a file it writes) that writes
-/// `path`: the same file through a link, `..` or a relative spelling
-/// counts. A device or a pipe (`/dev/null`, `/dev/stdout`) has no writer:
-/// nothing is replaced there, so several steps may name it.
-pub fn writer_of<'a>(outputs: &'a [(String, PathBuf)], path: &Path) -> Option<&'a str> {
-    if std::fs::metadata(path).is_ok_and(|meta| !meta.is_file() && !meta.is_dir()) {
-        return None;
-    }
-    outputs
-        .iter()
-        .find(|(_, other)| mark_duplicates::same_file(other, path))
-        .map(|(label, _)| label.as_str())
+/// What makes two paths one file: the device and inode of a file that
+/// exists, else the path with its directory resolved.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum Identity {
+    Inode(u64, u64),
+    Path(PathBuf),
 }
 
-/// Fail when two of `outputs` (a step's label, a file it writes) are one
-/// file. [`run_chain`] hands each step's metrics to the caller, which
-/// writes them after the run: without this check the later write replaces
-/// the earlier file and nothing fails.
-pub fn check_distinct_outputs(outputs: &[(String, PathBuf)]) -> Result<()> {
-    for (i, (label, path)) in outputs.iter().enumerate() {
-        if let Some(other) = writer_of(&outputs[..i], path) {
+/// The identity of `path`; `None` for a device or a pipe (`/dev/null`,
+/// `/dev/stdout`), where nothing is replaced, so several steps may name it.
+fn identity(path: &Path) -> Option<Identity> {
+    match std::fs::metadata(path) {
+        Ok(meta) if !meta.is_file() && !meta.is_dir() => None,
+        #[cfg(unix)]
+        Ok(meta) => {
+            use std::os::unix::fs::MetadataExt;
+            Some(Identity::Inode(meta.dev(), meta.ino()))
+        }
+        _ => Some(Identity::Path(mark_duplicates::same_file_key(path))),
+    }
+}
+
+/// The files the steps of a chain write, each with the label of its step.
+/// The same file through a link, `..` or a relative spelling counts as
+/// one. One hash lookup per file, so a chain of many steps is checked in
+/// linear time.
+#[derive(Debug, Default)]
+pub struct Outputs {
+    owners: std::collections::HashMap<Identity, String>,
+}
+
+impl Outputs {
+    /// Record that step `label` writes `path`. A usage error when a step
+    /// already writes that file.
+    pub fn claim(&mut self, label: &str, path: &Path) -> Result<()> {
+        let Some(identity) = identity(path) else {
+            return Ok(());
+        };
+        if let Some(other) = self.owners.get(&identity) {
             let whose = if other == label {
                 format!("{label} writes {} twice", path.display())
             } else {
@@ -496,8 +533,35 @@ pub fn check_distinct_outputs(outputs: &[(String, PathBuf)]) -> Result<()> {
                 "{whose}: every output of a chain needs its own file"
             )));
         }
+        self.owners.insert(identity, label.to_owned());
+        Ok(())
     }
-    Ok(())
+
+    /// The label of the step that writes `path`, if any.
+    pub fn owner(&self, path: &Path) -> Option<&str> {
+        self.owners.get(&identity(path)?).map(String::as_str)
+    }
+}
+
+/// The step among `outputs` (a step's label, a file it writes) that writes
+/// `path`. A caller with many paths to ask about builds [`Outputs`] once.
+pub fn writer_of<'a>(outputs: &'a [(String, PathBuf)], path: &Path) -> Option<&'a str> {
+    let wanted = identity(path)?;
+    outputs
+        .iter()
+        .find(|(_, other)| identity(other).as_ref() == Some(&wanted))
+        .map(|(label, _)| label.as_str())
+}
+
+/// Fail when two of `outputs` (a step's label, a file it writes) are one
+/// file. [`run_chain`] hands each step's metrics to the caller, which
+/// writes them after the run: without this check the later write replaces
+/// the earlier file and nothing fails.
+pub fn check_distinct_outputs(outputs: &[(String, PathBuf)]) -> Result<()> {
+    let mut claimed = Outputs::default();
+    outputs
+        .iter()
+        .try_for_each(|(label, path)| claimed.claim(label, path))
 }
 
 /// A chain: the source and its steps in order.

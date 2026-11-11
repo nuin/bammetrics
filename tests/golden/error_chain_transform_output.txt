@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/markdup.bam
++
+mark-duplicates
+-o
+OUT/x.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (mark-duplicates): -o names a BAM, and a transform writes none in a chain (from -o)
+  add + write OUT/x.bam after it; --metrics-file names its metrics

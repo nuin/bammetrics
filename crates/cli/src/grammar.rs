@@ -254,23 +254,56 @@ fn option_word(arg: &str) -> Option<(&str, &str)> {
     plain.then_some((name, value))
 }
 
-/// The error for an option no flag has, with the closest spelling.
-fn unknown(verb: &str, flags: &[Flag], spelled: &str, name: &str) -> VerbError {
+/// The flag a name without dashes refers to, as `--name` does: the long
+/// kebab spelling, then any normalised name (a plan file's keys).
+pub fn lookup<'a>(flags: &'a [Flag], name: &str) -> Option<&'a Flag> {
+    find(flags, 2, name)
+}
+
+/// The long spelling closest to `name`, a name no flag has, with the
+/// Picard name of its flag as ` (Picard NAME)`: the did-you-mean of an
+/// unknown option.
+pub fn closest(flags: &[Flag], name: &str) -> Option<String> {
     let kebab = name.to_ascii_lowercase().replace('_', "-");
     let spellings = flags
         .iter()
         .flat_map(|f| std::iter::once(&f.long).chain(&f.aliases))
         .map(String::as_str);
-    let mut error = VerbError::usage(verb, format!("unknown option {spelled}"));
-    if let Some(best) = did_you_mean(&kebab, spellings) {
-        let flag = flags
-            .iter()
-            .find(|f| f.long == best || f.aliases.iter().any(|a| a == best))
-            .expect("a flag");
-        let picard = flag
-            .picard()
-            .map_or_else(String::new, |p| format!(" (Picard {p})"));
-        error = error.hint(format!("did you mean --{best}{picard}?"));
+    let best = did_you_mean(&kebab, spellings)?;
+    let flag = flags
+        .iter()
+        .find(|f| f.long == best || f.aliases.iter().any(|a| a == best))?;
+    let picard = flag
+        .picard()
+        .map_or_else(String::new, |p| format!(" (Picard {p})"));
+    Some(format!("{best}{picard}"))
+}
+
+/// How the message of [`unknown`] starts.
+const UNKNOWN_OPTION: &str = "unknown option ";
+
+/// The option an error of [`unknown`] is about, as it was spelled
+/// (`--also`, `-q`, `ALSO=`); `None` for any other error.
+pub fn unknown_option(error: &VerbError) -> Option<&str> {
+    error.what.strip_prefix(UNKNOWN_OPTION)
+}
+
+/// The flag an option as spelled on a command line (`--also`, `-q`,
+/// `ALSO=`, `--no-dry-run`) refers to.
+pub fn spelled<'a>(flags: &'a [Flag], spelled: &str) -> Option<&'a Flag> {
+    let dashes = spelled.len() - spelled.trim_start_matches('-').len();
+    let name = spelled[dashes..].trim_end_matches('=');
+    find(flags, dashes, name).or_else(|| {
+        let positive = name.strip_prefix("no-").filter(|_| dashes == 2)?;
+        find(flags, 2, positive).filter(|flag| flag.ty == Ty::Bool)
+    })
+}
+
+/// The error for an option no flag has, with the closest spelling.
+fn unknown(verb: &str, flags: &[Flag], spelled: &str, name: &str) -> VerbError {
+    let mut error = VerbError::usage(verb, format!("{UNKNOWN_OPTION}{spelled}"));
+    if let Some(best) = closest(flags, name) {
+        error = error.hint(format!("did you mean --{best}?"));
     }
     error.hint(format!("every option: bammetrics help {verb}"))
 }

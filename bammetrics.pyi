@@ -163,16 +163,56 @@ class Verdict:
     def exit_code(self, fail_on: Literal["warn", "fail"] = "fail") -> int:
         """The exit code bammetrics check gives this verdict: 0, 10 or 11."""
 
+class Step:
+    """One step of chain(), as step() returns it: checked when it is made, so an
+    unknown verb or keyword raises UsageError here.
+
+    verb is the verb as the command spells it (insert-size, write); role is
+    "transform", "tap" or "write"; options holds the keywords given, without those
+    that were None; args is what they spell for the command (["--minimum-pct=0.1"]).
+    Two steps with the same verb and args are equal."""
+    verb: str
+    role: Literal["transform", "tap", "write"]
+    options: dict[str, Any]
+    args: list[str]
+    def __init__(self, verb: _StepVerb | str, /, **options: Any) -> None: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __hash__(self) -> int: ...
+
+class Stage:
+    """One step of a chain after the run, in Run.stages.
+
+    status is "ok", "failed", "stopped" (another step of its segment failed while it
+    ran) or "not_run" (a step in front of it failed); error says why for a status that
+    is not "ok". reads is the stream the step read ("in", or the name a transform in
+    front left); leaves is the stream a transform leaves ("marked"), None otherwise.
+    records_in, records_out and changed are a transform's record counts, None for a
+    tap and for write."""
+    number: int
+    verb: str
+    role: Literal["transform", "tap", "write"]
+    status: Literal["ok", "failed", "stopped", "not_run"]
+    error: str | None
+    reads: str
+    leaves: str | None
+    segment: int
+    files: list[str]
+    records_in: int | None
+    records_out: int | None
+    changed: int | None
+
 _V = TypeVar("_V", Verdict, None)
 
 class Run(Generic[_V]):
-    """A qc run (Run[Verdict]), or a collect(metrics=[...]) run (Run[None]: verdict
-    and manifest None).
+    """A qc run (Run[Verdict]), or a collect(metrics=[...]) or chain run (Run[None]:
+    verdict and manifest None).
 
     files lists every file written or kept, the manifest last. metrics maps the
     verb of each tool (insert-size, hs-metrics.BAIT_SET for one of several hs
-    runs, gc-bias.summary for a further file) to the parsed file, as
-    read_metrics returns it. In a notebook the run shows the report body."""
+    runs, gc-bias.summary for a further file; in a chain in.insert-size for a tap
+    in front of a transform) to the parsed file, as read_metrics returns it.
+    stages holds one Stage per step of a chain run, in step order, and is empty
+    otherwise. In a notebook a qc run shows the report body."""
     sample: str
     prefix: str
     files: list[str]
@@ -181,6 +221,7 @@ class Run(Generic[_V]):
     errors: dict[str, str]
     metrics: dict[str, _MetricsDoc]
     verdict: _V
+    stages: list[Stage]
     def _repr_html_(self) -> str | None: ...
 
 class InsertSizeMetrics:
@@ -1138,5 +1179,88 @@ def report(
     """bammetrics report: SAMPLE.verdict.json and SAMPLE.report.html per sample and
     index.html, under output (default: the one directory given). Returns the paths
     written."""
+
+# The steps of chain(): each tool verb that can be a step, in snake case, and write.
+_StepVerb = Literal[
+    "insert_size",
+    "alignment_summary",
+    "quality_yield",
+    "hs_metrics",
+    "gc_bias",
+    "quality_score_distribution",
+    "mean_quality_by_cycle",
+    "base_distribution_by_cycle",
+    "duplicate_metrics",
+    "rna_seq",
+    "mark_duplicates",
+    "sequencing_artifact",
+    "coverage_gaps",
+    "sex_check",
+    "write",
+]
+
+def step(verb: _StepVerb | str, /, **options: Any) -> Step:
+    """One step of chain(): a tool verb in snake case (insert_size), its Picard class, or
+    write. The keywords are those of the tool's function (minimum_pct=0.1) without its
+    input, plus output (the step's own file, or prefix for a tool that writes several),
+    format, panel on hs_metrics (baits and targets in one file), and as_ on a transform
+    (the name of the stream it leaves). write takes output, index, md5 and
+    compression_level. An unknown verb or keyword raises UsageError here, with the
+    closest name; so does a float that is NaN or infinite, and a list of texts with an
+    item that is not a str."""
+
+@overload
+def chain(
+    source: _Path | None = None,
+    steps: Step | str | Sequence[Step | str] | None = None,
+    *,
+    output: _Path | None = None,
+    reference: _Path | None = None,
+    threads: int | None = None,
+    tmp_dir: _Path | None = None,
+    format: str | Sequence[str] | None = None,
+    also: str | Sequence[str] | None = None,
+    sample: str | None = None,
+    plan: _Path | None = None,
+    dry_run: Literal[False] = False,
+) -> Run[None]:
+    """bammetrics chain: several steps on one BAM in one process, the records handed from
+    step to step in memory. steps holds verb names (insert_size) or step(...) objects,
+    in order: mark_duplicates is a transform, a one-pass tool is a tap on the records of
+    its position, write writes them as a BAM. plan names a TOML plan file in place of
+    steps; a keyword given replaces the file's. Returns a Run: files, metrics (keyed by
+    verb, STREAM.verb in front of a transform) and stages (one Stage per step).
+    dry_run=True returns the plan text and runs nothing. A failed step raises InputError
+    after the other steps wrote their files (its .run holds the Run)."""
+@overload
+def chain(
+    source: _Path | None = None,
+    steps: Step | str | Sequence[Step | str] | None = None,
+    *,
+    output: _Path | None = None,
+    reference: _Path | None = None,
+    threads: int | None = None,
+    tmp_dir: _Path | None = None,
+    format: str | Sequence[str] | None = None,
+    also: str | Sequence[str] | None = None,
+    sample: str | None = None,
+    plan: _Path | None = None,
+    dry_run: Literal[True],
+) -> str: ...
+@overload
+def chain(
+    source: _Path | None = None,
+    steps: Step | str | Sequence[Step | str] | None = None,
+    *,
+    output: _Path | None = None,
+    reference: _Path | None = None,
+    threads: int | None = None,
+    tmp_dir: _Path | None = None,
+    format: str | Sequence[str] | None = None,
+    also: str | Sequence[str] | None = None,
+    sample: str | None = None,
+    plan: _Path | None = None,
+    dry_run: bool,
+) -> Run[None] | str: ...
 
 # END verbs

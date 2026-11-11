@@ -1,0 +1,31 @@
+## argv
+plan
+tests/data/markdup.bam
+-o
+OUT/s
++
+quality-yield
++
+mark-duplicates
+--as
+dedup
++
+insert-size
++
+write
+## exit
+0
+## stdout
+chain plan for tests/data/markdup.bam
+  source    tests/data/markdup.bam (BAM, 1,158 bytes, sort order coordinate; a file, it can be read again)
+  prefix    OUT/s (from -o)
+segment 1  one read of tests/data/markdup.bam
+  step 1  quality-yield    tap on in              OUT/s.in.quality_yield_metrics
+  step 2  mark-duplicates  transform, first read  takes every record, then finds the duplicate sets
+segment 2  a second read of tests/data/markdup.bam through step 2 (replay: nothing is spooled)
+  step 2  mark-duplicates  stream dedup           OUT/s.dedup.duplication_metrics
+  step 3  insert-size      tap on dedup           OUT/s.insert_size_metrics
+  step 4  write            BAM of dedup           OUT/s.dedup.bam
+temp disk  none expected: about 16 records, and mark-duplicates keeps 4,000,000 in memory before it spills (MAX_RECORDS_IN_RAM)
+nothing ran: this is a plan
+## stderr

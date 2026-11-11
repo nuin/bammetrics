@@ -1,0 +1,31 @@
+# bammetrics chain --plan tests/data/chain_taps.toml -o out/sample
+#
+# Four collectors on one read of the BAM, with no transform: the read qc
+# makes. Each metrics file also as JSON. The same chain on the command line:
+#
+#   bammetrics chain tests/data/insert_size.bam -o out/sample --format picard,json --sample S1 \
+#       + quality-yield --no-use-original-qualities \
+#       + alignment-summary --level SAMPLE --level LIBRARY --stop-after 8 \
+#       + insert-size --minimum-pct 0.1 \
+#       + duplicate-metrics
+
+[chain]
+source = "tests/data/insert_size.bam"
+format = ["picard", "json"]
+sample = "S1"
+
+[[step]]
+verb = "quality-yield"
+use-original-qualities = false
+
+[[step]]
+verb = "alignment-summary"
+level = ["SAMPLE", "LIBRARY"]
+stop-after = 8
+
+[[step]]
+verb = "insert-size"
+minimum-pct = 0.1
+
+[[step]]
+verb = "duplicate-metrics"

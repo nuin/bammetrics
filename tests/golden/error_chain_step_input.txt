@@ -1,0 +1,11 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+insert-size
+tests/data/orientation.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (insert-size): a step takes no input, the chain's source feeds every step (from tests/data/orientation.bam)

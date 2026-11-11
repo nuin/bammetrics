@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+write
+OUT/x.bam
+--indx
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (write): unknown option --indx
+  did you mean --index?
+  every option: bammetrics chain BAM + write --help

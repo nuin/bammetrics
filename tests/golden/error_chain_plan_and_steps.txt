@@ -1,0 +1,12 @@
+## argv
+chain
+--plan
+tests/data/chain_markdup.toml
++
+write
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: --plan gives the steps: a + step on the command line cannot be added (from --plan)
+  options and the source may follow --plan FILE; they replace the file's

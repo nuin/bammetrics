@@ -1,0 +1,28 @@
+## argv
+chain
+-
+--tmp-dir
+OUT/tmp
+--dry-run
++
+mark-duplicates
++
+quality-yield
++
+write
+-
+## exit
+0
+## stdout
+chain plan for standard input
+  source    standard input (a pipe: it is read once)
+  prefix    ./stdin (from the source name, no -o)
+segment 1  one read of standard input, copied to the temporary directory for the second read (spool)
+  step 1  mark-duplicates  transform, first read  takes every record, then finds the duplicate sets
+segment 2  a read of the spooled copy through step 1
+  step 1  mark-duplicates  stream marked          ./stdin.marked.duplication_metrics
+  step 2  quality-yield    tap on marked          ./stdin.quality_yield_metrics
+  step 3  write            BAM of marked          standard output
+temp disk  in OUT/tmp: the whole input once (the spool; a pipe has no size to read), plus about 59 bytes per record when mark-duplicates holds more than 4,000,000 records (MAX_RECORDS_IN_RAM)
+nothing ran: this is a plan
+## stderr

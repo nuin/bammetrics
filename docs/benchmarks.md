@@ -137,16 +137,31 @@ SHA-256 over all records, `5a90c21f...fafb396`). The headers differ in the `@PG`
 
 ## Chains (HG002 exome)
 
-`bammetrics __chain` (docs/chaining.md section 9), release build, 8 threads,
-`/usr/bin/time -l`, other builds and test runs on the machine.
+`bammetrics chain` (docs/chaining.md section 11), release build, 8 threads,
+`/usr/bin/time -l`, other builds and test runs on the machine. The 0.21.0 rows were
+measured through the hidden `__chain` entry, the W04 rows through the `chain` verb.
 
-A chain without a stage against `qc --preset wgs`, on chr20, 21 and 22 of the exome
-(573 MB, 8.4 M records, four collectors on one read), median of 7 interleaved runs: `qc`
-6.49 s, the chain lowered to `pass::run_isolated` 6.44 s (-0.8 %), the stage executor
-forced with `LOWER=false` 6.65 s (+2.5 %). Max RSS 44, 42 and 19 MiB.
+A chain without a transform against `qc --preset wgs`, on chr20, 21 and 22 of the exome
+(573 MB, 8.4 M records, four collectors on one read), median of 7 interleaved runs:
 
-`MarkDuplicates` + 4 collectors + `write` as one chain against the staged sequence, on
-the whole exome, one run each:
+| run | 0.21.0 | W04 | W04 max RSS |
+|---|---:|---:|---:|
+| `qc --preset wgs` | 6.49 s | 6.48 s | 44 MiB |
+| the chain, lowered to `pass::run_isolated` | 6.44 s (-0.8 %) | 6.44 s (-0.6 %) | 42 MiB |
+| the chain on the stage executor (`--no-lower`) | 6.65 s (+2.5 %) | 6.53 s (+0.8 %) | 20 MiB |
+
+`mark-duplicates` + 4 collectors + `write` as one chain against the staged sequence on
+that slice, W04, median of 3 interleaved runs: `MarkDuplicates` to a file 15.69 s and
+643 MiB, the 4 collectors on the marked BAM 6.49 s and 42 MiB, the staged sequence
+22.18 s, one chain 16.49 s and 645 MiB (25.7 percent less than staged). Both BAMs are
+584,413,820 bytes and equal under `cmp`.
+
+The same chain from Python (`bammetrics.chain`, docs/python.md) against the command on
+that slice, median of 3 interleaved runs, each in its own process: the command 16.04 s
+and 646 MiB, the Python call 16.13 s and 658 MiB (0.6 percent longer, interpreter start
+and import included). Both BAMs are equal under `cmp`.
+
+The same on the whole exome, 0.21.0, one run each:
 
 | run | wall | max RSS |
 |---|---:|---:|

@@ -39,6 +39,7 @@ jumping-library                       CollectJumpingLibraryMetrics
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.
+  chain        Several steps on one BAM in one process: BAM + STEP [+ STEP ...], or --plan FILE.
   tools        List the verbs and the Picard class each runs.
   presets      List the built-in verdict presets with version and hash.
   help         Help for a verb or a Picard class.

@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/insert_size.bam
++
++
+write
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 is empty: a verb follows each +
+  usage: bammetrics chain [OPTIONS] BAM + STEP [STEP OPTIONS] [+ STEP ...]

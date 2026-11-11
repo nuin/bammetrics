@@ -1,0 +1,40 @@
+## argv
+chain
+tests/data/markdup.bam
+-R
+tests/data/ref_100k.fa
+-o
+OUT/sample
+--dry-run
++
+mark-duplicates
++
+alignment-summary
++
+insert-size
++
+quality-yield
++
+duplicate-metrics
++
+write
+--index
+## exit
+0
+## stdout
+chain plan for tests/data/markdup.bam
+  source    tests/data/markdup.bam (BAM, 1,158 bytes, sort order coordinate; a file, it can be read again)
+  prefix    OUT/sample (from -o)
+  reference tests/data/ref_100k.fa
+segment 1  one read of tests/data/markdup.bam
+  step 1  mark-duplicates    transform, first read  takes every record, then finds the duplicate sets
+segment 2  a second read of tests/data/markdup.bam through step 1 (replay: nothing is spooled)
+  step 1  mark-duplicates    stream marked          OUT/sample.marked.duplication_metrics
+  step 2  alignment-summary  tap on marked          OUT/sample.alignment_summary_metrics
+  step 3  insert-size        tap on marked          OUT/sample.insert_size_metrics
+  step 4  quality-yield      tap on marked          OUT/sample.quality_yield_metrics
+  step 5  duplicate-metrics  tap on marked          OUT/sample.duplicate_metrics
+  step 6  write              BAM of marked          OUT/sample.marked.bam, OUT/sample.marked.bai
+temp disk  none expected: about 16 records, and mark-duplicates keeps 4,000,000 in memory before it spills (MAX_RECORDS_IN_RAM)
+nothing ran: this is a plan
+## stderr
