@@ -221,7 +221,7 @@ UNPAIRED,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,,,
 ## file sample.manifest.json
 {
   "schema": "bammetrics.manifest/1",
-  "tool_version": "0.20.0",
+  "tool_version": "0.21.0",
   "sample": "no_reads",
   "bam": "tests/data/no_reads.bam",
   "prefix": "OUT/sample",
@@ -239,7 +239,7 @@ UNPAIRED,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,,,
         "OUTPUT=OUT/sample.quality_yield_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.20.0",
+      "tool_version": "0.21.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -267,7 +267,7 @@ UNPAIRED,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,,,
         "OUTPUT=OUT/sample.alignment_summary_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.20.0",
+      "tool_version": "0.21.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -295,7 +295,7 @@ UNPAIRED,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,,,
         "OUTPUT=OUT/sample.insert_size_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.20.0",
+      "tool_version": "0.21.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -317,7 +317,7 @@ UNPAIRED,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,,,
         "METRICS_FILE=OUT/sample.duplicate_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.20.0",
+      "tool_version": "0.21.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -347,7 +347,7 @@ UNPAIRED,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,,,
         "OUT/sample.quality_yield_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.20.0",
+      "tool_version": "0.21.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -369,7 +369,7 @@ UNPAIRED,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,,,
         "--date=2026-01-02 03:04:05 UTC"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.20.0",
+      "tool_version": "0.21.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -401,7 +401,7 @@ UNPAIRED,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,,,
         "--also=json,csv,junit"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.20.0",
+      "tool_version": "0.21.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -525,7 +525,7 @@ TOTAL_READS,PF_READS,READ_LENGTH,TOTAL_BASES,PF_BASES,Q20_BASES,PF_Q20_BASES,Q30
 ## file sample.verdict.json
 {
   "schema": "bammetrics.verdict/1",
-  "tool_version": "0.20.0",
+  "tool_version": "0.21.0",
   "sample": "no_reads",
   "preset": {
     "name": "generic",

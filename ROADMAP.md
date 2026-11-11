@@ -38,13 +38,14 @@ Shipped since: every accumulation level, `CollectHsMetrics` `PER_TARGET_COVERAGE
 `BamIndexStats`, `CheckDuplicateMarking`, `CollectJumpingLibraryMetrics` and the two clinical
 checks `CollectCoverageGaps` and `CollectSexCheckMetrics` (0.19.0), the output formats
 (`convert`, `--format` lists, `qc --also`) and the harness for tools that write reads
-(0.20.0). CHANGELOG.md has each.
+(0.20.0), the stage layer of in-process chaining behind the hidden `__chain` entry
+(0.21.0). CHANGELOG.md has each.
 
 Remaining for bammetrics:
 
 - bioconda recipe and a PyPI release (first push of the branch runs the CI workflow).
 - The Picard tools still to build, the `chain` verb, further formats and PDF reports: the
-  program plan `docs/07_full_parity_program.md` (waves W03 onward); docs/04 section 4 holds
+  program plan `docs/07_full_parity_program.md` (waves W04 onward); docs/04 section 4 holds
   the P9 queue.
 
 Exit criterion: a `pip install`-able library that produces correct, hand-verified numbers.

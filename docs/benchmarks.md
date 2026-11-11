@@ -135,6 +135,29 @@ duplicate flags, and `samtools view --no-PG` prints the same text for every reco
 SHA-256 over all records, `5a90c21f...fafb396`). The headers differ in the `@PG` line each tool adds and in the
 `@RG DT` value, which htsjdk writes in the JVM's time zone (KNOWN_DIFFERENCES.md).
 
+## Chains (HG002 exome)
+
+`bammetrics __chain` (docs/chaining.md section 9), release build, 8 threads,
+`/usr/bin/time -l`, other builds and test runs on the machine.
+
+A chain without a stage against `qc --preset wgs`, on chr20, 21 and 22 of the exome
+(573 MB, 8.4 M records, four collectors on one read), median of 7 interleaved runs: `qc`
+6.49 s, the chain lowered to `pass::run_isolated` 6.44 s (-0.8 %), the stage executor
+forced with `LOWER=false` 6.65 s (+2.5 %). Max RSS 44, 42 and 19 MiB.
+
+`MarkDuplicates` + 4 collectors + `write` as one chain against the staged sequence, on
+the whole exome, one run each:
+
+| run | wall | max RSS |
+|---|---:|---:|
+| `MarkDuplicates` to a file | 308.3 s | 800 MiB |
+| 4 collectors on the marked BAM, one shared read | 106.0 s | 95 MiB |
+| staged sequence, both | 414.3 s | 800 MiB |
+| one chain | 316.0 s | 807 MiB |
+
+Both BAMs are 10,210,246,600 bytes and equal under `cmp` (`PROGRAM_GROUP_COMMAND_LINE`
+given on both sides); the five metrics files are equal after their `StringHeader` lines.
+
 ## 0.19.0 tools (HG002 exome)
 
 Same machine and file as the MarkDuplicates run above, bammetrics 0.19.0 (d221376),
@@ -186,6 +209,14 @@ At 0.20.0 (2026-11-10, release/0.20.0 with feat/formats and feat/harness merged)
 target and under the 600 KB limit, as at 0.19.0), formats growth 129.2 KB (132,304 bytes
 stripped), 0 added passes.
 
+At 0.21.0 (2026-11-10, release/0.21.0 at d2af4a2: feat/stage-executor and the security
+fixes of release/0.20.0 merged), one `make budgets` run: render 1.69 ms and 0.74 ms,
+sample page 96.5 KB (98,790 bytes), index 190.7 KB (195,237 bytes), binary growth 371.5 KB
+(380,416 bytes stripped, as at 0.20.0), formats growth 129.2 KB (132,304 bytes stripped,
+as at 0.20.0), 0 added passes. Before the security merge (e6b282f) the formats row read
+113.1 KB (115,792 bytes stripped): the stripped probes differ by 16,512 bytes between the
+two commits, about one 16,384-byte page of the linker (opinion, not traced).
+
 The fixture metrics are the seven files the golden records hold for
 `tests/data/insert_size.bam` (alignment summary, insert size, quality yield, duplicate
 metrics, hs metrics, gc bias, mean quality by cycle). A KB is 1024 bytes.
@@ -211,6 +242,7 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 0.19.0 | 2026-11-09, release/0.19.0 at d221376 | 6,899,008 | 5,833,632 |
 | formats | 2026-11-10, feat/formats: `crates/formats`, `convert`, `qc --also`, the format lists | 7,124,416 | 6,032,112 |
 | 0.20.0 | 2026-11-10, release/0.20.0: feat/formats and feat/harness merged at 5a8f478, the version set | 7,124,320 | 6,032,104 |
+| 0.21.0 | 2026-11-10, release/0.21.0 at d2af4a2: feat/stage-executor and the security fixes of release/0.20.0 merged, the version set | 7,211,216 | 6,114,880 |
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and
