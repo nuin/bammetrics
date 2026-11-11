@@ -324,3 +324,30 @@ fn a_count_the_file_does_not_back_is_an_early_end() {
     negative.extend((-1i32).to_le_bytes());
     assert!(Index::read(&mut negative.as_slice()).is_err());
 }
+
+#[test]
+fn a_reference_starts_without_the_chunks_of_the_one_before() {
+    let chunk = |block: u64| Chunk {
+        start: offset(block, 0),
+        end: offset(block, 50),
+    };
+    let (index, counts) = build(
+        &vec![100_000; 1000],
+        &[
+            mapped(0, 1, 10, chunk(5)),
+            mapped(0, 20_000, 10, chunk(7)),
+            mapped(999, 1, 10, chunk(9)),
+        ],
+    );
+    assert_eq!(index.references.len(), 1000);
+    assert_eq!(index.references[0].bins.len(), 2);
+    assert!(
+        index.references[1..999]
+            .iter()
+            .all(|r| *r == Reference::default())
+    );
+    assert_eq!(index.references[999].bins, [(4681, vec![chunk(9)])]);
+    assert_eq!(index.references[999].intervals, [offset(9, 0)]);
+    assert_eq!(counts.references[999], (1, 0));
+    assert_eq!(counts.references.iter().filter(|c| c.0 > 0).count(), 2);
+}

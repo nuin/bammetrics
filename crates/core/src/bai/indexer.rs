@@ -143,9 +143,15 @@ struct Building {
     /// `BAMIndexBuilder.currentReference`: -1 for a header without
     /// references.
     reference: i64,
-    /// One slot per bin the reference's length allows.
+    /// The chunks of each bin, by bin number: grown to the largest bin met
+    /// and emptied through `seen`, so a reference costs what its records
+    /// touch and nothing for its length.
     bins: Vec<Vec<Chunk>>,
-    bins_seen: usize,
+    /// The bins that hold a chunk, in the order met.
+    seen: Vec<u32>,
+    /// The bins the reference's length allows: htsjdk sizes its bin array
+    /// by it, and a record past it fails.
+    slots: usize,
     /// The smallest start offset per window, 0 for a window not touched.
     windows: Vec<u64>,
     /// `largestIndexSeen`.
@@ -165,10 +171,10 @@ impl Building {
     fn start(&mut self, length: usize) {
         self.reference += 1;
         // `getMaxBinNumberForSequenceLength` plus one.
-        let slots = FIRST_LEAF_BIN as usize + (length >> WINDOW_SHIFT) + 1;
-        self.bins.clear();
-        self.bins.resize_with(slots, Vec::new);
-        self.bins_seen = 0;
+        self.slots = FIRST_LEAF_BIN as usize + (length >> WINDOW_SHIFT) + 1;
+        for bin in self.seen.drain(..) {
+            self.bins[bin as usize].clear();
+        }
         self.windows.clear();
         self.last_window = -1;
         self.metadata = NO_RECORDS;
@@ -200,10 +206,17 @@ impl Building {
             return Err(Refusal::PositionTooHigh);
         }
         let bin = region_to_bin(start - 1, end);
-        let last = self.bins.len() - 1;
-        let Some(chunks) = self.bins.get_mut(bin as usize) else {
-            return Err(Refusal::PastReference { bin, last });
-        };
+        let slot = bin as usize;
+        if slot >= self.slots {
+            return Err(Refusal::PastReference {
+                bin,
+                last: self.slots.saturating_sub(1),
+            });
+        }
+        if self.bins.len() <= slot {
+            self.bins.resize_with(slot + 1, Vec::new);
+        }
+        let chunks = &mut self.bins[slot];
         let chunk = alignment.chunk;
         match chunks.last_mut() {
             // `areInSameOrAdjacentBlocks`: the same block, or the block one
@@ -216,7 +229,7 @@ impl Building {
             Some(_) => chunks.push(chunk),
             None => {
                 chunks.push(chunk);
-                self.bins_seen += 1;
+                self.seen.push(bin);
             }
         }
         let (first, last) = if alignment.end == 0 {
@@ -241,16 +254,15 @@ impl Building {
 
     /// `BinaryBAMIndexWriter.writeReference`; returns the counts written.
     fn write(&mut self, out: &mut impl Write) -> io::Result<(u64, u64)> {
-        if self.bins_seen == 0 {
+        if self.seen.is_empty() {
             // No bin and no interval.
             out.write_all(&[0u8; 8])?;
             return Ok((0, 0));
         }
-        write_count(out, self.bins_seen + 1)?;
-        for (bin, chunks) in self.bins.iter().enumerate() {
-            if !chunks.is_empty() {
-                write_bin(out, bin as u32, chunks)?;
-            }
+        write_count(out, self.seen.len() + 1)?;
+        self.seen.sort_unstable();
+        for &bin in &self.seen {
+            write_bin(out, bin, &self.bins[bin as usize])?;
         }
         write_metadata(out, &self.metadata)?;
         let intervals = (self.last_window + 1) as usize;
@@ -297,7 +309,8 @@ impl<W: Write> Indexer<W> {
         let mut building = Building {
             reference: -1,
             bins: Vec::new(),
-            bins_seen: 0,
+            seen: Vec::new(),
+            slots: 0,
             windows: Vec::new(),
             last_window: -1,
             metadata: NO_RECORDS,
