@@ -334,7 +334,8 @@ pub const VERBS: &[Verb] = &[
             "writes the .bai index of a coordinate-sorted BAM, byte for byte the file Picard's \
              BuildBamIndex writes for the same BAM: to -o, or beside the BAM (x.bai for x.bam, \
              else the input name plus .bai). A BAM whose header does not say SO:coordinate is \
-             refused, as Picard refuses it.",
+             refused, as Picard refuses it. The Picard face without O= writes that file name \
+             into the current directory, as Picard 3.5.0 does.",
         ),
         writes: "BAM index",
         default_output: Some(build_bam_index::default_output),

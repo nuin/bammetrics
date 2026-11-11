@@ -4,10 +4,17 @@
 //! Picard opens `INPUT` as a BAM, requires `SO:coordinate` in its header
 //! (`Input bam file must be sorted by coordinate` for `queryname`,
 //! `unsorted`, `unknown` and a header without the tag), reads every record
-//! and writes the `.bai` to `OUTPUT`. Without `OUTPUT` the index goes
-//! beside the BAM: `x.bai` for `x.bam`, `INPUT.bai` for any other name.
-//! [`crate::bai`] holds the format and what htsjdk writes into it; the
-//! bytes are Picard's for the same BAM bytes.
+//! and writes the `.bai` to `OUTPUT`. [`crate::bai`] holds the format and
+//! what htsjdk writes into it; the bytes are Picard's for the same BAM
+//! bytes.
+//!
+//! Without `OUTPUT`, Picard 3.5.0 writes into the current directory, under
+//! the file name of `INPUT`: `x.bai` for `dir/x.bam`, `NAME.bai` for any
+//! other name. Its help says the index goes beside the BAM; every input
+//! takes the branch its source keeps for a URL. The Picard face does what
+//! Picard does ([`with_default_output`]). The `build-bam-index` verb and the
+//! Python function put the index beside the BAM ([`default_output`]), where
+//! htsjdk and samtools look for it.
 //!
 //! What bammetrics does differently (KNOWN_DIFFERENCES.md):
 //!
@@ -21,8 +28,8 @@
 //!   name and renamed into place. Picard leaves an empty `OUTPUT`.
 //! - An empty BGZF block in the middle of the file does not end the read.
 //! - `OUTPUT` may not be `INPUT`, and a CRAM is refused by name.
-//! - `INPUT` from a pipe needs `OUTPUT`: a pipe has no name to derive one
-//!   from.
+//! - The verb and the Python function need an output name for a pipe: a
+//!   pipe has no name to put the index beside.
 //!
 //! The Python function returns the rows `BamIndexStats` prints for the
 //! index written: one per reference, then the `*` row.
@@ -41,9 +48,11 @@ use crate::registry::{self, Invocation, Opt, Tool};
 pub const TOOL: Tool = Tool {
     name: "BuildBamIndex",
     summary: "writes the .bai of a coordinate-sorted BAM, byte for byte the index Picard \
-              writes for the same file: OUTPUT, or beside INPUT as x.bai for x.bam. Returns \
-              one row per reference of the header (reference, length, aligned, unaligned), \
-              then a * row whose unaligned count is the records without a coordinate.",
+              writes for the same file: to OUTPUT, or beside INPUT as x.bai for x.bam (the \
+              BuildBamIndex command without OUTPUT writes that name into the current \
+              directory, as Picard does). Returns one row per reference of the header \
+              (reference, length, aligned, unaligned), then a * row whose unaligned count is \
+              the records without a coordinate.",
     options: &[
         Opt::path(
             &["INPUT", "I"],
@@ -52,8 +61,8 @@ pub const TOOL: Tool = Tool {
         .required(),
         Opt::path(
             &["OUTPUT", "O"],
-            "The index file (default: INPUT with .bai in place of .bam, or INPUT.bai for \
-             another name).",
+            "The index file (default: beside INPUT, with .bai in place of .bam, or INPUT.bai \
+             for another name).",
         )
         .written(),
         Opt::ignored(
@@ -67,8 +76,8 @@ pub const TOOL: Tool = Tool {
     collector: None,
 };
 
-/// Where Picard writes the index of `input` without `OUTPUT`: `.bai` in
-/// place of a final `.bam`, else appended.
+/// The index beside `input`, named as Picard names it: `.bai` in place of
+/// a final `.bam`, else appended.
 pub fn default_output(input: &Path) -> PathBuf {
     let mut name = input.as_os_str().to_owned();
     if let Some(stem) = input.to_str().and_then(|text| text.strip_suffix(".bam")) {
@@ -76,6 +85,25 @@ pub fn default_output(input: &Path) -> PathBuf {
     }
     name.push(".bai");
     PathBuf::from(name)
+}
+
+/// Where Picard 3.5.0 writes the index of `input` without `OUTPUT`:
+/// [`default_output`] of its file name, in the current directory.
+pub fn picard_default_output(input: &Path) -> PathBuf {
+    let name = input.file_name().unwrap_or(input.as_os_str());
+    default_output(Path::new(name))
+}
+
+/// The Picard face's arguments with `OUTPUT` added when none is given:
+/// [`picard_default_output`] of `INPUT`.
+pub fn with_default_output(args: &[String]) -> Result<Vec<String>> {
+    let inv = TOOL.parse(args)?;
+    let mut args = args.to_vec();
+    if inv.get("OUTPUT").is_none() {
+        let output = picard_default_output(&inv.input);
+        args.push(format!("OUTPUT={}", output.display()));
+    }
+    Ok(args)
 }
 
 /// `OUTPUT`, or the default name beside `INPUT`. A device or a pipe has no
@@ -164,21 +192,32 @@ mod tests {
 
     #[test]
     fn the_default_name_is_picards() {
-        for (input, index) in [
-            ("x.bam", "x.bai"),
-            ("dir/a.b.bam", "dir/a.b.bai"),
-            ("/abs/x.BAM", "/abs/x.BAM.bai"),
-            ("x.cram", "x.cram.bai"),
-            ("x", "x.bai"),
-            ("x.bam.gz", "x.bam.gz.bai"),
-            (".bam", ".bai"),
+        for (input, index, in_cwd) in [
+            ("x.bam", "x.bai", "x.bai"),
+            ("dir/a.b.bam", "dir/a.b.bai", "a.b.bai"),
+            ("/abs/x.BAM", "/abs/x.BAM.bai", "x.BAM.bai"),
+            ("../x.cram", "../x.cram.bai", "x.cram.bai"),
+            ("x", "x.bai", "x.bai"),
+            ("a b/x.bam.gz", "a b/x.bam.gz.bai", "x.bam.gz.bai"),
+            ("/dev/stdin", "/dev/stdin.bai", "stdin.bai"),
         ] {
-            assert_eq!(
-                default_output(Path::new(input)),
-                Path::new(index),
-                "{input}"
-            );
+            let input = Path::new(input);
+            assert_eq!(default_output(input), Path::new(index));
+            assert_eq!(picard_default_output(input), Path::new(in_cwd));
         }
+    }
+
+    #[test]
+    fn the_picard_face_names_the_index_in_the_current_directory() {
+        let args =
+            |list: &[&str]| -> Vec<String> { list.iter().map(|a| (*a).to_owned()).collect() };
+        assert_eq!(
+            with_default_output(&args(&["I=dir/x.bam", "QUIET=true"])).expect("parses"),
+            args(&["I=dir/x.bam", "QUIET=true", "OUTPUT=x.bai"])
+        );
+        let given = args(&["--INPUT", "dir/x.bam", "-O", "y.bai"]);
+        assert_eq!(with_default_output(&given).expect("parses"), given);
+        assert!(with_default_output(&args(&["QUIET=true"])).is_err());
     }
 
     #[test]

@@ -1,7 +1,8 @@
 //! `BuildBamIndex` and `build-bam-index` end to end, without Picard: the
 //! index of each coordinate-sorted fixture BAM is the file Picard 3.5.0
 //! wrote for it (`tests/data/bai`, `tests/data/make_bai.py`), under both
-//! faces and every spelling; the default name is Picard's; a refused run
+//! faces and every spelling; without an output name the verb writes beside
+//! the BAM and the Picard face into the current directory; a refused run
 //! writes nothing; and the `.bai` that `MarkDuplicates CREATE_INDEX=true`
 //! and `chain ... + write --index` put beside a BAM is the index of that
 //! BAM's bytes.
@@ -183,9 +184,20 @@ fn every_spelling_writes_the_same_index() {
     fs::remove_dir_all(&dir).expect("remove the temp dir");
 }
 
+/// Without an output name the verb puts the index beside the BAM, and the
+/// Picard face puts the same file name into the current directory, as
+/// Picard 3.5.0 does.
 #[test]
-fn the_default_name_is_beside_the_bam_as_picard_names_it() {
+fn the_default_name_is_beside_the_bam_or_in_the_current_directory() {
     let dir = fresh_dir("default");
+    let data = dir.join("data");
+    let cwd = dir.join("cwd");
+    for made in [&data, &cwd] {
+        DirBuilder::new()
+            .mode(0o700)
+            .create(made)
+            .expect("a new dir");
+    }
     let bytes = fs::read(root().join(MARKDUP)).expect("fixture BAM");
     let expected = picard_index("markdup");
     for (bam, index) in [
@@ -193,22 +205,36 @@ fn the_default_name_is_beside_the_bam_as_picard_names_it() {
         ("a.b.bam", "a.b.bai"),
         ("plain", "plain.bai"),
     ] {
-        for face in ["BuildBamIndex", "build-bam-index"] {
-            let path = dir.join(bam);
-            write_new(&path, &bytes);
-            let input = match face {
-                "BuildBamIndex" => format!("I={}", path.display()),
-                _ => text(&path).to_owned(),
-            };
-            let run = ok(&[face, &input]);
-            assert_eq!(run.stdout, b"", "{face} {bam}");
-            let mut names = vec![bam.to_owned(), index.to_owned()];
-            names.sort();
-            assert_eq!(listing(&dir), names, "{face} {bam}");
-            assert_eq!(fs::read(dir.join(index)).expect("index"), expected);
-            fs::remove_file(dir.join(index)).expect("remove the index");
-            fs::remove_file(&path).expect("remove the BAM");
-        }
+        let path = data.join(bam);
+        write_new(&path, &bytes);
+        let mut names = vec![bam.to_owned(), index.to_owned()];
+        names.sort();
+
+        let run = command(&["build-bam-index", text(&path)])
+            .current_dir(&cwd)
+            .output()
+            .expect("run bammetrics");
+        assert_eq!(run.status.code(), Some(0), "{bam}: {run:?}");
+        assert_eq!(
+            listing(&data),
+            names,
+            "{bam}: the verb writes beside the BAM"
+        );
+        assert!(listing(&cwd).is_empty(), "{bam}");
+        assert_eq!(fs::read(data.join(index)).expect("index"), expected);
+        fs::remove_file(data.join(index)).expect("remove the index");
+
+        let run = command(&["BuildBamIndex", &format!("I={}", path.display())])
+            .current_dir(&cwd)
+            .output()
+            .expect("run bammetrics");
+        assert_eq!(run.status.code(), Some(0), "{bam}: {run:?}");
+        assert_eq!(run.stdout, b"", "{bam}");
+        assert_eq!(listing(&cwd), [index], "{bam}: the Picard face writes here");
+        assert_eq!(listing(&data), [bam], "{bam}");
+        assert_eq!(fs::read(cwd.join(index)).expect("index"), expected);
+        fs::remove_file(cwd.join(index)).expect("remove the index");
+        fs::remove_file(&path).expect("remove the BAM");
     }
     fs::remove_dir_all(&dir).expect("remove the temp dir");
 }
@@ -244,12 +270,6 @@ fn standard_input_is_indexed_and_needs_an_output_name() {
         String::from_utf8_lossy(&run.stderr),
         "bammetrics build-bam-index: missing -o FILE: standard input has no name to put the \
          BAM index beside\n  -o - writes the BAM index to standard output\n"
-    );
-    let run = piped(&["BuildBamIndex", "I=/dev/stdin"]);
-    assert_eq!(run.status.code(), Some(1), "{run:?}");
-    assert!(
-        String::from_utf8_lossy(&run.stderr).contains("give OUTPUT"),
-        "{run:?}"
     );
     assert!(listing(&dir).is_empty());
     fs::remove_dir_all(&dir).expect("remove the temp dir");

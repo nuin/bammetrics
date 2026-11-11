@@ -1021,9 +1021,11 @@ def build_bam_index(
     output: _Path | None = None,
 ) -> list[_BamIndexRow]:
     """BuildBamIndex: writes the .bai of a coordinate-sorted BAM, byte for byte the index
-    Picard writes for the same file: OUTPUT, or beside INPUT as x.bai for x.bam. Returns
-    one row per reference of the header (reference, length, aligned, unaligned), then a
-    * row whose unaligned count is the records without a coordinate."""
+    Picard writes for the same file: to OUTPUT, or beside INPUT as x.bai for x.bam (the
+    BuildBamIndex command without OUTPUT writes that name into the current directory, as
+    Picard does). Returns one row per reference of the header (reference, length,
+    aligned, unaligned), then a * row whose unaligned count is the records without a
+    coordinate."""
 
 # END registry tools
 
