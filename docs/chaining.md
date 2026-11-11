@@ -272,7 +272,9 @@ place that parses a thread count asks it: the tool verbs, `chain`, the plan file
 `plan`, `collect`, `threads=` on the Picard face (exit 1 there, as every error of that
 face) and the Python `chain`, `qc` and `collect`. In 0.22.0 and before,
 `--threads 100000000` started threads for about two minutes and then panicked inside
-`noodles-bgzf` with exit 101, on every verb.
+`noodles-bgzf` with exit 101, on every verb. It now exits 2 in 0.04 s. The maximum runs:
+`quality-yield` on the 10.3 GB HG002 exome BAM takes 33.1 s at 8 threads (7.8 MB peak)
+and 30.4 s at 256 (48.8 MB peak), with the same metrics (Mac Studio, 20 cores).
 
 Paths. A run makes the directories that are missing above its outputs. `missing/../in.bam`
 names no file before the run and names `in.bam` once `missing` is made, so neither the

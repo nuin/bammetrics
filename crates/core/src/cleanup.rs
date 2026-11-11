@@ -245,7 +245,9 @@ impl MadeDirs {
                 Err(e) => return Err(e),
             }
         }
-        Ok(())
+        // Nothing is left to make. A file where a directory is needed fails
+        // here with the error every verb gives for it.
+        fs::create_dir_all(parent)
     }
 
     /// The directories made so far, in the order they were made.
@@ -703,6 +705,15 @@ mod tests {
         dirs.create_parent(&dir.join("c/out.txt")).expect("c");
         dirs.create_parent(&dir.join("d/e/out.txt")).expect("d/e");
         dirs.create_parent(Path::new("out.txt")).expect("no parent");
+        // A file where a directory is needed is the error of `create_dir_all`.
+        fs::write(dir.join("file"), "x").expect("file");
+        let blocked = dirs.create_parent(&dir.join("file/out.txt"));
+        assert_eq!(
+            blocked.expect_err("a file").kind(),
+            fs::create_dir_all(dir.join("file"))
+                .expect_err("a file")
+                .kind()
+        );
         let made = ["old/a", "old/a/b", "c", "d", "d/e"].map(|d| dir.join(d));
         assert_eq!(dirs.made(), made);
         assert!(made.iter().all(|d| registered().contains(d)));
