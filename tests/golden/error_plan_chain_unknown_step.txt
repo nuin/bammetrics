@@ -1,0 +1,12 @@
+## argv
+plan
+tests/data/insert_size.bam
++
+inser-size
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1: unknown step "inser-size"
+  did you mean insert-size?
+  a step is a tool verb (bammetrics tools lists them) or write

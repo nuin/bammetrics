@@ -1,0 +1,12 @@
+## argv
+fifo-buffer
+--buffer-size
+1024
+--debug-frequency
+1
+## exit
+0
+## stdout
+## stderr
+bammetrics fifo-buffer: bammetrics chain runs its steps in one process and removes the pipe this buffer serves (-q drops this line)
+bammetrics fifo-buffer: Fifo buffer used 0 / 1,024 (0%).

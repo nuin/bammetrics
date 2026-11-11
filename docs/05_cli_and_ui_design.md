@@ -4,7 +4,7 @@ Status: proposal, read against origin/main 87e8d97. Items marked NEW do not exis
 
 ## 1. Goals and non-goals
 
-Goal: one verb-first CLI that covers every tool in the registry, chains steps by pipes and a shared output prefix, and ends in a verdict-first static HTML report. The Picard syntax stays byte-identical. The report is one self-contained file per sample plus one run index. It is written by the binary in under 20 ms (a target, to be measured), with no server, JVM, Python or JavaScript. It opens with pass, warn or fail per metric against a preset, plots only what explains a failure, and keeps every Picard column behind a collapsed table with its definition. It rejects the two models the maintainer named. MultiQC draws a wall of generic plots, gives no verdict and ships a JavaScript runtime. Qualimap writes dozens of plots, gives no verdict, needs a JVM and looks dated. Non-goals: a workflow engine (Nextflow and Snakemake own that), run history, trends, comments, users, audit trails and uploads (the paid dashboard in ROADMAP.md owns those), any change to Picard-face output, and new metric tools beyond the bed-to-interval-list step.
+Goal: one verb-first CLI that covers every tool in the registry, chains steps by pipes and a shared output prefix, and ends in a verdict-first static HTML report. The Picard syntax stays byte-identical. The report is one self-contained file per sample plus one run index. It is written by the binary in under 20 ms (a target, to be measured), with no server, JVM, Python or JavaScript. It opens with pass, warn or fail per metric against a preset, plots only what explains a failure, and keeps every Picard column behind a collapsed table with its definition. It rejects the two models the maintainer named. MultiQC draws a wall of generic plots, gives no verdict and ships a JavaScript runtime. Qualimap writes dozens of plots, gives no verdict, needs a JVM and looks dated. Non-goals: a workflow engine (Nextflow and Snakemake own that; `chain`, docs/chaining.md, is a line of steps with taps, with no branching, loops, scatter or cluster), run history, trends, comments, users, audit trails and uploads (the paid dashboard in ROADMAP.md owns those), and any change to Picard-face output. (Until docs/07 the list also held "new metric tools beyond the bed-to-interval-list step"; D7 of docs/07 section 7 removed it.)
 
 ## 2. CLI grammar
 
@@ -16,14 +16,14 @@ bammetrics <PicardClass> KEY=VALUE ...    unchanged drop-in
 bammetrics <old-subcommand> ...           unchanged (5 subcommands)
 ```
 
-Dispatch order in main.rs: (1) first argument is a Picard class in the registry or in picard_cli: legacy path, untouched. (2) first argument is a NEW verb. (3) the 5 clap subcommands. Class names are CamelCase and verbs are kebab, so they cannot collide. The old subcommands `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics` and `collect` become the same entries in the new verb table, with every flag and default kept.
+Dispatch order in main.rs: (1) first argument is a Picard class in the registry or in picard_cli: legacy path, untouched. (2) first argument is a NEW verb (`chain` among them since W04 of docs/07, and `plan` when its arguments describe a chain). (3) the 5 clap subcommands. Class names are CamelCase and verbs are kebab, so they cannot collide. The old subcommands `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics` and `collect` become the same entries in the new verb table, with every flag and default kept.
 
 Verbs:
 
 | Group | Verbs |
 |---|---|
-| Run | `qc` (preset or metric set, one pass, files, verdict, report), `collect` (same engine, no verdict, kept), one verb per tool |
-| Prepare | `bed-to-interval-list` (P4 library piece pulled forward; 0.14.0), `mark-duplicates` (0.18.0) |
+| Run | `qc` (preset or metric set, one pass, files, verdict, report), `collect` (same engine, no verdict, kept), `chain` (steps split at `+` in one process, records handed on in memory; W04 of docs/07, docs/chaining.md), one verb per tool |
+| Prepare | `bed-to-interval-list` (P4 library piece pulled forward; 0.14.0), `mark-duplicates` (0.18.0), `fifo-buffer` (docs/07 wave W04: standard input to standard output, no input argument and no `-o`) |
 | Post | `accumulate-quality-yield`, `compare-metrics`, `report`, `check` |
 | Info | `tools`, `presets`, `plan`, `completions <shell>`, `help <verb or Picard class>` |
 
@@ -167,10 +167,9 @@ Files in, file out. `AccumulateQualityYieldMetrics I=... I=... O=...` still work
 
 **9. Chain: MarkDuplicates to CollectDuplicateMetrics.**
 ```
-bammetrics mark-duplicates in.bam --metrics out/s.markdup_metrics -o - \
-  | tee out/s.marked.bam | bammetrics duplicate-metrics - -o out/s.dup
+bammetrics chain in.bam -o out/s + mark-duplicates + duplicate-metrics + write
 ```
-The marker reads its input twice, so `in.bam` must be a file. From stdin it spools to `--tmp-dir`. Shipped in 0.18.0 (docs/cli.md); `duplicate-metrics marked.bam` reads the flags it sets.
+One process (W04 of docs/07): `out/s.marked.duplication_metrics`, `out/s.duplicate_metrics` and `out/s.marked.bam`. `duplicate-metrics` gets the marked records in memory and reads the flags the marker set. The marker reads its input twice, so a file source is read twice and a piped one is copied to `--tmp-dir` once. The two-process form of 0.18.0 still works: `bammetrics mark-duplicates in.bam --metrics out/s.markdup_metrics -o - | tee out/s.marked.bam | bammetrics duplicate-metrics - -o out/s.dup`.
 
 **10. One read, seven collectors, stdin.**
 ```
@@ -205,18 +204,18 @@ $ bammetrics check out/NA12878 --preset clinical-panel --format jsonl > checks.j
 
 ## 3. Chaining model
 
-Three layers. No workflow language.
+Three layers. No workflow language. Since W04 of docs/07 `chain` joins them (docs/chaining.md): a line of steps in one process, with the records handed from step to step in memory. Layers 1 and 2 stay as they are. Layer 3 becomes a preset of `chain` in W14, when `qc` can be the last step of a chain; until then `qc` keeps its fixed graph, and a chain without a transform runs the same pass and writes the same metrics files.
 
 1. **Pipes for BAM streams.** `-` is stdin or stdout. A BAM written to `-` uses compression level 1. `tee` saves a copy.
 2. **Prefix-named files for handoff.** A step names its outputs from the prefix. The next step takes the prefix or the exact file. `PREFIX.manifest.json` lists each output with tool and kind.
 3. **A fixed stage graph inside `qc`.** Order: prepare, pass, post, report.
 
-| Stage | Content | BAM reads |
-|---|---|---|
-| prepare | bed-to-interval-list (reads BED; `qc --panel BED` since 0.14.0), mark-duplicates (writes a BAM) | 0 |
-| pass | quality-yield, alignment-summary, insert-size, any number of hs, gc-bias, by-cycle tools, duplicate-metrics | 1, shared through pass.rs |
-| post | accumulate-quality-yield, verdict | 0 |
-| report | HTML and JSON | 0 |
+| Stage | Content | BAM reads | As a `chain` step (stage) |
+|---|---|---|---|
+| prepare | bed-to-interval-list (reads BED; `qc --panel BED` since 0.14.0), mark-duplicates (writes a BAM) | 0 | mark-duplicates is a transform (a barrier: it reads its input twice); bed-to-interval-list reads no BAM and is no step |
+| pass | quality-yield, alignment-summary, insert-size, any number of hs, gc-bias, by-cycle tools, duplicate-metrics | 1, shared through pass.rs | each is a tap; `write` is the tap that writes the BAM |
+| post | accumulate-quality-yield, verdict | 0 | no step (W14: `qc` as the last step) |
+| report | HTML and JSON | 0 | no step (W14) |
 
 Rules:
 
@@ -400,9 +399,14 @@ m = bm.read_metrics("out/s.insert_size_metrics")    # rows and histograms
 v = bm.check("out/s", preset="clinical-panel")
 bm.report(["runs/a", "runs/b"], preset="clinical-panel", output="site/")
 bm.tools(); bm.presets()
+
+run = bm.chain("s.bam", [bm.step("mark_duplicates"), "insert_size", bm.step("write", index=True)],
+               output="out/s")       # W04 of docs/07: the chain verb, one process
+run.stages[0].records_out           # one Stage per step
 ```
 
-- `qc`, `collect` and `report` release the GIL.
+- `qc`, `collect`, `report` and `chain` release the GIL.
+- `chain` and `step` mirror the `chain` verb (docs/python.md, docs/chaining.md section 5.3). A step is a verb name or `step(verb, **options)`, checked when it is made against the keywords of the tool's function. This is a list of steps, as on the command line. It is no fluent builder.
 - A failed verdict is a value. It raises only with `fail_on="fail"`.
 - Errors: `UsageError(ValueError)` and `InputError(OSError)`. Existing `except ValueError` and `except OSError` keep working.
 - Option names come from the same table as the CLI, and `.pyi` is generated from it. This ends `reference` against `reference_sequence` and `path` against `input` for new functions. Old functions keep their signatures and are documented as aliases.
@@ -453,7 +457,7 @@ Risks, each with its mitigation:
 1. Does `qc` without `--preset` use `generic` (this proposal), or must it require a preset? Decided: `generic` (0.12.0).
 2. Are the 14 clinical-panel starting values in 4.3 acceptable as shipped defaults, or does a lab review them first? Decided: they ship labelled "starting values" after the maintainer reviews them; the review closed on 2026-11-06: the 14 values are kept as `clinical-panel` version 2 with the note `reviewed defaults`, and a lab still validates its own copy.
 3. Should `qc` exit 0 on a failed verdict by default (this proposal), or gate by default? Decided: exit 0 unless `--fail-on` is given; `check` always gates (0.12.0).
-4. Is `toml` acceptable as a dependency, or should presets use a hand-written format? Decided: hand-written. `crates/verdict/src/table.rs` reads the TOML subset the presets use, with no dependency; `parse_tables` is the one function a later switch to the `toml` crate replaces (2026-11-06).
+4. Is `toml` acceptable as a dependency, or should presets use a hand-written format? Decided: hand-written. `crates/verdict/src/table.rs` reads the TOML subset the presets use, with no dependency; `parse_tables` is the one function a later switch to the `toml` crate replaces (2026-11-06). The decision holds in docs/07 (D12): in W04 `parse_tables` moved to `crates/core/src/toml.rs`, where the plan file of `chain --plan` reads the same subset plus one-line arrays; the verdict crate calls it and names the preset file in the error.
 5. Is the 73-day plan acceptable, or should phases 9 and 10 move after 0.8? Decided: the plan ran in order; phases 7 to 11 shipped as 0.12.0 to 0.16.0.
 6. Do you want a sample sheet runner in this scope, or leave cohorts to Nextflow plus `report`? Decided: no sample sheet runner; `qc` runs one sample, cohorts loop in the shell or a workflow engine and finish with `report` (example 6). Its phase is dropped.
 7. Should the old subcommands be listed as aliases in `help` and docs, or hidden after 0.9? Decided: neither. `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics` and `collect` are verb-table entries since 0.13.0, listed in `help`, `tools` and docs/cli.md as verbs like the rest (2026-11-06).

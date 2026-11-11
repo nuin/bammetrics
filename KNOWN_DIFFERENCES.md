@@ -299,6 +299,51 @@ behaves how.
   inside the first block after the header block (`tests/data/insert_size.bam` cut at 120
   or 250 bytes, `jumping_bams.py` `main` cut at 1000), and throws `FileTruncatedException`
   (exit 1) when it falls in a later block (`main` cut at 60000 or at half its length).
+- `FifoBuffer` copies standard input to standard output as Picard does and takes no
+  `INPUT`, `OUTPUT`, `ASSUME_SORTED` or `GA4GH_CLIENT_SECRETS` (`Unrecognized option`, exit
+  1, as in Picard); the `fifo-buffer` verb has no input argument, no `-o` and no
+  `--format`. Where it differs:
+  - `BUFFER_SIZE=0` and `IO_SIZE=0` exit 1 (2 on the verb) with `a size from 1 to
+    2147483645 bytes is needed`. Picard 3.5.0 never ends on either once a byte arrives
+    (`CircularByteBuffer.write` returns 0 for ever, `InputStream.read` of an empty array
+    too); on an empty input `BUFFER_SIZE=0` exits 0 after an `ArithmeticException` on its
+    output thread.
+  - A negative size, `null`, and a `BUFFER_SIZE` above 2147483645 exit 1 in both: Picard
+    with `NegativeArraySizeException`, `Can not set int field ... to null value` and
+    `Requested array size exceeds VM limit`, bammetrics with its own line. A value that is
+    no Java `int` carries Picard's `Problem constructing Integer from the string 'abc'.`
+  - The first log line of `DEBUG_FREQUENCY` is printed before the first read and always
+    reads `used 0`. Picard starts its log thread beside the copy, so its first line holds
+    what the reader thread put by then (`used 81,920` in one run, `used 6` in another).
+    Every later line is the bytes held at that second in both. The lines carry no
+    timestamp (`INFO<TAB>FifoBuffer<TAB>Fifo buffer used 0 / 536,870,912 (0%).`), as the
+    `CheckDuplicateMarking` lines. The counts and the percent are printed as the JDK
+    prints them in an English locale; Picard follows the JVM's locale.
+  - A reader that closes standard output ends the copy: exit 0, no message, and the
+    writer of standard input sees its pipe close. Picard exits 0 too, after it reads the
+    rest of its input and drops it (`PrintStream` hides the failed write).
+  - Any other failed write (a full disk under `> file`) exits 1 with `standard output:
+    <error>`. Picard writes through the same `PrintStream`, which reports no failed
+    write, so by its source it exits 0 with a short output (not run on a full disk).
+  - `BUFFER_SIZE` bytes are reserved and written only as the buffer fills: the ring uses
+    a window of them, 64 KiB at first, doubled when the bytes held fill it, and an empty
+    ring starts again at its first byte. The ring's resident memory is at most twice
+    the most bytes ever held and at most `BUFFER_SIZE`. One read chunk and one write
+    chunk add `IO_SIZE` bytes each, cut to `BUFFER_SIZE` (128 KiB by default;
+    `IO_SIZE=1073741824 BUFFER_SIZE=10` peaks at 2.8 MiB, `IO_SIZE=1073741824
+    BUFFER_SIZE=1073741824` at 1.76 GiB on an empty input). The total was 7 to 11 MiB
+    for a 4 GiB copy to a reader that keeps up, 515 MiB with the default buffer full.
+    Picard allocates `BUFFER_SIZE`
+    bytes of heap at its start (630 to 646 MiB resident for the same copy), so it needs
+    `-Xmx` above the buffer size.
+  - `QUIET=false` prints no start and end lines (Picard's default for this tool is
+    `QUIET=true`). The `fifo-buffer` verb prints one line Picard has not: `bammetrics
+    chain runs its steps in one process and removes the pipe this buffer serves`; `-q`
+    or `QUIET=true` drops it, and the Picard face never prints it.
+  - `fifo-buffer` is no step of `bammetrics chain`: a chain has no pipe between its
+    steps. `chain BAM + fifo-buffer` exits 2 before the first read
+    (`FifoBuffer buffers the pipe between two commands and a chain has no pipe: it cannot
+    be a step`). On a pipe into or out of a chain the verb works as on any pipe.
 
 ## Charts
 
@@ -346,6 +391,11 @@ difference, `None` there for a row-count, column, missing-key or histogram line,
 `ignore_histogram_differences=True`, where the one line `Metrics Histograms differ, but
 the 'IGNORE_HISTOGRAM_DIFFERENCES' flag is set.` comes with files that are equal.
 `output=` writes Picard's `OUTPUT` text and `output_table=` its table.
+
+`fifo_buffer()` raises `UsageError` after it checks its keywords. `FifoBuffer` copies the
+standard input of a command to its standard output; a Python call has no pipe to buffer
+and no row to return, and copying file descriptor 0 to 1 under the interpreter would pass
+by `sys.stdin` and `sys.stdout`. The message names the command: `bammetrics fifo-buffer`.
 Every registry function that reads a BAM takes a CRAM with `reference_sequence=`, which the
 stub lists for every such tool and for no other (a BED, VCF or metrics-file input has no
 CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `collect()`,
@@ -879,6 +929,16 @@ negative value every consecutive bin); an empty histogram prints `?` for the mea
 0 when every pair is a duplicate; dovetailed pairs orient by `MC` when present and by
 `TLEN` without it.
 
+`FifoBuffer` behaviour reproduced from Picard 3.5.0 (`tests/concordance/test_fifo_buffer.py`):
+the bytes written equal the bytes read for an empty input, one byte, text, every byte
+value, an input larger than `BUFFER_SIZE` and a BAM; `IO_SIZE` above `BUFFER_SIZE` works;
+`DEBUG_FREQUENCY` of 0 or less logs nothing; the log message is `Fifo buffer used N / M
+(P%).` with `NAME` and a space after `buffer` when given, `NAME=null` as no name, the
+counts with thousands separators and the percent rounded to a whole number, a tie to
+the even one (`1 / 8` is `12%`, `3 / 8` is `38%`); `VERBOSITY=WARNING` and `ERROR` drop
+the lines, `DEBUG` keeps them; the exit code is 0 after the copy, and 0 when the reader
+of standard output closes it.
+
 ## Failures
 
 `CollectSequencingArtifactMetrics` fails where Picard fails, each with Picard's message:
@@ -1053,40 +1113,51 @@ the differences below are on purpose or cannot be avoided.
 
 ## Chains
 
-`bammetrics __chain` ([docs/chaining.md](docs/chaining.md)) runs `MarkDuplicates`, one-pass
+`bammetrics chain` ([docs/chaining.md](docs/chaining.md)) runs `mark-duplicates`, one-pass
 tools and `write` in one process. Picard has no chain, so the reference is the staged
 sequence of the same bammetrics tools: `MarkDuplicates` to a file, then each tool on that
 file. `crates/cli/tests/chain.rs` compares the two on the fixture, corpus t1 and the
 foundation corpus: every metrics file after its `StringHeader` lines and every BAM record
-are equal byte for byte. A chain differs from the staged sequence on purpose here:
+are equal byte for byte. A chain without a transform writes the metrics files `qc` writes,
+byte for byte apart from the `Started on` line. A chain differs from the staged sequence on
+purpose here:
 
 - The `StringHeader` command line of a tap names the chain's source as `INPUT`. Behind a
-  stage it ends in ` CHAIN=` and the stages in front of the tap, joined by `+`
+  transform it ends in ` CHAIN=` and the Picard classes of the transforms in front of the
+  tap, joined by `+`
   (`# CollectInsertSizeMetrics INPUT=in.bam OUTPUT=x.txt CHAIN=MarkDuplicates`). The
   staged file names the marked BAM. A tap on the source writes the line the tool writes.
 - The `CL` of the `@PG` line `MarkDuplicates` adds is the step's command line, which has
   no `OUTPUT`. With `PROGRAM_GROUP_COMMAND_LINE` given, the chained BAM, its `.bai` and
   its `.md5` equal the tool's files byte for byte.
-- `MarkDuplicates` as a step writes no BAM: `OUTPUT`, `COMPRESSION_LEVEL`, `CREATE_INDEX`
-  and `CREATE_MD5_FILE` on the step fail it, and the `write` step takes them.
-  `METRICS_FILE` is optional. A second `INPUT` fails the step: a chain has one source.
-- `write` writes BAM only and refuses a path that is the source or the reference.
+- `mark-duplicates` as a step writes no BAM: `-o`, `COMPRESSION_LEVEL`, `CREATE_INDEX`
+  and `CREATE_MD5_FILE` on the step are usage errors, and the `write` step takes them.
+  Its metrics file is `PREFIX.marked.duplication_metrics` unless `--metrics-file` names
+  another. A step takes no input of its own: a chain has one source.
+- `write` writes BAM only. A `.sam`, `.cram`, `.fastq` or `.fq` name is a usage error
+  that names the wave of docs/07 which adds that kind. A path that is a file the chain
+  reads is refused.
 - `STOP_AFTER` on a tap limits that tap. The steps after it get every record. The staged
   tool reading the marked BAM sees the same records.
-- When a stage fails on a record, every step of its segment writes nothing, a tap on the
-  source included: it saw part of the stream. In the staged sequence that tap would have
-  finished before `MarkDuplicates` started. Steps of an earlier segment keep their files.
-- A usage error inside a stage's own options (`READ_NAME_REGEX=(`, `OUTPUT` on
-  `MarkDuplicates`) is found when the stage is built and exits 1, with the other steps of
-  its segment stopped. The tool alone exits 1 too; the verbs exit 2. Every other usage
-  error of a chain exits 2 before the first read: an unknown step or option, a `.sam` or
-  `.cram` name on `write`, a second `MarkDuplicates`.
+- When a transform fails on a record, every step of its segment writes nothing, a tap on
+  the source included: it saw part of the stream. In the staged sequence that tap would
+  have finished before `MarkDuplicates` started. Steps of an earlier segment keep their
+  files.
+- Every usage error of a chain exits 2 before the first read and names its step: an
+  unknown step or option, a value of an int or float option that is no number, a bad
+  option of `mark-duplicates` (`--read-name-regex "("`), a name `write` cannot write, a
+  second `mark-duplicates`. The `MarkDuplicates` tool alone exits 1 for its bad options.
+  A text value only a tap's tool can judge (`--level NOPE`) fails that tap when it is
+  built (exit 1); the verb of the same tool exits 2.
 - Two steps that name one output file are a usage error (exit 2, nothing read or
   written). The staged sequence runs and the later tool replaces the earlier file.
-- `write CREATE_INDEX=true` on a stream that is not coordinate sorted writes no `.bai`
-  and prints a note. The `MarkDuplicates` tool writes no `.bai` either and prints nothing.
-- An output whose directory is missing exits 1 before the first read, under the step's
-  label. The Picard face exits 1 for the same `OUTPUT`; the verbs create the directory.
+- `write --index` on a stream that is not coordinate sorted writes no `.bai` and prints a
+  note. The `MarkDuplicates` tool writes no `.bai` either and prints nothing.
+- Missing directories above an output are created, as the verbs create them. An output
+  that still cannot be written exits 1 before the first read, under the step's label.
+- The further formats of `--format picard,json` and `--also json` are written from the
+  values in memory, so a double keeps its full precision. `qc --also json` reads the
+  Picard file back and writes its 6 fraction digits.
 
 ## Not in Picard
 

@@ -1,0 +1,8 @@
+# A plan file with a misspelled option: bammetrics chain refuses it and
+# names the line and the closest option.
+[chain]
+source = "tests/data/insert_size.bam"
+
+[[step]]
+verb = "insert-size"
+minmum-pct = 0.1

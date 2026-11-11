@@ -1,0 +1,29 @@
+## argv
+plan
+chain
+tests/data/insert_size.bam
+-o
+OUT/s
+--format
+picard,json
+--also
+markdown
++
+quality-yield
++
+insert-size
+-o
+-
+## exit
+0
+## stdout
+chain plan for tests/data/insert_size.bam
+  source    tests/data/insert_size.bam (BAM, 328 bytes, sort order coordinate; a file, it can be read again)
+  prefix    OUT/s (from -o)
+segment 1  one read of tests/data/insert_size.bam, shared by its taps as qc shares it
+  step 1  quality-yield  tap on in  OUT/s.quality_yield_metrics, OUT/s.quality_yield_metrics.json
+  step 2  insert-size    tap on in  standard output
+also       OUT/s.report.md (every metrics table)
+temp disk  none: no step spills
+nothing ran: this is a plan
+## stderr

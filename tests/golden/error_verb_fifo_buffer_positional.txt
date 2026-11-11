@@ -1,0 +1,10 @@
+## argv
+fifo-buffer
+tests/data/insert_size.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics fifo-buffer: "tests/data/insert_size.bam" is no option: the bytes come from standard input
+  bammetrics fifo-buffer [OPTIONS] < IN > OUT
+  every option: bammetrics help fifo-buffer

@@ -1,0 +1,12 @@
+## argv
+chain
++
+write
+OUT/x.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: missing BAM
+  bammetrics chain [OPTIONS] BAM + STEP [STEP OPTIONS] [+ STEP ...]
+  - reads standard input

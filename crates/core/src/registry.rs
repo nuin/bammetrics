@@ -335,6 +335,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::bam_index_stats::TOOL,
     &crate::check_duplicate_marking::TOOL,
     &crate::jumping_library::TOOL,
+    &crate::fifo_buffer::TOOL,
 ];
 
 /// The tool named `name`.
@@ -883,27 +884,75 @@ pub fn wrap(text: &str, indent: &str, width: usize) -> Vec<String> {
     lines
 }
 
+/// One keyword argument of a tool's Python function, as `bammetrics.pyi`
+/// lists it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PyKeyword {
+    /// The Python name: `minimum_pct`, or `output` for the metrics file.
+    pub name: String,
+    /// The Picard long name of its option row.
+    pub picard: &'static str,
+    /// The annotation of a given value, without `| None`.
+    pub annotation: String,
+    /// The call must give it: the stub writes no default.
+    pub required: bool,
+    /// The row names the tool's metrics file.
+    pub output: bool,
+}
+
+/// The positional arguments of a tool's Python function: its `INPUT`, or
+/// the required value rows of a tool without one.
+fn python_positional(tool: &Tool) -> Vec<&'static Opt> {
+    let takes_input = tool.takes_input();
+    tool.table()
+        .into_iter()
+        .filter(|opt| {
+            if takes_input {
+                opt.picard() == "INPUT"
+            } else {
+                opt.kind == Kind::Value && opt.required
+            }
+        })
+        .collect()
+}
+
+/// The keyword arguments of a tool's Python function, in stub order: one
+/// per value row of [`Tool::table`] that is not positional (`output` for
+/// the metrics file), and `reference_sequence` where it only decodes a
+/// CRAM. The generated stub and the Python `step` both read this list.
+pub fn python_keywords(tool: &Tool) -> Vec<PyKeyword> {
+    let positional = python_positional(tool);
+    let mut keywords = Vec::new();
+    for opt in tool.table() {
+        if positional.iter().any(|p| p.picard() == opt.picard()) {
+            continue;
+        }
+        let (name, annotation, required) = match opt.kind {
+            Kind::Output => (tool.metrics_kwarg(), "_Path".to_owned(), opt.required),
+            Kind::Value => (opt.kwarg(), python_annotation(opt), opt.required),
+            // The metrics do not read it, a CRAM input is decoded with it.
+            Kind::Ignored(REFERENCE_UNREAD) if opt.picard() == "REFERENCE_SEQUENCE" => {
+                (opt.kwarg(), "_Path".to_owned(), false)
+            }
+            Kind::Ignored(_) | Kind::Rejected => continue,
+        };
+        keywords.push(PyKeyword {
+            name,
+            picard: opt.picard(),
+            annotation,
+            required,
+            output: opt.kind == Kind::Output,
+        });
+    }
+    keywords
+}
+
 /// The `bammetrics.pyi` entry of one tool: its positional inputs, one
-/// keyword argument per value row of [`Tool::table`] (`output` for the
-/// metrics file), and the summary as the docstring. `None` leaves an
-/// option out, so Picard's default applies.
+/// keyword argument per [`python_keywords`] row, and the summary as the
+/// docstring. `None` leaves an option out, so Picard's default applies.
 pub fn python_stub(tool: &Tool) -> String {
-    let table = tool.table();
     let mut params = Vec::new();
-    let positional: Vec<&Opt> = if tool.takes_input() {
-        table
-            .iter()
-            .copied()
-            .filter(|o| o.picard() == "INPUT")
-            .collect()
-    } else {
-        table
-            .iter()
-            .copied()
-            .filter(|o| o.kind == Kind::Value && o.required)
-            .collect()
-    };
-    for opt in &positional {
+    for opt in python_positional(tool) {
         let ty = if opt.picard() == "INPUT" && opt.repeated {
             "_Paths".to_owned()
         } else {
@@ -911,34 +960,16 @@ pub fn python_stub(tool: &Tool) -> String {
         };
         params.push(format!("{}: {ty}", opt.kwarg()));
     }
-    let mut keywords = Vec::new();
-    for opt in &table {
-        if positional.iter().any(|p| p.picard() == opt.picard()) {
-            continue;
-        }
-        match opt.kind {
-            Kind::Output if opt.required => {
-                keywords.push(format!("{}: _Path", tool.metrics_kwarg()));
-            }
-            Kind::Output => keywords.push(format!("{}: _Path | None = None", tool.metrics_kwarg())),
-            Kind::Value if opt.required => {
-                keywords.push(format!("{}: {}", opt.kwarg(), python_annotation(opt)));
-            }
-            Kind::Value => keywords.push(format!(
-                "{}: {} | None = None",
-                opt.kwarg(),
-                python_annotation(opt)
-            )),
-            // The metrics do not read it, a CRAM input is decoded with it.
-            Kind::Ignored(REFERENCE_UNREAD) if opt.picard() == "REFERENCE_SEQUENCE" => {
-                keywords.push(format!("{}: _Path | None = None", opt.kwarg()));
-            }
-            Kind::Ignored(_) | Kind::Rejected => {}
-        }
-    }
+    let keywords = python_keywords(tool);
     if !keywords.is_empty() {
         params.push("*".to_owned());
-        params.extend(keywords);
+    }
+    for keyword in keywords {
+        params.push(if keyword.required {
+            format!("{}: {}", keyword.name, keyword.annotation)
+        } else {
+            format!("{}: {} | None = None", keyword.name, keyword.annotation)
+        });
     }
     let mut text = format!("def {}(\n", snake_case(tool.name));
     for param in params {

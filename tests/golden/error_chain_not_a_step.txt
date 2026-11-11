@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+wgs
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (wgs): CollectWgsMetrics has no stage and does not read a BAM in one pass: it cannot be a step
+  wave W14 of docs/07 runs such a tool on a spooled copy of the stream
+  the steps: bammetrics chain --help

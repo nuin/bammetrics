@@ -19,6 +19,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+use bammetrics_core::fifo_buffer;
 use bammetrics_core::multiple_metrics::file_extensions;
 use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
 use bammetrics_core::{bam_index_stats, check_duplicate_marking, compare_metrics, cram, pass};
@@ -321,7 +322,26 @@ pub const VERBS: &[Verb] = &[
             Files::Single,
         )
     },
+    // No input and no -o: standard input to standard output (`copy_stream`).
+    Verb {
+        input: "",
+        about: Some(
+            "copies standard input to standard output through a memory buffer of \
+             --buffer-size bytes, as Picard's FifoBuffer does, so a producer and a consumer \
+             that work in bursts do not wait for each other. Any bytes pass unchanged. One \
+             line on standard error says that bammetrics chain needs no such pipe; -q drops \
+             it.",
+        ),
+        writes: "copied bytes",
+        ignores: &[(Key::Threads, "one thread reads and one writes")],
+        ..verb("fifo-buffer", "FifoBuffer", Files::Single)
+    },
 ];
+
+/// What `fifo-buffer` says on standard error unless `-q` is given: the
+/// pipe it buffers is one `bammetrics chain` does not have.
+pub const CHAIN_NOTE: &str = "bammetrics chain runs its steps in one process and removes the \
+                              pipe this buffer serves (-q drops this line)";
 
 /// Verb spellings every verb's rows take, beside a verb's own
 /// [`Verb::aliases`]: `--reference` is `REFERENCE_SEQUENCE` as in 0.12.
@@ -379,6 +399,17 @@ impl Verb {
     /// The verb's flags: input, output, `--format` and `--sample`, every
     /// row of the tool's option table, then the shared flags.
     pub fn flags(&self) -> Vec<Flag> {
+        let mut flags = self.flags_with_files();
+        if self.copies_stream() {
+            // Bytes to standard output: no file, no format, no sample.
+            flags.retain(|f| !names_a_file(f.key));
+        }
+        flags
+    }
+
+    /// [`Verb::flags`] with the `-o`, `--format` and `--sample` a stream
+    /// verb drops: [`Verb::file_option_error`] parses against them.
+    fn flags_with_files(&self) -> Vec<Flag> {
         let tool = self.tool();
         let table = tool.table();
         let mut flags = Vec::new();
@@ -527,14 +558,18 @@ impl Verb {
     /// `bammetrics <verb> --help`.
     pub fn help(&self) -> String {
         let tool = self.tool();
+        let (input, redirects) = if self.copies_stream() {
+            (String::new(), " < IN > OUT")
+        } else {
+            (format!("[{}] ", self.input), "")
+        };
         let mut text = format!(
-            "bammetrics {}: {}, {}\n\nUsage: bammetrics {} [{}] [OPTIONS]\n       \
+            "bammetrics {}: {}, {}\n\nUsage: bammetrics {} {input}[OPTIONS]{redirects}\n       \
              bammetrics {} {}=... [KEY=VALUE ...]   (Picard syntax)\n\n",
             self.name,
             tool.name,
             self.about.unwrap_or(tool.summary),
             self.name,
-            self.input,
             tool.name,
             if tool.takes_input() { "I" } else { "KEY" },
         );
@@ -550,10 +585,14 @@ impl Verb {
     /// theirs (2 for usage, 1 for inputs and failed tools).
     pub fn run(&self, args: &[String]) -> Result<u8, VerbError> {
         let flags = self.flags();
-        let parsed = grammar::parse(self.name, &flags, args)?;
+        let parsed = grammar::parse(self.name, &flags, args)
+            .map_err(|e| self.file_option_error(args).unwrap_or(e))?;
         if parsed.flag(Key::Help) {
             print!("{}", self.help());
             return Ok(0);
+        }
+        if self.copies_stream() {
+            return self.copy_stream(&parsed, &flags);
         }
         let tool = self.tool();
         let formats = match parsed.last(Key::Format) {
@@ -725,7 +764,11 @@ impl Verb {
     /// An option of [`Verb::one_spelling`] given under two of its
     /// spellings: a usage error from the second. A verb alias is its own
     /// spelling; the row's Picard names and their kebab forms are one.
-    fn check_one_spelling(&self, parsed: &Parsed, flags: &[Flag]) -> Result<(), VerbError> {
+    pub(crate) fn check_one_spelling(
+        &self,
+        parsed: &Parsed,
+        flags: &[Flag],
+    ) -> Result<(), VerbError> {
         for &name in self.one_spelling {
             let spelling = |given: &Given| {
                 let word = normalize(given.spelled.trim_start_matches('-').trim_end_matches('='));
@@ -764,7 +807,11 @@ impl Verb {
     /// with the row's long name. Positional arguments are the inputs
     /// (`INPUT`, or the tool's first required options when it has no
     /// `INPUT`, or its first value option when it has neither).
-    fn picard_arguments(&self, parsed: &Parsed, flags: &[Flag]) -> Result<Vec<String>, VerbError> {
+    pub(crate) fn picard_arguments(
+        &self,
+        parsed: &Parsed,
+        flags: &[Flag],
+    ) -> Result<Vec<String>, VerbError> {
         let tool = self.tool();
         let mut picard = Vec::new();
         let inputs: Vec<&String> = parsed
@@ -978,7 +1025,11 @@ impl Verb {
 
     /// A required row with no value: an error that names its flag and its
     /// Picard name.
-    fn check_required(&self, flags: &[Flag], picard: &[String]) -> Result<(), VerbError> {
+    pub(crate) fn check_required(
+        &self,
+        flags: &[Flag],
+        picard: &[String],
+    ) -> Result<(), VerbError> {
         for flag in flags.iter().filter(|f| f.required) {
             let Some(name) = flag.picard() else { continue };
             if picard.iter().any(|a| a.starts_with(&format!("{name}="))) {
@@ -1007,7 +1058,7 @@ impl Verb {
     /// Every `INPUT` that names a file must exist (`-` is standard input).
     /// The error says where the name came from: `-i` as spelled, else the
     /// positional argument by its placeholder (`BAM`, as docs/05 example 12).
-    fn check_inputs(&self, parsed: &Parsed, picard: &[String]) -> Result<(), VerbError> {
+    pub(crate) fn check_inputs(&self, parsed: &Parsed, picard: &[String]) -> Result<(), VerbError> {
         let stdin_reads = picard.iter().filter(|a| *a == "INPUT=-").count();
         if stdin_reads > 1 {
             return Err(VerbError::usage(
@@ -1046,7 +1097,7 @@ impl Verb {
 
     /// A core error with the option it names: `MINIMUM_PCT=abc: ...` comes
     /// from the flag that gave `MINIMUM_PCT`, a write error from `-o`.
-    fn core_error(&self, parsed: &Parsed, e: &bammetrics_core::Error) -> VerbError {
+    pub(crate) fn core_error(&self, parsed: &Parsed, e: &bammetrics_core::Error) -> VerbError {
         let from = match e {
             bammetrics_core::Error::Usage(message) => {
                 message.split_once('=').and_then(|(name, _)| {
@@ -1190,6 +1241,79 @@ impl Verb {
     }
 }
 
+/// The flags of a file a verb writes, which a stream verb has not.
+fn names_a_file(key: Key) -> bool {
+    matches!(key, Key::Output | Key::Format | Key::Sample)
+}
+
+/// `fifo-buffer`: the one verb that moves bytes and writes no file.
+impl Verb {
+    /// True for the verb of `FifoBuffer`: standard input to standard
+    /// output, so it has no input argument, no `-o` and no `--format`.
+    pub(crate) fn copies_stream(&self) -> bool {
+        self.class == fifo_buffer::TOOL.name
+    }
+
+    /// A usage error of a stream verb, with the usage line as its hint.
+    fn stream_usage(&self, what: String) -> VerbError {
+        VerbError::usage(self.name, what)
+            .hint(format!("bammetrics {} [OPTIONS] < IN > OUT", self.name))
+            .hint(format!("every option: bammetrics help {}", self.name))
+    }
+
+    /// The error for `-o`, `--format` or `--sample` on a stream verb, in
+    /// any spelling: `args` parse once those flags are back and one of
+    /// them was given. `None` for every other verb and every other error.
+    fn file_option_error(&self, args: &[String]) -> Option<VerbError> {
+        if !self.copies_stream() {
+            return None;
+        }
+        let parsed = grammar::parse(self.name, &self.flags_with_files(), args).ok()?;
+        let given = parsed.given.iter().find(|g| names_a_file(g.key))?;
+        Some(self.stream_usage(format!(
+            "{} is no option of this verb: the bytes go to standard output unchanged",
+            given.spelled
+        )))
+    }
+
+    /// Copy standard input to standard output through the buffer. On
+    /// standard error: [`CHAIN_NOTE`] and the notes of ignored options
+    /// (not with `-q`), the log lines of `--debug-frequency`, and with
+    /// `-v` the Picard command line and the byte count. A closed standard
+    /// output ends the copy with exit 0 and no message.
+    fn copy_stream(&self, parsed: &Parsed, flags: &[Flag]) -> Result<u8, VerbError> {
+        if let Some(word) = parsed.positional.first() {
+            return Err(self.stream_usage(format!(
+                "{word:?} is no option: the bytes come from standard input"
+            )));
+        }
+        let core = |e: bammetrics_core::Error| self.core_error(parsed, &e);
+        let picard = self.picard_arguments(parsed, flags)?;
+        let inv = self.tool().parse(&picard).map_err(core)?;
+        let options = fifo_buffer::Options::from_invocation(&inv).map_err(core)?;
+        let verbose = parsed.flag(Key::Verbose);
+        if verbose {
+            eprintln!("bammetrics {}: {}", self.name, inv.command);
+        }
+        if !parsed.flag(Key::Quiet) {
+            for note in &inv.notes {
+                eprintln!("bammetrics {}: {note}", self.name);
+            }
+            eprintln!("bammetrics {}: {CHAIN_NOTE}", self.name);
+        }
+        let name = self.name;
+        let log = move |line: &str| eprintln!("bammetrics {name}: {line}");
+        let copied = fifo_buffer::copy_standard_streams(&options, log).map_err(core)?;
+        if verbose {
+            eprintln!(
+                "bammetrics {}: copied {} of {} bytes read",
+                self.name, copied.written, copied.read
+            );
+        }
+        Ok(0)
+    }
+}
+
 /// The `Options:` lines of `--help`: spellings, Picard names, help.
 pub fn option_lines(flags: &[Flag]) -> String {
     let width = flags.iter().map(|f| f.spellings().len()).max().unwrap_or(0);
@@ -1291,7 +1415,7 @@ fn same_file_key(path: &Path) -> PathBuf {
 
 /// Create the directories above `path` that do not exist (docs/05 section
 /// 2.3: missing output directories are created).
-fn create_parent(verb: &str, path: &Path) -> Result<(), VerbError> {
+pub(crate) fn create_parent(verb: &str, path: &Path) -> Result<(), VerbError> {
     match path.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => fs::create_dir_all(parent)
             .map_err(|e| VerbError::input(verb, format!("{}: {e}", parent.display()))),

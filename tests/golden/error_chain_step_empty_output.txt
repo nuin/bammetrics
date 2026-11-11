@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+gc-bias
+-o
+
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (gc-bias): -o names no file: its value is empty (from -o)

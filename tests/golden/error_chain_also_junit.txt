@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/insert_size.bam
+--also
+junit
++
+insert-size
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: --also junit prints a verdict, and a chain has none (from --also)
+  bammetrics check DIR --format junit reads the files a chain wrote
+  qc as the last step of a chain is wave W14 of docs/07

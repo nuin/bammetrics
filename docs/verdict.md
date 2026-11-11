@@ -86,8 +86,10 @@ names it, once per page.
 The file reader accepts the subset of TOML the presets use: comments, `[table]`,
 `[[table]]`, and `key = value` with a double-quoted string, an integer, a decimal, `true`
 or `false`. A preset file is valid TOML, so any TOML tool reads it. The parser is
-`table::parse_tables` in the crate, the one function a switch to the `toml` crate (open
-decision 4 of docs/05) would replace.
+`bammetrics_core::toml::parse_tables`, the one function a switch to the `toml` crate
+(decision 4 of docs/05) would replace; `table::parse_tables` in this crate calls it and
+names the preset file in the error. The plan file of `bammetrics chain --plan` reads
+the same subset, plus one-line arrays. A preset key takes no list.
 
 The preset hash is FNV-1a 64 of the file text with every `\r` removed, printed as 16 hex
 digits. The same file hashes the same on every platform and under either line ending;
@@ -222,7 +224,7 @@ nothing else from a run. Written by `Verdict::to_json`, read back by
 ```json
 {
   "schema": "bammetrics.verdict/1",
-  "tool_version": "0.21.0",
+  "tool_version": "0.22.0",
   "sample": "NA12878",
   "preset": {"name": "clinical-panel", "version": 3, "hash": "6f0d59319750923f",
              "source": "built-in", "note": "reviewed defaults; gap and sex rules are starting values"},

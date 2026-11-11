@@ -1,0 +1,104 @@
+## argv
+chain
+I=tests/data/markdup.bam
+O=OUT/s
++
+MarkDuplicates
+TAGGING_POLICY=All
+M=OUT/dup.txt
++
+CollectInsertSizeMetrics
+M=0.1
++
+write
+O=OUT/marked.bam
+CREATE_INDEX=true
+COMPRESSION_LEVEL=1
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: step 1 (mark-duplicates): 36 records in, 36 out, 16 changed
+bammetrics chain: 3 steps finished, 4 files written
+## file dup.txt
+## htsjdk.samtools.metrics.StringHeader
+# MarkDuplicates INPUT=tests/data/markdup.bam TAGGING_POLICY=All METRICS_FILE=OUT/dup.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.DuplicationMetrics
+LIBRARY	UNPAIRED_READS_EXAMINED	READ_PAIRS_EXAMINED	SECONDARY_OR_SUPPLEMENTARY_RDS	UNMAPPED_READS	UNPAIRED_READ_DUPLICATES	READ_PAIR_DUPLICATES	READ_PAIR_OPTICAL_DUPLICATES	PERCENT_DUPLICATION	ESTIMATED_LIBRARY_SIZE
+lib1	3	6	1	1	2	3	3	0.533333	
+lib2	2	7	1	2	1	4	3	0.5625	6
+
+## HISTOGRAM	java.lang.Double
+set_size	all_sets	optical_sets	non_optical_sets
+1.0	2	0	5
+2.0	2	2	1
+3.0	1	2	0
+4.0	1	0	0
+
+## file marked.bai
+<index not recorded>
+## file marked.bam
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:chr1	LN:100000
+@RG	ID:rg1	SM:s1	LB:lib1	PU:fc1.1
+@RG	ID:rg2	SM:s1	LB:lib2	PU:fc1.2
+@PG	ID:bwa	PN:bwa	VN:0.7.17
+@PG	ID:MarkDuplicates	VN:bammetrics <version>	CL:MarkDuplicates INPUT=tests/data/markdup.bam TAGGING_POLICY=All METRICS_FILE=OUT/dup.txt	PN:MarkDuplicates
+@PG	ID:MarkDuplicates.2	VN:bammetrics <version>	CL:MarkDuplicates INPUT=tests/data/markdup.bam TAGGING_POLICY=All METRICS_FILE=OUT/dup.txt	PN:MarkDuplicates	PP:bwa
+M1:7:FC1:1:1101:1000:2000	1123	0	1001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	DT:Z:SQ	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1123	0	1001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	DT:Z:SQ	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	99	0	1001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:9000:9000	1024	0	1001	PG:Z:MarkDuplicates.2	RG:Z:rg1	DT:Z:LB
+M1:7:FC1:1:1101:9001:9000	1024	0	1001	PG:Z:MarkDuplicates.2	RG:Z:rg1	DT:Z:LB
+M1:7:FC1:1:1101:1000:2000	1171	0	1251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	DT:Z:SQ	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1171	0	1251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	DT:Z:SQ	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	147	0	1251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	99	0	2001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	147	0	2301	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1000:2000	1123	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	DT:Z:LB	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1187	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	DT:Z:SQ	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	1123	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	DT:Z:SQ	RX:Z:TTGA
+M1:7:FC1:1:1101:1120:2090	163	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1000:2000	1171	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	DT:Z:LB	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1107	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	DT:Z:SQ	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	1171	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	DT:Z:SQ	RX:Z:TTGA
+M1:7:FC1:1:1101:1120:2090	83	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1102:1000:2000	1123	0	4001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	DT:Z:SQ	RX:Z:TTGA
+M1:7:FC1:1:1102:1040:2030	99	0	4001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1102:1000:2000	1171	0	4321	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	DT:Z:SQ	RX:Z:TTGA
+M1:7:FC1:1:1102:1040:2030	147	0	4321	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1000:2000	1123	0	5001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	DT:Z:SQ	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	99	0	5001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1101:1000:2000	1171	0	5251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	DT:Z:SQ	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	147	0	5251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1102:1000:2000	99	0	6001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	147	0	6401	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+single0	1024	0	7001	PG:Z:MarkDuplicates	RG:Z:rg2	DT:Z:LB
+single1	0	0	7001	PG:Z:MarkDuplicates	RG:Z:rg2
+mateless	73	0	8001	PG:Z:MarkDuplicates	RG:Z:rg1
+mateless	133	0	8001	PG:Z:MarkDuplicates	RG:Z:rg1
+M1:7:FC1:1:1101:1000:2000	329	0	9001	PG:Z:MarkDuplicates	RG:Z:rg1
+M1:7:FC1:1:1102:1000:2000	2121	0	9501	PG:Z:MarkDuplicates	RG:Z:rg2
+unplaced	77	-1	0	PG:Z:MarkDuplicates.2	RG:Z:rg2
+unplaced	141	-1	0	PG:Z:MarkDuplicates.2	RG:Z:rg2
+## file s.insert_size_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectInsertSizeMetrics INPUT=tests/data/markdup.bam OUTPUT=OUT/s.insert_size_metrics MINIMUM_PCT=0.1 CHAIN=MarkDuplicates
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.InsertSizeMetrics
+MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MAX_INSERT_SIZE	MEAN_INSERT_SIZE	STANDARD_DEVIATION	READ_PAIRS	PAIR_ORIENTATION	WIDTH_OF_10_PERCENT	WIDTH_OF_20_PERCENT	WIDTH_OF_30_PERCENT	WIDTH_OF_40_PERCENT	WIDTH_OF_50_PERCENT	WIDTH_OF_60_PERCENT	WIDTH_OF_70_PERCENT	WIDTH_OF_80_PERCENT	WIDTH_OF_90_PERCENT	WIDTH_OF_95_PERCENT	WIDTH_OF_99_PERCENT	SAMPLE	LIBRARY	READ_GROUP
+340	300	35	300	450	350	56.213877	6	FR	21	21	21	61	61	81	81	81	221	221	221			
+
+## HISTOGRAM	java.lang.Integer
+insert_size	All_Reads.fr_count
+300	2
+330	1
+350	1
+370	1
+450	1
+

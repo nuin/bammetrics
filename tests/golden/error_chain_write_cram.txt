@@ -1,0 +1,11 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+write
+OUT/x.cram
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (write): OUT/x.cram: bammetrics writes BAM only: CRAM output is wave W15 of docs/07_full_parity_program.md

@@ -1,0 +1,10 @@
+## argv
+chain
+tests/data/nope.bam
++
+quality-yield
+## exit
+1
+## stdout
+## stderr
+bammetrics chain: tests/data/nope.bam not found (from BAM)

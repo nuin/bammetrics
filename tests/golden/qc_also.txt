@@ -478,7 +478,7 @@ MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MA
 ## file sample.manifest.json
 {
   "schema": "bammetrics.manifest/1",
-  "tool_version": "0.21.0",
+  "tool_version": "0.22.0",
   "sample": "insert_size",
   "bam": "tests/data/insert_size.bam",
   "prefix": "OUT/sample",
@@ -496,7 +496,7 @@ MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MA
         "OUTPUT=OUT/sample.quality_yield_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.21.0",
+      "tool_version": "0.22.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -524,7 +524,7 @@ MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MA
         "OUTPUT=OUT/sample.alignment_summary_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.21.0",
+      "tool_version": "0.22.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -552,7 +552,7 @@ MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MA
         "OUTPUT=OUT/sample.insert_size_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.21.0",
+      "tool_version": "0.22.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -580,7 +580,7 @@ MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MA
         "METRICS_FILE=OUT/sample.duplicate_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.21.0",
+      "tool_version": "0.22.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -611,7 +611,7 @@ MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MA
         "OUT/sample.quality_yield_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.21.0",
+      "tool_version": "0.22.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -633,7 +633,7 @@ MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MA
         "--date=2026-01-02 03:04:05 UTC"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.21.0",
+      "tool_version": "0.22.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -665,7 +665,7 @@ MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MA
         "--also=json,tsv,markdown,junit,multiqc"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.21.0",
+      "tool_version": "0.22.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -936,7 +936,7 @@ Preset generic v1 (6dd89e). 0 fail, 0 warn, 6 pass, 0 not measured.
 ## file sample.verdict.json
 {
   "schema": "bammetrics.verdict/1",
-  "tool_version": "0.21.0",
+  "tool_version": "0.22.0",
   "sample": "insert_size",
   "preset": {
     "name": "generic",

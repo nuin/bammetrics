@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/insert_size.bam
+--thread
+2
++
+insert-size
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: unknown option --thread
+  did you mean --threads?
+  every option: bammetrics help chain

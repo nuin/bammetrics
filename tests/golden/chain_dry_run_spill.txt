@@ -1,0 +1,31 @@
+## argv
+chain
+tests/data/insert_size.cram
+-R
+tests/data/ref_100k.fa
+--dry-run
++
+mark-duplicates
+--max-records-in-ram
+5
++
+sequencing-artifact
++
+write
+-
+## exit
+0
+## stdout
+chain plan for tests/data/insert_size.cram
+  source    tests/data/insert_size.cram (CRAM, 966 bytes, sort order coordinate; a file, it can be read again)
+  prefix    ./insert_size (from the source name, no -o)
+  reference tests/data/ref_100k.fa
+segment 1  one read of tests/data/insert_size.cram
+  step 1  mark-duplicates      transform, first read  takes every record, then finds the duplicate sets
+segment 2  a second read of tests/data/insert_size.cram through step 1 (replay: nothing is spooled)
+  step 1  mark-duplicates      stream marked          ./insert_size.marked.duplication_metrics
+  step 2  sequencing-artifact  tap on marked          ./insert_size.* (named when the step finishes)
+  step 3  write                BAM of marked          standard output
+temp disk  about 2.7 KiB in the system temporary directory: mark-duplicates spills its read ends, about 59 bytes for each of about 46 records (estimated from the file size)
+nothing ran: this is a plan
+## stderr

@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+insert-size
+--threads
+2
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (insert-size): --threads belongs to the chain: give it before the first + (from --threads)

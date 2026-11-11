@@ -1,0 +1,9 @@
+## argv
+fifo-buffer
+--io-size
+64k
+## exit
+2
+## stdout
+## stderr
+bammetrics fifo-buffer: IO_SIZE=64k: Problem constructing Integer from the string '64k'. (from --io-size)

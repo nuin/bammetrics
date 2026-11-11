@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/insert_size.bam
+tests/data/orientation.bam
++
+insert-size
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: one source expected, got 2 (from tests/data/orientation.bam)
+  every step starts with +
+  usage: bammetrics chain [OPTIONS] BAM + STEP [STEP OPTIONS] [+ STEP ...]

@@ -114,6 +114,27 @@ impl Sink for CollectorSink {
     }
 }
 
+/// The file kinds `write` picks by extension in a later wave of docs/07:
+/// the extension, the kind and the wave.
+const LATER_KINDS: [(&str, &str, &str); 4] = [
+    ("sam", "SAM", "W05"),
+    ("cram", "CRAM", "W15"),
+    ("fastq", "FASTQ", "W22"),
+    ("fq", "FASTQ", "W22"),
+];
+
+/// The kind and wave of a name `write` cannot make yet (`out.sam`,
+/// `out.fastq.gz`); `None` for any other name, which is written as a BAM.
+pub fn later_kind(path: &Path) -> Option<(&'static str, &'static str)> {
+    let name = path.file_name()?.to_str()?.to_ascii_lowercase();
+    let name = name.strip_suffix(".gz").unwrap_or(&name);
+    let extension = name.rsplit_once('.')?.1;
+    LATER_KINDS
+        .iter()
+        .find(|(ext, _, _)| *ext == extension)
+        .map(|(_, kind, wave)| (*kind, *wave))
+}
+
 /// The file the `write` step writes.
 #[derive(Clone, Debug)]
 pub struct WriteOptions {
@@ -137,22 +158,19 @@ impl WriteOptions {
         }
     }
 
-    /// A usage error for a name the step cannot write: the file is always
-    /// a BAM. The caller of a chain asks before the first read; the step
-    /// asks again when it is built.
+    /// A usage error for a name the step cannot write yet: the file is
+    /// always a BAM, and the error names the wave of docs/07 that adds the
+    /// kind the name asks for. The caller of a chain asks before the first
+    /// read; the step asks again when it is built.
     pub fn check(&self) -> Result<()> {
-        let extension = |wanted: &str| {
-            self.path
-                .extension()
-                .is_some_and(|e| e.eq_ignore_ascii_case(wanted))
+        let Some((kind, wave)) = later_kind(&self.path) else {
+            return Ok(());
         };
-        if extension("sam") || extension("cram") {
-            return Err(Error::Usage(format!(
-                "{}: bammetrics writes BAM only (SAM and CRAM output are not supported)",
-                self.path.display()
-            )));
-        }
-        Ok(())
+        Err(Error::Usage(format!(
+            "{}: bammetrics writes BAM only: {kind} output is wave {wave} of \
+             docs/07_full_parity_program.md",
+            self.path.display()
+        )))
     }
 
     /// Every file the step may write: the BAM, then the `.bai` and the

@@ -1,0 +1,149 @@
+## argv
+chain
+tests/data/markdup.bam
+-R
+tests/data/ref_100k.fa
+-o
+OUT/sample
++
+mark-duplicates
++
+alignment-summary
++
+insert-size
++
+quality-yield
++
+duplicate-metrics
++
+write
+--index
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: step 1 (mark-duplicates): 36 records in, 36 out, 16 changed
+bammetrics chain: 6 steps finished, 7 files written
+## file sample.alignment_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectAlignmentSummaryMetrics INPUT=tests/data/markdup.bam OUTPUT=OUT/sample.alignment_summary_metrics REFERENCE_SEQUENCE=tests/data/ref_100k.fa CHAIN=MarkDuplicates
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.AlignmentSummaryMetrics
+CATEGORY	TOTAL_READS	PF_READS	PCT_PF_READS	PF_NOISE_READS	PF_READS_ALIGNED	PCT_PF_READS_ALIGNED	PF_ALIGNED_BASES	PF_HQ_ALIGNED_READS	PF_HQ_ALIGNED_BASES	PF_HQ_ALIGNED_Q20_BASES	PF_HQ_MEDIAN_MISMATCHES	PF_MISMATCH_RATE	PF_HQ_ERROR_RATE	PF_INDEL_RATE	MEAN_READ_LENGTH	SD_READ_LENGTH	MEDIAN_READ_LENGTH	MAD_READ_LENGTH	MIN_READ_LENGTH	MAX_READ_LENGTH	MEAN_ALIGNED_READ_LENGTH	READS_ALIGNED_IN_PAIRS	PCT_READS_ALIGNED_IN_PAIRS	PF_READS_IMPROPER_PAIRS	PCT_PF_READS_IMPROPER_PAIRS	BAD_CYCLES	STRAND_BALANCE	PCT_CHIMERAS	PCT_ADAPTER	PCT_SOFTCLIP	PCT_HARDCLIP	AVG_POS_3PRIME_SOFTCLIP_LENGTH	SAMPLE	LIBRARY	READ_GROUP
+FIRST_OF_PAIR	15	15	1	0	14	0.933333	700	14	700	700	0	0	0	0	50	0	50	0	50	50	46.666667	13	0.928571	1	0.071429	0	0.857143	0	0	0	0	0			
+SECOND_OF_PAIR	15	15	1	0	13	0.866667	650	13	650	650	0	0	0	0	50	0	50	0	50	50	43.333333	13	1	0	0	0	0.153846	0	0	0	0	0			
+PAIR	30	30	1	0	27	0.9	1350	27	1350	1350	0	0	0	0	50	0	50	0	50	50	45	26	0.962963	1	0.037037	0	0.518519	0	0	0	0	0			
+UNPAIRED	4	4	1	0	4	1	200	4	200	200	0	0	0	0	50	0	50	0	50	50	50	0	0	0	0	0	1	0	0	0	0	0			
+
+## HISTOGRAM	java.lang.Integer
+READ_LENGTH	PAIRED_TOTAL_LENGTH_COUNT	PAIRED_ALIGNED_LENGTH_COUNT	UNPAIRED_TOTAL_LENGTH_COUNT	UNPAIRED_ALIGNED_LENGTH_COUNT
+0	0	3	0	0
+50	30	27	4	4
+
+## file sample.duplicate_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectDuplicateMetrics INPUT=tests/data/markdup.bam METRICS_FILE=OUT/sample.duplicate_metrics CHAIN=MarkDuplicates
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.DuplicationMetrics
+LIBRARY	UNPAIRED_READS_EXAMINED	READ_PAIRS_EXAMINED	SECONDARY_OR_SUPPLEMENTARY_RDS	UNMAPPED_READS	UNPAIRED_READ_DUPLICATES	READ_PAIR_DUPLICATES	READ_PAIR_OPTICAL_DUPLICATES	PERCENT_DUPLICATION	ESTIMATED_LIBRARY_SIZE
+lib1	3	6	1	1	2	3	0	0.533333	3
+lib2	2	7	1	2	1	4	0	0.5625	3
+
+
+## file sample.insert_size_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectInsertSizeMetrics INPUT=tests/data/markdup.bam OUTPUT=OUT/sample.insert_size_metrics CHAIN=MarkDuplicates
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.InsertSizeMetrics
+MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MAX_INSERT_SIZE	MEAN_INSERT_SIZE	STANDARD_DEVIATION	READ_PAIRS	PAIR_ORIENTATION	WIDTH_OF_10_PERCENT	WIDTH_OF_20_PERCENT	WIDTH_OF_30_PERCENT	WIDTH_OF_40_PERCENT	WIDTH_OF_50_PERCENT	WIDTH_OF_60_PERCENT	WIDTH_OF_70_PERCENT	WIDTH_OF_80_PERCENT	WIDTH_OF_90_PERCENT	WIDTH_OF_95_PERCENT	WIDTH_OF_99_PERCENT	SAMPLE	LIBRARY	READ_GROUP
+340	300	35	300	450	350	56.213877	6	FR	21	21	21	61	61	81	81	81	221	221	221			
+
+## HISTOGRAM	java.lang.Integer
+insert_size	All_Reads.fr_count
+300	2
+330	1
+350	1
+370	1
+450	1
+
+## file sample.marked.bai
+<index not recorded>
+## file sample.marked.bam
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:chr1	LN:100000
+@RG	ID:rg1	SM:s1	LB:lib1	PU:fc1.1
+@RG	ID:rg2	SM:s1	LB:lib2	PU:fc1.2
+@PG	ID:bwa	PN:bwa	VN:0.7.17
+@PG	ID:MarkDuplicates	VN:bammetrics <version>	CL:MarkDuplicates INPUT=tests/data/markdup.bam METRICS_FILE=OUT/sample.marked.duplication_metrics REFERENCE_SEQUENCE=tests/data/ref_100k.fa	PN:MarkDuplicates
+@PG	ID:MarkDuplicates.2	VN:bammetrics <version>	CL:MarkDuplicates INPUT=tests/data/markdup.bam METRICS_FILE=OUT/sample.marked.duplication_metrics REFERENCE_SEQUENCE=tests/data/ref_100k.fa	PN:MarkDuplicates	PP:bwa
+M1:7:FC1:1:1101:1000:2000	1123	0	1001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1123	0	1001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	99	0	1001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:9000:9000	1024	0	1001	PG:Z:MarkDuplicates.2	RG:Z:rg1
+M1:7:FC1:1:1101:9001:9000	1024	0	1001	PG:Z:MarkDuplicates.2	RG:Z:rg1
+M1:7:FC1:1:1101:1000:2000	1171	0	1251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1171	0	1251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	147	0	1251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	99	0	2001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	147	0	2301	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1000:2000	1123	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1187	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	1123	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1101:1120:2090	163	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1000:2000	1171	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1107	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	1171	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1101:1120:2090	83	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1102:1000:2000	1123	0	4001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1102:1040:2030	99	0	4001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1102:1000:2000	1171	0	4321	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1102:1040:2030	147	0	4321	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1000:2000	1123	0	5001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	99	0	5001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1101:1000:2000	1171	0	5251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	147	0	5251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1102:1000:2000	99	0	6001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	147	0	6401	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+single0	1024	0	7001	PG:Z:MarkDuplicates	RG:Z:rg2
+single1	0	0	7001	PG:Z:MarkDuplicates	RG:Z:rg2
+mateless	73	0	8001	PG:Z:MarkDuplicates	RG:Z:rg1
+mateless	133	0	8001	PG:Z:MarkDuplicates	RG:Z:rg1
+M1:7:FC1:1:1101:1000:2000	329	0	9001	PG:Z:MarkDuplicates	RG:Z:rg1
+M1:7:FC1:1:1102:1000:2000	2121	0	9501	PG:Z:MarkDuplicates	RG:Z:rg2
+unplaced	77	-1	0	PG:Z:MarkDuplicates.2	RG:Z:rg2
+unplaced	141	-1	0	PG:Z:MarkDuplicates.2	RG:Z:rg2
+## file sample.marked.duplication_metrics
+## htsjdk.samtools.metrics.StringHeader
+# MarkDuplicates INPUT=tests/data/markdup.bam METRICS_FILE=OUT/sample.marked.duplication_metrics REFERENCE_SEQUENCE=tests/data/ref_100k.fa
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.DuplicationMetrics
+LIBRARY	UNPAIRED_READS_EXAMINED	READ_PAIRS_EXAMINED	SECONDARY_OR_SUPPLEMENTARY_RDS	UNMAPPED_READS	UNPAIRED_READ_DUPLICATES	READ_PAIR_DUPLICATES	READ_PAIR_OPTICAL_DUPLICATES	PERCENT_DUPLICATION	ESTIMATED_LIBRARY_SIZE
+lib1	3	6	1	1	2	3	3	0.533333	
+lib2	2	7	1	2	1	4	3	0.5625	6
+
+## HISTOGRAM	java.lang.Double
+set_size	all_sets	optical_sets	non_optical_sets
+1.0	2	0	5
+2.0	2	2	1
+3.0	1	2	0
+4.0	1	0	0
+
+## file sample.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectQualityYieldMetrics INPUT=tests/data/markdup.bam OUTPUT=OUT/sample.quality_yield_metrics CHAIN=MarkDuplicates
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+34	34	50	1700	1700	1700	1700	1250	1250	2590	2590
+
+

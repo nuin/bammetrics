@@ -1,0 +1,9 @@
+# A plan file whose step names the plan file itself as its output:
+# bammetrics chain refuses it. The chain reads the plan, so no step may
+# write it.
+[chain]
+source = "tests/data/insert_size.bam"
+
+[[step]]
+verb = "insert-size"
+output = "tests/data/chain_writes_plan.toml"

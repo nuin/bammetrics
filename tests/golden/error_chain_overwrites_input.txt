@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/markdup.bam
++
+mark-duplicates
++
+write
+tests/data/markdup.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 2 (write): tests/data/markdup.bam is an input; writing it would destroy it

@@ -300,7 +300,9 @@ python3 tests/concordance/picard_lock.py SortSam --help    # one queued Picard c
 on the Mac Studio (10 ms direct, 133 ms queued, mean of 50 calls of a no-op `picard`; 78 ms of
 it is `/bin/ps`). `make picard-fields` reads class files with `java` for about 1 s and is not
 queued. `tests/harness/test_picard_lock.py` fails when a file under `tests`, `benches` or
-`tools` starts `picard` without `env=picard_env()`.
+`tools` starts `picard` without `env=picard_env()`. It reads a list literal that starts with
+`"picard"` as a command, except a list of two or more output format names
+(`format=["picard", "json"]` of the Python `chain`).
 
 ## Registration rule
 
@@ -316,11 +318,13 @@ queued. `tests/harness/test_picard_lock.py` fails when a file under `tests`, `be
 4. its name in `docs/cli.md`;
 5. a row of the README tool table that starts with its name.
 
-One failure lists every gap of every tool with the edit that closes it. At 0.21.0 the 32 tools
-pass: 12 have a module named after them, 18 are mapped in `CONCORDANCE` to a shared module
+One failure lists every gap of every tool with the edit that closes it. At 0.22.0 the 33 tools
+pass: 13 have a module named after them, 18 are mapped in `CONCORDANCE` to a shared module
 (`test_read_level.py` 6, `test_wgs_metrics.py` 3, `test_variant_tools.py` 3, six others 1
 each), and `CollectCoverageGaps` and `CollectSexCheckMetrics` are in `NO_PICARD_ORACLE`
-(docs/06, not Picard tools). `EXEMPT` is empty.
+(docs/06, not Picard tools). `FifoBuffer` (wave W04 of docs/07) is tool 33. Its module is
+`tests/concordance/test_fifo_buffer.py`. It is the one line of `EXEMPT`: it copies
+standard input to standard output and writes no metrics column.
 
 ## Spec script
 
@@ -351,7 +355,8 @@ make deny                            # cargo deny check
 ```
 
 `deny.toml` checks the 105 packages of `Cargo.lock`. Result at 0.21.0: advisories ok, bans
-ok, licenses ok, sources ok.
+ok, licenses ok, sources ok. 0.22.0 adds no package: its `Cargo.lock` differs from the
+0.21.0 one in the six workspace versions only. `cargo-deny` was not rerun for 0.22.0.
 
 - Licences allowed: MIT, Apache-2.0, Unicode-3.0 (unicode-ident), Zlib (zlib-rs),
   bzip2-1.0.6 (libbz2-rs-sys under noodles-cram) and Apache-2.0 WITH LLVM-exception

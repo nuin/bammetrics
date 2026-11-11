@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/markdup.bam
++
+mark-duplicates
+--tagging-policy
+Some
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (mark-duplicates): TAGGING_POLICY=Some: expected DontTag, OpticalOnly or All (from --tagging-policy)

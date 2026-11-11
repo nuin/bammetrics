@@ -1,0 +1,13 @@
+## argv
+fifo-buffer
+-q
+--io-size
+16
+--verbosity
+ERROR
+--debug-frequency
+1
+## exit
+0
+## stdout
+## stderr

@@ -137,16 +137,31 @@ SHA-256 over all records, `5a90c21f...fafb396`). The headers differ in the `@PG`
 
 ## Chains (HG002 exome)
 
-`bammetrics __chain` (docs/chaining.md section 9), release build, 8 threads,
-`/usr/bin/time -l`, other builds and test runs on the machine.
+`bammetrics chain` (docs/chaining.md section 11), release build, 8 threads,
+`/usr/bin/time -l`, other builds and test runs on the machine. The 0.21.0 rows were
+measured through the hidden `__chain` entry, the W04 rows through the `chain` verb.
 
-A chain without a stage against `qc --preset wgs`, on chr20, 21 and 22 of the exome
-(573 MB, 8.4 M records, four collectors on one read), median of 7 interleaved runs: `qc`
-6.49 s, the chain lowered to `pass::run_isolated` 6.44 s (-0.8 %), the stage executor
-forced with `LOWER=false` 6.65 s (+2.5 %). Max RSS 44, 42 and 19 MiB.
+A chain without a transform against `qc --preset wgs`, on chr20, 21 and 22 of the exome
+(573 MB, 8.4 M records, four collectors on one read), median of 7 interleaved runs:
 
-`MarkDuplicates` + 4 collectors + `write` as one chain against the staged sequence, on
-the whole exome, one run each:
+| run | 0.21.0 | W04 | W04 max RSS |
+|---|---:|---:|---:|
+| `qc --preset wgs` | 6.49 s | 6.48 s | 44 MiB |
+| the chain, lowered to `pass::run_isolated` | 6.44 s (-0.8 %) | 6.44 s (-0.6 %) | 42 MiB |
+| the chain on the stage executor (`--no-lower`) | 6.65 s (+2.5 %) | 6.53 s (+0.8 %) | 20 MiB |
+
+`mark-duplicates` + 4 collectors + `write` as one chain against the staged sequence on
+that slice, W04, median of 3 interleaved runs: `MarkDuplicates` to a file 15.69 s and
+643 MiB, the 4 collectors on the marked BAM 6.49 s and 42 MiB, the staged sequence
+22.18 s, one chain 16.49 s and 645 MiB (25.7 percent less than staged). Both BAMs are
+584,413,820 bytes and equal under `cmp`.
+
+The same chain from Python (`bammetrics.chain`, docs/python.md) against the command on
+that slice, median of 3 interleaved runs, each in its own process: the command 16.04 s
+and 646 MiB, the Python call 16.13 s and 658 MiB (0.6 percent longer, interpreter start
+and import included). Both BAMs are equal under `cmp`.
+
+The same on the whole exome, 0.21.0, one run each:
 
 | run | wall | max RSS |
 |---|---:|---:|
@@ -181,6 +196,25 @@ open. The exit 1 is the file's own state: GIAB's HG002 exome holds 144,979 recor
 mates disagree on the duplicate flag, and Picard reports the same.
 `CollectSequencingArtifactMetrics` holds the current contig twice (the reference and an
 upper-cased copy), which is most of its 3.75 GB; one copy could go.
+
+## FifoBuffer (4 GiB through a pipe)
+
+Mac Studio (Apple M1 Ultra, 64 GB), bammetrics at the `feat/fifo-buffer` branch, release
+build. A 4 GiB file of zeros on standard input, `/dev/null` as standard output, default
+options, three runs each, `/usr/bin/time -l`. Picard 3.5.0 with `JAVA_OPTS=-Xmx8g`.
+
+| command | wall | peak RSS |
+|---|---:|---:|
+| `cat` | 0.41 to 0.45 s | 2 MiB |
+| `bammetrics FifoBuffer` | 0.71 to 1.10 s | 7 to 11 MiB |
+| `bammetrics fifo-buffer --io-size 1048576` | 0.47 to 0.59 s | 6 to 7 MiB |
+| `picard FifoBuffer` | 1.54 to 2.16 s | 630 to 646 MiB |
+
+With a reader that takes nothing for 3 seconds the default buffer fills
+(`Fifo buffer used 536,870,912 / 536,870,912 (100%).`) and bammetrics peaks at 515 MiB
+(540,049,408 bytes) for the 512 MiB buffer. Picard allocates the 512 MiB at its start,
+which is its 630 MiB with a reader that keeps up. bammetrics reserves the bytes and
+writes only a window of them, 64 KiB at first, doubled when the bytes held fill it.
 
 ## Report budgets (docs/05 section 4.8)
 
@@ -217,6 +251,12 @@ as at 0.20.0), 0 added passes. Before the security merge (e6b282f) the formats r
 113.1 KB (115,792 bytes stripped): the stripped probes differ by 16,512 bytes between the
 two commits, about one 16,384-byte page of the linker (opinion, not traced).
 
+At 0.22.0 (2026-11-10, release/0.22.0: feat/chain-verb and feat/fifo-buffer merged), one
+`make budgets` run with other builds on the machine: render 1.65 ms and 0.70 ms, sample
+page 96.5 KB (98,790 bytes), index 190.7 KB (195,237 bytes), binary growth 371.5 KB
+(380,432 bytes stripped, 16 bytes over 0.21.0), formats growth 129.2 KB (132,304 bytes
+stripped, as at 0.21.0), 0 added passes.
+
 The fixture metrics are the seven files the golden records hold for
 `tests/data/insert_size.bam` (alignment summary, insert size, quality yield, duplicate
 metrics, hs metrics, gc bias, mean quality by cycle). A KB is 1024 bytes.
@@ -243,6 +283,10 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | formats | 2026-11-10, feat/formats: `crates/formats`, `convert`, `qc --also`, the format lists | 7,124,416 | 6,032,112 |
 | 0.20.0 | 2026-11-10, release/0.20.0: feat/formats and feat/harness merged at 5a8f478, the version set | 7,124,320 | 6,032,104 |
 | 0.21.0 | 2026-11-10, release/0.21.0 at d2af4a2: feat/stage-executor and the security fixes of release/0.20.0 merged, the version set | 7,211,216 | 6,114,880 |
+| 0.22.0 | 2026-11-10, release/0.22.0: feat/chain-verb and feat/fifo-buffer merged, the version set | 7,414,032 | 6,296,952 |
+
+From 0.21.0 to 0.22.0 the binary grew 202,816 bytes (198.1 KB), 182,072 stripped (177.8
+KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and

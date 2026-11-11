@@ -62,7 +62,8 @@ pub enum Command {
     Qc(qc::QcArgs),
     /// What qc with the same options would run: stages, collectors, which
     /// share the BAM read and why any does not, which steps --resume would
-    /// skip. Nothing runs.
+    /// skip. Nothing runs. With a chain's arguments (BAM + STEP ..., or
+    /// --plan FILE) it prints the plan of that chain: bammetrics help chain.
     Plan(qc::QcArgs),
     /// One metrics file in another format: Picard text or JSON in; Picard
     /// text, json, jsonl, tsv, csv, markdown or human out.
@@ -141,9 +142,10 @@ pub fn clap_error(verb: &str, e: &clap::Error) -> VerbError {
 
 /// Dispatch, in the order of docs/05 section 2.1: (1) a Picard class name
 /// runs the Picard face, untouched; (2) a grammar verb (a tool verb,
-/// `collect`, `tools`, `presets`, `help`, `completions`); (3) the clap
-/// verbs `report`, `check`, `qc`, `plan` and `convert`. The exit code of
-/// the command:
+/// `collect`, `chain`, `tools`, `presets`, `help`, `completions`, and
+/// `plan` when its arguments describe a chain); (3) the clap verbs
+/// `report`, `check`, `qc`, `plan` and `convert`. The exit code of the
+/// command:
 /// the Picard face exits 0 or 1, the grammar verbs 0, 1 or 2, `check` and
 /// `qc --fail-on` 10 or 11 on a bad verdict (`bammetrics help check`).
 pub fn run() -> error::Result<u8> {
@@ -165,6 +167,10 @@ pub fn run() -> error::Result<u8> {
             if tool.name == bammetrics_core::check_duplicate_marking::TOOL.name {
                 return Ok(bammetrics_core::check_duplicate_marking::run_cli(rest)?);
             }
+            // Standard input to standard output; no rows and no file.
+            if tool.name == bammetrics_core::fifo_buffer::TOOL.name {
+                return Ok(bammetrics_core::fifo_buffer::run_cli(rest)?);
+            }
             // Picard's CreateSequenceDictionary names its .dict when O= is absent;
             // the verb and Python write standard output and rows instead.
             if tool.name == create_sequence_dictionary::TOOL.name {
@@ -179,7 +185,14 @@ pub fn run() -> error::Result<u8> {
         }
         match name.as_str() {
             "collect" => return Ok(collect::run(rest)?),
-            chain::ENTRY => return Ok(chain::run(rest)?),
+            chain::VERB => return Ok(chain::run(rest)?),
+            // `plan` with a chain's arguments (`plan chain ...`, a `+`
+            // step or `--plan FILE`) prints the chain's plan; with `qc`
+            // arguments it stays the clap verb below.
+            "plan" if rest.first().is_some_and(|word| word == chain::VERB) => {
+                return Ok(chain::run_plan(&rest[1..])?);
+            }
+            "plan" if chain::is_chain(rest) => return Ok(chain::run_plan(rest)?),
             "tools" => {
                 print!("{}", info::tools(&Cli::command()));
                 return Ok(0);

@@ -18,6 +18,7 @@ use pyo3::exceptions::{PyAttributeError, PyTypeError};
 use pyo3::prelude::*;
 use pyo3::types::{PyCFunction, PyDict, PyList, PyTuple};
 
+mod chain;
 mod verbs;
 
 use verbs::{input_error, usage_error};
@@ -1029,6 +1030,10 @@ fn bammetrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(verbs::py_qc, m)?)?;
     m.add_function(wrap_pyfunction!(verbs::py_check, m)?)?;
     m.add_function(wrap_pyfunction!(verbs::py_report, m)?)?;
+    m.add_function(wrap_pyfunction!(chain::py_chain, m)?)?;
+    m.add_function(wrap_pyfunction!(chain::py_step, m)?)?;
+    m.add_class::<chain::Step>()?;
+    m.add_class::<chain::Stage>()?;
     m.add_class::<verbs::Run>()?;
     m.add_class::<verbs::Verdict>()?;
     m.add_class::<verbs::Check>()?;

@@ -1,0 +1,19 @@
+## argv
+chain
+tests/data/markdup.bam
++
+mark-duplicates
++
+fifo-buffer
+--buffer-size
+1024
++
+write
+-
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 2 (fifo-buffer): FifoBuffer buffers the pipe between two commands and a chain has no pipe: it cannot be a step
+  leave the step out, or put the buffer on a pipe outside the chain: bammetrics chain BAM + write - | bammetrics fifo-buffer | ...
+  the steps: bammetrics chain --help

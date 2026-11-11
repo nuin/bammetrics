@@ -1,0 +1,15 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+quality-yield
+-o
+-
++
+write
+-
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (quality-yield) and step 2 (write) both write standard output; it takes one file

@@ -1,0 +1,744 @@
+## argv
+chain
+--plan
+tests/data/chain_taps.toml
+-o
+OUT/sample
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: 4 steps finished, 8 files written
+## file sample.alignment_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectAlignmentSummaryMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.alignment_summary_metrics METRIC_ACCUMULATION_LEVEL=SAMPLE METRIC_ACCUMULATION_LEVEL=LIBRARY STOP_AFTER=8
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.AlignmentSummaryMetrics
+CATEGORY	TOTAL_READS	PF_READS	PCT_PF_READS	PF_NOISE_READS	PF_READS_ALIGNED	PCT_PF_READS_ALIGNED	PF_ALIGNED_BASES	PF_HQ_ALIGNED_READS	PF_HQ_ALIGNED_BASES	PF_HQ_ALIGNED_Q20_BASES	PF_HQ_MEDIAN_MISMATCHES	PF_MISMATCH_RATE	PF_HQ_ERROR_RATE	PF_INDEL_RATE	MEAN_READ_LENGTH	SD_READ_LENGTH	MEDIAN_READ_LENGTH	MAD_READ_LENGTH	MIN_READ_LENGTH	MAX_READ_LENGTH	MEAN_ALIGNED_READ_LENGTH	READS_ALIGNED_IN_PAIRS	PCT_READS_ALIGNED_IN_PAIRS	PF_READS_IMPROPER_PAIRS	PCT_PF_READS_IMPROPER_PAIRS	BAD_CYCLES	STRAND_BALANCE	PCT_CHIMERAS	PCT_ADAPTER	PCT_SOFTCLIP	PCT_HARDCLIP	AVG_POS_3PRIME_SOFTCLIP_LENGTH	SAMPLE	LIBRARY	READ_GROUP
+FIRST_OF_PAIR	4	4	1	0	4	1	400	4	400	400	0	0	0	0	100	0	100	0	100	100	100	4	1	0	0	0	1	0	0	0	0	0			
+SECOND_OF_PAIR	4	4	1	0	4	1	400	4	400	400	0	0	0	0	100	0	100	0	100	100	100	4	1	0	0	0	0	0	0	0	0	0			
+PAIR	8	8	1	0	8	1	800	8	800	800	0	0	0	0	100	0	100	0	100	100	100	8	1	0	0	0	0.5	0	0	0	0	0			
+FIRST_OF_PAIR	4	4	1	0	4	1	400	4	400	400	0	0	0	0	100	0	100	0	100	100	100	4	1	0	0	0	1	0	0	0	0	0	unknown		
+SECOND_OF_PAIR	4	4	1	0	4	1	400	4	400	400	0	0	0	0	100	0	100	0	100	100	100	4	1	0	0	0	0	0	0	0	0	0	unknown		
+PAIR	8	8	1	0	8	1	800	8	800	800	0	0	0	0	100	0	100	0	100	100	100	8	1	0	0	0	0.5	0	0	0	0	0	unknown		
+FIRST_OF_PAIR	4	4	1	0	4	1	400	4	400	400	0	0	0	0	100	0	100	0	100	100	100	4	1	0	0	0	1	0	0	0	0	0	unknown	unknown	
+SECOND_OF_PAIR	4	4	1	0	4	1	400	4	400	400	0	0	0	0	100	0	100	0	100	100	100	4	1	0	0	0	0	0	0	0	0	0	unknown	unknown	
+PAIR	8	8	1	0	8	1	800	8	800	800	0	0	0	0	100	0	100	0	100	100	100	8	1	0	0	0	0.5	0	0	0	0	0	unknown	unknown	
+
+## HISTOGRAM	java.lang.Integer
+READ_LENGTH	PAIRED_TOTAL_LENGTH_COUNT	PAIRED_ALIGNED_LENGTH_COUNT
+100	8	8
+
+## file sample.alignment_summary_metrics.json
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectAlignmentSummaryMetrics",
+  "sample": "S1",
+  "headers": [
+    "CollectAlignmentSummaryMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.alignment_summary_metrics METRIC_ACCUMULATION_LEVEL=SAMPLE METRIC_ACCUMULATION_LEVEL=LIBRARY STOP_AFTER=8",
+    "Started on: <time>"
+  ],
+  "class": "picard.analysis.AlignmentSummaryMetrics",
+  "columns": [
+    "CATEGORY",
+    "TOTAL_READS",
+    "PF_READS",
+    "PCT_PF_READS",
+    "PF_NOISE_READS",
+    "PF_READS_ALIGNED",
+    "PCT_PF_READS_ALIGNED",
+    "PF_ALIGNED_BASES",
+    "PF_HQ_ALIGNED_READS",
+    "PF_HQ_ALIGNED_BASES",
+    "PF_HQ_ALIGNED_Q20_BASES",
+    "PF_HQ_MEDIAN_MISMATCHES",
+    "PF_MISMATCH_RATE",
+    "PF_HQ_ERROR_RATE",
+    "PF_INDEL_RATE",
+    "MEAN_READ_LENGTH",
+    "SD_READ_LENGTH",
+    "MEDIAN_READ_LENGTH",
+    "MAD_READ_LENGTH",
+    "MIN_READ_LENGTH",
+    "MAX_READ_LENGTH",
+    "MEAN_ALIGNED_READ_LENGTH",
+    "READS_ALIGNED_IN_PAIRS",
+    "PCT_READS_ALIGNED_IN_PAIRS",
+    "PF_READS_IMPROPER_PAIRS",
+    "PCT_PF_READS_IMPROPER_PAIRS",
+    "BAD_CYCLES",
+    "STRAND_BALANCE",
+    "PCT_CHIMERAS",
+    "PCT_ADAPTER",
+    "PCT_SOFTCLIP",
+    "PCT_HARDCLIP",
+    "AVG_POS_3PRIME_SOFTCLIP_LENGTH",
+    "SAMPLE",
+    "LIBRARY",
+    "READ_GROUP"
+  ],
+  "types": [
+    "string",
+    "int",
+    "int",
+    "float",
+    "int",
+    "int",
+    "float",
+    "int",
+    "int",
+    "int",
+    "int",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "int",
+    "float",
+    "int",
+    "float",
+    "int",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "string",
+    "string",
+    "string"
+  ],
+  "metrics": [
+    {
+      "CATEGORY": "FIRST_OF_PAIR",
+      "TOTAL_READS": 4,
+      "PF_READS": 4,
+      "PCT_PF_READS": 1,
+      "PF_NOISE_READS": 0,
+      "PF_READS_ALIGNED": 4,
+      "PCT_PF_READS_ALIGNED": 1,
+      "PF_ALIGNED_BASES": 400,
+      "PF_HQ_ALIGNED_READS": 4,
+      "PF_HQ_ALIGNED_BASES": 400,
+      "PF_HQ_ALIGNED_Q20_BASES": 400,
+      "PF_HQ_MEDIAN_MISMATCHES": 0,
+      "PF_MISMATCH_RATE": 0,
+      "PF_HQ_ERROR_RATE": 0,
+      "PF_INDEL_RATE": 0,
+      "MEAN_READ_LENGTH": 100,
+      "SD_READ_LENGTH": 0,
+      "MEDIAN_READ_LENGTH": 100,
+      "MAD_READ_LENGTH": 0,
+      "MIN_READ_LENGTH": 100,
+      "MAX_READ_LENGTH": 100,
+      "MEAN_ALIGNED_READ_LENGTH": 100,
+      "READS_ALIGNED_IN_PAIRS": 4,
+      "PCT_READS_ALIGNED_IN_PAIRS": 1,
+      "PF_READS_IMPROPER_PAIRS": 0,
+      "PCT_PF_READS_IMPROPER_PAIRS": 0,
+      "BAD_CYCLES": 0,
+      "STRAND_BALANCE": 1,
+      "PCT_CHIMERAS": 0,
+      "PCT_ADAPTER": 0,
+      "PCT_SOFTCLIP": 0,
+      "PCT_HARDCLIP": 0,
+      "AVG_POS_3PRIME_SOFTCLIP_LENGTH": 0,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "CATEGORY": "SECOND_OF_PAIR",
+      "TOTAL_READS": 4,
+      "PF_READS": 4,
+      "PCT_PF_READS": 1,
+      "PF_NOISE_READS": 0,
+      "PF_READS_ALIGNED": 4,
+      "PCT_PF_READS_ALIGNED": 1,
+      "PF_ALIGNED_BASES": 400,
+      "PF_HQ_ALIGNED_READS": 4,
+      "PF_HQ_ALIGNED_BASES": 400,
+      "PF_HQ_ALIGNED_Q20_BASES": 400,
+      "PF_HQ_MEDIAN_MISMATCHES": 0,
+      "PF_MISMATCH_RATE": 0,
+      "PF_HQ_ERROR_RATE": 0,
+      "PF_INDEL_RATE": 0,
+      "MEAN_READ_LENGTH": 100,
+      "SD_READ_LENGTH": 0,
+      "MEDIAN_READ_LENGTH": 100,
+      "MAD_READ_LENGTH": 0,
+      "MIN_READ_LENGTH": 100,
+      "MAX_READ_LENGTH": 100,
+      "MEAN_ALIGNED_READ_LENGTH": 100,
+      "READS_ALIGNED_IN_PAIRS": 4,
+      "PCT_READS_ALIGNED_IN_PAIRS": 1,
+      "PF_READS_IMPROPER_PAIRS": 0,
+      "PCT_PF_READS_IMPROPER_PAIRS": 0,
+      "BAD_CYCLES": 0,
+      "STRAND_BALANCE": 0,
+      "PCT_CHIMERAS": 0,
+      "PCT_ADAPTER": 0,
+      "PCT_SOFTCLIP": 0,
+      "PCT_HARDCLIP": 0,
+      "AVG_POS_3PRIME_SOFTCLIP_LENGTH": 0,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "CATEGORY": "PAIR",
+      "TOTAL_READS": 8,
+      "PF_READS": 8,
+      "PCT_PF_READS": 1,
+      "PF_NOISE_READS": 0,
+      "PF_READS_ALIGNED": 8,
+      "PCT_PF_READS_ALIGNED": 1,
+      "PF_ALIGNED_BASES": 800,
+      "PF_HQ_ALIGNED_READS": 8,
+      "PF_HQ_ALIGNED_BASES": 800,
+      "PF_HQ_ALIGNED_Q20_BASES": 800,
+      "PF_HQ_MEDIAN_MISMATCHES": 0,
+      "PF_MISMATCH_RATE": 0,
+      "PF_HQ_ERROR_RATE": 0,
+      "PF_INDEL_RATE": 0,
+      "MEAN_READ_LENGTH": 100,
+      "SD_READ_LENGTH": 0,
+      "MEDIAN_READ_LENGTH": 100,
+      "MAD_READ_LENGTH": 0,
+      "MIN_READ_LENGTH": 100,
+      "MAX_READ_LENGTH": 100,
+      "MEAN_ALIGNED_READ_LENGTH": 100,
+      "READS_ALIGNED_IN_PAIRS": 8,
+      "PCT_READS_ALIGNED_IN_PAIRS": 1,
+      "PF_READS_IMPROPER_PAIRS": 0,
+      "PCT_PF_READS_IMPROPER_PAIRS": 0,
+      "BAD_CYCLES": 0,
+      "STRAND_BALANCE": 0.5,
+      "PCT_CHIMERAS": 0,
+      "PCT_ADAPTER": 0,
+      "PCT_SOFTCLIP": 0,
+      "PCT_HARDCLIP": 0,
+      "AVG_POS_3PRIME_SOFTCLIP_LENGTH": 0,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "CATEGORY": "FIRST_OF_PAIR",
+      "TOTAL_READS": 4,
+      "PF_READS": 4,
+      "PCT_PF_READS": 1,
+      "PF_NOISE_READS": 0,
+      "PF_READS_ALIGNED": 4,
+      "PCT_PF_READS_ALIGNED": 1,
+      "PF_ALIGNED_BASES": 400,
+      "PF_HQ_ALIGNED_READS": 4,
+      "PF_HQ_ALIGNED_BASES": 400,
+      "PF_HQ_ALIGNED_Q20_BASES": 400,
+      "PF_HQ_MEDIAN_MISMATCHES": 0,
+      "PF_MISMATCH_RATE": 0,
+      "PF_HQ_ERROR_RATE": 0,
+      "PF_INDEL_RATE": 0,
+      "MEAN_READ_LENGTH": 100,
+      "SD_READ_LENGTH": 0,
+      "MEDIAN_READ_LENGTH": 100,
+      "MAD_READ_LENGTH": 0,
+      "MIN_READ_LENGTH": 100,
+      "MAX_READ_LENGTH": 100,
+      "MEAN_ALIGNED_READ_LENGTH": 100,
+      "READS_ALIGNED_IN_PAIRS": 4,
+      "PCT_READS_ALIGNED_IN_PAIRS": 1,
+      "PF_READS_IMPROPER_PAIRS": 0,
+      "PCT_PF_READS_IMPROPER_PAIRS": 0,
+      "BAD_CYCLES": 0,
+      "STRAND_BALANCE": 1,
+      "PCT_CHIMERAS": 0,
+      "PCT_ADAPTER": 0,
+      "PCT_SOFTCLIP": 0,
+      "PCT_HARDCLIP": 0,
+      "AVG_POS_3PRIME_SOFTCLIP_LENGTH": 0,
+      "SAMPLE": "unknown",
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "CATEGORY": "SECOND_OF_PAIR",
+      "TOTAL_READS": 4,
+      "PF_READS": 4,
+      "PCT_PF_READS": 1,
+      "PF_NOISE_READS": 0,
+      "PF_READS_ALIGNED": 4,
+      "PCT_PF_READS_ALIGNED": 1,
+      "PF_ALIGNED_BASES": 400,
+      "PF_HQ_ALIGNED_READS": 4,
+      "PF_HQ_ALIGNED_BASES": 400,
+      "PF_HQ_ALIGNED_Q20_BASES": 400,
+      "PF_HQ_MEDIAN_MISMATCHES": 0,
+      "PF_MISMATCH_RATE": 0,
+      "PF_HQ_ERROR_RATE": 0,
+      "PF_INDEL_RATE": 0,
+      "MEAN_READ_LENGTH": 100,
+      "SD_READ_LENGTH": 0,
+      "MEDIAN_READ_LENGTH": 100,
+      "MAD_READ_LENGTH": 0,
+      "MIN_READ_LENGTH": 100,
+      "MAX_READ_LENGTH": 100,
+      "MEAN_ALIGNED_READ_LENGTH": 100,
+      "READS_ALIGNED_IN_PAIRS": 4,
+      "PCT_READS_ALIGNED_IN_PAIRS": 1,
+      "PF_READS_IMPROPER_PAIRS": 0,
+      "PCT_PF_READS_IMPROPER_PAIRS": 0,
+      "BAD_CYCLES": 0,
+      "STRAND_BALANCE": 0,
+      "PCT_CHIMERAS": 0,
+      "PCT_ADAPTER": 0,
+      "PCT_SOFTCLIP": 0,
+      "PCT_HARDCLIP": 0,
+      "AVG_POS_3PRIME_SOFTCLIP_LENGTH": 0,
+      "SAMPLE": "unknown",
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "CATEGORY": "PAIR",
+      "TOTAL_READS": 8,
+      "PF_READS": 8,
+      "PCT_PF_READS": 1,
+      "PF_NOISE_READS": 0,
+      "PF_READS_ALIGNED": 8,
+      "PCT_PF_READS_ALIGNED": 1,
+      "PF_ALIGNED_BASES": 800,
+      "PF_HQ_ALIGNED_READS": 8,
+      "PF_HQ_ALIGNED_BASES": 800,
+      "PF_HQ_ALIGNED_Q20_BASES": 800,
+      "PF_HQ_MEDIAN_MISMATCHES": 0,
+      "PF_MISMATCH_RATE": 0,
+      "PF_HQ_ERROR_RATE": 0,
+      "PF_INDEL_RATE": 0,
+      "MEAN_READ_LENGTH": 100,
+      "SD_READ_LENGTH": 0,
+      "MEDIAN_READ_LENGTH": 100,
+      "MAD_READ_LENGTH": 0,
+      "MIN_READ_LENGTH": 100,
+      "MAX_READ_LENGTH": 100,
+      "MEAN_ALIGNED_READ_LENGTH": 100,
+      "READS_ALIGNED_IN_PAIRS": 8,
+      "PCT_READS_ALIGNED_IN_PAIRS": 1,
+      "PF_READS_IMPROPER_PAIRS": 0,
+      "PCT_PF_READS_IMPROPER_PAIRS": 0,
+      "BAD_CYCLES": 0,
+      "STRAND_BALANCE": 0.5,
+      "PCT_CHIMERAS": 0,
+      "PCT_ADAPTER": 0,
+      "PCT_SOFTCLIP": 0,
+      "PCT_HARDCLIP": 0,
+      "AVG_POS_3PRIME_SOFTCLIP_LENGTH": 0,
+      "SAMPLE": "unknown",
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "CATEGORY": "FIRST_OF_PAIR",
+      "TOTAL_READS": 4,
+      "PF_READS": 4,
+      "PCT_PF_READS": 1,
+      "PF_NOISE_READS": 0,
+      "PF_READS_ALIGNED": 4,
+      "PCT_PF_READS_ALIGNED": 1,
+      "PF_ALIGNED_BASES": 400,
+      "PF_HQ_ALIGNED_READS": 4,
+      "PF_HQ_ALIGNED_BASES": 400,
+      "PF_HQ_ALIGNED_Q20_BASES": 400,
+      "PF_HQ_MEDIAN_MISMATCHES": 0,
+      "PF_MISMATCH_RATE": 0,
+      "PF_HQ_ERROR_RATE": 0,
+      "PF_INDEL_RATE": 0,
+      "MEAN_READ_LENGTH": 100,
+      "SD_READ_LENGTH": 0,
+      "MEDIAN_READ_LENGTH": 100,
+      "MAD_READ_LENGTH": 0,
+      "MIN_READ_LENGTH": 100,
+      "MAX_READ_LENGTH": 100,
+      "MEAN_ALIGNED_READ_LENGTH": 100,
+      "READS_ALIGNED_IN_PAIRS": 4,
+      "PCT_READS_ALIGNED_IN_PAIRS": 1,
+      "PF_READS_IMPROPER_PAIRS": 0,
+      "PCT_PF_READS_IMPROPER_PAIRS": 0,
+      "BAD_CYCLES": 0,
+      "STRAND_BALANCE": 1,
+      "PCT_CHIMERAS": 0,
+      "PCT_ADAPTER": 0,
+      "PCT_SOFTCLIP": 0,
+      "PCT_HARDCLIP": 0,
+      "AVG_POS_3PRIME_SOFTCLIP_LENGTH": 0,
+      "SAMPLE": "unknown",
+      "LIBRARY": "unknown",
+      "READ_GROUP": null
+    },
+    {
+      "CATEGORY": "SECOND_OF_PAIR",
+      "TOTAL_READS": 4,
+      "PF_READS": 4,
+      "PCT_PF_READS": 1,
+      "PF_NOISE_READS": 0,
+      "PF_READS_ALIGNED": 4,
+      "PCT_PF_READS_ALIGNED": 1,
+      "PF_ALIGNED_BASES": 400,
+      "PF_HQ_ALIGNED_READS": 4,
+      "PF_HQ_ALIGNED_BASES": 400,
+      "PF_HQ_ALIGNED_Q20_BASES": 400,
+      "PF_HQ_MEDIAN_MISMATCHES": 0,
+      "PF_MISMATCH_RATE": 0,
+      "PF_HQ_ERROR_RATE": 0,
+      "PF_INDEL_RATE": 0,
+      "MEAN_READ_LENGTH": 100,
+      "SD_READ_LENGTH": 0,
+      "MEDIAN_READ_LENGTH": 100,
+      "MAD_READ_LENGTH": 0,
+      "MIN_READ_LENGTH": 100,
+      "MAX_READ_LENGTH": 100,
+      "MEAN_ALIGNED_READ_LENGTH": 100,
+      "READS_ALIGNED_IN_PAIRS": 4,
+      "PCT_READS_ALIGNED_IN_PAIRS": 1,
+      "PF_READS_IMPROPER_PAIRS": 0,
+      "PCT_PF_READS_IMPROPER_PAIRS": 0,
+      "BAD_CYCLES": 0,
+      "STRAND_BALANCE": 0,
+      "PCT_CHIMERAS": 0,
+      "PCT_ADAPTER": 0,
+      "PCT_SOFTCLIP": 0,
+      "PCT_HARDCLIP": 0,
+      "AVG_POS_3PRIME_SOFTCLIP_LENGTH": 0,
+      "SAMPLE": "unknown",
+      "LIBRARY": "unknown",
+      "READ_GROUP": null
+    },
+    {
+      "CATEGORY": "PAIR",
+      "TOTAL_READS": 8,
+      "PF_READS": 8,
+      "PCT_PF_READS": 1,
+      "PF_NOISE_READS": 0,
+      "PF_READS_ALIGNED": 8,
+      "PCT_PF_READS_ALIGNED": 1,
+      "PF_ALIGNED_BASES": 800,
+      "PF_HQ_ALIGNED_READS": 8,
+      "PF_HQ_ALIGNED_BASES": 800,
+      "PF_HQ_ALIGNED_Q20_BASES": 800,
+      "PF_HQ_MEDIAN_MISMATCHES": 0,
+      "PF_MISMATCH_RATE": 0,
+      "PF_HQ_ERROR_RATE": 0,
+      "PF_INDEL_RATE": 0,
+      "MEAN_READ_LENGTH": 100,
+      "SD_READ_LENGTH": 0,
+      "MEDIAN_READ_LENGTH": 100,
+      "MAD_READ_LENGTH": 0,
+      "MIN_READ_LENGTH": 100,
+      "MAX_READ_LENGTH": 100,
+      "MEAN_ALIGNED_READ_LENGTH": 100,
+      "READS_ALIGNED_IN_PAIRS": 8,
+      "PCT_READS_ALIGNED_IN_PAIRS": 1,
+      "PF_READS_IMPROPER_PAIRS": 0,
+      "PCT_PF_READS_IMPROPER_PAIRS": 0,
+      "BAD_CYCLES": 0,
+      "STRAND_BALANCE": 0.5,
+      "PCT_CHIMERAS": 0,
+      "PCT_ADAPTER": 0,
+      "PCT_SOFTCLIP": 0,
+      "PCT_HARDCLIP": 0,
+      "AVG_POS_3PRIME_SOFTCLIP_LENGTH": 0,
+      "SAMPLE": "unknown",
+      "LIBRARY": "unknown",
+      "READ_GROUP": null
+    }
+  ],
+  "non_finite": [],
+  "histogram": {
+    "key_class": "java.lang.Integer",
+    "columns": [
+      "READ_LENGTH",
+      "PAIRED_TOTAL_LENGTH_COUNT",
+      "PAIRED_ALIGNED_LENGTH_COUNT"
+    ],
+    "types": [
+      "int",
+      "float",
+      "float"
+    ],
+    "rows": [
+      {
+        "READ_LENGTH": 100,
+        "PAIRED_TOTAL_LENGTH_COUNT": 8,
+        "PAIRED_ALIGNED_LENGTH_COUNT": 8
+      }
+    ],
+    "non_finite": []
+  }
+}
+## file sample.duplicate_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectDuplicateMetrics INPUT=tests/data/insert_size.bam METRICS_FILE=OUT/sample.duplicate_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.DuplicationMetrics
+LIBRARY	UNPAIRED_READS_EXAMINED	READ_PAIRS_EXAMINED	SECONDARY_OR_SUPPLEMENTARY_RDS	UNMAPPED_READS	UNPAIRED_READ_DUPLICATES	READ_PAIR_DUPLICATES	READ_PAIR_OPTICAL_DUPLICATES	PERCENT_DUPLICATION	ESTIMATED_LIBRARY_SIZE
+Unknown Library	0	5	0	0	0	0	0	0	
+
+
+## file sample.duplicate_metrics.json
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectDuplicateMetrics",
+  "sample": "S1",
+  "headers": [
+    "CollectDuplicateMetrics INPUT=tests/data/insert_size.bam METRICS_FILE=OUT/sample.duplicate_metrics",
+    "Started on: <time>"
+  ],
+  "class": "picard.sam.DuplicationMetrics",
+  "columns": [
+    "LIBRARY",
+    "UNPAIRED_READS_EXAMINED",
+    "READ_PAIRS_EXAMINED",
+    "SECONDARY_OR_SUPPLEMENTARY_RDS",
+    "UNMAPPED_READS",
+    "UNPAIRED_READ_DUPLICATES",
+    "READ_PAIR_DUPLICATES",
+    "READ_PAIR_OPTICAL_DUPLICATES",
+    "PERCENT_DUPLICATION",
+    "ESTIMATED_LIBRARY_SIZE"
+  ],
+  "types": [
+    "string",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "float",
+    "int"
+  ],
+  "metrics": [
+    {
+      "LIBRARY": "Unknown Library",
+      "UNPAIRED_READS_EXAMINED": 0,
+      "READ_PAIRS_EXAMINED": 5,
+      "SECONDARY_OR_SUPPLEMENTARY_RDS": 0,
+      "UNMAPPED_READS": 0,
+      "UNPAIRED_READ_DUPLICATES": 0,
+      "READ_PAIR_DUPLICATES": 0,
+      "READ_PAIR_OPTICAL_DUPLICATES": 0,
+      "PERCENT_DUPLICATION": 0,
+      "ESTIMATED_LIBRARY_SIZE": null
+    }
+  ],
+  "non_finite": [],
+  "histogram": null
+}
+## file sample.insert_size_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.insert_size_metrics MINIMUM_PCT=0.1
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.InsertSizeMetrics
+MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MAX_INSERT_SIZE	MEAN_INSERT_SIZE	STANDARD_DEVIATION	READ_PAIRS	PAIR_ORIENTATION	WIDTH_OF_10_PERCENT	WIDTH_OF_20_PERCENT	WIDTH_OF_30_PERCENT	WIDTH_OF_40_PERCENT	WIDTH_OF_50_PERCENT	WIDTH_OF_60_PERCENT	WIDTH_OF_70_PERCENT	WIDTH_OF_80_PERCENT	WIDTH_OF_90_PERCENT	WIDTH_OF_95_PERCENT	WIDTH_OF_99_PERCENT	SAMPLE	LIBRARY	READ_GROUP
+310	310	10	300	500	310	8.164966	5	FR	1	1	1	1	21	21	21	21	381	381	381			
+
+## HISTOGRAM	java.lang.Integer
+insert_size	All_Reads.fr_count
+300	1
+310	2
+320	1
+
+## file sample.insert_size_metrics.json
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectInsertSizeMetrics",
+  "sample": "S1",
+  "headers": [
+    "CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.insert_size_metrics MINIMUM_PCT=0.1",
+    "Started on: <time>"
+  ],
+  "class": "picard.analysis.InsertSizeMetrics",
+  "columns": [
+    "MEDIAN_INSERT_SIZE",
+    "MODE_INSERT_SIZE",
+    "MEDIAN_ABSOLUTE_DEVIATION",
+    "MIN_INSERT_SIZE",
+    "MAX_INSERT_SIZE",
+    "MEAN_INSERT_SIZE",
+    "STANDARD_DEVIATION",
+    "READ_PAIRS",
+    "PAIR_ORIENTATION",
+    "WIDTH_OF_10_PERCENT",
+    "WIDTH_OF_20_PERCENT",
+    "WIDTH_OF_30_PERCENT",
+    "WIDTH_OF_40_PERCENT",
+    "WIDTH_OF_50_PERCENT",
+    "WIDTH_OF_60_PERCENT",
+    "WIDTH_OF_70_PERCENT",
+    "WIDTH_OF_80_PERCENT",
+    "WIDTH_OF_90_PERCENT",
+    "WIDTH_OF_95_PERCENT",
+    "WIDTH_OF_99_PERCENT",
+    "SAMPLE",
+    "LIBRARY",
+    "READ_GROUP"
+  ],
+  "types": [
+    "float",
+    "float",
+    "float",
+    "int",
+    "int",
+    "float",
+    "float",
+    "int",
+    "string",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "string",
+    "string",
+    "string"
+  ],
+  "metrics": [
+    {
+      "MEDIAN_INSERT_SIZE": 310,
+      "MODE_INSERT_SIZE": 310,
+      "MEDIAN_ABSOLUTE_DEVIATION": 10,
+      "MIN_INSERT_SIZE": 300,
+      "MAX_INSERT_SIZE": 500,
+      "MEAN_INSERT_SIZE": 310,
+      "STANDARD_DEVIATION": 8.16496580927726,
+      "READ_PAIRS": 5,
+      "PAIR_ORIENTATION": "FR",
+      "WIDTH_OF_10_PERCENT": 1,
+      "WIDTH_OF_20_PERCENT": 1,
+      "WIDTH_OF_30_PERCENT": 1,
+      "WIDTH_OF_40_PERCENT": 1,
+      "WIDTH_OF_50_PERCENT": 21,
+      "WIDTH_OF_60_PERCENT": 21,
+      "WIDTH_OF_70_PERCENT": 21,
+      "WIDTH_OF_80_PERCENT": 21,
+      "WIDTH_OF_90_PERCENT": 381,
+      "WIDTH_OF_95_PERCENT": 381,
+      "WIDTH_OF_99_PERCENT": 381,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    }
+  ],
+  "non_finite": [],
+  "histogram": {
+    "key_class": "java.lang.Integer",
+    "columns": [
+      "insert_size",
+      "All_Reads.fr_count"
+    ],
+    "types": [
+      "int",
+      "float"
+    ],
+    "rows": [
+      {
+        "insert_size": 300,
+        "All_Reads.fr_count": 1
+      },
+      {
+        "insert_size": 310,
+        "All_Reads.fr_count": 2
+      },
+      {
+        "insert_size": 320,
+        "All_Reads.fr_count": 1
+      }
+    ],
+    "non_finite": []
+  }
+}
+## file sample.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectQualityYieldMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.quality_yield_metrics USE_ORIGINAL_QUALITIES=false
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+10	10	100	1000	1000	1000	1000	1000	1000	2000	2000
+
+
+## file sample.quality_yield_metrics.json
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectQualityYieldMetrics",
+  "sample": "S1",
+  "headers": [
+    "CollectQualityYieldMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.quality_yield_metrics USE_ORIGINAL_QUALITIES=false",
+    "Started on: <time>"
+  ],
+  "class": "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics",
+  "columns": [
+    "TOTAL_READS",
+    "PF_READS",
+    "READ_LENGTH",
+    "TOTAL_BASES",
+    "PF_BASES",
+    "Q20_BASES",
+    "PF_Q20_BASES",
+    "Q30_BASES",
+    "PF_Q30_BASES",
+    "Q20_EQUIVALENT_YIELD",
+    "PF_Q20_EQUIVALENT_YIELD"
+  ],
+  "types": [
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int"
+  ],
+  "metrics": [
+    {
+      "TOTAL_READS": 10,
+      "PF_READS": 10,
+      "READ_LENGTH": 100,
+      "TOTAL_BASES": 1000,
+      "PF_BASES": 1000,
+      "Q20_BASES": 1000,
+      "PF_Q20_BASES": 1000,
+      "Q30_BASES": 1000,
+      "PF_Q30_BASES": 1000,
+      "Q20_EQUIVALENT_YIELD": 2000,
+      "PF_Q20_EQUIVALENT_YIELD": 2000
+    }
+  ],
+  "non_finite": [],
+  "histogram": null
+}

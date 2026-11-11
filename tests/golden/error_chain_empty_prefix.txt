@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/insert_size.bam
+-o
+
++
+insert-size
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: the output prefix is empty (from -o)
+  leave the prefix out and the files go to ./ plus the source name
