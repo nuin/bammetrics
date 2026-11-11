@@ -352,7 +352,9 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
                 first_stage = false;
             }
             (Role::Write, _) if !step.stdout => {
-                let Some(options) = &step.write else { continue };
+                let Some(options) = step.write.as_ref().filter(|o| !is_device(&o.path)) else {
+                    continue;
+                };
                 let per_record = match (options.format, order) {
                     (WriteFormat::Sam, _) => SAM_BYTES_PER_RECORD,
                     (WriteFormat::Bam, Some(SortOrder::Coordinate)) => BAM_OUT_COORDINATE,
@@ -371,6 +373,12 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
         barriers,
         outputs,
     })
+}
+
+/// True for a path no disk holds: one under `/dev` (`/dev/null`), or an
+/// existing file that is no regular file (a pipe, a device).
+fn is_device(path: &Path) -> bool {
+    path.starts_with("/dev") || std::fs::metadata(path).is_ok_and(|m| !m.is_file())
 }
 
 /// The free bytes of the file system that holds `dir`, for this user.
@@ -540,6 +548,15 @@ mod tests {
             resident.abs_diff(425_099_264) < 425_099_264 / 10,
             "{resident}"
         );
+    }
+
+    #[test]
+    fn a_device_takes_no_disk() {
+        assert!(is_device(Path::new("/dev/null")));
+        assert!(is_device(Path::new("/dev/stdout")));
+        assert!(!is_device(
+            &std::env::temp_dir().join("bammetrics-none.bam")
+        ));
     }
 
     #[test]
