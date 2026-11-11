@@ -1,0 +1,35 @@
+## argv
+check
+tests/data/picard
+--preset
+clinical-panel
+--format
+markdown
+## exit
+10
+## stdout
+# NA12878: FAIL
+
+Preset clinical-panel v3 (6f0d59). 5 fail, 0 warn, 8 pass, 5 not measured.
+
+| Status | Rule | Value | Warn | Fail | Reason |
+| --- | --- | ---: | --- | --- | --- |
+| FAIL | hs.mean-target-coverage | 0.377778 | < 200 | < 100 | Mean target coverage is 0.377778, below the fail limit of 100 |
+| FAIL | hs.target-20x | 0 | < 0.98 | < 0.95 | Target bases at 20x is 0, below the fail limit of 0.95 |
+| FAIL | hs.target-100x | 0 | < 0.8 | < 0.6 | Target bases at 100x is 0, below the fail limit of 0.6 |
+| NOT MEASURED | hs.evenness | ? | > 2 | > 3 | FOLD_80_BASE_PENALTY is ? |
+| PASS | hs.usable-on-target | 0.68 | < 0.5 | < 0.3 |  |
+| PASS | hs.selected-bases | 0.8 | < 0.7 | < 0.5 |  |
+| PASS | hs.excluded-duplicates | 0 | > 0.3 | > 0.5 |  |
+| FAIL | hs.zero-coverage-targets | 0.2 | > 0.01 | > 0.03 | Targets with zero coverage is 0.2, above the fail limit of 0.03 |
+| FAIL | hs.gc-dropout | 20.588235 | > 5 | > 10 | GC dropout is 20.588235, above the fail limit of 10 |
+| PASS | alignment.pf-reads-aligned | 1 | < 0.98 | < 0.95 |  |
+| PASS | alignment.adapter | 0 | > 0.005 | > 0.02 |  |
+| PASS | alignment.chimeras | 0 | > 0.05 | > 0.1 |  |
+| PASS | insert.median | 310 | outside 180..450 | outside 120..600 |  |
+| PASS | yield.q30 | 1 | < 0.85 | < 0.75 |  |
+| NOT MEASURED | gaps.reportable-range | ? | < 0.98 | < 0.95 | no CoverageGapMetrics file |
+| NOT MEASURED | gaps.targets-complete | ? | < 0.95 | < 0.9 | no CoverageGapMetrics file |
+| NOT MEASURED | sex.match | ? |  | is N | no SexCheckMetrics file |
+| NOT MEASURED | sex.inferred | ? | is UNKNOWN |  | no SexCheckMetrics file |
+## stderr

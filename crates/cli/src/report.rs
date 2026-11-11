@@ -2,12 +2,11 @@
 //! directory of Picard metrics files (docs/05 phase 6). No BAM is read.
 
 use std::fmt::Write as _;
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
+use bammetrics_core::cleanup::AtomicFile;
 use bammetrics_core::metrics_file::CivilTime;
 use bammetrics_report::{Options, SampleSummary, Tally, page_name, verdict_name};
 use bammetrics_verdict::{Band, Preset, Status, evaluate};
@@ -53,47 +52,28 @@ pub struct ReportArgs {
     pub date: Option<String>,
 }
 
-/// Write `contents` to `path` through a temporary file beside it, so a reader
-/// never sees a partial file. The temporary name carries the process id, a
-/// counter and a nanosecond clock, so nothing can be placed there ahead of
-/// time; it is opened with `create_new` (O_EXCL), which refuses an existing
-/// path and never follows a symlink, so a pre-placed link cannot redirect
-/// the write.
+/// Write `contents` to `path` through [`AtomicFile`]: a temporary file
+/// beside it, renamed into place, so a reader never sees a partial file. The
+/// temporary file is opened with `create_new` (O_EXCL), which refuses an
+/// existing path and never follows a symlink, so a pre-placed link cannot
+/// redirect the write. A file that is replaced keeps its permissions (a
+/// 0600 output stays 0600; its temporary file is 0600 from the start), and
+/// a signal removes the temporary file. A `path` under `/dev`, and a named
+/// pipe, device or symbolic link this user owns, are written in place, as
+/// `-o` of the tool verbs is; one of those owned by another user is an error.
 pub fn write_atomic(path: &Path, contents: impl AsRef<[u8]>) -> Result<()> {
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let dir = path.parent().filter(|d| !d.as_os_str().is_empty());
-    let name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("output");
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_nanos());
-    let tmp = format!(
-        ".{name}.{}.{}.{nanos}.tmp",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    );
-    let tmp = dir.map_or_else(|| PathBuf::from(&tmp), |d| d.join(&tmp));
-    write_via(path, &tmp, contents.as_ref())
+    write_through(AtomicFile::new(path), contents.as_ref())
 }
 
-/// [`write_atomic`] through the given temporary path.
-fn write_via(path: &Path, tmp: &Path, contents: &[u8]) -> Result<()> {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(tmp)
-        .map_err(|e| Error::io(tmp, e))?;
-    let written = file
-        .write_all(contents)
-        .and_then(|()| file.sync_all())
-        .and_then(|()| fs::rename(tmp, path));
-    if let Err(e) = written {
-        let _ = fs::remove_file(tmp);
-        return Err(Error::io(path, e));
-    }
-    Ok(())
+/// [`write_atomic`] through the given file.
+fn write_through(file: AtomicFile, contents: &[u8]) -> Result<()> {
+    let mut out = file.create().map_err(|e| Error::io(file.writing(), e))?;
+    out.write_all(contents)
+        .and_then(|()| out.sync_all())
+        .map_err(|e| Error::io(file.path(), e))?;
+    drop(out);
+    let path = file.path().to_path_buf();
+    file.commit().map_err(|e| Error::io(&path, e))
 }
 
 /// The samples under `dirs`, with the files that did not parse printed to
@@ -314,19 +294,36 @@ mod atomic_tests {
         let dir = scratch("symlink");
         let victim = dir.join("victim.txt");
         fs::write(&victim, "keep me").expect("victim");
-        let tmp = dir.join(".index.html.planted.tmp");
-        std::os::unix::fs::symlink(&victim, &tmp).expect("symlink");
         let path = dir.join("index.html");
-        let err = write_via(&path, &tmp, b"overwritten").expect_err("create_new refuses the link");
-        assert!(err.to_string().contains(".index.html.planted.tmp"), "{err}");
+        let file = AtomicFile::new(&path);
+        let tmp = file.writing().to_path_buf();
+        assert_ne!(tmp, path);
+        std::os::unix::fs::symlink(&victim, &tmp).expect("symlink");
+        let err = write_through(file, b"overwritten").expect_err("create_new refuses the link");
+        let name = tmp
+            .file_name()
+            .expect("name")
+            .to_string_lossy()
+            .into_owned();
+        assert!(err.to_string().contains(&name), "{err}");
         assert_eq!(fs::read_to_string(&victim).expect("read"), "keep me");
         assert!(!path.exists());
-        assert!(
-            tmp.symlink_metadata()
-                .expect("link stays")
-                .file_type()
-                .is_symlink()
-        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A 0600 output stays 0600 when it is replaced, whatever the umask.
+    #[cfg(unix)]
+    #[test]
+    fn a_replaced_file_keeps_its_mode() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = scratch("mode");
+        let path = dir.join("s.verdict.json");
+        fs::write(&path, "old").expect("old");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).expect("chmod");
+        write_atomic(&path, "new").expect("write");
+        let mode = fs::metadata(&path).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        assert_eq!(fs::read_to_string(&path).expect("read"), "new");
         let _ = fs::remove_dir_all(&dir);
     }
 }

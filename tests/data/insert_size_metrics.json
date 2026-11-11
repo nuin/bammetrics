@@ -1,0 +1,113 @@
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectMultipleMetrics",
+  "headers": [
+    "CollectMultipleMetrics INPUT=tests/data/insert_size.bam OUTPUT=tests/data/picard/NA12878/NA12878 PROGRAM=[CollectAlignmentSummaryMetrics, CollectInsertSizeMetrics, QualityScoreDistribution, MeanQualityByCycle, CollectBaseDistributionByCycle, CollectGcBiasMetrics, CollectQualityYieldMetrics] VERBOSITY=ERROR QUIET=true REFERENCE_SEQUENCE=tests/data/ref_100k.fa    ASSUME_SORTED=true STOP_AFTER=0 METRIC_ACCUMULATION_LEVEL=[ALL_READS] INCLUDE_UNPAIRED=false DO_NOT_CREATE_PLOTS=false VALIDATION_STRINGENCY=STRICT COMPRESSION_LEVEL=5 MAX_RECORDS_IN_RAM=500000 CREATE_INDEX=false CREATE_MD5_FILE=false USE_JDK_DEFLATER=false USE_JDK_INFLATER=false",
+    "Started on: Mon Nov 02 21:33:02 MST 2026"
+  ],
+  "class": "picard.analysis.InsertSizeMetrics",
+  "columns": [
+    "MEDIAN_INSERT_SIZE",
+    "MODE_INSERT_SIZE",
+    "MEDIAN_ABSOLUTE_DEVIATION",
+    "MIN_INSERT_SIZE",
+    "MAX_INSERT_SIZE",
+    "MEAN_INSERT_SIZE",
+    "STANDARD_DEVIATION",
+    "READ_PAIRS",
+    "PAIR_ORIENTATION",
+    "WIDTH_OF_10_PERCENT",
+    "WIDTH_OF_20_PERCENT",
+    "WIDTH_OF_30_PERCENT",
+    "WIDTH_OF_40_PERCENT",
+    "WIDTH_OF_50_PERCENT",
+    "WIDTH_OF_60_PERCENT",
+    "WIDTH_OF_70_PERCENT",
+    "WIDTH_OF_80_PERCENT",
+    "WIDTH_OF_90_PERCENT",
+    "WIDTH_OF_95_PERCENT",
+    "WIDTH_OF_99_PERCENT",
+    "SAMPLE",
+    "LIBRARY",
+    "READ_GROUP"
+  ],
+  "types": [
+    "float",
+    "float",
+    "float",
+    "int",
+    "int",
+    "float",
+    "float",
+    "int",
+    "string",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "string",
+    "string",
+    "string"
+  ],
+  "metrics": [
+    {
+      "MEDIAN_INSERT_SIZE": 310,
+      "MODE_INSERT_SIZE": 310,
+      "MEDIAN_ABSOLUTE_DEVIATION": 10,
+      "MIN_INSERT_SIZE": 300,
+      "MAX_INSERT_SIZE": 500,
+      "MEAN_INSERT_SIZE": 310,
+      "STANDARD_DEVIATION": 8.164966,
+      "READ_PAIRS": 5,
+      "PAIR_ORIENTATION": "FR",
+      "WIDTH_OF_10_PERCENT": 1,
+      "WIDTH_OF_20_PERCENT": 1,
+      "WIDTH_OF_30_PERCENT": 1,
+      "WIDTH_OF_40_PERCENT": 1,
+      "WIDTH_OF_50_PERCENT": 21,
+      "WIDTH_OF_60_PERCENT": 21,
+      "WIDTH_OF_70_PERCENT": 21,
+      "WIDTH_OF_80_PERCENT": 21,
+      "WIDTH_OF_90_PERCENT": 381,
+      "WIDTH_OF_95_PERCENT": 381,
+      "WIDTH_OF_99_PERCENT": 381,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    }
+  ],
+  "non_finite": [],
+  "histogram": {
+    "key_class": "java.lang.Integer",
+    "columns": [
+      "insert_size",
+      "All_Reads.fr_count"
+    ],
+    "types": [
+      "int",
+      "float"
+    ],
+    "rows": [
+      {
+        "insert_size": 300,
+        "All_Reads.fr_count": 1
+      },
+      {
+        "insert_size": 310,
+        "All_Reads.fr_count": 2
+      },
+      {
+        "insert_size": 320,
+        "All_Reads.fr_count": 1
+      }
+    ],
+    "non_finite": []
+  }
+}

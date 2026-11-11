@@ -1,0 +1,19 @@
+## argv
+plan
+tests/data/insert_size.bam
+-o
+OUT/sample
+--also
+csv,junit,multiqc
+--format
+jsonl
+## exit
+0
+## stdout
+{"event":"plan","bam":"tests/data/insert_size.bam","sample":"insert_size","prefix":"OUT/sample","preset":"generic","preset_hash":"6dd89ed0478fd5e4"}
+{"event":"step","id":"CollectQualityYieldMetrics","tool":"CollectQualityYieldMetrics","read":"pass","reason":null,"action":"run","resumable":false,"argv":["INPUT=tests/data/insert_size.bam","OUTPUT=OUT/sample.quality_yield_metrics"],"outputs":["OUT/sample.quality_yield_metrics"],"rules":["yield.q30"]}
+{"event":"step","id":"CollectAlignmentSummaryMetrics","tool":"CollectAlignmentSummaryMetrics","read":"pass","reason":null,"action":"run","resumable":false,"argv":["INPUT=tests/data/insert_size.bam","OUTPUT=OUT/sample.alignment_summary_metrics"],"outputs":["OUT/sample.alignment_summary_metrics"],"rules":["alignment.pf-reads-aligned","alignment.adapter","alignment.chimeras"]}
+{"event":"step","id":"CollectInsertSizeMetrics","tool":"CollectInsertSizeMetrics","read":"pass","reason":null,"action":"run","resumable":false,"argv":["INPUT=tests/data/insert_size.bam","OUTPUT=OUT/sample.insert_size_metrics"],"outputs":["OUT/sample.insert_size_metrics"],"rules":["insert.median"]}
+{"event":"step","id":"CollectDuplicateMetrics","tool":"CollectDuplicateMetrics","read":"pass","reason":null,"action":"run","resumable":false,"argv":["INPUT=tests/data/insert_size.bam","METRICS_FILE=OUT/sample.duplicate_metrics"],"outputs":["OUT/sample.duplicate_metrics"],"rules":["duplication.percent"]}
+{"event":"also","formats":["csv","junit","multiqc"],"outputs":["OUT/sample.alignment_summary_metrics.csv","OUT/sample.duplicate_metrics.csv","OUT/sample.insert_size_metrics.csv","OUT/sample.quality_yield_metrics.csv","OUT/sample.junit.xml","OUT/sample.verdict_mqc.json"]}
+## stderr

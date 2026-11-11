@@ -1,6 +1,145 @@
 # Changelog
 
-## Unreleased
+## 0.20.0
+
+Output formats from one typed table (`crates/formats`, `convert`, `--format` lists,
+`qc --also`) and the concordance harness for tools that write reads or variants
+(`compare_bam`, the Picard queue, the registration rule).
+
+### Added
+
+- Output formats from one typed table (docs/formats.md, docs/07 W02 parts A and B). New
+  crate `crates/formats` (`bammetrics-formats`, `std` and the core only): `Table { class,
+  columns: Vec<(name, Ty)>, rows }` takes each column's type (`int`, `float`, `string`) from
+  the glossary and infers only what the glossary lacks; the histogram is a second table and
+  the `StringHeader` texts travel as `headers`. Picard text stays the default and
+  byte-identical.
+- `--format` takes `csv` (RFC 4180, full doubles, `NaN` for NaN) and `markdown` (GFM tables,
+  at most 65,536 characters) beside `picard`, `json`, `tsv`, `jsonl` and `human`, and takes
+  a list: `--format picard,json,csv -o out.txt` writes `out.txt`, `out.txt.json` and
+  `out.txt.csv`. A multi-file verb and `mark-duplicates` take `picard` first and write each
+  further format beside every metrics file.
+- `bammetrics convert FILE`: Picard text or JSON in, any format out, `-` for standard input
+  and output, `--table metrics|histogram|CLASS` for the one-table formats. Picard text to
+  JSON to Picard text is byte for byte the first file; a test runs it on the 10 Picard
+  files of `tests/data/picard` and every metrics file of the golden records.
+- `qc --also FORMAT[,FORMAT]` (`json`, `jsonl`, `tsv`, `csv`, `markdown`, `junit`,
+  `multiqc`): `FILE.json` and its siblings beside every metrics file, `PREFIX.report.md`,
+  `PREFIX.junit.xml` and `PREFIX.verdict_mqc.json`, listed in the manifest under the step
+  `also`. `plan --also` lists them. Python: `qc(also=["json", "markdown"])`.
+- `check --format junit` (a testsuite per sample, a testcase per rule), `markdown` and
+  `multiqc`, a `--format` list, and `-o FILE` for the first format with the further ones
+  beside it.
+- MultiQC custom content: `PREFIX.verdict_mqc.json` is a table with a row per sample.
+  MultiQC 1.35 reads it (`crates/cli/tests/formats.rs`, skipped without `multiqc`).
+- Python `read_table(path, table=None)`: one table of a metrics file (Picard text or JSON)
+  as a `Table` with a list per column and the glossary dtypes, `histogram` as a second
+  `Table`, and `to_pandas()` and `to_polars()`, which import their library on the first
+  call. The wheel gains no dependency; `bammetrics[pandas]` and `bammetrics[polars]` are
+  extras.
+- `docs/schema/metrics-1.json`, the JSON Schema of `--format json`; a test validates the
+  writer's output under it.
+- JSON and JSON Lines give a repeated column name a member of its own. The histogram of
+  `CollectHsMetrics` with two units repeats its three columns; `columns` and the row objects
+  hold `high_quality_coverage_count` and `high_quality_coverage_count.1`, and
+  `picard_columns` holds the names of the file. `json.load` and `jq` keep one value per
+  member, so repeated members lost every series but the last. The round-trip test fails on
+  a repeated member.
+- `convert --format picard` exits 1 and writes nothing for a JSON cell, column name or
+  class with a tab, line feed or carriage return, and for a header with a line feed or
+  carriage return, for a row that would be a blank line and for a first cell that starts
+  with `## `. Picard text has no escape, and the file would read back with other rows. The
+  error names the row and the column.
+- `convert` drops a byte order mark before either form and reads text that starts with
+  `[` as JSON, so the error is the JSON one.
+- `qc --also` exits 0 on a BAM with no read, as `qc` without it does. The headers-only
+  file of `CollectDuplicateMetrics` gets a `.json` sibling with no row and empty `.tsv`,
+  `.csv` and `.jsonl` siblings. Fixture `tests/data/no_reads.bam`.
+- In `--format json,picard -o a.json` the Picard sibling `a.json.txt` names itself as
+  `OUTPUT` in its header, as `-o a.json.txt` alone does.
+- `make budgets` gains the row `formats growth`: the stripped `size_formats` probe less
+  `size_formats_base` (`crates/formats/examples`), 129.2 KB against a 150 KB target. The
+  whole binary grew 198,464 bytes stripped over 0.19.0, 12 times the 16 KB docs/07 section
+  3.2 priced the formats at (docs/benchmarks.md has the split by crate).
+
+### Changed
+
+- `--format json` is schema `bammetrics.metrics/1`. Added members: `schema`, `headers`,
+  `columns`, `types`, `non_finite`, `histogram.key_class`, `histogram.types` and
+  `histogram.non_finite`; `tool`, `sample`, `class`, `metrics` and `histogram` keep their
+  place and shape. Three values differ from 0.19.0: an int column is a JSON integer over the
+  whole `i64` range (it was a double), a boolean cell is `"Y"` or `"N"` as Picard prints it
+  (it was `true` or `false`), and the histogram of a file with no bin is `null` (it was an
+  object with empty lists). NaN and infinity stay `null` and are now listed in
+  `non_finite`, so the Picard text comes back. Seven golden JSON records changed for this.
+- `--format jsonl` prints the histogram rows too, each with `"histogram": true` first. The
+  rows of a histogram-only tool gain that member.
+- `--format tsv` writes a tab, newline, carriage return or backslash in a string cell or a
+  column name as `\t`, `\n`, `\r` or `\\`, so a row is always one line. A cell without
+  those characters is unchanged.
+- `check` no longer fails on a closed standard output (`check DIR | head -1`); the rest of
+  the output is dropped and the exit code kept, as `qc` does.
+- An unknown `--format` lists seven formats, and a non-Picard `--format` on a multi-file
+  verb names the `picard,json` form: two golden error records changed. `bammetrics tools`
+  lists `convert`.
+- An output that is replaced keeps its permissions. `report`, `check -o`, `convert`, the
+  non-Picard `--format` files and every file of `qc` are written through
+  `cleanup::AtomicFile`, as the Picard files of the tool verbs are: a 0600 file stays 0600
+  under any umask, the temporary file is 0600 from the start and a signal removes it.
+  Through 0.19.0 the verdict, the page and the manifest came back with the umask default.
+  A target that is a symbolic link is written through the link.
+- `check -o FILE` refuses a `FILE`, or a sibling of a `--format` list, that is a metrics
+  file or a `verdict.json` it reads (exit 2). Before, only the directory arguments were
+  compared, and `check DIR -o DIR/S1.insert_size_metrics` replaced the metrics file.
+
+### Security
+
+- `--format tsv` and `--format csv` write a string cell or a column name that starts with
+  `=`, `+`, `-`, `@`, a tab or a carriage return after a `'`, so a spreadsheet reads it as
+  text and runs no formula from a sample or library name. Numbers are unchanged (`-3` stays
+  `-3`), and so is a text that is `+` or `-` alone (a strand). No flag turns it off; such a cell does not round-trip through TSV or CSV, and JSON
+  holds it unchanged (docs/formats.md).
+- `Table::keys` (the members of `--format json` and `jsonl` for a repeated column name)
+  takes linear time. It compared every key with every earlier one, so a JSON document with
+  100,000 columns of one name held `convert` for minutes. The keys are the same.
+- `cleanup::AtomicFile`: an output that is a symbolic link owned by another user is an error
+  that names the path; a link the user owns is still written through. The same holds for a
+  named pipe, socket or device outside `/dev`: in place when the user owns it, an error
+  otherwise. The `/dev` rule (in place, no owner check) applies only to a path with no `..`
+  component, so `/dev/../tmp/x` gets the rules of any path. The temporary name
+  has a random part. A file already at the temporary name fails the write and is no longer
+  removed or renamed, and the temporary file is registered for signal cleanup only once
+  this process has made it.
+
+### Harness (full parity program, wave W02, part C)
+
+- `compare_bam` and `compare_vcf` in `tests/concordance/compare.py`, for tools that write
+  reads or variants: header lines other than `@PG` (the `@RG` `DT` field aside), the `@PG`
+  `ID` and `PP`, every record as `samtools view` prints it, the first difference named by
+  its index; `record_bytes=True` adds each record as bytes after BGZF inflation. Text is
+  split at `\n` only, and a BAM or bgzip VCF without the BGZF end-of-file block is a
+  difference.
+  `test_mark_duplicates.py` runs its 160 cases through `compare_bam`, and a case where both
+  tools fail now also requires that bammetrics left no output.
+- BAM outputs are compared at tier B, decoded records (docs/concordance.md, "BAM bytes").
+  The deflater spike (`make deflater-spike`) found that zlib-rs and miniz_oxide reproduce 0
+  of 585 BGZF blocks of either Picard stream on corpus t2 at any level, that Picard's two
+  deflaters differ from each other on one machine, and that C zlib 1.2.12 and C libdeflate
+  1.26.1 at level 5 each reproduce 585 of 585 blocks of one stream.
+- The Picard queue, `tests/concordance/picard_lock.py`: every harness call to `picard` takes
+  one file lock, so one JVM runs at a time across pytest processes, worktrees and agents.
+  `JAVA_OPTS` passes through, and the CI `picard` wrapper now expands it. Each interpreter
+  gets a shim script of its own under `target/picard-queue`, and a `PICARD_LOCK_TIMEOUT` that
+  is not seconds exits 2.
+- `crates/cli/tests/registration.rs`, the registration rule: every tool in `TOOLS` needs a
+  verb, a glossary argument list (the keys of `args()` in `crates/core/tests/glossary.rs`,
+  or an `EXEMPT` line), a concordance module that names it, a `docs/cli.md` mention and a
+  README row. The 32 tools pass.
+- `tools/spec_agent.py`: the option table of a Picard tool's `--help` as a starting spec,
+  enum values from either form Picard prints them in; an unknown tool is one line.
+- `deny.toml` and `make deny` (cargo-deny: licences, bans, sources, advisories). Clean on the
+  105 packages of `Cargo.lock`.
+- `tests/harness` and `make harness-test`: 79 tests of the harness on stand-in tools.
 
 ### Docs
 

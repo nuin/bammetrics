@@ -1,0 +1,12 @@
+## argv
+check
+tests/data/picard
+--format
+xml
+## exit
+2
+## stdout
+## stderr
+bammetrics check: invalid value "xml" (from --format)
+  one of: text, json, jsonl, junit, markdown, multiqc
+  every option: bammetrics help check

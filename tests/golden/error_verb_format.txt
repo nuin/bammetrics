@@ -9,4 +9,4 @@ jsn
 ## stderr
 bammetrics insert-size: no format "jsn" (from --format)
   did you mean json?
-  formats: picard, json, tsv, jsonl, human
+  formats: picard, json, tsv, jsonl, human, csv, markdown

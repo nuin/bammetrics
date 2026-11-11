@@ -1,0 +1,13 @@
+## argv
+insert-size
+tests/data/insert_size.bam
+--format
+tsv,tsv
+-o
+OUT/insert_size.tsv
+## exit
+2
+## stdout
+## stderr
+bammetrics insert-size: format tsv is given twice (from --format)
+  formats: picard, json, tsv, jsonl, human, csv, markdown

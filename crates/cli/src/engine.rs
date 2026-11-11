@@ -11,6 +11,7 @@ use bammetrics_core::pass::{self, Limits};
 use bammetrics_report::Options;
 use bammetrics_verdict::{Band, Input, Status as CheckStatus, Verdict, bytes_hash, evaluate};
 
+use crate::also;
 use crate::check::{self, status_word};
 use crate::error::{Error, Result};
 use crate::events::{self, Reporter, print_stdout};
@@ -303,6 +304,20 @@ fn guard_previous(plan: &Plan, args: &QcArgs) -> Result<()> {
     }
 }
 
+/// The metrics files the run holds, in path order, the order `report`
+/// discovers the same files in.
+fn metrics_paths(done: &[Done]) -> Vec<&Path> {
+    let mut paths: Vec<&Path> = done
+        .iter()
+        .filter(|d| d.record.status == Status::Ok)
+        .flat_map(|d| &d.record.outputs)
+        .filter(|o| o.kind == "metrics")
+        .map(|o| o.path.as_path())
+        .collect();
+    paths.sort();
+    paths
+}
+
 /// Post and report: the verdict over the run's files, then verdict.json and
 /// the page, as `bammetrics report` writes them for the same files.
 fn post_and_report(
@@ -312,15 +327,7 @@ fn post_and_report(
     files: &mut Files,
     out: &Reporter,
 ) -> Result<(Verdict, Vec<Input>, Vec<StepRecord>)> {
-    // In path order, the order `report` discovers the same files in.
-    let mut paths: Vec<&Path> = done
-        .iter()
-        .filter(|d| d.record.status == Status::Ok)
-        .flat_map(|d| &d.record.outputs)
-        .filter(|o| o.kind == "metrics")
-        .map(|o| o.path.as_path())
-        .collect();
-    paths.sort();
+    let paths = metrics_paths(done);
     let inputs = paths
         .iter()
         .map(|p| Input::read(p))
@@ -362,6 +369,66 @@ fn post_and_report(
     report_argv.extend(args.date.iter().map(|d| format!("--date={d}")));
     let report = own_step(plan, "report", "report", report_argv, outputs);
     Ok((verdict, inputs, vec![post, report]))
+}
+
+/// `--also`: write the files of [`also::texts`] and return their manifest
+/// step, `also`; `None` without the option. An `--also` file the earlier
+/// run's manifest lists and this run does not write is removed, under the
+/// rules of [`remove_dropped`] (a path owned by the prefix, a regular
+/// file, never through a symlink) and only under a name `--also` writes
+/// ([`also::is_target`]).
+fn write_also(
+    plan: &Plan,
+    args: &QcArgs,
+    verdict: &Verdict,
+    done: &[Done],
+    files: &mut Files,
+    out: &Reporter,
+) -> Result<Option<StepRecord>> {
+    let texts = also::texts(
+        &plan.prefix,
+        &metrics_paths(done),
+        &args.also,
+        &plan.sample,
+        verdict,
+        args.fail_on,
+    )?;
+    let mut outputs = Vec::new();
+    for (target, text) in texts {
+        files.replaced += usize::from(target.path.exists());
+        write_atomic(&target.path, text)?;
+        files.written += 1;
+        let output = Output {
+            path: target.path,
+            tool: "bammetrics".to_owned(),
+            kind: target.also.name().to_owned(),
+        };
+        out.file("also", &output, true);
+        outputs.push(output);
+    }
+    if let Ok(Some(old)) = &plan.previous {
+        let stale = old
+            .steps
+            .iter()
+            .filter(|s| s.id == "also")
+            .flat_map(|s| &s.outputs)
+            .filter(|o| also::is_target(&plan.prefix, &o.path, &o.kind))
+            .filter(|o| !outputs.iter().any(|new| new.path == o.path));
+        for output in stale {
+            if owned_by_prefix(&plan.prefix, &output.path)
+                && fs::symlink_metadata(&output.path).is_ok_and(|m| m.file_type().is_file())
+                && fs::remove_file(&output.path).is_ok()
+            {
+                files.removed += 1;
+            }
+        }
+    }
+    if outputs.is_empty() {
+        return Ok(None);
+    }
+    let names: Vec<&str> = args.also.iter().map(|a| a.name()).collect();
+    let argv = vec![format!("--also={}", names.join(","))];
+    Ok(Some(own_step(plan, "also", "report", argv, outputs)))
 }
 
 /// Without the page (Python `qc(report=False)`), an earlier run's page
@@ -457,6 +524,7 @@ fn stages(args: &QcArgs, silent: bool) -> Result<Stages> {
     let (verdict, inputs, own) = post_and_report(&plan, args, &done, &mut files, &out)?;
     let mut all = records;
     all.extend(own);
+    all.extend(write_also(&plan, args, &verdict, &done, &mut files, &out)?);
     write_atomic(
         &manifest_path(&plan.prefix),
         manifest(&plan, all.clone()).to_json(),

@@ -245,7 +245,7 @@ insert_size	All_Reads.fr_count
 ## file sample.manifest.json
 {
   "schema": "bammetrics.manifest/1",
-  "tool_version": "0.19.0",
+  "tool_version": "0.20.0",
   "sample": "insert_size",
   "bam": "tests/data/insert_size.bam",
   "prefix": "OUT/sample",
@@ -263,7 +263,7 @@ insert_size	All_Reads.fr_count
         "OUTPUT=OUT/sample.quality_yield_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.19.0",
+      "tool_version": "0.20.0",
       "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -292,7 +292,7 @@ insert_size	All_Reads.fr_count
         "REFERENCE_SEQUENCE=tests/data/ref_100k.fa"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.19.0",
+      "tool_version": "0.20.0",
       "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -333,7 +333,7 @@ insert_size	All_Reads.fr_count
         "OUTPUT=OUT/sample.insert_size_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.19.0",
+      "tool_version": "0.20.0",
       "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -364,7 +364,7 @@ insert_size	All_Reads.fr_count
         "TARGET_INTERVALS=tests/data/targets.interval_list"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.19.0",
+      "tool_version": "0.20.0",
       "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -412,7 +412,7 @@ insert_size	All_Reads.fr_count
         "TARGET_INTERVALS=tests/data/targets.interval_list"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.19.0",
+      "tool_version": "0.20.0",
       "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -449,7 +449,7 @@ insert_size	All_Reads.fr_count
         "TARGET_INTERVALS=tests/data/targets.interval_list"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.19.0",
+      "tool_version": "0.20.0",
       "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -494,7 +494,7 @@ insert_size	All_Reads.fr_count
         "OUT/sample.sex_check_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.19.0",
+      "tool_version": "0.20.0",
       "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -516,7 +516,7 @@ insert_size	All_Reads.fr_count
         "--date=2026-01-02 03:04:05 UTC"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.19.0",
+      "tool_version": "0.20.0",
       "preset_hash": "6f0d59319750923f",
       "input": {
         "path": "tests/data/insert_size.bam",
@@ -569,7 +569,7 @@ AUTOSOME_READS	X_READS	Y_READS	AUTOSOME_LENGTH	X_LENGTH	Y_LENGTH	X_RATIO	Y_RATIO
 ## file sample.verdict.json
 {
   "schema": "bammetrics.verdict/1",
-  "tool_version": "0.19.0",
+  "tool_version": "0.20.0",
   "sample": "insert_size",
   "preset": {
     "name": "clinical-panel",

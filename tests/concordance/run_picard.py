@@ -12,24 +12,30 @@ given. Picard must be the pinned PICARD_VERSION.
 CollectInsertSizeMetrics refuses to run without Rscript, so a no-op Rscript
 in target/fakeR goes first on PATH; it is never asked to draw anything
 useful because H=/dev/null.
+
+Every Picard call of the harness takes its environment from picard_env(),
+which also puts the queue shim of picard_lock.py on PATH: one Picard JVM runs
+at a time on this machine, and JAVA_OPTS passes through to it.
 """
 import json
 import os
 import subprocess
 import sys
 
+import picard_lock
 from cases import CASES, METRICS, PICARD_DIR, PICARD_VERSION, ROOT
 
 FAKE_R = ROOT / "target" / "fakeR"
+QUEUE = ROOT / "target" / "picard-queue"
 
 
 def picard_env():
+    """The environment of a Picard call: `picard` is the queue shim of
+    picard_lock.py and `Rscript` a script that does nothing."""
     FAKE_R.mkdir(parents=True, exist_ok=True)
-    rscript = FAKE_R / "Rscript"
-    rscript.write_text("#!/bin/sh\nexit 0\n")
-    rscript.chmod(0o755)
+    picard_lock.write_script(FAKE_R / "Rscript", "#!/bin/sh\nexit 0\n")
     env = dict(os.environ)
-    env["PATH"] = f"{FAKE_R}{os.pathsep}{env['PATH']}"
+    env["PATH"] = os.pathsep.join([str(picard_lock.shim(QUEUE)), str(FAKE_R), env["PATH"]])
     return env
 
 

@@ -10,9 +10,52 @@ json
 0
 ## stdout
 {
+  "schema": "bammetrics.metrics/1",
   "tool": "CollectJumpingLibraryMetrics",
   "sample": "orientation",
+  "headers": [
+    "CollectJumpingLibraryMetrics INPUT=tests/data/orientation.bam INPUT=tests/data/insert_size.bam TAIL_LIMIT=100",
+    "Started on: <time>"
+  ],
   "class": "picard.analysis.JumpingLibraryMetrics",
+  "columns": [
+    "JUMP_PAIRS",
+    "JUMP_DUPLICATE_PAIRS",
+    "JUMP_DUPLICATE_PCT",
+    "JUMP_LIBRARY_SIZE",
+    "JUMP_MEAN_INSERT_SIZE",
+    "JUMP_STDEV_INSERT_SIZE",
+    "NONJUMP_PAIRS",
+    "NONJUMP_DUPLICATE_PAIRS",
+    "NONJUMP_DUPLICATE_PCT",
+    "NONJUMP_LIBRARY_SIZE",
+    "NONJUMP_MEAN_INSERT_SIZE",
+    "NONJUMP_STDEV_INSERT_SIZE",
+    "CHIMERIC_PAIRS",
+    "FRAGMENTS",
+    "PCT_JUMPS",
+    "PCT_NONJUMPS",
+    "PCT_CHIMERAS"
+  ],
+  "types": [
+    "int",
+    "int",
+    "float",
+    "int",
+    "float",
+    "float",
+    "int",
+    "int",
+    "float",
+    "int",
+    "float",
+    "float",
+    "int",
+    "int",
+    "float",
+    "float",
+    "float"
+  ],
   "metrics": [
     {
       "JUMP_PAIRS": 2,
@@ -34,6 +77,7 @@ json
       "PCT_CHIMERAS": 0.022222222222222223
     }
   ],
+  "non_finite": [],
   "histogram": null
 }
 ## stderr

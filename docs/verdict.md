@@ -222,7 +222,7 @@ nothing else from a run. Written by `Verdict::to_json`, read back by
 ```json
 {
   "schema": "bammetrics.verdict/1",
-  "tool_version": "0.16.0",
+  "tool_version": "0.20.0",
   "sample": "NA12878",
   "preset": {"name": "clinical-panel", "version": 3, "hash": "6f0d59319750923f",
              "source": "built-in", "note": "reviewed defaults; gap and sex rules are starting values"},

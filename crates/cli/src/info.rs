@@ -31,7 +31,7 @@ const OTHER_VERBS: &[(&str, &str)] = &[
 ];
 
 /// The verbs clap parses (`main.rs`), in `tools` order.
-pub const CLAP_VERBS: [&str; 4] = ["qc", "plan", "check", "report"];
+pub const CLAP_VERBS: [&str; 5] = ["qc", "plan", "check", "report", "convert"];
 
 /// `text` up to its first `.`, `;` or `:` outside parentheses and before
 /// a space: one line for a verb list.

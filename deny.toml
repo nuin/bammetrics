@@ -1,0 +1,55 @@
+# cargo-deny configuration: `make deny` (cargo install cargo-deny --locked).
+# Checks the dependency graph of the six workspace crates and the vendored
+# noodles-cram: licences, banned and duplicated crates, registries, and the
+# RustSec advisory database. Every exception below carries its reason.
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = []
+
+[licenses]
+version = 2
+# The workspace is MIT OR Apache-2.0. A dependency may carry any licence that
+# both allow in a statically linked binary and a wheel.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    # unicode-ident (the data tables of proc-macro2).
+    "Unicode-3.0",
+    # zlib-rs, the inflater and deflater under noodles-bgzf and gzip.rs.
+    "Zlib",
+    # libbz2-rs-sys, the bzip2 codec of noodles-cram: a BSD-style licence that
+    # asks for the copyright notice and for changed versions to be marked.
+    "bzip2-1.0.6",
+    # target-lexicon, a build dependency of pyo3: Apache-2.0 with the LLVM
+    # exception, which only loosens Apache-2.0 for compiled output.
+    "Apache-2.0 WITH LLVM-exception",
+]
+confidence-threshold = 0.93
+
+[bans]
+multiple-versions = "deny"
+wildcards = "deny"
+# The workspace crates name each other by path and version.
+allow-wildcard-paths = true
+# docs/05 section 4.9: no crate makes a network call. A client or a TLS stack
+# in the graph means one could.
+deny = [
+    { crate = "reqwest", reason = "docs/05 section 4.9: no network call" },
+    { crate = "hyper", reason = "docs/05 section 4.9: no network call" },
+    { crate = "ureq", reason = "docs/05 section 4.9: no network call" },
+    { crate = "curl", reason = "docs/05 section 4.9: no network call" },
+    { crate = "openssl-sys", reason = "docs/05 section 4.9: no network call, no C TLS stack" },
+    { crate = "native-tls", reason = "docs/05 section 4.9: no network call" },
+    { crate = "rustls", reason = "docs/05 section 4.9: no network call" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

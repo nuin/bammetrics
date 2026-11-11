@@ -8,6 +8,7 @@ use std::fmt::Write as _;
 
 use bammetrics_verdict::json::Json;
 
+use crate::also::{Also, targets};
 use crate::events::{self, print_stdout};
 use crate::qc::{
     Format, Origin, Plan, QcArgs, Read, Step, manifest_path, page_path, plural, prepare,
@@ -24,6 +25,24 @@ fn origin(o: Origin, option: &str, other: &str) -> String {
         Origin::FileName => format!("from {other}"),
         Origin::Directory => format!("from {option}, a directory, and the BAM name"),
     }
+}
+
+/// The files `--also` would write, from the metrics files the steps plan.
+/// A collector that writes no file (Picard writes no insert size file when
+/// every orientation is dropped) gets no sibling in the run.
+fn also_files(plan: &Plan, also: &[Also]) -> Vec<String> {
+    let mut metrics: Vec<&std::path::Path> = plan
+        .steps
+        .iter()
+        .flat_map(|s| &s.record.outputs)
+        .filter(|o| o.kind == "metrics")
+        .map(|o| o.path.as_path())
+        .collect();
+    metrics.sort();
+    targets(&plan.prefix, &metrics, also)
+        .iter()
+        .map(|t| t.path.display().to_string())
+        .collect()
 }
 
 /// `run`, `skip`, or `run` with the note that `--resume` would skip it.
@@ -75,7 +94,7 @@ fn outputs(step: &Step) -> String {
 }
 
 /// The plan as text.
-pub fn text(plan: &Plan, resume: bool) -> String {
+pub fn text(plan: &Plan, resume: bool, also: &[Also]) -> String {
     let mut out = String::new();
     let p = &plan.preset;
     let _ = writeln!(out, "qc plan for {}", plan.bam.display());
@@ -186,6 +205,15 @@ pub fn text(plan: &Plan, resume: bool) -> String {
         verdict_path(&plan.prefix).display(),
         page_path(&plan.prefix).display()
     );
+    if !also.is_empty() {
+        let names: Vec<&str> = also.iter().map(|a| a.name()).collect();
+        let _ = writeln!(
+            out,
+            "also      {}: {} (always rewritten)",
+            names.join(", "),
+            plural(also_files(plan, also).len(), "file")
+        );
+    }
     out.push_str("nothing ran: this is a plan\n");
     out
 }
@@ -196,7 +224,7 @@ fn strings<'a>(items: impl Iterator<Item = &'a str>) -> Json {
 
 /// The plan as JSON lines: one `plan` event, a `step` event per
 /// collector, an `unmet` event per class no collector writes.
-pub fn jsonl(plan: &Plan, resume: bool) -> String {
+pub fn jsonl(plan: &Plan, resume: bool, also: &[Also]) -> String {
     let mut out = String::new();
     let field = |k: &str, v: Json| (k.to_owned(), v);
     let head = Json::Object(vec![
@@ -254,6 +282,17 @@ pub fn jsonl(plan: &Plan, resume: bool) -> String {
         ]);
         let _ = writeln!(out, "{}", line.render_line());
     }
+    if !also.is_empty() {
+        let line = Json::Object(vec![
+            field("event", Json::text("also")),
+            field("formats", strings(also.iter().map(|a| a.name()))),
+            field(
+                "outputs",
+                strings(also_files(plan, also).iter().map(String::as_str)),
+            ),
+        ]);
+        let _ = writeln!(out, "{}", line.render_line());
+    }
     out
 }
 
@@ -263,8 +302,8 @@ pub fn run(args: &QcArgs) -> u8 {
     match prepare(args) {
         Ok(plan) => {
             print_stdout(&match args.format {
-                Format::Text => text(&plan, args.resume),
-                Format::Jsonl => jsonl(&plan, args.resume),
+                Format::Text => text(&plan, args.resume, &args.also),
+                Format::Jsonl => jsonl(&plan, args.resume, &args.also),
             });
             0
         }

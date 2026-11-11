@@ -1,0 +1,8 @@
+## argv
+convert
+tests/data/nope.txt
+## exit
+1
+## stdout
+## stderr
+bammetrics convert: tests/data/nope.txt not found

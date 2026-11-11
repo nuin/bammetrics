@@ -19,6 +19,8 @@ import random
 import subprocess
 from pathlib import Path
 
+from run_picard import picard_env
+
 CONTIGS = [("c1", 30_000), ("c2", 20_000), ("c3", 6_000)]
 INDEXED_3P = "AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC"
 PAIRED_3P = "AGATCGGAAGAGCGGTTCAGCAGGAATGCCGAG"
@@ -44,7 +46,9 @@ def revcomp(seq):
 
 
 def run(cmd):
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    """Run a command quietly. A `picard` command queues behind picard_lock.py."""
+    env = picard_env() if cmd[0] == "picard" else None
+    subprocess.run(cmd, check=True, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def write_reference(out, seed=11):

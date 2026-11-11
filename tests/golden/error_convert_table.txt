@@ -1,0 +1,13 @@
+## argv
+convert
+tests/data/picard/NA12878/NA12878.insert_size_metrics
+--format
+tsv
+--table
+HsMetrics
+## exit
+2
+## stdout
+## stderr
+bammetrics convert: the file has no table "HsMetrics" (from --table)
+  it has: metrics, picard.analysis.InsertSizeMetrics, histogram

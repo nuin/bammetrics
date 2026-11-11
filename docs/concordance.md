@@ -125,6 +125,259 @@ The harness (`tests/concordance/`):
 - The run ends with one line per case: fields matched / total, and whether the
   file body is byte-identical to Picard's.
 
+## Oracle tiers
+
+Each tool is compared with Picard 3.5.0 at one tier.
+
+| Tier | Meaning | Harness call |
+|---|---|---|
+| A | Picard's file byte for byte after the `StringHeader` lines | `compare_metrics`, `compare_outputs`, `compare_prefixed` |
+| B | Picard's output decoded record by record, `@PG` normalised | `compare_bam`, `compare_vcf` |
+| C | Picard on synthetic data with a written tolerance | per tool |
+| D | no real-data oracle: round trip and parser tests | per tool |
+| E | not a Picard tool: planted truth, then a named tool within a stated tolerance | per tool |
+
+Metrics files, interval lists, `.dict` files and standard output are tier A. BAM, CRAM and
+VCF outputs are tier B (next two sections).
+
+## Tools that write reads or variants
+
+`compare_bam(tool, inputs, picard_args, bam_args=None, workdir=None, outcome="equal",
+input_key="I", output_key="O", metrics_key=None, suffix=".bam", reference=None, label=None,
+record_bytes=False)` in `tests/concordance/compare.py` runs Picard and bammetrics with
+`O=<dir>/<side><suffix>` and reads both files back with `samtools view --no-PG`, one character
+per byte.
+
+- Header lines other than `@PG` must be equal, in order. The `DT` field of an `@RG` line is
+  cut first: htsjdk rewrites it in the JVM's time zone.
+- The `@PG` lines must carry the same `ID` and `PP`, in order. `VN` and `CL` name the program
+  that wrote the file and are not compared.
+- Every record must be equal as `samtools view` prints it: every field, every tag, file order.
+  The text is split at `\n` only. `str.splitlines` also splits at `\r`, `\x0b`, `\x0c`, `\x1c`
+  to `\x1e` and `\x85`, so a tag value holding one of them would be cut in two and the byte
+  itself never compared.
+- Each BAM must end with the 28-byte BGZF end-of-file block. `samtools view` exits 0 without
+  it and prints every record, so a writer that never wrote it would pass otherwise. The same
+  check runs on a bgzip VCF and under `record_bytes`.
+- The failure names the first differing header line or record by its index, from 0, with both
+  lines.
+- `metrics_key="M"` also compares a metrics file as `compare_metrics` does.
+- `outcome="fail"` requires both tools to fail, bammetrics to leave no output, and neither to
+  write a metrics file. `outcome="same"` lets Picard decide between the two.
+- `record_bytes=True` also compares each record as bytes after BGZF inflation. That catches
+  what `samtools view` does not print: the `bin` field and the width of an integer tag.
+- `suffix=".cram"` with `reference=` reads a CRAM back. It returns `Written` (`outcome`,
+  Picard's `header` and `records`, the parsed `metrics`, `cells`).
+
+`tests/concordance/test_mark_duplicates.py` runs its 160 cases through `compare_bam`.
+
+`compare_vcf(tool, inputs, picard_args, bam_args=None, workdir=None, outcome="equal",
+input_key="I", output_key="O", suffix=".vcf", drop=(), label=None)` does the same for a VCF,
+plain or gzip. The header lines must be equal in order, without the date and command lines
+(`##fileDate=`, any key ending in `CommandLine` or `Command`) and without the keys in `drop`.
+Every record line must be equal, split at `\n` only. `drop` takes the lines one Picard writer adds that name the
+run, for example `drop=["liftOverTime"]`. Picard 3.5.0 `SortVcf` and `MakeSitesOnlyVcf` add no
+such line and write `##FORMAT` before `##contig`. No registered tool writes a VCF yet, so
+`compare_vcf` is tested on stand-in tools only.
+
+## BAM bytes
+
+Decision (2026-11-10, wave W02 of the full parity program plan): a tool that writes a BAM is
+compared at tier B,
+decoded records. BAM bytes are not compared and bammetrics does not try to write Picard's
+bytes. The same holds for CRAM and for a gzip VCF.
+
+The spike that decided it is `make deflater-spike`
+(`benches/deflater_spike.py` and the package `benches/deflater_spike`, which is outside the
+workspace, so no shipped crate depends on it). It runs `MarkDuplicates` three times per input:
+Picard at its defaults (`COMPRESSION_LEVEL=5`), Picard with `USE_JDK_DEFLATER=true`, and
+bammetrics. It then inflates every BGZF block Picard wrote, deflates it again with each
+candidate at each level, and counts the blocks that come out byte for byte.
+
+Run of 2026-11-10: Mac Studio M1 Ultra, OpenJDK 27.0.1 aarch64, Picard 3.5.0, zlib-rs 0.6.8,
+miniz_oxide 0.8.9, libdeflater 1.26.1, on `tests/data/markdup.bam` (36 records) and corpus
+`t2.bam` (101,099 records).
+
+Which deflater Picard used, from its log:
+
+| Picard run | Log line | Library |
+|---|---|---|
+| defaults | `Intel Deflater not supported, using Java.util.zip.Deflater` | `/usr/lib/libz.1.dylib`, zlib 1.2.12 |
+| `USE_JDK_DEFLATER=true` | `libdeflate is available; using libdeflate for DEFLATE compression` | libdeflate, loaded by htsjdk |
+
+The Intel GKL library in `picard.jar` is x86_64 only (`incompatible architecture (have
+'x86_64', need 'arm64')`), so it was not measured. On x86_64 it is a third stream.
+
+Whole files:
+
+| Input | File | Bytes | Data blocks | Largest block | Against Picard defaults |
+|---|---|---:|---:|---:|---|
+| markdup.bam | Picard defaults | 2,022 | 1 | 9,461 | equal |
+| markdup.bam | Picard `USE_JDK_DEFLATER=true` | 2,000 | 1 | 9,443 | differ at byte 16 |
+| markdup.bam | bammetrics | 1,355 | 1 | 7,331 | differ at byte 16 |
+| t2.bam | Picard defaults | 8,375,031 | 585 | 65,498 | equal |
+| t2.bam | Picard `USE_JDK_DEFLATER=true` | 8,414,929 | 585 | 65,498 | differ at byte 16 |
+| t2.bam | bammetrics | 8,180,379 | 585 | 65,495 | differ at byte 16 |
+
+Blocks each candidate reproduces, at its best level:
+
+| Picard stream | Candidate | Levels tried | markdup.bam | t2.bam |
+|---|---|---|---:|---:|
+| defaults | zlib-rs 0.6.8 | 1 to 9 | 0 of 1 | 0 of 585 |
+| defaults | miniz_oxide 0.8.9 | 1 to 10 | 0 of 1 | 0 of 585 |
+| defaults | C libdeflate 1.26.1 | 1 to 12 | 0 of 1 | 0 of 585 |
+| defaults | C zlib 1.2.12, memLevel 8 | 1 to 9 | 1 of 1 (level 5) | 585 of 585 (level 5) |
+| `USE_JDK_DEFLATER=true` | zlib-rs 0.6.8 | 1 to 9 | 0 of 1 | 0 of 585 |
+| `USE_JDK_DEFLATER=true` | miniz_oxide 0.8.9 | 1 to 10 | 0 of 1 | 0 of 585 |
+| `USE_JDK_DEFLATER=true` | C zlib 1.2.12, memLevel 8 | 1 to 9 | 0 of 1 | 0 of 585 |
+| `USE_JDK_DEFLATER=true` | C libdeflate 1.26.1 | 1 to 12 | 1 of 1 (level 5) | 585 of 585 (level 5) |
+
+Why tier B:
+
+1. Neither pure-Rust deflater writes a single Picard block. zlib-rs is the deflater under
+   noodles-bgzf 0.52, so every BAM bammetrics writes goes through it.
+2. Picard has no one byte stream. Picard at its defaults and with `USE_JDK_DEFLATER=true`
+   differ by 39,898 bytes on t2, on one machine. Two runs of the same command write the same
+   blocks. The default stream depends on the platform (Intel GKL on x86_64, the machine's libz
+   elsewhere) and on the libz and libdeflate versions.
+3. Both streams are reachable only through a C library pinned to Picard's version (libz
+   1.2.12 here, libdeflate at level 5), which the shipped crates do not link today.
+4. Bytes would still differ. htsjdk cuts blocks at 65,498 bytes and noodles-bgzf at 65,495.
+   A tool that writes a `@PG` line writes its own `VN` and `CL`, so the first block differs
+   in content (9,461 against 7,331 inflated bytes on markdup.bam).
+
+What tier B still proves, and what it does not:
+
+- Records after inflation, bammetrics against Picard defaults: 101,099 of 101,099 byte-equal on
+  t2, 34 of 36 on markdup.bam. `compare_bam(record_bytes=True)` is that check.
+- `test_mark_duplicates.py` with `record_bytes=True` fails 93 of its 160 tests, all on one
+  field: `bin` of a record without a reference (`refID` -1). The inputs carry 4680 there
+  (`reg2bin(-1, 0)`, as samtools and pysam write it; two foundation records carry 4683),
+  Picard writes 0, bammetrics copies the input. A probe planted `bin` 1 on two placed records
+  of markdup.bam: Picard wrote 4681, bammetrics 1. So htsjdk computes `bin` for every record
+  it writes and bammetrics copies it, which KNOWN_DIFFERENCES.md already lists under
+  MarkDuplicates. `samtools view` does not print `bin`. `MarkDuplicates` therefore keeps
+  `record_bytes` off; a later writer that computes `bin` can turn it on.
+- A BAI that Picard writes beside its BAM (`CREATE_INDEX=true`) holds virtual offsets into
+  Picard's compressed blocks. It cannot be byte-equal to an index of a BAM bammetrics wrote.
+  `BuildBamIndex` on one given BAM can be tier A.
+
+## Picard queue
+
+One Picard JVM runs at a time per user and machine. `run_picard.picard_env()` puts
+`target/picard-queue/<key>/picard` first on `PATH`. `<key>` is 12 hex characters of the
+SHA-256 of the script's text, which holds the interpreter path. A script at one path never
+changes, so two harness processes started from different interpreters (a uv environment and
+`.venv`) never replace each other's script. That script runs
+`tests/concordance/picard_lock.py`, which:
+
+1. takes an exclusive `flock` on `~/.cache/bammetrics/picard.lock` (file mode 0600,
+   never through a symbolic link);
+2. writes its pid, the time and the command into that file;
+3. waits while `/bin/ps -eo pid=,args=` lists a `java` process running `picard.jar`, which
+   covers a harness older than the lock and a Picard run started by hand;
+4. replaces itself with the real `picard`. The JVM inherits the descriptor, so the kernel
+   releases the lock when the JVM exits, however it exits.
+
+Two pytest processes, two worktrees or two agents therefore never run two JVMs at once.
+`JAVA_OPTS`, the arguments, standard streams and the exit code are the real command's. The
+Homebrew `picard` wrapper and the CI wrapper both expand `JAVA_OPTS`. A cached result
+(`target/fuzz/cache`, the `run_picard.py` manifest) starts no process and takes no lock.
+
+```bash
+python3 tests/concordance/picard_lock.py --status          # free, or who holds the lock
+python3 tests/concordance/picard_lock.py SortSam --help    # one queued Picard call
+```
+
+| Variable | Effect |
+|---|---|
+| `PICARD_LOCK_FILE` | another lock file |
+| `PICARD_LOCK_TIMEOUT` | seconds to wait, then exit 75; unset waits without limit; a value that is not a finite number from 0 up exits 2 with one line |
+| `PICARD_LOCK_WAIT_FOREIGN` | `0` skips step 3 |
+
+`benches/bench.py` and `benches/wgs_bench.py` hold the same lock around each timed Picard run
+(`picard_lock.held`), so the wait is outside the measured time. The queue adds 123 ms per call
+on the Mac Studio (10 ms direct, 133 ms queued, mean of 50 calls of a no-op `picard`; 78 ms of
+it is `/bin/ps`). `make picard-fields` reads class files with `java` for about 1 s and is not
+queued. `tests/harness/test_picard_lock.py` fails when a file under `tests`, `benches` or
+`tools` starts `picard` without `env=picard_env()`.
+
+## Registration rule
+
+`crates/cli/tests/registration.rs` fails while a tool in `TOOLS` lacks any of:
+
+1. a verb in `VERBS`;
+2. an argument list in `crates/core/tests/glossary.rs`, or a line in its `EXEMPT` table. The
+   test reads the keys of that file's `args()` map and the first field of each `EXEMPT` line.
+   A name in a comment or in an argument value does not count;
+3. a concordance module that names it: `tests/concordance/test_<verb>.py` or
+   `test_<picard_name_in_snake_case>.py`, a line in `CONCORDANCE` (tool, shared module), or a
+   line in `NO_PICARD_ORACLE` with the reason;
+4. its name in `docs/cli.md`;
+5. a row of the README tool table that starts with its name.
+
+One failure lists every gap of every tool with the edit that closes it. At 0.20.0 the 32 tools
+pass: 12 have a module named after them, 18 are mapped in `CONCORDANCE` to a shared module
+(`test_read_level.py` 6, `test_wgs_metrics.py` 3, `test_variant_tools.py` 3, six others 1
+each), and `CollectCoverageGaps` and `CollectSexCheckMetrics` are in `NO_PICARD_ORACLE`
+(docs/06, not Picard tools). `EXEMPT` is empty.
+
+## Spec script
+
+```bash
+python3 tools/spec_agent.py SortSam               # tab separated
+python3 tools/spec_agent.py SortSam --markdown    # a table
+python3 tools/spec_agent.py --from-help saved.txt
+```
+
+`tools/spec_agent.py` prints the option table of `picard <Tool> --help` as a builder's
+starting spec: `KEY`, `SHORT`, `TYPE` (Picard's Java type), `OPT` (the registry row kind it
+suggests: bool, int, float, path, text), `DEFAULT`, `NOTES` and `DOC`. `NOTES` holds
+`required`, `repeated`, `advanced`, `values A|B`, `excludes X`, `common` for a name the
+registry's `COMMON` rows take, and `parser` for the four options of Picard's command line
+parser. `values` comes from `Possible values: {A, B}`, or from the `A (what it does)` lines
+Picard prints for an enum with a text per value (`SORT_ORDER` of `SortSam`, `MODE` of
+`CheckDuplicateMarking`). A name Picard does not know exits 1 with one line, for example
+`spec_agent: SortBam: not a Picard tool; Picard suggests SortSam`. Picard's colour codes are
+dropped. One JVM runs, through the queue, with `JAVA_OPTS=-Xmx1g` unless `JAVA_OPTS` is set.
+The table says what Picard accepts. What an option does to the output comes from the Picard
+3.5.0 source.
+
+## Dependency checks
+
+```bash
+cargo install cargo-deny --locked    # once; 0.20.2 was used
+make deny                            # cargo deny check
+```
+
+`deny.toml` checks the 105 packages of `Cargo.lock`. Result at 0.20.0: advisories ok, bans
+ok, licenses ok, sources ok.
+
+- Licences allowed: MIT, Apache-2.0, Unicode-3.0 (unicode-ident), Zlib (zlib-rs),
+  bzip2-1.0.6 (libbz2-rs-sys under noodles-cram) and Apache-2.0 WITH LLVM-exception
+  (target-lexicon, a build dependency of pyo3). The last two were the only findings of the
+  first run. Both are permissive, so they are allowed with the reason in the file.
+- Bans: two versions of one crate, a wildcard version, and seven network or TLS crates
+  (docs/05 section 4.9: no network call).
+- Sources: crates.io only, no git dependency.
+- Advisories: the RustSec database, yanked crates denied, no exception.
+
+cargo-deny is not installed on the CI runners, so `make deny` is not a CI step. A duplicate
+version that a later dependency brings in needs a `skip` entry with its reason.
+
+## Harness tests
+
+```bash
+make harness-test    # pytest tests/harness: 79 tests, about 12 s, needs samtools
+```
+
+`tests/harness` tests the harness with stand-in tools, so it starts no JVM and needs no release
+build: the queue (`test_picard_lock.py`), `compare_bam` and `compare_vcf` on files with one
+planted difference each (`test_compare_bam.py`: one flag, one tag, one base quality, one `@PG`
+ID, one `bin` field, one separator byte in a tag, a missing end-of-file block), and the spec
+script on the `--help` text of `MarkDuplicates` and `SortSam` (`test_spec_agent.py`). It is a
+step of `make concordance`, before the pytest run.
+
 ## Python module tests
 
 ```bash

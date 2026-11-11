@@ -1,0 +1,654 @@
+## argv
+qc
+tests/data/no_reads.bam
+-o
+OUT/sample
+--also
+json,csv,junit
+--date
+2026-01-02 03:04:05 UTC
+## exit
+0
+## stdout
+no_reads  INCOMPLETE  preset generic v1 (6dd89e)  4 collectors, 1 BAM read
+NOT MEASURED  alignment.pf-reads-aligned  no AlignmentSummaryMetrics row with CATEGORY=PAIR at ALL_READS
+NOT MEASURED  alignment.adapter           no AlignmentSummaryMetrics row with CATEGORY=PAIR at ALL_READS
+NOT MEASURED  alignment.chimeras          no AlignmentSummaryMetrics row with CATEGORY=PAIR at ALL_READS
+NOT MEASURED  insert.median               no InsertSizeMetrics file
+NOT MEASURED  yield.q30                   PF_BASES is 0
+NOT MEASURED  duplication.percent         no DuplicationMetrics file
+PASS          0 checks
+wrote 13 files to OUT/sample.*, report OUT/sample.report.html
+use --fail-on fail or bammetrics check to gate
+## stderr
+bammetrics: all data categories were discarded because they contained < 0.05 of the total aligned paired data; no metrics written
+## file sample.alignment_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectAlignmentSummaryMetrics INPUT=tests/data/no_reads.bam OUTPUT=OUT/sample.alignment_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.AlignmentSummaryMetrics
+CATEGORY	TOTAL_READS	PF_READS	PCT_PF_READS	PF_NOISE_READS	PF_READS_ALIGNED	PCT_PF_READS_ALIGNED	PF_ALIGNED_BASES	PF_HQ_ALIGNED_READS	PF_HQ_ALIGNED_BASES	PF_HQ_ALIGNED_Q20_BASES	PF_HQ_MEDIAN_MISMATCHES	PF_MISMATCH_RATE	PF_HQ_ERROR_RATE	PF_INDEL_RATE	MEAN_READ_LENGTH	SD_READ_LENGTH	MEDIAN_READ_LENGTH	MAD_READ_LENGTH	MIN_READ_LENGTH	MAX_READ_LENGTH	MEAN_ALIGNED_READ_LENGTH	READS_ALIGNED_IN_PAIRS	PCT_READS_ALIGNED_IN_PAIRS	PF_READS_IMPROPER_PAIRS	PCT_PF_READS_IMPROPER_PAIRS	BAD_CYCLES	STRAND_BALANCE	PCT_CHIMERAS	PCT_ADAPTER	PCT_SOFTCLIP	PCT_HARDCLIP	AVG_POS_3PRIME_SOFTCLIP_LENGTH	SAMPLE	LIBRARY	READ_GROUP
+UNPAIRED	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0			
+
+
+## file sample.alignment_summary_metrics.csv
+CATEGORY,TOTAL_READS,PF_READS,PCT_PF_READS,PF_NOISE_READS,PF_READS_ALIGNED,PCT_PF_READS_ALIGNED,PF_ALIGNED_BASES,PF_HQ_ALIGNED_READS,PF_HQ_ALIGNED_BASES,PF_HQ_ALIGNED_Q20_BASES,PF_HQ_MEDIAN_MISMATCHES,PF_MISMATCH_RATE,PF_HQ_ERROR_RATE,PF_INDEL_RATE,MEAN_READ_LENGTH,SD_READ_LENGTH,MEDIAN_READ_LENGTH,MAD_READ_LENGTH,MIN_READ_LENGTH,MAX_READ_LENGTH,MEAN_ALIGNED_READ_LENGTH,READS_ALIGNED_IN_PAIRS,PCT_READS_ALIGNED_IN_PAIRS,PF_READS_IMPROPER_PAIRS,PCT_PF_READS_IMPROPER_PAIRS,BAD_CYCLES,STRAND_BALANCE,PCT_CHIMERAS,PCT_ADAPTER,PCT_SOFTCLIP,PCT_HARDCLIP,AVG_POS_3PRIME_SOFTCLIP_LENGTH,SAMPLE,LIBRARY,READ_GROUP
+UNPAIRED,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,,,
+## file sample.alignment_summary_metrics.json
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectAlignmentSummaryMetrics",
+  "sample": "no_reads",
+  "headers": [
+    "CollectAlignmentSummaryMetrics INPUT=tests/data/no_reads.bam OUTPUT=OUT/sample.alignment_summary_metrics",
+    "Started on: <time>"
+  ],
+  "class": "picard.analysis.AlignmentSummaryMetrics",
+  "columns": [
+    "CATEGORY",
+    "TOTAL_READS",
+    "PF_READS",
+    "PCT_PF_READS",
+    "PF_NOISE_READS",
+    "PF_READS_ALIGNED",
+    "PCT_PF_READS_ALIGNED",
+    "PF_ALIGNED_BASES",
+    "PF_HQ_ALIGNED_READS",
+    "PF_HQ_ALIGNED_BASES",
+    "PF_HQ_ALIGNED_Q20_BASES",
+    "PF_HQ_MEDIAN_MISMATCHES",
+    "PF_MISMATCH_RATE",
+    "PF_HQ_ERROR_RATE",
+    "PF_INDEL_RATE",
+    "MEAN_READ_LENGTH",
+    "SD_READ_LENGTH",
+    "MEDIAN_READ_LENGTH",
+    "MAD_READ_LENGTH",
+    "MIN_READ_LENGTH",
+    "MAX_READ_LENGTH",
+    "MEAN_ALIGNED_READ_LENGTH",
+    "READS_ALIGNED_IN_PAIRS",
+    "PCT_READS_ALIGNED_IN_PAIRS",
+    "PF_READS_IMPROPER_PAIRS",
+    "PCT_PF_READS_IMPROPER_PAIRS",
+    "BAD_CYCLES",
+    "STRAND_BALANCE",
+    "PCT_CHIMERAS",
+    "PCT_ADAPTER",
+    "PCT_SOFTCLIP",
+    "PCT_HARDCLIP",
+    "AVG_POS_3PRIME_SOFTCLIP_LENGTH",
+    "SAMPLE",
+    "LIBRARY",
+    "READ_GROUP"
+  ],
+  "types": [
+    "string",
+    "int",
+    "int",
+    "float",
+    "int",
+    "int",
+    "float",
+    "int",
+    "int",
+    "int",
+    "int",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "int",
+    "float",
+    "int",
+    "float",
+    "int",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "string",
+    "string",
+    "string"
+  ],
+  "metrics": [
+    {
+      "CATEGORY": "UNPAIRED",
+      "TOTAL_READS": 0,
+      "PF_READS": 0,
+      "PCT_PF_READS": 0,
+      "PF_NOISE_READS": 0,
+      "PF_READS_ALIGNED": 0,
+      "PCT_PF_READS_ALIGNED": 0,
+      "PF_ALIGNED_BASES": 0,
+      "PF_HQ_ALIGNED_READS": 0,
+      "PF_HQ_ALIGNED_BASES": 0,
+      "PF_HQ_ALIGNED_Q20_BASES": 0,
+      "PF_HQ_MEDIAN_MISMATCHES": 0,
+      "PF_MISMATCH_RATE": 0,
+      "PF_HQ_ERROR_RATE": 0,
+      "PF_INDEL_RATE": 0,
+      "MEAN_READ_LENGTH": 0,
+      "SD_READ_LENGTH": 0,
+      "MEDIAN_READ_LENGTH": 0,
+      "MAD_READ_LENGTH": 0,
+      "MIN_READ_LENGTH": 0,
+      "MAX_READ_LENGTH": 0,
+      "MEAN_ALIGNED_READ_LENGTH": 0,
+      "READS_ALIGNED_IN_PAIRS": 0,
+      "PCT_READS_ALIGNED_IN_PAIRS": 0,
+      "PF_READS_IMPROPER_PAIRS": 0,
+      "PCT_PF_READS_IMPROPER_PAIRS": 0,
+      "BAD_CYCLES": 0,
+      "STRAND_BALANCE": 0,
+      "PCT_CHIMERAS": 0,
+      "PCT_ADAPTER": 0,
+      "PCT_SOFTCLIP": 0,
+      "PCT_HARDCLIP": 0,
+      "AVG_POS_3PRIME_SOFTCLIP_LENGTH": 0,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    }
+  ],
+  "non_finite": [],
+  "histogram": null
+}
+## file sample.duplicate_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectDuplicateMetrics INPUT=tests/data/no_reads.bam METRICS_FILE=OUT/sample.duplicate_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+
+
+## file sample.duplicate_metrics.csv
+## file sample.duplicate_metrics.json
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectDuplicateMetrics",
+  "sample": "no_reads",
+  "headers": [
+    "CollectDuplicateMetrics INPUT=tests/data/no_reads.bam METRICS_FILE=OUT/sample.duplicate_metrics",
+    "Started on: <time>"
+  ],
+  "class": null,
+  "columns": [],
+  "types": [],
+  "metrics": [],
+  "non_finite": [],
+  "histogram": null
+}
+## file sample.junit.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="bammetrics check" tests="6" failures="0" errors="0" skipped="6">
+  <testsuite name="no_reads" tests="6" failures="0" errors="0" skipped="6">
+    <properties>
+      <property name="preset" value="generic v1 (6dd89e)"/>
+      <property name="verdict" value="incomplete"/>
+    </properties>
+    <testcase classname="bammetrics.no_reads" name="alignment.pf-reads-aligned">
+      <skipped message="no AlignmentSummaryMetrics row with CATEGORY=PAIR at ALL_READS"/>
+    </testcase>
+    <testcase classname="bammetrics.no_reads" name="alignment.adapter">
+      <skipped message="no AlignmentSummaryMetrics row with CATEGORY=PAIR at ALL_READS"/>
+    </testcase>
+    <testcase classname="bammetrics.no_reads" name="alignment.chimeras">
+      <skipped message="no AlignmentSummaryMetrics row with CATEGORY=PAIR at ALL_READS"/>
+    </testcase>
+    <testcase classname="bammetrics.no_reads" name="insert.median">
+      <skipped message="no InsertSizeMetrics file"/>
+    </testcase>
+    <testcase classname="bammetrics.no_reads" name="yield.q30">
+      <skipped message="PF_BASES is 0"/>
+    </testcase>
+    <testcase classname="bammetrics.no_reads" name="duplication.percent">
+      <skipped message="no DuplicationMetrics file"/>
+    </testcase>
+  </testsuite>
+</testsuites>
+## file sample.manifest.json
+{
+  "schema": "bammetrics.manifest/1",
+  "tool_version": "0.20.0",
+  "sample": "no_reads",
+  "bam": "tests/data/no_reads.bam",
+  "prefix": "OUT/sample",
+  "preset": {
+    "name": "generic",
+    "hash": "6dd89ed0478fd5e4"
+  },
+  "steps": [
+    {
+      "id": "CollectQualityYieldMetrics",
+      "stage": "pass",
+      "tool": "CollectQualityYieldMetrics",
+      "argv": [
+        "INPUT=tests/data/no_reads.bam",
+        "OUTPUT=OUT/sample.quality_yield_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.20.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/no_reads.bam",
+        "size": 120,
+        "mtime": "<mtime>",
+        "edges_hash": "36a7ca9f202b61d5"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.quality_yield_metrics",
+          "tool": "CollectQualityYieldMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "CollectAlignmentSummaryMetrics",
+      "stage": "pass",
+      "tool": "CollectAlignmentSummaryMetrics",
+      "argv": [
+        "INPUT=tests/data/no_reads.bam",
+        "OUTPUT=OUT/sample.alignment_summary_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.20.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/no_reads.bam",
+        "size": 120,
+        "mtime": "<mtime>",
+        "edges_hash": "36a7ca9f202b61d5"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.alignment_summary_metrics",
+          "tool": "CollectAlignmentSummaryMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "CollectInsertSizeMetrics",
+      "stage": "pass",
+      "tool": "CollectInsertSizeMetrics",
+      "argv": [
+        "INPUT=tests/data/no_reads.bam",
+        "OUTPUT=OUT/sample.insert_size_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.20.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/no_reads.bam",
+        "size": 120,
+        "mtime": "<mtime>",
+        "edges_hash": "36a7ca9f202b61d5"
+      },
+      "files": [],
+      "outputs": [],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "CollectDuplicateMetrics",
+      "stage": "pass",
+      "tool": "CollectDuplicateMetrics",
+      "argv": [
+        "INPUT=tests/data/no_reads.bam",
+        "METRICS_FILE=OUT/sample.duplicate_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.20.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/no_reads.bam",
+        "size": 120,
+        "mtime": "<mtime>",
+        "edges_hash": "36a7ca9f202b61d5"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.duplicate_metrics",
+          "tool": "CollectDuplicateMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "verdict",
+      "stage": "post",
+      "tool": "bammetrics",
+      "argv": [
+        "--preset=generic",
+        "OUT/sample.alignment_summary_metrics",
+        "OUT/sample.duplicate_metrics",
+        "OUT/sample.quality_yield_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.20.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/no_reads.bam",
+        "size": 120,
+        "mtime": "<mtime>",
+        "edges_hash": "36a7ca9f202b61d5"
+      },
+      "files": [],
+      "outputs": [],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "report",
+      "stage": "report",
+      "tool": "bammetrics",
+      "argv": [
+        "--all-plots=false",
+        "--date=2026-01-02 03:04:05 UTC"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.20.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/no_reads.bam",
+        "size": 120,
+        "mtime": "<mtime>",
+        "edges_hash": "36a7ca9f202b61d5"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.verdict.json",
+          "tool": "bammetrics",
+          "kind": "verdict"
+        },
+        {
+          "path": "OUT/sample.report.html",
+          "tool": "bammetrics",
+          "kind": "report"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "also",
+      "stage": "report",
+      "tool": "bammetrics",
+      "argv": [
+        "--also=json,csv,junit"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.20.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/no_reads.bam",
+        "size": 120,
+        "mtime": "<mtime>",
+        "edges_hash": "36a7ca9f202b61d5"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.alignment_summary_metrics.json",
+          "tool": "bammetrics",
+          "kind": "json"
+        },
+        {
+          "path": "OUT/sample.duplicate_metrics.json",
+          "tool": "bammetrics",
+          "kind": "json"
+        },
+        {
+          "path": "OUT/sample.quality_yield_metrics.json",
+          "tool": "bammetrics",
+          "kind": "json"
+        },
+        {
+          "path": "OUT/sample.alignment_summary_metrics.csv",
+          "tool": "bammetrics",
+          "kind": "csv"
+        },
+        {
+          "path": "OUT/sample.duplicate_metrics.csv",
+          "tool": "bammetrics",
+          "kind": "csv"
+        },
+        {
+          "path": "OUT/sample.quality_yield_metrics.csv",
+          "tool": "bammetrics",
+          "kind": "csv"
+        },
+        {
+          "path": "OUT/sample.junit.xml",
+          "tool": "bammetrics",
+          "kind": "junit"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    }
+  ]
+}
+## file sample.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectQualityYieldMetrics INPUT=tests/data/no_reads.bam OUTPUT=OUT/sample.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+0	0	0	0	0	0	0	0	0	0	0
+
+
+## file sample.quality_yield_metrics.csv
+TOTAL_READS,PF_READS,READ_LENGTH,TOTAL_BASES,PF_BASES,Q20_BASES,PF_Q20_BASES,Q30_BASES,PF_Q30_BASES,Q20_EQUIVALENT_YIELD,PF_Q20_EQUIVALENT_YIELD
+0,0,0,0,0,0,0,0,0,0,0
+## file sample.quality_yield_metrics.json
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectQualityYieldMetrics",
+  "sample": "no_reads",
+  "headers": [
+    "CollectQualityYieldMetrics INPUT=tests/data/no_reads.bam OUTPUT=OUT/sample.quality_yield_metrics",
+    "Started on: <time>"
+  ],
+  "class": "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics",
+  "columns": [
+    "TOTAL_READS",
+    "PF_READS",
+    "READ_LENGTH",
+    "TOTAL_BASES",
+    "PF_BASES",
+    "Q20_BASES",
+    "PF_Q20_BASES",
+    "Q30_BASES",
+    "PF_Q30_BASES",
+    "Q20_EQUIVALENT_YIELD",
+    "PF_Q20_EQUIVALENT_YIELD"
+  ],
+  "types": [
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int"
+  ],
+  "metrics": [
+    {
+      "TOTAL_READS": 0,
+      "PF_READS": 0,
+      "READ_LENGTH": 0,
+      "TOTAL_BASES": 0,
+      "PF_BASES": 0,
+      "Q20_BASES": 0,
+      "PF_Q20_BASES": 0,
+      "Q30_BASES": 0,
+      "PF_Q30_BASES": 0,
+      "Q20_EQUIVALENT_YIELD": 0,
+      "PF_Q20_EQUIVALENT_YIELD": 0
+    }
+  ],
+  "non_finite": [],
+  "histogram": null
+}
+## file sample.report.html
+<page not recorded>
+## file sample.verdict.json
+{
+  "schema": "bammetrics.verdict/1",
+  "tool_version": "0.20.0",
+  "sample": "no_reads",
+  "preset": {
+    "name": "generic",
+    "version": 1,
+    "hash": "6dd89ed0478fd5e4",
+    "source": "built-in",
+    "note": "starting values"
+  },
+  "status": "incomplete",
+  "counts": {
+    "pass": 0,
+    "warn": 0,
+    "fail": 0,
+    "not_measured": 6
+  },
+  "files": [
+    {
+      "path": "OUT/sample.alignment_summary_metrics",
+      "classes": [
+        "picard.analysis.AlignmentSummaryMetrics"
+      ]
+    },
+    {
+      "path": "OUT/sample.duplicate_metrics",
+      "classes": []
+    },
+    {
+      "path": "OUT/sample.quality_yield_metrics",
+      "classes": [
+        "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "rule": "alignment.pf-reads-aligned",
+      "label": "PF reads aligned",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_PF_READS_ALIGNED",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": null,
+      "warn": "< 0.9",
+      "fail": "< 0.8",
+      "status": "not_measured",
+      "reason": "no AlignmentSummaryMetrics row with CATEGORY=PAIR at ALL_READS",
+      "plot": null
+    },
+    {
+      "rule": "alignment.adapter",
+      "label": "Adapter reads",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_ADAPTER",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": null,
+      "warn": "> 0.01",
+      "fail": "> 0.05",
+      "status": "not_measured",
+      "reason": "no AlignmentSummaryMetrics row with CATEGORY=PAIR at ALL_READS",
+      "plot": "insert-size"
+    },
+    {
+      "rule": "alignment.chimeras",
+      "label": "Chimeric pairs",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_CHIMERAS",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": null,
+      "warn": "> 0.05",
+      "fail": "> 0.1",
+      "status": "not_measured",
+      "reason": "no AlignmentSummaryMetrics row with CATEGORY=PAIR at ALL_READS",
+      "plot": null
+    },
+    {
+      "rule": "insert.median",
+      "label": "Median insert size",
+      "class": "InsertSizeMetrics",
+      "metric": "MEDIAN_INSERT_SIZE",
+      "level": "ALL_READS",
+      "select": "PAIR_ORIENTATION=FR",
+      "unit": null,
+      "value": null,
+      "warn": "outside 100..1000",
+      "fail": "outside 50..2000",
+      "status": "not_measured",
+      "reason": "no InsertSizeMetrics file",
+      "plot": "insert-size"
+    },
+    {
+      "rule": "yield.q30",
+      "label": "Q30 fraction of PF bases",
+      "class": "QualityYieldMetrics",
+      "metric": "PF_Q30_BASES / PF_BASES",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": null,
+      "warn": "< 0.8",
+      "fail": "< 0.7",
+      "status": "not_measured",
+      "reason": "PF_BASES is 0",
+      "plot": "cycle-quality"
+    },
+    {
+      "rule": "duplication.percent",
+      "label": "Duplicate reads",
+      "class": "DuplicationMetrics",
+      "metric": "PERCENT_DUPLICATION",
+      "level": "LIBRARY",
+      "select": null,
+      "unit": null,
+      "value": null,
+      "warn": "> 0.3",
+      "fail": "> 0.5",
+      "status": "not_measured",
+      "reason": "no DuplicationMetrics file",
+      "plot": null
+    }
+  ]
+}

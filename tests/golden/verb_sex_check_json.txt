@@ -9,9 +9,42 @@ json
 0
 ## stdout
 {
+  "schema": "bammetrics.metrics/1",
   "tool": "CollectSexCheckMetrics",
   "sample": "insert_size",
+  "headers": [
+    "CollectSexCheckMetrics INPUT=tests/data/insert_size.bam EXPECTED_SEX=male",
+    "Started on: <time>"
+  ],
   "class": "bammetrics.qc.SexCheckMetrics",
+  "columns": [
+    "AUTOSOME_READS",
+    "X_READS",
+    "Y_READS",
+    "AUTOSOME_LENGTH",
+    "X_LENGTH",
+    "Y_LENGTH",
+    "X_RATIO",
+    "Y_RATIO",
+    "INFERRED_SEX",
+    "DECLARED_SEX",
+    "SEX_MATCH",
+    "REASON"
+  ],
+  "types": [
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "float",
+    "float",
+    "string",
+    "string",
+    "string",
+    "string"
+  ],
   "metrics": [
     {
       "AUTOSOME_READS": 10,
@@ -26,6 +59,18 @@ json
       "DECLARED_SEX": "MALE",
       "SEX_MATCH": null,
       "REASON": "no X bases; no Y bases; MALE declared, the inferred sex is UNKNOWN"
+    }
+  ],
+  "non_finite": [
+    {
+      "row": 0,
+      "column": "X_RATIO",
+      "value": "NaN"
+    },
+    {
+      "row": 0,
+      "column": "Y_RATIO",
+      "value": "NaN"
     }
   ],
   "histogram": null

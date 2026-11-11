@@ -26,6 +26,9 @@ from pathlib import Path
 
 import pysam
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "concordance"))
+from run_picard import picard_env  # noqa: E402
+
 CONTIGS = [("chr1", 60000), ("chr2", 40000), ("chrM", 12000)]
 SAMPLES = {"S1": ["LibA", "LibB"], "S2": ["LibC", "LibD"]}
 RGS_PER_LIBRARY = 3
@@ -37,7 +40,9 @@ READ1, READ2, SECONDARY, QCFAIL, DUP, SUPPLEMENTARY = 0x40, 0x80, 0x100, 0x200, 
 
 
 def run(cmd):
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    """Run a command quietly. A `picard` command queues behind picard_lock.py."""
+    env = picard_env() if cmd[0] == "picard" else None
+    subprocess.run(cmd, check=True, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def read_groups():

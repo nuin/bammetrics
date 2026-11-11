@@ -1,0 +1,334 @@
+## argv
+check
+tests/data/picard
+--format
+text,junit,markdown,multiqc,json,jsonl
+-o
+OUT/check.txt
+## exit
+0
+## stdout
+## stderr
+## file check.txt
+NA12878  PASS  0 fail, 0 warn, 6 pass, 0 not measured  preset generic v1 (6dd89e)
+  PASS          alignment.pf-reads-aligned    1  warn < 0.9, fail < 0.8
+  PASS          alignment.adapter             0  warn > 0.01, fail > 0.05
+  PASS          alignment.chimeras            0  warn > 0.05, fail > 0.1
+  PASS          insert.median               310  warn outside 100..1000, fail outside 50..2000
+  PASS          yield.q30                     1  warn < 0.8, fail < 0.7
+  PASS          duplication.percent           0  warn > 0.3, fail > 0.5
+exit 0: no sample reaches --fail-on fail
+## file check.txt.json
+[{
+  "schema": "bammetrics.verdict/1",
+  "tool_version": "0.20.0",
+  "sample": "NA12878",
+  "preset": {
+    "name": "generic",
+    "version": 1,
+    "hash": "6dd89ed0478fd5e4",
+    "source": "built-in",
+    "note": "starting values"
+  },
+  "status": "pass",
+  "counts": {
+    "pass": 6,
+    "warn": 0,
+    "fail": 0,
+    "not_measured": 0
+  },
+  "files": [
+    {
+      "path": "tests/data/picard/NA12878/NA12878.alignment_summary_metrics",
+      "classes": [
+        "picard.analysis.AlignmentSummaryMetrics"
+      ]
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.base_distribution_by_cycle_metrics",
+      "classes": [
+        "picard.analysis.BaseDistributionByCycleMetrics"
+      ]
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.duplicate_metrics",
+      "classes": [
+        "picard.sam.DuplicationMetrics"
+      ]
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.gc_bias.detail_metrics",
+      "classes": [
+        "picard.analysis.GcBiasDetailMetrics"
+      ]
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.gc_bias.summary_metrics",
+      "classes": [
+        "picard.analysis.GcBiasSummaryMetrics"
+      ]
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.hs_metrics",
+      "classes": [
+        "picard.analysis.directed.HsMetrics"
+      ]
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.insert_size_metrics",
+      "classes": [
+        "picard.analysis.InsertSizeMetrics"
+      ]
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.quality_by_cycle_metrics",
+      "classes": []
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.quality_distribution_metrics",
+      "classes": []
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.quality_yield_metrics",
+      "classes": [
+        "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "rule": "alignment.pf-reads-aligned",
+      "label": "PF reads aligned",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_PF_READS_ALIGNED",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 1,
+      "warn": "< 0.9",
+      "fail": "< 0.8",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "alignment.adapter",
+      "label": "Adapter reads",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_ADAPTER",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 0,
+      "warn": "> 0.01",
+      "fail": "> 0.05",
+      "status": "pass",
+      "reason": null,
+      "plot": "insert-size"
+    },
+    {
+      "rule": "alignment.chimeras",
+      "label": "Chimeric pairs",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_CHIMERAS",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 0,
+      "warn": "> 0.05",
+      "fail": "> 0.1",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "insert.median",
+      "label": "Median insert size",
+      "class": "InsertSizeMetrics",
+      "metric": "MEDIAN_INSERT_SIZE",
+      "level": "ALL_READS",
+      "select": "PAIR_ORIENTATION=FR",
+      "unit": null,
+      "value": 310,
+      "warn": "outside 100..1000",
+      "fail": "outside 50..2000",
+      "status": "pass",
+      "reason": null,
+      "plot": "insert-size"
+    },
+    {
+      "rule": "yield.q30",
+      "label": "Q30 fraction of PF bases",
+      "class": "QualityYieldMetrics",
+      "metric": "PF_Q30_BASES / PF_BASES",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 1,
+      "warn": "< 0.8",
+      "fail": "< 0.7",
+      "status": "pass",
+      "reason": null,
+      "plot": "cycle-quality"
+    },
+    {
+      "rule": "duplication.percent",
+      "label": "Duplicate reads",
+      "class": "DuplicationMetrics",
+      "metric": "PERCENT_DUPLICATION",
+      "level": "LIBRARY",
+      "select": null,
+      "unit": "Unknown Library",
+      "value": 0,
+      "warn": "> 0.3",
+      "fail": "> 0.5",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    }
+  ]
+}]
+## file check.txt.jsonl
+{"event":"check","sample":"NA12878","rule":"alignment.pf-reads-aligned","label":"PF reads aligned","class":"AlignmentSummaryMetrics","metric":"PCT_PF_READS_ALIGNED","level":"ALL_READS","select":"CATEGORY=PAIR","unit":null,"value":1,"warn":"< 0.9","fail":"< 0.8","status":"pass","reason":null,"plot":null}
+{"event":"check","sample":"NA12878","rule":"alignment.adapter","label":"Adapter reads","class":"AlignmentSummaryMetrics","metric":"PCT_ADAPTER","level":"ALL_READS","select":"CATEGORY=PAIR","unit":null,"value":0,"warn":"> 0.01","fail":"> 0.05","status":"pass","reason":null,"plot":"insert-size"}
+{"event":"check","sample":"NA12878","rule":"alignment.chimeras","label":"Chimeric pairs","class":"AlignmentSummaryMetrics","metric":"PCT_CHIMERAS","level":"ALL_READS","select":"CATEGORY=PAIR","unit":null,"value":0,"warn":"> 0.05","fail":"> 0.1","status":"pass","reason":null,"plot":null}
+{"event":"check","sample":"NA12878","rule":"insert.median","label":"Median insert size","class":"InsertSizeMetrics","metric":"MEDIAN_INSERT_SIZE","level":"ALL_READS","select":"PAIR_ORIENTATION=FR","unit":null,"value":310,"warn":"outside 100..1000","fail":"outside 50..2000","status":"pass","reason":null,"plot":"insert-size"}
+{"event":"check","sample":"NA12878","rule":"yield.q30","label":"Q30 fraction of PF bases","class":"QualityYieldMetrics","metric":"PF_Q30_BASES / PF_BASES","level":"ALL_READS","select":null,"unit":null,"value":1,"warn":"< 0.8","fail":"< 0.7","status":"pass","reason":null,"plot":"cycle-quality"}
+{"event":"check","sample":"NA12878","rule":"duplication.percent","label":"Duplicate reads","class":"DuplicationMetrics","metric":"PERCENT_DUPLICATION","level":"LIBRARY","select":null,"unit":"Unknown Library","value":0,"warn":"> 0.3","fail":"> 0.5","status":"pass","reason":null,"plot":null}
+{"event":"verdict","sample":"NA12878","status":"pass","counts":{"pass":6,"warn":0,"fail":0,"not_measured":0},"preset":{"name":"generic","version":1,"hash":"6dd89ed0478fd5e4"}}
+## file check.txt.junit.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="bammetrics check" tests="6" failures="0" errors="0" skipped="0">
+  <testsuite name="NA12878" tests="6" failures="0" errors="0" skipped="0">
+    <properties>
+      <property name="preset" value="generic v1 (6dd89e)"/>
+      <property name="verdict" value="pass"/>
+    </properties>
+    <testcase classname="bammetrics.NA12878" name="alignment.pf-reads-aligned"/>
+    <testcase classname="bammetrics.NA12878" name="alignment.adapter"/>
+    <testcase classname="bammetrics.NA12878" name="alignment.chimeras"/>
+    <testcase classname="bammetrics.NA12878" name="insert.median"/>
+    <testcase classname="bammetrics.NA12878" name="yield.q30"/>
+    <testcase classname="bammetrics.NA12878" name="duplication.percent"/>
+  </testsuite>
+</testsuites>
+## file check.txt.md
+# NA12878: PASS
+
+Preset generic v1 (6dd89e). 0 fail, 0 warn, 6 pass, 0 not measured.
+
+| Status | Rule | Value | Warn | Fail | Reason |
+| --- | --- | ---: | --- | --- | --- |
+| PASS | alignment.pf-reads-aligned | 1 | < 0.9 | < 0.8 |  |
+| PASS | alignment.adapter | 0 | > 0.01 | > 0.05 |  |
+| PASS | alignment.chimeras | 0 | > 0.05 | > 0.1 |  |
+| PASS | insert.median | 310 | outside 100..1000 | outside 50..2000 |  |
+| PASS | yield.q30 | 1 | < 0.8 | < 0.7 |  |
+| PASS | duplication.percent | 0 | > 0.3 | > 0.5 |  |
+## file check.txt.verdict_mqc.json
+{
+  "id": "bammetrics_verdict",
+  "section_name": "bammetrics verdict",
+  "description": "The bammetrics verdict per sample and the value each rule judged. Preset generic v1 (6dd89e).",
+  "plot_type": "table",
+  "pconfig": {
+    "id": "bammetrics_verdict_table",
+    "title": "bammetrics: verdict",
+    "namespace": "bammetrics"
+  },
+  "headers": {
+    "verdict": {
+      "title": "Verdict",
+      "description": "pass, warn, fail, or incomplete when a rule could not be measured",
+      "scale": false,
+      "cond_formatting_rules": {
+        "pass": [
+          {
+            "s_eq": "pass"
+          }
+        ],
+        "warn": [
+          {
+            "s_eq": "warn"
+          },
+          {
+            "s_eq": "incomplete"
+          }
+        ],
+        "fail": [
+          {
+            "s_eq": "fail"
+          }
+        ]
+      }
+    },
+    "checks_failed": {
+      "title": "Failed",
+      "description": "Checks that failed",
+      "format": "{:,d}",
+      "scale": false
+    },
+    "checks_warned": {
+      "title": "Warned",
+      "description": "Checks that warned",
+      "format": "{:,d}",
+      "scale": false
+    },
+    "checks_not_measured": {
+      "title": "Not measured",
+      "description": "Checks whose file, row or column is missing",
+      "format": "{:,d}",
+      "scale": false
+    },
+    "alignment.pf-reads-aligned": {
+      "title": "alignment.pf-reads-aligned",
+      "description": "PF reads aligned: AlignmentSummaryMetrics PCT_PF_READS_ALIGNED, warn < 0.9, fail < 0.8",
+      "format": "{:,.6g}",
+      "scale": false
+    },
+    "alignment.adapter": {
+      "title": "alignment.adapter",
+      "description": "Adapter reads: AlignmentSummaryMetrics PCT_ADAPTER, warn > 0.01, fail > 0.05",
+      "format": "{:,.6g}",
+      "scale": false
+    },
+    "alignment.chimeras": {
+      "title": "alignment.chimeras",
+      "description": "Chimeric pairs: AlignmentSummaryMetrics PCT_CHIMERAS, warn > 0.05, fail > 0.1",
+      "format": "{:,.6g}",
+      "scale": false
+    },
+    "insert.median": {
+      "title": "insert.median",
+      "description": "Median insert size: InsertSizeMetrics MEDIAN_INSERT_SIZE, warn outside 100..1000, fail outside 50..2000",
+      "format": "{:,.6g}",
+      "scale": false
+    },
+    "yield.q30": {
+      "title": "yield.q30",
+      "description": "Q30 fraction of PF bases: QualityYieldMetrics PF_Q30_BASES / PF_BASES, warn < 0.8, fail < 0.7",
+      "format": "{:,.6g}",
+      "scale": false
+    },
+    "duplication.percent": {
+      "title": "duplication.percent",
+      "description": "Duplicate reads: DuplicationMetrics PERCENT_DUPLICATION, warn > 0.3, fail > 0.5",
+      "format": "{:,.6g}",
+      "scale": false
+    }
+  },
+  "data": {
+    "NA12878": {
+      "verdict": "pass",
+      "checks_failed": 0,
+      "checks_warned": 0,
+      "checks_not_measured": 0,
+      "alignment.pf-reads-aligned": 1,
+      "alignment.adapter": 0,
+      "alignment.chimeras": 0,
+      "insert.median": 310,
+      "yield.q30": 1,
+      "duplication.percent": 0
+    }
+  }
+}

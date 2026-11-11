@@ -99,6 +99,40 @@ class PresetInfo(str):
     note: str
     def __new__(cls, name: str, version: int, hash: str, rules: int, note: str) -> PresetInfo: ...
 
+class Table:
+    """One table of a metrics file, column by column, as read_table returns it.
+
+    name is the metrics class (for a histogram, the Java class of its key).
+    columns maps each column to its values in row order; dtypes maps it to the
+    glossary's type for that column. An empty cell is None and "?" is nan.
+    histogram is the file's ## HISTOGRAM section as a Table, or None."""
+    name: str
+    columns: dict[str, list[Any]]
+    dtypes: dict[str, Literal["int", "float", "string"]]
+    histogram: Table | None
+    headers: list[str]
+    tool: str | None
+    sample: str | None
+    def __init__(
+        self,
+        name: str,
+        columns: dict[str, list[Any]],
+        dtypes: dict[str, Literal["int", "float", "string"]],
+        histogram: Table | None = None,
+        headers: Sequence[str] = (),
+        tool: str | None = None,
+        sample: str | None = None,
+    ) -> None: ...
+    def __len__(self) -> int: ...
+    def rows(self) -> list[dict[str, Any]]:
+        """The rows as dicts keyed by column."""
+    def to_pandas(self) -> Any:
+        """A pandas DataFrame with Int64, float64 and string columns; pandas is
+        imported on the first call."""
+    def to_polars(self) -> Any:
+        """A polars DataFrame with Int64, Float64 and String columns; polars is
+        imported on the first call."""
+
 class Check:
     """One check of a verdict. status is "pass", "warn", "fail" or "not_measured";
     text is the cell's text for a rule with an "is TEXT" bound (value is then None);
@@ -334,6 +368,15 @@ def read_metrics(path: _Path) -> _MetricsDoc:
     is the ## HISTOGRAM section (key_class, columns, rows) or None. Cells are
     typed from their text: int, float, str or None for an empty field; "?"
     is nan."""
+
+def read_table(path: _Path, table: str | None = None) -> Table:
+    """Read one table of a metrics file with the glossary's column types.
+
+    The file is Picard text or the JSON --format json writes (schema
+    bammetrics.metrics/1). table is "metrics" (the first class), "histogram" or
+    a class name; by default the metrics class, or the histogram of a file
+    without one. MEDIAN_INSERT_SIZE prints 310 and is a float here, where
+    read_metrics types each cell from its text."""
 
 def presets() -> list[PresetInfo]:
     """The shipped verdict presets as `bammetrics presets` lists them (generic,
@@ -1062,6 +1105,7 @@ def qc(
     resume: bool = False,
     force: bool = False,
     threads: int | None = None,
+    also: Literal["json", "jsonl", "tsv", "csv", "markdown", "junit", "multiqc"] | Sequence[Literal["json", "jsonl", "tsv", "csv", "markdown", "junit", "multiqc"]] | None = None,
     all_plots: bool = False,
     date: str | None = None,
     report: bool = True,
