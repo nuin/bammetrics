@@ -62,7 +62,8 @@ pub enum Command {
     Qc(qc::QcArgs),
     /// What qc with the same options would run: stages, collectors, which
     /// share the BAM read and why any does not, which steps --resume would
-    /// skip. Nothing runs.
+    /// skip. Nothing runs. With a chain's arguments (BAM + STEP ..., or
+    /// --plan FILE) it prints the plan of that chain: bammetrics help chain.
     Plan(qc::QcArgs),
     /// One metrics file in another format: Picard text or JSON in; Picard
     /// text, json, jsonl, tsv, csv, markdown or human out.

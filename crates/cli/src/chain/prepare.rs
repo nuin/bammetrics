@@ -141,6 +141,8 @@ pub struct Chain {
     pub report: Option<PathBuf>,
     /// Every planned file with the label of its step.
     pub(crate) outputs: Outputs,
+    /// Every file the chain reads: no step may write one.
+    pub(crate) inputs: Outputs,
 }
 
 impl Chain {
@@ -322,7 +324,7 @@ struct Position {
 }
 
 /// The name of the stream a transform leaves: `--as`, or its default.
-fn stream_name(draft: &Draft, verb: &Verb, taken: &[String]) -> Result<String, VerbError> {
+fn stream_name(draft: &Draft, verb: &Verb) -> Result<String, VerbError> {
     let Some(given) = draft.parsed.last(AS) else {
         return Ok(stage::label_of(verb.tool()).unwrap_or(verb.name).to_owned());
     };
@@ -338,9 +340,11 @@ fn stream_name(draft: &Draft, verb: &Verb, taken: &[String]) -> Result<String, V
             ))
             .from(given.spelled.clone()));
     }
-    if name == SOURCE_STREAM || taken.contains(name) {
+    if name == SOURCE_STREAM {
         return Err(draft
-            .usage(format!("the stream name {name} is taken"))
+            .usage(format!(
+                "the stream name {name} is taken: it names the source"
+            ))
             .from(given.spelled.clone()));
     }
     Ok(name.clone())
@@ -354,7 +358,6 @@ fn positions(drafts: &[Draft]) -> Result<Vec<Position>, VerbError> {
     let mut segment = 1;
     let mut behind: Vec<&str> = Vec::new();
     let mut first: Option<&Draft> = None;
-    let mut taken: Vec<String> = Vec::new();
     let mut positions = Vec::with_capacity(drafts.len());
     for draft in drafts {
         let mut position = Position {
@@ -374,8 +377,7 @@ fn positions(drafts: &[Draft]) -> Result<Vec<Position>, VerbError> {
                     .hint("wave W05 of docs/07 spools the stream for a second transform"));
             }
             first = Some(draft);
-            stream = stream_name(draft, verb, &taken)?;
-            taken.push(stream.clone());
+            stream = stream_name(draft, verb)?;
             position.leaves = Some(stream.clone());
             behind.push(verb.class);
             segment += 1;
@@ -937,27 +939,42 @@ fn claim_outputs(steps: &[Planned], report: Option<&Path>) -> Result<Outputs, Ve
     Ok(outputs)
 }
 
-/// A planned file that is a file the chain reads would destroy it: a usage
-/// error. The same file through a link or `..` counts.
-fn refuse_overwriting_inputs(chain: &Chain) -> Result<(), VerbError> {
+/// The files a chain reads: the source, the reference with its index, and
+/// every file a step reads by name. The same file through a link or `..`
+/// counts as one.
+fn inputs_of(source: &Path, reference: Option<&Path>, steps: &[Planned]) -> Outputs {
     let mut inputs = Outputs::default();
-    let fai = chain
-        .reference
-        .as_deref()
-        .map(|reference| with_suffix(reference, ".fai"));
-    let read = std::iter::once(&chain.source_path)
-        .chain(&chain.reference)
-        .chain(&fai)
-        .chain(chain.steps.iter().flat_map(|step| &step.inputs));
+    let fai = reference.map(|reference| with_suffix(reference, ".fai"));
+    let read = std::iter::once(source)
+        .chain(reference)
+        .chain(fai.as_deref())
+        .chain(
+            steps
+                .iter()
+                .flat_map(|step| &step.inputs)
+                .map(PathBuf::as_path),
+        );
     for path in read {
         // One file read by several steps is claimed once; the error of a
         // second claim says nothing new.
         let _ = inputs.claim("an input", path);
     }
-    let planned = chain
-        .steps
+    inputs
+}
+
+/// A planned file that is a file the chain reads would destroy it: a usage
+/// error.
+fn refuse_overwriting_inputs(
+    inputs: &Outputs,
+    steps: &[Planned],
+    report: Option<&Path>,
+) -> Result<(), VerbError> {
+    let also = "--also markdown".to_owned();
+    let planned = steps
         .iter()
-        .flat_map(|step| step.files.iter().map(move |file| (&step.label, &file.path)));
+        .flat_map(|step| step.files.iter().map(move |file| (&step.label, &file.path)))
+        .map(|(label, path)| (label, path.as_path()))
+        .chain(report.map(|report| (&also, report)));
     for (label, path) in planned {
         if inputs.owner(path).is_some() {
             return Err(usage(format!(
@@ -1034,10 +1051,13 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
     prefix_used |= report.is_some();
     check_one_stdout(&steps)?;
     let outputs = claim_outputs(&steps, report.as_deref())?;
-    let chain = Chain {
+    let reference = spec.reference.as_ref().map(PathBuf::from);
+    let inputs = inputs_of(&source_path, reference.as_deref(), &steps);
+    refuse_overwriting_inputs(&inputs, &steps, report.as_deref())?;
+    Ok(Chain {
         source,
         source_path,
-        reference: spec.reference.as_ref().map(PathBuf::from),
+        reference,
         prefix,
         prefix_origin,
         prefix_used,
@@ -1050,7 +1070,6 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         steps,
         report,
         outputs,
-    };
-    refuse_overwriting_inputs(&chain)?;
-    Ok(chain)
+        inputs,
+    })
 }

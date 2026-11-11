@@ -107,7 +107,7 @@ fn check_writable(chain: &Chain) -> Result<(), VerbError> {
             .iter()
             .map(|file| file.path.as_path())
             .chain(step.late_prefix.as_deref());
-        for path in paths.clone() {
+        for path in paths {
             verbs::create_parent(VERB, path).map_err(|e| labelled(&step.label, e))?;
         }
         let files = step.files.iter().map(|file| file.path.as_path());
@@ -169,14 +169,19 @@ fn write_metrics(
 /// The files of a tool step that finished: the main file (to its path, or
 /// to standard output), then every further file. A file the tool named
 /// only now (under an `OUTPUT` prefix) is claimed first; when another step
-/// writes it, this step fails and replaces nothing.
+/// writes it, or the chain reads it, this step fails and replaces nothing.
 fn write_tool_files(
     chain: &mut Chain,
     index: usize,
     products: &Products,
     sample: Option<&str>,
 ) -> bammetrics_core::Result<Vec<Written>> {
-    let Chain { steps, outputs, .. } = chain;
+    let Chain {
+        steps,
+        outputs,
+        inputs,
+        ..
+    } = chain;
     let step = &steps[index];
     let context = Context {
         tool: step.tool.map_or(step.verb, |tool| tool.name),
@@ -197,6 +202,12 @@ fn write_tool_files(
                 .iter()
                 .map(|format| format::sibling(path, format.extension()));
             for late in std::iter::once(path.clone()).chain(siblings) {
+                if inputs.owner(&late).is_some() {
+                    return Err(bammetrics_core::Error::Usage(format!(
+                        "{} is an input; writing it would destroy it",
+                        late.display()
+                    )));
+                }
                 outputs.claim(&step.label, &late)?;
             }
         }

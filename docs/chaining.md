@@ -140,8 +140,8 @@ Rules:
 - Two taps of one tool at one position write one name under the prefix, so they are that
   usage error. Give one of them `-o`.
 - A tool whose `OUTPUT` is a prefix (`sequencing-artifact`) names its files when it
-  finishes. If one of them is the file of another step, that tool fails alone and the
-  other step's file stays.
+  finishes. If one of them is the file of another step, or a file the chain reads, that
+  tool fails alone, writes none of its files, and the other file stays.
 - An output that is a file the chain reads (the source, the reference, an interval list
   of a step) is a usage error. Nothing is read and nothing is written.
 - Missing directories above an output are created, as every verb creates them.

@@ -1157,6 +1157,41 @@ fn a_file_under_a_prefix_never_replaces_the_file_of_another_step() {
     assert_eq!(written.len(), 10, "{written:?}");
     assert!(written.contains(&"art.error_summary_metrics.csv".to_owned()));
     fs::remove_dir_all(&dir).expect("cleanup");
+
+    // A file under the prefix that is a file the chain reads (here the
+    // reference) fails the tool alone, and the reference keeps its bytes.
+    let dir = fresh_dir("prefix-input");
+    let reference = dir.join("art.error_summary_metrics");
+    fs::copy(root().join(FIXTURE.1), &reference).expect("a reference");
+    let index = dir.join("art.error_summary_metrics.fai");
+    fs::copy(root().join(format!("{}.fai", FIXTURE.1)), &index).expect("its index");
+    let (code, stderr) = chain(&[
+        "tests/data/artifact.bam",
+        "-R",
+        &reference.display().to_string(),
+        "-o",
+        &dir.join("art").display().to_string(),
+        "+",
+        "sequencing-artifact",
+    ]);
+    assert_eq!(code, Some(1), "{stderr}");
+    assert!(
+        stderr.contains(&format!(
+            "step 1 (sequencing-artifact): failed alone: {} is an input; writing it would \
+             destroy it",
+            reference.display()
+        )),
+        "{stderr}"
+    );
+    assert_eq!(
+        names(&dir),
+        ["art.error_summary_metrics", "art.error_summary_metrics.fai"]
+    );
+    assert_eq!(
+        fs::read(&reference).expect("the reference"),
+        fs::read(root().join(FIXTURE.1)).expect("the fixture")
+    );
+    fs::remove_dir_all(&dir).expect("cleanup");
 }
 
 /// What `write` cannot do is said: an index of a stream that is not
