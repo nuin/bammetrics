@@ -342,15 +342,15 @@ def test_an_output_that_is_the_input_is_refused(bams, tmp_path):
 
 
 def test_files_that_are_not_bams(bams, tmp_path):
-    """Picard reads a SAM and treats an empty or cut file as agreeing; bammetrics
+    """Both read SAM text. Picard treats an empty or cut file as agreeing; bammetrics
     names the failure (KNOWN_DIFFERENCES.md)."""
     sam = tmp_path / "disagree.sam"
     sam.write_bytes(header("queryname").encode() + "".join(DISAGREE).encode())
     picard = run("picard", [f"I={sam}", SILENT])
-    ours = run("ours", [f"I={sam}"])
+    ours = run("ours", [f"I={sam}", SILENT])
     assert picard.returncode == 1 and ours.returncode == 1
     assert log_lines("picard", picard.stderr)[-1][0] == "ERROR"
-    assert "not a BAM or CRAM file" in ours.stderr
+    assert log_lines("ours", ours.stderr) == log_lines("picard", picard.stderr)
     empty = tmp_path / "empty.bam"
     empty.write_bytes(b"")
     assert run("picard", [f"I={empty}", SILENT]).returncode == 0

@@ -368,7 +368,9 @@ def test_failed_run_leaves_the_old_output(built, tmp_path):
     assert sorted(p.name for p in tmp_path.iterdir()) == ["out.bam"]
 
 
-def test_small_buffers_and_sam_input_are_refused(built, tmp_path):
+def test_small_buffers_are_refused_and_sam_input_is_read(built, tmp_path):
+    """SAM text is read as the BAM of the same records (test_view_sam.py compares
+    MarkDuplicates on SAM text with Picard)."""
     result = ours(f"I={built['md_markdup']}", f"O={tmp_path / 'o.bam'}",
                   f"M={tmp_path / 'm.txt'}", "MAX_RECORDS_IN_RAM=0")
     assert result.returncode != 0 and "MAX_RECORDS_IN_RAM=0" in result.stderr
@@ -376,9 +378,18 @@ def test_small_buffers_and_sam_input_are_refused(built, tmp_path):
     with open(sam, "wb") as handle:
         subprocess.run(["samtools", "view", "-h", str(built["md_markdup"])], check=True,
                        stdout=handle)
-    result = ours(f"I={sam}", f"O={tmp_path / 'o.bam'}", f"M={tmp_path / 'm.txt'}")
-    assert result.returncode != 0 and "SAM input is not supported" in result.stderr
-    assert not (tmp_path / "o.bam").exists()
+    marked = {}
+    for side, source in (("sam", sam), ("bam", built["md_markdup"])):
+        out = tmp_path / f"{side}.bam"
+        result = ours(f"I={source}", f"O={out}", f"M={tmp_path / (side + '.txt')}")
+        assert result.returncode == 0, result.stderr
+        marked[side] = subprocess.run(["samtools", "view", str(out)], check=True,
+                                      capture_output=True).stdout
+    # Tags come in htsjdk's order for SAM text, in file order for an untouched BAM
+    # record, so the records are compared with their tags sorted.
+    def records(text):
+        return [line.split(b"\t")[:11] + sorted(line.split(b"\t")[11:]) for line in text.splitlines()]
+    assert records(marked["sam"]) == records(marked["bam"]) and marked["sam"]
 
 
 def test_missing_input_fails(tmp_path):
