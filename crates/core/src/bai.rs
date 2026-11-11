@@ -42,10 +42,18 @@
 //! The offset before a record is where its first byte is. The offset after
 //! it is where the next byte would be read: when the record ends a block
 //! that is the start of the next block, as htsjdk's
-//! `BlockCompressedInputStream.getFilePointer` reports it and as its
-//! writer reports it for the bytes it has just written. An index built by
-//! reading a BAM therefore equals the one Picard writes with
-//! `CREATE_INDEX=true` beside the same bytes.
+//! `BlockCompressedInputStream.getFilePointer` reports it. The index of a
+//! BAM is therefore the one Picard `BuildBamIndex` writes for those bytes.
+//!
+//! The index Picard writes beside a BAM it is writing (`CREATE_INDEX=true`)
+//! differs from its own `BuildBamIndex` of that BAM in one offset. The last
+//! record of the file ends the last block, which the writer has not closed
+//! yet, so the writer reports the offset inside that block (`8374551:1514`)
+//! and the reader the EOF block after it (`8375239:0`). That offset is the
+//! end of one chunk and the last offset of one metadata bin, and only when
+//! the last record has a position. bammetrics writes the reader's value for
+//! a BAM it wrote too: the `.bai` beside a BAM is always `BuildBamIndex` of
+//! that BAM (`tests/concordance/test_mark_duplicates.py`).
 //!
 //! htsjdk stops reading at an empty BGZF block in the middle of a file and
 //! indexes only the records before it. [`index_bam`] reads on and indexes

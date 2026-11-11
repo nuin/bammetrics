@@ -48,6 +48,13 @@ The keywords of `qc`, `check` and `report` are the command's long flags in snake
   take their Picard defaults only. The module installs no signal handler: a Python
   process killed mid-run leaves its spill directory (`bammetrics-markdup.<pid>.<n>`) and
   its temporary output (`.NAME.<pid>.<n>.tmp`) behind.
+- `build_bam_index(bam, *, output=None)` writes the `.bai` of a coordinate-sorted BAM, the
+  bytes Picard `BuildBamIndex` writes for it. Without `output` the index goes beside the
+  BAM (`x.bai` for `x.bam`, the name plus `.bai` otherwise), whatever the current
+  directory is. It returns the rows `bam_index_stats` reads from that index: one dict per
+  reference (`reference`, `length`, `aligned`, `unaligned`), then the `*` row. A header
+  that is not `SO:coordinate` raises `InputError` and writes nothing; a CRAM, an
+  `output` that is the input and an unknown keyword raise `UsageError`.
 - `fifo_buffer(*, buffer_size, io_size, debug_frequency, name, verbosity)` copies nothing.
   `FifoBuffer` moves the standard input of a command to its standard output, and a
   Python call has no pipe to buffer and no row to return. The function checks its

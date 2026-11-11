@@ -344,6 +344,40 @@ behaves how.
     steps. `chain BAM + fifo-buffer` exits 2 before the first read
     (`FifoBuffer buffers the pipe between two commands and a chain has no pipe: it cannot
     be a step`). On a pipe into or out of a chain the verb works as on any pipe.
+- `BuildBamIndex` writes the `.bai` Picard writes for the same BAM and takes Picard's
+  options: `INPUT` and `OUTPUT` (`ASSUME_SORTED` and `GA4GH_CLIENT_SECRETS` exit 1 with
+  `Unrecognized option`, as in Picard). What differs:
+  - Without `OUTPUT` Picard 3.5.0 writes into the current directory under the file name
+    of `INPUT` (`I=dir/x.bam` writes `./x.bai`, `I=dir/plain` writes `./plain.bai`). Its
+    help says beside the BAM. The Picard face does what Picard does. The
+    `build-bam-index` verb and `build_bam_index()` write beside the BAM (`dir/x.bai`),
+    where htsjdk and samtools look for an index. The verb on standard input and the
+    function on a pipe need an output name.
+  - Records are not validated: `VALIDATION_STRINGENCY` is accepted and ignored, as in
+    every tool. Picard at its default `STRICT` refuses a BAM with a record that has a
+    reference and no position, a mapped record without a CIGAR, or a supplementary flag
+    on an unmapped read (the foundation corpus). bammetrics writes the index Picard
+    writes under `VALIDATION_STRINGENCY=SILENT`. Both fail where the indexer fails: a
+    reference out of order (`Unexpected reference 0 when constructing index for 1`), an
+    alignment that ends past position 2^29 (`Read position too high for BAI bin
+    indexing.`), a record that starts in a 16384-base window past the end of its
+    reference (Picard: `ArrayIndexOutOfBoundsException`), a reference the header lacks,
+    a position without a reference, a truncated file.
+  - A failed run writes nothing and keeps an earlier `OUTPUT`: the index is written
+    under a temporary name and renamed. Picard leaves an empty `OUTPUT`.
+  - htsjdk reads an empty BGZF block in the middle of a file as its end. Picard indexes
+    the records before it and exits 0 (101 of 300 in `index_bams.py`). bammetrics
+    indexes every record, and samtools reads all 300 through that index. The offset
+    before the first record after the empty block is the block that holds the record.
+  - `OUTPUT` naming `INPUT`, by name or by a hard link, is refused. Picard has no such
+    check.
+  - A CRAM is refused by name (`a .bai indexes a BAM and this is a CRAM, whose index is
+    a .crai`). Picard says `Input file must be bam file, not sam file.` for a SAM and a
+    CRAM alike. A SAM exits 1 with `not a BAM or CRAM file`.
+  - The verb takes `--format picard` only: an index has one form. `build-bam-index` is
+    no step of `bammetrics chain`: `write --index` writes the index of the BAM a chain
+    writes, and the step exits 2 naming it.
+  - `CREATE_MD5_FILE=true` writes no digest of the index, in either tool.
 
 ## Charts
 
@@ -375,6 +409,9 @@ only with `output=`. `bam_index_stats(bam)` returns one dict per reference of th
 as the `TypedDict` `_BamIndexRow`, so a checker knows each key's type) and a last dict
 `reference="*"` whose `unaligned` is the `NoCoordinateCount`; it takes no `output=`
 (`ValueError`, as Picard has no `OUTPUT`) and reads a CRAM with `reference_sequence=`.
+`build_bam_index(bam, output=None)` writes the `.bai` (beside the BAM without `output=`)
+and returns those rows for the index it wrote, with the counts as they are (no cast to a
+Java `int`).
 
 `check_duplicate_marking(bam, mode=..., output=...)` returns one dict per record whose
 duplicate flag differs from the first record of its queryname (`read_name`, `contig`,
@@ -929,6 +966,22 @@ negative value every consecutive bin); an empty histogram prints `?` for the mea
 0 when every pair is a duplicate; dovetailed pairs orient by `MC` when present and by
 `TLEN` without it.
 
+`BuildBamIndex` output reproduced from Picard 3.5.0
+(`tests/concordance/test_build_bam_index.py`): the `.bai` byte for byte. The bin of a
+record computed from its start and end, never read from the record's bin field; an
+unmapped placed record, and a mapped record without a reference base at position 1,
+counted as one base; a chunk extended only while the next record of the bin starts in the
+BGZF block the chunk ends in, and no bin moved into its parent; the linear index with the
+smallest start offset per 16384-base window, a window without a record taking the offset
+before it, an unmapped placed record counted in the window of the base before its start;
+the metadata bin 37450 (first and last offset, aligned and unaligned counts) only for a
+reference with a bin; a reference without records as 8 zero bytes; a record whose start
+is 0 counted as without a coordinate, whatever its reference; reads up to position 2^29
+of a longer reference in bin 37448 and window 32767; a file without its EOF block read to
+its end; `Input bam file must be sorted by coordinate` for `queryname`, `unsorted`,
+`unknown`, a header without `SO` and one without `@HD`; the default file name in the
+current directory.
+
 `FifoBuffer` behaviour reproduced from Picard 3.5.0 (`tests/concordance/test_fifo_buffer.py`):
 the bytes written equal the bytes read for an empty input, one byte, text, every byte
 value, an input larger than `BUFFER_SIZE` and a BAM; `IO_SIZE` above `BUFFER_SIZE` works;
@@ -1050,8 +1103,14 @@ the differences below are on purpose or cannot be avoided.
   tags were set or removed (always, under the default `CLEAR_DT=true`) is written with
   its tags in htsjdk's list order and integers in the smallest BAM type; any other
   record keeps its bytes, as htsjdk keeps them.
-- `CREATE_MD5_FILE` writes the MD5 of bammetrics' bytes; the index of `CREATE_INDEX` is
-  noodles' BAI of them. Both are named as Picard names them (`OUT.bam.md5`, `OUT.bai`).
+- `CREATE_MD5_FILE` writes the MD5 of bammetrics' bytes. The index of `CREATE_INDEX` is
+  the `.bai` Picard `BuildBamIndex` writes for those bytes, byte for byte
+  (`crates/core/src/bai.rs`). Both are named as Picard names them (`OUT.bam.md5`,
+  `OUT.bai`). Picard's own `CREATE_INDEX` file differs from its `BuildBamIndex` of the
+  same BAM in one offset: the end of the last record of the file, when that record has a
+  position. Picard's writer reports the offset inside the last block (`8374551:1514` on
+  corpus t2), its reader the EOF block after it (`8375239:0`). bammetrics writes the
+  reader's value, so the `.bai` beside a BAM is always `BuildBamIndex` of that BAM.
 - `OUTPUT` is always BAM. A name ending in `.sam` or `.cram` exits 1 on the Picard face and 2 on the verb before anything is
   read (`bammetrics writes BAM only`); Picard writes SAM or CRAM by the extension.
 - `MAX_RECORDS_IN_RAM` is the number of read ends each sorted list holds in memory before
@@ -1152,7 +1211,8 @@ purpose here:
 - Two steps that name one output file are a usage error (exit 2, nothing read or
   written). The staged sequence runs and the later tool replaces the earlier file.
 - `write --index` on a stream that is not coordinate sorted writes no `.bai` and prints a
-  note. The `MarkDuplicates` tool writes no `.bai` either and prints nothing.
+  note. The `MarkDuplicates` tool writes no `.bai` either and prints nothing. The `.bai`
+  `write --index` does write is Picard's `BuildBamIndex` of the written BAM.
 - Missing directories above an output are created, as the verbs create them. An output
   that still cannot be written exits 1 before the first read, under the step's label.
 - The further formats of `--format picard,json` and `--also json` are written from the

@@ -168,6 +168,7 @@ under the failing check it explains. The presets, the rule language and `verdict
 | CheckDuplicateMarking (`MODE`, `OUTPUT`, `VERBOSITY`; Picard's log lines and exit code; a BAM that is not queryname sorted is sorted first) | | `check_duplicate_marking()` |
 | CollectJumpingLibraryMetrics (several `INPUT`s read in turn; `MINIMUM_MAPPING_QUALITY`, `TAIL_LIMIT`, `CHIMERA_KB_MIN`) | | `collect_jumping_library_metrics()` |
 | FifoBuffer (standard input to standard output through a memory buffer; `BUFFER_SIZE`, `IO_SIZE`, `DEBUG_FREQUENCY`, `NAME`; Picard's log lines) | | command only: `fifo_buffer()` raises `UsageError` |
+| BuildBamIndex (the `.bai` of a coordinate-sorted BAM, byte for byte the file Picard writes for the same BAM; `OUTPUT` or the default name; the same index behind `MarkDuplicates CREATE_INDEX` and `chain ... + write --index`) | | `build_bam_index()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 
