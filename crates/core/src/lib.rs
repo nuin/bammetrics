@@ -22,6 +22,7 @@ pub mod cycle;
 pub mod duplicate_metrics;
 pub mod duplication;
 pub mod error;
+pub mod fifo_buffer;
 pub mod filters;
 pub mod gc_bias;
 pub mod genotype_concordance;

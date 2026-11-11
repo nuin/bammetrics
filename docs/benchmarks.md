@@ -197,6 +197,25 @@ mates disagree on the duplicate flag, and Picard reports the same.
 `CollectSequencingArtifactMetrics` holds the current contig twice (the reference and an
 upper-cased copy), which is most of its 3.75 GB; one copy could go.
 
+## FifoBuffer (4 GiB through a pipe)
+
+Mac Studio (Apple M1 Ultra, 64 GB), bammetrics at the `feat/fifo-buffer` branch, release
+build. A 4 GiB file of zeros on standard input, `/dev/null` as standard output, default
+options, three runs each, `/usr/bin/time -l`. Picard 3.5.0 with `JAVA_OPTS=-Xmx8g`.
+
+| command | wall | peak RSS |
+|---|---:|---:|
+| `cat` | 0.41 to 0.45 s | 2 MiB |
+| `bammetrics FifoBuffer` | 0.71 to 1.10 s | 7 to 11 MiB |
+| `bammetrics fifo-buffer --io-size 1048576` | 0.47 to 0.59 s | 6 to 7 MiB |
+| `picard FifoBuffer` | 1.54 to 2.16 s | 630 to 646 MiB |
+
+With a reader that takes nothing for 3 seconds the default buffer fills
+(`Fifo buffer used 536,870,912 / 536,870,912 (100%).`) and bammetrics peaks at 515 MiB
+(540,049,408 bytes) for the 512 MiB buffer. Picard allocates the 512 MiB at its start,
+which is its 630 MiB with a reader that keeps up. bammetrics reserves the bytes and
+writes only a window of them, 64 KiB at first, doubled when the bytes held fill it.
+
 ## Report budgets (docs/05 section 4.8)
 
 Measured 2026-11-05 with bammetrics 0.16.0, rustc 1.99.1, same machine, by `make budgets`

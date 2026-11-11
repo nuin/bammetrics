@@ -34,7 +34,7 @@ a chain); then the clap verbs `qc`, `plan`, `check`,
 | Group | Verbs |
 |---|---|
 | Run | `qc` (the collectors a preset needs, one pass, files, verdict, page), `collect` (the same pass, no verdict), `chain` (several steps on one BAM in one process, records handed on in memory), one verb per registry tool |
-| Prepare | `bed-to-interval-list`, `mark-duplicates` |
+| Prepare | `bed-to-interval-list`, `mark-duplicates`, `fifo-buffer` |
 | Post | `accumulate-quality-yield`, `accumulate-variant-calling`, `compare-metrics`, `check-duplicate-marking`, `report`, `check`, `convert` |
 | Info | `tools`, `presets`, `plan`, `help`, `completions` |
 
@@ -280,6 +280,7 @@ table.
 | `bam-index-stats` | BamIndexStats (reads the `.bai` or `.csi` beside the BAM) | Picard's text on standard output |
 | `check-duplicate-marking` | CheckDuplicateMarking | the bad querynames, one line per record |
 | `jumping-library` | CollectJumpingLibraryMetrics (one or more coordinate-sorted BAMs as positionals, read in turn; standard input refused) | one metrics file |
+| `fifo-buffer` | FifoBuffer (standard input to standard output; no input argument, no `-o`) | no file: the bytes it read, on standard output |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -719,6 +720,51 @@ metrics file.
 
 KNOWN_DIFFERENCES.md lists what differs from Picard: the `@PG` `VN` and `CL`, the flow
 options it refuses, the `READ_NAME_REGEX` syntax and the `MAX_RECORDS_IN_RAM` meaning.
+
+### fifo-buffer
+
+```bash
+bwa mem -t 8 ref.fa r1.fq r2.fq | bammetrics fifo-buffer | samtools sort -o sorted.bam -
+producer | bammetrics fifo-buffer --buffer-size 1073741824 --debug-frequency 10 --name bwa | consumer
+producer | bammetrics FifoBuffer BUFFER_SIZE=1073741824 DEBUG_FREQUENCY=10 NAME=bwa | consumer
+```
+
+The verb runs `FifoBuffer`, Picard 3.5.0's memory buffer between two commands of a pipe. It
+copies standard input to standard output. Any bytes pass unchanged: text, BAM, an empty
+input. The verb takes no input argument, no `-o`, no `--format` and no `--sample`; each
+exits 2 with the usage line `bammetrics fifo-buffer [OPTIONS] < IN > OUT`.
+
+- `--buffer-size` (`BUFFER_SIZE`) is the most bytes held, 1 to 2147483645, default
+  536870912 (512 MiB). The producer waits only when that many bytes are held. The bytes
+  are reserved, and written only as the buffer fills: the buffer's resident memory is at
+  most twice the most bytes ever held and at most the buffer size. A 4 GiB copy to a
+  reader that keeps up peaked at 7 to 11 MiB, a full default buffer at 515 MiB
+  (docs/benchmarks.md).
+- `--io-size` (`IO_SIZE`) is the most bytes one read or one write moves, default 65536.
+  The reader and the writer each hold one chunk of that size, cut to the buffer size:
+  128 KiB at the defaults. On an empty input `--io-size 1073741824 --buffer-size 10`
+  peaked at 2.8 MiB and `--io-size 1073741824 --buffer-size 1073741824` at 1.76 GiB.
+- `--debug-frequency N` (`DEBUG_FREQUENCY`) logs the bytes held on standard error: one line
+  before the first read, then one every N seconds. 0 or less logs none. `--name`
+  (`NAME`) puts a name in the line. `--verbosity WARNING` or `ERROR` drops the lines.
+- The Picard face prints the line as Picard does, without the timestamp:
+  `INFO<TAB>FifoBuffer<TAB>Fifo buffer bwa used 1,024 / 1,073,741,824 (0%).` The verb prints
+  `bammetrics fifo-buffer: Fifo buffer bwa used 1,024 / 1,073,741,824 (0%).`
+- The verb prints one more line on standard error when it starts:
+  `bammetrics fifo-buffer: bammetrics chain runs its steps in one process and removes the
+  pipe this buffer serves (-q drops this line)`. `-q` or `QUIET=true` drops it. The Picard
+  face never prints it. `-v` adds the Picard command line and `copied N of M bytes read`.
+- When the reader of standard output closes it, the copy stops and exits 0 with no
+  message, and the writer of standard input sees its pipe close. Any other failed write
+  exits 1 (`standard output: ...`). A failed read exits 1 after the bytes read before it
+  are written.
+- Exit codes: 0 after the copy. A bad value or an option Picard refuses (`INPUT`,
+  `OUTPUT`, `ASSUME_SORTED`, `GA4GH_CLIENT_SECRETS`) exits 2 on the verb and 1 on the
+  Picard face, before one byte is copied.
+
+`fifo_buffer()` in Python raises `UsageError`: a Python call has no pipe to buffer
+([docs/python.md](python.md)). KNOWN_DIFFERENCES.md lists what differs from Picard: the
+first log line, a size of 0, a closed or failed standard output.
 
 ## Post verbs
 

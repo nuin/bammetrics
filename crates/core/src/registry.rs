@@ -335,6 +335,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::bam_index_stats::TOOL,
     &crate::check_duplicate_marking::TOOL,
     &crate::jumping_library::TOOL,
+    &crate::fifo_buffer::TOOL,
 ];
 
 /// The tool named `name`.

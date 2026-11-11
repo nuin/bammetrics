@@ -167,6 +167,10 @@ pub fn run() -> error::Result<u8> {
             if tool.name == bammetrics_core::check_duplicate_marking::TOOL.name {
                 return Ok(bammetrics_core::check_duplicate_marking::run_cli(rest)?);
             }
+            // Standard input to standard output; no rows and no file.
+            if tool.name == bammetrics_core::fifo_buffer::TOOL.name {
+                return Ok(bammetrics_core::fifo_buffer::run_cli(rest)?);
+            }
             // Picard's CreateSequenceDictionary names its .dict when O= is absent;
             // the verb and Python write standard output and rows instead.
             if tool.name == create_sequence_dictionary::TOOL.name {

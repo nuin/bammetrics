@@ -320,7 +320,9 @@ One failure lists every gap of every tool with the edit that closes it. At 0.21.
 pass: 12 have a module named after them, 18 are mapped in `CONCORDANCE` to a shared module
 (`test_read_level.py` 6, `test_wgs_metrics.py` 3, `test_variant_tools.py` 3, six others 1
 each), and `CollectCoverageGaps` and `CollectSexCheckMetrics` are in `NO_PICARD_ORACLE`
-(docs/06, not Picard tools). `EXEMPT` is empty.
+(docs/06, not Picard tools), with `EXEMPT` empty. `FifoBuffer` (wave W04 of docs/07) is
+tool 33. Its module is `tests/concordance/test_fifo_buffer.py`. It is the first line of
+`EXEMPT`: it copies standard input to standard output and writes no metrics column.
 
 ## Spec script
 

@@ -1002,6 +1002,19 @@ def collect_jumping_library_metrics(
     insert size mean and SD, chimeric pairs, fragments and the three fractions; the
     inputs may be several coordinate-sorted BAMs, read in turn."""
 
+def fifo_buffer(
+    *,
+    buffer_size: int | None = None,
+    io_size: int | None = None,
+    debug_frequency: int | None = None,
+    name: str | None = None,
+    verbosity: str | None = None,
+) -> list[dict[str, Any]]:
+    """FifoBuffer: standard input copied to standard output through a memory buffer of
+    BUFFER_SIZE bytes, so a producer and a consumer that work in bursts do not wait for
+    each other. A command only: it returns no rows, and the Python function raises
+    UsageError, because a Python call has no pipe to buffer."""
+
 # END registry tools
 
 def alignment_summary(
