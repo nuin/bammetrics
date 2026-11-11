@@ -44,6 +44,13 @@ The keywords of `qc`, `check` and `report` are the command's long flags in snake
   take their Picard defaults only. The module installs no signal handler: a Python
   process killed mid-run leaves its spill directory (`bammetrics-markdup.<pid>.<n>`) and
   its temporary output (`.NAME.<pid>.<n>.tmp`) behind.
+- `fifo_buffer(*, buffer_size, io_size, debug_frequency, name, verbosity)` copies nothing.
+  `FifoBuffer` moves the standard input of a command to its standard output, and a
+  Python call has no pipe to buffer and no row to return. The function checks its
+  keywords as the command does (`buffer_size=0` raises `UsageError` naming
+  `BUFFER_SIZE=0`), then raises `UsageError` naming the command to run:
+  `bammetrics fifo-buffer`. Standard input and output of the Python process are not
+  touched.
 - `--format` and `--quiet` have no keyword, nor has `-o` of `check`: no progress line, no event and no step error is printed (step errors are in `Run.errors`). Three warnings still go to stderr: a `resume` over a manifest that cannot be read (`... is not a whole manifest; running every step`), a core tool's own warning (`CollectInsertSizeMetrics` when every orientation falls under `MINIMUM_PCT`), and `check` skipping an unparsable metrics file (`bammetrics: skipped ...`).
 - `qc(report=False)` is the one keyword the command lacks: no `PREFIX.report.html` is written. An earlier run's page under the same prefix is removed only when that run's manifest lists it as its `report` file; a page no run wrote stays. `PREFIX.verdict.json` is still written.
 - Messages are the command's lines, with its spelling: `bammetrics qc: out/s.manifest.json holds an earlier run: --resume skips its finished steps, --force reruns them` means `resume=True` or `force=True`. A manifest that cannot be read is named with its reason (`out/s.manifest.json is not a whole manifest: --resume or --force runs every step`). An `output` or `sample` holding a NUL byte is a `UsageError`.

@@ -299,6 +299,43 @@ behaves how.
   inside the first block after the header block (`tests/data/insert_size.bam` cut at 120
   or 250 bytes, `jumping_bams.py` `main` cut at 1000), and throws `FileTruncatedException`
   (exit 1) when it falls in a later block (`main` cut at 60000 or at half its length).
+- `FifoBuffer` copies standard input to standard output as Picard does and takes no
+  `INPUT`, `OUTPUT`, `ASSUME_SORTED` or `GA4GH_CLIENT_SECRETS` (`Unrecognized option`, exit
+  1, as in Picard); the `fifo-buffer` verb has no input argument, no `-o` and no
+  `--format`. Where it differs:
+  - `BUFFER_SIZE=0` and `IO_SIZE=0` exit 1 (2 on the verb) with `a size from 1 to
+    2147483645 bytes is needed`. Picard 3.5.0 never ends on either once a byte arrives
+    (`CircularByteBuffer.write` returns 0 for ever, `InputStream.read` of an empty array
+    too); on an empty input `BUFFER_SIZE=0` exits 0 after an `ArithmeticException` on its
+    output thread.
+  - A negative size, `null`, and a `BUFFER_SIZE` above 2147483645 exit 1 in both: Picard
+    with `NegativeArraySizeException`, `Can not set int field ... to null value` and
+    `Requested array size exceeds VM limit`, bammetrics with its own line. A value that is
+    no Java `int` carries Picard's `Problem constructing Integer from the string 'abc'.`
+  - The first log line of `DEBUG_FREQUENCY` is printed before the first read and always
+    reads `used 0`. Picard starts its log thread beside the copy, so its first line holds
+    what the reader thread put by then (`used 81,920` in one run, `used 6` in another).
+    Every later line is the bytes held at that second in both. The lines carry no
+    timestamp (`INFO<TAB>FifoBuffer<TAB>Fifo buffer used 0 / 536,870,912 (0%).`), as the
+    `CheckDuplicateMarking` lines. The counts and the percent are printed as the JDK
+    prints them in an English locale; Picard follows the JVM's locale.
+  - A reader that closes standard output ends the copy: exit 0, no message, and the
+    writer of standard input sees its pipe close. Picard exits 0 too, after it reads the
+    rest of its input and drops it (`PrintStream` hides the failed write).
+  - Any other failed write (a full disk under `> file`) exits 1 with `standard output:
+    <error>`. Picard writes through the same `PrintStream`, which reports no failed
+    write, so by its source it exits 0 with a short output (not run on a full disk).
+  - `BUFFER_SIZE` bytes are reserved and written only as the buffer fills: the ring uses
+    a window of them, 64 KiB at first, doubled when the bytes held fill it, and an empty
+    ring starts again at its first byte. Resident memory is at most twice the most
+    bytes ever held and at most `BUFFER_SIZE`: 7 to 11 MiB for a 4 GiB copy to a reader
+    that keeps up, 515 MiB with the default buffer full. Picard allocates `BUFFER_SIZE`
+    bytes of heap at its start (630 to 646 MiB resident for the same copy), so it needs
+    `-Xmx` above the buffer size.
+  - `QUIET=false` prints no start and end lines (Picard's default for this tool is
+    `QUIET=true`). The `fifo-buffer` verb prints one line Picard has not: `bammetrics
+    chain runs its steps in one process and removes the pipe this buffer serves`; `-q`
+    or `QUIET=true` drops it, and the Picard face never prints it.
 
 ## Charts
 
@@ -346,6 +383,11 @@ difference, `None` there for a row-count, column, missing-key or histogram line,
 `ignore_histogram_differences=True`, where the one line `Metrics Histograms differ, but
 the 'IGNORE_HISTOGRAM_DIFFERENCES' flag is set.` comes with files that are equal.
 `output=` writes Picard's `OUTPUT` text and `output_table=` its table.
+
+`fifo_buffer()` raises `UsageError` after it checks its keywords. `FifoBuffer` copies the
+standard input of a command to its standard output; a Python call has no pipe to buffer
+and no row to return, and copying file descriptor 0 to 1 under the interpreter would pass
+by `sys.stdin` and `sys.stdout`. The message names the command: `bammetrics fifo-buffer`.
 Every registry function that reads a BAM takes a CRAM with `reference_sequence=`, which the
 stub lists for every such tool and for no other (a BED, VCF or metrics-file input has no
 CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `collect()`,
@@ -878,6 +920,16 @@ negative value every consecutive bin); an empty histogram prints `?` for the mea
 `-0` for the SD, one pair `?` for the SD; the library size is 0 without duplicates and
 0 when every pair is a duplicate; dovetailed pairs orient by `MC` when present and by
 `TLEN` without it.
+
+`FifoBuffer` behaviour reproduced from Picard 3.5.0 (`tests/concordance/test_fifo_buffer.py`):
+the bytes written equal the bytes read for an empty input, one byte, text, every byte
+value, an input larger than `BUFFER_SIZE` and a BAM; `IO_SIZE` above `BUFFER_SIZE` works;
+`DEBUG_FREQUENCY` of 0 or less logs nothing; the log message is `Fifo buffer used N / M
+(P%).` with `NAME` and a space after `buffer` when given, `NAME=null` as no name, the
+counts with thousands separators and the percent rounded to a whole number, a tie to
+the even one (`1 / 8` is `12%`, `3 / 8` is `38%`); `VERBOSITY=WARNING` and `ERROR` drop
+the lines, `DEBUG` keeps them; the exit code is 0 after the copy, and 0 when the reader
+of standard output closes it.
 
 ## Failures
 

@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `FifoBuffer`, registry tool 33 (wave W04 of docs/07): Picard 3.5.0's memory buffer
+  between two commands of a pipe. `bammetrics FifoBuffer [BUFFER_SIZE=536870912]
+  [IO_SIZE=65536] [DEBUG_FREQUENCY=0] [NAME=text]` copies standard input to standard
+  output through a ring of `BUFFER_SIZE` bytes; any bytes pass unchanged. It takes no
+  `INPUT` and no `OUTPUT`, as in Picard. `DEBUG_FREQUENCY=N` logs `INFO<TAB>FifoBuffer<TAB>Fifo
+  buffer used 1,024 / 536,870,912 (0%).` before the first read and every N seconds;
+  `VERBOSITY=WARNING` or `ERROR` drops the lines.
+- The `fifo-buffer` verb: the same copy with `--buffer-size`, `--io-size`,
+  `--debug-frequency`, `--name` and `--verbosity`, no input argument and no `-o`. It
+  prints one line on standard error, `bammetrics chain runs its steps in one process and
+  removes the pipe this buffer serves`; `-q` or `QUIET=true` drops it. A usage error
+  exits 2 before one byte is copied.
+- A reader that closes standard output ends the copy with exit 0 and no message. A
+  failed write of another kind exits 1.
+- Memory follows the bytes held: a 4 GiB copy to a reader that keeps up peaked at 7 to
+  11 MiB and took 0.71 to 1.10 s (Picard 3.5.0: 630 to 646 MiB, 1.54 to 2.16 s); a full
+  default buffer peaked at 515 MiB (docs/benchmarks.md).
+- `fifo_buffer()` in Python checks its keywords and raises `UsageError`: a Python call
+  has no pipe to buffer (docs/python.md).
+- `tests/concordance/test_fifo_buffer.py`: six input shapes under every option through
+  Picard and bammetrics, the log lines of an idle and of a full buffer, error parity for
+  21 bad argument lists, a size of 0 (Picard never ends, bammetrics exits 1) and a
+  closed standard output. `crates/cli/tests/fifo_buffer.rs` runs the same shapes on
+  pipes without Picard; 8 golden cases.
+
+### Changed
+
+- `bammetrics tools`, the top-level `--help` and the completion scripts list
+  `fifo-buffer`. The golden record `verb_tools` gained that row; no other record changed.
+
 ## 0.21.0
 
 The stage layer of in-process chaining (`bammetrics_core::stage`, docs/chaining.md):

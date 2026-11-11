@@ -139,7 +139,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | GtcToVcf | Arrays | out | GTC to VCF. | bcftools +gtc2vcf |
 | MergePedIntoVcf | Arrays | out | zCall merge. | bcftools |
 | VcfToAdpc | Arrays | out | Array export. | none |
-| FifoBuffer | Other | out | Stream buffer. | mbuffer, pv |
+| FifoBuffer | Other | out | Stream buffer. Built in wave W04 of docs/07, after 0.21.0: standard input to standard output, Picard's log lines. S | mbuffer, pv |
 | SortGff | Other | out | GFF sort. | gff3sort |
 | FilterVcf | Variant | out | Hard filtering. | bcftools filter |
 | FixVcfHeader | Variant | out | Header edit. | bcftools reheader |
