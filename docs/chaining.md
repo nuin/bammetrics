@@ -2,9 +2,10 @@
 
 A chain runs several steps on one BAM in one process. Records move from step to step in
 memory. No shell pipe and no intermediate file is used. This page describes what waves W03
-and W04 of docs/07_full_parity_program.md (section 2) built: the stage layer and its
+to W05 of docs/07_full_parity_program.md (section 2) built: the stage layer and its
 executor (W03, 0.21.0), then the `chain` verb, its plan file, its plan text and the Python
-`chain` and `step` (W04, 0.22.0).
+`chain` and `step` (W04, 0.22.0), then the sort barrier, the spool, the planner and SAM
+text in and out (W05, 0.23.0).
 
 ```bash
 # MarkDuplicates, four collectors on the marked records and the marked BAM, one process
@@ -1071,8 +1072,10 @@ the records the first one marked (its stream is `marked-2`), and standard error 
 
 `crates/cli/src/chain/planner.rs` estimates, before the first read, per barrier: how it
 hands its stream on, the bytes it spills or spools, and its memory. The record count
-comes from the source's size (section 4). The constants were measured on 8,445,233
-records of the HG002 exome (docs/benchmarks.md, Sort barrier and planner):
+comes from the source's size (section 4): 69 bytes per record for a BAM, 102 for a BAM
+whose header says `queryname` (since 0.23.0), 21 for a CRAM, 434 for SAM text. The
+constants were measured on 8,445,233 records of the HG002 exome (docs/benchmarks.md, Sort
+barrier and planner):
 
 | Constant | Value | Measured |
 |---|---:|---|
@@ -1117,4 +1120,6 @@ not refuse. A pipe has no size, so its estimate is unknown and nothing is refuse
 | No word on a free-space override in tests | A hidden `--free-space BYTES` (not in `--help`) replaces the file system's answer | The golden suite records the refusal on any machine |
 | One `libc::statvfs` call, dependency decision in W05 | `libc` 0.2 in the cli crate, already in the lock file through `signal-hook` and `clap` | No new crate enters the tree |
 | A sort spill under 1.2 times the input (section 6) | A queryname run spills 1.52 times a coordinate BAM, a coordinate run 1.08 times | Queryname order puts records of distant positions side by side; the queryname BAM at level 5 is already 1.49 times the coordinate one, and no BGZF level reaches 1.2 (docs/benchmarks.md) |
+| The planner's estimate within 25 percent of the measured spill (section 6, Q5) | Within 2.2 percent for the sort spill on both scale inputs, after one fix | At 69 bytes per record the 2,870,148,655-byte queryname slice counted 41.6 M records for 29.3 M and the sort spill estimate was 51 percent over. A queryname BAM now counts at 102 bytes per record, the bytes `write` makes in that order (docs/benchmarks.md, Scale gate of wave W05) |
+| The scale gate on the exome (section 6) | On chromosomes 1 to 5 of the exome, 3,183,979,932 bytes | The planner gives the whole exome 29.4 GiB of temporary files and 9.8 GiB of output, over the 20 GB a run may hold on this machine |
 | The header merge lifted for `SortSam` | Lifted to `crates/core/src/header_merge.rs` and used by `MarkDuplicates`; `SortSam` takes one `INPUT` and merges nothing | Picard 3.5.0 `SortSam` has one `INPUT`; `MergeSamFiles` (W13) is the next user |

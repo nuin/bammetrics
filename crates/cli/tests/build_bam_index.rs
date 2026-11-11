@@ -299,7 +299,12 @@ fn a_refused_run_writes_nothing_and_keeps_an_earlier_index() {
             "a .bai indexes a BAM and this is a CRAM",
         ),
         (
-            &["build-bam-index", "tests/data/markdup.sam", "-o", text(&out)],
+            &[
+                "build-bam-index",
+                "tests/data/markdup.sam",
+                "-o",
+                text(&out),
+            ],
             2,
             "a .bai indexes a BAM and this is SAM text",
         ),

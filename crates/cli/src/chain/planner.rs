@@ -160,11 +160,18 @@ impl Source {
         })
     }
 
-    /// The records of the source, estimated from its size.
+    /// The records of the source, estimated from its size. A BAM whose
+    /// header says `queryname` takes the bytes per record of a queryname
+    /// BAM: the same records compress to 102 bytes each in that order and
+    /// to 69 to 70 in coordinate order. With 69 the 2,870,148,655-byte
+    /// queryname slice of docs/benchmarks.md ("Sort barrier") counted 41.6
+    /// million records for its 29.3 million, and the sort spill estimate was
+    /// 51 percent over the bytes spilled.
     pub fn records(&self) -> Option<u64> {
-        let per_record = match self.kind {
-            "CRAM" => CRAM_BYTES_PER_RECORD,
-            "SAM" => SAM_BYTES_PER_RECORD,
+        let per_record = match (self.kind, self.order) {
+            ("CRAM", _) => CRAM_BYTES_PER_RECORD,
+            ("SAM", _) => SAM_BYTES_PER_RECORD,
+            (_, Some(SortOrder::Queryname)) => BAM_OUT_QUERYNAME,
             _ => BAM_BYTES_PER_RECORD,
         };
         self.bytes.map(|bytes| bytes / per_record)
@@ -547,6 +554,31 @@ mod tests {
         assert!(
             resident.abs_diff(425_099_264) < 425_099_264 / 10,
             "{resident}"
+        );
+    }
+
+    /// The scale gate of docs/07 section 6 on the queryname slice of
+    /// docs/benchmarks.md ("Sort barrier"): 2,870,148,655 bytes, 29,330,868
+    /// records, 2,094,107,672 bytes spilled by `sort-sam --sort-order
+    /// coordinate`. The estimate stays within 25 percent of each.
+    #[test]
+    fn a_queryname_source_counts_its_records_at_queryname_bytes() {
+        let source = Source {
+            kind: "BAM",
+            bytes: Some(2_870_148_655),
+            order: Some(SortOrder::Queryname),
+        };
+        let records = source.records().expect("a size");
+        assert!(records.abs_diff(29_330_868) < 29_330_868 / 4, "{records}");
+        let spill = records * SPILL_BYTES_COORDINATE;
+        assert!(spill.abs_diff(2_094_107_672) < 2_094_107_672 / 4, "{spill}");
+        let coordinate = Source {
+            order: Some(SortOrder::Coordinate),
+            ..source
+        };
+        assert_eq!(
+            coordinate.records(),
+            Some(2_870_148_655 / BAM_BYTES_PER_RECORD)
         );
     }
 

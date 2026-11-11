@@ -290,6 +290,58 @@ other agents' builds on the machine. The constants of the planner
   the barrier before, because the allocator keeps what that one freed, and estimates
   above the peak.
 
+## Scale gate of wave W05 (docs/07 section 6, Q5)
+
+Release 0.23.0 (`release/0.23.0`, the three W05 branches merged), 2026-11-11, one run
+each under `/usr/bin/time -l` with no other job on `~/data`, 8 threads, other agents'
+builds on the machine. Picard 3.5.0 with `JAVA_OPTS=-Xmx8g`.
+
+The inputs, under `~/data/bammetrics-scale/waves/w05/`:
+
+- `slice.chr20_21.bam`: `samtools view -@ 8 -b -T GRCh38.fa NA12878.final.cram chr20
+  chr21`, 1,624,507,373 bytes, 29,330,868 records (55 bytes each: the CRAM's qualities
+  are binned). docs/07 expected about 4 GB. It stays on the data disk for later waves.
+- `slice.queryname.bam`: `bammetrics sort-sam slice.chr20_21.bam --sort-order
+  queryname`, 2,870,148,655 bytes. Deleted after the runs.
+- `exome.chr1_5.bam`: `samtools view -@ 8 -b HG002.exome.bam 1 2 3 4 5`, 3,183,979,932
+  bytes, 48,485,572 records. The whole exome does not fit: the planner gives the chain
+  29.4 GiB of temporary files and 9.8 GiB of output, over the 20 GB a run may hold.
+  Deleted after the runs.
+
+| Command | Input | Wall | Peak RSS | Sort spill | Spool |
+|---|---|---:|---:|---:|---:|
+| `sort-sam --sort-order queryname` | slice | 65.3 s | 619 MiB | 2,831 MB (sampled) | |
+| Picard `SortSam SORT_ORDER=queryname` | slice | 244.0 s | 4,193 MiB | | |
+| `chain --sort-memory 2G + sort-sam --sort-order coordinate + mark-duplicates + write --index` | queryname slice | 126.8 s | 2,755 MiB | 2,094,107,672 | 1,802,263,583 |
+| the same | exome chr1 to 5 | 141.7 s | 3,047 MiB | 3,432,800,381 | 3,429,831,103 |
+
+- Peak RSS is under `--sort-memory` plus 1 GiB (3,072 MiB) on both chains: 2,755 and
+  3,047 MiB. The exome run passes by 25 MiB; its memgate run peaked at 2,918 MiB.
+- The sort spill is 0.73 times the queryname slice and 1.08 times the exome part, under
+  1.2 times. The queryname sort of the coordinate slice spills 1.74 times its input and
+  0.99 times its output: records in queryname order take 1.77 times the bytes of the
+  same records in coordinate order (2,870,148,655 against 1,624,507,373), so 1.2 times
+  the input cannot hold for that sort (see "Sort barrier and planner" above). Its memgate
+  row bounds the spill by 1.2 times the output.
+- The planner, after its fix in this release, counts 28,138,712 records for the
+  queryname slice (29,330,868) and 46,144,636 for the exome part (48,485,572). Its sort
+  spill estimates are 2,138,542,112 and 3,506,992,336 bytes, 2.1 and 2.2 percent over the
+  bytes spilled. Its spool estimates are 18.7 and 2.2 percent over. Before the fix it
+  counted 41.6 million records in the queryname slice at the 69 bytes per record of a
+  coordinate BAM, and its sort spill estimate was 51 percent over.
+- The memgate sample of the whole temporary directory peaked at 4,955.5 MiB on the slice
+  and 8,703.2 MiB on the exome part, against plan totals of 5.5 and 9.1 GiB.
+- Picard's queryname output and ours hold the same 29,330,868 records and the same 3,394
+  header lines under the rules of `compare_bam` (records streamed through `samtools
+  view`, since `compare_bam` holds both texts in memory). bammetrics took 0.27 times
+  Picard's wall time and 0.15 times its peak RSS.
+- The `.bai` of each chain equals `build-bam-index` of the written BAM under `cmp`, and on
+  the slice also Picard `BuildBamIndex` of that BAM (342,600 bytes).
+- At 30x, linearly from the slice (26.2 times its records in the 768.6 million of the
+  genome CRAM): about 55 GB of sorted runs, 47 GB of spool and 45 GB of spill from
+  `mark-duplicates`, with RSS bounded by `--sort-memory` and `MAX_RECORDS_IN_RAM`, not by
+  the input. About 55 minutes of wall time. An extrapolation, no measurement.
+
 ## BuildBamIndex (HG002 exome)
 
 Mac Studio, Apple M1 Ultra, 20 cores, 64 GB. Release build of `feat/bam-index`, one run
@@ -341,6 +393,9 @@ Fixture tier (`make memgate`):
 | `build-bam-index` | 4.3 / 64 | 0.00 / 30 |
 | `mark-duplicates --create-index --create-md5-file` | 5.8 / 64 | 0.00 / 30 |
 | `chain + insert-size + quality-yield + write --index --md5` | 5.8 / 64 | 0.00 / 30 |
+| `view-sam` | 4.4 / 64 | 0.00 / 30 |
+| `sort-sam --max-records-in-ram 5` | 5.9 / 64 | 0.00 / 30 |
+| `chain + sort-sam + mark-duplicates + sort-sam + write --index`, `--sort-memory 2K` | 7.6 / 64 | 0.01 / 30 |
 
 Scale tier (`make memgate TIER=scale MEMGATE_ARGS="--out-root
 ~/data/bammetrics-scale/waves/w05/bam-index --markdown"`), 8 threads. The limit is the
@@ -352,6 +407,20 @@ docs/07 target for a streaming reader or writer, 1 GiB:
 | `build-bam-index exome` | HG002.exome.bam, 10.3 GB | 9.0 / 1024 | 14.22 | |
 | `chain write --index slice` | chr20_21_22.bam | 43.2 / 1024 | 5.55 | |
 | `mark-duplicates slice` (`--create-index`) | chr20_21_22.bam | 642.9 / 1024 | 16.81 | 358.0 |
+
+The sort rows of the W05 scale gate ("Scale gate of wave W05" above): the limit is
+`--sort-memory` (2 GiB) plus 1 GiB. A chain's spill limit is 3 times 1.2 times its input,
+for the runs, the spool and the spill of `mark-duplicates` in one directory.
+
+| command | input | peak RSS MiB / limit | wall s | spill MiB (sampled) / limit |
+|---|---|---|---:|---:|
+| `sort-sam queryname slice` | slice.chr20_21.bam, 1,624.5 MB | 619.6 / 3072 | 64.45 | 2,700.2 / 3,284 |
+| `chain sort barrier slice` | slice.queryname.bam, 2,870.1 MB | 2,755.7 / 3072 | 126.64 | 4,955.5 / 9,853 |
+| `chain sort barrier exome` | exome.chr1_5.bam, 3,184.0 MB | 2,918.4 / 3072 | 140.52 | 8,703.2 / 10,931 |
+
+The queryname row first ran against 1.2 times its input (1,859 MiB) and failed at 2,700.2
+MiB; its limit is now 1.2 times its output, for the reason given above. The two inputs
+other than the slice are made again with the commands of that section before a run.
 
 To add a scale row:
 
