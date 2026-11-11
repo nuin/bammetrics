@@ -5,7 +5,12 @@
 Wave W05 of docs/07. Part A: SAM text in and out, htsjdk's record orders, and `ViewSam`
 (tool 34). Part B: `SortSam` (tool 35), the sort barrier of a chain, two barriers in one
 chain through a spool, the planner and its free-space refusal. Part C: the BAM index
-writer, `BuildBamIndex` (tool 36) and `make memgate`.
+writer, `BuildBamIndex` (tool 36) and `make memgate`. Also six findings of the 0.22.0
+release review and one more found on the way (docs/chaining.md section 2.6;
+`crates/cli/tests/chain_safety.rs`, `tests/python/test_chain_safety.py`, 13 golden
+records), under Fixed from the symbolic link another user owns to the directories a
+failed tool verb made. Those fixes changed no Picard file, no `qc` output and no earlier
+golden record.
 
 ### Added
 
@@ -162,6 +167,9 @@ writer, `BuildBamIndex` (tool 36) and `make memgate`.
 - Golden suite: 10 new records. `verb_tools` gained the `build-bam-index` row; no other
   record changed. The suite records the `.bai` of a committed BAM as hex and still lists
   an index beside a BAM the case wrote.
+- docs/chaining.md says that `--format` on a chain names the formats of the metrics
+  files, why `plan BAM --format jsonl + STEP` is refused, and what a chain gives in place
+  of an event stream.
 
 ### Fixed
 
@@ -176,6 +184,43 @@ writer, `BuildBamIndex` (tool 36) and `make memgate`.
   user gave. Before, it named the temporary file the BAM is written under.
 - `benches/memgate.toml` refuses a `max_seconds` below 0.05: `time` reports wall time
   in steps of 0.01 s.
+- A chain output that is a symbolic link another user owns is refused before the first
+  read with the words and the exit code (1) of the tool verb: `owned by another user; not
+  written in place`. 0.22.0 said `Is a directory (os error 21)` for `/etc`.
+  `registry::check_writable` asks `cleanup::refusal`, so the Picard face says it too.
+- An output through a directory that does not exist with a `..` behind it
+  (`missing/../in.bam`) is a usage error (exit 2) before the first read, on `chain` and on
+  every tool verb. The run made `missing` and the path then named the input: 0.22.0 failed
+  `write` at write time and left the empty directory, and a tap or a tool verb with that
+  `-o` replaced its input BAM with the metrics file.
+- A chain that exits 1 removes the output directories it made that are still empty
+  (`cleanup::MadeDirs`). A directory that was there, or that holds a file, stays.
+- Two spellings of one new file under a directory that does not exist yet
+  (`link/new/a.txt` and `new/a.txt`) are one file for the one-file-twice check.
+- `chain --plan FILE` reads at most 1 MiB; a larger file is `not a plan file: it is larger
+  than 1 MiB` (exit 2). `--also markdown` reads back at most 64 MiB per metrics file.
+- `chain BAM + inser-size --help` names the unknown step with its number (`step 1`).
+- `--threads` over 256 is a usage error where it is parsed: the tool verbs, `chain`, the
+  plan file, `qc`, `plan`, `collect` (exit 2), `threads=` on the Picard face (exit 1) and
+  the Python `chain`, `qc` and `collect` (`UsageError`). `--threads 100000000` used to
+  start threads for about two minutes and panic in `noodles-bgzf` with exit 101.
+- A text value only the tool can judge on a tap (`--level NOPE`) is a usage error before
+  the first read (exit 2, `UsageError` in Python), as on the tool's verb. 0.22.0 failed
+  the tap when it was built and exited 1. `tap_options::check` runs the option parser of
+  each of the 13 one-pass tools without a header.
+- A number the tool refuses without a header is a usage error on a chain before the first
+  read too: `sequencing-artifact --context-size 99` or `-1` (exit 1 when the tap was
+  built) and `quality-yield --flow-mode` (the same). A `sequencing-artifact` step runs the
+  validation of the stand-alone tool: `--maximum-insert-size 10`, a negative insert size
+  and a `CONTEXTS_TO_PRINT` of the wrong length exit 2, where the chain wrote its five
+  files or failed on a later error.
+- `gc-bias --scan-window-size 0` (`SCAN_WINDOW_SIZE=0`) and a negative window are a usage
+  error: `a window holds at least 1 base`. Both were a panic with exit 101 on the verb,
+  the Picard face and the chain. Picard 3.5.0 throws on both.
+- `qc`, `plan` and `collect` refuse a prefix through a directory that does not exist with
+  a `..` behind it (`-o missing/../q`, exit 2). They wrote `q.*` and left `missing/`.
+- A tool verb, `collect` and `qc` that fail remove the output directories they made that
+  are still empty, as a chain does.
 
 ### Measured
 

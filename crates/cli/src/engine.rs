@@ -491,9 +491,10 @@ pub fn execute(args: &QcArgs) -> Result<Outcome> {
 pub fn collect_tools(args: &QcArgs, tools: &[&str]) -> Result<(Plan, Vec<StepRecord>)> {
     let plan = crate::qc::prepare_tools(args, tools)?;
     let mut out = Reporter::silent();
-    make_prefix_dir(&plan.prefix)?;
+    let mut made = make_prefix_dir(&plan.prefix)?;
     let mut files = Files::default();
     let done = collect(&plan, args, &mut files, &mut out)?;
+    made.keep();
     let records = done.into_iter().map(|d| d.record).collect();
     Ok((plan, records))
 }
@@ -515,7 +516,7 @@ fn stages(args: &QcArgs, silent: bool) -> Result<Stages> {
         Reporter::new(args.format, args.quiet, plan.fingerprint.size)
     };
     out.start(&plan, args.resume);
-    make_prefix_dir(&plan.prefix)?;
+    let mut made = make_prefix_dir(&plan.prefix)?;
     let mut files = Files::default();
     let done = collect(&plan, args, &mut files, &mut out)?;
     remove_dropped(&plan, &done, &mut files);
@@ -533,6 +534,7 @@ fn stages(args: &QcArgs, silent: bool) -> Result<Stages> {
         manifest(&plan, all.clone()).to_json(),
     )?;
     files.written += 1;
+    made.keep();
     let code = if done.iter().any(|d| d.record.status == Status::Failed) {
         1
     } else {

@@ -27,7 +27,9 @@ use super::args::{
     chain_option_on_step, find_step, is_transform, not_a_step, step_parser_flags, unknown_step,
     write_flags,
 };
-use super::claims::{Read, check_one_stdout, claim_outputs, inputs_of, refuse_overwriting_inputs};
+use super::claims::{
+    Read, check_one_stdout, claim_outputs, inputs_of, refuse_overwriting_inputs, refuse_unresolved,
+};
 use super::planner;
 use super::{EMPTY_PREFIX_HINT, Spec, StepSpec, VERB, WRITE, usage};
 use crate::also::Also;
@@ -761,7 +763,9 @@ fn tool_step(
     inv.threads = cx.threads;
     match role {
         Role::Transform => stage::check_stage_options(tool, &inv),
-        _ => inv.limits().map(|_| ()),
+        _ => inv
+            .limits()
+            .and_then(|_| bammetrics_core::tap_options::check(tool, &inv)),
     }
     .map_err(|e| draft.core(verb, &e))?;
     if role == Role::Tap && !position.behind.is_empty() {
@@ -1031,8 +1035,12 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         .find_map(|position| position.leaves.clone())
         .unwrap_or_else(|| SOURCE_STREAM.to_owned());
     let per_file: Vec<Format> = also.iter().filter_map(|a| a.per_file()).collect();
-    // 0 counts as 1, as on every verb.
-    let threads = spec.threads.unwrap_or_else(pass::default_threads).max(1);
+    // 0 counts as 1, as on every verb. A `Spec` a caller built is checked
+    // here; the command line and a plan file checked theirs with its place.
+    let threads = spec.threads.unwrap_or_else(pass::default_threads);
+    let threads = pass::check_threads(threads)
+        .map_err(|e| usage(format!("{threads} threads is {e}")))?
+        .max(1);
     let cx = Context {
         source: &source,
         is_cram,
@@ -1058,6 +1066,7 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         .then(|| with_suffix(&prefix, Also::Markdown.run_suffix()));
     prefix_used |= report.is_some();
     check_one_stdout(&steps)?;
+    refuse_unresolved(&steps, report.as_deref())?;
     let outputs = claim_outputs(&steps, report.as_deref())?;
     let reference = spec.reference.as_ref().map(PathBuf::from);
     let read = Read {

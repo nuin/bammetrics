@@ -189,6 +189,15 @@ def test_more_than_100_records_without_bases_fail(tmp_path):
     both_fail(CORPUS / "t2.bam", [f"R={REFERENCE}"], tmp_path, "CIGAR longer than the sequence")
 
 
+@pytest.mark.parametrize("window", [0, -5])
+def test_a_window_under_one_base_fails(built, tmp_path, window):
+    """Picard divides by zero at 0 and indexes past the contig below it.
+    bammetrics panicked on both before it refused them."""
+    bam, ref = built["rl_reads"]
+    both_fail(bam, [f"R={ref}", f"SCAN_WINDOW_SIZE={window}"], tmp_path,
+              f"SCAN_WINDOW_SIZE={window}: a window holds at least 1 base")
+
+
 # --- every column exercised ----------------------------------------------------------
 
 DEFAULTS = {"0", ""}

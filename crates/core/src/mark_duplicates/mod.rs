@@ -648,19 +648,21 @@ fn refuse_overlaps(opts: &Options) -> Result<()> {
     Ok(())
 }
 
-/// `path` absolute with its links resolved, or with its directory resolved
-/// when the file does not exist yet.
+/// `path` absolute with its links resolved, or, when the file does not
+/// exist yet, with its deepest directory that exists resolved and the names
+/// below it as spelled. So `link/new/a.txt` and `new/a.txt` are one key
+/// before `new` is made, when `link` leads to the working directory.
 pub(crate) fn same_file_key(path: &Path) -> PathBuf {
     if let Ok(resolved) = path.canonicalize() {
         return resolved;
     }
     let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
-    match (absolute.parent(), absolute.file_name()) {
-        (Some(dir), Some(name)) => dir
-            .canonicalize()
-            .map_or_else(|_| absolute.clone(), |d| d.join(name)),
-        _ => absolute,
+    for dir in absolute.ancestors().skip(1) {
+        if let (Ok(resolved), Ok(below)) = (dir.canonicalize(), absolute.strip_prefix(dir)) {
+            return resolved.join(below);
+        }
     }
+    absolute
 }
 
 pub(crate) fn same_file(a: &Path, b: &Path) -> bool {

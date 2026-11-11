@@ -1,0 +1,14 @@
+## argv
+gc-bias
+tests/data/insert_size.bam
+-R
+tests/data/ref_100k.fa
+-o
+OUT/s
+--scan-window-size
+0
+## exit
+2
+## stdout
+## stderr
+bammetrics gc-bias: SCAN_WINDOW_SIZE=0: a window holds at least 1 base (from --scan-window-size)

@@ -201,7 +201,7 @@ These are the two examples of docs/chaining.md. `tests/data/chain_markdup.toml` 
 | `steps` | `+ STEP ...` | A list of verb names and `step(...)` objects, in order. One name or one `Step` is a chain of one step |
 | `output` | `-o PREFIX` | The prefix of every step that names no file of its own. Default `./<source name>`. `""` raises `UsageError`: it would name hidden files (`.insert_size_metrics`) |
 | `reference` | `-R FASTA` | Decodes a CRAM source, and goes to every step that reads a reference and names none |
-| `threads` | `--threads N` | BGZF threads of each read and of `write` |
+| `threads` | `--threads N` | BGZF threads of each read and of `write`. Over 256 is a `UsageError`, on `chain`, `qc` and `collect` |
 | `tmp_dir` | `--tmp-dir DIR` | Where a transform spills and a piped source is copied |
 | `format` | `--format LIST` | `picard` first. `["picard", "json"]` adds `FILE.json` beside every metrics file |
 | `also` | `--also LIST` | `json`, `jsonl`, `tsv`, `csv` beside every metrics file, `markdown` as `PREFIX.report.md` |

@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/insert_size.bam
+--threads
+100000000
++
+insert-size
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: 100000000 is more than the maximum of 256 threads (from --threads)

@@ -1,0 +1,16 @@
+## argv
+chain
+tests/data/artifact.bam
+-R
+tests/data/ref_100k.fa
+-o
+OUT/s
++
+sequencing-artifact
+--maximum-insert-size
+10
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (sequencing-artifact): MAXIMUM_INSERT_SIZE cannot be less than MINIMUM_INSERT_SIZE unless set to 0

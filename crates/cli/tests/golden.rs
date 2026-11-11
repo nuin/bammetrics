@@ -183,6 +183,16 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_collect_stdout", "collect", "IS", "-o", "-"),
     case!("error_unknown_verb", "inser-size", "IS"),
     case!("error_qc_bad_threads", "qc", "IS", "--threads", "x"),
+    // A thread count over 256 is a usage error where it is parsed (exit 1 on the Picard
+    // face); an output through a missing directory and back names no file yet.
+    case!("error_qc_threads_maximum", "qc", "IS", "--threads", "257"),
+    case!("error_verb_threads_maximum", "insert-size", "IS", "--threads", "100000000"),
+    case!("error_picard_threads_maximum", "CollectInsertSizeMetrics", "I=IS", "threads=100000000"),
+    case!("error_verb_output_through_missing_directory", "insert-size", "IS", "-o", "OUT/missing/../x.txt"),
+    // The same path rule on a prefix, and a window of no base (a panic before).
+    case!("error_qc_output_through_missing_directory", "qc", "IS", "-o", "OUT/missing/../q"),
+    case!("error_collect_output_through_missing_directory", "collect", "IS", "-o", "OUT/missing/../q"),
+    case!("error_verb_scan_window_size", "gc-bias", "IS", "-R", "REF", "-o", "OUT/s", "--scan-window-size", "0"),
     case!("error_qc_no_bam", "qc"),
     case!("error_check_bad_fail_on", "check", "PICARD", "--fail-on", "bad"),
     // Documented error paths.
@@ -435,9 +445,20 @@ const CHAIN_CASES: &[Case] = &[
     case!("error_chain_not_a_step", "chain", "IS", "+", "wgs"),
     case!("error_chain_fifo_buffer", "chain", "MD", "+", "mark-duplicates", "+", "fifo-buffer", "--buffer-size", "1024", "+", "write", "-"),
     case!("error_chain_build_bam_index", "chain", "MD", "+", "mark-duplicates", "+", "build-bam-index", "+", "write", "OUT/marked.bam"),
+    case!("error_chain_view_sam", "chain", "MD", "+", "sort-sam", "--sort-order", "queryname", "+", "view-sam"),
     case!("error_chain_bad_number", "chain", "IS", "+", "insert-size", "--minimum-pct", "abc"),
     case!("error_chain_step_input", "chain", "IS", "+", "insert-size", "OR"),
     case!("error_chain_step_threads", "chain", "IS", "+", "insert-size", "--threads", "2"),
+    // From the 0.22.0 review: the help of an unknown step names its number, a thread count
+    // over 256, a value only the tool can judge (behind a transform too), an output
+    // through a missing directory and back.
+    case!("error_chain_unknown_step_help", "chain", "IS", "+", "quality-yield", "+", "inser-size", "--help"),
+    case!("error_chain_threads_maximum", "chain", "IS", "--threads", "100000000", "+", "insert-size"),
+    case!("error_chain_tap_level", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "+", "insert-size", "--level", "NOPE"),
+    case!("error_chain_output_through_missing_directory", "chain", "IS", "+", "write", "OUT/missing/../x.bam"),
+    // A number the tool refuses without a header, and a check only the stand-alone tool ran.
+    case!("error_chain_tap_context_size", "chain", "MD", "-R", "REF", "-o", "OUT/s", "+", "mark-duplicates", "+", "sequencing-artifact", "--context-size", "99"),
+    case!("error_chain_tap_insert_sizes", "chain", "ART", "-R", "REF", "-o", "OUT/s", "+", "sequencing-artifact", "--maximum-insert-size", "10"),
     case!("error_chain_missing_required", "chain", "IS", "+", "hs-metrics", "--baits", "IL"),
     case!("error_chain_transform_output", "chain", "MD", "+", "mark-duplicates", "-o", "OUT/x.bam"),
     case!("error_chain_transform_option", "chain", "MD", "+", "mark-duplicates", "--tagging-policy", "Some"),

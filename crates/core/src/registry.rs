@@ -599,9 +599,11 @@ impl Tool {
                 }
             };
             if name == "threads" {
-                inv.threads = value
+                let threads = value
                     .parse()
                     .map_err(|_| Error::Usage(format!("threads={value}: not a number")))?;
+                inv.threads = pass::check_threads(threads)
+                    .map_err(|e| Error::Usage(format!("threads={value}: {e}")))?;
                 continue;
             }
             let opt = self.lookup(name).ok_or_else(|| {
@@ -752,7 +754,9 @@ pub fn write_files(inv: &Invocation, output: &ToolOutput) -> Result<()> {
 /// written, as Picard's `assertFileIsWritable` does for every output first:
 /// a directory, a file without write permission, a missing parent
 /// directory. A target that is one of `inputs` fails too, so a run never
-/// replaces a file it reads.
+/// replaces a file it reads. A symbolic link or a non-regular file another
+/// user owns fails with the error its write would give
+/// ([`crate::cleanup::refusal`]).
 pub fn check_writable<'a>(
     targets: impl IntoIterator<Item = &'a Path>,
     inputs: &[PathBuf],
@@ -766,6 +770,11 @@ pub fn check_writable<'a>(
             path: target.to_path_buf(),
             source,
         };
+        if let Some(refused) = crate::cleanup::refusal(target)
+            && !target.canonicalize().is_ok_and(|t| inputs.contains(&t))
+        {
+            return Err(output_error(refused));
+        }
         match std::fs::metadata(target) {
             Ok(meta) if meta.is_dir() || meta.is_file() => {
                 if target.canonicalize().is_ok_and(|t| inputs.contains(&t)) {
@@ -1221,6 +1230,46 @@ mod tests {
         assert!(!fresh.exists());
         std::fs::remove_file(&input).unwrap();
         std::fs::remove_dir(&dir).unwrap();
+    }
+
+    /// A link another user owns fails the check with the error its write
+    /// gives. The test needs such a link (`/etc` on macOS, `/bin` on a
+    /// merged-usr Linux) and passes without one.
+    #[cfg(unix)]
+    #[test]
+    fn a_link_owned_by_another_user_is_refused_before_the_write() {
+        let foreign = ["/tmp", "/etc", "/var", "/bin", "/sbin", "/lib"]
+            .into_iter()
+            .map(Path::new)
+            .find(|p| crate::cleanup::refusal(p).is_some());
+        let Some(link) = foreign else {
+            return;
+        };
+        let error = check_writable([link], &[]).unwrap_err();
+        assert!(matches!(error, Error::Output { .. }), "{error}");
+        let written = write_to(Some(link), |_| Ok(())).unwrap_err();
+        assert_eq!(error.to_string(), written.to_string());
+        assert!(
+            error
+                .to_string()
+                .ends_with("owned by another user; not written in place"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn a_thread_count_over_the_maximum_is_a_usage_error() {
+        let tool = &crate::insert_size::TOOL;
+        let args = |threads: &str| vec!["I=in.bam".to_owned(), format!("threads={threads}")];
+        assert_eq!(tool.parse(&args("256")).unwrap().threads, pass::MAX_THREADS);
+        for value in ["257", "100000000"] {
+            let error = tool.parse(&args(value)).unwrap_err();
+            assert!(matches!(error, Error::Usage(_)), "{error}");
+            assert_eq!(
+                error.to_string(),
+                format!("threads={value}: more than the maximum of 256 threads")
+            );
+        }
     }
 
     #[test]

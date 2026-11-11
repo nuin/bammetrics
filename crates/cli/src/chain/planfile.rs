@@ -40,7 +40,7 @@ use super::args::{
     CHAIN_KEYS as CHAIN_FLAGS, chain_option, find_step, step_parser_flags, unknown_step,
     write_flags,
 };
-use super::{EMPTY_PREFIX_HINT, Spec, StepSpec, VERB, WRITE};
+use super::{EMPTY_PREFIX_HINT, PLAN_FILE_CAP, Spec, StepSpec, VERB, WRITE, read_capped};
 use crate::error::VerbError;
 use crate::grammar::{self, Flag, Key};
 
@@ -210,9 +210,13 @@ fn chain_table(at: &At, table: &Table, spec: &mut Spec) -> Result<(), VerbError>
                     Scalar::Int(n) => usize::try_from(*n).ok(),
                     _ => None,
                 };
-                spec.threads = Some(threads.ok_or_else(|| {
+                let threads = threads.ok_or_else(|| {
                     at.error(entry.line, "threads: expected a whole number, 0 or more")
-                })?);
+                })?;
+                spec.threads = Some(
+                    bammetrics_core::pass::check_threads(threads)
+                        .map_err(|e| at.error(entry.line, format!("threads: {threads} is {e}")))?,
+                );
             }
             other => {
                 let mut error = at.error(entry.line, format!("[chain]: unknown key {other}"));
@@ -393,21 +397,20 @@ pub fn parse(text: &str, file: &str) -> Result<Spec, VerbError> {
 }
 
 /// The plan file at `path`. A file that cannot be read is an input error
-/// (exit 1); one that is not UTF-8 text is no plan, a usage error (exit 2)
-/// as every other malformed plan.
+/// (exit 1); one that is not UTF-8 text, or holds more than
+/// [`PLAN_FILE_CAP`] bytes, is no plan, a usage error (exit 2) as every
+/// other malformed plan. At most one byte past the cap is read.
 pub fn read(path: &Path) -> Result<Spec, VerbError> {
     let file = path.display().to_string();
-    let text = std::fs::read_to_string(path).map_err(|e| {
-        if e.kind() == io::ErrorKind::InvalidData {
-            VerbError::usage(
-                VERB,
-                format!("{file}: not a plan file: it is not UTF-8 text"),
-            )
+    let text = read_capped(path, PLAN_FILE_CAP).map_err(|e| {
+        let why = match e.kind() {
+            io::ErrorKind::InvalidData => "it is not UTF-8 text".to_owned(),
+            io::ErrorKind::FileTooLarge => format!("it is {e}"),
+            _ => return VerbError::input(VERB, format!("{file}: {e}")).from("--plan"),
+        };
+        VerbError::usage(VERB, format!("{file}: not a plan file: {why}"))
             .from("--plan")
             .hint("a plan file is TOML text (docs/chaining.md)")
-        } else {
-            VerbError::input(VERB, format!("{file}: {e}")).from("--plan")
-        }
     })?;
     let mut spec = parse(&text, &file)?;
     spec.plan_file = Some(file);
@@ -525,6 +528,10 @@ mod tests {
             (
                 "[chain]\nthreads = \"4\"\n",
                 "p.toml:2: threads: expected a whole number",
+            ),
+            (
+                "[chain]\nsource = \"a.bam\"\nthreads = 100000000\n",
+                "p.toml:3: threads: 100000000 is more than the maximum of 256 threads",
             ),
             (
                 "[chain]\nquiet = \"yes\"\n",
@@ -647,6 +654,51 @@ mod tests {
         std::fs::write(&plan, "[chain]\nsource = \"in.bam\"\n").expect("write");
         let spec = read(&plan).expect("a plan");
         assert_eq!(spec.plan_file, Some(plan.display().to_string()));
+        std::fs::remove_dir_all(&dir).expect("remove the temp dir");
+    }
+
+    /// A plan file holds at most 1 MiB. One byte more is no plan: a usage
+    /// error that names the cap. A plan of exactly the cap is read.
+    #[test]
+    fn a_file_over_the_cap_is_a_usage_error() {
+        let dir = std::env::temp_dir().join(format!("bammetrics-plancap-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let plan = "[chain]\nsource = \"in.bam\"\n# ";
+        let cap = usize::try_from(PLAN_FILE_CAP).expect("the cap fits");
+        let padded = |bytes: usize| format!("{plan}{}", "x".repeat(bytes - plan.len()));
+        let path = dir.join("plan.toml");
+        std::fs::write(&path, padded(cap)).expect("write");
+        assert_eq!(
+            read(&path).expect("at the cap").source.as_deref(),
+            Some("in.bam")
+        );
+        std::fs::write(&path, padded(cap + 1)).expect("write");
+        let error = read(&path).expect_err("over the cap");
+        assert_eq!(error.code, 2);
+        assert!(
+            error.to_string().ends_with(
+                "plan.toml: not a plan file: it is larger than 1 MiB (from --plan)\n  \
+                 a plan file is TOML text (docs/chaining.md)"
+            ),
+            "{error}"
+        );
+        std::fs::remove_dir_all(&dir).expect("remove the temp dir");
+    }
+
+    /// The capped read stops one byte past the cap, whatever the file holds.
+    #[test]
+    fn the_capped_read_is_bounded() {
+        let dir = std::env::temp_dir().join(format!("bammetrics-capped-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("text");
+        std::fs::write(&path, "12345").expect("write");
+        assert_eq!(read_capped(&path, 5).expect("fits"), "12345");
+        let error = read_capped(&path, 4).expect_err("too long");
+        assert_eq!(error.kind(), io::ErrorKind::FileTooLarge);
+        assert_eq!(error.to_string(), "larger than 4 bytes");
+        std::fs::write(&path, [b'a', 0xff]).expect("write");
+        let error = read_capped(&path, 5).expect_err("not text");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         std::fs::remove_dir_all(&dir).expect("remove the temp dir");
     }
 }

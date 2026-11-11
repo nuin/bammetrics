@@ -1,0 +1,18 @@
+## argv
+chain
+tests/data/markdup.bam
+-R
+tests/data/ref_100k.fa
+-o
+OUT/s
++
+mark-duplicates
++
+sequencing-artifact
+--context-size
+99
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 2 (sequencing-artifact): CONTEXT_SIZE=99: too many contexts to count (from --context-size)
