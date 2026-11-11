@@ -284,6 +284,32 @@ def test_a_file_that_is_not_queryname_sorted_is_sorted_first(bams, tmp_path):
                      "n2"]
 
 
+def test_records_flagged_first_and_second(tmp_path):
+    """The queryname order is not total over records flagged both first and second of
+    their pair. Under 32 records Java sorts them by binary insertion and both tools give
+    the same names, log and exit; bammetrics never panics (exit 101 before 0.23)."""
+    both = 0x1 | 0x40 | 0x80
+    records = [rec(f"b{i % 3}", both | (DUP if i % 4 == 0 else 0) | (0x10 if i % 2 else 0),
+                   100 + i, "=", 100 + i) for i in range(20)]
+    bam = write_bam(tmp_path, "first_and_second", "unsorted", records)
+    compare(bam, [], tmp_path, "first and second")
+    # Spilled in runs of 3 the two merges take these records in other orders
+    # (KNOWN_DIFFERENCES.md, SortSam): both finish with exit 1 and no panic.
+    for side in ("picard", "ours"):
+        done = run(side, [f"I={bam}", "MAX_RECORDS_IN_RAM=3", SILENT if side == "picard" else "QUIET=true"])
+        assert done.returncode == 1, f"{side}: {done.stderr[-500:]}"
+    RESULTS.append((f"{TOOL} first and second, runs of 3", 0, 0, "both exit 1, no panic"))
+
+
+def test_a_spilled_sort_gives_the_sort_in_memory(bams, tmp_path):
+    """MAX_RECORDS_IN_RAM and TMP_DIR now spill the sort of a file without
+    SO:queryname: the result equals Picard's at runs of 7 and 1000 records."""
+    for size in (7, 1000):
+        compare(bams["corpus"], [f"MAX_RECORDS_IN_RAM={size}", f"TMP_DIR={tmp_path}"], tmp_path,
+                f"corpus spilled at {size}")
+    assert not [p for p in tmp_path.iterdir() if p.name.startswith("bammetrics-")]
+
+
 @pytest.mark.parametrize("verbosity", ["ERROR", "WARNING", "INFO", "DEBUG"])
 def test_verbosity(bams, tmp_path, verbosity):
     _, lines = compare(bams["disagree_coordinate"], [f"VERBOSITY={verbosity}"], tmp_path,

@@ -46,7 +46,9 @@ fn sorted<'a, K>(
 ) -> Result<Vec<usize>> {
     let keys = records.iter().map(key).collect::<Result<Vec<K>>>()?;
     let mut order: Vec<usize> = (0..records.len()).collect();
-    order.sort_by(|&a, &b| compare(&keys[a], &keys[b]));
+    // Java's sort, as htsjdk's: an order that is not total never panics.
+    bammetrics_core::timsort::sort_by(&mut order, |&a, &b| compare(&keys[a], &keys[b]))
+        .map_err(|violation| Error::Metric(violation.to_string()))?;
     Ok(order)
 }
 

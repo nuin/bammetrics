@@ -1286,9 +1286,13 @@ differs here:
   For a total order the records are the same.
 - Records flagged both first and second of a pair make the queryname order not total.
   A run in memory sorts as Java's `TimSort` sorts it, Java's `Comparison method violates
-  its general contract!` included, which then fails the run as it fails Picard. The merge
-  of spilled runs takes the smallest head through a binary heap where htsjdk uses
-  `java.util.PriorityQueue`; for such records the two can take different heads.
+  its general contract!` included, which then fails the run as it fails Picard. Spilled
+  runs merge through a binary heap, at most 64 at a time, where htsjdk's
+  `SortingCollection` merges every run at once through its own queue; for such records the
+  two merges take different records first. Both complete and write the same records (300
+  records in runs of 3, `test_sort_sam.py`). `CheckDuplicateMarking` sorts the same way:
+  on such records spilled in runs it can count other records as disagreeing (20 records
+  in runs of 3: Picard 5, bammetrics 8; both exit 1). In memory it gives Picard's lines.
 - Sorted runs spill to `TMP_DIR` as BGZF level 3, not as htsjdk's temporary files. Picard's
   log lines (`Finished reading inputs`, the progress lines) are not printed.
 
