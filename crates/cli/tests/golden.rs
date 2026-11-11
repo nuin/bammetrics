@@ -418,7 +418,7 @@ const CHAIN_CASES: &[Case] = &[
     case!("error_chain_write_cram", "chain", "IS", "+", "write", "OUT/x.cram"),
     case!("error_chain_write_fastq", "chain", "IS", "+", "write", "OUT/x.fastq.gz"),
     case!("error_chain_write_option", "chain", "IS", "+", "write", "OUT/x.bam", "--indx"),
-    case!("error_chain_two_transforms", "chain", "MD", "+", "mark-duplicates", "+", "quality-yield", "+", "mark-duplicates"),
+    case!("chain_two_mark_duplicates", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "+", "quality-yield", "+", "mark-duplicates"),
     case!("error_chain_one_file_twice", "chain", "IS", "-o", "OUT/s", "+", "insert-size", "+", "insert-size"),
     case!("error_chain_overwrites_input", "chain", "MD", "+", "mark-duplicates", "+", "write", "MD"),
     case!("error_chain_not_a_step", "chain", "IS", "+", "wgs"),
@@ -467,6 +467,19 @@ const CHAIN_CASES: &[Case] = &[
     case!("chain_write_sam_stdout", "chain", "MD", "-q", "-o", "OUT/s", "+", "mark-duplicates", "--program-group-command-line", "pinned", "--program-group-version", "pinned", "+", "write", "-", "--output-format", "sam"),
     case!("error_chain_write_sam_index", "chain", "IS", "+", "write", "OUT/x.sam", "--index"),
     case!("error_chain_write_output_format", "chain", "IS", "+", "write", "OUT/x.bam", "--output-format", "cram"),
+    // SortSam: the Picard face, the verb, SAM text by the name, and the errors Picard gives.
+    case!("picard_sort_sam_queryname", "SortSam", "I=MD", "O=OUT/sorted.bam", "SORT_ORDER=queryname"),
+    case!("picard_sort_sam_coordinate_index", "SortSam", "I=DM", "O=OUT/sorted.bam", "SO=coordinate", "CREATE_INDEX=true", "CREATE_MD5_FILE=true", "MAX_RECORDS_IN_RAM=2"),
+    case!("picard_sort_sam_sam_output", "SortSam", "I=MD_SAM", "O=OUT/sorted.sam", "SORT_ORDER=queryname"),
+    case!("picard_sort_sam_duplicate", "SortSam", "I=IS", "O=OUT/sorted.bam", "SORT_ORDER=duplicate"),
+    case!("verb_sort_sam", "sort-sam", "MD", "-o", "OUT/sorted.bam", "--sort-order", "queryname", "--max-records-in-ram", "5"),
+    case!("error_sort_sam_unsorted", "SortSam", "I=MD", "O=OUT/sorted.bam", "SORT_ORDER=unsorted"),
+    case!("error_sort_sam_missing_mc", "SortSam", "I=MD", "O=OUT/sorted.bam", "SORT_ORDER=duplicate"),
+    case!("error_sort_sam_cram_output", "SortSam", "I=MD", "O=OUT/sorted.cram", "SORT_ORDER=queryname"),
+    // Two barriers in one chain: sort, mark (spooled), sort, write.
+    case!("chain_two_barriers", "chain", "MD", "-o", "OUT/s", "+", "sort-sam", "--sort-order", "queryname", "+", "mark-duplicates", "--program-group-command-line", "pinned", "--program-group-version", "pinned", "+", "sort-sam", "--sort-order", "coordinate", "+", "write", "OUT/out.bam", "--index"),
+    case!("chain_dry_run_two_barriers", "chain", "MD", "-o", "OUT/s", "--sort-memory", "4K", "--dry-run", "+", "sort-sam", "--sort-order", "queryname", "+", "mark-duplicates", "+", "sort-sam", "--sort-order", "coordinate", "+", "write", "OUT/out.bam", "--index"),
+    case!("error_chain_free_space", "chain", "MD", "-o", "OUT/s", "--free-space", "100", "+", "sort-sam", "-SO", "queryname", "+", "write"),
 ];
 
 /// The same tools on corpus BAM t1, with its reference and interval lists.

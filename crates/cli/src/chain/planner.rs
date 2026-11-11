@@ -406,6 +406,9 @@ fn existing_dir(path: &Path) -> PathBuf {
     dir
 }
 
+/// What the temporary directory holds, in a [`Need`].
+const SPILLS: &str = "spills and spools";
+
 /// A file system the chain writes to: a directory on it, the bytes the
 /// chain needs there, and what they are for.
 pub struct Need {
@@ -422,7 +425,7 @@ pub fn needs(chain: &Chain, estimate: &Estimate) -> Vec<Need> {
     let temp = chain.tmp_dir.clone().unwrap_or_else(std::env::temp_dir);
     let mut wanted: Vec<(PathBuf, u64, String)> = Vec::new();
     if let Some(bytes) = estimate.temp().filter(|bytes| *bytes > 0) {
-        wanted.push((existing_dir(&temp), bytes, "spills and spools".to_owned()));
+        wanted.push((existing_dir(&temp), bytes, SPILLS.to_owned()));
     }
     for (path, bytes) in &estimate.outputs {
         let dir = existing_dir(path.parent().unwrap_or(Path::new(".")));
@@ -482,7 +485,8 @@ pub fn check_space(chain: &Chain) -> Result<(), VerbError> {
     let Some(need) = short(&needs).next() else {
         return Ok(());
     };
-    Err(VerbError::input(
+    let temp = need.what.iter().any(|what| what == SPILLS);
+    let error = VerbError::input(
         VERB,
         format!(
             "not enough free space in {}: the chain needs about {} there ({}) and {} are \
@@ -492,9 +496,13 @@ pub fn check_space(chain: &Chain) -> Result<(), VerbError> {
             need.what.join(", "),
             super::describe::human(need.free.unwrap_or(0))
         ),
-    )
-    .hint("--tmp-dir DIR puts spills and spools on another file system")
-    .hint("--force-space runs the chain anyway"))
+    );
+    let error = if temp {
+        error.hint("--tmp-dir DIR puts spills and spools on another file system")
+    } else {
+        error
+    };
+    Err(error.hint("--force-space runs the chain anyway"))
 }
 
 #[cfg(test)]

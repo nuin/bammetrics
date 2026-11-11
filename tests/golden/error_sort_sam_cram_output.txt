@@ -1,0 +1,10 @@
+## argv
+SortSam
+I=tests/data/markdup.bam
+O=OUT/sorted.cram
+SORT_ORDER=queryname
+## exit
+1
+## stdout
+## stderr
+bammetrics: OUTPUT=OUT/sorted.cram: bammetrics writes BAM and SAM only: CRAM output is wave W15 of docs/07_full_parity_program.md

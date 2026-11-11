@@ -38,6 +38,7 @@ check-duplicate-marking               CheckDuplicateMarking
 jumping-library                       CollectJumpingLibraryMetrics
 fifo-buffer                           FifoBuffer
 view-sam                              ViewSam
+sort-sam                              SortSam
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.
