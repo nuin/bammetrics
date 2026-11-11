@@ -45,7 +45,7 @@ Remaining for bammetrics:
 
 - bioconda recipe and a PyPI release (first push of the branch runs the CI workflow).
 - The Picard tools still to build, the `chain` verb, further formats and PDF reports: the
-  program plan `docs/07_full_parity_program.md` (waves W03 onward); docs/04 section 4 holds
+  program plan `docs/07_full_parity_program.md` (waves W04 onward); docs/04 section 4 holds
   the P9 queue.
 
 Exit criterion: a `pip install`-able library that produces correct, hand-verified numbers.
