@@ -1,5 +1,5 @@
 """What chain, qc and collect refuse before their first read, from Python
-(docs/chaining.md section 2.5; crates/cli/tests/chain_safety.rs holds the
+(docs/chaining.md section 2.6; crates/cli/tests/chain_safety.rs holds the
 same cases for the command): a thread count over 256, a value only the
 tool can judge, an output through a directory that does not exist and
 back, a plan file over 1 MiB. Each is a UsageError and writes nothing."""
@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "tests" / "data"
 BAM = DATA / "insert_size.bam"
 MARKDUP = DATA / "markdup.bam"
+REFERENCE = DATA / "ref_100k.fa"
 
 OVER = "more than the maximum of 256 threads"
 
@@ -42,12 +43,38 @@ def test_the_maximum_thread_count_runs(tmp_path):
      r'step 1 \(insert-size\): METRIC_ACCUMULATION_LEVEL "NOPE": expected ALL_READS'),
     (["mark_duplicates", bm.step("alignment_summary", expected_pair_orientations=["UP"])],
      r'step 2 \(alignment-summary\): pair orientation "UP": expected FR, RF or TANDEM'),
+    ([bm.step("sequencing_artifact", context_size=99)],
+     r"step 1 \(sequencing-artifact\): CONTEXT_SIZE=99: too many contexts to count"),
+    ([bm.step("sequencing_artifact", maximum_insert_size=10)],
+     r"step 1 \(sequencing-artifact\): MAXIMUM_INSERT_SIZE cannot be less than"),
+    ([bm.step("quality_yield", flow_mode=True)],
+     r"step 1 \(quality-yield\): FLOW_MODE is obsolete"),
+    (["mark_duplicates", bm.step("gc_bias", scan_window_size=0)],
+     r"step 2 \(gc-bias\): SCAN_WINDOW_SIZE=0: a window holds at least 1 base"),
 ])
 def test_a_value_only_the_tool_can_judge_is_a_usage_error(tmp_path, steps, message):
     """In 0.22.0 the tap failed alone when it was built: an InputError
     after the other steps had run."""
     with pytest.raises(bm.UsageError, match=message):
-        bm.chain(MARKDUP, steps, output=tmp_path / "made" / "s")
+        bm.chain(MARKDUP, steps, reference=REFERENCE, output=tmp_path / "made" / "s")
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a_window_under_one_base_is_a_usage_error(tmp_path):
+    """SCAN_WINDOW_SIZE=0 was a division by zero: a panic, not an exception."""
+    with pytest.raises(bm.UsageError, match="SCAN_WINDOW_SIZE=0: a window holds at least 1 base"):
+        bm.collect_gc_bias_metrics(BAM, output=tmp_path / "gc.txt", scan_window_size=0,
+                                   summary_output=tmp_path / "s.txt", reference_sequence=REFERENCE)
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("call", [
+    lambda out: bm.qc(BAM, output=out),
+    lambda out: bm.collect(BAM, metrics=["insert-size"], output=out),
+], ids=["qc", "collect-verbs"])
+def test_a_prefix_through_a_missing_directory_and_back_is_refused(tmp_path, call):
+    with pytest.raises(bm.UsageError, match=r"does not exist, so the \.\. behind it"):
+        call(tmp_path / "missing" / ".." / "q")
     assert list(tmp_path.iterdir()) == []
 
 

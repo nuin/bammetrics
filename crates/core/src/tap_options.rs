@@ -10,7 +10,12 @@
 //! that does not parse) is still found when the tap is built.
 //!
 //! Each row calls the parser the tool's own `collector` calls, so the two
-//! cannot disagree. No row opens a file.
+//! cannot disagree. No row opens a file. A row also runs what the tool
+//! checks without a header after parsing: `FLOW_MODE=true`
+//! (`quality_yield::checked_options`), and for
+//! `CollectSequencingArtifactMetrics` the stand-alone validation and the
+//! context count (`CONTEXT_SIZE=99`, `MINIMUM_INSERT_SIZE=-1`), which the
+//! verb runs in `run_tool` and the collector alone does not.
 
 use crate::error::Result;
 use crate::registry::{Invocation, Tool};
@@ -53,13 +58,13 @@ const CHECKS: &[(&str, Check)] = &[
         quality_score_distribution::Options::from_invocation(inv).map(drop)
     }),
     (quality_yield::TOOL.name, |inv| {
-        quality_yield::Options::from_invocation(inv).map(drop)
+        quality_yield::checked_options(inv).map(drop)
     }),
     (rna_seq_metrics::TOOL.name, |inv| {
         rna_seq_metrics::Options::from_invocation(inv).map(drop)
     }),
     (sequencing_artifact::TOOL.name, |inv| {
-        sequencing_artifact::Options::from_invocation(inv).map(drop)
+        sequencing_artifact::Options::from_invocation(inv)?.check()
     }),
     (sex_check::TOOL.name, |inv| {
         sex_check::Options::from_invocation(inv).map(drop)
@@ -103,7 +108,49 @@ mod tests {
 
     #[test]
     fn a_value_only_the_tool_can_judge_is_a_usage_error_without_a_bam() {
-        let cases: [(&Tool, &[&str], &str); 4] = [
+        const ARTIFACT: [&str; 3] = ["I=no.bam", "O=no", "R=no.fa"];
+        let artifact = |option: &'static str| [&ARTIFACT[..], &[option]].concat();
+        let (too_many, negative) = (artifact("CONTEXT_SIZE=99"), artifact("CONTEXT_SIZE=-1"));
+        let (insert, order) = (
+            artifact("MINIMUM_INSERT_SIZE=-1"),
+            artifact("MAXIMUM_INSERT_SIZE=10"),
+        );
+        let cases: [(&Tool, &[&str], &str); 11] = [
+            (
+                &sequencing_artifact::TOOL,
+                &too_many,
+                "CONTEXT_SIZE=99: too many contexts to count",
+            ),
+            (
+                &sequencing_artifact::TOOL,
+                &negative,
+                "CONTEXT_SIZE cannot be negative",
+            ),
+            (
+                &sequencing_artifact::TOOL,
+                &insert,
+                "MINIMUM_INSERT_SIZE cannot be negative",
+            ),
+            (
+                &sequencing_artifact::TOOL,
+                &order,
+                "MAXIMUM_INSERT_SIZE cannot be less than MINIMUM_INSERT_SIZE",
+            ),
+            (
+                &quality_yield::TOOL,
+                &["I=no.bam", "FLOW_MODE=true"],
+                "FLOW_MODE is obsolete",
+            ),
+            (
+                &gc_bias::TOOL,
+                &["I=no.bam", "R=no.fa", "S=no.txt", "SCAN_WINDOW_SIZE=0"],
+                "SCAN_WINDOW_SIZE=0: a window holds at least 1 base",
+            ),
+            (
+                &gc_bias::TOOL,
+                &["I=no.bam", "R=no.fa", "S=no.txt", "WINDOW_SIZE=-5"],
+                "SCAN_WINDOW_SIZE=-5: a window holds at least 1 base",
+            ),
             (
                 &insert_size::TOOL,
                 &["I=no.bam", "METRIC_ACCUMULATION_LEVEL=NOPE"],
@@ -151,5 +198,16 @@ mod tests {
         check(&rna_seq_metrics::TOOL, &inv).expect("no file is opened");
         let inv = parsed(&duplicate_metrics::TOOL, &["I=no.bam"]);
         check(&duplicate_metrics::TOOL, &inv).expect("no option to parse");
+        // The largest context size counted, and the smallest window.
+        let inv = parsed(
+            &sequencing_artifact::TOOL,
+            &["I=no.bam", "O=no", "R=no.fa", "CONTEXT_SIZE=5"],
+        );
+        check(&sequencing_artifact::TOOL, &inv).expect("4^11 contexts are counted");
+        let inv = parsed(
+            &gc_bias::TOOL,
+            &["I=no.bam", "R=no.fa", "S=no.txt", "SCAN_WINDOW_SIZE=1"],
+        );
+        check(&gc_bias::TOOL, &inv).expect("a window of 1 base");
     }
 }

@@ -22,6 +22,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use bammetrics_core::cleanup::MadeDirs;
 use bammetrics_core::collect;
 use bammetrics_core::cram;
 use bammetrics_core::hs_metrics;
@@ -938,6 +939,13 @@ fn prefix(args: &QcArgs) -> Result<(PathBuf, Origin)> {
             prefix.display().to_string()
         )));
     }
+    // `missing/../q`: the run would make `missing` and write beside it.
+    if let Some(what) = crate::verbs::unresolved_output(&prefix) {
+        return Err(Error::Usage(format!(
+            "-o {what}; {}",
+            crate::verbs::UNRESOLVED_HINT
+        )));
+    }
     Ok((prefix, origin))
 }
 
@@ -1094,12 +1102,14 @@ pub fn page_path(prefix: &Path) -> PathBuf {
     with_suffix(prefix, ".report.html")
 }
 
-/// Create the prefix's directory.
-pub fn make_prefix_dir(prefix: &Path) -> Result<()> {
-    match prefix.parent().filter(|d| !d.as_os_str().is_empty()) {
-        Some(dir) => fs::create_dir_all(dir).map_err(|e| Error::io(dir, e)),
-        None => Ok(()),
-    }
+/// Create the prefix's directory. The directories made come back: dropped
+/// by a run that fails, those still empty are removed; a run that finishes
+/// calls `keep`.
+pub fn make_prefix_dir(prefix: &Path) -> Result<MadeDirs> {
+    let mut made = MadeDirs::default();
+    made.create_parent(prefix)
+        .map_err(|e| Error::io(prefix.parent().unwrap_or(prefix), e))?;
+    Ok(made)
 }
 
 #[cfg(test)]

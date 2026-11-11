@@ -242,16 +242,19 @@ bammetrics chain: step 1 (write): out/x.sam: bammetrics writes BAM only: SAM out
 What is checked before the first read: the step name, every option name, every value of
 an int or float option, required options, files a step reads, `STOP_AFTER`, every option
 of `mark-duplicates` (`stage::check_stage_options`), the names and the writability of
-every output. Section 2.6 adds five checks.
+every output. Section 2.6 adds six checks.
 
 ### 2.6 More that is refused before the first read
 
-The 0.22.0 release review found these. Tests: `crates/cli/tests/chain_safety.rs` (7
-tests), `tests/python/test_chain_safety.py` and 8 golden records.
+The 0.22.0 release review found these. Tests: `crates/cli/tests/chain_safety.rs` (10
+tests), `tests/python/test_chain_safety.py` and 13 golden records. The tests show "before
+the first read" on a source cut after 150 bytes: its header block is whole, the block of
+its records is not, and a run that reads it exits 1 with `truncated BAM`.
 
 | What | The message says | Exit |
 |---|---|---|
 | A text value only the tool can judge on a tap (`--level NOPE`, `--expected-sex NOPE`) | The tool's own words under the step's label: `step 2 (insert-size): METRIC_ACCUMULATION_LEVEL "NOPE": expected ALL_READS, SAMPLE, LIBRARY or READ_GROUP` | 2 |
+| A number the tool refuses without a header (`sequencing-artifact --context-size 99`, `--maximum-insert-size 10`, `gc-bias --scan-window-size 0`, `quality-yield --flow-mode`) | The tool's own words: `step 1 (sequencing-artifact): CONTEXT_SIZE=99: too many contexts to count` | 2 |
 | `--threads` over 256, or `threads` over 256 in a plan file | `100000000 is more than the maximum of 256 threads` | 2 |
 | An output through a directory that does not exist with a `..` behind it (`missing/../in.bam`) | `missing does not exist, so the .. behind it names no directory` | 2 |
 | A plan file over 1 MiB (1,048,576 bytes) | `not a plan file: it is larger than 1 MiB` | 2 |
@@ -267,6 +270,20 @@ with exit 1: a sort order it requires (`--no-assume-sorted` on a queryname strea
 interval list with a contig the header lacks. The reason: the header of a piped source
 can be read once, and the header behind a transform exists only after the transform ran.
 
+Three rows run more than the parser, because the tool checks more without a header.
+`sequencing-artifact` runs the stand-alone validation (`CONTEXT_SIZE` and the insert
+sizes not negative, the maximum not under the minimum, each `CONTEXTS_TO_PRINT` of the
+implied length) and the context count (at most 4^11, `CONTEXT_SIZE` 5). The verb ran
+both in `run_tool`. The collector a chain builds ran the count alone, when the tap was
+built (exit 1), and never the validation: `chain ... + sequencing-artifact
+--maximum-insert-size 10` wrote its five files where the verb exits 2.
+`CollectMultipleMetrics` still skips the validation, as Picard does. `quality-yield
+--flow-mode` is refused by `quality_yield::checked_options`, which the collector calls
+too. `gc-bias --scan-window-size` under 1 is refused by the option parser: 0 was a
+division by zero and a negative window an index past the contig, a panic with exit 101
+on the verb, the Picard face and the chain. Picard 3.5.0 throws on both
+(`tests/concordance/test_gc_bias.py::test_a_window_under_one_base_fails`).
+
 Threads. `pass::check_threads` is the one check and `pass::MAX_THREADS` is 256. Every
 place that parses a thread count asks it: the tool verbs, `chain`, the plan file, `qc`,
 `plan`, `collect`, `threads=` on the Picard face (exit 1 there, as every error of that
@@ -281,7 +298,10 @@ names no file before the run and names `in.bam` once `missing` is made, so neith
 one-file-twice check nor the input check saw the file. In 0.22.0 `write missing/../in.bam`
 failed at write time with exit 1 and left `missing/` behind, and a tap with that `-o`
 replaced the source BAM with its metrics file. The tool verbs had the same hole
-(`insert-size in.bam -o missing/../in.bam`) and refuse the path with the same words. A
+(`insert-size in.bam -o missing/../in.bam`) and refuse the path with the same words.
+`qc`, `plan`, `collect` and the Python `qc` and `collect(metrics=[...])` refuse such a
+prefix too (`qc in.bam -o missing/../q`). Their extensions are fixed, so no input could
+be overwritten: the run wrote `q.*` and left `missing/` empty. A
 `..` behind a directory that exists resolves and is checked as any spelling. Two
 spellings of one new file under a directory that does not exist yet (`link/new/a.txt`
 and `new/a.txt`, `link` leading to the working directory) are one file: the deepest
@@ -291,6 +311,9 @@ Directories. `cleanup::MadeDirs` records each directory the run makes above an o
 run that ends with exit 1, before the first read or after it, removes those that are
 still empty, deepest first. A directory that was there before, or that holds a file,
 stays. A signal removes them under the same rule. A run that finishes keeps every one.
+The tool verbs, `collect` and `qc` hold a `MadeDirs` too: one that fails on its read
+(`insert-size cut.bam -o made/deeper/x.txt`) leaves no `made/`. The Picard face makes no
+directory.
 
 Files read whole. `crates/cli/src/chain` reads two files whole, each through
 `chain::read_capped`, which stops one byte past its cap. The plan file holds at most

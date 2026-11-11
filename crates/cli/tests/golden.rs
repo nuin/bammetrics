@@ -188,6 +188,10 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_verb_threads_maximum", "insert-size", "IS", "--threads", "100000000"),
     case!("error_picard_threads_maximum", "CollectInsertSizeMetrics", "I=IS", "threads=100000000"),
     case!("error_verb_output_through_missing_directory", "insert-size", "IS", "-o", "OUT/missing/../x.txt"),
+    // The same path rule on a prefix, and a window of no base (a panic before).
+    case!("error_qc_output_through_missing_directory", "qc", "IS", "-o", "OUT/missing/../q"),
+    case!("error_collect_output_through_missing_directory", "collect", "IS", "-o", "OUT/missing/../q"),
+    case!("error_verb_scan_window_size", "gc-bias", "IS", "-R", "REF", "-o", "OUT/s", "--scan-window-size", "0"),
     case!("error_qc_no_bam", "qc"),
     case!("error_check_bad_fail_on", "check", "PICARD", "--fail-on", "bad"),
     // Documented error paths.
@@ -439,6 +443,9 @@ const CHAIN_CASES: &[Case] = &[
     case!("error_chain_threads_maximum", "chain", "IS", "--threads", "100000000", "+", "insert-size"),
     case!("error_chain_tap_level", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "+", "insert-size", "--level", "NOPE"),
     case!("error_chain_output_through_missing_directory", "chain", "IS", "+", "write", "OUT/missing/../x.bam"),
+    // A number the tool refuses without a header, and a check only the stand-alone tool ran.
+    case!("error_chain_tap_context_size", "chain", "MD", "-R", "REF", "-o", "OUT/s", "+", "mark-duplicates", "+", "sequencing-artifact", "--context-size", "99"),
+    case!("error_chain_tap_insert_sizes", "chain", "ART", "-R", "REF", "-o", "OUT/s", "+", "sequencing-artifact", "--maximum-insert-size", "10"),
     case!("error_chain_missing_required", "chain", "IS", "+", "hs-metrics", "--baits", "IL"),
     case!("error_chain_transform_output", "chain", "MD", "+", "mark-duplicates", "-o", "OUT/x.bam"),
     case!("error_chain_transform_option", "chain", "MD", "+", "mark-duplicates", "--tagging-policy", "Some"),

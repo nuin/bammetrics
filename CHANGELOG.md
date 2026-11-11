@@ -5,7 +5,7 @@
 ### Fixed
 
 Six findings of the 0.22.0 release review, and one more found on the way (docs/chaining.md
-section 2.6; `crates/cli/tests/chain_safety.rs`, `tests/python/test_chain_safety.py`, 8
+section 2.6; `crates/cli/tests/chain_safety.rs`, `tests/python/test_chain_safety.py`, 13
 golden records). No Picard file, no `qc` output and no earlier golden record changed.
 
 - A chain output that is a symbolic link another user owns is refused before the first
@@ -32,6 +32,19 @@ golden records). No Picard file, no `qc` output and no earlier golden record cha
   the first read (exit 2, `UsageError` in Python), as on the tool's verb. 0.22.0 failed
   the tap when it was built and exited 1. `tap_options::check` runs the option parser of
   each of the 13 one-pass tools without a header.
+- A number the tool refuses without a header is a usage error on a chain before the first
+  read too: `sequencing-artifact --context-size 99` or `-1` (exit 1 when the tap was
+  built) and `quality-yield --flow-mode` (the same). A `sequencing-artifact` step runs the
+  validation of the stand-alone tool: `--maximum-insert-size 10`, a negative insert size
+  and a `CONTEXTS_TO_PRINT` of the wrong length exit 2, where the chain wrote its five
+  files or failed on a later error.
+- `gc-bias --scan-window-size 0` (`SCAN_WINDOW_SIZE=0`) and a negative window are a usage
+  error: `a window holds at least 1 base`. Both were a panic with exit 101 on the verb,
+  the Picard face and the chain. Picard 3.5.0 throws on both.
+- `qc`, `plan` and `collect` refuse a prefix through a directory that does not exist with
+  a `..` behind it (`-o missing/../q`, exit 2). They wrote `q.*` and left `missing/`.
+- A tool verb, `collect` and `qc` that fail remove the output directories they made that
+  are still empty, as a chain does.
 
 ### Changed
 

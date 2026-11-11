@@ -1,5 +1,5 @@
 //! What `bammetrics chain` refuses before its first read, from the 0.22.0
-//! release review (docs/chaining.md section 2.5):
+//! release review (docs/chaining.md section 2.6):
 //!
 //! * an output that is a symbolic link another user owns, with the refusal
 //!   and the exit code of the tool verb;
@@ -7,12 +7,15 @@
 //!   behind it, which would name an input once the directory is made;
 //! * a plan file over 1 MiB;
 //! * a thread count over 256, on every command that takes one;
-//! * a text value only the tool can judge (`--level NOPE`).
+//! * a text value only the tool can judge (`--level NOPE`), and a number
+//!   it refuses without a header (`--context-size 99`).
 //!
-//! And what a failed run leaves: no directory it made and left empty.
+//! And what a failed run leaves: no directory it made and left empty. `qc`,
+//! `plan`, `collect` and the tool verbs follow the same two path rules.
 //!
-//! "Before the first read" is shown with a source cut after 100 bytes: a
-//! run that read it would fail with a read error in place of the refusal.
+//! "Before the first read" is shown with a source cut after 150 bytes: a
+//! run that read it fails with a read error in place of the refusal
+//! (`the_cut_source_fails_when_it_is_read`).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -72,13 +75,35 @@ fn text(path: &Path) -> String {
     path.display().to_string()
 }
 
-/// The first 100 bytes of the fixture BAM under `dir`: its magic is whole,
-/// its first record is not.
+/// The first 150 bytes of the fixture BAM under `dir`: its header block
+/// (92 bytes) is whole, the block of its records is not. A cut inside the
+/// 18 bytes that start a block (93 to 109) reads as the end of the file.
 fn cut_bam(dir: &Path) -> String {
     let bytes = fs::read(root().join(BAM)).expect("fixture");
     let path = dir.join("cut.bam");
-    fs::write(&path, &bytes[..100]).expect("cut");
+    fs::write(&path, &bytes[..150]).expect("cut");
     text(&path)
+}
+
+/// The premise of every "before the first read" test here: a run that
+/// reads the cut source fails on it.
+#[test]
+fn the_cut_source_fails_when_it_is_read() {
+    let dir = fresh_dir("cut");
+    let cut = cut_bam(&dir);
+    let out = text(&dir.join("qy.txt"));
+    let truncated = format!("{cut}: truncated BAM: the file ends inside a record or a block");
+    let (code, stderr) = run(&["quality-yield", &cut, "-o", &out]);
+    assert_eq!(stderr, format!("bammetrics quality-yield: {truncated}\n"));
+    assert_eq!(code, Some(1));
+    let (code, stderr) = run(&["chain", &cut, "+", "quality-yield", "-o", &out]);
+    assert!(
+        stderr.starts_with(&format!("bammetrics chain: {truncated}")),
+        "{stderr}"
+    );
+    assert_eq!(code, Some(1));
+    assert_eq!(names(&dir), ["cut.bam"]);
+    fs::remove_dir_all(&dir).expect("cleanup");
 }
 
 /// A symbolic link on this machine that another user owns (`/etc` on
@@ -566,7 +591,46 @@ fn a_value_only_the_tool_can_judge_exits_2_before_the_first_read() {
     let dir = fresh_dir("values");
     let cut = cut_bam(&dir);
     let prefix = text(&dir.join("made/s"));
-    let cases: [(&str, &[&str], &str); 4] = [
+    const REF: &str = "tests/data/ref_100k.fa";
+    let cases: [(&str, &[&str], &str); 11] = [
+        // A number the tool refuses without a header, and the checks the
+        // stand-alone tool runs before it opens its BAM.
+        (
+            "sequencing-artifact",
+            &["-R", REF, "--context-size", "99"],
+            "CONTEXT_SIZE=99: too many contexts to count",
+        ),
+        (
+            "sequencing-artifact",
+            &["-R", REF, "--context-size", "-1"],
+            "CONTEXT_SIZE cannot be negative",
+        ),
+        (
+            "sequencing-artifact",
+            &["-R", REF, "--minimum-insert-size", "-1"],
+            "MINIMUM_INSERT_SIZE cannot be negative",
+        ),
+        (
+            "sequencing-artifact",
+            &["-R", REF, "--maximum-insert-size", "10"],
+            "MAXIMUM_INSERT_SIZE cannot be less than MINIMUM_INSERT_SIZE unless set to 0",
+        ),
+        (
+            "quality-yield",
+            &["--flow-mode"],
+            "FLOW_MODE is obsolete; Picard moved flow support to CollectQualityYieldMetricsFlow",
+        ),
+        // Both were a panic (exit 101) on the verb and on the chain.
+        (
+            "gc-bias",
+            &["-R", REF, "--scan-window-size", "0"],
+            "SCAN_WINDOW_SIZE=0: a window holds at least 1 base",
+        ),
+        (
+            "gc-bias",
+            &["-R", REF, "--scan-window-size", "-5"],
+            "SCAN_WINDOW_SIZE=-5: a window holds at least 1 base",
+        ),
         (
             "insert-size",
             &["--level", "NOPE"],
@@ -613,5 +677,97 @@ fn a_value_only_the_tool_can_judge_exits_2_before_the_first_read() {
         }
     }
     assert_eq!(names(&dir), ["cut.bam"]);
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+/// `qc`, `plan` and `collect` refuse a prefix through a directory that
+/// does not exist with a `..` behind it, as the tool verbs and `chain` do:
+/// exit 2, and `missing` is not made.
+#[test]
+fn qc_plan_and_collect_refuse_a_prefix_through_a_missing_directory() {
+    let dir = fresh_dir("prefix");
+    let prefix = text(&dir.join("missing/../q"));
+    let missing = text(&dir.join("missing"));
+    let what =
+        format!("{prefix}: {missing} does not exist, so the .. behind it names no directory");
+    let hint = "name the output without the ..: a run makes the directories that are missing";
+    for verb in ["qc", "plan"] {
+        let (code, stderr) = run(&[verb, BAM, "-o", &prefix]);
+        assert_eq!(stderr, format!("bammetrics {verb}: -o {what}; {hint}\n"));
+        assert_eq!(code, Some(2));
+    }
+    // `-o DIR/` puts the BAM's name behind the directory.
+    let (code, stderr) = run(&["qc", BAM, "-o", &text(&dir.join("missing/../"))]);
+    assert!(
+        stderr.contains("does not exist, so the .. behind it names no directory"),
+        "{stderr}"
+    );
+    assert_eq!(code, Some(2));
+    let (code, stderr) = run(&["collect", BAM, "-o", &prefix]);
+    assert_eq!(
+        stderr,
+        format!("bammetrics collect: {what} (from -o)\n  {hint}\n")
+    );
+    assert_eq!(code, Some(2));
+    assert!(names(&dir).is_empty());
+    // A `..` behind a directory that exists is a prefix as any other.
+    fs::create_dir(dir.join("there")).expect("dir");
+    let resolved = text(&dir.join("there/../q"));
+    let (code, stderr) = run(&["collect", BAM, "-o", &resolved]);
+    assert_eq!(code, Some(0), "{stderr}");
+    let written = names(&dir);
+    assert!(written.contains(&"q.quality_yield_metrics".to_owned()));
+    assert!(
+        written.iter().all(|n| n == "there" || n.starts_with("q.")),
+        "{written:?}"
+    );
+    assert!(names(&dir.join("there")).is_empty());
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+/// A tool verb, `collect` and `qc` that fail on their read remove the
+/// directories they made and left empty, as a chain does. A run that
+/// finishes keeps them.
+#[test]
+fn a_failed_verb_leaves_no_directory_it_made_empty() {
+    let dir = fresh_dir("verb-dirs");
+    let cut = cut_bam(&dir);
+    let file = text(&dir.join("made/deeper/x.txt"));
+    let prefix = text(&dir.join("made/deeper/s"));
+    // `mark-duplicates` reads raw records and names the cut in its own words.
+    let cases: [(&[&str], &str); 4] = [
+        (&["insert-size", &cut, "-o", &file], "truncated BAM"),
+        (
+            &[
+                "mark-duplicates",
+                &cut,
+                "-o",
+                &file,
+                "--metrics-file",
+                &prefix,
+            ],
+            "bad record: failed to fill whole buffer",
+        ),
+        (&["collect", &cut, "-o", &prefix], "truncated BAM"),
+        (&["qc", &cut, "-o", &prefix], "truncated BAM"),
+    ];
+    for (args, what) in cases {
+        let (code, stderr) = run(args);
+        assert_eq!(code, Some(1), "{args:?}: {stderr}");
+        assert!(stderr.contains(what), "{args:?}: {stderr}");
+        assert_eq!(names(&dir), ["cut.bam"], "{args:?}");
+    }
+    // A directory that was there stays, empty as it was.
+    fs::create_dir(dir.join("old")).expect("old");
+    let (code, stderr) = run(&["insert-size", &cut, "-o", &text(&dir.join("old/new/x.txt"))]);
+    assert_eq!(code, Some(1), "{stderr}");
+    assert_eq!(names(&dir), ["cut.bam", "old"]);
+    assert!(names(&dir.join("old")).is_empty());
+    let (code, stderr) = run(&["insert-size", BAM, "-o", &file]);
+    assert_eq!(code, Some(0), "{stderr}");
+    assert_eq!(names(&dir.join("made/deeper")), ["x.txt"]);
+    let (code, stderr) = run(&["collect", BAM, "-o", &text(&dir.join("kept/s"))]);
+    assert_eq!(code, Some(0), "{stderr}");
+    assert!(!names(&dir.join("kept")).is_empty());
     fs::remove_dir_all(&dir).expect("cleanup");
 }

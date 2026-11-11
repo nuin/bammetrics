@@ -15,10 +15,10 @@
 //! value.
 
 use std::ffi::OsString;
-use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+use bammetrics_core::cleanup::MadeDirs;
 use bammetrics_core::fifo_buffer;
 use bammetrics_core::multiple_metrics::file_extensions;
 use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
@@ -667,8 +667,11 @@ impl Verb {
         self.refuse_one_file_twice(&inv, output.as_deref())?;
         // The last usage error, so none leaves a directory it made.
         inv.threads = self.threads(&parsed)?;
+        // Dropped by an error below, `made` removes the directories the
+        // run made that are still empty.
+        let mut made = MadeDirs::default();
         if let Some(path) = &output {
-            create_parent(self.name, path).map_err(|e| with_from(e, output_flag()))?;
+            create_parent(self.name, &mut made, path).map_err(|e| with_from(e, output_flag()))?;
         }
         if let Some(header) = self.header {
             inv.command = header(&inv).map_err(core)?;
@@ -738,6 +741,7 @@ impl Verb {
                 eprintln!("bammetrics {}: wrote {}", self.name, path.display());
             }
         }
+        made.keep();
         Ok(status)
     }
 
@@ -1441,13 +1445,13 @@ fn same_file_key(path: &Path) -> PathBuf {
 }
 
 /// Create the directories above `path` that do not exist (docs/05 section
-/// 2.3: missing output directories are created).
-pub(crate) fn create_parent(verb: &str, path: &Path) -> Result<(), VerbError> {
-    match path.parent() {
-        Some(parent) if !parent.as_os_str().is_empty() => fs::create_dir_all(parent)
-            .map_err(|e| VerbError::input(verb, format!("{}: {e}", parent.display()))),
-        _ => Ok(()),
-    }
+/// 2.3: missing output directories are created). `made` records them, so a
+/// run that fails removes those it left empty.
+pub(crate) fn create_parent(verb: &str, made: &mut MadeDirs, path: &Path) -> Result<(), VerbError> {
+    made.create_parent(path).map_err(|e| {
+        let parent = path.parent().unwrap_or(path);
+        VerbError::input(verb, format!("{}: {e}", parent.display()))
+    })
 }
 
 /// `text` to `path` through a temporary file, as a core output error.

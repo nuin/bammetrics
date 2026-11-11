@@ -62,9 +62,17 @@ impl Options {
             Error::Usage("CollectGcBiasMetrics: REFERENCE_SEQUENCE is required".to_owned())
         })?;
         let _: f64 = inv.parse("MINIMUM_GENOME_FRACTION", 0.00001)?;
+        // Picard 3.5.0 throws on both: a division by zero at 0, an index
+        // past the contig below it.
+        let scan_window_size: i32 = inv.parse("SCAN_WINDOW_SIZE", 100)?;
+        if scan_window_size < 1 {
+            return Err(Error::Usage(format!(
+                "SCAN_WINDOW_SIZE={scan_window_size}: a window holds at least 1 base"
+            )));
+        }
         Ok(Self {
             reference: reference.into(),
-            scan_window_size: inv.parse::<i32>("SCAN_WINDOW_SIZE", 100)?.into(),
+            scan_window_size: scan_window_size.into(),
             bisulfite: inv.flag("IS_BISULFITE_SEQUENCED", false)?,
             also_ignore_duplicates: inv.flag("ALSO_IGNORE_DUPLICATES", false)?,
             levels: parse_levels(inv.all("METRIC_ACCUMULATION_LEVEL"))?,

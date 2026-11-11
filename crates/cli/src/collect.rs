@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use bammetrics_core::Error;
 use bammetrics_core::alignment_summary;
+use bammetrics_core::cleanup::MadeDirs;
 use bammetrics_core::collect::{self, Outputs, Request};
 use bammetrics_core::hs_metrics;
 use bammetrics_core::insert_size;
@@ -15,7 +16,10 @@ use bammetrics_core::registry::{Ty, did_you_mean};
 
 use crate::error::VerbError;
 use crate::grammar::{self, Flag, Key, Parsed};
-use crate::verbs::{option_lines, refuse_overwriting_inputs, shared_flags, stem};
+use crate::verbs::{
+    UNRESOLVED_HINT, create_parent, option_lines, refuse_overwriting_inputs, shared_flags, stem,
+    unresolved_output,
+};
 
 const VERB: &str = "collect";
 
@@ -241,6 +245,13 @@ pub fn run(args: &[String]) -> Result<u8, VerbError> {
             path
         }
     };
+    if let Some(what) = unresolved_output(&prefix) {
+        let error = VerbError::usage(VERB, what).hint(UNRESOLVED_HINT);
+        return Err(match parsed.last(Key::Output) {
+            Some(given) => error.from(given.spelled.clone()),
+            None => error,
+        });
+    }
     let threads = match parsed.last(Key::Threads) {
         None => pass::default_threads(),
         Some(given) => given.values[0]
@@ -291,11 +302,10 @@ pub fn run(args: &[String]) -> Result<u8, VerbError> {
             None => e,
         }
     })?;
-    // docs/05 section 2.3: missing output directories are created.
-    if let Some(parent) = prefix.parent().filter(|p| !p.as_os_str().is_empty()) {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| VerbError::input(VERB, format!("{}: {e}", parent.display())))?;
-    }
+    // docs/05 section 2.3: missing output directories are created. Dropped
+    // by an error below, `made` removes those still empty.
+    let mut made = MadeDirs::default();
+    create_parent(VERB, &mut made, &prefix)?;
     if parsed.flag(Key::Own("hs-per-base")) {
         for (opts, path) in request.hs_metrics.iter_mut().zip(&outputs.hs_metrics) {
             opts.per_base_coverage = Some(collect::per_base_coverage_path(path));
@@ -318,5 +328,6 @@ pub fn run(args: &[String]) -> Result<u8, VerbError> {
             format!("{} metric(s) failed", errors.len()),
         ));
     }
+    made.keep();
     Ok(0)
 }
