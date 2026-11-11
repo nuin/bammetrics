@@ -35,7 +35,8 @@
 //!   last 8 bytes and nowhere else.
 //!
 //! [`Indexer`] and [`index_bam`] live in `bai/indexer.rs`, the reader and
-//! the file layout here.
+//! the file layout here. `bai/header.rs` reads the BAM header for
+//! [`BamSource`]: a reference of length 0 is indexed, as Picard indexes it.
 //!
 //! # The offsets ([`index_bam`])
 //!
@@ -61,11 +62,13 @@
 
 use std::io::{self, Read, Write};
 
+mod header;
 mod indexer;
 #[cfg(test)]
 mod tests;
 
-pub use indexer::{Alignment, BamSource, Counts, Indexer, Refusal, index_bam, reference_lengths};
+pub use header::IndexHeader;
+pub use indexer::{Alignment, BamSource, Counts, Indexer, Refusal, index_bam};
 
 pub const MAGIC: [u8; 4] = *b"BAI\x01";
 

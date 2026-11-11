@@ -6,7 +6,9 @@
 //! `unsorted`, `unknown` and a header without the tag), reads every record
 //! and writes the `.bai` to `OUTPUT`. [`crate::bai`] holds the format and
 //! what htsjdk writes into it; the bytes are Picard's for the same BAM
-//! bytes.
+//! bytes. A reference of length 0 (`@SQ LN:0`) is indexed as Picard indexes
+//! it: [`crate::bai::IndexHeader`] reads the header, which noodles' own
+//! reader refuses.
 //!
 //! Without `OUTPUT`, Picard 3.5.0 writes into the current directory, under
 //! the file name of `INPUT`: `x.bai` for `dir/x.bam`, `NAME.bai` for any
@@ -42,7 +44,6 @@ use crate::bam_index_stats::{COLUMNS, Row, Stats};
 use crate::cleanup::AtomicFile;
 use crate::error::{Error, Result};
 use crate::metric::{MetricsOutput, ToolOutput};
-use crate::pass;
 use crate::registry::{self, Invocation, Opt, Tool};
 
 pub const TOOL: Tool = Tool {
@@ -134,7 +135,7 @@ pub fn build(input: &Path, output: &Path, threads: usize) -> Result<Stats> {
         )));
     }
     let source = BamSource::open(input, threads)?;
-    let order = pass::sort_order(source.header());
+    let order = &source.header().sort_order;
     if order != "coordinate" {
         return Err(Error::Metric(format!(
             "{}: Input bam file must be sorted by coordinate (its header says the sort order \
@@ -144,11 +145,11 @@ pub fn build(input: &Path, output: &Path, threads: usize) -> Result<Stats> {
     }
     let rows: Vec<Row> = source
         .header()
-        .reference_sequences()
+        .references
         .iter()
-        .map(|(name, reference)| Row {
-            name: name.to_string(),
-            length: usize::from(reference.length()) as i64,
+        .map(|(name, length)| Row {
+            name: name.clone(),
+            length: *length as i64,
             aligned: 0,
             unaligned: 0,
         })
@@ -188,6 +189,8 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
 
 #[cfg(test)]
 mod tests {
+    use noodles::bgzf;
+
     use super::*;
 
     #[test]
@@ -245,5 +248,98 @@ mod tests {
         }
         assert!(parse(&["O=y.bai"]).is_err(), "INPUT is required");
         assert!(parse(&["I=x.bam", "O=a", "O=b"]).is_err(), "one OUTPUT");
+    }
+
+    /// A scratch directory of this test, readable by this user only.
+    fn scratch(name: &str) -> PathBuf {
+        use std::os::unix::fs::DirBuilderExt;
+        let dir =
+            std::env::temp_dir().join(format!("bammetrics-index-{}-{name}", std::process::id()));
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&dir)
+            .expect("scratch dir");
+        dir
+    }
+
+    /// A coordinate-sorted BAM at `path`: the references, then the record
+    /// stream as given.
+    fn write_bam(path: &Path, references: &[(&str, u32)], records: &[u8]) {
+        let mut text = String::from("@HD\tVN:1.6\tSO:coordinate\n");
+        for (name, length) in references {
+            text.push_str(&format!("@SQ\tSN:{name}\tLN:{length}\n"));
+        }
+        let mut bytes = b"BAM\x01".to_vec();
+        bytes.extend_from_slice(&(text.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(text.as_bytes());
+        bytes.extend_from_slice(&(references.len() as u32).to_le_bytes());
+        for (name, length) in references {
+            bytes.extend_from_slice(&(name.len() as u32 + 1).to_le_bytes());
+            bytes.extend_from_slice(name.as_bytes());
+            bytes.push(0);
+            bytes.extend_from_slice(&length.to_le_bytes());
+        }
+        bytes.extend_from_slice(records);
+        let file = std::fs::File::create_new(path).expect("a new BAM");
+        // Stored blocks: two streams of one length take the same offsets.
+        let mut out = bgzf::io::writer::Builder::default()
+            .set_compression_level(bgzf::io::writer::CompressionLevel::NONE)
+            .build_from_writer(file);
+        out.write_all(&bytes).expect("write");
+        out.finish().expect("finish");
+    }
+
+    /// `count` mapped records of 50 bases on `reference`, 100 bases apart.
+    fn reads(reference: i32, count: i32) -> Vec<u8> {
+        let mut stream = Vec::new();
+        for i in 0..count {
+            crate::bam_raw::build("r", 0, reference, i * 100, &[(50, 0)], &[30; 50], b"")
+                .write_to(&mut stream)
+                .expect("memory");
+        }
+        stream
+    }
+
+    #[test]
+    fn a_reference_of_length_0_is_indexed() {
+        let dir = scratch("empty-reference");
+        let mut records = reads(0, 40);
+        records.extend(reads(2, 25));
+        // The same bytes but for one digit: the header noodles reads.
+        let (empty, one) = (dir.join("empty.bam"), dir.join("one.bam"));
+        write_bam(
+            &empty,
+            &[("a", 70_000), ("zero", 0), ("b", 9_000)],
+            &records,
+        );
+        write_bam(&one, &[("a", 70_000), ("zero", 1), ("b", 9_000)], &records);
+        let (empty_bai, one_bai) = (dir.join("empty.bai"), dir.join("one.bai"));
+        let stats = build(&empty, &empty_bai, 1).expect("Picard indexes LN:0");
+        build(&one, &one_bai, 1).expect("an index");
+        let rows: Vec<(&str, i64, i64)> = stats
+            .rows
+            .iter()
+            .map(|row| (row.name.as_str(), row.length, row.aligned))
+            .collect();
+        assert_eq!(rows, [("a", 70_000, 40), ("zero", 0, 0), ("b", 9_000, 25)]);
+        let index = std::fs::read(&empty_bai).expect("the index");
+        assert_eq!(index, std::fs::read(&one_bai).expect("the index"));
+        assert_eq!(&index[..8], b"BAI\x01\x03\0\0\0");
+        std::fs::remove_dir_all(&dir).expect("remove the scratch dir");
+    }
+
+    #[test]
+    fn a_block_size_past_the_file_is_a_truncated_bam_and_writes_nothing() {
+        let dir = scratch("block-size");
+        let mut records = reads(0, 3);
+        // A fourth record whose block_size claims 0xFFFFFF00 bytes.
+        records.extend_from_slice(&0xFFFF_FF00u32.to_le_bytes());
+        records.extend_from_slice(&[0u8; 100]);
+        let (bam, bai) = (dir.join("x.bam"), dir.join("x.bai"));
+        write_bam(&bam, &[("a", 70_000)], &records);
+        let error = build(&bam, &bai, 1).expect_err("the record is cut");
+        assert!(error.to_string().contains("truncated BAM"), "{error}");
+        assert_eq!(std::fs::read_dir(&dir).expect("list").count(), 1);
+        std::fs::remove_dir_all(&dir).expect("remove the scratch dir");
     }
 }

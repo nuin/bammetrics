@@ -7,8 +7,9 @@ use std::io::{self, BufRead, Read, Write};
 use std::num::NonZero;
 use std::path::{Path, PathBuf};
 
-use noodles::{bam, bgzf, sam};
+use noodles::bgzf;
 
+use super::header::IndexHeader;
 use super::{
     Chunk, FIRST_LEAF_BIN, MAX_POSITION, Metadata, WINDOW_SHIFT, write_bin, write_count,
     write_head, write_metadata,
@@ -279,15 +280,6 @@ impl Building {
     }
 }
 
-/// The header's sequence dictionary as the lengths [`Indexer::new`] takes.
-pub fn reference_lengths(header: &sam::Header) -> Vec<usize> {
-    header
-        .reference_sequences()
-        .values()
-        .map(|reference| usize::from(reference.length()))
-        .collect()
-}
-
 /// htsjdk `BAMIndexer`: alignments in file order in, the `.bai` bytes out.
 /// Each reference is written when the first record of a later one arrives,
 /// so memory holds one reference's bins.
@@ -380,7 +372,7 @@ impl<W: Write> Indexer<W> {
 /// A BAM opened for indexing: its header read, its records not yet.
 pub struct BamSource {
     path: PathBuf,
-    header: sam::Header,
+    header: IndexHeader,
     reader: bgzf::io::MultithreadedReader<Box<dyn Read + Send>>,
 }
 
@@ -403,20 +395,17 @@ impl BamSource {
         }
         let workers = NonZero::new(threads).unwrap_or(NonZero::<usize>::MIN);
         let inner: Box<dyn Read + Send> = Box::new(sniffed.reader);
-        let mut reader = bam::io::Reader::from(bgzf::io::MultithreadedReader::with_worker_count(
-            workers, inner,
-        ));
-        let header = reader
-            .read_header()
-            .map_err(|e| input(cram::bam_header_error(e)))?;
+        let mut reader = bgzf::io::MultithreadedReader::with_worker_count(workers, inner);
+        let header =
+            IndexHeader::read(&mut reader).map_err(|e| input(cram::bam_header_error(e)))?;
         Ok(Self {
             path: path.to_path_buf(),
             header,
-            reader: reader.into_inner(),
+            reader,
         })
     }
 
-    pub fn header(&self) -> &sam::Header {
+    pub fn header(&self) -> &IndexHeader {
         &self.header
     }
 
@@ -429,7 +418,7 @@ impl BamSource {
             path: target.to_path_buf(),
             source,
         };
-        let mut indexer = Indexer::new(out, reference_lengths(&self.header)).map_err(written)?;
+        let mut indexer = Indexer::new(out, self.header.lengths()).map_err(written)?;
         let mut record = RawRecord::default();
         loop {
             // The offset before a record is where its first byte is: an

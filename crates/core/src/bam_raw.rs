@@ -23,6 +23,31 @@ pub fn header_text(header: &noodles::sam::Header) -> io::Result<String> {
     String::from_utf8(writer.into_inner()).map_err(|e| invalid(&e.to_string()))
 }
 
+/// The most a buffer grows ahead of the bytes read into it.
+const READ_STEP: usize = 1 << 20;
+
+/// Append the next `size` bytes of `reader` to `buf`. `size` comes from a
+/// length field of the file, which can claim 4 GiB in a file of 200 bytes:
+/// the buffer grows one [`READ_STEP`] at a time, so it holds the bytes the
+/// stream gave and at most one step more. A stream that ends first is an
+/// `UnexpectedEof`.
+pub(crate) fn read_append<R: Read + ?Sized>(
+    reader: &mut R,
+    buf: &mut Vec<u8>,
+    size: usize,
+) -> io::Result<()> {
+    let end = buf
+        .len()
+        .checked_add(size)
+        .ok_or_else(|| invalid("longer than memory addresses"))?;
+    while buf.len() < end {
+        let filled = buf.len();
+        buf.resize(end.min(filled + READ_STEP), 0);
+        reader.read_exact(&mut buf[filled..])?;
+    }
+    Ok(())
+}
+
 /// One BAM alignment record without its `block_size`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RawRecord {
@@ -74,8 +99,7 @@ impl RawRecord {
         }
         let size = u32::from_le_bytes(size) as usize;
         self.buf.clear();
-        self.buf.resize(size, 0);
-        reader.read_exact(&mut self.buf)?;
+        read_append(reader, &mut self.buf, size)?;
         self.check()?;
         Ok(true)
     }
@@ -530,6 +554,48 @@ mod tests {
         assert!(back.read_from(&mut out.as_slice()).expect("read"));
         assert_eq!(back, record);
         assert!(!back.read_from(&mut [].as_slice()).expect("end"));
+    }
+
+    #[test]
+    fn a_block_size_the_stream_does_not_back_costs_one_step() {
+        // block_size 0xFFFFFF00, then the 100 bytes the file holds.
+        let mut stream = 0xFFFF_FF00u32.to_le_bytes().to_vec();
+        stream.extend_from_slice(&[0u8; 100]);
+        let mut record = RawRecord::default();
+        let error = record
+            .read_from(&mut stream.as_slice())
+            .expect_err("the stream ends inside the record");
+        assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+        assert!(
+            record.buf.capacity() <= 2 * READ_STEP,
+            "{} bytes held for a 100-byte stream",
+            record.buf.capacity()
+        );
+    }
+
+    #[test]
+    fn a_record_longer_than_one_step_is_read_whole() {
+        let quals = vec![30u8; 2 * READ_STEP + 17];
+        let record = build("long", 4, -1, -1, &[], &quals, b"");
+        let mut stream = Vec::new();
+        record.write_to(&mut stream).expect("write");
+        record.write_to(&mut stream).expect("write");
+        let mut reader = stream.as_slice();
+        let mut back = RawRecord::default();
+        for _ in 0..2 {
+            assert!(back.read_from(&mut reader).expect("read"));
+            assert_eq!(back, record);
+        }
+        assert!(!back.read_from(&mut reader).expect("end"));
+    }
+
+    #[test]
+    fn read_append_keeps_what_the_buffer_held() {
+        let mut buf = b"head".to_vec();
+        read_append(&mut b"abcdef".as_slice(), &mut buf, 4).expect("read");
+        assert_eq!(buf, b"headabcd");
+        let short = read_append(&mut b"xy".as_slice(), &mut buf, 3).expect_err("two bytes left");
+        assert_eq!(short.kind(), io::ErrorKind::UnexpectedEof);
     }
 
     #[test]

@@ -267,8 +267,8 @@ What tier B still proves, and what it does not:
 A `.bai` is tier A for a given BAM. `tests/concordance/test_build_bam_index.py` runs
 `BuildBamIndex` through both tools on the same file and compares the two indexes with
 `==` on their bytes: the six coordinate-sorted BAMs of `tests/data`, the foundation
-corpus, every coordinate-sorted tier BAM (t0 to t3), the exome slice and 23 BAMs that
-`index_bams.py` writes byte by byte. 100 tests, 64 indexes compared.
+corpus, every coordinate-sorted tier BAM (t0 to t3), the exome slice and 26 BAMs that
+`index_bams.py` writes byte by byte. 107 tests, 68 indexes compared.
 
 `index_bams.py` packs each record with `struct` and each BGZF block with `zlib`, because
 an index depends on where the blocks end and pysam and samtools choose that themselves.
@@ -278,7 +278,8 @@ chunk over the module), a wrong bin field in every record, placed unmapped reads
 on the edges of the 16384-base windows, unplaced reads only, no record, no reference,
 references without reads before, between and after the one with reads, a reference of
 2^29 + 40000 bases with reads up to position 2^29, a bin of each of the six levels, a
-file without its EOF block.
+file without its EOF block, a reference of length 0 (last, between two references with
+reads, alone).
 
 What running Picard 3.5.0 showed, each pinned by a test:
 
@@ -288,7 +289,7 @@ What running Picard 3.5.0 showed, each pinned by a test:
    `INPUT`. The help says beside the BAM (`test_default_output_name`).
 3. At the default `VALIDATION_STRINGENCY=STRICT` Picard refuses the foundation corpus (a
    supplementary flag on an unmapped read). The corpora run with `SILENT` on both sides,
-   as in every other module. The two `lenient` BAMs show that bammetrics, which
+   as in every other module. The three `lenient` BAMs show that bammetrics, which
    validates nothing, writes the index Picard writes under `SILENT`.
 4. An end past position 2^29 is `Read position too high for BAI bin indexing.`, so no
    bin above 37448 and no window above 32767 is ever written.
@@ -299,12 +300,23 @@ What running Picard 3.5.0 showed, each pinned by a test:
    last block; `BuildBamIndex` of that BAM ends it at `8375239:0`, the EOF block. A BAM
    that ends with unplaced reads shows no difference
    (`test_index_and_md5_beside_the_output`).
+7. htsjdk reads a header with `@SQ LN:0` and Picard indexes the file. noodles holds a
+   length as a non-zero number and its header reader refuses it, so `bai/header.rs`
+   reads the header for `BuildBamIndex` (`empty_reference_between`,
+   `empty_reference_last`, `empty_reference_only`). Picard at `STRICT` refuses a record
+   placed on such a reference and indexes it under `SILENT`, as bammetrics does
+   (`records_on_an_empty_reference`). samtools 1.x prints no header with `LN:0` and
+   finds no region of the file; `samtools idxstats` reads the bammetrics index.
 
-15 BAMs both tools refuse (`index_bams.refused`): each of the five headers that are not
+16 BAMs both tools refuse (`index_bams.refused`): each of the five headers that are not
 `SO:coordinate`, references out of order, five alignments past 2^29, a position without
-a reference, a start past the reference, a reference the header lacks, a truncated file.
-Picard leaves an empty `OUTPUT`; bammetrics leaves none and keeps the file that was
-there.
+a reference, a start past the reference, a reference the header lacks, a truncated file,
+a record whose `block_size` is 0xFFFFFF00 in a file of 227 bytes (Picard: `Invalid
+record length: -256`; bammetrics: `truncated BAM`). Picard leaves an empty `OUTPUT`;
+bammetrics leaves none and keeps the file that was there.
+`test_a_block_size_past_the_file_costs_the_bytes_present` runs `build-bam-index`,
+`mark-duplicates` and `chain + write --index` on that file and fails above 64 MiB of
+peak RSS: each takes 5 MiB. A buffer of `block_size` bytes took 4.3 GB.
 
 samtools reads each index as its own (`cross_check`): `samtools idxstats` and `samtools
 view -c` on four regions per reference give the same numbers through the bammetrics

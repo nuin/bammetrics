@@ -35,6 +35,8 @@ SMALL = [("chr1", 100_000), ("chr2", 50_000), ("chr3", 2_000)]
 WIDE = [("chr1", 400_000), ("chr2", 50_000)]
 # Longer than 512 Mbp: positions past 2^29 exist and a BAI has no bin for them.
 LONG = [("big", TOP + 40_000), ("small", 70_000)]
+# A reference of length 0, which CreateSequenceDictionary writes for an empty sequence.
+EMPTY = [("chr1", 70_000), ("zero", 0), ("chr3", 50_000)]
 
 
 def reg2bin(beg, end):
@@ -240,6 +242,13 @@ def indexed():
         "positions_out_of_order": bam(SMALL, [record("n0", 0, 5000), record("n1", 0, 100),
                                               record("n2", 0, 90000)]),
         "mapped_after_unplaced": bam(SMALL, [record("o0", 0, 100), unmapped("o"), record("o1", 1, 100)]),
+        # @SQ LN:0: htsjdk reads the header, noodles' own reader refuses it.
+        "empty_reference_between": bam(EMPTY, [record(f"e{i}", 0, 1 + i * 100) for i in range(200)]
+                                       + [record(f"f{i}", 2, 1 + i * 100) for i in range(200)]
+                                       + unplaced(5), block_size=700),
+        "empty_reference_last": bam(EMPTY[:2], [record(f"e{i}", 0, 1 + i * 100) for i in range(200)],
+                                    block_size=700),
+        "empty_reference_only": bam(EMPTY[1:2], unplaced(20)),
     }
 
 
@@ -273,6 +282,10 @@ def refused():
                                     "Reference name for '5' not found in sequence dictionary"),
         "truncated": (bam(SMALL, [record(f"m{i}", 0, 1 + i * 10) for i in range(300)],
                           block_size=1000)[:3000], "Premature end of file", "truncated BAM"),
+        # The fourth record claims 0xFFFFFF00 bytes, which htsjdk reads as -256.
+        "block_size_past_the_file": (bam(SMALL, [record(f"k{i}", 0, 100 + i) for i in range(3)]
+                                         + [struct.pack("<I", 0xFFFFFF00) + bytes(100)]),
+                                     "Invalid record length: -256", "truncated BAM"),
     }
 
 
@@ -283,6 +296,8 @@ def lenient():
                                                   record("g1", 0, 200)]),
         "mapped_without_cigar": bam(SMALL, [record("i0", 0, 1, cigar="*"), record("i1", 0, 16385, cigar="*"),
                                             record("i2", 0, 16386, cigar="*")]),
+        "records_on_an_empty_reference": bam(EMPTY, [record("z0", 0, 100), record("z1", 1, 1),
+                                                     unmapped("z2", 1, 1), record("z3", 2, 5)]),
     }
 
 

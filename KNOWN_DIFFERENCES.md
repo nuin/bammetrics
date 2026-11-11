@@ -355,8 +355,9 @@ behaves how.
     function on a pipe need an output name.
   - Records are not validated: `VALIDATION_STRINGENCY` is accepted and ignored, as in
     every tool. Picard at its default `STRICT` refuses a BAM with a record that has a
-    reference and no position, a mapped record without a CIGAR, or a supplementary flag
-    on an unmapped read (the foundation corpus). bammetrics writes the index Picard
+    reference and no position, a mapped record without a CIGAR, a record placed on a
+    reference of length 0, or a supplementary flag on an unmapped read (the foundation
+    corpus). bammetrics writes the index Picard
     writes under `VALIDATION_STRINGENCY=SILENT`. Both fail where the indexer fails: a
     reference out of order (`Unexpected reference 0 when constructing index for 1`), an
     alignment that ends past position 2^29 (`Read position too high for BAI bin
@@ -378,6 +379,13 @@ behaves how.
     no step of `bammetrics chain`: `write --index` writes the index of the BAM a chain
     writes, and the step exits 2 naming it.
   - `CREATE_MD5_FILE=true` writes no digest of the index, in either tool.
+  - A reference of length 0 (`@SQ LN:0`) is indexed, as in Picard. `BuildBamIndex` is
+    the one tool that reads such a header. Every other tool reads the header through
+    noodles, which holds no length 0, and exits 1 (`not a BAM or CRAM file (the header
+    could not be read: invalid record)`).
+  - A record whose `block_size` claims more bytes than the file holds is a `truncated
+    BAM` (exit 1). Picard says `Invalid record length` for a size htsjdk reads as
+    negative.
 
 ## Charts
 

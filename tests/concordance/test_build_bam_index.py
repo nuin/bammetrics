@@ -5,19 +5,20 @@ coordinate-sorted corpus tier BAM (t0 to t3), the exome slice, and the hand-writ
 of `index_bams.py` (BGZF blocks of 250 to 5000 bytes, records that span blocks, bins
 met again in later blocks, a wrong bin field, unplaced reads only, no record, no
 reference, references without reads, a reference longer than 512 Mbp with reads up to
-position 2^29, a file without its EOF block).
+position 2^29, a file without its EOF block, a reference of length 0).
 
 Each index is also read by samtools: `samtools idxstats` and region counts through the
 bammetrics index equal the ones through `samtools index`.
 
 Error parity (`index_bams.refused`): a header that is not SO:coordinate (queryname,
 unsorted, unknown, no SO, no @HD), references out of order, an alignment past 2^29, a
-record outside its reference or the header, a truncated file; a SAM, a CRAM, a missing
+record outside its reference or the header, a truncated file, a record whose block_size
+claims 4 GiB (bammetrics reads the bytes the file holds); a SAM, a CRAM, a missing
 file, an OUTPUT whose directory is missing. Picard leaves an empty OUTPUT behind;
 bammetrics leaves none and keeps an earlier file.
 
 Where bammetrics differs on purpose (KNOWN_DIFFERENCES.md): records are not validated,
-so the two `index_bams.lenient` BAMs are indexed as Picard indexes them under
+so the three `index_bams.lenient` BAMs are indexed as Picard indexes them under
 VALIDATION_STRINGENCY=SILENT; an empty BGZF block in the middle of the file does not end
 the read.
 
@@ -28,9 +29,11 @@ bammetrics deflater: the .bai beside it equals the one Picard builds from that B
 and a bin of every level over the cases compared.
 """
 import hashlib
+import os
 import shutil
 import struct
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -230,6 +233,19 @@ def test_hand_written_indexes_work_in_samtools(built, tmp_path, name):
     cross_check(bam, index, tmp_path, name)
 
 
+def test_samtools_reads_the_index_beside_an_empty_reference(built, tmp_path):
+    """samtools 1.x prints no header with `LN:0` and finds no region of such a BAM, so
+    `cross_check` cannot run. `samtools idxstats` reads the bammetrics index: the row of
+    the empty reference, the counts of the two others and the unplaced reads."""
+    bam = built / "empty_reference_between.bam"
+    index = tmp_path / "ours.bai"
+    assert run_ours([f"I={bam}", f"O={index}"]).returncode == 0
+    ours = beside(bam, index, tmp_path / "with_ours")
+    assert samtools("idxstats", str(ours)).decode().splitlines() == [
+        "chr1\t70000\t200\t0", "zero\t0\t0\t0", "chr3\t50000\t200\t0", "*\t0\t0\t5"]
+    RESULTS.append((f"{TOOL} empty_reference_between samtools", 4, 4, "idxstats rows as written"))
+
+
 def test_long_reference_reaches_the_last_bin_and_window(built, tmp_path):
     """A reference of 2^29 + 40000 bases: reads up to position 2^29 are indexed, into
     the last window bin and the last of 32768 windows."""
@@ -257,6 +273,25 @@ def test_refused_in_both(built, tmp_path, name):
     assert sorted(p.name for p in tmp_path.iterdir()) == sorted(
         ["ours.bai"] + (["picard.bai"] if picard_bai.exists() else []))
     RESULTS.append((f"{TOOL} {name}", 0, 0, "both exit non-zero"))
+
+
+def test_a_block_size_past_the_file_costs_the_bytes_present(built, tmp_path):
+    """bammetrics alone: a record whose block_size claims 0xFFFFFF00 bytes in a BAM of
+    227 is read as the bytes the file holds. A buffer of block_size bytes took 4.3 GB."""
+    bam = built / "block_size_past_the_file.bam"
+    for face, args in [(VERB, [str(bam), "-o", str(tmp_path / "x.bai")]),
+                       ("mark-duplicates", [str(bam), "-o", str(tmp_path / "x.bam"), "--metrics-file",
+                                            str(tmp_path / "x.txt")]),
+                       ("chain", [str(bam), "+", "write", str(tmp_path / "y.bam"), "--index"])]:
+        process = subprocess.Popen([str(BAMMETRICS), face, *args], stderr=subprocess.DEVNULL)
+        _, status, usage = os.wait4(process.pid, 0)
+        process.returncode = os.waitstatus_to_exitcode(status)
+        # ru_maxrss is bytes on macOS and kilobytes on Linux.
+        peak = usage.ru_maxrss * (1 if sys.platform == "darwin" else 1024)
+        assert process.returncode == 1, face
+        assert peak < 64 << 20, f"{face}: peak RSS {peak} bytes"
+    assert not any(tmp_path.iterdir())
+    RESULTS.append((f"{TOOL} block_size past the file", 3, 3, "three commands under 64 MiB"))
 
 
 @pytest.mark.parametrize("name", ["position_without_reference", "start_past_the_reference"])

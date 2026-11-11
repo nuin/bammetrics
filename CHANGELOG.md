@@ -19,7 +19,8 @@ Wave W05 part C of docs/07: the BAM index writer, `BuildBamIndex` (tool 34) and
   `SO:coordinate` exits 1 with Picard's `Input bam file must be sorted by coordinate`.
   Without `O=` the index goes into the current directory under the file name of the
   input, as Picard 3.5.0 does (its help says beside the BAM). `ASSUME_SORTED` and
-  `GA4GH_CLIENT_SECRETS` are `Unrecognized option`, as in Picard.
+  `GA4GH_CLIENT_SECRETS` are `Unrecognized option`, as in Picard. A reference of length
+  0 (`@SQ LN:0`) is indexed, as Picard indexes it (`bai/header.rs`).
 - The `build-bam-index` verb: `bammetrics build-bam-index x.bam [-o FILE]`. Without `-o`
   the index goes beside the BAM (`x.bai`); `-o -` prints it; standard input needs `-o`.
   It takes `--format picard` only. As a step of `chain` it exits 2 and names `write
@@ -33,7 +34,7 @@ Wave W05 part C of docs/07: the BAM index writer, `BuildBamIndex` (tool 34) and
   seconds; `make memgate TIER=scale` runs four rows on the real data of
   docs/benchmarks.md, where a row whose file is missing is skipped.
   `tests/harness/test_memgate.py` holds 21 tests of the harness.
-- `tests/concordance/test_build_bam_index.py`: 100 tests against Picard 3.5.0, with the
+- `tests/concordance/test_build_bam_index.py`: 107 tests against Picard 3.5.0, with the
   BAMs `index_bams.py` writes byte by byte. `tests/data/bai` holds the six fixture
   indexes Picard wrote, which `crates/cli/tests/build_bam_index.rs` compares without a
   JVM.
@@ -51,6 +52,14 @@ Wave W05 part C of docs/07: the BAM index writer, `BuildBamIndex` (tool 34) and
 - Golden suite: 10 new records. `verb_tools` gained the `build-bam-index` row; no other
   record changed. The suite records the `.bai` of a committed BAM as hex and still lists
   an index beside a BAM the case wrote.
+
+### Fixed
+
+- A record whose `block_size` claims more bytes than the file holds costs the bytes
+  present. `RawRecord::read_from` (`MarkDuplicates`, `chain`, `BuildBamIndex`) grew its
+  buffer to `block_size` before it read: a BAM of 211 bytes with a `block_size` of
+  0xFFFFFF00 took 4.3 GB of RSS before `truncated BAM`. The buffer now grows 1 MiB at
+  a time with the bytes read (`bam_raw::read_append`), and the same file takes 5 MiB.
 
 ### Measured
 
