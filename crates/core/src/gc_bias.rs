@@ -57,7 +57,7 @@ pub struct Options {
 }
 
 impl Options {
-    fn from_invocation(inv: &Invocation) -> Result<Self> {
+    pub(crate) fn from_invocation(inv: &Invocation) -> Result<Self> {
         let reference = inv.get("REFERENCE_SEQUENCE").ok_or_else(|| {
             Error::Usage("CollectGcBiasMetrics: REFERENCE_SEQUENCE is required".to_owned())
         })?;

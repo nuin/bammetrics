@@ -61,6 +61,7 @@ pub mod sequencing_artifact;
 pub mod sex_check;
 pub mod spill;
 pub mod stage;
+pub mod tap_options;
 pub mod toml;
 pub mod variant_calling_metrics;
 pub mod vcf;

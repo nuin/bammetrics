@@ -7,6 +7,12 @@
 //! is still registered; the `bammetrics` binary calls it from its SIGINT,
 //! SIGTERM and SIGHUP handler, so an interrupted run leaves no spill file
 //! and no partial output. Nothing else is ever removed.
+//!
+//! Three checks an output gets before the first read: [`refusal`] (the
+//! owner check of [`AtomicFile::create`], asked ahead of the write),
+//! [`unresolved_parent`] (a `..` behind a directory that does not exist)
+//! and [`MadeDirs`] (the directories a run made above its outputs, removed
+//! again when the run fails and they are still empty).
 
 use std::fs::{self, File};
 use std::io;
@@ -173,6 +179,101 @@ fn target(path: &Path) -> Target {
         Target::InPlace
     } else {
         Target::Rename
+    }
+}
+
+/// The error [`AtomicFile::create`] gives for `path` when it refuses it (a
+/// symbolic link or a non-regular file another user owns, outside `/dev`),
+/// so a caller can fail before it reads its input. Nothing is opened.
+pub fn refusal(path: &Path) -> Option<io::Error> {
+    match target(path) {
+        Target::Refused(reason) => Some(io::Error::new(io::ErrorKind::PermissionDenied, reason)),
+        Target::Rename | Target::InPlace => None,
+    }
+}
+
+/// The first directory of `path` that does not exist, when a `..` comes
+/// after it. Such a path names no file yet: once the directory is made,
+/// the `..` leads back out of it, to a file no check has seen (an input,
+/// or the output of another step). One `stat` per component.
+pub fn unresolved_parent(path: &Path) -> Option<PathBuf> {
+    let mut prefix = PathBuf::new();
+    let mut missing: Option<PathBuf> = None;
+    for component in path.components() {
+        if missing.is_some() {
+            if matches!(component, std::path::Component::ParentDir) {
+                return missing;
+            }
+            continue;
+        }
+        prefix.push(component);
+        if fs::metadata(&prefix).is_err() {
+            missing = Some(prefix.clone());
+        }
+    }
+    None
+}
+
+/// The directories a run made above its outputs. A run that fails calls
+/// [`MadeDirs::remove_empty`], which removes those still empty, deepest
+/// first; a directory that was there before, or that holds a file, stays.
+/// Each made directory is registered, so a signal removes it under the
+/// same rule ([`remove_registered`] removes a directory only when empty).
+#[derive(Debug, Default)]
+pub struct MadeDirs {
+    made: Vec<PathBuf>,
+}
+
+impl MadeDirs {
+    /// Make the directories above `path` that do not exist, top first.
+    pub fn create_parent(&mut self, path: &Path) -> io::Result<()> {
+        let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) else {
+            return Ok(());
+        };
+        let missing: Vec<&Path> = parent
+            .ancestors()
+            .take_while(|dir| !dir.as_os_str().is_empty() && fs::metadata(dir).is_err())
+            .collect();
+        for dir in missing.into_iter().rev() {
+            match fs::create_dir(dir) {
+                Ok(()) => {
+                    register(dir);
+                    self.made.push(dir.to_path_buf());
+                }
+                // Another process made it first, or `a/..` once `a` is there.
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists && dir.is_dir() => {}
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(())
+    }
+
+    /// The directories made so far, in the order they were made.
+    pub fn made(&self) -> &[PathBuf] {
+        &self.made
+    }
+
+    /// Remove every made directory that is empty, deepest first, and
+    /// forget them all.
+    pub fn remove_empty(&mut self) {
+        for dir in self.made.drain(..).rev() {
+            let _ = fs::remove_dir(&dir);
+            unregister(&dir);
+        }
+    }
+
+    /// Keep every made directory: the run finished.
+    pub fn keep(&mut self) {
+        for dir in self.made.drain(..) {
+            unregister(&dir);
+        }
+    }
+}
+
+impl Drop for MadeDirs {
+    /// Dropped without [`MadeDirs::keep`], the run did not finish.
+    fn drop(&mut self) {
+        self.remove_empty();
     }
 }
 
@@ -534,5 +635,97 @@ mod tests {
         assert!(kept.exists());
         fs::remove_file(&kept).expect("remove");
         fs::remove_dir(&dir).expect("remove dir");
+    }
+
+    /// The refusal asked ahead of the write is the one the write gives.
+    #[cfg(unix)]
+    #[test]
+    fn the_refusal_is_known_before_the_write() {
+        use std::os::unix::fs::MetadataExt;
+        let dir = scratch("refusal");
+        let plain = dir.join("out.txt");
+        assert!(refusal(&plain).is_none());
+        fs::write(&plain, "old").expect("old");
+        assert!(refusal(&plain).is_none());
+        assert!(refusal(Path::new("/dev/stdout")).is_none());
+        let me = effective_uid(&dir).expect("uid");
+        let foreign = ["/tmp", "/etc", "/var", "/bin", "/sbin", "/lib"]
+            .into_iter()
+            .map(Path::new)
+            .find(|p| {
+                fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink() && m.uid() != me)
+            });
+        if let Some(link) = foreign {
+            let asked = refusal(link).expect("refused").to_string();
+            let written = AtomicFile::new(link).create().expect_err("refused");
+            assert_eq!(asked, written.to_string());
+            assert!(asked.ends_with("owned by another user; not written in place"));
+        }
+        fs::remove_dir_all(&dir).expect("remove dir");
+    }
+
+    /// A `..` behind a directory that does not exist is found; one behind
+    /// a directory that exists, or a missing directory without one, is not.
+    #[test]
+    fn a_parent_component_behind_a_missing_directory_is_found() {
+        let dir = scratch("unresolved");
+        fs::create_dir(dir.join("there")).expect("dir");
+        let found = |tail: &str| unresolved_parent(&dir.join(tail));
+        assert_eq!(found("missing/../out.txt"), Some(dir.join("missing")));
+        assert_eq!(
+            found("there/missing/x/../../out.txt"),
+            Some(dir.join("there/missing"))
+        );
+        assert_eq!(found("there/../out.txt"), None);
+        assert_eq!(found("there/../missing/out.txt"), None);
+        assert_eq!(found("missing/deeper/out.txt"), None);
+        assert_eq!(found("out.txt"), None);
+        assert_eq!(unresolved_parent(Path::new("../out.txt")), None);
+        assert_eq!(unresolved_parent(Path::new("/dev/stdout")), None);
+        // A link that leads nowhere is a directory that does not exist.
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(dir.join("nowhere"), dir.join("link")).expect("symlink");
+            assert_eq!(found("link/../out.txt"), Some(dir.join("link")));
+        }
+        fs::remove_dir_all(&dir).expect("remove dir");
+    }
+
+    /// Only the directories the run made are removed, and only when empty.
+    #[test]
+    fn made_directories_are_removed_when_empty_and_never_others() {
+        let dir = scratch("made");
+        fs::create_dir(dir.join("old")).expect("old");
+        let mut dirs = MadeDirs::default();
+        dirs.create_parent(&dir.join("old/out.txt")).expect("old");
+        dirs.create_parent(&dir.join("old/a/b/out.txt"))
+            .expect("a/b");
+        dirs.create_parent(&dir.join("c/out.txt")).expect("c");
+        dirs.create_parent(&dir.join("d/e/out.txt")).expect("d/e");
+        dirs.create_parent(Path::new("out.txt")).expect("no parent");
+        let made = ["old/a", "old/a/b", "c", "d", "d/e"].map(|d| dir.join(d));
+        assert_eq!(dirs.made(), made);
+        assert!(made.iter().all(|d| registered().contains(d)));
+        fs::write(dir.join("d/e/out.txt"), "x").expect("file");
+        dirs.remove_empty();
+        assert!(dir.join("old").is_dir());
+        assert!(!dir.join("old/a").exists());
+        assert!(!dir.join("c").exists());
+        assert!(dir.join("d/e/out.txt").is_file());
+        assert!(made.iter().all(|d| !registered().contains(d)));
+        // Kept directories stay, empty or not; a drop removes the empty ones.
+        let mut kept = MadeDirs::default();
+        kept.create_parent(&dir.join("kept/out.txt")).expect("kept");
+        kept.keep();
+        drop(kept);
+        assert!(dir.join("kept").is_dir());
+        let mut dropped = MadeDirs::default();
+        dropped
+            .create_parent(&dir.join("dropped/out.txt"))
+            .expect("dropped");
+        drop(dropped);
+        assert!(!dir.join("dropped").exists());
+        assert!(!registered().iter().any(|p| p.starts_with(&dir)));
+        fs::remove_dir_all(&dir).expect("remove dir");
     }
 }

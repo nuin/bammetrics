@@ -32,6 +32,22 @@ use crate::metric::ToolOutput;
 /// bottleneck well before this on the corpus benchmark (docs/benchmarks.md).
 pub const MAX_DEFAULT_THREADS: usize = 8;
 
+/// The most threads a run may ask for. Each read, each `write` and each
+/// CRAM decode starts that many workers at once. A count the system cannot
+/// start panics inside `noodles-bgzf` (exit 101), so it is refused here.
+pub const MAX_THREADS: usize = 256;
+
+/// `threads` when a run may ask for it, else what is wrong with it, for a
+/// usage error that names the value in front (`--threads 300 is ...`).
+/// Every place that parses a thread count (the verbs, `chain`, a plan file,
+/// `qc`, `collect`, `threads=` on the Picard face, Python) asks here.
+pub fn check_threads(threads: usize) -> std::result::Result<usize, String> {
+    if threads > MAX_THREADS {
+        return Err(format!("more than the maximum of {MAX_THREADS} threads"));
+    }
+    Ok(threads)
+}
+
 /// A metric computed from one pass over the records of a BAM, the role of
 /// Picard's `SinglePassSamProgram.acceptRead` and `finish`.
 pub trait Accumulator {
