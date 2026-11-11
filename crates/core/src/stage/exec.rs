@@ -1,8 +1,16 @@
 //! The executor of a chain: segments cut at barriers, one read each, one
 //! thread per tap and sink.
+//!
+//! Replay or spool (docs/07 section 2.3). A barrier that reads its input
+//! twice (`MarkDuplicates`) replays the source when it reads the source
+//! itself, with no stage in front: the file is read a second time. Behind
+//! another stage its input is a stream no file holds, so the records it
+//! takes in its first read are also written to a spool ([`spool`]), and
+//! the second read replays the spool. A pipe source in front of a first
+//! stage that replays is copied whole to the temporary directory first.
 
 use std::collections::VecDeque;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, SyncSender};
@@ -11,6 +19,7 @@ use std::thread::{self, Scope, ScopedJoinHandle};
 use noodles::sam;
 
 use super::sinks::Limited;
+use super::spool::{SpoolRecords, SpoolWriter};
 use super::{
     Barrier, BuildCollector, ChainPlan, CollectorSink, Frame, Next, Products, QUEUED_BATCHES,
     Records, Sink, Source, Stage, Step, StepKind, Transform,
@@ -20,26 +29,16 @@ use crate::error::{Error, Result};
 use crate::pass::{self, Collector, Limits, OnProgress, Progress};
 use crate::spill::TempDir;
 
-/// A usage error for a stage that replays the source behind another
-/// stage: only the source itself can be read again in this version. Found
-/// from the plan, so no segment reads the source for a chain that cannot
-/// finish.
-fn check_replays(steps: &[Step]) -> Result<()> {
-    let mut front: Option<&str> = None;
-    for step in steps {
-        let StepKind::Stage(builder) = &step.kind else {
-            continue;
-        };
-        if let (true, Some(front)) = (builder.replays(), front) {
-            return Err(Error::Usage(format!(
-                "{} reads its input twice and cannot follow {front}: only a file source can be \
-                 read again in this version",
-                step.label
-            )));
-        }
-        front = Some(&step.label);
-    }
-    Ok(())
+/// True when the first stage of `steps` reads its input twice: a pipe
+/// source in front of it is copied to the temporary directory whole.
+fn first_stage_replays(steps: &[Step]) -> bool {
+    steps
+        .iter()
+        .find_map(|step| match &step.kind {
+            StepKind::Stage(builder) => Some(builder.replays()),
+            _ => None,
+        })
+        .unwrap_or(false)
 }
 
 /// How the error of a step that did not fail by itself starts.
@@ -66,12 +65,10 @@ pub fn halt(error: &Error) -> Option<Halt> {
     }
 }
 
-/// Run `plan`. One result per step, in step order. `Err` when the plan is
-/// refused before the first read (a replaying stage behind another stage)
-/// or when the source cannot be read in the first segment, as
-/// [`pass::run_isolated`] fails; any later failure is in the results.
+/// Run `plan`. One result per step, in step order. `Err` when the source
+/// cannot be read in the first segment, as [`pass::run_isolated`] fails;
+/// any later failure is in the results.
 pub fn run_chain(plan: ChainPlan, progress: Option<OnProgress>) -> Result<Vec<Result<Products>>> {
-    check_replays(&plan.steps)?;
     let taps_only = plan
         .steps
         .iter()
@@ -80,11 +77,7 @@ pub fn run_chain(plan: ChainPlan, progress: Option<OnProgress>) -> Result<Vec<Re
         return lowered(plan, progress);
     }
     let temp = TempDir::new(plan.tmp_dir.as_deref());
-    let replays = plan
-        .steps
-        .iter()
-        .any(|step| matches!(&step.kind, StepKind::Stage(builder) if builder.replays()));
-    let source = if replays && !plan.source.replayable() {
+    let source = if first_stage_replays(&plan.steps) && !plan.source.replayable() {
         plan.source.spool(&temp)?
     } else {
         plan.source
@@ -99,6 +92,8 @@ pub fn run_chain(plan: ChainPlan, progress: Option<OnProgress>) -> Result<Vec<Re
             .enumerate()
             .collect(),
         temp: &temp,
+        threads: plan.threads,
+        notes: Vec::new(),
         progress,
         bytes: Arc::new(AtomicU64::new(0)),
         records: 0,
@@ -108,6 +103,9 @@ pub fn run_chain(plan: ChainPlan, progress: Option<OnProgress>) -> Result<Vec<Re
     loop {
         let flow = match input {
             Input::Source(head) => chain.read_source(source.as_ref(), plan.threads, head),
+            Input::Spool(path, (step, frame, transform)) => {
+                chain.read_spool(&path, (step, frame, transform))
+            }
             Input::Records(frame, mut records) => {
                 chain.segment(frame, None, records.as_mut(), false)
             }
@@ -147,7 +145,7 @@ fn lowered(plan: ChainPlan, progress: Option<OnProgress>) -> Result<Vec<Result<P
     let limits = Limits {
         stop_after: read_limit(taps.iter().map(|(limits, _)| limits.stop_after)),
         assume_sorted: true,
-        ..Limits::default()
+        stringency: plan.source.stringency(),
     };
     let results = pass::run_isolated(path, reference, plan.threads, limits, progress, |header| {
         taps.into_iter()
@@ -335,8 +333,11 @@ struct Segment<'scope, 't> {
     /// The stream at the last position.
     frame: Frame,
     /// True when the segment reads the source itself, with no stage in
-    /// front: the only stream a barrier can replay in this version.
+    /// front: a barrier there replays the source.
     replayable: bool,
+    /// The copy of the barrier's input, for a barrier that replays a
+    /// stream no file holds.
+    spool: Option<SpoolWriter>,
 }
 
 /// What stopped a segment.
@@ -400,6 +401,9 @@ impl Segment<'_, '_> {
             .iter()
             .for_each(|sink| sink.send(&shared));
         if let Some((step, barrier)) = self.barrier.as_mut() {
+            if let Some(spool) = self.spool.as_mut() {
+                spool.write(&shared).map_err(|e| Failure::Step(*step, e))?;
+            }
             barrier.push(&shared).map_err(|e| Failure::Step(*step, e))?;
         }
         Ok(Some(shared))
@@ -426,11 +430,16 @@ impl Segment<'_, '_> {
     }
 }
 
+/// The transform a sealed barrier left, with the index of the barrier's
+/// step and the stream after it.
+type Head<'t> = (usize, Frame, Box<dyn Transform + 't>);
+
 /// The input of the next segment.
 enum Input<'t> {
-    /// The source, through the transform a sealed barrier left (with the
-    /// index of the barrier's step and the stream after it).
-    Source(Option<(usize, Frame, Box<dyn Transform + 't>)>),
+    /// The source, through the transform a sealed barrier left.
+    Source(Option<Head<'t>>),
+    /// The spool of a barrier's input, through the transform it left.
+    Spool(PathBuf, Head<'t>),
     /// The records a sealed barrier holds.
     Records(Frame, Box<dyn Records + 't>),
 }
@@ -450,6 +459,11 @@ struct Chain<'t, 'p> {
     /// The steps not yet built, with their index.
     steps: VecDeque<(usize, StepKind)>,
     temp: &'t TempDir,
+    /// BGZF workers of a spool.
+    threads: usize,
+    /// Notes of a stage, kept until its result is set: the step and the
+    /// line.
+    notes: Vec<(usize, String)>,
     progress: Option<OnProgress<'p>>,
     bytes: Arc<AtomicU64>,
     /// Records read from the source and from barriers so far.
@@ -463,7 +477,7 @@ impl<'t> Chain<'t, '_> {
         &mut self,
         source: &dyn Source,
         threads: usize,
-        head: Option<(usize, Frame, Box<dyn Transform + 't>)>,
+        head: Option<Head<'t>>,
     ) -> Flow<'t> {
         let bytes = Arc::clone(&self.bytes);
         let mut head = Some(head);
@@ -487,6 +501,23 @@ impl<'t> Chain<'t, '_> {
         }
     }
 
+    /// One segment read from the spool at `path` through `head`. The spool
+    /// is removed once read, so the disk it took is free for later
+    /// segments.
+    fn read_spool(&mut self, path: &Path, (step, frame, transform): Head<'t>) -> Flow<'t> {
+        let flow = match SpoolRecords::open(path, self.threads) {
+            Ok(mut records) => self.segment(frame, Some((step, transform)), &mut records, false),
+            Err(cause) => {
+                let label = self.labels[step].clone();
+                self.not_run(&label, &cause.to_string());
+                self.results[step] = Some(Err(cause));
+                Flow::Done
+            }
+        };
+        self.temp.remove(path);
+        flow
+    }
+
     /// Build the steps up to the next barrier, run them over `records`,
     /// and seal the barrier. `from_source` is true when `records` is the
     /// source's own stream.
@@ -505,6 +536,7 @@ impl<'t> Chain<'t, '_> {
                 transforms: Vec::new(),
                 barrier: None,
                 frame,
+                spool: None,
             };
             if let Err(failure) = self.build(scope, &mut segment) {
                 return self.stop(segment, failure);
@@ -542,6 +574,10 @@ impl<'t> Chain<'t, '_> {
                     segment.positions.last_mut().expect("one").push(worker);
                 }
                 StepKind::Stage(builder) => {
+                    // A barrier that replays a stream no file holds keeps a
+                    // copy of its input.
+                    let spools =
+                        builder.replays() && !(segment.replayable && segment.transforms.is_empty());
                     match builder.build(&segment.frame, self.temp).map_err(failed)? {
                         Stage::Transform(transform) => {
                             let header = transform.header(&segment.frame.header).map_err(failed)?;
@@ -550,6 +586,11 @@ impl<'t> Chain<'t, '_> {
                             segment.positions.push(Vec::new());
                         }
                         Stage::Barrier(barrier) => {
+                            if spools {
+                                let spool =
+                                    SpoolWriter::create(self.temp, self.threads).map_err(failed)?;
+                                segment.spool = Some(spool);
+                            }
                             segment.barrier = Some((step, barrier));
                             return Ok(());
                         }
@@ -610,6 +651,7 @@ impl<'t> Chain<'t, '_> {
             barrier,
             frame,
             replayable,
+            spool,
         } = segment;
         let mut writer_failed = None;
         for worker in positions.into_iter().flatten() {
@@ -625,9 +667,20 @@ impl<'t> Chain<'t, '_> {
             self.results[step] = Some(result);
         }
         for (step, mut transform) in head.into_iter().chain(transforms) {
-            self.results[step] = Some(transform.products().map(|products| Products {
-                counters: Some(transform.counters()),
-                ..products
+            let mut notes: Vec<String> = Vec::new();
+            self.notes.retain(|(of, note)| {
+                let mine = *of == step;
+                if mine {
+                    notes.push(note.clone());
+                }
+                !mine
+            });
+            self.results[step] = Some(transform.products().map(|mut products| {
+                products.notes.extend(notes);
+                Products {
+                    counters: Some(transform.counters()),
+                    ..products
+                }
             }));
         }
         if let Some((step, cause)) = writer_failed {
@@ -647,21 +700,36 @@ impl<'t> Chain<'t, '_> {
             }
         };
         let frame = frame.after(sealed.header, &label);
-        match sealed.next {
-            Next::Replay(transform) if replayable && self.results[step].is_none() => {
+        match (sealed.next, spool) {
+            (Next::Replay(transform), Some(spool)) => match spool.finish() {
+                Ok(path) => {
+                    let bytes = std::fs::metadata(&path).map_or(0, |m| m.len());
+                    self.notes.push((
+                        step,
+                        format!("spooled {bytes} bytes of its input to replay them"),
+                    ));
+                    Flow::Next(Box::new(Input::Spool(path, (step, frame, transform))))
+                }
+                Err(cause) => {
+                    self.not_run(&label, &cause.to_string());
+                    self.results[step] = Some(Err(cause));
+                    Flow::Done
+                }
+            },
+            (Next::Replay(transform), None) if replayable => {
                 Flow::Next(Box::new(Input::Source(Some((step, frame, transform)))))
             }
-            Next::Replay(_) => {
-                let cause = Error::Usage(format!(
-                    "{label} reads its input twice: only a file source can be read again in \
-                     this version"
+            (Next::Replay(_), None) => {
+                let cause = Error::Metric(format!(
+                    "{label} reads its input twice and its input was neither the source nor \
+                     spooled"
                 ));
                 self.not_run(&label, &cause.to_string());
                 self.results[step] = Some(Err(cause));
                 Flow::Done
             }
-            Next::Records(records) => {
-                self.results[step] = Some(Ok(Products::default()));
+            (Next::Records(records), _) => {
+                self.results[step] = Some(Ok(sealed.products));
                 if self.steps.is_empty() {
                     Flow::Done
                 } else {

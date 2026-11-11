@@ -209,6 +209,7 @@ impl<'t> Barrier<'t> for Hold {
         Ok(Sealed {
             header: sam::Header::default(),
             next: Next::Records(Box::new(Held(Some(self.held)))),
+            products: Products::default(),
         })
     }
 }
@@ -228,6 +229,7 @@ impl<'t> Barrier<'t> for Replayer {
                 bits: 0x400,
                 ..Flag::default()
             })),
+            products: Products::default(),
         })
     }
 }
@@ -475,29 +477,42 @@ fn a_barrier_hands_on_its_own_records_or_replays_the_source() {
 }
 
 #[test]
-fn a_stage_that_replays_is_refused_behind_another_stage() {
-    for first in [
-        Make::Flag(Flag::default()),
-        Make::Hold(Hold::default()),
-        Make::Replayer,
-    ] {
+fn a_stage_that_replays_behind_another_stage_replays_a_spool_of_its_input() {
+    // Behind a transform, a barrier that holds its records, or a barrier
+    // that replays, the replay reads the spool of its own input: the source
+    // is read once for the first stage (twice when that one replays too),
+    // and the last tap sees the input of the replaying stage flagged.
+    let cases = [
+        (
+            Make::Flag(Flag {
+                bits: 0x1,
+                ..Flag::default()
+            }),
+            1,
+            "r0:1025 r1:1025 r2:1025 r3:1025 r4:1025 r5:1025 r6:1025 r7:1025 r8:1025 r9:1025",
+        ),
+        (
+            Make::Hold(Hold::default()),
+            1,
+            "r9:1024 r8:1024 r7:1024 r6:1024 r5:1024 r4:1024 r3:1024 r2:1024 r1:1024 r0:1024",
+        ),
+        (
+            Make::Replayer,
+            2,
+            "r0:1024 r1:1024 r2:1024 r3:1024 r4:1024 r5:1024 r6:1024 r7:1024 r8:1024 r9:1024",
+        ),
+    ];
+    for (first, opened, last) in cases {
         let steps = vec![
             tap(0, None),
             stage("first", first),
-            tap(0, None),
             stage("replay", Make::Replayer),
+            tap(0, None),
         ];
         let (plan, reads) = Memory::plan(4, steps);
-        let Err(Error::Usage(refused)) = run_chain(plan, None) else {
-            panic!("the plan is refused");
-        };
-        assert_eq!(
-            refused,
-            "replay reads its input twice and cannot follow first: only a file source can be \
-             read again in this version"
-        );
-        // Refused before the first read: no stage opens the source.
-        assert_eq!(reads.load(Ordering::Relaxed), 0);
+        let results = texts(run_chain(plan, None).expect("runs"));
+        assert_eq!(results[3], last);
+        assert_eq!(reads.load(Ordering::Relaxed), opened);
     }
 }
 

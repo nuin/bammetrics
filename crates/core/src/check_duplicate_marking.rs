@@ -16,9 +16,13 @@
 //! before reverse, primary before secondary, secondary after supplementary,
 //! records without `HI` before those with one and `HI` ascending, and file
 //! order between records that compare equal (the sort is stable, as
-//! `SortingCollection` is). bammetrics keeps the sort keys in memory and
-//! writes no temporary file, so `TMP_DIR` and `MAX_RECORDS_IN_RAM` change
-//! nothing. The sort reads `HI` as `SAMRecord.getIntegerAttribute` does: a
+//! `SortingCollection` is). bammetrics sorts a key per record (name, flags,
+//! contig, start, `HI`) through [`crate::spill::Sorter`]: at most
+//! `MAX_RECORDS_IN_RAM` keys (default 500,000, as Picard) in memory, each
+//! run sorted by Java's `TimSort` ([`crate::timsort`]), spilled to
+//! `TMP_DIR` and merged with ties to the earlier run. Records flagged both
+//! first and second of a pair, where the comparator is no total order,
+//! sort as Java sorts them and never panic. The sort reads `HI` as `SAMRecord.getIntegerAttribute` does: a
 //! float is truncated, a string, character or array is an error (`Value for
 //! tag HI is not Number`), a value past `Integer` is an error too. A
 //! `SO:queryname` file never reads `HI`.
@@ -61,6 +65,7 @@ use crate::metric::{MetricsOutput, ToolOutput, Value};
 use crate::pass::Accumulator;
 use crate::registry::{Invocation, Opt, Tool, write_files};
 use crate::sam_order::QuerynameKey;
+use crate::spill::{Sorter, Spill, TempDir, get_u64, need_i64, need_u64, put_i64, put_u64};
 
 pub const TOOL: Tool = Tool {
     name: "CheckDuplicateMarking",
@@ -81,13 +86,16 @@ pub const TOOL: Tool = Tool {
             "ERROR drops the INFO and WARNING log lines, WARNING the INFO lines (default INFO).",
         ),
         Opt::rejected(&["ASSUME_SORTED", "AS"]),
-        Opt::ignored(
+        Opt::path(
             &["TMP_DIR"],
-            "a file without SO:queryname is sorted in memory and no temporary file is written",
-        ),
-        Opt::ignored(
+            "Directory for the sorted runs of a file without SO:queryname (default: the system \
+             temporary directory).",
+        )
+        .repeated(),
+        Opt::int(
             &["MAX_RECORDS_IN_RAM"],
-            "a file without SO:queryname is sorted in memory whatever the value",
+            "Records a file without SO:queryname holds in memory before a sorted run spills to \
+             TMP_DIR, 1 or more (default 500000).",
         ),
     ],
     run: run_tool,
@@ -153,10 +161,24 @@ struct Options {
     mode: Mode,
     /// The highest level printed.
     verbosity: Level,
+    /// Keys held in memory before a sorted run spills.
+    records_in_ram: usize,
+    tmp_dir: Option<std::path::PathBuf>,
 }
+
+/// Picard's `MAX_RECORDS_IN_RAM` default.
+const DEFAULT_RECORDS_IN_RAM: usize = 500_000;
 
 impl Options {
     fn from_invocation(inv: &Invocation) -> Result<Self> {
+        let records: i64 = inv.parse("MAX_RECORDS_IN_RAM", DEFAULT_RECORDS_IN_RAM as i64)?;
+        let records_in_ram = usize::try_from(records)
+            .ok()
+            .filter(|n| *n >= 1)
+            .ok_or_else(|| {
+                Error::Usage(format!("MAX_RECORDS_IN_RAM={records}: expected 1 or more"))
+            })?;
+        let tmp_dir = inv.all("TMP_DIR").first().map(std::path::PathBuf::from);
         let mode = inv.get("MODE").map_or(Ok(Mode::All), Mode::parse)?;
         let verbosity = match inv.get("VERBOSITY") {
             None | Some("INFO" | "DEBUG") => Level::Info,
@@ -168,7 +190,12 @@ impl Options {
                 )));
             }
         };
-        Ok(Self { mode, verbosity })
+        Ok(Self {
+            mode,
+            verbosity,
+            records_in_ram,
+            tmp_dir,
+        })
     }
 }
 
@@ -339,6 +366,90 @@ impl Key {
     }
 }
 
+impl PartialEq for Key {
+    fn eq(&self, other: &Self) -> bool {
+        self.compare(other) == Ordering::Equal
+    }
+}
+
+impl Eq for Key {}
+
+impl PartialOrd for Key {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.compare(other))
+    }
+}
+
+/// The queryname order, which is not total outside valid flags: the sort
+/// runs through [`crate::timsort`] and the merge accepts it.
+impl Ord for Key {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.compare(other)
+    }
+}
+
+/// An optional value as a varint, 0 for none and the value plus one.
+fn put_option(out: &mut Vec<u8>, value: Option<u64>) {
+    put_u64(out, value.map_or(0, |v| v + 1));
+}
+
+fn get_option(input: &mut impl std::io::BufRead) -> std::io::Result<Option<u64>> {
+    Ok(need_u64(input)?.checked_sub(1))
+}
+
+impl Spill for Key {
+    fn encode(&self, out: &mut Vec<u8>) {
+        put_u64(out, self.name.len() as u64);
+        out.extend_from_slice(&self.name);
+        put_u64(out, u64::from(self.flags.bits()));
+        put_option(out, self.contig.map(|c| c as u64));
+        put_i64(out, self.start);
+        match self.hit_index {
+            Some(hit) => {
+                out.push(1);
+                put_i64(out, hit);
+            }
+            None => out.push(0),
+        }
+    }
+
+    fn decode(input: &mut impl std::io::BufRead) -> std::io::Result<Option<Self>> {
+        let Some(len) = get_u64(input)? else {
+            return Ok(None);
+        };
+        let mut name = vec![0; usize::try_from(len).map_err(std::io::Error::other)?];
+        input.read_exact(&mut name)?;
+        let bits = u16::try_from(need_u64(input)?).map_err(std::io::Error::other)?;
+        let contig = get_option(input)?
+            .map(usize::try_from)
+            .transpose()
+            .map_err(std::io::Error::other)?;
+        let start = need_i64(input)?;
+        let mut flag = [0u8];
+        input.read_exact(&mut flag)?;
+        let hit_index = match flag[0] {
+            0 => None,
+            _ => Some(need_i64(input)?),
+        };
+        Ok(Some(Self {
+            name,
+            flags: sam::alignment::record::Flags::from_bits_retain(bits),
+            contig,
+            start,
+            hit_index,
+        }))
+    }
+
+    fn memory(&self) -> usize {
+        // The key, its name, and the two index slots `TimSort` moves.
+        std::mem::size_of::<Self>() + self.name.len() + 2 * std::mem::size_of::<usize>()
+    }
+
+    fn sort_run(run: &mut Vec<Self>) -> Result<()> {
+        crate::timsort::sort_by(run, Ord::cmp).map_err(|v| Error::Metric(v.to_string()))
+    }
+}
+
 /// `SAMRecord.getIntegerAttribute("HI")`: an integer as it is, a float
 /// through `Number.longValue` (truncated), anything else a
 /// `RuntimeException` naming the Java class; a value outside `Integer` is
@@ -372,20 +483,21 @@ fn hit_index(value: &sam::alignment::record::data::field::Value<'_>) -> Result<i
 
 /// `checkDuplicateMarkingsInIterator` over the records as they come
 /// (`SO:queryname`), or over the sorted keys.
-struct Checker {
+struct Checker<'t> {
     mode: Mode,
     contigs: Vec<String>,
     sorted: bool,
-    /// The records waiting to be sorted, when the file is not queryname
+    /// The keys waiting to be sorted, when the file is not queryname
     /// sorted.
-    pending: Vec<Key>,
+    pending: Option<Sorter<'t, Key>>,
     current_name: Option<Vec<u8>>,
     current_duplicate: bool,
     bad: Vec<BadRecord>,
 }
 
-impl Checker {
-    fn new(header: &sam::Header, mode: Mode) -> Self {
+impl<'t> Checker<'t> {
+    fn new(header: &sam::Header, options: &Options, temp: &'t TempDir) -> Self {
+        let mode = options.mode;
         let order = header
             .header()
             .and_then(|h| h.other_fields().get(&SORT_ORDER))
@@ -395,11 +507,12 @@ impl Checker {
             .keys()
             .map(|name| name.to_string())
             .collect();
+        let sorted = order.as_deref() != Some("queryname");
         Self {
             mode,
             contigs,
-            sorted: order.as_deref() != Some("queryname"),
-            pending: Vec::new(),
+            sorted,
+            pending: sorted.then(|| Sorter::new(temp, "names", options.records_in_ram)),
             current_name: None,
             current_duplicate: false,
             bad: Vec::new(),
@@ -453,24 +566,23 @@ impl Checker {
     }
 }
 
-impl Accumulator for Checker {
+impl Accumulator for Checker<'_> {
     type Output = (Vec<BadRecord>, bool);
 
     fn accept(&mut self, record: &bam::Record) -> Result<()> {
         let key = Key::read(record, self.sorted)?;
-        if self.sorted {
-            self.pending.push(key);
-            Ok(())
-        } else {
-            self.check(&key)
+        match self.pending.as_mut() {
+            Some(pending) => pending.push(key),
+            None => self.check(&key),
         }
     }
 
     fn finish(mut self) -> Result<Self::Output> {
-        let mut pending = std::mem::take(&mut self.pending);
-        pending.sort_by(Key::compare);
-        for key in &pending {
-            self.check(key)?;
+        if let Some(pending) = self.pending.take() {
+            let mut sorted = pending.finish()?;
+            while let Some(key) = sorted.next_item()? {
+                self.check(&key)?;
+            }
         }
         Ok((self.bad, self.sorted))
     }
@@ -490,17 +602,17 @@ pub fn check(inv: &Invocation) -> Result<Check> {
             )));
         }
     }
-    let (bad, sorted) =
-        inv.read_whole(&inv.input, |header| Ok(Checker::new(header, options.mode)))?;
+    let temp = TempDir::new(options.tmp_dir.as_deref());
+    let (bad, sorted) = inv.read_whole(&inv.input, |header| {
+        Ok(Checker::new(header, &options, &temp))
+    })?;
     Ok(Check::build(bad, sorted, options.verbosity))
 }
 
-/// True when both paths name one existing file, links and `..` resolved.
+/// True when both paths name one existing file: links and `..` resolved,
+/// a hard link found by device and inode.
 fn same_file(a: &std::path::Path, b: &std::path::Path) -> bool {
-    match (a.canonicalize(), b.canonicalize()) {
-        (Ok(a), Ok(b)) => a == b,
-        _ => false,
-    }
+    a.exists() && b.exists() && crate::mark_duplicates::same_file(a, b)
 }
 
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {

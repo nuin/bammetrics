@@ -36,10 +36,12 @@ use crate::mark_duplicates::{self, SortOrder};
 use crate::metric::ToolOutput;
 use crate::pass::{self, Collector, Limits};
 use crate::registry::{Invocation, Tool};
+use crate::sam_text::Stringency;
 use crate::spill::TempDir;
 
 mod exec;
 mod sinks;
+mod spool;
 #[cfg(test)]
 mod tests;
 
@@ -132,10 +134,16 @@ pub trait Source {
     fn file(&self) -> Option<(&Path, Option<&Path>)> {
         None
     }
+
+    /// How SAM text in this source is checked.
+    fn stringency(&self) -> Stringency {
+        Stringency::Strict
+    }
 }
 
 /// A BAM, CRAM or SAM file (told by its first bytes), or a pipe holding
-/// one. SAM text is read at `VALIDATION_STRINGENCY=STRICT`.
+/// one. SAM text is read at `STRICT` unless [`FileSource::with_stringency`]
+/// says otherwise.
 #[derive(Clone, Debug)]
 pub struct FileSource {
     path: PathBuf,
@@ -143,6 +151,7 @@ pub struct FileSource {
     reference: Option<PathBuf>,
     /// The path as the user gave it, when `path` is a spooled copy.
     label: String,
+    stringency: Stringency,
 }
 
 impl FileSource {
@@ -151,7 +160,17 @@ impl FileSource {
             path: path.to_path_buf(),
             reference: reference.map(Path::to_path_buf),
             label: path.display().to_string(),
+            stringency: Stringency::Strict,
         }
+    }
+
+    /// The source with SAM text checked at `stringency`
+    /// (`VALIDATION_STRINGENCY`). A BAM or CRAM reads the same at every
+    /// value.
+    #[must_use]
+    pub fn with_stringency(mut self, stringency: Stringency) -> Self {
+        self.stringency = stringency;
+        self
     }
 }
 
@@ -169,7 +188,7 @@ impl Source for FileSource {
             &self.path,
             self.reference.as_deref(),
             threads,
-            crate::sam_text::Stringency::Strict,
+            self.stringency,
             bytes,
             |header, reader, cram| {
                 let mut frame = Frame::new(header.clone(), self.label.clone());
@@ -201,11 +220,16 @@ impl Source for FileSource {
             path: copies.into_iter().next().unwrap_or_default(),
             reference: self.reference.clone(),
             label: self.label.clone(),
+            stringency: self.stringency,
         }))
     }
 
     fn file(&self) -> Option<(&Path, Option<&Path>)> {
         Some((&self.path, self.reference.as_deref()))
+    }
+
+    fn stringency(&self) -> Stringency {
+        self.stringency
     }
 }
 
@@ -328,6 +352,10 @@ pub trait Barrier<'t> {
 pub struct Sealed<'t> {
     pub header: sam::Header,
     pub next: Next<'t>,
+    /// The barrier's own result when it hands on its records
+    /// ([`Next::Records`]); a barrier that replays reports through its
+    /// transform.
+    pub products: Products,
 }
 
 /// How the stream goes on after a barrier.
@@ -373,36 +401,56 @@ pub trait StageBuilder {
 /// A registry tool's stage function.
 pub type StageFn = for<'t> fn(&Invocation, &Frame, &'t TempDir) -> Result<Stage<'t>>;
 
+/// The tools with a stage: the tool, its stage, the default name of the
+/// stream it leaves, and whether it reads its input twice (a replay).
+const STAGES: [(&str, StageFn, &str, bool); 2] = [
+    ("MarkDuplicates", mark_duplicates::stage, "marked", true),
+    ("SortSam", crate::sort_sam::stage, "sorted", false),
+];
+
+fn stage_row(tool: &Tool) -> Option<&'static (&'static str, StageFn, &'static str, bool)> {
+    STAGES.iter().find(|(name, ..)| *name == tool.name)
+}
+
 /// The stage of a registry tool, `None` for a tool that is not one. A
-/// table by name in place of a `Tool` field while one tool has a stage.
+/// table by name in place of a `Tool` field.
 pub fn stage_of(tool: &Tool) -> Option<StageFn> {
-    (tool.name == mark_duplicates::TOOL.name).then_some(mark_duplicates::stage as StageFn)
+    stage_row(tool).map(|row| row.1)
 }
 
 /// The default name of the stream a tool's stage leaves (docs/07 section
-/// 2.2): `marked` after `MarkDuplicates`. `None` for a tool without a stage.
+/// 2.2): `marked` after `MarkDuplicates`, `sorted` after `SortSam`. `None`
+/// for a tool without a stage.
 pub fn label_of(tool: &Tool) -> Option<&'static str> {
-    (tool.name == mark_duplicates::TOOL.name).then_some("marked")
+    stage_row(tool).map(|row| row.2)
+}
+
+/// True for a stage that reads its input twice: the second read replays
+/// the source or a spool of the stage's input (`MarkDuplicates`).
+pub fn replays(tool: &Tool) -> bool {
+    stage_row(tool).is_some_and(|row| row.3)
 }
 
 /// A usage error for options the stage of `tool` cannot take, asked before
 /// the first read of a chain. The stage asks again when it is built.
 pub fn check_stage_options(tool: &Tool, inv: &Invocation) -> Result<()> {
-    if tool.name == mark_duplicates::TOOL.name {
-        mark_duplicates::Options::for_stage(inv)?;
+    match tool.name {
+        "MarkDuplicates" => mark_duplicates::Options::for_stage(inv).map(|_| ()),
+        "SortSam" => crate::sort_sam::Options::for_stage(inv).map(|_| ()),
+        _ => Ok(()),
     }
-    Ok(())
 }
 
 /// A registry tool with a stage and its parsed options.
 struct ToolStage {
     stage: StageFn,
+    replays: bool,
     inv: Invocation,
 }
 
 impl StageBuilder for ToolStage {
     fn replays(&self) -> bool {
-        true
+        self.replays
     }
 
     fn build<'t>(self: Box<Self>, frame: &Frame, temp: &'t TempDir) -> Result<Stage<'t>> {
@@ -459,7 +507,11 @@ impl Step {
         let stage = stage_of(tool)?;
         Some(Self {
             label: tool.name.to_owned(),
-            kind: StepKind::Stage(Box::new(ToolStage { stage, inv })),
+            kind: StepKind::Stage(Box::new(ToolStage {
+                stage,
+                replays: replays(tool),
+                inv,
+            })),
         })
     }
 

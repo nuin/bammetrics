@@ -593,6 +593,7 @@ impl<'t> Barrier<'t> for Marking<'t> {
         Ok(Sealed {
             header: output,
             next: Next::Replay(Box::new(copier)),
+            products: crate::stage::Products::default(),
         })
     }
 }

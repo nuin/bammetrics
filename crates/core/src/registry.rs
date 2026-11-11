@@ -226,7 +226,7 @@ pub fn normalize(name: &str) -> String {
 /// is not coordinate sorted ([`Invocation::single_pass`]); the others change
 /// no metric.
 pub const COMMON: &[Opt] = &[
-    Opt::path(&["INPUT", "I"], "The BAM or CRAM to read.").required(),
+    Opt::path(&["INPUT", "I"], "The BAM, CRAM or SAM to read.").required(),
     Opt::output(&["OUTPUT", "O"]),
     Opt::ignored(&["VALIDATION_STRINGENCY"], STRINGENCY_UNREAD),
     Opt::ignored(&["TMP_DIR"], "no temporary files are written"),
@@ -248,7 +248,8 @@ pub const COMMON: &[Opt] = &[
 /// Why `VALIDATION_STRINGENCY` is ignored for a BAM or a CRAM. SAM text is
 /// checked at the value given ([`Invocation::stringency`]), and then no
 /// note is written.
-const STRINGENCY_UNREAD: &str = "records are not validated";
+pub const STRINGENCY_UNREAD: &str =
+    "a BAM or CRAM is not validated; SAM text is checked at the level given";
 
 /// Why `REFERENCE_SEQUENCE` is ignored by a tool whose metrics do not read
 /// it. A CRAM input is decoded with it, and then no note is written.
@@ -343,6 +344,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::jumping_library::TOOL,
     &crate::fifo_buffer::TOOL,
     &crate::view_sam::TOOL,
+    &crate::sort_sam::TOOL,
 ];
 
 /// The tool named `name`.
@@ -366,6 +368,9 @@ pub struct Invocation {
     /// The files the tool reads by name: `INPUT`, `REFERENCE_SEQUENCE` and
     /// every path option not marked [`Opt::written`].
     pub inputs: Vec<PathBuf>,
+    /// Bytes a sort may hold in memory (`--sort-memory` of a chain); `None`
+    /// for a tool run on its own, which counts records only.
+    pub sort_memory: Option<usize>,
 }
 
 impl Invocation {
@@ -969,6 +974,8 @@ pub fn python_keywords(tool: &Tool) -> Vec<PyKeyword> {
             Kind::Ignored(REFERENCE_UNREAD) if opt.picard() == "REFERENCE_SEQUENCE" => {
                 (opt.kwarg(), "_Path".to_owned(), false)
             }
+            // A BAM ignores it, SAM text is checked at it.
+            Kind::Ignored(STRINGENCY_UNREAD) => (opt.kwarg(), "str".to_owned(), false),
             Kind::Ignored(_) | Kind::Rejected => continue,
         };
         keywords.push(PyKeyword {
