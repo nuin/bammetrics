@@ -18,7 +18,7 @@ Decisions the owner must take, by the wave each one blocks:
 | # | Decision | Blocks |
 |---|---|---|
 | Q1 | Agent cap: 40 total is read as per workflow (14 at most each). Confirm. | W02 |
-| Q2 | Verb name: `chain`, with `run` as an alias or not. | W04 |
+| Q2 | Verb name: `chain`, with `run` as an alias or not. Decided: `chain` only, no alias (W04, docs/chaining.md section 12). | W04 |
 | Q3 | krilla for PDF: +3.8 MB behind feature `pdf`, rust-version 1.88 to 1.92. | W06 |
 | Q4 | Push `feat/check-duplicate-marking` and `feat/clinical-checks`; locate `feat/jumping-library-metrics`. | W01 |
 | Q5 | Scale gate on a CRAM slice (section 6), since no 30x BAM fits. | W05 |

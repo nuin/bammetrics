@@ -27,12 +27,13 @@ bammetrics <PicardClass> KEY=VALUE ...    the Picard drop-in, unchanged
 
 `run` in `crates/cli/src/lib.rs` dispatches in this order: a first argument that names a Picard class in the
 registry runs the Picard face, untouched; then a grammar verb (a tool verb, `collect`,
-`tools`, `presets`, `help`, `completions`); then the clap verbs `qc`, `plan`, `check`,
+`chain`, `tools`, `presets`, `help`, `completions`, and `plan` when its arguments describe
+a chain); then the clap verbs `qc`, `plan`, `check`,
 `report` and `convert`. Class names are CamelCase and verbs are kebab case, so the two cannot collide.
 
 | Group | Verbs |
 |---|---|
-| Run | `qc` (the collectors a preset needs, one pass, files, verdict, page), `collect` (the same pass, no verdict), one verb per registry tool |
+| Run | `qc` (the collectors a preset needs, one pass, files, verdict, page), `collect` (the same pass, no verdict), `chain` (several steps on one BAM in one process, records handed on in memory), one verb per registry tool |
 | Prepare | `bed-to-interval-list`, `mark-duplicates` |
 | Post | `accumulate-quality-yield`, `accumulate-variant-calling`, `compare-metrics`, `check-duplicate-marking`, `report`, `check`, `convert` |
 | Info | `tools`, `presets`, `plan`, `help`, `completions` |
@@ -45,6 +46,7 @@ samtools view -b in.bam chr20 | bammetrics quality-yield - -o chr20.quality_yiel
 bammetrics gc-bias in.bam -R ref.fa -o out/NA12878          # out/NA12878.gc_bias.*_metrics
 bammetrics hs-metrics in.bam --panel panel.bed -R ref.fa -o out/NA12878.hs_metrics
 bammetrics qc in.bam --preset clinical-panel --panel panel.bed -R ref.fa -o out/NA12878
+bammetrics chain in.bam -o out/NA12878 + mark-duplicates + insert-size + write --index
 bammetrics report out/ --preset clinical-panel
 bammetrics CollectInsertSizeMetrics I=in.bam O=out.txt M=0.5
 ```
@@ -137,6 +139,11 @@ above where a verb has them.
   `("OUTPUT", "")`: the program takes the prefix itself and adds its five extensions.
 - Several Hs runs write `PREFIX.<BAIT_SET>.hs_metrics`, `BAIT_SET` being the bait file name
   up to its first dot. Two bait files with one stem are an error.
+- `chain` writes under `-o PREFIX` too, with the same table: a tap on the last stream
+  writes the name `qc` writes, a tap in front of a transform `PREFIX.<stream>.<extension>`
+  (`PREFIX.in.insert_size_metrics` on the source), `mark-duplicates`
+  `PREFIX.marked.duplication_metrics`, `write` without a path `PREFIX.marked.bam`. A
+  step's own `-o` replaces the name ([docs/chaining.md](chaining.md) section 2.3).
 - Run files of `qc`: `PREFIX.manifest.json`, `PREFIX.verdict.json`, `PREFIX.report.html`,
   and `PREFIX.panel.interval_list` for a `--panel` BED. `report` writes
   `OUT/SAMPLE.verdict.json`, `OUT/SAMPLE.report.html` and `OUT/index.html`.
@@ -177,7 +184,8 @@ problem.
 
 `qc` and `plan` take `--format text|jsonl`, the event stream on standard output; `qc --also`
 writes file formats. `check` takes `text`, `json`, `jsonl`, `junit`, `markdown` and
-`multiqc`, as a list too. Each is described under its verb.
+`multiqc`, as a list too. Each is described under its verb. `chain` takes `--format` with
+`picard` first, on the chain and on a step, and `--also json|jsonl|tsv|csv|markdown`.
 
 ## Exit codes
 
@@ -195,7 +203,9 @@ One table for every verb, `EXIT_CODES` in `check.rs`:
 killed by a bad sample, and its summary prints `use --fail-on fail or bammetrics check to
 gate`. `report` exits 0 on any verdict. `check` always gates. A `qc` run with a failed
 collector exits 1 after it writes the other files, the verdict and the page. The tool verbs
-and `collect` exit 0, 1 or 2; the Picard face keeps 0 and 1. `compare-metrics` and
+and `collect` exit 0, 1 or 2; the Picard face keeps 0 and 1. `chain` exits 0, 1 or 2: 2
+for a usage error in any step, found before the first read, and 1 when a step failed, after
+the other steps wrote their files. `compare-metrics` and
 `CompareMetrics` exit 1 when the two files are NOT equal, as Picard does;
 `check-duplicate-marking` and `CheckDuplicateMarking` exit 1 when a record's duplicate flag
 differs from the first record of its queryname.
@@ -504,6 +514,55 @@ sibling with no row.
 `qc` exits 0 on any verdict unless `--fail-on` is given; then 10 when the verdict reaches it
 and 11 when the verdict is incomplete, as `check` does. A failed collector exits 1 after the
 other files, the verdict and the page are written.
+
+### chain
+
+```bash
+bammetrics chain [OPTIONS] BAM + STEP [STEP OPTIONS] [+ STEP ...]
+bammetrics chain --plan FILE [OPTIONS] [BAM]
+
+bammetrics chain in.bam -R ref.fa -o out/NA12878 \
+    + mark-duplicates \
+    + alignment-summary + insert-size + quality-yield + duplicate-metrics \
+    + write --index
+samtools view -b in.bam chr20 | bammetrics chain - + mark-duplicates + write - | samtools flagstat -
+bammetrics chain --plan plan.toml -o out/NA12878 --dry-run
+```
+
+Several steps on one BAM in one process. Records move from step to step in memory: no
+shell pipe and no intermediate file. [docs/chaining.md](chaining.md) is the reference; this
+is the short form.
+
+- The chain's options and the source (a BAM, a CRAM with `-R`, `-` for standard input)
+  come before the first `+`. Every `+` starts a step.
+- A step is a tool verb, its Picard class, or `write`. A transform (`mark-duplicates`)
+  changes the records later steps see. A tap (the 13 one-pass tool verbs) reads the
+  records of its position and changes nothing. `write [PATH]` writes those records as a
+  BAM; `-` is standard output. A `.sam`, `.cram` or `.fastq` name is refused with the wave
+  of docs/07 that adds it.
+- Each step takes its verb's own options in every spelling (`--minimum-pct 0.1`,
+  `--MINIMUM_PCT 0.1`, `MINIMUM_PCT=0.1`), with did-you-mean per step. `bammetrics chain
+  BAM + VERB --help` lists them.
+- Files go under `-o PREFIX` with the names `qc` writes (Output naming, above). A step's
+  own `-o` names its file. `--format picard,json` and `--also csv,markdown` add further
+  formats beside every metrics file.
+- `--plan FILE` reads the source, the options and the steps from a TOML file. An option
+  on the command line replaces the file's. An unknown key is an error with the line and
+  the closest name.
+- `--dry-run` prints the plan: the segments, whether `mark-duplicates` reads the file
+  twice (replay) or a copy of the pipe (spool), the files of each step, the estimated
+  temporary disk. `bammetrics plan` with a chain's arguments prints the same.
+- Standard error gets each transform's record counts, each failed step and one summary
+  line. `-q` leaves only the errors.
+
+Exit 0 when every step finished. Exit 2 for a usage error in any step: it is found before
+the first read, names the step (`step 2 (insert-size): unknown option --minmum-pct`), and
+nothing is written. Exit 1 when a step failed: a tap fails alone and every other step
+writes its files; a failing transform or `write` stops its segment, and the summary says
+which (`failed alone`, `failed and stopped its segment`, `stopped`, `not run`).
+
+A chain without a transform is the pass of `qc`: the same metrics files, byte for byte
+apart from the `Started on` line. It writes no verdict, page or manifest.
 
 ## Prepare verbs
 
@@ -874,15 +933,25 @@ bammetrics convert S1.insert_size_metrics | bammetrics convert - | cmp - S1.inse
   defaults; gap and sex rules are starting values`). Every rule is listed in
   [docs/verdict.md](verdict.md).
 - `bammetrics help VERB|PicardClass`: the verb's options in every spelling; `help qc` (or
-  `plan`, `check`, `report`, `convert`) prints clap's help.
+  `plan`, `check`, `report`, `convert`) prints clap's help. `help chain` lists the chain's
+  options, the step kinds and the options of `write`; `bammetrics chain BAM + VERB --help`
+  lists the options of one step.
 - `bammetrics completions bash|zsh|fish|elvish|powershell`: a completion script on stdout
-  (`bammetrics completions zsh > ~/.zfunc/_bammetrics`).
+  (`bammetrics completions zsh > ~/.zfunc/_bammetrics`). `chain` completes its own
+  options; the words after a `+` are not completed.
 
 ### plan
 
 ```bash
 bammetrics plan BAM [the qc options] [--format text|jsonl]
+bammetrics plan BAM [the chain options] + STEP [STEP OPTIONS] [+ STEP ...]
+bammetrics plan --plan FILE [the chain options]
 ```
+
+With a chain's arguments (a `+` step, `--plan FILE`, or the word `chain` first) `plan`
+prints the plan `chain --dry-run` prints: the segments, replay or spool, the files of each
+step and the estimated temporary disk ([docs/chaining.md](chaining.md) section 4). It reads
+the header of a file source and no record. With `qc` arguments it is what follows.
 
 `plan` is the dry run of `qc`. It prints the stages, the BAM reads (`2 BAM reads: 1 for the
 pass, 1 own read`), each collector with its files and rule count, which collectors share
@@ -1029,6 +1098,20 @@ bammetrics accumulate-quality-yield out/*.qy -o out/sample.qy
 `parallel` works in place of the loop.
 
 **9. MarkDuplicates to CollectDuplicateMetrics.**
+
+```
+$ bammetrics chain tests/data/markdup.bam -o out/s + mark-duplicates + duplicate-metrics + write
+bammetrics chain: step 1 (mark-duplicates): 36 records in, 36 out, 16 changed
+bammetrics chain: 3 steps finished, 3 files written
+$ ls out
+s.duplicate_metrics
+s.marked.bam
+s.marked.duplication_metrics
+```
+
+One process, no pipe and no second read of the marked BAM: `duplicate-metrics` gets the
+marked records in memory. The same with two processes and a pipe, as docs/05 first wrote
+it:
 
 ```bash
 bammetrics mark-duplicates tests/data/markdup.bam --metrics out/s.markdup_metrics -o - \

@@ -68,6 +68,15 @@ format given twice is a usage error.
   writes: `multiple-metrics in.bam -o out/S1 --format picard,json` adds
   `out/S1.insert_size_metrics.json` and its siblings. A file that is not a metrics file
   (the BAM, a BED of gaps) gets no sibling.
+- `chain` takes `picard` first too, on the chain and on a step (a step's own
+  `--format` replaces the chain's list for that step). Each further format is written
+  beside every metrics file a tap or `mark-duplicates` writes. `chain --also
+  json|jsonl|tsv|csv` adds the same siblings and `--also markdown` writes
+  `PREFIX.report.md` with every metrics table of the run and no verdict. `junit` and
+  `multiqc` are a usage error there: a chain has no verdict. The siblings are written
+  from the values in memory, as a verb's `--format picard,json` writes them, so a
+  double keeps its full precision; `qc --also` reads each Picard file back
+  ([docs/chaining.md](chaining.md) section 2.4).
 - `check` takes `-o FILE` for the first format. The further ones are `FILE.txt`,
   `FILE.json`, `FILE.jsonl`, `FILE.junit.xml`, `FILE.md` and `FILE.verdict_mqc.json`.
 - `qc` and `plan` keep one `--format` (`text` or `jsonl`): it names the event stream on

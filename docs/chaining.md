@@ -1,113 +1,365 @@
 # In-process chaining
 
 A chain runs several steps on one BAM in one process. Records move from step to step in
-memory. No shell pipe and no intermediate file is used. This page describes wave W03 of
-docs/07_full_parity_program.md (section 2): the stage layer, the executor, `MarkDuplicates` as
-the first stage, the tap adapter and the `write` step. The public `chain` verb is wave
-W04 (section 11).
+memory. No shell pipe and no intermediate file is used. This page describes what waves W03
+and W04 of docs/07_full_parity_program.md (section 2) built: the stage layer and its
+executor (W03, 0.21.0), then the `chain` verb, its plan file and its plan text (W04).
 
 ```bash
 # MarkDuplicates, four collectors on the marked records and the marked BAM, one process
-bammetrics __chain I=in.bam \
-    STEP=MarkDuplicates M=out.duplication_metrics \
-    STEP=CollectAlignmentSummaryMetrics O=out.alignment_summary_metrics \
-    STEP=CollectInsertSizeMetrics O=out.insert_size_metrics \
-    STEP=CollectQualityYieldMetrics O=out.quality_yield_metrics \
-    STEP=CollectDuplicateMetrics M=out.duplicate_metrics \
-    STEP=write O=out.marked.bam CREATE_INDEX=true
+bammetrics chain in.bam -R ref.fa -o out/NA12878 \
+    + mark-duplicates \
+    + alignment-summary + insert-size + quality-yield + duplicate-metrics \
+    + write --index
 ```
 
-The four metrics files equal, byte for byte after the `StringHeader` lines, the files the
-four tools write when they read `out.marked.bam`. The BAM holds the records the
-`MarkDuplicates` tool writes.
+This writes `out/NA12878.marked.duplication_metrics`, the four metrics files
+`out/NA12878.alignment_summary_metrics`, `.insert_size_metrics`, `.quality_yield_metrics`
+and `.duplicate_metrics`, and `out/NA12878.marked.bam` with `out/NA12878.marked.bai`. The
+four metrics files equal, byte for byte after the `StringHeader` lines, the files the four
+tools write when they read the marked BAM. The BAM holds the records the `MarkDuplicates`
+tool writes.
 
 ## 1. Steps
 
 A chain is a source and a list of steps. Each step sees the records the step before it
 emits.
 
-| Step | What it is | In W03 |
+| Step | What it is | Today |
 |---|---|---|
-| source | One BAM or CRAM file, or a pipe holding one | `I=` |
-| tap | A one-pass tool on the records of its position. It changes nothing | every registry tool with a collector (13 tools) |
-| stage | A tool that changes the stream. A transform edits batches in place. A barrier needs every record before one goes on | `MarkDuplicates` (barrier) |
-| sink | A writer of the records of its position | `write` (BAM) |
+| source | One BAM or CRAM file, or a pipe holding one | the positional argument, `-` for standard input |
+| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on | `mark-duplicates` (a barrier) |
+| tap | A one-pass tool on the records of its position. It changes nothing | 13 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check` |
+| write | A tap that writes the records of its position as a BAM | `write [PATH]` |
 
-A tap or a sink does not change the stream, so the step after it sees the same records.
-`MarkDuplicates I=in.bam + tap + tap + write` therefore gives every tap and the writer
-the marked records.
+A tap or `write` does not change the stream, so the step after it sees the same records.
+`in.bam + tap + mark-duplicates + tap + write` gives the first tap the source records and
+the second tap and the writer the marked records.
 
-A tool without a collector (`CollectWgsMetrics`, `CollectTargetedPcrMetrics`,
-`EstimateLibraryComplexity`, `CollectMultipleMetrics`) cannot be a step yet. W14 spools
-the stream for those.
+A tool without a collector and without a stage (`wgs`, `targeted-pcr`,
+`library-complexity`, `multiple-metrics`, every tool that reads no BAM) cannot be a step.
+W14 spools the stream for those.
 
-## 2. The test entry
-
-`bammetrics __chain` is hidden. `tools`, `help` and the completions do not list it. It
-exists so the tests and the measurements can run a chain from the command line. W04
-replaces it.
+## 2. The chain verb
 
 ```
-bammetrics __chain I=in.bam [R=ref.fa] [threads=N] [TMP_DIR=dir] \
-    STEP=<Picard class or write> [KEY=VALUE ...] \
-    STEP=...
+bammetrics chain [OPTIONS] BAM + STEP [STEP OPTIONS] [+ STEP ...]
+bammetrics chain --plan FILE [OPTIONS] [BAM]
 ```
 
-- Options before the first `STEP=` belong to the chain: `INPUT` (`I`),
-  `REFERENCE_SEQUENCE` (`R`, for a CRAM source), `threads` (default: the core
-  count, at most 8), `TMP_DIR` (where a barrier spills). `LOWER=false` forces the stage executor
-  for a chain of taps (section 9).
-- Every `STEP=` starts a step. The options after it are that step's, in the tool's own
-  Picard spelling. The chain's `INPUT` is given to every tool step. The chain's `R=` is
-  given to each tool that reads the reference, unless the step names its own.
-- A tap needs its file option (`O=`, or `M=` for `CollectDuplicateMetrics`).
-- `MarkDuplicates` takes every option of the tool except `OUTPUT`, `COMPRESSION_LEVEL`,
-  `CREATE_INDEX` and `CREATE_MD5_FILE`. Those belong to `write`. `METRICS_FILE` is
-  optional. Its record counts (in, out, changed) go to standard error.
-- `write` takes `OUTPUT` (`O`), `COMPRESSION_LEVEL` (0 to 9, default 5),
-  `CREATE_INDEX` and `CREATE_MD5_FILE`. The file is always BAM. A name ending in
-  `.sam` or `.cram` is refused. A path that is the source or the reference is refused.
-- `CREATE_INDEX=true` writes `<name>.bai` only for a coordinate-sorted stream. For any
-  other sort order `write` writes no index and prints
-  `write: CREATE_INDEX: no index written, the sort order is queryname and a .bai needs coordinate`.
-  The exit code stays 0. The `MarkDuplicates` tool skips the index the same way and
-  prints nothing.
-- Every output needs its own file. The outputs are each tap's file option and its other
-  written files (`SUMMARY_OUTPUT`), the `METRICS_FILE` of `MarkDuplicates`, and the BAM
-  of `write` with its `.bai` and `.md5`. Two outputs that are one file (links and `..`
-  resolved) are a usage error:
-  `CollectQualityYieldMetrics and write both write x.out: every output of a chain needs its own file`.
-  Nothing is read and nothing is written. A device or a pipe is exempt: several taps
-  may name `/dev/null`.
-- A tool whose `OUTPUT` is a prefix (`CollectSequencingArtifactMetrics`) names its
-  files when it finishes. If one of them is the file of another step, that tool fails
-  alone (`<file> is a file of <step>`, exit 1) and the other step's file stays.
+The chain's options and the source come first. Every `+` starts a step. The first word of
+a step is its verb: a tool verb (`insert-size`), its Picard class
+(`CollectInsertSizeMetrics`), or `write`. The words after it are that step's options.
 
-Step labels: a message names a step by its tool (`MarkDuplicates`, `write`). A name
-given more than once is numbered in step order: `CollectGcBiasMetrics#1`,
-`CollectGcBiasMetrics#2`.
+A step is parsed by its own verb's flags (`Verb::flags`). So every spelling a verb takes
+works in a step: `--minimum-pct 0.1`, `--MINIMUM_PCT 0.1`, `MINIMUM_PCT=0.1`, `-M 0.1`,
+`--no-x` for a boolean. An unknown option gets the closest name of that verb's options.
+`bammetrics chain BAM + VERB --help` lists the options of one step. A value that is a lone
+`+` is written `--option=+`.
 
-Exit codes:
+### 2.1 Chain options
+
+| Option | Meaning |
+|---|---|
+| `BAM`, `-i`, `I=` | The source: a BAM, or a CRAM with `-R`. `-` reads standard input |
+| `-o`, `--output-prefix`, `O=` | The prefix of every step that names no file of its own. Default `./` plus the source name without its extension, and standard error says so. A directory (an existing one, or a path ending in `/`) gets the source name as the file part |
+| `-R`, `--reference`, `R=` | Reference FASTA with a `.fai`. It decodes a CRAM source. It goes to every step that reads a reference and names none |
+| `-@`, `--threads` | BGZF threads of each read and of `write` (default: cores, at most 8) |
+| `--tmp-dir`, `TMP_DIR=` | Where a transform spills and a piped source is copied |
+| `--format LIST` | `picard` first. Each further format is written beside every metrics file |
+| `--also LIST` | `json`, `jsonl`, `tsv`, `csv` beside every metrics file; `markdown` as `PREFIX.report.md` |
+| `--sample NAME` | Sample name of the json and jsonl forms (default: the first `@RG SM`, else the source name) |
+| `--plan FILE` | Read the source, the options and the steps from a plan file (section 3) |
+| `--dry-run` | Print the plan and run nothing (section 4) |
+| `-q`, `-v` | No notes and no summary; or each command line and each file written |
+
+The source, `--threads`, `--sample`, `-q` and `-v` belong to the chain. Given on a step
+they are a usage error that says so.
+
+### 2.2 Step options
+
+- A tap takes every option of its verb. `-o FILE` names its file (`-o -` writes it to
+  standard output). On a verb that writes several files (`gc-bias`,
+  `sequencing-artifact`) `-o` is a prefix for that step alone.
+- `mark-duplicates` takes every option of the tool except `OUTPUT`, `COMPRESSION_LEVEL`,
+  `CREATE_INDEX` and `CREATE_MD5_FILE`. Those belong to `write`. `--metrics-file` names
+  its metrics file. `--as NAME` names the stream it leaves (default `marked`).
+- `write [PATH]` takes `--index` (`CREATE_INDEX`), `--md5` (`CREATE_MD5_FILE`) and
+  `--compression-level N` (0 to 9, default 5). `-` as the path is standard output, so a
+  pipe to another tool still works: `bammetrics chain in.bam + mark-duplicates + write -
+  | samtools flagstat -`. The file is always a BAM. A name ending in `.sam`, `.cram`,
+  `.fastq` or `.fq` (with `.gz` too) is refused with the wave that adds that kind: SAM is
+  W05, CRAM is W15, FASTQ is W22.
+- `--index` writes `<name>.bai` only for a coordinate-sorted stream. For any other sort
+  order `write` writes no index and says so on standard error. The exit code stays 0.
+
+### 2.3 Files and names
+
+Names follow `qc`. The extensions come from `multiple_metrics::file_extensions`, the one
+table `qc`, `collect` and the verbs read. A stream has a name: `in` for the source, the
+label of the transform in front otherwise.
+
+| Step | File |
+|---|---|
+| A tap on the last stream | `PREFIX.<extension>`, the name `qc` writes |
+| A tap in front of a transform | `PREFIX.<stream>.<extension>`: `PREFIX.in.insert_size_metrics` on the source |
+| `mark-duplicates` | `PREFIX.<stream>.duplication_metrics`: `PREFIX.marked.duplication_metrics` |
+| `write` without a path | `PREFIX.<stream>.bam`: `PREFIX.marked.bam`, or `PREFIX.in.bam` in a chain without a transform |
+| A step with its own `-o`, or `write PATH` | That name |
+
+```
+$ bammetrics chain tests/data/markdup.bam -o out/s --also csv \
+      + quality-yield \
+      + mark-duplicates --as dedup --remove-duplicates \
+      + insert-size \
+      + quality-yield -o out/after.txt \
+      + write out/kept.bam --md5
+bammetrics chain: step 2 (mark-duplicates): 36 records in, 19 out, 16 changed
+bammetrics chain: 5 steps finished, 10 files written
+$ ls out
+after.txt
+after.txt.csv
+kept.bam
+kept.bam.md5
+s.dedup.duplication_metrics
+s.dedup.duplication_metrics.csv
+s.in.quality_yield_metrics
+s.in.quality_yield_metrics.csv
+s.insert_size_metrics
+s.insert_size_metrics.csv
+```
+
+Rules:
+
+- Every output needs its own file. The outputs are each tap's files, the metrics file of
+  a transform, the BAM of `write` with its `.bai` and `.md5`, and each further format
+  beside a metrics file. Two outputs that are one file (links and `..` resolved, hard
+  links by device and inode) are a usage error:
+  `step 1 (quality-yield) and step 2 (insert-size) both write x.out: every output of a chain needs its own file`.
+  A device or a pipe is exempt: several steps may name `/dev/null`.
+- Two taps of one tool at one position write one name under the prefix, so they are that
+  usage error. Give one of them `-o`.
+- A tool whose `OUTPUT` is a prefix (`sequencing-artifact`) names its files when it
+  finishes. If one of them is the file of another step, that tool fails alone and the
+  other step's file stays.
+- An output that is a file the chain reads (the source, the reference, an interval list
+  of a step) is a usage error. Nothing is read and nothing is written.
+- Missing directories above an output are created, as every verb creates them.
+- At most one step writes standard output (`write -`, or `-o -` on a single-file tap).
+
+### 2.4 Formats
+
+The Picard text format is the default and its bytes do not change. `--format picard,json`
+writes each metrics file and `FILE.json` beside it, from one set of header lines, through
+`crates/formats`. A step's own `--format` replaces the chain's list for that step. The list
+starts with `picard`, on the chain and on a step: a chain names Picard files. `--also
+json|jsonl|tsv|csv` adds the same siblings. `--also markdown` writes `PREFIX.report.md`
+with every metrics table the run wrote, in step order. `--also junit` and `--also multiqc`
+print a verdict and a chain has none: they are a usage error that names `bammetrics check
+DIR --format junit`. A step that writes standard output writes the Picard file alone.
+
+The json, tsv and csv siblings are written from the values in memory, as `--format
+picard,json` of a tool verb writes them, so a double keeps its full precision. `qc --also`
+reads each Picard file back and so writes the 6 fraction digits of that file.
+
+### 2.5 What it prints, and exit codes
+
+Standard output is empty unless a step writes there. Standard error gets one line per
+transform with its record counts, each note, each failed step, and one summary line:
+
+```
+bammetrics chain: step 1 (mark-duplicates): 36 records in, 36 out, 16 changed
+bammetrics chain: 6 steps finished, 7 files written
+```
+
+A message names a step by its number and verb: `step 3 (insert-size)`.
 
 | Code | When | Found |
 |---|---|---|
 | 0 | Every step finished | |
-| 2 | A usage error: an unknown step or option, a missing `OUTPUT`, a `.sam` or `.cram` name on `write`, two outputs in one file, an output that is an input, a second replaying stage (section 5) | Before the first read. No file is written |
-| 1 | An output that cannot be written (its directory is missing, the file is read only) | Before the first read, as the Picard face exits for its `OUTPUT` |
-| 1 | A step failed | During the run. The other steps still write their files |
+| 2 | A usage error: an unknown step or option, a value that is no number, a missing required option, a name `write` cannot write yet, two outputs in one file, an output that is an input, a second transform, a bad plan file | Before the first read. No file is written and no directory is made |
+| 1 | An input that is not there (the source, `-R`, the plan file) | Before the first read |
+| 1 | An output that cannot be written (its directory cannot be made, the file is read only) | Before the first read, as the Picard face exits for its `OUTPUT` |
+| 1 | A step failed | During the run. The other steps still write their files (section 9) |
 
-Every one of these prints `bammetrics __chain: <step>: <error>`. An error of the chain's
-own options (`INPUT is required`) has no step. The options of a stage are parsed when
-the stage is built, so a bad value there (`READ_NAME_REGEX=(`) exits 1 (W04 moves that
-check in front of the run).
+```
+$ bammetrics chain in.bam + quality-yield + insert-size --minmum-pct 0.1
+bammetrics chain: step 2 (insert-size): unknown option --minmum-pct
+  did you mean --minimum-pct (Picard MINIMUM_PCT)?
+  every option: bammetrics help insert-size
+$ bammetrics chain in.bam + inser-size
+bammetrics chain: step 1: unknown step "inser-size"
+  did you mean insert-size?
+  a step is a tool verb (bammetrics tools lists them) or write
+$ bammetrics chain in.bam + write out/x.sam
+bammetrics chain: step 1 (write): out/x.sam: bammetrics writes BAM only: SAM output is wave W05 of docs/07_full_parity_program.md
+```
 
-Tests in `crates/cli/tests/chain.rs`: `two_steps_cannot_write_one_file` (8 command
-lines), `a_file_under_a_prefix_never_replaces_the_file_of_another_step`,
-`write_says_when_it_writes_no_index`,
-`an_output_that_cannot_be_written_exits_1_before_anything_runs` and
-`usage_errors_exit_2_before_anything_runs` (11 command lines).
+What is checked before the first read: the step name, every option name, every value of
+an int or float option, required options, files a step reads, `STOP_AFTER`, every option
+of `mark-duplicates` (`stage::check_stage_options`), the names and the writability of
+every output. A text value only the tool can judge (`--level NOPE` on a tap) is found when
+that tap is built: the tap fails alone and the chain exits 1.
 
-## 3. The Rust API
+## 3. The plan file
+
+`bammetrics chain --plan FILE` reads the source, the options and the steps from a TOML
+file. It is the same chain: `chain --plan FILE` and the command line it stands for write
+the same files and print the same plan.
+
+```toml
+# tests/data/chain_markdup.toml
+[chain]
+source = "tests/data/markdup.bam"
+reference = "tests/data/ref_100k.fa"
+
+[[step]]
+verb = "mark-duplicates"
+
+[[step]]
+verb = "alignment-summary"
+
+[[step]]
+verb = "insert-size"
+
+[[step]]
+verb = "quality-yield"
+
+[[step]]
+verb = "duplicate-metrics"
+
+[[step]]
+verb = "write"
+index = true
+```
+
+```bash
+bammetrics chain --plan tests/data/chain_markdup.toml -o out/sample
+# the same chain:
+bammetrics chain tests/data/markdup.bam -R tests/data/ref_100k.fa -o out/sample \
+    + mark-duplicates \
+    + alignment-summary + insert-size + quality-yield + duplicate-metrics \
+    + write --index
+```
+
+The second example is a chain without a transform: four collectors on one read, each
+metrics file also as JSON.
+
+```toml
+# tests/data/chain_taps.toml
+[chain]
+source = "tests/data/insert_size.bam"
+format = ["picard", "json"]
+sample = "S1"
+
+[[step]]
+verb = "quality-yield"
+use-original-qualities = false
+
+[[step]]
+verb = "alignment-summary"
+level = ["SAMPLE", "LIBRARY"]
+stop-after = 8
+
+[[step]]
+verb = "insert-size"
+minimum-pct = 0.1
+
+[[step]]
+verb = "duplicate-metrics"
+```
+
+```bash
+bammetrics chain --plan tests/data/chain_taps.toml -o out/sample
+# the same chain:
+bammetrics chain tests/data/insert_size.bam -o out/sample --format picard,json --sample S1 \
+    + quality-yield --no-use-original-qualities \
+    + alignment-summary --level SAMPLE --level LIBRARY --stop-after 8 \
+    + insert-size --minimum-pct 0.1 \
+    + duplicate-metrics
+```
+
+The format:
+
+- One `[chain]` table. Its keys: `source`, `output-prefix`, `reference`, `threads`,
+  `tmp-dir`, `format`, `also`, `sample`, `quiet`, `verbose`. `format` and `also` take a
+  string (`"picard,json"`) or a list of strings.
+- One `[[step]]` table per step, in chain order. `verb` is required: a tool verb, a
+  Picard class, or `write`. Every other key is the long name of an option of that verb
+  (`minimum-pct`), or its Picard name (`MINIMUM_PCT`). A boolean option takes `true` or
+  `false`, an int option an integer, a float option a number, a text or path option a
+  string. A repeatable option takes a list. The keys of `write` are `output`, `index`,
+  `md5` and `compression-level`.
+- A path is read as the command line reads it: relative to the working directory.
+- An option on the command line replaces the file's: `chain --plan FILE -o out/other
+  other.bam` runs the file's steps on another source under another prefix. A `+` step
+  beside `--plan` is a usage error.
+- An unknown table, an unknown key, a key given twice and a value of the wrong type are
+  usage errors with the file, the line and the closest name:
+
+```
+$ bammetrics chain --plan tests/data/chain_bad_key.toml
+bammetrics chain: tests/data/chain_bad_key.toml:8: step 1 (insert-size): unknown key minmum-pct
+  did you mean minimum-pct (Picard MINIMUM_PCT)?
+  every option: bammetrics chain BAM + insert-size --help
+```
+
+The reader is `bammetrics_core::toml::parse_tables`, the subset of TOML the verdict
+presets use (it moved from `crates/verdict/src/table.rs` in this wave). It gained one-line
+arrays of scalars for repeatable options. No dependency was added.
+
+## 4. The plan
+
+`chain ... --dry-run` prints what the chain would do and runs nothing. `bammetrics plan`
+with a chain's arguments prints the same text: `plan BAM + STEP ...`, `plan --plan FILE`,
+or `plan chain ...`. (`plan` with `qc` arguments, which hold no `+` and no `--plan`, is
+still the dry run of `qc`.)
+
+```
+$ bammetrics chain tests/data/markdup.bam -R tests/data/ref_100k.fa -o out/sample --dry-run \
+      + mark-duplicates \
+      + alignment-summary + insert-size + quality-yield + duplicate-metrics \
+      + write --index
+chain plan for tests/data/markdup.bam
+  source    tests/data/markdup.bam (BAM, 1,158 bytes, sort order coordinate; a file, it can be read again)
+  prefix    out/sample (from -o)
+  reference tests/data/ref_100k.fa
+segment 1  one read of tests/data/markdup.bam
+  step 1  mark-duplicates    transform, first read  takes every record, then finds the duplicate sets
+segment 2  a second read of tests/data/markdup.bam through step 1 (replay: nothing is spooled)
+  step 1  mark-duplicates    stream marked          out/sample.marked.duplication_metrics
+  step 2  alignment-summary  tap on marked          out/sample.alignment_summary_metrics
+  step 3  insert-size        tap on marked          out/sample.insert_size_metrics
+  step 4  quality-yield      tap on marked          out/sample.quality_yield_metrics
+  step 5  duplicate-metrics  tap on marked          out/sample.duplicate_metrics
+  step 6  write              BAM of marked          out/sample.marked.bam, out/sample.marked.bai
+temp disk  none expected: about 16 records, and mark-duplicates keeps 4,000,000 in memory before it spills (MAX_RECORDS_IN_RAM)
+nothing ran: this is a plan
+```
+
+The plan lists:
+
+- The segments, and what each reads. A transform that reads its input twice
+  (`mark-duplicates`) replays a file source: the file is read a second time and nothing
+  is spooled. A piped source is copied to the temporary directory once (the spool) and
+  the copy is read twice.
+- Each step with its role, the stream it reads and every file it writes, the further
+  formats included. A tool whose `OUTPUT` is a prefix is listed as `PREFIX.*`.
+- The estimated temporary disk. The record count comes from the file size: 69 compressed
+  bytes per record for a BAM, 21 for a CRAM (the HG002 exome BAM and the NA12878 genome
+  CRAM of docs/benchmarks.md). Under `MAX_RECORDS_IN_RAM` records nothing spills. Above
+  it the estimate is 59 bytes per record, the larger of the two peaks measured there
+  (46 and 59). It gives 8.2 GiB for the exome BAM (measured 6.5 GiB) and 41.3 GiB for the
+  genome CRAM (measured 42.1 GiB). A pipe has no size to read, so the plan says what
+  spills and gives no number.
+
+The plan reads the header of a file source, so a file that is no BAM exits 1 there. It
+reads no record and nothing of a pipe. The planner of W05 adds the free-space refusal and
+the sort order each step requires.
+
+## 5. The Rust API
+
+### 5.1 The stage layer
 
 `bammetrics_core::stage` (`crates/core/src/stage.rs`, `stage/exec.rs`,
 `stage/sinks.rs`).
@@ -126,19 +378,45 @@ lines), `a_file_under_a_prefix_never_replaces_the_file_of_another_step`,
 | `Emit` | Where a producer puts each record. `BamWriter` and `Vec<RawRecord>` implement it |
 | `Step` | `tap`, `tool_tap(tool, inv)`, `tool_stage(tool, inv)`, `stage`, `sink`, `write(WriteOptions, threads)` |
 | `ChainPlan` | `source`, `steps`, `threads`, `tmp_dir`, `lower` |
-| `run_chain(plan, progress)` | One `Result<Products>` per step, in step order. `Err` for a plan refused before the first read (section 5) or a source that cannot be read in the first segment |
-| `Products` | `output` (metrics the caller writes), `files` (a writer's renamed files), `counters` (a stage's records in, out, changed), `notes` (lines for standard error, such as the index `write` did not write) |
-| `WriteOptions` | `path`, `compression_level`, `create_index`, `create_md5`. `check()` refuses a `.sam` or `.cram` name. `files()` lists the BAM, the `.bai` and the `.md5` |
-| `check_distinct_outputs(outputs)` | A usage error when two `(step label, path)` pairs are one file. The caller writes the metrics, so the caller calls it before `run_chain` |
-| `writer_of(outputs, path)` | The label of the step that writes `path`, if any |
-| `stage_of(tool)` | The stage function of a registry tool. One row: `MarkDuplicates` |
+| `run_chain(plan, progress)` | One `Result<Products>` per step, in step order. `Err` for a plan refused before the first read or a source that cannot be read in the first segment |
+| `Products` | `output` (metrics the caller writes), `files` (a writer's renamed files), `counters` (a stage's records in, out, changed), `notes` (lines for standard error) |
+| `halt(error)`, `Halt` | `Stopped` or `NotRun` for the result of a step another step halted, `None` for a step's own failure |
+| `WriteOptions` | `path`, `compression_level`, `create_index`, `create_md5`. `check()` refuses a name of a later wave. `files()` lists the BAM, the `.bai` and the `.md5` |
+| `later_kind(path)` | The kind and wave of a name `write` cannot make yet: `("SAM", "W05")` |
+| `Outputs` | The files of a chain's steps in a hash map, keyed by device and inode or by the resolved path. `claim(label, path)` is a usage error when a step already writes the file. `owner(path)` |
+| `check_distinct_outputs(outputs)`, `writer_of(outputs, path)` | The same check over a slice |
+| `stage_of(tool)`, `label_of(tool)`, `check_stage_options(tool, inv)` | The stage function of a registry tool, the default name of its stream (`marked`), and its options checked before a run. One tool: `MarkDuplicates` |
 
 `crates/core/src/bam_writer.rs` holds `BamWriter` (the header byte for byte, BGZF on
 worker threads, htsjdk's order check, an `AtomicFile` under a temporary name) and
 `finish` (the `.bai` and `.md5`, then the renames). `MarkDuplicates` and `write` share
 it.
 
-## 4. Segments and threads
+### 5.2 The verb as a library
+
+`bammetrics_cli::chain` (`crates/cli/src/chain.rs` and `chain/`). A caller that is not the
+command line (the Python module) builds a `Spec`, calls `prepare`, then `execute`.
+
+| Item | Role |
+|---|---|
+| `Spec`, `StepSpec` | A chain as asked for: `source`, `reference`, `prefix`, `threads`, `tmp_dir`, `formats`, `also`, `sample`, `quiet`, `verbose`, `steps`. A step is its verb and its arguments as text (`StepSpec::new("insert-size", &["--minimum-pct=0.1"])`) |
+| `parse(args)` | The command line into `Asked::Chain { spec, dry_run }` or `Asked::Help(text)` (`chain/args.rs`) |
+| `read_plan(path)`, `parse_plan(text, file)` | A plan file into a `Spec` (`chain/planfile.rs`) |
+| `prepare(&Spec) -> Result<Chain, VerbError>` | Every usage check. Nothing is read or written (`chain/prepare.rs`) |
+| `Chain` | `source`, `source_path`, `reference`, `prefix`, `threads`, `steps`, `report`, `replayable()`, `segments()` |
+| `Planned` | One step: `number`, `verb`, `tool`, `role` (`Role::Transform`, `Tap`, `Write`), `label`, `reads`, `leaves`, `segment`, `files` (`PlannedFile { path, kind }`), `late_prefix`, `stdout`, `command` (the `StringHeader` command line) |
+| `plan_text(&Chain)` | The text of section 4 (`chain/describe.rs`) |
+| `execute(Chain) -> Result<Outcome, VerbError>` | Runs the chain and writes every file. It prints nothing. `Err` for what stops the chain before its first record (`chain/run.rs`) |
+| `Outcome` | `chain`, `steps`, `files` (the chain's own, `PREFIX.report.md`), `code` (0 or 1) |
+| `StepOutcome` | One per step: `number`, `status` (`StepStatus::Ok`, `Failed`, `Stopped`, `NotRun`), `error`, `files` (`Written { path, kind }`), `counters` (a transform's `records_in`, `records_out`, `changed`), `notes` |
+| `summary(&Outcome)` | The lines the command prints on standard error |
+| `global_flags()`, `step_flags(verb)`, `write_flags()` | The option tables, as `grammar::Flag`s: the source of `--help`, of the completions, and of a caller's keyword list |
+| `run(args)`, `run_plan(args)` | The command and its `plan` form: the exit code |
+
+`crates/cli/tests/chain.rs::the_library_entry_returns_one_outcome_per_step` pins this
+entry.
+
+## 6. Segments and threads
 
 The executor cuts the steps at barriers. Each part is a segment.
 
@@ -155,16 +433,17 @@ The executor cuts the steps at barriers. Each part is a segment.
   workers.
 - Segments run in turn. Peak memory is the largest segment, not the sum.
 
-`in.bam + tap A + MarkDuplicates + tap B + write` is two segments. Segment 1 reads
+`in.bam + tap A + mark-duplicates + tap B + write` is two segments. Segment 1 reads
 `in.bam`, feeds tap A and the first read of `MarkDuplicates`. The barrier is sealed.
 Segment 2 reads `in.bam` again through the second read of `MarkDuplicates` and feeds
 tap B and the writer.
 
 A chain of taps alone is not run by this executor. It is lowered to
-`pass::run_isolated`, the read `qc` uses, so `qc` and every golden record keep their
-bytes and their speed. `qc` itself is unchanged in W03.
+`pass::run_isolated`, the read `qc` uses, so it costs what `qc` costs and writes the bytes
+`qc` writes (section 10). `qc` itself is unchanged. `--no-lower` (not in `--help`) forces
+the stage executor for such a chain, to measure it.
 
-## 5. MarkDuplicates as a barrier
+## 7. MarkDuplicates as a barrier
 
 The tool has two reads. In a chain they become the two halves of a barrier.
 
@@ -179,94 +458,137 @@ The tool has two reads. In a chain they become the two halves of a barrier.
   the batch of the next step for a chain.
 
 The file source is read twice. Nothing is spooled for a regular file. A pipe is copied
-to `TMP_DIR` once, as the tool does. Read ends spill to `TMP_DIR` as in the tool
+to `--tmp-dir` once, as the tool does. Read ends spill to `--tmp-dir` as in the tool
 (`MAX_RECORDS_IN_RAM`).
 
 A step after the barrier is built from the sealed header, so it sees the new `@PG` line.
 
-Limit of W03: a stage that replays must sit directly behind a file source. A replaying
-stage behind another stage is refused by `run_chain` from the plan, before the first
-read of the source: `MarkDuplicates#2 reads its input twice and cannot follow
-MarkDuplicates#1: only a file source can be read again in this version`. It is a usage
-error (exit 2). No step runs and no file is written. W05 adds the spool and the planner
-that lift this.
+Limit: a transform that replays must sit directly behind a file source. A second
+transform is refused by `prepare`, before the first read: `step 3 (mark-duplicates): it
+reads its input twice and cannot follow step 1 (mark-duplicates): only a file source can
+be read again in this version`. It is a usage error (exit 2). No step runs and no file is
+written. `run_chain` refuses the same plan for a caller of the stage layer. W05 adds the
+spool and the planner that lift this.
 
-## 6. Options in the middle of a chain
+## 8. Options in the middle of a chain
 
 `STOP_AFTER` and `ASSUME_SORTED` belong to the tap that carries them.
 
-- `STOP_AFTER=N` on a tap: the tap takes the first N records its position emits. After
-  `MarkDuplicates REMOVE_DUPLICATES=true` those are the first N records that were kept,
+- `--stop-after N` on a tap: the tap takes the first N records its position emits. After
+  `mark-duplicates --remove-duplicates` those are the first N records that were kept,
   the same N records the tool reads from the written BAM.
 - It never shortens the stream. The steps after the tap get every record.
 - The read stops early only in a segment with no stage, when every tap of it is done.
   A lowered chain stops at the largest `STOP_AFTER` when every tap has one.
-- `ASSUME_SORTED=false` on a tap checks the header of its position. After a barrier
+- `--no-assume-sorted` on a tap checks the header of its position. After a barrier
   that is the sealed header.
 
 `crates/cli/tests/chain.rs::stop_after_in_the_middle_of_a_chain_belongs_to_its_tap` pins
-this against the staged runs. `MarkDuplicates` has no `STOP_AFTER`.
+this against the staged runs. `mark-duplicates` has no `STOP_AFTER`.
 
-## 7. Failure
+## 9. Failure
 
 | What fails | Result |
 |---|---|
 | A tap (cannot be built, fails on a record, fails to finish, panics) | That tap has its error. Every other step finishes |
-| A stage on a record, or a stage or `write` that cannot be built | Its segment stops. The failing step has its error. Every other step of the segment is `stopped: <step> failed: <cause>`, taps in front of it included, because they saw part of the stream. Every later step is `not run: <step> failed: <cause>` |
+| A transform on a record, or a transform or `write` that cannot be built | Its segment stops. The failing step has its error. Every other step of the segment is `stopped: <step> failed: <cause>`, taps in front of it included, because they saw part of the stream. Every later step is `not run: <step> failed: <cause>` |
 | A barrier at its seal | The barrier has its error. The taps of its segment keep their results: they saw the whole stream. Later steps are `not run` |
-| `write` on a record | The segment stops as for a stage when the reader sees the failure between two batches. When the stream ended first, the taps keep their results. Later steps are `not run` either way |
-| The source in the first segment | `run_chain` returns the error, as `pass::run_isolated` does |
+| `write` on a record | The segment stops as for a transform when the reader sees the failure between two batches. When the stream ended first, the taps keep their results. Later steps are `not run` either way |
+| The source in the first segment | `run_chain` returns the error, as `pass::run_isolated` does. The chain exits 1 |
 | The source in a later segment | The steps of that segment are `stopped`, later steps `not run` |
 
 Steps of an earlier segment keep their results. A written BAM is renamed into place only
 when its segment finished. A failed or stopped writer leaves no file and no temporary
 file. A tap that failed on its own before its segment stopped keeps its own error.
 
-Tests: `crates/core/src/stage/tests.rs` (synthetic stages, each row of the table) and
-`crates/cli/tests/chain.rs::a_failing_tap_fails_alone_and_a_failing_stage_stops_its_segment`
-(`CollectGcBiasMetrics` without a reference, `MarkDuplicates` on a BAM without a read
-group).
+The summary says which case it was. A tap that fails reads `failed alone`. A transform or
+`write` that halted other steps reads `failed and stopped its segment`. The last line
+counts the steps by how they ended. The exit code is 1.
 
-## 8. Chained equals staged
+```
+$ bammetrics chain tests/data/duplicate_marking.bam -o out/s \
+      + quality-yield --no-assume-sorted + mark-duplicates + insert-size + write
+bammetrics chain: step 1 (quality-yield): failed alone: tests/data/duplicate_marking.bam should be coordinate sorted but the header says the sort order is queryname; pass ASSUME_SORTED=true to read it anyway
+bammetrics chain: step 2 (mark-duplicates): 13 records in, 13 out, 5 changed
+bammetrics chain: 3 of 4 steps finished, 1 failed; 3 files written
+$ bammetrics chain tests/data/insert_size.bam -o out/s + quality-yield + mark-duplicates + insert-size + write
+bammetrics chain: step 1 (quality-yield): stopped: step 2 (mark-duplicates) failed: Cannot invoke ... is null (read r0)
+bammetrics chain: step 2 (mark-duplicates): failed and stopped its segment: Cannot invoke ... is null (read r0)
+bammetrics chain: step 3 (insert-size): not run: step 2 (mark-duplicates) failed: Cannot invoke ... is null (read r0)
+bammetrics chain: step 4 (write): not run: step 2 (mark-duplicates) failed: Cannot invoke ... is null (read r0)
+bammetrics chain: 0 of 4 steps finished, 1 failed, 1 stopped, 2 not run; 0 files written
+```
+
+Tests: `crates/core/src/stage/tests.rs` (synthetic stages, each row of the table) and
+`crates/cli/tests/chain.rs::a_failing_tap_fails_alone_and_a_failing_transform_stops_its_segment`
+(a tap that asks for a coordinate-sorted stream on a queryname-sorted BAM,
+`mark-duplicates` on a BAM without a read group).
+
+## 10. What equals what
+
+### 10.1 Chained equals staged
 
 Staged means `MarkDuplicates I=in.bam O=marked.bam M=dup.txt`, then each tool on
-`marked.bam`. Chained means one `__chain` command.
+`marked.bam`. Chained means one `chain` command.
 
 What is equal:
 
 - Each tap's metrics file after its `StringHeader` lines, byte for byte.
-- The `MarkDuplicates` metrics file after its `StringHeader` lines.
+- The `mark-duplicates` metrics file after its `StringHeader` lines.
 - Every record of the written BAM, byte for byte, and every header line with the `CL`
   field of `@PG` set aside.
-- With `PROGRAM_GROUP_COMMAND_LINE` given, the whole BAM, its `.bai` and its `.md5`.
+- With `PROGRAM_GROUP_COMMAND_LINE` given, the whole BAM, its `.bai` and its `.md5`,
+  written to a file or to standard output.
 
-`crates/cli/tests/chain.rs` checks this for 8 taps (`CollectAlignmentSummaryMetrics`,
-`CollectInsertSizeMetrics`, `CollectQualityYieldMetrics`, `CollectDuplicateMetrics`,
-`QualityScoreDistribution`, `MeanQualityByCycle`, `CollectBaseDistributionByCycle`,
-`CollectGcBiasMetrics` with its summary file) on `tests/data/markdup.bam` (2 option
-sets), the query-name sorted `tests/data/duplicate_marking.bam`, corpus t1 (2 option sets) and the foundation corpus
+`crates/cli/tests/chain.rs` checks this for 8 taps (`alignment-summary`, `insert-size`,
+`quality-yield`, `duplicate-metrics`, `quality-score-distribution`,
+`mean-quality-by-cycle`, `base-distribution-by-cycle`, `gc-bias` with its summary file) on
+`tests/data/markdup.bam` (2 option sets), the query-name sorted
+`tests/data/duplicate_marking.bam`, corpus t1 (2 option sets) and the foundation corpus
 (2 option sets, one spilling with `MAX_RECORDS_IN_RAM=500`). The corpus cases are
 skipped when `tests/corpus/out` is absent.
 
-What differs on purpose (also in KNOWN_DIFFERENCES.md):
+### 10.2 A chain without a transform equals qc
+
+`chain in.bam -o P + quality-yield + alignment-summary + insert-size + duplicate-metrics`
+writes the four metrics files `qc in.bam -o P` writes: the same names and the same bytes,
+apart from the `Started on` line, which carries the clock. The command line in the
+`StringHeader` is the tool's: `INPUT`, the file options, `REFERENCE_SEQUENCE` when the
+tool reads one or the source is a CRAM, then the step's options.
+`crates/cli/tests/chain.rs::a_chain_without_a_transform_equals_qc` checks a BAM, a BAM
+with `-R` and a CRAM. The golden suite checks the records of `chain_taps` and
+`qc_generic` against each other.
+
+### 10.3 The plan file equals the command line
+
+`crates/cli/tests/chain.rs::the_plan_file_equals_the_command_line` runs both examples of
+section 3 both ways: the same file names, the same bytes apart from the clock line, the
+same BAM and index, the same `--dry-run` text, the same `plan` text. The golden suite
+asserts that the records of `chain_plan_file` and `chain_mark_duplicates`,
+`chain_taps_plan_file` and `chain_taps_formats`, `chain_dry_run_plan_file` and
+`chain_dry_run` hold the same exit code, text and files.
+
+### 10.4 What differs on purpose (also in KNOWN_DIFFERENCES.md)
 
 - The `StringHeader` command line. A tap writes `INPUT=<the chain's source>` and, behind
-  a stage, ` CHAIN=<stages in front, joined by +>`. A tap on the source writes the line
-  the tool alone writes.
+  a transform, ` CHAIN=<the Picard classes of the transforms in front, joined by +>`. A
+  tap on the source writes the line the tool alone writes.
 - The `@PG` `CL` of the BAM is the step's command line, which has no `OUTPUT`.
-- `MarkDuplicates` in a chain writes no BAM. `write` does.
+- `mark-duplicates` in a chain writes no BAM. `write` does.
 
-## 9. Measurements
+## 11. Measurements
 
 Mac Studio, Apple M1 Ultra, 20 cores, 64 GB. Release build, 8 threads, `/usr/bin/time -l`.
 Other builds and test runs used the machine during every run.
 
-### 9.1 A chain without a stage against `qc` (the W03 gate, 5 percent)
+### 11.1 A chain without a transform against `qc` (the W03 gate, 5 percent)
 
 Input: chr20, 21 and 22 of the HG002 exome, 573 MB, 8.4 M records
 (`~/data/bammetrics-scale/waves/w03/chr20_21_22.bam`). Four collectors on one read
 (quality yield, alignment summary, insert size, duplicate metrics), the pass of
 `qc --preset wgs`. Seven runs each, interleaved.
+
+W03, through the hidden `__chain` entry:
 
 | Run | Median wall | Range | Against `qc` | Median max RSS |
 |---|---:|---|---:|---:|
@@ -274,15 +596,23 @@ Input: chr20, 21 and 22 of the HG002 exome, 573 MB, 8.4 M records
 | `__chain`, lowered to `pass::run_isolated` | 6.44 s | 6.40 to 6.50 | -0.8 % | 42 MiB |
 | `__chain LOWER=false`, the stage executor | 6.65 s | 6.54 to 6.95 | +2.5 % | 19 MiB |
 
-Both forms are inside the gate. The kill rule of docs/07 does not apply. A chain of taps
-is lowered anyway: it is the same code as `qc`, and it was 3.3 percent faster than the
-stage executor here. The four files of the three runs are equal after their
-`StringHeader` lines.
+W04, through the `chain` verb:
 
-### 9.2 One chain against the staged sequence (HG002 exome)
+| Run | Median wall | Range | Against `qc` | Median max RSS |
+|---|---:|---|---:|---:|
+| `qc --preset wgs` (also writes the verdict and the page) | 6.48 s | 6.44 to 6.70 | | 44 MiB |
+| `chain`, lowered to `pass::run_isolated` | 6.44 s | 6.38 to 6.98 | -0.6 % | 42 MiB |
+| `chain --no-lower`, the stage executor | 6.53 s | 6.40 to 6.85 | +0.8 % | 20 MiB |
 
-Input: 10,339,495,604 bytes, 150,538,907 records, coordinate sorted. One run each, default
-options, `PROGRAM_GROUP_COMMAND_LINE` given on both sides so the BAMs can be compared whole.
+Both forms are inside the gate in both waves. The kill rule of docs/07 does not apply. A
+chain of taps is lowered anyway: it is the same code as `qc`. The four files of the lowered
+chain and of `qc` are equal apart from the `Started on` line and the prefix in `OUTPUT=`.
+
+### 11.2 One chain against the staged sequence
+
+W03, on the HG002 exome (10,339,495,604 bytes, 150,538,907 records, coordinate sorted),
+one run each, default options, `PROGRAM_GROUP_COMMAND_LINE` given on both sides so the
+BAMs can be compared whole:
 
 | Run | Wall | Max RSS |
 |---|---:|---:|
@@ -298,13 +628,26 @@ The five metrics files are equal after their `StringHeader` lines. The chain rea
 10 GB input twice and the marked BAM never; the staged sequence reads the input twice and
 the marked BAM once.
 
-`MarkDuplicates` alone was measured at 299 s and 783 MiB before this wave
-(docs/benchmarks.md), so the tool did not slow down.
+W04, the same comparison through the `chain` verb on the 573 MB slice, three runs each,
+interleaved:
 
-### 9.3 Batch size and the pool
+| Run | Median wall | Median max RSS |
+|---|---:|---:|
+| `MarkDuplicates` to a file (staged, step 1) | 15.69 s | 643 MiB |
+| The four collectors on the marked BAM, a chain of taps (staged, step 2) | 6.49 s | 42 MiB |
+| Staged sequence, both steps | 22.18 s | 643 MiB |
+| `chain`: `mark-duplicates` + 4 collectors + `write` | 16.49 s | 645 MiB |
+
+The chain takes 25.7 percent less wall time than the staged sequence and 5.1 percent more
+than `MarkDuplicates` alone. Both BAMs are 584,413,820 bytes and `cmp` finds no
+difference. The four metrics files are equal after their `StringHeader` lines. `chain
+--dry-run` on the slice took under 0.01 s and 4 MiB. It estimated 8,306,326 records (the
+file holds 8.4 M) and 467.4 MiB of temporary disk; the peak of that run was not measured.
+
+### 11.3 Batch size and the pool
 
 The first build of the executor used batches of 4096 records and allocated every record.
-On the exome it took 345.2 s for the chain of 9.2 (the tool 300.8 s, the staged sequence
+On the exome it took 345.2 s for the chain of 11.2 (the tool 300.8 s, the staged sequence
 408.4 s, same BAM bytes). Two changes followed, each measured on the slice with 4
 interleaved runs, medians:
 
@@ -321,7 +664,9 @@ no pool against pool (first two rows), 4096 against 512 (17.0 s against 15.2 s f
 The `MarkDuplicates` tool alone took 16.2 to 16.9 s in those sessions. With 512 records
 the system time of the chain rose from 12 s to 16 s for the same wall time.
 
-## 10. Departures from docs/07 section 2
+## 12. Departures from docs/07 section 2
+
+W03:
 
 | docs/07 | As built | Reason |
 |---|---|---|
@@ -329,26 +674,43 @@ the system time of the chain rose from 12 s to 16 s for the same wall time.
 | `Tool` gains `stage`, `source`, `sink`, `tier` fields | `stage::stage_of(tool)`, a table by name | A new field breaks every `Tool { ... }` literal, including those on the two branches built at the same time. One tool has a stage |
 | `Transform::requires()` checked at plan time | A stage is built from the `Frame` of its position and fails there with the tool's own message | The planner is W05. `MarkDuplicates` accepts two orders, which one `Order` value cannot say |
 | `Worker` and `Fanout` of `pass.rs` reused for the taps | `SinkWorker` in `stage/exec.rs`, the same shape | `pass::Worker` carries `bam::Record` batches. A sink takes `RawRecord` batches and needs the done, failed and stopped signals |
-| Batches of at most 4096 records | 1024 records, and a pool that reuses the buffers of finished batches | Measured on the exome slice (section 9): with 4096 and no pool the chain `MarkDuplicates` + `write` was slower than the tool. A batch of 4096 exome records is 1.4 MB, one of 1024 is 360 KB (opinion: the transform reads the smaller batch back from a nearer cache). 512 gave the same wall time and more system time |
-| One reader thread and one transform thread | The transforms run on the reader thread | The tool does the same. A second thread adds one queue hop per batch. Measured on the exome: the chain takes 316 s, the tool alone 308 s (section 9) |
+| Batches of at most 4096 records | 1024 records, and a pool that reuses the buffers of finished batches | Measured on the exome slice (section 11): with 4096 and no pool the chain `MarkDuplicates` + `write` was slower than the tool. A batch of 4096 exome records is 1.4 MB, one of 1024 is 360 KB (opinion: the transform reads the smaller batch back from a nearer cache). 512 gave the same wall time and more system time |
+| One reader thread and one transform thread | The transforms run on the reader thread | The tool does the same. A second thread adds one queue hop per batch. Measured on the exome: the chain takes 316 s, the tool alone 308 s (section 11) |
 | 4 deflate workers per writer | `threads` workers, as the tool uses | The written BAM is then the tool's BAM byte for byte at any thread count, and compression is the slowest part of the chain |
 | `Barrier::seal` on a `Send` trait | `Transform` and `Barrier` are not `Send` | They run on the calling thread and borrow the chain's `TempDir` |
-| `write` picks BAM, SAM, CRAM or FASTQ by extension, `--index` | BAM only, `CREATE_INDEX`, `CREATE_MD5_FILE` | SAM text is W05, the CRAM writer W15, FASTQ W22 |
-| The `# INPUT=` line names the source and the step list | `INPUT=<source>` plus ` CHAIN=<stages>` behind a stage | The step grammar is W04. A tap on the source keeps today's line |
 | `run_chain(&ChainPlan, &dyn Progress) -> Result<Vec<Products>>` | `run_chain(ChainPlan, Option<OnProgress>) -> Result<Vec<Result<Products>>>` | A step can fail alone, so each step has its own result. `OnProgress` is the callback `qc` already has |
+
+W04:
+
+| docs/07 | As built | Reason |
+|---|---|---|
+| The verb is `chain`, with `run` as an alias or not (Q2) | `chain` only | The owner's decision on Q2 |
+| `write` picks BAM, SAM, CRAM or FASTQ by extension | BAM only. A `.sam`, `.cram`, `.fastq` or `.fq` name is a usage error naming W05, W15 or W22 | The SAM text writer is W05, the CRAM writer W15, FASTQ output W22 |
+| Two taps of one tool at one position is a usage error | It is one when both are named by the prefix, since they write one file. With `-o` on one of them the chain runs | A step's own `-o` is allowed, and two option sets of one tool on one stream is a use (`quality-yield` with and without original qualities) |
+| The `# INPUT=` line names the chain source and the step list | `INPUT=<source>` plus ` CHAIN=<transforms in front>`, as W03 wrote it. A tap on the source writes the tool's own line | A chain without a transform must write the bytes `qc` writes (section 10.2). The steps behind a tap do not change its records, so the line names only the transforms in front |
+| A transform's kept product is `PREFIX.<label>.bam` | The same, written by `write` without a path. The transform's own metrics file is `PREFIX.<label>.duplication_metrics` | docs/07 names no file for a transform's metrics. The label says which step wrote it |
+| `plan` prints segments, replay or spool per barrier, temp disk, and what `--resume` skips | Segments, replay or spool, the files of each step, the temp disk estimate. No `--resume` line | Resume per step is W14 (manifest 2) |
+| The planner refuses when free space is below the estimate | The plan prints the estimate and refuses nothing | The planner and its `statvfs` call are W05 |
+| `--also` on `chain` as on `qc` | `json`, `jsonl`, `tsv`, `csv`, `markdown`. `junit` and `multiqc` are a usage error | They print a verdict. `qc` as the last step of a chain is W14 |
+| `--format a,b` | `picard` must be first, on the chain and on a step | A chain names Picard files under a prefix, as the multi-file verbs do. A first format that is not `picard` would put JSON under a Picard name |
+| `parse_tables` moves to core | It moved, and it reads one-line arrays of scalars as well | A repeatable option of a step (`level`, `comment`) needs a list. A preset still takes no list |
+| `chain --plan plan.toml` reads the same steps | It reads the source and the chain's options too, and the command line may replace them | One file then describes one run, and one file can run on many sources (`--plan FILE other.bam -o other`) |
+| `plan` gains the chain form | `plan` with a `+` step, with `--plan FILE`, or with the word `chain` first | `plan` is a clap verb with the arguments of `qc`. A `qc` command line holds no `+` and no `--plan`, so the two cannot be mistaken |
+| Text-valued options are checked before the first read | Option names, int and float values, required options, input files and every option of a transform are. A text value only the tool can judge fails its tap when it is built | A collector parses its own options when it is built from the header of its position. Building each one twice would read each reference and interval list twice |
 
 Added beyond the list of docs/07: `Emit` takes `&mut RawRecord` so a batch can take the
 record without a copy. `Transform::products` carries the `MarkDuplicates` metrics.
 `Frame` has `cram` (htsjdk rebuilds `MD` and `NM` for CRAM records), `label` and
-`reads`. `Sink::done` carries `STOP_AFTER`.
+`reads`. `Sink::done` carries `STOP_AFTER`. `stage::Outputs` makes the one-file-twice
+check linear in the number of steps.
 
-## 11. What comes next
+## 13. What comes next
 
 | Wave | Adds |
 |---|---|
-| W04 | The `chain` verb with the `+` grammar and did-you-mean per step, `plan` for a chain, the TOML plan file, Python `bm.chain` and `bm.step`, `Run.stages` from `Products::counters`, the final form of the `StringHeader` line, product naming (`PREFIX.<label>.<ext>`), stage options checked before the run. `__chain` and `crates/cli/src/chain.rs` are replaced. `Step::tool_tap`, `Step::tool_stage`, `Step::write`, `run_chain`, `check_distinct_outputs` and `Products::notes` stay: the verb must call the output check and print the notes |
-| W05 | The sort barrier (`Next::Records`), the planner (`Frame` per position, `requires`, free-space check), the spool for a replay behind another stage, `--sort-memory`, `write --index` through the BAI writer |
-| W09 on | Each BAM-writing tool registers its stage in `stage_of` |
-| W14 | `qc` as the last step of a chain, manifest 2, resume per step, kept products, the spool for tools that read their input their own way |
+| W04, part C | Python `bm.chain` and `bm.step` over `chain::prepare` and `chain::execute`, `Run.stages` from `StepOutcome::counters`, `fifo-buffer` |
+| W05 | The sort barrier (`Next::Records`), the planner (`Frame` per position, `requires`, the free-space refusal), the spool for a replay behind another transform, `--sort-memory`, SAM output of `write`, `write --index` through the BAI writer |
+| W09 on | Each BAM-writing tool registers its stage in `stage_of` and its stream name in `label_of` |
+| W14 | `qc` as the last step of a chain, manifest 2, resume per step, kept products, the spool for tools that read their input their own way, a progress line |
 | W15, W22 | `write` to CRAM, FASTQ |
 | W46 | Variant streams (`Kind`), pileup and capture sinks |

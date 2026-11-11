@@ -71,6 +71,31 @@ Options that cannot change a number (`VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`
 face, 2 on a verb. `R=` needs a `.fai` next to the FASTA. A BED file works wherever Picard
 wants an interval list. Every option is listed in [docs/cli.md](docs/cli.md).
 
+## Chain
+
+Several steps on one BAM in one process. Records move from step to step in memory: no
+shell pipe, no intermediate file.
+
+```bash
+bammetrics chain sample.bam -R ref.fa -o out/NA12878 \
+    + mark-duplicates \
+    + alignment-summary + insert-size + quality-yield + duplicate-metrics \
+    + write --index
+```
+
+This marks duplicates, runs four collectors on the marked records and writes the marked
+BAM: `out/NA12878.marked.duplication_metrics`, four metrics files named as `qc` names them,
+`out/NA12878.marked.bam` and its `.bai`. The metrics equal what each tool writes when it
+reads the marked BAM, and the BAM holds the records `MarkDuplicates` writes. On 573 MB of
+exome the chain took 16.5 s against 22.2 s for `MarkDuplicates` followed by the four
+collectors on its output.
+
+Every `+` starts a step: a transform (`mark-duplicates`), a tap (13 one-pass tool verbs)
+or `write [PATH]` (`-` is standard output). Each step takes its verb's own options in every
+spelling. A usage error in any step is found before the first read and names the step.
+`--dry-run` prints the plan, and `--plan plan.toml` reads the chain from a file. The
+reference is [docs/chaining.md](docs/chaining.md).
+
 ## Report
 
 ```bash
@@ -176,7 +201,7 @@ crates/py     the bammetrics Python module (PyO3)
 tests/        concordance/ (Picard harness), harness/ (tests of that harness), corpus/ (generator), python/, data/
 tools/        spec_agent.py: a Picard tool's --help option table as a starting spec
 deny.toml     cargo-deny configuration (make deny)
-docs/         cli.md, formats.md, verdict.md, python.md, concordance.md, benchmarks.md, 04_picard_parity_plan.md
+docs/         cli.md, chaining.md, formats.md, verdict.md, python.md, concordance.md, benchmarks.md, 04_picard_parity_plan.md
 ```
 
 License: MIT OR Apache-2.0. Changes: [CHANGELOG.md](CHANGELOG.md).
