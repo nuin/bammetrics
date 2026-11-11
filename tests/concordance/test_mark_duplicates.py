@@ -376,8 +376,8 @@ def test_small_buffers_are_refused_and_sam_input_is_read(built, tmp_path):
     assert result.returncode != 0 and "MAX_RECORDS_IN_RAM=0" in result.stderr
     sam = tmp_path / "in.sam"
     with open(sam, "wb") as handle:
-        subprocess.run(["samtools", "view", "-h", str(built["md_markdup"])], check=True,
-                       stdout=handle)
+        subprocess.run(["samtools", "view", "-h", "--no-PG", str(built["md_markdup"])],
+                       check=True, stdout=handle)
     marked = {}
     for side, source in (("sam", sam), ("bam", built["md_markdup"])):
         out = tmp_path / f"{side}.bam"
