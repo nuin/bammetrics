@@ -25,7 +25,7 @@ make golden-update   # rewrite tests/golden after an intended command-line chang
 root: each registry tool in Picard syntax with and without `O=`, the five 0.12
 subcommands (verbs since 0.13.0) with and without `-O`, the verb grammar's spellings,
 formats, prefixes and info verbs, `check`, `report`, `qc` and `plan`, and the documented
-error paths, 316 cases on the committed fixtures and 22 more on corpus t1 when
+error paths, 351 cases on the committed fixtures and 22 more on corpus t1 when
 `GOLDEN_CORPUS=1` is set and `tests/corpus/out` exists. A case that writes into `.`
 (`collect` without `-o`) runs in its output directory and records the fixture paths as
 `ROOT/...`. One
@@ -393,10 +393,11 @@ queued. `tests/harness/test_picard_lock.py` fails when a file under `tests`, `be
 4. its name in `docs/cli.md`;
 5. a row of the README tool table that starts with its name.
 
-One failure lists every gap of every tool with the edit that closes it. `BuildBamIndex`
-(wave W05 of docs/07) is tool 34, with `tests/concordance/test_build_bam_index.py` as its
-module and an argument list in the glossary test (it returns rows without a class). The 34
-tools pass: 14 have a module named after them, 18 are mapped in `CONCORDANCE` to a shared module
+One failure lists every gap of every tool with the edit that closes it. Wave W05 of
+docs/07 added `ViewSam` (tool 34, `test_view_sam.py`), `SortSam` (tool 35,
+`test_sort_sam.py`) and `BuildBamIndex` (tool 36, `test_build_bam_index.py`), each with
+an argument list in the glossary test (`BuildBamIndex` returns rows without a class). The
+36 tools pass at 0.23.0: 16 have a module named after them, 18 are mapped in `CONCORDANCE` to a shared module
 (`test_read_level.py` 6, `test_wgs_metrics.py` 3, `test_variant_tools.py` 3, six others 1
 each), and `CollectCoverageGaps` and `CollectSexCheckMetrics` are in `NO_PICARD_ORACLE`
 (docs/06, not Picard tools). `FifoBuffer` (wave W04 of docs/07) is tool 33. Its module is
@@ -433,7 +434,10 @@ make deny                            # cargo deny check
 
 `deny.toml` checks the 105 packages of `Cargo.lock`. Result at 0.21.0: advisories ok, bans
 ok, licenses ok, sources ok. 0.22.0 adds no package: its `Cargo.lock` differs from the
-0.21.0 one in the six workspace versions only. `cargo-deny` was not rerun for 0.22.0.
+0.21.0 one in the six workspace versions only. 0.23.0 adds no package either: besides the
+six versions, `bammetrics-cli` names `libc` (statvfs for the free-space refusal of a
+chain), which was in the tree through signal-hook and clap. `cargo-deny` was not rerun for
+0.22.0 or 0.23.0 (not installed here).
 
 - Licences allowed: MIT, Apache-2.0, Unicode-3.0 (unicode-ident), Zlib (zlib-rs),
   bzip2-1.0.6 (libbz2-rs-sys under noodles-cram) and Apache-2.0 WITH LLVM-exception

@@ -63,7 +63,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-cli"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "bammetrics-core",
  "bammetrics-formats",
@@ -78,7 +78,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-core"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "noodles",
  "regex",
@@ -88,14 +88,14 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-formats"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "bammetrics-core",
 ]
 
 [[package]]
 name = "bammetrics-py"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "bammetrics-cli",
  "bammetrics-core",
@@ -107,7 +107,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-report"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "bammetrics-core",
  "bammetrics-verdict",
@@ -115,7 +115,7 @@ dependencies = [
 
 [[package]]
 name = "bammetrics-verdict"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "bammetrics-core",
  "thiserror",

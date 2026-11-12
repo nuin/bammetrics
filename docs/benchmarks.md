@@ -479,6 +479,12 @@ page 96.5 KB (98,790 bytes), index 190.7 KB (195,237 bytes), binary growth 371.5
 (380,432 bytes stripped, 16 bytes over 0.21.0), formats growth 129.2 KB (132,304 bytes
 stripped, as at 0.21.0), 0 added passes.
 
+At 0.23.0 (2026-11-11, release/0.23.0: feat/sam-sort, feat/bam-index and
+fix/chain-review-0.22 merged), one `make budgets` run with other builds on the machine:
+render 2.09 ms and 0.70 ms, sample page 96.5 KB (98,790 bytes), index 190.7 KB (195,237
+bytes), binary growth 371.5 KB (380,432 bytes stripped, as at 0.22.0), formats growth
+129.2 KB (132,304 bytes stripped, as at 0.22.0), 0 added passes.
+
 The fixture metrics are the seven files the golden records hold for
 `tests/data/insert_size.bam` (alignment summary, insert size, quality yield, duplicate
 metrics, hs metrics, gc bias, mean quality by cycle). A KB is 1024 bytes.
@@ -506,9 +512,14 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 0.20.0 | 2026-11-10, release/0.20.0: feat/formats and feat/harness merged at 5a8f478, the version set | 7,124,320 | 6,032,104 |
 | 0.21.0 | 2026-11-10, release/0.21.0 at d2af4a2: feat/stage-executor and the security fixes of release/0.20.0 merged, the version set | 7,211,216 | 6,114,880 |
 | 0.22.0 | 2026-11-10, release/0.22.0: feat/chain-verb and feat/fifo-buffer merged, the version set | 7,414,032 | 6,296,952 |
+| 0.23.0 | 2026-11-11, release/0.23.0: feat/sam-sort, feat/bam-index and fix/chain-review-0.22 merged, the version set | 7,904,624 | 6,710,840 |
 
 From 0.21.0 to 0.22.0 the binary grew 202,816 bytes (198.1 KB), 182,072 stripped (177.8
 KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
+
+From 0.22.0 to 0.23.0 it grew 490,592 bytes (479.1 KB), 413,888 stripped (404.2 KB,
+6.6%): the SAM text reader and writer, `ViewSam`, `SortSam` with TimSort, the `TreeSet`
+merge and the planner, the BAI writer and `BuildBamIndex`.
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and

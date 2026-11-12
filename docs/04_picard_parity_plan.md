@@ -95,8 +95,8 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | FixMateInformation | Read data | later | Harness input prep (MC tag). | samtools fixmate -m |
 | SetNmMdAndUqTags | Read data | later | Harness prep. Metrics use the reference, not tags. | samtools calmd |
 | SetNmAndUqTags | Read data | out | Deprecated. | samtools calmd |
-| BuildBamIndex | Read data | core | Built in wave W05 of docs/07: the `.bai` byte for byte Picard's for the same BAM, the index behind `MarkDuplicates CREATE_INDEX`, `SortSam CREATE_INDEX` and `chain ... + write --index`. S | samtools index |
-| SortSam | Read data | core | Built in wave W05 of docs/07: `queryname`, `coordinate` and `duplicate` with htsjdk's comparators, BAM or SAM text out, runs spilled to `TMP_DIR`; also the sort step of a chain. B | samtools sort |
+| BuildBamIndex | Read data | core | Shipped in 0.23.0 (wave W05 of docs/07): the `.bai` byte for byte Picard's for the same BAM, the index behind `MarkDuplicates CREATE_INDEX`, `SortSam CREATE_INDEX` and `chain ... + write --index`. S | samtools index |
+| SortSam | Read data | core | Shipped in 0.23.0 (wave W05 of docs/07): `queryname`, `coordinate` and `duplicate` with htsjdk's comparators, BAM or SAM text out, runs spilled to `TMP_DIR`; also the sort step of a chain. B | samtools sort |
 | SamFormatConverter | Read data | out | Format conversion. | samtools view |
 | AddCommentsToBam | Read data | out | Header edit. | samtools reheader |
 | AddOATag | Read data | out | No metric reads OA. | none |
@@ -118,7 +118,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | SamToFastqWithTags | Read data | out | Export with tags. | samtools fastq -T |
 | SplitSamByLibrary | Read data | out | File split. | samtools split |
 | SplitSamByNumberOfReads | Read data | out | File split. | samtools split |
-| ViewSam | Diagnostics | core | Prints the header and the records as htsjdk writes SAM text. Built in wave W05 of docs/07 with the SAM text reader and writer. S | samtools view |
+| ViewSam | Diagnostics | core | Prints the header and the records as htsjdk writes SAM text. Shipped in 0.23.0 (wave W05 of docs/07) with the SAM text reader and writer. S | samtools view |
 | CollectHiSeqXPfFailMetrics | Diagnostics | out | Needs basecall directory. | none |
 | CrosscheckReadGroupFingerprints | Diagnostics | out | Deprecated, CrosscheckFingerprints covers it. | CrosscheckFingerprints |
 | ConvertHaplotypeDatabaseToVcf | Diagnostics | out | Haplotype map conversion. | none |

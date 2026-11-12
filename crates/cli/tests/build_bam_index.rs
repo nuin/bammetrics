@@ -463,9 +463,12 @@ fn the_index_beside_a_written_bam_is_the_index_of_its_bytes() {
         "CREATE_MD5_FILE=true",
     ]);
     let resorted = dir.join("resorted.bam");
+    let prefix = dir.join("resorted");
     ok(&[
         "chain",
         MARKDUP,
+        "-o",
+        text(&prefix),
         "+",
         "sort-sam",
         "--sort-order",

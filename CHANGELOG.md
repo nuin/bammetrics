@@ -1,19 +1,20 @@
 # Changelog
 
-## Unreleased
+## 0.23.0
 
-Wave W05 of docs/07. Part A: SAM text in and out, htsjdk's record orders, and `ViewSam`
-(tool 34). Part B: `SortSam` (tool 35), the sort barrier of a chain, two barriers in one
-chain through a spool, the planner and its free-space refusal. Part C: the BAM index
-writer, `BuildBamIndex` (tool 36) and `make memgate`. Also six findings of the 0.22.0
-release review and one more found on the way (docs/chaining.md section 2.6;
-`crates/cli/tests/chain_safety.rs`, `tests/python/test_chain_safety.py`, 13 golden
-records), under Fixed from the symbolic link another user owns to the directories a
-failed tool verb made. Those fixes changed no Picard file, no `qc` output and no earlier
-golden record.
+SAM text in and out, `ViewSam`, `SortSam` with the sort barrier and the planner of a
+chain, `BuildBamIndex` and `make memgate` (tools 34 to 36), and the 0.22.0 review fixes.
 
 ### Added
 
+- Wave W05 of docs/07. Part A: SAM text in and out, htsjdk's record orders, and
+  `ViewSam` (tool 34). Part B: `SortSam` (tool 35), the sort barrier of a chain, two
+  barriers in one chain through a spool, the planner and its free-space refusal. Part C:
+  the BAM index writer, `BuildBamIndex` (tool 36) and `make memgate`.
+- `benches/memgate.toml`: fixture rows for `view-sam`, `sort-sam` and a chain of two
+  sorts around `mark-duplicates`; scale rows for the W05 gate (`sort-sam queryname
+  slice`, `chain sort barrier slice`, `chain sort barrier exome`). docs/benchmarks.md,
+  "Scale gate of wave W05", says how their inputs are made.
 - `SortSam` (`bammetrics SortSam I= O= SORT_ORDER=`, `bammetrics sort-sam in.bam -o
   out.bam --sort-order queryname`, `sort_sam()` in Python): `queryname`, `coordinate` or
   `duplicate`, the three Picard 3.5.0 takes. BAM output, or SAM text for a name ending in
@@ -170,6 +171,25 @@ golden record.
 - docs/chaining.md says that `--format` on a chain names the formats of the metrics
   files, why `plan BAM --format jsonl + STEP` is refused, and what a chain gives in place
   of an event stream.
+- The planner counts the records of a BAM whose header says `queryname` at 102 bytes
+  each, the bytes of a queryname BAM, where it took the 69 of a coordinate one. On the
+  queryname slice of the scale gate its sort spill estimate went from 51 percent over
+  the bytes spilled to 2.1 percent over. A coordinate, unsorted or CRAM source is
+  counted as before.
+- `chain BAM + view-sam` is refused with its own reason and names `write -
+  --output-format sam`; it said the tool does not read a BAM in one pass. One new golden
+  record, `error_chain_view_sam`.
+- `BuildBamIndex` refuses SAM text, plain or in gzip members, with Picard's `Input file
+  must be bam file, not sam file.` (exit 2 on the verb), as it refuses a CRAM. Before the
+  merge with SAM text input it said `not a BAM or CRAM file`.
+- `SortSam CREATE_INDEX=true` writes the `.bai` of `BuildBamIndex` for the BAM it wrote,
+  byte for byte, as `MarkDuplicates` and `write --index` do.
+- Golden suite at 0.23.0: 373 records (222 fixture forms, 34 format forms, 95 chain and
+  W05 forms, 22 on corpus t1). Against 0.22.0, 55 are new and 2 are gone (the sort branch
+  renamed `error_chain_two_transforms` to `chain_two_mark_duplicates` and
+  `error_chain_write_sam` to `chain_write_sam`), 12 changed for the causes
+  listed above (plan text, the `VALIDATION_STRINGENCY` note, `BAM and SAM only`, the
+  `tools` rows) and 9 for the version string alone.
 
 ### Fixed
 
@@ -184,6 +204,11 @@ golden record.
   user gave. Before, it named the temporary file the BAM is written under.
 - `benches/memgate.toml` refuses a `max_seconds` below 0.05: `time` reports wall time
   in steps of 0.01 s.
+- Six findings of the 0.22.0 release review, and one more found on the way
+  (docs/chaining.md section 2.6; `crates/cli/tests/chain_safety.rs`,
+  `tests/python/test_chain_safety.py`, 13 golden records), the items below to the
+  directories a failed tool verb made. They changed no Picard file, no `qc` output and
+  no earlier golden record.
 - A chain output that is a symbolic link another user owns is refused before the first
   read with the words and the exit code (1) of the tool verb: `owned by another user; not
   written in place`. 0.22.0 said `Is a directory (os error 21)` for `/etc`.
@@ -227,6 +252,15 @@ golden record.
 - HG002 exome BAM, 10,339,495,604 bytes, 150,538,907 records: `build-bam-index` 11.8 s
   and 9 MiB at 8 threads (65.0 s at 1), Picard 3.5.0 `BuildBamIndex` 85.6 s and 487 MiB.
   The two indexes are 7,186,968 bytes and equal under `cmp`.
+- The scale gate of docs/07 section 6 (docs/benchmarks.md, "Scale gate of wave W05"):
+  `chain --sort-memory 2G + sort-sam --sort-order coordinate + mark-duplicates + write
+  --index` peaked at 2,755 MiB on the queryname-sorted chr20 and chr21 slice of
+  NA12878 (2,870,148,655 bytes, 126.8 s) and 3,047 MiB on chromosomes 1 to 5 of the
+  HG002 exome (3,183,979,932 bytes, 141.7 s), under 3,072. Its sort spilled 0.73 and
+  1.08 times the input; the planner's estimates were 2.1 and 2.2 percent over. `sort-sam
+  --sort-order queryname` sorted the 29,330,868 records of the slice in 65.3 s at 619
+  MiB, Picard `SortSam` in 244.0 s at 4,193 MiB, and the two outputs hold the same
+  records and header lines.
 
 ## 0.22.0
 
