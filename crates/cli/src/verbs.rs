@@ -19,10 +19,14 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+use bammetrics_core::cleanup::MadeDirs;
 use bammetrics_core::fifo_buffer;
 use bammetrics_core::multiple_metrics::file_extensions;
 use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
-use bammetrics_core::{bam_index_stats, check_duplicate_marking, compare_metrics, cram, pass};
+use bammetrics_core::view_sam;
+use bammetrics_core::{
+    bam_index_stats, build_bam_index, check_duplicate_marking, compare_metrics, cram, pass,
+};
 
 use crate::error::VerbError;
 use crate::format::{self, Context, Format};
@@ -80,6 +84,10 @@ pub struct Verb {
     /// twice (`jumping-library`): its `--help` says standard input is
     /// refused, and the tool exits 2 on `-`, `/dev/stdin` or a pipe.
     pub reads_stdin: bool,
+    /// For a [`Files::Bam`] verb whose `-o` may be left out: the file it
+    /// then writes, from the input path (`build-bam-index` puts the index
+    /// beside the BAM, as Picard names it).
+    pub default_output: Option<fn(&Path) -> PathBuf>,
 }
 
 const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
@@ -97,6 +105,7 @@ const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
         also_writes: &[],
         ignores: &[],
         reads_stdin: true,
+        default_output: None,
     }
 }
 
@@ -322,6 +331,18 @@ pub const VERBS: &[Verb] = &[
             Files::Single,
         )
     },
+    Verb {
+        about: Some(
+            "writes the .bai index of a coordinate-sorted BAM, byte for byte the file Picard's \
+             BuildBamIndex writes for the same BAM: to -o, or beside the BAM (x.bai for x.bam, \
+             else the input name plus .bai). A BAM whose header does not say SO:coordinate is \
+             refused, as Picard refuses it. The Picard face without O= writes that file name \
+             into the current directory, as Picard 3.5.0 does.",
+        ),
+        writes: "BAM index",
+        default_output: Some(build_bam_index::default_output),
+        ..verb("build-bam-index", "BuildBamIndex", Files::Bam)
+    },
     // No input and no -o: standard input to standard output (`copy_stream`).
     Verb {
         input: "",
@@ -335,6 +356,26 @@ pub const VERBS: &[Verb] = &[
         writes: "copied bytes",
         ignores: &[(Key::Threads, "one thread reads and one writes")],
         ..verb("fifo-buffer", "FifoBuffer", Files::Single)
+    },
+    Verb {
+        about: Some(
+            "prints the header and each record of a SAM, BAM or CRAM as SAM text, as Picard's \
+             ViewSam does, to -o or standard output, as the file is read. --format json, jsonl \
+             or tsv gives one row per record instead and holds at most 256 MiB of SAM text.",
+        ),
+        writes: "SAM text",
+        reads: &["INTERVAL_LIST"],
+        ..verb("view-sam", "ViewSam", Files::Single)
+    },
+    Verb {
+        about: Some(
+            "sorts the records of a BAM, CRAM or SAM by --sort-order (queryname, coordinate or \
+             duplicate) as Picard's SortSam does: -o gets a BAM, or SAM text for a name ending \
+             in .sam, under the input header with SO set. Runs of --max-records-in-ram records \
+             spill to --tmp-dir.",
+        ),
+        writes: "sorted BAM",
+        ..verb("sort-sam", "SortSam", Files::Bam)
     },
 ];
 
@@ -438,6 +479,14 @@ impl Verb {
             .chain(["OUTPUT", "O"])
             .collect();
         let (placeholder, help) = match self.files {
+            Files::Bam if self.default_output.is_some() => (
+                "FILE",
+                format!(
+                    "The {} to write; - writes standard output. Without -o it goes beside the \
+                     input, named as Picard names it.",
+                    self.writes
+                ),
+            ),
             Files::Bam => (
                 "BAM",
                 "The BAM to write; - writes standard output. Required.".to_owned(),
@@ -471,6 +520,9 @@ impl Verb {
                               (picard,json) adds each further format beside every metrics file, \
                               as FILE.json."
                 .to_owned(),
+            Files::Bam if !self.writes_metrics() => {
+                format!("picard only: the {} has no other form.", self.writes)
+            }
             Files::Bam => "picard first: this verb writes a BAM and a Picard metrics file. A list \
                            (picard,json) adds each further format beside the metrics file, as \
                            FILE.json."
@@ -525,11 +577,18 @@ impl Verb {
                     .map(|(alias, _)| *alias),
             );
             let help = match opt.kind {
+                // A tool's own ignored row (`build-bam-index`) decodes nothing.
                 Kind::Ignored(why)
                     if opt.picard() == "REFERENCE_SEQUENCE"
-                        && opt.kind != registry::REFERENCE_NOT_DECODED.kind =>
+                        && opt.kind != registry::REFERENCE_NOT_DECODED.kind
+                        && !tool.options.iter().any(|own| own.picard() == opt.picard()) =>
                 {
                     format!("Decodes a CRAM input; for a BAM accepted and ignored: {why}.")
+                }
+                Kind::Ignored(registry::STRINGENCY_UNREAD) => {
+                    "How SAM text input is checked: STRICT (default), LENIENT or SILENT. A BAM \
+                     or CRAM is read the same at every value."
+                        .to_owned()
                 }
                 Kind::Ignored(why) => format!("Accepted and ignored: {why}."),
                 _ if opt.required => format!("{} Required.", opt.help),
@@ -600,6 +659,21 @@ impl Verb {
             Some(given) => format::parse_list(self.name, &given.values[0], &given.spelled)?,
         };
         let format = formats[0];
+        if self.files == Files::Bam
+            && !self.writes_metrics()
+            && formats != [Format::Picard]
+            && let Some(given) = parsed.last(Key::Format)
+        {
+            return Err(VerbError::usage(
+                self.name,
+                format!("--format {} has nothing to write", given.values[0]),
+            )
+            .from(given.spelled.clone())
+            .hint(format!(
+                "this verb writes the {} and no metrics file",
+                self.writes
+            )));
+        }
         if self.files != Files::Single
             && format != Format::Picard
             && let Some(given) = parsed.last(Key::Format)
@@ -656,14 +730,23 @@ impl Verb {
         let mut writes = self.output_paths(&inv, output.as_deref());
         writes.extend(siblings);
         for written in writes {
+            let flag = || flag_for_path(&parsed, &written).or_else(output_flag);
+            if let Some(what) = unresolved_output(&written) {
+                let error = VerbError::usage(self.name, what).hint(UNRESOLVED_HINT);
+                return Err(with_from(error, flag()));
+            }
             refuse_overwriting_inputs(self.name, &read, std::slice::from_ref(&written))
-                .map_err(|e| with_from(e, flag_for_path(&parsed, &written).or_else(output_flag)))?;
+                .map_err(|e| with_from(e, flag()))?;
         }
         self.refuse_one_file_twice(&inv, output.as_deref())?;
-        if let Some(path) = &output {
-            create_parent(self.name, path).map_err(|e| with_from(e, output_flag()))?;
-        }
+        // The last usage error, so none leaves a directory it made.
         inv.threads = self.threads(&parsed)?;
+        // Dropped by an error below, `made` removes the directories the
+        // run made that are still empty.
+        let mut made = MadeDirs::default();
+        if let Some(path) = &output {
+            create_parent(self.name, &mut made, path).map_err(|e| with_from(e, output_flag()))?;
+        }
         if let Some(header) = self.header {
             inv.command = header(&inv).map_err(core)?;
         }
@@ -684,6 +767,16 @@ impl Verb {
             }
             let status = check.status();
             (check.output, status)
+        } else if tool.name == view_sam::TOOL.name && formats == [Format::Picard] {
+            // The SAM text goes out as it is read: no rows are held.
+            let status = match &output {
+                Some(path) => view_sam::write_file(&inv, path).map(|()| 0),
+                None => view_sam::print(&inv),
+            };
+            (
+                bammetrics_core::metric::ToolOutput::NONE,
+                status.map_err(core)?,
+            )
         } else {
             ((tool.run)(&inv).map_err(core)?, 0)
         };
@@ -732,6 +825,7 @@ impl Verb {
                 eprintln!("bammetrics {}: wrote {}", self.name, path.display());
             }
         }
+        made.keep();
         Ok(status)
     }
 
@@ -913,10 +1007,13 @@ impl Verb {
             Files::Bam => match given {
                 Some(g) if g.values[0] == "-" => Ok(Some(PathBuf::from("/dev/stdout"))),
                 Some(g) => Ok(Some(PathBuf::from(&g.values[0]))),
-                None => Err(
-                    VerbError::usage(self.name, "missing -o BAM (Picard: OUTPUT)")
-                        .hint("-o - writes the BAM to standard output"),
-                ),
+                None => match self.default_output {
+                    Some(beside) => self.output_beside_input(picard, beside).map(Some),
+                    None => Err(
+                        VerbError::usage(self.name, "missing -o BAM (Picard: OUTPUT)")
+                            .hint("-o - writes the BAM to standard output"),
+                    ),
+                },
             },
             Files::Prefix => {
                 if let Some(g) = given.filter(|g| g.values[0] == "-") {
@@ -972,6 +1069,36 @@ impl Verb {
                 Ok(Some(path))
             }
         }
+    }
+
+    /// The file a verb with [`Verb::default_output`] writes without `-o`:
+    /// `beside` the one input. Standard input has no name to derive it from.
+    fn output_beside_input(
+        &self,
+        picard: &[String],
+        beside: fn(&Path) -> PathBuf,
+    ) -> Result<PathBuf, VerbError> {
+        match picard.iter().find_map(|a| a.strip_prefix("INPUT=")) {
+            Some(input) if input != "-" => Ok(beside(Path::new(input))),
+            _ => Err(VerbError::usage(
+                self.name,
+                format!(
+                    "missing -o FILE: standard input has no name to put the {} beside",
+                    self.writes
+                ),
+            )
+            .hint(format!(
+                "-o - writes the {} to standard output",
+                self.writes
+            ))),
+        }
+    }
+
+    /// True when the tool has a metrics file option of its own
+    /// (`mark-duplicates --metrics-file`); false for a verb whose only
+    /// file is the one `-o` names (`build-bam-index`).
+    fn writes_metrics(&self) -> bool {
+        self.tool().table().iter().any(|o| o.kind == Kind::Output)
     }
 
     /// The tool's file options for output `path`: `OUTPUT` for a
@@ -1234,9 +1361,12 @@ impl Verb {
         let Some(given) = given else {
             return Ok(pass::default_threads());
         };
-        given.values[0].parse().map_err(|_| {
+        let threads = given.values[0].parse().map_err(|_| {
             VerbError::usage(self.name, format!("{:?} is not a number", given.values[0]))
                 .from(given.spelled.clone())
+        })?;
+        pass::check_threads(threads).map_err(|e| {
+            VerbError::usage(self.name, format!("{threads} is {e}")).from(given.spelled.clone())
         })
     }
 }
@@ -1373,14 +1503,33 @@ fn with_from(error: VerbError, from: Option<String>) -> VerbError {
     }
 }
 
+/// The device and inode of an existing regular file; `None` for a device,
+/// a pipe or a missing file, which writing does not destroy.
+fn file_identity(path: &Path) -> Option<(u64, u64)> {
+    let meta = fs::metadata(path).ok().filter(fs::Metadata::is_file)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        Some((meta.dev(), meta.ino()))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = meta;
+        None
+    }
+}
+
 /// An output that is one of the inputs would overwrite it: a usage error.
-/// Only existing files compare equal, after resolving links and `..`.
+/// Only existing files compare equal: after resolving links and `..`, or
+/// by device and inode, so a hard link to an input counts too.
 pub fn refuse_overwriting_inputs(
     verb: &str,
     inputs: &[PathBuf],
     outputs: &[PathBuf],
 ) -> Result<(), VerbError> {
-    let inputs: Vec<PathBuf> = inputs
+    let identities: std::collections::HashSet<(u64, u64)> =
+        inputs.iter().filter_map(|p| file_identity(p)).collect();
+    let inputs: std::collections::HashSet<PathBuf> = inputs
         .iter()
         .filter_map(|p| p.canonicalize().ok())
         .collect();
@@ -1388,7 +1537,8 @@ pub fn refuse_overwriting_inputs(
         let Ok(resolved) = output.canonicalize() else {
             continue;
         };
-        if inputs.contains(&resolved) {
+        let linked = file_identity(output).is_some_and(|id| identities.contains(&id));
+        if linked || inputs.contains(&resolved) {
             return Err(VerbError::usage(
                 verb,
                 format!(
@@ -1400,6 +1550,24 @@ pub fn refuse_overwriting_inputs(
     }
     Ok(())
 }
+
+/// What is wrong with an output spelled through a directory that does not
+/// exist, with a `..` behind it. The run makes missing directories, and the
+/// path then leads back out of the new one, to a file no check has seen:
+/// an input, which [`refuse_overwriting_inputs`] passed because the path
+/// did not resolve. `None` for every other path.
+pub(crate) fn unresolved_output(path: &Path) -> Option<String> {
+    let missing = bammetrics_core::cleanup::unresolved_parent(path)?;
+    Some(format!(
+        "{}: {} does not exist, so the .. behind it names no directory",
+        path.display(),
+        missing.display()
+    ))
+}
+
+/// The hint of [`unresolved_output`].
+pub(crate) const UNRESOLVED_HINT: &str =
+    "name the output without the ..: a run makes the directories that are missing";
 
 /// `path` with its directory resolved where it exists, so `a.txt` and
 /// `./a.txt` compare equal before either file is written.
@@ -1414,13 +1582,13 @@ fn same_file_key(path: &Path) -> PathBuf {
 }
 
 /// Create the directories above `path` that do not exist (docs/05 section
-/// 2.3: missing output directories are created).
-pub(crate) fn create_parent(verb: &str, path: &Path) -> Result<(), VerbError> {
-    match path.parent() {
-        Some(parent) if !parent.as_os_str().is_empty() => fs::create_dir_all(parent)
-            .map_err(|e| VerbError::input(verb, format!("{}: {e}", parent.display()))),
-        _ => Ok(()),
-    }
+/// 2.3: missing output directories are created). `made` records them, so a
+/// run that fails removes those it left empty.
+pub(crate) fn create_parent(verb: &str, made: &mut MadeDirs, path: &Path) -> Result<(), VerbError> {
+    made.create_parent(path).map_err(|e| {
+        let parent = path.parent().unwrap_or(path);
+        VerbError::input(verb, format!("{}: {e}", parent.display()))
+    })
 }
 
 /// `text` to `path` through a temporary file, as a core output error.

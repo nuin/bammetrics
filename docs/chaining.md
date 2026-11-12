@@ -2,9 +2,10 @@
 
 A chain runs several steps on one BAM in one process. Records move from step to step in
 memory. No shell pipe and no intermediate file is used. This page describes what waves W03
-and W04 of docs/07_full_parity_program.md (section 2) built: the stage layer and its
+to W05 of docs/07_full_parity_program.md (section 2) built: the stage layer and its
 executor (W03, 0.21.0), then the `chain` verb, its plan file, its plan text and the Python
-`chain` and `step` (W04, 0.22.0).
+`chain` and `step` (W04, 0.22.0), then the sort barrier, the spool, the planner and SAM
+text in and out (W05, 0.23.0).
 
 ```bash
 # MarkDuplicates, four collectors on the marked records and the marked BAM, one process
@@ -28,10 +29,10 @@ emits.
 
 | Step | What it is | Today |
 |---|---|---|
-| source | One BAM or CRAM file, or a pipe holding one | the positional argument, `-` for standard input |
-| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on | `mark-duplicates` (a barrier) |
+| source | One BAM, CRAM or SAM text file, or a pipe holding one | the positional argument, `-` for standard input |
+| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on | `mark-duplicates`, `sort-sam` (both barriers) |
 | tap | A one-pass tool on the records of its position. It changes nothing | 13 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check` |
-| write | A tap that writes the records of its position as a BAM | `write [PATH]` |
+| write | A tap that writes the records of its position as a BAM, or as SAM text | `write [PATH]` |
 
 A tap or `write` does not change the stream, so the step after it sees the same records.
 `in.bam + tap + mark-duplicates + tap + write` gives the first tap the source records and
@@ -40,6 +41,11 @@ the second tap and the writer the marked records.
 A tool without a collector and without a stage (`wgs`, `targeted-pcr`,
 `library-complexity`, `multiple-metrics`, every tool that reads no BAM) cannot be a step.
 W14 spools the stream for those.
+
+`build-bam-index` and `view-sam` are no steps either, each with its own reason (exit 2).
+`build-bam-index` names `write --index`, which writes the `.bai` of the BAM a chain
+writes. `view-sam` names `write - --output-format sam`, which prints the stream as SAM
+text.
 
 `fifo-buffer` is never a step. `FifoBuffer` copies the bytes of a pipe between two
 commands. The steps of a chain hand records on in memory, so a chain has no pipe for it
@@ -83,11 +89,14 @@ works in a step: `--minimum-pct 0.1`, `--MINIMUM_PCT 0.1`, `MINIMUM_PCT=0.1`, `-
 | `BAM`, `-i`, `I=` | The source: a BAM, or a CRAM with `-R`. `-` reads standard input |
 | `-o`, `--output-prefix`, `O=` | The prefix of every step that names no file of its own. Default `./` plus the source name without its extension, and standard error says so. A directory (an existing one, or a path ending in `/`) gets the source name as the file part |
 | `-R`, `--reference`, `R=` | Reference FASTA with a `.fai`. It decodes a CRAM source. It goes to every step that reads a reference and names none |
-| `-@`, `--threads` | BGZF threads of each read and of `write` (default: cores, at most 8) |
+| `-@`, `--threads` | BGZF threads of each read and of `write` (default: cores, at most 8; at most 256 may be asked for) |
 | `--tmp-dir`, `TMP_DIR=` | Where a transform spills and a piped source is copied |
 | `--format LIST` | `picard` first. Each further format is written beside every metrics file |
 | `--also LIST` | `json`, `jsonl`, `tsv`, `csv` beside every metrics file; `markdown` as `PREFIX.report.md` |
 | `--sample NAME` | Sample name of the json and jsonl forms (default: the first `@RG SM`, else the source name) |
+| `--sort-memory BYTES` | What a `sort-sam` step holds before a sorted run spills: a number, or one with K, M, G or T (1024 based). Default 2G (section 15) |
+| `--force-space` | Run when the estimated temporary and output bytes exceed the free space of their file system (section 15) |
+| `--validation-stringency` | `STRICT` (default), `LENIENT` or `SILENT` for a SAM text source. A step refuses it |
 | `--plan FILE` | Read the source, the options and the steps from a plan file (section 3) |
 | `--dry-run` | Print the plan and run nothing (section 4) |
 | `-q`, `-v` | No notes and no summary; or each command line and each file written |
@@ -108,14 +117,24 @@ working directory (`.insert_size_metrics`).
 - `mark-duplicates` takes every option of the tool except `OUTPUT`, `COMPRESSION_LEVEL`,
   `CREATE_INDEX` and `CREATE_MD5_FILE`. Those belong to `write`. `--metrics-file` names
   its metrics file. `--as NAME` names the stream it leaves (default `marked`).
+- `sort-sam` takes `--sort-order` (required), `--max-records-in-ram` (a record bound beside
+  `--sort-memory`; none by default in a chain), `--tmp-dir` and `-R`. `OUTPUT` and the
+  options of the BAM file belong to `write`. Its stream is `sorted`. A default name an
+  earlier transform took gets `-2`, `-3` (`sorted-2`); an `--as` name that is taken is a
+  usage error.
 - `write [PATH]` takes `--index` (`CREATE_INDEX`), `--md5` (`CREATE_MD5_FILE`) and
   `--compression-level N` (0 to 9, default 5). `-` as the path is standard output, so a
   pipe to another tool still works: `bammetrics chain in.bam + mark-duplicates + write -
-  | samtools flagstat -`. The file is always a BAM. A name ending in `.sam`, `.cram`,
-  `.fastq` or `.fq` (with `.gz` too) is refused with the wave that adds that kind: SAM is
-  W05, CRAM is W15, FASTQ is W22.
+  | samtools flagstat -`. The file is a BAM, or SAM text for a name ending in `.sam`.
+  `--output-format bam|sam` says which whatever the name is, so `write - --output-format
+  sam` prints SAM text. A name ending in `.cram`, `.fastq` or `.fq` (with `.gz` too) is
+  refused with the wave that adds that kind: CRAM is W15, FASTQ is W22. `.sam.gz` is
+  refused: SAM text is written uncompressed. Section 14 has the details.
 - `--index` writes `<name>.bai` only for a coordinate-sorted stream. For any other sort
   order `write` writes no index and says so on standard error. The exit code stays 0.
+  The `.bai` is the file Picard `BuildBamIndex` writes for the written BAM, byte for byte
+  (W05, `crates/core/src/bai.rs`). `build-bam-index` is no step: `chain BAM +
+  build-bam-index` exits 2 and names `write --index`.
 - A file option with an empty value (`-o ''`, `--metrics-file ''`, `write ''`) is a usage
   error: `step 1 (gc-bias): -o names no file: its value is empty`.
 
@@ -190,6 +209,22 @@ The json, tsv and csv siblings are written from the values in memory, as `--form
 picard,json` of a tool verb writes them, so a double keeps its full precision. `qc --also`
 reads each Picard file back and so writes the 6 fraction digits of that file.
 
+On a chain `--format` names the formats of the metrics files. `qc`, and `plan` with `qc`
+arguments, give the same flag another meaning: `--format text|jsonl` there picks how
+progress and the plan are printed. So `bammetrics plan BAM --format jsonl + STEP` is a
+chain and is refused with exit 2: `--format jsonl starts with jsonl: a chain names Picard
+files`. A chain has no event stream in this version. What it gives in its place:
+
+- Standard error carries the lines of section 2.5. `-v` adds each step's command line and
+  each file written.
+- `--dry-run` and `plan` print the plan as text (section 4).
+- `bm.chain` returns `Run.stages`: one entry per step with its status, error, files and
+  record counts (section 5.3).
+- `--also jsonl` writes each metrics file as JSON Lines beside the Picard file. That is a
+  file format, with no events in it.
+
+`qc --format jsonl` stays the event stream of a `qc` run.
+
 ### 2.5 What it prints, and exit codes
 
 Standard output is empty unless a step writes there. Standard error gets one line per
@@ -205,8 +240,9 @@ A message names a step by its number and verb: `step 3 (insert-size)`.
 | Code | When | Found |
 |---|---|---|
 | 0 | Every step finished | |
-| 2 | A usage error: an unknown step or option, a chain option on a step, a value that is no number, a missing required option, an empty prefix or file name, a name `write` cannot write yet, two outputs in one file, an output that is an input, a second transform, a bad plan file (one that is not UTF-8 text included) | Before the first read. No file is written and no directory is made |
+| 2 | A usage error: an unknown step or option, a chain option on a step, a value that is no number, a missing required option, an empty prefix or file name, a name `write` cannot write yet, two outputs in one file, an output that is an input, a stream name another transform took, a bad `--sort-memory`, a bad plan file (one that is not UTF-8 text included) | Before the first read. No file is written and no directory is made |
 | 1 | An input that is not there or cannot be read (the source, `-R`, the plan file) | Before the first read |
+| 1 | A file system with less free space than the estimate needs there, without `--force-space` | Before the first read. No directory is made |
 | 1 | An output that cannot be written (its directory cannot be made, the file is read only) | Before the first read, as the Picard face exits for its `OUTPUT` |
 | 1 | A step failed | During the run. The other steps still write their files (section 9) |
 
@@ -219,15 +255,94 @@ $ bammetrics chain in.bam + inser-size
 bammetrics chain: step 1: unknown step "inser-size"
   did you mean insert-size?
   a step is a tool verb (bammetrics tools lists them) or write
-$ bammetrics chain in.bam + write out/x.sam
-bammetrics chain: step 1 (write): out/x.sam: bammetrics writes BAM only: SAM output is wave W05 of docs/07_full_parity_program.md
+$ bammetrics chain in.bam + write out/x.cram
+bammetrics chain: step 1 (write): out/x.cram: bammetrics writes BAM and SAM only: CRAM output is wave W15 of docs/07_full_parity_program.md
 ```
 
 What is checked before the first read: the step name, every option name, every value of
 an int or float option, required options, files a step reads, `STOP_AFTER`, every option
 of `mark-duplicates` (`stage::check_stage_options`), the names and the writability of
-every output. A text value only the tool can judge (`--level NOPE` on a tap) is found when
-that tap is built: the tap fails alone and the chain exits 1.
+every output. Section 2.6 adds six checks.
+
+### 2.6 More that is refused before the first read
+
+The 0.22.0 release review found these. Tests: `crates/cli/tests/chain_safety.rs` (10
+tests), `tests/python/test_chain_safety.py` and 13 golden records. The tests show "before
+the first read" on a source cut after 150 bytes: its header block is whole, the block of
+its records is not, and a run that reads it exits 1 with `truncated BAM`.
+
+| What | The message says | Exit |
+|---|---|---|
+| A text value only the tool can judge on a tap (`--level NOPE`, `--expected-sex NOPE`) | The tool's own words under the step's label: `step 2 (insert-size): METRIC_ACCUMULATION_LEVEL "NOPE": expected ALL_READS, SAMPLE, LIBRARY or READ_GROUP` | 2 |
+| A number the tool refuses without a header (`sequencing-artifact --context-size 99`, `--maximum-insert-size 10`, `gc-bias --scan-window-size 0`, `quality-yield --flow-mode`) | The tool's own words: `step 1 (sequencing-artifact): CONTEXT_SIZE=99: too many contexts to count` | 2 |
+| `--threads` over 256, or `threads` over 256 in a plan file | `100000000 is more than the maximum of 256 threads` | 2 |
+| An output through a directory that does not exist with a `..` behind it (`missing/../in.bam`) | `missing does not exist, so the .. behind it names no directory` | 2 |
+| A plan file over 1 MiB (1,048,576 bytes) | `not a plan file: it is larger than 1 MiB` | 2 |
+| An output that is a symbolic link, pipe, socket or device another user owns | `owned by another user; not written in place`, the words and the exit code of the tool verb | 1 |
+
+Values. `bammetrics_core::tap_options::check` holds one row per one-pass tool (13). Each
+row calls the option parser that the tool's own collector calls, with no header and no
+file opened. A unit test fails when a one-pass tool has no row. In 0.22.0 the tap failed
+alone when it was built, after the transform in front of it had read the whole source,
+and the chain exited 1. A value the tool judges against the header of its stream, or
+against a file it reads, is still found when the tap is built, and that tap fails alone
+with exit 1: a sort order it requires (`--no-assume-sorted` on a queryname stream), an
+interval list with a contig the header lacks. The reason: the header of a piped source
+can be read once, and the header behind a transform exists only after the transform ran.
+
+Three rows run more than the parser, because the tool checks more without a header.
+`sequencing-artifact` runs the stand-alone validation (`CONTEXT_SIZE` and the insert
+sizes not negative, the maximum not under the minimum, each `CONTEXTS_TO_PRINT` of the
+implied length) and the context count (at most 4^11, `CONTEXT_SIZE` 5). The verb ran
+both in `run_tool`. The collector a chain builds ran the count alone, when the tap was
+built (exit 1), and never the validation: `chain ... + sequencing-artifact
+--maximum-insert-size 10` wrote its five files where the verb exits 2.
+`CollectMultipleMetrics` still skips the validation, as Picard does. `quality-yield
+--flow-mode` is refused by `quality_yield::checked_options`, which the collector calls
+too. `gc-bias --scan-window-size` under 1 is refused by the option parser: 0 was a
+division by zero and a negative window an index past the contig, a panic with exit 101
+on the verb, the Picard face and the chain. Picard 3.5.0 throws on both
+(`tests/concordance/test_gc_bias.py::test_a_window_under_one_base_fails`).
+
+Threads. `pass::check_threads` is the one check and `pass::MAX_THREADS` is 256. Every
+place that parses a thread count asks it: the tool verbs, `chain`, the plan file, `qc`,
+`plan`, `collect`, `threads=` on the Picard face (exit 1 there, as every error of that
+face) and the Python `chain`, `qc` and `collect`. In 0.22.0 and before,
+`--threads 100000000` started threads for about two minutes and then panicked inside
+`noodles-bgzf` with exit 101, on every verb. It now exits 2 in 0.04 s. The maximum runs:
+`quality-yield` on the 10.3 GB HG002 exome BAM takes 33.1 s at 8 threads (7.8 MB peak)
+and 30.4 s at 256 (48.8 MB peak), with the same metrics (Mac Studio, 20 cores).
+
+Paths. A run makes the directories that are missing above its outputs. `missing/../in.bam`
+names no file before the run and names `in.bam` once `missing` is made, so neither the
+one-file-twice check nor the input check saw the file. In 0.22.0 `write missing/../in.bam`
+failed at write time with exit 1 and left `missing/` behind, and a tap with that `-o`
+replaced the source BAM with its metrics file. The tool verbs had the same hole
+(`insert-size in.bam -o missing/../in.bam`) and refuse the path with the same words.
+`qc`, `plan`, `collect` and the Python `qc` and `collect(metrics=[...])` refuse such a
+prefix too (`qc in.bam -o missing/../q`). Their extensions are fixed, so no input could
+be overwritten: the run wrote `q.*` and left `missing/` empty. A
+`..` behind a directory that exists resolves and is checked as any spelling. Two
+spellings of one new file under a directory that does not exist yet (`link/new/a.txt`
+and `new/a.txt`, `link` leading to the working directory) are one file: the deepest
+directory that exists is resolved (`mark_duplicates::same_file_key`).
+
+Directories. `cleanup::MadeDirs` records each directory the run makes above an output. A
+run that ends with exit 1, before the first read or after it, removes those that are
+still empty, deepest first. A directory that was there before, or that holds a file,
+stays. A signal removes them under the same rule. A run that finishes keeps every one.
+The tool verbs, `collect` and `qc` hold a `MadeDirs` too: one that fails on its read
+(`insert-size cut.bam -o made/deeper/x.txt`) leaves no `made/`. The Picard face makes no
+directory.
+
+Files read whole. `crates/cli/src/chain` reads two files whole, each through
+`chain::read_capped`, which stops one byte past its cap. The plan file holds at most
+1 MiB (`PLAN_FILE_CAP`). `--also markdown` reads back each metrics file the run wrote, at
+most 64 MiB each (`REPORT_FILE_CAP`); over that the report fails with exit 1 after every
+other file is written.
+
+The help of a step that is no verb names the step by its number, as a run does:
+`chain BAM + quality-yield + inser-size --help` prints `step 2: unknown step "inser-size"`.
 
 ## 3. The plan file
 
@@ -389,7 +504,10 @@ segment 2  a second read of tests/data/markdup.bam through step 1 (replay: nothi
   step 4  quality-yield      tap on marked          out/sample.quality_yield_metrics
   step 5  duplicate-metrics  tap on marked          out/sample.duplicate_metrics
   step 6  write              BAM of marked          out/sample.marked.bam, out/sample.marked.bai
-temp disk  none expected: about 16 records, and mark-duplicates keeps 4,000,000 in memory before it spills (MAX_RECORDS_IN_RAM)
+barrier    step 1 mark-duplicates: replays the source; about 16 records by the file size, no spill under MAX_RECORDS_IN_RAM 4,000,000; memory about 100.0 MiB
+temp disk  none expected
+output     about 1.1 KiB written by write
+memory     about 100.0 MiB at the peak
 nothing ran: this is a plan
 ```
 
@@ -401,17 +519,24 @@ The plan lists:
   the copy is read twice.
 - Each step with its role, the stream it reads and every file it writes, the further
   formats included. A tool whose `OUTPUT` is a prefix is listed as `PREFIX.*`.
-- The estimated temporary disk. The record count comes from the file size: 69 compressed
-  bytes per record for a BAM, 21 for a CRAM (the HG002 exome BAM and the NA12878 genome
-  CRAM of docs/benchmarks.md). Under `MAX_RECORDS_IN_RAM` records nothing spills. Above
-  it the estimate is 59 bytes per record, the larger of the two peaks measured there
-  (46 and 59). It gives 8.2 GiB for the exome BAM (measured 6.5 GiB) and 41.3 GiB for the
-  genome CRAM (measured 42.1 GiB). A pipe has no size to read, so the plan says what
-  spills and gives no number.
+- One `barrier` line per transform (section 15): whether it holds its records, replays the
+  source, replays a copy of the piped source, or spools its input; the bytes it spills or
+  the estimated record count with the bound under which nothing spills; its memory. The
+  record count comes from the file size: 69 compressed bytes per record for a BAM, 21 for a
+  CRAM (the HG002 exome BAM and the NA12878 genome CRAM of docs/benchmarks.md). A file that
+  compresses better gets a low count and a low spill estimate: a 22 MB BAM of 3,000,000
+  identical-pattern records (7.3 bytes each) is estimated at 318,938 records. `mark-duplicates` above
+  `MAX_RECORDS_IN_RAM` records spills 59 bytes per record, the larger of the two peaks
+  measured there (46 and 59): 8.2 GiB for the exome BAM (measured 6.5 GiB) and 41.3 GiB
+  for the genome CRAM (measured 42.1 GiB).
+- The temporary disk (every spill and spool, as if all were held at once), the bytes
+  `write` makes, and the peak memory. A pipe has no size to read, so those read
+  `unknown`.
+- A `space` line for a file system with less free space than the chain needs there. The
+  run refuses then, before the first read (section 15).
 
 The plan reads the header of a file source, so a file that is no BAM exits 1 there. It
-reads no record and nothing of a pipe. The planner of W05 adds the free-space refusal and
-the sort order each step requires.
+reads no record and nothing of a pipe.
 
 ## 5. The Rust API
 
@@ -423,7 +548,7 @@ the sort order each step requires.
 | Item | Role |
 |---|---|
 | `Source` | Opens the stream. `read(threads, bytes, consume)` hands `consume` the `Frame` and the `Records`. `replayable()` is true for a regular file. `spool(temp)` copies a pipe. `file()` names the file a lowered chain reads |
-| `FileSource` | A BAM or CRAM by its magic bytes, read through `pass::with_counted_stream` |
+| `FileSource` | A BAM, CRAM or SAM text by its first bytes, read through `pass::with_counted_stream` |
 | `Records` | `next_batch(&mut Vec<RawRecord>)`: at most 1024 records per batch (`BATCH_RECORDS`) |
 | `Frame` | The stream at one position: `kind`, `order`, `header`, `cram`, `label`, `reads` (the files a writer must not replace) |
 | `Transform` | `apply(batch)` in place, `finish(out)` for held records, `header(up)`, `counters()`, `products()` |
@@ -437,8 +562,8 @@ the sort order each step requires.
 | `run_chain(plan, progress)` | One `Result<Products>` per step, in step order. `Err` for a plan refused before the first read or a source that cannot be read in the first segment |
 | `Products` | `output` (metrics the caller writes), `files` (a writer's renamed files), `counters` (a stage's records in, out, changed), `notes` (lines for standard error) |
 | `halt(error)`, `Halt` | `Stopped` or `NotRun` for the result of a step another step halted, `None` for a step's own failure |
-| `WriteOptions` | `path`, `compression_level`, `create_index`, `create_md5`. `check()` refuses a name of a later wave. `files()` lists the BAM, the `.bai` and the `.md5` |
-| `later_kind(path)` | The kind and wave of a name `write` cannot make yet: `("SAM", "W05")` |
+| `WriteOptions` | `path`, `format` (`WriteFormat::Bam` or `Sam`, from the name), `compression_level`, `create_index`, `create_md5`. `check()` refuses a name of a later wave and an index beside SAM text. `files()` lists the BAM or SAM, the `.bai` and the `.md5` |
+| `later_kind(path)` | The kind and wave of a name `write` cannot make yet: `("CRAM", "W15")` |
 | `Outputs` | The files of a chain's steps in a hash map, keyed by device and inode or by the resolved path. `claim(label, path)` is a usage error when a step already writes the file. `owner(path)` |
 | `check_distinct_outputs(outputs)`, `writer_of(outputs, path)` | The same check over a slice |
 | `stage_of(tool)`, `label_of(tool)`, `check_stage_options(tool, inv)` | The stage function of a registry tool, the default name of its stream (`marked`), and its options checked before a run. One tool: `MarkDuplicates` |
@@ -446,7 +571,8 @@ the sort order each step requires.
 `crates/core/src/bam_writer.rs` holds `BamWriter` (the header byte for byte, BGZF on
 worker threads, htsjdk's order check, an `AtomicFile` under a temporary name) and
 `finish` (the `.bai` and `.md5`, then the renames). `MarkDuplicates` and `write` share
-it.
+it. The `.bai` comes from `bai::index_bam`: the finished BAM is read once more on the
+writer's BGZF workers, so its offsets are the ones of the file as written.
 
 ### 5.2 The verb as a library
 
@@ -573,12 +699,9 @@ to `--tmp-dir` once, as the tool does. Read ends spill to `--tmp-dir` as in the 
 
 A step after the barrier is built from the sealed header, so it sees the new `@PG` line.
 
-Limit: a transform that replays must sit directly behind a file source. A second
-transform is refused by `prepare`, before the first read: `step 3 (mark-duplicates): it
-reads its input twice and cannot follow step 1 (mark-duplicates): only a file source can
-be read again in this version`. It is a usage error (exit 2). No step runs and no file is
-written. `run_chain` refuses the same plan for a caller of the stage layer. W05 adds the
-spool and the planner that lift this.
+Behind another transform the input of `mark-duplicates` is a stream no file holds. Its
+first read then also writes every record it takes to a spool in `--tmp-dir`, and the
+second read replays the spool (section 15). W04 refused that chain; W05 runs it.
 
 ## 8. Options in the middle of a chain
 
@@ -828,7 +951,7 @@ W04:
 | `parse_tables` moves to core | It moved, and it reads one-line arrays of scalars as well | A repeatable option of a step (`level`, `comment`) needs a list. A preset still takes no list |
 | `chain --plan plan.toml` reads the same steps | It reads the source and the chain's options too, and the command line may replace them | One file then describes one run, and one file can run on many sources (`--plan FILE other.bam -o other`) |
 | `plan` gains the chain form | `plan` with a `+` step, with `--plan FILE`, or with the word `chain` first | `plan` is a clap verb with the arguments of `qc`. A `qc` command line holds no `+` and no `--plan`, so the two cannot be mistaken |
-| Text-valued options are checked before the first read | Option names, int and float values, required options, input files and every option of a transform are. A text value only the tool can judge fails its tap when it is built | A collector parses its own options when it is built from the header of its position. Building each one twice would read each reference and interval list twice |
+| Text-valued options are checked before the first read | They are, since the 0.22.0 review: `tap_options::check` runs each one-pass tool's option parser without a header (section 2.6). A value judged against the header or a file still fails its tap when it is built | A collector parses its options and then builds from the header of its position. The parser alone needs no header and opens no file, so no reference or interval list is read twice |
 
 W04, Python (docs/07 section 2.2, the `crates/py` paragraph):
 
@@ -862,8 +985,141 @@ check linear in the number of steps.
 
 | Wave | Adds |
 |---|---|
-| W05 | The sort barrier (`Next::Records`), the planner (`Frame` per position, `requires`, the free-space refusal), the spool for a replay behind another transform, `--sort-memory`, SAM output of `write`, `write --index` through the BAI writer |
+| W05, done | The sort barrier (`Next::Records`), the planner (`Frame` per position, `requires`, the free-space refusal), the spool for a replay behind another transform, `--sort-memory`, SAM output of `write`; `write --index` writes Picard's `.bai` of the written BAM (`bai.rs`); `BuildBamIndex` and `make memgate` |
 | W09 on | Each BAM-writing tool registers its stage in `stage_of` and its stream name in `label_of` |
 | W14 | `qc` as the last step of a chain, manifest 2, resume per step (`resume=` in Python), kept products, the spool for tools that read their input their own way, a progress line |
 | W15, W22 | `write` to CRAM, FASTQ |
 | W46 | Variant streams (`Kind`), pileup and capture sinks |
+
+## 14. W05 part A: SAM text
+
+W05 part A adds SAM text on both ends of a chain and the record orders the sort barrier
+will use. The sort barrier, the planner and `write --index` through the BAI writer are
+the rest of W05.
+
+- The source may be SAM text, plain or in gzip members, a file or a pipe. It is told by
+  its first bytes (`cram::Kind`) and parsed by `sam_text::Reader` into the records a BAM
+  holds, at `VALIDATION_STRINGENCY=STRICT`. A SAM text file can be read again, so
+  `mark-duplicates` replays it as it replays a BAM.
+- `write PATH` writes SAM text when `PATH` ends in `.sam` (`WriteFormat::of`), and
+  `--output-format bam|sam` (`output_format=` in Python, `output-format = "sam"` in a
+  plan file) says which whatever the name is. `write - --output-format sam` prints SAM
+  text on standard output. The plan lists the file as kind `sam`.
+- The file is the one Picard `SamFormatConverter` writes for the same records, byte for
+  byte (`tests/concordance/test_view_sam.py`): `sam_text::header_text(header, false)`,
+  which is `@HD VN:1.6` first, then one `sam_text::write_record` line per record, tags in
+  htsjdk's order. `--md5` writes `PATH.md5`. `--index` with SAM text is a usage error.
+  `--compression-level` changes nothing for SAM text.
+- `crates/core/src/sam_order.rs` holds the orders a sort barrier needs (`Order`,
+  `CoordinateKey`, `QuerynameKey`, `DuplicateKey`), each checked against Picard `SortSam`
+  (`tests/concordance/test_sam_order.py`).
+
+| docs/07 | As built | Reason |
+|---|---|---|
+| `write` picks BAM, SAM, CRAM or FASTQ by extension | BAM and SAM by extension, and `--output-format` | Standard output has no extension. CRAM and FASTQ stay W15 and W22 |
+| SAM text reader and writer in one infrastructure row with header-merge and the BAI reader and writer | The reader, the writer and the comparators only | Part A. Header merge exists in `mark_duplicates/inputs.rs` since 0.18.0; BAI and the sort barrier are parts B and C |
+| A chain carries `VALIDATION_STRINGENCY` | The source is read at `STRICT` | A chain has one source and no option of the source's own; the tools and verbs carry the option |
+| The SAM file of `write` has the header of the stream, as the BAM has | The SAM file has htsjdk's `SAMFileWriter` header (`VN:1.6`) | Picard is the oracle for SAM text. The BAM of `write` keeps the stream's `VN`, which htsjdk also rewrites; changing that would change the bytes 0.22.0 writes |
+
+## 15. W05 part B: the sort barrier, replay or spool, the planner
+
+```bash
+# Sort by name, mark duplicates, sort back, write the BAM and its index: one process
+bammetrics chain in.bam -o out/s --sort-memory 4G \
+    + sort-sam --sort-order queryname \
+    + mark-duplicates \
+    + sort-sam --sort-order coordinate \
+    + write out/s.bam --index
+```
+
+### 15.1 sort-sam as a step
+
+- `sort-sam` is a barrier that holds its records (`Next::Records`). Its first read pushes
+  each record into a `sam_sort::RecordSorter`. The seal sorts what is held, merges the
+  spilled runs, and hands the records on in order under the sorted header (`SO` set,
+  `@HD VN:1.6`, as the tool writes it). The next segment reads them from the sorter.
+- The buffer holds at most `--sort-memory` bytes (default 2 GiB). A record counts its
+  bytes, the item and two index slots of the sort (`sam_sort::ITEM_BYTES`). The step's
+  own `--max-records-in-ram` adds a record bound. Runs spill to `--tmp-dir` as BGZF level
+  3, are merged at most 64 at a time with ties to the earlier run, and are removed once
+  read, at a failure and at a signal (`spill::TempDir`).
+- A run in memory is sorted by the port of Java's `TimSort` (`crates/core/src/timsort.rs`),
+  as htsjdk sorts it. For a queryname order that is not total (a record flagged both
+  first and second of its pair) the order is Java's or Java's
+  `Comparison method violates its general contract!`, never a panic.
+- A CRAM source gets the `MD` and `NM` tags htsjdk rebuilds when the step has a
+  reference (`-R` reaches it).
+- Standard error gets `step N (sort-sam): R records in, R out, 0 changed` and, when it
+  spilled, `spilled B bytes in sorted runs, L merge levels`.
+
+### 15.2 Replay or spool
+
+docs/07 section 2.3: a barrier that reads its input twice (`mark-duplicates`) replays the
+source when the source is a file and nothing stands in front of the barrier in its
+segment. Otherwise it spools.
+
+| Where the replaying barrier is | Its second read |
+|---|---|
+| First stage, file source | The source again (replay: nothing is spooled) |
+| First stage, piped source | A copy of the pipe made before the first read |
+| Behind another transform | The spool of its own input: every record its first read took, written to `--tmp-dir` as BGZF level 3 (`stage/spool.rs`), read back and removed after the replay |
+
+So any number of transforms may follow one another. A second `mark-duplicates` runs on
+the records the first one marked (its stream is `marked-2`), and standard error says
+`spooled B bytes of its input to replay them`.
+
+### 15.3 The planner and the free-space refusal
+
+`crates/cli/src/chain/planner.rs` estimates, before the first read, per barrier: how it
+hands its stream on, the bytes it spills or spools, and its memory. The record count
+comes from the source's size (section 4): 69 bytes per record for a BAM, 102 for a BAM
+whose header says `queryname` (since 0.23.0), 21 for a CRAM, 434 for SAM text. The
+constants were measured on 8,445,233 records of the HG002 exome (docs/benchmarks.md, Sort
+barrier and planner):
+
+| Constant | Value | Measured |
+|---|---:|---|
+| Bytes of one record in memory | 350 | 2,951,869,900 inflated bytes over 8,445,233 records |
+| Resident bytes per byte a sort holds | 1.25 | 4,390 MB resident for 3,526 MB held |
+| Resident memory beside the barriers | 100 MiB | 425 MB at `--sort-memory 256M` less 1.25 times 268 MB |
+| A queryname run or spool, per record | 105 bytes | 871,834,880, 877,285,505 and 879,914,157 bytes |
+| A coordinate run, per record | 76 bytes | 616,683,279 and 639,427,369 bytes |
+| `write` BAM per record, coordinate or other | 70 or 102 bytes | 584,011,111 and 856,813,333 bytes |
+| `mark-duplicates` memory per record held | 200 bytes | 646 MiB (8.4 M records), 800 MiB (150.5 M) |
+
+A barrier's memory adds the memory of the barrier before it: a sort that held its
+records still holds them while the next barrier reads them, and the allocator keeps what
+the barrier before freed. The two-barrier chain above peaked at 1.65 GiB with
+`--sort-memory 1G`, more than either sort alone.
+
+Before the first read `execute` adds the temporary bytes (every spill and spool, as if
+all were held at once) and the bytes of each `write` file, by file system (the device of
+`--tmp-dir` and of each output's directory), and asks each for its free space (one
+`statvfs` call). When a file system has less free space than the chain needs there, the
+chain exits 1 and makes nothing:
+
+```
+$ bammetrics chain in.bam -o out/s + sort-sam -SO queryname + write
+bammetrics chain: not enough free space in out: the chain needs about 54.9 GiB there (out/s.sorted.bam) and 40.2 GiB are free
+  --force-space runs the chain anyway
+```
+
+`--force-space` runs it. The plan prints a `space` line for such a file system and does
+not refuse. A pipe has no size, so its estimate is unknown and nothing is refused.
+
+### 15.4 Departures from docs/07
+
+| docs/07 | As built | Reason |
+|---|---|---|
+| Spilled runs as BGZF level 1 (section 2.1) | Level 3 | zlib-rs level 1 spilled a queryname sort of 8.4 M records as 1,142,443,761 bytes in 16.7 s, level 3 as 871,834,880 bytes in 17.5 s; a coordinate sort 820,851,148 against 616,683,279 bytes in 8.1 against 8.9 s |
+| The planner in `crates/core/src/plan.rs` | `crates/cli/src/chain/planner.rs` | The planned steps (`Planned`) and their Picard arguments live in the cli crate; the core keeps the executor and the spool |
+| Replay when every earlier transform is deterministic | Replay only when the barrier reads the source itself; spool otherwise | Re-running earlier transforms needs each to be replayable; a spool of the barrier's own input is one rule for every stage. Measured cost: 879,914,157 bytes and the time to write them for 8.4 M records |
+| `Transform::requires()` checked at plan time | Not built | `MarkDuplicates` accepts two orders and a sort accepts any; the stage still checks its input when it is built |
+| `--sort-memory` sets the buffer | It does, and the step's `MAX_RECORDS_IN_RAM` bounds it too when given | The tool's option; Picard's `SortSam` counts records only, so the tool keeps that bound alone |
+| Free-space refusal in `plan` | `plan` prints the shortage; the run refuses | A plan runs nothing; it says what the run would do |
+| No word on a free-space override in tests | A hidden `--free-space BYTES` (not in `--help`) replaces the file system's answer | The golden suite records the refusal on any machine |
+| One `libc::statvfs` call, dependency decision in W05 | `libc` 0.2 in the cli crate, already in the lock file through `signal-hook` and `clap` | No new crate enters the tree |
+| A sort spill under 1.2 times the input (section 6) | A queryname run spills 1.52 times a coordinate BAM, a coordinate run 1.08 times | Queryname order puts records of distant positions side by side; the queryname BAM at level 5 is already 1.49 times the coordinate one, and no BGZF level reaches 1.2 (docs/benchmarks.md) |
+| The planner's estimate within 25 percent of the measured spill (section 6, Q5) | Within 2.2 percent for the sort spill on both scale inputs, after one fix | At 69 bytes per record the 2,870,148,655-byte queryname slice counted 41.6 M records for 29.3 M and the sort spill estimate was 51 percent over. A queryname BAM now counts at 102 bytes per record, the bytes `write` makes in that order (docs/benchmarks.md, Scale gate of wave W05) |
+| The scale gate on the exome (section 6) | On chromosomes 1 to 5 of the exome, 3,183,979,932 bytes | The planner gives the whole exome 29.4 GiB of temporary files and 9.8 GiB of output, over the 20 GB a run may hold on this machine |
+| The header merge lifted for `SortSam` | Lifted to `crates/core/src/header_merge.rs` and used by `MarkDuplicates`; `SortSam` takes one `INPUT` and merges nothing | Picard 3.5.0 `SortSam` has one `INPUT`; `MergeSamFiles` (W13) is the next user |

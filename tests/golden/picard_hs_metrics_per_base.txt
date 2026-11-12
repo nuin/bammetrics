@@ -12,7 +12,7 @@ VALIDATION_STRINGENCY=SILENT
 0
 ## stdout
 ## stderr
-bammetrics: ignoring VALIDATION_STRINGENCY=SILENT: records are not validated
+bammetrics: ignoring VALIDATION_STRINGENCY=SILENT: a BAM or CRAM is not validated; SAM text is checked at the level given
 ## file hs_metrics.txt
 ## htsjdk.samtools.metrics.StringHeader
 # CollectHsMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/hs_metrics.txt BAIT_INTERVALS=tests/data/targets.interval_list TARGET_INTERVALS=tests/data/targets.interval_list BAIT_SET_NAME=panel PER_BASE_COVERAGE=OUT/per_base.txt SAMPLE_SIZE=1000 VALIDATION_STRINGENCY=SILENT

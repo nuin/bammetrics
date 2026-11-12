@@ -35,7 +35,7 @@ pub struct Options {
 }
 
 impl Options {
-    fn from_invocation(inv: &Invocation) -> Result<Self> {
+    pub(crate) fn from_invocation(inv: &Invocation) -> Result<Self> {
         Ok(Self {
             aligned_reads_only: inv.flag("ALIGNED_READS_ONLY", false)?,
             pf_reads_only: inv.flag("PF_READS_ONLY", false)?,

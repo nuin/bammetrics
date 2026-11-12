@@ -189,10 +189,14 @@ Picard 3.5.0 numbers are the ones the feature branches measured on the same file
 | ConvertSequencingArtifactToOxoG | | | 0.00 s | 4 MB | |
 | CheckDuplicateMarking | | | 147.4 s | 14.14 GB | exit 1: 144,979 records disagree |
 
-`CheckDuplicateMarking` on a coordinate-sorted BAM sorts every record by query name in
-memory, as its port of Picard does without `SortingCollection`; 150.5M records took
-14.14 GB. A queryname-sorted input streams at a few MB. A disk-spilling sort for it is
-open. The exit 1 is the file's own state: GIAB's HG002 exome holds 144,979 records whose
+`CheckDuplicateMarking` on a coordinate-sorted BAM sorted every record by query name in
+memory in 0.19.0; 150.5M records took 14.14 GB. Since W05 part B it sorts through the
+spilling sorter (`MAX_RECORDS_IN_RAM` 500,000 keys, runs in `TMP_DIR`): 166.5 s and
+131 MiB (137,625,600 bytes), the same 144,979 lines. The exome holds no record flagged
+both first and second of a pair and no paired record flagged neither (`samtools view -c
+-f 0xC0` and `-f 0x1 -F 0xC0` both 0), so its queryname order is total and the spilled
+sort gives the order of the sort in memory. A queryname-sorted input streams at a few MB.
+The exit 1 is the file's own state: GIAB's HG002 exome holds 144,979 records whose
 mates disagree on the duplicate flag, and Picard reports the same.
 `CollectSequencingArtifactMetrics` holds the current contig twice (the reference and an
 upper-cased copy), which is most of its 3.75 GB; one copy could go.
@@ -215,6 +219,224 @@ With a reader that takes nothing for 3 seconds the default buffer fills
 (540,049,408 bytes) for the 512 MiB buffer. Picard allocates the 512 MiB at its start,
 which is its 630 MiB with a reader that keeps up. bammetrics reserves the bytes and
 writes only a window of them, 64 KiB at first, doubled when the bytes held fill it.
+
+## SAM text (HG002 exome)
+
+Wave W05 part A, the SAM text reader and writer, on the HG002 exome BAM (10,339,495,604
+bytes, 150,538,907 records) and on its chromosomes 20 and 21 (5,270,660 records, a
+355,705,146-byte BAM, 2,289,237,081 bytes of SAM text, 434 bytes per record). One run
+each with `/usr/bin/time -l`, 8 threads, on the machine of the Setup section.
+
+| Command | Input | Wall | Peak RSS |
+|---|---|---|---|
+| `view-sam -o /dev/null` | the exome BAM | 105.3 s | 9 MiB |
+| `samtools view -h -@7 -o /dev/null` | the exome BAM | 23.7 s | 22 MiB |
+| `view-sam -o slice.sam` | the slice BAM | 5.8 s | 8 MiB |
+| `chain slice.bam + write x.sam` | the slice BAM | 5.2 s | 20 MiB |
+| `view-sam -o /dev/null` | the slice as SAM text | 12.2 s | 7 MiB |
+| `CollectQualityYieldMetrics` | the slice as SAM text, `STRICT` | 10.0 s | 5 MiB |
+| `CollectQualityYieldMetrics` | the slice as SAM text in BGZF blocks | 12.0 s | 6 MiB |
+| `CollectQualityYieldMetrics` | the slice BAM | 1.2 s | 7 MiB |
+| `CollectInsertSizeMetrics` | the slice as SAM text, `STRICT` | 10.0 s | 6 MiB |
+| `CollectInsertSizeMetrics` | the slice BAM | 1.4 s | 7 MiB |
+
+- The writer prints 1.43 million records per second and holds one record. docs/07
+  section 6 allows a streaming writer 1.0 GiB.
+- The reader parses and validates 0.53 million records per second (230 MB of text) on
+  one thread. The BAM of the same records is read 8 times faster, its blocks inflated on
+  8 threads.
+- On the slice `ViewSam` prints Picard's bytes and `write x.sam` writes Picard
+  `SamFormatConverter`'s file, both apart from the `@RG DT` field (KNOWN_DIFFERENCES.md,
+  SAM text): MD5 `3755f1ca63f78d09f5b288fd92c99bcc` and
+  `76b5d683f749468a1ae3d10369c8416e` with that field left out of both.
+  `CollectQualityYieldMetrics`, `CollectInsertSizeMetrics` and `MarkDuplicates` write the
+  same metrics for the SAM text as for the BAM.
+
+## Sort barrier and planner (chromosomes 20 to 22 of the HG002 exome)
+
+Wave W05 part B on `chr20_21_22.bam` (573,136,551 bytes, 8,445,233 records, 2,951,869,900
+bytes inflated, coordinate sorted), one run each with `/usr/bin/time -l`, 8 threads, with
+other agents' builds on the machine. The constants of the planner
+(`crates/cli/src/chain/planner.rs`) come from these runs.
+
+| Command | Wall | Peak RSS | Spilled or spooled |
+|---|---:|---:|---:|
+| `chain + sort-sam --sort-order queryname + write`, `--sort-memory 16G` (in memory) | 16.7 s | 4,187 MiB | 0 |
+| the same, `--sort-memory 256M`, BGZF level 1 runs | 16.5 s | 407 MiB | 1,142,443,761 |
+| the same, `--sort-memory 256M`, BGZF level 3 runs (as built) | 17.5 s | 405 MiB | 871,834,880 |
+| `chain + sort-sam --sort-order coordinate + write` on the queryname BAM, 256M, level 1 | 8.1 s | 408 MiB | 820,851,148 |
+| the same, level 3 (as built) | 8.9 s | 406 MiB | 616,683,279 |
+| `SortSam SORT_ORDER=coordinate` (500,000 records per run) | 8.3 s | 302 MiB | |
+| `chain + mark-duplicates + write` (replay) | 14.9 s | 646 MiB | 0 |
+| `chain + sort-sam queryname + mark-duplicates + sort-sam coordinate + write --index`, `--sort-memory 1G` | 52.5 s | 1,689 MiB | 877,285,505 + 879,914,157 (spool) + 639,427,369 |
+| staged: `SortSam` queryname, `MarkDuplicates`, `SortSam` coordinate | 16.9 + 16.3 + 14.6 s | 307, 655, 284 MiB | |
+
+- The two-barrier chain and the staged sequence give the same records and the same header
+  lines apart from `@PG CL` (MD5 of `samtools view` `c793ee54b6d2ea44725dc5ef5c53c325` on
+  both). Its peak, 1.65 GiB at `--sort-memory 1G`, is under the docs/07 section 6 bound of
+  `--sort-memory` plus 1 GiB. The chain took 52.5 s against 47.8 s staged: its sorts hold
+  2.5 million records per run where the tool holds 500,000, and the spool is written on
+  the reader's thread.
+- A queryname run spills 1.52 times the coordinate BAM it came from at level 3 (1.99 at
+  level 1); a coordinate run 1.08 times (1.43). The queryname-sorted BAM at level 5 is
+  856,813,333 bytes, 1.49 times the coordinate one, so no level of BGZF brings a
+  queryname spill under the 1.2 times of docs/07 section 6. `bgzip` (libdeflate) at
+  levels 1 to 6 gave 890.6 to 855.8 MB for the queryname records and 626.6 to 574.7 MB for
+  the coordinate ones; the zlib-rs level 1 of noodles is the outlier, so runs are level 3.
+- The planner counts 8,306,326 records from the file size (1.6 percent short) and, with
+  105 and 76 bytes per record, estimates 831.8 MiB, 831.8 MiB and 602.0 MiB for the three
+  files of the two-barrier chain (measured 836.6, 839.2 and 609.8 MiB). Its first memory
+  rule gave 1.3 GiB against the measured 1.65 GiB; the rule as built adds the memory of
+  the barrier before, because the allocator keeps what that one freed, and estimates
+  above the peak.
+
+## Scale gate of wave W05 (docs/07 section 6, Q5)
+
+Release 0.23.0 (`release/0.23.0`, the three W05 branches merged), 2026-11-11, one run
+each under `/usr/bin/time -l` with no other job on `~/data`, 8 threads, other agents'
+builds on the machine. Picard 3.5.0 with `JAVA_OPTS=-Xmx8g`.
+
+The inputs, under `~/data/bammetrics-scale/waves/w05/`:
+
+- `slice.chr20_21.bam`: `samtools view -@ 8 -b -T GRCh38.fa NA12878.final.cram chr20
+  chr21`, 1,624,507,373 bytes, 29,330,868 records (55 bytes each: the CRAM's qualities
+  are binned). docs/07 expected about 4 GB. It stays on the data disk for later waves.
+- `slice.queryname.bam`: `bammetrics sort-sam slice.chr20_21.bam --sort-order
+  queryname`, 2,870,148,655 bytes. Deleted after the runs.
+- `exome.chr1_5.bam`: `samtools view -@ 8 -b HG002.exome.bam 1 2 3 4 5`, 3,183,979,932
+  bytes, 48,485,572 records. The whole exome does not fit: the planner gives the chain
+  29.4 GiB of temporary files and 9.8 GiB of output, over the 20 GB a run may hold.
+  Deleted after the runs.
+
+| Command | Input | Wall | Peak RSS | Sort spill | Spool |
+|---|---|---:|---:|---:|---:|
+| `sort-sam --sort-order queryname` | slice | 65.3 s | 619 MiB | 2,831 MB (sampled) | |
+| Picard `SortSam SORT_ORDER=queryname` | slice | 244.0 s | 4,193 MiB | | |
+| `chain --sort-memory 2G + sort-sam --sort-order coordinate + mark-duplicates + write --index` | queryname slice | 126.8 s | 2,755 MiB | 2,094,107,672 | 1,802,263,583 |
+| the same | exome chr1 to 5 | 141.7 s | 3,047 MiB | 3,432,800,381 | 3,429,831,103 |
+
+- Peak RSS is under `--sort-memory` plus 1 GiB (3,072 MiB) on both chains: 2,755 and
+  3,047 MiB. The exome run passes by 25 MiB; its memgate run peaked at 2,918 MiB.
+- The sort spill is 0.73 times the queryname slice and 1.08 times the exome part, under
+  1.2 times. The queryname sort of the coordinate slice spills 1.74 times its input and
+  0.99 times its output: records in queryname order take 1.77 times the bytes of the
+  same records in coordinate order (2,870,148,655 against 1,624,507,373), so 1.2 times
+  the input cannot hold for that sort (see "Sort barrier and planner" above). Its memgate
+  row bounds the spill by 1.2 times the output.
+- The planner, after its fix in this release, counts 28,138,712 records for the
+  queryname slice (29,330,868) and 46,144,636 for the exome part (48,485,572). Its sort
+  spill estimates are 2,138,542,112 and 3,506,992,336 bytes, 2.1 and 2.2 percent over the
+  bytes spilled. Its spool estimates are 18.7 and 2.2 percent over. Before the fix it
+  counted 41.6 million records in the queryname slice at the 69 bytes per record of a
+  coordinate BAM, and its sort spill estimate was 51 percent over.
+- The memgate sample of the whole temporary directory peaked at 4,955.5 MiB on the slice
+  and 8,703.2 MiB on the exome part, against plan totals of 5.5 and 9.1 GiB.
+- Picard's queryname output and ours hold the same 29,330,868 records and the same 3,394
+  header lines under the rules of `compare_bam` (records streamed through `samtools
+  view`, since `compare_bam` holds both texts in memory). bammetrics took 0.27 times
+  Picard's wall time and 0.15 times its peak RSS.
+- The `.bai` of each chain equals `build-bam-index` of the written BAM under `cmp`, and on
+  the slice also Picard `BuildBamIndex` of that BAM (342,600 bytes).
+- At 30x, linearly from the slice (26.2 times its records in the 768.6 million of the
+  genome CRAM): about 55 GB of sorted runs, 47 GB of spool and 45 GB of spill from
+  `mark-duplicates`, with RSS bounded by `--sort-memory` and `MAX_RECORDS_IN_RAM`, not by
+  the input. About 55 minutes of wall time. An extrapolation, no measurement.
+
+## BuildBamIndex (HG002 exome)
+
+Mac Studio, Apple M1 Ultra, 20 cores, 64 GB. Release build of `feat/bam-index`, one run
+each under `/usr/bin/time -l`, other builds and test runs on the machine. Picard 3.5.0
+with `JAVA_OPTS=-Xmx8g` and `VALIDATION_STRINGENCY=SILENT`. `samtools index -@ 8`
+(samtools 1.25) is there for scale: it writes another file.
+
+| BAM | tool | wall | peak RSS | index bytes |
+|---|---|---:|---:|---:|
+| chr20 to chr22 of the exome, 573,136,551 bytes, 8.4 M records | `build-bam-index`, 8 threads | 0.67 s | 7.8 MiB | 346,128 |
+| | `build-bam-index --threads 1` | 3.65 s | 5.7 MiB | 346,128 |
+| | Picard `BuildBamIndex` | 5.49 s | 404 MiB | 346,128 |
+| | `samtools index -@ 8` | 0.58 s | 11.7 MiB | 195,448 |
+| HG002.exome.bam, 10,339,495,604 bytes, 150.5 M records | `build-bam-index`, 8 threads | 11.77 s | 9.1 MiB | 7,186,968 |
+| | `build-bam-index --threads 1` | 64.97 s | 6.5 MiB | 7,186,968 |
+| | Picard `BuildBamIndex` | 85.61 s | 487 MiB | 7,186,968 |
+| | `samtools index -@ 8` | 10.75 s | 28.5 MiB | 3,694,104 |
+| Picard's `MarkDuplicates` output of the exome, 10,347,171,256 bytes | `build-bam-index`, 8 threads | 11.36 s | 9.4 MiB | 7,188,776 |
+| | `build-bam-index --threads 1` | 64.66 s | 6.7 MiB | 7,188,776 |
+| | Picard `BuildBamIndex` | 83.07 s | 585 MiB | 7,188,776 |
+
+Each bammetrics index equals Picard's under `cmp`, at 1 thread and at 8. The index of
+HG002.exome.bam also equals the `HG002.exome.bam.bai` that came with the BAM. samtools
+reads the bammetrics index as its own: `samtools idxstats` prints the same text and
+`samtools view -c` the same count on four regions (63,188, 65,042, 3,174,573 and 513,783
+records) as through `samtools index`.
+
+The indexer holds the bins of one reference and writes them when the next reference
+starts, so memory does not grow with the file: 7.8 MiB at 573 MB and 9.1 MiB at 10.3 GB.
+Wall time follows the BGZF inflation: 1.14 s per GB at 8 threads. A 70 GB BAM at 30x
+(docs/07 section 6) is about 80 s at that rate: a linear extrapolation, no measurement.
+
+`MarkDuplicates CREATE_INDEX=true` and `write --index` read the finished BAM once more to
+build the index. On the 573 MB slice that read is about 0.7 s of the 16.8 s `mark-duplicates`
+takes with `--create-index`.
+
+## Memory gate
+
+`make memgate` runs each row of `benches/memgate.toml` under `/usr/bin/time -l` and fails
+when a row passes a limit (`benches/memgate.py`; `tests/harness/test_memgate.py` tests
+the harness). The fixture rows read `tests/data` and run in any wave. The scale rows read
+the data of this file and run alone on the machine, once per wave, in the integrator's
+slot (docs/07 section 6).
+
+Fixture tier (`make memgate`):
+
+| command | peak RSS MiB / limit | wall s / limit |
+|---|---|---|
+| `build-bam-index` | 4.3 / 64 | 0.00 / 30 |
+| `mark-duplicates --create-index --create-md5-file` | 5.8 / 64 | 0.00 / 30 |
+| `chain + insert-size + quality-yield + write --index --md5` | 5.8 / 64 | 0.00 / 30 |
+| `view-sam` | 4.4 / 64 | 0.00 / 30 |
+| `sort-sam --max-records-in-ram 5` | 5.9 / 64 | 0.00 / 30 |
+| `chain + sort-sam + mark-duplicates + sort-sam + write --index`, `--sort-memory 2K` | 7.6 / 64 | 0.01 / 30 |
+
+Scale tier (`make memgate TIER=scale MEMGATE_ARGS="--out-root
+~/data/bammetrics-scale/waves/w05/bam-index --markdown"`), 8 threads. The limit is the
+docs/07 target for a streaming reader or writer, 1 GiB:
+
+| command | input | peak RSS MiB / limit | wall s | spill MiB (sampled) |
+|---|---|---|---:|---:|
+| `build-bam-index slice` | chr20_21_22.bam, 573 MB | 7.8 / 1024 | 0.70 | |
+| `build-bam-index exome` | HG002.exome.bam, 10.3 GB | 9.0 / 1024 | 14.22 | |
+| `chain write --index slice` | chr20_21_22.bam | 43.2 / 1024 | 5.55 | |
+| `mark-duplicates slice` (`--create-index`) | chr20_21_22.bam | 642.9 / 1024 | 16.81 | 358.0 |
+
+The sort rows of the W05 scale gate ("Scale gate of wave W05" above): the limit is
+`--sort-memory` (2 GiB) plus 1 GiB. A chain's spill limit is 3 times 1.2 times its input,
+for the runs, the spool and the spill of `mark-duplicates` in one directory.
+
+| command | input | peak RSS MiB / limit | wall s | spill MiB (sampled) / limit |
+|---|---|---|---:|---:|
+| `sort-sam queryname slice` | slice.chr20_21.bam, 1,624.5 MB | 619.6 / 3072 | 64.45 | 2,700.2 / 3,284 |
+| `chain sort barrier slice` | slice.queryname.bam, 2,870.1 MB | 2,755.7 / 3072 | 126.64 | 4,955.5 / 9,853 |
+| `chain sort barrier exome` | exome.chr1_5.bam, 3,184.0 MB | 2,918.4 / 3072 | 140.52 | 8,703.2 / 10,931 |
+
+The queryname row first ran against 1.2 times its input (1,859 MiB) and failed at 2,700.2
+MiB; its limit is now 1.2 times its output, for the reason given above. The two inputs
+other than the slice are made again with the commands of that section before a run.
+
+To add a scale row:
+
+1. Keep the data under `~/data/bammetrics-scale`, never in the repository. Write nothing
+   into `genome` or `exome`.
+2. Append a `[[command]]` to `benches/memgate.toml` with `tier = "scale"`, the files it
+   reads in `needs`, and an `argv` that writes only under `{out}`. Set `max_rss_mib` to
+   the docs/07 target: 1024 for a streaming writer, `--sort-memory` in MiB plus 1024 for a
+   sort or a merge, 500 for a VCF writer.
+3. For a tool that spills, pass `--tmp-dir {out}/tmp`, set `spill_dir = "{out}/tmp"` and
+   `max_spill_mib` to 1.2 times the input size in MiB.
+4. Run `make memgate TIER=scale MEMGATE_ARGS="--only NAME --out-root
+   ~/data/bammetrics-scale/waves/wNN --markdown"` with no other job on `~/data`, and
+   paste the table here. The row's directory is removed after the measurement, so no
+   output stays on the data disk. A row whose `needs` file is missing is skipped;
+   `--strict` makes that a failure.
 
 ## Report budgets (docs/05 section 4.8)
 
@@ -257,6 +479,12 @@ page 96.5 KB (98,790 bytes), index 190.7 KB (195,237 bytes), binary growth 371.5
 (380,432 bytes stripped, 16 bytes over 0.21.0), formats growth 129.2 KB (132,304 bytes
 stripped, as at 0.21.0), 0 added passes.
 
+At 0.23.0 (2026-11-11, release/0.23.0: feat/sam-sort, feat/bam-index and
+fix/chain-review-0.22 merged), one `make budgets` run with other builds on the machine:
+render 2.09 ms and 0.70 ms, sample page 96.5 KB (98,790 bytes), index 190.7 KB (195,237
+bytes), binary growth 371.5 KB (380,432 bytes stripped, as at 0.22.0), formats growth
+129.2 KB (132,304 bytes stripped, as at 0.22.0), 0 added passes.
+
 The fixture metrics are the seven files the golden records hold for
 `tests/data/insert_size.bam` (alignment summary, insert size, quality yield, duplicate
 metrics, hs metrics, gc bias, mean quality by cycle). A KB is 1024 bytes.
@@ -284,9 +512,14 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 0.20.0 | 2026-11-10, release/0.20.0: feat/formats and feat/harness merged at 5a8f478, the version set | 7,124,320 | 6,032,104 |
 | 0.21.0 | 2026-11-10, release/0.21.0 at d2af4a2: feat/stage-executor and the security fixes of release/0.20.0 merged, the version set | 7,211,216 | 6,114,880 |
 | 0.22.0 | 2026-11-10, release/0.22.0: feat/chain-verb and feat/fifo-buffer merged, the version set | 7,414,032 | 6,296,952 |
+| 0.23.0 | 2026-11-11, release/0.23.0: feat/sam-sort, feat/bam-index and fix/chain-review-0.22 merged, the version set | 7,904,624 | 6,710,840 |
 
 From 0.21.0 to 0.22.0 the binary grew 202,816 bytes (198.1 KB), 182,072 stripped (177.8
 KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
+
+From 0.22.0 to 0.23.0 it grew 490,592 bytes (479.1 KB), 413,888 stripped (404.2 KB,
+6.6%): the SAM text reader and writer, `ViewSam`, `SortSam` with TimSort, the `TreeSet`
+merge and the planner, the BAI writer and `BuildBamIndex`.
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and
@@ -337,4 +570,5 @@ make a11y        # axe-core, reflow and keyboard check of the report pages (node
 make bench-bam   # target/bench/bench.bam, about 10 minutes (Python simulation, bwa, MarkDuplicates)
 make bench       # release build, then benches/bench.py: table on stdout, target/bench/results.json
 make bench-wgs   # target/bench_wgs on first use, then benches/wgs_bench.py: the coverage table, target/bench_wgs/results.json
+make memgate     # benches/memgate.py on the fixture rows of benches/memgate.toml; TIER=scale for the real data
 ```

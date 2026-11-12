@@ -1,0 +1,172 @@
+# The memory gate table: one [[command]] per measured command (benches/memgate.py).
+#
+#   make memgate               the fixture rows: committed BAMs, a few seconds
+#   make memgate TIER=scale    the scale rows: real data outside the repository
+#
+# Keys: name (unique), tier (fixture or scale), argv, max_rss_mib (required), and
+# optionally max_seconds, needs (files the command reads), spill_dir with
+# max_spill_mib. {bin} is the release binary, {out} a directory of the row's own that
+# is removed after the measurement. docs/benchmarks.md ("Memory gate") holds the
+# numbers measured and how a row is added.
+#
+# Fixture limits are 8 times the peak measured on the Mac Studio, at least 64 MiB:
+# they catch a buffer that grows with nothing to hold, not a regression of a few MiB.
+
+[[command]]
+name = "build-bam-index"
+argv = ["{bin}", "build-bam-index", "tests/data/orientation.bam", "-o", "{out}/orientation.bai"]
+needs = ["tests/data/orientation.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "mark-duplicates"
+argv = [
+    "{bin}", "mark-duplicates", "tests/data/markdup.bam", "-o", "{out}/marked.bam",
+    "--metrics-file", "{out}/metrics.txt", "--create-index", "--create-md5-file",
+    "--tmp-dir", "{out}/tmp",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+
+# A chain without a transform: two collectors and a writer on one read.
+[[command]]
+name = "chain write --index"
+argv = [
+    "{bin}", "chain", "tests/data/markdup.bam", "-o", "{out}/sample", "+", "insert-size",
+    "+", "quality-yield", "+", "write", "{out}/kept.bam", "--index", "--md5",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+# Scale rows. The limits are the targets of docs/07 section 6: a streaming writer or
+# reader stays under 1 GiB whatever the input size. The data is listed in
+# docs/benchmarks.md; a row whose file is missing is skipped. Give
+# --out-root ~/data/bammetrics-scale/waves/w05 so the outputs land on the data disk.
+
+[[command]]
+name = "build-bam-index slice"
+tier = "scale"
+argv = ["{bin}", "build-bam-index", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "-o", "{out}/slice.bai"]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 1024
+
+[[command]]
+name = "build-bam-index exome"
+tier = "scale"
+argv = ["{bin}", "build-bam-index", "~/data/bammetrics-scale/exome/HG002.exome.bam", "-o", "{out}/exome.bai"]
+needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
+max_rss_mib = 1024
+
+[[command]]
+name = "chain write --index slice"
+tier = "scale"
+argv = [
+    "{bin}", "chain", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "+", "write",
+    "{out}/kept.bam", "--index", "--md5",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 1024
+
+[[command]]
+name = "mark-duplicates slice"
+tier = "scale"
+argv = [
+    "{bin}", "mark-duplicates", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "-o",
+    "{out}/marked.bam", "--metrics-file", "{out}/metrics.txt", "--create-index",
+    "--tmp-dir", "{out}/tmp",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 1024
+spill_dir = "{out}/tmp"
+
+# Wave W05 part B: the sort barrier. Fixture rows first, then the scale gate of
+# docs/07 section 6 (Q5): sort or merge RSS at most --sort-memory plus 1 GiB, spill at
+# most 1.2 times the input.
+
+[[command]]
+name = "view-sam"
+argv = ["{bin}", "view-sam", "tests/data/markdup.bam", "-o", "{out}/markdup.sam"]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "sort-sam"
+argv = [
+    "{bin}", "sort-sam", "tests/data/markdup.bam", "-o", "{out}/queryname.bam",
+    "--sort-order", "queryname", "--max-records-in-ram", "5", "--create-md5-file",
+    "--tmp-dir", "{out}/tmp",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+
+# Two sorts and a replay through a spool, spilled at a 2 KiB bound.
+[[command]]
+name = "chain sort-sam + mark-duplicates + sort-sam + write --index"
+argv = [
+    "{bin}", "chain", "tests/data/markdup.bam", "--sort-memory", "2K", "--tmp-dir",
+    "{out}/tmp", "-o", "{out}/q", "+", "sort-sam", "--sort-order", "queryname", "+",
+    "mark-duplicates", "+", "sort-sam", "--sort-order", "coordinate", "+", "write",
+    "{out}/sorted.bam", "--index",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+
+# Scale rows of the sort barrier. slice.chr20_21.bam is chr20 and chr21 of
+# NA12878.final.cram (samtools view -b -T GRCh38.fa), 1,624,507,373 bytes, 29,330,868
+# records; slice.queryname.bam is its sort-sam --sort-order queryname, 2,870,148,655
+# bytes; exome.chr1_5.bam is chromosomes 1 to 5 of HG002.exome.bam (samtools view -b).
+# docs/benchmarks.md ("Sort barrier") says how each is made. A chain row's temporary
+# directory holds the sorted runs, the spool and the spill of mark-duplicates, so its
+# limit is 3 times 1.2 times the input. The queryname sort of a coordinate-sorted BAM
+# spills its records in queryname order, which take 1.77 times the bytes of the same
+# records in coordinate order (2,870,148,655 against 1,624,507,373), so its limit is
+# 1.2 times its output, 2,737 MiB.
+
+[[command]]
+name = "sort-sam queryname slice"
+tier = "scale"
+argv = [
+    "{bin}", "sort-sam", "~/data/bammetrics-scale/waves/w05/slice.chr20_21.bam", "-o",
+    "{out}/queryname.bam", "--sort-order", "queryname", "--tmp-dir", "{out}/tmp",
+]
+needs = ["~/data/bammetrics-scale/waves/w05/slice.chr20_21.bam"]
+max_rss_mib = 3072
+spill_dir = "{out}/tmp"
+max_spill_mib = 3284
+
+[[command]]
+name = "chain sort barrier slice"
+tier = "scale"
+argv = [
+    "{bin}", "chain", "~/data/bammetrics-scale/waves/w05/slice.queryname.bam",
+    "--sort-memory", "2G", "--tmp-dir", "{out}/tmp", "-o", "{out}/q", "+", "sort-sam",
+    "--sort-order", "coordinate", "+", "mark-duplicates", "+", "write", "{out}/sorted.bam",
+    "--index",
+]
+needs = ["~/data/bammetrics-scale/waves/w05/slice.queryname.bam"]
+max_rss_mib = 3072
+spill_dir = "{out}/tmp"
+max_spill_mib = 9853
+
+[[command]]
+name = "chain sort barrier exome"
+tier = "scale"
+argv = [
+    "{bin}", "chain", "~/data/bammetrics-scale/waves/w05/exome.chr1_5.bam",
+    "--sort-memory", "2G", "--tmp-dir", "{out}/tmp", "-o", "{out}/e", "+", "sort-sam",
+    "--sort-order", "coordinate", "+", "mark-duplicates", "+", "write", "{out}/sorted.bam",
+    "--index",
+]
+needs = ["~/data/bammetrics-scale/waves/w05/exome.chr1_5.bam"]
+max_rss_mib = 3072
+spill_dir = "{out}/tmp"
+max_spill_mib = 10931

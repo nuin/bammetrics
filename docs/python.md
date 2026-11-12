@@ -48,6 +48,13 @@ The keywords of `qc`, `check` and `report` are the command's long flags in snake
   take their Picard defaults only. The module installs no signal handler: a Python
   process killed mid-run leaves its spill directory (`bammetrics-markdup.<pid>.<n>`) and
   its temporary output (`.NAME.<pid>.<n>.tmp`) behind.
+- `build_bam_index(bam, *, output=None)` writes the `.bai` of a coordinate-sorted BAM, the
+  bytes Picard `BuildBamIndex` writes for it. Without `output` the index goes beside the
+  BAM (`x.bai` for `x.bam`, the name plus `.bai` otherwise), whatever the current
+  directory is. It returns the rows `bam_index_stats` reads from that index: one dict per
+  reference (`reference`, `length`, `aligned`, `unaligned`), then the `*` row. A header
+  that is not `SO:coordinate` raises `InputError` and writes nothing; a CRAM, an
+  `output` that is the input and an unknown keyword raise `UsageError`.
 - `fifo_buffer(*, buffer_size, io_size, debug_frequency, name, verbosity)` copies nothing.
   `FifoBuffer` moves the standard input of a command to its standard output, and a
   Python call has no pipe to buffer and no row to return. The function checks its
@@ -55,13 +62,30 @@ The keywords of `qc`, `check` and `report` are the command's long flags in snake
   `BUFFER_SIZE=0`), then raises `UsageError` naming the command to run:
   `bammetrics fifo-buffer`. Standard input and output of the Python process are not
   touched.
+- `view_sam(input, *, alignment_status, pf_status, header_only, records_only,
+  interval_list, reference_sequence)` returns one dict per record with the keys `QNAME`,
+  `FLAG`, `RNAME`, `POS`, `MAPQ`, `CIGAR`, `RNEXT`, `PNEXT`, `TLEN`, `SEQ`, `QUAL` and
+  `TAGS` (`FLAG`, `POS`, `MAPQ`, `PNEXT` and `TLEN` as int, `TAGS` the tag fields joined
+  by tabs, in htsjdk's order). It prints nothing and holds the rows in memory, at most
+  256 MiB of SAM text; `bammetrics view-sam` prints a file of any size. It has no
+  `output`: `chain(source, [step("write", output="x.sam")])` writes SAM text.
+- `sort_sam(input, *, output, sort_order, compression_level, create_index,
+  create_md5_file, max_records_in_ram, tmp_dir, reference_sequence, validation_stringency)`
+  writes `output` (a BAM, or SAM text for a name ending in `.sam`) with every record in
+  `sort_order` (`"queryname"`, `"coordinate"` or `"duplicate"`), as `bammetrics sort-sam`
+  does, and returns `[]`: it writes no metrics file. In a chain, `step("sort_sam",
+  sort_order="queryname")` is a transform and `write` writes its records.
+- Every function that takes a BAM takes SAM text too, plain or in gzip members, read as
+  htsjdk reads it. `validation_stringency="STRICT"` (the default), `"LENIENT"` or
+  `"SILENT"` sets how; a BAM or a CRAM is read the same at every value. A line htsjdk
+  refuses raises with htsjdk's message.
 - `--format` and `--quiet` have no keyword, nor has `-o` of `check`: no progress line, no event and no step error is printed (step errors are in `Run.errors`). Three warnings still go to stderr: a `resume` over a manifest that cannot be read (`... is not a whole manifest; running every step`), a core tool's own warning (`CollectInsertSizeMetrics` when every orientation falls under `MINIMUM_PCT`), and `check` skipping an unparsable metrics file (`bammetrics: skipped ...`).
 - `qc(report=False)` is the one keyword the command lacks: no `PREFIX.report.html` is written. An earlier run's page under the same prefix is removed only when that run's manifest lists it as its `report` file; a page no run wrote stays. `PREFIX.verdict.json` is still written.
 - Messages are the command's lines, with its spelling: `bammetrics qc: out/s.manifest.json holds an earlier run: --resume skips its finished steps, --force reruns them` means `resume=True` or `force=True`. A manifest that cannot be read is named with its reason (`out/s.manifest.json is not a whole manifest: --resume or --force runs every step`). An `output` or `sample` holding a NUL byte is a `UsageError`.
 
 ## qc
 
-`qc(bam, *, output, reference, preset, hs, panel, ref_flat, strand, ribosomal_intervals, sex, sample, fail_on, resume, force, threads, also, all_plots, date, report)` returns a `Run`.
+`qc(bam, *, output, reference, preset, hs, panel, ref_flat, strand, ribosomal_intervals, sex, sample, fail_on, resume, force, threads, validation_stringency, also, all_plots, date, report)` returns a `Run`. `validation_stringency` (`"STRICT"`, `"LENIENT"`, `"SILENT"`) sets how a SAM text input is read.
 
 | Outcome | Command exit | Python |
 |---|---|---|
@@ -169,19 +193,22 @@ These are the two examples of docs/chaining.md. `tests/data/chain_markdup.toml` 
 
 ### chain
 
-`chain(source=None, steps=None, *, output, reference, threads, tmp_dir, format, also, sample, plan, dry_run)`.
+`chain(source=None, steps=None, *, output, reference, threads, tmp_dir, format, also, sample, sort_memory, force_space, validation_stringency, plan, dry_run)`.
 
 | Argument | Command | Value |
 |---|---|---|
-| `source` | the positional `BAM` | A BAM, or a CRAM with `reference`. `"-"` reads the standard input of the process. `None` when the plan file names it |
+| `source` | the positional `BAM` | A BAM, SAM text, or a CRAM with `reference`. `"-"` reads the standard input of the process. `None` when the plan file names it |
 | `steps` | `+ STEP ...` | A list of verb names and `step(...)` objects, in order. One name or one `Step` is a chain of one step |
 | `output` | `-o PREFIX` | The prefix of every step that names no file of its own. Default `./<source name>`. `""` raises `UsageError`: it would name hidden files (`.insert_size_metrics`) |
 | `reference` | `-R FASTA` | Decodes a CRAM source, and goes to every step that reads a reference and names none |
-| `threads` | `--threads N` | BGZF threads of each read and of `write` |
+| `threads` | `--threads N` | BGZF threads of each read and of `write`. Over 256 is a `UsageError`, on `chain`, `qc` and `collect` |
 | `tmp_dir` | `--tmp-dir DIR` | Where a transform spills and a piped source is copied |
 | `format` | `--format LIST` | `picard` first. `["picard", "json"]` adds `FILE.json` beside every metrics file |
 | `also` | `--also LIST` | `json`, `jsonl`, `tsv`, `csv` beside every metrics file, `markdown` as `PREFIX.report.md` |
 | `sample` | `--sample NAME` | The sample of the json forms and of `Run.sample` |
+| `sort_memory` | `--sort-memory BYTES` | What a `sort_sam` step holds before it spills: `"2G"`, `"512M"`, a number of bytes as a str. Default 2 GiB |
+| `force_space` | `--force-space` | `True` runs a chain whose estimated temporary and output bytes exceed the free space; without it that chain raises `InputError` before the first read |
+| `validation_stringency` | `--validation-stringency` | How a SAM text source is checked: `"STRICT"` (default), `"LENIENT"`, `"SILENT"`. A step refuses the keyword |
 | `plan` | `--plan FILE` | A TOML plan file in place of `steps`. A keyword given replaces the file's value. `steps` beside `plan` raises `UsageError`. Paths in the file are read relative to the working directory of the process, never to the file's directory. A step that names the plan file as its output raises `UsageError` |
 | `dry_run` | `--dry-run` | `True` returns the plan text as a str and runs nothing |
 
@@ -206,7 +233,7 @@ bm.step("fifo_buffer")                     # UsageError: FifoBuffer buffers the 
 - `output` is the step's own `-o`: the file of a tap that writes one file, a prefix for a tap that writes several (`gc_bias`). Without it the chain's prefix names the files. `mark_duplicates` takes no `output`, since a transform writes no BAM in a chain; `step("write", output=...)` after it writes the BAM, and `metrics_file` names its metrics.
 - `format` is the step's own `--format` list. `as_` on a transform is `--as NAME`, the name of the stream it leaves (`as` is a Python keyword).
 - `panel` on `hs_metrics` is the verb flag `--panel FILE`: one file as `bait_intervals` and `target_intervals`. The command's error for missing intervals names `--panel`, and `qc` takes `panel=` too.
-- `write` takes `output`, `index`, `md5` and `compression_level`.
+- `write` takes `output`, `index`, `md5`, `compression_level` and `output_format` (`"bam"` or `"sam"`; a name ending in `.sam` is SAM text without it).
 - A bool option takes `True` or `False`, an int option an int, a float option a number, a path a str or an `os.PathLike` (`TypeError` otherwise). A text option takes a str, or one number as its text. A list or tuple is a repeated option (`metric_accumulation_level`, `comment`); a list of a text option holds `str` items only. `None` leaves the option out.
 - A float that is NaN or infinite is a `UsageError` here (`minimum_pct takes a finite number, not nan`). So is a list of a text option with another type in it (`metric_accumulation_level takes a list of str, not one holding int`). Neither waits for the tap to be built.
 
@@ -246,7 +273,7 @@ bm.step("fifo_buffer")                     # UsageError: FifoBuffer buffers the 
 
 A tap that fails fails alone: the other steps finish. A transform or `write` that fails stops its segment: the message names it and counts the rest (`1 step(s) failed: step 2 (mark-duplicates): ...; 1 stopped; 2 not run`).
 
-`resume` is not a keyword: resume per step is wave W14. A second transform is a `UsageError` until W05.
+`resume` is not a keyword: resume per step is wave W14. A second transform replays the source or spools its input ([docs/chaining.md](chaining.md) section 15).
 
 ## Errors
 

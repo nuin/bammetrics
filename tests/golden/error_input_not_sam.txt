@@ -1,0 +1,8 @@
+## argv
+CollectQualityYieldMetrics
+I=tests/data/ref_100k.fa
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/ref_100k.fa: not a BAM or CRAM file (and not SAM text: the first line is no header line and has fewer than 11 tab-separated fields)

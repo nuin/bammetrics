@@ -1473,6 +1473,95 @@ fn an_output_that_cannot_be_written_exits_1_before_anything_runs() {
     fs::remove_dir_all(&dir).expect("cleanup");
 }
 
+/// `write` writes SAM text for a name ending in `.sam`, and on standard
+/// output with `--output-format sam`: htsjdk's header (`VN:1.6`), then the
+/// record lines `ViewSam` prints. The text reads back as the BAM does.
+#[test]
+fn write_writes_sam_text_by_name_or_by_output_format() {
+    let dir = fresh_dir("sam");
+    let file = |name: &str| dir.join(name).display().to_string();
+    let source = FIXTURE.0;
+    let sam = file("out.sam");
+    let output = run(&strings(&["chain", source, "+", "write", &sam, "--md5"]));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("1 step finished, 2 files written"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(names(&dir), ["out.sam", "out.sam.md5"]);
+    let written = fs::read(dir.join("out.sam")).expect("the SAM");
+    let lines: Vec<&[u8]> = written.split(|&b| b == b'\n').collect();
+    assert_eq!(lines[0], b"@HD\tVN:1.6\tSO:coordinate");
+    let records = run(&strings(&[
+        "ViewSam",
+        &format!("I={source}"),
+        "RECORDS_ONLY=true",
+    ]))
+    .stdout;
+    let record_lines: Vec<u8> = written
+        .split_inclusive(|&b| b == b'\n')
+        .filter(|line| !line.starts_with(b"@"))
+        .flatten()
+        .copied()
+        .collect();
+    assert_eq!(record_lines, records);
+    assert_eq!(record_lines.iter().filter(|&&b| b == b'\n').count(), 36);
+
+    // Standard output takes SAM text when asked, and a BAM otherwise.
+    let piped = run(&strings(&[
+        "chain",
+        source,
+        "+",
+        "write",
+        "-",
+        "--output-format",
+        "sam",
+    ]));
+    assert_eq!(piped.stdout, written);
+    let binary = run(&strings(&[
+        "chain",
+        source,
+        "+",
+        "write",
+        &sam,
+        "--output-format=bam",
+    ]));
+    assert!(binary.status.success());
+    assert_eq!(
+        &fs::read(dir.join("out.sam")).expect("a BAM")[..2],
+        b"\x1f\x8b"
+    );
+
+    // The SAM text is a source: its metrics are the BAM's.
+    fs::write(dir.join("out.sam"), &written).expect("the SAM again");
+    for (input, name) in [(sam.as_str(), "from_sam"), (source, "from_bam")] {
+        run(&strings(&[
+            "chain",
+            "-o",
+            &file(name),
+            input,
+            "+",
+            "insert-size",
+            "+",
+            "quality-yield",
+        ]));
+    }
+    for extension in ["insert_size_metrics", "quality_yield_metrics"] {
+        assert_eq!(
+            body(&dir.join(format!("from_sam.{extension}"))),
+            body(&dir.join(format!("from_bam.{extension}"))),
+            "{extension}"
+        );
+    }
+    let (code, stderr) = chain(&[source, "+", "write", &sam, "--output-format", "cram"]);
+    assert_eq!(code, Some(2), "{stderr}");
+    assert!(
+        stderr.contains("expected bam or sam, got \"cram\""),
+        "{stderr}"
+    );
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
 /// Every usage error exits 2 before the first read, names the step by its
 /// number and verb, and writes nothing.
 #[test]
@@ -1484,30 +1573,70 @@ fn usage_errors_exit_2_before_anything_runs() {
     let cram = file("out.cram");
     let fastq = file("out.fastq.gz");
     let source = FIXTURE.0;
-    let cases: [(&[&str], &str); 33] = [
-        (&[source, "+", "write", &sam], "step 1 (write): "),
+    let cases: [(&[&str], &str); 37] = [
+        (
+            &[source, "+", "write", &sam, "--index"],
+            "out.sam: an index needs a BAM: SAM text has none",
+        ),
         (
             &[source, "+", "mark-duplicates", "+", "write", &cram],
-            "out.cram: bammetrics writes BAM only: CRAM output is wave W15",
+            "out.cram: bammetrics writes BAM and SAM only: CRAM output is wave W15",
         ),
         (
             &[source, "+", "write", &fastq],
-            "out.fastq.gz: bammetrics writes BAM only: FASTQ output is wave W22",
+            "out.fastq.gz: bammetrics writes BAM and SAM only: FASTQ output is wave W22",
         ),
-        // Refused from the command line: the first mark-duplicates reads
-        // nothing for a chain that cannot finish.
+        // A stream name another transform took.
         (
             &[
                 source,
                 "+",
                 "mark-duplicates",
                 "+",
-                "quality-yield",
-                "+",
-                "mark-duplicates",
+                "sort-sam",
+                "--sort-order",
+                "queryname",
+                "--as",
+                "marked",
             ],
-            "step 3 (mark-duplicates): it reads its input twice and cannot follow step 1 \
-             (mark-duplicates)",
+            "step 2 (sort-sam): the stream name marked is taken by an earlier transform",
+        ),
+        (
+            &[
+                source,
+                "--sort-memory",
+                "2X",
+                "+",
+                "sort-sam",
+                "-SO",
+                "queryname",
+            ],
+            "--sort-memory \"2X\": expected bytes above 0",
+        ),
+        (
+            &[source, "+", "sort-sam", "--sort-order", "unsorted"],
+            "step 1 (sort-sam): 'unsorted' is not a valid value for SortOrder",
+        ),
+        (
+            &[
+                source,
+                "+",
+                "sort-sam",
+                "-SO",
+                "coordinate",
+                "--create-index",
+            ],
+            "step 1 (sort-sam): SortSam in a chain: CREATE_INDEX belongs to the write step",
+        ),
+        (
+            &[
+                source,
+                "+",
+                "insert-size",
+                "--validation-stringency",
+                "LENIENT",
+            ],
+            "step 1 (insert-size): --validation-stringency belongs to the chain",
         ),
         (&[source], "no step: a chain needs at least one + STEP"),
         (
@@ -1651,6 +1780,16 @@ fn usage_errors_exit_2_before_anything_runs() {
         assert!(stderr.starts_with("bammetrics chain: "), "{stderr}");
         assert!(stderr.contains(text), "{argv:?}: {stderr}");
     }
+    // sort-sam writes no metrics: its hint names no --metrics-file.
+    let (code, stderr) = chain(&[source, "+", "sort-sam", "-o", &file("x.bam")]);
+    assert_eq!(code, Some(2), "{stderr}");
+    assert!(
+        stderr.ends_with(&format!(
+            "(from -o)\n  add + write {} after it\n",
+            file("x.bam")
+        )),
+        "{stderr}"
+    );
     assert!(names(&dir).is_empty());
     // An empty prefix would name hidden files in the working directory
     // (`.insert_size_metrics`): a usage error, as `qc -o ''` is.

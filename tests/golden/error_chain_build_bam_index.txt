@@ -1,0 +1,17 @@
+## argv
+chain
+tests/data/markdup.bam
++
+mark-duplicates
++
+build-bam-index
++
+write
+OUT/marked.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 2 (build-bam-index): BuildBamIndex indexes a BAM file and a chain hands on records: it cannot be a step
+  write --index writes the .bai of the BAM a chain writes: bammetrics chain BAM + ... + write out.bam --index
+  the steps: bammetrics chain --help

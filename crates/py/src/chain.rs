@@ -223,7 +223,8 @@ impl Step {
 /// (minimum_pct=0.1) without its input, plus output (the step's own file,
 /// or prefix for a tool that writes several), format, panel on hs_metrics
 /// (baits and targets in one file), and as_ on a transform (the name of the
-/// stream it leaves). write takes output, index, md5 and compression_level.
+/// stream it leaves). write takes output, index, md5, compression_level and
+/// output_format ("bam" or "sam").
 /// An unknown verb or keyword raises UsageError here, with the closest
 /// name; so does a float that is NaN or infinite, and a list of texts with
 /// an item that is not a str.
@@ -588,9 +589,10 @@ fn run_object(py: Python<'_>, done: &Finished) -> PyResult<Py<Run>> {
 
 /// bammetrics chain: several steps on one BAM in one process, the records
 /// handed from step to step in memory. steps holds verb names (insert_size)
-/// or step(...) objects, in order: mark_duplicates is a transform, a
-/// one-pass tool is a tap on the records of its position, write writes them
-/// as a BAM. plan names a TOML plan file in place of steps; a keyword given
+/// or step(...) objects, in order: mark_duplicates and sort_sam are
+/// transforms, a one-pass tool is a tap on the records of its position,
+/// write writes them as a BAM, or as SAM text for a .sam name or
+/// output_format "sam". plan names a TOML plan file in place of steps; a keyword given
 /// replaces the file's. Returns a Run: files, metrics (keyed by verb,
 /// STREAM.verb in front of a transform) and stages (one Stage per step).
 /// dry_run=True returns the plan text and runs nothing. A failed step raises
@@ -605,8 +607,8 @@ fn run_object(py: Python<'_>, done: &Finished) -> PyResult<Py<Run>> {
     name = "chain",
     signature = (source = None, steps = None, **options),
     text_signature = "(source=None, steps=None, *, output=None, reference=None, threads=None, \
-                      tmp_dir=None, format=None, also=None, sample=None, plan=None, \
-                      dry_run=False)"
+                      tmp_dir=None, format=None, also=None, sample=None, sort_memory=None, \
+                      force_space=None, validation_stringency=None, plan=None, dry_run=False)"
 )]
 pub fn py_chain<'py>(
     py: Python<'py>,

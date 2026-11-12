@@ -23,6 +23,31 @@ pub fn header_text(header: &noodles::sam::Header) -> io::Result<String> {
     String::from_utf8(writer.into_inner()).map_err(|e| invalid(&e.to_string()))
 }
 
+/// The most a buffer grows ahead of the bytes read into it.
+const READ_STEP: usize = 1 << 20;
+
+/// Append the next `size` bytes of `reader` to `buf`. `size` comes from a
+/// length field of the file, which can claim 4 GiB in a file of 200 bytes:
+/// the buffer grows one [`READ_STEP`] at a time, so it holds the bytes the
+/// stream gave and at most one step more. A stream that ends first is an
+/// `UnexpectedEof`.
+pub(crate) fn read_append<R: Read + ?Sized>(
+    reader: &mut R,
+    buf: &mut Vec<u8>,
+    size: usize,
+) -> io::Result<()> {
+    let end = buf
+        .len()
+        .checked_add(size)
+        .ok_or_else(|| invalid("longer than memory addresses"))?;
+    while buf.len() < end {
+        let filled = buf.len();
+        buf.resize(end.min(filled + READ_STEP), 0);
+        reader.read_exact(&mut buf[filled..])?;
+    }
+    Ok(())
+}
+
 /// One BAM alignment record without its `block_size`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RawRecord {
@@ -74,8 +99,7 @@ impl RawRecord {
         }
         let size = u32::from_le_bytes(size) as usize;
         self.buf.clear();
-        self.buf.resize(size, 0);
-        reader.read_exact(&mut self.buf)?;
+        read_append(reader, &mut self.buf, size)?;
         self.check()?;
         Ok(true)
     }
@@ -130,8 +154,62 @@ impl RawRecord {
         self.buf[14..16].copy_from_slice(&flags.to_le_bytes());
     }
 
-    fn sequence_length(&self) -> usize {
+    /// `l_seq`: the number of read bases.
+    pub fn sequence_length(&self) -> usize {
         self.i32_at(16) as usize
+    }
+
+    /// The record built from its fields, as htsjdk's `BAMRecordCodec`
+    /// encodes a record that was not read from a BAM: the indexing bin
+    /// computed from the start and the CIGAR, the tags in the order and
+    /// types of [`Tags`].
+    pub fn from_fields(fields: &Fields<'_>) -> io::Result<Self> {
+        let name_len =
+            u8::try_from(fields.name.len() + 1).map_err(|_| invalid("read name over 254 bytes"))?;
+        let cigar_ops = u16::try_from(fields.cigar.len())
+            .map_err(|_| invalid("more than 65535 CIGAR operators"))?;
+        let l_seq = i32::try_from(fields.bases.len()).map_err(|_| invalid("read too long"))?;
+        if fields
+            .qualities
+            .is_some_and(|quals| quals.len() != fields.bases.len())
+        {
+            return Err(invalid("read length and quality length differ"));
+        }
+        let mut buf = Vec::with_capacity(FIXED + fields.name.len() + 1 + 2 * fields.bases.len());
+        buf.extend_from_slice(&fields.reference_id.to_le_bytes());
+        buf.extend_from_slice(&fields.alignment_start.wrapping_sub(1).to_le_bytes());
+        buf.push(name_len);
+        buf.push(fields.mapping_quality);
+        buf.extend_from_slice(&indexing_bin(fields).to_le_bytes());
+        buf.extend_from_slice(&cigar_ops.to_le_bytes());
+        buf.extend_from_slice(&fields.flags.to_le_bytes());
+        buf.extend_from_slice(&l_seq.to_le_bytes());
+        buf.extend_from_slice(&fields.mate_reference_id.to_le_bytes());
+        buf.extend_from_slice(&fields.mate_alignment_start.wrapping_sub(1).to_le_bytes());
+        buf.extend_from_slice(&fields.template_length.to_le_bytes());
+        buf.extend_from_slice(fields.name);
+        buf.push(0);
+        for &(len, op) in fields.cigar {
+            if len >= 1 << 28 || op > 8 {
+                return Err(invalid("CIGAR operator out of the BAM range"));
+            }
+            buf.extend_from_slice(&(len << 4 | u32::from(op)).to_le_bytes());
+        }
+        for pair in fields.bases.chunks(2) {
+            let low = pair.get(1).map_or(0, |&b| base_code(b));
+            buf.push(base_code(pair[0]) << 4 | low);
+        }
+        match fields.qualities {
+            Some(quals) => buf.extend_from_slice(quals),
+            None => buf.extend(std::iter::repeat_n(0xFF, fields.bases.len())),
+        }
+        fields.tags.encode(&mut buf)?;
+        Self::from_bytes(buf)
+    }
+
+    /// The reference bases the CIGAR covers (`M`, `D`, `N`, `=`, `X`).
+    pub fn reference_length(&self) -> i32 {
+        reference_length(self.cigar())
     }
 
     pub fn mate_reference_id(&self) -> i32 {
@@ -218,12 +296,9 @@ impl RawRecord {
 
     /// The decoded tag list, for edits.
     pub fn tags(&self) -> io::Result<Tags> {
-        let mut tags = Tags::default();
-        for field in TagIter::new(self.tag_bytes()) {
-            let (name, value) = field?;
-            tags.set(name, value);
-        }
-        Ok(tags)
+        TagIter::new(self.tag_bytes())
+            .collect::<io::Result<Vec<_>>>()
+            .map(Tags::from_unsorted)
     }
 
     /// Replace the tag block by `tags` encoded.
@@ -232,6 +307,93 @@ impl RawRecord {
         self.buf.truncate(start);
         tags.encode(&mut self.buf)
     }
+}
+
+/// The fields of a record to build ([`RawRecord::from_fields`]).
+#[derive(Clone, Copy, Debug)]
+pub struct Fields<'a> {
+    pub name: &'a [u8],
+    pub flags: u16,
+    /// `refID`, -1 for none.
+    pub reference_id: i32,
+    /// 1-based, 0 for none.
+    pub alignment_start: i32,
+    pub mapping_quality: u8,
+    /// `(length, op)` with op the BAM code (`MIDNSHP=X`).
+    pub cigar: &'a [(u32, u8)],
+    pub mate_reference_id: i32,
+    /// 1-based, 0 for none.
+    pub mate_alignment_start: i32,
+    pub template_length: i32,
+    /// The bases as letters; a letter outside `=ACMGRSVTWYHKDBN` (either
+    /// case) is stored as `N`.
+    pub bases: &'a [u8],
+    /// Phred scores, one per base; `None` for a record without them.
+    pub qualities: Option<&'a [u8]>,
+    pub tags: &'a Tags,
+}
+
+/// The 4-bit BAM code of a base letter.
+fn base_code(base: u8) -> u8 {
+    match base.to_ascii_uppercase() {
+        b'=' => 0,
+        b'A' => 1,
+        b'C' => 2,
+        b'M' => 3,
+        b'G' => 4,
+        b'R' => 5,
+        b'S' => 6,
+        b'V' => 7,
+        b'T' => 8,
+        b'W' => 9,
+        b'Y' => 10,
+        b'H' => 11,
+        b'K' => 12,
+        b'D' => 13,
+        b'B' => 14,
+        _ => 15,
+    }
+}
+
+/// The reference bases the operators cover: `M`, `D`, `N`, `=` and `X`.
+pub fn reference_length(cigar: impl Iterator<Item = (u32, u8)>) -> i32 {
+    cigar
+        .filter(|(_, op)| matches!(op, 0 | 2 | 3 | 7 | 8))
+        .fold(0i32, |sum, (len, _)| sum.wrapping_add(len as i32))
+}
+
+/// htsjdk `GenomicIndexUtil.regionToBin` on a 0-based half-open range.
+fn region_to_bin(beg: i32, end: i32) -> i32 {
+    let end = end.wrapping_sub(1);
+    for (shift, bits) in [(14, 15), (17, 12), (20, 9), (23, 6), (26, 3)] {
+        if beg >> shift == end >> shift {
+            return ((1 << bits) - 1) / 7 + (beg >> shift);
+        }
+    }
+    0
+}
+
+/// The `bin` field as `BAMRecordCodec.encode` computes it: 0 for a record
+/// without a start, else the bin of the alignment, one base long for an
+/// unmapped record or a CIGAR that covers no reference base.
+fn indexing_bin(fields: &Fields<'_>) -> u16 {
+    if fields.alignment_start == 0 {
+        return 0;
+    }
+    let start = fields.alignment_start.wrapping_sub(1);
+    let unmapped = fields.flags & 0x4 != 0;
+    let mut end = if unmapped {
+        0
+    } else {
+        fields
+            .alignment_start
+            .wrapping_add(reference_length(fields.cigar.iter().copied()))
+            .wrapping_sub(1)
+    };
+    if end <= 0 {
+        end = start.wrapping_add(1);
+    }
+    region_to_bin(start, end) as u16
 }
 
 /// One tag value as htsjdk holds it.
@@ -390,6 +552,21 @@ impl Tags {
             .binary_search_by(|(n, _)| binary_tag(*n).cmp(&key))
     }
 
+    /// The list `fields` leave when [`Tags::set`] takes each in turn: in
+    /// htsjdk's order, a repeated tag with its last value. One sort, so a
+    /// record with many tags costs no more per tag than one with few.
+    pub fn from_unsorted(mut fields: Vec<([u8; 2], TagValue)>) -> Self {
+        fields.sort_by_key(|(name, _)| binary_tag(*name));
+        let mut kept: Vec<([u8; 2], TagValue)> = Vec::with_capacity(fields.len());
+        for field in fields {
+            match kept.last_mut() {
+                Some(last) if last.0 == field.0 => *last = field,
+                _ => kept.push(field),
+            }
+        }
+        Self { fields: kept }
+    }
+
     pub fn get(&self, name: [u8; 2]) -> Option<&TagValue> {
         self.position(name).ok().map(|i| &self.fields[i].1)
     }
@@ -409,8 +586,13 @@ impl Tags {
         }
     }
 
+    /// The fields in htsjdk's order.
+    pub fn iter(&self) -> impl Iterator<Item = &([u8; 2], TagValue)> {
+        self.fields.iter()
+    }
+
     /// `BinaryTagCodec.writeTag` for each field in order.
-    fn encode(&self, out: &mut Vec<u8>) -> io::Result<()> {
+    pub fn encode(&self, out: &mut Vec<u8>) -> io::Result<()> {
         for (name, value) in &self.fields {
             out.extend_from_slice(name);
             match value {
@@ -530,6 +712,48 @@ mod tests {
         assert!(back.read_from(&mut out.as_slice()).expect("read"));
         assert_eq!(back, record);
         assert!(!back.read_from(&mut [].as_slice()).expect("end"));
+    }
+
+    #[test]
+    fn a_block_size_the_stream_does_not_back_costs_one_step() {
+        // block_size 0xFFFFFF00, then the 100 bytes the file holds.
+        let mut stream = 0xFFFF_FF00u32.to_le_bytes().to_vec();
+        stream.extend_from_slice(&[0u8; 100]);
+        let mut record = RawRecord::default();
+        let error = record
+            .read_from(&mut stream.as_slice())
+            .expect_err("the stream ends inside the record");
+        assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+        assert!(
+            record.buf.capacity() <= 2 * READ_STEP,
+            "{} bytes held for a 100-byte stream",
+            record.buf.capacity()
+        );
+    }
+
+    #[test]
+    fn a_record_longer_than_one_step_is_read_whole() {
+        let quals = vec![30u8; 2 * READ_STEP + 17];
+        let record = build("long", 4, -1, -1, &[], &quals, b"");
+        let mut stream = Vec::new();
+        record.write_to(&mut stream).expect("write");
+        record.write_to(&mut stream).expect("write");
+        let mut reader = stream.as_slice();
+        let mut back = RawRecord::default();
+        for _ in 0..2 {
+            assert!(back.read_from(&mut reader).expect("read"));
+            assert_eq!(back, record);
+        }
+        assert!(!back.read_from(&mut reader).expect("end"));
+    }
+
+    #[test]
+    fn read_append_keeps_what_the_buffer_held() {
+        let mut buf = b"head".to_vec();
+        read_append(&mut b"abcdef".as_slice(), &mut buf, 4).expect("read");
+        assert_eq!(buf, b"headabcd");
+        let short = read_append(&mut b"xy".as_slice(), &mut buf, 3).expect_err("two bytes left");
+        assert_eq!(short.kind(), io::ErrorKind::UnexpectedEof);
     }
 
     #[test]

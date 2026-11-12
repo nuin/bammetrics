@@ -427,7 +427,8 @@ def stub_function(name):
 
 def test_a_step_takes_the_keywords_of_its_tools_function():
     """Every keyword the generated registry stub gives a tool's function is a
-    keyword of its step, apart from the BAM a transform leaves to write."""
+    keyword of its step, apart from the BAM a transform leaves to write and the
+    stringency of the source, which belongs to the chain."""
     steps = {tool.verb.replace("-", "_"): tool for tool in bm.tools()}
     checked = 0
     for verb in steps:
@@ -438,9 +439,12 @@ def test_a_step_takes_the_keywords_of_its_tools_function():
         function = stub_function("".join(
             "_" + c.lower() if c.isupper() else c for c in steps[verb]).lstrip("_"))
         for keyword in (a.arg for a in function.args.kwonlyargs):
-            if (verb, keyword) == ("mark_duplicates", "output"):
+            if keyword == "output" and verb in ("mark_duplicates", "sort_sam"):
                 with pytest.raises(bm.UsageError, match="writes no BAM in a chain"):
                     bm.step(verb, output=None)
+            elif keyword == "validation_stringency":
+                with pytest.raises(bm.UsageError, match="the chain reads the source"):
+                    bm.step(verb, validation_stringency=None)
             else:
                 assert bm.step(verb, **{keyword: None}).args == []
             checked += 1
@@ -472,12 +476,17 @@ def test_a_step_takes_the_keywords_of_its_tools_function():
      "--format json starts with json: a chain names Picard files"),
     (lambda out: bm.chain(BAM, ["insert_size"], output=out, sample="a\0b"), bm.UsageError,
      "sample cannot hold a NUL byte"),
-    (lambda out: bm.chain(MARKDUP, ["mark_duplicates", "mark_duplicates"], output=out),
-     bm.UsageError, r"step 2 \(mark-duplicates\): it reads its input twice and cannot follow"),
+    (lambda out: bm.chain(MARKDUP, ["mark_duplicates", bm.step("mark_duplicates", as_="marked")],
+                          output=out),
+     bm.UsageError, r"step 2 \(mark-duplicates\): the stream name marked is taken"),
     (lambda out: bm.chain(MARKDUP, ["insert_size", "insert_size"], output=out), bm.UsageError,
      "insert_size_metrics"),
-    (lambda out: bm.chain(MARKDUP, [bm.step("write", output=out + ".sam")]), bm.UsageError,
-     "W05"),
+    (lambda out: bm.chain(MARKDUP, [bm.step("write", output=out + ".cram")]), bm.UsageError,
+     "W15"),
+    (lambda out: bm.chain(MARKDUP, [bm.step("write", output=out + ".sam", index=True)]),
+     bm.UsageError, "an index needs a BAM: SAM text has none"),
+    (lambda out: bm.chain(MARKDUP, [bm.step("write", output=out + ".bam", output_format="cram")]),
+     bm.UsageError, "expected bam or sam"),
     (lambda out: bm.chain(MARKDUP, [bm.step("write", output=MARKDUP)]), bm.UsageError,
      "is an input; writing it would destroy it"),
     (lambda out: bm.chain(MARKDUP, ["hs_metrics"], output=out), bm.UsageError,

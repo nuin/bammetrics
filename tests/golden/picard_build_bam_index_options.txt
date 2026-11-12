@@ -1,0 +1,20 @@
+## argv
+BuildBamIndex
+--INPUT
+tests/data/markdup.bam
+-O
+OUT/markdup.bai
+VALIDATION_STRINGENCY=SILENT
+CREATE_MD5_FILE=true
+R=tests/data/ref_100k.fa
+## exit
+0
+## stdout
+## stderr
+bammetrics: ignoring VALIDATION_STRINGENCY=SILENT: a BAM or CRAM is not validated; SAM text is checked at the level given
+bammetrics: ignoring CREATE_MD5_FILE=true: no BAM is written
+bammetrics: ignoring R=tests/data/ref_100k.fa: a BAM is indexed without its reference
+## file markdup.bai
+424149010100000002000000491200000100000000009d0000000000b4159d00
+000000004a9200000200000000009d0000000000b4159d000000000021000000
+0000000001000000000000000100000000009d00000000000200000000000000

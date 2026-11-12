@@ -437,11 +437,33 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("TAIL_LIMIT", "100")),
             picard_outputs: single,
         },
+        // No OUTPUT option: the Picard face prints the SAM text.
+        Case {
+            verb: "view-sam",
+            class: "ViewSam",
+            verb_args: bam(&[]),
+            picard_args: picard_bam(&[]),
+            option: Some(("ALIGNMENT_STATUS", "Aligned")),
+            picard_outputs: no_output,
+        },
+        // -o is the sorted file; SAM text, so the bodies compare.
+        Case {
+            verb: "sort-sam",
+            class: "SortSam",
+            verb_args: bam(&[]),
+            picard_args: picard_bam(&[]),
+            option: Some(("SORT_ORDER", "queryname")),
+            picard_outputs: sorted_sam,
+        },
     ]
 }
 
 fn marked(out: &str) -> Vec<String> {
     vec![format!("O={out}.bam"), format!("M={out}")]
+}
+
+fn sorted_sam(out: &str) -> Vec<String> {
+    vec![format!("O={out}.sam")]
 }
 
 /// The three spellings of `name` with `value`.
@@ -495,6 +517,12 @@ fn every_verb_reads_three_spellings_as_the_picard_face_does() {
                     format!("{out}.bam"),
                     "--metrics".to_owned(),
                 ]);
+            } else if case.verb == "sort-sam" {
+                args.extend(["-o".to_owned(), format!("{out}.sam")]);
+                run_ok(&args);
+                assert_eq!(bodies(&dir), expected, "{} {form:?}", case.verb);
+                let _ = fs::remove_dir_all(&dir);
+                continue;
             } else {
                 args.push("-o".to_owned());
             }
@@ -520,13 +548,18 @@ fn every_registry_tool_is_in_the_matrix() {
         .collect();
     let covered: Vec<&str> = cases(&built).iter().map(|c| c.class).collect();
     // FifoBuffer writes no file: tests/fifo_buffer.rs compares its spellings.
-    let elsewhere = ["AccumulateVariantCallingMetrics", "FifoBuffer"];
+    // BuildBamIndex writes a binary index: tests/build_bam_index.rs compares its.
+    let elsewhere = [
+        "AccumulateVariantCallingMetrics",
+        "FifoBuffer",
+        "BuildBamIndex",
+    ];
     let missing: Vec<&&str> = classes
         .iter()
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 33);
+    assert_eq!(classes.len(), 36);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

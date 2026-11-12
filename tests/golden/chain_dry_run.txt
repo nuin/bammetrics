@@ -35,6 +35,9 @@ segment 2  a second read of tests/data/markdup.bam through step 1 (replay: nothi
   step 4  quality-yield      tap on marked          OUT/sample.quality_yield_metrics
   step 5  duplicate-metrics  tap on marked          OUT/sample.duplicate_metrics
   step 6  write              BAM of marked          OUT/sample.marked.bam, OUT/sample.marked.bai
-temp disk  none expected: about 16 records, and mark-duplicates keeps 4,000,000 in memory before it spills (MAX_RECORDS_IN_RAM)
+barrier    step 1 mark-duplicates: replays the source; about 16 records by the file size, no spill under MAX_RECORDS_IN_RAM 4,000,000; memory about 100.0 MiB
+temp disk  none expected
+output     about 1.1 KiB written by write
+memory     about 100.0 MiB at the peak
 nothing ran: this is a plan
 ## stderr

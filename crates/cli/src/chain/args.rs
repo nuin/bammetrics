@@ -16,13 +16,18 @@ pub(crate) const TMP_DIR: Key = Key::Own("tmp-dir");
 pub(crate) const ALSO: Key = Key::Own("also");
 pub(crate) const PLAN: Key = Key::Own("plan");
 pub(crate) const DRY_RUN: Key = Key::Own("dry-run");
+pub(crate) const SORT_MEMORY: Key = Key::Own("sort-memory");
+pub(crate) const FORCE_SPACE: Key = Key::Own("force-space");
+pub(crate) const STRINGENCY: Key = Key::Own("validation-stringency");
 const LOWER: Key = Key::Own("lower");
+const FREE_SPACE: Key = Key::Own("free-space");
 /// A transform's `--as NAME`.
 pub(crate) const AS: Key = Key::Own("as");
 /// The options of `write`.
 pub(crate) const INDEX: Key = Key::Own("index");
 pub(crate) const MD5: Key = Key::Own("md5");
 pub(crate) const COMPRESSION_LEVEL: Key = Key::Own("compression-level");
+pub(crate) const OUTPUT_FORMAT: Key = Key::Own("output-format");
 
 const USAGE: &str = "bammetrics chain [OPTIONS] BAM + STEP [STEP OPTIONS] [+ STEP ...]";
 /// The last hint of a command-line error about a step that cannot be one.
@@ -121,6 +126,35 @@ pub fn global_flags() -> Vec<Flag> {
         )
         .placeholder("NAME"),
         Flag::new(
+            SORT_MEMORY,
+            "sort-memory",
+            &[],
+            Ty::Text,
+            "Bytes a sort-sam step holds before a sorted run spills to --tmp-dir: a number, or \
+             one with K, M, G or T (1024 based; 2G, 512MiB). Default 2G.",
+        )
+        .names(&["SORT_MEMORY"])
+        .placeholder("BYTES"),
+        Flag::new(
+            FORCE_SPACE,
+            "force-space",
+            &[],
+            Ty::Bool,
+            "Run when the estimated temporary and output bytes exceed the free space of their \
+             file system; without it the chain refuses before the first read.",
+        )
+        .names(&["FORCE_SPACE"]),
+        Flag::new(
+            STRINGENCY,
+            "validation-stringency",
+            &[],
+            Ty::Text,
+            "How a SAM text source is checked: STRICT (default), LENIENT or SILENT. A BAM or \
+             CRAM source is read the same at every value.",
+        )
+        .names(&["VALIDATION_STRINGENCY"])
+        .placeholder("LEVEL"),
+        Flag::new(
             PLAN,
             "plan",
             &[],
@@ -135,7 +169,7 @@ pub fn global_flags() -> Vec<Flag> {
             &[],
             Ty::Bool,
             "Print the plan and run nothing: the segments, which transform replays or spools, \
-             the files of each step, the estimated temporary disk.",
+             the files of each step, the estimated temporary disk and memory.",
         ),
         Flag::new(
             Key::Quiet,
@@ -156,7 +190,8 @@ pub fn global_flags() -> Vec<Flag> {
 }
 
 /// The flags the parser takes in front of the first `+`: the documented
-/// ones and `--no-lower`, which the measurements of docs/chaining.md use.
+/// ones, `--no-lower`, which the measurements of docs/chaining.md use, and
+/// `--free-space`, which the tests of the free-space refusal use.
 fn parser_flags() -> Vec<Flag> {
     let mut flags = global_flags();
     flags.push(
@@ -169,6 +204,16 @@ fn parser_flags() -> Vec<Flag> {
         )
         .names(&["LOWER"]),
     );
+    flags.push(
+        Flag::new(
+            FREE_SPACE,
+            "free-space",
+            &[],
+            Ty::Int,
+            "The free bytes the planner assumes in every directory.",
+        )
+        .names(&["FREE_SPACE"]),
+    );
     flags
 }
 
@@ -180,8 +225,9 @@ pub fn write_flags() -> Vec<Flag> {
             "output",
             &["o", "O"],
             Ty::Path,
-            "The BAM to write: the positional argument; - writes standard output. Without \
-             one, PREFIX.<stream>.bam (PREFIX.marked.bam after mark-duplicates).",
+            "The BAM to write, or SAM text for a name ending in .sam: the positional \
+             argument; - writes standard output. Without one, PREFIX.<stream>.bam \
+             (PREFIX.marked.bam after mark-duplicates).",
         )
         .names(&["OUTPUT", "O"])
         .placeholder("PATH"),
@@ -204,6 +250,15 @@ pub fn write_flags() -> Vec<Flag> {
         )
         .names(&["COMPRESSION_LEVEL"])
         .placeholder("N"),
+        Flag::new(
+            OUTPUT_FORMAT,
+            "output-format",
+            &[],
+            Ty::Text,
+            "bam or sam: what is written, whatever the name says. write - --output-format sam \
+             prints SAM text on standard output.",
+        )
+        .placeholder("KIND"),
         Flag::new(Key::Help, "help", &["h"], Ty::Bool, "This help."),
     ]
 }
@@ -222,7 +277,9 @@ pub(crate) fn is_step(verb: &Verb) -> bool {
 /// (`step 2 (wgs)`), with one hint. The caller adds the second and last
 /// hint, the one that lists the steps.
 ///
-/// `fifo-buffer` has its own reason. It copies the bytes of a pipe between
+/// `build-bam-index` names the `write --index` that does its work in a
+/// chain, `view-sam` the `write - --output-format sam` that prints the
+/// stream. `fifo-buffer` has its own reason. It copies the bytes of a pipe between
 /// two commands, and the steps of a chain hand records on in memory, so no
 /// later wave makes it a step.
 pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
@@ -235,6 +292,27 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
         .hint(
             "leave the step out, or put the buffer on a pipe outside the chain: bammetrics \
              chain BAM + write - | bammetrics fifo-buffer | ...",
+        );
+    }
+    if verb.class == bammetrics_core::build_bam_index::TOOL.name {
+        return usage(format!(
+            "{place}: {} indexes a BAM file and a chain hands on records: it cannot be a step",
+            verb.class
+        ))
+        .hint(
+            "write --index writes the .bai of the BAM a chain writes: bammetrics chain BAM + \
+             ... + write out.bam --index",
+        );
+    }
+    if verb.class == bammetrics_core::view_sam::TOOL.name {
+        return usage(format!(
+            "{place}: {} prints the records of a file as SAM text and a chain hands records to \
+             write: it cannot be a step",
+            verb.class
+        ))
+        .hint(
+            "write - --output-format sam prints the stream as SAM text: bammetrics chain BAM + \
+             ... + write - --output-format sam",
         );
     }
     usage(format!(
@@ -269,12 +347,14 @@ pub(crate) fn step_parser_flags(verb: &Verb) -> Vec<Flag> {
 }
 
 /// The keys of a verb's flags that belong to the chain, not to a step.
-pub(crate) const CHAIN_KEYS: [Key; 5] = [
+pub(crate) const CHAIN_KEYS: [Key; 6] = [
     Key::Input,
     Key::Threads,
     Key::Quiet,
     Key::Verbose,
     Key::Sample,
+    // The chain reads the source; a step reads none.
+    Key::Picard("VALIDATION_STRINGENCY"),
 ];
 
 /// The error for a chain option given on the step at `place`.
@@ -391,7 +471,8 @@ pub fn step_help(name: &str, number: usize) -> Result<String, VerbError> {
             option_lines(&write_flags())
         ));
     }
-    let verb = find_step(name).ok_or_else(|| unknown_step(name, None))?;
+    let verb =
+        find_step(name).ok_or_else(|| unknown_step(name, Some(&format!("step {number}"))))?;
     if !is_step(verb) {
         let place = format!("step {number} ({})", verb.name);
         return Err(not_a_step(verb, &place).hint(STEPS_HINT));
@@ -465,6 +546,8 @@ fn apply_globals(parsed: &Parsed, spec: &mut Spec) -> Result<(), VerbError> {
         (Key::Format, &mut spec.formats),
         (ALSO, &mut spec.also),
         (Key::Sample, &mut spec.sample),
+        (SORT_MEMORY, &mut spec.sort_memory),
+        (STRINGENCY, &mut spec.stringency),
     ];
     for (key, slot) in texts {
         if let Some(value) = last_value(parsed, key) {
@@ -475,12 +558,21 @@ fn apply_globals(parsed: &Parsed, spec: &mut Spec) -> Result<(), VerbError> {
         let threads = given.values[0].parse().map_err(|_| {
             usage(format!("{:?} is not a number", given.values[0])).from(given.spelled.clone())
         })?;
+        let threads = pass::check_threads(threads)
+            .map_err(|e| usage(format!("{threads} is {e}")).from(given.spelled.clone()))?;
         spec.threads = Some(threads);
+    }
+    if let Some(given) = parsed.last(FREE_SPACE) {
+        let bytes = given.values[0].parse().map_err(|_| {
+            usage(format!("{:?} is not a number", given.values[0])).from(given.spelled.clone())
+        })?;
+        spec.free_space = Some(bytes);
     }
     let flags = [
         (Key::Quiet, &mut spec.quiet, true),
         (Key::Verbose, &mut spec.verbose, true),
         (LOWER, &mut spec.stage_executor, false),
+        (FORCE_SPACE, &mut spec.force_space, true),
     ];
     for (key, slot, when) in flags {
         if parsed.last(key).is_some() {
@@ -640,6 +732,27 @@ mod tests {
                 .starts_with("bammetrics chain: --plan gives the steps")
         );
         assert!(error(&["a.bam", "--threads", "x", "+", "write"]).contains("is not a number"));
+        for threads in ["257", "100000000"] {
+            assert_eq!(
+                error(&["a.bam", "-@", threads, "+", "write"]),
+                format!(
+                    "bammetrics chain: {threads} is more than the maximum of 256 threads (from -@)"
+                )
+            );
+        }
+        // The help of a step that is no verb names the step by its number,
+        // as a run names it.
+        assert!(
+            error(&["a.bam", "+", "write", "+", "inser-size", "--help"]).starts_with(
+                "bammetrics chain: step 2: unknown step \"inser-size\"\n  did you mean insert-size?"
+            )
+        );
+    }
+
+    #[test]
+    fn the_most_threads_are_taken() {
+        let (spec, _) = spec(&["a.bam", "--threads", "256", "+", "write"]);
+        assert_eq!(spec.threads, Some(pass::MAX_THREADS));
     }
 
     /// A chain option no step has, given after the first `+`, gets the

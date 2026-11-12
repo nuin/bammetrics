@@ -130,7 +130,7 @@ pub fn text(plan: &Plan, resume: bool, also: &[Also]) -> String {
     let _ = writeln!(
         out,
         "  reads     {}: {} for the pass, {}",
-        plural(pass_reads + own_reads, "BAM read"),
+        plural(pass_reads + own_reads, crate::engine::read_word(&plan.bam)),
         pass_reads,
         plural(own_reads, "own read")
     );
@@ -156,7 +156,10 @@ pub fn text(plan: &Plan, resume: bool, also: &[Also]) -> String {
         out,
         "pass      {}{skips}, {}",
         plural(shared.len(), "collector"),
-        plural(pass_reads, "shared BAM read")
+        plural(
+            pass_reads,
+            &format!("shared {}", crate::engine::read_word(&plan.bam))
+        )
     );
     let width = plan
         .steps

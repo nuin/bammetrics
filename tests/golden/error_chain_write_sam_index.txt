@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+write
+OUT/x.sam
+--index
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (write): OUT/x.sam: an index needs a BAM: SAM text has none

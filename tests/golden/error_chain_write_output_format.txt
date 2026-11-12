@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+write
+OUT/x.bam
+--output-format
+cram
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (write): expected bam or sam, got "cram" (from --output-format)

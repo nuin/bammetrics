@@ -1,0 +1,16 @@
+## argv
+chain
+tests/data/markdup.bam
++
+sort-sam
+--sort-order
+queryname
++
+view-sam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 2 (view-sam): ViewSam prints the records of a file as SAM text and a chain hands records to write: it cannot be a step
+  write - --output-format sam prints the stream as SAM text: bammetrics chain BAM + ... + write - --output-format sam
+  the steps: bammetrics chain --help

@@ -1,5 +1,267 @@
 # Changelog
 
+## 0.23.0
+
+SAM text in and out, `ViewSam`, `SortSam` with the sort barrier and the planner of a
+chain, `BuildBamIndex` and `make memgate` (tools 34 to 36), and the 0.22.0 review fixes.
+
+### Added
+
+- Wave W05 of docs/07. Part A: SAM text in and out, htsjdk's record orders, and
+  `ViewSam` (tool 34). Part B: `SortSam` (tool 35), the sort barrier of a chain, two
+  barriers in one chain through a spool, the planner and its free-space refusal. Part C:
+  the BAM index writer, `BuildBamIndex` (tool 36) and `make memgate`.
+- `benches/memgate.toml`: fixture rows for `view-sam`, `sort-sam` and a chain of two
+  sorts around `mark-duplicates`; scale rows for the W05 gate (`sort-sam queryname
+  slice`, `chain sort barrier slice`, `chain sort barrier exome`). docs/benchmarks.md,
+  "Scale gate of wave W05", says how their inputs are made.
+- `SortSam` (`bammetrics SortSam I= O= SORT_ORDER=`, `bammetrics sort-sam in.bam -o
+  out.bam --sort-order queryname`, `sort_sam()` in Python): `queryname`, `coordinate` or
+  `duplicate`, the three Picard 3.5.0 takes. BAM output, or SAM text for a name ending in
+  `.sam`. `CREATE_INDEX`, `CREATE_MD5_FILE`, `COMPRESSION_LEVEL`, `MAX_RECORDS_IN_RAM`
+  (default 500,000), `TMP_DIR`, `REFERENCE_SEQUENCE` for a CRAM. The header gets `SO` and
+  `VN:1.6`; `GO`, `SS` and every other line stay, and no `@PG` is added, as in Picard.
+  `tests/concordance/test_sort_sam.py`: 62 cases against Picard.
+- `sort-sam` as a chain step: a barrier that holds its records under `--sort-memory`
+  (default 2 GiB, a byte count with K, M, G or T) and hands them on sorted. Its stream is
+  `sorted`. `chain in.bam + sort-sam --sort-order queryname + mark-duplicates + sort-sam
+  --sort-order coordinate + write out.bam --index` runs in one process and equals the
+  staged tools.
+- Replay or spool (docs/07 section 2.3): a transform that reads its input twice behind
+  another transform replays a spool of its input in `--tmp-dir`. A second
+  `mark-duplicates` runs (stream `marked-2`).
+- The planner: `plan` and `chain --dry-run` print one line per barrier (holds its records,
+  replays the source, or spools its input; the bytes it spills; its memory), the
+  temporary and output disk and the peak memory, from constants measured on 8,445,233
+  exome records. A chain whose estimate exceeds the free space of a file system it
+  writes to exits 1 before the first read; `--force-space` runs it.
+- `chain --validation-stringency` for a SAM text source, `qc --validation-stringency`,
+  and `validation_stringency=` on every Python tool function, `chain` and `qc`.
+- `bammetrics_core::timsort` (Java's `TimSort`), `sam_sort` (records keyed for a sort,
+  runs as BGZF level 3), `sort_sam`, `header_merge` (htsjdk's header and record merge,
+  lifted from `MarkDuplicates`), `stage::spool`; `Sorter::byte_limit`,
+  `Sorter::compressed`, `SortStats`.
+- 12 golden cases; `crates/cli/tests/sort_barrier.rs` (chained equals staged for a sort at
+  any position, spilled and in memory, the plan, the refusal, hard links, a piped SAM).
+
+- SAM text input for every tool, verb, `qc`, `chain` and Python function that reads a
+  BAM: plain text, `bgzip` or `gzip`, from a file, a pipe or `-`. The first bytes tell (a
+  gzip member that inflates to `BAM\1` is a BAM; text that starts with `@` or with a line
+  of 11 tab-separated fields is SAM). Each line is read as htsjdk 5.0.0 reads it
+  (`SAMLineParser`, `TextTagCodec`, `SAMTextHeaderCodec`) into the record htsjdk's BAM
+  codec writes for it: tags in htsjdk's order and types, the `*` forms, the indexing bin.
+  A tool writes the same file for SAM text as for the BAM of the same records.
+- `VALIDATION_STRINGENCY` (`--validation-stringency`) applies to SAM text. `STRICT`, the
+  default, exits 1 at the first line htsjdk refuses, with htsjdk's message. `LENIENT`
+  prints `Ignoring SAM validation error` and reads on. `SILENT` skips
+  `SAMRecord.isValid`. A value other than the three is a usage error. A BAM or a CRAM is
+  read as before, and the note about the ignored option is still printed for those.
+- `ViewSam` (`bammetrics ViewSam I=in.bam`, `bammetrics view-sam in.bam [-o out.sam]`,
+  `view_sam()` in Python): the header and every record as SAM text, as htsjdk writes it,
+  byte for byte Picard's standard output. `ALIGNMENT_STATUS`, `PF_STATUS`, `HEADER_ONLY`,
+  `RECORDS_ONLY` and `INTERVAL_LIST`. The text is printed as the file is read.
+  `--format json|jsonl|tsv|human` and the Python function give one row per record (at
+  most 256 MiB of text). A CRAM record gets the `MD` and `NM` tags htsjdk rebuilds.
+- `chain ... + write out.sam` writes SAM text, and `write - --output-format sam` prints
+  it (`output_format=` in Python, `output-format` in a plan file). The file is the one
+  Picard `SamFormatConverter` writes, byte for byte. `--md5` works; `--index` with SAM
+  text is a usage error.
+- `crates/core/src/sam_text.rs`: `Reader`, `Records`, `RecordStream`, `LineParser`,
+  `parse_cigar`, `write_record`, `header_text`, `SamWriter`, `Stringency`.
+- `crates/core/src/sam_order.rs`: htsjdk's record orders in one module. `Order`
+  (`unsorted`, `queryname`, `coordinate`, `duplicate`, the `SORT_ORDER` values of Picard
+  3.5.0 `SortSam`), `CoordinateKey`, `QuerynameKey`, `DuplicateKey` with `Libraries`,
+  `coordinate_order`, `queryname_order`, `hit_index`. A property test checks each order
+  is total over random keys. `tests/concordance/test_sam_order.py` sorts a shuffled
+  foundation corpus, t1 and a hand-written file of ties and finds every record where
+  Picard `SortSam` puts it, in all three orders.
+- `RawRecord::from_fields` builds a BAM record from its fields as htsjdk encodes one.
+- `tests/concordance/test_view_sam.py`: 144 cases against Picard.
+- 19 golden cases; `tests/data/markdup.sam`; `tests/python/test_view_sam.py`.
+- docs/benchmarks.md, SAM text: on the HG002 exome `view-sam` prints 150.5 million
+  records in 105 s with 9 MiB of memory, and SAM text is read at 0.53 million records
+  per second. On 5.27 million of its records `ViewSam` and `write x.sam` equal Picard
+  apart from the `@RG DT` field.
+- `crates/core/src/bai.rs`, the `.bai` format. `Indexer` writes the bytes htsjdk 5.0.0
+  `BAMIndexer` writes: the bin computed from each record's start and end (the stored bin
+  field is not read), a chunk extended only inside one BGZF block, the linear index with
+  empty windows filled forward, the metadata bin 37450 and the count of records without
+  a coordinate. `index_bam` reads a BAM with its virtual offsets on the BGZF worker
+  threads. `Index::read` holds a whole index (at most 1 GiB), `Summary::read` the counts
+  and no bin.
+- `BuildBamIndex`, registry tool 36. `bammetrics BuildBamIndex I=x.bam [O=x.bai]` writes
+  the `.bai` Picard 3.5.0 writes for the same BAM, byte for byte. A header that is not
+  `SO:coordinate` exits 1 with Picard's `Input bam file must be sorted by coordinate`.
+  Without `O=` the index goes into the current directory under the file name of the
+  input, as Picard 3.5.0 does (its help says beside the BAM). `ASSUME_SORTED` and
+  `GA4GH_CLIENT_SECRETS` are `Unrecognized option`, as in Picard. A reference of length
+  0 (`@SQ LN:0`) is indexed, as Picard indexes it (`bai/header.rs`).
+- The `build-bam-index` verb: `bammetrics build-bam-index x.bam [-o FILE]`. Without `-o`
+  the index goes beside the BAM (`x.bai`); `-o -` prints it; standard input needs `-o`.
+  It takes `--format picard` only. As a step of `chain` it exits 2 and names `write
+  --index`.
+- `build_bam_index(bam, *, output=None)` in Python: the index at `output` or beside the
+  BAM, and the rows `bam_index_stats` reads from it.
+- `make memgate` (`benches/memgate.py`, `benches/memgate.toml`): each command of the
+  table runs under `/usr/bin/time`, and the run fails when its peak RSS, its wall time or
+  the sampled size of its spill directory passes the limit of its row. Three fixture
+  rows (`build-bam-index`, `mark-duplicates`, a chain with `write --index`) run in
+  seconds; `make memgate TIER=scale` runs four rows on the real data of
+  docs/benchmarks.md, where a row whose file is missing is skipped.
+  `tests/harness/test_memgate.py` holds 22 tests of the harness.
+- `tests/concordance/test_build_bam_index.py`: 108 tests against Picard 3.5.0, with the
+  BAMs `index_bams.py` writes byte by byte. `tests/data/bai` holds the six fixture
+  indexes Picard wrote, which `crates/cli/tests/build_bam_index.rs` compares without a
+  JVM.
+
+### Changed
+
+- A SAM text input is read where it was refused (`not a BAM or CRAM file (SAM input is
+  not supported ...)`). A file that is no BAM, CRAM or SAM text now says `not a BAM or
+  CRAM file (and not SAM text: the first line is no header line and has fewer than 11
+  tab-separated fields)`. An empty file is still an error.
+- `chain` refuses a `.cram` or `.fastq` name of `write` with `bammetrics writes BAM and
+  SAM only` (was `BAM only`). Two golden records changed for that wording, one for the
+  `tools` listing, and `error_chain_write_sam` became `chain_write_sam`.
+- `CheckDuplicateMarking` sorts with `sam_order::QuerynameKey`, and `MarkDuplicates`
+  merges with the comparators of `sam_order`. Their output is unchanged.
+- `MarkDuplicates` carries `VALIDATION_STRINGENCY` to its SAM text inputs.
+- KNOWN_DIFFERENCES.md has two new sections, SAM text and ViewSam.
+- Every sort of records in the core runs Java's `TimSort` per run: records flagged both
+  first and second of a pair (a queryname order that is not total) sort as Picard sorts
+  them, or end in Picard's `Comparison method violates its general contract!`. Before,
+  `CheckDuplicateMarking` could panic (exit 101) there.
+- `CheckDuplicateMarking` sorts a file without `SO:queryname` through the spilling
+  sorter: `MAX_RECORDS_IN_RAM` (default 500,000) and `TMP_DIR` apply. On the HG002 exome
+  its peak memory fell from 14.14 GB to 131 MiB (166.5 s). Output unchanged.
+- A chain no longer refuses a second transform. The golden record
+  `error_chain_two_transforms` became `chain_two_mark_duplicates`.
+- The plan text of a chain: one `barrier` line per transform, the output and memory
+  lines; the `temp disk` line is shorter. A `write` of SAM text reads `SAM text of`.
+- The `qc` summary and plan say `SAM read` for a SAM text input.
+- The help of `INPUT` says BAM, CRAM or SAM; `VALIDATION_STRINGENCY` says what it does
+  for SAM text, and its note reads `a BAM or CRAM is not validated; SAM text is checked
+  at the level given` (two golden records).
+- An output that is a hard link to an input is refused by every verb (device and inode).
+- A bad SAM line piped to `MarkDuplicates` names `/dev/stdin`, not the copy in
+  `TMP_DIR`.
+- KNOWN_DIFFERENCES.md: five `@SQ` and `@RG` header shapes, a read name over 254 bytes
+  and a CIGAR operator of 2^28 bases, which Picard reads; a SortSam section.
+- Spilled runs merge through a port of Java's `TreeSet` (`crates/core/src/tree_set.rs`),
+  keyed as htsjdk's `SortingCollection` keys its run heads. A queryname sort of records
+  flagged both first and second of a pair gives Picard's order with 64 runs or fewer
+  (before: any spill could differ), and `CheckDuplicateMarking` gives Picard's lines on
+  such records in runs of 3. Output for a total order is unchanged.
+- The `VALIDATION_STRINGENCY` note is not printed for a pipe, which may hold SAM text.
+- A cut gzip stream of SAM text fails as `truncated gzip stream`, not `truncated BAM`.
+- The chain plan's barrier line reads `about N records by the file size, no spill under`
+  the bound (four golden records). The refusal of `-o` on a `sort-sam` step names no
+  `--metrics-file`.
+- `MarkDuplicates CREATE_INDEX=true` and `chain ... + write --index` write the `.bai`
+  Picard `BuildBamIndex` writes for the BAM they wrote, byte for byte. Before, the index
+  came from noodles' indexer and its bytes differed. The finished BAM is read once more
+  on the writer's BGZF workers. `test_mark_duplicates.py` checks the index and the
+  `.md5` against Picard on five inputs.
+- `BamIndexStats` reads a `.bai` through `bai::Summary`: the counts of the header's
+  references and no bin. Its output is unchanged. An index that lists one bin twice is
+  read (htsjdk reads it too); before it was an error.
+- Golden suite: 10 new records. `verb_tools` gained the `build-bam-index` row; no other
+  record changed. The suite records the `.bai` of a committed BAM as hex and still lists
+  an index beside a BAM the case wrote.
+- docs/chaining.md says that `--format` on a chain names the formats of the metrics
+  files, why `plan BAM --format jsonl + STEP` is refused, and what a chain gives in place
+  of an event stream.
+- The planner counts the records of a BAM whose header says `queryname` at 102 bytes
+  each, the bytes of a queryname BAM, where it took the 69 of a coordinate one. On the
+  queryname slice of the scale gate its sort spill estimate went from 51 percent over
+  the bytes spilled to 2.1 percent over. A coordinate, unsorted or CRAM source is
+  counted as before.
+- `chain BAM + view-sam` is refused with its own reason and names `write -
+  --output-format sam`; it said the tool does not read a BAM in one pass. One new golden
+  record, `error_chain_view_sam`.
+- `BuildBamIndex` refuses SAM text, plain or in gzip members, with Picard's `Input file
+  must be bam file, not sam file.` (exit 2 on the verb), as it refuses a CRAM. Before the
+  merge with SAM text input it said `not a BAM or CRAM file`.
+- `SortSam CREATE_INDEX=true` writes the `.bai` of `BuildBamIndex` for the BAM it wrote,
+  byte for byte, as `MarkDuplicates` and `write --index` do.
+- Golden suite at 0.23.0: 373 records (222 fixture forms, 34 format forms, 95 chain and
+  W05 forms, 22 on corpus t1). Against 0.22.0, 55 are new and 2 are gone (the sort branch
+  renamed `error_chain_two_transforms` to `chain_two_mark_duplicates` and
+  `error_chain_write_sam` to `chain_write_sam`), 12 changed for the causes
+  listed above (plan text, the `VALIDATION_STRINGENCY` note, `BAM and SAM only`, the
+  `tools` rows) and 9 for the version string alone.
+
+### Fixed
+
+- A record whose `block_size` claims more bytes than the file holds costs the bytes
+  present. `RawRecord::read_from` (`MarkDuplicates`, `chain`, `BuildBamIndex`) grew its
+  buffer to `block_size` before it read: a BAM of 211 bytes with a `block_size` of
+  0xFFFFFF00 took 4.3 GB of RSS before `truncated BAM`. The buffer now grows 1 MiB at
+  a time with the bytes read (`bam_raw::read_append`), and the same file takes 5 MiB.
+- `BuildBamIndex R=missing.fa` exits 1 with `Error opening file`, as Picard does. Before,
+  the missing file was ignored with a note. `R=null` names no file.
+- An index error of `MarkDuplicates CREATE_INDEX` or `write --index` names the BAM the
+  user gave. Before, it named the temporary file the BAM is written under.
+- `benches/memgate.toml` refuses a `max_seconds` below 0.05: `time` reports wall time
+  in steps of 0.01 s.
+- Six findings of the 0.22.0 release review, and one more found on the way
+  (docs/chaining.md section 2.6; `crates/cli/tests/chain_safety.rs`,
+  `tests/python/test_chain_safety.py`, 13 golden records), the items below to the
+  directories a failed tool verb made. They changed no Picard file, no `qc` output and
+  no earlier golden record.
+- A chain output that is a symbolic link another user owns is refused before the first
+  read with the words and the exit code (1) of the tool verb: `owned by another user; not
+  written in place`. 0.22.0 said `Is a directory (os error 21)` for `/etc`.
+  `registry::check_writable` asks `cleanup::refusal`, so the Picard face says it too.
+- An output through a directory that does not exist with a `..` behind it
+  (`missing/../in.bam`) is a usage error (exit 2) before the first read, on `chain` and on
+  every tool verb. The run made `missing` and the path then named the input: 0.22.0 failed
+  `write` at write time and left the empty directory, and a tap or a tool verb with that
+  `-o` replaced its input BAM with the metrics file.
+- A chain that exits 1 removes the output directories it made that are still empty
+  (`cleanup::MadeDirs`). A directory that was there, or that holds a file, stays.
+- Two spellings of one new file under a directory that does not exist yet
+  (`link/new/a.txt` and `new/a.txt`) are one file for the one-file-twice check.
+- `chain --plan FILE` reads at most 1 MiB; a larger file is `not a plan file: it is larger
+  than 1 MiB` (exit 2). `--also markdown` reads back at most 64 MiB per metrics file.
+- `chain BAM + inser-size --help` names the unknown step with its number (`step 1`).
+- `--threads` over 256 is a usage error where it is parsed: the tool verbs, `chain`, the
+  plan file, `qc`, `plan`, `collect` (exit 2), `threads=` on the Picard face (exit 1) and
+  the Python `chain`, `qc` and `collect` (`UsageError`). `--threads 100000000` used to
+  start threads for about two minutes and panic in `noodles-bgzf` with exit 101.
+- A text value only the tool can judge on a tap (`--level NOPE`) is a usage error before
+  the first read (exit 2, `UsageError` in Python), as on the tool's verb. 0.22.0 failed
+  the tap when it was built and exited 1. `tap_options::check` runs the option parser of
+  each of the 13 one-pass tools without a header.
+- A number the tool refuses without a header is a usage error on a chain before the first
+  read too: `sequencing-artifact --context-size 99` or `-1` (exit 1 when the tap was
+  built) and `quality-yield --flow-mode` (the same). A `sequencing-artifact` step runs the
+  validation of the stand-alone tool: `--maximum-insert-size 10`, a negative insert size
+  and a `CONTEXTS_TO_PRINT` of the wrong length exit 2, where the chain wrote its five
+  files or failed on a later error.
+- `gc-bias --scan-window-size 0` (`SCAN_WINDOW_SIZE=0`) and a negative window are a usage
+  error: `a window holds at least 1 base`. Both were a panic with exit 101 on the verb,
+  the Picard face and the chain. Picard 3.5.0 throws on both.
+- `qc`, `plan` and `collect` refuse a prefix through a directory that does not exist with
+  a `..` behind it (`-o missing/../q`, exit 2). They wrote `q.*` and left `missing/`.
+- A tool verb, `collect` and `qc` that fail remove the output directories they made that
+  are still empty, as a chain does.
+
+### Measured
+
+- HG002 exome BAM, 10,339,495,604 bytes, 150,538,907 records: `build-bam-index` 11.8 s
+  and 9 MiB at 8 threads (65.0 s at 1), Picard 3.5.0 `BuildBamIndex` 85.6 s and 487 MiB.
+  The two indexes are 7,186,968 bytes and equal under `cmp`.
+- The scale gate of docs/07 section 6 (docs/benchmarks.md, "Scale gate of wave W05"):
+  `chain --sort-memory 2G + sort-sam --sort-order coordinate + mark-duplicates + write
+  --index` peaked at 2,755 MiB on the queryname-sorted chr20 and chr21 slice of
+  NA12878 (2,870,148,655 bytes, 126.8 s) and 3,047 MiB on chromosomes 1 to 5 of the
+  HG002 exome (3,183,979,932 bytes, 141.7 s), under 3,072. Its sort spilled 0.73 and
+  1.08 times the input; the planner's estimates were 2.1 and 2.2 percent over. `sort-sam
+  --sort-order queryname` sorted the 29,330,868 records of the slice in 65.3 s at 619
+  MiB, Picard `SortSam` in 244.0 s at 4,193 MiB, and the two outputs hold the same
+  records and header lines.
+
 ## 0.22.0
 
 The `chain` verb, its plan file, Python `chain` and `step`, and `FifoBuffer` (tool 33).

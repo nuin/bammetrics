@@ -14,5 +14,6 @@ segment 1  one read of tests/data/insert_size.bam, shared by its taps as qc shar
   step 3  insert-size        tap on in  ./insert_size.insert_size_metrics, ./insert_size.insert_size_metrics.json
   step 4  duplicate-metrics  tap on in  ./insert_size.duplicate_metrics, ./insert_size.duplicate_metrics.json
 temp disk  none: no step spills
+memory     about 100.0 MiB at the peak
 nothing ran: this is a plan
 ## stderr
