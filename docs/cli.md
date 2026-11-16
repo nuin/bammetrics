@@ -801,8 +801,12 @@ metrics file.
   more, default 4,000,000) spilled to `--tmp-dir` (default the system temporary
   directory). Mates waiting for a mate on a later reference are spilled there too, one
   file per reference; memory holds those waiting on the reference being read. The
-  directory `bammetrics-markdup.<pid>.<n>` is made at the first spill and removed at the
-  end, on an error, and on SIGINT, SIGTERM or SIGHUP; a SIGKILL leaves it.
+  directory `bammetrics-mark-duplicates.<pid>.<16 hex digits>` is made at the first
+  spill with mode 0700. Its last part is random, and a name already there is an error,
+  never reused. It is removed at the end, on an error, and on SIGINT, SIGTERM or SIGHUP;
+  a SIGKILL leaves it. `sort-sam` names its directory `bammetrics-sort-sam.`,
+  `check-duplicate-marking` `bammetrics-check-duplicate-marking.` and `chain`
+  `bammetrics-chain.`.
 - `--tmp-dir` needs about 55 bytes per input record at its peak, during the first read:
   6.5 GiB for the 150.5M-record HG002 exome, 42.1 GiB for a 768.6M-record genome (about
   the size of the output BAM). Peak memory was 0.8 GB on the exome and 2.75 GB on the

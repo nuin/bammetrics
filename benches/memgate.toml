@@ -129,7 +129,11 @@ spill_dir = "{out}/tmp"
 # limit is 3 times 1.2 times the input. The queryname sort of a coordinate-sorted BAM
 # spills its records in queryname order, which take 1.77 times the bytes of the same
 # records in coordinate order (2,870,148,655 against 1,624,507,373), so its limit is
-# 1.2 times its output, 2,737 MiB.
+# 1.2 times its output, 3,284 MiB.
+#
+# The two chain rows hold their RSS to 2,765 MiB: --sort-memory plus 1 GiB (3,072 MiB)
+# less 10 percent. The sort step holds --sort-memory less 64 MiB and the 640 MB of read
+# ends a later mark-duplicates holds (crates/cli/src/chain/planner.rs, sort_budget).
 
 [[command]]
 name = "sort-sam queryname slice"
@@ -153,7 +157,7 @@ argv = [
     "--index",
 ]
 needs = ["~/data/bammetrics-scale/waves/w05/slice.queryname.bam"]
-max_rss_mib = 3072
+max_rss_mib = 2765
 spill_dir = "{out}/tmp"
 max_spill_mib = 9853
 
@@ -167,6 +171,6 @@ argv = [
     "--index",
 ]
 needs = ["~/data/bammetrics-scale/waves/w05/exome.chr1_5.bam"]
-max_rss_mib = 3072
+max_rss_mib = 2765
 spill_dir = "{out}/tmp"
 max_spill_mib = 10931

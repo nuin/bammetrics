@@ -316,7 +316,44 @@ The inputs, under `~/data/bammetrics-scale/waves/w05/`:
 | the same | exome chr1 to 5 | 141.7 s | 3,047 MiB | 3,432,800,381 | 3,429,831,103 |
 
 - Peak RSS is under `--sort-memory` plus 1 GiB (3,072 MiB) on both chains: 2,755 and
-  3,047 MiB. The exome run passes by 25 MiB; its memgate run peaked at 2,918 MiB.
+  3,047 MiB. The exome run passes by 25 MiB; its memgate run peaked at 2,918 MiB. The
+  release review fixed that margin (below).
+
+### The sort barrier's memory (release review of 0.23.0)
+
+2026-11-16, the same chain and inputs under `/usr/bin/time -l`, 8 threads, a virtual
+machine of 6 GB and other agents' builds on the machine. Before is release/0.23.0 at
+0cae2aa, after is the fix. `exome.queryname.bam` is `bammetrics sort-sam
+exome.chr1_5.bam --sort-order queryname`, 4,786,472,616 bytes, deleted after the runs.
+
+| Input | Before: peak RSS | After: peak RSS | After: wall | After: sort spill |
+|---|---:|---:|---:|---:|
+| exome.chr1_5.bam (coordinate) | 3,940 and 3,618 MiB | 2,132 and 2,172 MiB | 151.6 s | 3,432,783,770 |
+| exome.queryname.bam | 3,260 MiB | 2,198 MiB | 214.4 s | |
+| slice.queryname.bam | 3,346 MiB | 2,376 MiB | 139.0 s | 2,194,425,581 |
+
+The limit is 2,765 MiB, `--sort-memory` plus 1 GiB less 10 percent. Before the fix the
+release measured 3,047 MiB on the exome part on 2026-11-11 and 3,940 MiB here: the
+machine's load moves the peak by hundreds of MiB. An RSS sample each second found two
+causes.
+
+- The run sort copied the run. `timsort::sort_by` collected the run into a vector of
+  `Option` and extended a new vector in sorted order: 56 bytes per record twice, 290 MB
+  more for a run of 5.15 million records, and the allocator kept the pages. RSS climbed
+  from 2.3 GB at the first spill to 3.7 GB at the tenth. `permute` now moves the records
+  in place along the cycles of the order. The sort then held 2,368 MiB through its read,
+  and the chain peaked at 2,826 MiB.
+- The pages of the sort's records stay resident after the sort seals (macOS `ru_maxrss`
+  counts them: the peak footprint was 2,258 MiB). `mark-duplicates` then adds its pair
+  and fragment lists of 4,000,000 read ends each on top: 2,630 MiB through its first
+  read, 2,818 MiB at its first spill. The sort step now holds `--sort-memory` less 64
+  MiB (the run merge, the spool writer, the batches) and less the 640 MB of read ends of a
+  later `mark-duplicates` (`planner::sort_budget`): 1,440 MB on these chains, 3.45
+  million records per run. The read went to 1,636 MiB and `mark-duplicates` to 2,130 MiB.
+
+The sort spills 1.05 times the bytes on the slice (more runs, one merge level), and wall
+time moved within the noise of the machine (149.4 against 145.8 s on the exome part). The
+plan now estimates 2.5 GiB at the peak for both chains.
 - The sort spill is 0.73 times the queryname slice and 1.08 times the exome part, under
   1.2 times. The queryname sort of the coordinate slice spills 1.74 times its input and
   0.99 times its output: records in queryname order take 1.77 times the bytes of the
@@ -409,14 +446,20 @@ docs/07 target for a streaming reader or writer, 1 GiB:
 | `mark-duplicates slice` (`--create-index`) | chr20_21_22.bam | 642.9 / 1024 | 16.81 | 358.0 |
 
 The sort rows of the W05 scale gate ("Scale gate of wave W05" above): the limit is
-`--sort-memory` (2 GiB) plus 1 GiB. A chain's spill limit is 3 times 1.2 times its input,
-for the runs, the spool and the spill of `mark-duplicates` in one directory.
+`--sort-memory` (2 GiB) plus 1 GiB; since the release review the two chain rows allow
+that less 10 percent, 2,765 MiB. A chain's spill limit is 3 times 1.2 times its input,
+for the runs, the spool and the spill of `mark-duplicates` in one directory. The rows as
+first measured (2026-11-11), then after the review (2026-11-16, the same command and
+inputs, all seven scale rows passing):
 
 | command | input | peak RSS MiB / limit | wall s | spill MiB (sampled) / limit |
 |---|---|---|---:|---:|
 | `sort-sam queryname slice` | slice.chr20_21.bam, 1,624.5 MB | 619.6 / 3072 | 64.45 | 2,700.2 / 3,284 |
 | `chain sort barrier slice` | slice.queryname.bam, 2,870.1 MB | 2,755.7 / 3072 | 126.64 | 4,955.5 / 9,853 |
 | `chain sort barrier exome` | exome.chr1_5.bam, 3,184.0 MB | 2,918.4 / 3072 | 140.52 | 8,703.2 / 10,931 |
+| `sort-sam queryname slice`, after | slice.chr20_21.bam | 592.4 / 3072 | 71.14 | 2,700.2 / 3,284 |
+| `chain sort barrier slice`, after | slice.queryname.bam | 2,337.4 / 2765 | 146.20 | 5,051.1 / 9,853 |
+| `chain sort barrier exome`, after | exome.chr1_5.bam | 2,120.2 / 2765 | 153.83 | 8,703.2 / 10,931 |
 
 The queryname row first ran against 1.2 times its input (1,859 MiB) and failed at 2,700.2
 MiB; its limit is now 1.2 times its output, for the reason given above. The two inputs
