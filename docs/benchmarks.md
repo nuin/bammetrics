@@ -591,6 +591,48 @@ and the Markdown, JUnit and MultiQC forms of a verdict. The difference, 132,304 
 the crate's code and data. The command's own format code in `crates/cli` is outside the
 probe. The 150 KB target is the measured size plus 16%; the test fails at 300 KB.
 
+## PDF report (wave W06, docs/07 section 3.3)
+
+Measured 2026-11-16 on the Mac Studio, rustc 1.100.0, by `make budgets` on
+`feat/pdf-report`. `crates/pdf` is built only with the cargo feature `pdf`.
+
+| Budget | Target | Fails at | Measured | How |
+|---|---:|---:|---:|---|
+| PDF growth | 4 MB | 8 MB | 3.285 MB | 3,444,688 bytes: stripped `size_pdf` less stripped `size_report` (4,071,792 unstripped) |
+| Render, sample PDF | 100 ms | 200 ms | 21.5 ms | the failing fixture sample with every plot, A4, median of 31 renders after 3 unmeasured (`pdf_budget`) |
+| Sample PDF size | 150 KB | 300 KB | 240.5 KB | the largest of three: 214,994 bytes passing, 239,995 failing, 246,290 failing with every plot |
+
+A MB here is 1,048,576 bytes, as the KB of this file is 1024 bytes. In decimal units the
+growth is 3.44 MB.
+
+The kill rule of docs/07 (W06: layout code over 1,500 lines or growth over 4 MB keeps the
+PDF a documented recipe) did not fire:
+
+- Layout code: 1,495 lines, `wc -l crates/pdf/src/*.rs` (layout.rs 683, content.rs 434,
+  fonts.rs 190, lib.rs 188). The three examples add 241 lines and the test 603.
+- Growth, the probe of the first day: one page of text and one plot over `size_report`,
+  3,856,224 bytes stripped (3.68 MB). With the whole crate and default release settings
+  the growth read 4,120,800 bytes (3.93 MB, 4.12 decimal MB). The PDF dependencies now
+  build with `opt-level = "s"` (`[profile.release.package.*]` in the root Cargo.toml):
+  3,444,688 bytes, and the render went from 16.5 to 17.3 ms in the run that compared them.
+- The default build compiles none of it: `cargo tree --workspace -e normal,build` lists no
+  krilla, usvg or font crate, and the stripped `bammetrics` binary is 6,760,472 bytes on
+  both origin/main (822c293) and this branch.
+
+The size row is over its target. The appendix holds every metrics table as a tagged table
+(`TR`, `TH`, `TD` per cell), and krilla writes each structure element as its own object:
+1,505 elements took 154 KB of the 240 KB failing PDF, the content streams and fonts 64 KB.
+Tables over 25 records print 25 evenly spaced rows (`APPENDIX_ROWS`), which took the PDF
+from 463 KB to 240 KB; the definitions of the one-row tables stay.
+
+The fixture sample (`clinical-panel`, 5 fail, 8 pass, 5 not measured) is 13 A4 pages: 3
+of report and 10 of appendix. docs/07 named 3 pages; the appendix of every table that
+section 3.3 also asks for adds the rest.
+
+Fonts: three Latin subsets of DejaVu 2.37 (regular 24,188, bold 22,844, mono 21,500
+bytes), no hinting and no layout tables, from matplotlib 3.8.0's copies by
+`tools/subset_fonts.py`, which gives the same bytes on every run.
+
 ## Report accessibility
 
 Checked 2026-11-05 with bammetrics 0.16.0 by `make a11y` (`benches/a11y.mjs`): axe-core

@@ -1,5 +1,54 @@
 # Changelog
 
+## Unreleased
+
+The PDF report, wave W06 parts A and B of docs/07: `crates/pdf` behind the cargo feature
+`pdf`. The default build is unchanged: it compiles no krilla code and its stripped binary
+is the same size (6,760,472 bytes before and after on rustc 1.100, macOS arm64).
+
+### Added
+
+- `bammetrics_report::figure_standalone` (part A): each plot as an SVG document with the
+  SVG namespace, a size and a `<style>` of the `.chart` rules, every `var(--x)` replaced by
+  the print palette (`theme::resolve_tokens`), so usvg draws it; `Standalone::alt` is the
+  plot's `<desc>`. The HTML pages and their snapshots are byte-identical.
+- `crates/pdf` (`bammetrics-pdf`, part B): `render(verdict, inputs, &Options)` gives the
+  PDF bytes and `write(path, ...)` writes them through `AtomicFile`, refusing a path that
+  names an input or the font. `Options { date, font, all_plots, paper }`, `Paper::A4`
+  (default) or `Paper::Letter`. Content: header, verdict band, the failing and warning
+  checks each with its plot, the checks not measured, the check table, the run
+  provenance, and from a new page an appendix of every metrics table (tables over 25
+  records print 25, evenly spaced, with a line naming the file). PDF/UA-1 through
+  krilla's validator: document language, title, one heading per `Sect`, `TH` cells on
+  every table, `/Alt` on every figure, artifacts for rules, stripes, glyphs, repeated
+  header rows and the footer. An outline entry per section and per appendix file. Tables
+  break across pages with the header row repeated; each page carries its number.
+- Fonts: Latin subsets of DejaVu Sans, DejaVu Sans Bold and DejaVu Sans Mono (68,532 bytes,
+  `crates/pdf/fonts`, licence `LICENSE-DEJAVU`), rebuilt byte for byte by
+  `tools/subset_fonts.py` (fontTools, `tools/requirements.txt`). `Options::font`
+  (`--pdf-font` for the second builder) sets every text run from one TTF or OTF file of at
+  most 32 MiB, read and checked before use: a file that is not a font, a table past the
+  end of the file, no outlines, a damaged `head`, `hhea`, `hmtx`, `maxp` or `cmap` each
+  fail with the reason. A character the font lacks fails the render with its code point
+  and the text it is in.
+- `cargo run -p bammetrics-pdf --features pdf --example fixture_pdfs -- DIR` writes the
+  three fixture PDFs (`pass.pdf`, `fail.pdf`, `fail-all-plots.pdf`).
+- `make budgets` measures three new rows (docs/05 section 4.8): PDF growth, PDF render
+  time and PDF size, from the `size_pdf` and `pdf_budget` examples.
+
+### Changed
+
+- The PDF report's dependencies (krilla, krilla-svg, usvg, resvg, the font crates, the
+  image decoders) build with `opt-level = "s"` in the release profile. None of them is in
+  the default build. The PDF growth falls from 4,120,800 to 3,444,688 bytes stripped, and
+  the render time rises from 16.5 to 17.3 ms (one run each).
+- `crates/cli/tests/budgets.rs` finds the release examples above the test binary, which
+  cargo 1.100 builds under `target/release/build/<package>/<hash>/out`.
+- `crates/core/src/cram.rs`: a division by a `NonZeroUsize` without `.get()`, for clippy
+  1.100 (`needless_nonzero_get`).
+- `deny.toml`: BSD-2-Clause and BSD-3-Clause allowed, and three duplicate versions under
+  the PDF tree skipped, each with its reason.
+
 ## 0.23.0
 
 SAM text in and out, `ViewSam`, `SortSam` with the sort barrier and the planner of a
