@@ -2,11 +2,36 @@
 
 ## Unreleased
 
-The PDF report, wave W06 parts A and B of docs/07: `crates/pdf` behind the cargo feature
-`pdf`. The default build is unchanged: it compiles no krilla code and its stripped binary
-is the same size (6,760,472 bytes before and after on rustc 1.100, macOS arm64).
+The PDF report, wave W06 of docs/07: `crates/pdf` behind the cargo feature `pdf` (parts A
+and B), and `report --pdf`, `qc --report pdf` and the Python keywords (part C). The default
+build compiles no krilla code. Its stripped binary was 6,760,472 bytes after parts A and B
+and is 6,793,568 bytes with the command options of part C (rustc 1.100, macOS arm64).
+docs/pdf.md documents the report.
 
 ### Added
+
+- `bammetrics report DIR --pdf` writes `SAMPLE.report.pdf` beside each page;
+  `--pdf-only` writes `SAMPLE.verdict.json` and `SAMPLE.report.pdf` per sample and no page
+  or index. `bammetrics qc --report FORM[,FORM]` takes `html` (default), `pdf` or
+  `html,pdf`; the manifest lists `PREFIX.report.pdf` under the step `report` with kind
+  `pdf`, a later run without it removes it, and `plan` prints it. Both verbs take
+  `--pdf-font FONT` (read and checked before the run, exit 1 on a missing file, a
+  directory or a file that is no font) and `--page-size a4|letter`; either without a PDF
+  exits 2.
+- A binary built without the feature answers every PDF request with exit 2 before
+  anything is read, naming the feature and `cargo build --release -p bammetrics-cli
+  --features pdf`. `chain --report`, `--pdf`, `--pdf-only`, `--pdf-font` and `--page-size`
+  exit 2: a chain has no report step until wave W14.
+- Python: `report(dirs, pdf=True)`, `pdf_only=True`, `pdf_font`, `page_size`;
+  `qc(bam, report="pdf")` and `report=["html", "pdf"]` beside `report=True` and `False`.
+  The stub is regenerated; `tests/python/test_pdf.py` covers the forms.
+- The wheel is built with the feature `pdf` (`pyproject.toml`): 5,529,637 bytes against
+  3,698,827 without it on CPython 3.15, macOS arm64. `cargo build --release` and the
+  Makefile's `release` keep it off. The `bammetrics` binary with the feature is 10,105,752
+  bytes stripped.
+- Golden cases: 8 PDF forms with the feature (each PDF listed with its page count, and its
+  size for `report`), 3 missing-feature errors without it, 6 option errors in both.
+  `make golden` runs the suite with and without the feature.
 
 - `bammetrics_report::figure_standalone` (part A): each plot as an SVG document with the
   SVG namespace, a size and a `<style>` of the `.chart` rules, every `var(--x)` replaced by
@@ -26,7 +51,7 @@ is the same size (6,760,472 bytes before and after on rustc 1.100, macOS arm64).
 - Fonts: Latin subsets of DejaVu Sans, DejaVu Sans Bold and DejaVu Sans Mono (68,532 bytes,
   `crates/pdf/fonts`, licence `LICENSE-DEJAVU`), rebuilt byte for byte by
   `tools/subset_fonts.py` (fontTools, `tools/requirements.txt`). `Options::font`
-  (`--pdf-font` for the second builder) sets every text run from one TTF or OTF file of at
+  (`--pdf-font`) sets every text run from one TTF or OTF file of at
   most 32 MiB, read and checked before use: a file that is not a font, a table past the
   end of the file, no outlines, a damaged `head`, `hhea`, `hmtx`, `maxp` or `cmap` each
   fail with the reason. A character the font lacks fails the render with its code point

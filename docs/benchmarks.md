@@ -629,6 +629,12 @@ The fixture sample (`clinical-panel`, 5 fail, 8 pass, 5 not measured) is 13 A4 p
 of report and 10 of appendix. docs/07 named 3 pages; the appendix of every table that
 section 3.3 also asks for adds the rest.
 
+Part C (the command and Python face, `crates/cli/src/pdf.rs`) measured the whole binary
+the same day. `bammetrics` stripped: 6,760,472 bytes before part C, 6,793,568 bytes after
+it without the feature (the options, help text and errors: 33,096 bytes), 10,105,752 bytes
+with `--features pdf` (3,312,184 bytes over the default). The wheel, which carries the
+feature: 5,529,637 bytes, 1,830,810 more than a wheel without it (3,698,827).
+
 Fonts: three Latin subsets of DejaVu 2.37 (regular 24,188, bold 22,844, mono 21,500
 bytes), no hinting and no layout tables, from matplotlib 3.8.0's copies by
 `tools/subset_fonts.py`, which gives the same bytes on every run.

@@ -253,6 +253,8 @@ Section data sources:
 
 A column definition lives in `glossary.tsv` (tool, column, definition, unit). The text is written in our own words from Picard's column behavior, not copied from Javadoc or the Picard website. One reviewer checks it before release.
 
+The PDF (`report --pdf`, `report --pdf-only`, `qc --report pdf`; cargo feature `pdf`, wave W06, [docs/pdf.md](pdf.md)) holds rows 1 to 7 in the same order: the header, the verdict band, each failing and warning check with its plot, the checks not measured, the check table, the provenance, then from a new page an appendix of every metrics table (row 6 printed, where the print CSS of the page hides it). Each section is a tagged `Sect` with one heading and one outline entry; the file is PDF/UA-1. Tables over 25 records print 25 evenly spaced; the coverage gaps table under a failing gap check is left out (the appendix has the class table).
+
 ### 4.3 Thresholds and presets
 
 A preset is a TOML file. A rule has a metric selector, an operator, a warn bound, a fail bound and a reason template:
@@ -341,7 +343,7 @@ One row per sample, worst first. Sort: verdict rank (fail, warn, incomplete, pas
 | Index size, 100 samples | under 200 KB | 151.9 KB, 14 `clinical-panel` rules per sample |
 | Binary growth | under 300 KB | 290.8 KB stripped (314.8 KB unstripped), the `size_report` probe less `size_base`. The probe holds the two crates and leaves out the verbs' own code (`report.rs`, `check.rs`, `discover.rs`, the `qc` engine). The whole binary grew 339.4 KB stripped when the `report` and `check` verbs first linked the crates (28647a8 to f82df56): over the target, under 2x. |
 | Formats growth | under 150 KB | 129.2 KB stripped (2026-11-10), the `size_formats` probe less `size_formats_base` (`crates/formats/examples`): the format writers and readers of docs/formats.md. The whole binary grew 193.8 KB stripped with the format verbs and options. |
-| PDF growth (feature `pdf`) | under 4 MB | 3.285 MB stripped (2026-11-16), the `size_pdf` probe less `size_report` (`crates/pdf/examples`): krilla, krilla-svg, the layout and the three fonts. The default build holds none of it. |
+| PDF growth (feature `pdf`) | under 4 MB | 3.285 MB stripped (2026-11-16), the `size_pdf` probe less `size_report` (`crates/pdf/examples`): krilla, krilla-svg, the layout and the three fonts. The default build holds none of it. The whole `bammetrics` binary with `--features pdf` is 3.16 MB stripped over the default build ([docs/pdf.md](pdf.md)). |
 | Render, sample PDF | under 100 ms | 21.5 ms, the failing fixture sample with every plot, A4, median of 31 (`pdf_budget`) |
 | Sample PDF size | under 150 KB | 240.5 KB, the largest of the three fixture PDFs: over the target, under the 300 KB limit. The appendix of every metrics table is most of it (docs/benchmarks.md) |
 | Added passes over the BAM | 0 | 0: `qc` reports 1 BAM read with the report; `report` and `check` run with the BAM deleted |
