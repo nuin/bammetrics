@@ -15,9 +15,17 @@ path = "src/lib.rs"
 name = "bammetrics"
 path = "src/main.rs"
 
+[features]
+# `report --pdf` and `qc --report pdf`. Needs rustc 1.92 (krilla); the
+# default build keeps rust-version 1.88.
+pdf = ["dep:bammetrics-pdf", "bammetrics-pdf/pdf"]
+
 [dependencies]
 bammetrics-core.workspace = true
 bammetrics-formats.workspace = true
+# The PDF report (docs/pdf.md), only with the feature `pdf`: the default
+# build links no krilla code.
+bammetrics-pdf = { workspace = true, optional = true }
 bammetrics-report.workspace = true
 bammetrics-verdict.workspace = true
 clap.workspace = true

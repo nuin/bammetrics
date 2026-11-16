@@ -1,0 +1,12 @@
+## argv
+qc
+tests/data/insert_size.bam
+-o
+OUT/sample
+--page-size
+letter
+## exit
+2
+## stdout
+## stderr
+bammetrics qc: --page-size sets the PDF, which only --report pdf writes

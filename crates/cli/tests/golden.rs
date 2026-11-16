@@ -515,6 +515,48 @@ const CHAIN_CASES: &[Case] = &[
     case!("error_chain_free_space", "chain", "MD", "-o", "OUT/s", "--free-space", "100", "+", "sort-sam", "-SO", "queryname", "+", "write"),
 ];
 
+/// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
+/// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
+/// --report`, both page sizes, and a `--pdf-font` that is no font or no
+/// file. A PDF is listed with its page count; a `report` PDF also with its
+/// size, since every path it prints is a fixture's (a `qc` PDF prints the
+/// `OUT` paths of its metrics files, whose length changes per run).
+#[cfg(feature = "pdf")]
+#[rustfmt::skip]
+const PDF_CASES: &[Case] = &[
+    case!("report_pdf", "report", "PICARD", "-o", "OUT", "--pdf", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("report_pdf_only_letter", "report", "PICARD", "-o", "OUT", "--pdf-only", "--page-size", "letter", "--preset", "clinical-panel", "--all-plots", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("qc_report_html_pdf", "qc", "IS", "-o", "OUT/sample", "--report", "html,pdf", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("qc_report_pdf_clinical_panel", "qc", "IS", "-o", "OUT/sample", "--report", "pdf", "--preset", "clinical-panel", "--panel", "IL", "-R", "REF", "--page-size", "letter", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("plan_report_pdf", "plan", "IS", "-o", "OUT/sample", "--report", "pdf"),
+    case!("error_report_pdf_font_not_a_font", "report", "PICARD", "-o", "OUT", "--pdf", "--pdf-font", "IL"),
+    case!("error_report_pdf_font_missing", "report", "PICARD", "-o", "OUT", "--pdf", "--pdf-font", "tests/data/nope.ttf"),
+    case!("error_qc_pdf_font_directory", "qc", "IS", "-o", "OUT/sample", "--report", "pdf", "--pdf-font", "tests/data"),
+];
+
+/// The same requests in a binary built without the feature: a usage error
+/// that names the feature and the build command, before anything is read.
+#[cfg(not(feature = "pdf"))]
+#[rustfmt::skip]
+const NO_PDF_CASES: &[Case] = &[
+    case!("error_report_pdf_without_feature", "report", "PICARD", "-o", "OUT", "--pdf"),
+    case!("error_report_pdf_only_without_feature", "report", "PICARD", "-o", "OUT", "--pdf-only"),
+    case!("error_qc_report_pdf_without_feature", "qc", "IS", "-o", "OUT/sample", "--report", "html,pdf"),
+];
+
+/// Errors of the PDF options that read the same in either build: the PDF
+/// options without a PDF, `--pdf` without a directory, the report options
+/// on `chain`.
+#[rustfmt::skip]
+const PDF_OPTION_CASES: &[Case] = &[
+    case!("error_report_pdf_no_directory", "report", "--pdf"),
+    case!("error_report_pdf_font_without_pdf", "report", "PICARD", "-o", "OUT", "--pdf-font", "REF"),
+    case!("error_qc_page_size_without_pdf", "qc", "IS", "-o", "OUT/sample", "--page-size", "letter"),
+    case!("error_qc_report_form", "qc", "IS", "-o", "OUT/sample", "--report", "docx"),
+    case!("error_chain_report_pdf", "chain", "IS", "--report", "pdf", "+", "insert-size"),
+    case!("error_chain_pdf_font", "chain", "IS", "--pdf-font=x.ttf", "+", "insert-size"),
+];
+
 /// The same tools on corpus BAM t1, with its reference and interval lists.
 #[rustfmt::skip]
 const T1_CASES: &[Case] = &[
@@ -625,6 +667,21 @@ fn record(case: &Case) -> String {
             text.push_str("<page not recorded>\n");
             continue;
         }
+        // A PDF is about 250 KB of compressed streams; its bytes are pinned
+        // by crates/pdf/tests/pdf.rs (two renders, one result).
+        if name.ends_with(".pdf") {
+            let bytes = fs::read(&path).expect("read the PDF");
+            let pages = page_count(&bytes);
+            if case.argv.first() == Some(&"report") {
+                text.push_str(&format!(
+                    "<pdf not recorded: {pages} pages, {} bytes>\n",
+                    bytes.len()
+                ));
+            } else {
+                text.push_str(&format!("<pdf not recorded: {pages} pages>\n"));
+            }
+            continue;
+        }
         // A BAM is compressed; its header and records are recorded as text.
         // A BAI holds offsets into those compressed bytes.
         if name.ends_with(".bam") {
@@ -645,6 +702,15 @@ fn record(case: &Case) -> String {
     }
     let _ = fs::remove_dir_all(&out_dir);
     normalize(&text, out)
+}
+
+/// The pages of a PDF: its `/Type/Page` objects (krilla writes no object
+/// streams, so every page dictionary is plain text).
+fn page_count(pdf: &[u8]) -> usize {
+    let marker = b"/Type/Page";
+    pdf.windows(marker.len() + 1)
+        .filter(|w| w.starts_with(marker) && !w[marker.len()].is_ascii_alphabetic())
+        .count()
 }
 
 /// Bytes as hex, 32 to a line.
@@ -824,6 +890,24 @@ fn documented_format_commands_on_the_fixtures() {
     check(FORMAT_CASES);
 }
 
+#[test]
+fn pdf_option_errors_on_the_fixtures() {
+    check(PDF_OPTION_CASES);
+}
+
+/// `make golden` runs this with `--features pdf` and the test below without.
+#[cfg(feature = "pdf")]
+#[test]
+fn documented_pdf_commands_on_the_fixtures() {
+    check(PDF_CASES);
+}
+
+#[cfg(not(feature = "pdf"))]
+#[test]
+fn pdf_commands_without_the_feature() {
+    check(NO_PDF_CASES);
+}
+
 /// The record of case `name`, as committed.
 fn recorded(name: &str) -> String {
     let path = root().join("tests/golden").join(format!("{name}.txt"));
@@ -904,11 +988,17 @@ fn documented_commands_on_corpus_t1() {
 
 #[test]
 fn case_names_are_unique() {
+    #[cfg(feature = "pdf")]
+    let pdf_cases = PDF_CASES;
+    #[cfg(not(feature = "pdf"))]
+    let pdf_cases = NO_PDF_CASES;
     let mut names: Vec<&str> = FIXTURE_CASES
         .iter()
         .chain(FORMAT_CASES)
         .chain(CHAIN_CASES)
         .chain(T1_CASES)
+        .chain(PDF_OPTION_CASES)
+        .chain(pdf_cases)
         .map(|c| c.name)
         .collect();
     let count = names.len();

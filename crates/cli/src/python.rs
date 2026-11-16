@@ -66,6 +66,10 @@ pub struct Verb {
     skipped: &'static [&'static str],
     /// Python-only keywords: name, annotation, default.
     extra: &'static [(&'static str, &'static str, &'static str)],
+    /// Command keywords that also take `True` or `False`, with their
+    /// default: `report=False` writes no report, `report="pdf"` is
+    /// `--report=pdf`.
+    or_bool: &'static [(&'static str, &'static str)],
     returns: &'static str,
     doc: &'static str,
 }
@@ -88,19 +92,23 @@ pub const VERBS: [Verb; 3] = [
         name: "qc",
         command: qc_command,
         skipped: &["format", "quiet"],
-        extra: &[("report", "bool", "True")],
+        extra: &[],
+        or_bool: &[("report", "True")],
         returns: "Run[Verdict]",
         doc: "bammetrics qc: the collectors the preset needs on one read of the BAM, the verdict \
-              and the page, the files the command writes. report=False leaves out \
-              PREFIX.report.html. A failed verdict is a value; VerdictError only when fail_on is \
-              given and reached. An incomplete verdict returns the Run (its exit_code is 11). A \
-              failed collector raises InputError (its .run holds the rest).",
+              and the page, the files the command writes. report=False leaves out the report, \
+              report=\"pdf\" writes PREFIX.report.pdf in place of PREFIX.report.html, \
+              report=[\"html\", \"pdf\"] both (the PDF needs a module built with the feature \
+              pdf). A failed verdict is a value; VerdictError only when fail_on is given and \
+              reached. An incomplete verdict returns the Run (its exit_code is 11). A failed \
+              collector raises InputError (its .run holds the rest).",
     },
     Verb {
         name: "check",
         command: check_command,
         skipped: &["format", "output"],
         extra: &[],
+        or_bool: &[],
         returns: "Verdict | list[Verdict]",
         doc: "bammetrics check: verdicts from directories of metrics files, verdict.json files or \
               qc prefixes. One path with one sample gives a Verdict, else a list. VerdictError \
@@ -112,10 +120,12 @@ pub const VERBS: [Verb; 3] = [
         command: report_command,
         skipped: &[],
         extra: &[],
+        or_bool: &[],
         returns: "list[str]",
         doc: "bammetrics report: SAMPLE.verdict.json and SAMPLE.report.html per sample and \
-              index.html, under output (default: the one directory given). Returns the paths \
-              written.",
+              index.html, under output (default: the one directory given); pdf=True adds \
+              SAMPLE.report.pdf, pdf_only=True writes the verdicts and the PDFs alone (the PDF \
+              needs a module built with the feature pdf). Returns the paths written.",
     },
 ];
 
@@ -215,6 +225,13 @@ impl Verb {
                     _ => "None".to_owned(),
                 };
                 (Shape::Value, format!("{ty} | None"), default)
+            };
+            let (annotation, default) = match self.or_bool.iter().find(|(n, _)| *n == snake(long)) {
+                Some((_, default)) => (
+                    format!("bool | {}", annotation.trim_end_matches(" | None")),
+                    (*default).to_owned(),
+                ),
+                None => (annotation, default),
             };
             keywords.push(Keyword {
                 name: snake(long),
@@ -421,6 +438,8 @@ mod tests {
             "all_plots",
             "date",
             "report",
+            "pdf_font",
+            "page_size",
         ] {
             assert!(names.iter().any(|n| n == expected), "{expected}: {names:?}");
         }

@@ -1,0 +1,12 @@
+## argv
+qc
+tests/data/insert_size.bam
+-o
+OUT/sample
+--report
+html,pdf
+## exit
+2
+## stdout
+## stderr
+bammetrics qc: --report pdf: this binary was built without the cargo feature pdf; build one with `cargo build --release -p bammetrics-cli --features pdf`

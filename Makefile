@@ -43,10 +43,16 @@ harness-test:
 # on one machine's bwa output), byte for byte
 # against tests/golden. golden-update rewrites the records after an intended
 # change; the diff is the review.
+#
+# Both builds run: with the feature pdf (the PDF cases) and without it (the
+# usage error of a binary built without the feature). The default build runs
+# last, so target/release/bammetrics is the default binary afterwards.
 golden: release
+	cargo test --release -p bammetrics-cli --features pdf --test golden
 	cargo test --release -p bammetrics-cli --test golden
 
 golden-update: release
+	UPDATE_GOLDEN=1 cargo test --release -p bammetrics-cli --features pdf --test golden
 	UPDATE_GOLDEN=1 cargo test --release -p bammetrics-cli --test golden
 
 # Size and speed budgets of docs/05 section 4.8 (crates/cli/tests/budgets.rs):
