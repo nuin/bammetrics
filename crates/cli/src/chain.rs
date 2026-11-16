@@ -39,6 +39,7 @@ mod args;
 mod claims;
 mod describe;
 mod planfile;
+mod planner;
 mod prepare;
 pub mod python;
 mod run;
@@ -87,6 +88,15 @@ pub struct Spec {
     /// step may write it.
     pub plan_file: Option<String>,
     pub steps: Vec<StepSpec>,
+    /// `--sort-memory`: the bytes a sort step holds, as given (`2G`).
+    pub sort_memory: Option<String>,
+    /// `--force-space`: run when the estimate exceeds the free space.
+    pub force_space: bool,
+    /// `--validation-stringency`: how a SAM text source is checked.
+    pub stringency: Option<String>,
+    /// The free bytes the planner assumes in every directory, in place of
+    /// the file system's answer (a test hook, not in `--help`).
+    pub free_space: Option<u64>,
 }
 
 /// One step as asked for: its verb and its own arguments.
@@ -118,6 +128,39 @@ pub(crate) const EMPTY_PREFIX_HINT: &str =
 /// A usage error of the chain itself.
 pub(crate) fn usage(what: impl Into<String>) -> VerbError {
     VerbError::usage(VERB, what)
+}
+
+/// The most bytes of a plan file: 1 MiB. The longer plan of the two in
+/// docs/chaining.md (`tests/data/chain_taps.toml`) holds 839 bytes; a file
+/// over the cap is no plan.
+pub const PLAN_FILE_CAP: u64 = 1 << 20;
+
+/// The most bytes of one metrics file `--also markdown` reads back: 64 MiB.
+/// The report holds every table in memory at once.
+pub const REPORT_FILE_CAP: u64 = 64 << 20;
+
+/// The text of the file at `path`, read whole, when it holds at most `cap`
+/// bytes. A longer file is a [`std::io::ErrorKind::FileTooLarge`] error
+/// after `cap + 1` bytes, so no file a user names is read without a bound.
+/// The length is not asked first: a pipe has none.
+pub(crate) fn read_capped(path: &std::path::Path, cap: u64) -> std::io::Result<String> {
+    use std::io::{Error, ErrorKind, Read as _};
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)?
+        .take(cap.saturating_add(1))
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > cap {
+        let size = if cap >= 1 << 20 {
+            format!("{} MiB", cap >> 20)
+        } else {
+            format!("{cap} bytes")
+        };
+        return Err(Error::new(
+            ErrorKind::FileTooLarge,
+            format!("larger than {size}"),
+        ));
+    }
+    String::from_utf8(bytes).map_err(|e| Error::new(ErrorKind::InvalidData, e.utf8_error()))
 }
 
 /// True when the arguments of `plan` describe a chain: they hold a `+`

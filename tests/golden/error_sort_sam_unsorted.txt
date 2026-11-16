@@ -1,0 +1,10 @@
+## argv
+SortSam
+I=tests/data/markdup.bam
+O=OUT/sorted.bam
+SORT_ORDER=unsorted
+## exit
+1
+## stdout
+## stderr
+bammetrics: 'unsorted' is not a valid value for SortOrder. Possible values: queryname, coordinate, duplicate

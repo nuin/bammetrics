@@ -269,6 +269,31 @@ impl Options {
         }
     }
 
+    /// The number of full contexts, 4^(2 * `CONTEXT_SIZE` + 1), or the
+    /// usage error for a count over [`MAX_CONTEXTS`]. No header is read.
+    fn full_contexts(&self) -> Result<usize> {
+        let context_size = u32::try_from(self.context_size)
+            .map_err(|_| Error::Usage("CONTEXT_SIZE cannot be negative".to_owned()))?;
+        context_size
+            .checked_mul(2)
+            .and_then(|doubled| doubled.checked_add(1))
+            .and_then(|length| 4usize.checked_pow(length))
+            .filter(|&n| n <= MAX_CONTEXTS)
+            .ok_or_else(|| {
+                Error::Usage(format!(
+                    "CONTEXT_SIZE={context_size}: too many contexts to count"
+                ))
+            })
+    }
+
+    /// What the stand-alone tool refuses before it opens its BAM, in its
+    /// order: [`Self::validate`], then the context count. A chain asks
+    /// this before its first read (`tap_options`).
+    pub(crate) fn check(&self) -> Result<()> {
+        self.validate()?;
+        self.full_contexts().map(drop)
+    }
+
     /// `OUTPUT` plus `extension` plus `FILE_EXTENSION`.
     fn path(&self, extension: &str) -> PathBuf {
         let mut name = self.prefix.clone().into_os_string();
@@ -362,18 +387,8 @@ pub struct Artifacts {
 
 impl Artifacts {
     pub fn new(opts: &Options, header: &sam::Header) -> Result<Self> {
-        if opts.context_size < 0 {
-            return Err(Error::Usage("CONTEXT_SIZE cannot be negative".to_owned()));
-        }
+        let contexts = opts.full_contexts()?;
         let context_size = opts.context_size as usize;
-        let contexts = 4usize
-            .checked_pow(2 * context_size as u32 + 1)
-            .filter(|&n| n <= MAX_CONTEXTS)
-            .ok_or_else(|| {
-                Error::Usage(format!(
-                    "CONTEXT_SIZE={context_size}: too many contexts to count"
-                ))
-            })?;
         let groups = read_groups(header);
         let mut samples: Vec<String> = Vec::new();
         let mut names: Vec<String> = Vec::new();

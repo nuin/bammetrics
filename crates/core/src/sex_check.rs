@@ -221,7 +221,7 @@ pub struct Options {
 }
 
 impl Options {
-    fn from_invocation(inv: &Invocation) -> Result<Self> {
+    pub(crate) fn from_invocation(inv: &Invocation) -> Result<Self> {
         let expected_sex = match inv.get("EXPECTED_SEX") {
             None => None,
             Some(text) => Some(Sex::parse(text).ok_or_else(|| {

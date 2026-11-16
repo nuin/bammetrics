@@ -22,5 +22,8 @@ bammetrics-report.workspace = true
 bammetrics-verdict.workspace = true
 clap.workspace = true
 clap_complete = "4"
+# statvfs for the free-space refusal of a chain; already in the tree
+# through signal-hook and clap.
+libc = "0.2"
 signal-hook = "0.3"
 thiserror.workspace = true

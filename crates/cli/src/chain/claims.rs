@@ -95,6 +95,30 @@ pub(super) fn refuse_overwriting_inputs(
     Ok(())
 }
 
+/// A planned file spelled through a directory that does not exist, with a
+/// `..` behind it, names no file yet. The run makes missing directories,
+/// and the path then leads back out of the new one: to an input, or to the
+/// file of another step, which no claim saw. A usage error. It runs before
+/// the claims, which resolve what exists.
+pub(super) fn refuse_unresolved(steps: &[Planned], report: Option<&Path>) -> Result<(), VerbError> {
+    let also = "--also markdown".to_owned();
+    let planned = steps
+        .iter()
+        .flat_map(|step| {
+            let files = step.files.iter().map(|file| file.path.as_path());
+            files
+                .chain(step.late_prefix.as_deref())
+                .map(move |path| (&step.label, path))
+        })
+        .chain(report.map(|report| (&also, report)));
+    for (label, path) in planned {
+        if let Some(what) = crate::verbs::unresolved_output(path) {
+            return Err(usage(format!("{label}: {what}")).hint(crate::verbs::UNRESOLVED_HINT));
+        }
+    }
+    Ok(())
+}
+
 /// At most one step writes standard output.
 pub(super) fn check_one_stdout(steps: &[Planned]) -> Result<(), VerbError> {
     let mut writers = steps.iter().filter(|step| step.stdout);

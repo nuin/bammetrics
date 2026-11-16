@@ -191,7 +191,7 @@ impl Options {
         Ok(())
     }
 
-    fn from_invocation(inv: &Invocation, variant: Variant) -> Result<Self> {
+    pub(crate) fn from_invocation(inv: &Invocation, variant: Variant) -> Result<Self> {
         let defaults = match variant {
             Variant::Hs => Self::default(),
             Variant::TargetedPcr => Self::targeted_pcr(),

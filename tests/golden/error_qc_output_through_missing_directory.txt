@@ -1,0 +1,10 @@
+## argv
+qc
+tests/data/insert_size.bam
+-o
+OUT/missing/../q
+## exit
+2
+## stdout
+## stderr
+bammetrics qc: -o OUT/missing/../q: OUT/missing does not exist, so the .. behind it names no directory; name the output without the ..: a run makes the directories that are missing

@@ -1,0 +1,33 @@
+## argv
+SortSam
+I=tests/data/duplicate_marking.bam
+O=OUT/sorted.bam
+SO=coordinate
+CREATE_INDEX=true
+CREATE_MD5_FILE=true
+MAX_RECORDS_IN_RAM=2
+## exit
+0
+## stdout
+## stderr
+## file sorted.bai
+<index not recorded>
+## file sorted.bam
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:chr1	LN:100000
+@RG	ID:rg1	SM:NA12878	LB:lib1	PU:unit1
+r1	99	0	1010	RG:Z:rg1
+r2	1123	0	1020	RG:Z:rg1
+r4	99	0	1020	RG:Z:rg1
+r5	73	0	1030	RG:Z:rg1
+r5	1157	0	1030	RG:Z:rg1
+r6	0	0	1040	RG:Z:rg1
+r1	147	0	1050	RG:Z:rg1
+r2	147	0	1060	RG:Z:rg1
+r4	1171	0	1060	RG:Z:rg1
+r4	3219	0	1070	RG:Z:rg1
+r6	3072	0	1080	RG:Z:rg1
+r7	4	-1	0	RG:Z:rg1
+r7	1028	-1	0	RG:Z:rg1
+## file sorted.bam.md5
+f05d310ecde5a1d7acc6f7c766c7846f

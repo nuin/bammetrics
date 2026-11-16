@@ -232,7 +232,9 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     inv.run_collector(collector)
 }
 
-fn collector(inv: &Invocation, _: &sam::Header) -> Result<Box<dyn pass::Collector>> {
+/// The options the collector runs with, or what it refuses without a
+/// header: `FLOW_MODE=true`, then each flag that does not parse.
+pub(crate) fn checked_options(inv: &Invocation) -> Result<Options> {
     // Picard 3.5.0 throws before reading: flow data has its own tool.
     if inv.flag("FLOW_MODE", false)? {
         return Err(Error::Usage(
@@ -240,7 +242,11 @@ fn collector(inv: &Invocation, _: &sam::Header) -> Result<Box<dyn pass::Collecto
                 .to_owned(),
         ));
     }
-    let opts = Options::from_invocation(inv)?;
+    Options::from_invocation(inv)
+}
+
+fn collector(inv: &Invocation, _: &sam::Header) -> Result<Box<dyn pass::Collector>> {
+    let opts = checked_options(inv)?;
     Ok(pass::boxed(QualityYield::new(&opts), |row| {
         Ok(MetricsOutput::from_rows(&[row], None).into())
     }))

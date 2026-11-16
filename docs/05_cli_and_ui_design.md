@@ -23,7 +23,7 @@ Verbs:
 | Group | Verbs |
 |---|---|
 | Run | `qc` (preset or metric set, one pass, files, verdict, report), `collect` (same engine, no verdict, kept), `chain` (steps split at `+` in one process, records handed on in memory; W04 of docs/07, docs/chaining.md), one verb per tool |
-| Prepare | `bed-to-interval-list` (P4 library piece pulled forward; 0.14.0), `mark-duplicates` (0.18.0), `fifo-buffer` (docs/07 wave W04: standard input to standard output, no input argument and no `-o`) |
+| Prepare | `bed-to-interval-list` (P4 library piece pulled forward; 0.14.0), `mark-duplicates` (0.18.0), `fifo-buffer` (docs/07 wave W04: standard input to standard output, no input argument and no `-o`), `build-bam-index` (docs/07 wave W05: `-o` names the `.bai`, default beside the BAM, no metrics file and no `--format`) |
 | Post | `accumulate-quality-yield`, `compare-metrics`, `report`, `check` |
 | Info | `tools`, `presets`, `plan`, `completions <shell>`, `help <verb or Picard class>` |
 

@@ -171,10 +171,22 @@ pub fn run() -> error::Result<u8> {
             if tool.name == bammetrics_core::fifo_buffer::TOOL.name {
                 return Ok(bammetrics_core::fifo_buffer::run_cli(rest)?);
             }
+            // SAM text on standard output as it is read; Picard's exit code.
+            if tool.name == bammetrics_core::view_sam::TOOL.name {
+                return Ok(bammetrics_core::view_sam::run_cli(rest)?);
+            }
             // Picard's CreateSequenceDictionary names its .dict when O= is absent;
             // the verb and Python write standard output and rows instead.
             if tool.name == create_sequence_dictionary::TOOL.name {
                 tool.run_cli(&create_sequence_dictionary::with_default_output(rest)?)?;
+                return Ok(0);
+            }
+            // Picard's BuildBamIndex without O= writes into the current directory;
+            // the verb and Python put the index beside the BAM.
+            if tool.name == bammetrics_core::build_bam_index::TOOL.name {
+                tool.run_cli(&bammetrics_core::build_bam_index::with_default_output(
+                    rest,
+                )?)?;
                 return Ok(0);
             }
             tool.run_cli(rest)?;

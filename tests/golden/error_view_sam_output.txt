@@ -1,0 +1,9 @@
+## argv
+ViewSam
+I=tests/data/insert_size.bam
+O=OUT/view.sam
+## exit
+1
+## stdout
+## stderr
+bammetrics: ViewSam: Unrecognized option: O

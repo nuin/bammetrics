@@ -1,0 +1,11 @@
+## argv
+insert-size
+tests/data/insert_size.bam
+-o
+OUT/missing/../x.txt
+## exit
+2
+## stdout
+## stderr
+bammetrics insert-size: OUT/missing/../x.txt: OUT/missing does not exist, so the .. behind it names no directory (from -o)
+  name the output without the ..: a run makes the directories that are missing

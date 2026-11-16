@@ -37,10 +37,16 @@ chr1\t1010\trs1\tA\tG\t.\tPASS\t.
 const REF_FLAT: &str = "g1\tt1\tchr1\t+\t900\t1500\t950\t1400\t2\t900,1150,\t1100,1500,\n";
 
 /// Registered tools this test does not run: the tool, then why.
-const EXEMPT: &[(&str, &str)] = &[(
-    "FifoBuffer",
-    "copies standard input to standard output: no fixture, no metrics file, no column",
-)];
+const EXEMPT: &[(&str, &str)] = &[
+    (
+        "FifoBuffer",
+        "copies standard input to standard output: no fixture, no metrics file, no column",
+    ),
+    (
+        "SortSam",
+        "writes a BAM or SAM text: no metrics file, no row, no column",
+    ),
+];
 
 /// A directory of its own for this test's files.
 fn work_dir() -> PathBuf {
@@ -215,6 +221,9 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
     );
     // No OUTPUT option; the text goes to standard output.
     args.insert("BamIndexStats", vec![bam.clone()]);
+    args.insert("ViewSam", vec![bam.clone(), "HEADER_ONLY=true".to_owned()]);
+    // The tool writes the index itself and returns rows without a class.
+    args.insert("BuildBamIndex", vec![bam.clone(), out("fixture.bai")]);
     args.insert(
         "CheckDuplicateMarking",
         vec![bam.clone(), out("bad_querynames.txt")],

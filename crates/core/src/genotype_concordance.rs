@@ -964,6 +964,7 @@ pub const TOOL: Tool = Tool {
     options: &[
         Opt::path(&["TRUTH_VCF", "TV"], "The truth VCF.").required(),
         crate::registry::REFERENCE_NOT_DECODED,
+        crate::registry::STRINGENCY_NO_RECORDS,
         Opt::path(&["CALL_VCF", "CV"], "The call VCF.").required(),
         Opt::output(&["OUTPUT", "O"])
             .with_help("The output prefix of the three files.")

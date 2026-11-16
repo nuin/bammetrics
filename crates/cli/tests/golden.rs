@@ -49,6 +49,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("PLAN_TAPS", "tests/data/chain_taps.toml"),
     ("PLAN_BAD", "tests/data/chain_bad_key.toml"),
     ("PLAN_SELF", "tests/data/chain_writes_plan.toml"),
+    ("MD_SAM", "tests/data/markdup.sam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -182,6 +183,16 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_collect_stdout", "collect", "IS", "-o", "-"),
     case!("error_unknown_verb", "inser-size", "IS"),
     case!("error_qc_bad_threads", "qc", "IS", "--threads", "x"),
+    // A thread count over 256 is a usage error where it is parsed (exit 1 on the Picard
+    // face); an output through a missing directory and back names no file yet.
+    case!("error_qc_threads_maximum", "qc", "IS", "--threads", "257"),
+    case!("error_verb_threads_maximum", "insert-size", "IS", "--threads", "100000000"),
+    case!("error_picard_threads_maximum", "CollectInsertSizeMetrics", "I=IS", "threads=100000000"),
+    case!("error_verb_output_through_missing_directory", "insert-size", "IS", "-o", "OUT/missing/../x.txt"),
+    // The same path rule on a prefix, and a window of no base (a panic before).
+    case!("error_qc_output_through_missing_directory", "qc", "IS", "-o", "OUT/missing/../q"),
+    case!("error_collect_output_through_missing_directory", "collect", "IS", "-o", "OUT/missing/../q"),
+    case!("error_verb_scan_window_size", "gc-bias", "IS", "-R", "REF", "-o", "OUT/s", "--scan-window-size", "0"),
     case!("error_qc_no_bam", "qc"),
     case!("error_check_bad_fail_on", "check", "PICARD", "--fail-on", "bad"),
     // Documented error paths.
@@ -323,6 +334,17 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_fifo_buffer_size", "FifoBuffer", "BUFFER_SIZE=0"),
     case!("error_verb_fifo_buffer_positional", "fifo-buffer", "IS"),
     case!("error_verb_fifo_buffer_io_size", "fifo-buffer", "--io-size", "64k"),
+    // BuildBamIndex: the .bai of a fixture BAM, recorded as hex (the BAM's bytes fix it);
+    // crates/cli/tests/build_bam_index.rs holds Picard's files and the default name.
+    case!("picard_build_bam_index", "BuildBamIndex", "I=IS", "O=OUT/insert_size.bai"),
+    case!("picard_build_bam_index_options", "BuildBamIndex", "--INPUT", "MD", "-O", "OUT/markdup.bai", "VALIDATION_STRINGENCY=SILENT", "CREATE_MD5_FILE=true", "R=REF"),
+    case!("verb_build_bam_index", "build-bam-index", "OR", "-o", "OUT/orientation.bai", "-v"),
+    case!("verb_build_bam_index_no_reads", "build-bam-index", "NO_READS", "-o", "OUT/sub/no_reads.bai"),
+    case!("error_build_bam_index_queryname", "BuildBamIndex", "I=DM", "O=OUT/x.bai"),
+    case!("error_build_bam_index_assume_sorted", "BuildBamIndex", "I=IS", "O=OUT/x.bai", "ASSUME_SORTED=true"),
+    case!("error_verb_build_bam_index_cram", "build-bam-index", "IS_CRAM", "-o", "OUT/x.bai"),
+    case!("error_verb_build_bam_index_format", "build-bam-index", "IS", "-o", "OUT/x.bai", "--format", "picard,json"),
+    case!("error_verb_build_bam_index_overwrites_input", "build-bam-index", "IS", "-o", "IS"),
 ];
 
 /// Formats (docs/formats.md): `convert` in both directions and to every
@@ -414,18 +436,29 @@ const CHAIN_CASES: &[Case] = &[
     case!("error_chain_empty_step", "chain", "IS", "+", "+", "write"),
     case!("error_chain_two_sources", "chain", "IS", "OR", "+", "insert-size"),
     case!("error_chain_unknown_chain_option", "chain", "IS", "--thread", "2", "+", "insert-size"),
-    case!("error_chain_write_sam", "chain", "IS", "+", "write", "OUT/x.sam"),
     case!("error_chain_write_cram", "chain", "IS", "+", "write", "OUT/x.cram"),
     case!("error_chain_write_fastq", "chain", "IS", "+", "write", "OUT/x.fastq.gz"),
     case!("error_chain_write_option", "chain", "IS", "+", "write", "OUT/x.bam", "--indx"),
-    case!("error_chain_two_transforms", "chain", "MD", "+", "mark-duplicates", "+", "quality-yield", "+", "mark-duplicates"),
+    case!("chain_two_mark_duplicates", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "+", "quality-yield", "+", "mark-duplicates"),
     case!("error_chain_one_file_twice", "chain", "IS", "-o", "OUT/s", "+", "insert-size", "+", "insert-size"),
     case!("error_chain_overwrites_input", "chain", "MD", "+", "mark-duplicates", "+", "write", "MD"),
     case!("error_chain_not_a_step", "chain", "IS", "+", "wgs"),
     case!("error_chain_fifo_buffer", "chain", "MD", "+", "mark-duplicates", "+", "fifo-buffer", "--buffer-size", "1024", "+", "write", "-"),
+    case!("error_chain_build_bam_index", "chain", "MD", "+", "mark-duplicates", "+", "build-bam-index", "+", "write", "OUT/marked.bam"),
+    case!("error_chain_view_sam", "chain", "MD", "+", "sort-sam", "--sort-order", "queryname", "+", "view-sam"),
     case!("error_chain_bad_number", "chain", "IS", "+", "insert-size", "--minimum-pct", "abc"),
     case!("error_chain_step_input", "chain", "IS", "+", "insert-size", "OR"),
     case!("error_chain_step_threads", "chain", "IS", "+", "insert-size", "--threads", "2"),
+    // From the 0.22.0 review: the help of an unknown step names its number, a thread count
+    // over 256, a value only the tool can judge (behind a transform too), an output
+    // through a missing directory and back.
+    case!("error_chain_unknown_step_help", "chain", "IS", "+", "quality-yield", "+", "inser-size", "--help"),
+    case!("error_chain_threads_maximum", "chain", "IS", "--threads", "100000000", "+", "insert-size"),
+    case!("error_chain_tap_level", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "+", "insert-size", "--level", "NOPE"),
+    case!("error_chain_output_through_missing_directory", "chain", "IS", "+", "write", "OUT/missing/../x.bam"),
+    // A number the tool refuses without a header, and a check only the stand-alone tool ran.
+    case!("error_chain_tap_context_size", "chain", "MD", "-R", "REF", "-o", "OUT/s", "+", "mark-duplicates", "+", "sequencing-artifact", "--context-size", "99"),
+    case!("error_chain_tap_insert_sizes", "chain", "ART", "-R", "REF", "-o", "OUT/s", "+", "sequencing-artifact", "--maximum-insert-size", "10"),
     case!("error_chain_missing_required", "chain", "IS", "+", "hs-metrics", "--baits", "IL"),
     case!("error_chain_transform_output", "chain", "MD", "+", "mark-duplicates", "-o", "OUT/x.bam"),
     case!("error_chain_transform_option", "chain", "MD", "+", "mark-duplicates", "--tagging-policy", "Some"),
@@ -443,6 +476,43 @@ const CHAIN_CASES: &[Case] = &[
     // An input that is not there: exit 1, as on every verb.
     case!("error_chain_missing_source", "chain", "tests/data/nope.bam", "+", "quality-yield"),
     case!("error_chain_plan_missing", "chain", "--plan", "tests/data/nope.toml"),
+    // ViewSam: SAM text on standard output as htsjdk writes it; no OUTPUT option. The
+    // interval list is applied as Picard's index query (insert_size.bam.bai is there).
+    case!("picard_view_sam", "ViewSam", "I=MD"),
+    case!("picard_view_sam_header_only", "ViewSam", "I=IS", "HEADER_ONLY=true"),
+    case!("picard_view_sam_filters", "ViewSam", "I=MD", "RECORDS_ONLY=true", "ALIGNMENT_STATUS=Unaligned", "PF_STATUS=PF"),
+    case!("picard_view_sam_intervals", "ViewSam", "I=IS", "INTERVAL_LIST=IL", "RECORDS_ONLY=true"),
+    case!("picard_view_sam_cram", "ViewSam", "I=IS_CRAM", "R=REF", "RECORDS_ONLY=true"),
+    case!("verb_view_sam_output", "view-sam", "MD", "-o", "OUT/view.sam", "--alignment-status", "Aligned"),
+    case!("verb_view_sam_tsv", "view-sam", "IS", "--format", "tsv"),
+    case!("error_view_sam_header_and_records", "ViewSam", "I=IS", "HEADER_ONLY=true", "RECORDS_ONLY=true"),
+    case!("error_view_sam_output", "ViewSam", "I=IS", "O=OUT/view.sam"),
+    case!("error_view_sam_status", "ViewSam", "I=IS", "ALIGNMENT_STATUS=aligned"),
+    // SAM text input (tests/data/markdup.sam, the text ViewSam prints for markdup.bam):
+    // told by its first line, read at VALIDATION_STRINGENCY, no note about the option.
+    case!("picard_view_sam_sam", "ViewSam", "I=MD_SAM", "VALIDATION_STRINGENCY=LENIENT", "RECORDS_ONLY=true"),
+    case!("picard_insert_size_sam", "CollectInsertSizeMetrics", "I=MD_SAM", "O=OUT/insert_size.txt"),
+    case!("picard_mark_duplicates_sam", "MarkDuplicates", "I=MD_SAM", "O=OUT/marked.bam", "M=OUT/marked.txt", "PROGRAM_GROUP_COMMAND_LINE=pinned"),
+    case!("chain_sam_source", "chain", "MD_SAM", "-o", "OUT/s", "+", "quality-yield", "+", "insert-size"),
+    case!("error_input_not_sam", "CollectQualityYieldMetrics", "I=REF"),
+    // `write` to SAM text: by the name, or on standard output with --output-format sam.
+    case!("chain_write_sam", "chain", "IS", "+", "write", "OUT/x.sam"),
+    case!("chain_write_sam_stdout", "chain", "MD", "-q", "-o", "OUT/s", "+", "mark-duplicates", "--program-group-command-line", "pinned", "--program-group-version", "pinned", "+", "write", "-", "--output-format", "sam"),
+    case!("error_chain_write_sam_index", "chain", "IS", "+", "write", "OUT/x.sam", "--index"),
+    case!("error_chain_write_output_format", "chain", "IS", "+", "write", "OUT/x.bam", "--output-format", "cram"),
+    // SortSam: the Picard face, the verb, SAM text by the name, and the errors Picard gives.
+    case!("picard_sort_sam_queryname", "SortSam", "I=MD", "O=OUT/sorted.bam", "SORT_ORDER=queryname"),
+    case!("picard_sort_sam_coordinate_index", "SortSam", "I=DM", "O=OUT/sorted.bam", "SO=coordinate", "CREATE_INDEX=true", "CREATE_MD5_FILE=true", "MAX_RECORDS_IN_RAM=2"),
+    case!("picard_sort_sam_sam_output", "SortSam", "I=MD_SAM", "O=OUT/sorted.sam", "SORT_ORDER=queryname"),
+    case!("picard_sort_sam_duplicate", "SortSam", "I=IS", "O=OUT/sorted.bam", "SORT_ORDER=duplicate"),
+    case!("verb_sort_sam", "sort-sam", "MD", "-o", "OUT/sorted.bam", "--sort-order", "queryname", "--max-records-in-ram", "5"),
+    case!("error_sort_sam_unsorted", "SortSam", "I=MD", "O=OUT/sorted.bam", "SORT_ORDER=unsorted"),
+    case!("error_sort_sam_missing_mc", "SortSam", "I=MD", "O=OUT/sorted.bam", "SORT_ORDER=duplicate"),
+    case!("error_sort_sam_cram_output", "SortSam", "I=MD", "O=OUT/sorted.cram", "SORT_ORDER=queryname"),
+    // Two barriers in one chain: sort, mark (spooled), sort, write.
+    case!("chain_two_barriers", "chain", "MD", "-o", "OUT/s", "+", "sort-sam", "--sort-order", "queryname", "+", "mark-duplicates", "--program-group-command-line", "pinned", "--program-group-version", "pinned", "+", "sort-sam", "--sort-order", "coordinate", "+", "write", "OUT/out.bam", "--index"),
+    case!("chain_dry_run_two_barriers", "chain", "MD", "-o", "OUT/s", "--sort-memory", "4K", "--dry-run", "+", "sort-sam", "--sort-order", "queryname", "+", "mark-duplicates", "+", "sort-sam", "--sort-order", "coordinate", "+", "write", "OUT/out.bam", "--index"),
+    case!("error_chain_free_space", "chain", "MD", "-o", "OUT/s", "--free-space", "100", "+", "sort-sam", "-SO", "queryname", "+", "write"),
 ];
 
 /// The same tools on corpus BAM t1, with its reference and interval lists.
@@ -545,6 +615,8 @@ fn record(case: &Case) -> String {
     let mut files = Vec::new();
     collect_files(&out_dir, &out_dir, &mut files);
     files.sort();
+    // The index of a committed BAM is fixed by that BAM's bytes.
+    let wrote_bam = files.iter().any(|(name, _)| name.ends_with(".bam"));
     for (name, path) in files {
         text.push_str(&format!("## file {name}\n"));
         // A report page is about 50 KB of CSS and SVG; its bytes are pinned
@@ -559,8 +631,12 @@ fn record(case: &Case) -> String {
             text.push_str(&bam_text(&path));
             continue;
         }
-        if name.ends_with(".bai") {
+        if name.ends_with(".bai") && wrote_bam {
             text.push_str("<index not recorded>\n");
+            continue;
+        }
+        if name.ends_with(".bai") {
+            text.push_str(&hex_lines(&fs::read(path).expect("read the index")));
             continue;
         }
         text.push_str(&String::from_utf8_lossy(
@@ -569,6 +645,18 @@ fn record(case: &Case) -> String {
     }
     let _ = fs::remove_dir_all(&out_dir);
     normalize(&text, out)
+}
+
+/// Bytes as hex, 32 to a line.
+fn hex_lines(bytes: &[u8]) -> String {
+    let mut text = String::new();
+    for line in bytes.chunks(32) {
+        for byte in line {
+            text.push_str(&format!("{byte:02x}"));
+        }
+        text.push('\n');
+    }
+    text
 }
 
 /// A BAM as text: its SAM header, then one line per record with the name,

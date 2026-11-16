@@ -1,0 +1,11 @@
+## argv
+qc
+tests/data/insert_size.bam
+--threads
+257
+## exit
+2
+## stdout
+## stderr
+bammetrics qc: invalid value "257": more than the maximum of 256 threads (from --threads)
+  every option: bammetrics help qc

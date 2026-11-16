@@ -102,7 +102,7 @@ pub struct Options {
 }
 
 impl Options {
-    fn from_invocation(inv: &Invocation) -> Result<Self> {
+    pub(crate) fn from_invocation(inv: &Invocation) -> Result<Self> {
         let required = |name: &str| {
             inv.get(name)
                 .map(str::to_owned)

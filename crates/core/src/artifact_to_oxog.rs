@@ -46,6 +46,7 @@ pub const TOOL: Tool = Tool {
               CollectSequencingArtifactMetrics detail files of INPUT_BASE; the file is \
               OUTPUT_BASE.oxog_metrics. Python returns one row per file: file and rows.",
     options: &[
+        crate::registry::STRINGENCY_NO_RECORDS,
         Opt::output(&["OUTPUT_BASE", "O"]).with_help(
             "The output prefix: the file is OUTPUT_BASE.oxog_metrics (default INPUT_BASE).",
         ),

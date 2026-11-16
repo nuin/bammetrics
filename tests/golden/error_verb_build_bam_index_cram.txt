@@ -1,0 +1,10 @@
+## argv
+build-bam-index
+tests/data/insert_size.cram
+-o
+OUT/x.bai
+## exit
+2
+## stdout
+## stderr
+bammetrics build-bam-index: tests/data/insert_size.cram: a .bai indexes a BAM and this is a CRAM, whose index is a .crai (Picard: Input file must be bam file, not sam file.)

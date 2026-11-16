@@ -234,7 +234,7 @@ pub struct Options {
 }
 
 impl Options {
-    fn from_invocation(inv: &Invocation) -> Result<Self> {
+    pub(crate) fn from_invocation(inv: &Invocation) -> Result<Self> {
         let targets: Vec<PathBuf> = inv
             .all("TARGET_INTERVALS")
             .iter()

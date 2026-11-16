@@ -1,0 +1,22 @@
+## argv
+SortSam
+I=tests/data/insert_size.bam
+O=OUT/sorted.bam
+SORT_ORDER=duplicate
+## exit
+0
+## stdout
+## stderr
+## file sorted.bam
+@HD	VN:1.6	SO:duplicate
+@SQ	SN:chr1	LN:100000
+r0	99	0	1001	MC:Z:100M
+r0	147	0	1201	MC:Z:100M
+r1	99	0	2001	MC:Z:100M
+r1	147	0	2211	MC:Z:100M
+r2	99	0	3001	MC:Z:100M
+r2	147	0	3211	MC:Z:100M
+r3	99	0	4001	MC:Z:100M
+r3	147	0	4221	MC:Z:100M
+r4	99	0	5001	MC:Z:100M
+r4	147	0	5401	MC:Z:100M

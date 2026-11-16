@@ -41,10 +41,13 @@ use crate::optical::{
     ReadNameParser,
 };
 use crate::registry::{Invocation, Opt, Tool};
+use crate::sam_text::Stringency;
 use crate::spill::TempDir;
 use crate::stage::{Barrier, Frame, Next, Sealed, Stage};
 
+pub use build::unclipped;
 pub use inputs::SortOrder;
+pub use md_nm::{ContigCache, restore as restore_md_and_nm};
 
 /// `DuplicateScoringStrategy.ScoringStrategy`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -65,6 +68,17 @@ pub enum TaggingPolicy {
 /// Entries held in memory per sorted list before a run is spilled.
 pub const DEFAULT_RECORDS_IN_RAM: usize = 4_000_000;
 
+/// Bytes the first read holds at most with `records_in_ram`: the pair and
+/// fragment lists of `records_in_ram` read ends each, and the scratch of the
+/// standard library's stable sort for one of them (half a list). 640 MB at
+/// the default 4,000,000.
+pub fn held_bytes(records_in_ram: usize) -> usize {
+    records_in_ram
+        .saturating_mul(std::mem::size_of::<read_ends::ReadEnds>())
+        .saturating_mul(5)
+        / 2
+}
+
 /// Every option, parsed.
 #[derive(Clone, Debug)]
 pub struct Options {
@@ -73,6 +87,8 @@ pub struct Options {
     pub metrics: PathBuf,
     pub reference: Option<PathBuf>,
     pub threads: usize,
+    /// `VALIDATION_STRINGENCY`: how SAM text inputs are checked.
+    pub stringency: Stringency,
     pub remove_duplicates: bool,
     pub remove_sequencing_duplicates: bool,
     /// `ASSUME_SORT_ORDER`, or `coordinate` for `ASSUME_SORTED=true`.
@@ -245,6 +261,7 @@ impl Options {
             compression_level,
             create_index: inv.flag("CREATE_INDEX", false)?,
             create_md5_file: inv.flag("CREATE_MD5_FILE", false)?,
+            stringency: inv.stringency()?,
             tmp_dir: inv.all("TMP_DIR").first().map(PathBuf::from),
             records_in_ram,
             command: inv.command.clone(),
@@ -519,7 +536,7 @@ pub fn run(opts: &Options) -> Result<crate::metric::MetricsOutput> {
         }
     }
     refuse_overlaps(opts)?;
-    let temp = TempDir::new(opts.tmp_dir.as_deref());
+    let temp = TempDir::new(opts.tmp_dir.as_deref(), "mark-duplicates");
     let inputs = spool_streams(&opts.inputs, &temp)?;
     // An input copied from a pipe fails under the name the user gave.
     let named = |mut error: Error| {
@@ -587,6 +604,7 @@ impl<'t> Barrier<'t> for Marking<'t> {
         Ok(Sealed {
             header: output,
             next: Next::Replay(Box::new(copier)),
+            products: crate::stage::Products::default(),
         })
     }
 }
@@ -641,19 +659,21 @@ fn refuse_overlaps(opts: &Options) -> Result<()> {
     Ok(())
 }
 
-/// `path` absolute with its links resolved, or with its directory resolved
-/// when the file does not exist yet.
+/// `path` absolute with its links resolved, or, when the file does not
+/// exist yet, with its deepest directory that exists resolved and the names
+/// below it as spelled. So `link/new/a.txt` and `new/a.txt` are one key
+/// before `new` is made, when `link` leads to the working directory.
 pub(crate) fn same_file_key(path: &Path) -> PathBuf {
     if let Ok(resolved) = path.canonicalize() {
         return resolved;
     }
     let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
-    match (absolute.parent(), absolute.file_name()) {
-        (Some(dir), Some(name)) => dir
-            .canonicalize()
-            .map_or_else(|_| absolute.clone(), |d| d.join(name)),
-        _ => absolute,
+    for dir in absolute.ancestors().skip(1) {
+        if let (Ok(resolved), Ok(below)) = (dir.canonicalize(), absolute.strip_prefix(dir)) {
+            return resolved.join(below);
+        }
     }
+    absolute
 }
 
 pub(crate) fn same_file(a: &Path, b: &Path) -> bool {
@@ -718,4 +738,19 @@ pub(crate) fn spool_streams(inputs: &[PathBuf], temp: &TempDir) -> Result<Vec<Pa
 
 fn copy_all(source: &mut impl Read, sink: &mut File) -> io::Result<()> {
     io::copy(source, sink).map(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    /// Two lists of 64-byte read ends and half a list of sort scratch: the
+    /// reserve a chain's sort step leaves for a later `mark-duplicates`.
+    #[test]
+    fn the_first_read_holds_two_and_a_half_lists() {
+        assert_eq!(std::mem::size_of::<super::read_ends::ReadEnds>(), 64);
+        assert_eq!(
+            super::held_bytes(super::DEFAULT_RECORDS_IN_RAM),
+            640_000_000
+        );
+        assert_eq!(super::held_bytes(usize::MAX), usize::MAX / 2);
+    }
 }

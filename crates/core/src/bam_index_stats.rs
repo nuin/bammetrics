@@ -20,11 +20,14 @@
 //! what `samtools index` would have stored for the same records. Picard
 //! fails on a CRAM (KNOWN_DIFFERENCES.md).
 
+use std::fs::File;
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 use noodles::csi::BinningIndex;
 use noodles::{bam, csi, sam};
 
+use crate::bai::Summary;
 use crate::cram;
 use crate::error::{Error, Result};
 use crate::metric::{MetricsOutput, ToolOutput, Value};
@@ -149,38 +152,48 @@ fn look_for_index(bam: &Path) -> Option<PathBuf> {
 }
 
 /// `getIndexStats` then `printIndexStats`: the header's references against
-/// the index's metadata.
+/// the index's metadata. A `.bai` is read by [`crate::bai`], which keeps
+/// the counts and no bin; a `.csi` by noodles.
 fn from_index(bam: &Path, index_path: &Path) -> Result<Stats> {
     let header = pass::read_header(bam)?;
     let input = |source| Error::Input {
         path: index_path.to_path_buf(),
         source,
     };
-    let index: Box<dyn BinningIndex> = if index_path.extension().is_some_and(|e| e == "csi") {
-        Box::new(csi::fs::read(index_path).map_err(input)?)
-    } else {
-        Box::new(bam::bai::fs::read(index_path).map_err(input)?)
-    };
-    let mut counts: Vec<(u64, u64)> = index
-        .reference_sequences()
-        .map(|reference| {
-            reference.metadata().map_or((0, 0), |m| {
-                (m.mapped_record_count(), m.unmapped_record_count())
+    let references = header.reference_sequences();
+    let (mut counts, held, no_coordinate) = if index_path.extension().is_some_and(|e| e == "csi") {
+        let index: Box<dyn BinningIndex> = Box::new(csi::fs::read(index_path).map_err(input)?);
+        let counts: Vec<(u64, u64)> = index
+            .reference_sequences()
+            .map(|reference| {
+                reference.metadata().map_or((0, 0), |m| {
+                    (m.mapped_record_count(), m.unmapped_record_count())
+                })
             })
-        })
-        .collect();
-    if counts.is_empty() {
+            .collect();
+        let held = counts.len();
+        (counts, held, index.unplaced_unmapped_record_count())
+    } else {
+        // Only the counts of the header's references are kept, and no bin.
+        let mut file = BufReader::new(File::open(index_path).map_err(input)?);
+        let summary = Summary::read(&mut file, references.len()).map_err(input)?;
+        let counts = summary
+            .metadata
+            .iter()
+            .map(|metadata| metadata.map_or((0, 0), |m| (m.aligned, m.unaligned)))
+            .collect();
+        (counts, summary.references, summary.no_coordinate)
+    };
+    if held == 0 {
         // `result[0] = new BAMIndexMetaData()`: one empty reference.
         counts.push((0, 0));
     }
-    let no_coordinate = index.unplaced_unmapped_record_count().unwrap_or(0);
-    let references = header.reference_sequences();
+    let no_coordinate = no_coordinate.unwrap_or(0);
     if references.len() > counts.len() {
         return Err(Error::Metric(format!(
-            "{}: the index holds {} reference sequences, the header {} (Picard: Index {} out \
-             of bounds for length {})",
+            "{}: the index holds {held} reference sequences, the header {} (Picard: Index {} \
+             out of bounds for length {})",
             index_path.display(),
-            index.reference_sequences().count(),
             references.len(),
             counts.len(),
             counts.len()

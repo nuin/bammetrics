@@ -161,14 +161,61 @@ fn parse_interval_list(
     text: &str,
     header: &sam::Header,
 ) -> std::result::Result<Vec<NamedInterval>, String> {
+    parse_own_dictionary(text, |dictionary| check_dictionary(dictionary, header))
+        .map(|(_, intervals)| intervals)
+}
+
+/// The bytes of an interval list [`read_interval_list`] reads at most: the
+/// file is held in memory whole.
+const MAX_INTERVAL_LIST_BYTES: u64 = 1 << 30;
+
+/// `IntervalList.fromFile`: an interval list against its own dictionary,
+/// no BAM header consulted. Returns the `@SQ` names in order and the
+/// intervals, each `contig` an index into those names.
+pub fn read_interval_list(path: &Path) -> Result<(Vec<String>, Vec<NamedInterval>)> {
+    let input = |source| Error::Input {
+        path: path.to_path_buf(),
+        source,
+    };
+    let intervals = |message: String| Error::Intervals {
+        path: path.to_path_buf(),
+        message,
+    };
+    let size = fs::metadata(path).map_err(input)?.len();
+    if size > MAX_INTERVAL_LIST_BYTES {
+        return Err(intervals(format!(
+            "the interval list holds {size} bytes; at most {MAX_INTERVAL_LIST_BYTES} are read"
+        )));
+    }
+    let text = fs::read_to_string(path).map_err(input)?;
+    let (dictionary, list) = parse_own_dictionary(&text, |dictionary| {
+        if dictionary.is_empty() {
+            return Err("Interval list file must contain header.".to_owned());
+        }
+        Ok(())
+    })
+    .map_err(intervals)?;
+    Ok((dictionary.into_iter().map(|(name, _)| name).collect(), list))
+}
+
+/// The `@SQ` lines of an interval list: each name and length.
+type Dictionary = Vec<(String, i64)>;
+
+/// The `@SQ` lines of an interval list (name and length) and its
+/// intervals, each `contig` an index into those lines. `check` sees the
+/// dictionary before the first record is read.
+fn parse_own_dictionary(
+    text: &str,
+    check: impl FnOnce(&[(String, i64)]) -> std::result::Result<(), String>,
+) -> std::result::Result<(Dictionary, Vec<NamedInterval>), String> {
     let mut lines = text.lines().peekable();
-    let mut dictionary: Vec<(String, i64)> = Vec::new();
+    let mut dictionary = Dictionary::new();
     while let Some(line) = lines.next_if(|l| l.starts_with('@')) {
         if let Some(fields) = line.strip_prefix("@SQ\t") {
             dictionary.push(sequence_line(fields)?);
         }
     }
-    check_dictionary(&dictionary, header)?;
+    check(&dictionary)?;
     let mut intervals = Vec::new();
     for line in lines {
         if line.starts_with('@') || line.trim().is_empty() {
@@ -211,7 +258,7 @@ fn parse_interval_list(
             name: name.to_owned(),
         });
     }
-    Ok(intervals)
+    Ok((dictionary, intervals))
 }
 
 /// `SN` and `LN` of an `@SQ` header line (without the `@SQ\t` prefix).

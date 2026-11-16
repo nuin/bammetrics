@@ -552,6 +552,12 @@ fn py_collect<'py>(
         let hs = hs.map(|h| argument("hs", &h)).transpose()?;
         let threads = threads
             .map(|t| argument::<usize>("threads", &t))
+            .transpose()?
+            .map(|threads| {
+                pass::check_threads(threads).map_err(|e| {
+                    usage_error(format!("bammetrics collect: threads={threads} is {e}"))
+                })
+            })
             .transpose()?;
         let path: PathBuf = argument("path", &path)?;
         return collect_dict(

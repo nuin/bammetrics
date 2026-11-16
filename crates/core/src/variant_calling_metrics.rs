@@ -444,6 +444,7 @@ pub const TOOL: Tool = Tool {
     options: &[
         PREFIX_OUTPUT,
         crate::registry::REFERENCE_NOT_DECODED,
+        crate::registry::STRINGENCY_NO_RECORDS,
         Opt::path(&["INPUT", "I"], "The VCF to read, plain or bgzip.").required(),
         Opt::path(&["DBSNP"], "A dbSNP VCF.").required(),
         Opt::path(
@@ -476,6 +477,7 @@ pub const ACCUMULATE_TOOL: Tool = Tool {
     options: &[
         PREFIX_OUTPUT,
         crate::registry::REFERENCE_NOT_DECODED,
+        crate::registry::STRINGENCY_NO_RECORDS,
         Opt::path(
             &["INPUT", "I"],
             "The prefix of one CollectVariantCallingMetrics run; repeat for each.",

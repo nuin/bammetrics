@@ -1,0 +1,10 @@
+## argv
+ViewSam
+I=tests/data/insert_size.bam
+HEADER_ONLY=true
+## exit
+0
+## stdout
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:chr1	LN:100000
+## stderr

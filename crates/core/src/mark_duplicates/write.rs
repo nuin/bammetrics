@@ -156,6 +156,7 @@ pub fn run(opts: &Options, inputs: &[PathBuf], marks: Marks<'_>) -> Result<Metri
         inputs,
         opts.reference.as_deref(),
         opts.threads,
+        opts.stringency,
         opts.assume_sort_order,
         |mut stream| {
             let order = SortOrder::of(&stream.header);

@@ -1,0 +1,16 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
++
+mark-duplicates
++
+insert-size
+--level
+NOPE
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 2 (insert-size): METRIC_ACCUMULATION_LEVEL "NOPE": expected ALL_READS, SAMPLE, LIBRARY or READ_GROUP

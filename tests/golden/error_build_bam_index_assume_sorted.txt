@@ -1,0 +1,10 @@
+## argv
+BuildBamIndex
+I=tests/data/insert_size.bam
+O=OUT/x.bai
+ASSUME_SORTED=true
+## exit
+1
+## stdout
+## stderr
+bammetrics: BuildBamIndex: Unrecognized option: ASSUME_SORTED

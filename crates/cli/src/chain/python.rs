@@ -210,6 +210,13 @@ fn tool_keywords(verb: &Verb) -> (Vec<Keyword>, Vec<(&'static str, String)>) {
     let mut refused = vec![("input", "the chain's source feeds every step".to_owned())];
     let mut keywords = Vec::new();
     for keyword in python_keywords(tool) {
+        if keyword.picard == "VALIDATION_STRINGENCY" {
+            refused.push((
+                "validation_stringency",
+                "the chain reads the source: chain(..., validation_stringency=...)".to_owned(),
+            ));
+            continue;
+        }
         // A transform that writes a BAM as a tool writes none in a chain.
         if verb.files == Files::Bam && keyword.picard == "OUTPUT" {
             refused.push((
@@ -316,16 +323,17 @@ pub const STEP_DOC: &str = "One step of chain(): a tool verb in snake case (inse
      Picard class, or write. The keywords are those of the tool's function (minimum_pct=0.1) \
      without its input, plus output (the step's own file, or prefix for a tool that writes \
      several), format, panel on hs_metrics (baits and targets in one file), and as_ on a \
-     transform (the name of the stream it leaves). write takes output, index, md5 and \
-     compression_level. An unknown verb or keyword raises UsageError here, with the closest \
+     transform (the name of the stream it leaves). write takes output, index, md5, \
+     compression_level and output_format (\"bam\" or \"sam\"). An unknown verb or keyword raises UsageError here, with the closest \
      name; so does a float that is NaN or infinite, and a list of texts with an item that \
      is not a str.";
 
 /// The docstring of `chain`.
 pub const CHAIN_DOC: &str = "bammetrics chain: several steps on one BAM in one process, the \
      records handed from step to step in memory. steps holds verb names (insert_size) or \
-     step(...) objects, in order: mark_duplicates is a transform, a one-pass tool is a tap on \
-     the records of its position, write writes them as a BAM. plan names a TOML plan file in \
+     step(...) objects, in order: mark_duplicates and sort_sam are transforms, a one-pass \
+     tool is a tap on the records of its position, write writes them as a BAM, or as SAM text \
+     for a .sam name or output_format \"sam\". plan names a TOML plan file in \
      place of steps; a keyword given replaces the file's. Returns a Run: files, metrics (keyed \
      by verb, STREAM.verb in front of a transform) and stages (one Stage per step). \
      dry_run=True returns the plan text and runs nothing. A failed step raises InputError \
@@ -411,6 +419,9 @@ mod tests {
                 "format",
                 "also",
                 "sample",
+                "sort_memory",
+                "force_space",
+                "validation_stringency",
                 "plan",
                 "dry_run"
             ]
@@ -463,7 +474,13 @@ mod tests {
         let write = step_table("write").expect("a step");
         assert_eq!(
             names(&write.keywords),
-            ["output", "index", "md5", "compression_level"]
+            [
+                "output",
+                "index",
+                "md5",
+                "compression_level",
+                "output_format"
+            ]
         );
         // `--panel`, which the error for missing intervals names, is a
         // keyword of the one verb that has the flag.
@@ -477,16 +494,18 @@ mod tests {
     }
 
     /// Every keyword of the tool's Python function is a keyword of its
-    /// step, apart from the BAM of a transform.
+    /// step, apart from the BAM of a transform and the stringency of the
+    /// source, which belongs to the chain.
     #[test]
     fn no_keyword_of_a_step_verb_is_lost() {
         for verb in VERBS.iter().filter(|verb| is_step(verb)) {
             let table = step_table(verb.name).expect(verb.name);
             for keyword in python_keywords(verb.tool()) {
                 let bam = verb.files == Files::Bam && keyword.picard == "OUTPUT";
+                let chain_s = keyword.picard == "VALIDATION_STRINGENCY";
                 assert_eq!(
                     table.keywords.iter().any(|k| k.name == keyword.name),
-                    !bam,
+                    !bam && !chain_s,
                     "{}: {}",
                     verb.name,
                     keyword.name
@@ -555,6 +574,10 @@ mod tests {
         );
         let marked = step_table("mark_duplicates").expect("a step");
         assert!(error(&marked, "output").contains("add step(\"write\", output=...) after it"));
+        assert!(
+            error(&table, "validation_stringency")
+                .ends_with("chain(..., validation_stringency=...)")
+        );
     }
 
     #[test]

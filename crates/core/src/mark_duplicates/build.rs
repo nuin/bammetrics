@@ -402,6 +402,7 @@ pub fn run<'d>(opts: &Options, inputs: &[PathBuf], temp: &'d TempDir) -> Result<
         inputs,
         opts.reference.as_deref(),
         opts.threads,
+        opts.stringency,
         opts.assume_sort_order,
         |mut stream| {
             let mut builder = Builder::new(opts, &stream.header, temp)?;

@@ -1,0 +1,43 @@
+## argv
+chain
+tests/data/markdup.sam
+-o
+OUT/s
++
+quality-yield
++
+insert-size
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: 2 steps finished, 2 files written
+## file s.insert_size_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectInsertSizeMetrics INPUT=tests/data/markdup.sam OUTPUT=OUT/s.insert_size_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.InsertSizeMetrics
+MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MAX_INSERT_SIZE	MEAN_INSERT_SIZE	STANDARD_DEVIATION	READ_PAIRS	PAIR_ORIENTATION	WIDTH_OF_10_PERCENT	WIDTH_OF_20_PERCENT	WIDTH_OF_30_PERCENT	WIDTH_OF_40_PERCENT	WIDTH_OF_50_PERCENT	WIDTH_OF_60_PERCENT	WIDTH_OF_70_PERCENT	WIDTH_OF_80_PERCENT	WIDTH_OF_90_PERCENT	WIDTH_OF_95_PERCENT	WIDTH_OF_99_PERCENT	SAMPLE	LIBRARY	READ_GROUP
+330	300	30	300	450	335.384615	42.937044	13	FR	1	1	1	61	61	61	61	81	81	241	241			
+
+## HISTOGRAM	java.lang.Integer
+insert_size	All_Reads.fr_count
+300	5
+330	4
+350	1
+370	2
+450	1
+
+## file s.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectQualityYieldMetrics INPUT=tests/data/markdup.sam OUTPUT=OUT/s.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+34	34	50	1700	1700	1700	1700	1250	1250	2590	2590
+
+

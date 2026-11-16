@@ -6,6 +6,7 @@ CORPUS := tests/corpus/out
 
 .PHONY: all test lint release corpus reference-metrics concordance golden golden-update budgets a11y python-test wheel wheel-check clean-corpus bench-bam bench bench-wgs fuzz picard-fields
 .PHONY: harness-test deny deflater-spike
+.PHONY: memgate
 
 all: test lint concordance
 
@@ -146,3 +147,12 @@ deny:
 SPIKE_BAMS ?= tests/data/markdup.bam
 deflater-spike: release
 	python3 benches/deflater_spike.py $(SPIKE_BAMS)
+
+# The memory gate (benches/memgate.py): each command of benches/memgate.toml under
+# /usr/bin/time, failing when its peak RSS passes the limit of its row. The default
+# rows read tests/data and take seconds. TIER=scale runs the rows on the real data of
+# docs/benchmarks.md ("Memory gate"), alone on the machine;
+# MEMGATE_ARGS="--out-root DIR --markdown" passes further options.
+TIER ?= fixture
+memgate: release
+	python3 benches/memgate.py --tier $(TIER) $(MEMGATE_ARGS)

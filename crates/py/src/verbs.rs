@@ -844,7 +844,7 @@ fn verb(name: &str) -> &'static table::Verb {
     text_signature = "(bam, *, output=None, reference=None, preset='generic', hs=None, \
                       panel=None, ref_flat=None, strand=None, ribosomal_intervals=None, \
                       sex=None, sample=None, fail_on=None, resume=False, force=False, threads=None, \
-                      also=None, \
+                      validation_stringency=None, also=None, \
                       all_plots=False, date=None, report=True)"
 )]
 pub fn py_qc<'py>(

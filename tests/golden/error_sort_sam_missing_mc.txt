@@ -1,0 +1,10 @@
+## argv
+SortSam
+I=tests/data/markdup.bam
+O=OUT/sorted.bam
+SORT_ORDER=duplicate
+## exit
+1
+## stdout
+## stderr
+bammetrics: Mate CIGAR (Tag MC) not found: mateless

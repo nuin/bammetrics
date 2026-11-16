@@ -4,49 +4,87 @@
 //!
 //! Records are sorted stably, and runs merge with ties going to the earlier
 //! run, so equal records come back in the order they were added, as
-//! htsjdk's collections give them. A run file holds each record as LEB128
-//! varints ([`Spill`]). The directory and every run file are created here
-//! and removed when the [`TempDir`] is dropped; nothing else is deleted.
+//! htsjdk's collections give them. A run is sorted by [`Spill::sort_run`]:
+//! the standard library's stable sort for a total order, the port of Java's
+//! `TimSort` ([`crate::timsort`]) for an order that may not be one. Runs
+//! merge through the port of Java's `TreeSet` ([`crate::tree_set`]) keyed
+//! by the head record and then the run index, as htsjdk's `MergingIterator`
+//! merges them, so an order that is not total takes htsjdk's records first
+//! while at most 64 runs exist. A run file holds each record as
+//! [`Spill::encode`] writes it, plain or in BGZF blocks
+//! ([`Sorter::compressed`]). The buffer holds at most a set number of
+//! records and, with [`Sorter::byte_limit`], a set number of bytes. The
+//! directory and every run file are created here and removed when the
+//! [`TempDir`] is dropped; nothing else is deleted.
 
-use std::cmp::{Ordering, Reverse};
-use std::collections::BinaryHeap;
+use std::cmp::Ordering;
 use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, BufWriter, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
+use std::num::NonZero;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Mutex, OnceLock};
 
+use noodles::bgzf;
+
 use crate::error::{Error, Result};
+use crate::tree_set::TreeSet;
 
 /// A record that can be written to and read back from a run file.
 pub trait Spill: Sized {
     fn encode(&self, out: &mut Vec<u8>);
     /// The next record, `None` at the end of the file.
     fn decode(input: &mut impl BufRead) -> io::Result<Option<Self>>;
+
+    /// Bytes the record holds in memory, counted against
+    /// [`Sorter::byte_limit`].
+    fn memory(&self) -> usize {
+        std::mem::size_of::<Self>()
+    }
+
+    /// Sort one run in memory, stably. The default suits a total order. A
+    /// type whose order may not be one sorts as Java does
+    /// ([`crate::timsort`]), so it never panics.
+    fn sort_run(run: &mut Vec<Self>) -> Result<()>
+    where
+        Self: Ord,
+    {
+        run.sort();
+        Ok(())
+    }
 }
 
 /// A directory of run files, removed with everything this process put in it.
 /// The directory is created by the first [`TempDir::file`], so a run that
-/// spills nothing never touches `TMP_DIR`. Its name holds the process ID
-/// and a process-wide counter; a name already taken is skipped.
+/// spills nothing never touches `TMP_DIR`. Its name is
+/// `bammetrics-<purpose>.<pid>.<16 hex digits>`: the purpose the caller
+/// gives (`sort-sam`, `mark-duplicates`, `chain`), the process ID and a
+/// random part another process cannot predict. It is made with mode 0700 and
+/// fails when the name exists: a directory already there is never used.
 #[derive(Debug)]
 pub struct TempDir {
     base: PathBuf,
+    purpose: &'static str,
     /// The directory, once created.
     path: OnceLock<PathBuf>,
     files: Mutex<Vec<PathBuf>>,
     next: AtomicU64,
 }
 
-/// Directories made by this process so far, for unique names.
+/// Directories made by this process so far, mixed into the random part.
 static DIRECTORIES: AtomicU64 = AtomicU64::new(0);
 
 impl TempDir {
     /// A directory to be made under `base` (the first `TMP_DIR`, or the
-    /// system temporary directory).
-    pub fn new(base: Option<&Path>) -> Self {
+    /// system temporary directory) for `purpose`, which names it.
+    pub fn new(base: Option<&Path>, purpose: &'static str) -> Self {
+        debug_assert!(
+            !purpose.is_empty() && purpose.bytes().all(|b| b.is_ascii_lowercase() || b == b'-'),
+            "{purpose}"
+        );
         Self {
             base: base.map_or_else(std::env::temp_dir, Path::to_path_buf),
+            purpose,
             path: OnceLock::new(),
             files: Mutex::new(Vec::new()),
             next: AtomicU64::new(0),
@@ -67,20 +105,11 @@ impl TempDir {
             move |source| Error::Output { path, source }
         };
         fs::create_dir_all(&self.base).map_err(error(&self.base))?;
-        loop {
-            let n = DIRECTORIES.fetch_add(1, AtomicOrdering::Relaxed);
-            let path = self
-                .base
-                .join(format!("bammetrics-markdup.{}.{n}", std::process::id()));
-            match create_private_dir(&path) {
-                Ok(()) => {
-                    crate::cleanup::register(&path);
-                    return Ok(self.path.get_or_init(|| path));
-                }
-                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
-                Err(e) => return Err(error(&path)(e)),
-            }
-        }
+        let n = DIRECTORIES.fetch_add(1, AtomicOrdering::Relaxed);
+        let path = self.base.join(dir_name(self.purpose, n));
+        create_private_dir(&path).map_err(error(&path))?;
+        crate::cleanup::register(&path);
+        Ok(self.path.get_or_init(|| path))
     }
 
     /// A new file name in the directory, recorded for removal. The first
@@ -132,6 +161,16 @@ impl Drop for TempDir {
     }
 }
 
+/// `bammetrics-<purpose>.<pid>.<16 hex digits>`, the random part from
+/// `cleanup::nonce` as the temporary names of `AtomicFile` take it.
+fn dir_name(purpose: &str, counter: u64) -> String {
+    format!(
+        "bammetrics-{purpose}.{}.{:016x}",
+        std::process::id(),
+        crate::cleanup::nonce(counter)
+    )
+}
+
 /// A directory this user alone can enter (mode 0700). Fails when the path
 /// exists.
 fn create_private_dir(path: &Path) -> io::Result<()> {
@@ -164,16 +203,39 @@ fn write_error(path: &Path) -> impl Fn(io::Error) -> Error + '_ {
     }
 }
 
+/// How run files are written.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RunFormat {
+    Plain,
+    /// BGZF blocks at this level, compressed on `workers` threads.
+    Bgzf {
+        level: u8,
+        workers: usize,
+    },
+}
+
 /// Records added in any order, given back sorted.
 pub struct Sorter<'d, T> {
     dir: &'d TempDir,
     stem: &'static str,
     limit: usize,
+    /// Most bytes ([`Spill::memory`]) the buffer holds; `usize::MAX` for no
+    /// bound.
+    byte_limit: usize,
+    /// Bytes the buffer holds now.
+    held: usize,
+    format: RunFormat,
     buffer: Vec<T>,
     runs: Vec<PathBuf>,
     /// How many merges made each run: 0 for a spilled buffer.
     levels: Vec<u32>,
     count: u64,
+    /// Bytes written to run files so far, merged runs included.
+    spilled: u64,
+    peak_records: usize,
+    peak_bytes: usize,
+    /// The deepest level of merges made while spilling.
+    merge_levels: u32,
 }
 
 impl<'d, T: Spill + Ord> Sorter<'d, T> {
@@ -183,20 +245,65 @@ impl<'d, T: Spill + Ord> Sorter<'d, T> {
             dir,
             stem,
             limit: limit.max(1),
+            byte_limit: usize::MAX,
+            held: 0,
+            format: RunFormat::Plain,
             buffer: Vec::new(),
             runs: Vec::new(),
             levels: Vec::new(),
             count: 0,
+            spilled: 0,
+            peak_records: 0,
+            peak_bytes: 0,
+            merge_levels: 0,
         }
     }
 
+    /// Also spill before the buffer would hold more than `bytes` bytes of
+    /// records ([`Spill::memory`]). A record larger than `bytes` is held
+    /// alone.
+    #[must_use]
+    pub fn byte_limit(mut self, bytes: usize) -> Self {
+        self.byte_limit = bytes.max(1);
+        self
+    }
+
+    /// Write run files as BGZF blocks at `level` (0 to 9), compressed on
+    /// `workers` threads.
+    #[must_use]
+    pub fn compressed(mut self, level: u8, workers: usize) -> Self {
+        self.format = RunFormat::Bgzf {
+            level: level.min(9),
+            workers: workers.max(1),
+        };
+        self
+    }
+
     pub fn push(&mut self, item: T) -> Result<()> {
-        if self.buffer.len() >= self.limit {
+        let size = item.memory();
+        let over_bytes =
+            !self.buffer.is_empty() && self.held.saturating_add(size) > self.byte_limit;
+        if self.buffer.len() >= self.limit || over_bytes {
             self.spill()?;
         }
         self.buffer.push(item);
+        self.held += size;
         self.count += 1;
+        self.peak_records = self.peak_records.max(self.buffer.len());
+        self.peak_bytes = self.peak_bytes.max(self.held);
         Ok(())
+    }
+
+    /// What the sort has done so far.
+    pub fn stats(&self) -> SortStats {
+        SortStats {
+            records: self.count,
+            runs: self.runs.len(),
+            spilled_bytes: self.spilled,
+            peak_records: self.peak_records,
+            peak_bytes: self.peak_bytes,
+            merge_levels: self.merge_levels,
+        }
     }
 
     /// Records added so far.
@@ -209,16 +316,17 @@ impl<'d, T: Spill + Ord> Sorter<'d, T> {
     }
 
     fn spill(&mut self) -> Result<()> {
-        self.buffer.sort();
+        T::sort_run(&mut self.buffer)?;
         let (path, file) = self.dir.create_file(self.stem)?;
-        let mut out = BufWriter::with_capacity(1 << 20, file);
+        let mut out = RunWriter::new(file, self.format);
         let mut bytes = Vec::with_capacity(64);
         for item in self.buffer.drain(..) {
             bytes.clear();
             item.encode(&mut bytes);
             out.write_all(&bytes).map_err(write_error(&path))?;
         }
-        out.flush().map_err(write_error(&path))?;
+        self.held = 0;
+        self.spilled += out.finish().map_err(write_error(&path))?;
         self.runs.push(path);
         self.levels.push(0);
         // The last MAX_OPEN_RUNS runs of one level merge into one run of
@@ -230,77 +338,197 @@ impl<'d, T: Spill + Ord> Sorter<'d, T> {
             if self.levels[from..].iter().any(|l| *l != level) {
                 break;
             }
-            let merged = self.merge_into_run(&self.runs[from..])?;
+            let group = self.runs[from..].to_vec();
+            let merged = self.merge_into_run(&group)?;
             self.runs.truncate(from);
             self.levels.truncate(from);
             self.runs.push(merged);
             self.levels.push(level + 1);
+            self.merge_levels = self.merge_levels.max(level + 1);
         }
         Ok(())
     }
 
     /// Every record in order.
-    pub fn finish(mut self) -> Result<Sorted<'d, T>> {
+    pub fn finish(self) -> Result<Sorted<'d, T>> {
+        self.finish_with_stats().map(|(sorted, _)| sorted)
+    }
+
+    /// [`Sorter::finish`], and what the sort did with the last merge
+    /// counted.
+    pub fn finish_with_stats(mut self) -> Result<(Sorted<'d, T>, SortStats)> {
         if self.runs.is_empty() {
-            self.buffer.sort();
-            return Ok(Sorted {
-                source: Source::Memory(self.buffer.into_iter()),
-            });
+            T::sort_run(&mut self.buffer)?;
+            let stats = self.stats();
+            let items = std::mem::take(&mut self.buffer).into_iter();
+            return Ok((
+                Sorted {
+                    source: Source::Memory(items),
+                },
+                stats,
+            ));
         }
         if !self.buffer.is_empty() {
             self.spill()?;
         }
         // Consecutive runs merge into one until few enough files stay open;
         // a merged run takes its place in the list, so ties keep their order.
+        let mut level = self.merge_levels;
         while self.runs.len() > MAX_OPEN_RUNS {
             let mut merged = Vec::with_capacity(self.runs.len() / MAX_OPEN_RUNS + 1);
             for group in std::mem::take(&mut self.runs).chunks(MAX_OPEN_RUNS) {
                 merged.push(self.merge_into_run(group)?);
             }
             self.runs = merged;
+            level += 1;
         }
+        self.merge_levels = level + 1;
         self.levels.clear();
-        Ok(Sorted {
-            source: open_runs(self.dir, std::mem::take(&mut self.runs))?,
-        })
+        let stats = self.stats();
+        let runs = std::mem::take(&mut self.runs);
+        Ok((
+            Sorted {
+                source: open_runs(self.dir, runs, self.format)?,
+            },
+            stats,
+        ))
     }
 
     /// Merge `group` into one new run file; the files of `group` are removed.
-    fn merge_into_run(&self, group: &[PathBuf]) -> Result<PathBuf> {
+    fn merge_into_run(&mut self, group: &[PathBuf]) -> Result<PathBuf> {
         if let [only] = group {
             return Ok(only.clone());
         }
         let mut source: Sorted<'_, T> = Sorted {
-            source: open_runs(self.dir, group.to_vec())?,
+            source: open_runs(self.dir, group.to_vec(), self.format)?,
         };
         let (path, file) = self.dir.create_file(self.stem)?;
-        let mut out = BufWriter::with_capacity(1 << 20, file);
+        let mut out = RunWriter::new(file, self.format);
         let mut bytes = Vec::with_capacity(64);
         while let Some(item) = source.next_item()? {
             bytes.clear();
             item.encode(&mut bytes);
             out.write_all(&bytes).map_err(write_error(&path))?;
         }
-        out.flush().map_err(write_error(&path))?;
+        self.spilled += out.finish().map_err(write_error(&path))?;
         Ok(path)
     }
+}
+
+/// What a [`Sorter`] did.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SortStats {
+    pub records: u64,
+    /// Run files read by the last merge.
+    pub runs: usize,
+    /// Bytes written to run files, merged runs included.
+    pub spilled_bytes: u64,
+    /// Most records the buffer held at once.
+    pub peak_records: usize,
+    /// Most bytes ([`Spill::memory`]) the buffer held at once.
+    pub peak_bytes: usize,
+    /// 0 for a sort in memory, 1 for one merge of the spilled runs, one
+    /// more per level of merges made before that.
+    pub merge_levels: u32,
 }
 
 /// Most run files read at once; more are merged in groups first.
 const MAX_OPEN_RUNS: usize = 64;
 
+/// A run file being written: plain, or BGZF blocks.
+enum RunWriter {
+    Plain(BufWriter<File>),
+    Bgzf(bgzf::io::MultithreadedWriter<BufWriter<File>>),
+}
+
+impl RunWriter {
+    fn new(file: File, format: RunFormat) -> Self {
+        let out = BufWriter::with_capacity(1 << 20, file);
+        match format {
+            RunFormat::Plain => Self::Plain(out),
+            RunFormat::Bgzf { level, workers } => {
+                let level = bgzf::io::writer::CompressionLevel::new(level)
+                    .unwrap_or(bgzf::io::writer::CompressionLevel::FAST);
+                let workers = NonZero::new(workers).unwrap_or(NonZero::<usize>::MIN);
+                Self::Bgzf(
+                    bgzf::io::multithreaded_writer::Builder::default()
+                        .set_compression_level(level)
+                        .set_worker_count(workers)
+                        .build_from_writer(out),
+                )
+            }
+        }
+    }
+
+    fn write_all(&mut self, bytes: &[u8]) -> io::Result<()> {
+        match self {
+            Self::Plain(out) => out.write_all(bytes),
+            Self::Bgzf(out) => out.write_all(bytes),
+        }
+    }
+
+    /// Flush the file; its size in bytes.
+    fn finish(self) -> io::Result<u64> {
+        let mut file = match self {
+            Self::Plain(out) => out,
+            Self::Bgzf(mut out) => out.finish()?,
+        };
+        file.flush()?;
+        file.get_ref().metadata().map(|m| m.len())
+    }
+}
+
+/// A run file being read.
+enum RunReader {
+    Plain(BufReader<File>),
+    Bgzf(bgzf::io::Reader<BufReader<File>>),
+}
+
+impl Read for RunReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Self::Plain(r) => r.read(buf),
+            Self::Bgzf(r) => r.read(buf),
+        }
+    }
+}
+
+impl BufRead for RunReader {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        match self {
+            Self::Plain(r) => r.fill_buf(),
+            Self::Bgzf(r) => r.fill_buf(),
+        }
+    }
+
+    fn consume(&mut self, amount: usize) {
+        match self {
+            Self::Plain(r) => r.consume(amount),
+            Self::Bgzf(r) => r.consume(amount),
+        }
+    }
+}
+
 /// The k-way merge over `paths`, ties to the earlier run.
-fn open_runs<T: Spill + Ord>(dir: &TempDir, paths: Vec<PathBuf>) -> Result<Source<'_, T>> {
+fn open_runs<T: Spill + Ord>(
+    dir: &TempDir,
+    paths: Vec<PathBuf>,
+    format: RunFormat,
+) -> Result<Source<'_, T>> {
     let mut readers = Vec::with_capacity(paths.len());
-    let mut heap = BinaryHeap::with_capacity(paths.len());
+    let mut queue = TreeSet::with_capacity(paths.len());
     for (run, path) in paths.iter().enumerate() {
         let file = File::open(path).map_err(|source| Error::Input {
             path: path.clone(),
             source,
         })?;
-        let mut reader = BufReader::with_capacity(1 << 18, file);
+        let buffered = BufReader::with_capacity(1 << 18, file);
+        let mut reader = match format {
+            RunFormat::Plain => RunReader::Plain(buffered),
+            RunFormat::Bgzf { .. } => RunReader::Bgzf(bgzf::io::Reader::new(buffered)),
+        };
         if let Some(item) = T::decode(&mut reader).map_err(Error::Record)? {
-            heap.push(Reverse(Head { item, run }));
+            queue.add(Head { item, run }, head_order);
         }
         readers.push(reader);
     }
@@ -308,34 +536,20 @@ fn open_runs<T: Spill + Ord>(dir: &TempDir, paths: Vec<PathBuf>) -> Result<Sourc
         dir,
         paths,
         readers,
-        heap,
+        queue,
     })
 }
 
-/// The smallest unread record of one run; ties go to the earlier run.
+/// The smallest unread record of one run.
 struct Head<T> {
     item: T,
     run: usize,
 }
 
-impl<T: Ord> PartialEq for Head<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == Ordering::Equal
-    }
-}
-
-impl<T: Ord> Eq for Head<T> {}
-
-impl<T: Ord> PartialOrd for Head<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<T: Ord> Ord for Head<T> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.item.cmp(&other.item).then(self.run.cmp(&other.run))
-    }
+/// htsjdk's `PeekFileRecordIteratorComparator`: the records, then the run
+/// index, so ties go to the earlier run.
+fn head_order<T: Ord>(a: &Head<T>, b: &Head<T>) -> Ordering {
+    a.item.cmp(&b.item).then(a.run.cmp(&b.run))
 }
 
 enum Source<'d, T> {
@@ -343,8 +557,8 @@ enum Source<'d, T> {
     Runs {
         dir: &'d TempDir,
         paths: Vec<PathBuf>,
-        readers: Vec<BufReader<File>>,
-        heap: BinaryHeap<Reverse<Head<T>>>,
+        readers: Vec<RunReader>,
+        queue: TreeSet<Head<T>>,
     },
 }
 
@@ -358,12 +572,12 @@ impl<T: Spill + Ord> Sorted<'_, T> {
     pub fn next_item(&mut self) -> Result<Option<T>> {
         match &mut self.source {
             Source::Memory(items) => Ok(items.next()),
-            Source::Runs { readers, heap, .. } => {
-                let Some(Reverse(Head { item, run })) = heap.pop() else {
+            Source::Runs { readers, queue, .. } => {
+                let Some(Head { item, run }) = queue.poll_first() else {
                     return Ok(None);
                 };
                 if let Some(next) = T::decode(&mut readers[run]).map_err(Error::Record)? {
-                    heap.push(Reverse(Head { item: next, run }));
+                    queue.add(Head { item: next, run }, head_order);
                 }
                 Ok(Some(item))
             }
@@ -422,6 +636,49 @@ pub fn get_u64(input: &mut impl BufRead) -> io::Result<Option<u64>> {
     }
 }
 
+/// Most bytes one length-prefixed field of a spill file holds: a BAM record
+/// is at most what its 32-bit `block_size` counts, and a name, a read group
+/// or a mate key is part of one.
+pub const MAX_FIELD_BYTES: u64 = u32::MAX as u64;
+
+/// A length, then that many bytes: the field [`need_bytes`] reads back.
+pub fn put_bytes(out: &mut Vec<u8>, bytes: &[u8]) {
+    put_u64(out, bytes.len() as u64);
+    out.extend_from_slice(bytes);
+}
+
+/// The field [`put_bytes`] wrote.
+pub fn need_bytes(input: &mut impl BufRead) -> io::Result<Vec<u8>> {
+    let len = need_u64(input)?;
+    read_bytes(input, len)
+}
+
+/// `len` bytes of a field whose length a spill file gave. A length past
+/// [`MAX_FIELD_BYTES`] is an error before anything is allocated. Otherwise
+/// the buffer grows 1 MiB at a time with the bytes read
+/// (`bam_raw::read_append`), so a length the file does not back costs the
+/// bytes present and ends as an `UnexpectedEof`.
+pub fn read_bytes(input: &mut impl BufRead, len: u64) -> io::Result<Vec<u8>> {
+    if len > MAX_FIELD_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("spill file: a field of {len} bytes, past the {MAX_FIELD_BYTES} of a record"),
+        ));
+    }
+    let mut bytes = Vec::new();
+    crate::bam_raw::read_append(input, &mut bytes, len as usize).map_err(|e| {
+        if e.kind() == io::ErrorKind::UnexpectedEof {
+            io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                format!("spill file: a field of {len} bytes is cut short"),
+            )
+        } else {
+            e
+        }
+    })?;
+    Ok(bytes)
+}
+
 /// [`get_u64`] that must find a value.
 pub fn need_u64(input: &mut impl BufRead) -> io::Result<u64> {
     get_u64(input)?.ok_or_else(|| io::ErrorKind::UnexpectedEof.into())
@@ -449,7 +706,7 @@ mod tests {
 
     #[test]
     fn runs_merge_into_one_sorted_stream_and_are_removed() {
-        let dir = TempDir::new(None);
+        let dir = TempDir::new(None, "test");
         let mut sorter = Sorter::new(&dir, "n", 3);
         let values = [9u64, 1, 7, 3, 3, 0, 1 << 40, 5, 2, 8];
         for v in values {
@@ -484,7 +741,7 @@ mod tests {
     #[test]
     fn the_directory_and_its_files_belong_to_this_user_only() {
         use std::os::unix::fs::PermissionsExt;
-        let dir = TempDir::new(None);
+        let dir = TempDir::new(None, "test");
         let (path, file) = dir.create_file("n").expect("create");
         drop(file);
         let mode = |p: &Path| fs::metadata(p).expect("metadata").permissions().mode() & 0o777;
@@ -494,9 +751,59 @@ mod tests {
         assert!(create_private_file(&path).is_err());
     }
 
+    /// `bammetrics-<purpose>.<pid>.<16 hex digits>`, a random part of its
+    /// own per directory, and an existing name refused.
+    #[test]
+    fn the_directory_is_named_for_its_purpose_with_a_random_part() {
+        let random = |dir: &TempDir| {
+            dir.create_file("n").expect("create");
+            let name = dir
+                .path()
+                .and_then(Path::file_name)
+                .and_then(|n| n.to_str())
+                .expect("a name")
+                .to_owned();
+            let prefix = format!("bammetrics-sort-sam.{}.", std::process::id());
+            let random = name.strip_prefix(&prefix).expect(&name).to_owned();
+            assert_eq!(random.len(), 16, "{name}");
+            assert!(random.bytes().all(|b| b.is_ascii_hexdigit()), "{name}");
+            random
+        };
+        let first = TempDir::new(None, "sort-sam");
+        let second = TempDir::new(None, "sort-sam");
+        assert_ne!(random(&first), random(&second));
+        let taken = first.path().expect("created");
+        assert_eq!(
+            create_private_dir(taken).map_err(|e| e.kind()),
+            Err(io::ErrorKind::AlreadyExists)
+        );
+    }
+
+    /// A length past a record is refused before any allocation; a length
+    /// the file does not back is an error after the bytes present.
+    #[test]
+    fn a_field_length_is_capped_and_read_in_steps() {
+        let mut bytes = Vec::new();
+        put_u64(&mut bytes, MAX_FIELD_BYTES + 1);
+        let error = need_bytes(&mut bytes.as_slice()).expect_err("past a record");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        let mut bytes = Vec::new();
+        put_u64(&mut bytes, u64::from(u32::MAX));
+        bytes.extend_from_slice(b"ten bytes!");
+        let error = need_bytes(&mut bytes.as_slice()).expect_err("cut short");
+        assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+        assert!(error.to_string().contains("cut short"), "{error}");
+        let mut bytes = Vec::new();
+        put_bytes(&mut bytes, b"read group");
+        assert_eq!(
+            need_bytes(&mut bytes.as_slice()).expect("whole"),
+            b"read group"
+        );
+    }
+
     #[test]
     fn many_runs_merge_in_groups() {
-        let dir = TempDir::new(None);
+        let dir = TempDir::new(None, "test");
         let mut sorter = Sorter::new(&dir, "many", 2);
         let values: Vec<u64> = (0..300u64).map(|i| (i * 7919) % 301).collect();
         for v in &values {
@@ -520,7 +827,7 @@ mod tests {
 
     #[test]
     fn a_one_record_buffer_keeps_few_files() {
-        let dir = TempDir::new(None);
+        let dir = TempDir::new(None, "test");
         let mut sorter = Sorter::new(&dir, "ones", 1);
         let values: Vec<u64> = (0..5000u64).map(|i| ((i % 3) << 32) | i).collect();
         for v in &values {
@@ -543,7 +850,7 @@ mod tests {
     #[test]
     fn nothing_is_created_until_a_run_spills() {
         let base = std::env::temp_dir().join(format!("bammetrics-lazy.{}", std::process::id()));
-        let dir = TempDir::new(Some(&base));
+        let dir = TempDir::new(Some(&base), "test");
         let mut sorter = Sorter::new(&dir, "lazy", 10);
         sorter.push(1u64).expect("push");
         let mut sorted = sorter.finish().expect("finish");

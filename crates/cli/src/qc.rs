@@ -22,6 +22,7 @@ use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use bammetrics_core::cleanup::MadeDirs;
 use bammetrics_core::collect;
 use bammetrics_core::cram;
 use bammetrics_core::hs_metrics;
@@ -83,6 +84,15 @@ impl Sex {
             Sex::Female => "FEMALE",
         }
     }
+}
+
+/// `--threads`: a whole number, at most [`pass::MAX_THREADS`]. Text that
+/// is no number keeps the words of clap's own parser.
+fn parse_threads(text: &str) -> std::result::Result<usize, String> {
+    let threads = text
+        .parse()
+        .map_err(|e: std::num::ParseIntError| e.to_string())?;
+    pass::check_threads(threads)
 }
 
 fn after_help() -> String {
@@ -160,8 +170,12 @@ pub struct QcArgs {
     pub force: bool,
     /// BGZF decompression threads, or CRAM container decoders (default:
     /// available cores, at most 8).
-    #[arg(long, default_value_t = pass::default_threads())]
+    #[arg(long, default_value_t = pass::default_threads(), value_parser = parse_threads)]
     pub threads: usize,
+    /// How SAM text input is checked: STRICT (default), LENIENT or SILENT.
+    /// A BAM or CRAM is read the same at every value.
+    #[arg(long, value_name = "LEVEL", value_parser = ["STRICT", "LENIENT", "SILENT"])]
+    pub validation_stringency: Option<String>,
     #[arg(long, value_enum, default_value_t = Format::Text)]
     pub format: Format,
     /// Further formats beside the Picard files, one or a list
@@ -520,6 +534,11 @@ impl Context<'_> {
         if let Some(r) = reference {
             argv.push(format!("REFERENCE_SEQUENCE={}", r.display()));
         }
+        // SAM text, or a pipe that may hold it, is read at the level given.
+        let text = cram::is_sam(&self.args.bam) || !self.args.bam.is_file();
+        if let (Some(level), true) = (&self.args.validation_stringency, text) {
+            argv.push(format!("VALIDATION_STRINGENCY={level}"));
+        }
         argv.extend(extra.iter().cloned());
         argv
     }
@@ -869,12 +888,21 @@ fn unmet(cx: &Context, tools: &[&str]) -> Vec<Unmet> {
     unmet
 }
 
+/// `--validation-stringency` of `args`, `STRICT` without it. The parser
+/// takes the three values only.
+pub fn stringency_of(args: &QcArgs) -> bammetrics_core::sam_text::Stringency {
+    args.validation_stringency
+        .as_deref()
+        .and_then(bammetrics_core::sam_text::Stringency::parse)
+        .unwrap_or(bammetrics_core::sam_text::Stringency::Strict)
+}
+
 /// The sample: `--sample`, else the first `@RG` with an `SM`, else the
 /// BAM name. The header is read either way, so a file that is not a BAM
 /// stops the run here.
 fn sample(args: &QcArgs) -> Result<(String, Origin)> {
-    let header =
-        pass::read_header(&args.bam).map_err(|e| Error::Input(format!("{e} (from BAM)")))?;
+    let header = pass::read_header_at(&args.bam, stringency_of(args))
+        .map_err(|e| Error::Input(format!("{e} (from BAM)")))?;
     if let Some(name) = &args.sample {
         if name.contains('\0') {
             return Err(Error::Usage(format!(
@@ -927,6 +955,13 @@ fn prefix(args: &QcArgs) -> Result<(PathBuf, Origin)> {
         return Err(Error::Usage(format!(
             "-o {:?}: a prefix cannot hold a NUL byte",
             prefix.display().to_string()
+        )));
+    }
+    // `missing/../q`: the run would make `missing` and write beside it.
+    if let Some(what) = crate::verbs::unresolved_output(&prefix) {
+        return Err(Error::Usage(format!(
+            "-o {what}; {}",
+            crate::verbs::UNRESOLVED_HINT
         )));
     }
     Ok((prefix, origin))
@@ -1085,12 +1120,14 @@ pub fn page_path(prefix: &Path) -> PathBuf {
     with_suffix(prefix, ".report.html")
 }
 
-/// Create the prefix's directory.
-pub fn make_prefix_dir(prefix: &Path) -> Result<()> {
-    match prefix.parent().filter(|d| !d.as_os_str().is_empty()) {
-        Some(dir) => fs::create_dir_all(dir).map_err(|e| Error::io(dir, e)),
-        None => Ok(()),
-    }
+/// Create the prefix's directory. The directories made come back: dropped
+/// by a run that fails, those still empty are removed; a run that finishes
+/// calls `keep`.
+pub fn make_prefix_dir(prefix: &Path) -> Result<MadeDirs> {
+    let mut made = MadeDirs::default();
+    made.create_parent(prefix)
+        .map_err(|e| Error::io(prefix.parent().unwrap_or(prefix), e))?;
+    Ok(made)
 }
 
 #[cfg(test)]

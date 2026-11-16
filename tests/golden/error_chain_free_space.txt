@@ -1,0 +1,19 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
+--free-space
+100
++
+sort-sam
+-SO
+queryname
++
+write
+## exit
+1
+## stdout
+## stderr
+bammetrics chain: not enough free space in OUT: the chain needs about 1.6 KiB there (OUT/s.sorted.bam) and 100 bytes are free
+  --force-space runs the chain anyway

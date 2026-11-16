@@ -273,9 +273,9 @@ behaves how.
   `Read into sorter` every 1,000,000 records sorted, at `INFO`, timings included) are not
   printed, so the log lines match below 1,000,000 records and the concordance test drops
   them above. An `OUTPUT` that is the `INPUT` file is refused as a usage error on every
-  face; Picard truncates the file under its own reader. A SAM text file and an empty file
-  are errors here (`not a BAM or CRAM file`), Picard reads the SAM and reports that the
-  empty file agrees; a BAM cut inside its records exits 1 here (`truncated BAM`), Picard
+  face; Picard truncates the file under its own reader. An empty file is an error here
+  (`not a BAM or CRAM file`), Picard reads it as SAM text without a record and reports
+  that it agrees; a BAM cut inside its records exits 1 here (`truncated BAM`), Picard
   reports that every record agrees.
 - `CollectJumpingLibraryMetrics` is no `SinglePassSamProgram`: `ASSUME_SORTED` and
   `STOP_AFTER` are rejected as Picard rejects them (`Unrecognized option`, exit 1), and a
@@ -344,6 +344,48 @@ behaves how.
     steps. `chain BAM + fifo-buffer` exits 2 before the first read
     (`FifoBuffer buffers the pipe between two commands and a chain has no pipe: it cannot
     be a step`). On a pipe into or out of a chain the verb works as on any pipe.
+- `BuildBamIndex` writes the `.bai` Picard writes for the same BAM and takes Picard's
+  options: `INPUT` and `OUTPUT` (`ASSUME_SORTED` and `GA4GH_CLIENT_SECRETS` exit 1 with
+  `Unrecognized option`, as in Picard). What differs:
+  - Without `OUTPUT` Picard 3.5.0 writes into the current directory under the file name
+    of `INPUT` (`I=dir/x.bam` writes `./x.bai`, `I=dir/plain` writes `./plain.bai`). Its
+    help says beside the BAM. The Picard face does what Picard does. The
+    `build-bam-index` verb and `build_bam_index()` write beside the BAM (`dir/x.bai`),
+    where htsjdk and samtools look for an index. The verb on standard input and the
+    function on a pipe need an output name.
+  - Records are not validated: `VALIDATION_STRINGENCY` is accepted and ignored, as in
+    every tool. Picard at its default `STRICT` refuses a BAM with a record that has a
+    reference and no position, a mapped record without a CIGAR, a record placed on a
+    reference of length 0, or a supplementary flag on an unmapped read (the foundation
+    corpus). bammetrics writes the index Picard
+    writes under `VALIDATION_STRINGENCY=SILENT`. Both fail where the indexer fails: a
+    reference out of order (`Unexpected reference 0 when constructing index for 1`), an
+    alignment that ends past position 2^29 (`Read position too high for BAI bin
+    indexing.`), a record that starts in a 16384-base window past the end of its
+    reference (Picard: `ArrayIndexOutOfBoundsException`), a reference the header lacks,
+    a position without a reference, a truncated file.
+  - A failed run writes nothing and keeps an earlier `OUTPUT`: the index is written
+    under a temporary name and renamed. Picard leaves an empty `OUTPUT`.
+  - htsjdk reads an empty BGZF block in the middle of a file as its end. Picard indexes
+    the records before it and exits 0 (101 of 300 in `index_bams.py`). bammetrics
+    indexes every record, and samtools reads all 300 through that index. The offset
+    before the first record after the empty block is the block that holds the record.
+  - `OUTPUT` naming `INPUT`, by name or by a hard link, is refused. Picard has no such
+    check.
+  - A CRAM is refused by name (`a .bai indexes a BAM and this is a CRAM, whose index is
+    a .crai`). Picard says `Input file must be bam file, not sam file.` for a SAM and a
+    CRAM alike. A SAM exits 1 with `not a BAM or CRAM file`.
+  - The verb takes `--format picard` only: an index has one form. `build-bam-index` is
+    no step of `bammetrics chain`: `write --index` writes the index of the BAM a chain
+    writes, and the step exits 2 naming it.
+  - `CREATE_MD5_FILE=true` writes no digest of the index, in either tool.
+  - A reference of length 0 (`@SQ LN:0`) is indexed, as in Picard. `BuildBamIndex` is
+    the one tool that reads such a header. Every other tool reads the header through
+    noodles, which holds no length 0, and exits 1 (`not a BAM or CRAM file (the header
+    could not be read: invalid record)`).
+  - A record whose `block_size` claims more bytes than the file holds is a `truncated
+    BAM` (exit 1). Picard says `Invalid record length` for a size htsjdk reads as
+    negative.
 
 ## Charts
 
@@ -375,6 +417,9 @@ only with `output=`. `bam_index_stats(bam)` returns one dict per reference of th
 as the `TypedDict` `_BamIndexRow`, so a checker knows each key's type) and a last dict
 `reference="*"` whose `unaligned` is the `NoCoordinateCount`; it takes no `output=`
 (`ValueError`, as Picard has no `OUTPUT`) and reads a CRAM with `reference_sequence=`.
+`build_bam_index(bam, output=None)` writes the `.bai` (beside the BAM without `output=`)
+and returns those rows for the index it wrote, with the counts as they are (no cast to a
+Java `int`).
 
 `check_duplicate_marking(bam, mode=..., output=...)` returns one dict per record whose
 duplicate flag differs from the first record of its queryname (`read_name`, `contig`,
@@ -552,10 +597,11 @@ CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `col
 
 ## Validation
 
-- bammetrics does not validate records. Where Picard's STRICT validation aborts, for
-  example on a read that runs off the end of a contig, bammetrics writes metrics. The
-  `t0_asm` and `t0_hs` cases run Picard with `VALIDATION_STRINGENCY=SILENT` for this
-  reason.
+- bammetrics does not validate the records of a BAM or a CRAM. Where Picard's STRICT
+  validation aborts, for example on a read that runs off the end of a contig, bammetrics
+  writes metrics. The `t0_asm` and `t0_hs` cases run Picard with
+  `VALIDATION_STRINGENCY=SILENT` for this reason. SAM text is validated as htsjdk
+  validates it (section SAM text).
 - A non-string `OQ` tag returns a malformed-record error in every tool that reads `OQ`.
   htsjdk throws `ClassCastException`.
 - `QualityScoreDistribution` on a read whose `OQ` is shorter than its `QUAL`, or with a
@@ -929,6 +975,22 @@ negative value every consecutive bin); an empty histogram prints `?` for the mea
 0 when every pair is a duplicate; dovetailed pairs orient by `MC` when present and by
 `TLEN` without it.
 
+`BuildBamIndex` output reproduced from Picard 3.5.0
+(`tests/concordance/test_build_bam_index.py`): the `.bai` byte for byte. The bin of a
+record computed from its start and end, never read from the record's bin field; an
+unmapped placed record, and a mapped record without a reference base at position 1,
+counted as one base; a chunk extended only while the next record of the bin starts in the
+BGZF block the chunk ends in, and no bin moved into its parent; the linear index with the
+smallest start offset per 16384-base window, a window without a record taking the offset
+before it, an unmapped placed record counted in the window of the base before its start;
+the metadata bin 37450 (first and last offset, aligned and unaligned counts) only for a
+reference with a bin; a reference without records as 8 zero bytes; a record whose start
+is 0 counted as without a coordinate, whatever its reference; reads up to position 2^29
+of a longer reference in bin 37448 and window 32767; a file without its EOF block read to
+its end; `Input bam file must be sorted by coordinate` for `queryname`, `unsorted`,
+`unknown`, a header without `SO` and one without `@HD`; the default file name in the
+current directory.
+
 `FifoBuffer` behaviour reproduced from Picard 3.5.0 (`tests/concordance/test_fifo_buffer.py`):
 the bytes written equal the bytes read for an empty input, one byte, text, every byte
 value, an input larger than `BUFFER_SIZE` and a BAM; `IO_SIZE` above `BUFFER_SIZE` works;
@@ -1050,8 +1112,14 @@ the differences below are on purpose or cannot be avoided.
   tags were set or removed (always, under the default `CLEAR_DT=true`) is written with
   its tags in htsjdk's list order and integers in the smallest BAM type; any other
   record keeps its bytes, as htsjdk keeps them.
-- `CREATE_MD5_FILE` writes the MD5 of bammetrics' bytes; the index of `CREATE_INDEX` is
-  noodles' BAI of them. Both are named as Picard names them (`OUT.bam.md5`, `OUT.bai`).
+- `CREATE_MD5_FILE` writes the MD5 of bammetrics' bytes. The index of `CREATE_INDEX` is
+  the `.bai` Picard `BuildBamIndex` writes for those bytes, byte for byte
+  (`crates/core/src/bai.rs`). Both are named as Picard names them (`OUT.bam.md5`,
+  `OUT.bai`). Picard's own `CREATE_INDEX` file differs from its `BuildBamIndex` of the
+  same BAM in one offset: the end of the last record of the file, when that record has a
+  position. Picard's writer reports the offset inside the last block (`8374551:1514` on
+  corpus t2), its reader the EOF block after it (`8375239:0`). bammetrics writes the
+  reader's value, so the `.bai` beside a BAM is always `BuildBamIndex` of that BAM.
 - `OUTPUT` is always BAM. A name ending in `.sam` or `.cram` exits 1 on the Picard face and 2 on the verb before anything is
   read (`bammetrics writes BAM only`); Picard writes SAM or CRAM by the extension.
 - `MAX_RECORDS_IN_RAM` is the number of read ends each sorted list holds in memory before
@@ -1080,16 +1148,17 @@ the differences below are on purpose or cannot be avoided.
 - Booleans take `true` or `false` in any case. Picard reads any other word
   (`REMOVE_DUPLICATES=yes`) as false; bammetrics exits 1, so a misspelt `true` never
   turns an option off.
-- SAM input, plain or bgzipped, exits 1 (`not a BAM or CRAM file`), for every tool;
-  Picard reads it.
+- SAM text input is read (section SAM text) and `VALIDATION_STRINGENCY` applies to it.
+  `OUTPUT` is a BAM: a name ending in `.sam` or `.cram` exits 1, where Picard writes
+  that kind.
 - CRAM input: htsjdk rebuilds `MD` and `NM` on each mapped record that lacks them while
   it decodes, and gives every record its tags in list order. bammetrics computes both
   from the reference given with `R=`, so the records match Picard's (`test_cram`).
   The last two contigs are held in memory, so a query-name sorted CRAM reloads contigs
   often.
-- `VALIDATION_STRINGENCY` is not applied (records are not validated), as for every tool;
-  Picard's default `STRICT` stops on records it finds invalid. The harness runs Picard
-  with `SILENT`.
+- `VALIDATION_STRINGENCY` is not applied to a BAM or a CRAM (their records are not
+  validated), as for every tool; Picard's default `STRICT` stops on records it finds
+  invalid. The harness runs Picard with `SILENT`.
 - Errors are raised where Picard raises them, with Picard's message where one exists: a
   paired record without a read group (Picard's `NullPointerException`), a pair key put
   twice for the reference being read (`Putting value into PairInfoMap that already
@@ -1134,9 +1203,24 @@ purpose here:
   and `CREATE_MD5_FILE` on the step are usage errors, and the `write` step takes them.
   Its metrics file is `PREFIX.marked.duplication_metrics` unless `--metrics-file` names
   another. A step takes no input of its own: a chain has one source.
-- `write` writes BAM only. A `.sam`, `.cram`, `.fastq` or `.fq` name is a usage error
-  that names the wave of docs/07 which adds that kind. A path that is a file the chain
-  reads is refused.
+- `write` writes a BAM, or SAM text for a name ending in `.sam` or with `--output-format
+  sam`. A `.cram`, `.fastq` or `.fq` name is a usage error that names the wave of docs/07
+  which adds that kind. A path that is a file the chain reads is refused. The SAM file is
+  the one Picard `SamFormatConverter` writes, byte for byte: its header is htsjdk's
+  `SAMFileWriter` header, with `@HD VN:1.6` whatever the source says. The BAM keeps the
+  header of the stream, version included, where htsjdk writes `VN:1.6` there too. `--index`
+  with SAM text is a usage error; `--md5` writes the MD5 of the text.
+- A chain reads a SAM text source at `--validation-stringency` (default `STRICT`).
+- `sort-sam` as a step writes no BAM, as `mark-duplicates` writes none, and its buffer
+  holds at most `--sort-memory` bytes (default 2 GiB) where the tool counts
+  `MAX_RECORDS_IN_RAM` records only. Records with equal keys come out in input order
+  either way, so the records equal the tool's. Records flagged both first and second of a
+  pair, whose queryname order is not total, sort as Java sorts each run; where runs are
+  cut at other records the order can differ from the tool's, as two Picard runs with two
+  `MAX_RECORDS_IN_RAM` values differ.
+- A transform behind another transform reads its input twice from a spool in
+  `--tmp-dir` (BGZF level 3), where the staged sequence reads the file the tool before
+  wrote. A second `mark-duplicates` runs; its stream is `marked-2` unless `--as` names it.
 - `STOP_AFTER` on a tap limits that tap. The steps after it get every record. The staged
   tool reading the marked BAM sees the same records.
 - When a transform fails on a record, every step of its segment writes nothing, a tap on
@@ -1145,19 +1229,147 @@ purpose here:
   files.
 - Every usage error of a chain exits 2 before the first read and names its step: an
   unknown step or option, a value of an int or float option that is no number, a bad
-  option of `mark-duplicates` (`--read-name-regex "("`), a name `write` cannot write, a
-  second `mark-duplicates`. The `MarkDuplicates` tool alone exits 1 for its bad options.
+  option of `mark-duplicates` (`--read-name-regex "("`), a name `write` cannot write, an
+  `--as` name an earlier transform took. The `MarkDuplicates` tool alone exits 1 for its
+  bad options.
+- A chain whose estimated temporary and output bytes exceed the free space of a file
+  system it writes to exits 1 before the first read; `--force-space` runs it. The staged
+  tools run until the disk is full.
   A text value only a tap's tool can judge (`--level NOPE`) fails that tap when it is
   built (exit 1); the verb of the same tool exits 2.
 - Two steps that name one output file are a usage error (exit 2, nothing read or
   written). The staged sequence runs and the later tool replaces the earlier file.
 - `write --index` on a stream that is not coordinate sorted writes no `.bai` and prints a
-  note. The `MarkDuplicates` tool writes no `.bai` either and prints nothing.
+  note. The `MarkDuplicates` tool writes no `.bai` either and prints nothing. The `.bai`
+  `write --index` does write is Picard's `BuildBamIndex` of the written BAM.
 - Missing directories above an output are created, as the verbs create them. An output
   that still cannot be written exits 1 before the first read, under the step's label.
 - The further formats of `--format picard,json` and `--also json` are written from the
   values in memory, so a double keeps its full precision. `qc --also json` reads the
   Picard file back and writes its 6 fraction digits.
+
+## SAM text
+
+Every tool that reads a BAM reads SAM text, plain or in gzip members (`bgzip`, `gzip`),
+as htsjdk's `SAMTextReader` reads it (`crates/core/src/sam_text.rs`). Each line becomes
+the record htsjdk's `BAMRecordCodec` writes for it, so a tool sees a SAM file as it sees
+the BAM Picard makes of it. `tests/concordance/test_view_sam.py` compares 15 valid and
+40 bad lines, each at `STRICT`, `LENIENT` and `SILENT`, and 8 lines of the second item
+below. bammetrics differs here:
+
+- What a file is. htsjdk reads any file that is no BAM, no CRAM and no gzip file as SAM
+  text, an empty file included (an empty SAM: `ViewSam` prints `@HD VN:1.6`). bammetrics
+  reads it as SAM text when it starts with `@` or with a line of at least 11
+  tab-separated fields. Any other file exits 1 (`not a BAM or CRAM file (and not SAM
+  text: ...)`), where Picard fails later with `Not enough fields`. An empty file exits 1.
+- A record a BAM cannot hold. Under `LENIENT` or `SILENT` htsjdk keeps a bad field as
+  text and `ViewSam` prints it back. bammetrics holds BAM records, as Picard does once it
+  writes a BAM. A reference name the header lacks is read as no reference (`*`). A base
+  outside `=ACMGRSVTWYHKDBN.` is read as `N`. A `MAPQ` outside 0 to 255 keeps its low byte, a
+  flag above 65535 its low 16 bits, as htsjdk writes both into a BAM. A negative `MAPQ` passes
+  `STRICT` in htsjdk (it checks only `MAPQ < 256`), so `ViewSam` and a SAM `SortSam` print
+  `-1` at every stringency where bammetrics prints `255`. These are errors at every stringency: a `QUAL` whose
+  length differs from `SEQ`, a `QUAL` without `SEQ`, a CIGAR that does not parse (htsjdk
+  reads one under `SILENT`). Those fail at `STRICT` in htsjdk too. Three more are errors
+  here at every stringency and read by htsjdk at every stringency, `STRICT` included
+  (Picard 3.5.0 `ViewSam` prints them): a read name over 254 bytes, one CIGAR operator of
+  2^28 bases or more (`268435456M`), more than 65535 CIGAR operators (htsjdk moves those
+  to a `CG` tag in a BAM). A BAM record holds none of the three.
+- Messages. A line htsjdk refuses fails with htsjdk's text after `bad record: ` (`Error
+  parsing text SAM file. MRNM specified but flags indicate unpaired; File x.sam; Line
+  7`), without the Java stack trace. A header line fails as `x.sam: Error parsing SAM
+  header. @RG line missing SM tag. Line: ...`. Under `LENIENT` the warnings start with
+  `Ignoring SAM validation error`, as htsjdk's do; a header warning lacks the
+  `ERROR::TYPE:` prefix htsjdk prints. htsjdk reports one `ADJACENT_INDEL_IN_CIGAR`
+  warning per pair of `I` or `D` operators with no `M` or `N` between them; bammetrics
+  reports the first 100 of a record. A line over 1 GiB is an error.
+- The header. bammetrics hands the lines htsjdk keeps to the noodles parser, as it does
+  for a BAM header, so a header noodles refuses fails here where htsjdk reads it: an
+  `@HD VN` that is not `major.minor`, two `@HD` lines, an `@CO` line without a tab. An
+  `@RG DT` value is not parsed as a date: an unparseable one passes at `STRICT`. Five
+  `@SQ` and `@RG` shapes differ at every stringency (Picard 3.5.0 `ViewSam`, probed once):
+  two `@RG` lines with one `ID` (htsjdk keeps both, bammetrics exits 1); an `@SQ LN:0`
+  (htsjdk reads the header and fails a record on it at `STRICT` with
+  `CIGAR_MAPS_OFF_REFERENCE`, bammetrics exits 1 at the header); an `@SQ LN` above
+  2147483647, an `@SQ SN` outside the SAM name pattern (`*x`), and an `@SQ AN` alias
+  another line already holds (htsjdk exits 1 with `NumberFormatException`,
+  `SAMException` and `IllegalArgumentException`; bammetrics reads all three).
+- `@RG DT` on output. htsjdk parses the date and writes it back in the JVM's time zone
+  (`2020-01-02T03:04:05+0000` becomes `2020-01-01T20:04:05-0700` in Mountain time).
+  bammetrics writes the value it read. `ViewSam` and `write x.sam` differ from Picard in
+  that field only.
+- Characters outside ASCII. htsjdk decodes SAM text as UTF-8 and writes the low byte of
+  each UTF-16 code unit, so `é` (bytes `C3 A9`) comes out as the byte `E9`. bammetrics
+  does the same. htsjdk orders such names by code unit while they are in memory;
+  bammetrics orders the bytes it holds, which differs for characters above U+00FF.
+- `VALIDATION_STRINGENCY` is carried by every tool on the Picard face, every verb, every
+  Python function (`validation_stringency=`), `chain --validation-stringency` for its
+  source and `qc --validation-stringency`. A step of a chain refuses it: the chain reads
+  the source.
+- The note `ignoring VALIDATION_STRINGENCY=X: a BAM or CRAM is not validated; SAM text is
+  checked at the level given` is printed for a BAM file and a CRAM file. For a SAM text
+  file and a pipe, which may hold SAM text, it is not.
+- `BamIndexStats` on SAM text exits 1 (`No index for bam file x.sam`). Picard exits 1
+  too (`Premature end of file`): SAM text has no index.
+
+## ViewSam
+
+`ViewSam` prints Picard's bytes on the fixture BAMs, the foundation corpus, the corpus
+tiers, the exome slice, CRAM 3.0 and SAM text (`tests/concordance/test_view_sam.py`). It
+differs here:
+
+- Picard validates every BAM record at the default `STRICT` and stops at the first one
+  it refuses (the foundation corpus holds a supplementary unmapped record). bammetrics
+  validates SAM text only (section Validation), so it prints every record of a BAM. The
+  harness runs Picard with `SILENT` on BAM and CRAM input.
+- `INTERVAL_LIST`. Picard queries the index when one sits beside the input and scans
+  otherwise. The two paths keep different records (an unmapped record placed with its
+  mate matches the query and never the scan; the scan stops after the last interval).
+  bammetrics opens no index: it looks for the index as htsjdk does, then reads the whole
+  file with the test of the path Picard would take. On a coordinate-sorted file the
+  records are Picard's. On a file whose index does not describe it they are not.
+- `INTERVAL_LIST` must be an interval list. Its intervals must come in the order of the
+  input's `@SQ` lines after `IntervalList.uniqued()`, or the run exits 1 (`Intervals not
+  in order`), as both Picard paths do. An interval on a contig the input lacks matches
+  nothing; Picard's scan stops at the first record then, and its index query fails.
+- A CRAM record gets the `MD` and `NM` tags htsjdk rebuilds, from the reference given
+  with `R=`, as in `MarkDuplicates`.
+- The verb `view-sam` takes `-o FILE` and `--format json|jsonl|tsv|human`. The formats
+  give one row per record and hold at most 256 MiB of SAM text; `view_sam()` in Python
+  returns the same rows under the same limit. Picard prints text only.
+- A closed standard output ends the run with exit 1 and no message. Picard exits 1 too.
+- `OUTPUT` and `ASSUME_SORTED` are rejected with `Unrecognized option`, exit 1, as Picard
+  rejects them. Picard prints its usage text first.
+
+## SortSam
+
+`SortSam` writes the records Picard writes, in Picard's order, on the fixture BAMs, the
+foundation corpus, the corpus tiers, the exome slice, shuffled inputs, inputs with equal
+keys in every tie class, a CRAM and SAM text (`tests/concordance/test_sort_sam.py`,
+decoded records and the header rule of `compare_bam`; SAM output byte for byte). It
+differs here:
+
+- An `OUTPUT` ending in `.cram` is a usage error naming wave W15. Picard writes a CRAM.
+- Records with equal keys keep their input order through every merge, as htsjdk's
+  `SortingCollection` keeps them. bammetrics merges at most 64 run files at once and
+  merges consecutive runs first when there are more; htsjdk opens every run file at once.
+  For a total order the records are the same.
+- Records flagged both first and second of a pair make the queryname order not total.
+  A run in memory sorts as Java's `TimSort` sorts it, Java's `Comparison method violates
+  its general contract!` included, which then fails the run as it fails Picard. Spilled
+  runs merge through a port of Java's `TreeSet`, keyed by the head record and then the
+  run index as htsjdk's `SortingCollection` keys it, so with 64 runs or fewer the order is
+  Picard's (300 records in runs of 7, 43 runs, byte for byte; 3000 records with 18 flag
+  shapes at 30, 60 and 64 runs). With more than 64 runs bammetrics merges groups of 64
+  first, where htsjdk merges every run at once, and the two merges take different records
+  first; both write the same records (300 records in runs of 3, `test_sort_sam.py`).
+  `CheckDuplicateMarking` sorts the same way and gives Picard's lines on 20 such records
+  in runs of 3. A run of more than 8192 records sorts in Java through `Arrays.parallelSort`,
+  whose fork-join merge differs from `TimSort` for such records on a machine with more
+  than one core; bammetrics sorts every run with the `TimSort` port. Those orders were
+  not compared.
+- Sorted runs spill to `TMP_DIR` as BGZF level 3, not as htsjdk's temporary files. Picard's
+  log lines (`Finished reading inputs`, the progress lines) are not printed.
 
 ## Not in Picard
 
@@ -1171,7 +1383,8 @@ equals `PCT_TARGET_BASES_20X`.
 ## Not implemented
 
 `FindMendelianViolations`, `GenotypeConcordance OUTPUT_VCF` (see Options), the
-flow-based options of `MarkDuplicates`, SAM and CRAM output.
+flow-based options of `MarkDuplicates`, CRAM output, SAM output of `MarkDuplicates`
+(`chain ... + mark-duplicates + write out.sam` writes it).
 `CollectMultipleMetrics` still rejects `PROGRAM=RnaSeqMetrics`: the wrapper does not yet
 pass its `REF_FLAT`,
 `INTERVALS` and `IGNORE_SEQUENCE` to the RNA collector (Picard runs that program at
