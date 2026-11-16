@@ -830,7 +830,9 @@ fn verb(name: &str) -> &'static table::Verb {
 
 /// bammetrics qc: the collectors the preset needs on one read of the BAM,
 /// the verdict and the page, the files the command writes. report=False
-/// leaves out PREFIX.report.html. A failed verdict is a value; VerdictError
+/// leaves out the report, report="pdf" writes PREFIX.report.pdf in place of
+/// PREFIX.report.html, report=["html", "pdf"] both (the PDF needs a module
+/// built with the feature pdf). A failed verdict is a value; VerdictError
 /// only when fail_on is given and reached. An incomplete verdict returns the
 /// Run (its exit_code is 11). A failed collector raises InputError (its .run
 /// holds the rest).
@@ -845,7 +847,7 @@ fn verb(name: &str) -> &'static table::Verb {
                       panel=None, ref_flat=None, strand=None, ribosomal_intervals=None, \
                       sex=None, sample=None, fail_on=None, resume=False, force=False, threads=None, \
                       validation_stringency=None, also=None, \
-                      all_plots=False, date=None, report=True)"
+                      all_plots=False, date=None, report=True, pdf_font=None, page_size=None)"
 )]
 pub fn py_qc<'py>(
     py: Python<'py>,
@@ -853,16 +855,12 @@ pub fn py_qc<'py>(
     options: Option<&Bound<'py, PyDict>>,
 ) -> PyResult<Py<Run>> {
     let qc_verb = verb("qc");
-    let (argv, extra) = argv(qc_verb, bam, options, None)?;
+    // report=True or False says whether to write a report at all; a form or
+    // a list of forms goes to --report.
+    let (options, write_page) = without_bool(options, "report")?;
+    let (argv, _) = argv(qc_verb, bam, options.as_ref(), None)?;
     let mut args: QcArgs = qc_verb.parse(&argv).map_err(|e| verb_error(&e))?;
-    for (name, value) in extra {
-        if name == "report" {
-            if !value.is_instance_of::<PyBool>() {
-                return Err(usage_error("bammetrics qc: report takes True or False"));
-            }
-            args.write_page = value.extract()?;
-        }
-    }
+    args.write_page = write_page.unwrap_or(true);
     args.quiet = true;
     let date = args.date.clone().unwrap_or_else(|| CivilTime::now().iso());
     let outcome = py
@@ -979,7 +977,9 @@ pub fn py_check<'py>(
 }
 
 /// bammetrics report: SAMPLE.verdict.json and SAMPLE.report.html per sample
-/// and index.html, under output (default: the one directory given). Returns
+/// and index.html, under output (default: the one directory given);
+/// pdf=True adds SAMPLE.report.pdf, pdf_only=True writes the verdicts and the
+/// PDFs alone (the PDF needs a module built with the feature pdf). Returns
 /// the paths written.
 //
 // Runs `report::write` without the GIL.
@@ -987,7 +987,8 @@ pub fn py_check<'py>(
 #[pyo3(
     name = "report",
     signature = (dirs, **options),
-    text_signature = "(dirs, *, preset='generic', output=None, all_plots=False, date=None)"
+    text_signature = "(dirs, *, preset='generic', output=None, all_plots=False, date=None, \
+                      pdf=False, pdf_only=False, pdf_font=None, page_size=None)"
 )]
 pub fn py_report(
     py: Python<'_>,
@@ -1001,6 +1002,25 @@ pub fn py_report(
         .detach(|| report::write(&args))
         .map_err(|e| cli_error("report", &e))?;
     Ok(written.files.iter().map(|p| path_text(p)).collect())
+}
+
+/// `options` without `name` when its value is a bool, and that bool; the
+/// options as given, and `None`, otherwise.
+fn without_bool<'py>(
+    options: Option<&Bound<'py, PyDict>>,
+    name: &str,
+) -> PyResult<(Option<Bound<'py, PyDict>>, Option<bool>)> {
+    let Some(options) = options else {
+        return Ok((None, None));
+    };
+    match options.get_item(name)? {
+        Some(value) if value.is_instance_of::<PyBool>() => {
+            let rest = options.copy()?;
+            rest.del_item(name)?;
+            Ok((Some(rest), Some(value.extract()?)))
+        }
+        _ => Ok((Some(options.clone()), None)),
+    }
 }
 
 /// The `qc` keywords `collect(metrics=[...])` takes.
