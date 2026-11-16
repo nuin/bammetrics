@@ -397,7 +397,7 @@ One failure lists every gap of every tool with the edit that closes it. Wave W05
 docs/07 added `ViewSam` (tool 34, `test_view_sam.py`), `SortSam` (tool 35,
 `test_sort_sam.py`) and `BuildBamIndex` (tool 36, `test_build_bam_index.py`), each with
 an argument list in the glossary test (`BuildBamIndex` returns rows without a class). The
-36 tools pass at 0.23.0: 16 have a module named after them, 18 are mapped in `CONCORDANCE` to a shared module
+36 tools pass at 0.24.0 (0.24.0 adds no tool): 16 have a module named after them, 18 are mapped in `CONCORDANCE` to a shared module
 (`test_read_level.py` 6, `test_wgs_metrics.py` 3, `test_variant_tools.py` 3, six others 1
 each), and `CollectCoverageGaps` and `CollectSexCheckMetrics` are in `NO_PICARD_ORACLE`
 (docs/06, not Picard tools). `FifoBuffer` (wave W04 of docs/07) is tool 33. Its module is
@@ -436,8 +436,13 @@ make deny                            # cargo deny check
 ok, licenses ok, sources ok. 0.22.0 adds no package: its `Cargo.lock` differs from the
 0.21.0 one in the six workspace versions only. 0.23.0 adds no package either: besides the
 six versions, `bammetrics-cli` names `libc` (statvfs for the free-space refusal of a
-chain), which was in the tree through signal-hook and clap. `cargo-deny` was not rerun for
-0.22.0 or 0.23.0 (not installed here).
+chain), which was in the tree through signal-hook and clap. 0.24.0 adds 103 packages, all
+under `bammetrics-pdf` with the feature `pdf` (krilla, krilla-svg, usvg, resvg, the font
+crates, the image decoders) or under `lopdf`, the dev-dependency of its tests (30
+packages); `Cargo.lock` holds 208. The default build links no new package besides
+`bammetrics-pdf` itself. `deny.toml` allows BSD-2-Clause and BSD-3-Clause and skips three duplicate
+versions under the PDF tree, each with its reason. `cargo-deny` was not rerun for 0.22.0,
+0.23.0 or 0.24.0 (not installed here).
 
 - Licences allowed: MIT, Apache-2.0, Unicode-3.0 (unicode-ident), Zlib (zlib-rs),
   bzip2-1.0.6 (libbz2-rs-sys under noodles-cram) and Apache-2.0 WITH LLVM-exception

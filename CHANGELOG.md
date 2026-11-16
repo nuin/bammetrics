@@ -1,15 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.24.0
 
-The PDF report, wave W06 of docs/07: `crates/pdf` behind the cargo feature `pdf` (parts A
-and B), and `report --pdf`, `qc --report pdf` and the Python keywords (part C). The default
-build compiles no krilla code. Its stripped binary was 6,760,472 bytes after parts A and B
-and is 6,793,576 bytes with the command options of part C (rustc 1.100, macOS arm64).
-docs/pdf.md documents the report.
+The PDF report behind the cargo feature `pdf`: `report --pdf`, `qc --report pdf`,
+`--pdf-font` and the Python keywords (wave W06).
 
 ### Added
 
+- The PDF report, wave W06 of docs/07: `crates/pdf` behind the cargo feature `pdf` (parts
+  A and B), and `report --pdf`, `qc --report pdf` and the Python keywords (part C). The
+  default build compiles no krilla code. Its stripped binary was 6,760,472 bytes at 0.23.0
+  and is 6,793,576 bytes with the command options of part C (rustc 1.100, macOS arm64).
+  docs/pdf.md documents the report.
 - `bammetrics report DIR --pdf` writes `SAMPLE.report.pdf` beside each page;
   `--pdf-only` writes `SAMPLE.verdict.json` and `SAMPLE.report.pdf` per sample and no page
   or index. `bammetrics qc --report FORM[,FORM]` takes `html` (default), `pdf` or
@@ -30,8 +32,9 @@ docs/pdf.md documents the report.
   Makefile's `release` keep it off. The `bammetrics` binary with the feature is 10,122,280
   bytes stripped.
 - Golden cases: 8 PDF forms with the feature (each PDF listed with its page count, and its
-  size for `report`), 3 missing-feature errors without it, 6 option errors in both.
-  `make golden` runs the suite with and without the feature.
+  size for `report`), 3 missing-feature errors without it, 6 option errors in both: 390
+  records in all, 373 at 0.23.0. `make golden` runs the suite with and without the
+  feature.
 
 - `bammetrics_report::figure_standalone` (part A): each plot as an SVG document with the
   SVG namespace, a size and a `<style>` of the `.chart` rules, every `var(--x)` replaced by

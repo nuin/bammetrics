@@ -528,6 +528,13 @@ render 2.09 ms and 0.70 ms, sample page 96.5 KB (98,790 bytes), index 190.7 KB (
 bytes), binary growth 371.5 KB (380,432 bytes stripped, as at 0.22.0), formats growth
 129.2 KB (132,304 bytes stripped, as at 0.22.0), 0 added passes.
 
+At 0.24.0 (2026-11-16, release/0.24.0: feat/pdf-report merged, rustc 1.100.0), one `make
+budgets` run with other builds on the machine: render 1.66 ms and 0.67 ms, sample page
+96.5 KB (98,790 bytes), index 190.7 KB (195,237 bytes), binary growth 371.5 KB (380,432
+bytes stripped, as at 0.23.0), formats growth 129.2 KB (132,320 bytes stripped), PDF
+growth 3.285 MiB (3,444,688 bytes stripped), render of a sample PDF 31.1 ms, sample PDF
+454.1 KB (465,044 bytes; 433,723 passing, 458,691 failing), 0 added passes.
+
 The fixture metrics are the seven files the golden records hold for
 `tests/data/insert_size.bam` (alignment summary, insert size, quality yield, duplicate
 metrics, hs metrics, gc bias, mean quality by cycle). A KB is 1024 bytes.
@@ -556,6 +563,8 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 0.21.0 | 2026-11-10, release/0.21.0 at d2af4a2: feat/stage-executor and the security fixes of release/0.20.0 merged, the version set | 7,211,216 | 6,114,880 |
 | 0.22.0 | 2026-11-10, release/0.22.0: feat/chain-verb and feat/fifo-buffer merged, the version set | 7,414,032 | 6,296,952 |
 | 0.23.0 | 2026-11-11, release/0.23.0: feat/sam-sort, feat/bam-index and fix/chain-review-0.22 merged, the version set | 7,904,624 | 6,710,840 |
+| 0.24.0 | 2026-11-16, release/0.24.0: feat/pdf-report merged, the version set, rustc 1.100.0, default features | 7,998,272 | 6,793,568 |
+| 0.24.0 pdf | the same with `--features pdf` (`cargo build --release -p bammetrics-cli --features pdf`) | 11,945,216 | 10,122,272 |
 
 From 0.21.0 to 0.22.0 the binary grew 202,816 bytes (198.1 KB), 182,072 stripped (177.8
 KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
@@ -563,6 +572,12 @@ KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
 From 0.22.0 to 0.23.0 it grew 490,592 bytes (479.1 KB), 413,888 stripped (404.2 KB,
 6.6%): the SAM text reader and writer, `ViewSam`, `SortSam` with TimSort, the `TreeSet`
 merge and the planner, the BAI writer and `BuildBamIndex`.
+
+From 0.23.0 to 0.24.0 the default binary grew 82,728 bytes stripped. rustc changed from
+1.99.1 to 1.100.0 between the two rows: 0.23.0 (822c293) built with 1.100.0 is 6,760,472
+bytes stripped, so the release adds 33,096 bytes (0.49%), the PDF options, help text,
+errors and dispatch of `crates/cli`. No krilla code is in it. With `--features pdf` the
+binary is 3,328,704 bytes over the default build (3.17 MiB).
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and
@@ -637,7 +652,15 @@ Part C (the command and Python face, `crates/cli/src/pdf.rs`) measured the whole
 the same day. `bammetrics` stripped: 6,760,472 bytes before part C, 6,793,576 bytes after
 it and the review fixes without the feature (the options, help text and errors: 33,104
 bytes), 10,122,280 bytes with `--features pdf` (3,328,704 bytes over the default). The wheel, which carries the
-feature: 5,529,637 bytes, 1,830,810 more than a wheel without it (3,698,827).
+feature: 5,529,637 bytes, 1,830,810 more than a wheel without it (3,698,827). At 0.24.0
+`make wheel-check` built a 5,540,079-byte wheel (CPython 3.15, macOS arm64, with `pdf`).
+
+Release check, 0.24.0: `crates/pdf/src` is 1,497 lines and the PDF growth 3,444,688 bytes
+stripped, both as on the branch. Two runs of each form give the same bytes (`cmp`): the
+three fixture PDFs, `report tests/data/picard --pdf`, `--pdf-only --page-size letter
+--all-plots`, and `qc --report html,pdf` to one prefix. veraPDF and qpdf are not
+installed; pypdf 7.1.0 in strict mode reads the six, each marked, with a structure tree,
+`/Lang en`, `pdfuaid:part 1` in the XMP packet and an outline.
 
 Fonts: three Latin subsets of DejaVu 2.37 (regular 24,188, bold 22,844, mono 21,500
 bytes), no hinting and no layout tables, from matplotlib 3.8.0's copies by

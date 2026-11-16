@@ -43,14 +43,16 @@ its plan file, its plan text and the Python `chain` and `step`, with `FifoBuffer
 registry tool 33 (0.22.0, wave W04 of docs/07; docs/chaining.md, docs/python.md), SAM
 text in and out with `ViewSam`, `SortSam` with the sort barrier, the spool and the planner
 of a chain, `BuildBamIndex` with Picard's `.bai` behind every index written, and `make
-memgate` with the scale gate of docs/07 section 6 (tools 34 to 36, 0.23.0, wave W05).
+memgate` with the scale gate of docs/07 section 6 (tools 34 to 36, 0.23.0, wave W05),
+and the PDF report behind the cargo feature `pdf`: `report --pdf`, `qc --report pdf`,
+`--pdf-font` and the Python keywords, tagged PDF/UA-1 (0.24.0, wave W06; docs/pdf.md).
 CHANGELOG.md has each.
 
 Remaining for bammetrics:
 
 - bioconda recipe and a PyPI release (first push of the branch runs the CI workflow).
-- The Picard tools still to build, further formats and PDF reports: the program plan
-  `docs/07_full_parity_program.md` (waves W06 onward);
+- The Picard tools still to build, further formats and DOCX reports: the program plan
+  `docs/07_full_parity_program.md` (waves W07 onward);
   docs/04 section 4 holds the P9 queue.
 
 Exit criterion: a `pip install`-able library that produces correct, hand-verified numbers.
