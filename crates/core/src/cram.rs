@@ -288,7 +288,7 @@ impl Fasta {
             return Ok(None);
         };
         let length = record.length();
-        let full_lines = length.saturating_sub(1) / record.line_base_count().get();
+        let full_lines = length.saturating_sub(1) / record.line_base_count();
         let span = if length == 0 {
             0
         } else {

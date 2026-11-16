@@ -1,0 +1,191 @@
+## argv
+report
+tests/data/picard
+-o
+OUT
+--pdf
+--date
+2026-01-02 03:04:05 UTC
+## exit
+0
+## stdout
+1 sample, preset generic v1 (6dd89e), bammetrics 0.23.0
+PASS        NA12878  6 pass
+wrote 4 files to OUT, index OUT/index.html
+## stderr
+## file NA12878.report.html
+<page not recorded>
+## file NA12878.report.pdf
+<pdf not recorded: 27 pages, 649745 bytes>
+## file NA12878.verdict.json
+{
+  "schema": "bammetrics.verdict/1",
+  "tool_version": "0.23.0",
+  "sample": "NA12878",
+  "preset": {
+    "name": "generic",
+    "version": 1,
+    "hash": "6dd89ed0478fd5e4",
+    "source": "built-in",
+    "note": "starting values"
+  },
+  "status": "pass",
+  "counts": {
+    "pass": 6,
+    "warn": 0,
+    "fail": 0,
+    "not_measured": 0
+  },
+  "files": [
+    {
+      "path": "tests/data/picard/NA12878/NA12878.alignment_summary_metrics",
+      "classes": [
+        "picard.analysis.AlignmentSummaryMetrics"
+      ]
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.base_distribution_by_cycle_metrics",
+      "classes": [
+        "picard.analysis.BaseDistributionByCycleMetrics"
+      ]
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.duplicate_metrics",
+      "classes": [
+        "picard.sam.DuplicationMetrics"
+      ]
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.gc_bias.detail_metrics",
+      "classes": [
+        "picard.analysis.GcBiasDetailMetrics"
+      ]
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.gc_bias.summary_metrics",
+      "classes": [
+        "picard.analysis.GcBiasSummaryMetrics"
+      ]
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.hs_metrics",
+      "classes": [
+        "picard.analysis.directed.HsMetrics"
+      ]
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.insert_size_metrics",
+      "classes": [
+        "picard.analysis.InsertSizeMetrics"
+      ]
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.quality_by_cycle_metrics",
+      "classes": []
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.quality_distribution_metrics",
+      "classes": []
+    },
+    {
+      "path": "tests/data/picard/NA12878/NA12878.quality_yield_metrics",
+      "classes": [
+        "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "rule": "alignment.pf-reads-aligned",
+      "label": "PF reads aligned",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_PF_READS_ALIGNED",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 1,
+      "warn": "< 0.9",
+      "fail": "< 0.8",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "alignment.adapter",
+      "label": "Adapter reads",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_ADAPTER",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 0,
+      "warn": "> 0.01",
+      "fail": "> 0.05",
+      "status": "pass",
+      "reason": null,
+      "plot": "insert-size"
+    },
+    {
+      "rule": "alignment.chimeras",
+      "label": "Chimeric pairs",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_CHIMERAS",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 0,
+      "warn": "> 0.05",
+      "fail": "> 0.1",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "insert.median",
+      "label": "Median insert size",
+      "class": "InsertSizeMetrics",
+      "metric": "MEDIAN_INSERT_SIZE",
+      "level": "ALL_READS",
+      "select": "PAIR_ORIENTATION=FR",
+      "unit": null,
+      "value": 310,
+      "warn": "outside 100..1000",
+      "fail": "outside 50..2000",
+      "status": "pass",
+      "reason": null,
+      "plot": "insert-size"
+    },
+    {
+      "rule": "yield.q30",
+      "label": "Q30 fraction of PF bases",
+      "class": "QualityYieldMetrics",
+      "metric": "PF_Q30_BASES / PF_BASES",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 1,
+      "warn": "< 0.8",
+      "fail": "< 0.7",
+      "status": "pass",
+      "reason": null,
+      "plot": "cycle-quality"
+    },
+    {
+      "rule": "duplication.percent",
+      "label": "Duplicate reads",
+      "class": "DuplicationMetrics",
+      "metric": "PERCENT_DUPLICATION",
+      "level": "LIBRARY",
+      "select": null,
+      "unit": "Unknown Library",
+      "value": 0,
+      "warn": "> 0.3",
+      "fail": "> 0.5",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    }
+  ]
+}
+## file index.html
+<page not recorded>

@@ -107,7 +107,7 @@ struct Page<'a> {
 
 /// A text value as the page shows it: the text, or `empty` for an empty
 /// cell.
-fn shown_text(text: &str) -> String {
+pub fn shown_text(text: &str) -> String {
     if text.is_empty() {
         "empty".to_owned()
     } else {
@@ -124,7 +124,7 @@ pub(crate) fn status_class(status: Status) -> &'static str {
     }
 }
 
-pub(crate) fn status_glyph(status: Status) -> &'static str {
+pub fn status_glyph(status: Status) -> &'static str {
     match status {
         Status::Pass => "\u{2713}",
         Status::Warn => "\u{25B2}",
@@ -133,7 +133,7 @@ pub(crate) fn status_glyph(status: Status) -> &'static str {
     }
 }
 
-pub(crate) fn status_word(status: Status) -> &'static str {
+pub fn status_word(status: Status) -> &'static str {
     match status {
         Status::NotMeasured => "not measured",
         other => other.name(),
@@ -149,7 +149,7 @@ pub(crate) fn band_class(band: Band) -> &'static str {
     }
 }
 
-pub(crate) fn band_glyph(band: Band) -> &'static str {
+pub fn band_glyph(band: Band) -> &'static str {
     status_glyph(match band {
         Band::Pass => Status::Pass,
         Band::Warn => Status::Warn,
@@ -184,14 +184,14 @@ pub(crate) fn table_region(out: &mut String, label: &str) {
 }
 
 /// `HsMetrics` for `picard.analysis.directed.HsMetrics`.
-fn short_class(class: &str) -> &str {
+pub fn short_class(class: &str) -> &str {
     class.rsplit(['.', '$']).next().unwrap_or(class)
 }
 
 /// The heading of a class block: `Alignment summary metrics` for
 /// `picard.analysis.AlignmentSummaryMetrics`. The words of the last name
 /// part, with the short forms in [`ACRONYMS`] in capitals.
-fn class_title(class: &str) -> String {
+pub fn class_title(class: &str) -> String {
     const ACRONYMS: [&str; 5] = ["Hs", "Wgs", "Rna", "Gc", "Pcr"];
     let mut words: Vec<String> = Vec::new();
     for c in short_class(class).chars() {
@@ -216,7 +216,7 @@ fn class_title(class: &str) -> String {
     words.join(" ")
 }
 
-fn file_name(path: &str) -> &str {
+pub fn file_name(path: &str) -> &str {
     Path::new(path)
         .file_name()
         .and_then(|n| n.to_str())
@@ -225,7 +225,7 @@ fn file_name(path: &str) -> &str {
 
 /// `HsMetrics.PCT_TARGET_BASES_20X`, with the selector and the level when
 /// they narrow the rows.
-pub(crate) fn metric_text(check: &Check) -> String {
+pub fn metric_text(check: &Check) -> String {
     let mut text = format!("{}.{}", check.class, check.metric);
     if let Some(select) = &check.select {
         let _ = write!(text, " [{select}]");
@@ -237,7 +237,7 @@ pub(crate) fn metric_text(check: &Check) -> String {
 }
 
 /// `n` with a singular or plural noun: `1 check`, `3 checks`.
-fn count(n: usize, noun: &str) -> String {
+pub fn count(n: usize, noun: &str) -> String {
     if n == 1 {
         format!("1 {noun}")
     } else {
@@ -266,6 +266,50 @@ fn histogram_definition(
     glossary::histogram_lookup(program.unwrap_or_default(), key, label).map(|e| e.definition)
 }
 
+/// The read count the header prints: `TOTAL_READS` of the quality yield
+/// metrics, else of the alignment summary's `PAIR` or `UNPAIRED` row, else of
+/// the HS metrics.
+pub fn total_reads(inputs: &[Input]) -> Option<i64> {
+    let from = |class: &str, select: Option<(&str, &str)>| -> Option<i64> {
+        let block = inputs.iter().find_map(|i| i.doc.class(class))?;
+        let row = match select {
+            Some((column, text)) => (0..block.rows.len())
+                .find(|&r| block.get(r, column).map(Value::picard_text).as_deref() == Some(text))?,
+            None => 0,
+        };
+        block.get(row, "TOTAL_READS").and_then(Value::as_int)
+    };
+    from("QualityYieldMetrics", None)
+        .or_else(|| from("AlignmentSummaryMetrics", Some(("CATEGORY", "PAIR"))))
+        .or_else(|| from("AlignmentSummaryMetrics", Some(("CATEGORY", "UNPAIRED"))))
+        .or_else(|| from("HsMetrics", None))
+}
+
+/// The label of one row of a class block: the cells that name its unit or
+/// category, joined with ` / `; `value` when none does.
+pub fn row_label(block: &ClassBlock, row: usize) -> String {
+    const LABELS: [&str; 7] = [
+        "CATEGORY",
+        "PAIR_ORIENTATION",
+        "ACCUMULATION_LEVEL",
+        "READS_USED",
+        "SAMPLE",
+        "LIBRARY",
+        "READ_GROUP",
+    ];
+    let parts: Vec<String> = LABELS
+        .iter()
+        .filter_map(|c| block.get(row, c))
+        .filter(|v| !v.is_null())
+        .map(Value::picard_text)
+        .collect();
+    if parts.is_empty() {
+        "value".to_owned()
+    } else {
+        parts.join(" / ")
+    }
+}
+
 impl<'a> Page<'a> {
     /// The sections between the header and the run footer: the content of
     /// `<main>` on the page.
@@ -291,20 +335,7 @@ impl<'a> Page<'a> {
     }
 
     fn reads(&self) -> Option<i64> {
-        let from = |class: &str, select: Option<(&str, &str)>| -> Option<i64> {
-            let block = self.inputs.iter().find_map(|i| i.doc.class(class))?;
-            let row = match select {
-                Some((column, text)) => (0..block.rows.len()).find(|&r| {
-                    block.get(r, column).map(Value::picard_text).as_deref() == Some(text)
-                })?,
-                None => 0,
-            };
-            block.get(row, "TOTAL_READS").and_then(Value::as_int)
-        };
-        from("QualityYieldMetrics", None)
-            .or_else(|| from("AlignmentSummaryMetrics", Some(("CATEGORY", "PAIR"))))
-            .or_else(|| from("AlignmentSummaryMetrics", Some(("CATEGORY", "UNPAIRED"))))
-            .or_else(|| from("HsMetrics", None))
+        total_reads(self.inputs)
     }
 
     fn header(&mut self) {
@@ -659,31 +690,6 @@ impl<'a> Page<'a> {
         self.out.push_str("</section>\n");
     }
 
-    /// The label of one row of a class block: the cells that name its unit
-    /// or category, joined.
-    fn row_label(block: &ClassBlock, row: usize) -> String {
-        const LABELS: [&str; 7] = [
-            "CATEGORY",
-            "PAIR_ORIENTATION",
-            "ACCUMULATION_LEVEL",
-            "READS_USED",
-            "SAMPLE",
-            "LIBRARY",
-            "READ_GROUP",
-        ];
-        let parts: Vec<String> = LABELS
-            .iter()
-            .filter_map(|c| block.get(row, c))
-            .filter(|v| !v.is_null())
-            .map(Value::picard_text)
-            .collect();
-        if parts.is_empty() {
-            "value".to_owned()
-        } else {
-            parts.join(" / ")
-        }
-    }
-
     /// One row per column: the column, one value cell per row, the definition.
     fn transposed_table(&mut self, block: &ClassBlock, label: &str) {
         table_region(&mut self.out, label);
@@ -693,7 +699,7 @@ impl<'a> Page<'a> {
             let _ = write!(
                 self.out,
                 "<th scope=\"col\" class=\"num\">{}</th>",
-                escape(&Self::row_label(block, row))
+                escape(&row_label(block, row))
             );
         }
         self.out

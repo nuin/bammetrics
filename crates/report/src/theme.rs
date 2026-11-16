@@ -145,6 +145,35 @@ pub fn token(theme: Theme, name: &str) -> Option<[u8; 3]> {
         .map(|(_, rgb)| rgb)
 }
 
+/// `css` with each `var(--name)` whose token `theme` declares replaced by
+/// its `#rrggbb` color; other text, unknown tokens included, unchanged.
+pub fn resolve_tokens(css: &str, theme: Theme) -> String {
+    let palette = tokens(theme);
+    let mut out = String::with_capacity(css.len());
+    let mut rest = css;
+    while let Some(start) = rest.find("var(--") {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + "var(--".len()..];
+        let color = after.find(')').and_then(|end| {
+            let name = &after[..end];
+            let rgb = palette.iter().find(|(n, _)| n == name)?.1;
+            Some((end, rgb))
+        });
+        match color {
+            Some((end, [r, g, b])) => {
+                out.push_str(&format!("#{r:02x}{g:02x}{b:02x}"));
+                rest = &after[end + 1..];
+            }
+            None => {
+                out.push_str("var(--");
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 fn parse_hex(text: &str) -> Option<[u8; 3]> {
     let hex = text.strip_prefix('#')?;
     if hex.len() != 6 {
@@ -237,6 +266,25 @@ mod tests {
         for (name, rgb) in &print {
             assert!(light.contains(&(name.clone(), *rgb)), "--{name} in print");
         }
+    }
+
+    #[test]
+    fn resolve_tokens_puts_the_palette_in_place() {
+        assert_eq!(
+            resolve_tokens(
+                "a { fill: var(--ink); stroke: var(--fail-ink) }",
+                Theme::Print
+            ),
+            "a { fill: #1b1c1e; stroke: #a31f1f }"
+        );
+        assert_eq!(
+            resolve_tokens("b { fill: var(--accent) }", Theme::Dark),
+            "b { fill: #7faaf0 }"
+        );
+        assert_eq!(
+            resolve_tokens("c { x: var(--nope); y: var(--ink", Theme::Light),
+            "c { x: var(--nope); y: var(--ink"
+        );
     }
 
     #[test]

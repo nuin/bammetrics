@@ -120,6 +120,7 @@ run.metrics["insert-size"]           # the parsed metrics file
 bammetrics qc sample.bam --preset clinical-panel --panel panel.bed -R ref.fa -o out/NA12878
 bammetrics report runs/ --preset clinical-panel -o site/   # site/index.html, site/SAMPLE.report.html
 bammetrics check runs/ --preset clinical-panel             # exit 10 on a failed verdict, 11 when incomplete
+bammetrics report runs/ -o site/ --pdf                     # also site/SAMPLE.report.pdf (feature pdf)
 ```
 
 `qc` reads the BAM once for every collector the preset needs and writes
@@ -134,6 +135,14 @@ Picard output, no bammetrics run needed, and judges each sample against a preset
 thresholds: the verdict (pass, warn, fail or incomplete) opens each page, with a plot
 under the failing check it explains. The presets, the rule language and `verdict.json` are in
 [docs/verdict.md](docs/verdict.md); the exit codes of `check` are in [docs/cli.md](docs/cli.md).
+
+The PDF report holds the same content as a tagged PDF/UA-1 file, with an appendix of every
+metrics table: `report --pdf`, `report --pdf-only`, `qc --report pdf` or `--report
+html,pdf`, and in Python `report(..., pdf=True)` and `qc(..., report="pdf")`. It needs the
+cargo feature `pdf` (`cargo build --release -p bammetrics-cli --features pdf`, rustc 1.92),
+which the wheel carries and the default `cargo build --release` leaves out. Sample names
+outside Latin take `--pdf-font FONT`. [docs/pdf.md](docs/pdf.md) has the content, the tags,
+the sizes and a Chrome recipe for a build without the feature.
 
 ## Tools
 

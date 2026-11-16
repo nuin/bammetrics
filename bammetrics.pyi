@@ -1233,13 +1233,17 @@ def qc(
     also: Literal["json", "jsonl", "tsv", "csv", "markdown", "junit", "multiqc"] | Sequence[Literal["json", "jsonl", "tsv", "csv", "markdown", "junit", "multiqc"]] | None = None,
     all_plots: bool = False,
     date: str | None = None,
-    report: bool = True,
+    report: bool | Literal["html", "pdf"] | Sequence[Literal["html", "pdf"]] = True,
+    pdf_font: _Path | None = None,
+    page_size: Literal["a4", "letter"] | None = None,
 ) -> Run[Verdict]:
     """bammetrics qc: the collectors the preset needs on one read of the BAM, the verdict
-    and the page, the files the command writes. report=False leaves out
-    PREFIX.report.html. A failed verdict is a value; VerdictError only when fail_on is
-    given and reached. An incomplete verdict returns the Run (its exit_code is 11). A
-    failed collector raises InputError (its .run holds the rest)."""
+    and the page, the files the command writes. report=False leaves out the report,
+    report="pdf" writes PREFIX.report.pdf in place of PREFIX.report.html,
+    report=["html", "pdf"] both (the PDF needs a module built with the feature pdf). A
+    failed verdict is a value; VerdictError only when fail_on is given and reached. An
+    incomplete verdict returns the Run (its exit_code is 11). A failed collector raises
+    InputError (its .run holds the rest)."""
 
 def check(
     inputs: _Path | Sequence[_Path],
@@ -1259,10 +1263,15 @@ def report(
     output: _Path | None = None,
     all_plots: bool = False,
     date: str | None = None,
+    pdf: bool = False,
+    pdf_only: bool = False,
+    pdf_font: _Path | None = None,
+    page_size: Literal["a4", "letter"] | None = None,
 ) -> list[str]:
     """bammetrics report: SAMPLE.verdict.json and SAMPLE.report.html per sample and
-    index.html, under output (default: the one directory given). Returns the paths
-    written."""
+    index.html, under output (default: the one directory given); pdf=True adds
+    SAMPLE.report.pdf, pdf_only=True writes the verdicts and the PDFs alone (the PDF
+    needs a module built with the feature pdf). Returns the paths written."""
 
 # The steps of chain(): each tool verb that can be a step, in snake case, and write.
 _StepVerb = Literal[

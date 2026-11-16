@@ -17,8 +17,8 @@ use crate::error::{Error, Result};
 use crate::events::{self, Reporter, print_stdout};
 use crate::manifest::{Key, Manifest, Output, Status, StepRecord};
 use crate::qc::{
-    Origin, Plan, QcArgs, Read, Step, make_prefix_dir, manifest_path, page_path, plural, prepare,
-    verdict_path,
+    Origin, Plan, QcArgs, Read, ReportForm, Step, make_prefix_dir, manifest_path, page_path,
+    pdf_path, plural, prepare, report_path, verdict_path,
 };
 use crate::report::write_atomic;
 
@@ -321,8 +321,9 @@ fn metrics_paths(done: &[Done]) -> Vec<&Path> {
     paths
 }
 
-/// Post and report: the verdict over the run's files, then verdict.json and
-/// the page, as `bammetrics report` writes them for the same files.
+/// Post and report: the verdict over the run's files, then verdict.json,
+/// the page and the PDF, as `bammetrics report` writes them for the same
+/// files.
 fn post_and_report(
     plan: &Plan,
     args: &QcArgs,
@@ -340,9 +341,15 @@ fn post_and_report(
     argv.extend(paths.iter().map(|p| p.display().to_string()));
     let post = own_step(plan, "verdict", "post", argv, Vec::new());
 
+    let date = args.date.clone().unwrap_or_else(|| CivilTime::now().iso());
+    // The PDF is rendered before verdict.json and the page are written: a
+    // sample name the fonts cannot set fails the step with neither written.
+    let pdf_bytes = match &plan.pdf {
+        Some(settings) => Some(settings.render(&verdict, &inputs, &date, args.all_plots)?),
+        None => None,
+    };
     let mut written = vec![(verdict_path(&plan.prefix), verdict.to_json(), "verdict")];
-    if args.write_page {
-        let date = args.date.clone().unwrap_or_else(|| CivilTime::now().iso());
+    if args.writes(ReportForm::Html) {
         let page = bammetrics_report::render(
             &verdict,
             &inputs,
@@ -353,7 +360,7 @@ fn post_and_report(
         );
         written.push((page_path(&plan.prefix), page, "report"));
     } else {
-        remove_stale_page(plan, files);
+        remove_stale_report(plan, &page_path(&plan.prefix), "report", files);
     }
     let mut outputs = Vec::new();
     for (path, text, kind) in written {
@@ -368,8 +375,25 @@ fn post_and_report(
         out.file("report", &output, true);
         outputs.push(output);
     }
+    let pdf = pdf_path(&plan.prefix);
+    match (&plan.pdf, pdf_bytes) {
+        (Some(settings), Some(bytes)) => {
+            files.replaced += usize::from(pdf.exists());
+            settings.save(&pdf, &bytes, &inputs)?;
+            files.written += 1;
+            let output = Output {
+                path: pdf,
+                tool: "bammetrics".to_owned(),
+                kind: "pdf".to_owned(),
+            };
+            out.file("report", &output, true);
+            outputs.push(output);
+        }
+        _ => remove_stale_report(plan, &pdf, "pdf", files),
+    }
     let mut report_argv = vec![format!("--all-plots={}", args.all_plots)];
     report_argv.extend(args.date.iter().map(|d| format!("--date={d}")));
+    report_argv.extend(args.report_argv());
     let report = own_step(plan, "report", "report", report_argv, outputs);
     Ok((verdict, inputs, vec![post, report]))
 }
@@ -434,24 +458,24 @@ fn write_also(
     Ok(Some(own_step(plan, "also", "report", argv, outputs)))
 }
 
-/// Without the page (Python `qc(report=False)`), an earlier run's page
-/// would show an older verdict: remove it. Only the path this run computes
-/// from its prefix, only when the earlier run's manifest lists it as its
-/// `report` file, and only a regular file (a symlink is never followed).
-/// A page no run of this prefix wrote stays.
-fn remove_stale_page(plan: &Plan, files: &mut Files) {
+/// Without the page or the PDF (Python `qc(report=False)`, `--report pdf`
+/// or the default `--report html`), an earlier run's file would show an
+/// older verdict: remove it. Only `page`, the path this run computes from
+/// its prefix, only when the earlier run's manifest lists it as a file of
+/// `kind` (`report` for the page, `pdf`), and only a regular file (a
+/// symlink is never followed). A file no run of this prefix wrote stays.
+fn remove_stale_report(plan: &Plan, page: &Path, kind: &str, files: &mut Files) {
     let Ok(Some(old)) = &plan.previous else {
         return;
     };
-    let page = page_path(&plan.prefix);
     let written_before = old
         .steps
         .iter()
         .flat_map(|s| &s.outputs)
-        .any(|o| o.kind == "report" && o.path == page);
+        .any(|o| o.kind == kind && o.path == page);
     if written_before
-        && fs::symlink_metadata(&page).is_ok_and(|m| m.file_type().is_file())
-        && fs::remove_file(&page).is_ok()
+        && fs::symlink_metadata(page).is_ok_and(|m| m.file_type().is_file())
+        && fs::remove_file(page).is_ok()
     {
         files.removed += 1;
     }
@@ -575,7 +599,8 @@ fn qc(args: &QcArgs) -> Result<u8> {
         .filter(|r| r.status == Status::Failed)
         .collect();
     out.checks(verdict);
-    out.done(verdict, *code, &page_path(&plan.prefix));
+    let page = report_path(args, &plan.prefix);
+    out.done(verdict, *code, &page);
     if args.format == crate::qc::Format::Text {
         let reads = usize::from(done.iter().any(|d| d.ran && d.record.stage == "pass"))
             + done
@@ -591,6 +616,7 @@ fn qc(args: &QcArgs) -> Result<u8> {
             records: out.records(),
             code: *code,
             gate: args.fail_on.is_some(),
+            page: &page,
         }));
     }
     Ok(*code)
@@ -610,6 +636,8 @@ struct Summary<'a> {
     records: u64,
     code: u8,
     gate: bool,
+    /// The report the summary points to (`report_path`).
+    page: &'a Path,
 }
 
 /// `FAIL`, then the rule and the reason, one line per issue: errors, fails,
@@ -735,7 +763,7 @@ fn summary(s: &Summary) -> String {
     };
     let budget = SUMMARY_LINES - 3 - tail;
     let issues = issue_lines(s);
-    let page = page_path(&s.plan.prefix);
+    let page = s.page;
     if issues.len() > budget {
         for line in &issues[..budget - 1] {
             let _ = writeln!(text, "{line}");

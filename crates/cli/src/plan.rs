@@ -11,7 +11,7 @@ use bammetrics_verdict::json::Json;
 use crate::also::{Also, targets};
 use crate::events::{self, print_stdout};
 use crate::qc::{
-    Format, Origin, Plan, QcArgs, Read, Step, manifest_path, page_path, plural, prepare,
+    Format, Origin, Plan, QcArgs, Read, Step, manifest_path, page_path, pdf_path, plural, prepare,
     verdict_path,
 };
 
@@ -202,12 +202,15 @@ pub fn text(plan: &Plan, resume: bool, also: &[Also]) -> String {
         "post      verdict: preset {} over the files of the pass",
         p.name
     );
-    let _ = writeln!(
-        out,
-        "report    {}, {} (always rewritten)",
-        verdict_path(&plan.prefix).display(),
-        page_path(&plan.prefix).display()
-    );
+    let mut reports = vec![verdict_path(&plan.prefix)];
+    if plan.html {
+        reports.push(page_path(&plan.prefix));
+    }
+    if plan.pdf.is_some() {
+        reports.push(pdf_path(&plan.prefix));
+    }
+    let reports: Vec<String> = reports.iter().map(|p| p.display().to_string()).collect();
+    let _ = writeln!(out, "report    {} (always rewritten)", reports.join(", "));
     if !also.is_empty() {
         let names: Vec<&str> = also.iter().map(|a| a.name()).collect();
         let _ = writeln!(

@@ -10,6 +10,11 @@ publish = false
 name = "bammetrics"
 crate-type = ["cdylib"]
 
+[features]
+# The PDF report through `bammetrics_cli` (pyproject.toml turns it on for
+# the wheel).
+pdf = ["bammetrics-cli/pdf"]
+
 [dependencies]
 bammetrics-cli = { path = "../cli" }
 bammetrics-core.workspace = true

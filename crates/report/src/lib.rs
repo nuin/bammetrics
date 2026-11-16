@@ -23,4 +23,4 @@ pub use bammetrics_verdict::{Input, Verdict};
 pub use html::escape;
 pub use index::{SampleSummary, Tally, page_name, render_index, verdict_name, write_index};
 pub use page::{FRAGMENT_CLASS, FRAGMENT_POINTS, Options, fragment, render, write};
-pub use plots::{Family, figure, figure_with};
+pub use plots::{Family, Standalone, figure, figure_standalone, figure_with};

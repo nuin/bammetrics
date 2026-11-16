@@ -604,12 +604,31 @@ fn steps(segments: &[&[String]]) -> Result<Vec<StepSpec>, VerbError> {
         .collect()
 }
 
+/// The report options of `report` and `qc`. A chain has no verdict and no
+/// report step until wave W14 of docs/07 (`chain ... + qc`).
+const REPORT_OPTIONS: [&str; 5] = ["report", "pdf", "pdf-only", "pdf-font", "page-size"];
+
+/// An unknown chain option that is one of [`REPORT_OPTIONS`]: the refusal
+/// that says why and what writes the report. Any other error as it is.
+fn no_report_step(error: VerbError) -> VerbError {
+    let Some(spelled) = grammar::unknown_option(&error) else {
+        return error;
+    };
+    let name = spelled.trim_start_matches('-').split('=').next();
+    if !name.is_some_and(|name| REPORT_OPTIONS.contains(&name)) {
+        return error;
+    }
+    usage("a chain writes no verdict or report; its report step comes with wave W14 of docs/07")
+        .from(spelled)
+        .hint("bammetrics report DIR --pdf writes them for the metrics files a chain wrote to DIR")
+}
+
 /// Parse the arguments after `chain`.
 pub fn parse(args: &[String]) -> Result<Asked, VerbError> {
     let mut segments = args.split(|arg| arg == STEP);
     let head = segments.next().unwrap_or_default();
     let rest: Vec<&[String]> = segments.collect();
-    let parsed = grammar::parse(VERB, &parser_flags(), head)?;
+    let parsed = grammar::parse(VERB, &parser_flags(), head).map_err(no_report_step)?;
     if parsed.flag(Key::Help) {
         return Ok(Asked::Help(help()));
     }

@@ -28,6 +28,18 @@
 //!   add to a binary that already holds the registry and the glossary. The
 //!   target is 150 KB: the crate measured 129.2 KB when the row was added
 //!   (docs/benchmarks.md; the estimate of docs/07 section 3.2 was 16 KB).
+//! - PDF growth is the same measure for the PDF report of `crates/pdf`
+//!   (feature `pdf`, docs/07 section 3.3): the stripped `size_pdf` example
+//!   less the stripped `size_report`, the code and data krilla, krilla-svg,
+//!   the layout and the three fonts add to a binary that already renders the
+//!   HTML pages. The `pdf_budget` example prints the PDF sizes of the three
+//!   fixture samples and the median render time of the failing one with
+//!   every plot; this test reads its two lines. Targets: 4 MiB and 100 ms
+//!   from docs/07 section 3.3; 500 KB per sample, raised from docs/07's
+//!   150 KB, which was measured without the appendix. The appendix prints
+//!   every row (docs/05 section 4.2 row 6), and PDF/UA-1 needs one tagged
+//!   cell element per value, about 74 bytes each with its cross-reference
+//!   entry: the failing fixture holds 2,373 cells.
 //! - Added BAM passes: `qc` reports one BAM read for the collectors, the
 //!   verdict and the page together, and `report` and `check` run on the
 //!   `qc` output after the BAM is deleted.
@@ -133,14 +145,20 @@ impl Budget {
     }
 }
 
-/// The directory of the release examples, beside the directory of this
-/// test binary (`target/release/deps`).
+/// The directory of the release examples: `examples` in the nearest
+/// directory above this test binary that has one. Cargo puts the binary in
+/// `target/release/deps`, or since cargo 1.100 in
+/// `target/release/build/<package>/<hash>/out`; both sit under the profile
+/// directory, `target/release`.
 fn examples_dir() -> PathBuf {
     let exe = std::env::current_exe().expect("test binary path");
-    exe.parent()
-        .and_then(Path::parent)
-        .expect("target profile directory")
-        .join("examples")
+    exe.ancestors()
+        .skip(1)
+        .map(|dir| dir.join("examples"))
+        .find(|dir| dir.is_dir())
+        .expect(
+            "an examples directory above the test binary; build the probes first (make budgets)",
+        )
 }
 
 /// The size of `path` after `strip`, from a copy in `dir`.
@@ -235,6 +253,34 @@ fn added_bam_passes(dir: &Path) -> f64 {
     reads - 1.0
 }
 
+/// The PDF sizes of the three fixture samples and the median render time
+/// in milliseconds, from the `pdf_budget` example's two lines.
+fn pdf_budget(example: &Path) -> ([f64; 3], f64) {
+    let out = Command::new(example).output().unwrap_or_else(|e| {
+        panic!(
+            "{}: {e}; build the probes first (make budgets)",
+            example.display()
+        )
+    });
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let numbers = |key: &str| -> Vec<f64> {
+        text.lines()
+            .find_map(|line| line.strip_prefix(key))
+            .unwrap_or_else(|| panic!("no {key} line in {text:?}"))
+            .split_whitespace()
+            .map(|n| n.parse().expect("a number"))
+            .collect()
+    };
+    let bytes = numbers("pdf_bytes ");
+    let time = numbers("pdf_render_ms ");
+    ([bytes[0], bytes[1], bytes[2]], time[0])
+}
+
 #[test]
 fn a_budget_fails_at_twice_its_target() {
     let at = |target: f64, measured: f64| Budget {
@@ -301,6 +347,12 @@ fn budgets_of_docs_05_section_4_8() {
     let formats_growth =
         stripped_size(&formats, &dir) as f64 - stripped_size(&formats_base, &dir) as f64;
 
+    let (report_probe, pdf_probe) = (examples.join("size_report"), examples.join("size_pdf"));
+    let pdf_raw_growth = size(&pdf_probe) as f64 - size(&report_probe) as f64;
+    let pdf_growth =
+        stripped_size(&pdf_probe, &dir) as f64 - stripped_size(&report_probe, &dir) as f64;
+    let (pdf_bytes, pdf_time) = pdf_budget(&examples.join("pdf_budget"));
+
     let passes = added_bam_passes(&dir);
     let _ = fs::remove_dir_all(&dir);
 
@@ -342,6 +394,24 @@ fn budgets_of_docs_05_section_4_8() {
             unit: "KB",
         },
         Budget {
+            name: "PDF growth",
+            target: 4.0,
+            measured: pdf_growth / KB / KB,
+            unit: "MiB",
+        },
+        Budget {
+            name: "render, sample PDF",
+            target: 100.0,
+            measured: pdf_time,
+            unit: "ms",
+        },
+        Budget {
+            name: "sample PDF size",
+            target: 500.0,
+            measured: pdf_bytes.iter().copied().fold(0.0, f64::max) / KB,
+            unit: "KB",
+        },
+        Budget {
             name: "added passes over the BAM",
             target: 0.0,
             measured: passes,
@@ -379,6 +449,16 @@ fn budgets_of_docs_05_section_4_8() {
         formats_raw_growth,
         formats.display(),
         formats_base.display()
+    );
+    println!(
+        "PDF growth: {:.0} bytes stripped, {:.0} bytes unstripped ({} less {}); PDFs {:.0}, {:.0}, {:.0} bytes",
+        pdf_growth,
+        pdf_raw_growth,
+        pdf_probe.display(),
+        report_probe.display(),
+        pdf_bytes[0],
+        pdf_bytes[1],
+        pdf_bytes[2]
     );
     let failed: Vec<&str> = budgets
         .iter()

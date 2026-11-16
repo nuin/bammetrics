@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/insert_size.bam
+--pdf-font=x.ttf
++
+insert-size
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: a chain writes no verdict or report; its report step comes with wave W14 of docs/07 (from --pdf-font)
+  bammetrics report DIR --pdf writes them for the metrics files a chain wrote to DIR

@@ -116,8 +116,10 @@ def test_qc_usage_and_input_errors(tmp_path):
         bm.qc(BAM, outptu=tmp_path / "s")
     with pytest.raises(ValueError, match=r"invalid value \"maybe\" \(from --fail-on\)"):
         bm.qc(BAM, output=tmp_path / "s", fail_on="maybe")
-    with pytest.raises(bm.UsageError, match="report takes True or False"):
+    with pytest.raises(bm.UsageError, match=r"invalid value \"no\" \(from --report\)"):
         bm.qc(BAM, output=tmp_path / "s", report="no")
+    with pytest.raises(bm.UsageError, match="--pdf-font sets the PDF"):
+        bm.qc(BAM, output=tmp_path / "s", report=False, pdf_font=tmp_path / "f.ttf")
     with pytest.raises(OSError, match="nope.bam not found"):
         bm.qc(tmp_path / "nope.bam", output=tmp_path / "s")
     with pytest.raises(bm.InputError, match="absent.fa not found"):

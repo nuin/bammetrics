@@ -11,6 +11,7 @@ use bammetrics_verdict::{Bound, Check, Comparator, Input};
 
 use crate::html::{escape, number};
 use crate::svg::{Chart, Scale, Ticks, short_number};
+use crate::theme::{CSS, Theme, resolve_tokens};
 
 /// `(x, y)` points of one series.
 type Series = Vec<(f64, f64)>;
@@ -89,17 +90,71 @@ pub fn figure_with(
     checks: &[Check],
     max_points: Option<usize>,
 ) -> Option<String> {
-    let (svg, caption) = match family {
-        Family::Coverage => coverage(inputs, checks, max_points)?,
-        Family::InsertSize => insert_size(inputs, checks, max_points)?,
-        Family::GcBias => gc_bias(inputs, max_points)?,
-        Family::CycleQuality => cycle_quality(inputs, max_points)?,
-    };
+    let (svg, caption) = chart(family, inputs, checks, max_points)?;
     Some(format!(
         "<figure class=\"plot\" id=\"plot-{}\">{svg}<figcaption>{}</figcaption></figure>",
         family.name(),
         escape(&caption)
     ))
+}
+
+/// A plot as a self-contained SVG document, for a renderer that reads no
+/// CSS custom property (usvg, under the PDF report).
+pub struct Standalone {
+    /// The `<svg>` document: the SVG namespace, a `width` and `height` of
+    /// [`svg::WIDTH`](crate::svg::WIDTH) by [`svg::HEIGHT`](crate::svg::HEIGHT),
+    /// and a `<style>` holding the `.chart` rules of the page with every
+    /// `var(--x)` replaced by the print palette color.
+    pub svg: String,
+    /// The text alternative: the `<desc>` of the SVG and the caption of the
+    /// HTML figure.
+    pub alt: String,
+}
+
+/// The plot [`figure_with`] draws, as a [`Standalone`] SVG document.
+pub fn figure_standalone(
+    family: Family,
+    inputs: &[Input],
+    checks: &[Check],
+    max_points: Option<usize>,
+) -> Option<Standalone> {
+    let (svg, alt) = chart(family, inputs, checks, max_points)?;
+    let body = svg.strip_prefix("<svg ")?;
+    let open_end = body.find('>')?;
+    let svg = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{w}\" height=\"{h}\" {}><style>{}</style>{}",
+        &body[..open_end],
+        chart_css(Theme::Print),
+        &body[open_end + 1..],
+        w = crate::svg::WIDTH,
+        h = crate::svg::HEIGHT,
+    );
+    Some(Standalone { svg, alt })
+}
+
+/// The `.chart` rules of the stylesheet with the colors of `theme` in place
+/// of the custom properties.
+fn chart_css(theme: Theme) -> String {
+    let rules: Vec<&str> = CSS
+        .lines()
+        .filter(|line| line.starts_with(".chart "))
+        .collect();
+    resolve_tokens(&rules.join("\n"), theme)
+}
+
+/// The SVG and its text alternative for `family`.
+fn chart(
+    family: Family,
+    inputs: &[Input],
+    checks: &[Check],
+    max_points: Option<usize>,
+) -> Option<(String, String)> {
+    match family {
+        Family::Coverage => coverage(inputs, checks, max_points),
+        Family::InsertSize => insert_size(inputs, checks, max_points),
+        Family::GcBias => gc_bias(inputs, max_points),
+        Family::CycleQuality => cycle_quality(inputs, max_points),
+    }
 }
 
 fn histogram_with<'a>(

@@ -1,0 +1,11 @@
+## argv
+report
+tests/data/picard
+-o
+OUT
+--pdf
+## exit
+2
+## stdout
+## stderr
+bammetrics: --pdf: this binary was built without the cargo feature pdf; build one with `cargo build --release -p bammetrics-cli --features pdf`
