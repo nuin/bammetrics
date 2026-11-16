@@ -440,8 +440,9 @@ fn standalone_plots_hold_print_colors_and_no_custom_property() {
     let accent = token(Theme::Print, "accent").expect("accent");
     let accent = format!("#{:02x}{:02x}{:02x}", accent[0], accent[1], accent[2]);
     for family in Family::ALL {
-        let plot = figure_standalone(family, &inputs, &verdict.checks, None).expect(family.name());
-        let html = figure(family, &inputs, &verdict.checks).expect(family.name());
+        let name = family.name();
+        let plot = figure_standalone(family, &inputs, &verdict.checks, None).expect(name);
+        let html = figure(family, &inputs, &verdict.checks).expect(name);
         assert!(
             plot.svg
                 .starts_with("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"300\" class=\"chart\""),

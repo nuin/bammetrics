@@ -247,7 +247,7 @@ pub fn count(n: usize, noun: &str) -> String {
 
 /// The Picard program that wrote `doc`: the first word of its first header
 /// line (`CollectInsertSizeMetrics INPUT=...`).
-pub fn program(doc: &MetricsDoc) -> Option<&str> {
+fn program(doc: &MetricsDoc) -> Option<&str> {
     doc.headers
         .first()
         .and_then(|h| h.split_whitespace().next())
@@ -257,7 +257,7 @@ pub fn program(doc: &MetricsDoc) -> Option<&str> {
 /// The glossary definition of a histogram column of `hist`, by the program
 /// that wrote the file and the histogram's key label (the first column), so
 /// a `CollectMultipleMetrics` file finds the rows of the program behind it.
-pub fn histogram_definition(
+fn histogram_definition(
     program: Option<&str>,
     hist: &HistogramBlock,
     label: &str,
