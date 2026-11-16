@@ -237,7 +237,21 @@ fn budget_lines(out: &mut String, chain: &Chain, estimate: &Estimate) {
         let bytes = estimate.outputs.iter().map(|(_, b)| *b).sum();
         let _ = writeln!(out, "output     about {} written by write", human(bytes));
     }
-    let _ = writeln!(out, "memory     {} at the peak", about(estimate.memory()));
+    // The base is a constant: on a small input the peak is mostly base, and
+    // the chain takes less.
+    let base = match estimate.memory() {
+        Some(_) => format!(
+            ", a fixed {} for the chain beside its barriers included (a small input takes \
+             less)",
+            human(planner::BASE_MEMORY)
+        ),
+        None => String::new(),
+    };
+    let _ = writeln!(
+        out,
+        "memory     {} at the peak{base}",
+        about(estimate.memory())
+    );
     let needs = planner::needs(chain, estimate);
     for need in planner::short(&needs) {
         let _ = writeln!(

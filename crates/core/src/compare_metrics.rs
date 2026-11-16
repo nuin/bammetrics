@@ -55,6 +55,7 @@ pub const TOOL: Tool = Tool {
               VALUE1 and VALUE2 for a value, DIFFERENCE (the line Picard logs) for every one; \
               no row when the files are equal. The command line exits 1 when they are not.",
     options: &[
+        crate::registry::STRINGENCY_NO_RECORDS,
         Opt::path(&["INPUT", "I"], "A metrics file; give exactly two.")
             .repeated()
             .required(),

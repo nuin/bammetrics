@@ -26,7 +26,8 @@ use crate::error::{Error, Result};
 use crate::header_merge::{HeaderTag, set_header_tag};
 use crate::sam_order::{DuplicateKey, Libraries, Order, QuerynameKey, coordinate_order, hit_index};
 use crate::spill::{
-    SortStats, Sorted, Sorter, Spill, TempDir, get_u64, need_i64, need_u64, put_i64, put_u64,
+    SortStats, Sorted, Sorter, Spill, TempDir, get_u64, need_bytes, need_i64, need_u64, put_bytes,
+    put_i64, put_u64,
 };
 use crate::stage::{BATCH_RECORDS, Records};
 
@@ -132,18 +133,6 @@ fn invalid(what: &str) -> io::Error {
 
 fn need_i32(input: &mut impl BufRead) -> io::Result<i32> {
     i32::try_from(need_i64(input)?).map_err(|_| invalid("a value past 32 bits"))
-}
-
-fn put_bytes(out: &mut Vec<u8>, bytes: &[u8]) {
-    put_u64(out, bytes.len() as u64);
-    out.extend_from_slice(bytes);
-}
-
-fn need_bytes(input: &mut impl BufRead) -> io::Result<Vec<u8>> {
-    let len = usize::try_from(need_u64(input)?).map_err(|_| invalid("a length past memory"))?;
-    let mut bytes = vec![0; len];
-    input.read_exact(&mut bytes)?;
-    Ok(bytes)
 }
 
 impl Spill for Keyed {
@@ -359,7 +348,7 @@ mod tests {
     }
 
     fn sort(order: Order, records: Vec<RawRecord>, limit: usize) -> (Vec<RawRecord>, SortStats) {
-        let dir = TempDir::new(None);
+        let dir = TempDir::new(None, "test");
         let header = sam::Header::default();
         let limits = Limits {
             records: limit,
@@ -405,7 +394,7 @@ mod tests {
         assert!(seen.windows(2).all(|w| w[0] <= w[1]), "names in order");
         seen.dedup();
         assert_eq!(seen.len(), 7);
-        let dir = TempDir::new(None);
+        let dir = TempDir::new(None, "test");
         let limits = Limits {
             records: 1000,
             bytes: usize::MAX,

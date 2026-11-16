@@ -1371,7 +1371,7 @@ fn a_bad_pipe_fails_under_the_name_of_standard_input() {
             assert_eq!(code, Some(1), "{args:?}: {stderr}");
             assert!(stderr.contains(cause), "{args:?}: {stderr}");
             assert!(
-                !stderr.contains("bammetrics-markdup.") && !stderr.contains(".tmp"),
+                !stderr.contains("bammetrics-chain.") && !stderr.contains(".tmp"),
                 "{args:?}: {stderr}"
             );
             assert!(names(&tmp).is_empty(), "{args:?}: {:?}", names(&tmp));
@@ -1573,7 +1573,7 @@ fn usage_errors_exit_2_before_anything_runs() {
     let cram = file("out.cram");
     let fastq = file("out.fastq.gz");
     let source = FIXTURE.0;
-    let cases: [(&[&str], &str); 37] = [
+    let cases: [(&[&str], &str); 38] = [
         (
             &[source, "+", "write", &sam, "--index"],
             "out.sam: an index needs a BAM: SAM text has none",
@@ -1612,6 +1612,19 @@ fn usage_errors_exit_2_before_anything_runs() {
                 "queryname",
             ],
             "--sort-memory \"2X\": expected bytes above 0",
+        ),
+        (
+            &[
+                source,
+                "--sort-memory",
+                "99999999999T",
+                "+",
+                "sort-sam",
+                "-SO",
+                "queryname",
+            ],
+            "--sort-memory \"99999999999T\": more than the maximum of 18446744073709551615 bytes \
+             (16 EiB)",
         ),
         (
             &[source, "+", "sort-sam", "--sort-order", "unsorted"],

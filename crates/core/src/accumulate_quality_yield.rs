@@ -22,6 +22,7 @@ pub const TOOL: Tool = Tool {
     name: "AccumulateQualityYieldMetrics",
     summary: "QualityYieldMetrics files (a list of paths) merged into one row.",
     options: &[
+        crate::registry::STRINGENCY_NO_RECORDS,
         Opt::path(
             &["INPUT", "I"],
             "A QualityYieldMetrics file; repeat for each.",

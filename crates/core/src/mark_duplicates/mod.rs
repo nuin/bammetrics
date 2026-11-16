@@ -68,6 +68,17 @@ pub enum TaggingPolicy {
 /// Entries held in memory per sorted list before a run is spilled.
 pub const DEFAULT_RECORDS_IN_RAM: usize = 4_000_000;
 
+/// Bytes the first read holds at most with `records_in_ram`: the pair and
+/// fragment lists of `records_in_ram` read ends each, and the scratch of the
+/// standard library's stable sort for one of them (half a list). 640 MB at
+/// the default 4,000,000.
+pub fn held_bytes(records_in_ram: usize) -> usize {
+    records_in_ram
+        .saturating_mul(std::mem::size_of::<read_ends::ReadEnds>())
+        .saturating_mul(5)
+        / 2
+}
+
 /// Every option, parsed.
 #[derive(Clone, Debug)]
 pub struct Options {
@@ -525,7 +536,7 @@ pub fn run(opts: &Options) -> Result<crate::metric::MetricsOutput> {
         }
     }
     refuse_overlaps(opts)?;
-    let temp = TempDir::new(opts.tmp_dir.as_deref());
+    let temp = TempDir::new(opts.tmp_dir.as_deref(), "mark-duplicates");
     let inputs = spool_streams(&opts.inputs, &temp)?;
     // An input copied from a pipe fails under the name the user gave.
     let named = |mut error: Error| {
@@ -727,4 +738,19 @@ pub(crate) fn spool_streams(inputs: &[PathBuf], temp: &TempDir) -> Result<Vec<Pa
 
 fn copy_all(source: &mut impl Read, sink: &mut File) -> io::Result<()> {
     io::copy(source, sink).map(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    /// Two lists of 64-byte read ends and half a list of sort scratch: the
+    /// reserve a chain's sort step leaves for a later `mark-duplicates`.
+    #[test]
+    fn the_first_read_holds_two_and_a_half_lists() {
+        assert_eq!(std::mem::size_of::<super::read_ends::ReadEnds>(), 64);
+        assert_eq!(
+            super::held_bytes(super::DEFAULT_RECORDS_IN_RAM),
+            640_000_000
+        );
+        assert_eq!(super::held_bytes(usize::MAX), usize::MAX / 2);
+    }
 }

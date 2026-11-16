@@ -76,7 +76,7 @@ pub fn run_chain(plan: ChainPlan, progress: Option<OnProgress>) -> Result<Vec<Re
     if plan.lower && taps_only && plan.source.file().is_some() {
         return lowered(plan, progress);
     }
-    let temp = TempDir::new(plan.tmp_dir.as_deref());
+    let temp = TempDir::new(plan.tmp_dir.as_deref(), "chain");
     let source = if first_stage_replays(&plan.steps) && !plan.source.replayable() {
         plan.source.spool(&temp)?
     } else {

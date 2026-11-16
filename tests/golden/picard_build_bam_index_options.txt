@@ -11,7 +11,7 @@ R=tests/data/ref_100k.fa
 0
 ## stdout
 ## stderr
-bammetrics: ignoring VALIDATION_STRINGENCY=SILENT: a BAM or CRAM is not validated; SAM text is checked at the level given
+bammetrics: ignoring VALIDATION_STRINGENCY=SILENT: the BAM is not validated, and SAM text has no index
 bammetrics: ignoring CREATE_MD5_FILE=true: no BAM is written
 bammetrics: ignoring R=tests/data/ref_100k.fa: a BAM is indexed without its reference
 ## file markdup.bai

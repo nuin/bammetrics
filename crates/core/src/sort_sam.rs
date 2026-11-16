@@ -255,7 +255,7 @@ fn check_output(opts: &Options) -> Result<()> {
 /// the sort did.
 pub fn run(opts: &Options) -> Result<SortStats> {
     check_output(opts)?;
-    let temp = TempDir::new(opts.tmp_dir.as_deref());
+    let temp = TempDir::new(opts.tmp_dir.as_deref(), "sort-sam");
     pass::with_record_stream_at(
         &opts.input,
         opts.reference.as_deref(),

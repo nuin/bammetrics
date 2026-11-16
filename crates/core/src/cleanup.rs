@@ -96,7 +96,7 @@ enum Target {
 /// A number another process cannot predict: the standard library's hash
 /// key, which the system seeds at random, over the time, the process id
 /// and `counter`.
-fn nonce(counter: u64) -> u64 {
+pub(crate) fn nonce(counter: u64) -> u64 {
     use std::hash::{BuildHasher, Hasher};
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)

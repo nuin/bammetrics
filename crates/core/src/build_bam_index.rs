@@ -55,6 +55,10 @@ pub const TOOL: Tool = Tool {
               (reference, length, aligned, unaligned), then a * row whose unaligned count is \
               the records without a coordinate.",
     options: &[
+        Opt::ignored(
+            &["VALIDATION_STRINGENCY"],
+            "the BAM is not validated, and SAM text has no index",
+        ),
         Opt::path(
             &["INPUT", "I"],
             "The BAM to index; its header must say SO:coordinate.",

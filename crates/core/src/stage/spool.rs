@@ -116,7 +116,7 @@ mod tests {
 
     #[test]
     fn a_spool_gives_back_its_records_and_is_private() {
-        let temp = TempDir::new(None);
+        let temp = TempDir::new(None, "test");
         let records: Vec<RawRecord> = (0..3000)
             .map(|i| crate::bam_raw::build(&format!("r{i}"), 0, 0, i, &[], &[], b""))
             .collect();
