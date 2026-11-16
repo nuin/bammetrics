@@ -238,7 +238,7 @@ impl<'f> Flow<'f> {
     /// Record the first character of `text` that `face` lacks.
     fn check(&mut self, text: &str, face: Face) {
         let typeface = self.fonts.face(face);
-        let lacking = |c: &char| !c.is_whitespace() && typeface.advance(*c).is_none();
+        let lacking = |c: &char| !matches!(c, ' ' | '\n') && typeface.advance(*c).is_none();
         if self.missing.is_none()
             && let Some(c) = text.chars().find(lacking)
         {
@@ -252,11 +252,17 @@ impl<'f> Flow<'f> {
 
     /// `text` broken into lines of at most `width` points: at spaces, then
     /// at [`pieces`] of a word wider than a line, then between characters.
-    /// `\n` breaks a line; other control characters print as spaces.
+    /// `\n` breaks a line; other control characters and the line and
+    /// paragraph separators (U+2028, U+2029) print as spaces.
     fn wrap(&mut self, text: &str, style: Style, width: f32) -> Vec<String> {
         let text: String = text
             .chars()
-            .map(|c| if c.is_control() && c != '\n' { ' ' } else { c })
+            .map(
+                |c| match c != '\n' && (c.is_control() || matches!(c, '\u{2028}' | '\u{2029}')) {
+                    true => ' ',
+                    false => c,
+                },
+            )
             .collect();
         self.check(&text, style.face);
         let fits = |part: &str| self.measure(part, style) <= width;
@@ -483,11 +489,8 @@ impl<'f> Flow<'f> {
             .map(|(h, w)| self.wrap(h, head_style, w - 2.0 * PAD))
             .collect();
         let rows = lines.iter().map(Vec::len).max().unwrap_or(1) as f32;
-        let head: Head = (
-            lines,
-            rows * head_style.line_height() + 2.0 * PAD,
-            head_style,
-        );
+        let height = rows * head_style.line_height() + 2.0 * PAD;
+        let head: Head = (lines, height, head_style);
         self.room(head.1 + size * 1.35 + 2.0 * PAD);
         self.open(Tag::Table);
         self.open(Tag::THead);
@@ -496,9 +499,9 @@ impl<'f> Flow<'f> {
         self.close();
         self.close();
         self.open(Tag::TBody);
-        let total: f32 = widths.iter().sum();
+        let (total, step) = (widths.iter().sum::<f32>(), size * 1.35);
+        let bottom = self.size.1 - BOTTOM;
         for (r, row) in table.rows.iter().enumerate() {
-            let mut height: f32 = 0.0;
             let mut cells = Vec::new();
             for (cell, w) in row.iter().zip(&widths) {
                 let style = cell.style.sized(size);
@@ -506,46 +509,58 @@ impl<'f> Flow<'f> {
                     .glyph
                     .map_or(0.0, |(g, _)| self.measure(g, style.symbol()) + size * 0.4);
                 let lines = self.wrap(&cell.text, style, w - glyph - 2.0 * PAD);
-                height = height.max(lines.len() as f32 * style.line_height());
                 cells.push((lines, style, glyph));
             }
-            let height = height + 2.0 * PAD;
-            if self.y + height > self.size.1 - BOTTOM {
-                self.new_page();
-                self.head_row(&head, &widths, table.rule, false);
-            }
-            if r % 2 == 1 {
-                self.rect(0.0, self.y, total, height, table.stripe);
-            }
+            let n = cells.iter().map(|c| c.0.len()).max().unwrap_or(0).max(1);
             self.open(Tag::TR);
-            let mut x = MARGIN;
-            for (c, ((lines, style, glyph), cell)) in cells.into_iter().zip(row).enumerate() {
-                let kind: TagKind = match Some(c) == table.row_header {
-                    true => Tag::TH(TableHeaderScope::Row).into(),
+            let mut groups = Vec::new();
+            for c in 0..row.len() {
+                self.open(match Some(c) == table.row_header {
+                    true => TagKind::from(Tag::TH(TableHeaderScope::Row)),
                     false => Tag::TD.into(),
-                };
-                self.open(kind);
-                if let Some((g, color)) = cell.glyph {
-                    self.glyph(x + PAD, self.y + PAD, g, color, style);
-                }
-                let lines = lines.into_iter().enumerate();
-                let ops = lines
-                    .map(|(k, line)| {
-                        let top = self.y + PAD + k as f32 * style.line_height();
-                        let left = match cell.right {
-                            true => x + widths[c] - PAD - self.measure(&line, style),
-                            false => x + PAD + glyph,
-                        };
-                        self.text_op(left, top, line, style)
-                    })
-                    .collect();
-                self.span(ops);
-                self.close();
-                x += widths[c];
+                });
+                groups.extend(self.stack.pop());
             }
             self.close();
-            self.y += height;
-            self.rect(0.0, self.y - 0.4, total, 0.4, table.rule);
+            // The lines that fit below `y`. A row starts on a new page unless
+            // it fits whole; one taller than a page goes on in pieces.
+            let fits = |y: f32| ((bottom - y - 2.0 * PAD) / step).floor() as usize;
+            let mut done = 0;
+            while done < n {
+                if done > 0 || fits(self.y) < n {
+                    self.new_page();
+                    self.head_row(&head, &widths, table.rule, false);
+                }
+                let take = fits(self.y).clamp(1, n - done);
+                let height = take as f32 * step + 2.0 * PAD;
+                if r % 2 == 1 {
+                    self.rect(0.0, self.y, total, height, table.stripe);
+                }
+                let mut x = MARGIN;
+                for (c, ((lines, style, glyph), cell)) in cells.iter().zip(row).enumerate() {
+                    if let (0, Some((g, color))) = (done, cell.glyph) {
+                        self.glyph(x + PAD, self.y + PAD, g, color, *style);
+                    }
+                    let lines = lines.iter().enumerate().skip(done).take(take);
+                    let ops = lines
+                        .map(|(k, line)| {
+                            let top = self.y + PAD + (k - done) as f32 * step;
+                            let left = match cell.right {
+                                true => x + widths[c] - PAD - self.measure(line, *style),
+                                false => x + PAD + glyph,
+                            };
+                            self.text_op(left, top, line.clone(), *style)
+                        })
+                        .collect();
+                    self.stack.push(groups[c]);
+                    self.span(ops);
+                    self.stack.pop();
+                    x += widths[c];
+                }
+                self.y += height;
+                self.rect(0.0, self.y - 0.4, total, 0.4, table.rule);
+                done += take;
+            }
         }
         self.close();
         self.close();

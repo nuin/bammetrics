@@ -112,21 +112,34 @@ fn check_font(_: &Path) -> Result<()> {
 }
 
 impl Pdf {
-    /// The PDF of `verdict` over `inputs` at `path`, written under a
-    /// temporary name and renamed into place (`bammetrics_pdf::write`,
-    /// through `AtomicFile`); a path that names an input or the font is
-    /// refused.
+    /// The PDF of `verdict` over `inputs`, rendered before any file of the
+    /// run is written, so a font that lacks a glyph of the sample name
+    /// leaves no file behind.
     #[cfg(feature = "pdf")]
-    pub fn write(
+    pub fn render(
         &self,
-        path: &Path,
         verdict: &Verdict,
         inputs: &[Input],
         date: &str,
         all_plots: bool,
-    ) -> Result<()> {
-        use bammetrics_pdf::{Error as PdfError, Options, Paper};
-        let options = Options {
+    ) -> Result<Vec<u8>> {
+        bammetrics_pdf::render(verdict, inputs, &self.options(date, all_plots))
+            .map_err(|e| self.error(Path::new(&verdict.sample), e))
+    }
+
+    /// `bytes` at `path`, written under a temporary name and renamed into
+    /// place (`bammetrics_pdf::save`, through `AtomicFile`); a path that
+    /// names an input or the font is refused.
+    #[cfg(feature = "pdf")]
+    pub fn save(&self, path: &Path, bytes: &[u8], inputs: &[Input]) -> Result<()> {
+        bammetrics_pdf::save(path, bytes, inputs, &self.options("", false))
+            .map_err(|e| self.error(path, e))
+    }
+
+    #[cfg(feature = "pdf")]
+    fn options(&self, date: &str, all_plots: bool) -> bammetrics_pdf::Options {
+        use bammetrics_pdf::{Options, Paper};
+        Options {
             date: date.to_owned(),
             font: self.font.clone(),
             all_plots,
@@ -134,17 +147,29 @@ impl Pdf {
                 PageSize::A4 => Paper::A4,
                 PageSize::Letter => Paper::Letter,
             },
-        };
-        bammetrics_pdf::write(path, verdict, inputs, &options).map_err(|e| match e {
-            PdfError::Io(source) => Error::io(path, source),
+        }
+    }
+
+    /// A PDF error as the command reports it; `what` is the file or the
+    /// sample the error is about.
+    #[cfg(feature = "pdf")]
+    fn error(&self, what: &Path, e: bammetrics_pdf::Error) -> Error {
+        use bammetrics_pdf::Error as PdfError;
+        match e {
+            PdfError::Io(source) => Error::io(what, source),
             PdfError::OverwritesInput(_) => Error::Usage(e.to_string()),
             PdfError::Font { .. } => Error::Input(e.to_string()),
-            other => Error::Input(format!("{}: {other}", path.display())),
-        })
+            other => Error::Input(format!("{}: {other}", what.display())),
+        }
     }
 
     #[cfg(not(feature = "pdf"))]
-    pub fn write(&self, _: &Path, _: &Verdict, _: &[Input], _: &str, _: bool) -> Result<()> {
+    pub fn render(&self, _: &Verdict, _: &[Input], _: &str, _: bool) -> Result<Vec<u8>> {
+        Err(missing_feature("a PDF"))
+    }
+
+    #[cfg(not(feature = "pdf"))]
+    pub fn save(&self, _: &Path, _: &[u8], _: &[Input]) -> Result<()> {
         Err(missing_feature("a PDF"))
     }
 }

@@ -67,10 +67,14 @@ Top to bottom, as docs/05 section 4.2 orders the page:
 6. With `--all-plots`, every other plot family the files have data for.
 7. Run provenance: tool, preset, preset hash, date, schema, each input with the command
    line that wrote it.
-8. From a new page, the appendix: every metrics table of every input. A class with at
-   most 4 records prints a row per column with the glossary definition; a longer table and
-   the histogram print 25 evenly spaced records, the first and last kept, with a line
-   naming the file that holds them all.
+8. From a new page, the appendix: every metrics table of every input, every row. A class
+   with at most 4 records prints a row per column with the glossary definition; a longer
+   table and the histogram print a row per record.
+
+A table breaks across pages with its header row repeated. A row taller than the room left
+starts on a new page; a row taller than a page (a long command line in the run table, a
+long cell) goes on over the next pages, each piece under the repeated header row. A
+heading stays on the page of the plot under it.
 
 The coverage gaps table that the HTML page shows under a failing `CoverageGapMetrics`
 check is not in the PDF; the appendix prints the `CoverageGapMetrics` table.
@@ -101,8 +105,14 @@ keep no kern table, so line breaking measures what krilla draws.
 A character outside them (a sample name in Cyrillic or CJK) stops the render with its code
 point, the text and the way out: `U+041F (П) in "Пример-7" is outside the built-in Latin
 fonts; pass --pdf-font with a TTF or OTF font that has it` (exit 1). There is no silent
-fallback, because PDF/UA-1 refuses a `.notdef` glyph. With `qc` the metrics files and the
-manifest are written before the report fails; rerun with `--force --pdf-font FILE`.
+fallback, because PDF/UA-1 refuses a `.notdef` glyph. `report --pdf` renders every PDF
+before it writes the first file, so the run writes nothing. `qc` renders the PDF before
+`PREFIX.verdict.json` and the page; the metrics files and the manifest are written by then.
+Rerun with `--force --pdf-font FILE`.
+
+An empty sample name, or one holding a control character, U+2028 or U+2029, fails with
+`the sample name "..." is empty or not one line`. In a cell, control characters, U+2028 and
+U+2029 print as spaces.
 
 ## Builds, sizes and the kill rule
 
@@ -121,30 +131,41 @@ Measured 2026-11-16 on the Mac Studio (macOS arm64, rustc 1.100.0):
 
 | What | Without `pdf` | With `pdf` | Cost |
 |---|---:|---:|---:|
-| `bammetrics`, stripped | 6,793,568 | 10,105,752 | 3,312,184 bytes (3.16 MiB) |
+| `bammetrics`, stripped | 6,793,576 | 10,122,280 | 3,328,704 bytes (3.17 MiB) |
 | the wheel (CPython 3.15, macOS arm64) | 3,698,827 | 5,529,637 | 1,830,810 bytes |
 | the module inside it | 8,423,792 | 12,353,120 | 3,929,328 bytes |
 
 The default binary was 6,760,472 bytes stripped before this wave's command options
-(6358996). The options, their help, the errors and the dispatch add 33,096 bytes to it
-(0.49%); it links no PDF code. The `size_pdf` probe of `make budgets` measures the PDF
+(6358996). The options, their help, the errors and the dispatch add 33,104 bytes to it
+(0.49%); it links no PDF code. docs/07 asks that the default build not grow; the
+alternative, the flags compiled out of it, loses the exit-2 error that names the feature.
+The owner decides which holds. The `size_pdf` probe of `make budgets` measures the PDF
 crates alone (docs/05 section 4.8).
 
 PDF files from the committed fixtures, A4 unless named:
 
 | Input | Pages | Bytes |
 |---|---:|---:|
-| `report tests/data/picard --pdf` (generic) | 14 | 260,706 |
-| `report tests/data/picard --pdf-only --preset clinical-panel --all-plots --page-size letter` | 18 | 293,362 |
-| `qc tests/data/insert_size.bam --report pdf --preset clinical-panel --panel targets.interval_list -R ref_100k.fa` | 13 | 200,288 |
-| `qc tests/data/insert_size.bam --report html,pdf` (generic) | 7 | |
+| `report tests/data/picard --pdf` (generic) | 27 | 649,745 |
+| `report tests/data/picard --pdf-only --preset clinical-panel --all-plots --page-size letter` | 31 | 682,357 |
+| `qc tests/data/insert_size.bam --report pdf --preset clinical-panel --panel targets.interval_list -R ref_100k.fa` | 15 | 250,181 |
+| `qc tests/data/insert_size.bam --report html,pdf` (generic) | 7 | 107,023 |
+| `fixture_pdfs` failing sample (`crates/pdf/examples`) | 21 | 458,699 |
+
+The report part of the failing fixture is 3 pages, as docs/07 W06 asks; the appendix adds
+18. docs/07 counted 3 pages for the whole file and budgeted 150 KB per sample, measured
+without the appendix. Every row of every table costs about 74 bytes per value: PDF/UA-1
+needs one tagged cell element each, and krilla writes no object streams. The failing
+fixture holds 2,373 such cells. The size row of docs/05 section 4.8 is 500 KB for that
+reason (failing at 1 MB); the owner confirms it or asks for a row cap. A real sample's
+PDF follows the length of its histograms: `tests/data/picard` gives 27 pages and 650 KB.
 
 A `qc` PDF prints the paths of its metrics files, so its size follows the length of the
 prefix. Two runs of each give the same bytes (`cmp`).
 
 The kill rule of docs/07 (W06): layout code over 1,500 lines or growth over 4 MB keeps the
 PDF a documented recipe with the feature off. It did not fire. `wc -l crates/pdf/src/*.rs`
-reads 1,495 lines, and the growth reads 3,444,688 bytes (3.285 MiB). The CLI and Python
+reads 1,497 lines, and the growth reads 3,444,688 bytes (3.285 MiB, 3.44 MB). The CLI and Python
 glue lives in `crates/cli/src/pdf.rs` and `crates/py`, outside that count.
 docs/benchmarks.md holds the method.
 

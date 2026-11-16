@@ -5,7 +5,7 @@
 The PDF report, wave W06 of docs/07: `crates/pdf` behind the cargo feature `pdf` (parts A
 and B), and `report --pdf`, `qc --report pdf` and the Python keywords (part C). The default
 build compiles no krilla code. Its stripped binary was 6,760,472 bytes after parts A and B
-and is 6,793,568 bytes with the command options of part C (rustc 1.100, macOS arm64).
+and is 6,793,576 bytes with the command options of part C (rustc 1.100, macOS arm64).
 docs/pdf.md documents the report.
 
 ### Added
@@ -27,7 +27,7 @@ docs/pdf.md documents the report.
   The stub is regenerated; `tests/python/test_pdf.py` covers the forms.
 - The wheel is built with the feature `pdf` (`pyproject.toml`): 5,529,637 bytes against
   3,698,827 without it on CPython 3.15, macOS arm64. `cargo build --release` and the
-  Makefile's `release` keep it off. The `bammetrics` binary with the feature is 10,105,752
+  Makefile's `release` keep it off. The `bammetrics` binary with the feature is 10,122,280
   bytes stripped.
 - Golden cases: 8 PDF forms with the feature (each PDF listed with its page count, and its
   size for `report`), 3 missing-feature errors without it, 6 option errors in both.
@@ -38,16 +38,17 @@ docs/pdf.md documents the report.
   the print palette (`theme::resolve_tokens`), so usvg draws it; `Standalone::alt` is the
   plot's `<desc>`. The HTML pages and their snapshots are byte-identical.
 - `crates/pdf` (`bammetrics-pdf`, part B): `render(verdict, inputs, &Options)` gives the
-  PDF bytes and `write(path, ...)` writes them through `AtomicFile`, refusing a path that
-  names an input or the font. `Options { date, font, all_plots, paper }`, `Paper::A4`
+  PDF bytes, `save(path, bytes, inputs, &Options)` writes them through `AtomicFile`,
+  refusing a path that names an input or the font, and `write` does both. `Options { date, font, all_plots, paper }`, `Paper::A4`
   (default) or `Paper::Letter`. Content: header, verdict band, the failing and warning
   checks each with its plot, the checks not measured, the check table, the run
-  provenance, and from a new page an appendix of every metrics table (tables over 25
-  records print 25, evenly spaced, with a line naming the file). PDF/UA-1 through
+  provenance, and from a new page an appendix of every metrics table with every row.
+  PDF/UA-1 through
   krilla's validator: document language, title, one heading per `Sect`, `TH` cells on
   every table, `/Alt` on every figure, artifacts for rules, stripes, glyphs, repeated
   header rows and the footer. An outline entry per section and per appendix file. Tables
-  break across pages with the header row repeated; each page carries its number.
+  break across pages with the header row repeated, a row taller than a page goes on over
+  the next pages, and each page carries its number.
 - Fonts: Latin subsets of DejaVu Sans, DejaVu Sans Bold and DejaVu Sans Mono (68,532 bytes,
   `crates/pdf/fonts`, licence `LICENSE-DEJAVU`), rebuilt byte for byte by
   `tools/subset_fonts.py` (fontTools, `tools/requirements.txt`). `Options::font`
@@ -58,8 +59,30 @@ docs/pdf.md documents the report.
   and the text it is in.
 - `cargo run -p bammetrics-pdf --features pdf --example fixture_pdfs -- DIR` writes the
   three fixture PDFs (`pass.pdf`, `fail.pdf`, `fail-all-plots.pdf`).
-- `make budgets` measures three new rows (docs/05 section 4.8): PDF growth, PDF render
-  time and PDF size, from the `size_pdf` and `pdf_budget` examples.
+- `make budgets` measures three new rows (docs/05 section 4.8): PDF growth (4 MiB), PDF
+  render time (100 ms) and PDF size, from the `size_pdf` and `pdf_budget` examples. The
+  size target is 500 KB, not docs/07's 150 KB, which was measured without the appendix:
+  the failing fixture PDF is 458,699 bytes and 21 pages (3 of report, 18 of appendix).
+
+### Fixed (review of the PDF branch)
+
+- A table row taller than a page was drawn past the bottom and cut off (a 32 KB command
+  line showed 1,610 of 8,000 words). It now goes on over the next pages under the
+  repeated header row.
+- The appendix printed 25 evenly spaced rows of a longer table. It prints every row.
+- A plot heading could sit alone at a page bottom with its plot on the next page. The
+  heading of a plot, and a failing check with a plot, now start on a new page unless the
+  plot fits below them.
+- `report --pdf` with a sample name the fonts cannot set wrote the verdict and the page,
+  then failed with no index. Every PDF is now rendered before the first file is written,
+  so the run writes nothing. `qc` renders its PDF before `PREFIX.verdict.json`.
+- An empty sample name, or one with a control character or U+2028, failed with the PDF
+  writer's validation text. It fails with `the sample name "..." is empty or not one
+  line`. U+2028 and U+2029 in a cell print as spaces.
+- `read_font` checks that the path is a regular file before it opens it, so a pipe given
+  to the library no longer blocks. A damaged table tag prints escaped (`\x83`).
+- `tools/subset_fonts.py` formatted with ruff. docs/python.md puts the PDF keywords after
+  the `report` signature. The PDF growth row reads MiB.
 
 ### Changed
 

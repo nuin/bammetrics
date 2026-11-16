@@ -15,8 +15,9 @@
 //! same inputs and [`Options::date`] give the same bytes: nothing reads the
 //! clock or the system fonts.
 //!
-//! The entry points are [`render`] (the bytes) and [`write`] (a file,
-//! written under a temporary name and renamed into place).
+//! The entry points are [`render`] (the bytes), [`save`] (bytes to a file,
+//! written under a temporary name and renamed into place) and [`write`]
+//! (both).
 
 use std::fmt;
 use std::path::PathBuf;
@@ -33,6 +34,8 @@ pub use fonts::{FONT_LIMIT, read_font, validate};
 
 #[cfg(feature = "pdf")]
 use bammetrics_verdict::{Input, Verdict};
+#[cfg(feature = "pdf")]
+use std::path::Path;
 
 /// The page size: A4 (210 by 297 mm) or Letter (8.5 by 11 inches).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -48,15 +51,6 @@ impl Paper {
         match self {
             Paper::A4 => (595.276, 841.89),
             Paper::Letter => (612.0, 792.0),
-        }
-    }
-
-    /// `a4` or `letter`, any case.
-    pub fn parse(text: &str) -> Option<Paper> {
-        match text.to_ascii_lowercase().as_str() {
-            "a4" => Some(Paper::A4),
-            "letter" => Some(Paper::Letter),
-            _ => None,
         }
     }
 }
@@ -75,6 +69,9 @@ pub struct Options {
     pub paper: Paper,
 }
 
+/// The result of every entry point.
+pub type Result<T> = std::result::Result<T, Error>;
+
 /// Why no PDF was written.
 #[derive(Debug)]
 pub enum Error {
@@ -92,6 +89,8 @@ pub enum Error {
     },
     /// The output path names an input (a metrics file or the font).
     OverwritesInput(PathBuf),
+    /// The sample name is empty or holds a control or separator character.
+    SampleName(String),
     /// The PDF writer refused the document.
     Pdf(String),
     Io(std::io::Error),
@@ -111,6 +110,7 @@ impl fmt::Display for Error {
                 }
             }
             Error::OverwritesInput(p) => write!(f, "{} is an input, not overwritten", p.display()),
+            Error::SampleName(s) => write!(f, "the sample name {s:?} is empty or not one line"),
             Error::Pdf(reason) => write!(f, "PDF writer: {reason}"),
             Error::Io(e) => write!(f, "{e}"),
         }
@@ -127,61 +127,61 @@ impl From<std::io::Error> for Error {
 
 /// The PDF of `verdict` and the metrics files it was evaluated over.
 #[cfg(feature = "pdf")]
-pub fn render(verdict: &Verdict, inputs: &[Input], options: &Options) -> Result<Vec<u8>, Error> {
-    use fonts::Face;
-    use layout::{Flow, Style};
+pub fn render(verdict: &Verdict, inputs: &[Input], options: &Options) -> Result<Vec<u8>> {
+    let odd = |c: char| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}');
+    if verdict.sample.trim().is_empty() || verdict.sample.chars().any(odd) {
+        return Err(Error::SampleName(verdict.sample.clone()));
+    }
     let fonts = fonts::Fonts::load(options.font.as_deref())?;
     let layout = || {
-        let flow = Flow::new(&fonts, options.paper.points());
-        let mut report = content::Report::new(flow, verdict, inputs, options);
+        let flow = layout::Flow::new(&fonts, options.paper.points());
+        let drawn = Vec::new();
+        let mut report = content::Report {
+            flow,
+            verdict,
+            inputs,
+            options,
+            drawn,
+        };
         report.build()?;
         let status = verdict.status.name().to_uppercase();
         let title = format!("{}: {status} (bammetrics)", verdict.sample);
         let (sample, version) = (&verdict.sample, &verdict.tool_version);
         let footer = format!("{sample}  \u{b7}  {status}  \u{b7}  bammetrics {version}");
-        let ink = bammetrics_report::theme::token(bammetrics_report::theme::Theme::Print, "ink-2");
-        let style = Style {
-            face: Face::Regular,
-            size: 7.5,
-            color: ink.unwrap_or_default(),
-        };
+        let style = content::style(fonts::Face::Regular, 7.5, "ink-2");
         report.flow.finish(&title, &footer, style)
     };
     // krilla and its font parsers are written not to panic; a panic is still
     // turned into an error, so a damaged font never aborts a run.
-    let stopped = || {
-        Err(Error::Pdf(
-            "the PDF writer stopped on an internal error".into(),
-        ))
-    };
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(layout)).unwrap_or_else(|_| stopped())
+    let stopped = Error::Pdf("the PDF writer stopped on an internal error".into());
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(layout)).unwrap_or(Err(stopped))
 }
 
-/// [`render`] written to `path` through
+/// [`render`] written to `path` by [`save`].
+#[cfg(feature = "pdf")]
+pub fn write(path: &Path, verdict: &Verdict, inputs: &[Input], options: &Options) -> Result<()> {
+    save(path, &render(verdict, inputs, options)?, inputs, options)
+}
+
+/// `bytes` written to `path` through
 /// [`AtomicFile`](bammetrics_core::cleanup::AtomicFile): under a temporary
 /// name in its directory, then renamed into place, the mode of an existing
 /// file kept, a link or special file of another user refused. A path that
-/// names an input or the font is refused before anything is written.
+/// names one of `inputs` or the font of `options` is refused unwritten.
 #[cfg(feature = "pdf")]
-pub fn write(
-    path: &std::path::Path,
-    verdict: &Verdict,
-    inputs: &[Input],
-    options: &Options,
-) -> Result<(), Error> {
+pub fn save(path: &Path, bytes: &[u8], inputs: &[Input], options: &Options) -> Result<()> {
     use std::io::Write as _;
-    let same = |other: &std::path::Path| match (path.canonicalize(), other.canonicalize()) {
+    let same = |other: &Path| match (path.canonicalize(), other.canonicalize()) {
         (Ok(a), Ok(b)) => a == b,
         _ => false,
     };
-    let named = inputs.iter().map(|i| std::path::Path::new(&i.path));
+    let named = inputs.iter().map(|i| Path::new(&i.path));
     if named.chain(options.font.as_deref()).any(same) {
         return Err(Error::OverwritesInput(path.to_path_buf()));
     }
-    let bytes = render(verdict, inputs, options)?;
     let file = bammetrics_core::cleanup::AtomicFile::new(path);
     let mut out = file.create()?;
-    out.write_all(&bytes)?;
+    out.write_all(bytes)?;
     out.sync_all()?;
     drop(out);
     Ok(file.commit()?)

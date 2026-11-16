@@ -114,12 +114,12 @@ One path giving one sample returns a `Verdict`; a list of paths, or a directory 
 
 ## report
 
+`report(dirs, *, preset="generic", output=None, all_plots=False, date=None, pdf=False, pdf_only=False, pdf_font=None, page_size=None)` writes `SAMPLE.verdict.json` and `SAMPLE.report.html` per sample and `index.html`, the bytes `bammetrics report` writes, and returns the paths in write order. Without `output`, one directory is also the output; several directories without `output` raise `UsageError`.
+
 `report(dirs, pdf=True)` adds `SAMPLE.report.pdf` beside each page; `pdf_only=True` writes
 the verdicts and the PDF files alone. `page_size` (`"a4"`, `"letter"`) and `pdf_font` (a
 TTF or OTF path) set the PDF. The wheel is built with the feature `pdf`; a module built
 without it raises `UsageError` naming the feature ([docs/pdf.md](pdf.md)).
-
-`report(dirs, *, preset="generic", output=None, all_plots=False, date=None, pdf=False, pdf_only=False, pdf_font=None, page_size=None)` writes `SAMPLE.verdict.json` and `SAMPLE.report.html` per sample and `index.html`, the bytes `bammetrics report` writes, and returns the paths in write order. Without `output`, one directory is also the output; several directories without `output` raise `UsageError`.
 
 ## read_table
 

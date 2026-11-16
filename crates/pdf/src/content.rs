@@ -14,7 +14,8 @@ use bammetrics_report::page::{
     band_glyph, class_title, count, file_name, metric_text, row_label, short_class, shown_text,
     status_glyph, status_word, total_reads,
 };
-use bammetrics_report::plots::{Family, figure_standalone, thin_indices};
+use bammetrics_report::plots::{Family, figure_standalone};
+use bammetrics_report::svg::{HEIGHT, WIDTH};
 use bammetrics_report::theme::{Theme, token};
 use bammetrics_verdict::{Band, Check, Input, Status, Verdict};
 use krilla::tagging::{ListNumbering, Tag};
@@ -23,8 +24,6 @@ use crate::fonts::Face;
 use crate::layout::{Cell, Flow, Lead, Rgb, Style, Table};
 use crate::{Error, Options};
 
-/// The most records an appendix table prints, evenly spaced.
-const APPENDIX_ROWS: usize = 25;
 const NO_LEAD: Lead<'static> = (0.0, None);
 
 /// The columns and records of a class block or a histogram.
@@ -49,7 +48,7 @@ fn status_ink(status: Status) -> Rgb {
     status_colors(name).0
 }
 
-fn style(face: Face, size: f32, ink: &str) -> Style {
+pub(crate) fn style(face: Face, size: f32, ink: &str) -> Style {
     let color = color(ink);
     Style { face, size, color }
 }
@@ -81,28 +80,17 @@ fn table(head: &[&str], rows: Vec<Vec<Cell>>, row_header: Option<usize>) -> Tabl
     }
 }
 
-/// Lays out one sample's report.
+/// Lays out one sample's report; `drawn` holds the plot families drawn so
+/// far.
 pub(crate) struct Report<'r, 'f> {
     pub flow: Flow<'f>,
-    verdict: &'r Verdict,
-    inputs: &'r [Input],
-    options: &'r Options,
-    /// Plot families drawn so far.
-    drawn: Vec<Family>,
+    pub verdict: &'r Verdict,
+    pub inputs: &'r [Input],
+    pub options: &'r Options,
+    pub drawn: Vec<Family>,
 }
 
 impl<'r, 'f> Report<'r, 'f> {
-    pub fn new(flow: Flow<'f>, v: &'r Verdict, inputs: &'r [Input], o: &'r Options) -> Self {
-        let drawn = Vec::new();
-        Report {
-            flow,
-            verdict: v,
-            inputs,
-            options: o,
-            drawn,
-        }
-    }
-
     /// A heading of `level` 1 to 4 in its size: 20, 13, 10.5 and 9 points.
     fn heading(&mut self, level: u16, text: &str, lead: Lead, outline: Option<u8>) {
         let (size, ink) =
@@ -136,6 +124,7 @@ impl<'r, 'f> Report<'r, 'f> {
         if self.options.all_plots && !remaining.is_empty() {
             self.section("Plots", |report| {
                 for family in remaining {
+                    report.flow.room(report.plot_height() + 24.0);
                     report.flow.open(Tag::Section);
                     report.heading(3, family.title(), NO_LEAD, None);
                     report.plot(family)?;
@@ -244,6 +233,11 @@ impl<'r, 'f> Report<'r, 'f> {
     /// One failing or warning check: heading, reason, value and limits,
     /// metric, then its plot unless an earlier check drew it.
     fn issue(&mut self, check: &Check) -> Result<(), Error> {
+        let plot = check.plot.as_deref().and_then(Family::parse);
+        let plot = plot.filter(|family| !self.drawn.contains(family));
+        if plot.is_some() {
+            self.flow.room(self.plot_height() + 80.0);
+        }
         self.flow.open(Tag::Div);
         let heading = format!("{}: {}", status_word(check.status), check.label);
         let glyph = (status_glyph(check.status), status_ink(check.status));
@@ -262,14 +256,18 @@ impl<'r, 'f> Report<'r, 'f> {
         }
         let metric = format!("metric {}", metric_text(check));
         self.flow.paragraph(&metric, mono());
-        if let Some(family) = check.plot.as_deref().and_then(Family::parse)
-            && !self.drawn.contains(&family)
-        {
+        if let Some(family) = plot {
             self.plot(family)?;
         }
         self.flow.close();
         self.flow.y += 6.0;
         Ok(())
+    }
+
+    /// A plot at the text width (at most 470 points) with two caption lines,
+    /// kept on one page with the heading above it.
+    fn plot_height(&self) -> f32 {
+        self.flow.width().min(470.0) * (HEIGHT / WIDTH) as f32 + 30.0
     }
 
     fn plot(&mut self, family: Family) -> Result<(), Error> {
@@ -370,42 +368,31 @@ impl<'r, 'f> Report<'r, 'f> {
                     self.flow.close();
                 } else {
                     let title = class_title(&block.class);
-                    self.records(&title, name, (&block.columns, &block.rows), false);
+                    self.records(&title, (&block.columns, &block.rows), false);
                 }
             }
             if let Some(hist) = &doc.histogram {
-                self.records("Histogram", name, (&hist.columns, &hist.rows), true);
+                self.records("Histogram", (&hist.columns, &hist.rows), true);
             }
             self.flow.close();
         }
         Ok(())
     }
 
-    /// A `Sect` of one table with a row per record under an `h4` that counts
-    /// them, cut to [`APPENDIX_ROWS`] evenly spaced, the first and last kept;
-    /// `numbers` aligns every cell right.
-    fn records(&mut self, title: &str, file: &str, block: Records, numbers: bool) {
+    /// A `Sect` of one table with a row per record, every record, under an
+    /// `h4` that counts them; `numbers` aligns every cell right.
+    fn records(&mut self, title: &str, block: Records, numbers: bool) {
         let (columns, rows) = block;
         self.flow.room(110.0);
         self.flow.open(Tag::Section);
-        let shown = thin_indices(rows.len(), APPENDIX_ROWS);
-        let (n, all) = (shown.len(), rows.len());
-        let what = match n == all {
-            true => count(all, "row"),
-            false => format!("{n} of {all} rows, evenly spaced"),
-        };
-        self.heading(4, &format!("{title}, {what}"), NO_LEAD, None);
-        if n < all {
-            self.flow
-                .paragraph(&format!("Every row is in {file}."), muted());
-        }
+        let heading = format!("{title}, {}", count(rows.len(), "row"));
+        self.heading(4, &heading, NO_LEAD, None);
         let cell = |v: &Value| {
             let cell = Cell::new(v.picard_text(), body());
             if numbers { cell.right() } else { cell }
         };
-        let cells = shown.iter().map(|&r| rows[r].iter().map(cell).collect());
-        let cells = cells.collect();
-        let mut table = table(&[], cells, None);
+        let cells = rows.iter().map(|row| row.iter().map(cell).collect());
+        let mut table = table(&[], cells.collect(), None);
         table.head = columns.to_vec();
         self.flow.table(&table);
         self.flow.close();

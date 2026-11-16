@@ -135,11 +135,12 @@ pub fn read_font(path: &Path) -> Result<Vec<u8>, Error> {
         path: path.to_path_buf(),
         reason,
     };
-    let file = std::fs::File::open(path).map_err(|e| fail(e.to_string()))?;
-    let metadata = file.metadata().map_err(|e| fail(e.to_string()))?;
+    // Checked before the open, which blocks on a pipe.
+    let metadata = std::fs::metadata(path).map_err(|e| fail(e.to_string()))?;
     if !metadata.is_file() {
         return Err(fail("not a regular file".into()));
     }
+    let file = std::fs::File::open(path).map_err(|e| fail(e.to_string()))?;
     let mut bytes = Vec::new();
     if metadata.len() <= FONT_LIMIT {
         file.take(FONT_LIMIT + 1)
@@ -161,10 +162,9 @@ pub fn validate(bytes: &[u8]) -> Result<(), String> {
     let font = FontRef::new(bytes).map_err(|e| format!("not a TrueType or OpenType font ({e})"))?;
     for record in font.table_directory().table_records() {
         if font.table_data(record.tag()).is_none() {
-            return Err(format!(
-                "its {} table lies past the end of the file",
-                record.tag()
-            ));
+            let tag = record.tag().to_be_bytes().map(std::ascii::escape_default);
+            let tag: String = tag.into_iter().flatten().map(char::from).collect();
+            return Err(format!("its {tag} table lies past the end of the file"));
         }
     }
     let has = |tag: &[u8; 4]| font.table_data(skrifa::Tag::new(tag)).is_some();

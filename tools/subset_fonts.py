@@ -55,7 +55,9 @@ FONTS = (
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("source", type=pathlib.Path, help="directory with the DejaVu 2.37 TTFs")
+    parser.add_argument(
+        "source", type=pathlib.Path, help="directory with the DejaVu 2.37 TTFs"
+    )
     args = parser.parse_args()
     options = subset.Options()
     options.hinting = False

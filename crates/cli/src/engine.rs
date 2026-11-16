@@ -341,8 +341,14 @@ fn post_and_report(
     argv.extend(paths.iter().map(|p| p.display().to_string()));
     let post = own_step(plan, "verdict", "post", argv, Vec::new());
 
-    let mut written = vec![(verdict_path(&plan.prefix), verdict.to_json(), "verdict")];
     let date = args.date.clone().unwrap_or_else(|| CivilTime::now().iso());
+    // The PDF is rendered before verdict.json and the page are written: a
+    // sample name the fonts cannot set fails the step with neither written.
+    let pdf_bytes = match &plan.pdf {
+        Some(settings) => Some(settings.render(&verdict, &inputs, &date, args.all_plots)?),
+        None => None,
+    };
+    let mut written = vec![(verdict_path(&plan.prefix), verdict.to_json(), "verdict")];
     if args.writes(ReportForm::Html) {
         let page = bammetrics_report::render(
             &verdict,
@@ -370,10 +376,10 @@ fn post_and_report(
         outputs.push(output);
     }
     let pdf = pdf_path(&plan.prefix);
-    match &plan.pdf {
-        Some(settings) => {
+    match (&plan.pdf, pdf_bytes) {
+        (Some(settings), Some(bytes)) => {
             files.replaced += usize::from(pdf.exists());
-            settings.write(&pdf, &verdict, &inputs, &date, args.all_plots)?;
+            settings.save(&pdf, &bytes, &inputs)?;
             files.written += 1;
             let output = Output {
                 path: pdf,
@@ -383,7 +389,7 @@ fn post_and_report(
             out.file("report", &output, true);
             outputs.push(output);
         }
-        None => remove_stale_report(plan, &pdf, "pdf", files),
+        _ => remove_stale_report(plan, &pdf, "pdf", files),
     }
     let mut report_argv = vec![format!("--all-plots={}", args.all_plots)];
     report_argv.extend(args.date.iter().map(|d| format!("--date={d}")));

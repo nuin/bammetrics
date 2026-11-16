@@ -541,7 +541,7 @@ TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30
 
 
 ## file sample.report.pdf
-<pdf not recorded: 13 pages>
+<pdf not recorded: 16 pages>
 ## file sample.sex_check_metrics
 ## htsjdk.samtools.metrics.StringHeader
 # CollectSexCheckMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.sex_check_metrics TARGET_INTERVALS=tests/data/targets.interval_list

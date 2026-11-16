@@ -229,3 +229,38 @@ fn check_formats_and_exit_codes() {
     let no_preset = bammetrics(&["check", PICARD, "--preset", "nope"]);
     assert_eq!(code(&no_preset), 1);
 }
+
+/// A sample name the built-in Latin fonts cannot set fails `report --pdf`
+/// before any file is written: no verdict.json, no page, no index. Every
+/// PDF is rendered before the first write.
+#[cfg(feature = "pdf")]
+#[test]
+fn report_pdf_with_a_cyrillic_sample_writes_nothing() {
+    let dir = fresh_dir("cyrillic");
+    let input = dir.join("in");
+    fs::create_dir_all(&input).expect("input directory");
+    let picard = root().join(PICARD).join("NA12878");
+    for entry in fs::read_dir(&picard).expect("fixture directory") {
+        let name = entry
+            .expect("entry")
+            .file_name()
+            .into_string()
+            .expect("utf-8");
+        let renamed = name.replacen("NA12878", "Пример-7", 1);
+        fs::copy(picard.join(&name), input.join(renamed)).expect("copy");
+    }
+    let out = dir.join("out");
+    let run = bammetrics(&[
+        "report",
+        input.to_str().expect("utf-8"),
+        "--pdf",
+        "-o",
+        out.to_str().expect("utf-8"),
+    ]);
+    assert_eq!(code(&run), 1, "{}", stderr(&run));
+    let message = stderr(&run);
+    assert!(message.contains("U+041F (П) in \"Пример-7\""), "{message}");
+    let written: Vec<_> = fs::read_dir(&out).map_or_else(|_| Vec::new(), |d| d.collect());
+    assert!(written.is_empty(), "{written:?}");
+    fs::remove_dir_all(&dir).expect("clean up");
+}

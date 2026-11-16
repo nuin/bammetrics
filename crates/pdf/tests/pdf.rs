@@ -107,6 +107,8 @@ struct Elem {
     children: Vec<usize>,
     /// Marked content or object references among the kids.
     content: usize,
+    /// The page of `/Pg`.
+    page: Option<ObjectId>,
 }
 
 /// Every structure element under the root, parents before children.
@@ -132,6 +134,7 @@ fn struct_tree(pdf: &Document) -> (Vec<Elem>, Vec<usize>) {
             alt: elem.get(b"Alt").ok().map(text),
             children: Vec::new(),
             content: 0,
+            page: elem.get(b"Pg").and_then(Object::as_reference).ok(),
         });
         let (mut children, mut content) = (Vec::new(), 0);
         if let Ok(k) = elem.get(b"K") {
@@ -221,14 +224,15 @@ fn the_same_inputs_give_the_same_bytes() {
 
 /// The failing fixture: 3 pages of report (header, band, the 5 failing
 /// checks with 2 plots, the 5 not measured, the 18-row check table, the run)
-/// and 10 of appendix, which starts on page 4. docs/07 named 3 pages for the
-/// report; the appendix of every metrics table (docs/07 section 3.3) adds
-/// the rest.
+/// and 18 of appendix, which starts on page 4. docs/07 named 3 pages for the
+/// report; the appendix of every metrics table with every row (docs/07
+/// section 3.3, row 6 of docs/05 section 4.2) adds the rest, most of it the
+/// 101 GC bias rows of 11 columns and the 200 rows of the cycle histogram.
 #[test]
 fn the_failing_fixture_is_three_pages_and_an_appendix() {
     let bytes = failing_pdf(&options());
     let pdf = Document::load_mem(&bytes).expect("lopdf reads it");
-    assert_eq!(pdf.get_pages().len(), 13);
+    assert_eq!(pdf.get_pages().len(), 21);
     let entries = outline(&pdf);
     let appendix = entries
         .iter()
@@ -270,8 +274,6 @@ fn letter_paper_sets_the_page_size() {
         .map(|v| v.as_float().expect("number"))
         .collect();
     assert_eq!(size, vec![0.0, 0.0, 612.0, 792.0]);
-    assert_eq!(Paper::parse("LETTER"), Some(Paper::Letter));
-    assert_eq!(Paper::parse("a5"), None);
 }
 
 /// The PDF/UA-1 structure (no veraPDF on the build machine: this reads
@@ -360,6 +362,18 @@ fn the_structure_is_tagged_for_pdf_ua() {
     }
     let tables: Vec<&Elem> = elems.iter().filter(|e| e.kind == "Table").collect();
     assert_eq!(tables.len(), 12, "checks, run, 10 in the appendix");
+    let rows = |table: &Elem| {
+        let parts = table.children.iter().map(|&c| &elems[c]);
+        parts.map(|part| part.children.len()).sum::<usize>()
+    };
+    let mut row_counts: Vec<usize> = tables.iter().map(|t| rows(t)).collect();
+    row_counts.sort_unstable();
+    assert_eq!(
+        row_counts[row_counts.len() - 3..],
+        [102, 128, 201],
+        "every record with its header row: 101 GC bias rows, the 127 of the Hs \
+         histogram, the 200 of the cycle histogram"
+    );
     let descendants = |start: &Elem| -> Vec<&Elem> {
         let mut stack: Vec<usize> = start.children.clone();
         let mut out = Vec::new();
@@ -379,6 +393,21 @@ fn the_structure_is_tagged_for_pdf_ua() {
     }
     let figures: Vec<&Elem> = elems.iter().filter(|e| e.kind == "Figure").collect();
     assert_eq!(figures.len(), 4, "every plot family with all_plots");
+    for parent in &elems {
+        let elems = &elems;
+        let first = |kind: &str| {
+            parent
+                .children
+                .iter()
+                .copied()
+                .find(|&c| elems[c].kind == kind)
+        };
+        if let (Some(heading), Some(figure)) = (first("H3"), first("Figure")) {
+            let (heading, figure) = (&elems[heading], &elems[figure]);
+            assert!(heading.page.is_some(), "a heading without /Pg");
+            assert_eq!(heading.page, figure.page, "a plot apart from its heading");
+        }
+    }
     for figure in &figures {
         let alt = figure.alt.as_deref().unwrap_or_default();
         assert!(alt.len() > 20, "figure without an alternative: {figure:?}");
@@ -600,4 +629,84 @@ fn write_refuses_an_input_as_the_output() {
         .collect();
     assert!(leftovers.is_empty());
     fs::remove_dir_all(&dir).expect("clean up");
+}
+
+/// Every text line's baseline from the top of its page (krilla flips the
+/// page, so each `Tm` holds the top-down position), per page.
+fn baselines(pdf: &Document) -> Vec<Vec<f32>> {
+    let pages = pdf.get_pages().into_values();
+    let content = pages.map(|page| pdf.get_and_decode_page_content(page).expect("content"));
+    content
+        .map(|c| {
+            let tm = c.operations.into_iter().filter(|op| op.operator == "Tm");
+            tm.map(|op| op.operands[5].as_float().expect("y")).collect()
+        })
+        .collect()
+}
+
+/// A row taller than a page goes on over the next pages under the repeated
+/// header row: a 10,000-character command line in the run table and a
+/// 15,000-character cell in the appendix. Every line sits above the bottom
+/// margin (56 points); only the footer is below it.
+#[test]
+fn a_row_taller_than_a_page_goes_on_over_pages() {
+    let command = "A=x ".repeat(2500);
+    let cell = "word ".repeat(3000);
+    let text = format!(
+        "## htsjdk.samtools.metrics.StringHeader\n# {command}\n\n\
+         ## METRICS CLASS\tpicard.analysis.InsertSizeMetrics\nNOTE\n{cell}\n"
+    );
+    let mut inputs = fixture_set();
+    let doc = MetricsDoc::parse(&text).expect("parses");
+    assert!(doc.headers[0].len() >= 9999, "{}", doc.headers[0].len());
+    inputs.push(Input {
+        path: "fixture.long.txt".into(),
+        doc,
+    });
+    let verdict = verdict("clinical-panel", &inputs, "S1");
+    let bytes = render(&verdict, &inputs, &options()).expect("renders");
+    let pdf = Document::load_mem(&bytes).expect("lopdf reads it");
+    let (elems, _) = struct_tree(&pdf);
+    let split = elems.iter().filter(|e| e.kind == "TD" && e.content > 1);
+    assert_eq!(split.count(), 2, "the command line and the long cell");
+    let bottom = 841.89 - 56.0;
+    let lines = baselines(&pdf);
+    let footer = lines[0].iter().copied().fold(0.0, f32::max);
+    assert!(footer > bottom, "the footer is in the bottom margin");
+    for (page, ys) in lines.iter().enumerate() {
+        let below: Vec<f32> = ys.iter().copied().filter(|&y| y > bottom).collect();
+        assert_eq!(below.len(), 2, "page {}: footer and number only", page + 1);
+        assert!(below.iter().all(|&y| (y - footer).abs() < 0.01));
+    }
+    let short = Document::load_mem(&failing_pdf(&options())).expect("lopdf reads it");
+    assert!(
+        lines.len() >= short.get_pages().len() + 3,
+        "{} pages",
+        lines.len()
+    );
+}
+
+/// The inputs that came out as writer errors: an empty sample name, one
+/// with a control character or a line separator, and a cell holding U+2028
+/// and U+2029, which print as spaces.
+#[test]
+fn odd_text_gives_a_clear_error_or_a_space() {
+    let inputs = fixture_set();
+    for sample in ["", " ", "S\u{0}1", "S\u{2028}1"] {
+        let verdict = verdict("clinical-panel", &inputs, sample);
+        let err = render(&verdict, &inputs, &options()).unwrap_err();
+        assert!(matches!(err, Error::SampleName(_)), "{sample:?}: {err}");
+        assert!(
+            err.to_string().contains("is empty or not one line"),
+            "{err}"
+        );
+    }
+    let mut inputs = inputs;
+    let text = "## METRICS CLASS\tpicard.analysis.InsertSizeMetrics\nNOTE\na\u{2028}b\u{2029}c\n";
+    inputs.push(Input {
+        path: "fixture.separators.txt".into(),
+        doc: MetricsDoc::parse(text).expect("parses"),
+    });
+    let verdict = verdict("clinical-panel", &inputs, "S1");
+    render(&verdict, &inputs, &options()).expect("the separators print as spaces");
 }

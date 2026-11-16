@@ -159,10 +159,23 @@ pub fn write(args: &ReportArgs) -> Result<Written> {
         all_plots: args.all_plots,
         date: &date,
     };
+    let verdicts: Vec<_> = samples
+        .iter()
+        .map(|sample| evaluate(&preset, &sample.inputs, Some(&sample.name)))
+        .collect();
+    // Every PDF is rendered before the first file is written: a sample name
+    // the fonts cannot set fails the run with nothing written.
+    let pdfs = match &pdf {
+        Some(pdf) => samples
+            .iter()
+            .zip(&verdicts)
+            .map(|(s, v)| pdf.render(v, &s.inputs, &date, args.all_plots).map(Some))
+            .collect::<Result<Vec<_>>>()?,
+        None => vec![None; samples.len()],
+    };
     let mut summaries = Vec::with_capacity(samples.len());
     let mut files = Vec::with_capacity(3 * samples.len() + 1);
-    for sample in &samples {
-        let verdict = evaluate(&preset, &sample.inputs, Some(&sample.name));
+    for ((sample, verdict), bytes) in samples.iter().zip(verdicts).zip(pdfs) {
         let verdict_file = out.join(verdict_name(&sample.name));
         write_atomic(&verdict_file, verdict.to_json())?;
         files.push(verdict_file);
@@ -172,9 +185,9 @@ pub fn write(args: &ReportArgs) -> Result<Written> {
             write_atomic(&page_file, &page)?;
             files.push(page_file);
         }
-        if let Some(pdf) = &pdf {
+        if let (Some(pdf), Some(bytes)) = (&pdf, bytes) {
             let pdf_file = out.join(pdf_name(&sample.name));
-            pdf.write(&pdf_file, &verdict, &sample.inputs, &date, args.all_plots)?;
+            pdf.save(&pdf_file, &bytes, &sample.inputs)?;
             files.push(pdf_file);
         }
         summaries.push(SampleSummary::new(verdict, page_name(&sample.name)));
