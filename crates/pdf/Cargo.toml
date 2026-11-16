@@ -1,0 +1,52 @@
+[package]
+name = "bammetrics-pdf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+# The default build (no feature) compiles an empty crate on 1.88. The `pdf`
+# feature pulls krilla 0.8.2, which declares rust-version 1.92, so Cargo
+# refuses that build on an older compiler and names krilla.
+rust-version.workspace = true
+description = "The per-sample PDF report: the HTML report's content as a tagged PDF/UA-1 file (feature `pdf`)"
+
+[lib]
+name = "bammetrics_pdf"
+
+[features]
+pdf = [
+    "dep:bammetrics-core",
+    "dep:bammetrics-verdict",
+    "dep:bammetrics-report",
+    "dep:krilla",
+    "dep:krilla-svg",
+    "dep:skrifa",
+    "dep:usvg",
+]
+
+[dependencies]
+bammetrics-core = { workspace = true, optional = true }
+bammetrics-verdict = { workspace = true, optional = true }
+bammetrics-report = { workspace = true, optional = true }
+krilla = { version = "0.8.2", default-features = false, features = ["simple-text"], optional = true }
+krilla-svg = { version = "0.8.1", optional = true }
+skrifa = { version = "0.42", optional = true }
+usvg = { version = "0.47", default-features = false, features = ["text"], optional = true }
+
+[dev-dependencies]
+lopdf = { version = "0.44", default-features = false }
+
+[[example]]
+name = "fixture_pdfs"
+required-features = ["pdf"]
+
+[[example]]
+name = "size_pdf"
+required-features = ["pdf"]
+
+[[example]]
+name = "pdf_budget"
+required-features = ["pdf"]
+
+[[test]]
+name = "pdf"
+required-features = ["pdf"]

@@ -1,0 +1,2 @@
+# Maintainer scripts under tools/ (not the wheel): subset_fonts.py.
+fonttools>=4.25

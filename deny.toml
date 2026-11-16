@@ -1,5 +1,5 @@
 # cargo-deny configuration: `make deny` (cargo install cargo-deny --locked).
-# Checks the dependency graph of the six workspace crates and the vendored
+# Checks the dependency graph of the seven workspace crates and the vendored
 # noodles-cram: licences, banned and duplicated crates, registries, and the
 # RustSec advisory database. Every exception below carries its reason.
 
@@ -28,12 +28,28 @@ allow = [
     # target-lexicon, a build dependency of pyo3: Apache-2.0 with the LLVM
     # exception, which only loosens Apache-2.0 for compiled output.
     "Apache-2.0 WITH LLVM-exception",
+    # The PDF report (crates/pdf, feature pdf): tiny-skia and tiny-skia-path
+    # under krilla-svg, encoding_rs under lopdf (a dev-dependency of the
+    # structure test), arrayref under tiny-skia. Both licences ask for the
+    # copyright notice only.
+    "BSD-3-Clause",
+    "BSD-2-Clause",
 ]
 confidence-threshold = 0.93
 
 [bans]
 multiple-versions = "deny"
 wildcards = "deny"
+# Two versions each, all under the PDF report (feature pdf of crates/pdf),
+# none in the default build: png and tiny-skia take miniz_oxide 0.8 where
+# flate2 takes 0.9; fontdb's fontconfig-parser takes roxmltree 0.20 where
+# usvg takes 0.21; gif under krilla takes weezl 0.1 where lopdf, the
+# dev-dependency of the structure test, takes 0.2.
+skip = [
+    { crate = "miniz_oxide@0.8.9", reason = "png and tiny-skia under krilla, feature pdf" },
+    { crate = "roxmltree@0.20.0", reason = "fontconfig-parser under fontdb, feature pdf" },
+    { crate = "weezl@0.1.12", reason = "gif under krilla, feature pdf" },
+]
 # The workspace crates name each other by path and version.
 allow-wildcard-paths = true
 # docs/05 section 4.9: no crate makes a network call. A client or a TLS stack
