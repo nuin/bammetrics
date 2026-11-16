@@ -577,6 +577,7 @@ impl<'f> Flow<'f> {
             let font = self.fonts.custom.clone();
             return Err(Error::MissingGlyph { ch, text, font });
         }
+        self.shape_custom(footer, style)?;
         let pdf_error = |e: &dyn std::fmt::Debug| Error::Pdf(format!("{e:?}"));
         let configuration = ConfigurationBuilder::new()
             .with_accessibility_validator(Accessibility::UA1)
@@ -623,6 +624,33 @@ impl<'f> Flow<'f> {
         document.set_outline(self.outline());
         document.set_tag_tree(self.tag_tree(&mut ids));
         document.finish().map_err(|e| pdf_error(&e))
+    }
+
+    /// Shape every text run of a `--pdf-font` once before the first page
+    /// opens. A shaper panic under an open krilla surface aborts the
+    /// process (the surface's drop asserts); here it unwinds into an error.
+    fn shape_custom(&self, footer: &str, style: Style) -> Result<(), Error> {
+        let Some(path) = &self.fonts.custom else {
+            return Ok(());
+        };
+        let number = format!("page {0} of {0}", self.pages.len());
+        let fixed = [(footer, style.face), (number.as_str(), style.face)];
+        let ops = self.pages.iter().flatten().flat_map(|(_, ops)| ops);
+        let texts = ops.filter_map(|op| match op {
+            Op::Text(_, _, style, text) => Some((text.as_str(), style.face)),
+            _ => None,
+        });
+        let mut seen = std::collections::HashSet::new();
+        for (text, face) in fixed.into_iter().chain(texts) {
+            if face != Face::Symbol && seen.insert(text) {
+                let reason = |reason| Error::Font {
+                    path: path.into(),
+                    reason,
+                };
+                self.fonts.face(face).shapes(text).map_err(reason)?;
+            }
+        }
+        Ok(())
     }
 
     fn draw(&self, surface: &mut Surface, op: &Op) {

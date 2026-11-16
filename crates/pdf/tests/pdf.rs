@@ -710,3 +710,80 @@ fn odd_text_gives_a_clear_error_or_a_space() {
     let verdict = verdict("clinical-panel", &inputs, "S1");
     render(&verdict, &inputs, &options()).expect("the separators print as spaces");
 }
+
+/// The coverage gaps table of the HTML page under the failing
+/// `CoverageGapMetrics` check (owner decision D2 of 0.24.0): the longest
+/// 200 of 250 gaps from the BED beside the metrics file, a tagged table
+/// with header cells under an `H4` in the check's `Div`, once; without the
+/// BED, one paragraph and no table.
+#[test]
+fn the_coverage_gaps_table_sits_under_its_check() {
+    let dir = scratch("gaps");
+    let metrics = dir.join("s.coverage_gaps");
+    fs::write(
+        &metrics,
+        "## METRICS CLASS\tbammetrics.qc.CoverageGapMetrics\n\
+         TARGET_TERRITORY\tTARGET_COUNT\tMIN_DEPTH\tBASES_AT_OR_ABOVE_MIN_DEPTH\tPCT_REPORTABLE\tGAP_BASES\tGAP_COUNT\tLARGEST_GAP\tTARGETS_WITH_GAP\tPCT_TARGETS_COMPLETE\n\
+         100000\t300\t20\t90000\t0.9\t10000\t250\t400\t120\t0.6\n\n",
+    )
+    .expect("metrics");
+    let mut bed = String::from("#chrom\tstart\tend\ttarget\tmean_depth\tmin_depth\n");
+    for i in 0..250 {
+        let (chrom, start, end) = (1 + i % 3, 1000 * i, 1000 * i + 10 + i);
+        bed.push_str(&format!(
+            "chr{chrom}\t{start}\t{end}\tgene_{i}\t{}\t0\n",
+            i % 7
+        ));
+    }
+    let bed_path = format!("{}.bed", metrics.display());
+    fs::write(&bed_path, bed).expect("bed");
+    let inputs = vec![Input::read(&metrics).expect("reads")];
+    let verdict = verdict("clinical-panel", &inputs, "S1");
+    let gap_class = |c: &&bammetrics_verdict::Check| c.class.ends_with("CoverageGapMetrics");
+    let mut gap_checks = verdict.checks.iter().filter(gap_class);
+    assert!(gap_checks.any(|c| c.status == bammetrics_verdict::Status::Fail));
+    let structure = |bytes: Vec<u8>| struct_tree(&Document::load_mem(&bytes).expect("reads")).0;
+
+    let elems = structure(render(&verdict, &inputs, &options()).expect("renders"));
+    let child_kinds =
+        |e: &Elem| -> Vec<String> { e.children.iter().map(|&c| elems[c].kind.clone()).collect() };
+    let check = elems
+        .iter()
+        .find(|e| e.kind == "Div" && child_kinds(e).contains(&"Sect".to_owned()))
+        .expect("the failing check holds a section");
+    assert_eq!(child_kinds(check)[0], "H3");
+    let gaps = check
+        .children
+        .iter()
+        .map(|&c| &elems[c])
+        .find(|e| e.kind == "Sect");
+    let gaps = gaps.expect("the gaps section");
+    assert_eq!(
+        child_kinds(gaps),
+        ["H4", "Table", "P"],
+        "heading, table, the rest"
+    );
+    let table = &elems[gaps.children[1]];
+    let parts = table.children.iter().map(|&p| &elems[p]);
+    let rows: Vec<&Elem> = parts
+        .flat_map(|p| p.children.iter().map(|&r| &elems[r]))
+        .collect();
+    assert_eq!(rows.len(), 201, "the header row and the 200 longest gaps");
+    assert_eq!(child_kinds(rows[0]), ["TH"; 5]);
+    assert_eq!(
+        child_kinds(rows[1]),
+        ["TH", "TD", "TD", "TD", "TD"],
+        "the target heads its row"
+    );
+    let gap_heading = |e: &&Elem| e.kind == "Sect" && child_kinds(e) == ["H4", "Table", "P"];
+    assert_eq!(elems.iter().filter(gap_heading).count(), 1, "once");
+
+    fs::remove_file(&bed_path).expect("no BED");
+    let elems = structure(render(&verdict, &inputs, &options()).expect("renders"));
+    let tables = elems.iter().filter(|e| e.kind == "Table").count();
+    assert_eq!(
+        tables, 3,
+        "checks, run and the appendix table; no gaps table"
+    );
+    fs::remove_dir_all(&dir).expect("clean up");
+}

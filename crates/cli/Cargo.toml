@@ -17,7 +17,7 @@ path = "src/main.rs"
 
 [features]
 # `report --pdf` and `qc --report pdf`. Needs rustc 1.92 (krilla); the
-# default build keeps rust-version 1.88.
+# default build keeps the workspace rust-version, 1.91.
 pdf = ["dep:bammetrics-pdf", "bammetrics-pdf/pdf"]
 
 [dependencies]

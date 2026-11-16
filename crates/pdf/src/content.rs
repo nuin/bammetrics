@@ -9,6 +9,7 @@
 use bammetrics_core::glossary;
 use bammetrics_core::metric::Value;
 use bammetrics_core::metrics_file::ClassBlock;
+use bammetrics_report::gaps;
 use bammetrics_report::html::{number, thousands};
 use bammetrics_report::page::{
     band_glyph, class_title, count, file_name, metric_text, row_label, short_class, shown_text,
@@ -81,13 +82,14 @@ fn table(head: &[&str], rows: Vec<Vec<Cell>>, row_header: Option<usize>) -> Tabl
 }
 
 /// Lays out one sample's report; `drawn` holds the plot families drawn so
-/// far.
+/// far, `gaps_drawn` whether the coverage gaps table is in.
 pub(crate) struct Report<'r, 'f> {
     pub flow: Flow<'f>,
     pub verdict: &'r Verdict,
     pub inputs: &'r [Input],
     pub options: &'r Options,
     pub drawn: Vec<Family>,
+    pub gaps_drawn: bool,
 }
 
 impl<'r, 'f> Report<'r, 'f> {
@@ -259,9 +261,62 @@ impl<'r, 'f> Report<'r, 'f> {
         if let Some(family) = plot {
             self.plot(family)?;
         }
+        if short_class(&check.class) == gaps::CLASS && !self.gaps_drawn {
+            self.gaps_drawn = true;
+            self.gaps_table();
+        }
         self.flow.close();
         self.flow.y += 6.0;
         Ok(())
+    }
+
+    /// The `Coverage gaps` table of the HTML page (docs/06 section 1.7)
+    /// under the first warn or fail gap check: the longest [`gaps::SHOWN`]
+    /// gaps from the BED beside the `CoverageGapMetrics` file, or one line
+    /// when the BED is not there.
+    fn gaps_table(&mut self) {
+        let has_gaps = |i: &&Input| i.doc.class(gaps::CLASS).is_some();
+        let Some(input) = self.inputs.iter().find(has_gaps) else {
+            return;
+        };
+        let bed = format!("{}.bed", input.path);
+        let Ok(text) = std::fs::read_to_string(&bed) else {
+            let line = format!(
+                "Coverage gaps not listed: no gaps file at {}.",
+                file_name(&bed)
+            );
+            return self.flow.paragraph(&line, muted());
+        };
+        let all = gaps::parse(&text);
+        let (shown, total) = gaps::longest(&all, gaps::SHOWN);
+        let what = match shown.len() == total {
+            true => count(total, "gap"),
+            false => format!("{} longest of {total}", shown.len()),
+        };
+        self.flow.room(110.0);
+        self.flow.open(Tag::Section);
+        self.heading(4, &format!("Coverage gaps, {what}"), NO_LEAD, None);
+        let row = |gap: &&gaps::Gap| {
+            let (start, end) = (thousands(gap.start + 1), thousands(gap.end));
+            vec![
+                Cell::new(gap.target.clone(), body()),
+                Cell::new(format!("{}:{start}-{end}", gap.chrom), body()),
+                Cell::new(thousands(gap.end - gap.start), body()).right(),
+                Cell::new(gap.mean_depth.clone(), body()).right(),
+                Cell::new(gap.min_depth.clone(), body()).right(),
+            ]
+        };
+        if !shown.is_empty() {
+            let head = ["Target", "Region", "Length", "Mean depth", "Min depth"];
+            let rows = shown.iter().map(row).collect();
+            self.flow.table(&table(&head, rows, Some(0)));
+        }
+        if shown.len() < total {
+            let more = count(total - shown.len(), "gap");
+            let line = format!("{more} more in {}.", file_name(&bed));
+            self.flow.paragraph(&line, muted());
+        }
+        self.flow.close();
     }
 
     /// A plot at the text width (at most 470 points) with two caption lines,

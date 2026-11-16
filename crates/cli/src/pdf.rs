@@ -127,6 +127,14 @@ impl Pdf {
             .map_err(|e| self.error(Path::new(&verdict.sample), e))
     }
 
+    /// The sample name against the fonts (`bammetrics_pdf::check_sample`),
+    /// so `qc` refuses a name the fonts cannot set before its first read.
+    #[cfg(feature = "pdf")]
+    pub fn check_sample(&self, sample: &str) -> Result<()> {
+        bammetrics_pdf::check_sample(sample, self.font.as_deref())
+            .map_err(|e| self.error(Path::new(sample), e))
+    }
+
     /// `bytes` at `path`, written under a temporary name and renamed into
     /// place (`bammetrics_pdf::save`, through `AtomicFile`); a path that
     /// names an input or the font is refused.
@@ -165,6 +173,11 @@ impl Pdf {
 
     #[cfg(not(feature = "pdf"))]
     pub fn render(&self, _: &Verdict, _: &[Input], _: &str, _: bool) -> Result<Vec<u8>> {
+        Err(missing_feature("a PDF"))
+    }
+
+    #[cfg(not(feature = "pdf"))]
+    pub fn check_sample(&self, _: &str) -> Result<()> {
         Err(missing_feature("a PDF"))
     }
 

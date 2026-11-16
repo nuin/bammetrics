@@ -139,7 +139,9 @@ dependencies = [
  "krilla",
  "krilla-svg",
  "lopdf",
+ "rustybuzz",
  "skrifa",
+ "subsetter",
  "usvg",
 ]
 

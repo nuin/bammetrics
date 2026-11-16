@@ -76,6 +76,16 @@ impl Typeface {
         width
     }
 
+    /// [`shape`] on this font, with a glyph for every character: the PDF/UA
+    /// validator refuses a `.notdef`, and the cmap read by skrifa already
+    /// found one per character, so a `.notdef` here means a damaged font.
+    pub fn shapes(&self, text: &str) -> Result<(), String> {
+        match shape(self.data.as_ref(), text)?.contains(&0) {
+            true => Err(format!("the text shaper finds no glyph in {text:?}")),
+            false => Ok(()),
+        }
+    }
+
     /// The width of `text` at `size` points, kerning left out; a character
     /// without a glyph counts as half an em.
     pub fn measure(&self, text: &str, size: f32) -> f32 {
@@ -142,10 +152,14 @@ pub fn read_font(path: &Path) -> Result<Vec<u8>, Error> {
     }
     let file = std::fs::File::open(path).map_err(|e| fail(e.to_string()))?;
     let mut bytes = Vec::new();
-    if metadata.len() <= FONT_LIMIT {
-        file.take(FONT_LIMIT + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|e| fail(e.to_string()))?;
+    // The magic first: a system CJK collection is over the limit too.
+    let read = |limit: u64, bytes: &mut Vec<u8>| (&file).take(limit).read_to_end(bytes);
+    read(4, &mut bytes).map_err(|e| fail(e.to_string()))?;
+    if metadata.len() <= FONT_LIMIT && !bytes.starts_with(b"ttcf") {
+        read(FONT_LIMIT + 1, &mut bytes).map_err(|e| fail(e.to_string()))?;
+    }
+    if bytes.starts_with(b"ttcf") {
+        return Err(fail(COLLECTION.into()));
     }
     if metadata.len() > FONT_LIMIT || bytes.len() as u64 > FONT_LIMIT {
         return Err(fail(format!("over the {} MiB limit", FONT_LIMIT >> 20)));
@@ -154,17 +168,88 @@ pub fn read_font(path: &Path) -> Result<Vec<u8>, Error> {
     Ok(bytes)
 }
 
-/// Read every table a text run needs, so a damaged file fails here with a
-/// reason: the table directory with each table inside the file, glyph
-/// outlines, `head`, `hhea`, `hmtx`, `maxp` and a `cmap` that maps a
-/// character.
+/// The refusal of a TrueType or OpenType collection (magic `ttcf`).
+const COLLECTION: &str = "a font collection (TTC) holds several faces; extract one face \
+                          to a TTF or OTF file (docs/pdf.md shows how)";
+
+/// Printable ASCII and the other characters the report sets.
+const SAMPLE: &str = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ\
+                      [\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\u{b7}";
+
+/// The tables of a color or bitmap glyph, which krilla draws as a Type 3
+/// font on a path no check here reaches.
+const COLOR_TABLES: [&[u8; 4]; 5] = [b"COLR", b"SVG ", b"sbix", b"CBDT", b"EBDT"];
+
+/// Run every reader krilla runs on a font, so a damaged file fails here
+/// with a reason and krilla never sees it: the table directory with each
+/// table inside the file, glyph outlines, `head`, `hhea`, `hmtx`, `maxp`,
+/// a `cmap` that maps a character, no color glyph tables, the shaper's
+/// parser, a shaped [`SAMPLE`], and a subset of its glyphs that parses.
+/// A panic of a shaper or subsetter becomes the reason too: no krilla
+/// surface is open here, so it unwinds. A font collection is refused.
 pub fn validate(bytes: &[u8]) -> Result<(), String> {
+    if bytes.starts_with(b"ttcf") {
+        return Err(COLLECTION.into());
+    }
+    tables(bytes)?;
+    let glyphs = shape(bytes, SAMPLE)?;
+    let mut remapper = subsetter::GlyphRemapper::new();
+    for glyph in glyphs {
+        remapper.remap(glyph);
+    }
+    let subset = || subsetter::subset_with_variations(bytes, 0, &[], &remapper);
+    let subset = std::panic::catch_unwind(std::panic::AssertUnwindSafe(subset))
+        .map_err(|_| "the subsetter stopped on it".to_owned())?
+        .map_err(|e| format!("the subsetter cannot read it ({e})"))?;
+    if FontRef::new(&subset).is_err() || Font::new(Data::from(subset), 0).is_none() {
+        return Err("its subset does not parse".into());
+    }
+    Ok(())
+}
+
+/// The glyphs of `text` as krilla's shaper sets them (`rustybuzz` on face
+/// 0, no feature, the direction guessed); an error for a font the shaper
+/// cannot read or a panic while it shapes.
+pub fn shape(bytes: &[u8], text: &str) -> Result<Vec<u16>, String> {
+    let face = rustybuzz::Face::from_slice(bytes, 0)
+        .ok_or("the text shaper cannot read its head, hhea or maxp table")?;
+    let run = || {
+        let mut buffer = rustybuzz::UnicodeBuffer::new();
+        buffer.push_str(text);
+        buffer.guess_segment_properties();
+        let output = rustybuzz::shape(&face, &[], buffer);
+        let infos = output.glyph_infos().iter();
+        infos.map(|i| i.glyph_id as u16).collect::<Vec<u16>>()
+    };
+    let glyphs = std::panic::catch_unwind(std::panic::AssertUnwindSafe(run))
+        .map_err(|_| format!("the text shaper stopped on {text:?}"))?;
+    let count = face.number_of_glyphs();
+    match glyphs.iter().find(|g| **g >= count) {
+        Some(g) => Err(format!("the text shaper gave glyph {g} of {count}")),
+        None => Ok(glyphs),
+    }
+}
+
+/// The table checks of [`validate`], through skrifa.
+fn tables(bytes: &[u8]) -> Result<(), String> {
     let font = FontRef::new(bytes).map_err(|e| format!("not a TrueType or OpenType font ({e})"))?;
+    // `head` (and Apple's `bhed`) checksums skip a field that 53 of 242
+    // macOS system fonts set otherwise, so they are not compared.
+    let unsummed = [skrifa::Tag::new(b"head"), skrifa::Tag::new(b"bhed")];
     for record in font.table_directory().table_records() {
-        if font.table_data(record.tag()).is_none() {
-            let tag = record.tag().to_be_bytes().map(std::ascii::escape_default);
-            let tag: String = tag.into_iter().flatten().map(char::from).collect();
+        let tag = record.tag().to_be_bytes().map(std::ascii::escape_default);
+        let tag: String = tag.into_iter().flatten().map(char::from).collect();
+        let Some(data) = font.table_data(record.tag()) else {
             return Err(format!("its {tag} table lies past the end of the file"));
+        };
+        let words = data.as_bytes().chunks(4).map(|word| {
+            let mut padded = [0; 4];
+            padded[..word.len()].copy_from_slice(word);
+            u32::from_be_bytes(padded)
+        });
+        let sum = words.fold(0u32, u32::wrapping_add);
+        if !unsummed.contains(&record.tag()) && sum != record.checksum() {
+            return Err(format!("its {tag} table fails its checksum"));
         }
     }
     let has = |tag: &[u8; 4]| font.table_data(skrifa::Tag::new(tag)).is_some();
@@ -185,6 +270,15 @@ pub fn validate(bytes: &[u8]) -> Result<(), String> {
     font.cmap().map_err(|e| table("cmap", e))?;
     if font.charmap().mappings().next().is_none() {
         return Err("its cmap maps no character".into());
+    }
+    if font.os2().is_ok_and(|os2| os2.fs_type() & 0xF == 2) {
+        return Err("its license forbids embedding (OS/2 fsType 2), which a PDF needs".into());
+    }
+    if let Some(tag) = COLOR_TABLES.iter().find(|tag| has(tag)) {
+        let tag = String::from_utf8_lossy(&tag[..]).trim_end().to_owned();
+        return Err(format!(
+            "it has color or bitmap glyphs ({tag} table); pass an outline font"
+        ));
     }
     Ok(())
 }

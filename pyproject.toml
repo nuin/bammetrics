@@ -35,8 +35,9 @@ Changelog = "https://github.com/nuin/bammetrics/blob/main/CHANGELOG.md"
 
 [tool.maturin]
 manifest-path = "crates/py/Cargo.toml"
-# pdf: report(pdf=True) and qc(report="pdf") (docs/pdf.md). It adds about
-# 3.3 MB to the module and needs rustc 1.92 to build from source.
+# pdf: report(pdf=True) and qc(report="pdf") (docs/pdf.md). Always on: maturin
+# has no per-compiler feature, so a source build (sdist) needs rustc 1.92, the
+# rust-version of krilla. The wheel ships with it (docs/python.md).
 features = ["pyo3/extension-module", "pdf"]
 
 [tool.pytest.ini_options]

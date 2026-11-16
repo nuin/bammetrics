@@ -1040,6 +1040,9 @@ pub fn prepare(args: &QcArgs) -> Result<Plan> {
     let preset = Preset::resolve(&args.preset)?;
     check_sex_has_a_rule(args, &preset)?;
     let (sample, sample_origin) = sample(args)?;
+    if let Some(pdf) = &pdf {
+        pdf.check_sample(&sample)?;
+    }
     let (prefix, prefix_origin) = prefix(args)?;
     let fingerprint = Fingerprint::of(&args.bam)?;
     let cx = Context {

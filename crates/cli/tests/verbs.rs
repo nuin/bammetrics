@@ -264,3 +264,142 @@ fn report_pdf_with_a_cyrillic_sample_writes_nothing() {
     assert!(written.is_empty(), "{written:?}");
     fs::remove_dir_all(&dir).expect("clean up");
 }
+
+/// The table records of a TrueType file: record offset, tag, data offset
+/// and length.
+#[cfg(feature = "pdf")]
+fn table_records(font: &[u8]) -> Vec<(usize, [u8; 4], usize, usize)> {
+    let be = |at: usize| u32::from_be_bytes(font[at..at + 4].try_into().expect("4 bytes")) as usize;
+    let count = usize::from(u16::from_be_bytes([font[4], font[5]]));
+    let record = |i: usize| {
+        let at = 12 + 16 * i;
+        let tag = font[at..at + 4].try_into().expect("tag");
+        (at, tag, be(at + 8), be(at + 12))
+    };
+    (0..count).map(record).collect()
+}
+
+/// `font` with the checksum of `tag` recomputed, so the damage behind it
+/// reaches the readers past the checksum test.
+#[cfg(feature = "pdf")]
+fn resum(mut font: Vec<u8>, tag: &[u8; 4]) -> Vec<u8> {
+    let records = table_records(&font);
+    let (at, _, offset, length) = *records.iter().find(|r| &r.1 == tag).expect("table");
+    let words = font[offset..offset + length].chunks(4).map(|word| {
+        let mut padded = [0; 4];
+        padded[..word.len()].copy_from_slice(word);
+        u32::from_be_bytes(padded)
+    });
+    let sum = words.fold(0u32, u32::wrapping_add);
+    font[at + 4..at + 8].copy_from_slice(&sum.to_be_bytes());
+    font
+}
+
+/// Damaged copies of a built-in font, as `--pdf-font` meets them: cut at
+/// four offsets, a zeroed table directory, a wrong checksum, glyph offsets
+/// past the glyph table, random bytes after a valid header, and a `maxp`
+/// version the text shaper refuses while skrifa reads it (the damage that
+/// aborted 0.24.0 inside krilla with exit 134).
+#[cfg(feature = "pdf")]
+fn damaged_fonts() -> Vec<(String, Vec<u8>)> {
+    let font = fs::read(root().join("crates/pdf/fonts/DejaVuSans-Latin.ttf")).expect("font");
+    let records = table_records(&font);
+    let table = |tag: &[u8; 4]| *records.iter().find(|r| &r.1 == tag).expect("table");
+    let mut cases: Vec<(String, Vec<u8>)> = [1, 2, 3, 4]
+        .map(|q| (format!("cut-{q}"), font[..font.len() * q / 5].to_vec()))
+        .into();
+    let header = 12 + 16 * records.len();
+    let mut zeroed = font.clone();
+    zeroed[12..header].fill(0);
+    cases.push(("zeroed-directory".into(), zeroed));
+    let mut checksum = font.clone();
+    checksum[table(b"glyf").0 + 4] ^= 0x5A;
+    cases.push(("wrong-checksum".into(), checksum));
+    let (_, _, loca, loca_length) = table(b"loca");
+    let mut offsets = font.clone();
+    for entry in offsets[loca + 8..loca + loca_length].chunks_mut(4) {
+        entry.fill(0x7F);
+    }
+    cases.push(("glyph-offsets".into(), resum(offsets, b"loca")));
+    let mut random = font[..header].to_vec();
+    let mut state = 0x2545_F491_4F6C_DD1Du64;
+    random.extend((header..font.len()).map(|_| {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state as u8
+    }));
+    cases.push(("random-after-header".into(), random));
+    let mut maxp = font.clone();
+    maxp[table(b"maxp").2 + 3] = 0xC2;
+    cases.push(("maxp-version".into(), resum(maxp, b"maxp")));
+    cases
+}
+
+/// Every damaged font fails `report --pdf` with exit 1 and a `--pdf-font`
+/// reason before a file is written; none aborts the process (134).
+#[cfg(feature = "pdf")]
+#[test]
+fn a_damaged_pdf_font_is_an_error_never_an_abort() {
+    let dir = fresh_dir("damaged-fonts");
+    fs::create_dir_all(&dir).expect("scratch directory");
+    for (name, bytes) in damaged_fonts() {
+        let path = dir.join(format!("{name}.ttf"));
+        fs::write(&path, bytes).expect("font");
+        let out = dir.join(&name);
+        let run = bammetrics(&[
+            "report",
+            PICARD,
+            "--pdf-only",
+            "-o",
+            out.to_str().expect("utf-8"),
+            "--pdf-font",
+            path.to_str().expect("utf-8"),
+        ]);
+        assert_eq!(code(&run), 1, "{name}: {}", stderr(&run));
+        assert!(
+            stderr(&run).starts_with("bammetrics: --pdf-font "),
+            "{name}: {}",
+            stderr(&run)
+        );
+        assert!(!out.exists(), "{name}: nothing written");
+    }
+    fs::remove_dir_all(&dir).expect("clean up");
+}
+
+/// A TrueType collection is refused with the way out, a 40 MiB one too:
+/// the magic is read before the size limit, so the 55 MB system CJK
+/// collections get the same message.
+#[cfg(feature = "pdf")]
+#[test]
+fn a_font_collection_is_refused_with_the_way_out() {
+    let dir = fresh_dir("collection");
+    fs::create_dir_all(&dir).expect("scratch directory");
+    let font = fs::read(root().join("crates/pdf/fonts/DejaVuSans-Latin.ttf")).expect("font");
+    let mut collection = b"ttcf\x00\x01\x00\x00\x00\x00\x00\x01\x00\x00\x00\x10".to_vec();
+    collection.extend(&font);
+    let small = dir.join("small.ttc");
+    fs::write(&small, collection).expect("collection");
+    let big = dir.join("big.ttc");
+    let mut file = fs::File::create(&big).expect("big collection");
+    std::io::Write::write_all(&mut file, b"ttcf").expect("magic");
+    file.set_len(40 << 20).expect("40 MiB");
+    for path in [small, big] {
+        let run = bammetrics(&[
+            "report",
+            PICARD,
+            "--pdf",
+            "-o",
+            dir.join("out").to_str().expect("utf-8"),
+            "--pdf-font",
+            path.to_str().expect("utf-8"),
+        ]);
+        assert_eq!(code(&run), 1, "{}", stderr(&run));
+        assert!(
+            stderr(&run).contains("a font collection (TTC) holds several faces; extract one face"),
+            "{}",
+            stderr(&run)
+        );
+    }
+    fs::remove_dir_all(&dir).expect("clean up");
+}

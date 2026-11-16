@@ -125,14 +125,43 @@ impl From<std::io::Error> for Error {
     }
 }
 
+/// The sample name checks of [`render`] alone, for a caller that knows the
+/// name before it writes anything (`qc` reads it from the BAM header): one
+/// line, not empty, every character in the regular and bold text faces of
+/// `font` (`None` for the built-in fonts).
+#[cfg(feature = "pdf")]
+pub fn check_sample(sample: &str, font: Option<&Path>) -> Result<()> {
+    one_line(sample)?;
+    sample_glyphs(sample, &fonts::Fonts::load(font)?)
+}
+
+#[cfg(feature = "pdf")]
+fn one_line(sample: &str) -> Result<()> {
+    let odd = |c: char| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}');
+    if sample.trim().is_empty() || sample.chars().any(odd) {
+        return Err(Error::SampleName(sample.to_owned()));
+    }
+    Ok(())
+}
+
+#[cfg(feature = "pdf")]
+fn sample_glyphs(sample: &str, fonts: &fonts::Fonts) -> Result<()> {
+    for face in [fonts::Face::Regular, fonts::Face::Bold] {
+        let lacks = |c: &char| *c != ' ' && fonts.face(face).advance(*c).is_none();
+        if let Some(ch) = sample.chars().find(lacks) {
+            let (text, font) = (sample.to_owned(), fonts.custom.clone());
+            return Err(Error::MissingGlyph { ch, text, font });
+        }
+    }
+    Ok(())
+}
+
 /// The PDF of `verdict` and the metrics files it was evaluated over.
 #[cfg(feature = "pdf")]
 pub fn render(verdict: &Verdict, inputs: &[Input], options: &Options) -> Result<Vec<u8>> {
-    let odd = |c: char| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}');
-    if verdict.sample.trim().is_empty() || verdict.sample.chars().any(odd) {
-        return Err(Error::SampleName(verdict.sample.clone()));
-    }
+    one_line(&verdict.sample)?;
     let fonts = fonts::Fonts::load(options.font.as_deref())?;
+    sample_glyphs(&verdict.sample, &fonts)?;
     let layout = || {
         let flow = layout::Flow::new(&fonts, options.paper.points());
         let drawn = Vec::new();
@@ -142,6 +171,7 @@ pub fn render(verdict: &Verdict, inputs: &[Input], options: &Options) -> Result<
             inputs,
             options,
             drawn,
+            gaps_drawn: false,
         };
         report.build()?;
         let status = verdict.status.name().to_uppercase();
@@ -151,8 +181,11 @@ pub fn render(verdict: &Verdict, inputs: &[Input], options: &Options) -> Result<
         let style = content::style(fonts::Face::Regular, 7.5, "ink-2");
         report.flow.finish(&title, &footer, style)
     };
-    // krilla and its font parsers are written not to panic; a panic is still
-    // turned into an error, so a damaged font never aborts a run.
+    // A panic with no krilla surface open (layout, the document's finish,
+    // the subsetter) unwinds into this error. Under an open surface it would
+    // abort: the surface's drop asserts. `fonts::validate` and
+    // `Flow::shape_custom` run krilla's shaper and subsetter on a
+    // `--pdf-font` before any surface opens, so its text cannot panic there.
     let stopped = Error::Pdf("the PDF writer stopped on an internal error".into());
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(layout)).unwrap_or(Err(stopped))
 }
