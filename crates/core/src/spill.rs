@@ -56,26 +56,35 @@ pub trait Spill: Sized {
 
 /// A directory of run files, removed with everything this process put in it.
 /// The directory is created by the first [`TempDir::file`], so a run that
-/// spills nothing never touches `TMP_DIR`. Its name holds the process ID
-/// and a process-wide counter; a name already taken is skipped.
+/// spills nothing never touches `TMP_DIR`. Its name is
+/// `bammetrics-<purpose>.<pid>.<16 hex digits>`: the purpose the caller
+/// gives (`sort-sam`, `mark-duplicates`, `chain`), the process ID and a
+/// random part another process cannot predict. It is made with mode 0700 and
+/// fails when the name exists: a directory already there is never used.
 #[derive(Debug)]
 pub struct TempDir {
     base: PathBuf,
+    purpose: &'static str,
     /// The directory, once created.
     path: OnceLock<PathBuf>,
     files: Mutex<Vec<PathBuf>>,
     next: AtomicU64,
 }
 
-/// Directories made by this process so far, for unique names.
+/// Directories made by this process so far, mixed into the random part.
 static DIRECTORIES: AtomicU64 = AtomicU64::new(0);
 
 impl TempDir {
     /// A directory to be made under `base` (the first `TMP_DIR`, or the
-    /// system temporary directory).
-    pub fn new(base: Option<&Path>) -> Self {
+    /// system temporary directory) for `purpose`, which names it.
+    pub fn new(base: Option<&Path>, purpose: &'static str) -> Self {
+        debug_assert!(
+            !purpose.is_empty() && purpose.bytes().all(|b| b.is_ascii_lowercase() || b == b'-'),
+            "{purpose}"
+        );
         Self {
             base: base.map_or_else(std::env::temp_dir, Path::to_path_buf),
+            purpose,
             path: OnceLock::new(),
             files: Mutex::new(Vec::new()),
             next: AtomicU64::new(0),
@@ -96,20 +105,11 @@ impl TempDir {
             move |source| Error::Output { path, source }
         };
         fs::create_dir_all(&self.base).map_err(error(&self.base))?;
-        loop {
-            let n = DIRECTORIES.fetch_add(1, AtomicOrdering::Relaxed);
-            let path = self
-                .base
-                .join(format!("bammetrics-markdup.{}.{n}", std::process::id()));
-            match create_private_dir(&path) {
-                Ok(()) => {
-                    crate::cleanup::register(&path);
-                    return Ok(self.path.get_or_init(|| path));
-                }
-                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
-                Err(e) => return Err(error(&path)(e)),
-            }
-        }
+        let n = DIRECTORIES.fetch_add(1, AtomicOrdering::Relaxed);
+        let path = self.base.join(dir_name(self.purpose, n));
+        create_private_dir(&path).map_err(error(&path))?;
+        crate::cleanup::register(&path);
+        Ok(self.path.get_or_init(|| path))
     }
 
     /// A new file name in the directory, recorded for removal. The first
@@ -159,6 +159,16 @@ impl Drop for TempDir {
             crate::cleanup::unregister(path);
         }
     }
+}
+
+/// `bammetrics-<purpose>.<pid>.<16 hex digits>`, the random part from
+/// `cleanup::nonce` as the temporary names of `AtomicFile` take it.
+fn dir_name(purpose: &str, counter: u64) -> String {
+    format!(
+        "bammetrics-{purpose}.{}.{:016x}",
+        std::process::id(),
+        crate::cleanup::nonce(counter)
+    )
 }
 
 /// A directory this user alone can enter (mode 0700). Fails when the path
@@ -626,6 +636,49 @@ pub fn get_u64(input: &mut impl BufRead) -> io::Result<Option<u64>> {
     }
 }
 
+/// Most bytes one length-prefixed field of a spill file holds: a BAM record
+/// is at most what its 32-bit `block_size` counts, and a name, a read group
+/// or a mate key is part of one.
+pub const MAX_FIELD_BYTES: u64 = u32::MAX as u64;
+
+/// A length, then that many bytes: the field [`need_bytes`] reads back.
+pub fn put_bytes(out: &mut Vec<u8>, bytes: &[u8]) {
+    put_u64(out, bytes.len() as u64);
+    out.extend_from_slice(bytes);
+}
+
+/// The field [`put_bytes`] wrote.
+pub fn need_bytes(input: &mut impl BufRead) -> io::Result<Vec<u8>> {
+    let len = need_u64(input)?;
+    read_bytes(input, len)
+}
+
+/// `len` bytes of a field whose length a spill file gave. A length past
+/// [`MAX_FIELD_BYTES`] is an error before anything is allocated. Otherwise
+/// the buffer grows 1 MiB at a time with the bytes read
+/// (`bam_raw::read_append`), so a length the file does not back costs the
+/// bytes present and ends as an `UnexpectedEof`.
+pub fn read_bytes(input: &mut impl BufRead, len: u64) -> io::Result<Vec<u8>> {
+    if len > MAX_FIELD_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("spill file: a field of {len} bytes, past the {MAX_FIELD_BYTES} of a record"),
+        ));
+    }
+    let mut bytes = Vec::new();
+    crate::bam_raw::read_append(input, &mut bytes, len as usize).map_err(|e| {
+        if e.kind() == io::ErrorKind::UnexpectedEof {
+            io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                format!("spill file: a field of {len} bytes is cut short"),
+            )
+        } else {
+            e
+        }
+    })?;
+    Ok(bytes)
+}
+
 /// [`get_u64`] that must find a value.
 pub fn need_u64(input: &mut impl BufRead) -> io::Result<u64> {
     get_u64(input)?.ok_or_else(|| io::ErrorKind::UnexpectedEof.into())
@@ -653,7 +706,7 @@ mod tests {
 
     #[test]
     fn runs_merge_into_one_sorted_stream_and_are_removed() {
-        let dir = TempDir::new(None);
+        let dir = TempDir::new(None, "test");
         let mut sorter = Sorter::new(&dir, "n", 3);
         let values = [9u64, 1, 7, 3, 3, 0, 1 << 40, 5, 2, 8];
         for v in values {
@@ -688,7 +741,7 @@ mod tests {
     #[test]
     fn the_directory_and_its_files_belong_to_this_user_only() {
         use std::os::unix::fs::PermissionsExt;
-        let dir = TempDir::new(None);
+        let dir = TempDir::new(None, "test");
         let (path, file) = dir.create_file("n").expect("create");
         drop(file);
         let mode = |p: &Path| fs::metadata(p).expect("metadata").permissions().mode() & 0o777;
@@ -698,9 +751,59 @@ mod tests {
         assert!(create_private_file(&path).is_err());
     }
 
+    /// `bammetrics-<purpose>.<pid>.<16 hex digits>`, a random part of its
+    /// own per directory, and an existing name refused.
+    #[test]
+    fn the_directory_is_named_for_its_purpose_with_a_random_part() {
+        let random = |dir: &TempDir| {
+            dir.create_file("n").expect("create");
+            let name = dir
+                .path()
+                .and_then(Path::file_name)
+                .and_then(|n| n.to_str())
+                .expect("a name")
+                .to_owned();
+            let prefix = format!("bammetrics-sort-sam.{}.", std::process::id());
+            let random = name.strip_prefix(&prefix).expect(&name).to_owned();
+            assert_eq!(random.len(), 16, "{name}");
+            assert!(random.bytes().all(|b| b.is_ascii_hexdigit()), "{name}");
+            random
+        };
+        let first = TempDir::new(None, "sort-sam");
+        let second = TempDir::new(None, "sort-sam");
+        assert_ne!(random(&first), random(&second));
+        let taken = first.path().expect("created");
+        assert_eq!(
+            create_private_dir(taken).map_err(|e| e.kind()),
+            Err(io::ErrorKind::AlreadyExists)
+        );
+    }
+
+    /// A length past a record is refused before any allocation; a length
+    /// the file does not back is an error after the bytes present.
+    #[test]
+    fn a_field_length_is_capped_and_read_in_steps() {
+        let mut bytes = Vec::new();
+        put_u64(&mut bytes, MAX_FIELD_BYTES + 1);
+        let error = need_bytes(&mut bytes.as_slice()).expect_err("past a record");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        let mut bytes = Vec::new();
+        put_u64(&mut bytes, u64::from(u32::MAX));
+        bytes.extend_from_slice(b"ten bytes!");
+        let error = need_bytes(&mut bytes.as_slice()).expect_err("cut short");
+        assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+        assert!(error.to_string().contains("cut short"), "{error}");
+        let mut bytes = Vec::new();
+        put_bytes(&mut bytes, b"read group");
+        assert_eq!(
+            need_bytes(&mut bytes.as_slice()).expect("whole"),
+            b"read group"
+        );
+    }
+
     #[test]
     fn many_runs_merge_in_groups() {
-        let dir = TempDir::new(None);
+        let dir = TempDir::new(None, "test");
         let mut sorter = Sorter::new(&dir, "many", 2);
         let values: Vec<u64> = (0..300u64).map(|i| (i * 7919) % 301).collect();
         for v in &values {
@@ -724,7 +827,7 @@ mod tests {
 
     #[test]
     fn a_one_record_buffer_keeps_few_files() {
-        let dir = TempDir::new(None);
+        let dir = TempDir::new(None, "test");
         let mut sorter = Sorter::new(&dir, "ones", 1);
         let values: Vec<u64> = (0..5000u64).map(|i| ((i % 3) << 32) | i).collect();
         for v in &values {
@@ -747,7 +850,7 @@ mod tests {
     #[test]
     fn nothing_is_created_until_a_run_spills() {
         let base = std::env::temp_dir().join(format!("bammetrics-lazy.{}", std::process::id()));
-        let dir = TempDir::new(Some(&base));
+        let dir = TempDir::new(Some(&base), "test");
         let mut sorter = Sorter::new(&dir, "lazy", 10);
         sorter.push(1u64).expect("push");
         let mut sorted = sorter.finish().expect("finish");

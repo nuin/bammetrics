@@ -32,24 +32,38 @@ impl std::fmt::Display for ContractViolation {
 
 /// Sort `items` as `Arrays.sort(items, compare)` sorts them.
 pub fn sort_by<T>(
-    items: &mut Vec<T>,
+    items: &mut [T],
     mut compare: impl FnMut(&T, &T) -> Ordering,
 ) -> Result<(), ContractViolation> {
     if items.len() < 2 {
         return Ok(());
     }
-    let order = {
+    let mut order = {
         let view: &[T] = items;
         let mut c = |i: usize, j: usize| compare(&view[i], &view[j]);
         sort_indices(view.len(), &mut c)?
     };
-    let mut slots: Vec<Option<T>> = std::mem::take(items).into_iter().map(Some).collect();
-    items.extend(
-        order
-            .into_iter()
-            .map(|i| slots[i].take().expect("TimSort moves a permutation")),
-    );
+    permute(items, &mut order);
     Ok(())
+}
+
+/// Put `items[order[k]]` at `k` for every `k`, in place: each cycle of the
+/// permutation is followed with swaps, and `order[k] = k` marks a position
+/// done. A copy of the items would hold a second vector as large as the
+/// run while a sort spills it.
+fn permute<T>(items: &mut [T], order: &mut [usize]) {
+    for start in 0..items.len() {
+        let mut at = start;
+        while order[at] != at {
+            let from = order[at];
+            order[at] = at;
+            if from == start {
+                break;
+            }
+            items.swap(at, from);
+            at = from;
+        }
+    }
 }
 
 /// `0..n` sorted by `c`, which compares two indices.
@@ -596,6 +610,25 @@ mod tests {
             self.0 ^= self.0 >> 7;
             self.0 ^= self.0 << 17;
             self.0
+        }
+    }
+
+    /// The in-place permutation gives what a copy through the order gives,
+    /// for permutations with fixed points, long cycles and swaps.
+    #[test]
+    fn permute_in_place_matches_a_copy() {
+        let mut rng = Rng(0x9e37_79b9_7f4a_7c15);
+        for n in [0usize, 1, 2, 3, 17, 1000] {
+            let mut order: Vec<usize> = (0..n).collect();
+            for i in (1..n).rev() {
+                let j = (rng.next() % (i as u64 + 1)) as usize;
+                order.swap(i, j);
+            }
+            let items: Vec<String> = (0..n).map(|i| format!("r{i}")).collect();
+            let expected: Vec<String> = order.iter().map(|&i| items[i].clone()).collect();
+            let mut moved = items;
+            permute(&mut moved, &mut order);
+            assert_eq!(moved, expected, "n={n}");
         }
     }
 

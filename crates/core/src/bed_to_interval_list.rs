@@ -42,6 +42,7 @@ pub const TOOL: Tool = Tool {
     options: &[
         Opt::path(&["INPUT", "I"], "The BED file to convert.").required(),
         crate::registry::REFERENCE_NOT_DECODED,
+        crate::registry::STRINGENCY_NO_RECORDS,
         Opt::path(
             &["SEQUENCE_DICTIONARY", "SD"],
             "The @SQ lines: a .dict, BAM, SAM, interval list, or FASTA with a .dict.",

@@ -28,6 +28,6 @@ segment 2  a second read of tests/data/insert_size.cram through step 1 (replay: 
   step 3  write                BAM of marked          standard output
 barrier    step 1 mark-duplicates: replays the source; spills about 2.7 KiB (MAX_RECORDS_IN_RAM 5); memory about 100.0 MiB
 temp disk  about 2.7 KiB in the system temporary directory
-memory     about 100.0 MiB at the peak
+memory     about 100.0 MiB at the peak, a fixed 100.0 MiB for the chain beside its barriers included (a small input takes less)
 nothing ran: this is a plan
 ## stderr

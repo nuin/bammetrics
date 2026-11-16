@@ -86,6 +86,7 @@ pub const TOOL: Tool = Tool {
     summary: "one row per FASTA sequence (name, length, md5, assembly, uri, species, \
               alternate_names); OUTPUT gets the .dict.",
     options: &[
+        crate::registry::STRINGENCY_NO_RECORDS,
         Opt::path(
             &["REFERENCE", "R"],
             "The FASTA: .fasta, .fas, .fa, .fna or .txt, each also as .gz.",

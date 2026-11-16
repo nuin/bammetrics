@@ -72,6 +72,7 @@ pub const TOOL: Tool = Tool {
               other. A command only: it returns no rows, and the Python function raises \
               UsageError, because a Python call has no pipe to buffer.",
     options: &[
+        crate::registry::STRINGENCY_NO_RECORDS,
         Opt::int(
             &["BUFFER_SIZE"],
             "The size of the memory buffer in bytes, 1 to 2147483645 (default 536870912).",

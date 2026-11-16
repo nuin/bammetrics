@@ -47,7 +47,7 @@ const RECORD_BYTES: u64 = 350;
 const RESIDENT_QUARTERS: u64 = 5;
 /// Resident memory of a chain beside its barriers: 425 MB resident at
 /// `--sort-memory 256M`, less 1.25 times the 268 MB the sort held.
-const BASE_MEMORY: u64 = 100 << 20;
+pub(super) const BASE_MEMORY: u64 = 100 << 20;
 /// Bytes per record a sorted run or a spool takes at BGZF level 3, by the
 /// order of the records in it, over those 8,445,233 records: queryname
 /// runs 871,834,880 and 877,285,505, a queryname spool 879,914,157 (104.2);
@@ -73,16 +73,60 @@ const MERGE_FAN_IN: u64 = 64;
 /// `--sort-memory` when none is given: 2 GiB (docs/07 section 2.1).
 pub const DEFAULT_SORT_MEMORY: u64 = 2 << 30;
 
+/// Bytes of `--sort-memory` a sort step leaves for what is resident beside
+/// its records: the merge of up to 64 runs (a 256 KiB reader and two BGZF
+/// blocks each, 24 MiB), a spool writer and the batches in flight.
+const SORT_FIXED_RESERVE: u64 = 64 << 20;
+
+/// The bytes the sort step at `index` of `chain` holds before it spills:
+/// `--sort-memory` less [`SORT_FIXED_RESERVE`] and less the read ends of the
+/// largest `mark-duplicates` step after it. The allocator keeps the pages of
+/// the sort's records resident after the sort seals, so that step's lists
+/// come on top of them: on chromosomes 1 to 5 of the HG002 exome at
+/// `--sort-memory 2G` the chain peaked at 2,826 MiB while the sort held its
+/// full 2 GiB (docs/benchmarks.md). At least a quarter of `--sort-memory`.
+pub fn sort_budget(chain: &Chain, index: usize) -> u64 {
+    let after = chain
+        .steps
+        .iter()
+        .skip(index + 1)
+        .filter(|step| {
+            step.role == Role::Transform
+                && step.tool.map(|tool| tool.name) == Some(mark_duplicates::TOOL.name)
+        })
+        .map(|step| {
+            let records_in_ram = picard_value(step, "MAX_RECORDS_IN_RAM")
+                .and_then(|n| n.parse::<usize>().ok())
+                .unwrap_or(mark_duplicates::DEFAULT_RECORDS_IN_RAM);
+            mark_duplicates::held_bytes(records_in_ram) as u64
+        })
+        .max()
+        .unwrap_or(0);
+    chain
+        .sort_memory
+        .saturating_sub(SORT_FIXED_RESERVE.saturating_add(after))
+        .max(chain.sort_memory / 4)
+}
+
+/// Why a text is no byte count.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BytesError {
+    /// Zero, or text that is no count.
+    Invalid,
+    /// A count past `u64::MAX` bytes.
+    TooLarge,
+}
+
 /// A byte count as `--sort-memory` takes it: digits, then an optional K, M,
-/// G or T (1024 based) with an optional `B` or `iB`, any case. `None` for
-/// zero, an overflow, or any other text.
-pub fn parse_bytes(text: &str) -> Option<u64> {
+/// G or T (1024 based) with an optional `B` or `iB`, any case. Zero and
+/// other text are [`BytesError::Invalid`], a count past `u64::MAX`
+/// [`BytesError::TooLarge`].
+pub fn bytes_or_why(text: &str) -> Result<u64, BytesError> {
     let text = text.trim();
     let digits = text
         .find(|c: char| !c.is_ascii_digit())
         .unwrap_or(text.len());
     let (number, unit) = text.split_at(digits);
-    let number: u64 = number.parse().ok()?;
     let unit = unit.trim().to_ascii_uppercase();
     let unit = unit
         .strip_suffix("IB")
@@ -94,18 +138,35 @@ pub fn parse_bytes(text: &str) -> Option<u64> {
         "M" => 20,
         "G" => 30,
         "T" => 40,
-        _ => return None,
+        _ => return Err(BytesError::Invalid),
     };
-    number.checked_mul(1 << shift).filter(|bytes| *bytes > 0)
+    if number.is_empty() {
+        return Err(BytesError::Invalid);
+    }
+    // Digits that overflow u64 overflow the byte count too.
+    let number: u64 = number.parse().map_err(|_| BytesError::TooLarge)?;
+    match number.checked_mul(1 << shift) {
+        None => Err(BytesError::TooLarge),
+        Some(0) => Err(BytesError::Invalid),
+        Some(bytes) => Ok(bytes),
+    }
 }
 
-/// `--sort-memory`, parsed.
+/// `--sort-memory`, parsed. Exit 2 for text that is no byte count, and for
+/// a count past `u64::MAX` bytes, the maximum.
 pub(super) fn sort_memory(spec: &Spec) -> Result<u64, VerbError> {
     let Some(text) = &spec.sort_memory else {
         return Ok(DEFAULT_SORT_MEMORY);
     };
-    parse_bytes(text).ok_or_else(|| {
-        usage(format!("--sort-memory {text:?}: expected bytes above 0"))
+    bytes_or_why(text).map_err(|why| {
+        let error = match why {
+            BytesError::Invalid => usage(format!("--sort-memory {text:?}: expected bytes above 0")),
+            BytesError::TooLarge => usage(format!(
+                "--sort-memory {text:?}: more than the maximum of {} bytes (16 EiB)",
+                u64::MAX
+            )),
+        };
+        error
             .from("--sort-memory")
             .hint("a number of bytes, or one with K, M, G or T: 512M, 2G, 2GiB")
     })
@@ -276,7 +337,7 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
     let mut held_before: Option<u64> = Some(0);
     let mut barriers = Vec::new();
     let mut outputs = Vec::new();
-    for step in &chain.steps {
+    for (index, step) in chain.steps.iter().enumerate() {
         match (step.role, step.tool.map(|tool| tool.name)) {
             (Role::Transform, Some("SortSam")) => {
                 let sorted = picard_value(step, "SORT_ORDER").and_then(SortOrder::parse);
@@ -284,9 +345,10 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
                     picard_value(step, "MAX_RECORDS_IN_RAM").and_then(|n| n.parse::<u64>().ok());
                 let per_record = RECORD_BYTES + ITEM_BYTES as u64;
                 let budget = records.map(|n| n.saturating_mul(per_record));
+                let bytes = sort_budget(chain, index);
                 let cap = records_in_ram
-                    .map_or(chain.sort_memory, |n| n.saturating_mul(per_record))
-                    .min(chain.sort_memory);
+                    .map_or(bytes, |n| n.saturating_mul(per_record))
+                    .min(bytes);
                 let held = budget.map(|b| b.min(cap));
                 let spills = budget.map(|b| b > cap);
                 let spill = records.zip(spills).map(|(n, spills)| {
@@ -601,14 +663,26 @@ mod tests {
 
     #[test]
     fn sizes_take_a_binary_suffix() {
-        assert_eq!(parse_bytes("1000"), Some(1000));
-        assert_eq!(parse_bytes("2G"), Some(2 << 30));
-        assert_eq!(parse_bytes("2GiB"), Some(2 << 30));
-        assert_eq!(parse_bytes("512m"), Some(512 << 20));
-        assert_eq!(parse_bytes("64KB"), Some(64 << 10));
-        assert_eq!(parse_bytes("1T"), Some(1 << 40));
+        assert_eq!(bytes_or_why("1000").ok(), Some(1000));
+        assert_eq!(bytes_or_why("2G").ok(), Some(2 << 30));
+        assert_eq!(bytes_or_why("2GiB").ok(), Some(2 << 30));
+        assert_eq!(bytes_or_why("512m").ok(), Some(512 << 20));
+        assert_eq!(bytes_or_why("64KB").ok(), Some(64 << 10));
+        assert_eq!(bytes_or_why("1T").ok(), Some(1 << 40));
         for bad in ["", "0", "G", "2X", "-1", "1.5G", "99999999999T"] {
-            assert_eq!(parse_bytes(bad), None, "{bad}");
+            assert_eq!(bytes_or_why(bad).ok(), None, "{bad}");
         }
+        for (text, why) in [
+            ("0", BytesError::Invalid),
+            ("2X", BytesError::Invalid),
+            ("T", BytesError::Invalid),
+            ("99999999999T", BytesError::TooLarge),
+            ("16777216T", BytesError::TooLarge),
+            ("99999999999999999999", BytesError::TooLarge),
+        ] {
+            assert_eq!(bytes_or_why(text), Err(why), "{text}");
+        }
+        assert_eq!(bytes_or_why("16777215T"), Ok(16_777_215 << 40));
+        assert_eq!(bytes_or_why("18446744073709551615"), Ok(u64::MAX));
     }
 }

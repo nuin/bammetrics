@@ -65,7 +65,9 @@ use crate::metric::{MetricsOutput, ToolOutput, Value};
 use crate::pass::Accumulator;
 use crate::registry::{Invocation, Opt, Tool, write_files};
 use crate::sam_order::QuerynameKey;
-use crate::spill::{Sorter, Spill, TempDir, get_u64, need_i64, need_u64, put_i64, put_u64};
+use crate::spill::{
+    Sorter, Spill, TempDir, get_u64, need_i64, need_u64, put_i64, put_u64, read_bytes,
+};
 
 pub const TOOL: Tool = Tool {
     name: "CheckDuplicateMarking",
@@ -417,8 +419,7 @@ impl Spill for Key {
         let Some(len) = get_u64(input)? else {
             return Ok(None);
         };
-        let mut name = vec![0; usize::try_from(len).map_err(std::io::Error::other)?];
-        input.read_exact(&mut name)?;
+        let name = read_bytes(input, len)?;
         let bits = u16::try_from(need_u64(input)?).map_err(std::io::Error::other)?;
         let contig = get_option(input)?
             .map(usize::try_from)
@@ -602,7 +603,7 @@ pub fn check(inv: &Invocation) -> Result<Check> {
             )));
         }
     }
-    let temp = TempDir::new(options.tmp_dir.as_deref());
+    let temp = TempDir::new(options.tmp_dir.as_deref(), "check-duplicate-marking");
     let (bad, sorted) = inv.read_whole(&inv.input, |header| {
         Ok(Checker::new(header, &options, &temp))
     })?;
@@ -840,7 +841,7 @@ mod tests {
     /// violation Java's `TimSort` throws for the same keys.
     #[test]
     fn keys_flagged_first_and_second_sort_without_a_panic() {
-        let temp = TempDir::new(None);
+        let temp = TempDir::new(None, "test");
         let both = 0x1 | 0x40 | 0x80;
         let keys =
             || (0..200u16).map(move |i| key(&format!("q{}", i % 7), both | ((i % 2) * 0x10), None));

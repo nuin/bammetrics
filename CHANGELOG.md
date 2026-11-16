@@ -247,6 +247,33 @@ chain, `BuildBamIndex` and `make memgate` (tools 34 to 36), and the 0.22.0 revie
 - A tool verb, `collect` and `qc` that fail remove the output directories they made that
   are still empty, as a chain does.
 
+- Release review of 0.23.0. The chain `sort-sam --sort-order coordinate +
+  mark-duplicates + write --index` at `--sort-memory 2G` peaks at 2,132 MiB on
+  chromosomes 1 to 5 of the HG002 exome (3,618 to 3,940 MiB before) and 2,376 MiB on the
+  queryname slice (3,346 before), under 2,765. The run sort permutes in place
+  (`timsort::permute`): it copied the run into a second vector. A sort step holds
+  `--sort-memory` less 64 MiB and less the read ends of a later `mark-duplicates`
+  (`planner::sort_budget`, 640 MB at `MAX_RECORDS_IN_RAM` 4,000,000), since the sort's
+  pages stay resident under that step. The memgate rows of both chains now allow 2,765
+  MiB. The plan states its fixed 100 MiB base on the memory line.
+- A length read from a spill file is capped at a record's 32-bit `block_size` and read 1
+  MiB at a time (`spill::read_bytes`), so a corrupt or cut run file is an error after the
+  bytes present. `sam_sort`, the mate spill of `MarkDuplicates` and
+  `CheckDuplicateMarking` allocated the length first.
+- The spill directory is `bammetrics-<purpose>.<pid>.<16 hex digits>` (`sort-sam`,
+  `mark-duplicates`, `check-duplicate-marking`, `chain`), random as the temporary names of
+  `AtomicFile`, mode 0700, and an existing name is an error. It was
+  `bammetrics-markdup.<pid>.<n>` for every tool, a name another user could predict.
+- The `VALIDATION_STRINGENCY` note is true per tool. `FifoBuffer` and the tools that read
+  a VCF, a metrics file, a FASTA or a BED say `no SAM, BAM or CRAM record is read` and
+  lose the Python keyword; `BuildBamIndex` says `the BAM is not validated, and SAM text
+  has no index`.
+- `--sort-memory 99999999999T` exits 2 with `more than the maximum of
+  18446744073709551615 bytes (16 EiB)`; it said `expected bytes above 0`.
+- docs/chaining.md: the 13 keys of a plan file's `[chain]` table, the `output-format`
+  key of `write`, 77 tests in `tests/python/test_chain.py`, and the record counts of a
+  queryname BAM and SAM text.
+
 ### Measured
 
 - HG002 exome BAM, 10,339,495,604 bytes, 150,538,907 records: `build-bam-index` 11.8 s

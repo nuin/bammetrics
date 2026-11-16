@@ -28,7 +28,7 @@ use std::path::PathBuf;
 
 use super::read_ends::ReadEnds;
 use crate::error::{Error, Result};
-use crate::spill::{Spill, TempDir, get_u64, put_u64};
+use crate::spill::{Spill, TempDir, get_u64, put_u64, read_bytes};
 
 /// Most entries buffered for the reference files before they are written.
 const MAX_BUFFERED: usize = 1 << 20;
@@ -204,8 +204,7 @@ impl ByReference<'_> {
         };
         let mut input = BufReader::with_capacity(1 << 18, file.chain(buffer));
         while let Some(length) = get_u64(&mut input).map_err(error)? {
-            let mut key = vec![0; usize::try_from(length).unwrap_or(usize::MAX)];
-            input.read_exact(&mut key).map_err(error)?;
+            let key = read_bytes(&mut input, length).map_err(error)?;
             let ends = ReadEnds::decode(&mut input)
                 .map_err(error)?
                 .ok_or_else(|| error(std::io::ErrorKind::UnexpectedEof.into()))?;
@@ -234,7 +233,7 @@ mod tests {
 
     #[test]
     fn mates_on_later_references_wait_on_disk() {
-        let dir = TempDir::new(None);
+        let dir = TempDir::new(None, "test");
         let mut mates = Mates::new(false, &dir, 2);
         assert_eq!(mates.remove(0, b"a").expect("remove"), None);
         for (i, name) in [b"a", b"b", b"c"].iter().enumerate() {
@@ -267,7 +266,7 @@ mod tests {
 
     #[test]
     fn a_key_twice_fails_where_htsjdk_fails() {
-        let dir = TempDir::new(None);
+        let dir = TempDir::new(None, "test");
         let mut mates = Mates::new(false, &dir, 100);
         mates.remove(0, b"x").expect("load 0");
         mates.put(0, b"k".to_vec(), ends(0)).expect("put");
@@ -290,7 +289,7 @@ mod tests {
 
     #[test]
     fn query_name_order_replaces() {
-        let dir = TempDir::new(None);
+        let dir = TempDir::new(None, "test");
         let mut mates = Mates::new(true, &dir, 1);
         mates.put(0, b"k".to_vec(), ends(0)).expect("put");
         mates.put(0, b"k".to_vec(), ends(1)).expect("put");

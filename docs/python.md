@@ -46,7 +46,7 @@ The keywords of `qc`, `check` and `report` are the command's long flags in snake
   returns one dict per library. An `output` or `metrics_file` that is an input, or both
   naming one file, raises `UsageError` before anything is read. The `flow_*` keywords
   take their Picard defaults only. The module installs no signal handler: a Python
-  process killed mid-run leaves its spill directory (`bammetrics-markdup.<pid>.<n>`) and
+  process killed mid-run leaves its spill directory (`bammetrics-<purpose>.<pid>.<16 hex digits>`) and
   its temporary output (`.NAME.<pid>.<n>.tmp`) behind.
 - `build_bam_index(bam, *, output=None)` writes the `.bai` of a coordinate-sorted BAM, the
   bytes Picard `BuildBamIndex` writes for it. Without `output` the index goes beside the

@@ -70,12 +70,12 @@ mod tests {
 
     #[test]
     fn an_input_error_of_a_copy_names_the_file_the_user_gave() {
-        let copy = Path::new("/tmp/bammetrics-markdup.1.0/input.0.tmp");
+        let copy = Path::new("/tmp/bammetrics-chain.1.0123456789abcdef/input.0.tmp");
         let failed = |path: &str| Error::Input {
             path: PathBuf::from(path),
             source: io::Error::other("not a BAM or CRAM file"),
         };
-        let shown = failed("/tmp/bammetrics-markdup.1.0/input.0.tmp")
+        let shown = failed("/tmp/bammetrics-chain.1.0123456789abcdef/input.0.tmp")
             .naming_input(copy, Path::new("/dev/stdin"));
         assert_eq!(shown.to_string(), "/dev/stdin: not a BAM or CRAM file");
         let other = failed("/data/other.bam").naming_input(copy, Path::new("/dev/stdin"));
@@ -86,7 +86,7 @@ mod tests {
         let line = Error::Record(io::Error::new(
             io::ErrorKind::InvalidData,
             "Error parsing text SAM file. MAPQ should be < 256; File \
-             /tmp/bammetrics-markdup.1.0/input.0.tmp; Line 2",
+             /tmp/bammetrics-chain.1.0123456789abcdef/input.0.tmp; Line 2",
         ))
         .naming_input(copy, Path::new("/dev/stdin"));
         assert_eq!(

@@ -38,6 +38,6 @@ segment 2  a second read of tests/data/markdup.bam through step 1 (replay: nothi
 barrier    step 1 mark-duplicates: replays the source; about 16 records by the file size, no spill under MAX_RECORDS_IN_RAM 4,000,000; memory about 100.0 MiB
 temp disk  none expected
 output     about 1.1 KiB written by write
-memory     about 100.0 MiB at the peak
+memory     about 100.0 MiB at the peak, a fixed 100.0 MiB for the chain beside its barriers included (a small input takes less)
 nothing ran: this is a plan
 ## stderr

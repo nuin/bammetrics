@@ -94,7 +94,7 @@ works in a step: `--minimum-pct 0.1`, `--MINIMUM_PCT 0.1`, `MINIMUM_PCT=0.1`, `-
 | `--format LIST` | `picard` first. Each further format is written beside every metrics file |
 | `--also LIST` | `json`, `jsonl`, `tsv`, `csv` beside every metrics file; `markdown` as `PREFIX.report.md` |
 | `--sample NAME` | Sample name of the json and jsonl forms (default: the first `@RG SM`, else the source name) |
-| `--sort-memory BYTES` | What a `sort-sam` step holds before a sorted run spills: a number, or one with K, M, G or T (1024 based). Default 2G (section 15) |
+| `--sort-memory BYTES` | What the barriers of the chain hold: a `sort-sam` step spills a sorted run at it, less 64 MiB and the read ends of a later `mark-duplicates`. A number, or one with K, M, G or T (1024 based), at most 18446744073709551615 bytes (exit 2 past it). Default 2G (section 15) |
 | `--force-space` | Run when the estimated temporary and output bytes exceed the free space of their file system (section 15) |
 | `--validation-stringency` | `STRICT` (default), `LENIENT` or `SILENT` for a SAM text source. A step refuses it |
 | `--plan FILE` | Read the source, the options and the steps from a plan file (section 3) |
@@ -424,8 +424,9 @@ bammetrics chain tests/data/insert_size.bam -o out/sample --format picard,json -
 
 The format:
 
-- One `[chain]` table. Its keys: `source`, `output-prefix`, `reference`, `threads`,
-  `tmp-dir`, `format`, `also`, `sample`, `quiet`, `verbose`. `format` and `also` take a
+- One `[chain]` table. Its 13 keys: `source`, `output-prefix`, `reference`, `threads`,
+  `tmp-dir`, `format`, `also`, `sample`, `quiet`, `verbose`, `sort-memory`,
+  `force-space`, `validation-stringency`. `format` and `also` take a
   string (`"picard,json"`) or a list of strings. An empty `output-prefix` is an error.
 - One `[[step]]` table per step, in chain order. `verb` is required: a tool verb, a
   Picard class, or `write`. Every other key is the long name of an option of that verb
@@ -433,7 +434,7 @@ The format:
   `false`, an int option an integer, a float option a number, a text or path option a
   string. One number also stands for the text of a text option (`program-record-id = 7`).
   A repeatable option takes a list; a list of a text option holds strings only. The keys
-  of `write` are `output`, `index`, `md5` and `compression-level`.
+  of `write` are `output`, `index`, `md5`, `compression-level` and `output-format`.
 - A path is read as the command line reads it: relative to the working directory of the
   command. It is never read relative to the directory of the plan file.
 - The plan file is a file the chain reads. A step that names it as an output is a usage
@@ -507,7 +508,7 @@ segment 2  a second read of tests/data/markdup.bam through step 1 (replay: nothi
 barrier    step 1 mark-duplicates: replays the source; about 16 records by the file size, no spill under MAX_RECORDS_IN_RAM 4,000,000; memory about 100.0 MiB
 temp disk  none expected
 output     about 1.1 KiB written by write
-memory     about 100.0 MiB at the peak
+memory     about 100.0 MiB at the peak, a fixed 100.0 MiB for the chain beside its barriers included (a small input takes less)
 nothing ran: this is a plan
 ```
 
@@ -522,9 +523,9 @@ The plan lists:
 - One `barrier` line per transform (section 15): whether it holds its records, replays the
   source, replays a copy of the piped source, or spools its input; the bytes it spills or
   the estimated record count with the bound under which nothing spills; its memory. The
-  record count comes from the file size: 69 compressed bytes per record for a BAM, 21 for a
-  CRAM (the HG002 exome BAM and the NA12878 genome CRAM of docs/benchmarks.md). A file that
-  compresses better gets a low count and a low spill estimate: a 22 MB BAM of 3,000,000
+  record count comes from the file size: 69 compressed bytes per record for a BAM (102
+  when its header says `queryname`), 21 for a CRAM, 434 for SAM text (the HG002 exome BAM
+  and the NA12878 genome CRAM of docs/benchmarks.md). A file that compresses better gets a low count and a low spill estimate: a 22 MB BAM of 3,000,000
   identical-pattern records (7.3 bytes each) is estimated at 318,938 records. `mark-duplicates` above
   `MAX_RECORDS_IN_RAM` records spills 59 bytes per record, the larger of the two peaks
   measured there (46 and 59): 8.2 GiB for the exome BAM (measured 6.5 GiB) and 41.3 GiB
@@ -583,7 +584,7 @@ and of a Python call (section 5.3).
 
 | Item | Role |
 |---|---|
-| `Spec`, `StepSpec` | A chain as asked for: `source`, `reference`, `prefix`, `threads`, `tmp_dir`, `formats`, `also`, `sample`, `quiet`, `verbose`, `steps`. A step is its verb and its arguments as text (`StepSpec::new("insert-size", &["--minimum-pct=0.1"])`) |
+| `Spec`, `StepSpec` | A chain as asked for: `source`, `reference`, `prefix`, `threads`, `tmp_dir`, `formats`, `also`, `sample`, `quiet`, `verbose`, `sort_memory`, `force_space`, `stringency`, `plan_file`, `stage_executor`, `free_space`, `steps`. A step is its verb and its arguments as text (`StepSpec::new("insert-size", &["--minimum-pct=0.1"])`) |
 | `parse(args)` | The command line into `Asked::Chain { spec, dry_run }` or `Asked::Help(text)` (`chain/args.rs`) |
 | `read_plan(path)`, `parse_plan(text, file)` | A plan file into a `Spec` (`chain/planfile.rs`) |
 | `prepare(&Spec) -> Result<Chain, VerbError>` | Every usage check. Nothing is read or written (`chain/prepare.rs`) |
@@ -647,7 +648,7 @@ keyword. One number alone stands for the text of a text option, as in a plan fil
 `crates/py/src/chain.rs` holds `Step`, `Stage`, `chain` and `step`. A call builds the argv
 (`--long=VALUE` per keyword, `+ VERB --long=VALUE ...` per step), then runs `parse`,
 `prepare` and `execute` with the GIL released, reads every metrics file back, and returns
-the `Run`. `dry_run=True` returns `plan_text`. `tests/python/test_chain.py` (75 tests)
+the `Run`. `dry_run=True` returns `plan_text`. `tests/python/test_chain.py` (77 tests)
 checks chained equals staged through the Python functions, both plan files against their
 inline steps, the bytes of a Python call against the command's, `Run.stages`,
 `Run.metrics`, one error per misuse, pickling and the GIL release.
@@ -957,7 +958,7 @@ W04, Python (docs/07 section 2.2, the `crates/py` paragraph):
 
 | docs/07 | As built | Reason |
 |---|---|---|
-| `crates/py/src/verbs.rs` holds `bm.chain` | `crates/py/src/chain.rs` | `verbs.rs` has 1,138 lines. The chain classes and functions are one file of 610 |
+| `crates/py/src/verbs.rs` holds `bm.chain` | `crates/py/src/chain.rs` | `verbs.rs` has 1,138 lines. The chain classes and functions are one file of 632 |
 | `bm.chain(..., resume=)` | No `resume` keyword | Resume per step is W14 (manifest 2). A keyword that does nothing would be a lie in the signature |
 | `Run.stages` holds the transform counters | One `Stage` per step: `status`, `error`, `files`, `reads`, `leaves`, `segment`, and `records_in`, `records_out`, `changed` for a transform (`None` for a tap and `write`) | A failed run needs the status of every step, and `Products::counters` exists for a stage only. A chain of taps lowers to the read of `qc`, which counts no records |
 | `bm.step` validates against the generated registry signature | It does, through `registry::python_keywords`. `input` is refused, `output` is the step's own `-o` (a prefix for a tool that writes several files), `mark_duplicates` takes no `output`, and `format` and `as_` are added | A step has no input of its own, a transform writes no BAM in a chain, and `--format` and `--as` are step options with no row in the registry |
@@ -1038,8 +1039,14 @@ bammetrics chain in.bam -o out/s --sort-memory 4G \
   each record into a `sam_sort::RecordSorter`. The seal sorts what is held, merges the
   spilled runs, and hands the records on in order under the sorted header (`SO` set,
   `@HD VN:1.6`, as the tool writes it). The next segment reads them from the sorter.
-- The buffer holds at most `--sort-memory` bytes (default 2 GiB). A record counts its
-  bytes, the item and two index slots of the sort (`sam_sort::ITEM_BYTES`). The step's
+- The buffer holds at most `--sort-memory` bytes (default 2 GiB) less what is resident
+  beside it (`planner::sort_budget`): 64 MiB for the run merge, a spool writer and the
+  batches in flight, and the read ends of the largest `mark-duplicates` step after it
+  (`mark_duplicates::held_bytes`, 640 MB at `MAX_RECORDS_IN_RAM` 4,000,000), at least a
+  quarter of `--sort-memory`. The allocator keeps the pages of the sort's records resident
+  after the sort seals, so that step's lists come on top of them. A record counts its
+  bytes, the item and two index slots of the sort (`sam_sort::ITEM_BYTES`). The sort of
+  a run permutes the records in place, so no second vector of the run exists. The step's
   own `--max-records-in-ram` adds a record bound. Runs spill to `--tmp-dir` as BGZF level
   3, are merged at most 64 at a time with ties to the earlier run, and are removed once
   read, at a failure and at a signal (`spill::TempDir`).
@@ -1090,7 +1097,9 @@ barrier and planner):
 A barrier's memory adds the memory of the barrier before it: a sort that held its
 records still holds them while the next barrier reads them, and the allocator keeps what
 the barrier before freed. The two-barrier chain above peaked at 1.65 GiB with
-`--sort-memory 1G`, more than either sort alone.
+`--sort-memory 1G`, more than either sort alone. The 1.25 resident bytes per byte held
+were measured before the run sort permuted in place; since 0.23.0 a sort holding 1.44
+GB peaked at 1,636 MiB (1.12 with the base), so the estimate errs high.
 
 Before the first read `execute` adds the temporary bytes (every spill and spool, as if
 all were held at once) and the bytes of each `write` file, by file system (the device of

@@ -251,6 +251,14 @@ pub const COMMON: &[Opt] = &[
 pub const STRINGENCY_UNREAD: &str =
     "a BAM or CRAM is not validated; SAM text is checked at the level given";
 
+/// `VALIDATION_STRINGENCY` of a tool that reads no SAM, BAM or CRAM record
+/// (bytes, a VCF, a metrics file, a FASTA, a BED): Picard takes it, nothing
+/// reads it, and Python offers no keyword for it.
+pub const STRINGENCY_NO_RECORDS: Opt = Opt::ignored(
+    &["VALIDATION_STRINGENCY"],
+    "no SAM, BAM or CRAM record is read",
+);
+
 /// Why `REFERENCE_SEQUENCE` is ignored by a tool whose metrics do not read
 /// it. A CRAM input is decoded with it, and then no note is written.
 const REFERENCE_UNREAD: &str = "this metric does not read the reference";

@@ -126,7 +126,7 @@ fn check_writable(chain: &Chain, made: &mut MadeDirs) -> Result<(), VerbError> {
 }
 
 /// The step of the stage layer for `step`, under its label.
-fn core_step(chain: &Chain, step: &Planned) -> Result<Step, VerbError> {
+fn core_step(chain: &Chain, index: usize, step: &Planned) -> Result<Step, VerbError> {
     let failed = |e: bammetrics_core::Error| step_error(&step.label, &e);
     let unfit = || super::usage(format!("{}: it cannot be a step", step.label));
     let mut built = match (&step.write, step.tool) {
@@ -134,7 +134,8 @@ fn core_step(chain: &Chain, step: &Planned) -> Result<Step, VerbError> {
         (None, Some(tool)) => {
             let mut inv = tool.parse(&step.argv).map_err(failed)?;
             inv.threads = chain.threads;
-            inv.sort_memory = Some(usize::try_from(chain.sort_memory).unwrap_or(usize::MAX));
+            let sort_bytes = super::planner::sort_budget(chain, index);
+            inv.sort_memory = Some(usize::try_from(sort_bytes).unwrap_or(usize::MAX));
             inv.read_dash_from_stdin();
             match step.role {
                 Role::Transform => Step::tool_stage(tool, inv).ok_or_else(unfit)?,
@@ -390,7 +391,8 @@ fn run_steps(mut chain: Chain, made: &mut MadeDirs) -> Result<Outcome, VerbError
     let steps = chain
         .steps
         .iter()
-        .map(|step| core_step(&chain, step))
+        .enumerate()
+        .map(|(index, step)| core_step(&chain, index, step))
         .collect::<Result<Vec<_>, _>>()?;
     let plan = ChainPlan {
         source: Box::new(

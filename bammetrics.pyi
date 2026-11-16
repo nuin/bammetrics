@@ -544,7 +544,6 @@ def accumulate_quality_yield_metrics(
     input: _Paths,
     *,
     output: _Path | None = None,
-    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """AccumulateQualityYieldMetrics: QualityYieldMetrics files (a list of paths) merged
     into one row."""
@@ -684,7 +683,6 @@ def bed_to_interval_list(
     drop_missing_contigs: bool | None = None,
     keep_length_zero_intervals: bool | None = None,
     output: _Path | None = None,
-    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """BedToIntervalList: one row per interval written (contig, start, end, strand, name);
     OUTPUT gets the interval list."""
@@ -770,7 +768,6 @@ def collect_variant_calling_metrics(
     sequence_dictionary: _Path | None = None,
     gvcf_input: bool | None = None,
     thread_count: int | None = None,
-    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """CollectVariantCallingMetrics: the input is a VCF (plain or bgzip). OUTPUT is a
     prefix: PREFIX.variant_calling_summary_metrics and
@@ -781,7 +778,6 @@ def accumulate_variant_calling_metrics(
     input: _Paths,
     *,
     output: _Path,
-    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """AccumulateVariantCallingMetrics: the prefixes of CollectVariantCallingMetrics shards
     merged as Picard merges them; OUTPUT is the prefix of the two files. Python returns
@@ -802,7 +798,6 @@ def genotype_concordance(
     use_vcf_index: bool | None = None,
     missing_sites_hom_ref: bool | None = None,
     ignore_filter_status: bool | None = None,
-    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """GenotypeConcordance: the truth and call VCFs compared by position. OUTPUT is a
     prefix: PREFIX.genotype_concordance_summary_metrics, _detail_metrics and
@@ -819,7 +814,6 @@ def compare_metrics(
     ignore_histogram_differences: bool | None = None,
     key: str | Sequence[str] | None = None,
     verbosity: str | None = None,
-    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """CompareMetrics: one row per difference Picard reports between two metrics files:
     KEY, METRIC, VALUE1 and VALUE2 for a value, DIFFERENCE (the line Picard logs) for
@@ -837,7 +831,6 @@ def create_sequence_dictionary(
     alt_names: _Path | None = None,
     create_md5_file: bool | None = None,
     output: _Path | None = None,
-    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """CreateSequenceDictionary: one row per FASTA sequence (name, length, md5, assembly,
     uri, species, alternate_names); OUTPUT gets the .dict."""
@@ -925,7 +918,6 @@ def convert_sequencing_artifact_to_oxo_g(
     pre_adapter_in: _Path | None = None,
     bait_bias_in: _Path | None = None,
     oxog_out: _Path | None = None,
-    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """ConvertSequencingArtifactToOxoG: one CpcgMetrics row per library and C-centred
     context, read from the CollectSequencingArtifactMetrics detail files of INPUT_BASE;
@@ -1044,7 +1036,6 @@ def fifo_buffer(
     debug_frequency: int | None = None,
     name: str | None = None,
     verbosity: str | None = None,
-    validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """FifoBuffer: standard input copied to standard output through a memory buffer of
     BUFFER_SIZE bytes, so a producer and a consumer that work in bursts do not wait for
@@ -1086,7 +1077,6 @@ def build_bam_index(
     input: _Path,
     *,
     output: _Path | None = None,
-    validation_stringency: str | None = None,
 ) -> list[_BamIndexRow]:
     """BuildBamIndex: writes the .bai of a coordinate-sorted BAM, byte for byte the index
     Picard writes for the same file: to OUTPUT, or beside INPUT as x.bai for x.bam (the
