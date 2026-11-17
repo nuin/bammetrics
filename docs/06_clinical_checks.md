@@ -438,3 +438,201 @@ run 3.4 percent under the genome-wide autosomal depth. The whole-file run decode
 on 8 threads; its resident memory is the CRAM decoder's, the tool holds one row per unit.
 The HG002 exome without targets gives a ratio, section 6.4; the hs37d5 capture targets
 were not at hand.
+
+## 7. Adapter content
+
+`CollectAdapterContentMetrics` (verb `adapter-content`, Python
+`collect_adapter_content_metrics()`, class `bammetrics.qc.AdapterContentMetrics`, source
+`crates/core/src/adapter_content.rs`) reports adapter content as the Adapter Content module
+of FastQC 0.13.0 does, read from a BAM, CRAM or SAM file. It is the fourth check of this
+file with no Picard counterpart, and part of wave W08 of docs/07.
+
+### 7.1 Counts
+
+The tool is a one-pass `Collector`, so `CollectMultipleMetrics` runs it as a program
+(extension `.adapter_content_metrics`), `chain` runs it as a tap and `qc` runs it under a
+preset with an `AdapterContentMetrics` rule.
+
+- Records. Every primary record counts, unmapped records included, since adapter dimers
+  rarely map. Secondary and supplementary records never count. QC-failed records and
+  duplicates count unless `PF_READS_ONLY=true` or `INCLUDE_DUPLICATES=false`.
+- Read ends. `FIRST` is flags 0x1 and 0x40 without 0x80, `SECOND` is 0x1 and 0x80 without
+  0x40, `UNPAIRED` is every other record. The ends are reported apart, as `samtools fastq
+  -1 -2 -0` splits them.
+- Bases. A record with flag 0x10 is reverse complemented, so its bases are in sequencing
+  order, as `samtools fastq` writes them. Hard-clipped bases are not in the record and
+  cannot be restored: a hard-clipped read is shorter, and on the reverse strand its cycles
+  shift. Primary records from BWA and minimap2 carry soft clips, not hard clips.
+- Search. The key of an adapter is its first `ADAPTER_KMER` bases (default 12, FastQC's
+  length). A read carries the adapter when the key occurs in it exactly, at any position;
+  its start is the first occurrence, as FastQC's `String.indexOf`. An `N` or other IUPAC
+  code matches nothing. `crates/core/src/adapter.rs` (`AdapterUtility` of
+  `CollectAlignmentSummaryMetrics`) is a different test: the read must start with any
+  16-base window of an adapter, one mismatch allowed. Neither tool changes the other.
+- Read-through. `PAIR_READ_THROUGH` needs no sequence: among proper pairs of the read end
+  (flags 0x1 and 0x2, both mates mapped, TLEN not 0), the fraction whose |TLEN| is below
+  the record's read length. Such a read runs past its insert into the adapter.
+
+The default adapters are FastQC's six, from
+`/opt/homebrew/Cellar/fastqc/0.13.0/libexec/Configuration/adapter_list.txt`:
+
+| Adapter | Key |
+|---|---|
+| Illumina Universal Adapter | `AGATCGGAAGAG` |
+| Illumina Small RNA 3' Adapter | `TGGAATTCTCGG` |
+| Illumina Small RNA 5' Adapter | `GATCGTCGGACT` |
+| Nextera Transposase Sequence | `CTGTCTCTTATA` |
+| PolyA | `AAAAAAAAAAAA` |
+| PolyG | `GGGGGGGGGGGG` |
+
+The search rolls each read into a 2-bit code, one base at a time, from the packed BAM
+bytes. A 65,536-bit filter on the last 8 bases of the code rejects almost every position;
+a binary search over the sorted keys settles the rest. The cost is linear in the read
+length and does not grow with the number of adapters.
+
+### 7.2 Metrics class `bammetrics.qc.AdapterContentMetrics`
+
+One row per accumulation unit, read end and adapter, in that order. Units follow
+`METRIC_ACCUMULATION_LEVEL` as the Picard tools write them. A read end gets rows when the
+run counted at least one record of it; a file with no counted record gets the `UNPAIRED`
+rows with `READS` 0.
+
+| Column | Type | Definition |
+|---|---|---|
+| `ADAPTER` | string | The adapter's name. |
+| `KMER` | string | The bases searched, upper case. |
+| `READ_END` | string | `FIRST`, `SECOND` or `UNPAIRED`. |
+| `READS` | int | Counted records of the read end in the unit. |
+| `READS_WITH_ADAPTER` | int | Reads that hold the key. |
+| `PCT_READS_WITH_ADAPTER` | float | `100 x READS_WITH_ADAPTER / READS`, 0 to 100; `?` without a read. |
+| `MEAN_ADAPTER_START` | float | Mean 1-based cycle of the first occurrence; `?` without a match. |
+| `PCT_AT_LAST_CYCLE` | float | The table's value at its last cycle (section 7.3), the value FastQC grades. |
+| `PAIR_READ_THROUGH` | float | A fraction from 0 to 1 (section 7.1); `?` without a proper pair. |
+| `SAMPLE`, `LIBRARY`, `READ_GROUP` | string | The unit, as in the Picard tools (`READ_GROUP` is the `PU`). |
+
+`PCT_AT_LAST_CYCLE` equals `PCT_READS_WITH_ADAPTER` unless a key starts after cycle 1,000,
+the table's last row. A key starts at or before the last cycle of its read, and the table
+runs to the last cycle of the longest read.
+
+### 7.3 The by-cycle table
+
+The file's `## HISTOGRAM` section holds FastQC's cumulative curve. The key `READ_CYCLE`
+runs from 1 to the last cycle at which a key can start in the longest counted read
+(`read length - ADAPTER_KMER + 1`), at most 1,000. Each column is one unit, read end and
+adapter, labelled `<unit>.<READ_END>.<ADAPTER>` (`All_Reads.FIRST.PolyG`); the unit is
+`All_Reads` or the sample, library or platform unit, as in `CollectInsertSizeMetrics`.
+A cell is the percent of the column's reads whose key starts at or before the cycle,
+`100 x count / READS`, the arithmetic of FastQC's `calculateEnrichment` without grouping.
+A column of a read end with no read in its unit is `?`.
+
+The table is a histogram section, the shape of `QualityScoreDistribution`. A second class
+in a file of its own, the shape of `CollectGcBiasMetrics`, would need a second output
+option. One file keeps one `OUTPUT`, one verb file, one `CollectMultipleMetrics`
+extension and one chain file name, and every reader of a Picard histogram
+(`read_metrics`, `read_table`, `convert`, the formats) takes it as it is. The key is
+`READ_CYCLE`: the glossary looks a `CollectMultipleMetrics` histogram up by its key, and
+`CYCLE` is the key of `MeanQualityByCycle`.
+
+The 1,000-cycle cap bounds the table of a long-read file: 1,000 rows of at most
+`units x 3 x adapters` columns. Reads longer than that still count in full in every
+column of the class.
+
+### 7.4 Options
+
+| Option | Default | Meaning |
+|---|---|---|
+| `INPUT`, `OUTPUT` | | As every tool. |
+| `ADAPTER_SEQUENCE` | FastQC's six | `NAME=SEQ` or `SEQ` (named by itself); repeat for each. Any value replaces the six. At most 64; names are unique and hold no tab or line end. |
+| `ADAPTER_KMER` | 12 | Bases of each adapter searched, 1 to 32. Each adapter needs that many bases, all A, C, G or T; the bases after them are not read. Above 12 the default adapters are too short, which is an error. |
+| `PF_READS_ONLY` | false | Count only reads that pass the vendor filter. |
+| `INCLUDE_DUPLICATES` | true | Count reads flagged as duplicates. |
+| `METRIC_ACCUMULATION_LEVEL` (`LEVEL`) | `ALL_READS` | As the Picard tools. |
+| `STOP_AFTER` | 0 | Records read; 0 reads them all. |
+
+The tool reads no file whole. Its memory holds, per unit, read end and adapter, one count
+per distinct start: at most one per cycle of the longest read.
+
+### 7.5 Truth and cross-checks
+
+No Picard oracle exists. The tests rest on files whose answer is known by construction
+and on FastQC itself. The documented tolerance against FastQC is 0.1 percentage points
+per cycle and adapter.
+
+- `tests/data/make_adapter_bams.py OUT` writes `adapter_planted.bam`: 200 pairs and 50
+  unpaired reads of 100 bases. First reads carry the Universal key at cycles 31, 61 and
+  89, Nextera at 1, PolyG at 70 and both small RNA keys; second reads carry Universal at
+  31, Nextera at 5 and PolyA at 80. Half of each set lies on the reverse strand. The
+  unpaired reads hold 10 unmapped Universal dimers, 35 reads without an adapter and 5
+  reads of 10 bases, shorter than the key. Secondary and supplementary copies of adapter
+  reads must not count. The generator checks each planted start against Python's
+  `str.find`. `tests/python/test_adapter_content.py` requires every row, every mean start
+  and every cell of the table to equal the planted fractions exactly, and
+  `PAIR_READ_THROUGH` 0.1 (20 of 200 pairs have an insert of 30).
+- The same test runs `samtools fastq -F 0x900 -1 -2 -0` and `fastqc --nogroup` on the
+  planted BAM: every cell equals FastQC's within 5e-7, the rounding of 6 printed digits.
+- `tests/data/adapter_content.bam` (`make_adapter_bams.py --fixture`) is the golden
+  fixture: 12 pairs and 8 unpaired reads in two libraries, with the Universal key at
+  cycle 31 in both reads of 4 pairs (insert 30), Nextera at cycle 1 and 4 Universal
+  dimers. `crates/cli/tests/adapter_content.rs` runs the preset of section 7.6 on it
+  through `check` and `qc`.
+- The unit tests of `adapter_content.rs` cover the read ends, the reverse strand, the
+  filters, the levels, the 1,000-cycle cap, a record cut short, the packed-base scan
+  against the text scan on 500 random reads on both strands, and every option error.
+
+Cross-check on real data: `samtools fastq -F 0x900` of each file through `fastqc
+--nogroup --extract`, every cycle of every adapter in each read end compared.
+
+| Input | Reads per end | Cycles | Largest difference | Cells over 0.1 points |
+|---|---|---|---|---|
+| corpus t1 | 20,000 + 20,000 | 139 | 0 | 0 |
+| HG002 exome slice: the first 1,821,470 records plus the 178,530 unplaced unmapped ones | 999,406 + 999,296 | 115 | 5e-7 | 0 |
+
+FastQC widens its table when a longer read arrives and does not add the earlier reads'
+hits to the new cycles (`AdapterContent.processSequence`). On reads of mixed length its
+curve can then sit below this tool's at the cycles past an earlier, shorter read. The two
+files above show no such gap: the longest read of each end comes early in each file. The
+HG002 reads are 126 bases with some shorter, and 3.3 percent of each end carries the
+Universal key, at a mean cycle of 106.
+
+### 7.6 Rules
+
+No shipped preset has an `AdapterContentMetrics` rule, so `qc` output and every shipped
+preset stay byte for byte. FastQC's own limits (`Configuration/limits.txt`: `adapter warn
+5`, `adapter error 10`, percent of reads with an adapter k-mer at any position) are the
+standard thresholds. A lab writes them in its own preset; `qc` then runs the tool
+(`SOURCES` in `crates/cli/src/qc.rs`). The verdict takes the worst row, so the rule fails
+on the worst adapter and read end. The values are starting values, not validated limits:
+
+<!-- adapter preset start -->
+```toml
+[preset]
+name = "adapter-content"
+version = 1
+note = "starting values"
+
+[[rule]]
+id = "adapter.max-pct"
+label = "Reads with an adapter (FastQC limits)"
+class = "AdapterContentMetrics"
+metric = "PCT_AT_LAST_CYCLE"
+warn = "> 5"
+fail = "> 10"
+```
+<!-- adapter preset end -->
+
+No plot family is added, since no shipped rule names one.
+
+### 7.7 Measurements
+
+Mac Studio, release build, outputs under `~/data/bammetrics-scale/waves/w08/` (deleted
+after the run), 2026-11-17.
+
+| Input | Records counted | Universal, FIRST / SECOND (percent) | PolyA, FIRST / SECOND (percent) | `PAIR_READ_THROUGH` | Wall | Peak RSS |
+|---|---|---|---|---|---|---|
+| HG002 exome slice of section 7.5 | 1,998,702 | 3.314569 / 3.258794 | 0.79067 / 0.786454 | 0.087262 | 0.65 s | 8 MB |
+| HG002 exome BAM, 10 GB, whole file | 150,386,776 | 3.430677 / 3.371215 | 0.30206 / 0.442393 | 0.083479 | 42.0 s | 9 MB |
+
+The whole-file run took 42.0 s with the file in the page cache and 94.3 s on the first
+read. `CollectMtCopyNumberMetrics` on the same cached file took 33.6 s. A 5-second
+`sample` of the run puts 423 stacks in the collector and 890 in inflate alone: the
+collector waits for BGZF blocks most of the time.

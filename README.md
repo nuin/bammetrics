@@ -180,6 +180,7 @@ the sizes and a Chrome recipe for a build without the feature.
 | CollectCoverageGaps (not a Picard tool, [docs/06](docs/06_clinical_checks.md): target bases under `MIN_DEPTH` as a metrics row and a BED of gap runs, with the CollectHsMetrics depth) | | `collect_coverage_gaps()` |
 | CollectSexCheckMetrics (not a Picard tool, docs/06: reads per base on X, Y and the autosomes, the inferred sex against `EXPECTED_SEX`) | | `collect_sex_check_metrics()` |
 | CollectMtCopyNumberMetrics (not a Picard tool, docs/06 section 6: mitochondrial genomes per diploid nuclear genome, 2 x mean depth on chrM over mean autosomal depth; `TARGET_INTERVALS`, `EXCLUDE_INTERVALS`; also a `CollectMultipleMetrics` program) | all four | `collect_mt_copy_number_metrics()` |
+| CollectAdapterContentMetrics (not a Picard tool, docs/06 section 7: FastQC's Adapter Content on a BAM, per adapter and read end, unmapped reads included; the cumulative by-cycle curve as the histogram; `PAIR_READ_THROUGH` from TLEN; `ADAPTER_SEQUENCE`, `ADAPTER_KMER`; also a `CollectMultipleMetrics` program) | all four | `collect_adapter_content_metrics()` |
 | BamIndexStats (Picard's text from the `.bai` or `.csi`; a CRAM counted with `R=`) | | `bam_index_stats()` |
 | CheckDuplicateMarking (`MODE`, `OUTPUT`, `VERBOSITY`; Picard's log lines and exit code; a BAM that is not queryname sorted is sorted first) | | `check_duplicate_marking()` |
 | CollectJumpingLibraryMetrics (several `INPUT`s read in turn; `MINIMUM_MAPPING_QUALITY`, `TAIL_LIMIT`, `CHIMERA_KB_MIN`) | | `collect_jumping_library_metrics()` |
