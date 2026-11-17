@@ -1,0 +1,18 @@
+## argv
+exon-coverage
+tests/data/insert_size.bam
+--annotation
+tests/data/exons.gtf
+--canonical
+--feature
+CDS
+--format
+tsv
+## exit
+0
+## stdout
+GENE_NAME	GENE_ID	TRANSCRIPT_ID	EXON_NUMBER	CHROM	START	END	STRAND	LENGTH	MEAN_DEPTH	MEDIAN_DEPTH	MINIMUM_DEPTH	MAXIMUM_DEPTH	BASES_10X	BASES_20X	BASES_30X	PCT_10X	PCT_20X	PCT_30X
+GENE_A	ENSG_A.1	TA1.2	1	chr1	1051	1100	+	50	1	1	1	1	0	0	0	0	0	0
+GENE_A	ENSG_A.1	TA1.2	2	chr1	1151	1250	+	100	0.5	0.5	0	1	0	0	0	0	0	0
+GENE_A	ENSG_A.1	TA1.2	3	chr1	2001	2050	+	50	1	1	1	1	0	0	0	0	0	0
+## stderr

@@ -164,6 +164,13 @@ const OTHER_FILES: &[(&str, &[(&str, &str)])] = &[
         "CollectSexCheckMetrics",
         &[("OUTPUT", ".sex_check_metrics")],
     ),
+    (
+        "CollectExonCoverageMetrics",
+        &[
+            ("OUTPUT", ".exon_coverage_metrics"),
+            ("SUMMARY_OUTPUT", ".gene_coverage_metrics"),
+        ],
+    ),
 ];
 
 /// The files `tool` writes under an output prefix, as (file option,

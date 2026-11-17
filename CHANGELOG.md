@@ -37,6 +37,21 @@
 - Interval lists and BED files (`TARGET_INTERVALS`, `BAIT_INTERVALS`, `INTERVALS` and the
   rest read through `intervals::read_files`) are read through a 1 GiB cap that also holds
   for a pipe; a larger file is an error naming the cap.
+- `CollectExonCoverageMetrics`, wave W07 of docs/07 (docs/exon_coverage.md): one
+  `bammetrics.qc.ExonCoverageMetrics` row per exon with the mean, median, minimum and
+  maximum depth and the bases and fraction at each `MIN_DEPTH` (default 10, 20, 30), and in
+  `SUMMARY_OUTPUT` one `bammetrics.qc.GeneCoverageMetrics` row per gene and per transcript.
+  The depth is the `CollectHsMetrics` per-base depth. Verb `exon-coverage`, Python
+  `collect_exon_coverage_metrics()`. Not a Picard tool.
+- The gene annotation reader (`crates/core/src/gene_model.rs`): GTF 2.2 and GFF3 `exon` or
+  `CDS` features, BED12 blocks, BED regions, plain or gzip; `GENE`, `GENE_LIST`,
+  `TRANSCRIPT`, `CANONICAL` (`Ensembl_canonical`, then `MANE_Select`, then the longest
+  CDS), `FEATURE`; contigs matched to the BAM header with the `chr` alias reported.
+- Glossary rows whose column holds `<N>` (`BASES_<N>X`) stand for every number
+  (`glossary::column_matches`).
+- `tests/concordance/test_exon_coverage.py`: `MEAN_DEPTH` and `MINIMUM_DEPTH` equal Picard
+  3.5.0 `CollectHsMetrics PER_TARGET_COVERAGE` on 2,674 cells; `samtools bedcov` as the
+  cross-check.
 
 ### Changed
 
@@ -50,6 +65,15 @@
   short reads `the file ends inside the header`. The text form prints control characters
   as `\xNN`. A TSV sample sheet keeps backslashes other than its four escapes and drops
   a spreadsheet's double quotes. New fixture `tests/data/doctor/refid_big.bam`.
+- `hs_metrics::CaptureMetrics::with_intervals` builds the accumulator from intervals
+  already read; `CaptureMetrics::new` calls it. Hs output is unchanged.
+- The golden record `verb_tools` lists `exon-coverage`.
+- A tool verb makes the missing directory above a further file (`--summary-output`,
+  `--gaps-file`) before the first read, as it does for `-o`. Before, the run failed after
+  the read with the main file written.
+- A tool verb refuses a further file that is a `--format` copy of the main file.
+- `Invocation::quiet`: the verb's and the chain's `-q` and the Python functions drop a
+  tool's own notes on standard error (the contig notes of `exon-coverage`).
 
 ## 0.24.0
 

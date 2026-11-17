@@ -1387,6 +1387,16 @@ numbers exactly and the depths against `samtools depth`. `CollectMultipleMetrics
 3.5.0 does not know that program name and refuses it. The default program list is
 Picard's.
 
+`CollectExonCoverageMetrics` ([docs/exon_coverage.md](docs/exon_coverage.md)) has no Picard
+counterpart either; its classes are `bammetrics.qc.ExonCoverageMetrics` and
+`bammetrics.qc.GeneCoverageMetrics`. Oracle tier A: each exon's `MEAN_DEPTH` and
+`MINIMUM_DEPTH` print as the `mean_coverage` and `min_coverage` of Picard 3.5.0
+`CollectHsMetrics PER_TARGET_COVERAGE` for the same interval
+(`tests/concordance/test_exon_coverage.py`, 2,674 cells on ten inputs). The other columns
+rest on planted truth (`crates/core/tests/exon_coverage.rs`). `samtools bedcov` gives a mean
+up to 15.2% higher at the default filters (base quality and mate overlap) and at most 0.55%
+higher without them.
+
 ## Not implemented
 
 `FindMendelianViolations`, `GenotypeConcordance OUTPUT_VCF` (see Options), the

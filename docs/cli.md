@@ -300,6 +300,7 @@ table.
 | `fifo-buffer` | FifoBuffer (standard input to standard output; no input argument, no `-o`) | no file: the bytes it read, on standard output |
 | `view-sam` | ViewSam (SAM, BAM or CRAM in) | SAM text on standard output, or in `-o` |
 | `sort-sam` | SortSam (`--sort-order` queryname, coordinate or duplicate) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `exon-coverage` | CollectExonCoverageMetrics (not a Picard tool, [exon_coverage.md](exon_coverage.md); `--annotation` GTF, GFF3, BED12 or BED) | one (plus the `--summary-output` gene and transcript file) |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -340,6 +341,14 @@ and `MT_COPY_NUMBER`, 2 x their ratio ([docs/06](06_clinical_checks.md) section 
 `--targets` on an exome the value is a ratio between off-target and on-target depth, not
 a copy number. A header without a mitochondrial contig is a usage error naming
 `MT_CONTIG` (exit 2; the Picard face exits 1, as for every error there).
+
+`exon-coverage` reports the depth of every exon of an annotation, with no Picard
+counterpart ([exon_coverage.md](exon_coverage.md)). `bammetrics exon-coverage BAM
+--annotation genes.gtf.gz --gene BRCA1 --gene BRCA2 --canonical --summary-output genes.txt
+-o exons.txt` writes one `ExonCoverageMetrics` row per exon and one `GeneCoverageMetrics`
+row per gene and per transcript, with the `CollectHsMetrics` per-base depth, so an exon's
+`MEAN_DEPTH` and `MINIMUM_DEPTH` are the `mean_coverage` and `min_coverage` of
+`PER_TARGET_COVERAGE` for the same interval.
 
 ### The 0.12 subcommands
 
@@ -651,7 +660,7 @@ is the short form.
   come before the first `+`. Every `+` starts a step.
 - A step is a tool verb, its Picard class, or `write`. A transform (`mark-duplicates`,
   `sort-sam`) changes the records later steps see; any number may follow one another. A
-  tap (the 13 one-pass tool verbs) reads the
+  tap (the 14 one-pass tool verbs) reads the
   records of its position and changes nothing. `write [PATH]` writes those records as a
   BAM, or as SAM text for a name ending in `.sam`; `-` is standard output, and `write -
   --output-format sam` prints SAM text there. A `.cram` or `.fastq` name is refused with

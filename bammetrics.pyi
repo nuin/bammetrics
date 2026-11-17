@@ -1127,6 +1127,33 @@ def collect_mt_copy_number_metrics(
     from aligned bases, and MT_COPY_NUMBER, 2 x their ratio. Not a Picard tool
     (docs/06)."""
 
+def collect_exon_coverage_metrics(
+    input: _Path,
+    *,
+    annotation: _Path,
+    gene: str | Sequence[str] | None = None,
+    gene_list: _Path | None = None,
+    transcript: str | Sequence[str] | None = None,
+    canonical: bool | None = None,
+    feature: str | None = None,
+    min_depth: int | Sequence[int] | None = None,
+    summary_output: _Path | None = None,
+    minimum_mapping_quality: int | None = None,
+    minimum_base_quality: int | None = None,
+    clip_overlapping_reads: bool | None = None,
+    include_indels: bool | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    validation_stringency: str | None = None,
+    assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectExonCoverageMetrics: one ExonCoverageMetrics row per exon of each selected
+    transcript: mean, median, minimum and maximum depth and the bases and fraction at or
+    above each MIN_DEPTH, with the depth CollectHsMetrics writes per base;
+    SUMMARY_OUTPUT adds one GeneCoverageMetrics row per gene and per transcript. Not a
+    Picard tool (docs/07 W07)."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1353,6 +1380,7 @@ _StepVerb = Literal[
     "sex_check",
     "sort_sam",
     "mt_copy_number",
+    "exon_coverage",
     "write",
 ]
 
