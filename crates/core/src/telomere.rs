@@ -47,6 +47,10 @@ pub const LENGTH_TOLERANCE_PERCENT: i64 = 10;
 /// `ESTIMATED_LENGTH_KB` is empty when more than this percentage of the
 /// counted reads are off length.
 pub const MAX_OFF_LENGTH_PERCENT: i64 = 5;
+/// The histogram prints every repeat count from 0 to `READ_LENGTH` over the
+/// repeat length, at most to this one; a count a read has is printed above.
+/// Long reads with a short repeat would otherwise print a row per base.
+pub const MAX_ZERO_FILLED_KEY: i64 = 1000;
 
 /// One row: a unit's counts.
 #[derive(Clone, Debug, PartialEq)]
@@ -414,7 +418,7 @@ impl Accumulator for Telomere {
                 row.labels = bucket.labels;
                 let mut repeats = bucket.state.repeats;
                 if let Some(length) = row.read_length {
-                    for key in 0..=length / motif {
+                    for key in 0..=(length / motif).min(MAX_ZERO_FILLED_KEY) {
                         repeats.increment_by(key, 0.0);
                     }
                 }

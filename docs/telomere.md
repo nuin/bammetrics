@@ -114,8 +114,9 @@ those rows.
 The histogram section has the key `repeat_count` and one column per unit,
 `<unit>.read_count` (`All_Reads.read_count`, or the sample, library or `PU`): reads by
 repeat count, TelSeq's `TEL0`, `TEL1`, ... columns. Every key from 0 to `READ_LENGTH`
-divided by the repeat length is printed, 0 where no read has it; a longer read adds its
-own key above.
+divided by the repeat length is printed, 0 where no read has it, up to key 1,000 at most
+(`MAX_ZERO_FILLED_KEY`, for long reads with a short repeat); a count a read has is printed
+above that too.
 
 ## 5. Options
 

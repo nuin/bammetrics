@@ -365,6 +365,20 @@ fn another_repeat_counts_its_own_motif() {
     assert_eq!(none.telomeric_reads, 0);
 }
 
+/// A 3,000-base read with a one-base repeat fills the histogram to key
+/// 1,000 and prints its own count above.
+#[test]
+fn long_reads_fill_the_histogram_to_the_cap() {
+    let mut sam = String::from(HEADER);
+    line(&mut sam, "long", 4, &"A".repeat(3000), "a");
+    let buckets = run(&sam, &["REPEAT=A"]).expect("runs");
+    let repeats = &buckets[0].repeats;
+    let keys: Vec<i64> = repeats.keys().collect();
+    assert_eq!(keys.len(), 1002);
+    assert_eq!(keys[1000], MAX_ZERO_FILLED_KEY);
+    assert_eq!(repeats.get(3000), Some(1.0));
+}
+
 #[test]
 fn options_reject_bad_values() {
     let message = |args: &[&str]| run(&planted(), args).expect_err("refused").to_string();
