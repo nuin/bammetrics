@@ -242,7 +242,7 @@ def main():
         subprocess.run(["samtools", "view", "--no-PG", "-C", "--output-fmt-option", "version=3.0",
                         "-T", str(DATA / "ref_100k.fa"), "-o", str(cram), str(bam)], check=True)
         # samtools writes the absolute path of -T as UR; the fixture names the file alone.
-        text = subprocess.run(["samtools", "view", "-H", str(cram)], check=True,
+        text = subprocess.run(["samtools", "view", "-H", "--no-PG", str(cram)], check=True,
                               capture_output=True, text=True).stdout
         text = "".join(f"UR:ref_100k.fa" if field.startswith("UR:") else field
                        for field in re.split(r"(\t|\n)", text))

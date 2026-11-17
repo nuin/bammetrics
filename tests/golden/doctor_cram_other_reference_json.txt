@@ -37,7 +37,7 @@ json
     {
       "check": "header",
       "status": "pass",
-      "value": "5 lines: 1 @HD, 1 @SQ, 1 @RG, 2 @PG, 0 @CO",
+      "value": "4 lines: 1 @HD, 1 @SQ, 1 @RG, 1 @PG, 0 @CO",
       "reason": ""
     },
     {
