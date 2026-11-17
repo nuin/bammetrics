@@ -377,6 +377,18 @@ pub const VERBS: &[Verb] = &[
         writes: "sorted BAM",
         ..verb("sort-sam", "SortSam", Files::Bam)
     },
+    Verb {
+        aliases: &[
+            ("TARGETS", "TARGET_INTERVALS"),
+            ("EXCLUDE", "EXCLUDE_INTERVALS"),
+        ],
+        reads: &["TARGET_INTERVALS", "EXCLUDE_INTERVALS"],
+        ..verb(
+            "mt-copy-number",
+            "CollectMtCopyNumberMetrics",
+            Files::Single,
+        )
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the

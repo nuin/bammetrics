@@ -70,6 +70,12 @@ const NO_PICARD_ORACLE: &[(&str, &str)] = &[
         "not a Picard tool (docs/06); the unit tests of crates/core/src/sex_check.rs check \
          the thresholds and the rows, tests/python/test_clinical_checks.py the fixture row",
     ),
+    (
+        "CollectMtCopyNumberMetrics",
+        "not a Picard tool (docs/06 section 6); tests/python/test_mt_copy_number.py checks the \
+         planted copy numbers of tests/data/make_mt_bams.py exactly and the depths against \
+         samtools depth",
+    ),
 ];
 
 fn root() -> PathBuf {

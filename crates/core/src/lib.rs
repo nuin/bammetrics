@@ -45,6 +45,7 @@ pub mod md5;
 pub mod mean_quality_by_cycle;
 pub mod metric;
 pub mod metrics_file;
+pub mod mt_copy_number;
 pub mod multiple_metrics;
 pub mod optical;
 pub mod oxog_metrics;

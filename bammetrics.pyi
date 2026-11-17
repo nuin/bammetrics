@@ -1085,6 +1085,27 @@ def build_bam_index(
     aligned, unaligned), then a * row whose unaligned count is the records without a
     coordinate."""
 
+def collect_mt_copy_number_metrics(
+    input: _Path,
+    *,
+    mt_contig: str | None = None,
+    autosomes: str | Sequence[str] | None = None,
+    minimum_mapping_quality: int | None = None,
+    minimum_base_quality: int | None = None,
+    target_intervals: _Path | Sequence[_Path] | None = None,
+    exclude_intervals: _Path | Sequence[_Path] | None = None,
+    metric_accumulation_level: str | Sequence[str] | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    validation_stringency: str | None = None,
+    assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectMtCopyNumberMetrics: one row of the 12 MtCopyNumberMetrics columns per
+    accumulation unit: mean depth over the mitochondrial contig and over the autosomes
+    from aligned bases, and MT_COPY_NUMBER, 2 x their ratio. Not a Picard tool
+    (docs/06)."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1210,6 +1231,7 @@ _CollectorVerb = Literal[
     "rna-seq",
     "sex-check",
     "coverage-gaps",
+    "mt-copy-number",
 ]
 
 def qc(
@@ -1290,6 +1312,7 @@ _StepVerb = Literal[
     "coverage_gaps",
     "sex_check",
     "sort_sam",
+    "mt_copy_number",
     "write",
 ]
 

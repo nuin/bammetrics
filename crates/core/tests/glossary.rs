@@ -244,6 +244,15 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
             format!("M={}", dir.join("markdup_metrics").display()),
         ],
     );
+    // The fixture BAMs above have no chrM, which CollectMtCopyNumberMetrics refuses.
+    args.insert(
+        "CollectMtCopyNumberMetrics",
+        vec![
+            format!("I={DATA}/mt_copy_number.bam"),
+            out("mt_copy_number"),
+            "LEVEL=READ_GROUP".to_owned(),
+        ],
+    );
     // The fixture BAM has no @RG line, which CollectOxoGMetrics refuses.
     args.insert(
         "CollectOxoGMetrics",
