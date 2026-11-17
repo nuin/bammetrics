@@ -36,7 +36,9 @@ fn scratch(test: &str) -> PathBuf {
 /// The TOML block between the preset markers of docs/exon_coverage.md.
 fn documented_preset() -> String {
     let doc = fs::read_to_string(root().join("docs/exon_coverage.md")).expect("doc");
-    let start = doc.find("<!-- exon preset start -->").expect("start marker");
+    let start = doc
+        .find("<!-- exon preset start -->")
+        .expect("start marker");
     let end = doc.find("<!-- exon preset end -->").expect("end marker");
     let block = &doc[start..end];
     let body = block.split_once("```toml\n").expect("toml fence").1;
@@ -64,7 +66,11 @@ fn the_documented_preset_fails_the_least_covered_gene() {
         "--summary-output",
         genes.to_str().expect("utf-8"),
     ]);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let preset = dir.join("exon.toml");
     fs::write(&preset, documented_preset()).expect("preset");
     let out = bammetrics(&[
@@ -76,7 +82,10 @@ fn the_documented_preset_fails_the_least_covered_gene() {
     let text = String::from_utf8_lossy(&out.stdout);
     assert_eq!(out.status.code(), Some(10), "{text}");
     assert!(text.contains("preset exon-panel v1"), "{text}");
-    assert!(text.contains("exon.min-pct20  0  warn < 0.98, fail < 0.95"), "{text}");
+    assert!(
+        text.contains("exon.min-pct20  0  warn < 0.98, fail < 0.95"),
+        "{text}"
+    );
     let _ = fs::remove_dir_all(&dir);
 }
 
@@ -96,14 +105,25 @@ fn json_holds_the_rows_and_the_annotation_is_never_an_output() {
         "--format",
         "picard,json",
     ]);
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let json = fs::read_to_string(dir.join("exons.txt.json")).expect("json sibling");
-    assert!(json.contains("\"bammetrics.qc.ExonCoverageMetrics\""), "{json}");
+    assert!(
+        json.contains("\"bammetrics.qc.ExonCoverageMetrics\""),
+        "{json}"
+    );
     // PCT_1X, the last column, prints 1, 0.5 and 0.4: typed float by the
     // glossary's PCT_<N>X row.
     let types = json.split_once("\"types\": [").expect("types").1;
     let types = types.split_once(']').expect("end of types").0;
-    assert_eq!(types.split(',').next_back().map(str::trim), Some("\"float\""), "{json}");
+    assert_eq!(
+        types.split(',').next_back().map(str::trim),
+        Some("\"float\""),
+        "{json}"
+    );
     let before = fs::read(root().join(GTF)).expect("gtf");
     let out = bammetrics(&["exon-coverage", BAM, "--annotation", GTF, "-o", GTF]);
     assert_eq!(out.status.code(), Some(2));

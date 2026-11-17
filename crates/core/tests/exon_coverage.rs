@@ -23,8 +23,7 @@ fn work_dir() -> PathBuf {
 fn read(
     name: &str,
     flag: u16,
-    contig: &str,
-    pos: i64,
+    (contig, pos): (&str, i64),
     mapq: u8,
     cigar: &str,
     qual: char,
@@ -52,21 +51,21 @@ fn read(
 fn planted() -> (String, Vec<(&'static str, i64, i64)>) {
     let mut sam =
         String::from("@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:chr1\tLN:10000\n@SQ\tSN:chr2\tLN:5000\n");
-    sam += &read("f1", 0, "chr1", 101, 60, "100M", 'I', None);
-    sam += &read("dup", 1024, "chr1", 101, 60, "100M", 'I', None);
-    sam += &read("lowmq", 0, "chr1", 101, 10, "100M", 'I', None);
-    sam += &read("lowq", 0, "chr1", 101, 60, "100M", '#', None);
-    sam += &read("second", 256, "chr1", 101, 60, "100M", 'I', None);
-    sam += &read("f2", 16, "chr1", 151, 60, "100M", 'I', None);
-    sam += &read("f3", 0, "chr1", 151, 60, "50M", 'I', None);
-    sam += &read("del", 0, "chr1", 301, 60, "20M10D20M", 'I', None);
-    sam += &read("qcfail", 512, "chr1", 301, 60, "50M", 'I', None);
-    sam += &read("p", 99, "chr1", 501, 60, "50M", 'I', Some((531, 80)));
-    sam += &read("p", 147, "chr1", 531, 60, "50M", 'I', Some((501, -80)));
+    sam += &read("f1", 0, ("chr1", 101), 60, "100M", 'I', None);
+    sam += &read("dup", 1024, ("chr1", 101), 60, "100M", 'I', None);
+    sam += &read("lowmq", 0, ("chr1", 101), 10, "100M", 'I', None);
+    sam += &read("lowq", 0, ("chr1", 101), 60, "100M", '#', None);
+    sam += &read("second", 256, ("chr1", 101), 60, "100M", 'I', None);
+    sam += &read("f2", 16, ("chr1", 151), 60, "100M", 'I', None);
+    sam += &read("f3", 0, ("chr1", 151), 60, "50M", 'I', None);
+    sam += &read("del", 0, ("chr1", 301), 60, "20M10D20M", 'I', None);
+    sam += &read("qcfail", 512, ("chr1", 301), 60, "50M", 'I', None);
+    sam += &read("p", 99, ("chr1", 501), 60, "50M", 'I', Some((531, 80)));
+    sam += &read("p", 147, ("chr1", 531), 60, "50M", 'I', Some((501, -80)));
     for name in ["g1", "g2", "g3"] {
-        sam += &read(name, 16, "chr2", 1001, 60, "100M", 'I', None);
+        sam += &read(name, 16, ("chr2", 1001), 60, "100M", 'I', None);
     }
-    sam += &read("g4", 0, "chr2", 1051, 60, "100M", 'I', None);
+    sam += &read("g4", 0, ("chr2", 1051), 60, "100M", 'I', None);
     let counted = vec![
         ("chr1", 101, 200),
         ("chr1", 151, 250),
@@ -150,6 +149,9 @@ fn expected(counted: &[(&str, i64, i64)], contig: &str, spans: &[(i64, i64)]) ->
     cells
 }
 
+/// (LEVEL, TRANSCRIPT_ID, CHROM, the exon union, EXON_COUNT) of a summary row.
+type Summary<'a> = (&'a str, &'a str, &'a str, &'a [(i64, i64)], i64);
+
 fn rows(output: &MetricsOutput) -> Vec<BTreeMap<&str, &Value>> {
     output
         .rows
@@ -176,7 +178,7 @@ fn depth_cells(row: &BTreeMap<&str, &Value>) -> Vec<f64> {
     .collect()
 }
 
-fn text<'a>(row: &'a BTreeMap<&str, &Value>, column: &str) -> String {
+fn text(row: &BTreeMap<&str, &Value>, column: &str) -> String {
     match row[column] {
         Value::Str(s) => s.clone(),
         Value::Int(i) => i.to_string(),
@@ -278,7 +280,7 @@ fn gene_and_transcript_rows_are_the_union_of_their_exons() {
     let (path, summary) = &output.extra[0];
     assert!(path.display().to_string().contains("summary"));
     let rows = rows(summary);
-    let want: [(&str, &str, &str, &[(i64, i64)], i64); 7] = [
+    let want: [Summary; 7] = [
         ("GENE", "", "chr1", &[(101, 260), (321, 321), (501, 600)], 4),
         ("TRANSCRIPT", "T1", "chr1", &[(101, 200), (321, 321)], 2),
         ("TRANSCRIPT", "T2", "chr1", &[(151, 260), (501, 600)], 2),

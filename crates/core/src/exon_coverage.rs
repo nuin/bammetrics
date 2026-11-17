@@ -442,21 +442,17 @@ impl Stats {
 
 /// The depth of `[start, end]` on BAM contig `contig`, from the merged
 /// target that holds it.
-fn depth_of<'d>(
-    depths: &'d TargetDepths,
-    contig: usize,
-    start: i64,
-    end: i64,
-) -> Result<&'d [i32]> {
+fn depth_of(depths: &TargetDepths, contig: usize, start: i64, end: i64) -> Result<&[i32]> {
+    let missing = || Error::Metric(format!("no merged target holds {contig}:{start}-{end}"));
     let targets = depths.targets();
     let index = targets.partition_point(|t| (t.contig, t.end) < (contig, start));
     let target = targets
         .get(index)
         .filter(|t| t.contig == contig && t.start <= start && end <= t.end)
-        .ok_or_else(|| Error::Metric(format!("no merged target holds {contig}:{start}-{end}")))?;
-    let from = usize::try_from(start - target.start).unwrap_or(0);
-    let to = usize::try_from(end - target.start + 1).unwrap_or(0);
-    Ok(&depths.depth(index)[from..to])
+        .ok_or_else(missing)?;
+    let from = usize::try_from(start - target.start).map_err(|_| missing())?;
+    let to = usize::try_from(end - target.start + 1).map_err(|_| missing())?;
+    depths.depth(index).get(from..to).ok_or_else(missing)
 }
 
 /// One gene or transcript row: its exons (indices into the plan).

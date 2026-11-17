@@ -380,11 +380,7 @@ pub const VERBS: &[Verb] = &[
     Verb {
         reads: &["ANNOTATION", "GENE_LIST"],
         also_writes: &["SUMMARY_OUTPUT"],
-        ..verb(
-            "exon-coverage",
-            "CollectExonCoverageMetrics",
-            Files::Single,
-        )
+        ..verb("exon-coverage", "CollectExonCoverageMetrics", Files::Single)
     },
 ];
 
