@@ -17,7 +17,8 @@
   `METRIC_ACCUMULATION_LEVEL`. A `CollectMultipleMetrics` program
   (`.adapter_content_metrics`), a chain tap and a `qc` source; no shipped preset rule
   (docs/07 decision D24), a lab preset with FastQC's 5 and 10 percent limits in docs/06
-  section 7.6.
+  section 7.6. The output is bounded at 5,000,000 cells; a level whose units exceed it is
+  a usage error, and a unit's read end without a read gets rows and no table column.
 - `tests/data/make_adapter_bams.py`, `tests/data/adapter_content.bam`,
   `tests/python/test_adapter_content.py` (planted truth exact, FastQC within 5e-7 points),
   `crates/cli/tests/adapter_content.rs` and 8 golden records. On the HG002 exome slice of

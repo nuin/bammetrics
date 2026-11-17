@@ -523,7 +523,14 @@ adapter, labelled `<unit>.<READ_END>.<ADAPTER>` (`All_Reads.FIRST.PolyG`); the u
 `All_Reads` or the sample, library or platform unit, as in `CollectInsertSizeMetrics`.
 A cell is the percent of the column's reads whose key starts at or before the cycle,
 `100 x count / READS`, the arithmetic of FastQC's `calculateEnrichment` without grouping.
-A column of a read end with no read in its unit is `?`.
+A read end with no read in its unit gets its rows in the class and no column in the table.
+
+The table length is common to every read end and unit: the longest read of the whole run
+sets it. Cycles past a read end's own longest read repeat that column's last value, and
+`PCT_AT_LAST_CYCLE` is that value. FastQC sees one read end per FASTQ, so its table for a
+read end of shorter reads stops earlier; on every cycle both tables hold, the values are
+equal. A file with 300-base unpaired reads and `FIRST` reads of at most 151 bases has 289
+rows for `FIRST` here and 140 in FastQC.
 
 The table is a histogram section, the shape of `QualityScoreDistribution`. A second class
 in a file of its own, the shape of `CollectGcBiasMetrics`, would need a second output
@@ -550,7 +557,19 @@ column of the class.
 | `STOP_AFTER` | 0 | Records read; 0 reads them all. |
 
 The tool reads no file whole. Its memory holds, per unit, read end and adapter, one count
-per distinct start: at most one per cycle of the longest read.
+per distinct start: at most one per cycle of the longest read. A unit's read end holds no
+count until its first read.
+
+The output is bounded at 5,000,000 cells (`MAX_OUTPUT_CELLS`): 12 per row plus one per
+table column and cycle. One unit needs at most 3 x 64 x (12 + 1,000) = 194,304, so
+`ALL_READS` always fits. A finer `METRIC_ACCUMULATION_LEVEL` over a header with thousands
+of read groups can ask for more; the run then fails with a usage error that names
+`METRIC_ACCUMULATION_LEVEL` and `ADAPTER_SEQUENCE`. The rows alone are known from the
+header, so a header over the bound fails before the first record; a table over it fails
+after the pass, before the rows and the table are built. A header with 20,000 read
+groups, 2,000 unpaired reads of 150 bases and `LEVEL=READ_GROUP` writes 120,006 rows and
+the 11,466 columns of the 1,911 units with a read: 13 MB in 1.4 s at 263 MB peak RSS,
+where every unit's column took 1.06 GB.
 
 ### 7.5 Truth and cross-checks
 
@@ -587,12 +606,14 @@ Cross-check on real data: `samtools fastq -F 0x900` of each file through `fastqc
 | corpus t1 | 20,000 + 20,000 | 139 | 0 | 0 |
 | HG002 exome slice: the first 1,821,470 records plus the 178,530 unplaced unmapped ones | 999,406 + 999,296 | 115 | 5e-7 | 0 |
 
-FastQC widens its table when a longer read arrives and does not add the earlier reads'
-hits to the new cycles (`AdapterContent.processSequence`). On reads of mixed length its
-curve can then sit below this tool's at the cycles past an earlier, shorter read. The two
-files above show no such gap: the longest read of each end comes early in each file. The
-HG002 reads are 126 bases with some shorter, and 3.3 percent of each end carries the
-Universal key, at a mean cycle of 106.
+Mixed read lengths give the same curve in both tools. A FASTQ of one 36-base read with
+the Universal key at cycle 1, then three 100-base reads (one with the key at cycle 31),
+gives 25.0 at cycles 1 to 30 and 50.0 from cycle 31 to 89 in FastQC 0.13.0 and here:
+FastQC carries an earlier read's hit into the cycles a longer read opens. A planted BAM
+with reads of 36, 75, 101, 151 and 300 bases differs from FastQC by 0 on all 840 cells of
+`FIRST` and `SECOND` and all 1,734 of `UNPAIRED` (review of 2026-11-17). The HG002 reads
+are 126 bases with some shorter, and 3.3 percent of each end carries the Universal key,
+at a mean cycle of 106.
 
 ### 7.6 Rules
 

@@ -32,7 +32,7 @@ use noodles::{bam, sam};
 
 use crate::error::{Error, Result};
 use crate::histogram::Histogram;
-use crate::levels::{Labels, Level, Levels, parse_levels};
+use crate::levels::{Labels, Level, Levels, ReadGroupInfo, parse_levels, read_groups};
 use crate::metric::{
     HistogramSection, HistogramSeries, MetricRow, MetricsOutput, ToolOutput, Value,
 };
@@ -54,6 +54,10 @@ pub const MAX_ADAPTERS: usize = 64;
 /// The by-cycle table stops at this cycle. A start after it still counts
 /// in `READS_WITH_ADAPTER` and `MEAN_ADAPTER_START`.
 pub const MAX_TABLE_CYCLES: usize = 1_000;
+/// The cells one run may write: 12 per row plus one per table column and
+/// cycle. One unit holds at most 3 x 64 x (12 + 1,000) = 194,304; a level
+/// with many units can ask for more, which is refused.
+pub const MAX_OUTPUT_CELLS: usize = 5_000_000;
 /// The histogram key label. `CYCLE` would take the glossary rows of
 /// `MeanQualityByCycle` under `CollectMultipleMetrics`.
 pub const KEY_LABEL: &str = "READ_CYCLE";
@@ -119,13 +123,17 @@ pub fn parse_adapter(text: &str, k: usize) -> Result<Adapter> {
     if name.contains(['\t', '\n', '\r']) {
         return Err(bad("the name holds a tab or a line end".to_owned()));
     }
-    let upper = sequence.to_ascii_uppercase();
-    let Some(kmer) = upper.get(..k).filter(|_| upper.len() >= k) else {
+    let kmer = sequence
+        .chars()
+        .take(k)
+        .collect::<String>()
+        .to_ascii_uppercase();
+    if kmer.chars().count() < k {
         return Err(bad(format!(
             "{} bases, ADAPTER_KMER is {k}",
             sequence.chars().count()
         )));
-    };
+    }
     if !kmer.bytes().all(|b| base_code(b).is_some()) {
         return Err(bad(format!(
             "the first {k} bases must be A, C, G or T, got {kmer}"
@@ -133,7 +141,7 @@ pub fn parse_adapter(text: &str, k: usize) -> Result<Adapter> {
     }
     Ok(Adapter {
         name: name.to_owned(),
-        kmer: kmer.to_owned(),
+        kmer,
     })
 }
 
@@ -437,7 +445,8 @@ pub struct End {
     pub reads: i64,
     /// The longest read, in bases.
     pub longest: usize,
-    /// Per adapter: reads by 0-based start of the first occurrence.
+    /// Per adapter: reads by 0-based start of the first occurrence. Empty
+    /// until the end's first read, so a unit without reads holds no map.
     pub starts: Vec<BTreeMap<usize, i64>>,
     pub proper_pairs: i64,
     pub read_through: i64,
@@ -450,13 +459,9 @@ pub struct Unit {
 }
 
 impl Unit {
-    fn new(adapters: usize) -> Self {
-        let end = End {
-            starts: vec![BTreeMap::new(); adapters],
-            ..End::default()
-        };
+    fn new() -> Self {
         Self {
-            ends: [end.clone(), end.clone(), end],
+            ends: [End::default(), End::default(), End::default()],
         }
     }
 }
@@ -576,6 +581,36 @@ fn cumulative(starts: &BTreeMap<usize, i64>, reads: i64, last_cycle: usize) -> H
     histogram
 }
 
+/// The usage error of a run whose output would exceed [`MAX_OUTPUT_CELLS`].
+fn check_cells(cells: usize, units: usize, adapters: usize) -> Result<()> {
+    if cells <= MAX_OUTPUT_CELLS {
+        return Ok(());
+    }
+    Err(Error::Usage(format!(
+        "{units} units and {adapters} adapters make {cells} cells, at most {MAX_OUTPUT_CELLS}; \
+         choose a coarser METRIC_ACCUMULATION_LEVEL or fewer ADAPTER_SEQUENCE values"
+    )))
+}
+
+/// The units the header alone gives: one for `ALL_READS`, one per distinct
+/// sample, library or platform unit (a missing field is one more) at each
+/// other level. The `unknown` unit of a record is not counted.
+fn header_units(header: &sam::Header, levels: &[Level]) -> usize {
+    let groups = read_groups(header);
+    let distinct = |field: fn(&ReadGroupInfo) -> Option<&str>| {
+        groups.iter().map(field).collect::<HashSet<_>>().len()
+    };
+    levels
+        .iter()
+        .map(|level| match level {
+            Level::AllReads => 1,
+            Level::Sample => distinct(|g| g.sample.as_deref()),
+            Level::Library => distinct(|g| g.library.as_deref()),
+            Level::ReadGroup => distinct(|g| g.platform_unit.as_deref()),
+        })
+        .sum()
+}
+
 /// What a run returns: the rows and the by-cycle table.
 #[derive(Clone, Debug)]
 pub struct Report {
@@ -602,7 +637,7 @@ impl AdapterContent {
             adapters: opts.adapters.clone(),
             pf_reads_only: opts.pf_reads_only,
             include_duplicates: opts.include_duplicates,
-            levels: Levels::new(header, &opts.levels, Unit::new(opts.adapters.len())),
+            levels: Levels::new(header, &opts.levels, Unit::new()),
             seen: [false; 3],
             hits: Vec::new(),
         }
@@ -645,8 +680,12 @@ impl Accumulator for AdapterContent {
             .scan_record(sequence.as_bytes(), length, reverse, &mut self.hits);
         let through = read_through(record, length);
         let hits = &self.hits;
+        let adapters = self.adapters.len();
         self.levels.route(record, |unit| {
             let end = &mut unit.ends[read_end.index()];
+            if end.starts.is_empty() {
+                end.starts.resize(adapters, BTreeMap::new());
+            }
             end.reads += 1;
             end.longest = end.longest.max(length);
             for &(adapter, start) in hits {
@@ -676,20 +715,34 @@ impl Accumulator for AdapterContent {
         if ends.is_empty() {
             ends.push(ReadEnd::Unpaired);
         }
-        let mut rows = Vec::new();
+        let row_count = buckets.len() * ends.len() * self.adapters.len();
+        let read_ends = buckets
+            .iter()
+            .flat_map(|b| &b.state.ends)
+            .filter(|e| e.reads > 0)
+            .count();
+        let cells = row_count * Row::COLUMNS.len() + read_ends * self.adapters.len() * last_cycle;
+        check_cells(cells, buckets.len(), self.adapters.len())?;
+        let no_start = BTreeMap::new();
+        let mut rows = Vec::with_capacity(row_count);
         let mut series = Vec::new();
         for bucket in &buckets {
             for &read_end in &ends {
                 let end = &bucket.state.ends[read_end.index()];
-                for (adapter, starts) in self.adapters.iter().zip(&end.starts) {
+                for (index, adapter) in self.adapters.iter().enumerate() {
+                    let starts = end.starts.get(index).unwrap_or(&no_start);
                     rows.push(Row {
                         labels: bucket.labels.clone(),
                         ..row(adapter, read_end, end, starts, last_cycle)
                     });
-                    series.push(HistogramSeries {
-                        label: format!("{}.{}.{}", bucket.key, read_end.name(), adapter.name),
-                        histogram: cumulative(starts, end.reads, last_cycle),
-                    });
+                    // A read end without a read in its unit gets its row and
+                    // no column: every cell would be `?`.
+                    if end.reads > 0 {
+                        series.push(HistogramSeries {
+                            label: format!("{}.{}.{}", bucket.key, read_end.name(), adapter.name),
+                            histogram: cumulative(starts, end.reads, last_cycle),
+                        });
+                    }
                 }
             }
         }
@@ -741,6 +794,11 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
 
 fn collector(inv: &Invocation, header: &sam::Header) -> Result<Box<dyn pass::Collector>> {
     let opts = Options::from_invocation(inv)?;
+    // Every unit gets at least one row per adapter: refuse before the first
+    // record when the header alone is over the bound.
+    let units = header_units(header, &opts.levels);
+    let adapters = opts.adapters.len();
+    check_cells(units * adapters * Row::COLUMNS.len(), units, adapters)?;
     Ok(pass::boxed(AdapterContent::new(&opts, header), |report| {
         Ok(MetricsOutput::from_rows(&report.rows, report.table).into())
     }))

@@ -375,6 +375,24 @@ fn bad_options_are_usage_errors() {
             .contains("12 bases, ADAPTER_KMER is 13")
     );
     assert!(error(&["ADAPTER_SEQUENCE=x=ACGTNACGTACGT"]).contains("must be A, C, G or T"));
+    // A character beyond ASCII inside the key is a bad base, not a count.
+    let accented = error(&["ADAPTER_SEQUENCE=ACGTACGTACG\u{e9}TAC"]);
+    assert!(
+        accented.contains("the first 12 bases must be A, C, G or T"),
+        "{accented}"
+    );
+    assert!(error(&["ADAPTER_SEQUENCE=\u{e9}\u{e9}"]).contains("2 bases, ADAPTER_KMER is 12"));
+    // Bases after the key are not read.
+    let inv = TOOL
+        .parse(&[
+            "I=x".to_owned(),
+            "ADAPTER_SEQUENCE=AGATCGGAAGAG\u{e9}".to_owned(),
+        ])
+        .expect("parses");
+    assert_eq!(
+        Options::from_invocation(&inv).expect("opts").adapters[0].kmer,
+        "AGATCGGAAGAG"
+    );
     assert!(error(&["ADAPTER_SEQUENCE==ACGTACGTACGT"]).contains("the name is empty"));
     assert!(
         error(&[
@@ -389,6 +407,70 @@ fn bad_options_are_usage_errors() {
     let many: Vec<&str> = many.iter().map(String::as_str).collect();
     assert!(error(&many).contains("at most 64"));
     assert!(error(&["INCLUDE_DUPLICATES=maybe"]).contains("true or false"));
+}
+
+#[test]
+fn a_unit_without_reads_gets_rows_and_no_column() {
+    let mut sam = String::from(HEADER);
+    sam.push_str("@RG\tID:c\tSM:s2\tLB:l3\tPU:u3\n");
+    let sam = sam + unpaired().strip_prefix(HEADER).expect("header");
+    let report = run_report(&sam, &["LEVEL=null", "LEVEL=READ_GROUP"]).expect("runs");
+    assert_eq!(report.rows.len(), 18);
+    let empty: Vec<&Row> = report
+        .rows
+        .iter()
+        .filter(|r| r.labels.read_group.as_deref() == Some("u3"))
+        .collect();
+    assert_eq!(empty.len(), 6);
+    assert!(empty.iter().all(|r| r.reads == 0));
+    let table = report.table.as_ref().expect("table");
+    assert_eq!(table.series.len(), 12);
+    assert!(table.series.iter().all(|s| !s.label.starts_with("u3.")));
+    assert_eq!(
+        series(&report, "u2.UNPAIRED.Illumina Universal Adapter").get(11),
+        Some(20.0)
+    );
+}
+
+#[test]
+fn too_many_cells_name_the_level() {
+    let mut sam = String::from("@HD\tVN:1.6\tSO:unsorted\n@SQ\tSN:chr1\tLN:10000\n");
+    for i in 0..7_000 {
+        writeln!(sam, "@RG\tID:g{i}\tSM:s{i}\tLB:l{i}\tPU:u{i}").expect("write");
+    }
+    line(&mut sam, "r", 4, &background(LENGTH), 0, "g0");
+    let adapters: Vec<String> = (0..MAX_ADAPTERS)
+        .map(|i| format!("ADAPTER_SEQUENCE=a{i}=ACGTACGTACGT"))
+        .collect();
+    let mut args: Vec<&str> = adapters.iter().map(String::as_str).collect();
+    // The default level is one unit.
+    assert!(run_report(&sam, &args).is_ok());
+    // 7,000 units x 64 adapters x 12 columns: 5,376,000 cells.
+    args.extend(["LEVEL=null", "LEVEL=READ_GROUP"]);
+    let error = run_report(&sam, &args)
+        .map(|_| ())
+        .expect_err("refused")
+        .to_string();
+    assert!(error.contains("METRIC_ACCUMULATION_LEVEL"), "{error}");
+    assert!(error.contains("at most 5000000"), "{error}");
+    // The collector refuses from the header, before the first record.
+    let header: sam::Header = sam
+        .lines()
+        .filter(|l| l.starts_with('@'))
+        .map(|l| format!("{l}\n"))
+        .collect::<String>()
+        .parse()
+        .expect("header");
+    let mut all = vec!["I=x.bam".to_owned()];
+    all.extend(args.iter().map(|a| (*a).to_owned()));
+    let inv = TOOL.parse(&all).expect("parses");
+    let error = collector(&inv, &header).map(|_| ()).expect_err("refused");
+    assert!(
+        error
+            .to_string()
+            .contains("7000 units and 64 adapters make 5376000 cells"),
+        "{error}"
+    );
 }
 
 #[test]
