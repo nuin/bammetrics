@@ -1,0 +1,27 @@
+## argv
+chain
+tests/data/mt_copy_number.bam
+-o
+OUT/s
++
+mt-copy-number
+--level
+LIBRARY
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: 1 step finished, 1 file written
+## file s.mt_copy_number_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectMtCopyNumberMetrics INPUT=tests/data/mt_copy_number.bam OUTPUT=OUT/s.mt_copy_number_metrics METRIC_ACCUMULATION_LEVEL=LIBRARY
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.MtCopyNumberMetrics
+MT_CONTIG	MT_LENGTH	MT_BASES	MT_MEAN_DEPTH	AUTOSOMAL_LENGTH	AUTOSOMAL_BASES	AUTOSOMAL_MEAN_DEPTH	MT_COPY_NUMBER	READS_USED	SAMPLE	LIBRARY	READ_GROUP
+chrM	500	50000	100	4000	8000	2	100	580			
+chrM	500	30000	60	4000	4000	1	120	340	S1	L1	
+chrM	500	20000	40	4000	4000	1	80	240	S1	L2	
+
+

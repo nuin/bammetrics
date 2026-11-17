@@ -1,0 +1,65 @@
+## argv
+mt-copy-number
+tests/data/mt_copy_number.bam
+--format
+json
+## exit
+0
+## stdout
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectMtCopyNumberMetrics",
+  "sample": "S1",
+  "headers": [
+    "CollectMtCopyNumberMetrics INPUT=tests/data/mt_copy_number.bam",
+    "Started on: <time>"
+  ],
+  "class": "bammetrics.qc.MtCopyNumberMetrics",
+  "columns": [
+    "MT_CONTIG",
+    "MT_LENGTH",
+    "MT_BASES",
+    "MT_MEAN_DEPTH",
+    "AUTOSOMAL_LENGTH",
+    "AUTOSOMAL_BASES",
+    "AUTOSOMAL_MEAN_DEPTH",
+    "MT_COPY_NUMBER",
+    "READS_USED",
+    "SAMPLE",
+    "LIBRARY",
+    "READ_GROUP"
+  ],
+  "types": [
+    "string",
+    "int",
+    "int",
+    "float",
+    "int",
+    "int",
+    "float",
+    "float",
+    "int",
+    "string",
+    "string",
+    "string"
+  ],
+  "metrics": [
+    {
+      "MT_CONTIG": "chrM",
+      "MT_LENGTH": 500,
+      "MT_BASES": 50000,
+      "MT_MEAN_DEPTH": 100,
+      "AUTOSOMAL_LENGTH": 4000,
+      "AUTOSOMAL_BASES": 8000,
+      "AUTOSOMAL_MEAN_DEPTH": 2,
+      "MT_COPY_NUMBER": 100,
+      "READS_USED": 580,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    }
+  ],
+  "non_finite": [],
+  "histogram": null
+}
+## stderr

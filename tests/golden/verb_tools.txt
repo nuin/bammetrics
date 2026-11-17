@@ -40,6 +40,7 @@ build-bam-index                       BuildBamIndex
 fifo-buffer                           FifoBuffer
 view-sam                              ViewSam
 sort-sam                              SortSam
+mt-copy-number                        CollectMtCopyNumberMetrics
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

@@ -1,0 +1,19 @@
+## argv
+CollectMtCopyNumberMetrics
+I=tests/data/mt_copy_number.bam
+MQ=0
+Q=0
+## exit
+0
+## stdout
+## htsjdk.samtools.metrics.StringHeader
+# CollectMtCopyNumberMetrics INPUT=tests/data/mt_copy_number.bam MINIMUM_MAPPING_QUALITY=0 MINIMUM_BASE_QUALITY=0
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.MtCopyNumberMetrics
+MT_CONTIG	MT_LENGTH	MT_BASES	MT_MEAN_DEPTH	AUTOSOMAL_LENGTH	AUTOSOMAL_BASES	AUTOSOMAL_MEAN_DEPTH	MT_COPY_NUMBER	READS_USED	SAMPLE	LIBRARY	READ_GROUP
+chrM	500	51000	102	4000	12000	3	68	630			
+
+
+## stderr

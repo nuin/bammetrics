@@ -1,0 +1,10 @@
+## argv
+mt-copy-number
+tests/data/mt_copy_number.bam
+--mt-contig
+chrQ
+## exit
+2
+## stdout
+## stderr
+bammetrics mt-copy-number: MT_CONTIG=chrQ: the header has no such contig (from --mt-contig)

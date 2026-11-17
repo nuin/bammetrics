@@ -50,6 +50,9 @@ const FIXTURES: &[(&str, &str)] = &[
     ("PLAN_BAD", "tests/data/chain_bad_key.toml"),
     ("PLAN_SELF", "tests/data/chain_writes_plan.toml"),
     ("MD_SAM", "tests/data/markdup.sam"),
+    ("MT", "tests/data/mt_copy_number.bam"),
+    ("MT_TARGETS", "tests/data/mt_targets.bed"),
+    ("MT_NUMTS", "tests/data/mt_numts.bed"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -345,6 +348,19 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_verb_build_bam_index_cram", "build-bam-index", "IS_CRAM", "-o", "OUT/x.bai"),
     case!("error_verb_build_bam_index_format", "build-bam-index", "IS", "-o", "OUT/x.bai", "--format", "picard,json"),
     case!("error_verb_build_bam_index_overwrites_input", "build-bam-index", "IS", "-o", "IS"),
+    // CollectMtCopyNumberMetrics (docs/06 section 6): tests/data/mt_copy_number.bam
+    // (tests/data/make_mt_bams.py) plants chrM depth 100 over autosomal depth 2, so 100;
+    // libraries L1 and L2 carry 120 and 80.
+    case!("picard_mt_copy_number", "CollectMtCopyNumberMetrics", "I=MT", "O=OUT/mt_copy_number.txt", "LEVEL=LIBRARY", "LEVEL=READ_GROUP"),
+    case!("picard_mt_copy_number_stdout", "CollectMtCopyNumberMetrics", "I=MT", "MQ=0", "Q=0"),
+    case!("picard_mt_copy_number_multiple_metrics", "CollectMultipleMetrics", "I=MT", "O=OUT/s", "PROGRAM=null", "PROGRAM=CollectMtCopyNumberMetrics", "LEVEL=SAMPLE"),
+    case!("verb_mt_copy_number_json", "mt-copy-number", "MT", "--format", "json"),
+    case!("verb_mt_copy_number_regions", "mt-copy-number", "MT", "--targets", "MT_TARGETS", "--exclude", "MT_NUMTS", "-o", "OUT/mt_copy_number.txt"),
+    case!("chain_mt_copy_number", "chain", "MT", "-o", "OUT/s", "+", "mt-copy-number", "--level", "LIBRARY"),
+    case!("error_mt_copy_number_no_mt_contig", "CollectMtCopyNumberMetrics", "I=IS"),
+    case!("error_verb_mt_copy_number_mt_contig", "mt-copy-number", "MT", "--mt-contig", "chrQ"),
+    case!("error_verb_mt_copy_number_autosome", "mt-copy-number", "MT", "--autosomes", "chrM"),
+    case!("error_verb_mt_copy_number_base_quality", "mt-copy-number", "MT", "-Q", "300"),
 ];
 
 /// Formats (docs/formats.md): `convert` in both directions and to every
@@ -582,6 +598,7 @@ const T1_CASES: &[Case] = &[
     case!("t1_picard_jumping_library", "CollectJumpingLibraryMetrics", "I=T1", "O=OUT/jumping_library.txt"),
     case!("t1_chain_mark_duplicates", "chain", "T1", "-R", "T1_REF", "-o", "OUT/s", "+", "quality-yield", "+", "mark-duplicates", "+", "alignment-summary", "+", "insert-size", "+", "duplicate-metrics", "+", "write", "/dev/null"),
     case!("t1_chain_taps", "chain", "T1", "-o", "OUT/s", "+", "quality-yield", "+", "alignment-summary", "+", "insert-size", "+", "duplicate-metrics"),
+    case!("t1_mt_copy_number", "mt-copy-number", "T1", "-o", "OUT/mt_copy_number.txt"),
 ];
 
 fn root() -> PathBuf {
