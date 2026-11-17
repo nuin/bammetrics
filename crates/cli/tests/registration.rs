@@ -82,6 +82,12 @@ const NO_PICARD_ORACLE: &[(&str, &str)] = &[
          planted percentages of tests/data/make_adapter_bams.py exactly, and docs/06 section 7.5 \
          the by-cycle table against FastQC",
     ),
+    (
+        "CollectDuplicateByTileMetrics",
+        "not a Picard tool (docs/06 section 8); tests/python/test_duplicate_by_tile.py checks \
+         the planted counts of tests/data/make_tile_bams.py exactly and the ALL row against \
+         the CollectDuplicateMetrics and MarkDuplicates totals",
+    ),
 ];
 
 fn root() -> PathBuf {

@@ -1174,6 +1174,23 @@ def collect_adapter_content_metrics(
     histogram of the cumulative percent of reads with the adapter, as FastQC's Adapter
     Content module. Not a Picard tool (docs/06)."""
 
+def collect_duplicate_by_tile_metrics(
+    input: _Path,
+    *,
+    read_name_regex: str | None = None,
+    outlier_sd: float | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    validation_stringency: str | None = None,
+    assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectDuplicateByTileMetrics: one DuplicateByTileMetrics row per flowcell lane and
+    tile from the read names, one per lane, one for names without a tile and one for
+    all: reads, pairs and duplicates from the duplicate flags in the file, optical
+    duplicates from MarkDuplicates' DT:Z:SQ tags, and TILE_OUTLIER for a tile whose
+    duplication is far above its lane's median. Not a Picard tool (docs/06)."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1403,6 +1420,7 @@ _StepVerb = Literal[
     "mt_copy_number",
     "exon_coverage",
     "adapter_content",
+    "duplicate_by_tile",
     "write",
 ]
 

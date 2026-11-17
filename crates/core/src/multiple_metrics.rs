@@ -180,6 +180,10 @@ const OTHER_FILES: &[(&str, &[(&str, &str)])] = &[
             ("SUMMARY_OUTPUT", ".gene_coverage_metrics"),
         ],
     ),
+    (
+        "CollectDuplicateByTileMetrics",
+        &[("OUTPUT", ".duplicate_by_tile_metrics")],
+    ),
 ];
 
 /// The files `tool` writes under an output prefix, as (file option,

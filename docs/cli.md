@@ -302,6 +302,7 @@ table.
 | `view-sam` | ViewSam (SAM, BAM or CRAM in) | SAM text on standard output, or in `-o` |
 | `sort-sam` | SortSam (`--sort-order` queryname, coordinate or duplicate) | `-o` BAM, or SAM text for a name ending in `.sam` |
 | `exon-coverage` | CollectExonCoverageMetrics (not a Picard tool, [exon_coverage.md](exon_coverage.md); `--annotation` GTF, GFF3, BED12 or BED) | one (plus the `--summary-output` gene and transcript file) |
+| `duplicate-by-tile` | CollectDuplicateByTileMetrics (not a Picard tool, docs/06 section 8; `--read-name-regex`, `--outlier-sd`) | one |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -351,6 +352,16 @@ start and `PAIR_READ_THROUGH`, the proper pairs with an insert shorter than the 
 cumulative Adapter Content curve, one column per unit, read end and adapter. The
 default adapters are FastQC's six; each `--adapter-sequence NAME=SEQ` replaces them.
 Unmapped records count, secondary and supplementary ones do not.
+
+`bammetrics duplicate-by-tile marked.bam -o tiles.txt` writes one `DuplicateByTileMetrics`
+row per flowcell lane and tile of the read names, one per lane, one `UNPARSED` row for
+names without a tile and one `ALL` row ([docs/06](06_clinical_checks.md) section 8). The
+counts are those of `CollectDuplicateMetrics`, from the duplicate flags in the file, so the
+`ALL` row equals its totals. `OPTICAL_DUPLICATES` needs the `DT:Z:SQ` tags of
+`mark-duplicates --tagging-policy All`; `chain in.bam + mark-duplicates --tagging-policy
+All + duplicate-by-tile` marks and counts in one read. `TILE_OUTLIER` is `Y` for a tile
+more than `--outlier-sd` (default 3) robust standard deviations, and at least 0.005, above
+its lane's median.
 
 `exon-coverage` reports the depth of every exon of an annotation, with no Picard
 counterpart ([exon_coverage.md](exon_coverage.md)). `bammetrics exon-coverage BAM

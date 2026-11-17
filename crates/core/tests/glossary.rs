@@ -269,6 +269,11 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
             "LEVEL=READ_GROUP".to_owned(),
         ],
     );
+    // Illumina read names give lanes and tiles.
+    args.insert(
+        "CollectDuplicateByTileMetrics",
+        vec![format!("I={DATA}/markdup.bam"), out("duplicate_by_tile")],
+    );
     // The fixture BAM has no @RG line, which CollectOxoGMetrics refuses.
     args.insert(
         "CollectOxoGMetrics",

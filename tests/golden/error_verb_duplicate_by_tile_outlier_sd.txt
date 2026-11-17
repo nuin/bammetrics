@@ -1,0 +1,10 @@
+## argv
+duplicate-by-tile
+tests/data/duplicate_by_tile.bam
+--outlier-sd
+-1
+## exit
+2
+## stdout
+## stderr
+bammetrics duplicate-by-tile: OUTLIER_SD=-1: a finite number of at least 0 (from --outlier-sd)

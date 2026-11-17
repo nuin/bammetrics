@@ -24,6 +24,22 @@
   `crates/cli/tests/adapter_content.rs` and 8 golden records. On the HG002 exome slice of
   2 M records every cycle equals FastQC's within 5e-7 points; the 10 GB exome runs in
   42.0 s at 9 MB peak RSS.
+- `CollectDuplicateByTileMetrics` (verb `duplicate-by-tile`, Python
+  `collect_duplicate_by_tile_metrics()`), class `bammetrics.qc.DuplicateByTileMetrics`,
+  docs/06 section 8, part of wave W08: one row per flowcell lane and tile of the read names
+  (`READ_NAME_REGEX` as `MarkDuplicates`), one per lane, one `UNPARSED` row for names
+  without a tile and one `ALL` row. Reads, unmapped, unpaired reads, pairs (counted once)
+  and their duplicates from the flags in the file, as `CollectDuplicateMetrics` counts
+  them; optical duplicate pairs from `DT:Z:SQ` (`MarkDuplicates TAGGING_POLICY=All`);
+  `PCT_DUPLICATION`, `PCT_OPTICAL`, the x and y extent, and `TILE_OUTLIER` above the lane
+  median plus the larger of `OUTLIER_SD` (default 3) x 1.4826 x MAD and 0.005. Names read
+  one character per byte as `MarkDuplicates` reads them; a flowcell or lane with a control
+  character goes to `UNPARSED`. Notes for a file never marked, for missing `DT` tags and
+  for names without a tile, naming the parser in use. A `chain` tap. No shipped preset has a rule. Truth tests on
+  planted BAMs (`tests/data/make_tile_bams.py`: 2 lanes of 6 tiles, a hot tile, names
+  without a tile); the `ALL` row equals the `MarkDuplicates` and `CollectDuplicateMetrics`
+  totals on the fixture, 11 generated BAMs, Picard-marked BAMs and the HG002 exome
+  (3,163 optical duplicate pairs).
 
 ## 0.25.0
 

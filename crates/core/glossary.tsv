@@ -669,3 +669,24 @@ bammetrics.qc.AdapterContentMetrics	LIBRARY	string	Library (@RG LB) of the accum
 bammetrics.qc.AdapterContentMetrics	READ_GROUP	string	Platform unit (@RG PU) of the read group. Empty except on READ_GROUP rows.
 CollectAdapterContentMetrics	READ_CYCLE	int	Histogram key: the 1-based cycle in sequencing order, from 1 to the last cycle at which KMER can start in the longest read (read length - ADAPTER_KMER + 1), at most 1,000.
 CollectAdapterContentMetrics	*	float	Cumulative percent (0 to 100) of the reads of the unit, read end and adapter named by the label (unit.READ_END.ADAPTER) whose KMER starts at or before this cycle: FastQC's Adapter Content curve. ? for a read end without a read in the unit.
+bammetrics.qc.DuplicateByTileMetrics	UNIT	string	What the row sums: TILE (one flowcell lane and tile), LANE (the tiles of one flowcell lane), UNPARSED (reads whose name gave no tile under READ_NAME_REGEX) or ALL (every counted read).
+bammetrics.qc.DuplicateByTileMetrics	FLOWCELL	string	The third field of a 7-field Illumina name; empty for a 5-field name, with a READ_NAME_REGEX, and on UNPARSED and ALL rows.
+bammetrics.qc.DuplicateByTileMetrics	LANE	string	The field before the tile in a 5- or 7-field Illumina name, as written; empty with a READ_NAME_REGEX and on UNPARSED and ALL rows.
+bammetrics.qc.DuplicateByTileMetrics	TILE	int	The tile from the read name as MarkDuplicates reads it (cut to 16 bits); empty except on TILE rows.
+bammetrics.qc.DuplicateByTileMetrics	READS	int	Records counted: every unmapped record and every mapped record that is neither secondary nor supplementary. Both mates of a pair count.
+bammetrics.qc.DuplicateByTileMetrics	UNMAPPED	int	Unmapped records, counted before the secondary and supplementary test as CollectDuplicateMetrics counts UNMAPPED_READS.
+bammetrics.qc.DuplicateByTileMetrics	UNPAIRED_READS	int	Mapped primary records that are unpaired or whose mate is unmapped, as UNPAIRED_READS_EXAMINED.
+bammetrics.qc.DuplicateByTileMetrics	PAIRS	int	Pairs with both mates mapped, counted once on the first-of-pair primary record, as READ_PAIRS_EXAMINED.
+bammetrics.qc.DuplicateByTileMetrics	UNPAIRED_DUPLICATES	int	UNPAIRED_READS that carry the duplicate flag, as UNPAIRED_READ_DUPLICATES.
+bammetrics.qc.DuplicateByTileMetrics	PAIR_DUPLICATES	int	PAIRS whose first-of-pair record carries the duplicate flag, as READ_PAIR_DUPLICATES.
+bammetrics.qc.DuplicateByTileMetrics	DUPLICATES	int	Duplicate reads: UNPAIRED_DUPLICATES + 2 x PAIR_DUPLICATES.
+bammetrics.qc.DuplicateByTileMetrics	OPTICAL_DUPLICATES	int	PAIR_DUPLICATES whose first-of-pair record carries DT:Z:SQ (MarkDuplicates TAGGING_POLICY=All or OpticalOnly), as READ_PAIR_OPTICAL_DUPLICATES. Empty when no duplicate carries a DT tag and no MarkDuplicates @PG line sets TAGGING_POLICY to All or OpticalOnly.
+bammetrics.qc.DuplicateByTileMetrics	PCT_DUPLICATION	float	DUPLICATES / (UNPAIRED_READS + 2 x PAIRS), a fraction, as PERCENT_DUPLICATION; 0 without an examined read.
+bammetrics.qc.DuplicateByTileMetrics	PCT_OPTICAL	float	OPTICAL_DUPLICATES / PAIRS, a fraction; 0 without a pair, empty when OPTICAL_DUPLICATES is.
+bammetrics.qc.DuplicateByTileMetrics	OUTLIER_LIMIT	float	The lane's median PCT_DUPLICATION over its tiles that examined a read, plus the larger of OUTLIER_SD x 1.4826 x their median absolute deviation and 0.005; on the lane's TILE and LANE rows. Empty with fewer than 3 such tiles.
+bammetrics.qc.DuplicateByTileMetrics	TILE_OUTLIER	string	Y when the tile's PCT_DUPLICATION is above OUTLIER_LIMIT, N when not; empty on other rows, for a tile that examined no read and without a limit.
+bammetrics.qc.DuplicateByTileMetrics	MIN_X	int	Smallest x coordinate in the read names of the row; empty on UNPARSED rows.
+bammetrics.qc.DuplicateByTileMetrics	MAX_X	int	Largest x coordinate in the read names of the row; empty on UNPARSED rows.
+bammetrics.qc.DuplicateByTileMetrics	MIN_Y	int	Smallest y coordinate in the read names of the row; empty on UNPARSED rows.
+bammetrics.qc.DuplicateByTileMetrics	MAX_Y	int	Largest y coordinate in the read names of the row; empty on UNPARSED rows.
+bammetrics.qc.DuplicateByTileMetrics	NOTES	string	On the ALL row: a file with no duplicate flag and no duplicate marker @PG line, an empty OPTICAL_DUPLICATES and how to fill it, and the count of UNPARSED reads; joined by "; ". Empty elsewhere.

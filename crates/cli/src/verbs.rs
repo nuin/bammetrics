@@ -399,6 +399,11 @@ pub const VERBS: &[Verb] = &[
         "CollectAdapterContentMetrics",
         Files::Single,
     ),
+    verb(
+        "duplicate-by-tile",
+        "CollectDuplicateByTileMetrics",
+        Files::Single,
+    ),
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the

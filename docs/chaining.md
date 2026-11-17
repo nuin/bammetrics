@@ -31,7 +31,7 @@ emits.
 |---|---|---|
 | source | One BAM, CRAM or SAM text file, or a pipe holding one | the positional argument, `-` for standard input |
 | transform | A tool that changes the records later steps see. A barrier needs every record before one goes on | `mark-duplicates`, `sort-sam` (both barriers) |
-| tap | A one-pass tool on the records of its position. It changes nothing | 15 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check`, `mt-copy-number`, `exon-coverage` |
+| tap | A one-pass tool on the records of its position. It changes nothing | 15 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check`, `mt-copy-number`, `exon-coverage`, `duplicate-by-tile` |
 | write | A tap that writes the records of its position as a BAM, or as SAM text | `write [PATH]` |
 
 A tap or `write` does not change the stream, so the step after it sees the same records.

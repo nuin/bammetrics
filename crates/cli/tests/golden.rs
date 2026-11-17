@@ -57,6 +57,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("EXONS_BED", "tests/data/exons.bed"),
     ("EXON_GENES", "tests/data/exon_genes.txt"),
     ("AD", "tests/data/adapter_content.bam"),
+    ("DBT", "tests/data/duplicate_by_tile.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -385,6 +386,18 @@ const FIXTURE_CASES: &[Case] = &[
     case!("chain_adapter_content", "chain", "AD", "-o", "OUT/s", "+", "adapter-content", "--level", "READ_GROUP", "--adapter-kmer", "8"),
     case!("error_adapter_content_kmer", "CollectAdapterContentMetrics", "I=AD", "ADAPTER_KMER=13"),
     case!("error_verb_adapter_content_sequence", "adapter-content", "AD", "--adapter-sequence", "x=ACGTNACGTACGT"),
+    // CollectDuplicateByTileMetrics (docs/06 section 8): the planted tiles of
+    // tests/data/make_tile_bams.py, markdup.bam before and after marking, a BAM
+    // whose names give no tile and that was never marked.
+    case!("picard_duplicate_by_tile", "CollectDuplicateByTileMetrics", "I=DBT", "O=OUT/duplicate_by_tile.txt"),
+    case!("picard_duplicate_by_tile_stdout", "CollectDuplicateByTileMetrics", "I=MD", "OUTLIER_SD=1"),
+    case!("verb_duplicate_by_tile_json", "duplicate-by-tile", "DBT", "--outlier-sd", "0.5", "--format", "json"),
+    case!("verb_duplicate_by_tile_unmarked", "duplicate-by-tile", "IS", "-o", "OUT/duplicate_by_tile.txt"),
+    case!("verb_duplicate_by_tile_no_names", "duplicate-by-tile", "MD", "--read-name-regex", "null", "-q"),
+    case!("chain_duplicate_by_tile", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "--tagging-policy", "All", "+", "duplicate-by-tile", "+", "duplicate-metrics"),
+    case!("error_duplicate_by_tile_level", "CollectDuplicateByTileMetrics", "I=DBT", "METRIC_ACCUMULATION_LEVEL=SAMPLE"),
+    case!("error_verb_duplicate_by_tile_outlier_sd", "duplicate-by-tile", "DBT", "--outlier-sd", "-1"),
+    case!("error_verb_duplicate_by_tile_regex", "duplicate-by-tile", "DBT", "--read-name-regex", "(x"),
 ];
 
 /// Formats (docs/formats.md): `convert` in both directions and to every
@@ -658,6 +671,7 @@ const T1_CASES: &[Case] = &[
     case!("t1_doctor", "doctor", "T1", "-R", "T1_REF"),
     case!("t1_mt_copy_number", "mt-copy-number", "T1", "-o", "OUT/mt_copy_number.txt"),
     case!("t1_adapter_content", "adapter-content", "T1", "-o", "OUT/adapter_content.txt"),
+    case!("t1_duplicate_by_tile", "duplicate-by-tile", "T1", "-o", "OUT/duplicate_by_tile.txt"),
 ];
 
 fn root() -> PathBuf {

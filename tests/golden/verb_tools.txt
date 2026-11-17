@@ -43,6 +43,7 @@ sort-sam                              SortSam
 mt-copy-number                        CollectMtCopyNumberMetrics
 exon-coverage                         CollectExonCoverageMetrics
 adapter-content                       CollectAdapterContentMetrics
+duplicate-by-tile                     CollectDuplicateByTileMetrics
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

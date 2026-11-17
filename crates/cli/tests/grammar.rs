@@ -480,6 +480,14 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("ADAPTER_KMER", "10")),
             picard_outputs: single,
         },
+        Case {
+            verb: "duplicate-by-tile",
+            class: "CollectDuplicateByTileMetrics",
+            verb_args: strings(&[MD]),
+            picard_args: strings(&[&format!("I={MD}")]),
+            option: Some(("OUTLIER_SD", "2")),
+            picard_outputs: single,
+        },
     ]
 }
 
@@ -584,7 +592,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 39);
+    assert_eq!(classes.len(), 40);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names
