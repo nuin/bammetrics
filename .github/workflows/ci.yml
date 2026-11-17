@@ -106,8 +106,12 @@ jobs:
           chmod +x "$HOME/picard/bin/picard"
           echo "$HOME/picard/bin" >> "$GITHUB_PATH"
 
+      # SortSam MAX_RECORDS_IN_RAM=1 on the foundation corpus has Picard open
+      # one spill file per record (about 13,000); macOS runners allow 256.
       - name: Concordance harness
-        run: make concordance
+        run: |
+          ulimit -n 65536 2>/dev/null || ulimit -n 16384
+          make concordance
 
       - name: Python module
         run: |
