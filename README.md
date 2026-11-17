@@ -90,7 +90,7 @@ reads the marked BAM, and the BAM holds the records `MarkDuplicates` writes. On 
 exome the chain took 16.5 s against 22.2 s for `MarkDuplicates` followed by the four
 collectors on its output.
 
-Every `+` starts a step: a transform (`mark-duplicates`, `sort-sam`), a tap (13 one-pass
+Every `+` starts a step: a transform (`mark-duplicates`, `sort-sam`), a tap (14 one-pass
 tool verbs) or `write [PATH]` (`-` is standard output). Transforms may follow one another:
 `+ sort-sam --sort-order queryname + mark-duplicates + sort-sam --sort-order coordinate +
 write out.bam --index` sorts, marks and sorts back in one process, a sort holding at most
@@ -179,6 +179,7 @@ the sizes and a Chrome recipe for a build without the feature.
 | CollectOxoGMetrics (`CONTEXT_SIZE`, `CONTEXTS`, `INTERVALS`, `DB_SNP`, `USE_OQ`, insert size and quality filters; one row per context and library) | | `collect_oxo_g_metrics()` |
 | CollectCoverageGaps (not a Picard tool, [docs/06](docs/06_clinical_checks.md): target bases under `MIN_DEPTH` as a metrics row and a BED of gap runs, with the CollectHsMetrics depth) | | `collect_coverage_gaps()` |
 | CollectSexCheckMetrics (not a Picard tool, docs/06: reads per base on X, Y and the autosomes, the inferred sex against `EXPECTED_SEX`) | | `collect_sex_check_metrics()` |
+| CollectMtCopyNumberMetrics (not a Picard tool, docs/06 section 6: mitochondrial genomes per diploid nuclear genome, 2 x mean depth on chrM over mean autosomal depth; `TARGET_INTERVALS`, `EXCLUDE_INTERVALS`; also a `CollectMultipleMetrics` program) | all four | `collect_mt_copy_number_metrics()` |
 | BamIndexStats (Picard's text from the `.bai` or `.csi`; a CRAM counted with `R=`) | | `bam_index_stats()` |
 | CheckDuplicateMarking (`MODE`, `OUTPUT`, `VERBOSITY`; Picard's log lines and exit code; a BAM that is not queryname sorted is sorted first) | | `check_duplicate_marking()` |
 | CollectJumpingLibraryMetrics (several `INPUT`s read in turn; `MINIMUM_MAPPING_QUALITY`, `TAIL_LIMIT`, `CHIMERA_KB_MIN`) | | `collect_jumping_library_metrics()` |

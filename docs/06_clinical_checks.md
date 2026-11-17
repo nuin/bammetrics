@@ -291,3 +291,142 @@ female test did not change.
   annotation (gene, exon) beyond the target name.
 - A cohort baseline, a history of a sample's sex calls, or any read of another run
   directory (docs/05 section 4.9).
+
+## 6. Mitochondrial DNA copy number
+
+`CollectMtCopyNumberMetrics` (verb `mt-copy-number`, Python
+`collect_mt_copy_number_metrics()`, class `bammetrics.qc.MtCopyNumberMetrics`, source
+`crates/core/src/mt_copy_number.rs`) estimates mitochondrial genomes per diploid nuclear
+genome as `2 x MT_MEAN_DEPTH / AUTOSOMAL_MEAN_DEPTH`. It is the third check of this file
+with no Picard counterpart, and wave W07 of docs/07.
+
+### 6.1 Counts
+
+The tool is a one-pass `Collector`, so `CollectMultipleMetrics` runs it as a program
+(extension `.mt_copy_number_metrics`), `chain` runs it as a tap and `qc` runs it under a
+preset with a `MtCopyNumberMetrics` rule. A record counts under the filters of section
+2.1: primary, mapped, not duplicate, not QC-failed, MAPQ at or above
+`MINIMUM_MAPPING_QUALITY` (a missing MAPQ, 255, passes). Its counted bases are the bases of
+its alignment blocks (`blocks.rs`: `M`, `=` and `X`) at or above `MINIMUM_BASE_QUALITY`
+that lie in the territory. Soft clips, insertions and deletions add no base. A record
+without `QUAL` adds no base unless `MINIMUM_BASE_QUALITY` is 0. Two overlapping mates both
+count, as in `samtools depth` without `-s`.
+
+The territory is the mitochondrial contig plus the autosomes, less the merged
+`EXCLUDE_INTERVALS`. With `TARGET_INTERVALS` the autosomal part is the merged targets on
+the autosomes; the mitochondrial contig stays whole. Mean depth is counted bases over
+territory bases.
+
+The mitochondrial contig is `MT_CONTIG`, else the one header contig named `chrM`, `MT`,
+`M` or `chrMT`. A header with none, or with two of those names, is an error that names
+`MT_CONTIG`. The autosomes are `AUTOSOMES` (one contig per value), else `chr1` to `chr22`
+and `1` to `22` as in section 2.1. A header without an autosome is an error.
+
+### 6.2 Metrics class `bammetrics.qc.MtCopyNumberMetrics`
+
+One row per accumulation unit (`METRIC_ACCUMULATION_LEVEL`, as the Picard tools write
+them: `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`, in `@RG` header order).
+
+| Column | Type | Definition |
+|---|---|---|
+| `MT_CONTIG` | string | The mitochondrial contig. |
+| `MT_LENGTH` | int | Its `@SQ` length less the merged `EXCLUDE_INTERVALS` on it. |
+| `MT_BASES` | int | Counted bases on it (section 6.1). |
+| `MT_MEAN_DEPTH` | float | `MT_BASES / MT_LENGTH`; `?` when the length is 0. |
+| `AUTOSOMAL_LENGTH` | int | Autosome `@SQ` lengths summed, or the merged target bases on them, less the exclusions. |
+| `AUTOSOMAL_BASES` | int | Counted bases in that territory. |
+| `AUTOSOMAL_MEAN_DEPTH` | float | `AUTOSOMAL_BASES / AUTOSOMAL_LENGTH`; `?` when the length is 0. |
+| `MT_COPY_NUMBER` | float | `2 x MT_MEAN_DEPTH / AUTOSOMAL_MEAN_DEPTH`; `?` when the autosomal depth is 0. |
+| `READS_USED` | int | Records that added at least one counted base. |
+| `SAMPLE`, `LIBRARY`, `READ_GROUP` | string | The unit, as in the Picard tools (`READ_GROUP` is the `PU`). |
+
+### 6.3 Options
+
+| Option | Default | Meaning |
+|---|---|---|
+| `INPUT`, `OUTPUT` | | As every tool. |
+| `MT_CONTIG` | `chrM`, `MT`, `M` or `chrMT` | The mitochondrial contig. |
+| `AUTOSOMES` | `chr1`..`chr22`, `1`..`22` | One contig name per value; repeat. |
+| `MINIMUM_MAPPING_QUALITY` (`MQ`) | 20 | Reads below it are not counted. 0 to 255. |
+| `MINIMUM_BASE_QUALITY` (`Q`) | 20 | Bases below it are not counted. 0 to 255. |
+| `TARGET_INTERVALS` (`TI`) | none | Interval list or BED; repeat. Verb alias `--targets`. |
+| `EXCLUDE_INTERVALS` | none | Interval list or BED of regions left out of both depths; repeat. Verb alias `--exclude`. |
+| `METRIC_ACCUMULATION_LEVEL` (`LEVEL`) | `ALL_READS` | As the Picard tools. |
+| `STOP_AFTER` | 0 | Records read; 0 reads them all. |
+
+`chrM` and `MT` sort after `chrY` and `Y` in GRCh38 and hs37d5, so a `STOP_AFTER` run on a
+coordinate-sorted genome of those builds reads no mitochondrial record and writes
+`MT_COPY_NUMBER` 0.
+
+### 6.4 Exomes and NUMTs
+
+Most exome captures carry no mitochondrial bait. The reads on the mitochondrial contig of
+an exome are off target, so their depth follows the off-target rate of the library. With
+`TARGET_INTERVALS` the denominator is the on-target depth, and `MT_COPY_NUMBER` is then a
+ratio between two capture efficiencies, not a copy number. It compares samples of one
+kit and one protocol only. Without `TARGET_INTERVALS` an exome's autosomal depth is the
+mean over the whole autosomal length, mostly untargeted, and the value is again a ratio.
+
+NUMTs, nuclear segments copied from the mitochondrial genome, draw reads of either origin
+at MAPQ near 0. The default MAPQ limit of 20 drops most such reads. `EXCLUDE_INTERVALS`
+removes listed NUMT regions (or the mitochondrial bases they match) from both lengths and
+both base counts. The tool ships no NUMT list.
+
+### 6.5 Truth and cross-checks
+
+No oracle exists. The tests rest on files whose answer is known by construction, and on
+`samtools depth` with the same filters (`-a -q 20 -Q 20 -G
+UNMAP,SECONDARY,QCFAIL,DUP,SUPPLEMENTARY`, which counts no deletion and both overlapping
+mates). The documented tolerance against `samtools depth` is 0.5 percent of each mean
+depth.
+
+- `tests/data/make_mt_bams.py OUT` writes four BAMs with 100-base reads tiled at an even
+  depth: copy number 100 (`chrM`), 1000 (`MT`, autosomes `1` and `2`), 0 (no `chrM` read)
+  and no mitochondrial contig in the header. Each also holds reads that must not count:
+  soft-clipped and inserted bases, a duplicate, secondary, supplementary and QC-failed
+  copy of every start, MAPQ 19 copies, base quality 19 copies, an unmapped read placed on
+  `chrM` and reads on a decoy. `tests/python/test_mt_copy_number.py` requires the planted
+  value exactly (100.0, 1000.0, 0.0) and the error for the fourth.
+- `tests/data/mt_copy_number.bam` (`make_mt_bams.py --fixture`): two libraries at
+  `chrM` depth 60 and 40 over autosomal depth 1 each, so 120, 80 and 100 in all. The
+  golden suite records it, with targets and NUMTs (`tests/data/mt_targets.bed`,
+  `mt_numts.bed`), through `CollectMultipleMetrics` and `chain`.
+- The unit tests of `mt_copy_number.rs` cover base-by-base quality, clipped and inserted
+  bases, the territory shapes, the levels, and every error.
+
+| Input | Contigs | Tool bases / length | `samtools depth` bases / positions | Difference |
+|---|---|---|---|---|
+| fixture | `chrM` | 50,000 / 500 | 50,000 / 500 | 0 |
+| corpus t1 | `chrM` | 54,515 / 16,000 | 54,515 / 16,000 | 0 |
+| corpus t1 | `chr1`, `chr2` | 5,403,251 / 500,000 | 5,403,251 / 500,000 | 0 |
+| HG002 exome | `MT` | 6,431,978 / 16,569 | 6,431,978 / 16,569 | 0 |
+| HG002 exome | `1` | 1,655,240,796 / 249,250,621 | 1,655,240,796 / 249,250,621 | 0 |
+| NA12878 `chr20`, `chr21` slice plus its `chrM` reads | `chrM` | 206,423,466 / 16,569 | 206,423,466 / 16,569 | 0 |
+| same | `chr20`, `chr21` | 3,259,769,934 / 111,154,150 | 3,259,769,934 / 111,154,150 | 0 |
+
+### 6.6 Rules
+
+No shipped preset has a `MtCopyNumberMetrics` rule. Published copy numbers differ by
+tissue and by sample handling: whole blood counts platelet mtDNA, and cell lines, muscle
+and tumour run an order of magnitude apart. No QC threshold is standard, and a bound
+would flag a biological value as a defect. `qc` runs the tool under a preset file that
+names the class (`SOURCES` in `crates/cli/src/qc.rs`), so a site can set its own bound.
+No plot family is added, since no rule names one.
+
+### 6.7 Measurements
+
+Mac Studio, release build, outputs under `~/data/bammetrics-scale/waves/w07/` (deleted
+after the run), 2026-11-17.
+
+| Input | `MT_MEAN_DEPTH` | `AUTOSOMAL_MEAN_DEPTH` | `MT_COPY_NUMBER` | Wall | Peak RSS |
+|---|---|---|---|---|---|
+| HG002 exome BAM, 10 GB, hs37d5, no targets | 388.19 | 5.70 | 136.22 (a ratio, section 6.4) | 25.5 s | 8 MB |
+| NA12878 `chr20`, `chr21` slice plus its 1,720,065 `chrM` records, `AUTOSOMES=chr20,chr21` | 12,458.41 | 29.33 | 849.63 | 4.1 s | 11 MB |
+| NA12878 genome CRAM, 16 GB, GRCh38, whole file, `-R` | 12,458.41 | 30.35 | 821.01 | 274.4 s | 1.19 GiB |
+
+NA12878 is a lymphoblastoid cell line. Its value is a cell line's value, not a blood
+value. The slice gives 849.63 against 821.01 for the whole genome: `chr20` and `chr21`
+run 3.4 percent under the genome-wide autosomal depth. The whole-file run decodes the CRAM
+on 8 threads; its resident memory is the CRAM decoder's, the tool holds one row per unit.
+The HG002 exome without targets gives a ratio, section 6.4; the hs37d5 capture targets
+were not at hand.

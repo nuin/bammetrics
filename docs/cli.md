@@ -292,6 +292,7 @@ table.
 | `oxo-g` | CollectOxoGMetrics (needs `-R`) | one |
 | `coverage-gaps` | CollectCoverageGaps (not a Picard tool, [docs/06](06_clinical_checks.md); `--targets` or `--panel`) | one (plus the `--gaps-file` BED) |
 | `sex-check` | CollectSexCheckMetrics (not a Picard tool, docs/06; `--sex male|female`, `--targets` for a panel) | one |
+| `mt-copy-number` | CollectMtCopyNumberMetrics (not a Picard tool, docs/06 section 6; `--targets` for an exome, `--exclude` for NUMTs, `--mt-contig`, `--autosomes`) | one |
 | `bam-index-stats` | BamIndexStats (reads the `.bai` or `.csi` beside the BAM) | Picard's text on standard output |
 | `check-duplicate-marking` | CheckDuplicateMarking | the bad querynames, one line per record |
 | `jumping-library` | CollectJumpingLibraryMetrics (one or more coordinate-sorted BAMs as positionals, read in turn; standard input refused) | one metrics file |
@@ -331,6 +332,14 @@ so `--min-depth 20` gives `PCT_TARGET_BASES_20X`. `bammetrics sex-check BAM --se
 writes one `SexCheckMetrics` row: reads per base on X, Y and the autosomes against the
 `@SQ` lengths (or the target bases with `--targets`), the ratios, `INFERRED_SEX`
 (`FEMALE`, `MALE`, `UNKNOWN`) and `SEX_MATCH` against the declaration.
+
+`bammetrics mt-copy-number BAM -o mt.txt` writes one `MtCopyNumberMetrics` row per
+accumulation unit: mean depth on the mitochondrial contig (`chrM`, `MT`, `M` or `chrMT`,
+or `--mt-contig`) and on the autosomes from aligned bases at base and mapping quality 20,
+and `MT_COPY_NUMBER`, 2 x their ratio ([docs/06](06_clinical_checks.md) section 6). With
+`--targets` on an exome the value is a ratio between off-target and on-target depth, not
+a copy number. A header without a mitochondrial contig is a usage error naming
+`MT_CONTIG` (exit 2; the Picard face exits 1, as for every error there).
 
 ### The 0.12 subcommands
 
