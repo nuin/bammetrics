@@ -130,9 +130,19 @@ def test_pdf_options_need_a_pdf(tmp_path):
         bm.qc(BAM, output=tmp_path / "s", report=["html", "docx"])
 
 
+def test_a_font_collection_is_refused_with_the_way_out(pdf, tmp_path):
+    collection = tmp_path / "fonts.ttc"
+    collection.write_bytes(b"ttcf\x00\x01\x00\x00\x00\x00\x00\x01\x00\x00\x00\x10")
+    with pytest.raises(bm.InputError, match=r"a font collection \(TTC\) holds several faces"):
+        bm.report(PICARD, output=tmp_path / "r", pdf=True, pdf_font=collection)
+    assert not (tmp_path / "r").exists()
+
+
 def test_a_name_outside_latin_needs_pdf_font(pdf, tmp_path):
     with pytest.raises(bm.InputError, match=r"U\+041F \(П\) in \"Пример-7\".*--pdf-font"):
         bm.qc(BAM, output=tmp_path / "s", sample="Пример-7", report="pdf", date=DATE)
+    assert not tmp_path.joinpath("s.manifest.json").exists(), "refused before the first read"
+    assert not tmp_path.joinpath("s.insert_size_metrics").exists()
     font = ROOT / "crates" / "pdf" / "tests" / "data" / "DejaVuSans-Cyrillic.ttf"
     run = bm.qc(BAM, output=tmp_path / "t", sample="Пример-7", report="pdf", pdf_font=font,
                 date=DATE)

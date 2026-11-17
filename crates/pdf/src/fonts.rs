@@ -181,10 +181,10 @@ const SAMPLE: &str = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWX
 const COLOR_TABLES: [&[u8; 4]; 5] = [b"COLR", b"SVG ", b"sbix", b"CBDT", b"EBDT"];
 
 /// Run every reader krilla runs on a font, so a damaged file fails here
-/// with a reason and krilla never sees it: the table directory with each
-/// table inside the file, glyph outlines, `head`, `hhea`, `hmtx`, `maxp`,
-/// a `cmap` that maps a character, no color glyph tables, the shaper's
-/// parser, a shaped [`SAMPLE`], and a subset of its glyphs that parses.
+/// with a reason and krilla never sees it: tables inside the file with their
+/// checksums, outlines, `head`, `hhea`, `hmtx`, `maxp`, a `cmap` that maps a
+/// character, no color glyph table, embedding allowed, the shaper's parser,
+/// a shaped [`SAMPLE`], and a subset of its glyphs that parses.
 /// A panic of a shaper or subsetter becomes the reason too: no krilla
 /// surface is open here, so it unwinds. A font collection is refused.
 pub fn validate(bytes: &[u8]) -> Result<(), String> {
