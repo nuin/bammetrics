@@ -1,0 +1,653 @@
+## argv
+adapter-content
+tests/data/adapter_content.bam
+--adapter-sequence
+U=AGATCGGAAGAG
+--pf-reads-only
+--format
+json
+## exit
+0
+## stdout
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectAdapterContentMetrics",
+  "sample": "S1",
+  "headers": [
+    "CollectAdapterContentMetrics INPUT=tests/data/adapter_content.bam ADAPTER_SEQUENCE=U=AGATCGGAAGAG PF_READS_ONLY=true",
+    "Started on: <time>"
+  ],
+  "class": "bammetrics.qc.AdapterContentMetrics",
+  "columns": [
+    "ADAPTER",
+    "KMER",
+    "READ_END",
+    "READS",
+    "READS_WITH_ADAPTER",
+    "PCT_READS_WITH_ADAPTER",
+    "MEAN_ADAPTER_START",
+    "PCT_AT_LAST_CYCLE",
+    "PAIR_READ_THROUGH",
+    "SAMPLE",
+    "LIBRARY",
+    "READ_GROUP"
+  ],
+  "types": [
+    "string",
+    "string",
+    "string",
+    "int",
+    "int",
+    "float",
+    "float",
+    "float",
+    "float",
+    "string",
+    "string",
+    "string"
+  ],
+  "metrics": [
+    {
+      "ADAPTER": "U",
+      "KMER": "AGATCGGAAGAG",
+      "READ_END": "FIRST",
+      "READS": 12,
+      "READS_WITH_ADAPTER": 4,
+      "PCT_READS_WITH_ADAPTER": 33.333333333333336,
+      "MEAN_ADAPTER_START": 31,
+      "PCT_AT_LAST_CYCLE": 33.333333333333336,
+      "PAIR_READ_THROUGH": 0.3333333333333333,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "ADAPTER": "U",
+      "KMER": "AGATCGGAAGAG",
+      "READ_END": "SECOND",
+      "READS": 12,
+      "READS_WITH_ADAPTER": 4,
+      "PCT_READS_WITH_ADAPTER": 33.333333333333336,
+      "MEAN_ADAPTER_START": 31,
+      "PCT_AT_LAST_CYCLE": 33.333333333333336,
+      "PAIR_READ_THROUGH": 0.3333333333333333,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "ADAPTER": "U",
+      "KMER": "AGATCGGAAGAG",
+      "READ_END": "UNPAIRED",
+      "READS": 8,
+      "READS_WITH_ADAPTER": 4,
+      "PCT_READS_WITH_ADAPTER": 50,
+      "MEAN_ADAPTER_START": 1,
+      "PCT_AT_LAST_CYCLE": 50,
+      "PAIR_READ_THROUGH": null,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    }
+  ],
+  "non_finite": [
+    {
+      "row": 2,
+      "column": "PAIR_READ_THROUGH",
+      "value": "NaN"
+    }
+  ],
+  "histogram": {
+    "key_class": "java.lang.Integer",
+    "columns": [
+      "READ_CYCLE",
+      "All_Reads.FIRST.U",
+      "All_Reads.SECOND.U",
+      "All_Reads.UNPAIRED.U"
+    ],
+    "types": [
+      "int",
+      "float",
+      "float",
+      "float"
+    ],
+    "rows": [
+      {
+        "READ_CYCLE": 1,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 2,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 3,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 4,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 5,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 6,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 7,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 8,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 9,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 10,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 11,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 12,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 13,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 14,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 15,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 16,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 17,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 18,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 19,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 20,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 21,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 22,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 23,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 24,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 25,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 26,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 27,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 28,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 29,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 30,
+        "All_Reads.FIRST.U": 0,
+        "All_Reads.SECOND.U": 0,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 31,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 32,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 33,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 34,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 35,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 36,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 37,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 38,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 39,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 40,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 41,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 42,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 43,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 44,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 45,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 46,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 47,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 48,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 49,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 50,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 51,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 52,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 53,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 54,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 55,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 56,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 57,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 58,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 59,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 60,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 61,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 62,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 63,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 64,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 65,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 66,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 67,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 68,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 69,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 70,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 71,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 72,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 73,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 74,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 75,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 76,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 77,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 78,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 79,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 80,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 81,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 82,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 83,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 84,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 85,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 86,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 87,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 88,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      },
+      {
+        "READ_CYCLE": 89,
+        "All_Reads.FIRST.U": 33.333333333333336,
+        "All_Reads.SECOND.U": 33.333333333333336,
+        "All_Reads.UNPAIRED.U": 50
+      }
+    ],
+    "non_finite": []
+  }
+}
+## stderr

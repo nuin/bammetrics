@@ -1,0 +1,164 @@
+## argv
+CollectAdapterContentMetrics
+I=tests/data/adapter_content.bam
+O=OUT/adapter_content.txt
+LEVEL=LIBRARY
+## exit
+0
+## stdout
+## stderr
+## file adapter_content.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectAdapterContentMetrics INPUT=tests/data/adapter_content.bam OUTPUT=OUT/adapter_content.txt METRIC_ACCUMULATION_LEVEL=LIBRARY
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.AdapterContentMetrics
+ADAPTER	KMER	READ_END	READS	READS_WITH_ADAPTER	PCT_READS_WITH_ADAPTER	MEAN_ADAPTER_START	PCT_AT_LAST_CYCLE	PAIR_READ_THROUGH	SAMPLE	LIBRARY	READ_GROUP
+Illumina Universal Adapter	AGATCGGAAGAG	FIRST	12	4	33.333333	31	33.333333	0.333333			
+Illumina Small RNA 3' Adapter	TGGAATTCTCGG	FIRST	12	0	0	?	0	0.333333			
+Illumina Small RNA 5' Adapter	GATCGTCGGACT	FIRST	12	0	0	?	0	0.333333			
+Nextera Transposase Sequence	CTGTCTCTTATA	FIRST	12	4	33.333333	1	33.333333	0.333333			
+PolyA	AAAAAAAAAAAA	FIRST	12	0	0	?	0	0.333333			
+PolyG	GGGGGGGGGGGG	FIRST	12	0	0	?	0	0.333333			
+Illumina Universal Adapter	AGATCGGAAGAG	SECOND	12	4	33.333333	31	33.333333	0.333333			
+Illumina Small RNA 3' Adapter	TGGAATTCTCGG	SECOND	12	0	0	?	0	0.333333			
+Illumina Small RNA 5' Adapter	GATCGTCGGACT	SECOND	12	0	0	?	0	0.333333			
+Nextera Transposase Sequence	CTGTCTCTTATA	SECOND	12	0	0	?	0	0.333333			
+PolyA	AAAAAAAAAAAA	SECOND	12	0	0	?	0	0.333333			
+PolyG	GGGGGGGGGGGG	SECOND	12	0	0	?	0	0.333333			
+Illumina Universal Adapter	AGATCGGAAGAG	UNPAIRED	8	4	50	1	50	?			
+Illumina Small RNA 3' Adapter	TGGAATTCTCGG	UNPAIRED	8	0	0	?	0	?			
+Illumina Small RNA 5' Adapter	GATCGTCGGACT	UNPAIRED	8	0	0	?	0	?			
+Nextera Transposase Sequence	CTGTCTCTTATA	UNPAIRED	8	0	0	?	0	?			
+PolyA	AAAAAAAAAAAA	UNPAIRED	8	0	0	?	0	?			
+PolyG	GGGGGGGGGGGG	UNPAIRED	8	0	0	?	0	?			
+Illumina Universal Adapter	AGATCGGAAGAG	FIRST	8	4	50	31	50	0.5	S1	L1	
+Illumina Small RNA 3' Adapter	TGGAATTCTCGG	FIRST	8	0	0	?	0	0.5	S1	L1	
+Illumina Small RNA 5' Adapter	GATCGTCGGACT	FIRST	8	0	0	?	0	0.5	S1	L1	
+Nextera Transposase Sequence	CTGTCTCTTATA	FIRST	8	0	0	?	0	0.5	S1	L1	
+PolyA	AAAAAAAAAAAA	FIRST	8	0	0	?	0	0.5	S1	L1	
+PolyG	GGGGGGGGGGGG	FIRST	8	0	0	?	0	0.5	S1	L1	
+Illumina Universal Adapter	AGATCGGAAGAG	SECOND	8	4	50	31	50	0.5	S1	L1	
+Illumina Small RNA 3' Adapter	TGGAATTCTCGG	SECOND	8	0	0	?	0	0.5	S1	L1	
+Illumina Small RNA 5' Adapter	GATCGTCGGACT	SECOND	8	0	0	?	0	0.5	S1	L1	
+Nextera Transposase Sequence	CTGTCTCTTATA	SECOND	8	0	0	?	0	0.5	S1	L1	
+PolyA	AAAAAAAAAAAA	SECOND	8	0	0	?	0	0.5	S1	L1	
+PolyG	GGGGGGGGGGGG	SECOND	8	0	0	?	0	0.5	S1	L1	
+Illumina Universal Adapter	AGATCGGAAGAG	UNPAIRED	0	0	?	?	?	?	S1	L1	
+Illumina Small RNA 3' Adapter	TGGAATTCTCGG	UNPAIRED	0	0	?	?	?	?	S1	L1	
+Illumina Small RNA 5' Adapter	GATCGTCGGACT	UNPAIRED	0	0	?	?	?	?	S1	L1	
+Nextera Transposase Sequence	CTGTCTCTTATA	UNPAIRED	0	0	?	?	?	?	S1	L1	
+PolyA	AAAAAAAAAAAA	UNPAIRED	0	0	?	?	?	?	S1	L1	
+PolyG	GGGGGGGGGGGG	UNPAIRED	0	0	?	?	?	?	S1	L1	
+Illumina Universal Adapter	AGATCGGAAGAG	FIRST	4	0	0	?	0	0	S1	L2	
+Illumina Small RNA 3' Adapter	TGGAATTCTCGG	FIRST	4	0	0	?	0	0	S1	L2	
+Illumina Small RNA 5' Adapter	GATCGTCGGACT	FIRST	4	0	0	?	0	0	S1	L2	
+Nextera Transposase Sequence	CTGTCTCTTATA	FIRST	4	4	100	1	100	0	S1	L2	
+PolyA	AAAAAAAAAAAA	FIRST	4	0	0	?	0	0	S1	L2	
+PolyG	GGGGGGGGGGGG	FIRST	4	0	0	?	0	0	S1	L2	
+Illumina Universal Adapter	AGATCGGAAGAG	SECOND	4	0	0	?	0	0	S1	L2	
+Illumina Small RNA 3' Adapter	TGGAATTCTCGG	SECOND	4	0	0	?	0	0	S1	L2	
+Illumina Small RNA 5' Adapter	GATCGTCGGACT	SECOND	4	0	0	?	0	0	S1	L2	
+Nextera Transposase Sequence	CTGTCTCTTATA	SECOND	4	0	0	?	0	0	S1	L2	
+PolyA	AAAAAAAAAAAA	SECOND	4	0	0	?	0	0	S1	L2	
+PolyG	GGGGGGGGGGGG	SECOND	4	0	0	?	0	0	S1	L2	
+Illumina Universal Adapter	AGATCGGAAGAG	UNPAIRED	8	4	50	1	50	?	S1	L2	
+Illumina Small RNA 3' Adapter	TGGAATTCTCGG	UNPAIRED	8	0	0	?	0	?	S1	L2	
+Illumina Small RNA 5' Adapter	GATCGTCGGACT	UNPAIRED	8	0	0	?	0	?	S1	L2	
+Nextera Transposase Sequence	CTGTCTCTTATA	UNPAIRED	8	0	0	?	0	?	S1	L2	
+PolyA	AAAAAAAAAAAA	UNPAIRED	8	0	0	?	0	?	S1	L2	
+PolyG	GGGGGGGGGGGG	UNPAIRED	8	0	0	?	0	?	S1	L2	
+
+## HISTOGRAM	java.lang.Integer
+READ_CYCLE	All_Reads.FIRST.Illumina Universal Adapter	All_Reads.FIRST.Illumina Small RNA 3' Adapter	All_Reads.FIRST.Illumina Small RNA 5' Adapter	All_Reads.FIRST.Nextera Transposase Sequence	All_Reads.FIRST.PolyA	All_Reads.FIRST.PolyG	All_Reads.SECOND.Illumina Universal Adapter	All_Reads.SECOND.Illumina Small RNA 3' Adapter	All_Reads.SECOND.Illumina Small RNA 5' Adapter	All_Reads.SECOND.Nextera Transposase Sequence	All_Reads.SECOND.PolyA	All_Reads.SECOND.PolyG	All_Reads.UNPAIRED.Illumina Universal Adapter	All_Reads.UNPAIRED.Illumina Small RNA 3' Adapter	All_Reads.UNPAIRED.Illumina Small RNA 5' Adapter	All_Reads.UNPAIRED.Nextera Transposase Sequence	All_Reads.UNPAIRED.PolyA	All_Reads.UNPAIRED.PolyG	L1.FIRST.Illumina Universal Adapter	L1.FIRST.Illumina Small RNA 3' Adapter	L1.FIRST.Illumina Small RNA 5' Adapter	L1.FIRST.Nextera Transposase Sequence	L1.FIRST.PolyA	L1.FIRST.PolyG	L1.SECOND.Illumina Universal Adapter	L1.SECOND.Illumina Small RNA 3' Adapter	L1.SECOND.Illumina Small RNA 5' Adapter	L1.SECOND.Nextera Transposase Sequence	L1.SECOND.PolyA	L1.SECOND.PolyG	L1.UNPAIRED.Illumina Universal Adapter	L1.UNPAIRED.Illumina Small RNA 3' Adapter	L1.UNPAIRED.Illumina Small RNA 5' Adapter	L1.UNPAIRED.Nextera Transposase Sequence	L1.UNPAIRED.PolyA	L1.UNPAIRED.PolyG	L2.FIRST.Illumina Universal Adapter	L2.FIRST.Illumina Small RNA 3' Adapter	L2.FIRST.Illumina Small RNA 5' Adapter	L2.FIRST.Nextera Transposase Sequence	L2.FIRST.PolyA	L2.FIRST.PolyG	L2.SECOND.Illumina Universal Adapter	L2.SECOND.Illumina Small RNA 3' Adapter	L2.SECOND.Illumina Small RNA 5' Adapter	L2.SECOND.Nextera Transposase Sequence	L2.SECOND.PolyA	L2.SECOND.PolyG	L2.UNPAIRED.Illumina Universal Adapter	L2.UNPAIRED.Illumina Small RNA 3' Adapter	L2.UNPAIRED.Illumina Small RNA 5' Adapter	L2.UNPAIRED.Nextera Transposase Sequence	L2.UNPAIRED.PolyA	L2.UNPAIRED.PolyG
+1	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+2	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+3	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+4	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+5	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+6	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+7	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+8	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+9	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+10	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+11	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+12	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+13	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+14	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+15	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+16	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+17	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+18	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+19	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+20	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+21	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+22	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+23	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+24	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+25	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+26	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+27	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+28	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+29	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+30	0	0	0	33.333333	0	0	0	0	0	0	0	0	50	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+31	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+32	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+33	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+34	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+35	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+36	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+37	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+38	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+39	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+40	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+41	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+42	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+43	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+44	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+45	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+46	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+47	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+48	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+49	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+50	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+51	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+52	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+53	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+54	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+55	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+56	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+57	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+58	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+59	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+60	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+61	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+62	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+63	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+64	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+65	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+66	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+67	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+68	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+69	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+70	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+71	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+72	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+73	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+74	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+75	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+76	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+77	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+78	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+79	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+80	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+81	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+82	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+83	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+84	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+85	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+86	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+87	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+88	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+89	33.333333	0	0	33.333333	0	0	33.333333	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	50	0	0	0	0	0	?	?	?	?	?	?	0	0	0	100	0	0	0	0	0	0	0	0	50	0	0	0	0	0
+

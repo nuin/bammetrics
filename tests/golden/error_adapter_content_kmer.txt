@@ -1,0 +1,9 @@
+## argv
+CollectAdapterContentMetrics
+I=tests/data/adapter_content.bam
+ADAPTER_KMER=13
+## exit
+1
+## stdout
+## stderr
+bammetrics: ADAPTER_KMER=13: FastQC's adapters have 12 bases; give ADAPTER_SEQUENCE values of at least 13 bases
