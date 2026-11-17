@@ -1,0 +1,38 @@
+## argv
+CollectIndexDepthMetrics
+I=tests/data/index_depth.bam
+O=OUT/index_depth.txt
+## exit
+0
+## stdout
+## stderr
+## file index_depth.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectIndexDepthMetrics INPUT=tests/data/index_depth.bam OUTPUT=OUT/index_depth.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.IndexDepthMetrics
+CONTIG	GROUP	LENGTH	MAPPED	UNMAPPED_PLACED	ESTIMATED_MEAN_DEPTH	RATIO_TO_AUTOSOMES	READ_LENGTH	NO_COORDINATE	INFERRED_SEX	MT_COPY_NUMBER	REASON
+chr1	AUTOSOME	8192	256	7	3.125	1	100				
+chr2	AUTOSOME	4096	128	0	3.125	1	100				
+chrX	X	8192	128	0	1.5625	0.5	100				
+chrY	Y	4096	64	0	1.5625	0.5	100				
+chrM	MT	1024	512	0	50	16	100				
+chr1_KI270706v1_alt	ALT	2048	16	0	0.78125	0.25	100				
+chrUn_JTFH01000001v1_decoy	DECOY	1024	8	0	0.78125	0.25	100				
+HLA-A*01:01:01:01	HLA	4096	8	0	0.195312	0.0625	100				
+chrEBV	OTHER	1024	4	0	0.390625	0.125	100				
+chrUn_GL000220v1	OTHER	1024	0	0	0	0	100				
+zero	OTHER	0	0	0	?	?	100				
+	AUTOSOME	12288	384	7	3.125	1	100				
+	X	8192	128	0	1.5625	0.5	100				
+	Y	4096	64	0	1.5625	0.5	100				
+	MT	1024	512	0	50	16	100				
+	ALT	2048	16	0	0.78125	0.25	100				
+	DECOY	1024	8	0	0.78125	0.25	100				
+	HLA	4096	8	0	0.195312	0.0625	100				
+	OTHER	2048	4	0	0.195312	0.0625	100				
+	ALL	34816	1124	7	3.228401	1.033088	100	9	MALE	32	
+
+

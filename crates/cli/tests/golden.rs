@@ -56,6 +56,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("EXONS", "tests/data/exons.gtf"),
     ("EXONS_BED", "tests/data/exons.bed"),
     ("EXON_GENES", "tests/data/exon_genes.txt"),
+    ("ID", "tests/data/index_depth.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -375,6 +376,16 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_exon_coverage_feature", "CollectExonCoverageMetrics", "I=IS", "ANNOTATION=EXONS", "FEATURE=gene"),
     case!("error_verb_exon_coverage_unknown_gene", "exon-coverage", "IS", "--annotation", "EXONS", "--gene", "GENE_E"),
     case!("error_verb_exon_coverage_summary_is_input", "exon-coverage", "IS", "--annotation", "EXONS", "--summary-output", "EXONS"),
+    // CollectIndexDepthMetrics (docs/06 section 7): the planted counts of
+    // tests/data/index_depth.bam from its .bai; a BAM without an index, a
+    // CRAM and an option that needs a whole read are refused.
+    case!("picard_index_depth", "CollectIndexDepthMetrics", "I=ID", "O=OUT/index_depth.txt"),
+    case!("verb_index_depth_read_length_tsv", "index-depth", "ID", "--read-length", "150", "--format", "tsv"),
+    case!("verb_index_depth_one_contig_json", "index-depth", "IS", "--format", "json"),
+    case!("error_index_depth_cram", "CollectIndexDepthMetrics", "I=IS_CRAM"),
+    case!("error_index_depth_stop_after", "CollectIndexDepthMetrics", "I=ID", "STOP_AFTER=10"),
+    case!("error_verb_index_depth_no_index", "index-depth", "MD"),
+    case!("error_verb_index_depth_sample", "index-depth", "ID", "--read-length-sample", "0"),
 ];
 
 /// Formats (docs/formats.md): `convert` in both directions and to every

@@ -1154,6 +1154,19 @@ def collect_exon_coverage_metrics(
     SUMMARY_OUTPUT adds one GeneCoverageMetrics row per gene and per transcript. Not a
     Picard tool (docs/07 W07)."""
 
+def collect_index_depth_metrics(
+    input: _Path,
+    *,
+    read_length: int | None = None,
+    read_length_sample: int | None = None,
+    output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectIndexDepthMetrics: one row of the 12 IndexDepthMetrics columns per reference,
+    per contig group (AUTOSOME, X, Y, MT, ALT, DECOY, HLA, OTHER) and for ALL: the
+    mapped and placed unmapped counts of the .bai or .csi, MAPPED x READ_LENGTH / LENGTH
+    as the depth, the ratio to the autosomes, and on ALL the sex call, MT_COPY_NUMBER
+    and NO_COORDINATE. No whole read. Not a Picard tool (docs/06)."""
+
 # END registry tools
 
 def alignment_summary(

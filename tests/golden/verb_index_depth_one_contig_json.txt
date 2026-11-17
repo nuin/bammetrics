@@ -1,0 +1,267 @@
+## argv
+index-depth
+tests/data/insert_size.bam
+--format
+json
+## exit
+0
+## stdout
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectIndexDepthMetrics",
+  "sample": "insert_size",
+  "headers": [
+    "CollectIndexDepthMetrics INPUT=tests/data/insert_size.bam",
+    "Started on: <time>"
+  ],
+  "class": "bammetrics.qc.IndexDepthMetrics",
+  "columns": [
+    "CONTIG",
+    "GROUP",
+    "LENGTH",
+    "MAPPED",
+    "UNMAPPED_PLACED",
+    "ESTIMATED_MEAN_DEPTH",
+    "RATIO_TO_AUTOSOMES",
+    "READ_LENGTH",
+    "NO_COORDINATE",
+    "INFERRED_SEX",
+    "MT_COPY_NUMBER",
+    "REASON"
+  ],
+  "types": [
+    "string",
+    "string",
+    "int",
+    "int",
+    "int",
+    "float",
+    "float",
+    "float",
+    "int",
+    "string",
+    "float",
+    "string"
+  ],
+  "metrics": [
+    {
+      "CONTIG": "chr1",
+      "GROUP": "AUTOSOME",
+      "LENGTH": 100000,
+      "MAPPED": 10,
+      "UNMAPPED_PLACED": 0,
+      "ESTIMATED_MEAN_DEPTH": 0.01,
+      "RATIO_TO_AUTOSOMES": 1,
+      "READ_LENGTH": 100,
+      "NO_COORDINATE": null,
+      "INFERRED_SEX": null,
+      "MT_COPY_NUMBER": null,
+      "REASON": null
+    },
+    {
+      "CONTIG": null,
+      "GROUP": "AUTOSOME",
+      "LENGTH": 100000,
+      "MAPPED": 10,
+      "UNMAPPED_PLACED": 0,
+      "ESTIMATED_MEAN_DEPTH": 0.01,
+      "RATIO_TO_AUTOSOMES": 1,
+      "READ_LENGTH": 100,
+      "NO_COORDINATE": null,
+      "INFERRED_SEX": null,
+      "MT_COPY_NUMBER": null,
+      "REASON": null
+    },
+    {
+      "CONTIG": null,
+      "GROUP": "X",
+      "LENGTH": 0,
+      "MAPPED": 0,
+      "UNMAPPED_PLACED": 0,
+      "ESTIMATED_MEAN_DEPTH": null,
+      "RATIO_TO_AUTOSOMES": null,
+      "READ_LENGTH": 100,
+      "NO_COORDINATE": null,
+      "INFERRED_SEX": null,
+      "MT_COPY_NUMBER": null,
+      "REASON": null
+    },
+    {
+      "CONTIG": null,
+      "GROUP": "Y",
+      "LENGTH": 0,
+      "MAPPED": 0,
+      "UNMAPPED_PLACED": 0,
+      "ESTIMATED_MEAN_DEPTH": null,
+      "RATIO_TO_AUTOSOMES": null,
+      "READ_LENGTH": 100,
+      "NO_COORDINATE": null,
+      "INFERRED_SEX": null,
+      "MT_COPY_NUMBER": null,
+      "REASON": null
+    },
+    {
+      "CONTIG": null,
+      "GROUP": "MT",
+      "LENGTH": 0,
+      "MAPPED": 0,
+      "UNMAPPED_PLACED": 0,
+      "ESTIMATED_MEAN_DEPTH": null,
+      "RATIO_TO_AUTOSOMES": null,
+      "READ_LENGTH": 100,
+      "NO_COORDINATE": null,
+      "INFERRED_SEX": null,
+      "MT_COPY_NUMBER": null,
+      "REASON": null
+    },
+    {
+      "CONTIG": null,
+      "GROUP": "ALT",
+      "LENGTH": 0,
+      "MAPPED": 0,
+      "UNMAPPED_PLACED": 0,
+      "ESTIMATED_MEAN_DEPTH": null,
+      "RATIO_TO_AUTOSOMES": null,
+      "READ_LENGTH": 100,
+      "NO_COORDINATE": null,
+      "INFERRED_SEX": null,
+      "MT_COPY_NUMBER": null,
+      "REASON": null
+    },
+    {
+      "CONTIG": null,
+      "GROUP": "DECOY",
+      "LENGTH": 0,
+      "MAPPED": 0,
+      "UNMAPPED_PLACED": 0,
+      "ESTIMATED_MEAN_DEPTH": null,
+      "RATIO_TO_AUTOSOMES": null,
+      "READ_LENGTH": 100,
+      "NO_COORDINATE": null,
+      "INFERRED_SEX": null,
+      "MT_COPY_NUMBER": null,
+      "REASON": null
+    },
+    {
+      "CONTIG": null,
+      "GROUP": "HLA",
+      "LENGTH": 0,
+      "MAPPED": 0,
+      "UNMAPPED_PLACED": 0,
+      "ESTIMATED_MEAN_DEPTH": null,
+      "RATIO_TO_AUTOSOMES": null,
+      "READ_LENGTH": 100,
+      "NO_COORDINATE": null,
+      "INFERRED_SEX": null,
+      "MT_COPY_NUMBER": null,
+      "REASON": null
+    },
+    {
+      "CONTIG": null,
+      "GROUP": "OTHER",
+      "LENGTH": 0,
+      "MAPPED": 0,
+      "UNMAPPED_PLACED": 0,
+      "ESTIMATED_MEAN_DEPTH": null,
+      "RATIO_TO_AUTOSOMES": null,
+      "READ_LENGTH": 100,
+      "NO_COORDINATE": null,
+      "INFERRED_SEX": null,
+      "MT_COPY_NUMBER": null,
+      "REASON": null
+    },
+    {
+      "CONTIG": null,
+      "GROUP": "ALL",
+      "LENGTH": 100000,
+      "MAPPED": 10,
+      "UNMAPPED_PLACED": 0,
+      "ESTIMATED_MEAN_DEPTH": 0.01,
+      "RATIO_TO_AUTOSOMES": 1,
+      "READ_LENGTH": 100,
+      "NO_COORDINATE": 0,
+      "INFERRED_SEX": "UNKNOWN",
+      "MT_COPY_NUMBER": null,
+      "REASON": "no X bases; no Y bases; no mitochondrial contig"
+    }
+  ],
+  "non_finite": [
+    {
+      "row": 2,
+      "column": "ESTIMATED_MEAN_DEPTH",
+      "value": "NaN"
+    },
+    {
+      "row": 2,
+      "column": "RATIO_TO_AUTOSOMES",
+      "value": "NaN"
+    },
+    {
+      "row": 3,
+      "column": "ESTIMATED_MEAN_DEPTH",
+      "value": "NaN"
+    },
+    {
+      "row": 3,
+      "column": "RATIO_TO_AUTOSOMES",
+      "value": "NaN"
+    },
+    {
+      "row": 4,
+      "column": "ESTIMATED_MEAN_DEPTH",
+      "value": "NaN"
+    },
+    {
+      "row": 4,
+      "column": "RATIO_TO_AUTOSOMES",
+      "value": "NaN"
+    },
+    {
+      "row": 5,
+      "column": "ESTIMATED_MEAN_DEPTH",
+      "value": "NaN"
+    },
+    {
+      "row": 5,
+      "column": "RATIO_TO_AUTOSOMES",
+      "value": "NaN"
+    },
+    {
+      "row": 6,
+      "column": "ESTIMATED_MEAN_DEPTH",
+      "value": "NaN"
+    },
+    {
+      "row": 6,
+      "column": "RATIO_TO_AUTOSOMES",
+      "value": "NaN"
+    },
+    {
+      "row": 7,
+      "column": "ESTIMATED_MEAN_DEPTH",
+      "value": "NaN"
+    },
+    {
+      "row": 7,
+      "column": "RATIO_TO_AUTOSOMES",
+      "value": "NaN"
+    },
+    {
+      "row": 8,
+      "column": "ESTIMATED_MEAN_DEPTH",
+      "value": "NaN"
+    },
+    {
+      "row": 8,
+      "column": "RATIO_TO_AUTOSOMES",
+      "value": "NaN"
+    },
+    {
+      "row": 9,
+      "column": "MT_COPY_NUMBER",
+      "value": "NaN"
+    }
+  ],
+  "histogram": null
+}
+## stderr

@@ -76,6 +76,13 @@ const NO_PICARD_ORACLE: &[(&str, &str)] = &[
          planted copy numbers of tests/data/make_mt_bams.py exactly and the depths against \
          samtools depth",
     ),
+    (
+        "CollectIndexDepthMetrics",
+        "not a Picard tool (docs/06 section 7); crates/cli/tests/index_depth.rs and \
+         tests/python/test_index_depth.py check the planted counts of \
+         tests/data/make_index_depth_bams.py exactly, tests/concordance/test_index_depth.py \
+         the counts against samtools idxstats",
+    ),
 ];
 
 fn root() -> PathBuf {
