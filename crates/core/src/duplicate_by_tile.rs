@@ -7,8 +7,10 @@
 //! the default 5-field (`instrument:lane:tile:x:y`) and 7-field
 //! (`instrument:run:flowcell:lane:tile:x:y`) Illumina names, or a
 //! `READ_NAME_REGEX` with tile, x and y groups (then `FLOWCELL` and `LANE`
-//! are empty). The tile is Picard's 16-bit value. A name that gives no
-//! location counts on the `UNPARSED` row.
+//! are empty). The name is read one char per byte, as `MarkDuplicates`
+//! reads it. The tile is Picard's 16-bit value. A name that gives no
+//! location, or whose flowcell or lane holds an ASCII control character,
+//! counts on the `UNPARSED` row.
 //!
 //! Records are counted as `CollectDuplicateMetrics` counts them, so the
 //! `ALL` row reconciles with its totals: an unmapped record in `UNMAPPED`,
@@ -24,9 +26,11 @@
 //! row, lanes by flowcell then lane, then `UNPARSED`, then `ALL`.
 //!
 //! `TILE_OUTLIER` is `Y` for a tile whose `PCT_DUPLICATION` is above
-//! `median + OUTLIER_SD x 1.4826 x MAD` of the lane's tiles, with at least
+//! `median + max(OUTLIER_SD x 1.4826 x MAD, 0.005)` of the lane's tiles
+//! (`MIN_OUTLIER_EXCESS`), with at least
 //! 3 tiles that examined a read; tiles that examined none are left out.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use noodles::sam::alignment::record::data::field::{Tag, Value as FieldValue};
@@ -34,6 +38,7 @@ use noodles::sam::header::record::value::map::program::tag;
 use noodles::{bam, sam};
 
 use crate::error::{Error, Result};
+use crate::mark_duplicates::latin1;
 use crate::metric::{MetricRow, MetricsOutput, ToolOutput, Value};
 use crate::optical::ReadNameParser;
 use crate::pass::{self, Accumulator};
@@ -48,6 +53,10 @@ pub const DEFAULT_OUTLIER_SD: f64 = 3.0;
 /// `1 / Phi^-1(3/4)`: the MAD of a normal sample times this is its
 /// standard deviation.
 pub const MAD_TO_SD: f64 = 1.4826;
+
+/// The least `PCT_DUPLICATION` a tile must stand above its lane's median
+/// to be an outlier, so a lane of near-equal tiles (MAD 0) flags none.
+pub const MIN_OUTLIER_EXCESS: f64 = 0.005;
 
 /// Tiles of one lane that must have examined a read before any is judged.
 pub const MIN_TILES_FOR_OUTLIERS: usize = 3;
@@ -377,6 +386,9 @@ pub struct DuplicateByTile {
     lanes: HashMap<Vec<u8>, Lane>,
     tiles: usize,
     unparsed: Counts,
+    /// Records sent to `UNPARSED` for a control character in the
+    /// flowcell or lane field of a name that parses.
+    control_names: i64,
     any_duplicate: bool,
     any_dt: bool,
 }
@@ -390,6 +402,7 @@ impl DuplicateByTile {
             lanes: HashMap::new(),
             tiles: 0,
             unparsed: Counts::default(),
+            control_names: 0,
             any_duplicate: false,
             any_dt: false,
         }
@@ -398,22 +411,29 @@ impl DuplicateByTile {
     /// The counts of the row `name` belongs to; `MAX_TILES` bounds the
     /// rows a file can make.
     fn counts_of(&mut self, name: &[u8]) -> Result<&mut Counts> {
-        let located = std::str::from_utf8(name)
-            .ok()
-            .and_then(|text| self.parser.location(text));
-        let Some((tile, x, y)) = located else {
+        // One char per byte, as `MarkDuplicates` reads the name.
+        let text = match std::str::from_utf8(name) {
+            Ok(text) if text.is_ascii() => Cow::Borrowed(text),
+            _ => Cow::Owned(latin1(name)),
+        };
+        let Some((tile, x, y)) = self.parser.location(&text) else {
             return Ok(&mut self.unparsed);
         };
         let (key, flowcell, lane) = match self.parser {
             ReadNameParser::Default => lane_fields(name).unwrap_or((&[], &[], &[])),
             _ => (&[][..], &[][..], &[][..]),
         };
+        // A tab or line end in FLOWCELL or LANE would break the row.
+        if key.iter().any(u8::is_ascii_control) {
+            self.control_names += 1;
+            return Ok(&mut self.unparsed);
+        }
         if !self.lanes.contains_key(key) {
             self.lanes.insert(
                 key.to_vec(),
                 Lane {
-                    flowcell: String::from_utf8_lossy(flowcell).into_owned(),
-                    lane: String::from_utf8_lossy(lane).into_owned(),
+                    flowcell: latin1(flowcell),
+                    lane: latin1(lane),
                     tiles: HashMap::new(),
                 },
             );
@@ -507,11 +527,23 @@ impl DuplicateByTile {
                     .to_owned(),
             );
         }
-        if self.unparsed.reads > 0 {
+        let unread = self.unparsed.reads - self.control_names;
+        if unread > 0 {
+            let parser = match self.parser {
+                ReadNameParser::Default => "the 5- and 7-field Illumina name forms",
+                ReadNameParser::Regex(_) => "READ_NAME_REGEX",
+                ReadNameParser::None => "READ_NAME_REGEX=null",
+            };
             notes.push(format!(
-                "{} reads have names without a lane and tile under READ_NAME_REGEX; they are \
-                 on the UNPARSED row",
-                self.unparsed.reads
+                "{unread} reads have names without a lane and tile under {parser}; they are \
+                 on the UNPARSED row"
+            ));
+        }
+        if self.control_names > 0 {
+            notes.push(format!(
+                "{} reads have a control character (tab, line end) in the flowcell or lane of \
+                 their name; they are on the UNPARSED row",
+                self.control_names
             ));
         }
         rows.push(Row {
@@ -550,8 +582,9 @@ fn median(values: &mut [f64]) -> f64 {
     }
 }
 
-/// `median + outlier_sd x 1.4826 x MAD` of the tiles' `PCT_DUPLICATION`,
-/// or `None` with fewer than [`MIN_TILES_FOR_OUTLIERS`] tiles.
+/// `median + max(outlier_sd x 1.4826 x MAD, MIN_OUTLIER_EXCESS)` of the
+/// tiles' `PCT_DUPLICATION`, or `None` with fewer than
+/// [`MIN_TILES_FOR_OUTLIERS`] tiles.
 pub fn outlier_limit(pcts: &[f64], outlier_sd: f64) -> Option<f64> {
     if pcts.len() < MIN_TILES_FOR_OUTLIERS {
         return None;
@@ -560,7 +593,7 @@ pub fn outlier_limit(pcts: &[f64], outlier_sd: f64) -> Option<f64> {
     let center = median(&mut values);
     let mut deviations: Vec<f64> = pcts.iter().map(|p| (p - center).abs()).collect();
     let mad = median(&mut deviations);
-    Some(center + outlier_sd * MAD_TO_SD * mad)
+    Some(center + (outlier_sd * MAD_TO_SD * mad).max(MIN_OUTLIER_EXCESS))
 }
 
 impl Accumulator for DuplicateByTile {
@@ -629,7 +662,8 @@ pub const TOOL: Tool = Tool {
         Opt::float(
             &["OUTLIER_SD"],
             "A tile is an outlier above its lane's median PCT_DUPLICATION plus this many \
-             robust standard deviations, 1.4826 x MAD (default 3).",
+             robust standard deviations, 1.4826 x MAD, and at least 0.005 above it \
+             (default 3).",
         ),
         crate::registry::STOP_AFTER_OPTION,
     ],

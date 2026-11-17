@@ -29,6 +29,8 @@ mod md_nm;
 mod read_ends;
 mod write;
 
+pub(crate) use build::latin1;
+
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};

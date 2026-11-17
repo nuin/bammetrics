@@ -461,7 +461,11 @@ marks nothing, as `CollectDuplicateMetrics` does.
   the field before them the lane, and the third field of a 7-field name the flowcell.
   `READ_NAME_REGEX` takes Picard's regex with three groups (tile, x, y); then `FLOWCELL`
   and `LANE` are empty. `READ_NAME_REGEX=null` puts every read on the `UNPARSED` row.
-  `TILE` is Picard's 16-bit tile value.
+  `TILE` is Picard's 16-bit tile value. A name is read one character per byte (Latin-1),
+  as `MarkDuplicates` reads it, so a byte above 127 never moves a read off its tile.
+  A name whose flowcell or lane field holds an ASCII control character (tab, carriage
+  return, line feed) goes to the `UNPARSED` row with its own note: such a field would
+  break the row of the metrics file.
 - A record counts as `CollectDuplicateMetrics` counts it. An unmapped record adds to
   `UNMAPPED`. A mapped secondary or supplementary record counts nowhere. A mapped record
   that is unpaired or whose mate is unmapped adds to `UNPAIRED_READS`. A pair with both
@@ -482,11 +486,12 @@ the `ALL` row. The `UNPARSED` and `ALL` rows are always written. Notes go to the
 column of the `ALL` row and to standard error, one line each, unless `QUIET`.
 
 `TILE_OUTLIER` is `Y` when a tile's `PCT_DUPLICATION` is above `OUTLIER_LIMIT`: the median
-of the lane's tile values plus `OUTLIER_SD` times 1.4826 times their median absolute
-deviation (1.4826 x MAD estimates the standard deviation of normal data). A tile that
-examined no read is left out of the median and gets no flag. A lane with fewer than 3
-judged tiles gets no limit. When more than half the tiles share one value, the MAD is 0
-and every tile above the median is flagged.
+of the lane's tile values plus the larger of `OUTLIER_SD` times 1.4826 times their median
+absolute deviation (1.4826 x MAD estimates the standard deviation of normal data) and
+0.005 (`MIN_OUTLIER_EXCESS`, half a percentage point). A tile that examined no read is
+left out of the median and gets no flag. A lane with fewer than 3 judged tiles gets no
+limit. When more than half the tiles share one value, the MAD is 0 and the limit is the
+median plus 0.005, so a tile 0.0001 above the median of a flat lane is no outlier.
 
 One run holds at most 100,000 lane and tile pairs (`MAX_TILES`). A NovaSeq S4 flowcell
 has 3,744 tiles. More pairs mean the names are not Illumina names, and the run fails with
@@ -525,7 +530,7 @@ same tiles. The option is refused (`option METRIC_ACCUMULATION_LEVEL is not impl
 |---|---|---|
 | `INPUT`, `OUTPUT` | | As every tool. |
 | `READ_NAME_REGEX` | 5- and 7-field Illumina names | As `MarkDuplicates`; `null` for none. |
-| `OUTLIER_SD` | 3 | Robust standard deviations above the lane median; a finite number of at least 0. |
+| `OUTLIER_SD` | 3 | Robust standard deviations above the lane median, and at least 0.005; a finite number of at least 0. |
 | `STOP_AFTER` | 0 | Records read; 0 reads them all. |
 
 ### 7.4 Truth, cross-checks and tolerances

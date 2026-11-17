@@ -15,7 +15,7 @@ duplicate-metrics
 0
 ## stdout
 ## stderr
-bammetrics: CollectDuplicateByTileMetrics: 6 reads have names without a lane and tile under READ_NAME_REGEX; they are on the UNPARSED row
+bammetrics: CollectDuplicateByTileMetrics: 6 reads have names without a lane and tile under the 5- and 7-field Illumina name forms; they are on the UNPARSED row
 bammetrics chain: step 1 (mark-duplicates): 36 records in, 36 out, 16 changed
 bammetrics chain: 3 steps finished, 3 files written
 ## file s.duplicate_by_tile_metrics
@@ -30,7 +30,7 @@ TILE	FC1	1	1101	20	0	2	9	2	6	14	5	0.7	0.555556			1000	9001	2000	9000
 TILE	FC1	1	1102	8	0	0	4	0	1	2	1	0.25	0.25			1000	1040	2000	2030	
 LANE	FC1	1		28	0	2	13	2	7	16	6	0.571429	0.461538			1000	9001	2000	9000	
 UNPARSED				6	3	3	0	1	0	1	0	0.333333	0							
-ALL				34	3	5	13	3	7	17	6	0.548387	0.461538			1000	9001	2000	9000	6 reads have names without a lane and tile under READ_NAME_REGEX; they are on the UNPARSED row
+ALL				34	3	5	13	3	7	17	6	0.548387	0.461538			1000	9001	2000	9000	6 reads have names without a lane and tile under the 5- and 7-field Illumina name forms; they are on the UNPARSED row
 
 
 ## file s.duplicate_metrics

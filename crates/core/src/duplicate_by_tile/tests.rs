@@ -159,7 +159,8 @@ fn records_count_as_collect_duplicate_metrics_counts_them() {
     assert_eq!(
         all.notes.as_deref(),
         Some(
-            "3 reads have names without a lane and tile under READ_NAME_REGEX; they are on the UNPARSED row"
+            "3 reads have names without a lane and tile under the 5- and 7-field Illumina name \
+             forms; they are on the UNPARSED row"
         )
     );
     assert_eq!(all.values().len(), Row::COLUMNS.len());
@@ -216,9 +217,120 @@ fn outlier_limit_is_median_plus_robust_sd() {
         (limit - (0.11 + 3.0 * MAD_TO_SD * 0.01)).abs() < 1e-12,
         "{limit}"
     );
-    // Equal tiles: MAD 0, so any tile above the median is an outlier.
-    assert_eq!(outlier_limit(&[0.2, 0.2, 0.2, 0.5], 3.0), Some(0.2));
-    assert_eq!(outlier_limit(&[0.1, 0.2, 0.3], 0.0), Some(0.2));
+    // Equal tiles: MAD 0, so the limit is MIN_OUTLIER_EXCESS above the
+    // median.
+    for (pcts, sd) in [
+        (&[0.2, 0.2, 0.2, 0.5][..], 3.0),
+        (&[0.1, 0.2, 0.3][..], 0.0),
+    ] {
+        let limit = outlier_limit(pcts, sd).expect("tiles");
+        assert!(
+            (limit - (0.2 + MIN_OUTLIER_EXCESS)).abs() < 1e-12,
+            "{limit}"
+        );
+    }
+}
+
+#[test]
+fn a_flat_lane_flags_no_tile_a_hair_above_the_median() {
+    let mut sam = String::from(HEADER);
+    sam.push_str(MARKED);
+    // Tiles 1 to 3: 1 duplicate pair in 10 (PCT 0.1). Tile 4: 10 in 100
+    // and 1 unpaired duplicate (PCT 21/201, 0.0045 above the median).
+    // Tile 5: 2 in 10 (PCT 0.2). MAD 0.
+    for (tile, pairs, dups) in [(1, 10, 1), (2, 10, 1), (3, 10, 1), (4, 100, 10), (5, 10, 2)] {
+        for i in 0..pairs {
+            pair(&mut sam, &format!("I:1:FC:3:{tile}:{i}:0"), i < dups, "");
+        }
+    }
+    line(&mut sam, "I:1:FC:3:4:999:0", 0x400, "");
+    let rows = run(&sam, &[]).expect("runs").rows;
+    let flags: Vec<Option<bool>> = rows
+        .iter()
+        .filter(|r| r.unit == Unit::Tile)
+        .map(|r| r.tile_outlier)
+        .collect();
+    assert_eq!(
+        flags,
+        [
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(true)
+        ]
+    );
+    let lane = find(&rows, Unit::Lane, Some("3"), None);
+    let limit = lane.outlier_limit.expect("five tiles");
+    assert!(
+        (limit - (0.1 + MIN_OUTLIER_EXCESS)).abs() < 1e-12,
+        "{limit}"
+    );
+}
+
+/// The report of the names given, each counted as one unpaired read.
+fn names_report(names: &[&[u8]]) -> Report {
+    let opts = Options::from_invocation(&TOOL.parse(&["I=x.bam".to_owned()]).expect("parses"))
+        .expect("options");
+    let mut tiles = DuplicateByTile::new(&opts, &sam::Header::default());
+    for name in names {
+        tiles.counts_of(name).expect("counts").reads += 1;
+    }
+    tiles.report()
+}
+
+#[test]
+fn a_control_character_in_flowcell_or_lane_sends_the_name_to_unparsed() {
+    let report = names_report(&[
+        b"M:1:FC:3:4:5:6",
+        b"M:1:FC\tX:3:4:5:6",
+        b"M:1:FC:3\n:4:5:6",
+        b"M:1:FC\r:3:4:5:6",
+        b"M:3\t:4:5:6",
+    ]);
+    let tiles: Vec<&Row> = report
+        .rows
+        .iter()
+        .filter(|r| r.unit == Unit::Tile)
+        .collect();
+    assert_eq!(tiles.len(), 1);
+    assert_eq!(tiles[0].flowcell.as_deref(), Some("FC"));
+    let unparsed = find(&report.rows, Unit::Unparsed, None, None);
+    assert_eq!(unparsed.counts.reads, 4);
+    assert_eq!(
+        report.notes[2..],
+        [
+            "4 reads have a control character (tab, line end) in the flowcell or lane of their \
+          name; they are on the UNPARSED row"
+        ]
+    );
+    let mut bytes = Vec::new();
+    MetricsOutput::from_rows(&report.rows, None)
+        .write(Vec::new(), &mut bytes)
+        .expect("write");
+    let text = String::from_utf8(bytes).expect("utf8");
+    let columns = Row::COLUMNS.len();
+    for line in text
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+    {
+        assert_eq!(line.split('\t').count(), columns, "{line:?}");
+    }
+}
+
+#[test]
+fn names_are_read_one_char_per_byte_as_mark_duplicates_reads_them() {
+    let report = names_report(&[b"M:1:\xff\xfe:3:4:5:6", b"readA"]);
+    let tile = find(&report.rows, Unit::Tile, Some("3"), Some(4));
+    assert_eq!(tile.flowcell.as_deref(), Some("\u{ff}\u{fe}"));
+    assert_eq!(tile.counts.reads, 1);
+    assert_eq!(
+        report.notes.last().map(String::as_str),
+        Some(
+            "1 reads have names without a lane and tile under the 5- and 7-field Illumina \
+             name forms; they are on the UNPARSED row"
+        )
+    );
 }
 
 #[test]

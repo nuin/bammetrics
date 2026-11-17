@@ -669,7 +669,7 @@ bammetrics.qc.DuplicateByTileMetrics	DUPLICATES	int	Duplicate reads: UNPAIRED_DU
 bammetrics.qc.DuplicateByTileMetrics	OPTICAL_DUPLICATES	int	PAIR_DUPLICATES whose first-of-pair record carries DT:Z:SQ (MarkDuplicates TAGGING_POLICY=All or OpticalOnly), as READ_PAIR_OPTICAL_DUPLICATES. Empty when no duplicate carries a DT tag and no MarkDuplicates @PG line sets TAGGING_POLICY to All or OpticalOnly.
 bammetrics.qc.DuplicateByTileMetrics	PCT_DUPLICATION	float	DUPLICATES / (UNPAIRED_READS + 2 x PAIRS), a fraction, as PERCENT_DUPLICATION; 0 without an examined read.
 bammetrics.qc.DuplicateByTileMetrics	PCT_OPTICAL	float	OPTICAL_DUPLICATES / PAIRS, a fraction; 0 without a pair, empty when OPTICAL_DUPLICATES is.
-bammetrics.qc.DuplicateByTileMetrics	OUTLIER_LIMIT	float	The lane's median PCT_DUPLICATION over its tiles that examined a read, plus OUTLIER_SD x 1.4826 x their median absolute deviation; on the lane's TILE and LANE rows. Empty with fewer than 3 such tiles.
+bammetrics.qc.DuplicateByTileMetrics	OUTLIER_LIMIT	float	The lane's median PCT_DUPLICATION over its tiles that examined a read, plus the larger of OUTLIER_SD x 1.4826 x their median absolute deviation and 0.005; on the lane's TILE and LANE rows. Empty with fewer than 3 such tiles.
 bammetrics.qc.DuplicateByTileMetrics	TILE_OUTLIER	string	Y when the tile's PCT_DUPLICATION is above OUTLIER_LIMIT, N when not; empty on other rows, for a tile that examined no read and without a limit.
 bammetrics.qc.DuplicateByTileMetrics	MIN_X	int	Smallest x coordinate in the read names of the row; empty on UNPARSED rows.
 bammetrics.qc.DuplicateByTileMetrics	MAX_X	int	Largest x coordinate in the read names of the row; empty on UNPARSED rows.

@@ -430,11 +430,11 @@ json
       "MAX_X": 2741,
       "MIN_Y": 2054,
       "MAX_Y": 4497,
-      "NOTES": "28 reads have names without a lane and tile under READ_NAME_REGEX; they are on the UNPARSED row"
+      "NOTES": "28 reads have names without a lane and tile under the 5- and 7-field Illumina name forms; they are on the UNPARSED row"
     }
   ],
   "non_finite": [],
   "histogram": null
 }
 ## stderr
-bammetrics: CollectDuplicateByTileMetrics: 28 reads have names without a lane and tile under READ_NAME_REGEX; they are on the UNPARSED row
+bammetrics: CollectDuplicateByTileMetrics: 28 reads have names without a lane and tile under the 5- and 7-field Illumina name forms; they are on the UNPARSED row

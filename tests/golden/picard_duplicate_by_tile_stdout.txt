@@ -16,9 +16,9 @@ TILE	FC1	1	1101	20	0	2	9	1	0	1		0.05				1000	9001	2000	9000
 TILE	FC1	1	1102	8	0	0	4	0	0	0		0				1000	1040	2000	2030	
 LANE	FC1	1		28	0	2	13	1	0	1		0.035714				1000	9001	2000	9000	
 UNPARSED				6	3	3	0	0	0	0		0								
-ALL				34	3	5	13	1	0	1		0.032258				1000	9001	2000	9000	OPTICAL_DUPLICATES is empty: no duplicate carries a DT tag and no MarkDuplicates @PG line sets TAGGING_POLICY; run MarkDuplicates with TAGGING_POLICY=All (or OpticalOnly) to fill it; 6 reads have names without a lane and tile under READ_NAME_REGEX; they are on the UNPARSED row
+ALL				34	3	5	13	1	0	1		0.032258				1000	9001	2000	9000	OPTICAL_DUPLICATES is empty: no duplicate carries a DT tag and no MarkDuplicates @PG line sets TAGGING_POLICY; run MarkDuplicates with TAGGING_POLICY=All (or OpticalOnly) to fill it; 6 reads have names without a lane and tile under the 5- and 7-field Illumina name forms; they are on the UNPARSED row
 
 
 ## stderr
 bammetrics: CollectDuplicateByTileMetrics: OPTICAL_DUPLICATES is empty: no duplicate carries a DT tag and no MarkDuplicates @PG line sets TAGGING_POLICY; run MarkDuplicates with TAGGING_POLICY=All (or OpticalOnly) to fill it
-bammetrics: CollectDuplicateByTileMetrics: 6 reads have names without a lane and tile under READ_NAME_REGEX; they are on the UNPARSED row
+bammetrics: CollectDuplicateByTileMetrics: 6 reads have names without a lane and tile under the 5- and 7-field Illumina name forms; they are on the UNPARSED row

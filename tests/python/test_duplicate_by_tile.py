@@ -71,15 +71,15 @@ def test_planted_counts_are_exact(planted):
         pcts = [tiles[k]["PCT_DUPLICATION"] for k in tiles if k.startswith(lane + ":")]
         center = median(pcts)
         mad = median([abs(p - center) for p in pcts])
-        assert abs(lanes[lane]["OUTLIER_LIMIT"] - (center + 3 * 1.4826 * mad)) < LIMIT_TOLERANCE
+        assert abs(lanes[lane]["OUTLIER_LIMIT"] - (center + max(3 * 1.4826 * mad, 0.005))) < LIMIT_TOLERANCE
         assert lanes[lane]["TILE_OUTLIER"] is None
         assert lanes[lane]["MIN_X"] == min(tiles[k]["MIN_X"] for k in tiles if k[0] == lane)
     assert {k: unparsed[k] for k in COUNTS} == truth["unparsed"]
     assert all(unparsed[k] is None for k in EXTENT + ("LANE", "TILE"))
     assert {k: everything[k] for k in COUNTS} == truth["all"]
     assert everything["NOTES"] == (
-        f"{truth['unparsed']['READS']} reads have names without a lane and tile under "
-        "READ_NAME_REGEX; they are on the UNPARSED row")
+        f"{truth['unparsed']['READS']} reads have names without a lane and tile under the 5- "
+        "and 7-field Illumina name forms; they are on the UNPARSED row")
 
 
 def test_a_lower_outlier_sd_flags_more_tiles(planted):

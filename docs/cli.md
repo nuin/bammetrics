@@ -350,7 +350,8 @@ counts are those of `CollectDuplicateMetrics`, from the duplicate flags in the f
 `ALL` row equals its totals. `OPTICAL_DUPLICATES` needs the `DT:Z:SQ` tags of
 `mark-duplicates --tagging-policy All`; `chain in.bam + mark-duplicates --tagging-policy
 All + duplicate-by-tile` marks and counts in one read. `TILE_OUTLIER` is `Y` for a tile
-more than `--outlier-sd` (default 3) robust standard deviations above its lane's median.
+more than `--outlier-sd` (default 3) robust standard deviations, and at least 0.005, above
+its lane's median.
 
 `exon-coverage` reports the depth of every exon of an annotation, with no Picard
 counterpart ([exon_coverage.md](exon_coverage.md)). `bammetrics exon-coverage BAM
