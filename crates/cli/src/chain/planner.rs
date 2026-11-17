@@ -459,7 +459,11 @@ fn free_bytes(dir: &Path) -> Option<u64> {
     // `stat` is a plain C struct the call fills.
     let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
     let status = unsafe { libc::statvfs(path.as_ptr(), &mut stat) };
-    (status == 0).then(|| u64::from(stat.f_bavail).saturating_mul(stat.f_frsize))
+    // `f_bavail` is a u64 on Linux and a u32 on macOS: the conversion is
+    // needed on macOS and the same type on Linux.
+    #[allow(clippy::useless_conversion)]
+    let blocks = u64::from(stat.f_bavail);
+    (status == 0).then(|| blocks.saturating_mul(stat.f_frsize))
 }
 
 #[cfg(not(unix))]
