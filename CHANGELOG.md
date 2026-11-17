@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `CollectAdapterContentMetrics` (verb `adapter-content`, Python
+  `collect_adapter_content_metrics()`), class `bammetrics.qc.AdapterContentMetrics`,
+  docs/06 section 7, part of wave W08 of docs/07: FastQC 0.13.0's Adapter Content module
+  on a BAM, CRAM or SAM file. Primary records count, unmapped dimers included; bases are
+  taken in sequencing order. One row per unit, read end (`FIRST`, `SECOND`, `UNPAIRED`)
+  and adapter: `READS`, `READS_WITH_ADAPTER`, `PCT_READS_WITH_ADAPTER`,
+  `MEAN_ADAPTER_START`, `PCT_AT_LAST_CYCLE` and `PAIR_READ_THROUGH` (proper pairs whose
+  |TLEN| is below the read length). The `## HISTOGRAM` section is FastQC's cumulative
+  curve by `READ_CYCLE`. FastQC's six adapters by default, `ADAPTER_SEQUENCE` and
+  `ADAPTER_KMER` to change them, `PF_READS_ONLY`, `INCLUDE_DUPLICATES`,
+  `METRIC_ACCUMULATION_LEVEL`. A `CollectMultipleMetrics` program
+  (`.adapter_content_metrics`), a chain tap and a `qc` source; no shipped preset rule
+  (docs/07 decision D24), a lab preset with FastQC's 5 and 10 percent limits in docs/06
+  section 7.6. The output is bounded at 5,000,000 cells; a level whose units exceed it is
+  a usage error, and a unit's read end without a read gets rows and no table column.
+- `tests/data/make_adapter_bams.py`, `tests/data/adapter_content.bam`,
+  `tests/python/test_adapter_content.py` (planted truth exact, FastQC within 5e-7 points),
+  `crates/cli/tests/adapter_content.rs` and 8 golden records. On the HG002 exome slice of
+  2 M records every cycle equals FastQC's within 5e-7 points; the 10 GB exome runs in
+  42.0 s at 9 MB peak RSS.
+
 ## 0.25.0
 
 Wave W07 of docs/07: `bammetrics doctor`, `CollectMtCopyNumberMetrics` and

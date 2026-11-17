@@ -1,0 +1,10 @@
+## argv
+adapter-content
+tests/data/adapter_content.bam
+--adapter-sequence
+x=ACGTNACGTACGT
+## exit
+2
+## stdout
+## stderr
+bammetrics adapter-content: ADAPTER_SEQUENCE=x=ACGTNACGTACGT: the first 12 bases must be A, C, G or T, got ACGTNACGTACG (from --adapter-sequence)

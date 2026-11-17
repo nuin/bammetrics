@@ -2,6 +2,7 @@
 
 pub mod accumulate_quality_yield;
 pub mod adapter;
+pub mod adapter_content;
 pub mod alignment_summary;
 pub mod artifact_to_oxog;
 pub mod bai;

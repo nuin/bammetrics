@@ -1154,6 +1154,26 @@ def collect_exon_coverage_metrics(
     SUMMARY_OUTPUT adds one GeneCoverageMetrics row per gene and per transcript. Not a
     Picard tool (docs/07 W07)."""
 
+def collect_adapter_content_metrics(
+    input: _Path,
+    *,
+    adapter_sequence: str | Sequence[str] | None = None,
+    adapter_kmer: int | None = None,
+    pf_reads_only: bool | None = None,
+    include_duplicates: bool | None = None,
+    metric_accumulation_level: str | Sequence[str] | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    validation_stringency: str | None = None,
+    assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectAdapterContentMetrics: one row of the 12 AdapterContentMetrics columns per
+    adapter, read end and accumulation unit (reads, reads with the adapter's first
+    ADAPTER_KMER bases, their mean start, PAIR_READ_THROUGH from TLEN), and a by-cycle
+    histogram of the cumulative percent of reads with the adapter, as FastQC's Adapter
+    Content module. Not a Picard tool (docs/06)."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1280,6 +1300,7 @@ _CollectorVerb = Literal[
     "sex-check",
     "coverage-gaps",
     "mt-copy-number",
+    "adapter-content",
 ]
 
 def qc(
@@ -1381,6 +1402,7 @@ _StepVerb = Literal[
     "sort_sam",
     "mt_copy_number",
     "exon_coverage",
+    "adapter_content",
     "write",
 ]
 

@@ -1387,6 +1387,18 @@ numbers exactly and the depths against `samtools depth`. `CollectMultipleMetrics
 3.5.0 does not know that program name and refuses it. The default program list is
 Picard's.
 
+`CollectAdapterContentMetrics` (docs/06 section 7, class `bammetrics.qc.AdapterContentMetrics`)
+has no Picard counterpart either. Oracle tier E: planted truth, then FastQC 0.13.0's Adapter
+Content module within 0.1 percentage points per cycle (docs/07 decision D23).
+`tests/python/test_adapter_content.py` checks planted percentages exactly and the by-cycle
+curve against FastQC on `samtools fastq` of the same BAM. One difference from FastQC is on
+purpose: reads are split by read end in one file, where FastQC sees one FASTQ at a time.
+The table runs to the longest read of the run, so a read end of shorter reads gets more
+cycles than FastQC prints for it; those cycles repeat its last value. On mixed read
+lengths the curves are equal (docs/06 section 7.5).
+`CollectMultipleMetrics` takes `PROGRAM=CollectAdapterContentMetrics` and writes
+`PREFIX.adapter_content_metrics`; Picard 3.5.0 refuses that program name.
+
 `CollectExonCoverageMetrics` ([docs/exon_coverage.md](docs/exon_coverage.md)) has no Picard
 counterpart either; its classes are `bammetrics.qc.ExonCoverageMetrics` and
 `bammetrics.qc.GeneCoverageMetrics`. Oracle tier A: each exon's `MEAN_DEPTH` and

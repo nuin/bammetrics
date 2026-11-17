@@ -472,6 +472,14 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("MIN_DEPTH", "1")),
             picard_outputs: single,
         },
+        Case {
+            verb: "adapter-content",
+            class: "CollectAdapterContentMetrics",
+            verb_args: strings(&["tests/data/adapter_content.bam"]),
+            picard_args: strings(&["I=tests/data/adapter_content.bam"]),
+            option: Some(("ADAPTER_KMER", "10")),
+            picard_outputs: single,
+        },
     ]
 }
 
@@ -576,7 +584,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 38);
+    assert_eq!(classes.len(), 39);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

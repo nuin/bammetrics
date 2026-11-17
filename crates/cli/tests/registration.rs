@@ -76,6 +76,12 @@ const NO_PICARD_ORACLE: &[(&str, &str)] = &[
          planted copy numbers of tests/data/make_mt_bams.py exactly and the depths against \
          samtools depth",
     ),
+    (
+        "CollectAdapterContentMetrics",
+        "not a Picard tool (docs/06 section 7); tests/python/test_adapter_content.py checks the \
+         planted percentages of tests/data/make_adapter_bams.py exactly, and docs/06 section 7.5 \
+         the by-cycle table against FastQC",
+    ),
 ];
 
 fn root() -> PathBuf {

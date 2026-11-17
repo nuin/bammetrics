@@ -56,6 +56,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("EXONS", "tests/data/exons.gtf"),
     ("EXONS_BED", "tests/data/exons.bed"),
     ("EXON_GENES", "tests/data/exon_genes.txt"),
+    ("AD", "tests/data/adapter_content.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -375,6 +376,15 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_exon_coverage_feature", "CollectExonCoverageMetrics", "I=IS", "ANNOTATION=EXONS", "FEATURE=gene"),
     case!("error_verb_exon_coverage_unknown_gene", "exon-coverage", "IS", "--annotation", "EXONS", "--gene", "GENE_E"),
     case!("error_verb_exon_coverage_summary_is_input", "exon-coverage", "IS", "--annotation", "EXONS", "--summary-output", "EXONS"),
+    // CollectAdapterContentMetrics (docs/06 section 7): tests/data/adapter_content.bam
+    // (tests/data/make_adapter_bams.py --fixture), both read ends, two libraries.
+    case!("picard_adapter_content", "CollectAdapterContentMetrics", "I=AD", "O=OUT/adapter_content.txt", "LEVEL=LIBRARY"),
+    case!("picard_adapter_content_stdout", "CollectAdapterContentMetrics", "I=AD", "ADAPTER_SEQUENCE=Universal=AGATCGGAAGAGC", "ADAPTER_SEQUENCE=CTGTCTCTTATAC", "ADAPTER_KMER=13", "INCLUDE_DUPLICATES=false"),
+    case!("picard_adapter_content_multiple_metrics", "CollectMultipleMetrics", "I=AD", "O=OUT/s", "PROGRAM=null", "PROGRAM=CollectAdapterContentMetrics"),
+    case!("verb_adapter_content_json", "adapter-content", "AD", "--adapter-sequence", "U=AGATCGGAAGAG", "--pf-reads-only", "--format", "json"),
+    case!("chain_adapter_content", "chain", "AD", "-o", "OUT/s", "+", "adapter-content", "--level", "READ_GROUP", "--adapter-kmer", "8"),
+    case!("error_adapter_content_kmer", "CollectAdapterContentMetrics", "I=AD", "ADAPTER_KMER=13"),
+    case!("error_verb_adapter_content_sequence", "adapter-content", "AD", "--adapter-sequence", "x=ACGTNACGTACGT"),
 ];
 
 /// Formats (docs/formats.md): `convert` in both directions and to every
@@ -647,6 +657,7 @@ const T1_CASES: &[Case] = &[
     case!("t1_chain_taps", "chain", "T1", "-o", "OUT/s", "+", "quality-yield", "+", "alignment-summary", "+", "insert-size", "+", "duplicate-metrics"),
     case!("t1_doctor", "doctor", "T1", "-R", "T1_REF"),
     case!("t1_mt_copy_number", "mt-copy-number", "T1", "-o", "OUT/mt_copy_number.txt"),
+    case!("t1_adapter_content", "adapter-content", "T1", "-o", "OUT/adapter_content.txt"),
 ];
 
 fn root() -> PathBuf {
