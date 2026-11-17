@@ -655,3 +655,15 @@ bammetrics.qc.GeneCoverageMetrics	MINIMUM_DEPTH	int	The lowest depth of a base o
 bammetrics.qc.GeneCoverageMetrics	MAXIMUM_DEPTH	int	The highest depth of a base of the row's exons.
 bammetrics.qc.GeneCoverageMetrics	BASES_<N>X	int	Bases of the row's exons with a depth of at least N, one column per MIN_DEPTH value (default 10, 20 and 30).
 bammetrics.qc.GeneCoverageMetrics	PCT_<N>X	float	BASES_<N>X divided by LENGTH.
+bammetrics.qc.IndexDepthMetrics	CONTIG	string	The reference, in BAM header order; empty on a group row and on the ALL row.
+bammetrics.qc.IndexDepthMetrics	GROUP	string	The contig group by name: AUTOSOME (chr1 to chr22, 1 to 22), X, Y, MT (chrM, MT, M, chrMT), ALT (_alt), DECOY (_decoy, hs37d5), HLA (HLA-) or OTHER. A row with an empty CONTIG sums its group; ALL sums every reference.
+bammetrics.qc.IndexDepthMetrics	LENGTH	int	The reference length from the BAM header, summed over the group on a group row.
+bammetrics.qc.IndexDepthMetrics	MAPPED	int	Records placed on the reference without the unmapped flag, from the index metadata: duplicates, secondary and supplementary records, QC failures and MAPQ 0 included.
+bammetrics.qc.IndexDepthMetrics	UNMAPPED_PLACED	int	Records placed on the reference with the unmapped flag (usually the mate of a mapped read), from the index metadata.
+bammetrics.qc.IndexDepthMetrics	ESTIMATED_MEAN_DEPTH	float	MAPPED x READ_LENGTH / LENGTH: an estimate with no filter, no clip and no overlap removed. ? when LENGTH is 0 or the read length is unknown; 0 when MAPPED is 0.
+bammetrics.qc.IndexDepthMetrics	RATIO_TO_AUTOSOMES	float	MAPPED per base of the row divided by MAPPED per base of the autosomes; the read length cancels. On the X and Y group rows it is the X and Y ratio CollectSexCheckMetrics compares; ? without autosome reads.
+bammetrics.qc.IndexDepthMetrics	READ_LENGTH	float	The mean read length of the mapped primary records with a sequence among the first READ_LENGTH_SAMPLE records, or READ_LENGTH when given; empty when no record qualified.
+bammetrics.qc.IndexDepthMetrics	NO_COORDINATE	int	On the ALL row: records with no reference, the count after the last reference of the index.
+bammetrics.qc.IndexDepthMetrics	INFERRED_SEX	string	On the ALL row: FEMALE, MALE or UNKNOWN from the X and Y ratios, with the thresholds of CollectSexCheckMetrics.
+bammetrics.qc.IndexDepthMetrics	MT_COPY_NUMBER	float	On the ALL row: 2 x the RATIO_TO_AUTOSOMES of the MT group, the mitochondrial copy number estimate of CollectMtCopyNumberMetrics from unfiltered records; ? without a mitochondrial contig or autosome reads.
+bammetrics.qc.IndexDepthMetrics	REASON	string	On the ALL row: why INFERRED_SEX is UNKNOWN, why MT_COPY_NUMBER or the depths are ?; empty when every value is defined.

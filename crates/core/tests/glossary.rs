@@ -260,6 +260,11 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
             "LEVEL=READ_GROUP".to_owned(),
         ],
     );
+    // The planted index fixture fills every group row and the calls.
+    args.insert(
+        "CollectIndexDepthMetrics",
+        vec![format!("I={DATA}/index_depth.bam"), out("index_depth")],
+    );
     // The fixture BAM has no @RG line, which CollectOxoGMetrics refuses.
     args.insert(
         "CollectOxoGMetrics",
