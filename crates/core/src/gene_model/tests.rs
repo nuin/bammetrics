@@ -491,7 +491,7 @@ fn a_bed12_line_holds_at_most_max_blocks_blocks() {
     let sizes = "1,".repeat(blocks);
     let starts: String = (0..blocks).map(|i| format!("{i},")).collect();
     let text = format!("c\t0\t{blocks}\tT\t0\t+\t0\t0\t0\t{blocks}\t{sizes}\t{starts}\n");
-    let err = read("blocks.bed", &text, Feature::Exon).expect_err("too many blocks");
+    let err = read("max_blocks.bed", &text, Feature::Exon).expect_err("too many blocks");
     assert!(
         err.to_string()
             .contains(&format!("line 1: more than {MAX_BLOCKS} blocks")),
