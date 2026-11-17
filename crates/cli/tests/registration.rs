@@ -76,6 +76,12 @@ const NO_PICARD_ORACLE: &[(&str, &str)] = &[
          planted copy numbers of tests/data/make_mt_bams.py exactly and the depths against \
          samtools depth",
     ),
+    (
+        "CollectDuplicateByTileMetrics",
+        "not a Picard tool (docs/06 section 7); tests/python/test_duplicate_by_tile.py checks \
+         the planted counts of tests/data/make_tile_bams.py exactly and the ALL row against \
+         the CollectDuplicateMetrics and MarkDuplicates totals",
+    ),
 ];
 
 fn root() -> PathBuf {

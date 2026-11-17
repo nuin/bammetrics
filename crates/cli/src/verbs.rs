@@ -394,6 +394,11 @@ pub const VERBS: &[Verb] = &[
         also_writes: &["SUMMARY_OUTPUT"],
         ..verb("exon-coverage", "CollectExonCoverageMetrics", Files::Single)
     },
+    verb(
+        "duplicate-by-tile",
+        "CollectDuplicateByTileMetrics",
+        Files::Single,
+    ),
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the

@@ -22,6 +22,7 @@ pub mod cram;
 pub mod create_sequence_dictionary;
 pub mod cycle;
 pub mod doctor;
+pub mod duplicate_by_tile;
 pub mod duplicate_metrics;
 pub mod duplication;
 pub mod error;
