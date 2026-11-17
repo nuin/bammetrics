@@ -429,6 +429,31 @@ fn read_index(path: &Path, keep: usize) -> Result<Summary> {
     summary.map_err(input)
 }
 
+/// A read that ends before the bytes it was promised: the BAM is cut, or a
+/// record claims more bytes than the file holds.
+fn truncated(error: std::io::Error) -> std::io::Error {
+    if error.kind() != std::io::ErrorKind::UnexpectedEof {
+        return error;
+    }
+    std::io::Error::new(
+        std::io::ErrorKind::UnexpectedEof,
+        "truncated BAM: a record of the read length sample ends past the end of the file; \
+         READ_LENGTH skips the sample",
+    )
+}
+
+/// The smallest BGZF block: an 18-byte header, 2 bytes of deflate and an
+/// 8-byte footer. Each block inflates to at most 65,536 bytes.
+const MIN_BLOCK_BYTES: u128 = 28;
+const MAX_BLOCK_DATA: u128 = 65_536;
+/// The smallest BAM record: `block_size` and the 32 fixed bytes.
+const MIN_RECORD_BYTES: u128 = 36;
+
+/// The most records a BAM of `bytes` bytes can hold.
+fn max_records(bytes: u64) -> u128 {
+    u128::from(bytes) / MIN_BLOCK_BYTES * MAX_BLOCK_DATA / MIN_RECORD_BYTES
+}
+
 /// The mean `l_seq` of the mapped primary records with a sequence among
 /// the first `sample` records of `stream`; `None` when there is none.
 fn sample_read_length(stream: &mut BamStream, sample: i64, path: &Path) -> Result<Option<f64>> {
@@ -437,7 +462,7 @@ fn sample_read_length(stream: &mut BamStream, sample: i64, path: &Path) -> Resul
     for _ in 0..sample {
         let more = record.read_from(stream).map_err(|source| Error::Input {
             path: path.to_path_buf(),
-            source,
+            source: truncated(source),
         })?;
         if !more {
             break;
@@ -468,7 +493,7 @@ pub fn measure(bam: &Path, opts: &Options) -> Result<(Counts, Option<f64>)> {
     };
     let references = header.binary.len();
     let summary = read_index(&index, references)?;
-    if summary.references < references {
+    if summary.references != references {
         return Err(Error::Metric(format!(
             "{}: the index holds {} reference sequences, the BAM header {references}; it is \
              the index of another file",
@@ -490,13 +515,31 @@ pub fn measure(bam: &Path, opts: &Options) -> Result<(Counts, Option<f64>)> {
             }
         })
         .collect();
-    Ok((
-        Counts {
-            contigs,
-            no_coordinate: summary.no_coordinate.unwrap_or(0),
-        },
-        read_length,
-    ))
+    let counts = Counts {
+        contigs,
+        no_coordinate: summary.no_coordinate.unwrap_or(0),
+    };
+    let bytes = std::fs::metadata(bam)
+        .map_err(|source| Error::Input {
+            path: bam.to_path_buf(),
+            source,
+        })?
+        .len();
+    let records: u128 = counts
+        .contigs
+        .iter()
+        .map(|c| u128::from(c.mapped) + u128::from(c.unmapped))
+        .sum::<u128>()
+        + u128::from(counts.no_coordinate);
+    if records > max_records(bytes) {
+        return Err(Error::Metric(format!(
+            "{}: the index counts {records} records, more than the {} a BAM of {bytes} bytes \
+             can hold; it is damaged or the index of another file",
+            index.display(),
+            max_records(bytes)
+        )));
+    }
+    Ok((counts, read_length))
 }
 
 pub const TOOL: Tool = Tool {
@@ -538,6 +581,10 @@ pub const TOOL: Tool = Tool {
 
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let opts = Options::from_invocation(inv)?;
+    // `OUTPUT` may not replace the index the run reads.
+    if let Some(index) = find_index(&inv.input) {
+        crate::registry::check_writable(inv.output.as_deref(), &[index])?;
+    }
     let (counts, read_length) = measure(&inv.input, &opts)?;
     let sample = opts
         .read_length

@@ -215,3 +215,93 @@ fn options_that_need_a_read_are_unrecognized() {
         assert!(stderr.contains("Unrecognized option"), "{option}: {stderr}");
     }
 }
+
+/// The fixture BAM and its index of `kind` (`bai` or `csi`) copied into a
+/// directory of their own.
+fn copied(name: &str, kind: &str) -> (PathBuf, PathBuf, PathBuf) {
+    let dir = fresh_dir(name);
+    let bam = dir.join("p.bam");
+    fs::copy(root().join(FIXTURE), &bam).expect("copy the BAM");
+    let index = dir.join(format!("p.bam.{kind}"));
+    fs::copy(root().join(format!("{FIXTURE}.{kind}")), &index).expect("copy the index");
+    (dir, bam, index)
+}
+
+#[test]
+fn an_output_named_like_the_index_is_refused() {
+    for kind in ["bai", "csi"] {
+        let (dir, bam, index) = copied(&format!("over-{kind}"), kind);
+        let before = fs::read(&index).expect("read the index");
+        let (bam, out) = (bam.to_str().unwrap(), index.to_str().unwrap());
+        let verb = bammetrics(&["index-depth", bam, "-q", "-o", out]);
+        let stderr = String::from_utf8_lossy(&verb.stderr);
+        assert_eq!(verb.status.code(), Some(2), "{kind}: {stderr}");
+        assert!(stderr.contains("is an input"), "{kind}: {stderr}");
+        let picard = bammetrics(&[
+            "CollectIndexDepthMetrics",
+            &format!("I={bam}"),
+            &format!("O={out}"),
+        ]);
+        let stderr = String::from_utf8_lossy(&picard.stderr);
+        assert_eq!(picard.status.code(), Some(1), "{kind}: {stderr}");
+        assert!(stderr.contains("is an input"), "{kind}: {stderr}");
+        assert_eq!(fs::read(&index).expect("read the index"), before, "{kind}");
+        fs::remove_dir_all(&dir).expect("remove the temp dir");
+    }
+}
+
+#[test]
+fn an_index_with_more_references_than_the_header_is_refused() {
+    let dir = fresh_dir("more");
+    let bam = dir.join("one.bam");
+    fs::copy(root().join("tests/data/insert_size.bam"), &bam).expect("copy the BAM");
+    fs::copy(
+        root().join("tests/data/index_depth.bam.bai"),
+        dir.join("one.bam.bai"),
+    )
+    .expect("copy the index");
+    refused(
+        &["index-depth", bam.to_str().unwrap()],
+        "the index holds 11 reference sequences, the BAM header 1",
+    );
+    fs::remove_dir_all(&dir).expect("remove the temp dir");
+}
+
+#[test]
+fn counts_no_file_of_that_size_holds_are_refused() {
+    let (dir, bam, index) = copied("forged", "bai");
+    let mut file = fs::File::open(&index).expect("open the index");
+    let mut bai = bammetrics_core::bai::Index::read(&mut file).expect("read the index");
+    let first = bai.references[0].metadata.as_mut().expect("metadata");
+    first.aligned = (1 << 63) + 5;
+    first.unaligned = u64::MAX;
+    let mut bytes = Vec::new();
+    bai.write(&mut bytes).expect("write the index");
+    fs::write(&index, bytes).expect("write the index");
+    refused(
+        &["index-depth", bam.to_str().unwrap()],
+        "records, more than the",
+    );
+    fs::remove_dir_all(&dir).expect("remove the temp dir");
+}
+
+#[test]
+fn a_cut_bam_names_the_cut_and_read_length() {
+    let (dir, bam, _) = copied("cut", "bai");
+    let whole = fs::read(&bam).expect("read the BAM");
+    fs::write(&bam, &whole[..3000]).expect("cut the BAM");
+    let path = bam.to_str().unwrap();
+    refused(&["index-depth", path], "truncated BAM");
+    refused(&["index-depth", path], "READ_LENGTH skips the sample");
+    let out = dir.join("depth.txt");
+    let given = bammetrics(&[
+        "index-depth",
+        path,
+        "--read-length",
+        "50",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    assert_eq!(given.status.code(), Some(0), "{given:?}");
+    fs::remove_dir_all(&dir).expect("remove the temp dir");
+}

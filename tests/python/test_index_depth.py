@@ -113,6 +113,18 @@ def test_refusals(tmp_path):
                                                read_length_sample=0)
 
 
+@pytest.mark.parametrize("kind", ["bai", "csi"])
+def test_output_may_not_replace_the_index(tmp_path, kind):
+    bam = tmp_path / "p.bam"
+    shutil.copy(DATA / "index_depth.bam", bam)
+    index = tmp_path / f"p.bam.{kind}"
+    shutil.copy(DATA / f"index_depth.bam.{kind}", index)
+    before = index.read_bytes()
+    with pytest.raises(bammetrics.UsageError, match="is an input"):
+        bammetrics.collect_index_depth_metrics(str(bam), output=str(index))
+    assert index.read_bytes() == before
+
+
 def indexed_fixtures(tmp_path):
     """Every tests/data BAM with an index: beside it, or its Picard .bai in
     tests/data/bai copied next to a copy of the BAM."""

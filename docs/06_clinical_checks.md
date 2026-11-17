@@ -463,9 +463,13 @@ is the index-only depth analysis of wave W08 of docs/07, with no Picard counterp
   `READ_LENGTH` no record is read.
 
 A reference the index has no metadata for counts 0 (samtools and htsjdk write none for a
-reference without records). An index with fewer references than the header is the index
-of another file and is refused. An index older than the BAM is read as it is: `samtools`
-warns, `bammetrics doctor` reports its age.
+reference without records). An index whose reference count differs from the header's is
+the index of another file and is refused, fewer or more; `samtools idxstats` reads the
+first references of a longer index. An index that counts more records than the BAM can
+hold is refused too: a BGZF block is at least 28 bytes and inflates to at most 65,536, a
+record is at least 36 bytes, so a BAM of `S` bytes holds at most `S / 28 x 65536 / 36`
+records. An index older than the BAM is read as it is: `samtools` warns, `bammetrics
+doctor` reports its age.
 
 Refused, each with exit 1 and no file:
 
@@ -515,7 +519,7 @@ records in place of filtered aligned bases.
 
 | Option | Default | Meaning |
 |---|---|---|
-| `INPUT`, `OUTPUT` | | The BAM; the metrics file, standard output without one. |
+| `INPUT`, `OUTPUT` | | The BAM; the metrics file, standard output without one. An `OUTPUT` that names the index read is refused. |
 | `READ_LENGTH` | the sampled mean | 1 to 2,147,483,647 bases; then no record is read. |
 | `READ_LENGTH_SAMPLE` | 10,000 | Records read from the start, 1 to 1,000,000. |
 

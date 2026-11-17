@@ -25,7 +25,8 @@ use bammetrics_core::multiple_metrics::file_extensions;
 use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
 use bammetrics_core::view_sam;
 use bammetrics_core::{
-    bam_index_stats, build_bam_index, check_duplicate_marking, compare_metrics, cram, pass,
+    bam_index_stats, build_bam_index, check_duplicate_marking, compare_metrics, cram, index_depth,
+    pass,
 };
 
 use crate::error::VerbError;
@@ -1269,7 +1270,8 @@ impl Verb {
 
     /// The files the run reads: every `INPUT`, the reference and its `.fai`,
     /// for a tool without `INPUT` its required options, and for
-    /// `BamIndexStats` the `.bai` or `.csi` it reads beside each BAM.
+    /// `BamIndexStats` and `CollectIndexDepthMetrics` the `.bai` or `.csi`
+    /// they read beside each BAM.
     fn input_paths(&self, inv: &Invocation) -> Vec<PathBuf> {
         let tool = self.tool();
         let mut names = vec!["INPUT", "REFERENCE_SEQUENCE"];
@@ -1292,7 +1294,7 @@ impl Verb {
             .chain(indexes)
             .map(PathBuf::from)
             .collect();
-        if tool.name == bam_index_stats::TOOL.name {
+        if [bam_index_stats::TOOL.name, index_depth::TOOL.name].contains(&tool.name) {
             paths.extend(
                 inv.all("INPUT")
                     .iter()
