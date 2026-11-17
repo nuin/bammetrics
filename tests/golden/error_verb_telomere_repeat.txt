@@ -1,0 +1,10 @@
+## argv
+telomere
+tests/data/telomere.bam
+--repeat
+TTAGGN
+## exit
+2
+## stdout
+## stderr
+bammetrics telomere: REPEAT=TTAGGN: 1 to 100 bases of A, C, G and T (from --repeat)

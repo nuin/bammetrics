@@ -56,6 +56,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("EXONS", "tests/data/exons.gtf"),
     ("EXONS_BED", "tests/data/exons.bed"),
     ("EXON_GENES", "tests/data/exon_genes.txt"),
+    ("TEL", "tests/data/telomere.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -375,6 +376,17 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_exon_coverage_feature", "CollectExonCoverageMetrics", "I=IS", "ANNOTATION=EXONS", "FEATURE=gene"),
     case!("error_verb_exon_coverage_unknown_gene", "exon-coverage", "IS", "--annotation", "EXONS", "--gene", "GENE_E"),
     case!("error_verb_exon_coverage_summary_is_input", "exon-coverage", "IS", "--annotation", "EXONS", "--summary-output", "EXONS"),
+    // CollectTelomereMetrics (docs/telomere.md): tests/data/telomere.bam holds
+    // the planted reads of tests/data/make_telomere_bams.py, two read groups.
+    case!("picard_telomere", "CollectTelomereMetrics", "I=TEL", "O=OUT/telomere.txt", "LEVEL=SAMPLE", "LEVEL=READ_GROUP"),
+    case!("picard_telomere_stdout_duplicates", "CollectTelomereMetrics", "I=TEL", "COUNT_DUPLICATES=true", "K=20"),
+    case!("picard_telomere_multiple_metrics", "CollectMultipleMetrics", "I=TEL", "O=OUT/s", "PROGRAM=null", "PROGRAM=CollectTelomereMetrics", "LEVEL=LIBRARY"),
+    case!("verb_telomere_json", "telomere", "TEL", "--repeat", "ttaggg", "--format", "json"),
+    case!("verb_telomere_no_estimate", "telomere", "IS", "-o", "OUT/telomere.txt"),
+    case!("chain_telomere", "chain", "TEL", "-o", "OUT/s", "+", "telomere", "--level", "READ_GROUP"),
+    case!("error_verb_telomere_repeat", "telomere", "TEL", "--repeat", "TTAGGN"),
+    case!("error_verb_telomere_threshold", "telomere", "TEL", "-K", "0"),
+    case!("error_telomere_ends", "CollectTelomereMetrics", "I=TEL", "TELOMERE_ENDS=0"),
 ];
 
 /// Formats (docs/formats.md): `convert` in both directions and to every
@@ -647,6 +659,7 @@ const T1_CASES: &[Case] = &[
     case!("t1_chain_taps", "chain", "T1", "-o", "OUT/s", "+", "quality-yield", "+", "alignment-summary", "+", "insert-size", "+", "duplicate-metrics"),
     case!("t1_doctor", "doctor", "T1", "-R", "T1_REF"),
     case!("t1_mt_copy_number", "mt-copy-number", "T1", "-o", "OUT/mt_copy_number.txt"),
+    case!("t1_telomere", "telomere", "T1", "-o", "OUT/telomere.txt"),
 ];
 
 fn root() -> PathBuf {

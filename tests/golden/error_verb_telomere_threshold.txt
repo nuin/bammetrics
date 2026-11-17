@@ -1,0 +1,10 @@
+## argv
+telomere
+tests/data/telomere.bam
+-K
+0
+## exit
+2
+## stdout
+## stderr
+bammetrics telomere: TELOMERE_REPEAT_THRESHOLD=0: must be at least 1 (from -K)
