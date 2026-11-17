@@ -655,3 +655,17 @@ bammetrics.qc.GeneCoverageMetrics	MINIMUM_DEPTH	int	The lowest depth of a base o
 bammetrics.qc.GeneCoverageMetrics	MAXIMUM_DEPTH	int	The highest depth of a base of the row's exons.
 bammetrics.qc.GeneCoverageMetrics	BASES_<N>X	int	Bases of the row's exons with a depth of at least N, one column per MIN_DEPTH value (default 10, 20 and 30).
 bammetrics.qc.GeneCoverageMetrics	PCT_<N>X	float	BASES_<N>X divided by LENGTH.
+bammetrics.qc.AdapterContentMetrics	ADAPTER	string	Adapter name: one of FastQC's six (Configuration/adapter_list.txt), or the NAME of an ADAPTER_SEQUENCE value (the sequence itself when no name is given).
+bammetrics.qc.AdapterContentMetrics	KMER	string	The bases searched: the adapter's first ADAPTER_KMER bases (default 12), upper case. A read carries the adapter when they occur in it exactly.
+bammetrics.qc.AdapterContentMetrics	READ_END	string	FIRST (flags 0x1 and 0x40 without 0x80), SECOND (0x1 and 0x80 without 0x40) or UNPAIRED (any other record). Only read ends with a counted record get rows.
+bammetrics.qc.AdapterContentMetrics	READS	int	Primary records of the read end, unmapped included; secondary and supplementary never count, QC-failed records leave with PF_READS_ONLY and duplicates with INCLUDE_DUPLICATES=false.
+bammetrics.qc.AdapterContentMetrics	READS_WITH_ADAPTER	int	Reads whose bases in sequencing order (reverse complemented for flag 0x10) hold KMER at any position.
+bammetrics.qc.AdapterContentMetrics	PCT_READS_WITH_ADAPTER	float	100 x READS_WITH_ADAPTER / READS, a percent from 0 to 100. ? without a read.
+bammetrics.qc.AdapterContentMetrics	MEAN_ADAPTER_START	float	Mean 1-based cycle at which KMER first starts, over READS_WITH_ADAPTER. ? when no read has the adapter.
+bammetrics.qc.AdapterContentMetrics	PCT_AT_LAST_CYCLE	float	The by-cycle histogram's value at its last cycle: 100 x reads whose KMER starts at or before that cycle / READS, the value FastQC grades (warn above 5, fail above 10). Equals PCT_READS_WITH_ADAPTER unless a read is longer than 1,000 cycles plus the key.
+bammetrics.qc.AdapterContentMetrics	PAIR_READ_THROUGH	float	Proper pairs (flags 0x1 and 0x2, both mates mapped, TLEN not 0) of the read end whose abs(TLEN) is below the record's read length, over all such pairs: a fraction from 0 to 1 that needs no sequence search. ? without a proper pair.
+bammetrics.qc.AdapterContentMetrics	SAMPLE	string	Sample (@RG SM) of the accumulation unit. Empty on the ALL_READS rows.
+bammetrics.qc.AdapterContentMetrics	LIBRARY	string	Library (@RG LB) of the accumulation unit. Empty on ALL_READS and SAMPLE rows.
+bammetrics.qc.AdapterContentMetrics	READ_GROUP	string	Platform unit (@RG PU) of the read group. Empty except on READ_GROUP rows.
+CollectAdapterContentMetrics	READ_CYCLE	int	Histogram key: the 1-based cycle in sequencing order, from 1 to the last cycle at which KMER can start in the longest read (read length - ADAPTER_KMER + 1), at most 1,000.
+CollectAdapterContentMetrics	*	float	Cumulative percent (0 to 100) of the reads of the unit, read end and adapter named by the label (unit.READ_END.ADAPTER) whose KMER starts at or before this cycle: FastQC's Adapter Content curve. ? for a read end without a read in the unit.

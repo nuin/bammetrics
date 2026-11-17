@@ -130,6 +130,15 @@ const PROGRAMS: &[Program] = &[
         reference: Reference::Unused,
         prefix: false,
     },
+    // Not a Picard program (docs/06 section 7): Picard rejects the name.
+    Program {
+        name: "CollectAdapterContentMetrics",
+        tool: &crate::adapter_content::TOOL,
+        files: &[("OUTPUT", ".adapter_content_metrics")],
+        levels: true,
+        reference: Reference::Unused,
+        prefix: false,
+    },
 ];
 
 /// Picard's default `PROGRAM` list.

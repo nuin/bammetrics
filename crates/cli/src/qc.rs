@@ -112,7 +112,7 @@ fn after_help() -> String {
 .insert_size_metrics, .quality_yield_metrics, .gc_bias.detail_metrics and \
 .gc_bias.summary_metrics), .hs_metrics (.BAIT_SET.hs_metrics with several --hs), \
 .duplicate_metrics, .wgs_metrics, .rna_metrics, .sex_check_metrics, .coverage_gaps with its \
-.coverage_gaps.bed, .mt_copy_number_metrics; .panel.interval_list when --panel is a BED (its \
+.coverage_gaps.bed, .mt_copy_number_metrics, .adapter_content_metrics; .panel.interval_list when --panel is a BED (its \
 @SQ lines from the BAM header); then PREFIX.verdict.json, PREFIX.report.html \
 (PREFIX.report.pdf with --report pdf, both with --report html,pdf) and PREFIX.manifest.json. \
 Each metrics file is byte for byte the one `bammetrics <Tool> \
@@ -316,6 +316,11 @@ const SOURCES: &[(&str, &str, Needs)] = &[
     (
         "MtCopyNumberMetrics",
         "CollectMtCopyNumberMetrics",
+        Needs::Bam,
+    ),
+    (
+        "AdapterContentMetrics",
+        "CollectAdapterContentMetrics",
         Needs::Bam,
     ),
 ];

@@ -260,6 +260,15 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
             "LEVEL=READ_GROUP".to_owned(),
         ],
     );
+    // The adapter fixture holds both read ends and two read groups.
+    args.insert(
+        "CollectAdapterContentMetrics",
+        vec![
+            format!("I={DATA}/adapter_content.bam"),
+            out("adapter_content"),
+            "LEVEL=READ_GROUP".to_owned(),
+        ],
+    );
     // The fixture BAM has no @RG line, which CollectOxoGMetrics refuses.
     args.insert(
         "CollectOxoGMetrics",
