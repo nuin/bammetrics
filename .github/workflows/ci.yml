@@ -107,10 +107,13 @@ jobs:
           echo "$HOME/picard/bin" >> "$GITHUB_PATH"
 
       # SortSam MAX_RECORDS_IN_RAM=1 on the foundation corpus has Picard open
-      # one spill file per record (about 13,000); macOS runners allow 256.
+      # one spill file per record (about 13,000); macOS runners allow 256,
+      # and a JVM on macOS caps itself at 10,240 unless -XX:-MaxFDLimit.
       - name: Concordance harness
         run: |
           ulimit -n 65536 2>/dev/null || ulimit -n 16384
+          echo "open files: $(ulimit -n)"
+          if [ "$RUNNER_OS" = macOS ]; then export JAVA_OPTS="-XX:-MaxFDLimit"; fi
           make concordance
 
       - name: Python module
