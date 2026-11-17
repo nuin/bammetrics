@@ -1,0 +1,29 @@
+## argv
+doctor
+tests/data/doctor/cut.bam
+--format
+jsonl
+## exit
+10
+## stdout
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"file","status":"pass","value":"BAM, @HD VN:1.6","reason":""}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"eof","status":"fail","value":"cut short","reason":"the last BGZF block is incomplete: the file was cut short (an interrupted copy or a full disk)"}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"header","status":"pass","value":"28 lines: 1 @HD, 25 @SQ, 1 @RG, 1 @PG, 0 @CO","reason":""}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"references","status":"pass","value":"25 contigs, 3,088,286,401 bases","reason":""}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"build","status":"pass","value":"hg38","reason":"24 primary, 1 mitochondrial, 0 alt, 0 decoy, 0 HLA, 0 other contigs"}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"read_groups","status":"pass","value":"1 @RG line, 1 sample: NA12878","reason":"every line has ID, SM, LB and PL"}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"sort_order","status":"pass","value":"header coordinate","reason":"the first 162 records are in coordinate order"}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"records","status":"fail","value":"162 records read","reason":"record 163: the file ends inside the record"}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"record_read_groups","status":"pass","value":"162 records","reason":"every RG is in the header"}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"paired","status":"pass","value":"100.0%","reason":"paired-end"}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"mapped","status":"pass","value":"100.0%","reason":"of 162 primary records"}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"duplicates","status":"pass","value":"9.3% flagged","reason":"@PG MarkDuplicates ran"}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"read_length","status":"pass","value":"mean 100.0","reason":"over 162 primary records with bases"}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"qualities","status":"pass","value":"Q2 to Q40","reason":"Phred+33"}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"md_nm","status":"pass","value":"MD 100.0%, NM 100.0%","reason":"on every one of 162 mapped primary records"}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"reference","status":"skip","value":"","reason":"no -R given"}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"index","status":"warn","value":"none","reason":"no index beside the file: region queries need one (bammetrics build-bam-index writes it)"}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"sample_sheet","status":"skip","value":"","reason":"no --sample-sheet given"}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"expected_sex","status":"skip","value":"","reason":"no --expect-sex and no sex in the sample sheet"}
+{"event":"doctor","path":"tests/data/doctor/cut.bam","kind":"BAM","status":"fail","exit_code":10,"counts":{"fail":2,"warn":1,"pass":13,"skip":3}}
+## stderr

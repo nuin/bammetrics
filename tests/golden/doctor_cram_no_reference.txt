@@ -1,0 +1,28 @@
+## argv
+doctor
+tests/data/doctor/ref.cram
+## exit
+0
+## stdout
+tests/data/doctor/ref.cram  CRAM 3.0  WARN  0 fail, 2 warn, 6 pass, 11 skip
+  PASS  file                CRAM 3.0, @HD VN:1.6
+  PASS  eof                 EOF container present          the file ends with the CRAM 3 end-of-file container
+  PASS  header              5 lines: 1 @HD, 1 @SQ, 1 @RG, 2 @PG, 0 @CO
+  PASS  references          1 contig, 100,000 bases
+  PASS  build               unknown                        no primary chromosome has a GRCh37, GRCh38 or T2T-CHM13 length; 1 primary, 0 mitochondrial, 0 alt, 0 decoy, 0 HLA, 0 other contigs
+  PASS  read_groups         1 @RG line, 1 sample: NA12878  every line has ID, SM, LB and PL
+  SKIP  sort_order          header coordinate              no record was read
+  SKIP  records             0 records read                 the CRAM records need reference bases: give -R to read them
+  SKIP  record_read_groups                                 no record was read
+  SKIP  paired                                             no record was read
+  SKIP  mapped                                             no record was read
+  SKIP  duplicates                                         no record was read
+  SKIP  read_length                                        no record was read
+  SKIP  qualities                                          no record was read
+  SKIP  md_nm                                              no record was read
+  WARN  reference           needed                         the CRAM slices need reference bases: give -R, and the run needs REFERENCE_SEQUENCE (the first @SQ names UR:ref_100k.fa)
+  WARN  index               none                           no index beside the file: region queries need one (samtools index writes it)
+  SKIP  sample_sheet                                       no --sample-sheet given
+  SKIP  expected_sex                                       no --expect-sex and no sex in the sample sheet
+exit 0: no check reaches --fail-on fail
+## stderr

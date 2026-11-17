@@ -1,0 +1,141 @@
+## argv
+doctor
+tests/data/doctor/ref.cram
+-R
+tests/data/doctor/other.fa
+--format
+json
+## exit
+10
+## stdout
+{
+  "schema": "bammetrics.doctor/1",
+  "path": "tests/data/doctor/ref.cram",
+  "kind": "CRAM 3.0",
+  "status": "fail",
+  "exit_code": 10,
+  "records": 10000,
+  "counts": {
+    "fail": 1,
+    "warn": 1,
+    "pass": 6,
+    "skip": 11
+  },
+  "checks": [
+    {
+      "check": "file",
+      "status": "pass",
+      "value": "CRAM 3.0, @HD VN:1.6",
+      "reason": ""
+    },
+    {
+      "check": "eof",
+      "status": "pass",
+      "value": "EOF container present",
+      "reason": "the file ends with the CRAM 3 end-of-file container"
+    },
+    {
+      "check": "header",
+      "status": "pass",
+      "value": "5 lines: 1 @HD, 1 @SQ, 1 @RG, 2 @PG, 0 @CO",
+      "reason": ""
+    },
+    {
+      "check": "references",
+      "status": "pass",
+      "value": "1 contig, 100,000 bases",
+      "reason": ""
+    },
+    {
+      "check": "build",
+      "status": "pass",
+      "value": "unknown",
+      "reason": "no primary chromosome has a GRCh37, GRCh38 or T2T-CHM13 length; 1 primary, 0 mitochondrial, 0 alt, 0 decoy, 0 HLA, 0 other contigs"
+    },
+    {
+      "check": "read_groups",
+      "status": "pass",
+      "value": "1 @RG line, 1 sample: NA12878",
+      "reason": "every line has ID, SM, LB and PL"
+    },
+    {
+      "check": "sort_order",
+      "status": "skip",
+      "value": "header coordinate",
+      "reason": "no record was read"
+    },
+    {
+      "check": "records",
+      "status": "skip",
+      "value": "",
+      "reason": "the records were not decoded: chr1 differs between @SQ and the -R FASTA"
+    },
+    {
+      "check": "record_read_groups",
+      "status": "skip",
+      "value": "",
+      "reason": "no record was read"
+    },
+    {
+      "check": "paired",
+      "status": "skip",
+      "value": "",
+      "reason": "no record was read"
+    },
+    {
+      "check": "mapped",
+      "status": "skip",
+      "value": "",
+      "reason": "no record was read"
+    },
+    {
+      "check": "duplicates",
+      "status": "skip",
+      "value": "",
+      "reason": "no record was read"
+    },
+    {
+      "check": "read_length",
+      "status": "skip",
+      "value": "",
+      "reason": "no record was read"
+    },
+    {
+      "check": "qualities",
+      "status": "skip",
+      "value": "",
+      "reason": "no record was read"
+    },
+    {
+      "check": "md_nm",
+      "status": "skip",
+      "value": "",
+      "reason": "no record was read"
+    },
+    {
+      "check": "reference",
+      "status": "fail",
+      "value": "contigs that differ: 1 of 1",
+      "reason": "tests/data/doctor/other.fa: chr1 has 1,000 bases in the FASTA, 100,000 in @SQ"
+    },
+    {
+      "check": "index",
+      "status": "warn",
+      "value": "none",
+      "reason": "no index beside the file: region queries need one (samtools index writes it)"
+    },
+    {
+      "check": "sample_sheet",
+      "status": "skip",
+      "value": "",
+      "reason": "no --sample-sheet given"
+    },
+    {
+      "check": "expected_sex",
+      "status": "skip",
+      "value": "",
+      "reason": "no --expect-sex and no sex in the sample sheet"
+    }
+  ]
+}
+## stderr

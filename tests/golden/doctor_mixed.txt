@@ -1,0 +1,28 @@
+## argv
+doctor
+tests/data/doctor/mixed.bam
+## exit
+10
+## stdout
+tests/data/doctor/mixed.bam  BAM  FAIL  1 fail, 1 warn, 14 pass, 3 skip
+  PASS  file                BAM, @HD VN:1.6
+  PASS  eof                 end-of-file block present        the file ends with the 28-byte BGZF end-of-file block
+  PASS  header              28 lines: 1 @HD, 25 @SQ, 1 @RG, 1 @PG, 0 @CO
+  PASS  references          25 contigs, 3,089,292,245 bases
+  FAIL  build               mixed                            primary chromosomes of different builds: 23 of 24 have GRCh38 lengths; chr2 has 243199373 (GRCh37)
+  PASS  read_groups         1 @RG line, 1 sample: NA12878    every line has ID, SM, LB and PL
+  PASS  sort_order          header coordinate                the first 20 records are in coordinate order
+  PASS  records             20 records read                  every record of the file
+  PASS  record_read_groups  20 records                       every RG is in the header
+  PASS  paired              100.0%                           paired-end
+  PASS  mapped              100.0%                           of 20 primary records
+  PASS  duplicates          5.0% flagged                     @PG MarkDuplicates ran
+  PASS  read_length         mean 100.0                       over 20 primary records with bases
+  PASS  qualities           Q2 to Q40                        Phred+33
+  PASS  md_nm               MD 100.0%, NM 100.0%             on every one of 20 mapped primary records
+  SKIP  reference                                            no -R given
+  WARN  index               none                             no index beside the file: region queries need one (bammetrics build-bam-index writes it)
+  SKIP  sample_sheet                                         no --sample-sheet given
+  SKIP  expected_sex                                         no --expect-sex and no sex in the sample sheet
+exit 10: a check reaches --fail-on fail
+## stderr
