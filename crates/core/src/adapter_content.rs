@@ -264,33 +264,20 @@ impl Matcher {
     }
 
     /// [`Matcher::first_starts`] over base codes in sequencing order,
-    /// [`NO_BASE`] for a base other than A, C, G or T. A base costs one
-    /// branch, taken only when the filter passes.
+    /// [`NO_BASE`] for a base other than A, C, G or T.
     fn scan(&self, codes: impl Iterator<Item = u8>, out: &mut Vec<(usize, usize)>) {
         out.clear();
-        let all = self.codes.iter().fold(0, |m, &(_, bits)| m | bits);
-        let (mut code, mut run, mut found) = (0u64, 0usize, 0u64);
-        for (i, base) in codes.enumerate() {
-            code = ((code << 2) | u64::from(base & 3)) & self.mask;
-            run = if base == NO_BASE { 0 } else { run + 1 };
-            let low = (code & 0xFFFF) as usize;
-            if run < self.k || self.filter[low / 64] & (1 << (low % 64)) == 0 {
-                continue;
-            }
-            let mut new = self.adapters_of(code) & !found;
-            found |= new;
-            while new != 0 {
-                out.push((new.trailing_zeros() as usize, i + 1 - self.k));
-                new &= new - 1;
-            }
-            if found == all {
+        let mut scan = Scan::new(self);
+        for base in codes {
+            if scan.step(base, out) {
                 return;
             }
         }
     }
 
-    /// [`Matcher::first_starts`] over a BAM record's packed bases, read
-    /// backwards and complemented when `reverse`: no decoded copy.
+    /// [`Matcher::first_starts`] over a BAM record's packed bases, two to
+    /// a byte, read backwards and complemented when `reverse`. No decoded
+    /// copy is made; a byte gives its two codes through one table.
     fn scan_record(
         &self,
         packed: &[u8],
@@ -298,20 +285,106 @@ impl Matcher {
         reverse: bool,
         out: &mut Vec<(usize, usize)>,
     ) {
-        // A missing byte reads as 15, the BAM code of N.
-        let nibble = |i: usize| {
-            let byte = packed.get(i / 2).copied().unwrap_or(0xFF);
-            usize::from(if i.is_multiple_of(2) {
-                byte >> 4
+        let Some(bytes) = packed.get(..length.div_ceil(2)) else {
+            // Fewer bytes than bases: the record is cut. Missing bases are N.
+            let nibble = |i: usize| {
+                let byte = packed.get(i / 2).copied().unwrap_or(0xFF);
+                usize::from(if i.is_multiple_of(2) {
+                    byte >> 4
+                } else {
+                    byte & 0x0F
+                })
+            };
+            let codes: Vec<u8> = (0..length).map(|i| NIBBLE_CODE[nibble(i)]).collect();
+            let codes = codes.iter().copied();
+            if reverse {
+                self.scan(
+                    codes.rev().map(|c| if c == NO_BASE { c } else { 3 - c }),
+                    out,
+                );
             } else {
-                byte & 0x0F
-            })
+                self.scan(codes, out);
+            }
+            return;
+        };
+        out.clear();
+        let mut scan = Scan::new(self);
+        // An odd length leaves one base, in the high half, in the last byte.
+        let (whole, half) = if length % 2 == 1 {
+            bytes.split_at(bytes.len() - 1)
+        } else {
+            (bytes, &[][..])
         };
         if reverse {
-            self.scan((0..length).rev().map(|i| COMPLEMENT_CODE[nibble(i)]), out);
+            if let Some(&byte) = half.first()
+                && scan.step(REVERSE_PAIR[usize::from(byte)][1], out)
+            {
+                return;
+            }
+            for &byte in whole.iter().rev() {
+                let [first, second] = REVERSE_PAIR[usize::from(byte)];
+                if scan.step(first, out) || scan.step(second, out) {
+                    return;
+                }
+            }
         } else {
-            self.scan((0..length).map(|i| NIBBLE_CODE[nibble(i)]), out);
+            for &byte in whole {
+                let [first, second] = PAIR[usize::from(byte)];
+                if scan.step(first, out) || scan.step(second, out) {
+                    return;
+                }
+            }
+            if let Some(&byte) = half.first() {
+                scan.step(PAIR[usize::from(byte)][0], out);
+            }
         }
+    }
+}
+
+/// The rolling state of one read's search.
+struct Scan<'m> {
+    matcher: &'m Matcher,
+    /// Every adapter's bit.
+    all: u64,
+    code: u64,
+    /// Bases since the last base other than A, C, G or T.
+    run: usize,
+    found: u64,
+    /// The 0-based position of the next base.
+    position: usize,
+}
+
+impl<'m> Scan<'m> {
+    fn new(matcher: &'m Matcher) -> Self {
+        Self {
+            matcher,
+            all: matcher.codes.iter().fold(0, |m, &(_, bits)| m | bits),
+            code: 0,
+            run: 0,
+            found: 0,
+            position: 0,
+        }
+    }
+
+    /// Take the next base; true once every key is found. A base costs one
+    /// branch, taken only when the code passes the filter.
+    #[inline(always)]
+    fn step(&mut self, base: u8, out: &mut Vec<(usize, usize)>) -> bool {
+        let m = self.matcher;
+        self.code = ((self.code << 2) | u64::from(base & 3)) & m.mask;
+        self.run = if base == NO_BASE { 0 } else { self.run + 1 };
+        self.position += 1;
+        let low = (self.code & 0xFFFF) as usize;
+        if self.run < m.k || m.filter[low / 64] & (1 << (low % 64)) == 0 {
+            return false;
+        }
+        let mut new = m.adapters_of(self.code) & !self.found;
+        self.found |= new;
+        while new != 0 {
+            out.push((new.trailing_zeros() as usize, self.position - m.k));
+            new &= new - 1;
+        }
+        self.found == self.all
     }
 }
 
@@ -329,18 +402,34 @@ const NIBBLE_CODE: [u8; 16] = {
     table
 };
 
-/// The code of the complement of each 4-bit BAM base: 3 - code.
-const COMPLEMENT_CODE: [u8; 16] = {
-    let mut table = [NO_BASE; 16];
-    let mut i = 0;
-    while i < 16 {
-        if NIBBLE_CODE[i] != NO_BASE {
-            table[i] = 3 - NIBBLE_CODE[i];
-        }
-        i += 1;
+/// The codes of a packed byte's two bases, high half first.
+const PAIR: [[u8; 2]; 256] = {
+    let mut table = [[NO_BASE; 2]; 256];
+    let mut byte = 0;
+    while byte < 256 {
+        table[byte] = [NIBBLE_CODE[byte >> 4], NIBBLE_CODE[byte & 0x0F]];
+        byte += 1;
     }
     table
 };
+
+/// The complements of a packed byte's two bases, low half first: the
+/// byte read backwards on the reverse strand. The complement of code c is
+/// 3 - c.
+const REVERSE_PAIR: [[u8; 2]; 256] = {
+    let mut table = [[NO_BASE; 2]; 256];
+    let mut byte = 0;
+    while byte < 256 {
+        let [high, low] = PAIR[byte];
+        table[byte] = [complement_code(low), complement_code(high)];
+        byte += 1;
+    }
+    table
+};
+
+const fn complement_code(code: u8) -> u8 {
+    if code == NO_BASE { code } else { 3 - code }
+}
 
 /// The counts of one read end in one unit.
 #[derive(Clone, Debug, Default, PartialEq)]

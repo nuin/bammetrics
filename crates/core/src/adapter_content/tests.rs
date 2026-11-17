@@ -452,3 +452,18 @@ fn packed_records_scan_as_their_bases_in_sequencing_order() {
         }
     }
 }
+
+#[test]
+fn a_cut_record_reads_its_missing_bases_as_n() {
+    let matcher = Matcher::new(&[parse_adapter("A=AGATCGGAAGAG", 12).expect("A")], 12);
+    let read = b"AGATCGGAAGAGAGATCGGAAGAG";
+    let packed = pack(read);
+    let mut hits = Vec::new();
+    // 24 bases need 12 bytes; with 8 the last 8 bases are N.
+    matcher.scan_record(&packed[..8], read.len(), false, &mut hits);
+    assert_eq!(hits, [(0, 0)]);
+    matcher.scan_record(&packed[..8], read.len(), true, &mut hits);
+    assert_eq!(hits, []);
+    matcher.scan_record(&[], read.len(), true, &mut hits);
+    assert_eq!(hits, []);
+}
