@@ -515,6 +515,11 @@ fn page_renders_in_under_20_ms() {
     times.sort();
     let median = times[times.len() / 2];
     println!("median render {median:?} over {} runs", times.len());
+    // The 20 ms budget holds for a release build; `make budgets` measures
+    // that. A debug build on a shared CI runner reports its time only.
+    if cfg!(debug_assertions) {
+        return;
+    }
     assert!(
         median < Duration::from_millis(20),
         "median render {median:?}"

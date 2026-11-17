@@ -174,12 +174,14 @@ def test_alt_name_errors(fastas, tmp_path, case):
 
 def test_uri_of_a_relative_path_with_a_space_and_dot_dot(fastas, tmp_path):
     """`UR` from `R=` relative to the working directory, with `..`, a space and a
-    non-ASCII byte in it: Path.toUri encodes them and keeps the `..`."""
-    directory = tmp_path / "dir with space é" / "sub"
+    non-ASCII byte in it: Path.toUri encodes them and keeps the `..`. The letter
+    is ø, which has no decomposed form: the JDK of the macOS CI runner hands é
+    back decomposed (e%CC%81), and bammetrics keeps the bytes it was given."""
+    directory = tmp_path / "dir with space ø" / "sub"
     directory.mkdir(parents=True)
     shutil.copy(fastas["wrapped"], directory.parent / "a b.fa")
-    text = compare("dir with space é/sub/../a b.fa", [], tmp_path, "relative uri", cwd=tmp_path)
-    assert b"%20space%20%C3%A9/sub/../a%20b.fa" in text
+    text = compare("dir with space ø/sub/../a b.fa", [], tmp_path, "relative uri", cwd=tmp_path)
+    assert b"%20space%20%C3%B8/sub/../a%20b.fa" in text
 
 
 def test_default_output_beside_the_fasta(fastas, tmp_path):
