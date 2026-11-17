@@ -50,6 +50,12 @@ const FIXTURES: &[(&str, &str)] = &[
     ("PLAN_BAD", "tests/data/chain_bad_key.toml"),
     ("PLAN_SELF", "tests/data/chain_writes_plan.toml"),
     ("MD_SAM", "tests/data/markdup.sam"),
+    ("MT", "tests/data/mt_copy_number.bam"),
+    ("MT_TARGETS", "tests/data/mt_targets.bed"),
+    ("MT_NUMTS", "tests/data/mt_numts.bed"),
+    ("EXONS", "tests/data/exons.gtf"),
+    ("EXONS_BED", "tests/data/exons.bed"),
+    ("EXON_GENES", "tests/data/exon_genes.txt"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -345,6 +351,30 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_verb_build_bam_index_cram", "build-bam-index", "IS_CRAM", "-o", "OUT/x.bai"),
     case!("error_verb_build_bam_index_format", "build-bam-index", "IS", "-o", "OUT/x.bai", "--format", "picard,json"),
     case!("error_verb_build_bam_index_overwrites_input", "build-bam-index", "IS", "-o", "IS"),
+    // CollectMtCopyNumberMetrics (docs/06 section 6): tests/data/mt_copy_number.bam
+    // (tests/data/make_mt_bams.py) plants chrM depth 100 over autosomal depth 2, so 100;
+    // libraries L1 and L2 carry 120 and 80.
+    case!("picard_mt_copy_number", "CollectMtCopyNumberMetrics", "I=MT", "O=OUT/mt_copy_number.txt", "LEVEL=LIBRARY", "LEVEL=READ_GROUP"),
+    case!("picard_mt_copy_number_stdout", "CollectMtCopyNumberMetrics", "I=MT", "MQ=0", "Q=0"),
+    case!("picard_mt_copy_number_multiple_metrics", "CollectMultipleMetrics", "I=MT", "O=OUT/s", "PROGRAM=null", "PROGRAM=CollectMtCopyNumberMetrics", "LEVEL=SAMPLE"),
+    case!("verb_mt_copy_number_json", "mt-copy-number", "MT", "--format", "json"),
+    case!("verb_mt_copy_number_regions", "mt-copy-number", "MT", "--targets", "MT_TARGETS", "--exclude", "MT_NUMTS", "-o", "OUT/mt_copy_number.txt"),
+    case!("chain_mt_copy_number", "chain", "MT", "-o", "OUT/s", "+", "mt-copy-number", "--level", "LIBRARY"),
+    case!("error_mt_copy_number_no_mt_contig", "CollectMtCopyNumberMetrics", "I=IS"),
+    case!("error_verb_mt_copy_number_mt_contig", "mt-copy-number", "MT", "--mt-contig", "chrQ"),
+    case!("error_verb_mt_copy_number_autosome", "mt-copy-number", "MT", "--autosomes", "chrM"),
+    case!("error_verb_mt_copy_number_base_quality", "mt-copy-number", "MT", "-Q", "300"),
+    // CollectExonCoverageMetrics (docs/exon_coverage.md): a contig the BAM lacks, the chr
+    // alias of a BED12 file, the filters and both files.
+    case!("picard_exon_coverage", "CollectExonCoverageMetrics", "I=IS", "O=OUT/exons.txt", "ANNOTATION=EXONS", "SUMMARY_OUTPUT=OUT/genes.txt", "MIN_DEPTH=1"),
+    case!("picard_exon_coverage_bed12_stdout", "CollectExonCoverageMetrics", "I=IS", "ANNOTATION=EXONS_BED", "MIN_DEPTH=1", "MIN_DEPTH=2"),
+    case!("verb_exon_coverage_canonical_cds", "exon-coverage", "IS", "--annotation", "EXONS", "--canonical", "--feature", "CDS", "--format", "tsv"),
+    case!("verb_exon_coverage_genes", "exon-coverage", "MD", "--annotation", "EXONS", "--gene-list", "EXON_GENES", "--gene", "GENE_A", "--min-depth", "1", "--min-depth", "3", "-o", "OUT/exons.txt", "--summary-output", "OUT/genes.txt"),
+    case!("verb_exon_coverage_transcript_json", "exon-coverage", "IS", "--annotation", "EXONS", "--transcript", "TA2", "--min-depth", "1", "--format", "json"),
+    case!("error_exon_coverage_no_annotation", "CollectExonCoverageMetrics", "I=IS"),
+    case!("error_exon_coverage_feature", "CollectExonCoverageMetrics", "I=IS", "ANNOTATION=EXONS", "FEATURE=gene"),
+    case!("error_verb_exon_coverage_unknown_gene", "exon-coverage", "IS", "--annotation", "EXONS", "--gene", "GENE_E"),
+    case!("error_verb_exon_coverage_summary_is_input", "exon-coverage", "IS", "--annotation", "EXONS", "--summary-output", "EXONS"),
 ];
 
 /// Formats (docs/formats.md): `convert` in both directions and to every
@@ -557,6 +587,39 @@ const PDF_OPTION_CASES: &[Case] = &[
     case!("error_chain_pdf_font", "chain", "IS", "--pdf-font=x.ttf", "+", "insert-size"),
 ];
 
+/// `doctor` (docs/doctor.md) on the planted defects of `tests/data/doctor`
+/// (`tests/data/make_doctor_fixtures.py`), in its three forms, with the
+/// reference and sample sheet checks and its usage errors. No fixture there
+/// has an index, so no record depends on file times.
+#[rustfmt::skip]
+const DOCTOR_CASES: &[Case] = &[
+    case!("doctor_good", "doctor", "tests/data/doctor/good.bam"),
+    case!("doctor_good_json", "doctor", "tests/data/doctor/good.bam", "--format", "json"),
+    case!("doctor_good_fail_on_warn", "doctor", "tests/data/doctor/good.bam", "--fail-on", "warn", "--records", "50"),
+    case!("doctor_sam", "doctor", "tests/data/doctor/good.sam", "--expect-build", "hg38", "--expect-sex", "female"),
+    case!("doctor_cut_jsonl", "doctor", "tests/data/doctor/cut.bam", "--format", "jsonl"),
+    case!("doctor_no_eof", "doctor", "tests/data/doctor/no_eof.bam"),
+    case!("doctor_unsorted", "doctor", "tests/data/doctor/unsorted.bam"),
+    case!("doctor_rg_missing", "doctor", "tests/data/doctor/rg_missing.bam"),
+    case!("doctor_rg_duplicate_json", "doctor", "tests/data/doctor/rg_duplicate.bam", "--format", "json"),
+    case!("doctor_phred64", "doctor", "tests/data/doctor/phred64.bam"),
+    case!("doctor_hg19", "doctor", "tests/data/doctor/hg19.bam"),
+    case!("doctor_grch38_expect_hg38", "doctor", "tests/data/doctor/grch38.bam", "--expect-build", "hg38"),
+    case!("doctor_t2t", "doctor", "tests/data/doctor/t2t.bam", "--expect-build", "T2T-CHM13"),
+    case!("doctor_mixed", "doctor", "tests/data/doctor/mixed.bam"),
+    case!("doctor_unaligned", "doctor", "tests/data/doctor/unaligned.bam"),
+    case!("doctor_cram_no_reference", "doctor", "tests/data/doctor/ref.cram"),
+    case!("doctor_cram_reference", "doctor", "tests/data/doctor/ref.cram", "-R", "REF", "--check-md5"),
+    case!("doctor_cram_other_reference_json", "doctor", "tests/data/doctor/ref.cram", "-R", "tests/data/doctor/other.fa", "--format", "json"),
+    case!("doctor_sheet_agrees", "doctor", "tests/data/doctor/good.bam", "--sample-sheet", "tests/data/doctor/sheet.csv", "--sample", "NA12878"),
+    case!("doctor_sheet_disagrees", "doctor", "tests/data/doctor/good.bam", "--sample-sheet", "tests/data/doctor/sheet.tsv", "--sample", "NA12891"),
+    case!("doctor_not_a_bam", "doctor", "REF"),
+    case!("error_doctor_missing", "doctor", "tests/data/doctor/nope.bam"),
+    case!("error_doctor_sample_without_sheet", "doctor", "tests/data/doctor/good.bam", "--sample", "NA12878"),
+    case!("error_doctor_build_name", "doctor", "tests/data/doctor/good.bam", "--expect-build", "hg18"),
+    case!("error_doctor_reference_missing", "doctor", "tests/data/doctor/good.bam", "-R", "tests/data/nope.fa"),
+];
+
 /// The same tools on corpus BAM t1, with its reference and interval lists.
 #[rustfmt::skip]
 const T1_CASES: &[Case] = &[
@@ -582,6 +645,8 @@ const T1_CASES: &[Case] = &[
     case!("t1_picard_jumping_library", "CollectJumpingLibraryMetrics", "I=T1", "O=OUT/jumping_library.txt"),
     case!("t1_chain_mark_duplicates", "chain", "T1", "-R", "T1_REF", "-o", "OUT/s", "+", "quality-yield", "+", "mark-duplicates", "+", "alignment-summary", "+", "insert-size", "+", "duplicate-metrics", "+", "write", "/dev/null"),
     case!("t1_chain_taps", "chain", "T1", "-o", "OUT/s", "+", "quality-yield", "+", "alignment-summary", "+", "insert-size", "+", "duplicate-metrics"),
+    case!("t1_doctor", "doctor", "T1", "-R", "T1_REF"),
+    case!("t1_mt_copy_number", "mt-copy-number", "T1", "-o", "OUT/mt_copy_number.txt"),
 ];
 
 fn root() -> PathBuf {
@@ -891,6 +956,11 @@ fn documented_format_commands_on_the_fixtures() {
 }
 
 #[test]
+fn documented_doctor_commands_on_the_fixtures() {
+    check(DOCTOR_CASES);
+}
+
+#[test]
 fn pdf_option_errors_on_the_fixtures() {
     check(PDF_OPTION_CASES);
 }
@@ -998,6 +1068,7 @@ fn case_names_are_unique() {
         .chain(CHAIN_CASES)
         .chain(T1_CASES)
         .chain(PDF_OPTION_CASES)
+        .chain(DOCTOR_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

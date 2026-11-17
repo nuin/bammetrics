@@ -14,7 +14,7 @@ clinical-panel
 ## exit
 0
 ## stdout
-1 sample, preset clinical-panel v3 (6f0d59), bammetrics 0.24.0
+1 sample, preset clinical-panel v3 (6f0d59), bammetrics 0.25.0
 FAIL        NA12878  5 fail, 8 pass, 5 not measured
   FAIL  Mean target coverage is 0.377778, below the fail limit of 100
   FAIL  Target bases at 20x is 0, below the fail limit of 0.95
@@ -24,11 +24,11 @@ wrote 2 files to OUT
 the verdict does not change the exit code; bammetrics check gates on it
 ## stderr
 ## file NA12878.report.pdf
-<pdf not recorded: 31 pages, 682347 bytes>
+<pdf not recorded: 31 pages, 682378 bytes>
 ## file NA12878.verdict.json
 {
   "schema": "bammetrics.verdict/1",
-  "tool_version": "0.24.0",
+  "tool_version": "0.25.0",
   "sample": "NA12878",
   "preset": {
     "name": "clinical-panel",

@@ -1,0 +1,31 @@
+## argv
+doctor
+tests/data/doctor/ref.cram
+-R
+tests/data/ref_100k.fa
+--check-md5
+## exit
+0
+## stdout
+tests/data/doctor/ref.cram  CRAM 3.0  WARN  0 fail, 1 warn, 15 pass, 3 skip
+  PASS  file                CRAM 3.0, @HD VN:1.6
+  PASS  eof                 EOF container present              the file ends with the CRAM 3 end-of-file container
+  PASS  header              4 lines: 1 @HD, 1 @SQ, 1 @RG, 1 @PG, 0 @CO
+  PASS  references          1 contig, 100,000 bases
+  PASS  build               unknown                            no primary chromosome has a GRCh37, GRCh38 or T2T-CHM13 length; 1 primary, 0 mitochondrial, 0 alt, 0 decoy, 0 HLA, 0 other contigs
+  PASS  read_groups         1 @RG line, 1 sample: NA12878      every line has ID, SM, LB and PL
+  PASS  sort_order          header coordinate                  the first 80 records are in coordinate order
+  PASS  records             80 records read                    every record of the file
+  PASS  record_read_groups  80 records                         every RG is in the header
+  PASS  paired              100.0%                             paired-end
+  PASS  mapped              100.0%                             of 80 primary records
+  PASS  duplicates          10.0% flagged                      @PG MarkDuplicates ran
+  PASS  read_length         mean 100.0                         over 80 primary records with bases
+  PASS  qualities           Q2 to Q40                          Phred+33
+  SKIP  md_nm                                                  a CRAM stores no MD or NM; readers rebuild them from the reference
+  PASS  reference           names and lengths match: 1 contig  1 of 1 M5 equal (computed from the FASTA)
+  WARN  index               none                               no index beside the file: region queries need one (samtools index writes it)
+  SKIP  sample_sheet                                           no --sample-sheet given
+  SKIP  expected_sex                                           no --expect-sex and no sex in the sample sheet
+exit 0: no check reaches --fail-on fail
+## stderr

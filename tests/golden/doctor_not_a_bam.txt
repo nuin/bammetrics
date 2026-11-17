@@ -1,0 +1,28 @@
+## argv
+doctor
+tests/data/ref_100k.fa
+## exit
+10
+## stdout
+tests/data/ref_100k.fa  ?  FAIL  1 fail, 0 warn, 0 pass, 18 skip
+  FAIL  file                not BAM, CRAM or SAM  not a BAM or CRAM file (and not SAM text: the first line is no header line and has fewer than 11 tab-separated fields)
+  SKIP  eof                                       the file is not BAM, CRAM or SAM
+  SKIP  header                                    the file is not BAM, CRAM or SAM
+  SKIP  references                                the file is not BAM, CRAM or SAM
+  SKIP  build                                     the file is not BAM, CRAM or SAM
+  SKIP  read_groups                               the file is not BAM, CRAM or SAM
+  SKIP  sort_order                                the file is not BAM, CRAM or SAM
+  SKIP  records                                   the file is not BAM, CRAM or SAM
+  SKIP  record_read_groups                        the file is not BAM, CRAM or SAM
+  SKIP  paired                                    the file is not BAM, CRAM or SAM
+  SKIP  mapped                                    the file is not BAM, CRAM or SAM
+  SKIP  duplicates                                the file is not BAM, CRAM or SAM
+  SKIP  read_length                               the file is not BAM, CRAM or SAM
+  SKIP  qualities                                 the file is not BAM, CRAM or SAM
+  SKIP  md_nm                                     the file is not BAM, CRAM or SAM
+  SKIP  reference                                 the file is not BAM, CRAM or SAM
+  SKIP  index                                     the file is not BAM, CRAM or SAM
+  SKIP  sample_sheet                              the file is not BAM, CRAM or SAM
+  SKIP  expected_sex                              the file is not BAM, CRAM or SAM
+exit 10: a check reaches --fail-on fail
+## stderr

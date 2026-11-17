@@ -33,7 +33,7 @@ use crate::adapter::Adapters;
 use crate::duplication::{estimate_library_size, estimate_roi};
 use crate::error::{Error, Result};
 use crate::histogram::Histogram;
-use crate::intervals::{self, Interval, OverlapIndex};
+use crate::intervals::{self, Interval, NamedInterval, OverlapIndex};
 use crate::levels::{Labels, Level, Levels, parse_levels};
 use crate::metric::{
     HistogramSection, HistogramSeries, MetricRow, MetricsOutput, ToolOutput, Value,
@@ -1801,12 +1801,25 @@ impl CaptureMetrics {
     /// with a reference computes the GC fraction of every target.
     pub fn new(opts: &Options, header: &sam::Header) -> Result<Self> {
         opts.check_interval_files()?;
-        let contigs = header.reference_sequences().len();
         let raw_targets = intervals::read_named_files(&opts.target_intervals, header)?;
-        let unique_named = intervals::uniqued_named(&raw_targets);
+        let baits = intervals::read_files(&opts.bait_intervals, header)?;
+        Self::with_intervals(opts, header, &raw_targets, &baits)
+    }
+
+    /// The accumulator over targets and baits already read, in place of
+    /// the files `opts` names (`CollectExonCoverageMetrics` passes the
+    /// exons of an annotation as both). The bait set name still comes from
+    /// `opts`.
+    pub fn with_intervals(
+        opts: &Options,
+        header: &sam::Header,
+        raw_targets: &[NamedInterval],
+        baits: &[Interval],
+    ) -> Result<Self> {
+        let contigs = header.reference_sequences().len();
+        let unique_named = intervals::uniqued_named(raw_targets);
         let unique_targets: Vec<Interval> = unique_named.iter().map(|n| n.interval).collect();
-        let unique_baits =
-            intervals::uniqued(&intervals::read_files(&opts.bait_intervals, header)?);
+        let unique_baits = intervals::uniqued(baits);
         let target_gc = match &opts.reference {
             None => None,
             Some(reference) => {

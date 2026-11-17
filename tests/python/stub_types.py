@@ -60,3 +60,7 @@ def forms(names: list[str]) -> None:
     assert_type(bm.chain("x.bam", "insert_size", dry_run=True), str)
     assert_type(bm.chain("x.bam", step, dry_run=bool(names)), bm.Run[None] | str)
     assert_type(run.stages, list[bm.Stage])
+    doctor = bm.doctor("x.bam", reference="r.fa", expect_sex="male", records=100)
+    assert_type(doctor, bm.Doctor)
+    assert_type(doctor.checks[0].status, Literal["pass", "warn", "fail", "skip"])
+    assert_type(doctor["eof"].reason, str)

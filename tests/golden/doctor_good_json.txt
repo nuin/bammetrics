@@ -1,0 +1,139 @@
+## argv
+doctor
+tests/data/doctor/good.bam
+--format
+json
+## exit
+0
+## stdout
+{
+  "schema": "bammetrics.doctor/1",
+  "path": "tests/data/doctor/good.bam",
+  "kind": "BAM",
+  "status": "warn",
+  "exit_code": 0,
+  "records": 10000,
+  "counts": {
+    "fail": 0,
+    "warn": 1,
+    "pass": 15,
+    "skip": 3
+  },
+  "checks": [
+    {
+      "check": "file",
+      "status": "pass",
+      "value": "BAM, @HD VN:1.6",
+      "reason": ""
+    },
+    {
+      "check": "eof",
+      "status": "pass",
+      "value": "end-of-file block present",
+      "reason": "the file ends with the 28-byte BGZF end-of-file block"
+    },
+    {
+      "check": "header",
+      "status": "pass",
+      "value": "28 lines: 1 @HD, 25 @SQ, 1 @RG, 1 @PG, 0 @CO",
+      "reason": ""
+    },
+    {
+      "check": "references",
+      "status": "pass",
+      "value": "25 contigs, 3,088,286,401 bases",
+      "reason": ""
+    },
+    {
+      "check": "build",
+      "status": "pass",
+      "value": "hg38",
+      "reason": "24 primary, 1 mitochondrial (chrM), 0 alt, 0 decoy, 0 HLA, 0 other contigs"
+    },
+    {
+      "check": "read_groups",
+      "status": "pass",
+      "value": "1 @RG line, 1 sample: NA12878",
+      "reason": "every line has ID, SM, LB and PL"
+    },
+    {
+      "check": "sort_order",
+      "status": "pass",
+      "value": "header coordinate",
+      "reason": "the first 300 records are in coordinate order"
+    },
+    {
+      "check": "records",
+      "status": "pass",
+      "value": "300 records read",
+      "reason": "every record of the file"
+    },
+    {
+      "check": "record_read_groups",
+      "status": "pass",
+      "value": "300 records",
+      "reason": "every RG is in the header"
+    },
+    {
+      "check": "paired",
+      "status": "pass",
+      "value": "100.0%",
+      "reason": "paired-end"
+    },
+    {
+      "check": "mapped",
+      "status": "pass",
+      "value": "100.0%",
+      "reason": "of 300 primary records"
+    },
+    {
+      "check": "duplicates",
+      "status": "pass",
+      "value": "10.0% flagged",
+      "reason": "@PG MarkDuplicates ran"
+    },
+    {
+      "check": "read_length",
+      "status": "pass",
+      "value": "mean 100.0",
+      "reason": "over 300 primary records with bases"
+    },
+    {
+      "check": "qualities",
+      "status": "pass",
+      "value": "Q2 to Q40",
+      "reason": "Phred+33"
+    },
+    {
+      "check": "md_nm",
+      "status": "pass",
+      "value": "MD 100.0%, NM 100.0%",
+      "reason": "on every one of 300 mapped primary records"
+    },
+    {
+      "check": "reference",
+      "status": "skip",
+      "value": "",
+      "reason": "no -R given"
+    },
+    {
+      "check": "index",
+      "status": "warn",
+      "value": "none",
+      "reason": "no index beside the file: region queries need one (bammetrics build-bam-index writes it)"
+    },
+    {
+      "check": "sample_sheet",
+      "status": "skip",
+      "value": "",
+      "reason": "no --sample-sheet given"
+    },
+    {
+      "check": "expected_sex",
+      "status": "skip",
+      "value": "",
+      "reason": "no --expect-sex and no sex in the sample sheet"
+    }
+  ]
+}
+## stderr

@@ -1,0 +1,28 @@
+## argv
+doctor
+tests/data/doctor/unaligned.bam
+## exit
+0
+## stdout
+tests/data/doctor/unaligned.bam  BAM  WARN  0 fail, 1 warn, 11 pass, 7 skip
+  PASS  file                BAM, @HD VN:1.6
+  PASS  eof                 end-of-file block present  the file ends with the 28-byte BGZF end-of-file block
+  PASS  header              1 lines: 1 @HD, 0 @SQ, 0 @RG, 0 @PG, 0 @CO
+  PASS  references          0 contigs, 0 bases         no @SQ line: an unaligned file
+  SKIP  build                                          no contig in the header
+  WARN  read_groups         0 @RG lines                no @RG line: tools that report by sample, library or read group, and GATK, need one
+  PASS  sort_order          header unsorted            the first 200 records are not in coordinate order
+  PASS  records             200 records read           every record of the file
+  PASS  record_read_groups  no RG tag                  no @RG line and no RG tag
+  PASS  paired              0.0%                       single-end
+  PASS  mapped              0.0%                       an unaligned file
+  SKIP  duplicates                                     no mapped primary record: duplicates are marked on aligned records
+  PASS  read_length         mean 100.0                 over 200 primary records with bases
+  PASS  qualities           Q30 to Q30                 Phred+33
+  SKIP  md_nm                                          no mapped primary record
+  SKIP  reference                                      no -R given
+  SKIP  index                                          an index needs a coordinate-sorted file
+  SKIP  sample_sheet                                   no --sample-sheet given
+  SKIP  expected_sex                                   no --expect-sex and no sex in the sample sheet
+exit 0: no check reaches --fail-on fail
+## stderr

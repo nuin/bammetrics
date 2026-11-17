@@ -1,0 +1,30 @@
+## argv
+doctor
+tests/corpus/out/t1.bam
+-R
+tests/corpus/out/reference.fa
+## exit
+0
+## stdout
+tests/corpus/out/t1.bam  BAM  PASS  0 fail, 0 warn, 17 pass, 2 skip
+  PASS  file                BAM, @HD VN:1.6
+  PASS  eof                 end-of-file block present           the file ends with the 28-byte BGZF end-of-file block
+  PASS  header              15 lines: 1 @HD, 3 @SQ, 2 @RG, 9 @PG, 0 @CO
+  PASS  references          3 contigs, 516,000 bases
+  PASS  build               unknown                             no primary chromosome has a GRCh37, GRCh38 or T2T-CHM13 length; 2 primary, 1 mitochondrial (chrM), 0 alt, 0 decoy, 0 HLA, 0 other contigs
+  PASS  read_groups         2 @RG lines, 1 sample: SYN1         every line has ID, SM, LB and PL
+  PASS  sort_order          header coordinate                   the first 10,000 records are in coordinate order
+  PASS  records             10,000 records read                 the first 10,000
+  PASS  record_read_groups  10,000 records                      every RG is in the header
+  PASS  paired              100.0%                              paired-end
+  PASS  mapped              100.0%                              of 10,000 primary records
+  PASS  duplicates          0.0% flagged                        @PG MarkDuplicates ran
+  PASS  read_length         mean 150.0                          over 10,000 primary records with bases
+  PASS  qualities           Q4 to Q37                           Phred+33
+  PASS  md_nm               MD 100.0%, NM 100.0%                on every one of 10,000 mapped primary records
+  PASS  reference           names and lengths match: 3 contigs  the header has no M5 to compare
+  PASS  index               t1.bam.bai                          not older than the file
+  SKIP  sample_sheet                                            no --sample-sheet given
+  SKIP  expected_sex                                            no --expect-sex and no sex in the sample sheet
+exit 0: no check reaches --fail-on fail
+## stderr

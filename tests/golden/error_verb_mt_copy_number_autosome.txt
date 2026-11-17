@@ -1,0 +1,10 @@
+## argv
+mt-copy-number
+tests/data/mt_copy_number.bam
+--autosomes
+chrM
+## exit
+2
+## stdout
+## stderr
+bammetrics mt-copy-number: AUTOSOMES=chrM: that is the mitochondrial contig (from --autosomes)

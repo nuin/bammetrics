@@ -1,0 +1,20 @@
+## argv
+mt-copy-number
+tests/corpus/out/t1.bam
+-o
+OUT/mt_copy_number.txt
+## exit
+0
+## stdout
+## stderr
+## file mt_copy_number.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectMtCopyNumberMetrics INPUT=tests/corpus/out/t1.bam OUTPUT=OUT/mt_copy_number.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.MtCopyNumberMetrics
+MT_CONTIG	MT_LENGTH	MT_BASES	MT_MEAN_DEPTH	AUTOSOMAL_LENGTH	AUTOSOMAL_BASES	AUTOSOMAL_MEAN_DEPTH	MT_COPY_NUMBER	READS_USED	SAMPLE	LIBRARY	READ_GROUP
+chrM	16000	54515	3.407188	500000	5403251	10.806502	0.630581	39440			
+
+

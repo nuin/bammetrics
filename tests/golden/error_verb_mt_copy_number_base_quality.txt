@@ -1,0 +1,10 @@
+## argv
+mt-copy-number
+tests/data/mt_copy_number.bam
+-Q
+300
+## exit
+2
+## stdout
+## stderr
+bammetrics mt-copy-number: MINIMUM_BASE_QUALITY=300: 0 to 255 (from -Q)

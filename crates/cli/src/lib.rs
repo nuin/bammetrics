@@ -14,6 +14,7 @@ pub mod check;
 pub mod collect;
 pub mod convert;
 pub mod discover;
+pub mod doctor;
 pub mod engine;
 pub mod error;
 pub mod events;
@@ -71,6 +72,10 @@ pub enum Command {
     /// One metrics file in another format: Picard text or JSON in; Picard
     /// text, json, jsonl, tsv, csv, markdown or human out.
     Convert(convert::ConvertArgs),
+    /// A pre-flight check of one BAM, CRAM or SAM file: the header, the
+    /// end-of-file marker and the first 10,000 records, one line per check
+    /// with its status, pass, warn, fail or skip (docs/doctor.md).
+    Doctor(doctor::DoctorArgs),
 }
 
 /// The text of one clap context value.
@@ -147,10 +152,10 @@ pub fn clap_error(verb: &str, e: &clap::Error) -> VerbError {
 /// runs the Picard face, untouched; (2) a grammar verb (a tool verb,
 /// `collect`, `chain`, `tools`, `presets`, `help`, `completions`, and
 /// `plan` when its arguments describe a chain); (3) the clap verbs
-/// `report`, `check`, `qc`, `plan` and `convert`. The exit code of the
+/// `report`, `check`, `qc`, `plan`, `convert` and `doctor`. The exit code of the
 /// command:
 /// the Picard face exits 0 or 1, the grammar verbs 0, 1 or 2, `check` and
-/// `qc --fail-on` 10 or 11 on a bad verdict (`bammetrics help check`).
+/// `qc --fail-on` 10 or 11 on a bad verdict, `doctor` 10 on a failed check (`bammetrics help check`).
 pub fn run() -> error::Result<u8> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if let Some((name, rest)) = args.split_first() {
@@ -256,6 +261,7 @@ pub fn run() -> error::Result<u8> {
         Command::Qc(args) => Ok(engine::run(&args)),
         Command::Plan(args) => Ok(plan::run(&args)),
         Command::Convert(args) => convert::run(&args),
+        Command::Doctor(args) => doctor::run(&args),
     }
 }
 

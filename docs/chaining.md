@@ -31,7 +31,7 @@ emits.
 |---|---|---|
 | source | One BAM, CRAM or SAM text file, or a pipe holding one | the positional argument, `-` for standard input |
 | transform | A tool that changes the records later steps see. A barrier needs every record before one goes on | `mark-duplicates`, `sort-sam` (both barriers) |
-| tap | A one-pass tool on the records of its position. It changes nothing | 13 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check` |
+| tap | A one-pass tool on the records of its position. It changes nothing | 14 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check`, `mt-copy-number` |
 | write | A tap that writes the records of its position as a BAM, or as SAM text | `write [PATH]` |
 
 A tap or `write` does not change the stream, so the step after it sees the same records.
@@ -629,7 +629,7 @@ run.metrics["insert-size"]          # out/NA12878.insert_size_metrics, parsed
 | `step_table(name)` | A `StepTable` for a verb named in snake or kebab case, by its Picard class or by its function name: `verb`, `role`, `keywords`. An unknown name is a usage error with the closest step |
 | `StepTable::keyword(name)` | One keyword, or the usage error with the closest name. `input`, and `output` of `mark_duplicates`, are refused with the reason |
 | `Keyword` | `name`, `long` (the flag it spells), `ty`, `many` (`One`, `Repeated`: one occurrence per item, `Joined`: one comma list) |
-| `step_names()` | The 15 names `step` takes, snake case, in `bammetrics tools` order, `write` last |
+| `step_names()` | The 17 names `step` takes, snake case, in `bammetrics tools` order, `write` last |
 | `metric_key(chain, step, path)` | The key of a metrics file in `Run.metrics`: the verb, `STREAM.` in front for a tap that does not read the last stream, `.FILE` after it for a further file |
 | `stubs()` | The `bammetrics.pyi` entries: `_StepVerb`, `step`, three `chain` overloads |
 

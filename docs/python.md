@@ -128,6 +128,18 @@ one on the index. A build from source (`maturin develop`, `maturin build`, `pip 
 of the sdist) therefore needs rustc 1.92, the rust-version of krilla 0.8.2. The command
 line binary builds on 1.91 without the feature.
 
+## doctor
+
+`doctor(path, *, reference=None, records=None, check_md5=False, expect_build=None, expect_sex=None, sample_sheet=None, sample=None, fail_on="fail", threads=None)` runs `bammetrics doctor` ([docs/doctor.md](doctor.md)) and returns a `Doctor`: `path`, `kind` (`"BAM"`, `"CRAM 3.1"`, `"SAM"`; empty for none), `status` (the worst check: `"pass"`, `"warn"` or `"fail"`), `exit_code` (0, or 10 when a check reaches `fail_on`), `checks` (one `DoctorCheck` per check: `name`, `status` with `"skip"` too, `value`, `reason`) and `to_json()`, the text of `--format json`. `result["eof"]` is the check of that name.
+
+```python
+result = bm.doctor("in.cram", reference="ref.fa", expect_build="hg38")
+if result.status == "fail":
+    print([(c.name, c.reason) for c in result.checks if c.status == "fail"])
+```
+
+A failed check is a value, never an exception. A file that cannot be read raises `InputError`; `sample` without `sample_sheet`, or a build name it does not know, raises `UsageError`. Both classes pickle.
+
 ## read_table
 
 `read_table(path, table=None)` reads one table of a metrics file and returns a `Table`. The file is Picard text or the JSON `--format json` writes (schema `bammetrics.metrics/1`), told apart by its first character (`{` or `[` is JSON; a byte order mark is dropped).
@@ -240,7 +252,7 @@ bm.step("wgs")                             # UsageError: CollectWgsMetrics ... c
 bm.step("fifo_buffer")                     # UsageError: FifoBuffer buffers the pipe between two commands and a chain has no pipe
 ```
 
-- The verb is a tool verb in snake case (`insert_size`, `mark_duplicates`), or `write`. The kebab form (`insert-size`), the Picard class (`CollectInsertSizeMetrics`) and the function name (`collect_insert_size_metrics`) name the same step. The stub lists the 15 names as `_StepVerb`: `mark_duplicates` (a transform), 13 taps (`insert_size`, `alignment_summary`, `quality_yield`, `hs_metrics`, `gc_bias`, `quality_score_distribution`, `mean_quality_by_cycle`, `base_distribution_by_cycle`, `duplicate_metrics`, `rna_seq`, `sequencing_artifact`, `coverage_gaps`, `sex_check`) and `write`.
+- The verb is a tool verb in snake case (`insert_size`, `mark_duplicates`), or `write`. The kebab form (`insert-size`), the Picard class (`CollectInsertSizeMetrics`) and the function name (`collect_insert_size_metrics`) name the same step. The stub lists the 17 names as `_StepVerb`: `mark_duplicates` and `sort_sam` (transforms), 14 taps (`insert_size`, `alignment_summary`, `quality_yield`, `hs_metrics`, `gc_bias`, `quality_score_distribution`, `mean_quality_by_cycle`, `base_distribution_by_cycle`, `duplicate_metrics`, `rna_seq`, `sequencing_artifact`, `coverage_gaps`, `sex_check`, `exon_coverage`) and `write`.
 - The keywords are those of the tool's function in `bammetrics.pyi` (`registry::python_keywords`, the list the generated stub prints): `step("insert_size", minimum_pct=0.1)` takes what `collect_insert_size_metrics(bam, minimum_pct=0.1)` takes. `input` is refused: the chain's source feeds every step.
 - `output` is the step's own `-o`: the file of a tap that writes one file, a prefix for a tap that writes several (`gc_bias`). Without it the chain's prefix names the files. `mark_duplicates` takes no `output`, since a transform writes no BAM in a chain; `step("write", output=...)` after it writes the BAM, and `metrics_file` names its metrics.
 - `format` is the step's own `--format` list. `as_` on a transform is `--as NAME`, the name of the stream it leaves (`as` is a Python keyword).

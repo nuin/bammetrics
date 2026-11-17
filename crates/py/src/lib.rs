@@ -19,6 +19,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyCFunction, PyDict, PyList, PyTuple};
 
 mod chain;
+mod doctor;
 mod verbs;
 
 use verbs::{input_error, usage_error};
@@ -828,8 +829,13 @@ fn run_registered<'py>(
         }
     }
     options.extend(keyword_arguments(tool, kwargs)?);
+    // A tool's own notes stay off standard error, as `Invocation::notes` do.
     let (invocation, output) = py
-        .detach(|| tool.execute(&options))
+        .detach(|| {
+            let mut invocation = tool.parse(&options)?;
+            invocation.quiet = true;
+            (tool.run)(&invocation).map(|output| (invocation, output))
+        })
         .map_err(|e| py_error(&e))?;
     if invocation.output.is_some() || !output.extra.is_empty() {
         py.detach(|| registry::write_files(&invocation, &output))
@@ -1038,6 +1044,9 @@ fn bammetrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(verbs::py_report, m)?)?;
     m.add_function(wrap_pyfunction!(chain::py_chain, m)?)?;
     m.add_function(wrap_pyfunction!(chain::py_step, m)?)?;
+    m.add_function(wrap_pyfunction!(doctor::py_doctor, m)?)?;
+    m.add_class::<doctor::Doctor>()?;
+    m.add_class::<doctor::DoctorCheck>()?;
     m.add_class::<chain::Step>()?;
     m.add_class::<chain::Stage>()?;
     m.add_class::<verbs::Run>()?;

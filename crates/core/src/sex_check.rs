@@ -14,6 +14,7 @@ use noodles::{bam, sam};
 
 use crate::blocks::alignment_end;
 use crate::error::{Error, Result};
+use crate::genome_build;
 use crate::intervals::{self, OverlapIndex};
 use crate::metric::{MetricRow, MetricsOutput, ToolOutput, Value};
 use crate::pass::{self, Accumulator};
@@ -257,18 +258,14 @@ enum Group {
     Y,
 }
 
-/// The default names: `chrX` or `X`, `chrY` or `Y`, `chr1`..`chr22` or
-/// `1`..`22`.
+/// The default names, from the chromosome table of `genome_build.rs`:
+/// `chrX` or `X`, `chrY` or `Y`, `chr1`..`chr22` or `1`..`22`.
 fn default_group(name: &str) -> Option<Group> {
-    let bare = name.strip_prefix("chr").unwrap_or(name);
-    match bare {
+    match genome_build::chromosome(name)? {
         "X" => Some(Group::X),
         "Y" => Some(Group::Y),
-        _ => bare
-            .parse::<u8>()
-            .ok()
-            .filter(|n| (1..=22).contains(n) && bare == n.to_string())
-            .map(|_| Group::Autosome),
+        "M" => None,
+        _ => Some(Group::Autosome),
     }
 }
 

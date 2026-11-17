@@ -45,10 +45,25 @@ pub fn entries() -> impl Iterator<Item = Entry> {
 
 /// The row for `column` of `class`, by the full class name or the name
 /// after its last `.` or `$`.
+/// A row whose column holds `<N>` stands for every column with a number
+/// in its place (`BASES_<N>X` for `BASES_20X`); an exact row comes first.
 pub fn lookup(class: &str, column: &str) -> Option<Entry> {
-    entries().find(|e| {
-        e.column == column && (e.class == class || e.class.rsplit(['.', '$']).next() == Some(class))
-    })
+    let of_class = |e: &Entry| e.class == class || e.class.rsplit(['.', '$']).next() == Some(class);
+    entries()
+        .find(|e| e.column == column && of_class(e))
+        .or_else(|| entries().find(|e| of_class(e) && column_matches(e.column, column)))
+}
+
+/// True when `pattern` holds `<N>` and `column` is `pattern` with a
+/// decimal number in its place.
+pub fn column_matches(pattern: &str, column: &str) -> bool {
+    let Some((head, tail)) = pattern.split_once("<N>") else {
+        return false;
+    };
+    column
+        .strip_prefix(head)
+        .and_then(|rest| rest.strip_suffix(tail))
+        .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// The row for histogram column `label` of a file `program` wrote, where
@@ -111,6 +126,24 @@ mod tests {
             Some("int")
         );
         assert_eq!(lookup("InsertSizeMetrics", "NO_SUCH"), None);
+    }
+
+    #[test]
+    fn a_numbered_row_stands_for_every_number() {
+        assert!(column_matches("BASES_<N>X", "BASES_20X"));
+        assert!(column_matches("PCT_<N>X", "PCT_1000X"));
+        assert!(!column_matches("PCT_<N>X", "PCT_X"));
+        assert!(!column_matches("PCT_<N>X", "PCT_2aX"));
+        assert!(
+            !column_matches("PCT_20X", "PCT_20X"),
+            "no <N>: exact rows only"
+        );
+        let row = lookup("ExonCoverageMetrics", "PCT_45X").expect("numbered row");
+        assert_eq!((row.column, row.kind), ("PCT_<N>X", "float"));
+        assert_eq!(
+            lookup("HsMetrics", "PCT_TARGET_BASES_20X").map(|e| e.column),
+            Some("PCT_TARGET_BASES_20X")
+        );
     }
 
     #[test]

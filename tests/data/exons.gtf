@@ -1,0 +1,17 @@
+#!description: four genes over the reads of insert_size.bam on chr1, and one on chrUn, which no fixture BAM holds
+chr1	fixture	gene	1001	2350	.	+	.	gene_id "ENSG_A.1"; gene_name "GENE_A";
+chr1	fixture	transcript	1001	2100	.	+	.	gene_id "ENSG_A.1"; transcript_id "TA1.2"; gene_name "GENE_A"; tag "Ensembl_canonical";
+chr1	fixture	exon	1001	1100	.	+	.	gene_id "ENSG_A.1"; transcript_id "TA1.2"; gene_name "GENE_A"; exon_number "1"; tag "Ensembl_canonical";
+chr1	fixture	CDS	1051	1100	.	+	.	gene_id "ENSG_A.1"; transcript_id "TA1.2"; gene_name "GENE_A"; exon_number "1"; tag "Ensembl_canonical";
+chr1	fixture	exon	1151	1250	.	+	.	gene_id "ENSG_A.1"; transcript_id "TA1.2"; gene_name "GENE_A"; exon_number "2"; tag "Ensembl_canonical";
+chr1	fixture	CDS	1151	1250	.	+	.	gene_id "ENSG_A.1"; transcript_id "TA1.2"; gene_name "GENE_A"; exon_number "2"; tag "Ensembl_canonical";
+chr1	fixture	exon	2001	2100	.	+	.	gene_id "ENSG_A.1"; transcript_id "TA1.2"; gene_name "GENE_A"; exon_number "3"; tag "Ensembl_canonical";
+chr1	fixture	CDS	2001	2050	.	+	.	gene_id "ENSG_A.1"; transcript_id "TA1.2"; gene_name "GENE_A"; exon_number "3"; tag "Ensembl_canonical";
+chr1	fixture	exon	1051	1150	.	+	.	gene_id "ENSG_A.1"; transcript_id "TA2.1"; gene_name "GENE_A"; exon_number "1";
+chr1	fixture	CDS	1051	1150	.	+	.	gene_id "ENSG_A.1"; transcript_id "TA2.1"; gene_name "GENE_A"; exon_number "1";
+chr1	fixture	exon	2051	2350	.	+	.	gene_id "ENSG_A.1"; transcript_id "TA2.1"; gene_name "GENE_A"; exon_number "2";
+chr1	fixture	CDS	2051	2350	.	+	.	gene_id "ENSG_A.1"; transcript_id "TA2.1"; gene_name "GENE_A"; exon_number "2";
+chr1	fixture	exon	3001	3400	.	-	.	gene_id "ENSG_B.1"; transcript_id "TB1.1"; gene_name "GENE_B";
+chr1	fixture	exon	4050	4050	.	-	.	gene_id "ENSG_C.4"; transcript_id "TC1.1"; gene_name "GENE_C";
+chr1	fixture	exon	5001	5500	.	-	.	gene_id "ENSG_C.4"; transcript_id "TC1.1"; gene_name "GENE_C";
+chrUn	fixture	exon	1	100	.	+	.	gene_id "ENSG_D.1"; transcript_id "TD1.1"; gene_name "GENE_D";

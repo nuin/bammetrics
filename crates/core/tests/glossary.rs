@@ -154,6 +154,13 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
             "CollectSexCheckMetrics",
             vec!["EXPECTED_SEX=female".to_owned()],
         ),
+        (
+            "CollectExonCoverageMetrics",
+            vec![
+                format!("ANNOTATION={DATA}/exons.gtf"),
+                format!("SUMMARY_OUTPUT={}", dir.join("genes.txt").display()),
+            ],
+        ),
     ] {
         let mut list = vec![bam.clone(), out(tool)];
         list.extend(extra);
@@ -244,6 +251,15 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
             format!("M={}", dir.join("markdup_metrics").display()),
         ],
     );
+    // The fixture BAMs above have no chrM, which CollectMtCopyNumberMetrics refuses.
+    args.insert(
+        "CollectMtCopyNumberMetrics",
+        vec![
+            format!("I={DATA}/mt_copy_number.bam"),
+            out("mt_copy_number"),
+            "LEVEL=READ_GROUP".to_owned(),
+        ],
+    );
     // The fixture BAM has no @RG line, which CollectOxoGMetrics refuses.
     args.insert(
         "CollectOxoGMetrics",
@@ -322,7 +338,11 @@ fn every_column_every_tool_writes_has_a_definition() {
     );
 
     let stale: Vec<Entry> = glossary::entries()
-        .filter(|e| written.get(e.class).is_some_and(|c| !c.contains(e.column)))
+        .filter(|e| {
+            written.get(e.class).is_some_and(|c| {
+                !c.contains(e.column) && !c.iter().any(|w| glossary::column_matches(e.column, w))
+            })
+        })
         .collect();
     assert!(
         stale.is_empty(),

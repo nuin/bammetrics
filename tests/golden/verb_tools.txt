@@ -40,6 +40,8 @@ build-bam-index                       BuildBamIndex
 fifo-buffer                           FifoBuffer
 view-sam                              ViewSam
 sort-sam                              SortSam
+mt-copy-number                        CollectMtCopyNumberMetrics
+exon-coverage                         CollectExonCoverageMetrics
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.
@@ -53,6 +55,7 @@ Other verbs:
   check        Evaluate a preset over directories of metrics files, or read verdict.json files, and gate.
   report       Verdicts, sample pages and a run index from directories of Picard metrics files.
   convert      One metrics file in another format.
+  doctor       A pre-flight check of one BAM, CRAM or SAM file.
 
 Picard syntax: bammetrics <PICARD CLASS> I=... O=... [KEY=VALUE ...]
 ## stderr

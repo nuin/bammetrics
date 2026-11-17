@@ -1,0 +1,5 @@
+sample	bam	sex	build	library
+NA12878	good.bam	female	hg38	lib1
+NA12891	hg19.bam	male	GRCh38	lib9
+DUP	good.bam			
+DUP	good.bam			

@@ -1,0 +1,8 @@
+## argv
+CollectExonCoverageMetrics
+I=tests/data/insert_size.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: Option 'ANNOTATION' must be specified at least 1 times.

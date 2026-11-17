@@ -1,0 +1,11 @@
+## argv
+doctor
+tests/data/doctor/good.bam
+--expect-build
+hg18
+## exit
+2
+## stdout
+## stderr
+bammetrics doctor: invalid value "hg18": not a build name (one of GRCh37, b37, hg19, GRCh38, hg38, T2T-CHM13, chm13, hs1) (from --expect-build)
+  every option: bammetrics help doctor

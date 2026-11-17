@@ -377,6 +377,23 @@ pub const VERBS: &[Verb] = &[
         writes: "sorted BAM",
         ..verb("sort-sam", "SortSam", Files::Bam)
     },
+    Verb {
+        aliases: &[
+            ("TARGETS", "TARGET_INTERVALS"),
+            ("EXCLUDE", "EXCLUDE_INTERVALS"),
+        ],
+        reads: &["TARGET_INTERVALS", "EXCLUDE_INTERVALS"],
+        ..verb(
+            "mt-copy-number",
+            "CollectMtCopyNumberMetrics",
+            Files::Single,
+        )
+    },
+    Verb {
+        reads: &["ANNOTATION", "GENE_LIST"],
+        also_writes: &["SUMMARY_OUTPUT"],
+        ..verb("exon-coverage", "CollectExonCoverageMetrics", Files::Single)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
@@ -728,7 +745,7 @@ impl Verb {
             _ => Vec::new(),
         };
         let mut writes = self.output_paths(&inv, output.as_deref());
-        writes.extend(siblings);
+        writes.extend(siblings.iter().cloned());
         for written in writes {
             let flag = || flag_for_path(&parsed, &written).or_else(output_flag);
             if let Some(what) = unresolved_output(&written) {
@@ -738,7 +755,7 @@ impl Verb {
             refuse_overwriting_inputs(self.name, &read, std::slice::from_ref(&written))
                 .map_err(|e| with_from(e, flag()))?;
         }
-        self.refuse_one_file_twice(&inv, output.as_deref())?;
+        self.refuse_one_file_twice(&inv, output.as_deref(), &siblings)?;
         // The last usage error, so none leaves a directory it made.
         inv.threads = self.threads(&parsed)?;
         // Dropped by an error below, `made` removes the directories the
@@ -747,11 +764,17 @@ impl Verb {
         if let Some(path) = &output {
             create_parent(self.name, &mut made, path).map_err(|e| with_from(e, output_flag()))?;
         }
+        // A further file's directory is made before the read, as `-o`'s is.
+        for further in self.further_outputs(&inv) {
+            let flag = flag_for_path(&parsed, &further);
+            create_parent(self.name, &mut made, &further).map_err(|e| with_from(e, flag))?;
+        }
         if let Some(header) = self.header {
             inv.command = header(&inv).map_err(core)?;
         }
         inv.read_dash_from_stdin();
         let quiet = parsed.flag(Key::Quiet);
+        inv.quiet = quiet;
         let verbose = parsed.flag(Key::Verbose);
         if verbose {
             eprintln!("bammetrics {}: {}", self.name, inv.command);
@@ -1305,12 +1328,14 @@ impl Verb {
             .collect()
     }
 
-    /// A file of [`Verb::also_writes`] that is the main file: the second
-    /// write would replace the first.
+    /// A file of [`Verb::also_writes`] that is the main file, or a copy of
+    /// it in a further `--format` (`siblings`): the second write would
+    /// replace the first.
     fn refuse_one_file_twice(
         &self,
         inv: &Invocation,
         output: Option<&Path>,
+        siblings: &[PathBuf],
     ) -> Result<(), VerbError> {
         let Some(main) = output.map(Path::to_path_buf).or_else(|| inv.output.clone()) else {
             return Ok(());
@@ -1321,16 +1346,23 @@ impl Verb {
             .iter()
             .filter(|_| self.files == Files::Bam)
             .cloned();
+        let copies: Vec<PathBuf> = siblings.iter().map(|s| same_file_key(s)).collect();
         for further in self.further_outputs(inv).into_iter().chain(metrics) {
-            if same_file_key(&further) == main_path {
-                return Err(VerbError::usage(
-                    self.name,
-                    format!(
-                        "{} is the main output too; one file cannot hold both",
-                        further.display()
-                    ),
-                ));
-            }
+            let key = same_file_key(&further);
+            let what = if key == main_path {
+                "the main output"
+            } else if copies.contains(&key) {
+                "a --format copy of the main output"
+            } else {
+                continue;
+            };
+            return Err(VerbError::usage(
+                self.name,
+                format!(
+                    "{} is {what} too; one file cannot hold both",
+                    further.display()
+                ),
+            ));
         }
         Ok(())
     }

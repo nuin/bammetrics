@@ -1,0 +1,8 @@
+## argv
+CollectMtCopyNumberMetrics
+I=tests/data/insert_size.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: the header has no mitochondrial contig (chrM, MT, M, chrMT); set MT_CONTIG

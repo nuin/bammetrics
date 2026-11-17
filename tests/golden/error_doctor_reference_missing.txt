@@ -1,0 +1,10 @@
+## argv
+doctor
+tests/data/doctor/good.bam
+-R
+tests/data/nope.fa
+## exit
+1
+## stdout
+## stderr
+bammetrics doctor: tests/data/nope.fa: no such file (from -R)

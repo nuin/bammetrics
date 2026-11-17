@@ -20,9 +20,9 @@
 use crate::error::Result;
 use crate::registry::{Invocation, Tool};
 use crate::{
-    alignment_summary, base_distribution_by_cycle, coverage_gaps, duplicate_metrics, gc_bias,
-    hs_metrics, insert_size, mean_quality_by_cycle, quality_score_distribution, quality_yield,
-    rna_seq_metrics, sequencing_artifact, sex_check,
+    alignment_summary, base_distribution_by_cycle, coverage_gaps, duplicate_metrics, exon_coverage,
+    gc_bias, hs_metrics, insert_size, mean_quality_by_cycle, mt_copy_number,
+    quality_score_distribution, quality_yield, rna_seq_metrics, sequencing_artifact, sex_check,
 };
 
 type Check = fn(&Invocation) -> Result<()>;
@@ -68,6 +68,12 @@ const CHECKS: &[(&str, Check)] = &[
     }),
     (sex_check::TOOL.name, |inv| {
         sex_check::Options::from_invocation(inv).map(drop)
+    }),
+    (mt_copy_number::TOOL.name, |inv| {
+        mt_copy_number::Options::from_invocation(inv).map(drop)
+    }),
+    (exon_coverage::TOOL.name, |inv| {
+        exon_coverage::Options::from_invocation(inv).map(drop)
     }),
 ];
 

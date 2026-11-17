@@ -1,5 +1,96 @@
 # Changelog
 
+## 0.25.0
+
+Wave W07 of docs/07: `bammetrics doctor`, `CollectMtCopyNumberMetrics` and
+`CollectExonCoverageMetrics` with the GTF, GFF3 and BED12 reader (registry tools 37 and 38).
+
+### Added
+
+- `bammetrics doctor FILE` (wave W07 of docs/07, decisions D8 and D13; docs/doctor.md): a
+  pre-flight check of one BAM, CRAM or SAM file from its header, its last bytes and its
+  first 10,000 records (`--records N`). 19 checks, each `pass`, `warn`, `fail` or `skip`
+  with the value and the reason: kind and version, the BGZF end-of-file block or the CRAM
+  EOF container (a cut file is found without reading it), header, `@SQ` count and length,
+  genome build (GRCh37, hg19, GRCh38, hg38, T2T-CHM13 or unknown, from a table of primary
+  chromosome lengths in `crates/core/src/genome_build.rs`), `@RG` lines, sort order
+  against the records, records whose `RG` the header lacks, paired, mapped and duplicate
+  fractions, read length, quality range (Phred+64), MD and NM, the `-R` reference's names,
+  lengths and `M5`s (from the `.dict` beside it, or computed with `--check-md5`), an index
+  beside the file and its age, `--expect-build`, `--expect-sex` (a warning at most) and
+  the row of `--sample-sheet FILE --sample NAME` (CSV or TSV, `crates/formats/src/sheet.rs`).
+  Text, `--format json` (schema `bammetrics.doctor/1`) and `jsonl`; exit 10 when a check
+  fails, or warns with `--fail-on warn`, as `check`. 0.35 s on the 16 GB NA12878 CRAM with
+  GRCh38.
+- Python `bammetrics.doctor(path, ...)` returning a `Doctor` (`.checks`, `.status`,
+  `.exit_code`, `.to_json()`) of `DoctorCheck`s.
+- `tests/data/make_doctor_fixtures.py` and `tests/data/doctor/`: the planted defects;
+  `crates/cli/tests/doctor.rs`, `tests/python/test_doctor.py` and 26 golden records.
+- `CollectMtCopyNumberMetrics` (verb `mt-copy-number`, Python
+  `collect_mt_copy_number_metrics()`), class `bammetrics.qc.MtCopyNumberMetrics`, docs/06
+  section 6, part of wave W07: `2 x` mean depth on the mitochondrial contig over mean
+  autosomal depth, from aligned bases at base and mapping quality 20 of primary, mapped,
+  non-duplicate, non-QC-fail reads. `MT_CONTIG`, `AUTOSOMES`, `TARGET_INTERVALS` (autosomal
+  depth over targets only), `EXCLUDE_INTERVALS` (NUMTs), every accumulation level. A
+  `CollectMultipleMetrics` program (`.mt_copy_number_metrics`), a `chain` tap and a `qc`
+  source under a preset that names the class. No shipped preset has a rule. Truth tests on
+  planted BAMs (`tests/data/make_mt_bams.py`: copy number 100, 1000 and 0, no `chrM`) and
+  `samtools depth` on the fixture, corpus t1, the HG002 exome and an NA12878 slice: equal
+  base counts on every one.
+- Interval lists and BED files (`TARGET_INTERVALS`, `BAIT_INTERVALS`, `INTERVALS` and the
+  rest read through `intervals::read_files`) are read through a 1 GiB cap that also holds
+  for a pipe; a larger file is an error naming the cap.
+- `CollectExonCoverageMetrics`, wave W07 of docs/07 (docs/exon_coverage.md): one
+  `bammetrics.qc.ExonCoverageMetrics` row per exon with the mean, median, minimum and
+  maximum depth and the bases and fraction at each `MIN_DEPTH` (default 10, 20, 30), and in
+  `SUMMARY_OUTPUT` one `bammetrics.qc.GeneCoverageMetrics` row per gene and per transcript.
+  The depth is the `CollectHsMetrics` per-base depth. Verb `exon-coverage`, Python
+  `collect_exon_coverage_metrics()`. Not a Picard tool.
+- The gene annotation reader (`crates/core/src/gene_model.rs`): GTF 2.2 and GFF3 `exon` or
+  `CDS` features, BED12 blocks, BED regions, plain or gzip; `GENE`, `GENE_LIST`,
+  `TRANSCRIPT`, `CANONICAL` (`Ensembl_canonical`, then `MANE_Select`, then the longest
+  CDS), `FEATURE`; contigs matched to the BAM header with the `chr` alias reported.
+- Glossary rows whose column holds `<N>` (`BASES_<N>X`) stand for every number
+  (`glossary::column_matches`).
+- `tests/concordance/test_exon_coverage.py`: `MEAN_DEPTH` and `MINIMUM_DEPTH` equal Picard
+  3.5.0 `CollectHsMetrics PER_TARGET_COVERAGE` on 2,674 cells; `samtools bedcov` as the
+  cross-check.
+
+### Changed
+
+- `bammetrics tools` lists `doctor` among the other verbs (`tests/golden/verb_tools.txt`).
+- `doctor` after review: `--check-md5` reads a bgzip FASTA 1 MiB at a time through its
+  `.gzi` (GRCh38 on 8 threads: 41 MB peak, was 6.3 GB). The `reference` check warns when
+  the `.dict` names none or only some of the `M5` contigs, is older than the FASTA, or
+  gives another `LN` than the `.fai`, and says the `.dict` is trusted. `references` fails
+  on records past the dictionary and warns on an `LN:0` contig. `eof` names bytes after
+  the end-of-file block. `file` fails an empty file or one under 4 bytes, and a header cut
+  short reads `the file ends inside the header`. The text form prints control characters
+  as `\xNN`. A TSV sample sheet keeps backslashes other than its four escapes and drops
+  a spreadsheet's double quotes. New fixture `tests/data/doctor/refid_big.bam`.
+- `hs_metrics::CaptureMetrics::with_intervals` builds the accumulator from intervals
+  already read; `CaptureMetrics::new` calls it. Hs output is unchanged.
+- The golden record `verb_tools` lists `exon-coverage`.
+- A tool verb makes the missing directory above a further file (`--summary-output`,
+  `--gaps-file`) before the first read, as it does for `-o`. Before, the run failed after
+  the read with the main file written.
+- A tool verb refuses a further file that is a `--format` copy of the main file.
+- `Invocation::quiet`: the verb's and the chain's `-q` and the Python functions drop a
+  tool's own notes on standard error (the contig notes of `exon-coverage`).
+- One table of human chromosome names in `crates/core/src/genome_build.rs` (`chromosome`,
+  `is_autosome`, `is_mito`, `MITO_NAMES`, `aliases`). `CollectSexCheckMetrics` and
+  `CollectMtCopyNumberMetrics` read their default contigs from it and
+  `CollectExonCoverageMetrics` its annotation aliases (`chrM`, `MT`, `M` and `chrMT` now
+  alias one another; before, `chrM` and `MT` only).
+- `doctor`'s `build` check names the mitochondrial contig `mt-copy-number` reads (`1
+  mitochondrial (chrM)`), and says when two or more need `--mt-contig`. 15 doctor golden
+  records change in that line alone.
+
+### Fixed
+
+- `gene_model` unit tests: two tests wrote `blocks.bed` in one directory and failed when
+  run in parallel.
+
 ## 0.24.0
 
 The PDF report behind the cargo feature `pdf`: `report --pdf`, `qc --report pdf`,

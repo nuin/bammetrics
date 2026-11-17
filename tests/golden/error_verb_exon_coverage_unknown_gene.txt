@@ -1,0 +1,12 @@
+## argv
+exon-coverage
+tests/data/insert_size.bam
+--annotation
+tests/data/exons.gtf
+--gene
+GENE_E
+## exit
+2
+## stdout
+## stderr
+bammetrics exon-coverage: 1 gene is not in the annotation: GENE_E (did you mean GENE_A?)

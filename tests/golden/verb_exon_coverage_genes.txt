@@ -1,0 +1,56 @@
+## argv
+exon-coverage
+tests/data/markdup.bam
+--annotation
+tests/data/exons.gtf
+--gene-list
+tests/data/exon_genes.txt
+--gene
+GENE_A
+--min-depth
+1
+--min-depth
+3
+-o
+OUT/exons.txt
+--summary-output
+OUT/genes.txt
+## exit
+0
+## stdout
+## stderr
+## file exons.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectExonCoverageMetrics INPUT=tests/data/markdup.bam ANNOTATION=tests/data/exons.gtf GENE_LIST=tests/data/exon_genes.txt GENE=GENE_A MIN_DEPTH=1 MIN_DEPTH=3 SUMMARY_OUTPUT=OUT/genes.txt OUTPUT=OUT/exons.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.ExonCoverageMetrics
+GENE_NAME	GENE_ID	TRANSCRIPT_ID	EXON_NUMBER	CHROM	START	END	STRAND	LENGTH	MEAN_DEPTH	MEDIAN_DEPTH	MINIMUM_DEPTH	MAXIMUM_DEPTH	BASES_1X	BASES_3X	PCT_1X	PCT_3X
+GENE_A	ENSG_A.1	TA1.2	1	chr1	1001	1100	+	100	2	2	0	4	50	50	0.5	0.5
+GENE_A	ENSG_A.1	TA1.2	2	chr1	1151	1250	+	100	0	0	0	0	0	0	0	0
+GENE_A	ENSG_A.1	TA1.2	3	chr1	2001	2100	+	100	0.5	0.5	0	1	50	0	0.5	0
+GENE_A	ENSG_A.1	TA2.1	1	chr1	1051	1150	+	100	0	0	0	0	0	0	0	0
+GENE_A	ENSG_A.1	TA2.1	2	chr1	2051	2350	+	300	0.166667	0	0	1	50	0	0.166667	0
+GENE_B	ENSG_B.1	TB1.1	1	chr1	3001	3400	-	400	1	0	0	4	100	100	0.25	0.25
+GENE_C	ENSG_C.4	TC1.1	2	chr1	4050	4050	-	1	2	2	2	2	1	0	1	0
+GENE_C	ENSG_C.4	TC1.1	1	chr1	5001	5500	-	500	0.4	0	0	2	100	0	0.2	0
+
+
+## file genes.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectExonCoverageMetrics INPUT=tests/data/markdup.bam ANNOTATION=tests/data/exons.gtf GENE_LIST=tests/data/exon_genes.txt GENE=GENE_A MIN_DEPTH=1 MIN_DEPTH=3 SUMMARY_OUTPUT=OUT/genes.txt OUTPUT=OUT/exons.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.GeneCoverageMetrics
+LEVEL	GENE_NAME	GENE_ID	TRANSCRIPT_ID	CHROM	START	END	STRAND	EXON_COUNT	LENGTH	MEAN_DEPTH	MEDIAN_DEPTH	MINIMUM_DEPTH	MAXIMUM_DEPTH	BASES_1X	BASES_3X	PCT_1X	PCT_3X
+GENE	GENE_A	ENSG_A.1		chr1	1001	2350	+	5	600	0.5	0	0	4	150	50	0.25	0.083333
+TRANSCRIPT	GENE_A	ENSG_A.1	TA1.2	chr1	1001	2100	+	3	300	0.833333	0	0	4	100	50	0.333333	0.166667
+TRANSCRIPT	GENE_A	ENSG_A.1	TA2.1	chr1	1051	2350	+	2	400	0.125	0	0	1	50	0	0.125	0
+GENE	GENE_B	ENSG_B.1		chr1	3001	3400	-	1	400	1	0	0	4	100	100	0.25	0.25
+TRANSCRIPT	GENE_B	ENSG_B.1	TB1.1	chr1	3001	3400	-	1	400	1	0	0	4	100	100	0.25	0.25
+GENE	GENE_C	ENSG_C.4		chr1	4050	5500	-	2	501	0.403194	0	0	2	101	0	0.201597	0
+TRANSCRIPT	GENE_C	ENSG_C.4	TC1.1	chr1	4050	5500	-	2	501	0.403194	0	0	2	101	0	0.201597	0
+
+
