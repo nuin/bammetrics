@@ -299,6 +299,7 @@ table.
 | `fifo-buffer` | FifoBuffer (standard input to standard output; no input argument, no `-o`) | no file: the bytes it read, on standard output |
 | `view-sam` | ViewSam (SAM, BAM or CRAM in) | SAM text on standard output, or in `-o` |
 | `sort-sam` | SortSam (`--sort-order` queryname, coordinate or duplicate) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `exon-coverage` | CollectExonCoverageMetrics (not a Picard tool, [exon_coverage.md](exon_coverage.md); `--annotation` GTF, GFF3, BED12 or BED) | one (plus the `--summary-output` gene and transcript file) |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -331,6 +332,14 @@ so `--min-depth 20` gives `PCT_TARGET_BASES_20X`. `bammetrics sex-check BAM --se
 writes one `SexCheckMetrics` row: reads per base on X, Y and the autosomes against the
 `@SQ` lengths (or the target bases with `--targets`), the ratios, `INFERRED_SEX`
 (`FEMALE`, `MALE`, `UNKNOWN`) and `SEX_MATCH` against the declaration.
+
+`exon-coverage` reports the depth of every exon of an annotation, with no Picard
+counterpart ([exon_coverage.md](exon_coverage.md)). `bammetrics exon-coverage BAM
+--annotation genes.gtf.gz --gene BRCA1 --gene BRCA2 --canonical --summary-output genes.txt
+-o exons.txt` writes one `ExonCoverageMetrics` row per exon and one `GeneCoverageMetrics`
+row per gene and per transcript, with the `CollectHsMetrics` per-base depth, so an exon's
+`MEAN_DEPTH` and `MINIMUM_DEPTH` are the `mean_coverage` and `min_coverage` of
+`PER_TARGET_COVERAGE` for the same interval.
 
 ### The 0.12 subcommands
 

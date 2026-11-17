@@ -377,6 +377,15 @@ pub const VERBS: &[Verb] = &[
         writes: "sorted BAM",
         ..verb("sort-sam", "SortSam", Files::Bam)
     },
+    Verb {
+        reads: &["ANNOTATION", "GENE_LIST"],
+        also_writes: &["SUMMARY_OUTPUT"],
+        ..verb(
+            "exon-coverage",
+            "CollectExonCoverageMetrics",
+            Files::Single,
+        )
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the

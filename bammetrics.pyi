@@ -1317,6 +1317,7 @@ _StepVerb = Literal[
     "coverage_gaps",
     "sex_check",
     "sort_sam",
+    "exon_coverage",
     "write",
 ]
 

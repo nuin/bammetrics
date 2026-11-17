@@ -455,6 +455,14 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("SORT_ORDER", "queryname")),
             picard_outputs: sorted_sam,
         },
+        Case {
+            verb: "exon-coverage",
+            class: "CollectExonCoverageMetrics",
+            verb_args: bam(&["--annotation", "tests/data/exons.gtf"]),
+            picard_args: picard_bam(&["ANNOTATION=tests/data/exons.gtf"]),
+            option: Some(("MIN_DEPTH", "1")),
+            picard_outputs: single,
+        },
     ]
 }
 
@@ -559,7 +567,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 36);
+    assert_eq!(classes.len(), 37);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names
