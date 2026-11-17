@@ -31,12 +31,12 @@ bammetrics <PicardClass> KEY=VALUE ...    the Picard drop-in, unchanged
 registry runs the Picard face, untouched; then a grammar verb (a tool verb, `collect`,
 `chain`, `tools`, `presets`, `help`, `completions`, and `plan` when its arguments describe
 a chain); then the clap verbs `qc`, `plan`, `check`,
-`report` and `convert`. Class names are CamelCase and verbs are kebab case, so the two cannot collide.
+`report`, `convert` and `doctor`. Class names are CamelCase and verbs are kebab case, so the two cannot collide.
 
 | Group | Verbs |
 |---|---|
 | Run | `qc` (the collectors a preset needs, one pass, files, verdict, page), `collect` (the same pass, no verdict), `chain` (several steps on one BAM in one process, records handed on in memory), one verb per registry tool |
-| Prepare | `bed-to-interval-list`, `mark-duplicates`, `build-bam-index`, `fifo-buffer` |
+| Prepare | `bed-to-interval-list`, `mark-duplicates`, `build-bam-index`, `fifo-buffer`, `doctor` |
 | Post | `accumulate-quality-yield`, `accumulate-variant-calling`, `compare-metrics`, `check-duplicate-marking`, `report`, `check`, `convert` |
 | Info | `tools`, `presets`, `plan`, `help`, `completions` |
 
@@ -211,7 +211,7 @@ One table for every verb, `EXIT_CODES` in `check.rs`:
 | 0 | success: every verdict passes, or none reaches `--fail-on` (`qc` and `report` without `--fail-on`: any verdict) | all |
 | 1 | an input could not be read (a missing BAM, FASTA, `.fai` or interval file), a tool failed, the preset does not parse, or a `qc` collector failed | all |
 | 2 | usage error, nothing ran (bad arguments; `qc` over an earlier run without `--resume` or `--force`) | all |
-| 10 | a verdict reached `--fail-on`: fail, or warn with `--fail-on warn` (`check` defaults to `--fail-on fail`) | `check`, `qc --fail-on` |
+| 10 | a verdict reached `--fail-on`: fail, or warn with `--fail-on warn` (`check` defaults to `--fail-on fail`); for `doctor`, a check | `check`, `qc --fail-on`, `doctor` |
 | 11 | a verdict is incomplete (a rule's file, row or column is missing) and none reached `--fail-on` | `check`, `qc --fail-on` |
 
 `qc` exits 0 on any verdict unless `--fail-on warn|fail` is set, so a Nextflow task is not
@@ -928,6 +928,30 @@ samtools flagstat -`.
 ([docs/python.md](python.md)). KNOWN_DIFFERENCES.md lists what differs from Picard: the
 first log line, a size of 0, a closed or failed standard output.
 
+### doctor
+
+```bash
+bammetrics doctor FILE [-R FASTA] [--records N] [--check-md5] [--expect-build BUILD]
+    [--expect-sex male|female] [--sample-sheet FILE --sample NAME]
+    [--format text|json|jsonl] [--fail-on warn|fail] [--threads N]
+```
+
+`doctor` checks one BAM, CRAM or SAM file before a long run: the kind and version, the
+end-of-file marker, the header, `@SQ` count and length, the genome build (GRCh37, hg19,
+GRCh38, hg38, T2T-CHM13 or unknown), the `@RG` lines, the sort order against the records,
+then over the first 10,000 records the read groups, paired, mapped and duplicate fractions,
+read length, quality range (Phred+64), MD and NM; with `-R` the reference's names, lengths
+and MD5s against `@SQ`; an index beside the file; the sample sheet row of `--sample`. It
+reads no more than that: 0.35 s on a 16 GB CRAM. Each check prints one line with `PASS`,
+`WARN`, `FAIL` or `SKIP`, the value and the reason. It writes no file. Exit 10 when a check
+fails (or warns, with `--fail-on warn`), 1 when the file, FASTA or sheet cannot be read.
+Every check, threshold and form is in [docs/doctor.md](doctor.md).
+
+```bash
+bammetrics doctor sample.cram -R ref.fa --expect-build hg38
+bammetrics doctor sample.bam --sample-sheet samples.csv --sample NA12878 --format json
+```
+
 ## Post verbs
 
 ### accumulate-quality-yield and accumulate-variant-calling
@@ -1156,7 +1180,7 @@ bammetrics convert S1.insert_size_metrics | bammetrics convert - | cmp - S1.inse
   defaults; gap and sex rules are starting values`). Every rule is listed in
   [docs/verdict.md](verdict.md).
 - `bammetrics help VERB|PicardClass`: the verb's options in every spelling; `help qc` (or
-  `plan`, `check`, `report`, `convert`) prints clap's help. `help chain` lists the chain's
+  `plan`, `check`, `report`, `convert`, `doctor`) prints clap's help. `help chain` lists the chain's
   options, the step kinds and the options of `write`; `bammetrics chain BAM + VERB --help`
   lists the options of one step.
 - `bammetrics completions bash|zsh|fish|elvish|powershell`: a completion script on stdout

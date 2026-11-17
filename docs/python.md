@@ -128,6 +128,18 @@ one on the index. A build from source (`maturin develop`, `maturin build`, `pip 
 of the sdist) therefore needs rustc 1.92, the rust-version of krilla 0.8.2. The command
 line binary builds on 1.91 without the feature.
 
+## doctor
+
+`doctor(path, *, reference=None, records=None, check_md5=False, expect_build=None, expect_sex=None, sample_sheet=None, sample=None, fail_on="fail", threads=None)` runs `bammetrics doctor` ([docs/doctor.md](doctor.md)) and returns a `Doctor`: `path`, `kind` (`"BAM"`, `"CRAM 3.1"`, `"SAM"`; empty for none), `status` (the worst check: `"pass"`, `"warn"` or `"fail"`), `exit_code` (0, or 10 when a check reaches `fail_on`), `checks` (one `DoctorCheck` per check: `name`, `status` with `"skip"` too, `value`, `reason`) and `to_json()`, the text of `--format json`. `result["eof"]` is the check of that name.
+
+```python
+result = bm.doctor("in.cram", reference="ref.fa", expect_build="hg38")
+if result.status == "fail":
+    print([(c.name, c.reason) for c in result.checks if c.status == "fail"])
+```
+
+A failed check is a value, never an exception. A file that cannot be read raises `InputError`; `sample` without `sample_sheet`, or a build name it does not know, raises `UsageError`. Both classes pickle.
+
 ## read_table
 
 `read_table(path, table=None)` reads one table of a metrics file and returns a `Table`. The file is Picard text or the JSON `--format json` writes (schema `bammetrics.metrics/1`), told apart by its first character (`{` or `[` is JSON; a byte order mark is dropped).
