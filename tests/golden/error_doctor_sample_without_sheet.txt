@@ -1,0 +1,11 @@
+## argv
+doctor
+tests/data/doctor/good.bam
+--sample
+NA12878
+## exit
+2
+## stdout
+## stderr
+bammetrics doctor: missing --sample-sheet
+  usage: bammetrics doctor --sample <NAME> --sample-sheet <FILE> <BAM|CRAM|SAM>

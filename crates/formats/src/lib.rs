@@ -28,6 +28,7 @@ pub mod markdown;
 pub mod metrics_json;
 pub mod multiqc;
 pub mod picard;
+pub mod sheet;
 pub mod table;
 pub mod verdict;
 

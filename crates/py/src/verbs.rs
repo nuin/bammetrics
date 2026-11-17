@@ -110,7 +110,7 @@ pub(crate) fn verb_error(e: &VerbError) -> PyErr {
     }
 }
 
-fn cli_error(verb: &str, e: &CliError) -> PyErr {
+pub(crate) fn cli_error(verb: &str, e: &CliError) -> PyErr {
     let message = match e {
         CliError::Verb(inner) => return verb_error(inner),
         other => format!("bammetrics {verb}: {other}"),
@@ -168,7 +168,7 @@ type Extra<'py> = Vec<(String, Bound<'py, PyAny>)>;
 /// The argv `options` spell for `verb`: `--long=VALUE`, `--flag`, `--hs A
 /// B`, then `--` and the positional values, and the Python-only keywords.
 /// `allowed`, when given, limits the keywords.
-fn argv<'py>(
+pub(crate) fn argv<'py>(
     verb: &table::Verb,
     positional: &Bound<'py, PyAny>,
     options: Option<&Bound<'py, PyDict>>,

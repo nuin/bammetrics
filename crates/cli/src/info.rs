@@ -43,7 +43,7 @@ fn about(name: &str) -> String {
 }
 
 /// The verbs clap parses (`main.rs`), in `tools` order.
-pub const CLAP_VERBS: [&str; 5] = ["qc", "plan", "check", "report", "convert"];
+pub const CLAP_VERBS: [&str; 6] = ["qc", "plan", "check", "report", "convert", "doctor"];
 
 /// `text` up to its first `.`, `;` or `:` outside parentheses and before
 /// a space: one line for a verb list.

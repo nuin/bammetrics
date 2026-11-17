@@ -14,6 +14,7 @@ use bammetrics_core::multiple_metrics::file_extensions;
 use clap::{ArgAction, Args, Command, FromArgMatches};
 
 use crate::check::CheckArgs;
+use crate::doctor::DoctorArgs;
 use crate::error::VerbError;
 use crate::manifest::{Output, StepRecord};
 use crate::qc::QcArgs;
@@ -86,8 +87,12 @@ fn report_command() -> Command {
     ReportArgs::augment_args(Command::new("report"))
 }
 
+fn doctor_command() -> Command {
+    DoctorArgs::augment_args(Command::new("doctor"))
+}
+
 /// The Python verb functions, in `.pyi` order.
-pub const VERBS: [Verb; 3] = [
+pub const VERBS: [Verb; 4] = [
     Verb {
         name: "qc",
         command: qc_command,
@@ -126,6 +131,19 @@ pub const VERBS: [Verb; 3] = [
               index.html, under output (default: the one directory given); pdf=True adds \
               SAMPLE.report.pdf, pdf_only=True writes the verdicts and the PDFs alone (the PDF \
               needs a module built with the feature pdf). Returns the paths written.",
+    },
+    Verb {
+        name: "doctor",
+        command: doctor_command,
+        skipped: &["format"],
+        extra: &[],
+        or_bool: &[],
+        returns: "Doctor",
+        doc: "bammetrics doctor: a pre-flight check of one BAM, CRAM or SAM file (its header, \
+              its end-of-file marker, its first records). Returns a Doctor: .checks, one \
+              DoctorCheck per check with status pass, warn, fail or skip, .status, the worst, \
+              and .exit_code under fail_on. A failed check is a value, never an exception; \
+              InputError when the file cannot be opened.",
     },
 ];
 

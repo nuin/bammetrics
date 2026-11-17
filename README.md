@@ -186,6 +186,7 @@ the sizes and a Chrome recipe for a build without the feature.
 | ViewSam (the header and records of a SAM, BAM or CRAM as SAM text, as htsjdk writes it; `ALIGNMENT_STATUS`, `PF_STATUS`, `HEADER_ONLY`, `RECORDS_ONLY`, `INTERVAL_LIST`) | | `view_sam()` |
 | SortSam (`queryname`, `coordinate`, `duplicate`; BAM or SAM text out; `CREATE_INDEX`, `CREATE_MD5_FILE`, `MAX_RECORDS_IN_RAM` runs spilled to `TMP_DIR`; a chain step under `--sort-memory`) | | `sort_sam()` |
 | BuildBamIndex (the `.bai` of a coordinate-sorted BAM, byte for byte the file Picard writes for the same BAM; `OUTPUT` or the default name; the same index behind `MarkDuplicates CREATE_INDEX` and `chain ... + write --index`) | | `build_bam_index()` |
+| doctor (not a Picard tool, [docs/doctor.md](docs/doctor.md): a pre-flight check of one BAM, CRAM or SAM file from its header, end-of-file marker and first 10,000 records; build, read groups, sort order, reference MD5s, a sample sheet row) | | `doctor()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 | SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | `validation_stringency=` |

@@ -557,6 +557,39 @@ const PDF_OPTION_CASES: &[Case] = &[
     case!("error_chain_pdf_font", "chain", "IS", "--pdf-font=x.ttf", "+", "insert-size"),
 ];
 
+/// `doctor` (docs/doctor.md) on the planted defects of `tests/data/doctor`
+/// (`tests/data/make_doctor_fixtures.py`), in its three forms, with the
+/// reference and sample sheet checks and its usage errors. No fixture there
+/// has an index, so no record depends on file times.
+#[rustfmt::skip]
+const DOCTOR_CASES: &[Case] = &[
+    case!("doctor_good", "doctor", "tests/data/doctor/good.bam"),
+    case!("doctor_good_json", "doctor", "tests/data/doctor/good.bam", "--format", "json"),
+    case!("doctor_good_fail_on_warn", "doctor", "tests/data/doctor/good.bam", "--fail-on", "warn", "--records", "50"),
+    case!("doctor_sam", "doctor", "tests/data/doctor/good.sam", "--expect-build", "hg38", "--expect-sex", "female"),
+    case!("doctor_cut_jsonl", "doctor", "tests/data/doctor/cut.bam", "--format", "jsonl"),
+    case!("doctor_no_eof", "doctor", "tests/data/doctor/no_eof.bam"),
+    case!("doctor_unsorted", "doctor", "tests/data/doctor/unsorted.bam"),
+    case!("doctor_rg_missing", "doctor", "tests/data/doctor/rg_missing.bam"),
+    case!("doctor_rg_duplicate_json", "doctor", "tests/data/doctor/rg_duplicate.bam", "--format", "json"),
+    case!("doctor_phred64", "doctor", "tests/data/doctor/phred64.bam"),
+    case!("doctor_hg19", "doctor", "tests/data/doctor/hg19.bam"),
+    case!("doctor_grch38_expect_hg38", "doctor", "tests/data/doctor/grch38.bam", "--expect-build", "hg38"),
+    case!("doctor_t2t", "doctor", "tests/data/doctor/t2t.bam", "--expect-build", "T2T-CHM13"),
+    case!("doctor_mixed", "doctor", "tests/data/doctor/mixed.bam"),
+    case!("doctor_unaligned", "doctor", "tests/data/doctor/unaligned.bam"),
+    case!("doctor_cram_no_reference", "doctor", "tests/data/doctor/ref.cram"),
+    case!("doctor_cram_reference", "doctor", "tests/data/doctor/ref.cram", "-R", "REF", "--check-md5"),
+    case!("doctor_cram_other_reference_json", "doctor", "tests/data/doctor/ref.cram", "-R", "tests/data/doctor/other.fa", "--format", "json"),
+    case!("doctor_sheet_agrees", "doctor", "tests/data/doctor/good.bam", "--sample-sheet", "tests/data/doctor/sheet.csv", "--sample", "NA12878"),
+    case!("doctor_sheet_disagrees", "doctor", "tests/data/doctor/good.bam", "--sample-sheet", "tests/data/doctor/sheet.tsv", "--sample", "NA12891"),
+    case!("doctor_not_a_bam", "doctor", "REF"),
+    case!("error_doctor_missing", "doctor", "tests/data/doctor/nope.bam"),
+    case!("error_doctor_sample_without_sheet", "doctor", "tests/data/doctor/good.bam", "--sample", "NA12878"),
+    case!("error_doctor_build_name", "doctor", "tests/data/doctor/good.bam", "--expect-build", "hg18"),
+    case!("error_doctor_reference_missing", "doctor", "tests/data/doctor/good.bam", "-R", "tests/data/nope.fa"),
+];
+
 /// The same tools on corpus BAM t1, with its reference and interval lists.
 #[rustfmt::skip]
 const T1_CASES: &[Case] = &[
@@ -582,6 +615,7 @@ const T1_CASES: &[Case] = &[
     case!("t1_picard_jumping_library", "CollectJumpingLibraryMetrics", "I=T1", "O=OUT/jumping_library.txt"),
     case!("t1_chain_mark_duplicates", "chain", "T1", "-R", "T1_REF", "-o", "OUT/s", "+", "quality-yield", "+", "mark-duplicates", "+", "alignment-summary", "+", "insert-size", "+", "duplicate-metrics", "+", "write", "/dev/null"),
     case!("t1_chain_taps", "chain", "T1", "-o", "OUT/s", "+", "quality-yield", "+", "alignment-summary", "+", "insert-size", "+", "duplicate-metrics"),
+    case!("t1_doctor", "doctor", "T1", "-R", "T1_REF"),
 ];
 
 fn root() -> PathBuf {
@@ -891,6 +925,11 @@ fn documented_format_commands_on_the_fixtures() {
 }
 
 #[test]
+fn documented_doctor_commands_on_the_fixtures() {
+    check(DOCTOR_CASES);
+}
+
+#[test]
 fn pdf_option_errors_on_the_fixtures() {
     check(PDF_OPTION_CASES);
 }
@@ -998,6 +1037,7 @@ fn case_names_are_unique() {
         .chain(CHAIN_CASES)
         .chain(T1_CASES)
         .chain(PDF_OPTION_CASES)
+        .chain(DOCTOR_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

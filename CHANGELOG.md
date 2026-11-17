@@ -1,5 +1,42 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `bammetrics doctor FILE` (wave W07 of docs/07, decisions D8 and D13; docs/doctor.md): a
+  pre-flight check of one BAM, CRAM or SAM file from its header, its last bytes and its
+  first 10,000 records (`--records N`). 19 checks, each `pass`, `warn`, `fail` or `skip`
+  with the value and the reason: kind and version, the BGZF end-of-file block or the CRAM
+  EOF container (a cut file is found without reading it), header, `@SQ` count and length,
+  genome build (GRCh37, hg19, GRCh38, hg38, T2T-CHM13 or unknown, from a table of primary
+  chromosome lengths in `crates/core/src/genome_build.rs`), `@RG` lines, sort order
+  against the records, records whose `RG` the header lacks, paired, mapped and duplicate
+  fractions, read length, quality range (Phred+64), MD and NM, the `-R` reference's names,
+  lengths and `M5`s (from the `.dict` beside it, or computed with `--check-md5`), an index
+  beside the file and its age, `--expect-build`, `--expect-sex` (a warning at most) and
+  the row of `--sample-sheet FILE --sample NAME` (CSV or TSV, `crates/formats/src/sheet.rs`).
+  Text, `--format json` (schema `bammetrics.doctor/1`) and `jsonl`; exit 10 when a check
+  fails, or warns with `--fail-on warn`, as `check`. 0.35 s on the 16 GB NA12878 CRAM with
+  GRCh38.
+- Python `bammetrics.doctor(path, ...)` returning a `Doctor` (`.checks`, `.status`,
+  `.exit_code`, `.to_json()`) of `DoctorCheck`s.
+- `tests/data/make_doctor_fixtures.py` and `tests/data/doctor/`: the planted defects;
+  `crates/cli/tests/doctor.rs`, `tests/python/test_doctor.py` and 26 golden records.
+
+### Changed
+
+- `bammetrics tools` lists `doctor` among the other verbs (`tests/golden/verb_tools.txt`).
+- `doctor` after review: `--check-md5` reads a bgzip FASTA 1 MiB at a time through its
+  `.gzi` (GRCh38 on 8 threads: 41 MB peak, was 6.3 GB). The `reference` check warns when
+  the `.dict` names none or only some of the `M5` contigs, is older than the FASTA, or
+  gives another `LN` than the `.fai`, and says the `.dict` is trusted. `references` fails
+  on records past the dictionary and warns on an `LN:0` contig. `eof` names bytes after
+  the end-of-file block. `file` fails an empty file or one under 4 bytes, and a header cut
+  short reads `the file ends inside the header`. The text form prints control characters
+  as `\xNN`. A TSV sample sheet keeps backslashes other than its four escapes and drops
+  a spreadsheet's double quotes. New fixture `tests/data/doctor/refid_big.bam`.
+
 ## 0.24.0
 
 The PDF report behind the cargo feature `pdf`: `report --pdf`, `qc --report pdf`,
