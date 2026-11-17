@@ -1387,6 +1387,15 @@ numbers exactly and the depths against `samtools depth`. `CollectMultipleMetrics
 3.5.0 does not know that program name and refuses it. The default program list is
 Picard's.
 
+`CollectDuplicateByTileMetrics` (docs/06 section 7, class
+`bammetrics.qc.DuplicateByTileMetrics`) has no Picard counterpart either.
+`tests/python/test_duplicate_by_tile.py` checks the planted counts of
+`tests/data/make_tile_bams.py` exactly, and that the `ALL` row equals the `MarkDuplicates`
+and `CollectDuplicateMetrics` totals; `tests/concordance/test_duplicate_by_tile.py` does
+the same after Picard 3.5.0 `MarkDuplicates TAGGING_POLICY=All`. A pair counts once, on
+its first-of-pair record, where `CollectDuplicateMetrics` counts both reads and halves the
+sum: the two agree whenever both records of each pair are in the file.
+
 `CollectExonCoverageMetrics` ([docs/exon_coverage.md](docs/exon_coverage.md)) has no Picard
 counterpart either; its classes are `bammetrics.qc.ExonCoverageMetrics` and
 `bammetrics.qc.GeneCoverageMetrics`. Oracle tier A: each exon's `MEAN_DEPTH` and

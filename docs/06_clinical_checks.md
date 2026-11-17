@@ -438,3 +438,144 @@ run 3.4 percent under the genome-wide autosomal depth. The whole-file run decode
 on 8 threads; its resident memory is the CRAM decoder's, the tool holds one row per unit.
 The HG002 exome without targets gives a ratio, section 6.4; the hs37d5 capture targets
 were not at hand.
+
+## 7. Duplicates by tile
+
+`CollectDuplicateByTileMetrics` (verb `duplicate-by-tile`, Python
+`collect_duplicate_by_tile_metrics()`, class `bammetrics.qc.DuplicateByTileMetrics`, source
+`crates/core/src/duplicate_by_tile.rs`) splits the duplicate counts of a marked BAM by
+flowcell lane and tile, and flags tiles whose duplication runs far above their lane. A tile
+with a bubble, a smudge or a pad of clustered reads shows as one hot tile among normal
+ones. It is part of wave W08 of docs/07 and has no Picard counterpart.
+
+### 7.1 Counts
+
+The tool is a one-pass `Collector`: `chain` runs it as a tap (file
+`PREFIX.duplicate_by_tile_metrics`). It reads the duplicate flags already in the file and
+marks nothing, as `CollectDuplicateMetrics` does.
+
+- The lane and tile come from the read name through `ReadNameParser` of
+  `crates/core/src/optical.rs`, the parser `MarkDuplicates` uses for optical duplicates.
+  The default reads 5-field names (`instrument:lane:tile:x:y`) and 7-field names
+  (`instrument:run:flowcell:lane:tile:x:y`); the last three fields give tile, x and y,
+  the field before them the lane, and the third field of a 7-field name the flowcell.
+  `READ_NAME_REGEX` takes Picard's regex with three groups (tile, x, y); then `FLOWCELL`
+  and `LANE` are empty. `READ_NAME_REGEX=null` puts every read on the `UNPARSED` row.
+  `TILE` is Picard's 16-bit tile value.
+- A record counts as `CollectDuplicateMetrics` counts it. An unmapped record adds to
+  `UNMAPPED`. A mapped secondary or supplementary record counts nowhere. A mapped record
+  that is unpaired or whose mate is unmapped adds to `UNPAIRED_READS`. A pair with both
+  mates mapped adds 1 to `PAIRS` on its first-of-pair record. The duplicate flag adds to
+  `UNPAIRED_DUPLICATES` or `PAIR_DUPLICATES` by the same rule. QC-failed records count.
+- `OPTICAL_DUPLICATES` counts duplicate pairs whose first-of-pair record carries
+  `DT:Z:SQ`. `MarkDuplicates` writes that tag under `TAGGING_POLICY=All` or
+  `OpticalOnly`, on both records of each optical duplicate pair. The column is filled when
+  a duplicate carries any `DT` tag, or when a `@PG` line of a duplicate marker sets
+  `TAGGING_POLICY` to `All` or `OpticalOnly`. Otherwise it is empty, and the note says to
+  rerun `MarkDuplicates TAGGING_POLICY=All`.
+- A file with no duplicate flag and no `@PG` line whose ID, PN or CL holds `markdup`
+  (case ignored) gets the note that duplicates were probably never marked.
+
+Rows: each lane's `TILE` rows in tile order, then its `LANE` row; lanes by flowcell, then
+by lane number (a lane that is no number after the numbers); then the `UNPARSED` row, then
+the `ALL` row. The `UNPARSED` and `ALL` rows are always written. Notes go to the `NOTES`
+column of the `ALL` row and to standard error, one line each, unless `QUIET`.
+
+`TILE_OUTLIER` is `Y` when a tile's `PCT_DUPLICATION` is above `OUTLIER_LIMIT`: the median
+of the lane's tile values plus `OUTLIER_SD` times 1.4826 times their median absolute
+deviation (1.4826 x MAD estimates the standard deviation of normal data). A tile that
+examined no read is left out of the median and gets no flag. A lane with fewer than 3
+judged tiles gets no limit. When more than half the tiles share one value, the MAD is 0
+and every tile above the median is flagged.
+
+One run holds at most 100,000 lane and tile pairs (`MAX_TILES`). A NovaSeq S4 flowcell
+has 3,744 tiles. More pairs mean the names are not Illumina names, and the run fails with
+an error naming `READ_NAME_REGEX`. Memory is one counter set per tile.
+
+`METRIC_ACCUMULATION_LEVEL` is not an option. A tile is a place on a flowcell, and every
+read group of one lane shares its tiles, so a split by sample or library would repeat the
+same tiles. The option is refused (`option METRIC_ACCUMULATION_LEVEL is not implemented`, exit 1).
+
+### 7.2 Metrics class `bammetrics.qc.DuplicateByTileMetrics`
+
+| Column | Type | Definition |
+|---|---|---|
+| `UNIT` | string | `TILE`, `LANE`, `UNPARSED` or `ALL`. |
+| `FLOWCELL` | string | Third field of a 7-field name; empty for 5 fields, with a regex, on `UNPARSED` and `ALL`. |
+| `LANE` | string | The field before the tile; empty with a regex, on `UNPARSED` and `ALL`. |
+| `TILE` | int | The tile; `TILE` rows only. |
+| `READS` | int | Records counted, both mates of a pair. |
+| `UNMAPPED` | int | Unmapped records, as `UNMAPPED_READS`. |
+| `UNPAIRED_READS` | int | As `UNPAIRED_READS_EXAMINED`. |
+| `PAIRS` | int | As `READ_PAIRS_EXAMINED`. |
+| `UNPAIRED_DUPLICATES` | int | As `UNPAIRED_READ_DUPLICATES`. |
+| `PAIR_DUPLICATES` | int | As `READ_PAIR_DUPLICATES`. |
+| `DUPLICATES` | int | `UNPAIRED_DUPLICATES + 2 x PAIR_DUPLICATES`, in reads. |
+| `OPTICAL_DUPLICATES` | int | As `READ_PAIR_OPTICAL_DUPLICATES`; empty without `DT` tags (section 7.1). |
+| `PCT_DUPLICATION` | float | `DUPLICATES / (UNPAIRED_READS + 2 x PAIRS)`, as `PERCENT_DUPLICATION`; 0 without a read. |
+| `PCT_OPTICAL` | float | `OPTICAL_DUPLICATES / PAIRS`; 0 without a pair, empty with `OPTICAL_DUPLICATES`. |
+| `OUTLIER_LIMIT` | float | The lane's limit, on its `TILE` and `LANE` rows. |
+| `TILE_OUTLIER` | string | `Y` or `N` on a judged `TILE` row. |
+| `MIN_X`, `MAX_X`, `MIN_Y`, `MAX_Y` | int | The x and y extent of the names counted; empty on `UNPARSED`. |
+| `NOTES` | string | The notes of section 7.1, on the `ALL` row. |
+
+### 7.3 Options
+
+| Option | Default | Meaning |
+|---|---|---|
+| `INPUT`, `OUTPUT` | | As every tool. |
+| `READ_NAME_REGEX` | 5- and 7-field Illumina names | As `MarkDuplicates`; `null` for none. |
+| `OUTLIER_SD` | 3 | Robust standard deviations above the lane median; a finite number of at least 0. |
+| `STOP_AFTER` | 0 | Records read; 0 reads them all. |
+
+### 7.4 Truth, cross-checks and tolerances
+
+No oracle writes per-tile duplicate counts. The tests rest on files whose answer is known
+by construction, and on the totals of `MarkDuplicates` and `CollectDuplicateMetrics`.
+
+- `tests/data/make_tile_bams.py OUT` writes `tile_truth.bam`: one flowcell, 2 lanes of 6
+  tiles each. Each tile holds 40 pairs (one QC-failed), its planted duplicate pairs (3 to
+  24) and optical duplicate pairs (0 to 9, `DT:Z:SQ`), 6 unpaired reads with 0 to 2
+  duplicates, a mate-unmapped pair, and a secondary and a supplementary copy that must not
+  count. Lane 1 tile 1104 is hot: 24 duplicate pairs against 4 to 6. 12 pairs and 4
+  unpaired reads carry names that give no tile. `tile_untagged.bam` drops the `DT` tags
+  and the `MarkDuplicates` `@PG` line; `tile_unmarked.bam` also clears the duplicate
+  flags. `truth.json` holds every expected count, computed from the plan alone.
+  `tests/python/test_duplicate_by_tile.py` requires every count, extent and flag exactly,
+  `Y` on the hot tile only, and both notes.
+- `tests/data/duplicate_by_tile.bam` is `tile_truth.bam` (`make_tile_bams.py --fixture`).
+  The golden suite records it, `markdup.bam` before and after `mark-duplicates
+  --tagging-policy All` in a chain, and corpus t1, whose names give no tile.
+- Reconciliation: after bammetrics `MarkDuplicates TAGGING_POLICY=All`, the `ALL` row
+  equals the summed library rows in `UNPAIRED_READS_EXAMINED`, `READ_PAIRS_EXAMINED`,
+  `UNMAPPED_READS`, `UNPAIRED_READ_DUPLICATES`, `READ_PAIR_DUPLICATES` and
+  `READ_PAIR_OPTICAL_DUPLICATES` of `MarkDuplicates`, and `CollectDuplicateMetrics` on
+  the marked BAM, on `tests/data/markdup.bam`, 6 `markdup_bams.py` BAMs and 5
+  `complexity_bams.py` BAMs. `MarkDuplicates` refuses the other 2 complexity BAMs, as
+  Picard does; their unmarked flags reconcile with `CollectDuplicateMetrics`.
+  `tests/concordance/test_duplicate_by_tile.py` does the same after Picard 3.5.0
+  `MarkDuplicates TAGGING_POLICY=All` on `markdup.bam` and 3 `markdup_bams.py` BAMs.
+- Tolerances: every count is equal, with no tolerance. `PCT_DUPLICATION` and
+  `PCT_OPTICAL` equal the quotient of the planted counts as doubles. `OUTLIER_LIMIT` is
+  within 1e-12 of a median and MAD computed again in Python.
+
+### 7.5 Rules
+
+No shipped preset has a `DuplicateByTileMetrics` rule. No published threshold exists for
+per-tile duplication: the rate depends on the library, the loading and the instrument,
+and `TILE_OUTLIER` already compares each tile with its own lane. A site can name the
+class in its own preset. No plot family is added, since no rule names one.
+
+### 7.6 Measurements
+
+Mac Studio, release build, outputs under `~/data/bammetrics-scale/waves/w08/` (deleted
+after the run), 2026-11-17. HG002 exome BAM, 10 GB, 150,538,907 records, marked in 2015 by
+`MarkDuplicates` 1.124 without `TAGGING_POLICY`. Its 7-field names give flowcell
+`C7F6GANXX`, lane 8, 96 tiles.
+
+| Run | Wall | Peak RSS | Result |
+|---|---|---|---|
+| `duplicate-by-tile` on the BAM | 34.6 s | 8.2 MiB | `PCT_DUPLICATION` 0.048714; `OPTICAL_DUPLICATES` empty with the note; tile 2112 flagged (0.060544 against a limit of 0.05786) |
+| `chain BAM + mark-duplicates --tagging-policy All + duplicate-by-tile + duplicate-metrics` | 412.5 s | 768 MiB | `ALL` row equal to both metrics files: 246,423 unpaired reads, 74,857,700 pairs, 424,953 unmapped, 139,654 and 3,582,814 duplicates, 3,163 optical duplicate pairs |
+
+`CollectDuplicateMetrics` on the same BAM gives the same six counts as the first run.
