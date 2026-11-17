@@ -5,7 +5,8 @@
 //! One pass. A record counts when it is primary (not secondary, not
 //! supplementary) and not QC-failed; unmapped records count, since most
 //! telomeric reads are unmapped. Duplicates are left out unless
-//! `COUNT_DUPLICATES=true`. Each counted read is restored to the strand it
+//! `COUNT_DUPLICATES=true`. A record with no bases (`SEQ` `*`) is not
+//! counted. Each counted read is restored to the strand it
 //! was sequenced on (reverse complemented when flag 0x10 is set), then
 //! [`count_repeats`] counts the non-overlapping occurrences of `REPEAT` and
 //! of its reverse complement, scanning left to right, and keeps the larger
@@ -51,6 +52,10 @@ pub const MAX_OFF_LENGTH_PERCENT: i64 = 5;
 /// repeat length, at most to this one; a count a read has is printed above.
 /// Long reads with a short repeat would otherwise print a row per base.
 pub const MAX_ZERO_FILLED_KEY: i64 = 1000;
+/// The zero-filled bins of all units together: with more units, each unit
+/// is filled to `MAX_ZERO_FILLED_CELLS / units` at most, so a header with
+/// many read groups cannot multiply the section by 1,000.
+pub const MAX_ZERO_FILLED_CELLS: i64 = 1_000_000;
 
 /// One row: a unit's counts.
 #[derive(Clone, Debug, PartialEq)]
@@ -396,6 +401,9 @@ impl Accumulator for Telomere {
             return Ok(());
         }
         let scan = self.scan(record);
+        if scan.length == 0 {
+            return Ok(());
+        }
         let telomeric = scan.repeats >= self.threshold;
         self.levels.route(record, |unit| {
             unit.total_reads += 1;
@@ -408,17 +416,18 @@ impl Accumulator for Telomere {
     }
 
     fn finish(self) -> Result<Vec<Bucket>> {
+        let buckets = self.levels.into_buckets();
+        let filled_units = buckets.iter().filter(|b| b.state.total_reads > 0).count();
+        let fill_cap = zero_fill_cap(filled_units);
         let motif = self.repeat.len() as i64;
-        Ok(self
-            .levels
-            .into_buckets()
+        Ok(buckets
             .into_iter()
             .map(|bucket| {
                 let mut row = row(&bucket.state, self.formula);
                 row.labels = bucket.labels;
                 let mut repeats = bucket.state.repeats;
                 if let Some(length) = row.read_length {
-                    for key in 0..=(length / motif).min(MAX_ZERO_FILLED_KEY) {
+                    for key in 0..=(length / motif).min(fill_cap) {
                         repeats.increment_by(key, 0.0);
                     }
                 }
@@ -430,6 +439,14 @@ impl Accumulator for Telomere {
             })
             .collect())
     }
+}
+
+/// The last key zero-filled in each of `units` units with reads: at most
+/// [`MAX_ZERO_FILLED_KEY`], and at most [`MAX_ZERO_FILLED_CELLS`] bins over
+/// all units.
+pub fn zero_fill_cap(units: usize) -> i64 {
+    let units = i64::try_from(units.max(1)).unwrap_or(i64::MAX);
+    (MAX_ZERO_FILLED_CELLS / units - 1).clamp(0, MAX_ZERO_FILLED_KEY)
 }
 
 /// One unit's row and its histogram column.

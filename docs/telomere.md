@@ -25,8 +25,9 @@ The tool is a one-pass `Collector`, so `CollectMultipleMetrics` runs it as a pro
 
 ## 1. Counting
 
-A record counts when it is primary (not secondary, not supplementary) and not QC-failed.
-Unmapped records count: most telomeric reads do not map, or map at MAPQ 0 to a
+A record counts when it is primary (not secondary, not supplementary), not QC-failed and
+holds at least one base. A record with no bases (`SEQ` `*`) counts in no column, so
+`READ_LENGTH` is never 0. Unmapped records count: most telomeric reads do not map, or map at MAPQ 0 to a
 subtelomere. Duplicates count only with `COUNT_DUPLICATES=true`. TelSeq reads every
 record, secondary, supplementary, QC-failed and duplicate ones included; bammetrics
 leaves those out so that each sequenced read counts once.
@@ -117,6 +118,17 @@ repeat count, TelSeq's `TEL0`, `TEL1`, ... columns. Every key from 0 to `READ_LE
 divided by the repeat length is printed, 0 where no read has it, up to key 1,000 at most
 (`MAX_ZERO_FILLED_KEY`, for long reads with a short repeat); a count a read has is printed
 above that too.
+
+The zero-filled bins of all units together are capped at 1,000,000
+(`MAX_ZERO_FILLED_CELLS`). With `n` units holding reads, each is filled to key
+`1,000,000 / n - 1` at most, so 999 units or fewer keep key 1,000, and 20,000 read
+groups with the `ALL_READS` unit stop at key 48. A header of 20,000 read groups with one
+1,000-base read each, `REPEAT=A` and `LEVEL=READ_GROUP` printed 20,000,000 cells without
+the cap: 41 MB of Picard text at 1.04 GB peak RSS in 11 s, 4.5 GB with `--format json`.
+With the cap it prints 2.9 MB at 99 MB in 1.2 s, and 38 MB of JSON at 312 MB in 4.6 s. The
+cap bounds only the zero fill. The section still prints
+one cell per unit for every repeat count some read has, so units times distinct counts is
+its size.
 
 ## 5. Options
 

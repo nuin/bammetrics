@@ -655,7 +655,7 @@ bammetrics.qc.GeneCoverageMetrics	MINIMUM_DEPTH	int	The lowest depth of a base o
 bammetrics.qc.GeneCoverageMetrics	MAXIMUM_DEPTH	int	The highest depth of a base of the row's exons.
 bammetrics.qc.GeneCoverageMetrics	BASES_<N>X	int	Bases of the row's exons with a depth of at least N, one column per MIN_DEPTH value (default 10, 20 and 30).
 bammetrics.qc.GeneCoverageMetrics	PCT_<N>X	float	BASES_<N>X divided by LENGTH.
-bammetrics.qc.TelomereMetrics	TOTAL_READS	int	Primary records of the unit that are not QC failures, unmapped ones included; duplicates only with COUNT_DUPLICATES=true. Secondary and supplementary records are not counted.
+bammetrics.qc.TelomereMetrics	TOTAL_READS	int	Primary records of the unit that are not QC failures and hold at least one base, unmapped ones included; duplicates only with COUNT_DUPLICATES=true. Secondary and supplementary records are not counted.
 bammetrics.qc.TelomereMetrics	TELOMERIC_READS	int	Reads of TOTAL_READS holding at least TELOMERE_REPEAT_THRESHOLD (default 7, TelSeq's k) non-overlapping copies of REPEAT (default TTAGGG) or of its reverse complement (CCCTAA), counted on the read as sequenced; the larger of the two counts is the read's repeat count.
 bammetrics.qc.TelomereMetrics	PCT_TELOMERIC	float	TELOMERIC_READS / TOTAL_READS. ? when TOTAL_READS is 0.
 bammetrics.qc.TelomereMetrics	READS_GC_48_52	int	Reads of TOTAL_READS whose G plus C count is over 48 and at most 52 percent of the read length, N bases included in the length: TelSeq's GC bins 0.48 to 0.52, the denominator of the length estimate.

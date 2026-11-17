@@ -379,6 +379,61 @@ fn long_reads_fill_the_histogram_to_the_cap() {
     assert_eq!(repeats.get(3000), Some(1.0));
 }
 
+/// 2,000 read groups of one 1,000-base read each with a one-base repeat:
+/// each unit is filled to key 499, 1,000,000 bins in all, and keeps its
+/// read's count of 1,000 above.
+#[test]
+fn many_units_share_the_zero_fill_budget() {
+    assert_eq!(zero_fill_cap(0), MAX_ZERO_FILLED_KEY);
+    assert_eq!(zero_fill_cap(999), MAX_ZERO_FILLED_KEY);
+    assert_eq!(zero_fill_cap(1000), 999);
+    assert_eq!(zero_fill_cap(20_000), 49);
+    assert_eq!(zero_fill_cap(2_000_000), 0);
+    let mut sam = String::from("@HD\tVN:1.6\tSO:unsorted\n");
+    for i in 0..2000 {
+        writeln!(sam, "@RG\tID:g{i}\tSM:s\tPU:p{i}").expect("write");
+    }
+    for i in 0..2000 {
+        line(
+            &mut sam,
+            &format!("r{i}"),
+            4,
+            &"A".repeat(1000),
+            &format!("g{i}"),
+        );
+    }
+    let buckets = run(&sam, &["REPEAT=A", "LEVEL=null", "LEVEL=READ_GROUP"]).expect("runs");
+    assert_eq!(buckets.len(), 2000);
+    for bucket in &buckets {
+        let keys: Vec<i64> = bucket.repeats.keys().collect();
+        assert_eq!(keys.len(), 501, "{}", bucket.label);
+        assert_eq!(keys[499], 499);
+        assert_eq!(keys[500], 1000);
+        assert_eq!(bucket.repeats.get(1000), Some(1.0));
+    }
+}
+
+/// A record with no bases (`SEQ` `*`) is not counted: it sets no read
+/// length and no off-length fraction.
+#[test]
+fn reads_without_bases_are_not_counted() {
+    let mut sam = String::from(HEADER);
+    line(&mut sam, "e1", 4, "*", "a");
+    line(&mut sam, "e2", 4, "*", "a");
+    line(&mut sam, "b1", 4, "A", "a");
+    line(&mut sam, "b2", 4, "C", "a");
+    let row = rows_of(&sam, &[]);
+    assert_eq!(row.total_reads, 2);
+    assert_eq!(row.read_length, Some(1));
+    assert_eq!(row.pct_off_length, 0.0);
+    let mut empty = String::from(HEADER);
+    line(&mut empty, "e1", 4, "*", "a");
+    let row = rows_of(&empty, &[]);
+    assert_eq!(row.total_reads, 0);
+    assert_eq!(row.read_length, None);
+    assert!(row.pct_telomeric.is_nan());
+}
+
 #[test]
 fn options_reject_bad_values() {
     let message = |args: &[&str]| run(&planted(), args).expect_err("refused").to_string();
