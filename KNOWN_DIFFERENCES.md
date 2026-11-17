@@ -1397,6 +1397,14 @@ rest on planted truth (`crates/core/tests/exon_coverage.rs`). `samtools bedcov` 
 up to 15.2% higher at the default filters (base quality and mate overlap) and at most 0.55%
 higher without them.
 
+`CollectIndexDepthMetrics` (docs/06 section 7, class `bammetrics.qc.IndexDepthMetrics`) has
+no Picard counterpart. Oracle tier E for the depth, which is an estimate: `MAPPED`,
+`UNMAPPED_PLACED` and `NO_COORDINATE` equal `samtools idxstats`
+(`tests/concordance/test_index_depth.py`), `ESTIMATED_MEAN_DEPTH` stays within 0.5 percent
+of `samtools coverage` on corpus t1 and 10 percent on the HG002 exome, and the planted
+BAMs of `tests/data/make_index_depth_bams.py` give their values exactly. A CRAM is
+refused (docs/07 decision D23).
+
 ## Not implemented
 
 `FindMendelianViolations`, `GenotypeConcordance OUTPUT_VCF` (see Options), the
