@@ -1,0 +1,10 @@
+## argv
+index-depth
+tests/data/index_depth.bam
+--read-length-sample
+0
+## exit
+2
+## stdout
+## stderr
+bammetrics index-depth: READ_LENGTH_SAMPLE=0: 1 to 1000000 (from --read-length-sample)

@@ -1,0 +1,8 @@
+## argv
+index-depth
+tests/data/markdup.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics index-depth: tests/data/markdup.bam: no .bai or .csi beside the BAM (x.bai, x.csi, x.bam.bai or x.bam.csi); CollectIndexDepthMetrics reads the index alone and never the whole file. samtools index or bammetrics build-bam-index writes one

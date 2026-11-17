@@ -60,6 +60,33 @@
   exactly and the estimate equal to TelSeq's formula in Python; 11 golden records.
 - docs/07 decisions D29 (TelSeq did not run), D30 (the read set) and D31 (the read-length
   columns and no rule).
+- `CollectIndexDepthMetrics` (verb `index-depth`, Python `collect_index_depth_metrics()`),
+  class `bammetrics.qc.IndexDepthMetrics`, docs/06 section 10, the index-only depth of
+  wave W08: per reference, per contig group (`AUTOSOME`, `X`, `Y`, `MT`, `ALT`, `DECOY`,
+  `HLA`, `OTHER`) and for `ALL`, the mapped and placed unmapped counts of the `.bai` or
+  `.csi`, `MAPPED x READ_LENGTH / LENGTH` as the depth, the ratio to the autosomes, and
+  on `ALL` the sex call (the `sex-check` thresholds), `MT_COPY_NUMBER` and
+  `NO_COORDINATE`. The read length is the mean of the mapped primary records among the
+  first `READ_LENGTH_SAMPLE` records (default 10,000), or `READ_LENGTH`. No whole read:
+  0.03 s and 4.6 MB on the 10 GB HG002 exome. A CRAM, SAM text, a pipe and a BAM without
+  an index are refused (docs/07 decision D32). An `OUTPUT` that names the index it reads
+  is refused: exit 2 from the verb, exit 1 from the Picard face, `UsageError` in Python. So
+  is an index whose reference count differs from
+  the header's, or one that counts more records than the BAM's size allows. A BAM cut in
+  the read length sample names the cut and `READ_LENGTH`. Not a Picard tool; no shipped
+  preset rule.
+- `bai::Summary::read_csi`: the counts of a `.csi` without its bins.
+- `tests/data/make_index_depth_bams.py` and `tests/data/index_depth.bam` with its `.bai`
+  and `.csi`: planted counts. `crates/cli/tests/index_depth.rs`,
+  `tests/python/test_index_depth.py` (planted truth exactly, `samtools idxstats` on every
+  indexed fixture) and `tests/concordance/test_index_depth.py` (`samtools idxstats` on 20
+  corpus BAMs and the HG002 exome; `samtools coverage` within 0.5 percent on corpus t1 and
+  10 percent on HG002, decision D33); 7 golden records.
+
+### Changed
+
+- `genome_build::kind` and `genome_build::Kind` are public: `CollectIndexDepthMetrics`
+  groups its rows by them.
 
 ### Fixed
 

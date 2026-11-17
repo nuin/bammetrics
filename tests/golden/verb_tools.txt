@@ -45,6 +45,7 @@ exon-coverage                         CollectExonCoverageMetrics
 adapter-content                       CollectAdapterContentMetrics
 duplicate-by-tile                     CollectDuplicateByTileMetrics
 telomere                              CollectTelomereMetrics
+index-depth                           CollectIndexDepthMetrics
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

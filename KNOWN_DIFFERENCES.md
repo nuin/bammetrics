@@ -1430,6 +1430,14 @@ empty when more than 5 percent of reads are over 10 percent off the most common 
 `CollectMultipleMetrics` takes `PROGRAM=CollectTelomereMetrics` and writes
 `PREFIX.telomere_metrics`; Picard 3.5.0 refuses that program name.
 
+`CollectIndexDepthMetrics` (docs/06 section 10, class `bammetrics.qc.IndexDepthMetrics`) has
+no Picard counterpart. Oracle tier E for the depth, which is an estimate: `MAPPED`,
+`UNMAPPED_PLACED` and `NO_COORDINATE` equal `samtools idxstats`
+(`tests/concordance/test_index_depth.py`), `ESTIMATED_MEAN_DEPTH` stays within 0.5 percent
+of `samtools coverage` on corpus t1 and 10 percent on the HG002 exome, and the planted
+BAMs of `tests/data/make_index_depth_bams.py` give their values exactly. A CRAM is
+refused (docs/07 decision D32).
+
 ## Not implemented
 
 `FindMendelianViolations`, `GenotypeConcordance OUTPUT_VCF` (see Options), the

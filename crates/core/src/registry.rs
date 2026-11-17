@@ -359,6 +359,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::adapter_content::TOOL,
     &crate::duplicate_by_tile::TOOL,
     &crate::telomere::TOOL,
+    &crate::index_depth::TOOL,
 ];
 
 /// The tool named `name`.

@@ -59,6 +59,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("AD", "tests/data/adapter_content.bam"),
     ("DBT", "tests/data/duplicate_by_tile.bam"),
     ("TEL", "tests/data/telomere.bam"),
+    ("ID", "tests/data/index_depth.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -410,6 +411,16 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_verb_telomere_repeat", "telomere", "TEL", "--repeat", "TTAGGN"),
     case!("error_verb_telomere_threshold", "telomere", "TEL", "-K", "0"),
     case!("error_telomere_ends", "CollectTelomereMetrics", "I=TEL", "TELOMERE_ENDS=0"),
+    // CollectIndexDepthMetrics (docs/06 section 10): the planted counts of
+    // tests/data/index_depth.bam from its .bai; a BAM without an index, a
+    // CRAM and an option that needs a whole read are refused.
+    case!("picard_index_depth", "CollectIndexDepthMetrics", "I=ID", "O=OUT/index_depth.txt"),
+    case!("verb_index_depth_read_length_tsv", "index-depth", "ID", "--read-length", "150", "--format", "tsv"),
+    case!("verb_index_depth_one_contig_json", "index-depth", "IS", "--format", "json"),
+    case!("error_index_depth_cram", "CollectIndexDepthMetrics", "I=IS_CRAM"),
+    case!("error_index_depth_stop_after", "CollectIndexDepthMetrics", "I=ID", "STOP_AFTER=10"),
+    case!("error_verb_index_depth_no_index", "index-depth", "MD"),
+    case!("error_verb_index_depth_sample", "index-depth", "ID", "--read-length-sample", "0"),
 ];
 
 /// Formats (docs/formats.md): `convert` in both directions and to every

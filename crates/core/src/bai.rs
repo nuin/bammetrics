@@ -62,6 +62,7 @@
 
 use std::io::{self, Read, Write};
 
+mod csi;
 mod header;
 mod indexer;
 #[cfg(test)]
@@ -131,7 +132,9 @@ pub struct Index {
     pub no_coordinate: Option<u64>,
 }
 
-/// What `BamIndexStats` reads of an index: the counts, no bin kept.
+/// What `BamIndexStats` and `CollectIndexDepthMetrics` read of an index:
+/// the counts, no bin kept ([`Summary::read`] for a `.bai`,
+/// [`Summary::read_csi`] for a `.csi`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Summary {
     /// The metadata of the first references, at most the number asked for.

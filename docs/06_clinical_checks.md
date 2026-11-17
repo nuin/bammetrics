@@ -821,3 +821,169 @@ and the measurements.
 | `qc` file | `PREFIX.telomere_metrics` (under a preset that names the class) |
 | Rules | none shipped (docs/telomere.md section 7) |
 | Truth | `tests/data/make_telomere_bams.py`, `tests/python/test_telomere.py` |
+
+## 10. Index-only depth
+
+`CollectIndexDepthMetrics` (verb `index-depth`, Python `collect_index_depth_metrics()`,
+class `bammetrics.qc.IndexDepthMetrics`, source `crates/core/src/index_depth.rs`)
+estimates depth per reference from the BAM index alone, in under a second on any BAM. It
+is the index-only depth analysis of wave W08 of docs/07, with no Picard counterpart.
+
+### 10.1 What it reads
+
+- The `.bai` or `.csi` beside the BAM, found as `BamIndexStats` finds it (`x.bai`,
+  `x.csi`, `x.bam.bai`, `x.bam.csi`, then beside a symbolic link's target). Of each
+  reference it keeps the metadata pseudo-bin: records without the unmapped flag
+  (`MAPPED`) and with it (`UNMAPPED_PLACED`). After the last reference it keeps the
+  records without a coordinate (`NO_COORDINATE`). No bin is held. A `.bai` is read by
+  `bai::Summary::read`, a `.csi` by `Summary::read_csi` (`crates/core/src/bai/csi.rs`).
+  At most 1 GiB of index is read (inflated, for a `.csi`); a longer one is an error.
+- The BAM's binary reference list for names and lengths, read with its header text under
+  one 64 MiB cap (`doctor::input::bam_header`). A reference of length 0 is kept.
+- The first `READ_LENGTH_SAMPLE` records (default 10,000, at most 1,000,000) for the read
+  length: the mean `l_seq` of the mapped primary records with a sequence among them.
+  Secondary records, supplementary records and unmapped records are left out. With
+  `READ_LENGTH` no record is read.
+
+A reference the index has no metadata for counts 0 (samtools and htsjdk write none for a
+reference without records). An index whose reference count differs from the header's is
+the index of another file and is refused, fewer or more; `samtools idxstats` reads the
+first references of a longer index. An index that counts more records than the BAM can
+hold is refused too: a BGZF block is at least 28 bytes and inflates to at most 65,536, a
+record is at least 36 bytes, so a BAM of `S` bytes holds at most `S / 28 x 65536 / 36`
+records. An index older than the BAM is read as it is: `samtools` warns, `bammetrics
+doctor` reports its age.
+
+Refused, each with exit 1 and no file:
+
+- A CRAM. Its `.crai` holds container offsets and spans, no count. Container headers hold
+  a record count per slice but not the unmapped flag, and a multi-reference slice holds
+  no count per reference, so no count of `MAPPED` exists short of decoding records.
+  `samtools idxstats` decodes the flag and reference series alone: 14.7 s on 8 threads
+  for the 16 GB NA12878 CRAM. The noodles decoder of `cram.rs` decodes every series: a
+  whole-file `sex-check` of that CRAM takes 336.5 s (section 4). Neither is index-only,
+  so the CRAM is refused, and the message names `samtools idxstats` and `bammetrics
+  sex-check` and `mt-copy-number`. docs/07 decision D32.
+- A BAM without an index. The message names `samtools index` and `bammetrics
+  build-bam-index`. No whole read is ever made.
+- SAM text, a pipe and standard input.
+
+### 10.2 Metrics class `bammetrics.qc.IndexDepthMetrics`
+
+The tool writes a metrics file (`OUTPUT`, or standard output without one), so `--format`,
+`convert`, `check` and the report read it as any other. Rows: one per reference in
+header order, then one per group, then `ALL`. The groups come from the names of
+`crates/core/src/genome_build.rs`: `AUTOSOME` (`chr1` to `chr22`, `1` to `22`), `X`, `Y`,
+`MT` (`chrM`, `MT`, `M`, `chrMT`), `ALT` (`_alt`), `DECOY` (`_decoy`, `hs37d5`), `HLA`
+(`HLA-`) and `OTHER` (every other name). The eight group rows are always written; a group
+without a contig has length 0.
+
+| Column | Type | Definition |
+|---|---|---|
+| `CONTIG` | string | The reference; empty on a group row and on `ALL`. |
+| `GROUP` | string | The group of the reference, or of the group row; `ALL` on the last row. |
+| `LENGTH` | int | The header length, summed on a group row. |
+| `MAPPED` | int | Index metadata: records without the unmapped flag. |
+| `UNMAPPED_PLACED` | int | Index metadata: records with the unmapped flag placed on the reference. |
+| `ESTIMATED_MEAN_DEPTH` | float | `MAPPED x READ_LENGTH / LENGTH`. `?` for length 0 or an unknown read length; 0 for no mapped record. |
+| `RATIO_TO_AUTOSOMES` | float | `MAPPED / LENGTH` over the same for the autosomes; the read length cancels. |
+| `READ_LENGTH` | float | The sampled mean, or `READ_LENGTH`; empty when no record qualified. |
+| `NO_COORDINATE` | int | On `ALL`: the records with no reference. |
+| `INFERRED_SEX` | string | On `ALL`: `sex_check::row` on the `X` and `Y` ratios. |
+| `MT_COPY_NUMBER` | float | On `ALL`: `2 x` the `RATIO_TO_AUTOSOMES` of `MT`. |
+| `REASON` | string | On `ALL`: why a value is `?` or the sex `UNKNOWN`. |
+
+The `X` and `Y` ratios are reads per base over reads per base on the autosomes: the
+quantity `CollectSexCheckMetrics` computes, with its thresholds (section 2.3) and its
+reasons. `MT_COPY_NUMBER` is the estimate of `CollectMtCopyNumberMetrics` (section 6) from
+records in place of filtered aligned bases.
+
+### 10.3 Options
+
+| Option | Default | Meaning |
+|---|---|---|
+| `INPUT`, `OUTPUT` | | The BAM; the metrics file, standard output without one. An `OUTPUT` that names the index read is refused. |
+| `READ_LENGTH` | the sampled mean | 1 to 2,147,483,647 bases; then no record is read. |
+| `READ_LENGTH_SAMPLE` | 10,000 | Records read from the start, 1 to 1,000,000. |
+
+`ASSUME_SORTED`, `REFERENCE_SEQUENCE`, `STOP_AFTER`, `METRIC_ACCUMULATION_LEVEL` and
+`MINIMUM_MAPPING_QUALITY` need a read of the records and are `Unrecognized option`. The
+index counts every record, so no filter can apply. The tool is not one pass over the
+records, so it is no `CollectMultipleMetrics` program, `chain` tap or `qc` source.
+
+### 10.4 Truth, cross-checks and tolerances
+
+No oracle exists for the depth. The counts have one: `samtools idxstats` reads the same
+metadata.
+
+- `tests/data/make_index_depth_bams.py OUT` writes five BAMs with the struct writer of
+  `tests/concordance/index_bams.py`, each indexed by samtools as `.bai` and, in `OUT/csi`,
+  as `.csi`: `male` (11 references: two autosomes, X, Y, chrM, an alt, a decoy, an HLA
+  contig, `chrEBV`, a contig without a read, a contig of length 0; 7 placed unmapped and 9
+  unplaced records; on chr1 4 duplicates, 2 QC failures, 3 secondary records without a
+  sequence and 3 supplementary records of 40 bases), `female_no_mt` (no mitochondrial
+  contig), `empty` (no record), `unaligned` (no reference) and `mixed_lengths` (ten
+  100-base reads, then thirty of 150). Lengths and counts are powers of two, so every
+  ratio is exact. `tests/python/test_index_depth.py` requires every planted count, read
+  length (100, 137.5, and 100 at `READ_LENGTH_SAMPLE=10`), sex call and copy number
+  exactly, through both index kinds. `tests/data/index_depth.bam` is `male`, with its
+  `.bai` and `.csi`; `crates/cli/tests/index_depth.rs` checks it without samtools, and a
+  cut index and the index of another BAM fail.
+- `MAPPED`, `UNMAPPED_PLACED` and `NO_COORDINATE` equal `samtools idxstats` on the 8
+  `tests/data` BAMs with an index (`tests/python/test_index_depth.py`), on the foundation
+  corpus, the exome slice and the 18 corpus tier BAMs
+  (`tests/concordance/test_index_depth.py`), and on the 86 references of the HG002 exome.
+- `ESTIMATED_MEAN_DEPTH` against `samtools coverage` `meandepth` (defaults: no unmapped,
+  secondary, QC-failed or duplicate record; no quality filter). Tolerance 0.5 percent per
+  contig on corpus t1, 10 percent on the HG002 exome
+  (`BAMMETRICS_SCALE=1 pytest tests/concordance/test_index_depth.py`).
+
+| Input | Contig | Estimate | `samtools coverage` | Difference |
+|---|---|---|---|---|
+| corpus t1 | `chr1` | 12.712 | 12.7082 | +0.03% |
+| corpus t1 | `chr2` | 10.635 | 10.634 | +0.01% |
+| corpus t1 | `chrM` | 3.7125 | 3.7125 | 0 |
+| HG002 exome | `1` | 7.438408 | 7.00403 | +6.20% |
+| HG002 exome | `19` | 17.858204 | 16.8242 | +6.15% |
+| HG002 exome | `X` | 2.524985 | 2.3786 | +6.15% |
+| HG002 exome | `Y` | 0.526711 | 0.499064 | +5.54% |
+| HG002 exome | `MT` | 439.8327 | 411.054 | +7.00% |
+
+The 25 primary contigs of HG002 run 5.5 to 7.0 percent above. The index counts what
+`samtools coverage` drops: duplicates (7,305,282 of 150,113,954 mapped records, 4.9
+percent, by `samtools flagstat`) and secondary records (152,131, 0.1 percent). A record's
+read length counts its soft-clipped and inserted bases, which cover no reference base.
+`CollectWgsMetrics` `MEAN_COVERAGE`
+filters MAPQ and base quality 20 and mate overlap besides, so it runs further below; it
+is not the cross-check.
+
+### 10.5 Rules
+
+No shipped preset has an `IndexDepthMetrics` rule. The depth counts duplicates and every
+other record, so a coverage bound on it would pass a library a filtered tool fails; the
+filtered tools carry the coverage rules. The sex call repeats `sex.match` and
+`sex.inferred` on unfiltered counts. No rule names a plot, so no plot family is added.
+
+### 10.6 Measurements
+
+Mac Studio, release build, output under `~/data/bammetrics-scale/waves/w08/` (deleted
+after the run), 2026-11-17, three runs.
+
+| Input | Index | Wall | Peak RSS | `INFERRED_SEX` | X / Y ratio | `MT_COPY_NUMBER` |
+|---|---|---|---|---|---|---|
+| HG002 exome BAM, 10 GB, hs37d5 | `.bai`, 7.2 MB | 0.02 to 0.03 s | 4.6 MB | MALE | 0.397 / 0.083 | 138.35 |
+
+`samtools coverage` on the same BAM takes 216.8 s.
+
+The sex call on unfiltered counts. `CollectSexCheckMetrics` gives HG002 X 0.3857 and Y
+0.0522 on reads at MAPQ 20 (section 4); with `--minimum-mapping-quality 0` it gives X
+0.3977 and Y 0.0837, the index values (0.397 and 0.083). The reads under MAPQ 20 add 59
+percent to the Y ratio. NA12878 (female, GRCh38 CRAM, so the tool refuses it) has from
+`samtools idxstats` (14.7 s on 8 threads), the counts a BAM index would hold: X 0.967,
+Y 0.0896. Its filtered Y ratio is 0.0217 (section 4). With the thresholds of section 2.3
+the index call is `UNKNOWN` for NA12878 (Y over `FEMALE_MAX_Y`, 0.05; X over
+`MALE_MAX_X`, 0.75) and `MALE` for HG002. On unfiltered counts the Y ratios of the two
+samples overlap (0.0896 female, 0.083 male) and the X ratio separates them. The
+thresholds are kept: on these counts they read `UNKNOWN`, never the other sex, for XX and
+XY. `sex-check` is the call to report. `MT_COPY_NUMBER` on HG002 is 138.35 against 136.22
+from `CollectMtCopyNumberMetrics` (section 6.7), 1.6 percent higher.

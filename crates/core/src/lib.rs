@@ -39,6 +39,7 @@ pub mod gzip;
 pub mod header_merge;
 pub mod histogram;
 pub mod hs_metrics;
+pub mod index_depth;
 pub mod insert_size;
 pub mod intervals;
 pub mod java;
