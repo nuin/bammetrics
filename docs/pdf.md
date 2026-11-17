@@ -32,10 +32,11 @@ bm.qc("in.bam", output="out/S1", report=["html", "pdf"], pdf_font="font.otf")
   PDF the earlier manifest lists, as it removes a page. `plan` prints the PDF on its
   `report` line. The summary and the jsonl `done` event point to the PDF when it is the
   only report.
-- `--pdf-font PATH` sets every text run from one TrueType or OpenType file of at most
-  32 MiB. It is read and checked before the run: a missing file, a directory, a pipe, a
-  file over 32 MiB and a file that is not a font each exit 1 with the reason. Plot labels
-  and the status glyphs keep the built-in DejaVu.
+- `--pdf-font PATH` sets every text run from one TrueType or OpenType face of at most
+  32 MiB. It is read and checked before the run (section Fonts): a missing file, a
+  directory, a pipe, a file over 32 MiB, a font collection and a file krilla could not
+  read each exit 1 with the reason. Plot labels and the status glyphs keep the built-in
+  DejaVu.
 - `--page-size a4|letter`: A4 by default.
 - `--pdf-font` or `--page-size` without a PDF is a usage error (exit 2): `--pdf-font sets
   the PDF, which only --pdf writes`.
@@ -76,8 +77,14 @@ starts on a new page; a row taller than a page (a long command line in the run t
 long cell) goes on over the next pages, each piece under the repeated header row. A
 heading stays on the page of the plot under it.
 
-The coverage gaps table that the HTML page shows under a failing `CoverageGapMetrics`
-check is not in the PDF; the appendix prints the `CoverageGapMetrics` table.
+Under the first warning or failing `CoverageGapMetrics` check the PDF prints the coverage
+gaps table of the HTML page (owner decision D2): the longest 200 gaps from the BED beside
+the metrics file (its name plus `.bed`), longest first, with the columns Target
+(the row header), Region (1-based, closed), Length, Mean depth and Min depth, under an
+`H4` that counts them, and a line naming the BED for the rest. Without the BED it prints
+one line, `Coverage gaps not listed: no gaps file at ...`. The table is tagged as every
+other table; `the_coverage_gaps_table_sits_under_its_check` in `crates/pdf/tests/pdf.rs`
+pins its tags.
 
 ## Tags and PDF/UA-1
 
@@ -106,68 +113,131 @@ A character outside them (a sample name in Cyrillic or CJK) stops the render wit
 point, the text and the way out: `U+041F (П) in "Пример-7" is outside the built-in Latin
 fonts; pass --pdf-font with a TTF or OTF font that has it` (exit 1). There is no silent
 fallback, because PDF/UA-1 refuses a `.notdef` glyph. `report --pdf` renders every PDF
-before it writes the first file, so the run writes nothing. `qc` renders the PDF before
-`PREFIX.verdict.json` and the page; the metrics files and the manifest are written by then.
-Rerun with `--force --pdf-font FILE`.
+before it writes the first file, so the run writes nothing. `qc --report pdf` checks the
+sample name against the fonts in its prepare stage, after the BAM header gives the name
+(`--sample`, else the first `@RG` `SM`) and before the first read, so the run writes no
+metrics file, manifest or directory, and a rerun with `--pdf-font FILE` needs no
+`--force`.
 
 An empty sample name, or one holding a control character, U+2028 or U+2029, fails with
 `the sample name "..." is empty or not one line`. In a cell, control characters, U+2028 and
 U+2029 print as spaces.
 
+### What `--pdf-font` takes
+
+One TrueType or OpenType face (glyf or CFF outlines) of at most 32 MiB. `fonts::validate`
+runs every reader krilla runs before krilla sees the file, and each failure exits 1 with
+its reason:
+
+1. The table directory, each table inside the file, and each table checksum (`head` and
+   Apple's `bhed` aside: their checksum skips a field, and 53 of 242 macOS system fonts
+   set it otherwise).
+2. Glyph outlines, `head` (units per em 16 to 16384), `hhea`, `hmtx`, `maxp` with more
+   than one glyph, and a `cmap` that maps a character, through skrifa.
+3. No color or bitmap glyph table (`COLR`, `SVG`, `sbix`, `CBDT`, `EBDT`): krilla draws
+   those glyphs on a path no check reaches. No `OS/2` fsType 2: the license forbids the
+   embedding a PDF needs.
+4. The text shaper's own parser (rustybuzz, which reads `head`, `hhea` and `maxp` more
+   strictly than skrifa), then printable ASCII and `·` shaped as krilla shapes them.
+5. A subset of those glyphs (subsetter, as krilla subsets) that parses again.
+
+Then, before the first page opens, every text run of the report is shaped once with that
+font; a run that gives a `.notdef` or stops the shaper is the same error. The reason:
+krilla 0.8.2 shapes with `rustybuzz::Face::from_slice(..).unwrap()` while a page surface is
+open, and the surface's drop asserts during the unwind, so a panic there aborted the
+process (SIGABRT, exit 134) where `catch_unwind` cannot reach. Checked 2026-11-16: 1,550
+damaged copies of two DejaVu fonts (cut, zeroed directory, wrong checksums, glyph offsets
+past the glyph table, random bytes after a valid header, flipped bytes per table, each
+also with its checksums recomputed) all exit 1 or render; none exits 134. 242 TrueType and
+OpenType files of macOS 27 render or fail with a reason: 158 lack a Latin character of the
+report, 1 has no outlines, 1 is a color font, 1 maps no character, 1 forbids embedding.
+`a_damaged_pdf_font_is_an_error_never_an_abort` in `crates/cli/tests/verbs.rs` runs 9 of
+these shapes through the binary.
+
+A font collection (`.ttc`, magic `ttcf`) is refused with `a font collection (TTC) holds
+several faces; extract one face to a TTF or OTF file`. The magic is read before the size,
+so the system CJK collections of macOS (STHeiti Light 55,775,164 bytes, Apple SD Gothic
+Neo 55,323,000, Songti 66,902,744) get that message, not the size limit. One face comes
+out with fontTools:
+
+```bash
+python3 -c "from fontTools.ttLib import TTCollection; TTCollection('Songti.ttc').fonts[0].save('Songti-0.ttf')"
+```
+
+The 32 MiB cap holds a full CJK face (Noto Sans CJK SC is about 16 MiB) and bounds the
+memory of a render: the file is read once into memory and shared by the three text faces.
+
 ## Builds, sizes and the kill rule
 
 | Build | `pdf` | Why |
 |---|---|---|
-| `cargo build --release` (the Makefile's `release`) | off | the default build stays at rust-version 1.88 and pulls no krilla crate |
-| `cargo build --release -p bammetrics-cli --features pdf` | on | the binary with the PDF report; needs rustc 1.92 |
+| `cargo build --release` (the Makefile's `release`) | off | the workspace rust-version, 1.91; pulls no krilla crate |
+| `cargo build --release -p bammetrics-cli --features pdf` | on | the binary with the PDF report; rustc 1.92 |
 | the wheel (`pyproject.toml` `[tool.maturin] features`) | on | docs/07 budgets the wheel with `pdf`; a pip user cannot rebuild |
 | `make golden` | both | the PDF cases with it, the missing-feature errors without it |
 
-The workspace keeps `rust-version = "1.88"`. krilla 0.8.2 declares 1.92, so cargo refuses
-a build with the feature on an older compiler and names krilla. The default build has no
-1.92 crate.
+The workspace declares `rust-version = "1.91"`, the floor of noodles 0.119 and the vendored
+noodles-cram 0.102; the default workspace builds on rustc 1.91.1 (checked 2026-11-16, and
+the CI job `msrv`). The feature `pdf` needs rustc 1.92, the rust-version krilla 0.8.2 and
+krilla-svg 0.8.1 declare. Cargo does not enforce a dependency's rust-version: `cargo +1.91
+check -p bammetrics-pdf --features pdf` passed on 1.91.1, but 1.92 is the supported floor.
+The wheel always carries the feature (maturin has no feature per compiler), so building
+the Python module from source needs 1.92 (docs/python.md).
 
-Measured 2026-11-16 on the Mac Studio (macOS arm64, rustc 1.100.0):
+Measured 2026-11-16 on the Mac Studio (macOS arm64, rustc 1.100.0), on the release head:
 
 | What | Without `pdf` | With `pdf` | Cost |
 |---|---:|---:|---:|
-| `bammetrics`, stripped | 6,793,576 | 10,122,280 | 3,328,704 bytes (3.17 MiB) |
-| the wheel (CPython 3.15, macOS arm64) | 3,698,827 | 5,529,637 | 1,830,810 bytes |
-| the module inside it | 8,423,792 | 12,353,120 | 3,929,328 bytes |
+| `bammetrics`, stripped | 6,793,584 | 10,138,816 | 3,345,232 bytes (3.19 MiB) |
+| the wheel (CPython 3.15, macOS arm64) | 3,702,204 | 5,548,488 | 1,846,284 bytes |
+| the module inside it | 8,425,232 | 12,373,104 | 3,947,872 bytes |
 
-The default binary was 6,760,472 bytes stripped before this wave's command options
-(6358996). The options, their help, the errors and the dispatch add 33,104 bytes to it
-(0.49%); it links no PDF code. docs/07 asks that the default build not grow; the
-alternative, the flags compiled out of it, loses the exit-2 error that names the feature.
-The owner decides which holds. The `size_pdf` probe of `make budgets` measures the PDF
-crates alone (docs/05 section 4.8).
+The default binary of 0.23.0 (822c293), built the same way the same day, is 6,760,480 bytes
+stripped. The PDF options, their help, the errors and the dispatch add 33,104 bytes to it
+(0.49%); it links no PDF code. Owner decision D3 accepts this growth: the alternative, the
+flags compiled out of the default build, loses the exit-2 error that names the feature.
+Absolute sizes move by a few bytes with the path of the build directory; the differences
+do not. The `size_pdf` probe of `make budgets` measures the PDF crates alone (docs/05
+section 4.8).
 
 PDF files from the committed fixtures, A4 unless named:
 
 | Input | Pages | Bytes |
 |---|---:|---:|
-| `report tests/data/picard --pdf` (generic) | 27 | 649,745 |
-| `report tests/data/picard --pdf-only --preset clinical-panel --all-plots --page-size letter` | 31 | 682,357 |
-| `qc tests/data/insert_size.bam --report pdf --preset clinical-panel --panel targets.interval_list -R ref_100k.fa` | 15 | 250,181 |
-| `qc tests/data/insert_size.bam --report html,pdf` (generic) | 7 | 107,023 |
-| `fixture_pdfs` failing sample (`crates/pdf/examples`) | 21 | 458,699 |
+| `report tests/data/picard --pdf` (generic) | 27 | 649,897 |
+| `report tests/data/picard --pdf-only --preset clinical-panel --all-plots --page-size letter` | 31 | 682,347 |
+| `qc tests/data/insert_size.bam --report pdf --preset clinical-panel --panel targets.interval_list -R ref_100k.fa`, prefix `target/qcout/q/s` | 15 | 254,782 |
+| `qc tests/data/insert_size.bam --report html,pdf` (generic), prefix `target/qcout/g/s` | 6 | 105,548 |
+| `fixture_pdfs` failing sample (`crates/pdf/examples`) | 21 | 458,691 |
 
 The report part of the failing fixture is 3 pages, as docs/07 W06 asks; the appendix adds
-18. docs/07 counted 3 pages for the whole file and budgeted 150 KB per sample, measured
-without the appendix. Every row of every table costs about 74 bytes per value: PDF/UA-1
-needs one tagged cell element each, and krilla writes no object streams. The failing
-fixture holds 2,373 such cells. The size row of docs/05 section 4.8 is 500 KB for that
-reason (failing at 1 MB); the owner confirms it or asks for a row cap. A real sample's
-PDF follows the length of its histograms: `tests/data/picard` gives 27 pages and 650 KB.
+18. Owner decision D1: the appendix prints every row, and the sample PDF size target is
+500 KB, failing at 1 MB. docs/07 had budgeted 150 KB for 3 pages without the appendix.
+Every row of every table costs about 74 bytes per value: PDF/UA-1 needs one tagged cell
+element each, and krilla writes no object streams. The failing fixture holds 2,373 such
+cells. A real sample's PDF follows the length of its histograms: `tests/data/picard`
+gives 27 pages and 650 KB.
 
 A `qc` PDF prints the paths of its metrics files, so its size follows the length of the
 prefix. Two runs of each give the same bytes (`cmp`).
 
-The kill rule of docs/07 (W06): layout code over 1,500 lines or growth over 4 MB keeps the
+The kill rule of docs/07 (W06): layout code over 1,800 lines (owner decision D2, raised
+from 1,500 for the coverage gaps table and the font checks) or growth over 4 MB keeps the
 PDF a documented recipe with the feature off. It did not fire. `wc -l crates/pdf/src/*.rs`
-reads 1,497 lines, and the growth reads 3,444,688 bytes (3.285 MiB, 3.44 MB). The CLI and Python
-glue lives in `crates/cli/src/pdf.rs` and `crates/py`, outside that count.
-docs/benchmarks.md holds the method.
+reads 1,707 lines (layout.rs 726, content.rs 476, fonts.rs 284, lib.rs 221), and the growth
+reads 3,461,216 bytes (3.301 MiB, 3.46 MB). The CLI and Python glue lives in
+`crates/cli/src/pdf.rs` and `crates/py`, outside that count. docs/benchmarks.md holds the
+method.
+
+## Owner decisions (2026-11-16)
+
+- D1: the appendix prints every row. The sample PDF size target is 500 KB, failing at
+  1 MB (docs/05 section 4.8).
+- D2: the layout-code kill rule rises from 1,500 to 1,800 lines; the growth limit stays
+  4 MB. The coverage gaps table is in the PDF under a warning or failing
+  `CoverageGapMetrics` check.
+- D3: the default binary's growth of 33,104 bytes from the PDF flags and the exit-2
+  missing-feature error is accepted.
 
 ## Chrome recipe
 

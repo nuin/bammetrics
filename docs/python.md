@@ -118,8 +118,15 @@ One path giving one sample returns a `Verdict`; a list of paths, or a directory 
 
 `report(dirs, pdf=True)` adds `SAMPLE.report.pdf` beside each page; `pdf_only=True` writes
 the verdicts and the PDF files alone. `page_size` (`"a4"`, `"letter"`) and `pdf_font` (a
-TTF or OTF path) set the PDF. The wheel is built with the feature `pdf`; a module built
-without it raises `UsageError` naming the feature ([docs/pdf.md](pdf.md)).
+TTF or OTF path, one face of at most 32 MiB; a `.ttc` collection raises `InputError`)
+set the PDF. The wheel is built with the feature `pdf`; a module built without it raises
+`UsageError` naming the feature ([docs/pdf.md](pdf.md)).
+
+The feature is always on in `pyproject.toml` (`[tool.maturin] features`): maturin has no
+feature that follows the compiler, and a wheel without the PDF report would differ from the
+one on the index. A build from source (`maturin develop`, `maturin build`, `pip install`
+of the sdist) therefore needs rustc 1.92, the rust-version of krilla 0.8.2. The command
+line binary builds on 1.91 without the feature.
 
 ## read_table
 

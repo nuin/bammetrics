@@ -7,8 +7,8 @@ version is in the [README](../README.md); presets and `verdict.json` are in
 
 ## Build and test
 
-Needs Rust 1.88 or newer (edition 2024). The PDF report (cargo feature `pdf`,
-[docs/pdf.md](pdf.md)) needs Rust 1.92.
+Needs Rust 1.91 or newer (edition 2024; noodles 0.119 declares 1.91). The PDF report
+(cargo feature `pdf`, [docs/pdf.md](pdf.md)) needs Rust 1.92 (krilla 0.8.2).
 
 ```bash
 cargo build --release            # target/release/bammetrics

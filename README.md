@@ -13,7 +13,7 @@ seeded random BAMs, every printed cell compared as a string. What still differs 
 ## Install
 
 ```bash
-cargo build --release                          # target/release/bammetrics (Rust 1.88+)
+cargo build --release                          # target/release/bammetrics (Rust 1.91+)
 
 uv venv .venv && uv pip install --python .venv/bin/python maturin
 .venv/bin/maturin develop --release            # the bammetrics Python module
@@ -140,8 +140,10 @@ The PDF report holds the same content as a tagged PDF/UA-1 file, with an appendi
 metrics table: `report --pdf`, `report --pdf-only`, `qc --report pdf` or `--report
 html,pdf`, and in Python `report(..., pdf=True)` and `qc(..., report="pdf")`. It needs the
 cargo feature `pdf` (`cargo build --release -p bammetrics-cli --features pdf`, rustc 1.92),
-which the wheel carries and the default `cargo build --release` leaves out. Sample names
-outside Latin take `--pdf-font FONT`. [docs/pdf.md](docs/pdf.md) has the content, the tags,
+which the wheel carries and the default `cargo build --release` leaves out. The wheel always
+ships with it, so building the Python module from source (`maturin develop`, an sdist)
+needs rustc 1.92. Sample names outside Latin take `--pdf-font FONT`, one TTF or OTF face of
+at most 32 MiB (a `.ttc` collection is refused). [docs/pdf.md](docs/pdf.md) has the content, the tags,
 the sizes and a Chrome recipe for a build without the feature.
 
 ## Tools

@@ -19,7 +19,7 @@ Decisions the owner must take, by the wave each one blocks:
 |---|---|---|
 | Q1 | Agent cap: 40 total is read as per workflow (14 at most each). Confirm. | W02 |
 | Q2 | Verb name: `chain`, with `run` as an alias or not. Decided: `chain` only, no alias (W04, docs/chaining.md section 12). | W04 |
-| Q3 | krilla for PDF: +3.8 MB behind feature `pdf`, rust-version 1.88 to 1.92. | W06 |
+| Q3 | krilla for PDF: +3.8 MB behind feature `pdf`, rustc 1.92 for that feature; the workspace rust-version is 1.91 (noodles 0.119). | W06 |
 | Q4 | Push `feat/check-duplicate-marking` and `feat/clinical-checks`; locate `feat/jumping-library-metrics`. | W01 |
 | Q5 | Scale gate on a CRAM slice (section 6), since no 30x BAM fits. | W05 |
 | Q6 | `JAVASCRIPT_FILE` rejected on FilterSamReads and FilterVcf. | W13 |
@@ -168,11 +168,11 @@ krilla 0.8.2 with krilla-svg in a new `crates/pdf`, cargo feature `pdf`. Evidenc
 | wkhtmltopdf | 0 | 0 | 12 s | n/a | plots lost (no CSS variables) |
 | printpdf html | n/a | 181 | 2 s | 41 pages | plots lost as text |
 
-krilla is pure Rust, byte-identical across runs (needed by the golden suite), 8.5 MB peak RSS, validates PDF/A and PDF/UA-1, tags content, writes outlines. Costs: about 1,000 lines of layout code (wrap, tables, page breaks, tags), three Latin subsets of DejaVu (70 KB), `--pdf-font PATH` for non-Latin sample names, rust-version 1.92 (Q3). One change in `crates/report`: `plots::figure_standalone` replaces `var(--x)` with the print palette (`theme::token(Theme::Print, name)`), because usvg ignores CSS variables.
+krilla is pure Rust, byte-identical across runs (needed by the golden suite), 8.5 MB peak RSS, validates PDF/A and PDF/UA-1, tags content, writes outlines. Costs: about 1,000 lines of layout code (wrap, tables, page breaks, tags), three Latin subsets of DejaVu (70 KB), `--pdf-font PATH` for non-Latin sample names, rustc 1.92 for the feature (Q3). One change in `crates/report`: `plots::figure_standalone` replaces `var(--x)` with the print palette (`theme::token(Theme::Print, name)`), because usvg ignores CSS variables.
 
-Kill rule (W06): layout code over 1,500 lines or growth over 4 MB keeps PDF as a documented Chrome recipe with feature `pdf` off. Budget rows added to docs/05 4.8: PDF growth under 4 MB, render under 100 ms per sample, under 150 KB per sample, each failing at 2x. The 300 KB report row keeps its probes.
+Kill rule (W06): layout code over 1,800 lines or growth over 4 MB keeps PDF as a documented Chrome recipe with feature `pdf` off. The line limit was 1,500 until owner decision D2 (2026-11-16) raised it for the coverage gaps table; the growth limit stays. Budget rows added to docs/05 4.8: PDF growth under 4 MB, render under 100 ms per sample, under 500 KB per sample (owner decision D1, 2026-11-16: the appendix prints every row; the first figure, 150 KB, was measured without it), each failing at 2x. The 300 KB report row keeps its probes. Measured at 0.24.0: 1,707 lines, 3,461,216 bytes of growth, 31.4 ms, 454.1 KB (docs/pdf.md). Owner decision D3 (2026-11-16) accepts the default binary's growth of 33,104 bytes for the PDF flags and the exit-2 missing-feature error.
 
-PDF content follows docs/05 4.2: header, verdict band, failing checks each with its plot, check table, provenance, an appendix with every table (the print CSS hides `#tables` today), an outline entry per section. A later krilla-only backend for `svg.rs` `Chart` (about 12 primitives) saves about 1.8 MB (estimate).
+PDF content follows docs/05 4.2: header, verdict band, failing checks each with its plot (and the coverage gaps table under a gap check, D2), check table, provenance, an appendix with every table and every row (the print CSS hides `#tables` today), an outline entry per section. The failing fixture is 3 pages of report and 18 of appendix, 21 in all. A later krilla-only backend for `svg.rs` `Chart` (about 12 primitives) saves about 1.8 MB (estimate).
 
 ### 3.4 Reports
 
@@ -232,7 +232,7 @@ Base gate, every wave: fmt, clippy `-D warnings`, `cargo test --workspace`, `mak
 | W03 | 0.21.0 | Stage executor, MarkDuplicates barrier | A: stage.rs, executor. B: barrier plus replay, `Emit`. C: tap adapter, `write` sink | W00 | 14 | chained equals staged on corpus t1 | within 5 percent of `qc` on chr21.bam or the kill rule applies; mid-chain STOP_AFTER pinned |
 | W04 | 0.22.0 | `chain` verb, plan file, Python | A: `chain`, `+`, did-you-mean, `plan`. B: `--plan` TOML, `parse_tables` to core. C: `bm.chain`, `bm.step`, `Run.stages`, FifoBuffer | W03, W02 | 14 | self; golden cases for chain text and errors | both documented examples run; `plan` prints segments and disk; FifoBuffer exits 0 |
 | W05 | 0.23.0 | Record IO, sort barrier, planner, memgate | A: SAM text reader and writer, comparators with a total-order test. B: header-merge, Spill for RawRecord, planner, free-space refusal. C: bai reader and writer, `write --index`, `make memgate`. Tools SortSam, ViewSam, BuildBamIndex | W04 | 14 | A for BAI and SAM text, B for BAM; shuffled corpus; htsjdk tie order on random keys | BAI byte-identical; sort chain on the scale slice (section 6) with RSS under `--sort-memory` plus 1 GiB, spill under 1.2x input |
-| W06 | 0.24.0 | PDF report | A: `figure_standalone`. B: `crates/pdf`, fonts, `--pdf-font`. C: `report --pdf`, `qc --report pdf`, PDF/UA-1 test, budget rows | W02 | 14 | self; veraPDF or a structure test; two runs `cmp` | byte-stable, 3 pages for the fixture, growth under 4 MB, kill rule checked first |
+| W06 | 0.24.0 | PDF report | A: `figure_standalone`. B: `crates/pdf`, fonts, `--pdf-font`. C: `report --pdf`, `qc --report pdf`, PDF/UA-1 test, budget rows | W02 | 14 | self; veraPDF or a structure test; two runs `cmp` | byte-stable, 3 pages of report for the fixture plus the appendix (21 pages), growth under 4 MB, kill rule checked first |
 | W07 | 0.25.0 | Beyond A | doctor (header, last BGZF block, first 10,000 records, build detection, `--sample-sheet`), MtCopyNumberMetrics, ExonCoverageMetrics with GTF and BED12 reader | W01, W02 | 14 | E; per-exon mean and min tier A against `CollectHsMetrics PER_TARGET_COVERAGE`; planted defects; samtools coverage | doctor under 1 s on the scale CRAM header; exit codes as `check` |
 | W08 | 0.26.0 | Beyond B | AdapterContentMetrics, DuplicateByTileMetrics, TelomereMetrics, index-only depth | W01, W02 | 14 | E; planted reads; samtools idxstats | 4 analyses match planted truth; tolerances written |
 | W09 | 0.27.0 | BAM edit transforms 1 | AddCommentsToBam, AddOATag, CleanSam, SetNmMdAndUqTags, SetNmAndUqTags, ReplaceSamHeader | W05 | 14 | A or B per W02; corpus with tags stripped; reads off contig ends | 6 tools equal; each runs mid-chain |
@@ -309,12 +309,12 @@ Each change is one reviewed edit in the wave named.
 | D7 | docs/05 1 non-goals | "new metric tools beyond the bed-to-interval-list step" | Removed. "A workflow engine" stays: a chain is a line of steps with taps, no branching, loops, scatter or cluster | W04 |
 | D8 | docs/05 2.1 dispatch | Picard class, grammar verbs, clap verbs | `chain`, `convert`, `doctor`, `fifo-buffer` added | W02, W04, W07 |
 | D9 | docs/05 3 layers | Layer 3 is the fixed `qc` graph | Layers 1 (pipes) and 2 (prefix files) stay. Layer 3 becomes a preset of `chain`. Example 9 becomes one `chain` command. Stage table gains the `stage` column | W04, W14 |
-| D10 | docs/05 4.8 budgets | 300 KB report growth | Row kept. New rows: PDF growth under 4 MB, render under 100 ms, under 150 KB per sample, fail at 2x; data assets: identity set 70 KB embedded, contamination set 400 KB beside the binary | W06, W43 |
+| D10 | docs/05 4.8 budgets | 300 KB report growth | Row kept. New rows: PDF growth under 4 MB, render under 100 ms, under 500 KB per sample (D1), fail at 2x; data assets: identity set 70 KB embedded, contamination set 400 KB beside the binary | W06, W43 |
 | D11 | docs/05 4.9 | "cohort and lab-wide views" hosted | See the boundary below (Q7) | W45 |
 | D12 | docs/05 8 decision 4 | hand-written TOML reader in verdict | Holds; `parse_tables` moves to core | W04 |
 | D13 | docs/05 8 decision 6 | no sample sheet runner | Holds; `doctor --sample-sheet` checks one sample per call | W07 |
 | D14 | docs/05 8 decision 10 | MarkDuplicates next after 0.17.0 | Closed by W00 | W00 |
-| D15 | CLAUDE.md "no new dependency" for verdict and report | holds | Holds. krilla, parquet, rusqlite, arrow live in `crates/pdf` and `crates/formats` behind features; rust-version 1.92 for `pdf` (Q3); cargo-deny in CI | W02, W06 |
+| D15 | CLAUDE.md "no new dependency" for verdict and report | holds | Holds. krilla, parquet, rusqlite, arrow live in `crates/pdf` and `crates/formats` behind features; rustc 1.92 for `pdf` (Q3), workspace rust-version 1.91; cargo-deny in CI | W02, W06 |
 | D16 | docs/04 line on JS filters | n/a | `JAVASCRIPT_FILE` on FilterSamReads and FilterVcf is `Opt::rejected` (Q6); both listed as not fully concordant | W13, W17 |
 | D17 | ROADMAP.md Phase 0 | bammetrics done in 0.2.0 | Pointer to docs/07 and the 121-tool goal | this PR |
 | D18 | KNOWN_DIFFERENCES.md | per tool | A tier table and one section per tier B to E tool and per analysis | every wave |
@@ -327,7 +327,7 @@ The docs/05 4.9 boundary. Stays open: a verdict for one run; an index or cohort 
 |---|---|---|
 | Picard source unread; in and out types, determinism and sizes come from `--help` and memory | every wave, spec agent | One `--help` plus source note per tool before the builder starts; two Picard runs confirm determinism for BaitDesigner (W34) and the replicate tool (W25) |
 | BAM bytes differ from Picard (Intel deflater claim, unverified on this Mac) | W02 | Deflater spike with `USE_JDK_DEFLATER=true COMPRESSION_LEVEL=5`; tier A or B fixed before W09 |
-| PDF route too large or too much layout code | W06 | Kill rule: over 1,500 lines or 4 MB keeps PDF a documented recipe, feature off |
+| PDF route too large or too much layout code | W06 | Kill rule: over 1,800 lines (D2, was 1,500) or 4 MB keeps PDF a documented recipe, feature off |
 | Chaining slower than `qc` | W03 | Kill rule: over 5 percent on chr21.bam keeps `run_isolated` for transform-free chains |
 | Genome-scale memory and disk; no 30x BAM fits | W05, W14, W22, W40 | memgate on the CRAM slice and the exome, linear extrapolation, free-space refusal in `plan` |
 | VCF header lines Picard adds are unknown for 14 tools | W16 | Haiku inventory of all 14 writers before any VCF writer is built |
@@ -346,7 +346,7 @@ The docs/05 4.9 boundary. Stays open: a verdict for one run; an index or cohort 
 
 1. Agent cap: is 40 per workflow the reading, so the program may spend 572 agents over 48 workflows? If the budget is smaller, section 5 names what is cut first.
 2. Verb name: `chain` for the inline form and `chain --plan FILE` for the file. Add `run` as an alias?
-3. Accept krilla (+3.81 MB behind feature `pdf`, 97 crates, rust-version 1.88 to 1.92) with the W06 kill rule?
+3. Accept krilla (+3.81 MB behind feature `pdf`, 97 crates, rustc 1.92 for the feature, workspace rust-version 1.91) with the W06 kill rule? Accepted; W06 shipped in 0.24.0 under owner decisions D1 to D3 (section 3.3).
 4. Push `feat/check-duplicate-marking` and `feat/clinical-checks` to origin, and say where `feat/jumping-library-metrics` lives, before W01?
 5. Scale gate on a chr20 plus chr21 BAM slice of `NA12878.final.cram` and the exome, with a linear extrapolation to 30x, since a 30x BAM does not fit in 77 GB? Or provide an external disk?
 6. FilterSamReads and FilterVcf reject `JAVASCRIPT_FILE`. Confirm.
