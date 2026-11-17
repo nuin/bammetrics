@@ -116,6 +116,7 @@ fn committed_cases() -> Vec<Case> {
         case(&[&good], "header", "pass"),
         case(&[&good], "references", "pass"),
         case(&[&f("unaligned.bam")], "references", "pass"),
+        case(&[&f("refid_big.bam")], "references", "fail"),
         case(&[&good], "build", "pass"),
         case(&[&f("hg19.bam")], "build", "pass"),
         case(&[&f("grch38.bam")], "build", "pass"),
@@ -302,13 +303,78 @@ fn made_cases(dir: &Path) -> Vec<Case> {
     )
     .expect("write the .dict");
 
+    // A BAM with 4 bytes after its end-of-file block; an empty file and a
+    // file of one byte; a header with a zero-length contig.
+    let tail_junk = dir.join("tail_junk.bam");
+    fs::write(&tail_junk, [bam.as_slice(), b"junk"].concat()).expect("write");
+    let empty = dir.join("empty.sam");
+    fs::write(&empty, b"").expect("write");
+    let one_byte = dir.join("one.bam");
+    fs::write(&one_byte, &bam[..1]).expect("write");
+    let zero_length = dir.join("zero_length.sam");
+    fs::write(
+        &zero_length,
+        "@HD\tVN:1.6\n@SQ\tSN:chr1\tLN:100\n@SQ\tSN:chr0\tLN:0\n",
+    )
+    .expect("write");
+
+    // .dict files beside copies of ref_100k.fa: one naming no contig of
+    // the header, one whose LN differs from the .fai, one older than the
+    // FASTA, one right (samtools dict of the same bases, written after).
+    let right = fs::read_to_string(root.join("tests/data/chr1.dict")).expect("read the .dict");
+    let dicts = [
+        (
+            "names_other",
+            "@HD\tVN:1.6\n@SQ\tSN:other\tLN:5\tM5:abc\n".to_owned(),
+        ),
+        ("other_length", right.replace("LN:100000", "LN:99999")),
+        ("older", right.clone()),
+        ("right", right),
+    ];
+    let mut dict_fasta = Vec::new();
+    for (name, dict) in &dicts {
+        let fa = dir.join(format!("{name}.fa"));
+        fs::write(&fa, &fasta).expect("write");
+        fs::copy(
+            root.join("tests/data/ref_100k.fa.fai"),
+            dir.join(format!("{name}.fa.fai")),
+        )
+        .expect("copy the .fai");
+        let dict_file = dir.join(format!("{name}.dict"));
+        fs::write(&dict_file, dict).expect("write the .dict");
+        let age = if *name == "older" { 3600 } else { 0 };
+        for (path, seconds) in [(&fa, 60), (&dict_file, 30 + age)] {
+            File::options()
+                .write(true)
+                .open(path)
+                .and_then(|f| f.set_modified(now - Duration::from_secs(seconds)))
+                .expect("set the time");
+        }
+        dict_fasta.push(fa);
+    }
+
     let s = |p: &Path| p.to_str().expect("utf-8").to_owned();
     let made = |args: Vec<String>, check, status| Case {
         args,
         check,
         status,
     };
+    let with_dict = |i: usize, status| {
+        made(
+            vec![s(&cram), "-R".into(), s(&dict_fasta[i])],
+            "reference",
+            status,
+        )
+    };
     vec![
+        made(vec![s(&tail_junk)], "eof", "fail"),
+        made(vec![s(&empty)], "file", "fail"),
+        made(vec![s(&one_byte)], "file", "fail"),
+        made(vec![s(&zero_length)], "references", "warn"),
+        with_dict(0, "warn"),
+        with_dict(1, "warn"),
+        with_dict(2, "warn"),
+        with_dict(3, "pass"),
         made(vec![s(&cut_cram)], "eof", "fail"),
         made(vec![s(&open_sam)], "eof", "warn"),
         made(vec![s(&no_header)], "header", "fail"),
@@ -493,4 +559,65 @@ fn a_pipe_is_refused() {
     let out = run(&["/dev/stdin"]);
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("not a regular file"));
+}
+
+#[test]
+fn reasons_name_the_defect() {
+    let dir = scratch("reasons");
+    let bam = fs::read(root().join(D).join("good.bam")).expect("read the BAM");
+    let tail_junk = dir.join("tail_junk.bam");
+    fs::write(&tail_junk, [bam.as_slice(), b"junk"].concat()).expect("write");
+    let empty = dir.join("empty.sam");
+    fs::write(&empty, b"").expect("write");
+    let cases = [
+        (
+            text(&tail_junk).to_owned(),
+            "eof",
+            "4 bytes after the 28-byte end-of-file block",
+        ),
+        (text(&empty).to_owned(), "file", "the file holds 0 bytes"),
+        (
+            fixture("refid_big.bam"),
+            "references",
+            "1 record on a contig number",
+        ),
+    ];
+    for (path, name, reason) in cases {
+        let (json, code) = report(&[&path]);
+        assert_eq!(code, 10, "{path}");
+        let (status, found) = check(&json, name);
+        assert_eq!(status, "fail", "{path}: {found}");
+        assert!(found.contains(reason), "{path}: {found}");
+    }
+    fs::remove_dir_all(&dir).expect("remove the scratch directory");
+}
+
+#[test]
+fn control_characters_in_the_header_print_escaped() {
+    let dir = scratch("escape");
+    let sam = dir.join("escape.sam");
+    fs::write(
+        &sam,
+        "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:1000\n@RG\tID:a\tSM:\u{1b}[31mred\tLB:l\tPL:ILLUMINA\n",
+    )
+    .expect("write");
+    let out = String::from_utf8(run(&[text(&sam)]).stdout).expect("utf-8");
+    assert!(!out.contains('\u{1b}'), "{out}");
+    assert!(out.contains("1 sample: \\x1b[31mred"), "{out}");
+    let (json, _) = report(&[text(&sam)]);
+    let read_groups = json
+        .get("checks")
+        .and_then(Json::as_array)
+        .and_then(|c| {
+            c.iter()
+                .find(|c| c.get("check").and_then(Json::as_str) == Some("read_groups"))
+        })
+        .and_then(|c| c.get("value"))
+        .and_then(Json::as_str)
+        .map(str::to_owned);
+    assert_eq!(
+        read_groups.as_deref(),
+        Some("1 @RG line, 1 sample: \u{1b}[31mred")
+    );
+    fs::remove_dir_all(&dir).expect("remove the scratch directory");
 }

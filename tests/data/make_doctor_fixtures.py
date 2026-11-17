@@ -205,6 +205,14 @@ def write_fasta(path, name, bases, width=60):
     Path(str(path) + ".fai").write_text(f"{name}\t{len(bases)}\t{offset}\t{width}\t{width + 1}\n")
 
 
+def beyond_dictionary():
+    """A header with one contig and a second record on contig number 7."""
+    small = [("chr1", 100_000)]
+    records = [Record(f"r{i}", 0, ref, 999, 60, [(10, "M")], -1, -1, 0, "ACGTACGTAC", [30] * 10,
+                      [("RG", "Z", "rg1")]) for i, ref in enumerate((0, 7))]
+    return header(small), small, records
+
+
 def main():
     if OUT.exists():
         shutil.rmtree(OUT)
@@ -232,6 +240,7 @@ def main():
     unaligned = [Record(f"u{i:04d}", 0x4, -1, -1, 0, [], -1, -1, 0, "ACGT" * 25, [30] * 100, [])
                  for i in range(200)]
     write_bam("unaligned.bam", "@HD\tVN:1.6\tSO:unsorted\n", [], unaligned)
+    write_bam("refid_big.bam", *beyond_dictionary())
 
     small = [("chr1", 100_000)]
     ref_pairs = pairs(random.Random(SEED), 40, 1_000)

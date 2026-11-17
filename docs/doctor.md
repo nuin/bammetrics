@@ -37,10 +37,10 @@ the reason.
 
 | Check | Pass | Warn | Fail |
 |---|---|---|---|
-| `file` | BAM, CRAM 3.0 or 3.1, SAM, SAM (bgzip), SAM (gzip); the `@HD VN` | | none of those |
-| `eof` | BAM or bgzip: the 28-byte BGZF end-of-file block; CRAM: the 38-byte EOF container; SAM: a final line end | SAM text without a final line end | no end-of-file block (the last block is whole), cut short (the last block is not), no CRAM EOF container |
+| `file` | BAM, CRAM 3.0 or 3.1, SAM, SAM (bgzip), SAM (gzip); the `@HD VN` | | none of those; an empty file or one under 4 bytes |
+| `eof` | BAM or bgzip: the 28-byte BGZF end-of-file block; CRAM: the 38-byte EOF container; SAM: a final line end | SAM text without a final line end | no end-of-file block (the last block is whole), cut short (the last block is not), bytes after the end-of-file block that start no BGZF block, no CRAM EOF container |
 | `header` | the header lines by type | | the header cannot be read |
-| `references` | `@SQ` count and total length; no `@SQ` and no placed record (an unaligned file) | | an `@SQ` without `SN` or a number `LN`, a name twice, a BAM binary reference list that differs from the `@SQ` lines, placed records under no `@SQ` |
+| `references` | `@SQ` count and total length; no `@SQ` and no placed record (an unaligned file) | a zero-length contig (`LN:0`) | an `@SQ` without `SN` or a number `LN`, a name twice, a BAM binary reference list that differs from the `@SQ` lines, placed records under no `@SQ`, records on a contig number past the `@SQ` lines |
 | `build` | GRCh37, hg19, GRCh38, hg38 or T2T-CHM13, or `unknown`; the contigs by kind | | primary chromosomes of two builds; `--expect-build` not met |
 | `read_groups` | every `@RG` has ID, SM, LB and PL | no `@RG`; an `@RG` without LB or PL | duplicate IDs; an `@RG` without ID or SM |
 | `sort_order` | the records read agree with `SO` | the records are in coordinate order but `SO` is absent, `unknown` or `unsorted` | `SO:coordinate` over records out of coordinate order; `SO:queryname` over records out of name order |
@@ -52,7 +52,7 @@ the reason.
 | `read_length` | the mean over primary records with bases | no record has bases | |
 | `qualities` | the range, Phred+33 | no record has qualities | Phred+64 suspected |
 | `md_nm` | MD and NM on every mapped primary record (skip for a CRAM) | some lack them | |
-| `reference` | with `-R`: every `@SQ` contig in the `.fai` at its length, the `M5`s equal; without `-R`: a CRAM that decodes without one | without `-R`: a CRAM that needs one | no `.fai`; a contig absent or of another length; an `M5` that differs |
+| `reference` | with `-R`: every `@SQ` contig in the `.fai` at its length, the `M5`s equal; without `-R`: a CRAM that decodes without one | without `-R`: a CRAM that needs one; with `-R`: an `M5` the `.dict` does not name, a `.dict` older than the FASTA or with another `LN` than the `.fai` | no `.fai`; a contig absent or of another length; an `M5` that differs |
 | `index` | `.bai` or `.csi` (BAM), `.crai` (CRAM) beside the file, not older | no index; an index older than the file | |
 | `sample_sheet` | the row agrees | | no row, two rows, or a column that disagrees |
 | `expected_sex` | male with a Y contig, or female | male expected and no Y contig | |
@@ -81,7 +81,9 @@ and the counts.
 - The kind, from the first bytes, as every bammetrics reader tells it (`cram::sniff`).
 - The end: the last 64 KiB and 28 bytes of a BGZF file, the last 38 bytes of a CRAM, the
   last byte of plain SAM text. A BGZF block that starts in that window and ends at the last
-  byte is whole.
+  byte is whole. An end-of-file block followed by bytes that start no BGZF block is a file
+  with bytes appended; one followed by a block header is a concatenation, judged by its
+  last block. A file under 4 bytes is no kind and is not read further.
 - The header text, raw: a BAM header up to its binary reference list, a CRAM's SAM header
   container, the `@` lines of SAM text. No parser refuses it, so a header with two `@RG`
   lines of one ID is reported, not rejected. At most 64 MiB.
@@ -101,7 +103,20 @@ ends. Computing it reads the whole FASTA: 3.3 GB for GRCh38 takes 2.5 s on 8 thr
 So by default doctor compares `M5` with the `M5` of the same contig in the `.dict` beside
 the FASTA, which `CreateSequenceDictionary` and `samtools dict` write. Without a `.dict`
 the check says the MD5s were not compared. `--check-md5` computes them, one contig per
-worker, 1 MiB at a time.
+worker, 1 MiB at a time. A bgzip FASTA (`.gz` or `.bgz`) is read the same way through
+its `.gzi` (at most 64 MiB), so a worker holds 1 MiB of bases and one BGZF block whatever
+the length of the contig.
+
+The `.dict` is trusted as written: its `M5` is not checked against the bases, and the
+reason says so. The check warns when the `.dict` cannot vouch for the FASTA:
+
+- it names none of the `@SQ` contigs that carry an `M5`, or only some of them;
+- it is older than the FASTA (its `M5` may describe earlier bases);
+- an `LN` in it differs from the `.fai` (it describes another FASTA).
+
+A `.dict` older than its FASTA warns even when the bases are unchanged (a copy can write
+the two in that order, as `GRCh38.dict` of the scale data shows); `--check-md5` settles
+it.
 
 ## 3. Builds
 
@@ -136,6 +151,11 @@ CSV or TSV (a tab in the first line makes it TSV), at most 16 MiB, read by
 required, `bam`, `sex`, `build` and `library` are compared when present and the cell is
 not empty or `NA`. Other columns are ignored.
 
+A CSV cell follows RFC 4180. A TSV cell undoes the four escapes `crates/formats` writes
+(`\t`, `\n`, `\r`, `\\`) and keeps every other backslash, so `C:\data\x.bam` reads as
+written. A TSV cell in double quotes, as a spreadsheet writes it, loses the quotes and
+reads `""` as one quote; a tab or a line end inside the quotes still splits the cell.
+
 ```
 sample,bam,sex,build,library
 NA12878,NA12878.bam,female,hg38,lib1
@@ -156,7 +176,10 @@ The `sex` cell feeds `expected_sex` when `--expect-sex` is not given. A sheet wi
 
 ## 5. Output and exit codes
 
-Text: the file line (path, kind, status, counts), one line per check, the exit line.
+Text: the file line (path, kind, status, counts), one line per check, the exit line. A
+control character in the path, a value or a reason (U+0000 to U+001F, U+007F to U+009F,
+tab included) prints as `\xNN`, so a header value cannot move the cursor or color the
+terminal. JSON and JSON Lines escape them as JSON does.
 
 ```
 tests/data/doctor/cut.bam  BAM  FAIL  2 fail, 1 warn, 13 pass, 3 skip
@@ -207,12 +230,16 @@ defects. `tests/data/make_doctor_fixtures.py` writes `tests/data/doctor/`: `good
 `good.sam`, then one file per defect, each different from `good.bam` in one way (a cut
 BAM, no end-of-file block, coordinate over unsorted records, an RG the header lacks, two
 `@RG` with one ID, Phred+64 qualities, hg19, GRCh38, T2T and mixed headers, an unaligned
-file, a CRAM and a FASTA of other lengths, a sample sheet in CSV and TSV).
+file, a record on contig number 7 under a one-contig header, a CRAM and a FASTA of other
+lengths, a sample sheet in CSV and TSV).
 `crates/cli/tests/doctor.rs` checks the status of each check on each of them, and on files
 it makes: a CRAM without its EOF container, SAM text without a final line end, a BAM cut
 inside its header, a header naming a contig twice, mostly unmapped records without bases
-or qualities, an index older and one newer than its BAM, a FASTA with one base changed and
-a `.dict` with a wrong `M5`. A test fails when a check has no pass case or no warn or fail
+or qualities, an index older and one newer than its BAM, a FASTA with one base changed,
+a `.dict` with a wrong `M5`, a `.dict` naming no contig of the header, one with another
+`LN`, one older than its FASTA and one right, a BAM with 4 bytes after its end-of-file
+block, an empty file, a file of one byte, a header with an `LN:0` contig and an `@RG`
+whose `SM` holds an escape sequence. A test fails when a check has no pass case or no warn or fail
 case. `tests/golden/doctor_*.txt` hold the text, JSON and JSON Lines forms;
 `tests/python/test_doctor.py` the Python face. The build table was compared with the
 `.fai` of GRCh38 and hs37d5 on the scale data.
@@ -230,3 +257,17 @@ case. `tests/golden/doctor_*.txt` hold the text, JSON and JSON Lines forms;
 | HG002.exome.bam (BAM) `-R hs37d5.fa` | 0.03 s | 7 MB |
 
 The CRAM decoder loads the first contig whole (chr1, 249 MB), which sets the memory.
+
+`--check-md5` alone (`--records 0`, the same CRAM, GRCh38, 3,366 contigs), after the
+bgzip reader was changed to read 1 MiB at a time, 2026-11-17:
+
+| FASTA | Threads | Real | Peak RSS |
+|---|---|---|---|
+| plain, 3.3 GB | 8 | 2.01 s | 29 MB |
+| plain | 1 | 13.10 s | 15 MB |
+| bgzip, 820 MB, `.gzi` from `samtools faidx` | 8 | 3.08 s | 41 MB |
+| bgzip | 1 | 20.10 s | 17 MB |
+| bgzip, before the change (whole contig per query, then a copy) | 8 | 3.63 s | 6,304 MB |
+
+On the full run the CRAM decoder sets the peak (669 MB plain, 673 MB bgzip, 8 threads).
+The default run reads the `M5`s of `GRCh38.dict` and takes 0.34 to 0.37 s (3 runs), 670 MB.

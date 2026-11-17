@@ -12,6 +12,8 @@ use super::{Check, Eof, Facts, Options, Sex, SheetRow, Status};
 use crate::cram::Kind;
 use crate::genome_build::{self, BUILD_NAMES, Build, Detection};
 
+mod fasta;
+
 /// The checks, in the order a report lists them.
 pub const NAMES: [&str; 19] = [
     "file",
@@ -147,8 +149,13 @@ fn dictionary(facts: &Facts) -> Vec<(String, u64)> {
 pub(crate) fn judge(path: &Path, facts: &Facts, options: &Options) -> Vec<Check> {
     let mut out = Vec::new();
     let Some(kind) = facts.kind else {
+        let value = match facts.short {
+            Some(0) => "empty file",
+            Some(_) => "under 4 bytes",
+            None => "not BAM, CRAM or SAM",
+        };
         out.push(
-            Check::new("file", Status::Fail, "not BAM, CRAM or SAM")
+            Check::new("file", Status::Fail, value)
                 .because(facts.kind_error.clone().unwrap_or_default()),
         );
         skip_rest(&mut out, "the file is not BAM, CRAM or SAM");
@@ -269,6 +276,13 @@ fn eof(eof: Option<Eof>) -> Check {
             "the last BGZF block is incomplete: the file was cut short (an interrupted copy or \
              a full disk)",
         ),
+        Some(Eof::Bgzf(BgzfEnd::Trailing(n))) => {
+            Check::new("eof", Status::Fail, "bytes after the end-of-file block").because(format!(
+                "{} after the 28-byte end-of-file block start no BGZF block: readers that read \
+             past the block fail on them (something was appended to the file)",
+                plural(n as usize, "byte")
+            ))
+        }
         Some(Eof::Cram(true)) => check(
             Status::Pass,
             "EOF container present",
@@ -363,6 +377,24 @@ fn references(
         }
         return Check::new("references", Status::Pass, value)
             .because("no @SQ line: an unaligned file");
+    }
+    if let Some(s) = stats.filter(|s| s.beyond_dictionary > 0) {
+        return fail(format!(
+            "{} on a contig number the header lacks (it names {})",
+            plural(s.beyond_dictionary as usize, "record"),
+            plural(dict.len(), "contig")
+        ));
+    }
+    let empty: Vec<String> = dict
+        .iter()
+        .filter(|(_, length)| *length == 0)
+        .map(|(name, _)| name.clone())
+        .collect();
+    if !empty.is_empty() {
+        return Check::new("references", Status::Warn, value).because(format!(
+            "a zero-length contig: {} (samtools refuses such a header)",
+            shown(empty)
+        ));
     }
     let reason = if sq.is_empty() {
         "no @SQ line; the BAM's binary reference list names them"
@@ -765,106 +797,7 @@ fn reference_check(kind: Kind, facts: &Facts, dict: &[(String, u64)], options: &
                 .because("no -R given and no record decoded"),
         };
     };
-    against_fasta(fasta, facts, dict, options)
-}
-
-fn against_fasta(fasta: &Path, facts: &Facts, dict: &[(String, u64)], options: &Options) -> Check {
-    let fai = reference::fai_path(fasta);
-    let entries = match reference::read_fai(&fai) {
-        Ok(entries) => entries,
-        Err(e) => {
-            return Check::new("reference", Status::Fail, "no .fai")
-                .because(format!("{}: {e} (samtools faidx writes it)", fai.display()));
-        }
-    };
-    if dict.is_empty() {
-        return Check::new("reference", Status::Skip, "").because("the header names no contig");
-    }
-    let by_name: HashMap<&str, &reference::FaiEntry> =
-        entries.iter().map(|e| (e.name.as_str(), e)).collect();
-    let mut differ = Vec::new();
-    for (name, length) in dict {
-        match by_name.get(name.as_str()) {
-            None => differ.push(format!("{name} is not in the FASTA")),
-            Some(e) if e.length != *length => differ.push(format!(
-                "{name} has {} bases in the FASTA, {} in @SQ",
-                thousands(e.length),
-                thousands(*length)
-            )),
-            Some(_) => {}
-        }
-    }
-    if !differ.is_empty() {
-        return Check::new(
-            "reference",
-            Status::Fail,
-            format!("contigs that differ: {} of {}", differ.len(), dict.len()),
-        )
-        .because(format!("{}: {}", fasta.display(), shown(differ)));
-    }
-    let matched = format!("names and lengths match: {}", plural(dict.len(), "contig"));
-    let m5: Vec<(&str, &str)> = facts
-        .lines
-        .iter()
-        .filter(|l| l.kind == "SQ")
-        .filter_map(|l| Some((l.get("SN")?, l.get("M5")?)))
-        .collect();
-    if m5.is_empty() {
-        return Check::new("reference", Status::Pass, matched)
-            .because("the header has no M5 to compare");
-    }
-    let (digests, source) = if options.check_md5 {
-        let wanted: Vec<&reference::FaiEntry> = m5
-            .iter()
-            .filter_map(|(name, _)| by_name.get(name).copied())
-            .collect();
-        match reference::compute_md5(fasta, &wanted, options.threads) {
-            Ok(d) => (d, "computed from the FASTA".to_owned()),
-            Err(e) => {
-                return Check::new("reference", Status::Fail, matched)
-                    .because(format!("the MD5 could not be computed: {e}"));
-            }
-        }
-    } else {
-        let Some(dict_file) = reference::dict_path(fasta) else {
-            return Check::new("reference", Status::Pass, matched).because(
-                "M5 not compared: no .dict beside the FASTA (--check-md5 computes the MD5s)",
-            );
-        };
-        match reference::read_dict_md5(&dict_file) {
-            Ok(d) => (d, format!("from {}", file_name(&dict_file))),
-            Err(e) => {
-                return Check::new("reference", Status::Fail, matched)
-                    .because(format!("{}: {e}", dict_file.display()));
-            }
-        }
-    };
-    let mut compared = 0usize;
-    let mut differ = Vec::new();
-    for (name, want) in &m5 {
-        if let Some(got) = digests.get(*name) {
-            compared += 1;
-            if !got.eq_ignore_ascii_case(want) {
-                differ.push((*name).to_owned());
-            }
-        }
-    }
-    if !differ.is_empty() {
-        return Check::new(
-            "reference",
-            Status::Fail,
-            format!("{} of {compared} M5 differ", differ.len()),
-        )
-        .because(format!(
-            "other bases under the same names ({source}): {}",
-            shown(differ)
-        ));
-    }
-    Check::new("reference", Status::Pass, matched).because(format!(
-        "{} of {} M5 equal ({source})",
-        thousands(compared as u64),
-        thousands(m5.len() as u64)
-    ))
+    fasta::against_fasta(fasta, facts, dict, options)
 }
 
 fn file_name(path: &Path) -> String {

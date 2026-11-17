@@ -6,7 +6,10 @@
 //! * CSV: a field in double quotes may hold a comma, a line end or a
 //!   doubled quote. `\r\n` and `\n` end a row.
 //! * TSV: fields split at tabs; `\t`, `\n`, `\r` and `\\` are read back as
-//!   [`crate::delimited`] writes them.
+//!   [`crate::delimited`] writes them, and any other backslash is kept. A
+//!   cell in double quotes loses them, a doubled quote inside reads as
+//!   one (a spreadsheet's TSV); a tab or line end inside quotes still
+//!   splits the cell.
 //! * A byte order mark is dropped, blank lines are skipped, and a cell is
 //!   trimmed of spaces.
 //! * Column names are matched without case. A row with fewer cells than
@@ -44,22 +47,30 @@ fn error(line: usize, what: impl std::fmt::Display) -> Error {
     Error::Document(format!("sample sheet line {line}: {what}"))
 }
 
-/// One TSV cell with the escapes of [`crate::delimited::tsv`] undone.
+/// One TSV cell. A cell in double quotes, as a spreadsheet writes TSV, loses
+/// them and reads a doubled quote as one. Otherwise the four escapes of
+/// [`crate::delimited::tsv`] (`\t`, `\n`, `\r`, `\\`) are undone and any
+/// other backslash is kept, so `C:\data\x.bam` stays as written.
 fn tsv_cell(text: &str) -> String {
+    let text = text.trim();
+    if let Some(inner) = text.strip_prefix('"').and_then(|t| t.strip_suffix('"')) {
+        return inner.replace("\"\"", "\"");
+    }
     let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars();
+    let mut chars = text.chars().peekable();
     while let Some(c) = chars.next() {
-        if c != '\\' {
-            out.push(c);
-            continue;
-        }
-        match chars.next() {
-            Some('t') => out.push('\t'),
-            Some('n') => out.push('\n'),
-            Some('r') => out.push('\r'),
-            Some(other) => out.push(other),
-            None => out.push('\\'),
-        }
+        let unescaped = match (c, chars.peek()) {
+            ('\\', Some('t')) => '\t',
+            ('\\', Some('n')) => '\n',
+            ('\\', Some('r')) => '\r',
+            ('\\', Some('\\')) => '\\',
+            _ => {
+                out.push(c);
+                continue;
+            }
+        };
+        chars.next();
+        out.push(unescaped);
     }
     out
 }
@@ -187,6 +198,17 @@ mod tests {
             parse("sample\tbam\nx\\ty\tz\n").expect("tsv").rows[0][0],
             "x\ty"
         );
+    }
+
+    #[test]
+    fn tsv_keeps_other_backslashes_and_drops_spreadsheet_quotes() {
+        let sheet = parse(
+            "sample\tbam\n\"NA12878\"\tC:\\data\\x.bam\n\"a \"\"b\"\"\"\tgood\\\\.bam\nS\tend\\\n",
+        )
+        .expect("parse");
+        assert_eq!(sheet.rows[0], ["NA12878", "C:\\data\\x.bam"]);
+        assert_eq!(sheet.rows[1], ["a \"b\"", "good\\.bam"]);
+        assert_eq!(sheet.rows[2], ["S", "end\\"]);
     }
 
     #[test]

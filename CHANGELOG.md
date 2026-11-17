@@ -27,6 +27,15 @@
 ### Changed
 
 - `bammetrics tools` lists `doctor` among the other verbs (`tests/golden/verb_tools.txt`).
+- `doctor` after review: `--check-md5` reads a bgzip FASTA 1 MiB at a time through its
+  `.gzi` (GRCh38 on 8 threads: 41 MB peak, was 6.3 GB). The `reference` check warns when
+  the `.dict` names none or only some of the `M5` contigs, is older than the FASTA, or
+  gives another `LN` than the `.fai`, and says the `.dict` is trusted. `references` fails
+  on records past the dictionary and warns on an `LN:0` contig. `eof` names bytes after
+  the end-of-file block. `file` fails an empty file or one under 4 bytes, and a header cut
+  short reads `the file ends inside the header`. The text form prints control characters
+  as `\xNN`. A TSV sample sheet keeps backslashes other than its four escapes and drops
+  a spreadsheet's double quotes. New fixture `tests/data/doctor/refid_big.bam`.
 
 ## 0.24.0
 

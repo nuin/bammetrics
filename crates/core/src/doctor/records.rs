@@ -59,8 +59,10 @@ pub struct Stats {
     /// byte (htsjdk's queryname order) and in samtools' natural order.
     pub name_break: Option<Break>,
     pub natural_break: Option<Break>,
-    /// Whether any record has a reference.
+    /// Records with a reference.
     pub placed: u64,
+    /// Records whose reference number is past the header's dictionary.
+    pub beyond_dictionary: u64,
 }
 
 /// samtools' `strnum_cmp`: digit runs compared as numbers (leading zeros
@@ -124,11 +126,12 @@ impl<'a> Tally<'a> {
 
     fn place(&self, record: &RawRecord) -> String {
         let id = record.reference_id();
-        let name = usize::try_from(id)
-            .ok()
-            .and_then(|i| self.references.get(i))
-            .map_or("*", String::as_str);
-        format!("{name}:{}", record.alignment_start())
+        let start = record.alignment_start();
+        match usize::try_from(id).map(|i| self.references.get(i)) {
+            Err(_) => format!("*:{start}"),
+            Ok(Some(name)) => format!("{name}:{start}"),
+            Ok(None) => format!("contig number {id}:{start}"),
+        }
     }
 
     /// Read records from `stream` (each with its `block_size`) until
@@ -163,8 +166,9 @@ impl<'a> Tally<'a> {
         let s = &mut self.stats;
         s.read += 1;
         let n = s.read;
-        if record.reference_id() >= 0 {
+        if let Ok(id) = usize::try_from(record.reference_id()) {
             s.placed += 1;
+            s.beyond_dictionary += u64::from(id >= self.references.len());
         }
         if flags & (SECONDARY | SUPPLEMENTARY) == 0 {
             s.primary += 1;

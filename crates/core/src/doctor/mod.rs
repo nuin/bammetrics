@@ -22,6 +22,10 @@ use crate::sam_text::Stringency;
 
 pub use checks::NAMES;
 
+/// The shortest magic of the kinds read: `BAM\1` inflated, `CRAM`, and
+/// the gzip magic and flags. A shorter file is none of them.
+const MAGIC_BYTES: u64 = 4;
+
 /// Records read by default.
 pub const DEFAULT_RECORDS: u64 = 10_000;
 
@@ -188,6 +192,8 @@ impl Report {
 pub(crate) struct Facts {
     pub kind: Option<Kind>,
     pub kind_error: Option<String>,
+    /// The size of a file shorter than any magic.
+    pub short: Option<u64>,
     pub cram_version: Option<(u8, u8)>,
     pub eof: Option<Eof>,
     pub header: Option<std::result::Result<input::RawHeader, String>>,
@@ -254,6 +260,7 @@ fn read_facts(path: &Path, options: &Options) -> std::io::Result<Facts> {
     let mut facts = Facts {
         kind: None,
         kind_error: None,
+        short: None,
         cram_version: None,
         eof: None,
         header: None,
@@ -262,6 +269,18 @@ fn read_facts(path: &Path, options: &Options) -> std::io::Result<Facts> {
         records_error: None,
         records_skipped: None,
     };
+    let size = std::fs::metadata(path)?.len();
+    if size < MAGIC_BYTES {
+        facts.short = Some(size);
+        facts.kind_error = Some(format!(
+            "the file holds {}, under the {MAGIC_BYTES}-byte magic of BAM, CRAM or SAM",
+            match size {
+                1 => "1 byte".to_owned(),
+                n => format!("{n} bytes"),
+            }
+        ));
+        return Ok(facts);
+    }
     let kind = match input::kind(path)? {
         Ok(kind) => kind,
         Err(e) => {
@@ -286,7 +305,11 @@ fn read_facts(path: &Path, options: &Options) -> std::io::Result<Facts> {
     let (header, stream) = match header {
         Ok(found) => found,
         Err(e) => {
-            facts.header = Some(Err(e.to_string()));
+            facts.header = Some(Err(if e.kind() == std::io::ErrorKind::UnexpectedEof {
+                "the file ends inside the header".to_owned()
+            } else {
+                e.to_string()
+            }));
             return Ok(facts);
         }
     };

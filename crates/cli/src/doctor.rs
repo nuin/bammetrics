@@ -217,11 +217,27 @@ fn counts_line(report: &Report) -> String {
     )
 }
 
+/// `text` with every control character (U+0000 to U+001F, U+007F to
+/// U+009F) written as `\xNN`, so header values from an untrusted file
+/// cannot move the cursor or color a terminal. JSON escapes them itself.
+pub fn printable(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        if c.is_control() {
+            let _ = write!(out, "\\x{:02x}", u32::from(c));
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// The text form: the file line, one line per check, the exit line.
+/// Values and reasons go through [`printable`].
 pub fn text(report: &Report, code: u8, fail_on: FailOn) -> String {
     let mut out = format!(
         "{}  {}  {}  {}\n",
-        report.path.display(),
+        printable(&report.path.display().to_string()),
         if report.kind.is_empty() {
             "?"
         } else {
@@ -236,20 +252,24 @@ pub fn text(report: &Report, code: u8, fail_on: FailOn) -> String {
         .map(|c| c.name.len())
         .max()
         .unwrap_or(0);
-    let value_w = report
+    let shown: Vec<(String, String)> = report
         .checks
         .iter()
-        .map(|c| c.value.chars().count())
+        .map(|c| (printable(&c.value), printable(&c.reason)))
+        .collect();
+    let value_w = shown
+        .iter()
+        .map(|(value, _)| value.chars().count())
         .filter(|w| *w <= VALUE_WIDTH)
         .max()
         .unwrap_or(0);
-    for check in &report.checks {
+    for (check, (value, reason)) in report.checks.iter().zip(&shown) {
         let line = format!(
             "  {:<4}  {:<name_w$}  {:<value_w$}  {}",
             status_word(check.status),
             check.name,
-            check.value,
-            check.reason
+            value,
+            reason
         );
         let _ = writeln!(out, "{}", line.trim_end());
     }
@@ -346,4 +366,17 @@ pub fn run(args: &DoctorArgs) -> Result<u8> {
     };
     print_stdout(&shown);
     Ok(code)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::printable;
+
+    #[test]
+    fn control_characters_print_as_escapes() {
+        assert_eq!(
+            printable("\u{1b}[31mred\t\u{7f}\u{85}é"),
+            "\\x1b[31mred\\x09\\x7f\\x85é"
+        );
+    }
 }

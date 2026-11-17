@@ -64,6 +64,15 @@ fn block_size_at(bytes: &[u8], at: usize) -> Option<usize> {
     (gzip && extra).then(|| usize::from(u16::from_le_bytes([head[16], head[17]])) + 1)
 }
 
+/// True when `bytes` start a BGZF block, or are a cut start of one (a
+/// prefix of the 4-byte gzip magic and flags every block begins with).
+fn starts_block(bytes: &[u8]) -> bool {
+    if bytes.len() >= 18 {
+        return block_size_at(bytes, 0).is_some();
+    }
+    BGZF_EOF[..4].starts_with(&bytes[..bytes.len().min(4)])
+}
+
 /// How a BGZF file ends.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BgzfEnd {
@@ -74,14 +83,27 @@ pub enum BgzfEnd {
     WholeBlock,
     /// The last block is cut.
     Cut,
+    /// The end-of-file block, then this many bytes that start no block.
+    Trailing(u64),
 }
 
 /// How the BGZF file at `path` ends, from its last 64 KiB and 28 bytes: a
 /// block that starts in that window and ends at the last byte is whole.
+/// An end-of-file block followed by bytes that start no BGZF block is a
+/// file with bytes after its end; one followed by a block header is a
+/// concatenation, judged by its last block.
 pub fn bgzf_end(path: &Path) -> io::Result<BgzfEnd> {
     let bytes = tail(path, MAX_BLOCK + BGZF_EOF.len() as u64)?;
     if bytes.ends_with(&BGZF_EOF) {
         return Ok(BgzfEnd::Marker);
+    }
+    if let Some(at) = bytes
+        .windows(BGZF_EOF.len())
+        .rposition(|w| w == BGZF_EOF)
+        .map(|at| at + BGZF_EOF.len())
+        && !starts_block(&bytes[at..])
+    {
+        return Ok(BgzfEnd::Trailing((bytes.len() - at) as u64));
     }
     let whole = (0..bytes.len()).any(|at| block_size_at(&bytes, at) == Some(bytes.len() - at));
     Ok(if whole {
@@ -292,6 +314,27 @@ mod tests {
         assert_eq!(lines[1].get("LN"), Some("5"));
         assert_eq!(lines[2].kind, "CO");
         assert!(lines[2].fields.is_empty());
+    }
+
+    #[test]
+    fn bytes_after_the_end_of_file_block_are_told_from_a_cut_block() {
+        let dir =
+            std::env::temp_dir().join(format!("bammetrics-doctor-end.{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join("x.bam");
+        let end = |bytes: &[u8]| {
+            std::fs::write(&path, bytes).expect("write");
+            bgzf_end(&path).expect("read")
+        };
+        let eof = BGZF_EOF.as_slice();
+        assert_eq!(end(&[eof, eof].concat()), BgzfEnd::Marker);
+        assert_eq!(end(&[eof, b"junk"].concat()), BgzfEnd::Trailing(4));
+        assert_eq!(end(&[eof, b"\n"].concat()), BgzfEnd::Trailing(1));
+        // A second file cut inside its first block header, or after it.
+        assert_eq!(end(&[eof, &eof[..3]].concat()), BgzfEnd::Cut);
+        assert_eq!(end(&[eof, &eof[..20]].concat()), BgzfEnd::Cut);
+        assert_eq!(end(&eof[..27]), BgzfEnd::Cut);
+        std::fs::remove_dir_all(&dir).expect("clean");
     }
 
     #[test]
