@@ -14,6 +14,7 @@ use clap::Args;
 
 use crate::discover::{self, SAMPLE_RULE, Sample, Skipped};
 use crate::error::{Error, Result};
+use crate::pdf::{PdfArgs, pdf_name};
 
 /// The preset option both verbs share.
 pub const PRESET_HELP: &str = "A shipped preset (generic, clinical-panel, wgs, rna-seq) or the \
@@ -23,8 +24,10 @@ path of a preset TOML file (docs/verdict.md).";
 fn after_help() -> String {
     format!(
         "Files: OUT/SAMPLE.verdict.json, OUT/SAMPLE.report.html and OUT/index.html, each \
-written whole and renamed into place. A failed verdict still exits 0 (1 on an error, 2 on a \
-usage error); bammetrics check gates on the verdict.\n\n{FILE_RULE}\n\n{SAMPLE_RULE}"
+written whole and renamed into place; --pdf adds OUT/SAMPLE.report.pdf, and --pdf-only writes \
+the verdict and the PDF of each sample and no page or index. The PDF needs a binary built with \
+the cargo feature pdf. A failed verdict still exits 0 (1 on an error, 2 on a usage error); \
+bammetrics check gates on the verdict.\n\n{FILE_RULE}\n\n{SAMPLE_RULE}"
     )
 }
 
@@ -50,6 +53,23 @@ pub struct ReportArgs {
     /// The date printed on every page (default: now, as 2026-01-02 03:04:05 UTC).
     #[arg(long, value_name = "ISO")]
     pub date: Option<String>,
+    /// Write SAMPLE.report.pdf beside each page: the page's content as a
+    /// tagged PDF (cargo feature pdf).
+    #[arg(long)]
+    pub pdf: bool,
+    /// Write SAMPLE.verdict.json and SAMPLE.report.pdf only: no HTML page and
+    /// no index.html.
+    #[arg(long)]
+    pub pdf_only: bool,
+    #[command(flatten)]
+    pub pdf_options: PdfArgs,
+}
+
+impl ReportArgs {
+    /// The option that asked for the PDF, for its errors.
+    fn pdf_option(&self) -> &'static str {
+        if self.pdf_only { "--pdf-only" } else { "--pdf" }
+    }
 }
 
 /// Write `contents` to `path` through [`AtomicFile`]: a temporary file
@@ -94,7 +114,8 @@ pub fn samples(dirs: &[PathBuf]) -> Result<Vec<Sample>> {
 }
 
 /// What [`write`] wrote: the output directory, every file in write order
-/// (verdict and page per sample, then the index), one summary per sample.
+/// (verdict, page and PDF per sample, then the index), one summary per
+/// sample.
 pub struct Written {
     pub out: PathBuf,
     pub files: Vec<PathBuf>,
@@ -105,13 +126,22 @@ pub fn run(args: ReportArgs) -> Result<u8> {
     let written = write(&args)?;
     print!(
         "{}",
-        summary(&written.samples, &written.out, written.files.len())
+        summary(
+            &written.samples,
+            &written.out,
+            written.files.len(),
+            !args.pdf_only
+        )
     );
     Ok(0)
 }
 
 /// `report` without the summary: every file written.
 pub fn write(args: &ReportArgs) -> Result<Written> {
+    let pdf = args
+        .pdf_options
+        .prepare(args.pdf || args.pdf_only, args.pdf_option())?;
+    let html = !args.pdf_only;
     let preset = Preset::resolve(&args.preset)?;
     let out = match (&args.output, args.dirs.as_slice()) {
         (Some(out), _) => out.clone(),
@@ -129,24 +159,47 @@ pub fn write(args: &ReportArgs) -> Result<Written> {
         all_plots: args.all_plots,
         date: &date,
     };
+    let verdicts: Vec<_> = samples
+        .iter()
+        .map(|sample| evaluate(&preset, &sample.inputs, Some(&sample.name)))
+        .collect();
+    // Every PDF is rendered before the first file is written: a sample name
+    // the fonts cannot set fails the run with nothing written.
+    let pdfs = match &pdf {
+        Some(pdf) => samples
+            .iter()
+            .zip(&verdicts)
+            .map(|(s, v)| pdf.render(v, &s.inputs, &date, args.all_plots).map(Some))
+            .collect::<Result<Vec<_>>>()?,
+        None => vec![None; samples.len()],
+    };
     let mut summaries = Vec::with_capacity(samples.len());
-    let mut files = Vec::with_capacity(2 * samples.len() + 1);
-    for sample in &samples {
-        let verdict = evaluate(&preset, &sample.inputs, Some(&sample.name));
+    let mut files = Vec::with_capacity(3 * samples.len() + 1);
+    for ((sample, verdict), bytes) in samples.iter().zip(verdicts).zip(pdfs) {
         let verdict_file = out.join(verdict_name(&sample.name));
         write_atomic(&verdict_file, verdict.to_json())?;
-        let page = bammetrics_report::render(&verdict, &sample.inputs, &options);
-        let page_file = out.join(page_name(&sample.name));
-        write_atomic(&page_file, &page)?;
-        files.extend([verdict_file, page_file]);
+        files.push(verdict_file);
+        if html {
+            let page = bammetrics_report::render(&verdict, &sample.inputs, &options);
+            let page_file = out.join(page_name(&sample.name));
+            write_atomic(&page_file, &page)?;
+            files.push(page_file);
+        }
+        if let (Some(pdf), Some(bytes)) = (&pdf, bytes) {
+            let pdf_file = out.join(pdf_name(&sample.name));
+            pdf.save(&pdf_file, &bytes, &sample.inputs)?;
+            files.push(pdf_file);
+        }
         summaries.push(SampleSummary::new(verdict, page_name(&sample.name)));
     }
-    let index = out.join("index.html");
-    write_atomic(
-        &index,
-        bammetrics_report::render_index(&summaries, &options),
-    )?;
-    files.push(index);
+    if html {
+        let index = out.join("index.html");
+        write_atomic(
+            &index,
+            bammetrics_report::render_index(&summaries, &options),
+        )?;
+        files.push(index);
+    }
     Ok(Written {
         out,
         files,
@@ -186,8 +239,8 @@ fn counts_line(counts: bammetrics_verdict::Counts) -> String {
 
 /// The one-screen summary of docs/05 section 4.10: a header, one line per
 /// sample with its fails and warns (collapsed past three), then the files
-/// written and the index path.
-pub fn summary(samples: &[SampleSummary], out: &Path, files: usize) -> String {
+/// written and the index path (`index_written` false under `--pdf-only`).
+pub fn summary(samples: &[SampleSummary], out: &Path, files: usize, index_written: bool) -> String {
     let rows = bammetrics_report::index::sorted(samples);
     let tally = Tally::of(samples);
     let mut text = String::new();
@@ -249,12 +302,16 @@ pub fn summary(samples: &[SampleSummary], out: &Path, files: usize) -> String {
     if !listed {
         let _ = writeln!(text, "{:<10}  {} samples", "PASS", tally.pass);
     }
-    let _ = writeln!(
-        text,
-        "wrote {files} files to {}, index {}",
-        out.display(),
-        out.join("index.html").display()
-    );
+    if index_written {
+        let _ = writeln!(
+            text,
+            "wrote {files} files to {}, index {}",
+            out.display(),
+            out.join("index.html").display()
+        );
+    } else {
+        let _ = writeln!(text, "wrote {files} files to {}", out.display());
+    }
     if tally.worst() != Band::Pass {
         text.push_str("the verdict does not change the exit code; bammetrics check gates on it\n");
     }

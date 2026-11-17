@@ -10,6 +10,43 @@ env:
   PICARD_VERSION: "3.5.0"
 
 jobs:
+  # The PDF report (cargo feature `pdf`, docs/pdf.md): clippy and every test
+  # with all features, the PDF golden cases among them.
+  pdf:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Clippy, all features
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Tests, all features
+        run: cargo test --workspace --all-features
+
+  # The workspace rust-version (Cargo.toml): the default build on rustc 1.91,
+  # the floor noodles 0.119 and noodles-cram 0.102 declare.
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.91
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build the default workspace on 1.91
+        run: cargo build --workspace --locked
+
   test:
     strategy:
       fail-fast: false

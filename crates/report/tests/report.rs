@@ -9,7 +9,9 @@ use std::time::{Duration, Instant};
 
 use bammetrics_core::metrics_file::MetricsDoc;
 use bammetrics_report::theme::{TEXT_ON_BACKGROUND, Theme, contrast, token};
-use bammetrics_report::{Family, Input, Options, Verdict, escape, figure, render};
+use bammetrics_report::{
+    Family, Input, Options, Verdict, escape, figure, figure_standalone, render,
+};
 use bammetrics_verdict::{Preset, evaluate};
 
 const DATE: &str = "2026-01-02 03:04:05 UTC";
@@ -426,6 +428,40 @@ fn the_fixture_draws_all_four_plots_with_labels_and_legends() {
     assert!(
         cycle.contains("read 1 over 100 cycles averages Q40, read 2 over 100 cycles averages Q40")
     );
+}
+
+/// `figure_standalone` (docs/07 section 3.3): the SVG of `figure` in the SVG
+/// namespace with its own `<style>`, every `var(--x)` replaced by the print
+/// color, and the `<desc>` text as the text alternative. usvg parses it in
+/// `crates/pdf/tests/pdf.rs`.
+#[test]
+fn standalone_plots_hold_print_colors_and_no_custom_property() {
+    let (verdict, inputs) = failing();
+    let accent = token(Theme::Print, "accent").expect("accent");
+    let accent = format!("#{:02x}{:02x}{:02x}", accent[0], accent[1], accent[2]);
+    for family in Family::ALL {
+        let name = family.name();
+        let plot = figure_standalone(family, &inputs, &verdict.checks, None).expect(name);
+        let html = figure(family, &inputs, &verdict.checks).expect(name);
+        assert!(
+            plot.svg
+                .starts_with("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"300\" class=\"chart\""),
+            "{}",
+            family.name()
+        );
+        assert!(!plot.svg.contains("var("), "{}", family.name());
+        assert!(plot.svg.contains(".chart .ser { fill: none; stroke: "));
+        assert!(plot.svg.contains(&accent), "{}", family.name());
+        assert!(plot.svg.ends_with("</svg>"));
+        assert!(html.contains(&format!("<desc id=\"d-{}\">", family.name())));
+        assert!(html.contains(&escape(&plot.alt)), "{}", family.name());
+        let body = |svg: &str| svg[svg.find("<title").expect("title")..].to_owned();
+        assert!(
+            html.contains(&body(&plot.svg)),
+            "same drawing: {}",
+            family.name()
+        );
+    }
 }
 
 #[test]

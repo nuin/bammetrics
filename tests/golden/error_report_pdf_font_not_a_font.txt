@@ -1,0 +1,13 @@
+## argv
+report
+tests/data/picard
+-o
+OUT
+--pdf
+--pdf-font
+tests/data/targets.interval_list
+## exit
+1
+## stdout
+## stderr
+bammetrics: --pdf-font tests/data/targets.interval_list: not a TrueType or OpenType font (Invalid sfnt version 0x40484409)

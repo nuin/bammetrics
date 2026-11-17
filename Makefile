@@ -43,20 +43,28 @@ harness-test:
 # on one machine's bwa output), byte for byte
 # against tests/golden. golden-update rewrites the records after an intended
 # change; the diff is the review.
+#
+# Both builds run: with the feature pdf (the PDF cases) and without it (the
+# usage error of a binary built without the feature). The default build runs
+# last, so target/release/bammetrics is the default binary afterwards.
 golden: release
+	cargo test --release -p bammetrics-cli --features pdf --test golden
 	cargo test --release -p bammetrics-cli --test golden
 
 golden-update: release
+	UPDATE_GOLDEN=1 cargo test --release -p bammetrics-cli --features pdf --test golden
 	UPDATE_GOLDEN=1 cargo test --release -p bammetrics-cli --test golden
 
 # Size and speed budgets of docs/05 section 4.8 (crates/cli/tests/budgets.rs):
 # the fixture pages and a 100-sample index timed (median of 31 renders) and
 # sized, the binary growth between the two probe examples of crates/report
-# and between the two of crates/formats, and the BAM reads the report adds to
-# qc. Fails at 2x any target.
+# and between the two of crates/formats, the PDF report (feature pdf: growth
+# of size_pdf over size_report, render time and bytes from pdf_budget), and
+# the BAM reads the report adds to qc. Fails at 2x any target.
 budgets:
 	cargo build --release -p bammetrics-report --example size_base --example size_report
 	cargo build --release -p bammetrics-formats --example size_formats_base --example size_formats
+	cargo build --release -p bammetrics-pdf --features pdf --example size_pdf --example pdf_budget
 	cargo test --release -p bammetrics-cli --test budgets -- --ignored --nocapture
 
 # Accessibility check of the report pages (benches/a11y.mjs): axe-core in

@@ -1,0 +1,60 @@
+[package]
+name = "bammetrics-pdf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+# The default build (no feature) compiles an empty crate on 1.91. The `pdf`
+# feature pulls krilla 0.8.2 and krilla-svg 0.8.1, which declare rust-version
+# 1.92: the floor of that build. Cargo does not enforce a dependency's
+# rust-version, so 1.91.1 compiled it too (docs/pdf.md); 1.92 is supported.
+rust-version.workspace = true
+description = "The per-sample PDF report: the HTML report's content as a tagged PDF/UA-1 file (feature `pdf`)"
+
+[lib]
+name = "bammetrics_pdf"
+
+[features]
+pdf = [
+    "dep:bammetrics-core",
+    "dep:bammetrics-verdict",
+    "dep:bammetrics-report",
+    "dep:krilla",
+    "dep:krilla-svg",
+    "dep:rustybuzz",
+    "dep:skrifa",
+    "dep:subsetter",
+    "dep:usvg",
+]
+
+[dependencies]
+bammetrics-core = { workspace = true, optional = true }
+bammetrics-verdict = { workspace = true, optional = true }
+bammetrics-report = { workspace = true, optional = true }
+krilla = { version = "0.8.2", default-features = false, features = ["simple-text"], optional = true }
+krilla-svg = { version = "0.8.1", optional = true }
+skrifa = { version = "0.42", optional = true }
+# The shaper and the subsetter krilla runs, at krilla's versions, so the lock
+# file gains no crate. `fonts::validate` runs both on a `--pdf-font` file
+# before krilla sees it: a font they cannot read is an error, not an abort.
+rustybuzz = { version = "0.20.1", optional = true }
+subsetter = { version = "0.2.6", features = ["variable-fonts"], optional = true }
+usvg = { version = "0.47", default-features = false, features = ["text"], optional = true }
+
+[dev-dependencies]
+lopdf = { version = "0.44", default-features = false }
+
+[[example]]
+name = "fixture_pdfs"
+required-features = ["pdf"]
+
+[[example]]
+name = "size_pdf"
+required-features = ["pdf"]
+
+[[example]]
+name = "pdf_budget"
+required-features = ["pdf"]
+
+[[test]]
+name = "pdf"
+required-features = ["pdf"]

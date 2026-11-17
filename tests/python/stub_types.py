@@ -19,6 +19,11 @@ def forms(names: list[str]) -> None:
     assert_type(run.verdict.status, Literal["pass", "warn", "fail", "incomplete"])
     assert_type(bm.check("dir"), bm.Verdict | list[bm.Verdict])
     assert_type(bm.report("dir"), list[str])
+    assert_type(bm.report("dir", pdf=True, pdf_font="font.ttf", page_size="letter"), list[str])
+    assert_type(bm.report(["a", "b"], output="o", pdf_only=True), list[str])
+    assert_type(bm.qc("x.bam", report="pdf"), bm.Run[bm.Verdict])
+    assert_type(bm.qc("x.bam", report=["html", "pdf"], page_size="a4"), bm.Run[bm.Verdict])
+    assert_type(bm.qc("x.bam", report=False), bm.Run[bm.Verdict])
     try:
         bm.qc("x.bam")
     except bm.InputError as e:

@@ -948,3 +948,24 @@ fn sex_takes_any_case_and_needs_a_sex_rule() {
     );
     assert!(!dir.exists(), "nothing written");
 }
+
+/// `--report pdf` with a sample name the built-in Latin fonts lack and no
+/// `--pdf-font`: refused from the BAM header's name before the first read,
+/// so no metrics file, manifest or directory is written and a rerun needs
+/// no `--force`.
+#[cfg(feature = "pdf")]
+#[test]
+fn a_pdf_sample_name_outside_the_fonts_fails_before_any_write() {
+    let dir = fresh_dir("pdf-sample");
+    let run = qc(&dir, &["--report", "pdf", "--sample", "Пример-7"]);
+    assert_eq!(code(&run), 1, "{}", stderr(&run));
+    assert!(
+        stderr(&run).contains("U+041F (П) in \"Пример-7\" is outside the built-in Latin fonts"),
+        "{}",
+        stderr(&run)
+    );
+    assert!(!dir.exists(), "nothing written");
+    let html = qc(&dir, &["--sample", "Пример-7"]);
+    assert_eq!(code(&html), 0, "the page sets any name: {}", stderr(&html));
+    let _ = fs::remove_dir_all(&dir);
+}

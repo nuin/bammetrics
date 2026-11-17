@@ -253,6 +253,8 @@ Section data sources:
 
 A column definition lives in `glossary.tsv` (tool, column, definition, unit). The text is written in our own words from Picard's column behavior, not copied from Javadoc or the Picard website. One reviewer checks it before release.
 
+The PDF (`report --pdf`, `report --pdf-only`, `qc --report pdf`; cargo feature `pdf`, wave W06, [docs/pdf.md](pdf.md)) holds rows 1 to 7 in the same order: the header, the verdict band, each failing and warning check with its plot, the checks not measured, the check table, the provenance, then from a new page an appendix of every metrics table (row 6 printed, where the print CSS of the page hides it). Each section is a tagged `Sect` with one heading and one outline entry; the file is PDF/UA-1. Every table prints every row; a table breaks across pages with its header row repeated, and a row taller than a page goes on over the next pages. The coverage gaps table under the first warning or failing gap check is in the PDF as on the page (owner decision D2 of 2026-11-16).
+
 ### 4.3 Thresholds and presets
 
 A preset is a TOML file. A rule has a metric selector, an operator, a warn bound, a fail bound and a reason template:
@@ -341,6 +343,9 @@ One row per sample, worst first. Sort: verdict rank (fail, warn, incomplete, pas
 | Index size, 100 samples | under 200 KB | 151.9 KB, 14 `clinical-panel` rules per sample |
 | Binary growth | under 300 KB | 290.8 KB stripped (314.8 KB unstripped), the `size_report` probe less `size_base`. The probe holds the two crates and leaves out the verbs' own code (`report.rs`, `check.rs`, `discover.rs`, the `qc` engine). The whole binary grew 339.4 KB stripped when the `report` and `check` verbs first linked the crates (28647a8 to f82df56): over the target, under 2x. |
 | Formats growth | under 150 KB | 129.2 KB stripped (2026-11-10), the `size_formats` probe less `size_formats_base` (`crates/formats/examples`): the format writers and readers of docs/formats.md. The whole binary grew 193.8 KB stripped with the format verbs and options. |
+| PDF growth (feature `pdf`) | under 4 MiB | 3.301 MiB stripped (3,461,216 bytes, 2026-11-16, release head of 0.24.0), the `size_pdf` probe less `size_report` (`crates/pdf/examples`): krilla, krilla-svg, the layout, the font checks and the three fonts. The default build holds none of it. The whole `bammetrics` binary with `--features pdf` is 3,345,232 bytes (3.19 MiB) stripped over the default build ([docs/pdf.md](pdf.md)). Owner decision D3: the default binary's 33,104 bytes for the PDF flags and the exit-2 error are accepted. |
+| Render, sample PDF | under 100 ms | 31.4 ms, the failing fixture sample with every plot, A4, median of 31 (`pdf_budget`) |
+| Sample PDF size | under 500 KB | 454.1 KB, the largest of the three fixture PDFs (465,044 bytes, 22 pages). Owner decision D1 (2026-11-16): the appendix prints every row, the target is 500 KB, failing at 1 MB. docs/07 had set 150 KB from a PDF without the appendix; every row costs about 74 bytes per tagged cell (docs/pdf.md, docs/benchmarks.md) |
 | Added passes over the BAM | 0 | 0: `qc` reports 1 BAM read with the report; `report` and `check` run with the BAM deleted |
 
 `make budgets` (`crates/cli/tests/budgets.rs`) measures every row on the test fixtures and fails the build at 2x any target; CI runs it on Linux and macOS (decision 11). Each row's method and the history of the binary size are in docs/benchmarks.md.

@@ -1,0 +1,9 @@
+## argv
+report
+--pdf
+## exit
+2
+## stdout
+## stderr
+bammetrics report: missing <DIR>...
+  usage: bammetrics report --pdf <DIR>...

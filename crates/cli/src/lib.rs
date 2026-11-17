@@ -21,6 +21,7 @@ pub mod format;
 pub mod grammar;
 pub mod info;
 pub mod manifest;
+pub mod pdf;
 pub mod plan;
 pub mod python;
 pub mod qc;
@@ -50,7 +51,8 @@ pub struct Cli {
 #[derive(Subcommand)]
 pub enum Command {
     /// Verdicts, sample pages and a run index from directories of Picard
-    /// metrics files: SAMPLE.verdict.json, SAMPLE.report.html, index.html.
+    /// metrics files: SAMPLE.verdict.json, SAMPLE.report.html, index.html;
+    /// SAMPLE.report.pdf with --pdf.
     Report(report::ReportArgs),
     /// Evaluate a preset over directories of metrics files, or read
     /// verdict.json files, and gate: print the checks and exit 10 or 11 on
@@ -58,7 +60,8 @@ pub enum Command {
     Check(check::CheckArgs),
     /// The collectors a preset needs on one read of a BAM, then the
     /// verdict and the page: PREFIX.<metrics files>, PREFIX.verdict.json,
-    /// PREFIX.report.html, PREFIX.manifest.json.
+    /// PREFIX.report.html (PREFIX.report.pdf with --report pdf),
+    /// PREFIX.manifest.json.
     Qc(qc::QcArgs),
     /// What qc with the same options would run: stages, collectors, which
     /// share the BAM read and why any does not, which steps --resume would

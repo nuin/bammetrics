@@ -7,10 +7,12 @@ version is in the [README](../README.md); presets and `verdict.json` are in
 
 ## Build and test
 
-Needs Rust 1.88 or newer (edition 2024).
+Needs Rust 1.91 or newer (edition 2024; noodles 0.119 declares 1.91). The PDF report
+(cargo feature `pdf`, [docs/pdf.md](pdf.md)) needs Rust 1.92 (krilla 0.8.2).
 
 ```bash
 cargo build --release            # target/release/bammetrics
+cargo build --release -p bammetrics-cli --features pdf   # the same binary with report --pdf and qc --report pdf
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 make budgets                     # the size and speed budgets of docs/05 section 4.8
@@ -511,6 +513,7 @@ bammetrics qc BAM [-o PREFIX] [-R FASTA] [--preset NAME|FILE] [--hs BAITS TARGET
               [--ref-flat FILE --strand STRAND [--ribosomal-intervals FILE]] [--sex male|female]
               [--sample NAME] [--fail-on warn|fail] [--resume | --force] [--threads N]
               [--format text|jsonl] [--also FORMAT[,FORMAT]] [-q] [--all-plots] [--date ISO]
+              [--report html|pdf|html,pdf] [--pdf-font FONT] [--page-size a4|letter]
 ```
 
 `qc` runs the collectors the preset's rules need (`generic` without `--preset`; it never
@@ -592,6 +595,13 @@ second; `-q` turns it off. The output has no color. `--format jsonl` prints
 `--resume` kept), `error`, `check` and `done` events on stdout instead. A closed stdout
 (`| head -1`) drops the rest of the output; the run still writes its files and keeps its
 exit code. `--all-plots` and `--date` act as on `report`.
+
+`--report` picks the sample report: `html` (the default, `PREFIX.report.html`), `pdf`
+(`PREFIX.report.pdf` alone) or `html,pdf`. The PDF needs a binary built with the cargo
+feature `pdf`; without it `--report pdf` exits 2 before anything is read and names the build
+command. The manifest lists the PDF under the step `report` with kind `pdf`, and a later run
+without it removes it. `--pdf-font` and `--page-size` set the PDF and need `--report pdf`
+([docs/pdf.md](pdf.md)).
 
 `--also` writes further formats beside the Picard files, one or a list (`--also
 json,markdown`). `json`, `jsonl`, `tsv` and `csv` add `FILE.json` (`.jsonl`, `.tsv`, `.csv`)
@@ -1042,6 +1052,7 @@ suppressed.`, then the summary at `ERROR` or `INFO`.
 
 ```bash
 bammetrics report DIR... [--preset NAME|FILE] [-o OUT] [--all-plots] [--date ISO]
+                  [--pdf | --pdf-only] [--pdf-font FONT] [--page-size a4|letter]
 ```
 
 `report` works on any directory of Picard output and never reads a BAM. A metrics file is
@@ -1065,6 +1076,14 @@ by fail count, then name) with one cell per rule. `--all-plots` draws every plot
 files have data for; `--date` fixes the date printed on the pages, so the same inputs give
 the same bytes. `report` exits 0 on any verdict: a Nextflow task is not killed by a bad
 sample.
+
+`--pdf` adds `OUT/SAMPLE.report.pdf`, the page's content as a tagged PDF/UA-1 file with an
+appendix of every metrics table. `--pdf-only` writes `OUT/SAMPLE.verdict.json` and
+`OUT/SAMPLE.report.pdf` per sample and no page or index. `--page-size` is `a4` (default) or
+`letter`; `--pdf-font FONT` sets the text from one TTF or OTF file for sample names outside
+Latin. Both need a binary built with the cargo feature `pdf`; a binary without it exits 2
+and names `cargo build --release -p bammetrics-cli --features pdf`
+([docs/pdf.md](pdf.md)).
 
 The page and the index are self-contained HTML with no script and no network request: a
 `<meta>` CSP of `default-src 'none'; style-src 'unsafe-inline'`, the CSS inlined, plots as
@@ -1195,7 +1214,7 @@ purpose is listed in KNOWN_DIFFERENCES.md.
 
 The worked examples of docs/05 section 2.5 that work today, written against the committed
 fixtures so each runs from the repository root as shown (`tests/data/insert_size.bam` has
-no `@RG SM`, so the sample is the BAM name). Output is what 0.23.0 prints; long lines are
+no `@RG SM`, so the sample is the BAM name). Output is what 0.24.0 prints; long lines are
 cut.
 
 **1 and 2. One tool, as Picard text or machine-readable.**
@@ -1264,7 +1283,7 @@ $ for bam in bams/*.bam; do
         -o runs/2026-11-02/$(basename "$bam" .bam) -q > /dev/null
   done
 $ bammetrics report runs/2026-11-02/ --preset clinical-panel
-2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.23.0
+2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.24.0
 FAIL        NA1  7 fail, 1 warn, 9 pass, 1 not measured
   FAIL  Mean target coverage is 0.377778, below the fail limit of 100
   ...

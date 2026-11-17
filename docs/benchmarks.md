@@ -528,6 +528,13 @@ render 2.09 ms and 0.70 ms, sample page 96.5 KB (98,790 bytes), index 190.7 KB (
 bytes), binary growth 371.5 KB (380,432 bytes stripped, as at 0.22.0), formats growth
 129.2 KB (132,304 bytes stripped, as at 0.22.0), 0 added passes.
 
+At 0.24.0 (2026-11-16, the release head after the release review, rustc 1.100.0), one
+`make budgets` run with other builds on the machine: render 1.81 ms and 0.70 ms, sample
+page 96.5 KB (98,790 bytes), index 190.7 KB (195,237 bytes), binary growth 371.5 KB
+(380,432 bytes stripped, as at 0.23.0), formats growth 129.2 KB (132,320 bytes stripped),
+PDF growth 3.301 MiB (3,461,216 bytes stripped), render of a sample PDF 31.4 ms, sample
+PDF 454.1 KB (465,044 bytes; 433,723 passing, 458,691 failing), 0 added passes.
+
 The fixture metrics are the seven files the golden records hold for
 `tests/data/insert_size.bam` (alignment summary, insert size, quality yield, duplicate
 metrics, hs metrics, gc bias, mean quality by cycle). A KB is 1024 bytes.
@@ -556,6 +563,8 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 0.21.0 | 2026-11-10, release/0.21.0 at d2af4a2: feat/stage-executor and the security fixes of release/0.20.0 merged, the version set | 7,211,216 | 6,114,880 |
 | 0.22.0 | 2026-11-10, release/0.22.0: feat/chain-verb and feat/fifo-buffer merged, the version set | 7,414,032 | 6,296,952 |
 | 0.23.0 | 2026-11-11, release/0.23.0: feat/sam-sort, feat/bam-index and fix/chain-review-0.22 merged, the version set | 7,904,624 | 6,710,840 |
+| 0.24.0 | 2026-11-16, the release head after the release review, rustc 1.100.0, default features | 7,998,352 | 6,793,584 |
+| 0.24.0 pdf | the same with `--features pdf` (`cargo build --release -p bammetrics-cli --features pdf`) | 11,962,592 | 10,138,816 |
 
 From 0.21.0 to 0.22.0 the binary grew 202,816 bytes (198.1 KB), 182,072 stripped (177.8
 KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
@@ -563,6 +572,14 @@ KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
 From 0.22.0 to 0.23.0 it grew 490,592 bytes (479.1 KB), 413,888 stripped (404.2 KB,
 6.6%): the SAM text reader and writer, `ViewSam`, `SortSam` with TimSort, the `TreeSet`
 merge and the planner, the BAI writer and `BuildBamIndex`.
+
+From 0.23.0 to 0.24.0 the default binary grew 82,744 bytes stripped. rustc changed from
+1.99.1 to 1.100.0 between the two rows: 0.23.0 (822c293) built with 1.100.0 the same day
+is 6,760,480 bytes stripped, so the release adds 33,104 bytes (0.49%), the PDF options,
+help text, errors and dispatch of `crates/cli` (owner decision D3 accepts them). No krilla
+code is in it. With `--features pdf` the binary is 3,345,232 bytes over the default build
+(3.19 MiB). Absolute sizes move by a few bytes with the path of the build directory; the
+differences between two builds in one place do not.
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and
@@ -590,6 +607,79 @@ the formats crate. `size_formats` adds both readers, the seven formats of a metr
 and the Markdown, JUnit and MultiQC forms of a verdict. The difference, 132,304 bytes, is
 the crate's code and data. The command's own format code in `crates/cli` is outside the
 probe. The 150 KB target is the measured size plus 16%; the test fails at 300 KB.
+
+## PDF report (wave W06, docs/07 section 3.3)
+
+Measured 2026-11-16 on the Mac Studio, rustc 1.100.0, by `make budgets` on the release
+head of 0.24.0, after the release review. `crates/pdf` is built only with the cargo
+feature `pdf`.
+
+| Budget | Target | Fails at | Measured | How |
+|---|---:|---:|---:|---|
+| PDF growth | 4 MiB | 8 MiB | 3.301 MiB | 3,461,216 bytes: stripped `size_pdf` less stripped `size_report` (4,089,824 unstripped) |
+| Render, sample PDF | 100 ms | 200 ms | 31.4 ms | the failing fixture sample with every plot, A4, median of 31 renders after 3 unmeasured (`pdf_budget`) |
+| Sample PDF size | 500 KB | 1000 KB | 454.1 KB | the largest of three: 433,723 bytes passing, 458,691 failing, 465,044 failing with every plot |
+
+A MiB is 1,048,576 bytes, as the KB of this file is 1024 bytes. In decimal units the
+growth is 3.46 MB.
+
+The kill rule of docs/07 (W06: layout code over 1,800 lines, raised from 1,500 by owner
+decision D2, or growth over 4 MB keeps the PDF a documented recipe) did not fire:
+
+- Layout code: 1,707 lines, `wc -l crates/pdf/src/*.rs` (layout.rs 726, content.rs 476,
+  fonts.rs 284, lib.rs 221), after the branch review (every appendix row, rows split over
+  pages, the sample name check, `save`) and the release review (the font checks, the
+  shaping before the first page, the coverage gaps table, `check_sample`). It was 1,497
+  before the release review. The source has no `cfg(test)` code.
+- Growth, the probe of the first day: one page of text and one plot over `size_report`,
+  3,856,224 bytes stripped (3.68 MB). With the whole crate and default release settings
+  the growth read 4,120,800 bytes (3.93 MB, 4.12 decimal MB). The PDF dependencies now
+  build with `opt-level = "s"` (`[profile.release.package.*]` in the root Cargo.toml):
+  3,444,688 bytes, and the render went from 16.5 to 17.3 ms in the run that compared them.
+  The font checks of the release review bring it to 3,461,216 bytes.
+- The default build compiles none of it: `cargo tree --workspace -e normal,build` lists no
+  krilla, usvg or font crate, and before part C the stripped `bammetrics` binary of the
+  branch equalled origin/main's (822c293).
+
+The appendix holds every metrics table with every row as a tagged table (`TR`, `TH`, `TD`
+per cell), and krilla writes each structure element as its own object with a 20-byte
+cross-reference entry. In the 458,691-byte failing PDF the 2,373 `TD` elements take
+128 KB, the 623 `TR` 48 KB, the content streams and fonts 90 KB. A first build printed 25
+evenly spaced rows of a longer table (240 KB); the review asked for every row, as row 6 of
+docs/05 section 4.2 and docs/07 section 3.3 say. The size target moved from docs/07's
+150 KB, measured without the appendix, to 500 KB, failing at 1 MB: owner decision D1
+(2026-11-16) keeps every row and that target.
+
+The fixture sample (`clinical-panel`, 5 fail, 8 pass, 5 not measured) is 21 A4 pages: 3
+of report and 18 of appendix, most of it the 101 GC bias rows of 11 columns and the 200
+rows of the cycle histogram. docs/07 named 3 pages; the appendix adds the rest.
+
+The whole binary on the release head (the table above): `bammetrics` stripped is
+6,793,584 bytes without the feature, 33,104 more than 0.23.0 built the same day (the
+options, help text and errors of part C), and 10,138,816 bytes with `--features pdf`
+(3,345,232 bytes over the default). The wheel, which carries the feature: 5,548,488 bytes,
+1,846,284 more than a wheel without it (3,702,204), CPython 3.15, macOS arm64, from
+`make wheel-check` and the same build without the feature.
+
+Release check, 0.24.0, on the release head: `crates/pdf/src` is 1,707 lines and the PDF
+growth 3,461,216 bytes stripped. Two runs of each form give the same bytes (`cmp`): the
+three fixture PDFs, `report tests/data/picard --pdf`, `--pdf-only --page-size letter
+--all-plots`, and the two `qc` forms of docs/pdf.md, each to one prefix. veraPDF and qpdf
+are not installed; pypdf 7.1.0 in strict mode reads the seven, each marked, with a
+structure tree, `/Lang en`, `pdfuaid:part 1` in the XMP packet and an outline.
+
+`--pdf-font` check (release review): 1,550 damaged copies of DejaVuSans-Cyrillic and
+DejaVuSans-Latin (cut at six offsets, a zeroed table directory, wrong checksums, glyph
+offsets past `glyf`, random bytes after a valid header, bytes changed in one table or
+anywhere, each set also with its checksums recomputed) through `report --pdf-only
+--pdf-font`: each exits 1 with a reason or renders, none exits 134. Before the fix 4 of
+the first 175 aborted. 242 TrueType and OpenType files of macOS 27 under `/System/Library/Fonts`:
+80 render, 158 lack a Latin character of the report, 4 are refused (no outlines, a color
+font, a `cmap` that maps nothing, fsType 2).
+
+Fonts: three Latin subsets of DejaVu 2.37 (regular 24,188, bold 22,844, mono 21,500
+bytes), no hinting and no layout tables, from matplotlib 3.8.0's copies by
+`tools/subset_fonts.py`, which gives the same bytes on every run.
 
 ## Report accessibility
 

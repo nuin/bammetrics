@@ -1,5 +1,160 @@
 # Changelog
 
+## 0.24.0
+
+The PDF report behind the cargo feature `pdf`: `report --pdf`, `qc --report pdf`,
+`--pdf-font` and the Python keywords (wave W06).
+
+### Owner decisions (2026-11-16)
+
+- D1: the appendix prints every row. The sample PDF size target is 500 KB, failing at 1 MB
+  (docs/05 section 4.8); the failing fixture PDF is 458,691 bytes.
+- D2: the layout-code kill rule of docs/07 W06 rises from 1,500 to 1,800 lines; the growth
+  limit stays 4 MB. The coverage gaps table is in the PDF. `crates/pdf/src` is 1,707 lines
+  and the PDF growth 3,461,216 bytes stripped.
+- D3: the default binary's growth of 33,104 bytes for the PDF flags and the exit-2
+  missing-feature error is accepted.
+
+### Added
+
+- The PDF report, wave W06 of docs/07: `crates/pdf` behind the cargo feature `pdf` (parts
+  A and B), and `report --pdf`, `qc --report pdf` and the Python keywords (part C). The
+  default build compiles no krilla code. Its stripped binary is 6,760,480 bytes at 0.23.0
+  and 6,793,584 bytes at 0.24.0, 33,104 bytes more for the command options of part C
+  (rustc 1.100.0, macOS arm64, both built the same day).
+  docs/pdf.md documents the report.
+- `bammetrics report DIR --pdf` writes `SAMPLE.report.pdf` beside each page;
+  `--pdf-only` writes `SAMPLE.verdict.json` and `SAMPLE.report.pdf` per sample and no page
+  or index. `bammetrics qc --report FORM[,FORM]` takes `html` (default), `pdf` or
+  `html,pdf`; the manifest lists `PREFIX.report.pdf` under the step `report` with kind
+  `pdf`, a later run without it removes it, and `plan` prints it. Both verbs take
+  `--pdf-font FONT` (read and checked before the run, exit 1 on a missing file, a
+  directory or a file that is no font) and `--page-size a4|letter`; either without a PDF
+  exits 2.
+- A binary built without the feature answers every PDF request with exit 2 before
+  anything is read, naming the feature and `cargo build --release -p bammetrics-cli
+  --features pdf`. `chain --report`, `--pdf`, `--pdf-only`, `--pdf-font` and `--page-size`
+  exit 2: a chain has no report step until wave W14.
+- Python: `report(dirs, pdf=True)`, `pdf_only=True`, `pdf_font`, `page_size`;
+  `qc(bam, report="pdf")` and `report=["html", "pdf"]` beside `report=True` and `False`.
+  The stub is regenerated; `tests/python/test_pdf.py` covers the forms.
+- The wheel is built with the feature `pdf` (`pyproject.toml`): 5,548,488 bytes against
+  3,702,204 without it on CPython 3.15, macOS arm64. `cargo build --release` and the
+  Makefile's `release` keep it off. The `bammetrics` binary with the feature is 10,138,816
+  bytes stripped, 3,345,232 over the default build.
+- Golden cases: 8 PDF forms with the feature (each PDF listed with its page count, and its
+  size for `report`), 3 missing-feature errors without it, 6 option errors in both: 390
+  records in all, 373 at 0.23.0. `make golden` runs the suite with and without the
+  feature.
+
+- `bammetrics_report::figure_standalone` (part A): each plot as an SVG document with the
+  SVG namespace, a size and a `<style>` of the `.chart` rules, every `var(--x)` replaced by
+  the print palette (`theme::resolve_tokens`), so usvg draws it; `Standalone::alt` is the
+  plot's `<desc>`. The HTML pages and their snapshots are byte-identical.
+- `crates/pdf` (`bammetrics-pdf`, part B): `render(verdict, inputs, &Options)` gives the
+  PDF bytes, `save(path, bytes, inputs, &Options)` writes them through `AtomicFile`,
+  refusing a path that names an input or the font, and `write` does both. `Options { date, font, all_plots, paper }`, `Paper::A4`
+  (default) or `Paper::Letter`. Content: header, verdict band, the failing and warning
+  checks each with its plot, the checks not measured, the check table, the run
+  provenance, and from a new page an appendix of every metrics table with every row.
+  PDF/UA-1 through
+  krilla's validator: document language, title, one heading per `Sect`, `TH` cells on
+  every table, `/Alt` on every figure, artifacts for rules, stripes, glyphs, repeated
+  header rows and the footer. An outline entry per section and per appendix file. Tables
+  break across pages with the header row repeated, a row taller than a page goes on over
+  the next pages, and each page carries its number.
+- Fonts: Latin subsets of DejaVu Sans, DejaVu Sans Bold and DejaVu Sans Mono (68,532 bytes,
+  `crates/pdf/fonts`, licence `LICENSE-DEJAVU`), rebuilt byte for byte by
+  `tools/subset_fonts.py` (fontTools, `tools/requirements.txt`). `Options::font`
+  (`--pdf-font`) sets every text run from one TTF or OTF file of at
+  most 32 MiB, read and checked before use (docs/pdf.md, "What `--pdf-font` takes"): a
+  file that is not a font, a table past the end of the file or with a wrong checksum, no
+  outlines, a damaged `head`, `hhea`, `hmtx`, `maxp` or `cmap`, color glyph tables, an
+  fsType that forbids embedding, a font the text shaper or the subsetter cannot read, and a
+  font collection each fail with the reason. A character the font lacks fails the render with its code point
+  and the text it is in.
+- `cargo run -p bammetrics-pdf --features pdf --example fixture_pdfs -- DIR` writes the
+  three fixture PDFs (`pass.pdf`, `fail.pdf`, `fail-all-plots.pdf`).
+- `make budgets` measures three new rows (docs/05 section 4.8): PDF growth (4 MiB), PDF
+  render time (100 ms) and PDF size, from the `size_pdf` and `pdf_budget` examples. The
+  size target is 500 KB, not docs/07's 150 KB, which was measured without the appendix:
+  the failing fixture PDF is 458,691 bytes and 21 pages (3 of report, 18 of appendix).
+  Measured on the release head: growth 3,461,216 bytes, render 31.4 ms, largest fixture
+  PDF 465,044 bytes.
+- The coverage gaps table of the HTML page under the first warning or failing
+  `CoverageGapMetrics` check, in the PDF too: the longest 200 gaps from the BED beside the
+  metrics file, tagged as every other table (owner decision D2).
+- CI (`.github/workflows/ci.yml`): a `pdf` job runs clippy and every test with all
+  features on Linux and macOS, and an `msrv` job builds the default workspace on rustc
+  1.91.
+
+### Fixed (review of the PDF branch)
+
+- A table row taller than a page was drawn past the bottom and cut off (a 32 KB command
+  line showed 1,610 of 8,000 words). It now goes on over the next pages under the
+  repeated header row.
+- The appendix printed 25 evenly spaced rows of a longer table. It prints every row.
+- A plot heading could sit alone at a page bottom with its plot on the next page. The
+  heading of a plot, and a failing check with a plot, now start on a new page unless the
+  plot fits below them.
+- `report --pdf` with a sample name the fonts cannot set wrote the verdict and the page,
+  then failed with no index. Every PDF is now rendered before the first file is written,
+  so the run writes nothing. `qc` renders its PDF before `PREFIX.verdict.json`.
+- An empty sample name, or one with a control character or U+2028, failed with the PDF
+  writer's validation text. It fails with `the sample name "..." is empty or not one
+  line`. U+2028 and U+2029 in a cell print as spaces.
+- `read_font` checks that the path is a regular file before it opens it, so a pipe given
+  to the library no longer blocks. A damaged table tag prints escaped (`\x83`).
+- `tools/subset_fonts.py` formatted with ruff. docs/python.md puts the PDF keywords after
+  the `report` signature. The PDF growth row reads MiB.
+
+### Fixed (release review)
+
+- A damaged `--pdf-font` that passed the table checks aborted the process (SIGABRT, exit
+  134) inside krilla: its shaper unwraps `rustybuzz::Face::from_slice` while a page surface
+  is open, and the surface's drop asserts during the unwind, which `catch_unwind` cannot
+  catch. `fonts::validate` now runs the shaper's parser, a shaped sample text and a subset
+  of its glyphs before krilla sees the font, compares every table checksum (`head` and
+  `bhed` aside), and refuses color glyph tables and fsType 2; every text run of a
+  `--pdf-font` is shaped once before the first page opens. 1,550 damaged fonts exit 1 or
+  render, none 134; `a_damaged_pdf_font_is_an_error_never_an_abort` runs 9 shapes through
+  the binary.
+- The docs said the default build keeps rust-version 1.88; noodles 0.119 and the vendored
+  noodles-cram 0.102 declare 1.91. The workspace rust-version is 1.91, and the default
+  workspace builds on rustc 1.91.1. The feature `pdf` needs 1.92 (krilla); cargo does not
+  enforce a dependency's rust-version, so the docs no longer say it refuses that build.
+- CI built and tested neither the feature `pdf` nor the minimum compiler (jobs above).
+- Size numbers disagreed across the changelog, docs/pdf.md, docs/05 section 4.8 and
+  docs/benchmarks.md (6,760,472 or 6,793,576 bytes, 33,104 or 33,096). Each is measured
+  once on the release head and written the same everywhere; docs/07 section 3.3 carries
+  the decisions D1 to D3.
+- `qc --report pdf` with a sample name the built-in fonts lack failed after the metrics
+  files and the first manifest were written, so a rerun needed `--force`. The name is
+  checked against the fonts in prepare, before the first read; the run writes nothing.
+- `--pdf-font` with a `.ttc` collection failed with `not a TrueType or OpenType font`, and
+  a 55 MB system CJK collection with the size limit. A collection is refused with `extract
+  one face to a TTF or OTF file`; docs/pdf.md shows the fontTools line. The cap stays
+  32 MiB.
+- `pyproject.toml` always enables `pdf`, so a source build on a compiler older than 1.92
+  fails. Kept: maturin has no feature per compiler. README and docs/python.md say the wheel
+  ships with the feature and a source build needs rustc 1.92.
+
+### Changed
+
+- The PDF report's dependencies (krilla, krilla-svg, usvg, resvg, the font crates, the
+  image decoders) build with `opt-level = "s"` in the release profile. None of them is in
+  the default build. The PDF growth falls from 4,120,800 to 3,444,688 bytes stripped, and
+  the render time rises from 16.5 to 17.3 ms (one run each). The font checks of the release
+  review bring it to 3,461,216 bytes.
+- `rustybuzz` 0.20.1 and `subsetter` 0.2.6 are direct dependencies of `crates/pdf` behind
+  the feature, at the versions krilla uses: the lock file gains no crate.
+- `crates/cli/tests/budgets.rs` finds the release examples above the test binary, which
+  cargo 1.100 builds under `target/release/build/<package>/<hash>/out`.
+- `crates/core/src/cram.rs`: a division by a `NonZeroUsize` without `.get()`, for clippy
+  1.100 (`needless_nonzero_get`).
+- `deny.toml`: BSD-2-Clause and BSD-3-Clause allowed, and three duplicate versions under
+  the PDF tree skipped, each with its reason.
+
 ## 0.23.0
 
 SAM text in and out, `ViewSam`, `SortSam` with the sort barrier and the planner of a

@@ -1,19 +1,20 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/verdict", "crates/report", "crates/formats", "crates/cli", "crates/py"]
+members = ["crates/core", "crates/verdict", "crates/report", "crates/formats", "crates/pdf", "crates/cli", "crates/py"]
 exclude = ["vendor"]
 
 [workspace.package]
-version = "0.23.0"
+version = "0.24.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-rust-version = "1.88"
+rust-version = "1.91"
 
 [workspace.dependencies]
-bammetrics-core = { path = "crates/core", version = "0.23.0" }
-bammetrics-verdict = { path = "crates/verdict", version = "0.23.0" }
-bammetrics-report = { path = "crates/report", version = "0.23.0" }
-bammetrics-formats = { path = "crates/formats", version = "0.23.0" }
+bammetrics-core = { path = "crates/core", version = "0.24.0" }
+bammetrics-verdict = { path = "crates/verdict", version = "0.24.0" }
+bammetrics-report = { path = "crates/report", version = "0.24.0" }
+bammetrics-formats = { path = "crates/formats", version = "0.24.0" }
+bammetrics-pdf = { path = "crates/pdf", version = "0.24.0" }
 clap = { version = "4", features = ["derive", "string"] }
 noodles = { version = "0.119", features = ["bam", "sam", "bgzf", "core", "cram", "csi", "fasta", "vcf", "tabix"] }
 pyo3 = { version = "0.30", features = ["extension-module"] }
@@ -24,6 +25,60 @@ zlib-rs = "0.6"
 [profile.release]
 lto = "fat"
 codegen-units = 1
+
+# The PDF report's dependencies (feature `pdf` of crates/pdf, none of them in
+# the default build) are optimized for size: they draw a few pages per
+# sample, and the binary growth budget of docs/07 section 3.3 is 4 MB.
+[profile.release.package.krilla]
+opt-level = "s"
+[profile.release.package.krilla-svg]
+opt-level = "s"
+[profile.release.package.usvg]
+opt-level = "s"
+[profile.release.package.resvg]
+opt-level = "s"
+[profile.release.package.skrifa]
+opt-level = "s"
+[profile.release.package.read-fonts]
+opt-level = "s"
+[profile.release.package.write-fonts]
+opt-level = "s"
+[profile.release.package.subsetter]
+opt-level = "s"
+[profile.release.package.rustybuzz]
+opt-level = "s"
+[profile.release.package.ttf-parser]
+opt-level = "s"
+[profile.release.package.tiny-skia]
+opt-level = "s"
+[profile.release.package.tiny-skia-path]
+opt-level = "s"
+[profile.release.package.fontdb]
+opt-level = "s"
+[profile.release.package.zune-jpeg]
+opt-level = "s"
+[profile.release.package.png]
+opt-level = "s"
+[profile.release.package.gif]
+opt-level = "s"
+[profile.release.package.image-webp]
+opt-level = "s"
+[profile.release.package.pdf-writer]
+opt-level = "s"
+[profile.release.package.svgtypes]
+opt-level = "s"
+[profile.release.package.roxmltree]
+opt-level = "s"
+[profile.release.package.kurbo]
+opt-level = "s"
+[profile.release.package.fontconfig-parser]
+opt-level = "s"
+[profile.release.package.xmp-writer]
+opt-level = "s"
+[profile.release.package.simplecss]
+opt-level = "s"
+[profile.release.package.unicode-normalization]
+opt-level = "s"
 
 # noodles-cram 0.102.0 with one change: the template length of attached mates
 # follows htsjdk (vendor/README.md).

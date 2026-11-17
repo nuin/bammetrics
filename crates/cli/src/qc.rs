@@ -11,8 +11,9 @@
 //!   with no one-pass collector (`CollectWgsMetrics` walks loci) reads the
 //!   BAM on its own.
 //! * post: the verdict over the files the run holds.
-//! * report: `PREFIX.verdict.json` and `PREFIX.report.html`, the files
-//!   `bammetrics report` writes for the same metrics files.
+//! * report: `PREFIX.verdict.json` and `PREFIX.report.html` (and
+//!   `PREFIX.report.pdf` with `--report pdf`), the files `bammetrics
+//!   report` writes for the same metrics files.
 //!
 //! Each metrics file is the one the Picard face writes for the same
 //! arguments (`bammetrics <Tool> INPUT=... OUTPUT=...`), named by
@@ -38,6 +39,7 @@ use crate::also::Also;
 use crate::check::{EXIT_CODES, FailOn};
 use crate::error::{Error, Result};
 use crate::manifest::{Fingerprint, Key, Manifest, Output, Status, StepRecord};
+use crate::pdf::{Pdf, PdfArgs};
 use crate::report::PRESET_HELP;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
@@ -47,6 +49,15 @@ pub enum Format {
     /// One JSON object per line on stdout: start, progress, file, error,
     /// check and done events.
     Jsonl,
+}
+
+/// `--report`: the sample report's forms.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum ReportForm {
+    /// PREFIX.report.html.
+    Html,
+    /// PREFIX.report.pdf (cargo feature pdf).
+    Pdf,
 }
 
 /// `STRAND_SPECIFICITY` of `CollectRnaSeqMetrics`.
@@ -103,7 +114,8 @@ fn after_help() -> String {
 .duplicate_metrics, .wgs_metrics, .rna_metrics, .sex_check_metrics, .coverage_gaps with its \
 .coverage_gaps.bed; .panel.interval_list when --panel is a BED (its \
 @SQ lines from the BAM header); then PREFIX.verdict.json, PREFIX.report.html \
-and PREFIX.manifest.json. Each metrics file is byte for byte the one `bammetrics <Tool> \
+(PREFIX.report.pdf with --report pdf, both with --report html,pdf) and PREFIX.manifest.json. \
+Each metrics file is byte for byte the one `bammetrics <Tool> \
 INPUT=BAM OUTPUT=FILE` writes, apart from the Started on line.\n\n\
 --also json, jsonl, tsv or csv adds FILE.json (.jsonl, .tsv, .csv) beside every metrics file; \
 markdown adds PREFIX.report.md, junit PREFIX.junit.xml, multiqc PREFIX.verdict_mqc.json. The \
@@ -196,10 +208,55 @@ pub struct QcArgs {
     /// The date printed on the page (default: now, as 2026-01-02 03:04:05 UTC).
     #[arg(long, value_name = "ISO")]
     pub date: Option<String>,
-    /// Write PREFIX.report.html. No flag sets it: the command always writes
-    /// the page, the Python `qc(report=False)` does not.
+    /// The sample report, one form or a list: html (PREFIX.report.html, the
+    /// default), pdf (PREFIX.report.pdf, cargo feature pdf), html,pdf.
+    #[arg(
+        long,
+        value_enum,
+        value_delimiter = ',',
+        default_value = "html",
+        value_name = "FORM[,FORM]"
+    )]
+    pub report: Vec<ReportForm>,
+    #[command(flatten)]
+    pub pdf: PdfArgs,
+    /// Write the report of `--report`. No flag clears it: the command
+    /// always writes a report, the Python `qc(report=False)` does not.
     #[arg(skip = true)]
     pub write_page: bool,
+}
+
+impl QcArgs {
+    /// True when the run writes `form`.
+    pub fn writes(&self, form: ReportForm) -> bool {
+        self.write_page && self.report.contains(&form)
+    }
+
+    /// `--report=pdf` and the PDF options as given, for the manifest's
+    /// `report` step; empty at the defaults, so a run without them keeps
+    /// the argv of earlier versions.
+    pub fn report_argv(&self) -> Vec<String> {
+        let mut argv = Vec::new();
+        if self.report != [ReportForm::Html] {
+            let names: Vec<&str> = self
+                .report
+                .iter()
+                .map(|form| match form {
+                    ReportForm::Html => "html",
+                    ReportForm::Pdf => "pdf",
+                })
+                .collect();
+            argv.push(format!("--report={}", names.join(",")));
+        }
+        if let Some(font) = &self.pdf.pdf_font {
+            argv.push(format!("--pdf-font={}", font.display()));
+        }
+        if let Some(size) = self.pdf.page_size {
+            let name = format!("{size:?}").to_ascii_lowercase();
+            argv.push(format!("--page-size={name}"));
+        }
+        argv
+    }
 }
 
 /// What a collector needs beyond the BAM.
@@ -355,6 +412,10 @@ pub struct Plan {
     pub unmet: Vec<Unmet>,
     /// The earlier run's manifest, or why it could not be read.
     pub previous: std::result::Result<Option<Manifest>, String>,
+    /// The run writes PREFIX.report.html.
+    pub html: bool,
+    /// The PDF settings, checked; `None` without `--report pdf`.
+    pub pdf: Option<Pdf>,
 }
 
 /// `PREFIX` plus `suffix`.
@@ -421,11 +482,14 @@ fn refuse_overwriting_inputs<'a>(
         .into_iter()
         .filter_map(|(path, option)| path.canonicalize().ok().map(|p| (p, option)))
         .collect();
-    let fixed = [
+    let mut fixed = vec![
         manifest_path(prefix),
         verdict_path(prefix),
         page_path(prefix),
     ];
+    if args.writes(ReportForm::Pdf) {
+        fixed.push(pdf_path(prefix));
+    }
     let planned = steps.flat_map(|s| s.record.outputs.iter().map(|o| o.path.clone()));
     for output in planned.chain(fixed) {
         let Ok(resolved) = output.canonicalize() else {
@@ -969,10 +1033,16 @@ fn prefix(args: &QcArgs) -> Result<(PathBuf, Origin)> {
 
 /// Prepare: everything checked and decided, nothing written.
 pub fn prepare(args: &QcArgs) -> Result<Plan> {
+    let pdf = args
+        .pdf
+        .prepare(args.writes(ReportForm::Pdf), "--report pdf")?;
     check_inputs(args)?;
     let preset = Preset::resolve(&args.preset)?;
     check_sex_has_a_rule(args, &preset)?;
     let (sample, sample_origin) = sample(args)?;
+    if let Some(pdf) = &pdf {
+        pdf.check_sample(&sample)?;
+    }
     let (prefix, prefix_origin) = prefix(args)?;
     let fingerprint = Fingerprint::of(&args.bam)?;
     let cx = Context {
@@ -1004,6 +1074,8 @@ pub fn prepare(args: &QcArgs) -> Result<Plan> {
         steps,
         unmet,
         previous,
+        html: args.writes(ReportForm::Html),
+        pdf,
     })
 }
 
@@ -1105,6 +1177,8 @@ pub fn prepare_tools(args: &QcArgs, tools: &[&str]) -> Result<Plan> {
         steps,
         unmet: Vec::new(),
         previous: Ok(None),
+        html: false,
+        pdf: None,
     })
 }
 
@@ -1118,6 +1192,20 @@ pub fn verdict_path(prefix: &Path) -> PathBuf {
 
 pub fn page_path(prefix: &Path) -> PathBuf {
     with_suffix(prefix, ".report.html")
+}
+
+pub fn pdf_path(prefix: &Path) -> PathBuf {
+    with_suffix(prefix, ".report.pdf")
+}
+
+/// The report a summary points to: the page, or the PDF when the run writes
+/// only that.
+pub fn report_path(args: &QcArgs, prefix: &Path) -> PathBuf {
+    if args.writes(ReportForm::Pdf) && !args.writes(ReportForm::Html) {
+        pdf_path(prefix)
+    } else {
+        page_path(prefix)
+    }
 }
 
 /// Create the prefix's directory. The directories made come back: dropped

@@ -1,0 +1,12 @@
+## argv
+report
+tests/data/picard
+-o
+OUT
+--pdf-font
+tests/data/ref_100k.fa
+## exit
+2
+## stdout
+## stderr
+bammetrics: --pdf-font sets the PDF, which only --pdf writes
