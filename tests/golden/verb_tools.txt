@@ -44,6 +44,7 @@ mt-copy-number                        CollectMtCopyNumberMetrics
 exon-coverage                         CollectExonCoverageMetrics
 adapter-content                       CollectAdapterContentMetrics
 duplicate-by-tile                     CollectDuplicateByTileMetrics
+telomere                              CollectTelomereMetrics
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

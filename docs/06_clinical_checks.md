@@ -803,3 +803,21 @@ after the run), 2026-11-17. HG002 exome BAM, 10 GB, 150,538,907 records, marked 
 | `chain BAM + mark-duplicates --tagging-policy All + duplicate-by-tile + duplicate-metrics` | 412.5 s | 768 MiB | `ALL` row equal to both metrics files: 246,423 unpaired reads, 74,857,700 pairs, 424,953 unmapped, 139,654 and 3,582,814 duplicates, 3,163 optical duplicate pairs |
 
 `CollectDuplicateMetrics` on the same BAM gives the same six counts as the first run.
+
+## 9. Telomere content
+
+`CollectTelomereMetrics` (verb `telomere`, Python `collect_telomere_metrics()`, class
+`bammetrics.qc.TelomereMetrics`, source `crates/core/src/telomere.rs`) counts the reads
+holding at least 7 copies of `TTAGGG` or `CCCTAA` and gives TelSeq's telomere length
+estimate in kb, wave W08 of docs/07. [docs/telomere.md](telomere.md) holds the counting
+rules, the GC bin, the formula with its constants and read-length rule, the planted truth
+and the measurements.
+
+| | Telomere content |
+|---|---|
+| Picard class name | `CollectTelomereMetrics` |
+| Verb | `telomere` |
+| Metrics class | `bammetrics.qc.TelomereMetrics` |
+| `qc` file | `PREFIX.telomere_metrics` (under a preset that names the class) |
+| Rules | none shipped (docs/telomere.md section 7) |
+| Truth | `tests/data/make_telomere_bams.py`, `tests/python/test_telomere.py` |

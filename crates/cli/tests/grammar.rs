@@ -488,6 +488,14 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("OUTLIER_SD", "2")),
             picard_outputs: single,
         },
+        Case {
+            verb: "telomere",
+            class: "CollectTelomereMetrics",
+            verb_args: strings(&["tests/data/telomere.bam"]),
+            picard_args: strings(&["I=tests/data/telomere.bam"]),
+            option: Some(("TELOMERE_REPEAT_THRESHOLD", "6")),
+            picard_outputs: single,
+        },
     ]
 }
 
@@ -592,7 +600,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 40);
+    assert_eq!(classes.len(), 41);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

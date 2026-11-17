@@ -81,6 +81,9 @@ const CHECKS: &[(&str, Check)] = &[
     (crate::duplicate_by_tile::TOOL.name, |inv| {
         crate::duplicate_by_tile::Options::from_invocation(inv).map(drop)
     }),
+    (crate::telomere::TOOL.name, |inv| {
+        crate::telomere::Options::from_invocation(inv).map(drop)
+    }),
 ];
 
 /// Parse the options of `tool` as its collector would, and build nothing.

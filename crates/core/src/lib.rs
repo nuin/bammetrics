@@ -76,6 +76,7 @@ pub mod sort_sam;
 pub mod spill;
 pub mod stage;
 pub mod tap_options;
+pub mod telomere;
 pub mod timsort;
 pub mod toml;
 pub mod tree_set;

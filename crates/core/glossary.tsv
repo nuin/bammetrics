@@ -690,3 +690,15 @@ bammetrics.qc.DuplicateByTileMetrics	MAX_X	int	Largest x coordinate in the read 
 bammetrics.qc.DuplicateByTileMetrics	MIN_Y	int	Smallest y coordinate in the read names of the row; empty on UNPARSED rows.
 bammetrics.qc.DuplicateByTileMetrics	MAX_Y	int	Largest y coordinate in the read names of the row; empty on UNPARSED rows.
 bammetrics.qc.DuplicateByTileMetrics	NOTES	string	On the ALL row: a file with no duplicate flag and no duplicate marker @PG line, an empty OPTICAL_DUPLICATES and how to fill it, and the count of UNPARSED reads; joined by "; ". Empty elsewhere.
+bammetrics.qc.TelomereMetrics	TOTAL_READS	int	Primary records of the unit that are not QC failures and hold at least one base, unmapped ones included; duplicates only with COUNT_DUPLICATES=true. Secondary and supplementary records are not counted.
+bammetrics.qc.TelomereMetrics	TELOMERIC_READS	int	Reads of TOTAL_READS holding at least TELOMERE_REPEAT_THRESHOLD (default 7, TelSeq's k) non-overlapping copies of REPEAT (default TTAGGG) or of its reverse complement (CCCTAA), counted on the read as sequenced; the larger of the two counts is the read's repeat count.
+bammetrics.qc.TelomereMetrics	PCT_TELOMERIC	float	TELOMERIC_READS / TOTAL_READS. ? when TOTAL_READS is 0.
+bammetrics.qc.TelomereMetrics	READS_GC_48_52	int	Reads of TOTAL_READS whose G plus C count is over 48 and at most 52 percent of the read length, N bases included in the length: TelSeq's GC bins 0.48 to 0.52, the denominator of the length estimate.
+bammetrics.qc.TelomereMetrics	READ_LENGTH	int	The most common read length among TOTAL_READS, the shorter on a tie. The histogram runs from 0 to READ_LENGTH divided by the REPEAT length. Empty when TOTAL_READS is 0.
+bammetrics.qc.TelomereMetrics	PCT_OFF_LENGTH	float	Fraction of TOTAL_READS whose length differs from READ_LENGTH by more than 10 percent of READ_LENGTH. Over 0.05 empties ESTIMATED_LENGTH_KB. ? when TOTAL_READS is 0.
+bammetrics.qc.TelomereMetrics	ESTIMATED_LENGTH_KB	float	TelSeq's mean telomere length in kb: TELOMERIC_READS / READS_GC_48_52 x GENOME_LENGTH_AT_GC (default 332720800) / 1000 / TELOMERE_ENDS (default 46). Empty when READS_GC_48_52 is 0 or PCT_OFF_LENGTH is over 0.05. Calibrated for human whole genomes of one read length; on an exome it is a ratio, not a length.
+bammetrics.qc.TelomereMetrics	SAMPLE	string	Sample (@RG SM) of the accumulation unit. Empty on the ALL_READS row.
+bammetrics.qc.TelomereMetrics	LIBRARY	string	Library (@RG LB) of the accumulation unit. Empty on the ALL_READS and SAMPLE rows.
+bammetrics.qc.TelomereMetrics	READ_GROUP	string	Platform unit (@RG PU) of the read group. Empty except on READ_GROUP rows.
+CollectTelomereMetrics	repeat_count	int	Histogram key: a read's repeat count, the larger of its non-overlapping REPEAT and reverse complement counts, from 0 to READ_LENGTH divided by the REPEAT length, and higher for longer reads.
+CollectTelomereMetrics	*.read_count	float	Reads with this repeat count in the unit named before the dot (All_Reads, or the sample, library or read group PU): TelSeq's TEL0, TEL1, ... columns.

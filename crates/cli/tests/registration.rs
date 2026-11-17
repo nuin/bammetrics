@@ -88,6 +88,12 @@ const NO_PICARD_ORACLE: &[(&str, &str)] = &[
          the planted counts of tests/data/make_tile_bams.py exactly and the ALL row against \
          the CollectDuplicateMetrics and MarkDuplicates totals",
     ),
+    (
+        "CollectTelomereMetrics",
+        "not a Picard tool (docs/telomere.md); tests/python/test_telomere.py checks the planted \
+         counts of tests/data/make_telomere_bams.py exactly and the length estimate against \
+         TelSeq's formula computed in Python",
+    ),
 ];
 
 fn root() -> PathBuf {

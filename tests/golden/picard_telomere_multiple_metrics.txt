@@ -1,0 +1,52 @@
+## argv
+CollectMultipleMetrics
+I=tests/data/telomere.bam
+O=OUT/s
+PROGRAM=null
+PROGRAM=CollectTelomereMetrics
+LEVEL=LIBRARY
+## exit
+0
+## stdout
+## stderr
+## file s.telomere_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectMultipleMetrics INPUT=tests/data/telomere.bam OUTPUT=OUT/s PROGRAM=null PROGRAM=CollectTelomereMetrics METRIC_ACCUMULATION_LEVEL=LIBRARY
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.TelomereMetrics
+TOTAL_READS	TELOMERIC_READS	PCT_TELOMERIC	READS_GC_48_52	READ_LENGTH	PCT_OFF_LENGTH	ESTIMATED_LENGTH_KB	SAMPLE	LIBRARY	READ_GROUP
+97	20	0.206186	17	150	0	8509.483376			
+61	10	0.163934	11	150	0	6575.509881	S1	L1	
+36	10	0.277778	6	150	0	12055.101449	S1	L2	
+
+## HISTOGRAM	java.lang.Integer
+repeat_count	All_Reads.read_count	L1.read_count	L2.read_count
+0	66	43	23
+1	0	0	0
+2	0	0	0
+3	0	0	0
+4	0	0	0
+5	0	0	0
+6	11	8	3
+7	10	5	5
+8	0	0	0
+9	0	0	0
+10	0	0	0
+11	0	0	0
+12	0	0	0
+13	0	0	0
+14	0	0	0
+15	0	0	0
+16	0	0	0
+17	0	0	0
+18	0	0	0
+19	0	0	0
+20	10	5	5
+21	0	0	0
+22	0	0	0
+23	0	0	0
+24	0	0	0
+25	0	0	0
+

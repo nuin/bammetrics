@@ -1191,6 +1191,26 @@ def collect_duplicate_by_tile_metrics(
     duplicates from MarkDuplicates' DT:Z:SQ tags, and TILE_OUTLIER for a tile whose
     duplication is far above its lane's median. Not a Picard tool (docs/06)."""
 
+def collect_telomere_metrics(
+    input: _Path,
+    *,
+    telomere_repeat_threshold: int | None = None,
+    repeat: str | None = None,
+    count_duplicates: bool | None = None,
+    telomere_ends: int | None = None,
+    genome_length_at_gc: int | None = None,
+    metric_accumulation_level: str | Sequence[str] | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    validation_stringency: str | None = None,
+    assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectTelomereMetrics: one row of the 10 TelomereMetrics columns per accumulation
+    unit: reads holding at least TELOMERE_REPEAT_THRESHOLD copies of TTAGGG or CCCTAA,
+    reads of 48 to 52 percent GC, and TelSeq's telomere length estimate in kb; the
+    histogram counts reads by repeat count. Not a Picard tool (docs/telomere.md)."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1421,6 +1441,7 @@ _StepVerb = Literal[
     "exon_coverage",
     "adapter_content",
     "duplicate_by_tile",
+    "telomere",
     "write",
 ]
 

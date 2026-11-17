@@ -40,6 +40,32 @@
   without a tile); the `ALL` row equals the `MarkDuplicates` and `CollectDuplicateMetrics`
   totals on the fixture, 11 generated BAMs, Picard-marked BAMs and the HG002 exome
   (3,163 optical duplicate pairs).
+- `CollectTelomereMetrics` (verb `telomere`, Python `collect_telomere_metrics()`), class
+  `bammetrics.qc.TelomereMetrics`, docs/telomere.md: telomere content as TelSeq defines it
+  (Ding et al. 2014). One pass over primary, non-QC-fail records with at least one base, unmapped reads included,
+  duplicates with `COUNT_DUPLICATES=true`. A read's repeat count is the larger of its
+  non-overlapping `TTAGGG` and `CCCTAA` counts on the strand it was sequenced on; at
+  `TELOMERE_REPEAT_THRESHOLD` (default 7) or more it is telomeric. Columns `TOTAL_READS`,
+  `TELOMERIC_READS`, `PCT_TELOMERIC`, `READS_GC_48_52` (TelSeq's GC bins as
+  `48 L < 100 gc <= 52 L`), `READ_LENGTH`, `PCT_OFF_LENGTH` and `ESTIMATED_LENGTH_KB`
+  (`TELOMERIC_READS / READS_GC_48_52 x 332720800 / 1000 / 46`, empty when more than 5
+  percent of reads are over 10 percent off the modal length), per accumulation unit, and a
+  `repeat_count` histogram. `REPEAT`, `TELOMERE_ENDS` and `GENOME_LENGTH_AT_GC` for another
+  organism. The histogram's zero-filled bins stop at key 1,000 and at 1,000,000 over all
+  units. Also a `CollectMultipleMetrics` program (`.telomere_metrics`), a `chain` tap
+  and a `qc` source. No shipped preset has a rule.
+- `tests/data/make_telomere_bams.py` and `tests/data/telomere.bam`: planted reads at 0, 6,
+  7 and 20 repeats, both strands, unmapped, an `N` in a run, exact GC bin edges and the
+  records that must not count; `tests/python/test_telomere.py` requires every count
+  exactly and the estimate equal to TelSeq's formula in Python; 11 golden records.
+- docs/07 decisions D29 (TelSeq did not run), D30 (the read set) and D31 (the read-length
+  columns and no rule).
+
+### Fixed
+
+- The glossary finds the histogram row of a column whose unit name holds a dot (a `PU`
+  such as `fc1.1`): `fc1.1.read_count` and `fc1.1.fr_count` now match `*.read_count` and
+  `*.fr_count`.
 
 ## 0.25.0
 

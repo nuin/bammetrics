@@ -404,6 +404,7 @@ pub const VERBS: &[Verb] = &[
         "CollectDuplicateByTileMetrics",
         Files::Single,
     ),
+    verb("telomere", "CollectTelomereMetrics", Files::Single),
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the

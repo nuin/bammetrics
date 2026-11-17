@@ -303,6 +303,7 @@ table.
 | `sort-sam` | SortSam (`--sort-order` queryname, coordinate or duplicate) | `-o` BAM, or SAM text for a name ending in `.sam` |
 | `exon-coverage` | CollectExonCoverageMetrics (not a Picard tool, [exon_coverage.md](exon_coverage.md); `--annotation` GTF, GFF3, BED12 or BED) | one (plus the `--summary-output` gene and transcript file) |
 | `duplicate-by-tile` | CollectDuplicateByTileMetrics (not a Picard tool, docs/06 section 8; `--read-name-regex`, `--outlier-sd`) | one |
+| `telomere` | CollectTelomereMetrics (not a Picard tool, [telomere.md](telomere.md); `-K` the repeat threshold, `--repeat`, `--count-duplicates`) | one |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -370,6 +371,13 @@ counterpart ([exon_coverage.md](exon_coverage.md)). `bammetrics exon-coverage BA
 row per gene and per transcript, with the `CollectHsMetrics` per-base depth, so an exon's
 `MEAN_DEPTH` and `MINIMUM_DEPTH` are the `mean_coverage` and `min_coverage` of
 `PER_TARGET_COVERAGE` for the same interval.
+
+`telomere` measures telomeric read content as TelSeq does, with no Picard counterpart
+([telomere.md](telomere.md)). `bammetrics telomere BAM --level READ_GROUP -o tel.txt`
+writes one `TelomereMetrics` row per accumulation unit: primary reads that are not QC
+failures, unmapped reads included, the reads with at least 7 copies of TTAGGG or CCCTAA
+(`-K` sets the 7), the reads of 48 to 52 percent GC and `ESTIMATED_LENGTH_KB`, TelSeq's
+telomere length in kb. The histogram counts reads by repeat count.
 
 ### The 0.12 subcommands
 

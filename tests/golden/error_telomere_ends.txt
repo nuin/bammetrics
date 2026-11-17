@@ -1,0 +1,9 @@
+## argv
+CollectTelomereMetrics
+I=tests/data/telomere.bam
+TELOMERE_ENDS=0
+## exit
+1
+## stdout
+## stderr
+bammetrics: TELOMERE_ENDS=0: must be at least 1

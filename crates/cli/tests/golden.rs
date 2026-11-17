@@ -58,6 +58,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("EXON_GENES", "tests/data/exon_genes.txt"),
     ("AD", "tests/data/adapter_content.bam"),
     ("DBT", "tests/data/duplicate_by_tile.bam"),
+    ("TEL", "tests/data/telomere.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -398,6 +399,17 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_duplicate_by_tile_level", "CollectDuplicateByTileMetrics", "I=DBT", "METRIC_ACCUMULATION_LEVEL=SAMPLE"),
     case!("error_verb_duplicate_by_tile_outlier_sd", "duplicate-by-tile", "DBT", "--outlier-sd", "-1"),
     case!("error_verb_duplicate_by_tile_regex", "duplicate-by-tile", "DBT", "--read-name-regex", "(x"),
+    // CollectTelomereMetrics (docs/telomere.md): tests/data/telomere.bam holds
+    // the planted reads of tests/data/make_telomere_bams.py, two read groups.
+    case!("picard_telomere", "CollectTelomereMetrics", "I=TEL", "O=OUT/telomere.txt", "LEVEL=SAMPLE", "LEVEL=READ_GROUP"),
+    case!("picard_telomere_stdout_duplicates", "CollectTelomereMetrics", "I=TEL", "COUNT_DUPLICATES=true", "K=20"),
+    case!("picard_telomere_multiple_metrics", "CollectMultipleMetrics", "I=TEL", "O=OUT/s", "PROGRAM=null", "PROGRAM=CollectTelomereMetrics", "LEVEL=LIBRARY"),
+    case!("verb_telomere_json", "telomere", "TEL", "--repeat", "ttaggg", "--format", "json"),
+    case!("verb_telomere_no_estimate", "telomere", "IS", "-o", "OUT/telomere.txt"),
+    case!("chain_telomere", "chain", "TEL", "-o", "OUT/s", "+", "telomere", "--level", "READ_GROUP"),
+    case!("error_verb_telomere_repeat", "telomere", "TEL", "--repeat", "TTAGGN"),
+    case!("error_verb_telomere_threshold", "telomere", "TEL", "-K", "0"),
+    case!("error_telomere_ends", "CollectTelomereMetrics", "I=TEL", "TELOMERE_ENDS=0"),
 ];
 
 /// Formats (docs/formats.md): `convert` in both directions and to every
@@ -672,6 +684,7 @@ const T1_CASES: &[Case] = &[
     case!("t1_mt_copy_number", "mt-copy-number", "T1", "-o", "OUT/mt_copy_number.txt"),
     case!("t1_adapter_content", "adapter-content", "T1", "-o", "OUT/adapter_content.txt"),
     case!("t1_duplicate_by_tile", "duplicate-by-tile", "T1", "-o", "OUT/duplicate_by_tile.txt"),
+    case!("t1_telomere", "telomere", "T1", "-o", "OUT/telomere.txt"),
 ];
 
 fn root() -> PathBuf {
