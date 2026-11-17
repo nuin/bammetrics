@@ -152,14 +152,19 @@ fn sheet_row(path: &Path, sample: &str) -> Result<SheetRow> {
 
 /// The core options of `args`, the sample sheet read.
 pub fn options(args: &DoctorArgs) -> Result<Options> {
-    if let Some(reference) = &args.reference
-        && !reference.is_file()
-    {
-        return Err(
-            VerbError::input(VERB, format!("{}: no such file", reference.display()))
-                .from("-R")
-                .into(),
-        );
+    if let Some(reference) = &args.reference {
+        let why = match std::fs::metadata(reference) {
+            Ok(metadata) if metadata.is_file() => None,
+            Ok(metadata) => Some(bammetrics_core::doctor::not_a_file(&metadata.file_type())),
+            Err(_) => Some("no such file"),
+        };
+        if let Some(why) = why {
+            return Err(
+                VerbError::input(VERB, format!("{}: {why}", reference.display()))
+                    .from("-R")
+                    .into(),
+            );
+        }
     }
     let sheet = match (&args.sample_sheet, &args.sample) {
         (Some(path), Some(sample)) => Some(sheet_row(path, sample)?),

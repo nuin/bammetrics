@@ -495,6 +495,7 @@ and CI runs it on the Linux and macOS runners after the unit tests.
 | Index size, 100 samples | 200 KB | 400 KB | 151.9 KB | 155,513 bytes, 14 rule cells per row |
 | Binary growth | 300 KB | 600 KB | 290.8 KB | 297,808 bytes: stripped `size_report` less stripped `size_base`; the probe leaves out the verbs' code (see below) |
 | Binary growth, 0.19.0 | 300 KB | 600 KB | 371.5 KB | 380,400 bytes stripped (408,768 unstripped), measured 2026-11-09 by `make budgets` on the same machine: over the 300 KB target, under the 600 KB limit, so the test prints `over target` and passes; 80.7 KB more than the 0.16.0 row |
+| Binary growth, 0.25.0 | 300 KB | 600 KB | 387.6 KB | 396,944 bytes stripped, measured 2026-11-17 by `make budgets` on release/0.25.0: over the 300 KB target, under the 600 KB limit, so the test prints `over target` and passes; accepted for the release pending owner review (docs/07 decision D22) |
 | Formats growth, W02 | 150 KB | 300 KB | 129.2 KB | 132,304 bytes stripped (148,480 unstripped), measured 2026-11-10 by `make budgets`: stripped `size_formats` less stripped `size_formats_base` (`crates/formats/examples`); see below |
 | Added passes over the BAM | 0 | 1 | 0 | `qc` reports 1 BAM read with the verdict and page; `report` and `check` run with the BAM deleted |
 
@@ -565,6 +566,8 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 0.23.0 | 2026-11-11, release/0.23.0: feat/sam-sort, feat/bam-index and fix/chain-review-0.22 merged, the version set | 7,904,624 | 6,710,840 |
 | 0.24.0 | 2026-11-16, the release head after the release review, rustc 1.100.0, default features | 7,998,352 | 6,793,584 |
 | 0.24.0 pdf | the same with `--features pdf` (`cargo build --release -p bammetrics-cli --features pdf`) | 11,962,592 | 10,138,816 |
+| 0.25.0 | 2026-11-17, release/0.25.0 with fix/0.25.0-review, rustc 1.100.0, default features | 8,428,768 | 7,174,032 |
+| 0.25.0 pdf | the same with `--features pdf` | 12,393,408 | 10,519,272 |
 
 From 0.21.0 to 0.22.0 the binary grew 202,816 bytes (198.1 KB), 182,072 stripped (177.8
 KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
@@ -580,6 +583,11 @@ help text, errors and dispatch of `crates/cli` (owner decision D3 accepts them).
 code is in it. With `--features pdf` the binary is 3,345,232 bytes over the default build
 (3.19 MiB). Absolute sizes move by a few bytes with the path of the build directory; the
 differences between two builds in one place do not.
+
+From 0.24.0 to 0.25.0 the default binary grew 380,448 bytes stripped (5.6%), both built
+with rustc 1.100.0: `CollectExonCoverageMetrics`, `CollectMtCopyNumberMetrics` and
+`doctor`. With `--features pdf` it grew 380,456 bytes stripped, and the PDF build is
+3,345,240 bytes over the default build.
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and

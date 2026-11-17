@@ -555,10 +555,35 @@ fn records_limits_the_read() {
 }
 
 #[test]
-fn a_pipe_is_refused() {
-    let out = run(&["/dev/stdin"]);
+fn a_path_that_is_no_regular_file_is_refused_by_its_kind() {
+    let refused = |args: &[&str], why: &str| {
+        let out = run(args);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(1), "{args:?}: {stderr}");
+        assert!(stderr.contains(why), "{args:?}: {stderr}");
+    };
+    let good = fixture("good.bam");
+    refused(&["tests/data"], "tests/data: is a directory");
+    refused(&["/dev/null"], "/dev/null: is a device");
+    refused(
+        &[&good, "-R", "tests/data"],
+        "tests/data: is a directory (from -R)",
+    );
+    refused(
+        &[&good, "-R", "/dev/null"],
+        "/dev/null: is a device (from -R)",
+    );
+
+    let dir = scratch("fifo");
+    let fifo = dir.join("pipe.bam");
+    let made = Command::new("mkfifo").arg(&fifo).status().expect("mkfifo");
+    assert!(made.success());
+    let out = run(&[text(&fifo)]);
     assert_eq!(out.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("not a regular file"));
+    assert!(String::from_utf8_lossy(&out.stderr).contains(
+        "not a regular file (doctor reads the end of the file, which a pipe does not have)"
+    ));
+    fs::remove_dir_all(&dir).expect("clean");
 }
 
 #[test]
