@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `CollectExonCoverageMetrics`, wave W07 of docs/07 (docs/exon_coverage.md): one
+  `bammetrics.qc.ExonCoverageMetrics` row per exon with the mean, median, minimum and
+  maximum depth and the bases and fraction at each `MIN_DEPTH` (default 10, 20, 30), and in
+  `SUMMARY_OUTPUT` one `bammetrics.qc.GeneCoverageMetrics` row per gene and per transcript.
+  The depth is the `CollectHsMetrics` per-base depth. Verb `exon-coverage`, Python
+  `collect_exon_coverage_metrics()`. Not a Picard tool.
+- The gene annotation reader (`crates/core/src/gene_model.rs`): GTF 2.2 and GFF3 `exon` or
+  `CDS` features, BED12 blocks, BED regions, plain or gzip; `GENE`, `GENE_LIST`,
+  `TRANSCRIPT`, `CANONICAL` (`Ensembl_canonical`, then `MANE_Select`, then the longest
+  CDS), `FEATURE`; contigs matched to the BAM header with the `chr` alias reported.
+- Glossary rows whose column holds `<N>` (`BASES_<N>X`) stand for every number
+  (`glossary::column_matches`).
+- `tests/concordance/test_exon_coverage.py`: `MEAN_DEPTH` and `MINIMUM_DEPTH` equal Picard
+  3.5.0 `CollectHsMetrics PER_TARGET_COVERAGE` on 2,674 cells; `samtools bedcov` as the
+  cross-check.
+
+### Changed
+
+- `hs_metrics::CaptureMetrics::with_intervals` builds the accumulator from intervals
+  already read; `CaptureMetrics::new` calls it. Hs output is unchanged.
+- The golden record `verb_tools` lists `exon-coverage`.
+
 ## 0.24.0
 
 The PDF report behind the cargo feature `pdf`: `report --pdf`, `qc --report pdf`,
