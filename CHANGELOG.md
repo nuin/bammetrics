@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.25.0
+
+Wave W07 of docs/07: `bammetrics doctor`, `CollectMtCopyNumberMetrics` and
+`CollectExonCoverageMetrics` with the GTF, GFF3 and BED12 reader (registry tools 37 and 38).
 
 ### Added
 
@@ -74,6 +77,19 @@
 - A tool verb refuses a further file that is a `--format` copy of the main file.
 - `Invocation::quiet`: the verb's and the chain's `-q` and the Python functions drop a
   tool's own notes on standard error (the contig notes of `exon-coverage`).
+- One table of human chromosome names in `crates/core/src/genome_build.rs` (`chromosome`,
+  `is_autosome`, `is_mito`, `MITO_NAMES`, `aliases`). `CollectSexCheckMetrics` and
+  `CollectMtCopyNumberMetrics` read their default contigs from it and
+  `CollectExonCoverageMetrics` its annotation aliases (`chrM`, `MT`, `M` and `chrMT` now
+  alias one another; before, `chrM` and `MT` only).
+- `doctor`'s `build` check names the mitochondrial contig `mt-copy-number` reads (`1
+  mitochondrial (chrM)`), and says when two or more need `--mt-contig`. 15 doctor golden
+  records change in that line alone.
+
+### Fixed
+
+- `gene_model` unit tests: two tests wrote `blocks.bed` in one directory and failed when
+  run in parallel.
 
 ## 0.24.0
 
