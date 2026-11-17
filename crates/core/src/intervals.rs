@@ -132,6 +132,11 @@ pub fn read_files<P: AsRef<Path>>(paths: &[P], header: &sam::Header) -> Result<V
 /// The text of an interval list or BED, at most [`MAX_INTERVAL_LIST_BYTES`]
 /// read: a pipe has no size to check first, so the read itself stops.
 fn read_capped(path: &Path) -> Result<String> {
+    read_capped_at(path, MAX_INTERVAL_LIST_BYTES)
+}
+
+/// [`read_capped`] with the cap as an argument, so a test can pass a small one.
+fn read_capped_at(path: &Path, cap: u64) -> Result<String> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
@@ -139,15 +144,13 @@ fn read_capped(path: &Path) -> Result<String> {
     let mut text = String::new();
     fs::File::open(path)
         .map_err(input)?
-        .take(MAX_INTERVAL_LIST_BYTES + 1)
+        .take(cap + 1)
         .read_to_string(&mut text)
         .map_err(input)?;
-    if text.len() as u64 > MAX_INTERVAL_LIST_BYTES {
+    if text.len() as u64 > cap {
         return Err(Error::Intervals {
             path: path.to_path_buf(),
-            message: format!(
-                "the file holds more than {MAX_INTERVAL_LIST_BYTES} bytes, the most read"
-            ),
+            message: format!("the file holds more than {cap} bytes, the most read"),
         });
     }
     Ok(text)
@@ -581,5 +584,31 @@ mod tests {
         assert_eq!(near.overlaps(1, 1, 1), 2..3);
         assert_eq!(near.overlaps(5, 1, 1), 0..0);
         assert_eq!(near.intervals().len(), 3);
+    }
+
+    #[test]
+    fn the_read_stops_past_the_cap_and_refuses_text_that_is_not_utf8() {
+        let dir = std::env::temp_dir().join(format!("bammetrics-capped-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("temporary directory");
+        let at_cap = dir.join("at_cap.bed");
+        fs::write(&at_cap, "chr1\t0\t10\n").expect("write");
+        assert_eq!(
+            read_capped_at(&at_cap, 10).expect("10 bytes fit a cap of 10"),
+            "chr1\t0\t10\n"
+        );
+        let over = read_capped_at(&at_cap, 9).expect_err("10 bytes exceed a cap of 9");
+        assert!(
+            over.to_string()
+                .contains("the file holds more than 9 bytes, the most read"),
+            "{over}"
+        );
+        let latin1 = dir.join("latin1.bed");
+        fs::write(&latin1, b"chr1\t0\t10\tna\xefve\n").expect("write");
+        assert!(matches!(
+            read_capped(&latin1),
+            Err(Error::Input { source, .. }) if source.kind() == std::io::ErrorKind::InvalidData
+        ));
+        assert_eq!(MAX_INTERVAL_LIST_BYTES, 1 << 30);
+        fs::remove_dir_all(&dir).expect("remove the temporary directory");
     }
 }

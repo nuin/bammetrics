@@ -358,6 +358,11 @@ them: `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`, in `@RG` header order).
 coordinate-sorted genome of those builds reads no mitochondrial record and writes
 `MT_COPY_NUMBER` 0.
 
+An interval file (`TARGET_INTERVALS`, `EXCLUDE_INTERVALS`) is read whole into memory, at
+most 1 GiB (1,073,741,824 bytes). A larger file, or a pipe that yields more, is an error
+that names the file; so is text that is not UTF-8. The cap holds for every tool that reads
+interval files through `crates/core/src/intervals.rs`.
+
 ### 6.4 Exomes and NUMTs
 
 Most exome captures carry no mitochondrial bait. The reads on the mitochondrial contig of
@@ -378,7 +383,8 @@ No oracle exists. The tests rest on files whose answer is known by construction,
 `samtools depth` with the same filters (`-a -q 20 -Q 20 -G
 UNMAP,SECONDARY,QCFAIL,DUP,SUPPLEMENTARY`, which counts no deletion and both overlapping
 mates). The documented tolerance against `samtools depth` is 0.5 percent of each mean
-depth.
+depth. docs/07 section 6 names mosdepth as the W07 oracle. mosdepth is not installed
+(docs/07 Q9), so `samtools depth` takes its place (docs/07 decision D19).
 
 - `tests/data/make_mt_bams.py OUT` writes four BAMs with 100-base reads tiled at an even
   depth: copy number 100 (`chrM`), 1000 (`MT`, autosomes `1` and `2`), 0 (no `chrM` read)

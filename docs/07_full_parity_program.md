@@ -318,6 +318,7 @@ Each change is one reviewed edit in the wave named.
 | D16 | docs/04 line on JS filters | n/a | `JAVASCRIPT_FILE` on FilterSamReads and FilterVcf is `Opt::rejected` (Q6); both listed as not fully concordant | W13, W17 |
 | D17 | ROADMAP.md Phase 0 | bammetrics done in 0.2.0 | Pointer to docs/07 and the 121-tool goal | this PR |
 | D18 | KNOWN_DIFFERENCES.md | per tool | A tier table and one section per tier B to E tool and per analysis | every wave |
+| D19 | section 6, "W07 needs mosdepth" | mosdepth is the W07 oracle | MtCopyNumberMetrics is cross-checked with `samtools depth -a` and the tool's filters (docs/06 6.5), since mosdepth is not installed (Q9) | W07 |
 
 The docs/05 4.9 boundary. Stays open: a verdict for one run; an index or cohort page over the directories passed on one command line, one invocation, no stored state; identity and relatedness over sketch paths given explicitly. Stays hosted: stored cohorts, runs over time, cross-run comparison, baselines, audit trail, users, comments, uploads. The report and verdict crates keep their rules: no read of other run directories, no history store, no user identity, no network call, no comment field. A cohort-trained classifier score (cfDNA) and index-depth cohort normalisation are hosted.
 
