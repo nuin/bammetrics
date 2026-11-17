@@ -651,7 +651,7 @@ is the short form.
   come before the first `+`. Every `+` starts a step.
 - A step is a tool verb, its Picard class, or `write`. A transform (`mark-duplicates`,
   `sort-sam`) changes the records later steps see; any number may follow one another. A
-  tap (the 13 one-pass tool verbs) reads the
+  tap (the 14 one-pass tool verbs) reads the
   records of its position and changes nothing. `write [PATH]` writes those records as a
   BAM, or as SAM text for a name ending in `.sam`; `-` is standard output, and `write -
   --output-format sam` prints SAM text there. A `.cram` or `.fastq` name is refused with

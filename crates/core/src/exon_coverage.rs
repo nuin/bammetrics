@@ -751,7 +751,7 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
 fn collector(inv: &Invocation, header: &sam::Header) -> Result<Box<dyn pass::Collector>> {
     let opts = Options::from_invocation(inv)?;
     let (coverage, notes) = ExonCoverage::new(&opts, header)?;
-    for note in notes {
+    for note in notes.iter().filter(|_| !inv.quiet) {
         eprintln!("bammetrics: {note}");
     }
     Ok(pass::boxed(coverage, move |report| {

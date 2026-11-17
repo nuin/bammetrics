@@ -25,7 +25,9 @@ bammetrics CollectExonCoverageMetrics I=sample.bam ANNOTATION=genes.bed GENE=BRC
 
 `ANNOTATION` is read line by line, plain or gzip (one or more members, BGZF too), told by
 its first two bytes. The format is told by the first line that is not blank, a `#` comment,
-or a `track` or `browser` line.
+or a `track` or `browser` line. A 9-field line is GTF or GFF3 when its third field is text,
+so a BED9 line with an integer name and score is BED. A byte order mark before the first
+line is dropped.
 
 | Format | Told by | Exons | Names |
 |---|---|---|---|
@@ -42,7 +44,9 @@ integer, a strand, a quote, a block outside its line, a feature without a `gene_
 
 Size caps: a line holds at most 1 MiB, an annotation at most 5,000,000 features of the kind
 read (GENCODE 46 holds 1.65 million exon lines), a BED12 line at most 100,000 blocks, a
-`GENE_LIST` file at most 16 MiB. A BED12 block count and its size and offset lists must
+`GENE_LIST` file at most 16 MiB. The 5,000,000 cap also bounds the genes, the transcripts
+and the GFF3 parent features: an `exon` line of a `FEATURE=CDS` run adds a gene and a
+transcript and no feature. A `GENE_LIST` byte order mark is dropped. A BED12 block count and its size and offset lists must
 agree before any block is placed.
 
 ### 1.1 Selection
@@ -74,7 +78,8 @@ Each annotation contig is looked up in the BAM header by its own name, then with
 or removed, then `chrM` as `MT` and `MT` as `chrM`. A contig read under another name is
 listed on standard error (`1 annotation contig read under the BAM header's name: 1 as
 chr1`). An exon on a contig the header lacks under every name gets a row with empty depth
-cells and is not counted; standard error names the contigs. When no selected exon is on the
+cells and is not counted; standard error names the contigs. The verb's and the chain's `-q`
+drop both notes, and the Python function prints neither. When no selected exon is on the
 header the run fails, as it does for an exon that ends past its contig's `@SQ` length: the
 annotation is for another build.
 
@@ -109,6 +114,11 @@ default 10, 20 and 30, sorted and without repeats.
 `TRANSCRIPT` row per transcript of it. A row's bases are the union of its exons, so a base two
 transcripts share counts once in the `GENE` row; introns are not counted. `EXON_COUNT` counts
 distinct exon intervals.
+
+`SUMMARY_OUTPUT` is Picard text in every face: `--format` applies to `OUTPUT` alone, as it
+does to the further files of every verb. `convert` and Python `read_table` read the summary
+file. The verb refuses a `SUMMARY_OUTPUT` that names `-o` or a file `--format` writes beside
+it, and makes a missing directory above it before the first read, as it does for `-o`.
 
 The glossary rows `BASES_<N>X` and `PCT_<N>X` stand for every `MIN_DEPTH`
 (`glossary::column_matches`), so `--format json` and Python `read_table` type a `PCT_45X`

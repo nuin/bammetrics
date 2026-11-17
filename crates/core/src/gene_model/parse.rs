@@ -62,6 +62,8 @@ pub(super) struct Parser<'a> {
     pending: Vec<Pending>,
     /// BED regions per name so far, for their numbers.
     regions: HashMap<usize, i64>,
+    /// [`MAX_FEATURES`], lower in a test.
+    limit: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -81,7 +83,14 @@ impl<'a> Parser<'a> {
             nodes: HashMap::new(),
             pending: Vec::new(),
             regions: HashMap::new(),
+            limit: MAX_FEATURES,
         }
+    }
+
+    #[cfg(test)]
+    pub(super) fn with_limit(mut self, limit: usize) -> Self {
+        self.limit = limit;
+        self
     }
 
     fn error(&self, line: usize, message: impl std::fmt::Display) -> Error {
@@ -110,9 +119,12 @@ impl<'a> Parser<'a> {
             if buffer.len() > MAX_LINE_BYTES {
                 return Err(self.error(number, format!("longer than {MAX_LINE_BYTES} bytes")));
             }
-            let line = std::str::from_utf8(&buffer)
+            let mut line = std::str::from_utf8(&buffer)
                 .map_err(|_| self.error(number, "not UTF-8 text"))?
                 .trim_end_matches(['\n', '\r']);
+            if number == 1 {
+                line = line.strip_prefix('\u{feff}').unwrap_or(line);
+            }
             if line.starts_with("##FASTA") {
                 return Ok(());
             }
@@ -148,15 +160,27 @@ impl<'a> Parser<'a> {
             Format::Bed => self.bed_line(&fields),
         };
         outcome.map_err(|message| self.error(number, message))?;
-        if self.exons.len() + self.pending.len() > MAX_FEATURES || self.nodes.len() > MAX_FEATURES {
-            return Err(self.error(number, format!("more than {MAX_FEATURES} features")));
+        // Genes and transcripts count too: a GTF line of the other feature
+        // kind adds both and no exon.
+        let limit = self.limit;
+        if self.exons.len() + self.pending.len() > limit
+            || self.nodes.len() > limit
+            || self.genes.len() > limit
+            || self.transcripts.len() > limit
+        {
+            return Err(self.error(
+                number,
+                format!("more than {limit} features, genes or transcripts"),
+            ));
         }
         Ok(())
     }
 
     fn sniff(&self, fields: &[&str]) -> Option<Format> {
         let int = |i: usize| fields.get(i).is_some_and(|f| f.parse::<i64>().is_ok());
-        if fields.len() == 9 && int(3) && int(4) {
+        // A GTF or GFF3 feature column is text; a BED9 line with integer
+        // name and score has integers in columns 3 and 4 too.
+        if fields.len() == 9 && !int(2) && int(3) && int(4) {
             let attributes = fields[8];
             let gff3 =
                 self.gff3_directive || (!attributes.contains('"') && attributes.contains('='));

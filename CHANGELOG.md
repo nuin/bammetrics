@@ -25,6 +25,12 @@
 - `hs_metrics::CaptureMetrics::with_intervals` builds the accumulator from intervals
   already read; `CaptureMetrics::new` calls it. Hs output is unchanged.
 - The golden record `verb_tools` lists `exon-coverage`.
+- A tool verb makes the missing directory above a further file (`--summary-output`,
+  `--gaps-file`) before the first read, as it does for `-o`. Before, the run failed after
+  the read with the main file written.
+- A tool verb refuses a further file that is a `--format` copy of the main file.
+- `Invocation::quiet`: the verb's and the chain's `-q` and the Python functions drop a
+  tool's own notes on standard error (the contig notes of `exon-coverage`).
 
 ## 0.24.0
 

@@ -28,6 +28,12 @@ def test_exon_rows_of_the_fixture():
     assert off_the_bam["MEAN_DEPTH"] is None
 
 
+def test_python_prints_no_note(capfd):
+    rows = bammetrics.collect_exon_coverage_metrics(FIXTURE, annotation=GTF, min_depth=1)
+    assert rows[-1]["CHROM"] == "chrUn", "the row of the contig the BAM lacks"
+    assert capfd.readouterr().err == ""
+
+
 def test_filters_choose_the_rows():
     def transcripts(**options):
         rows = bammetrics.collect_exon_coverage_metrics(FIXTURE, annotation=GTF, **options)

@@ -134,6 +134,7 @@ fn core_step(chain: &Chain, index: usize, step: &Planned) -> Result<Step, VerbEr
         (None, Some(tool)) => {
             let mut inv = tool.parse(&step.argv).map_err(failed)?;
             inv.threads = chain.threads;
+            inv.quiet = chain.quiet;
             let sort_bytes = super::planner::sort_budget(chain, index);
             inv.sort_memory = Some(usize::try_from(sort_bytes).unwrap_or(usize::MAX));
             inv.read_dash_from_stdin();

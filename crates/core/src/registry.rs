@@ -381,6 +381,9 @@ pub struct Invocation {
     /// Bytes a sort may hold in memory (`--sort-memory` of a chain); `None`
     /// for a tool run on its own, which counts records only.
     pub sort_memory: Option<usize>,
+    /// Set by a face whose user asked for quiet (`-q`, Python): a tool
+    /// prints no note of its own on standard error.
+    pub quiet: bool,
 }
 
 impl Invocation {

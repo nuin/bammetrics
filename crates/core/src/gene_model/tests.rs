@@ -424,4 +424,77 @@ fn a_gene_list_takes_the_first_word_of_each_line() {
         read_gene_list(&path).expect("list"),
         ["BRCA1", "TP53", "ATM"]
     );
+    let bom = file("bom.txt", b"\xef\xbb\xbfGENE_B\r\nGENE_C\r\n");
+    assert_eq!(read_gene_list(&bom).expect("bom"), ["GENE_B", "GENE_C"]);
+}
+
+#[test]
+fn a_byte_order_mark_before_the_first_line_is_dropped() {
+    let genes = two_genes();
+    let (_comment, lines) = genes.split_once('\n').expect("a comment line");
+    let text = format!("\u{feff}{lines}");
+    let model = read("bom.gtf", &text, Feature::Exon).expect("read");
+    assert_eq!(model.format, Format::Gtf);
+    assert_eq!(model.contigs[0], "chr1");
+}
+
+#[test]
+fn a_bed9_line_with_integer_name_and_score_is_bed() {
+    let text = "chr1\t100\t200\t1234\t0\t+\t100\t200\t0,0,0\n";
+    let model = read("numeric.bed", text, Feature::Exon).expect("read");
+    assert_eq!(model.format, Format::Bed);
+    let selected = model.select(&Selection::default()).expect("all");
+    assert_eq!(
+        spans(&model, &selected),
+        [row("1234", "chr1", 101, 200, "+", 1)]
+    );
+}
+
+/// The feature cap counts genes and transcripts: CDS lines of a run that
+/// reports exons add both and no exon.
+#[test]
+fn the_feature_cap_counts_genes_and_transcripts() {
+    let lines: String = (1..=4)
+        .map(|i| {
+            gtf_line(
+                "chr1",
+                "CDS",
+                i * 10,
+                i * 10 + 5,
+                "+",
+                &format!("gene_id \"G{i}\"; transcript_id \"T{i}\";"),
+            )
+        })
+        .collect();
+    let path = file("cap.gtf", lines.as_bytes());
+    let parse = |limit: usize, feature: Feature| {
+        let mut parser = Parser::new(&path, feature).with_limit(limit);
+        let reader = Box::new(std::io::BufReader::new(
+            std::fs::File::open(&path).expect("open"),
+        ));
+        parser.read(reader).and_then(|()| parser.finish())
+    };
+    let err = parse(3, Feature::Exon).expect_err("4 genes over 3");
+    assert!(
+        err.to_string()
+            .contains("line 4: more than 3 features, genes or transcripts"),
+        "{err}"
+    );
+    let err = parse(3, Feature::Cds).expect_err("4 CDS over 3");
+    assert!(err.to_string().contains("line 4: more than 3"), "{err}");
+    assert_eq!(parse(4, Feature::Cds).expect("4 of 4").exons.len(), 4);
+}
+
+#[test]
+fn a_bed12_line_holds_at_most_max_blocks_blocks() {
+    let blocks = MAX_BLOCKS + 1;
+    let sizes = "1,".repeat(blocks);
+    let starts: String = (0..blocks).map(|i| format!("{i},")).collect();
+    let text = format!("c\t0\t{blocks}\tT\t0\t+\t0\t0\t0\t{blocks}\t{sizes}\t{starts}\n");
+    let err = read("blocks.bed", &text, Feature::Exon).expect_err("too many blocks");
+    assert!(
+        err.to_string()
+            .contains(&format!("line 1: more than {MAX_BLOCKS} blocks")),
+        "{err}"
+    );
 }

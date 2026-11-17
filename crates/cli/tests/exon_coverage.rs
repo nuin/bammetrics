@@ -130,3 +130,55 @@ fn json_holds_the_rows_and_the_annotation_is_never_an_output() {
     assert_eq!(fs::read(root().join(GTF)).expect("gtf"), before);
     let _ = fs::remove_dir_all(&dir);
 }
+
+/// `--summary-output` under a missing directory: the verb makes it before
+/// the read, as it does for `-o`. A summary that is the `--format json` copy
+/// of `-o` is refused before the read. `-q` drops the contig notes.
+#[test]
+fn the_summary_file_gets_its_directory_and_never_replaces_a_copy() {
+    let dir = scratch("summary");
+    let exons = dir.join("exons.txt");
+    let summary = dir.join("missing/deeper/genes.txt");
+    let out = bammetrics(&[
+        "exon-coverage",
+        BAM,
+        "--annotation",
+        GTF,
+        "-o",
+        exons.to_str().expect("utf-8"),
+        "--summary-output",
+        summary.to_str().expect("utf-8"),
+        "-q",
+    ]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{stderr}");
+    assert!(stderr.is_empty(), "{stderr}");
+    let text = fs::read_to_string(&summary).expect("summary");
+    assert!(text.contains("bammetrics.qc.GeneCoverageMetrics"), "{text}");
+    let loud = bammetrics(&["exon-coverage", BAM, "--annotation", GTF]);
+    let stderr = String::from_utf8_lossy(&loud.stderr);
+    assert!(stderr.contains("the BAM header lacks (chrUn)"), "{stderr}");
+
+    let main = dir.join("copy.txt");
+    let copy = dir.join("copy.txt.json");
+    let out = bammetrics(&[
+        "exon-coverage",
+        BAM,
+        "--annotation",
+        GTF,
+        "-o",
+        main.to_str().expect("utf-8"),
+        "--format",
+        "picard,json",
+        "--summary-output",
+        copy.to_str().expect("utf-8"),
+    ]);
+    assert_eq!(out.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("a --format copy of the main output"),
+        "{stderr}"
+    );
+    assert!(!main.exists() && !copy.exists());
+    let _ = fs::remove_dir_all(&dir);
+}

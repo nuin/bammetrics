@@ -34,7 +34,8 @@ use parse::Parser;
 pub const MAX_LINE_BYTES: usize = 1 << 20;
 
 /// The features of the chosen kind one annotation may hold (GENCODE 46
-/// holds 1.65 million exon lines), and the GFF3 genes and transcripts.
+/// holds 1.65 million exon lines), and the most genes, transcripts and
+/// GFF3 parent features it may name.
 pub const MAX_FEATURES: usize = 5_000_000;
 
 /// The bytes of a gene list file, which is read whole.
@@ -451,8 +452,8 @@ fn mark<'a>(
 }
 
 /// Gene names from a list file: one per line, the first word of the line;
-/// blank lines and `#` lines skipped. The file is read whole, at most
-/// [`MAX_LIST_BYTES`].
+/// blank lines and `#` lines skipped, a byte order mark dropped. The file
+/// is read whole, at most [`MAX_LIST_BYTES`].
 pub fn read_gene_list(path: &Path) -> Result<Vec<String>> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
@@ -472,6 +473,8 @@ pub fn read_gene_list(path: &Path) -> Result<Vec<String>> {
         .read_to_string(&mut text)
         .map_err(input)?;
     Ok(text
+        .strip_prefix('\u{feff}')
+        .unwrap_or(&text)
         .lines()
         .map(str::trim)
         .filter(|l| !l.is_empty() && !l.starts_with('#'))

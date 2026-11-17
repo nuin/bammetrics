@@ -828,8 +828,13 @@ fn run_registered<'py>(
         }
     }
     options.extend(keyword_arguments(tool, kwargs)?);
+    // A tool's own notes stay off standard error, as `Invocation::notes` do.
     let (invocation, output) = py
-        .detach(|| tool.execute(&options))
+        .detach(|| {
+            let mut invocation = tool.parse(&options)?;
+            invocation.quiet = true;
+            (tool.run)(&invocation).map(|output| (invocation, output))
+        })
         .map_err(|e| py_error(&e))?;
     if invocation.output.is_some() || !output.extra.is_empty() {
         py.detach(|| registry::write_files(&invocation, &output))
