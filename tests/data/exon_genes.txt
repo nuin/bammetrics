@@ -1,0 +1,3 @@
+# a gene list for CollectExonCoverageMetrics GENE_LIST
+GENE_B
+ENSG_C

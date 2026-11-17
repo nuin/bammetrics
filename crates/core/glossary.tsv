@@ -612,3 +612,34 @@ picard.analysis.JumpingLibraryMetrics	FRAGMENTS	int	First-of-pair records with e
 picard.analysis.JumpingLibraryMetrics	PCT_JUMPS	float	JUMP_PAIRS / (JUMP_PAIRS + NONJUMP_PAIRS + CHIMERIC_PAIRS), a fraction; 0 without any.
 picard.analysis.JumpingLibraryMetrics	PCT_NONJUMPS	float	NONJUMP_PAIRS / (JUMP_PAIRS + NONJUMP_PAIRS + CHIMERIC_PAIRS), a fraction; 0 without any.
 picard.analysis.JumpingLibraryMetrics	PCT_CHIMERAS	float	CHIMERIC_PAIRS / (JUMP_PAIRS + NONJUMP_PAIRS + CHIMERIC_PAIRS), a fraction; 0 without any.
+bammetrics.qc.ExonCoverageMetrics	GENE_NAME	string	The gene_name of the exon's gene (GFF3: the gene's Name), else its gene_id. BED12 and BED: the line's name.
+bammetrics.qc.ExonCoverageMetrics	GENE_ID	string	The gene_id of the exon's gene, as written. BED12 and BED: the line's name.
+bammetrics.qc.ExonCoverageMetrics	TRANSCRIPT_ID	string	The transcript_id the exon belongs to, as written. BED12 and BED: the line's name. An exon of two transcripts has a row for each.
+bammetrics.qc.ExonCoverageMetrics	EXON_NUMBER	int	The exon_number (GFF3: rank) written in the annotation; without one, the exon's place along the transcript from its 5' end, so the exon with the highest start is 1 on the minus strand. Overlapping exons of one transcript merge and keep the lowest number.
+bammetrics.qc.ExonCoverageMetrics	CHROM	string	The contig as the BAM header names it; the annotation's name when the header lacks the contig.
+bammetrics.qc.ExonCoverageMetrics	START	int	First base of the exon, 1-based (a BED start plus 1).
+bammetrics.qc.ExonCoverageMetrics	END	int	Last base of the exon, 1-based and included.
+bammetrics.qc.ExonCoverageMetrics	STRAND	string	+, - or . as the annotation writes the strand.
+bammetrics.qc.ExonCoverageMetrics	LENGTH	int	Bases of the exon: END minus START plus 1.
+bammetrics.qc.ExonCoverageMetrics	MEAN_DEPTH	float	Sum of the high-quality depth of the exon's bases divided by LENGTH. The depth is the one CollectHsMetrics writes to PER_BASE_COVERAGE, so this equals the mean_coverage column of PER_TARGET_COVERAGE for the same interval. Empty when the BAM header lacks the contig.
+bammetrics.qc.ExonCoverageMetrics	MEDIAN_DEPTH	float	The middle depth of the exon's bases; the mean of the two middle depths when LENGTH is even.
+bammetrics.qc.ExonCoverageMetrics	MINIMUM_DEPTH	int	The lowest depth of a base of the exon; equals the min_coverage column of CollectHsMetrics PER_TARGET_COVERAGE for the same interval.
+bammetrics.qc.ExonCoverageMetrics	MAXIMUM_DEPTH	int	The highest depth of a base of the exon.
+bammetrics.qc.ExonCoverageMetrics	BASES_<N>X	int	Bases of the exon with a depth of at least N, one column per MIN_DEPTH value (default 10, 20 and 30).
+bammetrics.qc.ExonCoverageMetrics	PCT_<N>X	float	BASES_<N>X divided by LENGTH.
+bammetrics.qc.GeneCoverageMetrics	LEVEL	string	GENE for the union of the selected exons of one gene on one contig, TRANSCRIPT for the exons of one transcript. Each gene row comes first, then the rows of its transcripts.
+bammetrics.qc.GeneCoverageMetrics	GENE_NAME	string	The gene_name of the gene (GFF3: its Name), else its gene_id.
+bammetrics.qc.GeneCoverageMetrics	GENE_ID	string	The gene_id of the gene, as written.
+bammetrics.qc.GeneCoverageMetrics	TRANSCRIPT_ID	string	The transcript of a TRANSCRIPT row; empty on a GENE row.
+bammetrics.qc.GeneCoverageMetrics	CHROM	string	The contig as the BAM header names it; the annotation's name when the header lacks the contig. A gene on two contigs has a row per contig.
+bammetrics.qc.GeneCoverageMetrics	START	int	The lowest exon start of the row, 1-based.
+bammetrics.qc.GeneCoverageMetrics	END	int	The highest exon end of the row, 1-based and included.
+bammetrics.qc.GeneCoverageMetrics	STRAND	string	The strand of the row's first exon in the annotation.
+bammetrics.qc.GeneCoverageMetrics	EXON_COUNT	int	Distinct exon intervals of the row; an exon two transcripts share counts once on the GENE row.
+bammetrics.qc.GeneCoverageMetrics	LENGTH	int	Bases of the union of the row's exons, so a base two transcripts share counts once on the GENE row. Introns are not counted.
+bammetrics.qc.GeneCoverageMetrics	MEAN_DEPTH	float	Sum of the high-quality depth of the LENGTH bases divided by LENGTH, with the depth of ExonCoverageMetrics. Empty when the BAM header lacks the contig.
+bammetrics.qc.GeneCoverageMetrics	MEDIAN_DEPTH	float	The middle depth of the LENGTH bases; the mean of the two middle depths when LENGTH is even.
+bammetrics.qc.GeneCoverageMetrics	MINIMUM_DEPTH	int	The lowest depth of a base of the row's exons.
+bammetrics.qc.GeneCoverageMetrics	MAXIMUM_DEPTH	int	The highest depth of a base of the row's exons.
+bammetrics.qc.GeneCoverageMetrics	BASES_<N>X	int	Bases of the row's exons with a depth of at least N, one column per MIN_DEPTH value (default 10, 20 and 30).
+bammetrics.qc.GeneCoverageMetrics	PCT_<N>X	float	BASES_<N>X divided by LENGTH.
