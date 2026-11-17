@@ -438,3 +438,21 @@ run 3.4 percent under the genome-wide autosomal depth. The whole-file run decode
 on 8 threads; its resident memory is the CRAM decoder's, the tool holds one row per unit.
 The HG002 exome without targets gives a ratio, section 6.4; the hs37d5 capture targets
 were not at hand.
+
+## 7. Telomere content
+
+`CollectTelomereMetrics` (verb `telomere`, Python `collect_telomere_metrics()`, class
+`bammetrics.qc.TelomereMetrics`, source `crates/core/src/telomere.rs`) counts the reads
+holding at least 7 copies of `TTAGGG` or `CCCTAA` and gives TelSeq's telomere length
+estimate in kb, wave W08 of docs/07. [docs/telomere.md](telomere.md) holds the counting
+rules, the GC bin, the formula with its constants and read-length rule, the planted truth
+and the measurements.
+
+| | Telomere content |
+|---|---|
+| Picard class name | `CollectTelomereMetrics` |
+| Verb | `telomere` |
+| Metrics class | `bammetrics.qc.TelomereMetrics` |
+| `qc` file | `PREFIX.telomere_metrics` (under a preset that names the class) |
+| Rules | none shipped (docs/telomere.md section 7) |
+| Truth | `tests/data/make_telomere_bams.py`, `tests/python/test_telomere.py` |

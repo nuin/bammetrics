@@ -1397,6 +1397,18 @@ rest on planted truth (`crates/core/tests/exon_coverage.rs`). `samtools bedcov` 
 up to 15.2% higher at the default filters (base quality and mate overlap) and at most 0.55%
 higher without them.
 
+`CollectTelomereMetrics` ([docs/telomere.md](docs/telomere.md), class
+`bammetrics.qc.TelomereMetrics`) has no Picard counterpart. Oracle tier E: planted truth
+(`tests/data/make_telomere_bams.py`, `tests/python/test_telomere.py`, every count exact and
+the length estimate equal to TelSeq's formula in Python). The named tool, TelSeq, did not
+run (docs/07 decision D23). Against TelSeq, by design: secondary, supplementary and
+QC-failed records are not counted and duplicates count only with `COUNT_DUPLICATES=true`
+(TelSeq counts all four); a read whose repeat count is above `READ_LENGTH / 6` is kept
+(TelSeq drops it); the estimate is computed in double precision (TelSeq: single) and is
+empty when more than 5 percent of reads are over 10 percent off the most common length.
+`CollectMultipleMetrics` takes `PROGRAM=CollectTelomereMetrics` and writes
+`PREFIX.telomere_metrics`; Picard 3.5.0 refuses that program name.
+
 ## Not implemented
 
 `FindMendelianViolations`, `GenotypeConcordance OUTPUT_VCF` (see Options), the
