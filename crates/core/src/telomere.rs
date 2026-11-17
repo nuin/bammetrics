@@ -146,12 +146,20 @@ pub fn in_gc_bin(gc: usize, length: usize) -> bool {
 /// right and resuming after each match (TelSeq's `countMotif`).
 pub fn count_occurrences(read: &[u8], pattern: &[u8]) -> usize {
     let m = pattern.len();
-    if m == 0 {
+    let Some(&first) = pattern.first() else {
         return 0;
-    }
+    };
+    let Some(last_start) = read.len().checked_sub(m) else {
+        return 0;
+    };
     let (mut count, mut i) = (0, 0);
-    while i + m <= read.len() {
-        if &read[i..i + m] == pattern {
+    while i <= last_start {
+        // The next position holding the pattern's first base.
+        let Some(skip) = read[i..=last_start].iter().position(|&b| b == first) else {
+            break;
+        };
+        i += skip;
+        if read[i..i + m].iter().zip(pattern).all(|(a, b)| a == b) {
             count += 1;
             i += m;
         } else {
@@ -162,10 +170,45 @@ pub fn count_occurrences(read: &[u8], pattern: &[u8]) -> usize {
 }
 
 /// The repeat count of a read as sequenced: the larger of the counts of
-/// `repeat` and of `reverse`, its reverse complement.
+/// `repeat` and of `reverse`, its reverse complement, both as
+/// [`count_occurrences`] counts them.
+///
+/// A repeat of at most 8 bases is matched in one pass: the last bases read
+/// are kept in a `u64`, and a match ending at `i` is taken when it starts at
+/// or after the end of the last match taken for the same pattern, which is
+/// the left-to-right greedy count.
 pub fn count_repeats(read: &[u8], repeat: &[u8], reverse: &[u8]) -> usize {
-    count_occurrences(read, repeat).max(count_occurrences(read, reverse))
+    let m = repeat.len();
+    if m == 0 || m > 8 || reverse.len() != m {
+        return count_occurrences(read, repeat).max(count_occurrences(read, reverse));
+    }
+    let mask = u64::MAX >> (64 - 8 * m);
+    let word = |p: &[u8]| p.iter().fold(0u64, |w, &b| (w << 8) | u64::from(b));
+    let (forward_word, reverse_word) = (word(repeat), word(reverse));
+    let (mut window, mut forward, mut backward) = (0u64, 0, 0);
+    // The first start a next match of each pattern may have.
+    let (mut forward_free, mut backward_free) = (0, 0);
+    for (i, &base) in read.iter().enumerate() {
+        window = ((window << 8) | u64::from(base)) & mask;
+        let Some(start) = (i + 1).checked_sub(m) else {
+            continue;
+        };
+        if window == forward_word && start >= forward_free {
+            forward += 1;
+            forward_free = i + 1;
+        }
+        if window == reverse_word && start >= backward_free {
+            backward += 1;
+            backward_free = i + 1;
+        }
+    }
+    forward.max(backward)
 }
+
+/// The bases of the 4-bit codes of a BAM record, and their complements
+/// (`N` for every code that is not A, C, G or T).
+const BASES: [u8; 16] = *b"=ACMGRSVTWYHKDBN";
+const COMPLEMENTS: [u8; 16] = *b"NTGNCNNNANNNNNNN";
 
 /// The reverse complement of A, C, G, T text; any other byte becomes `N`.
 pub fn reverse_complement(bases: &[u8]) -> Vec<u8> {
@@ -316,13 +359,17 @@ impl Telomere {
 
     /// The read as sequenced, scanned.
     fn scan(&mut self, record: &bam::Record) -> Scan {
+        let sequence = record.sequence();
+        let reverse = record.flags().is_reverse_complemented();
+        let table = if reverse { &COMPLEMENTS } else { &BASES };
         self.bases.clear();
-        self.bases.extend(record.sequence().iter());
-        if record.flags().is_reverse_complemented() {
+        for &pair in sequence.as_bytes() {
+            self.bases.push(table[usize::from(pair >> 4)]);
+            self.bases.push(table[usize::from(pair & 0x0F)]);
+        }
+        self.bases.truncate(sequence.len());
+        if reverse {
             self.bases.reverse();
-            for base in &mut self.bases {
-                *base = complement(*base);
-            }
         }
         let gc = self
             .bases

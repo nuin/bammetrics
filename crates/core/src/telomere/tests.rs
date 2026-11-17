@@ -83,6 +83,47 @@ fn occurrences_do_not_overlap_and_take_the_larger_strand() {
     );
 }
 
+/// The one-pass count of repeats up to 8 bases equals the two greedy scans
+/// on random reads, self-overlapping repeats included.
+#[test]
+fn the_one_pass_count_equals_two_scans() {
+    let mut state: u64 = 0x2545_F491_4F6C_DD1D;
+    let mut next = |n: u64| {
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        (state >> 33) % n
+    };
+    let repeats: [&[u8]; 7] = [
+        b"TTAGGG",
+        b"AAA",
+        b"ACAC",
+        b"AAAAAAAA",
+        b"TTTAGGGTT",
+        b"A",
+        b"GG",
+    ];
+    for _ in 0..4000 {
+        let length = next(160) as usize;
+        // A small alphabet makes runs and overlaps common.
+        let alphabet: &[u8] = if next(2) == 0 { b"ACGTN" } else { b"AG" };
+        let read: Vec<u8> = (0..length)
+            .map(|_| alphabet[next(alphabet.len() as u64) as usize])
+            .collect();
+        for repeat in repeats {
+            let reverse = reverse_complement(repeat);
+            let slow = count_occurrences(&read, repeat).max(count_occurrences(&read, &reverse));
+            assert_eq!(
+                count_repeats(&read, repeat, &reverse),
+                slow,
+                "{} in {}",
+                String::from_utf8_lossy(repeat),
+                String::from_utf8_lossy(&read)
+            );
+        }
+    }
+}
+
 #[test]
 fn the_gc_bin_is_open_at_48_and_closed_at_52() {
     assert!(!in_gc_bin(48, 100));
