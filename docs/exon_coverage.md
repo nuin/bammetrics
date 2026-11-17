@@ -97,8 +97,8 @@ depth that `PER_TARGET_COVERAGE` and this tool read, so it is not an option.
 
 ## 3. Rows
 
-`OUTPUT` holds one `ExonCoverageMetrics` row per selected exon, in file order of each
-transcript's first feature: the gene and transcript names, `EXON_NUMBER`, `CHROM` (the BAM
+`OUTPUT` holds one `ExonCoverageMetrics` row per selected exon, in the file order of each
+exon's first feature: the gene and transcript names, `EXON_NUMBER`, `CHROM` (the BAM
 header's name), `START`, `END`, `STRAND`, `LENGTH`, `MEAN_DEPTH` (the depth sum over
 `LENGTH`), `MEDIAN_DEPTH` (the mean of the two middle depths for an even length),
 `MINIMUM_DEPTH`, `MAXIMUM_DEPTH`, then `BASES_<N>X` for each `MIN_DEPTH` and `PCT_<N>X` for
@@ -145,7 +145,21 @@ No Picard tool computes per-exon depth from an annotation. Three checks hold the
   8.2% on the foundation corpus. mosdepth, the oracle docs/07 names, is not installed
   (docs/07 section 6, Q9).
 
-## 5. Verdict rule and plot
+## 5. Scale
+
+Measured on 2026-11-17 on the Mac Studio (M1 Ultra), `--threads 4`, the HG002 exome BAM
+(10 GB, hs37d5, contigs `1` to `22`, `X`, `Y`, `MT`) against GENCODE v19 (chr names, so all
+25 contigs are read under the alias):
+
+| Selection | Rows | Wall time | Peak RSS |
+|---|---:|---:|---:|
+| every exon of every transcript | 1,196,293 | 93.2 s | 3.36 GiB |
+| `--canonical --feature CDS` | 197,363 | 71.9 s | 1.07 GiB |
+
+The depth arrays hold 8 bytes per merged exon base, and every row is held until the end of
+the pass.
+
+## 6. Verdict rule and plot
 
 No shipped preset has an exon rule, so `qc` never runs this tool and its files are
 unchanged. `qc` has no annotation input, and per-exon thresholds are set per assay. A lab
@@ -175,10 +189,10 @@ fail = "< 0.95"
 `crates/cli/tests/exon_coverage.rs` runs this preset through `check`. No rule names a plot,
 so the report draws no per-exon plot.
 
-## 6. Departures from docs/07
+## 7. Departures from docs/07
 
 - No shipped `exon.min-pct20` rule (section 3.4): `qc` output stays byte for byte, and the
-  rule lives in a lab's preset (section 5 above).
+  rule lives in a lab's preset (section 6 above).
 - No per-exon plot family (section 3.4): no shipped rule names one.
 - `COVERAGE_CAP` is not an option: it does not change the per-target depth.
 - The cross-check is `samtools bedcov`; mosdepth (W07 row) is not installed.

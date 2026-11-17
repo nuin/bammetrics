@@ -1,4 +1,4 @@
-//! `exon-coverage` end to end: the preset of docs/exon_coverage.md section 5
+//! `exon-coverage` end to end: the preset of docs/exon_coverage.md section 6
 //! judges the two files through `check`, a `--format json` sibling holds the
 //! rows, and an output that names the annotation is refused before the read.
 //! The byte-exact forms are in the golden suite; the Picard comparison is
