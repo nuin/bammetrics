@@ -1,0 +1,10 @@
+## argv
+CollectExonCoverageMetrics
+I=tests/data/insert_size.bam
+ANNOTATION=tests/data/exons.gtf
+FEATURE=gene
+## exit
+1
+## stdout
+## stderr
+bammetrics: FEATURE=gene: exon or CDS

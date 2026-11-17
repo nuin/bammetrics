@@ -1,0 +1,97 @@
+## argv
+exon-coverage
+tests/data/insert_size.bam
+--annotation
+tests/data/exons.gtf
+--transcript
+TA2
+--min-depth
+1
+--format
+json
+## exit
+0
+## stdout
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectExonCoverageMetrics",
+  "sample": "insert_size",
+  "headers": [
+    "CollectExonCoverageMetrics INPUT=tests/data/insert_size.bam ANNOTATION=tests/data/exons.gtf TRANSCRIPT=TA2 MIN_DEPTH=1",
+    "Started on: <time>"
+  ],
+  "class": "bammetrics.qc.ExonCoverageMetrics",
+  "columns": [
+    "GENE_NAME",
+    "GENE_ID",
+    "TRANSCRIPT_ID",
+    "EXON_NUMBER",
+    "CHROM",
+    "START",
+    "END",
+    "STRAND",
+    "LENGTH",
+    "MEAN_DEPTH",
+    "MEDIAN_DEPTH",
+    "MINIMUM_DEPTH",
+    "MAXIMUM_DEPTH",
+    "BASES_1X",
+    "PCT_1X"
+  ],
+  "types": [
+    "string",
+    "string",
+    "string",
+    "int",
+    "string",
+    "int",
+    "int",
+    "string",
+    "int",
+    "float",
+    "float",
+    "int",
+    "int",
+    "int",
+    "float"
+  ],
+  "metrics": [
+    {
+      "GENE_NAME": "GENE_A",
+      "GENE_ID": "ENSG_A.1",
+      "TRANSCRIPT_ID": "TA2.1",
+      "EXON_NUMBER": 1,
+      "CHROM": "chr1",
+      "START": 1051,
+      "END": 1150,
+      "STRAND": "+",
+      "LENGTH": 100,
+      "MEAN_DEPTH": 0.5,
+      "MEDIAN_DEPTH": 0.5,
+      "MINIMUM_DEPTH": 0,
+      "MAXIMUM_DEPTH": 1,
+      "BASES_1X": 50,
+      "PCT_1X": 0.5
+    },
+    {
+      "GENE_NAME": "GENE_A",
+      "GENE_ID": "ENSG_A.1",
+      "TRANSCRIPT_ID": "TA2.1",
+      "EXON_NUMBER": 2,
+      "CHROM": "chr1",
+      "START": 2051,
+      "END": 2350,
+      "STRAND": "+",
+      "LENGTH": 300,
+      "MEAN_DEPTH": 0.5,
+      "MEDIAN_DEPTH": 0.5,
+      "MINIMUM_DEPTH": 0,
+      "MAXIMUM_DEPTH": 1,
+      "BASES_1X": 150,
+      "PCT_1X": 0.5
+    }
+  ],
+  "non_finite": [],
+  "histogram": null
+}
+## stderr

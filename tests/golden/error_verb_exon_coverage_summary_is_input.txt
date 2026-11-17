@@ -1,0 +1,12 @@
+## argv
+exon-coverage
+tests/data/insert_size.bam
+--annotation
+tests/data/exons.gtf
+--summary-output
+tests/data/exons.gtf
+## exit
+2
+## stdout
+## stderr
+bammetrics exon-coverage: tests/data/exons.gtf is an input; writing it would destroy it (from --summary-output)

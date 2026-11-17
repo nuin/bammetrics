@@ -50,6 +50,9 @@ const FIXTURES: &[(&str, &str)] = &[
     ("PLAN_BAD", "tests/data/chain_bad_key.toml"),
     ("PLAN_SELF", "tests/data/chain_writes_plan.toml"),
     ("MD_SAM", "tests/data/markdup.sam"),
+    ("EXONS", "tests/data/exons.gtf"),
+    ("EXONS_BED", "tests/data/exons.bed"),
+    ("EXON_GENES", "tests/data/exon_genes.txt"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -345,6 +348,17 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_verb_build_bam_index_cram", "build-bam-index", "IS_CRAM", "-o", "OUT/x.bai"),
     case!("error_verb_build_bam_index_format", "build-bam-index", "IS", "-o", "OUT/x.bai", "--format", "picard,json"),
     case!("error_verb_build_bam_index_overwrites_input", "build-bam-index", "IS", "-o", "IS"),
+    // CollectExonCoverageMetrics (docs/exon_coverage.md): a contig the BAM lacks, the chr
+    // alias of a BED12 file, the filters and both files.
+    case!("picard_exon_coverage", "CollectExonCoverageMetrics", "I=IS", "O=OUT/exons.txt", "ANNOTATION=EXONS", "SUMMARY_OUTPUT=OUT/genes.txt", "MIN_DEPTH=1"),
+    case!("picard_exon_coverage_bed12_stdout", "CollectExonCoverageMetrics", "I=IS", "ANNOTATION=EXONS_BED", "MIN_DEPTH=1", "MIN_DEPTH=2"),
+    case!("verb_exon_coverage_canonical_cds", "exon-coverage", "IS", "--annotation", "EXONS", "--canonical", "--feature", "CDS", "--format", "tsv"),
+    case!("verb_exon_coverage_genes", "exon-coverage", "MD", "--annotation", "EXONS", "--gene-list", "EXON_GENES", "--gene", "GENE_A", "--min-depth", "1", "--min-depth", "3", "-o", "OUT/exons.txt", "--summary-output", "OUT/genes.txt"),
+    case!("verb_exon_coverage_transcript_json", "exon-coverage", "IS", "--annotation", "EXONS", "--transcript", "TA2", "--min-depth", "1", "--format", "json"),
+    case!("error_exon_coverage_no_annotation", "CollectExonCoverageMetrics", "I=IS"),
+    case!("error_exon_coverage_feature", "CollectExonCoverageMetrics", "I=IS", "ANNOTATION=EXONS", "FEATURE=gene"),
+    case!("error_verb_exon_coverage_unknown_gene", "exon-coverage", "IS", "--annotation", "EXONS", "--gene", "GENE_E"),
+    case!("error_verb_exon_coverage_summary_is_input", "exon-coverage", "IS", "--annotation", "EXONS", "--summary-output", "EXONS"),
 ];
 
 /// Formats (docs/formats.md): `convert` in both directions and to every

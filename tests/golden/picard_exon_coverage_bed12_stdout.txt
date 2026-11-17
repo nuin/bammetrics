@@ -1,0 +1,25 @@
+## argv
+CollectExonCoverageMetrics
+I=tests/data/insert_size.bam
+ANNOTATION=tests/data/exons.bed
+MIN_DEPTH=1
+MIN_DEPTH=2
+## exit
+0
+## stdout
+## htsjdk.samtools.metrics.StringHeader
+# CollectExonCoverageMetrics INPUT=tests/data/insert_size.bam ANNOTATION=tests/data/exons.bed MIN_DEPTH=1 MIN_DEPTH=2
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.ExonCoverageMetrics
+GENE_NAME	GENE_ID	TRANSCRIPT_ID	EXON_NUMBER	CHROM	START	END	STRAND	LENGTH	MEAN_DEPTH	MEDIAN_DEPTH	MINIMUM_DEPTH	MAXIMUM_DEPTH	BASES_1X	BASES_2X	PCT_1X	PCT_2X
+TA1.2	TA1.2	TA1.2	1	chr1	1001	1100	+	100	1	1	1	1	100	0	1	0
+TA1.2	TA1.2	TA1.2	2	chr1	1151	1250	+	100	0.5	0.5	0	1	50	0	0.5	0
+TA1.2	TA1.2	TA1.2	3	chr1	2001	2100	+	100	1	1	1	1	100	0	1	0
+TC1.1	TC1.1	TC1.1	2	chr1	4050	4050	-	1	1	1	1	1	1	0	1	0
+TC1.1	TC1.1	TC1.1	1	chr1	5001	5500	-	500	0.4	0	0	1	200	0	0.4	0
+
+
+## stderr
+bammetrics: CollectExonCoverageMetrics: 1 annotation contig read under the BAM header's name: 1 as chr1
