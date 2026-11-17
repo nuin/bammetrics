@@ -479,7 +479,7 @@ def stub_function(name):
     return next(n for n in stub_tree().body if isinstance(n, ast.FunctionDef) and n.name == name)
 
 
-@pytest.mark.parametrize("name", ["qc", "check", "report", "chain", "step"])
+@pytest.mark.parametrize("name", ["qc", "check", "report", "chain", "step", "doctor"])
 def test_help_shows_the_stub_signature_and_docstring(name):
     # The first entry of an overloaded function (chain) carries the docstring
     # and the defaults help() shows.

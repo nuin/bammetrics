@@ -225,6 +225,27 @@ class Run(Generic[_V]):
     stages: list[Stage]
     def _repr_html_(self) -> str | None: ...
 
+class DoctorCheck:
+    """One check of doctor(): name as the command prints it, status "pass", "warn",
+    "fail" or "skip", value what was found, reason why that status."""
+    name: str
+    status: Literal["pass", "warn", "fail", "skip"]
+    value: str
+    reason: str
+
+class Doctor:
+    """What doctor() found in one file. kind is "BAM", "CRAM 3.1", "SAM" and so on
+    (empty when the file is none); status is the worst status of any check;
+    exit_code is the command's under fail_on (0 or 10). doctor["eof"] is the check
+    of that name; to_json() is the text of --format json."""
+    path: str
+    kind: str
+    status: Literal["pass", "warn", "fail"]
+    exit_code: int
+    checks: list[DoctorCheck]
+    def __getitem__(self, name: str) -> DoctorCheck: ...
+    def to_json(self) -> str: ...
+
 class InsertSizeMetrics:
     """One CollectInsertSizeMetrics row; fields are Picard's columns in lower case."""
     pair_orientation: str
@@ -1272,6 +1293,25 @@ def report(
     index.html, under output (default: the one directory given); pdf=True adds
     SAMPLE.report.pdf, pdf_only=True writes the verdicts and the PDFs alone (the PDF
     needs a module built with the feature pdf). Returns the paths written."""
+
+def doctor(
+    path: _Path,
+    *,
+    reference: _Path | None = None,
+    records: int | None = None,
+    check_md5: bool = False,
+    expect_build: str | None = None,
+    expect_sex: Literal["male", "female"] | None = None,
+    sample_sheet: _Path | None = None,
+    sample: str | None = None,
+    fail_on: Literal["warn", "fail"] | None = "fail",
+    threads: int | None = None,
+) -> Doctor:
+    """bammetrics doctor: a pre-flight check of one BAM, CRAM or SAM file (its header, its
+    end-of-file marker, its first records). Returns a Doctor: .checks, one DoctorCheck
+    per check with status pass, warn, fail or skip, .status, the worst, and .exit_code
+    under fail_on. A failed check is a value, never an exception; InputError when the
+    file cannot be opened."""
 
 # The steps of chain(): each tool verb that can be a step, in snake case, and write.
 _StepVerb = Literal[
