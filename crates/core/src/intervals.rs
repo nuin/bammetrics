@@ -7,6 +7,7 @@
 //! indices into the BAM header's `@SQ` lines.
 
 use std::fs;
+use std::io::Read as _;
 use std::ops::Range;
 use std::path::Path;
 
@@ -128,6 +129,30 @@ pub fn read_files<P: AsRef<Path>>(paths: &[P], header: &sam::Header) -> Result<V
         .collect())
 }
 
+/// The text of an interval list or BED, at most [`MAX_INTERVAL_LIST_BYTES`]
+/// read: a pipe has no size to check first, so the read itself stops.
+fn read_capped(path: &Path) -> Result<String> {
+    let input = |source| Error::Input {
+        path: path.to_path_buf(),
+        source,
+    };
+    let mut text = String::new();
+    fs::File::open(path)
+        .map_err(input)?
+        .take(MAX_INTERVAL_LIST_BYTES + 1)
+        .read_to_string(&mut text)
+        .map_err(input)?;
+    if text.len() as u64 > MAX_INTERVAL_LIST_BYTES {
+        return Err(Error::Intervals {
+            path: path.to_path_buf(),
+            message: format!(
+                "the file holds more than {MAX_INTERVAL_LIST_BYTES} bytes, the most read"
+            ),
+        });
+    }
+    Ok(text)
+}
+
 /// [`read_files`] keeping each interval's strand and name.
 pub fn read_named_files<P: AsRef<Path>>(
     paths: &[P],
@@ -136,10 +161,7 @@ pub fn read_named_files<P: AsRef<Path>>(
     let mut intervals = Vec::new();
     for path in paths {
         let path = path.as_ref();
-        let text = fs::read_to_string(path).map_err(|source| Error::Input {
-            path: path.to_path_buf(),
-            source,
-        })?;
+        let text = read_capped(path)?;
         let parsed = if is_interval_list_file(path, &text) {
             parse_interval_list(&text, header)
         } else {
