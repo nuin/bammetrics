@@ -76,6 +76,12 @@ const NO_PICARD_ORACLE: &[(&str, &str)] = &[
          planted copy numbers of tests/data/make_mt_bams.py exactly and the depths against \
          samtools depth",
     ),
+    (
+        "CollectTelomereMetrics",
+        "not a Picard tool (docs/telomere.md); tests/python/test_telomere.py checks the planted \
+         counts of tests/data/make_telomere_bams.py exactly and the length estimate against \
+         TelSeq's formula computed in Python",
+    ),
 ];
 
 fn root() -> PathBuf {

@@ -260,6 +260,16 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
             "LEVEL=READ_GROUP".to_owned(),
         ],
     );
+    // The telomere fixture has read groups and reads in the GC bin, so every
+    // column and histogram label has a value.
+    args.insert(
+        "CollectTelomereMetrics",
+        vec![
+            format!("I={DATA}/telomere.bam"),
+            out("telomere"),
+            "LEVEL=READ_GROUP".to_owned(),
+        ],
+    );
     // The fixture BAM has no @RG line, which CollectOxoGMetrics refuses.
     args.insert(
         "CollectOxoGMetrics",

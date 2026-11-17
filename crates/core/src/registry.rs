@@ -356,6 +356,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::build_bam_index::TOOL,
     &crate::mt_copy_number::TOOL,
     &crate::exon_coverage::TOOL,
+    &crate::telomere::TOOL,
 ];
 
 /// The tool named `name`.

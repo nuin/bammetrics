@@ -84,6 +84,12 @@ pub fn histogram_lookup(program: &str, key: &str, label: &str) -> Option<Entry> 
             let suffix = label.split_once('.')?.1;
             lookup(program, &format!("*.{suffix}"))
         })
+        // A unit name with a dot (a PU such as fc1.1): the suffix after the
+        // last dot.
+        .or_else(|| {
+            let suffix = label.rsplit_once('.')?.1;
+            lookup(program, &format!("*.{suffix}"))
+        })
         .or_else(|| lookup(program, "*"))
 }
 
@@ -155,6 +161,10 @@ mod tests {
         );
         assert_eq!(
             column("CollectInsertSizeMetrics", "insert_size", "lib1.fr_count"),
+            Some("*.fr_count")
+        );
+        assert_eq!(
+            column("CollectInsertSizeMetrics", "insert_size", "fc1.1.fr_count"),
             Some("*.fr_count")
         );
         assert_eq!(
