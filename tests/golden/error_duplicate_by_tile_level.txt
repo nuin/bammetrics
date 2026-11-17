@@ -1,0 +1,9 @@
+## argv
+CollectDuplicateByTileMetrics
+I=tests/data/duplicate_by_tile.bam
+METRIC_ACCUMULATION_LEVEL=SAMPLE
+## exit
+1
+## stdout
+## stderr
+bammetrics: CollectDuplicateByTileMetrics: option METRIC_ACCUMULATION_LEVEL is not implemented (it may change the metrics)

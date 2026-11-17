@@ -1,0 +1,13 @@
+## argv
+duplicate-by-tile
+tests/data/duplicate_by_tile.bam
+--read-name-regex
+(x
+## exit
+2
+## stdout
+## stderr
+bammetrics duplicate-by-tile: READ_NAME_REGEX "(x": regex parse error:
+    ^(?:(x)$
+     ^
+error: unclosed group

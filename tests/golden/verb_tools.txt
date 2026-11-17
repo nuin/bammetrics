@@ -42,6 +42,7 @@ view-sam                              ViewSam
 sort-sam                              SortSam
 mt-copy-number                        CollectMtCopyNumberMetrics
 exon-coverage                         CollectExonCoverageMetrics
+duplicate-by-tile                     CollectDuplicateByTileMetrics
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.
