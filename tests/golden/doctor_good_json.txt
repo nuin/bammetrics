@@ -48,7 +48,7 @@ json
       "check": "build",
       "status": "pass",
       "value": "hg38",
-      "reason": "24 primary, 1 mitochondrial, 0 alt, 0 decoy, 0 HLA, 0 other contigs"
+      "reason": "24 primary, 1 mitochondrial (chrM), 0 alt, 0 decoy, 0 HLA, 0 other contigs"
     },
     {
       "check": "read_groups",

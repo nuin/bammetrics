@@ -10,7 +10,7 @@ jsonl
 {"event":"check","path":"tests/data/doctor/cut.bam","check":"eof","status":"fail","value":"cut short","reason":"the last BGZF block is incomplete: the file was cut short (an interrupted copy or a full disk)"}
 {"event":"check","path":"tests/data/doctor/cut.bam","check":"header","status":"pass","value":"28 lines: 1 @HD, 25 @SQ, 1 @RG, 1 @PG, 0 @CO","reason":""}
 {"event":"check","path":"tests/data/doctor/cut.bam","check":"references","status":"pass","value":"25 contigs, 3,088,286,401 bases","reason":""}
-{"event":"check","path":"tests/data/doctor/cut.bam","check":"build","status":"pass","value":"hg38","reason":"24 primary, 1 mitochondrial, 0 alt, 0 decoy, 0 HLA, 0 other contigs"}
+{"event":"check","path":"tests/data/doctor/cut.bam","check":"build","status":"pass","value":"hg38","reason":"24 primary, 1 mitochondrial (chrM), 0 alt, 0 decoy, 0 HLA, 0 other contigs"}
 {"event":"check","path":"tests/data/doctor/cut.bam","check":"read_groups","status":"pass","value":"1 @RG line, 1 sample: NA12878","reason":"every line has ID, SM, LB and PL"}
 {"event":"check","path":"tests/data/doctor/cut.bam","check":"sort_order","status":"pass","value":"header coordinate","reason":"the first 162 records are in coordinate order"}
 {"event":"check","path":"tests/data/doctor/cut.bam","check":"records","status":"fail","value":"162 records read","reason":"record 163: the file ends inside the record"}

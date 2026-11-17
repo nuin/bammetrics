@@ -30,6 +30,7 @@ use noodles::{bam, sam};
 
 use crate::error::{Error, Result};
 use crate::gene_model::{self, Feature, GeneModel, Selected, Selection};
+use crate::genome_build;
 use crate::hs_metrics::{self, CaptureMetrics, TargetDepths};
 use crate::intervals::{Interval, NamedInterval};
 use crate::levels::Level;
@@ -204,8 +205,9 @@ impl Options {
     }
 }
 
-/// The BAM contig of each annotation contig: its own name, else the name
-/// with `chr` added or removed (`chrM` and `MT` too).
+/// The BAM contig of each annotation contig: its own name, else one of
+/// [`genome_build::aliases`] (`chr` added or removed; `chrM`, `MT`, `M`
+/// and `chrMT` for one another).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ContigMap {
     /// By annotation contig index.
@@ -221,7 +223,7 @@ impl ContigMap {
         let mut map = Self::default();
         for (index, name) in names.iter().enumerate() {
             let found = contigs.get_index_of(name.as_bytes()).or_else(|| {
-                aliases(name).into_iter().find_map(|alias| {
+                genome_build::aliases(name).into_iter().find_map(|alias| {
                     let i = contigs.get_index_of(alias.as_bytes())?;
                     map.aliased.push((index, alias));
                     Some(i)
@@ -231,21 +233,6 @@ impl ContigMap {
         }
         map
     }
-}
-
-/// The other spellings of a contig name: `chr` added or removed, and the
-/// mitochondrion as `chrM` and `MT`.
-fn aliases(name: &str) -> Vec<String> {
-    let mut names = match name.strip_prefix("chr") {
-        Some(rest) if !rest.is_empty() => vec![rest.to_owned()],
-        _ => vec![format!("chr{name}")],
-    };
-    match name {
-        "chrM" => names.push("MT".to_owned()),
-        "MT" => names.push("chrM".to_owned()),
-        _ => {}
-    }
-    names
 }
 
 /// The selected exons placed on the BAM header.
@@ -800,15 +787,6 @@ mod tests {
         let s = columns(SUMMARY_CLASS, &[5]);
         assert_eq!(s[0], "LEVEL");
         assert_eq!(&s[14..], ["BASES_5X", "PCT_5X"]);
-    }
-
-    #[test]
-    fn aliases_add_or_remove_chr() {
-        assert_eq!(aliases("chr1"), ["1"]);
-        assert_eq!(aliases("1"), ["chr1"]);
-        assert_eq!(aliases("chrM"), ["M", "MT"]);
-        assert_eq!(aliases("MT"), ["chrMT", "chrM"]);
-        assert_eq!(aliases("chr"), ["chrchr"]);
     }
 
     #[test]

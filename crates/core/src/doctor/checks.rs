@@ -404,6 +404,25 @@ fn references(
     Check::new("references", Status::Pass, value).because(reason)
 }
 
+/// The mitochondrial contigs by name, as `mt-copy-number` finds them: one
+/// is the contig it reads; several need its `--mt-contig`. At most the
+/// four names of [`genome_build::MITO_NAMES`], since `@SQ` names differ.
+fn mito_names(dict: &[(String, u64)]) -> String {
+    let names: Vec<&str> = dict
+        .iter()
+        .map(|(name, _)| name.as_str())
+        .filter(|name| genome_build::is_mito(name))
+        .collect();
+    match names.as_slice() {
+        [] => String::new(),
+        [one] => format!(" ({one})"),
+        several => format!(
+            " ({}; mt-copy-number needs --mt-contig)",
+            several.join(", ")
+        ),
+    }
+}
+
 /// What `detection` says against `expected`: `None` when they agree.
 fn build_mismatch(detection: &Detection, expected: Build) -> Option<String> {
     match detection {
@@ -434,8 +453,14 @@ fn build(dict: &[(String, u64)], detection: &Detection, expected: Option<Build>)
     }
     let c = genome_build::contigs(dict.iter().map(|(n, l)| (n.as_str(), *l)));
     let composition = format!(
-        "{} primary, {} mitochondrial, {} alt, {} decoy, {} HLA, {} other contigs",
-        c.primary, c.mito, c.alt, c.decoy, c.hla, c.other
+        "{} primary, {} mitochondrial{}, {} alt, {} decoy, {} HLA, {} other contigs",
+        c.primary,
+        c.mito,
+        mito_names(dict),
+        c.alt,
+        c.decoy,
+        c.hla,
+        c.other
     );
     let (status, value, mut reason) = match detection {
         Detection::Known { assembly, chr, .. } => {
@@ -985,7 +1010,7 @@ fn expected_sex(dict: &[(String, u64)], options: &Options) -> Check {
     let value = format!("{} expected", sex.name());
     let has_y = dict
         .iter()
-        .any(|(name, _)| matches!(name.as_str(), "Y" | "chrY"));
+        .any(|(name, _)| genome_build::chromosome(name) == Some("Y"));
     let limit = "doctor reads too few records to infer sex; bammetrics sex-check does";
     if sex == Sex::Male && !dict.is_empty() && !has_y {
         return Check::new("expected_sex", Status::Warn, value)
@@ -1004,6 +1029,19 @@ mod tests {
         assert_eq!(thousands(999), "999");
         assert_eq!(thousands(1000), "1,000");
         assert_eq!(thousands(3_099_922_541), "3,099,922,541");
+    }
+
+    #[test]
+    fn mito_names_name_the_contig_mt_copy_number_reads() {
+        let dict = |names: &[&str]| -> Vec<(String, u64)> {
+            names.iter().map(|n| ((*n).to_owned(), 16_569)).collect()
+        };
+        assert_eq!(mito_names(&dict(&["chr1", "chrX"])), "");
+        assert_eq!(mito_names(&dict(&["chr1", "chrM"])), " (chrM)");
+        assert_eq!(
+            mito_names(&dict(&["MT", "chrM"])),
+            " (MT, chrM; mt-copy-number needs --mt-contig)"
+        );
     }
 
     #[test]

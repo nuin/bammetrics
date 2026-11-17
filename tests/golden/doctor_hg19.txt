@@ -9,7 +9,7 @@ tests/data/doctor/hg19.bam  BAM  WARN  0 fail, 1 warn, 15 pass, 3 skip
   PASS  eof                 end-of-file block present        the file ends with the 28-byte BGZF end-of-file block
   PASS  header              30 lines: 1 @HD, 27 @SQ, 1 @RG, 1 @PG, 0 @CO
   PASS  references          27 contigs, 3,095,962,218 bases
-  PASS  build               hg19                             24 primary, 1 mitochondrial, 0 alt, 0 decoy, 0 HLA, 2 other contigs
+  PASS  build               hg19                             24 primary, 1 mitochondrial (chrM), 0 alt, 0 decoy, 0 HLA, 2 other contigs
   PASS  read_groups         1 @RG line, 1 sample: NA12878    every line has ID, SM, LB and PL
   PASS  sort_order          header coordinate                the first 20 records are in coordinate order
   PASS  records             20 records read                  every record of the file

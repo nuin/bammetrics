@@ -168,6 +168,48 @@ fn primary_key(name: &str) -> (&str, bool) {
     (if bare == "MT" { "M" } else { bare }, chr)
 }
 
+/// The mitochondrial contig names, in the order a tool looks for them:
+/// every name [`chromosome`] reads as `M`.
+pub const MITO_NAMES: [&str; 4] = ["chrM", "MT", "M", "chrMT"];
+
+/// The human chromosome `name` stands for, without `chr`: `1` to `22`,
+/// `X`, `Y`, or `M` for any of [`MITO_NAMES`]; `None` for every other name.
+/// The one table of chromosome names: doctor, `CollectSexCheckMetrics`,
+/// `CollectMtCopyNumberMetrics` and the annotation aliases of
+/// `CollectExonCoverageMetrics` read it.
+pub fn chromosome(name: &str) -> Option<&str> {
+    let (key, _) = primary_key(name);
+    (key == "M" || PRIMARY.iter().any(|(n, _)| *n == key)).then_some(key)
+}
+
+/// True for `chr1` to `chr22` and `1` to `22`.
+pub fn is_autosome(name: &str) -> bool {
+    chromosome(name).is_some_and(|key| !matches!(key, "X" | "Y" | "M"))
+}
+
+/// True for each of [`MITO_NAMES`].
+pub fn is_mito(name: &str) -> bool {
+    chromosome(name) == Some("M")
+}
+
+/// The other spellings of a contig name, in the order to try them: `chr`
+/// added or removed, then for a mitochondrial name the rest of
+/// [`MITO_NAMES`].
+pub fn aliases(name: &str) -> Vec<String> {
+    let mut names = match name.strip_prefix("chr") {
+        Some(rest) if !rest.is_empty() => vec![rest.to_owned()],
+        _ => vec![format!("chr{name}")],
+    };
+    if is_mito(name) {
+        for other in MITO_NAMES {
+            if other != name && !names.iter().any(|n| n == other) {
+                names.push(other.to_owned());
+            }
+        }
+    }
+    names
+}
+
 /// The kind of contig `name` is.
 fn kind(name: &str) -> Kind {
     let (key, _) = primary_key(name);
@@ -375,6 +417,39 @@ mod tests {
         );
         assert_eq!(detected(&[("contig7".to_owned(), 5)]), Detection::Unknown);
         assert_eq!(detected(&[]), Detection::Unknown);
+    }
+
+    #[test]
+    fn chromosome_names_are_read_with_and_without_chr() {
+        for name in MITO_NAMES {
+            assert!(is_mito(name), "{name}");
+            assert!(!is_autosome(name), "{name}");
+        }
+        for name in ["chr1", "22", "chr22"] {
+            assert!(is_autosome(name), "{name}");
+        }
+        for name in [
+            "chrX",
+            "Y",
+            "chr23",
+            "01",
+            "chr",
+            "",
+            "chrchr1",
+            "MT1",
+            "chrUn_KI270302v1",
+        ] {
+            assert!(!is_autosome(name), "{name}");
+            assert!(!is_mito(name), "{name}");
+        }
+        assert_eq!(chromosome("chrX"), Some("X"));
+        assert_eq!(chromosome("MT"), Some("M"));
+        assert_eq!(chromosome("chr1_KI270706v1_random"), None);
+        assert_eq!(aliases("chr7"), ["7"]);
+        assert_eq!(aliases("7"), ["chr7"]);
+        assert_eq!(aliases("chrM"), ["M", "MT", "chrMT"]);
+        assert_eq!(aliases("MT"), ["chrMT", "chrM", "M"]);
+        assert_eq!(aliases("chr"), ["chrchr"]);
     }
 
     #[test]

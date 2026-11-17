@@ -75,7 +75,8 @@ minus strand the exon with the highest start is 1.
 ### 1.3 Contigs
 
 Each annotation contig is looked up in the BAM header by its own name, then with `chr` added
-or removed, then `chrM` as `MT` and `MT` as `chrM`. A contig read under another name is
+or removed, then for a mitochondrial name the other three of `chrM`, `MT`, `M` and `chrMT`
+(`genome_build::aliases`, the table `doctor`, `sex-check` and `mt-copy-number` read). A contig read under another name is
 listed on standard error (`1 annotation contig read under the BAM header's name: 1 as
 chr1`). An exon on a contig the header lacks under every name gets a row with empty depth
 cells and is not counted; standard error names the contigs. The verb's and the chain's `-q`

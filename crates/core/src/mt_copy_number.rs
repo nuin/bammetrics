@@ -20,6 +20,7 @@ use noodles::{bam, sam};
 
 use crate::blocks::alignment_blocks;
 use crate::error::{Error, Result};
+use crate::genome_build;
 use crate::intervals::{self, Interval, OverlapIndex};
 use crate::levels::{Labels, Level, Levels, parse_levels};
 use crate::metric::{MetricRow, MetricsOutput, ToolOutput, Value};
@@ -32,9 +33,6 @@ pub const CLASS: &str = "bammetrics.qc.MtCopyNumberMetrics";
 
 pub const DEFAULT_MINIMUM_MAPPING_QUALITY: u8 = 20;
 pub const DEFAULT_MINIMUM_BASE_QUALITY: u8 = 20;
-
-/// The mitochondrial contig names looked for without `MT_CONTIG`.
-pub const MT_NAMES: [&str; 4] = ["chrM", "MT", "M", "chrMT"];
 
 /// A BAM stores a missing `QUAL` (`*`) as 0xFF bytes; a record read from
 /// SAM text may hold none.
@@ -201,7 +199,7 @@ fn roles(opts: &Options, header: &sam::Header) -> Result<(usize, Vec<Option<Role
             let found: Vec<usize> = names
                 .iter()
                 .enumerate()
-                .filter(|(_, n)| MT_NAMES.contains(&n.as_str()))
+                .filter(|(_, n)| genome_build::is_mito(n))
                 .map(|(i, _)| i)
                 .collect();
             match found.as_slice() {
@@ -209,7 +207,7 @@ fn roles(opts: &Options, header: &sam::Header) -> Result<(usize, Vec<Option<Role
                 [] => {
                     return Err(Error::Usage(format!(
                         "the header has no mitochondrial contig ({}); set MT_CONTIG",
-                        MT_NAMES.join(", ")
+                        genome_build::MITO_NAMES.join(", ")
                     )));
                 }
                 several => {
@@ -226,7 +224,7 @@ fn roles(opts: &Options, header: &sam::Header) -> Result<(usize, Vec<Option<Role
     roles[mt] = Some(Role::Mito);
     if opts.autosomes.is_empty() {
         for (index, name) in names.iter().enumerate() {
-            if index != mt && crate::sex_check::is_default_autosome(name) {
+            if index != mt && genome_build::is_autosome(name) {
                 roles[index] = Some(Role::Autosome);
             }
         }

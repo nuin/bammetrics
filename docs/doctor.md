@@ -132,6 +132,13 @@ build. No file or network is read.
   T2T-CHM13 has one name.
 - Alt (`_alt`), decoy (`_decoy`, `hs37d5`), HLA (`HLA-`), mitochondrial and other contigs
   are counted and never decide the build.
+- The mitochondrial contigs are named: `1 mitochondrial (chrM)` is the contig
+  `mt-copy-number` reads without `--mt-contig`. Two or more (`chrM` and `MT`) add
+  `mt-copy-number needs --mt-contig`, the option that tool then asks for.
+- The names `chrM`, `MT`, `M` and `chrMT`, and `1` to `22`, `X` and `Y` with or without
+  `chr`, come from one table in `crates/core/src/genome_build.rs` (`chromosome`,
+  `MITO_NAMES`, `aliases`). `sex-check`, `mt-copy-number` and the annotation aliases of
+  `exon-coverage` read the same table.
 - Primary chromosomes of two builds fail the check: the reason names how many agree with
   the likeliest build and each that does not.
 - No primary chromosome of a known length gives `unknown` (another species, or a test

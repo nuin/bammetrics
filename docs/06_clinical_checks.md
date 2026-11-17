@@ -320,7 +320,9 @@ territory bases.
 The mitochondrial contig is `MT_CONTIG`, else the one header contig named `chrM`, `MT`,
 `M` or `chrMT`. A header with none, or with two of those names, is an error that names
 `MT_CONTIG`. The autosomes are `AUTOSOMES` (one contig per value), else `chr1` to `chr22`
-and `1` to `22` as in section 2.1. A header without an autosome is an error.
+and `1` to `22` as in section 2.1. A header without an autosome is an error. Both name
+lists come from `crates/core/src/genome_build.rs`; `bammetrics doctor` names the contig
+this tool reads in its `build` check.
 
 ### 6.2 Metrics class `bammetrics.qc.MtCopyNumberMetrics`
 
