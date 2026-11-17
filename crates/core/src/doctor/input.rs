@@ -156,6 +156,58 @@ fn read_u32<R: Read + ?Sized>(reader: &mut R) -> io::Result<u32> {
     Ok(u32::from_le_bytes(bytes))
 }
 
+/// The longest reference name the binary list may hold, its NUL included.
+const MAX_NAME_BYTES: usize = 1 << 10;
+
+/// The smallest entry of the binary list: `l_name`, one NUL, `l_ref`.
+const MIN_ENTRY_BYTES: usize = 9;
+
+fn invalid(message: String) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, message)
+}
+
+/// The binary reference list after a header text of `l_text` bytes. The
+/// text and the list share one budget of [`MAX_HEADER_BYTES`]: the count is
+/// checked against it before the first entry, each `l_name` before its bytes.
+fn binary_references<R: Read + ?Sized>(
+    reader: &mut R,
+    l_text: usize,
+) -> io::Result<Vec<(String, u64)>> {
+    let mut budget = MAX_HEADER_BYTES.saturating_sub(l_text);
+    let count = read_u32(reader)? as usize;
+    if count > budget / MIN_ENTRY_BYTES {
+        return Err(invalid(format!(
+            "the binary reference list claims {count} entries, over the {MAX_HEADER_BYTES}-byte header cap"
+        )));
+    }
+    let mut binary = Vec::new();
+    for _ in 0..count {
+        let l_name = read_u32(reader)? as usize;
+        if l_name > MAX_NAME_BYTES {
+            return Err(invalid(format!(
+                "a reference name of the binary list claims {l_name} bytes, over {MAX_NAME_BYTES}"
+            )));
+        }
+        let entry = l_name + 8;
+        if entry > budget {
+            return Err(invalid(format!(
+                "the binary reference list is over the {MAX_HEADER_BYTES}-byte header cap"
+            )));
+        }
+        budget -= entry;
+        let mut name = Vec::new();
+        read_append(reader, &mut name, l_name)?;
+        if name.pop() != Some(0) {
+            return Err(invalid(
+                "a reference name of the binary list does not end in NUL".to_owned(),
+            ));
+        }
+        let length = u64::from(read_u32(reader)?);
+        binary.push((String::from_utf8_lossy(&name).into_owned(), length));
+    }
+    Ok(binary)
+}
+
 /// The inflated stream of a BAM.
 pub type BamStream = bgzf::io::Reader<BufReader<File>>;
 
@@ -173,21 +225,7 @@ pub fn bam_header(path: &Path) -> io::Result<(RawHeader, BamStream)> {
     }
     let l_text = read_u32(&mut reader)? as usize;
     let text = capped_text(&mut reader, l_text)?;
-    let count = read_u32(&mut reader)?;
-    let mut binary = Vec::new();
-    for _ in 0..count {
-        let l_name = read_u32(&mut reader)? as usize;
-        let mut name = Vec::new();
-        read_append(&mut reader, &mut name, l_name)?;
-        if name.pop() != Some(0) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "a reference name of the binary list does not end in NUL",
-            ));
-        }
-        let length = u64::from(read_u32(&mut reader)?);
-        binary.push((String::from_utf8_lossy(&name).into_owned(), length));
-    }
+    let binary = binary_references(&mut reader, l_text)?;
     let header = RawHeader {
         text,
         binary,
@@ -335,6 +373,91 @@ mod tests {
         assert_eq!(end(&[eof, &eof[..20]].concat()), BgzfEnd::Cut);
         assert_eq!(end(&eof[..27]), BgzfEnd::Cut);
         std::fs::remove_dir_all(&dir).expect("clean");
+    }
+
+    /// `count`, then `entries` copies of `entry`, made as they are read.
+    struct List {
+        head: Vec<u8>,
+        entry: Vec<u8>,
+        at: u64,
+        end: u64,
+    }
+
+    impl Read for List {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            let head = self.head.len() as u64;
+            let mut n = 0;
+            while n < buf.len() && self.at < self.end {
+                let byte = if self.at < head {
+                    self.head[self.at as usize]
+                } else {
+                    let i = (self.at - head) % self.entry.len() as u64;
+                    self.entry[i as usize]
+                };
+                buf[n] = byte;
+                n += 1;
+                self.at += 1;
+            }
+            Ok(n)
+        }
+    }
+
+    fn list(count: u32, entry: &[u8], entries: u64) -> List {
+        List {
+            head: count.to_le_bytes().to_vec(),
+            entry: entry.to_vec(),
+            at: 0,
+            end: 4 + entries * entry.len() as u64,
+        }
+    }
+
+    #[test]
+    fn a_hundred_million_entries_fail_before_the_first() {
+        let empty = [&1u32.to_le_bytes()[..], &[0], &0u32.to_le_bytes()].concat();
+        let mut reader = list(100_000_000, &empty, 100_000_000);
+        let error = binary_references(&mut reader, 0).expect_err("refused");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("100000000 entries"), "{error}");
+        assert_eq!(reader.at, 4, "no entry is read");
+    }
+
+    #[test]
+    fn entries_past_the_budget_fail_on_the_one_that_crosses_it() {
+        // The count fits the cap for 9-byte entries; 1 KiB names do not.
+        let count = (MAX_HEADER_BYTES / MIN_ENTRY_BYTES) as u32;
+        let name = [vec![b'n'; MAX_NAME_BYTES - 1], vec![0]].concat();
+        let entry = [
+            &(MAX_NAME_BYTES as u32).to_le_bytes()[..],
+            &name,
+            &5u32.to_le_bytes(),
+        ]
+        .concat();
+        let mut reader = list(count, &entry, u64::from(count));
+        let error = binary_references(&mut reader, 0).expect_err("refused");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("header cap"), "{error}");
+        let fit = (MAX_HEADER_BYTES / entry.len()) as u64;
+        assert_eq!(reader.at, 4 + fit * entry.len() as u64 + 4);
+    }
+
+    #[test]
+    fn a_name_length_of_four_billion_is_refused_before_its_bytes() {
+        let entry = u32::MAX.to_le_bytes();
+        let mut reader = list(1, &entry, 1);
+        let error = binary_references(&mut reader, 0).expect_err("refused");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("4294967295 bytes"), "{error}");
+    }
+
+    #[test]
+    fn the_header_text_takes_its_share_of_the_budget() {
+        let mut reader = list(2, &[], 0);
+        let error = binary_references(&mut reader, MAX_HEADER_BYTES - 17).expect_err("refused");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        let entry = [&2u32.to_le_bytes()[..], b"a\0", &7u32.to_le_bytes()].concat();
+        let mut reader = list(1, &entry, 1);
+        let binary = binary_references(&mut reader, 100).expect("read");
+        assert_eq!(binary, vec![("a".to_owned(), 7)]);
     }
 
     #[test]

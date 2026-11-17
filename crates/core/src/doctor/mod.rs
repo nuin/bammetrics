@@ -226,7 +226,7 @@ pub fn run(path: &Path, options: &Options) -> Result<Report> {
     if !metadata.is_file() {
         return Err(opened(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "not a regular file (doctor reads the end of the file, which a pipe does not have)",
+            not_a_file(&metadata.file_type()),
         )));
     }
     let facts = read_facts(path, options).map_err(opened)?;
@@ -238,6 +238,22 @@ pub fn run(path: &Path, options: &Options) -> Result<Report> {
         kind,
         checks: checks::judge(path, &facts, options),
     })
+}
+
+/// Why `doctor` refuses a path that is not a regular file, by its kind.
+pub fn not_a_file(kind: &std::fs::FileType) -> &'static str {
+    use std::os::unix::fs::FileTypeExt;
+    if kind.is_dir() {
+        "is a directory"
+    } else if kind.is_fifo() {
+        "not a regular file (doctor reads the end of the file, which a pipe does not have)"
+    } else if kind.is_char_device() || kind.is_block_device() {
+        "is a device"
+    } else if kind.is_socket() {
+        "is a socket"
+    } else {
+        "not a regular file"
+    }
 }
 
 fn kind_name(kind: Kind, facts: &Facts) -> String {
