@@ -1,0 +1,23 @@
+## argv
+CollectMultipleMetrics
+I=tests/data/mt_copy_number.bam
+O=OUT/s
+PROGRAM=null
+PROGRAM=CollectMtCopyNumberMetrics
+LEVEL=SAMPLE
+## exit
+0
+## stdout
+## stderr
+## file s.mt_copy_number_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectMultipleMetrics INPUT=tests/data/mt_copy_number.bam OUTPUT=OUT/s PROGRAM=null PROGRAM=CollectMtCopyNumberMetrics METRIC_ACCUMULATION_LEVEL=SAMPLE
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.MtCopyNumberMetrics
+MT_CONTIG	MT_LENGTH	MT_BASES	MT_MEAN_DEPTH	AUTOSOMAL_LENGTH	AUTOSOMAL_BASES	AUTOSOMAL_MEAN_DEPTH	MT_COPY_NUMBER	READS_USED	SAMPLE	LIBRARY	READ_GROUP
+chrM	500	50000	100	4000	8000	2	100	580			
+chrM	500	50000	100	4000	8000	2	100	580	S1		
+
+

@@ -612,3 +612,15 @@ picard.analysis.JumpingLibraryMetrics	FRAGMENTS	int	First-of-pair records with e
 picard.analysis.JumpingLibraryMetrics	PCT_JUMPS	float	JUMP_PAIRS / (JUMP_PAIRS + NONJUMP_PAIRS + CHIMERIC_PAIRS), a fraction; 0 without any.
 picard.analysis.JumpingLibraryMetrics	PCT_NONJUMPS	float	NONJUMP_PAIRS / (JUMP_PAIRS + NONJUMP_PAIRS + CHIMERIC_PAIRS), a fraction; 0 without any.
 picard.analysis.JumpingLibraryMetrics	PCT_CHIMERAS	float	CHIMERIC_PAIRS / (JUMP_PAIRS + NONJUMP_PAIRS + CHIMERIC_PAIRS), a fraction; 0 without any.
+bammetrics.qc.MtCopyNumberMetrics	MT_CONTIG	string	The mitochondrial contig: MT_CONTIG, else the one of chrM, MT, M or chrMT in the header.
+bammetrics.qc.MtCopyNumberMetrics	MT_LENGTH	int	Bases of the mitochondrial contig: its @SQ length less the merged EXCLUDE_INTERVALS on it. TARGET_INTERVALS do not change it.
+bammetrics.qc.MtCopyNumberMetrics	MT_BASES	int	Aligned bases (M, = and X operations; soft clips, insertions and deletions add nothing) at or above MINIMUM_BASE_QUALITY on the mitochondrial contig, outside EXCLUDE_INTERVALS, of primary mapped reads that are not duplicates or QC failures and have MAPQ at or above MINIMUM_MAPPING_QUALITY.
+bammetrics.qc.MtCopyNumberMetrics	MT_MEAN_DEPTH	float	MT_BASES / MT_LENGTH. ? when MT_LENGTH is 0.
+bammetrics.qc.MtCopyNumberMetrics	AUTOSOMAL_LENGTH	int	Bases of the autosomes (chr1 to chr22 or 1 to 22, or the AUTOSOMES option): the @SQ lengths summed, or with TARGET_INTERVALS the merged target bases on them, less the merged EXCLUDE_INTERVALS.
+bammetrics.qc.MtCopyNumberMetrics	AUTOSOMAL_BASES	int	Bases counted as for MT_BASES inside the AUTOSOMAL_LENGTH territory.
+bammetrics.qc.MtCopyNumberMetrics	AUTOSOMAL_MEAN_DEPTH	float	AUTOSOMAL_BASES / AUTOSOMAL_LENGTH. ? when AUTOSOMAL_LENGTH is 0.
+bammetrics.qc.MtCopyNumberMetrics	MT_COPY_NUMBER	float	2 x MT_MEAN_DEPTH / AUTOSOMAL_MEAN_DEPTH: mitochondrial genomes per diploid nuclear genome. With TARGET_INTERVALS on an exome the mitochondrial reads are off target and the value is a ratio, not a copy number. ? when the autosomal depth is 0.
+bammetrics.qc.MtCopyNumberMetrics	READS_USED	int	Reads that added at least one base to MT_BASES or AUTOSOMAL_BASES.
+bammetrics.qc.MtCopyNumberMetrics	SAMPLE	string	Sample (@RG SM) of the accumulation unit. Empty on the ALL_READS row.
+bammetrics.qc.MtCopyNumberMetrics	LIBRARY	string	Library (@RG LB) of the accumulation unit. Empty on ALL_READS and SAMPLE rows.
+bammetrics.qc.MtCopyNumberMetrics	READ_GROUP	string	Platform unit (@RG PU) of the read group. Empty except on READ_GROUP rows.

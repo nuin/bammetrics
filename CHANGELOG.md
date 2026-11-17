@@ -23,6 +23,20 @@
   `.exit_code`, `.to_json()`) of `DoctorCheck`s.
 - `tests/data/make_doctor_fixtures.py` and `tests/data/doctor/`: the planted defects;
   `crates/cli/tests/doctor.rs`, `tests/python/test_doctor.py` and 26 golden records.
+- `CollectMtCopyNumberMetrics` (verb `mt-copy-number`, Python
+  `collect_mt_copy_number_metrics()`), class `bammetrics.qc.MtCopyNumberMetrics`, docs/06
+  section 6, part of wave W07: `2 x` mean depth on the mitochondrial contig over mean
+  autosomal depth, from aligned bases at base and mapping quality 20 of primary, mapped,
+  non-duplicate, non-QC-fail reads. `MT_CONTIG`, `AUTOSOMES`, `TARGET_INTERVALS` (autosomal
+  depth over targets only), `EXCLUDE_INTERVALS` (NUMTs), every accumulation level. A
+  `CollectMultipleMetrics` program (`.mt_copy_number_metrics`), a `chain` tap and a `qc`
+  source under a preset that names the class. No shipped preset has a rule. Truth tests on
+  planted BAMs (`tests/data/make_mt_bams.py`: copy number 100, 1000 and 0, no `chrM`) and
+  `samtools depth` on the fixture, corpus t1, the HG002 exome and an NA12878 slice: equal
+  base counts on every one.
+- Interval lists and BED files (`TARGET_INTERVALS`, `BAIT_INTERVALS`, `INTERVALS` and the
+  rest read through `intervals::read_files`) are read through a 1 GiB cap that also holds
+  for a pipe; a larger file is an error naming the cap.
 
 ### Changed
 

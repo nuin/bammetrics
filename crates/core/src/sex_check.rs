@@ -257,6 +257,12 @@ enum Group {
     Y,
 }
 
+/// True for `chr1`..`chr22` and `1`..`22`, the default autosomes
+/// (`mt_copy_number.rs` shares them).
+pub(crate) fn is_default_autosome(name: &str) -> bool {
+    default_group(name) == Some(Group::Autosome)
+}
+
 /// The default names: `chrX` or `X`, `chrY` or `Y`, `chr1`..`chr22` or
 /// `1`..`22`.
 fn default_group(name: &str) -> Option<Group> {

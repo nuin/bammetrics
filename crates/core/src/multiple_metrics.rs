@@ -121,6 +121,15 @@ const PROGRAMS: &[Program] = &[
         reference: Reference::Required,
         prefix: true,
     },
+    // Not a Picard program (docs/06 section 6): Picard rejects the name.
+    Program {
+        name: "CollectMtCopyNumberMetrics",
+        tool: &crate::mt_copy_number::TOOL,
+        files: &[("OUTPUT", ".mt_copy_number_metrics")],
+        levels: true,
+        reference: Reference::Unused,
+        prefix: false,
+    },
 ];
 
 /// Picard's default `PROGRAM` list.

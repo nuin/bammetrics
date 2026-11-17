@@ -1380,6 +1380,13 @@ The gap depth is the `CollectHsMetrics` per-base depth, and `crates/core/tests/c
 and `tests/python/test_clinical_checks.py` check that `PCT_REPORTABLE` at `MIN_DEPTH=20`
 equals `PCT_TARGET_BASES_20X`.
 
+`CollectMtCopyNumberMetrics` (docs/06 section 6, class `bammetrics.qc.MtCopyNumberMetrics`)
+has no Picard counterpart either. `tests/python/test_mt_copy_number.py` checks planted copy
+numbers exactly and the depths against `samtools depth`. `CollectMultipleMetrics` takes
+`PROGRAM=CollectMtCopyNumberMetrics` and writes `PREFIX.mt_copy_number_metrics`; Picard
+3.5.0 does not know that program name and refuses it. The default program list is
+Picard's.
+
 ## Not implemented
 
 `FindMendelianViolations`, `GenotypeConcordance OUTPUT_VCF` (see Options), the
