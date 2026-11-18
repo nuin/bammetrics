@@ -497,6 +497,7 @@ and CI runs it on the Linux and macOS runners after the unit tests.
 | Binary growth, 0.19.0 | 300 KB | 600 KB | 371.5 KB | 380,400 bytes stripped (408,768 unstripped), measured 2026-11-09 by `make budgets` on the same machine: over the 300 KB target, under the 600 KB limit, so the test prints `over target` and passes; 80.7 KB more than the 0.16.0 row |
 | Binary growth, 0.25.0 | 300 KB | 600 KB | 387.6 KB | 396,944 bytes stripped, measured 2026-11-17 by `make budgets` on release/0.25.0: over the 300 KB target, under the 600 KB limit, so the test prints `over target` and passes; accepted for the release pending owner review (docs/07 decision D22) |
 | Binary growth, 0.26.0 | 300 KB | 600 KB | 403.8 KB | 413,456 bytes stripped (443,728 unstripped), measured 2026-11-17 by `make budgets` on release/0.26.0: 16,512 bytes (16.5 KB) over the 0.25.0 row in one wave, over the 300 KB target and under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review: raise the target, or find what in the core grows the probe per wave. The probe links no verb code, so the rise comes from the core (glossary rows, the registry, `bai/csi.rs`) |
+| Binary growth, 0.27.0 | 300 KB | 600 KB | 403.8 KB | 413,456 bytes stripped (443,728 unstripped), measured 2026-11-18 by `make budgets` on release/0.27.0: the same bytes as the 0.26.0 row, so wave W09 adds nothing to the probe (its six tools are verb and core code the probe does not link). 106,256 bytes (103.8 KB) over the 300 KB target and 200,944 bytes under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review |
 | Formats growth, W02 | 150 KB | 300 KB | 129.2 KB | 132,304 bytes stripped (148,480 unstripped), measured 2026-11-10 by `make budgets`: stripped `size_formats` less stripped `size_formats_base` (`crates/formats/examples`); see below |
 | Added passes over the BAM | 0 | 1 | 0 | `qc` reports 1 BAM read with the verdict and page; `report` and `check` run with the BAM deleted |
 
@@ -571,6 +572,8 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 0.25.0 pdf | the same with `--features pdf` | 12,393,408 | 10,519,272 |
 | 0.26.0 | 2026-11-17, release/0.26.0: feat/adapter-content, feat/duplicate-by-tile, feat/telomere and feat/index-depth merged, the version set, rustc 1.100.0, default features | 8,618,624 | 7,339,568 |
 | 0.26.0 pdf | the same with `--features pdf` | 12,599,840 | 10,701,328 |
+| 0.27.0 | 2026-11-18, release/0.27.0: feat/record-edit, feat/add-oa-tag, feat/clean-sam and feat/set-nm-md-uq merged, the version set, rustc 1.100.0, default features | 8,786,432 | 7,488,736 |
+| 0.27.0 pdf | the same with `--features pdf` | 12,750,880 | 10,833,936 |
 
 From 0.21.0 to 0.22.0 the binary grew 202,816 bytes (198.1 KB), 182,072 stripped (177.8
 KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
@@ -596,6 +599,12 @@ From 0.25.0 to 0.26.0 the default binary grew 165,536 bytes stripped (2.3%), bot
 with rustc 1.100.0: `CollectAdapterContentMetrics`, `CollectDuplicateByTileMetrics`,
 `CollectTelomereMetrics` and `CollectIndexDepthMetrics`. With `--features pdf` it grew
 182,056 bytes stripped, and the PDF build is 3,361,760 bytes over the default build.
+
+From 0.26.0 to 0.27.0 the default binary grew 149,168 bytes stripped (2.0%), both built
+with rustc 1.100.0: `record_edit.rs` and its six tools, `AddCommentsToBam`,
+`ReplaceSamHeader`, `AddOATag`, `CleanSam`, `SetNmMdAndUqTags` and `SetNmAndUqTags`. With
+`--features pdf` it grew 132,608 bytes stripped, and the PDF build is 3,345,200 bytes over
+the default build.
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and

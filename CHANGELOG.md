@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.27.0
 
-Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
+Wave W09 of docs/07: six record-editing tools on one shape, each a chain transform.
 
 ### Added
 
@@ -83,14 +83,14 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
 - `RecordEdit::rewrites`: the chain step of a tool whose stand-alone run rewrites its
   records sets the `bin` htsjdk's writer computes (0 for an unplaced read), so chained
   equals staged on a BAM whose unplaced reads carry samtools' 4680.
-- `RecordEdit::rewrites`: a tool that writes every record through htsjdk's writer gives
-  each record that writer's `bin` in its chain step too. `sequence::iupac_code`.
+  `sequence::iupac_code`.
 
 ### Fixed
 
-- A record-editing rewrite into a BAM writes `@HD VN:1.6`, and `SO:unsorted` on an `@HD`
-  without `SO`, as htsjdk's writer does; it kept the input's `VN:1.4`. A block copy keeps
-  the line as it is.
+- A record-editing rewrite into a BAM (`AddOATag`, `CleanSam`, `SetNmMdAndUqTags`,
+  `ReplaceSamHeader` on an input not named `.bam`) writes `@HD VN:1.6`, and `SO:unsorted`
+  on an `@HD` without `SO`, as htsjdk's writer does; it kept the input's `VN:1.4` (found
+  on the HG002 exome, whose header is `VN:1.4`). A block copy keeps the line as it is.
 - SAM text output checks the header's order as htsjdk's presorted writer does
   (`bam_writer::Presorted`, shared with `BamWriter`). `ReplaceSamHeader` into a `.sam`
   under a reordered dictionary, or of records out of their `SO:coordinate` order, wrote
@@ -104,9 +104,6 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
 - An `OUTPUT` named `.SAM` (any case other than `.sam`) gets BAM bytes, as htsjdk picks
   SAM text by `endsWith(".sam")`. `SortSam`, `CleanSam`, a rewriting `ReplaceSamHeader`
   and the chain's `write` step wrote SAM text under that name; a block copy refused it.
-- A record-editing rewrite (`ReplaceSamHeader` on an input not named `.bam`,
-  `SetNmMdAndUqTags`) writes a BAM with `@HD VN:1.6`, as htsjdk's writer does; a `VN:1.4`
-  header kept `VN:1.4` (found on the HG002 exome, whose header is `VN:1.4`).
 - `chain ... + add-comments-to-bam -C` with a newline in a comment is a usage error before
   the first read (exit 2, `--dry-run` too); it failed the step after the chain started.
 - `chain ... + add-o-a-tag -L FILE` reads the interval list before the first read, so a
@@ -124,8 +121,6 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   name becomes `.bai`, any other name gets `.bai` appended (`out.dat.bai`). It replaced
   any extension (`out.bai`). `AddOATag`, `SortSam`, `MarkDuplicates` and `chain ... +
   write --index`.
-- An `OUTPUT` ending in `.SAM` is a BAM, as htsjdk tells SAM by the lower-case suffix. It
-  was written as SAM text.
 - CRAM input: `MD` rebuilt for a record without one holds upper-case reference bases, as
   htsjdk's CRAM decoder reads the reference. A soft-masked FASTA gave lower-case bases in
   `MD` (`ViewSam`, `SortSam`, `MarkDuplicates`, `SetNmMdAndUqTags SET_ONLY_UQ=true`).

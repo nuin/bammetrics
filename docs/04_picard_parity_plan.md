@@ -93,16 +93,16 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | ScatterIntervalsByNs | Reference | out | Pipeline scatter helper. | bedtools |
 | BaitDesigner | Reference | out | Legacy bait design. | none |
 | FixMateInformation | Read data | later | Harness input prep (MC tag). | samtools fixmate -m |
-| SetNmMdAndUqTags | Read data | later | Harness prep. Metrics use the reference, not tags. | samtools calmd |
-| SetNmAndUqTags | Read data | out | Deprecated. | samtools calmd |
+| SetNmMdAndUqTags | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): `MD`, `NM` and `UQ` from the reference as htsjdk's `SequenceUtil` computes them, `SET_ONLY_UQ`, `IS_BISULFITE_SEQUENCE`. M | samtools calmd |
+| SetNmAndUqTags | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): Picard's deprecated name of SetNmMdAndUqTags, the same options and output. S | samtools calmd |
 | BuildBamIndex | Read data | core | Shipped in 0.23.0 (wave W05 of docs/07): the `.bai` byte for byte Picard's for the same BAM, the index behind `MarkDuplicates CREATE_INDEX`, `SortSam CREATE_INDEX` and `chain ... + write --index`. S | samtools index |
 | SortSam | Read data | core | Shipped in 0.23.0 (wave W05 of docs/07): `queryname`, `coordinate` and `duplicate` with htsjdk's comparators, BAM or SAM text out, runs spilled to `TMP_DIR`; also the sort step of a chain. B | samtools sort |
 | SamFormatConverter | Read data | out | Format conversion. | samtools view |
-| AddCommentsToBam | Read data | out | Header edit. | samtools reheader |
-| AddOATag | Read data | out | No metric reads OA. | none |
+| AddCommentsToBam | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): one `@CO` line per `COMMENT`, the BAM's records copied as Picard copies its blocks. S | samtools reheader |
+| AddOATag | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): each record's alignment appended to its `OA` tag, `INTERVAL_LIST`. S | none |
 | AddOrReplaceReadGroups | Read data | later | Harness fixture builder for per-RG rows. | samtools addreplacerg |
 | BamToBfq | Read data | out | Obsolete aligner format. | none |
-| CleanSam | Read data | later | Harness may need it to make fixtures valid. | none |
+| CleanSam | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): alignments and mate CIGARs past a contig end soft-clipped, MAPQ 0 on unmapped records. S | none |
 | DownsampleSam | Read data | later | Harness shrinks real BAMs once. | samtools view -s |
 | PositionBasedDownsampleSam | Read data | out | Tile-based downsampling for duplicate studies. | none |
 | FastqToSam | Read data | later | Harness builds unaligned fixtures. | samtools import, fgbio |
@@ -111,7 +111,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | MergeSamFiles | Read data | out | Merge. | samtools merge |
 | MergeBamAlignment | Read data | out | uBAM merge step. | fgbio ZipperBams |
 | ReorderSam | Read data | out | Contig reorder. | none |
-| ReplaceSamHeader | Read data | out | Header swap. | samtools reheader |
+| ReplaceSamHeader | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): the header of `HEADER` over every record, Picard's sort order checks. S | samtools reheader |
 | RevertOriginalBaseQualitiesAndAddMateCigar | Read data | out | Legacy pipeline step. | samtools fixmate (MC only) |
 | RevertSam | Read data | out | BAM to uBAM. | none |
 | SamToFastq | Read data | out | Export. | samtools fastq |

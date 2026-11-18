@@ -30,7 +30,7 @@ emits.
 | Step | What it is | Today |
 |---|---|---|
 | source | One BAM, CRAM or SAM text file, or a pipe holding one | the positional argument, `-` for standard input |
-| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on; a streaming transform edits each batch as it passes (section 16) | `mark-duplicates`, `sort-sam` (both barriers); `add-comments-to-bam`, `replace-sam-header`, `add-o-a-tag`, `clean-sam` (streaming) |
+| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on; a streaming transform edits each batch as it passes (section 16) | `mark-duplicates`, `sort-sam` (both barriers); `add-comments-to-bam`, `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`, `set-nm-and-uq-tags` (streaming) |
 | tap | A one-pass tool on the records of its position. It changes nothing | 18 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check`, `mt-copy-number`, `exon-coverage`, `adapter-content`, `duplicate-by-tile`, `telomere` |
 | write | A tap that writes the records of its position as a BAM, or as SAM text | `write [PATH]` |
 
@@ -631,7 +631,7 @@ run.metrics["insert-size"]          # out/NA12878.insert_size_metrics, parsed
 | `step_table(name)` | A `StepTable` for a verb named in snake or kebab case, by its Picard class or by its function name: `verb`, `role`, `keywords`. An unknown name is a usage error with the closest step |
 | `StepTable::keyword(name)` | One keyword, or the usage error with the closest name. `input`, and `output` of `mark_duplicates`, are refused with the reason |
 | `Keyword` | `name`, `long` (the flag it spells), `ty`, `many` (`One`, `Repeated`: one occurrence per item, `Joined`: one comma list) |
-| `step_names()` | The 21 names `step` takes, snake case, in `bammetrics tools` order, `write` last |
+| `step_names()` | The 27 names `step` takes, snake case, in `bammetrics tools` order, `write` last |
 | `metric_key(chain, step, path)` | The key of a metrics file in `Run.metrics`: the verb, `STREAM.` in front for a tap that does not read the last stream, `.FILE` after it for a further file |
 | `stubs()` | The `bammetrics.pyi` entries: `_StepVerb`, `step`, three `chain` overloads |
 
@@ -1163,6 +1163,8 @@ file holds, so it spools its input (section 15.2). The run prints one line per e
 | `replace-sam-header` | `reheadered` | Puts the header of `--header` in place of its stream's. Each record keeps its reference index, as Picard's block copy of a `.bam` keeps it. The new `SO` must be `unsorted` or the stream's |
 | `add-o-a-tag` | `oa_tagged` | Appends each record's alignment to its `OA` tag, or with `-L` only on the records over an interval. Every record leaves with the `bin` htsjdk's writer computes, as the tool on its own writes it |
 | `clean-sam` | `cleaned` | Soft-clips each alignment past the end of its reference and the `MC` of a mate past the end, sets MAPQ 0 on unmapped records, and gives each record the `bin` htsjdk computes. The chain reads a SAM text source at its `--validation-stringency`, so a source with lines past the end of their reference needs `LENIENT`; the tool alone reads `STRICT` as `LENIENT`. Chained equals staged in `crates/cli/tests/clean_sam.rs` |
+| `set-nm-md-and-uq-tags` | `tagged` | Sets `MD`, `NM` and `UQ` on each mapped record of a coordinate-sorted stream against the chain's `-R` (section 16.1) |
+| `set-nm-and-uq-tags` | `tagged` | Picard's deprecated name of `set-nm-md-and-uq-tags`: the same step |
 
 The rules of a record-editing step:
 
