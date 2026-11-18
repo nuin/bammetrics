@@ -427,6 +427,15 @@ pub const VERBS: &[Verb] = &[
         reads: &["HEADER"],
         ..verb("replace-sam-header", "ReplaceSamHeader", Files::Bam)
     },
+    Verb {
+        about: Some(
+            "cleans a SAM, BAM or CRAM as Picard's CleanSam does: -o gets every record, a \
+             mapped record past the end of its reference soft-clipped at its end, the MC tag of \
+             a mate past the end clipped the same way, an unmapped record at MAPQ 0.",
+        ),
+        writes: "BAM",
+        ..verb("clean-sam", "CleanSam", Files::Bam)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the

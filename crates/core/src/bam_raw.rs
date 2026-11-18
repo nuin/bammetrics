@@ -384,8 +384,8 @@ impl RawRecord {
     /// set `n_cigar_op`; the name, bases, qualities and tags stay. The
     /// `bin` is left as it was: [`RawRecord::set_codec_bin`] sets it.
     pub fn set_cigar(&mut self, cigar: &[(u32, u8)]) -> io::Result<()> {
-        let ops = u16::try_from(cigar.len())
-            .map_err(|_| invalid("more than 65535 CIGAR operators"))?;
+        let ops =
+            u16::try_from(cigar.len()).map_err(|_| invalid("more than 65535 CIGAR operators"))?;
         let mut encoded = Vec::with_capacity(4 * cigar.len());
         for &(len, op) in cigar {
             if len >= 1 << 28 || op > 8 {
@@ -910,7 +910,10 @@ mod tests {
         record
             .set_cigar(&[(11, 0), (9, 4), (5, 5)])
             .expect("a valid CIGAR");
-        assert_eq!(record.cigar().collect::<Vec<_>>(), [(11, 0), (9, 4), (5, 5)]);
+        assert_eq!(
+            record.cigar().collect::<Vec<_>>(),
+            [(11, 0), (9, 4), (5, 5)]
+        );
         assert_eq!(record.mapping_quality(), 0);
         assert_eq!(record.name(), b"r1");
         assert_eq!(record.qualities(), &[30; 20]);

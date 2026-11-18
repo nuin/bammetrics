@@ -362,6 +362,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::index_depth::TOOL,
     &crate::add_comments_to_bam::TOOL,
     &crate::replace_sam_header::TOOL,
+    &crate::clean_sam::TOOL,
 ];
 
 /// The tool named `name`.

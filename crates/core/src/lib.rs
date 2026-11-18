@@ -15,6 +15,7 @@ pub mod bed_to_interval_list;
 pub mod blocks;
 pub mod build_bam_index;
 pub mod check_duplicate_marking;
+pub mod clean_sam;
 pub mod cleanup;
 pub mod collect;
 pub mod commons_math;

@@ -1253,6 +1253,21 @@ def replace_sam_header(
     the input: a BAM, or SAM text for a name ending in .sam when the input name does not
     end in .bam."""
 
+def clean_sam(
+    input: _Path,
+    *,
+    output: _Path,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """CleanSam: no rows; OUTPUT gets every record of the input, a mapped record past the
+    end of its reference soft-clipped at its end, the MC of a mate past the end clipped
+    the same way, an unmapped record at MAPQ 0: a BAM, or SAM text for a name ending in
+    .sam."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1486,6 +1501,7 @@ _StepVerb = Literal[
     "telomere",
     "add_comments_to_bam",
     "replace_sam_header",
+    "clean_sam",
     "write",
 ]
 
