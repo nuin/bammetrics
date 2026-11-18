@@ -9,7 +9,9 @@
 //!   and adds 1 to `NM`;
 //! * an insertion adds its length to `NM`; a deletion writes `^` and the
 //!   deleted reference bases and adds its length to `NM`;
-//! * past the end of the contig the `MD` string stops, its run flushed.
+//! * past the end of the contig the `MD` string stops, its run flushed,
+//!   and `NM` counts nothing more: an insertion at the contig end or past
+//!   it adds nothing.
 
 use crate::bam_raw::{RawRecord, TagValue, Tags};
 use crate::error::Result;
@@ -101,6 +103,10 @@ fn compute(record: &RawRecord, bases: &[u8], reference: &[u8]) -> (Vec<u8>, i64)
                 position += length;
             }
             1 => {
+                if active && position >= reference.len() {
+                    flush(&mut md, &mut run);
+                    active = false;
+                }
                 if active {
                     nm += length as i64;
                 }
@@ -156,5 +162,14 @@ mod tests {
         // reads of A: 3 + 1 + 2 mismatches, 1 inserted and 2 deleted bases.
         assert_eq!(String::from_utf8(md).expect("ascii"), "0C0G0T1C0^GT1C0G0");
         assert_eq!(nm, 9);
+    }
+
+    #[test]
+    fn an_insertion_at_the_contig_end_adds_nothing() {
+        // 4M2I2M at position 1 of ACGT: the insertion starts at the end.
+        let record = build("r", 0, 0, 0, &[(4, 0), (2, 1), (2, 0)], &[30; 8], b"");
+        let (md, nm) = compute(&record, &record.bases(), b"ACGT");
+        assert_eq!(String::from_utf8(md).expect("ascii"), "1C0G0T0");
+        assert_eq!(nm, 3);
     }
 }
