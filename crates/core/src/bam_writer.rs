@@ -225,6 +225,15 @@ impl BamWriter {
         file.flush().map_err(error)?;
         Ok(self.file)
     }
+
+    /// The writer without the order check: records go out as they come,
+    /// as htsjdk's block copy of a BAM writes them
+    /// (`BamFileIoUtils.reheaderBamFile`).
+    #[must_use]
+    pub fn unchecked(mut self) -> Self {
+        self.order = SortOrder::Unsorted;
+        self
+    }
 }
 
 /// What [`finish`] writes beside the BAM.
@@ -245,17 +254,24 @@ pub fn finish(
     header: &sam::Header,
     companions: Companions,
 ) -> Result<Vec<PathBuf>> {
+    let index = writer.path.with_extension("bai");
+    finish_with_index(writer, header, companions, &index)
+}
+
+/// [`finish`] with the `.bai` at `index_path`: htsjdk's block copy of a
+/// BAM names it `<BAM>.bai` (`out.bam.bai`), its writers `out.bai`.
+pub fn finish_with_index(
+    writer: BamWriter,
+    header: &sam::Header,
+    companions: Companions,
+    index_path: &Path,
+) -> Result<Vec<PathBuf>> {
     let threads = writer.threads;
     let output = writer.close()?;
     let target = output.path().to_path_buf();
     let coordinate = SortOrder::of(header) == SortOrder::Coordinate;
     let index = if companions.index && coordinate {
-        Some(write_index(
-            output.writing(),
-            &target,
-            &target.with_extension("bai"),
-            threads,
-        )?)
+        Some(write_index(output.writing(), &target, index_path, threads)?)
     } else {
         None
     };

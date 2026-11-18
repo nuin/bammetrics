@@ -63,6 +63,7 @@ pub mod quality_score_distribution;
 pub mod quality_yield;
 pub mod read_bases;
 pub mod record;
+pub mod record_edit;
 pub mod ref_flat;
 pub mod reference;
 pub mod registry;

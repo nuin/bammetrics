@@ -336,6 +336,12 @@ impl RawRecord {
         self.i32_at(28)
     }
 
+    /// Set `refID` and `next_refID` (-1 for none); every other byte stays.
+    pub fn set_reference_ids(&mut self, reference: i32, mate: i32) {
+        self.buf[0..4].copy_from_slice(&reference.to_le_bytes());
+        self.buf[20..24].copy_from_slice(&mate.to_le_bytes());
+    }
+
     /// The read name without its NUL.
     pub fn name(&self) -> &[u8] {
         let len = usize::from(self.buf[8]);

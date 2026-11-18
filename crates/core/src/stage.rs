@@ -401,44 +401,98 @@ pub trait StageBuilder {
 /// A registry tool's stage function.
 pub type StageFn = for<'t> fn(&Invocation, &Frame, &'t TempDir) -> Result<Stage<'t>>;
 
-/// The tools with a stage: the tool, its stage, the default name of the
-/// stream it leaves, and whether it reads its input twice (a replay).
-const STAGES: [(&str, StageFn, &str, bool); 2] = [
-    ("MarkDuplicates", mark_duplicates::stage, "marked", true),
-    ("SortSam", crate::sort_sam::stage, "sorted", false),
+/// How a stage takes its stream.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StageKind {
+    /// A barrier that holds every record and hands them on ([`Next::Records`]).
+    Holds,
+    /// A barrier that reads its input twice: the second read replays the
+    /// source or a spool of its input ([`Next::Replay`]).
+    Replays,
+    /// A [`Transform`] that edits each batch and hands it on: no barrier,
+    /// no new segment (the record-editing tools of [`crate::record_edit`]).
+    Streams,
+}
+
+/// One tool with a stage.
+pub struct StageRow {
+    /// The registry tool's name.
+    pub tool: &'static str,
+    pub build: StageFn,
+    /// The default name of the stream the stage leaves.
+    pub label: &'static str,
+    pub kind: StageKind,
+    /// A usage error for options the stage cannot take, asked before the
+    /// first read of a chain. The stage asks again when it is built.
+    pub check: fn(&Invocation) -> Result<()>,
+}
+
+fn check_mark_duplicates(inv: &Invocation) -> Result<()> {
+    mark_duplicates::Options::for_stage(inv).map(|_| ())
+}
+
+fn check_sort_sam(inv: &Invocation) -> Result<()> {
+    crate::sort_sam::Options::for_stage(inv).map(|_| ())
+}
+
+/// The tools with a stage, one row each. A tool that writes the records
+/// it reads adds its row on the day it lands (docs/07 section 2.3).
+const STAGES: &[StageRow] = &[
+    StageRow {
+        tool: "MarkDuplicates",
+        build: mark_duplicates::stage,
+        label: "marked",
+        kind: StageKind::Replays,
+        check: check_mark_duplicates,
+    },
+    StageRow {
+        tool: "SortSam",
+        build: crate::sort_sam::stage,
+        label: "sorted",
+        kind: StageKind::Holds,
+        check: check_sort_sam,
+    },
 ];
 
-fn stage_row(tool: &Tool) -> Option<&'static (&'static str, StageFn, &'static str, bool)> {
-    STAGES.iter().find(|(name, ..)| *name == tool.name)
+fn stage_row(tool: &Tool) -> Option<&'static StageRow> {
+    STAGES.iter().find(|row| row.tool == tool.name)
 }
 
 /// The stage of a registry tool, `None` for a tool that is not one. A
 /// table by name in place of a `Tool` field.
 pub fn stage_of(tool: &Tool) -> Option<StageFn> {
-    stage_row(tool).map(|row| row.1)
+    stage_row(tool).map(|row| row.build)
 }
 
 /// The default name of the stream a tool's stage leaves (docs/07 section
 /// 2.2): `marked` after `MarkDuplicates`, `sorted` after `SortSam`. `None`
 /// for a tool without a stage.
 pub fn label_of(tool: &Tool) -> Option<&'static str> {
-    stage_row(tool).map(|row| row.2)
+    stage_row(tool).map(|row| row.label)
+}
+
+/// How the stage of `tool` takes its stream; `None` for a tool without a
+/// stage.
+pub fn kind_of(tool: &Tool) -> Option<StageKind> {
+    stage_row(tool).map(|row| row.kind)
 }
 
 /// True for a stage that reads its input twice: the second read replays
 /// the source or a spool of the stage's input (`MarkDuplicates`).
 pub fn replays(tool: &Tool) -> bool {
-    stage_row(tool).is_some_and(|row| row.3)
+    kind_of(tool) == Some(StageKind::Replays)
+}
+
+/// True for a stage that edits the stream batch by batch: it starts no
+/// segment, and the steps after it read in the same pass.
+pub fn streams(tool: &Tool) -> bool {
+    kind_of(tool) == Some(StageKind::Streams)
 }
 
 /// A usage error for options the stage of `tool` cannot take, asked before
 /// the first read of a chain. The stage asks again when it is built.
 pub fn check_stage_options(tool: &Tool, inv: &Invocation) -> Result<()> {
-    match tool.name {
-        "MarkDuplicates" => mark_duplicates::Options::for_stage(inv).map(|_| ()),
-        "SortSam" => crate::sort_sam::Options::for_stage(inv).map(|_| ()),
-        _ => Ok(()),
-    }
+    stage_row(tool).map_or(Ok(()), |row| (row.check)(inv))
 }
 
 /// A registry tool with a stage and its parsed options.

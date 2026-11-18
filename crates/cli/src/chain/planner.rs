@@ -382,6 +382,7 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
                 order = sorted;
                 first_stage = false;
             }
+            (Role::Transform, _) if step.streams() => first_stage = false,
             (Role::Transform, _) => {
                 let how = match (first_stage, chain.replayable()) {
                     (true, true) => How::Replays,
