@@ -31,6 +31,10 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   SAM text and CRAM), `crates/cli/tests/record_edit.rs` (chained equals staged at the
   first, a middle and the last position beside `mark-duplicates` and `sort-sam`), and
   golden records.
+- On the 10 GB HG002 exome (150,538,907 records) `AddCommentsToBam` takes 61.0 s at
+  47 MB peak RSS and `ReplaceSamHeader` 56.2 s at 38 MB; Picard's block copies take 9.7 s
+  and 11.2 s. The records are equal. bammetrics inflates and deflates every block where
+  Picard copies the compressed blocks.
 
 ### Changed
 
