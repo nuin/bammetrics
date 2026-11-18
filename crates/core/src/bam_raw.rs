@@ -375,6 +375,31 @@ impl RawRecord {
         self.buf[10..12].copy_from_slice(&bin.to_le_bytes());
     }
 
+    /// Set `MAPQ`; every other byte stays.
+    pub fn set_mapping_quality(&mut self, quality: u8) {
+        self.buf[9] = quality;
+    }
+
+    /// Replace the CIGAR by `cigar` (`(length, op)`, op the BAM code) and
+    /// set `n_cigar_op`; the name, bases, qualities and tags stay. The
+    /// `bin` is left as it was: [`RawRecord::set_codec_bin`] sets it.
+    pub fn set_cigar(&mut self, cigar: &[(u32, u8)]) -> io::Result<()> {
+        let ops = u16::try_from(cigar.len())
+            .map_err(|_| invalid("more than 65535 CIGAR operators"))?;
+        let mut encoded = Vec::with_capacity(4 * cigar.len());
+        for &(len, op) in cigar {
+            if len >= 1 << 28 || op > 8 {
+                return Err(invalid("CIGAR operator out of the BAM range"));
+            }
+            encoded.extend_from_slice(&(len << 4 | u32::from(op)).to_le_bytes());
+        }
+        let start = self.cigar_start();
+        let end = start + 4 * self.cigar_ops();
+        self.buf.splice(start..end, encoded);
+        self.buf[12..14].copy_from_slice(&ops.to_le_bytes());
+        Ok(())
+    }
+
     /// Set `refID` and `next_refID` (-1 for none); every other byte stays.
     pub fn set_reference_ids(&mut self, reference: i32, mate: i32) {
         self.buf[0..4].copy_from_slice(&reference.to_le_bytes());
@@ -876,6 +901,25 @@ mod tests {
         assert!(back.read_from(&mut out.as_slice()).expect("read"));
         assert_eq!(back, record);
         assert!(!back.read_from(&mut [].as_slice()).expect("end"));
+    }
+
+    #[test]
+    fn a_new_cigar_keeps_every_other_field() {
+        let mut record = build("r1", 0, 0, 9, &[(20, 0)], &[30; 20], b"RGZa\0NMC\x01");
+        record.set_mapping_quality(0);
+        record
+            .set_cigar(&[(11, 0), (9, 4), (5, 5)])
+            .expect("a valid CIGAR");
+        assert_eq!(record.cigar().collect::<Vec<_>>(), [(11, 0), (9, 4), (5, 5)]);
+        assert_eq!(record.mapping_quality(), 0);
+        assert_eq!(record.name(), b"r1");
+        assert_eq!(record.qualities(), &[30; 20]);
+        assert_eq!(record.tag_bytes(), b"RGZa\0NMC\x01");
+        RawRecord::from_bytes(record.as_bytes().to_vec()).expect("consistent");
+        record.set_cigar(&[]).expect("no operator");
+        assert_eq!(record.cigar().count(), 0);
+        assert!(record.set_cigar(&[(1 << 28, 0)]).is_err());
+        assert!(record.set_cigar(&vec![(1, 0); 65536]).is_err());
     }
 
     #[test]
