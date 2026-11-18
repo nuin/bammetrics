@@ -237,6 +237,27 @@ def test_strict_is_the_default():
     note(compare(TOOL, SOURCES["markdup"], [], "markdup at STRICT"))
 
 
+@pytest.mark.parametrize("version", ["1.4", "1.5", None])
+def test_an_older_header_version(tmp_path, version):
+    """htsjdk's writer sets `@HD VN:1.6` over the input's `VN:1.4` (the HG002 exome's
+    header) and adds `@HD` to a header without one."""
+    text = subprocess.run(["samtools", "view", "--no-PG", "-h", str(SOURCES["markdup"])],
+                          check=True, capture_output=True, text=True).stdout
+    lines = [line for line in text.splitlines(True) if not line.startswith("@HD")]
+    if version:
+        lines.insert(0, f"@HD\tVN:{version}\tSO:coordinate\n")
+    sam = tmp_path / "old.sam"
+    sam.write_text("".join(lines))
+    bam = tmp_path / "old.bam"
+    subprocess.run(["samtools", "view", "--no-PG", "-b", "-o", str(bam), str(sam)], check=True)
+    written = case(bam, [], f"markdup @HD VN:{version}")
+    assert written.header[0].startswith("@HD\tVN:1.6"), written.header[0]
+    case(sam, [], f"markdup SAM @HD VN:{version}", suffix=".sam")
+    chained = tmp_path / "chain"
+    chained.mkdir()
+    chain_against_picard(TOOL, ["add-o-a-tag"], bam, [SILENT], chained)
+
+
 def test_index_and_md5(tmp_path):
     index_and_md5(TOOL, [f"I={SOURCES['markdup']}"], tmp_path, "out.bai")
 
