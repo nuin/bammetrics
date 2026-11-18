@@ -1501,7 +1501,7 @@ _StepVerb = Literal[
     "telomere",
     "add_comments_to_bam",
     "replace_sam_header",
-    "add_oa_tag",
+    "add_o_a_tag",
     "write",
 ]
 

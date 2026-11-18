@@ -435,7 +435,7 @@ pub const VERBS: &[Verb] = &[
         ),
         writes: "BAM",
         reads: &["INTERVAL_LIST"],
-        ..verb("add-oa-tag", "AddOATag", Files::Bam)
+        ..verb("add-o-a-tag", "AddOATag", Files::Bam)
     },
 ];
 

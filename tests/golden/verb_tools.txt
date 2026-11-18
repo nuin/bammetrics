@@ -48,7 +48,7 @@ telomere                              CollectTelomereMetrics
 index-depth                           CollectIndexDepthMetrics
 add-comments-to-bam                   AddCommentsToBam
 replace-sam-header                    ReplaceSamHeader
-add-oa-tag                            AddOATag
+add-o-a-tag                           AddOATag
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

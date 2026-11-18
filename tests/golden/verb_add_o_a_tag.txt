@@ -1,5 +1,5 @@
 ## argv
-add-oa-tag
+add-o-a-tag
 tests/data/markdup.sam
 -o
 OUT/oa.bam

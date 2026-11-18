@@ -31,13 +31,13 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   SAM text and CRAM), `crates/cli/tests/record_edit.rs` (chained equals staged at the
   first, a middle and the last position beside `mark-duplicates` and `sort-sam`), and
   golden records.
-- `AddOATag` (verb `add-oa-tag`, Python `add_o_a_tag()`), as Picard 3.5.0: each record's
+- `AddOATag` (verb `add-o-a-tag`, Python `add_o_a_tag()`), as Picard 3.5.0: each record's
   alignment (`RNAME,POS,STRAND,CIGAR,MAPQ,NM;`, `*,0,STRAND,*,255,;` when unmapped)
   appended to its `OA` tag, `NM` and an earlier `OA` printed as Java prints them, `OA` at
   its place in htsjdk's tag order; `INTERVAL_LIST` (an interval list; a BED fails as in
   Picard) limits it to the records over an interval. An array `NM` or `OA`, which Picard
   prints as an object reference, exits 1. A chain transform (`oa_tagged`).
-  `tests/concordance/test_add_oa_tag.py` (tier B with record bytes: 66 cases equal, 8
+  `tests/concordance/test_add_o_a_tag.py` (tier B with record bytes: 66 cases equal, 8
   error-parity cases, the chain step against Picard) and `crates/cli/tests/add_oa_tag.rs`
   (chained equals staged at the first, a middle and the last position).
 - On the 10 GB HG002 exome (150,538,907 records) `AddCommentsToBam` takes 61.0 s at

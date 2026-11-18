@@ -4,7 +4,7 @@ tests/data/markdup.bam
 -o
 OUT/s
 +
-add-oa-tag
+add-o-a-tag
 +
 insert-size
 +
@@ -14,7 +14,7 @@ OUT/out.bam
 0
 ## stdout
 ## stderr
-bammetrics chain: step 1 (add-oa-tag): 36 records in, 36 out, 36 changed
+bammetrics chain: step 1 (add-o-a-tag): 36 records in, 36 out, 36 changed
 bammetrics chain: 3 steps finished, 2 files written
 ## file out.bam
 @HD	VN:1.6	SO:coordinate

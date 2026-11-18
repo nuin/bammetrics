@@ -307,7 +307,7 @@ table.
 | `index-depth` | CollectIndexDepthMetrics (not a Picard tool, [docs/06](06_clinical_checks.md) section 10; a BAM with its `.bai` or `.csi`, never read whole; a CRAM refused) | one |
 | `add-comments-to-bam` | AddCommentsToBam (a BAM; `--comment` repeated) | `-o` BAM, no metrics file |
 | `replace-sam-header` | ReplaceSamHeader (a SAM, BAM or CRAM; `--header` names the file whose header replaces the input's) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `add-oa-tag` | AddOATag (a SAM, BAM or CRAM; `-L` an interval list) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `add-o-a-tag` | AddOATag (a SAM, BAM or CRAM; `-L` an interval list) | `-o` BAM, or SAM text for a name ending in `.sam` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -606,16 +606,16 @@ Picard's `ReplaceSamHeader`: the header of `--header` (SAM text, a BAM or a CRAM
 - In a chain the step replaces the header of the stream at its position and every record
   keeps its reference index, as in a block copy.
 
-### add-oa-tag
+### add-o-a-tag
 
 ```bash
-bammetrics add-oa-tag sample.bam -o sample.oa.bam
-bammetrics add-oa-tag sample.cram -R ref.fa -L targets.interval_list -o sample.oa.sam
+bammetrics add-o-a-tag sample.bam -o sample.oa.bam
+bammetrics add-o-a-tag sample.cram -R ref.fa -L targets.interval_list -o sample.oa.sam
 bammetrics AddOATag I=sample.bam O=sample.oa.bam INTERVAL_LIST=targets.interval_list
 ```
 
 Picard's `AddOATag`: each record's alignment appended to its `OA` tag, then every record
-(`tests/concordance/test_add_oa_tag.py`).
+(`tests/concordance/test_add_o_a_tag.py`).
 
 - The entry is `RNAME,POS,STRAND,CIGAR,MAPQ,NM;`, for example `chr1,1001,+,50M,60,2;`. An
   unmapped record, placed or not, gets `*,0,+,*,255,;` (`-` with the reverse flag).
@@ -635,7 +635,7 @@ Picard's `AddOATag`: each record's alignment appended to its `OA` tag, then ever
   is added. `--create-index` writes `out.bai`. CRAM records get `MD` and `NM` as htsjdk
   decodes them, so their entries carry the `NM` htsjdk computes.
 - In a chain the step tags the records of the stream at its position:
-  `bammetrics chain in.bam + add-oa-tag -L targets.interval_list + write out.bam`.
+  `bammetrics chain in.bam + add-o-a-tag -L targets.interval_list + write out.bam`.
 
 ### qc
 

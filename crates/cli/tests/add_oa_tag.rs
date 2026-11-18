@@ -1,4 +1,4 @@
-//! `add-oa-tag` in a chain (docs/chaining.md, "Record-editing transforms"):
+//! `add-o-a-tag` in a chain (docs/chaining.md, "Record-editing transforms"):
 //! chained equals staged at the first, a middle and the last position,
 //! beside `mark-duplicates` and `sort-sam`, with and without
 //! `--interval-list`, on BAM and SAM text sources.
@@ -97,7 +97,7 @@ enum Step {
     /// `sort-sam` with this order.
     Sort(&'static str),
     MarkDuplicates,
-    /// `add-oa-tag`, with `--interval-list` when true.
+    /// `add-o-a-tag`, with `--interval-list` when true.
     Oa(bool),
 }
 
@@ -120,7 +120,7 @@ fn spell(step: Step, n: usize, dir: &Path) -> (Vec<String>, Vec<String>) {
         }
         Step::Oa(intervals) => {
             let mut staged = strings(&["AddOATag"]);
-            let mut chained = strings(&["add-oa-tag", "--as", &format!("o{n}")]);
+            let mut chained = strings(&["add-o-a-tag", "--as", &format!("o{n}")]);
             if intervals {
                 staged.push(format!("INTERVAL_LIST={TARGETS}"));
                 chained.extend(strings(&["-L", TARGETS]));
@@ -274,7 +274,7 @@ fn the_step_refuses_what_belongs_to_the_write_step() {
             if dry_run {
                 args.push("--dry-run");
             }
-            args.extend(["+", "add-oa-tag"]);
+            args.extend(["+", "add-o-a-tag"]);
             args.extend(options);
             args.extend(["+", "write", "/dev/null"]);
             let (code, stderr) = chain(&args);
@@ -295,9 +295,9 @@ fn the_run_reports_the_records_tagged() {
         "-o",
         &prefix,
         "+",
-        "add-oa-tag",
+        "add-o-a-tag",
         "+",
-        "add-oa-tag",
+        "add-o-a-tag",
         "-L",
         TARGETS,
         "+",
@@ -306,12 +306,12 @@ fn the_run_reports_the_records_tagged() {
     ]);
     assert_eq!(code, Some(0), "{stderr}");
     assert!(
-        stderr.contains("step 1 (add-oa-tag): 36 records in, 36 out, 36 changed\n"),
+        stderr.contains("step 1 (add-o-a-tag): 36 records in, 36 out, 36 changed\n"),
         "{stderr}"
     );
     let line = stderr
         .lines()
-        .find(|line| line.contains("step 2 (add-oa-tag): 36 records in, 36 out, "))
+        .find(|line| line.contains("step 2 (add-o-a-tag): 36 records in, 36 out, "))
         .unwrap_or_else(|| panic!("{stderr}"));
     assert!(
         !line.ends_with(" 36 changed") && !line.ends_with(" 0 changed"),

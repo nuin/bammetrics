@@ -1407,7 +1407,7 @@ differ here (docs/07 decisions D34 to D39):
 `AddOATag` writes the header lines and records Picard writes, the records byte for byte
 after inflation, on the fixture BAMs, the corpus tiers, the foundation corpus, the exome
 slice, each with `NM` stripped and with earlier `OA` values, reads off contig ends, SAM
-text and CRAM (`tests/concordance/test_add_oa_tag.py`). It differs here (docs/07
+text and CRAM (`tests/concordance/test_add_o_a_tag.py`). It differs here (docs/07
 decisions D40 to D43):
 
 - An `NM` or `OA` value that is an array or `H` exits 1 and writes nothing. Picard writes

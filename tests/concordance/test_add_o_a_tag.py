@@ -315,11 +315,11 @@ def test_the_step_in_a_chain_equals_picard(corpus, tmp_path):
     for source in (SOURCES["markdup"], corpus / "corpus.bam"):
         directory = tmp_path / source.stem
         directory.mkdir()
-        chain_against_picard(TOOL, ["add-oa-tag"], source, [SILENT], directory)
+        chain_against_picard(TOOL, ["add-o-a-tag"], source, [SILENT], directory)
     directory = tmp_path / "intervals"
     directory.mkdir()
     targets = FIXTURES / "targets.interval_list"
-    chain_against_picard(TOOL, ["add-oa-tag", "-L", str(targets)], SOURCES["markdup"],
+    chain_against_picard(TOOL, ["add-o-a-tag", "-L", str(targets)], SOURCES["markdup"],
                          [f"L={targets}"], directory)
 
 
