@@ -1,0 +1,19 @@
+## argv
+CleanSam
+I=tests/data/clean_sam_past.sam
+O=OUT/cleaned.bam
+## exit
+1
+## stdout
+## stderr
+Ignoring SAM validation error: ERROR::CIGAR_MAPS_OFF_REFERENCE:Read name past, Read CIGAR M operator maps off end of reference
+Ignoring SAM validation error due to lenient parsing:
+Error parsing text SAM file. Alignment start (100050) must be <= reference sequence length (100000) on reference chr1; File tests/data/clean_sam_past.sam; Line 5
+Line: past	0	chr1	100050	60	20M	*	0	0	ACGTACGTACGTACGTACGT	IIIIIIIIIIIIIIIIIIII	RG:Z:rg1
+Ignoring SAM validation error due to lenient parsing:
+Error parsing text SAM file. MAPQ must be zero if RNAME is not specified; File tests/data/clean_sam_past.sam; Line 6
+Line: unplaced	4	*	0	12	*	*	0	0	ACGTACGTACGTACGTACGT	IIIIIIIIIIIIIIIIIIII	RG:Z:rg1
+Ignoring SAM validation error due to lenient parsing:
+Error parsing text SAM file. MAPQ should be 0 for unmapped read.; File tests/data/clean_sam_past.sam; Line 6
+Line: unplaced	4	*	0	12	*	*	0	0	ACGTACGTACGTACGTACGT	IIIIIIIIIIIIIIIIIIII	RG:Z:rg1
+bammetrics: CleanSam: record past: the clip past the end of its reference gives CIGAR 69S, 69 read bases, for a read of 20 bases; Picard writes this record and no reader opens the file

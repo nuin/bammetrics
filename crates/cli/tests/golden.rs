@@ -60,6 +60,9 @@ const FIXTURES: &[(&str, &str)] = &[
     ("DBT", "tests/data/duplicate_by_tile.bam"),
     ("TEL", "tests/data/telomere.bam"),
     ("ID", "tests/data/index_depth.bam"),
+    ("CS", "tests/data/clean_sam.bam"),
+    ("CS_SAM", "tests/data/clean_sam.sam"),
+    ("CS_PAST", "tests/data/clean_sam_past.sam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -615,6 +618,23 @@ const RECORD_EDIT_CASES: &[Case] = &[
     case!("error_chain_add_comments_index", "chain", "MD", "+", "add-comments-to-bam", "-C", "note", "--create-index", "+", "write", "OUT/out.bam"),
 ];
 
+/// `CleanSam` (`crates/core/src/clean_sam.rs`) on `tests/data/clean_sam.bam`:
+/// the Picard face, the verb, SAM text in and out, the errors, a chain step.
+#[rustfmt::skip]
+const CLEAN_SAM_CASES: &[Case] = &[
+    case!("picard_clean_sam", "CleanSam", "I=CS", "O=OUT/cleaned.bam"),
+    case!("picard_clean_sam_index", "CleanSam", "I=CS", "O=OUT/cleaned.bam", "CREATE_INDEX=true", "CREATE_MD5_FILE=true", "COMPRESSION_LEVEL=1"),
+    case!("picard_clean_sam_sam", "CleanSam", "I=CS_SAM", "O=OUT/cleaned.sam"),
+    case!("verb_clean_sam", "clean-sam", "CS", "-o", "OUT/cleaned.sam"),
+    case!("picard_clean_sam_markdup", "CleanSam", "I=MD", "O=OUT/cleaned.bam"),
+    case!("error_clean_sam_past", "CleanSam", "I=CS_PAST", "O=OUT/cleaned.bam"),
+    case!("error_clean_sam_assume_sorted", "CleanSam", "I=CS", "O=OUT/cleaned.bam", "ASSUME_SORTED=true"),
+    case!("error_clean_sam_input_output", "CleanSam", "I=CS", "O=CS"),
+    case!("error_clean_sam_cram_output", "CleanSam", "I=CS", "O=OUT/cleaned.cram"),
+    case!("chain_clean_sam", "chain", "CS", "-o", "OUT/s", "+", "clean-sam", "+", "quality-yield", "+", "write", "OUT/out.sam"),
+    case!("error_chain_clean_sam_output", "chain", "CS", "+", "clean-sam", "--compression-level", "1", "+", "write", "OUT/out.bam"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -1043,6 +1063,11 @@ fn documented_record_edit_commands_on_the_fixtures() {
     check(RECORD_EDIT_CASES);
 }
 
+#[test]
+fn documented_clean_sam_commands_on_the_fixtures() {
+    check(CLEAN_SAM_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1148,6 +1173,7 @@ fn case_names_are_unique() {
         .chain(PDF_OPTION_CASES)
         .chain(DOCTOR_CASES)
         .chain(RECORD_EDIT_CASES)
+        .chain(CLEAN_SAM_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();
