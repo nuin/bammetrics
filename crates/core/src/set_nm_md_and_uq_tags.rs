@@ -398,6 +398,10 @@ impl RecordEdit for SetTags {
         Ok(input.clone())
     }
 
+    fn rewrites(&self) -> bool {
+        true
+    }
+
     fn record(&mut self, record: &mut RawRecord) -> Result<Outcome> {
         let flags = self.flags;
         let has_qualities = qualities(record).is_some();
