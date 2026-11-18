@@ -44,6 +44,8 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   47 MB peak RSS and `ReplaceSamHeader` 56.2 s at 38 MB; Picard's block copies take 9.7 s
   and 11.2 s. The records are equal. bammetrics inflates and deflates every block where
   Picard copies the compressed blocks.
+- On the same exome `AddOATag` takes 125.3 s at 31 MB peak RSS; Picard takes 1033.0 s
+  at 370 MB. The 150,538,907 records are equal as `samtools view` prints them.
 
 ### Changed
 
@@ -56,6 +58,9 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
 
 ### Fixed
 
+- A record-editing rewrite into a BAM writes `@HD VN:1.6`, and `SO:unsorted` on an `@HD`
+  without `SO`, as htsjdk's writer does; it kept the input's `VN:1.4`. A block copy keeps
+  the line as it is.
 - SAM text output checks the header's order as htsjdk's presorted writer does
   (`bam_writer::Presorted`, shared with `BamWriter`). `ReplaceSamHeader` into a `.sam`
   under a reordered dictionary, or of records out of their `SO:coordinate` order, wrote
