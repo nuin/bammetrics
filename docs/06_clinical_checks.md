@@ -438,3 +438,552 @@ run 3.4 percent under the genome-wide autosomal depth. The whole-file run decode
 on 8 threads; its resident memory is the CRAM decoder's, the tool holds one row per unit.
 The HG002 exome without targets gives a ratio, section 6.4; the hs37d5 capture targets
 were not at hand.
+
+## 7. Adapter content
+
+`CollectAdapterContentMetrics` (verb `adapter-content`, Python
+`collect_adapter_content_metrics()`, class `bammetrics.qc.AdapterContentMetrics`, source
+`crates/core/src/adapter_content.rs`) reports adapter content as the Adapter Content module
+of FastQC 0.13.0 does, read from a BAM, CRAM or SAM file. It is the fourth check of this
+file with no Picard counterpart, and part of wave W08 of docs/07.
+
+### 7.1 Counts
+
+The tool is a one-pass `Collector`, so `CollectMultipleMetrics` runs it as a program
+(extension `.adapter_content_metrics`), `chain` runs it as a tap and `qc` runs it under a
+preset with an `AdapterContentMetrics` rule.
+
+- Records. Every primary record counts, unmapped records included, since adapter dimers
+  rarely map. Secondary and supplementary records never count. QC-failed records and
+  duplicates count unless `PF_READS_ONLY=true` or `INCLUDE_DUPLICATES=false`.
+- Read ends. `FIRST` is flags 0x1 and 0x40 without 0x80, `SECOND` is 0x1 and 0x80 without
+  0x40, `UNPAIRED` is every other record. The ends are reported apart, as `samtools fastq
+  -1 -2 -0` splits them.
+- Bases. A record with flag 0x10 is reverse complemented, so its bases are in sequencing
+  order, as `samtools fastq` writes them. Hard-clipped bases are not in the record and
+  cannot be restored: a hard-clipped read is shorter, and on the reverse strand its cycles
+  shift. Primary records from BWA and minimap2 carry soft clips, not hard clips.
+- Search. The key of an adapter is its first `ADAPTER_KMER` bases (default 12, FastQC's
+  length). A read carries the adapter when the key occurs in it exactly, at any position;
+  its start is the first occurrence, as FastQC's `String.indexOf`. An `N` or other IUPAC
+  code matches nothing. `crates/core/src/adapter.rs` (`AdapterUtility` of
+  `CollectAlignmentSummaryMetrics`) is a different test: the read must start with any
+  16-base window of an adapter, one mismatch allowed. Neither tool changes the other.
+- Read-through. `PAIR_READ_THROUGH` needs no sequence: among proper pairs of the read end
+  (flags 0x1 and 0x2, both mates mapped, TLEN not 0), the fraction whose |TLEN| is below
+  the record's read length. Such a read runs past its insert into the adapter.
+
+The default adapters are FastQC's six, from
+`/opt/homebrew/Cellar/fastqc/0.13.0/libexec/Configuration/adapter_list.txt`:
+
+| Adapter | Key |
+|---|---|
+| Illumina Universal Adapter | `AGATCGGAAGAG` |
+| Illumina Small RNA 3' Adapter | `TGGAATTCTCGG` |
+| Illumina Small RNA 5' Adapter | `GATCGTCGGACT` |
+| Nextera Transposase Sequence | `CTGTCTCTTATA` |
+| PolyA | `AAAAAAAAAAAA` |
+| PolyG | `GGGGGGGGGGGG` |
+
+The search rolls each read into a 2-bit code, one base at a time, from the packed BAM
+bytes. A 65,536-bit filter on the last 8 bases of the code rejects almost every position;
+a binary search over the sorted keys settles the rest. The cost is linear in the read
+length and does not grow with the number of adapters.
+
+### 7.2 Metrics class `bammetrics.qc.AdapterContentMetrics`
+
+One row per accumulation unit, read end and adapter, in that order. Units follow
+`METRIC_ACCUMULATION_LEVEL` as the Picard tools write them. A read end gets rows when the
+run counted at least one record of it; a file with no counted record gets the `UNPAIRED`
+rows with `READS` 0.
+
+| Column | Type | Definition |
+|---|---|---|
+| `ADAPTER` | string | The adapter's name. |
+| `KMER` | string | The bases searched, upper case. |
+| `READ_END` | string | `FIRST`, `SECOND` or `UNPAIRED`. |
+| `READS` | int | Counted records of the read end in the unit. |
+| `READS_WITH_ADAPTER` | int | Reads that hold the key. |
+| `PCT_READS_WITH_ADAPTER` | float | `100 x READS_WITH_ADAPTER / READS`, 0 to 100; `?` without a read. |
+| `MEAN_ADAPTER_START` | float | Mean 1-based cycle of the first occurrence; `?` without a match. |
+| `PCT_AT_LAST_CYCLE` | float | The table's value at its last cycle (section 7.3), the value FastQC grades. |
+| `PAIR_READ_THROUGH` | float | A fraction from 0 to 1 (section 7.1); `?` without a proper pair. |
+| `SAMPLE`, `LIBRARY`, `READ_GROUP` | string | The unit, as in the Picard tools (`READ_GROUP` is the `PU`). |
+
+`PCT_AT_LAST_CYCLE` equals `PCT_READS_WITH_ADAPTER` unless a key starts after cycle 1,000,
+the table's last row. A key starts at or before the last cycle of its read, and the table
+runs to the last cycle of the longest read.
+
+### 7.3 The by-cycle table
+
+The file's `## HISTOGRAM` section holds FastQC's cumulative curve. The key `READ_CYCLE`
+runs from 1 to the last cycle at which a key can start in the longest counted read
+(`read length - ADAPTER_KMER + 1`), at most 1,000. Each column is one unit, read end and
+adapter, labelled `<unit>.<READ_END>.<ADAPTER>` (`All_Reads.FIRST.PolyG`); the unit is
+`All_Reads` or the sample, library or platform unit, as in `CollectInsertSizeMetrics`.
+A cell is the percent of the column's reads whose key starts at or before the cycle,
+`100 x count / READS`, the arithmetic of FastQC's `calculateEnrichment` without grouping.
+A read end with no read in its unit gets its rows in the class and no column in the table.
+
+The table length is common to every read end and unit: the longest read of the whole run
+sets it. Cycles past a read end's own longest read repeat that column's last value, and
+`PCT_AT_LAST_CYCLE` is that value. FastQC sees one read end per FASTQ, so its table for a
+read end of shorter reads stops earlier; on every cycle both tables hold, the values are
+equal. A file with 300-base unpaired reads and `FIRST` reads of at most 151 bases has 289
+rows for `FIRST` here and 140 in FastQC.
+
+The table is a histogram section, the shape of `QualityScoreDistribution`. A second class
+in a file of its own, the shape of `CollectGcBiasMetrics`, would need a second output
+option. One file keeps one `OUTPUT`, one verb file, one `CollectMultipleMetrics`
+extension and one chain file name, and every reader of a Picard histogram
+(`read_metrics`, `read_table`, `convert`, the formats) takes it as it is. The key is
+`READ_CYCLE`: the glossary looks a `CollectMultipleMetrics` histogram up by its key, and
+`CYCLE` is the key of `MeanQualityByCycle`.
+
+The 1,000-cycle cap bounds the table of a long-read file: 1,000 rows of at most
+`units x 3 x adapters` columns. Reads longer than that still count in full in every
+column of the class.
+
+### 7.4 Options
+
+| Option | Default | Meaning |
+|---|---|---|
+| `INPUT`, `OUTPUT` | | As every tool. |
+| `ADAPTER_SEQUENCE` | FastQC's six | `NAME=SEQ` or `SEQ` (named by itself); repeat for each. Any value replaces the six. At most 64; names are unique and hold no tab or line end. |
+| `ADAPTER_KMER` | 12 | Bases of each adapter searched, 1 to 32. Each adapter needs that many bases, all A, C, G or T; the bases after them are not read. Above 12 the default adapters are too short, which is an error. |
+| `PF_READS_ONLY` | false | Count only reads that pass the vendor filter. |
+| `INCLUDE_DUPLICATES` | true | Count reads flagged as duplicates. |
+| `METRIC_ACCUMULATION_LEVEL` (`LEVEL`) | `ALL_READS` | As the Picard tools. |
+| `STOP_AFTER` | 0 | Records read; 0 reads them all. |
+
+The tool reads no file whole. Its memory holds, per unit, read end and adapter, one count
+per distinct start: at most one per cycle of the longest read. A unit's read end holds no
+count until its first read.
+
+The output is bounded at 5,000,000 cells (`MAX_OUTPUT_CELLS`): 12 per row plus one per
+table column and cycle. One unit needs at most 3 x 64 x (12 + 1,000) = 194,304, so
+`ALL_READS` always fits. A finer `METRIC_ACCUMULATION_LEVEL` over a header with thousands
+of read groups can ask for more; the run then fails with a usage error that names
+`METRIC_ACCUMULATION_LEVEL` and `ADAPTER_SEQUENCE`. The rows alone are known from the
+header, so a header over the bound fails before the first record; a table over it fails
+after the pass, before the rows and the table are built. A header with 20,000 read
+groups, 2,000 unpaired reads of 150 bases and `LEVEL=READ_GROUP` writes 120,006 rows and
+the 11,466 columns of the 1,911 units with a read: 13 MB in 1.4 s at 263 MB peak RSS,
+where every unit's column took 1.06 GB.
+
+### 7.5 Truth and cross-checks
+
+No Picard oracle exists. The tests rest on files whose answer is known by construction
+and on FastQC itself. The documented tolerance against FastQC is 0.1 percentage points
+per cycle and adapter.
+
+- `tests/data/make_adapter_bams.py OUT` writes `adapter_planted.bam`: 200 pairs and 50
+  unpaired reads of 100 bases. First reads carry the Universal key at cycles 31, 61 and
+  89, Nextera at 1, PolyG at 70 and both small RNA keys; second reads carry Universal at
+  31, Nextera at 5 and PolyA at 80. Half of each set lies on the reverse strand. The
+  unpaired reads hold 10 unmapped Universal dimers, 35 reads without an adapter and 5
+  reads of 10 bases, shorter than the key. Secondary and supplementary copies of adapter
+  reads must not count. The generator checks each planted start against Python's
+  `str.find`. `tests/python/test_adapter_content.py` requires every row, every mean start
+  and every cell of the table to equal the planted fractions exactly, and
+  `PAIR_READ_THROUGH` 0.1 (20 of 200 pairs have an insert of 30).
+- The same test runs `samtools fastq -F 0x900 -1 -2 -0` and `fastqc --nogroup` on the
+  planted BAM: every cell equals FastQC's within 5e-7, the rounding of 6 printed digits.
+- `tests/data/adapter_content.bam` (`make_adapter_bams.py --fixture`) is the golden
+  fixture: 12 pairs and 8 unpaired reads in two libraries, with the Universal key at
+  cycle 31 in both reads of 4 pairs (insert 30), Nextera at cycle 1 and 4 Universal
+  dimers. `crates/cli/tests/adapter_content.rs` runs the preset of section 7.6 on it
+  through `check` and `qc`.
+- The unit tests of `adapter_content.rs` cover the read ends, the reverse strand, the
+  filters, the levels, the 1,000-cycle cap, a record cut short, the packed-base scan
+  against the text scan on 500 random reads on both strands, and every option error.
+
+Cross-check on real data: `samtools fastq -F 0x900` of each file through `fastqc
+--nogroup --extract`, every cycle of every adapter in each read end compared.
+
+| Input | Reads per end | Cycles | Largest difference | Cells over 0.1 points |
+|---|---|---|---|---|
+| corpus t1 | 20,000 + 20,000 | 139 | 0 | 0 |
+| HG002 exome slice: the first 1,821,470 records plus the 178,530 unplaced unmapped ones | 999,406 + 999,296 | 115 | 5e-7 | 0 |
+
+Mixed read lengths give the same curve in both tools. A FASTQ of one 36-base read with
+the Universal key at cycle 1, then three 100-base reads (one with the key at cycle 31),
+gives 25.0 at cycles 1 to 30 and 50.0 from cycle 31 to 89 in FastQC 0.13.0 and here:
+FastQC carries an earlier read's hit into the cycles a longer read opens. A planted BAM
+with reads of 36, 75, 101, 151 and 300 bases differs from FastQC by 0 on all 840 cells of
+`FIRST` and `SECOND` and all 1,734 of `UNPAIRED` (review of 2026-11-17). The HG002 reads
+are 126 bases with some shorter, and 3.3 percent of each end carries the Universal key,
+at a mean cycle of 106.
+
+### 7.6 Rules
+
+No shipped preset has an `AdapterContentMetrics` rule, so `qc` output and every shipped
+preset stay byte for byte. FastQC's own limits (`Configuration/limits.txt`: `adapter warn
+5`, `adapter error 10`, percent of reads with an adapter k-mer at any position) are the
+standard thresholds. A lab writes them in its own preset; `qc` then runs the tool
+(`SOURCES` in `crates/cli/src/qc.rs`). The verdict takes the worst row, so the rule fails
+on the worst adapter and read end. The values are starting values, not validated limits:
+
+<!-- adapter preset start -->
+```toml
+[preset]
+name = "adapter-content"
+version = 1
+note = "starting values"
+
+[[rule]]
+id = "adapter.max-pct"
+label = "Reads with an adapter (FastQC limits)"
+class = "AdapterContentMetrics"
+metric = "PCT_AT_LAST_CYCLE"
+warn = "> 5"
+fail = "> 10"
+```
+<!-- adapter preset end -->
+
+No plot family is added, since no shipped rule names one.
+
+### 7.7 Measurements
+
+Mac Studio, release build, outputs under `~/data/bammetrics-scale/waves/w08/` (deleted
+after the run), 2026-11-17.
+
+| Input | Records counted | Universal, FIRST / SECOND (percent) | PolyA, FIRST / SECOND (percent) | `PAIR_READ_THROUGH` | Wall | Peak RSS |
+|---|---|---|---|---|---|---|
+| HG002 exome slice of section 7.5 | 1,998,702 | 3.314569 / 3.258794 | 0.79067 / 0.786454 | 0.087262 | 0.65 s | 8 MB |
+| HG002 exome BAM, 10 GB, whole file | 150,386,776 | 3.430677 / 3.371215 | 0.30206 / 0.442393 | 0.083479 | 42.0 s | 9 MB |
+
+The whole-file run took 42.0 s with the file in the page cache and 94.3 s on the first
+read. `CollectMtCopyNumberMetrics` on the same cached file took 33.6 s. A 5-second
+`sample` of the run puts 423 stacks in the collector and 890 in inflate alone: the
+collector waits for BGZF blocks most of the time.
+
+## 8. Duplicates by tile
+
+`CollectDuplicateByTileMetrics` (verb `duplicate-by-tile`, Python
+`collect_duplicate_by_tile_metrics()`, class `bammetrics.qc.DuplicateByTileMetrics`, source
+`crates/core/src/duplicate_by_tile.rs`) splits the duplicate counts of a marked BAM by
+flowcell lane and tile, and flags tiles whose duplication runs far above their lane. A tile
+with a bubble, a smudge or a pad of clustered reads shows as one hot tile among normal
+ones. It is part of wave W08 of docs/07 and has no Picard counterpart.
+
+### 8.1 Counts
+
+The tool is a one-pass `Collector`: `chain` runs it as a tap (file
+`PREFIX.duplicate_by_tile_metrics`). It reads the duplicate flags already in the file and
+marks nothing, as `CollectDuplicateMetrics` does.
+
+- The lane and tile come from the read name through `ReadNameParser` of
+  `crates/core/src/optical.rs`, the parser `MarkDuplicates` uses for optical duplicates.
+  The default reads 5-field names (`instrument:lane:tile:x:y`) and 7-field names
+  (`instrument:run:flowcell:lane:tile:x:y`); the last three fields give tile, x and y,
+  the field before them the lane, and the third field of a 7-field name the flowcell.
+  `READ_NAME_REGEX` takes Picard's regex with three groups (tile, x, y); then `FLOWCELL`
+  and `LANE` are empty. `READ_NAME_REGEX=null` puts every read on the `UNPARSED` row.
+  `TILE` is Picard's 16-bit tile value. A name is read one character per byte (Latin-1),
+  as `MarkDuplicates` reads it, so a byte above 127 never moves a read off its tile.
+  A name whose flowcell or lane field holds an ASCII control character (tab, carriage
+  return, line feed) goes to the `UNPARSED` row with its own note: such a field would
+  break the row of the metrics file.
+- A record counts as `CollectDuplicateMetrics` counts it. An unmapped record adds to
+  `UNMAPPED`. A mapped secondary or supplementary record counts nowhere. A mapped record
+  that is unpaired or whose mate is unmapped adds to `UNPAIRED_READS`. A pair with both
+  mates mapped adds 1 to `PAIRS` on its first-of-pair record. The duplicate flag adds to
+  `UNPAIRED_DUPLICATES` or `PAIR_DUPLICATES` by the same rule. QC-failed records count.
+- `OPTICAL_DUPLICATES` counts duplicate pairs whose first-of-pair record carries
+  `DT:Z:SQ`. `MarkDuplicates` writes that tag under `TAGGING_POLICY=All` or
+  `OpticalOnly`, on both records of each optical duplicate pair. The column is filled when
+  a duplicate carries any `DT` tag, or when a `@PG` line of a duplicate marker sets
+  `TAGGING_POLICY` to `All` or `OpticalOnly`. Otherwise it is empty, and the note says to
+  rerun `MarkDuplicates TAGGING_POLICY=All`.
+- A file with no duplicate flag and no `@PG` line whose ID, PN or CL holds `markdup`
+  (case ignored) gets the note that duplicates were probably never marked.
+
+Rows: each lane's `TILE` rows in tile order, then its `LANE` row; lanes by flowcell, then
+by lane number (a lane that is no number after the numbers); then the `UNPARSED` row, then
+the `ALL` row. The `UNPARSED` and `ALL` rows are always written. Notes go to the `NOTES`
+column of the `ALL` row and to standard error, one line each, unless `QUIET`.
+
+`TILE_OUTLIER` is `Y` when a tile's `PCT_DUPLICATION` is above `OUTLIER_LIMIT`: the median
+of the lane's tile values plus the larger of `OUTLIER_SD` times 1.4826 times their median
+absolute deviation (1.4826 x MAD estimates the standard deviation of normal data) and
+0.005 (`MIN_OUTLIER_EXCESS`, half a percentage point). A tile that examined no read is
+left out of the median and gets no flag. A lane with fewer than 3 judged tiles gets no
+limit. When more than half the tiles share one value, the MAD is 0 and the limit is the
+median plus 0.005, so a tile 0.0001 above the median of a flat lane is no outlier.
+
+One run holds at most 100,000 lane and tile pairs (`MAX_TILES`). A NovaSeq S4 flowcell
+has 3,744 tiles. More pairs mean the names are not Illumina names, and the run fails with
+an error naming `READ_NAME_REGEX`. Memory is one counter set per tile.
+
+`METRIC_ACCUMULATION_LEVEL` is not an option. A tile is a place on a flowcell, and every
+read group of one lane shares its tiles, so a split by sample or library would repeat the
+same tiles. The option is refused (`option METRIC_ACCUMULATION_LEVEL is not implemented`, exit 1).
+
+### 8.2 Metrics class `bammetrics.qc.DuplicateByTileMetrics`
+
+| Column | Type | Definition |
+|---|---|---|
+| `UNIT` | string | `TILE`, `LANE`, `UNPARSED` or `ALL`. |
+| `FLOWCELL` | string | Third field of a 7-field name; empty for 5 fields, with a regex, on `UNPARSED` and `ALL`. |
+| `LANE` | string | The field before the tile; empty with a regex, on `UNPARSED` and `ALL`. |
+| `TILE` | int | The tile; `TILE` rows only. |
+| `READS` | int | Records counted, both mates of a pair. |
+| `UNMAPPED` | int | Unmapped records, as `UNMAPPED_READS`. |
+| `UNPAIRED_READS` | int | As `UNPAIRED_READS_EXAMINED`. |
+| `PAIRS` | int | As `READ_PAIRS_EXAMINED`. |
+| `UNPAIRED_DUPLICATES` | int | As `UNPAIRED_READ_DUPLICATES`. |
+| `PAIR_DUPLICATES` | int | As `READ_PAIR_DUPLICATES`. |
+| `DUPLICATES` | int | `UNPAIRED_DUPLICATES + 2 x PAIR_DUPLICATES`, in reads. |
+| `OPTICAL_DUPLICATES` | int | As `READ_PAIR_OPTICAL_DUPLICATES`; empty without `DT` tags (section 8.1). |
+| `PCT_DUPLICATION` | float | `DUPLICATES / (UNPAIRED_READS + 2 x PAIRS)`, as `PERCENT_DUPLICATION`; 0 without a read. |
+| `PCT_OPTICAL` | float | `OPTICAL_DUPLICATES / PAIRS`; 0 without a pair, empty with `OPTICAL_DUPLICATES`. |
+| `OUTLIER_LIMIT` | float | The lane's limit, on its `TILE` and `LANE` rows. |
+| `TILE_OUTLIER` | string | `Y` or `N` on a judged `TILE` row. |
+| `MIN_X`, `MAX_X`, `MIN_Y`, `MAX_Y` | int | The x and y extent of the names counted; empty on `UNPARSED`. |
+| `NOTES` | string | The notes of section 8.1, on the `ALL` row. |
+
+### 8.3 Options
+
+| Option | Default | Meaning |
+|---|---|---|
+| `INPUT`, `OUTPUT` | | As every tool. |
+| `READ_NAME_REGEX` | 5- and 7-field Illumina names | As `MarkDuplicates`; `null` for none. |
+| `OUTLIER_SD` | 3 | Robust standard deviations above the lane median, and at least 0.005; a finite number of at least 0. |
+| `STOP_AFTER` | 0 | Records read; 0 reads them all. |
+
+### 8.4 Truth, cross-checks and tolerances
+
+No oracle writes per-tile duplicate counts. The tests rest on files whose answer is known
+by construction, and on the totals of `MarkDuplicates` and `CollectDuplicateMetrics`.
+
+- `tests/data/make_tile_bams.py OUT` writes `tile_truth.bam`: one flowcell, 2 lanes of 6
+  tiles each. Each tile holds 40 pairs (one QC-failed), its planted duplicate pairs (3 to
+  24) and optical duplicate pairs (0 to 9, `DT:Z:SQ`), 6 unpaired reads with 0 to 2
+  duplicates, a mate-unmapped pair, and a secondary and a supplementary copy that must not
+  count. Lane 1 tile 1104 is hot: 24 duplicate pairs against 4 to 6. 12 pairs and 4
+  unpaired reads carry names that give no tile. `tile_untagged.bam` drops the `DT` tags
+  and the `MarkDuplicates` `@PG` line; `tile_unmarked.bam` also clears the duplicate
+  flags. `truth.json` holds every expected count, computed from the plan alone.
+  `tests/python/test_duplicate_by_tile.py` requires every count, extent and flag exactly,
+  `Y` on the hot tile only, and both notes.
+- `tests/data/duplicate_by_tile.bam` is `tile_truth.bam` (`make_tile_bams.py --fixture`).
+  The golden suite records it, `markdup.bam` before and after `mark-duplicates
+  --tagging-policy All` in a chain, and corpus t1, whose names give no tile.
+- Reconciliation: after bammetrics `MarkDuplicates TAGGING_POLICY=All`, the `ALL` row
+  equals the summed library rows in `UNPAIRED_READS_EXAMINED`, `READ_PAIRS_EXAMINED`,
+  `UNMAPPED_READS`, `UNPAIRED_READ_DUPLICATES`, `READ_PAIR_DUPLICATES` and
+  `READ_PAIR_OPTICAL_DUPLICATES` of `MarkDuplicates`, and `CollectDuplicateMetrics` on
+  the marked BAM, on `tests/data/markdup.bam`, 6 `markdup_bams.py` BAMs and 5
+  `complexity_bams.py` BAMs. `MarkDuplicates` refuses the other 2 complexity BAMs, as
+  Picard does; their unmarked flags reconcile with `CollectDuplicateMetrics`.
+  `tests/concordance/test_duplicate_by_tile.py` does the same after Picard 3.5.0
+  `MarkDuplicates TAGGING_POLICY=All` on `markdup.bam` and 3 `markdup_bams.py` BAMs.
+- Tolerances: every count is equal, with no tolerance. `PCT_DUPLICATION` and
+  `PCT_OPTICAL` equal the quotient of the planted counts as doubles. `OUTLIER_LIMIT` is
+  within 1e-12 of a median and MAD computed again in Python.
+
+### 8.5 Rules
+
+No shipped preset has a `DuplicateByTileMetrics` rule. No published threshold exists for
+per-tile duplication: the rate depends on the library, the loading and the instrument,
+and `TILE_OUTLIER` already compares each tile with its own lane. A site can name the
+class in its own preset. No plot family is added, since no rule names one.
+
+### 8.6 Measurements
+
+Mac Studio, release build, outputs under `~/data/bammetrics-scale/waves/w08/` (deleted
+after the run), 2026-11-17. HG002 exome BAM, 10 GB, 150,538,907 records, marked in 2015 by
+`MarkDuplicates` 1.124 without `TAGGING_POLICY`. Its 7-field names give flowcell
+`C7F6GANXX`, lane 8, 96 tiles.
+
+| Run | Wall | Peak RSS | Result |
+|---|---|---|---|
+| `duplicate-by-tile` on the BAM | 34.6 s | 8.2 MiB | `PCT_DUPLICATION` 0.048714; `OPTICAL_DUPLICATES` empty with the note; tile 2112 flagged (0.060544 against a limit of 0.05786) |
+| `chain BAM + mark-duplicates --tagging-policy All + duplicate-by-tile + duplicate-metrics` | 412.5 s | 768 MiB | `ALL` row equal to both metrics files: 246,423 unpaired reads, 74,857,700 pairs, 424,953 unmapped, 139,654 and 3,582,814 duplicates, 3,163 optical duplicate pairs |
+
+`CollectDuplicateMetrics` on the same BAM gives the same six counts as the first run.
+
+## 9. Telomere content
+
+`CollectTelomereMetrics` (verb `telomere`, Python `collect_telomere_metrics()`, class
+`bammetrics.qc.TelomereMetrics`, source `crates/core/src/telomere.rs`) counts the reads
+holding at least 7 copies of `TTAGGG` or `CCCTAA` and gives TelSeq's telomere length
+estimate in kb, wave W08 of docs/07. [docs/telomere.md](telomere.md) holds the counting
+rules, the GC bin, the formula with its constants and read-length rule, the planted truth
+and the measurements.
+
+| | Telomere content |
+|---|---|
+| Picard class name | `CollectTelomereMetrics` |
+| Verb | `telomere` |
+| Metrics class | `bammetrics.qc.TelomereMetrics` |
+| `qc` file | `PREFIX.telomere_metrics` (under a preset that names the class) |
+| Rules | none shipped (docs/telomere.md section 7) |
+| Truth | `tests/data/make_telomere_bams.py`, `tests/python/test_telomere.py` |
+
+## 10. Index-only depth
+
+`CollectIndexDepthMetrics` (verb `index-depth`, Python `collect_index_depth_metrics()`,
+class `bammetrics.qc.IndexDepthMetrics`, source `crates/core/src/index_depth.rs`)
+estimates depth per reference from the BAM index alone, in under a second on any BAM. It
+is the index-only depth analysis of wave W08 of docs/07, with no Picard counterpart.
+
+### 10.1 What it reads
+
+- The `.bai` or `.csi` beside the BAM, found as `BamIndexStats` finds it (`x.bai`,
+  `x.csi`, `x.bam.bai`, `x.bam.csi`, then beside a symbolic link's target). Of each
+  reference it keeps the metadata pseudo-bin: records without the unmapped flag
+  (`MAPPED`) and with it (`UNMAPPED_PLACED`). After the last reference it keeps the
+  records without a coordinate (`NO_COORDINATE`). No bin is held. A `.bai` is read by
+  `bai::Summary::read`, a `.csi` by `Summary::read_csi` (`crates/core/src/bai/csi.rs`).
+  At most 1 GiB of index is read (inflated, for a `.csi`); a longer one is an error.
+- The BAM's binary reference list for names and lengths, read with its header text under
+  one 64 MiB cap (`doctor::input::bam_header`). A reference of length 0 is kept.
+- The first `READ_LENGTH_SAMPLE` records (default 10,000, at most 1,000,000) for the read
+  length: the mean `l_seq` of the mapped primary records with a sequence among them.
+  Secondary records, supplementary records and unmapped records are left out. With
+  `READ_LENGTH` no record is read.
+
+A reference the index has no metadata for counts 0 (samtools and htsjdk write none for a
+reference without records). An index whose reference count differs from the header's is
+the index of another file and is refused, fewer or more; `samtools idxstats` reads the
+first references of a longer index. An index that counts more records than the BAM can
+hold is refused too: a BGZF block is at least 28 bytes and inflates to at most 65,536, a
+record is at least 36 bytes, so a BAM of `S` bytes holds at most `S / 28 x 65536 / 36`
+records. An index older than the BAM is read as it is: `samtools` warns, `bammetrics
+doctor` reports its age.
+
+Refused, each with exit 1 and no file:
+
+- A CRAM. Its `.crai` holds container offsets and spans, no count. Container headers hold
+  a record count per slice but not the unmapped flag, and a multi-reference slice holds
+  no count per reference, so no count of `MAPPED` exists short of decoding records.
+  `samtools idxstats` decodes the flag and reference series alone: 14.7 s on 8 threads
+  for the 16 GB NA12878 CRAM. The noodles decoder of `cram.rs` decodes every series: a
+  whole-file `sex-check` of that CRAM takes 336.5 s (section 4). Neither is index-only,
+  so the CRAM is refused, and the message names `samtools idxstats` and `bammetrics
+  sex-check` and `mt-copy-number`. docs/07 decision D32.
+- A BAM without an index. The message names `samtools index` and `bammetrics
+  build-bam-index`. No whole read is ever made.
+- SAM text, a pipe and standard input.
+
+### 10.2 Metrics class `bammetrics.qc.IndexDepthMetrics`
+
+The tool writes a metrics file (`OUTPUT`, or standard output without one), so `--format`,
+`convert`, `check` and the report read it as any other. Rows: one per reference in
+header order, then one per group, then `ALL`. The groups come from the names of
+`crates/core/src/genome_build.rs`: `AUTOSOME` (`chr1` to `chr22`, `1` to `22`), `X`, `Y`,
+`MT` (`chrM`, `MT`, `M`, `chrMT`), `ALT` (`_alt`), `DECOY` (`_decoy`, `hs37d5`), `HLA`
+(`HLA-`) and `OTHER` (every other name). The eight group rows are always written; a group
+without a contig has length 0.
+
+| Column | Type | Definition |
+|---|---|---|
+| `CONTIG` | string | The reference; empty on a group row and on `ALL`. |
+| `GROUP` | string | The group of the reference, or of the group row; `ALL` on the last row. |
+| `LENGTH` | int | The header length, summed on a group row. |
+| `MAPPED` | int | Index metadata: records without the unmapped flag. |
+| `UNMAPPED_PLACED` | int | Index metadata: records with the unmapped flag placed on the reference. |
+| `ESTIMATED_MEAN_DEPTH` | float | `MAPPED x READ_LENGTH / LENGTH`. `?` for length 0 or an unknown read length; 0 for no mapped record. |
+| `RATIO_TO_AUTOSOMES` | float | `MAPPED / LENGTH` over the same for the autosomes; the read length cancels. |
+| `READ_LENGTH` | float | The sampled mean, or `READ_LENGTH`; empty when no record qualified. |
+| `NO_COORDINATE` | int | On `ALL`: the records with no reference. |
+| `INFERRED_SEX` | string | On `ALL`: `sex_check::row` on the `X` and `Y` ratios. |
+| `MT_COPY_NUMBER` | float | On `ALL`: `2 x` the `RATIO_TO_AUTOSOMES` of `MT`. |
+| `REASON` | string | On `ALL`: why a value is `?` or the sex `UNKNOWN`. |
+
+The `X` and `Y` ratios are reads per base over reads per base on the autosomes: the
+quantity `CollectSexCheckMetrics` computes, with its thresholds (section 2.3) and its
+reasons. `MT_COPY_NUMBER` is the estimate of `CollectMtCopyNumberMetrics` (section 6) from
+records in place of filtered aligned bases.
+
+### 10.3 Options
+
+| Option | Default | Meaning |
+|---|---|---|
+| `INPUT`, `OUTPUT` | | The BAM; the metrics file, standard output without one. An `OUTPUT` that names the index read is refused. |
+| `READ_LENGTH` | the sampled mean | 1 to 2,147,483,647 bases; then no record is read. |
+| `READ_LENGTH_SAMPLE` | 10,000 | Records read from the start, 1 to 1,000,000. |
+
+`ASSUME_SORTED`, `REFERENCE_SEQUENCE`, `STOP_AFTER`, `METRIC_ACCUMULATION_LEVEL` and
+`MINIMUM_MAPPING_QUALITY` need a read of the records and are `Unrecognized option`. The
+index counts every record, so no filter can apply. The tool is not one pass over the
+records, so it is no `CollectMultipleMetrics` program, `chain` tap or `qc` source.
+
+### 10.4 Truth, cross-checks and tolerances
+
+No oracle exists for the depth. The counts have one: `samtools idxstats` reads the same
+metadata.
+
+- `tests/data/make_index_depth_bams.py OUT` writes five BAMs with the struct writer of
+  `tests/concordance/index_bams.py`, each indexed by samtools as `.bai` and, in `OUT/csi`,
+  as `.csi`: `male` (11 references: two autosomes, X, Y, chrM, an alt, a decoy, an HLA
+  contig, `chrEBV`, a contig without a read, a contig of length 0; 7 placed unmapped and 9
+  unplaced records; on chr1 4 duplicates, 2 QC failures, 3 secondary records without a
+  sequence and 3 supplementary records of 40 bases), `female_no_mt` (no mitochondrial
+  contig), `empty` (no record), `unaligned` (no reference) and `mixed_lengths` (ten
+  100-base reads, then thirty of 150). Lengths and counts are powers of two, so every
+  ratio is exact. `tests/python/test_index_depth.py` requires every planted count, read
+  length (100, 137.5, and 100 at `READ_LENGTH_SAMPLE=10`), sex call and copy number
+  exactly, through both index kinds. `tests/data/index_depth.bam` is `male`, with its
+  `.bai` and `.csi`; `crates/cli/tests/index_depth.rs` checks it without samtools, and a
+  cut index and the index of another BAM fail.
+- `MAPPED`, `UNMAPPED_PLACED` and `NO_COORDINATE` equal `samtools idxstats` on the 8
+  `tests/data` BAMs with an index (`tests/python/test_index_depth.py`), on the foundation
+  corpus, the exome slice and the 18 corpus tier BAMs
+  (`tests/concordance/test_index_depth.py`), and on the 86 references of the HG002 exome.
+- `ESTIMATED_MEAN_DEPTH` against `samtools coverage` `meandepth` (defaults: no unmapped,
+  secondary, QC-failed or duplicate record; no quality filter). Tolerance 0.5 percent per
+  contig on corpus t1, 10 percent on the HG002 exome
+  (`BAMMETRICS_SCALE=1 pytest tests/concordance/test_index_depth.py`).
+
+| Input | Contig | Estimate | `samtools coverage` | Difference |
+|---|---|---|---|---|
+| corpus t1 | `chr1` | 12.712 | 12.7082 | +0.03% |
+| corpus t1 | `chr2` | 10.635 | 10.634 | +0.01% |
+| corpus t1 | `chrM` | 3.7125 | 3.7125 | 0 |
+| HG002 exome | `1` | 7.438408 | 7.00403 | +6.20% |
+| HG002 exome | `19` | 17.858204 | 16.8242 | +6.15% |
+| HG002 exome | `X` | 2.524985 | 2.3786 | +6.15% |
+| HG002 exome | `Y` | 0.526711 | 0.499064 | +5.54% |
+| HG002 exome | `MT` | 439.8327 | 411.054 | +7.00% |
+
+The 25 primary contigs of HG002 run 5.5 to 7.0 percent above. The index counts what
+`samtools coverage` drops: duplicates (7,305,282 of 150,113,954 mapped records, 4.9
+percent, by `samtools flagstat`) and secondary records (152,131, 0.1 percent). A record's
+read length counts its soft-clipped and inserted bases, which cover no reference base.
+`CollectWgsMetrics` `MEAN_COVERAGE`
+filters MAPQ and base quality 20 and mate overlap besides, so it runs further below; it
+is not the cross-check.
+
+### 10.5 Rules
+
+No shipped preset has an `IndexDepthMetrics` rule. The depth counts duplicates and every
+other record, so a coverage bound on it would pass a library a filtered tool fails; the
+filtered tools carry the coverage rules. The sex call repeats `sex.match` and
+`sex.inferred` on unfiltered counts. No rule names a plot, so no plot family is added.
+
+### 10.6 Measurements
+
+Mac Studio, release build, output under `~/data/bammetrics-scale/waves/w08/` (deleted
+after the run), 2026-11-17, three runs.
+
+| Input | Index | Wall | Peak RSS | `INFERRED_SEX` | X / Y ratio | `MT_COPY_NUMBER` |
+|---|---|---|---|---|---|---|
+| HG002 exome BAM, 10 GB, hs37d5 | `.bai`, 7.2 MB | 0.02 to 0.03 s | 4.6 MB | MALE | 0.397 / 0.083 | 138.35 |
+
+`samtools coverage` on the same BAM takes 216.8 s.
+
+The sex call on unfiltered counts. `CollectSexCheckMetrics` gives HG002 X 0.3857 and Y
+0.0522 on reads at MAPQ 20 (section 4); with `--minimum-mapping-quality 0` it gives X
+0.3977 and Y 0.0837, the index values (0.397 and 0.083). The reads under MAPQ 20 add 59
+percent to the Y ratio. NA12878 (female, GRCh38 CRAM, so the tool refuses it) has from
+`samtools idxstats` (14.7 s on 8 threads), the counts a BAM index would hold: X 0.967,
+Y 0.0896. Its filtered Y ratio is 0.0217 (section 4). With the thresholds of section 2.3
+the index call is `UNKNOWN` for NA12878 (Y over `FEMALE_MAX_Y`, 0.05; X over
+`MALE_MAX_X`, 0.75) and `MALE` for HG002. On unfiltered counts the Y ratios of the two
+samples overlap (0.0896 female, 0.083 male) and the X ratio separates them. The
+thresholds are kept: on these counts they read `UNKNOWN`, never the other sex, for XX and
+XY. `sex-check` is the call to report. `MT_COPY_NUMBER` on HG002 is 138.35 against 136.22
+from `CollectMtCopyNumberMetrics` (section 6.7), 1.6 percent higher.

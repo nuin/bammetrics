@@ -293,6 +293,7 @@ table.
 | `coverage-gaps` | CollectCoverageGaps (not a Picard tool, [docs/06](06_clinical_checks.md); `--targets` or `--panel`) | one (plus the `--gaps-file` BED) |
 | `sex-check` | CollectSexCheckMetrics (not a Picard tool, docs/06; `--sex male|female`, `--targets` for a panel) | one |
 | `mt-copy-number` | CollectMtCopyNumberMetrics (not a Picard tool, docs/06 section 6; `--targets` for an exome, `--exclude` for NUMTs, `--mt-contig`, `--autosomes`) | one |
+| `adapter-content` | CollectAdapterContentMetrics (not a Picard tool, docs/06 section 7; FastQC's Adapter Content on a BAM; `--adapter-sequence NAME=SEQ`, `--adapter-kmer`) | one |
 | `bam-index-stats` | BamIndexStats (reads the `.bai` or `.csi` beside the BAM) | Picard's text on standard output |
 | `check-duplicate-marking` | CheckDuplicateMarking | the bad querynames, one line per record |
 | `jumping-library` | CollectJumpingLibraryMetrics (one or more coordinate-sorted BAMs as positionals, read in turn; standard input refused) | one metrics file |
@@ -301,6 +302,9 @@ table.
 | `view-sam` | ViewSam (SAM, BAM or CRAM in) | SAM text on standard output, or in `-o` |
 | `sort-sam` | SortSam (`--sort-order` queryname, coordinate or duplicate) | `-o` BAM, or SAM text for a name ending in `.sam` |
 | `exon-coverage` | CollectExonCoverageMetrics (not a Picard tool, [exon_coverage.md](exon_coverage.md); `--annotation` GTF, GFF3, BED12 or BED) | one (plus the `--summary-output` gene and transcript file) |
+| `duplicate-by-tile` | CollectDuplicateByTileMetrics (not a Picard tool, docs/06 section 8; `--read-name-regex`, `--outlier-sd`) | one |
+| `telomere` | CollectTelomereMetrics (not a Picard tool, [telomere.md](telomere.md); `-K` the repeat threshold, `--repeat`, `--count-duplicates`) | one |
+| `index-depth` | CollectIndexDepthMetrics (not a Picard tool, [docs/06](06_clinical_checks.md) section 10; a BAM with its `.bai` or `.csi`, never read whole; a CRAM refused) | one |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -342,6 +346,25 @@ and `MT_COPY_NUMBER`, 2 x their ratio ([docs/06](06_clinical_checks.md) section 
 a copy number. A header without a mitochondrial contig is a usage error naming
 `MT_CONTIG` (exit 2; the Picard face exits 1, as for every error there).
 
+`bammetrics adapter-content BAM -o adapters.txt` writes one `AdapterContentMetrics` row
+per accumulation unit, read end (`FIRST`, `SECOND`, `UNPAIRED`) and adapter: reads, reads
+whose bases in sequencing order hold the adapter's first 12 bases exactly, their mean
+start and `PAIR_READ_THROUGH`, the proper pairs with an insert shorter than the read
+([docs/06](06_clinical_checks.md) section 7). The `## HISTOGRAM` section is FastQC's
+cumulative Adapter Content curve, one column per unit, read end and adapter. The
+default adapters are FastQC's six; each `--adapter-sequence NAME=SEQ` replaces them.
+Unmapped records count, secondary and supplementary ones do not.
+
+`bammetrics duplicate-by-tile marked.bam -o tiles.txt` writes one `DuplicateByTileMetrics`
+row per flowcell lane and tile of the read names, one per lane, one `UNPARSED` row for
+names without a tile and one `ALL` row ([docs/06](06_clinical_checks.md) section 8). The
+counts are those of `CollectDuplicateMetrics`, from the duplicate flags in the file, so the
+`ALL` row equals its totals. `OPTICAL_DUPLICATES` needs the `DT:Z:SQ` tags of
+`mark-duplicates --tagging-policy All`; `chain in.bam + mark-duplicates --tagging-policy
+All + duplicate-by-tile` marks and counts in one read. `TILE_OUTLIER` is `Y` for a tile
+more than `--outlier-sd` (default 3) robust standard deviations, and at least 0.005, above
+its lane's median.
+
 `exon-coverage` reports the depth of every exon of an annotation, with no Picard
 counterpart ([exon_coverage.md](exon_coverage.md)). `bammetrics exon-coverage BAM
 --annotation genes.gtf.gz --gene BRCA1 --gene BRCA2 --canonical --summary-output genes.txt
@@ -349,6 +372,13 @@ counterpart ([exon_coverage.md](exon_coverage.md)). `bammetrics exon-coverage BA
 row per gene and per transcript, with the `CollectHsMetrics` per-base depth, so an exon's
 `MEAN_DEPTH` and `MINIMUM_DEPTH` are the `mean_coverage` and `min_coverage` of
 `PER_TARGET_COVERAGE` for the same interval.
+
+`telomere` measures telomeric read content as TelSeq does, with no Picard counterpart
+([telomere.md](telomere.md)). `bammetrics telomere BAM --level READ_GROUP -o tel.txt`
+writes one `TelomereMetrics` row per accumulation unit: primary reads that are not QC
+failures, unmapped reads included, the reads with at least 7 copies of TTAGGG or CCCTAA
+(`-K` sets the 7), the reads of 48 to 52 percent GC and `ESTIMATED_LENGTH_KB`, TelSeq's
+telomere length in kb. The histogram counts reads by repeat count.
 
 ### The 0.12 subcommands
 
@@ -660,7 +690,7 @@ is the short form.
   come before the first `+`. Every `+` starts a step.
 - A step is a tool verb, its Picard class, or `write`. A transform (`mark-duplicates`,
   `sort-sam`) changes the records later steps see; any number may follow one another. A
-  tap (the 15 one-pass tool verbs) reads the
+  tap (the 18 one-pass tool verbs) reads the
   records of its position and changes nothing. `write [PATH]` writes those records as a
   BAM, or as SAM text for a name ending in `.sam`; `-` is standard output, and `write -
   --output-format sam` prints SAM text there. A `.cram` or `.fastq` name is refused with
@@ -1256,7 +1286,7 @@ purpose is listed in KNOWN_DIFFERENCES.md.
 
 The worked examples of docs/05 section 2.5 that work today, written against the committed
 fixtures so each runs from the repository root as shown (`tests/data/insert_size.bam` has
-no `@RG SM`, so the sample is the BAM name). Output is what 0.25.0 prints; long lines are
+no `@RG SM`, so the sample is the BAM name). Output is what 0.26.0 prints; long lines are
 cut.
 
 **1 and 2. One tool, as Picard text or machine-readable.**
@@ -1325,7 +1355,7 @@ $ for bam in bams/*.bam; do
         -o runs/2026-11-02/$(basename "$bam" .bam) -q > /dev/null
   done
 $ bammetrics report runs/2026-11-02/ --preset clinical-panel
-2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.25.0
+2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.26.0
 FAIL        NA1  7 fail, 1 warn, 9 pass, 1 not measured
   FAIL  Mean target coverage is 0.377778, below the fail limit of 100
   ...

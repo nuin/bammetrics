@@ -210,8 +210,9 @@ pub fn aliases(name: &str) -> Vec<String> {
     names
 }
 
-/// The kind of contig `name` is.
-fn kind(name: &str) -> Kind {
+/// The kind of contig `name` is: the groups of [`contigs`], which
+/// `CollectIndexDepthMetrics` sums its rows by.
+pub fn kind(name: &str) -> Kind {
     let (key, _) = primary_key(name);
     if PRIMARY.iter().any(|(n, _)| *n == key) {
         Kind::Primary
@@ -228,7 +229,9 @@ fn kind(name: &str) -> Kind {
     }
 }
 
-enum Kind {
+/// A contig kind of [`kind`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
     Primary,
     Mito,
     Alt,

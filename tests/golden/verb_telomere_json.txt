@@ -1,0 +1,178 @@
+## argv
+telomere
+tests/data/telomere.bam
+--repeat
+ttaggg
+--format
+json
+## exit
+0
+## stdout
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectTelomereMetrics",
+  "sample": "S1",
+  "headers": [
+    "CollectTelomereMetrics INPUT=tests/data/telomere.bam REPEAT=ttaggg",
+    "Started on: <time>"
+  ],
+  "class": "bammetrics.qc.TelomereMetrics",
+  "columns": [
+    "TOTAL_READS",
+    "TELOMERIC_READS",
+    "PCT_TELOMERIC",
+    "READS_GC_48_52",
+    "READ_LENGTH",
+    "PCT_OFF_LENGTH",
+    "ESTIMATED_LENGTH_KB",
+    "SAMPLE",
+    "LIBRARY",
+    "READ_GROUP"
+  ],
+  "types": [
+    "int",
+    "int",
+    "float",
+    "int",
+    "int",
+    "float",
+    "float",
+    "string",
+    "string",
+    "string"
+  ],
+  "metrics": [
+    {
+      "TOTAL_READS": 97,
+      "TELOMERIC_READS": 20,
+      "PCT_TELOMERIC": 0.20618556701030927,
+      "READS_GC_48_52": 17,
+      "READ_LENGTH": 150,
+      "PCT_OFF_LENGTH": 0,
+      "ESTIMATED_LENGTH_KB": 8509.48337595908,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    }
+  ],
+  "non_finite": [],
+  "histogram": {
+    "key_class": "java.lang.Integer",
+    "columns": [
+      "repeat_count",
+      "All_Reads.read_count"
+    ],
+    "types": [
+      "int",
+      "float"
+    ],
+    "rows": [
+      {
+        "repeat_count": 0,
+        "All_Reads.read_count": 66
+      },
+      {
+        "repeat_count": 1,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 2,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 3,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 4,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 5,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 6,
+        "All_Reads.read_count": 11
+      },
+      {
+        "repeat_count": 7,
+        "All_Reads.read_count": 10
+      },
+      {
+        "repeat_count": 8,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 9,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 10,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 11,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 12,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 13,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 14,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 15,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 16,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 17,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 18,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 19,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 20,
+        "All_Reads.read_count": 10
+      },
+      {
+        "repeat_count": 21,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 22,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 23,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 24,
+        "All_Reads.read_count": 0
+      },
+      {
+        "repeat_count": 25,
+        "All_Reads.read_count": 0
+      }
+    ],
+    "non_finite": []
+  }
+}
+## stderr

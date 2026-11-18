@@ -379,10 +379,11 @@ behaves how.
     no step of `bammetrics chain`: `write --index` writes the index of the BAM a chain
     writes, and the step exits 2 naming it.
   - `CREATE_MD5_FILE=true` writes no digest of the index, in either tool.
-  - A reference of length 0 (`@SQ LN:0`) is indexed, as in Picard. `BuildBamIndex` is
-    the one tool that reads such a header. Every other tool reads the header through
-    noodles, which holds no length 0, and exits 1 (`not a BAM or CRAM file (the header
-    could not be read: invalid record)`).
+  - A reference of length 0 (`@SQ LN:0`) is indexed, as in Picard. `BuildBamIndex` and
+    `CollectIndexDepthMetrics` are the tools that read such a header. Every other tool
+    reads the header through noodles, which holds no length 0, and exits 1 (`not a BAM or
+    CRAM file (the header could not be read: invalid record)`); `ViewSam` on
+    `tests/data/index_depth.bam` is the concordance case (`test_view_sam.py`).
   - A record whose `block_size` claims more bytes than the file holds is a `truncated
     BAM` (exit 1). Picard says `Invalid record length` for a size htsjdk reads as
     negative.
@@ -1387,6 +1388,27 @@ numbers exactly and the depths against `samtools depth`. `CollectMultipleMetrics
 3.5.0 does not know that program name and refuses it. The default program list is
 Picard's.
 
+`CollectAdapterContentMetrics` (docs/06 section 7, class `bammetrics.qc.AdapterContentMetrics`)
+has no Picard counterpart either. Oracle tier E: planted truth, then FastQC 0.13.0's Adapter
+Content module within 0.1 percentage points per cycle (docs/07 decision D23).
+`tests/python/test_adapter_content.py` checks planted percentages exactly and the by-cycle
+curve against FastQC on `samtools fastq` of the same BAM. One difference from FastQC is on
+purpose: reads are split by read end in one file, where FastQC sees one FASTQ at a time.
+The table runs to the longest read of the run, so a read end of shorter reads gets more
+cycles than FastQC prints for it; those cycles repeat its last value. On mixed read
+lengths the curves are equal (docs/06 section 7.5).
+`CollectMultipleMetrics` takes `PROGRAM=CollectAdapterContentMetrics` and writes
+`PREFIX.adapter_content_metrics`; Picard 3.5.0 refuses that program name.
+
+`CollectDuplicateByTileMetrics` (docs/06 section 8, class
+`bammetrics.qc.DuplicateByTileMetrics`) has no Picard counterpart either.
+`tests/python/test_duplicate_by_tile.py` checks the planted counts of
+`tests/data/make_tile_bams.py` exactly, and that the `ALL` row equals the `MarkDuplicates`
+and `CollectDuplicateMetrics` totals; `tests/concordance/test_duplicate_by_tile.py` does
+the same after Picard 3.5.0 `MarkDuplicates TAGGING_POLICY=All`. A pair counts once, on
+its first-of-pair record, where `CollectDuplicateMetrics` counts both reads and halves the
+sum: the two agree whenever both records of each pair are in the file.
+
 `CollectExonCoverageMetrics` ([docs/exon_coverage.md](docs/exon_coverage.md)) has no Picard
 counterpart either; its classes are `bammetrics.qc.ExonCoverageMetrics` and
 `bammetrics.qc.GeneCoverageMetrics`. Oracle tier A: each exon's `MEAN_DEPTH` and
@@ -1396,6 +1418,26 @@ counterpart either; its classes are `bammetrics.qc.ExonCoverageMetrics` and
 rest on planted truth (`crates/core/tests/exon_coverage.rs`). `samtools bedcov` gives a mean
 up to 15.2% higher at the default filters (base quality and mate overlap) and at most 0.55%
 higher without them.
+
+`CollectTelomereMetrics` ([docs/telomere.md](docs/telomere.md), class
+`bammetrics.qc.TelomereMetrics`) has no Picard counterpart. Oracle tier E: planted truth
+(`tests/data/make_telomere_bams.py`, `tests/python/test_telomere.py`, every count exact and
+the length estimate equal to TelSeq's formula in Python). The named tool, TelSeq, did not
+run (docs/07 decision D29). Against TelSeq, by design: secondary, supplementary and
+QC-failed records are not counted and duplicates count only with `COUNT_DUPLICATES=true`
+(TelSeq counts all four); a read whose repeat count is above `READ_LENGTH / 6` is kept
+(TelSeq drops it); the estimate is computed in double precision (TelSeq: single) and is
+empty when more than 5 percent of reads are over 10 percent off the most common length.
+`CollectMultipleMetrics` takes `PROGRAM=CollectTelomereMetrics` and writes
+`PREFIX.telomere_metrics`; Picard 3.5.0 refuses that program name.
+
+`CollectIndexDepthMetrics` (docs/06 section 10, class `bammetrics.qc.IndexDepthMetrics`) has
+no Picard counterpart. Oracle tier E for the depth, which is an estimate: `MAPPED`,
+`UNMAPPED_PLACED` and `NO_COORDINATE` equal `samtools idxstats`
+(`tests/concordance/test_index_depth.py`), `ESTIMATED_MEAN_DEPTH` stays within 0.5 percent
+of `samtools coverage` on corpus t1 and 10 percent on the HG002 exome, and the planted
+BAMs of `tests/data/make_index_depth_bams.py` give their values exactly. A CRAM is
+refused (docs/07 decision D32).
 
 ## Not implemented
 

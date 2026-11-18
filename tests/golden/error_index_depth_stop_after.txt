@@ -1,0 +1,9 @@
+## argv
+CollectIndexDepthMetrics
+I=tests/data/index_depth.bam
+STOP_AFTER=10
+## exit
+1
+## stdout
+## stderr
+bammetrics: CollectIndexDepthMetrics: Unrecognized option: STOP_AFTER

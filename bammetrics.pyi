@@ -1154,6 +1154,76 @@ def collect_exon_coverage_metrics(
     SUMMARY_OUTPUT adds one GeneCoverageMetrics row per gene and per transcript. Not a
     Picard tool (docs/07 W07)."""
 
+def collect_adapter_content_metrics(
+    input: _Path,
+    *,
+    adapter_sequence: str | Sequence[str] | None = None,
+    adapter_kmer: int | None = None,
+    pf_reads_only: bool | None = None,
+    include_duplicates: bool | None = None,
+    metric_accumulation_level: str | Sequence[str] | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    validation_stringency: str | None = None,
+    assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectAdapterContentMetrics: one row of the 12 AdapterContentMetrics columns per
+    adapter, read end and accumulation unit (reads, reads with the adapter's first
+    ADAPTER_KMER bases, their mean start, PAIR_READ_THROUGH from TLEN), and a by-cycle
+    histogram of the cumulative percent of reads with the adapter, as FastQC's Adapter
+    Content module. Not a Picard tool (docs/06)."""
+
+def collect_duplicate_by_tile_metrics(
+    input: _Path,
+    *,
+    read_name_regex: str | None = None,
+    outlier_sd: float | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    validation_stringency: str | None = None,
+    assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectDuplicateByTileMetrics: one DuplicateByTileMetrics row per flowcell lane and
+    tile from the read names, one per lane, one for names without a tile and one for
+    all: reads, pairs and duplicates from the duplicate flags in the file, optical
+    duplicates from MarkDuplicates' DT:Z:SQ tags, and TILE_OUTLIER for a tile whose
+    duplication is far above its lane's median. Not a Picard tool (docs/06)."""
+
+def collect_telomere_metrics(
+    input: _Path,
+    *,
+    telomere_repeat_threshold: int | None = None,
+    repeat: str | None = None,
+    count_duplicates: bool | None = None,
+    telomere_ends: int | None = None,
+    genome_length_at_gc: int | None = None,
+    metric_accumulation_level: str | Sequence[str] | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    validation_stringency: str | None = None,
+    assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectTelomereMetrics: one row of the 10 TelomereMetrics columns per accumulation
+    unit: reads holding at least TELOMERE_REPEAT_THRESHOLD copies of TTAGGG or CCCTAA,
+    reads of 48 to 52 percent GC, and TelSeq's telomere length estimate in kb; the
+    histogram counts reads by repeat count. Not a Picard tool (docs/telomere.md)."""
+
+def collect_index_depth_metrics(
+    input: _Path,
+    *,
+    read_length: int | None = None,
+    read_length_sample: int | None = None,
+    output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectIndexDepthMetrics: one row of the 12 IndexDepthMetrics columns per reference,
+    per contig group (AUTOSOME, X, Y, MT, ALT, DECOY, HLA, OTHER) and for ALL: the
+    mapped and placed unmapped counts of the .bai or .csi, MAPPED x READ_LENGTH / LENGTH
+    as the depth, the ratio to the autosomes, and on ALL the sex call, MT_COPY_NUMBER
+    and NO_COORDINATE. No whole read. Not a Picard tool (docs/06)."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1280,6 +1350,7 @@ _CollectorVerb = Literal[
     "sex-check",
     "coverage-gaps",
     "mt-copy-number",
+    "adapter-content",
 ]
 
 def qc(
@@ -1381,6 +1452,9 @@ _StepVerb = Literal[
     "sort_sam",
     "mt_copy_number",
     "exon_coverage",
+    "adapter_content",
+    "duplicate_by_tile",
+    "telomere",
     "write",
 ]
 

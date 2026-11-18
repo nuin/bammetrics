@@ -130,6 +130,24 @@ const PROGRAMS: &[Program] = &[
         reference: Reference::Unused,
         prefix: false,
     },
+    // Not a Picard program (docs/06 section 7): Picard rejects the name.
+    Program {
+        name: "CollectAdapterContentMetrics",
+        tool: &crate::adapter_content::TOOL,
+        files: &[("OUTPUT", ".adapter_content_metrics")],
+        levels: true,
+        reference: Reference::Unused,
+        prefix: false,
+    },
+    // Not a Picard program (docs/telomere.md): Picard rejects the name.
+    Program {
+        name: "CollectTelomereMetrics",
+        tool: &crate::telomere::TOOL,
+        files: &[("OUTPUT", ".telomere_metrics")],
+        levels: true,
+        reference: Reference::Unused,
+        prefix: false,
+    },
 ];
 
 /// Picard's default `PROGRAM` list.
@@ -170,6 +188,10 @@ const OTHER_FILES: &[(&str, &[(&str, &str)])] = &[
             ("OUTPUT", ".exon_coverage_metrics"),
             ("SUMMARY_OUTPUT", ".gene_coverage_metrics"),
         ],
+    ),
+    (
+        "CollectDuplicateByTileMetrics",
+        &[("OUTPUT", ".duplicate_by_tile_metrics")],
     ),
 ];
 

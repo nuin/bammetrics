@@ -76,6 +76,31 @@ const NO_PICARD_ORACLE: &[(&str, &str)] = &[
          planted copy numbers of tests/data/make_mt_bams.py exactly and the depths against \
          samtools depth",
     ),
+    (
+        "CollectAdapterContentMetrics",
+        "not a Picard tool (docs/06 section 7); tests/python/test_adapter_content.py checks the \
+         planted percentages of tests/data/make_adapter_bams.py exactly, and docs/06 section 7.5 \
+         the by-cycle table against FastQC",
+    ),
+    (
+        "CollectDuplicateByTileMetrics",
+        "not a Picard tool (docs/06 section 8); tests/python/test_duplicate_by_tile.py checks \
+         the planted counts of tests/data/make_tile_bams.py exactly and the ALL row against \
+         the CollectDuplicateMetrics and MarkDuplicates totals",
+    ),
+    (
+        "CollectTelomereMetrics",
+        "not a Picard tool (docs/telomere.md); tests/python/test_telomere.py checks the planted \
+         counts of tests/data/make_telomere_bams.py exactly and the length estimate against \
+         TelSeq's formula computed in Python",
+    ),
+    (
+        "CollectIndexDepthMetrics",
+        "not a Picard tool (docs/06 section 10); crates/cli/tests/index_depth.rs and \
+         tests/python/test_index_depth.py check the planted counts of \
+         tests/data/make_index_depth_bams.py exactly, tests/concordance/test_index_depth.py \
+         the counts against samtools idxstats",
+    ),
 ];
 
 fn root() -> PathBuf {

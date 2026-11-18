@@ -56,6 +56,10 @@ const FIXTURES: &[(&str, &str)] = &[
     ("EXONS", "tests/data/exons.gtf"),
     ("EXONS_BED", "tests/data/exons.bed"),
     ("EXON_GENES", "tests/data/exon_genes.txt"),
+    ("AD", "tests/data/adapter_content.bam"),
+    ("DBT", "tests/data/duplicate_by_tile.bam"),
+    ("TEL", "tests/data/telomere.bam"),
+    ("ID", "tests/data/index_depth.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -375,6 +379,48 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_exon_coverage_feature", "CollectExonCoverageMetrics", "I=IS", "ANNOTATION=EXONS", "FEATURE=gene"),
     case!("error_verb_exon_coverage_unknown_gene", "exon-coverage", "IS", "--annotation", "EXONS", "--gene", "GENE_E"),
     case!("error_verb_exon_coverage_summary_is_input", "exon-coverage", "IS", "--annotation", "EXONS", "--summary-output", "EXONS"),
+    // CollectAdapterContentMetrics (docs/06 section 7): tests/data/adapter_content.bam
+    // (tests/data/make_adapter_bams.py --fixture), both read ends, two libraries.
+    case!("picard_adapter_content", "CollectAdapterContentMetrics", "I=AD", "O=OUT/adapter_content.txt", "LEVEL=LIBRARY"),
+    case!("picard_adapter_content_stdout", "CollectAdapterContentMetrics", "I=AD", "ADAPTER_SEQUENCE=Universal=AGATCGGAAGAGC", "ADAPTER_SEQUENCE=CTGTCTCTTATAC", "ADAPTER_KMER=13", "INCLUDE_DUPLICATES=false"),
+    case!("picard_adapter_content_multiple_metrics", "CollectMultipleMetrics", "I=AD", "O=OUT/s", "PROGRAM=null", "PROGRAM=CollectAdapterContentMetrics"),
+    case!("verb_adapter_content_json", "adapter-content", "AD", "--adapter-sequence", "U=AGATCGGAAGAG", "--pf-reads-only", "--format", "json"),
+    case!("chain_adapter_content", "chain", "AD", "-o", "OUT/s", "+", "adapter-content", "--level", "READ_GROUP", "--adapter-kmer", "8"),
+    case!("error_adapter_content_kmer", "CollectAdapterContentMetrics", "I=AD", "ADAPTER_KMER=13"),
+    case!("error_verb_adapter_content_sequence", "adapter-content", "AD", "--adapter-sequence", "x=ACGTNACGTACGT"),
+    // CollectDuplicateByTileMetrics (docs/06 section 8): the planted tiles of
+    // tests/data/make_tile_bams.py, markdup.bam before and after marking, a BAM
+    // whose names give no tile and that was never marked.
+    case!("picard_duplicate_by_tile", "CollectDuplicateByTileMetrics", "I=DBT", "O=OUT/duplicate_by_tile.txt"),
+    case!("picard_duplicate_by_tile_stdout", "CollectDuplicateByTileMetrics", "I=MD", "OUTLIER_SD=1"),
+    case!("verb_duplicate_by_tile_json", "duplicate-by-tile", "DBT", "--outlier-sd", "0.5", "--format", "json"),
+    case!("verb_duplicate_by_tile_unmarked", "duplicate-by-tile", "IS", "-o", "OUT/duplicate_by_tile.txt"),
+    case!("verb_duplicate_by_tile_no_names", "duplicate-by-tile", "MD", "--read-name-regex", "null", "-q"),
+    case!("chain_duplicate_by_tile", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "--tagging-policy", "All", "+", "duplicate-by-tile", "+", "duplicate-metrics"),
+    case!("error_duplicate_by_tile_level", "CollectDuplicateByTileMetrics", "I=DBT", "METRIC_ACCUMULATION_LEVEL=SAMPLE"),
+    case!("error_verb_duplicate_by_tile_outlier_sd", "duplicate-by-tile", "DBT", "--outlier-sd", "-1"),
+    case!("error_verb_duplicate_by_tile_regex", "duplicate-by-tile", "DBT", "--read-name-regex", "(x"),
+    // CollectTelomereMetrics (docs/telomere.md): tests/data/telomere.bam holds
+    // the planted reads of tests/data/make_telomere_bams.py, two read groups.
+    case!("picard_telomere", "CollectTelomereMetrics", "I=TEL", "O=OUT/telomere.txt", "LEVEL=SAMPLE", "LEVEL=READ_GROUP"),
+    case!("picard_telomere_stdout_duplicates", "CollectTelomereMetrics", "I=TEL", "COUNT_DUPLICATES=true", "K=20"),
+    case!("picard_telomere_multiple_metrics", "CollectMultipleMetrics", "I=TEL", "O=OUT/s", "PROGRAM=null", "PROGRAM=CollectTelomereMetrics", "LEVEL=LIBRARY"),
+    case!("verb_telomere_json", "telomere", "TEL", "--repeat", "ttaggg", "--format", "json"),
+    case!("verb_telomere_no_estimate", "telomere", "IS", "-o", "OUT/telomere.txt"),
+    case!("chain_telomere", "chain", "TEL", "-o", "OUT/s", "+", "telomere", "--level", "READ_GROUP"),
+    case!("error_verb_telomere_repeat", "telomere", "TEL", "--repeat", "TTAGGN"),
+    case!("error_verb_telomere_threshold", "telomere", "TEL", "-K", "0"),
+    case!("error_telomere_ends", "CollectTelomereMetrics", "I=TEL", "TELOMERE_ENDS=0"),
+    // CollectIndexDepthMetrics (docs/06 section 10): the planted counts of
+    // tests/data/index_depth.bam from its .bai; a BAM without an index, a
+    // CRAM and an option that needs a whole read are refused.
+    case!("picard_index_depth", "CollectIndexDepthMetrics", "I=ID", "O=OUT/index_depth.txt"),
+    case!("verb_index_depth_read_length_tsv", "index-depth", "ID", "--read-length", "150", "--format", "tsv"),
+    case!("verb_index_depth_one_contig_json", "index-depth", "IS", "--format", "json"),
+    case!("error_index_depth_cram", "CollectIndexDepthMetrics", "I=IS_CRAM"),
+    case!("error_index_depth_stop_after", "CollectIndexDepthMetrics", "I=ID", "STOP_AFTER=10"),
+    case!("error_verb_index_depth_no_index", "index-depth", "MD"),
+    case!("error_verb_index_depth_sample", "index-depth", "ID", "--read-length-sample", "0"),
 ];
 
 /// Formats (docs/formats.md): `convert` in both directions and to every
@@ -647,6 +693,9 @@ const T1_CASES: &[Case] = &[
     case!("t1_chain_taps", "chain", "T1", "-o", "OUT/s", "+", "quality-yield", "+", "alignment-summary", "+", "insert-size", "+", "duplicate-metrics"),
     case!("t1_doctor", "doctor", "T1", "-R", "T1_REF"),
     case!("t1_mt_copy_number", "mt-copy-number", "T1", "-o", "OUT/mt_copy_number.txt"),
+    case!("t1_adapter_content", "adapter-content", "T1", "-o", "OUT/adapter_content.txt"),
+    case!("t1_duplicate_by_tile", "duplicate-by-tile", "T1", "-o", "OUT/duplicate_by_tile.txt"),
+    case!("t1_telomere", "telomere", "T1", "-o", "OUT/telomere.txt"),
 ];
 
 fn root() -> PathBuf {

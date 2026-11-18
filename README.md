@@ -90,7 +90,7 @@ reads the marked BAM, and the BAM holds the records `MarkDuplicates` writes. On 
 exome the chain took 16.5 s against 22.2 s for `MarkDuplicates` followed by the four
 collectors on its output.
 
-Every `+` starts a step: a transform (`mark-duplicates`, `sort-sam`), a tap (15 one-pass
+Every `+` starts a step: a transform (`mark-duplicates`, `sort-sam`), a tap (18 one-pass
 tool verbs) or `write [PATH]` (`-` is standard output). Transforms may follow one another:
 `+ sort-sam --sort-order queryname + mark-duplicates + sort-sam --sort-order coordinate +
 write out.bam --index` sorts, marks and sorts back in one process, a sort holding at most
@@ -179,7 +179,9 @@ the sizes and a Chrome recipe for a build without the feature.
 | CollectOxoGMetrics (`CONTEXT_SIZE`, `CONTEXTS`, `INTERVALS`, `DB_SNP`, `USE_OQ`, insert size and quality filters; one row per context and library) | | `collect_oxo_g_metrics()` |
 | CollectCoverageGaps (not a Picard tool, [docs/06](docs/06_clinical_checks.md): target bases under `MIN_DEPTH` as a metrics row and a BED of gap runs, with the CollectHsMetrics depth) | | `collect_coverage_gaps()` |
 | CollectSexCheckMetrics (not a Picard tool, docs/06: reads per base on X, Y and the autosomes, the inferred sex against `EXPECTED_SEX`) | | `collect_sex_check_metrics()` |
+| CollectDuplicateByTileMetrics (not a Picard tool, docs/06 section 8: reads, pairs, duplicates and `DT:Z:SQ` optical duplicates per flowcell lane and tile of the read names, per lane and in all, equal to the CollectDuplicateMetrics totals; `TILE_OUTLIER` against the lane median and MAD) | | `collect_duplicate_by_tile_metrics()` |
 | CollectMtCopyNumberMetrics (not a Picard tool, docs/06 section 6: mitochondrial genomes per diploid nuclear genome, 2 x mean depth on chrM over mean autosomal depth; `TARGET_INTERVALS`, `EXCLUDE_INTERVALS`; also a `CollectMultipleMetrics` program) | all four | `collect_mt_copy_number_metrics()` |
+| CollectAdapterContentMetrics (not a Picard tool, docs/06 section 7: FastQC's Adapter Content on a BAM, per adapter and read end, unmapped reads included; the cumulative by-cycle curve as the histogram; `PAIR_READ_THROUGH` from TLEN; `ADAPTER_SEQUENCE`, `ADAPTER_KMER`; also a `CollectMultipleMetrics` program) | all four | `collect_adapter_content_metrics()` |
 | BamIndexStats (Picard's text from the `.bai` or `.csi`; a CRAM counted with `R=`) | | `bam_index_stats()` |
 | CheckDuplicateMarking (`MODE`, `OUTPUT`, `VERBOSITY`; Picard's log lines and exit code; a BAM that is not queryname sorted is sorted first) | | `check_duplicate_marking()` |
 | CollectJumpingLibraryMetrics (several `INPUT`s read in turn; `MINIMUM_MAPPING_QUALITY`, `TAIL_LIMIT`, `CHIMERA_KB_MIN`) | | `collect_jumping_library_metrics()` |
@@ -189,6 +191,8 @@ the sizes and a Chrome recipe for a build without the feature.
 | BuildBamIndex (the `.bai` of a coordinate-sorted BAM, byte for byte the file Picard writes for the same BAM; `OUTPUT` or the default name; the same index behind `MarkDuplicates CREATE_INDEX` and `chain ... + write --index`) | | `build_bam_index()` |
 | doctor (not a Picard tool, [docs/doctor.md](docs/doctor.md): a pre-flight check of one BAM, CRAM or SAM file from its header, end-of-file marker and first 10,000 records; build, read groups, sort order, reference MD5s, a sample sheet row) | | `doctor()` |
 | CollectExonCoverageMetrics (not a Picard tool, [docs/exon_coverage.md](docs/exon_coverage.md): per exon of a GTF, GFF3, BED12 or BED annotation the mean, median, minimum and maximum depth and the bases at each `MIN_DEPTH`, with the CollectHsMetrics depth; `GENE`, `GENE_LIST`, `TRANSCRIPT`, `CANONICAL`, `FEATURE`; `SUMMARY_OUTPUT` per gene and transcript) | | `collect_exon_coverage_metrics()` |
+| CollectTelomereMetrics (not a Picard tool, [docs/telomere.md](docs/telomere.md): reads with at least 7 copies of TTAGGG or CCCTAA, unmapped reads included, reads of 48 to 52 percent GC, TelSeq's telomere length estimate in kb and a histogram of reads by repeat count; `TELOMERE_REPEAT_THRESHOLD`, `REPEAT`, `COUNT_DUPLICATES`; also a `CollectMultipleMetrics` program) | all four | `collect_telomere_metrics()` |
+| CollectIndexDepthMetrics (not a Picard tool, docs/06 section 10: depth from the `.bai` or `.csi` alone, `MAPPED x READ_LENGTH / LENGTH` per reference and per contig group, the X and Y ratios with a sex call, `MT_COPY_NUMBER`; no whole read, a CRAM refused; `READ_LENGTH`, `READ_LENGTH_SAMPLE`) | | `collect_index_depth_metrics()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 | SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | `validation_stringency=` |

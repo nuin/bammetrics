@@ -1,5 +1,106 @@
 # Changelog
 
+## 0.26.0
+
+Wave W08 of docs/07: adapter content, duplicates by tile, telomere and index-only depth.
+
+### Added
+
+- `CollectAdapterContentMetrics` (verb `adapter-content`, Python
+  `collect_adapter_content_metrics()`), class `bammetrics.qc.AdapterContentMetrics`,
+  docs/06 section 7, part of wave W08 of docs/07: FastQC 0.13.0's Adapter Content module
+  on a BAM, CRAM or SAM file. Primary records count, unmapped dimers included; bases are
+  taken in sequencing order. One row per unit, read end (`FIRST`, `SECOND`, `UNPAIRED`)
+  and adapter: `READS`, `READS_WITH_ADAPTER`, `PCT_READS_WITH_ADAPTER`,
+  `MEAN_ADAPTER_START`, `PCT_AT_LAST_CYCLE` and `PAIR_READ_THROUGH` (proper pairs whose
+  |TLEN| is below the read length). The `## HISTOGRAM` section is FastQC's cumulative
+  curve by `READ_CYCLE`. FastQC's six adapters by default, `ADAPTER_SEQUENCE` and
+  `ADAPTER_KMER` to change them, `PF_READS_ONLY`, `INCLUDE_DUPLICATES`,
+  `METRIC_ACCUMULATION_LEVEL`. A `CollectMultipleMetrics` program
+  (`.adapter_content_metrics`), a chain tap and a `qc` source; no shipped preset rule
+  (docs/07 decision D24), a lab preset with FastQC's 5 and 10 percent limits in docs/06
+  section 7.6. The output is bounded at 5,000,000 cells; a level whose units exceed it is
+  a usage error, and a unit's read end without a read gets rows and no table column.
+- `tests/data/make_adapter_bams.py`, `tests/data/adapter_content.bam`,
+  `tests/python/test_adapter_content.py` (planted truth exact, FastQC within 5e-7 points),
+  `crates/cli/tests/adapter_content.rs` and 8 golden records. On the HG002 exome slice of
+  2 M records every cycle equals FastQC's within 5e-7 points; the 10 GB exome runs in
+  42.0 s at 9 MB peak RSS.
+- `CollectDuplicateByTileMetrics` (verb `duplicate-by-tile`, Python
+  `collect_duplicate_by_tile_metrics()`), class `bammetrics.qc.DuplicateByTileMetrics`,
+  docs/06 section 8, part of wave W08: one row per flowcell lane and tile of the read names
+  (`READ_NAME_REGEX` as `MarkDuplicates`), one per lane, one `UNPARSED` row for names
+  without a tile and one `ALL` row. Reads, unmapped, unpaired reads, pairs (counted once)
+  and their duplicates from the flags in the file, as `CollectDuplicateMetrics` counts
+  them; optical duplicate pairs from `DT:Z:SQ` (`MarkDuplicates TAGGING_POLICY=All`);
+  `PCT_DUPLICATION`, `PCT_OPTICAL`, the x and y extent, and `TILE_OUTLIER` above the lane
+  median plus the larger of `OUTLIER_SD` (default 3) x 1.4826 x MAD and 0.005. Names read
+  one character per byte as `MarkDuplicates` reads them; a flowcell or lane with a control
+  character goes to `UNPARSED`. Notes for a file never marked, for missing `DT` tags and
+  for names without a tile, naming the parser in use. A `chain` tap. No shipped preset has a rule. Truth tests on
+  planted BAMs (`tests/data/make_tile_bams.py`: 2 lanes of 6 tiles, a hot tile, names
+  without a tile); the `ALL` row equals the `MarkDuplicates` and `CollectDuplicateMetrics`
+  totals on the fixture, 11 generated BAMs, Picard-marked BAMs and the HG002 exome
+  (3,163 optical duplicate pairs).
+- `CollectTelomereMetrics` (verb `telomere`, Python `collect_telomere_metrics()`), class
+  `bammetrics.qc.TelomereMetrics`, docs/telomere.md: telomere content as TelSeq defines it
+  (Ding et al. 2014). One pass over primary, non-QC-fail records with at least one base, unmapped reads included,
+  duplicates with `COUNT_DUPLICATES=true`. A read's repeat count is the larger of its
+  non-overlapping `TTAGGG` and `CCCTAA` counts on the strand it was sequenced on; at
+  `TELOMERE_REPEAT_THRESHOLD` (default 7) or more it is telomeric. Columns `TOTAL_READS`,
+  `TELOMERIC_READS`, `PCT_TELOMERIC`, `READS_GC_48_52` (TelSeq's GC bins as
+  `48 L < 100 gc <= 52 L`), `READ_LENGTH`, `PCT_OFF_LENGTH` and `ESTIMATED_LENGTH_KB`
+  (`TELOMERIC_READS / READS_GC_48_52 x 332720800 / 1000 / 46`, empty when more than 5
+  percent of reads are over 10 percent off the modal length), per accumulation unit, and a
+  `repeat_count` histogram. `REPEAT`, `TELOMERE_ENDS` and `GENOME_LENGTH_AT_GC` for another
+  organism. The histogram's zero-filled bins stop at key 1,000 and at 1,000,000 over all
+  units. Also a `CollectMultipleMetrics` program (`.telomere_metrics`), a `chain` tap
+  and a `qc` source. No shipped preset has a rule.
+- `tests/data/make_telomere_bams.py` and `tests/data/telomere.bam`: planted reads at 0, 6,
+  7 and 20 repeats, both strands, unmapped, an `N` in a run, exact GC bin edges and the
+  records that must not count; `tests/python/test_telomere.py` requires every count
+  exactly and the estimate equal to TelSeq's formula in Python; 11 golden records.
+- docs/07 decisions D29 (TelSeq did not run), D30 (the read set) and D31 (the read-length
+  columns and no rule).
+- `CollectIndexDepthMetrics` (verb `index-depth`, Python `collect_index_depth_metrics()`),
+  class `bammetrics.qc.IndexDepthMetrics`, docs/06 section 10, the index-only depth of
+  wave W08: per reference, per contig group (`AUTOSOME`, `X`, `Y`, `MT`, `ALT`, `DECOY`,
+  `HLA`, `OTHER`) and for `ALL`, the mapped and placed unmapped counts of the `.bai` or
+  `.csi`, `MAPPED x READ_LENGTH / LENGTH` as the depth, the ratio to the autosomes, and
+  on `ALL` the sex call (the `sex-check` thresholds), `MT_COPY_NUMBER` and
+  `NO_COORDINATE`. The read length is the mean of the mapped primary records among the
+  first `READ_LENGTH_SAMPLE` records (default 10,000), or `READ_LENGTH`. No whole read:
+  0.03 s and 4.6 MB on the 10 GB HG002 exome. A CRAM, SAM text, a pipe and a BAM without
+  an index are refused (docs/07 decision D32). An `OUTPUT` that names the index it reads
+  is refused: exit 2 from the verb, exit 1 from the Picard face, `UsageError` in Python. So
+  is an index whose reference count differs from
+  the header's, or one that counts more records than the BAM's size allows. A BAM cut in
+  the read length sample names the cut and `READ_LENGTH`. Not a Picard tool; no shipped
+  preset rule.
+- `bai::Summary::read_csi`: the counts of a `.csi` without its bins.
+- `tests/data/make_index_depth_bams.py` and `tests/data/index_depth.bam` with its `.bai`
+  and `.csi`: planted counts. `crates/cli/tests/index_depth.rs`,
+  `tests/python/test_index_depth.py` (planted truth exactly, `samtools idxstats` on every
+  indexed fixture) and `tests/concordance/test_index_depth.py` (`samtools idxstats` on 20
+  corpus BAMs and the HG002 exome; `samtools coverage` within 0.5 percent on corpus t1 and
+  10 percent on HG002, decision D33); 7 golden records.
+
+### Changed
+
+- `read_bases.rs`: `CollectAdapterContentMetrics` and `CollectTelomereMetrics` take a
+  record's bases in sequencing order through one walk (`Bases::each`), two bases per table
+  lookup. Output is unchanged; a cut record now reads its missing bases as `N` in both.
+  On the 10 GB HG002 exome adapter content runs 27.0 s against 28.4 s and telomere
+  54.2 s against 52.5 s (means of four runs, page cache warm).
+- `genome_build::kind` and `genome_build::Kind` are public: `CollectIndexDepthMetrics`
+  groups its rows by them.
+
+### Fixed
+
+- The glossary finds the histogram row of a column whose unit name holds a dot (a `PU`
+  such as `fc1.1`): `fc1.1.read_count` and `fc1.1.fr_count` now match `*.read_count` and
+  `*.fr_count`.
+
 ## 0.25.0
 
 Wave W07 of docs/07: `bammetrics doctor`, `CollectMtCopyNumberMetrics` and

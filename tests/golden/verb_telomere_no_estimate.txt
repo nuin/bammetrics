@@ -1,0 +1,39 @@
+## argv
+telomere
+tests/data/insert_size.bam
+-o
+OUT/telomere.txt
+## exit
+0
+## stdout
+## stderr
+## file telomere.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectTelomereMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/telomere.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.TelomereMetrics
+TOTAL_READS	TELOMERIC_READS	PCT_TELOMERIC	READS_GC_48_52	READ_LENGTH	PCT_OFF_LENGTH	ESTIMATED_LENGTH_KB	SAMPLE	LIBRARY	READ_GROUP
+10	0	0	0	100	0				
+
+## HISTOGRAM	java.lang.Integer
+repeat_count	All_Reads.read_count
+0	10
+1	0
+2	0
+3	0
+4	0
+5	0
+6	0
+7	0
+8	0
+9	0
+10	0
+11	0
+12	0
+13	0
+14	0
+15	0
+16	0
+

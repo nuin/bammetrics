@@ -1,0 +1,47 @@
+## argv
+CollectTelomereMetrics
+I=tests/data/telomere.bam
+COUNT_DUPLICATES=true
+K=20
+## exit
+0
+## stdout
+## htsjdk.samtools.metrics.StringHeader
+# CollectTelomereMetrics INPUT=tests/data/telomere.bam COUNT_DUPLICATES=true TELOMERE_REPEAT_THRESHOLD=20
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.TelomereMetrics
+TOTAL_READS	TELOMERIC_READS	PCT_TELOMERIC	READS_GC_48_52	READ_LENGTH	PCT_OFF_LENGTH	ESTIMATED_LENGTH_KB	SAMPLE	LIBRARY	READ_GROUP
+99	12	0.121212	17	150	0	5105.690026			
+
+## HISTOGRAM	java.lang.Integer
+repeat_count	All_Reads.read_count
+0	66
+1	0
+2	0
+3	0
+4	0
+5	0
+6	11
+7	10
+8	0
+9	0
+10	0
+11	0
+12	0
+13	0
+14	0
+15	0
+16	0
+17	0
+18	0
+19	0
+20	12
+21	0
+22	0
+23	0
+24	0
+25	0
+
+## stderr
