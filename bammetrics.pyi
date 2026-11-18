@@ -1253,6 +1253,36 @@ def replace_sam_header(
     the input: a BAM, or SAM text for a name ending in .sam when the input name does not
     end in .bam."""
 
+def set_nm_md_and_uq_tags(
+    input: _Path,
+    *,
+    is_bisulfite_sequence: bool | None = None,
+    set_only_uq: bool | None = None,
+    output: _Path,
+    reference_sequence: _Path,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """SetNmMdAndUqTags: no rows; OUTPUT gets every record of a coordinate-sorted input,
+    each mapped one with MD, NM and UQ computed against REFERENCE_SEQUENCE."""
+
+def set_nm_and_uq_tags(
+    input: _Path,
+    *,
+    is_bisulfite_sequence: bool | None = None,
+    set_only_uq: bool | None = None,
+    output: _Path,
+    reference_sequence: _Path,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """SetNmAndUqTags: deprecated name of SetNmMdAndUqTags, the same options and output: no
+    rows; OUTPUT gets every record, each mapped one with MD, NM and UQ."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1486,6 +1516,8 @@ _StepVerb = Literal[
     "telomere",
     "add_comments_to_bam",
     "replace_sam_header",
+    "set_nm_md_and_uq_tags",
+    "set_nm_and_uq_tags",
     "write",
 ]
 

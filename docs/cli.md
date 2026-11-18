@@ -307,6 +307,8 @@ table.
 | `index-depth` | CollectIndexDepthMetrics (not a Picard tool, [docs/06](06_clinical_checks.md) section 10; a BAM with its `.bai` or `.csi`, never read whole; a CRAM refused) | one |
 | `add-comments-to-bam` | AddCommentsToBam (a BAM; `--comment` repeated) | `-o` BAM, no metrics file |
 | `replace-sam-header` | ReplaceSamHeader (a SAM, BAM or CRAM; `--header` names the file whose header replaces the input's) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `set-nm-md-and-uq-tags` | SetNmMdAndUqTags (a coordinate-sorted SAM, BAM or CRAM; `-R` required; `--is-bisulfite-sequence`, `--set-only-uq`) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `set-nm-and-uq-tags` | SetNmAndUqTags (Picard's deprecated name of SetNmMdAndUqTags: the same options and output) | `-o` BAM, or SAM text for a name ending in `.sam` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -604,6 +606,35 @@ Picard's `ReplaceSamHeader`: the header of `--header` (SAM text, a BAM or a CRAM
   name (exit 2).
 - In a chain the step replaces the header of the stream at its position and every record
   keeps its reference index, as in a block copy.
+
+### set-nm-md-and-uq-tags
+
+```bash
+bammetrics set-nm-md-and-uq-tags sample.bam -R ref.fa -o sample.tagged.bam
+bammetrics set-nm-md-and-uq-tags sample.bam -R ref.fa -o sample.tagged.sam --set-only-uq
+bammetrics SetNmMdAndUqTags I=sample.bam R=ref.fa O=sample.tagged.bam IS_BISULFITE_SEQUENCE=true
+```
+
+Picard's `SetNmMdAndUqTags`: each mapped record gets `MD`, `NM` and `UQ` computed against
+`-R` as htsjdk's `SequenceUtil` computes them; every other record is written as read
+(`tests/concordance/test_set_nm_md_and_uq_tags.py`). `set-nm-and-uq-tags`
+(`SetNmAndUqTags`) is Picard's deprecated name for the same tool.
+
+- The header must say `SO:coordinate`, else exit 1 with `Input must be coordinate-sorted
+  for this program to run. Found: queryname`. The reference is read forward, one contig at
+  a time; its `.fai` contigs must be the header's.
+- A mismatch writes the reference base as the FASTA holds it (`MD:Z:3t4` on a lower-case
+  base). Bases compare by IUPAC code, ignoring case: `N` equals `N`, `R` is no `A`.
+- `UQ` is the sum of the qualities of the mismatched aligned bases. A record without
+  qualities gets no `UQ`. An aligned base past the end of its contig exits 1, as Picard
+  does; `MD` and `NM` stop at the contig end.
+- `--is-bisulfite-sequence`: a read `T` on a reference `C` (forward strand) or `A` on `G`
+  (reverse strand) is no mismatch for `NM` and `UQ`. `MD` is unchanged.
+- `--set-only-uq` sets `UQ` alone. A record that gets a tag has its tags in htsjdk's order;
+  any other keeps its bytes. No `@PG` line is added.
+- In a chain the step reads the chain's `-R`: `bammetrics chain in.bam -R ref.fa +
+  sort-sam -SO coordinate + set-nm-md-and-uq-tags + write out.bam`. Its stream is
+  `tagged`.
 
 ### qc
 

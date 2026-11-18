@@ -466,6 +466,20 @@ const STAGES: &[StageRow] = &[
         kind: StageKind::Streams,
         check: crate::record_edit::check_stage,
     },
+    StageRow {
+        tool: "SetNmMdAndUqTags",
+        build: crate::set_nm_md_and_uq_tags::stage,
+        label: "tagged",
+        kind: StageKind::Streams,
+        check: crate::set_nm_md_and_uq_tags::check_stage,
+    },
+    StageRow {
+        tool: "SetNmAndUqTags",
+        build: crate::set_nm_md_and_uq_tags::stage,
+        label: "tagged",
+        kind: StageKind::Streams,
+        check: crate::set_nm_md_and_uq_tags::check_stage,
+    },
 ];
 
 fn stage_row(tool: &Tool) -> Option<&'static StageRow> {

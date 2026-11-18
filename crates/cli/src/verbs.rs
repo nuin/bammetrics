@@ -427,6 +427,23 @@ pub const VERBS: &[Verb] = &[
         reads: &["HEADER"],
         ..verb("replace-sam-header", "ReplaceSamHeader", Files::Bam)
     },
+    Verb {
+        about: Some(
+            "computes MD, NM and UQ of each mapped record of a coordinate-sorted SAM, BAM or \
+             CRAM against -R, as Picard's SetNmMdAndUqTags does: -o gets every record, a BAM, \
+             or SAM text for a name ending in .sam.",
+        ),
+        writes: "BAM",
+        ..verb("set-nm-md-and-uq-tags", "SetNmMdAndUqTags", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "the deprecated name of set-nm-md-and-uq-tags, as Picard keeps SetNmAndUqTags: the \
+             same options and output.",
+        ),
+        writes: "BAM",
+        ..verb("set-nm-and-uq-tags", "SetNmAndUqTags", Files::Bam)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the

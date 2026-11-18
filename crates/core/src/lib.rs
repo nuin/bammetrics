@@ -76,6 +76,7 @@ pub mod sam_text;
 pub mod sensitivity;
 pub mod sequence;
 pub mod sequencing_artifact;
+pub mod set_nm_md_and_uq_tags;
 pub mod sex_check;
 pub mod sort_sam;
 pub mod spill;
