@@ -35,9 +35,19 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   47 MB peak RSS and `ReplaceSamHeader` 56.2 s at 38 MB; Picard's block copies take 9.7 s
   and 11.2 s. The records are equal. bammetrics inflates and deflates every block where
   Picard copies the compressed blocks.
+- `CleanSam` (verb `clean-sam`, Python `clean_sam()`), as Picard 3.5.0: a mapped record
+  whose alignment ends past the end of its reference is soft-clipped at its end
+  (`createNewCigarsIfMapsOffEndOfReference` with htsjdk's `softClipEndOfRead`), the `MC`
+  of a mate past the end is clipped the same way, an unmapped record gets MAPQ 0; STRICT
+  reads at LENIENT. A read that starts past the end exits 1 (docs/07 D40). A chain
+  transform (`cleaned`). `tests/concordance/clean_bams.py` writes reads off contig ends on
+  both strands with every CIGAR operator at the clip point; `test_clean_sam.py` compares
+  them, the fixtures, the tiers, the exome slice, SAM text and a CRAM (tier B with record
+  bytes); `crates/cli/tests/clean_sam.rs` holds chained equals staged.
 
 ### Changed
 
+- `RawRecord::set_cigar` and `set_mapping_quality`.
 - `bam_writer::finish_with_index` names the `.bai`; `BamWriter::unchecked` writes records
   without the order check; `RawRecord::set_reference_ids` and `set_codec_bin`;
   `pass::with_record_stream_kind` tells a BAM from a CRAM and SAM text.

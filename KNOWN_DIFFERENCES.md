@@ -1402,6 +1402,19 @@ differ here (docs/07 decisions D34 to D39):
 - A partial file is never left: Picard leaves a header-only `OUTPUT` when a record's
   reference name is not in the new dictionary.
 
+## CleanSam
+
+`CleanSam` writes the header lines and records Picard writes, the records byte for byte
+after inflation, on reads off contig ends with every CIGAR operator at the clip point, the
+fixture BAMs, the corpus tiers, the exome slice, SAM text and a CRAM
+(`tests/concordance/test_clean_sam.py`). It differs here (docs/07 decisions D40 to D42):
+
+- A read that starts past the end of its reference exits 1 and writes nothing. Picard's
+  clip gives it a CIGAR longer than its bases (`69S` over 20 bases), Picard writes that
+  record, and samtools refuses the file.
+- `-o` ending in `.cram` exits 1 naming wave W15. Picard writes a CRAM.
+- A partial file is never left: Picard leaves the records before a failing one.
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))

@@ -307,6 +307,7 @@ table.
 | `index-depth` | CollectIndexDepthMetrics (not a Picard tool, [docs/06](06_clinical_checks.md) section 10; a BAM with its `.bai` or `.csi`, never read whole; a CRAM refused) | one |
 | `add-comments-to-bam` | AddCommentsToBam (a BAM; `--comment` repeated) | `-o` BAM, no metrics file |
 | `replace-sam-header` | ReplaceSamHeader (a SAM, BAM or CRAM; `--header` names the file whose header replaces the input's) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `clean-sam` | CleanSam (a SAM, BAM or CRAM; soft-clips alignments past the end of their reference, MAPQ 0 on unmapped records) | `-o` BAM, or SAM text for a name ending in `.sam` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -604,6 +605,36 @@ Picard's `ReplaceSamHeader`: the header of `--header` (SAM text, a BAM or a CRAM
   name (exit 2).
 - In a chain the step replaces the header of the stream at its position and every record
   keeps its reference index, as in a block copy.
+
+### clean-sam
+
+```bash
+bammetrics clean-sam sample.bam -o sample.clean.bam
+bammetrics clean-sam reads.sam -o reads.clean.sam
+bammetrics CleanSam I=sample.bam O=sample.clean.bam CREATE_INDEX=true
+```
+
+Picard's `CleanSam`: every record of the input with three fixes
+(`tests/concordance/test_clean_sam.py`).
+
+- A mapped record whose alignment ends past the end of its reference is soft-clipped at
+  the end of its CIGAR, whatever its strand. Its start stays. The clip point is the read
+  length less the overhang, so a deletion or insertion before it moves it, as in Picard:
+  `10M5D10M` 5 bases past the end becomes `10M5D6M4S`. A trailing `H` stays after the new
+  `S` (`20M5H` becomes `11M9S5H`).
+- The `MC` tag of a paired record whose mate is mapped and ends past the end of its
+  reference gets the mate's CIGAR clipped the same way.
+- An unmapped record gets MAPQ 0.
+- `NM` and `MD` are left as they were. No `@PG` line is added. A changed record has its
+  tags in htsjdk's order; a record with a new MAPQ only keeps its tag bytes.
+- `--validation-stringency STRICT`, the default, reads SAM text at `LENIENT`, as Picard
+  does, so a line past the end of its reference is read and named on standard error.
+- A read that starts past the end of its reference gets a CIGAR longer than its bases
+  (`20M` at 100050 on a 100000-base contig becomes `69S`). Picard writes that record and
+  samtools refuses the file; bammetrics exits 1 and writes nothing.
+- `--create-index` writes `out.bai`; `-o` ending in `.cram` exits 1 naming wave W15.
+- In a chain the step cleans the stream at its position: `bammetrics chain in.bam +
+  clean-sam + mark-duplicates + write out.bam`. Its stream is `cleaned`.
 
 ### qc
 
