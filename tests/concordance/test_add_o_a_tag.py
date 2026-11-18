@@ -21,7 +21,10 @@ VALIDATION_STRINGENCY. Error parity: a BED, a missing INTERVAL_LIST, records out
 header's order, OVERWRITE_TAG and ASSUME_SORTED (no such options), a bad SAM line at
 STRICT, a missing input and a missing output directory. bammetrics alone refuses an `NM`
 or `OA` array, which Picard prints as a Java object reference, and a CRAM output. The step
-in a chain against Picard's file. The distinct-value gate wants three entry counts, three
+in a chain against Picard's file. Header and name shapes: an `@HD SO` htsjdk does not
+name (SILENT and STRICT), unplaced reads with falling POS under `SO:coordinate`, a gzip
+INTERVAL_LIST, an OUTPUT named `.SAM` (a BAM in both) and the `.bai` name of three OUTPUT
+names. The distinct-value gate wants three entry counts, three
 `NM` texts and three tagged counts.
 """
 import subprocess
@@ -353,3 +356,71 @@ def test_values_are_distinct():
     assert len(entries) >= 3, entries
     assert "" in nm and len(nm) >= 3, nm
     assert len(tagged) >= 3, tagged
+
+
+@pytest.fixture(scope="module")
+def header_shapes(tmp_path_factory):
+    """A BAM whose `@HD SO` htsjdk does not name, and a coordinate-sorted BAM whose two
+    unplaced reads have falling POS (htsjdk compares only their reference index)."""
+    directory = tmp_path_factory.mktemp("shapes")
+    shapes = {
+        "weird_order": "@HD\tVN:1.6\tSO:weird\n@SQ\tSN:c1\tLN:1000\n"
+                       "r1\t0\tc1\t10\t60\t5M\t*\t0\t0\tACGTA\tIIIII\n",
+        "unplaced_pos": "@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:c1\tLN:1000\n"
+                        "r1\t0\tc1\t10\t60\t5M\t*\t0\t0\tACGTA\tIIIII\n"
+                        "u1\t4\t*\t5\t0\t*\t*\t0\t0\tACGTA\tIIIII\n"
+                        "u2\t4\t*\t0\t0\t*\t*\t0\t0\tACGTA\tIIIII\n",
+    }
+    out = {}
+    for name, text in shapes.items():
+        sam = directory / f"{name}.sam"
+        sam.write_text(text)
+        out[name] = directory / f"{name}.bam"
+        subprocess.run(["samtools", "view", "--no-PG", "-b", "-o", str(out[name]), str(sam)],
+                       check=True)
+    return out
+
+
+def test_an_unnamed_sort_order(header_shapes):
+    """htsjdk reads an `SO` it does not name as `unknown` below STRICT and fails at
+    STRICT."""
+    written = case(header_shapes["weird_order"], [], "SO:weird")
+    assert written.header[0] == "@HD\tVN:1.6\tSO:unknown", written.header[0]
+    compare(TOOL, header_shapes["weird_order"], [], "SO:weird at STRICT", "fail")
+
+
+def test_unplaced_reads_in_any_pos_order(header_shapes):
+    case(header_shapes["unplaced_pos"], [], "unplaced reads with falling POS")
+
+
+def test_a_gzip_interval_list(tmp_path):
+    """IntervalList.fromFile reads a name ending in .gz through gzip."""
+    plain = interval_list(SOURCES["markdup"], tmp_path / "markdup.interval_list")
+    subprocess.run(["gzip", "-k", str(plain)], check=True)
+    case(SOURCES["markdup"], [f"L={plain}.gz"], "markdup gzip INTERVAL_LIST")
+
+
+def test_an_upper_case_sam_name_is_a_bam(tmp_path):
+    """htsjdk writes SAM text for a name ending in `.sam` only: `.SAM` is a BAM."""
+    case(SOURCES["markdup"], [], "markdup OUTPUT .SAM", suffix=".SAM")
+    for side in ("picard", "bammetrics"):
+        out = tmp_path / f"{side}.SAM"
+        done = run_tool(side, TOOL, [f"I={SOURCES['markdup']}", f"O={out}", SILENT])
+        assert done.returncode == 0, f"{side}: {done.stderr[-800:]}"
+        assert out.read_bytes()[:2] == b"\x1f\x8b", side
+
+
+@pytest.mark.parametrize("name", ["out.dat", "out.bam.out", "out"])
+def test_the_index_name(tmp_path, name):
+    """BAMFileWriter replaces a trailing `.bam` with `.bai` and appends `.bai` to any
+    other name."""
+    names = {}
+    for side in ("picard", "bammetrics"):
+        directory = tmp_path / side
+        directory.mkdir()
+        done = run_tool(side, TOOL, [f"I={SOURCES['markdup']}", f"O={directory / name}",
+                                     "CREATE_INDEX=true", SILENT])
+        assert done.returncode == 0, f"{side}: {done.stderr[-800:]}"
+        names[side] = sorted(p.name for p in directory.iterdir())
+    assert names["picard"] == names["bammetrics"] == sorted([name, f"{name}.bai"]), names
+    RESULTS.append((f"{TOOL} index name {name}", 0, 0, "same names"))

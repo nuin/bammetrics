@@ -284,6 +284,54 @@ fn the_step_refuses_what_belongs_to_the_write_step() {
     }
 }
 
+/// An `INTERVAL_LIST` the step cannot read fails before the first read,
+/// with the verb's message and exit code 1, behind a `sort-sam` too and
+/// under `--dry-run`. The source is cut after 150 bytes: a run that read
+/// it would fail on it in place of the list.
+#[test]
+fn an_unreadable_interval_list_fails_before_the_first_read() {
+    let dir = fresh_dir("list");
+    let bytes = fs::read(root().join(MARKDUP)).expect("fixture");
+    let cut = dir.join("cut.bam");
+    fs::write(&cut, &bytes[..150]).expect("cut");
+    let cut = cut.display().to_string();
+    let prefix = dir.join("s").display().to_string();
+    let out = dir.join("out.bam").display().to_string();
+    let missing = dir.join("missing.interval_list").display().to_string();
+    for (list, message) in [
+        (
+            "tests/data/targets.bed",
+            "tests/data/targets.bed: Interval list file must contain header.",
+        ),
+        (missing.as_str(), missing.as_str()),
+    ] {
+        let verb = bammetrics(&strings(&["add-o-a-tag", MARKDUP, "-o", &out, "-L", list]));
+        assert_eq!(verb.status.code(), Some(1), "{list}");
+        for front in [&[][..], &["+", "sort-sam", "--sort-order", "queryname"]] {
+            for dry_run in [false, true] {
+                let mut args = vec![cut.as_str(), "-o", &prefix];
+                if dry_run {
+                    args.push("--dry-run");
+                }
+                args.extend(front);
+                args.extend(["+", "add-o-a-tag", "-L", list, "+", "write", &out]);
+                let (code, stderr) = chain(&args);
+                let number = if front.is_empty() { 1 } else { 2 };
+                let line = format!("bammetrics chain: step {number} (add-o-a-tag): {message}");
+                assert!(stderr.starts_with(&line), "{args:?}: {stderr}");
+                assert_eq!(stderr.lines().count(), 1, "{args:?}: {stderr}");
+                assert_eq!(code, Some(1), "{args:?}");
+            }
+        }
+    }
+    let left: Vec<_> = fs::read_dir(&dir)
+        .expect("dir")
+        .map(|entry| entry.expect("entry").file_name())
+        .collect();
+    assert_eq!(left, ["cut.bam"]);
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
 /// The step counts what it tagged: every record without intervals, the
 /// records over them with.
 #[test]

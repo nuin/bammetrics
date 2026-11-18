@@ -618,7 +618,7 @@ fn written_files(opts: &Options) -> Vec<(&'static str, PathBuf)> {
         ("METRICS_FILE", opts.metrics.clone()),
     ];
     if opts.create_index {
-        files.push(("CREATE_INDEX", opts.output.with_extension("bai")));
+        files.push(("CREATE_INDEX", crate::bam_writer::index_path(&opts.output)));
     }
     if opts.create_md5_file {
         files.push(("CREATE_MD5_FILE", crate::bam_writer::md5_path(&opts.output)));

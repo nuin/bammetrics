@@ -291,6 +291,14 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     Ok(ToolOutput::NONE)
 }
 
+/// The errors of the step, asked before the first read of a chain: an
+/// option of the written file, an `INTERVAL_LIST` that cannot be read. The
+/// list is read here and again when the step is built.
+pub fn check_stage(inv: &Invocation) -> Result<()> {
+    record_edit::check_stage(inv)?;
+    interval_list(inv).map(|_| ())
+}
+
 /// `AddOATag` as a step of a chain.
 pub fn stage<'t>(inv: &Invocation, frame: &Frame, _temp: &'t TempDir) -> Result<Stage<'t>> {
     record_edit::check_stage(inv)?;

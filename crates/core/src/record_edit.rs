@@ -201,7 +201,8 @@ impl Options {
     }
 
     /// Where `CREATE_INDEX` writes: `out.bam.bai` for a block copy, as
-    /// htsjdk's `StreamInflatingIndexingOutputStream`, else `out.bai`.
+    /// htsjdk's `StreamInflatingIndexingOutputStream`, else the name
+    /// [`bam_writer::index_path`] gives (`out.bai`, `out.dat.bai`).
     pub fn index_path(&self) -> PathBuf {
         match self.mode {
             Mode::BlockCopy => {
@@ -209,7 +210,7 @@ impl Options {
                 name.push(".bai");
                 PathBuf::from(name)
             }
-            _ => self.output.with_extension("bai"),
+            _ => bam_writer::index_path(&self.output),
         }
     }
 
@@ -377,12 +378,61 @@ impl Out {
 /// header's own version (`VN:1.4` is written `VN:1.6`) and `SO:unsorted`
 /// after the other fields of an `@HD` without `SO`; a block copy keeps the
 /// line as it is.
+/// The `SO` values htsjdk's `SAMFileHeader.SortOrder` names.
+const SORT_ORDERS: [&[u8]; 5] = [
+    b"unsorted",
+    b"queryname",
+    b"coordinate",
+    b"duplicate",
+    b"unknown",
+];
+
+/// `SAMTextHeaderCodec` on the `SO` of the header read: a value
+/// `SortOrder` does not name fails at `STRICT` and is reported at
+/// `LENIENT`; [`with_version`] writes it `unknown`. SAM text gets the same
+/// check as it is read, so its header holds `unknown` by now.
+fn check_sort_order(header: &sam::Header, stringency: Stringency, path: &Path) -> Result<()> {
+    use noodles::sam::header::record::value::map::header::tag::SORT_ORDER;
+    let Some(order) = header
+        .header()
+        .and_then(|hd| hd.other_fields().get(&SORT_ORDER))
+        .filter(|order| !SORT_ORDERS.contains(&order.as_slice()))
+    else {
+        return Ok(());
+    };
+    let shown = String::from_utf8_lossy(order);
+    match stringency {
+        Stringency::Strict => Err(Error::Input {
+            path: path.to_path_buf(),
+            source: io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Found non-conforming header SO tag: {shown}, exiting because \
+                     VALIDATION_STRINGENCY=STRICT"
+                ),
+            ),
+        }),
+        Stringency::Lenient => {
+            eprintln!("Found non-conforming header SO tag: {shown}. Treating as 'unknown'.");
+            Ok(())
+        }
+        Stringency::Silent => Ok(()),
+    }
+}
+
+/// An `SO` value htsjdk's `SAMFileHeader.SortOrder` does not name becomes
+/// `unknown`, as `SAMTextHeaderCodec` reads it below `STRICT`.
 fn with_version(mut header: sam::Header, rewrite: bool) -> sam::Header {
     use noodles::sam::header::record::value::map::header::tag::SORT_ORDER;
     let current = Version::new(1, 6);
     let hd = header
         .header_mut()
         .get_or_insert_with(|| Map::<sam::header::record::value::map::Header>::new(current));
+    if let Some(order) = hd.other_fields_mut().get_mut(&SORT_ORDER)
+        && !SORT_ORDERS.contains(&order.as_slice())
+    {
+        *order = "unknown".into();
+    }
     if rewrite {
         *hd.version_mut() = current;
         hd.other_fields_mut()
@@ -430,6 +480,7 @@ pub fn run(
             if opts.mode == Mode::BlockCopy && kind != Kind::Bam {
                 return Err(not_a_bam(&opts.input, kind));
             }
+            check_sort_order(header, opts.stringency, &opts.input)?;
             let cram = kind == Kind::Cram;
             let mut restore = Restore::new(cram, opts.mode, opts.reference.as_deref(), header)?;
             let mut edit = build(&Setup {

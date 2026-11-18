@@ -628,12 +628,20 @@ Picard's `AddOATag`: each record's alignment appended to its `OA` tag, then ever
   name. Only a record without the unmapped flag that shares a base with an interval gets
   the tag; its span runs from `POS` over the reference bases of its CIGAR, so a CIGAR
   without one never overlaps. A BED exits 1 with `Interval list file must contain
-  header.`, as in Picard.
+  header.`, as in Picard. A name ending in `.gz`, `.gzip` or `.bfq` is read through gzip,
+  as htsjdk reads it. In a chain the list is read before the first read of the source.
 - An `NM` or `OA` value that is an array or `H` exits 1: Picard prints it as a Java object
   reference (`[B@1a2b3c`), which changes from run to run.
 - The writer checks the header's order, as Picard's presorted writer does. No `@PG` line
-  is added. `--create-index` writes `out.bai`. CRAM records get `MD` and `NM` as htsjdk
-  decodes them, so their entries carry the `NM` htsjdk computes.
+  is added. `--create-index` writes `out.bai` for `out.bam` and `out.dat.bai` for
+  `out.dat`, as htsjdk names it. CRAM records get `MD` and `NM` as htsjdk decodes them, so
+  their entries carry the `NM` htsjdk computes.
+- SAM text is written for a name ending in `.sam`, lower case; `OUT.SAM` is a BAM, as in
+  Picard. A `.cram` `OUTPUT` is refused before the first read until wave W15: the verb
+  exits 2, the Picard face exits 1. Picard writes the CRAM.
+- An `@HD SO` value htsjdk does not name fails at `VALIDATION_STRINGENCY=STRICT` (`Found
+  non-conforming header SO tag`), as in Picard. At `LENIENT` and `SILENT` it is written
+  `SO:unknown`.
 - In a chain the step tags the records of the stream at its position:
   `bammetrics chain in.bam + add-o-a-tag -L targets.interval_list + write out.bam`.
 

@@ -272,3 +272,30 @@ fn a_step_refuses_the_options_of_the_file_it_does_not_write() {
         assert!(message.contains("belongs to the write step"), "{message}");
     }
 }
+
+/// An `SO` value htsjdk's `SortOrder` does not name: an error at `STRICT`,
+/// `unknown` in the header written at the other levels, in both modes.
+#[test]
+fn a_sort_order_htsjdk_does_not_name_is_written_unknown() {
+    let header: sam::Header = "@HD\tVN:1.6\tSO:weird\n@SQ\tSN:c1\tLN:100\n"
+        .parse()
+        .expect("header");
+    let path = Path::new("in.bam");
+    let message = check_sort_order(&header, Stringency::Strict, path)
+        .expect_err("strict")
+        .to_string();
+    assert!(
+        message.ends_with(
+            "Found non-conforming header SO tag: weird, exiting because \
+             VALIDATION_STRINGENCY=STRICT"
+        ),
+        "{message}"
+    );
+    check_sort_order(&header, Stringency::Silent, path).expect("silent");
+    for rewrite in [false, true] {
+        let text = crate::bam_writer::header_bytes(&with_version(header.clone(), rewrite));
+        assert!(text.starts_with(b"@HD\tVN:1.6\tSO:unknown\n"), "{rewrite}");
+    }
+    let named: sam::Header = "@HD\tVN:1.6\tSO:coordinate\n".parse().expect("header");
+    check_sort_order(&named, Stringency::Strict, path).expect("a named order");
+}

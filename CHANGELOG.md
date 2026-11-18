@@ -73,6 +73,23 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   text.
 - `chain ... + add-comments-to-bam -C` with a newline in a comment is a usage error before
   the first read (exit 2, `--dry-run` too); it failed the step after the chain started.
+- `chain ... + add-o-a-tag -L FILE` reads the interval list before the first read, so a
+  BED or a missing file fails with the verb's error and exit code 1 before the earlier
+  steps run (`--dry-run` too); it failed the step after a `sort-sam` before it had sorted.
+- An `INTERVAL_LIST` named `.gz`, `.gzip` or `.bfq` is read through gzip, as htsjdk reads
+  it (`AddOATag`, `ViewSam`). It failed with `stream did not contain valid UTF-8`.
+- A record-editing tool reads an `@HD SO` value htsjdk does not name as htsjdk does: an
+  error at `STRICT`, a warning at `LENIENT`, and `SO:unknown` in the file written. It
+  wrote the value as read.
+- The order check of the BAM and SAM writers takes two records without a reference as
+  equal whatever their `POS`, as `fileOrderCompare`. Two such records with falling `POS`
+  under `SO:coordinate` failed `AddOATag`, `SortSam` and `MarkDuplicates` outputs.
+- `CREATE_INDEX` names the `.bai` as htsjdk's `BAMFileWriter`: `.bam` at the end of the
+  name becomes `.bai`, any other name gets `.bai` appended (`out.dat.bai`). It replaced
+  any extension (`out.bai`). `AddOATag`, `SortSam`, `MarkDuplicates` and `chain ... +
+  write --index`.
+- An `OUTPUT` ending in `.SAM` is a BAM, as htsjdk tells SAM by the lower-case suffix. It
+  was written as SAM text.
 
 ## 0.26.0
 

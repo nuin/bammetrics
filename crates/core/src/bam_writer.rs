@@ -153,18 +153,17 @@ impl Presorted {
         }
         if let Some((reference, start)) = self.previous {
             let out_of_order = match self.order {
-                SortOrder::Coordinate => {
-                    let next = record.reference_id();
-                    let by_reference = match (reference, next) {
-                        (-1, -1) => std::cmp::Ordering::Equal,
-                        (-1, _) => std::cmp::Ordering::Greater,
-                        (_, -1) => std::cmp::Ordering::Less,
-                        _ => reference.cmp(&next),
-                    };
-                    by_reference
+                // `SAMRecordCoordinateComparator.fileOrderCompare`: two
+                // records without a reference are equal whatever their start.
+                SortOrder::Coordinate => match (reference, record.reference_id()) {
+                    (-1, -1) => false,
+                    (-1, _) => true,
+                    (_, -1) => false,
+                    (reference, next) => reference
+                        .cmp(&next)
                         .then(start.cmp(&record.alignment_start()))
-                        .is_gt()
-                }
+                        .is_gt(),
+                },
                 _ => self.previous_name.as_slice() > record.name(),
             };
             if out_of_order {
@@ -254,8 +253,8 @@ impl BamWriter {
 /// What [`finish`] writes beside the BAM.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Companions {
-    /// A `.bai` in place of the BAM's extension, for a coordinate-sorted
-    /// header only.
+    /// A `.bai` named by [`index_path`], for a coordinate-sorted header
+    /// only.
     pub index: bool,
     /// `<BAM>.md5`: the hex MD5 of the file.
     pub md5: bool,
@@ -269,8 +268,19 @@ pub fn finish(
     header: &sam::Header,
     companions: Companions,
 ) -> Result<Vec<PathBuf>> {
-    let index = writer.path.with_extension("bai");
+    let index = index_path(&writer.path);
     finish_with_index(writer, header, companions, &index)
+}
+
+/// Where htsjdk's `BAMFileWriter.createBamIndex` writes the `.bai` of
+/// `output`: `.bam` at the end of the name becomes `.bai` (`out.bam` gives
+/// `out.bai`), and any other name gets `.bai` appended (`out.dat.bai`).
+pub fn index_path(output: &Path) -> PathBuf {
+    use std::os::unix::ffi::{OsStrExt, OsStringExt};
+    let name = output.as_os_str().as_bytes();
+    let mut index = name.strip_suffix(b".bam").unwrap_or(name).to_vec();
+    index.extend_from_slice(b".bai");
+    PathBuf::from(std::ffi::OsString::from_vec(index))
 }
 
 /// [`finish`] with the `.bai` at `index_path`: htsjdk's block copy of a
@@ -368,6 +378,43 @@ mod tests {
 
     use super::*;
     use crate::bam_raw::build;
+
+    #[test]
+    fn the_index_replaces_a_bam_suffix_and_is_appended_to_any_other_name() {
+        for (output, index) in [
+            ("out.bam", "out.bai"),
+            ("dir/x.y.bam", "dir/x.y.bai"),
+            ("out", "out.bai"),
+            ("out.bam.out", "out.bam.out.bai"),
+            ("out.dat", "out.dat.bai"),
+            ("out.BAM", "out.BAM.bai"),
+        ] {
+            assert_eq!(index_path(Path::new(output)), Path::new(index), "{output}");
+        }
+    }
+
+    /// `fileOrderCompare`: two records without a reference are equal, so
+    /// their starts are never compared; one without a reference sorts last.
+    #[test]
+    fn records_without_a_reference_are_in_order_whatever_their_start() {
+        let header: sam::Header = "@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:c1\tLN:1000\n"
+            .parse()
+            .expect("header");
+        let path = Path::new("out.bam");
+        let mut order = Presorted::of(&header);
+        for (name, reference, pos0) in [("r1", 0, 9), ("u1", -1, 4), ("u2", -1, -1)] {
+            let record = build(name, 4, reference, pos0, &[], &[], b"");
+            order.check(&record, path).expect(name);
+        }
+        let mut order = Presorted::of(&header);
+        order
+            .check(&build("u1", 4, -1, 4, &[], &[], b""), path)
+            .expect("first");
+        let error = order
+            .check(&build("r1", 0, 0, 9, &[], &[], b""), path)
+            .expect_err("a placed record after an unplaced one");
+        assert!(error.to_string().contains("[u1] and [r1]"), "{error}");
+    }
 
     #[test]
     fn an_index_error_names_the_output_and_leaves_no_file() {

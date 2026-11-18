@@ -228,7 +228,8 @@ fn check_output(opts: &Options) -> Result<()> {
     }
     let written = [
         Some(opts.output.clone()),
-        opts.create_index.then(|| opts.output.with_extension("bai")),
+        opts.create_index
+            .then(|| bam_writer::index_path(&opts.output)),
         opts.create_md5.then(|| bam_writer::md5_path(&opts.output)),
     ];
     let read = std::iter::once(&opts.input).chain(&opts.reference);

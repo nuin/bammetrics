@@ -1420,6 +1420,13 @@ decisions D40 to D43):
   message. `CollectHsMetrics` converts a BED; this tool does not.
 - A failed run leaves no `OUTPUT`. Picard leaves the records it wrote before the failure,
   for example after `Alignments added out of order`.
+- A `.cram` `OUTPUT` is refused before the first read until wave W15 (`bammetrics writes
+  BAM and SAM only: CRAM output is wave W15`): the verb exits 2, the Picard face exits 1.
+  Picard writes the CRAM.
+- A header with an `@SQ LN:0` line exits 1 at the header (`not a BAM or CRAM file (the
+  header could not be read: invalid record)`), as every tool but `BuildBamIndex` and
+  `CollectIndexDepthMetrics` (the `BuildBamIndex` entry under "Options"). Picard tags the
+  records.
 
 ## Not in Picard
 

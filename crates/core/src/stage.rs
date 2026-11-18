@@ -471,7 +471,7 @@ const STAGES: &[StageRow] = &[
         build: crate::add_oa_tag::stage,
         label: "oa_tagged",
         kind: StageKind::Streams,
-        check: crate::record_edit::check_stage,
+        check: crate::add_oa_tag::check_stage,
     },
 ];
 
