@@ -44,6 +44,8 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   both strands with every CIGAR operator at the clip point; `test_clean_sam.py` compares
   them, the fixtures, the tiers, the exome slice, SAM text and a CRAM (tier B with record
   bytes); `crates/cli/tests/clean_sam.rs` holds chained equals staged.
+- On the 10 GB HG002 exome (150,538,907 records) `CleanSam` takes 76.7 s at 37 MB peak
+  RSS; Picard takes 774.1 s. The records `samtools view` prints are equal (one MD5).
 
 ### Changed
 
