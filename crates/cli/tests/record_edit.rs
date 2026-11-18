@@ -363,13 +363,25 @@ fn a_step_refuses_what_belongs_to_the_write_step() {
             "names a BAM, and a transform writes none in a chain",
         ),
         ("replace-sam-header", &[][..], "HEADER"),
+        (
+            "add-comments-to-bam",
+            &["-C", "a\nb"][..],
+            "Comments can not contain a new line",
+        ),
     ] {
-        let mut args = vec![MARKDUP, "+", step];
-        args.extend(options);
-        args.extend(["+", "write", "/dev/null"]);
-        let (code, _, stderr) = chain(&args);
-        assert_eq!(code, Some(2), "{step} {options:?}: {stderr}");
-        assert!(stderr.contains(message), "{message}\n{stderr}");
+        for dry_run in [false, true] {
+            let mut args = vec![MARKDUP];
+            if dry_run {
+                args.push("--dry-run");
+            }
+            args.extend(["+", step]);
+            args.extend(options);
+            args.extend(["+", "write", "/dev/null"]);
+            let (code, _, stderr) = chain(&args);
+            assert_eq!(code, Some(2), "{step} {options:?} {dry_run}: {stderr}");
+            assert!(stderr.contains(message), "{message}\n{stderr}");
+            assert!(!stderr.contains("stopped its segment"), "{stderr}");
+        }
     }
 }
 

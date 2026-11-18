@@ -8,7 +8,7 @@ crates.io releases. `exclude = ["vendor"]` keeps them out of the workspace, so
 
 The crates.io tarball (`noodles-cram-0.102.0.crate`), unpacked, with
 `Cargo.lock` dropped, an empty `[workspace]` table added to `Cargo.toml`, and
-two changes marked `bammetrics patch`. The first is in
+four changes marked `bammetrics patch`. The first is in
 `src/io/reader/container/slice.rs`:
 
 - `calculate_template_length` is htsjdk 4's
@@ -24,7 +24,7 @@ two changes marked `bammetrics patch`. The first is in
   negated length.
 
 The tests of that file cover both. `cargo test --manifest-path
-vendor/noodles-cram/Cargo.toml` runs the crate's 310 tests.
+vendor/noodles-cram/Cargo.toml` runs the crate's tests.
 
 Without the change, a mate pair samtools stored attached at equal starts and
 read without an `MC` tag gets the opposite orientation from Picard
@@ -36,6 +36,21 @@ container buffer one MiB at a time up to the container length, in place of one
 0x7fffff00 bytes in a file of 343 bytes cost 1,578 MiB peak RSS in `insert-size`;
 it now ends as `truncated CRAM` at 5 MiB
 (`crates/cli/tests/forged_block_size.rs`).
+
+The third is in `src/record/sequence/iter.rs`: a read that runs past the end of
+its reference sequence reads each reference base there as `N`, as htsjdk 5.0.0's
+`CRAMRecordReadFeatures.restoreReadBases` does. noodles panicked on the slice
+index (`range start index 701 out of range for slice of length 700`).
+
+The fourth is in `src/io/reader/container/slice/records.rs`: `read_sequence`
+and `read_quality_scores` return no bytes for a read of length 0 before they
+look up the `BA` or `QS` encoding and block. A container of unmapped reads with
+SEQ `*` alone has neither, and noodles failed with `missing data series
+encoding: Bases`. Picard reads both shapes; `ViewSam` on each prints Picard's
+text (`tests/concordance/test_replace_sam_header.py::test_cram_shapes_as_htsjdk_reads_them`).
+
+`cargo test --manifest-path vendor/noodles-cram/Cargo.toml` runs 311 tests, one
+of them for the third change.
 
 To move to a later noodles-cram: unpack its tarball here, apply the
 `bammetrics patch` changes again if upstream has not, and run that test module

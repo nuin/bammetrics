@@ -105,6 +105,13 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     Ok(ToolOutput::NONE)
 }
 
+/// The usage errors of the step, asked before the first read of a chain:
+/// an option of the written file, a comment with a newline.
+pub fn check_stage(inv: &Invocation) -> Result<()> {
+    record_edit::check_stage(inv)?;
+    comments(inv).map(|_| ())
+}
+
 /// `AddCommentsToBam` as a step of a chain.
 pub fn stage<'t>(inv: &Invocation, frame: &Frame, _temp: &'t TempDir) -> Result<Stage<'t>> {
     let comments = comments(inv)?;

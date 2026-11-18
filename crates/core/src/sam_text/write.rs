@@ -219,6 +219,7 @@ pub struct SamWriter {
     out: BufWriter<File>,
     references: Vec<Vec<u8>>,
     line: Vec<u8>,
+    order: bam_writer::Presorted,
 }
 
 impl SamWriter {
@@ -239,6 +240,7 @@ impl SamWriter {
             out,
             references: reference_names(header),
             line: Vec::new(),
+            order: bam_writer::Presorted::of(header),
         })
     }
 
@@ -249,7 +251,10 @@ impl SamWriter {
         }
     }
 
+    /// Write `record`. Records must come in the header's order, as
+    /// htsjdk's presorted `SAMFileWriterImpl` asserts.
     pub fn write(&mut self, record: &RawRecord) -> Result<()> {
+        self.order.check(record, &self.path)?;
         self.line.clear();
         write_record(&mut self.line, record, &self.references).map_err(Error::Record)?;
         self.out

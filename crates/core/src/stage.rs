@@ -457,7 +457,7 @@ const STAGES: &[StageRow] = &[
         build: crate::add_comments_to_bam::stage,
         label: "commented",
         kind: StageKind::Streams,
-        check: crate::record_edit::check_stage,
+        check: crate::add_comments_to_bam::check_stage,
     },
     StageRow {
         tool: "ReplaceSamHeader",

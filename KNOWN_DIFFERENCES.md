@@ -1388,6 +1388,13 @@ differ here (docs/07 decisions D34 to D39):
   file has none; samtools warns that it may be cut.
 - `CREATE_INDEX` on a block copy writes `OUTPUT.bai` when the header says `SO:coordinate`.
   Picard also indexes an `SO:unsorted` BAM whose records are in coordinate order.
+- `CREATE_INDEX` on a BAM htsjdk's indexer refuses (a record placed without a reference,
+  references out of order, a reference index the header lacks, a start past its
+  reference, a position past 512 Mbp: nine of the `refused()` BAMs of
+  `tests/concordance/index_bams.py`) exits 1 and writes nothing. Picard prints the
+  `BamIndexingThread` exception, exits 0 and leaves a 0-byte `.bai`.
+- A block copy decodes each record it copies. A BAM whose `block_size` runs past the file
+  exits 1 as `truncated BAM`. Picard copies the blocks without decoding them and exits 0.
 - `AddCommentsToBam` reads a BAM from a pipe or standard input. Picard's block copy needs
   a file.
 - In a chain, `replace-sam-header` keeps each record's reference index, as the block copy

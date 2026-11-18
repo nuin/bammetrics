@@ -6,21 +6,23 @@ reference index. Any other name (SAM text, a CRAM, a BAM named `.dat`) is read a
 written through a presorted writer: each record keeps its reference name. Both go through
 `compare.compare_bam` with `record_bytes=True` (tier B).
 
-Headers: each input's own header with `DS` on its read groups and a `@CO` line; its
-contigs renamed; a 5-base contig in front; `SO:unsorted`; no `SO`; no `@HD`; the other
-sort order; no `@SQ`; an unknown header line (STRICT fails, LENIENT and SILENT read it).
+Headers: each input's own header with `DS` on its read groups and a `@CO` line; its contigs
+renamed; a 5-base contig in front; `SO:unsorted`; no `SO`; no `@HD`; the other sort order;
+no `@SQ`; the `@SQ` lines reversed; an unknown header line (STRICT fails, LENIENT and SILENT
+read it).
 HEADER as SAM text, as a BAM, as a CRAM and as SAM text with records. Inputs: the fixture
 BAMs, the foundation corpus, t1 to t3, the exome slice, `markdup.sam`, the foundation corpus
-as SAM text, `insert_size.cram`, `markdup.bam` named `.dat`. Options: COMPRESSION_LEVEL,
-CREATE_INDEX (`OUTPUT.bai` for a block copy, `out.bai` for the other path),
-CREATE_MD5_FILE, MAX_RECORDS_IN_RAM, REFERENCE_SEQUENCE, SAM text output on the second
-path. Error parity: sort orders that do not agree, a contig the new dictionary lacks, a
-missing HEADER, INPUT or output directory, ASSUME_SORTED, a bad SO at STRICT. Where Picard
-writes a BAM no reader opens (a block-copied record past the new dictionary, a block copy
-into a `.sam` name) bammetrics exits with an error and writes nothing. The step in a chain
-against Picard's file. The distinct-value gate wants three dictionary sizes, three input
-sizes and both paths.
+as SAM text, `insert_size.cram`, `markdup.bam` named `.dat`, two CRAMs of shapes htsjdk
+reads (`cram_shapes`). Options: COMPRESSION_LEVEL, CREATE_INDEX (`OUTPUT.bai` for a block
+copy, `out.bai` for the other path), CREATE_MD5_FILE, MAX_RECORDS_IN_RAM,
+REFERENCE_SEQUENCE, SAM text output on the second path. Error parity: sort orders that do not agree, a contig the new dictionary lacks, a
+missing HEADER, INPUT or output directory, ASSUME_SORTED, a bad SO at STRICT, records out of
+the new header's order into SAM text and into a BAM. Where Picard writes a BAM no reader
+opens (a block-copied record past the new dictionary, a block copy into a `.sam` name)
+bammetrics exits with an error and writes nothing. The step in a chain against Picard's
+file. The distinct-value gate wants three dictionary sizes, three input sizes and both paths.
 """
+import random
 import shutil
 import subprocess
 
@@ -82,6 +84,10 @@ def variant(source, kind, directory):
             out.append(line + "\tDS:reheadered")
         else:
             out.append(line)
+    if kind == "reversed":
+        at = [i for i, line in enumerate(out) if line.startswith("@SQ")]
+        for i, line in zip(at, [out[i] for i in reversed(at)]):
+            out[i] = line
     if kind == "plus":
         out.append("@CO\treplaced by test_replace_sam_header.py")
     if kind == "bad_line":
@@ -147,6 +153,69 @@ def test_the_rewrite_path(rewritten, tmp_path, name):
     for kind in ("renamed", "unsorted", "no_so", "other_order"):
         case(source, variant(source, kind, tmp_path), f"{name} {kind}", "fail", args=args,
              reference=reference)
+
+
+def test_records_out_of_the_new_order_fail_on_both_writers(rewritten, tmp_path):
+    """htsjdk's presorted writer checks each record against the one before it, for SAM
+    text and BAM output alike. The corpus as SAM text under its dictionary reversed, and
+    the same records in reverse under their own coordinate header: both tools fail and
+    bammetrics writes nothing."""
+    source, _ = rewritten["corpus_sam"]
+    header = variant(source, "reversed", tmp_path)
+    lines = source.read_text(encoding="latin-1").splitlines(keepends=True)
+    head = [line for line in lines if line.startswith("@")]
+    backwards = tmp_path / "backwards.sam"
+    backwards.write_text("".join(head + lines[len(head):][::-1]), encoding="latin-1")
+    for suffix in (".sam", ".bam"):
+        case(source, header, f"corpus_sam reversed dictionary {suffix}", "fail",
+             suffix=suffix)
+        case(backwards, variant(source, "plus", tmp_path), f"records reversed {suffix}",
+             "fail", suffix=suffix)
+
+
+def cram_shapes(directory):
+    """Two CRAMs of shapes htsjdk reads: (1) `B` arrays of every subtype, which htsjdk's
+    CRAM reader writes back signed (`B:C,200` as `B:c,-56`), reads that run past the end
+    of a 700-base contig (the reference bases there read as `N`), and unmapped mates and
+    unplaced reads with SEQ `*`; (2) unplaced reads with SEQ `*` alone, a container with
+    no `BA` encoding."""
+    rng = random.Random(11)
+    contig = "".join(rng.choice("ACGT") for _ in range(700))
+    reference = directory / "short.fa"
+    reference.write_text(">c1\n" + "\n".join(contig[i:i + 60] for i in range(0, 700, 60))
+                         + "\n")
+    subprocess.run(["samtools", "faidx", str(reference)], check=True)
+    head = "@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:c1\tLN:700\n@RG\tID:r\tSM:s\n"
+    arrays = ("XB:B:C,1,2,200\tXS:B:S,1,40000\tXI:B:I,1,3000000000\tXb:B:c,-1,2"
+              "\tXs:B:s,-3\tXi:B:i,-4\tXf:B:f,1.5\tRG:Z:r")
+    lines = []
+    for i in range(20):
+        start = 10 + 5 * i
+        seq = contig[start - 1:start + 29]
+        lines.append(f"m{i}\t73\tc1\t{start}\t60\t30M\t=\t{start}\t0\t{seq}\t{'I' * 30}"
+                     f"\t{arrays}")
+        lines.append(f"m{i}\t133\tc1\t{start}\t0\t*\t=\t{start}\t0\t*\t*\tRG:Z:r")
+    for i, start in enumerate([600, 650, 680, 690, 695, 699, 700]):
+        seq = "".join(rng.choice("ACGT") for _ in range(30))
+        lines.append(f"p{i}\t0\tc1\t{start}\t60\t30M\t*\t0\t0\t{seq}\t{'I' * 30}\t{arrays}")
+    unplaced = [f"u{i}\t4\t*\t0\t0\t*\t*\t0\t0\t*\t*\tRG:Z:r" for i in range(30)]
+    crams = {}
+    for name, records in (("shapes", lines + unplaced), ("unplaced", unplaced * 2)):
+        sam = directory / f"{name}.sam"
+        sam.write_text(head + "\n".join(records) + "\n")
+        crams[name] = directory / f"{name}.cram"
+        subprocess.run(["samtools", "view", "--no-PG", "-C", "-T", str(reference), "-o",
+                        str(crams[name]), str(sam)], check=True)
+    return reference, crams
+
+
+def test_cram_shapes_as_htsjdk_reads_them(tmp_path):
+    reference, crams = cram_shapes(tmp_path)
+    for name, source in crams.items():
+        header = variant(source, "plus", tmp_path)
+        for suffix in (".bam", ".sam"):
+            case(source, header, f"cram {name} {suffix}", args=[f"R={reference}"],
+                 suffix=suffix, reference=reference)
 
 
 @pytest.mark.parametrize("header", ["oxog.bam", "insert_size.cram", "markdup.sam"])

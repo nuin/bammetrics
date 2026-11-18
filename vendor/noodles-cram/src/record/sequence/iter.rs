@@ -19,15 +19,62 @@ impl<'c> ReferenceSequence<'c> {
         Self(src)
     }
 
+    // bammetrics patch: a read may run past the end of its reference
+    // sequence. htsjdk 5.0.0 (`CRAMRecordReadFeatures.restoreReadBases`)
+    // reads each such reference base as `N`; noodles panicked on the index.
     fn at(&self, position: Position) -> u8 {
         let i = usize::from(position) - 1;
-        self.0[i]
+        self.0.get(i).copied().unwrap_or(b'N')
     }
 
-    fn slice(&self, range: Range<Position>) -> &'c [u8] {
+    fn slice(&self, range: Range<Position>) -> ReferenceBases<'c> {
         let start = usize::from(range.start) - 1;
         let end = usize::from(range.end) - 1;
-        &self.0[start..end]
+        let len = end.saturating_sub(start);
+        let held = &self.0[start.min(self.0.len())..end.min(self.0.len())];
+        ReferenceBases {
+            bases: held.iter(),
+            padding: len - held.len(),
+        }
+    }
+}
+
+/// bammetrics patch: the reference bases of a stretch of a read, then `N`
+/// for each position past the end of the reference sequence.
+struct ReferenceBases<'c> {
+    bases: slice::Iter<'c, u8>,
+    padding: usize,
+}
+
+impl ReferenceBases<'_> {
+    fn empty() -> Self {
+        Self {
+            bases: [].iter(),
+            padding: 0,
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.bases.len() + self.padding
+    }
+}
+
+impl Iterator for ReferenceBases<'_> {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<u8> {
+        if let Some(base) = self.bases.next() {
+            Some(*base)
+        } else if self.padding > 0 {
+            self.padding -= 1;
+            Some(b'N')
+        } else {
+            None
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
     }
 }
 
@@ -66,10 +113,10 @@ impl<'r, 'c: 'r> Iter<'r, 'c> {
 
 enum State<'r, 'c: 'r> {
     Next,
-    Prepare(slice::Iter<'c, u8>, Position, &'r Feature<'c>),
+    Prepare(ReferenceBases<'c>, Position, &'r Feature<'c>),
     Base(u8),
     Bases(slice::Iter<'c, u8>),
-    Finish(slice::Iter<'c, u8>),
+    Finish(ReferenceBases<'c>),
     Done,
 }
 
@@ -90,10 +137,10 @@ impl<'r: 'c, 'c: 'r> Iterator for Iter<'r, 'c> {
                             } else if read_position != self.last_read_position {
                                 panic!("next: missing reference sequence");
                             } else {
-                                &[]
+                                ReferenceBases::empty()
                             };
 
-                        State::Prepare(bases.iter(), reference_position, feature)
+                        State::Prepare(bases, reference_position, feature)
                     } else if let Some(reference_sequence) = self.reference_sequence.as_ref() {
                         let last_read_position = usize::from(self.last_read_position);
 
@@ -109,7 +156,7 @@ impl<'r: 'c, 'c: 'r> Iterator for Iter<'r, 'c> {
 
                             let bases = reference_sequence.slice(self.last_reference_position..end);
 
-                            State::Finish(bases.iter())
+                            State::Finish(bases)
                         }
                     } else if usize::from(self.last_read_position) != self.read_length + 1 {
                         panic!(
@@ -127,7 +174,7 @@ impl<'r: 'c, 'c: 'r> Iterator for Iter<'r, 'c> {
                 }
                 State::Prepare(ref mut reference_bases, reference_position, feature) => {
                     if let Some(base) = reference_bases.next() {
-                        return Some(*base);
+                        return Some(base);
                     }
 
                     self.state = match feature {
@@ -173,7 +220,7 @@ impl<'r: 'c, 'c: 'r> Iterator for Iter<'r, 'c> {
                     None => self.state = State::Next,
                 },
                 State::Finish(ref mut iter) => match iter.next() {
-                    Some(base) => return Some(*base),
+                    Some(base) => return Some(base),
                     None => self.state = State::Done,
                 },
                 State::Done => return None,
@@ -284,6 +331,42 @@ mod tests {
 
         let actual: Vec<_> = iter.collect();
         assert_eq!(actual, b"CACATGATT");
+
+        Ok(())
+    }
+
+    // bammetrics patch
+    #[test]
+    fn test_next_past_the_end_of_the_reference_sequence() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let reference_sequence = b"ACGT";
+
+        let features = [Feature::Substitution {
+            position: Position::try_from(4)?,
+            code: 0b00,
+        }];
+
+        let iter = Iter::new(
+            Some(reference_sequence),
+            SubstitutionMatrix::default(),
+            &features,
+            Position::try_from(3)?,
+            5,
+        );
+
+        assert_eq!(iter.size_hint(), (5, Some(5)));
+        let actual: Vec<_> = iter.collect();
+        // Read position 4 lies on reference position 6, past the end: N, then substituted.
+        assert_eq!(actual, b"GTNAN");
+
+        let iter = Iter::new(
+            Some(reference_sequence),
+            SubstitutionMatrix::default(),
+            &[],
+            Position::try_from(9)?,
+            2,
+        );
+        assert_eq!(iter.collect::<Vec<_>>(), b"NN");
 
         Ok(())
     }

@@ -637,6 +637,7 @@ fn decode_container(
                 // writes as 255.
                 writer.get_mut()[start + BAM_MAPQ_OFFSET] = 0;
             }
+            crate::bam_raw::sign_unsigned_arrays(&mut writer.get_mut()[start + 4..])?;
         }
     }
     Ok(writer.into_inner())

@@ -42,6 +42,21 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   without the order check; `RawRecord::set_reference_ids` and `set_codec_bin`;
   `pass::with_record_stream_kind` tells a BAM from a CRAM and SAM text.
 
+### Fixed
+
+- SAM text output checks the header's order as htsjdk's presorted writer does
+  (`bam_writer::Presorted`, shared with `BamWriter`). `ReplaceSamHeader` into a `.sam`
+  under a reordered dictionary, or of records out of their `SO:coordinate` order, wrote
+  the file; it now fails as Picard fails.
+- CRAM input: a `B:C`, `B:S` or `B:I` array comes out as `B:c`, `B:s` or `B:i` over the
+  same bytes, as htsjdk's CRAM reader writes it (`200` prints as `-56`). Reads past the
+  end of their contig decode with `N` for the reference bases there; the vendored
+  noodles-cram panicked. A container of unmapped reads with SEQ `*` alone decodes; it
+  failed with `missing data series encoding: Bases`. `ViewSam` on each prints Picard's
+  text.
+- `chain ... + add-comments-to-bam -C` with a newline in a comment is a usage error before
+  the first read (exit 2, `--dry-run` too); it failed the step after the chain started.
+
 ## 0.26.0
 
 Wave W08 of docs/07: adapter content, duplicates by tile, telomere and index-only depth.

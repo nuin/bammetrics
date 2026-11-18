@@ -169,6 +169,49 @@ fn invalid(what: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, format!("BAM record: {what}"))
 }
 
+/// Where the tag block of the record `buf` (no `block_size`) starts, an
+/// error when its fields run past its bytes.
+fn checked_tags_start(buf: &[u8]) -> io::Result<usize> {
+    if buf.len() < FIXED {
+        return Err(invalid("shorter than its fixed fields"));
+    }
+    let name_len = usize::from(buf[8]);
+    if name_len == 0 {
+        return Err(invalid("read name length 0"));
+    }
+    let cigar_ops = usize::from(u16::from_le_bytes([buf[12], buf[13]]));
+    let l_seq = usize::try_from(i32::from_le_bytes([buf[16], buf[17], buf[18], buf[19]]))
+        .map_err(|_| invalid("negative l_seq"))?;
+    let tags = FIXED + name_len + 4 * cigar_ops + l_seq.div_ceil(2) + l_seq;
+    if tags > buf.len() {
+        return Err(invalid("fields run past the record"));
+    }
+    Ok(tags)
+}
+
+/// The `B` arrays of a CRAM record as htsjdk 5.0.0 decodes them: its CRAM
+/// reader (`ReadTag`) drops the unsigned flag of an array, so `B:C`, `B:S`
+/// and `B:I` come out as `B:c`, `B:s` and `B:i` over the same bytes (200
+/// prints as -56). Rewrites the subtypes of the record `buf` (no
+/// `block_size`) in place.
+pub(crate) fn sign_unsigned_arrays(buf: &mut [u8]) -> io::Result<()> {
+    let start = checked_tags_start(buf)?;
+    let mut subtypes = Vec::new();
+    let mut tags = TagIter::new(&buf[start..]);
+    loop {
+        let at = buf.len() - tags.rest.len();
+        match tags.next().transpose()? {
+            None => break,
+            Some((_, TagValue::Array(b'C' | b'S' | b'I', ..))) => subtypes.push(at + 3),
+            Some(_) => {}
+        }
+    }
+    for at in subtypes {
+        buf[at] = buf[at].to_ascii_lowercase();
+    }
+    Ok(())
+}
+
 impl RawRecord {
     /// The record whose bytes are `buf`, checked so every accessor stays in
     /// bounds.
@@ -179,19 +222,7 @@ impl RawRecord {
     }
 
     fn check(&self) -> io::Result<()> {
-        if self.buf.len() < FIXED {
-            return Err(invalid("shorter than its fixed fields"));
-        }
-        let name_len = usize::from(self.buf[8]);
-        if name_len == 0 {
-            return Err(invalid("read name length 0"));
-        }
-        let l_seq = usize::try_from(self.i32_at(16)).map_err(|_| invalid("negative l_seq"))?;
-        let tags = FIXED + name_len + 4 * self.cigar_ops() + l_seq.div_ceil(2) + l_seq;
-        if tags > self.buf.len() {
-            return Err(invalid("fields run past the record"));
-        }
-        Ok(())
+        checked_tags_start(&self.buf).map(|_| ())
     }
 
     /// Read the next record of a BAM record stream into `self`. False at
@@ -960,6 +991,31 @@ mod tests {
         record.set_tags(&decoded).expect("encode");
         // Ordered by second character, then first: RG (G), XS (S), DT (T).
         assert_eq!(record.tag_bytes(), b"RGZa\0XSc\x07DTZLB\0");
+    }
+
+    #[test]
+    fn unsigned_arrays_of_a_cram_record_become_signed() {
+        let mut tags = Vec::new();
+        tags.extend_from_slice(b"XBBC\x03\0\0\0\x01\x02\xc8");
+        tags.extend_from_slice(b"XZZB:C\0");
+        tags.extend_from_slice(b"XSBS\x01\0\0\0\x40\x9c");
+        tags.extend_from_slice(b"XIBI\x01\0\0\0\0\x5e\xd0\xb2");
+        tags.extend_from_slice(b"XFBf\x01\0\0\0\0\0\xc0\x3f");
+        tags.extend_from_slice(b"XbBc\x01\0\0\0\xff");
+        let record = build("r", 0, 0, 0, &[], b"ACGT", &tags);
+        let mut bytes = record.as_bytes().to_vec();
+        sign_unsigned_arrays(&mut bytes).expect("arrays");
+        let signed = RawRecord::from_bytes(bytes).expect("a record");
+        let mut want = tags.clone();
+        for at in [3, 21, 31] {
+            want[at] = want[at].to_ascii_lowercase();
+        }
+        assert_eq!(signed.tag_bytes(), want.as_slice());
+        let cut = &mut record.as_bytes().to_vec()[..record.as_bytes().len() - 1];
+        assert!(
+            sign_unsigned_arrays(cut).is_err(),
+            "a cut array is an error"
+        );
     }
 
     #[test]
