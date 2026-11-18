@@ -5,8 +5,9 @@
 //! One pass. A record counts when it is primary (not secondary, not
 //! supplementary); unmapped records count, since adapter dimers rarely
 //! map. `PF_READS_ONLY` drops QC-failed records and `INCLUDE_DUPLICATES`
-//! false drops duplicates. The bases are taken in sequencing order: a
-//! record with flag 0x10 is reverse complemented, as `samtools fastq` does.
+//! false drops duplicates. The bases are taken in sequencing order through
+//! `read_bases.rs`, as `CollectTelomereMetrics` takes them: a record with
+//! flag 0x10 is reverse complemented, as `samtools fastq` does.
 //! Hard-clipped bases are not in the record and cannot be restored.
 //!
 //! For each adapter the search key is its first `ADAPTER_KMER` bases
@@ -38,6 +39,7 @@ use crate::metric::{
 };
 use crate::metrics_file::KeyClass;
 use crate::pass::{self, Accumulator};
+use crate::read_bases;
 use crate::registry::{Invocation, Opt, Tool};
 
 /// The metrics class string. Not a Picard class: readers key on the last
@@ -283,9 +285,9 @@ impl Matcher {
         }
     }
 
-    /// [`Matcher::first_starts`] over a BAM record's packed bases, two to
-    /// a byte, read backwards and complemented when `reverse`. No decoded
-    /// copy is made; a byte gives its two codes through one table.
+    /// [`Matcher::first_starts`] over a BAM record's packed bases, taken
+    /// in sequencing order by [`read_bases::Bases::each`]. No decoded copy is
+    /// made.
     fn scan_record(
         &self,
         packed: &[u8],
@@ -293,59 +295,12 @@ impl Matcher {
         reverse: bool,
         out: &mut Vec<(usize, usize)>,
     ) {
-        let Some(bytes) = packed.get(..length.div_ceil(2)) else {
-            // Fewer bytes than bases: the record is cut. Missing bases are N.
-            let nibble = |i: usize| {
-                let byte = packed.get(i / 2).copied().unwrap_or(0xFF);
-                usize::from(if i.is_multiple_of(2) {
-                    byte >> 4
-                } else {
-                    byte & 0x0F
-                })
-            };
-            let codes: Vec<u8> = (0..length).map(|i| NIBBLE_CODE[nibble(i)]).collect();
-            let codes = codes.iter().copied();
-            if reverse {
-                self.scan(
-                    codes.rev().map(|c| if c == NO_BASE { c } else { 3 - c }),
-                    out,
-                );
-            } else {
-                self.scan(codes, out);
-            }
-            return;
-        };
         out.clear();
-        let mut scan = Scan::new(self);
-        // An odd length leaves one base, in the high half, in the last byte.
-        let (whole, half) = if length % 2 == 1 {
-            bytes.split_at(bytes.len() - 1)
-        } else {
-            (bytes, &[][..])
+        let mut search = Search {
+            scan: Scan::new(self),
+            out,
         };
-        if reverse {
-            if let Some(&byte) = half.first()
-                && scan.step(REVERSE_PAIR[usize::from(byte)][1], out)
-            {
-                return;
-            }
-            for &byte in whole.iter().rev() {
-                let [first, second] = REVERSE_PAIR[usize::from(byte)];
-                if scan.step(first, out) || scan.step(second, out) {
-                    return;
-                }
-            }
-        } else {
-            for &byte in whole {
-                let [first, second] = PAIR[usize::from(byte)];
-                if scan.step(first, out) || scan.step(second, out) {
-                    return;
-                }
-            }
-            if let Some(&byte) = half.first() {
-                scan.step(PAIR[usize::from(byte)][0], out);
-            }
-        }
+        SEQUENCED.each(packed, length, reverse, &mut search);
     }
 }
 
@@ -396,6 +351,20 @@ impl<'m> Scan<'m> {
     }
 }
 
+/// A [`Scan`] and the hits it writes, as [`read_bases::Bases::each`] takes
+/// them.
+struct Search<'m, 'o> {
+    scan: Scan<'m>,
+    out: &'o mut Vec<(usize, usize)>,
+}
+
+impl read_bases::Take for Search<'_, '_> {
+    #[inline(always)]
+    fn take(&mut self, base: u8) -> bool {
+        self.scan.step(base, self.out)
+    }
+}
+
 /// A base other than A, C, G or T in [`Matcher::scan`].
 const NO_BASE: u8 = 4;
 
@@ -410,34 +379,8 @@ const NIBBLE_CODE: [u8; 16] = {
     table
 };
 
-/// The codes of a packed byte's two bases, high half first.
-const PAIR: [[u8; 2]; 256] = {
-    let mut table = [[NO_BASE; 2]; 256];
-    let mut byte = 0;
-    while byte < 256 {
-        table[byte] = [NIBBLE_CODE[byte >> 4], NIBBLE_CODE[byte & 0x0F]];
-        byte += 1;
-    }
-    table
-};
-
-/// The complements of a packed byte's two bases, low half first: the
-/// byte read backwards on the reverse strand. The complement of code c is
-/// 3 - c.
-const REVERSE_PAIR: [[u8; 2]; 256] = {
-    let mut table = [[NO_BASE; 2]; 256];
-    let mut byte = 0;
-    while byte < 256 {
-        let [high, low] = PAIR[byte];
-        table[byte] = [complement_code(low), complement_code(high)];
-        byte += 1;
-    }
-    table
-};
-
-const fn complement_code(code: u8) -> u8 {
-    if code == NO_BASE { code } else { 3 - code }
-}
+/// [`NIBBLE_CODE`] of each base in sequencing order.
+static SEQUENCED: read_bases::Bases = read_bases::Bases::new(NIBBLE_CODE);
 
 /// The counts of one read end in one unit.
 #[derive(Clone, Debug, Default, PartialEq)]

@@ -85,6 +85,11 @@
 
 ### Changed
 
+- `read_bases.rs`: `CollectAdapterContentMetrics` and `CollectTelomereMetrics` take a
+  record's bases in sequencing order through one walk (`Bases::each`), two bases per table
+  lookup. Output is unchanged; a cut record now reads its missing bases as `N` in both.
+  On the 10 GB HG002 exome adapter content runs 27.0 s against 28.4 s and telomere
+  54.2 s against 52.5 s (means of four runs, page cache warm).
 - `genome_build::kind` and `genome_build::Kind` are public: `CollectIndexDepthMetrics`
   groups its rows by them.
 

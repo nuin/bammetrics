@@ -61,6 +61,7 @@ pub mod picard_classes;
 pub mod quality;
 pub mod quality_score_distribution;
 pub mod quality_yield;
+pub mod read_bases;
 pub mod record;
 pub mod ref_flat;
 pub mod reference;

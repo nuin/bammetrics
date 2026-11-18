@@ -6,8 +6,9 @@
 //! supplementary) and not QC-failed; unmapped records count, since most
 //! telomeric reads are unmapped. Duplicates are left out unless
 //! `COUNT_DUPLICATES=true`. A record with no bases (`SEQ` `*`) is not
-//! counted. Each counted read is restored to the strand it
-//! was sequenced on (reverse complemented when flag 0x10 is set), then
+//! counted. Each counted read is restored to the strand it was sequenced
+//! on (reverse complemented when flag 0x10 is set) through `read_bases.rs`,
+//! as `CollectAdapterContentMetrics` restores it, then
 //! [`count_repeats`] counts the non-overlapping occurrences of `REPEAT` and
 //! of its reverse complement, scanning left to right, and keeps the larger
 //! count, as TelSeq's `countMotif` does. A read is telomeric at
@@ -24,6 +25,7 @@ use crate::metric::{
 };
 use crate::metrics_file::KeyClass;
 use crate::pass::{self, Accumulator};
+use crate::read_bases;
 use crate::registry::{Invocation, Opt, Tool};
 
 /// The metrics class string. Not a Picard class: readers key on the last
@@ -214,10 +216,8 @@ pub fn count_repeats(read: &[u8], repeat: &[u8], reverse: &[u8]) -> usize {
     forward.max(backward)
 }
 
-/// The bases of the 4-bit codes of a BAM record, and their complements
-/// (`N` for every code that is not A, C, G or T).
-const BASES: [u8; 16] = *b"=ACMGRSVTWYHKDBN";
-const COMPLEMENTS: [u8; 16] = *b"NTGNCNNNANNNNNNN";
+/// The letter of each base in sequencing order.
+static SEQUENCED: read_bases::Bases = read_bases::Bases::new(read_bases::LETTERS);
 
 /// The reverse complement of A, C, G, T text; any other byte becomes `N`.
 pub fn reverse_complement(bases: &[u8]) -> Vec<u8> {
@@ -370,16 +370,13 @@ impl Telomere {
     fn scan(&mut self, record: &bam::Record) -> Scan {
         let sequence = record.sequence();
         let reverse = record.flags().is_reverse_complemented();
-        let table = if reverse { &COMPLEMENTS } else { &BASES };
         self.bases.clear();
-        for &pair in sequence.as_bytes() {
-            self.bases.push(table[usize::from(pair >> 4)]);
-            self.bases.push(table[usize::from(pair & 0x0F)]);
-        }
-        self.bases.truncate(sequence.len());
-        if reverse {
-            self.bases.reverse();
-        }
+        SEQUENCED.each(
+            sequence.as_bytes(),
+            sequence.len(),
+            reverse,
+            &mut self.bases,
+        );
         let gc = self
             .bases
             .iter()

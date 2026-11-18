@@ -33,7 +33,9 @@ record, secondary, supplementary, QC-failed and duplicate ones included; bammetr
 leaves those out so that each sequenced read counts once.
 
 Each counted read is first put back on the strand it was sequenced on: a record with flag
-0x10 is reverse complemented. The repeat count is then the larger of two counts: the
+0x10 is reverse complemented. `CollectAdapterContentMetrics` takes its bases through the
+same walk (`crates/core/src/read_bases.rs`), where a cut record's missing bases read as
+`N`. The repeat count is then the larger of two counts: the
 non-overlapping occurrences of `REPEAT` (default `TTAGGG`) and those of its reverse
 complement (`CCCTAA`). A count scans left to right and resumes after each match, as
 TelSeq's `countMotif` does. `TTAGGG` cannot overlap itself, so for the default repeat the
