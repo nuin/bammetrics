@@ -476,6 +476,22 @@ fn sample_read_length(stream: &mut BamStream, sample: i64, path: &Path) -> Resul
     Ok((reads > 0).then(|| bases as f64 / reads as f64))
 }
 
+/// The block offset past a file of `bytes` bytes where the index says a
+/// reference's records end, if any. Each metadata bin holds the virtual
+/// offset after the reference's last record, whose upper 48 bits are the
+/// start of a BGZF block, at most the file length. A cut BAM whose index was
+/// made before the cut fails this test even when no record is read
+/// (`READ_LENGTH`).
+fn past_the_end(summary: &Summary, bytes: u64) -> Option<u64> {
+    summary
+        .metadata
+        .iter()
+        .flatten()
+        .map(|m| m.last_offset >> 16)
+        .max()
+        .filter(|end| *end > bytes)
+}
+
 /// The counts and the read length of the BAM at `bam`, from its index and
 /// its first records.
 pub fn measure(bam: &Path, opts: &Options) -> Result<(Counts, Option<f64>)> {
@@ -487,10 +503,6 @@ pub fn measure(bam: &Path, opts: &Options) -> Result<(Counts, Option<f64>)> {
         path: bam.to_path_buf(),
         source,
     })?;
-    let read_length = match opts.read_length {
-        Some(rl) => Some(rl as f64),
-        None => sample_read_length(&mut stream, opts.read_length_sample, bam)?,
-    };
     let references = header.binary.len();
     let summary = read_index(&index, references)?;
     if summary.references != references {
@@ -501,6 +513,28 @@ pub fn measure(bam: &Path, opts: &Options) -> Result<(Counts, Option<f64>)> {
             summary.references
         )));
     }
+    let bytes = std::fs::metadata(bam)
+        .map_err(|source| Error::Input {
+            path: bam.to_path_buf(),
+            source,
+        })?
+        .len();
+    if let Some(end) = past_the_end(&summary, bytes) {
+        return Err(Error::Input {
+            path: bam.to_path_buf(),
+            source: std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                format!(
+                    "truncated BAM: the index places records in a block at byte {end}, past \
+                     the end of the file at {bytes} bytes"
+                ),
+            ),
+        });
+    }
+    let read_length = match opts.read_length {
+        Some(rl) => Some(rl as f64),
+        None => sample_read_length(&mut stream, opts.read_length_sample, bam)?,
+    };
     let contigs = header
         .binary
         .into_iter()
@@ -519,12 +553,6 @@ pub fn measure(bam: &Path, opts: &Options) -> Result<(Counts, Option<f64>)> {
         contigs,
         no_coordinate: summary.no_coordinate.unwrap_or(0),
     };
-    let bytes = std::fs::metadata(bam)
-        .map_err(|source| Error::Input {
-            path: bam.to_path_buf(),
-            source,
-        })?
-        .len();
     let records: u128 = counts
         .contigs
         .iter()

@@ -326,6 +326,29 @@ fn a_count_the_file_does_not_back_is_an_early_end() {
 }
 
 #[test]
+fn an_index_cut_in_its_header_or_counts_says_so() {
+    let mut no_reference = b"BAI\x01".to_vec();
+    no_reference.extend(i32::MAX.to_le_bytes());
+    for bytes in [&b""[..], &b"BA"[..], &b"BAI\x01\x05"[..], &no_reference[..]] {
+        let error = Summary::read(&mut &bytes[..], 3).expect_err("cut");
+        assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+        assert_eq!(
+            error.to_string(),
+            "BAI: the index is cut short: damaged or incomplete"
+        );
+        let whole = Index::read(&mut &bytes[..]).expect_err("cut");
+        assert_eq!(whole.to_string(), error.to_string());
+    }
+    let mut csi = b"CSI\x01".to_vec();
+    csi.extend(14i32.to_le_bytes());
+    let error = Summary::read_csi(&mut csi.as_slice(), 1).expect_err("cut");
+    assert_eq!(
+        error.to_string(),
+        "CSI: the index is cut short: damaged or incomplete"
+    );
+}
+
+#[test]
 fn a_reference_starts_without_the_chunks_of_the_one_before() {
     let chunk = |block: u64| Chunk {
         start: offset(block, 0),

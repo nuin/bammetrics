@@ -15,8 +15,8 @@
 use std::io::{self, Read};
 
 use super::{
-    Metadata, Summary, invalid, read_count, read_metadata, read_no_coordinate, read_u32, read_u64,
-    skip,
+    Metadata, Summary, cut_short, invalid, read_count, read_metadata, read_no_coordinate, read_u32,
+    read_u64, skip,
 };
 
 pub const MAGIC: [u8; 4] = *b"CSI\x01";
@@ -54,6 +54,10 @@ impl Summary {
     /// count the file does not back ends at the end of the file; nothing is
     /// allocated from a count, and memory grows with `keep` only.
     pub fn read_csi(reader: &mut impl Read, keep: usize) -> io::Result<Self> {
+        Self::read_csi_whole(reader, keep).map_err(cut_short("CSI"))
+    }
+
+    fn read_csi_whole(reader: &mut impl Read, keep: usize) -> io::Result<Self> {
         let mut magic = [0u8; 4];
         reader.read_exact(&mut magic)?;
         if magic != MAGIC {

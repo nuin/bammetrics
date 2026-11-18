@@ -286,22 +286,24 @@ fn counts_no_file_of_that_size_holds_are_refused() {
 }
 
 #[test]
-fn a_cut_bam_names_the_cut_and_read_length() {
+fn a_cut_bam_is_refused_with_or_without_read_length() {
     let (dir, bam, _) = copied("cut", "bai");
     let whole = fs::read(&bam).expect("read the BAM");
     fs::write(&bam, &whole[..3000]).expect("cut the BAM");
     let path = bam.to_str().unwrap();
-    refused(&["index-depth", path], "truncated BAM");
-    refused(&["index-depth", path], "READ_LENGTH skips the sample");
-    let out = dir.join("depth.txt");
-    let given = bammetrics(&[
-        "index-depth",
-        path,
-        "--read-length",
-        "50",
-        "-o",
-        out.to_str().unwrap(),
-    ]);
+    for args in [
+        &["index-depth", path][..],
+        &["index-depth", path, "--read-length", "50"][..],
+    ] {
+        refused(
+            args,
+            "truncated BAM: the index places records in a block at byte",
+        );
+        refused(args, "past the end of the file at 3000 bytes");
+    }
+    // Without the end-of-file block every record is still there.
+    fs::write(&bam, &whole[..whole.len() - 28]).expect("cut the EOF block");
+    let given = bammetrics(&["index-depth", path, "--read-length", "50"]);
     assert_eq!(given.status.code(), Some(0), "{given:?}");
     fs::remove_dir_all(&dir).expect("remove the temp dir");
 }
