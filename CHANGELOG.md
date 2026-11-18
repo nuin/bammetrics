@@ -31,6 +31,18 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   SAM text and CRAM), `crates/cli/tests/record_edit.rs` (chained equals staged at the
   first, a middle and the last position beside `mark-duplicates` and `sort-sam`), and
   golden records.
+- `SetNmMdAndUqTags` (verb `set-nm-md-and-uq-tags`, Python `set_nm_md_and_uq_tags()`)
+  and `SetNmAndUqTags` (verb `set-nm-and-uq-tags`, Python `set_nm_and_uq_tags()`,
+  Picard's deprecated name for the same tool), as Picard 3.5.0: `MD`, `NM` and `UQ` of
+  each mapped record of a coordinate-sorted SAM, BAM or CRAM against `REFERENCE_SEQUENCE`,
+  as htsjdk's `SequenceUtil` computes them (`IS_BISULFITE_SEQUENCE`, `SET_ONLY_UQ`); the
+  header check and message of Picard; unmapped records keep their bytes; a record that
+  gets a tag has its tags in htsjdk's order and widths. A chain transform (`tagged`) that
+  reads the chain's `-R`. `tests/concordance/test_set_nm_md_and_uq_tags.py` and
+  `test_set_nm_and_uq_tags.py` (tier B with record bytes, 38 tests: the fixtures, the
+  corpus tiers and the exome slice as written, stripped and planted, edge records, reads
+  past a contig end, a bisulfite set, CRAM and SAM text), `crates/cli/tests/set_nm_md_uq.rs`
+  (chained equals staged at every position) and golden records.
 - On the 10 GB HG002 exome (150,538,907 records) `AddCommentsToBam` takes 61.0 s at
   47 MB peak RSS and `ReplaceSamHeader` 56.2 s at 38 MB; Picard's block copies take 9.7 s
   and 11.2 s. The records are equal. bammetrics inflates and deflates every block where
@@ -41,6 +53,8 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
 - `bam_writer::finish_with_index` names the `.bai`; `BamWriter::unchecked` writes records
   without the order check; `RawRecord::set_reference_ids` and `set_codec_bin`;
   `pass::with_record_stream_kind` tells a BAM from a CRAM and SAM text.
+- `RecordEdit::rewrites`: a tool that writes every record through htsjdk's writer gives
+  each record that writer's `bin` in its chain step too. `sequence::iupac_code`.
 
 ### Fixed
 
