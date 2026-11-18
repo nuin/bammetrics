@@ -115,20 +115,74 @@ fn write_bam_header(out: &mut impl Write, header: &sam::Header) -> io::Result<()
 }
 
 /// The BGZF output, compressed on worker threads. Records must come in the
-/// header's order, as htsjdk's presorted `SAMFileWriterImpl` asserts:
-/// coordinate (reference, then start) or query name; any other order is
-/// not checked.
+/// header's order ([`Presorted`]).
 pub struct BamWriter {
     path: PathBuf,
     /// The output under its temporary name.
     file: AtomicFile,
     inner: noodles::bam::io::Writer<bgzf::io::MultithreadedWriter<BufWriter<File>>>,
-    order: SortOrder,
+    order: Presorted,
     /// The BGZF workers, which also read the file back for its index.
     threads: usize,
+}
+
+/// htsjdk's `SAMFileWriterImpl.assertPresorted`: each record must follow
+/// the one before it in the header's order, coordinate (reference, then
+/// start) or query name. Any other order is not checked. The BAM and the
+/// SAM text writers both ask it.
+pub(crate) struct Presorted {
+    order: SortOrder,
     /// Reference and start of the last record written, and its name.
     previous: Option<(i32, i32)>,
     previous_name: Vec<u8>,
+}
+
+impl Presorted {
+    pub(crate) fn of(header: &sam::Header) -> Self {
+        Self {
+            order: SortOrder::of(header),
+            previous: None,
+            previous_name: Vec::new(),
+        }
+    }
+
+    /// An error when `record`, written to `path`, comes before the last one.
+    pub(crate) fn check(&mut self, record: &RawRecord, path: &Path) -> Result<()> {
+        if !matches!(self.order, SortOrder::Coordinate | SortOrder::Queryname) {
+            return Ok(());
+        }
+        if let Some((reference, start)) = self.previous {
+            let out_of_order = match self.order {
+                SortOrder::Coordinate => {
+                    let next = record.reference_id();
+                    let by_reference = match (reference, next) {
+                        (-1, -1) => std::cmp::Ordering::Equal,
+                        (-1, _) => std::cmp::Ordering::Greater,
+                        (_, -1) => std::cmp::Ordering::Less,
+                        _ => reference.cmp(&next),
+                    };
+                    by_reference
+                        .then(start.cmp(&record.alignment_start()))
+                        .is_gt()
+                }
+                _ => self.previous_name.as_slice() > record.name(),
+            };
+            if out_of_order {
+                return Err(Error::Metric(format!(
+                    "Alignments added out of order in SAMFileWriterImpl.addAlignment for {}. \
+                     Sort order is {}. Offending records are at [{}] and [{}]",
+                    path.display(),
+                    self.order.name(),
+                    String::from_utf8_lossy(&self.previous_name),
+                    String::from_utf8_lossy(record.name())
+                )));
+            }
+        }
+        self.previous = Some((record.reference_id(), record.alignment_start()));
+        self.previous_name.clear();
+        self.previous_name.extend_from_slice(record.name());
+        Ok(())
+    }
 }
 
 impl BamWriter {
@@ -160,52 +214,13 @@ impl BamWriter {
             path,
             file: atomic,
             inner,
-            order: SortOrder::of(header),
+            order: Presorted::of(header),
             threads,
-            previous: None,
-            previous_name: Vec::new(),
         })
     }
 
-    /// `assertPresorted`.
-    fn check_order(&mut self, record: &RawRecord) -> Result<()> {
-        if let Some((reference, start)) = self.previous {
-            let out_of_order = match self.order {
-                SortOrder::Coordinate => {
-                    let next = record.reference_id();
-                    let by_reference = match (reference, next) {
-                        (-1, -1) => std::cmp::Ordering::Equal,
-                        (-1, _) => std::cmp::Ordering::Greater,
-                        (_, -1) => std::cmp::Ordering::Less,
-                        _ => reference.cmp(&next),
-                    };
-                    by_reference
-                        .then(start.cmp(&record.alignment_start()))
-                        .is_gt()
-                }
-                _ => self.previous_name.as_slice() > record.name(),
-            };
-            if out_of_order {
-                return Err(Error::Metric(format!(
-                    "Alignments added out of order in SAMFileWriterImpl.addAlignment for {}. \
-                     Sort order is {}. Offending records are at [{}] and [{}]",
-                    self.path.display(),
-                    self.order.name(),
-                    String::from_utf8_lossy(&self.previous_name),
-                    String::from_utf8_lossy(record.name())
-                )));
-            }
-        }
-        self.previous = Some((record.reference_id(), record.alignment_start()));
-        self.previous_name.clear();
-        self.previous_name.extend_from_slice(record.name());
-        Ok(())
-    }
-
     pub fn write(&mut self, record: &RawRecord) -> Result<()> {
-        if matches!(self.order, SortOrder::Coordinate | SortOrder::Queryname) {
-            self.check_order(record)?;
-        }
+        self.order.check(record, &self.path)?;
         record
             .write_to(self.inner.get_mut())
             .map_err(|source| Error::Output {
@@ -224,6 +239,15 @@ impl BamWriter {
         let mut file = self.inner.get_mut().finish().map_err(error)?;
         file.flush().map_err(error)?;
         Ok(self.file)
+    }
+
+    /// The writer without the order check: records go out as they come,
+    /// as htsjdk's block copy of a BAM writes them
+    /// (`BamFileIoUtils.reheaderBamFile`).
+    #[must_use]
+    pub fn unchecked(mut self) -> Self {
+        self.order.order = SortOrder::Unsorted;
+        self
     }
 }
 
@@ -245,17 +269,24 @@ pub fn finish(
     header: &sam::Header,
     companions: Companions,
 ) -> Result<Vec<PathBuf>> {
+    let index = writer.path.with_extension("bai");
+    finish_with_index(writer, header, companions, &index)
+}
+
+/// [`finish`] with the `.bai` at `index_path`: htsjdk's block copy of a
+/// BAM names it `<BAM>.bai` (`out.bam.bai`), its writers `out.bai`.
+pub fn finish_with_index(
+    writer: BamWriter,
+    header: &sam::Header,
+    companions: Companions,
+    index_path: &Path,
+) -> Result<Vec<PathBuf>> {
     let threads = writer.threads;
     let output = writer.close()?;
     let target = output.path().to_path_buf();
     let coordinate = SortOrder::of(header) == SortOrder::Coordinate;
     let index = if companions.index && coordinate {
-        Some(write_index(
-            output.writing(),
-            &target,
-            &target.with_extension("bai"),
-            threads,
-        )?)
+        Some(write_index(output.writing(), &target, index_path, threads)?)
     } else {
         None
     };

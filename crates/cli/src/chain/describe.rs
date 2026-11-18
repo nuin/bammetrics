@@ -301,9 +301,10 @@ pub fn text(chain: &Chain) -> Result<String, VerbError> {
             segment_line(chain, &estimate, segment, taps_only)
         );
         for step in &chain.steps {
-            let emits = step.role == Role::Transform && step.segment + 1 == segment;
+            let barrier = step.role == Role::Transform && !step.streams();
+            let emits = barrier && step.segment + 1 == segment;
             if step.segment == segment {
-                step_line(&mut out, widths, step, step.role == Role::Transform);
+                step_line(&mut out, widths, step, barrier);
             } else if emits {
                 step_line(&mut out, widths, step, false);
             }

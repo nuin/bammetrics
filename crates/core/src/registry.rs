@@ -360,6 +360,8 @@ pub const TOOLS: &[&Tool] = &[
     &crate::duplicate_by_tile::TOOL,
     &crate::telomere::TOOL,
     &crate::index_depth::TOOL,
+    &crate::add_comments_to_bam::TOOL,
+    &crate::replace_sam_header::TOOL,
 ];
 
 /// The tool named `name`.

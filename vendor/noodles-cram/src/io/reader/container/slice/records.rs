@@ -618,7 +618,15 @@ impl<'c, 'ch: 'c> Records<'c, 'ch> {
         Ok(())
     }
 
+    // bammetrics patch: a read of length 0 (an unmapped read with SEQ `*`)
+    // has no `BA` and no `QS` values. A container of such reads alone may
+    // have neither encoding nor block, which htsjdk 5.0.0 and htslib read;
+    // noodles asked for the encoding and the block first.
     fn read_sequence(&mut self, read_length: usize) -> io::Result<Cow<'c, [u8]>> {
+        if read_length == 0 {
+            return Ok(Cow::from(&[][..]));
+        }
+
         let encoding = self
             .compression_header
             .data_series_encodings()
@@ -634,6 +642,10 @@ impl<'c, 'ch: 'c> Records<'c, 'ch> {
 
     fn read_quality_scores(&mut self, read_length: usize) -> io::Result<Cow<'c, [u8]>> {
         const MISSING: u8 = 0xff;
+
+        if read_length == 0 {
+            return Ok(Cow::from(&[][..]));
+        }
 
         let encoding = self
             .compression_header

@@ -505,7 +505,39 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("READ_LENGTH", "150")),
             picard_outputs: single,
         },
+        // A BAM, so the .md5 of each BAM compares.
+        Case {
+            verb: "add-comments-to-bam",
+            class: "AddCommentsToBam",
+            verb_args: strings(&[MD, "--create-md5-file"]),
+            picard_args: strings(&[&format!("I={MD}"), "CREATE_MD5_FILE=true"]),
+            option: Some(("COMMENT", "note")),
+            picard_outputs: commented_bam,
+        },
+        // SAM text in and out: the bodies compare.
+        Case {
+            verb: "replace-sam-header",
+            class: "ReplaceSamHeader",
+            verb_args: strings(&["tests/data/markdup.sam"]),
+            picard_args: strings(&["I=tests/data/markdup.sam"]),
+            option: Some(("HEADER", "tests/data/oxog.bam")),
+            picard_outputs: sorted_sam,
+        },
     ]
+}
+
+fn commented_bam(out: &str) -> Vec<String> {
+    vec![format!("O={out}.bam")]
+}
+
+/// The `-o` extension of a verb whose `-o` names the file the Picard face
+/// writes as `O=OUT.<extension>`.
+fn named_output(verb: &str) -> Option<&'static str> {
+    match verb {
+        "sort-sam" | "replace-sam-header" => Some("sam"),
+        "add-comments-to-bam" => Some("bam"),
+        _ => None,
+    }
 }
 
 fn marked(out: &str) -> Vec<String> {
@@ -567,8 +599,8 @@ fn every_verb_reads_three_spellings_as_the_picard_face_does() {
                     format!("{out}.bam"),
                     "--metrics".to_owned(),
                 ]);
-            } else if case.verb == "sort-sam" {
-                args.extend(["-o".to_owned(), format!("{out}.sam")]);
+            } else if let Some(extension) = named_output(case.verb) {
+                args.extend(["-o".to_owned(), format!("{out}.{extension}")]);
                 run_ok(&args);
                 assert_eq!(bodies(&dir), expected, "{} {form:?}", case.verb);
                 let _ = fs::remove_dir_all(&dir);
@@ -609,7 +641,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 42);
+    assert_eq!(classes.len(), 44);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

@@ -470,6 +470,37 @@ fn a_sam_file_is_written_through_a_temporary_name() {
 }
 
 #[test]
+fn a_sam_file_checks_the_header_order_as_htsjdk_presorted_writer() {
+    let dir = std::env::temp_dir().join(format!("bammetrics-sam-order-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("scratch");
+    let path = dir.join("out.sam");
+    let header = header();
+    let on = |contig: &str, start: u32| {
+        parse(
+            &format!("r{start}\t0\t{contig}\t{start}\t9\t4M\t*\t0\t0\tACGT\tIIII"),
+            Stringency::Strict,
+        )
+        .expect("a record")
+    };
+    let mut writer =
+        SamWriter::create(&path, &header, &header_text(&header, false)).expect("created");
+    writer.write(&on("chr1", 50)).expect("first");
+    writer.write(&on("chr2", 7)).expect("a later contig");
+    let error = writer
+        .write(&on("chr1", 60))
+        .expect_err("an earlier contig");
+    assert!(
+        error
+            .to_string()
+            .contains("Alignments added out of order in SAMFileWriterImpl.addAlignment"),
+        "{error}"
+    );
+    drop(writer);
+    assert!(!path.exists(), "a failed writer leaves nothing");
+    std::fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+#[test]
 fn a_cigar_parses_as_the_text_codec_parses_it() {
     assert_eq!(parse_cigar(b"*"), Ok(Vec::new()));
     assert_eq!(parse_cigar(b""), Ok(Vec::new()));

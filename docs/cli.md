@@ -305,6 +305,8 @@ table.
 | `duplicate-by-tile` | CollectDuplicateByTileMetrics (not a Picard tool, docs/06 section 8; `--read-name-regex`, `--outlier-sd`) | one |
 | `telomere` | CollectTelomereMetrics (not a Picard tool, [telomere.md](telomere.md); `-K` the repeat threshold, `--repeat`, `--count-duplicates`) | one |
 | `index-depth` | CollectIndexDepthMetrics (not a Picard tool, [docs/06](06_clinical_checks.md) section 10; a BAM with its `.bai` or `.csi`, never read whole; a CRAM refused) | one |
+| `add-comments-to-bam` | AddCommentsToBam (a BAM; `--comment` repeated) | `-o` BAM, no metrics file |
+| `replace-sam-header` | ReplaceSamHeader (a SAM, BAM or CRAM; `--header` names the file whose header replaces the input's) | `-o` BAM, or SAM text for a name ending in `.sam` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -553,6 +555,55 @@ bytes for SAM text).
   the `MD` and `NM` tags htsjdk rebuilds.
 - `-o out.cram` exits 2 naming wave W15. An `-o` that is the input (a link or a hard link
   included) exits 2 and replaces nothing.
+
+### add-comments-to-bam
+
+```bash
+bammetrics add-comments-to-bam sample.bam -o sample.noted.bam --comment "library prep v2"
+bammetrics add-comments-to-bam sample.bam -o sample.noted.bam -C first -C second --create-index
+bammetrics AddCommentsToBam I=sample.bam O=sample.noted.bam COMMENT="library prep v2"
+```
+
+Picard's `AddCommentsToBam`: the input header with one `@CO` line per `--comment` after the
+header's own, then every record of the BAM, byte for byte (`tests/concordance/test_add_comments_to_bam.py`).
+
+- The input must be a BAM, as Picard's block copy needs: a name ending in `.sam` exits 1
+  with `SAM files are not supported`, and a CRAM or SAM text under another name exits 1.
+- A comment that starts with `@CO` and a tab keeps one prefix; a newline exits 2. Other
+  characters go out as htsjdk writes them (`é` as the byte 0xE9).
+- No `@PG` line is added. A header without `@HD` gets `@HD VN:1.6`, as htsjdk writes it.
+- `--create-index` writes `out.bam.bai` beside a coordinate-sorted BAM (Picard's block
+  copy names it so); `--create-md5-file` writes `out.bam.md5`. An `-o` ending in `.sam`
+  exits 2: Picard writes BAM bytes under that name.
+- In a chain the step adds the comments to the stream at its position: `bammetrics chain
+  in.bam + add-comments-to-bam -C note + write out.bam`.
+
+### replace-sam-header
+
+```bash
+bammetrics replace-sam-header sample.bam --header new_header.sam -o sample.reheadered.bam
+bammetrics replace-sam-header reads.sam --header other.bam -o reads.reheadered.sam
+bammetrics ReplaceSamHeader I=sample.bam HEADER=new_header.sam O=sample.reheadered.bam
+```
+
+Picard's `ReplaceSamHeader`: the header of `--header` (SAM text, a BAM or a CRAM, read at
+`--validation-stringency`; its records are not read), then every record of the input
+(`tests/concordance/test_replace_sam_header.py`).
+
+- An input named `.bam` is a block copy, as in Picard: each record keeps its reference
+  index and takes the name the new dictionary gives it. The new `SO` must be `unsorted` or
+  the input's. `--create-index` writes `out.bam.bai`.
+- Any other input (SAM text, a CRAM with `-R`, a BAM under another name) is read at
+  `SILENT`: each record keeps its reference name and takes that name's index in the new
+  dictionary. A name the dictionary lacks exits 1 (`Reference index for 'chr1' not found
+  in sequence dictionary.`). The two `SO` values must be equal. The output may be SAM text,
+  and `--create-index` writes `out.bai`.
+- No `@PG` line is added; `SO`, `VN` and every other line are the ones `--header` gives.
+- Two cases where Picard writes a file no reader opens exit 1 here: a block-copied record
+  whose reference index the new dictionary does not have, and a block copy into a `.sam`
+  name (exit 2).
+- In a chain the step replaces the header of the stream at its position and every record
+  keeps its reference index, as in a block copy.
 
 ### qc
 

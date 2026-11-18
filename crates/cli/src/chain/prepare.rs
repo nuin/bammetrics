@@ -102,8 +102,9 @@ pub struct Planned {
     pub reads: String,
     /// The stream a transform leaves.
     pub leaves: Option<String>,
-    /// The segment it runs in, from 1. A transform takes its records in
-    /// this segment and emits them in the next.
+    /// The segment it runs in, from 1. A barrier transform takes its
+    /// records in this segment and emits them in the next; a streaming
+    /// one emits them in this segment.
     pub segment: usize,
     /// The files it writes under names known before it runs.
     pub files: Vec<PlannedFile>,
@@ -179,13 +180,22 @@ impl Chain {
             .unwrap_or(SOURCE_STREAM)
     }
 
-    /// The segments: one, plus one per transform.
+    /// The segments: one, plus one per transform that is a barrier.
     pub fn segments(&self) -> usize {
         1 + self
             .steps
             .iter()
-            .filter(|step| step.role == Role::Transform)
+            .filter(|step| step.role == Role::Transform && !step.streams())
             .count()
+    }
+}
+
+impl Planned {
+    /// True for a transform that edits the stream as it passes
+    /// ([`stage::streams`]): it takes and emits its records in its own
+    /// segment.
+    pub fn streams(&self) -> bool {
+        self.role == Role::Transform && self.tool.is_some_and(stage::streams)
     }
 }
 
@@ -449,7 +459,9 @@ fn positions(drafts: &[Draft]) -> Result<Vec<Position>, VerbError> {
             taken.insert(stream.clone());
             position.leaves = Some(stream.clone());
             behind.push(verb.class);
-            segment += 1;
+            if !stage::streams(verb.tool()) {
+                segment += 1;
+            }
         }
         positions.push(position);
     }

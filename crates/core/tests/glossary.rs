@@ -46,6 +46,14 @@ const EXEMPT: &[(&str, &str)] = &[
         "SortSam",
         "writes a BAM or SAM text: no metrics file, no row, no column",
     ),
+    (
+        "AddCommentsToBam",
+        "writes a BAM with @CO lines added: no metrics file, no row, no column",
+    ),
+    (
+        "ReplaceSamHeader",
+        "writes a BAM or SAM text under a new header: no metrics file, no row, no column",
+    ),
 ];
 
 /// A directory of its own for this test's files.

@@ -1,0 +1,16 @@
+## argv
+chain
+tests/data/markdup.bam
++
+add-comments-to-bam
+-C
+note
+--create-index
++
+write
+OUT/out.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (add-comments-to-bam): CREATE_INDEX belongs to the write step in a chain; this step hands its records to the next step

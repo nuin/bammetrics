@@ -591,6 +591,30 @@ const CHAIN_CASES: &[Case] = &[
     case!("error_chain_free_space", "chain", "MD", "-o", "OUT/s", "--free-space", "100", "+", "sort-sam", "-SO", "queryname", "+", "write"),
 ];
 
+/// The record-editing tools (`crates/core/src/record_edit.rs`): the Picard
+/// face, the verb, the errors Picard gives, and each tool as a chain step.
+#[rustfmt::skip]
+const RECORD_EDIT_CASES: &[Case] = &[
+    case!("picard_add_comments_to_bam", "AddCommentsToBam", "I=MD", "O=OUT/commented.bam", "C=first comment", "COMMENT=@CO\tsecond"),
+    case!("picard_add_comments_to_bam_index", "AddCommentsToBam", "I=MD", "O=OUT/commented.bam", "C=x", "CREATE_INDEX=true", "CREATE_MD5_FILE=true", "COMPRESSION_LEVEL=1"),
+    case!("verb_add_comments_to_bam", "add-comments-to-bam", "MD", "-o", "OUT/commented.bam", "-C", "one", "--comment", "two"),
+    case!("error_add_comments_to_bam_sam", "AddCommentsToBam", "I=MD_SAM", "O=OUT/commented.bam", "C=x"),
+    case!("error_add_comments_to_bam_cram", "AddCommentsToBam", "I=IS_CRAM", "R=REF", "O=OUT/commented.bam", "C=x"),
+    case!("picard_add_comments_to_bam_no_comment", "AddCommentsToBam", "I=MD", "O=OUT/commented.bam"),
+    case!("error_add_comments_to_bam_sam_output", "AddCommentsToBam", "I=MD", "O=OUT/commented.sam", "C=x"),
+    case!("error_add_comments_to_bam_input_output", "AddCommentsToBam", "I=MD", "O=MD", "C=x"),
+    case!("picard_replace_sam_header", "ReplaceSamHeader", "I=MD", "HEADER=OXOG", "O=OUT/reheadered.bam"),
+    case!("picard_replace_sam_header_sam", "ReplaceSamHeader", "I=MD_SAM", "HEADER=IS", "O=OUT/reheadered.sam"),
+    case!("picard_replace_sam_header_cram_header", "ReplaceSamHeader", "I=MD", "HEADER=IS_CRAM", "O=OUT/reheadered.bam", "CREATE_INDEX=true"),
+    case!("verb_replace_sam_header", "replace-sam-header", "MD_SAM", "--header", "OXOG", "-o", "OUT/reheadered.bam", "--create-index"),
+    case!("error_replace_sam_header_sort_order", "ReplaceSamHeader", "I=DM", "HEADER=MD", "O=OUT/reheadered.bam"),
+    case!("error_replace_sam_header_missing_header", "ReplaceSamHeader", "I=MD", "HEADER=tests/data/nope.sam", "O=OUT/reheadered.bam"),
+    case!("error_replace_sam_header_header_output", "ReplaceSamHeader", "I=IS", "HEADER=MD", "O=MD"),
+    case!("chain_record_edit", "chain", "MD", "-o", "OUT/s", "+", "add-comments-to-bam", "-C", "note", "+", "replace-sam-header", "--header", "OXOG", "+", "insert-size", "+", "write", "OUT/out.bam"),
+    case!("chain_dry_run_record_edit", "chain", "MD", "-o", "OUT/s", "--dry-run", "+", "add-comments-to-bam", "-C", "note", "+", "mark-duplicates", "+", "replace-sam-header", "--header", "OXOG", "+", "write", "OUT/out.bam"),
+    case!("error_chain_add_comments_index", "chain", "MD", "+", "add-comments-to-bam", "-C", "note", "--create-index", "+", "write", "OUT/out.bam"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -1014,6 +1038,11 @@ fn pdf_option_errors_on_the_fixtures() {
     check(PDF_OPTION_CASES);
 }
 
+#[test]
+fn documented_record_edit_commands_on_the_fixtures() {
+    check(RECORD_EDIT_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1118,6 +1147,7 @@ fn case_names_are_unique() {
         .chain(T1_CASES)
         .chain(PDF_OPTION_CASES)
         .chain(DOCTOR_CASES)
+        .chain(RECORD_EDIT_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

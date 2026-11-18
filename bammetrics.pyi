@@ -1224,6 +1224,35 @@ def collect_index_depth_metrics(
     as the depth, the ratio to the autosomes, and on ALL the sex call, MT_COPY_NUMBER
     and NO_COORDINATE. No whole read. Not a Picard tool (docs/06)."""
 
+def add_comments_to_bam(
+    input: _Path,
+    *,
+    comment: str | Sequence[str] | None = None,
+    output: _Path,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """AddCommentsToBam: no rows; OUTPUT gets the input BAM with one @CO line per COMMENT
+    after the header's own, every record copied unchanged."""
+
+def replace_sam_header(
+    input: _Path,
+    *,
+    header: _Path,
+    output: _Path,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """ReplaceSamHeader: no rows; OUTPUT gets the header of HEADER, then every record of
+    the input: a BAM, or SAM text for a name ending in .sam when the input name does not
+    end in .bam."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1455,6 +1484,8 @@ _StepVerb = Literal[
     "adapter_content",
     "duplicate_by_tile",
     "telomere",
+    "add_comments_to_bam",
+    "replace_sam_header",
     "write",
 ]
 

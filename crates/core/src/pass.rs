@@ -295,6 +295,38 @@ pub(crate) fn with_counted_stream<T>(
     bytes: &Arc<AtomicU64>,
     consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), bool) -> Result<T>,
 ) -> Result<T> {
+    with_stream_of_kind(
+        path,
+        reference,
+        threads,
+        stringency,
+        bytes,
+        |header, reader, kind| consume(header, reader, kind == Kind::Cram),
+    )
+}
+
+/// [`with_record_stream_at`], telling `consume` what the file holds: a
+/// tool that copies the records of a BAM (`AddCommentsToBam`) refuses the
+/// other kinds.
+pub(crate) fn with_record_stream_kind<T>(
+    path: &Path,
+    reference: Option<&Path>,
+    threads: usize,
+    stringency: Stringency,
+    consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), Kind) -> Result<T>,
+) -> Result<T> {
+    let bytes = Arc::new(AtomicU64::new(0));
+    with_stream_of_kind(path, reference, threads, stringency, &bytes, consume)
+}
+
+fn with_stream_of_kind<T>(
+    path: &Path,
+    reference: Option<&Path>,
+    threads: usize,
+    stringency: Stringency,
+    bytes: &Arc<AtomicU64>,
+    consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), Kind) -> Result<T>,
+) -> Result<T> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
@@ -313,7 +345,7 @@ pub(crate) fn with_counted_stream<T>(
                 .read_header()
                 .map_err(|e| input(cram::truncated(e, true)))?;
             cram::decode(reader, &header, reference, workers, |records| {
-                consume(&header, records.get_mut(), true)
+                consume(&header, records.get_mut(), Kind::Cram)
             })
         }
         Kind::Bam => {
@@ -323,13 +355,14 @@ pub(crate) fn with_counted_stream<T>(
             let header = reader
                 .read_header()
                 .map_err(|e| input(cram::bam_header_error(e)))?;
-            consume(&header, reader.get_mut(), false)
+            consume(&header, reader.get_mut(), Kind::Bam)
         }
         Kind::Sam | Kind::GzipSam => {
+            let kind = sniffed.kind;
             let reader = sam_reader(sniffed, stringency, path).map_err(input)?;
             let header = reader.header().map_err(input)?;
             let mut records = sam_text::RecordStream::new(reader.records(&header));
-            consume(&header, &mut records, false)
+            consume(&header, &mut records, kind)
         }
     }
 }
