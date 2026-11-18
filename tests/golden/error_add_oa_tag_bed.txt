@@ -1,0 +1,10 @@
+## argv
+AddOATag
+I=tests/data/markdup.bam
+L=tests/data/targets.bed
+O=OUT/oa.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/targets.bed: Interval list file must contain header.

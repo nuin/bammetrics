@@ -613,6 +613,13 @@ const RECORD_EDIT_CASES: &[Case] = &[
     case!("chain_record_edit", "chain", "MD", "-o", "OUT/s", "+", "add-comments-to-bam", "-C", "note", "+", "replace-sam-header", "--header", "OXOG", "+", "insert-size", "+", "write", "OUT/out.bam"),
     case!("chain_dry_run_record_edit", "chain", "MD", "-o", "OUT/s", "--dry-run", "+", "add-comments-to-bam", "-C", "note", "+", "mark-duplicates", "+", "replace-sam-header", "--header", "OXOG", "+", "write", "OUT/out.bam"),
     case!("error_chain_add_comments_index", "chain", "MD", "+", "add-comments-to-bam", "-C", "note", "--create-index", "+", "write", "OUT/out.bam"),
+    case!("picard_add_oa_tag", "AddOATag", "I=MD", "O=OUT/oa.bam"),
+    case!("picard_add_oa_tag_intervals", "AddOATag", "I=MD", "L=tests/data/targets.interval_list", "O=OUT/oa.bam", "CREATE_INDEX=true", "CREATE_MD5_FILE=true"),
+    case!("picard_add_oa_tag_cram", "AddOATag", "I=IS_CRAM", "R=REF", "O=OUT/oa.sam"),
+    case!("verb_add_oa_tag", "add-oa-tag", "MD_SAM", "-o", "OUT/oa.bam", "-L", "tests/data/targets.interval_list"),
+    case!("error_add_oa_tag_bed", "AddOATag", "I=MD", "L=tests/data/targets.bed", "O=OUT/oa.bam"),
+    case!("error_add_oa_tag_input_output", "AddOATag", "I=MD", "O=MD"),
+    case!("chain_add_oa_tag", "chain", "MD", "-o", "OUT/s", "+", "add-oa-tag", "+", "insert-size", "+", "write", "OUT/out.bam"),
 ];
 
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
