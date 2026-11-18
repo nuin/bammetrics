@@ -427,6 +427,16 @@ pub const VERBS: &[Verb] = &[
         reads: &["HEADER"],
         ..verb("replace-sam-header", "ReplaceSamHeader", Files::Bam)
     },
+    Verb {
+        about: Some(
+            "appends each record's alignment (RNAME,POS,STRAND,CIGAR,MAPQ,NM;) to its OA tag, \
+             as Picard's AddOATag does: -o gets every record of a SAM, BAM or CRAM, tagged, or \
+             with --interval-list only the records over an interval.",
+        ),
+        writes: "BAM",
+        reads: &["INTERVAL_LIST"],
+        ..verb("add-oa-tag", "AddOATag", Files::Bam)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the

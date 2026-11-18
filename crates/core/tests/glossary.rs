@@ -54,6 +54,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "ReplaceSamHeader",
         "writes a BAM or SAM text under a new header: no metrics file, no row, no column",
     ),
+    (
+        "AddOATag",
+        "writes a BAM or SAM text with OA tags added: no metrics file, no row, no column",
+    ),
 ];
 
 /// A directory of its own for this test's files.

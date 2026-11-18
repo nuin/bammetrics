@@ -466,6 +466,13 @@ const STAGES: &[StageRow] = &[
         kind: StageKind::Streams,
         check: crate::record_edit::check_stage,
     },
+    StageRow {
+        tool: "AddOATag",
+        build: crate::add_oa_tag::stage,
+        label: "oa_tagged",
+        kind: StageKind::Streams,
+        check: crate::record_edit::check_stage,
+    },
 ];
 
 fn stage_row(tool: &Tool) -> Option<&'static StageRow> {
