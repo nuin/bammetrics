@@ -271,6 +271,10 @@ impl RecordEdit for AddOa {
         record.set_tags(&tags).map_err(Error::Record)?;
         Ok(Outcome::Changed)
     }
+
+    fn rewrites(&self) -> bool {
+        true
+    }
 }
 
 fn build(list: Option<Intervals>) -> impl FnOnce(&Setup) -> Result<Box<dyn RecordEdit>> {
