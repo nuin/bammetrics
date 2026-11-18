@@ -1,0 +1,10 @@
+## argv
+AddCommentsToBam
+I=tests/data/markdup.sam
+O=OUT/commented.bam
+C=x
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/markdup.sam: SAM files are not supported

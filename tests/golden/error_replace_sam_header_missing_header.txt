@@ -1,0 +1,10 @@
+## argv
+ReplaceSamHeader
+I=tests/data/markdup.bam
+HEADER=tests/data/nope.sam
+O=OUT/reheadered.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/nope.sam: No such file or directory (os error 2)

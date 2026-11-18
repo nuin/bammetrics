@@ -452,6 +452,20 @@ const STAGES: &[StageRow] = &[
         kind: StageKind::Holds,
         check: check_sort_sam,
     },
+    StageRow {
+        tool: "AddCommentsToBam",
+        build: crate::add_comments_to_bam::stage,
+        label: "commented",
+        kind: StageKind::Streams,
+        check: crate::record_edit::check_stage,
+    },
+    StageRow {
+        tool: "ReplaceSamHeader",
+        build: crate::replace_sam_header::stage,
+        label: "reheadered",
+        kind: StageKind::Streams,
+        check: crate::record_edit::check_stage,
+    },
 ];
 
 fn stage_row(tool: &Tool) -> Option<&'static StageRow> {

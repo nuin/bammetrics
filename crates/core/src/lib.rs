@@ -3,6 +3,7 @@
 pub mod accumulate_quality_yield;
 pub mod adapter;
 pub mod adapter_content;
+pub mod add_comments_to_bam;
 pub mod alignment_summary;
 pub mod artifact_to_oxog;
 pub mod bai;
@@ -67,6 +68,7 @@ pub mod record_edit;
 pub mod ref_flat;
 pub mod reference;
 pub mod registry;
+pub mod replace_sam_header;
 pub mod rna_seq_metrics;
 pub mod sam_order;
 pub mod sam_sort;

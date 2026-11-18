@@ -1,0 +1,10 @@
+## argv
+ReplaceSamHeader
+I=tests/data/insert_size.bam
+HEADER=tests/data/markdup.bam
+O=tests/data/markdup.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: OUTPUT=tests/data/markdup.bam: it is the input tests/data/markdup.bam; writing it would destroy it

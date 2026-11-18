@@ -1,0 +1,10 @@
+## argv
+ReplaceSamHeader
+I=tests/data/duplicate_marking.bam
+HEADER=tests/data/markdup.bam
+O=OUT/reheadered.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: Sort order of new header does not match the original file, needs to be queryname
