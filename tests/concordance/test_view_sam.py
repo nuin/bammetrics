@@ -332,6 +332,15 @@ def test_cram(corpus, tmp_path, source):
     both_fail(f"{source} CRAM without R", [f"I={cram}"], picard_extra=[SILENT])
 
 
+def test_cram_over_a_soft_masked_reference(tmp_path):
+    """MD rebuilt from a CRAM holds upper-case reference bases, as htsjdk decodes them."""
+    from nm_md_uq_bams import soft_masked
+    reference, crams = soft_masked(tmp_path)
+    for cram in crams:
+        compare(f"{cram.name} soft-masked", [f"I={cram}", f"R={reference}"],
+                picard_extra=[SILENT])
+
+
 @pytest.mark.parametrize("stringency", STRINGENCIES)
 def test_handwritten_sam(handwritten, stringency):
     text = compare(f"handwritten {stringency}", [f"I={handwritten}", f"VALIDATION_STRINGENCY={stringency}"])

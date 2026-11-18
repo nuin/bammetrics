@@ -15,7 +15,8 @@ qualities, secondary, supplementary, duplicate, paired, placed and unplaced unma
 records, a record on the last base of its contig); reads past the end of a contig, with
 and without qualities, at SILENT; a bisulfite set (C to T forward, G to A reverse, both
 read ends, the other conversion as a mismatch); SAM text in and out; a CRAM fixture and
-the foundation corpus as CRAM 3.0. Options: IS_BISULFITE_SEQUENCE, SET_ONLY_UQ (each alone
+the foundation corpus as CRAM 3.0; CRAM 3.0 and 3.1 over a soft-masked reference
+(`soft_masked`); BAM records whose first quality byte alone is 0xFF. Options: IS_BISULFITE_SEQUENCE, SET_ONLY_UQ (each alone
 and both), COMPRESSION_LEVEL, CREATE_INDEX (`out.bai`), CREATE_MD5_FILE, MAX_RECORDS_IN_RAM,
 VALIDATION_STRINGENCY. Error parity: a queryname, an unsorted and an unknown sort order, no
 REFERENCE_SEQUENCE, a missing one, ASSUME_SORTED, a missing input, a missing output
@@ -32,8 +33,8 @@ import pytest
 from cases import BAMMETRICS, CORPUS, FIXTURES
 from compare import diff_bam, diff_bam_bytes
 from conftest import RESULTS
-from nm_md_uq_bams import (bisulfite, edges, mapped_without_bases, off_end, planted, stripped,
-                           with_bases)
+from nm_md_uq_bams import (bisulfite, edges, first_quality_ff, mapped_without_bases, off_end,
+                           planted, soft_masked, stripped, with_bases)
 from test_add_comments_to_bam import (chain_against_picard, compare, index_and_md5, records_of,
                                       run_tool)
 
@@ -164,6 +165,23 @@ def test_cram_input(crams, name):
     source, reference = crams[name]
     for option, args in OPTIONS.items():
         case(source, reference, [SILENT, *args], f"{name} CRAM {option}")
+
+
+def test_cram_over_a_soft_masked_reference(tmp_path):
+    """htsjdk rebuilds MD of a CRAM record from upper-case reference bases; SET_ONLY_UQ
+    keeps that MD, the other modes compute MD from the FASTA as it is written."""
+    reference, crams = soft_masked(tmp_path)
+    for cram in crams:
+        for option, args in OPTIONS.items():
+            case(cram, reference, [SILENT, *args], f"{cram.name} {option}")
+
+
+def test_a_first_quality_of_ff(tmp_path):
+    """htsjdk reads a record whose first quality byte is 0xFF as one without qualities and
+    writes every byte 0xFF once a tag is set; SET_ONLY_UQ sets none on it."""
+    reference, bam = first_quality_ff(tmp_path)
+    for option, args in OPTIONS.items():
+        case(bam, reference, [SILENT, *args], f"first quality 0xFF {option}")
 
 
 def test_sam_text_in_and_out():

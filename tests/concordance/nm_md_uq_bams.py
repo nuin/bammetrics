@@ -12,7 +12,11 @@ last base of its contig, and wrong NM, MD and UQ values in front of other tags.
 forward reads with C to T, reverse reads with G to A, first and second of pair, and the
 other conversion as a real mismatch. `planted(source, out)`: wrong NM, MD and UQ in front of
 each record's tags, in every integer width; `stripped(source, out)`: the three removed.
+`soft_masked(directory)`: a lower-case and IUPAC reference and CRAM 3.0 and 3.1 of reads
+over it without NM and MD. `first_quality_ff(directory)`: BAM records whose first quality
+byte alone is 0xFF.
 """
+import array
 import random
 import subprocess
 
@@ -185,6 +189,82 @@ def bisulfite(directory, seed=9):
     sam = directory / "bis.sam"
     sam.write_text(header([("b1", contig)]) + "\n".join(lines) + "\n")
     return reference, sam, to_bam(sam, directory / "bis.bam")
+
+
+def soft_masked(directory, seed=11):
+    """`masked.fa` (lower-case stretches and IUPAC codes) and `masked.bam`, sorted, with no
+    NM or MD, as CRAM 3.0 and 3.1: htsjdk's CRAM decoder rebuilds MD from upper-case
+    reference bases. Returns the reference and the two CRAMs."""
+    rng = random.Random(seed)
+    contigs = []
+    for name in ("m1", "m2"):
+        bases = [rng.choice("ACGT") for _ in range(600)]
+        for start in range(40, 600, 120):
+            for at in range(start, start + 50):
+                bases[at] = bases[at].lower()
+        for at in rng.sample(range(600), 40):
+            code = rng.choice(IUPAC)
+            bases[at] = code.lower() if bases[at].islower() else code
+        contigs.append((name, "".join(bases)))
+    reference = write_fasta(directory / "masked.fa", contigs)
+    lines = []
+    for name, bases in contigs:
+        upper = bases.upper()
+        for i, pos in enumerate(range(3, 560, 7)):
+            span = upper[pos - 1:pos + 39]
+            read = "".join(b if b in "ACGT" else rng.choice("ACGT") for b in span)
+            shape = i % 4
+            if shape == 0:
+                cigar, seq = "40M", mutate(rng, read, 2)
+            elif shape == 1:
+                cigar, seq = "15M3D22M", mutate(rng, read[:15] + read[18:], 1)
+            elif shape == 2:
+                cigar, seq = "3S20M2I15M", "GGG" + read[:20] + "TT" + read[20:35]
+            else:
+                cigar, seq = "20M4D16M", read[:20] + read[24:]
+            lines.append(sam_line(f"{name}_{i}", 16 if i % 3 == 0 else 0, name, pos, cigar, seq,
+                                  quals(rng, len(seq)), ["RG:Z:g1"]))
+    sam = directory / "masked.sam"
+    sam.write_text(header(contigs) + "\n".join(lines) + "\n")
+    bam = to_bam(sam, directory / "masked.bam")
+    crams = []
+    for version in ("3.0", "3.1"):
+        cram = directory / f"masked.{version}.cram"
+        subprocess.run(["samtools", "view", "--no-PG", "-C", "--output-fmt-option",
+                        f"version={version}", "-T", str(reference), "-o", str(cram), str(bam)],
+                       check=True)
+        crams.append(cram)
+    return reference, crams
+
+
+def first_quality_ff(directory, seed=12):
+    """`first_ff.fa` and `first_ff.bam`: mapped records whose first quality byte is 0xFF and
+    whose others are not, which htsjdk reads as a record without qualities, beside one with
+    every byte 0xFF and one with qualities. SAM text cannot hold them: pysam writes the
+    bytes."""
+    rng = random.Random(seed)
+    contig = "".join(rng.choice("ACGT") for _ in range(200))
+    reference = write_fasta(directory / "first_ff.fa", [("f1", contig)])
+    bam = directory / "first_ff.bam"
+    head = pysam.AlignmentHeader.from_dict({
+        "HD": {"VN": "1.6", "SO": "coordinate"}, "SQ": [{"SN": "f1", "LN": len(contig)}]})
+    shapes = [("first_ff", [255] + [rng.randrange(2, 41) for _ in range(29)]),
+              ("all_ff", [255] * 30),
+              ("quals", [rng.randrange(2, 41) for _ in range(30)]),
+              ("first_ff_rev", [255] + [rng.randrange(2, 41) for _ in range(29)])]
+    with pysam.AlignmentFile(str(bam), "wb", header=head) as out:
+        for i, (name, qualities) in enumerate(shapes):
+            record = pysam.AlignedSegment(head)
+            record.query_name = name
+            record.flag = 16 if name.endswith("rev") else 0
+            record.reference_id = 0
+            record.reference_start = 10 + 20 * i
+            record.mapping_quality = 60
+            record.cigarstring = "30M"
+            record.query_sequence = mutate(rng, contig[10 + 20 * i:40 + 20 * i], 3)
+            record.query_qualities = array.array("B", qualities)
+            out.write(record)
+    return reference, bam
 
 
 def mapped_without_bases(source):

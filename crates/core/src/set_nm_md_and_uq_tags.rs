@@ -22,7 +22,9 @@
 //!   CIGAR operators `=` and `X` say nothing: the bases decide.
 //! * `UQ` ([`sum_qualities_of_mismatches`]): the sum of the base qualities
 //!   of the aligned bases that differ from the reference. A record without
-//!   qualities (`*`, or a BAM's `0xFF` first quality) gets no `UQ`. An
+//!   qualities (`*`, or a BAM's `0xFF` first quality) gets no `UQ`; when it
+//!   gets `MD` and `NM`, every quality byte is written `0xFF`, as htsjdk
+//!   encodes a record it decoded without qualities. An
 //!   aligned base past the end of the contig fails the run, as Picard's
 //!   `ArrayIndexOutOfBoundsException` does; at `STRICT` Picard stops such a
 //!   record before, at validation.
@@ -392,6 +394,19 @@ fn qualities(record: &RawRecord) -> Option<&[u8]> {
     }
 }
 
+/// htsjdk decodes a record whose first quality is `0xFF` as one without
+/// qualities and encodes it back with `0xFF` for every base, so a record
+/// that gets a tag has all its quality bytes set to `0xFF`. True when a
+/// byte changed.
+fn clear_missing_qualities(record: &mut RawRecord) -> bool {
+    let qualities = record.qualities_mut();
+    if qualities.first() != Some(&0xFF) || qualities.iter().all(|&q| q == 0xFF) {
+        return false;
+    }
+    qualities.fill(0xFF);
+    true
+}
+
 impl RecordEdit for SetTags {
     fn header(&self, input: &sam::Header) -> Result<sam::Header> {
         check_order(input)?;
@@ -443,7 +458,9 @@ impl RecordEdit for SetTags {
             tags.set(name, value);
         }
         record.set_tags(&tags).map_err(Error::Record)?;
-        Ok(if record.tag_bytes() == before.as_slice() {
+        let qualities_cleared = clear_missing_qualities(record);
+        let same = record.tag_bytes() == before.as_slice() && !qualities_cleared;
+        Ok(if same {
             Outcome::Same
         } else {
             Outcome::Changed

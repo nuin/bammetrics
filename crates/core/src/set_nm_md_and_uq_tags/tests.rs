@@ -224,6 +224,25 @@ fn unmapped_records_and_uq_alone_without_qualities_keep_their_bytes() {
 }
 
 #[test]
+fn a_tagged_record_with_a_first_quality_of_ff_gets_every_quality_ff() {
+    let mut edit = SetTags {
+        reference: reference("ff"),
+        flags: Flags::default(),
+    };
+    let mut r = record(0, &[0xFF, 20, 30, 40], b"");
+    assert_eq!(edit.record(&mut r).expect("edits"), Outcome::Changed);
+    assert_eq!(r.qualities(), [0xFF; 4]);
+    assert_eq!(r.tag(*b"UQ").expect("UQ"), None);
+    assert_eq!(edit.record(&mut r).expect("edits"), Outcome::Same);
+    // SET_ONLY_UQ sets nothing on it: the record keeps its bytes.
+    edit.flags.only_uq = true;
+    let mut untouched = record(0, &[0xFF, 20, 30, 40], b"");
+    let before = untouched.clone();
+    assert_eq!(edit.record(&mut untouched).expect("edits"), Outcome::Same);
+    assert_eq!(untouched, before);
+}
+
+#[test]
 fn the_header_must_say_coordinate() {
     let parse = |text: &str| text.parse::<sam::Header>().expect("header");
     for (text, found) in [

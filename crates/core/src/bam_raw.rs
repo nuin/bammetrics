@@ -429,6 +429,12 @@ impl RawRecord {
         &self.buf[start..start + self.sequence_length()]
     }
 
+    /// The base qualities, for an edit in place.
+    pub fn qualities_mut(&mut self) -> &mut [u8] {
+        let (start, length) = (self.quality_start(), self.sequence_length());
+        &mut self.buf[start..start + length]
+    }
+
     fn tags_start(&self) -> usize {
         self.quality_start() + self.sequence_length()
     }

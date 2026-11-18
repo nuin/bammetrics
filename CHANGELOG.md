@@ -39,9 +39,10 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   header check and message of Picard; unmapped records keep their bytes; a record that
   gets a tag has its tags in htsjdk's order and widths. A chain transform (`tagged`) that
   reads the chain's `-R`. `tests/concordance/test_set_nm_md_and_uq_tags.py` and
-  `test_set_nm_and_uq_tags.py` (tier B with record bytes, 38 tests: the fixtures, the
+  `test_set_nm_and_uq_tags.py` (tier B with record bytes, 41 tests: the fixtures, the
   corpus tiers and the exome slice as written, stripped and planted, edge records, reads
-  past a contig end, a bisulfite set, CRAM and SAM text), `crates/cli/tests/set_nm_md_uq.rs`
+  past a contig end, a bisulfite set, a first quality of `0xFF`, CRAM over a soft-masked
+  reference and SAM text), `crates/cli/tests/set_nm_md_uq.rs`
   (chained equals staged at every position) and golden records.
 - On the 10 GB HG002 exome (150,538,907 records, hs37d5) `SetNmMdAndUqTags` takes 170.0 s
   at 1.98 GB peak RSS; Picard takes 1,020 s at 1.04 GB. The records are equal, and the
@@ -76,6 +77,12 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   header kept `VN:1.4` (found on the HG002 exome, whose header is `VN:1.4`).
 - `chain ... + add-comments-to-bam -C` with a newline in a comment is a usage error before
   the first read (exit 2, `--dry-run` too); it failed the step after the chain started.
+- CRAM input: `MD` rebuilt for a record without one holds upper-case reference bases, as
+  htsjdk's CRAM decoder reads the reference. A soft-masked FASTA gave lower-case bases in
+  `MD` (`ViewSam`, `SortSam`, `MarkDuplicates`, `SetNmMdAndUqTags SET_ONLY_UQ=true`).
+- `SetNmMdAndUqTags`: a record whose first quality byte alone is `0xFF` and that gets a
+  tag has every quality byte written `0xFF`, as htsjdk writes a record it read without
+  qualities. It kept its other quality bytes.
 
 ## 0.26.0
 
