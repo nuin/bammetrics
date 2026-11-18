@@ -43,6 +43,9 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   corpus tiers and the exome slice as written, stripped and planted, edge records, reads
   past a contig end, a bisulfite set, CRAM and SAM text), `crates/cli/tests/set_nm_md_uq.rs`
   (chained equals staged at every position) and golden records.
+- On the 10 GB HG002 exome (150,538,907 records, hs37d5) `SetNmMdAndUqTags` takes 170.0 s
+  at 1.98 GB peak RSS; Picard takes 1,020 s at 1.04 GB. The records are equal, and the
+  header lines but the `@RG DT` field, which htsjdk writes in the JVM's time zone.
 - On the 10 GB HG002 exome (150,538,907 records) `AddCommentsToBam` takes 61.0 s at
   47 MB peak RSS and `ReplaceSamHeader` 56.2 s at 38 MB; Picard's block copies take 9.7 s
   and 11.2 s. The records are equal. bammetrics inflates and deflates every block where

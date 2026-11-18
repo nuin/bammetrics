@@ -1419,6 +1419,8 @@ a bisulfite set, SAM text and CRAM (`tests/concordance/test_set_nm_md_and_uq_tag
 - A `.cram` `OUTPUT` exits 2 naming wave W15. Picard writes a CRAM.
 - A failed run leaves no `OUTPUT`. Picard leaves a partial one (59 bytes of SAM header
   after a read past its contig).
+- An `@RG DT` value is written as read. htsjdk parses it and writes it in the JVM's time
+  zone (`2015-10-02T02:00:00+0200` as `2015-10-01T18:00:00-0600` on the HG002 exome).
 
 ## Not in Picard
 
