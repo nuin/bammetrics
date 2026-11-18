@@ -336,6 +336,14 @@ impl RawRecord {
         self.i32_at(28)
     }
 
+    /// Set the `bin` field as htsjdk 5.0.0's `BAMRecordCodec.encode` writes
+    /// every record a `SAMFileWriter` takes, whatever bin it was read with:
+    /// 0 without a start, else the bin of the alignment.
+    pub fn set_codec_bin(&mut self) {
+        let bin = codec_bin(self.alignment_start(), self.flags(), self.cigar());
+        self.buf[10..12].copy_from_slice(&bin.to_le_bytes());
+    }
+
     /// Set `refID` and `next_refID` (-1 for none); every other byte stays.
     pub fn set_reference_ids(&mut self, reference: i32, mate: i32) {
         self.buf[0..4].copy_from_slice(&reference.to_le_bytes());
@@ -494,17 +502,25 @@ fn region_to_bin(beg: i32, end: i32) -> i32 {
 /// without a start, else the bin of the alignment, one base long for an
 /// unmapped record or a CIGAR that covers no reference base.
 fn indexing_bin(fields: &Fields<'_>) -> u16 {
-    if fields.alignment_start == 0 {
+    codec_bin(
+        fields.alignment_start,
+        fields.flags,
+        fields.cigar.iter().copied(),
+    )
+}
+
+/// [`indexing_bin`] from the 1-based start, the flags and the CIGAR.
+fn codec_bin(alignment_start: i32, flags: u16, cigar: impl Iterator<Item = (u32, u8)>) -> u16 {
+    if alignment_start == 0 {
         return 0;
     }
-    let start = fields.alignment_start.wrapping_sub(1);
-    let unmapped = fields.flags & 0x4 != 0;
+    let start = alignment_start.wrapping_sub(1);
+    let unmapped = flags & 0x4 != 0;
     let mut end = if unmapped {
         0
     } else {
-        fields
-            .alignment_start
-            .wrapping_add(reference_length(fields.cigar.iter().copied()))
+        alignment_start
+            .wrapping_add(reference_length(cigar))
             .wrapping_sub(1)
     };
     if end <= 0 {

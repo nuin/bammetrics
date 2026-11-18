@@ -30,7 +30,8 @@
 //!   order check; the index is `<OUTPUT>.bai` (`out.bam.bai`). Picard writes
 //!   BAM bytes whatever the `OUTPUT` name, so a `.sam` name is refused.
 //! * [`Mode::Rewrite`]: a `SamReader` into a presorted `SAMFileWriter`.
-//!   Records of a CRAM get `MD` and `NM` as htsjdk decodes them, the writer
+//!   Records of a CRAM get `MD` and `NM` as htsjdk decodes them, every
+//!   record gets the `bin` htsjdk's `BAMRecordCodec` computes, the writer
 //!   checks the header's order, and the index is `out.bai`.
 //!
 //! No `@PG` line is added: none of the six W09 tools adds one in Picard
@@ -41,6 +42,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use noodles::sam;
+use noodles::sam::header::record::value::Map;
+use noodles::sam::header::record::value::map::header::Version;
 
 use crate::bam_raw::RawRecord;
 use crate::bam_writer::{self, BamWriter, Companions};
@@ -317,7 +320,12 @@ impl Out {
         })
     }
 
-    fn write(&mut self, record: &RawRecord) -> Result<()> {
+    /// Write `record`. A rewrite gives it the `bin` htsjdk's writer computes;
+    /// a block copy keeps its bytes.
+    fn write(&mut self, record: &mut RawRecord, mode: Mode) -> Result<()> {
+        if mode == Mode::Rewrite {
+            record.set_codec_bin();
+        }
         match self {
             Self::Bam(writer) => writer.write(record),
             Self::Sam(writer) => writer.write(record),
@@ -353,6 +361,22 @@ impl Out {
             }
         }
     }
+}
+
+/// The header as htsjdk holds it: a `SAMFileHeader` starts with `@HD
+/// VN:1.6`, so a file without an `@HD` line is written with that one.
+fn with_version(mut header: sam::Header) -> sam::Header {
+    header.header_mut().get_or_insert_with(|| {
+        Map::<sam::header::record::value::map::Header>::new(Version::new(1, 6))
+    });
+    header
+}
+
+/// The bytes htsjdk writes for a Java string from the command line (a
+/// `COMMENT`, a read group field): the low byte of each UTF-16 unit, so
+/// `é` is the byte 0xE9.
+pub fn java_text(text: &str) -> Vec<u8> {
+    text.encode_utf16().map(|unit| unit as u8).collect()
 }
 
 /// Count one record's outcome; true when it is written.
@@ -394,7 +418,7 @@ pub fn run(
                 cram,
                 mode: opts.mode,
             })?;
-            let out_header = edit.header(header)?;
+            let out_header = with_version(edit.header(header)?);
             let mut out = Out::create(opts, &out_header)?;
             let mut counters = Counters::default();
             let mut record = RawRecord::default();
@@ -404,14 +428,14 @@ pub fn run(
             {
                 restore.apply(&mut record)?;
                 if tally(&mut counters, edit.record(&mut record)?) {
-                    out.write(&record)?;
+                    out.write(&mut record, opts.mode)?;
                 }
             }
             let mut tail = Vec::new();
             edit.finish(&mut tail)?;
-            for record in &tail {
+            for record in &mut tail {
                 counters.records_out += 1;
-                out.write(record)?;
+                out.write(record, opts.mode)?;
             }
             out.finish(&out_header, opts)?;
             Ok(counters)
@@ -465,7 +489,7 @@ struct Editing {
 
 impl Transform for Editing {
     fn header(&self, up: &sam::Header) -> Result<sam::Header> {
-        self.edit.header(up)
+        self.edit.header(up).map(with_version)
     }
 
     fn apply(&mut self, batch: &mut Vec<RawRecord>) -> Result<()> {
