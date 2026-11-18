@@ -195,6 +195,7 @@ the sizes and a Chrome recipe for a build without the feature.
 | CollectIndexDepthMetrics (not a Picard tool, docs/06 section 10: depth from the `.bai` or `.csi` alone, `MAPPED x READ_LENGTH / LENGTH` per reference and per contig group, the X and Y ratios with a sex call, `MT_COPY_NUMBER`; no whole read, a CRAM refused; `READ_LENGTH`, `READ_LENGTH_SAMPLE`) | | `collect_index_depth_metrics()` |
 | AddCommentsToBam (one `@CO` line per `COMMENT` after the header's own, the records of the BAM copied byte for byte; `CREATE_INDEX` writes `OUTPUT.bai`; a chain transform) | | `add_comments_to_bam()` |
 | ReplaceSamHeader (the header of `HEADER`, a SAM, BAM or CRAM, over every record; a `.bam` input keeps each record's reference index, any other its reference name; Picard's sort order checks; a chain transform) | | `replace_sam_header()` |
+| AddOATag (each record's alignment, `RNAME,POS,STRAND,CIGAR,MAPQ,NM;`, appended to its `OA` tag; `INTERVAL_LIST` limits it to the records over an interval; BAM or SAM text out; a chain transform) | | `add_o_a_tag()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 | SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | `validation_stringency=` |

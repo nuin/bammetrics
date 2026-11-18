@@ -1159,6 +1159,7 @@ file holds, so it spools its input (section 15.2). The run prints one line per e
 |---|---|---|
 | `add-comments-to-bam` | `commented` | Adds one `@CO` line per `--comment` to the header of its stream. The source may be SAM text or a CRAM; the tool on its own copies a BAM only, as Picard does |
 | `replace-sam-header` | `reheadered` | Puts the header of `--header` in place of its stream's. Each record keeps its reference index, as Picard's block copy of a `.bam` keeps it. The new `SO` must be `unsorted` or the stream's |
+| `add-oa-tag` | `oa_tagged` | Appends each record's alignment to its `OA` tag, or with `-L` only on the records over an interval. Every record leaves with the `bin` htsjdk's writer computes, as the tool on its own writes it |
 
 The rules of a record-editing step:
 
