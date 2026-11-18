@@ -66,6 +66,9 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   noodles-cram panicked. A container of unmapped reads with SEQ `*` alone decodes; it
   failed with `missing data series encoding: Bases`. `ViewSam` on each prints Picard's
   text.
+- An `OUTPUT` named `.SAM` (any case other than `.sam`) gets BAM bytes, as htsjdk picks
+  SAM text by `endsWith(".sam")`. `SortSam`, `CleanSam`, a rewriting `ReplaceSamHeader`
+  and the chain's `write` step wrote SAM text under that name; a block copy refused it.
 - `chain ... + add-comments-to-bam -C` with a newline in a comment is a usage error before
   the first read (exit 2, `--dry-run` too); it failed the step after the chain started.
 

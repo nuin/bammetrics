@@ -635,6 +635,7 @@ fn write_options_name_their_files_and_refuse_the_kinds_of_later_waves() {
         Err(Error::Usage(text)) if text.contains("written uncompressed")
     ));
     assert_eq!(WriteFormat::of(Path::new("out.bam")), WriteFormat::Bam);
+    assert_eq!(WriteFormat::of(Path::new("out.SAM")), WriteFormat::Bam);
     assert_eq!(WriteFormat::of(Path::new("/dev/stdout")), WriteFormat::Bam);
     assert_eq!(WriteFormat::parse("sam"), Some(WriteFormat::Sam));
     assert_eq!(WriteFormat::parse("cram"), None);

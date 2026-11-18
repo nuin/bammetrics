@@ -163,10 +163,10 @@ impl WriteFormat {
     }
 
     /// The format a path asks for by its name: SAM for `.sam`, else BAM.
+    /// The test is case-sensitive, as htsjdk's `endsWith(".sam")` is:
+    /// Picard writes BAM bytes under `out.SAM`.
     pub fn of(path: &Path) -> Self {
-        let sam = path
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("sam"));
+        let sam = path.extension().is_some_and(|extension| extension == "sam");
         if sam { Self::Sam } else { Self::Bam }
     }
 }

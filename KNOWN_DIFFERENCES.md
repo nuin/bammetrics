@@ -1157,6 +1157,12 @@ the differences below are on purpose or cannot be avoided.
   from the reference given with `R=`, so the records match Picard's (`test_cram`).
   The last two contigs are held in memory, so a query-name sorted CRAM reloads contigs
   often.
+- CRAM input with adjacent deletions. A BAM CIGAR `2S50D36D60M` stored in a CRAM holds
+  two deletion features; both decoders give the CIGAR `2S86D60M`. htsjdk builds `MD` from
+  the features (`0^<50 bases>0^<36 bases>60`, as samtools does); bammetrics builds it
+  from the decoded CIGAR (`0^<86 bases>60`). `NM` agrees. `ViewSam`, `CleanSam` and every
+  other tool that writes a CRAM's records differ in that tag (26 of 1942 records of one
+  probe file).
 - `VALIDATION_STRINGENCY` is not applied to a BAM or a CRAM (their records are not
   validated), as for every tool; Picard's default `STRICT` stops on records it finds
   invalid. The harness runs Picard with `SILENT`.
@@ -1415,6 +1421,13 @@ fixture BAMs, the corpus tiers, the exome slice, SAM text and a CRAM
 - A mapped record whose CIGAR of more than 65535 operators is held in a `CG` tag exits 1
   and writes nothing (D43). Picard clips the CIGAR of the tag.
 - `-o` ending in `.cram` exits 1 naming wave W15. Picard writes a CRAM.
+- A header with an `@SQ LN:0` line exits 1 and writes nothing, on SAM text (`invalid
+  length (LN): invalid value: 0`) and on a BAM (`the header could not be read`). Picard
+  cleans the file. The noodles header parser refuses the line for every tool that reads
+  records (section SAM text); `SortSam` and `ViewSam` exit 1 the same way.
+- An input file of 0 bytes exits 1 and writes nothing. Picard reads it as SAM text with
+  no line and writes a BAM with no record. Every tool exits 1 on such a file (section SAM
+  text).
 - A partial file is never left: Picard leaves the records before a failing one.
 
 ## Not in Picard

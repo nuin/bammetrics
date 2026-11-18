@@ -127,6 +127,17 @@ def test_index_and_md5(clean, tmp_path):
     index_and_md5(TOOL, [f"I={clean['bam']}"], tmp_path, "out.bai")
 
 
+def test_an_upper_case_sam_name_gets_bam_bytes(tmp_path):
+    """htsjdk picks SAM text by `endsWith(".sam")`, so both write a BAM under `out.SAM`."""
+    source = FIXTURES / "clean_sam.bam"
+    compare(TOOL, source, [], "clean_sam.bam into .SAM", suffix=".SAM")
+    for side in ("picard", "bammetrics"):
+        out = tmp_path / f"{side}.SAM"
+        done = run_tool(side, TOOL, [f"I={source}", f"O={out}"])
+        assert done.returncode == 0, f"{side}: {done.stderr}"
+        assert out.read_bytes()[:4] == b"\x1f\x8b\x08\x04", side
+
+
 def test_a_bam_without_records():
     compare(TOOL, FIXTURES / "no_reads.bam", [], "no_reads.bam")
 
