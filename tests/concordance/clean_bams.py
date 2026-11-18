@@ -146,7 +146,8 @@ def pairs(records):
                                          first_start - mate_start - span,
                                          tags="MC:Z:30M\tMQ:i:60"))
         for k, mate_start in enumerate((length + 1, length + 50)):
-            kind = "fail" if ops(cigar)[0][1] not in READ_OPS else "ok"
+            # MC is text, so a clip longer than the mate's read is written as it is.
+            kind = outcome(cigar, mate_start, length, bases).replace("unreadable", "ok")
             records.add(records.line(f"orphan_{i}_{k}", 65, "c1", 100 + i, 60, "30M", "=",
                                      mate_start, 0, tags=f"MC:Z:{cigar}"), kind)
     for i, (contig, length) in enumerate(CONTIGS):
