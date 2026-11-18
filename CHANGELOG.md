@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.26.0
+
+Wave W08 of docs/07: adapter content, duplicates by tile, telomere and index-only depth.
 
 ### Added
 

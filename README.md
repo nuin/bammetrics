@@ -90,7 +90,7 @@ reads the marked BAM, and the BAM holds the records `MarkDuplicates` writes. On 
 exome the chain took 16.5 s against 22.2 s for `MarkDuplicates` followed by the four
 collectors on its output.
 
-Every `+` starts a step: a transform (`mark-duplicates`, `sort-sam`), a tap (15 one-pass
+Every `+` starts a step: a transform (`mark-duplicates`, `sort-sam`), a tap (18 one-pass
 tool verbs) or `write [PATH]` (`-` is standard output). Transforms may follow one another:
 `+ sort-sam --sort-order queryname + mark-duplicates + sort-sam --sort-order coordinate +
 write out.bam --index` sorts, marks and sorts back in one process, a sort holding at most
