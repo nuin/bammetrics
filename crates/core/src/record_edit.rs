@@ -373,10 +373,22 @@ impl Out {
 
 /// The header as htsjdk holds it: a `SAMFileHeader` starts with `@HD
 /// VN:1.6`, so a file without an `@HD` line is written with that one.
-fn with_version(mut header: sam::Header) -> sam::Header {
-    header.header_mut().get_or_insert_with(|| {
-        Map::<sam::header::record::value::map::Header>::new(Version::new(1, 6))
-    });
+/// `rewrite`: htsjdk's `SAMFileWriter` also sets `VN:1.6` over the
+/// header's own version (`VN:1.4` is written `VN:1.6`) and `SO:unsorted`
+/// after the other fields of an `@HD` without `SO`; a block copy keeps the
+/// line as it is.
+fn with_version(mut header: sam::Header, rewrite: bool) -> sam::Header {
+    use noodles::sam::header::record::value::map::header::tag::SORT_ORDER;
+    let current = Version::new(1, 6);
+    let hd = header
+        .header_mut()
+        .get_or_insert_with(|| Map::<sam::header::record::value::map::Header>::new(current));
+    if rewrite {
+        *hd.version_mut() = current;
+        hd.other_fields_mut()
+            .entry(SORT_ORDER)
+            .or_insert_with(|| "unsorted".into());
+    }
     header
 }
 
@@ -426,7 +438,7 @@ pub fn run(
                 cram,
                 mode: opts.mode,
             })?;
-            let out_header = with_version(edit.header(header)?);
+            let out_header = with_version(edit.header(header)?, opts.mode == Mode::Rewrite);
             let mut out = Out::create(opts, &out_header)?;
             let mut counters = Counters::default();
             let mut record = RawRecord::default();
@@ -497,7 +509,10 @@ struct Editing {
 
 impl Transform for Editing {
     fn header(&self, up: &sam::Header) -> Result<sam::Header> {
-        self.edit.header(up).map(with_version)
+        let rewrites = self.edit.rewrites();
+        self.edit
+            .header(up)
+            .map(|header| with_version(header, rewrites))
     }
 
     fn apply(&mut self, batch: &mut Vec<RawRecord>) -> Result<()> {
