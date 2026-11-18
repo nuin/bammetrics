@@ -79,6 +79,14 @@ pub trait RecordEdit {
     fn finish(&mut self, _out: &mut Vec<RawRecord>) -> Result<()> {
         Ok(())
     }
+
+    /// True for a tool that writes every record through htsjdk's
+    /// `SAMFileWriter` whatever its input ([`Mode::Rewrite`] alone): its
+    /// chain step gives each record the `bin` that writer computes, as the
+    /// tool on its own does, so chained equals staged.
+    fn rewrites(&self) -> bool {
+        false
+    }
 }
 
 /// How the records are read and written; Picard's tools use one of two
@@ -493,12 +501,16 @@ impl Transform for Editing {
     }
 
     fn apply(&mut self, batch: &mut Vec<RawRecord>) -> Result<()> {
+        let rewrites = self.edit.rewrites();
         let mut kept = 0;
         for at in 0..batch.len() {
             let record = &mut batch[at];
             self.restore.apply(record)?;
             let outcome = self.edit.record(record)?;
             if tally(&mut self.counters, outcome) {
+                if rewrites {
+                    record.set_codec_bin();
+                }
                 batch.swap(kept, at);
                 kept += 1;
             }
@@ -509,6 +521,9 @@ impl Transform for Editing {
 
     fn finish(&mut self, out: &mut Vec<RawRecord>) -> Result<()> {
         self.edit.finish(out)?;
+        if self.edit.rewrites() {
+            out.iter_mut().for_each(RawRecord::set_codec_bin);
+        }
         self.counters.records_out += out.len() as u64;
         Ok(())
     }
