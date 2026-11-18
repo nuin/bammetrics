@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased
+
+Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
+
+### Added
+
+- `crates/core/src/record_edit.rs`: the shape of a Picard tool that edits a header and
+  each record. A tool supplies a `RecordEdit` (the output header, each record kept,
+  changed or dropped, records after the last); `run` reads SAM, BAM or CRAM and writes a
+  BAM or SAM text in htsjdk's two modes (`BlockCopy`, the record bytes of a BAM as they
+  are and the index at `OUTPUT.bai`; `Rewrite`, a presorted writer with the `bin` htsjdk
+  computes and `MD` and `NM` on CRAM records), with `COMPRESSION_LEVEL`, `CREATE_INDEX`,
+  `CREATE_MD5_FILE`, atomic outputs and the input-is-output refusal; `stage` turns the
+  same edit into a streaming chain transform. The stage table is a list of `StageRow`
+  with a `StageKind` (`Holds`, `Replays`, `Streams`); a streaming transform starts no
+  segment, and the chain plan lists it in the segment it reads.
+- `AddCommentsToBam` (verb `add-comments-to-bam`, Python `add_comments_to_bam()`), as
+  Picard 3.5.0: one `@CO` line per `COMMENT` after the header's own, the records of the
+  BAM byte for byte; a `.sam` input, a CRAM and SAM text fail as in Picard; no `COMMENT`
+  copies the BAM. A chain transform (`commented`).
+- `ReplaceSamHeader` (verb `replace-sam-header`, Python `replace_sam_header()`), as
+  Picard 3.5.0: the header of `HEADER` (SAM, BAM or CRAM, read at
+  `VALIDATION_STRINGENCY`). An input named `.bam` is block copied (each record keeps its
+  reference index; the new `SO` is `unsorted` or the input's); any other input is read at
+  `SILENT` (each record keeps its reference name; the two `SO` equal; SAM text output).
+  A chain transform (`reheadered`) that keeps each reference index.
+- `tests/concordance/test_add_comments_to_bam.py` and `test_replace_sam_header.py`
+  (tier B with record bytes; 64 cases on the fixtures, the corpus tiers, the exome slice,
+  SAM text and CRAM), `crates/cli/tests/record_edit.rs` (chained equals staged at the
+  first, a middle and the last position beside `mark-duplicates` and `sort-sam`), and
+  golden records.
+
+### Changed
+
+- `bam_writer::finish_with_index` names the `.bai`; `BamWriter::unchecked` writes records
+  without the order check; `RawRecord::set_reference_ids` and `set_codec_bin`;
+  `pass::with_record_stream_kind` tells a BAM from a CRAM and SAM text.
+
 ## 0.26.0
 
 Wave W08 of docs/07: adapter content, duplicates by tile, telomere and index-only depth.

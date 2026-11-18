@@ -1372,6 +1372,29 @@ differs here:
 - Sorted runs spill to `TMP_DIR` as BGZF level 3, not as htsjdk's temporary files. Picard's
   log lines (`Finished reading inputs`, the progress lines) are not printed.
 
+## AddCommentsToBam and ReplaceSamHeader
+
+Both write the header lines and records Picard writes, the records byte for byte after
+inflation, on the fixture BAMs, the corpus tiers, the exome slice, SAM text and a CRAM
+(`tests/concordance/test_add_comments_to_bam.py`, `test_replace_sam_header.py`). They
+differ here (docs/07 decisions D34 to D39):
+
+- A block copy into an `OUTPUT` ending in `.sam` exits 2. Picard writes BAM bytes under
+  that name.
+- A `ReplaceSamHeader` block copy (an input named `.bam`) whose record names a reference
+  index the new dictionary lacks exits 1 and writes nothing. Picard writes a BAM that
+  samtools cannot read.
+- A block copy of a BAM with no record ends with the BGZF end-of-file block. Picard's
+  file has none; samtools warns that it may be cut.
+- `CREATE_INDEX` on a block copy writes `OUTPUT.bai` when the header says `SO:coordinate`.
+  Picard also indexes an `SO:unsorted` BAM whose records are in coordinate order.
+- `AddCommentsToBam` reads a BAM from a pipe or standard input. Picard's block copy needs
+  a file.
+- In a chain, `replace-sam-header` keeps each record's reference index, as the block copy
+  of a `.bam` does. Picard's tool on SAM text or a CRAM keeps the reference name.
+- A partial file is never left: Picard leaves a header-only `OUTPUT` when a record's
+  reference name is not in the new dictionary.
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))

@@ -433,13 +433,13 @@ def test_a_step_takes_the_keywords_of_its_tools_function():
     checked = 0
     for verb in steps:
         try:
-            bm.step(verb)
+            role = bm.step(verb).role
         except bm.UsageError:
             continue
         function = stub_function("".join(
             "_" + c.lower() if c.isupper() else c for c in steps[verb]).lstrip("_"))
         for keyword in (a.arg for a in function.args.kwonlyargs):
-            if keyword == "output" and verb in ("mark_duplicates", "sort_sam"):
+            if keyword == "output" and role == "transform":
                 with pytest.raises(bm.UsageError, match="writes no BAM in a chain"):
                     bm.step(verb, output=None)
             elif keyword == "validation_stringency":
