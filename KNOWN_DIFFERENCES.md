@@ -379,10 +379,11 @@ behaves how.
     no step of `bammetrics chain`: `write --index` writes the index of the BAM a chain
     writes, and the step exits 2 naming it.
   - `CREATE_MD5_FILE=true` writes no digest of the index, in either tool.
-  - A reference of length 0 (`@SQ LN:0`) is indexed, as in Picard. `BuildBamIndex` is
-    the one tool that reads such a header. Every other tool reads the header through
-    noodles, which holds no length 0, and exits 1 (`not a BAM or CRAM file (the header
-    could not be read: invalid record)`).
+  - A reference of length 0 (`@SQ LN:0`) is indexed, as in Picard. `BuildBamIndex` and
+    `CollectIndexDepthMetrics` are the tools that read such a header. Every other tool
+    reads the header through noodles, which holds no length 0, and exits 1 (`not a BAM or
+    CRAM file (the header could not be read: invalid record)`); `ViewSam` on
+    `tests/data/index_depth.bam` is the concordance case (`test_view_sam.py`).
   - A record whose `block_size` claims more bytes than the file holds is a `truncated
     BAM` (exit 1). Picard says `Invalid record length` for a size htsjdk reads as
     negative.

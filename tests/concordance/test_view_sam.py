@@ -218,9 +218,30 @@ def foundation_sam(corpus, tmp_path_factory):
     return path
 
 
-@pytest.mark.parametrize("bam", sorted(FIXTURES.glob("*.bam")), ids=lambda p: p.stem)
+# Fixtures whose header holds an `@SQ LN:0`. bammetrics reads the header through
+# noodles, which holds no length 0, and exits 1 at the header (KNOWN_DIFFERENCES.md,
+# BuildBamIndex); htsjdk reads it.
+LENGTH_ZERO = {"index_depth.bam"}
+
+
+@pytest.mark.parametrize(
+    "bam",
+    sorted(p for p in FIXTURES.glob("*.bam") if p.name not in LENGTH_ZERO),
+    ids=lambda p: p.stem,
+)
 def test_fixtures(bam):
     compare(bam.name, [f"I={bam}"], picard_extra=[SILENT])
+
+
+@pytest.mark.parametrize("name", sorted(LENGTH_ZERO))
+def test_fixture_with_a_reference_of_length_0(name):
+    bam = FIXTURES / name
+    picard = run_picard([f"I={bam}", SILENT])
+    ours = run_ours([f"I={bam}"])
+    assert picard.returncode == 0, picard.stderr[-1500:].decode(errors="replace")
+    assert ours.returncode == 1, ours.stderr.decode(errors="replace")
+    assert b"the header could not be read: invalid record" in ours.stderr
+    RESULTS.append((f"{TOOL} {name} (@SQ LN:0)", 0, 0, "Picard prints, bammetrics refuses the header"))
 
 
 def test_foundation(corpus):
