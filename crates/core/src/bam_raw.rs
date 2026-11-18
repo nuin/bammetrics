@@ -11,7 +11,7 @@
 //! integers in the smallest BAM type that holds them and `H` as a `B:c`
 //! array; an untouched record keeps its bytes.
 
-use std::io::{self, Read, Write};
+use std::io::{self, BufRead, Read, Write};
 
 /// Offset of the read name: the fixed fields of SAM specification 4.2.
 const FIXED: usize = 32;
@@ -46,6 +46,117 @@ pub(crate) fn read_append<R: Read + ?Sized>(
         reader.read_exact(&mut buf[filled..])?;
     }
     Ok(())
+}
+
+/// A BAM record stream whose `block_size` fields are each checked against
+/// the bytes behind them before a reader sees the record. noodles'
+/// `read_record` resizes its buffer to `block_size` before it reads the
+/// record, so a field of 0x7fffff00 in a file of 200 bytes cost 2 GiB. A
+/// record of at most one [`READ_STEP`] passes straight through; a longer one
+/// is read ahead through [`read_append`] once its `block_size` is read, so a
+/// stream that ends inside it is an `UnexpectedEof` while at most one step
+/// more than the bytes present is held.
+pub(crate) struct BoundedRecords<R> {
+    inner: R,
+    /// A long record read ahead, and how much of it was handed on.
+    ahead: Vec<u8>,
+    at: usize,
+    /// Record bytes still to pass straight through.
+    left: usize,
+    /// The `block_size` bytes read so far.
+    size: [u8; 4],
+    got: usize,
+}
+
+impl<R: BufRead> BoundedRecords<R> {
+    pub(crate) fn new(inner: R) -> Self {
+        Self {
+            inner,
+            ahead: Vec::new(),
+            at: 0,
+            left: 0,
+            size: [0; 4],
+            got: 0,
+        }
+    }
+
+    /// Note a whole `block_size`: pass a short record through, read a long
+    /// one ahead.
+    fn sized(&mut self) -> io::Result<()> {
+        self.got = 0;
+        let size = u32::from_le_bytes(self.size) as usize;
+        if size <= READ_STEP {
+            self.left = size;
+            return Ok(());
+        }
+        self.ahead.clear();
+        self.at = 0;
+        read_append(&mut self.inner, &mut self.ahead, size)
+    }
+}
+
+impl<R: BufRead> Read for BoundedRecords<R> {
+    #[inline]
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.left > 0 {
+            let wanted = buf.len().min(self.left);
+            let n = self.inner.read(&mut buf[..wanted])?;
+            self.left -= n;
+            return Ok(n);
+        }
+        if self.at < self.ahead.len() {
+            let n = buf.len().min(self.ahead.len() - self.at);
+            buf[..n].copy_from_slice(&self.ahead[self.at..self.at + n]);
+            self.at += n;
+            return Ok(n);
+        }
+        // At a record boundary: the next bytes are a `block_size`. When the
+        // buffer holds all four, a short record's `block_size` and body pass
+        // straight through.
+        if self.got == 0
+            && let Some(out) = buf.first_chunk_mut::<4>()
+        {
+            let src = self.inner.fill_buf()?;
+            if let Some(size) = src.first_chunk::<4>()
+                && u32::from_le_bytes(*size) as usize <= READ_STEP
+            {
+                *out = *size;
+                self.left = u32::from_le_bytes(*size) as usize;
+                self.inner.consume(4);
+                return Ok(4);
+            }
+        }
+        let wanted = buf.len().min(4 - self.got);
+        let n = self.inner.read(&mut buf[..wanted])?;
+        self.size[self.got..self.got + n].copy_from_slice(&buf[..n]);
+        self.got += n;
+        if self.got == 4 {
+            self.sized()?;
+        }
+        Ok(n)
+    }
+
+    /// A record body that passes straight through is one `read_exact` of
+    /// the inner reader, which a BGZF reader serves by one copy out of its
+    /// block.
+    #[inline]
+    fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {
+        if buf.len() <= self.left {
+            self.inner.read_exact(buf)?;
+            self.left -= buf.len();
+            return Ok(());
+        }
+        let mut rest = buf;
+        while !rest.is_empty() {
+            match self.read(rest) {
+                Ok(0) => return Err(io::ErrorKind::UnexpectedEof.into()),
+                Ok(n) => rest = &mut rest[n..],
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(())
+    }
 }
 
 /// One BAM alignment record without its `block_size`.
@@ -754,6 +865,60 @@ mod tests {
         assert_eq!(buf, b"headabcd");
         let short = read_append(&mut b"xy".as_slice(), &mut buf, 3).expect_err("two bytes left");
         assert_eq!(short.kind(), io::ErrorKind::UnexpectedEof);
+    }
+
+    /// `block_size` and `body`, as a BAM record stream holds them.
+    fn framed(body: &[u8]) -> Vec<u8> {
+        let mut bytes = u32::try_from(body.len()).unwrap().to_le_bytes().to_vec();
+        bytes.extend_from_slice(body);
+        bytes
+    }
+
+    #[test]
+    fn bounded_records_pass_the_stream_unchanged() {
+        let short = build("r", 0, 0, 0, &[], b"ACGT", &[]);
+        let long = vec![7u8; READ_STEP * 2 + 5];
+        let mut stream = framed(short.as_bytes());
+        stream.extend(framed(&long));
+        stream.extend(framed(short.as_bytes()));
+        stream.extend(&[1, 2]);
+        let mut out = Vec::new();
+        let error = BoundedRecords::new(stream.as_slice())
+            .read_to_end(&mut out)
+            .err();
+        assert!(error.is_none(), "{error:?}");
+        assert_eq!(out, stream);
+
+        let one = framed(short.as_bytes());
+        let mut reader = noodles::bam::io::Reader::from(BoundedRecords::new(one.as_slice()));
+        let mut record = noodles::bam::Record::default();
+        assert_eq!(
+            reader.read_record(&mut record).expect("a record"),
+            short.as_bytes().len()
+        );
+        assert_eq!(reader.read_record(&mut record).expect("the end"), 0);
+    }
+
+    #[test]
+    fn a_block_size_past_the_stream_is_a_cut_record() {
+        for size in [
+            0x7fff_ff00u32,
+            (-5i32).cast_unsigned(),
+            READ_STEP as u32 + 1,
+        ] {
+            let mut stream = size.to_le_bytes().to_vec();
+            stream.extend([0u8; 100]);
+            let mut reader = noodles::bam::io::Reader::from(BoundedRecords::new(stream.as_slice()));
+            let error = reader
+                .read_record(&mut noodles::bam::Record::default())
+                .expect_err("cut");
+            assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof, "{size}");
+        }
+        let mut reader = noodles::bam::io::Reader::from(BoundedRecords::new(&[1u8, 0][..]));
+        let error = reader
+            .read_record(&mut noodles::bam::Record::default())
+            .expect_err("a cut block_size");
+        assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
     }
 
     #[test]

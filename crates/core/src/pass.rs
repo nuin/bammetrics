@@ -26,6 +26,7 @@ use std::thread::{self, JoinHandle};
 use noodles::sam::header::record::value::map::header::tag::SORT_ORDER;
 use noodles::{bam, bgzf, sam};
 
+use crate::bam_raw::BoundedRecords;
 use crate::cram::{self, Kind};
 use crate::error::{Error, Result};
 use crate::gzip::GzipReader;
@@ -411,6 +412,7 @@ where
             let header = reader
                 .read_header()
                 .map_err(|e| input(cram::bam_header_error(e)))?;
+            let mut reader = bam::io::Reader::from(BoundedRecords::new(reader.into_inner()));
             pass.drive(&mut reader, &header, build)
         }
         Kind::Sam | Kind::GzipSam => {

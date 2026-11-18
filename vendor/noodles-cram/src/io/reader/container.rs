@@ -65,8 +65,17 @@ where
     match read_header(reader, &mut container.header)? {
         0 => Ok(0),
         len => {
-            container.src.resize(len, 0);
-            reader.read_exact(&mut container.src)?;
+            // bammetrics patch: the length comes from the file, which can
+            // claim 2 GiB in a file of 200 bytes. The buffer grows one MiB
+            // at a time, so it holds the bytes present and at most one step
+            // more; a file that ends first is an `UnexpectedEof`.
+            const STEP: usize = 1 << 20;
+            container.src.clear();
+            while container.src.len() < len {
+                let filled = container.src.len();
+                container.src.resize(len.min(filled + STEP), 0);
+                reader.read_exact(&mut container.src[filled..])?;
+            }
             Ok(len)
         }
     }

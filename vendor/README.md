@@ -8,7 +8,8 @@ crates.io releases. `exclude = ["vendor"]` keeps them out of the workspace, so
 
 The crates.io tarball (`noodles-cram-0.102.0.crate`), unpacked, with
 `Cargo.lock` dropped, an empty `[workspace]` table added to `Cargo.toml`, and
-one change in `src/io/reader/container/slice.rs`, marked `bammetrics patch`:
+two changes marked `bammetrics patch`. The first is in
+`src/io/reader/container/slice.rs`:
 
 - `calculate_template_length` is htsjdk 4's
   `CRAMCompressionRecord.computeInsertSize`, which Picard 3.5.0 decodes with:
@@ -29,5 +30,13 @@ Without the change, a mate pair samtools stored attached at equal starts and
 read without an `MC` tag gets the opposite orientation from Picard
 (`tests/concordance/test_cram.py::test_attached_mates_without_mc_tag`).
 
-To move to a later noodles-cram: unpack its tarball here, apply the two
-changes again if upstream has not, and run that test module.
+The second is in `src/io/reader/container.rs`: `read_container` grows the
+container buffer one MiB at a time up to the container length, in place of one
+`resize` to that length. A container header (its CRC32 valid) that claims
+0x7fffff00 bytes in a file of 343 bytes cost 1,578 MiB peak RSS in `insert-size`;
+it now ends as `truncated CRAM` at 5 MiB
+(`crates/cli/tests/forged_block_size.rs`).
+
+To move to a later noodles-cram: unpack its tarball here, apply the
+`bammetrics patch` changes again if upstream has not, and run that test module
+and `crates/cli/tests/forged_block_size.rs`.
