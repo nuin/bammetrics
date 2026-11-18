@@ -373,10 +373,16 @@ impl Out {
 
 /// The header as htsjdk holds it: a `SAMFileHeader` starts with `@HD
 /// VN:1.6`, so a file without an `@HD` line is written with that one.
-fn with_version(mut header: sam::Header) -> sam::Header {
-    header.header_mut().get_or_insert_with(|| {
+/// htsjdk's `SAMFileWriter` (`current`: [`Mode::Rewrite`], or a chain step
+/// that [`RecordEdit::rewrites`]) writes `VN:1.6` whatever version it read:
+/// Picard's `SetNmMdAndUqTags` on the `VN:1.4` HG002 exome writes `VN:1.6`.
+fn with_version(mut header: sam::Header, current: bool) -> sam::Header {
+    let map = header.header_mut().get_or_insert_with(|| {
         Map::<sam::header::record::value::map::Header>::new(Version::new(1, 6))
     });
+    if current {
+        *map.version_mut() = Version::new(1, 6);
+    }
     header
 }
 
@@ -426,7 +432,7 @@ pub fn run(
                 cram,
                 mode: opts.mode,
             })?;
-            let out_header = with_version(edit.header(header)?);
+            let out_header = with_version(edit.header(header)?, opts.mode == Mode::Rewrite);
             let mut out = Out::create(opts, &out_header)?;
             let mut counters = Counters::default();
             let mut record = RawRecord::default();
@@ -497,7 +503,8 @@ struct Editing {
 
 impl Transform for Editing {
     fn header(&self, up: &sam::Header) -> Result<sam::Header> {
-        self.edit.header(up).map(with_version)
+        let rewrites = self.edit.rewrites();
+        self.edit.header(up).map(|h| with_version(h, rewrites))
     }
 
     fn apply(&mut self, batch: &mut Vec<RawRecord>) -> Result<()> {

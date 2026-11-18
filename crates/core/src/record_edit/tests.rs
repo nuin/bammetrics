@@ -271,11 +271,11 @@ impl RecordEdit for Pass {
 }
 
 #[test]
-fn a_rewriting_step_gives_each_record_the_writers_bin() {
-    let header: sam::Header = "@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:chr1\tLN:1000\n"
+fn a_rewriting_step_gives_each_record_the_writers_bin_and_version() {
+    let header: sam::Header = "@HD\tVN:1.4\tSO:coordinate\n@SQ\tSN:chr1\tLN:1000\n"
         .parse()
         .expect("header");
-    let frame = Frame::new(header, "in.bam".to_owned());
+    let frame = Frame::new(header.clone(), "in.bam".to_owned());
     let inv = crate::sort_sam::TOOL
         .parse(&["I=in.bam".to_owned(), "SORT_ORDER=coordinate".to_owned()])
         .expect("parse");
@@ -299,6 +299,14 @@ fn a_rewriting_step_gives_each_record_the_writers_bin() {
         let got = u16::from_le_bytes([batch[0].as_bytes()[10], batch[0].as_bytes()[11]]);
         assert_eq!(got, bin, "rewrites {rewrites}");
         assert_eq!(transform.counters().changed, 0);
+        // htsjdk's writer writes VN:1.6; a block copy keeps the version read.
+        let version = transform
+            .header(&header)
+            .expect("header")
+            .header()
+            .map(|hd| hd.version());
+        let expected = if rewrites { (1, 6) } else { (1, 4) };
+        assert_eq!(version, Some(Version::new(expected.0, expected.1)));
     }
 }
 
