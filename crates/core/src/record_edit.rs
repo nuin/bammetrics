@@ -79,6 +79,14 @@ pub trait RecordEdit {
     fn finish(&mut self, _out: &mut Vec<RawRecord>) -> Result<()> {
         Ok(())
     }
+
+    /// True for a tool whose stand-alone run is a [`Mode::Rewrite`]: as a
+    /// chain step it gives each record, and each record of
+    /// [`RecordEdit::finish`], the `bin` htsjdk's writer computes, so the
+    /// stream after it holds the records the tool writes.
+    fn rewrites(&self) -> bool {
+        false
+    }
 }
 
 /// How the records are read and written; Picard's tools use one of two
@@ -498,6 +506,9 @@ impl Transform for Editing {
             let record = &mut batch[at];
             self.restore.apply(record)?;
             let outcome = self.edit.record(record)?;
+            if self.edit.rewrites() {
+                record.set_codec_bin();
+            }
             if tally(&mut self.counters, outcome) {
                 batch.swap(kept, at);
                 kept += 1;
@@ -509,6 +520,9 @@ impl Transform for Editing {
 
     fn finish(&mut self, out: &mut Vec<RawRecord>) -> Result<()> {
         self.edit.finish(out)?;
+        if self.edit.rewrites() {
+            out.iter_mut().for_each(RawRecord::set_codec_bin);
+        }
         self.counters.records_out += out.len() as u64;
         Ok(())
     }
