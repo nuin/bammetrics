@@ -523,6 +523,15 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("HEADER", "tests/data/oxog.bam")),
             picard_outputs: sorted_sam,
         },
+        // SAM text in and out: the bodies compare.
+        Case {
+            verb: "clean-sam",
+            class: "CleanSam",
+            verb_args: strings(&["tests/data/clean_sam.sam"]),
+            picard_args: strings(&["I=tests/data/clean_sam.sam"]),
+            option: Some(("COMPRESSION_LEVEL", "1")),
+            picard_outputs: sorted_sam,
+        },
     ]
 }
 
@@ -534,7 +543,7 @@ fn commented_bam(out: &str) -> Vec<String> {
 /// writes as `O=OUT.<extension>`.
 fn named_output(verb: &str) -> Option<&'static str> {
     match verb {
-        "sort-sam" | "replace-sam-header" => Some("sam"),
+        "sort-sam" | "replace-sam-header" | "clean-sam" => Some("sam"),
         "add-comments-to-bam" => Some("bam"),
         _ => None,
     }
@@ -641,7 +650,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 44);
+    assert_eq!(classes.len(), 45);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

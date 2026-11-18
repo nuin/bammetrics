@@ -131,3 +131,15 @@ fn a_record_picard_writes_unreadable_or_fails_on_is_an_error() {
     let error = edit.record(&mut mc).expect_err("MC:i");
     assert!(error.to_string().contains("not a String"), "{error}");
 }
+
+#[test]
+fn a_cigar_held_in_a_cg_tag_is_refused() {
+    let mut edit = Clean::new(&header());
+    // 20S90N with CG:B:I,1M: htsjdk reads the real CIGAR from the tag.
+    let cg = b"CGBI\x01\0\0\0\x10\0\0\0";
+    let mut long = build("long", 0, 0, 9, &[(20, 4), (90, 3)], &[30; 20], cg);
+    let error = edit.record(&mut long).expect_err("a CG tag");
+    assert!(error.to_string().contains("CG tag"), "{error}");
+    let mut plain = build("plain", 0, 0, 9, &[(20, 4), (90, 3)], &[30; 20], b"");
+    assert!(edit.record(&mut plain).is_ok());
+}

@@ -1407,11 +1407,13 @@ differ here (docs/07 decisions D34 to D39):
 `CleanSam` writes the header lines and records Picard writes, the records byte for byte
 after inflation, on reads off contig ends with every CIGAR operator at the clip point, the
 fixture BAMs, the corpus tiers, the exome slice, SAM text and a CRAM
-(`tests/concordance/test_clean_sam.py`). It differs here (docs/07 decisions D40 to D42):
+(`tests/concordance/test_clean_sam.py`). It differs here (docs/07 decisions D40 to D43):
 
 - A read that starts past the end of its reference exits 1 and writes nothing. Picard's
   clip gives it a CIGAR longer than its bases (`69S` over 20 bases), Picard writes that
   record, and samtools refuses the file.
+- A mapped record whose CIGAR of more than 65535 operators is held in a `CG` tag exits 1
+  and writes nothing (D43). Picard clips the CIGAR of the tag.
 - `-o` ending in `.cram` exits 1 naming wave W15. Picard writes a CRAM.
 - A partial file is never left: Picard leaves the records before a failing one.
 

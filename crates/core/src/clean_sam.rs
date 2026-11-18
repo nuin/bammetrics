@@ -210,6 +210,12 @@ pub fn clip_off_end(
     soft_clip_end_of_read(clip_from, cigar).map(Some)
 }
 
+/// htsjdk `BAMRecord.isSentinelCigar`: `kSmN` with `k` the read length,
+/// the CIGAR a BAM holds when the real one is in the `CG` tag.
+fn is_sentinel(cigar: &[(u32, u8)], bases: usize) -> bool {
+    matches!(cigar, [(k, SOFT_CLIP), (_, 3)] if bases == 0 || usize::try_from(*k).ok() == Some(bases))
+}
+
 /// htsjdk `TextCigarCodec.encode`: `*` for no operator.
 pub fn cigar_text(cigar: &[(u32, u8)]) -> Vec<u8> {
     if cigar.is_empty() {
@@ -261,6 +267,15 @@ impl Clean {
     fn own_clip(&self, record: &RawRecord) -> Result<Option<Vec<(u32, u8)>>> {
         let length = self.length(record, record.reference_id(), "the record's")?;
         let cigar: Vec<(u32, u8)> = record.cigar().collect();
+        if is_sentinel(&cigar, record.sequence_length())
+            && record.tag(*b"CG").ok().flatten().is_some()
+        {
+            return Err(failure(
+                record,
+                "its CIGAR of more than 65535 operators is in a CG tag; htsjdk clips the CIGAR \
+                 of the tag, which bammetrics does not read",
+            ));
+        }
         let end = record
             .alignment_start()
             .wrapping_add(reference_length(&cigar))
