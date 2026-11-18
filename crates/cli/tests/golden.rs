@@ -642,6 +642,26 @@ const CLEAN_SAM_CASES: &[Case] = &[
     case!("error_chain_clean_sam_output", "chain", "CS", "+", "clean-sam", "--compression-level", "1", "+", "write", "OUT/out.bam"),
 ];
 
+/// `SetNmMdAndUqTags` and its deprecated name `SetNmAndUqTags`: the Picard
+/// face on a BAM, SAM text and a CRAM, the verbs, the errors Picard gives,
+/// and the step in a chain after `sort-sam`.
+#[rustfmt::skip]
+const SET_NM_CASES: &[Case] = &[
+    case!("picard_set_nm_md_and_uq_tags", "SetNmMdAndUqTags", "I=MD", "R=REF", "O=OUT/tagged.bam"),
+    case!("picard_set_nm_md_and_uq_tags_sam", "SetNmMdAndUqTags", "I=MD_SAM", "R=REF", "O=OUT/tagged.sam", "IS_BISULFITE_SEQUENCE=true"),
+    case!("picard_set_nm_md_and_uq_tags_cram", "SetNmMdAndUqTags", "I=IS_CRAM", "R=REF", "O=OUT/tagged.bam", "SET_ONLY_UQ=true", "CREATE_INDEX=true", "CREATE_MD5_FILE=true"),
+    case!("picard_set_nm_and_uq_tags", "SetNmAndUqTags", "I=IS", "R=REF", "O=OUT/tagged.sam"),
+    case!("verb_set_nm_md_and_uq_tags", "set-nm-md-and-uq-tags", "MD", "-R", "REF", "-o", "OUT/tagged.sam", "--set-only-uq"),
+    case!("verb_set_nm_and_uq_tags", "set-nm-and-uq-tags", "IS", "-R", "REF", "-o", "OUT/tagged.bam", "--create-index"),
+    case!("error_set_nm_md_and_uq_tags_queryname", "SetNmMdAndUqTags", "I=DM", "R=REF", "O=OUT/tagged.bam"),
+    case!("error_set_nm_md_and_uq_tags_no_reference", "SetNmMdAndUqTags", "I=MD", "O=OUT/tagged.bam"),
+    case!("error_verb_set_nm_md_and_uq_tags_no_reference", "set-nm-md-and-uq-tags", "MD", "-o", "OUT/tagged.bam"),
+    case!("error_set_nm_md_and_uq_tags_input_output", "SetNmMdAndUqTags", "I=MD", "R=REF", "O=MD"),
+    case!("chain_set_nm_md_and_uq_tags", "chain", "MD", "-R", "REF", "-o", "OUT/s", "+", "sort-sam", "-SO", "coordinate", "+", "set-nm-md-and-uq-tags", "+", "insert-size", "+", "write", "OUT/out.bam"),
+    case!("chain_dry_run_set_nm_md_and_uq_tags", "chain", "MD", "-R", "REF", "-o", "OUT/s", "--dry-run", "+", "mark-duplicates", "+", "set-nm-md-and-uq-tags", "--is-bisulfite-sequence", "+", "write", "OUT/out.bam"),
+    case!("error_chain_set_nm_md_and_uq_tags_no_reference", "chain", "MD", "+", "set-nm-md-and-uq-tags", "+", "write", "OUT/out.bam"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -1075,6 +1095,11 @@ fn documented_clean_sam_commands_on_the_fixtures() {
     check(CLEAN_SAM_CASES);
 }
 
+#[test]
+fn documented_set_nm_commands_on_the_fixtures() {
+    check(SET_NM_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1181,6 +1206,7 @@ fn case_names_are_unique() {
         .chain(DOCTOR_CASES)
         .chain(RECORD_EDIT_CASES)
         .chain(CLEAN_SAM_CASES)
+        .chain(SET_NM_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

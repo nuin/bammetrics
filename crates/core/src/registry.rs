@@ -364,6 +364,8 @@ pub const TOOLS: &[&Tool] = &[
     &crate::replace_sam_header::TOOL,
     &crate::add_oa_tag::TOOL,
     &crate::clean_sam::TOOL,
+    &crate::set_nm_md_and_uq_tags::TOOL,
+    &crate::set_nm_md_and_uq_tags::ALIAS,
 ];
 
 /// The tool named `name`.

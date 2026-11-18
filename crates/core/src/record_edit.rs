@@ -372,12 +372,6 @@ impl Out {
     }
 }
 
-/// The header as htsjdk holds it: a `SAMFileHeader` starts with `@HD
-/// VN:1.6`, so a file without an `@HD` line is written with that one.
-/// `rewrite`: htsjdk's `SAMFileWriter` also sets `VN:1.6` over the
-/// header's own version (`VN:1.4` is written `VN:1.6`) and `SO:unsorted`
-/// after the other fields of an `@HD` without `SO`; a block copy keeps the
-/// line as it is.
 /// The `SO` values htsjdk's `SAMFileHeader.SortOrder` names.
 const SORT_ORDERS: [&[u8]; 5] = [
     b"unsorted",
@@ -420,8 +414,13 @@ fn check_sort_order(header: &sam::Header, stringency: Stringency, path: &Path) -
     }
 }
 
-/// An `SO` value htsjdk's `SAMFileHeader.SortOrder` does not name becomes
-/// `unknown`, as `SAMTextHeaderCodec` reads it below `STRICT`.
+/// The header as htsjdk holds it: a `SAMFileHeader` starts with `@HD
+/// VN:1.6`, so a file without an `@HD` line is written with that one.
+/// `rewrite`: htsjdk's `SAMFileWriter` also sets `VN:1.6` over the
+/// header's own version (`VN:1.4` is written `VN:1.6`) and `SO:unsorted`
+/// after the other fields of an `@HD` without `SO`; a block copy keeps the
+/// line as it is. An `SO` value htsjdk's `SAMFileHeader.SortOrder` does not
+/// name becomes `unknown`, as `SAMTextHeaderCodec` reads it below `STRICT`.
 fn with_version(mut header: sam::Header, rewrite: bool) -> sam::Header {
     use noodles::sam::header::record::value::map::header::tag::SORT_ORDER;
     let current = Version::new(1, 6);
@@ -567,15 +566,16 @@ impl Transform for Editing {
     }
 
     fn apply(&mut self, batch: &mut Vec<RawRecord>) -> Result<()> {
+        let rewrites = self.edit.rewrites();
         let mut kept = 0;
         for at in 0..batch.len() {
             let record = &mut batch[at];
             self.restore.apply(record)?;
             let outcome = self.edit.record(record)?;
-            if self.edit.rewrites() {
-                record.set_codec_bin();
-            }
             if tally(&mut self.counters, outcome) {
+                if rewrites {
+                    record.set_codec_bin();
+                }
                 batch.swap(kept, at);
                 kept += 1;
             }

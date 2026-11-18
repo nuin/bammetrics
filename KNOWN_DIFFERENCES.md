@@ -1456,6 +1456,26 @@ fixture BAMs, the corpus tiers, the exome slice, SAM text and a CRAM
   text).
 - A partial file is never left: Picard leaves the records before a failing one.
 
+## SetNmMdAndUqTags and SetNmAndUqTags
+
+Both write the header lines and records Picard writes, the records byte for byte after
+inflation, on the fixture BAMs, the corpus tiers and the exome slice as written, with the
+three tags stripped and with wrong ones planted, on edge records, reads past a contig end,
+a bisulfite set, SAM text and CRAM (`tests/concordance/test_set_nm_md_and_uq_tags.py`,
+`test_set_nm_and_uq_tags.py`). They differ here (docs/07 decisions D49 to D52):
+
+- `REFERENCE_SEQUENCE` needs its `.fai`, and its contigs must be the input header's.
+  Picard reads a FASTA without one and takes the FASTA's contig N for reference index N
+  whatever its name.
+- A BAM record is not validated (section Validation). A read past the end of its contig
+  without qualities gets the tags the walk gives at every `VALIDATION_STRINGENCY`; Picard
+  refuses it at `STRICT` and writes the same tags at `SILENT`. With qualities both fail.
+- A `.cram` `OUTPUT` exits 2 naming wave W15. Picard writes a CRAM.
+- A failed run leaves no `OUTPUT`. Picard leaves a partial one (59 bytes of SAM header
+  after a read past its contig).
+- An `@RG DT` value is written as read. htsjdk parses it and writes it in the JVM's time
+  zone (`2015-10-02T02:00:00+0200` as `2015-10-01T18:00:00-0600` on the HG002 exome).
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))

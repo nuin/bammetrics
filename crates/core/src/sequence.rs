@@ -50,6 +50,13 @@ pub fn bases_equal(lhs: u8, rhs: u8) -> bool {
     }
 }
 
+/// `SequenceUtil.bases[byte]` as `calculateMdAndNm` reads it, without the
+/// range check of [`bases_equal`]: the IUPAC mask (0 for a byte that is no
+/// IUPAC code), `None` where Java's array access throws (127 and up).
+pub fn iupac_code(base: u8) -> Option<u8> {
+    IUPAC.get(usize::from(base)).copied()
+}
+
 /// `SequenceUtil.bisulfiteBasesEqual`: equal bases, or a read T on a
 /// reference C (forward strand) or a read A on a reference G (reverse).
 pub fn bisulfite_bases_equal(negative_strand: bool, read: u8, reference: u8) -> bool {

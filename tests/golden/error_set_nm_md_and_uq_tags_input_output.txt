@@ -1,0 +1,10 @@
+## argv
+SetNmMdAndUqTags
+I=tests/data/markdup.bam
+R=tests/data/ref_100k.fa
+O=tests/data/markdup.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: OUTPUT=tests/data/markdup.bam: it is the input tests/data/markdup.bam; writing it would destroy it

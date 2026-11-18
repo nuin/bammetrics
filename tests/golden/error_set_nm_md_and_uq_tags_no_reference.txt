@@ -1,0 +1,9 @@
+## argv
+SetNmMdAndUqTags
+I=tests/data/markdup.bam
+O=OUT/tagged.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: SetNmMdAndUqTags: REFERENCE_SEQUENCE is required: the tags are computed from it

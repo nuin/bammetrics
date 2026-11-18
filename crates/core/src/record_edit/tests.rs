@@ -253,6 +253,63 @@ fn the_stage_edits_a_batch_in_place_and_hands_the_header_down() {
     );
 }
 
+/// Keeps every record; `rewrites` as given.
+struct Pass(bool);
+
+impl RecordEdit for Pass {
+    fn header(&self, input: &sam::Header) -> Result<sam::Header> {
+        Ok(input.clone())
+    }
+
+    fn record(&mut self, _record: &mut RawRecord) -> Result<Outcome> {
+        Ok(Outcome::Same)
+    }
+
+    fn rewrites(&self) -> bool {
+        self.0
+    }
+}
+
+#[test]
+fn a_rewriting_step_gives_each_record_the_writers_bin_and_version() {
+    let header: sam::Header = "@HD\tVN:1.4\tSO:coordinate\n@SQ\tSN:chr1\tLN:1000\n"
+        .parse()
+        .expect("header");
+    let frame = Frame::new(header.clone(), "in.bam".to_owned());
+    let inv = crate::sort_sam::TOOL
+        .parse(&["I=in.bam".to_owned(), "SORT_ORDER=coordinate".to_owned()])
+        .expect("parse");
+    // An unplaced record read with bin 4680: htsjdk's writer gives it 0.
+    let mut bytes = build("u", 4, -1, -1, &[], &[], b"").as_bytes().to_vec();
+    bytes[10..12].copy_from_slice(&4680u16.to_le_bytes());
+    let stale = RawRecord::from_bytes(bytes).expect("record");
+    fn rewriting(_: &Setup) -> Result<Box<dyn RecordEdit>> {
+        Ok(Box::new(Pass(true)))
+    }
+    fn copying(_: &Setup) -> Result<Box<dyn RecordEdit>> {
+        Ok(Box::new(Pass(false)))
+    }
+    type Build = fn(&Setup) -> Result<Box<dyn RecordEdit>>;
+    for (rewrites, edit, bin) in [(true, rewriting as Build, 0u16), (false, copying, 4680)] {
+        let Stage::Transform(mut transform) = stage(&inv, &frame, edit).expect("stage") else {
+            panic!("a record edit is a transform");
+        };
+        let mut batch = vec![stale.clone()];
+        transform.apply(&mut batch).expect("apply");
+        let got = u16::from_le_bytes([batch[0].as_bytes()[10], batch[0].as_bytes()[11]]);
+        assert_eq!(got, bin, "rewrites {rewrites}");
+        assert_eq!(transform.counters().changed, 0);
+        // htsjdk's writer writes VN:1.6; a block copy keeps the version read.
+        let version = transform
+            .header(&header)
+            .expect("header")
+            .header()
+            .map(|hd| hd.version());
+        let expected = if rewrites { (1, 6) } else { (1, 4) };
+        assert_eq!(version, Some(Version::new(expected.0, expected.1)));
+    }
+}
+
 #[test]
 fn a_step_refuses_the_options_of_the_file_it_does_not_write() {
     for given in [

@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/markdup.bam
++
+set-nm-md-and-uq-tags
++
+write
+OUT/out.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (set-nm-md-and-uq-tags): missing --reference-sequence (Picard: REFERENCE_SEQUENCE)
+  every option: bammetrics help set-nm-md-and-uq-tags

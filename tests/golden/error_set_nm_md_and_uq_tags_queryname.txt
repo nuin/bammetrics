@@ -1,0 +1,10 @@
+## argv
+SetNmMdAndUqTags
+I=tests/data/duplicate_marking.bam
+R=tests/data/ref_100k.fa
+O=OUT/tagged.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: Input must be coordinate-sorted for this program to run. Found: queryname

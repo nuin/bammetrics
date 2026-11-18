@@ -541,6 +541,23 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("COMPRESSION_LEVEL", "1")),
             picard_outputs: sorted_sam,
         },
+        // SAM text out, so the bodies with MD, NM and UQ compare.
+        Case {
+            verb: "set-nm-md-and-uq-tags",
+            class: "SetNmMdAndUqTags",
+            verb_args: strings(&[MD, "--is-bisulfite-sequence"]),
+            picard_args: strings(&[&format!("I={MD}"), "IS_BISULFITE_SEQUENCE=true"]),
+            option: Some(("REFERENCE_SEQUENCE", REF)),
+            picard_outputs: sorted_sam,
+        },
+        Case {
+            verb: "set-nm-and-uq-tags",
+            class: "SetNmAndUqTags",
+            verb_args: strings(&["tests/data/markdup.sam", "--set-only-uq"]),
+            picard_args: strings(&["I=tests/data/markdup.sam", "SET_ONLY_UQ=true"]),
+            option: Some(("REFERENCE_SEQUENCE", REF)),
+            picard_outputs: sorted_sam,
+        },
     ]
 }
 
@@ -552,7 +569,12 @@ fn commented_bam(out: &str) -> Vec<String> {
 /// writes as `O=OUT.<extension>`.
 fn named_output(verb: &str) -> Option<&'static str> {
     match verb {
-        "sort-sam" | "replace-sam-header" | "add-o-a-tag" | "clean-sam" => Some("sam"),
+        "sort-sam"
+        | "replace-sam-header"
+        | "add-o-a-tag"
+        | "clean-sam"
+        | "set-nm-md-and-uq-tags"
+        | "set-nm-and-uq-tags" => Some("sam"),
         "add-comments-to-bam" => Some("bam"),
         _ => None,
     }
@@ -659,7 +681,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 46);
+    assert_eq!(classes.len(), 48);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

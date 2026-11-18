@@ -62,6 +62,14 @@ const EXEMPT: &[(&str, &str)] = &[
         "CleanSam",
         "writes a BAM or SAM text with clipped and MAPQ-fixed records: no metrics file, no row, no column",
     ),
+    (
+        "SetNmMdAndUqTags",
+        "writes a BAM or SAM text with MD, NM and UQ set: no metrics file, no row, no column",
+    ),
+    (
+        "SetNmAndUqTags",
+        "the deprecated name of SetNmMdAndUqTags: no metrics file, no row, no column",
+    ),
 ];
 
 /// A directory of its own for this test's files.

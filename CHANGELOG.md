@@ -40,6 +40,22 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   `tests/concordance/test_add_o_a_tag.py` (tier B with record bytes: 72 cases equal, 8
   error-parity cases, the chain step against Picard) and `crates/cli/tests/add_oa_tag.rs`
   (chained equals staged at the first, a middle and the last position).
+- `SetNmMdAndUqTags` (verb `set-nm-md-and-uq-tags`, Python `set_nm_md_and_uq_tags()`)
+  and `SetNmAndUqTags` (verb `set-nm-and-uq-tags`, Python `set_nm_and_uq_tags()`,
+  Picard's deprecated name for the same tool), as Picard 3.5.0: `MD`, `NM` and `UQ` of
+  each mapped record of a coordinate-sorted SAM, BAM or CRAM against `REFERENCE_SEQUENCE`,
+  as htsjdk's `SequenceUtil` computes them (`IS_BISULFITE_SEQUENCE`, `SET_ONLY_UQ`); the
+  header check and message of Picard; unmapped records keep their bytes; a record that
+  gets a tag has its tags in htsjdk's order and widths. A chain transform (`tagged`) that
+  reads the chain's `-R`. `tests/concordance/test_set_nm_md_and_uq_tags.py` and
+  `test_set_nm_and_uq_tags.py` (tier B with record bytes, 41 tests: the fixtures, the
+  corpus tiers and the exome slice as written, stripped and planted, edge records, reads
+  past a contig end, a bisulfite set, a first quality of `0xFF`, CRAM over a soft-masked
+  reference and SAM text), `crates/cli/tests/set_nm_md_uq.rs`
+  (chained equals staged at every position) and golden records.
+- On the 10 GB HG002 exome (150,538,907 records, hs37d5) `SetNmMdAndUqTags` takes 170.0 s
+  at 1.98 GB peak RSS; Picard takes 1,020 s at 1.04 GB. The records are equal, and the
+  header lines but the `@RG DT` field, which htsjdk writes in the JVM's time zone.
 - On the 10 GB HG002 exome (150,538,907 records) `AddCommentsToBam` takes 61.0 s at
   47 MB peak RSS and `ReplaceSamHeader` 56.2 s at 38 MB; Picard's block copies take 9.7 s
   and 11.2 s. The records are equal. bammetrics inflates and deflates every block where
@@ -67,6 +83,8 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
 - `RecordEdit::rewrites`: the chain step of a tool whose stand-alone run rewrites its
   records sets the `bin` htsjdk's writer computes (0 for an unplaced read), so chained
   equals staged on a BAM whose unplaced reads carry samtools' 4680.
+- `RecordEdit::rewrites`: a tool that writes every record through htsjdk's writer gives
+  each record that writer's `bin` in its chain step too. `sequence::iupac_code`.
 
 ### Fixed
 
@@ -86,6 +104,9 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
 - An `OUTPUT` named `.SAM` (any case other than `.sam`) gets BAM bytes, as htsjdk picks
   SAM text by `endsWith(".sam")`. `SortSam`, `CleanSam`, a rewriting `ReplaceSamHeader`
   and the chain's `write` step wrote SAM text under that name; a block copy refused it.
+- A record-editing rewrite (`ReplaceSamHeader` on an input not named `.bam`,
+  `SetNmMdAndUqTags`) writes a BAM with `@HD VN:1.6`, as htsjdk's writer does; a `VN:1.4`
+  header kept `VN:1.4` (found on the HG002 exome, whose header is `VN:1.4`).
 - `chain ... + add-comments-to-bam -C` with a newline in a comment is a usage error before
   the first read (exit 2, `--dry-run` too); it failed the step after the chain started.
 - `chain ... + add-o-a-tag -L FILE` reads the interval list before the first read, so a
@@ -105,6 +126,12 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   write --index`.
 - An `OUTPUT` ending in `.SAM` is a BAM, as htsjdk tells SAM by the lower-case suffix. It
   was written as SAM text.
+- CRAM input: `MD` rebuilt for a record without one holds upper-case reference bases, as
+  htsjdk's CRAM decoder reads the reference. A soft-masked FASTA gave lower-case bases in
+  `MD` (`ViewSam`, `SortSam`, `MarkDuplicates`, `SetNmMdAndUqTags SET_ONLY_UQ=true`).
+- `SetNmMdAndUqTags`: a record whose first quality byte alone is `0xFF` and that gets a
+  tag has every quality byte written `0xFF`, as htsjdk writes a record it read without
+  qualities. It kept its other quality bytes.
 
 ## 0.26.0
 

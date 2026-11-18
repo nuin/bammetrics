@@ -1182,3 +1182,36 @@ as bytes. One case differs from the staged tool on purpose: `replace-sam-header`
 first position of a SAM text or CRAM source keeps each reference index, where Picard's
 tool on such a file keeps each reference name. With one dictionary in both headers the two
 agree (`a_sam_source_reheaders_as_the_staged_tool`).
+
+### 16.1 set-nm-md-and-uq-tags
+
+`set-nm-md-and-uq-tags` (and `set-nm-and-uq-tags`, Picard's deprecated name for the same
+tool) is a streaming transform that reads the chain's `-R`. It sets `MD`, `NM` and `UQ`
+on each mapped record of its stream, which must be coordinate sorted, so the usual place
+is after `sort-sam -SO coordinate`:
+
+```bash
+bammetrics chain reads.queryname.bam -R ref.fa -o out/s \
+    + sort-sam -SO coordinate \
+    + set-nm-md-and-uq-tags \
+    + insert-size \
+    + write out/tagged.bam --index
+```
+
+| Tool | Default stream | What the step does |
+|---|---|---|
+| `set-nm-md-and-uq-tags`, `set-nm-and-uq-tags` | `tagged` | `MD`, `NM` and `UQ` of each mapped record against `-R`, as the tool computes them; `--is-bisulfite-sequence`, `--set-only-uq` |
+
+- Without `-R` the step exits 2 before the first read: `missing --reference-sequence`.
+- A stream whose header is not `SO:coordinate` fails the step as the tool fails: `Input
+  must be coordinate-sorted for this program to run. Found: queryname`.
+- The tool on its own writes every record through htsjdk's writer, which gives each
+  record the `bin` it computes. The step gives each record that `bin` too
+  (`RecordEdit::rewrites`), so the written BAM equals the staged tool's byte for byte.
+- `changed` counts the records whose tags the step changed: a second step after the first
+  changes none.
+
+Chained equals staged (`crates/cli/tests/set_nm_md_uq.rs`): the step first, after
+`sort-sam`, last, alone, twice and under the old name, beside `mark-duplicates` and
+`sort-sam`, with each option, on the fixtures, SAM text, a CRAM, corpus t1 and the
+foundation corpus.
