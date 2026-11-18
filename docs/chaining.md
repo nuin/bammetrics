@@ -125,12 +125,14 @@ working directory (`.insert_size_metrics`).
 - `write [PATH]` takes `--index` (`CREATE_INDEX`), `--md5` (`CREATE_MD5_FILE`) and
   `--compression-level N` (0 to 9, default 5). `-` as the path is standard output, so a
   pipe to another tool still works: `bammetrics chain in.bam + mark-duplicates + write -
-  | samtools flagstat -`. The file is a BAM, or SAM text for a name ending in `.sam`.
-  `--output-format bam|sam` says which whatever the name is, so `write - --output-format
-  sam` prints SAM text. A name ending in `.cram`, `.fastq` or `.fq` (with `.gz` too) is
-  refused with the wave that adds that kind: CRAM is W15, FASTQ is W22. `.sam.gz` is
-  refused: SAM text is written uncompressed. Section 14 has the details.
-- `--index` writes `<name>.bai` only for a coordinate-sorted stream. For any other sort
+  | samtools flagstat -`. The file is a BAM, or SAM text for a name ending in `.sam`, lower
+  case as htsjdk tells it (`out.SAM` is a BAM). `--output-format bam|sam` says which
+  whatever the name is, so `write - --output-format sam` prints SAM text. A name ending
+  in `.cram`, `.fastq` or `.fq` (with `.gz` too) is refused with the wave that adds that
+  kind: CRAM is W15, FASTQ is W22. `.sam.gz` is refused: SAM text is written
+  uncompressed. Section 14 has the details.
+- `--index` writes the `.bai` htsjdk names: `out.bam` gives `out.bai`, `out.dat` gives
+  `out.dat.bai`. It writes one only for a coordinate-sorted stream. For any other sort
   order `write` writes no index and says so on standard error. The exit code stays 0.
   The `.bai` is the file Picard `BuildBamIndex` writes for the written BAM, byte for byte
   (W05, `crates/core/src/bai.rs`). `build-bam-index` is no step: `chain BAM +
@@ -1159,6 +1161,7 @@ file holds, so it spools its input (section 15.2). The run prints one line per e
 |---|---|---|
 | `add-comments-to-bam` | `commented` | Adds one `@CO` line per `--comment` to the header of its stream. The source may be SAM text or a CRAM; the tool on its own copies a BAM only, as Picard does |
 | `replace-sam-header` | `reheadered` | Puts the header of `--header` in place of its stream's. Each record keeps its reference index, as Picard's block copy of a `.bam` keeps it. The new `SO` must be `unsorted` or the stream's |
+| `add-o-a-tag` | `oa_tagged` | Appends each record's alignment to its `OA` tag, or with `-L` only on the records over an interval. Every record leaves with the `bin` htsjdk's writer computes, as the tool on its own writes it |
 
 The rules of a record-editing step:
 

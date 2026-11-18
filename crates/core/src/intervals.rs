@@ -194,9 +194,44 @@ fn parse_interval_list(
 /// file is held in memory whole.
 const MAX_INTERVAL_LIST_BYTES: u64 = 1 << 30;
 
+/// True for a name htsjdk's `IOUtil.hasGzipFileExtension` reads through
+/// gzip: one ending in `.gz`, `.gzip` or `.bfq`, case as written.
+fn has_gzip_extension(path: &Path) -> bool {
+    path.file_name().is_some_and(|name| {
+        let name = name.to_string_lossy();
+        [".gz", ".gzip", ".bfq"]
+            .iter()
+            .any(|extension| name.ends_with(extension))
+    })
+}
+
+/// The text a gzip file inflates to, at most `cap` bytes: the inflated
+/// size is not known before it is read, so the read itself stops.
+fn read_gzip_capped(path: &Path, cap: u64) -> Result<String> {
+    let input = |source| Error::Input {
+        path: path.to_path_buf(),
+        source,
+    };
+    let file = fs::File::open(path).map_err(input)?;
+    let mut text = String::new();
+    crate::gzip::GzipReader::new(std::io::BufReader::new(file))
+        .take(cap + 1)
+        .read_to_string(&mut text)
+        .map_err(input)?;
+    if text.len() as u64 > cap {
+        return Err(Error::Intervals {
+            path: path.to_path_buf(),
+            message: format!("the interval list inflates to more than {cap} bytes, the most read"),
+        });
+    }
+    Ok(text)
+}
+
 /// `IntervalList.fromFile`: an interval list against its own dictionary,
-/// no BAM header consulted. Returns the `@SQ` names in order and the
-/// intervals, each `contig` an index into those names.
+/// no BAM header consulted. A name ending in `.gz`, `.gzip` or `.bfq` is
+/// read through gzip, as htsjdk's `IOUtil.openFileForReading` reads it.
+/// Returns the `@SQ` names in order and the intervals, each `contig` an
+/// index into those names.
 pub fn read_interval_list(path: &Path) -> Result<(Vec<String>, Vec<NamedInterval>)> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
@@ -212,7 +247,11 @@ pub fn read_interval_list(path: &Path) -> Result<(Vec<String>, Vec<NamedInterval
             "the interval list holds {size} bytes; at most {MAX_INTERVAL_LIST_BYTES} are read"
         )));
     }
-    let text = fs::read_to_string(path).map_err(input)?;
+    let text = if has_gzip_extension(path) {
+        read_gzip_capped(path, MAX_INTERVAL_LIST_BYTES)?
+    } else {
+        fs::read_to_string(path).map_err(input)?
+    };
     let (dictionary, list) = parse_own_dictionary(&text, |dictionary| {
         if dictionary.is_empty() {
             return Err("Interval list file must contain header.".to_owned());
@@ -609,6 +648,44 @@ mod tests {
             Err(Error::Input { source, .. }) if source.kind() == std::io::ErrorKind::InvalidData
         ));
         assert_eq!(MAX_INTERVAL_LIST_BYTES, 1 << 30);
+        fs::remove_dir_all(&dir).expect("remove the temporary directory");
+    }
+
+    /// htsjdk reads an interval list through gzip by its name: `.gz`,
+    /// `.gzip` or `.bfq`, lower case. BGZF is gzip, one member per block.
+    #[test]
+    fn an_interval_list_named_gz_is_inflated() {
+        use std::io::Write as _;
+        let dir = std::env::temp_dir().join(format!("bammetrics-il-gz-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("temporary directory");
+        let text = "@SQ\tSN:c1\tLN:100\nc1\t5\t9\t+\tt1\n";
+        let gz = dir.join("list.interval_list.gz");
+        let mut writer = noodles::bgzf::io::Writer::new(fs::File::create(&gz).expect("create"));
+        writer.write_all(text.as_bytes()).expect("write");
+        writer.finish().expect("finish");
+        let (names, list) = read_interval_list(&gz).expect("inflated");
+        assert_eq!(names, ["c1"]);
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].interval, iv(0, 5, 9));
+        let over = read_gzip_capped(&gz, 8).expect_err("over a cap of 8");
+        assert!(
+            over.to_string().contains("inflates to more than 8 bytes"),
+            "{over}"
+        );
+        // Plain text under a gzip name fails as GZIPInputStream fails;
+        // gzip under another name is read as text.
+        let plain = dir.join("plain.gz");
+        fs::write(&plain, text).expect("write");
+        assert!(matches!(
+            read_interval_list(&plain),
+            Err(Error::Input { .. })
+        ));
+        let upper = dir.join("list.GZ");
+        fs::copy(&gz, &upper).expect("copy");
+        assert!(read_interval_list(&upper).is_err());
+        assert!(has_gzip_extension(Path::new("a/x.gzip")));
+        assert!(has_gzip_extension(Path::new("x.bfq")));
+        assert!(!has_gzip_extension(Path::new("x.gz/list")));
         fs::remove_dir_all(&dir).expect("remove the temporary directory");
     }
 }

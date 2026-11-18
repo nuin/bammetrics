@@ -31,19 +31,36 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   SAM text and CRAM), `crates/cli/tests/record_edit.rs` (chained equals staged at the
   first, a middle and the last position beside `mark-duplicates` and `sort-sam`), and
   golden records.
+- `AddOATag` (verb `add-o-a-tag`, Python `add_o_a_tag()`), as Picard 3.5.0: each record's
+  alignment (`RNAME,POS,STRAND,CIGAR,MAPQ,NM;`, `*,0,STRAND,*,255,;` when unmapped)
+  appended to its `OA` tag, `NM` and an earlier `OA` printed as Java prints them, `OA` at
+  its place in htsjdk's tag order; `INTERVAL_LIST` (an interval list; a BED fails as in
+  Picard) limits it to the records over an interval. An array `NM` or `OA`, which Picard
+  prints as an object reference, exits 1. A chain transform (`oa_tagged`).
+  `tests/concordance/test_add_o_a_tag.py` (tier B with record bytes: 72 cases equal, 8
+  error-parity cases, the chain step against Picard) and `crates/cli/tests/add_oa_tag.rs`
+  (chained equals staged at the first, a middle and the last position).
 - On the 10 GB HG002 exome (150,538,907 records) `AddCommentsToBam` takes 61.0 s at
   47 MB peak RSS and `ReplaceSamHeader` 56.2 s at 38 MB; Picard's block copies take 9.7 s
   and 11.2 s. The records are equal. bammetrics inflates and deflates every block where
   Picard copies the compressed blocks.
+- On the same exome `AddOATag` takes 125.3 s at 31 MB peak RSS; Picard takes 1033.0 s
+  at 370 MB. The 150,538,907 records are equal as `samtools view` prints them.
 
 ### Changed
 
 - `bam_writer::finish_with_index` names the `.bai`; `BamWriter::unchecked` writes records
   without the order check; `RawRecord::set_reference_ids` and `set_codec_bin`;
   `pass::with_record_stream_kind` tells a BAM from a CRAM and SAM text.
+- `RecordEdit::rewrites`: the chain step of a tool whose stand-alone run rewrites its
+  records sets the `bin` htsjdk's writer computes (0 for an unplaced read), so chained
+  equals staged on a BAM whose unplaced reads carry samtools' 4680.
 
 ### Fixed
 
+- A record-editing rewrite into a BAM writes `@HD VN:1.6`, and `SO:unsorted` on an `@HD`
+  without `SO`, as htsjdk's writer does; it kept the input's `VN:1.4`. A block copy keeps
+  the line as it is.
 - SAM text output checks the header's order as htsjdk's presorted writer does
   (`bam_writer::Presorted`, shared with `BamWriter`). `ReplaceSamHeader` into a `.sam`
   under a reordered dictionary, or of records out of their `SO:coordinate` order, wrote
@@ -56,6 +73,23 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   text.
 - `chain ... + add-comments-to-bam -C` with a newline in a comment is a usage error before
   the first read (exit 2, `--dry-run` too); it failed the step after the chain started.
+- `chain ... + add-o-a-tag -L FILE` reads the interval list before the first read, so a
+  BED or a missing file fails with the verb's error and exit code 1 before the earlier
+  steps run (`--dry-run` too); it failed the step after a `sort-sam` before it had sorted.
+- An `INTERVAL_LIST` named `.gz`, `.gzip` or `.bfq` is read through gzip, as htsjdk reads
+  it (`AddOATag`, `ViewSam`). It failed with `stream did not contain valid UTF-8`.
+- A record-editing tool reads an `@HD SO` value htsjdk does not name as htsjdk does: an
+  error at `STRICT`, a warning at `LENIENT`, and `SO:unknown` in the file written. It
+  wrote the value as read.
+- The order check of the BAM and SAM writers takes two records without a reference as
+  equal whatever their `POS`, as `fileOrderCompare`. Two such records with falling `POS`
+  under `SO:coordinate` failed `AddOATag`, `SortSam` and `MarkDuplicates` outputs.
+- `CREATE_INDEX` names the `.bai` as htsjdk's `BAMFileWriter`: `.bam` at the end of the
+  name becomes `.bai`, any other name gets `.bai` appended (`out.dat.bai`). It replaced
+  any extension (`out.bai`). `AddOATag`, `SortSam`, `MarkDuplicates` and `chain ... +
+  write --index`.
+- An `OUTPUT` ending in `.SAM` is a BAM, as htsjdk tells SAM by the lower-case suffix. It
+  was written as SAM text.
 
 ## 0.26.0
 

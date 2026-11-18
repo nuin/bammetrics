@@ -1253,6 +1253,21 @@ def replace_sam_header(
     the input: a BAM, or SAM text for a name ending in .sam when the input name does not
     end in .bam."""
 
+def add_o_a_tag(
+    input: _Path,
+    *,
+    interval_list: _Path | None = None,
+    output: _Path,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """AddOATag: no rows; OUTPUT gets every record of the input with its alignment appended
+    to its OA tag (RNAME,POS,STRAND,CIGAR,MAPQ,NM;), or only the records over
+    INTERVAL_LIST: a BAM, or SAM text for a name ending in .sam."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1486,6 +1501,7 @@ _StepVerb = Literal[
     "telomere",
     "add_comments_to_bam",
     "replace_sam_header",
+    "add_o_a_tag",
     "write",
 ]
 

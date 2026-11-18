@@ -636,6 +636,9 @@ fn write_options_name_their_files_and_refuse_the_kinds_of_later_waves() {
     ));
     assert_eq!(WriteFormat::of(Path::new("out.bam")), WriteFormat::Bam);
     assert_eq!(WriteFormat::of(Path::new("/dev/stdout")), WriteFormat::Bam);
+    // htsjdk tells SAM by the lower-case suffix: `OUT.SAM` is a BAM.
+    assert_eq!(WriteFormat::of(Path::new("OUT.SAM")), WriteFormat::Bam);
+    assert_eq!(WriteFormat::of(Path::new(".sam")), WriteFormat::Sam);
     assert_eq!(WriteFormat::parse("sam"), Some(WriteFormat::Sam));
     assert_eq!(WriteFormat::parse("cram"), None);
     assert_eq!(WriteFormat::Sam.name(), "sam");

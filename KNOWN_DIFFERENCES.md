@@ -1402,6 +1402,32 @@ differ here (docs/07 decisions D34 to D39):
 - A partial file is never left: Picard leaves a header-only `OUTPUT` when a record's
   reference name is not in the new dictionary.
 
+## AddOATag
+
+`AddOATag` writes the header lines and records Picard writes, the records byte for byte
+after inflation, on the fixture BAMs, the corpus tiers, the foundation corpus, the exome
+slice, each with `NM` stripped and with earlier `OA` values, reads off contig ends, SAM
+text and CRAM (`tests/concordance/test_add_o_a_tag.py`). It differs here (docs/07
+decisions D40 to D43):
+
+- An `NM` or `OA` value that is an array or `H` exits 1 and writes nothing. Picard writes
+  the Java object reference of the decoded array (`[B@1a2b3c`), which changes from run to
+  run.
+- A reference name with a comma exits 1 at the first record the tool tags on it
+  (`Reference name for record r2 contains a comma character.`). htsjdk refuses the
+  header line first (`Sequence name 'c,1' doesn't match regex`).
+- `INTERVAL_LIST` takes an interval list only, as Picard: a BED exits 1 with Picard's
+  message. `CollectHsMetrics` converts a BED; this tool does not.
+- A failed run leaves no `OUTPUT`. Picard leaves the records it wrote before the failure,
+  for example after `Alignments added out of order`.
+- A `.cram` `OUTPUT` is refused before the first read until wave W15 (`bammetrics writes
+  BAM and SAM only: CRAM output is wave W15`): the verb exits 2, the Picard face exits 1.
+  Picard writes the CRAM.
+- A header with an `@SQ LN:0` line exits 1 at the header (`not a BAM or CRAM file (the
+  header could not be read: invalid record)`), as every tool but `BuildBamIndex` and
+  `CollectIndexDepthMetrics` (the `BuildBamIndex` entry under "Options"). Picard tags the
+  records.
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))

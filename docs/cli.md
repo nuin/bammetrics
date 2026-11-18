@@ -307,6 +307,7 @@ table.
 | `index-depth` | CollectIndexDepthMetrics (not a Picard tool, [docs/06](06_clinical_checks.md) section 10; a BAM with its `.bai` or `.csi`, never read whole; a CRAM refused) | one |
 | `add-comments-to-bam` | AddCommentsToBam (a BAM; `--comment` repeated) | `-o` BAM, no metrics file |
 | `replace-sam-header` | ReplaceSamHeader (a SAM, BAM or CRAM; `--header` names the file whose header replaces the input's) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `add-o-a-tag` | AddOATag (a SAM, BAM or CRAM; `-L` an interval list) | `-o` BAM, or SAM text for a name ending in `.sam` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -604,6 +605,45 @@ Picard's `ReplaceSamHeader`: the header of `--header` (SAM text, a BAM or a CRAM
   name (exit 2).
 - In a chain the step replaces the header of the stream at its position and every record
   keeps its reference index, as in a block copy.
+
+### add-o-a-tag
+
+```bash
+bammetrics add-o-a-tag sample.bam -o sample.oa.bam
+bammetrics add-o-a-tag sample.cram -R ref.fa -L targets.interval_list -o sample.oa.sam
+bammetrics AddOATag I=sample.bam O=sample.oa.bam INTERVAL_LIST=targets.interval_list
+```
+
+Picard's `AddOATag`: each record's alignment appended to its `OA` tag, then every record
+(`tests/concordance/test_add_o_a_tag.py`).
+
+- The entry is `RNAME,POS,STRAND,CIGAR,MAPQ,NM;`, for example `chr1,1001,+,50M,60,2;`. An
+  unmapped record, placed or not, gets `*,0,+,*,255,;` (`-` with the reverse flag).
+- `NM` prints as Java prints the tag's value: an integer in decimal, a float as
+  `Float.toString`, a `Z` or `A` value as its text. Without `NM` the field is empty
+  (`chr1,1001,+,50M,60,;`).
+- The entry goes after the record's own `OA` value. `OA` becomes a `Z` tag at its place in
+  htsjdk's tag order. Secondary and supplementary records are tagged as any other.
+- `-L` (`INTERVAL_LIST`) takes an interval list with its own `@SQ` lines; contigs match by
+  name. Only a record without the unmapped flag that shares a base with an interval gets
+  the tag; its span runs from `POS` over the reference bases of its CIGAR, so a CIGAR
+  without one never overlaps. A BED exits 1 with `Interval list file must contain
+  header.`, as in Picard. A name ending in `.gz`, `.gzip` or `.bfq` is read through gzip,
+  as htsjdk reads it. In a chain the list is read before the first read of the source.
+- An `NM` or `OA` value that is an array or `H` exits 1: Picard prints it as a Java object
+  reference (`[B@1a2b3c`), which changes from run to run.
+- The writer checks the header's order, as Picard's presorted writer does. No `@PG` line
+  is added. `--create-index` writes `out.bai` for `out.bam` and `out.dat.bai` for
+  `out.dat`, as htsjdk names it. CRAM records get `MD` and `NM` as htsjdk decodes them, so
+  their entries carry the `NM` htsjdk computes.
+- SAM text is written for a name ending in `.sam`, lower case; `OUT.SAM` is a BAM, as in
+  Picard. A `.cram` `OUTPUT` is refused before the first read until wave W15: the verb
+  exits 2, the Picard face exits 1. Picard writes the CRAM.
+- An `@HD SO` value htsjdk does not name fails at `VALIDATION_STRINGENCY=STRICT` (`Found
+  non-conforming header SO tag`), as in Picard. At `LENIENT` and `SILENT` it is written
+  `SO:unknown`.
+- In a chain the step tags the records of the stream at its position:
+  `bammetrics chain in.bam + add-o-a-tag -L targets.interval_list + write out.bam`.
 
 ### qc
 
