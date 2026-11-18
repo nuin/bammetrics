@@ -173,6 +173,20 @@ def test_sam_text_in_and_out():
         case(source, REF, args, f"markdup.sam {option} SAM text", suffix=".sam")
 
 
+def test_an_older_header_version_is_written_as_1_6(tmp_path):
+    """htsjdk's writer writes `@HD VN:1.6` whatever the input says (the HG002 exome is
+    `VN:1.4`)."""
+    text = (FIXTURES / "markdup.sam").read_text().replace("@HD\tVN:1.6", "@HD\tVN:1.4", 1)
+    source = tmp_path / "markdup_vn14.sam"
+    source.write_text(text)
+    bam = tmp_path / "markdup_vn14.bam"
+    subprocess.run(["samtools", "view", "--no-PG", "-b", "-o", str(bam), str(source)], check=True)
+    for path in (source, bam):
+        written = case(path, REF, [], f"{path.name} VN:1.4")
+        assert written.header[0].startswith("@HD\tVN:1.6"), written.header[0]
+        case(path, REF, [], f"{path.name} VN:1.4 SAM text", suffix=".sam")
+
+
 def test_the_options_of_the_file_written(tmp_path):
     source = FIXTURES / "markdup.bam"
     for args in (["COMPRESSION_LEVEL=0"], ["COMPRESSION_LEVEL=9"], ["MAX_RECORDS_IN_RAM=3"],
