@@ -25,7 +25,7 @@ Wave W08 of docs/07: adapter content, duplicates by tile, telomere and index-onl
   `tests/python/test_adapter_content.py` (planted truth exact, FastQC within 5e-7 points),
   `crates/cli/tests/adapter_content.rs` and 8 golden records. On the HG002 exome slice of
   2 M records every cycle equals FastQC's within 5e-7 points; the 10 GB exome runs in
-  42.0 s at 9 MB peak RSS.
+  27.0 s at 9 MB peak RSS (42.0 s before the `read_bases.rs` walk below).
 - `CollectDuplicateByTileMetrics` (verb `duplicate-by-tile`, Python
   `collect_duplicate_by_tile_metrics()`), class `bammetrics.qc.DuplicateByTileMetrics`,
   docs/06 section 8, part of wave W08: one row per flowcell lane and tile of the read names
@@ -59,7 +59,7 @@ Wave W08 of docs/07: adapter content, duplicates by tile, telomere and index-onl
 - `tests/data/make_telomere_bams.py` and `tests/data/telomere.bam`: planted reads at 0, 6,
   7 and 20 repeats, both strands, unmapped, an `N` in a run, exact GC bin edges and the
   records that must not count; `tests/python/test_telomere.py` requires every count
-  exactly and the estimate equal to TelSeq's formula in Python; 11 golden records.
+  exactly and the estimate equal to TelSeq's formula in Python; 10 golden records.
 - docs/07 decisions D29 (TelSeq did not run), D30 (the read set) and D31 (the read-length
   columns and no rule).
 - `CollectIndexDepthMetrics` (verb `index-depth`, Python `collect_index_depth_metrics()`),
@@ -100,6 +100,17 @@ Wave W08 of docs/07: adapter content, duplicates by tile, telomere and index-onl
 - The glossary finds the histogram row of a column whose unit name holds a dot (a `PU`
   such as `fc1.1`): `fc1.1.read_count` and `fc1.1.fr_count` now match `*.read_count` and
   `*.fr_count`.
+- The one-pass BAM reader (`pass.rs`, every collector tool) reads records through
+  `bam_raw::BoundedRecords`: a record over 1 MiB is read ahead 1 MiB at a time before
+  noodles sizes its buffer. A 127-byte BAM with `block_size` 0x7fffff00 or -5 cost 2,052
+  or 4,100 MiB peak RSS and now 5 MiB, still exit 1 with `truncated BAM`. The vendored
+  noodles-cram grows a container buffer the same way: a forged container length cost
+  1,578 MiB and now 5 MiB (`truncated CRAM`). `crates/cli/tests/forged_block_size.rs`
+  runs 14 forged cases under 64 MiB.
+- A `.bai` or `.csi` cut inside its header or counts gives `the index is cut short:
+  damaged or incomplete` in place of `failed to fill whole buffer`.
+- `index-depth` refuses a cut BAM with `READ_LENGTH` too: a metadata bin whose last
+  record ends in a block past the file length is `truncated BAM` (docs/06 section 10.1).
 
 ## 0.25.0
 

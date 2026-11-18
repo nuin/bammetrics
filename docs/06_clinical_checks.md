@@ -1,10 +1,17 @@
-# Clinical checks: coverage gaps and sex check (docs/06_clinical_checks.md)
+# Clinical checks and analyses beyond Picard (docs/06_clinical_checks.md)
 
-Two checks Picard does not have, built on the `qc`, verdict and report machinery of
-[docs/05](05_cli_and_ui_design.md). Both are single sample and stateless (docs/05 section
-4.9: no history, no cohort, no network). Each is a registry `Tool` with a verb, a Python
-function, glossary rows, golden records and a rule in the shipped presets. Neither has a
-Picard counterpart, so neither has a concordance module; `KNOWN_DIFFERENCES.md` says so.
+Seven tools Picard 3.5.0 does not have, built on the `qc`, verdict and report machinery
+of [docs/05](05_cli_and_ui_design.md): `CollectCoverageGaps` (section 1),
+`CollectSexCheckMetrics` (2), `CollectMtCopyNumberMetrics` (6),
+`CollectAdapterContentMetrics` (7), `CollectDuplicateByTileMetrics` (8),
+`CollectTelomereMetrics` (9) and `CollectIndexDepthMetrics` (10). Each is single sample
+and stateless (docs/05 section 4.9: no history, no cohort, no network), and each is a
+registry `Tool` with a verb, a Python function, glossary rows and golden records. All
+seven are in the `NO_PICARD_ORACLE` table of `crates/cli/tests/registration.rs`.
+Duplicates by tile and index-only depth also have a concordance module, which checks them
+against Picard `MarkDuplicates` and `samtools idxstats` (sections 8.4 and 10.4).
+`KNOWN_DIFFERENCES.md` lists each of the seven as a tool without a Picard counterpart.
+Sections 3 to 5 cover the first two checks.
 
 | | Coverage gaps | Sex check |
 |---|---|---|
@@ -244,6 +251,8 @@ other.
 
 ## 3. Files touched
 
+For sections 1 and 2.
+
 Core: `coverage_gaps.rs`, `sex_check.rs`, `lib.rs`, `registry.rs` (`TOOLS`),
 `hs_metrics.rs` (`into_target_depths`), `multiple_metrics.rs` (`OTHER_FILES`),
 `glossary.tsv`, `tests/glossary.rs`, `tests/coverage_gaps.rs`. CLI: `verbs.rs` (`VERBS`),
@@ -280,8 +289,10 @@ female test did not change.
 
 ## 5. Out of scope
 
-- A Picard counterpart. Picard 3.5.0 has no gap tool and no sex check, so there is no
-  concordance module and no entry in the fuzz harness.
+For sections 1 and 2.
+
+- A Picard counterpart. Picard 3.5.0 has no gap tool and no sex check, so these two have
+  no concordance module and no entry in the fuzz harness.
 - Accumulation levels. Both tools write one `ALL_READS` row. A per-library or per-read-group
   sex check is a later feature.
 - Ploidy beyond XX and XY: XXY, X0, mosaic loss of Y and tumour samples read `UNKNOWN` or a
@@ -651,12 +662,13 @@ after the run), 2026-11-17.
 | Input | Records counted | Universal, FIRST / SECOND (percent) | PolyA, FIRST / SECOND (percent) | `PAIR_READ_THROUGH` | Wall | Peak RSS |
 |---|---|---|---|---|---|---|
 | HG002 exome slice of section 7.5 | 1,998,702 | 3.314569 / 3.258794 | 0.79067 / 0.786454 | 0.087262 | 0.65 s | 8 MB |
-| HG002 exome BAM, 10 GB, whole file | 150,386,776 | 3.430677 / 3.371215 | 0.30206 / 0.442393 | 0.083479 | 42.0 s | 9 MB |
+| HG002 exome BAM, 10 GB, whole file | 150,386,776 | 3.430677 / 3.371215 | 0.30206 / 0.442393 | 0.083479 | 27.0 s | 9 MB |
 
-The whole-file run took 42.0 s with the file in the page cache and 94.3 s on the first
-read. `CollectMtCopyNumberMetrics` on the same cached file took 33.6 s. A 5-second
-`sample` of the run puts 423 stacks in the collector and 890 in inflate alone: the
-collector waits for BGZF blocks most of the time.
+The whole-file run takes 27.0 s with the file in the page cache, the mean of four runs
+after the one walk of `read_bases.rs` (CHANGELOG 0.26.0, Changed). Before that walk it took
+42.0 s cached and 94.3 s on the first read. `CollectMtCopyNumberMetrics` on the same
+cached file took 33.6 s. A 5-second `sample` of the 42.0 s run put 423 stacks in the
+collector and 890 in inflate alone: the collector waited for BGZF blocks most of the time.
 
 ## 8. Duplicates by tile
 
@@ -853,6 +865,14 @@ hold is refused too: a BGZF block is at least 28 bytes and inflates to at most 6
 record is at least 36 bytes, so a BAM of `S` bytes holds at most `S / 28 x 65536 / 36`
 records. An index older than the BAM is read as it is: `samtools` warns, `bammetrics
 doctor` reports its age.
+
+A cut BAM is refused before any record is read, with or without `READ_LENGTH`. Each
+reference's metadata bin holds the virtual offset after its last record, whose upper 48
+bits are a BGZF block start; one past the file length means the records the index counts
+are not all in the file (`truncated BAM: the index places records in a block at byte N`).
+This test was picked over a check of the 28-byte BGZF end-of-file block: it costs no read
+of the BAM, and a BAM written without that block (htsjdk only warns) still holds every
+record its index counts. A BAM cut after its last record and before that block passes.
 
 Refused, each with exit 1 and no file:
 

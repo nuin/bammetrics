@@ -247,6 +247,21 @@ fn read_reference(reader: &mut impl Read, keep: bool) -> io::Result<Reference> {
     Ok(reference)
 }
 
+/// An index that ends inside its header, a count or a bin is cut: name
+/// that, where the bare `UnexpectedEof` reads "failed to fill whole buffer".
+pub(crate) fn cut_short(kind: &str) -> impl Fn(io::Error) -> io::Error + '_ {
+    move |e| {
+        if e.kind() == io::ErrorKind::UnexpectedEof {
+            io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                format!("{kind}: the index is cut short: damaged or incomplete"),
+            )
+        } else {
+            e
+        }
+    }
+}
+
 /// The count after the last reference; an index may end before it.
 fn read_no_coordinate(reader: &mut impl Read) -> io::Result<Option<u64>> {
     match read_u64(reader) {
@@ -262,6 +277,10 @@ impl Summary {
     /// index is read through once and no bin is held, so memory grows with
     /// `keep` only.
     pub fn read(reader: &mut impl Read, keep: usize) -> io::Result<Self> {
+        Self::read_bai(reader, keep).map_err(cut_short("BAI"))
+    }
+
+    fn read_bai(reader: &mut impl Read, keep: usize) -> io::Result<Self> {
         let references = read_head(reader)?;
         let mut metadata = Vec::new();
         for index in 0..references {
@@ -283,7 +302,7 @@ impl Index {
     /// a longer index is an error.
     pub fn read(reader: &mut impl Read) -> io::Result<Self> {
         let mut reader = reader.take(MAX_INDEX_BYTES + 1);
-        let index = Self::read_capped(&mut reader);
+        let index = Self::read_capped(&mut reader).map_err(cut_short("BAI"));
         if reader.limit() == 0 {
             return Err(invalid(format!(
                 "BAI: the index is longer than {MAX_INDEX_BYTES} bytes"

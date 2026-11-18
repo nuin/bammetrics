@@ -403,10 +403,12 @@ an argument list in the glossary test (`BuildBamIndex` returns rows without a cl
 19 have a module named after them (`test_exon_coverage.py`, `test_duplicate_by_tile.py` and
 `test_index_depth.py` among them), 18 are mapped in `CONCORDANCE` to a shared module
 (`test_read_level.py` 6, `test_wgs_metrics.py` 3, `test_variant_tools.py` 3, six others 1
-each), and the 7 tools of docs/06 are in `NO_PICARD_ORACLE` (not Picard tools):
-`CollectCoverageGaps`, `CollectSexCheckMetrics`, `CollectMtCopyNumberMetrics` and the four
-of W08. `test_duplicate_by_tile.py` checks its `ALL` row against Picard `MarkDuplicates`,
-`test_index_depth.py` its counts against `samtools idxstats`. `FifoBuffer` (wave W04 of docs/07) is tool 33. Its module is
+each), and 5 are only in `NO_PICARD_ORACLE` (not Picard tools): `CollectCoverageGaps`,
+`CollectSexCheckMetrics`, `CollectMtCopyNumberMetrics`, `CollectAdapterContentMetrics` and
+`CollectTelomereMetrics`. The 7 tools of docs/06 are all in `NO_PICARD_ORACLE`; 2 of them,
+`CollectDuplicateByTileMetrics` and `CollectIndexDepthMetrics`, also have a module and are
+counted among the 19. `test_duplicate_by_tile.py` checks its `ALL` row against Picard
+`MarkDuplicates`, `test_index_depth.py` its counts against `samtools idxstats`. `FifoBuffer` (wave W04 of docs/07) is tool 33. Its module is
 `tests/concordance/test_fifo_buffer.py`. It is the one line of `EXEMPT`: it copies
 standard input to standard output and writes no metrics column.
 
