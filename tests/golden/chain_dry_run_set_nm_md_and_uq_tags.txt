@@ -1,0 +1,35 @@
+## argv
+chain
+tests/data/markdup.bam
+-R
+tests/data/ref_100k.fa
+-o
+OUT/s
+--dry-run
++
+mark-duplicates
++
+set-nm-md-and-uq-tags
+--is-bisulfite-sequence
++
+write
+OUT/out.bam
+## exit
+0
+## stdout
+chain plan for tests/data/markdup.bam
+  source    tests/data/markdup.bam (BAM, 1,158 bytes, sort order coordinate; a file, it can be read again)
+  prefix    OUT/s (from -o)
+  reference tests/data/ref_100k.fa
+segment 1  one read of tests/data/markdup.bam
+  step 1  mark-duplicates        transform, first read  takes every record, then finds the duplicate sets
+segment 2  a second read of tests/data/markdup.bam through step 1 (replay: nothing is spooled)
+  step 1  mark-duplicates        stream marked          OUT/s.marked.duplication_metrics
+  step 2  set-nm-md-and-uq-tags  stream tagged          no file
+  step 3  write                  BAM of tagged          OUT/out.bam
+barrier    step 1 mark-duplicates: replays the source; about 16 records by the file size, no spill under MAX_RECORDS_IN_RAM 4,000,000; memory about 100.0 MiB
+temp disk  none expected
+output     about 1.1 KiB written by write
+memory     about 100.0 MiB at the peak, a fixed 100.0 MiB for the chain beside its barriers included (a small input takes less)
+nothing ran: this is a plan
+## stderr
