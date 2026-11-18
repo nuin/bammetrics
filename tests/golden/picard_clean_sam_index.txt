@@ -1,0 +1,29 @@
+## argv
+CleanSam
+I=tests/data/clean_sam.bam
+O=OUT/cleaned.bam
+CREATE_INDEX=true
+CREATE_MD5_FILE=true
+COMPRESSION_LEVEL=1
+## exit
+0
+## stdout
+## stderr
+## file cleaned.bai
+<index not recorded>
+## file cleaned.bam
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:chr1	LN:100000
+@RG	ID:rg1	SM:s1	LB:lib1	PU:unit1
+in	0	0	1000	RG:Z:rg1	NM:i:0	MD:Z:20
+off_del	0	0	99980	RG:Z:rg1
+off	0	0	99986	MD:Z:10A9	RG:Z:rg1	NM:i:1
+pair_a	99	0	99987	MC:Z:11M9S	RG:Z:rg1
+off_rev	16	0	99990	RG:Z:rg1
+off_hard	0	0	99990	RG:Z:rg1
+pair_b	147	0	99990	MC:Z:14M6S	RG:Z:rg1
+unmapped	69	0	99995	RG:Z:rg1	MC:Z:6M14S
+unmapped	137	0	99995	RG:Z:rg1
+unplaced	4	-1	0	RG:Z:rg1
+## file cleaned.bam.md5
+da26ed782a61584bfe11af92d9be98d0

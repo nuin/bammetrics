@@ -46,9 +46,21 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   Picard copies the compressed blocks.
 - On the same exome `AddOATag` takes 125.3 s at 31 MB peak RSS; Picard takes 1033.0 s
   at 370 MB. The 150,538,907 records are equal as `samtools view` prints them.
+- `CleanSam` (verb `clean-sam`, Python `clean_sam()`), as Picard 3.5.0: a mapped record
+  whose alignment ends past the end of its reference is soft-clipped at its end
+  (`createNewCigarsIfMapsOffEndOfReference` with htsjdk's `softClipEndOfRead`), the `MC`
+  of a mate past the end is clipped the same way, an unmapped record gets MAPQ 0; STRICT
+  reads at LENIENT. A read that starts past the end exits 1 (docs/07 D45). A chain
+  transform (`cleaned`). `tests/concordance/clean_bams.py` writes reads off contig ends on
+  both strands with every CIGAR operator at the clip point; `test_clean_sam.py` compares
+  them, the fixtures, the tiers, the exome slice, SAM text and a CRAM (tier B with record
+  bytes); `crates/cli/tests/clean_sam.rs` holds chained equals staged.
+- On the 10 GB HG002 exome (150,538,907 records) `CleanSam` takes 76.7 s at 37 MB peak
+  RSS; Picard takes 774.1 s. The records `samtools view` prints are equal (one MD5).
 
 ### Changed
 
+- `RawRecord::set_cigar` and `set_mapping_quality`.
 - `bam_writer::finish_with_index` names the `.bai`; `BamWriter::unchecked` writes records
   without the order check; `RawRecord::set_reference_ids` and `set_codec_bin`;
   `pass::with_record_stream_kind` tells a BAM from a CRAM and SAM text.
@@ -71,6 +83,9 @@ Wave W09 of docs/07, part 1: the record-editing shape and its first two tools.
   noodles-cram panicked. A container of unmapped reads with SEQ `*` alone decodes; it
   failed with `missing data series encoding: Bases`. `ViewSam` on each prints Picard's
   text.
+- An `OUTPUT` named `.SAM` (any case other than `.sam`) gets BAM bytes, as htsjdk picks
+  SAM text by `endsWith(".sam")`. `SortSam`, `CleanSam`, a rewriting `ReplaceSamHeader`
+  and the chain's `write` step wrote SAM text under that name; a block copy refused it.
 - `chain ... + add-comments-to-bam -C` with a newline in a comment is a usage error before
   the first read (exit 2, `--dry-run` too); it failed the step after the chain started.
 - `chain ... + add-o-a-tag -L FILE` reads the interval list before the first read, so a

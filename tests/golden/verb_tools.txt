@@ -49,6 +49,7 @@ index-depth                           CollectIndexDepthMetrics
 add-comments-to-bam                   AddCommentsToBam
 replace-sam-header                    ReplaceSamHeader
 add-o-a-tag                           AddOATag
+clean-sam                             CleanSam
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

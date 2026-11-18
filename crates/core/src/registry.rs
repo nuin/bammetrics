@@ -363,6 +363,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::add_comments_to_bam::TOOL,
     &crate::replace_sam_header::TOOL,
     &crate::add_oa_tag::TOOL,
+    &crate::clean_sam::TOOL,
 ];
 
 /// The tool named `name`.

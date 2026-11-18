@@ -14,6 +14,7 @@ use std::io::Read;
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const TOOLS: &[&str] = &[
@@ -83,12 +84,16 @@ fn forged(size: u32) -> Vec<u8> {
     bam
 }
 
+/// A new directory per call. The two tests run on two threads of one
+/// process and may read the same clock value, so a counter tells them apart.
 fn fresh_dir() -> PathBuf {
+    static CALLS: AtomicUsize = AtomicUsize::new(0);
+    let call = CALLS.fetch_add(1, Ordering::Relaxed);
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos());
     let dir = std::env::temp_dir().join(format!(
-        "bammetrics-forged-block-size-{}-{nanos}",
+        "bammetrics-forged-block-size-{}-{nanos}-{call}",
         std::process::id()
     ));
     DirBuilder::new()

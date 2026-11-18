@@ -30,7 +30,7 @@ emits.
 | Step | What it is | Today |
 |---|---|---|
 | source | One BAM, CRAM or SAM text file, or a pipe holding one | the positional argument, `-` for standard input |
-| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on; a streaming transform edits each batch as it passes (section 16) | `mark-duplicates`, `sort-sam` (both barriers); `add-comments-to-bam`, `replace-sam-header` (streaming) |
+| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on; a streaming transform edits each batch as it passes (section 16) | `mark-duplicates`, `sort-sam` (both barriers); `add-comments-to-bam`, `replace-sam-header`, `add-o-a-tag`, `clean-sam` (streaming) |
 | tap | A one-pass tool on the records of its position. It changes nothing | 18 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check`, `mt-copy-number`, `exon-coverage`, `adapter-content`, `duplicate-by-tile`, `telomere` |
 | write | A tap that writes the records of its position as a BAM, or as SAM text | `write [PATH]` |
 
@@ -1162,6 +1162,7 @@ file holds, so it spools its input (section 15.2). The run prints one line per e
 | `add-comments-to-bam` | `commented` | Adds one `@CO` line per `--comment` to the header of its stream. The source may be SAM text or a CRAM; the tool on its own copies a BAM only, as Picard does |
 | `replace-sam-header` | `reheadered` | Puts the header of `--header` in place of its stream's. Each record keeps its reference index, as Picard's block copy of a `.bam` keeps it. The new `SO` must be `unsorted` or the stream's |
 | `add-o-a-tag` | `oa_tagged` | Appends each record's alignment to its `OA` tag, or with `-L` only on the records over an interval. Every record leaves with the `bin` htsjdk's writer computes, as the tool on its own writes it |
+| `clean-sam` | `cleaned` | Soft-clips each alignment past the end of its reference and the `MC` of a mate past the end, sets MAPQ 0 on unmapped records, and gives each record the `bin` htsjdk computes. The chain reads a SAM text source at its `--validation-stringency`, so a source with lines past the end of their reference needs `LENIENT`; the tool alone reads `STRICT` as `LENIENT`. Chained equals staged in `crates/cli/tests/clean_sam.rs` |
 
 The rules of a record-editing step:
 

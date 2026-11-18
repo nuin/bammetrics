@@ -196,6 +196,7 @@ the sizes and a Chrome recipe for a build without the feature.
 | AddCommentsToBam (one `@CO` line per `COMMENT` after the header's own, the records of the BAM copied byte for byte; `CREATE_INDEX` writes `OUTPUT.bai`; a chain transform) | | `add_comments_to_bam()` |
 | ReplaceSamHeader (the header of `HEADER`, a SAM, BAM or CRAM, over every record; a `.bam` input keeps each record's reference index, any other its reference name; Picard's sort order checks; a chain transform) | | `replace_sam_header()` |
 | AddOATag (each record's alignment, `RNAME,POS,STRAND,CIGAR,MAPQ,NM;`, appended to its `OA` tag; `INTERVAL_LIST` limits it to the records over an interval; BAM or SAM text out; a chain transform) | | `add_o_a_tag()` |
+| CleanSam (an alignment past the end of its reference soft-clipped at its end, the mate's `MC` clipped the same way, MAPQ 0 on unmapped records; SAM, BAM or CRAM in, BAM or SAM text out; a chain transform) | | `clean_sam()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 | SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | `validation_stringency=` |

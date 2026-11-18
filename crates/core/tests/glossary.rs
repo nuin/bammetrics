@@ -58,6 +58,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "AddOATag",
         "writes a BAM or SAM text with OA tags added: no metrics file, no row, no column",
     ),
+    (
+        "CleanSam",
+        "writes a BAM or SAM text with clipped and MAPQ-fixed records: no metrics file, no row, no column",
+    ),
 ];
 
 /// A directory of its own for this test's files.

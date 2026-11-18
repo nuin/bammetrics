@@ -1,0 +1,15 @@
+## argv
+chain
+tests/data/clean_sam.bam
++
+clean-sam
+--compression-level
+1
++
+write
+OUT/out.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (clean-sam): COMPRESSION_LEVEL belongs to the write step in a chain; this step hands its records to the next step

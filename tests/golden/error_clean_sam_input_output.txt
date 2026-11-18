@@ -1,0 +1,9 @@
+## argv
+CleanSam
+I=tests/data/clean_sam.bam
+O=tests/data/clean_sam.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: OUTPUT=tests/data/clean_sam.bam: it is the input tests/data/clean_sam.bam; writing it would destroy it
