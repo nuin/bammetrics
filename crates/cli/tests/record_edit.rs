@@ -416,3 +416,90 @@ fn the_run_reports_each_transform_with_its_counts() {
     }
     fs::remove_dir_all(&dir).expect("cleanup");
 }
+
+/// The `.fai` of a reference is an input wherever the reference is given:
+/// the Picard face of a record-editing tool (BAM and CRAM), `MarkDuplicates`
+/// and `SortSam`, a metrics tool, and a chain step's own `-R`. Each run is
+/// refused before it reads, and the `.fai` stays as it was.
+#[test]
+fn the_reference_index_is_never_an_output() {
+    let dir = fresh_dir("fai");
+    let fasta = dir.join("ref.fa");
+    let fai = dir.join("ref.fa.fai");
+    fs::copy(root().join("tests/data/ref_100k.fa"), &fasta).expect("copy FASTA");
+    fs::copy(root().join("tests/data/ref_100k.fa.fai"), &fai).expect("copy .fai");
+    let before = fs::read(&fai).expect("read .fai");
+    let (r, o) = (fasta.display().to_string(), fai.display().to_string());
+    let metrics = dir.join("m.txt").display().to_string();
+    let cram = "tests/data/insert_size.cram";
+    let refused: Vec<Vec<String>> = vec![
+        strings(&[
+            "SetNmMdAndUqTags",
+            &format!("I={MARKDUP}"),
+            &format!("O={o}"),
+            &format!("R={r}"),
+        ]),
+        strings(&[
+            "SetNmAndUqTags",
+            &format!("I={MARKDUP}"),
+            &format!("O={o}"),
+            &format!("R={r}"),
+        ]),
+        strings(&[
+            "CleanSam",
+            &format!("I={cram}"),
+            &format!("O={o}"),
+            &format!("R={r}"),
+        ]),
+        strings(&[
+            "AddOATag",
+            &format!("I={cram}"),
+            &format!("O={o}"),
+            &format!("R={r}"),
+        ]),
+        strings(&[
+            "MarkDuplicates",
+            &format!("I={MARKDUP}"),
+            &format!("O={o}"),
+            &format!("M={metrics}"),
+            &format!("R={r}"),
+        ]),
+        strings(&[
+            "SortSam",
+            &format!("I={MARKDUP}"),
+            &format!("O={o}"),
+            "SORT_ORDER=queryname",
+            &format!("R={r}"),
+        ]),
+        strings(&[
+            "CollectInsertSizeMetrics",
+            &format!("I={MARKDUP}"),
+            &format!("O={o}"),
+            &format!("R={r}"),
+        ]),
+        strings(&[
+            "chain",
+            MARKDUP,
+            "+",
+            "set-nm-md-and-uq-tags",
+            "-R",
+            &r,
+            "+",
+            "write",
+            &o,
+        ]),
+        strings(&["chain", MARKDUP, "+", "insert-size", "-R", &r, "-o", &o]),
+    ];
+    for args in &refused {
+        let output = bammetrics(args);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "{args:?} ran");
+        assert!(stderr.contains("would destroy it"), "{args:?}: {stderr}");
+        assert_eq!(
+            fs::read(&fai).expect("read .fai"),
+            before,
+            "{args:?} changed the .fai"
+        );
+    }
+    let _ = fs::remove_dir_all(&dir);
+}
