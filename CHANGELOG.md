@@ -46,6 +46,19 @@ BGZF block copy.
   (`tests/golden/picard_add_comments_to_bam_index.txt`). A pipe and a shorter dictionary
   keep the record path.
 
+### Measured
+
+- On the 10 GB HG002 exome (150,538,907 records) `AddCommentsToBam` takes 9.4 s at 6 MB
+  peak RSS (61.0 s at 0.27.0); Picard takes 8.3 s at 135 MB. The records are equal.
+  `ReplaceSamHeader` takes 6.1 s at 6 MB (56.2 s at 0.27.0).
+- `GatherBamFiles` of the exome twice takes 12.6 s at 7 MB; Picard takes 11.4 s at
+  131 MB. The two 20.7 GB files differ in length by 46 bytes: the one block htsjdk
+  deflates again.
+- `CalculateReadGroupChecksum` on the exome takes under 0.1 s at 4 MB; Picard takes 0.8 s
+  at 125 MB. The checksums are equal.
+- Memory gate: the three fixture rows peak at 3.9 to 6.1 MiB; the slice gather at
+  6.1 MiB, the exome checksum at 4.4 MiB.
+
 ## 0.27.0
 
 Wave W09 of docs/07: six record-editing tools on one shape, each a chain transform.

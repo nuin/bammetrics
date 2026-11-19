@@ -309,7 +309,13 @@ fn gather_blocks(gather: &Gather) -> Result<()> {
             });
         }
     }
-    let header = pass::read_header_at(first.path(), crate::sam_text::Stringency::Silent)?;
+    // The sort order decides the index; without one the header is not parsed,
+    // as htsjdk's block copy never parses the first file's.
+    let header = if opts.create_index {
+        pass::read_header_at(first.path(), crate::sam_text::Stringency::Silent)?
+    } else {
+        sam::Header::default()
+    };
     let output = |source| Error::Output {
         path: opts.output.clone(),
         source,
