@@ -406,6 +406,20 @@ impl RawRecord {
         self.buf[20..24].copy_from_slice(&mate.to_le_bytes());
     }
 
+    /// htsjdk `setAlignmentStart`: 1-based, 0 for none.
+    pub fn set_alignment_start(&mut self, start: i32) {
+        self.buf[4..8].copy_from_slice(&start.wrapping_sub(1).to_le_bytes());
+    }
+
+    /// htsjdk `setMateAlignmentStart`: 1-based, 0 for none.
+    pub fn set_mate_alignment_start(&mut self, start: i32) {
+        self.buf[24..28].copy_from_slice(&start.wrapping_sub(1).to_le_bytes());
+    }
+
+    pub fn set_template_length(&mut self, length: i32) {
+        self.buf[28..32].copy_from_slice(&length.to_le_bytes());
+    }
+
     /// The read name without its NUL.
     pub fn name(&self) -> &[u8] {
         let len = usize::from(self.buf[8]);

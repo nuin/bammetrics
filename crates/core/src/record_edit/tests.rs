@@ -80,6 +80,7 @@ fn options(input: &Path, output: &Path) -> Options {
         threads: 1,
         stringency: Stringency::Strict,
         mode: Mode::Rewrite,
+        reorder: Reorder::default(),
     }
 }
 

@@ -229,19 +229,50 @@ pub fn cigar_text(cigar: &[(u32, u8)]) -> Vec<u8> {
     text
 }
 
-/// The edit: the reference lengths of the header, as Java `int`s.
-struct Clean {
+/// The edit: the reference lengths of the header, as Java `int`s, and the
+/// tool that names its errors. `RevertOriginalBaseQualitiesAndAddMateCigar`
+/// makes the same clip ([`Clean::clip`]).
+pub(crate) struct Clean {
     lengths: Vec<i32>,
+    tool: &'static str,
 }
 
 impl Clean {
-    fn new(header: &sam::Header) -> Self {
+    pub(crate) fn new(header: &sam::Header, tool: &'static str) -> Self {
         let lengths = header
             .reference_sequences()
             .values()
             .map(|sequence| i32::try_from(sequence.length().get()).unwrap_or(i32::MAX))
             .collect();
-        Self { lengths }
+        Self { lengths, tool }
+    }
+
+    /// `createNewCigarsIfMapsOffEndOfReference`: the record's CIGAR and its
+    /// `MC`, clipped where they end past their reference. True when either
+    /// changed; the tags are then encoded again in htsjdk's order.
+    pub(crate) fn clip(&self, record: &mut RawRecord) -> Result<bool> {
+        let cigar = if record.flags() & 0x4 != 0 {
+            None
+        } else {
+            self.own_clip(record)?
+        };
+        let mate = self.mate_clip(record)?;
+        if cigar.is_none() && mate.is_none() {
+            return Ok(false);
+        }
+        let mut tags = record.tags().map_err(Error::Record)?;
+        if let Some(new) = &cigar {
+            record.set_cigar(new).map_err(Error::Record)?;
+        }
+        if let Some(text) = mate {
+            tags.set(*b"MC", TagValue::String(text));
+        }
+        record.set_tags(&tags).map_err(Error::Record)?;
+        Ok(true)
+    }
+
+    fn failure(&self, record: &RawRecord, what: &str) -> Error {
+        failure(self.tool, record, what)
     }
 
     /// `header.getSequence(index).getSequenceLength()`: a missing sequence
@@ -251,7 +282,7 @@ impl Clean {
             .ok()
             .and_then(|at| self.lengths.get(at).copied())
             .ok_or_else(|| {
-                failure(
+                self.failure(
                     record,
                     &format!(
                         "{what} reference index {index} is not in the sequence dictionary of {} \
@@ -270,7 +301,7 @@ impl Clean {
         if is_sentinel(&cigar, record.sequence_length())
             && record.tag(*b"CG").ok().flatten().is_some()
         {
-            return Err(failure(
+            return Err(self.failure(
                 record,
                 "its CIGAR of more than 65535 operators is in a CG tag; htsjdk clips the CIGAR \
                  of the tag, which bammetrics does not read",
@@ -281,11 +312,12 @@ impl Clean {
             .wrapping_add(reference_length(&cigar))
             .wrapping_sub(1);
         let read = i32::try_from(record.sequence_length()).unwrap_or(i32::MAX);
-        let clipped = clip_off_end(length, end, read, &cigar).map_err(|e| failure(record, &e))?;
+        let clipped =
+            clip_off_end(length, end, read, &cigar).map_err(|e| self.failure(record, &e))?;
         if let Some(new) = &clipped {
             let bases = record.sequence_length();
             if bases != 0 && usize::try_from(read_length(new)).ok() != Some(bases) {
-                return Err(failure(
+                return Err(self.failure(
                     record,
                     &format!(
                         "the clip past the end of its reference gives CIGAR {}, {} read bases, \
@@ -311,11 +343,11 @@ impl Clean {
             return Ok(None);
         };
         let TagValue::String(text) = value else {
-            return Err(failure(record, "Value for tag MC is not a String"));
+            return Err(self.failure(record, "Value for tag MC is not a String"));
         };
-        let cigar = parse_cigar(&text).map_err(|e| failure(record, &e))?;
+        let cigar = parse_cigar(&text).map_err(|e| self.failure(record, &e))?;
         if let Some(&(len, op)) = cigar.iter().find(|(len, _)| int(*len) < 0) {
-            return Err(failure(record, &element(int(len), op).unwrap_err()));
+            return Err(self.failure(record, &element(int(len), op).unwrap_err()));
         }
         let length = self.length(record, record.mate_reference_id(), "the mate's")?;
         let end = record
@@ -323,15 +355,15 @@ impl Clean {
             .wrapping_add(reference_length(&cigar))
             .wrapping_sub(1);
         let clipped = clip_off_end(length, end, read_length(&cigar), &cigar)
-            .map_err(|e| failure(record, &e))?;
+            .map_err(|e| self.failure(record, &e))?;
         Ok(clipped.map(|new| cigar_text(&new)))
     }
 }
 
-/// The error for `record`.
-fn failure(record: &RawRecord, what: &str) -> Error {
+/// The error of `tool` for `record`.
+fn failure(tool: &str, record: &RawRecord, what: &str) -> Error {
     Error::Metric(format!(
-        "CleanSam: record {}: {what}",
+        "{tool}: record {}: {what}",
         String::from_utf8_lossy(record.name())
     ))
 }
@@ -343,22 +375,8 @@ impl RecordEdit for Clean {
 
     fn record(&mut self, record: &mut RawRecord) -> Result<Outcome> {
         let unmapped = record.flags() & 0x4 != 0;
-        let cigar = if unmapped {
-            None
-        } else {
-            self.own_clip(record)?
-        };
-        let mate = self.mate_clip(record)?;
         let mut outcome = Outcome::Same;
-        if cigar.is_some() || mate.is_some() {
-            let mut tags = record.tags().map_err(Error::Record)?;
-            if let Some(new) = &cigar {
-                record.set_cigar(new).map_err(Error::Record)?;
-            }
-            if let Some(text) = mate {
-                tags.set(*b"MC", TagValue::String(text));
-            }
-            record.set_tags(&tags).map_err(Error::Record)?;
+        if self.clip(record)? {
             outcome = Outcome::Changed;
         }
         if unmapped && record.mapping_quality() != 0 {
@@ -371,7 +389,7 @@ impl RecordEdit for Clean {
 }
 
 fn build(setup: &Setup) -> Result<Box<dyn RecordEdit>> {
-    Ok(Box::new(Clean::new(setup.header)))
+    Ok(Box::new(Clean::new(setup.header, TOOL.name)))
 }
 
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {

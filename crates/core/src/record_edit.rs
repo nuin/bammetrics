@@ -54,7 +54,14 @@ use crate::pass;
 use crate::reference::{Reference, files_read};
 use crate::registry::{Invocation, Opt};
 use crate::sam_text::{self, SamWriter, Stringency};
+use crate::spill::TempDir;
 use crate::stage::{Counters, Frame, Stage, Transform, WriteFormat, later_kind};
+
+mod reorder;
+pub use reorder::{
+    DEFAULT_RECORDS_IN_RAM, Gate, Regroup, Reorder, WriterOrder, sort_limits, sorting_stage,
+    stage_limits,
+};
 
 /// What [`RecordEdit::record`] did to one record.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -162,6 +169,8 @@ pub struct Options {
     /// How SAM text input is checked.
     pub stringency: Stringency,
     pub mode: Mode,
+    /// Sorts between the edit and the file ([`Reorder`]); none by default.
+    pub reorder: Reorder,
 }
 
 impl Options {
@@ -188,6 +197,7 @@ impl Options {
             threads: inv.threads,
             stringency: inv.stringency()?,
             mode: Mode::Rewrite,
+            reorder: Reorder::default(),
         })
     }
 
@@ -474,7 +484,20 @@ pub fn run(
     opts: &Options,
     build: impl FnOnce(&Setup) -> Result<Box<dyn RecordEdit>>,
 ) -> Result<Counters> {
+    run_gated(opts, build, None).map(Option::unwrap_or_default)
+}
+
+/// [`run`] with a [`Gate`] that may skip the run: `None` when it did, and
+/// then no file is written. An edit that fails before the gate decides is
+/// reported only when the run goes on, as Picard decides from its own read
+/// of the first records before it edits any.
+pub fn run_gated(
+    opts: &Options,
+    build: impl FnOnce(&Setup) -> Result<Box<dyn RecordEdit>>,
+    mut gate: Option<&mut dyn Gate>,
+) -> Result<Option<Counters>> {
     check_output(opts)?;
+    let temp = TempDir::new(opts.reorder.tmp_dir.as_deref(), "record-edit");
     pass::with_record_stream_kind(
         &opts.input,
         opts.reference.as_deref(),
@@ -494,26 +517,68 @@ pub fn run(
                 mode: opts.mode,
             })?;
             let out_header = with_version(edit.header(header)?, opts.mode == Mode::Rewrite);
-            let mut out = Out::create(opts, &out_header)?;
+            let out = Out::create(opts, &out_header)?;
+            let input_order = crate::header_merge::SortOrder::of(header);
+            let mut out = reorder::Pipeline::new(
+                &opts.reorder,
+                input_order,
+                &out_header,
+                &temp,
+                out,
+                opts.mode,
+            );
             let mut counters = Counters::default();
             let mut record = RawRecord::default();
+            // An edit's error while the gate looks on: Picard reports it
+            // only when it does not skip.
+            let mut held: Option<Error> = None;
             while record
                 .read_from(reader)
                 .map_err(|e| pass::read_error(&opts.input, cram, e))?
             {
-                restore.apply(&mut record)?;
-                if tally(&mut counters, edit.record(&mut record)?) {
-                    out.write(&mut record, opts.mode)?;
+                if let Some(look) = gate.as_deref_mut() {
+                    match look.look(&record)? {
+                        Some(true) => return Ok(None),
+                        Some(false) => {
+                            gate = None;
+                            if let Some(error) = held.take() {
+                                return Err(error);
+                            }
+                        }
+                        None => {}
+                    }
                 }
+                if held.is_some() {
+                    continue;
+                }
+                let mut step = || -> Result<()> {
+                    restore.apply(&mut record)?;
+                    if tally(&mut counters, edit.record(&mut record)?) {
+                        out.push(&mut record)?;
+                    }
+                    Ok(())
+                };
+                match step() {
+                    Err(error) if gate.is_some() => held = Some(error),
+                    other => other?,
+                }
+            }
+            if let Some(look) = gate
+                && look.at_end()
+            {
+                return Ok(None);
+            }
+            if let Some(error) = held {
+                return Err(error);
             }
             let mut tail = Vec::new();
             edit.finish(&mut tail)?;
             for record in &mut tail {
                 counters.records_out += 1;
-                out.write(record, opts.mode)?;
+                out.push(record)?;
             }
-            out.finish(&out_header, opts)?;
-            Ok(counters)
+            out.finish()?.finish(&out_header, opts)?;
+            Ok(Some(counters))
         },
     )
 }
