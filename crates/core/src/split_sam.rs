@@ -462,20 +462,19 @@ pub fn run(run: &Run) -> Result<Vec<PathBuf>> {
     let reference = inv.reference();
     let stringency = inv.stringency()?;
     let options = WriterOptions::from_invocation(inv)?;
-    let mut total = 0;
-    if let SplitKind::Count(count) = &run.kind {
-        total = count.total;
-        if total == 0 {
-            if !std::fs::metadata(input).is_ok_and(|m| m.is_file()) || input.starts_with("/dev") {
-                return Err(Error::Input {
-                    path: input.clone(),
-                    source: io::Error::other(
-                        "INPUT is not a regular file. If TOTAL_READS_IN_INPUT is not \
-                         supplied, INPUT cannot be a stream.",
-                    ),
-                });
-            }
-        }
+    let mut total = match &run.kind {
+        SplitKind::Count(count) => count.total,
+        SplitKind::Library => 0,
+    };
+    let stream = !std::fs::metadata(input).is_ok_and(|m| m.is_file()) || input.starts_with("/dev");
+    if matches!(run.kind, SplitKind::Count(_)) && total == 0 && stream {
+        return Err(Error::Input {
+            path: input.clone(),
+            source: io::Error::other(
+                "INPUT is not a regular file. If TOTAL_READS_IN_INPUT is not supplied, INPUT \
+                 cannot be a stream.",
+            ),
+        });
     }
     check_directory(&run.dir)?;
     if let SplitKind::Count(_) = &run.kind
