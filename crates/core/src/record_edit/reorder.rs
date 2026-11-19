@@ -21,15 +21,18 @@
 //! `RevertOriginalBaseQualitiesAndAddMateCigar`).
 //!
 //! In a chain the same passes make the step a barrier that holds its
-//! records ([`sorting_stage`]).
+//! records ([`sorting_stage`]); a step whose writer is presorted for the
+//! stream it reads streams it with the writer's order check
+//! ([`presorted_stage`]).
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
 
 use noodles::sam;
 
-use super::{Mode, Out, check_stage};
+use super::{Mode, Options, Out, check_stage};
 use crate::bam_raw::RawRecord;
+use crate::bam_writer::Presorted;
 use crate::error::{Error, Result};
 use crate::header_merge::SortOrder;
 use crate::registry::Invocation;
@@ -37,7 +40,7 @@ use crate::sam_order::Order;
 use crate::sam_sort::{Limits, RecordSorter, SortedRecords};
 use crate::spill::{SortStats, TempDir};
 use crate::stage::{
-    BATCH_RECORDS, Barrier, Frame, Next, Products, Records, Sealed, Stage, Transform,
+    BATCH_RECORDS, Barrier, Counters, Frame, Next, Products, Records, Sealed, Stage, Transform,
 };
 
 /// Picard's `MAX_RECORDS_IN_RAM` default.
@@ -201,7 +204,12 @@ impl<'d> Last<'d> {
 pub(super) struct Pipeline<'d> {
     group: Option<(RecordSorter<'d>, Regroup)>,
     last: Last<'d>,
-    out: Out,
+    /// The file, made by [`Pipeline::open`] or at the first record written:
+    /// a run a [`Gate`] skips makes none.
+    out: Option<Out>,
+    opts: &'d Options,
+    /// The output header.
+    header: sam::Header,
     mode: Mode,
     /// `MAX_RECORDS_IN_RAM` below 1: a sort fails.
     no_room: bool,
@@ -212,13 +220,13 @@ impl<'d> Pipeline<'d> {
     /// groups (`duplicate` order). `input` is the order of the header
     /// read, which a [`WriterOrder::Header`] is resolved against.
     pub(super) fn new(
-        reorder: &Reorder,
+        opts: &'d Options,
         input: SortOrder,
         header: &sam::Header,
         temp: &'d TempDir,
-        out: Out,
-        mode: Mode,
+        out: Option<Out>,
     ) -> Self {
+        let reorder = &opts.reorder;
         let mut limits = reorder.limits;
         let no_room = limits.records == 0;
         limits.records = limits.records.max(1);
@@ -231,9 +239,25 @@ impl<'d> Pipeline<'d> {
             group,
             last: Last::new(writer, header, temp, limits),
             out,
-            mode,
+            opts,
+            header: header.clone(),
+            mode: opts.mode,
             no_room,
         }
+    }
+
+    /// Make the file now, when it is not made yet.
+    pub(super) fn open(&mut self) -> Result<&mut Out> {
+        let out = match self.out.take() {
+            Some(out) => out,
+            None => Out::create(self.opts, &self.header)?,
+        };
+        Ok(self.out.insert(out))
+    }
+
+    fn write(&mut self, record: &mut RawRecord) -> Result<()> {
+        let mode = self.mode;
+        self.open()?.write(record, mode)
     }
 
     fn sorts(&self) -> bool {
@@ -253,13 +277,11 @@ impl<'d> Pipeline<'d> {
 
     fn feed_last(&mut self, record: &mut RawRecord) -> Result<()> {
         match &mut self.last {
-            Last::Direct => self.out.write(record, self.mode),
-            Last::Sort(sorter) => sorter.push(std::mem::take(record)),
-            Last::Unknown(n) => {
-                *n += 1;
-                self.out.write(record, self.mode)
-            }
+            Last::Direct => {}
+            Last::Sort(sorter) => return sorter.push(std::mem::take(record)),
+            Last::Unknown(n) => *n += 1,
         }
+        self.write(record)
     }
 
     /// After the last record: every record in the file, the file not yet
@@ -282,11 +304,14 @@ impl<'d> Pipeline<'d> {
             Last::Sort(sorter) => {
                 let (mut sorted, _) = (*sorter).finish()?;
                 while let Some(mut record) = sorted.next_record()? {
-                    self.out.write(&mut record, self.mode)?;
+                    self.write(&mut record)?;
                 }
             }
         }
-        Ok(self.out)
+        match self.out.take() {
+            Some(out) => Ok(out),
+            None => Out::create(self.opts, &self.header),
+        }
     }
 }
 
@@ -393,6 +418,64 @@ pub fn sorting_stage<'t>(
         last,
         batch: Vec::new(),
     })))
+}
+
+/// A record-editing step whose stand-alone writer is presorted for this
+/// stream (`AddOrReplaceReadGroups` with a `SORT_ORDER` that is the
+/// input's): the edit on each batch, then htsjdk's `assertPresorted` on
+/// every record it hands on, in the order its output header names. The
+/// records go on as they come, so the step stays in its segment.
+pub fn presorted_stage<'t>(
+    frame: &Frame,
+    transform: Box<dyn Transform + 't>,
+    tool: &str,
+) -> Result<Stage<'t>> {
+    let header = transform.header(&frame.header)?;
+    Ok(Stage::Transform(Box::new(Checked {
+        transform,
+        order: Presorted::of(&header),
+        stream: PathBuf::from(format!("the stream of {tool}")),
+    })))
+}
+
+/// The transform of [`presorted_stage`].
+struct Checked<'t> {
+    transform: Box<dyn Transform + 't>,
+    order: Presorted,
+    /// What the order error names in place of a file.
+    stream: PathBuf,
+}
+
+impl Checked<'_> {
+    fn check(&mut self, records: &[RawRecord]) -> Result<()> {
+        records
+            .iter()
+            .try_for_each(|record| self.order.check(record, &self.stream))
+    }
+}
+
+impl Transform for Checked<'_> {
+    fn header(&self, up: &sam::Header) -> Result<sam::Header> {
+        self.transform.header(up)
+    }
+
+    fn apply(&mut self, batch: &mut Vec<RawRecord>) -> Result<()> {
+        self.transform.apply(batch)?;
+        self.check(batch)
+    }
+
+    fn finish(&mut self, out: &mut Vec<RawRecord>) -> Result<()> {
+        self.transform.finish(out)?;
+        self.check(out)
+    }
+
+    fn counters(&self) -> Counters {
+        self.transform.counters()
+    }
+
+    fn products(&mut self) -> Result<Products> {
+        self.transform.products()
+    }
 }
 
 /// The barrier of [`sorting_stage`].

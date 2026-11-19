@@ -301,20 +301,22 @@ impl Estimate {
     }
 }
 
-/// `NAME=VALUE` of a step's Picard arguments, the last one given.
 /// `RevertOriginalBaseQualitiesAndAddMateCigar`: a step that holds its
 /// records and sorts them twice.
 const REVERT: &str = "RevertOriginalBaseQualitiesAndAddMateCigar";
 
-/// True for a transform that holds its records in a sort: `sort-sam`, the
-/// reverting step, and a streaming tool whose arguments make it sort
-/// (`add-or-replace-read-groups` with a `SORT_ORDER` that names a sort).
+/// True for a transform that may hold its records in a sort: `sort-sam`,
+/// the reverting step, and a streaming tool whose arguments may make it
+/// sort (`add-or-replace-read-groups` with a `SORT_ORDER` that names a
+/// sort; a stream already in that order goes through unsorted, which the
+/// plan, made before the header is read, counts as a sort).
 fn holds(step: &Planned, name: &str) -> bool {
     name == "SortSam"
         || name == REVERT
         || (!step.streams() && step.tool.is_some_and(stage::streams))
 }
 
+/// `NAME=VALUE` of a step's Picard arguments, the last one given.
 fn picard_value<'a>(step: &'a Planned, name: &str) -> Option<&'a str> {
     step.argv.iter().rev().find_map(|arg| {
         arg.strip_prefix(name)

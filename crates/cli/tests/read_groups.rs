@@ -259,6 +259,19 @@ fn the_corpus_equals_the_staged_tools() {
     chained_equals_staged("foundation-rg", FOUNDATION, &[Md, Rg(None)]);
 }
 
+/// t1 and the foundation corpus were sorted by samtools, whose order of
+/// records at one position differs from htsjdk's: a `SORT_ORDER` that is
+/// the input's streams them unchanged, as the tool's presorted writer does.
+#[test]
+fn the_inputs_own_order_keeps_samtools_ties() {
+    chained_equals_staged("t1-rg-same", T1, &[Rg(Some("coordinate")), Md]);
+    chained_equals_staged(
+        "foundation-rg-same",
+        FOUNDATION,
+        &[Rg(Some("coordinate")), Rg(Some("queryname"))],
+    );
+}
+
 /// The sorting steps count every record in and out.
 #[test]
 fn the_run_reports_each_step_with_its_counts() {

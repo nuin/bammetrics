@@ -225,3 +225,80 @@ fn an_unknown_order_over_two_records_writes_nothing() {
     assert!(!out.exists());
     std::fs::remove_dir_all(&dir).expect("scratch");
 }
+
+/// The invocation of a chain step: no OUTPUT.
+fn step(extra: &[&str]) -> Invocation {
+    let argv: Vec<String> = args(extra)
+        .into_iter()
+        .filter(|arg| !arg.starts_with("O="))
+        .collect();
+    TOOL.parse(&argv).expect("parse")
+}
+
+/// The step resolves its writer against the stream's header: the stream's
+/// own order streams the records with the presorted writer's check, so a
+/// stream sorted by samtools keeps its order of tied records; another
+/// order sorts.
+#[test]
+fn a_step_streams_a_stream_already_in_its_order() {
+    let header: sam::Header = "@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:c\tLN:900\n"
+        .parse()
+        .expect("header");
+    let frame = Frame::new(header, "in.bam".to_owned());
+    let temp = TempDir::new(None, "read-groups-test");
+    let inv = |extra: &[&str]| step(extra);
+    let given: [&[&str]; 3] = [&[], &["SORT_ORDER=coordinate"], &["SORT_ORDER=unsorted"]];
+    for extra in given {
+        let built = stage(&inv(extra), &frame, &temp).expect("stage");
+        assert!(matches!(built, Stage::Transform(_)), "{extra:?}");
+    }
+    let built = stage(&inv(&["SORT_ORDER=queryname"]), &frame, &temp).expect("stage");
+    assert!(matches!(built, Stage::Barrier(_)));
+    // Two records at one position keep their order; a record before the
+    // last one fails as htsjdk's assertPresorted fails.
+    let Ok(Stage::Transform(mut transform)) = stage(&inv(&[]), &frame, &temp) else {
+        panic!("a transform");
+    };
+    let mut batch = vec![
+        build("b", 0, 0, 99, &[(5, 0)], b"IIIII", b""),
+        build("a", 0, 0, 99, &[(5, 0)], b"IIIII", b""),
+    ];
+    transform.apply(&mut batch).expect("tied records");
+    assert_eq!(batch[0].name(), b"b");
+    let mut late = vec![build("c", 0, 0, 9, &[(5, 0)], b"IIIII", b"")];
+    let message = transform
+        .apply(&mut late)
+        .expect_err("out of order")
+        .to_string();
+    assert!(
+        message.contains("Alignments added out of order"),
+        "{message}"
+    );
+}
+
+/// htsjdk's `setHeaderStrict`: a reference or mate reference index outside
+/// the dictionary fails the step as it fails the tool.
+#[test]
+fn a_reference_index_outside_the_dictionary_fails() {
+    let header: sam::Header = "@HD\tVN:1.6\tSO:unsorted\n@SQ\tSN:c\tLN:900\n"
+        .parse()
+        .expect("header");
+    let frame = Frame::new(header, "in.bam".to_owned());
+    let temp = TempDir::new(None, "read-groups-test");
+    let inv = step(&[]);
+    for (reference, mate, index) in [(77, -1, "77"), (0, 99, "99"), (-5, -1, "-5")] {
+        let Ok(Stage::Transform(mut transform)) = stage(&inv, &frame, &temp) else {
+            panic!("a transform");
+        };
+        let mut record = build("far", 0, 0, 9, &[(5, 0)], b"IIIII", b"");
+        record.set_reference_ids(reference, mate);
+        let message = transform
+            .apply(&mut vec![record])
+            .expect_err("outside")
+            .to_string();
+        assert!(
+            message.contains(&format!("Reference name for '{index}' not found")),
+            "{message}"
+        );
+    }
+}

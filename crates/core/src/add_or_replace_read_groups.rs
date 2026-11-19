@@ -69,8 +69,8 @@ pub const TOOL: Tool = Tool {
         Opt::text(&["RGDS", "DS"], "Read group description."),
         Opt::text(
             &["RGDT", "DT"],
-            "Read group run date, ISO 8601 (2020-01-02, 2020-01-02T03:04:05+05:30), written \
-             in UTC.",
+            "Read group run date, ISO 8601 (2020-01-02, 2020-01-02T03:04:05+05:30), years \
+             1583 to 9999, written in UTC.",
         ),
         Opt::int(&["RGPI", "PI"], "Read group predicted insert size."),
         Opt::text(&["RGPG", "PG"], "Read group program group."),
@@ -329,20 +329,29 @@ pub fn sorts(argv: &[String]) -> bool {
     }) == Some(true)
 }
 
-/// `AddOrReplaceReadGroups` as a step of a chain.
+/// `AddOrReplaceReadGroups` as a step of a chain. The writer is resolved
+/// against the stream's header as the tool resolves it against its
+/// input's: a `SORT_ORDER` that is the stream's order (or none) streams the
+/// records with the presorted writer's order check, so a stream sorted by
+/// another tool keeps its order of tied records; any other order sorts.
 pub fn stage<'t>(inv: &Invocation, frame: &Frame, temp: &'t TempDir) -> Result<Stage<'t>> {
     check_stage(inv)?;
     let options = ReadGroupOptions::from_invocation(inv)?;
-    let Some(order) = options.chain_sort() else {
-        return record_edit::stage(inv, frame, build(options));
-    };
+    let writer = WriterOrder::Header {
+        order: options.order,
+        presorted_if_same: true,
+    }
+    .against(SortOrder::of(&frame.header));
     let Stage::Transform(transform) = record_edit::stage(inv, frame, build(options))? else {
         return Err(Error::Metric(
             "AddOrReplaceReadGroups: the edit of a step is a transform".to_owned(),
         ));
     };
+    if writer == WriterOrder::Presorted {
+        return record_edit::presorted_stage(frame, transform, TOOL.name);
+    }
     let reorder = Reorder {
-        writer: WriterOrder::Sort(order),
+        writer,
         limits: record_edit::stage_limits(inv, 1)?,
         ..Reorder::default()
     };
