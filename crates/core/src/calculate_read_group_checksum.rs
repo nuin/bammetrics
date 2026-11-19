@@ -427,7 +427,7 @@ fn write_checksum(output: &Path, text: &str) -> Result<()> {
 
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let output = output_path(inv)?;
-    registry::check_writable([output.as_path()], &[inv.input.clone()])?;
+    registry::check_writable([output.as_path()], std::slice::from_ref(&inv.input))?;
     if crate::mark_duplicates::same_file(&inv.input, &output) {
         return Err(Error::Usage(format!(
             "OUTPUT={}: it is the input {}; writing it would destroy it",

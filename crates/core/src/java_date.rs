@@ -399,7 +399,7 @@ fn date_parse(text: &str) -> Option<i64> {
                 return None;
             }
             prevc = 0;
-        } else if [b'/', b':', b'+', b'-'].map(unit).contains(&c) {
+        } else if b"/:+-".map(unit).contains(&c) {
             prevc = c;
         } else {
             let start = i - 1;
@@ -529,7 +529,7 @@ fn raw_offset() -> Option<i64> {
     let mut offsets = Vec::new();
     for at in [later, later + 182 * DAY] {
         let tm = local_tm(at)?;
-        offsets.push((i64::from(tm.tm_gmtoff) * 1000, tm.tm_isdst > 0));
+        offsets.push((gmtoff_millis(&tm), tm.tm_isdst > 0));
     }
     offsets
         .iter()
@@ -540,7 +540,13 @@ fn raw_offset() -> Option<i64> {
 
 /// `tm_gmtoff` of `localtime_r` at `millis`, in milliseconds.
 fn libc_offset(millis: i64) -> Option<i64> {
-    local_tm(millis).map(|tm| i64::from(tm.tm_gmtoff) * 1000)
+    local_tm(millis).map(|tm| gmtoff_millis(&tm))
+}
+
+/// `tm_gmtoff` in milliseconds: a C `long`, 32 bits on some targets.
+#[allow(clippy::useless_conversion)]
+fn gmtoff_millis(tm: &libc::tm) -> i64 {
+    i64::from(tm.tm_gmtoff) * 1000
 }
 
 /// `localtime_r` at `millis`.
