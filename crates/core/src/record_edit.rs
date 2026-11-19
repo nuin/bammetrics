@@ -465,16 +465,14 @@ impl Out {
     /// Close the file, write its companions, rename everything into place.
     pub(crate) fn finish(self, header: &sam::Header, opts: &Options) -> Result<()> {
         match self {
-            Self::Bam(writer, companions) => {
-                bam_writer::finish_with_index(
-                    writer,
-                    header,
-                    companions,
-                    &opts.index_path(),
-                    opts.mode == Mode::BlockCopy,
-                )
-                .map(|_| ())
-            }
+            Self::Bam(writer, companions) => bam_writer::finish_with_index(
+                writer,
+                header,
+                companions,
+                &opts.index_path(),
+                opts.mode == Mode::BlockCopy,
+            )
+            .map(|_| ()),
             Self::Sam(writer, companions) => {
                 let output = writer.close()?;
                 let target = output.path().to_path_buf();
