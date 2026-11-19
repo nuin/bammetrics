@@ -101,6 +101,7 @@ fn role(step: &Planned, first_read: bool) -> String {
             };
             format!("{kind} of {}", step.reads)
         }
+        (Role::Split, _, _) => format!("split of {}", step.reads),
         _ => format!("tap on {}", step.reads),
     }
 }

@@ -26,7 +26,7 @@ use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
 use bammetrics_core::view_sam;
 use bammetrics_core::{
     bam_index_stats, build_bam_index, check_duplicate_marking, compare_metrics, cram, index_depth,
-    pass,
+    pass, split_sam,
 };
 
 use crate::error::VerbError;
@@ -89,6 +89,10 @@ pub struct Verb {
     /// then writes, from the input path (`build-bam-index` puts the index
     /// beside the BAM, as Picard names it).
     pub default_output: Option<fn(&Path) -> PathBuf>,
+    /// `-o` names a directory the tool writes its files into (the split
+    /// tools): the verb makes it when missing, as it makes the directory
+    /// above a file.
+    pub directory: bool,
 }
 
 const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
@@ -107,6 +111,7 @@ const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
         ignores: &[],
         reads_stdin: true,
         default_output: None,
+        directory: false,
     }
 }
 
@@ -462,6 +467,34 @@ pub const VERBS: &[Verb] = &[
         ),
         writes: "BAM",
         ..verb("set-nm-and-uq-tags", "SetNmAndUqTags", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "writes one file per library of a SAM, BAM or CRAM header into the directory -o \
+             (made when missing; the current directory without -o), as Picard's \
+             SplitSamByLibrary does: LIBRARY.bam (SAM text for SAM input) with that library's \
+             read groups, unknown.bam for the records without a library. Every file is renamed \
+             into place after the last record; a run that fails leaves none.",
+        ),
+        writes: "BAM files",
+        default_output: Some(split_sam::current_directory),
+        directory: true,
+        ..verb("split-sam-by-library", "SplitSamByLibrary", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "splits the records of a SAM, BAM or CRAM in file order over files of about the same \
+             size in the directory -o (made when missing), as Picard's SplitSamByNumberOfReads \
+             does: shard_0001.bam and on, a run of one record name never cut. Every file is \
+             renamed into place after the last record; a run that fails leaves none.",
+        ),
+        writes: "BAM files",
+        directory: true,
+        ..verb(
+            "split-sam-by-number-of-reads",
+            "SplitSamByNumberOfReads",
+            Files::Bam,
+        )
     },
 ];
 
@@ -832,6 +865,11 @@ impl Verb {
         let mut made = MadeDirs::default();
         if let Some(path) = &output {
             create_parent(self.name, &mut made, path).map_err(|e| with_from(e, output_flag()))?;
+            if self.directory {
+                // The parent of a name inside the directory is the directory.
+                create_parent(self.name, &mut made, &path.join("file"))
+                    .map_err(|e| with_from(e, output_flag()))?;
+            }
         }
         // A further file's directory is made before the read, as `-o`'s is.
         for further in self.further_outputs(&inv) {

@@ -14,7 +14,8 @@ use std::path::Path;
 use bammetrics_core::registry::{Ty, did_you_mean, python_keywords, snake_case, wrap};
 
 use super::args::{
-    ALSO, AS, find_step, global_flags, is_step, is_transform, not_a_step, step_flags, write_flags,
+    ALSO, AS, find_step, global_flags, is_split, is_step, is_transform, not_a_step, step_flags,
+    write_flags,
 };
 use super::prepare::{Chain, Planned, Role};
 use super::{WRITE, usage};
@@ -272,6 +273,8 @@ pub fn step_table(name: &str) -> Result<StepTable, VerbError> {
     }
     let role = if is_transform(verb) {
         Role::Transform
+    } else if is_split(verb) {
+        Role::Split
     } else {
         Role::Tap
     };

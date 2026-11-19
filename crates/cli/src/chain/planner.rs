@@ -434,6 +434,16 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
                     outputs.push((options.path.clone(), n.saturating_mul(per_record)));
                 }
             }
+            // A split writes every record once, as BAMs in its directory.
+            (Role::Split, _) => {
+                let per_record = match order {
+                    Some(SortOrder::Coordinate) => BAM_OUT_COORDINATE,
+                    _ => BAM_OUT_QUERYNAME,
+                };
+                if let (Some(n), Some(file)) = (records, step.files.first()) {
+                    outputs.push((file.path.clone(), n.saturating_mul(per_record)));
+                }
+            }
             _ => {}
         }
     }

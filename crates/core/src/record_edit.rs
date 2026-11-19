@@ -288,10 +288,15 @@ fn not_a_bam(path: &Path, kind: Kind) -> Error {
 }
 
 /// `MD` and `NM` of CRAM records, rebuilt as htsjdk decodes them.
-struct Restore(Option<ContigCache>);
+pub(crate) struct Restore(Option<ContigCache>);
 
 impl Restore {
-    fn new(cram: bool, mode: Mode, reference: Option<&Path>, header: &sam::Header) -> Result<Self> {
+    pub(crate) fn new(
+        cram: bool,
+        mode: Mode,
+        reference: Option<&Path>,
+        header: &sam::Header,
+    ) -> Result<Self> {
         Ok(Self(match (cram, mode, reference) {
             (true, Mode::Rewrite | Mode::Chain, Some(fasta)) => {
                 Some(ContigCache::new(Reference::open(fasta, header)?))
@@ -300,7 +305,7 @@ impl Restore {
         }))
     }
 
-    fn apply(&mut self, record: &mut RawRecord) -> Result<()> {
+    pub(crate) fn apply(&mut self, record: &mut RawRecord) -> Result<()> {
         let Some(contigs) = self.0.as_mut() else {
             return Ok(());
         };
@@ -390,7 +395,11 @@ const SORT_ORDERS: [&[u8]; 5] = [
 /// `SortOrder` does not name fails at `STRICT` and is reported at
 /// `LENIENT`; [`with_version`] writes it `unknown`. SAM text gets the same
 /// check as it is read, so its header holds `unknown` by now.
-fn check_sort_order(header: &sam::Header, stringency: Stringency, path: &Path) -> Result<()> {
+pub(crate) fn check_sort_order(
+    header: &sam::Header,
+    stringency: Stringency,
+    path: &Path,
+) -> Result<()> {
     use noodles::sam::header::record::value::map::header::tag::SORT_ORDER;
     let Some(order) = header
         .header()
@@ -426,7 +435,7 @@ fn check_sort_order(header: &sam::Header, stringency: Stringency, path: &Path) -
 /// after the other fields of an `@HD` without `SO`; a block copy keeps the
 /// line as it is. An `SO` value htsjdk's `SAMFileHeader.SortOrder` does not
 /// name becomes `unknown`, as `SAMTextHeaderCodec` reads it below `STRICT`.
-fn with_version(mut header: sam::Header, rewrite: bool) -> sam::Header {
+pub(crate) fn with_version(mut header: sam::Header, rewrite: bool) -> sam::Header {
     use noodles::sam::header::record::value::map::header::tag::SORT_ORDER;
     let current = Version::new(1, 6);
     let hd = header

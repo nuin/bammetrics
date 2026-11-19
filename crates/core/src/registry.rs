@@ -366,6 +366,8 @@ pub const TOOLS: &[&Tool] = &[
     &crate::clean_sam::TOOL,
     &crate::set_nm_md_and_uq_tags::TOOL,
     &crate::set_nm_md_and_uq_tags::ALIAS,
+    &crate::split_sam_by_library::TOOL,
+    &crate::split_sam_by_number_of_reads::TOOL,
 ];
 
 /// The tool named `name`.
