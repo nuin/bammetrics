@@ -29,6 +29,11 @@
 //!   a BAM; its record bytes go out unchanged, in the order read, with no
 //!   order check; the index is `<OUTPUT>.bai` (`out.bam.bai`). Picard writes
 //!   BAM bytes whatever the `OUTPUT` name, so a `.sam` name is refused.
+//!   From a regular file, an edit that needs no record
+//!   ([`RecordEdit::copies_bytes`]) is a byte copy as htsjdk's is
+//!   ([`crate::bgzf_copy`]): the header in blocks of its own, the block of
+//!   the first record deflated again, every later block copied, no record
+//!   decoded.
 //! * [`Mode::Rewrite`]: a `SamReader` into a presorted `SAMFileWriter`.
 //!   Records of a CRAM get `MD` and `NM` as htsjdk decodes them, every
 //!   record gets the `bin` htsjdk's `BAMRecordCodec` computes, the writer
@@ -552,8 +557,9 @@ pub fn run(
 /// `COMPRESSION_LEVEL`; then the index and the MD5 from the finished file.
 /// A file that holds no end-of-file block after the copy (a BAM with no
 /// record, whose last block htsjdk skips) gets one. Returns `None`, the
-/// edit kept in `built`, when the edit needs each record: the records are
-/// then read one by one. No record is counted.
+/// edit kept in `built`, when the edit needs each record, and with nothing
+/// built for a pipe or a device, whose blocks cannot be found again: the
+/// records are then read one by one. No record is counted.
 fn copy_blocks<B>(
     opts: &Options,
     build: &mut Option<B>,
@@ -562,6 +568,9 @@ fn copy_blocks<B>(
 where
     B: FnOnce(&Setup) -> Result<Box<dyn RecordEdit>>,
 {
+    if !std::fs::metadata(&opts.input).is_ok_and(|meta| meta.is_file()) {
+        return Ok(None);
+    }
     let input = |source| Error::Input {
         path: opts.input.clone(),
         source,
