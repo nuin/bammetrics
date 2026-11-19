@@ -52,6 +52,8 @@ add-o-a-tag                           AddOATag
 clean-sam                             CleanSam
 set-nm-md-and-uq-tags                 SetNmMdAndUqTags
 set-nm-and-uq-tags                    SetNmAndUqTags
+gather-bam-files                      GatherBamFiles
+calculate-read-group-checksum         CalculateReadGroupChecksum
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

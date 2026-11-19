@@ -1,0 +1,10 @@
+## argv
+CalculateReadGroupChecksum
+I=tests/data/insert_size.cram
+O=OUT/cram.read_group_md5
+## exit
+0
+## stdout
+## stderr
+## file cram.read_group_md5
+d41d8cd98f00b204e9800998ecf8427e
