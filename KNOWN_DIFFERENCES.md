@@ -1401,16 +1401,46 @@ differ here (docs/07 decisions D34 to D39):
   reference, a position past 512 Mbp: nine of the `refused()` BAMs of
   `tests/concordance/index_bams.py`) exits 1 and writes nothing. Picard prints the
   `BamIndexingThread` exception, exits 0 and leaves a 0-byte `.bai`.
-- A block copy decodes each record it copies. A BAM whose `block_size` runs past the file
-  exits 1 as `truncated BAM`. A record that does not parse (a forged `block_size`,
-  `l_read_name` 0, `n_cigar_op` 65535) exits 1 and writes nothing.
-  Picard copies the blocks without decoding them and exits 0 in both cases.
+- A block copy of a regular file copies the BGZF blocks as bytes, as Picard does, and
+  decodes no record (docs/07 D58). The block of the first record is deflated again with
+  zlib-rs, so its bytes differ from Picard's at levels 1 to 9. The copied blocks are
+  walked header by header: a byte that starts no BGZF block exits 1, where Picard copies
+  it. A `ReplaceSamHeader` whose new dictionary is shorter than the input's, and a BAM
+  read from a pipe, decode each record: a record that does not parse exits 1 there.
 - `AddCommentsToBam` reads a BAM from a pipe or standard input. Picard's block copy needs
   a file.
 - In a chain, `replace-sam-header` keeps each record's reference index, as the block copy
   of a `.bam` does. Picard's tool on SAM text or a CRAM keeps the reference name.
 - A partial file is never left: Picard leaves a header-only `OUTPUT` when a record's
   reference name is not in the new dictionary.
+
+## GatherBamFiles
+
+The output is Picard's byte for byte at `COMPRESSION_LEVEL=0` and with one input, and
+every block but one per later input at levels 1 to 9
+(`tests/concordance/test_gather_bam_files.py`). It differs here (docs/07 D53 to D55):
+
+- At levels 1 to 9 the block of each later input's first record holds zlib-rs bytes;
+  Picard's holds the JDK zlib's. Both inflate to the same bytes.
+- An input with records whose sequence dictionary is not the first input's exits 1.
+  Picard writes the file, whose later records name other references.
+- A first input that is no BAM exits 1. Picard copies its bytes.
+- A block copy into an `OUTPUT` named `.sam` or `.cram` exits with a usage error; an
+  `OUTPUT` that is an input or a list is refused; a failed run leaves no output.
+- A byte between two copied blocks that starts no BGZF block exits 1. Picard copies it.
+
+## CalculateReadGroupChecksum
+
+The checksum is Picard's on 60 generated headers as SAM text and as BAM, and on the
+fixtures, a CRAM and gzip SAM (`tests/concordance/test_calculate_read_group_checksum.py`).
+It differs here (docs/07 D57):
+
+- A `DT` in the JVM locale's medium date format (`Dec 31, 1969, 5:00:00 p.m.`), which
+  htsjdk reads with `DateFormat` before `Date.parse`, is no date: an error at `STRICT`,
+  kept as written below it.
+- The zone of a `DT` date is the process's (`TZ`, else `/etc/localtime`); Picard's is
+  the JVM's. They agree when both read the same zone.
+- An `OUTPUT` that is the input is refused, and a failed run writes nothing.
 
 ## AddOATag
 

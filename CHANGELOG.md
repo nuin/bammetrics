@@ -1,5 +1,51 @@
 # Changelog
 
+## Unreleased
+
+Wave W10 of docs/07, part: `GatherBamFiles`, `CalculateReadGroupChecksum` and a byte-level
+BGZF block copy.
+
+### Added
+
+- `crates/core/src/bgzf_copy.rs`: htsjdk's `BamFileIoUtils.blockCopyBamFile` as bytes. The
+  BAM header is read to the first record's virtual offset as `getFilePointer` gives it, the
+  rest of that block is deflated again at `COMPRESSION_LEVEL` (stored blocks at level 0, the
+  bytes Picard writes; zlib-rs at 1 to 9), and every later block is copied as it is, walked
+  header by header (`BSIZE` 26 to 65,536, `ISIZE` at most 65,536). `termination` is
+  `BlockCompressedInputStream.checkTermination`.
+- `GatherBamFiles` (verb `gather-bam-files`, Python `gather_bam_files()`), as Picard 3.5.0:
+  the records of every `INPUT` in the order given under the header of the first. `INPUT`
+  unrolls as `IOUtil.unrollFiles` unrolls it (a name not ending in `.bam`, `.sam` or
+  `.cram` is a list of paths, one per line, trimmed, lists in lists; at most 100,000 inputs
+  and 10,000 lists). BAM inputs are block copied: the file is Picard's byte for byte at
+  `COMPRESSION_LEVEL=0` and with one input; at levels 1 to 9 the one block per later input
+  that htsjdk deflates again inflates to Picard's bytes. A SAM or CRAM input reads every
+  record into a presorted writer, as Picard's `gatherNormally`. `CREATE_INDEX` writes
+  `<basename>.bai`, `CREATE_MD5_FILE` `OUTPUT.md5`.
+- `CalculateReadGroupChecksum` (verb `calculate-read-group-checksum`, Python
+  `calculate_read_group_checksum()`), as Picard 3.5.0: the MD5 of the `@RG` records as
+  htsjdk's `calculateReadGroupRecordChecksum` computes it, to `OUTPUT` or
+  `INPUT.read_group_md5`. A BAM's header text counts one character per byte, SAM text and a
+  CRAM header are UTF-8; the header is checked at `VALIDATION_STRINGENCY`; a `DT` value is
+  written back as `Iso8601Date` writes it in the process's time zone
+  (`crates/core/src/java_date.rs`: `DateParser`, `java.util.Date.parse`, the hybrid
+  Julian and Gregorian calendar, `ZoneInfo`'s offset before 1900).
+- `tests/concordance/test_gather_bam_files.py` (26 tests: t1, the foundation corpus and the
+  exome slice split by contig, the fixture BAMs, lists, missing end-of-file blocks, SAM and
+  CRAM inputs, the index names, error parity) and
+  `tests/concordance/test_calculate_read_group_checksum.py` (18 tests: 60 generated
+  headers as SAM text and as BAM, the dated ones under two more time zones, the fixtures,
+  CRAM and gzip SAM, `STRICT` errors, the default name).
+
+### Changed
+
+- `AddCommentsToBam`, and `ReplaceSamHeader` on a `.bam` whose new dictionary is at least as
+  long as the input's, copy the BGZF blocks of a regular file as bytes
+  (`RecordEdit::copies_bytes`), as Picard does: no record is decoded. The records and the
+  header lines are unchanged; the BAM bytes and so its `.md5` change
+  (`tests/golden/picard_add_comments_to_bam_index.txt`). A pipe and a shorter dictionary
+  keep the record path.
+
 ## 0.27.0
 
 Wave W09 of docs/07: six record-editing tools on one shape, each a chain transform.
