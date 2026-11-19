@@ -491,6 +491,39 @@ Against Picard 3.5.0 on the same slice (`/usr/bin/time -l`, one run each, output
 | `SplitSamByNumberOfReads N_FILES=8` | 81.41 / 617.6 | 6.48 / 27.5 | 26.32 / 10.2 |
 | `chain + mark-duplicates + split-sam-by-library` | | 17.31 / 670.4 | |
 
+Every wave W10 row at 0.28.0 (2026-11-19, release/0.28.0, 8 threads, one run each; `make
+memgate` passes 27 fixture rows, `TIER=scale make memgate` 19 scale rows and skips the two
+chain sort-barrier rows, whose inputs were not made again). `pairs.bam` is the slice cut
+to complete pairs (the command is in `benches/memgate.toml`), removed after the run:
+
+| command | tier | peak RSS MiB / limit | wall s | spill MiB |
+|---|---|---|---:|---:|
+| `add-or-replace-read-groups` | fixture | 5.5 / 64 | 0.00 | |
+| `add-or-replace-read-groups sorted` | fixture | 6.9 / 64 | 0.01 | 0.0 |
+| `revert-original-base-qualities-and-add-mate-cigar` | fixture | 7.9 / 64 | 0.01 | 0.0 |
+| `chain read groups sorted + revert + write` | fixture | 5.8 / 64 | 0.01 | |
+| `split-sam-by-library` | fixture | 6.1 / 64 | 0.01 | |
+| `split-sam-by-number-of-reads` | fixture | 5.9 / 64 | 0.00 | |
+| `chain mark-duplicates + split-sam-by-library` | fixture | 6.6 / 64 | 0.01 | |
+| `split-sam-by-library 1000 libraries` | fixture | 13.4 / 64 | 1.12 | |
+| `split-sam-by-number-of-reads 1000 files` | fixture | 11.5 / 64 | 0.56 | |
+| `gather-bam-files` | fixture | 5.2 / 64 | 0.01 | |
+| `gather-bam-files sam` | fixture | 6.1 / 64 | 0.00 | |
+| `calculate-read-group-checksum` | fixture | 4.0 / 64 | 0.00 | |
+| `gather-bam-files forged reference list` | fixture | 16.4 / 136 | 2.34 | |
+| `gather-bam-files long list` | fixture | 68.4 / 552 | 0.13 | |
+| `add-or-replace-read-groups slice` | scale | 31.3 / 512 | 3.90 | |
+| `add-or-replace-read-groups queryname slice` | scale | 282.4 / 1024 | 23.64 | 823.9 |
+| `revert-original-base-qualities-and-add-mate-cigar pairs` | scale | 681.1 / 1024 | 52.10 | 1,450.1 |
+| `split-sam-by-library slice` | scale | 28.7 / 512 | 3.68 | |
+| `split-sam-by-number-of-reads slice` | scale | 27.9 / 512 | 5.48 | |
+| `gather-bam-files slice` | scale | 5.9 / 512 | 0.45 | |
+| `calculate-read-group-checksum exome` | scale | 4.5 / 64 | 0.00 | |
+
+The W09 rows of `add-comments-to-bam slice` and `replace-sam-header slice` copy the
+blocks as bytes at 0.28.0: 6.3 MiB and 0.28 s, 6.3 MiB and 0.21 s (28.5 MiB and 2.94 s,
+28.2 MiB and 3.13 s at 0.27.0).
+
 The sort rows of the W05 scale gate ("Scale gate of wave W05" above): the limit is
 `--sort-memory` (2 GiB) plus 1 GiB; since the release review the two chain rows allow
 that less 10 percent, 2,765 MiB. A chain's spill limit is 3 times 1.2 times its input,
@@ -544,6 +577,7 @@ and CI runs it on the Linux and macOS runners after the unit tests.
 | Binary growth, 0.25.0 | 300 KB | 600 KB | 387.6 KB | 396,944 bytes stripped, measured 2026-11-17 by `make budgets` on release/0.25.0: over the 300 KB target, under the 600 KB limit, so the test prints `over target` and passes; accepted for the release pending owner review (docs/07 decision D22) |
 | Binary growth, 0.26.0 | 300 KB | 600 KB | 403.8 KB | 413,456 bytes stripped (443,728 unstripped), measured 2026-11-17 by `make budgets` on release/0.26.0: 16,512 bytes (16.5 KB) over the 0.25.0 row in one wave, over the 300 KB target and under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review: raise the target, or find what in the core grows the probe per wave. The probe links no verb code, so the rise comes from the core (glossary rows, the registry, `bai/csi.rs`) |
 | Binary growth, 0.27.0 | 300 KB | 600 KB | 403.8 KB | 413,456 bytes stripped (443,728 unstripped), measured 2026-11-18 by `make budgets` on release/0.27.0: the same bytes as the 0.26.0 row, so wave W09 adds nothing to the probe (its six tools are verb and core code the probe does not link). 106,256 bytes (103.8 KB) over the 300 KB target and 200,944 bytes under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review |
+| Binary growth, 0.28.0 | 300 KB | 600 KB | 403.8 KB | 413,456 bytes stripped (443,648 unstripped), measured 2026-11-19 by `make budgets` on release/0.28.0: the same stripped bytes as the 0.26.0 and 0.27.0 rows, so wave W10 adds nothing to the probe (its six tools are verb and core code the probe does not link). 106,256 bytes (103.8 KB) over the 300 KB target and 200,944 bytes under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review |
 | Formats growth, W02 | 150 KB | 300 KB | 129.2 KB | 132,304 bytes stripped (148,480 unstripped), measured 2026-11-10 by `make budgets`: stripped `size_formats` less stripped `size_formats_base` (`crates/formats/examples`); see below |
 | Added passes over the BAM | 0 | 1 | 0 | `qc` reports 1 BAM read with the verdict and page; `report` and `check` run with the BAM deleted |
 
@@ -620,6 +654,8 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 0.26.0 pdf | the same with `--features pdf` | 12,599,840 | 10,701,328 |
 | 0.27.0 | 2026-11-18, release/0.27.0: feat/record-edit, feat/add-oa-tag, feat/clean-sam and feat/set-nm-md-uq merged, the version set, rustc 1.100.0, default features | 8,786,432 | 7,488,736 |
 | 0.27.0 pdf | the same with `--features pdf` | 12,750,880 | 10,833,936 |
+| 0.28.0 | 2026-11-19, release/0.28.0: feat/read-groups, feat/split-sinks and feat/gather-checksum merged, the version set, rustc 1.100.0, default features | 9,192,912 | 7,836,544 |
+| 0.28.0 pdf | the same with `--features pdf` | 13,173,264 | 11,198,248 |
 
 From 0.21.0 to 0.22.0 the binary grew 202,816 bytes (198.1 KB), 182,072 stripped (177.8
 KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
@@ -651,6 +687,14 @@ with rustc 1.100.0: `record_edit.rs` and its six tools, `AddCommentsToBam`,
 `ReplaceSamHeader`, `AddOATag`, `CleanSam`, `SetNmMdAndUqTags` and `SetNmAndUqTags`. With
 `--features pdf` it grew 132,608 bytes stripped, and the PDF build is 3,345,200 bytes over
 the default build.
+
+From 0.27.0 to 0.28.0 the default binary grew 347,808 bytes stripped (4.6%), both built
+with rustc 1.100.0: `AddOrReplaceReadGroups` with its date reader,
+`RevertOriginalBaseQualitiesAndAddMateCigar`, the writer's sort `record_edit/reorder.rs`,
+`SplitSamByLibrary` and `SplitSamByNumberOfReads` with the fan-out writer,
+`GatherBamFiles` with `bgzf_copy.rs`, and `CalculateReadGroupChecksum` with `java_date.rs`.
+With `--features pdf` it grew 364,312 bytes stripped, and the PDF build is 3,361,704 bytes
+over the default build.
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and
