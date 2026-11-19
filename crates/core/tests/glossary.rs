@@ -70,6 +70,14 @@ const EXEMPT: &[(&str, &str)] = &[
         "SetNmAndUqTags",
         "the deprecated name of SetNmMdAndUqTags: no metrics file, no row, no column",
     ),
+    (
+        "AddOrReplaceReadGroups",
+        "writes a BAM or SAM text with one read group set: no metrics file, no row, no column",
+    ),
+    (
+        "RevertOriginalBaseQualitiesAndAddMateCigar",
+        "writes a BAM or SAM text with OQ restored and mate tags set: no metrics file, no row, no column",
+    ),
 ];
 
 /// A directory of its own for this test's files.

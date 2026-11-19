@@ -1,0 +1,9 @@
+## argv
+RevertOriginalBaseQualitiesAndAddMateCigar
+I=tests/data/revert.bam
+O=tests/data/revert.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: OUTPUT=tests/data/revert.bam: it is the input tests/data/revert.bam; writing it would destroy it

@@ -148,7 +148,7 @@ pub struct Given {
 }
 
 /// A parsed command line.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Parsed {
     pub positional: Vec<String>,
     pub given: Vec<Given>,

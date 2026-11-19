@@ -1,0 +1,38 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
+--dry-run
++
+add-or-replace-read-groups
+--rglb
+lib1
+--rgpl
+ILLUMINA
+--rgpu
+unit1
+--rgsm
+sample1
+--sort-order
+queryname
++
+write
+OUT/out.bam
+## exit
+0
+## stdout
+chain plan for tests/data/markdup.bam
+  source    tests/data/markdup.bam (BAM, 1,158 bytes, sort order coordinate; a file, it can be read again)
+  prefix    not used: every step names its files
+segment 1  one read of tests/data/markdup.bam
+  step 1  add-or-replace-read-groups  transform, first read  takes every record and sorts them by queryname
+segment 2  the records step 1 holds, sorted by queryname
+  step 1  add-or-replace-read-groups  stream rg              no file
+  step 2  write                       BAM of rg              OUT/out.bam
+barrier    step 1 add-or-replace-read-groups: holds its records; about 16 records by the file size, no spill under --sort-memory 2.0 GiB; memory about 100.0 MiB
+temp disk  none expected
+output     about 1.6 KiB written by write
+memory     about 100.0 MiB at the peak, a fixed 100.0 MiB for the chain beside its barriers included (a small input takes less)
+nothing ran: this is a plan
+## stderr

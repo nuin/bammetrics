@@ -88,7 +88,7 @@ fn header() -> sam::Header {
 
 #[test]
 fn a_record_is_clipped_its_tags_encoded_and_its_mate_cigar_clipped() {
-    let mut edit = Clean::new(&header());
+    let mut edit = Clean::new(&header(), "CleanSam");
     // MC:Z:20M, then NM:C:0 stored as an unsigned byte; the tags are
     // encoded again in htsjdk's order and widths.
     let mut record = build(
@@ -111,7 +111,7 @@ fn a_record_is_clipped_its_tags_encoded_and_its_mate_cigar_clipped() {
 
 #[test]
 fn an_unmapped_record_gets_mapq_zero_and_keeps_its_tag_bytes() {
-    let mut edit = Clean::new(&header());
+    let mut edit = Clean::new(&header(), "CleanSam");
     let mut record = build("u", 0x4, 0, 9, &[], &[30; 20], b"NMC\x03");
     assert_eq!(edit.record(&mut record).expect("edit"), Outcome::Changed);
     assert_eq!(record.mapping_quality(), 0);
@@ -121,7 +121,7 @@ fn an_unmapped_record_gets_mapq_zero_and_keeps_its_tag_bytes() {
 
 #[test]
 fn a_record_picard_writes_unreadable_or_fails_on_is_an_error() {
-    let mut edit = Clean::new(&header());
+    let mut edit = Clean::new(&header(), "CleanSam");
     let mut past = build("past", 0, 0, 149, &[(20, 0)], &[30; 20], b"");
     let error = edit.record(&mut past).expect_err("69S over 20 bases");
     assert!(error.to_string().contains("CIGAR 69S"), "{error}");
@@ -134,7 +134,7 @@ fn a_record_picard_writes_unreadable_or_fails_on_is_an_error() {
 
 #[test]
 fn a_cigar_held_in_a_cg_tag_is_refused() {
-    let mut edit = Clean::new(&header());
+    let mut edit = Clean::new(&header(), "CleanSam");
     // 20S90N with CG:B:I,1M: htsjdk reads the real CIGAR from the tag.
     let cg = b"CGBI\x01\0\0\0\x10\0\0\0";
     let mut long = build("long", 0, 0, 9, &[(20, 4), (90, 3)], &[30; 20], cg);

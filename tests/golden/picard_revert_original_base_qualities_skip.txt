@@ -1,0 +1,9 @@
+## argv
+RevertOriginalBaseQualitiesAndAddMateCigar
+I=tests/data/oxog.bam
+O=OUT/reverted.bam
+## exit
+0
+## stdout
+## stderr
+RevertOriginalBaseQualitiesAndAddMateCigar: Can skip the SAM/BAM/CRAM file; OUTPUT is not written

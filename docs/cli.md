@@ -311,6 +311,8 @@ table.
 | `clean-sam` | CleanSam (a SAM, BAM or CRAM; soft-clips alignments past the end of their reference, MAPQ 0 on unmapped records) | `-o` BAM, or SAM text for a name ending in `.sam` |
 | `set-nm-md-and-uq-tags` | SetNmMdAndUqTags (a coordinate-sorted SAM, BAM or CRAM; `-R` required; `--is-bisulfite-sequence`, `--set-only-uq`) | `-o` BAM, or SAM text for a name ending in `.sam` |
 | `set-nm-and-uq-tags` | SetNmAndUqTags (Picard's deprecated name of SetNmMdAndUqTags: the same options and output) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `add-or-replace-read-groups` | AddOrReplaceReadGroups (a SAM, BAM or CRAM; `--rglb`, `--rgpl`, `--rgpu`, `--rgsm` required; `--sort-order`) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `revert-original-base-qualities-and-add-mate-cigar` | RevertOriginalBaseQualitiesAndAddMateCigar (a SAM, BAM or CRAM; `--sort-order`, `--restore-original-qualities`, `--max-records-to-examine`) | `-o` BAM (with `.bai` and `.md5` by default), or SAM text for a name ending in `.sam`; nothing for a file in shape |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -706,6 +708,66 @@ Picard's `SetNmMdAndUqTags`: each mapped record gets `MD`, `NM` and `UQ` compute
 - In a chain the step reads the chain's `-R`: `bammetrics chain in.bam -R ref.fa +
   sort-sam -SO coordinate + set-nm-md-and-uq-tags + write out.bam`. Its stream is
   `tagged`.
+
+### add-or-replace-read-groups
+
+```bash
+bammetrics add-or-replace-read-groups sample.bam -o sample.rg.bam --rglb lib1 --rgpl ILLUMINA --rgpu unit1 --rgsm NA12878
+bammetrics add-or-replace-read-groups sample.bam -o sample.rg.bam --rgid 4 --rglb lib1 --rgpl ILLUMINA --rgpu unit1 --rgsm 20 --rgdt 2020-01-02 --sort-order queryname
+bammetrics AddOrReplaceReadGroups I=sample.bam O=sample.rg.bam RGLB=lib1 RGPL=ILLUMINA RGPU=unit1 RGSM=20
+```
+
+Picard's `AddOrReplaceReadGroups`: every `@RG` line is replaced by one read group and
+every record's `RG` tag is set to its ID
+(`tests/concordance/test_add_or_replace_read_groups.py`).
+
+- `RGLB`, `RGPL`, `RGPU` and `RGSM` are required; `RGID` defaults to `1`. The `@RG` line
+  holds `ID`, `LB`, `PL`, `SM`, `PU`, then `CN`, `DS`, `DT`, `PI`, `PG`, `PM`, `KS`, `FO`
+  when given, in that order.
+- Every value must be printable ASCII or a space, one character or more (`^[ -~]+$`);
+  each value that is not is named in one usage error, as in Picard.
+- `RGDT` takes htsjdk's ISO 8601 forms (`2020-01-02`, `2020-01-02T03:04:05`,
+  `2020-01-02T03:04:05.123+05:30`, `2020-13-45` carried into 2021-02-14) and is written in
+  UTC: `DT:2020-01-02T00:00:00+0000`. Picard writes the same instant in the JVM's time
+  zone. Years 1583 to 9999 are read.
+- `RGID=null` writes `ID:null` and removes every record's `RG` tag, as Picard does.
+- `--sort-order` sets `SO`. An order that differs from the input's is sorted as `sort-sam`
+  sorts it (`--max-records-in-ram`, `--tmp-dir`); `unsorted` is written as read; `unknown`
+  exits 1 on two records or more, where Picard throws a `ClassCastException`. Without a
+  sort the records keep their order and a header that names a sort is checked.
+- Every record is encoded again as htsjdk encodes a record whose tag changed: tags in
+  htsjdk's order and widths. No `@PG` line is added.
+- In a chain the step leaves `rg` and streams; with `--sort-order` queryname, coordinate or
+  duplicate it is a barrier that sorts. `--sort-order unknown` is a usage error there.
+
+### revert-original-base-qualities-and-add-mate-cigar
+
+```bash
+bammetrics revert-original-base-qualities-and-add-mate-cigar sample.bam -o sample.reverted.bam
+bammetrics revert-original-base-qualities-and-add-mate-cigar sample.bam -o sample.reverted.bam --max-records-to-examine 0 --sort-order queryname
+bammetrics RevertOriginalBaseQualitiesAndAddMateCigar I=sample.bam O=sample.reverted.bam CREATE_INDEX=false
+```
+
+Picard's `RevertOriginalBaseQualitiesAndAddMateCigar`
+(`tests/concordance/test_revert_original_base_qualities_and_add_mate_cigar.py`).
+
+- The first `--max-records-to-examine` records (10,000) decide whether the file needs
+  work: a record with `OQ`, or a first paired record with a mapped mate and no `MC`, starts
+  the run; that record with `MC`, or the end of the file, skips it. A skipped file exits 0,
+  writes nothing (not even `-o`) and says `Can skip the SAM/BAM/CRAM file` on standard
+  error. `0` runs any file with a record.
+- Each record gets the soft clip of `clean-sam` where it ends past its reference, and
+  with `--restore-original-qualities` (default true) `QUAL` from `OQ`, which is removed.
+- The records are sorted by name; each pair gets the mate's reference, position, strand,
+  unmapped flag, `MQ`, `MC` and `TLEN` as htsjdk's `SamPairUtil.setMateInfo` sets them; a
+  paired supplementary record gets them from its mate. A name with two primary first
+  records, or a primary first record without its second, exits 1.
+- `--sort-order` (default the input's) is applied after the mate pass: `unsorted` writes
+  the name order, `unknown` exits 1 on two records or more.
+- `--create-index` and `--create-md5-file` default to true. Every record is encoded again
+  with tags in htsjdk's order and widths. No `@PG` line is added.
+- In a chain the step is a barrier that leaves `reverted`. It never skips its stream, so
+  `--max-records-to-examine` is a usage error there.
 
 ### qc
 

@@ -1217,3 +1217,44 @@ Chained equals staged (`crates/cli/tests/set_nm_md_uq.rs`): the step first, afte
 `sort-sam`, last, alone, twice and under the old name, beside `mark-duplicates` and
 `sort-sam`, with each option, on the fixtures, SAM text, a CRAM, corpus t1 and the
 foundation corpus.
+
+## 17. W10: steps that sort
+
+`add-or-replace-read-groups` and `revert-original-base-qualities-and-add-mate-cigar` are
+record-editing steps whose tool on its own writes through Picard's `presorted=false`
+writer, which sorts at close. In a chain that sort makes the step a barrier that holds its
+records, as `sort-sam` holds them (section 15.1): the plan lists it with a `barrier` line,
+its spill and its memory, and the next segment reads the records it hands on.
+`add-or-replace-read-groups` sorts only when its `--sort-order` differs from the order the
+stream's header names, as the tool decides from its input's header. The plan is made
+before the header is read, so it lists the step as a barrier either way; a step whose
+stream is already in that order streams the records with the order check of Picard's
+presorted writer and starts no segment.
+
+```bash
+bammetrics chain in.bam -o out/s \
+    + add-or-replace-read-groups --rglb lib1 --rgpl ILLUMINA --rgpu unit1 --rgsm NA12878 \
+    + revert-original-base-qualities-and-add-mate-cigar \
+    + mark-duplicates \
+    + write out/s.bam --index
+```
+
+| Tool | Default stream | What the step does |
+|---|---|---|
+| `add-or-replace-read-groups` | `rg` | Replaces every `@RG` line by one read group and sets `RG` on each record, streaming. With `--sort-order queryname`, `coordinate` or `duplicate` that differs from the stream's order it holds its records and hands them on sorted; the stream's own order goes through as it comes, its order checked; `--sort-order unknown` exits 2 |
+| `revert-original-base-qualities-and-add-mate-cigar` | `reverted` | Holds its records: `QUAL` from `OQ` and the clip of `clean-sam` as they come, a queryname sort, the mate fields, `MQ` and `MC` of each pair, then `--sort-order` (default the stream's). It never skips its stream, so `--max-records-to-examine` exits 2 |
+
+- The spilled runs go to the chain's `--tmp-dir`. Each sort holds at most
+  `--max-records-in-ram` records when the step gives it, and its share of
+  `--sort-memory` (the reverting step splits it between its two sorts).
+- Every record leaves with the `bin` htsjdk's writer computes, set after the mate pass, as
+  the tool on its own writes it.
+
+Chained equals staged (`crates/cli/tests/read_groups.rs`): each step first, in the middle
+and last, streaming and sorting, beside `mark-duplicates` and `sort-sam`, on
+`tests/data/markdup.bam`, `tests/data/revert.bam`, corpus t1 and the foundation corpus,
+and `--sort-order coordinate` on t1 and the foundation corpus, which samtools sorted with
+its own order of tied records.
+`test_add_or_replace_read_groups.py` and
+`test_revert_original_base_qualities_and_add_mate_cigar.py` also compare each step's
+written BAM with Picard's file of the tool.

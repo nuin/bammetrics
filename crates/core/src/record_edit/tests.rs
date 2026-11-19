@@ -80,6 +80,7 @@ fn options(input: &Path, output: &Path) -> Options {
         threads: 1,
         stringency: Stringency::Strict,
         mode: Mode::Rewrite,
+        reorder: Reorder::default(),
     }
 }
 
@@ -211,6 +212,36 @@ fn an_output_that_is_an_input_is_refused_before_the_first_read() {
     let message = run(&header, keep).expect_err("index is read").to_string();
     assert!(message.contains("in.bai"), "{message}");
     assert_eq!(std::fs::read(&input).expect("read"), before);
+    std::fs::remove_dir_all(&dir).expect("scratch");
+}
+
+/// htsjdk writes no index and no MD5 beside an OUTPUT that is not a regular
+/// file (a pipe, `/dev/null`): the run completes without them.
+#[test]
+fn a_stream_gets_no_index_and_no_md5() {
+    let header: sam::Header = "@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:chr1\tLN:1000\n"
+        .parse()
+        .expect("header");
+    let mut opts = options(&data("insert_size.bam"), Path::new("/dev/null"));
+    opts.create_index = true;
+    opts.create_md5 = true;
+    let got = companions(&opts, &header).expect("companions");
+    assert!(!got.index && !got.md5);
+    run(&opts, keep).expect("a run into /dev/null");
+    assert!(!Path::new("/dev/null.bai").exists());
+    assert!(!Path::new("/dev/null.md5").exists());
+    let dir = scratch("companions");
+    let file = options(&data("insert_size.bam"), &dir.join("out.bam"));
+    assert_eq!(Target::of(&dir.join("out.bam")), Target::File);
+    let got = companions(
+        &Options {
+            create_md5: true,
+            ..file
+        },
+        &header,
+    )
+    .expect("companions");
+    assert!(got.md5);
     std::fs::remove_dir_all(&dir).expect("scratch");
 }
 

@@ -195,7 +195,10 @@ impl Planned {
     /// ([`stage::streams`]): it takes and emits its records in its own
     /// segment.
     pub fn streams(&self) -> bool {
-        self.role == Role::Transform && self.tool.is_some_and(stage::streams)
+        self.role == Role::Transform
+            && self
+                .tool
+                .is_some_and(|tool| stage::streams_with(tool, &self.argv))
     }
 }
 
@@ -459,7 +462,14 @@ fn positions(drafts: &[Draft]) -> Result<Vec<Position>, VerbError> {
             taken.insert(stream.clone());
             position.leaves = Some(stream.clone());
             behind.push(verb.class);
-            if !stage::streams(verb.tool()) {
+            // The step's Picard arguments, with a stand-in for its input:
+            // a step may hold its records for some options only.
+            let mut parsed = draft.parsed.clone();
+            parsed.positional.push(SOURCE_STREAM.to_owned());
+            let picard = verb
+                .picard_arguments(&parsed, &draft.flags)
+                .unwrap_or_default();
+            if !stage::streams_with(verb.tool(), &picard) {
                 segment += 1;
             }
         }

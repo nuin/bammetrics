@@ -1485,6 +1485,31 @@ a bisulfite set, SAM text and CRAM (`tests/concordance/test_set_nm_md_and_uq_tag
 - An `@RG DT` value is written as read. htsjdk parses it and writes it in the JVM's time
   zone (`2015-10-02T02:00:00+0200` as `2015-10-01T18:00:00-0600` on the HG002 exome).
 
+## AddOrReplaceReadGroups and RevertOriginalBaseQualitiesAndAddMateCigar
+
+Both write the header lines and records Picard writes, the records byte for byte after
+inflation, on the fixture BAMs, the corpus tiers, the foundation corpus, the exome slice,
+generated pairs, SAM text and CRAM (`tests/concordance/test_add_or_replace_read_groups.py`,
+`test_revert_original_base_qualities_and_add_mate_cigar.py`). They differ here (docs/07
+decisions D53 to D57):
+
+- `RGDT` is written in UTC (`+0000`). Picard writes the same instant in the JVM's time
+  zone (`2020-01-01T17:00:00-0700` in Edmonton for `RGDT=2020-01-02`). Years 1583 to 9999
+  are read; Picard reads any year.
+- `RGCN=` (an empty value) exits with the regular expression error. Picard's parser takes
+  the next argument as the value.
+- `SORT_ORDER=unknown` over two records or more exits 1 and writes nothing. Picard throws a
+  `ClassCastException` at close and leaves an `OUTPUT` of 0 bytes.
+- `RevertOriginalBaseQualitiesAndAddMateCigar` decides its early exit from the records of
+  its one read. Picard opens `INPUT` a second time, so it fails on a pipe; bammetrics reads
+  one. A skipped run says Picard's line on standard error and writes nothing, as Picard.
+- A queryname sort of more than 64 runs (`MAX_RECORDS_IN_RAM` times 64 records) of paired
+  records flagged neither first nor second can order them differently, as in `SortSam`
+  (section SortSam): bammetrics merges 64 runs into one as they spill, htsjdk merges every
+  run at once.
+- A `.cram` `OUTPUT` exits 2 naming wave W15. Picard writes a CRAM. A failed run leaves no
+  `OUTPUT`.
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))

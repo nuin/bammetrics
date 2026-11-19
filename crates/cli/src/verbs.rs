@@ -463,6 +463,33 @@ pub const VERBS: &[Verb] = &[
         writes: "BAM",
         ..verb("set-nm-and-uq-tags", "SetNmAndUqTags", Files::Bam)
     },
+    Verb {
+        about: Some(
+            "replaces every @RG line of a SAM, BAM or CRAM by the one read group --rgid, \
+             --rglb, --rgpl, --rgpu and --rgsm give and sets each record's RG tag, as Picard's \
+             AddOrReplaceReadGroups does: -o gets every record, sorted when --sort-order \
+             differs from the input's.",
+        ),
+        writes: "BAM",
+        ..verb(
+            "add-or-replace-read-groups",
+            "AddOrReplaceReadGroups",
+            Files::Bam,
+        )
+    },
+    Verb {
+        about: Some(
+            "restores QUAL from OQ and sets MC, MQ and the mate fields from each mate, as \
+             Picard's RevertOriginalBaseQualitiesAndAddMateCigar does: -o gets every record in \
+             --sort-order, or nothing when the first records need no change.",
+        ),
+        writes: "BAM",
+        ..verb(
+            "revert-original-base-qualities-and-add-mate-cigar",
+            "RevertOriginalBaseQualitiesAndAddMateCigar",
+            Files::Bam,
+        )
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
