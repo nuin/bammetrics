@@ -447,3 +447,39 @@ fn a_byte_copy_keeps_the_records_and_ends_with_the_end_of_file_block() {
     );
     std::fs::remove_dir_all(&dir).expect("scratch");
 }
+
+/// The byte copy asks [`companions`] as a record run does: `/dev/null` gets
+/// the BAM and no index or MD5, and an unsorted header asks the index of a
+/// block copy alone.
+#[test]
+fn a_byte_copy_into_a_stream_gets_no_index_and_no_md5() {
+    let opts = Options {
+        mode: Mode::BlockCopy,
+        create_index: true,
+        create_md5: true,
+        ..options(&data("markdup.bam"), Path::new("/dev/null"))
+    };
+    run(&opts, copy_bytes).expect("a byte copy into /dev/null");
+    assert!(!Path::new("/dev/null.bai").exists());
+    assert!(!Path::new("/dev/null.bam.bai").exists());
+    assert!(!Path::new("/dev/null.md5").exists());
+    let unsorted: sam::Header = "@HD\tVN:1.6\tSO:unsorted\n@SQ\tSN:chr1\tLN:1000\n"
+        .parse()
+        .expect("header");
+    let dir = scratch("unsorted-index");
+    let file = Options {
+        create_index: true,
+        ..options(&data("markdup.bam"), &dir.join("out.bam"))
+    };
+    let rewrite = companions(&file, &unsorted).expect("companions");
+    let copy = companions(
+        &Options {
+            mode: Mode::BlockCopy,
+            ..file
+        },
+        &unsorted,
+    )
+    .expect("companions");
+    assert!(!rewrite.index && copy.index);
+    std::fs::remove_dir_all(&dir).expect("scratch");
+}

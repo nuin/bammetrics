@@ -138,8 +138,11 @@ Wave W10 of docs/07: six tools (54 in all), a writer that sorts, fan-out sinks a
   true, wrote the BAM, then exited 1 on `/dev/stdout.bai`. `/dev/stdout` redirected to a
   regular file with a companion asked is a usage error before the first record, where
   Picard fails opening `/dev/stdout.bai` or `.md5`. A run the early exit skips makes no
-  file, so `-o -` gets no byte.
-
+  file, so `-o -` gets no byte. The byte block copy of `AddCommentsToBam` and
+  `ReplaceSamHeader` asks the same rule before it writes, so it too writes no index and
+  no MD5 beside a pipe, and exits 2 on a redirected `/dev/stdout` with one asked.
+- `bammetrics.pyi`: the `role` of a `Step` and a `Stage` may be `"split"`, which a split
+  step reports.
 - `crates/core/src/cleanup.rs`: the registry of paths a signal removes is a hash map and
   a tree. Forgetting a path scanned a list before, so a split of 80,000 files took 228 s
   in its renames; it takes 37 s now. A file is created and registered under one lock,
