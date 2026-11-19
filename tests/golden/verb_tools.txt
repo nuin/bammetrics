@@ -46,6 +46,12 @@ adapter-content                       CollectAdapterContentMetrics
 duplicate-by-tile                     CollectDuplicateByTileMetrics
 telomere                              CollectTelomereMetrics
 index-depth                           CollectIndexDepthMetrics
+add-comments-to-bam                   AddCommentsToBam
+replace-sam-header                    ReplaceSamHeader
+add-o-a-tag                           AddOATag
+clean-sam                             CleanSam
+set-nm-md-and-uq-tags                 SetNmMdAndUqTags
+set-nm-and-uq-tags                    SetNmAndUqTags
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

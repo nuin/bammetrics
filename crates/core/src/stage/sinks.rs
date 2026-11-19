@@ -162,11 +162,14 @@ impl WriteFormat {
         }
     }
 
-    /// The format a path asks for by its name: SAM for `.sam`, else BAM.
+    /// The format a path asks for by its name: SAM for a name ending in
+    /// `.sam`, lower case, else BAM, as htsjdk's `SAMFileWriterFactory`
+    /// tells them (`out.SAM` is a BAM).
     pub fn of(path: &Path) -> Self {
+        use std::os::unix::ffi::OsStrExt;
         let sam = path
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("sam"));
+            .file_name()
+            .is_some_and(|name| name.as_bytes().ends_with(b".sam"));
         if sam { Self::Sam } else { Self::Bam }
     }
 }
@@ -231,7 +234,7 @@ impl WriteOptions {
     pub fn files(&self) -> Vec<PathBuf> {
         let mut files = vec![self.path.clone()];
         if self.create_index {
-            files.push(self.path.with_extension("bai"));
+            files.push(bam_writer::index_path(&self.path));
         }
         if self.create_md5 {
             files.push(bam_writer::md5_path(&self.path));

@@ -9,7 +9,11 @@
 //!   and adds 1 to `NM`;
 //! * an insertion adds its length to `NM`; a deletion writes `^` and the
 //!   deleted reference bases and adds its length to `NM`;
-//! * past the end of the contig the `MD` string stops, its run flushed.
+//! * past the end of the contig the `MD` string stops, its run flushed,
+//!   and `NM` counts nothing more: an insertion at the contig end or past
+//!   it adds nothing;
+//! * the reference bases of `MD` are upper case, as htsjdk's CRAM decoder
+//!   reads the reference, whatever case the FASTA holds.
 
 use crate::bam_raw::{RawRecord, TagValue, Tags};
 use crate::error::Result;
@@ -92,7 +96,7 @@ fn compute(record: &RawRecord, bases: &[u8], reference: &[u8]) -> (Vec<u8>, i64)
                             run += 1;
                         } else {
                             flush(&mut md, &mut run);
-                            md.push(ref_base);
+                            md.push(ref_base.to_ascii_uppercase());
                             nm += 1;
                         }
                     }
@@ -101,6 +105,10 @@ fn compute(record: &RawRecord, bases: &[u8], reference: &[u8]) -> (Vec<u8>, i64)
                 position += length;
             }
             1 => {
+                if active && position >= reference.len() {
+                    flush(&mut md, &mut run);
+                    active = false;
+                }
                 if active {
                     nm += length as i64;
                 }
@@ -115,7 +123,8 @@ fn compute(record: &RawRecord, bases: &[u8], reference: &[u8]) -> (Vec<u8>, i64)
                     flush(&mut md, &mut run);
                     md.push(b'^');
                     for i in 0..length {
-                        md.push(reference.get(position + i).copied().unwrap_or(b'N'));
+                        let base = reference.get(position + i).copied().unwrap_or(b'N');
+                        md.push(base.to_ascii_uppercase());
                     }
                     nm += length as i64;
                 }
@@ -156,5 +165,23 @@ mod tests {
         // reads of A: 3 + 1 + 2 mismatches, 1 inserted and 2 deleted bases.
         assert_eq!(String::from_utf8(md).expect("ascii"), "0C0G0T1C0^GT1C0G0");
         assert_eq!(nm, 9);
+    }
+
+    #[test]
+    fn an_insertion_at_the_contig_end_adds_nothing() {
+        // 4M2I2M at position 1 of ACGT: the insertion starts at the end.
+        let record = build("r", 0, 0, 0, &[(4, 0), (2, 1), (2, 0)], &[30; 8], b"");
+        let (md, nm) = compute(&record, &record.bases(), b"ACGT");
+        assert_eq!(String::from_utf8(md).expect("ascii"), "1C0G0T0");
+        assert_eq!(nm, 3);
+    }
+
+    #[test]
+    fn md_holds_upper_case_reference_bases() {
+        // 2M1D2M at position 1 of a soft-masked reference, reads of A.
+        let record = build("r", 0, 0, 0, &[(2, 0), (1, 2), (2, 0)], &[30; 4], b"");
+        let (md, nm) = compute(&record, &record.bases(), b"acgtn");
+        assert_eq!(String::from_utf8(md).expect("ascii"), "1C0^G0T0N0");
+        assert_eq!(nm, 4);
     }
 }

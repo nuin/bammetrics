@@ -90,8 +90,9 @@ reads the marked BAM, and the BAM holds the records `MarkDuplicates` writes. On 
 exome the chain took 16.5 s against 22.2 s for `MarkDuplicates` followed by the four
 collectors on its output.
 
-Every `+` starts a step: a transform (`mark-duplicates`, `sort-sam`), a tap (18 one-pass
-tool verbs) or `write [PATH]` (`-` is standard output). Transforms may follow one another:
+Every `+` starts a step: a transform (`mark-duplicates`, `sort-sam` and the six
+record-editing verbs of wave W09), a tap (18 one-pass tool verbs) or `write [PATH]` (`-`
+is standard output). Transforms may follow one another:
 `+ sort-sam --sort-order queryname + mark-duplicates + sort-sam --sort-order coordinate +
 write out.bam --index` sorts, marks and sorts back in one process, a sort holding at most
 `--sort-memory` bytes (default 2G). Each step takes its verb's own options in every
@@ -193,6 +194,12 @@ the sizes and a Chrome recipe for a build without the feature.
 | CollectExonCoverageMetrics (not a Picard tool, [docs/exon_coverage.md](docs/exon_coverage.md): per exon of a GTF, GFF3, BED12 or BED annotation the mean, median, minimum and maximum depth and the bases at each `MIN_DEPTH`, with the CollectHsMetrics depth; `GENE`, `GENE_LIST`, `TRANSCRIPT`, `CANONICAL`, `FEATURE`; `SUMMARY_OUTPUT` per gene and transcript) | | `collect_exon_coverage_metrics()` |
 | CollectTelomereMetrics (not a Picard tool, [docs/telomere.md](docs/telomere.md): reads with at least 7 copies of TTAGGG or CCCTAA, unmapped reads included, reads of 48 to 52 percent GC, TelSeq's telomere length estimate in kb and a histogram of reads by repeat count; `TELOMERE_REPEAT_THRESHOLD`, `REPEAT`, `COUNT_DUPLICATES`; also a `CollectMultipleMetrics` program) | all four | `collect_telomere_metrics()` |
 | CollectIndexDepthMetrics (not a Picard tool, docs/06 section 10: depth from the `.bai` or `.csi` alone, `MAPPED x READ_LENGTH / LENGTH` per reference and per contig group, the X and Y ratios with a sex call, `MT_COPY_NUMBER`; no whole read, a CRAM refused; `READ_LENGTH`, `READ_LENGTH_SAMPLE`) | | `collect_index_depth_metrics()` |
+| AddCommentsToBam (one `@CO` line per `COMMENT` after the header's own, the records of the BAM copied byte for byte; `CREATE_INDEX` writes `OUTPUT.bai`; a chain transform) | | `add_comments_to_bam()` |
+| ReplaceSamHeader (the header of `HEADER`, a SAM, BAM or CRAM, over every record; a `.bam` input keeps each record's reference index, any other its reference name; Picard's sort order checks; a chain transform) | | `replace_sam_header()` |
+| AddOATag (each record's alignment, `RNAME,POS,STRAND,CIGAR,MAPQ,NM;`, appended to its `OA` tag; `INTERVAL_LIST` limits it to the records over an interval; BAM or SAM text out; a chain transform) | | `add_o_a_tag()` |
+| CleanSam (an alignment past the end of its reference soft-clipped at its end, the mate's `MC` clipped the same way, MAPQ 0 on unmapped records; SAM, BAM or CRAM in, BAM or SAM text out; a chain transform) | | `clean_sam()` |
+| SetNmMdAndUqTags (`MD`, `NM` and `UQ` of each mapped record of a coordinate-sorted input against `REFERENCE_SEQUENCE`, as htsjdk computes them; `IS_BISULFITE_SEQUENCE`, `SET_ONLY_UQ`; a chain transform) | | `set_nm_md_and_uq_tags()` |
+| SetNmAndUqTags (Picard's deprecated name of SetNmMdAndUqTags: the same options and output) | | `set_nm_and_uq_tags()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 | SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | `validation_stringency=` |

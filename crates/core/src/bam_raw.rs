@@ -169,6 +169,49 @@ fn invalid(what: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, format!("BAM record: {what}"))
 }
 
+/// Where the tag block of the record `buf` (no `block_size`) starts, an
+/// error when its fields run past its bytes.
+fn checked_tags_start(buf: &[u8]) -> io::Result<usize> {
+    if buf.len() < FIXED {
+        return Err(invalid("shorter than its fixed fields"));
+    }
+    let name_len = usize::from(buf[8]);
+    if name_len == 0 {
+        return Err(invalid("read name length 0"));
+    }
+    let cigar_ops = usize::from(u16::from_le_bytes([buf[12], buf[13]]));
+    let l_seq = usize::try_from(i32::from_le_bytes([buf[16], buf[17], buf[18], buf[19]]))
+        .map_err(|_| invalid("negative l_seq"))?;
+    let tags = FIXED + name_len + 4 * cigar_ops + l_seq.div_ceil(2) + l_seq;
+    if tags > buf.len() {
+        return Err(invalid("fields run past the record"));
+    }
+    Ok(tags)
+}
+
+/// The `B` arrays of a CRAM record as htsjdk 5.0.0 decodes them: its CRAM
+/// reader (`ReadTag`) drops the unsigned flag of an array, so `B:C`, `B:S`
+/// and `B:I` come out as `B:c`, `B:s` and `B:i` over the same bytes (200
+/// prints as -56). Rewrites the subtypes of the record `buf` (no
+/// `block_size`) in place.
+pub(crate) fn sign_unsigned_arrays(buf: &mut [u8]) -> io::Result<()> {
+    let start = checked_tags_start(buf)?;
+    let mut subtypes = Vec::new();
+    let mut tags = TagIter::new(&buf[start..]);
+    loop {
+        let at = buf.len() - tags.rest.len();
+        match tags.next().transpose()? {
+            None => break,
+            Some((_, TagValue::Array(b'C' | b'S' | b'I', ..))) => subtypes.push(at + 3),
+            Some(_) => {}
+        }
+    }
+    for at in subtypes {
+        buf[at] = buf[at].to_ascii_lowercase();
+    }
+    Ok(())
+}
+
 impl RawRecord {
     /// The record whose bytes are `buf`, checked so every accessor stays in
     /// bounds.
@@ -179,19 +222,7 @@ impl RawRecord {
     }
 
     fn check(&self) -> io::Result<()> {
-        if self.buf.len() < FIXED {
-            return Err(invalid("shorter than its fixed fields"));
-        }
-        let name_len = usize::from(self.buf[8]);
-        if name_len == 0 {
-            return Err(invalid("read name length 0"));
-        }
-        let l_seq = usize::try_from(self.i32_at(16)).map_err(|_| invalid("negative l_seq"))?;
-        let tags = FIXED + name_len + 4 * self.cigar_ops() + l_seq.div_ceil(2) + l_seq;
-        if tags > self.buf.len() {
-            return Err(invalid("fields run past the record"));
-        }
-        Ok(())
+        checked_tags_start(&self.buf).map(|_| ())
     }
 
     /// Read the next record of a BAM record stream into `self`. False at
@@ -336,6 +367,45 @@ impl RawRecord {
         self.i32_at(28)
     }
 
+    /// Set the `bin` field as htsjdk 5.0.0's `BAMRecordCodec.encode` writes
+    /// every record a `SAMFileWriter` takes, whatever bin it was read with:
+    /// 0 without a start, else the bin of the alignment.
+    pub fn set_codec_bin(&mut self) {
+        let bin = codec_bin(self.alignment_start(), self.flags(), self.cigar());
+        self.buf[10..12].copy_from_slice(&bin.to_le_bytes());
+    }
+
+    /// Set `MAPQ`; every other byte stays.
+    pub fn set_mapping_quality(&mut self, quality: u8) {
+        self.buf[9] = quality;
+    }
+
+    /// Replace the CIGAR by `cigar` (`(length, op)`, op the BAM code) and
+    /// set `n_cigar_op`; the name, bases, qualities and tags stay. The
+    /// `bin` is left as it was: [`RawRecord::set_codec_bin`] sets it.
+    pub fn set_cigar(&mut self, cigar: &[(u32, u8)]) -> io::Result<()> {
+        let ops =
+            u16::try_from(cigar.len()).map_err(|_| invalid("more than 65535 CIGAR operators"))?;
+        let mut encoded = Vec::with_capacity(4 * cigar.len());
+        for &(len, op) in cigar {
+            if len >= 1 << 28 || op > 8 {
+                return Err(invalid("CIGAR operator out of the BAM range"));
+            }
+            encoded.extend_from_slice(&(len << 4 | u32::from(op)).to_le_bytes());
+        }
+        let start = self.cigar_start();
+        let end = start + 4 * self.cigar_ops();
+        self.buf.splice(start..end, encoded);
+        self.buf[12..14].copy_from_slice(&ops.to_le_bytes());
+        Ok(())
+    }
+
+    /// Set `refID` and `next_refID` (-1 for none); every other byte stays.
+    pub fn set_reference_ids(&mut self, reference: i32, mate: i32) {
+        self.buf[0..4].copy_from_slice(&reference.to_le_bytes());
+        self.buf[20..24].copy_from_slice(&mate.to_le_bytes());
+    }
+
     /// The read name without its NUL.
     pub fn name(&self) -> &[u8] {
         let len = usize::from(self.buf[8]);
@@ -382,6 +452,12 @@ impl RawRecord {
     pub fn qualities(&self) -> &[u8] {
         let start = self.quality_start();
         &self.buf[start..start + self.sequence_length()]
+    }
+
+    /// The base qualities, for an edit in place.
+    pub fn qualities_mut(&mut self) -> &mut [u8] {
+        let (start, length) = (self.quality_start(), self.sequence_length());
+        &mut self.buf[start..start + length]
     }
 
     fn tags_start(&self) -> usize {
@@ -488,17 +564,25 @@ fn region_to_bin(beg: i32, end: i32) -> i32 {
 /// without a start, else the bin of the alignment, one base long for an
 /// unmapped record or a CIGAR that covers no reference base.
 fn indexing_bin(fields: &Fields<'_>) -> u16 {
-    if fields.alignment_start == 0 {
+    codec_bin(
+        fields.alignment_start,
+        fields.flags,
+        fields.cigar.iter().copied(),
+    )
+}
+
+/// [`indexing_bin`] from the 1-based start, the flags and the CIGAR.
+fn codec_bin(alignment_start: i32, flags: u16, cigar: impl Iterator<Item = (u32, u8)>) -> u16 {
+    if alignment_start == 0 {
         return 0;
     }
-    let start = fields.alignment_start.wrapping_sub(1);
-    let unmapped = fields.flags & 0x4 != 0;
+    let start = alignment_start.wrapping_sub(1);
+    let unmapped = flags & 0x4 != 0;
     let mut end = if unmapped {
         0
     } else {
-        fields
-            .alignment_start
-            .wrapping_add(reference_length(fields.cigar.iter().copied()))
+        alignment_start
+            .wrapping_add(reference_length(cigar))
             .wrapping_sub(1)
     };
     if end <= 0 {
@@ -826,6 +910,28 @@ mod tests {
     }
 
     #[test]
+    fn a_new_cigar_keeps_every_other_field() {
+        let mut record = build("r1", 0, 0, 9, &[(20, 0)], &[30; 20], b"RGZa\0NMC\x01");
+        record.set_mapping_quality(0);
+        record
+            .set_cigar(&[(11, 0), (9, 4), (5, 5)])
+            .expect("a valid CIGAR");
+        assert_eq!(
+            record.cigar().collect::<Vec<_>>(),
+            [(11, 0), (9, 4), (5, 5)]
+        );
+        assert_eq!(record.mapping_quality(), 0);
+        assert_eq!(record.name(), b"r1");
+        assert_eq!(record.qualities(), &[30; 20]);
+        assert_eq!(record.tag_bytes(), b"RGZa\0NMC\x01");
+        RawRecord::from_bytes(record.as_bytes().to_vec()).expect("consistent");
+        record.set_cigar(&[]).expect("no operator");
+        assert_eq!(record.cigar().count(), 0);
+        assert!(record.set_cigar(&[(1 << 28, 0)]).is_err());
+        assert!(record.set_cigar(&vec![(1, 0); 65536]).is_err());
+    }
+
+    #[test]
     fn a_block_size_the_stream_does_not_back_costs_one_step() {
         // block_size 0xFFFFFF00, then the 100 bytes the file holds.
         let mut stream = 0xFFFF_FF00u32.to_le_bytes().to_vec();
@@ -938,6 +1044,31 @@ mod tests {
         record.set_tags(&decoded).expect("encode");
         // Ordered by second character, then first: RG (G), XS (S), DT (T).
         assert_eq!(record.tag_bytes(), b"RGZa\0XSc\x07DTZLB\0");
+    }
+
+    #[test]
+    fn unsigned_arrays_of_a_cram_record_become_signed() {
+        let mut tags = Vec::new();
+        tags.extend_from_slice(b"XBBC\x03\0\0\0\x01\x02\xc8");
+        tags.extend_from_slice(b"XZZB:C\0");
+        tags.extend_from_slice(b"XSBS\x01\0\0\0\x40\x9c");
+        tags.extend_from_slice(b"XIBI\x01\0\0\0\0\x5e\xd0\xb2");
+        tags.extend_from_slice(b"XFBf\x01\0\0\0\0\0\xc0\x3f");
+        tags.extend_from_slice(b"XbBc\x01\0\0\0\xff");
+        let record = build("r", 0, 0, 0, &[], b"ACGT", &tags);
+        let mut bytes = record.as_bytes().to_vec();
+        sign_unsigned_arrays(&mut bytes).expect("arrays");
+        let signed = RawRecord::from_bytes(bytes).expect("a record");
+        let mut want = tags.clone();
+        for at in [3, 21, 31] {
+            want[at] = want[at].to_ascii_lowercase();
+        }
+        assert_eq!(signed.tag_bytes(), want.as_slice());
+        let cut = &mut record.as_bytes().to_vec()[..record.as_bytes().len() - 1];
+        assert!(
+            sign_unsigned_arrays(cut).is_err(),
+            "a cut array is an error"
+        );
     }
 
     #[test]

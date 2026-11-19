@@ -46,7 +46,10 @@ def test_the_committed_table_parses_and_names_both_tiers():
     assert {r.tier for r in rows} == {"fixture", "scale"}
     fixture = [r.name for r in rows if r.tier == "fixture"]
     assert fixture == ["build-bam-index", "mark-duplicates", "chain write --index", "view-sam",
-                       "sort-sam", "chain sort-sam + mark-duplicates + sort-sam + write --index"]
+                       "sort-sam", "chain sort-sam + mark-duplicates + sort-sam + write --index",
+                       "add-comments-to-bam", "replace-sam-header", "add-o-a-tag", "clean-sam",
+                       "set-nm-md-and-uq-tags", "set-nm-and-uq-tags",
+                       "chain four edits + write --index"]
     for r in rows:
         assert r.argv[0] == "{bin}" and r.max_rss_mib > 0
         if r.tier == "fixture":

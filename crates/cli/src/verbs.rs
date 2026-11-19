@@ -407,6 +407,62 @@ pub const VERBS: &[Verb] = &[
     ),
     verb("telomere", "CollectTelomereMetrics", Files::Single),
     verb("index-depth", "CollectIndexDepthMetrics", Files::Single),
+    Verb {
+        about: Some(
+            "adds each --comment to the header of a BAM as a @CO line after the header's own, \
+             as Picard's AddCommentsToBam does: -o gets a BAM whose records are the input's, \
+             byte for byte. The input must be a BAM.",
+        ),
+        writes: "BAM",
+        ..verb("add-comments-to-bam", "AddCommentsToBam", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "replaces the header of a SAM, BAM or CRAM by the header of --header (SAM, BAM or \
+             CRAM), as Picard's ReplaceSamHeader does: -o gets that header and every record. \
+             An input named .bam keeps each record's reference index; any other input keeps \
+             each record's reference name.",
+        ),
+        writes: "BAM",
+        reads: &["HEADER"],
+        ..verb("replace-sam-header", "ReplaceSamHeader", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "appends each record's alignment (RNAME,POS,STRAND,CIGAR,MAPQ,NM;) to its OA tag, \
+             as Picard's AddOATag does: -o gets every record of a SAM, BAM or CRAM, tagged, or \
+             with --interval-list only the records over an interval.",
+        ),
+        writes: "BAM",
+        reads: &["INTERVAL_LIST"],
+        ..verb("add-o-a-tag", "AddOATag", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "cleans a SAM, BAM or CRAM as Picard's CleanSam does: -o gets every record, a \
+             mapped record past the end of its reference soft-clipped at its end, the MC tag of \
+             a mate past the end clipped the same way, an unmapped record at MAPQ 0.",
+        ),
+        writes: "BAM",
+        ..verb("clean-sam", "CleanSam", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "computes MD, NM and UQ of each mapped record of a coordinate-sorted SAM, BAM or \
+             CRAM against -R, as Picard's SetNmMdAndUqTags does: -o gets every record, a BAM, \
+             or SAM text for a name ending in .sam.",
+        ),
+        writes: "BAM",
+        ..verb("set-nm-md-and-uq-tags", "SetNmMdAndUqTags", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "the deprecated name of set-nm-md-and-uq-tags, as Picard keeps SetNmAndUqTags: the \
+             same options and output.",
+        ),
+        writes: "BAM",
+        ..verb("set-nm-and-uq-tags", "SetNmAndUqTags", Files::Bam)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the

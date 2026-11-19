@@ -42,6 +42,7 @@ use crate::optical::{
     DEFAULT_MAX_DUPLICATE_SET_SIZE, DEFAULT_OPTICAL_DUPLICATE_DISTANCE, OpticalDuplicateFinder,
     ReadNameParser,
 };
+use crate::reference::files_read;
 use crate::registry::{Invocation, Opt, Tool};
 use crate::sam_text::Stringency;
 use crate::spill::TempDir;
@@ -618,7 +619,7 @@ fn written_files(opts: &Options) -> Vec<(&'static str, PathBuf)> {
         ("METRICS_FILE", opts.metrics.clone()),
     ];
     if opts.create_index {
-        files.push(("CREATE_INDEX", opts.output.with_extension("bai")));
+        files.push(("CREATE_INDEX", crate::bam_writer::index_path(&opts.output)));
     }
     if opts.create_md5_file {
         files.push(("CREATE_MD5_FILE", crate::bam_writer::md5_path(&opts.output)));
@@ -633,10 +634,11 @@ fn written_files(opts: &Options) -> Vec<(&'static str, PathBuf)> {
 /// not destroyed by writing and are not compared.
 fn refuse_overlaps(opts: &Options) -> Result<()> {
     let device = |path: &Path| same_file_key(path).starts_with("/dev");
-    let read: Vec<&PathBuf> = opts
+    let read: Vec<PathBuf> = opts
         .inputs
         .iter()
-        .chain(&opts.reference)
+        .cloned()
+        .chain(opts.reference.iter().flat_map(|r| files_read(r)))
         .filter(|p| !device(p))
         .collect();
     let written = written_files(opts);

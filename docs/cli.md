@@ -305,6 +305,12 @@ table.
 | `duplicate-by-tile` | CollectDuplicateByTileMetrics (not a Picard tool, docs/06 section 8; `--read-name-regex`, `--outlier-sd`) | one |
 | `telomere` | CollectTelomereMetrics (not a Picard tool, [telomere.md](telomere.md); `-K` the repeat threshold, `--repeat`, `--count-duplicates`) | one |
 | `index-depth` | CollectIndexDepthMetrics (not a Picard tool, [docs/06](06_clinical_checks.md) section 10; a BAM with its `.bai` or `.csi`, never read whole; a CRAM refused) | one |
+| `add-comments-to-bam` | AddCommentsToBam (a BAM; `--comment` repeated) | `-o` BAM, no metrics file |
+| `replace-sam-header` | ReplaceSamHeader (a SAM, BAM or CRAM; `--header` names the file whose header replaces the input's) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `add-o-a-tag` | AddOATag (a SAM, BAM or CRAM; `-L` an interval list) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `clean-sam` | CleanSam (a SAM, BAM or CRAM; soft-clips alignments past the end of their reference, MAPQ 0 on unmapped records) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `set-nm-md-and-uq-tags` | SetNmMdAndUqTags (a coordinate-sorted SAM, BAM or CRAM; `-R` required; `--is-bisulfite-sequence`, `--set-only-uq`) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `set-nm-and-uq-tags` | SetNmAndUqTags (Picard's deprecated name of SetNmMdAndUqTags: the same options and output) | `-o` BAM, or SAM text for a name ending in `.sam` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -554,6 +560,153 @@ bytes for SAM text).
 - `-o out.cram` exits 2 naming wave W15. An `-o` that is the input (a link or a hard link
   included) exits 2 and replaces nothing.
 
+### add-comments-to-bam
+
+```bash
+bammetrics add-comments-to-bam sample.bam -o sample.noted.bam --comment "library prep v2"
+bammetrics add-comments-to-bam sample.bam -o sample.noted.bam -C first -C second --create-index
+bammetrics AddCommentsToBam I=sample.bam O=sample.noted.bam COMMENT="library prep v2"
+```
+
+Picard's `AddCommentsToBam`: the input header with one `@CO` line per `--comment` after the
+header's own, then every record of the BAM, byte for byte (`tests/concordance/test_add_comments_to_bam.py`).
+
+- The input must be a BAM, as Picard's block copy needs: a name ending in `.sam` exits 1
+  with `SAM files are not supported`, and a CRAM or SAM text under another name exits 1.
+- A comment that starts with `@CO` and a tab keeps one prefix; a newline exits 2. Other
+  characters go out as htsjdk writes them (`é` as the byte 0xE9).
+- No `@PG` line is added. A header without `@HD` gets `@HD VN:1.6`, as htsjdk writes it.
+- `--create-index` writes `out.bam.bai` beside a coordinate-sorted BAM (Picard's block
+  copy names it so); `--create-md5-file` writes `out.bam.md5`. An `-o` ending in `.sam`
+  exits 2: Picard writes BAM bytes under that name.
+- In a chain the step adds the comments to the stream at its position: `bammetrics chain
+  in.bam + add-comments-to-bam -C note + write out.bam`.
+
+### replace-sam-header
+
+```bash
+bammetrics replace-sam-header sample.bam --header new_header.sam -o sample.reheadered.bam
+bammetrics replace-sam-header reads.sam --header other.bam -o reads.reheadered.sam
+bammetrics ReplaceSamHeader I=sample.bam HEADER=new_header.sam O=sample.reheadered.bam
+```
+
+Picard's `ReplaceSamHeader`: the header of `--header` (SAM text, a BAM or a CRAM, read at
+`--validation-stringency`; its records are not read), then every record of the input
+(`tests/concordance/test_replace_sam_header.py`).
+
+- An input named `.bam` is a block copy, as in Picard: each record keeps its reference
+  index and takes the name the new dictionary gives it. The new `SO` must be `unsorted` or
+  the input's. `--create-index` writes `out.bam.bai`.
+- Any other input (SAM text, a CRAM with `-R`, a BAM under another name) is read at
+  `SILENT`: each record keeps its reference name and takes that name's index in the new
+  dictionary. A name the dictionary lacks exits 1 (`Reference index for 'chr1' not found
+  in sequence dictionary.`). The two `SO` values must be equal. The output may be SAM text,
+  and `--create-index` writes `out.bai`.
+- No `@PG` line is added; `SO`, `VN` and every other line are the ones `--header` gives.
+- Two cases where Picard writes a file no reader opens exit 1 here: a block-copied record
+  whose reference index the new dictionary does not have, and a block copy into a `.sam`
+  name (exit 2).
+- In a chain the step replaces the header of the stream at its position and every record
+  keeps its reference index, as in a block copy.
+
+### add-o-a-tag
+
+```bash
+bammetrics add-o-a-tag sample.bam -o sample.oa.bam
+bammetrics add-o-a-tag sample.cram -R ref.fa -L targets.interval_list -o sample.oa.sam
+bammetrics AddOATag I=sample.bam O=sample.oa.bam INTERVAL_LIST=targets.interval_list
+```
+
+Picard's `AddOATag`: each record's alignment appended to its `OA` tag, then every record
+(`tests/concordance/test_add_o_a_tag.py`).
+
+- The entry is `RNAME,POS,STRAND,CIGAR,MAPQ,NM;`, for example `chr1,1001,+,50M,60,2;`. An
+  unmapped record, placed or not, gets `*,0,+,*,255,;` (`-` with the reverse flag).
+- `NM` prints as Java prints the tag's value: an integer in decimal, a float as
+  `Float.toString`, a `Z` or `A` value as its text. Without `NM` the field is empty
+  (`chr1,1001,+,50M,60,;`).
+- The entry goes after the record's own `OA` value. `OA` becomes a `Z` tag at its place in
+  htsjdk's tag order. Secondary and supplementary records are tagged as any other.
+- `-L` (`INTERVAL_LIST`) takes an interval list with its own `@SQ` lines; contigs match by
+  name. Only a record without the unmapped flag that shares a base with an interval gets
+  the tag; its span runs from `POS` over the reference bases of its CIGAR, so a CIGAR
+  without one never overlaps. A BED exits 1 with `Interval list file must contain
+  header.`, as in Picard. A name ending in `.gz`, `.gzip` or `.bfq` is read through gzip,
+  as htsjdk reads it. In a chain the list is read before the first read of the source.
+- An `NM` or `OA` value that is an array or `H` exits 1: Picard prints it as a Java object
+  reference (`[B@1a2b3c`), which changes from run to run.
+- The writer checks the header's order, as Picard's presorted writer does. No `@PG` line
+  is added. `--create-index` writes `out.bai` for `out.bam` and `out.dat.bai` for
+  `out.dat`, as htsjdk names it. CRAM records get `MD` and `NM` as htsjdk decodes them, so
+  their entries carry the `NM` htsjdk computes.
+- SAM text is written for a name ending in `.sam`, lower case; `OUT.SAM` is a BAM, as in
+  Picard. A `.cram` `OUTPUT` is refused before the first read until wave W15: the verb
+  exits 2, the Picard face exits 1. Picard writes the CRAM.
+- An `@HD SO` value htsjdk does not name fails at `VALIDATION_STRINGENCY=STRICT` (`Found
+  non-conforming header SO tag`), as in Picard. At `LENIENT` and `SILENT` it is written
+  `SO:unknown`.
+- In a chain the step tags the records of the stream at its position:
+  `bammetrics chain in.bam + add-o-a-tag -L targets.interval_list + write out.bam`.
+
+### clean-sam
+
+```bash
+bammetrics clean-sam sample.bam -o sample.clean.bam
+bammetrics clean-sam reads.sam -o reads.clean.sam
+bammetrics CleanSam I=sample.bam O=sample.clean.bam CREATE_INDEX=true
+```
+
+Picard's `CleanSam`: every record of the input with three fixes
+(`tests/concordance/test_clean_sam.py`).
+
+- A mapped record whose alignment ends past the end of its reference is soft-clipped at
+  the end of its CIGAR, whatever its strand. Its start stays. The clip point is the read
+  length less the overhang, so a deletion or insertion before it moves it, as in Picard:
+  `10M5D10M` 5 bases past the end becomes `10M5D6M4S`. A trailing `H` stays after the new
+  `S` (`20M5H` becomes `11M9S5H`).
+- The `MC` tag of a paired record whose mate is mapped and ends past the end of its
+  reference gets the mate's CIGAR clipped the same way.
+- An unmapped record gets MAPQ 0.
+- `NM` and `MD` are left as they were. No `@PG` line is added. A changed record has its
+  tags in htsjdk's order; a record with a new MAPQ only keeps its tag bytes.
+- `--validation-stringency STRICT`, the default, reads SAM text at `LENIENT`, as Picard
+  does, so a line past the end of its reference is read and named on standard error.
+- A read that starts past the end of its reference gets a CIGAR longer than its bases
+  (`20M` at 100050 on a 100000-base contig becomes `69S`). Picard writes that record and
+  samtools refuses the file; bammetrics exits 1 and writes nothing.
+- `--create-index` writes `out.bai`; `-o` ending in `.cram` exits 1 naming wave W15.
+- In a chain the step cleans the stream at its position: `bammetrics chain in.bam +
+  clean-sam + mark-duplicates + write out.bam`. Its stream is `cleaned`.
+
+### set-nm-md-and-uq-tags
+
+```bash
+bammetrics set-nm-md-and-uq-tags sample.bam -R ref.fa -o sample.tagged.bam
+bammetrics set-nm-md-and-uq-tags sample.bam -R ref.fa -o sample.tagged.sam --set-only-uq
+bammetrics SetNmMdAndUqTags I=sample.bam R=ref.fa O=sample.tagged.bam IS_BISULFITE_SEQUENCE=true
+```
+
+Picard's `SetNmMdAndUqTags`: each mapped record gets `MD`, `NM` and `UQ` computed against
+`-R` as htsjdk's `SequenceUtil` computes them; every other record is written as read
+(`tests/concordance/test_set_nm_md_and_uq_tags.py`). `set-nm-and-uq-tags`
+(`SetNmAndUqTags`) is Picard's deprecated name for the same tool.
+
+- The header must say `SO:coordinate`, else exit 1 with `Input must be coordinate-sorted
+  for this program to run. Found: queryname`. The reference is read forward, one contig at
+  a time; its `.fai` contigs must be the header's.
+- A mismatch writes the reference base as the FASTA holds it (`MD:Z:3t4` on a lower-case
+  base). Bases compare by IUPAC code, ignoring case: `N` equals `N`, `R` is no `A`.
+- `UQ` is the sum of the qualities of the mismatched aligned bases. A record without
+  qualities gets no `UQ`. An aligned base past the end of its contig exits 1, as Picard
+  does; `MD` and `NM` stop at the contig end.
+- `--is-bisulfite-sequence`: a read `T` on a reference `C` (forward strand) or `A` on `G`
+  (reverse strand) is no mismatch for `NM` and `UQ`. `MD` is unchanged.
+- `--set-only-uq` sets `UQ` alone. A record that gets a tag has its tags in htsjdk's order;
+  any other keeps its bytes. No `@PG` line is added.
+- In a chain the step reads the chain's `-R`: `bammetrics chain in.bam -R ref.fa +
+  sort-sam -SO coordinate + set-nm-md-and-uq-tags + write out.bam`. Its stream is
+  `tagged`.
+
 ### qc
 
 ```bash
@@ -689,7 +842,9 @@ is the short form.
 - The chain's options and the source (a BAM, a CRAM with `-R`, `-` for standard input)
   come before the first `+`. Every `+` starts a step.
 - A step is a tool verb, its Picard class, or `write`. A transform (`mark-duplicates`,
-  `sort-sam`) changes the records later steps see; any number may follow one another. A
+  `sort-sam` and the six record-editing verbs of wave W09: `add-comments-to-bam`,
+  `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`,
+  `set-nm-and-uq-tags`) changes the records later steps see; any number may follow one another. A
   tap (the 18 one-pass tool verbs) reads the
   records of its position and changes nothing. `write [PATH]` writes those records as a
   BAM, or as SAM text for a name ending in `.sam`; `-` is standard output, and `write -
@@ -1286,7 +1441,7 @@ purpose is listed in KNOWN_DIFFERENCES.md.
 
 The worked examples of docs/05 section 2.5 that work today, written against the committed
 fixtures so each runs from the repository root as shown (`tests/data/insert_size.bam` has
-no `@RG SM`, so the sample is the BAM name). Output is what 0.26.0 prints; long lines are
+no `@RG SM`, so the sample is the BAM name). Output is what 0.27.0 prints; long lines are
 cut.
 
 **1 and 2. One tool, as Picard text or machine-readable.**
@@ -1355,7 +1510,7 @@ $ for bam in bams/*.bam; do
         -o runs/2026-11-02/$(basename "$bam" .bam) -q > /dev/null
   done
 $ bammetrics report runs/2026-11-02/ --preset clinical-panel
-2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.26.0
+2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.27.0
 FAIL        NA1  7 fail, 1 warn, 9 pass, 1 not measured
   FAIL  Mean target coverage is 0.377778, below the fail limit of 100
   ...

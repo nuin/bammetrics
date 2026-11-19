@@ -13,6 +13,15 @@ use crate::error::{Error, Result};
 
 type Reader = fasta::io::IndexedReader<fasta::io::BufReader<File>>;
 
+/// The files a reader of the FASTA `fasta` opens: the FASTA and its
+/// `.fai`. The CRAM decoder and [`Reference::open`] read no `.dict` and no
+/// `.gzi`. A tool refuses to write any of them.
+pub fn files_read(fasta: &Path) -> [PathBuf; 2] {
+    let mut fai = fasta.as_os_str().to_owned();
+    fai.push(".fai");
+    [fasta.to_path_buf(), PathBuf::from(fai)]
+}
+
 /// A FASTA with its `.fai`, read by random access. Only the contig of the
 /// current record is held in memory.
 pub struct Reference {

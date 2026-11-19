@@ -1,0 +1,11 @@
+## argv
+AddCommentsToBam
+I=tests/data/insert_size.cram
+R=tests/data/ref_100k.fa
+O=OUT/commented.bam
+C=x
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/insert_size.cram: a CRAM: this tool copies the records of a BAM, as Picard does

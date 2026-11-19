@@ -1,5 +1,145 @@
 # Changelog
 
+## 0.27.0
+
+Wave W09 of docs/07: six record-editing tools on one shape, each a chain transform.
+
+### Added
+
+- `crates/core/src/record_edit.rs`: the shape of a Picard tool that edits a header and
+  each record. A tool supplies a `RecordEdit` (the output header, each record kept,
+  changed or dropped, records after the last); `run` reads SAM, BAM or CRAM and writes a
+  BAM or SAM text in htsjdk's two modes (`BlockCopy`, the record bytes of a BAM as they
+  are and the index at `OUTPUT.bai`; `Rewrite`, a presorted writer with the `bin` htsjdk
+  computes and `MD` and `NM` on CRAM records), with `COMPRESSION_LEVEL`, `CREATE_INDEX`,
+  `CREATE_MD5_FILE`, atomic outputs and the input-is-output refusal; `stage` turns the
+  same edit into a streaming chain transform. The stage table is a list of `StageRow`
+  with a `StageKind` (`Holds`, `Replays`, `Streams`); a streaming transform starts no
+  segment, and the chain plan lists it in the segment it reads.
+- `AddCommentsToBam` (verb `add-comments-to-bam`, Python `add_comments_to_bam()`), as
+  Picard 3.5.0: one `@CO` line per `COMMENT` after the header's own, the records of the
+  BAM byte for byte; a `.sam` input, a CRAM and SAM text fail as in Picard; no `COMMENT`
+  copies the BAM. A chain transform (`commented`).
+- `ReplaceSamHeader` (verb `replace-sam-header`, Python `replace_sam_header()`), as
+  Picard 3.5.0: the header of `HEADER` (SAM, BAM or CRAM, read at
+  `VALIDATION_STRINGENCY`). An input named `.bam` is block copied (each record keeps its
+  reference index; the new `SO` is `unsorted` or the input's); any other input is read at
+  `SILENT` (each record keeps its reference name; the two `SO` equal; SAM text output).
+  A chain transform (`reheadered`) that keeps each reference index.
+- `tests/concordance/test_add_comments_to_bam.py` and `test_replace_sam_header.py`
+  (tier B with record bytes; 64 cases on the fixtures, the corpus tiers, the exome slice,
+  SAM text and CRAM), `crates/cli/tests/record_edit.rs` (chained equals staged at the
+  first, a middle and the last position beside `mark-duplicates` and `sort-sam`), and
+  golden records.
+- `AddOATag` (verb `add-o-a-tag`, Python `add_o_a_tag()`), as Picard 3.5.0: each record's
+  alignment (`RNAME,POS,STRAND,CIGAR,MAPQ,NM;`, `*,0,STRAND,*,255,;` when unmapped)
+  appended to its `OA` tag, `NM` and an earlier `OA` printed as Java prints them, `OA` at
+  its place in htsjdk's tag order; `INTERVAL_LIST` (an interval list; a BED fails as in
+  Picard) limits it to the records over an interval. An array `NM` or `OA`, which Picard
+  prints as an object reference, exits 1. A chain transform (`oa_tagged`).
+  `tests/concordance/test_add_o_a_tag.py` (tier B with record bytes: 72 cases equal, 8
+  error-parity cases, the chain step against Picard) and `crates/cli/tests/add_oa_tag.rs`
+  (chained equals staged at the first, a middle and the last position).
+- `SetNmMdAndUqTags` (verb `set-nm-md-and-uq-tags`, Python `set_nm_md_and_uq_tags()`)
+  and `SetNmAndUqTags` (verb `set-nm-and-uq-tags`, Python `set_nm_and_uq_tags()`,
+  Picard's deprecated name for the same tool), as Picard 3.5.0: `MD`, `NM` and `UQ` of
+  each mapped record of a coordinate-sorted SAM, BAM or CRAM against `REFERENCE_SEQUENCE`,
+  as htsjdk's `SequenceUtil` computes them (`IS_BISULFITE_SEQUENCE`, `SET_ONLY_UQ`); the
+  header check and message of Picard; unmapped records keep their bytes; a record that
+  gets a tag has its tags in htsjdk's order and widths. A chain transform (`tagged`) that
+  reads the chain's `-R`. `tests/concordance/test_set_nm_md_and_uq_tags.py` and
+  `test_set_nm_and_uq_tags.py` (tier B with record bytes, 41 tests: the fixtures, the
+  corpus tiers and the exome slice as written, stripped and planted, edge records, reads
+  past a contig end, a bisulfite set, a first quality of `0xFF`, CRAM over a soft-masked
+  reference and SAM text), `crates/cli/tests/set_nm_md_uq.rs`
+  (chained equals staged at every position) and golden records.
+- On the 10 GB HG002 exome (150,538,907 records, hs37d5) `SetNmMdAndUqTags` takes 170.0 s
+  at 1.98 GB peak RSS; Picard takes 1,020 s at 1.04 GB. The records are equal, and the
+  header lines but the `@RG DT` field, which htsjdk writes in the JVM's time zone.
+- On the 10 GB HG002 exome (150,538,907 records) `AddCommentsToBam` takes 61.0 s at
+  47 MB peak RSS and `ReplaceSamHeader` 56.2 s at 38 MB; Picard's block copies take 9.7 s
+  and 11.2 s. The records are equal. bammetrics inflates and deflates every block where
+  Picard copies the compressed blocks.
+- On the same exome `AddOATag` takes 125.3 s at 31 MB peak RSS; Picard takes 1033.0 s
+  at 370 MB. The 150,538,907 records are equal as `samtools view` prints them.
+- `CleanSam` (verb `clean-sam`, Python `clean_sam()`), as Picard 3.5.0: a mapped record
+  whose alignment ends past the end of its reference is soft-clipped at its end
+  (`createNewCigarsIfMapsOffEndOfReference` with htsjdk's `softClipEndOfRead`), the `MC`
+  of a mate past the end is clipped the same way, an unmapped record gets MAPQ 0; STRICT
+  reads at LENIENT. A read that starts past the end exits 1 (docs/07 D45). A chain
+  transform (`cleaned`). `tests/concordance/clean_bams.py` writes reads off contig ends on
+  both strands with every CIGAR operator at the clip point; `test_clean_sam.py` compares
+  them, the fixtures, the tiers, the exome slice, SAM text and a CRAM (tier B with record
+  bytes); `crates/cli/tests/clean_sam.rs` holds chained equals staged.
+- On the 10 GB HG002 exome (150,538,907 records) `CleanSam` takes 76.7 s at 37 MB peak
+  RSS; Picard takes 774.1 s. The records `samtools view` prints are equal (one MD5).
+
+### Changed
+
+- `benches/memgate.toml`: fixture and scale rows for the six record-editing tools and a
+  chain of four of them with `write --index` (scale peaks 28 to 183 MiB under a 512 MiB
+  limit, docs/benchmarks.md "Memory gate"). KNOWN_DIFFERENCES.md lists a block copy of a
+  record that does not parse, `AddOATag` among the tools that do not validate records,
+  and a BAM cut in half under `AddOATag`, `CleanSam` and `SetNmMdAndUqTags`.
+
+- `RawRecord::set_cigar` and `set_mapping_quality`.
+- `bam_writer::finish_with_index` names the `.bai`; `BamWriter::unchecked` writes records
+  without the order check; `RawRecord::set_reference_ids` and `set_codec_bin`;
+  `pass::with_record_stream_kind` tells a BAM from a CRAM and SAM text.
+- `RecordEdit::rewrites`: the chain step of a tool whose stand-alone run rewrites its
+  records sets the `bin` htsjdk's writer computes (0 for an unplaced read), so chained
+  equals staged on a BAM whose unplaced reads carry samtools' 4680.
+  `sequence::iupac_code`.
+
+### Fixed
+
+- The `.fai` of a reference is an input wherever `REFERENCE_SEQUENCE` is given: the
+  Picard face of the six record-editing tools, `MarkDuplicates`, `SortSam` and the
+  metrics tools (`Invocation::inputs`), and a chain step's own `-R`. `SetNmMdAndUqTags
+  I=in.bam O=ref.fa.fai R=ref.fa`, `CleanSam` on a CRAM and `chain in.bam +
+  set-nm-md-and-uq-tags -R ref.fa + write ref.fa.fai` replaced the `.fai`; each now
+  exits with `would destroy it` before the first read (`reference::files_read`).
+- A record-editing rewrite into a BAM (`AddOATag`, `CleanSam`, `SetNmMdAndUqTags`,
+  `ReplaceSamHeader` on an input not named `.bam`) writes `@HD VN:1.6`, and `SO:unsorted`
+  on an `@HD` without `SO`, as htsjdk's writer does; it kept the input's `VN:1.4` (found
+  on the HG002 exome, whose header is `VN:1.4`). A block copy keeps the line as it is.
+- SAM text output checks the header's order as htsjdk's presorted writer does
+  (`bam_writer::Presorted`, shared with `BamWriter`). `ReplaceSamHeader` into a `.sam`
+  under a reordered dictionary, or of records out of their `SO:coordinate` order, wrote
+  the file; it now fails as Picard fails.
+- CRAM input: a `B:C`, `B:S` or `B:I` array comes out as `B:c`, `B:s` or `B:i` over the
+  same bytes, as htsjdk's CRAM reader writes it (`200` prints as `-56`). Reads past the
+  end of their contig decode with `N` for the reference bases there; the vendored
+  noodles-cram panicked. A container of unmapped reads with SEQ `*` alone decodes; it
+  failed with `missing data series encoding: Bases`. `ViewSam` on each prints Picard's
+  text.
+- An `OUTPUT` named `.SAM` (any case other than `.sam`) gets BAM bytes, as htsjdk picks
+  SAM text by `endsWith(".sam")`. `SortSam`, `CleanSam`, a rewriting `ReplaceSamHeader`
+  and the chain's `write` step wrote SAM text under that name; a block copy refused it.
+- `chain ... + add-comments-to-bam -C` with a newline in a comment is a usage error before
+  the first read (exit 2, `--dry-run` too); it failed the step after the chain started.
+- `chain ... + add-o-a-tag -L FILE` reads the interval list before the first read, so a
+  BED or a missing file fails with the verb's error and exit code 1 before the earlier
+  steps run (`--dry-run` too); it failed the step after a `sort-sam` before it had sorted.
+- An `INTERVAL_LIST` named `.gz`, `.gzip` or `.bfq` is read through gzip, as htsjdk reads
+  it (`AddOATag`, `ViewSam`). It failed with `stream did not contain valid UTF-8`.
+- A record-editing tool reads an `@HD SO` value htsjdk does not name as htsjdk does: an
+  error at `STRICT`, a warning at `LENIENT`, and `SO:unknown` in the file written. It
+  wrote the value as read.
+- The order check of the BAM and SAM writers takes two records without a reference as
+  equal whatever their `POS`, as `fileOrderCompare`. Two such records with falling `POS`
+  under `SO:coordinate` failed `AddOATag`, `SortSam` and `MarkDuplicates` outputs.
+- `CREATE_INDEX` names the `.bai` as htsjdk's `BAMFileWriter`: `.bam` at the end of the
+  name becomes `.bai`, any other name gets `.bai` appended (`out.dat.bai`). It replaced
+  any extension (`out.bai`). `AddOATag`, `SortSam`, `MarkDuplicates` and `chain ... +
+  write --index`.
+- CRAM input: `MD` rebuilt for a record without one holds upper-case reference bases, as
+  htsjdk's CRAM decoder reads the reference. A soft-masked FASTA gave lower-case bases in
+  `MD` (`ViewSam`, `SortSam`, `MarkDuplicates`, `SetNmMdAndUqTags SET_ONLY_UQ=true`).
+- `SetNmMdAndUqTags`: a record whose first quality byte alone is `0xFF` and that gets a
+  tag has every quality byte written `0xFF`, as htsjdk writes a record it read without
+  qualities. It kept its other quality bytes.
+
 ## 0.26.0
 
 Wave W08 of docs/07: adapter content, duplicates by tile, telomere and index-only depth.

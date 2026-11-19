@@ -600,8 +600,10 @@ CRAM to decode). The older functions `alignment_summary()`, `hs_metrics()`, `col
 
 - bammetrics does not validate the records of a BAM or a CRAM. Where Picard's STRICT
   validation aborts, for example on a read that runs off the end of a contig, bammetrics
-  writes metrics. The `t0_asm` and `t0_hs` cases run Picard with
-  `VALIDATION_STRINGENCY=SILENT` for this reason. SAM text is validated as htsjdk
+  writes metrics. `AddOATag` writes its `OUTPUT` the same way: Picard at `STRICT` refuses
+  an unmapped placed read with MAPQ 37, or a CIGAR whose length differs from `SEQ`. The
+  `t0_asm` and `t0_hs` cases run Picard with `VALIDATION_STRINGENCY=SILENT` for this
+  reason. SAM text is validated as htsjdk
   validates it (section SAM text).
 - A non-string `OQ` tag returns a malformed-record error in every tool that reads `OQ`.
   htsjdk throws `ClassCastException`.
@@ -1157,6 +1159,12 @@ the differences below are on purpose or cannot be avoided.
   from the reference given with `R=`, so the records match Picard's (`test_cram`).
   The last two contigs are held in memory, so a query-name sorted CRAM reloads contigs
   often.
+- CRAM input with adjacent deletions. A BAM CIGAR `2S50D36D60M` stored in a CRAM holds
+  two deletion features; both decoders give the CIGAR `2S86D60M`. htsjdk builds `MD` from
+  the features (`0^<50 bases>0^<36 bases>60`, as samtools does); bammetrics builds it
+  from the decoded CIGAR (`0^<86 bases>60`). `NM` agrees. `ViewSam`, `CleanSam` and every
+  other tool that writes a CRAM's records differ in that tag (26 of 1942 records of one
+  probe file).
 - `VALIDATION_STRINGENCY` is not applied to a BAM or a CRAM (their records are not
   validated), as for every tool; Picard's default `STRICT` stops on records it finds
   invalid. The harness runs Picard with `SILENT`.
@@ -1371,6 +1379,111 @@ differs here:
   not compared.
 - Sorted runs spill to `TMP_DIR` as BGZF level 3, not as htsjdk's temporary files. Picard's
   log lines (`Finished reading inputs`, the progress lines) are not printed.
+
+## AddCommentsToBam and ReplaceSamHeader
+
+Both write the header lines and records Picard writes, the records byte for byte after
+inflation, on the fixture BAMs, the corpus tiers, the exome slice, SAM text and a CRAM
+(`tests/concordance/test_add_comments_to_bam.py`, `test_replace_sam_header.py`). They
+differ here (docs/07 decisions D34 to D39):
+
+- A block copy into an `OUTPUT` ending in `.sam` exits 2. Picard writes BAM bytes under
+  that name.
+- A `ReplaceSamHeader` block copy (an input named `.bam`) whose record names a reference
+  index the new dictionary lacks exits 1 and writes nothing. Picard writes a BAM that
+  samtools cannot read.
+- A block copy of a BAM with no record ends with the BGZF end-of-file block. Picard's
+  file has none; samtools warns that it may be cut.
+- `CREATE_INDEX` on a block copy writes `OUTPUT.bai` when the header says `SO:coordinate`.
+  Picard also indexes an `SO:unsorted` BAM whose records are in coordinate order.
+- `CREATE_INDEX` on a BAM htsjdk's indexer refuses (a record placed without a reference,
+  references out of order, a reference index the header lacks, a start past its
+  reference, a position past 512 Mbp: nine of the `refused()` BAMs of
+  `tests/concordance/index_bams.py`) exits 1 and writes nothing. Picard prints the
+  `BamIndexingThread` exception, exits 0 and leaves a 0-byte `.bai`.
+- A block copy decodes each record it copies. A BAM whose `block_size` runs past the file
+  exits 1 as `truncated BAM`. A record that does not parse (a forged `block_size`,
+  `l_read_name` 0, `n_cigar_op` 65535) exits 1 and writes nothing.
+  Picard copies the blocks without decoding them and exits 0 in both cases.
+- `AddCommentsToBam` reads a BAM from a pipe or standard input. Picard's block copy needs
+  a file.
+- In a chain, `replace-sam-header` keeps each record's reference index, as the block copy
+  of a `.bam` does. Picard's tool on SAM text or a CRAM keeps the reference name.
+- A partial file is never left: Picard leaves a header-only `OUTPUT` when a record's
+  reference name is not in the new dictionary.
+
+## AddOATag
+
+`AddOATag` writes the header lines and records Picard writes, the records byte for byte
+after inflation, on the fixture BAMs, the corpus tiers, the foundation corpus, the exome
+slice, each with `NM` stripped and with earlier `OA` values, reads off contig ends, SAM
+text and CRAM (`tests/concordance/test_add_o_a_tag.py`). It differs here (docs/07
+decisions D40 to D43):
+
+- An `NM` or `OA` value that is an array or `H` exits 1 and writes nothing. Picard writes
+  the Java object reference of the decoded array (`[B@1a2b3c`), which changes from run to
+  run.
+- A reference name with a comma exits 1 at the first record the tool tags on it
+  (`Reference name for record r2 contains a comma character.`). htsjdk refuses the
+  header line first (`Sequence name 'c,1' doesn't match regex`).
+- `INTERVAL_LIST` takes an interval list only, as Picard: a BED exits 1 with Picard's
+  message. `CollectHsMetrics` converts a BED; this tool does not.
+- A failed run leaves no `OUTPUT`. Picard leaves the records it wrote before the failure,
+  for example after `Alignments added out of order`.
+- A `.cram` `OUTPUT` is refused before the first read until wave W15 (`bammetrics writes
+  BAM and SAM only: CRAM output is wave W15`): the verb exits 2, the Picard face exits 1.
+  Picard writes the CRAM.
+- A header with an `@SQ LN:0` line exits 1 at the header (`not a BAM or CRAM file (the
+  header could not be read: invalid record)`), as every tool but `BuildBamIndex` and
+  `CollectIndexDepthMetrics` (the `BuildBamIndex` entry under "Options"). Picard tags the
+  records.
+- A BAM cut in half exits 1 and writes nothing. Picard exits 0. `CleanSam` and
+  `SetNmMdAndUqTags` differ the same way.
+
+## CleanSam
+
+`CleanSam` writes the header lines and records Picard writes, the records byte for byte
+after inflation, on reads off contig ends with every CIGAR operator at the clip point, the
+fixture BAMs, the corpus tiers, the exome slice, SAM text and a CRAM
+(`tests/concordance/test_clean_sam.py`). It differs here (docs/07 decisions D45 to D48):
+
+- A read that starts past the end of its reference exits 1 and writes nothing. Picard's
+  clip gives it a CIGAR longer than its bases (`69S` over 20 bases), Picard writes that
+  record, and samtools refuses the file.
+- A mapped record whose CIGAR of more than 65535 operators is held in a `CG` tag exits 1
+  and writes nothing (D48). Picard clips the CIGAR of the tag.
+- `-o` ending in `.cram` exits 1 naming wave W15. Picard writes a CRAM.
+- A header with an `@SQ LN:0` line exits 1 and writes nothing, on SAM text (`invalid
+  length (LN): invalid value: 0`) and on a BAM (`the header could not be read`). Picard
+  cleans the file. The noodles header parser refuses the line for every tool that reads
+  records (section SAM text); `SortSam` and `ViewSam` exit 1 the same way.
+- A BAM cut in half exits 1 and writes nothing. Picard exits 0 (as `AddOATag`).
+- An input file of 0 bytes exits 1 and writes nothing. Picard reads it as SAM text with
+  no line and writes a BAM with no record. Every tool exits 1 on such a file (section SAM
+  text).
+- A partial file is never left: Picard leaves the records before a failing one.
+
+## SetNmMdAndUqTags and SetNmAndUqTags
+
+Both write the header lines and records Picard writes, the records byte for byte after
+inflation, on the fixture BAMs, the corpus tiers and the exome slice as written, with the
+three tags stripped and with wrong ones planted, on edge records, reads past a contig end,
+a bisulfite set, SAM text and CRAM (`tests/concordance/test_set_nm_md_and_uq_tags.py`,
+`test_set_nm_and_uq_tags.py`). They differ here (docs/07 decisions D49 to D52):
+
+- `REFERENCE_SEQUENCE` needs its `.fai`, and its contigs must be the input header's.
+  Picard reads a FASTA without one and takes the FASTA's contig N for reference index N
+  whatever its name.
+- A BAM record is not validated (section Validation). A read past the end of its contig
+  without qualities gets the tags the walk gives at every `VALIDATION_STRINGENCY`; Picard
+  refuses it at `STRICT` and writes the same tags at `SILENT`. With qualities both fail.
+- A `.cram` `OUTPUT` exits 2 naming wave W15. Picard writes a CRAM.
+- A failed run leaves no `OUTPUT`. Picard leaves a partial one (59 bytes of SAM header
+  after a read past its contig).
+- `SetNmMdAndUqTags` on a BAM cut in half exits 1 and writes nothing. Picard exits 0 (as
+  `AddOATag`).
+- An `@RG DT` value is written as read. htsjdk parses it and writes it in the JVM's time
+  zone (`2015-10-02T02:00:00+0200` as `2015-10-01T18:00:00-0600` on the HG002 exome).
 
 ## Not in Picard
 

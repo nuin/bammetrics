@@ -46,6 +46,30 @@ const EXEMPT: &[(&str, &str)] = &[
         "SortSam",
         "writes a BAM or SAM text: no metrics file, no row, no column",
     ),
+    (
+        "AddCommentsToBam",
+        "writes a BAM with @CO lines added: no metrics file, no row, no column",
+    ),
+    (
+        "ReplaceSamHeader",
+        "writes a BAM or SAM text under a new header: no metrics file, no row, no column",
+    ),
+    (
+        "AddOATag",
+        "writes a BAM or SAM text with OA tags added: no metrics file, no row, no column",
+    ),
+    (
+        "CleanSam",
+        "writes a BAM or SAM text with clipped and MAPQ-fixed records: no metrics file, no row, no column",
+    ),
+    (
+        "SetNmMdAndUqTags",
+        "writes a BAM or SAM text with MD, NM and UQ set: no metrics file, no row, no column",
+    ),
+    (
+        "SetNmAndUqTags",
+        "the deprecated name of SetNmMdAndUqTags: no metrics file, no row, no column",
+    ),
 ];
 
 /// A directory of its own for this test's files.

@@ -60,6 +60,9 @@ const FIXTURES: &[(&str, &str)] = &[
     ("DBT", "tests/data/duplicate_by_tile.bam"),
     ("TEL", "tests/data/telomere.bam"),
     ("ID", "tests/data/index_depth.bam"),
+    ("CS", "tests/data/clean_sam.bam"),
+    ("CS_SAM", "tests/data/clean_sam.sam"),
+    ("CS_PAST", "tests/data/clean_sam_past.sam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -591,6 +594,74 @@ const CHAIN_CASES: &[Case] = &[
     case!("error_chain_free_space", "chain", "MD", "-o", "OUT/s", "--free-space", "100", "+", "sort-sam", "-SO", "queryname", "+", "write"),
 ];
 
+/// The record-editing tools (`crates/core/src/record_edit.rs`): the Picard
+/// face, the verb, the errors Picard gives, and each tool as a chain step.
+#[rustfmt::skip]
+const RECORD_EDIT_CASES: &[Case] = &[
+    case!("picard_add_comments_to_bam", "AddCommentsToBam", "I=MD", "O=OUT/commented.bam", "C=first comment", "COMMENT=@CO\tsecond"),
+    case!("picard_add_comments_to_bam_index", "AddCommentsToBam", "I=MD", "O=OUT/commented.bam", "C=x", "CREATE_INDEX=true", "CREATE_MD5_FILE=true", "COMPRESSION_LEVEL=1"),
+    case!("verb_add_comments_to_bam", "add-comments-to-bam", "MD", "-o", "OUT/commented.bam", "-C", "one", "--comment", "two"),
+    case!("error_add_comments_to_bam_sam", "AddCommentsToBam", "I=MD_SAM", "O=OUT/commented.bam", "C=x"),
+    case!("error_add_comments_to_bam_cram", "AddCommentsToBam", "I=IS_CRAM", "R=REF", "O=OUT/commented.bam", "C=x"),
+    case!("picard_add_comments_to_bam_no_comment", "AddCommentsToBam", "I=MD", "O=OUT/commented.bam"),
+    case!("error_add_comments_to_bam_sam_output", "AddCommentsToBam", "I=MD", "O=OUT/commented.sam", "C=x"),
+    case!("error_add_comments_to_bam_input_output", "AddCommentsToBam", "I=MD", "O=MD", "C=x"),
+    case!("picard_replace_sam_header", "ReplaceSamHeader", "I=MD", "HEADER=OXOG", "O=OUT/reheadered.bam"),
+    case!("picard_replace_sam_header_sam", "ReplaceSamHeader", "I=MD_SAM", "HEADER=IS", "O=OUT/reheadered.sam"),
+    case!("picard_replace_sam_header_cram_header", "ReplaceSamHeader", "I=MD", "HEADER=IS_CRAM", "O=OUT/reheadered.bam", "CREATE_INDEX=true"),
+    case!("verb_replace_sam_header", "replace-sam-header", "MD_SAM", "--header", "OXOG", "-o", "OUT/reheadered.bam", "--create-index"),
+    case!("error_replace_sam_header_sort_order", "ReplaceSamHeader", "I=DM", "HEADER=MD", "O=OUT/reheadered.bam"),
+    case!("error_replace_sam_header_missing_header", "ReplaceSamHeader", "I=MD", "HEADER=tests/data/nope.sam", "O=OUT/reheadered.bam"),
+    case!("error_replace_sam_header_header_output", "ReplaceSamHeader", "I=IS", "HEADER=MD", "O=MD"),
+    case!("chain_record_edit", "chain", "MD", "-o", "OUT/s", "+", "add-comments-to-bam", "-C", "note", "+", "replace-sam-header", "--header", "OXOG", "+", "insert-size", "+", "write", "OUT/out.bam"),
+    case!("chain_dry_run_record_edit", "chain", "MD", "-o", "OUT/s", "--dry-run", "+", "add-comments-to-bam", "-C", "note", "+", "mark-duplicates", "+", "replace-sam-header", "--header", "OXOG", "+", "write", "OUT/out.bam"),
+    case!("error_chain_add_comments_index", "chain", "MD", "+", "add-comments-to-bam", "-C", "note", "--create-index", "+", "write", "OUT/out.bam"),
+    case!("picard_add_o_a_tag", "AddOATag", "I=MD", "O=OUT/oa.bam"),
+    case!("picard_add_o_a_tag_intervals", "AddOATag", "I=MD", "L=tests/data/targets.interval_list", "O=OUT/oa.bam", "CREATE_INDEX=true", "CREATE_MD5_FILE=true"),
+    case!("picard_add_o_a_tag_cram", "AddOATag", "I=IS_CRAM", "R=REF", "O=OUT/oa.sam"),
+    case!("verb_add_o_a_tag", "add-o-a-tag", "MD_SAM", "-o", "OUT/oa.bam", "-L", "tests/data/targets.interval_list"),
+    case!("error_add_o_a_tag_bed", "AddOATag", "I=MD", "L=tests/data/targets.bed", "O=OUT/oa.bam"),
+    case!("error_add_o_a_tag_input_output", "AddOATag", "I=MD", "O=MD"),
+    case!("chain_add_o_a_tag", "chain", "MD", "-o", "OUT/s", "+", "add-o-a-tag", "+", "insert-size", "+", "write", "OUT/out.bam"),
+];
+
+/// `CleanSam` (`crates/core/src/clean_sam.rs`) on `tests/data/clean_sam.bam`:
+/// the Picard face, the verb, SAM text in and out, the errors, a chain step.
+#[rustfmt::skip]
+const CLEAN_SAM_CASES: &[Case] = &[
+    case!("picard_clean_sam", "CleanSam", "I=CS", "O=OUT/cleaned.bam"),
+    case!("picard_clean_sam_index", "CleanSam", "I=CS", "O=OUT/cleaned.bam", "CREATE_INDEX=true", "CREATE_MD5_FILE=true", "COMPRESSION_LEVEL=1"),
+    case!("picard_clean_sam_sam", "CleanSam", "I=CS_SAM", "O=OUT/cleaned.sam"),
+    case!("verb_clean_sam", "clean-sam", "CS", "-o", "OUT/cleaned.sam"),
+    case!("picard_clean_sam_markdup", "CleanSam", "I=MD", "O=OUT/cleaned.bam"),
+    case!("error_clean_sam_past", "CleanSam", "I=CS_PAST", "O=OUT/cleaned.bam"),
+    case!("error_clean_sam_assume_sorted", "CleanSam", "I=CS", "O=OUT/cleaned.bam", "ASSUME_SORTED=true"),
+    case!("error_clean_sam_input_output", "CleanSam", "I=CS", "O=CS"),
+    case!("error_clean_sam_cram_output", "CleanSam", "I=CS", "O=OUT/cleaned.cram"),
+    case!("chain_clean_sam", "chain", "CS", "-o", "OUT/s", "+", "clean-sam", "+", "quality-yield", "+", "write", "OUT/out.sam"),
+    case!("error_chain_clean_sam_output", "chain", "CS", "+", "clean-sam", "--compression-level", "1", "+", "write", "OUT/out.bam"),
+];
+
+/// `SetNmMdAndUqTags` and its deprecated name `SetNmAndUqTags`: the Picard
+/// face on a BAM, SAM text and a CRAM, the verbs, the errors Picard gives,
+/// and the step in a chain after `sort-sam`.
+#[rustfmt::skip]
+const SET_NM_CASES: &[Case] = &[
+    case!("picard_set_nm_md_and_uq_tags", "SetNmMdAndUqTags", "I=MD", "R=REF", "O=OUT/tagged.bam"),
+    case!("picard_set_nm_md_and_uq_tags_sam", "SetNmMdAndUqTags", "I=MD_SAM", "R=REF", "O=OUT/tagged.sam", "IS_BISULFITE_SEQUENCE=true"),
+    case!("picard_set_nm_md_and_uq_tags_cram", "SetNmMdAndUqTags", "I=IS_CRAM", "R=REF", "O=OUT/tagged.bam", "SET_ONLY_UQ=true", "CREATE_INDEX=true", "CREATE_MD5_FILE=true"),
+    case!("picard_set_nm_and_uq_tags", "SetNmAndUqTags", "I=IS", "R=REF", "O=OUT/tagged.sam"),
+    case!("verb_set_nm_md_and_uq_tags", "set-nm-md-and-uq-tags", "MD", "-R", "REF", "-o", "OUT/tagged.sam", "--set-only-uq"),
+    case!("verb_set_nm_and_uq_tags", "set-nm-and-uq-tags", "IS", "-R", "REF", "-o", "OUT/tagged.bam", "--create-index"),
+    case!("error_set_nm_md_and_uq_tags_queryname", "SetNmMdAndUqTags", "I=DM", "R=REF", "O=OUT/tagged.bam"),
+    case!("error_set_nm_md_and_uq_tags_no_reference", "SetNmMdAndUqTags", "I=MD", "O=OUT/tagged.bam"),
+    case!("error_verb_set_nm_md_and_uq_tags_no_reference", "set-nm-md-and-uq-tags", "MD", "-o", "OUT/tagged.bam"),
+    case!("error_set_nm_md_and_uq_tags_input_output", "SetNmMdAndUqTags", "I=MD", "R=REF", "O=MD"),
+    case!("chain_set_nm_md_and_uq_tags", "chain", "MD", "-R", "REF", "-o", "OUT/s", "+", "sort-sam", "-SO", "coordinate", "+", "set-nm-md-and-uq-tags", "+", "insert-size", "+", "write", "OUT/out.bam"),
+    case!("chain_dry_run_set_nm_md_and_uq_tags", "chain", "MD", "-R", "REF", "-o", "OUT/s", "--dry-run", "+", "mark-duplicates", "+", "set-nm-md-and-uq-tags", "--is-bisulfite-sequence", "+", "write", "OUT/out.bam"),
+    case!("error_chain_set_nm_md_and_uq_tags_no_reference", "chain", "MD", "+", "set-nm-md-and-uq-tags", "+", "write", "OUT/out.bam"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -1014,6 +1085,21 @@ fn pdf_option_errors_on_the_fixtures() {
     check(PDF_OPTION_CASES);
 }
 
+#[test]
+fn documented_record_edit_commands_on_the_fixtures() {
+    check(RECORD_EDIT_CASES);
+}
+
+#[test]
+fn documented_clean_sam_commands_on_the_fixtures() {
+    check(CLEAN_SAM_CASES);
+}
+
+#[test]
+fn documented_set_nm_commands_on_the_fixtures() {
+    check(SET_NM_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1118,6 +1204,9 @@ fn case_names_are_unique() {
         .chain(T1_CASES)
         .chain(PDF_OPTION_CASES)
         .chain(DOCTOR_CASES)
+        .chain(RECORD_EDIT_CASES)
+        .chain(CLEAN_SAM_CASES)
+        .chain(SET_NM_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

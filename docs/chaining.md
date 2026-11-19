@@ -30,7 +30,7 @@ emits.
 | Step | What it is | Today |
 |---|---|---|
 | source | One BAM, CRAM or SAM text file, or a pipe holding one | the positional argument, `-` for standard input |
-| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on | `mark-duplicates`, `sort-sam` (both barriers) |
+| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on; a streaming transform edits each batch as it passes (section 16) | `mark-duplicates`, `sort-sam` (both barriers); `add-comments-to-bam`, `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`, `set-nm-and-uq-tags` (streaming) |
 | tap | A one-pass tool on the records of its position. It changes nothing | 18 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check`, `mt-copy-number`, `exon-coverage`, `adapter-content`, `duplicate-by-tile`, `telomere` |
 | write | A tap that writes the records of its position as a BAM, or as SAM text | `write [PATH]` |
 
@@ -125,12 +125,14 @@ working directory (`.insert_size_metrics`).
 - `write [PATH]` takes `--index` (`CREATE_INDEX`), `--md5` (`CREATE_MD5_FILE`) and
   `--compression-level N` (0 to 9, default 5). `-` as the path is standard output, so a
   pipe to another tool still works: `bammetrics chain in.bam + mark-duplicates + write -
-  | samtools flagstat -`. The file is a BAM, or SAM text for a name ending in `.sam`.
-  `--output-format bam|sam` says which whatever the name is, so `write - --output-format
-  sam` prints SAM text. A name ending in `.cram`, `.fastq` or `.fq` (with `.gz` too) is
-  refused with the wave that adds that kind: CRAM is W15, FASTQ is W22. `.sam.gz` is
-  refused: SAM text is written uncompressed. Section 14 has the details.
-- `--index` writes `<name>.bai` only for a coordinate-sorted stream. For any other sort
+  | samtools flagstat -`. The file is a BAM, or SAM text for a name ending in `.sam`, lower
+  case as htsjdk tells it (`out.SAM` is a BAM). `--output-format bam|sam` says which
+  whatever the name is, so `write - --output-format sam` prints SAM text. A name ending
+  in `.cram`, `.fastq` or `.fq` (with `.gz` too) is refused with the wave that adds that
+  kind: CRAM is W15, FASTQ is W22. `.sam.gz` is refused: SAM text is written
+  uncompressed. Section 14 has the details.
+- `--index` writes the `.bai` htsjdk names: `out.bam` gives `out.bai`, `out.dat` gives
+  `out.dat.bai`. It writes one only for a coordinate-sorted stream. For any other sort
   order `write` writes no index and says so on standard error. The exit code stays 0.
   The `.bai` is the file Picard `BuildBamIndex` writes for the written BAM, byte for byte
   (W05, `crates/core/src/bai.rs`). `build-bam-index` is no step: `chain BAM +
@@ -629,7 +631,7 @@ run.metrics["insert-size"]          # out/NA12878.insert_size_metrics, parsed
 | `step_table(name)` | A `StepTable` for a verb named in snake or kebab case, by its Picard class or by its function name: `verb`, `role`, `keywords`. An unknown name is a usage error with the closest step |
 | `StepTable::keyword(name)` | One keyword, or the usage error with the closest name. `input`, and `output` of `mark_duplicates`, are refused with the reason |
 | `Keyword` | `name`, `long` (the flag it spells), `ty`, `many` (`One`, `Repeated`: one occurrence per item, `Joined`: one comma list) |
-| `step_names()` | The 21 names `step` takes, snake case, in `bammetrics tools` order, `write` last |
+| `step_names()` | The 27 names `step` takes, snake case, in `bammetrics tools` order, `write` last |
 | `metric_key(chain, step, path)` | The key of a metrics file in `Run.metrics`: the verb, `STREAM.` in front for a tap that does not read the last stream, `.FILE` after it for a further file |
 | `stubs()` | The `bammetrics.pyi` entries: `_StepVerb`, `step`, three `chain` overloads |
 
@@ -1132,3 +1134,86 @@ not refuse. A pipe has no size, so its estimate is unknown and nothing is refuse
 | The planner's estimate within 25 percent of the measured spill (section 6, Q5) | Within 2.2 percent for the sort spill on both scale inputs, after one fix | At 69 bytes per record the 2,870,148,655-byte queryname slice counted 41.6 M records for 29.3 M and the sort spill estimate was 51 percent over. A queryname BAM now counts at 102 bytes per record, the bytes `write` makes in that order (docs/benchmarks.md, Scale gate of wave W05) |
 | The scale gate on the exome (section 6) | On chromosomes 1 to 5 of the exome, 3,183,979,932 bytes | The planner gives the whole exome 29.4 GiB of temporary files and 9.8 GiB of output, over the 20 GB a run may hold on this machine |
 | The header merge lifted for `SortSam` | Lifted to `crates/core/src/header_merge.rs` and used by `MarkDuplicates`; `SortSam` takes one `INPUT` and merges nothing | Picard 3.5.0 `SortSam` has one `INPUT`; `MergeSamFiles` (W13) is the next user |
+
+## 16. W09: record-editing transforms
+
+`add-comments-to-bam` and `replace-sam-header` are streaming transforms. They are built on
+`crates/core/src/record_edit.rs`, the shape every record-editing tool of waves W09 and
+W10 uses. A streaming transform edits each batch of records on the reading thread and
+hands it on in the same read. It starts no segment and holds no record.
+
+```bash
+bammetrics chain in.bam -o out/s \
+    + add-comments-to-bam -C "library prep v2" \
+    + replace-sam-header --header new_header.sam \
+    + insert-size \
+    + mark-duplicates \
+    + write --index
+```
+
+The plan lists both edits in segment 1, the segment they read. Their streams are named
+`commented` and `reheadered`, so the tap on `insert-size` writes
+`out/s.reheadered.insert_size_metrics`. `mark-duplicates` reads the edited stream, which no
+file holds, so it spools its input (section 15.2). The run prints one line per edit:
+`step 1 (add-comments-to-bam): 36 records in, 36 out, 0 changed`.
+
+| Tool | Default stream | What the step does |
+|---|---|---|
+| `add-comments-to-bam` | `commented` | Adds one `@CO` line per `--comment` to the header of its stream. The source may be SAM text or a CRAM; the tool on its own copies a BAM only, as Picard does |
+| `replace-sam-header` | `reheadered` | Puts the header of `--header` in place of its stream's. Each record keeps its reference index, as Picard's block copy of a `.bam` keeps it. The new `SO` must be `unsorted` or the stream's |
+| `add-o-a-tag` | `oa_tagged` | Appends each record's alignment to its `OA` tag, or with `-L` only on the records over an interval. Every record leaves with the `bin` htsjdk's writer computes, as the tool on its own writes it |
+| `clean-sam` | `cleaned` | Soft-clips each alignment past the end of its reference and the `MC` of a mate past the end, sets MAPQ 0 on unmapped records, and gives each record the `bin` htsjdk computes. The chain reads a SAM text source at its `--validation-stringency`, so a source with lines past the end of their reference needs `LENIENT`; the tool alone reads `STRICT` as `LENIENT`. Chained equals staged in `crates/cli/tests/clean_sam.rs` |
+| `set-nm-md-and-uq-tags` | `tagged` | Sets `MD`, `NM` and `UQ` on each mapped record of a coordinate-sorted stream against the chain's `-R` (section 16.1) |
+| `set-nm-and-uq-tags` | `tagged` | Picard's deprecated name of `set-nm-md-and-uq-tags`: the same step |
+
+The rules of a record-editing step:
+
+- The options of the BAM a tool writes on its own (`-o`, `--compression-level`,
+  `--create-index`, `--create-md5-file`) belong to the `write` step. Each exits 2 before
+  the first read: `CREATE_INDEX belongs to the write step in a chain`.
+- A header without `@HD` leaves the step with `@HD VN:1.6`, as htsjdk holds it.
+- Records of a CRAM source get `MD` and `NM` when the chain has `-R`, as the `sort-sam`
+  step gives them.
+- The step's counters are records in, records out and records changed. A tool that drops
+  or adds records says so in them.
+
+Chained equals staged (`crates/cli/tests/record_edit.rs`): each tool first, in the middle
+and last, beside `mark-duplicates` and `sort-sam`, the two after each other, on the
+fixtures, corpus t1 and the foundation corpus. The records of the written BAM are compared
+as bytes. One case differs from the staged tool on purpose: `replace-sam-header` at the
+first position of a SAM text or CRAM source keeps each reference index, where Picard's
+tool on such a file keeps each reference name. With one dictionary in both headers the two
+agree (`a_sam_source_reheaders_as_the_staged_tool`).
+
+### 16.1 set-nm-md-and-uq-tags
+
+`set-nm-md-and-uq-tags` (and `set-nm-and-uq-tags`, Picard's deprecated name for the same
+tool) is a streaming transform that reads the chain's `-R`. It sets `MD`, `NM` and `UQ`
+on each mapped record of its stream, which must be coordinate sorted, so the usual place
+is after `sort-sam -SO coordinate`:
+
+```bash
+bammetrics chain reads.queryname.bam -R ref.fa -o out/s \
+    + sort-sam -SO coordinate \
+    + set-nm-md-and-uq-tags \
+    + insert-size \
+    + write out/tagged.bam --index
+```
+
+| Tool | Default stream | What the step does |
+|---|---|---|
+| `set-nm-md-and-uq-tags`, `set-nm-and-uq-tags` | `tagged` | `MD`, `NM` and `UQ` of each mapped record against `-R`, as the tool computes them; `--is-bisulfite-sequence`, `--set-only-uq` |
+
+- Without `-R` the step exits 2 before the first read: `missing --reference-sequence`.
+- A stream whose header is not `SO:coordinate` fails the step as the tool fails: `Input
+  must be coordinate-sorted for this program to run. Found: queryname`.
+- The tool on its own writes every record through htsjdk's writer, which gives each
+  record the `bin` it computes. The step gives each record that `bin` too
+  (`RecordEdit::rewrites`), so the written BAM equals the staged tool's byte for byte.
+- `changed` counts the records whose tags the step changed: a second step after the first
+  changes none.
+
+Chained equals staged (`crates/cli/tests/set_nm_md_uq.rs`): the step first, after
+`sort-sam`, last, alone, twice and under the old name, beside `mark-duplicates` and
+`sort-sam`, with each option, on the fixtures, SAM text, a CRAM, corpus t1 and the
+foundation corpus.

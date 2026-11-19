@@ -1,0 +1,10 @@
+## argv
+CleanSam
+I=tests/data/clean_sam.bam
+O=OUT/cleaned.bam
+ASSUME_SORTED=true
+## exit
+1
+## stdout
+## stderr
+bammetrics: CleanSam: Unrecognized option: ASSUME_SORTED
