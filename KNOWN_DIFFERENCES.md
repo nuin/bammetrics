@@ -1400,7 +1400,7 @@ differ here (docs/07 decisions D34 to D39):
   `tests/concordance/index_bams.py`) exits 1 and writes nothing. Picard prints the
   `BamIndexingThread` exception, exits 0 and leaves a 0-byte `.bai`.
 - A block copy of a regular file copies the BGZF blocks as bytes, as Picard does, and
-  decodes no record (docs/07 D58). The block of the first record is deflated again with
+  decodes no record (docs/07 D68). The block of the first record is deflated again with
   zlib-rs, so its bytes differ from Picard's at levels 1 to 9. The copied blocks are
   walked header by header: a byte that starts no BGZF block exits 1, where Picard copies
   it. A `ReplaceSamHeader` whose new dictionary is shorter than the input's, and a BAM
@@ -1416,7 +1416,7 @@ differ here (docs/07 decisions D34 to D39):
 
 The output is Picard's byte for byte at `COMPRESSION_LEVEL=0` and with one input, and
 every block but one per later input at levels 1 to 9
-(`tests/concordance/test_gather_bam_files.py`). It differs here (docs/07 D53 to D55, D59, D60):
+(`tests/concordance/test_gather_bam_files.py`). It differs here (docs/07 D63 to D65, D69, D70):
 
 - At levels 1 to 9 the block of each later input's first record holds zlib-rs bytes;
   Picard's holds the JDK zlib's. Both inflate to the same bytes.
@@ -1436,7 +1436,7 @@ every block but one per later input at levels 1 to 9
 
 The checksum is Picard's on 60 generated headers as SAM text and as BAM, and on the
 fixtures, a CRAM and gzip SAM (`tests/concordance/test_calculate_read_group_checksum.py`).
-It differs here (docs/07 D57):
+It differs here (docs/07 D67):
 
 - A `DT` in the JVM locale's medium date format (`Dec 31, 1969, 5:00:00 p.m.`), which
   htsjdk reads with `DateFormat` before `Date.parse`, is no date: an error at `STRICT`,
@@ -1551,7 +1551,7 @@ BAMs, the corpus tiers, the exome slice, SAM text, gzip SAM and CRAM
 (`tests/concordance/test_split_sam_by_library.py`,
 `test_split_sam_by_number_of_reads.py`). BGZF block boundaries differ: at most 64 files
 are open at once, and a file closed to make room ends its block early. They differ here
-(docs/07 decisions D53 to D57):
+(docs/07 decisions D58 to D62):
 
 - `SplitSamByLibrary` on a CRAM exits 2 naming wave W15 (1 on the Picard face) and writes
   nothing. Picard writes a CRAM per library.

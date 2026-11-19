@@ -209,7 +209,7 @@ def test_a_cram_input_is_wave_w15(corpus, tmp_path):
                            str(reference), "-o", str(tmp_path / "verb")], capture_output=True,
                           text=True)
     assert verb.returncode == 2 and not (tmp_path / "verb").exists()
-    RESULTS.append((f"{TOOL} CRAM input", 0, 0, "Picard writes CRAM, bammetrics refuses (D53)"))
+    RESULTS.append((f"{TOOL} CRAM input", 0, 0, "Picard writes CRAM, bammetrics refuses (D58)"))
 
 
 @pytest.mark.parametrize("case", ["safe_clash", "unknown_clash", "case_clash"])
@@ -227,7 +227,7 @@ def test_one_file_for_two_writers_fails(split, tmp_path, case):
         else:
             assert done.returncode == 1, done.stderr
     assert not os.listdir(dirs["bammetrics"])
-    RESULTS.append((f"{TOOL} {case}", 0, 0, "Picard writes one file over the other (D54)"))
+    RESULTS.append((f"{TOOL} {case}", 0, 0, "Picard writes one file over the other (D59)"))
 
 
 @pytest.mark.parametrize("case", ["no_rg", "no_lb"])

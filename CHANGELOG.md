@@ -112,14 +112,14 @@ BGZF block copy.
 
 - A block copy (`GatherBamFiles`, `AddCommentsToBam`, `ReplaceSamHeader` on a `.bam`) with
   `CREATE_INDEX` indexes the records under a header that says `SO:unsorted` or has no
-  `@HD`, as htsjdk's indexer does; before, only `SO:coordinate` got an index (docs/07 D59).
+  `@HD`, as htsjdk's indexer does; before, only `SO:coordinate` got an index (docs/07 D69).
 - The block copy holds a BAM's reference list as a count and an MD5, and a list of inputs
   stops at 100,000 paths as it is read: a forged 0.5 MB header of 20,000,000 references
   read in 1,536 MiB and now reads in 4.6 MiB, a 60 MB list in 1,897 MiB and now 67 MiB.
 - `CalculateReadGroupChecksum` looks up a field's key in a hash set, and a SAM text header
   read at `SILENT` builds no message per field: one `@RG` line of 40,000 fields read in
   2.7 s and now reads in 0.02 s.
-- `libc` moves to `[workspace.dependencies]` (docs/07 D62).
+- `libc` moves to `[workspace.dependencies]` (docs/07 D72).
 - `AddCommentsToBam`, and `ReplaceSamHeader` on a `.bam` whose new dictionary is at least as
   long as the input's, copy the BGZF blocks of a regular file as bytes
   (`RecordEdit::copies_bytes`), as Picard does: no record is decoded. The records and the
