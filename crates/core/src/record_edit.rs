@@ -51,7 +51,7 @@ use crate::cram::Kind;
 use crate::error::{Error, Result};
 use crate::mark_duplicates::{ContigCache, restore_md_and_nm, same_file};
 use crate::pass;
-use crate::reference::Reference;
+use crate::reference::{Reference, files_read};
 use crate::registry::{Invocation, Opt};
 use crate::sam_text::{self, SamWriter, Stringency};
 use crate::stage::{Counters, Frame, Stage, Transform, WriteFormat, later_kind};
@@ -245,16 +245,21 @@ fn check_output(opts: &Options) -> Result<()> {
         )));
     }
     let written = opts.written();
-    let read = std::iter::once(&opts.input)
+    let named = std::iter::once(&opts.input)
         .chain(&opts.reference)
         .chain(&opts.reads);
-    for input in read {
+    for input in named {
         if !input.exists() {
             return Err(Error::Input {
                 path: input.clone(),
                 source: io::ErrorKind::NotFound.into(),
             });
         }
+    }
+    let read = std::iter::once(opts.input.clone())
+        .chain(opts.reference.iter().flat_map(|r| files_read(r)))
+        .chain(opts.reads.iter().cloned());
+    for input in &read.collect::<Vec<_>>() {
         if let Some(path) = written.iter().find(|path| same_file(input, path)) {
             return Err(Error::Usage(format!(
                 "OUTPUT={}: it is the input {}; writing it would destroy it",

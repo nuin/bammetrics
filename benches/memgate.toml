@@ -174,3 +174,152 @@ needs = ["~/data/bammetrics-scale/waves/w05/exome.chr1_5.bam"]
 max_rss_mib = 2765
 spill_dir = "{out}/tmp"
 max_spill_mib = 10931
+
+# Wave W09: the six record-editing tools and a chain of four of them. Fixture rows first,
+# then the scale rows on the slice of wave W03 (hs37d5 names). The scale peaks measured
+# on 2026-11-18 were 28 to 35 MiB for four tools, 179 and 183 MiB for the two
+# set-nm tools (one contig of the reference held) and 181 MiB for the chain
+# (docs/benchmarks.md, "Memory gate"); the limit is 512 MiB.
+
+[[command]]
+name = "add-comments-to-bam"
+argv = ["{bin}", "add-comments-to-bam", "tests/data/markdup.bam", "-o", "{out}/c.bam", "-C", "memgate"]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "replace-sam-header"
+argv = [
+    "{bin}", "replace-sam-header", "tests/data/markdup.bam", "-o", "{out}/h.bam", "--header",
+    "tests/data/markdup.sam",
+]
+needs = ["tests/data/markdup.bam", "tests/data/markdup.sam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "add-o-a-tag"
+argv = ["{bin}", "add-o-a-tag", "tests/data/markdup.bam", "-o", "{out}/oa.bam"]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "clean-sam"
+argv = ["{bin}", "clean-sam", "tests/data/markdup.bam", "-o", "{out}/clean.bam"]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "set-nm-md-and-uq-tags"
+argv = [
+    "{bin}", "set-nm-md-and-uq-tags", "tests/data/markdup.bam", "-o", "{out}/nm.bam", "-R",
+    "tests/data/ref_100k.fa",
+]
+needs = ["tests/data/markdup.bam", "tests/data/ref_100k.fa"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "set-nm-and-uq-tags"
+argv = [
+    "{bin}", "set-nm-and-uq-tags", "tests/data/markdup.bam", "-o", "{out}/nmuq.bam", "-R",
+    "tests/data/ref_100k.fa",
+]
+needs = ["tests/data/markdup.bam", "tests/data/ref_100k.fa"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "chain four edits + write --index"
+argv = [
+    "{bin}", "chain", "tests/data/markdup.bam", "+", "add-comments-to-bam", "-C", "memgate",
+    "+", "clean-sam", "+", "set-nm-md-and-uq-tags", "-R", "tests/data/ref_100k.fa", "+",
+    "add-o-a-tag", "+", "write", "{out}/edited.bam", "--index",
+]
+needs = ["tests/data/markdup.bam", "tests/data/ref_100k.fa"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "add-comments-to-bam slice"
+tier = "scale"
+argv = [
+    "{bin}", "add-comments-to-bam", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam",
+    "-o", "{out}/c.bam", "-C", "memgate",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 512
+
+[[command]]
+name = "replace-sam-header slice"
+tier = "scale"
+argv = [
+    "{bin}", "replace-sam-header", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam",
+    "-o", "{out}/h.bam", "--header", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 512
+
+[[command]]
+name = "add-o-a-tag slice"
+tier = "scale"
+argv = [
+    "{bin}", "add-o-a-tag", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "-o",
+    "{out}/oa.bam",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 512
+
+[[command]]
+name = "clean-sam slice"
+tier = "scale"
+argv = [
+    "{bin}", "clean-sam", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "-o",
+    "{out}/clean.bam",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 512
+
+[[command]]
+name = "set-nm-md-and-uq-tags slice"
+tier = "scale"
+argv = [
+    "{bin}", "set-nm-md-and-uq-tags", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam",
+    "-o", "{out}/nm.bam", "-R", "~/data/bammetrics-scale/exome/hs37d5.fa",
+]
+needs = [
+    "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam",
+    "~/data/bammetrics-scale/exome/hs37d5.fa",
+]
+max_rss_mib = 512
+
+[[command]]
+name = "set-nm-and-uq-tags slice"
+tier = "scale"
+argv = [
+    "{bin}", "set-nm-and-uq-tags", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam",
+    "-o", "{out}/nmuq.bam", "-R", "~/data/bammetrics-scale/exome/hs37d5.fa",
+]
+needs = [
+    "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam",
+    "~/data/bammetrics-scale/exome/hs37d5.fa",
+]
+max_rss_mib = 512
+
+[[command]]
+name = "chain four edits + write --index slice"
+tier = "scale"
+argv = [
+    "{bin}", "chain", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "+",
+    "add-comments-to-bam", "-C", "memgate", "+", "clean-sam", "+", "set-nm-md-and-uq-tags",
+    "-R", "~/data/bammetrics-scale/exome/hs37d5.fa", "+", "add-o-a-tag", "+", "write",
+    "{out}/edited.bam", "--index",
+]
+needs = [
+    "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam",
+    "~/data/bammetrics-scale/exome/hs37d5.fa",
+]
+max_rss_mib = 512

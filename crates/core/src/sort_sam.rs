@@ -32,7 +32,7 @@ use crate::error::{Error, Result};
 use crate::mark_duplicates::{ContigCache, restore_md_and_nm, same_file};
 use crate::metric::ToolOutput;
 use crate::pass;
-use crate::reference::Reference;
+use crate::reference::{Reference, files_read};
 use crate::registry::{Invocation, Opt, Tool};
 use crate::sam_order::Order;
 use crate::sam_sort::{self, Limits, RecordSorter};
@@ -232,14 +232,17 @@ fn check_output(opts: &Options) -> Result<()> {
             .then(|| bam_writer::index_path(&opts.output)),
         opts.create_md5.then(|| bam_writer::md5_path(&opts.output)),
     ];
-    let read = std::iter::once(&opts.input).chain(&opts.reference);
-    for input in read {
+    for input in std::iter::once(&opts.input).chain(&opts.reference) {
         if !input.exists() {
             return Err(Error::Input {
                 path: input.clone(),
                 source: io::ErrorKind::NotFound.into(),
             });
         }
+    }
+    let read = std::iter::once(opts.input.clone())
+        .chain(opts.reference.iter().flat_map(|r| files_read(r)));
+    for input in &read.collect::<Vec<_>>() {
         if let Some(path) = written.iter().flatten().find(|path| same_file(input, path)) {
             return Err(Error::Usage(format!(
                 "OUTPUT={}: it is the input {}; writing it would destroy it",

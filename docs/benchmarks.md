@@ -433,6 +433,13 @@ Fixture tier (`make memgate`):
 | `view-sam` | 4.4 / 64 | 0.00 / 30 |
 | `sort-sam --max-records-in-ram 5` | 5.9 / 64 | 0.00 / 30 |
 | `chain + sort-sam + mark-duplicates + sort-sam + write --index`, `--sort-memory 2K` | 7.6 / 64 | 0.01 / 30 |
+| `add-comments-to-bam -C memgate` | 5.1 / 64 | 0.00 / 30 |
+| `replace-sam-header --header markdup.sam` | 5.3 / 64 | 0.00 / 30 |
+| `add-o-a-tag` | 5.2 / 64 | 0.00 / 30 |
+| `clean-sam` | 5.1 / 64 | 0.00 / 30 |
+| `set-nm-md-and-uq-tags -R ref_100k.fa` | 5.6 / 64 | 0.00 / 30 |
+| `set-nm-and-uq-tags -R ref_100k.fa` | 5.7 / 64 | 0.00 / 30 |
+| `chain + add-comments-to-bam + clean-sam + set-nm-md-and-uq-tags + add-o-a-tag + write --index` | 6.6 / 64 | 0.01 / 30 |
 
 Scale tier (`make memgate TIER=scale MEMGATE_ARGS="--out-root
 ~/data/bammetrics-scale/waves/w05/bam-index --markdown"`), 8 threads. The limit is the
@@ -444,6 +451,21 @@ docs/07 target for a streaming reader or writer, 1 GiB:
 | `build-bam-index exome` | HG002.exome.bam, 10.3 GB | 9.0 / 1024 | 14.22 | |
 | `chain write --index slice` | chr20_21_22.bam | 43.2 / 1024 | 5.55 | |
 | `mark-duplicates slice` (`--create-index`) | chr20_21_22.bam | 642.9 / 1024 | 16.81 | 358.0 |
+
+The record-editing rows of wave W09 (2026-11-18, release/0.27.0 with the review fixes,
+8 threads) hold 512 MiB. The two `set-nm` tools hold one contig of hs37d5.fa at a time;
+the chain runs `add-comments-to-bam`, `clean-sam`, `set-nm-md-and-uq-tags` and
+`add-o-a-tag`, then `write --index`:
+
+| command | input | peak RSS MiB / limit | wall s |
+|---|---|---|---:|
+| `add-comments-to-bam slice` | chr20_21_22.bam | 28.5 / 512 | 2.94 |
+| `replace-sam-header slice` | chr20_21_22.bam | 28.2 / 512 | 3.13 |
+| `add-o-a-tag slice` | chr20_21_22.bam | 34.1 / 512 | 5.88 |
+| `clean-sam slice` | chr20_21_22.bam | 35.3 / 512 | 4.16 |
+| `set-nm-md-and-uq-tags slice` | chr20_21_22.bam, hs37d5.fa | 182.7 / 512 | 9.37 |
+| `set-nm-and-uq-tags slice` | chr20_21_22.bam, hs37d5.fa | 178.8 / 512 | 9.16 |
+| `chain four edits + write --index slice` | chr20_21_22.bam, hs37d5.fa | 180.6 / 512 | 14.49 |
 
 The sort rows of the W05 scale gate ("Scale gate of wave W05" above): the limit is
 `--sort-memory` (2 GiB) plus 1 GiB; since the release review the two chain rows allow

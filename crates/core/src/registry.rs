@@ -386,8 +386,8 @@ pub struct Invocation {
     pub command: String,
     /// One line per ignored option, for standard error.
     pub notes: Vec<String>,
-    /// The files the tool reads by name: `INPUT`, `REFERENCE_SEQUENCE` and
-    /// every path option not marked [`Opt::written`].
+    /// The files the tool reads by name: `INPUT`, `REFERENCE_SEQUENCE` with
+    /// its `.fai`, and every path option not marked [`Opt::written`].
     pub inputs: Vec<PathBuf>,
     /// Bytes a sort may hold in memory (`--sort-memory` of a chain); `None`
     /// for a tool run on its own, which counts records only.
@@ -666,7 +666,8 @@ impl Tool {
                     }
                     inv.notes.push(format!("ignoring {name}={value}: {why}"));
                     if opt.names[0] == "REFERENCE_SEQUENCE" {
-                        inv.inputs.push(PathBuf::from(&value));
+                        inv.inputs
+                            .extend(crate::reference::files_read(Path::new(&value)));
                         inv.values.entry(opt.names[0]).or_default().push(value);
                     } else if opt.names[0] == "VALIDATION_STRINGENCY" {
                         inv.values.entry(opt.names[0]).or_default().push(value);
@@ -679,7 +680,12 @@ impl Tool {
                         input = Some(PathBuf::from(&value));
                     }
                     if opt.ty == Ty::Path && !opt.written && value != "null" {
-                        inv.inputs.push(PathBuf::from(&value));
+                        if opt.names[0] == "REFERENCE_SEQUENCE" {
+                            inv.inputs
+                                .extend(crate::reference::files_read(Path::new(&value)));
+                        } else {
+                            inv.inputs.push(PathBuf::from(&value));
+                        }
                     }
                     inv.values.entry(opt.names[0]).or_default().push(value);
                 }

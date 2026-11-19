@@ -76,6 +76,12 @@ Wave W09 of docs/07: six record-editing tools on one shape, each a chain transfo
 
 ### Changed
 
+- `benches/memgate.toml`: fixture and scale rows for the six record-editing tools and a
+  chain of four of them with `write --index` (scale peaks 28 to 183 MiB under a 512 MiB
+  limit, docs/benchmarks.md "Memory gate"). KNOWN_DIFFERENCES.md lists a block copy of a
+  record that does not parse, `AddOATag` among the tools that do not validate records,
+  and a BAM cut in half under `AddOATag`, `CleanSam` and `SetNmMdAndUqTags`.
+
 - `RawRecord::set_cigar` and `set_mapping_quality`.
 - `bam_writer::finish_with_index` names the `.bai`; `BamWriter::unchecked` writes records
   without the order check; `RawRecord::set_reference_ids` and `set_codec_bin`;
@@ -87,6 +93,12 @@ Wave W09 of docs/07: six record-editing tools on one shape, each a chain transfo
 
 ### Fixed
 
+- The `.fai` of a reference is an input wherever `REFERENCE_SEQUENCE` is given: the
+  Picard face of the six record-editing tools, `MarkDuplicates`, `SortSam` and the
+  metrics tools (`Invocation::inputs`), and a chain step's own `-R`. `SetNmMdAndUqTags
+  I=in.bam O=ref.fa.fai R=ref.fa`, `CleanSam` on a CRAM and `chain in.bam +
+  set-nm-md-and-uq-tags -R ref.fa + write ref.fa.fai` replaced the `.fai`; each now
+  exits with `would destroy it` before the first read (`reference::files_read`).
 - A record-editing rewrite into a BAM (`AddOATag`, `CleanSam`, `SetNmMdAndUqTags`,
   `ReplaceSamHeader` on an input not named `.bam`) writes `@HD VN:1.6`, and `SO:unsorted`
   on an `@HD` without `SO`, as htsjdk's writer does; it kept the input's `VN:1.4` (found
