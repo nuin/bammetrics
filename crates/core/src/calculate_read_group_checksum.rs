@@ -380,16 +380,34 @@ pub fn checksum(groups: &[ReadGroup]) -> String {
 }
 
 /// The header of `path` checked at `stringency` as htsjdk checks it, then
-/// its checksum.
+/// its checksum. Two `@RG` lines may share an `ID` (`setReadGroups` keeps
+/// both); two `@SQ` lines may not share a name (`SAMSequenceDictionary`
+/// refuses it at any stringency).
 pub fn checksum_of(path: &Path, stringency: Stringency) -> Result<String> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
     };
     let (bytes, utf8) = header_bytes(path).map_err(input)?;
-    crate::sam_text::Reader::new(Cursor::new(&bytes), stringency, Some(path))
-        .and_then(|reader| reader.header())
-        .map_err(input)?;
+    let reader =
+        crate::sam_text::Reader::new(Cursor::new(&bytes), stringency, Some(path)).map_err(input)?;
+    let mut names = std::collections::HashSet::new();
+    for line in reader.header_text().split(|&b| b == b'\n') {
+        let name = line.strip_prefix(b"@SQ\t").and_then(|fields| {
+            fields
+                .split(|&b| b == b'\t')
+                .find_map(|f| f.strip_prefix(b"SN:"))
+        });
+        if let Some(name) = name.filter(|name| !names.insert(*name)) {
+            return Err(input(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Cannot add sequence that already exists in SAMSequenceDictionary: {}",
+                    String::from_utf8_lossy(name)
+                ),
+            )));
+        }
+    }
     let groups = read_groups(&java_string(&bytes, utf8), stringency)?;
     Ok(checksum(&groups))
 }

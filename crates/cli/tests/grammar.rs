@@ -558,6 +558,27 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("REFERENCE_SEQUENCE", REF)),
             picard_outputs: sorted_sam,
         },
+        // Stored blocks at level 0, so the .md5 of each BAM compares.
+        Case {
+            verb: "gather-bam-files",
+            class: "GatherBamFiles",
+            verb_args: strings(&[MD, "--input", MD, "--create-md5-file"]),
+            picard_args: strings(&[
+                &format!("I={MD}"),
+                &format!("I={MD}"),
+                "CREATE_MD5_FILE=true",
+            ]),
+            option: Some(("COMPRESSION_LEVEL", "0")),
+            picard_outputs: commented_bam,
+        },
+        Case {
+            verb: "calculate-read-group-checksum",
+            class: "CalculateReadGroupChecksum",
+            verb_args: strings(&["tests/data/oxog.bam"]),
+            picard_args: strings(&["I=tests/data/oxog.bam"]),
+            option: Some(("VALIDATION_STRINGENCY", "SILENT")),
+            picard_outputs: single,
+        },
     ]
 }
 
@@ -575,7 +596,7 @@ fn named_output(verb: &str) -> Option<&'static str> {
         | "clean-sam"
         | "set-nm-md-and-uq-tags"
         | "set-nm-and-uq-tags" => Some("sam"),
-        "add-comments-to-bam" => Some("bam"),
+        "add-comments-to-bam" | "gather-bam-files" => Some("bam"),
         _ => None,
     }
 }
@@ -681,7 +702,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 48);
+    assert_eq!(classes.len(), 50);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

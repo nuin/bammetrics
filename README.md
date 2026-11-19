@@ -200,6 +200,8 @@ the sizes and a Chrome recipe for a build without the feature.
 | CleanSam (an alignment past the end of its reference soft-clipped at its end, the mate's `MC` clipped the same way, MAPQ 0 on unmapped records; SAM, BAM or CRAM in, BAM or SAM text out; a chain transform) | | `clean_sam()` |
 | SetNmMdAndUqTags (`MD`, `NM` and `UQ` of each mapped record of a coordinate-sorted input against `REFERENCE_SEQUENCE`, as htsjdk computes them; `IS_BISULFITE_SEQUENCE`, `SET_ONLY_UQ`; a chain transform) | | `set_nm_md_and_uq_tags()` |
 | SetNmAndUqTags (Picard's deprecated name of SetNmMdAndUqTags: the same options and output) | | `set_nm_and_uq_tags()` |
+| GatherBamFiles (the records of every `INPUT` in order under the first header; BAM inputs block copied as Picard copies them, byte for byte at `COMPRESSION_LEVEL=0`; lists of paths; SAM or CRAM read record by record) | | `gather_bam_files()` |
+| CalculateReadGroupChecksum (the MD5 of the `@RG` records as htsjdk computes it, in `OUTPUT` or `INPUT.read_group_md5`; the header alone is read) | | `calculate_read_group_checksum()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 | SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | `validation_stringency=` |

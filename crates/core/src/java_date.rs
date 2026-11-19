@@ -503,20 +503,58 @@ fn same_ignoring_case(entry: char, unit: u16) -> bool {
     c == entry || upper(c) == upper(entry) || lower(upper(c)) == lower(upper(entry))
 }
 
+/// 1900-01-01T00:00:00Z: `ZoneInfo` holds no transition before it.
+const UTC1900: i64 = -2_208_988_800_000;
+
 /// The offset of the process's time zone at `millis`, in milliseconds east
-/// of UTC: `tm_gmtoff` of `localtime_r`.
+/// of UTC, as `sun.util.calendar.ZoneInfo` gives it: `tm_gmtoff` of
+/// `localtime_r` from 1900 on, and before 1900 the zone's standard offset
+/// today (`getLastRawOffset`; no local mean time).
 fn zone_offset(millis: i64) -> Option<i64> {
+    if millis < UTC1900 {
+        return raw_offset();
+    }
+    libc_offset(millis)
+}
+
+/// The zone's last standard offset (`ZoneInfo.rawOffset`, the last offset
+/// of the zone's history, a rule already decided for later years
+/// included): the offset without daylight saving at one of two instants
+/// half a year apart, ten years from now, else the smaller.
+fn raw_offset() -> Option<i64> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?;
+    let later = i64::try_from(now.as_millis()).ok()? + 3650 * DAY;
+    let mut offsets = Vec::new();
+    for at in [later, later + 182 * DAY] {
+        let tm = local_tm(at)?;
+        offsets.push((i64::from(tm.tm_gmtoff) * 1000, tm.tm_isdst > 0));
+    }
+    offsets
+        .iter()
+        .find(|(_, dst)| !dst)
+        .map(|(offset, _)| *offset)
+        .or_else(|| offsets.iter().map(|(offset, _)| *offset).min())
+}
+
+/// `tm_gmtoff` of `localtime_r` at `millis`, in milliseconds.
+fn libc_offset(millis: i64) -> Option<i64> {
+    local_tm(millis).map(|tm| i64::from(tm.tm_gmtoff) * 1000)
+}
+
+/// `localtime_r` at `millis`.
+fn local_tm(millis: i64) -> Option<libc::tm> {
     let seconds = libc::time_t::try_from(floor_div(millis, 1000)).ok()?;
     // SAFETY: `localtime_r` writes the zeroed `tm` it is given and reads
     // only `seconds`; a null result is checked.
-    let offset = unsafe {
+    unsafe {
         let mut tm: libc::tm = std::mem::zeroed();
         if libc::localtime_r(&seconds, &mut tm).is_null() {
             return None;
         }
-        tm.tm_gmtoff
-    };
-    Some(i64::from(offset) * 1000)
+        Some(tm)
+    }
 }
 
 /// The instant of the wall-clock time `wall` in the process's zone, as

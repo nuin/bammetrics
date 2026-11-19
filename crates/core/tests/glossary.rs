@@ -70,6 +70,10 @@ const EXEMPT: &[(&str, &str)] = &[
         "SetNmAndUqTags",
         "the deprecated name of SetNmMdAndUqTags: no metrics file, no row, no column",
     ),
+    (
+        "GatherBamFiles",
+        "writes a BAM gathered from several: no metrics file, no row, no column",
+    ),
 ];
 
 /// A directory of its own for this test's files.
@@ -255,6 +259,11 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
     args.insert("ViewSam", vec![bam.clone(), "HEADER_ONLY=true".to_owned()]);
     // The tool writes the index itself and returns rows without a class.
     args.insert("BuildBamIndex", vec![bam.clone(), out("fixture.bai")]);
+    // The tool writes the checksum itself and returns one row without a class.
+    args.insert(
+        "CalculateReadGroupChecksum",
+        vec![bam.clone(), out("fixture.read_group_md5")],
+    );
     args.insert(
         "CheckDuplicateMarking",
         vec![bam.clone(), out("bad_querynames.txt")],

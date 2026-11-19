@@ -112,7 +112,7 @@ fn bad_gathers_fail_and_leave_no_file() {
     };
     let markdup = format!("I={}", data("markdup.bam").display());
     let o = format!("O={}", out.display());
-    // Two dictionaries: oxog.bam has the fixture's, no_reads.bam another.
+    // A file with records under another dictionary.
     let other = dir.join("other.bam");
     let mut header = b"@HD\tVN:1.6\n@SQ\tSN:chrX\tLN:5\n".to_vec();
     header.push(b'\n');
@@ -123,6 +123,8 @@ fn bad_gathers_fail_and_leave_no_file() {
     bytes.extend_from_slice(&5i32.to_le_bytes());
     bytes.extend_from_slice(b"chrX\0");
     bytes.extend_from_slice(&5i32.to_le_bytes());
+    // Bytes after the header: the file holds records.
+    bytes.extend_from_slice(b"records");
     let mut file = Vec::new();
     bgzf_copy::write_blocks(&mut file, &bytes, 5).expect("blocks");
     file.extend_from_slice(&bgzf_copy::EOF_BLOCK);
