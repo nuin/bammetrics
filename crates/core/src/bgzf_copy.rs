@@ -27,10 +27,11 @@
 //! Every length read from a file is checked. A block header must be a BGZF
 //! header (gzip magic with `FEXTRA`, `XLEN` 6 and the `BC` subfield) whose
 //! `BSIZE` gives 26 to 65,536 bytes; an inflated block must hold `ISIZE`
-//! bytes, at most 65,536. The header text is read through and not held;
-//! each reference name is read through [`read_append`], so no buffer is
-//! sized from a length before its bytes are read, and the reference list
-//! and the text share one budget of [`MAX_HEADER_BYTES`]. The blocks of
+//! bytes, at most 65,536. The header text and the reference list are read
+//! through and not held: the list is kept as its entry count and the MD5 of
+//! its bytes ([`Dictionary`]), so memory stays at one block and a few
+//! buffers whatever count or length the file states. The text and the list
+//! share one budget of [`MAX_HEADER_BYTES`]. The blocks of
 //! step 3 are walked header by header: a file cut inside a block, or a byte
 //! that starts no block, fails the copy where htsjdk copies it.
 
@@ -42,6 +43,7 @@ use zlib_rs::{DeflateConfig, InflateConfig, Method, ReturnCode, Strategy};
 
 use crate::bam_raw::read_append;
 use crate::error::{Error, Result};
+use crate::md5::Md5;
 
 /// The BGZF end-of-file block (SAM specification 4.1.2).
 pub const EOF_BLOCK: [u8; 28] = [
@@ -67,6 +69,8 @@ pub const BLOCK_DATA_BYTES: usize = 65_498;
 pub const MAX_HEADER_BYTES: u64 = 1 << 31;
 /// The bytes of one copy buffer.
 const COPY_BUFFER: usize = 1 << 20;
+/// The reference list bytes handed to the digest at once.
+const DIGEST_RUN: usize = 1 << 16;
 
 /// `BlockCompressedInputStream.checkTermination`: how a file ends.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -270,12 +274,22 @@ impl<R: Read + Seek> Inflating<R> {
         Ok(())
     }
 
-    /// Read `count` bytes and drop them.
-    fn skip(&mut self, mut count: u64) -> io::Result<()> {
+    /// Read `count` bytes and hand each run of them to `each`.
+    fn read_through(&mut self, mut count: u64, mut each: impl FnMut(&[u8])) -> io::Result<()> {
+        // A reference name is a few bytes: zeroing 4 KiB for each of
+        // millions of them costs more than reading them.
+        if count <= 64 {
+            let mut short = [0u8; 64];
+            let short = &mut short[..count as usize];
+            self.read_exact(short)?;
+            each(short);
+            return Ok(());
+        }
         let mut scratch = [0u8; 4096];
         while count > 0 {
             let n = count.min(scratch.len() as u64) as usize;
             self.read_exact(&mut scratch[..n])?;
+            each(&scratch[..n]);
             count -= n as u64;
         }
         Ok(())
@@ -322,13 +336,22 @@ impl<R: Read + Seek> Inflating<R> {
     }
 }
 
+/// A binary reference list as its entry count and the MD5 of its bytes
+/// (each `l_name`, name with its NUL and `l_ref`): two lists are equal when
+/// their dictionaries are, and the list is never held.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Dictionary {
+    pub count: u64,
+    pub digest: [u8; 16],
+}
+
 /// Where a BAM's records start, and its binary reference list.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BamStart {
     /// The virtual offset of the first record: block address and offset.
     pub first_record: (u64, usize),
-    /// Each reference's name (without its NUL) and length.
-    pub references: Vec<(Vec<u8>, i32)>,
+    /// The reference names and lengths.
+    pub references: Dictionary,
     /// A byte follows the header before an empty block or the end: the
     /// file holds records.
     pub has_records: bool,
@@ -346,7 +369,7 @@ fn read_start<R: Read + Seek>(stream: &mut Inflating<R>) -> io::Result<BamStart>
     let l_text = u64::try_from(l_text)
         .map_err(|_| invalid(format!("the BAM header text claims {l_text} bytes")))?;
     let mut budget = MAX_HEADER_BYTES.saturating_sub(l_text);
-    stream.skip(l_text)?;
+    stream.read_through(l_text, |_| ())?;
     let count = stream.read_i32()?;
     let count = u64::try_from(count)
         .map_err(|_| invalid(format!("the BAM reference list claims {count} entries")))?;
@@ -356,7 +379,11 @@ fn read_start<R: Read + Seek>(stream: &mut Inflating<R>) -> io::Result<BamStart>
             "the BAM reference list claims {count} entries, over the {MAX_HEADER_BYTES}-byte header budget"
         )));
     }
-    let mut references = Vec::new();
+    // Each entry costs at least 9 bytes of the file, so the loop is bounded
+    // by the bytes read; nothing per entry is kept.
+    let mut md5 = Md5::new();
+    // The entries go to the digest 64 KiB at a time.
+    let mut pending = Vec::with_capacity(DIGEST_RUN + 4096);
     for _ in 0..count {
         let l_name = stream.read_i32()?;
         let l_name = u64::try_from(l_name)
@@ -364,27 +391,26 @@ fn read_start<R: Read + Seek>(stream: &mut Inflating<R>) -> io::Result<BamStart>
             .filter(|&n| n >= 1 && n + 4 <= budget)
             .ok_or_else(|| invalid(format!("a BAM reference name claims {l_name} bytes")))?;
         budget -= l_name + 4;
-        let mut name = Vec::new();
-        read_append(&mut ReadAdapter(stream), &mut name, l_name as usize)?;
-        name.pop();
-        let length = stream.read_i32()?;
-        references.push((name, length));
+        pending.extend_from_slice(&(l_name as i32).to_le_bytes());
+        stream.read_through(l_name, |bytes| {
+            pending.extend_from_slice(bytes);
+            if pending.len() >= DIGEST_RUN {
+                md5.update(&pending);
+                pending.clear();
+            }
+        })?;
+        pending.extend_from_slice(&stream.read_i32()?.to_le_bytes());
     }
+    md5.update(&pending);
     let first_record = stream.file_pointer();
     Ok(BamStart {
         first_record,
-        references,
+        references: Dictionary {
+            count,
+            digest: md5.finish(),
+        },
         has_records: stream.available()? > 0,
     })
-}
-
-/// [`Inflating::read_exact`] as a [`Read`], for [`read_append`].
-struct ReadAdapter<'a, R>(&'a mut Inflating<R>);
-
-impl<R: Read + Seek> Read for ReadAdapter<'_, R> {
-    fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
-        self.0.read_exact(out).map(|()| out.len())
-    }
 }
 
 /// One BAM to copy: its file, size and termination, and where its records

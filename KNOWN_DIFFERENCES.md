@@ -1394,8 +1394,6 @@ differ here (docs/07 decisions D34 to D39):
   samtools cannot read.
 - A block copy of a BAM with no record ends with the BGZF end-of-file block. Picard's
   file has none; samtools warns that it may be cut.
-- `CREATE_INDEX` on a block copy writes `OUTPUT.bai` when the header says `SO:coordinate`.
-  Picard also indexes an `SO:unsorted` BAM whose records are in coordinate order.
 - `CREATE_INDEX` on a BAM htsjdk's indexer refuses (a record placed without a reference,
   references out of order, a reference index the header lacks, a start past its
   reference, a position past 512 Mbp: nine of the `refused()` BAMs of
@@ -1418,7 +1416,7 @@ differ here (docs/07 decisions D34 to D39):
 
 The output is Picard's byte for byte at `COMPRESSION_LEVEL=0` and with one input, and
 every block but one per later input at levels 1 to 9
-(`tests/concordance/test_gather_bam_files.py`). It differs here (docs/07 D53 to D55):
+(`tests/concordance/test_gather_bam_files.py`). It differs here (docs/07 D53 to D55, D59, D60):
 
 - At levels 1 to 9 the block of each later input's first record holds zlib-rs bytes;
   Picard's holds the JDK zlib's. Both inflate to the same bytes.
@@ -1428,6 +1426,11 @@ every block but one per later input at levels 1 to 9
 - A block copy into an `OUTPUT` named `.sam` or `.cram` exits with a usage error; an
   `OUTPUT` that is an input or a list is refused; a failed run leaves no output.
 - A byte between two copied blocks that starts no BGZF block exits 1. Picard copies it.
+- `CREATE_INDEX` on records htsjdk's indexer refuses (a reference that goes back under
+  `SO:unsorted` or `SO:coordinate`) exits 1 with no output. Picard's indexing thread
+  fails, the run exits 0 and leaves a 0-byte `.bai`, as for `AddCommentsToBam`.
+- No `INPUT`, or lists that name no input, exits 1. Picard exits 0 and writes a 28-byte
+  file holding the end-of-file block alone, which has no BAM header.
 
 ## CalculateReadGroupChecksum
 

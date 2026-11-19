@@ -678,6 +678,8 @@ const GATHER_CHECKSUM_CASES: &[Case] = &[
     case!("verb_calculate_read_group_checksum_sam", "calculate-read-group-checksum", "MD_SAM", "-o", "OUT/markdup.md5", "--validation-stringency", "SILENT"),
     case!("error_calculate_read_group_checksum_input_output", "CalculateReadGroupChecksum", "I=OXOG", "O=OXOG"),
     case!("error_calculate_read_group_checksum_missing", "CalculateReadGroupChecksum", "I=tests/data/nope.bam", "O=OUT/x.md5"),
+    case!("error_chain_gather_bam_files", "chain", "MD", "-o", "OUT/s", "+", "gather-bam-files"),
+    case!("error_chain_calculate_read_group_checksum", "chain", "MD", "-o", "OUT/s", "+", "calculate-read-group-checksum"),
 ];
 
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:

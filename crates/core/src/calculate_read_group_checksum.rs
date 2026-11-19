@@ -37,6 +37,7 @@
 //!
 //! The Python function returns one row: the checksum.
 
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
@@ -286,6 +287,9 @@ pub fn read_groups(text: &[u16], stringency: Stringency) -> Result<Vec<ReadGroup
             fields.pop();
         }
         let mut kept: Vec<(Vec<u16>, Vec<u16>)> = Vec::new();
+        // The keys kept so far: one lookup per field, so a line of many
+        // fields costs linear time.
+        let mut keys: HashSet<[u16; 2]> = HashSet::new();
         for field in &fields[1..] {
             let Some(at) = field.iter().position(|&u| u == colon) else {
                 continue;
@@ -294,12 +298,12 @@ pub fn read_groups(text: &[u16], stringency: Stringency) -> Result<Vec<ReadGroup
             if value.is_empty() {
                 continue;
             }
+            let Ok(key) = <[u16; 2]>::try_from(key) else {
+                continue;
+            };
             // A second value of a key is dropped (an error htsjdk reports),
             // the same value again kept once.
-            if kept.iter().any(|(k, _)| k.as_slice() == key) {
-                continue;
-            }
-            if key.len() != 2 {
+            if !keys.insert(key) {
                 continue;
             }
             kept.push((key.to_vec(), value.to_vec()));

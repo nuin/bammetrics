@@ -9,7 +9,8 @@ prints it, then every record as bytes after inflation).
 Inputs: the fixture BAMs, a BAM without an `@HD` line, a queryname-sorted BAM, the
 foundation corpus, t1 to t3, the exome slice. Comments: plain, with a tab, with a carriage
 return, with `@CO` and a tab in front (kept once), `@CO` alone, beyond ASCII (Latin-1
-bytes in both). Options: COMPRESSION_LEVEL, CREATE_INDEX (`OUTPUT.bai`), CREATE_MD5_FILE,
+bytes in both). Options: COMPRESSION_LEVEL, CREATE_INDEX (`OUTPUT.bai`, also under
+`SO:unsorted` and without `@HD`, none under another order), CREATE_MD5_FILE,
 MAX_RECORDS_IN_RAM and REFERENCE_SEQUENCE (both ignored on a BAM). Error parity: a `.sam`
 input, SAM text in another name, bgzip SAM, a CRAM, no COMMENT, a newline in a comment,
 ASSUME_SORTED, a missing input and a missing output directory. The step in a chain against
@@ -133,6 +134,69 @@ COMMENTS = ["C=one", "C=two words", "COMMENT=@CO\tthree", "C=tab\there", "C=a\rb
             "C=é ü ñ"]
 
 
+def sort_order_inputs(directory):
+    """BAMs whose header order and record order disagree, for the index of a block copy:
+    the markdup records under `SO:unsorted`, under no `@HD`, and sorted by name under
+    `SO:queryname`; three records whose reference goes back (c2 then c1) under
+    `SO:unsorted` and `SO:unknown`."""
+    md = SOURCES["markdup"]
+    header = subprocess.run(["samtools", "view", "-H", str(md)], check=True,
+                            capture_output=True, text=True).stdout
+    body = subprocess.run(["samtools", "view", str(md)], check=True, capture_output=True,
+                          text=True).stdout
+    no_hd = "".join(line for line in header.splitlines(True) if not line.startswith("@HD"))
+    texts = {
+        "unsorted_header": header.replace("SO:coordinate", "SO:unsorted") + body,
+        "no_hd": no_hd + body,
+    }
+    back = "".join(f"r{i}\t0\t{ref}\t{pos}\t60\t10M\t*\t0\t0\tACGTACGTAC\tIIIIIIIIII\n"
+                   for i, (ref, pos) in enumerate([("c2", 100), ("c1", 200), ("c1", 50)]))
+    for order in ("unsorted", "unknown"):
+        texts[f"back_{order}"] = (f"@HD\tVN:1.6\tSO:{order}\n@SQ\tSN:c1\tLN:5000\n"
+                                  f"@SQ\tSN:c2\tLN:5000\n{back}")
+    paths = {}
+    for name, text in texts.items():
+        paths[name] = directory / f"{name}.bam"
+        subprocess.run(["samtools", "view", "--no-PG", "-b", "-o", str(paths[name]), "-"],
+                       input=text, text=True, check=True)
+    paths["queryname"] = directory / "queryname.bam"
+    subprocess.run(["samtools", "sort", "-n", "--no-PG", "-o", str(paths["queryname"]), str(md)],
+                   check=True)
+    return paths
+
+
+def index_by_sort_order(tool, args_of, tmp_path, index_name):
+    """CREATE_INDEX on a block copy follows htsjdk's `BAMIndexer`: the records are indexed
+    under `SO:coordinate`, `SO:unsorted` or no `@HD` (the same .bai in both tools), no
+    index under another order (both exit 0). A record the indexer refuses (its reference
+    goes back) leaves Picard's run at exit 0 with an empty .bai; bammetrics exits 1 and
+    writes nothing (KNOWN_DIFFERENCES.md)."""
+    inputs = sort_order_inputs(tmp_path)
+    for name, bam in inputs.items():
+        result = {}
+        for side in ("picard", "bammetrics"):
+            directory = tmp_path / name / side
+            directory.mkdir(parents=True)
+            done = run_tool(side, tool, [*args_of(bam), f"O={directory / 'out.bam'}",
+                                         "CREATE_INDEX=true"])
+            result[side] = (done.returncode, sorted(p.name for p in directory.iterdir()))
+        index = [tmp_path / name / side / index_name for side in ("picard", "bammetrics")]
+        if name in ("unsorted_header", "no_hd"):
+            assert result["picard"] == result["bammetrics"] == (0, sorted(["out.bam",
+                                                                           index_name])), name
+            assert index[0].read_bytes() == index[1].read_bytes(), name
+            detail = f"{index_name} equal"
+        elif name in ("queryname", "back_unknown"):
+            assert result["picard"] == result["bammetrics"] == (0, ["out.bam"]), name
+            detail = "no index in either"
+        else:
+            assert result["picard"] == (0, sorted(["out.bam", index_name])), name
+            assert index[0].stat().st_size == 0, name
+            assert result["bammetrics"] == (1, []), name
+            detail = "indexer refuses: Picard an empty .bai, bammetrics exit 1 and no file"
+        RESULTS.append((f"{tool} CREATE_INDEX {name}", 1, 1, detail))
+
+
 @pytest.mark.parametrize("name", [*SOURCES, "foundation", "exome"])
 def test_every_input(corpus, exome, name):
     source = source_path(name, corpus, exome)
@@ -205,6 +269,10 @@ def test_no_index_beside_a_queryname_bam(tmp_path):
         assert done.returncode == 0, done.stderr[-800:]
         assert sorted(p.name for p in directory.iterdir()) == ["out.bam", "out.bam.md5"], side
     RESULTS.append((f"{TOOL} CREATE_INDEX queryname", 0, 0, "neither writes an index"))
+
+
+def test_the_index_follows_the_header_order_as_htsjdk(tmp_path):
+    index_by_sort_order(TOOL, lambda bam: [f"I={bam}", "C=x"], tmp_path, "out.bam.bai")
 
 
 @pytest.fixture(scope="module")

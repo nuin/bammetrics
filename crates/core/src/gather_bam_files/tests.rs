@@ -62,6 +62,19 @@ fn a_list_that_names_itself_ends_with_an_error() {
 }
 
 #[test]
+fn a_list_stops_at_the_input_cap() {
+    let dir = scratch("cap");
+    let list = dir.join("many.list");
+    std::fs::write(&list, "a.bam\n".repeat(MAX_INPUTS)).expect("list");
+    let (inputs, _) = unroll(&strings(&[&list])).expect("at the cap");
+    assert_eq!(inputs.len(), MAX_INPUTS);
+    std::fs::write(&list, "a.bam\n".repeat(MAX_INPUTS + 1)).expect("list");
+    let message = unroll(&strings(&[&list])).expect_err("over").to_string();
+    assert!(message.contains("more than 100000 inputs"), "{message}");
+    std::fs::remove_dir_all(&dir).expect("scratch");
+}
+
+#[test]
 fn the_block_copy_index_is_named_by_the_basename() {
     for (output, index) in [
         ("out.bam", "out.bai"),

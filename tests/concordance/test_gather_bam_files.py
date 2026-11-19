@@ -13,7 +13,8 @@ pieces gathered back in order, and some in another order), the fixture BAMs, a B
 record first and later, a BAM without its end-of-file block first and later, lists of
 paths (nested, blank lines, spaces). A SAM or CRAM input sends both tools down Picard's
 `gatherNormally` (tier B, records as bytes). CREATE_INDEX names the index `out.bai` beside
-`out.bam` and beside `out.dat`. Error parity: a file cut inside a block, text named `.bam`,
+`out.bam` and beside `out.dat`, and follows htsjdk's `BAMIndexer` on the header order
+(coordinate, unsorted, no `@HD`). Error parity: a file cut inside a block, text named `.bam`,
 bgzip SAM named `.bam` after a BAM, a missing input, a list naming a missing file, a CRAM
 without R, a missing output directory. bammetrics alone refuses an input with records
 under another sequence dictionary, a block copy into a `.sam` name and an OUTPUT that is
@@ -29,7 +30,7 @@ import pytest
 from cases import BAMMETRICS, CORPUS, FIXTURES
 from compare import compare_bam
 from conftest import RESULTS
-from test_add_comments_to_bam import index_and_md5, records_of, run_tool
+from test_add_comments_to_bam import index_and_md5, index_by_sort_order, records_of, run_tool
 
 TOOL = "GatherBamFiles"
 T1 = CORPUS / "t1.bam"
@@ -177,6 +178,25 @@ def test_the_index_of_a_dat_output(tmp_path):
     names = [sorted(p.name for p in out.parent.iterdir()) for out in (pout, oout)]
     assert names[0] == names[1] == ["out.bai", "out.dat"]
     RESULTS.append((f"{TOOL} CREATE_INDEX out.dat", 1, 1, "out.bai in both"))
+
+
+def test_the_index_follows_the_header_order_as_htsjdk(tmp_path):
+    index_by_sort_order(TOOL, lambda bam: [f"I={bam}"], tmp_path, "out.bai")
+
+
+def test_the_index_follows_the_first_header(tmp_path):
+    """A queryname-sorted input after markdup.bam: the output takes the `SO:coordinate`
+    header of the first, so both tools index the records (in no coordinate order)."""
+    queryname = tmp_path / "queryname.bam"
+    subprocess.run(["samtools", "sort", "-n", "--no-PG", "-o", str(queryname),
+                    str(FIXTURES / "markdup.bam")], check=True)
+    (prc, pout, perr), (orc, oout, oerr) = both(
+        [f"I={FIXTURES / 'markdup.bam'}", f"I={queryname}", "CREATE_INDEX=true"], tmp_path)
+    assert prc == 0, perr[-800:]
+    assert orc == 0, oerr[-800:]
+    indexes = [out.with_name("out.bai").read_bytes() for out in (pout, oout)]
+    assert indexes[0] == indexes[1]
+    RESULTS.append((f"{TOOL} CREATE_INDEX queryname after coordinate", 1, 1, "out.bai equal"))
 
 
 def test_sam_and_cram_inputs_gather_record_by_record(pieces, tmp_path):

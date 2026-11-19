@@ -17,8 +17,9 @@
 //! 1 to 9 the one block per later input that htsjdk deflates again holds
 //! zlib-rs bytes, which inflate to Picard's. `CREATE_INDEX` writes
 //! `<basename>.bai` beside the output (`out.bai` for `out.bam` and for
-//! `out.dat`) when the first header says `SO:coordinate`; `CREATE_MD5_FILE`
-//! writes `<OUTPUT>.md5`.
+//! `out.dat`) when the first header says `SO:coordinate` or `SO:unsorted`
+//! or has no `SO`, as htsjdk's `BAMIndexer` takes them
+//! ([`bam_writer::finish_file`]); `CREATE_MD5_FILE` writes `<OUTPUT>.md5`.
 //!
 //! Any other name sends Picard down `gatherNormally`: the header of the
 //! first input, then every record of every input read one by one (SAM text
@@ -87,8 +88,9 @@ pub const TOOL: Tool = Tool {
         record_edit::COMPRESSION_OPTION,
         Opt::bool(
             &["CREATE_INDEX"],
-            "Write a .bai beside a coordinate-sorted BAM OUTPUT, named OUTPUT less its \
-             extension plus .bai for a block copy (default false).",
+            "Write a .bai beside a BAM OUTPUT, named OUTPUT less its extension plus .bai for \
+             a block copy, which is indexed under SO:coordinate, SO:unsorted or no @HD; \
+             written records under SO:coordinate (default false).",
         ),
         record_edit::MD5_OPTION,
         record_edit::RECORDS_IN_RAM_OPTION,
@@ -130,23 +132,34 @@ pub fn unroll(given: &[String]) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
                 "INPUT: more than {MAX_LISTS} list files to read; does a list name itself?"
             )));
         }
-        for line in list_lines(&path)? {
+        let text = list_text(&path)?;
+        for line in list_lines(&text) {
+            if stack.len() + inputs.len() == MAX_INPUTS {
+                return Err(Error::Usage(format!(
+                    "INPUT: more than {MAX_INPUTS} inputs; does a list name itself?"
+                )));
+            }
             stack.push(PathBuf::from(line));
         }
         lists.push(path);
-        if stack.len() + inputs.len() > MAX_INPUTS {
-            return Err(Error::Usage(format!(
-                "INPUT: more than {MAX_INPUTS} inputs; does a list name itself?"
-            )));
-        }
     }
     inputs.reverse();
     Ok((inputs, lists))
 }
 
-/// The paths of the list file `path`: `Files.lines` (UTF-8, lines ended by
-/// `\n`, `\r` or `\r\n`), each `String.trim`med, empty lines dropped.
-fn list_lines(path: &Path) -> Result<Vec<String>> {
+/// The paths of a list's text: `Files.lines` (lines ended by `\n`, `\r` or
+/// `\r\n`), each `String.trim`med, empty lines dropped. Lazy, so the caller
+/// stops at [`MAX_INPUTS`] and no line beyond it is held.
+fn list_lines(text: &str) -> impl Iterator<Item = &str> {
+    text.split('\n')
+        .flat_map(|line| line.split('\r'))
+        .map(|line| line.trim_matches(|c: char| c <= ' '))
+        .filter(|line| !line.is_empty())
+}
+
+/// The text of the list file `path`, at most [`MAX_LIST_BYTES`] of UTF-8
+/// (`Files.lines` fails on other bytes).
+fn list_text(path: &Path) -> Result<String> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
@@ -163,19 +176,12 @@ fn list_lines(path: &Path) -> Result<Vec<String>> {
             format!("a list of inputs over {MAX_LIST_BYTES} bytes"),
         )));
     }
-    let text = String::from_utf8(bytes).map_err(|_| {
+    String::from_utf8(bytes).map_err(|_| {
         input(io::Error::new(
             io::ErrorKind::InvalidData,
             "a list of inputs that is not UTF-8 text (Files.lines fails on it)",
         ))
-    })?;
-    Ok(text
-        .split('\n')
-        .flat_map(|line| line.split('\r'))
-        .map(|line| line.trim_matches(|c: char| c <= ' '))
-        .filter(|line| !line.is_empty())
-        .map(str::to_owned)
-        .collect())
+    })
 }
 
 /// `IOUtil.assertFileIsReadable`: each input exists, is no directory and
@@ -309,8 +315,9 @@ fn gather_blocks(gather: &Gather) -> Result<()> {
             });
         }
     }
-    // The sort order decides the index; without one the header is not parsed,
-    // as htsjdk's block copy never parses the first file's.
+    // The sort order decides the index (htsjdk's `BAMIndexer` reads the
+    // output header, the first input's); without one the header is not
+    // parsed, as htsjdk's block copy never parses the first file's.
     let header = if opts.create_index {
         pass::read_header_at(first.path(), crate::sam_text::Stringency::Silent)?
     } else {

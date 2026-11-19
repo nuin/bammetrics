@@ -578,8 +578,9 @@ header's own, then every record of the BAM, byte for byte (`tests/concordance/te
 - A comment that starts with `@CO` and a tab keeps one prefix; a newline exits 2. Other
   characters go out as htsjdk writes them (`é` as the byte 0xE9).
 - No `@PG` line is added. A header without `@HD` gets `@HD VN:1.6`, as htsjdk writes it.
-- `--create-index` writes `out.bam.bai` beside a coordinate-sorted BAM (Picard's block
-  copy names it so); `--create-md5-file` writes `out.bam.md5`. An `-o` ending in `.sam`
+- `--create-index` writes `out.bam.bai` (Picard's block copy names it so) under a header
+  that says `SO:coordinate`, `SO:unsorted` or has no `@HD`, and no index under another
+  order, as htsjdk's indexer does; `--create-md5-file` writes `out.bam.md5`. An `-o` ending in `.sam`
   exits 2: Picard writes BAM bytes under that name.
 - In a chain the step adds the comments to the stream at its position: `bammetrics chain
   in.bam + add-comments-to-bam -C note + write out.bam`.
@@ -739,7 +740,13 @@ header of the first (`tests/concordance/test_gather_bam_files.py`).
   writer checks.
 - `--create-index` writes a `.bai` named as Picard names it: the output name less its
   extension plus `.bai` for a block copy (`out.bai` for `out.bam` and for `out.dat`),
-  `out.bai` or `out.dat.bai` otherwise. `--create-md5-file` writes `out.bam.md5`.
+  `out.bai` or `out.dat.bai` otherwise. `--create-md5-file` writes `out.bam.md5`. A block
+  copy indexes the records under a first header that says `SO:coordinate`, `SO:unsorted`
+  or has no `@HD`, as htsjdk's indexer does, and writes no index under another order. A
+  record the indexer refuses (a reference that goes back) exits 1 with no output; Picard
+  exits 0 with an empty `.bai`.
+- No input, or lists that name none, exits 1. Picard writes a 28-byte file with no BAM
+  header.
 - An `-o` that is an input or a list exits 2. A block copy into an `-o` ending in `.sam`
   or `.cram` exits 2: Picard writes BAM bytes under that name. A failed run leaves no
   output. Not a chain step: a chain reads one source.

@@ -373,8 +373,14 @@ impl Out {
                     index: opts.create_index,
                     md5: opts.create_md5,
                 };
-                bam_writer::finish_with_index(writer, header, companions, &opts.index_path())
-                    .map(|_| ())
+                bam_writer::finish_with_index(
+                    writer,
+                    header,
+                    companions,
+                    &opts.index_path(),
+                    opts.mode == Mode::BlockCopy,
+                )
+                .map(|_| ())
             }
             Self::Sam(writer) => {
                 let output = writer.close()?;

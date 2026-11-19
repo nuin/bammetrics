@@ -98,10 +98,20 @@ fn the_first_record_follows_the_header_as_get_file_pointer_gives_it() {
     let start = Source::open(&alone).expect("open").start;
     let first_block = 18 + 5 + head.len() + 8;
     assert_eq!(start.first_record, (first_block as u64, 0));
-    assert_eq!(start.references, vec![(b"c1".to_vec(), 1000)]);
+    let mut list = Md5::new();
+    list.update(&3i32.to_le_bytes());
+    list.update(b"c1\0");
+    list.update(&1000i32.to_le_bytes());
+    let expected = Dictionary {
+        count: 1,
+        digest: list.finish(),
+    };
+    assert_eq!(start.references, expected);
     assert!(start.has_records);
     let empty = file_of(&dir, "empty.bam", &[&head], true);
-    assert!(!Source::open(&empty).expect("open").start.has_records);
+    let empty = Source::open(&empty).expect("open").start;
+    assert!(!empty.has_records);
+    assert_eq!(empty.references, expected);
     // The header and records in one block.
     let mut shared = head.clone();
     shared.extend_from_slice(b"records");

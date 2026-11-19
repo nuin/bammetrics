@@ -350,6 +350,31 @@ needs = ["tests/data/oxog.bam"]
 max_rss_mib = 64
 max_seconds = 30
 
+# A forged header of 20,000,000 reference entries in 0.5 MB, and a 60 MB list of
+# 30,000,000 inputs (refused over the 100,000 cap, so the row wants exit 2). The
+# inputs come from tests/data/make_gather_stress.py in the same shell, so its Python
+# counts: peaks 16.3 and 68.5 MiB (bammetrics alone 4.6 and 67; 1,536 and 1,897
+# before the list and the reference list were read through).
+[[command]]
+name = "gather-bam-files forged reference list"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_gather_stress.py {out} && {bin} gather-bam-files tests/data/markdup.bam {out}/forged_refs.bam -o {out}/g.bam",
+]
+needs = ["tests/data/markdup.bam", "tests/data/make_gather_stress.py"]
+max_rss_mib = 136
+max_seconds = 60
+
+[[command]]
+name = "gather-bam-files long list"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_gather_stress.py {out} && {bin} gather-bam-files -i {out}/many.list -o {out}/g.bam; test $? -eq 2",
+]
+needs = ["tests/data/make_gather_stress.py"]
+max_rss_mib = 552
+max_seconds = 60
+
 [[command]]
 name = "gather-bam-files slice"
 tier = "scale"
