@@ -195,7 +195,10 @@ impl Planned {
     /// ([`stage::streams`]): it takes and emits its records in its own
     /// segment.
     pub fn streams(&self) -> bool {
-        self.role == Role::Transform && self.tool.is_some_and(stage::streams)
+        self.role == Role::Transform
+            && self
+                .tool
+                .is_some_and(|tool| stage::streams_with(tool, &self.argv))
     }
 }
 
