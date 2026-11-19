@@ -99,6 +99,9 @@ fn the_first_record_follows_the_header_as_get_file_pointer_gives_it() {
     let first_block = 18 + 5 + head.len() + 8;
     assert_eq!(start.first_record, (first_block as u64, 0));
     assert_eq!(start.references, vec![(b"c1".to_vec(), 1000)]);
+    assert!(start.has_records);
+    let empty = file_of(&dir, "empty.bam", &[&head], true);
+    assert!(!Source::open(&empty).expect("open").start.has_records);
     // The header and records in one block.
     let mut shared = head.clone();
     shared.extend_from_slice(b"records");

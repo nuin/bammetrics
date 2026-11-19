@@ -329,6 +329,9 @@ pub struct BamStart {
     pub first_record: (u64, usize),
     /// Each reference's name (without its NUL) and length.
     pub references: Vec<(Vec<u8>, i32)>,
+    /// A byte follows the header before an empty block or the end: the
+    /// file holds records.
+    pub has_records: bool,
 }
 
 /// `BAMFileReader.readHeader` on the inflated stream: the magic, the text
@@ -367,9 +370,11 @@ fn read_start<R: Read + Seek>(stream: &mut Inflating<R>) -> io::Result<BamStart>
         let length = stream.read_i32()?;
         references.push((name, length));
     }
+    let first_record = stream.file_pointer();
     Ok(BamStart {
-        first_record: stream.file_pointer(),
+        first_record,
         references,
+        has_records: stream.available()? > 0,
     })
 }
 

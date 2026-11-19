@@ -463,6 +463,16 @@ pub const VERBS: &[Verb] = &[
         writes: "BAM",
         ..verb("set-nm-and-uq-tags", "SetNmAndUqTags", Files::Bam)
     },
+    Verb {
+        about: Some(
+            "gathers the records of several BAMs, in the order given, under the header of the \
+             first, as Picard's GatherBamFiles does: -o gets a BAM whose BGZF blocks are the \
+             inputs' (one block per later input is deflated again). A SAM or CRAM input, or a \
+             text file of paths one per line, is read as Picard reads it.",
+        ),
+        writes: "BAM",
+        ..verb("gather-bam-files", "GatherBamFiles", Files::Bam)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the

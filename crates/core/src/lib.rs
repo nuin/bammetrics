@@ -34,6 +34,7 @@ pub mod error;
 pub mod exon_coverage;
 pub mod fifo_buffer;
 pub mod filters;
+pub mod gather_bam_files;
 pub mod gc_bias;
 pub mod gene_model;
 pub mod genome_build;
