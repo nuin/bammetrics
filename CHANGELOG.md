@@ -1,5 +1,53 @@
 # Changelog
 
+## Unreleased
+
+Wave W10 of docs/07, part one: two more record-editing tools, the first whose writer sorts.
+
+### Added
+
+- `record_edit::Reorder`: Picard's `presorted=false` writer sorts its records at close.
+  `WriterOrder` picks, from the output order and the input header, a presorted writer
+  (the order checked), a sort through `sam_sort` (`MAX_RECORDS_IN_RAM`, `TMP_DIR`), or
+  htsjdk's failure for `SO:unknown` on a second record. A `Regroup` pass edits the records
+  of one read name at a time after a queryname sort, and a `Gate` may skip a run before it
+  writes anything. In a chain the same passes make the step a barrier that holds its
+  records (`record_edit::sorting_stage`); the planner counts its sorts.
+- `AddOrReplaceReadGroups` (verb `add-or-replace-read-groups`, Python
+  `add_or_replace_read_groups()`), as Picard 3.5.0: every `@RG` line replaced by one read
+  group (`RGID`, `RGLB`, `RGPL`, `RGPU`, `RGSM`, `RGCN`, `RGDS`, `RGDT`, `RGPI`, `RGPG`,
+  `RGPM`, `RGKS`, `RGFO` in htsjdk's order), `RG` set on every record, each value checked
+  against `^[ -~]+$` with every bad one named, `RGDT` read by htsjdk's `DateParser` and
+  written in UTC, `RGID=null` as Picard writes it, `SORT_ORDER` sorted when it differs from
+  the input's. A chain transform (`rg`), a barrier when `SORT_ORDER` names a sort.
+- `RevertOriginalBaseQualitiesAndAddMateCigar` (verb
+  `revert-original-base-qualities-and-add-mate-cigar`, Python
+  `revert_original_base_qualities_and_add_mate_cigar()`), as Picard 3.5.0: Picard's early
+  exit over `MAX_RECORDS_TO_EXAMINE` records (a skipped file writes nothing), `CleanSam`'s
+  clip, `QUAL` from `OQ` (`RESTORE_ORIGINAL_QUALITIES`), a queryname sort and
+  `SamPairUtil.setMateInfo` on each pair (mate fields, `MQ`, `MC`, `TLEN`) and on paired
+  supplementary records, then `SORT_ORDER`; `CREATE_INDEX` and `CREATE_MD5_FILE` default to
+  true. A chain barrier (`reverted`).
+- `tests/concordance/test_add_or_replace_read_groups.py` (75 cases) and
+  `test_revert_original_base_qualities_and_add_mate_cigar.py` (51 cases): tier B with
+  record bytes on the fixtures, the corpus tiers, the foundation corpus, the exome slice,
+  the `revert_bams.py` records (pairs without `MC`, `OQ`, unmapped mates, supplementary
+  records, reads off a contig end) as BAM in three orders, SAM text and CRAM 3.0 and 3.1;
+  every option, error parity, the early exit, the step in a chain against Picard's file.
+  `crates/cli/tests/read_groups.rs` (chained equals staged, each step first, in the
+  middle and last, streaming and sorting), `tests/data/revert.bam`, golden records,
+  Python tests and memgate rows.
+
+### Measured
+
+On the 8,445,233-record chr20 to chr22 slice of the HG002 exome (Mac Studio, records
+equal to Picard 3.5.0's): `AddOrReplaceReadGroups` 5.5 s and 30 MiB peak RSS against
+Picard's 68.3 s and 326 MiB; with `SORT_ORDER=queryname` 23.1 s and 287 MiB against
+120.1 s and 4,452 MiB. `RevertOriginalBaseQualitiesAndAddMateCigar` on the slice cut to
+complete pairs (8,424,223 records; the slice itself holds mates on other contigs, and both
+tools fail on the same read) 71.2 s and 684 MiB against 110.9 s and 4,682 MiB; the header
+differs only in the `@RG DT` time zone.
+
 ## 0.27.0
 
 Wave W09 of docs/07: six record-editing tools on one shape, each a chain transform.

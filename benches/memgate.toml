@@ -323,3 +323,88 @@ needs = [
     "~/data/bammetrics-scale/exome/hs37d5.fa",
 ]
 max_rss_mib = 512
+
+[[command]]
+name = "add-or-replace-read-groups"
+argv = [
+    "{bin}", "add-or-replace-read-groups", "tests/data/markdup.bam", "-o", "{out}/rg.bam",
+    "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm", "sample1",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "add-or-replace-read-groups sorted"
+argv = [
+    "{bin}", "add-or-replace-read-groups", "tests/data/markdup.bam", "-o", "{out}/rg.bam",
+    "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm", "sample1",
+    "--sort-order", "queryname", "--max-records-in-ram", "4", "--tmp-dir", "{out}/tmp",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+
+[[command]]
+name = "revert-original-base-qualities-and-add-mate-cigar"
+argv = [
+    "{bin}", "revert-original-base-qualities-and-add-mate-cigar", "tests/data/revert.bam",
+    "-o", "{out}/reverted.bam", "--max-records-in-ram", "3", "--tmp-dir", "{out}/tmp",
+]
+needs = ["tests/data/revert.bam"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+
+[[command]]
+name = "chain read groups sorted + revert + write"
+argv = [
+    "{bin}", "chain", "tests/data/revert.bam", "--tmp-dir", "{out}/tmp", "+",
+    "add-or-replace-read-groups", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1",
+    "--rgsm", "sample1", "--sort-order", "queryname", "+",
+    "revert-original-base-qualities-and-add-mate-cigar", "+", "write", "{out}/out.bam",
+]
+needs = ["tests/data/revert.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "add-or-replace-read-groups slice"
+tier = "scale"
+argv = [
+    "{bin}", "add-or-replace-read-groups", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam",
+    "-o", "{out}/rg.bam", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm",
+    "sample1",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 512
+
+[[command]]
+name = "add-or-replace-read-groups queryname slice"
+tier = "scale"
+argv = [
+    "{bin}", "add-or-replace-read-groups", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam",
+    "-o", "{out}/rg.bam", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm",
+    "sample1", "--sort-order", "queryname", "--tmp-dir", "{out}/tmp",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 1024
+spill_dir = "{out}/tmp"
+
+# The slice holds reads whose mates are on other contigs, which the reverting tool
+# refuses (as Picard does). pairs.bam is the slice cut to complete pairs:
+#   samtools view -h chr20_21_22.bam | awk -F'\t' '/^@/ || $7 == "=" || $2 % 2 == 0' \
+#     | samtools view -b -o ~/data/bammetrics-scale/waves/w10/pairs.bam -
+[[command]]
+name = "revert-original-base-qualities-and-add-mate-cigar pairs"
+tier = "scale"
+argv = [
+    "{bin}", "revert-original-base-qualities-and-add-mate-cigar",
+    "~/data/bammetrics-scale/waves/w10/pairs.bam", "-o", "{out}/reverted.bam",
+    "--max-records-to-examine", "0", "--validation-stringency", "SILENT", "--tmp-dir",
+    "{out}/tmp",
+]
+needs = ["~/data/bammetrics-scale/waves/w10/pairs.bam"]
+max_rss_mib = 1024
+spill_dir = "{out}/tmp"

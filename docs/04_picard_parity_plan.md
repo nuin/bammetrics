@@ -100,7 +100,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | SamFormatConverter | Read data | out | Format conversion. | samtools view |
 | AddCommentsToBam | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): one `@CO` line per `COMMENT`, the BAM's records copied as Picard copies its blocks. S | samtools reheader |
 | AddOATag | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): each record's alignment appended to its `OA` tag, `INTERVAL_LIST`. S | none |
-| AddOrReplaceReadGroups | Read data | later | Harness fixture builder for per-RG rows. | samtools addreplacerg |
+| AddOrReplaceReadGroups | Read data | core | Shipped in wave W10 of docs/07 (the record-editing shape `record_edit.rs`; a chain transform, a barrier when it sorts): every `@RG` line replaced by one read group, `RG` on every record, `RGDT` in UTC, `SORT_ORDER` sorted as Picard's writer sorts. S | samtools addreplacerg |
 | BamToBfq | Read data | out | Obsolete aligner format. | none |
 | CleanSam | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): alignments and mate CIGARs past a contig end soft-clipped, MAPQ 0 on unmapped records. S | none |
 | DownsampleSam | Read data | later | Harness shrinks real BAMs once. | samtools view -s |
@@ -112,7 +112,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | MergeBamAlignment | Read data | out | uBAM merge step. | fgbio ZipperBams |
 | ReorderSam | Read data | out | Contig reorder. | none |
 | ReplaceSamHeader | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): the header of `HEADER` over every record, Picard's sort order checks. S | samtools reheader |
-| RevertOriginalBaseQualitiesAndAddMateCigar | Read data | out | Legacy pipeline step. | samtools fixmate (MC only) |
+| RevertOriginalBaseQualitiesAndAddMateCigar | Read data | core | Shipped in wave W10 of docs/07 (the record-editing shape `record_edit.rs`; a chain barrier): `QUAL` from `OQ`, `MC`, `MQ` and the mate fields from each mate after a name sort, `SORT_ORDER`, Picard's early exit. S | samtools fixmate (MC only) |
 | RevertSam | Read data | out | BAM to uBAM. | none |
 | SamToFastq | Read data | out | Export. | samtools fastq |
 | SamToFastqWithTags | Read data | out | Export with tags. | samtools fastq -T |
