@@ -91,7 +91,7 @@ pub fn header_bytes(header: &sam::Header) -> Vec<u8> {
 }
 
 /// The BAM header: magic, the text, the reference list.
-fn write_bam_header(out: &mut impl Write, header: &sam::Header) -> io::Result<()> {
+pub(crate) fn write_bam_header(out: &mut impl Write, header: &sam::Header) -> io::Result<()> {
     let invalid = |e| io::Error::new(io::ErrorKind::InvalidInput, e);
     let text = header_bytes(header);
     out.write_all(b"BAM\x01")?;
@@ -293,6 +293,20 @@ pub fn finish_with_index(
 ) -> Result<Vec<PathBuf>> {
     let threads = writer.threads;
     let output = writer.close()?;
+    finish_file(output, header, companions, index_path, threads)
+}
+
+/// [`finish_with_index`] for a BAM already written under its temporary
+/// name (a block copy, [`crate::bgzf_copy`]): the index and the MD5 from
+/// the file, read back on `threads` workers, then every file renamed into
+/// place.
+pub fn finish_file(
+    output: AtomicFile,
+    header: &sam::Header,
+    companions: Companions,
+    index_path: &Path,
+    threads: usize,
+) -> Result<Vec<PathBuf>> {
     let target = output.path().to_path_buf();
     let coordinate = SortOrder::of(header) == SortOrder::Coordinate;
     let index = if companions.index && coordinate {

@@ -13,6 +13,7 @@ pub mod bam_raw;
 pub mod bam_writer;
 pub mod base_distribution_by_cycle;
 pub mod bed_to_interval_list;
+pub mod bgzf_copy;
 pub mod blocks;
 pub mod build_bam_index;
 pub mod check_duplicate_marking;
