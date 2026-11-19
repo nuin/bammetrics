@@ -14,6 +14,8 @@ bammetrics reimplements Picard BAM QC metrics in Rust (on `noodles` 0.119) and e
 
 `CollectIndexDepthMetrics` (verb `index-depth`, class `bammetrics.qc.IndexDepthMetrics`, docs/06 section 10, wave W08) estimates depth from the `.bai` or `.csi` alone: per reference, per contig group and for `ALL`, `MAPPED x READ_LENGTH / LENGTH`, the ratios to the autosomes, the sex call and `MT_COPY_NUMBER`; a CRAM is refused (docs/07 D23); truth from `tests/data/make_index_depth_bams.py` and `samtools idxstats`.
 
+`SplitSamByLibrary` and `SplitSamByNumberOfReads` (wave W10, verbs `split-sam-by-library` and `split-sam-by-number-of-reads`) write several files from one read through `split_sam.rs` and `split_sam/fanout.rs` (`Fanout`: at most `MAX_OPEN_FILES` 64 open, a closed file reopened for append after its device and inode are checked, every file renamed with its `.bai` and `.md5` after the last record, none left on a failure, at most `MAX_FILES` 100,000). In a chain each is a split step (`Role::Split`, `split_sam::chain_step`, a sink of the executor) that claims every file it makes against the chain's planned files through the shared `Claims`; `crates/cli/src/chain/prepare/split.rs` plans it. Tests: `split_sam/tests.rs`, `crates/cli/tests/split_sam.rs`, `tests/concordance/test_split_sam_by_library.py` (its `compare_split` serves both modules) and `split_bams.py`.
+
 ## Commands
 
 ```bash

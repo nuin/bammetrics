@@ -1,5 +1,41 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `SplitSamByLibrary` (verb `split-sam-by-library`, Python `split_sam_by_library()`), as
+  Picard 3.5.0: one BAM, or SAM text for SAM input, per library of the header in the
+  `OUTPUT` directory (the current directory without one), named as htsjdk's
+  `makeFileNameSafe` names it, under the header with that library's read groups; every
+  library gets its file before the first record; `unknown.bam` for the records whose read
+  group is missing, not in the header or without `LB`. A header without a library is
+  Picard's exit 2 on the Picard face too. A CRAM input exits 2 naming wave W15 (Picard
+  writes CRAM). Two libraries with one file name exit 1 and leave no file (Picard writes
+  one over the other).
+- `SplitSamByNumberOfReads` (verb `split-sam-by-number-of-reads`, Python
+  `split_sam_by_number_of_reads()`), as Picard 3.5.0: `SPLIT_TO_N_FILES` or
+  `SPLIT_TO_N_READS`, `TOTAL_READS_IN_INPUT` (else a first read counts the records; a
+  pipe without it exits 1), `OUT_PREFIX`; Picard's double arithmetic for the sizes, a run
+  of one record name never cut, `shard_0001.bam` names, a BAM under `.cram` names for a
+  CRAM input, Picard's warnings.
+- `crates/core/src/split_sam.rs` and `split_sam/fanout.rs`: the fan-out writer of both
+  tools. At most 64 files open at once (a file closed to make room is opened again by its
+  device and inode); every file under a temporary name, renamed with its `.bai` and `.md5`
+  only after the last record; a failure removes every file the split renamed; names
+  differing in case only on a file system that ignores case fail; at most 100,000 files.
+- The split as a chain step (`Role::Split`, a sink of the executor): `chain BAM +
+  mark-duplicates + split-sam-by-library -o DIR` writes the files the staged run writes.
+  The split claims each file it makes against the planned files of every other step and
+  the other splits; two splits with one naming rule in one directory are a usage error
+  before the first read. A count split in a chain needs `TOTAL_READS_IN_INPUT`. The plan
+  lists a split's directory and its naming rule.
+- `tests/concordance/test_split_sam_by_library.py`,
+  `test_split_sam_by_number_of_reads.py` and `split_bams.py` (300 libraries, odd names,
+  read groups without `LB`, runs of names with secondary and supplementary records);
+  `crates/cli/tests/split_sam.rs` (chained equals staged, a failed split leaves no file,
+  claims); 18 golden cases; five memgate rows.
+
 ## 0.27.0
 
 Wave W09 of docs/07: six record-editing tools on one shape, each a chain transform.

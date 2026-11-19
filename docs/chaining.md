@@ -33,6 +33,7 @@ emits.
 | transform | A tool that changes the records later steps see. A barrier needs every record before one goes on; a streaming transform edits each batch as it passes (section 16) | `mark-duplicates`, `sort-sam` (both barriers); `add-comments-to-bam`, `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`, `set-nm-and-uq-tags` (streaming) |
 | tap | A one-pass tool on the records of its position. It changes nothing | 18 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check`, `mt-copy-number`, `exon-coverage`, `adapter-content`, `duplicate-by-tile`, `telomere` |
 | write | A tap that writes the records of its position as a BAM, or as SAM text | `write [PATH]` |
+| split | A sink that writes the records of its position over BAMs in a directory (section 17) | `split-sam-by-library`, `split-sam-by-number-of-reads` |
 
 A tap or `write` does not change the stream, so the step after it sees the same records.
 `in.bam + tap + mark-duplicates + tap + write` gives the first tap the source records and
@@ -1217,3 +1218,41 @@ Chained equals staged (`crates/cli/tests/set_nm_md_uq.rs`): the step first, afte
 `sort-sam`, last, alone, twice and under the old name, beside `mark-duplicates` and
 `sort-sam`, with each option, on the fixtures, SAM text, a CRAM, corpus t1 and the
 foundation corpus.
+
+## 17. W10: split steps
+
+A split writes the records of its position over several BAMs in a directory: one per
+library (`split-sam-by-library`) or files of about one size (`split-sam-by-number-of-reads`).
+It is a sink of the executor, as `write` is: it changes nothing, so the step after it sees
+the same records, and its failure stops its segment.
+
+```bash
+bammetrics chain sample.bam -o out/s \
+    + mark-duplicates \
+    + split-sam-by-library -o out/libraries --create-index
+```
+
+- The step's own `-o DIR` names the directory; the run makes it when missing. Without `-o`
+  `split-sam-by-library` writes into the current directory, as the tool does, and
+  `split-sam-by-number-of-reads` exits 2.
+- The files are BAMs named `.bam`, whatever the source: `LIBRARY.bam` and `unknown.bam`, or
+  `OUT_PREFIX_0001.bam` on. `--create-index`, `--create-md5-file` and `--compression-level`
+  belong to the step.
+- A count split needs `--total-reads`: the stream is read once, and Picard refuses a stream
+  without it (exit 2 before the first read).
+- At most 64 files are open at once, whatever the number of libraries. Every file is
+  renamed into place after the last record, with its `.bai` and `.md5`. A split that fails
+  leaves none of its files; a chain that does not finish removes the directories it made
+  that are still empty.
+- The names a split makes are known only once the stream is read. The plan claims
+  `DIR/<LIBRARY>.bam` or `DIR/OUT_PREFIX_<N>.bam` for the step, so two splits with one
+  naming rule in one directory are a usage error before the first read. Each file the
+  split makes is claimed when it is made against every planned file of the chain and the
+  files of the other splits, and against every file the chain reads: a `write` into the
+  directory under a library's name fails the split.
+
+Chained equals staged (`crates/cli/tests/split_sam.rs`, `test_split_sam_by_library.py`,
+`test_split_sam_by_number_of_reads.py`): `mark-duplicates` then a library split on the
+fixtures and the foundation corpus, `sort-sam -SO queryname` then a count split, a split
+beside a tap and `write`; every file has the staged run's name, header lines and record
+bytes.

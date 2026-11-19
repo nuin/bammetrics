@@ -1485,6 +1485,31 @@ a bisulfite set, SAM text and CRAM (`tests/concordance/test_set_nm_md_and_uq_tag
 - An `@RG DT` value is written as read. htsjdk parses it and writes it in the JVM's time
   zone (`2015-10-02T02:00:00+0200` as `2015-10-01T18:00:00-0600` on the HG002 exome).
 
+## SplitSamByLibrary and SplitSamByNumberOfReads
+
+Both write the files Picard writes, with the same names, header lines and records, the
+records byte for byte after inflation, on 300 libraries, odd library names, the fixture
+BAMs, the corpus tiers, the exome slice, SAM text, gzip SAM and CRAM
+(`tests/concordance/test_split_sam_by_library.py`,
+`test_split_sam_by_number_of_reads.py`). BGZF block boundaries differ: at most 64 files
+are open at once, and a file closed to make room ends its block early. They differ here
+(docs/07 decisions D53 to D57):
+
+- `SplitSamByLibrary` on a CRAM exits 2 naming wave W15 (1 on the Picard face) and writes
+  nothing. Picard writes a CRAM per library.
+- Two libraries whose safe names are one file (`a b` and `a_b`), a library named
+  `unknown` beside records without a library, or library names that differ in case only
+  on a file system that ignores case: Picard writes one file over the other and exits 0;
+  bammetrics exits 1 and leaves none of the split's files.
+- A record whose `RG` names no header read group: Picard fails at `STRICT` after some
+  files are written; bammetrics validates no BAM record and writes it to `unknown.bam`,
+  as Picard does at `SILENT`.
+- A run that fails leaves none of its files. Picard leaves the files it opened.
+- A split writes at most 100,000 files; a count split that asks for more exits 2.
+- A library name of SAM text with a character above U+00FF is kept as the low byte of
+  each UTF-16 unit, as every SAM text value is (section SAM text), so its file name is not
+  Picard's.
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))
