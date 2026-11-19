@@ -1,0 +1,14 @@
+## argv
+AddOrReplaceReadGroups
+I=tests/data/markdup.bam
+O=OUT/rg.bam
+RGLB=lib1
+RGPL=ILLUMINA
+RGPU=unit1
+RGSM=sample1
+SORT_ORDER=unknown
+## exit
+1
+## stdout
+## stderr
+bammetrics: SO:unknown through a writer that sorts: htsjdk holds no comparator for unknown, and Picard fails at close with a ClassCastException on 36 records; nothing is written

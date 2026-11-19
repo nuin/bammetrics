@@ -558,6 +558,39 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("REFERENCE_SEQUENCE", REF)),
             picard_outputs: sorted_sam,
         },
+        // SAM text out, so the bodies with the read group compare.
+        Case {
+            verb: "add-or-replace-read-groups",
+            class: "AddOrReplaceReadGroups",
+            verb_args: strings(&[
+                "tests/data/revert.sam",
+                "--rglb",
+                "l",
+                "--rgpl",
+                "P",
+                "--rgpu",
+                "u",
+                "--rgsm",
+                "s",
+            ]),
+            picard_args: strings(&[
+                "I=tests/data/revert.sam",
+                "RGLB=l",
+                "RGPL=P",
+                "RGPU=u",
+                "RGSM=s",
+            ]),
+            option: Some(("SORT_ORDER", "queryname")),
+            picard_outputs: sorted_sam,
+        },
+        Case {
+            verb: "revert-original-base-qualities-and-add-mate-cigar",
+            class: "RevertOriginalBaseQualitiesAndAddMateCigar",
+            verb_args: strings(&["tests/data/revert.sam", "--no-create-md5-file"]),
+            picard_args: strings(&["I=tests/data/revert.sam", "CREATE_MD5_FILE=false"]),
+            option: Some(("SORT_ORDER", "queryname")),
+            picard_outputs: sorted_sam,
+        },
     ]
 }
 
@@ -574,7 +607,9 @@ fn named_output(verb: &str) -> Option<&'static str> {
         | "add-o-a-tag"
         | "clean-sam"
         | "set-nm-md-and-uq-tags"
-        | "set-nm-and-uq-tags" => Some("sam"),
+        | "set-nm-and-uq-tags"
+        | "add-or-replace-read-groups"
+        | "revert-original-base-qualities-and-add-mate-cigar" => Some("sam"),
         "add-comments-to-bam" => Some("bam"),
         _ => None,
     }
@@ -681,7 +716,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 48);
+    assert_eq!(classes.len(), 50);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

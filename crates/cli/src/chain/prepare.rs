@@ -462,7 +462,14 @@ fn positions(drafts: &[Draft]) -> Result<Vec<Position>, VerbError> {
             taken.insert(stream.clone());
             position.leaves = Some(stream.clone());
             behind.push(verb.class);
-            if !stage::streams(verb.tool()) {
+            // The step's Picard arguments, with a stand-in for its input:
+            // a step may hold its records for some options only.
+            let mut parsed = draft.parsed.clone();
+            parsed.positional.push(SOURCE_STREAM.to_owned());
+            let picard = verb
+                .picard_arguments(&parsed, &draft.flags)
+                .unwrap_or_default();
+            if !stage::streams_with(verb.tool(), &picard) {
                 segment += 1;
             }
         }

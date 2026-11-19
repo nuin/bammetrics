@@ -1,0 +1,17 @@
+## argv
+add-or-replace-read-groups
+tests/data/markdup.bam
+-o
+OUT/rg.bam
+--rglb
+lib1
+--rgpl
+ILLUMINA
+--rgpu
+unit1
+## exit
+2
+## stdout
+## stderr
+bammetrics add-or-replace-read-groups: missing --rgsm (Picard: RGSM)
+  every option: bammetrics help add-or-replace-read-groups

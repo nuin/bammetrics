@@ -1,0 +1,13 @@
+## argv
+AddOrReplaceReadGroups
+I=tests/data/markdup.bam
+O=tests/data/markdup.bam
+RGLB=lib1
+RGPL=ILLUMINA
+RGPU=unit1
+RGSM=sample1
+## exit
+1
+## stdout
+## stderr
+bammetrics: OUTPUT=tests/data/markdup.bam: it is the input tests/data/markdup.bam; writing it would destroy it

@@ -63,6 +63,8 @@ const FIXTURES: &[(&str, &str)] = &[
     ("CS", "tests/data/clean_sam.bam"),
     ("CS_SAM", "tests/data/clean_sam.sam"),
     ("CS_PAST", "tests/data/clean_sam_past.sam"),
+    ("RV", "tests/data/revert.bam"),
+    ("RV_SAM", "tests/data/revert.sam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -662,6 +664,38 @@ const SET_NM_CASES: &[Case] = &[
     case!("error_chain_set_nm_md_and_uq_tags_no_reference", "chain", "MD", "+", "set-nm-md-and-uq-tags", "+", "write", "OUT/out.bam"),
 ];
 
+/// `AddOrReplaceReadGroups` and `RevertOriginalBaseQualitiesAndAddMateCigar`
+/// (wave W10): the Picard face on a BAM, SAM text and a CRAM, the verbs,
+/// the errors Picard gives, a file the early exit skips, and the steps in a
+/// chain, streaming and sorting.
+#[rustfmt::skip]
+const READ_GROUP_CASES: &[Case] = &[
+    case!("picard_add_or_replace_read_groups", "AddOrReplaceReadGroups", "I=MD", "O=OUT/rg.bam", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1", "RGSM=sample1"),
+    case!("picard_add_or_replace_read_groups_every_field", "AddOrReplaceReadGroups", "I=RV_SAM", "O=OUT/rg.sam", "RGID=g7", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1", "RGSM=sample1", "RGCN=a center", "RGDS=a description", "RGDT=2020-01-02T03:04:05.123+05:30", "RGPI=+350", "RGPG=bwa", "RGPM=HiSeq", "RGKS=TCAG", "RGFO=TACG", "SORT_ORDER=queryname"),
+    case!("picard_add_or_replace_read_groups_cram", "AddOrReplaceReadGroups", "I=IS_CRAM", "R=REF", "O=OUT/rg.bam", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1", "RGSM=sample1", "CREATE_INDEX=true", "CREATE_MD5_FILE=true"),
+    case!("picard_add_or_replace_read_groups_null_id", "AddOrReplaceReadGroups", "I=RV", "O=OUT/rg.sam", "RGID=null", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1", "RGSM=sample1"),
+    case!("verb_add_or_replace_read_groups", "add-or-replace-read-groups", "DM", "-o", "OUT/rg.sam", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm", "sample1", "--sort-order", "coordinate", "--max-records-in-ram", "3"),
+    case!("error_add_or_replace_read_groups_no_rgsm", "AddOrReplaceReadGroups", "I=MD", "O=OUT/rg.bam", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1"),
+    case!("error_verb_add_or_replace_read_groups_no_rgsm", "add-or-replace-read-groups", "MD", "-o", "OUT/rg.bam", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1"),
+    case!("error_add_or_replace_read_groups_values", "AddOrReplaceReadGroups", "I=MD", "O=OUT/rg.bam", "RGID=a\tb", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1", "RGSM=s\u{e9}"),
+    case!("error_add_or_replace_read_groups_date", "AddOrReplaceReadGroups", "I=MD", "O=OUT/rg.bam", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1", "RGSM=sample1", "RGDT=2020-01-02 03:04"),
+    case!("error_add_or_replace_read_groups_unknown_order", "AddOrReplaceReadGroups", "I=MD", "O=OUT/rg.bam", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1", "RGSM=sample1", "SORT_ORDER=unknown"),
+    case!("error_add_or_replace_read_groups_input_output", "AddOrReplaceReadGroups", "I=MD", "O=MD", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1", "RGSM=sample1"),
+    case!("chain_add_or_replace_read_groups", "chain", "MD", "-o", "OUT/s", "+", "add-or-replace-read-groups", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm", "sample1", "+", "insert-size", "+", "write", "OUT/out.bam"),
+    case!("chain_add_or_replace_read_groups_sorted", "chain", "MD", "-o", "OUT/s", "+", "add-or-replace-read-groups", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm", "sample1", "--sort-order", "queryname", "+", "quality-yield", "+", "write", "OUT/out.sam"),
+    case!("chain_dry_run_add_or_replace_read_groups_sorted", "chain", "MD", "-o", "OUT/s", "--dry-run", "+", "add-or-replace-read-groups", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm", "sample1", "--sort-order", "queryname", "+", "write", "OUT/out.bam"),
+    case!("error_chain_add_or_replace_read_groups_unknown", "chain", "MD", "+", "add-or-replace-read-groups", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm", "sample1", "--sort-order", "unknown", "+", "write", "OUT/out.bam"),
+    case!("picard_revert_original_base_qualities", "RevertOriginalBaseQualitiesAndAddMateCigar", "I=RV", "O=OUT/reverted.bam"),
+    case!("picard_revert_original_base_qualities_sam", "RevertOriginalBaseQualitiesAndAddMateCigar", "I=RV_SAM", "O=OUT/reverted.sam", "SORT_ORDER=queryname", "RESTORE_ORIGINAL_QUALITIES=false"),
+    case!("picard_revert_original_base_qualities_skip", "RevertOriginalBaseQualitiesAndAddMateCigar", "I=OXOG", "O=OUT/reverted.bam"),
+    case!("verb_revert_original_base_qualities", "revert-original-base-qualities-and-add-mate-cigar", "OXOG", "-o", "OUT/reverted.bam", "--max-records-to-examine", "0", "--sort-order", "unsorted", "--create-index=false"),
+    case!("error_revert_original_base_qualities_two_first", "RevertOriginalBaseQualitiesAndAddMateCigar", "I=MD", "O=OUT/reverted.bam", "MAX_RECORDS_TO_EXAMINE=0"),
+    case!("error_revert_original_base_qualities_input_output", "RevertOriginalBaseQualitiesAndAddMateCigar", "I=RV", "O=RV"),
+    case!("chain_revert_original_base_qualities", "chain", "RV", "-o", "OUT/s", "+", "revert-original-base-qualities-and-add-mate-cigar", "+", "mark-duplicates", "+", "write", "OUT/out.bam"),
+    case!("chain_dry_run_revert_original_base_qualities", "chain", "RV", "-o", "OUT/s", "--dry-run", "+", "revert-original-base-qualities-and-add-mate-cigar", "--sort-order", "queryname", "+", "write", "OUT/out.bam"),
+    case!("error_chain_revert_original_base_qualities_examine", "chain", "RV", "+", "revert-original-base-qualities-and-add-mate-cigar", "--max-records-to-examine", "0", "+", "write", "OUT/out.bam"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -1100,6 +1134,11 @@ fn documented_set_nm_commands_on_the_fixtures() {
     check(SET_NM_CASES);
 }
 
+#[test]
+fn documented_read_group_commands_on_the_fixtures() {
+    check(READ_GROUP_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1207,6 +1246,7 @@ fn case_names_are_unique() {
         .chain(RECORD_EDIT_CASES)
         .chain(CLEAN_SAM_CASES)
         .chain(SET_NM_CASES)
+        .chain(READ_GROUP_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

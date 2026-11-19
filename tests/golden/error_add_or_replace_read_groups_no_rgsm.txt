@@ -1,0 +1,12 @@
+## argv
+AddOrReplaceReadGroups
+I=tests/data/markdup.bam
+O=OUT/rg.bam
+RGLB=lib1
+RGPL=ILLUMINA
+RGPU=unit1
+## exit
+1
+## stdout
+## stderr
+bammetrics: Argument 'RGSM' is required

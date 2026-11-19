@@ -1,0 +1,10 @@
+## argv
+RevertOriginalBaseQualitiesAndAddMateCigar
+I=tests/data/markdup.bam
+O=OUT/reverted.bam
+MAX_RECORDS_TO_EXAMINE=0
+## exit
+1
+## stdout
+## stderr
+bammetrics: RevertOriginalBaseQualitiesAndAddMateCigar: record M1:7:FC1:1:1101:1000:2000: Found two records that are paired, not supplementary, and first of the pair
