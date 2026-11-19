@@ -20,8 +20,9 @@
   of one record name never cut, `shard_0001.bam` names, a BAM under `.cram` names for a
   CRAM input, Picard's warnings.
 - `crates/core/src/split_sam.rs` and `split_sam/fanout.rs`: the fan-out writer of both
-  tools. At most 64 files open at once (a file closed to make room is opened again by its
-  device and inode); every file under a temporary name, renamed with its `.bai` and `.md5`
+  tools. Full BGZF blocks of every file are compressed on the run's threads, shared by
+  the files. At most 64 files open at once (a file closed to make room is opened again by
+  its device and inode); every file under a temporary name, renamed with its `.bai` and `.md5`
   only after the last record; a failure removes every file the split renamed; names
   differing in case only on a file system that ignores case fail; at most 100,000 files.
 - The split as a chain step (`Role::Split`, a sink of the executor): `chain BAM +

@@ -81,7 +81,16 @@ fn tagged(name: &str, rg: Option<&str>) -> RawRecord {
 }
 
 fn library_split(dir: &Path, header: &sam::Header) -> Splitter {
-    let fanout = Fanout::new(options(), header, Vec::new(), None).expect("fanout");
+    library_split_on(dir, header, 1)
+}
+
+/// A library split whose blocks `threads` workers compress.
+fn library_split_on(dir: &Path, header: &sam::Header, threads: usize) -> Splitter {
+    let options = WriterOptions {
+        threads,
+        ..options()
+    };
+    let fanout = Fanout::new(options, header, Vec::new(), None).expect("fanout");
     let layout = Layout {
         dir,
         extension: "bam",
@@ -96,9 +105,43 @@ fn library_split(dir: &Path, header: &sam::Header) -> Splitter {
 /// every file holds its records in order.
 #[test]
 fn three_hundred_libraries_keep_at_most_the_bound_open() {
-    let dir = scratch("bound");
+    three_hundred_libraries("bound", 1);
+}
+
+/// The same files when four workers compress the blocks.
+#[test]
+fn workers_compress_the_blocks_of_every_file_in_order() {
+    three_hundred_libraries("workers", 4);
+    // Records enough for several full blocks per file, two files.
+    let dir = scratch("blocks");
+    let header = header(2);
+    let mut split = library_split_on(&dir, &header, 4);
+    for i in 0..40_000 {
+        let rg = format!("rg{}", i % 2);
+        split
+            .push(&tagged(&format!("read{i:06}"), Some(&rg)))
+            .expect("push");
+    }
+    split.finish().expect("finish");
+    for n in 0..2 {
+        let (_, records) = read_bam(&dir.join(format!("lib_{n}.bam")));
+        assert_eq!(records.len(), 20_000);
+        for (k, record) in records.iter().enumerate() {
+            let name = format!("read{:06}\0", k * 2 + n);
+            assert_eq!(
+                &record[32..32 + name.len()],
+                name.as_bytes(),
+                "lib_{n} record {k}"
+            );
+        }
+    }
+    std::fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+fn three_hundred_libraries(name: &str, threads: usize) {
+    let dir = scratch(name);
     let header = header(300);
-    let mut split = library_split(&dir, &header);
+    let mut split = library_split_on(&dir, &header, threads);
     for round in 0..5 {
         for n in 0..300 {
             let record = tagged(&format!("r{round}_{n}"), Some(&format!("rg{n}")));

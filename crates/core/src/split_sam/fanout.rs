@@ -1,13 +1,21 @@
 //! [`Fanout`]: the files of one split, written from one stream with at
 //! most [`MAX_OPEN_FILES`] open at once, renamed into place together.
+//!
+//! Each BAM file stages its bytes and cuts them into BGZF blocks of
+//! [`BLOCK`] bytes; a full block of any file goes to the workers the files
+//! share, and each file writes its frames in the order it sent its blocks.
+//! A file closed to make room first sends its staged bytes as a short
+//! block and writes every frame it has pending.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
+use std::thread;
 
 use noodles::bgzf;
+use noodles::bgzf::io::writer::CompressionLevel;
 use noodles::sam;
 
 use crate::bam_raw::RawRecord;
@@ -44,7 +52,8 @@ pub struct WriterOptions {
     pub create_index: bool,
     /// `<file>.md5` beside each file.
     pub create_md5: bool,
-    /// Workers that read a finished BAM back for its index.
+    /// Workers that compress the blocks of every file and read a finished
+    /// BAM back for its index.
     pub threads: usize,
 }
 
@@ -70,15 +79,98 @@ impl WriterOptions {
 /// file whose name is known only once the stream is read.
 pub type Claims = Arc<Mutex<Outputs>>;
 
+/// The uncompressed bytes of one BGZF block: at most what one block holds
+/// with level 0's overhead (65,505).
+const BLOCK: usize = 65_280;
+/// The BGZF end-of-file block (SAM specification 4.1.2).
+const BGZF_EOF: [u8; 28] = [
+    0x1f, 0x8b, 0x08, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x06, 0x00, 0x42, 0x43, 0x02, 0x00,
+    0x1b, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+];
+
+/// One block compressed to its BGZF frame by noodles' writer: `data` fits
+/// one block, so the writer writes one frame and no end-of-file block.
+fn frame(data: &[u8], level: CompressionLevel) -> io::Result<Vec<u8>> {
+    let mut writer = bgzf::io::writer::Builder::default()
+        .set_compression_level(level)
+        .build_from_writer(Vec::with_capacity(data.len() / 2 + 64));
+    writer.write_all(data)?;
+    writer.flush()?;
+    Ok(writer.into_inner())
+}
+
+/// A block on its way to a worker, and where its frame goes back.
+type Job = (
+    Vec<u8>,
+    CompressionLevel,
+    mpsc::SyncSender<io::Result<Vec<u8>>>,
+);
+
+/// The compression workers every file of a fan-out shares: each full block
+/// of any file is one job, and each file writes its frames in the order it
+/// sent its blocks.
+struct Pool {
+    jobs: Option<mpsc::Sender<Job>>,
+    workers: Vec<thread::JoinHandle<()>>,
+}
+
+impl Pool {
+    fn new(threads: usize) -> Self {
+        let (jobs, queue) = mpsc::channel::<Job>();
+        let queue = Arc::new(Mutex::new(queue));
+        let workers = (0..threads)
+            .map(|_| {
+                let queue = Arc::clone(&queue);
+                thread::spawn(move || {
+                    loop {
+                        let job = queue.lock().unwrap_or_else(PoisonError::into_inner).recv();
+                        let Ok((data, level, done)) = job else {
+                            break;
+                        };
+                        // The file that sent it may have failed and gone.
+                        let _ = done.send(frame(&data, level));
+                    }
+                })
+            })
+            .collect();
+        Self {
+            jobs: Some(jobs),
+            workers,
+        }
+    }
+
+    fn send(&self, data: Vec<u8>, level: CompressionLevel) -> io::Result<Pending> {
+        let (done, frame) = mpsc::sync_channel(1);
+        self.jobs
+            .as_ref()
+            .and_then(|jobs| jobs.send((data, level, done)).ok())
+            .ok_or_else(|| io::Error::other("the compression workers stopped"))?;
+        Ok(frame)
+    }
+}
+
+impl Drop for Pool {
+    fn drop(&mut self) {
+        drop(self.jobs.take());
+        for worker in self.workers.drain(..) {
+            let _ = worker.join();
+        }
+    }
+}
+
+/// A frame a worker is compressing.
+type Pending = mpsc::Receiver<io::Result<Vec<u8>>>;
+
 /// An open file of a fan-out.
 enum Open {
-    Bam(bgzf::io::Writer<File>),
+    /// BGZF frames are written as they come back from the workers.
+    Bam(File),
     Sam(BufWriter<File>),
 }
 
 /// One file of a fan-out.
 struct Output {
-    /// Dropped before `file`, so a writer never writes to a removed name.
+    /// Dropped before `file`, so nothing is written to a removed name.
     open: Option<Open>,
     file: AtomicFile,
     /// Device and inode of the file as created, asked again on each open.
@@ -86,6 +178,10 @@ struct Output {
     format: Format,
     coordinate: bool,
     order: Presorted,
+    /// BAM bytes not yet in a block: at most [`BLOCK`].
+    staged: Vec<u8>,
+    /// Blocks sent to the workers, oldest first; only an open file has any.
+    pending: VecDeque<Pending>,
     /// The end-of-file block is written.
     ended: bool,
     last_used: u64,
@@ -102,6 +198,39 @@ impl Output {
             source,
         }
     }
+
+    /// Write `bytes` to the open file.
+    fn put(&mut self, bytes: &[u8]) -> Result<()> {
+        let written = match self.open.as_mut() {
+            Some(Open::Bam(file)) => file.write_all(bytes),
+            Some(Open::Sam(writer)) => writer.write_all(bytes),
+            None => Err(io::Error::other("the file is not open")),
+        };
+        written.map_err(|e| self.error(e))
+    }
+
+    /// Write the frames the workers have finished, oldest first; with
+    /// `all`, wait for every one. A file with more than `limit` frames
+    /// pending waits for its oldest.
+    fn drain(&mut self, all: bool, limit: usize) -> Result<()> {
+        while let Some(front) = self.pending.front() {
+            let ready = if all || self.pending.len() > limit {
+                front.recv().ok()
+            } else {
+                match front.try_recv() {
+                    Ok(frame) => Some(frame),
+                    Err(mpsc::TryRecvError::Empty) => return Ok(()),
+                    Err(mpsc::TryRecvError::Disconnected) => None,
+                }
+            };
+            let frame = ready
+                .unwrap_or_else(|| Err(io::Error::other("a compression worker stopped")))
+                .map_err(|e| self.error(e))?;
+            self.pending.pop_front();
+            self.put(&frame)?;
+        }
+        Ok(())
+    }
 }
 
 /// Device and inode of an open file.
@@ -112,14 +241,19 @@ fn identity(file: &File) -> io::Result<(u64, u64)> {
 }
 
 /// Several files written from one stream ([`MAX_OPEN_FILES`] open at
-/// once), renamed into place together by [`Fanout::finish`].
+/// once), renamed into place together by [`Fanout::finish`]. Full blocks
+/// of every file are compressed on `threads` shared workers.
 pub struct Fanout {
     outputs: Vec<Output>,
     /// Indices of the open outputs.
     open: Vec<usize>,
     clock: u64,
     options: WriterOptions,
-    level: bgzf::io::writer::CompressionLevel,
+    level: CompressionLevel,
+    /// `None` with one thread: blocks are compressed where they are cut.
+    pool: Option<Pool>,
+    /// Frames one file may have pending before it waits for its oldest.
+    limit: usize,
     /// Each file name made so far and what made it, for the error of two
     /// libraries with one file name.
     names: HashMap<PathBuf, String>,
@@ -130,7 +264,6 @@ pub struct Fanout {
     references: Vec<Vec<u8>>,
     line: Vec<u8>,
 }
-
 impl Fanout {
     pub fn new(
         options: WriterOptions,
@@ -138,19 +271,21 @@ impl Fanout {
         reads: Vec<PathBuf>,
         claims: Option<(String, Claims)>,
     ) -> Result<Self> {
-        let level = bgzf::io::writer::CompressionLevel::try_from(options.compression_level)
-            .map_err(|e| {
-                Error::Usage(format!(
-                    "COMPRESSION_LEVEL={}: {e}",
-                    options.compression_level
-                ))
-            })?;
+        let level = CompressionLevel::try_from(options.compression_level).map_err(|e| {
+            Error::Usage(format!(
+                "COMPRESSION_LEVEL={}: {e}",
+                options.compression_level
+            ))
+        })?;
+        let threads = options.threads.max(1);
         Ok(Self {
             outputs: Vec::new(),
             open: Vec::new(),
             clock: 0,
             options,
             level,
+            pool: (threads > 1).then(|| Pool::new(threads)),
+            limit: threads + 1,
             names: HashMap::new(),
             reads,
             claims,
@@ -193,7 +328,7 @@ impl Fanout {
             )));
         }
         if let Some((label, claims)) = &self.claims {
-            let mut claims = claims.lock().unwrap_or_else(|e| e.into_inner());
+            let mut claims = claims.lock().unwrap_or_else(PoisonError::into_inner);
             match claims.owner(path) {
                 Some(owner) if owner != label => {
                     return Err(Error::Metric(format!(
@@ -231,6 +366,7 @@ impl Fanout {
         {
             self.claim(&path, what)?;
         }
+        self.make_room()?;
         let error = |source| Error::Output {
             path: target.to_path_buf(),
             source,
@@ -238,13 +374,11 @@ impl Fanout {
         let file = AtomicFile::new(target);
         let handle = file.create().map_err(error)?;
         let identity = identity(&handle).map_err(error)?;
+        let mut staged = Vec::new();
         let open = match format {
             Format::Bam => {
-                let mut writer = bgzf::io::writer::Builder::default()
-                    .set_compression_level(self.level)
-                    .build_from_writer(handle);
-                bam_writer::write_bam_header(&mut writer, header).map_err(error)?;
-                Open::Bam(writer)
+                bam_writer::write_bam_header(&mut staged, header).map_err(error)?;
+                Open::Bam(handle)
             }
             Format::Sam => {
                 let mut writer = BufWriter::with_capacity(SAM_BUFFER, handle);
@@ -256,19 +390,20 @@ impl Fanout {
         };
         let index = self.outputs.len();
         self.outputs.push(Output {
-            open: None,
+            open: Some(open),
             file,
             identity,
             format,
             coordinate,
             order: Presorted::of(header),
+            staged,
+            pending: VecDeque::new(),
             ended: false,
             last_used: 0,
         });
-        self.make_room()?;
-        self.outputs[index].open = Some(open);
         self.open.push(index);
         self.touch(index);
+        self.send_full_blocks(index)?;
         Ok(index)
     }
 
@@ -298,17 +433,52 @@ impl Fanout {
         self.suspend(index)
     }
 
-    /// Close an open file without ending it: its staged records become a
-    /// block, the descriptor is released.
-    fn suspend(&mut self, index: usize) -> Result<()> {
+    /// Compress `block` of file `index`: on a worker, or here with one
+    /// thread. The file is open.
+    fn send(&mut self, index: usize, block: Vec<u8>) -> Result<()> {
         let output = &mut self.outputs[index];
-        match output.open.take() {
-            Some(Open::Bam(mut writer)) => {
-                writer.flush().map_err(|e| output.error(e))?;
-                drop(writer.into_inner());
+        match &self.pool {
+            Some(pool) => {
+                let pending = pool.send(block, self.level).map_err(|e| output.error(e))?;
+                output.pending.push_back(pending);
+                output.drain(false, self.limit)
             }
-            Some(Open::Sam(mut writer)) => writer.flush().map_err(|e| output.error(e))?,
-            None => {}
+            None => {
+                let frame = frame(&block, self.level).map_err(|e| output.error(e))?;
+                output.put(&frame)
+            }
+        }
+    }
+
+    /// Send every full block of the staged bytes of file `index`.
+    fn send_full_blocks(&mut self, index: usize) -> Result<()> {
+        while self.outputs[index].staged.len() >= BLOCK {
+            let staged = &mut self.outputs[index].staged;
+            let rest = staged.split_off(BLOCK);
+            let block = std::mem::replace(staged, rest);
+            self.send(index, block)?;
+        }
+        Ok(())
+    }
+
+    /// Write out everything file `index` holds: the staged bytes as a
+    /// block, then every pending frame.
+    fn settle(&mut self, index: usize) -> Result<()> {
+        let staged = std::mem::take(&mut self.outputs[index].staged);
+        if !staged.is_empty() {
+            self.send(index, staged)?;
+        }
+        let limit = self.limit;
+        self.outputs[index].drain(true, limit)
+    }
+
+    /// Close an open file without ending it: its staged bytes become a
+    /// block, every frame is written, the descriptor is released.
+    fn suspend(&mut self, index: usize) -> Result<()> {
+        self.settle(index)?;
+        let output = &mut self.outputs[index];
+        if let Some(Open::Sam(mut writer)) = output.open.take() {
+            writer.flush().map_err(|e| output.error(e))?;
         }
         Ok(())
     }
@@ -320,7 +490,6 @@ impl Fanout {
             return Ok(());
         }
         self.make_room()?;
-        let level = self.level;
         let output = &mut self.outputs[index];
         let file = File::options()
             .append(true)
@@ -332,11 +501,7 @@ impl Fanout {
             )));
         }
         output.open = Some(match output.format {
-            Format::Bam => Open::Bam(
-                bgzf::io::writer::Builder::default()
-                    .set_compression_level(level)
-                    .build_from_writer(file),
-            ),
+            Format::Bam => Open::Bam(file),
             Format::Sam => Open::Sam(BufWriter::with_capacity(SAM_BUFFER, file)),
         });
         self.open.push(index);
@@ -356,15 +521,22 @@ impl Fanout {
             ..
         } = self;
         let output = &mut outputs[index];
-        let written = match output.open.as_mut().expect("reopened") {
-            Open::Bam(writer) => record.write_to(writer),
-            Open::Sam(writer) => {
+        match output.format {
+            Format::Bam => {
+                record
+                    .write_to(&mut output.staged)
+                    .map_err(|e| output.error(e))?;
+                if output.staged.len() >= BLOCK {
+                    self.send_full_blocks(index)?;
+                }
+                Ok(())
+            }
+            Format::Sam => {
                 line.clear();
                 sam_text::write_record(line, record, references).map_err(Error::Record)?;
-                writer.write_all(line)
+                output.put(line)
             }
-        };
-        written.map_err(|e| output.error(e))
+        }
     }
 
     /// Write the end of file `index` and close it. It is renamed into
@@ -373,14 +545,16 @@ impl Fanout {
         if self.outputs[index].ended {
             return Ok(());
         }
-        if self.outputs[index].format == Format::Bam {
-            self.reopen(index)?;
-        }
+        self.reopen(index)?;
+        self.settle(index)?;
         self.open.retain(|open| *open != index);
         let output = &mut self.outputs[index];
+        if output.format == Format::Bam {
+            output.put(&BGZF_EOF)?;
+        }
         match output.open.take() {
-            Some(Open::Bam(writer)) => drop(writer.finish().map_err(|e| output.error(e))?),
             Some(Open::Sam(mut writer)) => writer.flush().map_err(|e| output.error(e))?,
+            Some(Open::Bam(file)) => drop(file),
             None => {}
         }
         output.ended = true;
