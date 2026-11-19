@@ -1,11 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.28.0
 
-Wave W10 of docs/07, part one: two more record-editing tools, the first whose writer sorts.
-
-Wave W10 of docs/07, part: `GatherBamFiles`, `CalculateReadGroupChecksum` and a byte-level
-BGZF block copy.
+Wave W10 of docs/07: six tools (54 in all), a writer that sorts, fan-out sinks and a BGZF block copy.
 
 ### Added
 

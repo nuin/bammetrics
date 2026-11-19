@@ -30,10 +30,10 @@ emits.
 | Step | What it is | Today |
 |---|---|---|
 | source | One BAM, CRAM or SAM text file, or a pipe holding one | the positional argument, `-` for standard input |
-| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on; a streaming transform edits each batch as it passes (section 16) | `mark-duplicates`, `sort-sam` (both barriers); `add-comments-to-bam`, `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`, `set-nm-and-uq-tags` (streaming) |
+| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on; a streaming transform edits each batch as it passes (section 16) | `mark-duplicates`, `sort-sam`, `revert-original-base-qualities-and-add-mate-cigar` (barriers); `add-comments-to-bam`, `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`, `set-nm-and-uq-tags` (streaming); `add-or-replace-read-groups` (streaming, a barrier with a `--sort-order` that differs from the stream's; section 17) |
 | tap | A one-pass tool on the records of its position. It changes nothing | 18 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check`, `mt-copy-number`, `exon-coverage`, `adapter-content`, `duplicate-by-tile`, `telomere` |
 | write | A tap that writes the records of its position as a BAM, or as SAM text | `write [PATH]` |
-| split | A sink that writes the records of its position over BAMs in a directory (section 17) | `split-sam-by-library`, `split-sam-by-number-of-reads` |
+| split | A sink that writes the records of its position over BAMs in a directory (section 18) | `split-sam-by-library`, `split-sam-by-number-of-reads` |
 
 A tap or `write` does not change the stream, so the step after it sees the same records.
 `in.bam + tap + mark-duplicates + tap + write` gives the first tap the source records and
@@ -1260,7 +1260,7 @@ its own order of tied records.
 `test_revert_original_base_qualities_and_add_mate_cigar.py` also compare each step's
 written BAM with Picard's file of the tool.
 
-## 17. W10: split steps
+## 18. W10: split steps
 
 A split writes the records of its position over several BAMs in a directory: one per
 library (`split-sam-by-library`) or files of about one size (`split-sam-by-number-of-reads`).

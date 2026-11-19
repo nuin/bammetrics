@@ -169,11 +169,11 @@ class Step:
     unknown verb or keyword raises UsageError here.
 
     verb is the verb as the command spells it (insert-size, write); role is
-    "transform", "tap" or "write"; options holds the keywords given, without those
+    "transform", "tap", "write" or "split"; options holds the keywords given, without those
     that were None; args is what they spell for the command (["--minimum-pct=0.1"]).
     Two steps with the same verb and args are equal."""
     verb: str
-    role: Literal["transform", "tap", "write"]
+    role: Literal["transform", "tap", "write", "split"]
     options: dict[str, Any]
     args: list[str]
     def __init__(self, verb: _StepVerb | str, /, **options: Any) -> None: ...
@@ -191,7 +191,7 @@ class Stage:
     tap and for write."""
     number: int
     verb: str
-    role: Literal["transform", "tap", "write"]
+    role: Literal["transform", "tap", "write", "split"]
     status: Literal["ok", "failed", "stopped", "not_run"]
     error: str | None
     reads: str
