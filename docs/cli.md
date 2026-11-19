@@ -741,8 +741,8 @@ Picard's `SplitSamByLibrary`: one file per library of the header's `@RG` lines
   record, with its `.bai` (`--create-index`, a coordinate-sorted BAM) and `.md5`. A run that
   fails leaves none. At most 64 files are open at once; a file closed to make room is
   opened again for its next record. A split writes at most 100,000 files.
-- `-o` names the directory; the verb makes it when missing, the Picard face needs it to
-  exist. Without `-o` the files go to the current directory, as Picard's.
+- `-o` names the directory (`-o -` exits 2); the verb makes it when missing, the Picard
+  face needs it to exist. Without `-o` the files go to the current directory, as Picard's.
 - In a chain the step is a split: it writes a BAM per library of the stream at its
   position into its own `-o DIR`. Its files are claimed when it makes them, so no other
   step may write one.
@@ -773,7 +773,8 @@ Picard's `SplitSamByNumberOfReads`: the records in file order over files of abou
 - A `--total-reads` other than the count read changes the sizes and prints Picard's
   warning with the files written.
 - Files are renamed into place after the last record and a run that fails leaves none, as
-  for `split-sam-by-library`. A count that asks for more than 100,000 files exits 2.
+  for `split-sam-by-library`. A run that would make more than 100,000 files exits 1 and
+  leaves none; a larger `--n-files` is taken when the records give fewer files.
 - In a chain the step needs `--total-reads`: the stream is read once.
 
 ### qc

@@ -357,6 +357,26 @@ needs = ["tests/data/markdup.bam"]
 max_rss_mib = 64
 max_seconds = 30
 
+# 1,000 libraries (tests/data/make_many_libraries.py) under a limit of 80 descriptors:
+# the split holds at most 64 files open, so it writes all 1,000 (and the 1,000 .md5).
+[[command]]
+name = "split-sam-by-library 1000 libraries"
+argv = [
+    "/bin/sh", "-c", "ulimit -n 80 && exec {bin} split-sam-by-library tests/data/many_libraries.bam -o {out}/libs --create-md5-file",
+]
+needs = ["tests/data/many_libraries.bam"]
+max_rss_mib = 64
+max_seconds = 60
+
+[[command]]
+name = "split-sam-by-number-of-reads 1000 files"
+argv = [
+    "/bin/sh", "-c", "ulimit -n 80 && exec {bin} split-sam-by-number-of-reads tests/data/many_libraries.bam -o {out}/shards --n-files 1000",
+]
+needs = ["tests/data/many_libraries.bam"]
+max_rss_mib = 64
+max_seconds = 60
+
 [[command]]
 name = "split-sam-by-library slice"
 tier = "scale"

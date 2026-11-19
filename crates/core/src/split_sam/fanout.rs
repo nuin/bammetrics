@@ -20,7 +20,7 @@ use noodles::sam;
 
 use crate::bam_raw::RawRecord;
 use crate::bam_writer::{self, Presorted};
-use crate::cleanup::AtomicFile;
+use crate::cleanup::{self, AtomicFile};
 use crate::error::{Error, Result};
 use crate::mark_duplicates::{SortOrder, same_file};
 use crate::registry::Invocation;
@@ -599,23 +599,32 @@ impl Fanout {
 
 /// Rename every file into place. When one fails, or when two of them
 /// turn out to be one file (names that differ in case only, on a file
-/// system that ignores case), every file renamed is removed again.
+/// system that ignores case), every file renamed is removed again. Each
+/// renamed file stays registered in [`crate::cleanup`] until the last
+/// rename and the check are done, so a signal in between removes the
+/// renamed files too. A file written in place (a link or pipe this user
+/// owns) is never removed.
 fn commit_all(staged: Vec<AtomicFile>) -> Result<Vec<PathBuf>> {
     let mut done: Vec<PathBuf> = Vec::with_capacity(staged.len());
-    let undo = |done: &[PathBuf]| {
-        for path in done {
+    let mut renamed: Vec<PathBuf> = Vec::with_capacity(staged.len());
+    let undo = |renamed: &[PathBuf]| {
+        for path in renamed.iter().rev() {
             let _ = std::fs::remove_file(path);
         }
+        cleanup::unregister_all(renamed);
     };
     let mut files = staged.into_iter();
     while let Some(file) = files.next() {
         let path = file.path().to_path_buf();
-        if let Err(source) = file.commit() {
-            undo(&done);
-            // The files not yet renamed are dropped: their temporary
-            // names are removed.
-            drop(files);
-            return Err(Error::Output { path, source });
+        match file.commit_registered() {
+            Ok(committed) => renamed.extend(committed),
+            Err(source) => {
+                undo(&renamed);
+                // The files not yet renamed are dropped: their temporary
+                // names are removed.
+                drop(files);
+                return Err(Error::Output { path, source });
+            }
         }
         done.push(path);
     }
@@ -632,9 +641,10 @@ fn commit_all(staged: Vec<AtomicFile>) -> Result<Vec<PathBuf>> {
                 other.display(),
                 path.display()
             );
-            undo(&done);
+            undo(&renamed);
             return Err(Error::Metric(message));
         }
     }
+    cleanup::unregister_all(&renamed);
     Ok(done)
 }

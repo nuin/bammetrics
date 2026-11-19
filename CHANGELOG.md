@@ -35,7 +35,23 @@
   `test_split_sam_by_number_of_reads.py` and `split_bams.py` (300 libraries, odd names,
   read groups without `LB`, runs of names with secondary and supplementary records);
   `crates/cli/tests/split_sam.rs` (chained equals staged, a failed split leaves no file,
-  claims); 18 golden cases; five memgate rows.
+  claims, a signal during the renames of 20,000 files); 18 golden cases; seven memgate
+  rows, two on `tests/data/many_libraries.bam` (1,000 libraries, written by
+  `tests/data/make_many_libraries.py`) under a limit of 80 file descriptors.
+
+### Fixed
+
+- `crates/core/src/cleanup.rs`: the registry of paths a signal removes is a hash map and
+  a tree. Forgetting a path scanned a list before, so a split of 80,000 files took 228 s
+  in its renames; it takes 37 s now. A file is created and registered under one lock,
+  so a signal never leaves a temporary file between the two.
+- A split keeps each renamed file registered until its last rename, so SIGINT during the
+  renames leaves no file of the split. A file written in place (a link or pipe this user
+  owns) is never removed by a failed split.
+- `SPLIT_TO_N_FILES` above 100,000 is taken when the records give fewer files, as Picard
+  takes it; the run that would make the 100,001st file exits 1.
+- `split-sam-by-library` and `split-sam-by-number-of-reads`: `-o DIR` help names the
+  directory, `-o -` exits 2, and `--format` help speaks of the files.
 
 ## 0.27.0
 

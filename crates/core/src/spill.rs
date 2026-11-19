@@ -107,8 +107,8 @@ impl TempDir {
         fs::create_dir_all(&self.base).map_err(error(&self.base))?;
         let n = DIRECTORIES.fetch_add(1, AtomicOrdering::Relaxed);
         let path = self.base.join(dir_name(self.purpose, n));
-        create_private_dir(&path).map_err(error(&path))?;
-        crate::cleanup::register(&path);
+        crate::cleanup::create_registered(&path, || create_private_dir(&path))
+            .map_err(error(&path))?;
         Ok(self.path.get_or_init(|| path))
     }
 

@@ -262,6 +262,69 @@ fn a_split_that_fails_leaves_no_file() {
     fs::remove_dir_all(&dir).expect("cleanup");
 }
 
+/// A count above the 100,000-file bound is taken when the records give
+/// fewer files, as Picard takes it: one record per file at most.
+#[test]
+fn a_count_above_the_file_bound_writes_the_files_the_records_give() {
+    let dir = fresh_dir("huge-count");
+    run(&[
+        "SplitSamByNumberOfReads",
+        &format!("I={MARKDUP}"),
+        &format!("O={}", text(&dir)),
+        "SPLIT_TO_N_FILES=2147483647",
+    ]);
+    let files = names(&dir);
+    assert!((2..=36).contains(&files.len()), "{files:?}");
+    assert_eq!(files[0], "shard_0001.bam");
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+/// SIGINT while a split of 20,000 files renames them into place: the
+/// files renamed so far stay registered for removal until the last
+/// rename, so the run leaves no file, renamed or temporary.
+#[cfg(unix)]
+#[test]
+fn a_signal_during_the_renames_leaves_no_file() {
+    use std::fmt::Write as _;
+    use std::os::unix::process::ExitStatusExt;
+    let dir = fresh_dir("signal");
+    let sam = dir.join("unmapped.sam");
+    let mut lines = String::from("@HD\tVN:1.6\tSO:unsorted\n@SQ\tSN:chr1\tLN:1000\n");
+    for i in 0..20_000 {
+        writeln!(lines, "r{i:05}\t4\t*\t0\t0\t*\t*\t0\t0\tACGT\tIIII").expect("line");
+    }
+    fs::write(&sam, lines).expect("SAM");
+    let out = dir.join("out");
+    fs::create_dir(&out).expect("output directory");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+        .args([
+            "SplitSamByNumberOfReads",
+            &format!("I={}", text(&sam)),
+            &format!("O={}", text(&out)),
+            "SPLIT_TO_N_FILES=20000",
+        ])
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("run bammetrics");
+    let renamed = |dir: &Path| {
+        fs::read_dir(dir).is_ok_and(|mut entries| {
+            entries.any(|e| e.is_ok_and(|e| !e.file_name().to_string_lossy().starts_with('.')))
+        })
+    };
+    while child.try_wait().expect("wait").is_none() && !renamed(&out) {
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let signalled = Command::new("kill")
+        .args(["-INT", &child.id().to_string()])
+        .status()
+        .expect("kill runs");
+    assert!(signalled.success());
+    let status = child.wait().expect("wait");
+    assert_eq!(status.signal(), Some(2), "the run ended before the signal");
+    assert!(names(&out).is_empty(), "{} files left", names(&out).len());
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
 /// A `write` whose file is one a split makes once the stream is read:
 /// the split finds it when it makes the file and fails.
 #[test]

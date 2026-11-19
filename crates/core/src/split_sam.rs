@@ -314,12 +314,9 @@ impl Splitter {
         header: &sam::Header,
         layout: &Layout,
     ) -> Result<()> {
-        let (files, per_file) = options.sizes(layout.total);
-        if usize::try_from(files).is_ok_and(|files| files > MAX_FILES) {
-            return Err(Error::Usage(format!(
-                "{files} files asked for: a split writes at most {MAX_FILES}"
-            )));
-        }
+        // A count above MAX_FILES is taken: the files written are at most
+        // the records, and `Fanout::create` refuses the one past the bound.
+        let (_, per_file) = options.sizes(layout.total);
         let mut route = ByCount {
             per_file,
             written: 0,

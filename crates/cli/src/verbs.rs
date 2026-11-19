@@ -598,6 +598,16 @@ impl Verb {
             .chain(["OUTPUT", "O"])
             .collect();
         let (placeholder, help) = match self.files {
+            Files::Bam if self.directory => (
+                "DIR",
+                if self.default_output.is_some() {
+                    "The directory the files go to, made when missing; the current directory \
+                     without -o."
+                } else {
+                    "The directory the files go to, made when missing. Required."
+                }
+                .to_owned(),
+            ),
             Files::Bam if self.default_output.is_some() => (
                 "FILE",
                 format!(
@@ -639,6 +649,9 @@ impl Verb {
                               (picard,json) adds each further format beside every metrics file, \
                               as FILE.json."
                 .to_owned(),
+            Files::Bam if self.directory => {
+                format!("picard only: the {} have no other form.", self.writes)
+            }
             Files::Bam if !self.writes_metrics() => {
                 format!("picard only: the {} has no other form.", self.writes)
             }
@@ -1134,6 +1147,24 @@ impl Verb {
             Files::Single => Ok(given
                 .map(|g| PathBuf::from(&g.values[0]))
                 .filter(|p| p != Path::new("-"))),
+            Files::Bam if self.directory => match given {
+                Some(g) if g.values[0] == "-" => Err(VerbError::usage(
+                    self.name,
+                    "standard output takes one file; this verb writes several into a directory",
+                )
+                .from(g.spelled.clone())
+                .hint("give -o DIR")),
+                Some(g) => Ok(Some(PathBuf::from(&g.values[0]))),
+                // The directory does not depend on the input, so standard
+                // input has one too.
+                None => match self.default_output {
+                    Some(default) => Ok(Some(default(Path::new("-")))),
+                    None => Err(VerbError::usage(
+                        self.name,
+                        "missing -o DIR (Picard: OUTPUT), the directory the files go to",
+                    )),
+                },
+            },
             Files::Bam => match given {
                 Some(g) if g.values[0] == "-" => Ok(Some(PathBuf::from("/dev/stdout"))),
                 Some(g) => Ok(Some(PathBuf::from(&g.values[0]))),

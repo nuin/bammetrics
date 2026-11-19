@@ -1505,7 +1505,7 @@ are open at once, and a file closed to make room ends its block early. They diff
   files are written; bammetrics validates no BAM record and writes it to `unknown.bam`,
   as Picard does at `SILENT`.
 - A run that fails leaves none of its files. Picard leaves the files it opened.
-- A split writes at most 100,000 files; a count split that asks for more exits 2.
+- A split writes at most 100,000 files: the run that would make the 100,001st exits 1 and leaves none. A count above 100,000 is taken when the records give fewer files.
 - A library name of SAM text with a character above U+00FF is kept as the low byte of
   each UTF-16 unit, as every SAM text value is (section SAM text), so its file name is not
   Picard's.
