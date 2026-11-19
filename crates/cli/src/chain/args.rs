@@ -401,10 +401,14 @@ pub fn step_flags(verb: &Verb) -> Vec<Flag> {
     let mut flags: Vec<Flag> = step_parser_flags(verb)
         .into_iter()
         .filter(|flag| !CHAIN_KEYS.contains(&flag.key))
-        .filter(|flag| !(verb.files == Files::Bam && flag.key == Key::Output))
+        .filter(|flag| !(verb.files == Files::Bam && flag.key == Key::Output && !is_split(verb)))
         .collect();
     for flag in &mut flags {
         match (flag.key, verb.files) {
+            (Key::Output, _) if is_split(verb) => {
+                "The directory this step writes its files into; made when missing."
+                    .clone_into(&mut flag.help);
+            }
             (Key::Output, Files::Single) => {
                 flag.help = format!(
                     "The {} of this step; - writes standard output. Without one the chain's \

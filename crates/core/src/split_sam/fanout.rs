@@ -345,8 +345,8 @@ impl Fanout {
 
     /// Write `record` to file `index`.
     pub fn write(&mut self, index: usize, record: &RawRecord) -> Result<()> {
-        let target = self.outputs[index].target().to_path_buf();
-        self.outputs[index].order.check(record, &target)?;
+        let output = &mut self.outputs[index];
+        output.order.check(record, output.file.path())?;
         self.reopen(index)?;
         self.touch(index);
         let Self {

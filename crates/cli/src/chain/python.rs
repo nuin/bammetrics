@@ -218,8 +218,10 @@ fn tool_keywords(verb: &Verb) -> (Vec<Keyword>, Vec<(&'static str, String)>) {
             ));
             continue;
         }
+        // A split's `output` is its directory, the step's own `-o`.
+        let split_output = is_split(verb) && keyword.picard == "OUTPUT";
         // A transform that writes a BAM as a tool writes none in a chain.
-        if verb.files == Files::Bam && keyword.picard == "OUTPUT" {
+        if verb.files == Files::Bam && keyword.picard == "OUTPUT" && !split_output {
             refused.push((
                 "output",
                 format!(
@@ -229,7 +231,7 @@ fn tool_keywords(verb: &Verb) -> (Vec<Keyword>, Vec<(&'static str, String)>) {
             ));
             continue;
         }
-        let key = if keyword.output && verb.files != Files::Bam {
+        let key = if (keyword.output && verb.files != Files::Bam) || split_output {
             Key::Output
         } else {
             Key::Picard(keyword.picard)
@@ -504,7 +506,7 @@ mod tests {
         for verb in VERBS.iter().filter(|verb| is_step(verb)) {
             let table = step_table(verb.name).expect(verb.name);
             for keyword in python_keywords(verb.tool()) {
-                let bam = verb.files == Files::Bam && keyword.picard == "OUTPUT";
+                let bam = verb.files == Files::Bam && keyword.picard == "OUTPUT" && !is_split(verb);
                 let chain_s = keyword.picard == "VALIDATION_STRINGENCY";
                 assert_eq!(
                     table.keywords.iter().any(|k| k.name == keyword.name),
