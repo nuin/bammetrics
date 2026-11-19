@@ -236,7 +236,19 @@ fn budget_lines(out: &mut String, chain: &Chain, estimate: &Estimate) {
     let _ = writeln!(out, "{temp}");
     if !estimate.outputs.is_empty() {
         let bytes = estimate.outputs.iter().map(|(_, b)| *b).sum();
-        let _ = writeln!(out, "output     about {} written by write", human(bytes));
+        let writers = match (
+            chain.steps.iter().any(|step| step.role == Role::Write),
+            chain.steps.iter().any(|step| step.role == Role::Split),
+        ) {
+            (true, true) => "write and the splits",
+            (false, true) => "the splits",
+            _ => "write",
+        };
+        let _ = writeln!(
+            out,
+            "output     about {} written by {writers}",
+            human(bytes)
+        );
     }
     // The base is a constant: on a small input the peak is mostly base, and
     // the chain takes less.

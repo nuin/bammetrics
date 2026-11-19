@@ -52,6 +52,8 @@ add-o-a-tag                           AddOATag
 clean-sam                             CleanSam
 set-nm-md-and-uq-tags                 SetNmMdAndUqTags
 set-nm-and-uq-tags                    SetNmAndUqTags
+split-sam-by-library                  SplitSamByLibrary
+split-sam-by-number-of-reads          SplitSamByNumberOfReads
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

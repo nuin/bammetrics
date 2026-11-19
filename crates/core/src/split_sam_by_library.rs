@@ -66,6 +66,20 @@ fn format(extension: &str) -> Result<Format> {
     }
 }
 
+/// The Picard face: Picard's exit code 2 (`NO_LIBRARIES_SPECIFIED_IN_HEADER`)
+/// for a header without a library, with its message; any other error as
+/// every tool gives it.
+pub fn run_cli(args: &[String]) -> Result<u8> {
+    match TOOL.run_cli(args) {
+        Ok(()) => Ok(0),
+        Err(Error::Usage(message)) if message.starts_with(split_sam::NO_LIBRARIES) => {
+            eprintln!("bammetrics: {message}");
+            Ok(2)
+        }
+        Err(e) => Err(e),
+    }
+}
+
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let dir = split_sam::output_dir(inv, Some("."))?;
     if crate::cram::is_cram(&inv.input) {

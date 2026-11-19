@@ -103,7 +103,7 @@ fn three_hundred_libraries_keep_at_most_the_bound_open() {
         for n in 0..300 {
             let record = tagged(&format!("r{round}_{n}"), Some(&format!("rg{n}")));
             split.push(&record).expect("push");
-            assert!(split.fanout.open.len() <= MAX_OPEN_FILES);
+            assert!(split.fanout.open_files() <= MAX_OPEN_FILES);
         }
     }
     split.push(&tagged("orphan", Some("zz"))).expect("orphan");

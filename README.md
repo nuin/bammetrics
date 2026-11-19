@@ -200,6 +200,8 @@ the sizes and a Chrome recipe for a build without the feature.
 | CleanSam (an alignment past the end of its reference soft-clipped at its end, the mate's `MC` clipped the same way, MAPQ 0 on unmapped records; SAM, BAM or CRAM in, BAM or SAM text out; a chain transform) | | `clean_sam()` |
 | SetNmMdAndUqTags (`MD`, `NM` and `UQ` of each mapped record of a coordinate-sorted input against `REFERENCE_SEQUENCE`, as htsjdk computes them; `IS_BISULFITE_SEQUENCE`, `SET_ONLY_UQ`; a chain transform) | | `set_nm_md_and_uq_tags()` |
 | SetNmAndUqTags (Picard's deprecated name of SetNmMdAndUqTags: the same options and output) | | `set_nm_and_uq_tags()` |
+| SplitSamByLibrary (one BAM, or SAM text for SAM input, per library into the `OUTPUT` directory, `unknown.bam` for the records without a library; the names htsjdk makes safe; every file renamed into place after the last record, at most 64 open at once; a chain split) | | `split_sam_by_library()` |
+| SplitSamByNumberOfReads (the records in file order over files of about one size, `shard_0001.bam` on; `SPLIT_TO_N_FILES` or `SPLIT_TO_N_READS`, a run of one record name never cut; `TOTAL_READS_IN_INPUT`, `OUT_PREFIX`; a chain split) | | `split_sam_by_number_of_reads()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 | SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | `validation_stringency=` |

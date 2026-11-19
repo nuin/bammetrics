@@ -272,6 +272,11 @@ impl Fanout {
         Ok(index)
     }
 
+    /// The files open now: at most [`MAX_OPEN_FILES`].
+    pub fn open_files(&self) -> usize {
+        self.open.len()
+    }
+
     fn touch(&mut self, index: usize) {
         self.clock += 1;
         self.outputs[index].last_used = self.clock;

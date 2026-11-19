@@ -66,6 +66,9 @@ pub fn file_name_safe(value: &[u8]) -> String {
         .collect()
 }
 
+/// Picard's message for a header without a library, before the input.
+pub const NO_LIBRARIES: &str = "No individual libraries are specified in the header of ";
+
 /// The `SplitSamByNumberOfReads` options that size the files.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CountOptions {
@@ -197,14 +200,16 @@ fn written_header(header: sam::Header) -> sam::Header {
     record_edit::with_version(header, true)
 }
 
-/// `header` with only the read groups `keep` says.
-fn with_groups(header: &sam::Header, keep: impl Fn(&[u8], Option<&[u8]>) -> bool) -> sam::Header {
-    let mut out = header.clone();
+/// `base` (a header without read groups) with the read groups of `header`
+/// at `positions`, in header order.
+fn with_groups(base: &sam::Header, header: &sam::Header, positions: &[usize]) -> sam::Header {
+    let mut out = base.clone();
     let groups = out.read_groups_mut();
-    groups.retain(|id, map| {
-        let library = map.other_fields().get(&LIBRARY).map(|v| v.as_ref());
-        keep(id.as_ref(), library)
-    });
+    for &at in positions {
+        if let Some((id, map)) = header.read_groups().get_index(at) {
+            groups.insert(id.clone(), map.clone());
+        }
+    }
     out
 }
 
@@ -248,29 +253,36 @@ impl Splitter {
     }
 
     fn libraries(&mut self, header: &sam::Header, layout: &Layout) -> Result<()> {
-        // Libraries in header order, each with its read groups.
-        let mut libraries: Vec<(Vec<u8>, Vec<Vec<u8>>)> = Vec::new();
-        let mut groups = HashMap::new();
-        for (id, map) in header.read_groups() {
-            let id = id.to_vec();
+        // Libraries in header order, each with the positions of its read
+        // groups; one hash lookup per read group.
+        let mut libraries: Vec<(Vec<u8>, Vec<usize>)> = Vec::new();
+        let mut library_at: HashMap<Vec<u8>, usize> = HashMap::new();
+        let mut without_library = Vec::new();
+        for (at, (_, map)) in header.read_groups().iter().enumerate() {
             let Some(library) = map.other_fields().get(&LIBRARY) else {
-                groups.insert(id, None);
+                without_library.push(at);
                 continue;
             };
-            let library = library.to_vec();
-            match libraries.iter_mut().find(|(name, _)| *name == library) {
-                Some((_, ids)) => ids.push(id),
-                None => libraries.push((library, vec![id])),
+            let next = libraries.len();
+            let index = *library_at.entry(library.to_vec()).or_insert(next);
+            if index == next {
+                libraries.push((library.to_vec(), Vec::new()));
+            }
+            libraries[index].1.push(at);
+        }
+        let mut groups: HashMap<Vec<u8>, Option<usize>> = HashMap::new();
+        for &at in &without_library {
+            if let Some((id, _)) = header.read_groups().get_index(at) {
+                groups.insert(id.to_vec(), None);
             }
         }
         if libraries.is_empty() {
-            return Err(Error::Usage(format!(
-                "No individual libraries are specified in the header of {}",
-                layout.input
-            )));
+            return Err(Error::Usage(format!("{NO_LIBRARIES}{}", layout.input)));
         }
-        for (library, ids) in &libraries {
-            let only = with_groups(header, |_, lb| lb == Some(library.as_slice()));
+        let mut base = header.clone();
+        base.read_groups_mut().clear();
+        for (library, positions) in &libraries {
+            let only = with_groups(&base, header, positions);
             let name = format!("{}.{}", file_name_safe(library), layout.extension);
             let what = format!("library {:?}", String::from_utf8_lossy(library));
             let index = self.fanout.create(
@@ -279,14 +291,16 @@ impl Splitter {
                 &written_header(only),
                 layout.format,
             )?;
-            for id in ids {
-                groups.insert(id.clone(), Some(index));
+            for &at in positions {
+                if let Some((id, _)) = header.read_groups().get_index(at) {
+                    groups.insert(id.to_vec(), Some(index));
+                }
             }
         }
         self.route = Route::Library(ByLibrary {
             groups,
             unknown: None,
-            unknown_header: written_header(with_groups(header, |_, lb| lb.is_none())),
+            unknown_header: written_header(with_groups(&base, header, &without_library)),
             dir: layout.dir.to_path_buf(),
             extension: layout.extension.to_owned(),
             format: layout.format,

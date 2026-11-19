@@ -175,6 +175,10 @@ pub fn run() -> error::Result<u8> {
             if tool.name == bammetrics_core::check_duplicate_marking::TOOL.name {
                 return Ok(bammetrics_core::check_duplicate_marking::run_cli(rest)?);
             }
+            // Picard's exit code 2 for a header without a library.
+            if tool.name == bammetrics_core::split_sam_by_library::TOOL.name {
+                return Ok(bammetrics_core::split_sam_by_library::run_cli(rest)?);
+            }
             // Standard input to standard output; no rows and no file.
             if tool.name == bammetrics_core::fifo_buffer::TOOL.name {
                 return Ok(bammetrics_core::fifo_buffer::run_cli(rest)?);

@@ -1,0 +1,9 @@
+## argv
+SplitSamByLibrary
+I=tests/data/markdup.bam
+O=OUT/missing
+## exit
+1
+## stdout
+## stderr
+bammetrics: OUT/missing: Directory does not exist
