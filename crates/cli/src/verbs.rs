@@ -473,6 +473,20 @@ pub const VERBS: &[Verb] = &[
         writes: "BAM",
         ..verb("gather-bam-files", "GatherBamFiles", Files::Bam)
     },
+    Verb {
+        about: Some(
+            "writes the MD5 of the @RG lines of a SAM, BAM or CRAM header as Picard's \
+             CalculateReadGroupChecksum computes it, 32 hex digits and no line end: to -o, or \
+             beside the input as INPUT.read_group_md5.",
+        ),
+        writes: "read group checksum",
+        default_output: Some(bammetrics_core::calculate_read_group_checksum::default_output),
+        ..verb(
+            "calculate-read-group-checksum",
+            "CalculateReadGroupChecksum",
+            Files::Bam,
+        )
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the

@@ -367,6 +367,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::set_nm_md_and_uq_tags::TOOL,
     &crate::set_nm_md_and_uq_tags::ALIAS,
     &crate::gather_bam_files::TOOL,
+    &crate::calculate_read_group_checksum::TOOL,
 ];
 
 /// The tool named `name`.
