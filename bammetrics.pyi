@@ -1396,6 +1396,31 @@ def split_sam_by_number_of_reads(
     order over files of about the same size, OUT_PREFIX_0001.bam and on, a template
     never cut."""
 
+def gather_bam_files(
+    input: _Paths,
+    *,
+    output: _Path,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """GatherBamFiles: no rows; OUTPUT gets the records of every INPUT in the order given
+    under the header of the first: BAM inputs block copied as Picard copies them, byte
+    for byte at COMPRESSION_LEVEL=0; with a SAM or CRAM input every record read and
+    written again."""
+
+def calculate_read_group_checksum(
+    input: _Path,
+    *,
+    output: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """CalculateReadGroupChecksum: writes the MD5 of the header's read groups as Picard
+    computes it (32 hex digits, no line end) to OUTPUT, or beside INPUT as
+    INPUT.read_group_md5. Returns one row: the checksum."""
+
 # END registry tools
 
 def alignment_summary(

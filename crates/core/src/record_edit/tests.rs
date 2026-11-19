@@ -387,3 +387,63 @@ fn a_sort_order_htsjdk_does_not_name_is_written_unknown() {
     let named: sam::Header = "@HD\tVN:1.6\tSO:coordinate\n".parse().expect("header");
     check_sort_order(&named, Stringency::Strict, path).expect("a named order");
 }
+
+/// Hands every record on and copies the BGZF blocks as bytes.
+struct CopyBytes;
+
+impl RecordEdit for CopyBytes {
+    fn header(&self, input: &sam::Header) -> Result<sam::Header> {
+        let mut header = input.clone();
+        header.add_comment("copied");
+        Ok(header)
+    }
+
+    fn record(&mut self, _record: &mut RawRecord) -> Result<Outcome> {
+        unreachable!("a byte copy reads no record")
+    }
+
+    fn copies_bytes(&self, _input: &sam::Header) -> bool {
+        true
+    }
+}
+
+fn copy_bytes(_: &Setup) -> Result<Box<dyn RecordEdit>> {
+    Ok(Box::new(CopyBytes))
+}
+
+#[test]
+fn a_byte_copy_keeps_the_records_and_ends_with_the_end_of_file_block() {
+    let dir = scratch("bytes");
+    let input = data("markdup.bam");
+    let out = dir.join("out.bam");
+    let opts = Options {
+        mode: Mode::BlockCopy,
+        create_index: true,
+        compression_level: 0,
+        ..options(&input, &out)
+    };
+    run(&opts, copy_bytes).expect("run");
+    let (header, records) = read_back(&out);
+    let (input_header, input_records) = read_back(&input);
+    assert_eq!(records, input_records);
+    assert_eq!(header.comments().len(), input_header.comments().len() + 1);
+    assert!(
+        std::fs::read(&out)
+            .expect("out")
+            .ends_with(&bgzf_copy::EOF_BLOCK)
+    );
+    assert!(dir.join("out.bam.bai").exists());
+    // A BAM with no record: the header, then the end-of-file block.
+    let empty = Options {
+        mode: Mode::BlockCopy,
+        ..options(&data("no_reads.bam"), &out)
+    };
+    run(&empty, copy_bytes).expect("run");
+    assert_eq!(count(&out), 0);
+    assert!(
+        std::fs::read(&out)
+            .expect("out")
+            .ends_with(&bgzf_copy::EOF_BLOCK)
+    );
+    std::fs::remove_dir_all(&dir).expect("scratch");
+}

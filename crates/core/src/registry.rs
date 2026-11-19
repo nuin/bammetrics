@@ -370,6 +370,8 @@ pub const TOOLS: &[&Tool] = &[
     &crate::revert_original_base_qualities_and_add_mate_cigar::TOOL,
     &crate::split_sam_by_library::TOOL,
     &crate::split_sam_by_number_of_reads::TOOL,
+    &crate::gather_bam_files::TOOL,
+    &crate::calculate_read_group_checksum::TOOL,
 ];
 
 /// The tool named `name`.

@@ -1,0 +1,9 @@
+## argv
+CalculateReadGroupChecksum
+I=tests/data/oxog.bam
+O=tests/data/oxog.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/oxog.bam is an input; writing it would destroy it

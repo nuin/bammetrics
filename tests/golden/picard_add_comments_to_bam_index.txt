@@ -56,4 +56,4 @@ unplaced	141	-1	0	RG:Z:rg2	PG:Z:bwa
 ## file commented.bam.bai
 <index not recorded>
 ## file commented.bam.md5
-e19bc16b361c9debf5ebba12e5755c86
+4cb71bfd5bc5f7e4d8094b0c0d863f85

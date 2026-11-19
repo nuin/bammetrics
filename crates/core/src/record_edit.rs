@@ -29,6 +29,11 @@
 //!   a BAM; its record bytes go out unchanged, in the order read, with no
 //!   order check; the index is `<OUTPUT>.bai` (`out.bam.bai`). Picard writes
 //!   BAM bytes whatever the `OUTPUT` name, so a `.sam` name is refused.
+//!   From a regular file, an edit that needs no record
+//!   ([`RecordEdit::copies_bytes`]) is a byte copy as htsjdk's is
+//!   ([`crate::bgzf_copy`]): the header in blocks of its own, the block of
+//!   the first record deflated again, every later block copied, no record
+//!   decoded.
 //! * [`Mode::Rewrite`]: a `SamReader` into a presorted `SAMFileWriter`.
 //!   Records of a CRAM get `MD` and `NM` as htsjdk decodes them, every
 //!   record gets the `bin` htsjdk's `BAMRecordCodec` computes, the writer
@@ -38,7 +43,7 @@
 //! 3.5.0 (none calls `getPGRecord`). A tool that adds one does it in
 //! [`RecordEdit::header`].
 
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use noodles::sam;
@@ -47,6 +52,8 @@ use noodles::sam::header::record::value::map::header::Version;
 
 use crate::bam_raw::RawRecord;
 use crate::bam_writer::{self, BamWriter, Companions};
+use crate::bgzf_copy;
+use crate::cleanup::AtomicFile;
 use crate::cram::Kind;
 use crate::error::{Error, Result};
 use crate::mark_duplicates::{ContigCache, restore_md_and_nm, same_file};
@@ -92,6 +99,13 @@ pub trait RecordEdit {
     /// [`RecordEdit::finish`], the `bin` htsjdk's writer computes, so the
     /// stream after it holds the records the tool writes.
     fn rewrites(&self) -> bool {
+        false
+    }
+
+    /// True when a [`Mode::BlockCopy`] run may copy the input's BGZF
+    /// blocks as bytes ([`crate::bgzf_copy`]): the edit changes the header
+    /// alone and needs to see no record. `input` is the header read.
+    fn copies_bytes(&self, _input: &sam::Header) -> bool {
         false
     }
 }
@@ -309,12 +323,12 @@ impl Target {
 /// pipe and exits 0. Standard output redirected to a file is a usage error
 /// before the first record is written: Picard fails opening
 /// `/dev/stdout.bai` or `/dev/stdout.md5`. The index is asked only of a
-/// coordinate-sorted BAM, as [`bam_writer::finish_with_index`] writes it.
+/// BAM whose order [`bam_writer::indexes`] takes: `coordinate`, and for a
+/// block copy also `unsorted`.
 fn companions(opts: &Options, header: &sam::Header) -> Result<Companions> {
-    use crate::header_merge::SortOrder;
     let index = opts.create_index
         && opts.format() == WriteFormat::Bam
-        && SortOrder::of(header) == SortOrder::Coordinate;
+        && bam_writer::indexes(header, opts.mode == Mode::BlockCopy);
     let asked: Vec<&str> = [(index, "index"), (opts.create_md5, "MD5 file")]
         .into_iter()
         .filter_map(|(asked, what)| asked.then_some(what))
@@ -411,13 +425,13 @@ impl Restore {
 }
 
 /// Where the records go: a BAM or SAM text, with the companions it gets.
-enum Out {
+pub(crate) enum Out {
     Bam(BamWriter, Companions),
     Sam(SamWriter, Companions),
 }
 
 impl Out {
-    fn create(opts: &Options, header: &sam::Header) -> Result<Self> {
+    pub(crate) fn create(opts: &Options, header: &sam::Header) -> Result<Self> {
         let companions = companions(opts, header)?;
         Ok(match opts.format() {
             WriteFormat::Sam => {
@@ -438,7 +452,7 @@ impl Out {
 
     /// Write `record`. A rewrite gives it the `bin` htsjdk's writer computes;
     /// a block copy keeps its bytes.
-    fn write(&mut self, record: &mut RawRecord, mode: Mode) -> Result<()> {
+    pub(crate) fn write(&mut self, record: &mut RawRecord, mode: Mode) -> Result<()> {
         if mode == Mode::Rewrite {
             record.set_codec_bin();
         }
@@ -449,11 +463,17 @@ impl Out {
     }
 
     /// Close the file, write its companions, rename everything into place.
-    fn finish(self, header: &sam::Header, opts: &Options) -> Result<()> {
+    pub(crate) fn finish(self, header: &sam::Header, opts: &Options) -> Result<()> {
         match self {
             Self::Bam(writer, companions) => {
-                bam_writer::finish_with_index(writer, header, companions, &opts.index_path())
-                    .map(|_| ())
+                bam_writer::finish_with_index(
+                    writer,
+                    header,
+                    companions,
+                    &opts.index_path(),
+                    opts.mode == Mode::BlockCopy,
+                )
+                .map(|_| ())
             }
             Self::Sam(writer, companions) => {
                 let output = writer.close()?;
@@ -590,6 +610,13 @@ pub fn run_gated(
 ) -> Result<Option<Counters>> {
     check_output(opts)?;
     let temp = TempDir::new(opts.reorder.tmp_dir.as_deref(), "record-edit");
+    let mut build = Some(build);
+    let mut built = None;
+    if opts.mode == Mode::BlockCopy
+        && let Some(counters) = copy_blocks(opts, &mut build, &mut built)?
+    {
+        return Ok(Some(counters));
+    }
     pass::with_record_stream_kind(
         &opts.input,
         opts.reference.as_deref(),
@@ -602,12 +629,15 @@ pub fn run_gated(
             check_sort_order(header, opts.stringency, &opts.input)?;
             let cram = kind == Kind::Cram;
             let mut restore = Restore::new(cram, opts.mode, opts.reference.as_deref(), header)?;
-            let mut edit = build(&Setup {
-                header,
-                reference: opts.reference.as_deref(),
-                cram,
-                mode: opts.mode,
-            })?;
+            let mut edit = match built.take() {
+                Some(edit) => edit,
+                None => (build.take().expect("built once"))(&Setup {
+                    header,
+                    reference: opts.reference.as_deref(),
+                    cram,
+                    mode: opts.mode,
+                })?,
+            };
             let out_header = with_version(edit.header(header)?, opts.mode == Mode::Rewrite);
             // A run a gate may skip makes its file once the gate lets it go
             // on, so a skip writes nothing, not even to standard output.
@@ -676,6 +706,79 @@ pub fn run_gated(
             Ok(Some(counters))
         },
     )
+}
+
+/// `reheaderBamFile` as bytes ([`crate::bgzf_copy`]): the new header in
+/// blocks of its own, the rest of the block of the first record deflated
+/// again, every later block of the input copied, all at
+/// `COMPRESSION_LEVEL`; then the index and the MD5 from the finished file.
+/// A file that holds no end-of-file block after the copy (a BAM with no
+/// record, whose last block htsjdk skips) gets one. Returns `None`, the
+/// edit kept in `built`, when the edit needs each record, and with nothing
+/// built for a pipe or a device, whose blocks cannot be found again: the
+/// records are then read one by one. No record is counted.
+fn copy_blocks<B>(
+    opts: &Options,
+    build: &mut Option<B>,
+    built: &mut Option<Box<dyn RecordEdit>>,
+) -> Result<Option<Counters>>
+where
+    B: FnOnce(&Setup) -> Result<Box<dyn RecordEdit>>,
+{
+    if !std::fs::metadata(&opts.input).is_ok_and(|meta| meta.is_file()) {
+        return Ok(None);
+    }
+    let input = |source| Error::Input {
+        path: opts.input.clone(),
+        source,
+    };
+    let file = std::fs::File::open(&opts.input).map_err(input)?;
+    let kind = crate::cram::sniff(file).map_err(input)?.kind;
+    if kind != Kind::Bam {
+        return Err(not_a_bam(&opts.input, kind));
+    }
+    let header = pass::read_header_at(&opts.input, opts.stringency)?;
+    check_sort_order(&header, opts.stringency, &opts.input)?;
+    let edit = (build.take().expect("built once"))(&Setup {
+        header: &header,
+        reference: opts.reference.as_deref(),
+        cram: false,
+        mode: opts.mode,
+    })?;
+    if !edit.copies_bytes(&header) {
+        *built = Some(edit);
+        return Ok(None);
+    }
+    let out_header = with_version(edit.header(&header)?, false);
+    let companions = companions(opts, &out_header)?;
+    let source = bgzf_copy::Source::open(&opts.input)?;
+    let output = |source| Error::Output {
+        path: opts.output.clone(),
+        source,
+    };
+    let file = AtomicFile::new(&opts.output);
+    let mut out = bgzf_copy::writer(file.create().map_err(output)?);
+    let mut bytes = Vec::new();
+    bam_writer::write_bam_header(&mut bytes, &out_header).map_err(output)?;
+    bgzf_copy::write_blocks(&mut out, &bytes, opts.compression_level).map_err(output)?;
+    let stats = source
+        .copy(&mut out, true, false, opts.compression_level)
+        .map_err(|e| match e {
+            Error::Record(source) => output(source),
+            other => other,
+        })?;
+    if !stats.ends_with_eof {
+        out.write_all(&bgzf_copy::EOF_BLOCK).map_err(output)?;
+    }
+    drop(out.into_inner().map_err(|e| output(e.into_error()))?);
+    bam_writer::finish_file(
+        file,
+        &out_header,
+        companions,
+        &opts.index_path(),
+        opts.threads,
+    )?;
+    Ok(Some(Counters::default()))
 }
 
 /// A usage error for an option of the file a stand-alone run writes: in a

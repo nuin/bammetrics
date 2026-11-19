@@ -49,9 +49,13 @@ def test_the_committed_table_parses_and_names_both_tiers():
                        "sort-sam", "chain sort-sam + mark-duplicates + sort-sam + write --index",
                        "add-comments-to-bam", "replace-sam-header", "add-o-a-tag", "clean-sam",
                        "set-nm-md-and-uq-tags", "set-nm-and-uq-tags",
-                       "chain four edits + write --index"]
+                       "chain four edits + write --index", "gather-bam-files",
+                       "gather-bam-files sam", "calculate-read-group-checksum",
+                       "gather-bam-files forged reference list", "gather-bam-files long list"]
     for r in rows:
-        assert r.argv[0] == "{bin}" and r.max_rss_mib > 0
+        # A row whose input a script writes first runs both in one `sh -c`.
+        shell = r.argv[:2] == ["sh", "-c"] and "{bin}" in r.argv[2]
+        assert (r.argv[0] == "{bin}" or shell) and r.max_rss_mib > 0, r.name
         if r.tier == "fixture":
             assert all((ROOT / need).is_file() for need in r.needs), r.name
         else:

@@ -181,6 +181,14 @@ impl RecordEdit for Replace {
         record.set_reference_ids(renamed.0, renamed.1);
         Ok(Outcome::Changed)
     }
+
+    /// A block copy copies the input's blocks as bytes when no record can
+    /// name an index past the new dictionary: it is at least as long as the
+    /// input's. A shorter one needs each record checked.
+    fn copies_bytes(&self, input: &sam::Header) -> bool {
+        self.mode == Mode::BlockCopy
+            && self.header.reference_sequences().len() >= input.reference_sequences().len()
+    }
 }
 
 fn build(header: sam::Header) -> impl FnOnce(&Setup) -> Result<Box<dyn RecordEdit>> {

@@ -1,0 +1,13 @@
+## argv
+calculate-read-group-checksum
+tests/data/markdup.sam
+-o
+OUT/markdup.md5
+--validation-stringency
+SILENT
+## exit
+0
+## stdout
+## stderr
+## file markdup.md5
+16083d58f79ba0d26abca15ec92ba038

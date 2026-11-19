@@ -68,7 +68,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | ValidateSamFile | Diagnostics | out | Defined by htsjdk parser behaviour over about 70 rules. XL | samtools quickcheck (partial) |
 | CompareMetrics | Diagnostics | core | The oracle comparator. Its semantics go into the harness. S | none |
 | CompareSAMs | Diagnostics | later | Pipeline regression check. Quirks to copy. M | none |
-| CalculateReadGroupChecksum | Diagnostics | later | 40 lines, verified algorithm. S | none |
+| CalculateReadGroupChecksum | Diagnostics | core | Shipped in wave W10 of docs/07: the MD5 of the `@RG` records as htsjdk computes it, the header text decoded as htsjdk decodes it, `DT` written back in the process's time zone. S | none |
 | CheckTerminatorBlock | Diagnostics | later | 50 lines, pre-flight check. S | noodles-bgzf, samtools quickcheck |
 | CollectVariantCallingMetrics | Variant | core | Variant-benchmarking pillar of the roadmap. M | bcftools stats (partial) |
 | AccumulateVariantCallingMetrics | Variant | later | Lossy shard merge, copy the inversion. S | none |
@@ -107,7 +107,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | PositionBasedDownsampleSam | Read data | out | Tile-based downsampling for duplicate studies. | none |
 | FastqToSam | Read data | later | Harness builds unaligned fixtures. | samtools import, fgbio |
 | FilterSamReads | Read data | out | Subsetting. | samtools view |
-| GatherBamFiles | Read data | out | Concatenation. | samtools cat |
+| GatherBamFiles | Read data | core | Shipped in wave W10 of docs/07 (`bgzf_copy.rs`): BAM inputs block copied as htsjdk copies them, byte for byte at `COMPRESSION_LEVEL=0`; SAM or CRAM inputs read record by record. S | samtools cat |
 | MergeSamFiles | Read data | out | Merge. | samtools merge |
 | MergeBamAlignment | Read data | out | uBAM merge step. | fgbio ZipperBams |
 | ReorderSam | Read data | out | Contig reorder. | none |

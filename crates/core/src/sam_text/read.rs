@@ -102,6 +102,11 @@ impl HeaderLine<'_> {
     /// `reportErrorParsingLine`: an error under `STRICT`, a warning under
     /// `LENIENT`, nothing under `SILENT`.
     fn report(&self, reason: &str) -> io::Result<()> {
+        // The message holds the whole line: built for every field of a long
+        // line under `SILENT` it would cost time quadratic in the line.
+        if self.stringency == Stringency::Silent {
+            return Ok(());
+        }
         let reason = format!(
             "Error parsing SAM header. {reason}. Line:\n{}",
             String::from_utf8_lossy(self.text)

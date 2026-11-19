@@ -523,6 +523,30 @@ pub const VERBS: &[Verb] = &[
             Files::Bam,
         )
     },
+    Verb {
+        about: Some(
+            "gathers the records of several BAMs, in the order given, under the header of the \
+             first, as Picard's GatherBamFiles does: -o gets a BAM whose BGZF blocks are the \
+             inputs' (one block per later input is deflated again). A SAM or CRAM input, or a \
+             text file of paths one per line, is read as Picard reads it.",
+        ),
+        writes: "BAM",
+        ..verb("gather-bam-files", "GatherBamFiles", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "writes the MD5 of the @RG lines of a SAM, BAM or CRAM header as Picard's \
+             CalculateReadGroupChecksum computes it, 32 hex digits and no line end: to -o, or \
+             beside the input as INPUT.read_group_md5.",
+        ),
+        writes: "read group checksum",
+        default_output: Some(bammetrics_core::calculate_read_group_checksum::default_output),
+        ..verb(
+            "calculate-read-group-checksum",
+            "CalculateReadGroupChecksum",
+            Files::Bam,
+        )
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the

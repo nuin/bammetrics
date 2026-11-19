@@ -4,6 +4,9 @@
 
 Wave W10 of docs/07, part one: two more record-editing tools, the first whose writer sorts.
 
+Wave W10 of docs/07, part: `GatherBamFiles`, `CalculateReadGroupChecksum` and a byte-level
+BGZF block copy.
+
 ### Added
 
 - `record_edit::Reorder`: Picard's `presorted=false` writer sorts its records at close.
@@ -75,6 +78,55 @@ Wave W10 of docs/07, part one: two more record-editing tools, the first whose wr
   rows, two on `tests/data/many_libraries.bam` (1,000 libraries, written by
   `tests/data/make_many_libraries.py`) under a limit of 80 file descriptors.
 
+- `crates/core/src/bgzf_copy.rs`: htsjdk's `BamFileIoUtils.blockCopyBamFile` as bytes. The
+  BAM header is read to the first record's virtual offset as `getFilePointer` gives it, the
+  rest of that block is deflated again at `COMPRESSION_LEVEL` (stored blocks at level 0, the
+  bytes Picard writes; zlib-rs at 1 to 9), and every later block is copied as it is, walked
+  header by header (`BSIZE` 26 to 65,536, `ISIZE` at most 65,536). `termination` is
+  `BlockCompressedInputStream.checkTermination`.
+- `GatherBamFiles` (verb `gather-bam-files`, Python `gather_bam_files()`), as Picard 3.5.0:
+  the records of every `INPUT` in the order given under the header of the first. `INPUT`
+  unrolls as `IOUtil.unrollFiles` unrolls it (a name not ending in `.bam`, `.sam` or
+  `.cram` is a list of paths, one per line, trimmed, lists in lists; at most 100,000 inputs
+  and 10,000 lists). BAM inputs are block copied: the file is Picard's byte for byte at
+  `COMPRESSION_LEVEL=0` and with one input; at levels 1 to 9 the one block per later input
+  that htsjdk deflates again inflates to Picard's bytes. A SAM or CRAM input reads every
+  record into a presorted writer, as Picard's `gatherNormally`. `CREATE_INDEX` writes
+  `<basename>.bai`, `CREATE_MD5_FILE` `OUTPUT.md5`.
+- `CalculateReadGroupChecksum` (verb `calculate-read-group-checksum`, Python
+  `calculate_read_group_checksum()`), as Picard 3.5.0: the MD5 of the `@RG` records as
+  htsjdk's `calculateReadGroupRecordChecksum` computes it, to `OUTPUT` or
+  `INPUT.read_group_md5`. A BAM's header text counts one character per byte, SAM text and a
+  CRAM header are UTF-8; the header is checked at `VALIDATION_STRINGENCY`; a `DT` value is
+  written back as `Iso8601Date` writes it in the process's time zone
+  (`crates/core/src/java_date.rs`: `DateParser`, `java.util.Date.parse`, the hybrid
+  Julian and Gregorian calendar, `ZoneInfo`'s offset before 1900).
+- `tests/concordance/test_gather_bam_files.py` (26 tests: t1, the foundation corpus and the
+  exome slice split by contig, the fixture BAMs, lists, missing end-of-file blocks, SAM and
+  CRAM inputs, the index names, error parity) and
+  `tests/concordance/test_calculate_read_group_checksum.py` (18 tests: 60 generated
+  headers as SAM text and as BAM, the dated ones under two more time zones, the fixtures,
+  CRAM and gzip SAM, `STRICT` errors, the default name).
+
+### Changed
+
+- A block copy (`GatherBamFiles`, `AddCommentsToBam`, `ReplaceSamHeader` on a `.bam`) with
+  `CREATE_INDEX` indexes the records under a header that says `SO:unsorted` or has no
+  `@HD`, as htsjdk's indexer does; before, only `SO:coordinate` got an index (docs/07 D59).
+- The block copy holds a BAM's reference list as a count and an MD5, and a list of inputs
+  stops at 100,000 paths as it is read: a forged 0.5 MB header of 20,000,000 references
+  read in 1,536 MiB and now reads in 4.6 MiB, a 60 MB list in 1,897 MiB and now 67 MiB.
+- `CalculateReadGroupChecksum` looks up a field's key in a hash set, and a SAM text header
+  read at `SILENT` builds no message per field: one `@RG` line of 40,000 fields read in
+  2.7 s and now reads in 0.02 s.
+- `libc` moves to `[workspace.dependencies]` (docs/07 D62).
+- `AddCommentsToBam`, and `ReplaceSamHeader` on a `.bam` whose new dictionary is at least as
+  long as the input's, copy the BGZF blocks of a regular file as bytes
+  (`RecordEdit::copies_bytes`), as Picard does: no record is decoded. The records and the
+  header lines are unchanged; the BAM bytes and so its `.md5` change
+  (`tests/golden/picard_add_comments_to_bam_index.txt`). A pipe and a shorter dictionary
+  keep the record path.
+
 ### Fixed
 
 - A rewriting record edit (`CleanSam`, `AddOATag`, `SetNmMdAndUqTags`, `SetNmAndUqTags` and
@@ -112,6 +164,17 @@ Picard's 68.3 s and 326 MiB; with `SORT_ORDER=queryname` 23.1 s and 287 MiB agai
 complete pairs (8,424,223 records; the slice itself holds mates on other contigs, and both
 tools fail on the same read) 71.2 s and 684 MiB against 110.9 s and 4,682 MiB; the header
 differs only in the `@RG DT` time zone.
+
+- On the 10 GB HG002 exome (150,538,907 records) `AddCommentsToBam` takes 9.4 s at 6 MB
+  peak RSS (61.0 s at 0.27.0); Picard takes 8.3 s at 135 MB. The records are equal.
+  `ReplaceSamHeader` takes 6.1 s at 6 MB (56.2 s at 0.27.0).
+- `GatherBamFiles` of the exome twice takes 12.6 s at 7 MB; Picard takes 11.4 s at
+  131 MB. The two 20.7 GB files differ in length by 46 bytes: the one block htsjdk
+  deflates again.
+- `CalculateReadGroupChecksum` on the exome takes under 0.1 s at 4 MB; Picard takes 0.8 s
+  at 125 MB. The checksums are equal.
+- Memory gate: the three fixture rows peak at 3.9 to 6.1 MiB; the slice gather at
+  6.1 MiB, the exome checksum at 4.4 MiB.
 
 ## 0.27.0
 

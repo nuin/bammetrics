@@ -56,6 +56,8 @@ add-or-replace-read-groups                         AddOrReplaceReadGroups
 revert-original-base-qualities-and-add-mate-cigar  RevertOriginalBaseQualitiesAndAddMateCigar
 split-sam-by-library                               SplitSamByLibrary
 split-sam-by-number-of-reads                       SplitSamByNumberOfReads
+gather-bam-files                                   GatherBamFiles
+calculate-read-group-checksum                      CalculateReadGroupChecksum
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

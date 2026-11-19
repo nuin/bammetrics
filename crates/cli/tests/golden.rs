@@ -721,6 +721,26 @@ const SPLIT_CASES: &[Case] = &[
     case!("error_chain_two_splits_one_directory", "chain", "MD", "+", "split-sam-by-library", "-o", "OUT/libs", "+", "split-sam-by-library", "-o", "OUT/libs"),
 ];
 
+/// Wave W10: `GatherBamFiles` (a block copy of BAMs, SAM text record by
+/// record) and `CalculateReadGroupChecksum` on the fixtures.
+#[rustfmt::skip]
+const GATHER_CHECKSUM_CASES: &[Case] = &[
+    case!("picard_gather_bam_files", "GatherBamFiles", "I=IS", "I=MD", "O=OUT/gathered.bam", "COMPRESSION_LEVEL=0", "CREATE_INDEX=true", "CREATE_MD5_FILE=true"),
+    case!("verb_gather_bam_files", "gather-bam-files", "OXOG", "-i", "ART", "-o", "OUT/gathered.bam"),
+    case!("picard_gather_bam_files_sam", "GatherBamFiles", "I=MD_SAM", "O=OUT/gathered.sam"),
+    case!("error_gather_bam_files_sam_name", "GatherBamFiles", "I=MD", "I=MD", "O=OUT/gathered.sam"),
+    case!("error_gather_bam_files_missing", "GatherBamFiles", "I=MD", "I=tests/data/nope.bam", "O=OUT/gathered.bam"),
+    case!("error_verb_gather_bam_files_input_output", "gather-bam-files", "MD", "-o", "MD"),
+    case!("picard_calculate_read_group_checksum", "CalculateReadGroupChecksum", "I=OXOG", "O=OUT/oxog.read_group_md5"),
+    case!("picard_calculate_read_group_checksum_cram", "CalculateReadGroupChecksum", "I=IS_CRAM", "O=OUT/cram.read_group_md5"),
+    case!("verb_calculate_read_group_checksum", "calculate-read-group-checksum", "ART", "-o", "OUT/artifact.md5"),
+    case!("verb_calculate_read_group_checksum_sam", "calculate-read-group-checksum", "MD_SAM", "-o", "OUT/markdup.md5", "--validation-stringency", "SILENT"),
+    case!("error_calculate_read_group_checksum_input_output", "CalculateReadGroupChecksum", "I=OXOG", "O=OXOG"),
+    case!("error_calculate_read_group_checksum_missing", "CalculateReadGroupChecksum", "I=tests/data/nope.bam", "O=OUT/x.md5"),
+    case!("error_chain_gather_bam_files", "chain", "MD", "-o", "OUT/s", "+", "gather-bam-files"),
+    case!("error_chain_calculate_read_group_checksum", "chain", "MD", "-o", "OUT/s", "+", "calculate-read-group-checksum"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -1169,6 +1189,11 @@ fn documented_split_commands_on_the_fixtures() {
     check(SPLIT_CASES);
 }
 
+#[test]
+fn documented_gather_and_checksum_commands_on_the_fixtures() {
+    check(GATHER_CHECKSUM_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1278,6 +1303,7 @@ fn case_names_are_unique() {
         .chain(SET_NM_CASES)
         .chain(READ_GROUP_CASES)
         .chain(SPLIT_CASES)
+        .chain(GATHER_CHECKSUM_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();
