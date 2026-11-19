@@ -91,7 +91,7 @@ pub fn header_bytes(header: &sam::Header) -> Vec<u8> {
 }
 
 /// The BAM header: magic, the text, the reference list.
-fn write_bam_header(out: &mut impl Write, header: &sam::Header) -> io::Result<()> {
+pub(crate) fn write_bam_header(out: &mut impl Write, header: &sam::Header) -> io::Result<()> {
     let invalid = |e| io::Error::new(io::ErrorKind::InvalidInput, e);
     let text = header_bytes(header);
     out.write_all(b"BAM\x01")?;
@@ -326,7 +326,12 @@ pub fn finish_with_index(
 /// The finished BAM is read once more, its blocks inflated by `threads`
 /// workers, so the offsets are the ones of the file as written. Messages
 /// name `shown`, the path the BAM is renamed to.
-fn write_index(bam: &Path, shown: &Path, target: &Path, threads: usize) -> Result<AtomicFile> {
+pub(crate) fn write_index(
+    bam: &Path,
+    shown: &Path,
+    target: &Path,
+    threads: usize,
+) -> Result<AtomicFile> {
     let output = |source| Error::Output {
         path: target.to_path_buf(),
         source,

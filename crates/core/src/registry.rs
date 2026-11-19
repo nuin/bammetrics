@@ -368,6 +368,8 @@ pub const TOOLS: &[&Tool] = &[
     &crate::set_nm_md_and_uq_tags::ALIAS,
     &crate::add_or_replace_read_groups::TOOL,
     &crate::revert_original_base_qualities_and_add_mate_cigar::TOOL,
+    &crate::split_sam_by_library::TOOL,
+    &crate::split_sam_by_number_of_reads::TOOL,
 ];
 
 /// The tool named `name`.

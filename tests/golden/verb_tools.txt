@@ -54,6 +54,8 @@ set-nm-md-and-uq-tags                              SetNmMdAndUqTags
 set-nm-and-uq-tags                                 SetNmAndUqTags
 add-or-replace-read-groups                         AddOrReplaceReadGroups
 revert-original-base-qualities-and-add-mate-cigar  RevertOriginalBaseQualitiesAndAddMateCigar
+split-sam-by-library                               SplitSamByLibrary
+split-sam-by-number-of-reads                       SplitSamByNumberOfReads
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

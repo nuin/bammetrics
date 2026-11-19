@@ -696,6 +696,31 @@ const READ_GROUP_CASES: &[Case] = &[
     case!("error_chain_revert_original_base_qualities_examine", "chain", "RV", "+", "revert-original-base-qualities-and-add-mate-cigar", "--max-records-to-examine", "0", "+", "write", "OUT/out.bam"),
 ];
 
+/// `SplitSamByLibrary` and `SplitSamByNumberOfReads`
+/// (`crates/core/src/split_sam.rs`): the Picard face, the verbs, SAM text
+/// and CRAM in, the errors, the split as a chain step.
+#[rustfmt::skip]
+const SPLIT_CASES: &[Case] = &[
+    case!("picard_split_sam_by_library", "SplitSamByLibrary", "I=MD", "O=OUT"),
+    case!("picard_split_sam_by_library_sam", "SplitSamByLibrary", "I=MD_SAM", "O=OUT", "CREATE_MD5_FILE=true"),
+    case!("picard_split_sam_by_library_index", "SplitSamByLibrary", "I=OXOG", "O=OUT", "CREATE_INDEX=true", "COMPRESSION_LEVEL=1"),
+    case!("verb_split_sam_by_library", "split-sam-by-library", "OXOG", "-o", "OUT/libs"),
+    case!("error_split_sam_by_library_no_library", "SplitSamByLibrary", "I=IS", "O=OUT"),
+    case!("error_split_sam_by_library_cram", "SplitSamByLibrary", "I=IS_CRAM", "R=REF", "O=OUT"),
+    case!("error_split_sam_by_library_missing_directory", "SplitSamByLibrary", "I=MD", "O=OUT/missing"),
+    case!("picard_split_sam_by_number_of_reads", "SplitSamByNumberOfReads", "I=MD", "O=OUT", "N_FILES=3"),
+    case!("picard_split_sam_by_number_of_reads_reads", "SplitSamByNumberOfReads", "I=DM", "O=OUT", "SPLIT_TO_N_READS=4", "OUT_PREFIX=part"),
+    case!("picard_split_sam_by_number_of_reads_cram", "SplitSamByNumberOfReads", "I=IS_CRAM", "R=REF", "O=OUT", "N_FILES=2", "CREATE_INDEX=true"),
+    case!("picard_split_sam_by_number_of_reads_total", "SplitSamByNumberOfReads", "I=MD_SAM", "O=OUT", "N_READS=10", "TOTAL_READS=20"),
+    case!("verb_split_sam_by_number_of_reads", "split-sam-by-number-of-reads", "MD", "-o", "OUT/shards", "--n-files", "2"),
+    case!("error_split_sam_by_number_of_reads_both", "SplitSamByNumberOfReads", "I=MD", "O=OUT", "N_FILES=2", "N_READS=5"),
+    case!("error_split_sam_by_number_of_reads_none", "SplitSamByNumberOfReads", "I=MD", "O=OUT"),
+    case!("chain_split_sam_by_library", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "+", "split-sam-by-library", "-o", "OUT/libs"),
+    case!("chain_dry_run_split", "chain", "MD", "-o", "OUT/s", "--dry-run", "+", "mark-duplicates", "+", "split-sam-by-library", "-o", "OUT/libs", "+", "split-sam-by-number-of-reads", "-o", "OUT/shards", "--n-files", "2", "--total-reads", "36"),
+    case!("error_chain_split_no_total", "chain", "MD", "+", "split-sam-by-number-of-reads", "-o", "OUT/shards", "--n-files", "2"),
+    case!("error_chain_two_splits_one_directory", "chain", "MD", "+", "split-sam-by-library", "-o", "OUT/libs", "+", "split-sam-by-library", "-o", "OUT/libs"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -1139,6 +1164,11 @@ fn documented_read_group_commands_on_the_fixtures() {
     check(READ_GROUP_CASES);
 }
 
+#[test]
+fn documented_split_commands_on_the_fixtures() {
+    check(SPLIT_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1247,6 +1277,7 @@ fn case_names_are_unique() {
         .chain(CLEAN_SAM_CASES)
         .chain(SET_NM_CASES)
         .chain(READ_GROUP_CASES)
+        .chain(SPLIT_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/markdup.bam
++
+split-sam-by-number-of-reads
+-o
+OUT/shards
+--n-files
+2
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (split-sam-by-number-of-reads): TOTAL_READS_IN_INPUT is required in a chain: the stream is read once, and Picard needs it for a stream

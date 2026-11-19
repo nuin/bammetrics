@@ -78,6 +78,14 @@ const EXEMPT: &[(&str, &str)] = &[
         "RevertOriginalBaseQualitiesAndAddMateCigar",
         "writes a BAM or SAM text with OQ restored and mate tags set: no metrics file, no row, no column",
     ),
+    (
+        "SplitSamByLibrary",
+        "writes a BAM or SAM text per library into a directory: no metrics file, no row, no column",
+    ),
+    (
+        "SplitSamByNumberOfReads",
+        "writes BAMs or SAM text of about one size into a directory: no metrics file, no row, no column",
+    ),
 ];
 
 /// A directory of its own for this test's files.

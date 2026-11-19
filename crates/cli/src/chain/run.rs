@@ -10,10 +10,12 @@
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use bammetrics_core::cleanup::MadeDirs;
 use bammetrics_core::metric::MetricsOutput;
 use bammetrics_core::registry;
+use bammetrics_core::split_sam::{self, Claims};
 use bammetrics_core::stage::{self, ChainPlan, Counters, FileSource, Halt, Products, Step};
 use bammetrics_formats::{Document, markdown};
 
@@ -125,8 +127,38 @@ fn check_writable(chain: &Chain, made: &mut MadeDirs) -> Result<(), VerbError> {
     Ok(())
 }
 
+/// A split step: its directory and options, every file the chain reads,
+/// and the claims every split of the chain shares.
+fn split_step(
+    chain: &Chain,
+    step: &Planned,
+    tool: &'static registry::Tool,
+    inv: &registry::Invocation,
+    claims: &Claims,
+) -> bammetrics_core::Result<Step> {
+    let (kind, dir) = split_sam::chain_options(tool, inv)?;
+    let mut reads = vec![chain.source_path.clone()];
+    if let Some(reference) = &chain.reference {
+        reads.extend(bammetrics_core::reference::files_read(reference));
+    }
+    reads.extend(chain.steps.iter().flat_map(|s| s.inputs.iter().cloned()));
+    let split = split_sam::ChainSplit {
+        kind,
+        dir,
+        writer: split_sam::WriterOptions::from_invocation(inv)?,
+        reads,
+        claims: Some((step.label.clone(), Arc::clone(claims))),
+    };
+    Ok(split_sam::chain_step(&step.label, split))
+}
+
 /// The step of the stage layer for `step`, under its label.
-fn core_step(chain: &Chain, index: usize, step: &Planned) -> Result<Step, VerbError> {
+fn core_step(
+    chain: &Chain,
+    index: usize,
+    step: &Planned,
+    claims: &Claims,
+) -> Result<Step, VerbError> {
     let failed = |e: bammetrics_core::Error| step_error(&step.label, &e);
     let unfit = || super::usage(format!("{}: it cannot be a step", step.label));
     let mut built = match (&step.write, step.tool) {
@@ -140,6 +172,7 @@ fn core_step(chain: &Chain, index: usize, step: &Planned) -> Result<Step, VerbEr
             inv.read_dash_from_stdin();
             match step.role {
                 Role::Transform => Step::tool_stage(tool, inv).ok_or_else(unfit)?,
+                Role::Split => split_step(chain, step, tool, &inv, claims).map_err(failed)?,
                 _ => Step::tool_tap(tool, inv)
                     .map_err(failed)?
                     .ok_or_else(unfit)?,
@@ -389,11 +422,17 @@ pub fn execute(chain: Chain) -> Result<Outcome, VerbError> {
 fn run_steps(mut chain: Chain, made: &mut MadeDirs) -> Result<Outcome, VerbError> {
     super::planner::check_space(&chain)?;
     check_writable(&chain, made)?;
+    // The planned files again, for the split steps to claim the files they
+    // name once the stream is read.
+    let claims: Claims = Arc::new(Mutex::new(super::claims::claim_outputs(
+        &chain.steps,
+        chain.report.as_deref(),
+    )?));
     let steps = chain
         .steps
         .iter()
         .enumerate()
-        .map(|(index, step)| core_step(&chain, index, step))
+        .map(|(index, step)| core_step(&chain, index, step, &claims))
         .collect::<Result<Vec<_>, _>>()?;
     let plan = ChainPlan {
         source: Box::new(

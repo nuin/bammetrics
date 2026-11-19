@@ -70,6 +70,14 @@ fn bodies(dir: &Path) -> BTreeMap<String, String> {
         if path.extension().is_some_and(|e| e == "bam") {
             continue;
         }
+        // The directory a split writes into: its files under `DIR/NAME`.
+        if path.is_dir() {
+            let dir = path.file_name().expect("name").to_string_lossy();
+            for (name, body) in bodies(&path) {
+                files.insert(format!("{dir}/{name}"), body);
+            }
+            continue;
+        }
         let text = fs::read_to_string(&path).expect("read");
         let body: Vec<&str> = text.lines().filter(|l| !l.starts_with("# ")).collect();
         let name = path
@@ -591,7 +599,31 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("SORT_ORDER", "queryname")),
             picard_outputs: sorted_sam,
         },
+        // SAM text in, so the files of the directory are SAM text.
+        Case {
+            verb: "split-sam-by-library",
+            class: "SplitSamByLibrary",
+            verb_args: strings(&["tests/data/markdup.sam"]),
+            picard_args: strings(&["I=tests/data/markdup.sam"]),
+            option: Some(("CREATE_MD5_FILE", "true")),
+            picard_outputs: split_directory,
+        },
+        Case {
+            verb: "split-sam-by-number-of-reads",
+            class: "SplitSamByNumberOfReads",
+            verb_args: strings(&["tests/data/markdup.sam"]),
+            picard_args: strings(&["I=tests/data/markdup.sam"]),
+            option: Some(("SPLIT_TO_N_FILES", "3")),
+            picard_outputs: split_directory,
+        },
     ]
+}
+
+/// The directory a split's Picard face writes into: it must exist, as
+/// Picard's does. The verb makes its own.
+fn split_directory(out: &str) -> Vec<String> {
+    fs::create_dir_all(out).expect("split directory");
+    vec![format!("O={out}")]
 }
 
 fn commented_bam(out: &str) -> Vec<String> {
@@ -716,7 +748,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 50);
+    assert_eq!(classes.len(), 52);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

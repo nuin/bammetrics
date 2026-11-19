@@ -1,0 +1,9 @@
+## argv
+SplitSamByNumberOfReads
+I=tests/data/markdup.bam
+O=OUT
+## exit
+1
+## stdout
+## stderr
+bammetrics: One of SPLIT_TO_N_FILES or SPLIT_TO_N_READS must be greater than 0. Found SPLIT_TO_N_FILES is 0 and SPLIT_TO_N_READS is 0.

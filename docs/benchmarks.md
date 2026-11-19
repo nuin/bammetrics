@@ -440,6 +440,9 @@ Fixture tier (`make memgate`):
 | `set-nm-md-and-uq-tags -R ref_100k.fa` | 5.6 / 64 | 0.00 / 30 |
 | `set-nm-and-uq-tags -R ref_100k.fa` | 5.7 / 64 | 0.00 / 30 |
 | `chain + add-comments-to-bam + clean-sam + set-nm-md-and-uq-tags + add-o-a-tag + write --index` | 6.6 / 64 | 0.01 / 30 |
+| `split-sam-by-library --create-index --create-md5-file` | 6.0 / 64 | 0.00 / 30 |
+| `split-sam-by-number-of-reads --n-files 3` | 5.5 / 64 | 0.00 / 30 |
+| `chain + mark-duplicates + split-sam-by-library` | 7.0 / 64 | 0.01 / 30 |
 
 Scale tier (`make memgate TIER=scale MEMGATE_ARGS="--out-root
 ~/data/bammetrics-scale/waves/w05/bam-index --markdown"`), 8 threads. The limit is the
@@ -466,6 +469,27 @@ the chain runs `add-comments-to-bam`, `clean-sam`, `set-nm-md-and-uq-tags` and
 | `set-nm-md-and-uq-tags slice` | chr20_21_22.bam, hs37d5.fa | 182.7 / 512 | 9.37 |
 | `set-nm-and-uq-tags slice` | chr20_21_22.bam, hs37d5.fa | 178.8 / 512 | 9.16 |
 | `chain four edits + write --index slice` | chr20_21_22.bam, hs37d5.fa | 180.6 / 512 | 14.49 |
+
+The split rows of wave W10 (2026-11-19, feat/split-sinks, 8 threads) hold 512 MiB: at
+most 64 files open, each with one block staged, and the blocks of every file compressed
+on the shared workers. The slice has one library, so the library split writes one file
+of every record; the count split reads the slice twice (the count, then the files). A
+samtools process of another branch read the slice during these two rows:
+
+| command | input | peak RSS MiB / limit | wall s |
+|---|---|---|---:|
+| `split-sam-by-library slice` | chr20_21_22.bam | 27.3 / 512 | 5.06 |
+| `split-sam-by-number-of-reads slice` (`--n-files 8`) | chr20_21_22.bam | 27.8 / 512 | 6.20 |
+
+Against Picard 3.5.0 on the same slice (`/usr/bin/time -l`, one run each, outputs under
+`~/data/bammetrics-scale/waves/w10`, removed after; the records of every file equal by
+`samtools view`):
+
+| command | Picard wall s / RSS MiB | bammetrics 8 threads wall s / RSS MiB | bammetrics 1 thread wall s / RSS MiB |
+|---|---:|---:|---:|
+| `SplitSamByLibrary` | 48.65 / 321.2 | 6.69 / 26.9 | 24.76 / 10.7 |
+| `SplitSamByNumberOfReads N_FILES=8` | 81.41 / 617.6 | 6.48 / 27.5 | 26.32 / 10.2 |
+| `chain + mark-duplicates + split-sam-by-library` | | 17.31 / 670.4 | |
 
 The sort rows of the W05 scale gate ("Scale gate of wave W05" above): the limit is
 `--sort-memory` (2 GiB) plus 1 GiB; since the release review the two chain rows allow

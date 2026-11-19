@@ -40,6 +40,41 @@ Wave W10 of docs/07, part one: two more record-editing tools, the first whose wr
   middle and last, streaming and sorting), `tests/data/revert.bam`, golden records,
   Python tests and memgate rows.
 
+- `SplitSamByLibrary` (verb `split-sam-by-library`, Python `split_sam_by_library()`), as
+  Picard 3.5.0: one BAM, or SAM text for SAM input, per library of the header in the
+  `OUTPUT` directory (the current directory without one), named as htsjdk's
+  `makeFileNameSafe` names it, under the header with that library's read groups; every
+  library gets its file before the first record; `unknown.bam` for the records whose read
+  group is missing, not in the header or without `LB`. A header without a library is
+  Picard's exit 2 on the Picard face too. A CRAM input exits 2 naming wave W15 (Picard
+  writes CRAM). Two libraries with one file name exit 1 and leave no file (Picard writes
+  one over the other).
+- `SplitSamByNumberOfReads` (verb `split-sam-by-number-of-reads`, Python
+  `split_sam_by_number_of_reads()`), as Picard 3.5.0: `SPLIT_TO_N_FILES` or
+  `SPLIT_TO_N_READS`, `TOTAL_READS_IN_INPUT` (else a first read counts the records; a
+  pipe without it exits 1), `OUT_PREFIX`; Picard's double arithmetic for the sizes, a run
+  of one record name never cut, `shard_0001.bam` names, a BAM under `.cram` names for a
+  CRAM input, Picard's warnings.
+- `crates/core/src/split_sam.rs` and `split_sam/fanout.rs`: the fan-out writer of both
+  tools. Full BGZF blocks of every file are compressed on the run's threads, shared by
+  the files. At most 64 files open at once (a file closed to make room is opened again by
+  its device and inode); every file under a temporary name, renamed with its `.bai` and `.md5`
+  only after the last record; a failure removes every file the split renamed; names
+  differing in case only on a file system that ignores case fail; at most 100,000 files.
+- The split as a chain step (`Role::Split`, a sink of the executor): `chain BAM +
+  mark-duplicates + split-sam-by-library -o DIR` writes the files the staged run writes.
+  The split claims each file it makes against the planned files of every other step and
+  the other splits; two splits with one naming rule in one directory are a usage error
+  before the first read. A count split in a chain needs `TOTAL_READS_IN_INPUT`. The plan
+  lists a split's directory and its naming rule.
+- `tests/concordance/test_split_sam_by_library.py`,
+  `test_split_sam_by_number_of_reads.py` and `split_bams.py` (300 libraries, odd names,
+  read groups without `LB`, runs of names with secondary and supplementary records);
+  `crates/cli/tests/split_sam.rs` (chained equals staged, a failed split leaves no file,
+  claims, a signal during the renames of 20,000 files); 18 golden cases; seven memgate
+  rows, two on `tests/data/many_libraries.bam` (1,000 libraries, written by
+  `tests/data/make_many_libraries.py`) under a limit of 80 file descriptors.
+
 ### Fixed
 
 - A rewriting record edit (`CleanSam`, `AddOATag`, `SetNmMdAndUqTags`, `SetNmAndUqTags` and
@@ -55,6 +90,18 @@ Wave W10 of docs/07, part one: two more record-editing tools, the first whose wr
   regular file with a companion asked is a usage error before the first record, where
   Picard fails opening `/dev/stdout.bai` or `.md5`. A run the early exit skips makes no
   file, so `-o -` gets no byte.
+
+- `crates/core/src/cleanup.rs`: the registry of paths a signal removes is a hash map and
+  a tree. Forgetting a path scanned a list before, so a split of 80,000 files took 228 s
+  in its renames; it takes 37 s now. A file is created and registered under one lock,
+  so a signal never leaves a temporary file between the two.
+- A split keeps each renamed file registered until its last rename, so SIGINT during the
+  renames leaves no file of the split. A file written in place (a link or pipe this user
+  owns) is never removed by a failed split.
+- `SPLIT_TO_N_FILES` above 100,000 is taken when the records give fewer files, as Picard
+  takes it; the run that would make the 100,001st file exits 1.
+- `split-sam-by-library` and `split-sam-by-number-of-reads`: `-o DIR` help names the
+  directory, `-o -` exits 2, and `--format` help speaks of the files.
 
 ### Measured
 

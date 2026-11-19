@@ -1,0 +1,38 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
+--dry-run
++
+mark-duplicates
++
+split-sam-by-library
+-o
+OUT/libs
++
+split-sam-by-number-of-reads
+-o
+OUT/shards
+--n-files
+2
+--total-reads
+36
+## exit
+0
+## stdout
+chain plan for tests/data/markdup.bam
+  source    tests/data/markdup.bam (BAM, 1,158 bytes, sort order coordinate; a file, it can be read again)
+  prefix    OUT/s (from -o)
+segment 1  one read of tests/data/markdup.bam
+  step 1  mark-duplicates               transform, first read  takes every record, then finds the duplicate sets
+segment 2  a second read of tests/data/markdup.bam through step 1 (replay: nothing is spooled)
+  step 1  mark-duplicates               stream marked          OUT/s.marked.duplication_metrics
+  step 2  split-sam-by-library          split of marked        OUT/libs/<LIBRARY>.bam
+  step 3  split-sam-by-number-of-reads  split of marked        OUT/shards/shard_<N>.bam
+barrier    step 1 mark-duplicates: replays the source; about 16 records by the file size, no spill under MAX_RECORDS_IN_RAM 4,000,000; memory about 100.0 MiB
+temp disk  none expected
+output     about 2.2 KiB written by the splits
+memory     about 100.0 MiB at the peak, a fixed 100.0 MiB for the chain beside its barriers included (a small input takes less)
+nothing ran: this is a plan
+## stderr

@@ -1365,6 +1365,37 @@ def revert_original_base_qualities_and_add_mate_cigar(
     name ending in .sam. A file whose first records need nothing is skipped and OUTPUT
     is not written."""
 
+def split_sam_by_library(
+    input: _Path,
+    *,
+    output: _Path | None = None,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """SplitSamByLibrary: no rows; OUTPUT (a directory) gets one BAM, or SAM text for SAM
+    input, per library of the header, and unknown.bam for the records without a library."""
+
+def split_sam_by_number_of_reads(
+    input: _Path,
+    *,
+    output: _Path,
+    split_to_n_reads: int | None = None,
+    split_to_n_files: int | None = None,
+    total_reads_in_input: int | None = None,
+    out_prefix: str | None = None,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """SplitSamByNumberOfReads: no rows; OUTPUT (a directory) gets the records in file
+    order over files of about the same size, OUT_PREFIX_0001.bam and on, a template
+    never cut."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1604,6 +1635,8 @@ _StepVerb = Literal[
     "set_nm_and_uq_tags",
     "add_or_replace_read_groups",
     "revert_original_base_qualities_and_add_mate_cigar",
+    "split_sam_by_library",
+    "split_sam_by_number_of_reads",
     "write",
 ]
 

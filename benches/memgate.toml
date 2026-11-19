@@ -408,3 +408,76 @@ argv = [
 needs = ["~/data/bammetrics-scale/waves/w10/pairs.bam"]
 max_rss_mib = 1024
 spill_dir = "{out}/tmp"
+
+# Wave W10 split tools (crates/core/src/split_sam.rs): at most 64 files open, each
+# with one BGZF block staged, so the peak does not grow with the libraries.
+
+[[command]]
+name = "split-sam-by-library"
+argv = [
+    "{bin}", "split-sam-by-library", "tests/data/markdup.bam", "-o", "{out}/libs",
+    "--create-index", "--create-md5-file",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "split-sam-by-number-of-reads"
+argv = [
+    "{bin}", "split-sam-by-number-of-reads", "tests/data/markdup.bam", "-o", "{out}/shards",
+    "--n-files", "3",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "chain mark-duplicates + split-sam-by-library"
+argv = [
+    "{bin}", "chain", "tests/data/markdup.bam", "-o", "{out}/s", "+", "mark-duplicates", "+",
+    "split-sam-by-library", "-o", "{out}/libs",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+# 1,000 libraries (tests/data/make_many_libraries.py) under a limit of 80 descriptors:
+# the split holds at most 64 files open, so it writes all 1,000 (and the 1,000 .md5).
+[[command]]
+name = "split-sam-by-library 1000 libraries"
+argv = [
+    "/bin/sh", "-c", "ulimit -n 80 && exec {bin} split-sam-by-library tests/data/many_libraries.bam -o {out}/libs --create-md5-file",
+]
+needs = ["tests/data/many_libraries.bam"]
+max_rss_mib = 64
+max_seconds = 60
+
+[[command]]
+name = "split-sam-by-number-of-reads 1000 files"
+argv = [
+    "/bin/sh", "-c", "ulimit -n 80 && exec {bin} split-sam-by-number-of-reads tests/data/many_libraries.bam -o {out}/shards --n-files 1000",
+]
+needs = ["tests/data/many_libraries.bam"]
+max_rss_mib = 64
+max_seconds = 60
+
+[[command]]
+name = "split-sam-by-library slice"
+tier = "scale"
+argv = [
+    "{bin}", "split-sam-by-library", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "-o",
+    "{out}/libs",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 512
+
+[[command]]
+name = "split-sam-by-number-of-reads slice"
+tier = "scale"
+argv = [
+    "{bin}", "split-sam-by-number-of-reads", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam",
+    "-o", "{out}/shards", "--n-files", "8",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 512
