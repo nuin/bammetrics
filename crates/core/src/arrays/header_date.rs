@@ -223,7 +223,7 @@ fn new_york_offset(millis: i64) -> i64 {
 }
 
 /// The instant of a New York wall-clock time: in the hour the clocks repeat
-/// the earlier one, in the hour they skip the offset before it, as
+/// the later one, in the hour they skip the offset before it, as
 /// `ZoneInfo.getOffsetsByWall` does.
 fn new_york_instant(wall: i64) -> Result<i64, String> {
     if year_of(wall.div_euclid(DAY)) < 1967 {
@@ -234,17 +234,13 @@ fn new_york_instant(wall: i64) -> Result<i64, String> {
         );
     }
     let before = new_york_offset(wall - 14 * HOUR);
-    let early = wall - before;
-    if new_york_offset(early) == before {
-        return Ok(early);
-    }
     let after = new_york_offset(wall + 14 * HOUR);
-    let late = wall - after;
-    Ok(if new_york_offset(late) == after {
-        late
-    } else {
-        early
-    })
+    Ok(java_date::wall_instant(
+        wall,
+        before,
+        after,
+        new_york_offset(wall - after),
+    ))
 }
 
 #[cfg(test)]

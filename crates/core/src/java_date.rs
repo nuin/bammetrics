@@ -654,10 +654,25 @@ pub fn wall_millis(year: i64, month0: i64, day: i64, time_of_day: i64) -> i64 {
 }
 
 /// The instant of `wall` (from [`wall_millis`]) in the process's zone, as
-/// `GregorianCalendar` resolves an overlap and a gap; `None` past what the
-/// C library converts.
+/// `GregorianCalendar.computeTime` resolves it through
+/// `ZoneInfo.getOffsetsByWall`; `None` past what the C library converts.
 pub fn local_instant(wall: i64) -> Option<i64> {
-    from_wall(wall)
+    let before = zone_offset(wall - 14 * 3_600_000)?;
+    let after = zone_offset(wall + 14 * 3_600_000)?;
+    Some(wall_instant(wall, before, after, zone_offset(wall - after)?))
+}
+
+/// `getOffsetsByWall` around one transition from the offset `before` to
+/// `after`: a transition takes effect at its instant plus the new offset
+/// in wall time. So a wall time the clocks skip takes the offset before,
+/// and one they repeat takes the offset after (the later instant).
+/// `at_late` is the zone's offset at `wall - after`.
+pub fn wall_instant(wall: i64, before: i64, after: i64, at_late: i64) -> i64 {
+    if at_late == after {
+        wall - after
+    } else {
+        wall - before
+    }
 }
 
 #[cfg(test)]

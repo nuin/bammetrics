@@ -40,7 +40,7 @@
 //! fails the run; `pipelineVersion`, `analysisVersionNumber`,
 //! `expectedGender`, `fingerprintGender`, `gtcCallRate`, `zcallVersion`
 //! and `zcallThresholds` may be absent. A header key given twice keeps its
-//! last line. The dates are read by [`super::header_date`].
+//! first line. The dates are read by [`super::header_date`].
 //!
 //! The VCF is read under [`MAX_VCF_LINE_BYTES`] per line and
 //! [`MAX_VCF_LINES`] lines.
@@ -687,7 +687,7 @@ fn gta_no_calls(record: &noodles::vcf::Record, samples: usize) -> Vec<bool> {
     out
 }
 
-/// `getOtherHeaderLine(key).getValue()`: the last unstructured line of the
+/// `getOtherHeaderLine(key).getValue()`: the first unstructured line of the
 /// key.
 fn header_value<'h>(
     header: &'h noodles::vcf::Header,
@@ -695,7 +695,7 @@ fn header_value<'h>(
 ) -> std::result::Result<Option<&'h str>, String> {
     match header.get(key) {
         None => Ok(None),
-        Some(Collection::Unstructured(values)) => Ok(values.last().map(String::as_str)),
+        Some(Collection::Unstructured(values)) => Ok(values.first().map(String::as_str)),
         Some(Collection::Structured(_)) => Err(format!(
             "the ##{key} header line holds a <...> map, where a plain value is read"
         )),
