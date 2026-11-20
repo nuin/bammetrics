@@ -1,5 +1,181 @@
 # Changelog
 
+## 0.28.0
+
+Wave W10 of docs/07: six tools (54 in all), a writer that sorts, fan-out sinks and a BGZF block copy.
+
+### Added
+
+- `record_edit::Reorder`: Picard's `presorted=false` writer sorts its records at close.
+  `WriterOrder` picks, from the output order and the input header, a presorted writer
+  (the order checked), a sort through `sam_sort` (`MAX_RECORDS_IN_RAM`, `TMP_DIR`), or
+  htsjdk's failure for `SO:unknown` on a second record. A `Regroup` pass edits the records
+  of one read name at a time after a queryname sort, and a `Gate` may skip a run before it
+  writes anything. In a chain the same passes make the step a barrier that holds its
+  records (`record_edit::sorting_stage`); the planner counts its sorts.
+- `AddOrReplaceReadGroups` (verb `add-or-replace-read-groups`, Python
+  `add_or_replace_read_groups()`), as Picard 3.5.0: every `@RG` line replaced by one read
+  group (`RGID`, `RGLB`, `RGPL`, `RGPU`, `RGSM`, `RGCN`, `RGDS`, `RGDT`, `RGPI`, `RGPG`,
+  `RGPM`, `RGKS`, `RGFO` in htsjdk's order), `RG` set on every record, each value checked
+  against `^[ -~]+$` with every bad one named, `RGDT` read by htsjdk's `DateParser` and
+  written in UTC, `RGID=null` as Picard writes it, `SORT_ORDER` sorted when it differs from
+  the input's. A chain transform (`rg`); a `SORT_ORDER` that differs from the stream's
+  order makes it a barrier that sorts, the stream's own order streams it with the
+  presorted writer's order check (`record_edit::presorted_stage`).
+- `RevertOriginalBaseQualitiesAndAddMateCigar` (verb
+  `revert-original-base-qualities-and-add-mate-cigar`, Python
+  `revert_original_base_qualities_and_add_mate_cigar()`), as Picard 3.5.0: Picard's early
+  exit over `MAX_RECORDS_TO_EXAMINE` records (a skipped file writes nothing), `CleanSam`'s
+  clip, `QUAL` from `OQ` (`RESTORE_ORIGINAL_QUALITIES`), a queryname sort and
+  `SamPairUtil.setMateInfo` on each pair (mate fields, `MQ`, `MC`, `TLEN`) and on paired
+  supplementary records, then `SORT_ORDER`; `CREATE_INDEX` and `CREATE_MD5_FILE` default to
+  true. A chain barrier (`reverted`).
+- `tests/concordance/test_add_or_replace_read_groups.py` (83 cases) and
+  `test_revert_original_base_qualities_and_add_mate_cigar.py` (55 cases): tier B with
+  record bytes on the fixtures, the corpus tiers, the foundation corpus, the exome slice,
+  the `revert_bams.py` records (pairs without `MC`, `OQ`, unmapped mates, supplementary
+  records, reads off a contig end) as BAM in three orders, SAM text and CRAM 3.0 and 3.1;
+  every option, error parity, the early exit, the step in a chain against Picard's file.
+  `crates/cli/tests/read_groups.rs` (chained equals staged, each step first, in the
+  middle and last, streaming and sorting), `tests/data/revert.bam`, golden records,
+  Python tests and memgate rows.
+
+- `SplitSamByLibrary` (verb `split-sam-by-library`, Python `split_sam_by_library()`), as
+  Picard 3.5.0: one BAM, or SAM text for SAM input, per library of the header in the
+  `OUTPUT` directory (the current directory without one), named as htsjdk's
+  `makeFileNameSafe` names it, under the header with that library's read groups; every
+  library gets its file before the first record; `unknown.bam` for the records whose read
+  group is missing, not in the header or without `LB`. A header without a library is
+  Picard's exit 2 on the Picard face too. A CRAM input exits 2 naming wave W15 (Picard
+  writes CRAM). Two libraries with one file name exit 1 and leave no file (Picard writes
+  one over the other).
+- `SplitSamByNumberOfReads` (verb `split-sam-by-number-of-reads`, Python
+  `split_sam_by_number_of_reads()`), as Picard 3.5.0: `SPLIT_TO_N_FILES` or
+  `SPLIT_TO_N_READS`, `TOTAL_READS_IN_INPUT` (else a first read counts the records; a
+  pipe without it exits 1), `OUT_PREFIX`; Picard's double arithmetic for the sizes, a run
+  of one record name never cut, `shard_0001.bam` names, a BAM under `.cram` names for a
+  CRAM input, Picard's warnings.
+- `crates/core/src/split_sam.rs` and `split_sam/fanout.rs`: the fan-out writer of both
+  tools. Full BGZF blocks of every file are compressed on the run's threads, shared by
+  the files. At most 64 files open at once (a file closed to make room is opened again by
+  its device and inode); every file under a temporary name, renamed with its `.bai` and `.md5`
+  only after the last record; a failure removes every file the split renamed; names
+  differing in case only on a file system that ignores case fail; at most 100,000 files.
+- The split as a chain step (`Role::Split`, a sink of the executor): `chain BAM +
+  mark-duplicates + split-sam-by-library -o DIR` writes the files the staged run writes.
+  The split claims each file it makes against the planned files of every other step and
+  the other splits; two splits with one naming rule in one directory are a usage error
+  before the first read. A count split in a chain needs `TOTAL_READS_IN_INPUT`. The plan
+  lists a split's directory and its naming rule.
+- `tests/concordance/test_split_sam_by_library.py`,
+  `test_split_sam_by_number_of_reads.py` and `split_bams.py` (300 libraries, odd names,
+  read groups without `LB`, runs of names with secondary and supplementary records);
+  `crates/cli/tests/split_sam.rs` (chained equals staged, a failed split leaves no file,
+  claims, a signal during the renames of 20,000 files); 18 golden cases; seven memgate
+  rows, two on `tests/data/many_libraries.bam` (1,000 libraries, written by
+  `tests/data/make_many_libraries.py`) under a limit of 80 file descriptors.
+
+- `crates/core/src/bgzf_copy.rs`: htsjdk's `BamFileIoUtils.blockCopyBamFile` as bytes. The
+  BAM header is read to the first record's virtual offset as `getFilePointer` gives it, the
+  rest of that block is deflated again at `COMPRESSION_LEVEL` (stored blocks at level 0, the
+  bytes Picard writes; zlib-rs at 1 to 9), and every later block is copied as it is, walked
+  header by header (`BSIZE` 26 to 65,536, `ISIZE` at most 65,536). `termination` is
+  `BlockCompressedInputStream.checkTermination`.
+- `GatherBamFiles` (verb `gather-bam-files`, Python `gather_bam_files()`), as Picard 3.5.0:
+  the records of every `INPUT` in the order given under the header of the first. `INPUT`
+  unrolls as `IOUtil.unrollFiles` unrolls it (a name not ending in `.bam`, `.sam` or
+  `.cram` is a list of paths, one per line, trimmed, lists in lists; at most 100,000 inputs
+  and 10,000 lists). BAM inputs are block copied: the file is Picard's byte for byte at
+  `COMPRESSION_LEVEL=0` and with one input; at levels 1 to 9 the one block per later input
+  that htsjdk deflates again inflates to Picard's bytes. A SAM or CRAM input reads every
+  record into a presorted writer, as Picard's `gatherNormally`. `CREATE_INDEX` writes
+  `<basename>.bai`, `CREATE_MD5_FILE` `OUTPUT.md5`.
+- `CalculateReadGroupChecksum` (verb `calculate-read-group-checksum`, Python
+  `calculate_read_group_checksum()`), as Picard 3.5.0: the MD5 of the `@RG` records as
+  htsjdk's `calculateReadGroupRecordChecksum` computes it, to `OUTPUT` or
+  `INPUT.read_group_md5`. A BAM's header text counts one character per byte, SAM text and a
+  CRAM header are UTF-8; the header is checked at `VALIDATION_STRINGENCY`; a `DT` value is
+  written back as `Iso8601Date` writes it in the process's time zone
+  (`crates/core/src/java_date.rs`: `DateParser`, `java.util.Date.parse`, the hybrid
+  Julian and Gregorian calendar, `ZoneInfo`'s offset before 1900).
+- `tests/concordance/test_gather_bam_files.py` (26 tests: t1, the foundation corpus and the
+  exome slice split by contig, the fixture BAMs, lists, missing end-of-file blocks, SAM and
+  CRAM inputs, the index names, error parity) and
+  `tests/concordance/test_calculate_read_group_checksum.py` (18 tests: 60 generated
+  headers as SAM text and as BAM, the dated ones under two more time zones, the fixtures,
+  CRAM and gzip SAM, `STRICT` errors, the default name).
+
+### Changed
+
+- A block copy (`GatherBamFiles`, `AddCommentsToBam`, `ReplaceSamHeader` on a `.bam`) with
+  `CREATE_INDEX` indexes the records under a header that says `SO:unsorted` or has no
+  `@HD`, as htsjdk's indexer does; before, only `SO:coordinate` got an index (docs/07 D69).
+- The block copy holds a BAM's reference list as a count and an MD5, and a list of inputs
+  stops at 100,000 paths as it is read: a forged 0.5 MB header of 20,000,000 references
+  read in 1,536 MiB and now reads in 4.6 MiB, a 60 MB list in 1,897 MiB and now 67 MiB.
+- `CalculateReadGroupChecksum` looks up a field's key in a hash set, and a SAM text header
+  read at `SILENT` builds no message per field: one `@RG` line of 40,000 fields read in
+  2.7 s and now reads in 0.02 s.
+- `libc` moves to `[workspace.dependencies]` (docs/07 D72).
+- `AddCommentsToBam`, and `ReplaceSamHeader` on a `.bam` whose new dictionary is at least as
+  long as the input's, copy the BGZF blocks of a regular file as bytes
+  (`RecordEdit::copies_bytes`), as Picard does: no record is decoded. The records and the
+  header lines are unchanged; the BAM bytes and so its `.md5` change
+  (`tests/golden/picard_add_comments_to_bam_index.txt`). A pipe and a shorter dictionary
+  keep the record path.
+
+### Fixed
+
+- A rewriting record edit (`CleanSam`, `AddOATag`, `SetNmMdAndUqTags`, `SetNmAndUqTags` and
+  the two W10 tools, on their own and as chain steps) fails on a record whose reference or
+  mate reference index is outside the header's dictionary, with htsjdk's `Reference name
+  for '77' not found in sequence dictionary.`, at any `VALIDATION_STRINGENCY`, as Picard
+  fails. It wrote the record, and samtools could not read the BAM.
+- A record-editing tool writes no index and no MD5 beside an `OUTPUT` that is not a regular
+  file (a pipe, a device) and prints htsjdk's `Cannot create index for BAM because output
+  file is not a regular file` warning for each, as Picard does on a pipe.
+  `revert-original-base-qualities-and-add-mate-cigar -o -`, whose companions default to
+  true, wrote the BAM, then exited 1 on `/dev/stdout.bai`. `/dev/stdout` redirected to a
+  regular file with a companion asked is a usage error before the first record, where
+  Picard fails opening `/dev/stdout.bai` or `.md5`. A run the early exit skips makes no
+  file, so `-o -` gets no byte. The byte block copy of `AddCommentsToBam` and
+  `ReplaceSamHeader` asks the same rule before it writes, so it too writes no index and
+  no MD5 beside a pipe, and exits 2 on a redirected `/dev/stdout` with one asked.
+- `bammetrics.pyi`: the `role` of a `Step` and a `Stage` may be `"split"`, which a split
+  step reports.
+- `crates/core/src/cleanup.rs`: the registry of paths a signal removes is a hash map and
+  a tree. Forgetting a path scanned a list before, so a split of 80,000 files took 228 s
+  in its renames; it takes 37 s now. A file is created and registered under one lock,
+  so a signal never leaves a temporary file between the two.
+- A split keeps each renamed file registered until its last rename, so SIGINT during the
+  renames leaves no file of the split. A file written in place (a link or pipe this user
+  owns) is never removed by a failed split.
+- `SPLIT_TO_N_FILES` above 100,000 is taken when the records give fewer files, as Picard
+  takes it; the run that would make the 100,001st file exits 1.
+- `split-sam-by-library` and `split-sam-by-number-of-reads`: `-o DIR` help names the
+  directory, `-o -` exits 2, and `--format` help speaks of the files.
+
+### Measured
+
+On the 8,445,233-record chr20 to chr22 slice of the HG002 exome (Mac Studio, records
+equal to Picard 3.5.0's): `AddOrReplaceReadGroups` 5.5 s and 30 MiB peak RSS against
+Picard's 68.3 s and 326 MiB; with `SORT_ORDER=queryname` 23.1 s and 287 MiB against
+120.1 s and 4,452 MiB. `RevertOriginalBaseQualitiesAndAddMateCigar` on the slice cut to
+complete pairs (8,424,223 records; the slice itself holds mates on other contigs, and both
+tools fail on the same read) 71.2 s and 684 MiB against 110.9 s and 4,682 MiB; the header
+differs only in the `@RG DT` time zone.
+
+- On the 10 GB HG002 exome (150,538,907 records) `AddCommentsToBam` takes 9.4 s at 6 MB
+  peak RSS (61.0 s at 0.27.0); Picard takes 8.3 s at 135 MB. The records are equal.
+  `ReplaceSamHeader` takes 6.1 s at 6 MB (56.2 s at 0.27.0).
+- `GatherBamFiles` of the exome twice takes 12.6 s at 7 MB; Picard takes 11.4 s at
+  131 MB. The two 20.7 GB files differ in length by 46 bytes: the one block htsjdk
+  deflates again.
+- `CalculateReadGroupChecksum` on the exome takes under 0.1 s at 4 MB; Picard takes 0.8 s
+  at 125 MB. The checksums are equal.
+- Memory gate: the three fixture rows peak at 3.9 to 6.1 MiB; the slice gather at
+  6.1 MiB, the exome checksum at 4.4 MiB.
+
 ## 0.27.0
 
 Wave W09 of docs/07: six record-editing tools on one shape, each a chain transform.

@@ -30,9 +30,10 @@ emits.
 | Step | What it is | Today |
 |---|---|---|
 | source | One BAM, CRAM or SAM text file, or a pipe holding one | the positional argument, `-` for standard input |
-| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on; a streaming transform edits each batch as it passes (section 16) | `mark-duplicates`, `sort-sam` (both barriers); `add-comments-to-bam`, `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`, `set-nm-and-uq-tags` (streaming) |
+| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on; a streaming transform edits each batch as it passes (section 16) | `mark-duplicates`, `sort-sam`, `revert-original-base-qualities-and-add-mate-cigar` (barriers); `add-comments-to-bam`, `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`, `set-nm-and-uq-tags` (streaming); `add-or-replace-read-groups` (streaming, a barrier with a `--sort-order` that differs from the stream's; section 17) |
 | tap | A one-pass tool on the records of its position. It changes nothing | 18 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check`, `mt-copy-number`, `exon-coverage`, `adapter-content`, `duplicate-by-tile`, `telomere` |
 | write | A tap that writes the records of its position as a BAM, or as SAM text | `write [PATH]` |
+| split | A sink that writes the records of its position over BAMs in a directory (section 18) | `split-sam-by-library`, `split-sam-by-number-of-reads` |
 
 A tap or `write` does not change the stream, so the step after it sees the same records.
 `in.bam + tap + mark-duplicates + tap + write` gives the first tap the source records and
@@ -1217,3 +1218,82 @@ Chained equals staged (`crates/cli/tests/set_nm_md_uq.rs`): the step first, afte
 `sort-sam`, last, alone, twice and under the old name, beside `mark-duplicates` and
 `sort-sam`, with each option, on the fixtures, SAM text, a CRAM, corpus t1 and the
 foundation corpus.
+
+## 17. W10: steps that sort
+
+`add-or-replace-read-groups` and `revert-original-base-qualities-and-add-mate-cigar` are
+record-editing steps whose tool on its own writes through Picard's `presorted=false`
+writer, which sorts at close. In a chain that sort makes the step a barrier that holds its
+records, as `sort-sam` holds them (section 15.1): the plan lists it with a `barrier` line,
+its spill and its memory, and the next segment reads the records it hands on.
+`add-or-replace-read-groups` sorts only when its `--sort-order` differs from the order the
+stream's header names, as the tool decides from its input's header. The plan is made
+before the header is read, so it lists the step as a barrier either way; a step whose
+stream is already in that order streams the records with the order check of Picard's
+presorted writer and starts no segment.
+
+```bash
+bammetrics chain in.bam -o out/s \
+    + add-or-replace-read-groups --rglb lib1 --rgpl ILLUMINA --rgpu unit1 --rgsm NA12878 \
+    + revert-original-base-qualities-and-add-mate-cigar \
+    + mark-duplicates \
+    + write out/s.bam --index
+```
+
+| Tool | Default stream | What the step does |
+|---|---|---|
+| `add-or-replace-read-groups` | `rg` | Replaces every `@RG` line by one read group and sets `RG` on each record, streaming. With `--sort-order queryname`, `coordinate` or `duplicate` that differs from the stream's order it holds its records and hands them on sorted; the stream's own order goes through as it comes, its order checked; `--sort-order unknown` exits 2 |
+| `revert-original-base-qualities-and-add-mate-cigar` | `reverted` | Holds its records: `QUAL` from `OQ` and the clip of `clean-sam` as they come, a queryname sort, the mate fields, `MQ` and `MC` of each pair, then `--sort-order` (default the stream's). It never skips its stream, so `--max-records-to-examine` exits 2 |
+
+- The spilled runs go to the chain's `--tmp-dir`. Each sort holds at most
+  `--max-records-in-ram` records when the step gives it, and its share of
+  `--sort-memory` (the reverting step splits it between its two sorts).
+- Every record leaves with the `bin` htsjdk's writer computes, set after the mate pass, as
+  the tool on its own writes it.
+
+Chained equals staged (`crates/cli/tests/read_groups.rs`): each step first, in the middle
+and last, streaming and sorting, beside `mark-duplicates` and `sort-sam`, on
+`tests/data/markdup.bam`, `tests/data/revert.bam`, corpus t1 and the foundation corpus,
+and `--sort-order coordinate` on t1 and the foundation corpus, which samtools sorted with
+its own order of tied records.
+`test_add_or_replace_read_groups.py` and
+`test_revert_original_base_qualities_and_add_mate_cigar.py` also compare each step's
+written BAM with Picard's file of the tool.
+
+## 18. W10: split steps
+
+A split writes the records of its position over several BAMs in a directory: one per
+library (`split-sam-by-library`) or files of about one size (`split-sam-by-number-of-reads`).
+It is a sink of the executor, as `write` is: it changes nothing, so the step after it sees
+the same records, and its failure stops its segment.
+
+```bash
+bammetrics chain sample.bam -o out/s \
+    + mark-duplicates \
+    + split-sam-by-library -o out/libraries --create-index
+```
+
+- The step's own `-o DIR` names the directory; the run makes it when missing. Without `-o`
+  `split-sam-by-library` writes into the current directory, as the tool does, and
+  `split-sam-by-number-of-reads` exits 2.
+- The files are BAMs named `.bam`, whatever the source: `LIBRARY.bam` and `unknown.bam`, or
+  `OUT_PREFIX_0001.bam` on. `--create-index`, `--create-md5-file` and `--compression-level`
+  belong to the step.
+- A count split needs `--total-reads`: the stream is read once, and Picard refuses a stream
+  without it (exit 2 before the first read).
+- At most 64 files are open at once, whatever the number of libraries. Every file is
+  renamed into place after the last record, with its `.bai` and `.md5`. A split that fails
+  leaves none of its files; a chain that does not finish removes the directories it made
+  that are still empty.
+- The names a split makes are known only once the stream is read. The plan claims
+  `DIR/<LIBRARY>.bam` or `DIR/OUT_PREFIX_<N>.bam` for the step, so two splits with one
+  naming rule in one directory are a usage error before the first read. Each file the
+  split makes is claimed when it is made against every planned file of the chain and the
+  files of the other splits, and against every file the chain reads: a `write` into the
+  directory under a library's name fails the split.
+
+Chained equals staged (`crates/cli/tests/split_sam.rs`, `test_split_sam_by_library.py`,
+`test_split_sam_by_number_of_reads.py`): `mark-duplicates` then a library split on the
+fixtures and the foundation corpus, `sort-sam -SO queryname` then a count split, a split
+beside a tap and `write`; every file has the staged run's name, header lines and record
+bytes.

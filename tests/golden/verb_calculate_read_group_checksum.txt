@@ -1,0 +1,11 @@
+## argv
+calculate-read-group-checksum
+tests/data/artifact.bam
+-o
+OUT/artifact.md5
+## exit
+0
+## stdout
+## stderr
+## file artifact.md5
+9c6e9c4d784bea04a82de4454631b3ec

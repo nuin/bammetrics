@@ -1,0 +1,15 @@
+## argv
+AddOrReplaceReadGroups
+I=tests/data/markdup.bam
+O=OUT/rg.bam
+RGID=a	b
+RGLB=lib1
+RGPL=ILLUMINA
+RGPU=unit1
+RGSM=sé
+## exit
+1
+## stdout
+## stderr
+bammetrics: The values of tags in a SAM header must adhere to the regular expression '^[ -~]+$',but the value provided for RGID, 'a	b', doesn't.
+The values of tags in a SAM header must adhere to the regular expression '^[ -~]+$',but the value provided for RGSM, 'sé', doesn't.

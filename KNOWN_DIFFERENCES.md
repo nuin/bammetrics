@@ -1394,23 +1394,56 @@ differ here (docs/07 decisions D34 to D39):
   samtools cannot read.
 - A block copy of a BAM with no record ends with the BGZF end-of-file block. Picard's
   file has none; samtools warns that it may be cut.
-- `CREATE_INDEX` on a block copy writes `OUTPUT.bai` when the header says `SO:coordinate`.
-  Picard also indexes an `SO:unsorted` BAM whose records are in coordinate order.
 - `CREATE_INDEX` on a BAM htsjdk's indexer refuses (a record placed without a reference,
   references out of order, a reference index the header lacks, a start past its
   reference, a position past 512 Mbp: nine of the `refused()` BAMs of
   `tests/concordance/index_bams.py`) exits 1 and writes nothing. Picard prints the
   `BamIndexingThread` exception, exits 0 and leaves a 0-byte `.bai`.
-- A block copy decodes each record it copies. A BAM whose `block_size` runs past the file
-  exits 1 as `truncated BAM`. A record that does not parse (a forged `block_size`,
-  `l_read_name` 0, `n_cigar_op` 65535) exits 1 and writes nothing.
-  Picard copies the blocks without decoding them and exits 0 in both cases.
+- A block copy of a regular file copies the BGZF blocks as bytes, as Picard does, and
+  decodes no record (docs/07 D68). The block of the first record is deflated again with
+  zlib-rs, so its bytes differ from Picard's at levels 1 to 9. The copied blocks are
+  walked header by header: a byte that starts no BGZF block exits 1, where Picard copies
+  it. A `ReplaceSamHeader` whose new dictionary is shorter than the input's, and a BAM
+  read from a pipe, decode each record: a record that does not parse exits 1 there.
 - `AddCommentsToBam` reads a BAM from a pipe or standard input. Picard's block copy needs
   a file.
 - In a chain, `replace-sam-header` keeps each record's reference index, as the block copy
   of a `.bam` does. Picard's tool on SAM text or a CRAM keeps the reference name.
 - A partial file is never left: Picard leaves a header-only `OUTPUT` when a record's
   reference name is not in the new dictionary.
+
+## GatherBamFiles
+
+The output is Picard's byte for byte at `COMPRESSION_LEVEL=0` and with one input, and
+every block but one per later input at levels 1 to 9
+(`tests/concordance/test_gather_bam_files.py`). It differs here (docs/07 D63 to D65, D69, D70):
+
+- At levels 1 to 9 the block of each later input's first record holds zlib-rs bytes;
+  Picard's holds the JDK zlib's. Both inflate to the same bytes.
+- An input with records whose sequence dictionary is not the first input's exits 1.
+  Picard writes the file, whose later records name other references.
+- A first input that is no BAM exits 1. Picard copies its bytes.
+- A block copy into an `OUTPUT` named `.sam` or `.cram` exits with a usage error; an
+  `OUTPUT` that is an input or a list is refused; a failed run leaves no output.
+- A byte between two copied blocks that starts no BGZF block exits 1. Picard copies it.
+- `CREATE_INDEX` on records htsjdk's indexer refuses (a reference that goes back under
+  `SO:unsorted` or `SO:coordinate`) exits 1 with no output. Picard's indexing thread
+  fails, the run exits 0 and leaves a 0-byte `.bai`, as for `AddCommentsToBam`.
+- No `INPUT`, or lists that name no input, exits 1. Picard exits 0 and writes a 28-byte
+  file holding the end-of-file block alone, which has no BAM header.
+
+## CalculateReadGroupChecksum
+
+The checksum is Picard's on 60 generated headers as SAM text and as BAM, and on the
+fixtures, a CRAM and gzip SAM (`tests/concordance/test_calculate_read_group_checksum.py`).
+It differs here (docs/07 D67):
+
+- A `DT` in the JVM locale's medium date format (`Dec 31, 1969, 5:00:00 p.m.`), which
+  htsjdk reads with `DateFormat` before `Date.parse`, is no date: an error at `STRICT`,
+  kept as written below it.
+- The zone of a `DT` date is the process's (`TZ`, else `/etc/localtime`); Picard's is
+  the JVM's. They agree when both read the same zone.
+- An `OUTPUT` that is the input is refused, and a failed run writes nothing.
 
 ## AddOATag
 
@@ -1484,6 +1517,56 @@ a bisulfite set, SAM text and CRAM (`tests/concordance/test_set_nm_md_and_uq_tag
   `AddOATag`).
 - An `@RG DT` value is written as read. htsjdk parses it and writes it in the JVM's time
   zone (`2015-10-02T02:00:00+0200` as `2015-10-01T18:00:00-0600` on the HG002 exome).
+
+## AddOrReplaceReadGroups and RevertOriginalBaseQualitiesAndAddMateCigar
+
+Both write the header lines and records Picard writes, the records byte for byte after
+inflation, on the fixture BAMs, the corpus tiers, the foundation corpus, the exome slice,
+generated pairs, SAM text and CRAM (`tests/concordance/test_add_or_replace_read_groups.py`,
+`test_revert_original_base_qualities_and_add_mate_cigar.py`). They differ here (docs/07
+decisions D53 to D57):
+
+- `RGDT` is written in UTC (`+0000`). Picard writes the same instant in the JVM's time
+  zone (`2020-01-01T17:00:00-0700` in Edmonton for `RGDT=2020-01-02`). Years 1583 to 9999
+  are read; Picard reads any year.
+- `RGCN=` (an empty value) exits with the regular expression error. Picard's parser takes
+  the next argument as the value.
+- `SORT_ORDER=unknown` over two records or more exits 1 and writes nothing. Picard throws a
+  `ClassCastException` at close and leaves an `OUTPUT` of 0 bytes.
+- `RevertOriginalBaseQualitiesAndAddMateCigar` decides its early exit from the records of
+  its one read. Picard opens `INPUT` a second time, so it fails on a pipe; bammetrics reads
+  one. A skipped run says Picard's line on standard error and writes nothing, as Picard.
+- A queryname sort of more than 64 runs (`MAX_RECORDS_IN_RAM` times 64 records) of paired
+  records flagged neither first nor second can order them differently, as in `SortSam`
+  (section SortSam): bammetrics merges 64 runs into one as they spill, htsjdk merges every
+  run at once.
+- A `.cram` `OUTPUT` exits 2 naming wave W15. Picard writes a CRAM. A failed run leaves no
+  `OUTPUT`.
+
+## SplitSamByLibrary and SplitSamByNumberOfReads
+
+Both write the files Picard writes, with the same names, header lines and records, the
+records byte for byte after inflation, on 300 libraries, odd library names, the fixture
+BAMs, the corpus tiers, the exome slice, SAM text, gzip SAM and CRAM
+(`tests/concordance/test_split_sam_by_library.py`,
+`test_split_sam_by_number_of_reads.py`). BGZF block boundaries differ: at most 64 files
+are open at once, and a file closed to make room ends its block early. They differ here
+(docs/07 decisions D58 to D62):
+
+- `SplitSamByLibrary` on a CRAM exits 2 naming wave W15 (1 on the Picard face) and writes
+  nothing. Picard writes a CRAM per library.
+- Two libraries whose safe names are one file (`a b` and `a_b`), a library named
+  `unknown` beside records without a library, or library names that differ in case only
+  on a file system that ignores case: Picard writes one file over the other and exits 0;
+  bammetrics exits 1 and leaves none of the split's files.
+- A record whose `RG` names no header read group: Picard fails at `STRICT` after some
+  files are written; bammetrics validates no BAM record and writes it to `unknown.bam`,
+  as Picard does at `SILENT`.
+- A run that fails leaves none of its files. Picard leaves the files it opened.
+- A split writes at most 100,000 files: the run that would make the 100,001st exits 1 and leaves none. A count above 100,000 is taken when the records give fewer files.
+- A library name of SAM text with a character above U+00FF is kept as the low byte of
+  each UTF-16 unit, as every SAM text value is (section SAM text), so its file name is not
+  Picard's.
 
 ## Not in Picard
 

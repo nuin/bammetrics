@@ -311,6 +311,12 @@ table.
 | `clean-sam` | CleanSam (a SAM, BAM or CRAM; soft-clips alignments past the end of their reference, MAPQ 0 on unmapped records) | `-o` BAM, or SAM text for a name ending in `.sam` |
 | `set-nm-md-and-uq-tags` | SetNmMdAndUqTags (a coordinate-sorted SAM, BAM or CRAM; `-R` required; `--is-bisulfite-sequence`, `--set-only-uq`) | `-o` BAM, or SAM text for a name ending in `.sam` |
 | `set-nm-and-uq-tags` | SetNmAndUqTags (Picard's deprecated name of SetNmMdAndUqTags: the same options and output) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `add-or-replace-read-groups` | AddOrReplaceReadGroups (a SAM, BAM or CRAM; `--rglb`, `--rgpl`, `--rgpu`, `--rgsm` required; `--sort-order`) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `revert-original-base-qualities-and-add-mate-cigar` | RevertOriginalBaseQualitiesAndAddMateCigar (a SAM, BAM or CRAM; `--sort-order`, `--restore-original-qualities`, `--max-records-to-examine`) | `-o` BAM (with `.bai` and `.md5` by default), or SAM text for a name ending in `.sam`; nothing for a file in shape |
+| `split-sam-by-library` | SplitSamByLibrary (a SAM, BAM or CRAM; a CRAM exits 2 naming wave W15) | `-o DIR`, default the current directory: one BAM, or SAM text, per library |
+| `split-sam-by-number-of-reads` | SplitSamByNumberOfReads (a SAM, BAM or CRAM; `--n-files` or `--n-reads`) | `-o DIR`: `shard_0001.bam` and on |
+| `gather-bam-files` | GatherBamFiles (BAMs as positionals or `-i`, in the order to gather; a text file of paths, one per line; SAM or CRAM read record by record) | `-o` BAM, no metrics file |
+| `calculate-read-group-checksum` | CalculateReadGroupChecksum (a SAM, BAM or CRAM; only its header is read) | the 32 hex digits of the checksum in `-o`, default beside the input |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -576,8 +582,9 @@ header's own, then every record of the BAM, byte for byte (`tests/concordance/te
 - A comment that starts with `@CO` and a tab keeps one prefix; a newline exits 2. Other
   characters go out as htsjdk writes them (`é` as the byte 0xE9).
 - No `@PG` line is added. A header without `@HD` gets `@HD VN:1.6`, as htsjdk writes it.
-- `--create-index` writes `out.bam.bai` beside a coordinate-sorted BAM (Picard's block
-  copy names it so); `--create-md5-file` writes `out.bam.md5`. An `-o` ending in `.sam`
+- `--create-index` writes `out.bam.bai` (Picard's block copy names it so) under a header
+  that says `SO:coordinate`, `SO:unsorted` or has no `@HD`, and no index under another
+  order, as htsjdk's indexer does; `--create-md5-file` writes `out.bam.md5`. An `-o` ending in `.sam`
   exits 2: Picard writes BAM bytes under that name.
 - In a chain the step adds the comments to the stream at its position: `bammetrics chain
   in.bam + add-comments-to-bam -C note + write out.bam`.
@@ -706,6 +713,199 @@ Picard's `SetNmMdAndUqTags`: each mapped record gets `MD`, `NM` and `UQ` compute
 - In a chain the step reads the chain's `-R`: `bammetrics chain in.bam -R ref.fa +
   sort-sam -SO coordinate + set-nm-md-and-uq-tags + write out.bam`. Its stream is
   `tagged`.
+
+### add-or-replace-read-groups
+
+```bash
+bammetrics add-or-replace-read-groups sample.bam -o sample.rg.bam --rglb lib1 --rgpl ILLUMINA --rgpu unit1 --rgsm NA12878
+bammetrics add-or-replace-read-groups sample.bam -o sample.rg.bam --rgid 4 --rglb lib1 --rgpl ILLUMINA --rgpu unit1 --rgsm 20 --rgdt 2020-01-02 --sort-order queryname
+bammetrics AddOrReplaceReadGroups I=sample.bam O=sample.rg.bam RGLB=lib1 RGPL=ILLUMINA RGPU=unit1 RGSM=20
+```
+
+Picard's `AddOrReplaceReadGroups`: every `@RG` line is replaced by one read group and
+every record's `RG` tag is set to its ID
+(`tests/concordance/test_add_or_replace_read_groups.py`).
+
+- `RGLB`, `RGPL`, `RGPU` and `RGSM` are required; `RGID` defaults to `1`. The `@RG` line
+  holds `ID`, `LB`, `PL`, `SM`, `PU`, then `CN`, `DS`, `DT`, `PI`, `PG`, `PM`, `KS`, `FO`
+  when given, in that order.
+- Every value must be printable ASCII or a space, one character or more (`^[ -~]+$`);
+  each value that is not is named in one usage error, as in Picard.
+- `RGDT` takes htsjdk's ISO 8601 forms (`2020-01-02`, `2020-01-02T03:04:05`,
+  `2020-01-02T03:04:05.123+05:30`, `2020-13-45` carried into 2021-02-14) and is written in
+  UTC: `DT:2020-01-02T00:00:00+0000`. Picard writes the same instant in the JVM's time
+  zone. Years 1583 to 9999 are read.
+- `RGID=null` writes `ID:null` and removes every record's `RG` tag, as Picard does.
+- `--sort-order` sets `SO`. An order that differs from the input's is sorted as `sort-sam`
+  sorts it (`--max-records-in-ram`, `--tmp-dir`); `unsorted` is written as read; `unknown`
+  exits 1 on two records or more, where Picard throws a `ClassCastException`. Without a
+  sort the records keep their order and a header that names a sort is checked.
+- Every record is encoded again as htsjdk encodes a record whose tag changed: tags in
+  htsjdk's order and widths. No `@PG` line is added.
+- In a chain the step leaves `rg` and streams; with `--sort-order` queryname, coordinate or
+  duplicate it is a barrier that sorts. `--sort-order unknown` is a usage error there.
+
+### revert-original-base-qualities-and-add-mate-cigar
+
+```bash
+bammetrics revert-original-base-qualities-and-add-mate-cigar sample.bam -o sample.reverted.bam
+bammetrics revert-original-base-qualities-and-add-mate-cigar sample.bam -o sample.reverted.bam --max-records-to-examine 0 --sort-order queryname
+bammetrics RevertOriginalBaseQualitiesAndAddMateCigar I=sample.bam O=sample.reverted.bam CREATE_INDEX=false
+```
+
+Picard's `RevertOriginalBaseQualitiesAndAddMateCigar`
+(`tests/concordance/test_revert_original_base_qualities_and_add_mate_cigar.py`).
+
+- The first `--max-records-to-examine` records (10,000) decide whether the file needs
+  work: a record with `OQ`, or a first paired record with a mapped mate and no `MC`, starts
+  the run; that record with `MC`, or the end of the file, skips it. A skipped file exits 0,
+  writes nothing (not even `-o`) and says `Can skip the SAM/BAM/CRAM file` on standard
+  error. `0` runs any file with a record.
+- Each record gets the soft clip of `clean-sam` where it ends past its reference, and
+  with `--restore-original-qualities` (default true) `QUAL` from `OQ`, which is removed.
+- The records are sorted by name; each pair gets the mate's reference, position, strand,
+  unmapped flag, `MQ`, `MC` and `TLEN` as htsjdk's `SamPairUtil.setMateInfo` sets them; a
+  paired supplementary record gets them from its mate. A name with two primary first
+  records, or a primary first record without its second, exits 1.
+- `--sort-order` (default the input's) is applied after the mate pass: `unsorted` writes
+  the name order, `unknown` exits 1 on two records or more.
+- `--create-index` and `--create-md5-file` default to true. Every record is encoded again
+  with tags in htsjdk's order and widths. No `@PG` line is added.
+- In a chain the step is a barrier that leaves `reverted`. It never skips its stream, so
+  `--max-records-to-examine` is a usage error there.
+
+### split-sam-by-library
+
+```bash
+bammetrics split-sam-by-library sample.bam -o by_library/
+bammetrics SplitSamByLibrary I=sample.bam O=by_library CREATE_INDEX=true
+bammetrics chain sample.bam + mark-duplicates + split-sam-by-library -o by_library
+```
+
+Picard's `SplitSamByLibrary`: one file per library of the header's `@RG` lines
+(`tests/concordance/test_split_sam_by_library.py`).
+
+- A library's file is `LB.bam` (`LB.sam` for SAM text input) under the header with that
+  library's read groups only. The name is the `LB` value made safe as htsjdk's
+  `makeFileNameSafe` makes it: trimmed, then each space and each of
+  ``!"#$%&'()*/:;<=>?@[]\^`{|}~`` becomes `_` (`Lib A` gives `Lib_A.bam`, `lib/x` gives
+  `lib_x.bam`). A byte above 127 in a BAM header is one character, as htsjdk reads it, so
+  `café` in UTF-8 gives `cafÃ©.bam`, Picard's name.
+- Every library gets its file before the first record; a library without records gets a
+  header-only file.
+- A record without an `RG` tag, with one the header lacks, or whose read group has no `LB`
+  goes to `unknown.bam`, made with the first such record, under the header with the read
+  groups that have no `LB`.
+- A header with no `LB` on any read group exits 2, `No individual libraries are specified
+  in the header of INPUT`, as Picard does, and writes nothing.
+- Picard writes a CRAM per library for a CRAM input; bammetrics exits 2 naming wave W15.
+- Two libraries with one safe name (`a b` and `a_b`), a library `unknown` beside records
+  without a library, and names that differ in case only on a file system that ignores case
+  make Picard write one file over the other. bammetrics exits 1 and leaves no file.
+- Every file is written under a temporary name and renamed into place after the last
+  record, with its `.bai` (`--create-index`, a coordinate-sorted BAM) and `.md5`. A run that
+  fails leaves none. At most 64 files are open at once; a file closed to make room is
+  opened again for its next record. A split writes at most 100,000 files.
+- `-o` names the directory (`-o -` exits 2); the verb makes it when missing, the Picard
+  face needs it to exist. Without `-o` the files go to the current directory, as Picard's.
+- In a chain the step is a split: it writes a BAM per library of the stream at its
+  position into its own `-o DIR`. Its files are claimed when it makes them, so no other
+  step may write one.
+
+### split-sam-by-number-of-reads
+
+```bash
+bammetrics split-sam-by-number-of-reads sample.bam -o shards --n-files 8
+bammetrics SplitSamByNumberOfReads I=unmapped.bam O=shards N_READS=48000000 TOTAL_READS=800000000
+bammetrics chain sample.bam + split-sam-by-number-of-reads -o shards --n-files 8 --total-reads 12918
+```
+
+Picard's `SplitSamByNumberOfReads`: the records in file order over files of about one size
+(`tests/concordance/test_split_sam_by_number_of_reads.py`).
+
+- The total is `--total-reads`, else the records of a first read of the input. A pipe
+  without `--total-reads` exits 1, as Picard does.
+- The number of files is `--n-files`, else `ceil(total / --n-reads)`; each file takes
+  `ceil(total / files)` records, then every further record with the name of the last one
+  written. A query-grouped input keeps each template in one file; a coordinate-sorted one
+  does not, and the run prints Picard's warning. Every record counts, secondary and
+  supplementary ones too.
+- Files are `OUT_PREFIX_N.EXT`: `N` from 1 with at least four digits, `EXT` the input's
+  kind. SAM text input gives SAM text files; a CRAM input gives BAMs named
+  `shard_0001.cram`, as Picard writes them. The first file is made before the first record,
+  so an empty input gives one header-only file.
+- `--n-files` and `--n-reads` together exit 2. One of them must be above 1.
+- A `--total-reads` other than the count read changes the sizes and prints Picard's
+  warning with the files written.
+- Files are renamed into place after the last record and a run that fails leaves none, as
+  for `split-sam-by-library`. A run that would make more than 100,000 files exits 1 and
+  leaves none; a larger `--n-files` is taken when the records give fewer files.
+- In a chain the step needs `--total-reads`: the stream is read once.
+
+### gather-bam-files
+
+```bash
+bammetrics gather-bam-files part1.bam part2.bam part3.bam -o sample.bam
+bammetrics gather-bam-files -i parts.list -o sample.bam --create-index --create-md5-file
+bammetrics GatherBamFiles I=part1.bam I=part2.bam O=sample.bam COMPRESSION_LEVEL=0
+```
+
+Picard's `GatherBamFiles`: the records of every input, in the order given, under the
+header of the first (`tests/concordance/test_gather_bam_files.py`).
+
+- An input whose name does not end in `.bam`, `.sam` or `.cram` is a list: one path per
+  line, each line trimmed, empty lines skipped, a relative path read from the current
+  directory. A list may name lists. At most 100,000 inputs and 10,000 lists are read.
+- When every input name ends in `.bam`, the BGZF blocks are copied as bytes, as Picard
+  copies them: the first file whole, each later file from the block of its first record,
+  one end-of-file block at the end. Picard deflates that one block per later file again;
+  bammetrics deflates it with zlib-rs, so at `--compression-level` 1 to 9 those blocks hold
+  other bytes than Picard's and inflate to the same. At level 0, and with one input, the
+  file is Picard's byte for byte.
+- An input with records whose sequence dictionary (names and lengths) is not the first
+  input's exits 1: its records would name other references. Picard writes that file.
+- An input whose last bytes are no BGZF block exits 1 with `does not have a valid GZIP
+  block at the end of the file`, as Picard does. A file cut at a block boundary is copied.
+- With a SAM or CRAM input every record is read (a CRAM with `-R`) and written again into
+  a BAM, or SAM text for an `-o` ending in `.sam`; each record takes its reference by name
+  in the first header, and a coordinate-sorted header must stay in order, as Picard's
+  writer checks.
+- `--create-index` writes a `.bai` named as Picard names it: the output name less its
+  extension plus `.bai` for a block copy (`out.bai` for `out.bam` and for `out.dat`),
+  `out.bai` or `out.dat.bai` otherwise. `--create-md5-file` writes `out.bam.md5`. A block
+  copy indexes the records under a first header that says `SO:coordinate`, `SO:unsorted`
+  or has no `@HD`, as htsjdk's indexer does, and writes no index under another order. A
+  record the indexer refuses (a reference that goes back) exits 1 with no output; Picard
+  exits 0 with an empty `.bai`.
+- No input, or lists that name none, exits 1. Picard writes a 28-byte file with no BAM
+  header.
+- An `-o` that is an input or a list exits 2. A block copy into an `-o` ending in `.sam`
+  or `.cram` exits 2: Picard writes BAM bytes under that name. A failed run leaves no
+  output. Not a chain step: a chain reads one source.
+
+### calculate-read-group-checksum
+
+```bash
+bammetrics calculate-read-group-checksum sample.bam
+bammetrics calculate-read-group-checksum sample.cram -o sample.rg.md5
+bammetrics CalculateReadGroupChecksum I=sample.bam
+```
+
+Picard's `CalculateReadGroupChecksum`: the MD5 of the header's `@RG` records as htsjdk
+computes it, 32 hex digits with no line end, in `-o` or beside the input as
+`sample.bam.read_group_md5` (`tests/concordance/test_calculate_read_group_checksum.py`).
+
+- The records are sorted by `PU`, `LB`, `DT`, `SM`, `CN`, `PL` and `DS`, a missing field
+  first, the header order kept for ties. Each record gives its fields in key order, key
+  then value, `ID` left out. A header without `@RG` gives `d41d8cd98f00b204e9800998ecf8427e`.
+- A BAM's header text counts one character per byte, so `é` stored as UTF-8 is two
+  characters; SAM text and a CRAM header are read as UTF-8.
+- A `DT` date is written back as htsjdk writes it, in the time zone of the process:
+  `2020-01-02` becomes `2020-01-01T17:00:00-0700` in Edmonton. The checksum then depends on
+  `TZ`, as Picard's depends on the JVM's zone.
+- Every header line is checked at `--validation-stringency`: at `STRICT` (the default) an
+  `@RG` without `SM`, two values of one key or a `DT` that is no date exits 1.
+- Only the header is read. An `-o` that is the input exits 2. Not a chain step.
 
 ### qc
 
@@ -842,11 +1042,13 @@ is the short form.
 - The chain's options and the source (a BAM, a CRAM with `-R`, `-` for standard input)
   come before the first `+`. Every `+` starts a step.
 - A step is a tool verb, its Picard class, or `write`. A transform (`mark-duplicates`,
-  `sort-sam` and the six record-editing verbs of wave W09: `add-comments-to-bam`,
+  `sort-sam`, the six record-editing verbs of wave W09: `add-comments-to-bam`,
   `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`,
-  `set-nm-and-uq-tags`) changes the records later steps see; any number may follow one another. A
-  tap (the 18 one-pass tool verbs) reads the
-  records of its position and changes nothing. `write [PATH]` writes those records as a
+  `set-nm-and-uq-tags`, and the two of wave W10: `add-or-replace-read-groups`,
+  `revert-original-base-qualities-and-add-mate-cigar`) changes the records later steps
+  see; any number may follow one another. A tap (the 18 one-pass tool verbs) reads the
+  records of its position and changes nothing. A split (`split-sam-by-library`,
+  `split-sam-by-number-of-reads`) writes them over BAMs in a directory. `write [PATH]` writes those records as a
   BAM, or as SAM text for a name ending in `.sam`; `-` is standard output, and `write -
   --output-format sam` prints SAM text there. A `.cram` or `.fastq` name is refused with
   the wave of docs/07 that adds it.
@@ -1441,7 +1643,7 @@ purpose is listed in KNOWN_DIFFERENCES.md.
 
 The worked examples of docs/05 section 2.5 that work today, written against the committed
 fixtures so each runs from the repository root as shown (`tests/data/insert_size.bam` has
-no `@RG SM`, so the sample is the BAM name). Output is what 0.27.0 prints; long lines are
+no `@RG SM`, so the sample is the BAM name). Output is what 0.28.0 prints; long lines are
 cut.
 
 **1 and 2. One tool, as Picard text or machine-readable.**
@@ -1510,7 +1712,7 @@ $ for bam in bams/*.bam; do
         -o runs/2026-11-02/$(basename "$bam" .bam) -q > /dev/null
   done
 $ bammetrics report runs/2026-11-02/ --preset clinical-panel
-2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.27.0
+2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.28.0
 FAIL        NA1  7 fail, 1 warn, 9 pass, 1 not measured
   FAIL  Mean target coverage is 0.377778, below the fail limit of 100
   ...

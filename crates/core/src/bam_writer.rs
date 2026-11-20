@@ -91,7 +91,7 @@ pub fn header_bytes(header: &sam::Header) -> Vec<u8> {
 }
 
 /// The BAM header: magic, the text, the reference list.
-fn write_bam_header(out: &mut impl Write, header: &sam::Header) -> io::Result<()> {
+pub(crate) fn write_bam_header(out: &mut impl Write, header: &sam::Header) -> io::Result<()> {
     let invalid = |e| io::Error::new(io::ErrorKind::InvalidInput, e);
     let text = header_bytes(header);
     out.write_all(b"BAM\x01")?;
@@ -254,7 +254,7 @@ impl BamWriter {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Companions {
     /// A `.bai` named by [`index_path`], for a coordinate-sorted header
-    /// only.
+    /// (a block copy also under `unsorted`: [`finish_file`]).
     pub index: bool,
     /// `<BAM>.md5`: the hex MD5 of the file.
     pub md5: bool,
@@ -269,7 +269,7 @@ pub fn finish(
     companions: Companions,
 ) -> Result<Vec<PathBuf>> {
     let index = index_path(&writer.path);
-    finish_with_index(writer, header, companions, &index)
+    finish_with_index(writer, header, companions, &index, false)
 }
 
 /// Where htsjdk's `BAMFileWriter.createBamIndex` writes the `.bai` of
@@ -284,23 +284,67 @@ pub fn index_path(output: &Path) -> PathBuf {
 }
 
 /// [`finish`] with the `.bai` at `index_path`: htsjdk's block copy of a
-/// BAM names it `<BAM>.bai` (`out.bam.bai`), its writers `out.bai`.
+/// BAM names it `<BAM>.bai` (`out.bam.bai`), its writers `out.bai`. With
+/// `block_copy`, the index is written as [`finish_file`] writes it.
 pub fn finish_with_index(
     writer: BamWriter,
     header: &sam::Header,
     companions: Companions,
     index_path: &Path,
+    block_copy: bool,
 ) -> Result<Vec<PathBuf>> {
     let threads = writer.threads;
     let output = writer.close()?;
+    let index = companions.index && indexes(header, block_copy);
+    finish_paths(output, index, companions.md5, index_path, threads)
+}
+
+/// Whether `CREATE_INDEX` writes a `.bai` under `header`. htsjdk's
+/// writers index a `SO:coordinate` file alone. Its block copy
+/// (`StreamInflatingIndexingOutputStream`) builds a `BAMIndexer`, which
+/// takes `coordinate` and `unsorted` (also a header without `SO`) and
+/// throws on any other order in its own thread, so the run ends with no
+/// index and exit 0.
+pub(crate) fn indexes(header: &sam::Header, block_copy: bool) -> bool {
+    match SortOrder::of(header) {
+        SortOrder::Coordinate => true,
+        SortOrder::Unsorted => block_copy,
+        _ => false,
+    }
+}
+
+/// [`finish_with_index`] for a BAM block copied under its temporary name
+/// ([`crate::bgzf_copy`]): the index and the MD5 from the file, read back on
+/// `threads` workers, then every file renamed into place. The index follows
+/// the records whatever their order under a `coordinate` or `unsorted`
+/// header; a record the indexer refuses fails the run and nothing is
+/// renamed (Picard's indexing thread dies, leaves an empty `.bai` and the
+/// run exits 0).
+pub fn finish_file(
+    output: AtomicFile,
+    header: &sam::Header,
+    companions: Companions,
+    index_path: &Path,
+    threads: usize,
+) -> Result<Vec<PathBuf>> {
+    let index = companions.index && indexes(header, true);
+    finish_paths(output, index, companions.md5, index_path, threads)
+}
+
+fn finish_paths(
+    output: AtomicFile,
+    index: bool,
+    md5: bool,
+    index_path: &Path,
+    threads: usize,
+) -> Result<Vec<PathBuf>> {
     let target = output.path().to_path_buf();
-    let coordinate = SortOrder::of(header) == SortOrder::Coordinate;
-    let index = if companions.index && coordinate {
+    let index = if index {
         Some(write_index(output.writing(), &target, index_path, threads)?)
     } else {
         None
     };
-    let md5 = if companions.md5 {
+    let md5 = if md5 {
         Some(write_md5(output.writing(), &md5_path(&target))?)
     } else {
         None
@@ -326,7 +370,12 @@ pub fn finish_with_index(
 /// The finished BAM is read once more, its blocks inflated by `threads`
 /// workers, so the offsets are the ones of the file as written. Messages
 /// name `shown`, the path the BAM is renamed to.
-fn write_index(bam: &Path, shown: &Path, target: &Path, threads: usize) -> Result<AtomicFile> {
+pub(crate) fn write_index(
+    bam: &Path,
+    shown: &Path,
+    target: &Path,
+    threads: usize,
+) -> Result<AtomicFile> {
     let output = |source| Error::Output {
         path: target.to_path_buf(),
         source,

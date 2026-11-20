@@ -397,12 +397,16 @@ One failure lists every gap of every tool with the edit that closes it. Wave W05
 docs/07 added `ViewSam` (tool 34, `test_view_sam.py`), `SortSam` (tool 35,
 `test_sort_sam.py`) and `BuildBamIndex` (tool 36, `test_build_bam_index.py`), each with
 an argument list in the glossary test (`BuildBamIndex` returns rows without a class). The
-48 tools pass at 0.27.0 (wave W07 adds `CollectMtCopyNumberMetrics` and
+54 tools pass at 0.28.0 (wave W07 adds `CollectMtCopyNumberMetrics` and
 `CollectExonCoverageMetrics`, wave W08 `CollectAdapterContentMetrics`,
 `CollectDuplicateByTileMetrics`, `CollectTelomereMetrics` and `CollectIndexDepthMetrics`,
-wave W09 the six record-editing tools): 25 have a module named after them
-(`test_exon_coverage.py`, `test_duplicate_by_tile.py`, `test_index_depth.py` and the six
-of W09, `test_add_comments_to_bam.py` to `test_set_nm_and_uq_tags.py`, among them), 18 are mapped in `CONCORDANCE` to a shared module
+wave W09 the six record-editing tools, wave W10 `AddOrReplaceReadGroups`,
+`RevertOriginalBaseQualitiesAndAddMateCigar`, `SplitSamByLibrary`,
+`SplitSamByNumberOfReads`, `GatherBamFiles` and `CalculateReadGroupChecksum`): 31 have a
+module named after them (`test_exon_coverage.py`, `test_duplicate_by_tile.py`,
+`test_index_depth.py`, the six of W09, `test_add_comments_to_bam.py` to
+`test_set_nm_and_uq_tags.py`, and the six of W10, `test_add_or_replace_read_groups.py` to
+`test_calculate_read_group_checksum.py`, among them), 18 are mapped in `CONCORDANCE` to a shared module
 (`test_read_level.py` 6, `test_wgs_metrics.py` 3, `test_variant_tools.py` 3, six others 1
 each), and 5 are only in `NO_PICARD_ORACLE` (not Picard tools): `CollectCoverageGaps`,
 `CollectSexCheckMetrics`, `CollectMtCopyNumberMetrics`, `CollectAdapterContentMetrics` and

@@ -68,7 +68,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | ValidateSamFile | Diagnostics | out | Defined by htsjdk parser behaviour over about 70 rules. XL | samtools quickcheck (partial) |
 | CompareMetrics | Diagnostics | core | The oracle comparator. Its semantics go into the harness. S | none |
 | CompareSAMs | Diagnostics | later | Pipeline regression check. Quirks to copy. M | none |
-| CalculateReadGroupChecksum | Diagnostics | later | 40 lines, verified algorithm. S | none |
+| CalculateReadGroupChecksum | Diagnostics | core | Shipped in 0.28.0 (wave W10 of docs/07): the MD5 of the `@RG` records as htsjdk computes it, the header text decoded as htsjdk decodes it, `DT` written back in the process's time zone. S | none |
 | CheckTerminatorBlock | Diagnostics | later | 50 lines, pre-flight check. S | noodles-bgzf, samtools quickcheck |
 | CollectVariantCallingMetrics | Variant | core | Variant-benchmarking pillar of the roadmap. M | bcftools stats (partial) |
 | AccumulateVariantCallingMetrics | Variant | later | Lossy shard merge, copy the inversion. S | none |
@@ -100,24 +100,24 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | SamFormatConverter | Read data | out | Format conversion. | samtools view |
 | AddCommentsToBam | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): one `@CO` line per `COMMENT`, the BAM's records copied as Picard copies its blocks. S | samtools reheader |
 | AddOATag | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): each record's alignment appended to its `OA` tag, `INTERVAL_LIST`. S | none |
-| AddOrReplaceReadGroups | Read data | later | Harness fixture builder for per-RG rows. | samtools addreplacerg |
+| AddOrReplaceReadGroups | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the record-editing shape `record_edit.rs`; a chain transform, a barrier when it sorts): every `@RG` line replaced by one read group, `RG` on every record, `RGDT` in UTC, `SORT_ORDER` sorted as Picard's writer sorts. S | samtools addreplacerg |
 | BamToBfq | Read data | out | Obsolete aligner format. | none |
 | CleanSam | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): alignments and mate CIGARs past a contig end soft-clipped, MAPQ 0 on unmapped records. S | none |
 | DownsampleSam | Read data | later | Harness shrinks real BAMs once. | samtools view -s |
 | PositionBasedDownsampleSam | Read data | out | Tile-based downsampling for duplicate studies. | none |
 | FastqToSam | Read data | later | Harness builds unaligned fixtures. | samtools import, fgbio |
 | FilterSamReads | Read data | out | Subsetting. | samtools view |
-| GatherBamFiles | Read data | out | Concatenation. | samtools cat |
+| GatherBamFiles | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, `bgzf_copy.rs`): BAM inputs block copied as htsjdk copies them, byte for byte at `COMPRESSION_LEVEL=0`; SAM or CRAM inputs read record by record. S | samtools cat |
 | MergeSamFiles | Read data | out | Merge. | samtools merge |
 | MergeBamAlignment | Read data | out | uBAM merge step. | fgbio ZipperBams |
 | ReorderSam | Read data | out | Contig reorder. | none |
 | ReplaceSamHeader | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): the header of `HEADER` over every record, Picard's sort order checks. S | samtools reheader |
-| RevertOriginalBaseQualitiesAndAddMateCigar | Read data | out | Legacy pipeline step. | samtools fixmate (MC only) |
+| RevertOriginalBaseQualitiesAndAddMateCigar | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the record-editing shape `record_edit.rs`; a chain barrier): `QUAL` from `OQ`, `MC`, `MQ` and the mate fields from each mate after a name sort, `SORT_ORDER`, Picard's early exit. S | samtools fixmate (MC only) |
 | RevertSam | Read data | out | BAM to uBAM. | none |
 | SamToFastq | Read data | out | Export. | samtools fastq |
 | SamToFastqWithTags | Read data | out | Export with tags. | samtools fastq -T |
-| SplitSamByLibrary | Read data | out | File split. | samtools split |
-| SplitSamByNumberOfReads | Read data | out | File split. | samtools split |
+| SplitSamByLibrary | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the fan-out writer `split_sam.rs`; a chain split): one BAM or SAM text per library, `unknown` for the rest, Picard's safe names and exit 2 without a library; a CRAM input exits 2 naming W15. S | samtools split |
+| SplitSamByNumberOfReads | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the fan-out writer `split_sam.rs`; a chain split with `TOTAL_READS_IN_INPUT`): files of about one size, a run of one name never cut, `shard_0001` names. S | samtools split |
 | ViewSam | Diagnostics | core | Prints the header and the records as htsjdk writes SAM text. Shipped in 0.23.0 (wave W05 of docs/07) with the SAM text reader and writer. S | samtools view |
 | CollectHiSeqXPfFailMetrics | Diagnostics | out | Needs basecall directory. | none |
 | CrosscheckReadGroupFingerprints | Diagnostics | out | Deprecated, CrosscheckFingerprints covers it. | CrosscheckFingerprints |

@@ -323,3 +323,233 @@ needs = [
     "~/data/bammetrics-scale/exome/hs37d5.fa",
 ]
 max_rss_mib = 512
+
+[[command]]
+name = "add-or-replace-read-groups"
+argv = [
+    "{bin}", "add-or-replace-read-groups", "tests/data/markdup.bam", "-o", "{out}/rg.bam",
+    "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm", "sample1",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "add-or-replace-read-groups sorted"
+argv = [
+    "{bin}", "add-or-replace-read-groups", "tests/data/markdup.bam", "-o", "{out}/rg.bam",
+    "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm", "sample1",
+    "--sort-order", "queryname", "--max-records-in-ram", "4", "--tmp-dir", "{out}/tmp",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+
+[[command]]
+name = "revert-original-base-qualities-and-add-mate-cigar"
+argv = [
+    "{bin}", "revert-original-base-qualities-and-add-mate-cigar", "tests/data/revert.bam",
+    "-o", "{out}/reverted.bam", "--max-records-in-ram", "3", "--tmp-dir", "{out}/tmp",
+]
+needs = ["tests/data/revert.bam"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+
+[[command]]
+name = "chain read groups sorted + revert + write"
+argv = [
+    "{bin}", "chain", "tests/data/revert.bam", "--tmp-dir", "{out}/tmp", "+",
+    "add-or-replace-read-groups", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1",
+    "--rgsm", "sample1", "--sort-order", "queryname", "+",
+    "revert-original-base-qualities-and-add-mate-cigar", "+", "write", "{out}/out.bam",
+]
+needs = ["tests/data/revert.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "add-or-replace-read-groups slice"
+tier = "scale"
+argv = [
+    "{bin}", "add-or-replace-read-groups", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam",
+    "-o", "{out}/rg.bam", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm",
+    "sample1",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 512
+
+[[command]]
+name = "add-or-replace-read-groups queryname slice"
+tier = "scale"
+argv = [
+    "{bin}", "add-or-replace-read-groups", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam",
+    "-o", "{out}/rg.bam", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm",
+    "sample1", "--sort-order", "queryname", "--tmp-dir", "{out}/tmp",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 1024
+spill_dir = "{out}/tmp"
+
+# The slice holds reads whose mates are on other contigs, which the reverting tool
+# refuses (as Picard does). pairs.bam is the slice cut to complete pairs:
+#   samtools view -h chr20_21_22.bam | awk -F'\t' '/^@/ || $7 == "=" || $2 % 2 == 0' \
+#     | samtools view -b -o ~/data/bammetrics-scale/waves/w10/pairs.bam -
+[[command]]
+name = "revert-original-base-qualities-and-add-mate-cigar pairs"
+tier = "scale"
+argv = [
+    "{bin}", "revert-original-base-qualities-and-add-mate-cigar",
+    "~/data/bammetrics-scale/waves/w10/pairs.bam", "-o", "{out}/reverted.bam",
+    "--max-records-to-examine", "0", "--validation-stringency", "SILENT", "--tmp-dir",
+    "{out}/tmp",
+]
+needs = ["~/data/bammetrics-scale/waves/w10/pairs.bam"]
+max_rss_mib = 1024
+spill_dir = "{out}/tmp"
+
+# Wave W10 split tools (crates/core/src/split_sam.rs): at most 64 files open, each
+# with one BGZF block staged, so the peak does not grow with the libraries.
+
+[[command]]
+name = "split-sam-by-library"
+argv = [
+    "{bin}", "split-sam-by-library", "tests/data/markdup.bam", "-o", "{out}/libs",
+    "--create-index", "--create-md5-file",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "split-sam-by-number-of-reads"
+argv = [
+    "{bin}", "split-sam-by-number-of-reads", "tests/data/markdup.bam", "-o", "{out}/shards",
+    "--n-files", "3",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "chain mark-duplicates + split-sam-by-library"
+argv = [
+    "{bin}", "chain", "tests/data/markdup.bam", "-o", "{out}/s", "+", "mark-duplicates", "+",
+    "split-sam-by-library", "-o", "{out}/libs",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+# 1,000 libraries (tests/data/make_many_libraries.py) under a limit of 80 descriptors:
+# the split holds at most 64 files open, so it writes all 1,000 (and the 1,000 .md5).
+[[command]]
+name = "split-sam-by-library 1000 libraries"
+argv = [
+    "/bin/sh", "-c", "ulimit -n 80 && exec {bin} split-sam-by-library tests/data/many_libraries.bam -o {out}/libs --create-md5-file",
+]
+needs = ["tests/data/many_libraries.bam"]
+max_rss_mib = 64
+max_seconds = 60
+
+[[command]]
+name = "split-sam-by-number-of-reads 1000 files"
+argv = [
+    "/bin/sh", "-c", "ulimit -n 80 && exec {bin} split-sam-by-number-of-reads tests/data/many_libraries.bam -o {out}/shards --n-files 1000",
+]
+needs = ["tests/data/many_libraries.bam"]
+max_rss_mib = 64
+max_seconds = 60
+
+[[command]]
+name = "split-sam-by-library slice"
+tier = "scale"
+argv = [
+    "{bin}", "split-sam-by-library", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "-o",
+    "{out}/libs",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 512
+
+[[command]]
+name = "split-sam-by-number-of-reads slice"
+tier = "scale"
+argv = [
+    "{bin}", "split-sam-by-number-of-reads", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam",
+    "-o", "{out}/shards", "--n-files", "8",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 512
+
+# Wave W10: GatherBamFiles copies the blocks of BAMs (only the block of each later
+# file's first record is inflated), CalculateReadGroupChecksum reads one header.
+[[command]]
+name = "gather-bam-files"
+argv = [
+    "{bin}", "gather-bam-files", "tests/data/insert_size.bam", "tests/data/markdup.bam",
+    "-o", "{out}/g.bam", "--create-index", "--create-md5-file",
+]
+needs = ["tests/data/insert_size.bam", "tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "gather-bam-files sam"
+argv = ["{bin}", "gather-bam-files", "tests/data/markdup.sam", "-o", "{out}/g.bam"]
+needs = ["tests/data/markdup.sam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "calculate-read-group-checksum"
+argv = ["{bin}", "calculate-read-group-checksum", "tests/data/oxog.bam", "-o", "{out}/rg.md5"]
+needs = ["tests/data/oxog.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+# A forged header of 20,000,000 reference entries in 0.5 MB, and a 60 MB list of
+# 30,000,000 inputs (refused over the 100,000 cap, so the row wants exit 2). The
+# inputs come from tests/data/make_gather_stress.py in the same shell, so its Python
+# counts: peaks 16.3 and 68.5 MiB (bammetrics alone 4.6 and 67; 1,536 and 1,897
+# before the list and the reference list were read through).
+[[command]]
+name = "gather-bam-files forged reference list"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_gather_stress.py {out} && {bin} gather-bam-files tests/data/markdup.bam {out}/forged_refs.bam -o {out}/g.bam",
+]
+needs = ["tests/data/markdup.bam", "tests/data/make_gather_stress.py"]
+max_rss_mib = 136
+max_seconds = 60
+
+[[command]]
+name = "gather-bam-files long list"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_gather_stress.py {out} && {bin} gather-bam-files -i {out}/many.list -o {out}/g.bam; test $? -eq 2",
+]
+needs = ["tests/data/make_gather_stress.py"]
+max_rss_mib = 552
+max_seconds = 60
+
+[[command]]
+name = "gather-bam-files slice"
+tier = "scale"
+argv = [
+    "{bin}", "gather-bam-files", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam",
+    "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "-o", "{out}/g.bam",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 512
+
+[[command]]
+name = "calculate-read-group-checksum exome"
+tier = "scale"
+argv = [
+    "{bin}", "calculate-read-group-checksum", "~/data/bammetrics-scale/exome/HG002.exome.bam",
+    "-o", "{out}/rg.md5",
+]
+needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
+max_rss_mib = 64
+max_seconds = 10

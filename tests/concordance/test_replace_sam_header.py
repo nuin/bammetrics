@@ -31,7 +31,7 @@ import pytest
 from cases import BAMMETRICS, CORPUS, FIXTURES
 from conftest import RESULTS
 from test_add_comments_to_bam import (chain_against_picard, compare, header_only, index_and_md5,
-                                      records_of, run_tool)
+                                      index_by_sort_order, records_of, run_tool)
 
 TOOL = "ReplaceSamHeader"
 REF = FIXTURES / "ref_100k.fa"
@@ -312,6 +312,13 @@ def test_the_step_in_a_chain_equals_picard(corpus, tmp_path):
         header = variant(source, "prepended", directory)
         chain_against_picard(TOOL, ["replace-sam-header", "--header", str(header)], source,
                              [f"HEADER={header}"], directory)
+
+
+def test_the_index_follows_the_header_order_as_htsjdk(tmp_path):
+    """Each input under its own header, so htsjdk's sort order check passes and the
+    index follows the header order as for AddCommentsToBam."""
+    index_by_sort_order(TOOL, lambda bam: [f"I={bam}", f"HEADER={bam}"], tmp_path,
+                        "out.bam.bai")
 
 
 def test_values_are_distinct():

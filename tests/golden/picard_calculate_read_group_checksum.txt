@@ -1,0 +1,10 @@
+## argv
+CalculateReadGroupChecksum
+I=tests/data/oxog.bam
+O=OUT/oxog.read_group_md5
+## exit
+0
+## stdout
+## stderr
+## file oxog.read_group_md5
+2e51b5bd9f0f28ee633ecd5cf781e926

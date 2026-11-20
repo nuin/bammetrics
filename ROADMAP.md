@@ -53,13 +53,17 @@ docs/06 section 6, docs/exon_coverage.md), and `CollectAdapterContentMetrics`,
 (tools 39 to 42, 0.26.0, wave W08; docs/06 sections 7 to 10, docs/telomere.md), and the
 record-editing shape with `AddCommentsToBam`, `ReplaceSamHeader`, `AddOATag`, `CleanSam`,
 `SetNmMdAndUqTags` and `SetNmAndUqTags`, each a streaming chain transform (tools 43 to 48,
-0.27.0, wave W09; docs/chaining.md section 16). CHANGELOG.md has each.
+0.27.0, wave W09; docs/chaining.md section 16), and `AddOrReplaceReadGroups` and
+`RevertOriginalBaseQualitiesAndAddMateCigar` with the writer's sort in the record-editing
+shape, `SplitSamByLibrary` and `SplitSamByNumberOfReads` as fan-out sinks of a chain,
+`GatherBamFiles` by BGZF block copy and `CalculateReadGroupChecksum` (tools 49 to 54,
+0.28.0, wave W10; docs/chaining.md sections 17 and 18). CHANGELOG.md has each.
 
 Remaining for bammetrics:
 
 - bioconda recipe and a PyPI release (first push of the branch runs the CI workflow).
 - The Picard tools still to build, further formats and DOCX reports: the program plan
-  `docs/07_full_parity_program.md` (waves W10 onward);
+  `docs/07_full_parity_program.md` (waves W11 onward);
   docs/04 section 4 holds the P9 queue.
 
 Exit criterion: a `pip install`-able library that produces correct, hand-verified numbers.

@@ -49,9 +49,20 @@ def test_the_committed_table_parses_and_names_both_tiers():
                        "sort-sam", "chain sort-sam + mark-duplicates + sort-sam + write --index",
                        "add-comments-to-bam", "replace-sam-header", "add-o-a-tag", "clean-sam",
                        "set-nm-md-and-uq-tags", "set-nm-and-uq-tags",
-                       "chain four edits + write --index"]
+                       "chain four edits + write --index", "add-or-replace-read-groups",
+                       "add-or-replace-read-groups sorted",
+                       "revert-original-base-qualities-and-add-mate-cigar",
+                       "chain read groups sorted + revert + write", "split-sam-by-library",
+                       "split-sam-by-number-of-reads",
+                       "chain mark-duplicates + split-sam-by-library",
+                       "split-sam-by-library 1000 libraries",
+                       "split-sam-by-number-of-reads 1000 files", "gather-bam-files",
+                       "gather-bam-files sam", "calculate-read-group-checksum",
+                       "gather-bam-files forged reference list", "gather-bam-files long list"]
     for r in rows:
-        assert r.argv[0] == "{bin}" and r.max_rss_mib > 0
+        # A row whose input a script writes first runs both in one `sh -c`.
+        shell = r.argv[0] in ("sh", "/bin/sh") and r.argv[1:2] == ["-c"] and "{bin}" in r.argv[2]
+        assert (r.argv[0] == "{bin}" or shell) and r.max_rss_mib > 0, r.name
         if r.tier == "fixture":
             assert all((ROOT / need).is_file() for need in r.needs), r.name
         else:

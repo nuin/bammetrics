@@ -1,0 +1,10 @@
+## argv
+GatherBamFiles
+I=tests/data/markdup.bam
+I=tests/data/markdup.bam
+O=OUT/gathered.sam
+## exit
+1
+## stdout
+## stderr
+bammetrics: OUTPUT=OUT/gathered.sam: every input is a BAM, whose blocks are copied, and Picard writes BAM bytes under this name: name the OUTPUT .bam

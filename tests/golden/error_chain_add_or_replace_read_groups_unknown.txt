@@ -1,0 +1,23 @@
+## argv
+chain
+tests/data/markdup.bam
++
+add-or-replace-read-groups
+--rglb
+lib1
+--rgpl
+ILLUMINA
+--rgpu
+unit1
+--rgsm
+sample1
+--sort-order
+unknown
++
+write
+OUT/out.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (add-or-replace-read-groups): SORT_ORDER=unknown in a chain: Picard sorts unknown with no comparator and fails on any input whose order is not unknown (from --sort-order)

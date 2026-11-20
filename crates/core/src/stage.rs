@@ -494,6 +494,20 @@ const STAGES: &[StageRow] = &[
         kind: StageKind::Streams,
         check: crate::set_nm_md_and_uq_tags::check_stage,
     },
+    StageRow {
+        tool: "AddOrReplaceReadGroups",
+        build: crate::add_or_replace_read_groups::stage,
+        label: "rg",
+        kind: StageKind::Streams,
+        check: crate::add_or_replace_read_groups::check_stage,
+    },
+    StageRow {
+        tool: "RevertOriginalBaseQualitiesAndAddMateCigar",
+        build: crate::revert_original_base_qualities_and_add_mate_cigar::stage,
+        label: "reverted",
+        kind: StageKind::Holds,
+        check: crate::revert_original_base_qualities_and_add_mate_cigar::check_stage,
+    },
 ];
 
 fn stage_row(tool: &Tool) -> Option<&'static StageRow> {
@@ -529,6 +543,15 @@ pub fn replays(tool: &Tool) -> bool {
 /// segment, and the steps after it read in the same pass.
 pub fn streams(tool: &Tool) -> bool {
     kind_of(tool) == Some(StageKind::Streams)
+}
+
+/// [`streams`] for a step with these Picard arguments: an
+/// `AddOrReplaceReadGroups` whose `SORT_ORDER` names a sort holds its
+/// records.
+pub fn streams_with(tool: &Tool, argv: &[String]) -> bool {
+    streams(tool)
+        && !(tool.name == crate::add_or_replace_read_groups::TOOL.name
+            && crate::add_or_replace_read_groups::sorts(argv))
 }
 
 /// A usage error for options the stage of `tool` cannot take, asked before

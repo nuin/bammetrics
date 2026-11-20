@@ -1,0 +1,14 @@
+## argv
+AddOrReplaceReadGroups
+I=tests/data/markdup.bam
+O=OUT/rg.bam
+RGLB=lib1
+RGPL=ILLUMINA
+RGPU=unit1
+RGSM=sample1
+RGDT=2020-01-02 03:04
+## exit
+1
+## stdout
+## stderr
+bammetrics: RGDT=2020-01-02 03:04: Problem constructing Iso8601Date from the string '2020-01-02 03:04' (For input string: "02 03")

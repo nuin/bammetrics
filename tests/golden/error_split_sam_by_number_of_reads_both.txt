@@ -1,0 +1,11 @@
+## argv
+SplitSamByNumberOfReads
+I=tests/data/markdup.bam
+O=OUT
+N_FILES=2
+N_READS=5
+## exit
+1
+## stdout
+## stderr
+bammetrics: SPLIT_TO_N_FILES and SPLIT_TO_N_READS cannot be used together

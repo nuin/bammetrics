@@ -85,6 +85,10 @@ impl RecordEdit for Comments {
     fn record(&mut self, _record: &mut RawRecord) -> Result<Outcome> {
         Ok(Outcome::Same)
     }
+
+    fn copies_bytes(&self, _input: &sam::Header) -> bool {
+        true
+    }
 }
 
 fn build(comments: Vec<Vec<u8>>) -> impl FnOnce(&Setup) -> Result<Box<dyn RecordEdit>> {

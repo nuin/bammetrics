@@ -268,9 +268,16 @@ pub(crate) fn is_transform(verb: &Verb) -> bool {
     stage::stage_of(verb.tool()).is_some()
 }
 
-/// True for a verb that can be a step: a transform or a one-pass tool.
+/// True for a verb that can be a step: a transform, a split or a one-pass
+/// tool.
 pub(crate) fn is_step(verb: &Verb) -> bool {
-    is_transform(verb) || verb.tool().collector.is_some()
+    is_transform(verb) || is_split(verb) || verb.tool().collector.is_some()
+}
+
+/// True for a split tool: a step that writes the records of its position
+/// over several BAMs in a directory.
+pub(crate) fn is_split(verb: &Verb) -> bool {
+    bammetrics_core::split_sam::is_split(verb.tool())
 }
 
 /// The usage error for a verb that cannot be a step, named `place`
@@ -394,10 +401,14 @@ pub fn step_flags(verb: &Verb) -> Vec<Flag> {
     let mut flags: Vec<Flag> = step_parser_flags(verb)
         .into_iter()
         .filter(|flag| !CHAIN_KEYS.contains(&flag.key))
-        .filter(|flag| !(verb.files == Files::Bam && flag.key == Key::Output))
+        .filter(|flag| !(verb.files == Files::Bam && flag.key == Key::Output && !is_split(verb)))
         .collect();
     for flag in &mut flags {
         match (flag.key, verb.files) {
+            (Key::Output, _) if is_split(verb) => {
+                "The directory this step writes its files into; made when missing."
+                    .clone_into(&mut flag.help);
+            }
             (Key::Output, Files::Single) => {
                 flag.help = format!(
                     "The {} of this step; - writes standard output. Without one the chain's \
@@ -432,7 +443,7 @@ fn step_names(wanted: fn(&Verb) -> bool) -> String {
 
 /// `bammetrics chain --help`.
 pub fn help() -> String {
-    let taps = |verb: &Verb| is_step(verb) && !is_transform(verb);
+    let taps = |verb: &Verb| is_step(verb) && !is_transform(verb) && !is_split(verb);
     let mut text = format!(
         "bammetrics chain: several steps on one BAM in one process. Records move from step \
          to step in memory: no pipe, no intermediate file.\n\n\
@@ -441,7 +452,8 @@ pub fn help() -> String {
          Every + starts a step. A step sees the records the step before it emits.\n  \
          transform  changes the records later steps see: {}\n  \
          tap        reads the records of its position, changes nothing: {}\n  \
-         write      write [PATH] writes the records of its position as a BAM\n\n\
+         write      write [PATH] writes the records of its position as a BAM\n  \
+         split      writes the records of its position over BAMs in its -o DIR: {}\n\n\
          A step takes its verb's own options in every spelling (--minimum-pct 0.1, \
          --MINIMUM_PCT 0.1, MINIMUM_PCT=0.1); bammetrics chain BAM + VERB --help lists them. \
          A value that is a lone + is written --option=+.\n\n\
@@ -454,6 +466,7 @@ pub fn help() -> String {
          error, found before the first read.\n\nOptions:\n",
         step_names(is_transform),
         step_names(taps),
+        step_names(is_split),
     );
     text.push_str(&option_lines(&global_flags()));
     text.push_str("\nOptions of write:\n");
@@ -480,6 +493,9 @@ pub fn step_help(name: &str, number: usize) -> Result<String, VerbError> {
     let tool = verb.tool();
     let kind = if is_transform(verb) {
         "a transform: later steps see the records it emits"
+    } else if is_split(verb) {
+        "a split: it writes the records of its position over BAMs in its -o DIR, renamed \
+         into place when the stream ends"
     } else {
         "a tap: it reads the records of its position and changes nothing"
     };

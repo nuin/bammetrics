@@ -169,11 +169,11 @@ class Step:
     unknown verb or keyword raises UsageError here.
 
     verb is the verb as the command spells it (insert-size, write); role is
-    "transform", "tap" or "write"; options holds the keywords given, without those
+    "transform", "tap", "write" or "split"; options holds the keywords given, without those
     that were None; args is what they spell for the command (["--minimum-pct=0.1"]).
     Two steps with the same verb and args are equal."""
     verb: str
-    role: Literal["transform", "tap", "write"]
+    role: Literal["transform", "tap", "write", "split"]
     options: dict[str, Any]
     args: list[str]
     def __init__(self, verb: _StepVerb | str, /, **options: Any) -> None: ...
@@ -191,7 +191,7 @@ class Stage:
     tap and for write."""
     number: int
     verb: str
-    role: Literal["transform", "tap", "write"]
+    role: Literal["transform", "tap", "write", "split"]
     status: Literal["ok", "failed", "stopped", "not_run"]
     error: str | None
     reads: str
@@ -1313,6 +1313,114 @@ def set_nm_and_uq_tags(
     """SetNmAndUqTags: deprecated name of SetNmMdAndUqTags, the same options and output: no
     rows; OUTPUT gets every record, each mapped one with MD, NM and UQ."""
 
+def add_or_replace_read_groups(
+    input: _Path,
+    *,
+    rgid: str | None = None,
+    rglb: str,
+    rgpl: str,
+    rgpu: str,
+    rgsm: str,
+    rgcn: str | None = None,
+    rgds: str | None = None,
+    rgdt: str | None = None,
+    rgpi: int | None = None,
+    rgpg: str | None = None,
+    rgpm: str | None = None,
+    rgks: str | None = None,
+    rgfo: str | None = None,
+    sort_order: str | None = None,
+    output: _Path,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    max_records_in_ram: int | None = None,
+    tmp_dir: _Path | Sequence[_Path] | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """AddOrReplaceReadGroups: no rows; OUTPUT gets every record of the input with its RG
+    tag set to RGID under the input header whose @RG lines are replaced by the one read
+    group the options give, sorted when SORT_ORDER differs from the input's: a BAM, or
+    SAM text for a name ending in .sam."""
+
+def revert_original_base_qualities_and_add_mate_cigar(
+    input: _Path,
+    *,
+    sort_order: str | None = None,
+    restore_original_qualities: bool | None = None,
+    max_records_to_examine: int | None = None,
+    output: _Path,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    max_records_in_ram: int | None = None,
+    tmp_dir: _Path | Sequence[_Path] | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """RevertOriginalBaseQualitiesAndAddMateCigar: no rows; OUTPUT gets every record with
+    QUAL restored from OQ, a CIGAR past the end of its reference soft-clipped, and MC,
+    MQ and the mate fields set from each mate, in SORT_ORDER: a BAM, or SAM text for a
+    name ending in .sam. A file whose first records need nothing is skipped and OUTPUT
+    is not written."""
+
+def split_sam_by_library(
+    input: _Path,
+    *,
+    output: _Path | None = None,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """SplitSamByLibrary: no rows; OUTPUT (a directory) gets one BAM, or SAM text for SAM
+    input, per library of the header, and unknown.bam for the records without a library."""
+
+def split_sam_by_number_of_reads(
+    input: _Path,
+    *,
+    output: _Path,
+    split_to_n_reads: int | None = None,
+    split_to_n_files: int | None = None,
+    total_reads_in_input: int | None = None,
+    out_prefix: str | None = None,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """SplitSamByNumberOfReads: no rows; OUTPUT (a directory) gets the records in file
+    order over files of about the same size, OUT_PREFIX_0001.bam and on, a template
+    never cut."""
+
+def gather_bam_files(
+    input: _Paths,
+    *,
+    output: _Path,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """GatherBamFiles: no rows; OUTPUT gets the records of every INPUT in the order given
+    under the header of the first: BAM inputs block copied as Picard copies them, byte
+    for byte at COMPRESSION_LEVEL=0; with a SAM or CRAM input every record read and
+    written again."""
+
+def calculate_read_group_checksum(
+    input: _Path,
+    *,
+    output: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """CalculateReadGroupChecksum: writes the MD5 of the header's read groups as Picard
+    computes it (32 hex digits, no line end) to OUTPUT, or beside INPUT as
+    INPUT.read_group_md5. Returns one row: the checksum."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1550,6 +1658,10 @@ _StepVerb = Literal[
     "clean_sam",
     "set_nm_md_and_uq_tags",
     "set_nm_and_uq_tags",
+    "add_or_replace_read_groups",
+    "revert_original_base_qualities_and_add_mate_cigar",
+    "split_sam_by_library",
+    "split_sam_by_number_of_reads",
     "write",
 ]
 

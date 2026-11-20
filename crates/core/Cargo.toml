@@ -14,3 +14,6 @@ noodles.workspace = true
 regex.workspace = true
 thiserror.workspace = true
 zlib-rs.workspace = true
+# localtime_r for the zone offset of an @RG DT date (java_date.rs); already
+# in the tree through the cli crate and signal-hook.
+libc.workspace = true

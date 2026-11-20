@@ -63,6 +63,8 @@ const FIXTURES: &[(&str, &str)] = &[
     ("CS", "tests/data/clean_sam.bam"),
     ("CS_SAM", "tests/data/clean_sam.sam"),
     ("CS_PAST", "tests/data/clean_sam_past.sam"),
+    ("RV", "tests/data/revert.bam"),
+    ("RV_SAM", "tests/data/revert.sam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -662,6 +664,83 @@ const SET_NM_CASES: &[Case] = &[
     case!("error_chain_set_nm_md_and_uq_tags_no_reference", "chain", "MD", "+", "set-nm-md-and-uq-tags", "+", "write", "OUT/out.bam"),
 ];
 
+/// `AddOrReplaceReadGroups` and `RevertOriginalBaseQualitiesAndAddMateCigar`
+/// (wave W10): the Picard face on a BAM, SAM text and a CRAM, the verbs,
+/// the errors Picard gives, a file the early exit skips, and the steps in a
+/// chain, streaming and sorting.
+#[rustfmt::skip]
+const READ_GROUP_CASES: &[Case] = &[
+    case!("picard_add_or_replace_read_groups", "AddOrReplaceReadGroups", "I=MD", "O=OUT/rg.bam", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1", "RGSM=sample1"),
+    case!("picard_add_or_replace_read_groups_every_field", "AddOrReplaceReadGroups", "I=RV_SAM", "O=OUT/rg.sam", "RGID=g7", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1", "RGSM=sample1", "RGCN=a center", "RGDS=a description", "RGDT=2020-01-02T03:04:05.123+05:30", "RGPI=+350", "RGPG=bwa", "RGPM=HiSeq", "RGKS=TCAG", "RGFO=TACG", "SORT_ORDER=queryname"),
+    case!("picard_add_or_replace_read_groups_cram", "AddOrReplaceReadGroups", "I=IS_CRAM", "R=REF", "O=OUT/rg.bam", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1", "RGSM=sample1", "CREATE_INDEX=true", "CREATE_MD5_FILE=true"),
+    case!("picard_add_or_replace_read_groups_null_id", "AddOrReplaceReadGroups", "I=RV", "O=OUT/rg.sam", "RGID=null", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1", "RGSM=sample1"),
+    case!("verb_add_or_replace_read_groups", "add-or-replace-read-groups", "DM", "-o", "OUT/rg.sam", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm", "sample1", "--sort-order", "coordinate", "--max-records-in-ram", "3"),
+    case!("error_add_or_replace_read_groups_no_rgsm", "AddOrReplaceReadGroups", "I=MD", "O=OUT/rg.bam", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1"),
+    case!("error_verb_add_or_replace_read_groups_no_rgsm", "add-or-replace-read-groups", "MD", "-o", "OUT/rg.bam", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1"),
+    case!("error_add_or_replace_read_groups_values", "AddOrReplaceReadGroups", "I=MD", "O=OUT/rg.bam", "RGID=a\tb", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1", "RGSM=s\u{e9}"),
+    case!("error_add_or_replace_read_groups_date", "AddOrReplaceReadGroups", "I=MD", "O=OUT/rg.bam", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1", "RGSM=sample1", "RGDT=2020-01-02 03:04"),
+    case!("error_add_or_replace_read_groups_unknown_order", "AddOrReplaceReadGroups", "I=MD", "O=OUT/rg.bam", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1", "RGSM=sample1", "SORT_ORDER=unknown"),
+    case!("error_add_or_replace_read_groups_input_output", "AddOrReplaceReadGroups", "I=MD", "O=MD", "RGLB=lib1", "RGPL=ILLUMINA", "RGPU=unit1", "RGSM=sample1"),
+    case!("chain_add_or_replace_read_groups", "chain", "MD", "-o", "OUT/s", "+", "add-or-replace-read-groups", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm", "sample1", "+", "insert-size", "+", "write", "OUT/out.bam"),
+    case!("chain_add_or_replace_read_groups_sorted", "chain", "MD", "-o", "OUT/s", "+", "add-or-replace-read-groups", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm", "sample1", "--sort-order", "queryname", "+", "quality-yield", "+", "write", "OUT/out.sam"),
+    case!("chain_dry_run_add_or_replace_read_groups_sorted", "chain", "MD", "-o", "OUT/s", "--dry-run", "+", "add-or-replace-read-groups", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm", "sample1", "--sort-order", "queryname", "+", "write", "OUT/out.bam"),
+    case!("error_chain_add_or_replace_read_groups_unknown", "chain", "MD", "+", "add-or-replace-read-groups", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm", "sample1", "--sort-order", "unknown", "+", "write", "OUT/out.bam"),
+    case!("picard_revert_original_base_qualities", "RevertOriginalBaseQualitiesAndAddMateCigar", "I=RV", "O=OUT/reverted.bam"),
+    case!("picard_revert_original_base_qualities_sam", "RevertOriginalBaseQualitiesAndAddMateCigar", "I=RV_SAM", "O=OUT/reverted.sam", "SORT_ORDER=queryname", "RESTORE_ORIGINAL_QUALITIES=false"),
+    case!("picard_revert_original_base_qualities_skip", "RevertOriginalBaseQualitiesAndAddMateCigar", "I=OXOG", "O=OUT/reverted.bam"),
+    case!("verb_revert_original_base_qualities", "revert-original-base-qualities-and-add-mate-cigar", "OXOG", "-o", "OUT/reverted.bam", "--max-records-to-examine", "0", "--sort-order", "unsorted", "--create-index=false"),
+    case!("error_revert_original_base_qualities_two_first", "RevertOriginalBaseQualitiesAndAddMateCigar", "I=MD", "O=OUT/reverted.bam", "MAX_RECORDS_TO_EXAMINE=0"),
+    case!("error_revert_original_base_qualities_input_output", "RevertOriginalBaseQualitiesAndAddMateCigar", "I=RV", "O=RV"),
+    case!("chain_revert_original_base_qualities", "chain", "RV", "-o", "OUT/s", "+", "revert-original-base-qualities-and-add-mate-cigar", "+", "mark-duplicates", "+", "write", "OUT/out.bam"),
+    case!("chain_dry_run_revert_original_base_qualities", "chain", "RV", "-o", "OUT/s", "--dry-run", "+", "revert-original-base-qualities-and-add-mate-cigar", "--sort-order", "queryname", "+", "write", "OUT/out.bam"),
+    case!("error_chain_revert_original_base_qualities_examine", "chain", "RV", "+", "revert-original-base-qualities-and-add-mate-cigar", "--max-records-to-examine", "0", "+", "write", "OUT/out.bam"),
+];
+
+/// `SplitSamByLibrary` and `SplitSamByNumberOfReads`
+/// (`crates/core/src/split_sam.rs`): the Picard face, the verbs, SAM text
+/// and CRAM in, the errors, the split as a chain step.
+#[rustfmt::skip]
+const SPLIT_CASES: &[Case] = &[
+    case!("picard_split_sam_by_library", "SplitSamByLibrary", "I=MD", "O=OUT"),
+    case!("picard_split_sam_by_library_sam", "SplitSamByLibrary", "I=MD_SAM", "O=OUT", "CREATE_MD5_FILE=true"),
+    case!("picard_split_sam_by_library_index", "SplitSamByLibrary", "I=OXOG", "O=OUT", "CREATE_INDEX=true", "COMPRESSION_LEVEL=1"),
+    case!("verb_split_sam_by_library", "split-sam-by-library", "OXOG", "-o", "OUT/libs"),
+    case!("error_split_sam_by_library_no_library", "SplitSamByLibrary", "I=IS", "O=OUT"),
+    case!("error_split_sam_by_library_cram", "SplitSamByLibrary", "I=IS_CRAM", "R=REF", "O=OUT"),
+    case!("error_split_sam_by_library_missing_directory", "SplitSamByLibrary", "I=MD", "O=OUT/missing"),
+    case!("picard_split_sam_by_number_of_reads", "SplitSamByNumberOfReads", "I=MD", "O=OUT", "N_FILES=3"),
+    case!("picard_split_sam_by_number_of_reads_reads", "SplitSamByNumberOfReads", "I=DM", "O=OUT", "SPLIT_TO_N_READS=4", "OUT_PREFIX=part"),
+    case!("picard_split_sam_by_number_of_reads_cram", "SplitSamByNumberOfReads", "I=IS_CRAM", "R=REF", "O=OUT", "N_FILES=2", "CREATE_INDEX=true"),
+    case!("picard_split_sam_by_number_of_reads_total", "SplitSamByNumberOfReads", "I=MD_SAM", "O=OUT", "N_READS=10", "TOTAL_READS=20"),
+    case!("verb_split_sam_by_number_of_reads", "split-sam-by-number-of-reads", "MD", "-o", "OUT/shards", "--n-files", "2"),
+    case!("error_split_sam_by_number_of_reads_both", "SplitSamByNumberOfReads", "I=MD", "O=OUT", "N_FILES=2", "N_READS=5"),
+    case!("error_split_sam_by_number_of_reads_none", "SplitSamByNumberOfReads", "I=MD", "O=OUT"),
+    case!("chain_split_sam_by_library", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "+", "split-sam-by-library", "-o", "OUT/libs"),
+    case!("chain_dry_run_split", "chain", "MD", "-o", "OUT/s", "--dry-run", "+", "mark-duplicates", "+", "split-sam-by-library", "-o", "OUT/libs", "+", "split-sam-by-number-of-reads", "-o", "OUT/shards", "--n-files", "2", "--total-reads", "36"),
+    case!("error_chain_split_no_total", "chain", "MD", "+", "split-sam-by-number-of-reads", "-o", "OUT/shards", "--n-files", "2"),
+    case!("error_chain_two_splits_one_directory", "chain", "MD", "+", "split-sam-by-library", "-o", "OUT/libs", "+", "split-sam-by-library", "-o", "OUT/libs"),
+];
+
+/// Wave W10: `GatherBamFiles` (a block copy of BAMs, SAM text record by
+/// record) and `CalculateReadGroupChecksum` on the fixtures.
+#[rustfmt::skip]
+const GATHER_CHECKSUM_CASES: &[Case] = &[
+    case!("picard_gather_bam_files", "GatherBamFiles", "I=IS", "I=MD", "O=OUT/gathered.bam", "COMPRESSION_LEVEL=0", "CREATE_INDEX=true", "CREATE_MD5_FILE=true"),
+    case!("verb_gather_bam_files", "gather-bam-files", "OXOG", "-i", "ART", "-o", "OUT/gathered.bam"),
+    case!("picard_gather_bam_files_sam", "GatherBamFiles", "I=MD_SAM", "O=OUT/gathered.sam"),
+    case!("error_gather_bam_files_sam_name", "GatherBamFiles", "I=MD", "I=MD", "O=OUT/gathered.sam"),
+    case!("error_gather_bam_files_missing", "GatherBamFiles", "I=MD", "I=tests/data/nope.bam", "O=OUT/gathered.bam"),
+    case!("error_verb_gather_bam_files_input_output", "gather-bam-files", "MD", "-o", "MD"),
+    case!("picard_calculate_read_group_checksum", "CalculateReadGroupChecksum", "I=OXOG", "O=OUT/oxog.read_group_md5"),
+    case!("picard_calculate_read_group_checksum_cram", "CalculateReadGroupChecksum", "I=IS_CRAM", "O=OUT/cram.read_group_md5"),
+    case!("verb_calculate_read_group_checksum", "calculate-read-group-checksum", "ART", "-o", "OUT/artifact.md5"),
+    case!("verb_calculate_read_group_checksum_sam", "calculate-read-group-checksum", "MD_SAM", "-o", "OUT/markdup.md5", "--validation-stringency", "SILENT"),
+    case!("error_calculate_read_group_checksum_input_output", "CalculateReadGroupChecksum", "I=OXOG", "O=OXOG"),
+    case!("error_calculate_read_group_checksum_missing", "CalculateReadGroupChecksum", "I=tests/data/nope.bam", "O=OUT/x.md5"),
+    case!("error_chain_gather_bam_files", "chain", "MD", "-o", "OUT/s", "+", "gather-bam-files"),
+    case!("error_chain_calculate_read_group_checksum", "chain", "MD", "-o", "OUT/s", "+", "calculate-read-group-checksum"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -1100,6 +1179,21 @@ fn documented_set_nm_commands_on_the_fixtures() {
     check(SET_NM_CASES);
 }
 
+#[test]
+fn documented_read_group_commands_on_the_fixtures() {
+    check(READ_GROUP_CASES);
+}
+
+#[test]
+fn documented_split_commands_on_the_fixtures() {
+    check(SPLIT_CASES);
+}
+
+#[test]
+fn documented_gather_and_checksum_commands_on_the_fixtures() {
+    check(GATHER_CHECKSUM_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1207,6 +1301,9 @@ fn case_names_are_unique() {
         .chain(RECORD_EDIT_CASES)
         .chain(CLEAN_SAM_CASES)
         .chain(SET_NM_CASES)
+        .chain(READ_GROUP_CASES)
+        .chain(SPLIT_CASES)
+        .chain(GATHER_CHECKSUM_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

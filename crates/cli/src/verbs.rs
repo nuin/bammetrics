@@ -26,7 +26,7 @@ use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
 use bammetrics_core::view_sam;
 use bammetrics_core::{
     bam_index_stats, build_bam_index, check_duplicate_marking, compare_metrics, cram, index_depth,
-    pass,
+    pass, split_sam,
 };
 
 use crate::error::VerbError;
@@ -89,6 +89,10 @@ pub struct Verb {
     /// then writes, from the input path (`build-bam-index` puts the index
     /// beside the BAM, as Picard names it).
     pub default_output: Option<fn(&Path) -> PathBuf>,
+    /// `-o` names a directory the tool writes its files into (the split
+    /// tools): the verb makes it when missing, as it makes the directory
+    /// above a file.
+    pub directory: bool,
 }
 
 const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
@@ -107,6 +111,7 @@ const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
         ignores: &[],
         reads_stdin: true,
         default_output: None,
+        directory: false,
     }
 }
 
@@ -463,6 +468,85 @@ pub const VERBS: &[Verb] = &[
         writes: "BAM",
         ..verb("set-nm-and-uq-tags", "SetNmAndUqTags", Files::Bam)
     },
+    Verb {
+        about: Some(
+            "replaces every @RG line of a SAM, BAM or CRAM by the one read group --rgid, \
+             --rglb, --rgpl, --rgpu and --rgsm give and sets each record's RG tag, as Picard's \
+             AddOrReplaceReadGroups does: -o gets every record, sorted when --sort-order \
+             differs from the input's.",
+        ),
+        writes: "BAM",
+        ..verb(
+            "add-or-replace-read-groups",
+            "AddOrReplaceReadGroups",
+            Files::Bam,
+        )
+    },
+    Verb {
+        about: Some(
+            "restores QUAL from OQ and sets MC, MQ and the mate fields from each mate, as \
+             Picard's RevertOriginalBaseQualitiesAndAddMateCigar does: -o gets every record in \
+             --sort-order, or nothing when the first records need no change.",
+        ),
+        writes: "BAM",
+        ..verb(
+            "revert-original-base-qualities-and-add-mate-cigar",
+            "RevertOriginalBaseQualitiesAndAddMateCigar",
+            Files::Bam,
+        )
+    },
+    Verb {
+        about: Some(
+            "writes one file per library of a SAM, BAM or CRAM header into the directory -o \
+             (made when missing; the current directory without -o), as Picard's \
+             SplitSamByLibrary does: LIBRARY.bam (SAM text for SAM input) with that library's \
+             read groups, unknown.bam for the records without a library. Every file is renamed \
+             into place after the last record; a run that fails leaves none.",
+        ),
+        writes: "BAM files",
+        default_output: Some(split_sam::current_directory),
+        directory: true,
+        ..verb("split-sam-by-library", "SplitSamByLibrary", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "splits the records of a SAM, BAM or CRAM in file order over files of about the same \
+             size in the directory -o (made when missing), as Picard's SplitSamByNumberOfReads \
+             does: shard_0001.bam and on, a run of one record name never cut. Every file is \
+             renamed into place after the last record; a run that fails leaves none.",
+        ),
+        writes: "BAM files",
+        directory: true,
+        ..verb(
+            "split-sam-by-number-of-reads",
+            "SplitSamByNumberOfReads",
+            Files::Bam,
+        )
+    },
+    Verb {
+        about: Some(
+            "gathers the records of several BAMs, in the order given, under the header of the \
+             first, as Picard's GatherBamFiles does: -o gets a BAM whose BGZF blocks are the \
+             inputs' (one block per later input is deflated again). A SAM or CRAM input, or a \
+             text file of paths one per line, is read as Picard reads it.",
+        ),
+        writes: "BAM",
+        ..verb("gather-bam-files", "GatherBamFiles", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "writes the MD5 of the @RG lines of a SAM, BAM or CRAM header as Picard's \
+             CalculateReadGroupChecksum computes it, 32 hex digits and no line end: to -o, or \
+             beside the input as INPUT.read_group_md5.",
+        ),
+        writes: "read group checksum",
+        default_output: Some(bammetrics_core::calculate_read_group_checksum::default_output),
+        ..verb(
+            "calculate-read-group-checksum",
+            "CalculateReadGroupChecksum",
+            Files::Bam,
+        )
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
@@ -565,6 +649,16 @@ impl Verb {
             .chain(["OUTPUT", "O"])
             .collect();
         let (placeholder, help) = match self.files {
+            Files::Bam if self.directory => (
+                "DIR",
+                if self.default_output.is_some() {
+                    "The directory the files go to, made when missing; the current directory \
+                     without -o."
+                } else {
+                    "The directory the files go to, made when missing. Required."
+                }
+                .to_owned(),
+            ),
             Files::Bam if self.default_output.is_some() => (
                 "FILE",
                 format!(
@@ -606,6 +700,9 @@ impl Verb {
                               (picard,json) adds each further format beside every metrics file, \
                               as FILE.json."
                 .to_owned(),
+            Files::Bam if self.directory => {
+                format!("picard only: the {} have no other form.", self.writes)
+            }
             Files::Bam if !self.writes_metrics() => {
                 format!("picard only: the {} has no other form.", self.writes)
             }
@@ -832,6 +929,11 @@ impl Verb {
         let mut made = MadeDirs::default();
         if let Some(path) = &output {
             create_parent(self.name, &mut made, path).map_err(|e| with_from(e, output_flag()))?;
+            if self.directory {
+                // The parent of a name inside the directory is the directory.
+                create_parent(self.name, &mut made, &path.join("file"))
+                    .map_err(|e| with_from(e, output_flag()))?;
+            }
         }
         // A further file's directory is made before the read, as `-o`'s is.
         for further in self.further_outputs(&inv) {
@@ -1096,6 +1198,24 @@ impl Verb {
             Files::Single => Ok(given
                 .map(|g| PathBuf::from(&g.values[0]))
                 .filter(|p| p != Path::new("-"))),
+            Files::Bam if self.directory => match given {
+                Some(g) if g.values[0] == "-" => Err(VerbError::usage(
+                    self.name,
+                    "standard output takes one file; this verb writes several into a directory",
+                )
+                .from(g.spelled.clone())
+                .hint("give -o DIR")),
+                Some(g) => Ok(Some(PathBuf::from(&g.values[0]))),
+                // The directory does not depend on the input, so standard
+                // input has one too.
+                None => match self.default_output {
+                    Some(default) => Ok(Some(default(Path::new("-")))),
+                    None => Err(VerbError::usage(
+                        self.name,
+                        "missing -o DIR (Picard: OUTPUT), the directory the files go to",
+                    )),
+                },
+            },
             Files::Bam => match given {
                 Some(g) if g.values[0] == "-" => Ok(Some(PathBuf::from("/dev/stdout"))),
                 Some(g) => Ok(Some(PathBuf::from(&g.values[0]))),

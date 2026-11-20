@@ -1,0 +1,9 @@
+## argv
+SplitSamByLibrary
+I=tests/data/insert_size.bam
+O=OUT
+## exit
+2
+## stdout
+## stderr
+bammetrics: No individual libraries are specified in the header of ROOT/tests/data/insert_size.bam

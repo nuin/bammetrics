@@ -1,0 +1,15 @@
+## argv
+chain
+tests/data/revert.bam
++
+revert-original-base-qualities-and-add-mate-cigar
+--max-records-to-examine
+0
++
+write
+OUT/out.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (revert-original-base-qualities-and-add-mate-cigar): MAX_RECORDS_TO_EXAMINE: a chain step reverts every record of its stream; the early exit of a file in shape belongs to the tool on its own

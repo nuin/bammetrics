@@ -14,16 +14,67 @@
 //! and [`MadeDirs`] (the directories a run made above its outputs, removed
 //! again when the run fails and they are still empty).
 
+use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{LazyLock, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-static REGISTERED: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+/// The registered paths in the order they were registered. A path is
+/// found by a hash lookup and its place in a tree, so registering and
+/// forgetting one costs `O(log n)` however many are held (a split holds a
+/// path per file until its last rename).
+#[derive(Debug, Default)]
+pub struct Registry {
+    next: u64,
+    by_order: BTreeMap<u64, PathBuf>,
+    /// Each path's places, the last registered last: a path registered
+    /// twice is forgotten newest first.
+    by_path: HashMap<PathBuf, Vec<u64>>,
+}
 
-fn registered() -> MutexGuard<'static, Vec<PathBuf>> {
+impl Registry {
+    fn insert(&mut self, path: PathBuf) {
+        let at = self.next;
+        self.next += 1;
+        self.by_path.entry(path.clone()).or_default().push(at);
+        self.by_order.insert(at, path);
+    }
+
+    fn remove(&mut self, path: &Path) {
+        let Some(places) = self.by_path.get_mut(path) else {
+            return;
+        };
+        if let Some(at) = places.pop() {
+            self.by_order.remove(&at);
+        }
+        if places.is_empty() {
+            self.by_path.remove(path);
+        }
+    }
+
+    #[cfg(test)]
+    fn contains(&self, path: &Path) -> bool {
+        self.by_path.contains_key(path)
+    }
+
+    #[cfg(test)]
+    fn paths(&self) -> impl Iterator<Item = &PathBuf> {
+        self.by_order.values()
+    }
+
+    /// Every path, oldest first; the registry is left empty.
+    fn drain(&mut self) -> Vec<PathBuf> {
+        self.by_path.clear();
+        std::mem::take(&mut self.by_order).into_values().collect()
+    }
+}
+
+static REGISTERED: LazyLock<Mutex<Registry>> = LazyLock::new(Mutex::default);
+
+fn registered() -> MutexGuard<'static, Registry> {
     REGISTERED
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -31,14 +82,30 @@ fn registered() -> MutexGuard<'static, Vec<PathBuf>> {
 
 /// Remember `path` for [`remove_registered`].
 pub fn register(path: &Path) {
-    registered().push(path.to_path_buf());
+    registered().insert(path.to_path_buf());
+}
+
+/// Run `make`, which creates `path`, and register `path` when it succeeds,
+/// both under the registry lock: a signal finds `path` registered from the
+/// moment it exists, and a path `make` did not create is never registered.
+pub fn create_registered<T>(path: &Path, make: impl FnOnce() -> io::Result<T>) -> io::Result<T> {
+    let mut registry = registered();
+    let made = make()?;
+    registry.insert(path.to_path_buf());
+    Ok(made)
 }
 
 /// Forget `path` (it was removed or renamed into place).
 pub fn unregister(path: &Path) {
-    let mut paths = registered();
-    if let Some(i) = paths.iter().rposition(|p| p == path) {
-        paths.remove(i);
+    registered().remove(path);
+}
+
+/// Forget every path of `paths` under one lock, so a signal finds all of
+/// them registered or none.
+pub fn unregister_all(paths: &[PathBuf]) {
+    let mut registry = registered();
+    for path in paths {
+        registry.remove(path);
     }
 }
 
@@ -46,10 +113,10 @@ pub fn unregister(path: &Path) {
 /// directory go before the directory. The returned guard keeps the
 /// registry locked: a signal handler holds it until the process exits,
 /// so no thread registers a new file in between.
-pub fn remove_registered() -> MutexGuard<'static, Vec<PathBuf>> {
-    let mut paths = registered();
-    remove_newest_first(paths.drain(..));
-    paths
+pub fn remove_registered() -> MutexGuard<'static, Registry> {
+    let mut registry = registered();
+    remove_newest_first(registry.drain().into_iter());
+    registry
 }
 
 /// Remove each file, or each empty directory, last path first.
@@ -235,11 +302,8 @@ impl MadeDirs {
             .take_while(|dir| !dir.as_os_str().is_empty() && fs::metadata(dir).is_err())
             .collect();
         for dir in missing.into_iter().rev() {
-            match fs::create_dir(dir) {
-                Ok(()) => {
-                    register(dir);
-                    self.made.push(dir.to_path_buf());
-                }
+            match create_registered(dir, || fs::create_dir(dir)) {
+                Ok(()) => self.made.push(dir.to_path_buf()),
                 // Another process made it first, or `a/..` once `a` is there.
                 Err(e) if e.kind() == io::ErrorKind::AlreadyExists && dir.is_dir() => {}
                 Err(e) => return Err(e),
@@ -339,9 +403,8 @@ impl AtomicFile {
             use std::os::unix::fs::OpenOptionsExt;
             options.mode(0o600);
         }
-        let file = options.open(temp)?;
+        let file = create_registered(temp, || options.open(temp))?;
         self.created.store(true, Ordering::Release);
-        register(temp);
         if let Some(permissions) = existing {
             file.set_permissions(permissions)?;
         }
@@ -374,6 +437,34 @@ impl AtomicFile {
         }
         unregister(&temp);
         renamed
+    }
+
+    /// Rename the temporary file over `path` as [`AtomicFile::commit`]
+    /// does, and register `path` in place of the temporary name under the
+    /// registry lock, so a signal at any moment removes one of the two. The
+    /// caller forgets `path` ([`unregister_all`]) once every file of its
+    /// set is in place, or removes it when the set fails. Returns `path`
+    /// when a file was renamed; a file written in place gives `None` and is
+    /// never registered.
+    pub fn commit_registered(mut self) -> io::Result<Option<PathBuf>> {
+        if self.temp.is_none() {
+            return Ok(None);
+        }
+        let Some(temp) = self.take_created() else {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "no temporary file was created",
+            ));
+        };
+        let mut registry = registered();
+        let renamed = fs::rename(&temp, &self.path);
+        if renamed.is_err() {
+            let _ = fs::remove_file(&temp);
+        }
+        registry.remove(&temp);
+        renamed?;
+        registry.insert(self.path.clone());
+        Ok(Some(self.path.clone()))
     }
 }
 
@@ -666,6 +757,48 @@ mod tests {
         fs::remove_dir_all(&dir).expect("remove dir");
     }
 
+    /// Forgetting 20,000 paths oldest first, the order a split renames its
+    /// files, costs a lookup each: the old list scanned the whole registry
+    /// per path and took minutes at 100,000.
+    #[test]
+    fn forgetting_many_paths_oldest_first_is_not_quadratic() {
+        let mut registry = Registry::default();
+        let paths: Vec<PathBuf> = (0..20_000)
+            .map(|i| PathBuf::from(format!("/nowhere/bammetrics-registry/shard_{i:05}.bam")))
+            .collect();
+        let started = std::time::Instant::now();
+        for path in &paths {
+            registry.insert(path.clone());
+        }
+        registry.insert(paths[7].clone());
+        for path in &paths {
+            registry.remove(path);
+        }
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+        assert_eq!(registry.drain(), vec![paths[7].clone()]);
+        assert!(registry.drain().is_empty());
+    }
+
+    /// A committed file stays registered under its own name until the
+    /// caller forgets it, so a signal before then removes it.
+    #[test]
+    fn a_registered_commit_keeps_the_target_registered() {
+        let dir = scratch("commit-registered");
+        let path = dir.join("out.txt");
+        let file = AtomicFile::new(&path);
+        let temp = file.writing().to_path_buf();
+        drop(file.create().expect("create"));
+        let committed = file.commit_registered().expect("commit");
+        assert_eq!(committed.as_deref(), Some(path.as_path()));
+        assert!(path.is_file());
+        assert!(!temp.exists());
+        assert!(!registered().contains(&temp));
+        assert!(registered().contains(&path));
+        unregister_all(std::slice::from_ref(&path));
+        assert!(!registered().contains(&path));
+        fs::remove_dir_all(&dir).expect("remove dir");
+    }
+
     /// A `..` behind a directory that does not exist is found; one behind
     /// a directory that exists, or a missing directory without one, is not.
     #[test]
@@ -736,7 +869,7 @@ mod tests {
             .expect("dropped");
         drop(dropped);
         assert!(!dir.join("dropped").exists());
-        assert!(!registered().iter().any(|p| p.starts_with(&dir)));
+        assert!(!registered().paths().any(|p| p.starts_with(&dir)));
         fs::remove_dir_all(&dir).expect("remove dir");
     }
 }

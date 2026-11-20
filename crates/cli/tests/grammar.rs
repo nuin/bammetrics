@@ -70,6 +70,14 @@ fn bodies(dir: &Path) -> BTreeMap<String, String> {
         if path.extension().is_some_and(|e| e == "bam") {
             continue;
         }
+        // The directory a split writes into: its files under `DIR/NAME`.
+        if path.is_dir() {
+            let dir = path.file_name().expect("name").to_string_lossy();
+            for (name, body) in bodies(&path) {
+                files.insert(format!("{dir}/{name}"), body);
+            }
+            continue;
+        }
         let text = fs::read_to_string(&path).expect("read");
         let body: Vec<&str> = text.lines().filter(|l| !l.starts_with("# ")).collect();
         let name = path
@@ -558,7 +566,85 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("REFERENCE_SEQUENCE", REF)),
             picard_outputs: sorted_sam,
         },
+        // SAM text out, so the bodies with the read group compare.
+        Case {
+            verb: "add-or-replace-read-groups",
+            class: "AddOrReplaceReadGroups",
+            verb_args: strings(&[
+                "tests/data/revert.sam",
+                "--rglb",
+                "l",
+                "--rgpl",
+                "P",
+                "--rgpu",
+                "u",
+                "--rgsm",
+                "s",
+            ]),
+            picard_args: strings(&[
+                "I=tests/data/revert.sam",
+                "RGLB=l",
+                "RGPL=P",
+                "RGPU=u",
+                "RGSM=s",
+            ]),
+            option: Some(("SORT_ORDER", "queryname")),
+            picard_outputs: sorted_sam,
+        },
+        Case {
+            verb: "revert-original-base-qualities-and-add-mate-cigar",
+            class: "RevertOriginalBaseQualitiesAndAddMateCigar",
+            verb_args: strings(&["tests/data/revert.sam", "--no-create-md5-file"]),
+            picard_args: strings(&["I=tests/data/revert.sam", "CREATE_MD5_FILE=false"]),
+            option: Some(("SORT_ORDER", "queryname")),
+            picard_outputs: sorted_sam,
+        },
+        // SAM text in, so the files of the directory are SAM text.
+        Case {
+            verb: "split-sam-by-library",
+            class: "SplitSamByLibrary",
+            verb_args: strings(&["tests/data/markdup.sam"]),
+            picard_args: strings(&["I=tests/data/markdup.sam"]),
+            option: Some(("CREATE_MD5_FILE", "true")),
+            picard_outputs: split_directory,
+        },
+        Case {
+            verb: "split-sam-by-number-of-reads",
+            class: "SplitSamByNumberOfReads",
+            verb_args: strings(&["tests/data/markdup.sam"]),
+            picard_args: strings(&["I=tests/data/markdup.sam"]),
+            option: Some(("SPLIT_TO_N_FILES", "3")),
+            picard_outputs: split_directory,
+        },
+        // Stored blocks at level 0, so the .md5 of each BAM compares.
+        Case {
+            verb: "gather-bam-files",
+            class: "GatherBamFiles",
+            verb_args: strings(&[MD, "--input", MD, "--create-md5-file"]),
+            picard_args: strings(&[
+                &format!("I={MD}"),
+                &format!("I={MD}"),
+                "CREATE_MD5_FILE=true",
+            ]),
+            option: Some(("COMPRESSION_LEVEL", "0")),
+            picard_outputs: commented_bam,
+        },
+        Case {
+            verb: "calculate-read-group-checksum",
+            class: "CalculateReadGroupChecksum",
+            verb_args: strings(&["tests/data/oxog.bam"]),
+            picard_args: strings(&["I=tests/data/oxog.bam"]),
+            option: Some(("VALIDATION_STRINGENCY", "SILENT")),
+            picard_outputs: single,
+        },
     ]
+}
+
+/// The directory a split's Picard face writes into: it must exist, as
+/// Picard's does. The verb makes its own.
+fn split_directory(out: &str) -> Vec<String> {
+    fs::create_dir_all(out).expect("split directory");
+    vec![format!("O={out}")]
 }
 
 fn commented_bam(out: &str) -> Vec<String> {
@@ -574,8 +660,10 @@ fn named_output(verb: &str) -> Option<&'static str> {
         | "add-o-a-tag"
         | "clean-sam"
         | "set-nm-md-and-uq-tags"
-        | "set-nm-and-uq-tags" => Some("sam"),
-        "add-comments-to-bam" => Some("bam"),
+        | "set-nm-and-uq-tags"
+        | "add-or-replace-read-groups"
+        | "revert-original-base-qualities-and-add-mate-cigar" => Some("sam"),
+        "add-comments-to-bam" | "gather-bam-files" => Some("bam"),
         _ => None,
     }
 }
@@ -681,7 +769,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 48);
+    assert_eq!(classes.len(), 54);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

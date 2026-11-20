@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 use bammetrics_core::mark_duplicates::{self, SortOrder};
 use bammetrics_core::sam_sort::ITEM_BYTES;
 use bammetrics_core::sam_text::Stringency;
-use bammetrics_core::stage::WriteFormat;
+use bammetrics_core::stage::{self, WriteFormat};
 use bammetrics_core::{cram, pass};
 
 use super::prepare::{Chain, Planned, Role};
@@ -301,6 +301,21 @@ impl Estimate {
     }
 }
 
+/// `RevertOriginalBaseQualitiesAndAddMateCigar`: a step that holds its
+/// records and sorts them twice.
+const REVERT: &str = "RevertOriginalBaseQualitiesAndAddMateCigar";
+
+/// True for a transform that may hold its records in a sort: `sort-sam`,
+/// the reverting step, and a streaming tool whose arguments may make it
+/// sort (`add-or-replace-read-groups` with a `SORT_ORDER` that names a
+/// sort; a stream already in that order goes through unsorted, which the
+/// plan, made before the header is read, counts as a sort).
+fn holds(step: &Planned, name: &str) -> bool {
+    name == "SortSam"
+        || name == REVERT
+        || (!step.streams() && step.tool.is_some_and(stage::streams))
+}
+
 /// `NAME=VALUE` of a step's Picard arguments, the last one given.
 fn picard_value<'a>(step: &'a Planned, name: &str) -> Option<&'a str> {
     step.argv.iter().rev().find_map(|arg| {
@@ -339,8 +354,15 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
     let mut outputs = Vec::new();
     for (index, step) in chain.steps.iter().enumerate() {
         match (step.role, step.tool.map(|tool| tool.name)) {
-            (Role::Transform, Some("SortSam")) => {
-                let sorted = picard_value(step, "SORT_ORDER").and_then(SortOrder::parse);
+            (Role::Transform, Some(name)) if holds(step, name) => {
+                // A reverting step sorts twice: by name, then in its order.
+                let passes = if name == REVERT { 2 } else { 1 };
+                let given = picard_value(step, "SORT_ORDER").and_then(SortOrder::parse);
+                let sorted = if name == REVERT {
+                    given.or(order)
+                } else {
+                    given
+                };
                 let records_in_ram =
                     picard_value(step, "MAX_RECORDS_IN_RAM").and_then(|n| n.parse::<u64>().ok());
                 let per_record = RECORD_BYTES + ITEM_BYTES as u64;
@@ -363,11 +385,13 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
                         left = left.div_ceil(MERGE_FAN_IN);
                         levels += 1;
                     }
-                    n.saturating_mul(spill_bytes(sorted)).saturating_mul(levels)
+                    n.saturating_mul(spill_bytes(sorted))
+                        .saturating_mul(levels)
+                        .saturating_mul(passes)
                 });
-                let memory = held
-                    .zip(held_before)
-                    .map(|(held, before)| BASE_MEMORY + resident(held) + before);
+                let memory = held.zip(held_before).map(|(held, before)| {
+                    BASE_MEMORY + resident(held).saturating_mul(passes) + before
+                });
                 held_before = held.map(resident);
                 barriers.push(Barrier {
                     number: step.number,
@@ -432,6 +456,16 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
                 };
                 if let Some(n) = records {
                     outputs.push((options.path.clone(), n.saturating_mul(per_record)));
+                }
+            }
+            // A split writes every record once, as BAMs in its directory.
+            (Role::Split, _) => {
+                let per_record = match order {
+                    Some(SortOrder::Coordinate) => BAM_OUT_COORDINATE,
+                    _ => BAM_OUT_QUERYNAME,
+                };
+                if let (Some(n), Some(file)) = (records, step.files.first()) {
+                    outputs.push((file.path.clone(), n.saturating_mul(per_record)));
                 }
             }
             _ => {}

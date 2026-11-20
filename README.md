@@ -90,8 +90,9 @@ reads the marked BAM, and the BAM holds the records `MarkDuplicates` writes. On 
 exome the chain took 16.5 s against 22.2 s for `MarkDuplicates` followed by the four
 collectors on its output.
 
-Every `+` starts a step: a transform (`mark-duplicates`, `sort-sam` and the six
-record-editing verbs of wave W09), a tap (18 one-pass tool verbs) or `write [PATH]` (`-`
+Every `+` starts a step: a transform (`mark-duplicates`, `sort-sam`, the six
+record-editing verbs of wave W09 and the two of wave W10), a tap (18 one-pass tool verbs),
+a split (`split-sam-by-library`, `split-sam-by-number-of-reads`) or `write [PATH]` (`-`
 is standard output). Transforms may follow one another:
 `+ sort-sam --sort-order queryname + mark-duplicates + sort-sam --sort-order coordinate +
 write out.bam --index` sorts, marks and sorts back in one process, a sort holding at most
@@ -200,6 +201,12 @@ the sizes and a Chrome recipe for a build without the feature.
 | CleanSam (an alignment past the end of its reference soft-clipped at its end, the mate's `MC` clipped the same way, MAPQ 0 on unmapped records; SAM, BAM or CRAM in, BAM or SAM text out; a chain transform) | | `clean_sam()` |
 | SetNmMdAndUqTags (`MD`, `NM` and `UQ` of each mapped record of a coordinate-sorted input against `REFERENCE_SEQUENCE`, as htsjdk computes them; `IS_BISULFITE_SEQUENCE`, `SET_ONLY_UQ`; a chain transform) | | `set_nm_md_and_uq_tags()` |
 | SetNmAndUqTags (Picard's deprecated name of SetNmMdAndUqTags: the same options and output) | | `set_nm_and_uq_tags()` |
+| AddOrReplaceReadGroups (every `@RG` line replaced by the one read group `RGID`, `RGLB`, `RGPL`, `RGPU`, `RGSM` and the optional fields give, `RG` set on every record; `RGDT` written in UTC; `SORT_ORDER` sorts when it differs from the input's; a chain transform, a barrier when it sorts) | | `add_or_replace_read_groups()` |
+| RevertOriginalBaseQualitiesAndAddMateCigar (`QUAL` restored from `OQ`, `MC`, `MQ` and the mate fields set from each mate after a name sort, then `SORT_ORDER`; Picard's early exit for a file in shape; `CREATE_INDEX` and `CREATE_MD5_FILE` on by default; a chain barrier) | | `revert_original_base_qualities_and_add_mate_cigar()` |
+| SplitSamByLibrary (one BAM, or SAM text for SAM input, per library into the `OUTPUT` directory, `unknown.bam` for the records without a library; the names htsjdk makes safe; every file renamed into place after the last record, at most 64 open at once; a chain split) | | `split_sam_by_library()` |
+| SplitSamByNumberOfReads (the records in file order over files of about one size, `shard_0001.bam` on; `SPLIT_TO_N_FILES` or `SPLIT_TO_N_READS`, a run of one record name never cut; `TOTAL_READS_IN_INPUT`, `OUT_PREFIX`; a chain split) | | `split_sam_by_number_of_reads()` |
+| GatherBamFiles (the records of every `INPUT` in order under the first header; BAM inputs block copied as Picard copies them, byte for byte at `COMPRESSION_LEVEL=0`; lists of paths; SAM or CRAM read record by record) | | `gather_bam_files()` |
+| CalculateReadGroupChecksum (the MD5 of the `@RG` records as htsjdk computes it, in `OUTPUT` or `INPUT.read_group_md5`; the header alone is read) | | `calculate_read_group_checksum()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 | SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | `validation_stringency=` |

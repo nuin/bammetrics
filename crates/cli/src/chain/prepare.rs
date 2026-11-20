@@ -24,8 +24,8 @@ use clap::ValueEnum;
 
 use super::args::{
     AS, CHAIN_KEYS, COMPRESSION_LEVEL, INDEX, MD5, OUTPUT_FORMAT, STEPS_HINT, belongs_to_chain,
-    chain_option_on_step, find_step, is_transform, not_a_step, step_parser_flags, unknown_step,
-    write_flags,
+    chain_option_on_step, find_step, is_split, is_transform, not_a_step, step_parser_flags,
+    unknown_step, write_flags,
 };
 use super::claims::{
     Read, check_one_stdout, claim_outputs, inputs_of, refuse_overwriting_inputs, refuse_unresolved,
@@ -38,6 +38,8 @@ use crate::format::{self, Format};
 use crate::grammar::{self, Flag, Key, Parsed};
 use crate::qc::with_suffix;
 use crate::verbs::{self, Files, Verb};
+
+mod split;
 
 /// The stream of the source.
 const SOURCE_STREAM: &str = "in";
@@ -56,6 +58,9 @@ pub enum Role {
     Tap,
     /// `write`: the records of its position as a BAM.
     Write,
+    /// A split tool: the records of its position over several BAMs in a
+    /// directory, named once the stream is read (`split-sam-by-library`).
+    Split,
 }
 
 impl Role {
@@ -64,6 +69,7 @@ impl Role {
             Role::Transform => "transform",
             Role::Tap => "tap",
             Role::Write => "write",
+            Role::Split => "split",
         }
     }
 }
@@ -195,7 +201,10 @@ impl Planned {
     /// ([`stage::streams`]): it takes and emits its records in its own
     /// segment.
     pub fn streams(&self) -> bool {
-        self.role == Role::Transform && self.tool.is_some_and(stage::streams)
+        self.role == Role::Transform
+            && self
+                .tool
+                .is_some_and(|tool| stage::streams_with(tool, &self.argv))
     }
 }
 
@@ -265,6 +274,9 @@ fn tool_role(spec: &StepSpec, number: usize) -> Result<(&'static Verb, Role), Ve
         .ok_or_else(|| unknown_step(&spec.verb, Some(&place(spec, &label))))?;
     if is_transform(verb) {
         return Ok((verb, Role::Transform));
+    }
+    if is_split(verb) {
+        return Ok((verb, Role::Split));
     }
     if verb.tool().collector.is_some() {
         return Ok((verb, Role::Tap));
@@ -459,7 +471,14 @@ fn positions(drafts: &[Draft]) -> Result<Vec<Position>, VerbError> {
             taken.insert(stream.clone());
             position.leaves = Some(stream.clone());
             behind.push(verb.class);
-            if !stage::streams(verb.tool()) {
+            // The step's Picard arguments, with a stand-in for its input:
+            // a step may hold its records for some options only.
+            let mut parsed = draft.parsed.clone();
+            parsed.positional.push(SOURCE_STREAM.to_owned());
+            let picard = verb
+                .picard_arguments(&parsed, &draft.flags)
+                .unwrap_or_default();
+            if !stage::streams_with(verb.tool(), &picard) {
                 segment += 1;
             }
         }
@@ -1067,6 +1086,7 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
     let mut prefix_used = false;
     for (draft, position) in drafts.into_iter().zip(positions) {
         let (step, uses_prefix) = match draft.what {
+            What::Tool(verb, Role::Split) => split::split_step(&cx, draft, verb, position)?,
             What::Tool(verb, role) => tool_step(&cx, draft, (verb, role), position)?,
             What::Write => write_step(&cx, &draft, position)?,
         };
