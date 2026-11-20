@@ -450,7 +450,9 @@ make deny                            # cargo deny check
 ok, licenses ok, sources ok. 0.22.0 adds no package: its `Cargo.lock` differs from the
 0.21.0 one in the six workspace versions only. 0.23.0 adds no package either: besides the
 six versions, `bammetrics-cli` names `libc` (statvfs for the free-space refusal of a
-chain), which was in the tree through signal-hook and clap. 0.24.0 adds 103 packages, all
+chain), which was in the tree through signal-hook and clap. `bammetrics-core` names `libc`
+too: `java_date.rs` asks `localtime_r` for the zone offset of an `@RG DT` date, as the JVM
+writes it (`CalculateReadGroupChecksum`). 0.24.0 adds 103 packages, all
 under `bammetrics-pdf` with the feature `pdf` (krilla, krilla-svg, usvg, resvg, the font
 crates, the image decoders) or under `lopdf`, the dev-dependency of its tests (30
 packages); `Cargo.lock` holds 208. The default build links no new package besides

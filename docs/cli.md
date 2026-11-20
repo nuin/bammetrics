@@ -734,7 +734,8 @@ every record's `RG` tag is set to its ID
 - `RGDT` takes htsjdk's ISO 8601 forms (`2020-01-02`, `2020-01-02T03:04:05`,
   `2020-01-02T03:04:05.123+05:30`, `2020-13-45` carried into 2021-02-14) and is written in
   UTC: `DT:2020-01-02T00:00:00+0000`. Picard writes the same instant in the JVM's time
-  zone. Years 1583 to 9999 are read.
+  zone. Dates before 15 October 1582 are Julian, as in Java (`1582-10-10` is written
+  `1582-10-20T00:00:00+0000`); a year past 100,000,000 is refused.
 - `RGID=null` writes `ID:null` and removes every record's `RG` tag, as Picard does.
 - `--sort-order` sets `SO`. An order that differs from the input's is sorted as `sort-sam`
   sorts it (`--max-records-in-ram`, `--tmp-dir`); `unsorted` is written as read; `unknown`
@@ -790,7 +791,9 @@ Picard's `SplitSamByLibrary`: one file per library of the header's `@RG` lines
   `makeFileNameSafe` makes it: trimmed, then each space and each of
   ``!"#$%&'()*/:;<=>?@[]\^`{|}~`` becomes `_` (`Lib A` gives `Lib_A.bam`, `lib/x` gives
   `lib_x.bam`). A byte above 127 in a BAM header is one character, as htsjdk reads it, so
-  `café` in UTF-8 gives `cafÃ©.bam`, Picard's name.
+  `café` in UTF-8 gives `cafÃ©.bam`, Picard's name. SAM text is read as UTF-8, so
+  `LB:中文` gives `中文.sam`; the header inside keeps the low byte of each UTF-16 unit, as
+  htsjdk writes it.
 - Every library gets its file before the first record; a library without records gets a
   header-only file.
 - A record without an `RG` tag, with one the header lacks, or whose read group has no `LB`
@@ -855,7 +858,8 @@ header of the first (`tests/concordance/test_gather_bam_files.py`).
 
 - An input whose name does not end in `.bam`, `.sam` or `.cram` is a list: one path per
   line, each line trimmed, empty lines skipped, a relative path read from the current
-  directory. A list may name lists. At most 100,000 inputs and 10,000 lists are read.
+  directory. A list may name lists. At most 100,000 inputs and 10,000 lists are read, each
+  list at most 64 MiB and all lists of a run together at most 256 MiB.
 - When every input name ends in `.bam`, the BGZF blocks are copied as bytes, as Picard
   copies them: the first file whole, each later file from the block of its first record,
   one end-of-file block at the end. Picard deflates that one block per later file again;
