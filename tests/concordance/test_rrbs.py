@@ -181,6 +181,29 @@ def test_prefix_ending_in_a_dot(built, tmp_path):
     assert cells > 0
 
 
+def test_prefix_ending_in_a_slash(built, tmp_path):
+    """A prefix that names a directory with a trailing `/` gets a `.` added,
+    as in Picard: both write `.rrbs_summary_metrics` and
+    `.rrbs_detail_metrics` inside the directory."""
+    args = [f"R={built['ref']}", NO_PLOTS]
+    for side in ("picard", "bammetrics"):
+        (tmp_path / side).mkdir()
+    subprocess.run(["picard", TOOL, f"I={built['main']}", f"M={tmp_path / 'picard'}/", *args,
+                    "VERBOSITY=ERROR", "QUIET=true"], check=True, env=picard_env(),
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run([str(BAMMETRICS), TOOL, f"I={built['main']}",
+                    f"M={tmp_path / 'bammetrics'}/", *args], check=True, capture_output=True)
+    names = {side: sorted(p.name for p in (tmp_path / side).iterdir())
+             for side in ("picard", "bammetrics")}
+    assert names["picard"] == names["bammetrics"] == [".rrbs_detail_metrics",
+                                                      ".rrbs_summary_metrics"]
+    for side in ("picard", "bammetrics"):
+        for path in (tmp_path / side).iterdir():
+            path.rename(tmp_path / f"{side}{path.name}")
+        (tmp_path / side).rmdir()
+    assert compare_written(TOOL, tmp_path, "M=DIR/", SEEN) > 0
+
+
 # --- CRAM and SAM text --------------------------------------------------------------------
 
 @pytest.mark.parametrize("version", ["3.0", "3.1"])

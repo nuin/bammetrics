@@ -17,6 +17,24 @@
 
 - A metrics file formats each row as it writes it (`MetricsFile::write_rows`): the rows are
   no longer held a second time as text. The bytes written are unchanged.
+- `MetricsOutput::source` (`metric::RowSource`): rows made as the Picard writer writes
+  them. `CollectRrbsMetrics` writes its detail file this way from sites packed at 3 to 4
+  bytes: the HG002 exome at three levels peaks at 434 MiB (7.2 GB at `ALL_READS` before).
+  The JSON and delimited formats and Python fill the rows first
+  (`MetricsOutput::materialized`).
+- The reference walker (`Reference::contig`) refills one buffer reserved at the `.fai`
+  length, at most the FASTA's size, and `Reference::load` copies nothing: eight hs37d5
+  contigs peak at 243 MiB (1.7 GB before), `set-nm-md-and-uq-tags` on the slice at 82 MiB
+  (183 MiB before). The bases are noodles' query of the whole contig.
+
+### Fixed
+
+- `chain` plans the two files of `rrbs` before the first read: two `rrbs` steps on one
+  prefix, a `write` onto one of their files, or a source named like one exit 2. A file a
+  step names when it finishes is also checked by its path once an earlier step wrote it,
+  so two `sequencing-artifact` steps on one prefix fail in place of replacing the files.
+- `CollectRrbsMetrics` checks that both files can be written before it reads, as Picard
+  does.
 
 ## 0.28.0
 

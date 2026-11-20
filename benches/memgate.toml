@@ -564,8 +564,10 @@ needs = ["tests/data/rrbs.bam", "tests/data/ref_100k.fa"]
 max_rss_mib = 64
 max_seconds = 30
 
-# One contig of the reference and every CpG site of the slice (about 1.1 million, one
-# detail row each) are held: 563 MiB measured.
+# One contig of the reference in one buffer, the sites of the contig each unit reads in
+# a hash map, and every other CpG site packed at 3 to 4 bytes; the detail rows are made
+# as the file is written. The slice holds about 1.1 million sites per unit, the exome
+# 16.6 million.
 [[command]]
 name = "rrbs slice"
 tier = "scale"
@@ -574,4 +576,26 @@ argv = [
     "~/data/bammetrics-scale/exome/hs37d5.fa", "-o", "{out}/rrbs",
 ]
 needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "~/data/bammetrics-scale/exome/hs37d5.fa"]
+max_rss_mib = 512
+
+[[command]]
+name = "rrbs read groups slice"
+tier = "scale"
+argv = [
+    "{bin}", "rrbs", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "-R",
+    "~/data/bammetrics-scale/exome/hs37d5.fa", "-o", "{out}/rrbs", "--level", "SAMPLE",
+    "--level", "READ_GROUP",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "~/data/bammetrics-scale/exome/hs37d5.fa"]
+max_rss_mib = 512
+
+[[command]]
+name = "rrbs exome"
+tier = "scale"
+argv = [
+    "{bin}", "rrbs", "~/data/bammetrics-scale/exome/HG002.exome.bam", "-R",
+    "~/data/bammetrics-scale/exome/hs37d5.fa", "-o", "{out}/rrbs", "--level", "SAMPLE",
+    "--level", "READ_GROUP",
+]
+needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam", "~/data/bammetrics-scale/exome/hs37d5.fa"]
 max_rss_mib = 1024
