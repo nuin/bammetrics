@@ -343,6 +343,23 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
         "CollectOxoGMetrics",
         vec![format!("I={DATA}/oxog.bam"), reference.clone(), out("oxog")],
     );
+    // Wave W11: the picard.arrays fixtures of tests/data/make_arrays_fixtures.py.
+    args.insert(
+        "CreateBafRegressMetricsFile",
+        vec![format!("I={DATA}/arrays/bafregress.txt"), out("baf")],
+    );
+    args.insert(
+        "CreateVerifyIDIntensityContaminationMetricsFile",
+        vec![format!("I={DATA}/arrays/verifyidintensity.txt"), out("vid")],
+    );
+    args.insert(
+        "CollectArraysVariantCallingMetrics",
+        vec![
+            format!("I={DATA}/arrays/arrays.vcf.gz"),
+            format!("DBSNP={DATA}/arrays/dbsnp.vcf"),
+            out("arrays"),
+        ],
+    );
     args
 }
 

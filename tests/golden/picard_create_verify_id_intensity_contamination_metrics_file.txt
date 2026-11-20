@@ -1,0 +1,21 @@
+## argv
+CreateVerifyIDIntensityContaminationMetricsFile
+I=tests/data/arrays/verifyidintensity.txt
+O=OUT/vid
+## exit
+0
+## stdout
+## stderr
+## file vid.verifyidintensity_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CreateVerifyIDIntensityContaminationMetricsFile INPUT=tests/data/arrays/verifyidintensity.txt OUTPUT=OUT/vid
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.arrays.VerifyIDIntensityContaminationMetrics
+ID	PCT_MIX	LLK	LLK0
+0	0.0034	-61742.7451	-61781.2534
+1	0.15	-60012.25	-60500
+2	0.02	-59000.5	-59001.125
+
+

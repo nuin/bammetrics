@@ -1,0 +1,21 @@
+## argv
+CreateBafRegressMetricsFile
+I=tests/data/arrays/bafregress.txt
+O=OUT/baf
+## exit
+0
+## stdout
+## stderr
+## file baf.bafregress_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CreateBafRegressMetricsFile INPUT=tests/data/arrays/bafregress.txt OUTPUT=OUT/baf
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.arrays.BafRegressMetrics
+SAMPLE	ESTIMATE	STDERR	TVAL	PVAL	LOG10_PVAL	CALL_RATE	NHOM
+NA12878	0.0012	0.0003	4.1	0.000021	-4.677781	0.995	123456
+NA12891	-0.0004	0.00021	-1.9	0.97	-0.013228	0.9981	130001
+NA12892	?	0.002	75.3	0	-?	0.93	99999
+
+

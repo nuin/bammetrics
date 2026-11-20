@@ -1421,6 +1421,40 @@ def calculate_read_group_checksum(
     computes it (32 hex digits, no line end) to OUTPUT, or beside INPUT as
     INPUT.read_group_md5. Returns one row: the checksum."""
 
+def create_baf_regress_metrics_file(
+    input: _Path,
+    *,
+    output: _Path,
+) -> list[dict[str, Any]]:
+    """CreateBafRegressMetricsFile: one BafRegressMetrics row per sample line of the
+    bafRegress output INPUT; the file is OUTPUT.bafregress_metrics. Python returns one
+    row per file: file and rows."""
+
+def create_verify_i_d_intensity_contamination_metrics_file(
+    input: _Path,
+    *,
+    output: _Path,
+) -> list[dict[str, Any]]:
+    """CreateVerifyIDIntensityContaminationMetricsFile: one
+    VerifyIDIntensityContaminationMetrics row per result line of the VerifyIDIntensity
+    output INPUT; the file is OUTPUT.verifyidintensity_metrics. Python returns one row
+    per file: file and rows."""
+
+def collect_arrays_variant_calling_metrics(
+    input: _Path,
+    *,
+    output: _Path,
+    dbsnp: _Path,
+    call_rate_pf_threshold: float | None = None,
+    num_processors: int | None = None,
+    sequence_dictionary: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectArraysVariantCallingMetrics: the input is an arrays VCF as GtcToVcf writes
+    it, with its index. OUTPUT is a prefix: PREFIX.arrays_variant_calling_detail_metrics
+    (one row per sample), PREFIX.arrays_variant_calling_summary_metrics and
+    PREFIX.arrays_control_code_summary_metrics; Python returns one row per file: file
+    and rows."""
+
 # END registry tools
 
 def alignment_summary(

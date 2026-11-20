@@ -714,3 +714,72 @@ bammetrics.qc.IndexDepthMetrics	NO_COORDINATE	int	On the ALL row: records with n
 bammetrics.qc.IndexDepthMetrics	INFERRED_SEX	string	On the ALL row: FEMALE, MALE or UNKNOWN from the X and Y ratios, with the thresholds of CollectSexCheckMetrics.
 bammetrics.qc.IndexDepthMetrics	MT_COPY_NUMBER	float	On the ALL row: 2 x the RATIO_TO_AUTOSOMES of the MT group, the mitochondrial copy number estimate of CollectMtCopyNumberMetrics from unfiltered records; ? without a mitochondrial contig or autosome reads.
 bammetrics.qc.IndexDepthMetrics	REASON	string	On the ALL row: why INFERRED_SEX is UNKNOWN, why MT_COPY_NUMBER or the depths are ?; empty when every value is defined.
+picard.arrays.BafRegressMetrics	SAMPLE	string	The sample name, the first field of the bafRegress output line, as written.
+picard.arrays.BafRegressMetrics	ESTIMATE	float	bafRegress' estimate of the fraction of the sample's DNA that comes from another sample, from a regression of B allele frequencies at hom sites on population allele frequencies.
+picard.arrays.BafRegressMetrics	STDERR	float	Standard error of ESTIMATE, as bafRegress printed it.
+picard.arrays.BafRegressMetrics	TVAL	float	The t statistic of ESTIMATE, as bafRegress printed it.
+picard.arrays.BafRegressMetrics	PVAL	float	The p-value of the t statistic, as bafRegress printed it; a small value says the contamination estimate differs from 0.
+picard.arrays.BafRegressMetrics	LOG10_PVAL	float	log10 of PVAL; -? when PVAL is 0, ? when PVAL is negative or NaN.
+picard.arrays.BafRegressMetrics	CALL_RATE	float	The call rate of the sample, as bafRegress printed it.
+picard.arrays.BafRegressMetrics	NHOM	int	The number of hom sites bafRegress used in the regression.
+picard.arrays.VerifyIDIntensityContaminationMetrics	ID	int	The result number VerifyIDIntensity printed; one row per result line.
+picard.arrays.VerifyIDIntensityContaminationMetrics	PCT_MIX	float	VerifyIDIntensity's estimate of the fraction of the sample contaminated by another sample, from the array intensities.
+picard.arrays.VerifyIDIntensityContaminationMetrics	LLK	float	The log likelihood of the intensities at the PCT_MIX estimate.
+picard.arrays.VerifyIDIntensityContaminationMetrics	LLK0	float	The log likelihood of the intensities with no contamination; LLK - LLK0 says how much better a mixture explains the data.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysControlCodesSummaryMetrics	CONTROL	string	The control probe, the first field of its header line (DNP(High), Extension(A), NP(T) and on); one row per control of Illumina's list of 23, in its order.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysControlCodesSummaryMetrics	CATEGORY	string	The control category, the second field of the header line (Staining, Extension, Hybridization and on).
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysControlCodesSummaryMetrics	RED	int	The red channel intensity of the control, the third field of the header line.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysControlCodesSummaryMetrics	GREEN	int	The green channel intensity of the control, the fourth field of the header line.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	CHIP_WELL_BARCODE	string	The VCF sample column name, the chip well barcode in GtcToVcf output; one row per sample.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	SAMPLE_ALIAS	string	The ##sampleAlias header value.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	ANALYSIS_VERSION	int	The ##analysisVersionNumber header value; empty without the line.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	CHIP_TYPE	string	The array type, the ##arrayType header value.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	AUTOCALL_PF	string	Y when AUTOCALL_CALL_RATE is above CALL_RATE_PF_THRESHOLD (default 0.98), else N.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	AUTOCALL_DATE	string	The ##autocallDate header value (MM/dd/yyyy HH:mm in the local zone) as yyyy-MM-ddTHH:mm:ss with the zone offset of the process.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	IMAGING_DATE	string	The ##imagingDate header value (MM/dd/yyyy hh:mm:ss AM or PM in New York time) as yyyy-MM-ddTHH:mm:ss with the zone offset of the process.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	IS_ZCALLED	string	Y when the ##zcallThresholds header line is present and not empty, so zCall was run on the sample; else N.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	GTC_CALL_RATE	float	The call rate the GTC file recorded, the ##gtcCallRate header value; empty without the line.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	AUTOCALL_GENDER	string	The sex Autocall inferred, from ##autocallGender: M, F, U (unknown) or N (not reported).
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	FP_GENDER	string	The sex the fingerprint gave, from ##fingerprintGender: M, F, U, or N without the line.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	REPORTED_GENDER	string	The sex the sample was reported as, from ##expectedGender: M, F, U, or N without the line.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	GENDER_CONCORDANCE_PF	string	Y when two or three of REPORTED_GENDER, FP_GENDER and AUTOCALL_GENDER say F and none M, or two or three say M and none F; N otherwise, and when all three are U or N.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	HET_PCT	float	Het genotypes over NUM_CALLS, at unfiltered and DUPE assays; ? without a call.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	CLUSTER_FILE_NAME	string	The cluster file Autocall used, the ##clusterFile header value.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	P95_GREEN	int	The 95th percentile of the green intensities, the ##p95Green header value.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	P95_RED	int	The 95th percentile of the red intensities, the ##p95Red header value.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	AUTOCALL_VERSION	string	The Autocall version, the ##autocallVersion header value.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	ZCALL_VERSION	string	The zCall version, the ##zcallVersion header value; empty without the line.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	EXTENDED_MANIFEST_VERSION	string	The version of the extended Illumina manifest, the ##extendedIlluminaManifestVersion header value.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	HET_HOMVAR_RATIO	float	Het genotypes over hom-var genotypes, at unfiltered and DUPE assays; ? without a hom-var.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	SCANNER_NAME	string	The scanner that imaged the chip, the ##scannerName header value.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	PIPELINE_VERSION	string	The ##pipelineVersion header value; empty without the line.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	NUM_ASSAYS	int	VCF records on a ##contig of the header: every assay of the sample.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	NUM_NON_FILTERED_ASSAYS	int	Assays that are unfiltered (PASS or .) or carry the DUPE filter.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	NUM_FILTERED_ASSAYS	int	Assays with a filter and without DUPE; NUM_ASSAYS - NUM_NON_FILTERED_ASSAYS.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	NUM_ZEROED_OUT_ASSAYS	int	Assays among NUM_FILTERED_ASSAYS whose filters include ZEROED_OUT_ASSAY.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	NUM_SNPS	int	Non-filtered assays whose record is a SNP (every alternate one base long, as the reference), whatever the genotype.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	NUM_INDELS	int	Non-filtered assays whose record is an indel, whatever the genotype.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	NUM_CALLS	int	Non-filtered assays whose genotype is called (not a no-call; a half call such as ./1 counts).
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	NUM_AUTOCALL_CALLS	int	Calls among NUM_CALLS whose GTA (the Autocall genotype) is not ./.; a missing GTA counts as the GT.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	NUM_NO_CALLS	int	Non-filtered assays whose genotype is a no-call or absent.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	NUM_IN_DB_SNP	int	SNPs among NUM_SNPS whose start is a position some dbSNP SNP record covers.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	NOVEL_SNPS	int	NUM_SNPS - NUM_IN_DB_SNP.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	PCT_DBSNP	float	NUM_IN_DB_SNP / NUM_SNPS, divided in single precision; ? without a SNP.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	CALL_RATE	float	NUM_CALLS / NUM_NON_FILTERED_ASSAYS, divided in single precision; ? without such an assay.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	AUTOCALL_CALL_RATE	float	NUM_AUTOCALL_CALLS / NUM_NON_FILTERED_ASSAYS, divided in single precision; ? without such an assay.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics	NUM_SINGLETONS	int	Non-filtered assays where this sample alone carries a variant allele, on one chromosome only (a het, every other sample hom-ref or no-call).
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	NUM_ASSAYS	int	The detail rows' NUM_ASSAYS summed over the samples.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	NUM_NON_FILTERED_ASSAYS	int	The detail rows' NUM_NON_FILTERED_ASSAYS summed over the samples.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	NUM_FILTERED_ASSAYS	int	The detail rows' NUM_FILTERED_ASSAYS summed over the samples.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	NUM_ZEROED_OUT_ASSAYS	int	The detail rows' NUM_ZEROED_OUT_ASSAYS summed over the samples.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	NUM_SNPS	int	The detail rows' NUM_SNPS summed over the samples.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	NUM_INDELS	int	The detail rows' NUM_INDELS summed over the samples.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	NUM_CALLS	int	The detail rows' NUM_CALLS summed over the samples.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	NUM_AUTOCALL_CALLS	int	The detail rows' NUM_AUTOCALL_CALLS summed over the samples.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	NUM_NO_CALLS	int	The detail rows' NUM_NO_CALLS summed over the samples.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	NUM_IN_DB_SNP	int	The detail rows' NUM_IN_DB_SNP summed over the samples.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	NOVEL_SNPS	int	NUM_SNPS - NUM_IN_DB_SNP of this row.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	PCT_DBSNP	float	NUM_IN_DB_SNP / NUM_SNPS of this row, in single precision; ? without a SNP.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	CALL_RATE	float	NUM_CALLS / NUM_NON_FILTERED_ASSAYS of this row, in single precision.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	AUTOCALL_CALL_RATE	float	NUM_AUTOCALL_CALLS / NUM_NON_FILTERED_ASSAYS of this row, in single precision.
+picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics	NUM_SINGLETONS	int	The detail rows' NUM_SINGLETONS summed over the samples.

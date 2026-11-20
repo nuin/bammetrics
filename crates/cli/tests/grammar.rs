@@ -637,6 +637,37 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("VALIDATION_STRINGENCY", "SILENT")),
             picard_outputs: single,
         },
+        Case {
+            verb: "create-baf-regress-file",
+            class: "CreateBafRegressMetricsFile",
+            verb_args: strings(&["tests/data/arrays/bafregress.txt"]),
+            picard_args: strings(&["I=tests/data/arrays/bafregress.txt"]),
+            option: None,
+            picard_outputs: prefix,
+        },
+        Case {
+            verb: "create-verify-i-d-intensity-contamination-file",
+            class: "CreateVerifyIDIntensityContaminationMetricsFile",
+            verb_args: strings(&["tests/data/arrays/verifyidintensity.txt"]),
+            picard_args: strings(&["I=tests/data/arrays/verifyidintensity.txt"]),
+            option: None,
+            picard_outputs: prefix,
+        },
+        Case {
+            verb: "arrays-variant-calling",
+            class: "CollectArraysVariantCallingMetrics",
+            verb_args: strings(&[
+                "tests/data/arrays/arrays.vcf.gz",
+                "--dbsnp",
+                "tests/data/arrays/dbsnp.vcf",
+            ]),
+            picard_args: strings(&[
+                "I=tests/data/arrays/arrays.vcf.gz",
+                "DBSNP=tests/data/arrays/dbsnp.vcf",
+            ]),
+            option: Some(("CALL_RATE_PF_THRESHOLD", "0.5")),
+            picard_outputs: prefix,
+        },
     ]
 }
 
@@ -769,7 +800,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 54);
+    assert_eq!(classes.len(), 57);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

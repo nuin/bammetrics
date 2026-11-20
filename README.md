@@ -207,6 +207,9 @@ the sizes and a Chrome recipe for a build without the feature.
 | SplitSamByNumberOfReads (the records in file order over files of about one size, `shard_0001.bam` on; `SPLIT_TO_N_FILES` or `SPLIT_TO_N_READS`, a run of one record name never cut; `TOTAL_READS_IN_INPUT`, `OUT_PREFIX`; a chain split) | | `split_sam_by_number_of_reads()` |
 | GatherBamFiles (the records of every `INPUT` in order under the first header; BAM inputs block copied as Picard copies them, byte for byte at `COMPRESSION_LEVEL=0`; lists of paths; SAM or CRAM read record by record) | | `gather_bam_files()` |
 | CalculateReadGroupChecksum (the MD5 of the `@RG` records as htsjdk computes it, in `OUTPUT` or `INPUT.read_group_md5`; the header alone is read) | | `calculate_read_group_checksum()` |
+| CreateBafRegressMetricsFile (the text bafRegress prints, one `BafRegressMetrics` row per sample, in `OUTPUT.bafregress_metrics`) | | `create_baf_regress_metrics_file()` |
+| CreateVerifyIDIntensityContaminationMetricsFile (the text VerifyIDIntensity prints, one `VerifyIDIntensityContaminationMetrics` row per result, in `OUTPUT.verifyidintensity_metrics`) | | `create_verify_i_d_intensity_contamination_metrics_file()` |
+| CollectArraysVariantCallingMetrics (an arrays VCF as GtcToVcf writes it, with its `.tbi` or `.idx`; `DBSNP`, `CALL_RATE_PF_THRESHOLD`, `SEQUENCE_DICTIONARY`; the per-sample detail, summary and control-code files) | | `collect_arrays_variant_calling_metrics()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 | SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | `validation_stringency=` |

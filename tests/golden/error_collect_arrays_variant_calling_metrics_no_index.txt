@@ -1,0 +1,10 @@
+## argv
+CollectArraysVariantCallingMetrics
+I=tests/data/arrays/arrays.vcf
+DBSNP=tests/data/arrays/dbsnp.vcf
+O=OUT/arrays
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/arrays/arrays.vcf: no index: Picard opens INPUT with its index (.tbi beside a bgzip VCF, .idx beside a plain one) and fails with An index is required, but none found
