@@ -13,6 +13,11 @@
 - A tool option named `REFERENCE` puts the FASTA's `.fai` among the run's inputs, as
   `REFERENCE_SEQUENCE` does.
 
+### Changed
+
+- A metrics file formats each row as it writes it (`MetricsFile::write_rows`): the rows are
+  no longer held a second time as text. The bytes written are unchanged.
+
 ## 0.28.0
 
 Wave W10 of docs/07: six tools (54 in all), a writer that sorts, fan-out sinks and a BGZF block copy.
