@@ -75,7 +75,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | AccumulateQualityYieldMetrics | Metrics | later | Needs QualityYield first. S | none |
 | GenotypeConcordance | Variant | core | The benchmarking tool people cite. L | hap.py, vcfeval (different method) |
 | FindMendelianViolations | Variant | later | Deterministic, needs VCF layer. M | bcftools +mendelian2 (partial) |
-| CollectArraysVariantCallingMetrics | Arrays | out | Broad GtcToVcf output only. M | none |
+| CollectArraysVariantCallingMetrics | Arrays | core | Shipped in wave W11 of docs/07: the detail, summary and control-code files of an arrays VCF with its index, header dates in the process's time zone, rows in Java `HashMap` order. M | none |
 | CrosscheckFingerprints | Fingerprint | later | Identity check, needs pileup and likelihood model. XL | NGSCheckMate, somalier (different method) |
 | CheckFingerprint | Fingerprint | later | Reuses Crosscheck core. L | none |
 | ExtractFingerprint | Fingerprint | later | VCF output only. M | none |
@@ -133,9 +133,9 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | BpmToNormalizationManifestCsv | Arrays | out | Array manifest. | none |
 | CombineGenotypingArrayVcfs | Arrays | out | Array VCF merge. | bcftools merge |
 | CompareGtcFiles | Arrays | out | GTC diff. | none |
-| CreateBafRegressMetricsFile | Arrays | out | Wraps bafRegress. | none |
+| CreateBafRegressMetricsFile | Arrays | core | Shipped in wave W11 of docs/07: the bafRegress text read as Picard reads it, one row per sample. S | none |
 | CreateExtendedIlluminaManifest | Arrays | out | Manifest builder. | none |
-| CreateVerifyIDIntensityContaminationMetricsFile | Arrays | out | Wraps VerifyIDIntensity. | none |
+| CreateVerifyIDIntensityContaminationMetricsFile | Arrays | core | Shipped in wave W11 of docs/07: the VerifyIDIntensity text matched against Picard's three patterns, one row per result. S | none |
 | GtcToVcf | Arrays | out | GTC to VCF. | bcftools +gtc2vcf |
 | MergePedIntoVcf | Arrays | out | zCall merge. | bcftools |
 | VcfToAdpc | Arrays | out | Array export. | none |
@@ -741,7 +741,7 @@ Risks:
 | R10 | Picard behaviours that look like bugs (inverted UMI filter, strand compare in CompareSAMs, NPE on missing tags) | Copying them is wrong for users | Compat mode default on. Document each in the register. Missing tags: explicit error is a DEVIATION (D-nnn) |
 | R11 | Core set is 19 tools but three are harness pieces | Count looks larger than the user-facing work (16 tools) | State both numbers in release notes |
 | R12 | Done: the 121-tool list was diffed against `picard` with no arguments, no missing, extra or duplicate names | none | none |
-| R13 | Unverified columns: CollectQualityYieldMetricsFlow and CollectArraysVariantCallingMetrics (both out of scope) | None for the plan | Verify only if the decision changes |
+| R13 | Unverified columns: CollectQualityYieldMetricsFlow (out of scope); CollectArraysVariantCallingMetrics verified by run in wave W11 | None for the plan | Verify only if the decision changes |
 | R14 | Gate can pass with no real comparison (both tools fail, zero cells compared, non-independent case counts, unreachable column rule) | False concordance claim | BOTH-ERR and VACUOUS statuses, minimum Picard-success cases per tool and option, bound on T1 and T2 only, reasoned exempt-column list (5.5, 5.9) |
 | R15 | A machinery item is needed by a tool but built in no phase (M18 and M22 were missed in the first draft) | Tool blocked at its phase | Scheduling check in section 3 |
 

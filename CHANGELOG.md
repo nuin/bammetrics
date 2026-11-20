@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `CreateBafRegressMetricsFile` (verb `create-baf-regress-file`, Python
+  `create_baf_regress_metrics_file()`), as Picard 3.5.0: the text bafRegress prints, its
+  header line checked whole, each line split at runs of Java's `\s` into 7 fields, numbers
+  read by `Double.parseDouble` and `Integer.parseInt`, `LOG10_PVAL` from `PVAL`; one
+  `BafRegressMetrics` row per sample in `OUTPUT.bafregress_metrics`.
+- `CreateVerifyIDIntensityContaminationMetricsFile` (verb
+  `create-verify-i-d-intensity-contamination-file`, Python
+  `create_verify_i_d_intensity_contamination_metrics_file()`), as Picard 3.5.0: the header,
+  the rule and each result line matched against Picard's three patterns; one
+  `VerifyIDIntensityContaminationMetrics` row per result in
+  `OUTPUT.verifyidintensity_metrics`.
+- `CollectArraysVariantCallingMetrics` (verb `arrays-variant-calling`, Python
+  `collect_arrays_variant_calling_metrics()`), as Picard 3.5.0: an arrays VCF as GtcToVcf
+  writes it, with its `.tbi` or `.idx`; `DBSNP`, `CALL_RATE_PF_THRESHOLD`,
+  `SEQUENCE_DICTIONARY`, `NUM_PROCESSORS` (taken, no effect). The per-sample detail file in
+  Java `HashMap` order, the summary and the 23 control codes from the header; the header
+  dates read by a lenient `SimpleDateFormat` port, `##imagingDate` in New York time, both
+  printed in the process's time zone (`arrays/header_date.rs`).
+- `VcfReader::open_capped`: a VCF read under a line-length and line-count cap
+  (`vcf/line_cap.rs`). `java_date::wall_millis` and `local_instant`: lenient calendar
+  fields to an instant in the process's zone, a repeated hour resolved to the later
+  instant as `ZoneInfo.getOffsetsByWall` does.
+- `tests/concordance/array_vcfs.py`, a seeded writer of arrays VCFs and their dbSNP, and the
+  concordance modules of the three tools; `tests/data/arrays` (`make_arrays_fixtures.py`);
+  12 golden forms, the arrays VCF ones under `TZ=UTC`.
+
 ## 0.28.0
 
 Wave W10 of docs/07: six tools (54 in all), a writer that sorts, fan-out sinks and a BGZF block copy.

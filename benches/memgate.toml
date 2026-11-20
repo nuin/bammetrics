@@ -553,3 +553,30 @@ argv = [
 needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
 max_rss_mib = 64
 max_seconds = 10
+
+[[command]]
+name = "create-baf-regress-file"
+argv = ["{bin}", "create-baf-regress-file", "tests/data/arrays/bafregress.txt", "-o", "{out}/baf"]
+needs = ["tests/data/arrays/bafregress.txt"]
+max_rss_mib = 64
+max_seconds = 10
+
+[[command]]
+name = "create-verify-i-d-intensity-contamination-file"
+argv = [
+    "{bin}", "create-verify-i-d-intensity-contamination-file",
+    "tests/data/arrays/verifyidintensity.txt", "-o", "{out}/vid",
+]
+needs = ["tests/data/arrays/verifyidintensity.txt"]
+max_rss_mib = 64
+max_seconds = 10
+
+[[command]]
+name = "arrays-variant-calling"
+argv = [
+    "{bin}", "arrays-variant-calling", "tests/data/arrays/arrays.vcf.gz",
+    "--dbsnp", "tests/data/arrays/dbsnp.vcf", "-o", "{out}/arrays",
+]
+needs = ["tests/data/arrays/arrays.vcf.gz", "tests/data/arrays/dbsnp.vcf"]
+max_rss_mib = 64
+max_seconds = 10

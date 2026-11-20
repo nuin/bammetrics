@@ -1568,6 +1568,30 @@ are open at once, and a file closed to make room ends its block early. They diff
   each UTF-16 unit, as every SAM text value is (section SAM text), so its file name is not
   Picard's.
 
+## CreateBafRegressMetricsFile, CreateVerifyIDIntensityContaminationMetricsFile and CollectArraysVariantCallingMetrics
+
+The three tools write Picard's files cell for cell and byte for byte after the header
+lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22, 25 and
+40 runs fail in both with no file left
+(`tests/concordance/test_create_baf_regress_metrics_file.py`,
+`test_create_verify_i_d_intensity_contamination_metrics_file.py`,
+`test_arrays_variant_calling.py`). They differ here (docs/07 decisions D74 to D78):
+
+- `##imagingDate` is read with the `AM` and `PM` markers GtcToVcf writes. Picard reads the
+  markers of the JVM's locale: an `en_CA` JVM takes `a.m.` and `p.m.` and fails on `AM`
+  with `Unrecognized date`; bammetrics reads `AM` and refuses `a.m.`. The concordance
+  module runs Picard with `-Duser.language=en -Duser.country=US`.
+- `##imagingDate` is New York time from the US daylight-saving rules of 1967 on; a date
+  before 1967 exits 1. Picard takes any date from the JVM's time zone data.
+- A date field with a sign or with more than 2,147,483,647 is refused; Java's number
+  parser reads a sign and wraps a larger number.
+- A required header value written as a `<...>` map (`##sampleAlias=<ID=x>`) exits 1.
+- `INPUT` must have the index htsjdk opens (`.tbi` beside a `.gz`, `.gzip`, `.bgz` or
+  `.bgzf` name, else `.idx`), but the index is not read: a stale or broken index that
+  Picard fails on gives the files of the VCF.
+- The arrays VCF is read at most 16 MiB per line and 100,000,000 lines; the two text
+  inputs at most 64 MiB, 1 MiB per line and 1,000,000 lines. Each cap exits 1 naming it.
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))

@@ -512,6 +512,9 @@ to complete pairs (the command is in `benches/memgate.toml`), removed after the 
 | `calculate-read-group-checksum` | fixture | 4.0 / 64 | 0.00 | |
 | `gather-bam-files forged reference list` | fixture | 16.4 / 136 | 2.34 | |
 | `gather-bam-files long list` | fixture | 68.4 / 552 | 0.13 | |
+| `create-baf-regress-file` | fixture | 3.8 / 64 | 0.00 | |
+| `create-verify-i-d-intensity-contamination-file` | fixture | 3.7 / 64 | 0.00 | |
+| `arrays-variant-calling` | fixture | 4.9 / 64 | 0.00 | |
 | `add-or-replace-read-groups slice` | scale | 31.3 / 512 | 3.90 | |
 | `add-or-replace-read-groups queryname slice` | scale | 282.4 / 1024 | 23.64 | 823.9 |
 | `revert-original-base-qualities-and-add-mate-cigar pairs` | scale | 681.1 / 1024 | 52.10 | 1,450.1 |
