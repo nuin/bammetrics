@@ -84,6 +84,9 @@ const CHECKS: &[(&str, Check)] = &[
     (crate::telomere::TOOL.name, |inv| {
         crate::telomere::Options::from_invocation(inv).map(drop)
     }),
+    (crate::quality_yield_snvq::TOOL.name, |inv| {
+        crate::quality_yield_snvq::Options::from_invocation(inv).map(drop)
+    }),
 ];
 
 /// Parse the options of `tool` as its collector would, and build nothing.

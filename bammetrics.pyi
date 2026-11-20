@@ -1421,6 +1421,43 @@ def calculate_read_group_checksum(
     computes it (32 hex digits, no line end) to OUTPUT, or beside INPUT as
     INPUT.read_group_md5. Returns one row: the checksum."""
 
+def collect_quality_yield_metrics_s_n_v_q(
+    input: _Path,
+    *,
+    alternate_quality_attribute: str | None = None,
+    include_bq_histogram: bool | None = None,
+    include_secondary_alignments: bool | None = None,
+    include_supplemental_alignments: bool | None = None,
+    stop_after: int | None = None,
+    output: _Path | None = None,
+    validation_stringency: str | None = None,
+    assume_sorted: bool | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectQualityYieldMetricsSNVQ: one row of read, base and Q20/Q30/Q40 totals, and
+    the same for the SNV qualities of the qa, qc, qg and qt tags (three per A, C, G or T
+    base, four per other base); INCLUDE_BQ_HISTOGRAM adds the quality histograms and the
+    mean by read index."""
+
+def collect_umi_prevalence_metrics(
+    input: _Path,
+    *,
+    minimum_mq: int | None = None,
+    barcode_tag: str | None = None,
+    barcode_bq: str | None = None,
+    minimum_barcode_bq: int | None = None,
+    filter_unpaired_reads: bool | None = None,
+    progress_step_interval: int | None = None,
+    tmp_dir: _Path | Sequence[_Path] | None = None,
+    max_records_in_ram: int | None = None,
+    output: _Path | None = None,
+    validation_stringency: str | None = None,
+    reference_sequence: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """CollectUmiPrevalenceMetrics: a histogram of duplicate sets by the number of distinct
+    UMIs they hold (numUmis, duplicateSets), over mapped primary records with a UMI; no
+    metrics row."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1662,6 +1699,7 @@ _StepVerb = Literal[
     "revert_original_base_qualities_and_add_mate_cigar",
     "split_sam_by_library",
     "split_sam_by_number_of_reads",
+    "quality_yield_s_n_v_q",
     "write",
 ]
 

@@ -65,6 +65,8 @@ const FIXTURES: &[(&str, &str)] = &[
     ("CS_PAST", "tests/data/clean_sam_past.sam"),
     ("RV", "tests/data/revert.bam"),
     ("RV_SAM", "tests/data/revert.sam"),
+    ("SNVQ", "tests/data/snvq.bam"),
+    ("UMI", "tests/data/umi_prevalence.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -741,6 +743,26 @@ const GATHER_CHECKSUM_CASES: &[Case] = &[
     case!("error_chain_calculate_read_group_checksum", "chain", "MD", "-o", "OUT/s", "+", "calculate-read-group-checksum"),
 ];
 
+/// `CollectQualityYieldMetricsSNVQ` and `CollectUmiPrevalenceMetrics`
+/// (wave W11) on the fixtures of `tests/data/make_snvq_umi_fixtures.py`.
+#[rustfmt::skip]
+const SNVQ_UMI_CASES: &[Case] = &[
+    case!("picard_quality_yield_snvq", "CollectQualityYieldMetricsSNVQ", "I=SNVQ", "O=OUT/snvq.txt"),
+    case!("picard_quality_yield_snvq_histogram_stdout", "CollectQualityYieldMetricsSNVQ", "I=SNVQ", "INCLUDE_BQ_HISTOGRAM=true", "AQA=XQ"),
+    case!("verb_quality_yield_snvq", "quality-yield-s-n-v-q", "SNVQ", "-o", "OUT/snvq.txt", "--include-bq-histogram", "--stop-after", "5"),
+    case!("chain_quality_yield_snvq", "chain", "SNVQ", "-o", "OUT/s", "+", "sort-sam", "--sort-order", "queryname", "+", "quality-yield-s-n-v-q", "+", "quality-yield"),
+    case!("error_quality_yield_snvq_secondary", "CollectQualityYieldMetricsSNVQ", "I=SNVQ", "O=OUT/snvq.txt", "INCLUDE_SECONDARY_ALIGNMENTS=true"),
+    case!("error_verb_quality_yield_snvq_no_tags", "quality-yield-s-n-v-q", "IS", "-o", "OUT/snvq.txt"),
+    case!("picard_umi_prevalence", "CollectUmiPrevalenceMetrics", "I=UMI", "O=OUT/umi.txt"),
+    case!("picard_umi_prevalence_stdout_unpaired", "CollectUmiPrevalenceMetrics", "I=UMI", "FUR=false", "BQ=100"),
+    case!("verb_umi_prevalence", "umi-prevalence", "UMI", "-o", "OUT/umi.txt", "--minimum-mq", "10", "--max-records-in-ram", "3"),
+    case!("verb_umi_prevalence_json", "umi-prevalence", "UMI", "--format", "json"),
+    case!("picard_umi_prevalence_no_umis", "CollectUmiPrevalenceMetrics", "I=MD", "O=OUT/umi.txt", "BARCODE_TAG=ZZ"),
+    case!("error_umi_prevalence_assume_sorted", "CollectUmiPrevalenceMetrics", "I=UMI", "O=OUT/umi.txt", "ASSUME_SORTED=true"),
+    case!("error_verb_umi_prevalence_progress", "umi-prevalence", "UMI", "-o", "OUT/umi.txt", "--progress-step-interval", "0"),
+    case!("error_chain_umi_prevalence", "chain", "UMI", "-o", "OUT/s", "+", "umi-prevalence"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -846,6 +868,7 @@ const T1_CASES: &[Case] = &[
     case!("t1_adapter_content", "adapter-content", "T1", "-o", "OUT/adapter_content.txt"),
     case!("t1_duplicate_by_tile", "duplicate-by-tile", "T1", "-o", "OUT/duplicate_by_tile.txt"),
     case!("t1_telomere", "telomere", "T1", "-o", "OUT/telomere.txt"),
+    case!("t1_umi_prevalence", "umi-prevalence", "T1", "-o", "OUT/umi_prevalence.txt", "--barcode-tag", "RG", "--filter-unpaired-reads", "false"),
 ];
 
 fn root() -> PathBuf {
@@ -1194,6 +1217,11 @@ fn documented_gather_and_checksum_commands_on_the_fixtures() {
     check(GATHER_CHECKSUM_CASES);
 }
 
+#[test]
+fn documented_snvq_and_umi_commands_on_the_fixtures() {
+    check(SNVQ_UMI_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1304,6 +1332,7 @@ fn case_names_are_unique() {
         .chain(READ_GROUP_CASES)
         .chain(SPLIT_CASES)
         .chain(GATHER_CHECKSUM_CASES)
+        .chain(SNVQ_UMI_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

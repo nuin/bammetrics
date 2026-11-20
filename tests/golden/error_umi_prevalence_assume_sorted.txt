@@ -1,0 +1,10 @@
+## argv
+CollectUmiPrevalenceMetrics
+I=tests/data/umi_prevalence.bam
+O=OUT/umi.txt
+ASSUME_SORTED=true
+## exit
+1
+## stdout
+## stderr
+bammetrics: CollectUmiPrevalenceMetrics: Unrecognized option: ASSUME_SORTED

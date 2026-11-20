@@ -317,6 +317,8 @@ table.
 | `split-sam-by-number-of-reads` | SplitSamByNumberOfReads (a SAM, BAM or CRAM; `--n-files` or `--n-reads`) | `-o DIR`: `shard_0001.bam` and on |
 | `gather-bam-files` | GatherBamFiles (BAMs as positionals or `-i`, in the order to gather; a text file of paths, one per line; SAM or CRAM read record by record) | `-o` BAM, no metrics file |
 | `calculate-read-group-checksum` | CalculateReadGroupChecksum (a SAM, BAM or CRAM; only its header is read) | the 32 hex digits of the checksum in `-o`, default beside the input |
+| `quality-yield-s-n-v-q` | CollectQualityYieldMetricsSNVQ (`qa`, `qc`, `qg` and `qt` on every counted record; `--alternate-quality-attribute`, `--include-bq-histogram`) | one |
+| `umi-prevalence` | CollectUmiPrevalenceMetrics (`--barcode-tag`, `--barcode-bq`, `--minimum-mq`, `--minimum-barcode-bq`, `--filter-unpaired-reads`) | one histogram, no metrics row |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -910,6 +912,72 @@ computes it, 32 hex digits with no line end, in `-o` or beside the input as
 - Every header line is checked at `--validation-stringency`: at `STRICT` (the default) an
   `@RG` without `SM`, two values of one key or a `DT` that is no date exits 1.
 - Only the header is read. An `-o` that is the input exits 2. Not a chain step.
+
+### quality-yield-s-n-v-q
+
+```bash
+bammetrics quality-yield-s-n-v-q sample.bam -o sample.quality_yield_snvq_metrics
+bammetrics quality-yield-s-n-v-q sample.bam --include-bq-histogram --alternate-quality-attribute XQ
+bammetrics CollectQualityYieldMetricsSNVQ I=sample.bam O=out.txt INCLUDE_BQ_HISTOGRAM=true
+```
+
+Picard's `CollectQualityYieldMetricsSNVQ`: one row of read, base and Q20, Q30 and Q40
+totals, and the same counts for the SNV qualities of the Ultima tags `qa`, `qc`, `qg` and
+`qt` (`tests/concordance/test_quality_yield_s_n_v_q.py`).
+
+- Each tag holds one Phred+33 character per base, in stored order. At each base the tags
+  of the three other bases count, so an `A`, `C`, `G` or `T` gives 3 observations and an
+  `N`, an IUPAC code or `=` gives 4. Lower-case bases are read upper case, as htsjdk reads
+  them. A quality of 40 counts in Q20, Q30 and Q40.
+- Every counted record needs all four tags; a record without one exits 1 naming the record
+  and the tag (Picard throws a `NullPointerException`). A secondary or supplementary record
+  is skipped before its tags are read unless its `--include-*` flag is set. A tag shorter
+  than the read fails only where a base reads past its end; a character outside `!` to `~`
+  fails where it is read.
+- A tag given twice in a record is read as htsjdk 5.0.0 lists it: the last value counts.
+  When the second copy replaces the field htsjdk last appended, the tags after it that sort
+  later are lost, so a record `qa qa qc qg qt` has no `qc` and exits 1 in both tools.
+  `umi-prevalence` reads `RX` and `BQ` the same way.
+- `--alternate-quality-attribute TAG` reads the base qualities from a Phred+33 tag in place
+  of `QUAL`; every counted record needs it, with one character per base.
+- `--include-bq-histogram` adds one `KEY` histogram holding four series: `BQ_COUNT`,
+  `SNVQ_COUNT`, and the mean base and SNV quality at each read index. The quality keys and
+  the read indexes share the `KEY` column, as in Picard.
+- A chain tap: `bammetrics chain in.bam -o s + quality-yield-s-n-v-q` writes
+  `s.quality_yield_snvq_metrics`. Not a `CollectMultipleMetrics` program in Picard 3.5.0.
+
+### umi-prevalence
+
+```bash
+bammetrics umi-prevalence sample.bam -o sample.umi_prevalence_metrics
+bammetrics umi-prevalence sample.bam --filter-unpaired-reads false --minimum-mq 10
+bammetrics CollectUmiPrevalenceMetrics I=sample.bam O=out.txt BARCODE_TAG=RX
+```
+
+Picard's `CollectUmiPrevalenceMetrics`: a histogram of duplicate sets by the number of
+distinct UMIs in each, `numUmis` against `duplicateSets`, with no metrics row
+(`tests/concordance/test_umi_prevalence.py`).
+
+- Records count when mapped, at or above `--minimum-mq` (30), primary, with the
+  `--barcode-tag` (RX) tag, past the barcode quality filter, and with
+  `--filter-unpaired-reads` (on) paired with a mapped mate.
+- The barcode quality filter is Picard's as written: a record with the `--barcode-bq` (BQ)
+  tag is kept only when one quality (Phred+33, spaces ignored) is below
+  `--minimum-barcode-bq` (30). A record whose barcode qualities are all good is dropped; one
+  without the tag is kept (KNOWN_DIFFERENCES.md, "CollectUmiPrevalenceMetrics").
+- The input need not be sorted or indexed: the records are sorted in htsjdk's duplicate
+  order, `--max-records-in-ram` at a time spilled under `--tmp-dir`, and a set is the run of
+  records equal to its first under `duplicateSetCompare` (library, reference, unclipped 5'
+  end, orientation, mate). Each read of a pair is its own record. A fragment or a read with
+  an unmapped mate joins the pairs on its strand when `--filter-unpaired-reads false` keeps
+  it.
+- A paired record with a mapped mate needs `MC`, as in Picard; a run that keeps one record
+  never compares it and passes without one.
+- A sorted run also spills at 256 MiB of keys and UMIs; Picard bounds it by records alone.
+  The distinct UMIs of one set are held in memory, as in Picard, so peak memory grows with
+  the largest set: 1,000,000 distinct 16-base UMIs at one position took 176 MiB.
+- `--progress-step-interval 0` exits 1 once a set is found, as Picard's progress logger
+  divides by it. Not a chain step: the tool reads the stream whole before its first set.
 
 ### qc
 

@@ -1568,6 +1568,30 @@ are open at once, and a file closed to make room ends its block early. They diff
 - A run that fails leaves none of its files. Picard leaves the files it opened.
 - A split writes at most 100,000 files: the run that would make the 100,001st exits 1 and leaves none. A count above 100,000 is taken when the records give fewer files.
 
+## CollectQualityYieldMetricsSNVQ and CollectUmiPrevalenceMetrics
+
+Both write the file Picard writes, cell for cell and byte for byte after the header lines,
+on the `tests/concordance/snvq_umi_bams.py` inputs, the MarkDuplicates corpus, the tier and
+foundation corpora, SAM text and CRAM (`tests/concordance/test_quality_yield_s_n_v_q.py`,
+`test_umi_prevalence.py`). Picard's behavior kept on purpose, and where they differ
+(docs/07 decisions D73 to D78):
+
+- CollectUmiPrevalenceMetrics keeps Picard's barcode quality filter as written: a record
+  with the `BARCODE_BQ` tag counts only when one of its qualities is below
+  `MINIMUM_BARCODE_BQ`, so barcodes whose every base is good are left out and poor ones
+  kept. A record without the tag counts. The test is inverted in Picard's source; the
+  counts follow Picard.
+- A missing `qa`, `qc`, `qg`, `qt` or alternate quality tag exits 1 naming the record and
+  the tag. Picard throws a `NullPointerException`. Neither writes a file.
+- `MINIMUM_MQ=null` exits 2 before the read; Picard exits 1 with a
+  `NullPointerException`.
+- A duplicate set of 32 records or more whose records htsjdk's comparator cannot order (a
+  record flagged both first and second of a pair) may make Picard's `Collections.sort`
+  throw; bammetrics counts the set. Picard's check that the sorted set starts with its
+  representative is not repeated: it holds for every order htsjdk can sort.
+- An SNVQ tag of SAM text with a character above U+00FF is held as the low byte of each
+  UTF-16 unit (section SAM text), so the positions after it are not the ones Picard reads.
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))

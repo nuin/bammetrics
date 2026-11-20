@@ -207,6 +207,8 @@ the sizes and a Chrome recipe for a build without the feature.
 | SplitSamByNumberOfReads (the records in file order over files of about one size, `shard_0001.bam` on; `SPLIT_TO_N_FILES` or `SPLIT_TO_N_READS`, a run of one record name never cut; `TOTAL_READS_IN_INPUT`, `OUT_PREFIX`; a chain split) | | `split_sam_by_number_of_reads()` |
 | GatherBamFiles (the records of every `INPUT` in order under the first header; BAM inputs block copied as Picard copies them, byte for byte at `COMPRESSION_LEVEL=0`; lists of paths; SAM or CRAM read record by record) | | `gather_bam_files()` |
 | CalculateReadGroupChecksum (the MD5 of the `@RG` records as htsjdk computes it, in `OUTPUT` or `INPUT.read_group_md5`; the header alone is read) | | `calculate_read_group_checksum()` |
+| CollectQualityYieldMetricsSNVQ (read, base and Q20/Q30/Q40 totals, and the same for the SNV qualities of the Ultima `qa`, `qc`, `qg` and `qt` tags, three per called base and four per `N`; `ALTERNATE_QUALITY_ATTRIBUTE`, `INCLUDE_BQ_HISTOGRAM`; a chain tap) | | `collect_quality_yield_metrics_s_n_v_q()` |
+| CollectUmiPrevalenceMetrics (duplicate sets by their number of distinct `RX` UMIs; Picard's inverted `BQ` filter, `MINIMUM_MQ`, `FILTER_UNPAIRED_READS`; records sorted in duplicate order, spilled to `TMP_DIR`) | | `collect_umi_prevalence_metrics()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 | SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | `validation_stringency=` |

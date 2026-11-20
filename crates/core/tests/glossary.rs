@@ -338,6 +338,23 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
         "CollectIndexDepthMetrics",
         vec![format!("I={DATA}/index_depth.bam"), out("index_depth")],
     );
+    // The SNVQ fixture carries qa, qc, qg and qt; the histogram adds its labels.
+    args.insert(
+        "CollectQualityYieldMetricsSNVQ",
+        vec![
+            format!("I={DATA}/snvq.bam"),
+            out("snvq"),
+            "INCLUDE_BQ_HISTOGRAM=true".to_owned(),
+        ],
+    );
+    // The UMI fixture carries RX, BQ and MC on its pairs.
+    args.insert(
+        "CollectUmiPrevalenceMetrics",
+        vec![
+            format!("I={DATA}/umi_prevalence.bam"),
+            out("umi_prevalence"),
+        ],
+    );
     // The fixture BAM has no @RG line, which CollectOxoGMetrics refuses.
     args.insert(
         "CollectOxoGMetrics",
