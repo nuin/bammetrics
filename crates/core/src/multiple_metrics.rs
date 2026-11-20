@@ -193,6 +193,10 @@ const OTHER_FILES: &[(&str, &[(&str, &str)])] = &[
         "CollectDuplicateByTileMetrics",
         &[("OUTPUT", ".duplicate_by_tile_metrics")],
     ),
+    (
+        "CollectQualityYieldMetricsSNVQ",
+        &[("OUTPUT", ".quality_yield_snvq_metrics")],
+    ),
 ];
 
 /// The files `tool` writes under an output prefix, as (file option,

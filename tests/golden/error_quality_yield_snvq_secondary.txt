@@ -1,0 +1,10 @@
+## argv
+CollectQualityYieldMetricsSNVQ
+I=tests/data/snvq.bam
+O=OUT/snvq.txt
+INCLUDE_SECONDARY_ALIGNMENTS=true
+## exit
+1
+## stdout
+## stderr
+bammetrics: record s10: no qa tag; CollectQualityYieldMetricsSNVQ needs it on every record it counts (Picard fails with a NullPointerException)

@@ -553,3 +553,39 @@ argv = [
 needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
 max_rss_mib = 64
 max_seconds = 10
+
+[[command]]
+name = "quality-yield-s-n-v-q"
+argv = [
+    "{bin}", "quality-yield-s-n-v-q", "tests/data/snvq.bam", "-o", "{out}/snvq.txt",
+    "--include-bq-histogram",
+]
+needs = ["tests/data/snvq.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+# A sorted run of 3 records spills the duplicate sort to TMP_DIR.
+[[command]]
+name = "umi-prevalence"
+argv = [
+    "{bin}", "umi-prevalence", "tests/data/umi_prevalence.bam", "-o", "{out}/umi.txt",
+    "--filter-unpaired-reads", "false", "--max-records-in-ram", "3", "--tmp-dir", "{out}/tmp",
+]
+needs = ["tests/data/umi_prevalence.bam"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+max_spill_mib = 1
+
+# 400,000 records of SAM text with MC and RX (no real data carries both): the duplicate
+# sort holds 20,000 keys at a time and spills the rest, so the peak stays flat.
+[[command]]
+name = "umi-prevalence 400,000 records"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_umi_stress.py {out}/stress.sam && {bin} umi-prevalence {out}/stress.sam -o {out}/umi.txt --max-records-in-ram 20000 --tmp-dir {out}/tmp",
+]
+needs = ["tests/data/make_umi_stress.py"]
+max_rss_mib = 64
+max_seconds = 60
+spill_dir = "{out}/tmp"

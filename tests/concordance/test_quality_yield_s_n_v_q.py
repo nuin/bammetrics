@@ -17,7 +17,7 @@ from collections import defaultdict
 import pysam
 import pytest
 
-from cases import BAMMETRICS, CORPUS
+from cases import BAMMETRICS, CORPUS, FIXTURES
 from compare import compare_metrics
 from conftest import RESULTS
 from run_picard import picard_env
@@ -72,6 +72,13 @@ def test_options(built, option):
     args = OPTIONS[option]
     histogram = any("HISTOGRAM=true" in a for a in args)
     compare(built["snvq_main"], args, f"snvq_main {option}", histogram)
+
+
+@pytest.mark.parametrize("args", [[], ["INCLUDE_BQ_HISTOGRAM=true", "AQA=XQ"]],
+                         ids=["defaults", "histogram_alternate"])
+def test_golden_fixture(args):
+    """tests/data/snvq.bam, the fixture of the golden records."""
+    compare(FIXTURES / "snvq.bam", args, f"fixture {' '.join(args)}", histogram=bool(args))
 
 
 def test_histogram_of_an_empty_file_is_left_out(built):

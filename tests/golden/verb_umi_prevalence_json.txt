@@ -1,0 +1,49 @@
+## argv
+umi-prevalence
+tests/data/umi_prevalence.bam
+--format
+json
+## exit
+0
+## stdout
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectUmiPrevalenceMetrics",
+  "sample": "s1",
+  "headers": [
+    "CollectUmiPrevalenceMetrics INPUT=tests/data/umi_prevalence.bam",
+    "Started on: <time>"
+  ],
+  "class": null,
+  "columns": [],
+  "types": [],
+  "metrics": [],
+  "non_finite": [],
+  "histogram": {
+    "key_class": "java.lang.Integer",
+    "columns": [
+      "numUmis",
+      "duplicateSets"
+    ],
+    "types": [
+      "int",
+      "float"
+    ],
+    "rows": [
+      {
+        "numUmis": 1,
+        "duplicateSets": 2
+      },
+      {
+        "numUmis": 2,
+        "duplicateSets": 2
+      },
+      {
+        "numUmis": 3,
+        "duplicateSets": 2
+      }
+    ],
+    "non_finite": []
+  }
+}
+## stderr

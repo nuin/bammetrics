@@ -1,0 +1,24 @@
+## argv
+umi-prevalence
+tests/corpus/out/t1.bam
+-o
+OUT/umi_prevalence.txt
+--barcode-tag
+RG
+--filter-unpaired-reads
+false
+## exit
+0
+## stdout
+## stderr
+## file umi_prevalence.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectUmiPrevalenceMetrics INPUT=tests/corpus/out/t1.bam BARCODE_TAG=RG FILTER_UNPAIRED_READS=false OUTPUT=OUT/umi_prevalence.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+
+## HISTOGRAM	java.lang.Integer
+numUmis	duplicateSets
+1	39424
+

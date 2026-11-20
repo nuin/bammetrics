@@ -54,6 +54,13 @@ def test_defaults(built, name):
     compare(built[name], [], name)
 
 
+@pytest.mark.parametrize("args", [[], ["FUR=false", "BQ=100"], ["MQ=10"]],
+                         ids=["defaults", "unpaired_kept", "mq_10"])
+def test_golden_fixture(args):
+    """tests/data/umi_prevalence.bam, the fixture of the golden records."""
+    compare(FIXTURES / "umi_prevalence.bam", args, f"fixture {' '.join(args)}")
+
+
 def test_empty_file(built):
     compare(built["umi_empty"], [], "umi_empty", expect_sets=False)
 

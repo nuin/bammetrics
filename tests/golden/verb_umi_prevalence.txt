@@ -1,0 +1,26 @@
+## argv
+umi-prevalence
+tests/data/umi_prevalence.bam
+-o
+OUT/umi.txt
+--minimum-mq
+10
+--max-records-in-ram
+3
+## exit
+0
+## stdout
+## stderr
+## file umi.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectUmiPrevalenceMetrics INPUT=tests/data/umi_prevalence.bam MINIMUM_MQ=10 MAX_RECORDS_IN_RAM=3 OUTPUT=OUT/umi.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+
+## HISTOGRAM	java.lang.Integer
+numUmis	duplicateSets
+1	2
+2	2
+4	2
+

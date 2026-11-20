@@ -714,3 +714,41 @@ bammetrics.qc.IndexDepthMetrics	NO_COORDINATE	int	On the ALL row: records with n
 bammetrics.qc.IndexDepthMetrics	INFERRED_SEX	string	On the ALL row: FEMALE, MALE or UNKNOWN from the X and Y ratios, with the thresholds of CollectSexCheckMetrics.
 bammetrics.qc.IndexDepthMetrics	MT_COPY_NUMBER	float	On the ALL row: 2 x the RATIO_TO_AUTOSOMES of the MT group, the mitochondrial copy number estimate of CollectMtCopyNumberMetrics from unfiltered records; ? without a mitochondrial contig or autosome reads.
 bammetrics.qc.IndexDepthMetrics	REASON	string	On the ALL row: why INFERRED_SEX is UNKNOWN, why MT_COPY_NUMBER or the depths are ?; empty when every value is defined.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	TOTAL_READS	int	Records counted: every record, mapped or not; secondary and supplementary records only when their INCLUDE option is set.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PF_READS	int	Counted records without the QC-fail flag (0x200).
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	READ_LENGTH	int	TOTAL_BASES / TOTAL_READS, integer division; 0 without reads.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	TOTAL_BASES	int	Bases in the counted records.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PF_BASES	int	Bases in PF records.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	Q20_BASES	int	Bases with quality 20 or more: QUAL, or the ALTERNATE_QUALITY_ATTRIBUTE tag decoded as Phred+33.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PF_Q20_BASES	int	Q20 bases in PF records.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	Q30_BASES	int	Bases with quality 30 or more; each is also a Q20 base.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PF_Q30_BASES	int	Q30 bases in PF records.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	Q40_BASES	int	Bases with quality 40 or more; each is also a Q20 and a Q30 base.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PF_Q40_BASES	int	Q40 bases in PF records.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PCT_Q20_BASES	float	Q20_BASES / TOTAL_BASES; 0 without bases.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PCT_Q30_BASES	float	Q30_BASES / TOTAL_BASES; 0 without bases.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PCT_Q40_BASES	float	Q40_BASES / TOTAL_BASES; 0 without bases.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PCT_PF_Q20_BASES	float	PF_Q20_BASES / PF_BASES; 0 without PF bases.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PCT_PF_Q30_BASES	float	PF_Q30_BASES / PF_BASES; 0 without PF bases.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PCT_PF_Q40_BASES	float	PF_Q40_BASES / PF_BASES; 0 without PF bases.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	TOTAL_SNVQ	int	SNV quality observations: at each base, one from each of the qa, qc, qg and qt tags whose base (A, C, G, T) it is not. An A, C, G or T base gives 3, an N or other code 4.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PF_SNVQ	int	SNV quality observations in PF records.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	Q20_SNVQ	int	SNV quality observations of 20 or more (the tag character minus 33).
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PF_Q20_SNVQ	int	Q20 SNV quality observations in PF records.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	Q30_SNVQ	int	SNV quality observations of 30 or more; each is also a Q20 one.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PF_Q30_SNVQ	int	Q30 SNV quality observations in PF records.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	Q40_SNVQ	int	SNV quality observations of 40 or more; each is also a Q20 and a Q30 one.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PF_Q40_SNVQ	int	Q40 SNV quality observations in PF records.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PCT_Q20_SNVQ	float	Q20_SNVQ / TOTAL_SNVQ; 0 without observations.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PCT_Q30_SNVQ	float	Q30_SNVQ / TOTAL_SNVQ; 0 without observations.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PCT_Q40_SNVQ	float	Q40_SNVQ / TOTAL_SNVQ; 0 without observations.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PCT_PF_Q20_SNVQ	float	PF_Q20_SNVQ / PF_SNVQ; 0 without PF observations.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PCT_PF_Q30_SNVQ	float	PF_Q30_SNVQ / PF_SNVQ; 0 without PF observations.
+picard.analysis.CollectQualityYieldMetricsSNVQ$QualityYieldMetrics	PCT_PF_Q40_SNVQ	float	PF_Q40_SNVQ / PF_SNVQ; 0 without PF observations.
+CollectQualityYieldMetricsSNVQ	KEY	int	Histogram key (INCLUDE_BQ_HISTOGRAM): a quality for BQ_COUNT and SNVQ_COUNT, a 0-based read index for the two means; one column of keys holds both.
+CollectQualityYieldMetricsSNVQ	BQ_COUNT	float	Counted bases with this base quality.
+CollectQualityYieldMetricsSNVQ	SNVQ_COUNT	float	SNV quality observations with this value.
+CollectQualityYieldMetricsSNVQ	READ_INDEX_MEAN_BQ	float	Mean base quality at this read index, in stored order (a reverse-strand read is not reversed), over every counted record long enough.
+CollectQualityYieldMetricsSNVQ	READ_INDEX_MEAN_SNVQ	float	Mean SNV quality of the observations at this read index.
+CollectUmiPrevalenceMetrics	numUmis	int	Histogram key: the number of distinct BARCODE_TAG strings in one duplicate set (records equal under htsjdk's duplicateSetCompare: library, reference, unclipped 5' end, orientation, mate).
+CollectUmiPrevalenceMetrics	duplicateSets	float	Duplicate sets holding numUmis distinct UMIs, over mapped primary records at or above MINIMUM_MQ with a UMI that pass Picard's inverted BARCODE_BQ filter; each read of a pair is in its own set.
