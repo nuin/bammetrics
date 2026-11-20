@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `CollectRrbsMetrics` (verb `rrbs`, Python `collect_rrbs_metrics()`; wave W11 of docs/07):
+  `PREFIX.rrbs_summary_metrics` (`RrbsSummaryMetrics`, one row per accumulation unit) and
+  `PREFIX.rrbs_detail_metrics` (`RrbsCpgDetailMetrics`, one row per CpG site and unit),
+  equal to Picard 3.5.0 on every option and level, CRAM and SAM text. A chain tap: the
+  chain's `-R` is its `REFERENCE`. `tests/data/rrbs.bam` (`make_rrbs_bam.py`) is the
+  fixture, `tests/concordance/rrbs_bams.py` the bisulfite corpus.
+- A tool option named `REFERENCE` puts the FASTA's `.fai` among the run's inputs, as
+  `REFERENCE_SEQUENCE` does.
+
 ## 0.28.0
 
 Wave W10 of docs/07: six tools (54 in all), a writer that sorts, fan-out sinks and a BGZF block copy.
