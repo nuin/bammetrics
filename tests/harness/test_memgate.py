@@ -58,7 +58,8 @@ def test_the_committed_table_parses_and_names_both_tiers():
                        "split-sam-by-library 1000 libraries",
                        "split-sam-by-number-of-reads 1000 files", "gather-bam-files",
                        "gather-bam-files sam", "calculate-read-group-checksum",
-                       "gather-bam-files forged reference list", "gather-bam-files long list"]
+                       "gather-bam-files forged reference list", "gather-bam-files long list",
+                       "rrbs"]
     for r in rows:
         # A row whose input a script writes first runs both in one `sh -c`.
         shell = r.argv[0] in ("sh", "/bin/sh") and r.argv[1:2] == ["-c"] and "{bin}" in r.argv[2]
