@@ -92,7 +92,7 @@ fn julian_date(fixed: i64) -> (i64, i64, i64) {
 /// `GregorianCalendar.computeTime` for the fields `DateParser` sets: the
 /// calendar of `year` before its month rolls over, Gregorian from 1582 on
 /// when that date is on or after the cutover, else Julian.
-fn calendar_time(year: i64, month0: i64, day: i64, time_of_day: i64) -> i64 {
+pub(crate) fn calendar_time(year: i64, month0: i64, day: i64, time_of_day: i64) -> i64 {
     let days = floor_div(time_of_day, DAY);
     let time_of_day = time_of_day.rem_euclid(DAY);
     let gregorian = days + gregorian_fixed(year, month0 + 1, day);
@@ -592,7 +592,11 @@ fn current_year() -> Option<i64> {
 /// Year, month, day, hour, minute, second and zone offset of `millis` in
 /// the process's zone, the date from Java's hybrid calendar.
 fn local_fields(millis: i64) -> Option<(i64, i64, i64, i64, i64, i64, i64)> {
-    let offset = zone_offset(millis)?;
+    Some(fields_at(millis, zone_offset(millis)?))
+}
+
+/// [`local_fields`] at a given zone `offset` in milliseconds.
+fn fields_at(millis: i64, offset: i64) -> (i64, i64, i64, i64, i64, i64, i64) {
     let local = millis + offset;
     let fixed = floor_div(local, DAY) + EPOCH_OFFSET;
     let (year, month, day) = if fixed >= CUTOVER {
@@ -601,7 +605,7 @@ fn local_fields(millis: i64) -> Option<(i64, i64, i64, i64, i64, i64, i64)> {
         julian_date(fixed)
     };
     let in_day = local.rem_euclid(DAY) / 1000;
-    Some((
+    (
         year,
         month,
         day,
@@ -609,7 +613,7 @@ fn local_fields(millis: i64) -> Option<(i64, i64, i64, i64, i64, i64, i64)> {
         in_day / 60 % 60,
         in_day % 60,
         offset,
-    ))
+    )
 }
 
 /// `decodeDate` without the `DateFormat` reader: the instant `text` names,
@@ -634,16 +638,27 @@ pub fn decode_date(text: &str) -> Result<Option<i64>, String> {
 /// `Iso8601Date.toString`: `yyyy-MM-dd'T'HH:mm:ssZ` in the process's zone;
 /// `None` past what the C library converts.
 pub fn iso8601(millis: i64) -> Option<String> {
-    let (year, month, day, hour, minute, second, offset) = local_fields(millis)?;
+    local_fields(millis).map(iso8601_text)
+}
+
+/// [`iso8601`] in UTC, as a JVM under `TZ=UTC` writes it: the file does not
+/// depend on the machine's zone.
+pub fn iso8601_utc(millis: i64) -> String {
+    iso8601_text(fields_at(millis, 0))
+}
+
+fn iso8601_text(
+    (year, month, day, hour, minute, second, offset): (i64, i64, i64, i64, i64, i64, i64),
+) -> String {
     // `yyyy` prints the year of the era: 1 BC for year 0.
     let year = if year <= 0 { 1 - year } else { year };
     let minutes = offset / 60_000;
     let sign = if minutes < 0 { '-' } else { '+' };
     let minutes = minutes.abs();
-    Some(format!(
+    format!(
         "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}{sign}{:04}",
         minutes / 60 * 100 + minutes % 60
-    ))
+    )
 }
 
 #[cfg(test)]
