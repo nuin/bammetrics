@@ -75,6 +75,22 @@ fn a_list_stops_at_the_input_cap() {
 }
 
 #[test]
+fn the_lists_of_a_run_stop_at_the_total_budget() {
+    let dir = scratch("budget");
+    let first = dir.join("first.list");
+    let second = dir.join("second.list");
+    std::fs::write(&first, "a.bam\n").expect("list");
+    std::fs::write(&second, "b.bam\n").expect("list");
+    let given = strings(&[&first, &second]);
+    let (inputs, _) = unroll_within(&given, 12).expect("at the budget");
+    assert_eq!(inputs.len(), 2);
+    let message = unroll_within(&given, 11).expect_err("over").to_string();
+    assert!(message.contains("hold over 11 bytes together"), "{message}");
+    assert_eq!(MAX_TOTAL_LIST_BYTES, 256 << 20);
+    std::fs::remove_dir_all(&dir).expect("scratch");
+}
+
+#[test]
 fn the_block_copy_index_is_named_by_the_basename() {
     for (output, index) in [
         ("out.bam", "out.bai"),
