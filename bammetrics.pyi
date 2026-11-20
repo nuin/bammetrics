@@ -1458,6 +1458,24 @@ def collect_umi_prevalence_metrics(
     UMIs they hold (numUmis, duplicateSets), over mapped primary records with a UMI; no
     metrics row."""
 
+def collect_rrbs_metrics(
+    input: _Path,
+    *,
+    output: _Path,
+    reference: _Path,
+    c_quality_threshold: int | None = None,
+    next_base_quality_threshold: int | None = None,
+    minimum_read_length: int | None = None,
+    max_mismatch_rate: float | None = None,
+    sequence_names: str | Sequence[str] | None = None,
+    metric_accumulation_level: str | Sequence[str] | None = None,
+    assume_sorted: bool | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """CollectRrbsMetrics: METRICS_FILE_PREFIX is a prefix: PREFIX.rrbs_summary_metrics,
+    one row per accumulation unit, and PREFIX.rrbs_detail_metrics, one row per CpG site
+    and unit; Python returns one row per file: file and rows."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1700,6 +1718,7 @@ _StepVerb = Literal[
     "split_sam_by_library",
     "split_sam_by_number_of_reads",
     "quality_yield_s_n_v_q",
+    "rrbs",
     "write",
 ]
 

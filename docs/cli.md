@@ -319,6 +319,7 @@ table.
 | `calculate-read-group-checksum` | CalculateReadGroupChecksum (a SAM, BAM or CRAM; only its header is read) | the 32 hex digits of the checksum in `-o`, default beside the input |
 | `quality-yield-s-n-v-q` | CollectQualityYieldMetricsSNVQ (`qa`, `qc`, `qg` and `qt` on every counted record; `--alternate-quality-attribute`, `--include-bq-histogram`) | one |
 | `umi-prevalence` | CollectUmiPrevalenceMetrics (`--barcode-tag`, `--barcode-bq`, `--minimum-mq`, `--minimum-barcode-bq`, `--filter-unpaired-reads`) | one histogram, no metrics row |
+| `rrbs` | CollectRrbsMetrics (a coordinate-sorted SAM, BAM or CRAM; `-R` required) | `PREFIX.rrbs_summary_metrics`, `PREFIX.rrbs_detail_metrics` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -978,6 +979,37 @@ distinct UMIs in each, `numUmis` against `duplicateSets`, with no metrics row
   the largest set: 1,000,000 distinct 16-base UMIs at one position took 176 MiB.
 - `--progress-step-interval 0` exits 1 once a set is found, as Picard's progress logger
   divides by it. Not a chain step: the tool reads the stream whole before its first set.
+
+### rrbs
+
+```bash
+bammetrics rrbs sample.bam -R ref.fa -o out/sample --level READ_GROUP
+bammetrics CollectRrbsMetrics I=sample.bam R=ref.fa M=out/sample DO_NOT_CREATE_PLOTS=true
+bammetrics chain sample.bam -R ref.fa -o out/sample + rrbs + mark-duplicates + rrbs
+```
+
+Picard's `CollectRrbsMetrics`: bisulfite conversion at CpG and non-CpG Cs against the
+reference, `PREFIX.rrbs_summary_metrics` with one row per accumulation unit and
+`PREFIX.rrbs_detail_metrics` with one row per CpG site and unit
+(`tests/concordance/test_rrbs.py`). `-o` (Picard `METRICS_FILE_PREFIX`, `M`) gets a `.`
+unless it ends in one. No plot is drawn: `--do-not-create-plots` is accepted.
+
+- Every record not flagged unmapped counts, secondary, supplementary, duplicate and
+  QC-failed records included; `--sequence-names` limits the contigs. Reads under
+  `--minimum-read-length` (5) and reads with more bisulfite mismatches than
+  `Math.round(length x --max-mismatch-rate)` (0.1) are counted and set aside.
+- A CpG counts when the read has a C or a T at the C, the G matched, the C at
+  `--c-quality-threshold` (20) and the base after it at `--next-base-quality-threshold`
+  (10). A reverse-strand read is read reverse complemented. `POSITION` is the 0-based C of
+  the forward strand. Detail rows sort by contig name, then position.
+- The non-CpG quality test reads the record's qualities in file order at the index within
+  the alignment block, as Picard does.
+- The reference contig of a record is taken by its index in the FASTA, with no dictionary
+  check, as Picard's walker takes it. The `.fai` is required. A record on an earlier contig
+  than the one before it exits 1.
+- A header that is not `SO:coordinate` exits 1 unless `--assume-sorted`. A record without
+  base qualities and a second alignment block exits 1, as Picard does. A chain step: the
+  chain's `-R` is its reference.
 
 ### qc
 

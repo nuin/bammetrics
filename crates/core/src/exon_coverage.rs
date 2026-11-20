@@ -509,6 +509,7 @@ fn output(class: &'static str, depths: &[i32]) -> MetricsOutput {
         histogram: None,
         with_headers: true,
         text: None,
+        source: None,
     }
 }
 

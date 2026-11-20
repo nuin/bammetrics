@@ -589,6 +589,24 @@ fn the_output_index_knows_one_file_under_any_name() {
     std::fs::remove_dir_all(&dir).expect("cleanup");
 }
 
+/// A file claimed before it exists and then written (renamed into place)
+/// is still that step's: the step that names it late is refused.
+#[test]
+fn a_file_written_after_its_claim_keeps_its_owner() {
+    let dir = scratch("output-written");
+    let path = dir.join("a.pre_adapter_detail_metrics");
+    let mut outputs = Outputs::default();
+    outputs.claim("step 1", &path).expect("free");
+    std::fs::write(dir.join("tmp"), "").expect("a file");
+    std::fs::rename(dir.join("tmp"), &path).expect("renamed into place");
+    assert_eq!(outputs.owner(&path), Some("step 1"));
+    let Err(Error::Usage(text)) = outputs.claim("step 2", &path) else {
+        panic!("a file step 1 wrote");
+    };
+    assert!(text.starts_with("step 1 and step 2 both write "), "{text}");
+    std::fs::remove_dir_all(&dir).expect("cleanup");
+}
+
 #[test]
 fn write_options_name_their_files_and_refuse_the_kinds_of_later_waves() {
     let mut options = WriteOptions::new(Path::new("dir/out.bam"));

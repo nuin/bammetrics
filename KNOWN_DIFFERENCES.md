@@ -1445,6 +1445,20 @@ It differs here (docs/07 D67):
   the JVM's. They agree when both read the same zone.
 - An `OUTPUT` that is the input is refused, and a failed run writes nothing.
 
+## CollectRrbsMetrics
+
+Both files are Picard's cell for cell and byte for byte after the header lines on the
+bisulfite corpus of `tests/concordance/rrbs_bams.py`, the fixtures, the foundation corpus,
+t1 and the exome slice, at every option and level (`tests/concordance/test_rrbs.py`). It
+differs here:
+
+- `REFERENCE` needs a `.fai`. Picard reads a FASTA without one front to back. Both take a
+  record's contig by its index in the FASTA, with no dictionary check.
+- No plot is drawn and no `R` is needed. Picard without `DO_NOT_CREATE_PLOTS=true` fails
+  when `Rscript` is missing and writes `PREFIX.rrbs_qc.pdf` when it is present.
+- An `RG` the header lacks goes to the `unknown` unit; Picard at `STRICT` refuses the
+  record (section Validation).
+
 ## AddOATag
 
 `AddOATag` writes the header lines and records Picard writes, the records byte for byte

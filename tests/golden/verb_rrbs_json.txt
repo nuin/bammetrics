@@ -1,0 +1,401 @@
+## argv
+rrbs
+tests/data/rrbs.bam
+-R
+tests/data/ref_100k.fa
+-o
+OUT/rrbs
+--next-base-quality-threshold
+30
+--format
+picard,json
+## exit
+0
+## stdout
+## stderr
+## file rrbs.rrbs_detail_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectRrbsMetrics INPUT=tests/data/rrbs.bam REFERENCE=tests/data/ref_100k.fa NEXT_BASE_QUALITY_THRESHOLD=30 METRICS_FILE_PREFIX=OUT/rrbs
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.RrbsCpgDetailMetrics
+SEQUENCE_NAME	POSITION	TOTAL_SITES	CONVERTED_SITES	PCT_CONVERTED	SAMPLE	LIBRARY	READ_GROUP
+chr1	1020	4	1	0.25			
+chr1	1045	9	5	0.555556			
+chr1	1047	8	4	0.5			
+chr1	1050	7	2	0.285714			
+chr1	1071	12	5	0.416667			
+chr1	1081	12	4	0.333333			
+chr1	1102	14	5	0.357143			
+chr1	1116	19	5	0.263158			
+chr1	1133	12	5	0.416667			
+chr1	1142	15	7	0.466667			
+chr1	1158	11	1	0.090909			
+chr1	1176	12	7	0.583333			
+chr1	1224	15	5	0.333333			
+chr1	1234	11	5	0.454545			
+chr1	1237	12	6	0.5			
+chr1	1241	10	6	0.6			
+chr1	1246	13	6	0.461538			
+chr1	1256	9	4	0.444444			
+chr1	1258	6	4	0.666667			
+chr1	1273	7	2	0.285714			
+chr1	1284	9	2	0.222222			
+chr1	1319	5	2	0.4			
+chr1	1322	3	1	0.333333			
+chr1	1355	2	1	0.5			
+
+
+## file rrbs.rrbs_detail_metrics.json
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectRrbsMetrics",
+  "sample": "S1",
+  "headers": [
+    "CollectRrbsMetrics INPUT=tests/data/rrbs.bam REFERENCE=tests/data/ref_100k.fa NEXT_BASE_QUALITY_THRESHOLD=30 METRICS_FILE_PREFIX=OUT/rrbs",
+    "Started on: <time>"
+  ],
+  "class": "picard.analysis.RrbsCpgDetailMetrics",
+  "columns": [
+    "SEQUENCE_NAME",
+    "POSITION",
+    "TOTAL_SITES",
+    "CONVERTED_SITES",
+    "PCT_CONVERTED",
+    "SAMPLE",
+    "LIBRARY",
+    "READ_GROUP"
+  ],
+  "types": [
+    "string",
+    "int",
+    "int",
+    "int",
+    "float",
+    "string",
+    "string",
+    "string"
+  ],
+  "metrics": [
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1020,
+      "TOTAL_SITES": 4,
+      "CONVERTED_SITES": 1,
+      "PCT_CONVERTED": 0.25,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1045,
+      "TOTAL_SITES": 9,
+      "CONVERTED_SITES": 5,
+      "PCT_CONVERTED": 0.5555555555555556,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1047,
+      "TOTAL_SITES": 8,
+      "CONVERTED_SITES": 4,
+      "PCT_CONVERTED": 0.5,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1050,
+      "TOTAL_SITES": 7,
+      "CONVERTED_SITES": 2,
+      "PCT_CONVERTED": 0.2857142857142857,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1071,
+      "TOTAL_SITES": 12,
+      "CONVERTED_SITES": 5,
+      "PCT_CONVERTED": 0.4166666666666667,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1081,
+      "TOTAL_SITES": 12,
+      "CONVERTED_SITES": 4,
+      "PCT_CONVERTED": 0.3333333333333333,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1102,
+      "TOTAL_SITES": 14,
+      "CONVERTED_SITES": 5,
+      "PCT_CONVERTED": 0.35714285714285715,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1116,
+      "TOTAL_SITES": 19,
+      "CONVERTED_SITES": 5,
+      "PCT_CONVERTED": 0.2631578947368421,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1133,
+      "TOTAL_SITES": 12,
+      "CONVERTED_SITES": 5,
+      "PCT_CONVERTED": 0.4166666666666667,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1142,
+      "TOTAL_SITES": 15,
+      "CONVERTED_SITES": 7,
+      "PCT_CONVERTED": 0.4666666666666667,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1158,
+      "TOTAL_SITES": 11,
+      "CONVERTED_SITES": 1,
+      "PCT_CONVERTED": 0.09090909090909091,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1176,
+      "TOTAL_SITES": 12,
+      "CONVERTED_SITES": 7,
+      "PCT_CONVERTED": 0.5833333333333334,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1224,
+      "TOTAL_SITES": 15,
+      "CONVERTED_SITES": 5,
+      "PCT_CONVERTED": 0.3333333333333333,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1234,
+      "TOTAL_SITES": 11,
+      "CONVERTED_SITES": 5,
+      "PCT_CONVERTED": 0.45454545454545453,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1237,
+      "TOTAL_SITES": 12,
+      "CONVERTED_SITES": 6,
+      "PCT_CONVERTED": 0.5,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1241,
+      "TOTAL_SITES": 10,
+      "CONVERTED_SITES": 6,
+      "PCT_CONVERTED": 0.6,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1246,
+      "TOTAL_SITES": 13,
+      "CONVERTED_SITES": 6,
+      "PCT_CONVERTED": 0.46153846153846156,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1256,
+      "TOTAL_SITES": 9,
+      "CONVERTED_SITES": 4,
+      "PCT_CONVERTED": 0.4444444444444444,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1258,
+      "TOTAL_SITES": 6,
+      "CONVERTED_SITES": 4,
+      "PCT_CONVERTED": 0.6666666666666666,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1273,
+      "TOTAL_SITES": 7,
+      "CONVERTED_SITES": 2,
+      "PCT_CONVERTED": 0.2857142857142857,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1284,
+      "TOTAL_SITES": 9,
+      "CONVERTED_SITES": 2,
+      "PCT_CONVERTED": 0.2222222222222222,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1319,
+      "TOTAL_SITES": 5,
+      "CONVERTED_SITES": 2,
+      "PCT_CONVERTED": 0.4,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1322,
+      "TOTAL_SITES": 3,
+      "CONVERTED_SITES": 1,
+      "PCT_CONVERTED": 0.3333333333333333,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "SEQUENCE_NAME": "chr1",
+      "POSITION": 1355,
+      "TOTAL_SITES": 2,
+      "CONVERTED_SITES": 1,
+      "PCT_CONVERTED": 0.5,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    }
+  ],
+  "non_finite": [],
+  "histogram": null
+}
+## file rrbs.rrbs_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectRrbsMetrics INPUT=tests/data/rrbs.bam REFERENCE=tests/data/ref_100k.fa NEXT_BASE_QUALITY_THRESHOLD=30 METRICS_FILE_PREFIX=OUT/rrbs
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.RrbsSummaryMetrics
+READS_ALIGNED	NON_CPG_BASES	NON_CPG_CONVERTED_BASES	PCT_NON_CPG_BASES_CONVERTED	CPG_BASES_SEEN	CPG_BASES_CONVERTED	PCT_CPG_BASES_CONVERTED	MEAN_CPG_COVERAGE	MEDIAN_CPG_COVERAGE	READS_WITH_NO_CPG	READS_IGNORED_SHORT	READS_IGNORED_MISMATCHES	SAMPLE	LIBRARY	READ_GROUP
+80	551	490	0.889292	237	95	0.400844	9.875	10	3	8	4			
+
+
+## file rrbs.rrbs_summary_metrics.json
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectRrbsMetrics",
+  "sample": "S1",
+  "headers": [
+    "CollectRrbsMetrics INPUT=tests/data/rrbs.bam REFERENCE=tests/data/ref_100k.fa NEXT_BASE_QUALITY_THRESHOLD=30 METRICS_FILE_PREFIX=OUT/rrbs",
+    "Started on: <time>"
+  ],
+  "class": "picard.analysis.RrbsSummaryMetrics",
+  "columns": [
+    "READS_ALIGNED",
+    "NON_CPG_BASES",
+    "NON_CPG_CONVERTED_BASES",
+    "PCT_NON_CPG_BASES_CONVERTED",
+    "CPG_BASES_SEEN",
+    "CPG_BASES_CONVERTED",
+    "PCT_CPG_BASES_CONVERTED",
+    "MEAN_CPG_COVERAGE",
+    "MEDIAN_CPG_COVERAGE",
+    "READS_WITH_NO_CPG",
+    "READS_IGNORED_SHORT",
+    "READS_IGNORED_MISMATCHES",
+    "SAMPLE",
+    "LIBRARY",
+    "READ_GROUP"
+  ],
+  "types": [
+    "int",
+    "int",
+    "int",
+    "float",
+    "int",
+    "int",
+    "float",
+    "float",
+    "int",
+    "int",
+    "int",
+    "int",
+    "string",
+    "string",
+    "string"
+  ],
+  "metrics": [
+    {
+      "READS_ALIGNED": 80,
+      "NON_CPG_BASES": 551,
+      "NON_CPG_CONVERTED_BASES": 490,
+      "PCT_NON_CPG_BASES_CONVERTED": 0.8892921960072595,
+      "CPG_BASES_SEEN": 237,
+      "CPG_BASES_CONVERTED": 95,
+      "PCT_CPG_BASES_CONVERTED": 0.4008438818565401,
+      "MEAN_CPG_COVERAGE": 9.875,
+      "MEDIAN_CPG_COVERAGE": 10,
+      "READS_WITH_NO_CPG": 3,
+      "READS_IGNORED_SHORT": 8,
+      "READS_IGNORED_MISMATCHES": 4,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    }
+  ],
+  "non_finite": [],
+  "histogram": null
+}

@@ -1,0 +1,32 @@
+## argv
+rrbs
+tests/data/insert_size.cram
+-R
+tests/data/ref_100k.fa
+-o
+OUT/cram
+--max-mismatch-rate
+1
+## exit
+0
+## stdout
+## stderr
+## file cram.rrbs_detail_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectRrbsMetrics INPUT=tests/data/insert_size.cram REFERENCE=tests/data/ref_100k.fa MAX_MISMATCH_RATE=1 METRICS_FILE_PREFIX=OUT/cram
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+
+
+## file cram.rrbs_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectRrbsMetrics INPUT=tests/data/insert_size.cram REFERENCE=tests/data/ref_100k.fa MAX_MISMATCH_RATE=1 METRICS_FILE_PREFIX=OUT/cram
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.RrbsSummaryMetrics
+READS_ALIGNED	NON_CPG_BASES	NON_CPG_CONVERTED_BASES	PCT_NON_CPG_BASES_CONVERTED	CPG_BASES_SEEN	CPG_BASES_CONVERTED	PCT_CPG_BASES_CONVERTED	MEAN_CPG_COVERAGE	MEDIAN_CPG_COVERAGE	READS_WITH_NO_CPG	READS_IGNORED_SHORT	READS_IGNORED_MISMATCHES	SAMPLE	LIBRARY	READ_GROUP
+10	54	54	1	0	0	0	?	0	10	0	0			
+
+

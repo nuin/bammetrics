@@ -60,6 +60,7 @@ gather-bam-files                                   GatherBamFiles
 calculate-read-group-checksum                      CalculateReadGroupChecksum
 quality-yield-s-n-v-q                              CollectQualityYieldMetricsSNVQ
 umi-prevalence                                     CollectUmiPrevalenceMetrics
+rrbs                                               CollectRrbsMetrics
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

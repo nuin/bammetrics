@@ -689,14 +689,24 @@ pub struct Outputs {
     owners: std::collections::HashMap<Identity, String>,
 }
 
+/// Every key of `path` in [`Outputs`]: its identity, and for a file that
+/// exists also its resolved path. A file renamed into place by an earlier
+/// step has a new inode, and its path still finds that step.
+fn keys(path: &Path) -> Vec<Identity> {
+    let Some(identity) = identity(path) else {
+        return Vec::new();
+    };
+    let spelled = matches!(identity, Identity::Inode(..))
+        .then(|| Identity::Path(mark_duplicates::same_file_key(path)));
+    std::iter::once(identity).chain(spelled).collect()
+}
+
 impl Outputs {
     /// Record that step `label` writes `path`. A usage error when a step
     /// already writes that file.
     pub fn claim(&mut self, label: &str, path: &Path) -> Result<()> {
-        let Some(identity) = identity(path) else {
-            return Ok(());
-        };
-        if let Some(other) = self.owners.get(&identity) {
+        let keys = keys(path);
+        if let Some(other) = keys.iter().find_map(|key| self.owners.get(key)) {
             let whose = if other == label {
                 format!("{label} writes {} twice", path.display())
             } else {
@@ -706,13 +716,18 @@ impl Outputs {
                 "{whose}: every output of a chain needs its own file"
             )));
         }
-        self.owners.insert(identity, label.to_owned());
+        for key in keys {
+            self.owners.insert(key, label.to_owned());
+        }
         Ok(())
     }
 
     /// The label of the step that writes `path`, if any.
     pub fn owner(&self, path: &Path) -> Option<&str> {
-        self.owners.get(&identity(path)?).map(String::as_str)
+        keys(path)
+            .iter()
+            .find_map(|key| self.owners.get(key))
+            .map(String::as_str)
     }
 }
 

@@ -11,8 +11,10 @@
 //! (at most 6 fraction digits), booleans as `Y` or `N` (htsjdk `FormatUtil`), strings
 //! as they are, and null as an empty field.
 
+use std::borrow::Cow;
 use std::io::{self, Write};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::histogram::Histogram;
 use crate::metrics_file::{
@@ -197,6 +199,23 @@ impl From<MetricsOutput> for ToolOutput {
     }
 }
 
+/// Rows made one at a time as a file is written, for a file whose rows
+/// as [`Value`]s would not fit in memory: `CollectRrbsMetrics` writes one
+/// row per CpG site and unit, about 300 bytes each as `Value`s and 3 to 4
+/// packed in its own table.
+pub trait RowSource: std::fmt::Debug + Send + Sync {
+    /// The number of rows.
+    fn len(&self) -> usize;
+
+    /// True when there is no row.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Call `row` with each row in file order; the first error stops.
+    fn each(&self, row: &mut dyn FnMut(&[Value]) -> io::Result<()>) -> io::Result<()>;
+}
+
 /// Everything a tool returns: enough to write the file or build Python rows.
 #[derive(Clone, Debug)]
 pub struct MetricsOutput {
@@ -211,6 +230,10 @@ pub struct MetricsOutput {
     /// interval list): written as it is, with no header lines. `rows` and
     /// `columns` still describe it for Python.
     pub text: Option<String>,
+    /// Rows made as they are written, in place of `rows` (which is then
+    /// empty). The Picard writer streams them; a reader of `rows` calls
+    /// [`MetricsOutput::materialized`] first.
+    pub source: Option<Arc<dyn RowSource>>,
 }
 
 impl MetricsOutput {
@@ -222,6 +245,7 @@ impl MetricsOutput {
             histogram,
             with_headers: true,
             text: None,
+            source: None,
         }
     }
 
@@ -235,6 +259,7 @@ impl MetricsOutput {
             histogram: Some(histogram),
             with_headers: true,
             text: None,
+            source: None,
         }
     }
 
@@ -248,6 +273,7 @@ impl MetricsOutput {
             histogram: None,
             with_headers: false,
             text: Some(text),
+            source: None,
         }
     }
 
@@ -265,6 +291,27 @@ impl MetricsOutput {
     /// histogram table.
     pub fn is_histogram_only(&self) -> bool {
         self.columns.is_empty()
+    }
+
+    /// This output with `rows` filled from its [`RowSource`], for a reader
+    /// of `rows` (the JSON and delimited formats, Python); borrowed when it
+    /// has no source.
+    pub fn materialized(&self) -> Cow<'_, Self> {
+        let Some(source) = &self.source else {
+            return Cow::Borrowed(self);
+        };
+        let mut rows = Vec::with_capacity(source.len());
+        source
+            .each(&mut |row| {
+                rows.push(row.to_vec());
+                Ok(())
+            })
+            .expect("collecting rows in memory");
+        Cow::Owned(Self {
+            rows,
+            source: None,
+            ..self.clone()
+        })
     }
 
     /// Rows as `(column, value)` pairs, the shape the Python converter wants.
@@ -291,19 +338,28 @@ impl MetricsOutput {
                 })
                 .collect(),
         });
-        MetricsFile {
+        let file = MetricsFile {
             headers,
             class: self.class,
             columns: self.columns,
-            rows: self
-                .rows
-                .iter()
-                .map(|r| r.iter().map(Value::picard_text).collect())
-                .collect(),
+            rows: Vec::new(),
             histogram,
-        }
-        .write(out)
+        };
+        let Some(source) = &self.source else {
+            return file.write_rows(out, &self.rows, |row| line(row));
+        };
+        file.write_lines(out, !source.is_empty(), |out| {
+            source.each(&mut |row| writeln!(out, "{}", line(row)))
+        })
     }
+}
+
+/// A row as its Picard line, without the line end.
+fn line(row: &[Value]) -> String {
+    row.iter()
+        .map(Value::picard_text)
+        .collect::<Vec<_>>()
+        .join("\t")
 }
 
 #[cfg(test)]
@@ -357,5 +413,50 @@ mod tests {
              ## METRICS CLASS\tpicard.analysis.Demo\nCOUNT\tMEAN\tFLAG\tNAME\n\
              3\t2.5\tY\t\n-1\t?\tN\tx\n\n\n"
         );
+    }
+
+    /// The rows of a [`RowSource`], held here as `Value`s.
+    #[derive(Debug)]
+    struct Held(Vec<Vec<Value>>);
+
+    impl RowSource for Held {
+        fn len(&self) -> usize {
+            self.0.len()
+        }
+
+        fn each(&self, row: &mut dyn FnMut(&[Value]) -> io::Result<()>) -> io::Result<()> {
+            self.0.iter().try_for_each(|r| row(r))
+        }
+    }
+
+    #[test]
+    fn a_row_source_writes_the_bytes_of_its_rows() {
+        let rows = [Demo {
+            count: 3,
+            mean: 2.5,
+            flag: true,
+            name: None,
+        }];
+        let held = MetricsOutput::from_rows(&rows, None);
+        for source in [held.rows.clone(), Vec::new()] {
+            let streamed = MetricsOutput {
+                rows: Vec::new(),
+                source: Some(Arc::new(Held(source.clone()))),
+                ..held.clone()
+            };
+            let expected = MetricsOutput {
+                rows: source.clone(),
+                ..held.clone()
+            };
+            let write = |output: &MetricsOutput| {
+                let mut out = Vec::new();
+                output
+                    .write(vec!["Demo".to_owned()], &mut out)
+                    .expect("write to Vec");
+                out
+            };
+            assert_eq!(write(&streamed), write(&expected));
+            assert_eq!(streamed.materialized().rows, source);
+        }
     }
 }

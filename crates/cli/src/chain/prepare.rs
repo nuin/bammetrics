@@ -680,9 +680,17 @@ fn transform_names(cx: &Context, tool: &Tool, position: &Position, own: &[String
 }
 
 /// `REFERENCE_SEQUENCE` for a tool step: the chain's reference when the
-/// tool reads one, or decodes a CRAM source, and the step names none.
+/// tool reads one, or decodes a CRAM source, and the step names none. A
+/// tool whose reference option is `REFERENCE` (`CollectRrbsMetrics`)
+/// gets it there.
 fn reference_arg(cx: &Context, tool: &Tool, own: &[String]) -> Option<String> {
     let reference = cx.reference?;
+    if tool
+        .option("REFERENCE")
+        .is_some_and(|opt| opt.kind == Kind::Value)
+    {
+        return (!sets(own, "REFERENCE")).then(|| format!("REFERENCE={reference}"));
+    }
     let reads = tool
         .option("REFERENCE_SEQUENCE")
         .is_some_and(|opt| opt.kind == Kind::Value);
@@ -706,10 +714,11 @@ fn file_kind(tool: &Tool, option: &str) -> &'static str {
     }
 }
 
-/// True for a tool whose `OUTPUT` is a prefix: it names its files when it
-/// finishes.
+/// True for a tool whose `OUTPUT` (or own output option) is a prefix: it
+/// names its files when it finishes.
 fn output_is_prefix(tool: &Tool) -> bool {
-    matches!(file_extensions(tool.name), Some([("OUTPUT", "")]))
+    matches!(file_extensions(tool.name), Some([(option, "")])
+        if *option == "OUTPUT" || *option == tool.output_name())
 }
 
 /// The files `argv` names as written, each with a sibling per further
@@ -742,6 +751,39 @@ fn planned_files(tool: &Tool, argv: &[String], formats: &[Format]) -> Vec<Planne
             })
             .collect::<Vec<_>>();
         files.push(PlannedFile { path, kind });
+        files.extend(siblings);
+    }
+    files
+}
+
+/// The metrics files a tool names under its output prefix when the names
+/// are known before the run, each with a sibling per further format, so
+/// the claims and the writability check see them before the first read.
+/// `CollectRrbsMetrics` adds its two extensions. A tool whose names
+/// depend on its options plans none here: its files are claimed when it
+/// finishes.
+fn prefix_files(tool: &Tool, prefix: &Path, formats: &[Format]) -> Vec<PlannedFile> {
+    use bammetrics_core::rrbs_metrics;
+    if tool.name != rrbs_metrics::TOOL.name {
+        return Vec::new();
+    }
+    let mut files = Vec::new();
+    for extension in [
+        rrbs_metrics::SUMMARY_EXTENSION,
+        rrbs_metrics::DETAIL_EXTENSION,
+    ] {
+        let path = rrbs_metrics::file_path(prefix, extension);
+        let siblings: Vec<PlannedFile> = formats[1..]
+            .iter()
+            .map(|f| PlannedFile {
+                path: format::sibling(&path, f.extension()),
+                kind: f.name(),
+            })
+            .collect();
+        files.push(PlannedFile {
+            path,
+            kind: "metrics",
+        });
         files.extend(siblings);
     }
     files
@@ -803,6 +845,10 @@ fn tool_step(
         inv.command.push_str(&format!(" CHAIN={}", position.behind));
     }
     let late_prefix = inv.output.clone().filter(|_| output_is_prefix(tool));
+    let mut files = planned_files(tool, &argv, &formats);
+    if let Some(prefix) = &late_prefix {
+        files.extend(prefix_files(tool, prefix, &formats));
+    }
     let planned = Planned {
         number: draft.number,
         verb: verb.name,
@@ -812,7 +858,7 @@ fn tool_step(
         reads: position.reads,
         leaves: position.leaves,
         segment: position.segment,
-        files: planned_files(tool, &argv, &formats),
+        files,
         late_prefix,
         stdout: named.stdout,
         command: Some(inv.command),

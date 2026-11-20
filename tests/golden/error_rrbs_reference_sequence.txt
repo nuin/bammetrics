@@ -1,0 +1,10 @@
+## argv
+CollectRrbsMetrics
+I=tests/data/rrbs.bam
+M=OUT/x
+REFERENCE_SEQUENCE=tests/data/ref_100k.fa
+## exit
+1
+## stdout
+## stderr
+bammetrics: CollectRrbsMetrics: Unrecognized option: REFERENCE_SEQUENCE

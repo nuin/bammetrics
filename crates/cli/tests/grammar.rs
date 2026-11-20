@@ -653,6 +653,15 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("MINIMUM_BARCODE_BQ", "40")),
             picard_outputs: single,
         },
+        // METRICS_FILE_PREFIX is the prefix of the two files.
+        Case {
+            verb: "rrbs",
+            class: "CollectRrbsMetrics",
+            verb_args: strings(&["tests/data/rrbs.bam", "-R", REF]),
+            picard_args: strings(&["I=tests/data/rrbs.bam", &r]),
+            option: Some(("MAX_MISMATCH_RATE", "0.2")),
+            picard_outputs: |out| vec![format!("M={out}")],
+        },
     ]
 }
 
@@ -785,7 +794,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 56);
+    assert_eq!(classes.len(), 57);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

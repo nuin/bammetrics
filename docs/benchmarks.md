@@ -520,6 +520,20 @@ to complete pairs (the command is in `benches/memgate.toml`), removed after the 
 | `gather-bam-files slice` | scale | 5.9 / 512 | 0.45 | |
 | `calculate-read-group-checksum exome` | scale | 4.5 / 64 | 0.00 | |
 
+The W11 rows of `rrbs` (2026-11-20): the fixture at 5.2 / 64 MiB in 0.01 s, `rrbs
+slice` at 95.3 / 512 MiB in 7.79 s, `rrbs read groups slice` (`SAMPLE` and `READ_GROUP`
+added, 3.3 million detail rows) at 152.1 / 512 MiB in 10.60 s. Picard takes 31.1 s on the
+slice and writes the same two files. `rrbs exome` runs the HG002 exome, which is not
+bisulfite data, at three levels: 16.6 million CpG sites per unit, 50 million detail rows
+(2.1 GB), 433.6 / 1024 MiB in 174.74 s. Before the review of the branch the slice peaked at
+562.5 MiB and the exome at `ALL_READS` alone at 7.2 GB: every detail row was held as cells
+until the file was written, and each contig load of the reference walker kept memory the
+allocator did not return (1.7 GB after eight hs37d5 contigs, 243 MiB now). The detail rows
+are now made as the file is written (`metric::RowSource`), a unit packs the sites of each
+contig it leaves at 3 to 4 bytes a site, and the walker refills one buffer.
+`set-nm-md-and-uq-tags slice` and `set-nm-and-uq-tags slice` read the reference through
+the same walker: 81.9 and 81.4 MiB (182.7 and 178.8 MiB before).
+
 The W09 rows of `add-comments-to-bam slice` and `replace-sam-header slice` copy the
 blocks as bytes at 0.28.0: 6.3 MiB and 0.28 s, 6.3 MiB and 0.21 s (28.5 MiB and 2.94 s,
 28.2 MiB and 3.13 s at 0.27.0).

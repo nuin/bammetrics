@@ -67,6 +67,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("RV_SAM", "tests/data/revert.sam"),
     ("SNVQ", "tests/data/snvq.bam"),
     ("UMI", "tests/data/umi_prevalence.bam"),
+    ("RRBS", "tests/data/rrbs.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -763,6 +764,23 @@ const SNVQ_UMI_CASES: &[Case] = &[
     case!("error_chain_umi_prevalence", "chain", "UMI", "-o", "OUT/s", "+", "umi-prevalence"),
 ];
 
+/// Wave W11: `CollectRrbsMetrics` on the bisulfite fixture of
+/// tests/data/make_rrbs_bam.py, the Picard face, the verb, a chain tap and
+/// the errors.
+#[rustfmt::skip]
+const RRBS_CASES: &[Case] = &[
+    case!("picard_rrbs", "CollectRrbsMetrics", "I=RRBS", "M=OUT/rrbs", "R=REF", "LEVEL=SAMPLE"),
+    case!("picard_rrbs_options", "CollectRrbsMetrics", "I=RRBS", "M=OUT/rrbs.", "R=REF", "C_QUALITY_THRESHOLD=0", "MINIMUM_READ_LENGTH=40", "MAX_MISMATCH_RATE=0.2", "SEQUENCE_NAMES=chr1", "DO_NOT_CREATE_PLOTS=true", "LEVEL=null", "LEVEL=LIBRARY"),
+    case!("verb_rrbs_json", "rrbs", "RRBS", "-R", "REF", "-o", "OUT/rrbs", "--next-base-quality-threshold", "30", "--format", "picard,json"),
+    case!("verb_rrbs_cram", "rrbs", "IS_CRAM", "-R", "REF", "-o", "OUT/cram", "--max-mismatch-rate", "1"),
+    case!("chain_rrbs", "chain", "RRBS", "-R", "REF", "-o", "OUT/s", "+", "rrbs", "--level", "READ_GROUP", "--minimum-read-length", "60", "+", "mark-duplicates", "+", "rrbs", "--sequence-names", "none"),
+    case!("error_rrbs_rate", "CollectRrbsMetrics", "I=RRBS", "M=OUT/x", "R=REF", "MAX_MISMATCH_RATE=1.5", "MINIMUM_READ_LENGTH=0"),
+    case!("error_rrbs_no_reference", "CollectRrbsMetrics", "I=RRBS", "M=OUT/x"),
+    case!("error_rrbs_reference_sequence", "CollectRrbsMetrics", "I=RRBS", "M=OUT/x", "REFERENCE_SEQUENCE=REF"),
+    case!("error_verb_rrbs_unsorted", "rrbs", "DM", "-R", "REF", "-o", "OUT/x"),
+    case!("error_chain_rrbs_no_reference", "chain", "RRBS", "-o", "OUT/s", "+", "rrbs"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -869,6 +887,7 @@ const T1_CASES: &[Case] = &[
     case!("t1_duplicate_by_tile", "duplicate-by-tile", "T1", "-o", "OUT/duplicate_by_tile.txt"),
     case!("t1_telomere", "telomere", "T1", "-o", "OUT/telomere.txt"),
     case!("t1_umi_prevalence", "umi-prevalence", "T1", "-o", "OUT/umi_prevalence.txt", "--barcode-tag", "RG", "--filter-unpaired-reads", "false"),
+    case!("t1_rrbs", "rrbs", "T1", "-R", "T1_REF", "-o", "OUT/rrbs", "--minimum-read-length", "1000", "--level", "READ_GROUP"),
 ];
 
 fn root() -> PathBuf {
@@ -1222,6 +1241,11 @@ fn documented_snvq_and_umi_commands_on_the_fixtures() {
     check(SNVQ_UMI_CASES);
 }
 
+#[test]
+fn documented_rrbs_commands_on_the_fixtures() {
+    check(RRBS_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1333,6 +1357,7 @@ fn case_names_are_unique() {
         .chain(SPLIT_CASES)
         .chain(GATHER_CHECKSUM_CASES)
         .chain(SNVQ_UMI_CASES)
+        .chain(RRBS_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

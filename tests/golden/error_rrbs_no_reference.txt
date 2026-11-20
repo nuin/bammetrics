@@ -1,0 +1,9 @@
+## argv
+CollectRrbsMetrics
+I=tests/data/rrbs.bam
+M=OUT/x
+## exit
+1
+## stdout
+## stderr
+bammetrics: REFERENCE is required

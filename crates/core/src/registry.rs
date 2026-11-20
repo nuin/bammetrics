@@ -374,6 +374,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::calculate_read_group_checksum::TOOL,
     &crate::quality_yield_snvq::TOOL,
     &crate::umi_prevalence::TOOL,
+    &crate::rrbs_metrics::TOOL,
 ];
 
 /// The tool named `name`.
@@ -688,7 +689,7 @@ impl Tool {
                         input = Some(PathBuf::from(&value));
                     }
                     if opt.ty == Ty::Path && !opt.written && value != "null" {
-                        if opt.names[0] == "REFERENCE_SEQUENCE" {
+                        if matches!(opt.names[0], "REFERENCE_SEQUENCE" | "REFERENCE") {
                             inv.inputs
                                 .extend(crate::reference::files_read(Path::new(&value)));
                         } else {
