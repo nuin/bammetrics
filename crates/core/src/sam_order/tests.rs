@@ -339,3 +339,40 @@ fn orders_parse_and_name_themselves() {
     }
     assert_eq!(Order::parse("unknown"), None);
 }
+
+#[test]
+fn the_set_order_collapses_a_fragment_into_pairs_on_its_strand() {
+    let key = |flags: u16, mate_coordinate: i32| DuplicateKey {
+        library: 1,
+        reference_id: 0,
+        read_coordinate: 100,
+        flags,
+        mate_reference_id: if flags & 0x8 == 0 && flags & 0x1 != 0 {
+            0
+        } else {
+            -1
+        },
+        mate_coordinate,
+        score: 0,
+        read_group: None,
+        name: std::borrow::Cow::Borrowed(b"r"),
+    };
+    // FF (0x1), FR (0x21), a mate-unmapped F (0x9) and a fragment F (0).
+    let (ff, fr, f, fragment) = (key(0x1, 200), key(0x21, 200), key(0x9, -1), key(0, -1));
+    let (rf, rr, r) = (key(0x11, 200), key(0x31, 200), key(0x19, -1));
+    for (a, b) in [(&f, &ff), (&f, &fr), (&fragment, &fr), (&r, &rf), (&r, &rr)] {
+        assert_eq!(a.set_order(b), Ordering::Equal);
+        assert_eq!(b.set_order(a), Ordering::Equal);
+    }
+    // The full order keeps them apart, and the collapse is not transitive.
+    assert_eq!(f.compare(&fr), Ordering::Greater);
+    assert_eq!(ff.set_order(&fr), Ordering::Less);
+    assert_eq!(f.set_order(&rf), Ordering::Less);
+    assert_eq!(r.set_order(&fr), Ordering::Greater);
+    // A pair's mate coordinate splits sets; a fragment's has none to split.
+    assert_eq!(fr.set_order(&key(0x21, 300)), Ordering::Less);
+    assert_eq!(f.set_order(&key(0x21, 300)), Ordering::Equal);
+    // The pairing tie-breaks of the sort are left out.
+    assert_eq!(f.set_order(&fragment), Ordering::Equal);
+    assert_ne!(f.compare(&fragment), Ordering::Equal);
+}

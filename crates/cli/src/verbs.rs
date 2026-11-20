@@ -547,6 +547,16 @@ pub const VERBS: &[Verb] = &[
             Files::Bam,
         )
     },
+    verb(
+        "quality-yield-s-n-v-q",
+        "CollectQualityYieldMetricsSNVQ",
+        Files::Single,
+    ),
+    verb(
+        "umi-prevalence",
+        "CollectUmiPrevalenceMetrics",
+        Files::Single,
+    ),
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the

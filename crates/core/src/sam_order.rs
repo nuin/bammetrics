@@ -356,6 +356,20 @@ fn orientation(flags: u16, both_mapped: bool) -> i32 {
     }
 }
 
+/// `compareOrientationByteCollapseOrientation`: `F` (2) ties with `FF` (0),
+/// `FR` (1) and itself, `R` (5) with `RF` (3), `RR` (4) and itself, either
+/// side first; anything else orders by the difference.
+fn collapsed_orientation(a: i32, b: i32) -> Ordering {
+    const F: i32 = 2;
+    const R: i32 = 5;
+    match (a, b) {
+        (F, 0..=2) | (R, 3..=5) => Ordering::Equal,
+        (F | R, _) => a.cmp(&b),
+        (_, F | R) => collapsed_orientation(b, a).reverse(),
+        _ => a.cmp(&b),
+    }
+}
+
 /// What `SAMRecordDuplicateComparator` reads from a record.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DuplicateKey<'a> {
@@ -518,6 +532,36 @@ impl<'a> DuplicateKey<'a> {
                     Ordering::Greater
                 }
             })
+    }
+
+    /// `duplicateSetCompare`, `fileOrderCompare(a, b, true, false)`: the
+    /// orientation of a fragment (or of a pair with one end unmapped)
+    /// equals that of a pair on the same strand (`F` equals `FR` and `FF`,
+    /// `R` equals `RF` and `RR`), and the pairing tie-breaks are left out.
+    /// The collapse makes this order intransitive, as in htsjdk: a set is
+    /// the records that compare equal to its first record.
+    pub fn set_order(&self, other: &Self) -> Ordering {
+        let by_reference = match (self.reference_id, other.reference_id) {
+            (-1, -1) => Ordering::Equal,
+            (-1, _) => Ordering::Greater,
+            (_, -1) => Ordering::Less,
+            (a, b) => java_difference(a, b),
+        };
+        let mut order = java_difference(self.library, other.library)
+            .then(by_reference)
+            .then_with(|| java_difference(self.read_coordinate, other.read_coordinate))
+            .then_with(|| {
+                collapsed_orientation(
+                    orientation(self.flags, self.both_mapped()),
+                    orientation(other.flags, other.both_mapped()),
+                )
+            });
+        if self.both_mapped() && other.both_mapped() {
+            order = order
+                .then_with(|| java_difference(self.mate_reference_id, other.mate_reference_id))
+                .then_with(|| java_difference(self.mate_coordinate, other.mate_coordinate));
+        }
+        order.then_with(|| other.mapped_end().cmp(&self.mapped_end()))
     }
 
     /// `SAMRecordDuplicateComparator.compare`.

@@ -197,9 +197,26 @@ impl Collector {
 /// `calculateDerivedFields`: `(int) (TOTAL_BASES / TOTAL_READS)`, 0 without
 /// reads.
 fn derived_read_length(row: &Row) -> i32 {
-    row.total_bases
-        .checked_div(row.total_reads)
-        .map_or(0, |mean| mean as i32)
+    read_length(row.total_bases, row.total_reads)
+}
+
+/// `READ_LENGTH` of a quality yield row: `(int) (bases / reads)`, Java's
+/// truncating `long` division cast to `int`, 0 without reads. The SNVQ
+/// variant derives it the same way.
+pub(crate) fn read_length(bases: i64, reads: i64) -> i32 {
+    bases.checked_div(reads).map_or(0, |mean| mean as i32)
+}
+
+/// Whether `acceptRecord` returns before counting: a secondary or a
+/// supplementary record its option leaves out. The SNVQ variant skips the
+/// same records.
+pub(crate) fn skipped(
+    flags: noodles::sam::alignment::record::Flags,
+    include_secondary: bool,
+    include_supplemental: bool,
+) -> bool {
+    (flags.is_secondary() && !include_secondary)
+        || (flags.is_supplementary() && !include_supplemental)
 }
 
 pub const TOOL: Tool = Tool {
@@ -301,9 +318,11 @@ impl Accumulator for QualityYield {
 
     fn accept(&mut self, record: &bam::Record) -> Result<()> {
         let flags = record.flags();
-        if (flags.is_secondary() && !self.opts.include_secondary_alignments)
-            || (flags.is_supplementary() && !self.opts.include_supplemental_alignments)
-        {
+        if skipped(
+            flags,
+            self.opts.include_secondary_alignments,
+            self.opts.include_supplemental_alignments,
+        ) {
             return Ok(());
         }
         qualities(
