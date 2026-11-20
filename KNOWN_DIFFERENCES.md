@@ -1527,8 +1527,8 @@ generated pairs, SAM text and CRAM (`tests/concordance/test_add_or_replace_read_
 decisions D53 to D57):
 
 - `RGDT` is written in UTC (`+0000`). Picard writes the same instant in the JVM's time
-  zone (`2020-01-01T17:00:00-0700` in Edmonton for `RGDT=2020-01-02`). Years 1583 to 9999
-  are read; Picard reads any year.
+  zone (`2020-01-01T17:00:00-0700` in Edmonton for `RGDT=2020-01-02`). A year past
+  100,000,000 exits 2; Picard's milliseconds overflow there.
 - `RGCN=` (an empty value) exits with the regular expression error. Picard's parser takes
   the next argument as the value.
 - `SORT_ORDER=unknown` over two records or more exits 1 and writes nothing. Picard throws a
@@ -1542,6 +1542,9 @@ decisions D53 to D57):
   run at once.
 - A `.cram` `OUTPUT` exits 2 naming wave W15. Picard writes a CRAM. A failed run leaves no
   `OUTPUT`.
+- `RevertOriginalBaseQualitiesAndAddMateCigar` holds the records of one read name together
+  to set their mate fields. A name with more than 1,000,000 records exits 1. Picard holds
+  them all while the JVM heap lasts.
 
 ## SplitSamByLibrary and SplitSamByNumberOfReads
 
@@ -1564,9 +1567,6 @@ are open at once, and a file closed to make room ends its block early. They diff
   as Picard does at `SILENT`.
 - A run that fails leaves none of its files. Picard leaves the files it opened.
 - A split writes at most 100,000 files: the run that would make the 100,001st exits 1 and leaves none. A count above 100,000 is taken when the records give fewer files.
-- A library name of SAM text with a character above U+00FF is kept as the low byte of
-  each UTF-16 unit, as every SAM text value is (section SAM text), so its file name is not
-  Picard's.
 
 ## Not in Picard
 

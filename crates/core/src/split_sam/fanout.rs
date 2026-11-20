@@ -7,7 +7,7 @@
 //! A file closed to make room first sends its staged bytes as a short
 //! block and writes every frame it has pending.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -599,27 +599,45 @@ impl Fanout {
 
 /// Rename every file into place. When one fails, or when two of them
 /// turn out to be one file (names that differ in case only, on a file
-/// system that ignores case), every file renamed is removed again. Each
-/// renamed file stays registered in [`crate::cleanup`] until the last
-/// rename and the check are done, so a signal in between removes the
-/// renamed files too. A file written in place (a link or pipe this user
-/// owns) is never removed.
+/// system that ignores case), every file renamed is removed again and each
+/// file it replaced comes back. A file about to be replaced is first kept
+/// under a second name ([`keep_old`]), removed once every file of the set
+/// is in place. Each renamed file stays registered in [`crate::cleanup`]
+/// until the last rename and the check are done, so a signal in between
+/// removes the renamed files too; a kept file is not registered, so it
+/// outlives the signal under its kept name. A file written in place (a
+/// link or pipe this user owns) is never removed.
 fn commit_all(staged: Vec<AtomicFile>) -> Result<Vec<PathBuf>> {
     let mut done: Vec<PathBuf> = Vec::with_capacity(staged.len());
     let mut renamed: Vec<PathBuf> = Vec::with_capacity(staged.len());
-    let undo = |renamed: &[PathBuf]| {
+    let mut kept: Vec<Kept> = Vec::new();
+    // The files this set has put in place, by device and inode: a later
+    // name that is one of them (case only differs) replaces no old file.
+    let mut ours: HashSet<(u64, u64)> = HashSet::with_capacity(staged.len());
+    let undo = |renamed: &[PathBuf], kept: &[Kept]| {
         for path in renamed.iter().rev() {
             let _ = std::fs::remove_file(path);
         }
         cleanup::unregister_all(renamed);
+        for old in kept.iter().rev() {
+            let _ = std::fs::rename(&old.kept, &old.target);
+        }
     };
     let mut files = staged.into_iter();
     while let Some(file) = files.next() {
         let path = file.path().to_path_buf();
-        match file.commit_registered() {
+        let committed = keep_old(&file, &ours).and_then(|old| {
+            kept.extend(old);
+            file.commit_registered()
+        });
+        if let Ok(meta) = std::fs::metadata(&path) {
+            use std::os::unix::fs::MetadataExt;
+            ours.insert((meta.dev(), meta.ino()));
+        }
+        match committed {
             Ok(committed) => renamed.extend(committed),
             Err(source) => {
-                undo(&renamed);
+                undo(&renamed, &kept);
                 // The files not yet renamed are dropped: their temporary
                 // names are removed.
                 drop(files);
@@ -641,10 +659,136 @@ fn commit_all(staged: Vec<AtomicFile>) -> Result<Vec<PathBuf>> {
                 other.display(),
                 path.display()
             );
-            undo(&renamed);
+            undo(&renamed, &kept);
             return Err(Error::Metric(message));
         }
     }
     cleanup::unregister_all(&renamed);
+    for old in &kept {
+        let _ = std::fs::remove_file(&old.kept);
+    }
     Ok(done)
+}
+
+/// A file a commit replaces, kept under a second name until the set is in
+/// place.
+struct Kept {
+    target: PathBuf,
+    kept: PathBuf,
+}
+
+/// Keep the file `file` would replace: a hard link beside it named
+/// `.NAME.PID.N.old`, so the file stays at its name until the rename over
+/// it; where the file system has no hard links, the file is renamed to
+/// that name. `None` when nothing is replaced: no file there, a directory
+/// (the rename over it fails), a file of this set (`ours`), or `file` is
+/// written in place.
+fn keep_old(file: &AtomicFile, ours: &HashSet<(u64, u64)>) -> io::Result<Option<Kept>> {
+    use std::os::unix::fs::MetadataExt;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let target = file.path();
+    let replaced = std::fs::symlink_metadata(target)
+        .is_ok_and(|m| !m.is_dir() && !ours.contains(&(m.dev(), m.ino())));
+    if file.writing() == target || !replaced {
+        return Ok(None);
+    }
+    let name = target
+        .file_name()
+        .map_or_else(|| "output".into(), |n| n.to_string_lossy().into_owned());
+    let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let kept = target.with_file_name(format!(".{name}.{}.{counter}.old", std::process::id()));
+    std::fs::hard_link(target, &kept).or_else(|_| std::fs::rename(target, &kept))?;
+    Ok(Some(Kept {
+        target: target.to_path_buf(),
+        kept,
+    }))
+}
+
+#[cfg(test)]
+mod commit_tests {
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("bammetrics-fanout-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir(&dir).expect("scratch dir");
+        dir
+    }
+
+    fn staged(path: &Path, text: &str) -> AtomicFile {
+        let file = AtomicFile::new(path);
+        file.create()
+            .expect("create")
+            .write_all(text.as_bytes())
+            .expect("write");
+        file
+    }
+
+    fn listing(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .expect("dir")
+            .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// A set whose second rename fails leaves the first file as it was
+    /// before the run, and no other file.
+    #[test]
+    fn a_failed_set_restores_the_files_it_replaced() {
+        let dir = scratch("restore");
+        let old = dir.join("a.bam");
+        std::fs::write(&old, "before").expect("old");
+        let first = staged(&old, "new a");
+        let blocked = dir.join("b.bam");
+        let second = staged(&blocked, "new b");
+        // A directory with a file in it: the rename over it fails.
+        std::fs::create_dir(&blocked).expect("dir");
+        std::fs::write(blocked.join("x"), "x").expect("x");
+        let error = commit_all(vec![first, second]).expect_err("the second rename fails");
+        assert!(error.to_string().contains("b.bam"), "{error}");
+        assert_eq!(std::fs::read_to_string(&old).expect("a.bam"), "before");
+        assert_eq!(listing(&dir), ["a.bam", "b.bam"]);
+        std::fs::remove_dir_all(&dir).expect("cleanup");
+    }
+
+    /// Two names of one file on a file system that ignores case: the set
+    /// fails and the file that was there comes back with its bytes.
+    #[test]
+    fn a_case_clash_restores_the_old_file() {
+        let dir = scratch("case");
+        let old = dir.join("ab.bam");
+        std::fs::write(&old, "before").expect("old");
+        if !dir.join("AB.bam").exists() {
+            // A file system that tells case apart has no clash.
+            std::fs::remove_dir_all(&dir).expect("cleanup");
+            return;
+        }
+        let set = vec![
+            staged(&dir.join("AB.bam"), "new AB"),
+            staged(&old, "new ab"),
+        ];
+        let error = commit_all(set).expect_err("one file");
+        assert!(error.to_string().contains("one file"), "{error}");
+        assert_eq!(std::fs::read_to_string(&old).expect("ab.bam"), "before");
+        assert_eq!(listing(&dir).len(), 1);
+        std::fs::remove_dir_all(&dir).expect("cleanup");
+    }
+
+    /// A set that succeeds replaces the file and leaves no kept copy.
+    #[test]
+    fn a_set_in_place_removes_the_kept_files() {
+        let dir = scratch("replace");
+        let old = dir.join("a.bam");
+        std::fs::write(&old, "before").expect("old");
+        let done = commit_all(vec![staged(&old, "new a"), staged(&dir.join("b.bam"), "b")])
+            .expect("commit");
+        assert_eq!(done.len(), 2);
+        assert_eq!(std::fs::read_to_string(&old).expect("a.bam"), "new a");
+        assert_eq!(listing(&dir), ["a.bam", "b.bam"]);
+        std::fs::remove_dir_all(&dir).expect("cleanup");
+    }
 }

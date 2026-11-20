@@ -110,11 +110,19 @@ pub const MAX_INPUTS: usize = 100_000;
 pub const MAX_LISTS: usize = 10_000;
 /// The bytes of one list file.
 pub const MAX_LIST_BYTES: u64 = 64 << 20;
+/// The bytes of every list file of one run together.
+pub const MAX_TOTAL_LIST_BYTES: u64 = 256 << 20;
 
 /// `INPUT` unrolled as `IOUtil.unrollPaths` unrolls it: a stack of paths,
 /// each list replaced by its lines. Returns the inputs in the order given,
 /// then the list files read.
 pub fn unroll(given: &[String]) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
+    unroll_within(given, MAX_TOTAL_LIST_BYTES)
+}
+
+/// [`unroll`], reading at most `total` bytes of list files in all.
+fn unroll_within(given: &[String], total: u64) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
+    let mut left = total;
     let mut stack: Vec<PathBuf> = given.iter().map(PathBuf::from).collect();
     let mut inputs = Vec::new();
     let mut lists = Vec::new();
@@ -132,7 +140,8 @@ pub fn unroll(given: &[String]) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
                 "INPUT: more than {MAX_LISTS} list files to read; does a list name itself?"
             )));
         }
-        let text = list_text(&path)?;
+        let text = list_text(&path, left, total)?;
+        left -= text.len() as u64;
         for line in list_lines(&text) {
             if stack.len() + inputs.len() == MAX_INPUTS {
                 return Err(Error::Usage(format!(
@@ -158,8 +167,9 @@ fn list_lines(text: &str) -> impl Iterator<Item = &str> {
 }
 
 /// The text of the list file `path`, at most [`MAX_LIST_BYTES`] of UTF-8
-/// (`Files.lines` fails on other bytes).
-fn list_text(path: &Path) -> Result<String> {
+/// (`Files.lines` fails on other bytes) and at most `left`, what remains
+/// of the run's `total` for list files.
+fn list_text(path: &Path, left: u64, total: u64) -> Result<String> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
@@ -167,13 +177,20 @@ fn list_text(path: &Path) -> Result<String> {
     let file = File::open(path).map_err(input)?;
     let mut bytes = Vec::new();
     BufReader::new(file)
-        .take(MAX_LIST_BYTES + 1)
+        .take(MAX_LIST_BYTES.min(left) + 1)
         .read_to_end(&mut bytes)
         .map_err(input)?;
-    if bytes.len() as u64 > MAX_LIST_BYTES {
+    let read = bytes.len() as u64;
+    if read > MAX_LIST_BYTES {
         return Err(input(io::Error::new(
             io::ErrorKind::InvalidData,
             format!("a list of inputs over {MAX_LIST_BYTES} bytes"),
+        )));
+    }
+    if read > left {
+        return Err(input(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("the lists of inputs of this run hold over {total} bytes together"),
         )));
     }
     String::from_utf8(bytes).map_err(|_| {

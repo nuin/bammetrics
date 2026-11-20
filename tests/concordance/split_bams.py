@@ -9,6 +9,8 @@ test_split_sam_by_number_of_reads.py), written with pysam on one 20 kb contig.
   `café` in UTF-8, every character `makeFileNameSafe` replaces; a read group without `LB`;
   records without `RG` and with an `RG` the header lacks; a library with no record.
 - `names_sam`: the same records as SAM text; `names_sam_gz`: as gzip SAM.
+- `wide_sam`: SAM text with libraries above U+00FF (`中文`, `㸭文` with the same low bytes,
+  `中/文`): htsjdk names each file from the whole text and writes the low bytes.
 - `no_rg`, `no_lb`: headers whose read groups give no library.
 - `old_header`: one library under `@HD VN:1.4` with no `SO`.
 - `queryname`, `unsorted`: two libraries under those headers, records in name order and in
@@ -34,6 +36,8 @@ QUAL = "I" * 50
 
 ODD_NAMES = ["Lib A", "lib/x", " sp ", "a+b,c-d.e", "café", "q!\"#$%&'()*:;<=>?@[]\\^`{|}~z",
              "tab\tin", "no reads"]
+
+WIDE_NAMES = ["中文", "\u3e2d文", "中/文"]
 
 
 def header(groups, hd=None):
@@ -92,6 +96,10 @@ def write(directory):
     paths["names_sam_gz"] = directory / "names_sam.gz"
     with open(paths["names_sam"], "rb") as plain, gzip.open(paths["names_sam_gz"], "wb") as packed:
         shutil.copyfileobj(plain, packed)
+
+    wide = [{"ID": f"w{n}", "SM": "s", "LB": name} for n, name in enumerate(WIDE_NAMES)]
+    records = [(f"w{i:03d}", 100 + i * 7, f"w{i % len(wide)}") for i in range(30)]
+    paths["wide_sam"] = write_bam(directory / "wide.sam", header(wide), records, mode="w")
 
     paths["no_rg"] = write_bam(directory / "no_rg.bam", header([]), [("a", 1, None)])
     paths["no_lb"] = write_bam(directory / "no_lb.bam", header([{"ID": "x", "SM": "s"}]),

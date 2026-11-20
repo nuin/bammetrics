@@ -14,7 +14,7 @@ compares the whole `@RG` line, `DT` included, byte for byte.
 Inputs: the fixture BAMs, `markdup.sam`, `insert_size.cram`, the foundation corpus (two
 samples, two libraries, three read groups), t1 to t3, the exome slice and the
 `revert_bams.py` records (coordinate, queryname and unsorted). Options: every read group
-field, `RGDT` in 14 forms, `RGID=null`, each `SORT_ORDER` against each input order,
+field, `RGDT` in 22 forms (before the Gregorian cutover, in its gap and past 9999 among them), `RGID=null`, each `SORT_ORDER` against each input order,
 `MAX_RECORDS_IN_RAM`, `TMP_DIR`, COMPRESSION_LEVEL, CREATE_INDEX (`out.bai`),
 CREATE_MD5_FILE, SAM text output. Error parity: a required option missing or `null`, a
 value with a tab, a bad date, a bad integer, a bad sort order, `MAX_RECORDS_IN_RAM=0` with
@@ -125,7 +125,8 @@ DATES = ["2020-01-02", "2020-01-02T03:04:05", "2020-01-02T03:04:05Z",
          "2020-01-02T03:04:05-0700", "2020-13-45", "1969-12-31T23:59:59Z",
          "2020-01-02T03:04:05.5Z", "2020-01-02T25:61:61", "2020-01-02T03:04+05",
          "1999-12-31T23:59:59.999-12:00", "1969-12-31T23:59:59.500Z",
-         "1969-12-31T23:58:58.999Z"]
+         "1969-12-31T23:58:58.999Z", "1500-03-04T05:06:07", "0001-01-01", "1582-10-10",
+         "1582-10-04", "1582-10-15", "20200102"]
 
 
 @pytest.mark.parametrize("date", DATES)
