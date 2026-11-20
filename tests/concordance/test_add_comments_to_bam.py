@@ -165,12 +165,40 @@ def sort_order_inputs(directory):
     return paths
 
 
+def block_starts(bam):
+    """The offset of each BGZF block of `bam`, in file order."""
+    data, starts, at = bam.read_bytes(), [], 0
+    while at < len(data):
+        starts.append(at)
+        at += int.from_bytes(data[at + 16:at + 18], "little") + 1
+    return starts
+
+
+def same_index_by_block(index, other, bam, other_bam):
+    """Two .bai files equal once each virtual offset is read as (block number, offset
+    in the block) of its own BAM. A block copy deflates the header block again, and
+    zlib-rs and the JDK's zlib give it other lengths (docs/07 D63), so the compressed
+    offsets of two indexes of the same records differ by that length."""
+    index, other = index.read_bytes(), other.read_bytes()
+    if len(index) != len(other):
+        return False
+    starts, other_starts = block_starts(bam), block_starts(other_bam)
+    for word, other_word in offsets_that_differ(index, other):
+        if word & 0xFFFF != other_word & 0xFFFF:
+            return False
+        if word >> 16 not in starts or other_word >> 16 not in other_starts:
+            return False
+        if starts.index(word >> 16) != other_starts.index(other_word >> 16):
+            return False
+    return True
+
+
 def index_by_sort_order(tool, args_of, tmp_path, index_name):
     """CREATE_INDEX on a block copy follows htsjdk's `BAMIndexer`: the records are indexed
-    under `SO:coordinate`, `SO:unsorted` or no `@HD` (the same .bai in both tools), no
-    index under another order (both exit 0). A record the indexer refuses (its reference
-    goes back) leaves Picard's run at exit 0 with an empty .bai; bammetrics exits 1 and
-    writes nothing (KNOWN_DIFFERENCES.md)."""
+    under `SO:coordinate`, `SO:unsorted` or no `@HD` (the same .bai in both tools, block
+    by block), no index under another order (both exit 0). A record the indexer refuses
+    (its reference goes back) leaves Picard's run at exit 0 with an empty .bai; bammetrics
+    exits 1 and writes nothing (KNOWN_DIFFERENCES.md)."""
     inputs = sort_order_inputs(tmp_path)
     for name, bam in inputs.items():
         result = {}
@@ -184,8 +212,9 @@ def index_by_sort_order(tool, args_of, tmp_path, index_name):
         if name in ("unsorted_header", "no_hd"):
             assert result["picard"] == result["bammetrics"] == (0, sorted(["out.bam",
                                                                            index_name])), name
-            assert index[0].read_bytes() == index[1].read_bytes(), name
-            detail = f"{index_name} equal"
+            bams = [path.parent / "out.bam" for path in index]
+            assert same_index_by_block(*index, *bams), name
+            detail = f"{index_name} equal by block"
         elif name in ("queryname", "back_unknown"):
             assert result["picard"] == result["bammetrics"] == (0, ["out.bam"]), name
             detail = "no index in either"

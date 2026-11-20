@@ -100,6 +100,9 @@ Wave W11 of docs/07: six metrics tools (60 in all), two of them chain taps, and 
   so two `sequencing-artifact` steps on one prefix fail in place of replacing the files.
 - `CollectRrbsMetrics` checks that both files can be written before it reads, as Picard
   does.
+- The concordance modules of `AddCommentsToBam`, `ReplaceSamHeader` and `GatherBamFiles`
+  compare a block copy's `.bai` with Picard's by block number and offset in the block
+  (docs/07 D93): the header block deflated by zlib-rs can be a byte shorter than the JDK's.
 
 ## 0.28.0
 
