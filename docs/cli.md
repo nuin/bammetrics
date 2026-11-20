@@ -320,6 +320,9 @@ table.
 | `quality-yield-s-n-v-q` | CollectQualityYieldMetricsSNVQ (`qa`, `qc`, `qg` and `qt` on every counted record; `--alternate-quality-attribute`, `--include-bq-histogram`) | one |
 | `umi-prevalence` | CollectUmiPrevalenceMetrics (`--barcode-tag`, `--barcode-bq`, `--minimum-mq`, `--minimum-barcode-bq`, `--filter-unpaired-reads`) | one histogram, no metrics row |
 | `rrbs` | CollectRrbsMetrics (a coordinate-sorted SAM, BAM or CRAM; `-R` required) | `PREFIX.rrbs_summary_metrics`, `PREFIX.rrbs_detail_metrics` |
+| `create-baf-regress-file` | CreateBafRegressMetricsFile (the text bafRegress prints) | `PREFIX.bafregress_metrics` |
+| `create-verify-i-d-intensity-contamination-file` | CreateVerifyIDIntensityContaminationMetricsFile (the text VerifyIDIntensity prints) | `PREFIX.verifyidintensity_metrics` |
+| `arrays-variant-calling` | CollectArraysVariantCallingMetrics (an arrays VCF with its index; `--dbsnp` required) | `PREFIX.arrays_variant_calling_{detail,summary}_metrics`, `PREFIX.arrays_control_code_summary_metrics` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -1010,6 +1013,52 @@ unless it ends in one. No plot is drawn: `--do-not-create-plots` is accepted.
 - A header that is not `SO:coordinate` exits 1 unless `--assume-sorted`. A record without
   base qualities and a second alignment block exits 1, as Picard does. A chain step: the
   chain's `-R` is its reference.
+
+### create-baf-regress-file, create-verify-i-d-intensity-contamination-file and arrays-variant-calling
+
+```bash
+bammetrics create-baf-regress-file bafregress.txt -o chip
+bammetrics create-verify-i-d-intensity-contamination-file verifyidintensity.txt -o chip
+bammetrics arrays-variant-calling chip.vcf.gz --dbsnp dbsnp.vcf.gz -o chip
+bammetrics CollectArraysVariantCallingMetrics I=chip.vcf.gz DBSNP=dbsnp.vcf.gz O=chip
+```
+
+The three `picard.arrays` metrics tools of Picard 3.5.0, each writing under the prefix
+`-o` (`tests/concordance/test_create_baf_regress_metrics_file.py`,
+`test_create_verify_i_d_intensity_contamination_metrics_file.py`,
+`test_arrays_variant_calling.py`).
+
+- `CreateBafRegressMetricsFile` reads the text bafRegress prints: the first line must be
+  `sample estimate stderr tval pval callrate Nhom` with tabs, and every later line must
+  split at spaces and tabs into 7 fields, numbers as Java reads them (`NaN`, `1e-5`).
+  `LOG10_PVAL` is `log10(pval)`. The file is `PREFIX.bafregress_metrics`.
+- `CreateVerifyIDIntensityContaminationMetricsFile` reads the text VerifyIDIntensity
+  prints: the `ID %Mix LLK LLK0` header, a rule of dashes, then one line of four numbers
+  per result. The file is `PREFIX.verifyidintensity_metrics`.
+- The two text inputs are read whole, at most 64 MiB, 1 MiB per line and 100,000 lines,
+  decoded as UTF-8 (a malformed sequence becomes U+FFFD, as in Java). A header alone gives a file
+  with no row; any other line Picard refuses exits 1 and writes nothing.
+- `CollectArraysVariantCallingMetrics` reads an arrays VCF as GtcToVcf writes it. Picard
+  opens it with its index, so a bgzip VCF needs its `.tbi` and a plain one its `.idx`;
+  without one the run exits 1. The index is not read. It writes
+  `PREFIX.arrays_variant_calling_detail_metrics` (one row per sample, in the order of a
+  Java `HashMap` filled in reverse header order),
+  `PREFIX.arrays_variant_calling_summary_metrics` (the sum) and
+  `PREFIX.arrays_control_code_summary_metrics` (the 23 Illumina controls from their header
+  lines). The header must hold `sampleAlias`, `arrayType`, `autocallGender`,
+  `autocallVersion`, `autocallDate`, `imagingDate`, `extendedIlluminaManifestVersion`,
+  `clusterFile`, `p95Green`, `p95Red`, `scannerName` and the control lines.
+- `AUTOCALL_DATE` and `IMAGING_DATE` print in the time zone of the process, as Picard's
+  print in the JVM's: set `TZ` to compare runs from two machines. `##imagingDate` is read
+  in New York time with the `AM` and `PM` markers GtcToVcf writes; an `en_CA` JVM reads
+  `a.m.` and `p.m.` and fails on them (`KNOWN_DIFFERENCES.md`).
+- `--call-rate-pf-threshold` (default 0.98, over 0 and at most 1) sets `AUTOCALL_PF`.
+  `--num-processors` is taken and changes nothing. `--sequence-dictionary` gives the
+  contigs the dbSNP file is checked against. The VCF is read at most 8 MiB per line,
+  100,000,000 lines and 50,000 samples. A record counts when it overlaps 1 to the length
+  of its `##contig` line. A tab or line end in a header value exits 1 and writes nothing,
+  as in Picard.
+- None of the three reads a BAM: none is a chain step.
 
 ### qc
 

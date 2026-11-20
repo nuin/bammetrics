@@ -1,0 +1,9 @@
+## argv
+CreateVerifyIDIntensityContaminationMetricsFile
+I=tests/data/arrays/verifyidintensity_bad.txt
+O=OUT/vid
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/arrays/verifyidintensity_bad.txt: line 3: For input string: "1-2"

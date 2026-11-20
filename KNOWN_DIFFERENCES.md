@@ -1606,6 +1606,53 @@ foundation corpora, SAM text and CRAM (`tests/concordance/test_quality_yield_s_n
 - An SNVQ tag of SAM text with a character above U+00FF is held as the low byte of each
   UTF-16 unit (section SAM text), so the positions after it are not the ones Picard reads.
 
+## CreateBafRegressMetricsFile, CreateVerifyIDIntensityContaminationMetricsFile and CollectArraysVariantCallingMetrics
+
+The three tools write Picard's files cell for cell and byte for byte after the header
+lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22, 25 and
+40 runs fail in both with no file left
+(`tests/concordance/test_create_baf_regress_metrics_file.py`,
+`test_create_verify_i_d_intensity_contamination_metrics_file.py`,
+`test_arrays_variant_calling.py`). They differ here (docs/07 decisions D84 to D88):
+
+- `##imagingDate` is read with the `AM` and `PM` markers GtcToVcf writes. Picard reads the
+  markers of the JVM's locale: an `en_CA` JVM takes `a.m.` and `p.m.` and fails on `AM`
+  with `Unrecognized date`; bammetrics reads `AM` and refuses `a.m.`. The concordance
+  module runs Picard with `-Duser.language=en -Duser.country=US`.
+- `##imagingDate` is New York time from the US daylight-saving rules of 1967 on; a date
+  before 1967 exits 1. Picard takes any date from the JVM's time zone data.
+- A date field with a sign or with more than 2,147,483,647 is refused; Java's number
+  parser reads a sign and wraps a larger number.
+- A required header value written as a `<...>` map (`##sampleAlias=<ID=x>`) exits 1.
+- `INPUT` must have the index htsjdk opens (`.tbi` beside a `.gz`, `.gzip`, `.bgz` or
+  `.bgzf` name, else `.idx`), but the index is not read: a stale or broken index that
+  Picard fails on gives the files of the VCF.
+- The arrays VCF is read at most 8 MiB per line, 100,000,000 lines and 50,000 samples;
+  the `DBSNP` and `SEQUENCE_DICTIONARY` VCFs at most 16 MiB per line and 4,000,000,000
+  lines; the two text inputs at most 64 MiB, 1 MiB per line and 100,000 lines. The dbSNP
+  sites may set at most 2,097,152 pages of 4,096 positions (1 GiB of bit set). Each cap
+  exits 1 naming it.
+- A tab or line end in a header value exits 1 in both. Picard leaves an empty
+  `.arrays_variant_calling_detail_metrics` behind; bammetrics checks every cell before the
+  first file and leaves none.
+- A date more than 292,000,000 years from 1970 exits 1. Java's `long` millisecond count
+  wraps there, and Picard prints the wrapped date.
+- Picard writes the detail rows in the order of a `HashMap` filled in reverse header order.
+  When more than 8 sample names fall in one bin of a table of 64 bins or more (11 names
+  of one hash code, such as `AaAa`, `AaBB`, `BBAa`), Java turns the bin into a tree whose
+  order is not modelled: bammetrics exits 1, Picard writes the files.
+- The VCF reader (noodles) refuses files htsjdk reads: an `##` line without `=`, an
+  `##INFO` line without `Description`, a repeated `##FORMAT`, `##FILTER` or `##contig` ID,
+  a malformed `##PEDIGREE` or `##META` line, a genotype of `''`, `0/` or `/0`, a record
+  with a trailing tab or more genotype columns than samples, a repeated sample name, and a
+  byte that is not UTF-8 in a header value or a record ID. Each exits 1 with no file.
+  GtcToVcf writes none of them.
+- bammetrics reads files Picard refuses: a `#CHROM` line with `FORMAT` and no sample, a
+  `##fileformat` of `VCFv3.3` or `VCFv9.9`, a `FILTER` value of `0`,
+  with a space or with an empty name (`DUPE;;ZEROED_OUT_ASSAY`), and a record whose
+  alleles repeat (`A>A`, `A>T,T`) in `INPUT` or `DBSNP`. Each gives the files where Picard
+  exits 1.
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))

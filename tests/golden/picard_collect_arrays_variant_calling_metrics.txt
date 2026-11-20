@@ -1,0 +1,64 @@
+## argv
+CollectArraysVariantCallingMetrics
+I=tests/data/arrays/arrays.vcf.gz
+DBSNP=tests/data/arrays/dbsnp.vcf
+O=OUT/arrays
+## exit
+0
+## stdout
+## stderr
+## file arrays.arrays_control_code_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectArraysVariantCallingMetrics INPUT=tests/data/arrays/arrays.vcf.gz DBSNP=tests/data/arrays/dbsnp.vcf OUTPUT=OUT/arrays
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.arrays.CollectArraysVariantCallingMetrics$ArraysControlCodesSummaryMetrics
+CONTROL	CATEGORY	RED	GREEN
+DNP(High)	Staining	46912	30003
+DNP(Bgnd)	Staining	47210	45744
+Biotin(High)	Staining	48261	53725
+Biotin(Bgnd)	Staining	14183	45259
+Extension(A)	Extension	5214	59892
+Extension(T)	Extension	39601	48540
+Extension(C)	Extension	8090	42982
+Extension(G)	Extension	25149	30323
+TargetRemoval	TargetRemoval	58407	22259
+Hyb(High)	Hybridization	57257	44355
+Hyb(Medium)	Hybridization	7878	32154
+Hyb(Low)	Hybridization	5489	8759
+String(PM)	Stringency	14680	38323
+String(MM)	Stringency	54369	1720
+NSB(Bgnd)Red	Non-SpecificBinding	2987	14857
+NSB(Bgnd)Purple	Non-SpecificBinding	7127	45415
+NSB(Bgnd)Blue	Non-SpecificBinding	8464	39892
+NSB(Bgnd)Green	Non-SpecificBinding	34403	19346
+NP(A)	Non-Polymorphic	12121	48981
+NP(T)	Non-Polymorphic	26933	56522
+NP(C)	Non-Polymorphic	48150	38160
+NP(G)	Non-Polymorphic	47482	44190
+Restore	Restoration	27299	14948
+
+
+## file arrays.arrays_variant_calling_detail_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectArraysVariantCallingMetrics INPUT=tests/data/arrays/arrays.vcf.gz DBSNP=tests/data/arrays/dbsnp.vcf OUTPUT=OUT/arrays
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingDetailMetrics
+CHIP_WELL_BARCODE	SAMPLE_ALIAS	ANALYSIS_VERSION	CHIP_TYPE	AUTOCALL_PF	AUTOCALL_DATE	IMAGING_DATE	IS_ZCALLED	GTC_CALL_RATE	AUTOCALL_GENDER	FP_GENDER	REPORTED_GENDER	GENDER_CONCORDANCE_PF	HET_PCT	CLUSTER_FILE_NAME	P95_GREEN	P95_RED	AUTOCALL_VERSION	ZCALL_VERSION	EXTENDED_MANIFEST_VERSION	HET_HOMVAR_RATIO	SCANNER_NAME	PIPELINE_VERSION	NUM_ASSAYS	NUM_NON_FILTERED_ASSAYS	NUM_FILTERED_ASSAYS	NUM_ZEROED_OUT_ASSAYS	NUM_SNPS	NUM_INDELS	NUM_CALLS	NUM_AUTOCALL_CALLS	NUM_NO_CALLS	NUM_IN_DB_SNP	NOVEL_SNPS	PCT_DBSNP	CALL_RATE	AUTOCALL_CALL_RATE	NUM_SINGLETONS
+SAMPLE	NA12881	4	GSA-24v3-0_A1	N	2013-04-13T03:03:00+0000	2013-04-04T08:03:21+0000	Y	0.939	M	U	M	Y	0.351351	cluster_3.egt	7087	9111	2.0.1	1.0.0.3	2.0	0.928571	N1043	1.3.0	60	42	18	8	29	10	37	26	5	15	14	0.517241	0.880952	0.619048	13
+
+
+## file arrays.arrays_variant_calling_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectArraysVariantCallingMetrics INPUT=tests/data/arrays/arrays.vcf.gz DBSNP=tests/data/arrays/dbsnp.vcf OUTPUT=OUT/arrays
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.arrays.CollectArraysVariantCallingMetrics$ArraysVariantCallingSummaryMetrics
+NUM_ASSAYS	NUM_NON_FILTERED_ASSAYS	NUM_FILTERED_ASSAYS	NUM_ZEROED_OUT_ASSAYS	NUM_SNPS	NUM_INDELS	NUM_CALLS	NUM_AUTOCALL_CALLS	NUM_NO_CALLS	NUM_IN_DB_SNP	NOVEL_SNPS	PCT_DBSNP	CALL_RATE	AUTOCALL_CALL_RATE	NUM_SINGLETONS
+60	42	18	8	29	10	37	26	5	15	14	0.517241	0.880952	0.619048	13
+
+

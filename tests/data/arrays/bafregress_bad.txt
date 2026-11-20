@@ -1,0 +1,2 @@
+sample	estimate	stderr	tval	pval	callrate	Nhom
+NA12878	0.0012	0.0003	4.1	2.1e-5	0.995

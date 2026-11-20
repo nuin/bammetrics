@@ -26,7 +26,6 @@
   `test_umi_prevalence.py`: every option, CRAM and SAM text, error parity and the
   distinct-value gate against Picard. `tests/data/snvq.bam` and `umi_prevalence.bam`
   (`tests/data/make_snvq_umi_fixtures.py`) back the golden cases.
-
 - `CollectRrbsMetrics` (verb `rrbs`, Python `collect_rrbs_metrics()`; wave W11 of docs/07):
   `PREFIX.rrbs_summary_metrics` (`RrbsSummaryMetrics`, one row per accumulation unit) and
   `PREFIX.rrbs_detail_metrics` (`RrbsCpgDetailMetrics`, one row per CpG site and unit),
@@ -35,6 +34,47 @@
   fixture, `tests/concordance/rrbs_bams.py` the bisulfite corpus.
 - A tool option named `REFERENCE` puts the FASTA's `.fai` among the run's inputs, as
   `REFERENCE_SEQUENCE` does.
+- `CreateBafRegressMetricsFile` (verb `create-baf-regress-file`, Python
+  `create_baf_regress_metrics_file()`), as Picard 3.5.0: the text bafRegress prints, its
+  header line checked whole, each line split at runs of Java's `\s` into 7 fields, numbers
+  read by `Double.parseDouble` and `Integer.parseInt`, `LOG10_PVAL` from `PVAL`; one
+  `BafRegressMetrics` row per sample in `OUTPUT.bafregress_metrics`.
+- `CreateVerifyIDIntensityContaminationMetricsFile` (verb
+  `create-verify-i-d-intensity-contamination-file`, Python
+  `create_verify_i_d_intensity_contamination_metrics_file()`), as Picard 3.5.0: the header,
+  the rule and each result line matched against Picard's three patterns; one
+  `VerifyIDIntensityContaminationMetrics` row per result in
+  `OUTPUT.verifyidintensity_metrics`.
+- `CollectArraysVariantCallingMetrics` (verb `arrays-variant-calling`, Python
+  `collect_arrays_variant_calling_metrics()`), as Picard 3.5.0: an arrays VCF as GtcToVcf
+  writes it, with its `.tbi` or `.idx`; `DBSNP`, `CALL_RATE_PF_THRESHOLD`,
+  `SEQUENCE_DICTIONARY`, `NUM_PROCESSORS` (taken, no effect). The per-sample detail file in
+  Java `HashMap` order, the summary and the 23 control codes from the header; the header
+  dates read by a lenient `SimpleDateFormat` port, `##imagingDate` in New York time, both
+  printed in the process's time zone (`arrays/header_date.rs`).
+- `VcfReader::open_capped`: a VCF read under a line-length and line-count cap
+  (`vcf/line_cap.rs`). `java_date::wall_millis` and `local_instant`: lenient calendar
+  fields to an instant in the process's zone, a repeated hour resolved to the later
+  instant as `ZoneInfo.getOffsetsByWall` does.
+- The review of the arrays tools: the detail rows follow a `HashMap` filled in reverse
+  header order, so names that share a bin (`S1` and `.`, 12 or 45 names) come out as
+  Picard writes them; a VCF whose names make a tree bin exits 1. A record counts when it
+  overlaps 1 to its `##contig` length. A tab or line end in a header value exits 1 with no
+  file, as in Picard. A dbSNP file without `##contig` lines is read. At most 50,000
+  samples and 8 MiB per line; the header fields are held once for every sample.
+- The dbSNP bit set keeps pages of 4,096 positions where a site sets a bit, at most 1 GiB
+  in one run (`vcf/bit_set.rs`): 200 sites at position 2,147,483,000 take 5 MiB, not
+  1.3 GiB. Every dbSNP and VCF dictionary is read under 16 MiB per line.
+- `VcfReader` opens its file once, so a named pipe is read. `output_path` drops trailing
+  separators as `java.io.File` does: `O=dir/` writes `dir.<extension>`. An `OUTPUT` that is
+  a hard link to an input is refused by device and inode (`registry::check_writable`).
+- The text inputs decode an encoded surrogate (`ED A0 80`) as one U+FFFD, as Java does, and
+  hold at most 100,000 lines. A header date more than 292,000,000 years from 1970 exits 1
+  where the arithmetic overflowed. `chain` names the tools that read a text or VCF file
+  and no BAM. `tests/data/make_arrays_stress.py` and three memgate rows at the caps.
+- `tests/concordance/array_vcfs.py`, a seeded writer of arrays VCFs and their dbSNP, and the
+  concordance modules of the three tools; `tests/data/arrays` (`make_arrays_fixtures.py`);
+  12 golden forms, the arrays VCF ones under `TZ=UTC`.
 
 ### Changed
 

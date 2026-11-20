@@ -1,0 +1,9 @@
+## argv
+CreateBafRegressMetricsFile
+I=tests/data/arrays/bafregress_bad.txt
+O=OUT/baf
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/arrays/bafregress_bad.txt: line 2: Invalid number of entries (6) in line: NA12878	0.0012	0.0003	4.1	2.1e-5	0.995 (Picard: Error parsing bafRegress Output)

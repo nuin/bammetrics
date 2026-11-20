@@ -1,0 +1,100 @@
+## argv
+create-baf-regress-file
+tests/data/arrays/bafregress.txt
+-o
+OUT/baf
+--format
+picard,json
+## exit
+0
+## stdout
+## stderr
+## file baf.bafregress_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CreateBafRegressMetricsFile INPUT=tests/data/arrays/bafregress.txt OUTPUT=OUT/baf
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.arrays.BafRegressMetrics
+SAMPLE	ESTIMATE	STDERR	TVAL	PVAL	LOG10_PVAL	CALL_RATE	NHOM
+NA12878	0.0012	0.0003	4.1	0.000021	-4.677781	0.995	123456
+NA12891	-0.0004	0.00021	-1.9	0.97	-0.013228	0.9981	130001
+NA12892	?	0.002	75.3	0	-?	0.93	99999
+
+
+## file baf.bafregress_metrics.json
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CreateBafRegressMetricsFile",
+  "sample": "bafregress.txt",
+  "headers": [
+    "CreateBafRegressMetricsFile INPUT=tests/data/arrays/bafregress.txt OUTPUT=OUT/baf",
+    "Started on: <time>"
+  ],
+  "class": "picard.arrays.BafRegressMetrics",
+  "columns": [
+    "SAMPLE",
+    "ESTIMATE",
+    "STDERR",
+    "TVAL",
+    "PVAL",
+    "LOG10_PVAL",
+    "CALL_RATE",
+    "NHOM"
+  ],
+  "types": [
+    "string",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "int"
+  ],
+  "metrics": [
+    {
+      "SAMPLE": "NA12878",
+      "ESTIMATE": 0.0012,
+      "STDERR": 0.0003,
+      "TVAL": 4.1,
+      "PVAL": 0.000021,
+      "LOG10_PVAL": -4.6777807052660805,
+      "CALL_RATE": 0.995,
+      "NHOM": 123456
+    },
+    {
+      "SAMPLE": "NA12891",
+      "ESTIMATE": -0.0004,
+      "STDERR": 0.00021,
+      "TVAL": -1.9,
+      "PVAL": 0.97,
+      "LOG10_PVAL": -0.01322826573375516,
+      "CALL_RATE": 0.9981,
+      "NHOM": 130001
+    },
+    {
+      "SAMPLE": "NA12892",
+      "ESTIMATE": null,
+      "STDERR": 0.002,
+      "TVAL": 75.3,
+      "PVAL": 0,
+      "LOG10_PVAL": null,
+      "CALL_RATE": 0.93,
+      "NHOM": 99999
+    }
+  ],
+  "non_finite": [
+    {
+      "row": 2,
+      "column": "ESTIMATE",
+      "value": "NaN"
+    },
+    {
+      "row": 2,
+      "column": "LOG10_PVAL",
+      "value": "-Infinity"
+    }
+  ],
+  "histogram": null
+}
