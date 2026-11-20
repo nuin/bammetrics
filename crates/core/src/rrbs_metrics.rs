@@ -38,7 +38,7 @@
 //! Detail rows follow the units, each unit's sites sorted by contig name
 //! (Java `String.compareTo`) then position.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -453,7 +453,8 @@ struct Scratch {
 /// The pass accumulator.
 pub struct Rrbs {
     thresholds: Thresholds,
-    sequence_names: Vec<String>,
+    /// `SEQUENCE_NAMES`; empty takes every contig.
+    sequence_names: HashSet<String>,
     reference: Reference,
     names: Vec<String>,
     levels: Levels<Unit>,
@@ -472,7 +473,7 @@ impl Rrbs {
                 minimum_read_length: opts.minimum_read_length,
                 max_mismatch_rate: opts.max_mismatch_rate,
             },
-            sequence_names: opts.sequence_names.clone(),
+            sequence_names: opts.sequence_names.iter().cloned().collect(),
             reference,
             names: header
                 .reference_sequences()
@@ -497,7 +498,7 @@ impl Accumulator for Rrbs {
         let name = id
             .and_then(|i| self.names.get(i))
             .map_or("*", String::as_str);
-        if !self.sequence_names.is_empty() && !self.sequence_names.iter().any(|n| n == name) {
+        if !self.sequence_names.is_empty() && !self.sequence_names.contains(name) {
             return Ok(());
         }
         let id = id.ok_or_else(|| Error::MalformedRecord {
