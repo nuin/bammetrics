@@ -279,15 +279,37 @@ impl MetricRow for SummaryRow {
     }
 }
 
-/// `RrbsCpgDetailMetrics`.
+/// `RrbsCpgDetailMetrics`. `PCT_CONVERTED` is 0 when no read was
+/// converted, else `CONVERTED_SITES / TOTAL_SITES`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DetailRow {
     pub sequence_name: String,
     pub position: i64,
     pub total_sites: i64,
     pub converted_sites: i64,
-    pub pct_converted: f64,
     pub labels: Labels,
+}
+
+impl DetailRow {
+    /// The cells of one row, made without the row: the file holds one row
+    /// per CpG site and unit, millions on a genome.
+    fn cells(name: &str, position: i64, total: i64, converted: i64, labels: &Labels) -> Vec<Value> {
+        let pct = if converted == 0 {
+            0.0
+        } else {
+            converted as f64 / total as f64
+        };
+        vec![
+            name.into(),
+            position.into(),
+            total.into(),
+            converted.into(),
+            pct.into(),
+            labels.sample.clone().into(),
+            labels.library.clone().into(),
+            labels.read_group.clone().into(),
+        ]
+    }
 }
 
 impl MetricRow for DetailRow {
@@ -304,29 +326,30 @@ impl MetricRow for DetailRow {
     ];
 
     fn values(&self) -> Vec<Value> {
-        vec![
-            self.sequence_name.clone().into(),
-            self.position.into(),
-            self.total_sites.into(),
-            self.converted_sites.into(),
-            self.pct_converted.into(),
-            self.labels.sample.clone().into(),
-            self.labels.library.clone().into(),
-            self.labels.read_group.clone().into(),
-        ]
+        Self::cells(
+            &self.sequence_name,
+            self.position,
+            self.total_sites,
+            self.converted_sites,
+            &self.labels,
+        )
     }
 }
 
-/// Every row of both files.
+/// Every row of both files: the detail rows as their cells.
 #[derive(Clone, Debug, Default)]
 pub struct Report {
     pub summary: Vec<SummaryRow>,
-    pub details: Vec<DetailRow>,
+    pub details: Vec<Vec<Value>>,
 }
 
 impl Report {
     /// The two files in the order Picard writes them.
-    fn files(&self, opts: &Options) -> ToolOutput {
+    fn files(self, opts: &Options) -> ToolOutput {
+        let details = MetricsOutput {
+            rows: self.details,
+            ..MetricsOutput::from_rows::<DetailRow>(&[], None)
+        };
         ToolOutput {
             main: None,
             extra: vec![
@@ -334,10 +357,7 @@ impl Report {
                     opts.path(SUMMARY_EXTENSION),
                     MetricsOutput::from_rows(&self.summary, None),
                 ),
-                (
-                    opts.path(DETAIL_EXTENSION),
-                    MetricsOutput::from_rows(&self.details, None),
-                ),
+                (opts.path(DETAIL_EXTENSION), details),
             ],
         }
     }
@@ -512,21 +532,15 @@ impl Accumulator for Rrbs {
             report
                 .summary
                 .push(summary(counters, &sites, bucket.labels.clone()));
+            report.details.reserve(sites.len());
             for ((id, position), site) in sites {
-                let total = java_int(site.total);
-                let converted = java_int(site.converted);
-                report.details.push(DetailRow {
-                    sequence_name: self.names[id].clone(),
+                report.details.push(DetailRow::cells(
+                    &self.names[id],
                     position,
-                    total_sites: total,
-                    converted_sites: converted,
-                    pct_converted: if converted == 0 {
-                        0.0
-                    } else {
-                        converted as f64 / total as f64
-                    },
-                    labels: bucket.labels.clone(),
-                });
+                    java_int(site.total),
+                    java_int(site.converted),
+                    &bucket.labels,
+                ));
             }
         }
         Ok(report)

@@ -295,14 +295,15 @@ impl MetricsOutput {
             headers,
             class: self.class,
             columns: self.columns,
-            rows: self
-                .rows
-                .iter()
-                .map(|r| r.iter().map(Value::picard_text).collect())
-                .collect(),
+            rows: Vec::new(),
             histogram,
         }
-        .write(out)
+        .write_rows(out, &self.rows, |row| {
+            row.iter()
+                .map(Value::picard_text)
+                .collect::<Vec<_>>()
+                .join("\t")
+        })
     }
 }
 

@@ -520,6 +520,13 @@ to complete pairs (the command is in `benches/memgate.toml`), removed after the 
 | `gather-bam-files slice` | scale | 5.9 / 512 | 0.45 | |
 | `calculate-read-group-checksum exome` | scale | 4.5 / 64 | 0.00 | |
 
+The W11 rows of `rrbs` (2026-11-20): the fixture at 5.2 / 64 MiB in 0.01 s, `rrbs
+slice` at 562.5 / 1024 MiB in 8.59 s. Picard takes 31.1 s on the slice and writes the same
+two files. On the HG002 exome, which is not bisulfite data, 16.6 million CpG sites give a
+350 MB detail file and a peak of 7.2 GB in 147 s: every detail row is held as cells until
+the file is written. Before the writer formatted rows as it wrote them, that peak was
+11.1 GB.
+
 The W09 rows of `add-comments-to-bam slice` and `replace-sam-header slice` copy the
 blocks as bytes at 0.28.0: 6.3 MiB and 0.28 s, 6.3 MiB and 0.21 s (28.5 MiB and 2.94 s,
 28.2 MiB and 3.13 s at 0.27.0).

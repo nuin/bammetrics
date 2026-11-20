@@ -314,9 +314,21 @@ pub struct MetricsFile<'a> {
 
 impl MetricsFile<'_> {
     pub fn write(&self, out: &mut impl Write) -> io::Result<()> {
+        self.write_rows(out, &self.rows, |row| row.join("\t"))
+    }
+
+    /// [`MetricsFile::write`] with `rows` in place of `self.rows`, each
+    /// line made by `line` as it is written, so the file's text is never
+    /// held whole.
+    pub fn write_rows<T>(
+        &self,
+        out: &mut impl Write,
+        rows: &[T],
+        line: impl Fn(&T) -> String,
+    ) -> io::Result<()> {
         write_headers(out, &self.headers)?;
         writeln!(out)?;
-        write_class(out, self.class, self.columns.iter().copied(), &self.rows)?;
+        write_class(out, self.class, self.columns.iter().copied(), rows, line)?;
         writeln!(out)?;
         if let Some(table) = &self.histogram {
             table.write(out)?;
@@ -340,11 +352,12 @@ fn write_headers(out: &mut impl Write, headers: &[String]) -> io::Result<()> {
 /// `printBeanMetrics`: the class line, the column line and one line per
 /// row. Nothing, not even the class line, without a row; a histogram-only
 /// file has two blank lines there.
-fn write_class<'c>(
+fn write_class<'c, T>(
     out: &mut impl Write,
     class: &str,
     columns: impl Iterator<Item = &'c str>,
-    rows: &[Vec<String>],
+    rows: &[T],
+    line: impl Fn(&T) -> String,
 ) -> io::Result<()> {
     if rows.is_empty() {
         return Ok(());
@@ -352,7 +365,7 @@ fn write_class<'c>(
     writeln!(out, "## METRICS CLASS\t{class}")?;
     writeln!(out, "{}", columns.collect::<Vec<_>>().join("\t"))?;
     for row in rows {
-        writeln!(out, "{}", row.join("\t"))?;
+        writeln!(out, "{}", line(row))?;
     }
     Ok(())
 }
@@ -672,6 +685,7 @@ impl TextDoc {
                 &block.class,
                 block.columns.iter().map(String::as_str),
                 &block.rows,
+                |row| row.join("\t"),
             )?;
         }
         writeln!(out)?;
