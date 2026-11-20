@@ -864,6 +864,84 @@ fn encode_int(v: i64, out: &mut Vec<u8>) -> io::Result<()> {
     Ok(())
 }
 
+/// The tag list htsjdk 5.0.0 `BinaryTagCodec.readTags` builds from a
+/// record read from a BAM, as positions in the block. `readTags` appends a
+/// field whose tag sorts after the last appended one and inserts any other
+/// through `SAMBinaryTagAndValue.insert`, which replaces an equal tag. An
+/// insert that replaces the last appended field leaves the append point on
+/// the replaced field, outside the list, so every later field that sorts
+/// after it is lost until an insert. `getAttribute` then finds no such tag.
+/// Without a repeated tag every field is in the list. A block with a
+/// repeated tag costs one `BTreeMap` insert per field.
+#[derive(Debug, Default)]
+pub struct HtsjdkTags {
+    names: Vec<i16>,
+    sorted: Vec<i16>,
+    repeated: bool,
+    kept: std::collections::BTreeMap<i16, usize>,
+}
+
+impl HtsjdkTags {
+    /// Load the tag names of one block, in file order.
+    pub fn load(&mut self, names: impl IntoIterator<Item = [u8; 2]>) {
+        let result: Result<(), std::convert::Infallible> = self.try_load(names.into_iter().map(Ok));
+        let Ok(()) = result;
+    }
+
+    /// [`HtsjdkTags::load`] from names that may fail to decode.
+    pub fn try_load<E>(
+        &mut self,
+        names: impl IntoIterator<Item = Result<[u8; 2], E>>,
+    ) -> Result<(), E> {
+        self.names.clear();
+        for name in names {
+            self.names.push(binary_tag(name?));
+        }
+        self.sorted.clear();
+        self.sorted.extend_from_slice(&self.names);
+        self.sorted.sort_unstable();
+        self.repeated = self.sorted.windows(2).any(|w| w[0] == w[1]);
+        self.kept.clear();
+        if !self.repeated {
+            return Ok(());
+        }
+        // The appended tail: its tag, and whether it is still in the list.
+        let mut tail: Option<(i16, bool)> = None;
+        for (index, &key) in self.names.iter().enumerate() {
+            match tail {
+                Some((last, in_list)) if key > last => {
+                    if in_list {
+                        self.kept.insert(key, index);
+                    }
+                    tail = Some((key, in_list));
+                }
+                Some((last, in_list)) => {
+                    if in_list && key == last {
+                        tail = Some((last, false));
+                    }
+                    self.kept.insert(key, index);
+                }
+                None => {
+                    self.kept.insert(key, index);
+                    tail = Some((key, true));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The position of the field `getAttribute(name)` returns, `None` when
+    /// the list holds no such tag.
+    pub fn position(&self, name: [u8; 2]) -> Option<usize> {
+        let key = binary_tag(name);
+        if self.repeated {
+            self.kept.get(&key).copied()
+        } else {
+            self.names.iter().position(|&n| n == key)
+        }
+    }
+}
+
 /// Build a record from its parts, for tests.
 #[cfg(test)]
 pub(crate) fn build(
@@ -1101,5 +1179,29 @@ mod tests {
             encode_int(value, &mut out).expect("in range");
             assert_eq!(out, bytes, "{value}");
         }
+    }
+
+    #[test]
+    fn htsjdk_tags_follow_read_tags() {
+        let mut tags = HtsjdkTags::default();
+        // Picard 3.5.0 reads the last `qa` of each of the first two blocks.
+        tags.load([*b"qa", *b"qc", *b"qg", *b"qt", *b"qa"]);
+        assert_eq!(tags.position(*b"qa"), Some(4));
+        assert_eq!(tags.position(*b"qt"), Some(3));
+        tags.load([*b"qt", *b"qg", *b"qc", *b"qa", *b"qa"]);
+        assert_eq!(tags.position(*b"qa"), Some(4));
+        assert_eq!(tags.position(*b"qc"), Some(2));
+        // The second `qa` replaces the append point: `qc` to `qt` are lost.
+        tags.load([*b"qa", *b"qa", *b"qc", *b"qg", *b"qt"]);
+        assert_eq!(tags.position(*b"qa"), Some(1));
+        assert_eq!(tags.position(*b"qc"), None);
+        assert_eq!(tags.position(*b"qt"), None);
+        // An insert that sorts before the lost tail is kept again.
+        tags.load([*b"XA", *b"XA", *b"RX", *b"BQ"]);
+        assert_eq!(tags.position(*b"RX"), None);
+        assert_eq!(tags.position(*b"BQ"), Some(3));
+        tags.load([*b"RX", *b"BQ"]);
+        assert_eq!(tags.position(*b"RX"), Some(0));
+        assert_eq!(tags.position(*b"XA"), None);
     }
 }

@@ -1585,8 +1585,6 @@ foundation corpora, SAM text and CRAM (`tests/concordance/test_quality_yield_s_n
   the tag. Picard throws a `NullPointerException`. Neither writes a file.
 - `MINIMUM_MQ=null` exits 2 before the read; Picard exits 1 with a
   `NullPointerException`.
-- The sorted runs of CollectUmiPrevalenceMetrics go under the first `TMP_DIR`; Picard's
-  `DuplicateSetIterator` writes them under `java.io.tmpdir`. The counts do not change.
 - A duplicate set of 32 records or more whose records htsjdk's comparator cannot order (a
   record flagged both first and second of a pair) may make Picard's `Collections.sort`
   throw; bammetrics counts the set. Picard's check that the sorted set starts with its

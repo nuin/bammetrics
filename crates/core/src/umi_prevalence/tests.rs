@@ -48,7 +48,8 @@ fn the_barcode_quality_filter_keeps_low_and_missing_qualities() {
         if let Some(bq) = bq {
             tags.push((b"BQ", bq));
         }
-        opts.umi(&read("r", PAIR, 100, 60, &tags)).expect("reads")
+        opts.umi(&read("r", PAIR, 100, 60, &tags), &mut HtsjdkTags::default())
+            .expect("reads")
     };
     assert_eq!(umi(None).as_deref(), Some(&b"AAA-CCC"[..]));
     assert_eq!(umi(Some("III +II")).as_deref(), Some(&b"AAA-CCC"[..]));
@@ -57,7 +58,10 @@ fn the_barcode_quality_filter_keeps_low_and_missing_qualities() {
     // Every character is decoded before the test: a bad one after a low one fails.
     let mut bad = vec![(b"RX", "A"), (b"BQ", "+\u{7f}")];
     bad.push((b"MC", "10M"));
-    assert!(opts.umi(&read("r", PAIR, 100, 60, &bad)).is_err());
+    assert!(
+        opts.umi(&read("r", PAIR, 100, 60, &bad), &mut HtsjdkTags::default())
+            .is_err()
+    );
 }
 
 #[test]
@@ -65,9 +69,12 @@ fn the_filters_run_in_picard_order() {
     let opts = defaults();
     let tags: &[(&[u8; 2], &str)] = &[(b"RX", "A"), (b"MC", "10M")];
     let kept = |flags: u16, mapq: u8, opts: &Options| {
-        opts.umi(&read("r", flags, 100, mapq, tags))
-            .expect("reads")
-            .is_some()
+        opts.umi(
+            &read("r", flags, 100, mapq, tags),
+            &mut HtsjdkTags::default(),
+        )
+        .expect("reads")
+        .is_some()
     };
     assert!(kept(PAIR, 30, &opts));
     assert!(!kept(PAIR, 29, &opts));
@@ -88,7 +95,9 @@ fn the_filters_run_in_picard_order() {
         ..defaults()
     };
     assert!(!kept(PAIR, 10, &bad));
-    let error = bad.umi(&read("r", PAIR, 100, 60, tags)).expect_err("RXX");
+    let error = bad
+        .umi(&read("r", PAIR, 100, 60, tags), &mut HtsjdkTags::default())
+        .expect_err("RXX");
     assert!(error.to_string().contains("length() == 2: RXX"), "{error}");
 }
 
@@ -99,7 +108,7 @@ fn sets(records: &[RawRecord], opts: &Options) -> Result<Vec<(i64, f64)>> {
     let libraries = Libraries::new(&header);
     let mut sorter = Sorter::new(&temp, "umi", opts.records_in_ram);
     for record in records {
-        if let Some(umi) = opts.umi(record)? {
+        if let Some(umi) = opts.umi(record, &mut HtsjdkTags::default())? {
             let key = DuplicateKey::of(record, &libraries)?.into_owned();
             sorter.push(Member { key, umi })?;
         }

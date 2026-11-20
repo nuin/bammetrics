@@ -105,6 +105,12 @@ def test_unsorted_options(built, option):
     compare(built["umi_unsorted"], OPTIONS[option], f"umi_unsorted {option}")
 
 
+@pytest.mark.parametrize("args", [[], ["FUR=false"]], ids=["defaults", "unpaired_kept"])
+def test_repeated_tags_read_as_htsjdk_lists_them(built, args):
+    """RX given twice counts its last value; RX after a repeated RG is lost."""
+    compare(built["umi_repeated"], args, f"umi_repeated {' '.join(args)}")
+
+
 def test_tmp_dir(built, tmp_path):
     compare(built["umi_main"], [f"TMP_DIR={tmp_path}", "MAX_RECORDS_IN_RAM=5"], "umi_main tmp")
     assert not list(tmp_path.iterdir())

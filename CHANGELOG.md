@@ -12,13 +12,16 @@
   `INCLUDE_SUPPLEMENTAL_ALIGNMENTS`, `STOP_AFTER`; `INCLUDE_BQ_HISTOGRAM` adds `BQ_COUNT`,
   `SNVQ_COUNT` and the means by read index on one `KEY` column. A record without an SNVQ
   tag exits 1 naming it. A chain tap (`PREFIX.quality_yield_snvq_metrics`).
+- `bam_raw::HtsjdkTags`: the tag list htsjdk's `BinaryTagCodec.readTags` builds, a
+  repeated tag with its last value and the tags its lost append point drops. Both new tools
+  read their tags through it, so a repeated `qa` or `RX` counts as in Picard.
 - `CollectUmiPrevalenceMetrics` (verb `umi-prevalence`, Python
   `collect_umi_prevalence_metrics()`), as Picard 3.5.0: the histogram of duplicate sets by
   their number of distinct `BARCODE_TAG` UMIs, over mapped primary records at
   `MINIMUM_MQ`, with Picard's inverted `BARCODE_BQ` filter and `FILTER_UNPAIRED_READS`.
   The records are sorted in htsjdk's duplicate order (`MAX_RECORDS_IN_RAM`, `TMP_DIR`), so
   the input needs no index and no sort order. `DuplicateKey::set_order` is htsjdk's
-  `duplicateSetCompare`.
+  `duplicateSetCompare`. A sorted run also spills at 256 MiB of keys and UMIs.
 - `tests/concordance/snvq_umi_bams.py`, `test_quality_yield_s_n_v_q.py` and
   `test_umi_prevalence.py`: every option, CRAM and SAM text, error parity and the
   distinct-value gate against Picard. `tests/data/snvq.bam` and `umi_prevalence.bam`

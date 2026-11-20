@@ -930,6 +930,10 @@ totals, and the same counts for the SNV qualities of the Ultima tags `qa`, `qc`,
   is skipped before its tags are read unless its `--include-*` flag is set. A tag shorter
   than the read fails only where a base reads past its end; a character outside `!` to `~`
   fails where it is read.
+- A tag given twice in a record is read as htsjdk 5.0.0 lists it: the last value counts.
+  When the second copy replaces the field htsjdk last appended, the tags after it that sort
+  later are lost, so a record `qa qa qc qg qt` has no `qc` and exits 1 in both tools.
+  `umi-prevalence` reads `RX` and `BQ` the same way.
 - `--alternate-quality-attribute TAG` reads the base qualities from a Phred+33 tag in place
   of `QUAL`; every counted record needs it, with one character per base.
 - `--include-bq-histogram` adds one `KEY` histogram holding four series: `BQ_COUNT`,
@@ -965,6 +969,9 @@ distinct UMIs in each, `numUmis` against `duplicateSets`, with no metrics row
   it.
 - A paired record with a mapped mate needs `MC`, as in Picard; a run that keeps one record
   never compares it and passes without one.
+- A sorted run also spills at 256 MiB of keys and UMIs; Picard bounds it by records alone.
+  The distinct UMIs of one set are held in memory, as in Picard, so peak memory grows with
+  the largest set: 1,000,000 distinct 16-base UMIs at one position took 176 MiB.
 - `--progress-step-interval 0` exits 1 once a set is found, as Picard's progress logger
   divides by it. Not a chain step: the tool reads the stream whole before its first set.
 

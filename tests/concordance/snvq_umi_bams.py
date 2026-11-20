@@ -45,6 +45,13 @@ the two halves of a duplex UMI) on paired reads with `MC`:
 * The failing inputs: `umi_no_mc` (pairs without MC), `umi_int_rx`
   (`RX:i:5` on a kept record), `umi_int_bq` (`BQ:i:30`), `umi_bad_bq`
   (a BQ character past `~`, written as raw BAM bytes by pysam).
+
+Repeated tags, as htsjdk's `BinaryTagCodec.readTags` lists them
+(`bam_raw::HtsjdkTags`): `snvq_repeated` (qa, qc and XQ given twice, the
+last value read), `snvq_repeated_lost` (a second qa replaces the append
+point, so qc, qg and qt are lost and both tools fail), `umi_repeated` (RX
+given twice, the last UMI counted; RG given twice before RX, so RX is lost
+and the read left out).
 """
 import random
 
@@ -333,6 +340,41 @@ def umi_variants(rng):
     }
 
 
+def with_tags(record, tags):
+    """`record` with its tags replaced by `tags` in this order, repeats kept."""
+    record.set_tags([(tag, value, "Z") for tag, value in tags])
+    return record
+
+
+def repeated_tag_variants(rng):
+    """Records with a repeated tag: name -> records."""
+    def snvq(name, tags):
+        return with_tags(segment(name, 0, "u1", 100, "ACGT", "IIII"), tags)
+    good = [snvq(f"g{i}", [(t, "IIII") for t in (*SNVQ_TAGS, "XQ")]) for i in range(3)]
+    low, high = "!!!!", "IIII"
+    repeated = [
+        snvq("appended", [("qa", low), ("qc", high), ("qg", high), ("qt", high), ("XQ", low),
+                          ("qa", high), ("XQ", high)]),
+        snvq("inserted", [("qt", high), ("qg", low), ("qc", low), ("qa", low), ("qa", high),
+                          ("qc", high), ("XQ", high)]),
+    ]
+    lost = snvq("lost", [("qa", low), ("qa", high), ("qc", high), ("qg", high), ("qt", high),
+                         ("XQ", high)])
+    umi = []
+    for i, (first, last) in enumerate((("AAAA", "CCCC"), ("GGGG", "CCCC"), ("TTTT", "CCCC"))):
+        for record in pair_records(rng, f"rep{i}", "u1", 800, 1_000, 0, "ra", first):
+            umi.append(with_tags(record, [("RG", "ra"), ("MC", "40M"), ("RX", first),
+                                          ("RX", last)]))
+    for record in pair_records(rng, "lostrx", "u1", 800, 1_000, 0, "ra", "GGGG"):
+        umi.append(with_tags(record, [("RG", "ra"), ("MC", "40M"), ("RG", "ra"),
+                                      ("RX", "GGGG")]))
+    return {
+        "snvq_repeated": [*good, *repeated],
+        "snvq_repeated_lost": [*good, lost],
+        "umi_repeated": umi,
+    }
+
+
 def build_all(out, seed=97):
     """Write every input under `out`; returns name -> path, plus `ref`."""
     out.mkdir(parents=True, exist_ok=True)
@@ -349,6 +391,9 @@ def build_all(out, seed=97):
     built["umi_unsorted"] = write(out, "umi_unsorted", shuffled, order="unsorted")
     built["umi_queryname"] = write(out, "umi_queryname", main, order="queryname")
     for name, records in umi_variants(rng).items():
+        built[name] = write(out, name, records)
+    # A generator of its own, so the inputs above keep their records.
+    for name, records in repeated_tag_variants(random.Random(seed + 1)).items():
         built[name] = write(out, name, records)
     return built
 

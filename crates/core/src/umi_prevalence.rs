@@ -20,12 +20,13 @@
 //!
 //! The kept records are sorted as `DuplicateSetIterator` sorts them,
 //! `SAMRecordDuplicateComparator` through a `SortingCollection`
-//! ([`crate::spill::Sorter`] with `MAX_RECORDS_IN_RAM` and `TMP_DIR`), and
-//! each run of records equal to the run's first under
-//! `duplicateSetCompare` ([`DuplicateKey::set_order`]) is one duplicate
+//! ([`crate::spill::Sorter`] with `MAX_RECORDS_IN_RAM` and `TMP_DIR`, a run
+//! also spilled at 256 MiB of keys and UMIs), and each run of records
+//! equal to the run's first under `duplicateSetCompare` ([`DuplicateKey::set_order`]) is one duplicate
 //! set. Each read of a pair is its own record, so a pair's two reads fall
 //! in two sets. A set counts the distinct `BARCODE_TAG` strings of its
-//! records.
+//! records, held in one hash set as Picard holds them, so peak memory grows
+//! with the distinct UMIs of the largest set.
 //!
 //! The key needs `MC` on a paired record whose mate is mapped, as htsjdk
 //! does. htsjdk computes it only when it compares two records, so a run
@@ -37,7 +38,7 @@ use std::collections::HashSet;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
 
-use crate::bam_raw::{RawRecord, TagValue};
+use crate::bam_raw::{HtsjdkTags, RawRecord, TagIter, TagValue};
 use crate::error::{Error, Result};
 use crate::histogram::Histogram;
 use crate::metric::{HistogramSection, HistogramSeries, MetricsOutput, ToolOutput};
@@ -55,6 +56,11 @@ pub const SERIES_LABEL: &str = "duplicateSets";
 
 /// Picard's `MAX_RECORDS_IN_RAM` default, the size of a sorted run.
 const DEFAULT_RECORDS_IN_RAM: usize = 500_000;
+
+/// A sorted run also spills at this many bytes of keys and UMIs, so long
+/// `BARCODE_TAG` strings cannot hold `MAX_RECORDS_IN_RAM` records in memory.
+/// Picard bounds the run by records alone.
+const SORT_BYTES: usize = 256 << 20;
 
 const UNMAPPED: u16 = 0x4;
 const PAIRED: u16 = 0x1;
@@ -184,10 +190,20 @@ fn record_name(record: &RawRecord) -> String {
     String::from_utf8_lossy(record.name()).into_owned()
 }
 
+/// `getAttribute`: the field htsjdk's tag list keeps ([`HtsjdkTags`],
+/// loaded for `record`), `None` when the list holds no such tag.
+fn tag_value(record: &RawRecord, tags: &HtsjdkTags, tag: [u8; 2]) -> Result<Option<TagValue>> {
+    let Some(index) = tags.position(tag) else {
+        return Ok(None);
+    };
+    let field = TagIter::new(record.tag_bytes()).nth(index).transpose();
+    Ok(field.map_err(Error::Record)?.map(|(_, value)| value))
+}
+
 /// `getStringAttribute`: the text, `None` without the tag, an error for
 /// another type.
-fn string_tag(record: &RawRecord, tag: [u8; 2]) -> Result<Option<Vec<u8>>> {
-    match record.tag(tag).map_err(Error::Record)? {
+fn string_tag(record: &RawRecord, tags: &HtsjdkTags, tag: [u8; 2]) -> Result<Option<Vec<u8>>> {
+    match tag_value(record, tags, tag)? {
         None => Ok(None),
         Some(TagValue::String(text)) => Ok(Some(text)),
         Some(_) => Err(Error::Metric(format!(
@@ -201,12 +217,12 @@ fn string_tag(record: &RawRecord, tag: [u8; 2]) -> Result<Option<Vec<u8>>> {
 impl Options {
     /// `BarcodeQualityFilter.filterOut`: true when the record has the tag
     /// and none of its qualities is below the minimum.
-    fn good_barcode(&self, record: &RawRecord) -> Result<bool> {
+    fn good_barcode(&self, record: &RawRecord, tags: &HtsjdkTags) -> Result<bool> {
         let tag = self.barcode_bq.get()?;
-        if record.tag(tag).map_err(Error::Record)?.is_none() {
+        if tags.position(tag).is_none() {
             return Ok(false);
         }
-        let text = string_tag(record, tag)?.unwrap_or_default();
+        let text = string_tag(record, tags, tag)?.unwrap_or_default();
         // `SAMUtils.fastqToPhred` decodes the whole text before any test.
         let mut qualities = Vec::with_capacity(text.len());
         for &byte in text.iter().filter(|&&b| b != b' ') {
@@ -237,7 +253,7 @@ impl Options {
 
     /// The UMI of a record the filters keep, `None` for one they drop, in
     /// the order of Picard's `AggregateFilter`.
-    fn umi(&self, record: &RawRecord) -> Result<Option<Vec<u8>>> {
+    fn umi(&self, record: &RawRecord, tags: &mut HtsjdkTags) -> Result<Option<Vec<u8>>> {
         let flags = record.flags();
         if flags & UNMAPPED != 0
             || i32::from(record.mapping_quality()) < self.minimum_mq
@@ -246,14 +262,16 @@ impl Options {
             return Ok(None);
         }
         let tag = self.barcode_tag.get()?;
-        if record.tag(tag).map_err(Error::Record)?.is_none() || self.good_barcode(record)? {
+        tags.try_load(TagIter::new(record.tag_bytes()).map(|field| field.map(|(name, _)| name)))
+            .map_err(Error::Record)?;
+        if tags.position(tag).is_none() || self.good_barcode(record, tags)? {
             return Ok(None);
         }
         if self.filter_unpaired_reads && (flags & PAIRED == 0 || flags & MATE_UNMAPPED != 0) {
             return Ok(None);
         }
         // The set's lambda reads the tag as a String.
-        string_tag(record, tag)
+        string_tag(record, tags, tag)
     }
 }
 
@@ -440,16 +458,18 @@ pub fn histogram(inv: &Invocation, opts: &Options) -> Result<Histogram> {
         |header, reader, cram| {
             let libraries = Libraries::new(header);
             let mut collected = Collected {
-                sorter: Sorter::new(&temp, "umi", opts.records_in_ram),
+                sorter: Sorter::new(&temp, "umi", opts.records_in_ram)
+                    .byte_limit(inv.sort_memory.unwrap_or(SORT_BYTES)),
                 kept: 0,
                 held_error: None,
             };
             let mut record = RawRecord::default();
+            let mut tags = HtsjdkTags::default();
             while record
                 .read_from(reader)
                 .map_err(|e| pass::read_error(&inv.input, cram, e))?
             {
-                let Some(umi) = opts.umi(&record)? else {
+                let Some(umi) = opts.umi(&record, &mut tags)? else {
                     continue;
                 };
                 collected.kept += 1;

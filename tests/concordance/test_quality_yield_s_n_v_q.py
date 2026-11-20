@@ -95,6 +95,14 @@ def test_short_unread_tag_with_histogram(built):
     compare(built["snvq_short_unread"], ["INCLUDE_BQ_HISTOGRAM=true"], "short unread", True)
 
 
+@pytest.mark.parametrize("args", [["INCLUDE_BQ_HISTOGRAM=true"], ["AQA=XQ"]],
+                         ids=["histogram", "alternate"])
+def test_repeated_tags_read_as_htsjdk_lists_them(built, args):
+    """qa, qc and XQ given twice: htsjdk's tag list keeps the last value."""
+    compare(built["snvq_repeated"], args, f"snvq_repeated {' '.join(args)}",
+            histogram="INCLUDE_BQ_HISTOGRAM=true" in args)
+
+
 # --- CRAM and SAM text ----------------------------------------------------------------
 
 def test_cram_input(built, tmp_path):
@@ -157,6 +165,7 @@ FAILURES = {
     "level": ("snvq_main", ["METRIC_ACCUMULATION_LEVEL=SAMPLE"], "METRIC_ACCUMULATION_LEVEL"),
     "flow_mode": ("snvq_main", ["FLOW_MODE=true"], "FLOW_MODE"),
     "missing_input": ("snvq_main", ["I=/nonexistent/x.bam"], None),
+    "repeated_tag_lost": ("snvq_repeated_lost", [], "no qc tag"),
 }
 
 

@@ -41,6 +41,7 @@ use std::borrow::Cow;
 use noodles::sam::alignment::record::data::field::{Tag, Value as TagValue};
 use noodles::{bam, sam};
 
+use crate::bam_raw::HtsjdkTags;
 use crate::error::{Error, Result};
 use crate::histogram::Histogram;
 use crate::metric::{
@@ -341,6 +342,7 @@ pub struct QualityYieldSnvq {
     report: Report,
     qualities: Vec<i8>,
     bases: Vec<u8>,
+    tags: HtsjdkTags,
 }
 
 impl QualityYieldSnvq {
@@ -356,14 +358,24 @@ impl QualityYieldSnvq {
             },
             qualities: Vec::new(),
             bases: Vec::new(),
+            tags: HtsjdkTags::default(),
         }
     }
 
     /// The text of a `Z` tag `getStringAttribute` returns, failing as
-    /// Picard fails on a record without it or with another type.
-    fn string_tag(record: &bam::Record, tag: Tag) -> Result<&[u8]> {
+    /// Picard fails on a record without it or with another type. The field
+    /// is the one htsjdk's tag list keeps ([`HtsjdkTags`], loaded for
+    /// `record`): the last of a repeated tag, or none past a lost append.
+    fn string_tag<'r>(tags: &HtsjdkTags, record: &'r bam::Record, tag: Tag) -> Result<&'r [u8]> {
         let name = || String::from_utf8_lossy(tag.as_ref()).into_owned();
-        match record.data().get(&tag).transpose()? {
+        let value = match tags.position(*tag.as_ref()) {
+            Some(index) => match record.data().iter().nth(index) {
+                Some(field) => Some(field?.1),
+                None => None,
+            },
+            None => None,
+        };
+        match value {
             Some(TagValue::String(text)) => Ok(text.as_ref()),
             Some(_) => Err(Error::Metric(format!(
                 "record {}: Value for tag {} is not a String",
@@ -393,7 +405,7 @@ impl QualityYieldSnvq {
         let tag = alternate.ok_or_else(|| {
             Error::Metric(format!("String tag does not have length() == 2: {given}"))
         })?;
-        let text = java_bytes(Self::string_tag(record, tag)?);
+        let text = java_bytes(Self::string_tag(&self.tags, record, tag)?);
         self.qualities.clear();
         for &byte in text.iter() {
             let quality = phred(byte).ok_or_else(|| {
@@ -429,6 +441,12 @@ impl Accumulator for QualityYieldSnvq {
             row.pf_reads += 1;
             row.bases.pf += length;
         }
+        self.tags.try_load(
+            record
+                .data()
+                .iter()
+                .map(|field| field.map(|(tag, _)| *tag.as_ref())),
+        )?;
         self.read_qualities(record)?;
         self.bases.clear();
         self.bases.extend(record.sequence().iter());
@@ -440,7 +458,7 @@ impl Accumulator for QualityYieldSnvq {
         }
         let mut tags: [Cow<'_, [u8]>; 4] = Default::default();
         for (text, tag) in tags.iter_mut().zip(TAGS) {
-            *text = java_bytes(Self::string_tag(record, tag)?);
+            *text = java_bytes(Self::string_tag(&self.tags, record, tag)?);
         }
         let report = &mut self.report;
         for (index, (&quality, &base)) in self.qualities.iter().zip(&self.bases).enumerate() {
