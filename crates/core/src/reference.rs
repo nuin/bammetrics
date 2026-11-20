@@ -2,7 +2,7 @@
 //! `ReferenceSequenceFileWalker` hands them to `SinglePassSamProgram`.
 
 use std::fs::File;
-use std::io;
+use std::io::{self, BufRead, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use noodles::core::{Position, Region};
@@ -27,6 +27,8 @@ pub fn files_read(fasta: &Path) -> [PathBuf; 2] {
 pub struct Reference {
     path: PathBuf,
     reader: Reader,
+    /// The FASTA's size in bytes: the most a contig buffer reserves.
+    size: u64,
     current: Option<(usize, Vec<u8>)>,
 }
 
@@ -67,6 +69,7 @@ impl Reference {
         Ok(Self {
             path: path.to_path_buf(),
             reader,
+            size: std::fs::metadata(path).map_or(0, |m| m.len()),
             current: None,
         })
     }
@@ -83,7 +86,10 @@ impl Reference {
             }
             Some(previous) if id == previous => {}
             _ => {
-                let bases = self.load(id)?;
+                // The buffer of the contig left is refilled: one allocation
+                // for the walk, at the largest contig's size.
+                let mut bases = self.current.take().map(|(_, b)| b).unwrap_or_default();
+                self.read_contig(id, &mut bases)?;
                 self.current = Some((id, bases));
             }
         }
@@ -110,8 +116,25 @@ impl Reference {
     /// Every base of the contig at `id`, read fresh through the `.fai`.
     /// It does not move the forward-only `contig` walker.
     pub fn load(&mut self, id: usize) -> Result<Vec<u8>> {
+        let mut bases = Vec::new();
+        self.read_contig(id, &mut bases)?;
+        Ok(bases)
+    }
+
+    /// Every base of the contig at `id` into `bases`, cleared first: the
+    /// bases noodles' query of the whole contig returns, read into a buffer
+    /// reserved at the `.fai` length (at most the FASTA's size) with no
+    /// copy. Picard's walker holds one contig too.
+    fn read_contig(&mut self, id: usize, bases: &mut Vec<u8>) -> Result<()> {
         let region = Region::new(self.name(id)?, ..);
-        self.query(&region)
+        let index = self.reader.index();
+        let length = index.as_ref().get(id).map_or(0, |r| r.length());
+        let offset = index
+            .query(&region)
+            .map_err(|e| self.error(e.to_string()))?;
+        bases.clear();
+        bases.reserve(usize::try_from(length.min(self.size)).unwrap_or(0));
+        read_bases(self.reader.get_mut(), offset, bases).map_err(|e| self.error(e.to_string()))
     }
 
     /// Number of contigs in the `.fai`.
@@ -145,6 +168,45 @@ impl Reference {
             path: self.path.clone(),
             message,
         }
+    }
+}
+
+/// The sequence lines from `offset` to the next `>` or the end of the
+/// file, as noodles' sequence reader takes them: empty lines skipped, the
+/// line end and a `\r` before it dropped.
+fn read_bases<R: BufRead + Seek>(
+    reader: &mut R,
+    offset: u64,
+    bases: &mut Vec<u8>,
+) -> io::Result<()> {
+    reader.seek(SeekFrom::Start(offset))?;
+    loop {
+        loop {
+            let mut newline = false;
+            if reader.fill_buf()?.starts_with(b"\r") {
+                reader.consume(1);
+                newline = true;
+            }
+            if reader.fill_buf()?.starts_with(b"\n") {
+                reader.consume(1);
+                newline = true;
+            }
+            if !newline {
+                break;
+            }
+        }
+        let src = reader.fill_buf()?;
+        if src.first().is_none_or(|&b| b == b'>') {
+            return Ok(());
+        }
+        let line = src
+            .iter()
+            .position(|&b| b == b'\n')
+            .map_or(src, |end| &src[..end]);
+        let line = line.strip_suffix(b"\r").unwrap_or(line);
+        bases.extend_from_slice(line);
+        let used = line.len();
+        reader.consume(used);
     }
 }
 
@@ -193,5 +255,40 @@ mod tests {
             reference.contig(0).expect("walker untouched"),
             b"ACGTACGTAC"
         );
+    }
+
+    /// The walker's bases are noodles' query of the whole contig on every
+    /// line form: CRLF, empty lines, a lone `\r`, lower case, a `.fai`
+    /// length shorter or longer than the lines, no newline at the end.
+    #[test]
+    fn contigs_read_as_noodles_reads_them() {
+        let dir = std::env::temp_dir().join(format!("bammetrics-ref-{}-lines", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("ref.fa");
+        let fasta = ">a\r\nACgt\r\n\r\nNNac\r\n>b desc\nAC\rGT\n\n\nTT\n>c\nGGG";
+        std::fs::write(&path, fasta).expect("write FASTA");
+        let offset = |name: &str| fasta.find(name).expect("name") + name.len() + 1;
+        let fai = format!(
+            "a\t5\t{}\t4\t6\nb\t20\t{}\t5\t6\nc\t3\t{}\t3\t4\n",
+            offset(">a\r"),
+            offset(">b desc"),
+            offset(">c"),
+        );
+        std::fs::write(dir.join("ref.fa.fai"), fai).expect("write .fai");
+        let mut reference = Reference::open(&path, &sam::Header::default()).expect("opens");
+        let mut noodles = fasta::io::indexed_reader::Builder::default()
+            .build_from_path(&path)
+            .expect("noodles");
+        for (id, name) in ["a", "b", "c"].into_iter().enumerate() {
+            let region = Region::new(name, ..);
+            let expected = noodles.query(&region).expect("query");
+            let expected = expected.sequence().as_ref().to_vec();
+            assert_eq!(reference.contig(id).expect("walk"), expected, "{name}");
+            assert_eq!(reference.load(id).expect("load"), expected, "{name}");
+        }
+        assert_eq!(reference.load(0).expect("a"), b"ACgtNNac");
+        assert_eq!(reference.load(1).expect("b"), b"AC\rGTTT");
+        assert_eq!(reference.load(2).expect("c"), b"GGG");
+        std::fs::remove_dir_all(&dir).expect("cleanup");
     }
 }
