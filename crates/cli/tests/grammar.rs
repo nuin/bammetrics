@@ -637,6 +637,22 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("VALIDATION_STRINGENCY", "SILENT")),
             picard_outputs: single,
         },
+        Case {
+            verb: "quality-yield-s-n-v-q",
+            class: "CollectQualityYieldMetricsSNVQ",
+            verb_args: strings(&["tests/data/snvq.bam"]),
+            picard_args: strings(&["I=tests/data/snvq.bam"]),
+            option: Some(("ALTERNATE_QUALITY_ATTRIBUTE", "XQ")),
+            picard_outputs: single,
+        },
+        Case {
+            verb: "umi-prevalence",
+            class: "CollectUmiPrevalenceMetrics",
+            verb_args: strings(&["tests/data/umi_prevalence.bam"]),
+            picard_args: strings(&["I=tests/data/umi_prevalence.bam"]),
+            option: Some(("MINIMUM_BARCODE_BQ", "40")),
+            picard_outputs: single,
+        },
     ]
 }
 
@@ -769,7 +785,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 54);
+    assert_eq!(classes.len(), 56);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names
