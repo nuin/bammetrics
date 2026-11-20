@@ -714,3 +714,26 @@ bammetrics.qc.IndexDepthMetrics	NO_COORDINATE	int	On the ALL row: records with n
 bammetrics.qc.IndexDepthMetrics	INFERRED_SEX	string	On the ALL row: FEMALE, MALE or UNKNOWN from the X and Y ratios, with the thresholds of CollectSexCheckMetrics.
 bammetrics.qc.IndexDepthMetrics	MT_COPY_NUMBER	float	On the ALL row: 2 x the RATIO_TO_AUTOSOMES of the MT group, the mitochondrial copy number estimate of CollectMtCopyNumberMetrics from unfiltered records; ? without a mitochondrial contig or autosome reads.
 bammetrics.qc.IndexDepthMetrics	REASON	string	On the ALL row: why INFERRED_SEX is UNKNOWN, why MT_COPY_NUMBER or the depths are ?; empty when every value is defined.
+picard.analysis.RrbsSummaryMetrics	READS_ALIGNED	int	Records not flagged unmapped on a contig SEQUENCE_NAMES allows: secondary, supplementary, duplicate and QC-failed records count, and each end of a pair.
+picard.analysis.RrbsSummaryMetrics	NON_CPG_BASES	int	Reference Cs that start no CpG where the read has a C or a T, the next base is equal or bisulfite equal, and the qualities at the C and after it pass; on the read's strand.
+picard.analysis.RrbsSummaryMetrics	NON_CPG_CONVERTED_BASES	int	NON_CPG_BASES where the read has a T.
+picard.analysis.RrbsSummaryMetrics	PCT_NON_CPG_BASES_CONVERTED	float	NON_CPG_CONVERTED_BASES / NON_CPG_BASES, a fraction; 0 without a non-CpG base.
+picard.analysis.RrbsSummaryMetrics	CPG_BASES_SEEN	int	CpG sites read with a C or a T at the C, the G matched and the qualities at C_QUALITY_THRESHOLD and NEXT_BASE_QUALITY_THRESHOLD; each read of a site counts once.
+picard.analysis.RrbsSummaryMetrics	CPG_BASES_CONVERTED	int	CPG_BASES_SEEN where the read has a T at the C.
+picard.analysis.RrbsSummaryMetrics	PCT_CPG_BASES_CONVERTED	float	CPG_BASES_CONVERTED / CPG_BASES_SEEN, a fraction; 0 without a CpG.
+picard.analysis.RrbsSummaryMetrics	MEAN_CPG_COVERAGE	float	CPG_BASES_SEEN over the number of distinct CpG sites seen; ? without a site.
+picard.analysis.RrbsSummaryMetrics	MEDIAN_CPG_COVERAGE	int	Median of the reads per distinct CpG site, the mean of the middle two for an even count, truncated to an integer; 0 without a site.
+picard.analysis.RrbsSummaryMetrics	READS_WITH_NO_CPG	int	Reads kept (not short, not over the mismatch rate) in which no CpG site counted. Their non-CpG bases still count.
+picard.analysis.RrbsSummaryMetrics	READS_IGNORED_SHORT	int	Reads with fewer bases than MINIMUM_READ_LENGTH.
+picard.analysis.RrbsSummaryMetrics	READS_IGNORED_MISMATCHES	int	Reads whose aligned bases hold more bisulfite mismatches than Math.round(read length x MAX_MISMATCH_RATE).
+picard.analysis.RrbsSummaryMetrics	SAMPLE	string	Sample (@RG SM) of the accumulation unit. Empty on the ALL_READS row.
+picard.analysis.RrbsSummaryMetrics	LIBRARY	string	Library (@RG LB) of the accumulation unit. Empty on ALL_READS and SAMPLE rows.
+picard.analysis.RrbsSummaryMetrics	READ_GROUP	string	Platform unit (@RG PU) of the accumulation unit. Empty above the READ_GROUP level.
+picard.analysis.RrbsCpgDetailMetrics	SEQUENCE_NAME	string	Contig of the CpG site, as the record names it. Rows sort by this name as Java compares strings, then by POSITION.
+picard.analysis.RrbsCpgDetailMetrics	POSITION	int	0-based position of the C of the CpG on the forward strand.
+picard.analysis.RrbsCpgDetailMetrics	TOTAL_SITES	int	Reads of the unit in which this CpG site counted.
+picard.analysis.RrbsCpgDetailMetrics	CONVERTED_SITES	int	TOTAL_SITES with a T at the C: unmethylated reads.
+picard.analysis.RrbsCpgDetailMetrics	PCT_CONVERTED	float	CONVERTED_SITES / TOTAL_SITES, a fraction.
+picard.analysis.RrbsCpgDetailMetrics	SAMPLE	string	Sample (@RG SM) of the accumulation unit. Empty on ALL_READS rows.
+picard.analysis.RrbsCpgDetailMetrics	LIBRARY	string	Library (@RG LB) of the accumulation unit. Empty on ALL_READS and SAMPLE rows.
+picard.analysis.RrbsCpgDetailMetrics	READ_GROUP	string	Platform unit (@RG PU) of the accumulation unit. Empty above the READ_GROUP level.

@@ -338,6 +338,16 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
         "CollectIndexDepthMetrics",
         vec![format!("I={DATA}/index_depth.bam"), out("index_depth")],
     );
+    // The bisulfite fixture fills both files at the read group level.
+    args.insert(
+        "CollectRrbsMetrics",
+        vec![
+            format!("I={DATA}/rrbs.bam"),
+            reference.clone(),
+            format!("M={}", dir.join("rrbs").display()),
+            "LEVEL=READ_GROUP".to_owned(),
+        ],
+    );
     // The fixture BAM has no @RG line, which CollectOxoGMetrics refuses.
     args.insert(
         "CollectOxoGMetrics",

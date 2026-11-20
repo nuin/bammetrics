@@ -547,6 +547,10 @@ pub const VERBS: &[Verb] = &[
             Files::Bam,
         )
     },
+    Verb {
+        reads: &["REFERENCE"],
+        ..verb("rrbs", "CollectRrbsMetrics", Files::Prefix)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the

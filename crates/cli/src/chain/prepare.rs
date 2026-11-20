@@ -680,9 +680,17 @@ fn transform_names(cx: &Context, tool: &Tool, position: &Position, own: &[String
 }
 
 /// `REFERENCE_SEQUENCE` for a tool step: the chain's reference when the
-/// tool reads one, or decodes a CRAM source, and the step names none.
+/// tool reads one, or decodes a CRAM source, and the step names none. A
+/// tool whose reference option is `REFERENCE` (`CollectRrbsMetrics`)
+/// gets it there.
 fn reference_arg(cx: &Context, tool: &Tool, own: &[String]) -> Option<String> {
     let reference = cx.reference?;
+    if tool
+        .option("REFERENCE")
+        .is_some_and(|opt| opt.kind == Kind::Value)
+    {
+        return (!sets(own, "REFERENCE")).then(|| format!("REFERENCE={reference}"));
+    }
     let reads = tool
         .option("REFERENCE_SEQUENCE")
         .is_some_and(|opt| opt.kind == Kind::Value);
@@ -706,10 +714,11 @@ fn file_kind(tool: &Tool, option: &str) -> &'static str {
     }
 }
 
-/// True for a tool whose `OUTPUT` is a prefix: it names its files when it
-/// finishes.
+/// True for a tool whose `OUTPUT` (or own output option) is a prefix: it
+/// names its files when it finishes.
 fn output_is_prefix(tool: &Tool) -> bool {
-    matches!(file_extensions(tool.name), Some([("OUTPUT", "")]))
+    matches!(file_extensions(tool.name), Some([(option, "")])
+        if *option == "OUTPUT" || *option == tool.output_name())
 }
 
 /// The files `argv` names as written, each with a sibling per further

@@ -193,6 +193,8 @@ const OTHER_FILES: &[(&str, &[(&str, &str)])] = &[
         "CollectDuplicateByTileMetrics",
         &[("OUTPUT", ".duplicate_by_tile_metrics")],
     ),
+    // METRICS_FILE_PREFIX is a prefix: the tool names its two files.
+    ("CollectRrbsMetrics", &[("METRICS_FILE_PREFIX", "")]),
 ];
 
 /// The files `tool` writes under an output prefix, as (file option,
