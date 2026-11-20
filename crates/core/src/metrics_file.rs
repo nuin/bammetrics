@@ -326,9 +326,27 @@ impl MetricsFile<'_> {
         rows: &[T],
         line: impl Fn(&T) -> String,
     ) -> io::Result<()> {
+        self.write_lines(out, !rows.is_empty(), |out| {
+            rows.iter()
+                .try_for_each(|row| writeln!(out, "{}", line(row)))
+        })
+    }
+
+    /// [`MetricsFile::write`] with the row lines written by `lines`, for
+    /// rows made as they are written. `any` is false when there is no row:
+    /// then neither the class line nor the column line is printed.
+    pub fn write_lines<W: Write>(
+        &self,
+        out: &mut W,
+        any: bool,
+        lines: impl FnOnce(&mut W) -> io::Result<()>,
+    ) -> io::Result<()> {
         write_headers(out, &self.headers)?;
         writeln!(out)?;
-        write_class(out, self.class, self.columns.iter().copied(), rows, line)?;
+        if any {
+            write_class_head(out, self.class, self.columns.iter().copied())?;
+            lines(out)?;
+        }
         writeln!(out)?;
         if let Some(table) = &self.histogram {
             table.write(out)?;
@@ -362,12 +380,21 @@ fn write_class<'c, T>(
     if rows.is_empty() {
         return Ok(());
     }
-    writeln!(out, "## METRICS CLASS\t{class}")?;
-    writeln!(out, "{}", columns.collect::<Vec<_>>().join("\t"))?;
+    write_class_head(out, class, columns)?;
     for row in rows {
         writeln!(out, "{}", line(row))?;
     }
     Ok(())
+}
+
+/// The `## METRICS CLASS` line and the column line.
+fn write_class_head<'c>(
+    out: &mut impl Write,
+    class: &str,
+    columns: impl Iterator<Item = &'c str>,
+) -> io::Result<()> {
+    writeln!(out, "## METRICS CLASS\t{class}")?;
+    writeln!(out, "{}", columns.collect::<Vec<_>>().join("\t"))
 }
 
 /// The `## HISTOGRAM` line, the label line (the key label first) and one

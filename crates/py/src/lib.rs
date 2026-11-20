@@ -732,6 +732,7 @@ fn value_object(py: Python<'_>, value: &Value) -> PyResult<Py<PyAny>> {
 /// metrics class (`QualityScoreDistribution`, `MeanQualityByCycle`) returns
 /// its histogram table instead, one dict per key.
 fn rows_as_dicts<'py>(py: Python<'py>, output: &MetricsOutput) -> PyResult<Bound<'py, PyList>> {
+    let output = output.materialized();
     if output.is_histogram_only() {
         let records: Vec<Vec<(String, Value)>> =
             output.histogram.iter().flat_map(|h| h.records()).collect();

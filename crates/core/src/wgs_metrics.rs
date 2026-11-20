@@ -855,6 +855,7 @@ fn output(opts: &Options, mut counts: Counts, filters: &Filters) -> Result<Metri
         }),
         with_headers: true,
         text: None,
+        source: None,
     })
 }
 

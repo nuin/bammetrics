@@ -164,6 +164,7 @@ mod tests {
             histogram: None,
             with_headers: true,
             text: None,
+            source: None,
         }
     }
 

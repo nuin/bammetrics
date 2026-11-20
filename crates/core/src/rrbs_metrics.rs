@@ -37,10 +37,20 @@
 //! included: `MEAN_CPG_COVERAGE` of a unit with no CpG prints `?`.
 //! Detail rows follow the units, each unit's sites sorted by contig name
 //! (Java `String.compareTo`) then position.
+//!
+//! Memory: a unit holds the sites of the contig it reads in a hash map and
+//! packs them at 3 to 4 bytes a site (`sites.rs`) when it reads another
+//! contig. The detail rows are made from the packed sites as the file is
+//! written ([`RowSource`]), never held as `Value`s by the Picard writer.
+//! A unit never comes back to a contig it left: the reference walker
+//! refuses a record on an earlier contig, as Picard's does, even under
+//! `ASSUME_SORTED=true`. One contig of the reference is held at a time.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsString;
+use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use noodles::{bam, sam};
 
@@ -48,13 +58,17 @@ use crate::blocks::alignment_blocks;
 use crate::error::{Error, Result};
 use crate::java;
 use crate::levels::{Labels, Level, Levels, parse_levels};
-use crate::metric::{MetricRow, MetricsOutput, ToolOutput, Value};
+use crate::metric::{MetricRow, MetricsOutput, RowSource, ToolOutput, Value};
 use crate::pass::{self, Accumulator, Collector, Limits};
 use crate::quality::base_qualities;
 use crate::record::record_name;
 use crate::reference::Reference;
 use crate::registry::{Invocation, Opt, Tool, picard_list};
 use crate::sequence::{bases_equal, bisulfite_bases_equal, complement};
+
+mod sites;
+
+use sites::{Site, Sites};
 
 pub const SUMMARY_EXTENSION: &str = "rrbs_summary_metrics";
 pub const DETAIL_EXTENSION: &str = "rrbs_detail_metrics";
@@ -190,6 +204,13 @@ pub const TOOL: Tool = Tool {
 
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let opts = Options::from_invocation(inv)?;
+    // Picard asserts both files writable before it reads.
+    crate::registry::check_writable(
+        [opts.path(SUMMARY_EXTENSION), opts.path(DETAIL_EXTENSION)]
+            .iter()
+            .map(PathBuf::as_path),
+        &inv.inputs,
+    )?;
     let limits = Limits {
         stringency: inv.stringency()?,
         ..Limits::default()
@@ -290,25 +311,12 @@ pub struct DetailRow {
     pub labels: Labels,
 }
 
-impl DetailRow {
-    /// The cells of one row, made without the row: the file holds one row
-    /// per CpG site and unit, millions on a genome.
-    fn cells(name: &str, position: i64, total: i64, converted: i64, labels: &Labels) -> Vec<Value> {
-        let pct = if converted == 0 {
-            0.0
-        } else {
-            converted as f64 / total as f64
-        };
-        vec![
-            name.into(),
-            position.into(),
-            total.into(),
-            converted.into(),
-            pct.into(),
-            labels.sample.clone().into(),
-            labels.library.clone().into(),
-            labels.read_group.clone().into(),
-        ]
+/// `PCT_CONVERTED`: 0 when no read was converted.
+fn pct_converted(total: i64, converted: i64) -> f64 {
+    if converted == 0 {
+        0.0
+    } else {
+        converted as f64 / total as f64
     }
 }
 
@@ -326,28 +334,32 @@ impl MetricRow for DetailRow {
     ];
 
     fn values(&self) -> Vec<Value> {
-        Self::cells(
-            &self.sequence_name,
-            self.position,
-            self.total_sites,
-            self.converted_sites,
-            &self.labels,
-        )
+        vec![
+            self.sequence_name.clone().into(),
+            self.position.into(),
+            self.total_sites.into(),
+            self.converted_sites.into(),
+            pct_converted(self.total_sites, self.converted_sites).into(),
+            self.labels.sample.clone().into(),
+            self.labels.library.clone().into(),
+            self.labels.read_group.clone().into(),
+        ]
     }
 }
 
-/// Every row of both files: the detail rows as their cells.
-#[derive(Clone, Debug, Default)]
+/// Every row of both files: the summary rows, and the detail rows as the
+/// site tables they are made from.
+#[derive(Debug, Default)]
 pub struct Report {
     pub summary: Vec<SummaryRow>,
-    pub details: Vec<Vec<Value>>,
+    pub details: Details,
 }
 
 impl Report {
     /// The two files in the order Picard writes them.
     fn files(self, opts: &Options) -> ToolOutput {
         let details = MetricsOutput {
-            rows: self.details,
+            source: Some(Arc::new(self.details)),
             ..MetricsOutput::from_rows::<DetailRow>(&[], None)
         };
         ToolOutput {
@@ -363,11 +375,51 @@ impl Report {
     }
 }
 
-/// A CpG site's reads: all of them and the converted ones.
+/// The detail rows: each unit's labels and its sites by contig, contigs
+/// in the order of their names. A [`RowSource`]: each row is made as the
+/// file is written.
+#[derive(Debug, Default)]
+pub struct Details {
+    names: Vec<String>,
+    units: Vec<(Labels, Vec<Contig>)>,
+    rows: usize,
+}
+
+/// One contig's index and its sites.
+type Contig = (u32, Sites);
+
+impl RowSource for Details {
+    fn len(&self) -> usize {
+        self.rows
+    }
+
+    fn each(&self, row: &mut dyn FnMut(&[Value]) -> io::Result<()>) -> io::Result<()> {
+        let mut cells = vec![Value::Null; DetailRow::COLUMNS.len()];
+        for (labels, contigs) in &self.units {
+            cells[5] = labels.sample.clone().into();
+            cells[6] = labels.library.clone().into();
+            cells[7] = labels.read_group.clone().into();
+            for (id, sites) in contigs {
+                cells[0] = self.names[*id as usize].as_str().into();
+                for site in sites.iter() {
+                    let (total, converted) = (java_int(site.total), java_int(site.converted));
+                    cells[1] = i64::from(site.position).into();
+                    cells[2] = total.into();
+                    cells[3] = converted.into();
+                    cells[4] = pct_converted(total, converted).into();
+                    row(&cells)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// The reads of a site still being counted.
 #[derive(Clone, Copy, Debug, Default)]
-struct Site {
-    total: u64,
-    converted: u64,
+struct Count {
+    total: u32,
+    converted: u32,
 }
 
 /// The read and base counters of a unit.
@@ -385,8 +437,12 @@ struct Counters {
 #[derive(Clone, Debug, Default)]
 struct Unit {
     counters: Counters,
-    /// Sites by contig index and 0-based position.
-    sites: HashMap<(usize, i64), Site>,
+    /// The sites of `open_contig` by position.
+    open: HashMap<u32, Count>,
+    /// The contig whose sites `open` holds.
+    open_contig: Option<u32>,
+    /// The sites of each contig the unit has left, in the order read.
+    closed: Vec<Contig>,
 }
 
 /// What a record adds to every unit it reaches.
@@ -397,7 +453,7 @@ struct Observation {
     non_cpg_converted: i64,
     /// Counted CpG sites: 0-based position of the C and whether it was
     /// converted.
-    cpgs: Vec<(i64, bool)>,
+    cpgs: Vec<(u32, bool)>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -409,7 +465,7 @@ enum Outcome {
 }
 
 impl Unit {
-    fn add(&mut self, contig: usize, o: &Observation) {
+    fn add(&mut self, contig: u32, o: &Observation) {
         let c = &mut self.counters;
         c.reads_aligned += 1;
         match o.outcome {
@@ -420,14 +476,49 @@ impl Unit {
                 c.non_cpg_converted += o.non_cpg_converted;
                 if o.cpgs.is_empty() {
                     c.no_cpg += 1;
+                    return;
                 }
+                self.enter(contig);
                 for &(position, converted) in &o.cpgs {
-                    let site = self.sites.entry((contig, position)).or_default();
-                    site.total += 1;
-                    site.converted += u64::from(converted);
+                    let site = self.open.entry(position).or_default();
+                    site.total = site.total.saturating_add(1);
+                    site.converted = site.converted.saturating_add(u32::from(converted));
                 }
             }
         }
+    }
+
+    /// Make `contig` the open one: the sites of the contig left go to
+    /// `closed`. The reference walker refuses a record on an earlier
+    /// contig, so a contig left is never read again.
+    fn enter(&mut self, contig: u32) {
+        if self.open_contig != Some(contig) {
+            self.close();
+            self.open_contig = Some(contig);
+        }
+    }
+
+    /// Move the sites of the open contig to `closed`, packed.
+    fn close(&mut self) {
+        let Some(contig) = self.open_contig.take() else {
+            return;
+        };
+        let mut sites: Vec<Site> = self
+            .open
+            .drain()
+            .map(|(position, count)| Site {
+                position,
+                total: count.total,
+                converted: count.converted,
+            })
+            .collect();
+        self.closed.push((contig, Sites::pack(&mut sites)));
+    }
+
+    /// The counters and every contig's sites.
+    fn into_contigs(mut self) -> (Counters, Vec<Contig>) {
+        self.close();
+        (self.counters, self.closed)
     }
 }
 
@@ -505,6 +596,10 @@ impl Accumulator for Rrbs {
             name: record_name(record),
             what: "mapped without a reference sequence",
         })?;
+        let index = u32::try_from(id).map_err(|_| Error::MalformedRecord {
+            name: record_name(record),
+            what: "a reference sequence index past 2^32",
+        })?;
         let contig = self.reference.contig(id)?;
         observe(
             record,
@@ -514,7 +609,8 @@ impl Accumulator for Rrbs {
             &mut self.observation,
         )?;
         let observation = &self.observation;
-        self.levels.route(record, |unit| unit.add(id, observation));
+        self.levels
+            .route(record, |unit| unit.add(index, observation));
         Ok(())
     }
 
@@ -525,41 +621,57 @@ impl Accumulator for Rrbs {
         for (place, &id) in rank.iter().enumerate() {
             order[id] = place;
         }
-        let mut report = Report::default();
+        let mut summary = Vec::new();
+        let mut units = Vec::new();
+        let mut rows = 0;
         for bucket in self.levels.into_buckets() {
-            let Unit { counters, sites } = bucket.state;
-            let mut sites: Vec<((usize, i64), Site)> = sites.into_iter().collect();
-            sites.sort_unstable_by_key(|&((id, position), _)| (order[id], position));
-            report
-                .summary
-                .push(summary(counters, &sites, bucket.labels.clone()));
-            report.details.reserve(sites.len());
-            for ((id, position), site) in sites {
-                report.details.push(DetailRow::cells(
-                    &self.names[id],
-                    position,
-                    java_int(site.total),
-                    java_int(site.converted),
-                    &bucket.labels,
-                ));
-            }
+            let (counters, mut contigs) = bucket.state.into_contigs();
+            contigs.sort_unstable_by_key(|(id, _)| order[*id as usize]);
+            summary.push(summary_row(counters, &contigs, bucket.labels.clone()));
+            rows += contigs.iter().map(|(_, sites)| sites.len()).sum::<usize>();
+            units.push((bucket.labels, contigs));
         }
-        Ok(report)
+        Ok(Report {
+            summary,
+            details: Details {
+                names: self.names,
+                units,
+                rows,
+            },
+        })
     }
 }
 
 /// `finish` and `buildSummaryMetrics` of a unit. The site histogram gives
 /// `getSumOfValues` (CpG bases), `getMeanBinSize` (the sum over the number
 /// of sites, NaN without one) and `getMedianBinSize` (0 without a site).
-fn summary(c: Counters, sites: &[((usize, i64), Site)], labels: Labels) -> SummaryRow {
-    let seen_sum: f64 = sites.iter().map(|(_, s)| s.total as f64).sum();
-    let converted_sum: f64 = sites.iter().map(|(_, s)| s.converted as f64).sum();
-    let mut totals: Vec<u64> = sites.iter().map(|(_, s)| s.total).collect();
-    totals.sort_unstable();
-    let median = match totals.len() {
+fn summary_row(c: Counters, contigs: &[Contig], labels: Labels) -> SummaryRow {
+    // Sites by their read count: the sums and the median without a copy
+    // of every site.
+    let mut by_total: BTreeMap<u32, u64> = BTreeMap::new();
+    let (mut seen_sum, mut converted_sum, mut n) = (0u64, 0u64, 0u64);
+    for site in contigs.iter().flat_map(|(_, sites)| sites.iter()) {
+        *by_total.entry(site.total).or_default() += 1;
+        seen_sum += u64::from(site.total);
+        converted_sum += u64::from(site.converted);
+        n += 1;
+    }
+    let (seen_sum, converted_sum) = (seen_sum as f64, converted_sum as f64);
+    // The `k`th smallest read count, from 0.
+    let kth = |k: u64| {
+        let mut below = 0;
+        by_total
+            .iter()
+            .find(|&(_, &count)| {
+                below += count;
+                below > k
+            })
+            .map_or(0.0, |(&total, _)| f64::from(total))
+    };
+    let median = match n {
         0 => 0.0,
-        n if n % 2 == 0 => (totals[n / 2] as f64 + totals[n / 2 - 1] as f64) / 2.0,
-        n => totals[n / 2] as f64,
+        n if n % 2 == 0 => (kth(n / 2) + kth(n / 2 - 1)) / 2.0,
+        n => kth(n / 2),
     };
     let seen = java_d2i(seen_sum);
     let converted = java_d2i(converted_sum);
@@ -578,7 +690,7 @@ fn summary(c: Counters, sites: &[((usize, i64), Site)], labels: Labels) -> Summa
         cpg_bases_seen: seen,
         cpg_bases_converted: converted,
         pct_cpg_bases_converted: ratio(converted, seen),
-        mean_cpg_coverage: seen_sum / sites.len() as f64,
+        mean_cpg_coverage: seen_sum / n as f64,
         median_cpg_coverage: java_d2i(median),
         reads_with_no_cpg: c.no_cpg,
         reads_ignored_short: c.short,
@@ -593,7 +705,7 @@ fn java_d2i(value: f64) -> i64 {
 }
 
 /// A count as the `int` Picard keeps it in.
-fn java_int(value: u64) -> i64 {
+fn java_int(value: u32) -> i64 {
     i64::from(i32::try_from(value).unwrap_or(i32::MAX))
 }
 
@@ -713,6 +825,8 @@ fn observe(
                     } else {
                         block.reference_start - 1 + i as i64
                     };
+                    let position = u32::try_from(position)
+                        .map_err(|_| malformed("a CpG position past 2^32"))?;
                     o.cpgs.push((position, is_converted(read[i], fragment[i])));
                 }
                 i += 1;

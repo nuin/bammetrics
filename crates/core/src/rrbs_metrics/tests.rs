@@ -165,24 +165,117 @@ fn the_prefix_gets_one_dot() {
 
 #[test]
 fn the_summary_takes_picard_histogram_statistics() {
-    let site = |total, converted| Site { total, converted };
-    let sites = [
-        ((0, 1), site(1, 1)),
-        ((0, 5), site(4, 2)),
-        ((0, 9), site(2, 0)),
-        ((0, 12), site(3, 3)),
+    let site = |position, total, converted| Site {
+        position,
+        total,
+        converted,
+    };
+    let contigs = [
+        (0, Sites::pack(&mut [site(1, 1, 1), site(5, 4, 2)])),
+        (1, Sites::pack(&mut [site(9, 2, 0), site(12, 3, 3)])),
     ];
-    let row = summary(Counters::default(), &sites, Labels::default());
+    let row = summary_row(Counters::default(), &contigs, Labels::default());
     assert_eq!((row.cpg_bases_seen, row.cpg_bases_converted), (10, 6));
     assert_eq!(row.mean_cpg_coverage, 2.5);
     // Median of 1, 2, 3, 4 is 2.5, truncated.
     assert_eq!(row.median_cpg_coverage, 2);
-    let empty = summary(Counters::default(), &[], Labels::default());
+    // Read counts 1, 2, 2, 3 and 7: the median is the third.
+    let odd = [(
+        0,
+        Sites::pack(&mut [
+            site(1, 7, 0),
+            site(2, 2, 0),
+            site(3, 1, 0),
+            site(4, 3, 0),
+            site(5, 2, 0),
+        ]),
+    )];
+    let row = summary_row(Counters::default(), &odd, Labels::default());
+    assert_eq!((row.median_cpg_coverage, row.mean_cpg_coverage), (2, 3.0));
+    let empty = summary_row(Counters::default(), &[], Labels::default());
     assert!(empty.mean_cpg_coverage.is_nan());
     assert_eq!(
         (empty.median_cpg_coverage, empty.pct_cpg_bases_converted),
         (0, 0.0)
     );
+}
+
+/// An observation with the CpG sites `cpgs`.
+fn with_cpgs(cpgs: &[(u32, bool)]) -> Observation {
+    Observation {
+        cpgs: cpgs.to_vec(),
+        ..Observation::default()
+    }
+}
+
+#[test]
+fn a_unit_closes_each_contig_it_leaves() {
+    let mut unit = Unit::default();
+    unit.add(2, &with_cpgs(&[(7, true), (3, false)]));
+    unit.add(2, &with_cpgs(&[(7, false)]));
+    unit.add(0, &with_cpgs(&[(4, true)]));
+    assert_eq!(unit.closed.len(), 1);
+    assert_eq!(unit.open.len(), 1);
+    let (counters, contigs) = unit.into_contigs();
+    assert_eq!(counters.reads_aligned, 3);
+    let site = |position, total, converted| Site {
+        position,
+        total,
+        converted,
+    };
+    assert_eq!(
+        contigs,
+        [
+            (2, Sites::pack(&mut [site(3, 1, 0), site(7, 2, 1)])),
+            (0, Sites::pack(&mut [site(4, 1, 1)]))
+        ]
+    );
+}
+
+#[test]
+fn detail_rows_are_made_as_they_are_written() {
+    let labels = Labels {
+        sample: Some("s".to_owned()),
+        library: None,
+        read_group: None,
+    };
+    let site = |position, total, converted| Site {
+        position,
+        total,
+        converted,
+    };
+    let details = Details {
+        names: vec!["b".to_owned(), "a".to_owned()],
+        units: vec![(
+            labels,
+            vec![
+                (1, Sites::pack(&mut [site(4, 3, 0)])),
+                (0, Sites::pack(&mut [site(2, 4, 1)])),
+            ],
+        )],
+        rows: 2,
+    };
+    let mut rows = Vec::new();
+    details
+        .each(&mut |row| {
+            rows.push(row.to_vec());
+            Ok(())
+        })
+        .expect("rows");
+    let expected = |name: &str, position, total_sites, converted_sites| {
+        DetailRow {
+            sequence_name: name.to_owned(),
+            position,
+            total_sites,
+            converted_sites,
+            labels: Labels {
+                sample: Some("s".to_owned()),
+                ..Labels::default()
+            },
+        }
+        .values()
+    };
+    assert_eq!(rows, [expected("a", 4, 3, 0), expected("b", 2, 4, 1)]);
 }
 
 #[test]
