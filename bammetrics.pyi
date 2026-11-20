@@ -1680,6 +1680,7 @@ _StepVerb = Literal[
     "revert_original_base_qualities_and_add_mate_cigar",
     "split_sam_by_library",
     "split_sam_by_number_of_reads",
+    "rrbs",
     "write",
 ]
 

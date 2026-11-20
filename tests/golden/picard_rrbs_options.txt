@@ -1,0 +1,120 @@
+## argv
+CollectRrbsMetrics
+I=tests/data/rrbs.bam
+M=OUT/rrbs.
+R=tests/data/ref_100k.fa
+C_QUALITY_THRESHOLD=0
+MINIMUM_READ_LENGTH=40
+MAX_MISMATCH_RATE=0.2
+SEQUENCE_NAMES=chr1
+DO_NOT_CREATE_PLOTS=true
+LEVEL=null
+LEVEL=LIBRARY
+## exit
+0
+## stdout
+## stderr
+bammetrics: ignoring DO_NOT_CREATE_PLOTS=true: no plot is drawn
+## file rrbs.rrbs_detail_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectRrbsMetrics INPUT=tests/data/rrbs.bam METRICS_FILE_PREFIX=OUT/rrbs. REFERENCE=tests/data/ref_100k.fa C_QUALITY_THRESHOLD=0 MINIMUM_READ_LENGTH=40 MAX_MISMATCH_RATE=0.2 SEQUENCE_NAMES=chr1 DO_NOT_CREATE_PLOTS=true METRIC_ACCUMULATION_LEVEL=null METRIC_ACCUMULATION_LEVEL=LIBRARY
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.RrbsCpgDetailMetrics
+SEQUENCE_NAME	POSITION	TOTAL_SITES	CONVERTED_SITES	PCT_CONVERTED	SAMPLE	LIBRARY	READ_GROUP
+chr1	1047	1	0	0	S1	L1	
+chr1	1050	1	0	0	S1	L1	
+chr1	1071	2	1	0.5	S1	L1	
+chr1	1081	2	2	1	S1	L1	
+chr1	1102	6	2	0.333333	S1	L1	
+chr1	1116	6	1	0.166667	S1	L1	
+chr1	1133	3	2	0.666667	S1	L1	
+chr1	1142	4	2	0.5	S1	L1	
+chr1	1158	4	0	0	S1	L1	
+chr1	1176	6	3	0.5	S1	L1	
+chr1	1224	6	3	0.5	S1	L1	
+chr1	1234	2	1	0.5	S1	L1	
+chr1	1237	2	0	0	S1	L1	
+chr1	1241	2	1	0.5	S1	L1	
+chr1	1246	2	2	1	S1	L1	
+chr1	1256	1	0	0	S1	L1	
+chr1	1258	1	1	1	S1	L1	
+chr1	1045	1	1	1	S1	L2	
+chr1	1047	1	0	0	S1	L2	
+chr1	1050	1	1	1	S1	L2	
+chr1	1071	3	0	0	S1	L2	
+chr1	1081	3	1	0.333333	S1	L2	
+chr1	1102	3	1	0.333333	S1	L2	
+chr1	1116	3	2	0.666667	S1	L2	
+chr1	1133	3	3	1	S1	L2	
+chr1	1142	2	1	0.5	S1	L2	
+chr1	1158	2	0	0	S1	L2	
+chr1	1176	3	3	1	S1	L2	
+chr1	1224	3	0	0	S1	L2	
+chr1	1234	3	2	0.666667	S1	L2	
+chr1	1237	3	2	0.666667	S1	L2	
+chr1	1241	4	2	0.5	S1	L2	
+chr1	1246	3	1	0.333333	S1	L2	
+chr1	1256	4	1	0.25	S1	L2	
+chr1	1258	1	1	1	S1	L2	
+chr1	1273	3	1	0.333333	S1	L2	
+chr1	1284	3	1	0.333333	S1	L2	
+chr1	1319	2	0	0	S1	L2	
+chr1	1322	1	0	0	S1	L2	
+chr1	1050	1	0	0	S2	L3	
+chr1	1071	1	0	0	S2	L3	
+chr1	1081	1	0	0	S2	L3	
+chr1	1102	2	1	0.5	S2	L3	
+chr1	1116	5	0	0	S2	L3	
+chr1	1133	3	0	0	S2	L3	
+chr1	1142	5	2	0.4	S2	L3	
+chr1	1158	3	1	0.333333	S2	L3	
+chr1	1176	2	2	1	S2	L3	
+chr1	1224	1	0	0	S2	L3	
+chr1	1234	1	1	1	S2	L3	
+chr1	1237	1	1	1	S2	L3	
+chr1	1241	1	1	1	S2	L3	
+chr1	1246	1	0	0	S2	L3	
+chr1	1273	1	0	0	S2	L3	
+chr1	1284	1	0	0	S2	L3	
+chr1	1319	3	1	0.333333	S2	L3	
+chr1	1322	1	0	0	S2	L3	
+chr1	1355	2	1	0.5	S2	L3	
+chr1	1020	1	1	1	unknown	unknown	
+chr1	1045	1	1	1	unknown	unknown	
+chr1	1047	1	1	1	unknown	unknown	
+chr1	1050	1	1	1	unknown	unknown	
+chr1	1071	2	1	0.5	unknown	unknown	
+chr1	1081	3	0	0	unknown	unknown	
+chr1	1102	4	1	0.25	unknown	unknown	
+chr1	1116	5	1	0.2	unknown	unknown	
+chr1	1133	5	1	0.2	unknown	unknown	
+chr1	1142	4	2	0.5	unknown	unknown	
+chr1	1158	2	0	0	unknown	unknown	
+chr1	1176	2	0	0	unknown	unknown	
+chr1	1224	4	2	0.5	unknown	unknown	
+chr1	1234	4	1	0.25	unknown	unknown	
+chr1	1237	4	2	0.5	unknown	unknown	
+chr1	1241	3	3	1	unknown	unknown	
+chr1	1246	5	2	0.4	unknown	unknown	
+chr1	1256	4	3	0.75	unknown	unknown	
+chr1	1258	5	2	0.4	unknown	unknown	
+chr1	1273	4	1	0.25	unknown	unknown	
+chr1	1284	5	1	0.2	unknown	unknown	
+
+
+## file rrbs.rrbs_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectRrbsMetrics INPUT=tests/data/rrbs.bam METRICS_FILE_PREFIX=OUT/rrbs. REFERENCE=tests/data/ref_100k.fa C_QUALITY_THRESHOLD=0 MINIMUM_READ_LENGTH=40 MAX_MISMATCH_RATE=0.2 SEQUENCE_NAMES=chr1 DO_NOT_CREATE_PLOTS=true METRIC_ACCUMULATION_LEVEL=null METRIC_ACCUMULATION_LEVEL=LIBRARY
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.RrbsSummaryMetrics
+READS_ALIGNED	NON_CPG_BASES	NON_CPG_CONVERTED_BASES	PCT_NON_CPG_BASES_CONVERTED	CPG_BASES_SEEN	CPG_BASES_CONVERTED	PCT_CPG_BASES_CONVERTED	MEAN_CPG_COVERAGE	MEDIAN_CPG_COVERAGE	READS_WITH_NO_CPG	READS_IGNORED_SHORT	READS_IGNORED_MISMATCHES	SAMPLE	LIBRARY	READ_GROUP
+20	131	105	0.801527	51	21	0.411765	3	2	0	7	0	S1	L1	
+20	139	138	0.992806	55	24	0.436364	2.5	3	0	7	0	S1	L2	
+20	104	85	0.817308	36	11	0.305556	1.894737	1	0	10	0	S2	L3	
+20	144	144	1	69	27	0.391304	3.285714	4	0	7	0	unknown	unknown	
+
+

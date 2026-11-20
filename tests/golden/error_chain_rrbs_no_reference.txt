@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/rrbs.bam
+-o
+OUT/s
++
+rrbs
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (rrbs): missing --reference (Picard: REFERENCE)
+  every option: bammetrics help rrbs

@@ -1,0 +1,12 @@
+## argv
+CollectRrbsMetrics
+I=tests/data/rrbs.bam
+M=OUT/x
+R=tests/data/ref_100k.fa
+MAX_MISMATCH_RATE=1.5
+MINIMUM_READ_LENGTH=0
+## exit
+1
+## stdout
+## stderr
+bammetrics: MAX_MISMATCH_RATE must be in the range of 0-1; MINIMUM_READ_LENGTH must be > 0

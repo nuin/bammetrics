@@ -87,9 +87,16 @@ impl Options {
             java::parse_double(text)
                 .map_err(|e| Error::Usage(format!("MAX_MISMATCH_RATE={text}: {e}")))
         })?;
+        let required = |name: &str| Error::Usage(format!("{name} is required"));
         let opts = Self {
-            prefix: inv.output.clone().unwrap_or_default(),
-            reference: inv.get("REFERENCE").map(PathBuf::from).unwrap_or_default(),
+            prefix: inv
+                .output
+                .clone()
+                .ok_or_else(|| required("METRICS_FILE_PREFIX"))?,
+            reference: inv
+                .get("REFERENCE")
+                .map(PathBuf::from)
+                .ok_or_else(|| required("REFERENCE"))?,
             c_quality_threshold: int("C_QUALITY_THRESHOLD", 20)?,
             next_base_quality_threshold: int("NEXT_BASE_QUALITY_THRESHOLD", 10)?,
             minimum_read_length: int("MINIMUM_READ_LENGTH", 5)?,
