@@ -57,13 +57,17 @@ record-editing shape with `AddCommentsToBam`, `ReplaceSamHeader`, `AddOATag`, `C
 `RevertOriginalBaseQualitiesAndAddMateCigar` with the writer's sort in the record-editing
 shape, `SplitSamByLibrary` and `SplitSamByNumberOfReads` as fan-out sinks of a chain,
 `GatherBamFiles` by BGZF block copy and `CalculateReadGroupChecksum` (tools 49 to 54,
-0.28.0, wave W10; docs/chaining.md sections 17 and 18). CHANGELOG.md has each.
+0.28.0, wave W10; docs/chaining.md sections 17 and 18), and `CollectQualityYieldMetricsSNVQ`
+and `CollectRrbsMetrics` as chain taps, `CollectUmiPrevalenceMetrics` over the duplicate-set
+sort, and `CreateBafRegressMetricsFile`, `CreateVerifyIDIntensityContaminationMetricsFile`
+and `CollectArraysVariantCallingMetrics` on text and arrays VCF input (tools 55 to 60,
+0.29.0, wave W11). CHANGELOG.md has each.
 
 Remaining for bammetrics:
 
 - bioconda recipe and a PyPI release (first push of the branch runs the CI workflow).
 - The Picard tools still to build, further formats and DOCX reports: the program plan
-  `docs/07_full_parity_program.md` (waves W11 onward);
+  `docs/07_full_parity_program.md` (waves W12 onward);
   docs/04 section 4 holds the P9 queue.
 
 Exit criterion: a `pip install`-able library that produces correct, hand-verified numbers.

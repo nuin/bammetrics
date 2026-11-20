@@ -1199,7 +1199,7 @@ is the short form.
   `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`,
   `set-nm-and-uq-tags`, and the two of wave W10: `add-or-replace-read-groups`,
   `revert-original-base-qualities-and-add-mate-cigar`) changes the records later steps
-  see; any number may follow one another. A tap (the 18 one-pass tool verbs) reads the
+  see; any number may follow one another. A tap (the 20 one-pass tool verbs) reads the
   records of its position and changes nothing. A split (`split-sam-by-library`,
   `split-sam-by-number-of-reads`) writes them over BAMs in a directory. `write [PATH]` writes those records as a
   BAM, or as SAM text for a name ending in `.sam`; `-` is standard output, and `write -
@@ -1796,7 +1796,7 @@ purpose is listed in KNOWN_DIFFERENCES.md.
 
 The worked examples of docs/05 section 2.5 that work today, written against the committed
 fixtures so each runs from the repository root as shown (`tests/data/insert_size.bam` has
-no `@RG SM`, so the sample is the BAM name). Output is what 0.28.0 prints; long lines are
+no `@RG SM`, so the sample is the BAM name). Output is what 0.29.0 prints; long lines are
 cut.
 
 **1 and 2. One tool, as Picard text or machine-readable.**
@@ -1865,7 +1865,7 @@ $ for bam in bams/*.bam; do
         -o runs/2026-11-02/$(basename "$bam" .bam) -q > /dev/null
   done
 $ bammetrics report runs/2026-11-02/ --preset clinical-panel
-2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.28.0
+2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.29.0
 FAIL        NA1  7 fail, 1 warn, 9 pass, 1 not measured
   FAIL  Mean target coverage is 0.377778, below the fail limit of 100
   ...

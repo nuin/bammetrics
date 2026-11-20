@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.29.0
+
+Wave W11 of docs/07: six metrics tools (60 in all), two of them chain taps, and the first inputs that are text another program prints.
 
 ### Added
 

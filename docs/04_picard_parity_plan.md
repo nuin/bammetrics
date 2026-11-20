@@ -34,7 +34,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | CollectAlignmentSummaryMetrics | Metrics | core | Most-run alignment QC, next milestone in ROADMAP. L | samtools stats, flagstat (partial) |
 | CollectInsertSizeMetrics | Metrics | core | In v0.1 for ALL_READS. Needs levels, widths, options. M | samtools stats IS (partial) |
 | CollectQualityYieldMetrics | Metrics | core | Single-pass counters, no reference. S | fastp, seqkit stats (partial) |
-| CollectQualityYieldMetricsSNVQ | Metrics | core | Shipped in wave W11 of docs/07: the Ultima qa/qc/qg/qt tags with the Q20, Q30 and Q40 cascades, the `INCLUDE_BQ_HISTOGRAM` section, a missing tag an error naming the record; a chain tap. S | none |
+| CollectQualityYieldMetricsSNVQ | Metrics | core | Shipped in 0.29.0 (wave W11 of docs/07): the Ultima qa/qc/qg/qt tags with the Q20, Q30 and Q40 cascades, the `INCLUDE_BQ_HISTOGRAM` section, a missing tag an error naming the record; a chain tap. S | none |
 | CollectQualityYieldMetricsFlow | Metrics | out | Experimental, Ultima only, needs FlowBasedRead port and flow fixtures. L | none |
 | QualityScoreDistribution | Metrics | core | About 100 lines of integer counts. S | none |
 | MeanQualityByCycle | Metrics | core | Under 200 lines, one cycle-offset trap. S | FastQC (partial) |
@@ -51,14 +51,14 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | CollectDuplicateMetrics | Duplicates | core | Pure flag counting, builds the DuplicationMetrics block. S | samtools stats (partial) |
 | EstimateLibraryComplexity | Duplicates | core | Works on unaligned input, no BAM output. M | none |
 | CheckDuplicateMarking | Duplicates | core | Validator, exit code is the output. Shipped in 0.19.0. S | none |
-| CollectUmiPrevalenceMetrics | Duplicates | core | Shipped in wave W11 of docs/07: Picard's inverted barcode filter kept, the kept records sorted in htsjdk's duplicate order (no index, any sort order). M | none |
+| CollectUmiPrevalenceMetrics | Duplicates | core | Shipped in 0.29.0 (wave W11 of docs/07): Picard's inverted barcode filter kept, the kept records sorted in htsjdk's duplicate order (no index, any sort order). M | none |
 | CollectIndependentReplicateMetrics | Duplicates | out | Alpha research tool, niche protocol. L | none |
 | CollectGcBiasMetrics | Metrics | core | Standard WGS bias QC, reference windows plus read starts. M | Picard only (deepTools computeGCBias, partial) |
 | CollectSequencingArtifactMetrics | Metrics | core | 5 output files, pro/con rules. FFPE and OxoG use. Shipped in 0.19.0. L | none |
 | CollectOxoGMetrics | Metrics | core | Needs pileup, Java hash row order. Shipped in 0.19.0. M | none |
 | ConvertSequencingArtifactToOxoG | Metrics | core | Text conversion, needs the artifact tool. Shipped in 0.19.0. S | none |
 | CollectSamErrorMetrics | Metrics | later | About 30 stratifiers, research tool. XL | none |
-| CollectRrbsMetrics | Metrics | core | Shipped in wave W11 of docs/07: both files equal to Picard's cell for cell, every option and level, CRAM and SAM text, a chain tap. M | Bismark reports (partial) |
+| CollectRrbsMetrics | Metrics | core | Shipped in 0.29.0 (wave W11 of docs/07): both files equal to Picard's cell for cell, every option and level, CRAM and SAM text, a chain tap. M | Bismark reports (partial) |
 | CollectRnaSeqMetrics | Metrics | core | Mainstream RNA-seq QC (nf-core/rnaseq). L | RSeQC, Qualimap (partial) |
 | CollectJumpingLibraryMetrics | Metrics | core | Mate-pair libraries are rare. Shipped in 0.19.0. S | none |
 | CollectMultipleMetrics | Metrics | core | Most users call this wrapper. Single pass is a speed argument. M | none |
@@ -75,7 +75,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | AccumulateQualityYieldMetrics | Metrics | later | Needs QualityYield first. S | none |
 | GenotypeConcordance | Variant | core | The benchmarking tool people cite. L | hap.py, vcfeval (different method) |
 | FindMendelianViolations | Variant | later | Deterministic, needs VCF layer. M | bcftools +mendelian2 (partial) |
-| CollectArraysVariantCallingMetrics | Arrays | core | Shipped in wave W11 of docs/07: the detail, summary and control-code files of an arrays VCF with its index, header dates in the process's time zone, rows in Java `HashMap` order. M | none |
+| CollectArraysVariantCallingMetrics | Arrays | core | Shipped in 0.29.0 (wave W11 of docs/07): the detail, summary and control-code files of an arrays VCF with its index, header dates in the process's time zone, rows in Java `HashMap` order. M | none |
 | CrosscheckFingerprints | Fingerprint | later | Identity check, needs pileup and likelihood model. XL | NGSCheckMate, somalier (different method) |
 | CheckFingerprint | Fingerprint | later | Reuses Crosscheck core. L | none |
 | ExtractFingerprint | Fingerprint | later | VCF output only. M | none |
@@ -133,9 +133,9 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | BpmToNormalizationManifestCsv | Arrays | out | Array manifest. | none |
 | CombineGenotypingArrayVcfs | Arrays | out | Array VCF merge. | bcftools merge |
 | CompareGtcFiles | Arrays | out | GTC diff. | none |
-| CreateBafRegressMetricsFile | Arrays | core | Shipped in wave W11 of docs/07: the bafRegress text read as Picard reads it, one row per sample. S | none |
+| CreateBafRegressMetricsFile | Arrays | core | Shipped in 0.29.0 (wave W11 of docs/07): the bafRegress text read as Picard reads it, one row per sample. S | none |
 | CreateExtendedIlluminaManifest | Arrays | out | Manifest builder. | none |
-| CreateVerifyIDIntensityContaminationMetricsFile | Arrays | core | Shipped in wave W11 of docs/07: the VerifyIDIntensity text matched against Picard's three patterns, one row per result. S | none |
+| CreateVerifyIDIntensityContaminationMetricsFile | Arrays | core | Shipped in 0.29.0 (wave W11 of docs/07): the VerifyIDIntensity text matched against Picard's three patterns, one row per result. S | none |
 | GtcToVcf | Arrays | out | GTC to VCF. | bcftools +gtc2vcf |
 | MergePedIntoVcf | Arrays | out | zCall merge. | bcftools |
 | VcfToAdpc | Arrays | out | Array export. | none |

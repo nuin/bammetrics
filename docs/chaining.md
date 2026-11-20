@@ -283,7 +283,7 @@ its records is not, and a run that reads it exits 1 with `truncated BAM`.
 | A plan file over 1 MiB (1,048,576 bytes) | `not a plan file: it is larger than 1 MiB` | 2 |
 | An output that is a symbolic link, pipe, socket or device another user owns | `owned by another user; not written in place`, the words and the exit code of the tool verb | 1 |
 
-Values. `bammetrics_core::tap_options::check` holds one row per one-pass tool (18). Each
+Values. `bammetrics_core::tap_options::check` holds one row per one-pass tool (20). Each
 row calls the option parser that the tool's own collector calls, with no header and no
 file opened. A unit test fails when a one-pass tool has no row. In 0.22.0 the tap failed
 alone when it was built, after the transform in front of it had read the whole source,
@@ -632,7 +632,7 @@ run.metrics["insert-size"]          # out/NA12878.insert_size_metrics, parsed
 | `step_table(name)` | A `StepTable` for a verb named in snake or kebab case, by its Picard class or by its function name: `verb`, `role`, `keywords`. An unknown name is a usage error with the closest step |
 | `StepTable::keyword(name)` | One keyword, or the usage error with the closest name. `input`, and `output` of `mark_duplicates`, are refused with the reason |
 | `Keyword` | `name`, `long` (the flag it spells), `ty`, `many` (`One`, `Repeated`: one occurrence per item, `Joined`: one comma list) |
-| `step_names()` | The 27 names `step` takes, snake case, in `bammetrics tools` order, `write` last |
+| `step_names()` | The 33 names `step` takes, snake case, in `bammetrics tools` order, `write` last |
 | `metric_key(chain, step, path)` | The key of a metrics file in `Run.metrics`: the verb, `STREAM.` in front for a tap that does not read the last stream, `.FILE` after it for a further file |
 | `stubs()` | The `bammetrics.pyi` entries: `_StepVerb`, `step`, three `chain` overloads |
 
