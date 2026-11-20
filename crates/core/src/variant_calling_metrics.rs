@@ -311,7 +311,7 @@ impl CallingMetrics {
 
 /// `getSingletonSample`: the one sample with exactly one variant
 /// chromosome, when no other sample has any.
-fn singleton_sample(vc: &Variant) -> Option<usize> {
+pub(crate) fn singleton_sample(vc: &Variant) -> Option<usize> {
     // The first two het or hom-var genotypes: a het counts one variant
     // chromosome, a hom-var two; the sum must be exactly 1.
     let mut sum = 0;

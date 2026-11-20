@@ -7,6 +7,7 @@ pub mod add_comments_to_bam;
 pub mod add_oa_tag;
 pub mod add_or_replace_read_groups;
 pub mod alignment_summary;
+pub mod arrays;
 pub mod artifact_to_oxog;
 pub mod bai;
 pub mod bam_index_stats;

@@ -29,7 +29,10 @@ use std::io::{self, BufRead, Read};
 use std::path::{Path, PathBuf};
 
 use noodles::vcf;
-use noodles::vcf::io::CompressionMethod;
+
+mod line_cap;
+
+use line_cap::LineCap;
 
 use crate::bed_to_interval_list;
 use crate::error::{Error, Result};
@@ -422,6 +425,12 @@ pub struct VcfReader {
 
 impl VcfReader {
     pub fn open(path: &Path) -> Result<Self> {
+        Self::open_capped(path, usize::MAX, u64::MAX)
+    }
+
+    /// [`VcfReader::open`] where a line (header or record) over
+    /// `max_line_bytes`, or more than `max_lines` lines, is a read error.
+    pub fn open_capped(path: &Path, max_line_bytes: usize, max_lines: u64) -> Result<Self> {
         let input = |source| Error::Input {
             path: path.to_path_buf(),
             source,
@@ -430,15 +439,14 @@ impl VcfReader {
         let read = File::open(path)
             .and_then(|mut f| f.read(&mut magic))
             .map_err(input)?;
-        let method = if read == 2 && magic == [0x1f, 0x8b] {
-            CompressionMethod::Bgzf
+        let file = File::open(path).map_err(input)?;
+        let text: Box<dyn BufRead> = if read == 2 && magic == [0x1f, 0x8b] {
+            Box::new(noodles::bgzf::io::Reader::new(file))
         } else {
-            CompressionMethod::None
+            Box::new(io::BufReader::new(file))
         };
-        let mut reader = vcf::io::reader::Builder::default()
-            .set_compression_method(method)
-            .build_from_path(path)
-            .map_err(input)?;
+        let capped: Box<dyn BufRead> = Box::new(LineCap::new(text, max_line_bytes, max_lines));
+        let mut reader = vcf::io::Reader::new(capped);
         let header = reader.read_header().map_err(input)?;
         Ok(Self {
             path: path.to_path_buf(),
@@ -495,6 +503,18 @@ impl VcfReader {
                 path: self.path.clone(),
                 message: format!("record {}: {message}", self.line),
             })
+    }
+
+    /// The header as noodles read it.
+    pub fn header(&self) -> &vcf::Header {
+        &self.header
+    }
+
+    /// The raw record [`VcfReader::next_variant`] read last, for the
+    /// fields a [`Variant`] does not keep (each `FILTER` name, a `FORMAT`
+    /// value such as `GTA`).
+    pub fn record(&self) -> &vcf::Record {
+        &self.record
     }
 
     /// Every remaining record.

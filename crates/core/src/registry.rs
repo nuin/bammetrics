@@ -372,6 +372,9 @@ pub const TOOLS: &[&Tool] = &[
     &crate::split_sam_by_number_of_reads::TOOL,
     &crate::gather_bam_files::TOOL,
     &crate::calculate_read_group_checksum::TOOL,
+    &crate::arrays::baf_regress::TOOL,
+    &crate::arrays::verify_id_intensity::TOOL,
+    &crate::arrays::variant_calling::TOOL,
 ];
 
 /// The tool named `name`.

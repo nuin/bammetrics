@@ -646,5 +646,19 @@ pub fn iso8601(millis: i64) -> Option<String> {
     ))
 }
 
+/// The wall-clock time of lenient calendar fields (`month0` from 0, every
+/// field free to roll over), as milliseconds from 1970 with no zone:
+/// `GregorianCalendar.computeTime` before the zone offset.
+pub fn wall_millis(year: i64, month0: i64, day: i64, time_of_day: i64) -> i64 {
+    calendar_time(year, month0, day, time_of_day)
+}
+
+/// The instant of `wall` (from [`wall_millis`]) in the process's zone, as
+/// `GregorianCalendar` resolves an overlap and a gap; `None` past what the
+/// C library converts.
+pub fn local_instant(wall: i64) -> Option<i64> {
+    from_wall(wall)
+}
+
 #[cfg(test)]
 mod tests;
