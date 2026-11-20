@@ -58,6 +58,9 @@ split-sam-by-library                               SplitSamByLibrary
 split-sam-by-number-of-reads                       SplitSamByNumberOfReads
 gather-bam-files                                   GatherBamFiles
 calculate-read-group-checksum                      CalculateReadGroupChecksum
+create-baf-regress-file                            CreateBafRegressMetricsFile
+create-verify-i-d-intensity-contamination-file     CreateVerifyIDIntensityContaminationMetricsFile
+arrays-variant-calling                             CollectArraysVariantCallingMetrics
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.
