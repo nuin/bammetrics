@@ -257,6 +257,7 @@ impl HeaderLine<'_> {
 pub struct Reader<R> {
     lines: LineReader<R>,
     header: Vec<u8>,
+    wide: Vec<String>,
     stringency: Stringency,
     file: Option<PathBuf>,
 }
@@ -268,10 +269,17 @@ impl<R: BufRead> Reader<R> {
     pub fn new(inner: R, stringency: Stringency, file: Option<&Path>) -> io::Result<Self> {
         let mut lines = LineReader::new(inner);
         let mut header = Vec::new();
+        let mut wide = Vec::new();
         let mut line = Vec::new();
         while lines.peek()? == Some(b'@') {
             lines.read_line(&mut line)?;
             let text = java_bytes(&line);
+            if !line.is_ascii() {
+                let decoded = String::from_utf8_lossy(&line);
+                if decoded.chars().any(|c| u32::from(c) > 0xFF) {
+                    wide.push(decoded.into_owned());
+                }
+            }
             let checked = HeaderLine {
                 stringency,
                 file,
@@ -286,6 +294,7 @@ impl<R: BufRead> Reader<R> {
         Ok(Self {
             lines,
             header,
+            wide,
             stringency,
             file: file.map(Path::to_path_buf),
         })
@@ -294,6 +303,14 @@ impl<R: BufRead> Reader<R> {
     /// The header lines htsjdk keeps, each ended by `\n`.
     pub fn header_text(&self) -> &[u8] {
         &self.header
+    }
+
+    /// The header lines with a character above U+00FF, as the file spells
+    /// them: [`Reader::header_text`] keeps the low byte of each UTF-16
+    /// unit, and a file named after a header value (`SplitSamByLibrary`)
+    /// takes the whole character, as Java names it.
+    pub fn wide_lines(&self) -> &[String] {
+        &self.wide
     }
 
     /// The header as noodles holds it. htsjdk takes the `@HD` line

@@ -301,7 +301,7 @@ pub(crate) fn with_counted_stream<T>(
         threads,
         stringency,
         bytes,
-        |header, reader, kind| consume(header, reader, kind == Kind::Cram),
+        |header, reader, kind, _| consume(header, reader, kind == Kind::Cram),
     )
 }
 
@@ -315,6 +315,25 @@ pub(crate) fn with_record_stream_kind<T>(
     stringency: Stringency,
     consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), Kind) -> Result<T>,
 ) -> Result<T> {
+    with_record_stream_wide(
+        path,
+        reference,
+        threads,
+        stringency,
+        |header, reader, kind, _| consume(header, reader, kind),
+    )
+}
+
+/// [`with_record_stream_kind`], also handing `consume` the header lines of
+/// SAM text with a character above U+00FF as the file spells them
+/// ([`sam_text::Reader::wide_lines`]); empty for the other kinds.
+pub(crate) fn with_record_stream_wide<T>(
+    path: &Path,
+    reference: Option<&Path>,
+    threads: usize,
+    stringency: Stringency,
+    consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), Kind, &[String]) -> Result<T>,
+) -> Result<T> {
     let bytes = Arc::new(AtomicU64::new(0));
     with_stream_of_kind(path, reference, threads, stringency, &bytes, consume)
 }
@@ -325,7 +344,7 @@ fn with_stream_of_kind<T>(
     threads: usize,
     stringency: Stringency,
     bytes: &Arc<AtomicU64>,
-    consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), Kind) -> Result<T>,
+    consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), Kind, &[String]) -> Result<T>,
 ) -> Result<T> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
@@ -345,7 +364,7 @@ fn with_stream_of_kind<T>(
                 .read_header()
                 .map_err(|e| input(cram::truncated(e, true)))?;
             cram::decode(reader, &header, reference, workers, |records| {
-                consume(&header, records.get_mut(), Kind::Cram)
+                consume(&header, records.get_mut(), Kind::Cram, &[])
             })
         }
         Kind::Bam => {
@@ -355,14 +374,15 @@ fn with_stream_of_kind<T>(
             let header = reader
                 .read_header()
                 .map_err(|e| input(cram::bam_header_error(e)))?;
-            consume(&header, reader.get_mut(), Kind::Bam)
+            consume(&header, reader.get_mut(), Kind::Bam, &[])
         }
         Kind::Sam | Kind::GzipSam => {
             let kind = sniffed.kind;
             let reader = sam_reader(sniffed, stringency, path).map_err(input)?;
             let header = reader.header().map_err(input)?;
+            let wide = reader.wide_lines().to_vec();
             let mut records = sam_text::RecordStream::new(reader.records(&header));
-            consume(&header, &mut records, kind)
+            consume(&header, &mut records, kind, &wide)
         }
     }
 }
