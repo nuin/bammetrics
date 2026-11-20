@@ -97,6 +97,7 @@ fn library_split_on(dir: &Path, header: &sam::Header, threads: usize) -> Splitte
         format: Format::Bam,
         input: "in.bam",
         total: 0,
+        wide: &[],
     };
     Splitter::new(&SplitKind::Library, header, &layout, fanout).expect("splitter")
 }
@@ -205,12 +206,43 @@ fn two_libraries_with_one_safe_name_fail_before_any_record() {
         format: Format::Bam,
         input: "in.bam",
         total: 0,
+        wide: &[],
     };
     let error = Splitter::new(&SplitKind::Library, &header, &layout, fanout)
         .err()
         .expect("one file for two libraries");
     assert!(error.to_string().contains("a_b.bam"), "{error}");
     assert!(names(&dir).is_empty());
+    std::fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+/// SAM text with a library above U+00FF: the file takes the whole name,
+/// and two names with the same low bytes are two libraries, as in Picard.
+#[test]
+fn a_wide_library_of_sam_text_names_its_file_whole() {
+    let dir = scratch("wide");
+    let text = "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:1000\n\
+                @RG\tID:a\tSM:s\tLB:中文\n@RG\tID:b\tSM:s\tLB:\u{3e2d}\u{6587}\n@RG\tID:c\tSM:s\tLB:café\n";
+    let reader =
+        crate::sam_text::Reader::new(text.as_bytes(), Stringency::Strict, None).expect("reader");
+    let header = reader.header().expect("header");
+    assert_eq!(reader.wide_lines().len(), 2);
+    let fanout = Fanout::new(options(), &header, Vec::new(), None).expect("fanout");
+    let layout = Layout {
+        dir: &dir,
+        extension: "sam",
+        format: Format::Bam,
+        input: "in.sam",
+        total: 0,
+        wide: reader.wide_lines(),
+    };
+    let split = Splitter::new(&SplitKind::Library, &header, &layout, fanout).expect("splitter");
+    split.finish().expect("finish");
+    assert_eq!(
+        names(&dir),
+        ["café.sam", "\u{3e2d}\u{6587}.sam", "中文.sam"]
+    );
+    assert_eq!(file_name_safe_text(" 中/文 "), "中_文");
     std::fs::remove_dir_all(&dir).expect("cleanup");
 }
 
@@ -225,6 +257,7 @@ fn a_header_without_a_library_is_picards_usage_error() {
         format: Format::Bam,
         input: "/abs/in.bam",
         total: 0,
+        wide: &[],
     };
     let error = Splitter::new(&SplitKind::Library, &header, &layout, fanout)
         .err()
@@ -286,6 +319,7 @@ fn a_count_split_keeps_a_name_together() {
         format: Format::Bam,
         input: "in.bam",
         total: 7,
+        wide: &[],
     };
     let count = CountOptions {
         files: 3,

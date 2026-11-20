@@ -11,7 +11,7 @@ compared through `samtools idxstats` (Picard's writer-side `.bai` ends one offse
 BuildBamIndex, test_mark_duplicates.py); an `.md5` must hold the MD5 of its own file.
 
 Inputs: `split_bams.py` (300 libraries, odd library names, read groups without `LB`,
-records without `RG` or with one the header lacks, headers without libraries, `VN:1.4`,
+records without `RG` or with one the header lacks, headers without libraries, `VN:1.4`, SAM text with libraries above U+00FF,
 queryname and unsorted headers), the fixture BAMs, the foundation corpus (four
 libraries), t1 to t3, the exome slice, SAM text (plain and gzip). Picard reads the
 corpora at SILENT: its record validation refuses them at STRICT (docs/07 D51). Options:
@@ -165,6 +165,8 @@ def test_the_odd_names_are_picards(split):
     assert "unknown.bam" in files and "no_reads.bam" in files
     sam = compare_split(TOOL, split["names_sam"], SILENT, "odd names in SAM text")
     assert "café.sam" in sam, sam
+    wide = compare_split(TOOL, split["wide_sam"], SILENT, "libraries above U+00FF in SAM text")
+    assert wide == sorted(["中文.sam", "\u3e2d文.sam", "中_文.sam"]), wide
 
 
 @pytest.mark.parametrize("args", [["COMPRESSION_LEVEL=0"], ["COMPRESSION_LEVEL=9"],

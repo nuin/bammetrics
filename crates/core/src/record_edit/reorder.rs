@@ -49,6 +49,12 @@ pub const DEFAULT_RECORDS_IN_RAM: usize = 500_000;
 /// Edit one group of records that share a read name, in queryname order.
 pub type Regroup = fn(&mut [RawRecord]) -> Result<()>;
 
+/// The most records of one read name a [`Reorder::regroup`] holds at once:
+/// Picard's `SetMateInfoIterator` holds every record of a name, so a name
+/// with more is refused before it fills memory (1,000,000 records of 160
+/// bytes are about 160 MiB).
+pub const MAX_GROUP_RECORDS: usize = 1_000_000;
+
 /// What the writer does with the records it is handed.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WriterOrder {
@@ -354,19 +360,41 @@ impl<'d> Grouped<'d> {
                 None => return Ok(None),
             },
         };
-        let mut group = vec![first];
-        while let Some(record) = self.sorted.next_record()? {
-            if record.name() == group[0].name() {
-                group.push(record);
-            } else {
-                self.next = Some(record);
-                break;
-            }
-        }
+        let sorted = &mut self.sorted;
+        let (mut group, next) = take_group(first, || sorted.next_record(), MAX_GROUP_RECORDS)?;
+        self.next = next;
         (self.regroup)(&mut group)?;
         self.ready.extend(group);
         Ok(self.ready.pop_front())
     }
+}
+
+/// The records that share the read name of `first`, read from `next` up
+/// to the first of another name, which is returned beside them. More than
+/// `limit` records of one name is an error.
+fn take_group(
+    first: RawRecord,
+    mut next: impl FnMut() -> Result<Option<RawRecord>>,
+    limit: usize,
+) -> Result<(Vec<RawRecord>, Option<RawRecord>)> {
+    let mut group = vec![first];
+    while let Some(record) = next()? {
+        if record.name() != group[0].name() {
+            return Ok((group, Some(record)));
+        }
+        if group.len() == limit {
+            return Err(Error::Record(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "read name {}: more than {limit} records of one name; bammetrics holds at \
+                     most {limit} records of one name to set their mate fields",
+                    String::from_utf8_lossy(group[0].name())
+                ),
+            )));
+        }
+        group.push(record);
+    }
+    Ok((group, None))
 }
 
 impl Records for Grouped<'_> {
@@ -570,5 +598,51 @@ impl<'t> Barrier<'t> for Sorting<'t> {
                 ..Products::default()
             },
         })
+    }
+}
+
+#[cfg(test)]
+mod group_tests {
+    use super::*;
+    use crate::bam_raw::build;
+
+    fn named(names: &[&str]) -> impl FnMut() -> Result<Option<RawRecord>> {
+        let mut records: VecDeque<RawRecord> = names
+            .iter()
+            .map(|name| build(name, 4, -1, -1, &[], &[], &[]))
+            .collect();
+        move || Ok(records.pop_front())
+    }
+
+    #[test]
+    fn a_group_ends_at_the_next_name() {
+        let mut next = named(&["a", "a", "b"]);
+        let first = next().expect("read").expect("first");
+        let (group, after) = take_group(first, &mut next, 3).expect("group");
+        assert_eq!(group.len(), 2);
+        assert_eq!(after.expect("next").name(), b"b");
+    }
+
+    #[test]
+    fn a_group_of_the_limit_is_taken() {
+        let mut next = named(&["a", "a", "a"]);
+        let first = next().expect("read").expect("first");
+        let (group, after) = take_group(first, &mut next, 3).expect("group");
+        assert_eq!(group.len(), 3);
+        assert!(after.is_none());
+    }
+
+    #[test]
+    fn a_group_past_the_limit_is_refused() {
+        let mut next = named(&["a", "a", "a", "a"]);
+        let first = next().expect("read").expect("first");
+        let error = take_group(first, &mut next, 3).expect_err("too many");
+        assert!(
+            error
+                .to_string()
+                .contains("more than 3 records of one name"),
+            "{error}"
+        );
+        assert_eq!(MAX_GROUP_RECORDS, 1_000_000);
     }
 }

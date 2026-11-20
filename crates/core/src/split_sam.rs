@@ -44,26 +44,59 @@ pub use fanout::{Claims, Fanout, Format, MAX_FILES, MAX_OPEN_FILES, WriterOption
 
 /// `IOUtil.makeFileNameSafe` on a header value: each byte is the Java
 /// character of its code (htsjdk reads header text one byte per
-/// character), the string is trimmed of characters up to the space, and
-/// each whitespace character and each of ``!"#$%&'()*/:;<=>?@[]\^`{|}~``
-/// becomes `_`. The name is the result encoded in UTF-8, as Java names a
-/// file: the byte 0xE9 gives `é`.
+/// character), then [`file_name_safe_text`]. The byte 0xE9 gives `é`.
 pub fn file_name_safe(value: &[u8]) -> String {
-    let start = value.iter().position(|b| *b > b' ').unwrap_or(value.len());
-    let end = value
-        .iter()
-        .rposition(|b| *b > b' ')
-        .map_or(start, |i| i + 1);
-    value[start..end.max(start)]
-        .iter()
-        .map(|&byte| match byte {
-            b' ' | b'\t' | b'\n' | 0x0B | 0x0C | b'\r' => '_',
-            b'!' | b'"' | b'#' | b'$' | b'%' | b'&' | b'\'' | b'(' | b')' | b'*' | b'/' | b':'
-            | b';' | b'<' | b'=' | b'>' | b'?' | b'@' | b'[' | b']' | b'\\' | b'^' | b'`'
-            | b'{' | b'|' | b'}' | b'~' => '_',
-            other => char::from(other),
+    let text: String = value.iter().map(|&byte| char::from(byte)).collect();
+    file_name_safe_text(&text)
+}
+
+/// `IOUtil.makeFileNameSafe` on a Java string: trimmed of characters up to
+/// the space, then each whitespace character and each of
+/// ``!"#$%&'()*/:;<=>?@[]\^`{|}~`` becomes `_`. The name is the result
+/// encoded in UTF-8, as Java names a file.
+pub fn file_name_safe_text(value: &str) -> String {
+    value
+        .trim_matches(|c: char| c <= ' ')
+        .chars()
+        .map(|c| match c {
+            ' ' | '\t' | '\n' | '\u{0B}' | '\u{0C}' | '\r' => '_',
+            '!' | '"' | '#' | '$' | '%' | '&' | '\'' | '(' | ')' | '*' | '/' | ':' | ';' | '<'
+            | '=' | '>' | '?' | '@' | '[' | ']' | '\\' | '^' | '`' | '{' | '|' | '}' | '~' => '_',
+            other => other,
         })
         .collect()
+}
+
+/// The library of each read group whose `@RG` line has a character above
+/// U+00FF, from the header lines as the SAM text spells them: the read
+/// group ID as the header holds it (the low byte of each UTF-16 unit),
+/// and `LB` whole. htsjdk decodes SAM text as UTF-8, so Picard names the
+/// file of `LB:中文` `中文.sam`; the header written keeps the low bytes.
+fn libraries_as_spelled(wide: &[String]) -> HashMap<Vec<u8>, String> {
+    let low_bytes = |text: &str| {
+        text.encode_utf16()
+            .map(|unit| unit as u8)
+            .collect::<Vec<_>>()
+    };
+    let mut out = HashMap::new();
+    for line in wide {
+        let mut fields = line.trim_end_matches(['\r', '\n']).split('\t');
+        if fields.next() != Some("@RG") {
+            continue;
+        }
+        let (mut id, mut library) = (None, None);
+        for field in fields {
+            if let Some(value) = field.strip_prefix("ID:") {
+                id = Some(value);
+            } else if let Some(value) = field.strip_prefix("LB:") {
+                library = Some(value);
+            }
+        }
+        if let (Some(id), Some(library)) = (id, library) {
+            out.insert(low_bytes(id), library.to_owned());
+        }
+    }
+    out
 }
 
 /// Picard's message for a header without a library, before the input.
@@ -223,6 +256,9 @@ pub struct Layout<'a> {
     pub input: &'a str,
     /// The total of a count split, known before the first record.
     pub total: i64,
+    /// SAM text header lines with a character above U+00FF, as the file
+    /// spells them ([`crate::sam_text::Reader::wide_lines`]).
+    pub wide: &'a [String],
 }
 
 impl Splitter {
@@ -254,19 +290,26 @@ impl Splitter {
 
     fn libraries(&mut self, header: &sam::Header, layout: &Layout) -> Result<()> {
         // Libraries in header order, each with the positions of its read
-        // groups; one hash lookup per read group.
-        let mut libraries: Vec<(Vec<u8>, Vec<usize>)> = Vec::new();
-        let mut library_at: HashMap<Vec<u8>, usize> = HashMap::new();
+        // groups; one hash lookup per read group. A library is the Java
+        // string Picard holds: the header bytes one character each, or the
+        // whole text of SAM text with a character above U+00FF.
+        let spelled = libraries_as_spelled(layout.wide);
+        let mut libraries: Vec<(String, Vec<usize>)> = Vec::new();
+        let mut library_at: HashMap<String, usize> = HashMap::new();
         let mut without_library = Vec::new();
-        for (at, (_, map)) in header.read_groups().iter().enumerate() {
+        for (at, (id, map)) in header.read_groups().iter().enumerate() {
             let Some(library) = map.other_fields().get(&LIBRARY) else {
                 without_library.push(at);
                 continue;
             };
+            let library = match spelled.get(&id.to_vec()) {
+                Some(text) => text.clone(),
+                None => library.iter().map(|&byte| char::from(byte)).collect(),
+            };
             let next = libraries.len();
-            let index = *library_at.entry(library.to_vec()).or_insert(next);
+            let index = *library_at.entry(library.clone()).or_insert(next);
             if index == next {
-                libraries.push((library.to_vec(), Vec::new()));
+                libraries.push((library, Vec::new()));
             }
             libraries[index].1.push(at);
         }
@@ -283,8 +326,8 @@ impl Splitter {
         base.read_groups_mut().clear();
         for (library, positions) in &libraries {
             let only = with_groups(&base, header, positions);
-            let name = format!("{}.{}", file_name_safe(library), layout.extension);
-            let what = format!("library {:?}", String::from_utf8_lossy(library));
+            let name = format!("{}.{}", file_name_safe_text(library), layout.extension);
+            let what = format!("library {library:?}");
             let index = self.fanout.create(
                 &layout.dir.join(name),
                 &what,
@@ -483,12 +526,12 @@ pub fn run(run: &Run) -> Result<Vec<PathBuf>> {
     if let Some(reference) = reference {
         reads.extend(crate::reference::files_read(reference));
     }
-    pass::with_record_stream_kind(
+    pass::with_record_stream_wide(
         input,
         reference,
         inv.threads,
         stringency,
-        |header, reader, kind| {
+        |header, reader, kind, wide| {
             record_edit::check_sort_order(header, stringency, input)?;
             let extension = match kind {
                 Kind::Bam => "bam",
@@ -509,6 +552,7 @@ pub fn run(run: &Run) -> Result<Vec<PathBuf>> {
                 format,
                 input: &absolute.display().to_string(),
                 total,
+                wide,
             };
             let mut splitter = Splitter::new(&run.kind, header, &layout, fanout)?;
             let mut record = RawRecord::default();
@@ -646,6 +690,7 @@ pub fn chain_step(label: &str, split: ChainSplit) -> Step {
             format: Format::Bam,
             input: &frame.label,
             total,
+            wide: &[],
         };
         let splitter = Splitter::new(&kind, &frame.header, &layout, fanout)?;
         Ok(Box::new(SplitSink { splitter }) as Box<dyn Sink>)

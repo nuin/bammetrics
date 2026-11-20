@@ -69,8 +69,8 @@ pub const TOOL: Tool = Tool {
         Opt::text(&["RGDS", "DS"], "Read group description."),
         Opt::text(
             &["RGDT", "DT"],
-            "Read group run date, ISO 8601 (2020-01-02, 2020-01-02T03:04:05+05:30), years \
-             1583 to 9999, written in UTC.",
+            "Read group run date, ISO 8601 (2020-01-02, 2020-01-02T03:04:05+05:30), written \
+             in UTC.",
         ),
         Opt::int(&["RGPI", "PI"], "Read group predicted insert size."),
         Opt::text(&["RGPG", "PG"], "Read group program group."),
