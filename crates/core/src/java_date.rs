@@ -659,7 +659,12 @@ pub fn wall_millis(year: i64, month0: i64, day: i64, time_of_day: i64) -> i64 {
 pub fn local_instant(wall: i64) -> Option<i64> {
     let before = zone_offset(wall - 14 * 3_600_000)?;
     let after = zone_offset(wall + 14 * 3_600_000)?;
-    Some(wall_instant(wall, before, after, zone_offset(wall - after)?))
+    Some(wall_instant(
+        wall,
+        before,
+        after,
+        zone_offset(wall - after)?,
+    ))
 }
 
 /// `getOffsetsByWall` around one transition from the offset `before` to
