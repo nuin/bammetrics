@@ -73,7 +73,7 @@ fn files(step: &Planned) -> String {
         .filter(|_| !(step.stdout && step.role == Role::Write))
         .map(|file| file.path.display().to_string())
         .collect();
-    if let Some(prefix) = &step.late_prefix {
+    if let Some(prefix) = step.late_prefix.as_ref().filter(|_| step.files.is_empty()) {
         names.push(format!(
             "{}.* (named when the step finishes)",
             prefix.display()

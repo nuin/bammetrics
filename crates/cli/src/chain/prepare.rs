@@ -756,6 +756,39 @@ fn planned_files(tool: &Tool, argv: &[String], formats: &[Format]) -> Vec<Planne
     files
 }
 
+/// The metrics files a tool names under its output prefix when the names
+/// are known before the run, each with a sibling per further format, so
+/// the claims and the writability check see them before the first read.
+/// `CollectRrbsMetrics` adds its two extensions. A tool whose names
+/// depend on its options plans none here: its files are claimed when it
+/// finishes.
+fn prefix_files(tool: &Tool, prefix: &Path, formats: &[Format]) -> Vec<PlannedFile> {
+    use bammetrics_core::rrbs_metrics;
+    if tool.name != rrbs_metrics::TOOL.name {
+        return Vec::new();
+    }
+    let mut files = Vec::new();
+    for extension in [
+        rrbs_metrics::SUMMARY_EXTENSION,
+        rrbs_metrics::DETAIL_EXTENSION,
+    ] {
+        let path = rrbs_metrics::file_path(prefix, extension);
+        let siblings: Vec<PlannedFile> = formats[1..]
+            .iter()
+            .map(|f| PlannedFile {
+                path: format::sibling(&path, f.extension()),
+                kind: f.name(),
+            })
+            .collect();
+        files.push(PlannedFile {
+            path,
+            kind: "metrics",
+        });
+        files.extend(siblings);
+    }
+    files
+}
+
 /// A tap or a transform: its Picard command line, checked as the tool's
 /// own verb checks it, and its files.
 fn tool_step(
@@ -812,6 +845,10 @@ fn tool_step(
         inv.command.push_str(&format!(" CHAIN={}", position.behind));
     }
     let late_prefix = inv.output.clone().filter(|_| output_is_prefix(tool));
+    let mut files = planned_files(tool, &argv, &formats);
+    if let Some(prefix) = &late_prefix {
+        files.extend(prefix_files(tool, prefix, &formats));
+    }
     let planned = Planned {
         number: draft.number,
         verb: verb.name,
@@ -821,7 +858,7 @@ fn tool_step(
         reads: position.reads,
         leaves: position.leaves,
         segment: position.segment,
-        files: planned_files(tool, &argv, &formats),
+        files,
         late_prefix,
         stdout: named.stdout,
         command: Some(inv.command),

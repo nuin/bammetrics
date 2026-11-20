@@ -157,3 +157,95 @@ fn a_bad_value_and_a_missing_reference_fail_before_the_first_read() {
     assert_eq!(fs::read_dir(&dir).expect("dir").count(), 0);
     let _ = fs::remove_dir_all(&dir);
 }
+
+/// The two files are planned before the first read: two `rrbs` steps on
+/// one prefix, a `write` onto one of them, and a source named like one
+/// each exit 2 and write nothing.
+#[test]
+fn the_two_files_are_claimed_before_the_first_read() {
+    let dir = scratch("claims");
+    let prefix = dir.join("a");
+    let refused = |args: &[&str], wanted: &str| {
+        let out = bammetrics(args);
+        assert_eq!(out.status.code(), Some(2), "{args:?}");
+        let text = String::from_utf8_lossy(&out.stderr);
+        assert!(text.contains(wanted), "{text}");
+    };
+    refused(
+        &[
+            "chain",
+            BAM,
+            "-R",
+            REFERENCE,
+            "-o",
+            utf8(&prefix),
+            "+",
+            "rrbs",
+            "--level",
+            "SAMPLE",
+            "+",
+            "rrbs",
+            "--level",
+            "LIBRARY",
+        ],
+        "both write",
+    );
+    let summary = format!("{}.rrbs_summary_metrics", utf8(&prefix));
+    refused(
+        &[
+            "chain",
+            BAM,
+            "-R",
+            REFERENCE,
+            "+",
+            "rrbs",
+            "-o",
+            utf8(&prefix),
+            "+",
+            "write",
+            &summary,
+        ],
+        "both write",
+    );
+    assert_eq!(fs::read_dir(&dir).expect("dir").count(), 0);
+    let source = dir.join("s.rrbs_detail_metrics");
+    fs::copy(root().join(BAM), &source).expect("copy");
+    let stem = dir.join("s");
+    refused(
+        &[
+            "chain",
+            utf8(&source),
+            "-R",
+            REFERENCE,
+            "+",
+            "rrbs",
+            "-o",
+            utf8(&stem),
+        ],
+        "is an input",
+    );
+    assert_eq!(fs::read(&source).ok(), fs::read(root().join(BAM)).ok());
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// A dry run names both files.
+#[test]
+fn the_plan_names_both_files() {
+    let out = bammetrics(&[
+        "chain",
+        BAM,
+        "-R",
+        REFERENCE,
+        "-o",
+        "/nonexistent/p",
+        "--dry-run",
+        "+",
+        "rrbs",
+    ]);
+    ok(&out);
+    let text = String::from_utf8_lossy(&out.stdout);
+    for file in FILES {
+        assert!(text.contains(&format!("/nonexistent/p.{file}")), "{text}");
+    }
+    assert!(!text.contains("named when the step finishes"), "{text}");
+}
