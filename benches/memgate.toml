@@ -580,3 +580,37 @@ argv = [
 needs = ["tests/data/arrays/arrays.vcf.gz", "tests/data/arrays/dbsnp.vcf"]
 max_rss_mib = 64
 max_seconds = 10
+
+# The arrays caps: tests/data/make_arrays_stress.py writes the inputs in the same shell,
+# so its Python counts. 50,000 samples (MAX_SAMPLES) peak at 201 MiB; 200 dbSNP sites at
+# 2,147,483,000 and up at 31.6 MiB (bammetrics alone 5 MiB, 1,346 MiB before the bit set
+# kept pages); bafRegress at its 100,000-line cap at 80 MiB.
+[[command]]
+name = "arrays-variant-calling at the sample cap"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_arrays_stress.py {out} && {bin} arrays-variant-calling {out}/many.vcf --dbsnp tests/data/arrays/dbsnp.vcf -o {out}/m",
+]
+needs = ["tests/data/make_arrays_stress.py", "tests/data/arrays/arrays.vcf", "tests/data/arrays/dbsnp.vcf"]
+max_rss_mib = 288
+max_seconds = 60
+
+[[command]]
+name = "arrays-variant-calling far dbSNP sites"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_arrays_stress.py {out} && {bin} arrays-variant-calling tests/data/arrays/arrays.vcf.gz --dbsnp {out}/far_dbsnp.vcf -o {out}/f",
+]
+needs = ["tests/data/make_arrays_stress.py", "tests/data/arrays/arrays.vcf.gz", "tests/data/arrays/dbsnp.vcf"]
+max_rss_mib = 64
+max_seconds = 60
+
+[[command]]
+name = "create-baf-regress-file at the line cap"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_arrays_stress.py {out} && {bin} create-baf-regress-file {out}/baf_cap.txt -o {out}/b",
+]
+needs = ["tests/data/make_arrays_stress.py", "tests/data/arrays/arrays.vcf", "tests/data/arrays/dbsnp.vcf"]
+max_rss_mib = 128
+max_seconds = 60

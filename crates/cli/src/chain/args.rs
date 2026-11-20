@@ -322,6 +322,17 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
              ... + write - --output-format sam",
         );
     }
+    if matches!(verb.input, "TEXT" | "VCF") {
+        return usage(format!(
+            "{place}: {} reads a {} file and no BAM, and a chain hands on the records of a BAM: \
+             it cannot be a step",
+            verb.class, verb.input
+        ))
+        .hint(format!(
+            "run it on its own: bammetrics {} --help",
+            verb.name
+        ));
+    }
     usage(format!(
         "{place}: {} has no stage and does not read a BAM in one pass: it cannot be a step",
         verb.class

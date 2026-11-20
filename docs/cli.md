@@ -931,14 +931,15 @@ The three `picard.arrays` metrics tools of Picard 3.5.0, each writing under the 
 - `CreateVerifyIDIntensityContaminationMetricsFile` reads the text VerifyIDIntensity
   prints: the `ID %Mix LLK LLK0` header, a rule of dashes, then one line of four numbers
   per result. The file is `PREFIX.verifyidintensity_metrics`.
-- The two text inputs are read whole, at most 64 MiB, 1 MiB per line and 1,000,000 lines,
-  decoded as UTF-8 (a bad byte becomes U+FFFD, as in Java). A header alone gives a file
+- The two text inputs are read whole, at most 64 MiB, 1 MiB per line and 100,000 lines,
+  decoded as UTF-8 (a malformed sequence becomes U+FFFD, as in Java). A header alone gives a file
   with no row; any other line Picard refuses exits 1 and writes nothing.
 - `CollectArraysVariantCallingMetrics` reads an arrays VCF as GtcToVcf writes it. Picard
   opens it with its index, so a bgzip VCF needs its `.tbi` and a plain one its `.idx`;
   without one the run exits 1. The index is not read. It writes
-  `PREFIX.arrays_variant_calling_detail_metrics` (one row per sample, in Java `HashMap`
-  order), `PREFIX.arrays_variant_calling_summary_metrics` (the sum) and
+  `PREFIX.arrays_variant_calling_detail_metrics` (one row per sample, in the order of a
+  Java `HashMap` filled in reverse header order),
+  `PREFIX.arrays_variant_calling_summary_metrics` (the sum) and
   `PREFIX.arrays_control_code_summary_metrics` (the 23 Illumina controls from their header
   lines). The header must hold `sampleAlias`, `arrayType`, `autocallGender`,
   `autocallVersion`, `autocallDate`, `imagingDate`, `extendedIlluminaManifestVersion`,
@@ -949,8 +950,10 @@ The three `picard.arrays` metrics tools of Picard 3.5.0, each writing under the 
   `a.m.` and `p.m.` and fails on them (`KNOWN_DIFFERENCES.md`).
 - `--call-rate-pf-threshold` (default 0.98, over 0 and at most 1) sets `AUTOCALL_PF`.
   `--num-processors` is taken and changes nothing. `--sequence-dictionary` gives the
-  contigs the dbSNP file is checked against. The VCF is read at most 16 MiB per line and
-  100,000,000 lines.
+  contigs the dbSNP file is checked against. The VCF is read at most 8 MiB per line,
+  100,000,000 lines and 50,000 samples. A record counts when it overlaps 1 to the length
+  of its `##contig` line. A tab or line end in a header value exits 1 and writes nothing,
+  as in Picard.
 - None of the three reads a BAM: none is a chain step.
 
 ### qc

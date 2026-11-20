@@ -15,9 +15,17 @@
 //!
 //! `INPUT` needs the index htsjdk opens (`VCFFileReader(INPUT, true)`): a
 //! `.tbi` beside a name ending in `.gz`, `.gzip`, `.bgz` or `.bgzf`, else a
-//! Tribble `.idx`. The index is not read: every record of the file on a
-//! `##contig` of its header is counted once, which is what the
-//! `VariantProcessor` segments return. `NUM_PROCESSORS` changes nothing.
+//! Tribble `.idx`. The index is not read: a record counts once when it
+//! overlaps 1 to the length of its `##contig` line (a line without a
+//! length is length 0), which is what the `VariantProcessor` index queries
+//! return. `NUM_PROCESSORS` changes nothing.
+//!
+//! The detail rows follow a `HashMap` filled with the sample names in
+//! reverse header order. A table in which more than 8 names share a bin
+//! turns that bin into a tree, whose order is not modelled: such a VCF is
+//! refused. At most [`MAX_SAMPLES`] samples are read. A tab, line feed or
+//! carriage return in a string cell is refused before any file is
+//! written, as htsjdk's `MetricsFile` refuses it.
 //!
 //! Per sample and record (`updateDetailMetric`): every record adds to
 //! `NUM_ASSAYS`. A record that is not filtered, or whose filters include
@@ -45,15 +53,16 @@
 //! The VCF is read under [`MAX_VCF_LINE_BYTES`] per line and
 //! [`MAX_VCF_LINES`] lines.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use noodles::vcf::header::record::value::Collection;
 
 use super::content_error;
 use super::header_date::{self, Pattern};
 use crate::error::{Error, Result};
-use crate::java::{self, hash_map_order};
+use crate::java::{self, hash_map_order_checked, string_hash_code};
 use crate::metric::{MetricRow, MetricsOutput, ToolOutput, Value};
 use crate::registry::{Invocation, Opt, Tool};
 use crate::variant_calling_metrics::{output_path, singleton_sample};
@@ -66,9 +75,11 @@ pub const SUMMARY_EXTENSION: &str = "arrays_variant_calling_summary_metrics";
 pub const CONTROL_EXTENSION: &str = "arrays_control_code_summary_metrics";
 
 /// The longest line of the input VCF, in bytes.
-pub const MAX_VCF_LINE_BYTES: usize = 16 << 20;
+pub const MAX_VCF_LINE_BYTES: usize = 8 << 20;
 /// The most lines of the input VCF.
 pub const MAX_VCF_LINES: u64 = 100_000_000;
+/// The most samples of the input VCF.
+pub const MAX_SAMPLES: usize = 50_000;
 
 /// `ArraysControlInfo.CONTROL_INFO`: the header key of each control, in
 /// the order of the control-code file.
@@ -263,7 +274,8 @@ pub struct HeaderFields {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DetailRow {
     pub chip_well_barcode: String,
-    pub header: HeaderFields,
+    /// One copy for every sample.
+    pub header: Arc<HeaderFields>,
     pub counts: Counts,
     /// `CALL_RATE_PF_THRESHOLD`.
     pub threshold: f64,
@@ -498,23 +510,58 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let opts = Options::from_invocation(inv)?;
     let report = collect(&inv.input, &opts)?;
     let prefix = &opts.prefix;
+    let files = [
+        (
+            DETAIL_EXTENSION,
+            MetricsOutput::from_rows(&report.details, None),
+        ),
+        (
+            SUMMARY_EXTENSION,
+            MetricsOutput::from_rows(std::slice::from_ref(&report.summary), None),
+        ),
+        (
+            CONTROL_EXTENSION,
+            MetricsOutput::from_rows(&report.controls, None),
+        ),
+    ];
+    for (extension, file) in &files {
+        check_cells(&inv.input, extension, file)?;
+    }
     Ok(ToolOutput {
         main: None,
-        extra: vec![
-            (
-                output_path(prefix, DETAIL_EXTENSION),
-                MetricsOutput::from_rows(&report.details, None),
-            ),
-            (
-                output_path(prefix, SUMMARY_EXTENSION),
-                MetricsOutput::from_rows(std::slice::from_ref(&report.summary), None),
-            ),
-            (
-                output_path(prefix, CONTROL_EXTENSION),
-                MetricsOutput::from_rows(&report.controls, None),
-            ),
-        ],
+        extra: files
+            .into_iter()
+            .map(|(extension, file)| (output_path(prefix, extension), file))
+            .collect(),
     })
+}
+
+/// htsjdk's `MetricsFile` refuses a string cell holding a tab or a line
+/// end (`Supplied String contains illegal character`): the whole run
+/// fails before any file is written.
+fn check_cells(input: &Path, extension: &str, file: &MetricsOutput) -> Result<()> {
+    for (i, row) in file.rows.iter().enumerate() {
+        for (column, value) in file.columns.iter().zip(row) {
+            let Value::Str(text) = value else { continue };
+            let found = text.chars().find_map(|c| match c {
+                '\t' => Some("tab"),
+                '\n' => Some("line feed"),
+                '\r' => Some("carriage return"),
+                _ => None,
+            });
+            if let Some(character) = found {
+                return Err(content_error(
+                    input,
+                    format!(
+                        "Picard text cannot hold the {character} in {extension} row {i}, \
+                         column {column}: {text:?} (Picard: Supplied String contains illegal \
+                         character)"
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The rows of the three files.
@@ -562,20 +609,38 @@ pub fn collect(input: &Path, opts: &Options) -> Result<Report> {
         Some(path) => vcf::read_dictionary(path)?,
         None => header_dictionary.clone(),
     };
-    let dbsnp = DbSnpSets::load(&opts.dbsnp, Some(&dictionary), None)?;
+    // `DbSnpBitSetUtil` compares the dictionaries only when the dbSNP file
+    // has `##contig` lines.
+    let dbsnp = DbSnpSets::load_lenient(&opts.dbsnp, &dictionary)?;
     let header = reader.header();
     let controls = CONTROLS
         .iter()
         .map(|name| control(header, name))
         .collect::<std::result::Result<Vec<_>, String>>()
         .map_err(|message| content_error(input, message))?;
-    let fields = header_fields(header).map_err(|message| content_error(input, message))?;
+    let fields = Arc::new(header_fields(header).map_err(|message| content_error(input, message))?);
     let samples = reader.samples();
+    if samples.len() > MAX_SAMPLES {
+        return Err(content_error(
+            input,
+            format!(
+                "{} samples, over {MAX_SAMPLES}, the most this tool reads",
+                samples.len()
+            ),
+        ));
+    }
+    let order = detail_order(&samples).map_err(|message| content_error(input, message))?;
     let mut counts = vec![Counts::default(); samples.len()];
-    let contigs: HashSet<String> = header_dictionary.into_iter().map(|c| c.name).collect();
+    // A contig line without a length is htsjdk's length 0: no query
+    // interval overlaps it.
+    let lengths: HashMap<String, i64> = header_dictionary
+        .into_iter()
+        .map(|c| (c.name, c.length.unwrap_or(0)))
+        .collect();
     while let Some(vc) = reader.next_variant()? {
-        if !contigs.contains(&vc.contig) {
-            continue;
+        match lengths.get(&vc.contig) {
+            Some(&length) if vc.end >= 1 && vc.start <= length => {}
+            _ => continue,
         }
         let record = reader.record();
         let filter_field = record.filters();
@@ -599,12 +664,11 @@ pub fn collect(input: &Path, opts: &Options) -> Result<Report> {
     for sample in &counts {
         total.add(sample);
     }
-    let names: Vec<&str> = samples.iter().map(String::as_str).collect();
-    let details = hash_map_order(&names)
+    let details = order
         .into_iter()
         .map(|i| DetailRow {
             chip_well_barcode: samples[i].clone(),
-            header: fields.clone(),
+            header: Arc::clone(&fields),
             counts: counts[i].clone(),
             threshold: opts.call_rate_pf_threshold,
         })
@@ -614,6 +678,19 @@ pub fn collect(input: &Path, opts: &Options) -> Result<Report> {
         summary: SummaryRow(total),
         controls,
     })
+}
+
+/// The sample indices in the order Picard writes the detail rows: a
+/// `HashMap` keyed by sample name, filled in reverse header order.
+fn detail_order(samples: &[String]) -> std::result::Result<Vec<usize>, String> {
+    let last = samples.len().saturating_sub(1);
+    let reversed: Vec<i32> = samples.iter().rev().map(|s| string_hash_code(s)).collect();
+    let order = hash_map_order_checked(&reversed).ok_or_else(|| {
+        "more than 8 sample names fall in one HashMap bin, which Java turns into a tree whose \
+         order is not modelled"
+            .to_owned()
+    })?;
+    Ok(order.into_iter().map(|i| last - i).collect())
 }
 
 /// What one record says for every sample.
@@ -817,6 +894,24 @@ mod tests {
         assert!(!gender_concordance(Female, NotReported, Unknown));
         assert!(!gender_concordance(NotReported, Unknown, NotReported));
         assert!(gender_concordance(Male, Male, Unknown));
+    }
+
+    #[test]
+    fn detail_rows_follow_a_map_filled_in_reverse() {
+        let names = |list: &[&str]| list.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        // Both names fall in bin 14 of 16: the later header name comes first.
+        assert_eq!(detail_order(&names(&["S1", "."])).unwrap(), [1, 0]);
+        assert_eq!(detail_order(&names(&[".", "S1"])).unwrap(), [1, 0]);
+        assert_eq!(detail_order(&[]).unwrap(), Vec::<usize>::new());
+        // 16 names with one hash code (Aa and BB) make a tree bin.
+        let same: Vec<String> = (0..16u32)
+            .map(|i| {
+                (0..4)
+                    .map(|bit| if i >> bit & 1 == 1 { "Aa" } else { "BB" })
+                    .collect()
+            })
+            .collect();
+        assert!(detail_order(&same).is_err());
     }
 
     #[test]

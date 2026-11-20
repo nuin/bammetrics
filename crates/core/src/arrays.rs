@@ -9,8 +9,8 @@
 //!   summary and control-code files of an arrays VCF as `GtcToVcf` writes it.
 //!
 //! The two text tools read their input as `BufferedReader.readLine` does,
-//! through [`read_lines`]: the file decoded as UTF-8 (a bad byte becomes
-//! U+FFFD, as Java's decoder replaces it), lines ended by `\n`, `\r` or
+//! through [`read_lines`]: the file decoded as UTF-8 (a malformed sequence
+//! becomes U+FFFD, as Java's decoder replaces it), lines ended by `\n`, `\r` or
 //! `\r\n`. The file is read whole under three caps: [`MAX_TEXT_BYTES`]
 //! bytes, [`MAX_LINE_BYTES`] bytes per line and [`MAX_LINES`] lines. Each
 //! cap is an error that names it; bafRegress and VerifyIDIntensity print
@@ -32,7 +32,7 @@ pub const MAX_TEXT_BYTES: u64 = 64 << 20;
 /// The longest line of a text input, in bytes.
 pub const MAX_LINE_BYTES: usize = 1 << 20;
 /// The most lines of a text input.
-pub const MAX_LINES: usize = 1_000_000;
+pub const MAX_LINES: usize = 100_000;
 
 /// An error about the content of `path`.
 pub(crate) fn content_error(path: &Path, message: String) -> Error {
@@ -60,7 +60,34 @@ pub(crate) fn read_text(path: &Path) -> Result<String> {
             format!("over {MAX_TEXT_BYTES} bytes, the most a text input may hold"),
         ));
     }
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
+    Ok(java_utf8(&bytes))
+}
+
+/// `bytes` decoded as Java's UTF-8 decoder decodes them: each malformed
+/// sequence becomes one U+FFFD, as in `String::from_utf8_lossy`, except an
+/// encoded surrogate (`ED A0..BF 80..BF`), which Java reads as one
+/// malformed sequence of three bytes and Rust as three.
+pub(crate) fn java_utf8(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len());
+    let mut rest = bytes;
+    loop {
+        match std::str::from_utf8(rest) {
+            Ok(text) => {
+                out.push_str(text);
+                return out;
+            }
+            Err(error) => {
+                let (valid, bad) = rest.split_at(error.valid_up_to());
+                out.push_str(std::str::from_utf8(valid).unwrap_or_default());
+                out.push('\u{FFFD}');
+                let skip = match bad {
+                    [0xED, 0xA0..=0xBF, 0x80..=0xBF, ..] => 3,
+                    _ => error.error_len().unwrap_or(bad.len()),
+                };
+                rest = &bad[skip..];
+            }
+        }
+    }
 }
 
 /// The lines of `text` as `BufferedReader.readLine` returns them: ended by
@@ -133,6 +160,17 @@ mod tests {
         assert!(read_lines(path, "").unwrap().is_empty());
         let long = "x".repeat(MAX_LINE_BYTES + 1);
         assert!(read_lines(path, &long).is_err());
+    }
+
+    #[test]
+    fn malformed_bytes_decode_as_java_decodes_them() {
+        assert_eq!(java_utf8(b"S\xED\xA0\x80"), "S\u{FFFD}");
+        assert_eq!(java_utf8(b"S\xED\xBF\xBFx"), "S\u{FFFD}x");
+        assert_eq!(java_utf8(b"\xC0\x80"), "\u{FFFD}\u{FFFD}");
+        assert_eq!(java_utf8(b"a\xE2\x82"), "a\u{FFFD}");
+        assert_eq!(java_utf8(b"\xFFb\xED\x9F\xBF"), "\u{FFFD}b\u{D7FF}");
+        assert_eq!(java_utf8("\u{1F600}".as_bytes()), "\u{1F600}");
+        assert_eq!(java_utf8(b"\xF0\x9F\x98"), "\u{FFFD}");
     }
 
     #[test]

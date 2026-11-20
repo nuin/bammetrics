@@ -522,9 +522,13 @@ impl Options {
     }
 }
 
-/// `<prefix>.<extension>`, the `OUTPUT.getAbsolutePath() + "."` rule.
+/// `<prefix>.<extension>`, the `OUTPUT + "."` rule. `java.io.File` drops
+/// trailing and repeated separators, so `dir/` gives `dir.<extension>`.
 pub fn output_path(prefix: &Path, extension: &str) -> PathBuf {
-    PathBuf::from(format!("{}.{extension}", prefix.display()))
+    let mut name = prefix.components().collect::<PathBuf>().into_os_string();
+    name.push(".");
+    name.push(extension);
+    PathBuf::from(name)
 }
 
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
@@ -745,6 +749,15 @@ pub fn accumulate(prefixes: &[PathBuf]) -> Result<(SummaryRow, Vec<DetailRow>)> 
 mod tests {
     use super::*;
     use crate::vcf::Allele;
+
+    #[test]
+    fn output_names_drop_trailing_separators() {
+        let name = |prefix: &str| output_path(Path::new(prefix), "x_metrics");
+        assert_eq!(name("dir/"), Path::new("dir.x_metrics"));
+        assert_eq!(name("a//b///"), Path::new("a/b.x_metrics"));
+        assert_eq!(name("/tmp/p"), Path::new("/tmp/p.x_metrics"));
+        assert_eq!(name("p"), Path::new("p.x_metrics"));
+    }
 
     fn genotype(alleles: &[Option<usize>], gq: i64, ad: Option<Vec<i64>>) -> Genotype {
         Genotype {

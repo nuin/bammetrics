@@ -4,6 +4,7 @@ Each valid input is converted by both tools and the file under the prefix compar
 cell and byte for byte after the header lines (compare_prefixed). Each invalid input makes
 both tools exit non-zero with no file left. The last test is the distinct-value gate.
 """
+import os
 import random
 import subprocess
 from collections import defaultdict
@@ -92,9 +93,11 @@ def test_valid_input(case, tmp_path):
 
 
 def test_bytes_that_are_not_utf8(tmp_path):
-    """A byte Java's decoder replaces becomes U+FFFD in both."""
+    """A byte Java's decoder replaces becomes U+FFFD in both; an encoded surrogate (ED A0
+    80) is one U+FFFD in Java."""
     path = tmp_path / "latin1.txt"
-    path.write_bytes(HEADER.encode() + b"\nS\xe9\xff\t1\t2\t3\t4\t5\t6\n")
+    path.write_bytes(HEADER.encode() + b"\nS\xe9\xff\t1\t2\t3\t4\t5\t6\n"
+                     + b"T\xed\xa0\x80\xc0\x80\t1\t2\t3\t4\t5\t6\n")
     cells = compare_prefixed(TOOL, [f"I={path}"], workdir=tmp_path, seen=SEEN)
     RESULTS.append((f"{TOOL} latin1", cells, cells, "every file identical"))
 
@@ -140,6 +143,34 @@ def test_missing_input_and_output(tmp_path):
                           capture_output=True, text=True)
     assert picard.returncode != 0 and ours.returncode != 0
     assert not (tmp_path / "no").exists()
+
+
+def test_prefix_with_a_trailing_separator(tmp_path):
+    """java.io.File drops the trailing /: O=dir/ writes dir.bafregress_metrics beside dir."""
+    path = write(tmp_path, "ok", VALID["three_rows"])
+    for side in ("picard", "ours"):
+        (tmp_path / side).mkdir()
+    picard = subprocess.run(["picard", TOOL, f"I={path}", f"O={tmp_path / 'picard'}/"],
+                            env=picard_env(), capture_output=True, text=True)
+    ours = subprocess.run([str(BAMMETRICS), TOOL, f"I={path}", f"O={tmp_path / 'ours'}/"],
+                          capture_output=True, text=True)
+    assert picard.returncode == 0 and ours.returncode == 0, ours.stderr
+    for side in ("picard", "ours"):
+        assert (tmp_path / f"{side}.bafregress_metrics").is_file()
+        assert not list((tmp_path / side).iterdir())
+
+
+def test_output_hard_linked_to_the_input(tmp_path):
+    """bammetrics alone: an OUTPUT that is a hard link to INPUT is refused and left whole."""
+    target = tmp_path / "x.bafregress_metrics"
+    target.write_text(VALID["three_rows"])
+    link = tmp_path / "y.txt"
+    os.link(target, link)
+    ours = subprocess.run([str(BAMMETRICS), TOOL, f"I={link}", f"O={tmp_path / 'x'}"],
+                          capture_output=True, text=True)
+    assert ours.returncode != 0 and "is an input" in ours.stderr, ours.stderr
+    assert target.read_text() == VALID["three_rows"]
+    assert os.stat(target).st_ino == os.stat(link).st_ino
 
 
 def test_ignored_common_options(tmp_path):

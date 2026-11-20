@@ -26,6 +26,22 @@
   (`vcf/line_cap.rs`). `java_date::wall_millis` and `local_instant`: lenient calendar
   fields to an instant in the process's zone, a repeated hour resolved to the later
   instant as `ZoneInfo.getOffsetsByWall` does.
+- The review of the arrays tools: the detail rows follow a `HashMap` filled in reverse
+  header order, so names that share a bin (`S1` and `.`, 12 or 45 names) come out as
+  Picard writes them; a VCF whose names make a tree bin exits 1. A record counts when it
+  overlaps 1 to its `##contig` length. A tab or line end in a header value exits 1 with no
+  file, as in Picard. A dbSNP file without `##contig` lines is read. At most 50,000
+  samples and 8 MiB per line; the header fields are held once for every sample.
+- The dbSNP bit set keeps pages of 4,096 positions where a site sets a bit, at most 1 GiB
+  in one run (`vcf/bit_set.rs`): 200 sites at position 2,147,483,000 take 5 MiB, not
+  1.3 GiB. Every dbSNP and VCF dictionary is read under 16 MiB per line.
+- `VcfReader` opens its file once, so a named pipe is read. `output_path` drops trailing
+  separators as `java.io.File` does: `O=dir/` writes `dir.<extension>`. An `OUTPUT` that is
+  a hard link to an input is refused by device and inode (`registry::check_writable`).
+- The text inputs decode an encoded surrogate (`ED A0 80`) as one U+FFFD, as Java does, and
+  hold at most 100,000 lines. A header date more than 292,000,000 years from 1970 exits 1
+  where the arithmetic overflowed. `chain` names the tools that read a text or VCF file
+  and no BAM. `tests/data/make_arrays_stress.py` and three memgate rows at the caps.
 - `tests/concordance/array_vcfs.py`, a seeded writer of arrays VCFs and their dbSNP, and the
   concordance modules of the three tools; `tests/data/arrays` (`make_arrays_fixtures.py`);
   12 golden forms, the arrays VCF ones under `TZ=UTC`.

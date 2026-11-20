@@ -4,8 +4,10 @@ Every case writes the three files under a prefix; compare_prefixed compares each
 the bytes after the header lines. The cases cover every header value Picard reads (each
 gender spelling, the optional lines absent, a key given twice, dates that roll over or fall
 in a daylight-saving change), one and two samples, a VCF with no record, a record on a
-contig the header lacks, the plain VCF with its .idx and the bgzip one with its .tbi, and
-each option at non-default values. Then error parity (both fail, bammetrics leaves no file)
+contig the header lacks, records at the ends of a contig, a contig line without a length,
+sample names that share a HashMap bin (2, 12 and 45 names), a dbSNP file without ##contig
+lines, the plain VCF with its .idx and the bgzip one with its .tbi, and each option at
+non-default values. Then error parity (both fail, bammetrics leaves no file)
 and the distinct-value gate.
 
 Picard parses the hh:mm:ss a imaging date with the JVM locale's AM and PM markers, so every
@@ -13,6 +15,7 @@ Picard run here gets -Duser.language=en -Duser.country=US (the markers GtcToVcf 
 one test shows the en_CA JVM failing where bammetrics reads the date.
 """
 import os
+import random
 import subprocess
 from collections import defaultdict
 
@@ -54,6 +57,29 @@ def gender_values(seed, expected, fingerprint, autocall):
                    autocallGender=autocall)
 
 
+def shuffled_samples(n, seed):
+    """`n` names sample_0 to sample_N in a seeded order: past 6 names two share a HashMap
+    bin, so the order of the detail rows depends on the order Picard fills its map."""
+    names = [f"sample_{i}" for i in range(n)]
+    random.Random(seed).shuffle(names)
+    return tuple(names)
+
+
+def edge_records(seed):
+    """The records of `seed` plus records at the ends of contig 1 (length 40000): Picard
+    counts a record that overlaps 1 to 40000 and drops the others."""
+    base = [r for r in records(seed) if r.split("\t")[0] == "2"][0].split("\t")
+    extra = []
+    for pos, ref in ((0, "A"), (0, "AT"), (1, "A"), (39999, "C"), (40000, "G"),
+                     (40000, "AT"), (40001, "A"), (40001, "AT"), (40002, "C")):
+        fields = list(base)
+        fields[0], fields[1], fields[3], fields[4] = "1", str(pos), ref, "G" if ref[0] != "G" else "T"
+        extra.append("\t".join(fields))
+    order = [name for name, _ in CONTIGS]
+    return sorted(records(seed) + extra,
+                  key=lambda r: (order.index(r.split("\t")[0]), int(r.split("\t")[1])))
+
+
 # Each case: (seed, header values or None for the defaults, samples, extra build arguments).
 HEADERS = {
     "full": (1, None, ("SAMPLE",), {}),
@@ -91,6 +117,10 @@ HEADERS = {
     "no_records": (24, None, ("A",), {"record_lines": []}),
     "unlisted_contig": (25, None, ("A",), {"record_lines": records(25) + [
         "GL000192.1\t100\trsx\tA\tG\t.\tPASS\t.\tGT\t0/1"]}),
+    "samples_in_one_bin": (40, None, ("S1", "."), {}),
+    "samples_12": (41, None, shuffled_samples(12, 1), {}),
+    "samples_45": (42, None, shuffled_samples(45, 2), {}),
+    "contig_edges": (43, None, ("A",), {"record_lines": edge_records(43)}),
 }
 
 
@@ -155,6 +185,26 @@ def test_bgzip_dbsnp(corpus, tmp_path):
     compare([f"I={corpus['full']}", f"DBSNP={gz}"], "dbsnp_bgzip", tmp_path)
 
 
+def test_contig_line_without_length(corpus, tmp_path):
+    """htsjdk reads a ##contig line without a length as length 0: no record on it counts."""
+    lines = array_vcfs.header_lines(default_values(1), ["A"], controls=control_lines(1))
+    lines = [line.replace("##contig=<ID=2,length=30000,", "##contig=<ID=2,") for line in lines]
+    vcf = array_vcfs.write(tmp_path / "nolength.vcf", lines + records(1))
+    compare([f"I={vcf}", f"DBSNP={corpus['full.dbsnp']}"], "contig_without_length", tmp_path)
+
+
+@pytest.mark.parametrize("sites", [False, True])
+def test_dbsnp_without_contig_lines(corpus, sites, tmp_path):
+    """Picard compares the dictionaries only when the dbSNP file has ##contig lines."""
+    lines = [line for line in dbsnp_lines(1, records(1)) if not line.startswith("##contig")]
+    if not sites:
+        lines = [line for line in lines if line.startswith("#")]
+    dbsnp = tmp_path / "db.vcf"
+    dbsnp.write_text("\n".join(lines) + "\n")
+    compare([f"I={corpus['full']}", f"DBSNP={dbsnp}"], f"dbsnp_without_contigs_{sites}",
+            tmp_path)
+
+
 def test_time_zones(corpus, tmp_path, monkeypatch):
     """Both print the dates in the zone of the process (TZ for both the JVM and libc)."""
     for zone in ("UTC", "America/Los_Angeles", "Asia/Kolkata"):
@@ -208,6 +258,38 @@ def test_bad_header_value(corpus, case, tmp_path):
     changes, picard_message = BAD_HEADERS[case]
     vcf = build(tmp_path, "bad", 31, values=replace(default_values(31), **changes))
     both_fail([f"I={vcf}", f"DBSNP={corpus['full.dbsnp']}"], tmp_path, picard_message)
+
+
+@pytest.mark.parametrize("key", ["sampleAlias", "scannerName", "clusterFile"])
+def test_tab_in_a_header_value(corpus, key, tmp_path):
+    """htsjdk's MetricsFile refuses a string cell with a tab. Picard leaves an empty detail
+    file behind; bammetrics checks every cell first and writes nothing."""
+    vcf = build(tmp_path, "tab", 35, values=replace(default_values(35), **{key: "a\tb"}))
+    args = [f"I={vcf}", f"DBSNP={corpus['full.dbsnp']}"]
+    picard = subprocess.run(["picard", TOOL, *args, f"O={tmp_path / 'picard'}", "QUIET=true"],
+                            env=picard_env(), capture_output=True, text=True)
+    assert picard.returncode != 0 and "illegal character" in picard.stdout + picard.stderr
+    assert [p.stat().st_size for p in tmp_path.glob("picard*")] == [0]
+    ours = subprocess.run([str(BAMMETRICS), TOOL, *args, f"O={tmp_path / 'ours'}"],
+                          capture_output=True, text=True)
+    assert ours.returncode == 1 and "tab" in ours.stderr, ours.stderr
+    assert not list(tmp_path.glob("ours*"))
+    RESULTS.append((f"{TOOL} fails: a tab in ##{key}", 0, 0, "both exit non-zero"))
+
+
+def test_sample_names_in_a_tree_bin(corpus, tmp_path):
+    """KNOWN_DIFFERENCES.md: 16 names with one hash code (Aa and BB blocks) make a tree bin
+    in Picard's HashMap, whose order is not modelled; bammetrics refuses the VCF."""
+    names = tuple("".join("Aa" if i >> bit & 1 else "BB" for bit in range(4)) for i in range(16))
+    vcf = build(tmp_path, "tree", 36, samples=names)
+    args = [f"I={vcf}", f"DBSNP={corpus['full.dbsnp']}"]
+    picard = subprocess.run(["picard", TOOL, *args, f"O={tmp_path / 'picard'}", "QUIET=true"],
+                            env=picard_env(), capture_output=True, text=True)
+    assert picard.returncode == 0, picard.stderr[-2000:]
+    ours = subprocess.run([str(BAMMETRICS), TOOL, *args, f"O={tmp_path / 'ours'}"],
+                          capture_output=True, text=True)
+    assert ours.returncode == 1 and "HashMap bin" in ours.stderr, ours.stderr
+    assert not list(tmp_path.glob("ours*"))
 
 
 def test_missing_control_line(corpus, tmp_path):
@@ -303,7 +385,7 @@ FEWER_THAN_THREE = {
     "IS_ZCALLED": "a boolean, Y or N",
     "GENDER_CONCORDANCE_PF": "a boolean, Y or N",
 }
-EXPECTED_FILES = 3 * (len(HEADERS) + len(OPTION_CASES) + 2 + 3)
+EXPECTED_FILES = 3 * (len(HEADERS) + len(OPTION_CASES) + 2 + 3 + 1 + 2)
 
 
 def narrowed(config):

@@ -515,6 +515,9 @@ to complete pairs (the command is in `benches/memgate.toml`), removed after the 
 | `create-baf-regress-file` | fixture | 3.8 / 64 | 0.00 | |
 | `create-verify-i-d-intensity-contamination-file` | fixture | 3.7 / 64 | 0.00 | |
 | `arrays-variant-calling` | fixture | 4.9 / 64 | 0.00 | |
+| `arrays-variant-calling at the sample cap` | fixture | 201.2 / 288 | 0.59 | |
+| `arrays-variant-calling far dbSNP sites` | fixture | 31.6 / 64 | 0.11 | |
+| `create-baf-regress-file at the line cap` | fixture | 79.7 / 128 | 0.68 | |
 | `add-or-replace-read-groups slice` | scale | 31.3 / 512 | 3.90 | |
 | `add-or-replace-read-groups queryname slice` | scale | 282.4 / 1024 | 23.64 | 823.9 |
 | `revert-original-base-qualities-and-add-mate-cigar pairs` | scale | 681.1 / 1024 | 52.10 | 1,450.1 |

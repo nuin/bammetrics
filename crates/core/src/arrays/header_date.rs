@@ -20,7 +20,8 @@
 //! 1967: last Sunday of April; 1974 from 6 January, 1975 from 23
 //! February); an imaging date before 1967 is refused. A number with a sign
 //! or over 2,147,483,647 is refused too, where Java's number parser reads
-//! it.
+//! it, and so is a date more than 292,000,000 years from 1970, where
+//! Java's millisecond count wraps.
 
 use crate::java_date;
 
@@ -45,7 +46,13 @@ pub fn iso_date(text: &str, pattern: Pattern) -> Result<String, String> {
         fields.month - 1,
         fields.day,
         ((fields.hour * 60 + fields.minute) * 60 + fields.second) * 1000,
-    );
+    )
+    .ok_or_else(|| {
+        format!(
+            "{text:?}: more than 292,000,000 years from 1970, where Java's millisecond count \
+             overflows"
+        )
+    })?;
     let instant = match pattern {
         Pattern::Autocall => java_date::local_instant(wall),
         Pattern::Imaging => Some(new_york_instant(wall)?),
@@ -249,12 +256,15 @@ mod tests {
 
     fn utc(text: &str) -> i64 {
         let f = parse(text, Pattern::Imaging).unwrap();
-        new_york_instant(java_date::wall_millis(
-            f.year,
-            f.month - 1,
-            f.day,
-            ((f.hour * 60 + f.minute) * 60 + f.second) * 1000,
-        ))
+        new_york_instant(
+            java_date::wall_millis(
+                f.year,
+                f.month - 1,
+                f.day,
+                ((f.hour * 60 + f.minute) * 60 + f.second) * 1000,
+            )
+            .unwrap(),
+        )
         .unwrap()
     }
 
@@ -303,6 +313,10 @@ mod tests {
         );
         assert_eq!(sunday(2019, 3, 2), days_from_civil(2019, 3, 10));
         assert_eq!(sunday(2019, 10, 5), days_from_civil(2019, 10, 27));
-        assert!(new_york_instant(java_date::wall_millis(1966, 0, 1, 0)).is_err());
+        assert!(new_york_instant(java_date::wall_millis(1966, 0, 1, 0).unwrap()).is_err());
+        let huge = i64::from(i32::MAX);
+        assert!(java_date::wall_millis(huge, huge, huge, 0).is_none());
+        assert!(iso_date("01/01/999999999 0:0", Pattern::Autocall).is_err());
+        assert!(iso_date("01/01/200000000 0:0", Pattern::Autocall).is_ok());
     }
 }
