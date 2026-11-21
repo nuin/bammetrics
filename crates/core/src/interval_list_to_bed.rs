@@ -14,10 +14,11 @@
 //! With `SORT` (the default) the intervals are sorted by
 //! `IntervalCoordinateComparator` (contig index, start, end, strand, name)
 //! in a `SortingCollection` of 500,000 records; a list of more is spilled to
-//! disk through `IntervalCodec`, which writes each name one byte per
+//! disk in runs through `IntervalCodec`, which writes each name one byte per
 //! character, so a character above U+00FF comes back as its low byte
-//! ([`spilled_name`]). A name with a character whose low byte is 0 would
-//! end its record early there; such a list is refused.
+//! ([`spilled_name`]) and the runs merge on the names read back
+//! ([`sorted`]). A name with a character whose low byte is 0 would end its
+//! record early there; such a list is refused.
 //!
 //! Each interval is one line: contig, start - 1, end, name, `SCORE` and
 //! strand, tab-separated and ended by `\n`. `SCORE` is any Java `int`,
@@ -123,11 +124,28 @@ pub fn spilled_name(name: &str) -> Option<String> {
         .collect()
 }
 
-/// `getSortedIntervals` and the spill of its `SortingCollection`.
-pub fn sorted(mut list: IntervalList) -> Result<IntervalList> {
-    list.intervals.sort_by(interval_ops::ops::compare);
-    if list.intervals.len() > SORT_RECORDS_IN_RAM {
-        for interval in &mut list.intervals {
+/// `getSortedIntervals` and the spill of its `SortingCollection`. A list
+/// of at most [`SORT_RECORDS_IN_RAM`] intervals is sorted in memory. A
+/// longer one is cut into runs of that many in input order; each run is
+/// sorted on the names as read, then its names are rewritten as the spill
+/// reads them back ([`spilled_name`]), and the runs are merged on the
+/// rewritten names, a tie going to the earlier run (`MergingIterator`).
+pub fn sorted(list: IntervalList) -> Result<IntervalList> {
+    let IntervalList {
+        header,
+        mut intervals,
+    } = list;
+    if intervals.len() <= SORT_RECORDS_IN_RAM {
+        intervals.sort_by(interval_ops::ops::compare);
+        return Ok(IntervalList { header, intervals });
+    }
+    let total = intervals.len();
+    let mut runs = Vec::with_capacity(total.div_ceil(SORT_RECORDS_IN_RAM));
+    while !intervals.is_empty() {
+        let at = (intervals.len() - 1) / SORT_RECORDS_IN_RAM * SORT_RECORDS_IN_RAM;
+        let mut run = intervals.split_off(at);
+        run.sort_by(interval_ops::ops::compare);
+        for interval in &mut run {
             if let Some(name) = &interval.name {
                 interval.name = Some(spilled_name(name).ok_or_else(|| {
                     Error::Metric(format!(
@@ -138,9 +156,57 @@ pub fn sorted(mut list: IntervalList) -> Result<IntervalList> {
                 })?);
             }
         }
+        runs.push(run);
     }
-    Ok(list)
+    drop(intervals);
+    runs.reverse();
+    let mut runs: Vec<std::vec::IntoIter<Interval>> =
+        runs.into_iter().map(Vec::into_iter).collect();
+    let mut heads = std::collections::BinaryHeap::with_capacity(runs.len());
+    for (run, items) in runs.iter_mut().enumerate() {
+        if let Some(interval) = items.next() {
+            heads.push(Head { interval, run });
+        }
+    }
+    let mut merged = Vec::with_capacity(total);
+    while let Some(Head { interval, run }) = heads.pop() {
+        merged.push(interval);
+        if let Some(interval) = runs[run].next() {
+            heads.push(Head { interval, run });
+        }
+    }
+    Ok(IntervalList {
+        header,
+        intervals: merged,
+    })
 }
+
+/// The next interval of a spilled run in the merge, ordered so the
+/// greatest in `BinaryHeap` is the least by the comparator, then by run.
+struct Head {
+    interval: Interval,
+    run: usize,
+}
+
+impl Ord for Head {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        interval_ops::ops::compare(&other.interval, &self.interval).then(other.run.cmp(&self.run))
+    }
+}
+
+impl PartialOrd for Head {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Head {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other).is_eq()
+    }
+}
+
+impl Eq for Head {}
 
 /// The BED lines of `list` with `score`, as `generateOutput` writes them.
 #[derive(Debug)]
@@ -245,6 +311,42 @@ mod tests {
             "c2\t4\t9\tq\t-7\t-\nc1\t99\t200\t.\t-7\t+\nc1\t0\t10\tp\t-7\t+\n\
              c1\t49\t49\tzero\t-7\t+\n"
         );
+    }
+
+    /// Picard 3.5.0 on 500,001 intervals: `B` and `\u{141}x` tie on the
+    /// coordinates in the first run, `C` is the 500,001st. The first run
+    /// sorts on the names as read (`B` before U+0141), the merge on the
+    /// names read back (`Ax` before `C`): `B`, `Ax`, `C`.
+    #[test]
+    fn spilled_runs_merge_on_the_names_read_back() {
+        let tie = |name: &str| Interval {
+            contig: 0,
+            start: 700_000,
+            end: 700_000,
+            negative_strand: false,
+            name: Some(name.to_owned()),
+        };
+        let mut intervals: Vec<Interval> = (0..SORT_RECORDS_IN_RAM as i32 - 2)
+            .map(|i| Interval {
+                contig: 0,
+                start: i + 1,
+                end: i + 1,
+                negative_strand: false,
+                name: None,
+            })
+            .collect();
+        intervals.push(tie("B"));
+        intervals.push(tie("\u{141}x"));
+        intervals.push(tie("C"));
+        let list = IntervalList {
+            header: interval_ops::Header::new(vec![interval_ops::Sequence::new("c1", 1_000_000)]),
+            intervals,
+        };
+        let names: Vec<_> = sorted(list).expect("sorts").intervals[SORT_RECORDS_IN_RAM - 2..]
+            .iter()
+            .map(|i| i.name.clone().expect("named"))
+            .collect();
+        assert_eq!(names, ["B", "Ax", "C"]);
     }
 
     #[test]
