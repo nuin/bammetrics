@@ -183,7 +183,7 @@ impl FileSet {
 /// The usage error of a first format that cannot go to standard output,
 /// or `None`.
 pub fn stdout_refusal(verb: &str, formats: &[Format], spelled: &str) -> Option<VerbError> {
-    let first = formats.first().filter(|f| f.is_binary())?;
+    let first = formats.first().filter(|f| !f.companions().is_empty())?;
     Some(
         VerbError::usage(
             verb,
@@ -209,7 +209,8 @@ pub fn sibling(path: &Path, extension: &str) -> PathBuf {
 /// `output` in each of `formats`, each as its files (the main file first),
 /// with one set of `StringHeader` lines, so the Picard file and its JSON
 /// sibling carry the same start time. The Picard form is the file the
-/// registry writer writes. Only `parquet` fails here.
+/// registry writer writes. Only a binary format fails here: `parquet`, or
+/// XLSX past its limits (a sheet of over 1,048,576 rows).
 pub fn render_all(
     formats: &[Format],
     context: &Context<'_>,
@@ -417,7 +418,7 @@ mod tests {
         assert_eq!(
             unknown.to_string(),
             "bammetrics insert-size: no format \"jsn\" (from --format)\n  did you mean json?\n  \
-             formats: picard, json, tsv, jsonl, human, csv, markdown, parquet"
+             formats: picard, json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx"
         );
         let twice = parse_list("insert-size", "tsv,tsv", "--format").expect_err("twice");
         assert!(twice.to_string().contains("format tsv is given twice"));

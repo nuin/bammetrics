@@ -112,8 +112,8 @@ pub fn global_flags() -> Vec<Flag> {
             "also",
             &[],
             Ty::Text,
-            "Further formats, one or a list: json, jsonl, tsv or csv beside every metrics \
-             file; markdown as PREFIX.report.md.",
+            "Further formats, one or a list: json, jsonl, tsv, csv, parquet, xlsx or docx beside \
+             every metrics file; markdown as PREFIX.report.md.",
         )
         .placeholder("FORMAT"),
         Flag::new(

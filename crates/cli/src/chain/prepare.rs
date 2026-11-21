@@ -1072,7 +1072,7 @@ fn also(spec: &Spec) -> Result<Vec<Also>, VerbError> {
             if let Some(best) = bammetrics_core::registry::did_you_mean(name, names) {
                 error = error.hint(format!("did you mean {best}?"));
             }
-            error.hint("formats: json, jsonl, tsv, csv, markdown, parquet")
+            error.hint("formats: json, jsonl, tsv, csv, parquet, xlsx, docx, markdown")
         })?;
         if let Some(missing) = format.per_file().filter(|f| !format::available(*f)) {
             return Err(format::unavailable(VERB, missing).from("--also"));

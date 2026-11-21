@@ -1,7 +1,7 @@
 //! `qc --also FORMAT[,FORMAT]` (docs/formats.md): further formats beside
-//! the Picard files of a run. `json`, `jsonl`, `tsv`, `csv` and `parquet`
-//! are written beside every metrics file as `FILE.json` (`parquet` with
-//! its companions); `markdown`, `junit` and `multiqc` are one file per run
+//! the Picard files of a run. `json`, `jsonl`, `tsv`, `csv`, `parquet`,
+//! `xlsx` and `docx` are written beside every metrics file as `FILE.json`
+//! (`parquet` with its companions); `markdown`, `junit` and `multiqc` are one file per run
 //! under the prefix. [`targets`] names the
 //! files (for `plan` too), [`texts`] renders them from the metrics files
 //! on disk, and `engine::write_also` writes them and records the manifest
@@ -30,6 +30,13 @@ pub enum Also {
     Tsv,
     /// FILE.csv beside every metrics file: the metrics table, RFC 4180.
     Csv,
+    /// FILE.parquet beside every metrics file, with FILE.histogram.parquet
+    /// (when the file has a histogram) and FILE.long.parquet.
+    Parquet,
+    /// FILE.xlsx beside every metrics file: a sheet per table.
+    Xlsx,
+    /// FILE.docx beside every metrics file: the headers and every table.
+    Docx,
     /// PREFIX.report.md: the verdict, then every metrics table, at most
     /// 65,536 characters.
     #[value(alias = "md")]
@@ -38,9 +45,6 @@ pub enum Also {
     Junit,
     /// PREFIX.verdict_mqc.json: MultiQC custom content.
     Multiqc,
-    /// FILE.parquet beside every metrics file, with FILE.histogram.parquet
-    /// (when the file has a histogram) and FILE.long.parquet.
-    Parquet,
 }
 
 impl Also {
@@ -51,10 +55,12 @@ impl Also {
             Also::Jsonl => "jsonl",
             Also::Tsv => "tsv",
             Also::Csv => "csv",
+            Also::Parquet => "parquet",
+            Also::Xlsx => "xlsx",
+            Also::Docx => "docx",
             Also::Markdown => "markdown",
             Also::Junit => "junit",
             Also::Multiqc => "multiqc",
-            Also::Parquet => "parquet",
         }
     }
 
@@ -67,6 +73,8 @@ impl Also {
             Also::Tsv => Some(Format::Tsv),
             Also::Csv => Some(Format::Csv),
             Also::Parquet => Some(Format::Parquet),
+            Also::Xlsx => Some(Format::Xlsx),
+            Also::Docx => Some(Format::Docx),
             Also::Markdown | Also::Junit | Also::Multiqc => None,
         }
     }
@@ -77,7 +85,7 @@ impl Also {
             Also::Markdown => ".report.md",
             Also::Junit => ".junit.xml",
             Also::Multiqc => ".verdict_mqc.json",
-            Also::Json | Also::Jsonl | Also::Tsv | Also::Csv | Also::Parquet => "",
+            Also::Json | Also::Jsonl | Also::Tsv | Also::Csv | Also::Parquet | Also::Xlsx | Also::Docx => "",
         }
     }
 }

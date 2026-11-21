@@ -9,9 +9,12 @@
 //! JSON for Picard text, so `convert` applied twice gives the first file
 //! back byte for byte. A JSON cell with a tab or a line end has no Picard
 //! text form: `--format picard` is then an error and writes nothing.
+//! `xlsx` and `docx` are written only: an input that starts as a zip is
+//! refused with that reason after its first four bytes. Neither goes to
+//! standard output when it is a terminal.
 
 use std::fs;
-use std::io::Read;
+use std::io::{IsTerminal as _, Read};
 use std::path::{Path, PathBuf};
 
 use bammetrics_formats::{Document, Format, Table, parquet};
@@ -20,7 +23,7 @@ use clap::Args;
 use bammetrics_core::cleanup::MadeDirs;
 
 use crate::error::{Result, VerbError};
-use crate::events::print_stdout;
+use crate::events::print_stdout_bytes;
 use crate::format::{FileSet, all_files, parse_list, stdout_refusal};
 use crate::verbs::{UNRESOLVED_HINT, create_parent, refuse_overwriting_inputs, unresolved_output};
 
@@ -31,8 +34,8 @@ const VERB: &str = "convert";
     after_help = "Formats: picard (Picard metrics text), json (schema bammetrics.metrics/1, \
 docs/schema/metrics-1.json), jsonl (one object per row, a histogram row with \"histogram\": true), \
 tsv, csv (RFC 4180), markdown, human, parquet (FILE, FILE.histogram.parquet and \
-FILE.long.parquet; needs -o). Picard text, json and parquet read back; the others are written \
-only.\n\nPicard text to json or parquet to Picard text is byte for byte the first file, for a \
+FILE.long.parquet; needs -o), xlsx (a sheet per table), docx (the headers and every table). \
+Picard text, json and parquet read back; the others are written only.\n\nPicard text to json or parquet to Picard text is byte for byte the first file, for a \
 file Picard or bammetrics wrote. tsv, csv and human print one table: the metrics class, or the \
 histogram of a file without one; --table picks."
 )]
@@ -108,6 +111,13 @@ fn read_input(path: &Path) -> std::result::Result<Input, VerbError> {
         }
         return Ok(Input::Parquet(bytes));
     }
+    if bytes == bammetrics_formats::ZIP_MAGIC {
+        return Err(VerbError::input(
+            VERB,
+            format!("{name}: {}", bammetrics_formats::TextError::Zip),
+        )
+        .hint("convert reads Picard text, the JSON of --format json and Parquet"));
+    }
     reader.read_to_end(&mut bytes).map_err(failed)?;
     String::from_utf8(bytes).map(Input::Text).map_err(|_| {
         failed(std::io::Error::new(
@@ -161,6 +171,18 @@ pub fn run(args: &ConvertArgs) -> Result<u8> {
         .hint("give -o FILE: the further formats are written beside it")
         .into());
     }
+    if output.is_none() && formats[0].is_binary() && std::io::stdout().is_terminal() {
+        return Err(VerbError::usage(
+            VERB,
+            format!(
+                "--format {} is a binary file; standard output is a terminal",
+                formats[0].name()
+            ),
+        )
+        .from("--format")
+        .hint("give -o FILE, or send standard output to a file or a pipe")
+        .into());
+    }
     let targets: Vec<PathBuf> = output.map_or_else(Vec::new, |path| all_files(path, &formats));
     // A `..` behind a directory that does not exist names no file the
     // input check below can see: the verbs refuse it too.
@@ -205,7 +227,7 @@ pub fn run(args: &ConvertArgs) -> Result<u8> {
         .map_err(|e| {
             let hint = match e {
                 bammetrics_formats::Error::Picard(_) => {
-                    "the other formats hold it: json, jsonl, tsv, csv, markdown"
+                    "the other formats hold it: json, jsonl, tsv, csv, markdown, xlsx, docx"
                 }
                 _ => "picard and json hold every document",
             };
@@ -214,7 +236,7 @@ pub fn run(args: &ConvertArgs) -> Result<u8> {
     let Some(path) = output else {
         for files in rendered {
             for file in files {
-                print_stdout(&String::from_utf8_lossy(&file.bytes));
+                print_stdout_bytes(&file.bytes);
             }
         }
         return Ok(0);

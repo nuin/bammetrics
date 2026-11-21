@@ -10,5 +10,5 @@ prquet
 ## stdout
 ## stderr
 bammetrics qc: invalid value "prquet" (from --also)
-  one of: json, jsonl, tsv, csv, markdown, junit, multiqc, parquet
+  one of: json, jsonl, tsv, csv, parquet, xlsx, docx, markdown, junit, multiqc
   every option: bammetrics help qc

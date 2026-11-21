@@ -87,7 +87,7 @@ On every tool verb:
 | `-R` | FASTA with a `.fai` | `R`, `REFERENCE_SEQUENCE` |
 | `--level` | accumulation level, repeatable | `LEVEL`, `METRIC_ACCUMULATION_LEVEL` |
 | `--stop-after N` | read limit | `STOP_AFTER` |
-| `--format` | `picard`, `json`, `tsv`, `jsonl`, `human`, `csv`, `markdown`, `parquet`, or a list (`picard,json`): the first to `-o`, each further one beside it as `FILE.json` | none |
+| `--format` | `picard`, `json`, `tsv`, `jsonl`, `human`, `csv`, `markdown`, `parquet`, `xlsx`, `docx`, or a list (`picard,json`): the first to `-o`, each further one beside it as `FILE.json` | none |
 | `--sample NAME` | sample name in the json and jsonl forms, default the first `@RG SM`, else the input name without its extension (none for standard input); never written into a Picard file | none |
 | `-q`, `-v` | no notes on stderr; the Picard command line and each file written on stderr | `QUIET` |
 
@@ -193,7 +193,11 @@ rows of `tsv`, `csv` and `human` are the histogram. `parquet` writes the class t
 file, the histogram to `STEM.histogram.parquet` and every cell to `STEM.long.parquet`
 (`STEM` is the file less a last `.parquet`), with the glossary's types, NaN and full
 doubles; it needs `-o` (exit 2 without) and a build with the feature `parquet`, the
-default ([docs/formats.md](formats.md) section Parquet).
+default ([docs/formats.md](formats.md) section Parquet). `xlsx` is a workbook with a
+`Headers` sheet, a sheet per class and a `Histogram` sheet, numbers with every digit;
+`docx` is the headers and every table as Picard text ([docs/formats.md](formats.md)). Both
+are binary files: standard output takes them when it is a file or a pipe; on a terminal the
+verb exits 2 and asks for `-o`.
 
 `--format` takes a list (`picard,json,csv`). The first format goes to `-o` or standard
 output, each further one beside `-o` as `FILE.json`, `FILE.csv`; a list needs `-o`. A
@@ -204,7 +208,7 @@ problem.
 `qc` and `plan` take `--format text|jsonl`, the event stream on standard output; `qc --also`
 writes file formats. `check` takes `text`, `json`, `jsonl`, `junit`, `markdown` and
 `multiqc`, as a list too. Each is described under its verb. `chain` takes `--format` with
-`picard` first, on the chain and on a step, and `--also json|jsonl|tsv|csv|markdown|parquet`.
+`picard` first, on the chain and on a step, and `--also json|jsonl|tsv|csv|parquet|xlsx|docx|markdown`.
 
 ## Exit codes
 
@@ -1165,9 +1169,9 @@ without it removes it. `--pdf-font` and `--page-size` set the PDF and need `--re
 ([docs/pdf.md](pdf.md)).
 
 `--also` writes further formats beside the Picard files, one or a list (`--also
-json,markdown`). `json`, `jsonl`, `tsv` and `csv` add `FILE.json` (`.jsonl`, `.tsv`, `.csv`)
-beside every metrics file. `parquet` adds `FILE.parquet`, `FILE.histogram.parquet` for a
-file with a histogram, and `FILE.long.parquet`. `markdown` adds `PREFIX.report.md` (the verdict, then every
+json,markdown`). `json`, `jsonl`, `tsv`, `csv`, `xlsx` and `docx` add `FILE.json` (`.jsonl`,
+`.tsv`, `.csv`, `.xlsx`, `.docx`) beside every metrics file. `parquet` adds `FILE.parquet`,
+`FILE.histogram.parquet` for a file with a histogram, and `FILE.long.parquet`. `markdown` adds `PREFIX.report.md` (the verdict, then every
 metrics table, at most 65,536 characters), `junit` adds `PREFIX.junit.xml` (a testcase per
 rule) and `multiqc` adds `PREFIX.verdict_mqc.json` (MultiQC custom content). The manifest
 lists them under the step `also`. A later run without `--also` removes the ones the earlier
@@ -1873,8 +1877,10 @@ the JSON of `--format json` (schema `bammetrics.metrics/1`) or the main file of 
 parquet`, told apart by its first bytes (`PAR1` is Parquet; `{` or `[` is JSON, a byte
 order mark before it dropped); `-` reads standard input. A Parquet file reads its histogram
 companion from beside it, so one with a histogram is read from a path. `--format` takes
-`picard`, `json`, `jsonl`, `tsv`, `csv`, `markdown`, `human` or `parquet`, one or a list;
-without it the output is `json` for Picard text and `picard` for JSON and Parquet. Picard
+`picard`, `json`, `jsonl`, `tsv`, `csv`, `markdown`, `human`, `parquet`, `xlsx` or `docx`,
+one or a list; without it the output is `json` for Picard text and `picard` for JSON and
+Parquet. XLSX and DOCX are written only: an input whose first 4 bytes are a zip's exits 1
+with that reason. Neither goes to standard output when it is a terminal (exit 2). Picard
 text to JSON or Parquet to Picard text is byte for byte the first file, for a file Picard
 or bammetrics wrote.
 
@@ -1886,7 +1892,8 @@ bammetrics convert S1.insert_size_metrics | bammetrics convert - | cmp - S1.inse
 
 - `-o FILE` writes the first format there; each further format of a list goes beside it.
   `parquet` needs it. `convert` refuses to write its input or the histogram companion of a
-  Parquet input (exit 2).
+  Parquet input (exit 2), and an `-o` through a missing directory with a `..` behind it
+  (exit 2), as the tool verbs do.
 - A long Parquet file (`FILE.long.parquet`) is not read back (exit 1).
 - `--table metrics|histogram|CLASS` picks the table `tsv`, `csv` and `human` print.
 - `--sample NAME` sets the sample of the `json` and `jsonl` forms.

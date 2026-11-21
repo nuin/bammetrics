@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+Wave W21 of docs/07: Parquet, XLSX, DOCX and the SQL dump of a metrics file. No version bump; it ships with the release after 0.31.0.
+
 ### Added
 
 - Parquet (wave W21 of docs/07, docs/formats.md section Parquet): `--format parquet` on the
@@ -30,12 +32,32 @@
   polars and pyarrow reading every file written (`crates/formats/tests/round_trip.rs`,
   skipped without the reader), 14 golden forms, the committed
   `tests/data/insert_size_metrics.parquet` set.
+- XLSX and DOCX (wave W21 of docs/07): `--format xlsx` and `docx` on the tool verbs,
+  `convert` and `chain`, and `qc --also xlsx,docx` (and `chain --also`) beside every
+  metrics file. XLSX is a workbook with a `Headers` sheet, a sheet per metrics class and a
+  `Histogram` sheet, numbers with every digit; DOCX is the headers and every table as
+  Picard text, A4 landscape. Both are hand-written OOXML in a zip of stored entries
+  (`crates/formats/src/ooxml.rs`, `xlsx.rs`, `docx.rs`): no new dependency, the same bytes
+  for the same document. Neither reads back; `convert` exits 1 on a zip input.
+  docs/formats.md says what each loses.
+- `crates/formats/tests/ooxml.rs`: every metrics file of `tests/data/picard` and
+  `tests/golden` read back from both formats cell by cell, and openpyxl, pandas,
+  python-docx, pandoc and DuckDB's `excel` extension on the same files when installed.
+- XLSX writes a null cell of a text column as an empty inline string, so DuckDB's
+  `read_xlsx` types the column as text. DOCX cuts a table past Word's 63 columns into
+  parts. Both check the 1 GiB cap row by row, before the file is built whole.
+- `convert` refuses an `-o` through a missing directory with a `..` behind it (exit 2),
+  which overwrote its input before; it reads 4 bytes before it refuses a zip, and
+  `read_table` gives the same zip message. `convert` and the tool verbs refuse to print
+  XLSX or DOCX on a terminal (exit 2). A multi-file verb renders its further formats
+  before it writes its Picard files.
 
 ### Changed
 
-- `--format` and `--also` name `parquet` in their lists, so the error text of an unknown
-  format lists it (`error_verb_format`, `error_verb_format_twice` and `error_qc_also`, which
-  now gives `prquet`).
+- `--format` and `--also` name `parquet`, `xlsx` and `docx` in their lists, so the error
+  text of an unknown format lists them (`error_verb_format`, `error_verb_format_twice` and
+  `error_qc_also`, which now gives `prquet`). `convert` of a zip names Parquet among the
+  formats it reads (`error_convert_reads_xlsx`).
 
 ## 0.30.0
 

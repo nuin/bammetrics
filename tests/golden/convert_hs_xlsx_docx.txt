@@ -1,0 +1,379 @@
+## argv
+convert
+tests/data/picard/NA12878/NA12878.hs_metrics
+--format
+xlsx,docx
+-o
+OUT/hs.xlsx
+## exit
+0
+## stdout
+## stderr
+## file hs.xlsx
+<zip: 24631 bytes, 8 parts>
+### part [Content_Types].xml (953 bytes)
+### part _rels/.rels (297 bytes)
+### part xl/workbook.xml (422 bytes)
+### part xl/_rels/workbook.xml.rels (707 bytes)
+### part xl/styles.xml (823 bytes)
+### part xl/worksheets/sheet1.xml (1159 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:A2"/><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetData>
+<row r="1"><c r="A1" t="inlineStr"><is><t>CollectHsMetrics BAIT_INTERVALS=[tests/data/targets.interval_list] TARGET_INTERVALS=[tests/data/targets.interval_list] INPUT=tests/data/insert_size.bam OUTPUT=tests/data/picard/NA12878/NA12878.hs_metrics PER_BASE_COVERAGE=tests/data/picard/NA12878/NA12878.per_base_coverage VERBOSITY=ERROR QUIET=true REFERENCE_SEQUENCE=tests/data/ref_100k.fa    METRIC_ACCUMULATION_LEVEL=[ALL_READS] NEAR_DISTANCE=250 MINIMUM_MAPPING_QUALITY=20 MINIMUM_BASE_QUALITY=20 CLIP_OVERLAPPING_READS=true INCLUDE_INDELS=false COVERAGE_CAP=200 SAMPLE_SIZE=10000 ALLELE_FRACTION=[0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5] VALIDATION_STRINGENCY=STRICT COMPRESSION_LEVEL=5 MAX_RECORDS_IN_RAM=500000 CREATE_INDEX=false CREATE_MD5_FILE=false USE_JDK_DEFLATER=false USE_JDK_INFLATER=false</t></is></c></row>
+<row r="2"><c r="A2" t="inlineStr"><is><t>Started on: <time></t></is></c></row>
+</sheetData></worksheet>
+### part xl/worksheets/sheet2.xml (6831 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:BQ2"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>
+<row r="1"><c r="A1" s="1" t="inlineStr"><is><t>BAIT_SET</t></is></c><c r="B1" s="1" t="inlineStr"><is><t>BAIT_TERRITORY</t></is></c><c r="C1" s="1" t="inlineStr"><is><t>BAIT_DESIGN_EFFICIENCY</t></is></c><c r="D1" s="1" t="inlineStr"><is><t>ON_BAIT_BASES</t></is></c><c r="E1" s="1" t="inlineStr"><is><t>NEAR_BAIT_BASES</t></is></c><c r="F1" s="1" t="inlineStr"><is><t>OFF_BAIT_BASES</t></is></c><c r="G1" s="1" t="inlineStr"><is><t>PCT_SELECTED_BASES</t></is></c><c r="H1" s="1" t="inlineStr"><is><t>PCT_OFF_BAIT</t></is></c><c r="I1" s="1" t="inlineStr"><is><t>ON_BAIT_VS_SELECTED</t></is></c><c r="J1" s="1" t="inlineStr"><is><t>MEAN_BAIT_COVERAGE</t></is></c><c r="K1" s="1" t="inlineStr"><is><t>PCT_USABLE_BASES_ON_BAIT</t></is></c><c r="L1" s="1" t="inlineStr"><is><t>PCT_USABLE_BASES_ON_TARGET</t></is></c><c r="M1" s="1" t="inlineStr"><is><t>FOLD_ENRICHMENT</t></is></c><c r="N1" s="1" t="inlineStr"><is><t>HS_LIBRARY_SIZE</t></is></c><c r="O1" s="1" t="inlineStr"><is><t>HS_PENALTY_10X</t></is></c><c r="P1" s="1" t="inlineStr"><is><t>HS_PENALTY_20X</t></is></c><c r="Q1" s="1" t="inlineStr"><is><t>HS_PENALTY_30X</t></is></c><c r="R1" s="1" t="inlineStr"><is><t>HS_PENALTY_40X</t></is></c><c r="S1" s="1" t="inlineStr"><is><t>HS_PENALTY_50X</t></is></c><c r="T1" s="1" t="inlineStr"><is><t>HS_PENALTY_100X</t></is></c><c r="U1" s="1" t="inlineStr"><is><t>TARGET_TERRITORY</t></is></c><c r="V1" s="1" t="inlineStr"><is><t>GENOME_SIZE</t></is></c><c r="W1" s="1" t="inlineStr"><is><t>TOTAL_READS</t></is></c><c r="X1" s="1" t="inlineStr"><is><t>PF_READS</t></is></c><c r="Y1" s="1" t="inlineStr"><is><t>PF_BASES</t></is></c><c r="Z1" s="1" t="inlineStr"><is><t>PF_UNIQUE_READS</t></is></c><c r="AA1" s="1" t="inlineStr"><is><t>PF_UQ_READS_ALIGNED</t></is></c><c r="AB1" s="1" t="inlineStr"><is><t>PF_BASES_ALIGNED</t></is></c><c r="AC1" s="1" t="inlineStr"><is><t>PF_UQ_BASES_ALIGNED</t></is></c><c r="AD1" s="1" t="inlineStr"><is><t>ON_TARGET_BASES</t></is></c><c r="AE1" s="1" t="inlineStr"><is><t>PCT_PF_READS</t></is></c><c r="AF1" s="1" t="inlineStr"><is><t>PCT_PF_UQ_READS</t></is></c><c r="AG1" s="1" t="inlineStr"><is><t>PCT_PF_UQ_READS_ALIGNED</t></is></c><c r="AH1" s="1" t="inlineStr"><is><t>MEAN_TARGET_COVERAGE</t></is></c><c r="AI1" s="1" t="inlineStr"><is><t>MEDIAN_TARGET_COVERAGE</t></is></c><c r="AJ1" s="1" t="inlineStr"><is><t>MAX_TARGET_COVERAGE</t></is></c><c r="AK1" s="1" t="inlineStr"><is><t>MIN_TARGET_COVERAGE</t></is></c><c r="AL1" s="1" t="inlineStr"><is><t>ZERO_CVG_TARGETS_PCT</t></is></c><c r="AM1" s="1" t="inlineStr"><is><t>PCT_EXC_DUPE</t></is></c><c r="AN1" s="1" t="inlineStr"><is><t>PCT_EXC_ADAPTER</t></is></c><c r="AO1" s="1" t="inlineStr"><is><t>PCT_EXC_MAPQ</t></is></c><c r="AP1" s="1" t="inlineStr"><is><t>PCT_EXC_BASEQ</t></is></c><c r="AQ1" s="1" t="inlineStr"><is><t>PCT_EXC_OVERLAP</t></is></c><c r="AR1" s="1" t="inlineStr"><is><t>PCT_EXC_OFF_TARGET</t></is></c><c r="AS1" s="1" t="inlineStr"><is><t>FOLD_80_BASE_PENALTY</t></is></c><c r="AT1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_1X</t></is></c><c r="AU1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_2X</t></is></c><c r="AV1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_10X</t></is></c><c r="AW1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_20X</t></is></c><c r="AX1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_30X</t></is></c><c r="AY1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_40X</t></is></c><c r="AZ1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_50X</t></is></c><c r="BA1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_100X</t></is></c><c r="BB1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_250X</t></is></c><c r="BC1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_500X</t></is></c><c r="BD1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_1000X</t></is></c><c r="BE1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_2500X</t></is></c><c r="BF1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_5000X</t></is></c><c r="BG1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_10000X</t></is></c><c r="BH1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_25000X</t></is></c><c r="BI1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_50000X</t></is></c><c r="BJ1" s="1" t="inlineStr"><is><t>PCT_TARGET_BASES_100000X</t></is></c><c r="BK1" s="1" t="inlineStr"><is><t>AT_DROPOUT</t></is></c><c r="BL1" s="1" t="inlineStr"><is><t>GC_DROPOUT</t></is></c><c r="BM1" s="1" t="inlineStr"><is><t>HET_SNP_SENSITIVITY</t></is></c><c r="BN1" s="1" t="inlineStr"><is><t>HET_SNP_Q</t></is></c><c r="BO1" s="1" t="inlineStr"><is><t>SAMPLE</t></is></c><c r="BP1" s="1" t="inlineStr"><is><t>LIBRARY</t></is></c><c r="BQ1" s="1" t="inlineStr"><is><t>READ_GROUP</t></is></c></row>
+<row r="2"><c r="A2" t="inlineStr"><is><t>targets</t></is></c><c r="B2"><v>1800</v></c><c r="C2"><v>1.0</v></c><c r="D2"><v>680</v></c><c r="E2"><v>120</v></c><c r="F2"><v>200</v></c><c r="G2"><v>0.8</v></c><c r="H2"><v>0.2</v></c><c r="I2"><v>0.85</v></c><c r="J2"><v>0.377778</v></c><c r="K2"><v>0.68</v></c><c r="L2"><v>0.68</v></c><c r="M2"><v>37.777778</v></c><c r="O2"><v>0.0</v></c><c r="P2"><v>0.0</v></c><c r="Q2"><v>0.0</v></c><c r="R2"><v>0.0</v></c><c r="S2"><v>0.0</v></c><c r="T2"><v>0.0</v></c><c r="U2"><v>1800</v></c><c r="V2"><v>100000</v></c><c r="W2"><v>10</v></c><c r="X2"><v>10</v></c><c r="Y2"><v>1000</v></c><c r="Z2"><v>10</v></c><c r="AA2"><v>10</v></c><c r="AB2"><v>1000</v></c><c r="AC2"><v>1000</v></c><c r="AD2"><v>680</v></c><c r="AE2"><v>1.0</v></c><c r="AF2"><v>1.0</v></c><c r="AG2"><v>1.0</v></c><c r="AH2"><v>0.377778</v></c><c r="AI2"><v>0.0</v></c><c r="AJ2"><v>1</v></c><c r="AK2"><v>0</v></c><c r="AL2"><v>0.2</v></c><c r="AM2"><v>0.0</v></c><c r="AN2"><v>0.0</v></c><c r="AO2"><v>0.0</v></c><c r="AP2"><v>0.0</v></c><c r="AQ2"><v>0.0</v></c><c r="AR2"><v>0.32</v></c><c r="AS2" t="inlineStr"><is><t>?</t></is></c><c r="AT2"><v>0.377778</v></c><c r="AU2"><v>0.0</v></c><c r="AV2"><v>0.0</v></c><c r="AW2"><v>0.0</v></c><c r="AX2"><v>0.0</v></c><c r="AY2"><v>0.0</v></c><c r="AZ2"><v>0.0</v></c><c r="BA2"><v>0.0</v></c><c r="BB2"><v>0.0</v></c><c r="BC2"><v>0.0</v></c><c r="BD2"><v>0.0</v></c><c r="BE2"><v>0.0</v></c><c r="BF2"><v>0.0</v></c><c r="BG2"><v>0.0</v></c><c r="BH2"><v>0.0</v></c><c r="BI2"><v>0.0</v></c><c r="BJ2"><v>0.0</v></c><c r="BK2"><v>16.666667</v></c><c r="BL2"><v>20.588235</v></c><c r="BM2"><v>0.18717</v></c><c r="BN2"><v>1.0</v></c><c r="BO2" t="inlineStr"><is><t></t></is></c><c r="BP2" t="inlineStr"><is><t></t></is></c><c r="BQ2" t="inlineStr"><is><t></t></is></c></row>
+</sheetData></worksheet>
+### part xl/worksheets/sheet3.xml (12497 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:C128"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>
+<row r="1"><c r="A1" s="1" t="inlineStr"><is><t>coverage_or_base_quality</t></is></c><c r="B1" s="1" t="inlineStr"><is><t>high_quality_coverage_count</t></is></c><c r="C1" s="1" t="inlineStr"><is><t>unfiltered_baseq_count</t></is></c></row>
+<row r="2"><c r="A2"><v>0</v></c><c r="B2"><v>1120.0</v></c><c r="C2"><v>0.0</v></c></row>
+<row r="3"><c r="A3"><v>1</v></c><c r="B3"><v>680.0</v></c><c r="C3"><v>0.0</v></c></row>
+<row r="4"><c r="A4"><v>2</v></c><c r="B4"><v>0.0</v></c><c r="C4"><v>0.0</v></c></row>
+<row r="5"><c r="A5"><v>3</v></c><c r="B5"><v>0.0</v></c><c r="C5"><v>0.0</v></c></row>
+<row r="6"><c r="A6"><v>4</v></c><c r="B6"><v>0.0</v></c><c r="C6"><v>0.0</v></c></row>
+<row r="7"><c r="A7"><v>5</v></c><c r="B7"><v>0.0</v></c><c r="C7"><v>0.0</v></c></row>
+<row r="8"><c r="A8"><v>6</v></c><c r="B8"><v>0.0</v></c><c r="C8"><v>0.0</v></c></row>
+<row r="9"><c r="A9"><v>7</v></c><c r="B9"><v>0.0</v></c><c r="C9"><v>0.0</v></c></row>
+<row r="10"><c r="A10"><v>8</v></c><c r="B10"><v>0.0</v></c><c r="C10"><v>0.0</v></c></row>
+<row r="11"><c r="A11"><v>9</v></c><c r="B11"><v>0.0</v></c><c r="C11"><v>0.0</v></c></row>
+<row r="12"><c r="A12"><v>10</v></c><c r="B12"><v>0.0</v></c><c r="C12"><v>0.0</v></c></row>
+<row r="13"><c r="A13"><v>11</v></c><c r="B13"><v>0.0</v></c><c r="C13"><v>0.0</v></c></row>
+<row r="14"><c r="A14"><v>12</v></c><c r="B14"><v>0.0</v></c><c r="C14"><v>0.0</v></c></row>
+<row r="15"><c r="A15"><v>13</v></c><c r="B15"><v>0.0</v></c><c r="C15"><v>0.0</v></c></row>
+<row r="16"><c r="A16"><v>14</v></c><c r="B16"><v>0.0</v></c><c r="C16"><v>0.0</v></c></row>
+<row r="17"><c r="A17"><v>15</v></c><c r="B17"><v>0.0</v></c><c r="C17"><v>0.0</v></c></row>
+<row r="18"><c r="A18"><v>16</v></c><c r="B18"><v>0.0</v></c><c r="C18"><v>0.0</v></c></row>
+<row r="19"><c r="A19"><v>17</v></c><c r="B19"><v>0.0</v></c><c r="C19"><v>0.0</v></c></row>
+<row r="20"><c r="A20"><v>18</v></c><c r="B20"><v>0.0</v></c><c r="C20"><v>0.0</v></c></row>
+<row r="21"><c r="A21"><v>19</v></c><c r="B21"><v>0.0</v></c><c r="C21"><v>0.0</v></c></row>
+<row r="22"><c r="A22"><v>20</v></c><c r="B22"><v>0.0</v></c><c r="C22"><v>0.0</v></c></row>
+<row r="23"><c r="A23"><v>21</v></c><c r="B23"><v>0.0</v></c><c r="C23"><v>0.0</v></c></row>
+<row r="24"><c r="A24"><v>22</v></c><c r="B24"><v>0.0</v></c><c r="C24"><v>0.0</v></c></row>
+<row r="25"><c r="A25"><v>23</v></c><c r="B25"><v>0.0</v></c><c r="C25"><v>0.0</v></c></row>
+<row r="26"><c r="A26"><v>24</v></c><c r="B26"><v>0.0</v></c><c r="C26"><v>0.0</v></c></row>
+<row r="27"><c r="A27"><v>25</v></c><c r="B27"><v>0.0</v></c><c r="C27"><v>0.0</v></c></row>
+<row r="28"><c r="A28"><v>26</v></c><c r="B28"><v>0.0</v></c><c r="C28"><v>0.0</v></c></row>
+<row r="29"><c r="A29"><v>27</v></c><c r="B29"><v>0.0</v></c><c r="C29"><v>0.0</v></c></row>
+<row r="30"><c r="A30"><v>28</v></c><c r="B30"><v>0.0</v></c><c r="C30"><v>0.0</v></c></row>
+<row r="31"><c r="A31"><v>29</v></c><c r="B31"><v>0.0</v></c><c r="C31"><v>0.0</v></c></row>
+<row r="32"><c r="A32"><v>30</v></c><c r="B32"><v>0.0</v></c><c r="C32"><v>0.0</v></c></row>
+<row r="33"><c r="A33"><v>31</v></c><c r="B33"><v>0.0</v></c><c r="C33"><v>0.0</v></c></row>
+<row r="34"><c r="A34"><v>32</v></c><c r="B34"><v>0.0</v></c><c r="C34"><v>0.0</v></c></row>
+<row r="35"><c r="A35"><v>33</v></c><c r="B35"><v>0.0</v></c><c r="C35"><v>0.0</v></c></row>
+<row r="36"><c r="A36"><v>34</v></c><c r="B36"><v>0.0</v></c><c r="C36"><v>0.0</v></c></row>
+<row r="37"><c r="A37"><v>35</v></c><c r="B37"><v>0.0</v></c><c r="C37"><v>0.0</v></c></row>
+<row r="38"><c r="A38"><v>36</v></c><c r="B38"><v>0.0</v></c><c r="C38"><v>0.0</v></c></row>
+<row r="39"><c r="A39"><v>37</v></c><c r="B39"><v>0.0</v></c><c r="C39"><v>0.0</v></c></row>
+<row r="40"><c r="A40"><v>38</v></c><c r="B40"><v>0.0</v></c><c r="C40"><v>0.0</v></c></row>
+<row r="41"><c r="A41"><v>39</v></c><c r="B41"><v>0.0</v></c><c r="C41"><v>0.0</v></c></row>
+<row r="42"><c r="A42"><v>40</v></c><c r="B42"><v>0.0</v></c><c r="C42"><v>680.0</v></c></row>
+<row r="43"><c r="A43"><v>41</v></c><c r="B43"><v>0.0</v></c><c r="C43"><v>0.0</v></c></row>
+<row r="44"><c r="A44"><v>42</v></c><c r="B44"><v>0.0</v></c><c r="C44"><v>0.0</v></c></row>
+<row r="45"><c r="A45"><v>43</v></c><c r="B45"><v>0.0</v></c><c r="C45"><v>0.0</v></c></row>
+<row r="46"><c r="A46"><v>44</v></c><c r="B46"><v>0.0</v></c><c r="C46"><v>0.0</v></c></row>
+<row r="47"><c r="A47"><v>45</v></c><c r="B47"><v>0.0</v></c><c r="C47"><v>0.0</v></c></row>
+<row r="48"><c r="A48"><v>46</v></c><c r="B48"><v>0.0</v></c><c r="C48"><v>0.0</v></c></row>
+<row r="49"><c r="A49"><v>47</v></c><c r="B49"><v>0.0</v></c><c r="C49"><v>0.0</v></c></row>
+<row r="50"><c r="A50"><v>48</v></c><c r="B50"><v>0.0</v></c><c r="C50"><v>0.0</v></c></row>
+<row r="51"><c r="A51"><v>49</v></c><c r="B51"><v>0.0</v></c><c r="C51"><v>0.0</v></c></row>
+<row r="52"><c r="A52"><v>50</v></c><c r="B52"><v>0.0</v></c><c r="C52"><v>0.0</v></c></row>
+<row r="53"><c r="A53"><v>51</v></c><c r="B53"><v>0.0</v></c><c r="C53"><v>0.0</v></c></row>
+<row r="54"><c r="A54"><v>52</v></c><c r="B54"><v>0.0</v></c><c r="C54"><v>0.0</v></c></row>
+<row r="55"><c r="A55"><v>53</v></c><c r="B55"><v>0.0</v></c><c r="C55"><v>0.0</v></c></row>
+<row r="56"><c r="A56"><v>54</v></c><c r="B56"><v>0.0</v></c><c r="C56"><v>0.0</v></c></row>
+<row r="57"><c r="A57"><v>55</v></c><c r="B57"><v>0.0</v></c><c r="C57"><v>0.0</v></c></row>
+<row r="58"><c r="A58"><v>56</v></c><c r="B58"><v>0.0</v></c><c r="C58"><v>0.0</v></c></row>
+<row r="59"><c r="A59"><v>57</v></c><c r="B59"><v>0.0</v></c><c r="C59"><v>0.0</v></c></row>
+<row r="60"><c r="A60"><v>58</v></c><c r="B60"><v>0.0</v></c><c r="C60"><v>0.0</v></c></row>
+<row r="61"><c r="A61"><v>59</v></c><c r="B61"><v>0.0</v></c><c r="C61"><v>0.0</v></c></row>
+<row r="62"><c r="A62"><v>60</v></c><c r="B62"><v>0.0</v></c><c r="C62"><v>0.0</v></c></row>
+<row r="63"><c r="A63"><v>61</v></c><c r="B63"><v>0.0</v></c><c r="C63"><v>0.0</v></c></row>
+<row r="64"><c r="A64"><v>62</v></c><c r="B64"><v>0.0</v></c><c r="C64"><v>0.0</v></c></row>
+<row r="65"><c r="A65"><v>63</v></c><c r="B65"><v>0.0</v></c><c r="C65"><v>0.0</v></c></row>
+<row r="66"><c r="A66"><v>64</v></c><c r="B66"><v>0.0</v></c><c r="C66"><v>0.0</v></c></row>
+<row r="67"><c r="A67"><v>65</v></c><c r="B67"><v>0.0</v></c><c r="C67"><v>0.0</v></c></row>
+<row r="68"><c r="A68"><v>66</v></c><c r="B68"><v>0.0</v></c><c r="C68"><v>0.0</v></c></row>
+<row r="69"><c r="A69"><v>67</v></c><c r="B69"><v>0.0</v></c><c r="C69"><v>0.0</v></c></row>
+<row r="70"><c r="A70"><v>68</v></c><c r="B70"><v>0.0</v></c><c r="C70"><v>0.0</v></c></row>
+<row r="71"><c r="A71"><v>69</v></c><c r="B71"><v>0.0</v></c><c r="C71"><v>0.0</v></c></row>
+<row r="72"><c r="A72"><v>70</v></c><c r="B72"><v>0.0</v></c><c r="C72"><v>0.0</v></c></row>
+<row r="73"><c r="A73"><v>71</v></c><c r="B73"><v>0.0</v></c><c r="C73"><v>0.0</v></c></row>
+<row r="74"><c r="A74"><v>72</v></c><c r="B74"><v>0.0</v></c><c r="C74"><v>0.0</v></c></row>
+<row r="75"><c r="A75"><v>73</v></c><c r="B75"><v>0.0</v></c><c r="C75"><v>0.0</v></c></row>
+<row r="76"><c r="A76"><v>74</v></c><c r="B76"><v>0.0</v></c><c r="C76"><v>0.0</v></c></row>
+<row r="77"><c r="A77"><v>75</v></c><c r="B77"><v>0.0</v></c><c r="C77"><v>0.0</v></c></row>
+<row r="78"><c r="A78"><v>76</v></c><c r="B78"><v>0.0</v></c><c r="C78"><v>0.0</v></c></row>
+<row r="79"><c r="A79"><v>77</v></c><c r="B79"><v>0.0</v></c><c r="C79"><v>0.0</v></c></row>
+<row r="80"><c r="A80"><v>78</v></c><c r="B80"><v>0.0</v></c><c r="C80"><v>0.0</v></c></row>
+<row r="81"><c r="A81"><v>79</v></c><c r="B81"><v>0.0</v></c><c r="C81"><v>0.0</v></c></row>
+<row r="82"><c r="A82"><v>80</v></c><c r="B82"><v>0.0</v></c><c r="C82"><v>0.0</v></c></row>
+<row r="83"><c r="A83"><v>81</v></c><c r="B83"><v>0.0</v></c><c r="C83"><v>0.0</v></c></row>
+<row r="84"><c r="A84"><v>82</v></c><c r="B84"><v>0.0</v></c><c r="C84"><v>0.0</v></c></row>
+<row r="85"><c r="A85"><v>83</v></c><c r="B85"><v>0.0</v></c><c r="C85"><v>0.0</v></c></row>
+<row r="86"><c r="A86"><v>84</v></c><c r="B86"><v>0.0</v></c><c r="C86"><v>0.0</v></c></row>
+<row r="87"><c r="A87"><v>85</v></c><c r="B87"><v>0.0</v></c><c r="C87"><v>0.0</v></c></row>
+<row r="88"><c r="A88"><v>86</v></c><c r="B88"><v>0.0</v></c><c r="C88"><v>0.0</v></c></row>
+<row r="89"><c r="A89"><v>87</v></c><c r="B89"><v>0.0</v></c><c r="C89"><v>0.0</v></c></row>
+<row r="90"><c r="A90"><v>88</v></c><c r="B90"><v>0.0</v></c><c r="C90"><v>0.0</v></c></row>
+<row r="91"><c r="A91"><v>89</v></c><c r="B91"><v>0.0</v></c><c r="C91"><v>0.0</v></c></row>
+<row r="92"><c r="A92"><v>90</v></c><c r="B92"><v>0.0</v></c><c r="C92"><v>0.0</v></c></row>
+<row r="93"><c r="A93"><v>91</v></c><c r="B93"><v>0.0</v></c><c r="C93"><v>0.0</v></c></row>
+<row r="94"><c r="A94"><v>92</v></c><c r="B94"><v>0.0</v></c><c r="C94"><v>0.0</v></c></row>
+<row r="95"><c r="A95"><v>93</v></c><c r="B95"><v>0.0</v></c><c r="C95"><v>0.0</v></c></row>
+<row r="96"><c r="A96"><v>94</v></c><c r="B96"><v>0.0</v></c><c r="C96"><v>0.0</v></c></row>
+<row r="97"><c r="A97"><v>95</v></c><c r="B97"><v>0.0</v></c><c r="C97"><v>0.0</v></c></row>
+<row r="98"><c r="A98"><v>96</v></c><c r="B98"><v>0.0</v></c><c r="C98"><v>0.0</v></c></row>
+<row r="99"><c r="A99"><v>97</v></c><c r="B99"><v>0.0</v></c><c r="C99"><v>0.0</v></c></row>
+<row r="100"><c r="A100"><v>98</v></c><c r="B100"><v>0.0</v></c><c r="C100"><v>0.0</v></c></row>
+<row r="101"><c r="A101"><v>99</v></c><c r="B101"><v>0.0</v></c><c r="C101"><v>0.0</v></c></row>
+<row r="102"><c r="A102"><v>100</v></c><c r="B102"><v>0.0</v></c><c r="C102"><v>0.0</v></c></row>
+<row r="103"><c r="A103"><v>101</v></c><c r="B103"><v>0.0</v></c><c r="C103"><v>0.0</v></c></row>
+<row r="104"><c r="A104"><v>102</v></c><c r="B104"><v>0.0</v></c><c r="C104"><v>0.0</v></c></row>
+<row r="105"><c r="A105"><v>103</v></c><c r="B105"><v>0.0</v></c><c r="C105"><v>0.0</v></c></row>
+<row r="106"><c r="A106"><v>104</v></c><c r="B106"><v>0.0</v></c><c r="C106"><v>0.0</v></c></row>
+<row r="107"><c r="A107"><v>105</v></c><c r="B107"><v>0.0</v></c><c r="C107"><v>0.0</v></c></row>
+<row r="108"><c r="A108"><v>106</v></c><c r="B108"><v>0.0</v></c><c r="C108"><v>0.0</v></c></row>
+<row r="109"><c r="A109"><v>107</v></c><c r="B109"><v>0.0</v></c><c r="C109"><v>0.0</v></c></row>
+<row r="110"><c r="A110"><v>108</v></c><c r="B110"><v>0.0</v></c><c r="C110"><v>0.0</v></c></row>
+<row r="111"><c r="A111"><v>109</v></c><c r="B111"><v>0.0</v></c><c r="C111"><v>0.0</v></c></row>
+<row r="112"><c r="A112"><v>110</v></c><c r="B112"><v>0.0</v></c><c r="C112"><v>0.0</v></c></row>
+<row r="113"><c r="A113"><v>111</v></c><c r="B113"><v>0.0</v></c><c r="C113"><v>0.0</v></c></row>
+<row r="114"><c r="A114"><v>112</v></c><c r="B114"><v>0.0</v></c><c r="C114"><v>0.0</v></c></row>
+<row r="115"><c r="A115"><v>113</v></c><c r="B115"><v>0.0</v></c><c r="C115"><v>0.0</v></c></row>
+<row r="116"><c r="A116"><v>114</v></c><c r="B116"><v>0.0</v></c><c r="C116"><v>0.0</v></c></row>
+<row r="117"><c r="A117"><v>115</v></c><c r="B117"><v>0.0</v></c><c r="C117"><v>0.0</v></c></row>
+<row r="118"><c r="A118"><v>116</v></c><c r="B118"><v>0.0</v></c><c r="C118"><v>0.0</v></c></row>
+<row r="119"><c r="A119"><v>117</v></c><c r="B119"><v>0.0</v></c><c r="C119"><v>0.0</v></c></row>
+<row r="120"><c r="A120"><v>118</v></c><c r="B120"><v>0.0</v></c><c r="C120"><v>0.0</v></c></row>
+<row r="121"><c r="A121"><v>119</v></c><c r="B121"><v>0.0</v></c><c r="C121"><v>0.0</v></c></row>
+<row r="122"><c r="A122"><v>120</v></c><c r="B122"><v>0.0</v></c><c r="C122"><v>0.0</v></c></row>
+<row r="123"><c r="A123"><v>121</v></c><c r="B123"><v>0.0</v></c><c r="C123"><v>0.0</v></c></row>
+<row r="124"><c r="A124"><v>122</v></c><c r="B124"><v>0.0</v></c><c r="C124"><v>0.0</v></c></row>
+<row r="125"><c r="A125"><v>123</v></c><c r="B125"><v>0.0</v></c><c r="C125"><v>0.0</v></c></row>
+<row r="126"><c r="A126"><v>124</v></c><c r="B126"><v>0.0</v></c><c r="C126"><v>0.0</v></c></row>
+<row r="127"><c r="A127"><v>125</v></c><c r="B127"><v>0.0</v></c><c r="C127"><v>0.0</v></c></row>
+<row r="128"><c r="A128"><v>126</v></c><c r="B128"><v>0.0</v></c><c r="C128"><v>0.0</v></c></row>
+</sheetData></worksheet>
+## file hs.xlsx.docx
+<zip: 50559 bytes, 5 parts>
+### part [Content_Types].xml (558 bytes)
+### part _rels/.rels (299 bytes)
+### part word/document.xml (47032 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>CollectHsMetrics</w:t></w:r></w:p>
+<w:p><w:r><w:t>CollectHsMetrics BAIT_INTERVALS=[tests/data/targets.interval_list] TARGET_INTERVALS=[tests/data/targets.interval_list] INPUT=tests/data/insert_size.bam OUTPUT=tests/data/picard/NA12878/NA12878.hs_metrics PER_BASE_COVERAGE=tests/data/picard/NA12878/NA12878.per_base_coverage VERBOSITY=ERROR QUIET=true REFERENCE_SEQUENCE=tests/data/ref_100k.fa    METRIC_ACCUMULATION_LEVEL=[ALL_READS] NEAR_DISTANCE=250 MINIMUM_MAPPING_QUALITY=20 MINIMUM_BASE_QUALITY=20 CLIP_OVERLAPPING_READS=true INCLUDE_INDELS=false COVERAGE_CAP=200 SAMPLE_SIZE=10000 ALLELE_FRACTION=[0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5] VALIDATION_STRINGENCY=STRICT COMPRESSION_LEVEL=5 MAX_RECORDS_IN_RAM=500000 CREATE_INDEX=false CREATE_MD5_FILE=false USE_JDK_DEFLATER=false USE_JDK_INFLATER=false</w:t></w:r></w:p>
+<w:p><w:r><w:t>Started on: <time></w:t></w:r></w:p>
+<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>picard.analysis.directed.HsMetrics</w:t></w:r></w:p>
+<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="0" w:type="auto"/><w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr><w:tblGrid><w:gridCol/><w:gridCol/></w:tblGrid>
+<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Column</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>1</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>BAIT_SET</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>targets</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>BAIT_TERRITORY</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1800</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>BAIT_DESIGN_EFFICIENCY</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>ON_BAIT_BASES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>680</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>NEAR_BAIT_BASES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>120</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>OFF_BAIT_BASES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>200</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_SELECTED_BASES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0.8</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_OFF_BAIT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0.2</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>ON_BAIT_VS_SELECTED</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0.85</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MEAN_BAIT_COVERAGE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0.377778</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_USABLE_BASES_ON_BAIT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0.68</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_USABLE_BASES_ON_TARGET</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0.68</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>FOLD_ENRICHMENT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>37.777778</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>HS_LIBRARY_SIZE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>HS_PENALTY_10X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>HS_PENALTY_20X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>HS_PENALTY_30X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>HS_PENALTY_40X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>HS_PENALTY_50X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>HS_PENALTY_100X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>TARGET_TERRITORY</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1800</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>GENOME_SIZE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>100000</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>TOTAL_READS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>10</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_READS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>10</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_BASES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1000</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_UNIQUE_READS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>10</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_UQ_READS_ALIGNED</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>10</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_BASES_ALIGNED</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1000</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_UQ_BASES_ALIGNED</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1000</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>ON_TARGET_BASES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>680</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_PF_READS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_PF_UQ_READS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_PF_UQ_READS_ALIGNED</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MEAN_TARGET_COVERAGE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0.377778</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MEDIAN_TARGET_COVERAGE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MAX_TARGET_COVERAGE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MIN_TARGET_COVERAGE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>ZERO_CVG_TARGETS_PCT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0.2</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_EXC_DUPE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_EXC_ADAPTER</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_EXC_MAPQ</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_EXC_BASEQ</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_EXC_OVERLAP</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_EXC_OFF_TARGET</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0.32</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>FOLD_80_BASE_PENALTY</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>?</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_1X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0.377778</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_2X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_10X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_20X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_30X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_40X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_50X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_100X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_250X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_500X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_1000X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_2500X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_5000X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_10000X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_25000X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_50000X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_TARGET_BASES_100000X</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>AT_DROPOUT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>16.666667</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>GC_DROPOUT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>20.588235</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>HET_SNP_SENSITIVITY</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0.18717</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>HET_SNP_Q</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>SAMPLE</w:t></w:r></w:p></w:tc><w:tc><w:p></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>LIBRARY</w:t></w:r></w:p></w:tc><w:tc><w:p></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>READ_GROUP</w:t></w:r></w:p></w:tc><w:tc><w:p></w:p></w:tc></w:tr>
+</w:tbl>
+<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Histogram of picard.analysis.directed.HsMetrics, by coverage_or_base_quality</w:t></w:r></w:p>
+<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="0" w:type="auto"/><w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr><w:tblGrid><w:gridCol/><w:gridCol/><w:gridCol/></w:tblGrid>
+<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>coverage_or_base_quality</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>high_quality_coverage_count</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>unfiltered_baseq_count</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1120</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>680</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>2</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>3</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>4</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>5</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>6</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>7</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>8</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>9</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>10</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>11</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>12</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>13</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>14</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>15</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>16</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>17</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>18</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>19</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>20</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>21</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>22</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>23</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>24</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>25</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>26</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>27</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>28</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>29</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>30</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>31</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>32</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>33</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>34</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>35</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>36</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>37</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>38</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>39</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>40</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>680</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>41</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>42</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>43</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>44</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>45</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>46</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>47</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>48</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>49</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>50</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>51</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>52</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>53</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>54</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>55</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>56</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>57</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>58</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>59</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>60</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>61</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>62</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>63</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>64</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>65</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>66</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>67</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>68</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>69</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>70</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>71</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>72</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>73</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>74</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>75</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>76</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>77</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>78</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>79</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>80</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>81</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>82</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>83</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>84</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>85</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>86</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>87</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>88</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>89</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>90</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>91</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>92</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>93</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>94</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>95</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>96</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>97</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>98</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>99</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>100</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>101</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>102</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>103</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>104</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>105</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>106</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>107</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>108</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>109</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>110</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>111</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>112</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>113</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>114</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>115</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>116</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>117</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>118</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>119</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>120</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>121</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>122</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>123</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>124</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>125</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>126</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+</w:tbl>
+<w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="851" w:right="851" w:bottom="851" w:left="851" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>
+### part word/_rels/document.xml.rels (284 bytes)
+### part word/styles.xml (1804 bytes)

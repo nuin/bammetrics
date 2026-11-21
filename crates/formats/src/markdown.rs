@@ -107,7 +107,7 @@ impl Page {
             return;
         }
         let cell = |value: &Value| escape(&value.picard_text());
-        if table.columns.len() > SIDEWAYS_COLUMNS && table.rows.len() <= SIDEWAYS_ROWS {
+        if sideways(table) {
             let numbers = (1..=table.rows.len()).map(|i| i.to_string());
             self.row(std::iter::once("Column".to_owned()).chain(numbers));
             self.row((0..=table.rows.len()).map(|_| "---".to_owned()));
@@ -163,6 +163,28 @@ impl Page {
     }
 }
 
+/// True for a table written one line per column: more than
+/// [`SIDEWAYS_COLUMNS`] columns and at most [`SIDEWAYS_ROWS`] rows. DOCX
+/// turns the same tables.
+pub(crate) fn sideways(table: &Table) -> bool {
+    table.columns.len() > SIDEWAYS_COLUMNS && table.rows.len() <= SIDEWAYS_ROWS
+}
+
+/// The heading of `doc`'s histogram: `Histogram of CLASS, by KEY`, with
+/// the tool in place of a class the file lacks.
+pub(crate) fn histogram_heading(doc: &Document, histogram: &Table) -> String {
+    let key = histogram.names().next().unwrap_or("key");
+    match doc.tables.first() {
+        Some(table) if !table.class.is_empty() => {
+            format!("Histogram of {}, by {key}", table.class)
+        }
+        _ => match &doc.tool {
+            Some(tool) => format!("Histogram of {tool}, by {key}"),
+            None => format!("Histogram by {key}"),
+        },
+    }
+}
+
 /// The verdict of each sample in `verdicts` first, then `docs`, each
 /// under its tables' class names. At most [`CAP`] characters.
 pub fn write(docs: &[&Document], verdicts: &[VerdictSummary]) -> String {
@@ -184,17 +206,7 @@ pub fn write(docs: &[&Document], verdicts: &[VerdictSummary]) -> String {
             page.table(heading, table);
         }
         if let Some(histogram) = &doc.histogram {
-            let key = histogram.names().next().unwrap_or("key");
-            let heading = match doc.tables.first() {
-                Some(table) if !table.class.is_empty() => {
-                    format!("Histogram of {}, by {key}", table.class)
-                }
-                _ => match &doc.tool {
-                    Some(tool) => format!("Histogram of {tool}, by {key}"),
-                    None => format!("Histogram by {key}"),
-                },
-            };
-            page.table(&heading, histogram);
+            page.table(&histogram_heading(doc, histogram), histogram);
         }
     }
     if page.cut_rows > 0 {

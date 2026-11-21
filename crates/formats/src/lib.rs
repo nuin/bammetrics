@@ -14,15 +14,18 @@
 //! | Markdown | [`markdown`] | no |
 //! | JUnit XML, MultiQC custom content | [`junit`], [`multiqc`] | no |
 //! | Parquet (feature `parquet`) | [`parquet`] | yes |
+//! | XLSX, DOCX (stored zip of OOXML parts) | [`xlsx`], [`docx`] | no |
 //!
 //! [`read`] takes either text form, so Picard text to JSON to Picard
 //! text is byte for byte the first file (`tests/round_trip.rs` runs it on
 //! every fixture); [`read_path`] takes Parquet too. The crate uses `std`
-//! and the core only by default. Parquet brings the `parquet` crate behind
-//! the feature `parquet`; XLSX and Arrow come behind features (docs/07
-//! W21, W46). All write from the same [`Table`].
+//! and the core only by default; XLSX and DOCX are hand-written zips of
+//! XML ([`ooxml`]). Parquet brings the `parquet` crate behind the feature
+//! `parquet`; Arrow comes behind a feature (docs/07 W46). All write from
+//! the same [`Table`].
 
 pub mod delimited;
+pub mod docx;
 pub mod error;
 pub mod json;
 pub mod junit;
@@ -30,10 +33,12 @@ pub mod markdown;
 pub mod metrics_json;
 pub mod multiqc;
 pub mod parquet;
+pub mod ooxml;
 pub mod picard;
 pub mod sheet;
 pub mod table;
 pub mod verdict;
+pub mod xlsx;
 
 pub use error::{Error, Result};
 pub use table::{Document, Table, Ty, glossary_type};
@@ -50,11 +55,13 @@ pub enum Format {
     Csv,
     Markdown,
     Parquet,
+    Xlsx,
+    Docx,
 }
 
 impl Format {
     /// Every format, in `--help` order.
-    pub const ALL: [Format; 8] = [
+    pub const ALL: [Format; 10] = [
         Format::Picard,
         Format::Json,
         Format::Tsv,
@@ -63,6 +70,8 @@ impl Format {
         Format::Csv,
         Format::Markdown,
         Format::Parquet,
+        Format::Xlsx,
+        Format::Docx,
     ];
 
     pub fn name(self) -> &'static str {
@@ -75,6 +84,8 @@ impl Format {
             Format::Csv => "csv",
             Format::Markdown => "markdown",
             Format::Parquet => "parquet",
+            Format::Xlsx => "xlsx",
+            Format::Docx => "docx",
         }
     }
 
@@ -98,6 +109,8 @@ impl Format {
             Format::Csv => "csv",
             Format::Markdown => "md",
             Format::Parquet => "parquet",
+            Format::Xlsx => "xlsx",
+            Format::Docx => "docx",
         }
     }
 
@@ -110,9 +123,10 @@ impl Format {
         }
     }
 
-    /// True for a format whose files are bytes, not text.
+    /// True for a format whose files are bytes, not text: [`render_files`]
+    /// writes it.
     pub fn is_binary(self) -> bool {
-        self == Format::Parquet
+        matches!(self, Format::Parquet | Format::Xlsx | Format::Docx)
     }
 }
 
@@ -152,8 +166,8 @@ pub enum ListError {
 
 /// `doc` in a text format. A one-table format prints `table` (the main
 /// table without one). `picard` fails on a cell Picard text cannot hold
-/// ([`picard::write`]); `parquet` is bytes and fails here
-/// ([`render_files`] writes it).
+/// ([`picard::write`]); a binary format is an error here, since
+/// [`render_files`] writes it.
 pub fn render(format: Format, doc: &Document, table: Option<&Table>) -> Result<String> {
     let one = || table.or_else(|| doc.main_table());
     Ok(match format {
@@ -169,13 +183,15 @@ pub fn render(format: Format, doc: &Document, table: Option<&Table>) -> Result<S
         Format::Csv => one().map(delimited::csv).unwrap_or_default(),
         Format::Human => one().map(delimited::human).unwrap_or_default(),
         Format::Markdown => markdown::write(&[doc], &[]),
+        Format::Xlsx | Format::Docx => return Err(Error::Binary(format.name())),
     })
 }
 
-/// Every file of `doc` in `format`, the main file first. A text format
-/// gives one file ([`render`]); `parquet` gives the main file, the
-/// histogram companion when the document has a class and a histogram, and
-/// the long file. `table` picks the table of a one-table text format.
+/// Every file of `doc` in `format`, the main file first. A text format,
+/// XLSX and DOCX give one file ([`render_bytes`]); `parquet` gives the
+/// main file, the histogram companion when the document has a class and a
+/// histogram, and the long file. `table` picks the table of a one-table
+/// text format.
 pub fn render_files(format: Format, doc: &Document, table: Option<&Table>) -> Result<Vec<File>> {
     if format == Format::Parquet {
         #[cfg(feature = "parquet")]
@@ -183,13 +199,14 @@ pub fn render_files(format: Format, doc: &Document, table: Option<&Table>) -> Re
         #[cfg(not(feature = "parquet"))]
         return Err(parquet::unavailable());
     }
-    let bytes = render(format, doc, table)?.into_bytes();
+    let bytes = render_bytes(format, doc, table)?;
     Ok(vec![File { part: None, bytes }])
 }
 
 /// The metrics file at `path` in any form that reads back: Parquet by
 /// its first four bytes (with its histogram companion beside it), else
-/// text through [`read`].
+/// text through [`read`]. A zip (XLSX or DOCX) is refused after its first
+/// four bytes.
 pub fn read_path(path: &std::path::Path) -> Result<Document> {
     use std::io::Read as _;
     let io = |e: std::io::Error| Error::Io(format!("{}: {e}", path.display()));
@@ -202,6 +219,9 @@ pub fn read_path(path: &std::path::Path) -> Result<Document> {
         #[cfg(not(feature = "parquet"))]
         return Err(parquet::unavailable());
     }
+    if head == ZIP_MAGIC {
+        return Err(Error::Io(format!("{}: {}", path.display(), TextError::Zip)));
+    }
     let mut rest = Vec::new();
     file.read_to_end(&mut rest).map_err(io)?;
     head.extend(rest);
@@ -212,6 +232,17 @@ pub fn read_path(path: &std::path::Path) -> Result<Document> {
         ))
     })?;
     read(&text)
+}
+
+/// `doc` in a one-file format as bytes: the text of [`render`], or the
+/// XLSX or DOCX file. XLSX and DOCX fail past their limits
+/// ([`Error::Limit`]); `parquet` fails here ([`render_files`] writes it).
+pub fn render_bytes(format: Format, doc: &Document, table: Option<&Table>) -> Result<Vec<u8>> {
+    match format {
+        Format::Xlsx => xlsx::write(doc),
+        Format::Docx => docx::write(doc),
+        text => render(text, doc, table).map(String::into_bytes),
+    }
 }
 
 /// `text` without a leading byte order mark (U+FEFF), which some editors
@@ -238,9 +269,62 @@ pub fn read(text: &str) -> Result<Document> {
     }
 }
 
+/// The zip magic an XLSX or DOCX file starts with.
+pub const ZIP_MAGIC: &[u8] = b"PK\x03\x04";
+
+/// Why [`read_text`] gave no text.
+#[derive(Debug)]
+pub enum TextError {
+    /// The input starts as a zip: XLSX and DOCX do not read back.
+    Zip,
+    /// A read error, or bytes that are not UTF-8.
+    Io(std::io::Error),
+}
+
+impl std::fmt::Display for TextError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TextError::Zip => f.write_str("a zip (XLSX or DOCX) does not read back"),
+            TextError::Io(e) => e.fmt(f),
+        }
+    }
+}
+
+/// The UTF-8 text of `reader`. Its first four bytes are read first, so a
+/// zip is refused before the rest of it is read.
+pub fn read_text(mut reader: impl std::io::Read) -> std::result::Result<String, TextError> {
+    use std::io::Read as _;
+    let mut bytes = Vec::new();
+    reader
+        .by_ref()
+        .take(ZIP_MAGIC.len() as u64)
+        .read_to_end(&mut bytes)
+        .map_err(TextError::Io)?;
+    if bytes == ZIP_MAGIC {
+        return Err(TextError::Zip);
+    }
+    reader.read_to_end(&mut bytes).map_err(TextError::Io)?;
+    String::from_utf8(bytes).map_err(|_| {
+        TextError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "stream did not contain valid UTF-8",
+        ))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_zip_is_refused_after_four_bytes() {
+        let mut zip = std::io::Cursor::new(b"PK\x03\x04 and more".to_vec());
+        assert!(matches!(read_text(&mut zip), Err(TextError::Zip)));
+        assert_eq!(zip.position(), 4);
+        assert_eq!(read_text(&b"PK"[..]).expect("text"), "PK");
+        let error = read_text(&b"\xff\xfe"[..]).expect_err("not UTF-8");
+        assert_eq!(error.to_string(), "stream did not contain valid UTF-8");
+    }
 
     #[test]
     fn format_lists_parse() {
@@ -304,9 +388,14 @@ mod tests {
         let doc = read(cell).expect("reads");
         assert_eq!(render(Format::Tsv, &doc, None).expect("tsv"), "A\na\\tb\n");
         for format in Format::ALL {
-            let rendered = render(format, &doc, None);
+            let rendered = render_bytes(format, &doc, None);
             let fails = matches!(format, Format::Picard | Format::Parquet);
             assert_eq!(rendered.is_err(), fails, "{format:?}");
+            let text = render(format, &doc, None);
+            assert_eq!(
+                text.is_err(),
+                format == Format::Picard || format.is_binary()
+            );
         }
         let error = render(Format::Picard, &doc, None).expect_err("a tab");
         assert!(matches!(error, Error::Picard(_)), "{error}");

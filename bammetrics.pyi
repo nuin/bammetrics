@@ -1725,7 +1725,7 @@ def qc(
     force: bool = False,
     threads: int | None = None,
     validation_stringency: Literal["STRICT", "LENIENT", "SILENT"] | None = None,
-    also: Literal["json", "jsonl", "tsv", "csv", "markdown", "junit", "multiqc", "parquet"] | Sequence[Literal["json", "jsonl", "tsv", "csv", "markdown", "junit", "multiqc", "parquet"]] | None = None,
+    also: Literal["json", "jsonl", "tsv", "csv", "parquet", "xlsx", "docx", "markdown", "junit", "multiqc"] | Sequence[Literal["json", "jsonl", "tsv", "csv", "parquet", "xlsx", "docx", "markdown", "junit", "multiqc"]] | None = None,
     all_plots: bool = False,
     date: str | None = None,
     report: bool | Literal["html", "pdf"] | Sequence[Literal["html", "pdf"]] = True,

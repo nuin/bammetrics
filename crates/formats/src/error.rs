@@ -19,6 +19,10 @@ pub enum Error {
     Parquet(String),
     /// A file that cannot be read; the message names it.
     Io(String),
+    /// The document is over a limit of the format (an XLSX sheet's rows).
+    Limit(String),
+    /// A binary format asked of the text writer.
+    Binary(&'static str),
 }
 
 impl fmt::Display for Error {
@@ -29,7 +33,9 @@ impl fmt::Display for Error {
             Error::Document(message)
             | Error::Metrics(message)
             | Error::Picard(message)
-            | Error::Io(message) => f.write_str(message),
+            | Error::Io(message)
+            | Error::Limit(message) => f.write_str(message),
+            Error::Binary(name) => write!(f, "{name} is a binary format, not text"),
         }
     }
 }
