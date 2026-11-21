@@ -1,0 +1,10 @@
+## argv
+ScatterIntervalsByNs
+R=tests/data/n_runs.fa
+O=OUT/x.interval_list
+OT=acgt
+## exit
+1
+## stdout
+## stderr
+bammetrics: OUTPUT_TYPE=acgt: 'acgt' is not a valid value for OutputType; expected N, ACGT or BOTH

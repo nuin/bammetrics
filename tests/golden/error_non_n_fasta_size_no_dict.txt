@@ -1,0 +1,9 @@
+## argv
+NonNFastaSize
+I=tests/data/ref_100k.fa
+O=OUT/ref.non_n
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/ref_100k.fa: no sequence dictionary (.dict) beside the FASTA; Picard fails with a NullPointerException

@@ -638,6 +638,38 @@ pub const VERBS: &[Verb] = &[
         ignores: &[(Key::Threads, "no BAM is read")],
         ..verb("vcf-to-interval-list", "VcfToIntervalList", Files::Bam)
     },
+    Verb {
+        input: "FASTA",
+        about: Some(
+            "writes the reference as an interval list, as Picard's ScatterIntervalsByNs does: \
+             -o gets @HD, the .dict's @SQ lines and one interval per run of N bases (Nmer; N, \
+             n and .) or of other bases (ACGTmer). An N run of at most --max-to-merge bases \
+             stays inside the ACGTmer around it. The FASTA needs its .fai and .dict beside it.",
+        ),
+        writes: "interval list",
+        ignores: &[(Key::Threads, "no BAM is read")],
+        ..verb(
+            "scatter-intervals-by-ns",
+            "ScatterIntervalsByNs",
+            Files::Bam,
+        )
+    },
+    Verb {
+        input: "FASTA",
+        about: Some(
+            "counts the bases of a FASTA that are not N or n, as Picard's NonNFastaSize does \
+             (IUPAC codes and . count); --intervals counts only inside an interval list. -o or \
+             standard output gets the number and a line end. The FASTA needs its .fai and \
+             .dict beside it.",
+        ),
+        writes: "count",
+        reads: &["INTERVALS"],
+        ignores: &[
+            (Key::Threads, "no BAM is read"),
+            (Key::Sample, "a count has no sample"),
+        ],
+        ..verb("non-n-fasta-size", "NonNFastaSize", Files::Single)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
@@ -716,7 +748,9 @@ impl Verb {
         let table = tool.table();
         let mut flags = Vec::new();
         if let Some(input) = table.iter().find(|o| o.picard() == "INPUT") {
-            let stdin = if self.reads_stdin {
+            let stdin = if self.input == "FASTA" {
+                ". Standard input and pipes are refused: the FASTA is read through its .fai."
+            } else if self.reads_stdin {
                 "; - reads standard input."
             } else {
                 ". Standard input and pipes are refused: the tool reads each input twice."

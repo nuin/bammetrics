@@ -1,0 +1,11 @@
+## argv
+NonNFastaSize
+I=tests/data/n_runs.fa
+INTERVALS=tests/data/n_runs.interval_list
+O=OUT/masked.non_n
+## exit
+0
+## stdout
+## stderr
+## file masked.non_n
+49

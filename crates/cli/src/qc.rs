@@ -20,7 +20,6 @@
 //! [`multiple_metrics::file_extensions`] and written whole, then renamed.
 
 use std::ffi::OsString;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use bammetrics_core::cleanup::MadeDirs;
@@ -867,13 +866,40 @@ fn prepare_steps(cx: &Context) -> Result<Vec<Step>> {
     let Some(panel) = &cx.args.panel else {
         return Ok(Vec::new());
     };
-    let text = fs::read_to_string(panel)
-        .map_err(|e| Error::Input(format!("{}: {e} (from --panel)", panel.display())))?;
+    let (text, misnamed_gzip) = intervals::read_panel_text(panel)
+        .map_err(|e| Error::Input(format!("{e} (from --panel)")))?;
+    if intervals::is_vcf(&text) {
+        return Err(Error::Usage(format!(
+            "--panel {}: a VCF is no panel; convert it first with bammetrics VcfToIntervalList \
+             I=VCF O=panel.interval_list",
+            panel.display()
+        )));
+    }
+    if misnamed_gzip {
+        return Err(Error::Usage(format!(
+            "--panel {}: gzip data under a name that does not end in .gz, .gzip or .bfq; the panel \
+             is inflated by its name, so rename it",
+            panel.display()
+        )));
+    }
     if intervals::is_interval_list(&text) {
         return Ok(Vec::new());
     }
-    let tool = registry::find("BedToIntervalList").expect("registered");
     let output = with_suffix(cx.prefix, PANEL_SUFFIX);
+    // A BED named as its own conversion gets the input-is-output error of
+    // the planned files.
+    let is_output = matches!(
+        (panel.canonicalize(), output.canonicalize()),
+        (Ok(a), Ok(b)) if a == b
+    );
+    if intervals::is_interval_list_file(panel, &text) && !is_output {
+        return Err(Error::Usage(format!(
+            "--panel {}: named .interval_list, but its first line is no @HD or @SQ header \
+             line; a BED panel needs another name",
+            panel.display()
+        )));
+    }
+    let tool = registry::find("BedToIntervalList").expect("registered");
     let argv = vec![
         format!("INPUT={}", panel.display()),
         format!("SEQUENCE_DICTIONARY={}", cx.args.bam.display()),

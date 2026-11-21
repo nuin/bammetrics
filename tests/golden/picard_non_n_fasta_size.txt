@@ -1,0 +1,10 @@
+## argv
+NonNFastaSize
+I=tests/data/n_runs.fa
+O=OUT/n_runs.non_n
+## exit
+0
+## stdout
+## stderr
+## file n_runs.non_n
+73

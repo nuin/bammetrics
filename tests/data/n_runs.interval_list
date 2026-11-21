@@ -1,0 +1,8 @@
+@HD	VN:1.6
+@SQ	SN:c1	LN:66
+@SQ	SN:c2	LN:20
+@SQ	SN:c3	LN:39
+c1	1	20	+	a
+c1	15	40	-	b
+c3	5	4	+	empty
+c3	10	39	+	c

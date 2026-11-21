@@ -479,6 +479,26 @@ Both files equal Picard's byte for byte (1,961,583 intervals after the merge). T
 gate row `interval converters on GRCh38, 2,000,000 records` runs both with the generator:
 491 MiB, 9.3 s.
 
+## ScatterIntervalsByNs and NonNFastaSize (wave W12, GRCh38)
+
+Mac Studio, Apple M1 Ultra, release build of `feat/scatter-n`, one run each under
+`/usr/bin/time -l`, the FASTA in the page cache. Input:
+`~/data/bammetrics-scale/genome/GRCh38.fa` (3,263,683,042 bytes, 3,366 contigs) with its
+`.fai` and `.dict`; Picard 3.5.0 with `JAVA_OPTS=-Xmx8g`. Outputs went under
+`~/data/bammetrics-scale/waves/w12`, removed after.
+
+| command | tool | wall | peak RSS | output |
+|---|---|---:|---:|---|
+| `ScatterIntervalsByNs` defaults | bammetrics | 2.68 s | 12.4 MiB | 8,587 lines, identical |
+| | Picard | 33.64 s | 650.8 MiB | |
+| `NonNFastaSize` | bammetrics | 1.06 s | 8.4 MiB | `3043453562`, identical |
+| | Picard | 10.78 s | 605.5 MiB | |
+
+Picard holds the longest contig (chr1, 248,956,422 bases) as one array; bammetrics
+holds 1 MiB of bases and at most three intervals. On one generated contig of 200,000,000
+bases (`n_run_refs.py --long`, 40,002 lines written) bammetrics peaks at 4.9 MiB in both
+tools.
+
 ## Memory gate
 
 `make memgate` runs each row of `benches/memgate.toml` under `/usr/bin/time -l` and fails
@@ -619,6 +639,20 @@ pairs`, whose inputs were removed after earlier runs). Scale outputs went under
 | `rrbs slice` | scale | 94.2 / 512 | 7.72 | |
 | `rrbs read groups slice` | scale | 150.9 / 512 | 10.08 | |
 | `rrbs exome` | scale | 528.1 / 1024 | 169.04 | |
+
+The wave W12 rows of ScatterIntervalsByNs and NonNFastaSize (2026-11-20, feat/scatter-n,
+one run each; the scale rows with `--out-root ~/data/bammetrics-scale/waves/w12`). A
+long-contig row's peak is the Python generator's, which runs in the same shell;
+bammetrics alone peaks at 4.9 MiB there:
+
+| command | tier | peak RSS MiB / limit | wall s |
+|---|---|---|---:|
+| `scatter-intervals-by-ns` | fixture | 3.8 / 64 | 0.00 |
+| `non-n-fasta-size` | fixture | 3.9 / 64 | 0.01 |
+| `scatter-intervals-by-ns long contig` | fixture | 31.6 / 64 | 2.29 |
+| `non-n-fasta-size long contig` | fixture | 31.7 / 64 | 2.32 |
+| `scatter-intervals-by-ns GRCh38` | scale | 13.5 / 64 | 2.61 |
+| `non-n-fasta-size GRCh38` | scale | 8.8 / 64 | 1.02 |
 
 The arrays rows were first measured on feat/arrays: 201.2 MiB at the sample cap and 79.7
 MiB at the line cap there, 111.6 and 45.2 MiB here. `rrbs exome` peaked at 433.6 MiB on

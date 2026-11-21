@@ -80,7 +80,7 @@ fn read_text(path: &Path, cap: u64) -> Result<String> {
 /// as U+FFFD: no line end is part of a UTF-8 sequence, so the lines are
 /// those of the decoded text, and a text that is not UTF-8 is never copied
 /// whole.
-fn java_lines(text: &[u8]) -> impl Iterator<Item = Cow<'_, str>> {
+pub(crate) fn java_lines(text: &[u8]) -> impl Iterator<Item = Cow<'_, str>> {
     let mut rest = text;
     std::iter::from_fn(move || {
         if rest.is_empty() {

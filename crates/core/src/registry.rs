@@ -381,6 +381,8 @@ pub const TOOLS: &[&Tool] = &[
     &crate::interval_list_tools::TOOL,
     &crate::interval_list_to_bed::TOOL,
     &crate::vcf_to_interval_list::TOOL,
+    &crate::scatter_intervals_by_ns::TOOL,
+    &crate::non_n_fasta_size::TOOL,
 ];
 
 /// The tool named `name`.

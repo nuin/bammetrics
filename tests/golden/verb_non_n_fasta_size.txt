@@ -1,0 +1,8 @@
+## argv
+non-n-fasta-size
+tests/data/n_runs.fa
+## exit
+0
+## stdout
+73
+## stderr

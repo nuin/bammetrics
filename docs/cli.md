@@ -324,6 +324,8 @@ table.
 | `create-verify-i-d-intensity-contamination-file` | CreateVerifyIDIntensityContaminationMetricsFile (the text VerifyIDIntensity prints) | `PREFIX.verifyidintensity_metrics` |
 | `arrays-variant-calling` | CollectArraysVariantCallingMetrics (an arrays VCF with its index; `--dbsnp` required) | `PREFIX.arrays_variant_calling_{detail,summary}_metrics`, `PREFIX.arrays_control_code_summary_metrics` |
 | `interval-list-tools` | IntervalListTools (interval lists as positionals or `-i`; `--second-input` for SUBTRACT, SYMDIFF and OVERLAPS) | `-o` interval list, or with `--scatter-count` above 1 the directory `-o` of `temp_NNNN_of_N/scattered.interval_list`; the `--output-value` count on standard output or in `--count-output`; no file without `-o` |
+| `scatter-intervals-by-ns` | ScatterIntervalsByNs (a FASTA with its `.fai` and `.dict`; `--max-to-merge`, `--output-type`) | `-o` interval list of `ACGTmer` and `Nmer` runs, `-o -` standard output |
+| `non-n-fasta-size` | NonNFastaSize (a FASTA with its `.fai` and `.dict`; `--intervals`) | the count and a line end, in `-o` or on standard output |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -1286,7 +1288,14 @@ other programs that take only interval lists.
 In `qc`, `--panel BED` runs the same conversion with the BAM as the dictionary and keeps
 `PREFIX.panel.interval_list`, the bytes `bammetrics bed-to-interval-list BED --from-bam
 BAM` writes. A panel whose first non-blank line starts with `@` is an interval list
-already, and prepare writes nothing for it. A `--panel` BED that is itself named
+already, and prepare writes nothing for it: the lists `IntervalListTools`,
+`ScatterIntervalsByNs` and `VcfToIntervalList` write go to `qc` and `hs-metrics --panel` as
+they are. A panel named `.gz`, `.gzip` or `.bfq` is inflated first, as htsjdk inflates it,
+then told by its first line in the same way; a gzip BED goes to `BedToIntervalList`, which
+inflates it as Picard does. A VCF (`##fileformat=VCF` on its first line, gzip or not)
+exits 2 (`a VCF is no panel`): `VcfToIntervalList` converts it. Gzip data under another
+name (`.bgz`) exits 2, as does a panel named `.interval_list` whose first line is no `@`
+header line: the hs reader takes either name at its word. A `--panel` BED that is itself named
 `PREFIX.panel.interval_list` exits 2 (`is an input; writing it would destroy it (from
 --panel)`), as does any planned file that is an input. The hs collector reads the `--panel`
 file itself, so its file, header line and `BAIT_SET` are the same with or without the
@@ -1400,6 +1409,51 @@ without `O=` writes the FASTA name with its extension replaced by `.dict`, besid
 The tools that look for a `.dict` beside a FASTA (`bed-to-interval-list --dict ref.fa`,
 `SD=ref.fa`) read the file this verb writes, and Picard's CollectWgsMetrics takes it as
 the dictionary of `R=ref.fa`.
+
+### scatter-intervals-by-ns and non-n-fasta-size
+
+```bash
+bammetrics scatter-intervals-by-ns ref.fa -o ref.acgt.interval_list --output-type ACGT --max-to-merge 50
+bammetrics ScatterIntervalsByNs R=ref.fa O=ref.interval_list
+bammetrics non-n-fasta-size ref.fa
+bammetrics NonNFastaSize I=ref.fa INTERVALS=panel.interval_list O=panel.non_n
+```
+
+Both read the FASTA as htsjdk's indexed reader does: the name ends in a FASTA extension,
+the `.fai` beside it gives each contig's offset and line geometry, and the `.dict` (the
+FASTA name with its extension replaced by `.dict`, else the name plus `.dict`) must list
+the `.fai`'s contigs in its order with its lengths. A bgzip FASTA named `.gz` is read
+through its `.gzi`. The bases are read 1 MiB at a time, whatever the contig length; the
+`.fai` and `.dict` are read whole, at most 64 MiB each
+(`tests/concordance/test_scatter_intervals_by_ns.py`, `test_non_n_fasta_size.py`,
+fixtures from `tests/concordance/n_run_refs.py`).
+
+- `scatter-intervals-by-ns` writes `@HD VN:1.6 SO:coordinate`, the `.dict`'s `@SQ` lines,
+  then one interval per run: `Nmer` for a run of `N`, `n` or `.`, `ACGTmer` for a run of any
+  other byte (IUPAC codes, `-` and `*` included). An `Nmer` of at most `--max-to-merge`
+  bases (default 1) between two `ACGTmer`s joins them, from the start of the list, so a
+  joined interval may join the next. `--output-type` (`ACGT`, `N` or `BOTH`, the default;
+  upper case only) picks the intervals written. Each interval is written as soon as it is
+  decided: at most three are held. `-o` is required; `-o -` writes standard output, and a
+  name ending in `.gz` is written as BGZF. `--format` takes `picard` only. Python returns
+  one row per contig: its length and the `ACGTmer` and `Nmer` intervals and bases.
+- `non-n-fasta-size` counts every base but `N` and `n` (IUPAC codes and `.` count) and
+  writes the number and a line end. `--intervals FILE` (an interval list) counts only the
+  bases inside it; its `@SQ` line `k` stands for the FASTA's contig `k`, whatever the name,
+  as Picard's mask matches them. `--format json` and the other forms print one row,
+  `non_n_bases`. `--threads` and `--sample` are accepted and ignored.
+- Both exit 1 without a `.fai`, without a `.dict` or with one of no `@SQ` line, with a
+  `.dict` whose contigs or lengths differ from the `.fai`, and on a `.fai` line with 0
+  bases per line, as Picard fails. `scatter-intervals-by-ns` also exits 1 on a contig of
+  no base, which Picard cannot index. A FASTA that ends before the bases its `.fai` gives,
+  and a gzip FASTA that is not bgzip, exit 1 where Picard reads bytes that are no bases
+  (`KNOWN_DIFFERENCES.md`). A `.fai` line is read as htsjdk's `Scanner` reads it (the
+  pattern `(.+)\t+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)` found in the line, a blank line before a
+  later entry and a last entry with no line end refused). A FASTA or `.dict` that is no
+  regular file exits 1 before it is opened. No output may be the FASTA, its `.fai`, `.gzi`
+  or `.dict`, or the `--intervals` file; a failed run writes no file, and with `-o -` prints
+  nothing: the list is copied to standard output once it is whole.
+- Neither reads a BAM, so neither is a step of `chain` (exit 2).
 
 ### mark-duplicates
 

@@ -1555,6 +1555,28 @@ def vcf_to_interval_list(
     @SQ lines, then one interval per record (POS to END), neighbours that overlap or
     abut merged. Returns one row per interval."""
 
+def scatter_intervals_by_ns(
+    reference: _Path,
+    *,
+    output: _Path | None = None,
+    output_type: str | None = None,
+    max_to_merge: int | None = None,
+) -> list[dict[str, Any]]:
+    """ScatterIntervalsByNs: writes the reference as an interval list of ACGTmer and Nmer
+    runs (N, n and . are N; an N run of at most MAX_TO_MERGE bases stays inside the
+    ACGTmer around it) to OUTPUT. Returns one row per contig: length, then the ACGTmer
+    and Nmer intervals and bases."""
+
+def non_n_fasta_size(
+    input: _Path,
+    *,
+    intervals: _Path | None = None,
+    output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """NonNFastaSize: counts the bases of a FASTA that are not N or n (IUPAC codes and .
+    count), inside INTERVALS when given, and writes the number and a line end. Returns
+    one row: the count."""
+
 # END registry tools
 
 def alignment_summary(

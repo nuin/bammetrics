@@ -322,7 +322,7 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
              ... + write - --output-format sam",
         );
     }
-    if matches!(verb.input, "TEXT" | "VCF" | "LIST") {
+    if matches!(verb.input, "TEXT" | "VCF" | "LIST" | "FASTA") {
         return usage(format!(
             "{place}: {} reads a {} file and no BAM, and a chain hands on the records of a BAM: \
              it cannot be a step",

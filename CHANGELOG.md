@@ -64,6 +64,27 @@
   every option on the interval_lists.py, variant_vcfs.py and array_vcfs.py inputs,
   Picard-made lists, hand-written edge cases and error parity, against Picard 3.5.0;
   `benches/interval_scale.py` and four memgate rows.
+- `ScatterIntervalsByNs` (verb `scatter-intervals-by-ns`, Python
+  `scatter_intervals_by_ns()`), as Picard 3.5.0: the reference as an interval list of
+  `ACGTmer` and `Nmer` runs (`N`, `n` and `.` are N), an N run of at most `MAX_TO_MERGE`
+  bases joined into the `ACGTmer` around it, `OUTPUT_TYPE`, the `.dict`'s `@SQ` lines
+  under `@HD VN:1.6 SO:coordinate`. The FASTA is read through its `.fai` 1 MiB at a time
+  and each interval written as soon as it is decided, so memory does not grow with a
+  contig or the number of intervals.
+- `NonNFastaSize` (verb `non-n-fasta-size`, Python `non_n_fasta_size()`), as Picard 3.5.0:
+  the bases that are not `N` or `n`, inside `INTERVALS` when given (matched by `@SQ`
+  index, as Picard's mask matches them), written as the number and a line end.
+- `indexed_fasta` (`crates/core/src/indexed_fasta.rs`): a FASTA as htsjdk's indexed reader
+  opens it (FASTA extensions, the `.dict` beside it, the `.fai` and the `.gzi` of a bgzip
+  FASTA, the dictionary checked against the index) and a contig's bases at the `.fai`
+  geometry, handed on 1 MiB at a time.
+- `tests/concordance/n_run_refs.py` writes the seeded references (N runs of 1 to 10,000
+  bases at contig starts, ends and middles, lower case, IUPAC codes, an all-N contig, a
+  contig of no base, three wraps, CRLF, one line) and the committed fixtures
+  `tests/data/n_runs.fa`, `n_runs.interval_list`, `n_runs_panel.interval_list` and
+  `targets.interval_list.gz`. `test_scatter_intervals_by_ns.py` and
+  `test_non_n_fasta_size.py` compare both tools with Picard 3.5.0 on them, on
+  `ref_100k.fa`, the foundation and exome references, every option and error parity.
 
 ### Changed
 
@@ -71,10 +92,30 @@
   1,000 lists over GRCh38's 3,366 `@SQ` lines peaked at 1,748 MiB with a header per
   list and peak at 19 MiB now (Picard 3.5.0: 732 MiB).
 - The example `interval_ops` runs the `IntervalListTools` registry tool.
-
 - `VcfReader` keeps the first of two `##contig` lines with one ID (noodles refused the
   header), so `IntervalListTools` reads such a VCF as Picard does. `next_site`
   checks each record as htsjdk's `VCFCodec` checks its site.
+- `qc --panel` and `hs-metrics --panel` (and every interval file option read through
+  `intervals.rs`) inflate a file named `.gz`, `.gzip` or `.bfq` before reading it, as
+  htsjdk does, so a gzip interval list from `IntervalListTools` is a panel. A VCF panel
+  exits 2 in `qc` and 1 in the tools, naming `VcfToIntervalList`. A BED panel's run is
+  byte for byte the same.
+- A chain step that reads a FASTA (`create-sequence-dictionary` and the two tools above)
+  is refused with the reason given for the TEXT and VCF tools.
+- A `Files::Bam` verb that writes no BAM names what it writes in its `-o` help and in
+  its missing `-o` error.
+- `BedToIntervalList` inflates a plain gzip BED named `.gz`, `.gzip`, `.bgz` or `.bgzf`, as
+  Picard 3.5.0 does; it read `.gz` as bgzip only. The BED is read under a 1 GiB cap.
+  `qc --panel p.bed.gz` runs its prepare step on such a BED.
+- `qc --panel` exits 2 on gzip data under a name it does not inflate (`.bgz`) and on a
+  panel named `.interval_list` whose first line is no `@` header line; a gzip VCF gets the
+  VCF message.
+- The `.fai` of `ScatterIntervalsByNs` and `NonNFastaSize` is read as htsjdk's `Scanner`
+  reads it (`(.+)\t+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)` found in each line), and a FASTA or
+  `.dict` that is no regular file exits 1 before it is opened. With `-o -` a failed
+  `ScatterIntervalsByNs` prints nothing. `NonNFastaSize INTERVALS` drops the names before
+  the merge.
+
 - `BedToIntervalList UNIQUE=true` merges an interval with no base as htsjdk does: a
   zero-length interval at 10 now joins one starting at 11 (Picard 3.5.0 writes one
   interval there). Its sort compares names by UTF-16 unit, as Java does.
