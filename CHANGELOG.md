@@ -23,8 +23,35 @@
   `BREAK_BANDS_AT_MULTIPLES_OF`, `COMMENT`), every scatter mode at `SCATTER_COUNT` 1, 2,
   3, 7, 50 and 200 and with `SCATTER_CONTENT`, Picard-made and corpus lists, and error
   parity, against Picard 3.5.0.
+- `IntervalListTools` (`crates/core/src/interval_list_tools.rs`, verb
+  `interval-list-tools`, Python `interval_list_tools()`): the steps of Picard 3.5.0's
+  `doWork` over `interval_ops`, with every option: `INPUT` and `SECOND_INPUT` repeated,
+  each `ACTION`, `PADDING`, `UNIQUE`, `DONT_MERGE_ABUTTING`, `SORT`, `INVERT`,
+  `BREAK_BANDS_AT_MULTIPLES_OF`, `COMMENT`, `SCATTER_COUNT`, `SCATTER_CONTENT`,
+  `SUBDIVISION_MODE`, `OUTPUT_VALUE`, `COUNT_OUTPUT`, `INCLUDE_FILTERED`. The `@PG` line
+  holds Picard's command line, in the form of either Picard parser, so every file equals
+  Picard's byte for byte. A file named exactly `.vcf`, `.vcf.gz` or `.vcf.bgz` is read
+  as a VCF, as Picard reads it. Without `OUTPUT` no list is written and the count is
+  printed. Every output is checked before the first is written; a scatter is renamed
+  into place as one set. A chain refuses it as a step. Python returns one row per
+  interval written, with the number of its scatter list.
+- `tests/concordance/test_interval_list_tools.py`: 270 cases against Picard 3.5.0, every
+  file compared whole, the `@PG` line included: every `ACTION` under 13 option sets, the
+  lists Picard's `BedToIntervalList` and `VcfToIntervalList` wrote, the foundation and
+  exome lists, a VCF named `.vcf`, the five scatter modes at five counts on two inputs,
+  `SCATTER_CONTENT`, the counts, both syntaxes, standard input and 30 error cases.
+  16 golden forms (`tests/data/make_interval_list_fixtures.py`), `qc --panel` on the
+  lists it writes (`crates/cli/tests/interval_list_tools.rs`), and three memory gate rows
+  (`tests/data/make_interval_tiling.py`: a 1 Mbp tiling of a dictionary).
+- `Invocation::given` and `Invocation::legacy_syntax`: every option as given and the
+  parser Picard would use, for a tool that writes Picard's command line.
 
 ### Changed
+
+- `interval_ops::scatter` returns `Scattered`, one header and the intervals of each list:
+  1,000 lists over GRCh38's 3,366 `@SQ` lines peaked at 1,748 MiB with a header per
+  list and peak at 19 MiB now (Picard 3.5.0: 732 MiB).
+- The example `interval_ops` runs the `IntervalListTools` registry tool.
 
 - `BedToIntervalList UNIQUE=true` merges an interval with no base as htsjdk does: a
   zero-length interval at 10 now joins one starting at 11 (Picard 3.5.0 writes one

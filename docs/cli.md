@@ -1511,6 +1511,30 @@ bammetrics doctor sample.cram -R ref.fa --expect-build hg38
 bammetrics doctor sample.bam --sample-sheet samples.csv --sample NA12878 --format json
 ```
 
+### interval-list-tools
+
+`IntervalListTools` of Picard 3.5.0 (wave W12, `crates/core/src/interval_list_tools.rs`).
+Each input list is padded by `--padding`, the lists are combined by `--action`, then the
+result is sorted, inverted (`--invert`), merged (`--unique`, `--dont-merge-abutting`) and
+broken at `--break-bands-at-multiples-of`, in Picard's order. `-o` gets the list, or with
+`--scatter-count` (or `--scatter-content`) above 1 a directory of
+`temp_NNNN_of_N/scattered.interval_list` files, renamed into place as one set; a run that
+fails leaves none. `--output-value BASES` or `INTERVALS` prints the count of what was
+written to standard output, or to `--count-output`; without `-o` no list is written. The
+`@PG` line holds Picard's command line for the same options, so the files equal
+Picard's byte for byte. A file named exactly `.vcf`, `.vcf.gz` or `.vcf.bgz` is read as a
+VCF (`--include-filtered` keeps its filtered records); every other name is an interval
+list, as in Picard. A chain refuses the verb as a step: it reads no BAM.
+
+```bash
+bammetrics interval-list-tools panel_a.interval_list -i panel_b.interval_list --action UNION -o union.interval_list
+bammetrics IntervalListTools I=targets.interval_list SI=blacklist.interval_list ACTION=SUBTRACT PADDING=50 O=kept.interval_list
+bammetrics interval-list-tools genome.interval_list --scatter-count 24 -M BALANCING_WITHOUT_INTERVAL_SUBDIVISION -o shards
+bammetrics interval-list-tools targets.interval_list --unique --output-value BASES
+```
+
+`qc --panel` takes the list it writes.
+
 ## Post verbs
 
 ### accumulate-quality-yield and accumulate-variant-calling
