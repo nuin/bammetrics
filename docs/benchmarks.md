@@ -731,6 +731,42 @@ The presorted merge holds one record and one BGZF reader per input. The querynam
 and the reorder hold `MAX_RECORDS_IN_RAM` (500,000) records per sorted run, as `sort-sam
 queryname slice` does (592.4 MiB above).
 
+Every wave W13 row at 0.31.0 (2026-11-21, release/0.31.0, one run each; `make memgate`
+passes 55 fixture rows, `TIER=scale make memgate` passes 35 scale rows and skips 3: the
+two chain sort-barrier rows and `revert-original-base-qualities-and-add-mate-cigar
+pairs`, whose inputs were removed after earlier runs). The split slice and
+`reversed.dict` were made again with the commands above; scale outputs went under
+`~/data/bammetrics-scale/waves/w13`, and both were removed after the run:
+
+| command | tier | peak RSS MiB / limit | wall s | spill MiB / limit |
+|---|---|---|---:|---:|
+| `merge-sam-files` | fixture | 7.3 / 64 | 0.01 | |
+| `merge-sam-files queryname` | fixture | 9.6 / 64 | 0.02 | 0.0 |
+| `reorder-sam` | fixture | 7.7 / 64 | 0.01 | 0.0 |
+| `fix-mate-information` | fixture | 9.3 / 64 | 0.01 | 0.0 |
+| `filter-sam-reads` | fixture | 6.7 / 64 | 0.02 | 0.0 |
+| `chain fix-mate-information + filter-sam-reads + write` | fixture | 10.3 / 64 | 0.02 | 0.0 |
+| `downsample-sam HighAccuracy` | fixture | 6.0 / 64 | 0.00 | |
+| `chain downsample-sam + mark-duplicates + write` | fixture | 7.1 / 64 | 0.00 | |
+| `position-based-downsample-sam` | fixture | 5.7 / 64 | 0.00 | |
+| `merge-sam-files slice by read group` | scale | 79.4 / 3072 | 11.46 | |
+| `merge-sam-files slice queryname` | scale | 456.6 / 3072 | 70.42 | 2,783.0 / 3,284 |
+| `reorder-sam slice` | scale | 595.7 / 3072 | 32.86 | 1,725.2 / 3,284 |
+| `fix-mate-information slice` | scale | 646.3 / 3072 | 152.05 | 5,093.4 / 5,400 |
+| `filter-sam-reads slice` | scale | 35.5 / 1024 | 15.78 | |
+| `downsample-sam ConstantMemory exome` | scale | 23.4 / 1024 | 19.99 | |
+| `downsample-sam Chained exome` | scale | 137.0 / 1024 | 14.03 | |
+| `downsample-sam HighAccuracy slice` | scale | 1,972.5 / 3072 | 19.97 | |
+| `position-based-downsample-sam exome` | scale | 32.4 / 1024 | 58.29 | |
+
+The sort and merge rows stay under the W05 gate of `--sort-memory` (2 GiB) plus 1 GiB:
+the queryname merge of the 12 read-group pieces peaks at 456.6 MiB, the fix at 646.3 MiB.
+`downsample-sam HighAccuracy slice` holds every name decided so far, as Picard does
+(docs/07 D138): 1,972.5 MiB for the 14.7 million templates of the slice. Of the rows of
+earlier waves, `interval converters on GRCh38, 2,000,000 records` peaks at 489.4 / 768
+MiB (461.4 MiB at 0.30.0) and `mark-duplicates slice` at 659.5 / 1024 MiB (660.3 MiB at
+0.30.0).
+
 To add a scale row:
 
 1. Keep the data under `~/data/bammetrics-scale`, never in the repository. Write nothing
@@ -767,6 +803,7 @@ and CI runs it on the Linux and macOS runners after the unit tests.
 | Binary growth, 0.28.0 | 300 KB | 600 KB | 403.8 KB | 413,456 bytes stripped (443,648 unstripped), measured 2026-11-19 by `make budgets` on release/0.28.0: the same stripped bytes as the 0.26.0 and 0.27.0 rows, so wave W10 adds nothing to the probe (its six tools are verb and core code the probe does not link). 106,256 bytes (103.8 KB) over the 300 KB target and 200,944 bytes under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review |
 | Binary growth, 0.29.0 | 300 KB | 600 KB | 419.9 KB | 429,968 bytes stripped (460,224 unstripped), measured 2026-11-20 by `make budgets` on release/0.29.0: 16,512 bytes (16.1 KB) over the 0.28.0 row. The cause is unconfirmed: probably the glossary rows of the six W11 tools, which the report links. 122,768 bytes (119.9 KB) over the 300 KB target and 184,432 bytes under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review |
 | Binary growth, 0.30.0 | 300 KB | 600 KB | 419.9 KB | 429,968 bytes stripped (460,224 unstripped), measured 2026-11-21 by `make budgets` on release/0.30.0: the same bytes as the 0.29.0 row, so wave W12 adds nothing to the probe (its five tools write no metrics file and add no glossary row). 122,768 bytes (119.9 KB) over the 300 KB target and 184,432 bytes under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review |
+| Binary growth, 0.31.0 | 300 KB | 600 KB | 419.9 KB | 429,968 bytes stripped (460,240 unstripped), measured 2026-11-21 by `make budgets` on release/0.31.0: the same stripped bytes as the 0.29.0 and 0.30.0 rows, so wave W13 adds nothing to the probe (no glossary row: `DownsampleSam` writes the existing `QualityYieldMetrics` and the other five no metrics file). 122,768 bytes (119.9 KB) over the 300 KB target and 184,432 bytes under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review |
 | Formats growth, W02 | 150 KB | 300 KB | 129.2 KB | 132,304 bytes stripped (148,480 unstripped), measured 2026-11-10 by `make budgets`: stripped `size_formats` less stripped `size_formats_base` (`crates/formats/examples`); see below |
 | Added passes over the BAM | 0 | 1 | 0 | `qc` reports 1 BAM read with the verdict and page; `report` and `check` run with the BAM deleted |
 
@@ -849,6 +886,8 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 0.29.0 pdf | the same with `--features pdf` | 13,498,464 | 11,479,808 |
 | 0.30.0 | 2026-11-21, release/0.30.0: feat/interval-ops, feat/interval-list-tools, feat/interval-bed-vcf and feat/scatter-n merged, the version set, rustc 1.100.0, default features | 9,816,208 | 8,383,160 |
 | 0.30.0 pdf | the same with `--features pdf` | 13,780,656 | 11,728,392 |
+| 0.31.0 | 2026-11-21, release/0.31.0: feat/merge-reorder, feat/fix-mate-filter and feat/downsample merged, the version set, rustc 1.100.0, default features | 10,116,448 | 8,648,256 |
+| 0.31.0 pdf | the same with `--features pdf` | 14,080,192 | 11,993,488 |
 
 From 0.21.0 to 0.22.0 the binary grew 202,816 bytes (198.1 KB), 182,072 stripped (177.8
 KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
@@ -902,6 +941,13 @@ with rustc 1.100.0: the interval layer `interval_ops`, `IntervalListTools`,
 `ScatterIntervalsByNs` and `NonNFastaSize` with the indexed FASTA walk. With
 `--features pdf` it grew 248,584 bytes stripped, and the PDF build is 3,345,232 bytes over
 the default build.
+
+From 0.30.0 to 0.31.0 the default binary grew 265,096 bytes stripped (3.2%), both built
+with rustc 1.100.0: `MergeSamFiles` and the dictionary merge of `header_merge.rs`,
+`ReorderSam`, `FixMateInformation`, `FilterSamReads` with its read-name arena,
+`DownsampleSam` with `java_random.rs` and `java_hash_set.rs`, and
+`PositionBasedDownsampleSam`. With `--features pdf` it grew 265,096 bytes stripped, and
+the PDF build is 3,345,232 bytes over the default build.
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and
