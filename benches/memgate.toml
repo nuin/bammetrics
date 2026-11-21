@@ -906,6 +906,10 @@ argv = [
 needs = ["~/data/bammetrics-scale/waves/w05/slice.chr20_21.bam"]
 max_rss_mib = 3072
 spill_dir = "{out}/tmp"
+# The name runs stay on disk while the coordinate sort spills: 1.2 times the queryname
+# and the coordinate bytes of the slice, 1.2 x (2,870 + 1,624) MB, 5,143 MiB, rounded up.
+# Measured 641.5 MiB peak RSS, 5,093 MiB spilled, 147 s.
+max_spill_mib = 5400
 
 [[command]]
 name = "filter-sam-reads slice"
