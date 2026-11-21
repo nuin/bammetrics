@@ -437,14 +437,28 @@ impl VcfReader {
     /// [`VcfReader::open`] where a line (header or record) over
     /// `max_line_bytes`, or more than `max_lines` lines, is a read error.
     pub fn open_capped(path: &Path, max_line_bytes: usize, max_lines: u64) -> Result<Self> {
+        Self::open_capped_header(path, max_line_bytes, max_lines, u64::MAX)
+    }
+
+    /// [`VcfReader::open_capped`] where more than `max_header_lines` lines
+    /// starting with `#` is a read error too, so a header of millions of
+    /// `##contig` lines is refused before noodles holds it.
+    pub fn open_capped_header(
+        path: &Path,
+        max_line_bytes: usize,
+        max_lines: u64,
+        max_header_lines: u64,
+    ) -> Result<Self> {
         let input = |source| Error::Input {
             path: path.to_path_buf(),
             source,
         };
-        // One open: the magic bytes are read and handed back in front of
-        // the rest, so a named pipe is read once.
+        // One open: the first bytes are read and handed back in front of
+        // the rest, so a named pipe is read once. A gzip member whose
+        // header carries the BGZF `BC` extra field is BGZF; any other gzip
+        // is read member by member as `GZIPInputStream` reads it.
         let mut file = File::open(path).map_err(input)?;
-        let mut magic = [0u8; 2];
+        let mut magic = [0u8; 14];
         let mut read = 0;
         while read < magic.len() {
             match file.read(&mut magic[read..]) {
@@ -454,14 +468,21 @@ impl VcfReader {
                 Err(error) => return Err(input(error)),
             }
         }
-        let gzip = read == 2 && magic == [0x1f, 0x8b];
+        let gzip = read >= 2 && magic[..2] == [0x1f, 0x8b];
+        let bgzf = read == magic.len() && magic[3] & 0x04 != 0 && magic[12..14] == *b"BC";
         let file = io::Cursor::new(magic[..read].to_vec()).chain(file);
-        let text: Box<dyn BufRead> = if gzip {
+        let text: Box<dyn BufRead> = if gzip && bgzf {
             Box::new(noodles::bgzf::io::Reader::new(file))
+        } else if gzip {
+            Box::new(io::BufReader::new(crate::gzip::GzipReader::new(
+                io::BufReader::new(file),
+            )))
         } else {
             Box::new(io::BufReader::new(file))
         };
-        let capped: Box<dyn BufRead> = Box::new(LineCap::new(text, max_line_bytes, max_lines));
+        let capped: Box<dyn BufRead> = Box::new(
+            LineCap::new(text, max_line_bytes, max_lines).with_header_lines(max_header_lines),
+        );
         let mut reader = vcf::io::Reader::new(capped);
         let header = reader.read_header().map_err(input)?;
         Ok(Self {
