@@ -68,10 +68,10 @@ pub fn sql_type(ty: Ty) -> &'static str {
     }
 }
 
-/// Names no two equal when compared without case, as SQLite and DuckDB
-/// compare identifiers. A name whose folded form is taken gets
-/// `{sep}{n}` from `first` up, the lowest `n` free. `last` keeps the
-/// highest `n` given per name, so the work is linear in the names.
+/// Names no two equal when compared without ASCII case, as SQLite and
+/// DuckDB compare identifiers. A name whose folded form is taken gets
+/// `{sep}{n}`, `n` from `first` up, skipping a taken one. `last` keeps
+/// the highest `n` given per name, so the work is linear in the names.
 struct Names {
     taken: HashSet<String>,
     last: HashMap<String, u64>,
@@ -90,7 +90,7 @@ impl Names {
     }
 
     fn take(&mut self, name: &str) -> String {
-        let folded = name.to_lowercase();
+        let folded = name.to_ascii_lowercase();
         if self.taken.insert(folded.clone()) {
             return name.to_owned();
         }
@@ -98,7 +98,7 @@ impl Names {
         loop {
             *n += 1;
             let candidate = format!("{name}{}{n}", self.sep);
-            if self.taken.insert(candidate.to_lowercase()) {
+            if self.taken.insert(candidate.to_ascii_lowercase()) {
                 return candidate;
             }
         }
