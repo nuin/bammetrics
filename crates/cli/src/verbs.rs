@@ -592,6 +592,28 @@ pub const VERBS: &[Verb] = &[
             Files::Prefix,
         )
     },
+    Verb {
+        input: "LIST",
+        about: Some(
+            "writes a BED as Picard's IntervalListToBed does: one line per interval of the \
+             interval list (contig, start less 1, end, name, --score, strand), sorted by \
+             contig, start, end, strand and name unless --sort false.",
+        ),
+        writes: "BED",
+        ignores: &[(Key::Threads, "no BAM is read")],
+        ..verb("interval-list-to-bed", "IntervalListToBed", Files::Bam)
+    },
+    Verb {
+        input: "VCF",
+        about: Some(
+            "writes an interval list as Picard's VcfToIntervalList does: the VCF's ##contig \
+             lines as @SQ lines, then one interval per record from POS to END, records that \
+             overlap or abut the one before merged and named by their IDs.",
+        ),
+        writes: "interval list",
+        ignores: &[(Key::Threads, "no BAM is read")],
+        ..verb("vcf-to-interval-list", "VcfToIntervalList", Files::Bam)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
@@ -709,6 +731,13 @@ impl Verb {
                 format!(
                     "The {} to write; - writes standard output. Without -o it goes beside the \
                      input, named as Picard names it.",
+                    self.writes
+                ),
+            ),
+            Files::Bam if !self.writes.contains("BAM") => (
+                "FILE",
+                format!(
+                    "The {} to write; - writes standard output. Required.",
                     self.writes
                 ),
             ),
@@ -1266,6 +1295,14 @@ impl Verb {
                 Some(g) => Ok(Some(PathBuf::from(&g.values[0]))),
                 None => match self.default_output {
                     Some(beside) => self.output_beside_input(picard, beside).map(Some),
+                    None if !self.writes.contains("BAM") => Err(VerbError::usage(
+                        self.name,
+                        format!("missing -o FILE (Picard: OUTPUT), the {}", self.writes),
+                    )
+                    .hint(format!(
+                        "-o - writes the {} to standard output",
+                        self.writes
+                    ))),
                     None => Err(
                         VerbError::usage(self.name, "missing -o BAM (Picard: OUTPUT)")
                             .hint("-o - writes the BAM to standard output"),

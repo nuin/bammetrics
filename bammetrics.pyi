@@ -1510,6 +1510,27 @@ def collect_arrays_variant_calling_metrics(
     PREFIX.arrays_control_code_summary_metrics; Python returns one row per file: file
     and rows."""
 
+def interval_list_to_bed(
+    input: _Path,
+    *,
+    output: _Path,
+    score: int | None = None,
+    sort: bool | None = None,
+) -> list[dict[str, Any]]:
+    """IntervalListToBed: writes OUTPUT as a BED: one line per interval of the interval
+    list (contig, 0-based start, end, name, SCORE, strand). Returns one row per line."""
+
+def vcf_to_interval_list(
+    input: _Path,
+    *,
+    output: _Path,
+    include_filtered: bool | None = None,
+    variant_id_method: str | None = None,
+) -> list[dict[str, Any]]:
+    """VcfToIntervalList: writes OUTPUT as an interval list: the VCF's ##contig lines as
+    @SQ lines, then one interval per record (POS to END), neighbours that overlap or
+    abut merged. Returns one row per interval."""
+
 # END registry tools
 
 def alignment_summary(

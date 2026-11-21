@@ -378,6 +378,8 @@ pub const TOOLS: &[&Tool] = &[
     &crate::arrays::baf_regress::TOOL,
     &crate::arrays::verify_id_intensity::TOOL,
     &crate::arrays::variant_calling::TOOL,
+    &crate::interval_list_to_bed::TOOL,
+    &crate::vcf_to_interval_list::TOOL,
 ];
 
 /// The tool named `name`.
