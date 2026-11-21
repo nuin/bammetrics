@@ -30,7 +30,7 @@ emits.
 | Step | What it is | Today |
 |---|---|---|
 | source | One BAM, CRAM or SAM text file, or a pipe holding one | the positional argument, `-` for standard input |
-| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on; a streaming transform edits each batch as it passes (section 16) | `mark-duplicates`, `sort-sam`, `revert-original-base-qualities-and-add-mate-cigar` (barriers); `add-comments-to-bam`, `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`, `set-nm-and-uq-tags` (streaming); `add-or-replace-read-groups` (streaming, a barrier with a `--sort-order` that differs from the stream's; section 17) |
+| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on; a streaming transform edits each batch as it passes (section 16) | `mark-duplicates`, `sort-sam`, `revert-original-base-qualities-and-add-mate-cigar` (barriers); `add-comments-to-bam`, `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`, `set-nm-and-uq-tags` (streaming); `add-or-replace-read-groups` (streaming, a barrier with a `--sort-order` that differs from the stream's; section 17); `downsample-sam` (streaming; section 19) |
 | tap | A one-pass tool on the records of its position. It changes nothing | 20 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check`, `mt-copy-number`, `exon-coverage`, `adapter-content`, `duplicate-by-tile`, `telomere`, `quality-yield-s-n-v-q`, `rrbs` |
 | write | A tap that writes the records of its position as a BAM, or as SAM text | `write [PATH]` |
 | split | A sink that writes the records of its position over BAMs in a directory (section 18) | `split-sam-by-library`, `split-sam-by-number-of-reads` |
@@ -1305,3 +1305,22 @@ Chained equals staged (`crates/cli/tests/split_sam.rs`, `test_split_sam_by_libra
 fixtures and the foundation corpus, `sort-sam -SO queryname` then a count split, a split
 beside a tap and `write`; every file has the staged run's name, header lines and record
 bytes.
+
+## 19. W13: downsample-sam
+
+`downsample-sam` is a streaming transform (stream name `downsampled`): it keeps the
+records of a random part of the read names at its position and hands on the stream under
+the header with its `@PG` line, as `DownsampleSam` writes it on its own.
+
+| Step | Stream | What it does |
+|---|---|---|
+| `downsample-sam` | `downsampled` | ConstantMemory decides each record as it passes. HighAccuracy and Chained hold one chunk of records (`ceil(1 / ACCURACY)` new names) and hand it on once decided, so the steps after it see the same records in the same order. The seed is resolved against the header of the stream at its position |
+
+- `--metrics-file` on the step writes the QualityYieldMetrics of the records it keeps.
+- `-o`, `--compression-level`, `--create-index` and `--create-md5-file` belong to `write`.
+- `position-based-downsample-sam` reads its input twice and is refused as a step; wave W14
+  runs such a tool on a spooled copy of the stream.
+
+Chained equals staged (`crates/cli/tests/downsample.rs`): each strategy first, in the
+middle and last beside `mark-duplicates` and `sort-sam` on the fixture, and first on t1;
+the records as bytes, the header lines and every metrics file equal.

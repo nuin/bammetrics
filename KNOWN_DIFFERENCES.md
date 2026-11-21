@@ -1723,6 +1723,23 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   decodes it, so an encoded surrogate (`ED A0 80`) in an `@SQ` field is one U+FFFD in
   the `OUTPUT` of `ScatterIntervalsByNs`.
 
+## DownsampleSam and PositionBasedDownsampleSam
+
+- The `@PG` line holds the bammetrics command line (`CL`) and version (`VN:bammetrics
+  <version>`); its `ID`, `PN`, `rs` and the absence of `PP` are Picard's. The harness
+  compares the `@PG` IDs and PP.
+- `DownsampleSam RANDOM_SEED=null` draws its seed from the clock and the process id, where
+  Picard calls `new Random().nextInt()`. Neither run can be repeated; both print the seed
+  and write it as `rs`.
+- A read name from SAM text with a character above U+00FF is hashed (ConstantMemory) and
+  ordered (HighAccuracy) by the low byte of each UTF-16 unit, as bammetrics holds SAM
+  text; Picard uses the whole unit. The SAM specification allows printable ASCII in a
+  name, where the two agree.
+- A `.cram` `OUTPUT` exits 2 naming wave W15; Picard writes a CRAM.
+- `PositionBasedDownsampleSam` refuses standard input and pipes with exit 2: it reads its
+  input twice. Picard opens `INPUT` three times and its later reads of a pipe find no
+  record.
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))

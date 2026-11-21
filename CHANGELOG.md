@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+Wave W13 of docs/07, the downsampling tools: `DownsampleSam` and
+`PositionBasedDownsampleSam`.
+
+### Added
+
+- `java_random.rs`: `java.util.Random` (moved from `sensitivity.rs`, whose output is
+  unchanged) with `nextInt`, `nextInt(bound)` and `Collections.shuffle`, and htsjdk's
+  `Murmur3.hashUnencodedChars`. `java_hash_set.rs`: the iteration order of a
+  `HashSet<String>` filled by `add`, tree bins included, held to the orders a JVM prints.
+- `DownsampleSam` (`crates/core/src/downsample_sam.rs` and `downsample_sam/`, verb
+  `downsample-sam`, Python `downsample_sam()`): the ConstantMemory, HighAccuracy and
+  Chained strategies of htsjdk 5.0.0, `PROBABILITY`, `RANDOM_SEED` (changed after an
+  earlier run as Picard changes it; `null` draws one), `ACCURACY`, `METRICS_FILE`, BAM or
+  SAM text out, a streaming chain transform. Records equal to Picard 3.5.0's for 50 seeds
+  per strategy at probabilities 0.01 to 1.0 on the foundation corpus and t1, smaller
+  chunks, the exome slice, SAM text, CRAM and a second run.
+- `PositionBasedDownsampleSam` (`crates/core/src/position_based_downsample_sam.rs`, verb
+  `position-based-downsample-sam`, Python `position_based_downsample_sam()`): Picard's
+  two reads, the tile extents and the circle of area `FRACTION`, every option. Records
+  equal to Picard's on the markdup and complexity BAMs. Not a chain step.
+- `tests/concordance/PicardBatch.java`: many Picard command lines in one JVM under the
+  queue lock, for the seed sweeps.
+
 ## 0.30.0
 
 Wave W12 of docs/07: the interval layer `interval_ops` and five interval tools (65 in all), none of them a chain step; `qc --panel` takes the lists they write.

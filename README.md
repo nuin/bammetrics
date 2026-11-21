@@ -218,6 +218,8 @@ the sizes and a Chrome recipe for a build without the feature.
 | VcfToIntervalList (the `##contig` lines as `@SQ`, one interval per record from `POS` to `END`, neighbours that overlap or abut merged; `INCLUDE_FILTERED`, `VARIANT_ID_METHOD`; plain or gzip VCF) | | `vcf_to_interval_list()` |
 | ScatterIntervalsByNs (the reference as an interval list of `ACGTmer` and `Nmer` runs, `N`, `n` and `.` as N; `MAX_TO_MERGE`, `OUTPUT_TYPE`; the FASTA read through its `.fai` and `.dict` 1 MiB at a time) | | `scatter_intervals_by_ns()` |
 | NonNFastaSize (the bases of a FASTA that are not `N` or `n`, inside `INTERVALS` when given; the number and a line end) | | `non_n_fasta_size()` |
+| DownsampleSam (the records of a random part of the templates, a read name's records kept or dropped together; `STRATEGY` ConstantMemory, HighAccuracy or Chained, `PROBABILITY`, `RANDOM_SEED` changed as Picard changes it after an earlier run, `ACCURACY`; `METRICS_FILE` the QualityYieldMetrics of the records kept; a chain transform) | | `downsample_sam()` |
+| PositionBasedDownsampleSam (the records whose read name places them in a circle of area `FRACTION` on each tile; two reads of the input; `REMOVE_DUPLICATE_INFORMATION`, `READ_NAME_REGEX`, `STOP_AFTER`, `ALLOW_MULTIPLE_DOWNSAMPLING_DESPITE_WARNINGS`) | | `position_based_downsample_sam()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 | SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | `validation_stringency=` |
