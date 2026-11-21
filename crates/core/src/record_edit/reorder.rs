@@ -206,6 +206,9 @@ impl<'d> Last<'d> {
     }
 }
 
+/// Sees each record as it goes into the file.
+pub(crate) type Observer<'d> = Box<dyn FnMut(&RawRecord) -> Result<()> + 'd>;
+
 /// Records from the edit to the file of a stand-alone run.
 pub(crate) struct Pipeline<'d> {
     group: Option<(RecordSorter<'d>, Regroup)>,
@@ -219,6 +222,8 @@ pub(crate) struct Pipeline<'d> {
     mode: Mode,
     /// `MAX_RECORDS_IN_RAM` below 1: a sort fails.
     no_room: bool,
+    /// Sees each record written, in the file's order.
+    observer: Option<Observer<'d>>,
 }
 
 impl<'d> Pipeline<'d> {
@@ -249,11 +254,18 @@ impl<'d> Pipeline<'d> {
             header: header.clone(),
             mode: opts.mode,
             no_room,
+            observer: None,
         }
     }
 
+    /// Show `observer` each record as it is written (`FilterSamReads`
+    /// writes the names of its output beside it).
+    pub(crate) fn observe(&mut self, observer: Observer<'d>) {
+        self.observer = Some(observer);
+    }
+
     /// Make the file now, when it is not made yet.
-    pub(super) fn open(&mut self) -> Result<&mut Out> {
+    pub(crate) fn open(&mut self) -> Result<&mut Out> {
         let out = match self.out.take() {
             Some(out) => out,
             None => Out::create(self.opts, &self.header)?,
@@ -263,6 +275,9 @@ impl<'d> Pipeline<'d> {
 
     fn write(&mut self, record: &mut RawRecord) -> Result<()> {
         let mode = self.mode;
+        if let Some(observer) = self.observer.as_mut() {
+            observer(record)?;
+        }
         self.open()?.write(record, mode)
     }
 

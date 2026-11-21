@@ -1,0 +1,9 @@
+## argv
+FixMateInformation
+I=tests/data/mate_filter.bam
+I=tests/data/revert.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: Must specify either an explicit OUTPUT file or a single INPUT file to be overridden.

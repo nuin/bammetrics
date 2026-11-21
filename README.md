@@ -220,6 +220,8 @@ the sizes and a Chrome recipe for a build without the feature.
 | NonNFastaSize (the bases of a FASTA that are not `N` or `n`, inside `INTERVALS` when given; the number and a line end) | | `non_n_fasta_size()` |
 | MergeSamFiles (the records of every `INPUT` under one merged header, read group and program IDs that collide renamed; `SORT_ORDER` merged or sorted, `MERGE_SEQUENCE_DICTIONARIES`, `COMMENT`, `INTERVALS`) | | `merge_sam_files()` |
 | ReorderSam (the records under the dictionary of `SEQUENCE_DICTIONARY`, contigs matched by name, records on a contig it lacks made unplaced with `ALLOW_INCOMPLETE_DICT_CONCORDANCE`, sorted again; a chain barrier) | | `reorder_sam()` |
+| FixMateInformation (the mate fields, `MQ`, `MC` and `TLEN` of each pair set from its mate after a name sort, then `SORT_ORDER`; several `INPUT`s merged with ID collisions renamed; `ADD_MATE_CIGAR`, `IGNORE_MISSING_MATES`, `ASSUME_SORTED`; without `OUTPUT` the input BAM rewritten in place; a chain barrier) | | `fix_mate_information()` |
+| FilterSamReads (the records a `FILTER` keeps: aligned or unmapped, pairs of a queryname input together; names of `READ_LIST_FILE`; string values of `TAG`; pairs with an end over `INTERVAL_LIST`; `WRITE_READS_FILES`; `includeJavascript` and `JAVASCRIPT_FILE` refused; a chain transform, a barrier when it sorts) | | `filter_sam_reads()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 | SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | `validation_stringency=` |

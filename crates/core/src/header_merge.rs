@@ -506,7 +506,7 @@ pub struct Merger<'a> {
 
 impl<'a> Merger<'a> {
     /// Take the records of `readers` (one per merged header, in order)
-    /// in `order`, coordinate or queryname.
+    /// in `order`: coordinate, queryname, or unsorted (input after input).
     pub fn new(
         readers: Vec<&'a mut (dyn Read + 'static)>,
         merged: HeaderMerger,
@@ -515,6 +515,7 @@ impl<'a> Merger<'a> {
         let order = match order {
             SortOrder::Queryname => MergeOrder::Queryname,
             SortOrder::Coordinate => MergeOrder::Coordinate,
+            SortOrder::Unsorted => MergeOrder::InputOrder,
             other => {
                 return Err(Error::Metric(format!(
                     "merging inputs in {} order is not supported",
@@ -668,13 +669,19 @@ impl<'a> Merger<'a> {
     /// dictionary, its references found again by name; false after the
     /// last.
     pub fn next(&mut self, record: &mut RawRecord) -> Result<bool> {
+        Ok(self.next_from(record)?.is_some())
+    }
+
+    /// [`Merger::next`], with the index of the input the record came from;
+    /// `None` after the last.
+    pub fn next_from(&mut self, record: &mut RawRecord) -> Result<Option<usize>> {
         let next = if self.queued() {
             self.poll()
         } else {
             self.next_input()
         };
         let Some(i) = next else {
-            return Ok(false);
+            return Ok(None);
         };
         *record = self.heads[i].take().expect("queued inputs have a record");
         self.advance(i)?;
@@ -706,7 +713,7 @@ impl<'a> Merger<'a> {
             );
             record.set_reference_ids(ids.0, ids.1);
         }
-        Ok(true)
+        Ok(Some(i))
     }
 
     /// True when the last record had its `RG` or `PG` tag set, which makes

@@ -113,9 +113,13 @@ const SECONDARY: u16 = 0x100;
 const SUPPLEMENTARY: u16 = 0x800;
 
 fn failure(record: &RawRecord, what: &str) -> Error {
+    failure_of(TOOL.name, record, what)
+}
+
+/// The error of `tool` on `record`.
+fn failure_of(tool: &str, record: &RawRecord, what: &str) -> Error {
     Error::Metric(format!(
-        "{}: record {}: {what}",
-        TOOL.name,
+        "{tool}: record {}: {what}",
         String::from_utf8_lossy(record.name())
     ))
 }
@@ -360,8 +364,9 @@ fn compute_insert_size(a: &RawRecord, b: &RawRecord) -> i32 {
     second.wrapping_sub(first).wrapping_add(adjustment)
 }
 
-/// `SamPairUtil.setMateInfo(a, b, true)`.
-fn set_mate_info(a: &mut RawRecord, b: &mut RawRecord) -> Result<()> {
+/// `SamPairUtil.setMateInfo(a, b, mate_cigar)`: without `mate_cigar` no
+/// record keeps an `MC`.
+fn set_mate_info(a: &mut RawRecord, b: &mut RawRecord, mate_cigar: bool) -> Result<()> {
     let a_unmapped = a.flags() & UNMAPPED != 0;
     let b_unmapped = b.flags() & UNMAPPED != 0;
     if !a_unmapped && !b_unmapped {
@@ -370,8 +375,8 @@ fn set_mate_info(a: &mut RawRecord, b: &mut RawRecord) -> Result<()> {
         mate_fields(b, a, false);
         set_tag_int(b, *b"MQ", Some(i64::from(a.mapping_quality())))?;
         let (a_cigar, b_cigar) = (cigar_string(a), cigar_string(b));
-        set_mate_cigar(a, Some(b_cigar))?;
-        set_mate_cigar(b, Some(a_cigar))?;
+        set_mate_cigar(a, mate_cigar.then_some(b_cigar))?;
+        set_mate_cigar(b, mate_cigar.then_some(a_cigar))?;
     } else if a_unmapped && b_unmapped {
         let (a_reverse, b_reverse) = (a.flags() & REVERSE != 0, b.flags() & REVERSE != 0);
         for (record, mate_reverse) in [(&mut *a, b_reverse), (&mut *b, a_reverse)] {
@@ -398,7 +403,7 @@ fn set_mate_info(a: &mut RawRecord, b: &mut RawRecord) -> Result<()> {
         mapped.set_template_length(0);
         mate_fields(unmapped, mapped, false);
         set_tag_int(unmapped, *b"MQ", Some(i64::from(mapped.mapping_quality())))?;
-        set_mate_cigar(unmapped, Some(cigar_string(mapped)))?;
+        set_mate_cigar(unmapped, mate_cigar.then(|| cigar_string(mapped)))?;
         unmapped.set_template_length(0);
     }
     let insert = compute_insert_size(a, b);
@@ -407,12 +412,19 @@ fn set_mate_info(a: &mut RawRecord, b: &mut RawRecord) -> Result<()> {
     Ok(())
 }
 
-/// `setMateInformationOnSupplementalAlignment(record, mate, true)`.
-fn set_supplementary_mate(record: &mut RawRecord, mate: &RawRecord) -> Result<()> {
+/// `setMateInformationOnSupplementalAlignment(record, mate, mate_cigar)`.
+fn set_supplementary_mate(
+    record: &mut RawRecord,
+    mate: &RawRecord,
+    mate_cigar: bool,
+) -> Result<()> {
     let mate_unmapped = mate.flags() & UNMAPPED != 0;
     mate_fields(record, mate, mate_unmapped);
     record.set_template_length(mate.template_length().wrapping_neg());
-    set_mate_cigar(record, (!mate_unmapped).then(|| cigar_string(mate)))?;
+    set_mate_cigar(
+        record,
+        (mate_cigar && !mate_unmapped).then(|| cigar_string(mate)),
+    )?;
     set_tag_int(record, *b"MQ", Some(i64::from(mate.mapping_quality())))
 }
 
@@ -432,12 +444,31 @@ fn two(group: &mut [RawRecord], i: usize, j: usize) -> (&mut RawRecord, &mut Raw
 /// error. Each record then gets the `bin` htsjdk's writer computes: an
 /// unmapped read placed beside its mate has a new start.
 pub fn mate_group(group: &mut [RawRecord]) -> Result<()> {
-    set_mates(group)?;
+    mate_group_with(group, true, false, TOOL.name)
+}
+
+/// [`mate_group`] as `SetMateInfoIterator(iterator, mate_cigar,
+/// ignore_missing)` makes it: without `mate_cigar` no record of a pair
+/// keeps an `MC`; with `ignore_missing` a primary record whose mate is not
+/// in the group is handed on as it came (`FixMateInformation`). An error
+/// names `tool`.
+pub fn mate_group_with(
+    group: &mut [RawRecord],
+    mate_cigar: bool,
+    ignore_missing: bool,
+    tool: &str,
+) -> Result<()> {
+    set_mates(group, mate_cigar, ignore_missing, tool)?;
     group.iter_mut().for_each(RawRecord::set_codec_bin);
     Ok(())
 }
 
-fn set_mates(group: &mut [RawRecord]) -> Result<()> {
+fn set_mates(
+    group: &mut [RawRecord],
+    mate_cigar: bool,
+    ignore_missing: bool,
+    tool: &str,
+) -> Result<()> {
     let mut first = None;
     let mut second = None;
     let mut supplementary = false;
@@ -449,7 +480,8 @@ fn set_mates(group: &mut [RawRecord]) -> Result<()> {
         if flags & (SECONDARY | SUPPLEMENTARY) == 0 {
             if flags & FIRST != 0 {
                 if first.is_some() {
-                    return Err(failure(
+                    return Err(failure_of(
+                        tool,
                         record,
                         "Found two records that are paired, not supplementary, and first of \
                          the pair",
@@ -458,7 +490,8 @@ fn set_mates(group: &mut [RawRecord]) -> Result<()> {
                 first = Some(at);
             } else if flags & SECOND != 0 {
                 if second.is_some() {
-                    return Err(failure(
+                    return Err(failure_of(
+                        tool,
                         record,
                         "Found two records that are paired, not supplementary, and second of \
                          the pair",
@@ -472,16 +505,19 @@ fn set_mates(group: &mut [RawRecord]) -> Result<()> {
         }
     }
     let (Some(first), Some(second)) = (first, second) else {
+        if ignore_missing {
+            return Ok(());
+        }
         if let Some(at) = first {
-            return Err(failure(&group[at], "Missing second read of pair"));
+            return Err(failure_of(tool, &group[at], "Missing second read of pair"));
         }
         if let Some(at) = second {
-            return Err(failure(&group[at], "Missing first read of pair"));
+            return Err(failure_of(tool, &group[at], "Missing first read of pair"));
         }
         return Ok(());
     };
     let (a, b) = two(group, first, second);
-    set_mate_info(a, b)?;
+    set_mate_info(a, b, mate_cigar)?;
     if supplementary {
         let (first_record, second_record) = (group[first].clone(), group[second].clone());
         for record in group.iter_mut() {
@@ -494,7 +530,7 @@ fn set_mates(group: &mut [RawRecord]) -> Result<()> {
             } else {
                 &first_record
             };
-            set_supplementary_mate(record, mate)?;
+            set_supplementary_mate(record, mate, mate_cigar)?;
         }
     }
     Ok(())

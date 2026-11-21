@@ -1,0 +1,30 @@
+## argv
+chain
+tests/data/mate_filter.bam
+-o
+OUT/s
+--dry-run
++
+fix-mate-information
+--sort-order
+queryname
++
+write
+OUT/out.bam
+## exit
+0
+## stdout
+chain plan for tests/data/mate_filter.bam
+  source    tests/data/mate_filter.bam (BAM, 670 bytes, sort order coordinate; a file, it can be read again)
+  prefix    not used: every step names its files
+segment 1  one read of tests/data/mate_filter.bam
+  step 1  fix-mate-information  transform, first read  takes every record and sorts them by queryname
+segment 2  the records step 1 holds, sorted by queryname
+  step 1  fix-mate-information  stream fixed           no file
+  step 2  write                 BAM of fixed           OUT/out.bam
+barrier    step 1 fix-mate-information: holds its records; about 9 records by the file size, no spill under --sort-memory 2.0 GiB; memory about 100.0 MiB
+temp disk  none expected
+output     about 918 bytes written by write
+memory     about 100.0 MiB at the peak, a fixed 100.0 MiB for the chain beside its barriers included (a small input takes less)
+nothing ran: this is a plan
+## stderr

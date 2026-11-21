@@ -1,0 +1,10 @@
+## argv
+FilterSamReads
+I=tests/data/mate_filter.bam
+O=OUT/x.bam
+FILTER=includeAligned
+## exit
+1
+## stdout
+## stderr
+bammetrics: FilterSamReads: Record p4 should come after h1 when sorting with queryname ordering.

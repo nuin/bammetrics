@@ -92,7 +92,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | NormalizeFasta | Reference | out | FASTA rewrap. | seqkit seq -w |
 | ScatterIntervalsByNs | Reference | core | Shipped in 0.30.0 (wave W12 of docs/07): `ACGTmer` and `Nmer` runs with Picard's merge of short N runs, `OUTPUT_TYPE`, the `.dict` header; the interval list written as it is walked. S | bedtools |
 | BaitDesigner | Reference | out | Legacy bait design. | none |
-| FixMateInformation | Read data | later | Harness input prep (MC tag). | samtools fixmate -m |
+| FixMateInformation | Read data | core | Shipped in wave W13 of docs/07 (the record-editing shape `record_edit.rs`; a chain barrier): the mate fields, `MQ`, `MC` and `TLEN` from each mate after a name sort, then `SORT_ORDER`; several inputs merged; the input rewritten in place without `OUTPUT`. S | samtools fixmate -m |
 | SetNmMdAndUqTags | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): `MD`, `NM` and `UQ` from the reference as htsjdk's `SequenceUtil` computes them, `SET_ONLY_UQ`, `IS_BISULFITE_SEQUENCE`. M | samtools calmd |
 | SetNmAndUqTags | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): Picard's deprecated name of SetNmMdAndUqTags, the same options and output. S | samtools calmd |
 | BuildBamIndex | Read data | core | Shipped in 0.23.0 (wave W05 of docs/07): the `.bai` byte for byte Picard's for the same BAM, the index behind `MarkDuplicates CREATE_INDEX`, `SortSam CREATE_INDEX` and `chain ... + write --index`. S | samtools index |
@@ -106,7 +106,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | DownsampleSam | Read data | later | Harness shrinks real BAMs once. | samtools view -s |
 | PositionBasedDownsampleSam | Read data | out | Tile-based downsampling for duplicate studies. | none |
 | FastqToSam | Read data | later | Harness builds unaligned fixtures. | samtools import, fgbio |
-| FilterSamReads | Read data | out | Subsetting. | samtools view |
+| FilterSamReads | Read data | core | Shipped in wave W13 of docs/07 (the record-editing shape `record_edit.rs`; a chain transform, a barrier when it sorts): every `FILTER` but `includeJavascript` (Q6, D16), `WRITE_READS_FILES`. S | samtools view |
 | GatherBamFiles | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, `bgzf_copy.rs`): BAM inputs block copied as htsjdk copies them, byte for byte at `COMPRESSION_LEVEL=0`; SAM or CRAM inputs read record by record. S | samtools cat |
 | MergeSamFiles | Read data | core | Shipped in wave W13 of docs/07 (`merge_sam_files.rs` over `header_merge.rs`): read group and program IDs renamed on a collision, `MERGE_SEQUENCE_DICTIONARIES`, the priority-queue merge of presorted inputs, else the `SortSam` sort; `INTERVALS`. Not a chain step. S | samtools merge |
 | MergeBamAlignment | Read data | out | uBAM merge step. | fgbio ZipperBams |

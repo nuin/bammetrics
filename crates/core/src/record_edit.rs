@@ -67,8 +67,8 @@ use crate::stage::{Counters, Frame, Stage, Transform, WriteFormat, later_kind};
 mod reorder;
 pub(crate) use reorder::Pipeline;
 pub use reorder::{
-    DEFAULT_RECORDS_IN_RAM, Gate, Regroup, Reorder, WriterOrder, presorted_stage, sort_limits,
-    sorting_stage, stage_limits,
+    DEFAULT_RECORDS_IN_RAM, Gate, MAX_GROUP_RECORDS, Regroup, Reorder, WriterOrder,
+    presorted_stage, sort_limits, sorting_stage, stage_limits,
 };
 
 /// What [`RecordEdit::record`] did to one record.
@@ -196,6 +196,12 @@ impl Options {
             .get("OUTPUT")
             .map(PathBuf::from)
             .ok_or_else(|| Error::Usage("OUTPUT is required".to_owned()))?;
+        Self::with_output(inv, output)
+    }
+
+    /// [`Options::from_invocation`] writing `output`, for a tool whose
+    /// `OUTPUT` may be left out (`FixMateInformation` rewrites its input).
+    pub fn with_output(inv: &Invocation, output: PathBuf) -> Result<Self> {
         let level: i64 = inv.parse("COMPRESSION_LEVEL", 5)?;
         let compression_level = u8::try_from(level)
             .ok()
@@ -255,6 +261,17 @@ impl Options {
 /// Refuse an `OUTPUT` the run cannot write, or one that would destroy a
 /// file it reads, before anything is read.
 pub(crate) fn check_output(opts: &Options) -> Result<()> {
+    check_written(opts, false)
+}
+
+/// [`check_output`] for a run that rewrites `opts.input` in place through
+/// an [`AtomicFile`] at the same path: `OUTPUT` may be `INPUT`, every other
+/// file written may be no input.
+pub(crate) fn check_output_in_place(opts: &Options) -> Result<()> {
+    check_written(opts, true)
+}
+
+fn check_written(opts: &Options, in_place: bool) -> Result<()> {
     if let Some((kind, wave)) = later_kind(&opts.output) {
         return Err(Error::Usage(format!(
             "OUTPUT={}: bammetrics writes BAM and SAM only: {kind} output is wave {wave} of \
@@ -285,7 +302,10 @@ pub(crate) fn check_output(opts: &Options) -> Result<()> {
         .chain(opts.reference.iter().flat_map(|r| files_read(r)))
         .chain(opts.reads.iter().cloned());
     for input in &read.collect::<Vec<_>>() {
-        if let Some(path) = written.iter().find(|path| same_file(input, path)) {
+        let replaced = |path: &&PathBuf| {
+            !(in_place && *path == &opts.output && input == &opts.input) && same_file(input, path)
+        };
+        if let Some(path) = written.iter().find(replaced) {
             return Err(Error::Usage(format!(
                 "OUTPUT={}: it is the input {}; writing it would destroy it",
                 path.display(),
@@ -575,7 +595,7 @@ pub fn java_text(text: &str) -> Vec<u8> {
 }
 
 /// Count one record's outcome; true when it is written.
-fn tally(counters: &mut Counters, outcome: Outcome) -> bool {
+pub(crate) fn tally(counters: &mut Counters, outcome: Outcome) -> bool {
     counters.records_in += 1;
     if outcome == Outcome::Dropped {
         return false;

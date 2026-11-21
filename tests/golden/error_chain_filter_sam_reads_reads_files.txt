@@ -1,0 +1,16 @@
+## argv
+chain
+tests/data/mate_filter.queryname.bam
++
+filter-sam-reads
+--filter
+includeAligned
+--write-reads-files
++
+write
+OUT/out.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (filter-sam-reads): WRITE_READS_FILES: the .reads files sit beside OUTPUT, and a chain step hands its records on (wave W14 of docs/07_full_parity_program.md)

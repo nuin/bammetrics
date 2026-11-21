@@ -386,6 +386,8 @@ pub const TOOLS: &[&Tool] = &[
     &crate::non_n_fasta_size::TOOL,
     &crate::merge_sam_files::TOOL,
     &crate::reorder_sam::TOOL,
+    &crate::fix_mate_information::TOOL,
+    &crate::filter_sam_reads::TOOL,
 ];
 
 /// The tool named `name`.

@@ -1,0 +1,59 @@
+## argv
+chain
+tests/data/mate_filter.queryname.bam
+-o
+OUT/s
++
+fix-mate-information
+--sort-order
+coordinate
++
+filter-sam-reads
+--filter
+includePairedIntervals
+--interval-list
+tests/data/targets.interval_list
++
+insert-size
++
+write
+OUT/out.bam
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: step 1 (fix-mate-information): 20 records in, 20 out, 0 changed
+bammetrics chain: step 2 (filter-sam-reads): 20 records in, 10 out, 0 changed
+bammetrics chain: 4 steps finished, 2 files written
+## file out.bam
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:chr1	LN:100000
+@RG	ID:rg1	SM:s1	LB:lib1	PU:unit1	PL:ILLUMINA
+@RG	ID:rg2	SM:s1	LB:lib2	PU:unit2	PL:ILLUMINA
+p1	99	0	1050	MC:Z:20M	RG:Z:rg1	XI:i:1	MQ:i:60	XZ:Z:a
+p1	147	0	1150	MC:Z:20M	RG:Z:rg1	XI:i:2	MQ:i:60	XZ:Z:b
+p2	97	0	2100	MC:Z:10M2D10M	RG:Z:rg2	XI:i:3	MQ:i:60	XZ:Z:a
+p2	145	0	2300	MC:Z:20M	RG:Z:rg2	XI:i:1	MQ:i:60	XZ:Z:c
+p4	99	0	4100	MC:Z:20M	RG:Z:rg2	XI:i:-2	MQ:i:60	XZ:Z:c
+p4	147	0	4250	MC:Z:20M	RG:Z:rg2	XI:i:7	MQ:i:60	XZ:Z:a
+h1	73	0	5100	RG:Z:rg1	XI:i:3	XZ:Z:c
+h1	133	0	5100	MC:Z:20M	RG:Z:rg1	XI:i:3	MQ:i:60	XZ:Z:c
+p6	99	0	8100	MC:Z:20M	RG:Z:rg2	XI:i:1	MQ:i:60	XZ:Z:a
+p6	147	0	8500	MC:Z:20M	RG:Z:rg2	XI:i:2	MQ:i:60	XZ:Z:b
+## file s.insert_size_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectInsertSizeMetrics INPUT=tests/data/mate_filter.queryname.bam OUTPUT=OUT/s.insert_size_metrics CHAIN=FixMateInformation+FilterSamReads
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.InsertSizeMetrics
+MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MAX_INSERT_SIZE	MEAN_INSERT_SIZE	STANDARD_DEVIATION	READ_PAIRS	PAIR_ORIENTATION	WIDTH_OF_10_PERCENT	WIDTH_OF_20_PERCENT	WIDTH_OF_30_PERCENT	WIDTH_OF_40_PERCENT	WIDTH_OF_50_PERCENT	WIDTH_OF_60_PERCENT	WIDTH_OF_70_PERCENT	WIDTH_OF_80_PERCENT	WIDTH_OF_90_PERCENT	WIDTH_OF_95_PERCENT	WIDTH_OF_99_PERCENT	SAMPLE	LIBRARY	READ_GROUP
+196	120	51	120	420	233	131.438198	4	FR	53	53	53	53	53	153	153	449	449	449	449			
+
+## HISTOGRAM	java.lang.Integer
+insert_size	All_Reads.fr_count
+120	1
+170	1
+222	1
+420	1
+

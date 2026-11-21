@@ -1,0 +1,10 @@
+## argv
+FilterSamReads
+I=tests/data/mate_filter.bam
+O=OUT/x.bam
+FILTER=includeReadList
+## exit
+1
+## stdout
+## stderr
+bammetrics: READ_LIST_FILE must be specified when using FILTER=includeReadList, but it was null.

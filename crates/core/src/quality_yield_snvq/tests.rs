@@ -167,8 +167,11 @@ fn the_histogram_keys_qualities_and_read_indexes_on_one_column() {
 
 #[test]
 fn java_bytes_widen_latin1_characters() {
-    assert_eq!(java_bytes(b"I5").as_ref(), b"I5");
-    assert_eq!(java_bytes(&[b'I', 0xE9]).as_ref(), &[b'I', 0xC3, 0xA9]);
+    assert_eq!(crate::java::latin1_utf8(b"I5").as_ref(), b"I5");
+    assert_eq!(
+        crate::java::latin1_utf8(&[b'I', 0xE9]).as_ref(),
+        &[b'I', 0xC3, 0xA9]
+    );
     assert_eq!(phred(b'!'), Some(0));
     assert_eq!(phred(b'~'), Some(93));
     assert_eq!(phred(b' '), None);

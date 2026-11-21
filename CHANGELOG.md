@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-Wave W13 of docs/07, part one: `MergeSamFiles` and `ReorderSam`.
+Wave W13 of docs/07: `MergeSamFiles`, `ReorderSam`, `FixMateInformation` and `FilterSamReads`.
 
 ### Added
 
@@ -32,6 +32,36 @@ Wave W13 of docs/07, part one: `MergeSamFiles` and `ReorderSam`.
   `merge_bams.py`) and `test_reorder_sam.py`; golden cases on the fixtures of
   `tests/data/make_merge_reorder_fixtures.py`; `crates/cli/tests/reorder_sam.rs` (chained
   equals staged); memgate rows, fixture and scale (docs/benchmarks.md).
+- `FixMateInformation` (`crates/core/src/fix_mate_information.rs`, verb
+  `fix-mate-information`, Python `fix_mate_information()`): every `INPUT` read, several
+  merged through `header_merge` (read group and program IDs renamed on a collision,
+  queryname inputs merged by name, any other mix input after input); a name sort unless
+  every input says `SO:queryname` or `ASSUME_SORTED`; htsjdk's `SetMateInfoIterator` on
+  each name (`mate_group_with` of the reverting tool, with `ADD_MATE_CIGAR` and
+  `IGNORE_MISSING_MATES`); the writer presorted for `queryname`, sorting for every other
+  `SORT_ORDER`; `CREATE_INDEX` refused off `coordinate`. Without `OUTPUT` the input BAM is
+  rewritten in place through an `AtomicFile` (mode and links kept, `x.bai`, `x.bam.md5`;
+  a directory the user cannot write is named before the first read). `MD` and `NM` are
+  rebuilt on the records of a CRAM input only. A chain barrier leaving `fixed`.
+- `FilterSamReads` (`crates/core/src/filter_sam_reads.rs`, verb `filter-sam-reads`,
+  Python `filter_sam_reads()`): `includeAligned` and `excludeAligned` (the pairs of a
+  queryname input judged together, htsjdk's mate and order assertions),
+  `includeReadList` and `excludeReadList` (`READ_LIST_FILE` as `ReadNameFilter` reads it,
+  one arena of names with a hash table of offsets, 1 GiB and 50,000,000 distinct names),
+  `includeTagValues` and `excludeTagValues` (only `Z` values
+  match), `includePairedIntervals` (`INTERVAL_LIST` through the W12 overlap tree, both
+  ends of a pair together, `MC` for the mate's end); `includeJavascript` and
+  `JAVASCRIPT_FILE` refused (Q6); Picard's option checks per filter; `SORT_ORDER`;
+  `WRITE_READS_FILES` (each byte from `0x80` up written as the UTF-8 of that character,
+  as Picard writes htsjdk's string). A chain transform leaving `filtered`, a barrier when
+  it sorts.
+- `tests/concordance/test_fix_mate_information.py` and `test_filter_sam_reads.py` against
+  Picard 3.5.0 through `compare_bam` with record bytes, on the inputs of
+  `tests/concordance/mate_filter_bams.py` (the foundation corpus with mate fields
+  damaged, split by read group with colliding IDs, tags of every type, read lists of every
+  name kind), the `revert_bams.py` records, the fixtures, t1 to t3, the exome slice, SAM
+  text and CRAM; `crates/cli/tests/mate_filter.rs`, chained equals staged; golden
+  records on `tests/data/mate_filter.bam` (`tests/data/make_mate_filter_fixtures.py`).
 
 ### Changed
 
@@ -54,6 +84,10 @@ Wave W13 of docs/07, part one: `MergeSamFiles` and `ReorderSam`.
 - The dictionary test of `MarkDuplicates` with several inputs follows
   `SAMSequenceRecord.isSameSequence`: two `M5` values that differ fail the run, two names
   that an `AN` field matches pass.
+- `header_merge::Merger` merges `SO:unsorted` inputs one after the other. MarkDuplicates
+  on several unsorted inputs now exits 1 with Picard's sort-order message.
+- `java::latin1_utf8` holds the one copy of the Latin-1 to UTF-8 widening that
+  `CollectQualityYieldMetricsSNVQ` and the `.reads` files of `FilterSamReads` share.
 
 ## 0.30.0
 

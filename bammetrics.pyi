@@ -1618,6 +1618,49 @@ def reorder_sam(
     the dictionary lacks made unplaced, sorted again in the input's order: a BAM, or SAM
     text for a name ending in .sam."""
 
+def fix_mate_information(
+    input: _Paths,
+    *,
+    output: _Path | None = None,
+    sort_order: str | None = None,
+    assume_sorted: bool | None = None,
+    add_mate_cigar: bool | None = None,
+    ignore_missing_mates: bool | None = None,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    max_records_in_ram: int | None = None,
+    tmp_dir: _Path | Sequence[_Path] | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """FixMateInformation: no rows; OUTPUT gets every record of every INPUT with the mate
+    fields, MQ, MC and TLEN of each pair set from its mate, in SORT_ORDER: a BAM, or SAM
+    text for a name ending in .sam. Without OUTPUT the one INPUT is rewritten in place."""
+
+def filter_sam_reads(
+    input: _Path,
+    *,
+    filter: str,
+    read_list_file: _Path | None = None,
+    interval_list: _Path | None = None,
+    tag: str | None = None,
+    tag_value: str | Sequence[str] | None = None,
+    sort_order: str | None = None,
+    write_reads_files: bool | None = None,
+    output: _Path,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    max_records_in_ram: int | None = None,
+    tmp_dir: _Path | Sequence[_Path] | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """FilterSamReads: no rows; OUTPUT gets the records of INPUT that FILTER keeps (aligned
+    or unmapped reads, a read name list, tag values, pairs over intervals), in
+    SORT_ORDER: a BAM, or SAM text for a name ending in .sam."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1862,6 +1905,8 @@ _StepVerb = Literal[
     "quality_yield_s_n_v_q",
     "rrbs",
     "reorder_sam",
+    "fix_mate_information",
+    "filter_sam_reads",
     "write",
 ]
 

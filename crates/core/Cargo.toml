@@ -17,3 +17,7 @@ zlib-rs.workspace = true
 # localtime_r for the zone offset of an @RG DT date (java_date.rs); already
 # in the tree through the cli crate and signal-hook.
 libc.workspace = true
+# HashTable for the READ_LIST_FILE name set of filter_sam_reads.rs, one
+# arena of names and a table of offsets; already in the tree through
+# indexmap (noodles).
+hashbrown.workspace = true

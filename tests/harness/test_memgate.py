@@ -71,7 +71,9 @@ def test_the_committed_table_parses_and_names_both_tiers():
                        "vcf-to-interval-list 200,000 alleles in one record",
                        "scatter-intervals-by-ns", "non-n-fasta-size",
                        "scatter-intervals-by-ns long contig", "non-n-fasta-size long contig",
-                       "merge-sam-files", "merge-sam-files queryname", "reorder-sam"]
+                       "merge-sam-files", "merge-sam-files queryname", "reorder-sam",
+                       "fix-mate-information", "filter-sam-reads",
+                       "chain fix-mate-information + filter-sam-reads + write"]
     for r in rows:
         # A row whose input a script writes first runs both in one `sh -c`.
         shell = r.argv[0] in ("sh", "/bin/sh") and r.argv[1:2] == ["-c"] and "{bin}" in r.argv[2]

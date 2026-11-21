@@ -71,6 +71,8 @@ scatter-intervals-by-ns                            ScatterIntervalsByNs
 non-n-fasta-size                                   NonNFastaSize
 merge-sam-files                                    MergeSamFiles
 reorder-sam                                        ReorderSam
+fix-mate-information                               FixMateInformation
+filter-sam-reads                                   FilterSamReads
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

@@ -759,6 +759,32 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("MAX_RECORDS_IN_RAM", "5")),
             picard_outputs: commented_bam,
         },
+        Case {
+            verb: "fix-mate-information",
+            class: "FixMateInformation",
+            verb_args: strings(&["tests/data/mate_filter.sam", "--no-add-mate-cigar"]),
+            picard_args: strings(&["I=tests/data/mate_filter.sam", "ADD_MATE_CIGAR=false"]),
+            option: Some(("SORT_ORDER", "queryname")),
+            picard_outputs: sorted_sam,
+        },
+        Case {
+            verb: "filter-sam-reads",
+            class: "FilterSamReads",
+            verb_args: strings(&[
+                "tests/data/mate_filter.sam",
+                "--filter",
+                "includeReadList",
+                "--read-list-file",
+                "tests/data/mate_filter_names.txt",
+            ]),
+            picard_args: strings(&[
+                "I=tests/data/mate_filter.sam",
+                "FILTER=includeReadList",
+                "READ_LIST_FILE=tests/data/mate_filter_names.txt",
+            ]),
+            option: Some(("SORT_ORDER", "queryname")),
+            picard_outputs: sorted_sam,
+        },
     ]
 }
 
@@ -784,7 +810,9 @@ fn named_output(verb: &str) -> Option<&'static str> {
         | "set-nm-md-and-uq-tags"
         | "set-nm-and-uq-tags"
         | "add-or-replace-read-groups"
-        | "revert-original-base-qualities-and-add-mate-cigar" => Some("sam"),
+        | "revert-original-base-qualities-and-add-mate-cigar"
+        | "fix-mate-information"
+        | "filter-sam-reads" => Some("sam"),
         "add-comments-to-bam" | "gather-bam-files" | "merge-sam-files" | "reorder-sam" => {
             Some("bam")
         }
@@ -896,7 +924,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 67);
+    assert_eq!(classes.len(), 69);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names
