@@ -87,6 +87,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("BED_GZ", "tests/data/targets.bed.gz"),
     ("BED_BGZ", "tests/data/targets_bed.bgz"),
     ("BED_AS_IL", "tests/data/targets_bed.interval_list"),
+    ("DS", "tests/data/downsampled.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -901,6 +902,34 @@ const N_RUNS_CASES: &[Case] = &[
     case!("error_qc_panel_bed_as_interval_list", "qc", "IS", "-o", "OUT/sample", "--panel", "BED_AS_IL"),
 ];
 
+/// Wave W13: `DownsampleSam` and `PositionBasedDownsampleSam` on
+/// `markdup.bam` and on `downsampled.bam` (tests/data/make_downsampled_bam.py:
+/// its header says both tools ran before), the Picard face, the verbs, a
+/// chain step and the errors.
+#[rustfmt::skip]
+const DOWNSAMPLE_CASES: &[Case] = &[
+    case!("picard_downsample_sam", "DownsampleSam", "I=MD", "O=OUT/ds.bam", "P=0.5", "M=OUT/ds.quality_yield_metrics"),
+    case!("picard_downsample_sam_high_accuracy_sam", "DownsampleSam", "I=MD", "O=OUT/ds.sam", "P=0.4", "STRATEGY=HighAccuracy", "ACCURACY=0.1", "RANDOM_SEED=7"),
+    case!("picard_downsample_sam_chained_index", "DownsampleSam", "I=MD", "O=OUT/ds.bam", "P=0.3", "S=Chained", "A=0.2", "CREATE_INDEX=true", "CREATE_MD5_FILE=true"),
+    case!("picard_downsample_sam_again", "DownsampleSam", "I=DS", "O=OUT/again.bam", "P=0.5"),
+    case!("verb_downsample_sam", "downsample-sam", "MD", "-o", "OUT/ds.bam", "-P", "0.6", "--strategy", "HighAccuracy", "--metrics-file", "OUT/ds.txt"),
+    case!("verb_downsample_sam_cram", "downsample-sam", "IS_CRAM", "--reference-sequence", "REF", "-o", "OUT/ds.sam", "--probability", "0.5", "-R", "-3"),
+    case!("chain_downsample_sam", "chain", "MD", "-o", "OUT/s", "+", "downsample-sam", "--probability", "0.5", "--strategy", "Chained", "--metrics-file", "OUT/s.downsampled.txt", "+", "mark-duplicates", "+", "quality-yield", "+", "write", "OUT/out.bam"),
+    case!("error_downsample_sam_probability", "DownsampleSam", "I=MD", "O=OUT/ds.bam", "P=1.5"),
+    case!("error_downsample_sam_strategy", "DownsampleSam", "I=MD", "O=OUT/ds.bam", "STRATEGY=constantmemory"),
+    case!("error_downsample_sam_accuracy", "DownsampleSam", "I=MD", "O=OUT/ds.bam", "S=HighAccuracy", "A=1"),
+    case!("error_downsample_sam_cram_output", "DownsampleSam", "I=MD", "O=OUT/ds.cram", "P=0.5"),
+    case!("error_verb_downsample_sam_metrics_input", "downsample-sam", "MD", "-o", "OUT/ds.bam", "--metrics-file", "MD"),
+    case!("picard_position_based_downsample_sam", "PositionBasedDownsampleSam", "I=MD", "O=OUT/pb.bam", "F=0.5"),
+    case!("picard_position_based_downsample_sam_options", "PositionBasedDownsampleSam", "I=MD", "O=OUT/pb.sam", "F=0.8", "REMOVE_DUPLICATE_INFORMATION=false", "STOP_AFTER=30"),
+    case!("picard_position_based_downsample_sam_allow", "PositionBasedDownsampleSam", "I=DS", "O=OUT/pb.bam", "F=0.5", "ALLOW_MULTIPLE_DOWNSAMPLING_DESPITE_WARNINGS=true"),
+    case!("verb_position_based_downsample_sam", "position-based-downsample-sam", "MD", "-o", "OUT/pb.bam", "--fraction", "0.3", "--read-name-regex", "null"),
+    case!("error_position_based_downsample_sam_again", "PositionBasedDownsampleSam", "I=DS", "O=OUT/pb.bam", "F=0.5"),
+    case!("error_position_based_downsample_sam_fraction", "PositionBasedDownsampleSam", "I=MD", "O=OUT/pb.bam", "F=2"),
+    case!("error_verb_position_based_downsample_sam_stdin", "position-based-downsample-sam", "-", "--fraction", "0.5", "-o", "OUT/pb.bam"),
+    case!("error_chain_position_based_downsample_sam", "chain", "MD", "-o", "OUT/s", "+", "position-based-downsample-sam", "--fraction", "0.5"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -1385,6 +1414,11 @@ fn documented_interval_converter_commands_on_the_fixtures() {
 #[test]
 fn documented_n_runs_and_panel_commands_on_the_fixtures() {
     check(N_RUNS_CASES);
+}
+
+#[test]
+fn documented_downsample_commands_on_the_fixtures() {
+    check(DOWNSAMPLE_CASES);
 }
 
 /// `make golden` runs this with `--features pdf` and the test below without.

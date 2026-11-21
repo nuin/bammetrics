@@ -69,6 +69,8 @@ interval-list-to-bed                               IntervalListToBed
 vcf-to-interval-list                               VcfToIntervalList
 scatter-intervals-by-ns                            ScatterIntervalsByNs
 non-n-fasta-size                                   NonNFastaSize
+downsample-sam                                     DownsampleSam
+position-based-downsample-sam                      PositionBasedDownsampleSam
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.

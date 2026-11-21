@@ -1,0 +1,12 @@
+## argv
+position-based-downsample-sam
+-
+--fraction
+0.5
+-o
+OUT/pb.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics position-based-downsample-sam: INPUT=/dev/stdin: PositionBasedDownsampleSam reads its input twice (the tile extents, then the records), so it needs a file, not standard input or a pipe

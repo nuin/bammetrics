@@ -146,3 +146,11 @@ def test_values_are_distinct():
         pytest.skip("no case ran")
     assert len(set(SEEN)) >= 3, sorted(set(SEEN))
     RESULTS.append((f"{TOOL} distinct kept counts", len(set(SEEN)), len(set(SEEN)), ""))
+
+
+def test_the_golden_fixture():
+    """tests/data/downsampled.bam says this tool ran before."""
+    source = FIXTURES / "downsampled.bam"
+    run_case(source, ["F=0.5"], "downsampled.bam", outcome="fail")
+    run_case(source, ["F=0.5", "ALLOW_MULTIPLE_DOWNSAMPLING_DESPITE_WARNINGS=true"],
+             "downsampled.bam, allowed")

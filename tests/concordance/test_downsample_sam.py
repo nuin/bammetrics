@@ -270,3 +270,11 @@ def test_values_are_distinct():
     for strategy in STRATEGIES:
         counts = {kept for name, kept in SEEN if name == f"STRATEGY={strategy}"}
         assert len(counts) >= 3, f"{strategy}: {sorted(counts)}"
+
+
+@pytest.mark.parametrize("strategy", STRATEGIES)
+def test_the_golden_fixture(strategy):
+    """tests/data/downsampled.bam: an @PG with rs:1 and one without, as the golden
+    cases read it."""
+    compare(TOOL, FIXTURES / "downsampled.bam", ["P=0.5", f"STRATEGY={strategy}"],
+            f"downsampled.bam {strategy}")
