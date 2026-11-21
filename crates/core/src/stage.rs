@@ -508,6 +508,20 @@ const STAGES: &[StageRow] = &[
         kind: StageKind::Holds,
         check: crate::revert_original_base_qualities_and_add_mate_cigar::check_stage,
     },
+    StageRow {
+        tool: "FixMateInformation",
+        build: crate::fix_mate_information::stage,
+        label: "fixed",
+        kind: StageKind::Holds,
+        check: crate::fix_mate_information::check_stage,
+    },
+    StageRow {
+        tool: "FilterSamReads",
+        build: crate::filter_sam_reads::stage,
+        label: "filtered",
+        kind: StageKind::Streams,
+        check: crate::filter_sam_reads::check_stage,
+    },
 ];
 
 fn stage_row(tool: &Tool) -> Option<&'static StageRow> {
@@ -546,12 +560,15 @@ pub fn streams(tool: &Tool) -> bool {
 }
 
 /// [`streams`] for a step with these Picard arguments: an
-/// `AddOrReplaceReadGroups` whose `SORT_ORDER` names a sort holds its
-/// records.
+/// `AddOrReplaceReadGroups` or `FilterSamReads` whose `SORT_ORDER` names a
+/// sort holds its records.
 pub fn streams_with(tool: &Tool, argv: &[String]) -> bool {
+    let sorts_with = [
+        crate::add_or_replace_read_groups::TOOL.name,
+        crate::filter_sam_reads::TOOL.name,
+    ];
     streams(tool)
-        && !(tool.name == crate::add_or_replace_read_groups::TOOL.name
-            && crate::add_or_replace_read_groups::sorts(argv))
+        && !(sorts_with.contains(&tool.name) && crate::add_or_replace_read_groups::sorts(argv))
 }
 
 /// A usage error for options the stage of `tool` cannot take, asked before

@@ -20,7 +20,7 @@ use crate::pass;
 use crate::sam_text::Stringency;
 
 /// One opened input: its header and its record stream.
-type Stream<'a> = (sam::Header, &'a mut (dyn Read + 'static), bool);
+pub(crate) type Stream<'a> = (sam::Header, &'a mut (dyn Read + 'static), bool);
 
 /// What `openInputs` gives: the header and the records in order.
 pub struct Inputs<'a> {
@@ -63,6 +63,26 @@ pub fn open<T>(
         let f = f.take().expect("called once");
         f(combine(streams, assume)?)
     };
+    let decoding = Decoding {
+        reference,
+        threads,
+        stringency,
+    };
+    open_nested(paths, decoding, Vec::new(), &mut call)
+}
+
+/// Open every input in turn and hand `f` each header, record stream and
+/// whether it is a CRAM, in the order given (`FixMateInformation` merges
+/// them itself).
+pub(crate) fn open_streams<T>(
+    paths: &[PathBuf],
+    reference: Option<&Path>,
+    threads: usize,
+    stringency: Stringency,
+    f: impl FnOnce(Vec<Stream<'_>>) -> Result<T>,
+) -> Result<T> {
+    let mut f = Some(f);
+    let mut call = |streams: Vec<Stream<'_>>| (f.take().expect("called once"))(streams);
     let decoding = Decoding {
         reference,
         threads,

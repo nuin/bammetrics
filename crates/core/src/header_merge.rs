@@ -373,6 +373,11 @@ fn same_dictionary(a: &sam::Header, b: &sam::Header) -> Result<()> {
 enum Order {
     Coordinate,
     Queryname,
+    /// Each input after the one before it. htsjdk compares the
+    /// `System.identityHashCode` of the two records, an order no run
+    /// repeats; the inputs in the order given is the one order a test can
+    /// hold.
+    Unsorted,
 }
 
 /// `MergingSamRecordIterator` over raw records.
@@ -386,7 +391,7 @@ pub struct Merger<'a> {
 
 impl<'a> Merger<'a> {
     /// Take the records of `readers` (one per merged header, in order)
-    /// in `order`, coordinate or queryname.
+    /// in `order`: coordinate, queryname, or unsorted (input after input).
     pub fn new(
         readers: Vec<&'a mut (dyn Read + 'static)>,
         merged: HeaderMerger,
@@ -395,6 +400,7 @@ impl<'a> Merger<'a> {
         let order = match order {
             SortOrder::Queryname => Order::Queryname,
             SortOrder::Coordinate => Order::Coordinate,
+            SortOrder::Unsorted => Order::Unsorted,
             other => {
                 return Err(Error::Metric(format!(
                     "merging inputs in {} order is not supported",
@@ -435,6 +441,7 @@ impl<'a> Merger<'a> {
         match self.order {
             Order::Coordinate => coordinate_order(x, y),
             Order::Queryname => queryname_order(x, y),
+            Order::Unsorted => a.cmp(&b),
         }
     }
 
