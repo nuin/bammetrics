@@ -378,6 +378,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::arrays::baf_regress::TOOL,
     &crate::arrays::verify_id_intensity::TOOL,
     &crate::arrays::variant_calling::TOOL,
+    &crate::interval_list_tools::TOOL,
 ];
 
 /// The tool named `name`.
@@ -407,6 +408,15 @@ pub struct Invocation {
     /// Set by a face whose user asked for quiet (`-q`, Python): a tool
     /// prints no note of its own on standard error.
     pub quiet: bool,
+    /// Every option as given, ignored ones included: the long name and the
+    /// value, in command-line order. A tool that writes Picard's command
+    /// line into its output (`IntervalListTools` `@PG CL`) rebuilds it
+    /// from these.
+    pub given: Vec<(&'static str, String)>,
+    /// True when Picard parses the arguments with its legacy parser: some
+    /// argument is `KEY=VALUE` without a leading dash and none starts with
+    /// `-` (`CommandLineSyntaxTranslater.isLegacyPicardStyle`).
+    pub legacy_syntax: bool,
 }
 
 impl Invocation {
@@ -611,6 +621,8 @@ impl Tool {
         let mut inv = Invocation {
             threads: default_threads(),
             command: self.name.to_owned(),
+            legacy_syntax: args.iter().any(|a| !a.starts_with('-') && a.contains('='))
+                && !args.iter().any(|a| a.starts_with('-')),
             ..Invocation::default()
         };
         let mut input = None;
@@ -665,6 +677,7 @@ impl Tool {
                 )));
             }
             inv.command.push_str(&format!(" {}={value}", opt.names[0]));
+            inv.given.push((opt.names[0], value.clone()));
             match opt.kind {
                 Kind::Ignored(why) => {
                     let typed = value == "null"

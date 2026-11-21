@@ -387,6 +387,15 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
             out("arrays"),
         ],
     );
+    // An interval list and no metrics file: the rows have no class.
+    args.insert(
+        "IntervalListTools",
+        vec![
+            format!("I={DATA}/targets.interval_list"),
+            "PADDING=50".to_owned(),
+            out("padded.interval_list"),
+        ],
+    );
     args
 }
 

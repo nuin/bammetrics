@@ -49,6 +49,7 @@ pub mod histogram;
 pub mod hs_metrics;
 pub mod index_depth;
 pub mod insert_size;
+pub mod interval_list_tools;
 pub mod interval_ops;
 pub mod intervals;
 pub mod java;
