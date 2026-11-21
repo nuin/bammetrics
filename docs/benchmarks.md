@@ -709,6 +709,28 @@ The queryname row first ran against 1.2 times its input (1,859 MiB) and failed a
 MiB; its limit is now 1.2 times its output, for the reason given above. The two inputs
 other than the slice are made again with the commands of that section before a run.
 
+The wave W13 rows (2026-11-21, feat/merge-reorder, one run each; the scale rows with
+`--out-root ~/data/bammetrics-scale/waves/w13`). The scale inputs are the W05 slice
+(`slice.chr20_21.bam`, 29,330,868 records) split by read group with `samtools split -@ 8
+--no-PG -f slice_rg_%#.bam` (12 BAMs of 168 to 181 MB) and `reversed.dict`, an `@HD
+VN:1.6` line then the slice's `@SQ` lines in reverse order (`samtools view -H
+slice.chr20_21.bam | grep '^@SQ' | tail -r`), all in `~/data/bammetrics-scale/waves/w13`.
+They were removed after the run and are made again with these commands. The limit of
+each scale row is the W05 sort gate, 3,072 MiB:
+
+| command | tier | peak RSS MiB / limit | wall s | spill MiB / limit |
+|---|---|---|---:|---:|
+| `merge-sam-files` | fixture | 7.2 / 64 | 0.01 | |
+| `merge-sam-files queryname` | fixture | 9.7 / 64 | 0.02 | 0.0 |
+| `reorder-sam` | fixture | 8.0 / 64 | 0.01 | 0.0 |
+| `merge-sam-files slice by read group` | scale | 96.3 / 3072 | 13.37 | |
+| `merge-sam-files slice queryname` | scale | 471.2 / 3072 | 71.88 | 2,783.0 / 3,284 |
+| `reorder-sam slice` | scale | 596.6 / 3072 | 33.51 | 1,725.2 / 3,284 |
+
+The presorted merge holds one record and one BGZF reader per input. The queryname merge
+and the reorder hold `MAX_RECORDS_IN_RAM` (500,000) records per sorted run, as `sort-sam
+queryname slice` does (592.4 MiB above).
+
 To add a scale row:
 
 1. Keep the data under `~/data/bammetrics-scale`, never in the repository. Write nothing

@@ -1723,6 +1723,25 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   decodes it, so an encoded surrogate (`ED A0 80`) in an `@SQ` field is one U+FFFD in
   the `OUTPUT` of `ScatterIntervalsByNs`.
 
+## MergeSamFiles and ReorderSam
+
+- `MergeSamFiles SORT_ORDER=unsorted` writes the records of the first input, then of the
+  second, and so on. Picard merges them by `System.identityHashCode`, an order that
+  changes from run to run (docs/07 D121).
+- `MergeSamFiles` over inputs that are not all in `SORT_ORDER` sorts them; records that tie
+  in the sort (one read name in two read groups, under `queryname`) come in input order.
+  Picard hands its sort the records in hash order, so the tie can come the other way
+  (D122).
+- `MergeSamFiles SORT_ORDER=duplicate` on two or more inputs that are all in duplicate
+  order exits 2 (D123).
+- `MergeSamFiles COMMENT` with a line end exits 2; Picard writes it (D125).
+- `MergeSamFiles INTERVALS` reads each input whole and keeps what the index query returns
+  (D126). It opens at most 1,000 inputs.
+- `ReorderSam` reads its input in file order. Picard reads an indexed input contig by
+  contig in its dictionary's order: the same for a coordinate-sorted input (D127).
+- A `SEQUENCE_DICTIONARY` file read whole (a `.dict`, an interval list, SAM text) holds
+  at most 256 MiB.
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))

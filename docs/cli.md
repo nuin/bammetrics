@@ -326,6 +326,8 @@ table.
 | `interval-list-tools` | IntervalListTools (interval lists as positionals or `-i`; `--second-input` for SUBTRACT, SYMDIFF and OVERLAPS) | `-o` interval list, or with `--scatter-count` above 1 the directory `-o` of `temp_NNNN_of_N/scattered.interval_list`; the `--output-value` count on standard output or in `--count-output`; no file without `-o` |
 | `scatter-intervals-by-ns` | ScatterIntervalsByNs (a FASTA with its `.fai` and `.dict`; `--max-to-merge`, `--output-type`) | `-o` interval list of `ACGTmer` and `Nmer` runs, `-o -` standard output |
 | `non-n-fasta-size` | NonNFastaSize (a FASTA with its `.fai` and `.dict`; `--intervals`) | the count and a line end, in `-o` or on standard output |
+| `merge-sam-files` | MergeSamFiles (SAM, BAM or CRAM files as positionals or `-i`; `--sort-order`, `--merge-sequence-dictionaries`, `--comment`, `--intervals`) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `reorder-sam` | ReorderSam (a SAM, BAM or CRAM; `--sequence-dictionary` required, `-S`, `-U`) | `-o` BAM, or SAM text for a name ending in `.sam` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -1456,6 +1458,70 @@ fixtures from `tests/concordance/n_run_refs.py`).
   or `.dict`, or the `--intervals` file; a failed run writes no file, and with `-o -` prints
   nothing: the list is copied to standard output once it is whole.
 - Neither reads a BAM, so neither is a step of `chain` (exit 2).
+
+### merge-sam-files
+
+```bash
+bammetrics merge-sam-files rg1.bam rg2.bam rg3.bam -o sample.bam --create-index
+bammetrics merge-sam-files a.bam -i b.cram -R ref.fa -o merged.bam --sort-order queryname
+bammetrics MergeSamFiles I=a.bam I=b.bam O=merged.bam MERGE_SEQUENCE_DICTIONARIES=true COMMENT=lane1
+```
+
+Picard's `MergeSamFiles` (`tests/concordance/test_merge_sam_files.py`, inputs from
+`tests/concordance/merge_bams.py`).
+
+- The header is `@HD VN:1.6 GO:none SO:<order>`, the first input's `@SQ` lines, every
+  input's `@RG` and `@PG` lines sorted by ID, every input's `@CO` lines, then each
+  `--comment`. A read group or program ID that two inputs use for different lines is
+  renamed `ID.1`, `ID.2` (htsjdk's base 36 counter), and so is each record's `RG` or `PG`.
+  No `@PG` line is added.
+- The dictionaries must be the same (names or `AN` names, lengths, `M5` when both have
+  one), or exit 1. `--merge-sequence-dictionaries` merges them as htsjdk does: a contig the
+  merge lacks goes before the next contig they share, or last; two shared contigs in two
+  orders exit 1. Each record then names its contigs by the merged index.
+- `--sort-order` (default `coordinate`): when every input says that order in its header,
+  or with `--assume-sorted`, `--intervals` or `--sort-order unsorted`, the records are
+  merged as they come and the order is checked; otherwise they are sorted as `sort-sam`
+  sorts them (`--max-records-in-ram`, `--tmp-dir`). `unsorted` takes the inputs one after
+  the other; Picard takes them in `System.identityHashCode` order, which changes from run
+  to run. A sort of inputs in other orders gets the records in that order too, so records
+  that tie in the sort (one read name in two inputs) may come in another order than
+  Picard's. `unknown` exits 1 on two inputs with records. `duplicate` on inputs already in
+  duplicate order exits 2: htsjdk merges them with a comparator that numbers libraries as
+  it meets them.
+- `--intervals` (an interval list) keeps the records that overlap an interval, as an
+  index query returns them; every input needs an index beside it, or exit 1. bammetrics
+  reads each input whole.
+- `--create-index` needs `--sort-order coordinate`. A `--comment` with a line end exits 2.
+  At most 1,000 inputs, all open at once.
+- It merges several files, so it is not a step of `chain` (exit 2): merge first, then
+  chain the merged BAM.
+
+### reorder-sam
+
+```bash
+bammetrics reorder-sam in.bam --sequence-dictionary ref_hg38.dict -o out.bam
+bammetrics reorder-sam in.cram -R old.fa --sequence-dictionary new.fa -S -o out.bam
+bammetrics ReorderSam I=in.bam SD=new.dict O=out.bam ALLOW_CONTIG_LENGTH_DISCORDANCE=true
+```
+
+Picard's `ReorderSam` (`tests/concordance/test_reorder_sam.py`).
+
+- `--sequence-dictionary` is a `.dict`, a FASTA with its `.dict` beside it (a FASTA
+  without one exits 1, as in Picard), a SAM, BAM or CRAM, an interval list or a VCF with
+  `##contig` lines. A file read whole holds at most 256 MiB.
+- Each contig of the input needs a contig of the same name and length in the dictionary,
+  or exit 1. `-S` (`--allow-incomplete-dict-concordance`) lets a contig go: its records
+  become unplaced (start 0, unmapped flag, CIGAR `*`, MAPQ 0), and their mates get mate
+  start 0, the mate unmapped flag and no `MC` tag. `-U`
+  (`--allow-contig-length-discordance`) maps a contig of another length and prints
+  Picard's warning on standard error.
+- The output header is the input's with the new `@SQ` lines. The records are sorted
+  again in the input's order (`coordinate` under the new dictionary, `queryname`,
+  `duplicate`) as Picard's writer sorts them; `unsorted` is written as read; `unknown`
+  exits 1 on two records.
+- In a chain the step sorts the stream when its order names a sort, and leaves
+  `reordered`.
 
 ### mark-duplicates
 

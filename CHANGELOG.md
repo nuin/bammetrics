@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased
+
+Wave W13 of docs/07, part one: `MergeSamFiles` and `ReorderSam`.
+
+### Added
+
+- `MergeSamFiles` (verb `merge-sam-files`, Python `merge_sam_files()`), as Picard 3.5.0:
+  the records of every `INPUT` under one merged header (`header_merge.rs`): read group and
+  program IDs that collide renamed with htsjdk's base 36 counter, the `@CO` lines of every
+  input then `COMMENT`, `GO:none`, `SO:<SORT_ORDER>`, no `@PG` line. Inputs all in
+  `SORT_ORDER` (or with `ASSUME_SORTED`, `INTERVALS`, or `SORT_ORDER=unsorted`) are merged
+  through the port of `java.util.PriorityQueue` into a presorted writer; others are sorted
+  as `SortSam` sorts (`MAX_RECORDS_IN_RAM`, `TMP_DIR`). `MERGE_SEQUENCE_DICTIONARIES`
+  merges the dictionaries as `mergeSequenceDictionaries` does and moves each record's
+  references by name; the coordinate merge then compares merged indexes. `INTERVALS`
+  keeps the records an index query returns and needs an index beside each input.
+  `USE_THREADING` changes nothing. `CREATE_INDEX` needs `SORT_ORDER=coordinate`. Not a
+  chain step (exit 2, wave W14).
+- `ReorderSam` (verb `reorder-sam`, Python `reorder_sam()`), as Picard 3.5.0: the records
+  under the dictionary of `SEQUENCE_DICTIONARY` (a `.dict`, a FASTA with its `.dict`, a
+  SAM, BAM or CRAM, an interval list, a VCF), contigs matched by name;
+  `ALLOW_INCOMPLETE_DICT_CONCORDANCE` makes the records of a lost contig unplaced and
+  their mates' mate fields unplaced without `MC`; `ALLOW_CONTIG_LENGTH_DISCORDANCE`.
+  Sorted again in the input's order as Picard's writer sorts. A chain barrier
+  (`reordered`).
+- `header_merge.rs`: `HeaderMerger::merge_with`, `merge_dictionaries`, the dictionary test
+  of `SAMSequenceRecord.isSameSequence` (`M5`, `AN`), `Merger::from_sources` with
+  `MergeOrder` (coordinate with merged indexes, queryname, input order, no comparator).
+- Concordance modules `tests/concordance/test_merge_sam_files.py` (inputs from
+  `merge_bams.py`) and `test_reorder_sam.py`; golden cases on the fixtures of
+  `tests/data/make_merge_reorder_fixtures.py`; `crates/cli/tests/reorder_sam.rs` (chained
+  equals staged); memgate rows, fixture and scale (docs/benchmarks.md).
+
+### Changed
+
+- The dictionary test of `MarkDuplicates` with several inputs follows
+  `SAMSequenceRecord.isSameSequence`: two `M5` values that differ fail the run, two names
+  that an `AN` field matches pass.
+
 ## 0.30.0
 
 Wave W12 of docs/07: the interval layer `interval_ops` and five interval tools (65 in all), none of them a chain step; `qc --panel` takes the lists they write.

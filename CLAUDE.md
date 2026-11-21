@@ -32,6 +32,19 @@ bammetrics reimplements Picard BAM QC metrics in Rust (on `noodles` 0.119) and e
 
 `NonNFastaSize` (verb `non-n-fasta-size`, wave W12) counts the bases of the same indexed FASTA that are not `N` or `n`, inside `INTERVALS` keyed by `@SQ` index when given, and writes the number and a line end to `OUTPUT` or standard output.
 
+`MergeSamFiles` (verb `merge-sam-files`) and `ReorderSam` (verb `reorder-sam`) are wave W13
+(docs/07 D121 to D129). `merge_sam_files.rs` opens every input at once
+(`mark_duplicates::inputs::open_all`), merges the headers through
+`header_merge::HeaderMerger::merge_with` (`MERGE_SEQUENCE_DICTIONARIES`), and takes the
+records through `header_merge::Merger::from_sources` (`MergeOrder`) into
+`record_edit::Pipeline`: presorted when every input is in `SORT_ORDER` (or
+`ASSUME_SORTED`, `INTERVALS`, `unsorted`), else the `sam_sort` sort; `INTERVALS` through
+`view_sam::IntervalFilter`; not a chain step. `reorder_sam.rs` is a record edit whose
+writer sorts in the input's order (`WriterOrder::Header`), a chain barrier through
+`sorting_stage`. Tests: `tests/concordance/test_merge_sam_files.py` (`merge_bams.py`),
+`test_reorder_sam.py`, `crates/cli/tests/reorder_sam.rs`, fixtures from
+`tests/data/make_merge_reorder_fixtures.py`.
+
 ## Commands
 
 ```bash
@@ -181,6 +194,8 @@ Shared building blocks in `crates/core/src`:
 | `bgzf_copy.rs` | htsjdk's `blockCopyBamFile` as bytes: `termination` (`checkTermination`), `Source` (a BAM's end checked and its header read to the first record's virtual offset, `BamStart` with the binary reference list and `has_records`), `Source::copy` (the rest of the first record's block deflated again by `write_blocks`, stored at level 0, every later block copied and walked header by header), `EOF_BLOCK`. `GatherBamFiles` and the byte path of `record_edit.rs` (`RecordEdit::copies_bytes`) use it. |
 | `gather_bam_files.rs` | `GatherBamFiles`: `unroll` (`IOUtil.unrollFiles`, lists of paths, `MAX_INPUTS`, `MAX_LISTS`, `MAX_LIST_BYTES`), the block copy of BAM inputs (every input checked first, the dictionary of an input with records against the first's), `gatherNormally` for a SAM or CRAM input through `record_edit::Out`, `block_copy_index` (`<basename>.bai`). |
 | `calculate_read_group_checksum.rs`, `java_date.rs` | `CalculateReadGroupChecksum`: the header text as htsjdk decodes it (a BAM one character per byte, SAM text and CRAM UTF-8), checked by `sam_text::Reader`, `read_groups` (htsjdk's drop rules), `checksum` (`SAMHeaderRecordComparator`, fields in `TreeMap` order, `ID` left out). `java_date.rs`: `decode_date` (`DateParser`, then `java.util.Date.parse`) and `iso8601` (`Iso8601Date.toString` in the process's zone, `ZoneInfo`'s offset before 1900, the Julian calendar before 15 October 1582). |
+| `merge_sam_files.rs` | `MergeSamFiles`: `Merge` (the options; `presorted`, Picard's choice of path; `merge_order`), `Input` (one input as a `header_merge::RecordSource`: reference ids checked, `INTERVALS` kept, `MD` and `NM` of a CRAM), the merged header with `COMMENT` and `SO`, at most `MAX_INPUTS` (1,000) inputs. |
+| `reorder_sam.rs` | `ReorderSam`: the dictionary of `SEQUENCE_DICTIONARY` (`read_sequences`, a FASTA needs its `.dict`, `MAX_DICTIONARY_BYTES`), `sequence_map` (`buildSequenceDictionaryMap`), the edit `Reordering` (references by name, a lost contig unplaced, a lost mate without `MC`, the record encoded again), `stage` (a sort barrier, or streaming for an unsorted stream). |
 
 `insert_size.rs` is the reference tool: copy its shape. `build_bam_index.rs` is the shape of a tool whose one file is not a metrics file and is written by the tool (its verb is `Files::Bam` with `default_output`, so `-o` may be left out and `--format` takes `picard` only). `variant_calling_metrics.rs` is the shape of a VCF tool whose `OUTPUT` is a prefix (`main: None`, every file in `extra`), `compare_metrics.rs` of a tool with a Picard exit code (`Comparison::status`; the Picard face in `crates/cli/src/lib.rs` calls its `run_cli`, the verb its `compare`), `genotype_concordance.rs` of a tool without `INPUT` (`Opt::rejected(&["INPUT", "I"])`; `Tool::takes_input` is then false, `Invocation::input` empty, and the Python function fills the tool's value options from its positional arguments in declaration order). `quality_score_distribution.rs` is the shape of a histogram-only tool, `gc_bias.rs` of a tool with two files, `library_complexity.rs` of a tool that is not one pass (`collector: None`), `wgs_metrics.rs` of a tool over the pileup engine, `bed_to_interval_list.rs` of a tool whose file is not a metrics file, `bam_index_stats.rs` of a tool with no `OUTPUT` option (its text goes to standard output), `fifo_buffer.rs` of a tool with neither `INPUT` nor `OUTPUT` and no rows (bytes from standard input to standard output; the command faces call its copy, `run` refuses, the glossary test lists it in `EXEMPT`), `hs_metrics.rs` of a tool with `Levels` and extra files, `mark_duplicates/` of a tool that writes the reads it reads (raw records, two reads, a spilling sort; its `OUTPUT` is a value row and `METRICS_FILE` the output row, so Python takes `output=` for the BAM and `metrics_file=`, and the verb is `Files::Bam`). `insert_size.rs`, `alignment_summary.rs`, `quality_yield.rs` and `hs_metrics.rs` keep `subcommand_header`, the `StringHeader` line their 0.12 subcommands wrote, which the verbs of the same name still write (`core/src/collect.rs` runs the four in one pass for the `collect` verb).
 

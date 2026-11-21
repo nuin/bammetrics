@@ -108,9 +108,9 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | FastqToSam | Read data | later | Harness builds unaligned fixtures. | samtools import, fgbio |
 | FilterSamReads | Read data | out | Subsetting. | samtools view |
 | GatherBamFiles | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, `bgzf_copy.rs`): BAM inputs block copied as htsjdk copies them, byte for byte at `COMPRESSION_LEVEL=0`; SAM or CRAM inputs read record by record. S | samtools cat |
-| MergeSamFiles | Read data | out | Merge. | samtools merge |
+| MergeSamFiles | Read data | core | Shipped in wave W13 of docs/07 (`merge_sam_files.rs` over `header_merge.rs`): read group and program IDs renamed on a collision, `MERGE_SEQUENCE_DICTIONARIES`, the priority-queue merge of presorted inputs, else the `SortSam` sort; `INTERVALS`. Not a chain step. S | samtools merge |
 | MergeBamAlignment | Read data | out | uBAM merge step. | fgbio ZipperBams |
-| ReorderSam | Read data | out | Contig reorder. | none |
+| ReorderSam | Read data | core | Shipped in wave W13 of docs/07 (`reorder_sam.rs`, a record edit): references matched by name, records on a lost contig made unplaced, the input's order sorted again; a chain barrier. S | none |
 | ReplaceSamHeader | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): the header of `HEADER` over every record, Picard's sort order checks. S | samtools reheader |
 | RevertOriginalBaseQualitiesAndAddMateCigar | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the record-editing shape `record_edit.rs`; a chain barrier): `QUAL` from `OQ`, `MC`, `MQ` and the mate fields from each mate after a name sort, `SORT_ORDER`, Picard's early exit. S | samtools fixmate (MC only) |
 | RevertSam | Read data | out | BAM to uBAM. | none |

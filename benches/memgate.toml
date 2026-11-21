@@ -852,3 +852,113 @@ needs = [
 ]
 max_rss_mib = 64
 max_seconds = 300
+
+# Wave W13: MergeSamFiles and ReorderSam. Fixture rows first, then the scale rows on the
+# slice of wave W05 (slice.chr20_21.bam, 29,330,868 records). slice_rg_0.bam to
+# slice_rg_11.bam are its 12 read groups (samtools split --no-PG -f slice_rg_%#.bam);
+# reversed.dict is its 3,366 @SQ lines in reverse order. docs/benchmarks.md ("Memory
+# gate") says how each is made. The limit of each scale row is the W05 sort gate: sort
+# or merge RSS at most --sort-memory (2 GiB) plus 1 GiB, 3,072 MiB. Measured on
+# 2026-11-21: the presorted merge of the 12 pieces 97 MiB in 12 s, the queryname merge
+# 473 MiB in 68 s, the reorder 593 MiB in 33 s.
+
+[[command]]
+name = "merge-sam-files"
+argv = [
+    "{bin}", "merge-sam-files", "tests/data/markdup.bam", "-i", "tests/data/artifact.bam",
+    "-i", "tests/data/merge_other_dict.sam", "-o", "{out}/merged.bam",
+    "--merge-sequence-dictionaries", "--create-index", "--create-md5-file",
+]
+needs = ["tests/data/markdup.bam", "tests/data/artifact.bam", "tests/data/merge_other_dict.sam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "merge-sam-files queryname"
+argv = [
+    "{bin}", "merge-sam-files", "tests/data/markdup.bam", "-i", "tests/data/oxog.bam", "-i",
+    "tests/data/insert_size.bam", "-o", "{out}/merged.bam", "--sort-order", "queryname",
+    "--max-records-in-ram", "5", "--tmp-dir", "{out}/tmp",
+]
+needs = ["tests/data/markdup.bam", "tests/data/oxog.bam", "tests/data/insert_size.bam"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+
+[[command]]
+name = "reorder-sam"
+argv = [
+    "{bin}", "reorder-sam", "tests/data/markdup.bam", "--sequence-dictionary",
+    "tests/data/reorder_extra.dict", "-o", "{out}/reordered.bam", "--max-records-in-ram",
+    "5", "--tmp-dir", "{out}/tmp", "--create-index",
+]
+needs = ["tests/data/markdup.bam", "tests/data/reorder_extra.dict"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+
+[[command]]
+name = "merge-sam-files slice by read group"
+tier = "scale"
+argv = [
+    "{bin}", "merge-sam-files", "~/data/bammetrics-scale/waves/w13/slice_rg_0.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_1.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_2.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_3.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_4.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_5.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_6.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_7.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_8.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_9.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_10.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_11.bam",
+    "-o", "{out}/merged.bam",
+]
+needs = [
+    "~/data/bammetrics-scale/waves/w13/slice_rg_0.bam",
+    "~/data/bammetrics-scale/waves/w13/slice_rg_11.bam",
+]
+max_rss_mib = 3072
+
+[[command]]
+name = "merge-sam-files slice queryname"
+tier = "scale"
+argv = [
+    "{bin}", "merge-sam-files", "~/data/bammetrics-scale/waves/w13/slice_rg_0.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_1.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_2.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_3.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_4.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_5.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_6.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_7.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_8.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_9.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_10.bam",
+    "-i", "~/data/bammetrics-scale/waves/w13/slice_rg_11.bam",
+    "-o", "{out}/merged.bam", "--sort-order", "queryname", "--tmp-dir", "{out}/tmp",
+]
+needs = [
+    "~/data/bammetrics-scale/waves/w13/slice_rg_0.bam",
+    "~/data/bammetrics-scale/waves/w13/slice_rg_11.bam",
+]
+max_rss_mib = 3072
+spill_dir = "{out}/tmp"
+max_spill_mib = 3284
+
+[[command]]
+name = "reorder-sam slice"
+tier = "scale"
+argv = [
+    "{bin}", "reorder-sam", "~/data/bammetrics-scale/waves/w05/slice.chr20_21.bam",
+    "--sequence-dictionary", "~/data/bammetrics-scale/waves/w13/reversed.dict", "-o",
+    "{out}/reordered.bam", "--tmp-dir", "{out}/tmp",
+]
+needs = [
+    "~/data/bammetrics-scale/waves/w05/slice.chr20_21.bam",
+    "~/data/bammetrics-scale/waves/w13/reversed.dict",
+]
+max_rss_mib = 3072
+spill_dir = "{out}/tmp"
+max_spill_mib = 3284
