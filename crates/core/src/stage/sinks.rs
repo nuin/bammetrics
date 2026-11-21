@@ -59,7 +59,7 @@ impl Read for Framed<'_> {
 }
 
 /// Fill `record` from the bytes of `raw`.
-fn fill(record: &mut bam::Record, raw: &RawRecord) -> io::Result<()> {
+pub(crate) fn fill(record: &mut bam::Record, raw: &RawRecord) -> io::Result<()> {
     let body = raw.as_bytes();
     let size = u32::try_from(body.len())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?

@@ -691,7 +691,8 @@ marks nothing, as `CollectDuplicateMetrics` does.
   (`instrument:run:flowcell:lane:tile:x:y`); the last three fields give tile, x and y,
   the field before them the lane, and the third field of a 7-field name the flowcell.
   `READ_NAME_REGEX` takes Picard's regex with three groups (tile, x, y); then `FLOWCELL`
-  and `LANE` are empty. `READ_NAME_REGEX=null` puts every read on the `UNPARSED` row.
+  and `LANE` are empty. A regex with fewer groups that matches a name fails the run, as
+  `MarkDuplicates` fails. `READ_NAME_REGEX=null` puts every read on the `UNPARSED` row.
   `TILE` is Picard's 16-bit tile value. A name is read one character per byte (Latin-1),
   as `MarkDuplicates` reads it, so a byte above 127 never moves a read off its tile.
   A name whose flowcell or lane field holds an ASCII control character (tab, carriage

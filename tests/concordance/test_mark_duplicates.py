@@ -213,6 +213,7 @@ OPTIONS = {
     "regex_null": ["READ_NAME_REGEX=null"],
     "regex_seven": ["READ_NAME_REGEX=[^:]+:[^:]+:[^:]+:[^:]+:([0-9]+):([0-9]+):([0-9]+)"],
     "regex_partial": ["READ_NAME_REGEX=(?:.*:)?([0-9]+):([0-9]+):([0-9a-z]+)"],
+    "regex_one_group_no_int": ["READ_NAME_REGEX=([^:]+):.*"],
     "pixels_2500": ["OPTICAL_DUPLICATE_PIXEL_DISTANCE=2500"],
     "pixels_0": ["OPTICAL_DUPLICATE_PIXEL_DISTANCE=0"],
     "set_size_3": ["MAX_OPTICAL_DUPLICATE_SET_SIZE=3"],
@@ -292,6 +293,9 @@ FAILURES = {
     "barcode_not_a_string": ("md_markdup", ["BARCODE_TAG=XS"]),
     "barcode_tag_length": ("md_markdup", ["BARCODE_TAG=RXX"]),
     "bad_regex": ("md_markdup", ["READ_NAME_REGEX=("]),
+    "regex_no_group": ("md_markdup", ["READ_NAME_REGEX=.*"]),
+    "regex_one_group": ("md_markdup", ["READ_NAME_REGEX=.*:([0-9]+)"]),
+    "regex_two_groups": ("md_markdup", ["READ_NAME_REGEX=.*:([0-9]+):([0-9]+):[0-9]+"]),
     "bad_strategy": ("md_markdup", ["DUPLICATE_SCORING_STRATEGY=BEST"]),
     "bad_policy": ("md_markdup", ["TAGGING_POLICY=Some"]),
 }

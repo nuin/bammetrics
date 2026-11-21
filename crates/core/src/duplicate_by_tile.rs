@@ -416,7 +416,7 @@ impl DuplicateByTile {
             Ok(text) if text.is_ascii() => Cow::Borrowed(text),
             _ => Cow::Owned(latin1(name)),
         };
-        let Some((tile, x, y)) = self.parser.location(&text) else {
+        let Some((tile, x, y)) = self.parser.location(&text)? else {
             return Ok(&mut self.unparsed);
         };
         let (key, flowcell, lane) = match self.parser {

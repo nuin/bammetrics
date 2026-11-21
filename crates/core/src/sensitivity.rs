@@ -1,12 +1,14 @@
 //! `HET_SNP_SENSITIVITY` from Picard 3.5.0 `TheoreticalSensitivity`, with the
-//! `java.util.Random` stream it samples from, so the Monte Carlo estimate
-//! is the same number Picard prints; and the per-allele-fraction model
-//! behind `THEORETICAL_SENSITIVITY_OUTPUT` (`calculateSensitivities`), whose
-//! binomial draws come from the commons-math port in `commons_math.rs`.
+//! `java.util.Random` stream it samples from (`java_random.rs`), so the
+//! Monte Carlo estimate is the same number Picard prints; and the
+//! per-allele-fraction model behind `THEORETICAL_SENSITIVITY_OUTPUT`
+//! (`calculateSensitivities`), whose binomial draws come from the
+//! commons-math port in `commons_math.rs`.
 
 use crate::commons_math::{Binomial, Well19937c};
 use crate::error::{Error, Result};
 use crate::histogram::Histogram;
+use crate::java_random::JavaRandom;
 use crate::metric::{MetricRow, Value};
 
 /// `TheoreticalSensitivity.MAX_CONSIDERED_DEPTH_HET_SENS`.
@@ -23,54 +25,6 @@ const LARGE_NUMBER_OF_DRAWS: i32 = 10;
 const DEPTH_BIN_WIDTH: f64 = 0.01;
 /// `calculateSensitivities`: the MuTect2 log-odds threshold.
 const OUTPUT_LOG_ODDS_THRESHOLD: f64 = 6.2;
-
-/// `java.util.Random`: a 48-bit linear congruential generator.
-struct JavaRandom {
-    seed: u64,
-    /// `nextNextGaussian`, kept from the polar method's second value.
-    next_gaussian: Option<f64>,
-}
-
-impl JavaRandom {
-    const MULTIPLIER: u64 = 0x5_DEEC_E66D;
-    const MASK: u64 = (1 << 48) - 1;
-
-    fn new(seed: i64) -> Self {
-        Self {
-            seed: (seed as u64 ^ Self::MULTIPLIER) & Self::MASK,
-            next_gaussian: None,
-        }
-    }
-
-    /// `Random.next(bits)`.
-    fn next(&mut self, bits: u32) -> i64 {
-        self.seed = self.seed.wrapping_mul(Self::MULTIPLIER).wrapping_add(0xB) & Self::MASK;
-        (self.seed >> (48 - bits)) as i64
-    }
-
-    /// `Random.nextDouble`: 53 random bits scaled to [0, 1).
-    fn next_double(&mut self) -> f64 {
-        let bits = (self.next(26) << 27) + self.next(27);
-        bits as f64 * (1.0 / (1u64 << 53) as f64)
-    }
-
-    /// `Random.nextGaussian`: the polar method, two values per two draws.
-    fn next_gaussian(&mut self) -> f64 {
-        if let Some(value) = self.next_gaussian.take() {
-            return value;
-        }
-        loop {
-            let v1 = 2.0 * self.next_double() - 1.0;
-            let v2 = 2.0 * self.next_double() - 1.0;
-            let s = v1 * v1 + v2 * v2;
-            if s < 1.0 && s != 0.0 {
-                let multiplier = (-2.0 * s.ln() / s).sqrt();
-                self.next_gaussian = Some(v2 * multiplier);
-                return v1 * multiplier;
-            }
-        }
-    }
-}
 
 /// `TheoreticalSensitivity.RouletteWheel`: stochastic acceptance sampling of
 /// indices weighted by `weights`. The rejection counter persists across
@@ -410,23 +364,6 @@ pub fn phred_from_error_probability(probability: f64) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn java_random_matches_the_jdk() {
-        // new java.util.Random(51): nextDouble() twice, printed by the JDK.
-        let mut rng = JavaRandom::new(51);
-        assert_eq!(rng.next_double(), 0.7296240607935824);
-        assert_eq!(rng.next_double(), 0.7837023678833833);
-    }
-
-    #[test]
-    fn java_gaussian_matches_the_jdk() {
-        // new java.util.Random(51): nextGaussian() three times.
-        let mut rng = JavaRandom::new(51);
-        assert_eq!(rng.next_gaussian(), 0.7059203462238288);
-        assert_eq!(rng.next_gaussian(), 0.8721702467442611);
-        assert_eq!(rng.next_gaussian(), -0.8754653493198823);
-    }
 
     #[test]
     fn trim_drops_trailing_zeros_only() {

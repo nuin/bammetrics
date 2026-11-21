@@ -1280,7 +1280,11 @@ below. bammetrics differs here:
   text and `ViewSam` prints it back. bammetrics holds BAM records, as Picard does once it
   writes a BAM. A reference name the header lacks is read as no reference (`*`). A base
   outside `=ACMGRSVTWYHKDBN.` is read as `N`. A `MAPQ` outside 0 to 255 keeps its low byte, a
-  flag above 65535 its low 16 bits, as htsjdk writes both into a BAM. A negative `MAPQ` passes
+  flag above 65535 its low 16 bits. A tool that writes these records (`SortSam`,
+  `DownsampleSam`) writes the altered record, where Picard 3.5.0 fails when it writes the
+  BAM: `Value (70000) too large to be written as ushort`, `Value (300) to large to be
+  written as ubyte`, `Bad base passed to charToCompressedBaseHigh`, `Reference index for
+  nope not found in sequence dictionary` (for `RNAME` and `RNEXT`). A negative `MAPQ` passes
   `STRICT` in htsjdk (it checks only `MAPQ < 256`), so `ViewSam` and a SAM `SortSam` print
   `-1` at every stringency where bammetrics prints `255`. These are errors at every stringency: a `QUAL` whose
   length differs from `SEQ`, a `QUAL` without `SEQ`, a CIGAR that does not parse (htsjdk
@@ -1775,6 +1779,28 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   tool reads SAM text), so no list name matches it; Picard compares the Java strings.
 - `FILTER=includeJavascript` and `JAVASCRIPT_FILE` are a usage error (exit 2 on the verb, 1 on
   the Picard face; docs/07 Q6).
+
+## DownsampleSam and PositionBasedDownsampleSam
+
+- The `@PG` line holds the bammetrics command line (`CL`) and version (`VN:bammetrics
+  <version>`); its `ID`, `PN`, `rs` and the absence of `PP` are Picard's. The harness
+  compares the `@PG` IDs and PP.
+- `DownsampleSam RANDOM_SEED=null` draws its seed from the clock and the process id, where
+  Picard calls `new Random().nextInt()`. Neither run can be repeated; both print the seed
+  and write it as `rs`.
+- A read name from SAM text with a character above U+00FF is hashed (ConstantMemory) and
+  ordered (HighAccuracy) by the low byte of each UTF-16 unit, as bammetrics holds SAM
+  text; Picard uses the whole unit. The SAM specification allows printable ASCII in a
+  name, where the two agree.
+- A `.cram` `OUTPUT` exits 2 naming wave W15; Picard writes a CRAM.
+- A BAM header line that repeats a tag (`@PG ... rs:1 rs:2`) or has a tag with no value
+  (`rs:`) exits 1 in every tool (`the header could not be read: invalid record`): noodles
+  refuses it. Picard fails too at the default `VALIDATION_STRINGENCY=STRICT` (`Error
+  parsing SAM header`) and reads it under `LENIENT` or `SILENT`. Such a line in SAM text
+  is read as htsjdk reads it at each stringency. The SAM specification allows neither.
+- `PositionBasedDownsampleSam` refuses standard input and pipes with exit 2: it reads its
+  input twice. Picard opens `INPUT` three times and its later reads of a pipe find no
+  record.
 
 ## Not in Picard
 

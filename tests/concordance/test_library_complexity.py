@@ -163,6 +163,8 @@ FAILURES = {
     "read_length_below_seed": (["MAX_READ_LENGTH=3"], "MAX_READ_LENGTH"),
     "seed_zero": (["MIN_IDENTICAL_BASES=0"], "MIN_IDENTICAL_BASES"),
     "bad_regex": (["READ_NAME_REGEX=("], "READ_NAME_REGEX"),
+    "regex_no_group": (["READ_NAME_REGEX=.*"], "No group 1"),
+    "regex_two_groups": (["READ_NAME_REGEX=.*:([0-9]+):([0-9]+):[0-9]+"], "No group 3"),
     "missing_input": (["I=/nonexistent/x.bam"], None),
 }
 

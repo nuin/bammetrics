@@ -83,50 +83,57 @@ impl ReadNameParser {
     }
 
     /// `(tile, x, y)` of a read name, or `None` when the name does not
-    /// carry a location.
-    pub fn location(&self, name: &str) -> Option<(i16, i32, i32)> {
-        match self {
-            Self::None => None,
-            Self::Default => {
-                let (fields, tokens) = last_three_fields(name)?;
-                (fields == 5 || fields == 7).then_some((tokens[0] as i16, tokens[1], tokens[2]))
-            }
-            Self::Regex(regex) => {
-                let captures = regex.captures(name)?;
-                let group = |i: usize| captures.get(i)?.as_str().parse::<i32>().ok();
-                Some((group(1)? as i16, group(2)?, group(3)?))
-            }
-        }
+    /// carry a location. An error where `read_location` gives one.
+    pub fn location(&self, name: &str) -> Result<Option<(i16, i32, i32)>> {
+        let mut loc = Location::default();
+        Ok(self
+            .read_location(name, &mut loc)?
+            .then_some((loc.tile, loc.x, loc.y)))
     }
-}
 
-impl ReadNameParser {
     /// `readLocationInformation` into `loc`: true when the name gave tile,
     /// x and y. With a regex the fields are set one by one, so a name whose
     /// x or y is not a Java `int` leaves the tile (and x) set and returns
-    /// false, as Picard does.
-    pub fn read_location(&self, name: &str, loc: &mut Location) -> bool {
+    /// false, as Picard does. A group the regex lacks is Java's uncaught
+    /// `IndexOutOfBoundsException` (`No group N`): an error at the first
+    /// matching name whose earlier groups parse. A group that took no part
+    /// in the match is `parseInt(null)`, a caught `NumberFormatException`.
+    pub fn read_location(&self, name: &str, loc: &mut Location) -> Result<bool> {
         match self {
-            Self::None => false,
-            Self::Default => match self.location(name) {
-                Some((tile, x, y)) => {
-                    (loc.tile, loc.x, loc.y) = (tile, x, y);
-                    true
+            Self::None => Ok(false),
+            Self::Default => match last_three_fields(name) {
+                Some((5 | 7, tokens)) => {
+                    (loc.tile, loc.x, loc.y) = (tokens[0] as i16, tokens[1], tokens[2]);
+                    Ok(true)
                 }
-                None => false,
+                _ => Ok(false),
             },
             Self::Regex(regex) => {
                 let Some(captures) = regex.captures(name) else {
-                    return false;
+                    return Ok(false);
                 };
-                let group = |i: usize| captures.get(i)?.as_str().parse::<i32>().ok();
-                let Some(tile) = group(1) else { return false };
+                let group = |i: usize| -> Result<Option<i32>> {
+                    if i >= captures.len() {
+                        return Err(Error::Metric(format!(
+                            "READ_NAME_REGEX matches read name {name:?} but has no group {i} \
+                             (Picard: No group {i})"
+                        )));
+                    }
+                    Ok(captures.get(i).and_then(|m| m.as_str().parse::<i32>().ok()))
+                };
+                let Some(tile) = group(1)? else {
+                    return Ok(false);
+                };
                 loc.tile = tile as i16;
-                let Some(x) = group(2) else { return false };
+                let Some(x) = group(2)? else {
+                    return Ok(false);
+                };
                 loc.x = x;
-                let Some(y) = group(3) else { return false };
+                let Some(y) = group(3)? else {
+                    return Ok(false);
+                };
                 loc.y = y;
-                true
+                Ok(true)
             }
         }
     }
@@ -359,27 +366,27 @@ mod tests {
     fn default_names_take_the_last_three_of_five_or_seven_fields() {
         let parser = ReadNameParser::Default;
         assert_eq!(
-            parser.location("A00123:45:HXXX:1:1101:1000:2000"),
+            parsed(&parser, "A00123:45:HXXX:1:1101:1000:2000"),
             Some((1101, 1000, 2000))
         );
         assert_eq!(
-            parser.location("M01234:12:000000000-ABCDE:1:1101"),
+            parsed(&parser, "M01234:12:000000000-ABCDE:1:1101"),
             Some((0, 1, 1101))
         );
         assert_eq!(
-            parser.location("run:1:1101:1000:2000"),
+            parsed(&parser, "run:1:1101:1000:2000"),
             Some((1101, 1000, 2000))
         );
-        assert_eq!(parser.location("1:2:3:4:5:6"), None);
-        assert_eq!(parser.location("p005469"), None);
-        assert_eq!(parser.location("a:b:c:d:e"), None);
-        assert_eq!(parser.location("r:1:1101:10x:20"), Some((1101, 10, 20)));
-        assert_eq!(parser.location("r:1:70000:1:-5"), Some((4464, 1, -5)));
+        assert_eq!(parsed(&parser, "1:2:3:4:5:6"), None);
+        assert_eq!(parsed(&parser, "p005469"), None);
+        assert_eq!(parsed(&parser, "a:b:c:d:e"), None);
+        assert_eq!(parsed(&parser, "r:1:1101:10x:20"), Some((1101, 10, 20)));
+        assert_eq!(parsed(&parser, "r:1:70000:1:-5"), Some((4464, 1, -5)));
         assert_eq!(
-            parser.location("r:1:1:99999999999:1"),
+            parsed(&parser, "r:1:1:99999999999:1"),
             Some((1, 1_215_752_191, 1))
         );
-        assert_eq!(ReadNameParser::None.location("r:1:2:3:4"), None);
+        assert_eq!(parsed(&ReadNameParser::None, "r:1:2:3:4"), None);
     }
 
     #[test]
@@ -387,14 +394,37 @@ mod tests {
         let parser =
             ReadNameParser::new(Some(r"(?:.*;)?([0-9]+)[^;]*;([0-9]+)[^;]*;([0-9]+)[^;]*"))
                 .expect("compiles");
-        assert_eq!(parser.location("x;7a;300b;400c"), Some((7, 300, 400)));
-        assert_eq!(parser.location("x;7a;300b;400c extra"), Some((7, 300, 400)));
-        assert_eq!(parser.location("nothing"), None);
+        assert_eq!(parsed(&parser, "x;7a;300b;400c"), Some((7, 300, 400)));
+        assert_eq!(parsed(&parser, "x;7a;300b;400c extra"), Some((7, 300, 400)));
+        assert_eq!(parsed(&parser, "nothing"), None);
         let strict = ReadNameParser::new(Some(r"(\d+):(\d+):(\d+)")).expect("compiles");
-        assert_eq!(strict.location("1:2:3"), Some((1, 2, 3)));
-        assert_eq!(strict.location("1:2:3:4"), None);
-        assert_eq!(strict.location("1:2:99999999999"), None);
+        assert_eq!(parsed(&strict, "1:2:3"), Some((1, 2, 3)));
+        assert_eq!(parsed(&strict, "1:2:3:4"), None);
+        assert_eq!(parsed(&strict, "1:2:99999999999"), None);
         assert!(ReadNameParser::new(Some("(")).is_err());
+    }
+
+    #[test]
+    fn a_missing_group_fails_once_the_earlier_groups_parse() {
+        let none = ReadNameParser::new(Some(".*")).expect("compiles");
+        let err = none.location("a:1:2").expect_err("no group 1");
+        assert!(err.to_string().contains("No group 1"), "{err}");
+        let one = ReadNameParser::new(Some(r"([0-9a-z]+):.*")).expect("compiles");
+        assert_eq!(parsed(&one, "x:1"), None);
+        let err = one.location("7:1").expect_err("no group 2");
+        assert!(err.to_string().contains("No group 2"), "{err}");
+        let two = ReadNameParser::new(Some(r".*:([0-9]+):([0-9]+):[0-9]+")).expect("compiles");
+        assert!(two.location("r:1:2:3").is_err());
+        assert_eq!(parsed(&two, "no match"), None);
+        let optional = ReadNameParser::new(Some(r"(\d+)?:(\d+):(\d+)")).expect("compiles");
+        assert_eq!(parsed(&optional, ":2:3"), None);
+        let mut loc = Location::default();
+        assert!(!one.read_location("x:1", &mut loc).expect("no error"));
+        assert_eq!(loc, Location::default());
+    }
+
+    fn parsed(parser: &ReadNameParser, name: &str) -> Option<(i16, i32, i32)> {
+        parser.location(name).expect("a regex with three groups")
     }
 
     fn finder() -> OpticalDuplicateFinder {

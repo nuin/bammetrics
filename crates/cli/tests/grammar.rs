@@ -392,6 +392,15 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("TAGGING_POLICY", "All")),
             picard_outputs: marked,
         },
+        // The BAM's @PG line holds the command line: the metrics compare.
+        Case {
+            verb: "downsample-sam",
+            class: "DownsampleSam",
+            verb_args: strings(&[MD]),
+            picard_args: strings(&[&format!("I={MD}")]),
+            option: Some(("PROBABILITY", "0.5")),
+            picard_outputs: marked,
+        },
         Case {
             verb: "sequencing-artifact",
             class: "CollectSequencingArtifactMetrics",
@@ -873,7 +882,7 @@ fn every_verb_reads_three_spellings_as_the_picard_face_does() {
             let mut args = vec![case.verb.to_owned()];
             args.extend(case.verb_args.iter().cloned());
             args.extend(form.iter().cloned());
-            if case.verb == "mark-duplicates" {
+            if matches!(case.verb, "mark-duplicates" | "downsample-sam") {
                 args.extend([
                     "-o".to_owned(),
                     format!("{out}.bam"),
@@ -913,18 +922,21 @@ fn every_registry_tool_is_in_the_matrix() {
     // BuildBamIndex writes a binary index: tests/build_bam_index.rs compares its.
     // IntervalListTools writes its command line, output path included, into
     // the list: tests/interval_list_tools.rs compares its spellings.
+    // PositionBasedDownsampleSam writes only a BAM whose @PG holds the
+    // command line: tests/downsample.rs compares its spellings.
     let elsewhere = [
         "AccumulateVariantCallingMetrics",
         "FifoBuffer",
         "BuildBamIndex",
         "IntervalListTools",
+        "PositionBasedDownsampleSam",
     ];
     let missing: Vec<&&str> = classes
         .iter()
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 69);
+    assert_eq!(classes.len(), 71);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

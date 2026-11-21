@@ -57,19 +57,23 @@ struct TokenReader {
 }
 
 impl TokenReader {
-    fn get(&self, ty: Type) -> &Cursor<Vec<u8>> {
-        match ty {
+    // bammetrics patch: `DZLen` is a stream a later token may duplicate
+    // (samtools 1.25 CRAM 3.1 does), and any other type is an error in
+    // place of a panic.
+    fn get(&self, ty: Type) -> io::Result<&Cursor<Vec<u8>>> {
+        Ok(match ty {
             Type::Type => &self.type_reader,
             Type::String => &self.string_reader,
             Type::Char => &self.char_reader,
             Type::Digits0 => &self.digits0_reader,
             Type::Dup => &self.dup_reader,
             Type::Diff => &self.diff_reader,
+            Type::DZLen => &self.dz_len_reader,
             Type::Digits => &self.digits_reader,
             Type::Delta => &self.delta_reader,
             Type::Delta0 => &self.delta0_reader,
-            _ => unimplemented!("unhandled ty: {:?}", ty),
-        }
+            _ => return Err(unhandled(ty)),
+        })
     }
 
     fn get_mut(&mut self, ty: Type) -> &mut Cursor<Vec<u8>> {
@@ -88,7 +92,7 @@ impl TokenReader {
         }
     }
 
-    fn set(&mut self, ty: Type, buf: Vec<u8>) {
+    fn set(&mut self, ty: Type, buf: Vec<u8>) -> io::Result<()> {
         match ty {
             Type::Type => *self.type_reader.get_mut() = buf,
             Type::String => *self.string_reader.get_mut() = buf,
@@ -100,8 +104,9 @@ impl TokenReader {
             Type::Digits => *self.digits_reader.get_mut() = buf,
             Type::Delta => *self.delta_reader.get_mut() = buf,
             Type::Delta0 => *self.delta0_reader.get_mut() = buf,
-            _ => unimplemented!("unhandled ty: {:?}", ty),
+            _ => return Err(unhandled(ty)),
         }
+        Ok(())
     }
 
     fn read_type(&mut self) -> io::Result<Type> {
@@ -194,9 +199,20 @@ fn decode_token_byte_streams(
 
             if ty != Type::Type {
                 let mut buf = vec![u8::from(Type::Match); n_names];
-                buf[0] = u8::from(ty);
-                b[t as usize].set(Type::Type, buf);
+                if let Some(first) = buf.first_mut() {
+                    *first = u8::from(ty);
+                }
+                b[t as usize].set(Type::Type, buf)?;
             }
+        }
+
+        // bammetrics patch: a stream before the first new token, or a
+        // duplicate of a token not read yet, is an error in place of a panic.
+        if t < 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "name tokenizer: a token stream before the first token",
+            ));
         }
 
         if tok_dup {
@@ -206,8 +222,14 @@ fn decode_token_byte_streams(
                 Type::try_from(n).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
             })?;
 
-            let buf = b[dup_pos].get(dup_type).get_ref().clone();
-            b[t as usize].set(ty, buf);
+            let source = b.get(dup_pos).ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("name tokenizer: duplicate of token {dup_pos}, not read yet"),
+                )
+            })?;
+            let buf = source.get(dup_type)?.get_ref().clone();
+            b[t as usize].set(ty, buf)?;
         } else {
             let compressed_size = read_uint7_as(src)?;
             let buf = split_off(src, compressed_size)?;
@@ -217,11 +239,18 @@ fn decode_token_byte_streams(
                 CompressionMethod::AdaptiveArithmeticCoder => aac::decode(buf, 0)?,
             };
 
-            b[t as usize].set(ty, buf);
+            b[t as usize].set(ty, buf)?;
         }
     }
 
     Ok(b)
+}
+
+fn unhandled(ty: Type) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!("name tokenizer: unhandled token type {ty:?}"),
+    )
 }
 
 fn decode_single_name(
@@ -277,6 +306,25 @@ fn split_off<'a>(src: &mut &'a [u8], len: usize) -> io::Result<&'a [u8]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // bammetrics patch
+    #[test]
+    fn a_dz_len_stream_can_be_duplicated_and_bad_streams_are_errors() -> io::Result<()> {
+        let mut reader = TokenReader::default();
+        reader.set(Type::DZLen, vec![5, 5, 6])?;
+        assert_eq!(reader.get(Type::DZLen)?.get_ref(), &[5, 5, 6]);
+        assert!(reader.get(Type::Match).is_err());
+        assert!(reader.set(Type::End, Vec::new()).is_err());
+        // A duplicate of token 3 in a stream that has read one token.
+        let src = [0x80 | 0x40 | u8::from(Type::Digits0), 3, u8::from(Type::DZLen)];
+        let error = decode_token_byte_streams(&mut &src[..], CompressionMethod::RansNx16, 1)
+            .expect_err("token 3 was never read");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        // A stream before any new token.
+        let src = [u8::from(Type::Digits0), 0];
+        assert!(decode_token_byte_streams(&mut &src[..], CompressionMethod::RansNx16, 1).is_err());
+        Ok(())
+    }
 
     #[test]
     fn test_decode() -> io::Result<()> {

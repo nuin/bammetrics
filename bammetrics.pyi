@@ -1661,6 +1661,46 @@ def filter_sam_reads(
     or unmapped reads, a read name list, tag values, pairs over intervals), in
     SORT_ORDER: a BAM, or SAM text for a name ending in .sam."""
 
+def downsample_sam(
+    input: _Path,
+    *,
+    output: _Path,
+    metrics_file: _Path | None = None,
+    strategy: str | None = None,
+    random_seed: str | None = None,
+    probability: float | None = None,
+    accuracy: float | None = None,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """DownsampleSam: no rows, or the QualityYieldMetrics row of the records kept with
+    METRICS_FILE; OUTPUT gets the records of a random part of the templates (a
+    template's records kept or dropped together) with a @PG line: a BAM, or SAM text for
+    a name ending in .sam."""
+
+def position_based_downsample_sam(
+    input: _Path,
+    *,
+    output: _Path,
+    fraction: float,
+    remove_duplicate_information: bool | None = None,
+    read_name_regex: str | None = None,
+    stop_after: str | None = None,
+    allow_multiple_downsampling_despite_warnings: bool | None = None,
+    compression_level: int | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    reference_sequence: _Path | None = None,
+    validation_stringency: str | None = None,
+) -> list[dict[str, Any]]:
+    """PositionBasedDownsampleSam: no rows; OUTPUT gets the records whose read name places
+    them in a circle of area FRACTION on each tile of the flow cell (outside one of area
+    1 - FRACTION above 0.5), duplicate flags cleared, with a @PG line: a BAM, or SAM
+    text for a name ending in .sam."""
+
 # END registry tools
 
 def alignment_summary(
@@ -1907,6 +1947,7 @@ _StepVerb = Literal[
     "reorder_sam",
     "fix_mate_information",
     "filter_sam_reads",
+    "downsample_sam",
     "write",
 ]
 

@@ -330,6 +330,8 @@ table.
 | `reorder-sam` | ReorderSam (a SAM, BAM or CRAM; `--sequence-dictionary` required, `-S`, `-U`) | `-o` BAM, or SAM text for a name ending in `.sam` |
 | `fix-mate-information` | FixMateInformation (SAM, BAM or CRAM, several merged; `--sort-order`, `--add-mate-cigar`, `--ignore-missing-mates`, `--assume-sorted`) | `-o` BAM, or SAM text for a name ending in `.sam`; without `-o` the one input BAM rewritten in place |
 | `filter-sam-reads` | FilterSamReads (a SAM, BAM or CRAM; `--filter` required, `--read-list-file`, `--interval-list`, `--tag`, `--tag-value`, `--sort-order`, `--write-reads-files`) | `-o` BAM, or SAM text for a name ending in `.sam`; `.reads` files beside it with `--write-reads-files` |
+| `downsample-sam` | DownsampleSam (a SAM, BAM or CRAM; `--probability`, `--strategy`, `--random-seed`, `--accuracy`) | `-o` BAM, or SAM text for a name ending in `.sam`; `--metrics-file` the QualityYieldMetrics of the records kept |
+| `position-based-downsample-sam` | PositionBasedDownsampleSam (a SAM, BAM or CRAM file, read twice; `--fraction` required) | `-o` BAM, or SAM text for a name ending in `.sam` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -1066,6 +1068,61 @@ The three `picard.arrays` metrics tools of Picard 3.5.0, each writing under the 
   of its `##contig` line. A tab or line end in a header value exits 1 and writes nothing,
   as in Picard.
 - None of the three reads a BAM: none is a chain step.
+
+### downsample-sam and position-based-downsample-sam
+
+```bash
+bammetrics downsample-sam in.bam -o half.bam --probability 0.5
+bammetrics downsample-sam in.bam -o small.bam -P 0.02 --strategy Chained --metrics-file small.qy.txt
+bammetrics DownsampleSam I=in.bam O=out.bam P=0.1 STRATEGY=HighAccuracy RANDOM_SEED=7
+bammetrics position-based-downsample-sam in.bam -o tiles.bam --fraction 0.3
+```
+
+Picard's `DownsampleSam` and `PositionBasedDownsampleSam` (wave W13,
+`tests/concordance/test_downsample_sam.py`, `test_position_based_downsample_sam.py`).
+Both write the records they keep in input order, as Picard's presorted writer writes
+them, with a `@PG` line (`ID:DownsampleSam`, or `.1` and on when the input has one).
+
+- `--strategy ConstantMemory` (the default) keeps a read name when htsjdk's Murmur3 of
+  it, seeded with `--random-seed`, falls under `PROBABILITY`. Memory is constant.
+- `HighAccuracy` reads chunks of `ceil(1 / ACCURACY)` new names (10,000 by default) and
+  keeps `PROBABILITY` of each chunk exactly, the names drawn by `java.util.Random`. It
+  holds every name decided so far and one chunk of records, as Picard does: about 140
+  bytes per template (1,968 MiB for the 14.7 million templates of a chr20 and chr21
+  slice). A chunk closes only after `ceil(1 / ACCURACY)` new names, so a small
+  `--accuracy` or many records under few names hold those records at once
+  (`--accuracy 1e-9` on 2 million names: 1,141 MiB). Neither is capped: a cap or a spill
+  would change which names Picard keeps (decision D138).
+- `Chained` runs ConstantMemory at `P + 3.3 sqrt(P / 50000)`, then HighAccuracy on what it
+  kept. It holds the names the first stage keeps.
+- The records of one read name are kept or dropped together: mates, secondary and
+  supplementary records.
+- `--random-seed` (default 1) is written as `rs:` on the `@PG` line. ConstantMemory and
+  Chained change it as Picard does when the input went through DownsampleSam before: an
+  earlier `rs` equal to the seed draws a new one, an earlier `@PG` without `rs` reseeds
+  from its hash code. The new seed is printed on standard error. `--random-seed null`
+  draws a seed from the clock and prints it.
+- `--metrics-file` writes the QualityYieldMetrics of the records kept: original
+  qualities, no secondary or supplementary record.
+- A CRAM input needs `--reference-sequence` (no short name: `-R` is `--random-seed`, as
+  in Picard). A `.cram` `-o` exits 2 naming wave W15.
+- In a chain `downsample-sam` is a streaming transform (stream name `downsampled`);
+  `--metrics-file` on the step writes its file.
+
+`position-based-downsample-sam` reads the input twice, so `-` and pipes exit 2. The
+first read finds each tile's x and y extent from the read names (`--read-name-regex`,
+Picard's default of 5 or 7 fields split on `:`); the second keeps the records inside a
+circle of area `--fraction` on the tile, or outside one of area `1 - FRACTION` above 0.5.
+
+- A name without a location counts as tile -1 at (-1, -1), as in Picard: no error.
+- A `--read-name-regex` with fewer than three groups exits 1 at the first name it matches
+  whose groups before the missing one are numbers, as Picard fails with `No group N`.
+  `mark-duplicates`, `library-complexity` and `duplicate-by-tile` do the same.
+- `--remove-duplicate-information` (default true) clears the duplicate flag.
+- `--stop-after N` reads N records in each read; 0 or less writes no record.
+- An input whose header has a `PositionBasedDownsampleSam` `@PG` exits 1 unless
+  `--allow-multiple-downsampling-despite-warnings`.
+- Not a chain step: it reads its input twice (wave W14).
 
 ### qc
 

@@ -1,0 +1,10 @@
+## argv
+DownsampleSam
+I=tests/data/markdup.bam
+O=OUT/ds.bam
+P=1.5
+## exit
+1
+## stdout
+## stderr
+bammetrics: Downsampling requires 0<=PROBABILITY<=1. Found invalid value: 1.5

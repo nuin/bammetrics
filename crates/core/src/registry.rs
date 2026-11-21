@@ -388,6 +388,8 @@ pub const TOOLS: &[&Tool] = &[
     &crate::reorder_sam::TOOL,
     &crate::fix_mate_information::TOOL,
     &crate::filter_sam_reads::TOOL,
+    &crate::downsample_sam::TOOL,
+    &crate::position_based_downsample_sam::TOOL,
 ];
 
 /// The tool named `name`.

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-Wave W13 of docs/07: `MergeSamFiles`, `ReorderSam`, `FixMateInformation` and `FilterSamReads`.
+Wave W13 of docs/07: `MergeSamFiles`, `ReorderSam`, `FixMateInformation`, `FilterSamReads`, `DownsampleSam` and `PositionBasedDownsampleSam`.
 
 ### Added
 
@@ -62,6 +62,23 @@ Wave W13 of docs/07: `MergeSamFiles`, `ReorderSam`, `FixMateInformation` and `Fi
   name kind), the `revert_bams.py` records, the fixtures, t1 to t3, the exome slice, SAM
   text and CRAM; `crates/cli/tests/mate_filter.rs`, chained equals staged; golden
   records on `tests/data/mate_filter.bam` (`tests/data/make_mate_filter_fixtures.py`).
+- `java_random.rs`: `java.util.Random` (moved from `sensitivity.rs`, whose output is
+  unchanged) with `nextInt`, `nextInt(bound)` and `Collections.shuffle`, and htsjdk's
+  `Murmur3.hashUnencodedChars`. `java_hash_set.rs`: the iteration order of a
+  `HashSet<String>` filled by `add`, tree bins included, held to the orders a JVM prints.
+- `DownsampleSam` (`crates/core/src/downsample_sam.rs` and `downsample_sam/`, verb
+  `downsample-sam`, Python `downsample_sam()`): the ConstantMemory, HighAccuracy and
+  Chained strategies of htsjdk 5.0.0, `PROBABILITY`, `RANDOM_SEED` (changed after an
+  earlier run as Picard changes it; `null` draws one), `ACCURACY`, `METRICS_FILE`, BAM or
+  SAM text out, a streaming chain transform. Records equal to Picard 3.5.0's for 50 seeds
+  per strategy at probabilities 0.01 to 1.0 on the foundation corpus and t1, smaller
+  chunks, the exome slice, SAM text, CRAM and a second run.
+- `PositionBasedDownsampleSam` (`crates/core/src/position_based_downsample_sam.rs`, verb
+  `position-based-downsample-sam`, Python `position_based_downsample_sam()`): Picard's
+  two reads, the tile extents and the circle of area `FRACTION`, every option. Records
+  equal to Picard's on the markdup and complexity BAMs. Not a chain step.
+- `tests/concordance/PicardBatch.java`: many Picard command lines in one JVM under the
+  queue lock, for the seed sweeps.
 
 ### Changed
 
@@ -88,6 +105,19 @@ Wave W13 of docs/07: `MergeSamFiles`, `ReorderSam`, `FixMateInformation` and `Fi
   on several unsorted inputs now exits 1 with Picard's sort-order message.
 - `java::latin1_utf8` holds the one copy of the Latin-1 to UTF-8 widening that
   `CollectQualityYieldMetricsSNVQ` and the `.reads` files of `FilterSamReads` share.
+
+### Fixed
+
+- A `READ_NAME_REGEX` with fewer than three groups that matches a read name exits 1, as
+  Picard fails with `No group N`, in `MarkDuplicates`, `EstimateLibraryComplexity`,
+  `PositionBasedDownsampleSam` and `CollectDuplicateByTileMetrics`. It exited 0 with no
+  location for any read.
+- `MarkDuplicates` and `DownsampleSam` refuse a `METRICS_FILE` directory they cannot write
+  before the read. The BAM was renamed into place first and stayed behind.
+- `java_hash_set.rs` links a tree bin's list in constant time per name. 262,144 names of
+  one hash code in one HighAccuracy chunk took 10.6 s.
+- CRAM 3.1 from samtools 1.25 whose name tokenizer duplicates a `DZLen` stream decodes
+  (`vendor/noodles-cram`, fifth patch). It panicked with `unhandled ty: DZLen`.
 
 ## 0.30.0
 

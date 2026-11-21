@@ -1,0 +1,10 @@
+## argv
+DownsampleSam
+I=tests/data/markdup.bam
+O=OUT/ds.cram
+P=0.5
+## exit
+1
+## stdout
+## stderr
+bammetrics: OUTPUT=OUT/ds.cram: bammetrics writes BAM and SAM only: CRAM output is wave W15 of docs/07_full_parity_program.md
