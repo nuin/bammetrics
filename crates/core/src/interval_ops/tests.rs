@@ -217,6 +217,37 @@ fn an_interval_ending_before_it_starts_joins_by_its_unmoved_end() {
 }
 
 #[test]
+fn the_feature_reader_fails_on_an_empty_line_after_the_header() {
+    // Picard IntervalListToBed: "Unable to parse header with error: Index
+    // 0 out of bounds for length 0" for each of the first five; a blank
+    // line inside or after the records is skipped.
+    let dir = scratch("blank");
+    let path = dir.join("in.interval_list");
+    let read = |text: &str| {
+        std::fs::write(&path, text).expect("writes");
+        IntervalList::read_features(&path)
+    };
+    for bad in [
+        "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\n\nc1\t1\t5\t+\tn\n",
+        "@HD\tVN:1.6\n\n@SQ\tSN:c1\tLN:100\nc1\t1\t5\t+\tn\n",
+        "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\n\n",
+        "\n@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\n",
+        "\n",
+    ] {
+        let error = read(bad).expect_err(bad).to_string();
+        assert!(error.contains("Index 0 out of bounds"), "{error}");
+    }
+    for good in [
+        "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\nc1\t1\t5\t+\tn\n\nc1\t7\t9\t+\tm\n",
+        "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\nc1\t1\t5\t+\tn\n\n",
+        "",
+    ] {
+        assert!(read(good).is_ok(), "{good:?}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn padding_clamps_and_refuses_a_negative_value() {
     let input = list("c1\t3\t998\t-\ta\nc2\t100\t99\t+\tz\nc3\t1\t10\t+\tq\n");
     assert_eq!(

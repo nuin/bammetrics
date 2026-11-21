@@ -131,6 +131,13 @@ impl IntervalList {
         if require_header && header_lines.is_empty() {
             return Err("Interval list file must contain header. ".to_owned());
         }
+        // `IntervalListCodec.readActualHeader` peeks the first character of
+        // the line after the header, which an empty line does not have.
+        if !require_header && lines.peek() == Some(&"") {
+            return Err(
+                "Unable to parse header with error: Index 0 out of bounds for length 0".to_owned(),
+            );
+        }
         let header = Header::decode(header_lines)?;
         let index = header.name_index();
         let mut intervals = Vec::new();
