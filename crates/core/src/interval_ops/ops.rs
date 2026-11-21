@@ -133,15 +133,20 @@ impl Group {
     }
 
     /// `overlaps(next) || withinDistanceOf(next, distance)` on the
-    /// first member's start and the greatest end so far.
+    /// first member's start and the greatest end so far. Both tests are
+    /// needed: for an interval that ends before it starts (a VCF record
+    /// whose `END` is less than `POS`), the overlap of the unmoved
+    /// coordinates can hold where the moved ones miss.
     fn joins(&self, next: &Interval, distance: i32) -> bool {
         self.first.contig == next.contig
-            && coordinates_overlap(
-                self.first.start,
-                self.end,
-                next.start.wrapping_sub(distance),
-                next.end.wrapping_add(distance),
-            )
+            && (coordinates_overlap(self.first.start, self.end, next.start, next.end)
+                || (distance > 0
+                    && coordinates_overlap(
+                        self.first.start,
+                        self.end,
+                        next.start.wrapping_sub(distance),
+                        next.end.wrapping_add(distance),
+                    )))
     }
 
     fn add(&mut self, next: Interval, concatenate_names: bool) {

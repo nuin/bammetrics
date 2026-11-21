@@ -184,6 +184,39 @@ fn merging_follows_the_merger_iterator() {
 }
 
 #[test]
+fn an_interval_ending_before_it_starts_joins_by_its_unmoved_end() {
+    // Picard VcfToIntervalList on c1:100 END=110, c1:120 END=110 and
+    // c1:111 END=130 writes `c1 100 130 + a|b|c`: the second record's end
+    // 110 lies inside 100-110, though 119-111 (moved one base) does not.
+    let spans = |input: Vec<Interval>, concatenate: bool| -> Vec<(i32, i32, Option<String>)> {
+        merged(input, true, concatenate)
+            .map(|i| (i.start, i.end, i.name))
+            .collect()
+    };
+    let two = vec![
+        iv(0, 100, 110, false, Some("a")),
+        iv(0, 120, 110, false, Some("b")),
+    ];
+    assert_eq!(
+        spans(two.clone(), true),
+        [(100, 110, Some("a|b".to_owned()))]
+    );
+    assert_eq!(spans(two, false), [(100, 110, Some("a".to_owned()))]);
+    let three = vec![
+        iv(0, 100, 110, false, Some("a")),
+        iv(0, 120, 110, false, Some("b")),
+        iv(0, 111, 130, false, Some("c")),
+    ];
+    assert_eq!(spans(three, true), [(100, 130, Some("a|b|c".to_owned()))]);
+    // Without abutting merges only the overlap test runs.
+    let apart = vec![
+        iv(0, 100, 110, false, Some("a")),
+        iv(0, 111, 120, false, Some("b")),
+    ];
+    assert_eq!(merged(apart, false, true).count(), 2);
+}
+
+#[test]
 fn padding_clamps_and_refuses_a_negative_value() {
     let input = list("c1\t3\t998\t-\ta\nc2\t100\t99\t+\tz\nc3\t1\t10\t+\tq\n");
     assert_eq!(
