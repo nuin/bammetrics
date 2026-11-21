@@ -254,3 +254,108 @@ fn glossary_types_differ_from_the_cell_text_on_the_picard_fixture() {
     assert!(cells > 100, "{cells} cells");
     assert!(retyped > 20, "{retyped} of {cells} cells change type");
 }
+
+/// `text` through Parquet and back (docs/07 section 3.1, wave W21): the
+/// files `render_files` gives, written under `dir` as `name.parquet` and
+/// its companions, read back with `read_path`. The document is the one
+/// Picard text gave, column types included, and its Picard text is the
+/// first file byte for byte.
+#[cfg(feature = "parquet")]
+fn parquet_round_trip(text: &str, dir: &Path, name: &str) -> Result<(), String> {
+    use bammetrics_formats::{parquet, read_path, render_files};
+    let doc = read(text).map_err(|e| format!("does not read: {e}"))?;
+    let main = dir.join(format!("{name}.parquet"));
+    let files =
+        render_files(Format::Parquet, &doc, None).map_err(|e| format!("no Parquet: {e}"))?;
+    for file in files {
+        let path = file
+            .part
+            .map_or(main.clone(), |p| parquet::companion(&main, p));
+        fs::write(&path, &file.bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    }
+    let back = read_path(&main).map_err(|e| format!("its Parquet does not read: {e}"))?;
+    // Debug text compares NaN cells as equal, which `==` does not.
+    if format!("{back:?}") != format!("{doc:?}") {
+        return Err("the document read back differs".to_owned());
+    }
+    let again = render(Format::Picard, &back, None).map_err(|e| format!("no Picard text: {e}"))?;
+    if again != text {
+        return Err("its Picard text differs".to_owned());
+    }
+    Ok(())
+}
+
+#[cfg(feature = "parquet")]
+fn temporary(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("bammetrics-{name}-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).expect("temporary directory");
+    dir
+}
+
+#[cfg(feature = "parquet")]
+#[test]
+fn every_picard_fixture_round_trips_through_parquet() {
+    let dir = temporary("parquet-picard");
+    let mut files = Vec::new();
+    files_under(&root().join("tests/data/picard"), &mut files);
+    files.sort();
+    let (mut checked, mut failures) = (0, Vec::new());
+    for path in files {
+        let text = fs::read_to_string(&path).expect("read fixture");
+        if !is_metrics_file(&text) {
+            continue;
+        }
+        checked += 1;
+        if let Err(e) = parquet_round_trip(&text, &dir, &checked.to_string()) {
+            failures.push(format!("{}: {e}", path.display()));
+        }
+    }
+    let _ = fs::remove_dir_all(&dir);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    eprintln!("{checked} Picard files round trip through Parquet");
+    assert!(checked >= 8, "only {checked} Picard files");
+}
+
+#[cfg(feature = "parquet")]
+#[test]
+fn every_golden_metrics_file_round_trips_through_parquet() {
+    let dir = temporary("parquet-golden");
+    let mut records = Vec::new();
+    files_under(&root().join("tests/golden"), &mut records);
+    records.sort();
+    let (mut checked, mut failures) = (0, Vec::new());
+    for path in records {
+        let record = fs::read_to_string(&path).expect("read golden record");
+        for (name, text) in golden_sections(&record) {
+            if !is_metrics_file(&text) {
+                continue;
+            }
+            checked += 1;
+            if let Err(e) = parquet_round_trip(&text, &dir, &checked.to_string()) {
+                failures.push(format!("{} ({name}): {e}", path.display()));
+            }
+        }
+    }
+    let _ = fs::remove_dir_all(&dir);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    eprintln!("{checked} golden metrics files round trip through Parquet");
+    assert!(checked >= 150, "only {checked} metrics files");
+}
+
+/// The repeated histogram columns of `CollectHsMetrics` with two units
+/// keep their Picard names through `picard_columns`.
+#[cfg(feature = "parquet")]
+#[test]
+fn a_repeated_histogram_column_round_trips_through_parquet() {
+    let text = "## htsjdk.samtools.metrics.StringHeader\n# CollectHsMetrics INPUT=x.bam\n\n\
+                ## METRICS CLASS\tpicard.analysis.directed.HsMetrics\nBAIT_SET\tSAMPLE\n\
+                panel\t\npanel\tS1\n\n## HISTOGRAM\tjava.lang.Integer\n\
+                coverage_or_base_quality\thigh_quality_coverage_count\t\
+                coverage_or_base_quality\thigh_quality_coverage_count\n\
+                0\t3\t0\t?\n1\t1\t1\t7\n\n";
+    let dir = temporary("parquet-repeat");
+    let result = parquet_round_trip(text, &dir, "hs");
+    let _ = fs::remove_dir_all(&dir);
+    result.expect("round trips");
+}
