@@ -1305,3 +1305,32 @@ Chained equals staged (`crates/cli/tests/split_sam.rs`, `test_split_sam_by_libra
 fixtures and the foundation corpus, `sort-sam -SO queryname` then a count split, a split
 beside a tap and `write`; every file has the staged run's name, header lines and record
 bytes.
+
+## 19. W13: ReorderSam, and MergeSamFiles outside the chain
+
+`reorder-sam` is a record-editing step whose tool on its own writes through Picard's
+`presorted=false` writer in the input's order (section 17). In a chain it moves each
+record to the dictionary of `--sequence-dictionary` and holds the records when the
+stream's header names a sort (`coordinate`, `queryname`, `duplicate`), then hands them on
+sorted under the new dictionary; an `unsorted` stream goes through as it comes. The plan
+lists it as a barrier either way. The dictionary is read when the step is built, before
+the first record.
+
+```bash
+bammetrics chain in.bam -o out/s \
+    + reorder-sam --sequence-dictionary hg38.dict -S \
+    + mark-duplicates \
+    + write out/s.bam --index
+```
+
+| Tool | Default stream | What the step does |
+|---|---|---|
+| `reorder-sam` | `reordered` | New `@SQ` lines, each record's reference and mate reference moved by name; with `-S` a record on a contig the dictionary lacks becomes unplaced and its mate loses `MC`; then the sort of the stream's order |
+
+`merge-sam-files` reads several `INPUT` files and a chain reads one source, so it is no
+step (exit 2, the reason names wave W14). Merge first, then chain the merged BAM.
+
+Chained equals staged (`crates/cli/tests/reorder_sam.rs`): the step first, in the middle
+and last, beside `mark-duplicates` and `sort-sam`, on `tests/data/markdup.bam`, corpus t1
+and the foundation corpus, with a contig added and with contigs dropped.
+`test_reorder_sam.py` also compares the written BAM with Picard's file of the tool.

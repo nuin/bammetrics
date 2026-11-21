@@ -287,10 +287,11 @@ pub fn read_interval_list(path: &Path) -> Result<(Vec<String>, Vec<NamedInterval
             "the interval list holds {size} bytes; at most {MAX_INTERVAL_LIST_BYTES} are read"
         )));
     }
+    // The size above is 0 for a pipe or a device, so the read stops itself.
     let text = if has_gzip_extension(path) {
         read_gzip_capped(path, MAX_INTERVAL_LIST_BYTES)?
     } else {
-        fs::read_to_string(path).map_err(input)?
+        read_capped_at(path, MAX_INTERVAL_LIST_BYTES)?
     };
     let (dictionary, list) = parse_own_dictionary(&text, |dictionary| {
         if dictionary.is_empty() {

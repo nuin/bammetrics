@@ -65,6 +65,7 @@ use crate::spill::TempDir;
 use crate::stage::{Counters, Frame, Stage, Transform, WriteFormat, later_kind};
 
 mod reorder;
+pub(crate) use reorder::Pipeline;
 pub use reorder::{
     DEFAULT_RECORDS_IN_RAM, Gate, Regroup, Reorder, WriterOrder, presorted_stage, sort_limits,
     sorting_stage, stage_limits,
@@ -253,7 +254,7 @@ impl Options {
 
 /// Refuse an `OUTPUT` the run cannot write, or one that would destroy a
 /// file it reads, before anything is read.
-fn check_output(opts: &Options) -> Result<()> {
+pub(crate) fn check_output(opts: &Options) -> Result<()> {
     if let Some((kind, wave)) = later_kind(&opts.output) {
         return Err(Error::Usage(format!(
             "OUTPUT={}: bammetrics writes BAM and SAM only: {kind} output is wave {wave} of \
@@ -364,7 +365,7 @@ fn companions(opts: &Options, header: &sam::Header) -> Result<Companions> {
 /// calls on each one: a reference or mate reference index that is neither
 /// -1 nor one of the header's `references` sequences fails, whatever
 /// `VALIDATION_STRINGENCY`. A block copy writes the bytes and checks none.
-fn check_reference_ids(record: &RawRecord, references: usize) -> Result<()> {
+pub(crate) fn check_reference_ids(record: &RawRecord, references: usize) -> Result<()> {
     for index in [record.reference_id(), record.mate_reference_id()] {
         if index != -1
             && usize::try_from(index)

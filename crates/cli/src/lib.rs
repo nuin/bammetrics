@@ -148,6 +148,22 @@ pub fn clap_error(verb: &str, e: &clap::Error) -> VerbError {
     }
 }
 
+/// The command-line arguments as text. An argument that is not UTF-8 is a
+/// usage error naming its position and its bytes as far as they decode.
+fn text_arguments(args: impl Iterator<Item = std::ffi::OsString>) -> error::Result<Vec<String>> {
+    args.enumerate()
+        .map(|(at, arg)| {
+            arg.into_string().map_err(|arg| {
+                error::Error::Usage(format!(
+                    "argument {} ({}) is not UTF-8 text",
+                    at + 1,
+                    arg.to_string_lossy()
+                ))
+            })
+        })
+        .collect()
+}
+
 /// Dispatch, in the order of docs/05 section 2.1: (1) a Picard class name
 /// runs the Picard face, untouched; (2) a grammar verb (a tool verb,
 /// `collect`, `chain`, `tools`, `presets`, `help`, `completions`, and
@@ -157,7 +173,7 @@ pub fn clap_error(verb: &str, e: &clap::Error) -> VerbError {
 /// the Picard face exits 0 or 1, the grammar verbs 0, 1 or 2, `check` and
 /// `qc --fail-on` 10 or 11 on a bad verdict, `doctor` 10 on a failed check (`bammetrics help check`).
 pub fn run() -> error::Result<u8> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let args = text_arguments(std::env::args_os().skip(1))?;
     if let Some((name, rest)) = args.split_first() {
         if let Some(tool) = registry::find(name) {
             if let [flag] = rest

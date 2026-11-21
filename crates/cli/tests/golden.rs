@@ -87,6 +87,10 @@ const FIXTURES: &[(&str, &str)] = &[
     ("BED_GZ", "tests/data/targets.bed.gz"),
     ("BED_BGZ", "tests/data/targets_bed.bgz"),
     ("BED_AS_IL", "tests/data/targets_bed.interval_list"),
+    ("MRG_SAM", "tests/data/merge_other_dict.sam"),
+    ("RO_EXTRA", "tests/data/reorder_extra.dict"),
+    ("RO_DROPPED", "tests/data/reorder_dropped.dict"),
+    ("RO_LENGTH", "tests/data/reorder_length.dict"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -901,6 +905,146 @@ const N_RUNS_CASES: &[Case] = &[
     case!("error_qc_panel_bed_as_interval_list", "qc", "IS", "-o", "OUT/sample", "--panel", "BED_AS_IL"),
 ];
 
+/// Wave W13: `MergeSamFiles` and `ReorderSam` on the fixture BAMs and the
+/// fixtures of `tests/data/make_merge_reorder_fixtures.py`.
+const MERGE_REORDER_CASES: &[Case] = &[
+    case!(
+        "picard_merge_sam_files",
+        "MergeSamFiles",
+        "I=MD",
+        "I=ART",
+        "O=OUT/merged.bam",
+        "COMMENT=lane 1",
+        "CREATE_INDEX=true",
+        "CREATE_MD5_FILE=true"
+    ),
+    case!(
+        "picard_merge_sam_files_queryname",
+        "MergeSamFiles",
+        "I=MD",
+        "I=OXOG",
+        "I=IS",
+        "O=OUT/merged.bam",
+        "SO=queryname"
+    ),
+    case!(
+        "picard_merge_sam_files_dictionaries",
+        "MergeSamFiles",
+        "I=MD",
+        "I=MRG_SAM",
+        "O=OUT/merged.sam",
+        "MERGE_SEQUENCE_DICTIONARIES=true"
+    ),
+    case!(
+        "verb_merge_sam_files",
+        "merge-sam-files",
+        "MD",
+        "-i",
+        "OXOG",
+        "-o",
+        "OUT/merged.bam",
+        "--comment",
+        "lane 1"
+    ),
+    case!(
+        "error_merge_sam_files_dictionaries",
+        "MergeSamFiles",
+        "I=MD",
+        "I=MRG_SAM",
+        "O=OUT/merged.bam"
+    ),
+    case!(
+        "error_merge_sam_files_index_order",
+        "MergeSamFiles",
+        "I=MD",
+        "O=OUT/merged.bam",
+        "SO=queryname",
+        "CREATE_INDEX=true"
+    ),
+    case!(
+        "error_merge_sam_files_intervals_no_index",
+        "MergeSamFiles",
+        "I=MD",
+        "O=OUT/merged.bam",
+        "INTERVALS=IL"
+    ),
+    case!(
+        "error_chain_merge_sam_files",
+        "chain",
+        "MD",
+        "-o",
+        "OUT/s",
+        "+",
+        "merge-sam-files"
+    ),
+    case!(
+        "picard_reorder_sam",
+        "ReorderSam",
+        "I=MD",
+        "O=OUT/reordered.bam",
+        "SD=RO_EXTRA",
+        "CREATE_INDEX=true"
+    ),
+    case!(
+        "picard_reorder_sam_dropped",
+        "ReorderSam",
+        "I=MD",
+        "O=OUT/reordered.sam",
+        "SD=RO_DROPPED",
+        "ALLOW_INCOMPLETE_DICT_CONCORDANCE=true"
+    ),
+    case!(
+        "verb_reorder_sam",
+        "reorder-sam",
+        "IS_CRAM",
+        "-R",
+        "REF",
+        "--sequence-dictionary",
+        "RO_EXTRA",
+        "-o",
+        "OUT/reordered.bam"
+    ),
+    case!(
+        "error_reorder_sam_dropped",
+        "ReorderSam",
+        "I=MD",
+        "O=OUT/reordered.bam",
+        "SD=RO_DROPPED"
+    ),
+    case!(
+        "error_reorder_sam_length",
+        "reorder-sam",
+        "MD",
+        "--sequence-dictionary",
+        "RO_LENGTH",
+        "-o",
+        "OUT/reordered.bam"
+    ),
+    case!(
+        "error_reorder_sam_fasta_without_dict",
+        "ReorderSam",
+        "I=MD",
+        "O=OUT/reordered.bam",
+        "SD=REF"
+    ),
+    case!(
+        "chain_reorder_sam",
+        "chain",
+        "MD",
+        "-o",
+        "OUT/s",
+        "+",
+        "reorder-sam",
+        "--sequence-dictionary",
+        "RO_EXTRA",
+        "+",
+        "quality-yield",
+        "+",
+        "write",
+        "OUT/chained.bam"
+    ),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -1387,6 +1531,11 @@ fn documented_n_runs_and_panel_commands_on_the_fixtures() {
     check(N_RUNS_CASES);
 }
 
+#[test]
+fn documented_merge_and_reorder_commands_on_the_fixtures() {
+    check(MERGE_REORDER_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1503,6 +1652,7 @@ fn case_names_are_unique() {
         .chain(INTERVAL_LIST_TOOLS_CASES)
         .chain(INTERVAL_CONVERT_CASES)
         .chain(N_RUNS_CASES)
+        .chain(MERGE_REORDER_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

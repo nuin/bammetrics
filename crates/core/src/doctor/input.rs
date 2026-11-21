@@ -133,8 +133,9 @@ pub struct RawHeader {
     pub cram_version: Option<(u8, u8)>,
 }
 
-/// `size` header bytes read from `reader`, or an error past the cap.
-fn capped_text<R: Read + ?Sized>(reader: &mut R, size: usize) -> io::Result<String> {
+/// `size` header bytes read from `reader`, or an error past the cap or
+/// before `size` bytes.
+fn capped_bytes<R: Read + ?Sized>(reader: &mut R, size: usize) -> io::Result<Vec<u8>> {
     if size > MAX_HEADER_BYTES {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -143,6 +144,12 @@ fn capped_text<R: Read + ?Sized>(reader: &mut R, size: usize) -> io::Result<Stri
     }
     let mut text = Vec::new();
     read_append(reader, &mut text, size)?;
+    Ok(text)
+}
+
+/// [`capped_bytes`] as text.
+fn capped_text<R: Read + ?Sized>(reader: &mut R, size: usize) -> io::Result<String> {
+    let mut text = capped_bytes(reader, size)?;
     // The text ends at its first NUL (htsjdk and samtools pad it).
     if let Some(nul) = text.iter().position(|&b| b == 0) {
         text.truncate(nul);
@@ -232,6 +239,25 @@ pub fn bam_header(path: &Path) -> io::Result<(RawHeader, BamStream)> {
         cram_version: None,
     };
     Ok((header, reader))
+}
+
+/// The header text of the BAM at `path` as its bytes, under
+/// [`MAX_HEADER_BYTES`], after its binary reference list is checked to
+/// fit the same cap.
+pub fn bam_header_bytes(path: &Path) -> io::Result<Vec<u8>> {
+    let mut reader = bgzf::io::Reader::new(BufReader::new(File::open(path)?));
+    let mut magic = [0u8; 4];
+    reader.read_exact(&mut magic)?;
+    if magic != *b"BAM\x01" {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "the first block does not start with the BAM magic",
+        ));
+    }
+    let l_text = read_u32(&mut reader)? as usize;
+    let text = capped_bytes(&mut reader, l_text)?;
+    binary_references(&mut reader, l_text)?;
+    Ok(text)
 }
 
 /// The header of the CRAM at `path`.

@@ -19,8 +19,9 @@ pub use crate::header_merge::{HeaderTag, SortOrder, base36, set_header_tag};
 use crate::pass;
 use crate::sam_text::Stringency;
 
-/// One opened input: its header and its record stream.
-type Stream<'a> = (sam::Header, &'a mut (dyn Read + 'static), bool);
+/// One opened input: its header, its record stream, and whether it is a
+/// CRAM.
+pub(crate) type Stream<'a> = (sam::Header, &'a mut (dyn Read + 'static), bool);
 
 /// What `openInputs` gives: the header and the records in order.
 pub struct Inputs<'a> {
@@ -63,6 +64,25 @@ pub fn open<T>(
         let f = f.take().expect("called once");
         f(combine(streams, assume)?)
     };
+    let decoding = Decoding {
+        reference,
+        threads,
+        stringency,
+    };
+    open_nested(paths, decoding, Vec::new(), &mut call)
+}
+
+/// Open every input of `paths` at once, in order, and hand `f` their
+/// headers and record streams. SAM text is read at `stringency`.
+pub(crate) fn open_all<T>(
+    paths: &[PathBuf],
+    reference: Option<&Path>,
+    threads: usize,
+    stringency: Stringency,
+    f: impl FnOnce(Vec<Stream<'_>>) -> Result<T>,
+) -> Result<T> {
+    let mut f = Some(f);
+    let mut call = |streams: Vec<Stream<'_>>| (f.take().expect("called once"))(streams);
     let decoding = Decoding {
         reference,
         threads,

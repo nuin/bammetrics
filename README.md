@@ -218,6 +218,8 @@ the sizes and a Chrome recipe for a build without the feature.
 | VcfToIntervalList (the `##contig` lines as `@SQ`, one interval per record from `POS` to `END`, neighbours that overlap or abut merged; `INCLUDE_FILTERED`, `VARIANT_ID_METHOD`; plain or gzip VCF) | | `vcf_to_interval_list()` |
 | ScatterIntervalsByNs (the reference as an interval list of `ACGTmer` and `Nmer` runs, `N`, `n` and `.` as N; `MAX_TO_MERGE`, `OUTPUT_TYPE`; the FASTA read through its `.fai` and `.dict` 1 MiB at a time) | | `scatter_intervals_by_ns()` |
 | NonNFastaSize (the bases of a FASTA that are not `N` or `n`, inside `INTERVALS` when given; the number and a line end) | | `non_n_fasta_size()` |
+| MergeSamFiles (the records of every `INPUT` under one merged header, read group and program IDs that collide renamed; `SORT_ORDER` merged or sorted, `MERGE_SEQUENCE_DICTIONARIES`, `COMMENT`, `INTERVALS`) | | `merge_sam_files()` |
+| ReorderSam (the records under the dictionary of `SEQUENCE_DICTIONARY`, contigs matched by name, records on a contig it lacks made unplaced with `ALLOW_INCOMPLETE_DICT_CONCORDANCE`, sorted again; a chain barrier) | | `reorder_sam()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 | SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | `validation_stringency=` |

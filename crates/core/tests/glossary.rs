@@ -90,6 +90,14 @@ const EXEMPT: &[(&str, &str)] = &[
         "GatherBamFiles",
         "writes a BAM gathered from several: no metrics file, no row, no column",
     ),
+    (
+        "MergeSamFiles",
+        "writes a BAM merged from several: no metrics file, no row, no column",
+    ),
+    (
+        "ReorderSam",
+        "writes a BAM under another sequence dictionary: no metrics file, no row, no column",
+    ),
 ];
 
 /// A directory of its own for this test's files.

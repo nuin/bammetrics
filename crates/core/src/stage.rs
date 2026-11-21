@@ -508,6 +508,13 @@ const STAGES: &[StageRow] = &[
         kind: StageKind::Holds,
         check: crate::revert_original_base_qualities_and_add_mate_cigar::check_stage,
     },
+    StageRow {
+        tool: "ReorderSam",
+        build: crate::reorder_sam::stage,
+        label: "reordered",
+        kind: StageKind::Holds,
+        check: crate::reorder_sam::check_stage,
+    },
 ];
 
 fn stage_row(tool: &Tool) -> Option<&'static StageRow> {

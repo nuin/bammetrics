@@ -1,0 +1,10 @@
+## argv
+ReorderSam
+I=tests/data/markdup.bam
+O=OUT/reordered.bam
+SD=tests/data/ref_100k.fa
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/ref_100k.fa: Could not find dictionary next to reference file tests/data/ref_100k.fa
