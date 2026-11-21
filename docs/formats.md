@@ -26,11 +26,13 @@ bammetrics convert out/S1.hs_metrics | bammetrics convert -      # the first fil
 | Aligned text | `human` | `.human.txt` | no | one table |
 | JUnit XML | `junit` | `.junit.xml` | no | the checks of `check` and `qc` |
 | MultiQC custom content | `multiqc` | `.verdict_mqc.json` | no | a verdict table, one row per sample |
+| XLSX | `xlsx` | `.xlsx` | no | headers, a sheet per metrics class, a histogram sheet; full doubles |
+| DOCX | `docx` | `.docx` | no | headers and every table as Picard text, no plot |
 
-The tool verbs and `convert` take the first seven. `check` takes `text`, `json`, `jsonl`,
-`junit`, `markdown` and `multiqc`. `qc --also` takes `json`, `jsonl`, `tsv`, `csv`,
-`markdown`, `junit` and `multiqc`. Parquet, XLSX, DOCX, SQL and Arrow come in later waves
-(docs/07 W21 and W46) and are written from the same table.
+The tool verbs and `convert` take the first seven, `xlsx` and `docx`. `check` takes `text`,
+`json`, `jsonl`, `junit`, `markdown` and `multiqc`. `qc --also` takes `json`, `jsonl`,
+`tsv`, `csv`, `xlsx`, `docx`, `markdown`, `junit` and `multiqc`. Parquet, SQL and Arrow come
+in later waves (docs/07 W21 and W46) and are written from the same table.
 
 ## The typed table
 
@@ -105,7 +107,7 @@ bammetrics qc in.bam -o out/S1 --also json,csv --also markdown
 
 | Value | Files |
 |---|---|
-| `json`, `jsonl`, `tsv`, `csv` | `FILE.json` (`.jsonl`, `.tsv`, `.csv`) beside every metrics file of the run |
+| `json`, `jsonl`, `tsv`, `csv`, `xlsx`, `docx` | `FILE.json` (`.jsonl`, `.tsv`, `.csv`, `.xlsx`, `.docx`) beside every metrics file of the run |
 | `markdown` (`md`) | `out/S1.report.md`: the verdict, then every metrics table |
 | `junit` | `out/S1.junit.xml`: one testcase per rule |
 | `multiqc` | `out/S1.verdict_mqc.json`: MultiQC custom content |
@@ -287,6 +289,71 @@ with the sample and the band, the preset and the counts, then one table row per 
   open a tag.
 - The text is at most 65,536 characters, the limit of a GitHub comment. Rows that do not
   fit are left out and the last line says how many.
+
+## XLSX
+
+`--format xlsx` writes an Office Open XML workbook. The XML is written by hand into a zip
+of stored entries: no compression, no dependency. The same document gives the same bytes:
+every entry carries the date 1980-01-01 00:00, and the parts come in a fixed order.
+
+| Sheet | Holds |
+|---|---|
+| `Headers` | the `StringHeader` texts, one per row in column A |
+| one per metrics class | named by the class after its last `.` or `$` (`InsertSizeMetrics`): row 1 the column names in bold and frozen, then one row per metrics row |
+| `Histogram` | the histogram: the key and one column per series |
+
+- An `int` cell is a number with every digit. A `float` cell is a number with the shortest
+  digits that read back as the same double, always with a point or an exponent (`310.0`,
+  `8.16496580927726`, `1e300`), so openpyxl gives a Python `float`.
+- NaN and infinity have no spreadsheet number. They are the text Picard prints: `?` for NaN
+  and positive infinity, `-?` for negative infinity. `pandas.read_excel(path,
+  na_values=["?"])` reads them as NaN.
+- A null cell and an empty string are both no cell.
+- A string is an inline string, XML-escaped. A character XML 1.0 cannot hold (a control
+  character other than tab, line feed and carriage return) is written `_xHHHH_`, the escape
+  of the OOXML string type that Excel decodes. A `_x` that would read as such an escape is
+  written `_x005F_x`.
+- A sheet name has at most 31 characters and none of `: \ / ? * [ ]`. A name equal to an
+  earlier one in any case, or to `History`, gets ` (2)`, ` (3)` after it.
+- A sheet holds at most 1,048,576 rows and 16,384 columns, as Excel does. A larger table is
+  an error (exit 1) and no file is written. The file is at most 1 GiB, so it needs no zip64
+  record.
+
+What XLSX loses: the column types (a reader infers them from the cells), the histogram's key
+class, the `sample` and `tool` of the JSON form, a string past 32,767 characters (it is
+cut to the most an Excel cell holds), and the difference between null and an empty string.
+Excel shows 15 significant digits: an int above 2^53 keeps every digit in the file and in
+openpyxl, not on screen. openpyxl and pandas do not decode `_xHHHH_`; they show such a cell
+as written. `pandas.read_excel` gives `int64` for a float column whose cells are all whole
+numbers. `convert` and `read_table` do not read XLSX back: `convert` exits 1 on a zip.
+
+`crates/formats/tests/ooxml.rs` reads every sheet of every metrics file under
+`tests/data/picard` and `tests/golden` back from the zip and compares each cell with the
+document. It also runs openpyxl and pandas (`tests/ooxml_readers.py`, the Python of
+`OOXML_PYTHON` or `python3`) and DuckDB's `excel` extension when they are installed, and
+skips each otherwise.
+
+## DOCX
+
+`--format docx` writes a WordprocessingML document of text and tables, A4 landscape, no
+plot. Like XLSX it is a stored zip with fixed dates and the same bytes for the same document.
+
+- A `Heading 1` with the tool and the sample when known, then one paragraph per
+  `StringHeader` text.
+- A `Heading 2` and a table per metrics class, then the histogram under the heading of the
+  Markdown form (`Histogram of CLASS, by KEY`). The first row holds the column names in
+  bold and repeats on every page. A class with no row is the line `No rows.`
+- A table with more than 8 columns and at most 8 rows is turned on its side, as in Markdown:
+  one row per column.
+- A cell holds the text Picard prints: at most 6 fraction digits, `?` for NaN. Numbers are
+  right-aligned. A tab is a Word tab and a line end a line break.
+
+What DOCX loses: every digit past the sixth fraction digit, the column types, the form of a
+line end (`\r\n` and `\r` become a line break), and a character XML 1.0 cannot hold
+(U+FFFD in its place). `convert` does not read DOCX back. `crates/formats/tests/ooxml.rs`
+compares every table cell with the document, runs python-docx through
+`tests/ooxml_readers.py`, and checks that pandoc converts each file to Markdown and finds
+one table per table with a row.
 
 ## JUnit XML
 

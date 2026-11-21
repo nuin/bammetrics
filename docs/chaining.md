@@ -93,7 +93,7 @@ works in a step: `--minimum-pct 0.1`, `--MINIMUM_PCT 0.1`, `MINIMUM_PCT=0.1`, `-
 | `-@`, `--threads` | BGZF threads of each read and of `write` (default: cores, at most 8; at most 256 may be asked for) |
 | `--tmp-dir`, `TMP_DIR=` | Where a transform spills and a piped source is copied |
 | `--format LIST` | `picard` first. Each further format is written beside every metrics file |
-| `--also LIST` | `json`, `jsonl`, `tsv`, `csv` beside every metrics file; `markdown` as `PREFIX.report.md` |
+| `--also LIST` | `json`, `jsonl`, `tsv`, `csv`, `xlsx`, `docx` beside every metrics file; `markdown` as `PREFIX.report.md` |
 | `--sample NAME` | Sample name of the json and jsonl forms (default: the first `@RG SM`, else the source name) |
 | `--sort-memory BYTES` | What the barriers of the chain hold: a `sort-sam` step spills a sorted run at it, less 64 MiB and the read ends of a later `mark-duplicates`. A number, or one with K, M, G or T (1024 based), at most 18446744073709551615 bytes (exit 2 past it). Default 2G (section 15) |
 | `--force-space` | Run when the estimated temporary and output bytes exceed the free space of their file system (section 15) |
@@ -211,7 +211,7 @@ The Picard text format is the default and its bytes do not change. `--format pic
 writes each metrics file and `FILE.json` beside it, from one set of header lines, through
 `crates/formats`. A step's own `--format` replaces the chain's list for that step. The list
 starts with `picard`, on the chain and on a step: a chain names Picard files. `--also
-json|jsonl|tsv|csv` adds the same siblings. `--also markdown` writes `PREFIX.report.md`
+json|jsonl|tsv|csv|xlsx|docx` adds the same siblings. `--also markdown` writes `PREFIX.report.md`
 with every metrics table the run wrote, in step order. `--also junit` and `--also multiqc`
 print a verdict and a chain has none: they are a usage error that names `bammetrics check
 DIR --format junit`. A step that writes standard output writes the Picard file alone.
@@ -958,7 +958,7 @@ W04:
 | A transform's kept product is `PREFIX.<label>.bam` | The same, written by `write` without a path. The transform's own metrics file is `PREFIX.<label>.duplication_metrics` | docs/07 names no file for a transform's metrics. The label says which step wrote it |
 | `plan` prints segments, replay or spool per barrier, temp disk, and what `--resume` skips | Segments, replay or spool, the files of each step, the temp disk estimate. No `--resume` line | Resume per step is W14 (manifest 2) |
 | The planner refuses when free space is below the estimate | The plan prints the estimate and refuses nothing | The planner and its `statvfs` call are W05 |
-| `--also` on `chain` as on `qc` | `json`, `jsonl`, `tsv`, `csv`, `markdown`. `junit` and `multiqc` are a usage error | They print a verdict. `qc` as the last step of a chain is W14 |
+| `--also` on `chain` as on `qc` | `json`, `jsonl`, `tsv`, `csv`, `xlsx`, `docx`, `markdown`. `junit` and `multiqc` are a usage error | They print a verdict. `qc` as the last step of a chain is W14 |
 | `--format a,b` | `picard` must be first, on the chain and on a step | A chain names Picard files under a prefix, as the multi-file verbs do. A first format that is not `picard` would put JSON under a Picard name |
 | `parse_tables` moves to core | It moved, and it reads one-line arrays of scalars as well | A repeatable option of a step (`level`, `comment`) needs a list. A preset still takes no list |
 | `chain --plan plan.toml` reads the same steps | It reads the source and the chain's options too, and the command line may replace them | One file then describes one run, and one file can run on many sources (`--plan FILE other.bam -o other`) |

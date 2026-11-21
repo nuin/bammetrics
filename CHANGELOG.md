@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- XLSX and DOCX (wave W21 of docs/07): `--format xlsx` and `docx` on the tool verbs,
+  `convert` and `chain`, and `qc --also xlsx,docx` (and `chain --also`) beside every
+  metrics file. XLSX is a workbook with a `Headers` sheet, a sheet per metrics class and a
+  `Histogram` sheet, numbers with every digit; DOCX is the headers and every table as
+  Picard text, A4 landscape. Both are hand-written OOXML in a zip of stored entries
+  (`crates/formats/src/ooxml.rs`, `xlsx.rs`, `docx.rs`): no new dependency, the same bytes
+  for the same document. Neither reads back; `convert` exits 1 on a zip input.
+  docs/formats.md says what each loses.
+- `crates/formats/tests/ooxml.rs`: every metrics file of `tests/data/picard` and
+  `tests/golden` read back from both formats cell by cell, and openpyxl, pandas,
+  python-docx, pandoc and DuckDB's `excel` extension on the files when installed.
+
+### Changed
+
+- `--format` and `--also` name `xlsx` and `docx` in their lists, so 3 golden error
+  records list two more formats.
+
 ## 0.30.0
 
 Wave W12 of docs/07: the interval layer `interval_ops` and five interval tools (65 in all), none of them a chain step; `qc --panel` takes the lists they write.

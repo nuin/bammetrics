@@ -48,7 +48,7 @@ bammetrics CompareMetrics I=picard.hs_metrics I=ours.hs_metrics O=diff.txt
 Each Picard class is also a kebab-case verb (`insert-size`, `gc-bias`, ...; `bammetrics
 tools` lists them) that takes the same options as `--minimum-pct`, `--MINIMUM_PCT` or
 `MINIMUM_PCT=`, `-` for standard input and `--format json`. Picard text is the default;
-`--format` also writes JSON, JSON Lines, TSV, CSV and Markdown, one or a list
+`--format` also writes JSON, JSON Lines, TSV, CSV, Markdown, XLSX and DOCX, one or a list
 (`--format picard,json -o out.txt` adds `out.txt.json`), and `convert` turns a metrics file
 into any of them and back ([docs/formats.md](docs/formats.md)). `collect` computes several
 metrics in one read of the BAM:
