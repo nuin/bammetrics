@@ -1731,7 +1731,8 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   writes a new file of the default mode, and leaves the index and MD5 under its temporary
   name (`x.bam.being_fixed.<n>bam.md5`) with a warning; bammetrics writes `x.bai` and
   `x.bam.md5`. An input that is SAM text, a CRAM, a BAM named `.sam` or `.cram`, or not a
-  regular file exits 2 without `OUTPUT`: Picard writes BAM bytes under that name.
+  regular file is a usage error without `OUTPUT` (exit 2 on the verb, 1 on the Picard
+  face): Picard writes BAM bytes under that name.
 - `FixMateInformation` with several inputs that are not all `SO:queryname` takes them one
   after the other. htsjdk's merge compares the identity hash codes of two records there,
   an order that changes from run to run; the name sort that follows gives one order but
@@ -1743,12 +1744,13 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
 - `FilterSamReads WRITE_READS_FILES=true` writes both `.reads` files from its one read of
   `INPUT`; Picard reads `INPUT` once more and `OUTPUT` back. A run that fails leaves no
   `.reads` file (Picard leaves the input's). A `.reads` name that is an input or `OUTPUT`
-  exits 2.
+  is a usage error (exit 2 on the verb, 1 on the Picard face).
 - `FilterSamReads` compares a read list name with a record name byte for byte, a name of
   the list decoded as UTF-8 and each character at most U+00FF taken as one byte. A SAM text
   record whose name holds a character above U+00FF keeps its low byte (as every bammetrics
   tool reads SAM text), so no list name matches it; Picard compares the Java strings.
-- `FILTER=includeJavascript` and `JAVASCRIPT_FILE` exit 2 (docs/07 Q6).
+- `FILTER=includeJavascript` and `JAVASCRIPT_FILE` are a usage error (exit 2 on the verb, 1 on
+  the Picard face; docs/07 Q6).
 
 ## Not in Picard
 

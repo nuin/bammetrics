@@ -34,7 +34,7 @@ import pytest
 
 import mate_filter_bams
 import revert_bams
-from cases import CORPUS, FIXTURES
+from cases import BAMMETRICS, CORPUS, FIXTURES
 from compare import compare_bam
 from conftest import RESULTS
 from test_add_comments_to_bam import (SOURCES, chain_against_picard, compare, index_and_md5,
@@ -220,7 +220,10 @@ def test_in_place_refuses_sam_text(tmp_path):
     shutil.copy(FIXTURES / "markdup.sam", target)
     before = target.read_bytes()
     done = run_tool("bammetrics", TOOL, [f"I={target}"])
-    assert done.returncode == 2, done.stderr
+    assert done.returncode == 1 and "give OUTPUT" in done.stderr, done.stderr
+    verb = subprocess.run([str(BAMMETRICS), "fix-mate-information", str(target)],
+                          capture_output=True, text=True)
+    assert verb.returncode == 2, verb.stderr
     assert target.read_bytes() == before
 
 

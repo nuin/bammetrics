@@ -29,7 +29,7 @@ import subprocess
 import pytest
 
 import mate_filter_bams
-from cases import CORPUS, FIXTURES
+from cases import BAMMETRICS, CORPUS, FIXTURES
 from conftest import RESULTS
 from test_add_comments_to_bam import chain_against_picard, compare, index_and_md5, run_tool
 
@@ -152,16 +152,16 @@ def test_paired_intervals_on_the_exome_and_t1(exome, lists, tmp_path):
              f"t1 {filter_}")
 
 
-def test_paired_intervals_after_fixing_mates(corpus, lists, tmp_path):
-    """FixMateInformation sets MC on every pair, so no mate lacks it."""
+def test_paired_intervals_after_fixing_mates(bams, lists, tmp_path):
+    """FixMateInformation (Picard's) sets MC on every mapped mate of the whole pairs of
+    `primary.bam`, so no mate lacks it."""
     fixed = tmp_path / "fixed.bam"
-    done = run_tool("bammetrics", "FixMateInformation",
-                    [f"I={corpus / 'corpus.bam'}", f"O={fixed}", "VALIDATION_STRINGENCY=SILENT",
-                     "IGNORE_MISSING_MATES=true"])
-    if done.returncode != 0:
-        pytest.skip("the corpus holds two primary first reads under one name")
-    kept(fixed, ["FILTER=includePairedIntervals", f"INTERVAL_LIST={lists['padded']}"],
-         "includePairedIntervals fixed corpus")
+    done = run_tool("picard", "FixMateInformation",
+                    [f"I={bams / 'primary.bam'}", f"O={fixed}", *SILENT])
+    assert done.returncode == 0, done.stderr[-800:]
+    for name in ("padded", "target"):
+        kept(fixed, ["FILTER=includePairedIntervals", f"INTERVAL_LIST={lists[name]}"],
+             f"includePairedIntervals fixed primary records, {name}")
 
 
 @pytest.mark.parametrize("order", ["unsorted", "queryname", "coordinate", "duplicate"])
@@ -212,8 +212,8 @@ def test_reads_files(corpus, bams, tmp_path):
 
 
 def test_index_and_md5(bams, tmp_path):
-    index_and_md5(TOOL, [f"I={bams / 'tagged.bam'}", "FILTER=includeTagValues", "TAG=XZ",
-                         "TAG_VALUE=alpha"], tmp_path, "out.bai")
+    index_and_md5(TOOL, [f"I={bams / 'tagged.bam'}", *SILENT, "FILTER=includeTagValues",
+                         "TAG=XZ", "TAG_VALUE=alpha"], tmp_path, "out.bai")
 
 
 ERRORS = {
@@ -260,7 +260,11 @@ def test_javascript_is_refused(corpus, tmp_path):
                                                 f"JAVASCRIPT_FILE={tmp_path / 'f.js'}"]):
         done = run_tool("bammetrics", TOOL, [f"I={corpus / 'corpus.bam'}",
                                              f"O={tmp_path / 'out.bam'}", *args])
-        assert done.returncode == 2, done.stderr
+        assert done.returncode == 1 and "JAVASCRIPT" in done.stderr.upper(), done.stderr
+        verb = subprocess.run([str(BAMMETRICS), "filter-sam-reads", str(corpus / "corpus.bam"),
+                               "-o", str(tmp_path / "out.bam"), "--filter", "includeJavascript"],
+                              capture_output=True, text=True)
+        assert verb.returncode == 2, verb.stderr
         assert not (tmp_path / "out.bam").exists()
     RESULTS.append((f"{TOOL} includeJavascript", 0, 0, "refused (docs/07 Q6)"))
 

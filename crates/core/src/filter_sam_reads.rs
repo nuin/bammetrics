@@ -522,7 +522,7 @@ impl Rule {
                     }
                     JavaTag::NoRecordHasIt => false,
                     JavaTag::Bytes(name) => string_tag(record, *name, tags)?
-                        .is_some_and(|value| values.iter().any(|v| *v == value)),
+                        .is_some_and(|value| values.contains(&value)),
                 };
                 found != *include
             }
