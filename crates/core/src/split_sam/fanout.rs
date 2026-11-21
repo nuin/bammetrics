@@ -607,7 +607,7 @@ impl Fanout {
 /// removes the renamed files too; a kept file is not registered, so it
 /// outlives the signal under its kept name. A file written in place (a
 /// link or pipe this user owns) is never removed.
-fn commit_all(staged: Vec<AtomicFile>) -> Result<Vec<PathBuf>> {
+pub(crate) fn commit_all(staged: Vec<AtomicFile>) -> Result<Vec<PathBuf>> {
     let mut done: Vec<PathBuf> = Vec::with_capacity(staged.len());
     let mut renamed: Vec<PathBuf> = Vec::with_capacity(staged.len());
     let mut kept: Vec<Kept> = Vec::new();

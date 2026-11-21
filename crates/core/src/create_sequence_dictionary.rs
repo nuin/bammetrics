@@ -79,7 +79,7 @@ const NAME_LIMIT: usize = 4096;
 
 /// `SAMSequenceRecord.LEGAL_RNAME_PATTERN`, written out as its two
 /// character classes.
-const NAME_PATTERN: &str = "[0-9A-Za-z!#$%&+./:;?@^_|~-][0-9A-Za-z!#$%&*+./:;=?@^_|~-]*";
+pub(crate) const NAME_PATTERN: &str = "[0-9A-Za-z!#$%&+./:;?@^_|~-][0-9A-Za-z!#$%&*+./:;=?@^_|~-]*";
 
 pub const TOOL: Tool = Tool {
     name: "CreateSequenceDictionary",
@@ -271,7 +271,7 @@ fn is_blank(text: &str) -> bool {
 }
 
 /// `SAMSequenceRecord.validateSequenceName`: [`NAME_PATTERN`].
-fn legal_name(name: &str) -> bool {
+pub(crate) fn legal_name(name: &str) -> bool {
     let first = |b: u8| b.is_ascii_alphanumeric() || b"!#$%&+./:;?@^_|~-".contains(&b);
     let rest = |b: u8| first(b) || b == b'*' || b == b'=';
     let mut bytes = name.bytes();

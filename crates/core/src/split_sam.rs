@@ -40,6 +40,7 @@ mod fanout;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use fanout::commit_all;
 pub use fanout::{Claims, Fanout, Format, MAX_FILES, MAX_OPEN_FILES, WriterOptions};
 
 /// `IOUtil.makeFileNameSafe` on a header value: each byte is the Java
