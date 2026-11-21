@@ -632,6 +632,14 @@ impl Tool {
             let body = arg.trim_start_matches('-');
             let (name, value) = match body.split_once('=') {
                 Some((n, v)) => (n, v.to_owned()),
+                // Barclay takes a boolean's value only when one follows: a
+                // bare `--UNIQUE` before another option or at the end is true.
+                None if dashed
+                    && self.lookup(body).is_some_and(|o| o.ty == Ty::Bool)
+                    && rest.as_slice().first().is_none_or(|v| v.starts_with('-')) =>
+                {
+                    (body, "true".to_owned())
+                }
                 None if dashed => {
                     let v = rest.next().ok_or_else(|| {
                         Error::Usage(format!("{}: {arg} needs a value", self.name))
@@ -1173,6 +1181,39 @@ mod tests {
                 "CollectInsertSizeMetrics INPUT=x.bam OUTPUT=out.txt MINIMUM_PCT=0.5"
             );
         }
+    }
+
+    /// Picard 3.5.0 takes `--INCLUDE_DUPLICATES` alone as true, before
+    /// another option or at the end; a value that follows is its value.
+    #[test]
+    fn a_bare_dashed_boolean_is_true() {
+        for args in [
+            strings(&["--INPUT", "x.bam", "--INCLUDE_DUPLICATES", "-O", "o"]),
+            strings(&["--INPUT", "x.bam", "-O", "o", "--INCLUDE_DUPLICATES"]),
+            strings(&[
+                "--INPUT",
+                "x.bam",
+                "--INCLUDE_DUPLICATES",
+                "true",
+                "-O",
+                "o",
+            ]),
+        ] {
+            let inv = tool().parse(&args).expect("parses");
+            assert_eq!(inv.get("INCLUDE_DUPLICATES"), Some("true"), "{args:?}");
+            assert_eq!(inv.output.as_deref(), Some(Path::new("o")), "{args:?}");
+        }
+        let inv = tool()
+            .parse(&strings(&[
+                "--INPUT",
+                "x.bam",
+                "--INCLUDE_DUPLICATES",
+                "false",
+            ]))
+            .expect("parses");
+        assert_eq!(inv.get("INCLUDE_DUPLICATES"), Some("false"));
+        // A value option still needs its value.
+        assert!(tool().parse(&strings(&["--INPUT", "x.bam", "-M"])).is_err());
     }
 
     #[test]
