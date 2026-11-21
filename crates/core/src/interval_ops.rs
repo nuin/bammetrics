@@ -39,7 +39,7 @@ pub use ops::{
     break_at_band_multiples, concatenate, difference, intersection, invert, merge_intervals,
     merged, overlaps, subtract, subtract_disjoint, union, unique_intervals,
 };
-pub use read::{MAX_LINE_BYTES, MAX_LIST_BYTES, VcfInterval, VcfIntervals};
+pub use read::{MAX_INTERVALS, MAX_LINE_BYTES, MAX_LIST_BYTES, VcfInterval, VcfIntervals};
 pub use regions::Regions;
 pub use scatter::{
     MAX_SCATTER_FILES, ScatterMode, list_weight, scatter, scatter_count_for_content, scatter_path,

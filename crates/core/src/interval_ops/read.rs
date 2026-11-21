@@ -10,14 +10,24 @@ use std::path::Path;
 use super::header::{Header, Sequence, SortOrder};
 use super::{Interval, IntervalList};
 use crate::bed_to_interval_list;
-use crate::error::{Error, Result};
+use crate::error::{Error, Result, excerpt};
 use crate::vcf::VcfReader;
 
 /// The bytes of an interval list read at most, inflated when it is gzip:
 /// the text is held whole while it is parsed.
 pub const MAX_LIST_BYTES: u64 = 1 << 30;
+/// The intervals of one list held at most. Each cost 76 bytes (name `.`)
+/// to 102 bytes (`target_N`) of peak memory in `IntervalListToBed` on 5
+/// million intervals, its line of text included, so a list at the cap
+/// needs 2.3 to 3 GB; htsjdk has no bound.
+pub const MAX_INTERVALS: usize = 30_000_000;
 /// The longest line of a VCF read for its intervals.
 pub const MAX_LINE_BYTES: usize = crate::vcf::MAX_LINE_BYTES;
+
+/// The error of a list that would hold more than [`MAX_INTERVALS`].
+fn too_many_intervals() -> String {
+    format!("the list holds more than {MAX_INTERVALS} intervals, the most held")
+}
 
 /// True for a name htsjdk's `IOUtil.openFileForReading` inflates:
 /// `.gz`, `.gzip` or `.bfq`, case as written.
@@ -53,7 +63,7 @@ fn read_text(path: &Path, cap: u64) -> Result<String> {
     }
     Ok(match String::from_utf8(bytes) {
         Ok(text) => text,
-        Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned(),
+        Err(e) => crate::java::decode_utf8(e.as_bytes()).into_owned(),
     })
 }
 
@@ -87,7 +97,9 @@ fn java_split_tab(line: &str) -> Vec<&str> {
 }
 
 fn parse_int(text: &str) -> std::result::Result<i32, String> {
-    crate::java::parse_integer(text, 32).map(|v| v as i32)
+    crate::java::parse_integer(text, 32)
+        .map(|v| v as i32)
+        .map_err(|message| excerpt(&message).into_owned())
 }
 
 impl IntervalList {
@@ -143,6 +155,9 @@ impl IntervalList {
         let mut intervals = Vec::new();
         for line in lines {
             if let Some(interval) = decode_record(line, &header, &index)? {
+                if intervals.len() == MAX_INTERVALS {
+                    return Err(too_many_intervals());
+                }
                 intervals.push(interval);
             }
         }
@@ -167,6 +182,12 @@ impl IntervalList {
                     ),
                 });
             };
+            if list.intervals.len() == MAX_INTERVALS {
+                return Err(Error::Intervals {
+                    path: path.to_path_buf(),
+                    message: too_many_intervals(),
+                });
+            }
             list.intervals.push(Interval {
                 contig,
                 start: site.start,
@@ -234,8 +255,9 @@ fn decode_record(
     let fields = java_split_tab(line);
     let [contig, start, end, strand, name] = fields[..] else {
         return Err(format!(
-            "Invalid interval record contains {} fields: {line}",
-            fields.len()
+            "Invalid interval record contains {} fields: {}",
+            fields.len(),
+            excerpt(line)
         ));
     };
     let start = parse_int(start)?;

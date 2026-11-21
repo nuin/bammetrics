@@ -825,3 +825,62 @@ mod lang_tests {
         );
     }
 }
+
+/// `new String(bytes, UTF_8)`: each malformed sequence becomes U+FFFD as
+/// the JDK's decoder replaces it. That is Rust's `from_utf8_lossy` but for
+/// an encoded surrogate: `ED` followed by `A0` to `BF` is one malformed
+/// unit of 3 bytes when a continuation byte follows, else of 2.
+pub fn decode_utf8(bytes: &[u8]) -> std::borrow::Cow<'_, str> {
+    let first = match std::str::from_utf8(bytes) {
+        Ok(text) => return std::borrow::Cow::Borrowed(text),
+        Err(error) => error,
+    };
+    let mut out = String::with_capacity(bytes.len() + 2);
+    let mut rest = bytes;
+    let mut error = Some(first);
+    while let Some(e) = error {
+        let (valid, after) = rest.split_at(e.valid_up_to());
+        out.push_str(std::str::from_utf8(valid).unwrap_or_default());
+        out.push('\u{FFFD}');
+        let skip = match after {
+            [0xED, 0xA0..=0xBF, 0x80..=0xBF, ..] => 3,
+            [0xED, 0xA0..=0xBF, ..] => 2,
+            _ => e.error_len().unwrap_or(after.len()),
+        };
+        rest = &after[skip..];
+        error = std::str::from_utf8(rest).err();
+    }
+    out.push_str(std::str::from_utf8(rest).unwrap_or_default());
+    std::borrow::Cow::Owned(out)
+}
+
+#[cfg(test)]
+mod utf8_tests {
+    use super::decode_utf8;
+
+    /// Each expectation is what `new String(bytes, UTF_8)` gave on
+    /// OpenJDK 27.
+    #[test]
+    fn malformed_bytes_decode_as_the_jdk_decodes_them() {
+        let units =
+            |bytes: &[u8]| -> Vec<u32> { decode_utf8(bytes).chars().map(u32::from).collect() };
+        let r = 0xFFFD;
+        assert_eq!(units(&[0xED, 0xA0, 0x80]), [r]);
+        assert_eq!(units(&[0xED, 0xA0, 0x41]), [r, 0x41]);
+        assert_eq!(units(&[0xED, 0xA0]), [r]);
+        assert_eq!(units(&[0xED, 0xBF, 0xBF]), [r]);
+        assert_eq!(units(&[0xED, 0x9F, 0xBF]), [0xD7FF]);
+        assert_eq!(units(&[0xED, 0xA0, 0x80, 0xED, 0xB0, 0x80]), [r, r]);
+        assert_eq!(units(&[0xE0, 0x80, 0x80]), [r, r, r]);
+        assert_eq!(units(&[0xE0, 0xA0]), [r]);
+        assert_eq!(units(&[0xF0, 0x80, 0x80, 0x80]), [r, r, r, r]);
+        assert_eq!(units(&[0xF4, 0x90, 0x80, 0x80]), [r, r, r, r]);
+        assert_eq!(units(&[0xC0, 0x80]), [r, r]);
+        assert_eq!(units(&[0xE2, 0x82, 0x41]), [r, 0x41]);
+        assert_eq!(units(&[0x41, 0xED, 0xA0, 0x80, 0x42]), [0x41, r, 0x42]);
+        assert_eq!(units(&[0xED, 0xA0, 0xC0]), [r, r]);
+        assert_eq!(units(&[0xED, 0x80]), [r]);
+        assert_eq!(units(&[0xED]), [r]);
+        assert_eq!(decode_utf8(b"plain"), "plain");
+    }
+}
