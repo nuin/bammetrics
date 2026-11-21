@@ -48,7 +48,7 @@ bammetrics CompareMetrics I=picard.hs_metrics I=ours.hs_metrics O=diff.txt
 Each Picard class is also a kebab-case verb (`insert-size`, `gc-bias`, ...; `bammetrics
 tools` lists them) that takes the same options as `--minimum-pct`, `--MINIMUM_PCT` or
 `MINIMUM_PCT=`, `-` for standard input and `--format json`. Picard text is the default;
-`--format` also writes JSON, JSON Lines, TSV, CSV and Markdown, one or a list
+`--format` also writes JSON, JSON Lines, TSV, CSV, Markdown and an SQL dump, one or a list
 (`--format picard,json -o out.txt` adds `out.txt.json`), and `convert` turns a metrics file
 into any of them and back ([docs/formats.md](docs/formats.md)). `collect` computes several
 metrics in one read of the BAM:
@@ -261,7 +261,7 @@ the cases and the comparison rules are in [docs/concordance.md](docs/concordance
 ```
 crates/core   bammetrics-core: the metrics library
 crates/verdict, crates/report   presets and verdicts; the HTML pages and the index
-crates/formats   one typed table per metrics class; JSON, CSV, Markdown, JUnit, MultiQC
+crates/formats   one typed table per metrics class; JSON, CSV, Markdown, JUnit, MultiQC, SQL
 crates/cli    the bammetrics command
 crates/py     the bammetrics Python module (PyO3)
 tests/        concordance/ (Picard harness), harness/ (tests of that harness), corpus/ (generator), python/, data/

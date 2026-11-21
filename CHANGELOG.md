@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `--format sql` (wave W21 of docs/07): an SQL dump of a metrics file that `sqlite3 DB <
+  FILE.sql` loads (`crates/formats/src/sql.rs`). One table per metrics class, named by
+  the class after its last `.` or `$`, the histogram as `histogram`, the `StringHeader`
+  texts as `headers`, and `tables` and `columns` that name each table and column with its
+  glossary type. Columns are `BIGINT`, `DOUBLE` or `TEXT`; a float keeps every digit; an
+  empty cell, NaN and infinity are `NULL`. One `INSERT` per row in one transaction. The
+  tool verbs, `convert`, `qc --also sql` and `chain --also sql` write it; `convert` and
+  `read_table` refuse a dump. No crate is added; the stripped binary grows 16,560 bytes.
+- `crates/formats/tests/sql.rs`: `sqlite3` 3.54.0 and DuckDB 2.0.1 load the dump of every
+  file of `tests/data/picard` and every metrics file in `tests/golden` (373 files, 93,924
+  cells) and give back every cell, column type and header line; each reader is skipped
+  when it is not on PATH. `tests/python/test_sql.py` loads the `qc` and `chain` dumps with
+  Python's `sqlite3`.
+- Nine golden forms (`convert_sql`, `convert_sql_list`, `error_convert_reads_sql`,
+  `verb_insert_size_sql`, `verb_multiple_metrics_sql`, `qc_also_sql`,
+  `qc_also_sql_no_reads`, `plan_also_sql`, `chain_also_sql`) and the fixture
+  `tests/data/insert_size_metrics.sql`. Three error records list `sql` among the formats.
+
 ## 0.30.0
 
 Wave W12 of docs/07: the interval layer `interval_ops` and five interval tools (65 in all), none of them a chain step; `qc --panel` takes the lists they write.

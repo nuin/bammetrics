@@ -234,7 +234,7 @@ These are the two examples of docs/chaining.md. `tests/data/chain_markdup.toml` 
 | `threads` | `--threads N` | BGZF threads of each read and of `write`. Over 256 is a `UsageError`, on `chain`, `qc` and `collect` |
 | `tmp_dir` | `--tmp-dir DIR` | Where a transform spills and a piped source is copied |
 | `format` | `--format LIST` | `picard` first. `["picard", "json"]` adds `FILE.json` beside every metrics file |
-| `also` | `--also LIST` | `json`, `jsonl`, `tsv`, `csv` beside every metrics file, `markdown` as `PREFIX.report.md` |
+| `also` | `--also LIST` | `json`, `jsonl`, `tsv`, `csv`, `sql` beside every metrics file, `markdown` as `PREFIX.report.md` |
 | `sample` | `--sample NAME` | The sample of the json forms and of `Run.sample` |
 | `sort_memory` | `--sort-memory BYTES` | What a `sort_sam` step holds before it spills: `"2G"`, `"512M"`, a number of bytes as a str. Default 2 GiB |
 | `force_space` | `--force-space` | `True` runs a chain whose estimated temporary and output bytes exceed the free space; without it that chain raises `InputError` before the first read |

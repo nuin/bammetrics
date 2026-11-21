@@ -87,7 +87,7 @@ On every tool verb:
 | `-R` | FASTA with a `.fai` | `R`, `REFERENCE_SEQUENCE` |
 | `--level` | accumulation level, repeatable | `LEVEL`, `METRIC_ACCUMULATION_LEVEL` |
 | `--stop-after N` | read limit | `STOP_AFTER` |
-| `--format` | `picard`, `json`, `tsv`, `jsonl`, `human`, `csv`, `markdown`, or a list (`picard,json`): the first to `-o`, each further one beside it as `FILE.json` | none |
+| `--format` | `picard`, `json`, `tsv`, `jsonl`, `human`, `csv`, `markdown`, `sql`, or a list (`picard,json`): the first to `-o`, each further one beside it as `FILE.json` | none |
 | `--sample NAME` | sample name in the json and jsonl forms, default the first `@RG SM`, else the input name without its extension (none for standard input); never written into a Picard file | none |
 | `-q`, `-v` | no notes on stderr; the Picard command line and each file written on stderr | `QUIET` |
 
@@ -189,7 +189,9 @@ full doubles. `markdown` is a GFM table per class. `human` is an aligned table (
 line up to 6 columns, else `COLUMN  value` lines per row). Numbers are JSON numbers, NaN and
 infinity `null` and listed in `non_finite`; `tsv` and `human` print Picard's cell text. For
 `QualityScoreDistribution` and `MeanQualityByCycle`, whose file has no metrics class, the
-rows of `tsv`, `csv` and `human` are the histogram.
+rows of `tsv`, `csv` and `human` are the histogram. `sql` is a dump `sqlite3 DB < FILE.sql`
+loads: a table per class, `histogram`, `headers`, and `tables` and `columns` that describe
+them; NaN and infinity are `NULL` ([formats.md](formats.md), "SQL dump").
 
 `--format` takes a list (`picard,json,csv`). The first format goes to `-o` or standard
 output, each further one beside `-o` as `FILE.json`, `FILE.csv`; a list needs `-o`. A
@@ -200,7 +202,7 @@ problem.
 `qc` and `plan` take `--format text|jsonl`, the event stream on standard output; `qc --also`
 writes file formats. `check` takes `text`, `json`, `jsonl`, `junit`, `markdown` and
 `multiqc`, as a list too. Each is described under its verb. `chain` takes `--format` with
-`picard` first, on the chain and on a step, and `--also json|jsonl|tsv|csv|markdown`.
+`picard` first, on the chain and on a step, and `--also json|jsonl|tsv|csv|sql|markdown`.
 
 ## Exit codes
 
@@ -1161,8 +1163,8 @@ without it removes it. `--pdf-font` and `--page-size` set the PDF and need `--re
 ([docs/pdf.md](pdf.md)).
 
 `--also` writes further formats beside the Picard files, one or a list (`--also
-json,markdown`). `json`, `jsonl`, `tsv` and `csv` add `FILE.json` (`.jsonl`, `.tsv`, `.csv`)
-beside every metrics file. `markdown` adds `PREFIX.report.md` (the verdict, then every
+json,markdown`). `json`, `jsonl`, `tsv`, `csv` and `sql` add `FILE.json` (`.jsonl`,
+`.tsv`, `.csv`, `.sql`) beside every metrics file. `markdown` adds `PREFIX.report.md` (the verdict, then every
 metrics table, at most 65,536 characters), `junit` adds `PREFIX.junit.xml` (a testcase per
 rule) and `multiqc` adds `PREFIX.verdict_mqc.json` (MultiQC custom content). The manifest
 lists them under the step `also`. A later run without `--also` removes the ones the earlier
@@ -1867,8 +1869,9 @@ bammetrics convert FILE [--format FORMAT[,FORMAT]] [-o FILE] [--table NAME] [--s
 or the JSON of `--format json` (schema `bammetrics.metrics/1`), told apart by its first
 character (`{` or `[` is JSON; a byte order mark before it is dropped); `-` reads standard
 input. `--format` takes `picard`, `json`, `jsonl`, `tsv`,
-`csv`, `markdown` or `human`, one or a list; without it the output is `json` for Picard
-text and `picard` for JSON. Picard text to JSON to Picard text is byte for byte the first
+`csv`, `markdown`, `human` or `sql`, one or a list; without it the output is `json` for
+Picard text and `picard` for JSON. An SQL dump does not read back: `convert` refuses one
+(exit 1) and names `sqlite3`. Picard text to JSON to Picard text is byte for byte the first
 file, for a file Picard or bammetrics wrote.
 
 ```bash
