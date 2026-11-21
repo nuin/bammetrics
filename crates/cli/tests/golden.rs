@@ -48,6 +48,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("INS_PQ_LONG", "tests/data/insert_size_metrics.long.parquet"),
     ("INS_XLSX", "tests/data/insert_size_metrics.xlsx"),
     ("NO_READS", "tests/data/no_reads.bam"),
+    ("INS_SQL", "tests/data/insert_size_metrics.sql"),
     ("PLAN_MD", "tests/data/chain_markdup.toml"),
     ("PLAN_TAPS", "tests/data/chain_taps.toml"),
     ("PLAN_BAD", "tests/data/chain_bad_key.toml"),
@@ -529,6 +530,17 @@ const FORMAT_CASES: &[Case] = &[
     case!("error_convert_reads_xlsx", "convert", "INS_XLSX"),
     case!("error_verb_xlsx_stdout_list", "insert-size", "IS", "--format", "xlsx,docx"),
     case!("error_convert_unresolved_output", "convert", "PIC_INS", "--format", "xlsx", "-o", "OUT/nodir/../insert_size.xlsx"),
+    // The SQL dump (docs/formats.md "SQL dump"); tests/data/insert_size_metrics.sql is
+    // `convert PIC_INS --format sql`.
+    case!("convert_sql", "convert", "PIC_INS", "--format", "sql", "--sample", "NA12878"),
+    case!("convert_sql_list", "convert", "INS_JSON", "--format", "picard,sql", "-o", "OUT/insert_size.txt"),
+    case!("error_convert_reads_sql", "convert", "INS_SQL"),
+    case!("verb_insert_size_sql", "insert-size", "IS", "--format", "picard,sql", "-o", "OUT/insert_size.txt", "--sample", "S1"),
+    case!("verb_multiple_metrics_sql", "multiple-metrics", "IS", "-o", "OUT/sample", "--program", "CollectQualityYieldMetrics", "--program", "CollectInsertSizeMetrics", "--format", "picard,sql"),
+    case!("qc_also_sql", "qc", "IS", "-o", "OUT/sample", "--also", "sql", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("qc_also_sql_no_reads", "qc", "NO_READS", "-o", "OUT/sample", "--also", "sql", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("plan_also_sql", "plan", "IS", "-o", "OUT/sample", "--also", "sql,markdown"),
+    case!("chain_also_sql", "chain", "IS", "-o", "OUT/s", "--also", "sql", "+", "insert-size", "+", "quality-yield"),
 ];
 
 /// `chain` (docs/chaining.md): the two documented examples from the command
@@ -1358,6 +1370,13 @@ fn normalize(text: &str, out: &str) -> String {
         {
             // The same header in the `headers` array of the JSON form.
             normalized.push_str(&format!("{indent}\"Started on: <time>\""));
+        } else if let Some(rest) = line.strip_prefix("INSERT INTO \"headers\" VALUES (")
+            && let Some((position, _)) = rest.split_once(", 'Started on: ")
+        {
+            // The same header in the `headers` table of the SQL form.
+            normalized.push_str(&format!(
+                "INSERT INTO \"headers\" VALUES ({position}, 'Started on: <time>');"
+            ));
         } else if let Some(indent) = line.strip_suffix(line.trim_start())
             && let Some(key) = ["mtime", "argv_hash"]
                 .into_iter()

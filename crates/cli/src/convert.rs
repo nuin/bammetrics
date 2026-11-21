@@ -34,8 +34,9 @@ const VERB: &str = "convert";
     after_help = "Formats: picard (Picard metrics text), json (schema bammetrics.metrics/1, \
 docs/schema/metrics-1.json), jsonl (one object per row, a histogram row with \"histogram\": true), \
 tsv, csv (RFC 4180), markdown, human, parquet (FILE, FILE.histogram.parquet and \
-FILE.long.parquet; needs -o), xlsx (a sheet per table), docx (the headers and every table). \
-Picard text, json and parquet read back; the others are written only.\n\nPicard text to json or parquet to Picard text is byte for byte the first file, for a \
+FILE.long.parquet; needs -o), xlsx (a sheet per table), docx (the headers and every table), \
+sql (a dump sqlite3 loads). Picard text, json and parquet read back; the others are written \
+only.\n\nPicard text to json or parquet to Picard text is byte for byte the first file, for a \
 file Picard or bammetrics wrote. tsv, csv and human print one table: the metrics class, or the \
 histogram of a file without one; --table picks."
 )]
@@ -57,8 +58,8 @@ pub struct ConvertArgs {
     /// file without a class).
     #[arg(long, value_name = "NAME")]
     pub table: Option<String>,
-    /// Sample name for the json and jsonl forms (default: the one the
-    /// input JSON carries).
+    /// Sample name for the json, jsonl and sql forms (default: the one
+    /// the input JSON carries).
     #[arg(long, value_name = "NAME")]
     pub sample: Option<String>,
 }
@@ -227,7 +228,7 @@ pub fn run(args: &ConvertArgs) -> Result<u8> {
         .map_err(|e| {
             let hint = match e {
                 bammetrics_formats::Error::Picard(_) => {
-                    "the other formats hold it: json, jsonl, tsv, csv, markdown, xlsx, docx"
+                    "the other formats hold it: json, jsonl, tsv, csv, markdown, xlsx, docx, sql"
                 }
                 _ => "picard and json hold every document",
             };

@@ -15,6 +15,7 @@
 //! | JUnit XML, MultiQC custom content | [`junit`], [`multiqc`] | no |
 //! | Parquet (feature `parquet`) | [`parquet`] | yes |
 //! | XLSX, DOCX (stored zip of OOXML parts) | [`xlsx`], [`docx`] | no |
+//! | SQL dump for `sqlite3` | [`sql`] | no |
 //!
 //! [`read`] takes either text form, so Picard text to JSON to Picard
 //! text is byte for byte the first file (`tests/round_trip.rs` runs it on
@@ -32,10 +33,11 @@ pub mod junit;
 pub mod markdown;
 pub mod metrics_json;
 pub mod multiqc;
-pub mod parquet;
 pub mod ooxml;
+pub mod parquet;
 pub mod picard;
 pub mod sheet;
+pub mod sql;
 pub mod table;
 pub mod verdict;
 pub mod xlsx;
@@ -57,11 +59,12 @@ pub enum Format {
     Parquet,
     Xlsx,
     Docx,
+    Sql,
 }
 
 impl Format {
     /// Every format, in `--help` order.
-    pub const ALL: [Format; 10] = [
+    pub const ALL: [Format; 11] = [
         Format::Picard,
         Format::Json,
         Format::Tsv,
@@ -72,6 +75,7 @@ impl Format {
         Format::Parquet,
         Format::Xlsx,
         Format::Docx,
+        Format::Sql,
     ];
 
     pub fn name(self) -> &'static str {
@@ -86,6 +90,7 @@ impl Format {
             Format::Parquet => "parquet",
             Format::Xlsx => "xlsx",
             Format::Docx => "docx",
+            Format::Sql => "sql",
         }
     }
 
@@ -111,6 +116,7 @@ impl Format {
             Format::Parquet => "parquet",
             Format::Xlsx => "xlsx",
             Format::Docx => "docx",
+            Format::Sql => "sql",
         }
     }
 
@@ -184,6 +190,7 @@ pub fn render(format: Format, doc: &Document, table: Option<&Table>) -> Result<S
         Format::Human => one().map(delimited::human).unwrap_or_default(),
         Format::Markdown => markdown::write(&[doc], &[]),
         Format::Xlsx | Format::Docx => return Err(Error::Binary(format.name())),
+        Format::Sql => sql::write(doc),
     })
 }
 
@@ -262,6 +269,11 @@ pub fn is_json(text: &str) -> bool {
 /// [`is_json`], else Picard text. A leading byte order mark is dropped.
 pub fn read(text: &str) -> Result<Document> {
     let text = without_bom(text);
+    if sql::is_sql(text) {
+        return Err(Error::Metrics(
+            "an SQL dump (--format sql) does not read back: load it with sqlite3".to_owned(),
+        ));
+    }
     if is_json(text) {
         metrics_json::read(text)
     } else {

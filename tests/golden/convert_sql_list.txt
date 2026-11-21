@@ -1,0 +1,69 @@
+## argv
+convert
+tests/data/insert_size_metrics.json
+--format
+picard,sql
+-o
+OUT/insert_size.txt
+## exit
+0
+## stdout
+## stderr
+## file insert_size.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectMultipleMetrics INPUT=tests/data/insert_size.bam OUTPUT=tests/data/picard/NA12878/NA12878 PROGRAM=[CollectAlignmentSummaryMetrics, CollectInsertSizeMetrics, QualityScoreDistribution, MeanQualityByCycle, CollectBaseDistributionByCycle, CollectGcBiasMetrics, CollectQualityYieldMetrics] VERBOSITY=ERROR QUIET=true REFERENCE_SEQUENCE=tests/data/ref_100k.fa    ASSUME_SORTED=true STOP_AFTER=0 METRIC_ACCUMULATION_LEVEL=[ALL_READS] INCLUDE_UNPAIRED=false DO_NOT_CREATE_PLOTS=false VALIDATION_STRINGENCY=STRICT COMPRESSION_LEVEL=5 MAX_RECORDS_IN_RAM=500000 CREATE_INDEX=false CREATE_MD5_FILE=false USE_JDK_DEFLATER=false USE_JDK_INFLATER=false
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.InsertSizeMetrics
+MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MAX_INSERT_SIZE	MEAN_INSERT_SIZE	STANDARD_DEVIATION	READ_PAIRS	PAIR_ORIENTATION	WIDTH_OF_10_PERCENT	WIDTH_OF_20_PERCENT	WIDTH_OF_30_PERCENT	WIDTH_OF_40_PERCENT	WIDTH_OF_50_PERCENT	WIDTH_OF_60_PERCENT	WIDTH_OF_70_PERCENT	WIDTH_OF_80_PERCENT	WIDTH_OF_90_PERCENT	WIDTH_OF_95_PERCENT	WIDTH_OF_99_PERCENT	SAMPLE	LIBRARY	READ_GROUP
+310	310	10	300	500	310	8.164966	5	FR	1	1	1	1	21	21	21	21	381	381	381			
+
+## HISTOGRAM	java.lang.Integer
+insert_size	All_Reads.fr_count
+300	1
+310	2
+320	1
+
+## file insert_size.txt.sql
+-- bammetrics SQL dump of one metrics file: sqlite3 DB < FILE.sql
+BEGIN TRANSACTION;
+CREATE TABLE "headers" ("position" BIGINT, "text" TEXT);
+INSERT INTO "headers" VALUES (1, 'CollectMultipleMetrics INPUT=tests/data/insert_size.bam OUTPUT=tests/data/picard/NA12878/NA12878 PROGRAM=[CollectAlignmentSummaryMetrics, CollectInsertSizeMetrics, QualityScoreDistribution, MeanQualityByCycle, CollectBaseDistributionByCycle, CollectGcBiasMetrics, CollectQualityYieldMetrics] VERBOSITY=ERROR QUIET=true REFERENCE_SEQUENCE=tests/data/ref_100k.fa    ASSUME_SORTED=true STOP_AFTER=0 METRIC_ACCUMULATION_LEVEL=[ALL_READS] INCLUDE_UNPAIRED=false DO_NOT_CREATE_PLOTS=false VALIDATION_STRINGENCY=STRICT COMPRESSION_LEVEL=5 MAX_RECORDS_IN_RAM=500000 CREATE_INDEX=false CREATE_MD5_FILE=false USE_JDK_DEFLATER=false USE_JDK_INFLATER=false');
+INSERT INTO "headers" VALUES (2, 'Started on: <time>');
+CREATE TABLE "tables" ("name" TEXT, "kind" TEXT, "class" TEXT, "tool" TEXT, "sample" TEXT);
+INSERT INTO "tables" VALUES ('InsertSizeMetrics', 'metrics', 'picard.analysis.InsertSizeMetrics', 'CollectMultipleMetrics', NULL);
+INSERT INTO "tables" VALUES ('histogram', 'histogram', 'java.lang.Integer', 'CollectMultipleMetrics', NULL);
+CREATE TABLE "columns" ("table" TEXT, "position" BIGINT, "column" TEXT, "name" TEXT, "type" TEXT);
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 1, 'MEDIAN_INSERT_SIZE', 'MEDIAN_INSERT_SIZE', 'float');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 2, 'MODE_INSERT_SIZE', 'MODE_INSERT_SIZE', 'float');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 3, 'MEDIAN_ABSOLUTE_DEVIATION', 'MEDIAN_ABSOLUTE_DEVIATION', 'float');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 4, 'MIN_INSERT_SIZE', 'MIN_INSERT_SIZE', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 5, 'MAX_INSERT_SIZE', 'MAX_INSERT_SIZE', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 6, 'MEAN_INSERT_SIZE', 'MEAN_INSERT_SIZE', 'float');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 7, 'STANDARD_DEVIATION', 'STANDARD_DEVIATION', 'float');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 8, 'READ_PAIRS', 'READ_PAIRS', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 9, 'PAIR_ORIENTATION', 'PAIR_ORIENTATION', 'string');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 10, 'WIDTH_OF_10_PERCENT', 'WIDTH_OF_10_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 11, 'WIDTH_OF_20_PERCENT', 'WIDTH_OF_20_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 12, 'WIDTH_OF_30_PERCENT', 'WIDTH_OF_30_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 13, 'WIDTH_OF_40_PERCENT', 'WIDTH_OF_40_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 14, 'WIDTH_OF_50_PERCENT', 'WIDTH_OF_50_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 15, 'WIDTH_OF_60_PERCENT', 'WIDTH_OF_60_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 16, 'WIDTH_OF_70_PERCENT', 'WIDTH_OF_70_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 17, 'WIDTH_OF_80_PERCENT', 'WIDTH_OF_80_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 18, 'WIDTH_OF_90_PERCENT', 'WIDTH_OF_90_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 19, 'WIDTH_OF_95_PERCENT', 'WIDTH_OF_95_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 20, 'WIDTH_OF_99_PERCENT', 'WIDTH_OF_99_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 21, 'SAMPLE', 'SAMPLE', 'string');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 22, 'LIBRARY', 'LIBRARY', 'string');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 23, 'READ_GROUP', 'READ_GROUP', 'string');
+INSERT INTO "columns" VALUES ('histogram', 1, 'insert_size', 'insert_size', 'int');
+INSERT INTO "columns" VALUES ('histogram', 2, 'All_Reads.fr_count', 'All_Reads.fr_count', 'float');
+CREATE TABLE "InsertSizeMetrics" ("MEDIAN_INSERT_SIZE" DOUBLE, "MODE_INSERT_SIZE" DOUBLE, "MEDIAN_ABSOLUTE_DEVIATION" DOUBLE, "MIN_INSERT_SIZE" BIGINT, "MAX_INSERT_SIZE" BIGINT, "MEAN_INSERT_SIZE" DOUBLE, "STANDARD_DEVIATION" DOUBLE, "READ_PAIRS" BIGINT, "PAIR_ORIENTATION" TEXT, "WIDTH_OF_10_PERCENT" BIGINT, "WIDTH_OF_20_PERCENT" BIGINT, "WIDTH_OF_30_PERCENT" BIGINT, "WIDTH_OF_40_PERCENT" BIGINT, "WIDTH_OF_50_PERCENT" BIGINT, "WIDTH_OF_60_PERCENT" BIGINT, "WIDTH_OF_70_PERCENT" BIGINT, "WIDTH_OF_80_PERCENT" BIGINT, "WIDTH_OF_90_PERCENT" BIGINT, "WIDTH_OF_95_PERCENT" BIGINT, "WIDTH_OF_99_PERCENT" BIGINT, "SAMPLE" TEXT, "LIBRARY" TEXT, "READ_GROUP" TEXT);
+INSERT INTO "InsertSizeMetrics" VALUES (310.0, 310.0, 10.0, 300, 500, 310.0, 8.164966, 5, 'FR', 1, 1, 1, 1, 21, 21, 21, 21, 381, 381, 381, NULL, NULL, NULL);
+CREATE TABLE "histogram" ("insert_size" BIGINT, "All_Reads.fr_count" DOUBLE);
+INSERT INTO "histogram" VALUES (300, 1.0);
+INSERT INTO "histogram" VALUES (310, 2.0);
+INSERT INTO "histogram" VALUES (320, 1.0);
+COMMIT;

@@ -30,11 +30,12 @@ bammetrics insert-size in.bam --format parquet -o is.parquet     # is.parquet an
 | Parquet | `parquet` | `.parquet` | yes | headers, metrics class, histogram, column types, full doubles |
 | XLSX | `xlsx` | `.xlsx` | no | headers, a sheet per metrics class, a histogram sheet; full doubles |
 | DOCX | `docx` | `.docx` | no | headers and every table as Picard text, no plot |
+| SQL dump | `sql` | `.sql` | no (`sqlite3` loads it) | headers, every table, column types; NaN and infinity as `NULL` |
 
-The tool verbs and `convert` take the first seven, `parquet`, `xlsx` and `docx`. `check`
-takes `text`, `json`, `jsonl`, `junit`, `markdown` and `multiqc`. `qc --also` takes `json`,
-`jsonl`, `tsv`, `csv`, `parquet`, `xlsx`, `docx`, `markdown`, `junit` and `multiqc`. SQL
-and Arrow come in later waves (docs/07 W21 and W46) and are written from the same table.
+The tool verbs and `convert` take the first seven, `parquet`, `xlsx`, `docx` and `sql`.
+`check` takes `text`, `json`, `jsonl`, `junit`, `markdown` and `multiqc`. `qc --also` takes
+`json`, `jsonl`, `tsv`, `csv`, `parquet`, `xlsx`, `docx`, `sql`, `markdown`, `junit` and
+`multiqc`. Arrow comes in a later wave (docs/07 W46) and is written from the same table.
 
 ## The typed table
 
@@ -75,7 +76,7 @@ format given twice is a usage error.
 - `chain` takes `picard` first too, on the chain and on a step (a step's own
   `--format` replaces the chain's list for that step). Each further format is written
   beside every metrics file a tap or `mark-duplicates` writes. `chain --also
-  json|jsonl|tsv|csv|xlsx|docx` adds the same siblings and `--also markdown` writes
+  json|jsonl|tsv|csv|parquet|xlsx|docx|sql` adds the same siblings and `--also markdown` writes
   `PREFIX.report.md` with every metrics table of the run and no verdict. `junit` and
   `multiqc` are a usage error there: a chain has no verdict. The siblings are written
   from the values in memory, as a verb's `--format picard,json` writes them, so a
@@ -109,7 +110,7 @@ bammetrics qc in.bam -o out/S1 --also json,csv --also markdown
 
 | Value | Files |
 |---|---|
-| `json`, `jsonl`, `tsv`, `csv`, `xlsx`, `docx` | `FILE.json` (`.jsonl`, `.tsv`, `.csv`, `.xlsx`, `.docx`) beside every metrics file of the run |
+| `json`, `jsonl`, `tsv`, `csv`, `xlsx`, `docx`, `sql` | `FILE.json` (`.jsonl`, `.tsv`, `.csv`, `.xlsx`, `.docx`, `.sql`) beside every metrics file of the run |
 | `markdown` (`md`) | `out/S1.report.md`: the verdict, then every metrics table |
 | `junit` | `out/S1.junit.xml`: one testcase per rule |
 | `multiqc` | `out/S1.verdict_mqc.json`: MultiQC custom content |
@@ -124,6 +125,7 @@ JSON forms carry the run's sample name.
 `--also` does not change the exit code of the run. `CollectDuplicateMetrics` writes a file
 with headers only for a BAM with no read. Its `.json` sibling is a document with the
 headers, `class` null and no row; its `.tsv`, `.csv` and `.jsonl` siblings are empty files.
+Its `.sql` sibling holds the `headers` table and empty `tables` and `columns` tables.
 `junit` and `multiqc` print the verdict and read no metrics file.
 
 ## JSON, schema `bammetrics.metrics/1`
@@ -234,9 +236,9 @@ bammetrics convert FILE [--format FORMAT[,FORMAT]] [-o FILE] [--table NAME] [--s
 - `--table` picks the table `tsv`, `csv` and `human` print: `metrics` (the first class),
   `histogram`, or a class name. Without it they print the metrics class, or the histogram of
   a file without one.
-- `--sample` sets the sample of the `json` and `jsonl` forms.
+- `--sample` sets the sample of the `json`, `jsonl` and `sql` forms.
 - Exit 1 for a file that is neither form, with the reason: the JSON error for text that
-  starts with `{` or `[`, else `not a metrics file`. `convert` does not read BAM, VCF or
+  starts with `{` or `[`, the SQL dump's own reason for a dump, else `not a metrics file`. `convert` does not read BAM, VCF or
   interval lists.
 - Exit 1 for `--format picard` on a JSON cell Picard text cannot hold (see the round trip).
 
@@ -415,6 +417,61 @@ multiqc run/          # section "bammetrics verdict", plus the Picard sections
 `crates/cli/tests/formats.rs` runs MultiQC on such a directory when `multiqc` is on PATH
 (or `MULTIQC` names it) and is skipped otherwise. MultiQC 1.35 reads the file as a table
 with 1 sample.
+
+## SQL dump
+
+`--format sql` writes one text file that `sqlite3` loads into a database. It is the
+`.dump` form: no database file is written (a native `.sqlite` is docs/07 wave W46).
+
+```bash
+bammetrics insert-size in.bam --format picard,sql -o is.txt      # is.txt and is.txt.sql
+sqlite3 is.db < is.txt.sql
+sqlite3 is.db 'SELECT MEDIAN_INSERT_SIZE, READ_PAIRS FROM InsertSizeMetrics'
+duckdb is.duckdb < is.txt.sql
+```
+
+| Table | Columns | Rows |
+|---|---|---|
+| `headers` | `position`, `text` | the `StringHeader` texts, from 1 |
+| `tables` | `name`, `kind`, `class`, `tool`, `sample` | one per table below; `kind` is `metrics` or `histogram` |
+| `columns` | `table`, `position`, `column`, `name`, `type` | one per column of each table; `name` as the file has it, `type` `int`, `float` or `string` |
+| a class, by its name after the last `.` or `$` | the class's columns | the metrics rows |
+| `histogram` | the key, then one column per series | the histogram rows |
+
+- A column is `BIGINT`, `DOUBLE` or `TEXT` by its glossary type. SQLite gives these the
+  affinities INTEGER, REAL and TEXT. DuckDB reads 64-bit integers and doubles: its own
+  `INTEGER` is 32 bits and its `REAL` a 32-bit float.
+- The names `headers`, `tables`, `columns` and `histogram` are taken first. A class whose
+  name is taken, in any case, gets `_2`, `_3`: SQLite and DuckDB compare names without case.
+  A class name that starts with `sqlite_`, in any case, gets `_` before it
+  (`_sqlite_x`): SQLite keeps such names for its own tables. No Picard class has one.
+- A column name the table repeats, or repeats in another case, gets `.1`, `.2` (the
+  histogram of `CollectHsMetrics` with two units), as the JSON form names it. `columns`
+  keeps the name of the file.
+- Identifiers are in double quotes with `"` doubled. Strings are in single quotes with `'`
+  doubled. A carriage return or a NUL in a string is written `char(13)` or `char(0)`: the
+  `sqlite3` shell drops a carriage return before a line end. `char` is SQLite's, so DuckDB
+  does not load a dump with either character in a cell. A carriage return or a NUL in a name
+  becomes U+240D or U+2400 in the identifier.
+- A float keeps every digit: the shortest text that reads back as the same `f64`, with a
+  point or an exponent (`310.0`, `1e-7`). An empty cell, NaN and infinity are all `NULL`.
+  The form is lossy there: `?` and an empty cell read back the same. A `-0.0` is written
+  as `-0.0`, and SQLite 3.54.0 and DuckDB 2.0.1 both read it back as `0.0`.
+- Every statement is in one transaction, one `INSERT` per row. SQLite's default statement
+  limit is 1,000,000,000 bytes. SQLite refuses a table of over 2,000 columns. The widest
+  class of the glossary, `HsMetrics`, has 69. The histogram of `CollectHsMetrics` has 3
+  columns per unit, so over 666 units it does not load.
+- The `sqlite3` shell runs the statements after a failed one, so `COMMIT` keeps a partial
+  load. `sqlite3 -bail DB < FILE.sql` stops at the first error and leaves no table.
+- The text depends on the document only: the same file gives the same dump.
+- A table with no column (a class block with no column, possible in JSON) gets no SQL table.
+- `convert` does not read a dump back. It refuses a file whose first line is the dump's
+  first line, `-- bammetrics SQL dump of one metrics file: sqlite3 DB < FILE.sql`.
+
+`crates/formats/tests/sql.rs` loads the dump of every Picard file under `tests/data/picard`
+and of every metrics file in `tests/golden` (373 files, 93,924 cells) into `sqlite3` 3.54.0
+and DuckDB 2.0.1. `SELECT` gives back every cell, every declared type and every header
+line. A reader that is not on PATH is skipped.
 
 ## Python
 

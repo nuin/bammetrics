@@ -69,8 +69,9 @@ pub enum Command {
     /// skip. Nothing runs. With a chain's arguments (BAM + STEP ..., or
     /// --plan FILE) it prints the plan of that chain: bammetrics help chain.
     Plan(qc::QcArgs),
-    /// One metrics file in another format: Picard text or JSON in; Picard
-    /// text, json, jsonl, tsv, csv, markdown, human, xlsx or docx out.
+    /// One metrics file in another format: Picard text, JSON or Parquet in;
+    /// Picard text, json, jsonl, tsv, csv, markdown, human, parquet, xlsx,
+    /// docx or sql out.
     Convert(convert::ConvertArgs),
     /// A pre-flight check of one BAM, CRAM or SAM file: the header, the
     /// end-of-file marker and the first 10,000 records, one line per check

@@ -830,9 +830,9 @@ impl Verb {
         );
         let format_help = match self.files {
             Files::Single => format!(
-                "picard (the {}), json, tsv, jsonl, human, csv, markdown, xlsx or docx. A list \
-                 (picard,json) \
-                 writes the first to -o and each further one beside it, as FILE.json.",
+                "picard (the {}), json, tsv, jsonl, human, csv, markdown, parquet, xlsx, docx \
+                 or sql. A list (picard,json) writes the first to -o and each further one beside \
+                 it, as FILE.json.",
                 self.writes
             ),
             Files::Prefix => "picard first: this verb writes several Picard files. A list \

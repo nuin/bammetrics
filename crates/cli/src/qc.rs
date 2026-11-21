@@ -116,9 +116,10 @@ fn after_help() -> String {
 (PREFIX.report.pdf with --report pdf, both with --report html,pdf) and PREFIX.manifest.json. \
 Each metrics file is byte for byte the one `bammetrics <Tool> \
 INPUT=BAM OUTPUT=FILE` writes, apart from the Started on line.\n\n\
---also json, jsonl, tsv, csv, xlsx or docx adds FILE.json (.jsonl, .tsv, .csv, .xlsx, .docx) \
-beside every metrics file; parquet adds FILE.parquet, FILE.histogram.parquet when the file has a histogram, and \
-FILE.long.parquet; markdown adds PREFIX.report.md, junit PREFIX.junit.xml, multiqc PREFIX.verdict_mqc.json. The \
+--also json, jsonl, tsv, csv, xlsx, docx or sql adds FILE.json (.jsonl, .tsv, .csv, .xlsx, \
+.docx, .sql) beside every metrics file; parquet adds FILE.parquet, FILE.histogram.parquet when \
+the file has a histogram, and FILE.long.parquet; markdown adds PREFIX.report.md, junit \
+PREFIX.junit.xml, multiqc PREFIX.verdict_mqc.json. The \
 manifest lists them under the step `also`.\n\n\
 Without --fail-on, qc exits 0 on any verdict; bammetrics check always gates.\n\n{EXIT_CODES}\n  \
 qc also exits 1 when a collector failed, after it writes the files the others made."

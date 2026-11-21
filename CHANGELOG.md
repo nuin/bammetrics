@@ -51,10 +51,28 @@ Wave W21 of docs/07: Parquet, XLSX, DOCX and the SQL dump of a metrics file. No 
   `read_table` gives the same zip message. `convert` and the tool verbs refuse to print
   XLSX or DOCX on a terminal (exit 2). A multi-file verb renders its further formats
   before it writes its Picard files.
+- `--format sql` (wave W21 of docs/07): an SQL dump of a metrics file that `sqlite3 DB <
+  FILE.sql` loads (`crates/formats/src/sql.rs`). One table per metrics class, named by
+  the class after its last `.` or `$`, the histogram as `histogram`, the `StringHeader`
+  texts as `headers`, and `tables` and `columns` that name each table and column with its
+  glossary type. Columns are `BIGINT`, `DOUBLE` or `TEXT`; a float keeps every digit; an
+  empty cell, NaN and infinity are `NULL`; `-0.0` reads back as `0.0`. A class name that
+  starts with `sqlite_` gets `_` before it. One `INSERT` per row in one transaction. The
+  tool verbs, `convert`, `qc --also sql` and `chain --also sql` write it; `convert` and
+  `read_table` refuse a dump. No crate is added; the stripped binary grows 16,560 bytes.
+- `crates/formats/tests/sql.rs`: `sqlite3` 3.54.0 and DuckDB 2.0.1 load the dump of every
+  file of `tests/data/picard` and every metrics file in `tests/golden` (373 files, 93,924
+  cells) and give back every cell, column type and header line; each reader is skipped
+  when it is not on PATH. `tests/python/test_sql.py` loads the `qc` and `chain` dumps with
+  Python's `sqlite3`.
+- Nine golden forms (`convert_sql`, `convert_sql_list`, `error_convert_reads_sql`,
+  `verb_insert_size_sql`, `verb_multiple_metrics_sql`, `qc_also_sql`,
+  `qc_also_sql_no_reads`, `plan_also_sql`, `chain_also_sql`) and the fixture
+  `tests/data/insert_size_metrics.sql`. Three error records list `sql` among the formats.
 
 ### Changed
 
-- `--format` and `--also` name `parquet`, `xlsx` and `docx` in their lists, so the error
+- `--format` and `--also` name `parquet`, `xlsx`, `docx` and `sql` in their lists, so the error
   text of an unknown format lists them (`error_verb_format`, `error_verb_format_twice` and
   `error_qc_also`, which now gives `prquet`). `convert` of a zip names Parquet among the
   formats it reads (`error_convert_reads_xlsx`).
