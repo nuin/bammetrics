@@ -1,0 +1,12 @@
+## argv
+qc
+tests/data/insert_size.bam
+-o
+OUT/sample
+--panel
+tests/data/targets_bed.bgz
+## exit
+2
+## stdout
+## stderr
+bammetrics qc: --panel tests/data/targets_bed.bgz: gzip data under a name that does not end in .gz, .gzip or .bfq; the panel is inflated by its name, so rename it

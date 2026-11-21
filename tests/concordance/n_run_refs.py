@@ -20,7 +20,10 @@ one of one base, and an alternating N and A contig.
 tests/data: `n_runs.fa` (+ .fai, .dict), `n_runs.interval_list`,
 `n_runs_panel.interval_list` (the ACGTmer intervals of `ref_100k.fa` with
 `PANEL_MASK` as N, under the @SQ line of `chr1.dict`, as `scatter` computes them)
-and `targets.interval_list.gz` (a gzip of `targets.interval_list` with mtime 0).
+and `targets.interval_list.gz` (a gzip of `targets.interval_list` with mtime 0),
+plus three panels made from `targets.bed`: `targets.bed.gz` (plain gzip),
+`targets_bed.bgz` (the same bytes under a name nothing inflates) and
+`targets_bed.interval_list` (the BED under an interval list name).
 
 `--long BASES` writes only `OUT/long.fa`: one contig of BASES bases with a 100-base N run
 in every 10,000, written 1 MiB at a time, for the memory gate rows of benches/memgate.toml.
@@ -246,6 +249,12 @@ def write_fixtures():
     with open(f"{targets}.gz", "wb") as raw, gzip.GzipFile(
             filename="", fileobj=raw, mode="wb", mtime=0) as gz:
         gz.write(targets.read_bytes())
+    bed = DATA / "targets.bed"
+    for name in ("targets.bed.gz", "targets_bed.bgz"):
+        with open(DATA / name, "wb") as raw, gzip.GzipFile(
+                filename="", fileobj=raw, mode="wb", mtime=0) as gz:
+            gz.write(bed.read_bytes())
+    (DATA / "targets_bed.interval_list").write_bytes(bed.read_bytes())
 
 
 def main():

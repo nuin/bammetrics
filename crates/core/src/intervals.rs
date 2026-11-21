@@ -141,6 +141,27 @@ pub fn read_text(path: &Path) -> Result<String> {
     read_capped_at(path, MAX_INTERVAL_LIST_BYTES)
 }
 
+/// [`read_text`] for telling a `--panel` apart by its bytes: gzip data
+/// (first bytes `1f 8b`) is inflated whatever the name. The flag is true
+/// for gzip data under a name [`read_text`] reads as plain text, which the
+/// panel readers then fail on.
+pub fn read_panel_text(path: &Path) -> Result<(String, bool)> {
+    if has_gzip_extension(path) {
+        return Ok((read_gzip_capped(path, MAX_INTERVAL_LIST_BYTES)?, false));
+    }
+    let mut magic = Vec::with_capacity(2);
+    fs::File::open(path)
+        .and_then(|file| file.take(2).read_to_end(&mut magic))
+        .map_err(|source| Error::Input {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    if magic == [0x1f, 0x8b] {
+        return Ok((read_gzip_capped(path, MAX_INTERVAL_LIST_BYTES)?, true));
+    }
+    Ok((read_capped_at(path, MAX_INTERVAL_LIST_BYTES)?, false))
+}
+
 /// True for VCF text: its first line starts with `##fileformat=VCF`. A
 /// VCF is no interval file; `VcfToIntervalList` converts one.
 pub fn is_vcf(text: &str) -> bool {

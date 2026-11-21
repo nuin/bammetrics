@@ -79,6 +79,9 @@ const FIXTURES: &[(&str, &str)] = &[
     ("NR_IL", "tests/data/n_runs.interval_list"),
     ("NR_PANEL", "tests/data/n_runs_panel.interval_list"),
     ("IL_GZ", "tests/data/targets.interval_list.gz"),
+    ("BED_GZ", "tests/data/targets.bed.gz"),
+    ("BED_BGZ", "tests/data/targets_bed.bgz"),
+    ("BED_AS_IL", "tests/data/targets_bed.interval_list"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -845,6 +848,10 @@ const N_RUNS_CASES: &[Case] = &[
     case!("plan_panel_interval_list", "plan", "IS", "-o", "OUT/sample", "--panel", "NR_PANEL"),
     case!("verb_hs_metrics_panel_gz", "hs-metrics", "IS", "--panel", "IL_GZ", "--sample-size", "1000"),
     case!("error_qc_panel_vcf", "qc", "IS", "-o", "OUT/sample", "--panel", "AVCF_PLAIN"),
+    case!("picard_bed_to_interval_list_gzip", "BedToIntervalList", "I=BED_GZ", "SD=DICT", "O=OUT/gz.interval_list"),
+    case!("qc_panel_bed_gz", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--panel", "BED_GZ", "-R", "REF", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("error_qc_panel_gzip_misnamed", "qc", "IS", "-o", "OUT/sample", "--panel", "BED_BGZ"),
+    case!("error_qc_panel_bed_as_interval_list", "qc", "IS", "-o", "OUT/sample", "--panel", "BED_AS_IL"),
 ];
 
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
