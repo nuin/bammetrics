@@ -143,3 +143,50 @@ fn a_failed_scatter_leaves_no_directory() {
     assert_eq!(fs::read_dir(&scatter).expect("scatter").count(), 3);
     let _ = fs::remove_dir_all(&dir);
 }
+
+/// Run `args` in `dir`, every input named by its absolute path.
+fn run_in(dir: &Path, args: &[String]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .expect("run bammetrics")
+}
+
+fn owned(args: &[&str]) -> Vec<String> {
+    args.iter().map(|s| (*s).to_owned()).collect()
+}
+
+/// The verb reads each spelling of an option as the Picard face does, and
+/// writes the same bytes, the `@PG` command line included: the verb passes
+/// `KEY=VALUE`, so its `CL` is the legacy form of the same options.
+#[test]
+fn every_spelling_writes_the_picard_face_bytes() {
+    let dir = fresh_dir("spellings");
+    let list = root().join(LIST_A).display().to_string();
+    let targets = root().join(TARGETS).display().to_string();
+    let picard = dir.join("picard");
+    fs::create_dir_all(&picard).expect("picard dir");
+    let face = owned(&[
+        "IntervalListTools",
+        &format!("I={list}"),
+        &format!("SI={targets}"),
+        "ACTION=SUBTRACT",
+        "PADDING=5",
+        "O=out.interval_list",
+    ]);
+    ok(&run_in(&picard, &face));
+    let expected = fs::read_to_string(picard.join("out.interval_list")).expect("face list");
+    let forms: [&[&str]; 3] = [&["--padding", "5"], &["--PADDING", "5"], &["PADDING=5"]];
+    for (i, form) in forms.iter().enumerate() {
+        let verb_dir = dir.join(format!("verb{i}"));
+        fs::create_dir_all(&verb_dir).expect("verb dir");
+        let mut args = owned(&["interval-list-tools", &list, "--second-input", &targets]);
+        args.extend(owned(form));
+        args.extend(owned(&["--action", "SUBTRACT", "-o", "out.interval_list"]));
+        ok(&run_in(&verb_dir, &args));
+        let got = fs::read_to_string(verb_dir.join("out.interval_list")).expect("verb list");
+        assert_eq!(got, expected, "{form:?}");
+    }
+    let _ = fs::remove_dir_all(&dir);
+}
