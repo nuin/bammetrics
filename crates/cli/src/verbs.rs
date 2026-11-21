@@ -32,7 +32,6 @@ use bammetrics_core::{
 use crate::error::VerbError;
 use crate::format::{self, Context, Format};
 use crate::grammar::{self, Flag, Given, Key, Parsed};
-use crate::report::write_atomic;
 
 /// How a verb names what it writes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1037,12 +1036,15 @@ impl Verb {
         let core = |e: bammetrics_core::Error| self.core_error(&parsed, &e);
         let mut inv = tool.parse(&picard).map_err(core)?;
         let read = self.input_paths(&inv);
-        // A single-file verb writes each further format beside `-o`.
+        // A single-file verb writes each further format beside `-o`, and
+        // the companions of a Parquet file beside it.
         let siblings: Vec<PathBuf> = match (&output, self.files) {
-            (Some(path), Files::Single) => formats[1..]
-                .iter()
-                .map(|f| format::sibling(path, f.extension()))
-                .collect(),
+            (Some(path), Files::Single) => format::all_files(path, &formats).split_off(1),
+            (None, Files::Single) if formats[0].is_binary() => {
+                let given = parsed.last(Key::Format).expect("a format was given");
+                return Err(format::stdout_refusal(self.name, &formats, &given.spelled)
+                    .expect("a binary format"));
+            }
             (None, Files::Single) if formats.len() > 1 => {
                 let given = parsed.last(Key::Format).expect("a list was given");
                 return Err(VerbError::usage(
@@ -1132,7 +1134,7 @@ impl Verb {
             Some(given) => Some(given.values[0].clone()),
             None if formats
                 .iter()
-                .any(|f| matches!(f, Format::Json | Format::Jsonl)) =>
+                .any(|f| matches!(f, Format::Json | Format::Jsonl | Format::Parquet)) =>
             {
                 self.default_sample(&inv)
             }
@@ -1973,17 +1975,6 @@ pub(crate) fn create_parent(verb: &str, made: &mut MadeDirs, path: &Path) -> Res
     })
 }
 
-/// `text` to `path` through a temporary file, as a core output error.
-fn write_text(path: &Path, text: String) -> bammetrics_core::Result<()> {
-    write_atomic(path, text).map_err(|e| bammetrics_core::Error::Output {
-        path: path.to_path_buf(),
-        source: match e {
-            crate::error::Error::Io { source, .. } => source,
-            other => io::Error::other(other.to_string()),
-        },
-    })
-}
-
 /// The main file in the first of `formats` to `target` (standard output
 /// for `None`) and in each further one beside it, and every further file
 /// as Picard text.
@@ -1996,24 +1987,29 @@ fn write_single(
 ) -> bammetrics_core::Result<Vec<PathBuf>> {
     let mut written = Vec::new();
     if let Some(main) = &result.main {
-        let mut texts = format::render_all(formats, context, main).into_iter();
-        let text = texts.next().expect("one text per format");
+        let path = target.unwrap_or(Path::new("-"));
+        let mut rendered = format::render_all(formats, context, main)
+            .map_err(|e| format::unrendered(path, &e))?
+            .into_iter();
+        let first = rendered.next().expect("files per format");
         match target {
             None => io::stdout()
                 .lock()
-                .write_all(text.as_bytes())
+                .write_all(&first[0].bytes)
                 .map_err(|source| bammetrics_core::Error::Output {
                     path: PathBuf::from("-"),
                     source,
                 })?,
             Some(path) => {
-                write_text(path, text)?;
-                written.push(path.to_path_buf());
-                for (format, text) in formats[1..].iter().zip(texts) {
-                    let sibling = format::sibling(path, format.extension());
-                    write_text(&sibling, text)?;
-                    written.push(sibling);
-                }
+                // The main file, its companions and the further formats are
+                // one set: a failed write leaves none of them.
+                let mut set = format::FileSet::default();
+                set.add(
+                    path,
+                    formats,
+                    std::iter::once(first).chain(rendered).collect(),
+                );
+                written.extend(set.write()?);
             }
         }
     }
@@ -2044,14 +2040,20 @@ fn write_siblings(
         .into_iter()
         .chain(result.extra.iter().map(|(path, file)| (file, path)))
         .filter(|(file, _)| file.text.is_none());
+    // Every sibling of every file is one set: a failed write leaves none.
+    let mut set = format::FileSet::default();
     for (file, path) in files {
-        let texts = format::render_all(&formats[1..], context, file);
-        for (format, text) in formats[1..].iter().zip(texts) {
-            let sibling = format::sibling(path, format.extension());
-            write_text(&sibling, text)?;
-            written.push(sibling);
+        let rendered = format::render_all(&formats[1..], context, file)
+            .map_err(|e| format::unrendered(path, &e))?;
+        for (format, files) in formats[1..].iter().zip(rendered) {
+            set.add(
+                &format::sibling(path, format.extension()),
+                &[*format],
+                vec![files],
+            );
         }
     }
+    written.extend(set.write()?);
     Ok(written)
 }
 

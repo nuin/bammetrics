@@ -14,15 +14,22 @@ pub enum Error {
     Metrics(String),
     /// The document holds a cell Picard text has no form for.
     Picard(String),
+    /// A Parquet file that cannot be written or read, or a build without
+    /// the feature `parquet`.
+    Parquet(String),
+    /// A file that cannot be read; the message names it.
+    Io(String),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Json(message) => write!(f, "json: {message}"),
-            Error::Document(message) | Error::Metrics(message) | Error::Picard(message) => {
-                f.write_str(message)
-            }
+            Error::Parquet(message) => write!(f, "parquet: {message}"),
+            Error::Document(message)
+            | Error::Metrics(message)
+            | Error::Picard(message)
+            | Error::Io(message) => f.write_str(message),
         }
     }
 }

@@ -1,0 +1,46 @@
+## argv
+quality-score-distribution
+tests/data/insert_size.bam
+--format
+picard,parquet
+-o
+OUT/quality.txt
+## exit
+0
+## stdout
+## stderr
+## file quality.txt
+## htsjdk.samtools.metrics.StringHeader
+# QualityScoreDistribution INPUT=tests/data/insert_size.bam OUTPUT=OUT/quality.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+
+## HISTOGRAM	java.lang.Byte
+QUALITY	COUNT_OF_Q
+40	1000
+
+## file quality.txt.long.parquet
+parquet <size> bytes, part long, 2 rows, 1 row groups, created_by bammetrics
+class QualityScoreDistribution
+tool QualityScoreDistribution
+sample insert_size
+header QualityScoreDistribution INPUT=tests/data/insert_size.bam OUTPUT=OUT/quality.txt
+header Started on: <time>
+column sample BYTE_ARRAY (STRING) optional
+column class BYTE_ARRAY (STRING) required
+column row_key BYTE_ARRAY (STRING) required
+column column BYTE_ARRAY (STRING) required
+column value BYTE_ARRAY (STRING) optional
+insert_size	QualityScoreDistribution	histogram/0	QUALITY	40
+insert_size	QualityScoreDistribution	histogram/0	COUNT_OF_Q	1000.0
+## file quality.txt.parquet
+parquet <size> bytes, part histogram, 1 rows, 1 row groups, created_by bammetrics
+class java.lang.Byte
+tool QualityScoreDistribution
+sample insert_size
+header QualityScoreDistribution INPUT=tests/data/insert_size.bam OUTPUT=OUT/quality.txt
+header Started on: <time>
+column QUALITY INT64 optional
+column COUNT_OF_Q DOUBLE optional
+40	1000.0

@@ -13,12 +13,14 @@
 //! | JSON Lines, TSV, CSV, aligned text | [`delimited`] | no |
 //! | Markdown | [`markdown`] | no |
 //! | JUnit XML, MultiQC custom content | [`junit`], [`multiqc`] | no |
+//! | Parquet (feature `parquet`) | [`parquet`] | yes |
 //!
-//! [`read`] takes either readable form, so Picard text to JSON to Picard
+//! [`read`] takes either text form, so Picard text to JSON to Picard
 //! text is byte for byte the first file (`tests/round_trip.rs` runs it on
-//! every fixture). The crate uses `std` and the core only: Parquet, XLSX
-//! and Arrow, which bring dependencies, come behind features (docs/07
-//! W21, W46) and write from the same [`Table`].
+//! every fixture); [`read_path`] takes Parquet too. The crate uses `std`
+//! and the core only by default. Parquet brings the `parquet` crate behind
+//! the feature `parquet`; XLSX and Arrow come behind features (docs/07
+//! W21, W46). All write from the same [`Table`].
 
 pub mod delimited;
 pub mod error;
@@ -27,6 +29,7 @@ pub mod junit;
 pub mod markdown;
 pub mod metrics_json;
 pub mod multiqc;
+pub mod parquet;
 pub mod picard;
 pub mod sheet;
 pub mod table;
@@ -46,11 +49,12 @@ pub enum Format {
     Human,
     Csv,
     Markdown,
+    Parquet,
 }
 
 impl Format {
     /// Every format, in `--help` order.
-    pub const ALL: [Format; 7] = [
+    pub const ALL: [Format; 8] = [
         Format::Picard,
         Format::Json,
         Format::Tsv,
@@ -58,6 +62,7 @@ impl Format {
         Format::Human,
         Format::Csv,
         Format::Markdown,
+        Format::Parquet,
     ];
 
     pub fn name(self) -> &'static str {
@@ -69,6 +74,7 @@ impl Format {
             Format::Human => "human",
             Format::Csv => "csv",
             Format::Markdown => "markdown",
+            Format::Parquet => "parquet",
         }
     }
 
@@ -91,8 +97,31 @@ impl Format {
             Format::Human => "human.txt",
             Format::Csv => "csv",
             Format::Markdown => "md",
+            Format::Parquet => "parquet",
         }
     }
+
+    /// The companion parts a format may write beside its main file
+    /// ([`parquet::companion`] names them); empty for a one-file format.
+    pub fn companions(self) -> &'static [&'static str] {
+        match self {
+            Format::Parquet => &parquet::COMPANIONS,
+            _ => &[],
+        }
+    }
+
+    /// True for a format whose files are bytes, not text.
+    pub fn is_binary(self) -> bool {
+        self == Format::Parquet
+    }
+}
+
+/// One file of a rendered document: `part` is `None` for the main file,
+/// else the companion it is ([`Format::companions`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct File {
+    pub part: Option<&'static str>,
+    pub bytes: Vec<u8>,
 }
 
 /// The names `--format` takes, in `--help` order.
@@ -121,12 +150,18 @@ pub enum ListError {
     Repeated(Format),
 }
 
-/// `doc` in `format`. A one-table format prints `table` (the main table
-/// without one). Only `picard` fails: on a cell Picard text cannot hold
-/// ([`picard::write`]).
+/// `doc` in a text format. A one-table format prints `table` (the main
+/// table without one). `picard` fails on a cell Picard text cannot hold
+/// ([`picard::write`]); `parquet` is bytes and fails here
+/// ([`render_files`] writes it).
 pub fn render(format: Format, doc: &Document, table: Option<&Table>) -> Result<String> {
     let one = || table.or_else(|| doc.main_table());
     Ok(match format {
+        Format::Parquet => {
+            return Err(Error::Parquet(
+                "Parquet is binary: render_files writes it".to_owned(),
+            ));
+        }
         Format::Picard => picard::write(doc)?,
         Format::Json => metrics_json::write(doc),
         Format::Jsonl => delimited::jsonl(doc),
@@ -135,6 +170,48 @@ pub fn render(format: Format, doc: &Document, table: Option<&Table>) -> Result<S
         Format::Human => one().map(delimited::human).unwrap_or_default(),
         Format::Markdown => markdown::write(&[doc], &[]),
     })
+}
+
+/// Every file of `doc` in `format`, the main file first. A text format
+/// gives one file ([`render`]); `parquet` gives the main file, the
+/// histogram companion when the document has a class and a histogram, and
+/// the long file. `table` picks the table of a one-table text format.
+pub fn render_files(format: Format, doc: &Document, table: Option<&Table>) -> Result<Vec<File>> {
+    if format == Format::Parquet {
+        #[cfg(feature = "parquet")]
+        return parquet::write(doc);
+        #[cfg(not(feature = "parquet"))]
+        return Err(parquet::unavailable());
+    }
+    let bytes = render(format, doc, table)?.into_bytes();
+    Ok(vec![File { part: None, bytes }])
+}
+
+/// The metrics file at `path` in any form that reads back: Parquet by
+/// its first four bytes (with its histogram companion beside it), else
+/// text through [`read`].
+pub fn read_path(path: &std::path::Path) -> Result<Document> {
+    use std::io::Read as _;
+    let io = |e: std::io::Error| Error::Io(format!("{}: {e}", path.display()));
+    let mut file = std::fs::File::open(path).map_err(io)?;
+    let mut head = Vec::with_capacity(4);
+    (&mut file).take(4).read_to_end(&mut head).map_err(io)?;
+    if parquet::is_parquet(&head) {
+        #[cfg(feature = "parquet")]
+        return parquet::read(parquet::read_capped(path)?, Some(path));
+        #[cfg(not(feature = "parquet"))]
+        return Err(parquet::unavailable());
+    }
+    let mut rest = Vec::new();
+    file.read_to_end(&mut rest).map_err(io)?;
+    head.extend(rest);
+    let text = String::from_utf8(head).map_err(|_| {
+        Error::Io(format!(
+            "{}: not UTF-8 text and not a Parquet file",
+            path.display()
+        ))
+    })?;
+    read(&text)
 }
 
 /// `text` without a leading byte order mark (U+FEFF), which some editors
@@ -228,7 +305,8 @@ mod tests {
         assert_eq!(render(Format::Tsv, &doc, None).expect("tsv"), "A\na\\tb\n");
         for format in Format::ALL {
             let rendered = render(format, &doc, None);
-            assert_eq!(rendered.is_err(), format == Format::Picard, "{format:?}");
+            let fails = matches!(format, Format::Picard | Format::Parquet);
+            assert_eq!(rendered.is_err(), fails, "{format:?}");
         }
         let error = render(Format::Picard, &doc, None).expect_err("a tab");
         assert!(matches!(error, Error::Picard(_)), "{error}");

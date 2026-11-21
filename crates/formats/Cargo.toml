@@ -9,5 +9,20 @@ description = "One typed table per metrics class, written as Picard text, JSON, 
 [lib]
 name = "bammetrics_formats"
 
+[features]
+# The Parquet form of a metrics file (docs/formats.md): the parquet crate
+# with snappy only, no arrow.
+parquet = ["dep:parquet", "dep:bytes"]
+
+# The Parquet growth probe of `make budgets`: size_formats with the feature
+# parquet.
+[[example]]
+name = "size_parquet"
+required-features = ["parquet"]
+
 [dependencies]
 bammetrics-core.workspace = true
+# The Parquet writer and reader (feature parquet): snappy, no arrow. bytes is
+# the buffer type its reader takes; parquet already depends on it.
+bytes = { version = "1", optional = true }
+parquet = { version = "60", default-features = false, features = ["snap"], optional = true }

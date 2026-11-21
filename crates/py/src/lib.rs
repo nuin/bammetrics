@@ -896,10 +896,25 @@ fn table_as_dicts<'c, 'v, 'py>(
 /// or None; `?` is nan).
 #[pyfunction]
 fn read_metrics<'py>(py: Python<'py>, path: PathBuf) -> PyResult<Bound<'py, PyDict>> {
+    if starts_as_parquet(&path) {
+        return Err(input_error(format!(
+            "{} is a Parquet file; read_table reads it",
+            path.display()
+        )));
+    }
     let doc = py
         .detach(|| MetricsDoc::read(&path))
         .map_err(|e| py_error(&e))?;
     doc_dict(py, &doc)
+}
+
+/// True when the file at `path` starts with the Parquet magic `PAR1`.
+fn starts_as_parquet(path: &std::path::Path) -> bool {
+    use std::io::Read as _;
+    let mut head = Vec::with_capacity(4);
+    std::fs::File::open(path)
+        .and_then(|file| file.take(4).read_to_end(&mut head))
+        .is_ok_and(|_| bammetrics_formats::parquet::is_parquet(&head))
 }
 
 /// A parsed metrics file in the form [`read_metrics`] returns.
@@ -961,7 +976,9 @@ fn table_object<'py>(
 }
 
 /// Read one table of a metrics file with the glossary's column types. The
-/// file is Picard text or the JSON `--format json` writes. `table` names
+/// file is Picard text, the JSON `--format json` writes, or the main file
+/// `--format parquet` writes (its histogram companion read from beside it,
+/// in a build with the feature `parquet`, as the wheel is). `table` names
 /// the table: "metrics" (the first class), "histogram", or a class name;
 /// by default the metrics class, or the histogram of a file without one.
 /// Returns a `Table`: `columns` ({name: list}), `dtypes` ({name: "int",
@@ -977,16 +994,22 @@ fn read_table<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let doc = py
         .detach(|| {
-            let text =
-                std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-            bammetrics_formats::read(&text).map_err(|e| format!("{}: {e}", path.display()))
+            bammetrics_formats::read_path(&path).map_err(|e| match e {
+                bammetrics_formats::Error::Io(message) => message,
+                e => format!("{}: {e}", path.display()),
+            })
         })
         .map_err(input_error)?;
     let picked = match table {
         Some(name) => doc
             .table(name)
             .ok_or_else(|| usage_error(format!("{} has no table {name:?}", path.display())))?,
-        None => doc.main_table().expect("a document that read has a table"),
+        None => doc.main_table().ok_or_else(|| {
+            input_error(format!(
+                "{}: the file holds header lines and no table",
+                path.display()
+            ))
+        })?,
     };
     let histogram = match &doc.histogram {
         Some(histogram) if !std::ptr::eq(histogram, picked) => {

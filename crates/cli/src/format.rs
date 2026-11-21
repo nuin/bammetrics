@@ -6,7 +6,9 @@
 //! goes to `-o` (or standard output); each further one is a sibling file
 //! named `-o` plus [`Format::extension`]. Every format but `picard` is
 //! written from one typed [`Document`], so a column has the same type in
-//! each.
+//! each. `parquet` writes a main file and its companions
+//! ([`Format::companions`]) beside it, so it needs a file, never standard
+//! output.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -14,7 +16,7 @@ use std::path::{Path, PathBuf};
 use bammetrics_core::metric::MetricsOutput;
 use bammetrics_core::metrics_file::format_double;
 use bammetrics_core::registry::did_you_mean;
-use bammetrics_formats::{CheckLine, Document, ListError, Outcome, VerdictSummary};
+use bammetrics_formats::{CheckLine, Document, File, ListError, Outcome, VerdictSummary};
 use bammetrics_verdict::{Status, Verdict};
 
 pub use bammetrics_formats::Format;
@@ -34,7 +36,7 @@ pub struct Context<'a> {
 /// that names the flag as `spelled`.
 pub fn parse_list(verb: &str, value: &str, spelled: &str) -> Result<Vec<Format>, VerbError> {
     let names = bammetrics_formats::names();
-    bammetrics_formats::parse_list(value).map_err(|e| {
+    let formats = bammetrics_formats::parse_list(value).map_err(|e| {
         let error = match e {
             ListError::Unknown(name) => {
                 let error = VerbError::usage(verb, format!("no format {name:?}")).from(spelled);
@@ -49,7 +51,150 @@ pub fn parse_list(verb: &str, value: &str, spelled: &str) -> Result<Vec<Format>,
             }
         };
         error.hint(format!("formats: {}", names.join(", ")))
-    })
+    })?;
+    if let Some(missing) = formats.iter().find(|f| !available(**f)) {
+        return Err(unavailable(verb, *missing).from(spelled));
+    }
+    Ok(formats)
+}
+
+/// False for a format this build lacks: `parquet` without the feature
+/// `parquet`.
+pub fn available(format: Format) -> bool {
+    format != Format::Parquet || cfg!(feature = "parquet")
+}
+
+/// The usage error of a format this build lacks.
+pub fn unavailable(verb: &str, format: Format) -> VerbError {
+    VerbError::usage(
+        verb,
+        format!(
+            "this build has no {}: it was built without the feature {}",
+            format.name(),
+            format.name()
+        ),
+    )
+    .hint(format!(
+        "cargo build --release builds it (the feature {} is on by default)",
+        format.name()
+    ))
+}
+
+/// Every file `format` writes when its main file is `path`: `path`, then
+/// each companion (`parquet`: `STEM.histogram.parquet`,
+/// `STEM.long.parquet`).
+pub fn files_of(path: &Path, format: Format) -> Vec<PathBuf> {
+    std::iter::once(path.to_path_buf())
+        .chain(
+            format
+                .companions()
+                .iter()
+                .map(|part| bammetrics_formats::parquet::companion(path, part)),
+        )
+        .collect()
+}
+
+/// Every file of a `--format` list when the first goes to `path`: the
+/// first format's files, then each further format's files beside `path`.
+pub fn all_files(path: &Path, formats: &[Format]) -> Vec<PathBuf> {
+    let mut files = files_of(path, formats[0]);
+    for format in &formats[1..] {
+        files.extend(files_of(&sibling(path, format.extension()), *format));
+    }
+    files
+}
+
+/// Rendered `files` at their paths, the main file at `path`.
+pub fn placed(path: &Path, files: Vec<File>) -> Vec<(PathBuf, Vec<u8>)> {
+    files
+        .into_iter()
+        .map(|file| {
+            let at = file.part.map_or_else(
+                || path.to_path_buf(),
+                |part| bammetrics_formats::parquet::companion(path, part),
+            );
+            (at, file.bytes)
+        })
+        .collect()
+}
+
+/// The files of a `--format` list as one set: `rendered` (one entry per
+/// format) placed with the first format's main file at `path` and each
+/// further one beside it.
+#[derive(Debug, Default)]
+pub struct FileSet {
+    files: Vec<(PathBuf, Vec<u8>)>,
+    /// The format of each file of `files`.
+    formats: Vec<Format>,
+    /// Companions a format writes that this rendering has none of (a
+    /// Parquet file without a histogram has no `STEM.histogram.parquet`).
+    absent: Vec<PathBuf>,
+}
+
+impl FileSet {
+    /// Add `rendered` (one entry per format of `formats`) with the first
+    /// format's main file at `path`.
+    pub fn add(&mut self, path: &Path, formats: &[Format], rendered: Vec<Vec<File>>) {
+        for (index, (format, files)) in formats.iter().zip(rendered).enumerate() {
+            let main = if index == 0 {
+                path.to_path_buf()
+            } else {
+                sibling(path, format.extension())
+            };
+            let placed = placed(&main, files);
+            self.absent.extend(
+                files_of(&main, *format)
+                    .into_iter()
+                    .filter(|at| !placed.iter().any(|(p, _)| p == at)),
+            );
+            self.formats
+                .extend(std::iter::repeat_n(*format, placed.len()));
+            self.files.extend(placed);
+        }
+    }
+
+    /// Write every file as one set ([`bammetrics_core::cleanup::write_set`]:
+    /// a failure leaves none of them), then remove each absent companion
+    /// that an earlier run left: a regular file that is a bammetrics
+    /// Parquet histogram. Returns the paths written.
+    pub fn write(self) -> bammetrics_core::Result<Vec<PathBuf>> {
+        Ok(self
+            .write_with_formats()?
+            .into_iter()
+            .map(|(p, _)| p)
+            .collect())
+    }
+
+    /// [`FileSet::write`], each path with its format.
+    pub fn write_with_formats(self) -> bammetrics_core::Result<Vec<(PathBuf, Format)>> {
+        let written = bammetrics_core::cleanup::write_set(self.files)?;
+        let written = written.into_iter().zip(self.formats).collect();
+        for stale in &self.absent {
+            if std::fs::symlink_metadata(stale).is_ok_and(|m| m.file_type().is_file())
+                && bammetrics_formats::parquet::is_histogram_file(stale)
+            {
+                let _ = std::fs::remove_file(stale);
+            }
+        }
+        Ok(written)
+    }
+}
+
+/// The usage error of a first format that cannot go to standard output,
+/// or `None`.
+pub fn stdout_refusal(verb: &str, formats: &[Format], spelled: &str) -> Option<VerbError> {
+    let first = formats.first().filter(|f| f.is_binary())?;
+    Some(
+        VerbError::usage(
+            verb,
+            format!(
+                "--format {} writes a file and its companions; standard output holds one text",
+                first.name()
+            ),
+        )
+        .from(spelled)
+        .hint("give -o FILE: the companions are written beside it"),
+    )
 }
 
 /// `path` with `.` and the format's extension added: the sibling a
@@ -61,14 +206,15 @@ pub fn sibling(path: &Path, extension: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
-/// `output` in each of `formats`, with one set of `StringHeader` lines, so
-/// the Picard file and its JSON sibling carry the same start time. The
-/// Picard form is the file the registry writer writes.
+/// `output` in each of `formats`, each as its files (the main file first),
+/// with one set of `StringHeader` lines, so the Picard file and its JSON
+/// sibling carry the same start time. The Picard form is the file the
+/// registry writer writes. Only `parquet` fails here.
 pub fn render_all(
     formats: &[Format],
     context: &Context<'_>,
     output: &MetricsOutput,
-) -> Vec<String> {
+) -> Result<Vec<Vec<File>>, bammetrics_formats::Error> {
     let headers = output.headers(context.command);
     let document = formats.iter().any(|f| *f != Format::Picard).then(|| {
         let mut doc = Document::from_output(context.tool, headers.clone(), output);
@@ -83,12 +229,25 @@ pub fn render_all(
                 output
                     .write(headers.clone(), &mut bytes)
                     .expect("writing to memory");
-                String::from_utf8_lossy(&bytes).into_owned()
+                Ok(vec![File { part: None, bytes }])
             }
-            (format, Some(doc)) => bammetrics_formats::render(*format, doc, None)
-                .expect("only the Picard writer refuses a document"),
+            (format, Some(doc)) => bammetrics_formats::render_files(*format, doc, None),
         })
         .collect()
+}
+
+/// A format that could not render the metrics file at `path`.
+pub fn unrendered(path: &Path, error: &bammetrics_formats::Error) -> bammetrics_core::Error {
+    bammetrics_core::Error::Output {
+        path: path.to_path_buf(),
+        source: std::io::Error::other(error.to_string()),
+    }
+}
+
+/// The text of the one file a text format renders.
+#[cfg(test)]
+fn text_of(files: Vec<File>) -> String {
+    String::from_utf8(files.into_iter().next().expect("one file").bytes).expect("text")
 }
 
 /// What the Markdown, JUnit and MultiQC writers need of `verdict`.
@@ -169,7 +328,11 @@ mod tests {
     }
 
     fn render(format: Format, context: &Context<'_>, output: &MetricsOutput) -> String {
-        render_all(&[format], context, output).remove(0)
+        text_of(
+            render_all(&[format], context, output)
+                .expect("renders")
+                .remove(0),
+        )
     }
 
     fn context(sample: Option<&str>) -> Context<'_> {
@@ -226,7 +389,12 @@ mod tests {
 
     #[test]
     fn a_list_shares_one_start_time() {
-        let all = render_all(&[Format::Picard, Format::Json], &context(None), &output());
+        let all: Vec<String> =
+            render_all(&[Format::Picard, Format::Json], &context(None), &output())
+                .expect("renders")
+                .into_iter()
+                .map(text_of)
+                .collect();
         let started = all[0]
             .lines()
             .find_map(|l| l.strip_prefix("# Started on: "))
@@ -249,7 +417,7 @@ mod tests {
         assert_eq!(
             unknown.to_string(),
             "bammetrics insert-size: no format \"jsn\" (from --format)\n  did you mean json?\n  \
-             formats: picard, json, tsv, jsonl, human, csv, markdown"
+             formats: picard, json, tsv, jsonl, human, csv, markdown, parquet"
         );
         let twice = parse_list("insert-size", "tsv,tsv", "--format").expect_err("twice");
         assert!(twice.to_string().contains("format tsv is given twice"));

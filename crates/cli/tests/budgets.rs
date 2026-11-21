@@ -28,6 +28,12 @@
 //!   add to a binary that already holds the registry and the glossary. The
 //!   target is 150 KB: the crate measured 129.2 KB when the row was added
 //!   (docs/benchmarks.md; the estimate of docs/07 section 3.2 was 16 KB).
+//! - Parquet growth is the stripped `size_parquet` example (`size_formats`
+//!   with the feature `parquet`, which writes and reads every file as
+//!   Parquet) less the stripped `size_formats`: the `parquet` crate, its
+//!   dependencies and `crates/formats/src/parquet`. The target is the 0.53
+//!   MiB of docs/07 section 3.2; wave W21 measured 1.04 MiB with the crate
+//!   at opt-level "z" (docs/benchmarks.md).
 //! - PDF growth is the same measure for the PDF report of `crates/pdf`
 //!   (feature `pdf`, docs/07 section 3.3): the stripped `size_pdf` example
 //!   less the stripped `size_report`, the code and data krilla, krilla-svg,
@@ -347,6 +353,11 @@ fn budgets_of_docs_05_section_4_8() {
     let formats_growth =
         stripped_size(&formats, &dir) as f64 - stripped_size(&formats_base, &dir) as f64;
 
+    let parquet_probe = examples.join("size_parquet");
+    let parquet_raw_growth = size(&parquet_probe) as f64 - size(&formats) as f64;
+    let parquet_growth =
+        stripped_size(&parquet_probe, &dir) as f64 - stripped_size(&formats, &dir) as f64;
+
     let (report_probe, pdf_probe) = (examples.join("size_report"), examples.join("size_pdf"));
     let pdf_raw_growth = size(&pdf_probe) as f64 - size(&report_probe) as f64;
     let pdf_growth =
@@ -392,6 +403,12 @@ fn budgets_of_docs_05_section_4_8() {
             target: 150.0,
             measured: formats_growth / KB,
             unit: "KB",
+        },
+        Budget {
+            name: "Parquet growth",
+            target: 0.53,
+            measured: parquet_growth / KB / KB,
+            unit: "MiB",
         },
         Budget {
             name: "PDF growth",
@@ -449,6 +466,13 @@ fn budgets_of_docs_05_section_4_8() {
         formats_raw_growth,
         formats.display(),
         formats_base.display()
+    );
+    println!(
+        "Parquet growth: {:.0} bytes stripped, {:.0} bytes unstripped ({} less {})",
+        parquet_growth,
+        parquet_raw_growth,
+        parquet_probe.display(),
+        formats.display()
     );
     println!(
         "PDF growth: {:.0} bytes stripped, {:.0} bytes unstripped ({} less {}); PDFs {:.0}, {:.0}, {:.0} bytes",

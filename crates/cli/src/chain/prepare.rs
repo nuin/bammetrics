@@ -745,9 +745,13 @@ fn planned_files(tool: &Tool, argv: &[String], formats: &[Format]) -> Vec<Planne
         let siblings = formats[1..]
             .iter()
             .filter(|_| kind == "metrics")
-            .map(|f| PlannedFile {
-                path: format::sibling(&path, f.extension()),
-                kind: f.name(),
+            .flat_map(|f| {
+                format::files_of(&format::sibling(&path, f.extension()), *f)
+                    .into_iter()
+                    .map(|path| PlannedFile {
+                        path,
+                        kind: f.name(),
+                    })
             })
             .collect::<Vec<_>>();
         files.push(PlannedFile { path, kind });
@@ -775,9 +779,13 @@ fn prefix_files(tool: &Tool, prefix: &Path, formats: &[Format]) -> Vec<PlannedFi
         let path = rrbs_metrics::file_path(prefix, extension);
         let siblings: Vec<PlannedFile> = formats[1..]
             .iter()
-            .map(|f| PlannedFile {
-                path: format::sibling(&path, f.extension()),
-                kind: f.name(),
+            .flat_map(|f| {
+                format::files_of(&format::sibling(&path, f.extension()), *f)
+                    .into_iter()
+                    .map(|path| PlannedFile {
+                        path,
+                        kind: f.name(),
+                    })
             })
             .collect();
         files.push(PlannedFile {
@@ -1064,8 +1072,11 @@ fn also(spec: &Spec) -> Result<Vec<Also>, VerbError> {
             if let Some(best) = bammetrics_core::registry::did_you_mean(name, names) {
                 error = error.hint(format!("did you mean {best}?"));
             }
-            error.hint("formats: json, jsonl, tsv, csv, markdown")
+            error.hint("formats: json, jsonl, tsv, csv, markdown, parquet")
         })?;
+        if let Some(missing) = format.per_file().filter(|f| !format::available(*f)) {
+            return Err(format::unavailable(VERB, missing).from("--also"));
+        }
         if matches!(format, Also::Junit | Also::Multiqc) {
             return Err(usage(format!(
                 "--also {} prints a verdict, and a chain has none",
