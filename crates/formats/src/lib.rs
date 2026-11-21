@@ -13,6 +13,7 @@
 //! | JSON Lines, TSV, CSV, aligned text | [`delimited`] | no |
 //! | Markdown | [`markdown`] | no |
 //! | JUnit XML, MultiQC custom content | [`junit`], [`multiqc`] | no |
+//! | SQL dump for `sqlite3` | [`sql`] | no |
 //!
 //! [`read`] takes either readable form, so Picard text to JSON to Picard
 //! text is byte for byte the first file (`tests/round_trip.rs` runs it on
@@ -29,6 +30,7 @@ pub mod metrics_json;
 pub mod multiqc;
 pub mod picard;
 pub mod sheet;
+pub mod sql;
 pub mod table;
 pub mod verdict;
 
@@ -46,11 +48,12 @@ pub enum Format {
     Human,
     Csv,
     Markdown,
+    Sql,
 }
 
 impl Format {
     /// Every format, in `--help` order.
-    pub const ALL: [Format; 7] = [
+    pub const ALL: [Format; 8] = [
         Format::Picard,
         Format::Json,
         Format::Tsv,
@@ -58,6 +61,7 @@ impl Format {
         Format::Human,
         Format::Csv,
         Format::Markdown,
+        Format::Sql,
     ];
 
     pub fn name(self) -> &'static str {
@@ -69,6 +73,7 @@ impl Format {
             Format::Human => "human",
             Format::Csv => "csv",
             Format::Markdown => "markdown",
+            Format::Sql => "sql",
         }
     }
 
@@ -91,6 +96,7 @@ impl Format {
             Format::Human => "human.txt",
             Format::Csv => "csv",
             Format::Markdown => "md",
+            Format::Sql => "sql",
         }
     }
 }
@@ -134,6 +140,7 @@ pub fn render(format: Format, doc: &Document, table: Option<&Table>) -> Result<S
         Format::Csv => one().map(delimited::csv).unwrap_or_default(),
         Format::Human => one().map(delimited::human).unwrap_or_default(),
         Format::Markdown => markdown::write(&[doc], &[]),
+        Format::Sql => sql::write(doc),
     })
 }
 
@@ -154,6 +161,11 @@ pub fn is_json(text: &str) -> bool {
 /// [`is_json`], else Picard text. A leading byte order mark is dropped.
 pub fn read(text: &str) -> Result<Document> {
     let text = without_bom(text);
+    if sql::is_sql(text) {
+        return Err(Error::Metrics(
+            "an SQL dump (--format sql) does not read back: load it with sqlite3".to_owned(),
+        ));
+    }
     if is_json(text) {
         metrics_json::read(text)
     } else {
