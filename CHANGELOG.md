@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.30.0
+
+Wave W12 of docs/07: the interval layer `interval_ops` and five interval tools (65 in all), none of them a chain step; `qc --panel` takes the lists they write.
 
 ### Added
 
@@ -100,7 +102,8 @@
   htsjdk does, so a gzip interval list from `IntervalListTools` is a panel. A VCF panel
   exits 2 in `qc` and 1 in the tools, naming `VcfToIntervalList`. A BED panel's run is
   byte for byte the same.
-- A chain step that reads a FASTA (`create-sequence-dictionary` and the two tools above)
+- A chain step that reads a FASTA (`create-sequence-dictionary`, `scatter-intervals-by-ns`
+  and `non-n-fasta-size`)
   is refused with the reason given for the TEXT and VCF tools.
 - A `Files::Bam` verb that writes no BAM names what it writes in its `-o` help and in
   its missing `-o` error.
@@ -115,7 +118,6 @@
   `.dict` that is no regular file exits 1 before it is opened. With `-o -` a failed
   `ScatterIntervalsByNs` prints nothing. `NonNFastaSize INTERVALS` drops the names before
   the merge.
-
 - `BedToIntervalList UNIQUE=true` merges an interval with no base as htsjdk does: a
   zero-length interval at 10 now joins one starting at 11 (Picard 3.5.0 writes one
   interval there). Its sort compares names by UTF-16 unit, as Java does.

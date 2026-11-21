@@ -83,14 +83,14 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | ClusterCrosscheckMetrics | Fingerprint | later | Java hash order. S | none |
 | IdentifyContaminant | Fingerprint | out | Niche, VCF output only. M | VerifyBamID |
 | BedToIntervalList | Intervals | core | Hs, TargetedPcr and Wgs take interval_list. Harness needs it. | none |
-| IntervalListToBed | Intervals | core | Shipped in wave W12 of docs/07 over `interval_ops`: the list read as tribble's `IntervalListCodec` reads it, the sort with its spill of names past 500,000 intervals, `SCORE`, gzip output. S | bedtools (partial) |
-| IntervalListTools | Intervals | core | Shipped in wave W12 of docs/07 (0.30.0, the interval layer `interval_ops.rs`): every `ACTION`, padding, sort, merge, invert, band breaks, the five scatter modes written as one set, `OUTPUT_VALUE` and `COUNT_OUTPUT`, Picard's command line in the `@PG` line. M | bedtools |
+| IntervalListToBed | Intervals | core | Shipped in 0.30.0 (wave W12 of docs/07) over `interval_ops`: the list read as tribble's `IntervalListCodec` reads it, the sort with its spill of names past 500,000 intervals, `SCORE`, gzip output. S | bedtools (partial) |
+| IntervalListTools | Intervals | core | Shipped in 0.30.0 (wave W12 of docs/07, the interval layer `interval_ops.rs`): every `ACTION`, padding, sort, merge, invert, band breaks, the five scatter modes written as one set, `OUTPUT_VALUE` and `COUNT_OUTPUT`, Picard's command line in the `@PG` line. M | bedtools |
 | LiftOverIntervalList | Intervals | out | Liftover, no metrics. | UCSC liftOver, CrossMap |
 | CreateSequenceDictionary | Reference | core | Metrics need contig lengths. Harness prep. | samtools dict |
 | ExtractSequences | Reference | out | Region FASTA subsetting. | samtools faidx |
-| NonNFastaSize | Reference | core | Shipped in wave W12 of docs/07: the bases that are not `N` or `n`, read through the `.fai` 1 MiB at a time, `INTERVALS` matched by `@SQ` index as Picard matches them. S | seqkit stats |
+| NonNFastaSize | Reference | core | Shipped in 0.30.0 (wave W12 of docs/07): the bases that are not `N` or `n`, read through the `.fai` 1 MiB at a time, `INTERVALS` matched by `@SQ` index as Picard matches them. S | seqkit stats |
 | NormalizeFasta | Reference | out | FASTA rewrap. | seqkit seq -w |
-| ScatterIntervalsByNs | Reference | core | Shipped in wave W12 of docs/07: `ACGTmer` and `Nmer` runs with Picard's merge of short N runs, `OUTPUT_TYPE`, the `.dict` header; the interval list written as it is walked. S | bedtools |
+| ScatterIntervalsByNs | Reference | core | Shipped in 0.30.0 (wave W12 of docs/07): `ACGTmer` and `Nmer` runs with Picard's merge of short N runs, `OUTPUT_TYPE`, the `.dict` header; the interval list written as it is walked. S | bedtools |
 | BaitDesigner | Reference | out | Legacy bait design. | none |
 | FixMateInformation | Read data | later | Harness input prep (MC tag). | samtools fixmate -m |
 | SetNmMdAndUqTags | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): `MD`, `NM` and `UQ` from the reference as htsjdk's `SequenceUtil` computes them, `SET_ONLY_UQ`, `IS_BISULFITE_SEQUENCE`. M | samtools calmd |
@@ -153,7 +153,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | SplitVcfs | Variant | out | SNP/indel split. | bcftools view -v |
 | UpdateVcfSequenceDictionary | Variant | out | Header contig update. | bcftools reheader |
 | VcfFormatConverter | Variant | out | VCF/BCF conversion. | bcftools view |
-| VcfToIntervalList | Variant | core | Shipped in wave W12 of docs/07 over `interval_ops`: each record checked as htsjdk's codec checks its site, neighbours merged in file order, `INCLUDE_FILTERED`, `VARIANT_ID_METHOD`. S | bcftools query plus BedToIntervalList |
+| VcfToIntervalList | Variant | core | Shipped in 0.30.0 (wave W12 of docs/07) over `interval_ops`: each record checked as htsjdk's codec checks its site, neighbours merged in file order, `INCLUDE_FILTERED`, `VARIANT_ID_METHOD`. S | bcftools query plus BedToIntervalList |
 
 Scheduling update (2026-11-09): the 65 `out` tools and the 26 unbuilt `later` tools are now scheduled. `docs/07_full_parity_program.md` places each of the 91 in a wave (section 5 there) with its oracle tier and acceptance line. The `out` decision in the table above records the 2026-10-29 reasoning and the covering tool; it no longer means "not built". The rows are rewritten to `build (docs/07 Wnn)` one wave at a time, closing at the 1.0.0 parity gate (docs/07 W40, change D1).
 
@@ -356,7 +356,7 @@ Columns for these tools are verified by run, except where marked. Entries are sh
 ### 2.3 Later tools from triage (harness and interval helpers)
 
 - BedToIntervalList (core): parse BED, write interval_list with `@SQ` header from a dictionary. Needed by Hs, TargetedPcr, Wgs `INTERVALS`. Both sides must read identical interval_lists.
-- IntervalListToBed, IntervalListTools (merge, pad, uniquify, subtract only as the metrics need them), VcfToIntervalList, NonNFastaSize: small, built as library functions, not as CLI clones.
+- IntervalListToBed, IntervalListTools, VcfToIntervalList, NonNFastaSize and ScatterIntervalsByNs: shipped in 0.30.0 (wave W12 of docs/07) as registry tools with Picard's faces, over the library layer `interval_ops`.
 - CreateSequenceDictionary (core for the harness): `picard CreateSequenceDictionary` or `samtools dict`. The library reads `.dict` or `.fai` for contig lengths.
 - Harness prep only: FixMateInformation (MC tag, via `samtools fixmate -m`), SetNmMdAndUqTags (`samtools calmd`), BuildBamIndex, SortSam, AddOrReplaceReadGroups, CleanSam, DownsampleSam, FastqToSam. Never ported.
 
