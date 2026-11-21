@@ -32,7 +32,6 @@ use bammetrics_core::{
 use crate::error::VerbError;
 use crate::format::{self, Context, Format};
 use crate::grammar::{self, Flag, Given, Key, Parsed};
-use crate::report::write_atomic;
 
 /// How a verb names what it writes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1976,17 +1975,6 @@ pub(crate) fn create_parent(verb: &str, made: &mut MadeDirs, path: &Path) -> Res
     })
 }
 
-/// `text` to `path` through a temporary file, as a core output error.
-fn write_text(path: &Path, text: impl AsRef<[u8]>) -> bammetrics_core::Result<()> {
-    write_atomic(path, text).map_err(|e| bammetrics_core::Error::Output {
-        path: path.to_path_buf(),
-        source: match e {
-            crate::error::Error::Io { source, .. } => source,
-            other => io::Error::other(other.to_string()),
-        },
-    })
-}
-
 /// The main file in the first of `formats` to `target` (standard output
 /// for `None`) and in each further one beside it, and every further file
 /// as Picard text.
@@ -2013,16 +2001,15 @@ fn write_single(
                     source,
                 })?,
             Some(path) => {
-                let further = formats[1..]
-                    .iter()
-                    .zip(rendered)
-                    .flat_map(|(format, files)| {
-                        format::placed(&format::sibling(path, format.extension()), files)
-                    });
-                for (at, bytes) in format::placed(path, first).into_iter().chain(further) {
-                    write_text(&at, bytes)?;
-                    written.push(at);
-                }
+                // The main file, its companions and the further formats are
+                // one set: a failed write leaves none of them.
+                let mut set = format::FileSet::default();
+                set.add(
+                    path,
+                    formats,
+                    std::iter::once(first).chain(rendered).collect(),
+                );
+                written.extend(set.write()?);
             }
         }
     }
@@ -2053,17 +2040,20 @@ fn write_siblings(
         .into_iter()
         .chain(result.extra.iter().map(|(path, file)| (file, path)))
         .filter(|(file, _)| file.text.is_none());
+    // Every sibling of every file is one set: a failed write leaves none.
+    let mut set = format::FileSet::default();
     for (file, path) in files {
         let rendered = format::render_all(&formats[1..], context, file)
             .map_err(|e| format::unrendered(path, &e))?;
         for (format, files) in formats[1..].iter().zip(rendered) {
-            let sibling = format::sibling(path, format.extension());
-            for (at, bytes) in format::placed(&sibling, files) {
-                write_text(&at, bytes)?;
-                written.push(at);
-            }
+            set.add(
+                &format::sibling(path, format.extension()),
+                &[*format],
+                vec![files],
+            );
         }
     }
+    written.extend(set.write()?);
     Ok(written)
 }
 

@@ -3,14 +3,19 @@
 //!
 //! A file is read whole, at most [`MAX_BYTES`]. Before a page is read the
 //! footer is checked (one flat level of `INT64`, `DOUBLE` and
-//! `BYTE_ARRAY` columns, at most [`MAX_CELLS`] cells, the `bammetrics`
-//! metadata) and every page header is checked against the bytes present
-//! ([`super::scan`]). A panic inside the crate becomes an error.
+//! `BYTE_ARRAY` columns, the `bammetrics` metadata, at most [`MAX_CELLS`]
+//! cells and at most [`CELLS_PER_BYTE`] cells per byte of the file) and
+//! every page header is checked against the bytes present
+//! ([`super::scan`]), so what the reader holds is bounded by the file's
+//! size. A panic inside the crate becomes an error, and its message is
+//! not printed.
 
+use std::cell::Cell;
 use std::fs;
 use std::io::Read as _;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
+use std::sync::Once;
 
 use ::parquet::basic::{Repetition, Type as PhysicalType};
 use ::parquet::column::reader::ColumnReader;
@@ -20,8 +25,8 @@ use bammetrics_core::metric::Value;
 use bytes::Bytes;
 
 use super::{
-    COMPANIONS, DIGEST_KEY, KEY, MAX_BYTES, MAX_CELLS, SCHEMA, bad, cell_text, companion, digest,
-    scan,
+    CELLS_PER_BYTE, COMPANIONS, DIGEST_KEY, KEY, MAX_BYTES, MAX_CELLS, SCHEMA, bad, cell_text,
+    companion, digest, scan,
 };
 use crate::json::Json;
 use crate::table::{Table, Ty};
@@ -40,6 +45,9 @@ struct Meta {
     class: String,
     picard_columns: Option<Vec<String>>,
     histogram: bool,
+    /// True when the metadata has a `histogram` member: a main file of
+    /// part `metrics` or `histogram`.
+    main: bool,
 }
 
 fn text_member(json: &Json, key: &str) -> Result<Option<String>> {
@@ -85,6 +93,7 @@ impl Meta {
             class: required("class")?,
             picard_columns: strings_member(&json, "picard_columns")?,
             histogram: matches!(json.get("histogram"), Some(Json::Bool(true))),
+            main: json.get("histogram").is_some(),
         })
     }
 }
@@ -234,6 +243,14 @@ fn read_one(bytes: Vec<u8>) -> Result<One> {
             "the file holds {cells} cells; bammetrics reads at most {MAX_CELLS}"
         )));
     }
+    let backed = (file.len() as u64).saturating_mul(CELLS_PER_BYTE);
+    if cells > backed {
+        return Err(bad(format!(
+            "the file says {cells} cells in {} bytes; bammetrics reads at most \
+             {CELLS_PER_BYTE} cells per byte",
+            file.len()
+        )));
+    }
     scan::pages(&file, metadata)?;
     let mut table_rows: Vec<Vec<Value>> = Vec::new();
     for g in 0..reader.num_row_groups() {
@@ -244,7 +261,11 @@ fn read_one(bytes: Vec<u8>) -> Result<One> {
         for (j, (_, ty)) in types.iter().enumerate() {
             let cells = column(group.as_ref(), j, *ty, n)?;
             if j == 0 {
-                table_rows.extend(cells.into_iter().map(|cell| vec![cell]));
+                table_rows.extend(cells.into_iter().map(|cell| {
+                    let mut row = Vec::with_capacity(types.len());
+                    row.push(cell);
+                    row
+                }));
             } else {
                 for (row, cell) in table_rows[first..].iter_mut().zip(cells) {
                     row.push(cell);
@@ -293,9 +314,33 @@ fn before_footer(file: &[u8]) -> Result<&[u8]> {
     Ok(&file[..end])
 }
 
+thread_local! {
+    /// True while this thread runs [`quietly`].
+    static QUIET: Cell<bool> = const { Cell::new(false) };
+}
+
+/// `run` with a panic caught and its message not printed. The process's
+/// panic hook is wrapped once, so a panic on another thread, or on this
+/// one outside `run`, prints as before.
+fn quietly<T>(run: impl FnOnce() -> T) -> std::thread::Result<T> {
+    static HOOK: Once = Once::new();
+    HOOK.call_once(|| {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            if !QUIET.with(Cell::get) {
+                previous(info);
+            }
+        }));
+    });
+    let was = QUIET.with(|quiet| quiet.replace(true));
+    let result = catch_unwind(AssertUnwindSafe(run));
+    QUIET.with(|quiet| quiet.set(was));
+    result
+}
+
 /// [`read_one`] with a panic in the crate as an error.
 fn read_guarded(bytes: Vec<u8>) -> Result<One> {
-    catch_unwind(AssertUnwindSafe(|| read_one(bytes)))
+    quietly(|| read_one(bytes))
         .unwrap_or_else(|_| Err(bad("the Parquet reader failed on a malformed file")))
 }
 
@@ -311,6 +356,14 @@ pub(crate) fn read_capped(path: &Path) -> Result<Vec<u8>> {
         return Err(bad(format!("{} is over {MAX_BYTES} bytes", path.display())));
     }
     Ok(bytes)
+}
+
+/// The part of the companion file at `path` (`histogram` or `long`), or
+/// `None` for a main file or a file bammetrics cannot read.
+pub(super) fn companion_part(path: &Path) -> Option<String> {
+    let one = read_guarded(read_capped(path).ok()?).ok()?;
+    let companion = !one.meta.main && COMPANIONS.contains(&one.meta.part.as_str());
+    companion.then_some(one.meta.part)
 }
 
 /// The document of the main Parquet file `bytes`. Its histogram
@@ -508,6 +561,67 @@ mod tests {
             crate::picard::write(&back).expect("Picard text"),
             crate::picard::write(&doc).expect("Picard text")
         );
+    }
+
+    /// One column of `rows` cells `cell`, as the main Parquet file.
+    fn one_column(rows: usize, ty: Ty, cell: Value) -> Vec<u8> {
+        let doc = Document {
+            headers: vec!["x".to_owned()],
+            tables: vec![Table {
+                class: "x.Y".to_owned(),
+                columns: vec![("V".to_owned(), ty)],
+                rows: vec![vec![cell]; rows],
+            }],
+            ..Document::default()
+        };
+        render_files(Format::Parquet, &doc, None)
+            .expect("writes")
+            .remove(0)
+            .bytes
+    }
+
+    #[test]
+    fn a_file_of_nulls_that_says_many_rows_is_refused() {
+        let bytes = one_column(200_000, Ty::Str, Value::Null);
+        let size = bytes.len();
+        let error = read(bytes, None).expect_err("too many cells per byte");
+        assert!(
+            error.to_string().contains("cells per byte"),
+            "{size} bytes: {error}"
+        );
+        // Values back a file: 200,000 zeros read.
+        let zeros = one_column(200_000, Ty::Int, Value::Int(0));
+        let doc = read(zeros, None).expect("reads");
+        assert_eq!(doc.tables[0].rows.len(), 200_000);
+    }
+
+    #[test]
+    fn a_long_column_is_written_in_chunks_and_reads_back() {
+        let rows = super::super::write::CHUNK * 2 + 7;
+        let bytes = one_column(rows, Ty::Float, Value::Float(0.5));
+        let doc = read(bytes, None).expect("reads");
+        assert_eq!(doc.tables[0].rows.len(), rows);
+        assert!(doc.tables[0].rows.iter().all(|r| r[0] == Value::Float(0.5)));
+    }
+
+    #[test]
+    fn an_int_a_double_cannot_hold_is_refused_in_a_float_column() {
+        let doc = Document {
+            tables: vec![Table {
+                class: "x.Y".to_owned(),
+                columns: vec![("V".to_owned(), Ty::Float)],
+                rows: vec![vec![Value::Int(9_007_199_254_740_993)]],
+            }],
+            ..Document::default()
+        };
+        assert!(render_files(Format::Parquet, &doc, None).is_err());
+    }
+
+    #[test]
+    fn a_panic_inside_quietly_is_an_error_and_the_flag_comes_back() {
+        assert!(quietly(|| panic!("inside the crate")).is_err());
+        assert!(!QUIET.with(Cell::get));
+        assert_eq!(quietly(|| 7).ok(), Some(7));
     }
 
     #[test]

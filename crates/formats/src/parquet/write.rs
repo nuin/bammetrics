@@ -94,54 +94,100 @@ fn field(name: &str, ty: Ty, nullable: bool) -> Result<Arc<Type>> {
         .map_err(|e| bad(format!("column {name:?}: {e}")))
 }
 
-/// One column's cells: a definition level per row (1 present, 0 null)
-/// and the present values, written in one batch.
-fn write_column<'v>(
+/// Cells handed to a column writer at a time: a multiple of the crate's
+/// mini-batch of 1,024, so the pages are the ones one batch would give.
+pub(super) const CHUNK: usize = 1 << 16;
+
+/// One present cell of a column.
+enum Cell {
+    Int(i64),
+    Float(f64),
+    Text(ByteArray),
+}
+
+/// A column's cells in row order, `None` for null. Boxed, so one
+/// [`write_column`] serves every file.
+type Cells<'a> = Box<dyn Iterator<Item = Result<Option<Cell>>> + 'a>;
+
+/// One column's cells, `None` for null: a definition level per row (1
+/// present, 0 null) and the present values, written [`CHUNK`] rows at a
+/// time, so a column is never held whole.
+fn write_column(
     column: &mut SerializedColumnWriter<'_>,
     ty: Ty,
     nullable: bool,
-    cells: impl Iterator<Item = &'v Value>,
+    cells: Cells<'_>,
     name: &str,
 ) -> Result<()> {
-    let mut levels = Vec::new();
+    let mut levels: Vec<i16> = Vec::with_capacity(CHUNK);
     let (mut ints, mut floats, mut texts) = (Vec::new(), Vec::new(), Vec::new());
+    let mut flush = |levels: &mut Vec<i16>,
+                     ints: &mut Vec<i64>,
+                     floats: &mut Vec<f64>,
+                     texts: &mut Vec<ByteArray>|
+     -> Result<()> {
+        let defs = nullable.then_some(&levels[..]);
+        let written = match ty {
+            Ty::Int => column.typed::<Int64Type>().write_batch(ints, defs, None),
+            Ty::Float => column.typed::<DoubleType>().write_batch(floats, defs, None),
+            Ty::Str => column
+                .typed::<ByteArrayType>()
+                .write_batch(texts, defs, None),
+        };
+        levels.clear();
+        ints.clear();
+        floats.clear();
+        texts.clear();
+        written.map(drop).map_err(|e| bad(e.to_string()))
+    };
     for (i, cell) in cells.enumerate() {
-        levels.push(i16::from(!matches!(cell, Value::Null)));
-        match (ty, cell) {
-            (_, Value::Null) if nullable => {}
-            (Ty::Int, Value::Int(v)) => ints.push(*v),
-            (Ty::Float, Value::Float(v)) => floats.push(*v),
-            (Ty::Float, Value::Int(v)) => floats.push(*v as f64),
-            (Ty::Str, cell) => match cell_text(cell) {
-                Some(text) => texts.push(ByteArray::from(text.into_bytes())),
-                None => return Err(bad(format!("row {i} of column {name:?} is empty"))),
-            },
-            (_, cell) => {
-                return Err(bad(format!(
-                    "row {i} of column {name:?}: {cell:?} in a column of type {}",
-                    ty.name()
-                )));
+        match cell? {
+            None if nullable => levels.push(0),
+            None => return Err(bad(format!("row {i} of column {name:?} is empty"))),
+            Some(cell) => {
+                levels.push(1);
+                match cell {
+                    Cell::Int(v) => ints.push(v),
+                    Cell::Float(v) => floats.push(v),
+                    Cell::Text(v) => texts.push(v),
+                }
             }
         }
+        if levels.len() == CHUNK {
+            flush(&mut levels, &mut ints, &mut floats, &mut texts)?;
+        }
     }
-    let levels = nullable.then_some(&levels[..]);
-    let written = match ty {
-        Ty::Int => column.typed::<Int64Type>().write_batch(&ints, levels, None),
-        Ty::Float => column
-            .typed::<DoubleType>()
-            .write_batch(&floats, levels, None),
-        Ty::Str => column
-            .typed::<ByteArrayType>()
-            .write_batch(&texts, levels, None),
-    };
-    written.map(drop).map_err(|e| bad(e.to_string()))
+    flush(&mut levels, &mut ints, &mut floats, &mut texts)
+}
+
+/// A table cell as a cell of a column of type `ty`: an int in a float
+/// column only when the double holds it exactly.
+fn typed(ty: Ty, value: &Value, i: usize, name: &str) -> Result<Option<Cell>> {
+    Ok(Some(match (ty, value) {
+        (_, Value::Null) => return Ok(None),
+        (Ty::Int, Value::Int(v)) => Cell::Int(*v),
+        (Ty::Float, Value::Float(v)) => Cell::Float(*v),
+        (Ty::Float, Value::Int(v)) if (*v as f64) as i64 == *v && *v != i64::MAX => {
+            Cell::Float(*v as f64)
+        }
+        (Ty::Str, cell) => match cell_text(cell) {
+            Some(text) => Cell::Text(ByteArray::from(text.into_bytes())),
+            None => return Ok(None),
+        },
+        (_, cell) => {
+            return Err(bad(format!(
+                "row {i} of column {name:?}: {cell:?} in a column of type {}",
+                ty.name()
+            )));
+        }
+    }))
 }
 
 /// A file of `columns` whose cells column `j` gives as `cells(j)`.
-fn file<'v, I: Iterator<Item = &'v Value>>(
+fn file<'a>(
     columns: &[(String, Ty, bool)],
     metadata: String,
-    mut cells: impl FnMut(usize) -> I,
+    cells: &dyn Fn(usize) -> Cells<'a>,
 ) -> Result<Vec<u8>> {
     let fields = columns
         .iter()
@@ -182,8 +228,15 @@ fn table_file(doc: &Document, table: &Table, part: Part<'_>) -> Result<Vec<u8>> 
         .map(|(key, (_, ty))| (key, *ty, true))
         .collect();
     table_rows_checked(table)?;
-    file(&columns, metadata(doc, &part), |j| {
-        table.rows.iter().map(move |row| &row[j])
+    file(&columns, metadata(doc, &part), &|j| {
+        let (name, ty) = &table.columns[j];
+        Box::new(
+            table
+                .rows
+                .iter()
+                .enumerate()
+                .map(move |(i, row)| typed(*ty, &row[j], i, name)),
+        )
     })
 }
 
@@ -205,33 +258,35 @@ fn table_rows_checked(table: &Table) -> Result<()> {
 }
 
 /// The long file: one row per cell of the class table, then of the
-/// histogram.
+/// histogram. Each of its five columns is made from the tables as it is
+/// written, so the file's cells are never held: `sample` and `class` are
+/// one buffer each, shared by every row.
 fn long_file(doc: &Document, class: &str, part: &'static str) -> Result<Vec<u8>> {
-    let mut columns: [Vec<Value>; 5] = Default::default();
-    let tables = doc
+    let tables: Vec<(&Table, &str, &str)> = doc
         .tables
         .iter()
         .map(|t| (t, "metrics", t.class.as_str()))
-        .chain(doc.histogram.iter().map(|t| (t, "histogram", class)));
-    let sample = doc.sample.clone().map_or(Value::Null, Value::Str);
-    for (table, kind, class) in tables {
-        for (i, row) in table.rows.iter().enumerate() {
-            let row_key = Value::Str(format!("{kind}/{i}"));
-            for (name, cell) in table.names().zip(row) {
-                let value = cell_text(cell).map_or(Value::Null, Value::Str);
-                let cells = [
-                    sample.clone(),
-                    Value::Str(class.to_owned()),
-                    row_key.clone(),
-                    Value::Str(name.to_owned()),
-                    value,
-                ];
-                for (column, cell) in columns.iter_mut().zip(cells) {
-                    column.push(cell);
-                }
-            }
-        }
-    }
+        .chain(doc.histogram.iter().map(|t| (t, "histogram", class)))
+        .collect();
+    let shared = |text: &str| ByteArray::from(bytes::Bytes::copy_from_slice(text.as_bytes()));
+    let sample = doc.sample.as_deref().map(shared);
+    let classes: Vec<ByteArray> = tables.iter().map(|(_, _, class)| shared(class)).collect();
+    let names: Vec<Vec<ByteArray>> = tables
+        .iter()
+        .map(|(table, _, _)| table.names().map(shared).collect())
+        .collect();
+    // Every cell of every table, with the table's index, the row's and the
+    // column's.
+    let cells = || {
+        tables.iter().enumerate().flat_map(|(t, (table, _, _))| {
+            table.rows.iter().enumerate().flat_map(move |(i, row)| {
+                row.iter()
+                    .take(table.columns.len())
+                    .enumerate()
+                    .map(move |(j, cell)| (t, i, j, cell))
+            })
+        })
+    };
     let schema: Vec<(String, Ty, bool)> = LONG
         .iter()
         .map(|(name, nullable)| ((*name).to_owned(), Ty::Str, *nullable))
@@ -242,7 +297,20 @@ fn long_file(doc: &Document, class: &str, part: &'static str) -> Result<Vec<u8>>
         picard_columns: None,
         histogram: None,
     };
-    file(&schema, metadata(doc, &part), |j| columns[j].iter())
+    let text = |text: String| Cell::Text(ByteArray::from(text.into_bytes()));
+    let (sample, classes, names, kinds) = (&sample, &classes, &names, &tables);
+    let column = |j: usize| -> Cells<'_> {
+        Box::new(cells().map(move |(t, i, c, cell)| {
+            Ok(match j {
+                0 => sample.clone().map(Cell::Text),
+                1 => Some(Cell::Text(classes[t].clone())),
+                2 => Some(text(format!("{}/{i}", kinds[t].1))),
+                3 => Some(Cell::Text(names[t][c].clone())),
+                _ => cell_text(cell).map(text),
+            })
+        }))
+    };
+    file(&schema, metadata(doc, &part), &column)
 }
 
 /// True when a table repeats a column name, so the Parquet names

@@ -896,10 +896,25 @@ fn table_as_dicts<'c, 'v, 'py>(
 /// or None; `?` is nan).
 #[pyfunction]
 fn read_metrics<'py>(py: Python<'py>, path: PathBuf) -> PyResult<Bound<'py, PyDict>> {
+    if starts_as_parquet(&path) {
+        return Err(input_error(format!(
+            "{} is a Parquet file; read_table reads it",
+            path.display()
+        )));
+    }
     let doc = py
         .detach(|| MetricsDoc::read(&path))
         .map_err(|e| py_error(&e))?;
     doc_dict(py, &doc)
+}
+
+/// True when the file at `path` starts with the Parquet magic `PAR1`.
+fn starts_as_parquet(path: &std::path::Path) -> bool {
+    use std::io::Read as _;
+    let mut head = Vec::with_capacity(4);
+    std::fs::File::open(path)
+        .and_then(|file| file.take(4).read_to_end(&mut head))
+        .is_ok_and(|_| bammetrics_formats::parquet::is_parquet(&head))
 }
 
 /// A parsed metrics file in the form [`read_metrics`] returns.
@@ -989,7 +1004,12 @@ fn read_table<'py>(
         Some(name) => doc
             .table(name)
             .ok_or_else(|| usage_error(format!("{} has no table {name:?}", path.display())))?,
-        None => doc.main_table().expect("a document that read has a table"),
+        None => doc.main_table().ok_or_else(|| {
+            input_error(format!(
+                "{}: the file holds header lines and no table",
+                path.display()
+            ))
+        })?,
     };
     let histogram = match &doc.histogram {
         Some(histogram) if !std::ptr::eq(histogram, picked) => {

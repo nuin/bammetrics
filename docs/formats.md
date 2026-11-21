@@ -393,12 +393,26 @@ types, every row, null and NaN. A reader that is not installed is skipped; the P
 readers run under `BAMMETRICS_PARQUET_PYTHON` (default `python3`).
 
 `convert` and `read_table` read a file bammetrics wrote: the `bammetrics` metadata, one
-flat level of `INT64`, `DOUBLE` and `BYTE_ARRAY` columns. The reader reads at most 256 MiB
-and 134,217,728 cells. Before the `parquet` crate decodes a page it checks the MD5 and
-every page header against the bytes present: a page that claims more than 64 times its
-compressed size plus 1 KiB uncompressed, a page outside its column chunk, or more values
-than rows is an error. A long file is not read back (exit 1). A file another tool
-rewrote has no `bammetrics` metadata and is refused.
+flat level of `INT64`, `DOUBLE` and `BYTE_ARRAY` columns in `PLAIN` data pages version 1.
+The reader reads at most 256 MiB, 8,388,608 cells (about 1 GiB decoded), 64 cells per byte
+of the file and 512 MiB of decompressed pages, all checked from the footer and the page
+headers before a value is decoded. A file of 47 KB that says 30,000,000 null rows is
+refused. Before the `parquet` crate decodes a page it checks the MD5 and every page header
+against the bytes present: a page that claims more than 64 times its compressed size plus
+1 KiB uncompressed, a page outside its column chunk, a dictionary page or encoding, or
+more values than rows is an error. A panic in the crate is an error, and its message is
+not printed. A long file is not read back (exit 1). A file another tool rewrote has no
+`bammetrics` metadata and is refused. `read_metrics` refuses a Parquet file and names
+`read_table`; `read_table` of a file with headers only (part `empty`) is an `InputError`.
+
+`convert`, the tool verbs and `chain` write a Parquet file, its companions and the further
+formats of a `--format` list as one set: each file under a temporary name, then all
+renamed into place. A failed write or rename leaves none of them and puts back each file a
+rename replaced. A new main
+file with no histogram removes a `STEM.histogram.parquet` beside it that a bammetrics run
+wrote as a companion (its metadata says so), so a glob such as `*.histogram.parquet`
+finds no stale histogram. `qc` removes the companions an earlier run wrote through its
+manifest.
 
 The feature costs 1,095,672 bytes of stripped binary (1.04 MiB) with the `parquet` crate
 at opt-level `"z"` (docs/benchmarks.md). A build with `--no-default-features` has no

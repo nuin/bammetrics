@@ -194,24 +194,22 @@ fn write_metrics(
 ) -> bammetrics_core::Result<Vec<Written>> {
     let rendered =
         format::render_all(formats, context, file).map_err(|e| format::unrendered(path, &e))?;
-    let mut written = Vec::with_capacity(formats.len());
-    for (index, (format, files)) in formats.iter().zip(rendered).enumerate() {
-        let main = if index == 0 {
-            path.to_path_buf()
-        } else {
-            format::sibling(path, format.extension())
-        };
-        for (target, bytes) in format::placed(&main, files) {
-            let kind = if index == 0 && target == path {
+    // The file and the further formats are one set: a failed write leaves
+    // none of them.
+    let mut set = format::FileSet::default();
+    set.add(path, formats, rendered);
+    Ok(set
+        .write_with_formats()?
+        .into_iter()
+        .map(|(target, format)| {
+            let kind = if target == path {
                 "metrics"
             } else {
                 format.name()
             };
-            registry::write_to(Some(&target), |out| out.write_all(&bytes))?;
-            written.push(Written { path: target, kind });
-        }
-    }
-    Ok(written)
+            Written { path: target, kind }
+        })
+        .collect())
 }
 
 /// The files of a tool step that finished: the main file (to its path, or

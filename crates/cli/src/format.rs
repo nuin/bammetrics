@@ -118,6 +118,68 @@ pub fn placed(path: &Path, files: Vec<File>) -> Vec<(PathBuf, Vec<u8>)> {
         .collect()
 }
 
+/// The files of a `--format` list as one set: `rendered` (one entry per
+/// format) placed with the first format's main file at `path` and each
+/// further one beside it.
+#[derive(Debug, Default)]
+pub struct FileSet {
+    files: Vec<(PathBuf, Vec<u8>)>,
+    /// The format of each file of `files`.
+    formats: Vec<Format>,
+    /// Companions a format writes that this rendering has none of (a
+    /// Parquet file without a histogram has no `STEM.histogram.parquet`).
+    absent: Vec<PathBuf>,
+}
+
+impl FileSet {
+    /// Add `rendered` (one entry per format of `formats`) with the first
+    /// format's main file at `path`.
+    pub fn add(&mut self, path: &Path, formats: &[Format], rendered: Vec<Vec<File>>) {
+        for (index, (format, files)) in formats.iter().zip(rendered).enumerate() {
+            let main = if index == 0 {
+                path.to_path_buf()
+            } else {
+                sibling(path, format.extension())
+            };
+            let placed = placed(&main, files);
+            self.absent.extend(
+                files_of(&main, *format)
+                    .into_iter()
+                    .filter(|at| !placed.iter().any(|(p, _)| p == at)),
+            );
+            self.formats
+                .extend(std::iter::repeat_n(*format, placed.len()));
+            self.files.extend(placed);
+        }
+    }
+
+    /// Write every file as one set ([`bammetrics_core::cleanup::write_set`]:
+    /// a failure leaves none of them), then remove each absent companion
+    /// that an earlier run left: a regular file that is a bammetrics
+    /// Parquet histogram. Returns the paths written.
+    pub fn write(self) -> bammetrics_core::Result<Vec<PathBuf>> {
+        Ok(self
+            .write_with_formats()?
+            .into_iter()
+            .map(|(p, _)| p)
+            .collect())
+    }
+
+    /// [`FileSet::write`], each path with its format.
+    pub fn write_with_formats(self) -> bammetrics_core::Result<Vec<(PathBuf, Format)>> {
+        let written = bammetrics_core::cleanup::write_set(self.files)?;
+        let written = written.into_iter().zip(self.formats).collect();
+        for stale in &self.absent {
+            if std::fs::symlink_metadata(stale).is_ok_and(|m| m.file_type().is_file())
+                && bammetrics_formats::parquet::is_histogram_file(stale)
+            {
+                let _ = std::fs::remove_file(stale);
+            }
+        }
+        Ok(written)
+    }
+}
+
 /// The usage error of a first format that cannot go to standard output,
 /// or `None`.
 pub fn stdout_refusal(verb: &str, formats: &[Format], spelled: &str) -> Option<VerbError> {

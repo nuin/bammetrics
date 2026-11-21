@@ -6,13 +6,17 @@
 //! protocol reader of its own, bounded by the bytes present, and a page
 //! whose sizes the bytes cannot back is refused: an uncompressed size over
 //! [`RATIO`] times the compressed one (snappy expands at most about 21
-//! times), a page outside its chunk, or more values than the row group
-//! has rows.
+//! times), a page outside its chunk, more values than the row group has
+//! rows, or pages that
+//! decompress to more than [`MAX_DECODED_BYTES`] in all. bammetrics writes
+//! `PLAIN` data pages version 1 and no dictionary, so any other page is
+//! refused too: a dictionary-encoded page without its dictionary panics
+//! the crate.
 
 use ::parquet::basic::Compression;
 use ::parquet::file::metadata::ParquetMetaData;
 
-use super::bad;
+use super::{MAX_DECODED_BYTES, bad};
 use crate::Result;
 
 /// The most an uncompressed page may exceed its compressed bytes.
@@ -147,6 +151,11 @@ impl<'a> Thrift<'a> {
     }
 }
 
+/// The page type `DATA_PAGE` (version 1).
+const DATA_PAGE: i64 = 0;
+/// The encoding `PLAIN`.
+const PLAIN: i64 = 0;
+
 /// What the checks need of one page header.
 #[derive(Default)]
 struct Header {
@@ -154,6 +163,8 @@ struct Header {
     uncompressed: i64,
     compressed: i64,
     values: i64,
+    /// The values' encoding of a data page version 1.
+    encoding: Option<i64>,
 }
 
 fn header(reader: &mut Thrift<'_>) -> Result<Header> {
@@ -164,12 +175,14 @@ fn header(reader: &mut Thrift<'_>) -> Result<Header> {
             2 => header.uncompressed = r.i32_field(ty)?,
             3 => header.compressed = r.i32_field(ty)?,
             // The data page, dictionary page and data page v2 headers:
-            // field 1 of each is its value count.
-            5 | 7 | 8 if ty == 12 => r.fields(1, |r, id, ty| {
-                if id != 1 {
-                    return Ok(false);
+            // field 1 of each is its value count; field 2 of a data page
+            // version 1 is its values' encoding.
+            5 | 7 | 8 if ty == 12 => r.fields(1, |r, field, ty| {
+                match field {
+                    1 => header.values = r.i32_field(ty)?,
+                    2 if id == 5 => header.encoding = Some(r.i32_field(ty)?),
+                    _ => return Ok(false),
                 }
-                header.values = r.i32_field(ty)?;
                 Ok(true)
             })?,
             _ => return Ok(false),
@@ -181,6 +194,7 @@ fn header(reader: &mut Thrift<'_>) -> Result<Header> {
 
 /// Check every page of every column chunk of `metadata` against `file`.
 pub(super) fn pages(file: &[u8], metadata: &ParquetMetaData) -> Result<()> {
+    let mut decoded = 0u64;
     for group in metadata.row_groups() {
         let rows = u64::try_from(group.num_rows()).map_err(|_| bad("a row count is negative"))?;
         for column in group.columns() {
@@ -194,16 +208,23 @@ pub(super) fn pages(file: &[u8], metadata: &ParquetMetaData) -> Result<()> {
                 .filter(|range| range.end <= file.len())
                 .ok_or_else(|| bad("a column chunk lies outside the file"))?;
             let compressed = column.compression() != Compression::UNCOMPRESSED;
-            chunk(&file[range], rows, compressed)?;
+            decoded = decoded.saturating_add(chunk(&file[range], rows, compressed)?);
+            if decoded > MAX_DECODED_BYTES {
+                return Err(bad(format!(
+                    "the pages decompress to more than {MAX_DECODED_BYTES} bytes"
+                )));
+            }
         }
     }
     Ok(())
 }
 
-/// The pages of one column chunk, `bytes` its whole extent.
-fn chunk(bytes: &[u8], rows: u64, compressed: bool) -> Result<()> {
+/// The pages of one column chunk, `bytes` its whole extent. Returns the
+/// bytes its pages decompress to.
+fn chunk(bytes: &[u8], rows: u64, compressed: bool) -> Result<u64> {
     let mut reader = Thrift { bytes, at: 0 };
     let mut values = 0u64;
+    let mut decoded = 0u64;
     while reader.at < bytes.len() {
         let page = header(&mut reader)?;
         let (Ok(size), Ok(full), Ok(count)) = (
@@ -219,20 +240,20 @@ fn chunk(bytes: &[u8], rows: u64, compressed: bool) -> Result<()> {
                 "a page says {full} bytes uncompressed from {size} compressed"
             )));
         }
-        // A dictionary page (type 2) holds at most one value per byte.
-        if page.kind == 2 && count > full {
-            return Err(bad("a dictionary page holds more values than bytes"));
+        if page.kind != DATA_PAGE || page.encoding != Some(PLAIN) {
+            return Err(bad(
+                "a page is not a PLAIN data page version 1; bammetrics writes no other",
+            ));
         }
-        if page.kind != 2 {
-            values = values.saturating_add(count);
-        }
+        values = values.saturating_add(count);
+        decoded = decoded.saturating_add(full);
     }
     if values > rows {
         return Err(bad(format!(
             "a column chunk holds {values} values for {rows} rows"
         )));
     }
-    Ok(())
+    Ok(decoded)
 }
 
 #[cfg(test)]
@@ -253,6 +274,8 @@ mod tests {
             0x2c,
             0x15,
             zz(values),
+            0x15,
+            0,
             0,
             0,
         ]
@@ -266,6 +289,19 @@ mod tests {
         assert!(chunk(&bytes, 2, true).is_err(), "more values than rows");
         bytes.truncate(bytes.len() - 1);
         assert!(chunk(&bytes, 3, true).is_err(), "a page past its chunk");
+    }
+
+    #[test]
+    fn a_dictionary_page_or_encoding_is_refused() {
+        let mut dictionary = data_page(20, 4, 3);
+        dictionary[1] = 4; // type 2, a dictionary page
+        dictionary.extend([0; 4]);
+        assert!(chunk(&dictionary, 3, true).is_err());
+        let mut encoded = data_page(20, 4, 3);
+        encoded[10] = 16; // encoding 8, RLE_DICTIONARY
+        encoded.extend([0; 4]);
+        let error = chunk(&encoded, 3, true).expect_err("dictionary encoded");
+        assert!(error.to_string().contains("PLAIN"), "{error}");
     }
 
     #[test]

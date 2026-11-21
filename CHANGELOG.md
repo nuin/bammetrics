@@ -14,7 +14,15 @@
   same document. `convert` reads a Parquet main file and its histogram companion back to
   every format; Picard text to Parquet to Picard text is byte for byte on every fixture.
   Python `read_table` reads it too. The reader checks an MD5 and every page header against
-  the bytes present before the crate decodes a page.
+  the bytes present before the crate decodes a page, and reads at most 8,388,608 cells, 64
+  cells per byte of the file and 512 MiB of decompressed pages, `PLAIN` data pages only; a
+  panic in the crate is an error with no panic message. The long file is written a column
+  at a time in chunks of 65,536 cells, so writing Parquet takes about the memory of CSV.
+- `convert`, the tool verbs and `chain` write a Parquet set and the further formats of a
+  `--format` list as one set (`cleanup::write_set`): a failed write leaves none of them and
+  puts back each file a rename replaced. A new main file with no histogram removes the
+  histogram companion an earlier run left beside it. `convert -o` through a directory that
+  does not exist with a `..` behind it is a usage error (exit 2), as on the tool verbs.
 - The feature `parquet` of `bammetrics-formats`, a default feature of `bammetrics-cli` and
   `bammetrics-py` (on in `cargo build --release` and the wheel): 1,095,672 bytes of stripped
   binary with the crate at opt-level `"z"`. `make budgets` reports it as Parquet growth.

@@ -236,3 +236,15 @@ def test_the_parquet_form_reads_the_same(tmp_path):
     assert from_parquet.sample == run.sample
     with pytest.raises(OSError, match="long file"):
         bammetrics.read_table(str(prefix) + ".insert_size_metrics.long.parquet")
+    with pytest.raises(OSError, match="read_table reads it"):
+        bammetrics.read_metrics(str(prefix) + ".insert_size_metrics.parquet")
+
+
+def test_a_parquet_file_with_headers_only_is_an_input_error(tmp_path):
+    """A metrics file with headers only (CollectDuplicateMetrics on a BAM with no
+    read) gives a Parquet main file of part empty: read_table raises InputError."""
+    prefix = tmp_path / "e"
+    bammetrics.qc("tests/data/no_reads.bam", output=prefix, also="parquet")
+    empty = str(prefix) + ".duplicate_metrics.parquet"
+    with pytest.raises(bammetrics.InputError, match="no table"):
+        bammetrics.read_table(empty)

@@ -828,3 +828,112 @@ fn a_replaced_parquet_set_keeps_its_mode() {
     );
     let _ = fs::remove_dir_all(&dir);
 }
+
+/// A Parquet set and the further formats of its list are written as one
+/// set: when a later file cannot be written (a directory holds its name)
+/// none of the set is left, and the files an earlier run wrote keep their
+/// bytes. Through `convert`, a tool verb and a `picard,parquet` list.
+#[cfg(feature = "parquet")]
+#[test]
+fn a_failed_parquet_set_leaves_none_of_its_files() {
+    let dir = fresh_dir("parquet-set");
+    let input = root()
+        .join(PICARD)
+        .join("NA12878/NA12878.insert_size_metrics");
+    let input = input.to_str().expect("utf-8");
+    let path = |name: &str| dir.join(name).to_str().expect("utf-8").to_owned();
+    let argv = |head: &[&str], out: &str| -> Vec<String> {
+        head.iter()
+            .map(|a| (*a).to_owned())
+            .chain([path(out)])
+            .collect()
+    };
+    let runs: [(Vec<String>, &str); 3] = [
+        (
+            argv(
+                &["convert", input, "--format", "parquet", "-o"],
+                "t.parquet",
+            ),
+            "t.long.parquet",
+        ),
+        (
+            argv(
+                &["insert-size", BAM, "--format", "parquet", "-o"],
+                "p.parquet",
+            ),
+            "p.long.parquet",
+        ),
+        (
+            argv(
+                &["insert-size", BAM, "--format", "picard,parquet", "-o"],
+                "o.txt",
+            ),
+            "o.txt.long.parquet",
+        ),
+    ];
+    for (args, blocked) in &runs {
+        fs::create_dir(dir.join(blocked)).expect("a directory in the way");
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let failed = bammetrics(&args);
+        assert_eq!(code(&failed), 1, "{args:?}: {}", stderr(&failed));
+        assert!(
+            stderr(&failed).contains("Is a directory"),
+            "{}",
+            stderr(&failed)
+        );
+        assert_eq!(names(&dir), [blocked.to_string()], "{args:?}");
+        fs::remove_dir(dir.join(blocked)).expect("rmdir");
+    }
+    // An earlier set keeps its bytes when a later run fails.
+    let (args, blocked) = &runs[0];
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    assert_eq!(code(&bammetrics(&args)), 0);
+    let before = fs::read(dir.join("t.parquet")).expect("main");
+    fs::remove_file(dir.join(blocked)).expect("rm");
+    fs::create_dir(dir.join(blocked)).expect("a directory in the way");
+    let quality = root()
+        .join(PICARD)
+        .join("NA12878/NA12878.quality_yield_metrics");
+    let other = [
+        "convert",
+        quality.to_str().expect("utf-8"),
+        "--format",
+        "parquet",
+        "-o",
+        args[args.len() - 1],
+    ];
+    assert_eq!(code(&bammetrics(&other)), 1);
+    assert_eq!(fs::read(dir.join("t.parquet")).expect("main"), before);
+    assert!(dir.join("t.histogram.parquet").is_file());
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// A new main file with no histogram removes the histogram companion an
+/// earlier run left beside it; a main file that happens to have the
+/// companion's name stays.
+#[cfg(feature = "parquet")]
+#[test]
+fn a_main_file_without_a_histogram_removes_a_stale_companion() {
+    let dir = fresh_dir("parquet-stale");
+    let picard = |name: &str| {
+        let path = root().join(PICARD).join(format!("NA12878/NA12878.{name}"));
+        path.to_str().expect("utf-8").to_owned()
+    };
+    let path = |name: &str| dir.join(name).to_str().expect("utf-8").to_owned();
+    let convert = |input: &str, out: &str| {
+        let wrote = bammetrics(&["convert", input, "--format", "parquet", "-o", out]);
+        assert_eq!(code(&wrote), 0, "{}", stderr(&wrote));
+    };
+    convert(&picard("insert_size_metrics"), &path("s.parquet"));
+    assert!(dir.join("s.histogram.parquet").is_file());
+    convert(&picard("quality_yield_metrics"), &path("s.parquet"));
+    assert_eq!(names(&dir), ["s.long.parquet", "s.parquet"]);
+    // A histogram alone is a main file, never removed as a companion.
+    convert(
+        &picard("quality_distribution_metrics"),
+        &path("h.histogram.parquet"),
+    );
+    convert(&picard("quality_yield_metrics"), &path("h.parquet"));
+    assert!(dir.join("h.histogram.parquet").is_file());
+    let _ = fs::remove_dir_all(&dir);
+}

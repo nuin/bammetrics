@@ -55,7 +55,6 @@ skip = [
     { crate = "weezl@0.1.12", reason = "gif under krilla, feature pdf" },
     { crate = "getrandom@0.3.4", reason = "ahash under parquet, feature parquet" },
     { crate = "getrandom@0.2.17", reason = "const-random under ahash under parquet, wasm32 only, feature parquet" },
-    { crate = "r-efi@5.3.0", reason = "getrandom 0.3 under ahash under parquet, UEFI only, feature parquet" },
 ]
 # The workspace crates name each other by path and version.
 allow-wildcard-paths = true

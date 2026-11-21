@@ -73,8 +73,16 @@ pub const MAGIC: &[u8; 4] = b"PAR1";
 pub const COMPANIONS: [&str; 2] = ["histogram", "long"];
 /// The largest Parquet file read: 256 MiB.
 pub const MAX_BYTES: u64 = 256 << 20;
-/// The most cells read from one file, whatever its size.
-pub const MAX_CELLS: u64 = 1 << 27;
+/// The most cells read from one file, whatever its size: 8,388,608, about
+/// 1 GiB of decoded table.
+pub const MAX_CELLS: u64 = 1 << 23;
+/// The most cells read per byte of the file. A row bammetrics writes
+/// holds at least one value of 8 bytes, which snappy shrinks at most about
+/// 21 times, so a written file holds well under this; a file of nulls
+/// that says millions of rows in a few kilobytes does not.
+pub const CELLS_PER_BYTE: u64 = 64;
+/// The most bytes the pages of one file may decompress to: 512 MiB.
+pub const MAX_DECODED_BYTES: u64 = 512 << 20;
 
 /// True when `bytes` start as a Parquet file does.
 pub fn is_parquet(bytes: &[u8]) -> bool {
@@ -122,6 +130,20 @@ pub fn type_name(ty: Ty) -> &'static str {
         Ty::Int => "INT64",
         Ty::Float => "DOUBLE",
         Ty::Str => "BYTE_ARRAY (STRING)",
+    }
+}
+
+/// True when `path` is a histogram companion bammetrics wrote: a Parquet
+/// file whose metadata says part `histogram` and no main file of its own.
+/// A writer removes such a file beside a new main file that has no
+/// histogram, so no stale histogram stays beside it.
+pub fn is_histogram_file(path: &Path) -> bool {
+    #[cfg(feature = "parquet")]
+    return read::companion_part(path).as_deref() == Some("histogram");
+    #[cfg(not(feature = "parquet"))]
+    {
+        let _ = path;
+        false
     }
 }
 

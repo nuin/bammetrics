@@ -17,11 +17,12 @@ use std::path::{Path, PathBuf};
 use bammetrics_formats::{Document, Format, Table, parquet};
 use clap::Args;
 
+use bammetrics_core::cleanup::MadeDirs;
+
 use crate::error::{Result, VerbError};
 use crate::events::print_stdout;
-use crate::format::{all_files, parse_list, placed, sibling, stdout_refusal};
-use crate::report::write_atomic;
-use crate::verbs::refuse_overwriting_inputs;
+use crate::format::{FileSet, all_files, parse_list, stdout_refusal};
+use crate::verbs::{UNRESOLVED_HINT, create_parent, refuse_overwriting_inputs, unresolved_output};
 
 const VERB: &str = "convert";
 
@@ -161,6 +162,14 @@ pub fn run(args: &ConvertArgs) -> Result<u8> {
         .into());
     }
     let targets: Vec<PathBuf> = output.map_or_else(Vec::new, |path| all_files(path, &formats));
+    // A `..` behind a directory that does not exist names no file the
+    // input check below can see: the verbs refuse it too.
+    if let Some(what) = targets.iter().find_map(|t| unresolved_output(t)) {
+        return Err(VerbError::usage(VERB, what)
+            .from("-o")
+            .hint(UNRESOLVED_HINT)
+            .into());
+    }
     // A Parquet input with a histogram reads its companion too.
     let mut inputs = vec![args.input.clone()];
     if matches!(input, Input::Parquet(_)) && args.input != Path::new("-") {
@@ -210,19 +219,16 @@ pub fn run(args: &ConvertArgs) -> Result<u8> {
         }
         return Ok(0);
     };
-    if let Some(parent) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
-        fs::create_dir_all(parent).map_err(|e| crate::error::Error::io(parent, e))?;
-    }
-    for (index, (format, files)) in formats.iter().zip(rendered).enumerate() {
-        let main = if index == 0 {
-            path.to_path_buf()
-        } else {
-            sibling(path, format.extension())
-        };
-        for (at, bytes) in placed(&main, files) {
-            write_atomic(&at, bytes)?;
-        }
-    }
+    // Dropped by an error below, `made` removes the directories this run
+    // made that are still empty.
+    let mut made = MadeDirs::default();
+    create_parent(VERB, &mut made, path)?;
+    // Every file of the list is one set: a failed write leaves none.
+    let mut set = FileSet::default();
+    set.add(path, &formats, rendered);
+    set.write()
+        .map_err(|e| VerbError::input(VERB, e.to_string()))?;
+    made.keep();
     Ok(0)
 }
 
