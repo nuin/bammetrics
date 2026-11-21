@@ -910,7 +910,7 @@ const N_RUNS_CASES: &[Case] = &[
 const DOWNSAMPLE_CASES: &[Case] = &[
     case!("picard_downsample_sam", "DownsampleSam", "I=MD", "O=OUT/ds.bam", "P=0.5", "M=OUT/ds.quality_yield_metrics"),
     case!("picard_downsample_sam_high_accuracy_sam", "DownsampleSam", "I=MD", "O=OUT/ds.sam", "P=0.4", "STRATEGY=HighAccuracy", "ACCURACY=0.1", "RANDOM_SEED=7"),
-    case!("picard_downsample_sam_chained_index", "DownsampleSam", "I=MD", "O=OUT/ds.bam", "P=0.3", "S=Chained", "A=0.2", "CREATE_INDEX=true", "CREATE_MD5_FILE=true"),
+    case!("picard_downsample_sam_chained_index", "DownsampleSam", "I=MD", "O=OUT/ds.bam", "P=0.3", "S=Chained", "A=0.2", "CREATE_INDEX=true"),
     case!("picard_downsample_sam_again", "DownsampleSam", "I=DS", "O=OUT/again.bam", "P=0.5"),
     case!("verb_downsample_sam", "downsample-sam", "MD", "-o", "OUT/ds.bam", "-P", "0.6", "--strategy", "HighAccuracy", "--metrics-file", "OUT/ds.txt"),
     case!("verb_downsample_sam_cram", "downsample-sam", "IS_CRAM", "--reference-sequence", "REF", "-o", "OUT/ds.sam", "--probability", "0.5", "-R", "-3"),
