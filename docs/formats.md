@@ -350,6 +350,8 @@ duckdb is.duckdb < is.txt.sql
   `INTEGER` is 32 bits and its `REAL` a 32-bit float.
 - The names `headers`, `tables`, `columns` and `histogram` are taken first. A class whose
   name is taken, in any case, gets `_2`, `_3`: SQLite and DuckDB compare names without case.
+  A class name that starts with `sqlite_`, in any case, gets `_` before it
+  (`_sqlite_x`): SQLite keeps such names for its own tables. No Picard class has one.
 - A column name the table repeats, or repeats in another case, gets `.1`, `.2` (the
   histogram of `CollectHsMetrics` with two units), as the JSON form names it. `columns`
   keeps the name of the file.
@@ -360,11 +362,14 @@ duckdb is.duckdb < is.txt.sql
   becomes U+240D or U+2400 in the identifier.
 - A float keeps every digit: the shortest text that reads back as the same `f64`, with a
   point or an exponent (`310.0`, `1e-7`). An empty cell, NaN and infinity are all `NULL`.
-  The form is lossy there: `?` and an empty cell read back the same.
-- Every statement is in one transaction, one `INSERT` per row. A row is one statement, so
-  no statement nears SQLite's 1,000,000-byte limit. SQLite refuses a table of over 2,000
-  columns. The widest class of the glossary, `HsMetrics`, has 69. The histogram of
-  `CollectHsMetrics` has 3 columns per unit, so over 666 units it does not load.
+  The form is lossy there: `?` and an empty cell read back the same. A `-0.0` is written
+  as `-0.0`, and SQLite 3.54.0 and DuckDB 2.0.1 both read it back as `0.0`.
+- Every statement is in one transaction, one `INSERT` per row. SQLite's default statement
+  limit is 1,000,000,000 bytes. SQLite refuses a table of over 2,000 columns. The widest
+  class of the glossary, `HsMetrics`, has 69. The histogram of `CollectHsMetrics` has 3
+  columns per unit, so over 666 units it does not load.
+- The `sqlite3` shell runs the statements after a failed one, so `COMMIT` keeps a partial
+  load. `sqlite3 -bail DB < FILE.sql` stops at the first error and leaves no table.
 - The text depends on the document only: the same file gives the same dump.
 - A table with no column (a class block with no column, possible in JSON) gets no SQL table.
 - `convert` does not read a dump back. It refuses a file whose first line is the dump's

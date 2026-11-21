@@ -9,7 +9,8 @@
   the class after its last `.` or `$`, the histogram as `histogram`, the `StringHeader`
   texts as `headers`, and `tables` and `columns` that name each table and column with its
   glossary type. Columns are `BIGINT`, `DOUBLE` or `TEXT`; a float keeps every digit; an
-  empty cell, NaN and infinity are `NULL`. One `INSERT` per row in one transaction. The
+  empty cell, NaN and infinity are `NULL`; `-0.0` reads back as `0.0`. A class name that
+  starts with `sqlite_` gets `_` before it. One `INSERT` per row in one transaction. The
   tool verbs, `convert`, `qc --also sql` and `chain --also sql` write it; `convert` and
   `read_table` refuse a dump. No crate is added; the stripped binary grows 16,560 bytes.
 - `crates/formats/tests/sql.rs`: `sqlite3` 3.54.0 and DuckDB 2.0.1 load the dump of every

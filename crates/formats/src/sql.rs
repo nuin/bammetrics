@@ -16,7 +16,9 @@
 //! * One table per metrics class, named by the class after its last `.`
 //!   or `$` (`InsertSizeMetrics`), and the histogram as `histogram`. The
 //!   names `headers`, `tables`, `columns` and `histogram` come first; a
-//!   class whose name is taken, in any case, gets `_2`, `_3`.
+//!   class whose name is taken, in any case, gets `_2`, `_3`. A class
+//!   name that starts with `sqlite_`, in any case, gets `_` before it:
+//!   SQLite refuses to create such a table.
 //! * A column is `BIGINT`, `DOUBLE` or `TEXT` by the glossary type of
 //!   [`Table`]. SQLite gives them the affinities INTEGER, REAL and TEXT;
 //!   DuckDB reads them as 64-bit integers and doubles (its `INTEGER` is 32
@@ -30,8 +32,8 @@
 //!   before a line end. Such an identifier gets U+240D or U+2400 in its
 //!   place, and `columns` keeps the name.
 //! * A float keeps every digit (the shortest text that reads back as the
-//!   same `f64`). NaN and infinity are `NULL`, as an empty cell is: the
-//!   one loss of the form.
+//!   same `f64`). NaN and infinity are `NULL`, as an empty cell is, and
+//!   SQLite and DuckDB read `-0.0` back as `0.0`: the losses of the form.
 //! * One `INSERT` per row, all in one transaction. The text depends on the
 //!   document only.
 
@@ -112,6 +114,18 @@ fn identifier_text(name: &str) -> String {
         return "_".to_owned();
     }
     name.replace('\r', "\u{240d}").replace('\0', "\u{2400}")
+}
+
+/// A class name as a table identifier: [`identifier_text`], with `_` before
+/// a name that starts with `sqlite_` in any case, which SQLite keeps for
+/// its own tables.
+fn table_identifier(name: &str) -> String {
+    let text = identifier_text(name);
+    let reserved = text
+        .as_bytes()
+        .get(..7)
+        .is_some_and(|b| b.eq_ignore_ascii_case(b"sqlite_"));
+    if reserved { format!("_{text}") } else { text }
 }
 
 fn push_identifier(name: &str, out: &mut String) {
@@ -230,7 +244,7 @@ fn place(doc: &Document) -> Vec<Placed<'_>> {
         .map(|table| {
             let short = table.class.rsplit(['.', '$']).next().unwrap_or_default();
             let short = if short.is_empty() { "metrics" } else { short };
-            (names.take(&identifier_text(short)), "metrics", table)
+            (names.take(&table_identifier(short)), "metrics", table)
         })
         .collect::<Vec<_>>()
         .into_iter()
@@ -397,6 +411,10 @@ mod tests {
                 table("Outer$Inner", &[("A", Ty::Int)], vec![]),
                 table("", &[("A", Ty::Int)], vec![]),
                 table("no.Columns", &[], vec![]),
+                table("x.sqlite_master", &[("A", Ty::Int)], vec![]),
+                table("x.SQLite_X", &[("A", Ty::Int)], vec![]),
+                table("x._sqlite_x", &[("A", Ty::Int)], vec![]),
+                table("x.sqlite", &[("A", Ty::Int)], vec![]),
             ],
             histogram: Some(table("java.lang.Integer", &[("k", Ty::Int)], vec![])),
             ..Document::default()
@@ -410,6 +428,10 @@ mod tests {
                 "Headers_2_2",
                 "Inner",
                 "metrics",
+                "_sqlite_master",
+                "_SQLite_X",
+                "_sqlite_x_2",
+                "sqlite",
                 "histogram"
             ]
         );

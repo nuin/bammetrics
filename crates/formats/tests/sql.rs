@@ -442,3 +442,53 @@ fn sqlite3_keeps_every_character() {
         assert_eq!(row.get("q"), Some(&Json::text(&hex(&format!("{cell}!")))));
     }
 }
+
+/// Classes named `sqlite_master` and `SQLite_x` load as `_sqlite_master`
+/// and `_SQLite_x`: SQLite refuses a table whose name starts with `sqlite_`.
+#[test]
+fn sqlite3_loads_a_class_named_like_its_own_tables() {
+    if !SQLITE.present() {
+        return;
+    }
+    let class = |name: &str, n: i64| Table {
+        class: format!("picard.analysis.{name}"),
+        columns: vec![("N".to_owned(), Ty::Int)],
+        rows: vec![vec![Value::Int(n)]],
+    };
+    let doc = Document {
+        tables: vec![class("sqlite_master", 1), class("SQLite_x", 2)],
+        ..Document::default()
+    };
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("sql-reserved");
+    fs::create_dir_all(&dir).expect("scratch directory");
+    let sql = render(Format::Sql, &doc, None).expect("renders");
+    let path = dir.join("reserved.sql");
+    let query = "SELECT t.name AS name, \
+                 (SELECT count(*) FROM sqlite_schema s WHERE s.name = t.name) AS made \
+                 FROM \"tables\" t;\n\
+                 SELECT \"N\" AS n FROM \"_sqlite_master\" \
+                 UNION ALL SELECT \"N\" FROM \"_SQLite_x\";\n";
+    fs::write(&path, format!("{sql}.mode json\n{query}")).expect("write");
+    let arrays = SQLITE.run(&path).expect("loads");
+    let pairs: Vec<_> = arrays[0]
+        .as_array()
+        .expect("tables")
+        .iter()
+        .map(|row| (row.get("name").cloned(), row.get("made").cloned()))
+        .collect();
+    let number = |text: &str| Some(Json::parse(text).expect("a number"));
+    assert_eq!(
+        pairs,
+        [
+            (Some(Json::text("_sqlite_master")), number("1")),
+            (Some(Json::text("_SQLite_x")), number("1")),
+        ]
+    );
+    let values: Vec<_> = arrays[1]
+        .as_array()
+        .expect("rows")
+        .iter()
+        .map(|row| row.get("n").cloned())
+        .collect();
+    assert_eq!(values, [number("1"), number("2")]);
+}
