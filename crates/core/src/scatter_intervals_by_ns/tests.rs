@@ -149,11 +149,11 @@ fn the_header_is_the_dict_and_a_failed_run_leaves_no_output() {
         "@SQ\tSN:c1\tLN:47\n@SQ\tSN:c2\tLN:0\n@SQ\tSN:c3\tLN:13\n",
     )
     .expect(".dict");
-    let error = TOOL.execute(&argv("N=1")).err().expect("fails").to_string();
+    let error = TOOL.execute(&argv("N=1")).expect_err("fails").to_string();
     assert!(error.contains("no base"), "{error}");
     assert!(!output.exists());
     std::fs::remove_file(&dict).expect("no .dict");
-    let error = TOOL.execute(&argv("N=1")).err().expect("fails").to_string();
+    let error = TOOL.execute(&argv("N=1")).expect_err("fails").to_string();
     assert!(error.contains("dictionary"), "{error}");
     assert!(!output.exists());
     let error = TOOL
@@ -161,8 +161,7 @@ fn the_header_is_the_dict_and_a_failed_run_leaves_no_output() {
             format!("R={}", path.display()),
             format!("O={}", path.display()),
         ])
-        .err()
-        .expect("refused")
+        .expect_err("refused")
         .to_string();
     assert!(error.contains("is an input"), "{error}");
 }

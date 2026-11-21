@@ -715,14 +715,15 @@ mod tests {
         use std::io::Write as _;
         let dir = std::env::temp_dir().join(format!("bammetrics-panel-{}", std::process::id()));
         fs::create_dir_all(&dir).expect("temporary directory");
-        let header = sam::Header::builder()
-            .add_reference_sequence(
-                "c1",
-                sam::header::record::value::Map::<
-                    sam::header::record::value::map::ReferenceSequence,
-                >::new(std::num::NonZeroUsize::new(100).expect("length")),
-            )
-            .build();
+        let header =
+            sam::Header::builder()
+                .add_reference_sequence(
+                    "c1",
+                    sam::header::record::value::Map::<
+                        sam::header::record::value::map::ReferenceSequence,
+                    >::new(std::num::NonZeroUsize::new(100).expect("length")),
+                )
+                .build();
         let text = "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\nc1\t5\t9\t+\tt1\n";
         let gz = dir.join("panel.interval_list.gz");
         let mut writer = noodles::bgzf::io::Writer::new(fs::File::create(&gz).expect("create"));

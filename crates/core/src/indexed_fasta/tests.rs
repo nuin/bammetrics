@@ -180,7 +180,7 @@ fn a_short_file_and_a_zero_line_length_fail() {
     let text = std::fs::read(&path).expect("FASTA");
     std::fs::write(&path, &text[..text.len() - 4]).expect("cut");
     let mut fasta = indexed(&path);
-    let error = fasta.walk(0, |_| {}).err().expect("fails").to_string();
+    let error = fasta.walk(0, |_| {}).expect_err("fails").to_string();
     assert!(error.contains("ends before"), "{error}");
     std::fs::write(fai_path(&path), "c1\t0\t4\t0\t0\n").expect(".fai");
     std::fs::write(
@@ -189,6 +189,6 @@ fn a_short_file_and_a_zero_line_length_fail() {
     )
     .expect(".dict");
     let mut fasta = indexed(&path);
-    let error = fasta.walk(0, |_| {}).err().expect("fails").to_string();
+    let error = fasta.walk(0, |_| {}).expect_err("fails").to_string();
     assert!(error.contains("/ by zero"), "{error}");
 }
