@@ -33,6 +33,10 @@ use crate::gzip::GzipReader;
 use crate::metric::ToolOutput;
 use crate::sam_text::{self, Stringency};
 
+mod block_ends;
+
+pub(crate) use block_ends::{BlockEnds, CutBlockHeader};
+
 /// Cap on the default worker count. BGZF inflation stops being the
 /// bottleneck well before this on the corpus benchmark (docs/benchmarks.md).
 pub const MAX_DEFAULT_THREADS: usize = 8;
@@ -368,9 +372,11 @@ fn with_stream_of_kind<T>(
             })
         }
         Kind::Bam => {
-            let mut reader = bam::io::Reader::from(
-                bgzf::io::MultithreadedReader::with_worker_count(workers, sniffed.reader),
-            );
+            let mut reader =
+                bam::io::Reader::from(bgzf::io::MultithreadedReader::with_worker_count(
+                    workers,
+                    BlockEnds::new(sniffed.reader),
+                ));
             let header = reader
                 .read_header()
                 .map_err(|e| input(cram::bam_header_error(e)))?;
@@ -459,9 +465,11 @@ where
             })
         }
         Kind::Bam => {
-            let mut reader = bam::io::Reader::from(
-                bgzf::io::MultithreadedReader::with_worker_count(workers, sniffed.reader),
-            );
+            let mut reader =
+                bam::io::Reader::from(bgzf::io::MultithreadedReader::with_worker_count(
+                    workers,
+                    BlockEnds::new(sniffed.reader),
+                ));
             let header = reader
                 .read_header()
                 .map_err(|e| input(cram::bam_header_error(e)))?;
@@ -534,13 +542,13 @@ impl Pass<'_, '_> {
 
 /// The error of a failed record read. A CRAM decoding error names the
 /// input file, as does a cut gzip stream of SAM text; a BAM that ends
-/// inside a record or a block was cut; any other BAM error stays a bad
-/// record.
+/// inside a record, a block or a block header ([`CutBlockHeader`]) was cut;
+/// any other BAM error stays a bad record.
 pub(crate) fn read_error(path: &Path, cram: bool, source: io::Error) -> Error {
-    let cut_gzip = source
+    let names_input = source
         .get_ref()
-        .is_some_and(|inner| inner.is::<TruncatedGzip>());
-    if cram || cut_gzip {
+        .is_some_and(|inner| inner.is::<TruncatedGzip>() || inner.is::<CutBlockHeader>());
+    if cram || names_input {
         Error::Input {
             path: path.to_path_buf(),
             source,

@@ -1788,6 +1788,10 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
 - `DownsampleSam RANDOM_SEED=null` draws its seed from the clock and the process id, where
   Picard calls `new Random().nextInt()`. Neither run can be repeated; both print the seed
   and write it as `rs`.
+- `DownsampleSam STRATEGY=HighAccuracy` and `Chained` hold at most 50,000,000 read names
+  (decided or in the current chunk; about 6.5 GiB). The next new name exits 1 with an error
+  that names `STRATEGY=ConstantMemory`, which holds none. Picard holds every name until
+  the JVM runs out of memory (docs/07 D138).
 - A read name from SAM text with a character above U+00FF is hashed (ConstantMemory) and
   ordered (HighAccuracy) by the low byte of each UTF-16 unit, as bammetrics holds SAM
   text; Picard uses the whole unit. The SAM specification allows printable ASCII in a

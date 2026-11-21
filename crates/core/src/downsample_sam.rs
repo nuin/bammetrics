@@ -15,7 +15,9 @@
 //!   names are copied from a `HashSet` (`java_hash_set.rs`), shuffled by a
 //!   `java.util.Random` seeded with `RANDOM_SEED`, and the first ones left
 //!   out. Every name's decision is kept for its later records, so memory
-//!   grows with the names, as in Picard.
+//!   grows with the names, as in Picard. Past
+//!   [`sampler::MAX_HELD_NAMES`] (50,000,000) names the run fails and
+//!   names `STRATEGY=ConstantMemory`, which holds none (decision D138).
 //! * `Chained`: `ConstantMemory` at `PROBABILITY + 3.3 sqrt(PROBABILITY /
 //!   50000)` (at most 1), then `HighAccuracy` on what it keeps, each chunk
 //!   at `PROBABILITY` over the fraction the first stage kept around it.

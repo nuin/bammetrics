@@ -1081,6 +1081,36 @@ const MERGE_REORDER_CASES: &[Case] = &[
         "write",
         "OUT/chained.bam"
     ),
+    case!(
+        "chain_dry_run_reorder_sam",
+        "chain",
+        "MD",
+        "-o",
+        "OUT/s",
+        "--dry-run",
+        "+",
+        "reorder-sam",
+        "--sequence-dictionary",
+        "RO_EXTRA",
+        "+",
+        "write",
+        "OUT/out.bam"
+    ),
+    case!(
+        "chain_dry_run_reorder_sam_stdin",
+        "chain",
+        "-",
+        "--tmp-dir",
+        "OUT/tmp",
+        "--dry-run",
+        "+",
+        "reorder-sam",
+        "--sequence-dictionary",
+        "RO_EXTRA",
+        "+",
+        "write",
+        "-"
+    ),
 ];
 
 /// Wave W13: `DownsampleSam` and `PositionBasedDownsampleSam` on
