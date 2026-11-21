@@ -670,6 +670,28 @@ pub const VERBS: &[Verb] = &[
         ],
         ..verb("non-n-fasta-size", "NonNFastaSize", Files::Single)
     },
+    Verb {
+        about: Some(
+            "merges the records of several SAM, BAM or CRAM files under one header, as \
+             Picard's MergeSamFiles does: read group and program IDs that collide renamed, \
+             -o gets every record in --sort-order (default coordinate), merged when the inputs \
+             are in it, else sorted.",
+        ),
+        writes: "BAM",
+        reads: &["INTERVALS"],
+        ..verb("merge-sam-files", "MergeSamFiles", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "moves the records of a SAM, BAM or CRAM to the sequence dictionary of \
+             --sequence-dictionary, contigs matched by name, as Picard's ReorderSam does: -o \
+             gets every record sorted again in the input's order, a record on a contig the \
+             dictionary lacks made unplaced.",
+        ),
+        writes: "BAM",
+        reads: &["SEQUENCE_DICTIONARY"],
+        ..verb("reorder-sam", "ReorderSam", Files::Bam)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the

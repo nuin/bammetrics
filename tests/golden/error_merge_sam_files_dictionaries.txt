@@ -1,0 +1,10 @@
+## argv
+MergeSamFiles
+I=tests/data/markdup.bam
+I=tests/data/merge_other_dict.sam
+O=OUT/merged.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: Sequence dictionaries are not the same size (1, 2)

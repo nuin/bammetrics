@@ -162,7 +162,7 @@ impl Options {
 /// BAM or CRAM in a regular file with `x.bai` or `x.csi` (for `x.bam`),
 /// `x.crai` or `x.cram.crai` (for `x.cram`), `NAME.bai` or `NAME.csi`
 /// beside it, or the same names beside the file a symbolic link names.
-fn has_index(path: &Path) -> bool {
+pub(crate) fn has_index(path: &Path) -> bool {
     let beside = |file: &Path| {
         let Some(name) = file.file_name().and_then(|name| name.to_str()) else {
             return false;
@@ -186,7 +186,7 @@ fn has_index(path: &Path) -> bool {
 
 /// What the interval filter says of a record.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Step {
+pub(crate) enum Step {
     Print,
     Skip,
     /// No later record can match.
@@ -203,7 +203,7 @@ struct Region {
 }
 
 /// The `INTERVAL_LIST` filter over records in file order.
-struct IntervalFilter {
+pub(crate) struct IntervalFilter {
     regions: Vec<Region>,
     at: usize,
     /// True for Picard's index query, false for its scan.
@@ -212,7 +212,7 @@ struct IntervalFilter {
 
 impl IntervalFilter {
     /// The uniqued intervals of `path` on the references of `header`.
-    fn load(path: &Path, header: &sam::Header, query: bool) -> Result<Self> {
+    pub(crate) fn load(path: &Path, header: &sam::Header, query: bool) -> Result<Self> {
         let (names, list) = intervals::read_interval_list(path)?;
         let unique =
             intervals::uniqued(&list.iter().map(|named| named.interval).collect::<Vec<_>>());
@@ -256,7 +256,7 @@ impl IntervalFilter {
         })
     }
 
-    fn step(&mut self, record: &RawRecord) -> Step {
+    pub(crate) fn step(&mut self, record: &RawRecord) -> Step {
         if self.query {
             self.query_step(record)
         } else {

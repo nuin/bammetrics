@@ -4,17 +4,26 @@
 //! collision, and the records of several sorted inputs taken in coordinate
 //! or query-name order.
 //!
-//! * The sequence dictionaries must be equal; the merged header has
-//!   `@HD VN:1.6 GO:none SO:<first input's order>`, the first input's
-//!   `@SQ` lines, the read groups and programs of every input sorted by ID,
-//!   and every comment in input order.
+//! * The sequence dictionaries must be equal (`SequenceUtil.
+//!   assertSequenceDictionariesEqual`: names or `AN` names, lengths, `M5`
+//!   when both have one), or with `MERGE_SEQUENCE_DICTIONARIES` they are
+//!   merged (`mergeSequenceDictionaries`, [`merge_dictionaries`]) and each
+//!   record's reference and mate reference are found again by name. The
+//!   merged header has `@HD VN:1.6 GO:none SO:<order>`, the dictionary,
+//!   the read groups and programs of every input sorted by ID, and every
+//!   comment in input order.
 //! * A read group or program ID used by two inputs for different records
 //!   gets a suffix `.<base 36 counter>`, and the records of that input are
 //!   rewritten to the new ID (an `RG` or `PG` the input's header lacks is
 //!   removed, as htsjdk sets it to null).
 //! * Records are taken in coordinate or query-name order through a port of
 //!   `java.util.PriorityQueue`, so equal records from two inputs come in the
-//!   order Picard gives them.
+//!   order Picard gives them. With a merged dictionary the coordinate order
+//!   compares merged reference indexes, and an unplaced record with a placed
+//!   mate takes its mate's (`MergedSequenceDictionaryCoordinateOrderComparator`).
+//!   [`MergeOrder::InputOrder`] takes every record of one input before the
+//!   next: htsjdk's `unsorted` merge compares `System.identityHashCode`, so
+//!   its order between inputs changes from run to run.
 //!
 //! Also here: [`SortOrder`] (`SAMFileHeader.SortOrder`) and
 //! [`set_header_tag`] (`setSortOrder`, `setGroupOrder`).
@@ -28,11 +37,14 @@ use noodles::sam::header::record::value::Map;
 use noodles::sam::header::record::value::map::header::Version;
 use noodles::sam::header::record::value::map::header::tag::{GROUP_ORDER, SORT_ORDER};
 use noodles::sam::header::record::value::map::program::tag::PREVIOUS_PROGRAM_ID;
-use noodles::sam::header::record::value::map::{Program, ReadGroup};
+use noodles::sam::header::record::value::map::reference_sequence::tag::{
+    ALTERNATIVE_NAMES, MD5_CHECKSUM,
+};
+use noodles::sam::header::record::value::map::{Program, ReadGroup, ReferenceSequence};
 
 use crate::bam_raw::{RawRecord, TagValue};
 use crate::error::{Error, Result};
-use crate::sam_order::{coordinate_order, queryname_order};
+use crate::sam_order::{CoordinateKey, coordinate_order, queryname_order};
 
 /// `SAMFileHeader.SortOrder`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -135,15 +147,52 @@ pub struct HeaderMerger {
     read_group_collisions: bool,
     program_collisions: bool,
     counter: i32,
+    /// Per input, the merged index of each of its references; empty unless
+    /// the dictionaries were merged.
+    sequence_maps: Vec<Vec<i32>>,
 }
 
 impl HeaderMerger {
-    /// The merged header of `headers`, in input order.
+    /// The merged header of `headers`, in input order, with the first
+    /// input's sort order and equal dictionaries.
     pub fn merge(headers: &[sam::Header]) -> Result<Self> {
+        Self::merge_with(headers, SortOrder::of(&headers[0]), false)
+    }
+
+    /// `new SamFileHeaderMerger(order, headers, merge_dictionaries)`: the
+    /// dictionaries are merged only when they are not all equal.
+    pub fn merge_with(
+        headers: &[sam::Header],
+        order: SortOrder,
+        merge_dictionaries: bool,
+    ) -> Result<Self> {
         let first = &headers[0];
-        for header in &headers[1..] {
-            same_dictionary(first, header)?;
-        }
+        let equal = headers[1..]
+            .iter()
+            .try_for_each(|header| same_dictionary(first, header));
+        let (dictionary, sequence_maps) = match equal {
+            Ok(()) => (first.reference_sequences().clone(), Vec::new()),
+            Err(_) if merge_dictionaries => {
+                let dictionary = self::merge_dictionaries(headers)?;
+                let maps = headers
+                    .iter()
+                    .map(|header| {
+                        header
+                            .reference_sequences()
+                            .keys()
+                            .map(|name| {
+                                dictionary
+                                    .get_index_of(name)
+                                    .and_then(|at| i32::try_from(at).ok())
+                                    .unwrap_or(-1)
+                            })
+                            .collect()
+                    })
+                    .collect();
+                (dictionary, maps)
+            }
+            Err(error) => return Err(error),
+        };
         let mut merger = Self {
             header: sam::Header::default(),
             read_group_ids: vec![HashMap::new(); headers.len()],
@@ -151,12 +200,13 @@ impl HeaderMerger {
             read_group_collisions: false,
             program_collisions: false,
             counter: 0,
+            sequence_maps,
         };
         let mut header = sam::Header::default();
         *header.header_mut() = Some(Map::<sam::header::record::value::map::Header>::new(
             Version::new(1, 6),
         ));
-        *header.reference_sequences_mut() = first.reference_sequences().clone();
+        *header.reference_sequences_mut() = dictionary;
         for (id, map) in merger.merge_programs(headers)? {
             header.programs_mut().as_mut().insert(id.into(), map);
         }
@@ -164,11 +214,7 @@ impl HeaderMerger {
             header.read_groups_mut().insert(id.into(), map);
         }
         set_header_tag(&mut header, HeaderTag::GroupOrder, "none");
-        set_header_tag(
-            &mut header,
-            HeaderTag::SortOrder,
-            SortOrder::of(first).name(),
-        );
+        set_header_tag(&mut header, HeaderTag::SortOrder, order.name());
         for input in headers {
             for comment in input.comments() {
                 header.comments_mut().push(comment.clone());
@@ -176,6 +222,11 @@ impl HeaderMerger {
         }
         merger.header = header;
         Ok(merger)
+    }
+
+    /// True when the dictionaries were merged.
+    pub fn has_merged_dictionary(&self) -> bool {
+        !self.sequence_maps.is_empty()
     }
 
     fn merge_read_groups(&mut self, headers: &[sam::Header]) -> Result<Vec<(Id, Map<ReadGroup>)>> {
@@ -346,7 +397,8 @@ fn translate(
         .collect()
 }
 
-/// `SequenceUtil.assertSequenceDictionariesEqual`: names and lengths.
+/// `SequenceUtil.assertSequenceDictionariesEqual`: as many sequences, and
+/// at each index the same sequence (`SAMSequenceRecord.isSameSequence`).
 fn same_dictionary(a: &sam::Header, b: &sam::Header) -> Result<()> {
     let (x, y) = (a.reference_sequences(), b.reference_sequences());
     if x.len() != y.len() {
@@ -357,7 +409,7 @@ fn same_dictionary(a: &sam::Header, b: &sam::Header) -> Result<()> {
         )));
     }
     for (i, ((name_a, map_a), (name_b, map_b))) in x.iter().zip(y).enumerate() {
-        if name_a != name_b || map_a.length() != map_b.length() {
+        if !same_sequence(name_a, map_a, name_b, map_b)? {
             return Err(Error::Metric(format!(
                 "Sequences at index {i} don't match: {name_a}/{} {name_b}/{}",
                 map_a.length(),
@@ -368,20 +420,149 @@ fn same_dictionary(a: &sam::Header, b: &sam::Header) -> Result<()> {
     Ok(())
 }
 
-/// The order records are merged in.
-#[derive(Clone, Copy)]
-enum Order {
+/// `SAMSequenceRecord.isSameSequence` for two records at one index: the
+/// lengths equal, the `M5` values equal as hexadecimal numbers when both
+/// have one, and the names equal or one named among the other's `AN`.
+fn same_sequence(
+    name_a: &[u8],
+    a: &Map<ReferenceSequence>,
+    name_b: &[u8],
+    b: &Map<ReferenceSequence>,
+) -> Result<bool> {
+    if a.length() != b.length() {
+        return Ok(false);
+    }
+    let md5 = |map: &Map<ReferenceSequence>| map.other_fields().get(&MD5_CHECKSUM).cloned();
+    if let (Some(x), Some(y)) = (md5(a), md5(b))
+        && hex_number(&x)? != hex_number(&y)?
+    {
+        return Ok(false);
+    }
+    let named = |map: &Map<ReferenceSequence>, name: &[u8]| {
+        map.other_fields()
+            .get(&ALTERNATIVE_NAMES)
+            .is_some_and(|names| names.split(|b| *b == b',').any(|alt| alt == name))
+    };
+    Ok(name_a == name_b || named(a, name_b) || named(b, name_a))
+}
+
+/// `new BigInteger(text, 16)` as digits without leading zeros: an `M5`
+/// that is no hexadecimal number fails, as Java's constructor throws.
+fn hex_number(text: &[u8]) -> Result<Vec<u8>> {
+    let digits = text.strip_prefix(b"+").unwrap_or(text);
+    if digits.is_empty() || !digits.iter().all(u8::is_ascii_hexdigit) {
+        return Err(Error::Metric(format!(
+            "M5 value {0}: For input string: \"{0}\" under radix 16",
+            String::from_utf8_lossy(text)
+        )));
+    }
+    let first = digits
+        .iter()
+        .position(|b| *b != b'0')
+        .unwrap_or(digits.len());
+    Ok(digits[first..].to_ascii_lowercase())
+}
+
+/// `SamFileHeaderMerger.mergeSequenceDictionaries`: the dictionaries
+/// folded one by one through `mergeSequences` from an empty one. Each
+/// sequence of the next dictionary that the merged one lacks waits until
+/// the next sequence they share, and goes in before it; the ones after the
+/// last shared sequence go at the end. A shared sequence before the one
+/// shared last is an error. A name the merged dictionary has keeps its
+/// first record, whatever its length.
+pub fn merge_dictionaries(headers: &[sam::Header]) -> Result<sam::header::ReferenceSequences> {
+    let mut merged = sam::header::ReferenceSequences::default();
+    for header in headers {
+        merged = merge_sequences(&merged, header.reference_sequences())?;
+    }
+    Ok(merged)
+}
+
+/// `mergeSequences(a, b)`, in time linear in the two dictionaries: the
+/// position of a shared sequence in the list Java grows is its position in
+/// `a` plus what was put before it, so the order test compares positions
+/// in `a`.
+fn merge_sequences(
+    a: &sam::header::ReferenceSequences,
+    b: &sam::header::ReferenceSequences,
+) -> Result<sam::header::ReferenceSequences> {
+    type Entry<'h> = (&'h [u8], &'h Map<ReferenceSequence>);
+    let mut before: Vec<Vec<Entry<'_>>> = vec![Vec::new(); a.len()];
+    let mut holder: Vec<Entry<'_>> = Vec::new();
+    let mut previous: Option<(usize, &[u8])> = None;
+    for (name, map) in b {
+        let Some(at) = a.get_index_of(name.as_slice()) else {
+            holder.push((name.as_slice(), map));
+            continue;
+        };
+        if let Some((last, last_name)) = previous
+            && last > at
+        {
+            return Err(Error::Metric(format!(
+                "Cannot merge sequence dictionaries because sequence {} and {} are in \
+                 different orders in two input sequence dictionaries.",
+                String::from_utf8_lossy(name),
+                String::from_utf8_lossy(last_name)
+            )));
+        }
+        before[at].append(&mut holder);
+        previous = Some((at, name.as_slice()));
+    }
+    let mut merged = sam::header::ReferenceSequences::default();
+    for ((name, map), waiting) in a.iter().zip(before) {
+        for (held, held_map) in waiting {
+            merged.insert(held.into(), held_map.clone());
+        }
+        merged.insert(name.clone(), map.clone());
+    }
+    for (held, held_map) in holder {
+        merged.insert(held.into(), held_map.clone());
+    }
+    Ok(merged)
+}
+
+/// The order a [`Merger`] takes records in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MergeOrder {
+    /// `SAMRecordCoordinateComparator`, or with a merged dictionary
+    /// `MergedSequenceDictionaryCoordinateOrderComparator`.
     Coordinate,
+    /// `SAMRecordQueryNameComparator`.
     Queryname,
+    /// Every record of the first input, then of the second, and so on.
+    InputOrder,
+    /// `SortOrder.unknown`, which has no comparator: htsjdk's priority
+    /// queue fails comparing the first records of two inputs, so more than
+    /// one input with a record is an error; otherwise input order.
+    NoComparator,
+}
+
+/// One input of a [`Merger`]: its records in file order.
+pub trait RecordSource {
+    /// The next record into `record`; false after the last.
+    fn next_record(&mut self, record: &mut RawRecord) -> Result<bool>;
+}
+
+/// The records of a BAM record stream.
+struct Stream<'a>(&'a mut (dyn Read + 'static));
+
+impl RecordSource for Stream<'_> {
+    fn next_record(&mut self, record: &mut RawRecord) -> Result<bool> {
+        record.read_from(self.0).map_err(Error::Record)
+    }
 }
 
 /// `MergingSamRecordIterator` over raw records.
 pub struct Merger<'a> {
-    readers: Vec<&'a mut (dyn Read + 'static)>,
+    sources: Vec<Box<dyn RecordSource + 'a>>,
     heads: Vec<Option<RawRecord>>,
     queue: Vec<usize>,
-    order: Order,
+    order: MergeOrder,
     merged: HeaderMerger,
+    /// The input [`MergeOrder::InputOrder`] takes records from.
+    current: usize,
+    /// The last record had its `RG` or `PG` set.
+    rewritten: bool,
 }
 
 impl<'a> Merger<'a> {
@@ -393,8 +574,8 @@ impl<'a> Merger<'a> {
         order: SortOrder,
     ) -> Result<Self> {
         let order = match order {
-            SortOrder::Queryname => Order::Queryname,
-            SortOrder::Coordinate => Order::Coordinate,
+            SortOrder::Queryname => MergeOrder::Queryname,
+            SortOrder::Coordinate => MergeOrder::Coordinate,
             other => {
                 return Err(Error::Metric(format!(
                     "merging inputs in {} order is not supported",
@@ -402,25 +583,54 @@ impl<'a> Merger<'a> {
                 )));
             }
         };
+        let sources = readers
+            .into_iter()
+            .map(|reader| Box::new(Stream(reader)) as Box<dyn RecordSource + 'a>)
+            .collect();
+        Self::from_sources(sources, merged, order)
+    }
+
+    /// Take the records of `sources` (one per merged header, in order) in
+    /// `order`. The first record of every input is read here.
+    pub fn from_sources(
+        sources: Vec<Box<dyn RecordSource + 'a>>,
+        merged: HeaderMerger,
+        order: MergeOrder,
+    ) -> Result<Self> {
         let mut merger = Self {
-            heads: vec![None; readers.len()],
-            readers,
+            heads: vec![None; sources.len()],
+            sources,
             queue: Vec::new(),
             order,
             merged,
+            current: 0,
+            rewritten: false,
         };
-        for i in 0..merger.readers.len() {
+        for i in 0..merger.sources.len() {
             merger.advance(i)?;
         }
+        if order == MergeOrder::NoComparator && merger.heads.iter().flatten().count() > 1 {
+            return Err(Error::Metric(
+                "SORT_ORDER=unknown has no comparator: htsjdk's MergingSamRecordIterator fails \
+                 with a NullPointerException comparing the first records of two inputs"
+                    .to_owned(),
+            ));
+        }
         Ok(merger)
+    }
+
+    fn queued(&self) -> bool {
+        matches!(self.order, MergeOrder::Coordinate | MergeOrder::Queryname)
     }
 
     /// Read the next record of input `i` and queue the input if it has one.
     fn advance(&mut self, i: usize) -> Result<()> {
         let mut record = RawRecord::default();
-        if record.read_from(self.readers[i]).map_err(Error::Record)? {
+        if self.sources[i].next_record(&mut record)? {
             self.heads[i] = Some(record);
-            self.offer(i);
+            if self.queued() {
+                self.offer(i);
+            }
         } else {
             self.heads[i] = None;
         }
@@ -433,9 +643,32 @@ impl<'a> Merger<'a> {
             self.heads[b].as_ref().expect("queued inputs have a record"),
         );
         match self.order {
-            Order::Coordinate => coordinate_order(x, y),
-            Order::Queryname => queryname_order(x, y),
+            MergeOrder::Coordinate if self.merged.has_merged_dictionary() => {
+                self.merged_key(a, x).compare(&self.merged_key(b, y))
+            }
+            MergeOrder::Queryname => queryname_order(x, y),
+            _ => coordinate_order(x, y),
         }
+    }
+
+    /// The coordinate key of `record` of input `i` with its reference, or
+    /// for an unplaced record its mate's, as an index of the merged
+    /// dictionary. Its other fields stay the input's.
+    fn merged_key<'r>(&self, i: usize, record: &'r RawRecord) -> CoordinateKey<'r> {
+        let map = &self.merged.sequence_maps[i];
+        let merged = |id: i32| {
+            usize::try_from(id)
+                .ok()
+                .and_then(|at| map.get(at).copied())
+                .unwrap_or(-1)
+        };
+        let mut key = CoordinateKey::of(record);
+        key.reference_id = match (key.reference_id, key.mate_reference_id) {
+            (-1, -1) => -1,
+            (-1, mate) => merged(mate),
+            (reference, _) => merged(reference),
+        };
+        key
     }
 
     /// `PriorityQueue.offer` (`siftUp`).
@@ -484,29 +717,72 @@ impl<'a> Merger<'a> {
         Some(result)
     }
 
-    /// The next record into `record`, its IDs renamed; false after the
+    /// The input of the next record, in input order.
+    fn next_input(&mut self) -> Option<usize> {
+        while self.current < self.heads.len() && self.heads[self.current].is_none() {
+            self.current += 1;
+        }
+        (self.current < self.heads.len()).then_some(self.current)
+    }
+
+    /// The next record into `record`, its IDs renamed and, with a merged
+    /// dictionary, its references found again by name; false after the
     /// last.
     pub fn next(&mut self, record: &mut RawRecord) -> Result<bool> {
-        let Some(i) = self.poll() else {
+        let next = if self.queued() {
+            self.poll()
+        } else {
+            self.next_input()
+        };
+        let Some(i) = next else {
             return Ok(false);
         };
         *record = self.heads[i].take().expect("queued inputs have a record");
         self.advance(i)?;
+        self.rewritten = false;
         if self.merged.read_group_collisions {
-            translate_tag(record, *b"RG", &self.merged.read_group_ids[i])?;
+            self.rewritten |= translate_tag(record, *b"RG", &self.merged.read_group_ids[i])?;
         }
         if self.merged.program_collisions {
-            translate_tag(record, *b"PG", &self.merged.program_ids[i])?;
+            self.rewritten |= translate_tag(record, *b"PG", &self.merged.program_ids[i])?;
+        }
+        if let Some(map) = self.merged.sequence_maps.get(i) {
+            let name = || String::from_utf8_lossy(record.name()).into_owned();
+            let merged = |id: i32| -> Result<i32> {
+                let Ok(at) = usize::try_from(id) else {
+                    return Ok(-1);
+                };
+                map.get(at).copied().ok_or_else(|| {
+                    Error::Metric(format!(
+                        "record {}: No mapping for reference index {id} from the header of \
+                         input {}",
+                        name(),
+                        i + 1
+                    ))
+                })
+            };
+            let ids = (
+                merged(record.reference_id())?,
+                merged(record.mate_reference_id())?,
+            );
+            record.set_reference_ids(ids.0, ids.1);
         }
         Ok(true)
     }
+
+    /// True when the last record had its `RG` or `PG` tag set, which makes
+    /// htsjdk encode the record again.
+    pub fn rewritten(&self) -> bool {
+        self.rewritten
+    }
 }
 
-/// `record.setAttribute(tag, table.get(old))` for a record that has `tag`.
-fn translate_tag(record: &mut RawRecord, tag: [u8; 2], table: &HashMap<Id, Id>) -> Result<()> {
+/// `record.setAttribute(tag, table.get(old))` for a record that has `tag`;
+/// true when it has it.
+fn translate_tag(record: &mut RawRecord, tag: [u8; 2], table: &HashMap<Id, Id>) -> Result<bool> {
     let mut tags = record.tags().map_err(Error::Record)?;
     let Some(old) = tags.get(tag) else {
-        return Ok(());
+        return Ok(false);
     };
     let TagValue::String(old) = old else {
         return Err(Error::Metric(format!(
@@ -519,7 +795,8 @@ fn translate_tag(record: &mut RawRecord, tag: [u8; 2], table: &HashMap<Id, Id>) 
         Some(new) => tags.set(tag, TagValue::String(new.clone())),
         None => tags.remove(tag),
     }
-    record.set_tags(&tags).map_err(Error::Record)
+    record.set_tags(&tags).map_err(Error::Record)?;
+    Ok(true)
 }
 
 #[cfg(test)]

@@ -322,6 +322,17 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
              ... + write - --output-format sam",
         );
     }
+    if verb.class == bammetrics_core::merge_sam_files::TOOL.name {
+        return usage(format!(
+            "{place}: {} merges several INPUT files and a chain reads one source: it cannot be \
+             a step",
+            verb.class
+        ))
+        .hint(
+            "merge the files first, then chain the merged BAM; wave W14 of docs/07 adds steps \
+             that read more than the stream",
+        );
+    }
     if matches!(verb.input, "TEXT" | "VCF" | "LIST" | "FASTA") {
         return usage(format!(
             "{place}: {} reads a {} file and no BAM, and a chain hands on the records of a BAM: \

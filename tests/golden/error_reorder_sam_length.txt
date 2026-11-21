@@ -1,0 +1,12 @@
+## argv
+reorder-sam
+tests/data/markdup.bam
+--sequence-dictionary
+tests/data/reorder_length.dict
+-o
+OUT/reordered.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics reorder-sam: Discordant contig lengths: read chr1 LN=100000, ref chr1 LN=99999

@@ -22,7 +22,7 @@
 //! The rules that decide which record is flagged are in the submodules.
 
 mod build;
-mod inputs;
+pub(crate) mod inputs;
 mod mark;
 mod mates;
 mod md_nm;

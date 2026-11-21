@@ -1,0 +1,11 @@
+## argv
+MergeSamFiles
+I=tests/data/markdup.bam
+O=OUT/merged.bam
+SO=queryname
+CREATE_INDEX=true
+## exit
+1
+## stdout
+## stderr
+bammetrics: CREATE_INDEX=true: Can't CREATE_INDEX unless SORT_ORDER is coordinate
