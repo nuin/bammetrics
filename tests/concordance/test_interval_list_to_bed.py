@@ -41,6 +41,20 @@ VERB_OPTIONS = {
 BAD_ARGS = {
     "score_text": ["SCORE=high"],
     "score_overflow": ["SCORE=2147483648"],
+    "stringency": ["VALIDATION_STRINGENCY=BOGUS"],
+    "stringency_case": ["VALIDATION_STRINGENCY=strict"],
+}
+# An empty line where IntervalListCodec.readActualHeader peeks the first character of
+# the line after the header fails Picard ("Index 0 out of bounds for length 0"); one
+# among or after the records is skipped.
+BLANK_LINES = {
+    "after_header": ("@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\n\nc1\t1\t5\t+\tn\n", False),
+    "between_header_lines": ("@HD\tVN:1.6\n\n@SQ\tSN:c1\tLN:100\nc1\t1\t5\t+\tn\n", False),
+    "header_then_blank": ("@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\n\n", False),
+    "first_line": ("\n@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\nc1\t1\t5\t+\tn\n", False),
+    "only_a_newline": ("\n", False),
+    "among_records": ("@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\nc1\t1\t5\t+\tn\n\nc1\t7\t9\t+\tm\n", True),
+    "at_the_end": ("@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\nc1\t1\t5\t+\tn\n\n", True),
 }
 SEEN = {"files": 0, "errors": 0, "lines": 0}
 
@@ -108,7 +122,10 @@ def lists(tmp_path_factory):
         [("c2", 5, 9, "-", "q"), ("c1", 1, 10, "+", "p")]).replace("\n", "\r").encode())
     (odd / "no_header_ok.interval_list").write_text("c1\t1\t5\t+\tn\nc2\t3\t4\t-\tm\n")
     (odd / "missing_contig.interval_list").write_text(interval_lists.HEADER + "c9\t1\t5\t+\tn\nc1\t2\t3\t+\tk\n")
-    for name in ("crlf", "cr", "no_header_ok", "missing_contig"):
+    # An encoded surrogate (ED A0 80) is one U+FFFD for the JDK's decoder.
+    (odd / "surrogate.interval_list").write_bytes(interval_lists.HEADER.encode()
+                                                   + b"c1\t1\t5\t+\tr\xed\xa0\x80s\nc1\t7\t9\t+\t\xed\xa0A\n")
+    for name in ("crlf", "cr", "no_header_ok", "missing_contig", "surrogate"):
         paths[name] = odd / f"{name}.interval_list"
     gz = odd / "a.interval_list.gz"
     gz.write_bytes(gzip.compress(paths["a"].read_bytes()))
@@ -144,6 +161,15 @@ def test_bad_lists(lists, name, tmp_path):
         assert result == b""
     else:
         assert result is None, f"{name}: Picard read it"
+
+
+@pytest.mark.parametrize("name", sorted(BLANK_LINES))
+def test_blank_lines(name, tmp_path):
+    text, reads = BLANK_LINES[name]
+    source = tmp_path / f"{name}.interval_list"
+    source.write_text(text)
+    result = compare(source, [], tmp_path, f"blank line {name}")
+    assert (result is not None) is reads, name
 
 
 @pytest.mark.parametrize("name", sorted(BAD_ARGS))
@@ -196,6 +222,20 @@ def test_sort_spill(tmp_path):
     unsorted = tmp_path / "unsorted"
     unsorted.mkdir()
     compare(source, ["SORT=false"], unsorted, "500001 intervals unsorted")
+
+
+def test_sort_spill_ties(tmp_path):
+    """500,001 intervals where `B` and `\u0141x` tie on the coordinates in the first run
+    and `C` is the 500,001st: the first run sorts on the names as read, the merge on the
+    names read back (`Ax`), so Picard writes B, Ax, C."""
+    lines = [("c1", i + 1, i + 1, "+", f"n{i}") for i in range(499_998)]
+    lines += [("c1", 700_000, 700_000, "+", name) for name in ("B", "\u0141x", "C")]
+    header = "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:1000000\n"
+    source = tmp_path / "ties.interval_list"
+    source.write_text(header + "".join("\t".join(map(str, line)) + "\n" for line in lines),
+                      encoding="utf-8")
+    bed = compare(source, [], tmp_path, "500001 intervals with tied names")
+    assert bed.decode().splitlines()[-3:] == [f"c1\t699999\t700000\t{n}\t500\t+" for n in ("B", "Ax", "C")]
 
 
 def test_round_trip(lists, tmp_path):

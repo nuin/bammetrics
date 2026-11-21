@@ -725,6 +725,18 @@ needs = ["benches/interval_scale.py"]
 max_rss_mib = 320
 max_seconds = 60
 
+# One record of 200,000 alternate alleles (a 2 MB line): each is checked against the
+# alleles before it by hash. A scan of a list took 40 s here.
+[[command]]
+name = "vcf-to-interval-list 200,000 alleles in one record"
+argv = [
+    "sh", "-c",
+    "python3 benches/interval_scale.py --alleles {out} 200000 && {bin} vcf-to-interval-list {out}/alleles.vcf -o {out}/alleles.interval_list",
+]
+needs = ["benches/interval_scale.py"]
+max_rss_mib = 64
+max_seconds = 10
+
 [[command]]
 name = "interval converters on GRCh38, 2,000,000 records"
 tier = "scale"

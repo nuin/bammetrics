@@ -235,11 +235,14 @@ fn threads_and_sample_are_accepted_and_change_nothing() {
         "--format",
         "json",
         "-@",
-        "x",
+        "4",
         "--sample",
         "S1",
     ]);
     assert_eq!(plain.stdout, ignored.stdout);
+    // The count is checked as on every verb, though it changes nothing here.
+    let checked = bammetrics(&["bed-to-interval-list", BED, "--from-bam", BAM, "-@", "x"]);
+    assert_eq!(checked.status.code(), Some(2));
     let json = String::from_utf8_lossy(&plain.stdout);
     assert!(!json.contains("\"sample\""), "{json}");
     assert!(json.contains("\"contig\": \"chr1\""), "{json}");

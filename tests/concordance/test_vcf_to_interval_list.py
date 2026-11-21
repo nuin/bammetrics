@@ -41,6 +41,7 @@ VERB_OPTIONS = {
 BAD_ARGS = {
     "method": ["VARIANT_ID_METHOD=FIRST"],
     "method_case": ["VARIANT_ID_METHOD=use_first"],
+    "stringency": ["VALIDATION_STRINGENCY=BOGUS"],
 }
 HEAD = ("##fileformat=VCFv4.2\n##INFO=<ID=END,Number=1,Type=Integer,Description=\"e\">\n"
         "##FILTER=<ID=q10,Description=\"q\">\n")
@@ -64,6 +65,11 @@ GOOD = {
     "qualities": "c1\t10\t.\tA\tC\t-10\t.\t.\nc1\t20\t.\tA\tC\tnan\t.\t.\nc1\t30\t.\tA\tC\tInfinity\t.\t.\n"
                  "c1\t40\t.\tA\tC\t5d\t.\t.\nc1\t50\t.\tA\tC\t0x1p3\t.\t.\nc1\t60\t.\tA\tC\t 5 \t.\t.\nc1\t70\t.\tA\tC\t+inf\t.\t.\n",
     "comments_and_tabs": "c1\t10\t.\tA\tC\t.\t.\t.\n#a comment\n\tc1\t20\t.\tA\tC\t.\t.\t.\n",
+    # An END inside the open interval joins it however far POS lies past it:
+    # IntervalMergerIterator tests the overlap before the abutting distance.
+    "end_inside_open": "c1\t100\ta\tA\t<DEL>\t.\t.\tEND=110\nc1\t120\tb\tA\t<DEL>\t.\t.\tEND=110\n"
+                       "c1\t111\tc\tA\t<DEL>\t.\t.\tEND=130\nc1\t300\td\tA\t<DEL>\t.\t.\tEND=200\n"
+                       "c1\t400\te\tA\t<DEL>\t.\t.\tEND=300\n",
     "header_only": "",
 }
 BAD_RECORDS = {
@@ -106,6 +112,63 @@ SAMPLE_CASES = {
     "gt_index_unsorted": ("c1\t10\t.\tA\tC\t.\t.\t.\tGT\t0/5\t0/1\n", False),
     "good_unsorted": ("c1\t10\t.\tA\tC\t.\t.\t.\tGT\t0/1\t1|1\n", True),
 }
+# Header shapes, each before one plain record: htsjdk's VCFCodec reads some that a
+# strict VCF parser refuses (a repeated ID, no Description, a bare `##` line, a
+# repeated attribute, spaces after commas) and refuses others (VCFv3.3, VCFv4.4, a
+# bad Type or Number, an unclosed quote, a trailing comma before a length).
+FF = "##fileformat=VCFv4.2\n"
+CT = "##contig=<ID=c1,length=1000>\n"
+INFO_X = "##INFO=<ID=X,Number=1,Type=Integer,Description=\"a\">\n"
+HEADERS = {
+    "info_no_description": FF + CT + "##INFO=<ID=X,Number=1,Type=Integer>\n" + COLS,
+    "info_twice": FF + CT + INFO_X + INFO_X.replace('"a"', '"b"') + COLS,
+    "filter_twice": FF + CT + '##FILTER=<ID=q,Description="a">\n##FILTER=<ID=q,Description="b">\n' + COLS,
+    "format_twice": FF + CT + '##FORMAT=<ID=GT,Number=1,Type=String,Description="a">\n' * 2 + COLS,
+    "alt_twice": FF + CT + '##ALT=<ID=DEL,Description="d">\n##ALT=<ID=DEL,Description="e">\n' + COLS,
+    "fileformat_twice": FF + FF + CT + COLS,
+    "fileformat_late": CT + FF + COLS,
+    "fileformat_spaces": "##fileformat = VCFv4.1 \n" + CT + COLS,
+    "bare_line": FF + CT + "##foo\n" + COLS,
+    "key_value_line": FF + CT + "##foo=bar=baz\n" + COLS,
+    "contig_length_twice": FF + "##contig=<ID=c1,length=1000,length=2000>\n" + COLS,
+    "contig_length_space": FF + "##contig=<ID=c1,length= 100>\n" + COLS,
+    "contig_space_after_comma": FF + "##contig=<ID=c1, length=1000>\n" + COLS,
+    "contig_quoted_comma": FF + '##contig=<ID=c1,length=1000,species="Homo, sapiens">\n' + COLS,
+    "contig_tags_out_of_order": FF + "##contig=<length=1000,ID=c1>\n" + COLS,
+    "chrom_trailing_tab": FF + CT + COLS.rstrip("\n") + "\t\n",
+    "samples_twice": FF + CT + COLS.rstrip("\n") + "\tFORMAT\tS\tS\n",
+    "pedigree_v42": FF + CT + "##PEDIGREE=<Name_0=a,Name_1=b>\n" + COLS,
+    "v40": "##fileformat=VCFv4.0\n" + CT + COLS,
+    "v41": "##fileformat=VCFv4.1\n" + CT + COLS,
+    "v43": "##fileformat=VCFv4.3\n" + CT + COLS,
+    # Refused by both.
+    "v33": "##fileformat=VCFv3.3\n" + CT + COLS,
+    "v44": "##fileformat=VCFv4.4\n" + CT + COLS,
+    "v50": "##fileformat=VCFv5.0\n" + CT + COLS,
+    "v32_format": "##format=VCRv3.2\n" + CT + COLS,
+    "no_fileformat": CT + COLS,
+    "contig_trailing_comma": FF + "##contig=<ID=c1,length=1000,>\n" + COLS,
+    "contig_no_id": FF + "##contig=<length=1000>\n" + CT + COLS,
+    "contig_bad_name": FF + "##contig=<ID=*c1,length=1000>\n" + CT + COLS,
+    "info_bad_type": FF + CT + '##INFO=<ID=X,Number=1,Type=Bogus,Description="a">\n' + COLS,
+    "info_bad_number": FF + CT + '##INFO=<ID=X,Number=zz,Type=Integer,Description="a">\n' + COLS,
+    "info_zero_count": FF + CT + '##INFO=<ID=X,Number=0,Type=Integer,Description="a">\n' + COLS,
+    "info_tags_out_of_order": FF + CT + '##INFO=<Number=1,ID=X,Type=Integer,Description="a">\n' + COLS,
+    "info_unclosed_quote": FF + CT + '##INFO=<ID=X,Number=1,Type=Integer,Description="a>\n' + COLS,
+    "format_flag": FF + CT + '##FORMAT=<ID=X,Number=0,Type=Flag,Description="a">\n' + COLS,
+    "filter_no_id": FF + CT + '##FILTER=<Description="a">\n' + COLS,
+    "pedigree_v43": "##fileformat=VCFv4.3\n" + CT + "##PEDIGREE=<Name_0=a>\n" + COLS,
+    "key_angle_bracket": FF + CT + "##fo<o=bar\n" + COLS,
+    "chrom_short": FF + CT + "#CHROM\tPOS\tID\tREF\tALT\n",
+    "chrom_spaces": FF + CT + COLS.replace("\t", " "),
+    "format_without_samples": FF + CT + COLS.rstrip("\n") + "\tFORMAT\n",
+    "sample_without_format": FF + CT + COLS.rstrip("\n") + "\tS1\n",
+}
+HEADER_REFUSED = {"v33", "v44", "v50", "v32_format", "no_fileformat", "contig_trailing_comma",
+                  "contig_no_id", "contig_bad_name", "info_bad_type", "info_bad_number",
+                  "info_zero_count", "info_tags_out_of_order", "info_unclosed_quote",
+                  "format_flag", "filter_no_id", "pedigree_v43", "key_angle_bracket",
+                  "chrom_short", "chrom_spaces", "format_without_samples", "sample_without_format"}
 SEEN = {"files": 0, "errors": set(), "options": set()}
 
 
@@ -180,7 +243,8 @@ def vcfs(tmp_path_factory):
     found["percent_v43"] = v43
     non_utf8 = hand / "non_utf8.vcf"
     non_utf8.write_bytes((HEAD + CONTIGS + COLS).encode() + b"c1\t10\tr\xe9x\tA\tC\t.\t.\t.\n"
-                         b"c1\t20\tr\xc3\xa9\xe2\x82\xac\tA\tC\t.\t.\t.\n")
+                         b"c1\t20\tr\xc3\xa9\xe2\x82\xac\tA\tC\t.\t.\t.\n"
+                         b"c1\t40\tr\xed\xa0\x80s\tA\tC\t.\t.\t.\n")
     found["non_utf8"] = non_utf8
     good_samples = hand / "good_unsorted.vcf"
     good_samples.write_text(HEAD + CONTIGS + SAMPLE_COLS + SAMPLE_CASES["good_unsorted"][0])
@@ -213,6 +277,17 @@ def test_samples_out_of_order(name, tmp_path):
     result = compare(path, [], tmp_path, f"samples {name}")
     assert (result is not None) is reads, name
     SEEN["errors"].add(name)
+
+
+@pytest.mark.parametrize("name", sorted(HEADERS))
+def test_headers(name, tmp_path):
+    """Picard decides; bammetrics agrees on the list or on failing."""
+    path = tmp_path / f"{name}.vcf"
+    record = "c1\t10\t.\tA\tC\t.\t.\t.\tGT\t0/1\n" if "samples_twice" in name else "c1\t10\t.\tA\tC\t.\t.\t.\n"
+    path.write_text(HEADERS[name] + record + "#a line after the column line\n" + record.replace("10", "20", 1))
+    result = compare(path, [], tmp_path, f"header {name}")
+    assert (result is None) is (name in HEADER_REFUSED), name
+    SEEN["errors"].add(f"header {name}")
 
 
 @pytest.mark.parametrize("name", sorted(BAD_ARGS))
@@ -268,6 +343,6 @@ def test_verb_face(vcfs, options, tmp_path):
 
 def test_cases_are_covered():
     assert SEEN["options"] == set(OPTION_SETS), SEEN["options"]
-    expected = set(BAD_RECORDS) | set(SAMPLE_CASES) | set(BAD_ARGS)
+    expected = set(BAD_RECORDS) | set(SAMPLE_CASES) | set(BAD_ARGS) | {f"header {n}" for n in HEADERS}
     assert expected <= SEEN["errors"], sorted(expected - SEEN["errors"])
     assert SEEN["files"] >= 150, SEEN["files"]

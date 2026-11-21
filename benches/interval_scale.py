@@ -1,6 +1,7 @@
 """Inputs of the memgate rows of IntervalListToBed and VcfToIntervalList.
 
     python3 benches/interval_scale.py OUT COUNT [DICT]
+    python3 benches/interval_scale.py --alleles OUT COUNT
 
 Writes OUT/big.interval_list (COUNT intervals in shuffled order, names rs<N>, one in
 1,000 named with a character past U+00FF so a list of more than 500,000 goes through
@@ -8,6 +9,10 @@ Picard's sort spill) and OUT/big.vcf (COUNT sites-only records in file order, on
 50 filtered, one in 100 a symbolic deletion with END), over the @SQ lines of DICT
 (default: chr1 to chr22, X and Y of GRCh38 by their lengths). Seeded, so a row reads
 the same bytes every run.
+
+With --alleles it writes OUT/alleles.vcf instead: one record with COUNT distinct
+alternate alleles of 9 bases. A record of 200,000 alternates took 40 s when each
+allele was looked up in a list of the ones before it.
 """
 import random
 import sys
@@ -31,7 +36,19 @@ def dictionary(path):
     return contigs
 
 
+def many_alleles(out, count):
+    out.mkdir(parents=True, exist_ok=True)
+    alts = ["".join("ACGT"[(i >> (2 * k)) & 3] for k in range(9)) for i in range(count)]
+    with open(out / "alleles.vcf", "w", encoding="utf-8") as vcf:
+        vcf.write("##fileformat=VCFv4.2\n##contig=<ID=c1,length=1000>\n"
+                  "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n")
+        vcf.write(f"c1\t1\tmany\tAAAAAAAAAA\t{','.join(alts)}\t.\t.\t.\n")
+
+
 def main():
+    if sys.argv[1] == "--alleles":
+        many_alleles(Path(sys.argv[2]), int(sys.argv[3]))
+        return
     out, count = Path(sys.argv[1]), int(sys.argv[2])
     contigs = dictionary(sys.argv[3] if len(sys.argv) > 3 else None)
     out.mkdir(parents=True, exist_ok=True)
