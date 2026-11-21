@@ -8,6 +8,7 @@ lines, and lines with one or two fields. `test_verb_face` runs the
 `bed-to-interval-list` verb with `--from-bam` and `--dict` on three of them, at the
 defaults and under each option's verb spelling (`VERB_OPTIONS`).
 """
+import gzip
 import subprocess
 
 import pytest
@@ -164,3 +165,15 @@ def test_verb_face(beds, corpus, tmp_path, name, spelling, source, option):
 def test_assume_sorted_is_not_an_option(beds, corpus, tmp_path):
     picard, ours, *_ = run_both(beds["plain"], corpus / "ref.dict", ["ASSUME_SORTED=true"], tmp_path)
     assert picard.returncode != 0 and ours.returncode != 0 and "ASSUME_SORTED" in ours.stderr
+
+
+@pytest.mark.parametrize("suffix", [".bed.gz", ".bed.gzip", ".bed.bgz", ".bed.bgzf"])
+@pytest.mark.parametrize("members", [1, 2])
+def test_gzip_bed(beds, corpus, tmp_path, suffix, members):
+    """Picard 3.5.0 reads a gzip BED under each of htsjdk's block-compressed names, one
+    plain gzip member or several (bgzip writes several)."""
+    text = beds["messy"].read_bytes()
+    cut = len(text) // members
+    bed = tmp_path / f"messy{suffix}"
+    bed.write_bytes(b"".join(gzip.compress(part, mtime=0) for part in (text[:cut], text[cut:]) if part))
+    compare(bed, corpus / "ref.dict", ["UNIQUE=true"], tmp_path, f"messy{suffix} {members} member(s)")

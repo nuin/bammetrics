@@ -23,7 +23,7 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 
-use noodles::{bam, bgzf};
+use noodles::bam;
 
 use crate::error::{Error, Result};
 use crate::interval_ops;
@@ -461,22 +461,37 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     Ok(MetricsOutput::text(&COLUMNS, rows, text).into())
 }
 
-/// The BED text, inflated when the name ends in `.gz`.
+/// The BED text, at most [`crate::interval_ops::MAX_LIST_BYTES`]. A name
+/// with one of htsjdk's block-compressed extensions (`.gz`, `.gzip`,
+/// `.bgz`, `.bgzf`) is inflated as gzip members, plain gzip or bgzip:
+/// Picard 3.5.0 reads a plain gzip BED under each of those names.
 fn read_bed_file(path: &Path) -> Result<String> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
     };
-    let file = File::open(path).map_err(input)?;
+    let cap = crate::interval_ops::MAX_LIST_BYTES;
+    let file = std::io::BufReader::new(File::open(path).map_err(input)?);
+    let name = path.to_string_lossy();
     let mut text = String::new();
-    if path.to_string_lossy().ends_with(".gz") {
-        bgzf::io::Reader::new(file)
+    if [".gz", ".gzip", ".bgz", ".bgzf"]
+        .iter()
+        .any(|extension| name.ends_with(extension))
+    {
+        crate::gzip::GzipReader::new(file)
+            .take(cap + 1)
             .read_to_string(&mut text)
             .map_err(input)?;
     } else {
-        std::io::BufReader::new(file)
+        file.take(cap + 1)
             .read_to_string(&mut text)
             .map_err(input)?;
+    }
+    if text.len() as u64 > cap {
+        return Err(Error::Intervals {
+            path: path.to_path_buf(),
+            message: format!("the BED holds more than {cap} bytes, the most read"),
+        });
     }
     Ok(text)
 }
