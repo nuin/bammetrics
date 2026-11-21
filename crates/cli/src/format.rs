@@ -249,7 +249,7 @@ mod tests {
         assert_eq!(
             unknown.to_string(),
             "bammetrics insert-size: no format \"jsn\" (from --format)\n  did you mean json?\n  \
-             formats: picard, json, tsv, jsonl, human, csv, markdown"
+             formats: picard, json, tsv, jsonl, human, csv, markdown, sql"
         );
         let twice = parse_list("insert-size", "tsv,tsv", "--format").expect_err("twice");
         assert!(twice.to_string().contains("format tsv is given twice"));

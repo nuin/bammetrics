@@ -1,6 +1,6 @@
 //! `qc --also FORMAT[,FORMAT]` (docs/formats.md): further formats beside
-//! the Picard files of a run. `json`, `jsonl`, `tsv` and `csv` are written
-//! beside every metrics file as `FILE.json`; `markdown`, `junit` and
+//! the Picard files of a run. `json`, `jsonl`, `tsv`, `csv` and `sql` are
+//! written beside every metrics file as `FILE.json`; `markdown`, `junit` and
 //! `multiqc` are one file per run under the prefix. [`targets`] names the
 //! files (for `plan` too), [`texts`] renders them from the metrics files
 //! on disk, and `engine::write_also` writes them and records the manifest
@@ -29,6 +29,8 @@ pub enum Also {
     Tsv,
     /// FILE.csv beside every metrics file: the metrics table, RFC 4180.
     Csv,
+    /// FILE.sql beside every metrics file: an SQL dump sqlite3 loads.
+    Sql,
     /// PREFIX.report.md: the verdict, then every metrics table, at most
     /// 65,536 characters.
     #[value(alias = "md")]
@@ -47,6 +49,7 @@ impl Also {
             Also::Jsonl => "jsonl",
             Also::Tsv => "tsv",
             Also::Csv => "csv",
+            Also::Sql => "sql",
             Also::Markdown => "markdown",
             Also::Junit => "junit",
             Also::Multiqc => "multiqc",
@@ -61,6 +64,7 @@ impl Also {
             Also::Jsonl => Some(Format::Jsonl),
             Also::Tsv => Some(Format::Tsv),
             Also::Csv => Some(Format::Csv),
+            Also::Sql => Some(Format::Sql),
             Also::Markdown | Also::Junit | Also::Multiqc => None,
         }
     }
@@ -71,7 +75,7 @@ impl Also {
             Also::Markdown => ".report.md",
             Also::Junit => ".junit.xml",
             Also::Multiqc => ".verdict_mqc.json",
-            Also::Json | Also::Jsonl | Also::Tsv | Also::Csv => "",
+            Also::Json | Also::Jsonl | Also::Tsv | Also::Csv | Also::Sql => "",
         }
     }
 }

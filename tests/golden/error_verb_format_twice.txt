@@ -10,4 +10,4 @@ OUT/insert_size.tsv
 ## stdout
 ## stderr
 bammetrics insert-size: format tsv is given twice (from --format)
-  formats: picard, json, tsv, jsonl, human, csv, markdown
+  formats: picard, json, tsv, jsonl, human, csv, markdown, sql

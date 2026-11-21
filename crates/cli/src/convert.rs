@@ -26,8 +26,8 @@ const VERB: &str = "convert";
 #[command(
     after_help = "Formats: picard (Picard metrics text), json (schema bammetrics.metrics/1, \
 docs/schema/metrics-1.json), jsonl (one object per row, a histogram row with \"histogram\": true), \
-tsv, csv (RFC 4180), markdown, human. Picard text and json read back; the others are written \
-only.\n\nPicard text to json to Picard text is byte for byte the first file, for a file Picard or \
+tsv, csv (RFC 4180), markdown, human, sql (a dump sqlite3 loads). Picard text and json read \
+back; the others are written only.\n\nPicard text to json to Picard text is byte for byte the first file, for a file Picard or \
 bammetrics wrote. tsv, csv and human print one table: the metrics class, or the histogram of a \
 file without one; --table picks."
 )]
@@ -49,8 +49,8 @@ pub struct ConvertArgs {
     /// file without a class).
     #[arg(long, value_name = "NAME")]
     pub table: Option<String>,
-    /// Sample name for the json and jsonl forms (default: the one the
-    /// input JSON carries).
+    /// Sample name for the json, jsonl and sql forms (default: the one
+    /// the input JSON carries).
     #[arg(long, value_name = "NAME")]
     pub sample: Option<String>,
 }
@@ -142,7 +142,7 @@ pub fn run(args: &ConvertArgs) -> Result<u8> {
         .map(|format| bammetrics_formats::render(*format, &doc, table))
         .collect::<std::result::Result<Vec<String>, _>>()
         .map_err(|e| {
-            input_error(e).hint("the other formats hold it: json, jsonl, tsv, csv, markdown")
+            input_error(e).hint("the other formats hold it: json, jsonl, tsv, csv, markdown, sql")
         })?;
     if targets.is_empty() {
         for text in texts {

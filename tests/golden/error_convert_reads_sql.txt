@@ -1,0 +1,8 @@
+## argv
+convert
+tests/data/insert_size_metrics.sql
+## exit
+1
+## stdout
+## stderr
+bammetrics convert: tests/data/insert_size_metrics.sql: an SQL dump (--format sql) does not read back: load it with sqlite3

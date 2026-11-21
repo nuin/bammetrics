@@ -70,7 +70,7 @@ pub enum Command {
     /// --plan FILE) it prints the plan of that chain: bammetrics help chain.
     Plan(qc::QcArgs),
     /// One metrics file in another format: Picard text or JSON in; Picard
-    /// text, json, jsonl, tsv, csv, markdown or human out.
+    /// text, json, jsonl, tsv, csv, markdown, human or sql out.
     Convert(convert::ConvertArgs),
     /// A pre-flight check of one BAM, CRAM or SAM file: the header, the
     /// end-of-file marker and the first 10,000 records, one line per check
