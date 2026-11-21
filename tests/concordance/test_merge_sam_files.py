@@ -19,7 +19,8 @@ bammetrics and in `System.identityHashCode` order in Picard, so those cases comp
 header and the records as a multiset (docs/07 decision row); a sort of inputs that are
 not in the order hands the sort the records in the same hash order, so records that tie
 in queryname order (one name in two read groups of the markdup fixture) are compared up
-to the order of the tie. `SORT_ORDER=duplicate` fails in both on a pair without `MC`. ASSUME_SORTED, INTERVALS on
+to the order of the tie. `SORT_ORDER=duplicate` fails in both on a pair without `MC`, and is
+compared on the pieces without such pairs. ASSUME_SORTED, INTERVALS on
 indexed pieces, COMPRESSION_LEVEL, MAX_RECORDS_IN_RAM with spilled runs, TMP_DIR,
 USE_THREADING, CREATE_INDEX and CREATE_MD5_FILE, SAM output. Error parity: dictionaries
 that differ without MERGE_SEQUENCE_DICTIONARIES, crossed dictionaries with it, INTERVALS
@@ -149,6 +150,11 @@ def test_sort_orders(pieces, tmp_path, order, kind):
 def test_sort_orders_on_the_corpus(pieces, order, kind):
     merge(pieces["foundation"][kind], [f"SO={order}"], f"foundation {kind} SO={order}",
           outcome=outcome_of(order))
+
+
+@pytest.mark.parametrize("source", ["foundation", "markdup"])
+def test_duplicate_order_on_pairs_with_mc(pieces, source):
+    merge(pieces[source]["with_mc"], ["SO=duplicate"], f"{source} with MC SO=duplicate")
 
 
 @pytest.mark.parametrize("kind", ["by_rg", "queryname", "mixed"])

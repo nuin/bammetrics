@@ -6,6 +6,8 @@ with samtools.
 
 - `by_rg`: one BAM per read group (its own `@RG` line only), and one for the records
   without `RG`, coordinate sorted.
+- `with_mc`: the pieces without the paired records whose mate is mapped and that carry
+  no `MC` (htsjdk's duplicate comparator fails on them).
 - `colliding`: the same pieces with every read group renamed `grp` (each piece's
   `SM`, `LB` and `PU` kept, so every ID collides) and a `@PG` line `ID:aligner` whose
   `VN` differs per piece, set as `PG` on every record: both kinds of ID collide.
@@ -81,6 +83,15 @@ def by_read_group(lines):
     return out
 
 
+def has_mc_or_needs_none(record):
+    """False for a paired record whose mate is mapped and that has no `MC` tag, which
+    htsjdk's duplicate comparator fails on."""
+    fields = record.split("\t")
+    flag = int(fields[1])
+    paired_mate_mapped = flag & 0x1 and not flag & 0x8
+    return not paired_mate_mapped or any(f.startswith("MC:Z:") for f in fields[11:])
+
+
 def set_tag(record, tag, value):
     fields = [f for f in record.split("\t") if not f.startswith(f"{tag}:")]
     return "\t".join([*fields, f"{tag}:Z:{value}"])
@@ -138,6 +149,8 @@ def pieces(bam, directory, name, bammetrics):
     p = lambda kind, i, suffix=".bam": directory / f"{name}_{kind}_{i}{suffix}"
     out = {}
     out["by_rg"] = [write(h + r, p("rg", i)) for i, (_, h, r) in enumerate(groups)]
+    out["with_mc"] = [write(h + [x for x in r if has_mc_or_needs_none(x)], p("mc", i))
+                      for i, (_, h, r) in enumerate(groups)]
     out["colliding"] = [write(h + r, p("collide", i))
                         for i, (h, r) in enumerate(colliding(groups))]
     out["queryname"] = [queryname_sorted(piece, p("qn", i), bammetrics)
