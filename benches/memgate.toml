@@ -696,3 +696,42 @@ argv = [
 needs = ["tests/data/make_arrays_stress.py", "tests/data/arrays/arrays.vcf", "tests/data/arrays/dbsnp.vcf"]
 max_rss_mib = 128
 max_seconds = 60
+
+# Wave W12: IntervalListToBed and VcfToIntervalList. benches/interval_scale.py writes the
+# inputs in the same shell, so its Python counts (about 500 MiB at 2,000,000 records).
+# Measured with bammetrics alone at 2,000,000: interval-list-to-bed 274 MiB, 1.3 s;
+# vcf-to-interval-list 128 MiB, 1.2 s (Picard 3.5.0: 1,763 MiB, 6.5 s and 603 MiB, 2.7 s).
+[[command]]
+name = "interval-list-to-bed fixture"
+argv = ["{bin}", "interval-list-to-bed", "tests/data/intervals.interval_list", "-o", "{out}/intervals.bed"]
+needs = ["tests/data/intervals.interval_list"]
+max_rss_mib = 32
+max_seconds = 10
+
+[[command]]
+name = "vcf-to-interval-list fixture"
+argv = ["{bin}", "vcf-to-interval-list", "tests/data/intervals.vcf", "-o", "{out}/intervals.interval_list"]
+needs = ["tests/data/intervals.vcf"]
+max_rss_mib = 32
+max_seconds = 10
+
+[[command]]
+name = "interval-list-to-bed past the sort spill"
+argv = [
+    "sh", "-c",
+    "python3 benches/interval_scale.py {out} 600000 && {bin} interval-list-to-bed {out}/big.interval_list -o {out}/big.bed && {bin} vcf-to-interval-list {out}/big.vcf -o {out}/big.interval_list.gz",
+]
+needs = ["benches/interval_scale.py"]
+max_rss_mib = 320
+max_seconds = 60
+
+[[command]]
+name = "interval converters on GRCh38, 2,000,000 records"
+tier = "scale"
+argv = [
+    "sh", "-c",
+    "python3 benches/interval_scale.py {out} 2000000 ~/data/bammetrics-scale/genome/GRCh38.dict && {bin} interval-list-to-bed {out}/big.interval_list -o {out}/big.bed && {bin} vcf-to-interval-list {out}/big.vcf -o {out}/big.out.interval_list",
+]
+needs = ["~/data/bammetrics-scale/genome/GRCh38.dict"]
+max_rss_mib = 768
+max_seconds = 120
