@@ -93,6 +93,9 @@ pub struct Verb {
     /// tools): the verb makes it when missing, as it makes the directory
     /// above a file.
     pub directory: bool,
+    /// A [`Files::Bam`] verb whose `-o` may be left out with nothing
+    /// written in its place (`interval-list-tools` then prints a count).
+    pub optional_output: bool,
 }
 
 const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
@@ -112,6 +115,7 @@ const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
         reads_stdin: true,
         default_output: None,
         directory: false,
+        optional_output: false,
     }
 }
 
@@ -592,6 +596,26 @@ pub const VERBS: &[Verb] = &[
             Files::Prefix,
         )
     },
+    Verb {
+        input: "LIST",
+        about: Some(
+            "combines interval lists as Picard's IntervalListTools does: pad, then --action \
+             (CONCAT, UNION, INTERSECT, SUBTRACT, SYMDIFF, OVERLAPS against --second-input), \
+             then sort, invert, merge and break at band multiples. -o gets the list, or with \
+             --scatter-count above 1 a directory of temp_NNNN_of_N/scattered.interval_list \
+             files, renamed into place as one set. --output-value BASES or INTERVALS prints the \
+             count to standard output or --count-output; -o may then be left out.",
+        ),
+        writes: "interval list",
+        reads: &["SECOND_INPUT"],
+        also_writes: &["COUNT_OUTPUT"],
+        ignores: &[
+            (Key::Threads, "no BAM is read"),
+            (Key::Sample, "an interval list has no sample"),
+        ],
+        optional_output: true,
+        ..verb("interval-list-tools", "IntervalListTools", Files::Bam)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
@@ -709,6 +733,13 @@ impl Verb {
                 format!(
                     "The {} to write; - writes standard output. Without -o it goes beside the \
                      input, named as Picard names it.",
+                    self.writes
+                ),
+            ),
+            Files::Bam if self.optional_output => (
+                "FILE",
+                format!(
+                    "The {} to write; - writes standard output. Without -o none is written.",
                     self.writes
                 ),
             ),
@@ -1266,6 +1297,7 @@ impl Verb {
                 Some(g) => Ok(Some(PathBuf::from(&g.values[0]))),
                 None => match self.default_output {
                     Some(beside) => self.output_beside_input(picard, beside).map(Some),
+                    None if self.optional_output => Ok(None),
                     None => Err(
                         VerbError::usage(self.name, "missing -o BAM (Picard: OUTPUT)")
                             .hint("-o - writes the BAM to standard output"),

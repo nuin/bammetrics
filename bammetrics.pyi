@@ -1510,6 +1510,30 @@ def collect_arrays_variant_calling_metrics(
     PREFIX.arrays_control_code_summary_metrics; Python returns one row per file: file
     and rows."""
 
+def interval_list_tools(
+    input: _Paths,
+    *,
+    output: _Path | None = None,
+    padding: int | None = None,
+    unique: bool | None = None,
+    dont_merge_abutting: bool | None = None,
+    sort: bool | None = None,
+    action: str | None = None,
+    second_input: _Path | Sequence[_Path] | None = None,
+    comment: str | Sequence[str] | None = None,
+    scatter_count: int | None = None,
+    scatter_content: int | None = None,
+    include_filtered: bool | None = None,
+    break_bands_at_multiples_of: int | None = None,
+    subdivision_mode: str | None = None,
+    invert: bool | None = None,
+    output_value: str | None = None,
+    count_output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """IntervalListTools: one row per interval written (list, contig, start, end, strand,
+    name; list counts the scatter lists from 1); OUTPUT gets the interval list, or the
+    scatter directory when SCATTER_COUNT is above 1."""
+
 # END registry tools
 
 def alignment_summary(

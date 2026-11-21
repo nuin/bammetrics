@@ -1,0 +1,10 @@
+## argv
+interval-list-tools
+tests/data/intervals_a.interval_list
+-o
+tests/data/intervals_a.interval_list
+## exit
+2
+## stdout
+## stderr
+bammetrics interval-list-tools: tests/data/intervals_a.interval_list is an input; writing it would destroy it (from -o)

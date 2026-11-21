@@ -1,0 +1,24 @@
+## argv
+IntervalListTools
+I=tests/data/intervals_a.interval_list
+I=tests/data/targets.interval_list
+ACTION=UNION
+O=OUT/union.interval_list
+COMMENT=golden
+## exit
+0
+## stdout
+## stderr
+## file union.interval_list
+@HD	VN:1.6	SO:unsorted
+@SQ	SN:chr1	LN:100000
+@PG	ID:1	CL:IntervalListTools INPUT=[tests/data/intervals_a.interval_list, tests/data/targets.interval_list] OUTPUT=OUT/union.interval_list ACTION=UNION COMMENT=[golden]    PADDING=0 UNIQUE=false DONT_MERGE_ABUTTING=false SORT=true SCATTER_COUNT=1 INCLUDE_FILTERED=false BREAK_BANDS_AT_MULTIPLES_OF=0 SUBDIVISION_MODE=INTERVAL_SUBDIVISION INVERT=false OUTPUT_VALUE=NONE VERBOSITY=INFO QUIET=false VALIDATION_STRINGENCY=STRICT COMPRESSION_LEVEL=5 MAX_RECORDS_IN_RAM=500000 CREATE_INDEX=false CREATE_MD5_FILE=false USE_JDK_DEFLATER=false USE_JDK_INFLATER=false	PN:IntervalListTools
+@CO	golden
+chr1	1001	1300	+	t1|a2|a3
+chr1	2001	2400	+	t2|a2
+chr1	3000	3999	+	a5
+chr1	4001	4300	+	t3
+chr1	5001	5800	+	t4|a1
+chr1	8001	8300	+	t5
+chr1	9000	9000	+	a4
+chr1	99950	100000	+	a6

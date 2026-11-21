@@ -1,0 +1,15 @@
+## argv
+IntervalListTools
+--INPUT
+tests/data/intervals_a.interval_list
+--ACTION
+OVERLAPS
+--SECOND_INPUT
+tests/data/targets.interval_list
+--OUTPUT
+OUT/overlaps.interval_list
+## exit
+1
+## stdout
+## stderr
+bammetrics: IntervalListTools: option OUTPUT is not implemented (it may change the metrics)
