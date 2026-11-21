@@ -21,8 +21,9 @@
 //!   `;`-separated entry is `KEY=VALUE` or a flag; a later `END` replaces
 //!   an earlier one. `END=0` under an `END` declared as `Flag` is dropped.
 //!   An `END` whose value is not one Java `int` (a list, a flag, `.`) is
-//!   an error. Without `END` the end is `POS` plus the reference length
-//!   less 1 in Java `int` arithmetic.
+//!   an error. In VCF 4.3 and later the value is percent-decoded first.
+//!   Without `END` the end is `POS` plus the reference length less 1 in
+//!   Java `int` arithmetic.
 //! - `REF` is upper-cased and checked as `checkAllele` checks it: not
 //!   empty, not symbolic, not `.`, not `*`, no leading `D` or `I`, only
 //!   `ACGTN`. Each `ALT` (the field split on `,`, trailing empty ones
@@ -49,6 +50,9 @@ pub struct Rules {
     pub eager_genotypes: bool,
     /// `##INFO=<ID=END,...,Type=Flag>`.
     pub end_is_flag: bool,
+    /// VCF 4.3 or later: `INFO` values are percent-decoded
+    /// (`VCFPercentEncodedTextTransformer`).
+    pub percent_decoded: bool,
 }
 
 impl Rules {
@@ -68,6 +72,10 @@ impl Rules {
                 .infos()
                 .get("END")
                 .is_some_and(|info| info.ty() == Type::Flag),
+            percent_decoded: {
+                let format = header.file_format();
+                (format.major(), format.minor()) >= (4, 3)
+            },
         }
     }
 }
@@ -99,7 +107,7 @@ pub fn parse_line(line: &str, rules: &Rules) -> Result<Option<Site>, String> {
     let reference = parts[3].to_uppercase();
     check_quality(parts[5])?;
     let filtered = parse_filters(parts[6])?;
-    let end_value = parse_info_end(parts[7], rules.end_is_flag)?;
+    let end_value = parse_info_end(parts[7], rules)?;
     let end = match end_value {
         Some(text) => Some(
             crate::java::parse_integer(&text, 32)
@@ -237,7 +245,8 @@ fn java_split(text: &str, separator: char) -> Vec<&str> {
 /// `AbstractVCFCodec.parseInfo` as far as `END` goes: the text of the
 /// last `END` entry as `Object.toString` gives it (`true` for a flag, a
 /// list in brackets), `None` without one.
-fn parse_info_end(info: &str, end_is_flag: bool) -> Result<Option<String>, String> {
+fn parse_info_end(info: &str, rules: &Rules) -> Result<Option<String>, String> {
+    let end_is_flag = rules.end_is_flag;
     if info.is_empty() {
         return Err("The VCF specification requires a valid (non-zero length) info field".into());
     }
@@ -256,10 +265,19 @@ fn parse_info_end(info: &str, end_is_flag: bool) -> Result<Option<String>, Strin
             Some(("END", value)) => {
                 let values: Vec<&str> = value.split(',').collect();
                 if values.len() == 1 {
+                    let value = if rules.percent_decoded {
+                        percent_decode(value)
+                    } else {
+                        value.to_owned()
+                    };
                     if end_is_flag && value == "0" {
                         continue;
                     }
-                    end = Some(if value.is_empty() { "." } else { value }.to_owned());
+                    end = Some(if value.is_empty() {
+                        ".".to_owned()
+                    } else {
+                        value
+                    });
                 } else {
                     end = Some(format!("[{}]", values.join(", ")));
                 }
@@ -271,6 +289,34 @@ fn parse_info_end(info: &str, end_is_flag: bool) -> Result<Option<String>, Strin
         }
     }
     Ok(end)
+}
+
+/// `VCFPercentEncodedTextTransformer.decodeText`: each `%` with two hex
+/// digits after it becomes the character of that code; any other `%`
+/// stays.
+fn percent_decode(text: &str) -> String {
+    if !text.contains('%') {
+        return text.to_owned();
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < chars.len() {
+        let code = (chars[i] == '%' && i + 2 < chars.len())
+            .then(|| chars[i + 1].to_digit(16).zip(chars[i + 2].to_digit(16)))
+            .flatten();
+        match code {
+            Some((high, low)) => {
+                out.push(char::from((high * 16 + low) as u8));
+                i += 3;
+            }
+            None => {
+                out.push(chars[i]);
+                i += 1;
+            }
+        }
+    }
+    out
 }
 
 /// The alleles a record holds after `parseAlleles`.
@@ -432,6 +478,16 @@ mod tests {
             .expect("ok")
             .expect("site");
         assert_eq!(s.end, 10);
+        let v43 = Rules {
+            percent_decoded: true,
+            ..Rules::default()
+        };
+        let s = parse_line("c1\t1\t.\tA\t<DEL>\t.\t.\tEND=%32%30", &v43)
+            .expect("ok")
+            .expect("site");
+        assert_eq!(s.end, 20);
+        assert!(site("c1\t1\t.\tA\t<DEL>\t.\t.\tEND=%32%30").is_err());
+        assert_eq!(percent_decode("a%3Db%2"), "a=b%2");
     }
 
     #[test]
