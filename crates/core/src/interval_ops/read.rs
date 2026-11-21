@@ -59,7 +59,7 @@ fn read_text(path: &Path, cap: u64) -> Result<String> {
 
 /// The lines of `text` as `BufferedReader.readLine` ends them: at `\n`,
 /// `\r` or `\r\n`.
-fn java_lines(text: &str) -> impl Iterator<Item = &str> {
+pub(crate) fn java_lines(text: &str) -> impl Iterator<Item = &str> {
     let mut rest = text;
     std::iter::from_fn(move || {
         if rest.is_empty() {

@@ -178,7 +178,7 @@ fn gzi_path(fasta: &Path) -> PathBuf {
 }
 
 /// The `.gzi` of a bgzip FASTA, at most [`MAX_INDEX_BYTES`].
-fn read_gzi(fasta: &Path) -> io::Result<bgzf::gzi::Index> {
+pub(crate) fn read_gzi(fasta: &Path) -> io::Result<bgzf::gzi::Index> {
     let path = gzi_path(fasta);
     let size = std::fs::metadata(&path)
         .map_err(|e| invalid(format!("{}: {e} (bgzip -r writes it)", path.display())))?

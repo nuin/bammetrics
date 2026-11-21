@@ -4,7 +4,7 @@
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-use super::IntervalList;
+use super::{Header, IntervalList};
 use crate::cleanup::{AtomicFile, MadeDirs};
 use crate::error::{Error, Result};
 
@@ -76,24 +76,66 @@ pub(super) fn check_target(target: &Path, inputs: &[PathBuf]) -> Result<()> {
 /// Write `list` into `file`: plain text, or BGZF (a gzip file htsjdk
 /// reads back) under a name [`gzip_name`] accepts.
 pub(super) fn stage(list: &IntervalList, file: &AtomicFile) -> Result<()> {
+    stage_with(file, |mut out| {
+        list.write_to(&mut out).map_err(Error::Record)
+    })
+}
+
+/// Write what `body` writes into `file`, through BGZF under a name
+/// [`gzip_name`] accepts. An I/O error of `body` is reported against the
+/// file.
+fn stage_with(file: &AtomicFile, body: impl FnOnce(&mut dyn Write) -> Result<()>) -> Result<()> {
     let target = file.path().to_path_buf();
     let output = |source| Error::Output {
         path: target.clone(),
         source,
     };
+    let against_file = |e: Error| match e {
+        Error::Record(source) => output(source),
+        other => other,
+    };
     let handle = file.create().map_err(output)?;
     if gzip_name(&target) {
         let mut writer = noodles::bgzf::io::Writer::new(BufWriter::new(handle));
-        list.write_to(&mut writer).map_err(output)?;
+        body(&mut writer).map_err(against_file)?;
         writer
             .finish()
             .and_then(|mut inner| inner.flush())
             .map_err(output)?;
     } else {
         let mut writer = BufWriter::new(handle);
-        list.write_to(&mut writer).map_err(output)?;
+        body(&mut writer).map_err(against_file)?;
         writer.flush().map_err(output)?;
     }
+    Ok(())
+}
+
+/// [`write_list`] for a list made while it is written: `header`, then
+/// the lines `body` writes, so no interval is held. The file rules are
+/// [`write_list`]'s; a failed `body` leaves `path` as it was.
+pub fn write_streamed(
+    header: &Header,
+    path: &Path,
+    inputs: &[PathBuf],
+    body: impl FnOnce(&mut dyn Write) -> Result<()>,
+) -> Result<()> {
+    check_target(path, inputs)?;
+    let mut dirs = MadeDirs::default();
+    dirs.create_parent(path).map_err(|source| Error::Output {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let file = AtomicFile::new(path);
+    stage_with(&file, |out| {
+        out.write_all(header.encode().as_bytes())
+            .map_err(Error::Record)?;
+        body(out)
+    })?;
+    file.commit().map_err(|source| Error::Output {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    dirs.keep();
     Ok(())
 }
 

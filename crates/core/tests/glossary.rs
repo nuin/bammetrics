@@ -387,6 +387,16 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
             out("arrays"),
         ],
     );
+    // Wave W12: tests/data/n_runs.fa of tests/concordance/n_run_refs.py. Both
+    // write a file that is no metrics file and return rows without a class.
+    args.insert(
+        "ScatterIntervalsByNs",
+        vec![format!("R={DATA}/n_runs.fa"), out("n_runs.interval_list")],
+    );
+    args.insert(
+        "NonNFastaSize",
+        vec![format!("I={DATA}/n_runs.fa"), out("n_runs.non_n")],
+    );
     args
 }
 

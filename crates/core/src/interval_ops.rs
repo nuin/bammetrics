@@ -39,13 +39,14 @@ pub use ops::{
     break_at_band_multiples, concatenate, difference, intersection, invert, merge_intervals,
     overlaps, subtract, subtract_disjoint, union, unique_intervals,
 };
+pub(crate) use read::java_lines;
 pub use read::{MAX_LINE_BYTES, MAX_LIST_BYTES};
 pub use regions::Regions;
 pub use scatter::{
     MAX_SCATTER_FILES, ScatterMode, list_weight, scatter, scatter_count_for_content, scatter_path,
     write_scatter,
 };
-pub use write::write_list;
+pub use write::{write_list, write_streamed};
 
 /// One interval as htsjdk's `Interval` holds it: `contig` is the index of
 /// its `@SQ` line in the list's header.

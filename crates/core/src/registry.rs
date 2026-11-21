@@ -378,6 +378,8 @@ pub const TOOLS: &[&Tool] = &[
     &crate::arrays::baf_regress::TOOL,
     &crate::arrays::verify_id_intensity::TOOL,
     &crate::arrays::variant_calling::TOOL,
+    &crate::scatter_intervals_by_ns::TOOL,
+    &crate::non_n_fasta_size::TOOL,
 ];
 
 /// The tool named `name`.
