@@ -56,72 +56,115 @@ pub fn merge_intervals(
     combine_abutting: bool,
     concatenate_names: bool,
 ) -> Vec<Interval> {
-    struct Group {
-        first: Interval,
-        end: i32,
-        least_start: i32,
-        names: Vec<String>,
-        seen: HashSet<String>,
-    }
-    impl Group {
-        fn new(interval: Interval, concatenate_names: bool) -> Self {
-            let mut group = Group {
-                end: interval.end,
-                least_start: interval.start,
-                names: Vec::new(),
-                seen: HashSet::new(),
-                first: interval,
-            };
-            if concatenate_names && let Some(name) = group.first.name.clone() {
-                group.seen.insert(name.clone());
-                group.names.push(name);
-            }
-            group
-        }
+    merged(intervals, combine_abutting, concatenate_names).collect()
+}
 
-        fn finish(self, concatenate_names: bool) -> Interval {
-            let mut out = self.first;
-            out.end = self.end;
-            if concatenate_names {
-                out.start = self.least_start;
-                out.name = (!self.names.is_empty()).then(|| self.names.join("|"));
-            }
-            out
-        }
+/// [`merge_intervals`] one merged interval at a time, as
+/// `IntervalMergerIterator` hands them out: each as soon as an input
+/// interval falls outside it, so a stream of intervals is merged while it
+/// is read.
+pub fn merged<I: IntoIterator<Item = Interval>>(
+    intervals: I,
+    combine_abutting: bool,
+    concatenate_names: bool,
+) -> Merged<I::IntoIter> {
+    Merged {
+        inner: intervals.into_iter().fuse(),
+        current: None,
+        distance: i32::from(combine_abutting),
+        concatenate_names,
     }
-    let distance = i32::from(combine_abutting);
-    let mut out = Vec::new();
-    let mut current: Option<Group> = None;
-    for next in intervals {
-        match current.as_mut() {
-            Some(group)
-                if group.first.contig == next.contig
-                    && coordinates_overlap(
-                        group.first.start,
-                        group.end,
-                        next.start.wrapping_sub(distance),
-                        next.end.wrapping_add(distance),
-                    ) =>
-            {
-                group.end = group.end.max(next.end);
-                if concatenate_names {
-                    group.least_start = group.least_start.min(next.start);
-                    if let Some(name) = next.name
-                        && group.seen.insert(name.clone())
-                    {
-                        group.names.push(name);
+}
+
+/// The iterator of [`merged`].
+pub struct Merged<I> {
+    inner: std::iter::Fuse<I>,
+    current: Option<Group>,
+    distance: i32,
+    concatenate_names: bool,
+}
+
+impl<I: Iterator<Item = Interval>> Iterator for Merged<I> {
+    type Item = Interval;
+
+    fn next(&mut self) -> Option<Interval> {
+        let concatenate_names = self.concatenate_names;
+        for next in self.inner.by_ref() {
+            match self.current.as_mut() {
+                Some(group) if group.joins(&next, self.distance) => {
+                    group.add(next, concatenate_names);
+                }
+                _ => {
+                    if let Some(done) = self.current.replace(Group::new(next, concatenate_names)) {
+                        return Some(done.finish(concatenate_names));
                     }
                 }
             }
-            _ => {
-                if let Some(done) = current.replace(Group::new(next, concatenate_names)) {
-                    out.push(done.finish(concatenate_names));
-                }
+        }
+        self.current
+            .take()
+            .map(|group| group.finish(concatenate_names))
+    }
+}
+
+/// The interval [`Merged`] is growing and the names it has met.
+struct Group {
+    first: Interval,
+    end: i32,
+    least_start: i32,
+    names: Vec<String>,
+    seen: HashSet<String>,
+}
+
+impl Group {
+    fn new(interval: Interval, concatenate_names: bool) -> Self {
+        let mut group = Group {
+            end: interval.end,
+            least_start: interval.start,
+            names: Vec::new(),
+            seen: HashSet::new(),
+            first: interval,
+        };
+        if concatenate_names && let Some(name) = group.first.name.clone() {
+            group.seen.insert(name.clone());
+            group.names.push(name);
+        }
+        group
+    }
+
+    /// `overlaps(next) || withinDistanceOf(next, distance)` on the
+    /// first member's start and the greatest end so far.
+    fn joins(&self, next: &Interval, distance: i32) -> bool {
+        self.first.contig == next.contig
+            && coordinates_overlap(
+                self.first.start,
+                self.end,
+                next.start.wrapping_sub(distance),
+                next.end.wrapping_add(distance),
+            )
+    }
+
+    fn add(&mut self, next: Interval, concatenate_names: bool) {
+        self.end = self.end.max(next.end);
+        if concatenate_names {
+            self.least_start = self.least_start.min(next.start);
+            if let Some(name) = next.name
+                && self.seen.insert(name.clone())
+            {
+                self.names.push(name);
             }
         }
     }
-    out.extend(current.map(|group| group.finish(concatenate_names)));
-    out
+
+    fn finish(self, concatenate_names: bool) -> Interval {
+        let mut out = self.first;
+        out.end = self.end;
+        if concatenate_names {
+            out.start = self.least_start;
+            out.name = (!self.names.is_empty()).then(|| self.names.join("|"));
+        }
+        out
+    }
 }
 
 /// `IntervalList.getUniqueIntervals(list, combineAbutting, concatenateNames,

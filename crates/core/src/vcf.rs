@@ -33,7 +33,9 @@ use std::path::{Path, PathBuf};
 use noodles::vcf;
 
 mod bit_set;
+mod header;
 mod line_cap;
+mod site;
 
 pub use bit_set::MAX_DBSNP_PAGES;
 use bit_set::PAGE_BITS;
@@ -427,6 +429,10 @@ pub struct VcfReader {
     reader: vcf::io::Reader<Box<dyn BufRead>>,
     record: vcf::Record,
     line: u64,
+    /// The line [`VcfReader::next_site`] read last, as bytes.
+    raw: Vec<u8>,
+    /// What the header tells [`VcfReader::next_site`], made at its first call.
+    rules: Option<site::Rules>,
 }
 
 impl VcfReader {
@@ -456,20 +462,26 @@ impl VcfReader {
         }
         let gzip = read == 2 && magic == [0x1f, 0x8b];
         let file = io::Cursor::new(magic[..read].to_vec()).chain(file);
+        // Gzip members in turn, BGZF or plain, as `GZIPInputStream` reads a
+        // `.vcf.gz` for htsjdk.
         let text: Box<dyn BufRead> = if gzip {
-            Box::new(noodles::bgzf::io::Reader::new(file))
+            Box::new(io::BufReader::new(crate::gzip::GzipReader::new(
+                io::BufReader::new(file),
+            )))
         } else {
             Box::new(io::BufReader::new(file))
         };
         let capped: Box<dyn BufRead> = Box::new(LineCap::new(text, max_line_bytes, max_lines));
         let mut reader = vcf::io::Reader::new(capped);
-        let header = reader.read_header().map_err(input)?;
+        let header = header::read_header(reader.get_mut()).map_err(input)?;
         Ok(Self {
             path: path.to_path_buf(),
             header,
             reader,
             record: vcf::Record::default(),
             line: 0,
+            raw: Vec::new(),
+            rules: None,
         })
     }
 
@@ -533,27 +545,49 @@ impl VcfReader {
         &self.record
     }
 
-    /// The next record's position, `ID` and filter status, its alleles and
-    /// genotypes not decoded (htsjdk decodes genotypes lazily, so a site
-    /// list never reads them); `None` at the end of the file.
+    /// The next record's position, `ID` and filter status, read from its
+    /// line as htsjdk's `VCFCodec` reads it for a site (`vcf/site.rs`): the
+    /// fixed columns checked, the genotypes left undecoded unless the
+    /// header's samples are not in sorted order; `None` at the end of the
+    /// file. A line is decoded as UTF-8, a byte that is not becoming
+    /// U+FFFD as Java's decoder makes it.
     pub fn next_site(&mut self) -> Result<Option<Site>> {
-        let read = self
-            .reader
-            .read_record(&mut self.record)
-            .map_err(|source| Error::Input {
-                path: self.path.clone(),
-                source,
-            })?;
-        if read == 0 {
-            return Ok(None);
+        let rules = self
+            .rules
+            .get_or_insert_with(|| site::Rules::of(&self.header))
+            .clone();
+        loop {
+            self.raw.clear();
+            let read = self
+                .reader
+                .get_mut()
+                .read_until(b'\n', &mut self.raw)
+                .map_err(|source| Error::Input {
+                    path: self.path.clone(),
+                    source,
+                })?;
+            if read == 0 {
+                return Ok(None);
+            }
+            self.line += 1;
+            if self.raw.last() == Some(&b'\n') {
+                self.raw.pop();
+                if self.raw.last() == Some(&b'\r') {
+                    self.raw.pop();
+                }
+            }
+            let text = String::from_utf8_lossy(&self.raw);
+            match site::parse_line(&text, &rules) {
+                Ok(Some(site)) => return Ok(Some(site)),
+                Ok(None) => {}
+                Err(message) => {
+                    return Err(Error::Intervals {
+                        path: self.path.clone(),
+                        message: format!("record {}: {message}", self.line),
+                    });
+                }
+            }
         }
-        self.line += 1;
-        parse_site(&self.record)
-            .map(Some)
-            .map_err(|message| Error::Intervals {
-                path: self.path.clone(),
-                message: format!("record {}: {message}", self.line),
-            })
     }
 
     /// Every remaining record.
@@ -578,36 +612,6 @@ pub struct Site {
     pub id: Option<String>,
     /// `FILTER` is neither `.` nor `PASS`.
     pub filtered: bool,
-}
-
-fn parse_site(record: &vcf::Record) -> std::result::Result<Site, String> {
-    let int =
-        |value: i64| i32::try_from(value).map_err(|_| format!("For input string: \"{value}\""));
-    let start = match record.variant_start() {
-        Some(Ok(p)) => usize::from(p) as i64,
-        Some(Err(e)) => return Err(format!("bad position: {e}")),
-        None => 0,
-    };
-    let mut end = start + record.reference_bases().len() as i64 - 1;
-    let info_field = record.info();
-    let info: &str = info_field.as_ref();
-    for field in info.split(';') {
-        if let Some(value) = field.strip_prefix("END=") {
-            end = value
-                .parse::<i32>()
-                .map(i64::from)
-                .map_err(|_| "the END value in the INFO field is not valid".to_owned())?;
-        }
-    }
-    let ids = record.ids();
-    let id: &str = ids.as_ref();
-    Ok(Site {
-        contig: record.reference_sequence_name().to_owned(),
-        start: int(start)?,
-        end: int(end)?,
-        id: (!id.is_empty() && id != ".").then(|| id.to_owned()),
-        filtered: is_filtered(record.filters().as_ref()),
-    })
 }
 
 /// `VCFCodec.parseFilters`: `.` and `PASS` are unfiltered. noodles hands

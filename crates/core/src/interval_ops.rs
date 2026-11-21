@@ -37,15 +37,16 @@ mod write;
 pub use header::{Header, HeaderRecord, Sequence, SortOrder};
 pub use ops::{
     break_at_band_multiples, concatenate, difference, intersection, invert, merge_intervals,
-    overlaps, subtract, subtract_disjoint, union, unique_intervals,
+    merged, overlaps, subtract, subtract_disjoint, union, unique_intervals,
 };
-pub use read::{MAX_LINE_BYTES, MAX_LIST_BYTES};
+pub use read::{MAX_LINE_BYTES, MAX_LIST_BYTES, VcfInterval, VcfIntervals};
 pub use regions::Regions;
 pub use scatter::{
     MAX_SCATTER_FILES, ScatterMode, list_weight, scatter, scatter_count_for_content, scatter_path,
     write_scatter,
 };
-pub use write::write_list;
+pub(crate) use write::check_target;
+pub use write::{write_list, write_text};
 
 /// One interval as htsjdk's `Interval` holds it: `contig` is the index of
 /// its `@SQ` line in the list's header.

@@ -106,12 +106,29 @@ impl IntervalList {
     /// a blank line skipped. A record on a contig the header lacks is
     /// skipped, as htsjdk does with a warning.
     pub fn parse(text: &str) -> std::result::Result<IntervalList, String> {
+        Self::parse_lines(text, true)
+    }
+
+    /// The intervals of `path` as tribble's `AbstractFeatureReader` reads
+    /// them with `IntervalListCodec` (`IntervalListToBed`): the rules of
+    /// [`IntervalList::read`], but a file without a header line is read
+    /// with an empty dictionary, so every record is decoded, checked and
+    /// then skipped.
+    pub fn read_features(path: &Path) -> Result<IntervalList> {
+        let text = read_text(path, MAX_LIST_BYTES)?;
+        Self::parse_lines(&text, false).map_err(|message| Error::Intervals {
+            path: path.to_path_buf(),
+            message,
+        })
+    }
+
+    fn parse_lines(text: &str, require_header: bool) -> std::result::Result<IntervalList, String> {
         let mut lines = java_lines(text).peekable();
         let mut header_lines = Vec::new();
         while let Some(line) = lines.next_if(|l| l.starts_with('@')) {
             header_lines.push(line);
         }
-        if header_lines.is_empty() {
+        if require_header && header_lines.is_empty() {
             return Err("Interval list file must contain header. ".to_owned());
         }
         let header = Header::decode(header_lines)?;
@@ -126,74 +143,29 @@ impl IntervalList {
     }
 
     /// `VCFFileReader.toIntervalList(path, includeFiltered)`: the
-    /// `##contig` lines as the dictionary (`SN`, `LN` or 0, `AS` from
-    /// `assembly`), then per record not filtered (or every record with
-    /// `include_filtered`) `POS` to `INFO/END` (else the reference
-    /// allele's end) on `+`, named by `ID`, or `interval-N` counting the
-    /// records without one.
+    /// intervals of [`VcfIntervals`] added to a list under its dictionary;
+    /// a record on a contig the dictionary lacks is an error
+    /// (`IntervalList.add`).
     pub fn from_vcf(path: &Path, include_filtered: bool) -> Result<IntervalList> {
-        let mut reader = VcfReader::open_capped(path, MAX_LINE_BYTES, crate::vcf::MAX_DBSNP_LINES)?;
-        let intervals_error = |message: String| Error::Intervals {
-            path: path.to_path_buf(),
-            message,
-        };
-        let contigs = reader.header().contigs();
-        if contigs.is_empty() {
-            return Err(intervals_error(
-                "the VCF has no ##contig lines, so no sequence dictionary (Picard fails with a \
-                 NullPointerException)"
-                    .to_owned(),
-            ));
-        }
-        let mut sequences = Vec::with_capacity(contigs.len());
-        for (name, contig) in contigs {
-            let length = match contig.length() {
-                Some(length) => i32::try_from(length).map_err(|_| {
-                    intervals_error(format!("For input string: \"{length}\" (##contig {name})"))
-                })?,
-                None => 0,
-            };
-            let mut sequence = Sequence::new(name, length);
-            if let Some((_, assembly)) = contig
-                .other_fields()
-                .iter()
-                .find(|(key, _)| key.as_ref() == "assembly")
-            {
-                sequence
-                    .attributes
-                    .push(("AS".to_owned(), assembly.clone()));
-            }
-            sequences.push(sequence);
-        }
-        let mut list = IntervalList::new(Header::new(sequences));
+        let (header, mut sites) = VcfIntervals::open(path, include_filtered)?;
+        let mut list = IntervalList::new(header);
         let index = list.header.name_index();
-        let mut unnamed = 0u64;
-        while let Some(record) = reader.next_site()? {
-            if record.filtered && !include_filtered {
-                continue;
-            }
-            let Some(&contig) = index.get(record.contig.as_str()) else {
-                return Err(intervals_error(format!(
-                    "Cannot add interval {}:{}-{}\t+\t{}, contig not in header",
-                    record.contig,
-                    record.start,
-                    record.end,
-                    record.id.as_deref().unwrap_or(".")
-                )));
-            };
-            let name = match record.id {
-                Some(id) => id,
-                None => {
-                    unnamed += 1;
-                    format!("interval-{unnamed}")
-                }
+        while let Some(site) = sites.next_interval()? {
+            let Some(&contig) = index.get(site.contig.as_str()) else {
+                return Err(Error::Intervals {
+                    path: path.to_path_buf(),
+                    message: format!(
+                        "Cannot add interval {}:{}-{}\t+\t{}, contig not in header",
+                        site.contig, site.start, site.end, site.name
+                    ),
+                });
             };
             list.intervals.push(Interval {
                 contig,
-                start: record.start,
-                end: record.end,
+                start: site.start,
+                end: site.end,
                 negative_strand: false,
-                name: Some(name),
+                name: Some(site.name),
             });
         }
         Ok(list)
@@ -292,4 +264,99 @@ fn decode_record(
         negative_strand,
         name: Some(name.to_owned()),
     }))
+}
+
+/// One interval of [`VcfIntervals`], its contig by name: `VcfToIntervalList`
+/// writes a record on a contig the dictionary lacks as it is.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VcfInterval {
+    pub contig: String,
+    pub start: i32,
+    pub end: i32,
+    pub name: String,
+}
+
+/// `VCFFileReader.toIntervals(reader, includeFiltered)` over a plain or
+/// gzip VCF: per record not filtered (or every record with
+/// `include_filtered`), `POS` to `INFO/END` (else the reference allele's
+/// end) on `+`, named by `ID`, or `interval-N` counting the records
+/// without one (an `AtomicInteger`, so it wraps as a Java `int`). Each
+/// record is checked as htsjdk's codec checks its site
+/// ([`VcfReader::next_site`]); lines are read one at a time under
+/// [`MAX_LINE_BYTES`].
+pub struct VcfIntervals {
+    reader: VcfReader,
+    include_filtered: bool,
+    unnamed: i32,
+}
+
+impl VcfIntervals {
+    /// Open `path` and make its dictionary: the `##contig` lines (`SN`,
+    /// `LN` or 0, `AS` from `assembly`), as `VCFHeader.getSequenceDictionary`
+    /// makes it. A VCF without `##contig` lines has none, and Picard fails
+    /// there with a `NullPointerException`.
+    pub fn open(path: &Path, include_filtered: bool) -> Result<(Header, Self)> {
+        let reader = VcfReader::open_capped(path, MAX_LINE_BYTES, crate::vcf::MAX_DBSNP_LINES)?;
+        let intervals_error = |message: String| Error::Intervals {
+            path: path.to_path_buf(),
+            message,
+        };
+        let contigs = reader.header().contigs();
+        if contigs.is_empty() {
+            return Err(intervals_error(
+                "the VCF has no ##contig lines, so no sequence dictionary (Picard fails with a \
+                 NullPointerException)"
+                    .to_owned(),
+            ));
+        }
+        let mut sequences = Vec::with_capacity(contigs.len());
+        for (name, contig) in contigs {
+            let length = match contig.length() {
+                Some(length) => i32::try_from(length).map_err(|_| {
+                    intervals_error(format!("For input string: \"{length}\" (##contig {name})"))
+                })?,
+                None => 0,
+            };
+            let mut sequence = Sequence::new(name, length);
+            if let Some((_, assembly)) = contig
+                .other_fields()
+                .iter()
+                .find(|(key, _)| key.as_ref() == "assembly")
+            {
+                sequence
+                    .attributes
+                    .push(("AS".to_owned(), assembly.clone()));
+            }
+            sequences.push(sequence);
+        }
+        let sites = Self {
+            reader,
+            include_filtered,
+            unnamed: 0,
+        };
+        Ok((Header::new(sequences), sites))
+    }
+
+    /// The next interval, `None` at the end of the file.
+    pub fn next_interval(&mut self) -> Result<Option<VcfInterval>> {
+        while let Some(site) = self.reader.next_site()? {
+            if site.filtered && !self.include_filtered {
+                continue;
+            }
+            let name = match site.id {
+                Some(id) => id,
+                None => {
+                    self.unnamed = self.unnamed.wrapping_add(1);
+                    format!("interval-{}", self.unnamed)
+                }
+            };
+            return Ok(Some(VcfInterval {
+                contig: site.contig,
+                start: site.start,
+                end: site.end,
+                name,
+            }));
+        }
+        Ok(None)
+    }
 }
