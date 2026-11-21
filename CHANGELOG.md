@@ -1,5 +1,41 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `interval_ops` (`crates/core/src/interval_ops.rs` and `interval_ops/`), the interval
+  layer of wave W12: htsjdk 5.0.0's `IntervalList` read from a Picard interval list (the
+  header through `SAMTextHeaderCodec` at `SILENT`, the records through
+  `IntervalListCodec`, gzip by name), from a VCF (`VCFFileReader.toIntervalList`,
+  `INCLUDE_FILTERED`, `END`, `interval-N` names) and from a BED through
+  `bed_to_interval_list`, and written as `IntervalList.write`. `sorted`, `uniqued`,
+  `concatenate`, `union`, `intersection`, `subtract`, `difference`, `overlaps`, `invert`,
+  `padded` and `breakIntervalsAtBandMultiples` keep htsjdk's results, names and orders;
+  overlap queries go through a segment tree, so no operation compares every pair. The
+  five `IntervalListScatterer` modes, `SCATTER_CONTENT`, and the
+  `temp_NNNN_of_N/scattered.interval_list` directory written as one set (at most 100,000
+  files). No registry tool yet: `IntervalListTools` and the other W12 tools come next.
+- `crates/core/examples/interval_ops.rs`: `IntervalListTools` over the layer, and
+  `tests/concordance/test_interval_ops.py` with the seeded lists of
+  `tests/concordance/interval_lists.py`: every `ACTION` under 13 option sets
+  (`PADDING` -5, 0 and 7, `UNIQUE`, `SORT=false`, `DONT_MERGE_ABUTTING`, `INVERT`,
+  `BREAK_BANDS_AT_MULTIPLES_OF`, `COMMENT`), every scatter mode at `SCATTER_COUNT` 1, 2,
+  3, 7, 50 and 200 and with `SCATTER_CONTENT`, Picard-made and corpus lists, and error
+  parity, against Picard 3.5.0.
+
+### Changed
+
+- `BedToIntervalList UNIQUE=true` merges an interval with no base as htsjdk does: a
+  zero-length interval at 10 now joins one starting at 11 (Picard 3.5.0 writes one
+  interval there). Its sort compares names by UTF-16 unit, as Java does.
+- `vcf::Regions` (the `INTERVALS` of `CollectVariantCallingMetrics`,
+  `GenotypeConcordance` and `CollectSequencingArtifactMetrics`) reads, merges,
+  intersects and queries through `interval_ops`: the header as htsjdk decodes it, a
+  dictionary mismatch between two lists as htsjdk's error, an interval with no base
+  overlapping nothing, and overlap queries by binary search in place of a scan.
+- `mt_copy_number::subtract` is `interval_ops::subtract_disjoint`, unchanged.
+
 ## 0.29.0
 
 Wave W11 of docs/07: six metrics tools (60 in all), two of them chain taps, and the first inputs that are text another program prints.

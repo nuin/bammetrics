@@ -415,6 +415,33 @@ Wall time follows the BGZF inflation: 1.14 s per GB at 8 threads. A 70 GB BAM at
 build the index. On the 573 MB slice that read is about 0.7 s of the 16.8 s `mark-duplicates`
 takes with `--create-index`.
 
+## Interval layer (wave W12, GRCh38 dictionary)
+
+Mac Studio, Apple M1 Ultra, release build of `feat/interval-ops`, one run each under
+`/usr/bin/time -l`. The example `interval_ops` (crates/core/examples/interval_ops.rs) runs
+`IntervalListTools` over `interval_ops`; Picard 3.5.0 with `JAVA_OPTS=-Xmx8g`. Input: two
+seeded lists on the 3,366 `@SQ` lines of GRCh38, 2,000,000 intervals (68.7 MB) and
+500,000 (16.9 MB), 0 to 301 bases each, over chromosomes 1 to 22, X and Y.
+
+| action | tool | wall | peak RSS |
+|---|---|---:|---:|
+| `UNIQUE=true` on the large list | example | 1.66 s | 411 MiB |
+| `UNION` of both | example | 1.91 s | 467 MiB |
+| `INTERSECT` of both | example | 1.11 s | 395 MiB |
+| `SUBTRACT` large minus small | example | 2.16 s | 730 MiB |
+| | Picard | 10.47 s | 4,403 MiB |
+| `SYMDIFF` | example | 3.64 s | 1,028 MiB |
+| | Picard | 13.25 s | 4,580 MiB |
+| `OVERLAPS` | example | 0.88 s | 385 MiB |
+| `INVERT=true` | example | 1.71 s | 620 MiB |
+| `PADDING=100 BREAK_BANDS_AT_MULTIPLES_OF=1000` | example | 1.32 s | 310 MiB |
+| `SCATTER_COUNT=50`, `INTERVAL_SUBDIVISION` | example | 1.78 s | 605 MiB |
+| `SCATTER_COUNT=50`, `BALANCING_WITHOUT_INTERVAL_SUBDIVISION` | example | 1.55 s | 625 MiB |
+
+The `SUBTRACT` and `SYMDIFF` files equal Picard's on every line but the `@PG` command
+line. An interval costs about 150 to 200 bytes in each copy a step holds; `SYMDIFF` holds
+both inputs, both unions and both differences at its peak.
+
 ## Memory gate
 
 `make memgate` runs each row of `benches/memgate.toml` under `/usr/bin/time -l` and fails
