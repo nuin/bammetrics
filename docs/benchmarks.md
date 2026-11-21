@@ -442,6 +442,22 @@ The `SUBTRACT` and `SYMDIFF` files equal Picard's on every line but the `@PG` co
 line. An interval costs about 150 to 200 bytes in each copy a step holds; `SYMDIFF` holds
 both inputs, both unions and both differences at its peak.
 
+### IntervalListToBed and VcfToIntervalList
+
+Same machine, release build of `feat/interval-bed-vcf`, one run each. Inputs from
+`python3 benches/interval_scale.py OUT 2000000 GRCh38.dict`: a shuffled list of 2,000,000
+intervals (72 MB, one name in 1,000 with U+0101, so Picard's sort spills) and a sites-only
+VCF of 2,000,000 records (73 MB, 2 percent filtered, 1 percent symbolic deletions).
+
+| tool | wall bammetrics | peak RSS bammetrics | wall Picard | peak RSS Picard |
+|---|---:|---:|---:|---:|
+| `IntervalListToBed` | 1.25 s | 274 MiB | 6.45 s | 1,763 MiB |
+| `VcfToIntervalList` | 1.19 s | 128 MiB | 2.73 s | 603 MiB |
+
+Both files equal Picard's byte for byte (1,961,583 intervals after the merge). The memory
+gate row `interval converters on GRCh38, 2,000,000 records` runs both with the generator:
+491 MiB, 9.3 s.
+
 ## Memory gate
 
 `make memgate` runs each row of `benches/memgate.toml` under `/usr/bin/time -l` and fails

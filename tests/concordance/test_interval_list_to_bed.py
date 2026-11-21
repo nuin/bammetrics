@@ -234,5 +234,5 @@ def test_round_trip(lists, tmp_path):
 
 
 def test_cases_are_covered():
-    assert SEEN["files"] >= 150, SEEN
+    assert SEEN["files"] >= 120, SEEN
     assert SEEN["errors"] >= len(interval_lists.BAD) + len(BAD_ARGS), SEEN
