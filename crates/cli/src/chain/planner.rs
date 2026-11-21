@@ -305,6 +305,15 @@ impl Estimate {
 /// records and sorts them twice.
 const REVERT: &str = "RevertOriginalBaseQualitiesAndAddMateCigar";
 
+/// `FixMateInformation`: holds and sorts twice, as the reverting step.
+const FIX_MATE: &str = "FixMateInformation";
+
+/// True for a step that sorts by name, sets the mates, then sorts in its
+/// order (default the stream's).
+fn sorts_twice(name: &str) -> bool {
+    name == REVERT || name == FIX_MATE
+}
+
 /// True for a transform that may hold its records in a sort: `sort-sam`,
 /// the reverting step, and a streaming tool whose arguments may make it
 /// sort (`add-or-replace-read-groups` with a `SORT_ORDER` that names a
@@ -312,7 +321,7 @@ const REVERT: &str = "RevertOriginalBaseQualitiesAndAddMateCigar";
 /// plan, made before the header is read, counts as a sort).
 fn holds(step: &Planned, name: &str) -> bool {
     name == "SortSam"
-        || name == REVERT
+        || sorts_twice(name)
         || (!step.streams() && step.tool.is_some_and(stage::streams))
 }
 
@@ -356,9 +365,9 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
         match (step.role, step.tool.map(|tool| tool.name)) {
             (Role::Transform, Some(name)) if holds(step, name) => {
                 // A reverting step sorts twice: by name, then in its order.
-                let passes = if name == REVERT { 2 } else { 1 };
+                let passes = if sorts_twice(name) { 2 } else { 1 };
                 let given = picard_value(step, "SORT_ORDER").and_then(SortOrder::parse);
-                let sorted = if name == REVERT {
+                let sorted = if sorts_twice(name) {
                     given.or(order)
                 } else {
                     given

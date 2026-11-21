@@ -670,6 +670,28 @@ pub const VERBS: &[Verb] = &[
         ],
         ..verb("non-n-fasta-size", "NonNFastaSize", Files::Single)
     },
+    Verb {
+        about: Some(
+            "sets the mate fields, MQ, MC and TLEN of each pair from its mate, as Picard's \
+             FixMateInformation does: -o gets every record of every input (several are merged) \
+             in --sort-order, a BAM or SAM text for a name ending in .sam. Without -o the one \
+             input BAM is rewritten in place, renamed over it when complete.",
+        ),
+        writes: "BAM",
+        optional_output: true,
+        ..verb("fix-mate-information", "FixMateInformation", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "keeps the records --filter picks, as Picard's FilterSamReads does: aligned or \
+             unmapped reads (pairs of a queryname-sorted input together), names in a read \
+             list, string values of a tag, or pairs with an end over an interval list. -o \
+             gets a BAM, or SAM text for a name ending in .sam, in --sort-order.",
+        ),
+        writes: "BAM",
+        reads: &["READ_LIST_FILE", "INTERVAL_LIST"],
+        ..verb("filter-sam-reads", "FilterSamReads", Files::Bam)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
@@ -791,6 +813,12 @@ impl Verb {
                      input, named as Picard names it.",
                     self.writes
                 ),
+            ),
+            Files::Bam if self.class == bammetrics_core::fix_mate_information::TOOL.name => (
+                "FILE",
+                "The BAM to write, or SAM text for a name ending in .sam; - writes standard \
+                 output. Without -o the one input BAM is rewritten in place."
+                    .to_owned(),
             ),
             Files::Bam if self.optional_output => (
                 "FILE",

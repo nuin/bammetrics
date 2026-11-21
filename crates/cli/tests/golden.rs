@@ -65,6 +65,10 @@ const FIXTURES: &[(&str, &str)] = &[
     ("CS_PAST", "tests/data/clean_sam_past.sam"),
     ("RV", "tests/data/revert.bam"),
     ("RV_SAM", "tests/data/revert.sam"),
+    ("MF", "tests/data/mate_filter.bam"),
+    ("MF_SAM", "tests/data/mate_filter.sam"),
+    ("MF_QN", "tests/data/mate_filter.queryname.bam"),
+    ("MF_NAMES", "tests/data/mate_filter_names.txt"),
     ("SNVQ", "tests/data/snvq.bam"),
     ("UMI", "tests/data/umi_prevalence.bam"),
     ("RRBS", "tests/data/rrbs.bam"),
@@ -870,6 +874,39 @@ const INTERVAL_CONVERT_CASES: &[Case] = &[
     case!("error_chain_interval_list_to_bed", "chain", "MD", "-o", "OUT/s", "+", "interval-list-to-bed"),
 ];
 
+/// `FixMateInformation` and `FilterSamReads` (wave W13) on
+/// `tests/data/mate_filter.bam`, its SAM text and queryname forms
+/// (`tests/data/make_mate_filter_fixtures.py`): the Picard face, the verbs,
+/// the errors, each tool as a chain step.
+#[rustfmt::skip]
+const MATE_FILTER_CASES: &[Case] = &[
+    case!("picard_fix_mate_information", "FixMateInformation", "I=MF", "O=OUT/fixed.bam"),
+    case!("picard_fix_mate_information_sam", "FixMateInformation", "I=MF_SAM", "O=OUT/fixed.sam", "SORT_ORDER=queryname", "ADD_MATE_CIGAR=false"),
+    case!("picard_fix_mate_information_merged", "FixMateInformation", "I=MF", "I=RV", "O=OUT/merged.bam", "CREATE_INDEX=true", "CREATE_MD5_FILE=true"),
+    case!("picard_fix_mate_information_queryname", "FixMateInformation", "I=MF_QN", "O=OUT/fixed.sam", "ASSUME_SORTED=true"),
+    case!("verb_fix_mate_information", "fix-mate-information", "MF", "-o", "OUT/fixed.sam", "--sort-order", "coordinate", "--max-records-in-ram", "3"),
+    case!("error_fix_mate_information_missing_mate", "FixMateInformation", "I=MF", "O=OUT/fixed.bam", "IGNORE_MISSING_MATES=false"),
+    case!("error_fix_mate_information_index_order", "FixMateInformation", "I=MF", "O=OUT/fixed.bam", "SORT_ORDER=queryname", "CREATE_INDEX=true"),
+    case!("error_fix_mate_information_two_inputs_in_place", "FixMateInformation", "I=MF", "I=RV"),
+    case!("error_verb_fix_mate_information_in_place_sam", "fix-mate-information", "MF_SAM"),
+    case!("chain_fix_mate_information", "chain", "MF_QN", "-o", "OUT/s", "+", "fix-mate-information", "--sort-order", "coordinate", "+", "filter-sam-reads", "--filter", "includePairedIntervals", "--interval-list", "IL", "+", "insert-size", "+", "write", "OUT/out.bam"),
+    case!("chain_dry_run_fix_mate_information", "chain", "MF", "-o", "OUT/s", "--dry-run", "+", "fix-mate-information", "--sort-order", "queryname", "+", "write", "OUT/out.bam"),
+    case!("error_chain_fix_mate_information_assume_sorted", "chain", "MF", "+", "fix-mate-information", "--assume-sorted", "+", "write", "OUT/out.bam"),
+    case!("picard_filter_sam_reads_read_list", "FilterSamReads", "I=MF", "O=OUT/kept.bam", "FILTER=includeReadList", "READ_LIST_FILE=MF_NAMES", "WRITE_READS_FILES=true"),
+    case!("picard_filter_sam_reads_aligned", "FilterSamReads", "I=MF_QN", "O=OUT/aligned.sam", "FILTER=includeAligned", "SORT_ORDER=coordinate"),
+    case!("picard_filter_sam_reads_tags", "FilterSamReads", "I=MF", "O=OUT/tags.bam", "FILTER=excludeTagValues", "TAG=XZ", "TAG_VALUE=a", "TAG_VALUE=b", "CREATE_INDEX=true"),
+    case!("verb_filter_sam_reads", "filter-sam-reads", "MF_QN", "-o", "OUT/unmapped.bam", "--filter", "excludeAligned"),
+    case!("verb_filter_sam_reads_integer_tag", "filter-sam-reads", "MF_SAM", "-o", "OUT/none.sam", "--filter", "includeTagValues", "--tag", "XI", "--tag-value", "7"),
+    case!("error_filter_sam_reads_intervals_without_mc", "FilterSamReads", "I=MF", "O=OUT/x.bam", "FILTER=includePairedIntervals", "INTERVAL_LIST=IL"),
+    case!("error_filter_sam_reads_no_list", "FilterSamReads", "I=MF", "O=OUT/x.bam", "FILTER=includeReadList"),
+    case!("error_filter_sam_reads_javascript", "FilterSamReads", "I=MF", "O=OUT/x.bam", "FILTER=includeJavascript"),
+    case!("error_filter_sam_reads_pairs_on_coordinate", "FilterSamReads", "I=MF", "O=OUT/x.bam", "FILTER=includeAligned"),
+    case!("error_verb_filter_sam_reads_tag_for_another", "filter-sam-reads", "MF", "-o", "OUT/x.bam", "--filter", "includeAligned", "--tag", "RG"),
+    case!("chain_filter_sam_reads", "chain", "MF_QN", "-o", "OUT/s", "+", "filter-sam-reads", "--filter", "includeAligned", "+", "quality-yield", "+", "write", "OUT/out.bam"),
+    case!("chain_filter_sam_reads_sorted", "chain", "MF", "-o", "OUT/s", "+", "filter-sam-reads", "--filter", "includeReadList", "--read-list-file", "MF_NAMES", "--sort-order", "queryname", "+", "write", "OUT/out.sam"),
+    case!("error_chain_filter_sam_reads_reads_files", "chain", "MF_QN", "+", "filter-sam-reads", "--filter", "includeAligned", "--write-reads-files", "+", "write", "OUT/out.bam"),
+];
+
 /// Wave W12: `ScatterIntervalsByNs` and `NonNFastaSize` on
 /// `tests/data/n_runs.fa` (`tests/concordance/n_run_refs.py --fixtures`),
 /// and `qc --panel` with an interval list: gzip, and the ACGTmer list
@@ -1387,6 +1424,11 @@ fn documented_n_runs_and_panel_commands_on_the_fixtures() {
     check(N_RUNS_CASES);
 }
 
+#[test]
+fn documented_fix_mate_and_filter_commands_on_the_fixtures() {
+    check(MATE_FILTER_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1503,6 +1545,7 @@ fn case_names_are_unique() {
         .chain(INTERVAL_LIST_TOOLS_CASES)
         .chain(INTERVAL_CONVERT_CASES)
         .chain(N_RUNS_CASES)
+        .chain(MATE_FILTER_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

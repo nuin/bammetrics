@@ -1,0 +1,11 @@
+## argv
+FixMateInformation
+I=tests/data/mate_filter.bam
+O=OUT/fixed.bam
+SORT_ORDER=queryname
+CREATE_INDEX=true
+## exit
+1
+## stdout
+## stderr
+bammetrics: Can't CREATE_INDEX unless sort order is coordinate

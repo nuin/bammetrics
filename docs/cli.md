@@ -326,6 +326,8 @@ table.
 | `interval-list-tools` | IntervalListTools (interval lists as positionals or `-i`; `--second-input` for SUBTRACT, SYMDIFF and OVERLAPS) | `-o` interval list, or with `--scatter-count` above 1 the directory `-o` of `temp_NNNN_of_N/scattered.interval_list`; the `--output-value` count on standard output or in `--count-output`; no file without `-o` |
 | `scatter-intervals-by-ns` | ScatterIntervalsByNs (a FASTA with its `.fai` and `.dict`; `--max-to-merge`, `--output-type`) | `-o` interval list of `ACGTmer` and `Nmer` runs, `-o -` standard output |
 | `non-n-fasta-size` | NonNFastaSize (a FASTA with its `.fai` and `.dict`; `--intervals`) | the count and a line end, in `-o` or on standard output |
+| `fix-mate-information` | FixMateInformation (SAM, BAM or CRAM, several merged; `--sort-order`, `--add-mate-cigar`, `--ignore-missing-mates`, `--assume-sorted`) | `-o` BAM, or SAM text for a name ending in `.sam`; without `-o` the one input BAM rewritten in place |
+| `filter-sam-reads` | FilterSamReads (a SAM, BAM or CRAM; `--filter` required, `--read-list-file`, `--interval-list`, `--tag`, `--tag-value`, `--sort-order`, `--write-reads-files`) | `-o` BAM, or SAM text for a name ending in `.sam`; `.reads` files beside it with `--write-reads-files` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -1456,6 +1458,84 @@ fixtures from `tests/concordance/n_run_refs.py`).
   or `.dict`, or the `--intervals` file; a failed run writes no file, and with `-o -` prints
   nothing: the list is copied to standard output once it is whole.
 - Neither reads a BAM, so neither is a step of `chain` (exit 2).
+
+### fix-mate-information
+
+```bash
+bammetrics fix-mate-information sample.bam -o sample.fixed.bam
+bammetrics fix-mate-information a.bam b.bam -o merged.fixed.bam --sort-order queryname
+bammetrics FixMateInformation I=sample.bam CREATE_INDEX=true
+```
+
+Picard's `FixMateInformation` (`tests/concordance/test_fix_mate_information.py`):
+
+- Every `INPUT` is read; several are merged as htsjdk merges them: equal dictionaries, read
+  group and program IDs renamed on a collision, queryname order when every input says
+  `SO:queryname`, else one input after the other (Picard's order there depends on object
+  hash codes and changes from run to run).
+- The records are sorted by name unless every input says `SO:queryname` or
+  `--assume-sorted` is given; then the records of each name, as they come, get the mate
+  reference, start, strand and unmapped flag, `MQ`, `TLEN` and `MC` of their primary mate.
+  A paired supplementary record takes them from the other end's primary. An unmapped read
+  beside a mapped mate is placed at the mate's start. `--no-add-mate-cigar` removes `MC`;
+  `--no-ignore-missing-mates` fails on a primary record without its mate (exit 1). A name
+  with two primary first (or second) records fails, as in Picard.
+- The output is written in `--sort-order`, default the first input's: `queryname` as it
+  comes, with htsjdk's order check; `coordinate` and `duplicate` sorted again with
+  `--max-records-in-ram` records per run spilled to `--tmp-dir`; `unknown` fails on a second
+  record. `--create-index` with another order than `coordinate` exits 1.
+- Without `-o` the one input is rewritten in place: the records go to a temporary file
+  beside it, renamed over it when every file is complete, so a failed run leaves the input
+  as it was. The file keeps its mode; a symbolic link keeps pointing at it. The index is
+  `<input less .bam>.bai`, the MD5 `<input>.md5`. The input must be a regular BAM whose name
+  does not end in `.sam` or `.cram` (Picard writes BAM bytes under that name), and this user
+  must be able to write it; otherwise exit 2 (exit 1 for a file it cannot write).
+- In a chain the step leaves `fixed` and holds its records: a name sort, the mate pass,
+  then `--sort-order` (default the stream's). `--assume-sorted`, `--sort-order unknown` and
+  a second input are usage errors there.
+
+### filter-sam-reads
+
+```bash
+bammetrics filter-sam-reads sample.bam -o kept.bam --filter includeReadList --read-list-file names.txt
+bammetrics filter-sam-reads qn.bam -o aligned.bam --filter includeAligned
+bammetrics FilterSamReads I=sample.bam O=panel.bam FILTER=includePairedIntervals INTERVAL_LIST=panel.interval_list
+bammetrics FilterSamReads I=sample.bam O=rg.sam FILTER=includeTagValues TAG=RG TAG_VALUE=rg1 TAG_VALUE=rg2
+```
+
+Picard's `FilterSamReads` (`tests/concordance/test_filter_sam_reads.py`):
+
+- `includeReadList` and `excludeReadList` read `--read-list-file`: each line that is not
+  blank names the text before its first whitespace character, so a line that starts with a
+  space names nothing; `#` is no comment. Lines end at `\n`, `\r` or `\r\n`; the file is
+  UTF-8, inflated first when its name ends in `.gz`, `.gzip` or `.bfq`; an empty file exits
+  1; at most 1 GiB and lines of 16 MiB are read. The names go into a hash set.
+- `includeTagValues` and `excludeTagValues` compare `--tag` with each `--tag-value`. Picard
+  compares the tag's Java object with strings, so only a `Z` value can match: an integer,
+  float, character or array tag matches no value, and `excludeTagValues` keeps it. Without a
+  `--tag-value` nothing matches. A tag of other than two characters exits 1 at the first
+  record.
+- `includePairedIntervals` keeps a primary paired record whose alignment, or whose mate's
+  (its start and `MC`), shares a base with an interval of `--interval-list`; both ends of a
+  pair agree. Unpaired, secondary and supplementary records are dropped. A record whose own
+  alignment misses and whose mapped mate has no `MC` exits 1. The output order must be
+  `coordinate` (exit 1 otherwise).
+- `includeAligned` and `excludeAligned` judge a first-of-pair record with the record after
+  it, which must be its mate marked second of the pair (exit 1 otherwise): both are kept
+  when both are aligned (`includeAligned`), or when either is unmapped (`excludeAligned`).
+  The records must come in queryname order of their names (exit 1 otherwise): a
+  coordinate-sorted input with pairs fails, as in Picard.
+- `includeJavascript` and `--javascript-file` are refused (exit 2): bammetrics runs no
+  JavaScript (docs/07 Q6). An option for another filter is a usage error, as Picard's
+  checks give it: `--tag` with `includeAligned`, `--read-list-file` with `includeTagValues`.
+- `--write-reads-files` writes the SAM line of each record read to `<INPUT basename>.reads`
+  and of each record written to `<OUTPUT basename>.reads`, both beside `-o`. A `.reads` name
+  that is an input or `-o` is a usage error.
+- The output header is the input's with `SO` set to `--sort-order`; the writer is presorted
+  for the input's order and sorts any other (`--max-records-in-ram`, `--tmp-dir`).
+- In a chain the step leaves `filtered` and streams, or holds and sorts its records when
+  `--sort-order` names another order than the stream's. `--write-reads-files` is a usage
+  error there.
 
 ### mark-duplicates
 

@@ -1,0 +1,10 @@
+## argv
+FixMateInformation
+I=tests/data/mate_filter.bam
+O=OUT/fixed.bam
+IGNORE_MISSING_MATES=false
+## exit
+1
+## stdout
+## stderr
+bammetrics: FixMateInformation: record o1: Missing second read of pair

@@ -1,0 +1,33 @@
+## argv
+chain
+tests/data/mate_filter.bam
+-o
+OUT/s
++
+filter-sam-reads
+--filter
+includeReadList
+--read-list-file
+tests/data/mate_filter_names.txt
+--sort-order
+queryname
++
+write
+OUT/out.sam
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: step 1 (filter-sam-reads): 23 records in, 6 out, 0 changed
+bammetrics chain: 2 steps finished, 1 file written
+## file out.sam
+@HD	VN:1.6	SO:queryname
+@SQ	SN:chr1	LN:100000
+@RG	ID:rg1	SM:s1	LB:lib1	PU:unit1	PL:ILLUMINA
+@RG	ID:rg2	SM:s1	LB:lib2	PU:unit2	PL:ILLUMINA
+p1	99	chr1	1050	60	20M	=	1150	120	ACGTACGTACGTACGTACGT	IIIIIIIIIIIIIIIIIIII	RG:Z:rg1	XI:i:1	XZ:Z:a
+p1	147	chr1	1150	60	20M	=	1050	-120	ACGTACGTACGTACGTACGT	IIIIIIIIIIIIIIIIIIII	MC:Z:20M	RG:Z:rg1	XI:i:2	MQ:i:60	XZ:Z:b
+p3	65	chr1	3000	60	20M	=	3200	0	ACGTACGTACGTACGTACGT	IIIIIIIIIIIIIIIIIIII	RG:Z:rg1	XI:i:300	XZ:Z:b
+p3	177	chr1	3200	60	5S15M	=	3000	-215	ACGTACGTACGTACGTACGT	IIIIIIIIIIIIIIIIIIII	RG:Z:rg1	XI:i:70000	XZ:Z:b
+p6	99	chr1	8100	60	20M	=	8500	420	ACGTACGTACGTACGTACGT	IIIIIIIIIIIIIIIIIIII	RG:Z:rg2	XI:i:1	XZ:Z:a
+p6	147	chr1	8500	60	20M	=	8100	-420	ACGTACGTACGTACGTACGT	IIIIIIIIIIIIIIIIIIII	RG:Z:rg2	XI:i:2	XZ:Z:b

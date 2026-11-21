@@ -106,8 +106,15 @@ fn role(step: &Planned, first_read: bool) -> String {
     }
 }
 
-/// What a transform does in its first read.
+/// What a transform does in its first read. `fix-mate-information` sorts
+/// by name first, whatever its `SORT_ORDER`.
 fn first_read(step: &Planned) -> String {
+    if step
+        .tool
+        .is_some_and(|tool| tool.name == bammetrics_core::fix_mate_information::TOOL.name)
+    {
+        return "takes every record and sorts them by queryname".to_owned();
+    }
     let order = step
         .argv
         .iter()

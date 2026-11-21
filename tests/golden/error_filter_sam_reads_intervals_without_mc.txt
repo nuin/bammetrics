@@ -1,0 +1,11 @@
+## argv
+FilterSamReads
+I=tests/data/mate_filter.bam
+O=OUT/x.bam
+FILTER=includePairedIntervals
+INTERVAL_LIST=tests/data/targets.interval_list
+## exit
+1
+## stdout
+## stderr
+bammetrics: FilterSamReads: record p3: Mate CIGAR (Tag MC) not found

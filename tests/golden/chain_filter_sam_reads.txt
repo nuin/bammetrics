@@ -1,0 +1,52 @@
+## argv
+chain
+tests/data/mate_filter.queryname.bam
+-o
+OUT/s
++
+filter-sam-reads
+--filter
+includeAligned
++
+quality-yield
++
+write
+OUT/out.bam
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: step 1 (filter-sam-reads): 20 records in, 16 out, 0 changed
+bammetrics chain: 3 steps finished, 2 files written
+## file out.bam
+@HD	VN:1.6	SO:queryname
+@SQ	SN:chr1	LN:100000
+@RG	ID:rg1	SM:s1	LB:lib1	PU:unit1	PL:ILLUMINA
+@RG	ID:rg2	SM:s1	LB:lib2	PU:unit2	PL:ILLUMINA
+p1	99	0	1050	RG:Z:rg1	XZ:Z:a	XI:i:1
+p1	147	0	1150	RG:Z:rg1	XZ:Z:b	XI:i:2	MC:Z:20M	MQ:i:60
+p2	97	0	2100	RG:Z:rg2	XZ:Z:a	XI:i:3
+p2	145	0	2300	RG:Z:rg2	XZ:Z:c	XI:i:1	MC:Z:5M	MQ:i:3
+p3	65	0	3000	RG:Z:rg1	XZ:Z:b	XI:i:300
+p3	177	0	3200	RG:Z:rg1	XZ:Z:b	XI:i:70000
+p4	99	0	4100	RG:Z:rg2	XZ:Z:c	XI:i:-2
+p4	147	0	4250	RG:Z:rg2	XZ:Z:a	XI:i:7
+p5	99	0	6000	RG:Z:rg1	XZ:Z:d	XI:i:7	MC:Z:20M
+p5	147	0	6100	RG:Z:rg1	XZ:Z:d	XI:i:7
+p6	99	0	8100	RG:Z:rg2	XZ:Z:a	XI:i:1
+p6	147	0	8500	RG:Z:rg2	XZ:Z:b	XI:i:2
+s1	99	0	7300	RG:Z:rg1	XZ:Z:b	XI:i:1
+s1	147	0	7400	RG:Z:rg1	XZ:Z:b	XI:i:1
+u1	0	0	9500	RG:Z:rg1	XZ:Z:a	XI:i:5
+u2	16	0	9600	RG:Z:rg1	XZ:Z:d	XI:i:6
+## file s.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectQualityYieldMetrics INPUT=tests/data/mate_filter.queryname.bam OUTPUT=OUT/s.quality_yield_metrics CHAIN=FilterSamReads
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+16	16	20	320	320	320	320	320	320	640	640
+
+

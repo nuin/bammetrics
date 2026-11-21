@@ -90,6 +90,14 @@ const EXEMPT: &[(&str, &str)] = &[
         "GatherBamFiles",
         "writes a BAM gathered from several: no metrics file, no row, no column",
     ),
+    (
+        "FixMateInformation",
+        "writes a BAM or SAM text with mate fields set: no metrics file, no row, no column",
+    ),
+    (
+        "FilterSamReads",
+        "writes a BAM or SAM text of the records a filter keeps: no metrics file, no row, no column",
+    ),
 ];
 
 /// A directory of its own for this test's files.
