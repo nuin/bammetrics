@@ -1,12 +1,14 @@
 //! `IntervalList.write`: the header as `SAMTextHeaderCodec.encode` writes
 //! it, then one line per interval (`IntervalListWriter`).
 
+use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use super::{Header, IntervalList};
 use crate::cleanup::{AtomicFile, MadeDirs};
 use crate::error::{Error, Result};
+use crate::spill::TempDir;
 
 impl IntervalList {
     /// The file `IntervalList.write` writes: the header lines, then
@@ -85,17 +87,29 @@ pub(super) fn stage(list: &IntervalList, file: &AtomicFile) -> Result<()> {
 /// [`gzip_name`] accepts. An I/O error of `body` is reported against the
 /// file.
 fn stage_with(file: &AtomicFile, body: impl FnOnce(&mut dyn Write) -> Result<()>) -> Result<()> {
-    let target = file.path().to_path_buf();
+    let handle = file.create().map_err(|source| Error::Output {
+        path: file.path().to_path_buf(),
+        source,
+    })?;
+    write_into(handle, file.path(), body)
+}
+
+/// Write what `body` writes into `handle`, compressed as `target`'s name
+/// asks; errors name `target`.
+fn write_into(
+    handle: File,
+    target: &Path,
+    body: impl FnOnce(&mut dyn Write) -> Result<()>,
+) -> Result<()> {
     let output = |source| Error::Output {
-        path: target.clone(),
+        path: target.to_path_buf(),
         source,
     };
     let against_file = |e: Error| match e {
         Error::Record(source) => output(source),
         other => other,
     };
-    let handle = file.create().map_err(output)?;
-    if gzip_name(&target) {
+    if gzip_name(target) {
         let mut writer = noodles::bgzf::io::Writer::new(BufWriter::new(handle));
         body(&mut writer).map_err(against_file)?;
         writer
@@ -112,7 +126,10 @@ fn stage_with(file: &AtomicFile, body: impl FnOnce(&mut dyn Write) -> Result<()>
 
 /// [`write_list`] for a list made while it is written: `header`, then
 /// the lines `body` writes, so no interval is held. The file rules are
-/// [`write_list`]'s; a failed `body` leaves `path` as it was.
+/// [`write_list`]'s; a failed `body` leaves `path` as it was. A path
+/// written in place (`/dev/stdout`, a pipe, a link this user owns) cannot
+/// take back bytes, so the list goes to a file in the system temporary
+/// directory first and is copied to `path` once `body` has finished.
 pub fn write_streamed(
     header: &Header,
     path: &Path,
@@ -120,21 +137,31 @@ pub fn write_streamed(
     body: impl FnOnce(&mut dyn Write) -> Result<()>,
 ) -> Result<()> {
     check_target(path, inputs)?;
-    let mut dirs = MadeDirs::default();
-    dirs.create_parent(path).map_err(|source| Error::Output {
+    let output = |source| Error::Output {
         path: path.to_path_buf(),
         source,
-    })?;
+    };
+    let mut dirs = MadeDirs::default();
+    dirs.create_parent(path).map_err(output)?;
     let file = AtomicFile::new(path);
-    stage_with(&file, |out| {
+    let whole = |out: &mut dyn Write| {
         out.write_all(header.encode().as_bytes())
             .map_err(Error::Record)?;
         body(out)
-    })?;
-    file.commit().map_err(|source| Error::Output {
-        path: path.to_path_buf(),
-        source,
-    })?;
+    };
+    if file.writing() == file.path() {
+        let temp = TempDir::new(None, "interval-list");
+        let (staged, handle) = temp.create_file("list")?;
+        write_into(handle, path, whole)?;
+        let mut from = File::open(&staged).map_err(output)?;
+        let mut to = file.create().map_err(output)?;
+        io::copy(&mut from, &mut to)
+            .and_then(|_| to.flush())
+            .map_err(output)?;
+    } else {
+        stage_with(&file, whole)?;
+    }
+    file.commit().map_err(output)?;
     dirs.keep();
     Ok(())
 }

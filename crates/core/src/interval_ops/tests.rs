@@ -538,3 +538,35 @@ fn the_panel_reader_takes_a_written_list() {
     assert_eq!(shown, [(0, 1, 10, "p"), (1, 5, 9, "q")]);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A streamed list whose target is written in place (here a link this
+/// user owns, as `/dev/stdout` is) gets no byte when the body fails, and
+/// the whole list when it succeeds.
+#[cfg(unix)]
+#[test]
+fn a_streamed_list_written_in_place_gets_nothing_from_a_failed_run() {
+    let dir = scratch("in-place");
+    let target = dir.join("target.txt");
+    std::fs::write(&target, "kept\n").expect("target");
+    let link = dir.join("link.interval_list");
+    std::os::unix::fs::symlink(&target, &link).expect("link");
+    let header = list("").header;
+    let failed = write_streamed(&header, &link, &[], |out| {
+        out.write_all(b"c1\t1\t5\t+\t.\n")
+            .map_err(crate::error::Error::Record)?;
+        Err(crate::error::Error::Metric("the walk failed".to_owned()))
+    });
+    assert!(failed.is_err());
+    assert_eq!(std::fs::read_to_string(&target).expect("target"), "kept\n");
+    write_streamed(&header, &link, &[], |out| {
+        out.write_all(b"c1\t1\t5\t+\t.\n")
+            .map_err(crate::error::Error::Record)
+    })
+    .expect("writes");
+    let text = std::fs::read_to_string(&target).expect("target");
+    assert!(
+        text.starts_with("@HD") && text.ends_with("c1\t1\t5\t+\t.\n"),
+        "{text}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
