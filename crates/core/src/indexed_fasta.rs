@@ -14,8 +14,10 @@
 //!   `@SQ` line counts as none.
 //! - The `.fai` is `FASTA.fai`; a BGZF FASTA needs `FASTA.gzi` too. Without
 //!   them the FASTA is not indexed ([`Opened::Unindexed`]).
-//! - Each `.fai` line is a name (cut at its first whitespace), a length, an
-//!   offset, bases per line and bytes per line; a name given twice fails.
+//! - Each `.fai` line holds `(.+)\t+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)`, found
+//!   by a `Scanner` ([`read_index`]): a name (cut at its first whitespace),
+//!   a length, an offset, bases per line and bytes per line; a name given
+//!   twice fails.
 //! - With a dictionary, its `@SQ` lines must name the index's contigs in
 //!   the index's order with the same lengths
 //!   (`sanityCheckDictionaryAgainstIndex`).
@@ -29,7 +31,8 @@
 //!   zero bytes for the missing bases, which count as bases.
 //! - A gzip FASTA that is not BGZF, or a BGZF FASTA whose name does not end
 //!   in `.gz`, is refused. htsjdk reads the compressed bytes as bases.
-//! - A `.fai` line with other than five tab-separated fields fails.
+//! - A FASTA or `.dict` that is not a regular file (a named pipe, a
+//!   socket, a device) fails before it is opened.
 //!
 //! Memory: one [`CHUNK`] buffer whatever the contig length, and the `.fai`
 //! and `.dict` read whole, each under [`MAX_INDEX_BYTES`].
@@ -145,6 +148,28 @@ fn reference_error(path: &Path, message: String) -> Error {
     }
 }
 
+/// Refuse a path that is not a regular file (after links), before it is
+/// opened: opening a named pipe with no writer blocks, and the walk seeks.
+fn refuse_irregular(path: &Path) -> Result<()> {
+    let metadata = std::fs::metadata(path).map_err(|source| Error::Input {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if metadata.is_dir() {
+        return Err(Error::Input {
+            path: path.to_path_buf(),
+            source: io::Error::other("Cannot read file because it is a directory"),
+        });
+    }
+    if !metadata.is_file() {
+        return Err(reference_error(
+            path,
+            "not a regular file (a pipe, socket or device); the reader seeks in it".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 /// A whole small file, at most [`MAX_INDEX_BYTES`]; bytes that are not
 /// UTF-8 become U+FFFD.
 fn read_capped(path: &Path) -> Result<String> {
@@ -152,6 +177,7 @@ fn read_capped(path: &Path) -> Result<String> {
         path: path.to_path_buf(),
         source,
     };
+    refuse_irregular(path)?;
     let mut bytes = Vec::new();
     File::open(path)
         .map_err(input)?
@@ -175,29 +201,71 @@ fn read_dictionary(path: &Path) -> Result<Header> {
     Header::decode(lines).map_err(|message| reference_error(path, message))
 }
 
-/// `FastaSequenceIndex.parseIndexFile`: one entry per non-blank line.
+/// `Character.isWhitespace`: the delimiters `Scanner.hasNext` skips.
+fn java_whitespace(c: char) -> bool {
+    matches!(c, '\t'..='\r' | '\u{1c}'..='\u{1f}')
+        || (c.is_whitespace() && !matches!(c, '\u{85}' | '\u{a0}' | '\u{2007}' | '\u{202f}'))
+}
+
+/// The line at the head of `text` and where the next one starts, as
+/// `Scanner` splits lines: at `\r\n`, `\n`, `\r`, U+2028, U+2029 or
+/// U+0085. `None` when no separator ends the line.
+fn scanner_line(text: &str) -> (&str, Option<usize>) {
+    let Some(at) = text.find(['\n', '\r', '\u{2028}', '\u{2029}', '\u{85}']) else {
+        return (text, None);
+    };
+    let separator = if text[at..].starts_with("\r\n") {
+        2
+    } else {
+        text[at..].chars().next().map_or(1, char::len_utf8)
+    };
+    (&text[..at], Some(at + separator))
+}
+
+/// The pattern `parseIndexFile` finds in each line,
+/// `(.+)\t+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)`, with Java's ASCII `\d` and `\s`.
+static INDEX_LINE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    let space = r"[\t\n\x0B\x0C\r ]+";
+    regex::Regex::new(&format!(
+        r"(?s)(.+)\t+([0-9]+){space}([0-9]+){space}([0-9]+){space}([0-9]+)"
+    ))
+    .expect("a valid pattern")
+});
+
+/// `SAMSequenceRecord.truncateSequenceName`: the name up to its first
+/// space, tab, line feed, vertical tab, form feed or carriage return.
+fn truncate_sequence_name(name: &str) -> &str {
+    name.split(['\t', '\n', '\x0B', '\x0C', '\r', ' '])
+        .next()
+        .unwrap_or_default()
+}
+
+/// `FastaSequenceIndex.parseIndexFile`, a `Scanner` over the text. While
+/// a token is left, the pattern is found anywhere in the current line and
+/// the rest of the line is skipped. A line without it, a blank line before
+/// a later entry included, is invalid. A last entry whose match runs to the
+/// end of a file with no final line end fails (`nextLine` finds no line).
 pub fn read_index(path: &Path) -> Result<Vec<Entry>> {
     let text = read_capped(path)?;
     let mut entries = Vec::new();
     let mut names = HashSet::new();
-    for line in text.split('\n') {
-        let line = line.strip_suffix('\r').unwrap_or(line);
-        if line.trim().is_empty() {
-            continue;
-        }
+    let mut rest = text.as_str();
+    while !rest.chars().all(java_whitespace) {
+        let (line, next) = scanner_line(rest);
         let invalid = || reference_error(path, format!("Found invalid line in index file:{line}"));
-        let fields: Vec<&str> = line.split('\t').collect();
-        let [name, length, offset, bases, width] = fields[..] else {
-            return Err(invalid());
-        };
-        let digits = |text: &str| !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit());
-        if ![length, offset, bases, width].into_iter().all(digits) {
-            return Err(invalid());
+        let found = INDEX_LINE.captures(line).ok_or_else(invalid)?;
+        if next.is_none() && found.get(0).is_some_and(|m| m.end() == line.len()) {
+            return Err(reference_error(
+                path,
+                "No line found: the last line has no line end (htsjdk's Scanner.nextLine fails)"
+                    .to_owned(),
+            ));
         }
+        let group = |i: usize| found.get(i).map_or("", |m| m.as_str());
         let number = |text: &str, bits| {
             crate::java::parse_integer(text, bits).map_err(|e| reference_error(path, e))
         };
-        let name = name.split(char::is_whitespace).next().unwrap_or_default();
+        let name = truncate_sequence_name(group(1));
         if !names.insert(name.to_owned()) {
             return Err(reference_error(
                 path,
@@ -206,11 +274,12 @@ pub fn read_index(path: &Path) -> Result<Vec<Entry>> {
         }
         entries.push(Entry {
             name: name.to_owned(),
-            length: number(length, 64)?,
-            offset: number(offset, 64)?,
-            line_bases: number(bases, 32)? as i32,
-            line_width: number(width, 32)? as i32,
+            length: number(group(2), 64)?,
+            offset: number(group(3), 64)?,
+            line_bases: number(group(4), 32)? as i32,
+            line_width: number(group(5), 32)? as i32,
         });
+        rest = next.map_or("", |at| &rest[at..]);
     }
     Ok(entries)
 }
@@ -276,12 +345,7 @@ pub fn open(path: &Path) -> Result<Opened> {
         path: path.to_path_buf(),
         source,
     };
-    let metadata = std::fs::metadata(path).map_err(input)?;
-    if metadata.is_dir() {
-        return Err(input(io::Error::other(
-            "Cannot read file because it is a directory",
-        )));
-    }
+    refuse_irregular(path)?;
     let name = path
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())

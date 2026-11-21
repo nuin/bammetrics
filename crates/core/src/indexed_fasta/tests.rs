@@ -156,20 +156,59 @@ fn the_dictionary_must_match_the_index() {
 fn index_lines_are_read_as_htsjdk_reads_them() {
     let dir = scratch("fai");
     let fai = dir.join("x.fa.fai");
-    std::fs::write(&fai, "c1 extra\t10\t4\t5\t6\r\n\n  \nc2\t3\t20\t60\t61\n").expect(".fai");
+    std::fs::write(&fai, "c1 extra\t10\t4\t5\t6\r\nc2\t3\t20\t60\t61\n\n  \n").expect(".fai");
     let entries = read_index(&fai).expect("reads");
     assert_eq!(entries[0].name, "c1");
     assert_eq!(entries[0].length, 10);
     assert_eq!(entries[1].line_width, 61);
     for bad in [
         "c1\t10\t4\t5\n",
-        "c1\t10\t4\t5\t6\t7\n",
         "c1\t-1\t4\t5\t6\n",
         "c1\t1\t4\t5\t99999999999\n",
         "c1\t1\t4\t5\t6\nc1\t1\t4\t5\t6\n",
     ] {
         std::fs::write(&fai, bad).expect(".fai");
         assert!(read_index(&fai).is_err(), "{bad:?}");
+    }
+}
+
+/// The six shapes of the 0.29.0 review, each as Picard 3.5.0 reads it:
+/// htsjdk finds `(.+)\t+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)` in each line of a
+/// `Scanner`.
+#[test]
+fn index_lines_follow_the_scanner_pattern() {
+    let dir = scratch("fai-scanner");
+    let fai = dir.join("x.fa.fai");
+    let read = |text: &str| {
+        std::fs::write(&fai, text).expect(".fai");
+        read_index(&fai)
+    };
+    for good in [
+        "c1\t10\t4\t5\t6\t\nc2\t3\t20\t60\t61\t\n",
+        "c1\t10\t4\t5\t6  \nc2\t3\t20\t60\t61  \n",
+        "c1\t\t10\t\t4\t\t5\t\t6\nc2\t\t3\t\t20\t\t60\t\t61\n",
+        "c1\t10\t4\t5\t6x\nc2\t3\t20\t60\t61x\n",
+        "c1\t10\t4\t5\t6\rc2\t3\t20\t60\t61\r",
+        "c1\t10 4 5 6\nc2\t3\t20\t60\t61x",
+    ] {
+        let entries = read(good).unwrap_or_else(|e| panic!("{good:?}: {e}"));
+        assert_eq!(entries.len(), 2, "{good:?}");
+        assert_eq!(entries[0].length, 10, "{good:?}");
+        assert_eq!(entries[1].line_width, 61, "{good:?}");
+    }
+    let longer = read("c1\t10\t4\t5\t6\t7\n").expect("a sixth number");
+    assert_eq!((longer[0].length, longer[0].line_width), (4, 7));
+    for (bad, message) in [
+        ("c1\t10\t4\t5\t6\nc2\t3\t20\t60\t61", "No line found"),
+        ("\nc1\t10\t4\t5\t6\n", "Found invalid line in index file:"),
+        (
+            "c1\t10\t4\t5\t6\n \nc2\t3\t20\t60\t61\n",
+            "invalid line in index file: \n",
+        ),
+        ("c1 10\t4\t5\t6\n", "invalid line"),
+    ] {
+        let error = read(bad).expect_err(bad).to_string();
+        assert!(error.contains(message.trim_end()), "{bad:?}: {error}");
     }
 }
 
@@ -191,4 +230,31 @@ fn a_short_file_and_a_zero_line_length_fail() {
     let mut fasta = indexed(&path);
     let error = fasta.walk(0, |_| {}).expect_err("fails").to_string();
     assert!(error.contains("/ by zero"), "{error}");
+}
+
+/// A named pipe as the FASTA or the `.dict` is refused before it is
+/// opened: an open with no writer would block.
+#[cfg(unix)]
+#[test]
+fn a_named_pipe_is_refused_before_it_is_opened() {
+    let mkfifo = |path: &Path| {
+        let made = std::process::Command::new("mkfifo")
+            .arg(path)
+            .status()
+            .expect("mkfifo runs");
+        assert!(made.success());
+    };
+    let dir = scratch("fifo");
+    let path = write_fasta(&dir, "p.fa", &[("c1", b"ACGT")], 4, "\n");
+    let dict = default_dictionary(&path).expect("name");
+    std::fs::remove_file(&dict).expect("no .dict");
+    mkfifo(&dict);
+    let error = open(&path).err().expect("a pipe .dict").to_string();
+    assert!(error.contains("not a regular file"), "{error}");
+    std::fs::remove_file(&dict).expect("no pipe");
+    let fifo = dir.join("q.fa");
+    mkfifo(&fifo);
+    std::fs::copy(fai_path(&path), fai_path(&fifo)).expect(".fai");
+    let error = open(&fifo).err().expect("a pipe FASTA").to_string();
+    assert!(error.contains("not a regular file"), "{error}");
 }

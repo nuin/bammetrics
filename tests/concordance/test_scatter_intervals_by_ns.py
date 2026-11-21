@@ -23,6 +23,7 @@ refuses both. A .gz OUTPUT is BGZF in bammetrics and one gzip member in Picard: 
 inflated text is compared.
 """
 import gzip
+import os
 import shutil
 import subprocess
 
@@ -268,6 +269,81 @@ def test_known_differences(refs, tmp_path):
         assert picard.returncode == 0, f"Picard {label}: {picard.stderr[-500:]}"
         assert ours.returncode != 0 and not out.exists(), label
         RESULTS.append((f"{TOOL} {label}", 0, 0, "Picard reads bytes that are no bases; refused"))
+
+
+def first_line_then(insert):
+    """The .fai text with `insert` after its first line."""
+    return lambda text: text.replace("\n", "\n" + insert, 1)
+
+
+# .fai shapes htsjdk's Scanner reads: the pattern (.+)\t+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)
+# found anywhere in each line, the rest of the line skipped.
+FAI_READ = {
+    "trailing_tab": lambda text: text.replace("\n", "\t\n"),
+    "trailing_spaces": lambda text: text.replace("\n", "  \n"),
+    "double_tabs": lambda text: text.replace("\t", "\t\t"),
+    "trailing_letter": lambda text: text.replace("\n", "x\n"),
+    "cr_line_ends": lambda text: text.replace("\n", "\r"),
+    "spaces_after_length": lambda text: "".join(
+        line.replace("\t", "\x00", 1).replace("\t", " ").replace("\x00", "\t") + "\n"
+        for line in text.splitlines()),
+    "trailing_blank_lines": lambda text: text + "\n\n \n",
+}
+# .fai shapes it refuses: a blank or whitespace line before a later entry, and a last
+# entry whose match runs to the end of a file with no line end (`No line found`).
+FAI_REFUSED = {
+    "no_final_line_end": lambda text: text.rstrip("\n"),
+    "blank_line_first": lambda text: "\n" + text,
+    "blank_line_between": first_line_then("\n"),
+    "space_line_between": first_line_then(" \n"),
+}
+
+
+def edit_fai(change):
+    def edit(directory):
+        path = directory / "x.fa.fai"
+        path.write_bytes(change(path.read_bytes().decode()).encode())
+    return edit
+
+
+@pytest.mark.parametrize("label", sorted(FAI_READ))
+def test_fai_lines_read_as_the_scanner_reads_them(refs, tmp_path, label):
+    fasta = broken(refs, tmp_path, label, edit_fai(FAI_READ[label]))
+    compare(fasta, [], tmp_path, f"fai {label}")
+
+
+@pytest.mark.parametrize("label", sorted(FAI_REFUSED))
+def test_fai_lines_the_scanner_refuses_fail_in_both(refs, tmp_path, label):
+    fasta = broken(refs, tmp_path, label, edit_fai(FAI_REFUSED[label]))
+    assert_both_fail([f"R={fasta}"], tmp_path, f"fai {label}")
+
+
+def test_named_pipe_reference_is_refused(refs, tmp_path):
+    """bammetrics refuses a FASTA that is a named pipe before it opens it (an open with
+    no writer blocks); Picard is not run, since it would wait on the pipe."""
+    paths, _ = refs
+    fifo = tmp_path / "p.fa"
+    os.mkfifo(fifo)
+    shutil.copy(paths["w60"].with_name("w60.fa.fai"), tmp_path / "p.fa.fai")
+    shutil.copy(paths["w60"].with_name("w60.dict"), tmp_path / "p.dict")
+    out = tmp_path / "p.interval_list"
+    ours = subprocess.run([str(BAMMETRICS), TOOL, f"R={fifo}", f"O={out}"], capture_output=True,
+                          text=True, timeout=30)
+    assert ours.returncode != 0 and "not a regular file" in ours.stderr and not out.exists()
+    RESULTS.append((f"{TOOL} named pipe", 0, 0, "refused before it is opened"))
+
+
+def test_failed_run_prints_nothing_on_standard_output(refs, tmp_path):
+    """A run that fails after the header is decided (a contig of no base) prints no
+    byte with -o - or O=/dev/stdout; both tools fail."""
+    paths, _ = refs
+    fasta = paths["empty_contig"]
+    picard = run("picard", [f"R={fasta}", "O=/dev/stdout"])
+    assert picard.returncode != 0
+    for args in ([TOOL, f"R={fasta}", "O=/dev/stdout"], ["scatter-intervals-by-ns", str(fasta), "-o", "-"]):
+        ours = subprocess.run([str(BAMMETRICS), *args], capture_output=True)
+        assert ours.returncode != 0 and ours.stdout == b"", args
+    RESULTS.append((f"{TOOL} failed run on standard output", 0, 0, "both fail, no byte printed"))
 
 
 def test_output_may_not_be_an_input(refs, tmp_path):

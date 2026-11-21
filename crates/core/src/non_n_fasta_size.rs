@@ -16,7 +16,11 @@
 //! without a `.fai`.
 //!
 //! The walk holds one [`crate::indexed_fasta::CHUNK`] of bases; Picard
-//! holds a whole contig. What bammetrics does differently is
+//! holds a whole contig. `INTERVALS` is read whole, at most
+//! [`crate::interval_ops::MAX_LIST_BYTES`] (1 GiB). While it is parsed,
+//! the text and the intervals with their names are held; then the names
+//! are dropped and the mask keeps 48 bytes per interval. What bammetrics
+//! does differently is
 //! [`crate::indexed_fasta`]'s list. The Python function returns one row:
 //! the count.
 
@@ -56,9 +60,13 @@ pub const COLUMNS: [&str; 1] = ["non_n_bases"];
 
 /// The uniqued intervals of `INTERVALS`, grouped by the index of their
 /// `@SQ` line: `IntervalListReferenceSequenceMask`'s bit sets, held as
-/// sorted, disjoint intervals.
-fn mask(list: IntervalList) -> Vec<Vec<Interval>> {
-    let list = list.into_uniqued(true);
+/// sorted, disjoint intervals. The names are dropped first: the count
+/// needs only the contig, start and end.
+fn mask(mut list: IntervalList) -> Vec<Vec<Interval>> {
+    for interval in &mut list.intervals {
+        interval.name = None;
+    }
+    let list = list.into_uniqued(false);
     let mut by_contig: Vec<Vec<Interval>> = vec![Vec::new(); list.header.sequences.len()];
     for interval in list.intervals {
         by_contig[interval.contig].push(interval);
