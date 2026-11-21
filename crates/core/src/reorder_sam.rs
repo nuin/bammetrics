@@ -4,9 +4,12 @@
 //!
 //! The dictionary comes from a `.dict`, a FASTA with its `.dict` beside it
 //! (Picard fails on a FASTA without one), a SAM, BAM or CRAM header, an
-//! interval list or a VCF's `##contig` lines, as
-//! `SAMSequenceDictionaryExtractor` reads them; a file read whole holds at
-//! most [`MAX_DICTIONARY_BYTES`]. Every input contig needs a contig of the
+//! interval list or a VCF's `##contig` lines, told by the name's extension
+//! as `SAMSequenceDictionaryExtractor` tells them ([`DictionaryKind`]); any
+//! other name is refused. A file read whole holds at most
+//! [`bed_to_interval_list::MAX_DICTIONARY_BYTES`]. A dictionary with no
+//! `@SQ` line is taken, as Picard takes it; a length below 1 or over
+//! 2^31 - 1 is refused. Every input contig needs a contig of the
 //! same name (`ALLOW_INCOMPLETE_DICT_CONCORDANCE` lets one go) and of the
 //! same length (`ALLOW_CONTIG_LENGTH_DISCORDANCE` lets it differ, with
 //! Picard's warning on standard error).
@@ -91,11 +94,6 @@ pub const TOOL: Tool = Tool {
     collector: None,
 };
 
-/// The bytes of a dictionary file read whole (a `.dict`, an interval list,
-/// SAM text). A BAM or CRAM is read to the end of its header only, a VCF
-/// through its own line caps.
-pub const MAX_DICTIONARY_BYTES: u64 = 256 << 20;
-
 /// The options the edit takes.
 #[derive(Clone, Debug)]
 struct Options {
@@ -118,45 +116,98 @@ impl Options {
     }
 }
 
-const FASTA_EXTENSIONS: [&str; 8] = [
-    ".fa",
+/// htsjdk's `FileExtensions.FASTA`.
+const FASTA_EXTENSIONS: [&str; 10] = [
     ".fasta",
-    ".fna",
-    ".fa.gz",
     ".fasta.gz",
+    ".fas",
+    ".fas.gz",
+    ".fa",
+    ".fa.gz",
+    ".fna",
     ".fna.gz",
-    ".fa.bgz",
-    ".fasta.bgz",
+    ".txt",
+    ".txt.gz",
 ];
+
+/// The file types of `SAMSequenceDictionaryExtractor.TYPE`, in the order
+/// `forFile` tries them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DictionaryKind {
+    /// A FASTA: the `.dict` beside it, its extension replaced.
+    Fasta(usize),
+    Dictionary,
+    Cram,
+    Sam,
+    Vcf,
+    IntervalList,
+}
+
+impl DictionaryKind {
+    /// `TYPE.forFile`: the first type with an extension the name ends with,
+    /// case as written.
+    fn of(name: &str) -> Option<Self> {
+        let ends = |extensions: &[&str]| extensions.iter().any(|e| name.ends_with(e));
+        if let Some(e) = FASTA_EXTENSIONS.iter().find(|e| name.ends_with(*e)) {
+            return Some(Self::Fasta(e.len()));
+        }
+        [
+            (&[".dict"][..], Self::Dictionary),
+            (&[".cram"], Self::Cram),
+            (&[".sam", ".bam"], Self::Sam),
+            (&[".vcf", ".vcf.gz", ".vcf.bgz", ".bcf"], Self::Vcf),
+            (&[".interval_list", ".interval_list.gz"], Self::IntervalList),
+        ]
+        .into_iter()
+        .find_map(|(extensions, kind)| ends(extensions).then_some(kind))
+    }
+}
+
+fn not_found(path: &Path, message: String) -> Error {
+    Error::Input {
+        path: path.to_path_buf(),
+        source: std::io::Error::new(std::io::ErrorKind::NotFound, message),
+    }
+}
 
 /// `SAMSequenceDictionaryExtractor.extractDictionary`.
 fn read_sequences(path: &Path) -> Result<Vec<Sequence>> {
     let text = path.to_string_lossy();
-    let name = text.to_ascii_lowercase();
-    if let Some(stem) = FASTA_EXTENSIONS
-        .iter()
-        .find_map(|e| name.ends_with(e).then(|| &text[..text.len() - e.len()]))
-    {
-        let dict = PathBuf::from(format!("{stem}.dict"));
-        if !dict.is_file() {
-            return Err(Error::Input {
-                path: path.to_path_buf(),
-                source: std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
+    let Some(kind) = DictionaryKind::of(&text) else {
+        return Err(Error::Input {
+            path: path.to_path_buf(),
+            source: std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "Cannot figure out type of file {} from extension. Current implementation \
+                     understands the following types: FASTA, DICTIONARY, CRAM, SAM, VCF, \
+                     INTERVAL_LIST",
+                    path.display()
+                ),
+            ),
+        });
+    };
+    match kind {
+        DictionaryKind::Fasta(extension) => {
+            if !path.is_file() {
+                return Err(not_found(
+                    path,
+                    format!("Reference file {} not found", path.display()),
+                ));
+            }
+            let dict = PathBuf::from(format!("{}.dict", &text[..text.len() - extension]));
+            if !dict.is_file() {
+                return Err(not_found(
+                    path,
                     format!(
                         "Could not find dictionary next to reference file {}",
                         path.display()
                     ),
-                ),
-            });
+                ));
+            }
+            bed_to_interval_list::read_sequences(&dict)
         }
-        return read_sequences(&dict);
-    }
-    if [".vcf", ".vcf.gz", ".vcf.bgz", ".bcf"]
-        .iter()
-        .any(|e| name.ends_with(e))
-    {
-        return crate::vcf::read_dictionary(path)?
+        DictionaryKind::Vcf => crate::vcf::read_dictionary(path)?
             .into_iter()
             .map(|contig| {
                 let length = contig.length.ok_or_else(|| Error::Input {
@@ -172,28 +223,12 @@ fn read_sequences(path: &Path) -> Result<Vec<Sequence>> {
                     other_fields: Vec::new(),
                 })
             })
-            .collect();
+            .collect(),
+        DictionaryKind::Dictionary
+        | DictionaryKind::Cram
+        | DictionaryKind::Sam
+        | DictionaryKind::IntervalList => bed_to_interval_list::read_sequences(path),
     }
-    let header_only = name.ends_with(".bam") || crate::cram::is_cram(path);
-    let size = std::fs::metadata(path)
-        .map_err(|source| Error::Input {
-            path: path.to_path_buf(),
-            source,
-        })?
-        .len();
-    if !header_only && size > MAX_DICTIONARY_BYTES {
-        return Err(Error::Input {
-            path: path.to_path_buf(),
-            source: std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!(
-                    "{size} bytes: a dictionary file read whole holds at most \
-                     {MAX_DICTIONARY_BYTES} bytes"
-                ),
-            ),
-        });
-    }
-    bed_to_interval_list::read_dictionary(path)
 }
 
 /// The dictionary of `path` as header `@SQ` records, each with the fields
@@ -202,14 +237,17 @@ fn read_dictionary(path: &Path) -> Result<sam::header::ReferenceSequences> {
     let sequences = read_sequences(path)?;
     let mut text = String::new();
     for sequence in &sequences {
-        if sequence.length < 1 {
+        if sequence.length < 1 || sequence.length > i64::from(i32::MAX) {
             return Err(Error::Input {
                 path: path.to_path_buf(),
                 source: std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     format!(
-                        "@SQ SN:{} LN:{}: a BAM header holds a length of 1 or more",
-                        sequence.name, sequence.length
+                        "SEQUENCE_DICTIONARY @SQ SN:{} LN:{}: a BAM header holds a length of 1 \
+                         to {}",
+                        sequence.name,
+                        sequence.length,
+                        i32::MAX
                     ),
                 ),
             });

@@ -177,6 +177,21 @@ def test_dictionary_file_kinds(inputs):
         reorder(source["bam"], [f"SD={path}"], f"foundation SD as {kind}")
 
 
+def test_dictionary_names_as_htsjdk_tells_them(inputs):
+    """The type comes from the extension: `.txt` is a FASTA name, `.foo` none (D130)."""
+    source = inputs["foundation"]
+    directory = inputs["dir"]
+    contigs = contigs_of(source["bam"])[::-1]
+    unknown = write_dict(directory / "names.foo", contigs)
+    reorder(source["bam"], [f"SD={unknown}"], "error SD with an unknown extension",
+            outcome="fail")
+    txt = write_dict(directory / "names.txt", contigs)
+    reorder(source["bam"], [f"SD={txt}"], "error SD .txt without its .dict", outcome="fail")
+    empty = write_dict(directory / "empty.dict", [])
+    reorder(source["bam"], [f"SD={empty}", "S=true"], "foundation SD with no @SQ line")
+    reorder(source["bam"], [f"SD={empty}"], "error SD with no @SQ line", outcome="fail")
+
+
 def test_a_fasta_without_its_dict_fails(inputs):
     source = inputs["foundation"]
     lone = inputs["dir"] / "lone.fa"

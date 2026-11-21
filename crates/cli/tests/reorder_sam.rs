@@ -288,3 +288,27 @@ fn merge_sam_files_is_no_step() {
     assert_eq!(output.status.code(), Some(2), "{stderr}");
     assert!(stderr.contains("wave W14"), "{stderr}");
 }
+
+/// An argument that is not UTF-8 is a usage error, not a panic.
+#[cfg(unix)]
+#[test]
+fn an_argument_that_is_not_utf8_exits_2() {
+    use std::os::unix::ffi::OsStringExt;
+    let dir = fresh_dir("not-utf8");
+    let output = Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+        .args(["merge-sam-files", MARKDUP, "-o"])
+        .arg(dir.join("out.bam"))
+        .arg("--comment")
+        .arg(std::ffi::OsString::from_vec(b"a\xffb".to_vec()))
+        .current_dir(root())
+        .output()
+        .expect("run bammetrics");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(2), "{stderr}");
+    assert!(
+        stderr.contains("argument 6 (a\u{fffd}b) is not UTF-8 text"),
+        "{stderr}"
+    );
+    assert!(!dir.join("out.bam").exists());
+    fs::remove_dir_all(&dir).expect("cleanup");
+}

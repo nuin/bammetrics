@@ -1736,11 +1736,16 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   order exits 2 (D123).
 - `MergeSamFiles COMMENT` with a line end exits 2; Picard writes it (D125).
 - `MergeSamFiles INTERVALS` reads each input whole and keeps what the index query returns
-  (D126). It opens at most 1,000 inputs.
+  (D126). The index must exist, but its bytes are never read: a stale, empty or garbage
+  index gives the records the query of a right index returns, where Picard fails or keeps
+  none. It opens at most 1,000 inputs.
 - `ReorderSam` reads its input in file order. Picard reads an indexed input contig by
   contig in its dictionary's order: the same for a coordinate-sorted input (D127).
 - A `SEQUENCE_DICTIONARY` file read whole (a `.dict`, an interval list, SAM text) holds
-  at most 256 MiB.
+  at most 256 MiB, a BAM or CRAM header text at most 64 MiB.
+- `ReorderSam` refuses a dictionary length below 1 or over 2^31 - 1 (`LN:0`, a VCF
+  `##contig` without a length); Picard with `ALLOW_INCOMPLETE_DICT_CONCORDANCE` and
+  `ALLOW_CONTIG_LENGTH_DISCORDANCE` writes a BAM whose header samtools cannot read (D130).
 
 ## Not in Picard
 

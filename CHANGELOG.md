@@ -35,6 +35,22 @@ Wave W13 of docs/07, part one: `MergeSamFiles` and `ReorderSam`.
 
 ### Changed
 
+- The header merge of `MergeSamFiles` and of `MarkDuplicates` with several inputs is
+  linear in the `@RG` and `@PG` lines and the dictionaries: IDs and records found by hash,
+  the `PP` walk indexed by input and ID, the merged dictionary a linked list. 100,000
+  `@RG` lines on two inputs merge in 0.55 s (26 s before); a 20,000-program chain in
+  0.12 s (23 s before).
+- `MergeSamFiles INTERVALS` reads the list once and shares its regions between inputs:
+  a list of 1,000,000 intervals over 50 inputs peaks at 158 MB (749 MB before).
+  `COMMENT=null` clears the comments given before it, as in Picard.
+- `ReorderSam SEQUENCE_DICTIONARY` is told by its extension as htsjdk tells it: `.txt`
+  and `.fas` are FASTA names, an unknown extension exits 1, a dictionary with no `@SQ`
+  line is taken, a length over 2^31 - 1 exits 1 naming `SEQUENCE_DICTIONARY` (D130).
+- A dictionary file (`.dict`, interval list, SAM text, `.fai`) and an interval list are
+  read by a read that stops at the cap, so a pipe or device costs no more than a file; a
+  BAM or CRAM header used as a dictionary is read under 64 MiB and its binary reference
+  list checked.
+- A command-line argument that is not UTF-8 exits 2 naming its position; it panicked.
 - The dictionary test of `MarkDuplicates` with several inputs follows
   `SAMSequenceRecord.isSameSequence`: two `M5` values that differ fail the run, two names
   that an `AN` field matches pass.

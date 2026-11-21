@@ -109,3 +109,24 @@ fn an_order_picks_the_presorted_path_as_picard_does() {
         MergeOrder::InputOrder
     );
 }
+
+#[test]
+fn a_null_comment_clears_the_comments_before_it() {
+    let comments = |args: &[&str]| {
+        let args: Vec<String> = ["I=a.bam", "O=o.bam"]
+            .iter()
+            .chain(args)
+            .map(|a| (*a).to_owned())
+            .collect();
+        Merge::from_invocation(&TOOL.parse(&args).expect("parsed"))
+            .expect("ok")
+            .comments
+    };
+    assert!(comments(&["COMMENT=null"]).is_empty());
+    assert_eq!(comments(&["COMMENT=null", "COMMENT=x"]), [b"x".to_vec()]);
+    assert!(comments(&["COMMENT=x", "COMMENT=null"]).is_empty());
+    assert_eq!(
+        comments(&["CO=a", "CO=@CO\tb"]),
+        [b"a".to_vec(), b"b".to_vec()]
+    );
+}

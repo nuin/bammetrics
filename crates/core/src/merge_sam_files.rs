@@ -95,7 +95,7 @@ pub const TOOL: Tool = Tool {
         ),
         Opt::text(
             &["COMMENT", "CO"],
-            "A @CO line to add after the inputs' comments; repeat for more.",
+            "A @CO line to add after the inputs' comments; repeat for more, null clears.",
         )
         .repeated(),
         Opt::path(
@@ -167,22 +167,19 @@ impl Merge {
                 "CREATE_INDEX=true: Can't CREATE_INDEX unless SORT_ORDER is coordinate".to_owned(),
             ));
         }
-        let comments = inv
-            .all("COMMENT")
-            .iter()
-            .map(|comment| {
-                if comment.contains(['\n', '\r']) {
-                    return Err(Error::Usage(format!(
-                        "COMMENT={comment:?}: a comment with a line end would read as two \
-                         header lines"
-                    )));
-                }
-                let text = record_edit::java_text(comment);
-                Ok(text
-                    .strip_prefix(b"@CO\t")
-                    .map_or_else(|| text.clone(), <[u8]>::to_vec))
-            })
-            .collect::<Result<_>>()?;
+        // A list option: `null` clears the comments given before it.
+        let comments = registry::picard_list(Vec::new(), inv.all("COMMENT"), |comment| {
+            if comment.contains(['\n', '\r']) {
+                return Err(Error::Usage(format!(
+                    "COMMENT={comment:?}: a comment with a line end would read as two header \
+                     lines"
+                )));
+            }
+            let text = record_edit::java_text(comment);
+            Ok(text
+                .strip_prefix(b"@CO\t")
+                .map_or_else(|| text.clone(), <[u8]>::to_vec))
+        })?;
         let intervals = inv.get("INTERVALS").map(PathBuf::from);
         let (limits, tmp_dir) = record_edit::sort_limits(inv)?;
         out.input = inputs[0].clone();
@@ -276,8 +273,7 @@ impl RecordSource for Input<'_> {
 }
 
 /// The merged header with `COMMENT` and `SO:<SORT_ORDER>`.
-fn output_header(merge: &Merge, merged: &HeaderMerger) -> sam::Header {
-    let mut header = merged.header.clone();
+fn output_header(merge: &Merge, mut header: sam::Header) -> sam::Header {
     for comment in &merge.comments {
         header.add_comment(comment.as_slice());
     }
@@ -310,13 +306,18 @@ fn run(merge: &Merge) -> Result<()> {
         threads,
         opts.stringency,
         |streams| {
-            let headers: Vec<sam::Header> = streams.iter().map(|s| s.0.clone()).collect();
+            let mut headers = Vec::with_capacity(streams.len());
+            let mut readers = Vec::with_capacity(streams.len());
+            for (header, reader, cram) in streams {
+                headers.push(header);
+                readers.push((reader, cram));
+            }
             for (header, path) in headers.iter().zip(&merge.inputs) {
                 record_edit::check_sort_order(header, opts.stringency, path)?;
             }
             let presorted = merge.presorted(&headers);
             let order = merge.merge_order(presorted, headers.len())?;
-            let merged = HeaderMerger::merge_with(
+            let mut merged = HeaderMerger::merge_with(
                 &headers,
                 if presorted {
                     merge.order
@@ -325,24 +326,22 @@ fn run(merge: &Merge) -> Result<()> {
                 },
                 merge.merge_dictionaries,
             )?;
-            let header = output_header(merge, &merged);
+            let header = output_header(merge, std::mem::take(&mut merged.header));
             let intervals = merge
                 .intervals
                 .as_deref()
                 .map(UniquedList::read)
                 .transpose()?;
             let mut sources: Vec<Box<dyn RecordSource + '_>> = Vec::new();
-            for ((input_header, reader, cram), path) in streams.into_iter().zip(&merge.inputs) {
+            for ((input_header, (reader, cram)), path) in
+                headers.iter().zip(readers).zip(&merge.inputs)
+            {
                 let filter = intervals
                     .as_ref()
-                    .map(|list| IntervalFilter::on_header(list, &input_header, true))
+                    .map(|list| IntervalFilter::on_header(list, input_header, true))
                     .transpose()?;
-                let restore = Restore::new(
-                    cram,
-                    Mode::Rewrite,
-                    opts.reference.as_deref(),
-                    &input_header,
-                )?;
+                let restore =
+                    Restore::new(cram, Mode::Rewrite, opts.reference.as_deref(), input_header)?;
                 sources.push(Box::new(Input {
                     reader,
                     path,

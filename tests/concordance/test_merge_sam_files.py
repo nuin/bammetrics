@@ -196,6 +196,12 @@ def test_comments(pieces):
           "markdup COMMENT")
 
 
+@pytest.mark.parametrize("args", [["COMMENT=null"], ["COMMENT=null", "CO=x"],
+                                  ["COMMENT=x", "CO=null"]])
+def test_a_null_comment_clears_the_list(pieces, args):
+    merge(pieces["markdup"]["by_rg"], args, f"markdup {' '.join(args)}")
+
+
 @pytest.fixture(scope="module")
 def indexed(pieces):
     for piece in pieces["foundation"]["by_rg"]:

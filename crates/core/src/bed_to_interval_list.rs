@@ -23,8 +23,6 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 
-use noodles::bam;
-
 use crate::error::{Error, Result};
 use crate::interval_ops;
 use crate::metric::{MetricsOutput, ToolOutput, Value};
@@ -111,15 +109,34 @@ impl Sequence {
     }
 }
 
+/// The bytes of a dictionary file read whole (a `.dict`, an interval list,
+/// SAM text, a `.fai`). A BAM or CRAM header text is read under
+/// [`crate::doctor::input::MAX_HEADER_BYTES`].
+pub const MAX_DICTIONARY_BYTES: u64 = 256 << 20;
+
 /// `SAMSequenceDictionaryExtractor.extractDictionary` for the file types
-/// a metrics harness meets.
+/// a metrics harness meets. A dictionary with no `@SQ` line is an error.
 pub fn read_dictionary(path: &Path) -> Result<Vec<Sequence>> {
+    let sequences = read_sequences(path)?;
+    if sequences.is_empty() {
+        return Err(Error::Intervals {
+            path: path.to_path_buf(),
+            message: "no @SQ line: cannot extract a sequence dictionary".to_owned(),
+        });
+    }
+    Ok(sequences)
+}
+
+/// The `@SQ` lines of `path`, none or more: [`read_dictionary`] without
+/// the test for an empty dictionary.
+pub fn read_sequences(path: &Path) -> Result<Vec<Sequence>> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
     };
     let name = path.to_string_lossy().to_ascii_lowercase();
     let text = if crate::cram::is_cram(path) {
+        let cap = crate::doctor::input::MAX_HEADER_BYTES as u64;
         let mut reader =
             noodles::cram::io::Reader::new(BufReader::new(File::open(path).map_err(input)?));
         let mut header = reader.header_reader();
@@ -131,16 +148,18 @@ pub fn read_dictionary(path: &Path) -> Result<Vec<Sequence>> {
         container
             .raw_sam_header_reader()
             .map_err(input)?
+            .take(cap + 1)
             .read_to_end(&mut bytes)
             .map_err(input)?;
+        if bytes.len() as u64 > cap {
+            return Err(Error::Intervals {
+                path: path.to_path_buf(),
+                message: format!("the CRAM header text holds more than {cap} bytes"),
+            });
+        }
         crate::java::decode_utf8(&bytes).into_owned()
     } else if name.ends_with(".bam") {
-        let mut reader = bam::io::Reader::new(File::open(path).map_err(input)?);
-        let mut header = reader.header_reader();
-        header.read_magic_number().map_err(input)?;
-        let mut raw = header.raw_sam_header_reader().map_err(input)?;
-        let mut bytes = Vec::new();
-        raw.read_to_end(&mut bytes).map_err(input)?;
+        let bytes = crate::doctor::input::bam_header_bytes(path).map_err(input)?;
         // htsjdk reads a BAM's header text one character per byte.
         bytes.iter().copied().map(char::from).collect()
     } else if [".fa", ".fasta", ".fna", ".fa.gz", ".fasta.gz"]
@@ -149,19 +168,48 @@ pub fn read_dictionary(path: &Path) -> Result<Vec<Sequence>> {
     {
         return fasta_dictionary(path);
     } else {
-        crate::java::decode_utf8(&std::fs::read(path).map_err(input)?).into_owned()
+        crate::java::decode_utf8(&read_capped(path)?).into_owned()
     };
-    let sequences = parse_sq_lines(&text).map_err(|message| Error::Intervals {
+    parse_sq_lines(&text).map_err(|message| Error::Intervals {
         path: path.to_path_buf(),
         message,
-    })?;
-    if sequences.is_empty() {
+    })
+}
+
+/// The bytes of `path`, inflated for a name ending in `.gz`, at most
+/// [`MAX_DICTIONARY_BYTES`]. The read itself stops, so a pipe or a device
+/// costs no more than a file.
+fn read_capped(path: &Path) -> Result<Vec<u8>> {
+    read_capped_at(path, MAX_DICTIONARY_BYTES)
+}
+
+/// [`read_capped`] with the cap as an argument, so a test can pass a small one.
+fn read_capped_at(path: &Path, cap: u64) -> Result<Vec<u8>> {
+    let gzip = path.to_string_lossy().ends_with(".gz");
+    let mut bytes = Vec::new();
+    File::open(path)
+        .and_then(|file| {
+            let mut reader: Box<dyn Read> = if gzip {
+                Box::new(crate::gzip::GzipReader::new(BufReader::new(file)))
+            } else {
+                Box::new(file)
+            };
+            reader.by_ref().take(cap + 1).read_to_end(&mut bytes)
+        })
+        .map_err(|source| Error::Input {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    if bytes.len() as u64 > cap {
         return Err(Error::Intervals {
             path: path.to_path_buf(),
-            message: "no @SQ line: cannot extract a sequence dictionary".to_owned(),
+            message: format!(
+                "the file holds more than {cap} bytes, the most a dictionary file read whole \
+                 may hold"
+            ),
         });
     }
-    Ok(sequences)
+    Ok(bytes)
 }
 
 /// `ReferenceSequenceFileFactory.getDefaultDictionaryForReferenceSequence`:
@@ -175,13 +223,10 @@ fn fasta_dictionary(path: &Path) -> Result<Vec<Sequence>> {
         .to_owned();
     let dict = PathBuf::from(format!("{stem}.dict"));
     if dict.exists() {
-        return read_dictionary(&dict);
+        return read_sequences(&dict);
     }
     let fai = PathBuf::from(format!("{name}.fai"));
-    let bytes = std::fs::read(&fai).map_err(|source| Error::Input {
-        path: fai.clone(),
-        source,
-    })?;
+    let bytes = read_capped(&fai)?;
     let text = crate::java::decode_utf8(&bytes);
     let mut sequences = Vec::new();
     for line in text.lines().filter(|l| !l.trim().is_empty()) {
@@ -503,6 +548,36 @@ fn read_bed_file(path: &Path) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A named pipe fed `@SQ` lines without end: the capped read stops at
+    /// the cap and fails, where a read to the end would grow forever.
+    #[cfg(unix)]
+    #[test]
+    fn a_dictionary_on_an_endless_pipe_stops_at_the_cap() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("bammetrics-dict-fifo-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let fifo = dir.join("endless.dict");
+        let made = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .expect("mkfifo");
+        assert!(made.success());
+        let path = fifo.clone();
+        let writer = std::thread::spawn(move || {
+            let mut pipe = File::create(&path).expect("open the pipe");
+            let line = b"@SQ\tSN:c\tLN:1\n".repeat(4096);
+            while pipe.write_all(&line).is_ok() {}
+        });
+        let read = read_capped_at(&fifo, 1 << 20);
+        writer.join().expect("writer");
+        std::fs::remove_file(&fifo).expect("remove the pipe");
+        std::fs::remove_dir(&dir).expect("remove the directory");
+        assert!(
+            matches!(&read, Err(Error::Intervals { message, .. }) if message.contains("more than 1048576")),
+            "{read:?}"
+        );
+    }
 
     fn dictionary() -> Vec<Sequence> {
         parse_sq_lines(
