@@ -1,0 +1,11 @@
+## argv
+IntervalListTools
+I=tests/data/intervals_a.interval_list
+I=tests/data/intervals_other.interval_list
+ACTION=INTERSECT
+O=OUT/x.interval_list
+## exit
+1
+## stdout
+## stderr
+bammetrics: Sequences at index 0 don't match: 0/100000/chr1 0/99999/chr1

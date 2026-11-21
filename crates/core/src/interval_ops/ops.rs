@@ -12,6 +12,15 @@ use crate::error::{Error, Result};
 /// band, so a band of 1 base over a genome would make three billion.
 pub const MAX_BAND_PIECES: u64 = 20_000_000;
 
+/// The overlapping pairs [`intersection`] makes at most. htsjdk makes one
+/// interval per pair before it merges them, so two lists of `n` nested
+/// intervals make `n * n`: 4,000 each peaked at 4.3 GB.
+pub const MAX_INTERSECTION_PAIRS: u64 = 10_000_000;
+
+/// The bytes of names [`intersection`] and [`break_at_band_multiples`]
+/// make at most: each piece carries a copy of the name it came from.
+pub const MAX_MADE_NAME_BYTES: u64 = 256 << 20;
+
 /// `String.compareTo`: UTF-16 code units in order.
 fn java_compare(a: &str, b: &str) -> Ordering {
     if a.is_ascii() && b.is_ascii() {
@@ -320,16 +329,40 @@ fn build(tree: &mut [i32], list: &[(i32, i32, usize)], node: usize, lo: usize, h
 /// `IntervalList.intersection(a, b)`: for each interval `i` of `b`, in
 /// order, and each interval `j` of `a` it overlaps, `i.intersect(j)`: the
 /// common bases on `i`'s strand, named `"<i> intersection <j>"` (a missing
-/// name reads `null`); then `uniqued()` under `a`'s header.
+/// name reads `null`); then `uniqued()` under `a`'s header. More than
+/// [`MAX_INTERSECTION_PAIRS`] pairs or [`MAX_MADE_NAME_BYTES`] of names
+/// is an error.
 pub fn intersection(a: &IntervalList, b: &IntervalList) -> Result<IntervalList> {
+    intersection_limited(a, b, MAX_INTERSECTION_PAIRS, MAX_MADE_NAME_BYTES)
+}
+
+/// [`intersection`] with at most `max_pairs` pairs and `max_name_bytes`
+/// bytes of names.
+pub(super) fn intersection_limited(
+    a: &IntervalList,
+    b: &IntervalList,
+    max_pairs: u64,
+    max_name_bytes: u64,
+) -> Result<IntervalList> {
     a.header
         .assert_same_dictionary(&b.header)
         .map_err(dictionary_error)?;
     let tree = OverlapTree::new(&a.intervals, a.header.sequences.len());
     let mut out = IntervalList::new(a.header.clone());
+    let mut name_bytes = 0u64;
+    let mut over = false;
     for i in &b.intervals {
+        if over {
+            break;
+        }
         tree.for_each_overlap(i.contig, i.start, i.end, |at| {
             let j = &a.intervals[at];
+            let name = name_length(&i.name) + " intersection ".len() + name_length(&j.name);
+            name_bytes += name as u64;
+            if over || out.intervals.len() as u64 >= max_pairs || name_bytes > max_name_bytes {
+                over = true;
+                return;
+            }
             out.intervals.push(Interval {
                 contig: i.contig,
                 start: i.start.max(j.start),
@@ -343,7 +376,18 @@ pub fn intersection(a: &IntervalList, b: &IntervalList) -> Result<IntervalList> 
             });
         });
     }
+    if over {
+        return Err(Error::Usage(format!(
+            "the intersection makes more than {max_pairs} overlapping pairs or \
+             {max_name_bytes} bytes of names, the most made"
+        )));
+    }
     Ok(out.into_uniqued(true))
+}
+
+/// The bytes of a name as written, `null` for none.
+fn name_length(name: &Option<String>) -> usize {
+    name.as_ref().map_or(4, String::len)
 }
 
 /// `IntervalList.invert`: per contig in dictionary order, the bases the
@@ -437,9 +481,11 @@ pub fn break_at_band_multiples(intervals: &[Interval], n: i32) -> Result<Vec<Int
         return Ok(intervals.to_vec());
     }
     let mut out = Vec::with_capacity(intervals.len());
+    let mut name_bytes = 0u64;
     let over = || {
         Error::Usage(format!(
-            "BREAK_BANDS_AT_MULTIPLES_OF={n} makes more than {MAX_BAND_PIECES} intervals"
+            "BREAK_BANDS_AT_MULTIPLES_OF={n} makes more than {MAX_BAND_PIECES} intervals or \
+             {MAX_MADE_NAME_BYTES} bytes of names"
         ))
     };
     for interval in intervals {
@@ -452,7 +498,9 @@ pub fn break_at_band_multiples(intervals: &[Interval], n: i32) -> Result<Vec<Int
             continue;
         }
         let pieces = u64::try_from(i64::from(last_band) - i64::from(first_band) + 1).unwrap_or(0);
-        if out.len() as u64 + pieces > MAX_BAND_PIECES {
+        // Each piece's name is the interval's, a dot and up to 10 digits.
+        name_bytes += pieces * (name_length(&interval.name) as u64 + 11);
+        if out.len() as u64 + pieces > MAX_BAND_PIECES || name_bytes > MAX_MADE_NAME_BYTES {
             return Err(over());
         }
         let name = interval.name.as_deref().unwrap_or("null");

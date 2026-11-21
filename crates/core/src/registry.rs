@@ -378,6 +378,7 @@ pub const TOOLS: &[&Tool] = &[
     &crate::arrays::baf_regress::TOOL,
     &crate::arrays::verify_id_intensity::TOOL,
     &crate::arrays::variant_calling::TOOL,
+    &crate::interval_list_tools::TOOL,
 ];
 
 /// The tool named `name`.
@@ -407,6 +408,15 @@ pub struct Invocation {
     /// Set by a face whose user asked for quiet (`-q`, Python): a tool
     /// prints no note of its own on standard error.
     pub quiet: bool,
+    /// Every option as given, ignored ones included: the long name and the
+    /// value, in command-line order. A tool that writes Picard's command
+    /// line into its output (`IntervalListTools` `@PG CL`) rebuilds it
+    /// from these.
+    pub given: Vec<(&'static str, String)>,
+    /// True when Picard parses the arguments with its legacy parser: some
+    /// argument is `KEY=VALUE` without a leading dash and none starts with
+    /// `-` (`CommandLineSyntaxTranslater.isLegacyPicardStyle`).
+    pub legacy_syntax: bool,
 }
 
 impl Invocation {
@@ -611,6 +621,8 @@ impl Tool {
         let mut inv = Invocation {
             threads: default_threads(),
             command: self.name.to_owned(),
+            legacy_syntax: args.iter().any(|a| !a.starts_with('-') && a.contains('='))
+                && !args.iter().any(|a| a.starts_with('-')),
             ..Invocation::default()
         };
         let mut input = None;
@@ -620,6 +632,14 @@ impl Tool {
             let body = arg.trim_start_matches('-');
             let (name, value) = match body.split_once('=') {
                 Some((n, v)) => (n, v.to_owned()),
+                // Barclay takes a boolean's value only when one follows: a
+                // bare `--UNIQUE` before another option or at the end is true.
+                None if dashed
+                    && self.lookup(body).is_some_and(|o| o.ty == Ty::Bool)
+                    && rest.as_slice().first().is_none_or(|v| v.starts_with('-')) =>
+                {
+                    (body, "true".to_owned())
+                }
                 None if dashed => {
                     let v = rest.next().ok_or_else(|| {
                         Error::Usage(format!("{}: {arg} needs a value", self.name))
@@ -665,6 +685,7 @@ impl Tool {
                 )));
             }
             inv.command.push_str(&format!(" {}={value}", opt.names[0]));
+            inv.given.push((opt.names[0], value.clone()));
             match opt.kind {
                 Kind::Ignored(why) => {
                     let typed = value == "null"
@@ -1160,6 +1181,39 @@ mod tests {
                 "CollectInsertSizeMetrics INPUT=x.bam OUTPUT=out.txt MINIMUM_PCT=0.5"
             );
         }
+    }
+
+    /// Picard 3.5.0 takes `--INCLUDE_DUPLICATES` alone as true, before
+    /// another option or at the end; a value that follows is its value.
+    #[test]
+    fn a_bare_dashed_boolean_is_true() {
+        for args in [
+            strings(&["--INPUT", "x.bam", "--INCLUDE_DUPLICATES", "-O", "o"]),
+            strings(&["--INPUT", "x.bam", "-O", "o", "--INCLUDE_DUPLICATES"]),
+            strings(&[
+                "--INPUT",
+                "x.bam",
+                "--INCLUDE_DUPLICATES",
+                "true",
+                "-O",
+                "o",
+            ]),
+        ] {
+            let inv = tool().parse(&args).expect("parses");
+            assert_eq!(inv.get("INCLUDE_DUPLICATES"), Some("true"), "{args:?}");
+            assert_eq!(inv.output.as_deref(), Some(Path::new("o")), "{args:?}");
+        }
+        let inv = tool()
+            .parse(&strings(&[
+                "--INPUT",
+                "x.bam",
+                "--INCLUDE_DUPLICATES",
+                "false",
+            ]))
+            .expect("parses");
+        assert_eq!(inv.get("INCLUDE_DUPLICATES"), Some("false"));
+        // A value option still needs its value.
+        assert!(tool().parse(&strings(&["--INPUT", "x.bam", "-M"])).is_err());
     }
 
     #[test]

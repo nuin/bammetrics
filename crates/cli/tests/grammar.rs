@@ -815,17 +815,20 @@ fn every_registry_tool_is_in_the_matrix() {
     let covered: Vec<&str> = cases(&built).iter().map(|c| c.class).collect();
     // FifoBuffer writes no file: tests/fifo_buffer.rs compares its spellings.
     // BuildBamIndex writes a binary index: tests/build_bam_index.rs compares its.
+    // IntervalListTools writes its command line, output path included, into
+    // the list: tests/interval_list_tools.rs compares its spellings.
     let elsewhere = [
         "AccumulateVariantCallingMetrics",
         "FifoBuffer",
         "BuildBamIndex",
+        "IntervalListTools",
     ];
     let missing: Vec<&&str> = classes
         .iter()
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 60);
+    assert_eq!(classes.len(), 61);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

@@ -323,6 +323,7 @@ table.
 | `create-baf-regress-file` | CreateBafRegressMetricsFile (the text bafRegress prints) | `PREFIX.bafregress_metrics` |
 | `create-verify-i-d-intensity-contamination-file` | CreateVerifyIDIntensityContaminationMetricsFile (the text VerifyIDIntensity prints) | `PREFIX.verifyidintensity_metrics` |
 | `arrays-variant-calling` | CollectArraysVariantCallingMetrics (an arrays VCF with its index; `--dbsnp` required) | `PREFIX.arrays_variant_calling_{detail,summary}_metrics`, `PREFIX.arrays_control_code_summary_metrics` |
+| `interval-list-tools` | IntervalListTools (interval lists as positionals or `-i`; `--second-input` for SUBTRACT, SYMDIFF and OVERLAPS) | `-o` interval list, or with `--scatter-count` above 1 the directory `-o` of `temp_NNNN_of_N/scattered.interval_list`; the `--output-value` count on standard output or in `--count-output`; no file without `-o` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -1509,6 +1510,37 @@ Every check, threshold and form is in [docs/doctor.md](doctor.md).
 bammetrics doctor sample.cram -R ref.fa --expect-build hg38
 bammetrics doctor sample.bam --sample-sheet samples.csv --sample NA12878 --format json
 ```
+
+### interval-list-tools
+
+`IntervalListTools` of Picard 3.5.0 (wave W12, `crates/core/src/interval_list_tools.rs`).
+Each input list is padded by `--padding`, the lists are combined by `--action`, then the
+result is sorted, inverted (`--invert`), merged (`--unique`, `--dont-merge-abutting`) and
+broken at `--break-bands-at-multiples-of`, in Picard's order. `-o` gets the list, or with
+`--scatter-count` (or `--scatter-content`) above 1 a directory of
+`temp_NNNN_of_N/scattered.interval_list` files, renamed into place as one set; a run that
+fails leaves none. `--output-value BASES` or `INTERVALS` prints the count of what was
+written to standard output, or to `--count-output`; without `-o` no list is written. The
+`@PG` line holds Picard's command line for the same options, so the files equal
+Picard's byte for byte. A file named exactly `.vcf`, `.vcf.gz` or `.vcf.bgz` is read as a
+VCF (`--include-filtered` keeps its filtered records); every other name is an interval
+list, as in Picard. A chain refuses the verb as a step: it reads no BAM.
+
+Stated limits: a list or VCF holds at most 20,000,000 intervals, 1,000,000 header lines
+and 8,000,000 header fields; an intersection (`INTERSECT`, `SUBTRACT`, `SYMDIFF`) makes
+at most 10,000,000 overlapping pairs and 256 MiB of names; a scatter makes at most
+100,000 lists and 32 GiB of text. A value with a line feed exits 2 before any file, as
+Picard fails before it reads. A `--count-output` inside a list directory of the scatter
+is refused.
+
+```bash
+bammetrics interval-list-tools panel_a.interval_list -i panel_b.interval_list --action UNION -o union.interval_list
+bammetrics IntervalListTools I=targets.interval_list SI=blacklist.interval_list ACTION=SUBTRACT PADDING=50 O=kept.interval_list
+bammetrics interval-list-tools genome.interval_list --scatter-count 24 -M BALANCING_WITHOUT_INTERVAL_SUBDIVISION -o shards
+bammetrics interval-list-tools targets.interval_list --unique --output-value BASES
+```
+
+`qc --panel` takes the list it writes.
 
 ## Post verbs
 

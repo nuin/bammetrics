@@ -1,0 +1,24 @@
+## argv
+IntervalListTools
+I=tests/data/intervals_a.interval_list
+INVERT=true
+BRK=20000
+O=OUT/inverted.interval_list
+## exit
+0
+## stdout
+## stderr
+## file inverted.interval_list
+@HD	VN:1.6
+@SQ	SN:chr1	LN:100000
+@PG	ID:1	CL:IntervalListTools INPUT=[tests/data/intervals_a.interval_list] OUTPUT=OUT/inverted.interval_list BREAK_BANDS_AT_MULTIPLES_OF=20000 INVERT=true    PADDING=0 UNIQUE=false DONT_MERGE_ABUTTING=false SORT=true ACTION=CONCAT SCATTER_COUNT=1 INCLUDE_FILTERED=false SUBDIVISION_MODE=INTERVAL_SUBDIVISION OUTPUT_VALUE=NONE VERBOSITY=INFO QUIET=false VALIDATION_STRINGENCY=STRICT COMPRESSION_LEVEL=5 MAX_RECORDS_IN_RAM=500000 CREATE_INDEX=false CREATE_MD5_FILE=false USE_JDK_DEFLATER=false USE_JDK_INFLATER=false	PN:IntervalListTools
+chr1	1	1149	+	interval-1
+chr1	1301	2299	+	interval-2
+chr1	2351	2999	+	interval-3
+chr1	4000	5499	+	interval-4
+chr1	5801	8999	+	interval-5
+chr1	9001	19999	+	interval-6.1
+chr1	20000	39999	+	interval-6.2
+chr1	40000	59999	+	interval-6.3
+chr1	60000	79999	+	interval-6.4
+chr1	80000	99949	+	interval-6.5

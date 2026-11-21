@@ -442,6 +442,27 @@ The `SUBTRACT` and `SYMDIFF` files equal Picard's on every line but the `@PG` co
 line. An interval costs about 150 to 200 bytes in each copy a step holds; `SYMDIFF` holds
 both inputs, both unions and both differences at its peak.
 
+### IntervalListTools scatter (wave W12)
+
+`tests/data/make_interval_tiling.py` tiles GRCh38's 3,366 `@SQ` lines every 1 Mbp: 6,494
+intervals under a 723 KB header. `SCATTER_COUNT=1000
+SUBDIVISION_MODE=BALANCING_WITHOUT_INTERVAL_SUBDIVISION` writes 1,000 lists, 723 MB.
+
+| tool | wall | peak RSS |
+|---|---:|---:|
+| interval layer before `Scattered` (a header per list) | 2.59 s | 1,748 MiB |
+| `bammetrics IntervalListTools` | 1.42 s | 19 MiB |
+| Picard 3.5.0 | 5.53 s | 732 MiB |
+
+The memory gate rows (`make memgate`, and `TIER=scale` with `--out-root
+~/data/bammetrics-scale/waves/w12`), the generator's Python included:
+
+| command | tier | peak RSS MiB / limit | wall s |
+|---|---|---|---:|
+| `interval-list-tools scatter` (chr1.dict tiled every 100 bases, `SYMDIFF`, 50 lists) | fixture | 26.9 / 64 | 0.10 |
+| `interval-list-tools GRCh38 scatter` (1,000 lists) | scale | 22.4 / 1024 | 1.73 |
+| `interval-list-tools GRCh38 subtract` (`PADDING`, `UNIQUE`, band breaks) | scale | 21.7 / 1024 | 0.09 |
+
 ## Memory gate
 
 `make memgate` runs each row of `benches/memgate.toml` under `/usr/bin/time -l` and fails

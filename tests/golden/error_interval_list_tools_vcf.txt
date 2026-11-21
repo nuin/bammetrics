@@ -1,0 +1,9 @@
+## argv
+IntervalListTools
+I=tests/data/arrays/arrays.vcf
+O=OUT/x.interval_list
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/arrays/arrays.vcf: Interval list file must contain header. 

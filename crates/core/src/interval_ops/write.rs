@@ -4,7 +4,8 @@
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-use super::IntervalList;
+use super::header::Header;
+use super::{Interval, IntervalList};
 use crate::cleanup::{AtomicFile, MadeDirs};
 use crate::error::{Error, Result};
 
@@ -13,19 +14,7 @@ impl IntervalList {
     /// `contig`, `start`, `end`, `+` or `-` and the name (`.` without one),
     /// tab-separated, each line ended by `\n`.
     pub fn write_to(&self, out: &mut impl Write) -> io::Result<()> {
-        out.write_all(self.header.encode().as_bytes())?;
-        for interval in &self.intervals {
-            writeln!(
-                out,
-                "{}\t{}\t{}\t{}\t{}",
-                self.contig_name(interval),
-                interval.start,
-                interval.end,
-                if interval.negative_strand { '-' } else { '+' },
-                interval.name.as_deref().unwrap_or(".")
-            )?;
-        }
-        Ok(())
+        write_intervals(&self.header, &self.intervals, out)
     }
 
     /// [`IntervalList::write_to`] as text.
@@ -35,6 +24,28 @@ impl IntervalList {
             .expect("writing to memory cannot fail");
         String::from_utf8(bytes).expect("the header and names are text")
     }
+}
+
+/// [`IntervalList::write_to`] for a header and intervals held apart: the
+/// lists of a scatter share one header.
+pub(super) fn write_intervals(
+    header: &Header,
+    intervals: &[Interval],
+    out: &mut impl Write,
+) -> io::Result<()> {
+    out.write_all(header.encode().as_bytes())?;
+    for interval in intervals {
+        writeln!(
+            out,
+            "{}\t{}\t{}\t{}\t{}",
+            header.sequences[interval.contig].name,
+            interval.start,
+            interval.end,
+            if interval.negative_strand { '-' } else { '+' },
+            interval.name.as_deref().unwrap_or(".")
+        )?;
+    }
+    Ok(())
 }
 
 /// True for a name htsjdk's `IOUtil.openFileForWriting` compresses.
@@ -73,9 +84,9 @@ pub(super) fn check_target(target: &Path, inputs: &[PathBuf]) -> Result<()> {
     Ok(())
 }
 
-/// Write `list` into `file`: plain text, or BGZF (a gzip file htsjdk
-/// reads back) under a name [`gzip_name`] accepts.
-pub(super) fn stage(list: &IntervalList, file: &AtomicFile) -> Result<()> {
+/// Write `header` and `intervals` into `file`: plain text, or BGZF (a gzip
+/// file htsjdk reads back) under a name [`gzip_name`] accepts.
+pub(super) fn stage(header: &Header, intervals: &[Interval], file: &AtomicFile) -> Result<()> {
     let target = file.path().to_path_buf();
     let output = |source| Error::Output {
         path: target.clone(),
@@ -84,14 +95,14 @@ pub(super) fn stage(list: &IntervalList, file: &AtomicFile) -> Result<()> {
     let handle = file.create().map_err(output)?;
     if gzip_name(&target) {
         let mut writer = noodles::bgzf::io::Writer::new(BufWriter::new(handle));
-        list.write_to(&mut writer).map_err(output)?;
+        write_intervals(header, intervals, &mut writer).map_err(output)?;
         writer
             .finish()
             .and_then(|mut inner| inner.flush())
             .map_err(output)?;
     } else {
         let mut writer = BufWriter::new(handle);
-        list.write_to(&mut writer).map_err(output)?;
+        write_intervals(header, intervals, &mut writer).map_err(output)?;
         writer.flush().map_err(output)?;
     }
     Ok(())
@@ -109,7 +120,7 @@ pub fn write_list(list: &IntervalList, path: &Path, inputs: &[PathBuf]) -> Resul
         source,
     })?;
     let file = AtomicFile::new(path);
-    stage(list, &file)?;
+    stage(&list.header, &list.intervals, &file)?;
     file.commit().map_err(|source| Error::Output {
         path: path.to_path_buf(),
         source,

@@ -1659,9 +1659,32 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   it inflates to the text Picard writes, and Picard's single gzip member has other bytes.
 - Two dictionaries whose `@SQ` names differ only through an `AN` alternative name are
   refused as different dictionaries; htsjdk's `isSameSequence` accepts them.
-- A scatter into more than 100,000 lists (`SCATTER_COUNT`, or the count `SCATTER_CONTENT`
-  gives) and a `BREAK_BANDS_AT_MULTIPLES_OF` that makes more than 20,000,000 intervals
-  fail with a usage error. Picard writes the files, or runs out of memory.
+- A scatter that makes more than 100,000 lists, or more than 32 GiB of text (each
+  list carries the whole header), and a `BREAK_BANDS_AT_MULTIPLES_OF` that makes more
+  than 20,000,000 intervals fail with a usage error before the first file. Picard
+  writes the files, or runs out of memory. A `SCATTER_COUNT` above 100,000 that makes
+  fewer lists runs as in Picard.
+- An interval list or VCF with more than 20,000,000 intervals, 1,000,000 header lines
+  or 8,000,000 header fields is refused while it is read. An intersection (`INTERSECT`
+  of several lists, `SUBTRACT`, `SYMDIFF`) that makes more than 10,000,000 overlapping
+  pairs, or an intersection or band break that makes more than 256 MiB of names, is
+  refused: htsjdk makes one interval per overlapping pair before it merges them, so two
+  lists of 4,000 nested intervals peak at 4.3 GB. Picard has none of these bounds.
+- A VCF input with a `##contig` ID given twice is refused (`duplicate contig ID`, from
+  the noodles header parser). htsjdk keeps the first line of the ID and Picard reads
+  the file.
+- An error message that quotes a malformed line is cut to 300 bytes; Picard prints the
+  whole line.
+- `IntervalListTools` refuses an `INPUT` named exactly `.bcf`, which Picard reads as BCF.
+  It reads a file named exactly `.vcf`, `.vcf.gz` or `.vcf.bgz` as a VCF, as Picard does;
+  every other name is an interval list in both.
+- `IntervalListTools` checks `OUTPUT` and `COUNT_OUTPUT` before it writes either: a
+  `COUNT_OUTPUT` in a missing directory, naming `OUTPUT`, or inside a list directory of
+  the scatter under `OUTPUT`, fails with no file written. Picard writes `OUTPUT` first
+  and then fails, or writes the count over the list.
+- A boolean option of `IntervalListTools` takes `true` or `false` in any case. Picard's
+  legacy parser reads any other text as `false` (`UNIQUE=T` is false); bammetrics
+  refuses it, as for every tool.
 
 ## Not in Picard
 

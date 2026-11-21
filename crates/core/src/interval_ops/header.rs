@@ -21,6 +21,11 @@ use crate::sam_text::{Stringency, clean_header_line};
 /// `SAMFileHeader.CURRENT_VERSION`: the `VN` every written `@HD` carries.
 const VERSION: &str = "1.6";
 
+/// The `KEY:VALUE` fields [`Header::decode`] reads at most over a header:
+/// about 100 bytes each in memory, so a line of millions of short tags is
+/// refused before it is held.
+pub const MAX_HEADER_FIELDS: usize = 8_000_000;
+
 /// `SAMFileHeader.SortOrder`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SortOrder {
@@ -273,9 +278,18 @@ impl Header {
     /// `SAMTextHeaderCodec.decode` at `SILENT` of the header lines, each
     /// without its line end.
     pub fn decode<'a>(lines: impl IntoIterator<Item = &'a str>) -> Result<Header, String> {
+        Self::decode_limited(lines, MAX_HEADER_FIELDS)
+    }
+
+    /// [`Header::decode`] reading at most `max_fields` fields.
+    pub(super) fn decode_limited<'a>(
+        lines: impl IntoIterator<Item = &'a str>,
+        max_fields: usize,
+    ) -> Result<Header, String> {
         let mut header = Header::default();
         let mut read_group_ids = HashSet::new();
         let mut program_ids = HashSet::new();
+        let mut fields_left = max_fields;
         for line in lines {
             let Some(kept) = clean_header_line(line.as_bytes(), Stringency::Silent)
                 .map_err(|e| e.to_string())?
@@ -291,8 +305,12 @@ impl Header {
             }
             let mut pairs: Vec<(String, String)> = fields
                 .filter_map(|f| f.split_once(':'))
+                .take(fields_left.saturating_add(1))
                 .map(|(k, v)| (k.to_owned(), v.to_owned()))
                 .collect();
+            fields_left = fields_left.checked_sub(pairs.len()).ok_or_else(|| {
+                format!("the header holds more than {max_fields} fields, the most read")
+            })?;
             let mut take = |key: &str| {
                 pairs
                     .iter()

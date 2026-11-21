@@ -24,26 +24,31 @@
 //! [`write_scatter`] writes its lists as `temp_0001_of_N/scattered.interval_list`,
 //! committed as one set.
 //!
-//! Limits: an interval list or VCF text is read under [`MAX_LIST_BYTES`];
-//! a scatter writes at most [`MAX_SCATTER_FILES`] files.
+//! Limits: an interval list is read under [`MAX_LIST_BYTES`], a list or
+//! VCF with at most [`MAX_LIST_INTERVALS`] intervals, [`MAX_HEADER_LINES`]
+//! header lines and [`MAX_HEADER_FIELDS`] header fields; an intersection
+//! makes at most [`MAX_INTERSECTION_PAIRS`] pairs and, with the band
+//! breaks, [`MAX_MADE_NAME_BYTES`] of names; a scatter writes at most
+//! [`MAX_SCATTER_FILES`] files and [`MAX_SCATTER_BYTES`] bytes.
 
 mod header;
 pub mod ops;
-mod read;
+pub(crate) mod read;
 mod regions;
 mod scatter;
 mod write;
 
-pub use header::{Header, HeaderRecord, Sequence, SortOrder};
+pub use header::{Header, HeaderRecord, MAX_HEADER_FIELDS, Sequence, SortOrder};
 pub use ops::{
-    break_at_band_multiples, concatenate, difference, intersection, invert, merge_intervals,
-    overlaps, subtract, subtract_disjoint, union, unique_intervals,
+    MAX_BAND_PIECES, MAX_INTERSECTION_PAIRS, MAX_MADE_NAME_BYTES, break_at_band_multiples,
+    concatenate, difference, intersection, invert, merge_intervals, overlaps, subtract,
+    subtract_disjoint, union, unique_intervals,
 };
-pub use read::{MAX_LINE_BYTES, MAX_LIST_BYTES};
+pub use read::{MAX_HEADER_LINES, MAX_LINE_BYTES, MAX_LIST_BYTES, MAX_LIST_INTERVALS};
 pub use regions::Regions;
 pub use scatter::{
-    MAX_SCATTER_FILES, ScatterMode, list_weight, scatter, scatter_count_for_content, scatter_path,
-    write_scatter,
+    MAX_SCATTER_BYTES, MAX_SCATTER_FILES, ScatterMode, Scattered, list_weight, scatter,
+    scatter_bytes, scatter_count_for_content, scatter_path, write_scatter,
 };
 pub use write::write_list;
 

@@ -1,0 +1,9 @@
+## argv
+IntervalListTools
+I=tests/data/intervals_a.interval_list
+OUTPUT_VALUE=INTERVALS
+## exit
+0
+## stdout
+7
+## stderr

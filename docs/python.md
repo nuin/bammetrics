@@ -55,6 +55,12 @@ The keywords of `qc`, `check` and `report` are the command's long flags in snake
   reference (`reference`, `length`, `aligned`, `unaligned`), then the `*` row. A header
   that is not `SO:coordinate` raises `InputError` and writes nothing; a CRAM, an
   `output` that is the input and an unknown keyword raise `UsageError`.
+- `interval_list_tools(input, *, output=None, action=None, second_input=None, ...)` runs
+  `IntervalListTools`: `input` is one interval list or a list of them, `output` the list
+  or, with `scatter_count` above 1, the scatter directory. It returns one dict per
+  interval written (`list`, the scatter list from 1; `contig`, `start`, `end`, `strand`,
+  `name`). It prints nothing: the `output_value` count goes to `count_output` when given.
+  A failing call raises and writes no file.
 - `fifo_buffer(*, buffer_size, io_size, debug_frequency, name, verbosity)` copies nothing.
   `FifoBuffer` moves the standard input of a command to its standard output, and a
   Python call has no pipe to buffer and no row to return. The function checks its

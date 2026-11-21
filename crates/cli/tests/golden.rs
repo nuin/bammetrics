@@ -75,6 +75,8 @@ const FIXTURES: &[(&str, &str)] = &[
     ("AVCF", "tests/data/arrays/arrays.vcf.gz"),
     ("AVCF_PLAIN", "tests/data/arrays/arrays.vcf"),
     ("ADBSNP", "tests/data/arrays/dbsnp.vcf"),
+    ("ILA", "tests/data/intervals_a.interval_list"),
+    ("ILO", "tests/data/intervals_other.interval_list"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -816,6 +818,30 @@ const ARRAYS_CASES: &[Case] = &[
     case!("error_chain_arrays_variant_calling", "chain", "MD", "-o", "OUT/s", "+", "arrays-variant-calling"),
 ];
 
+/// Wave W12: `IntervalListTools` on `tests/data/intervals_a.interval_list`
+/// and `targets.interval_list` (`tests/data/make_interval_list_fixtures.py`):
+/// the Picard face in both syntaxes, the verb, a scatter directory, the
+/// counts and the errors.
+#[rustfmt::skip]
+const INTERVAL_LIST_TOOLS_CASES: &[Case] = &[
+    case!("picard_interval_list_tools_union", "IntervalListTools", "I=ILA", "I=IL", "ACTION=UNION", "O=OUT/union.interval_list", "COMMENT=golden"),
+    case!("picard_interval_list_tools_subtract_bases", "IntervalListTools", "ACTION=SUBTRACT", "I=IL", "SI=ILA", "PADDING=10", "O=OUT/subtract.interval_list", "OUTPUT_VALUE=BASES"),
+    case!("picard_interval_list_tools_count_only", "IntervalListTools", "I=ILA", "OUTPUT_VALUE=INTERVALS"),
+    case!("picard_interval_list_tools_scatter", "IntervalListTools", "I=ILA", "I=IL", "SCATTER_COUNT=3", "M=INTERVAL_COUNT_WITH_DISTRIBUTED_REMAINDER", "O=OUT/scatter", "OUTPUT_VALUE=BASES", "COUNT_OUTPUT=OUT/count.txt"),
+    case!("picard_interval_list_tools_invert_bands", "IntervalListTools", "I=ILA", "INVERT=true", "BRK=20000", "O=OUT/inverted.interval_list"),
+    case!("picard_interval_list_tools_dashed", "IntervalListTools", "--INPUT", "ILA", "--ACTION", "OVERLAPS", "--SECOND_INPUT", "IL", "--OUTPUT", "OUT/overlaps.interval_list"),
+    case!("verb_interval_list_tools", "interval-list-tools", "ILA", "-i", "IL", "--action", "INTERSECT", "--unique", "-o", "OUT/intersect.interval_list"),
+    case!("verb_interval_list_tools_stdout", "interval-list-tools", "ILA", "--no-sort", "--dont-merge-abutting", "--comment", "unsorted", "-o", "-"),
+    case!("verb_interval_list_tools_scatter_content", "interval-list-tools", "ILA", "--scatter-content", "2", "-M", "INTERVAL_COUNT", "-o", "OUT/by_count", "--output-value", "INTERVALS"),
+    case!("error_interval_list_tools_no_second_input", "IntervalListTools", "I=ILA", "ACTION=SUBTRACT", "O=OUT/x.interval_list"),
+    case!("error_interval_list_tools_padding", "IntervalListTools", "I=ILA", "PADDING=-5", "O=OUT/x.interval_list"),
+    case!("error_interval_list_tools_count_output_none", "IntervalListTools", "I=ILA", "COUNT_OUTPUT=OUT/c.txt"),
+    case!("error_interval_list_tools_vcf", "IntervalListTools", "I=AVCF_PLAIN", "O=OUT/x.interval_list"),
+    case!("error_interval_list_tools_dictionary", "IntervalListTools", "I=ILA", "I=ILO", "ACTION=INTERSECT", "O=OUT/x.interval_list"),
+    case!("error_verb_interval_list_tools_input_output", "interval-list-tools", "ILA", "-o", "ILA"),
+    case!("error_chain_interval_list_tools", "chain", "MD", "-o", "OUT/s", "+", "interval-list-tools"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -1287,6 +1313,11 @@ fn documented_arrays_commands_on_the_fixtures() {
     check(ARRAYS_CASES);
 }
 
+#[test]
+fn documented_interval_list_tools_commands_on_the_fixtures() {
+    check(INTERVAL_LIST_TOOLS_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1400,6 +1431,7 @@ fn case_names_are_unique() {
         .chain(SNVQ_UMI_CASES)
         .chain(RRBS_CASES)
         .chain(ARRAYS_CASES)
+        .chain(INTERVAL_LIST_TOOLS_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

@@ -1,0 +1,10 @@
+## argv
+IntervalListTools
+I=tests/data/intervals_a.interval_list
+PADDING=-5
+O=OUT/x.interval_list
+## exit
+1
+## stdout
+## stderr
+bammetrics: Padding values must be >= 0.
