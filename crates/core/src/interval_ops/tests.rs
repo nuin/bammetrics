@@ -385,7 +385,6 @@ fn scatter_by_subdivision_splits_to_the_ideal_weight() {
     let by_count = scatter(&input, ScatterMode::IntervalCount, 5).expect("scatters");
     assert_eq!(by_count.len(), 2);
     assert!(scatter(&input, ScatterMode::IntervalCount, 0).is_err());
-    assert!(scatter(&input, ScatterMode::IntervalCount, 100_001).is_err());
     assert_eq!(
         scatter_count_for_content(ScatterMode::IntervalSubdivision, &input, 0),
         -1
@@ -539,5 +538,180 @@ fn the_panel_reader_takes_a_written_list() {
         })
         .collect();
     assert_eq!(shown, [(0, 1, 10, "p"), (1, 5, 9, "q")]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn reading_stops_at_each_count_cap() {
+    let limits = |header_lines, header_fields, intervals| read::Limits {
+        header_lines,
+        header_fields,
+        intervals,
+    };
+    let text = format!("{DICT}c1\t1\t5\t+\ta\nc1\t7\t9\t+\tb\n");
+    let text = text.as_bytes();
+    assert!(IntervalList::parse_limited(text, &limits(4, 7, 2)).is_ok());
+    let header = IntervalList::parse_limited(text, &limits(3, 7, 2)).expect_err("lines");
+    assert!(header.contains("more than 3 lines"), "{header}");
+    // `VN`, then `SN` and `LN` on each of three `@SQ` lines.
+    let fields = IntervalList::parse_limited(text, &limits(4, 6, 2)).expect_err("fields");
+    assert!(fields.contains("more than 6 fields"), "{fields}");
+    let intervals = IntervalList::parse_limited(text, &limits(4, 7, 1)).expect_err("intervals");
+    assert!(intervals.contains("more than 1 intervals"), "{intervals}");
+}
+
+#[test]
+fn a_long_bad_line_is_cut_in_the_message() {
+    let line = "x".repeat(5000);
+    let error = IntervalList::parse(&format!("{DICT}{line}\n")).expect_err("refused");
+    assert!(error.len() < 400, "{} bytes", error.len());
+    assert!(error.ends_with("(5043 bytes)"), "{error}");
+}
+
+#[test]
+fn bytes_that_are_not_utf8_read_as_replacement_characters() {
+    let mut text = DICT.as_bytes().to_vec();
+    text.extend_from_slice(b"c1\t1\t5\t+\tn\xff\xfeame\r\nc2\t2\t3\t-\t\xe2\x82\n");
+    let parsed = IntervalList::parse_bytes(&text).expect("parses");
+    assert_eq!(
+        body(&parsed),
+        ["c1\t1\t5\t+\tn\u{fffd}\u{fffd}ame", "c2\t2\t3\t-\t\u{fffd}"]
+    );
+}
+
+#[test]
+fn an_intersection_past_its_budget_is_refused() {
+    // Three nested intervals on each side: nine pairs.
+    let a = list("c1\t1\t100\t+\ta1\nc1\t2\t99\t+\ta2\nc1\t3\t98\t+\ta3\n");
+    let b = list("c1\t4\t97\t+\tb1\nc1\t5\t96\t+\tb2\nc1\t6\t95\t+\tb3\n");
+    let whole = intersection(&a, &b).expect("within the caps");
+    assert_eq!(
+        ops::intersection_limited(&a, &b, 9, 1 << 20).expect("nine pairs"),
+        whole
+    );
+    let pairs = ops::intersection_limited(&a, &b, 8, 1 << 20).expect_err("pairs");
+    assert!(
+        pairs.to_string().contains("more than 8 overlapping pairs"),
+        "{pairs}"
+    );
+    // Each name is `bN intersection aN`, 18 bytes.
+    assert!(ops::intersection_limited(&a, &b, 9, 9 * 18).is_ok());
+    assert!(ops::intersection_limited(&a, &b, 9, 9 * 18 - 1).is_err());
+}
+
+#[test]
+fn band_pieces_with_long_names_are_refused_before_they_are_made() {
+    let name = "n".repeat(20_000);
+    let long = [iv(0, 1, 20_000, false, Some(&name))];
+    let error = break_at_band_multiples(&long, 1).expect_err("too many name bytes");
+    assert!(error.to_string().contains("bytes of names"), "{error}");
+    assert_eq!(
+        break_at_band_multiples(&long, 10_000)
+            .expect("three pieces")
+            .len(),
+        3
+    );
+}
+
+#[test]
+fn a_scatter_is_capped_by_the_lists_it_makes() {
+    let input = list("c1\t1\t5\t+\ta\nc2\t1\t5\t+\tb\n");
+    // Picard writes as many lists as the intervals allow.
+    let lists = scatter(&input, ScatterMode::IntervalCount, 100_001).expect("two lists");
+    assert_eq!(lists.len(), 2);
+    let big = IntervalList::parse("@HD\tVN:1.6\n@SQ\tSN:c1\tLN:200000\nc1\t1\t200000\t+\tw\n")
+        .expect("parses");
+    let error = scatter(&big, ScatterMode::IntervalSubdivision, 200_000).expect_err("over");
+    assert!(
+        error.to_string().contains("more than 100000 lists"),
+        "{error}"
+    );
+}
+
+#[test]
+fn the_scatter_bytes_are_the_bytes_written() {
+    let dir = scratch("scatter-bytes");
+    let input = list("c1\t1\t100\t+\ta\nc1\t201\t300\t-\t.\nc2\t9\t8\t+\tlong name\n");
+    let lists = scatter(&input, ScatterMode::IntervalCount, 2).expect("scatters");
+    let written = write_scatter(&dir.join("out"), &lists, 2, &[]).expect("writes");
+    let on_disk: u64 = written
+        .iter()
+        .map(|p| std::fs::metadata(p).expect("written").len())
+        .sum();
+    assert_eq!(scatter_bytes(&lists), on_disk);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_vcf_contig_outside_the_name_pattern_is_refused() {
+    let dir = scratch("vcf-name");
+    let path = dir.join("v.vcf");
+    std::fs::write(
+        &path,
+        "##fileformat=VCFv4.2\n##contig=<ID=tig 7,length=999>\n\
+         #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\ntig 7\t10\trs1\tA\tC\t.\tPASS\t.\n",
+    )
+    .expect("write");
+    let error = IntervalList::from_vcf(&path, false).expect_err("refused");
+    assert!(
+        error
+            .to_string()
+            .contains("Sequence name 'tig 7' doesn't match regex"),
+        "{error}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// One gzip member holding `data` in a stored deflate block, as `gzip`
+/// writes one without the BGZF extra field.
+fn plain_gzip(data: &[u8]) -> Vec<u8> {
+    let mut crc = !0u32;
+    for &byte in data {
+        crc ^= u32::from(byte);
+        for _ in 0..8 {
+            crc = if crc & 1 == 1 {
+                (crc >> 1) ^ 0xedb8_8320
+            } else {
+                crc >> 1
+            };
+        }
+    }
+    let length = u16::try_from(data.len()).expect("one stored block");
+    let mut out = vec![0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 3, 1];
+    out.extend_from_slice(&length.to_le_bytes());
+    out.extend_from_slice(&(!length).to_le_bytes());
+    out.extend_from_slice(data);
+    out.extend_from_slice(&(!crc).to_le_bytes());
+    out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+    out
+}
+
+#[test]
+fn a_plain_gzip_vcf_is_read() {
+    let dir = scratch("vcf-gzip");
+    let text = "##fileformat=VCFv4.2\n##contig=<ID=c1,length=500>\n\
+                #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n\
+                c1\t10\trs1\tA\tC\t.\tPASS\t.\nc1\t20\t.\tA\tC\t.\tq\t.\n";
+    let path = dir.join("v.vcf.gz");
+    std::fs::write(&path, plain_gzip(text.as_bytes())).expect("write");
+    assert_eq!(
+        body(&IntervalList::from_vcf(&path, true).expect("plain gzip")),
+        ["c1\t10\t10\t+\trs1", "c1\t20\t20\t+\tinterval-1"]
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_vcf_header_past_its_line_cap_is_refused() {
+    let dir = scratch("vcf-header");
+    let path = dir.join("v.vcf");
+    std::fs::write(
+        &path,
+        "##fileformat=VCFv4.2\n##contig=<ID=c1,length=500>\n##contig=<ID=c2,length=500>\n\
+         #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n",
+    )
+    .expect("write");
+    assert!(crate::vcf::VcfReader::open_capped_header(&path, 1 << 20, 100, 4).is_ok());
+    assert!(crate::vcf::VcfReader::open_capped_header(&path, 1 << 20, 100, 3).is_err());
     let _ = std::fs::remove_dir_all(&dir);
 }

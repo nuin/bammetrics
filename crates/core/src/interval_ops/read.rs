@@ -2,6 +2,7 @@
 //! with `IntervalListCodec.decode`), a VCF (`VCFFileReader.toIntervalList`)
 //! or a BED (`BedToIntervalList` before its sort).
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -10,6 +11,7 @@ use std::path::Path;
 use super::header::{Header, Sequence, SortOrder};
 use super::{Interval, IntervalList};
 use crate::bed_to_interval_list;
+use crate::create_sequence_dictionary::{NAME_PATTERN, legal_name};
 use crate::error::{Error, Result};
 use crate::vcf::VcfReader;
 
@@ -18,6 +20,15 @@ use crate::vcf::VcfReader;
 pub const MAX_LIST_BYTES: u64 = 1 << 30;
 /// The longest line of a VCF read for its intervals.
 pub const MAX_LINE_BYTES: usize = crate::vcf::MAX_LINE_BYTES;
+/// The intervals one list or VCF holds at most: about 127 bytes each in
+/// memory, so 2.5 GB at the cap.
+pub const MAX_LIST_INTERVALS: usize = 20_000_000;
+/// The header lines of one list (`@` lines) or VCF (`#` lines) at most:
+/// about 450 bytes each in memory for an `@SQ` line.
+pub const MAX_HEADER_LINES: usize = 1_000_000;
+/// The bytes of an error message kept: a message quotes the line or
+/// field it failed on, which may be the whole file.
+const MESSAGE_BYTES: usize = 300;
 
 /// True for a name htsjdk's `IOUtil.openFileForReading` inflates:
 /// `.gz`, `.gzip` or `.bfq`, case as written.
@@ -28,9 +39,8 @@ fn has_gzip_extension(path: &Path) -> bool {
     })
 }
 
-/// The text of `path`, at most [`MAX_LIST_BYTES`] after inflation. Bytes
-/// that are not UTF-8 become U+FFFD, as Java's decoder makes them.
-fn read_text(path: &Path, cap: u64) -> Result<String> {
+/// The bytes of `path`, at most `cap` after inflation.
+fn read_bytes(path: &Path, cap: u64) -> Result<Vec<u8>> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
@@ -51,30 +61,57 @@ fn read_text(path: &Path, cap: u64) -> Result<String> {
             message: format!("the interval list holds more than {cap} bytes, the most read"),
         });
     }
-    Ok(match String::from_utf8(bytes) {
+    Ok(bytes)
+}
+
+/// The text of `path`, at most `cap` bytes after inflation. Bytes that are
+/// not UTF-8 become U+FFFD, as Java's decoder makes them.
+fn read_text(path: &Path, cap: u64) -> Result<String> {
+    Ok(match String::from_utf8(read_bytes(path, cap)?) {
         Ok(text) => text,
         Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned(),
     })
 }
 
 /// The lines of `text` as `BufferedReader.readLine` ends them: at `\n`,
-/// `\r` or `\r\n`.
-fn java_lines(text: &str) -> impl Iterator<Item = &str> {
+/// `\r` or `\r\n`. Each line is decoded alone, bytes that are not UTF-8
+/// as U+FFFD: no line end is part of a UTF-8 sequence, so the lines are
+/// those of the decoded text, and a text that is not UTF-8 is never copied
+/// whole.
+fn java_lines(text: &[u8]) -> impl Iterator<Item = Cow<'_, str>> {
     let mut rest = text;
     std::iter::from_fn(move || {
         if rest.is_empty() {
             return None;
         }
-        let end = rest.find(['\n', '\r']).unwrap_or(rest.len());
+        let end = rest
+            .iter()
+            .position(|&b| b == b'\n' || b == b'\r')
+            .unwrap_or(rest.len());
         let line = &rest[..end];
-        let skip = match rest.as_bytes().get(end) {
-            Some(b'\r') if rest.as_bytes().get(end + 1) == Some(&b'\n') => 2,
+        let skip = match rest.get(end) {
+            Some(b'\r') if rest.get(end + 1) == Some(&b'\n') => 2,
             Some(_) => 1,
             None => 0,
         };
         rest = &rest[end + skip..];
-        Some(line)
+        Some(String::from_utf8_lossy(line))
     })
+}
+
+/// `message` cut to its first [`MESSAGE_BYTES`] bytes, with the length
+/// it had.
+fn cut(mut message: String) -> String {
+    if message.len() > MESSAGE_BYTES {
+        let length = message.len();
+        let mut end = MESSAGE_BYTES;
+        while !message.is_char_boundary(end) {
+            end -= 1;
+        }
+        message.truncate(end);
+        message.push_str(&format!("... ({length} bytes)"));
+    }
+    message
 }
 
 /// `String.split("\t")`: trailing empty fields dropped.
@@ -94,8 +131,8 @@ impl IntervalList {
     /// `IntervalList.fromPath`: read through gzip when the name ends in
     /// `.gz`, `.gzip` or `.bfq`.
     pub fn read(path: &Path) -> Result<IntervalList> {
-        let text = read_text(path, MAX_LIST_BYTES)?;
-        IntervalList::parse(&text).map_err(|message| Error::Intervals {
+        let bytes = read_bytes(path, MAX_LIST_BYTES)?;
+        IntervalList::parse_bytes(&bytes).map_err(|message| Error::Intervals {
             path: path.to_path_buf(),
             message,
         })
@@ -104,21 +141,49 @@ impl IntervalList {
     /// `IntervalList.fromReader`: the leading `@` lines are the header (at
     /// least one), then every other line is a record, a later `@` line and
     /// a blank line skipped. A record on a contig the header lacks is
-    /// skipped, as htsjdk does with a warning.
+    /// skipped, as htsjdk does with a warning. At most
+    /// [`MAX_HEADER_LINES`] header lines and [`MAX_LIST_INTERVALS`]
+    /// intervals are read.
     pub fn parse(text: &str) -> std::result::Result<IntervalList, String> {
+        Self::parse_bytes(text.as_bytes())
+    }
+
+    /// [`IntervalList::parse`] of bytes, each line decoded as UTF-8 alone.
+    /// An error message is cut to its first 300 bytes.
+    pub fn parse_bytes(text: &[u8]) -> std::result::Result<IntervalList, String> {
+        Self::parse_limited(text, &Limits::DEFAULT).map_err(cut)
+    }
+
+    pub(super) fn parse_limited(
+        text: &[u8],
+        limits: &Limits,
+    ) -> std::result::Result<IntervalList, String> {
         let mut lines = java_lines(text).peekable();
         let mut header_lines = Vec::new();
         while let Some(line) = lines.next_if(|l| l.starts_with('@')) {
+            if header_lines.len() == limits.header_lines {
+                return Err(format!(
+                    "the header holds more than {} lines, the most read",
+                    limits.header_lines
+                ));
+            }
             header_lines.push(line);
         }
         if header_lines.is_empty() {
             return Err("Interval list file must contain header. ".to_owned());
         }
-        let header = Header::decode(header_lines)?;
+        let header = Header::decode_limited(
+            header_lines.iter().map(|l| l.as_ref()),
+            limits.header_fields,
+        )?;
+        drop(header_lines);
         let index = header.name_index();
         let mut intervals = Vec::new();
         for line in lines {
-            if let Some(interval) = decode_record(line, &header, &index)? {
+            if let Some(interval) = decode_record(&line, &header, &index)? {
+                if intervals.len() == limits.intervals {
+                    return Err(too_many_intervals(limits.intervals));
+                }
                 intervals.push(interval);
             }
         }
@@ -131,8 +196,17 @@ impl IntervalList {
     /// `include_filtered`) `POS` to `INFO/END` (else the reference
     /// allele's end) on `+`, named by `ID`, or `interval-N` counting the
     /// records without one.
+    ///
+    /// A `##contig` ID outside the SAM name pattern is htsjdk's error; at
+    /// most [`MAX_HEADER_LINES`] header lines and [`MAX_LIST_INTERVALS`]
+    /// intervals are read.
     pub fn from_vcf(path: &Path, include_filtered: bool) -> Result<IntervalList> {
-        let mut reader = VcfReader::open_capped(path, MAX_LINE_BYTES, crate::vcf::MAX_DBSNP_LINES)?;
+        let mut reader = VcfReader::open_capped_header(
+            path,
+            MAX_LINE_BYTES,
+            crate::vcf::MAX_DBSNP_LINES,
+            MAX_HEADER_LINES as u64,
+        )?;
         let intervals_error = |message: String| Error::Intervals {
             path: path.to_path_buf(),
             message,
@@ -147,6 +221,11 @@ impl IntervalList {
         }
         let mut sequences = Vec::with_capacity(contigs.len());
         for (name, contig) in contigs {
+            if !legal_name(name) {
+                return Err(intervals_error(format!(
+                    "Sequence name '{name}' doesn't match regex: '{NAME_PATTERN}'"
+                )));
+            }
             let length = match contig.length() {
                 Some(length) => i32::try_from(length).map_err(|_| {
                     intervals_error(format!("For input string: \"{length}\" (##contig {name})"))
@@ -188,6 +267,9 @@ impl IntervalList {
                     format!("interval-{unnamed}")
                 }
             };
+            if list.intervals.len() == MAX_LIST_INTERVALS {
+                return Err(intervals_error(too_many_intervals(MAX_LIST_INTERVALS)));
+            }
             list.intervals.push(Interval {
                 contig,
                 start: record.start,
@@ -241,6 +323,25 @@ impl IntervalList {
             .collect();
         Ok(list)
     }
+}
+
+fn too_many_intervals(limit: usize) -> String {
+    format!("the list holds more than {limit} intervals, the most read")
+}
+
+/// The counts [`IntervalList::parse_bytes`] reads at most.
+pub(super) struct Limits {
+    pub header_lines: usize,
+    pub header_fields: usize,
+    pub intervals: usize,
+}
+
+impl Limits {
+    pub(super) const DEFAULT: Limits = Limits {
+        header_lines: MAX_HEADER_LINES,
+        header_fields: super::header::MAX_HEADER_FIELDS,
+        intervals: MAX_LIST_INTERVALS,
+    };
 }
 
 /// `IntervalListCodec.decode`: `None` for a skipped line.

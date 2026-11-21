@@ -17,9 +17,14 @@ use super::{Interval, IntervalList};
 use crate::cleanup::{AtomicFile, MadeDirs};
 use crate::error::{Error, Result};
 
-/// The lists a scatter makes at most, so the files it writes at most:
-/// `SCATTER_COUNT` and a count from `SCATTER_CONTENT` above it are refused.
+/// The lists a scatter makes at most, so the files it writes at most: a
+/// scatter that would make more is refused, whatever `SCATTER_COUNT` asks.
 pub const MAX_SCATTER_FILES: i64 = 100_000;
+
+/// The bytes a scatter writes at most, counted as text before any is
+/// written: every list carries the whole header, so the GRCh38 dictionary
+/// (723 KB) in 1,000 lists is 723 MB.
+pub const MAX_SCATTER_BYTES: u64 = 32 << 30;
 
 /// `IntervalListScatterMode`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -224,17 +229,13 @@ impl Scattered {
     }
 }
 
-/// `IntervalListScatter(scatterer, list, count)` iterated to its end.
+/// `IntervalListScatter(scatterer, list, count)` iterated to its end. A
+/// scatter that makes more than [`MAX_SCATTER_FILES`] lists is refused
+/// when the next list starts.
 pub fn scatter(list: &IntervalList, mode: ScatterMode, count: i32) -> Result<Scattered> {
     if count < 1 {
         return Err(Error::Usage(format!(
             "Scatter count should be a positive integer, but it was{count}."
-        )));
-    }
-    if i64::from(count) > MAX_SCATTER_FILES {
-        return Err(Error::Usage(format!(
-            "a scatter into {count} lists would write {count} files; at most {MAX_SCATTER_FILES} \
-             are written"
         )));
     }
     let list = match mode {
@@ -248,6 +249,12 @@ pub fn scatter(list: &IntervalList, mode: ScatterMode, count: i32) -> Result<Sca
     let mut out = Vec::new();
     let mut returned: i64 = 0;
     while !queue.is_empty() {
+        if out.len() as i64 == MAX_SCATTER_FILES {
+            return Err(Error::Usage(format!(
+                "SCATTER_COUNT={count} makes more than {MAX_SCATTER_FILES} lists; at most \
+                 {MAX_SCATTER_FILES} files are written"
+            )));
+        }
         returned += 1;
         let mut part = Vec::new();
         let mut current: i64 = 0;
@@ -301,6 +308,14 @@ pub fn write_scatter(
             lists.len()
         )));
     }
+    let bytes = scatter_bytes(lists);
+    if bytes > MAX_SCATTER_BYTES {
+        return Err(Error::Usage(format!(
+            "the {} lists would write {bytes} bytes (the header in each); at most \
+             {MAX_SCATTER_BYTES} are written",
+            lists.len()
+        )));
+    }
     let paths: Vec<PathBuf> = (1..=lists.len())
         .map(|index| scatter_path(dir, index, count))
         .collect();
@@ -321,4 +336,33 @@ pub fn write_scatter(
     let written = crate::split_sam::commit_all(staged)?;
     dirs.keep();
     Ok(written)
+}
+
+/// The bytes of text the lists of `lists` hold: the header once per list
+/// and one line per interval.
+pub fn scatter_bytes(lists: &Scattered) -> u64 {
+    let header = lists.header.encode().len() as u64;
+    let lines: u64 = lists
+        .parts
+        .iter()
+        .flatten()
+        .map(|i| {
+            let fields = lists.header.sequences[i.contig].name.len()
+                + decimal_length(i.start)
+                + decimal_length(i.end)
+                + i.name.as_ref().map_or(1, String::len);
+            // Four tabs, the strand and the line feed.
+            fields as u64 + 6
+        })
+        .sum();
+    header * lists.len() as u64 + lines
+}
+
+/// The characters of `value` in decimal.
+fn decimal_length(value: i32) -> usize {
+    let digits = value
+        .unsigned_abs()
+        .checked_ilog10()
+        .map_or(1, |d| d as usize + 1);
+    digits + usize::from(value < 0)
 }
