@@ -1526,6 +1526,13 @@ Picard's byte for byte. A file named exactly `.vcf`, `.vcf.gz` or `.vcf.bgz` is 
 VCF (`--include-filtered` keeps its filtered records); every other name is an interval
 list, as in Picard. A chain refuses the verb as a step: it reads no BAM.
 
+Stated limits: a list or VCF holds at most 20,000,000 intervals, 1,000,000 header lines
+and 8,000,000 header fields; an intersection (`INTERSECT`, `SUBTRACT`, `SYMDIFF`) makes
+at most 10,000,000 overlapping pairs and 256 MiB of names; a scatter makes at most
+100,000 lists and 32 GiB of text. A value with a line feed exits 2 before any file, as
+Picard fails before it reads. A `--count-output` inside a list directory of the scatter
+is refused.
+
 ```bash
 bammetrics interval-list-tools panel_a.interval_list -i panel_b.interval_list --action UNION -o union.interval_list
 bammetrics IntervalListTools I=targets.interval_list SI=blacklist.interval_list ACTION=SUBTRACT PADDING=50 O=kept.interval_list

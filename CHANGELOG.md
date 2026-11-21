@@ -63,6 +63,26 @@
   overlapping nothing, and overlap queries by binary search in place of a scan.
 - `mt_copy_number::subtract` is `interval_ops::subtract_disjoint`, unchanged.
 
+### Fixed
+
+- `interval_ops` reads at most 20,000,000 intervals, 1,000,000 header lines and
+  8,000,000 header fields per list or VCF, counted while it reads: a 1 GiB list of
+  one-base intervals took 7.6 GB. A list that is not UTF-8 is decoded line by line, not
+  copied whole. An intersection makes at most 10,000,000 overlapping pairs and 256 MiB of
+  names (two lists of 4,000 nested intervals took 4.3 GB). A scatter is capped by the
+  lists it makes, so `SCATTER_COUNT=100001` on a short list writes what Picard writes, and
+  by 32 GiB of text before the first file. An error message quoting a line is cut to
+  300 bytes. A `##contig` ID outside the SAM name pattern fails as in htsjdk.
+- `VcfReader` reads a plain gzip `.vcf.gz` (no BGZF extra field) as `GZIPInputStream`
+  does; it failed with `failed to fill whole buffer`.
+- A bare `--KEY` boolean on the Picard face (`--UNIQUE` before another option or last)
+  is true, as Barclay reads it, for every tool.
+- `IntervalListTools`: a value with a line feed (`COMMENT`, a path) exits 2 before any
+  file, as Picard fails in `StringHeader`; a trailing `/` on `OUTPUT` or `COUNT_OUTPUT`
+  names the file before it, as Java's `Path` does; a `COUNT_OUTPUT` inside a list
+  directory of the scatter is refused before the scatter is written; `--COMMENT null`
+  prints Picard's empty piece in the `@PG` command line.
+
 ## 0.29.0
 
 Wave W11 of docs/07: six metrics tools (60 in all), two of them chain taps, and the first inputs that are text another program prints.
