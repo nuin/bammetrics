@@ -84,6 +84,14 @@ def lists(tmp_path_factory, corpus, exome):
     shutil.copy(ARRAYS_VCF, vcf_dir / "plain" / ".vcf")
     (vcf_dir / "bgzip").mkdir()
     shutil.copy(ARRAYS_VCF.with_name("arrays.vcf.gz"), vcf_dir / "bgzip" / ".vcf.gz")
+    (vcf_dir / "gzip").mkdir()
+    (vcf_dir / "gzip" / ".vcf.gz").write_bytes(gzip.compress(ARRAYS_VCF.read_bytes()))
+    (vcf_dir / "bad_name").mkdir()
+    (vcf_dir / "bad_name" / ".vcf").write_text(
+        "##fileformat=VCFv4.2\n##contig=<ID=tig 7,length=999>\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\ntig 7\t10\trs1\tA\tC\t.\tPASS\t.\n")
+    paths["vcf_plain_gz"] = vcf_dir / "gzip" / ".vcf.gz"
+    paths["vcf_bad_name"] = vcf_dir / "bad_name" / ".vcf"
     paths["vcf"] = vcf_dir / "plain" / ".vcf"
     paths["vcf_gz"] = vcf_dir / "bgzip" / ".vcf.gz"
     paths["vcf_named"] = ARRAYS_VCF
@@ -207,6 +215,7 @@ VCF_CASES = {
     "vcf_subtract_made": ["ACTION=SUBTRACT", "I={vcf}", "INCLUDE_FILTERED=true", "SI={made_vcf}"],
     "vcf_with_list": ["ACTION=INTERSECT", "I={vcf_gz}", "I={made_vcf}"],
     "vcf_named_is_a_list": ["I={vcf_named}"],
+    "vcf_plain_gzip_filtered": ["I={vcf_plain_gz}", "INCLUDE_FILTERED=true"],
 }
 
 
@@ -237,6 +246,9 @@ FORM_CASES = {
     "bare_invert": ["I={bare}", "INVERT=true", "O=out.interval_list"],
     "non_utf8": ["I={non_utf8}", "UNIQUE=true", "O=out.interval_list"],
     "repeat_intersect": ["ACTION=INTERSECT", "I={a}", "I={a}", "O=out.interval_list"],
+    "output_trailing_slash": ["I={a}", "UNIQUE=true", "O=out.interval_list/"],
+    "scatter_count_above_cap": ["I={a}", "SCATTER_COUNT=100001", "M=INTERVAL_COUNT", "O=scatter"],
+    "comment_carriage_return": ["I={a}", "COMMENT=a\rb", "O=out.interval_list"],
 }
 
 
@@ -248,13 +260,16 @@ def test_forms(lists, tmp_path, case):
     compare(args, tmp_path, f"form {case}")
 
 
-@pytest.mark.parametrize("case", ["plain", "scatter", "symdiff"])
+@pytest.mark.parametrize("case", ["plain", "scatter", "symdiff", "bare_flag", "comment_null"])
 def test_dashed_syntax(lists, tmp_path, case):
     """Picard's `--KEY VALUE` syntax, whose command line Barclay prints differently."""
     args = {"plain": ["--INPUT", str(lists["a"]), "--INPUT", str(lists["b"]), "--COMMENT", "x y"],
             "scatter": ["-I", str(lists["a"]), "--SCATTER_COUNT", "3", "--SCATTER_CONTENT", "null"],
             "symdiff": ["--ACTION", "SYMDIFF", "--INPUT", str(lists["a"]), "--SI", str(lists["c"]),
-                        "--UNIQUE", "true", "--PADDING", "5"]}[case]
+                        "--UNIQUE", "true", "--PADDING", "5"],
+            "bare_flag": ["-I", str(lists["a"]), "--UNIQUE", "--SORT", "false"],
+            "comment_null": ["--INPUT", str(lists["a"]), "--COMMENT", "x", "--COMMENT", "null",
+                             "--SECOND_INPUT", "null"]}[case]
     out = ["--OUTPUT", "scatter" if case == "scatter" else "out.interval_list"]
     compare(args + out + ["--QUIET", "true", "--VERBOSITY", "ERROR"], tmp_path, f"dashed {case}")
 
@@ -286,6 +301,9 @@ ERROR_CASES = {
     "other_dictionary_symdiff": ["ACTION=SYMDIFF", "I={b}", "SI={other_dictionary}", "O=out"],
     "bare_with_a": ["I={bare}", "I={a}", "O=out"],
     "vcf_name_is_a_list": ["I={vcf_named}", "INCLUDE_FILTERED=true", "O=out"],
+    "comment_line_feed": ["I={a}", "COMMENT=a\nb", "O=out"],
+    "output_line_feed": ["I={a}", "O=o\nut"],
+    "vcf_contig_name": ["I={vcf_bad_name}", "O=out"],
 }
 
 

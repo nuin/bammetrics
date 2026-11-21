@@ -88,7 +88,8 @@ pub const TOOL: Tool = Tool {
         .repeated(),
         Opt::int(
             &["SCATTER_COUNT"],
-            "The lists to scatter the result into under OUTPUT (default 1, at most 100,000).",
+            "The lists to scatter the result into under OUTPUT (default 1; a scatter that \
+             makes more than 100,000 lists is refused).",
         ),
         Opt::int(
             &["SCATTER_CONTENT"],
@@ -233,8 +234,8 @@ impl Options {
     /// The options and `customCommandLineValidation`, every problem in one
     /// error as Picard lists them.
     fn from_invocation(inv: &Invocation) -> Result<Self> {
-        let paths = |name: &str| inv.list(name, Vec::new(), |v| Ok(PathBuf::from(v)));
-        let path = |name: &str| inv.get(name).filter(|v| *v != "null").map(PathBuf::from);
+        let paths = |name: &str| inv.list(name, Vec::new(), |v| Ok(java_path(v)));
+        let path = |name: &str| inv.get(name).filter(|v| *v != "null").map(java_path);
         let action = match inv.get("ACTION") {
             None => Action::Concat,
             Some(text) => Action::parse(text).ok_or_else(|| {
@@ -317,6 +318,15 @@ impl Options {
             return Err(usage(problems.join("\n")));
         }
         Ok(opts)
+    }
+}
+
+/// A path as Java's `Path` holds it: trailing `/` dropped, so `O=sc/`
+/// names the file `sc`.
+fn java_path(text: &str) -> PathBuf {
+    match text.trim_end_matches('/') {
+        "" if text.starts_with('/') => PathBuf::from("/"),
+        trimmed => PathBuf::from(trimmed),
     }
 }
 
@@ -411,7 +421,44 @@ fn check_outputs(inv: &Invocation, opts: &Options, scattered: bool) -> Result<()
     Ok(())
 }
 
+/// Refuse a `COUNT_OUTPUT` that names a file or directory of the scatter
+/// under `dir`: the count would replace a list after the set is written.
+fn check_count_beside_scatter(dir: &Path, count: &Path, lists: usize, of: i32) -> Result<()> {
+    use crate::mark_duplicates::same_file_key;
+    let key = same_file_key(count);
+    let root = same_file_key(dir);
+    let Some(first) = key.strip_prefix(&root).ok().and_then(|r| r.iter().next()) else {
+        return Ok(());
+    };
+    let first = first.to_string_lossy();
+    let index = first
+        .strip_prefix("temp_")
+        .and_then(|rest| rest.strip_suffix(&format!("_of_{of}")))
+        .and_then(|digits| digits.parse::<usize>().ok().map(|n| (n, digits)));
+    match index {
+        Some((n, digits)) if (1..=lists).contains(&n) && format!("{n:04}") == digits => {
+            Err(usage(format!(
+                "COUNT_OUTPUT {} is inside list {n} of the scatter under OUTPUT {}; the count \
+                 would replace it",
+                count.display(),
+                dir.display()
+            )))
+        }
+        _ => Ok(()),
+    }
+}
+
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
+    // `CommandLineProgram.instanceMain` puts the command line in a
+    // `StringHeader`, which refuses a line feed; Picard fails before it
+    // reads anything.
+    if picard_command_line(inv).contains('\n') {
+        return Err(usage(
+            "an option value holds a line feed, which no header line can hold (Picard fails in \
+             StringHeader)"
+                .to_owned(),
+        ));
+    }
     let opts = Options::from_invocation(inv)?;
     let output = compute(inv, &opts)?;
     let scatter_count = match opts.scatter_content {
@@ -422,6 +469,9 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
         Some(dir) if scatter_count > 1 => {
             let lists = scatter(&output, opts.mode, scatter_count)?;
             check_outputs(inv, &opts, true)?;
+            if let Some(count) = &opts.count_output {
+                check_count_beside_scatter(dir, count, lists.len(), scatter_count)?;
+            }
             write_scatter(dir, &lists, scatter_count, &inv.inputs)?;
             lists
         }
@@ -589,6 +639,9 @@ pub fn picard_command_line(inv: &Invocation) -> String {
                 .unwrap_or_default();
             if legacy {
                 given.push(format!("{name}=[{}]", items.join(", ")));
+            } else if items.is_empty() {
+                // A collection a `null` cleared prints as nothing.
+                given.push(String::new());
             } else {
                 given.extend(items.iter().map(|v| format!("--{name} {v}")));
             }

@@ -279,3 +279,120 @@ fn a_vcf_named_dot_vcf_is_read_with_include_filtered() {
     assert_eq!(rows("true"), 2);
     let _ = fs::remove_dir_all(&dir);
 }
+
+/// Picard 3.5.0 prints a collection a `null` cleared as an empty piece of
+/// the `--KEY VALUE` command line, and takes a bare `--UNIQUE` as true.
+#[test]
+fn a_cleared_collection_and_a_bare_flag_print_as_picard_prints_them() {
+    let inv = TOOL
+        .parse(&args(&[
+            "-I",
+            "a.interval_list",
+            "--COMMENT",
+            "null",
+            "-O",
+            "o1.il",
+            "--UNIQUE",
+        ]))
+        .expect("parses");
+    let line = picard_command_line(&inv);
+    assert!(
+        line.starts_with(
+            "IntervalListTools --INPUT a.interval_list --OUTPUT o1.il --UNIQUE true  \
+             --PADDING 0 --DONT_MERGE_ABUTTING false"
+        ),
+        "{line}"
+    );
+}
+
+#[test]
+fn a_line_feed_in_an_option_value_is_refused_before_any_file() {
+    let dir = scratch("line-feed");
+    let input = path(&dir, "in.interval_list");
+    fs::write(&input, LIST).expect("write");
+    let out = path(&dir, "out.interval_list");
+    for list in [
+        vec![
+            format!("I={input}"),
+            "COMMENT=a\nb".to_owned(),
+            format!("O={out}"),
+        ],
+        vec![format!("I={input}"), format!("O={out}\nx")],
+    ] {
+        let error = run(&list).expect_err("refused");
+        assert!(error.to_string().contains("line feed"), "{error}");
+        assert_eq!(fs::read_dir(&dir).expect("dir").count(), 1, "{list:?}");
+    }
+    // A carriage return is written as it is, as Picard writes it.
+    run(&args(&[
+        &format!("I={input}"),
+        "COMMENT=a\rb",
+        &format!("O={out}"),
+    ]))
+    .expect("runs");
+    assert!(
+        fs::read_to_string(&out)
+            .expect("written")
+            .contains("@CO\ta\rb\n")
+    );
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_trailing_slash_names_the_file_before_it() {
+    let dir = scratch("slash");
+    let input = path(&dir, "in.interval_list");
+    fs::write(&input, LIST).expect("write");
+    let out = path(&dir, "out.il");
+    run(&args(&[&format!("I={input}"), &format!("O={out}/")])).expect("runs");
+    assert!(Path::new(&out).is_file());
+    assert_eq!(java_path("/"), Path::new("/"));
+    assert_eq!(java_path("a//"), Path::new("a"));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_count_output_inside_the_scatter_is_refused() {
+    let dir = scratch("count-in-scatter");
+    let input = path(&dir, "in.interval_list");
+    fs::write(&input, LIST).expect("write");
+    let out = dir.join("sc");
+    // As the review ran it: the directory of the count made first.
+    for count in [
+        out.join("temp_0001_of_2/scattered.interval_list"),
+        out.join("temp_0001_of_2/./scattered.interval_list"),
+    ] {
+        fs::create_dir_all(out.join("temp_0001_of_2")).expect("dir");
+        let error = run(&args(&[
+            &format!("I={input}"),
+            &format!("O={}", out.display()),
+            "SCATTER_COUNT=2",
+            "M=INTERVAL_COUNT",
+            "OUTPUT_VALUE=BASES",
+            &format!("COUNT_OUTPUT={}", count.display()),
+        ]))
+        .expect_err("refused");
+        assert!(error.to_string().contains("inside list"), "{error}");
+        for n in 1..=2 {
+            assert!(
+                !crate::interval_ops::scatter_path(&out, n, 2).exists(),
+                "{count:?}"
+            );
+        }
+        assert!(!out.join("temp_0002_of_2").exists(), "{count:?}");
+    }
+    // Beside the lists, the count is written.
+    let count = out.join("count.txt");
+    fs::create_dir_all(&out).expect("dir");
+    run(&args(&[
+        &format!("I={input}"),
+        &format!("O={}", out.display()),
+        "SCATTER_COUNT=2",
+        "M=INTERVAL_COUNT",
+        "OUTPUT_VALUE=INTERVALS",
+        &format!("COUNT_OUTPUT={}", count.display()),
+    ]))
+    .expect("runs");
+    assert_eq!(fs::read_to_string(&count).expect("count"), "3\n");
+    let _ = fs::remove_dir_all(&dir);
+}
