@@ -1659,18 +1659,21 @@ impl Verb {
     }
 
     fn threads(&self, parsed: &Parsed) -> Result<usize, VerbError> {
-        let given = parsed
-            .last(Key::Threads)
-            .filter(|_| !self.ignored(Key::Threads));
-        let Some(given) = given else {
+        let Some(given) = parsed.last(Key::Threads) else {
             return Ok(pass::default_threads());
         };
+        // Checked on every verb, a verb that ignores the count included.
         let threads = given.values[0].parse().map_err(|_| {
             VerbError::usage(self.name, format!("{:?} is not a number", given.values[0]))
                 .from(given.spelled.clone())
         })?;
-        pass::check_threads(threads).map_err(|e| {
+        let threads = pass::check_threads(threads).map_err(|e| {
             VerbError::usage(self.name, format!("{threads} is {e}")).from(given.spelled.clone())
+        })?;
+        Ok(if self.ignored(Key::Threads) {
+            pass::default_threads()
+        } else {
+            threads
         })
     }
 }
