@@ -852,3 +852,85 @@ needs = [
 ]
 max_rss_mib = 64
 max_seconds = 300
+
+# Wave W13: the downsampling tools. Fixture rows on markdup.bam; scale rows on the
+# HG002 exome (150,538,907 records) and, for HighAccuracy, whose memory grows with the
+# read names as Picard's does, the W05 chr20 and chr21 slice (29.3 million records).
+# Measured 2026-11-21 on the Mac Studio: ConstantMemory exome 20.7 MiB in 23 s, Chained
+# exome 139.5 MiB in 18 s, HighAccuracy slice 1,968 MiB in 21 s, PositionBased exome
+# 33.2 MiB in 58 s. The HighAccuracy limit is the W05 rule, 2 GiB plus 1 GiB.
+[[command]]
+name = "downsample-sam HighAccuracy"
+argv = [
+    "{bin}", "downsample-sam", "tests/data/markdup.bam", "-o", "{out}/ds.bam", "-P", "0.5",
+    "--strategy", "HighAccuracy", "--accuracy", "0.1", "--metrics-file", "{out}/ds.txt",
+    "--create-index", "--create-md5-file",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "chain downsample-sam + mark-duplicates + write"
+argv = [
+    "{bin}", "chain", "tests/data/markdup.bam", "-o", "{out}/s", "+", "downsample-sam",
+    "--probability", "0.5", "--strategy", "Chained", "+", "mark-duplicates", "+", "write",
+    "{out}/out.bam",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "position-based-downsample-sam"
+argv = [
+    "{bin}", "position-based-downsample-sam", "tests/data/markdup.bam", "-o", "{out}/pb.bam",
+    "--fraction", "0.5",
+]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "downsample-sam ConstantMemory exome"
+tier = "scale"
+argv = [
+    "{bin}", "downsample-sam", "~/data/bammetrics-scale/exome/HG002.exome.bam", "-o",
+    "{out}/cm.bam", "-P", "0.1", "--metrics-file", "{out}/cm.txt",
+]
+needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
+max_rss_mib = 1024
+max_seconds = 300
+
+[[command]]
+name = "downsample-sam Chained exome"
+tier = "scale"
+argv = [
+    "{bin}", "downsample-sam", "~/data/bammetrics-scale/exome/HG002.exome.bam", "-o",
+    "{out}/ch.bam", "-P", "0.01", "--strategy", "Chained",
+]
+needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
+max_rss_mib = 1024
+max_seconds = 300
+
+[[command]]
+name = "downsample-sam HighAccuracy slice"
+tier = "scale"
+argv = [
+    "{bin}", "downsample-sam", "~/data/bammetrics-scale/waves/w05/slice.chr20_21.bam", "-o",
+    "{out}/ha.bam", "-P", "0.1", "--strategy", "HighAccuracy",
+]
+needs = ["~/data/bammetrics-scale/waves/w05/slice.chr20_21.bam"]
+max_rss_mib = 3072
+max_seconds = 300
+
+[[command]]
+name = "position-based-downsample-sam exome"
+tier = "scale"
+argv = [
+    "{bin}", "position-based-downsample-sam", "~/data/bammetrics-scale/exome/HG002.exome.bam",
+    "-o", "{out}/pb.bam", "--fraction", "0.5",
+]
+needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
+max_rss_mib = 1024
+max_seconds = 600

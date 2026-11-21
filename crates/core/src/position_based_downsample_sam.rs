@@ -15,14 +15,14 @@
 //! first finds each tile's extent: `Coord` starts at 0 for the minimum and
 //! the maximum of x and y (so a minimum above 0 stays 0, as Picard has it),
 //! then each side widens by `(max - min) / count` in Java `int` division.
-//! The second keeps a record when `roundedPart((x - minX) / (maxX - minX)
-//! - offset)^2 + roundedPart((y - minY) / (maxY - minY) - offset)^2` is at
-//! most `f / pi` (`roundedPart(v)` is `v - Math.round(v)`, `f` is
-//! `FRACTION` or `1 - FRACTION` above 0.5, `offset` is `sqrt(f / pi -
-//! f^2 / 4)`), or above it for `FRACTION` over 0.5. `STOP_AFTER` (a Java
-//! `Long`, `null` by default) ends both reads after that many records; 0
-//! or less reads none. `REMOVE_DUPLICATE_INFORMATION` (default true)
-//! clears the duplicate flag of each record written.
+//! The second keeps a record when `d = r(u)^2 + r(v)^2` is at most `f / pi`,
+//! or above it for `FRACTION` over 0.5: `u` is `(x - minX) / (maxX - minX)`
+//! less `offset`, `v` the same for y, `r(t)` is `t - Math.round(t)`, `f` is
+//! `FRACTION` (`1 - FRACTION` above 0.5) and `offset` is
+//! `sqrt(f / pi - f^2 / 4)`. `STOP_AFTER` (a Java `Long`, `null` by
+//! default) ends both reads after that many records; 0 or less reads none.
+//! `REMOVE_DUPLICATE_INFORMATION` (default true) clears the duplicate flag
+//! of each record written.
 //!
 //! An input whose header has an `@PG` with `PN:PositionBasedDownsampleSam`
 //! fails unless `ALLOW_MULTIPLE_DOWNSAMPLING_DESPITE_WARNINGS`. The output

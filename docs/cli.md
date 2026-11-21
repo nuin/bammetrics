@@ -1083,8 +1083,9 @@ them, with a `@PG` line (`ID:DownsampleSam`, or `.1` and on when the input has o
   it, seeded with `--random-seed`, falls under `PROBABILITY`. Memory is constant.
 - `HighAccuracy` reads chunks of `ceil(1 / ACCURACY)` new names (10,000 by default) and
   keeps `PROBABILITY` of each chunk exactly, the names drawn by `java.util.Random`. It
-  holds every name decided so far and one chunk of records, as Picard does: about 100
-  bytes per template.
+  holds every name decided so far and one chunk of records, as Picard does: about 140
+  bytes per template (1,968 MiB for the 14.7 million templates of a chr20 and chr21
+  slice).
 - `Chained` runs ConstantMemory at `P + 3.3 sqrt(P / 50000)`, then HighAccuracy on what it
   kept. It holds the names the first stage keeps.
 - The records of one read name are kept or dropped together: mates, secondary and
