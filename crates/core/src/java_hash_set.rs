@@ -33,7 +33,9 @@ fn spread(hash: i32) -> i32 {
     hash ^ ((hash as u32) >> 16) as i32
 }
 
-/// One entry: a `TreeNode` once its bin is a tree.
+/// One entry: a `TreeNode` once its bin is a tree. `prev` and `next` link
+/// the bin's list, as `TreeNode.prev` and `Node.next` do, so a node goes in
+/// after its tree parent or to the front in constant time.
 #[derive(Clone, Copy, Debug, Default)]
 struct Node {
     hash: i32,
@@ -41,12 +43,16 @@ struct Node {
     left: Option<usize>,
     right: Option<usize>,
     red: bool,
+    prev: Option<usize>,
+    next: Option<usize>,
 }
 
-/// One table slot: its nodes in `next` order and, for a tree bin, the root.
-#[derive(Clone, Debug, Default)]
+/// One table slot: the ends of its list and, for a tree bin, the root.
+#[derive(Clone, Copy, Debug, Default)]
 struct Bin {
-    list: Vec<usize>,
+    head: Option<usize>,
+    tail: Option<usize>,
+    len: usize,
     root: Option<usize>,
 }
 
@@ -95,8 +101,8 @@ impl<'k> HashSetOrder<'k> {
         if self.table[at].root.is_some() {
             self.put_tree(at, id);
         } else {
-            self.table[at].list.push(id);
-            if self.table[at].list.len() > TREEIFY_THRESHOLD {
+            self.push_back(at, id);
+            if self.table[at].len > TREEIFY_THRESHOLD {
                 if self.table.len() < MIN_TREEIFY_CAPACITY {
                     self.resize();
                 } else {
@@ -111,10 +117,59 @@ impl<'k> HashSetOrder<'k> {
 
     /// The insertion numbers in iteration order.
     pub fn order(&self) -> Vec<usize> {
-        self.table
-            .iter()
-            .flat_map(|bin| bin.list.iter().copied())
-            .collect()
+        let mut order = Vec::with_capacity(self.keys.len());
+        for bin in &self.table {
+            self.walk(bin.head, &mut order);
+        }
+        order
+    }
+
+    /// The nodes of a list from `head` on, appended to `out`.
+    fn walk(&self, mut node: Option<usize>, out: &mut Vec<usize>) {
+        while let Some(n) = node {
+            out.push(n);
+            node = self.nodes[n].next;
+        }
+    }
+
+    /// Bin `at`'s nodes in list order.
+    fn list(&self, at: usize) -> Vec<usize> {
+        let mut out = Vec::with_capacity(self.table[at].len);
+        self.walk(self.table[at].head, &mut out);
+        out
+    }
+
+    fn push_back(&mut self, at: usize, x: usize) {
+        let tail = self.table[at].tail;
+        self.nodes[x].prev = tail;
+        self.nodes[x].next = None;
+        match tail {
+            Some(t) => self.nodes[t].next = Some(x),
+            None => self.table[at].head = Some(x),
+        }
+        self.table[at].tail = Some(x);
+        self.table[at].len += 1;
+    }
+
+    /// Bin `at` becomes the list `nodes`, in that order, with no root.
+    fn set_list(&mut self, at: usize, nodes: &[usize]) {
+        self.table[at] = Bin::default();
+        for &x in nodes {
+            self.push_back(at, x);
+        }
+    }
+
+    /// `x` goes into bin `at`'s list right after `p`.
+    fn insert_after(&mut self, at: usize, p: usize, x: usize) {
+        let next = self.nodes[p].next;
+        self.nodes[x].prev = Some(p);
+        self.nodes[x].next = next;
+        self.nodes[p].next = Some(x);
+        match next {
+            Some(n) => self.nodes[n].prev = Some(x),
+            None => self.table[at].tail = Some(x),
+        }
+        self.table[at].len += 1;
     }
 
     fn slot(&self, hash: i32) -> usize {
@@ -161,9 +216,7 @@ impl<'k> HashSetOrder<'k> {
     fn put_tree(&mut self, at: usize, x: usize) {
         let root = self.table[at].root.expect("a tree bin");
         let parent = self.attach(root, x);
-        let list = &mut self.table[at].list;
-        let place = list.iter().position(|&n| n == parent).map_or(0, |p| p + 1);
-        list.insert(place, x);
+        self.insert_after(at, parent, x);
         let root = self.balance_insertion(root, x);
         self.move_root_to_front(at, root);
     }
@@ -171,7 +224,7 @@ impl<'k> HashSetOrder<'k> {
     /// `treeifyBin` past the table check, and `TreeNode.treeify`: the list's
     /// nodes go into a new tree in list order, then the root moves first.
     fn treeify(&mut self, at: usize) {
-        let list = self.table[at].list.clone();
+        let list = self.list(at);
         let mut root: Option<usize> = None;
         for &x in &list {
             self.nodes[x].left = None;
@@ -197,13 +250,24 @@ impl<'k> HashSetOrder<'k> {
 
     fn move_root_to_front(&mut self, at: usize, root: usize) {
         self.table[at].root = Some(root);
-        let list = &mut self.table[at].list;
-        if list.first() != Some(&root)
-            && let Some(place) = list.iter().position(|&n| n == root)
-        {
-            list.remove(place);
-            list.insert(0, root);
+        let first = self.table[at].head;
+        if first == Some(root) {
+            return;
         }
+        let (prev, next) = (self.nodes[root].prev, self.nodes[root].next);
+        if let Some(p) = prev {
+            self.nodes[p].next = next;
+        }
+        match next {
+            Some(n) => self.nodes[n].prev = prev,
+            None => self.table[at].tail = prev,
+        }
+        self.nodes[root].prev = None;
+        self.nodes[root].next = first;
+        if let Some(f) = first {
+            self.nodes[f].prev = Some(root);
+        }
+        self.table[at].head = Some(root);
     }
 
     /// `resize`: double the table; each bin's nodes go, in order, to the
@@ -212,9 +276,11 @@ impl<'k> HashSetOrder<'k> {
         let old = std::mem::take(&mut self.table);
         let old_cap = old.len();
         self.table = vec![Bin::default(); old_cap * 2];
+        let mut nodes = Vec::new();
         for (j, bin) in old.into_iter().enumerate() {
-            let (lo, hi): (Vec<usize>, Vec<usize>) = bin
-                .list
+            nodes.clear();
+            self.walk(bin.head, &mut nodes);
+            let (lo, hi): (Vec<usize>, Vec<usize>) = nodes
                 .iter()
                 .partition(|&&n| (self.nodes[n].hash as u32 as usize) & old_cap == 0);
             let tree = bin.root.is_some();
@@ -225,11 +291,11 @@ impl<'k> HashSetOrder<'k> {
                 if half.is_empty() {
                     continue;
                 }
-                self.table[place].list = half;
+                self.set_list(place, &half);
                 if !tree {
                     continue;
                 }
-                if self.table[place].list.len() <= UNTREEIFY_THRESHOLD {
+                if half.len() <= UNTREEIFY_THRESHOLD {
                     self.table[place].root = None;
                 } else if other_empty {
                     self.table[place].root = bin.root;

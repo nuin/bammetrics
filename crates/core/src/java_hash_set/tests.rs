@@ -104,3 +104,15 @@ fn a_tree_splits_into_two_trees() {
     assert_eq!(order.len(), 732);
     assert_eq!(checksum(&order), 1900439107876390308);
 }
+
+/// 131,072 names of one hash code in one bin. Each insert links its node in
+/// constant time, so this runs in well under a second; a list scan per
+/// insert took 2.7 s in a release build.
+#[test]
+fn a_large_tree_bin_inserts_in_constant_time_per_name() {
+    let keys = combos(17);
+    let mut order = order(&keys);
+    assert_eq!(order.len(), keys.len());
+    order.sort_unstable();
+    assert!(order.iter().enumerate().all(|(i, &n)| i == n));
+}

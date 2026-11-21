@@ -14,7 +14,9 @@ false, READ_NAME_REGEX (a regex with three groups, one whose y group is no int, 
 STOP_AFTER (0, a few records, null), FRACTION 0 and 1, COMPRESSION_LEVEL, CREATE_INDEX,
 CREATE_MD5_FILE, SAM text in and out, a CRAM. ALLOW_MULTIPLE_DOWNSAMPLING_DESPITE_WARNINGS on
 Picard's own output, which fails without it. Error parity: FRACTION missing, below 0,
-above 1, not a number, a READ_NAME_REGEX that does not compile, ASSUME_SORTED, a missing
+above 1, not a number, a READ_NAME_REGEX that does not compile, one with 0, 1 or 2 groups
+that matches (Java's `No group N`; a first group that is no int is caught first, so a
+1-group regex on non-numeric names runs), ASSUME_SORTED, a missing
 input, standard input (bammetrics refuses it, Picard reads /dev/stdin three times and
 fails). The distinct-value gate wants three kept counts.
 """
@@ -72,6 +74,7 @@ OPTIONS = [
     ["F=0.3", r"READ_NAME_REGEX=[^:]+:[^:]+:([0-9]+):([0-9]+):([0-9]+)"],
     ["F=0.3", r"READ_NAME_REGEX=.*:([0-9]+):([0-9]+):([^:]+)"],
     ["F=0.3", "READ_NAME_REGEX=null"],
+    ["F=0.3", "READ_NAME_REGEX=([^:]+):.*"],
     ["F=0.3", "STOP_AFTER=0"],
     ["F=0.3", "STOP_AFTER=15"],
     ["F=0.3", "STOP_AFTER=null"],
@@ -118,6 +121,9 @@ ERRORS = [
     ["F=1.1"],
     ["F=half"],
     ["F=0.5", "READ_NAME_REGEX=(["],
+    ["F=0.5", "READ_NAME_REGEX=.*"],
+    ["F=0.5", "READ_NAME_REGEX=.*:([0-9]+)"],
+    ["F=0.5", "READ_NAME_REGEX=.*:([0-9]+):([0-9]+):[0-9]+"],
     ["F=0.5", "ASSUME_SORTED=true"],
     ["F=0.5", "STOP_AFTER=x"],
 ]

@@ -533,7 +533,12 @@ impl<'d> Builder<'d> {
         ends.library_id = self.library_id(rg.as_deref());
         let mut location = Location::default();
         let name = latin1(record.name());
-        if self.opts.finder.parser.read_location(&name, &mut location) {
+        if self
+            .opts
+            .finder
+            .parser
+            .read_location(&name, &mut location)?
+        {
             ends.read_group = self.groups.number(rg.as_deref());
         }
         ends.tile = location.tile;

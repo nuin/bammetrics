@@ -163,3 +163,21 @@ fn options_are_checked_as_picard_checks_them() {
     assert_eq!(parse(&["R=-7"]).expect("parsed").seed, Some(-7));
     assert!(parse(&["P=NaN"]).expect("parsed").probability.is_nan());
 }
+
+#[test]
+fn the_cram_reference_error_names_the_long_option() {
+    let source = std::io::Error::new(
+        std::io::ErrorKind::InvalidInput,
+        "the records on chr1 need reference bases: a CRAM input needs REFERENCE_SEQUENCE (R)",
+    );
+    let error = reference_by_long_name(Error::Input {
+        path: "x.cram".into(),
+        source,
+    });
+    let text = error.to_string();
+    assert!(text.contains("REFERENCE_SEQUENCE (--reference;"), "{text}");
+    assert!(matches!(
+        reference_by_long_name(Error::Metric("other".into())),
+        Error::Metric(text) if text == "other"
+    ));
+}

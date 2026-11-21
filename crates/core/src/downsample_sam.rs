@@ -188,10 +188,32 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     if let Some(path) = metrics {
         refuse_metrics_path(&opts, path, &inv.inputs)?;
     }
-    let row = run(&opts, &sampling, &inv.command, metrics.is_some())?;
+    let row =
+        run(&opts, &sampling, &inv.command, metrics.is_some()).map_err(reference_by_long_name)?;
     Ok(row.map_or(ToolOutput::NONE, |row| {
         MetricsOutput::from_rows(&[row], None).into()
     }))
+}
+
+/// The CRAM error that names `REFERENCE_SEQUENCE (R)`, with the long name:
+/// `R` is `RANDOM_SEED` in this tool.
+fn reference_by_long_name(error: Error) -> Error {
+    const SHORT: &str = "REFERENCE_SEQUENCE (R)";
+    const LONG: &str = "REFERENCE_SEQUENCE (--reference; R is RANDOM_SEED here)";
+    let renamed = |source: std::io::Error| {
+        std::io::Error::new(source.kind(), source.to_string().replace(SHORT, LONG))
+    };
+    match error {
+        Error::Input { path, source } if source.to_string().contains(SHORT) => Error::Input {
+            path,
+            source: renamed(source),
+        },
+        Error::Record(source) if source.to_string().contains(SHORT) => {
+            Error::Record(renamed(source))
+        }
+        Error::Metric(text) if text.contains(SHORT) => Error::Metric(text.replace(SHORT, LONG)),
+        other => other,
+    }
 }
 
 /// Refuse a `METRICS_FILE` that is an input or one of the files the BAM
@@ -204,7 +226,13 @@ fn refuse_metrics_path(opts: &record_edit::Options, path: &Path, inputs: &[PathB
             other.display()
         )));
     }
-    crate::registry::check_writable([path], inputs)
+    crate::registry::check_writable([path], inputs)?;
+    // `OUTPUT` is renamed into place before the registry writes
+    // `METRICS_FILE`, so an unwritable metrics directory fails here.
+    crate::cleanup::AtomicFile::probe(path).map_err(|source| Error::Output {
+        path: path.to_path_buf(),
+        source,
+    })
 }
 
 /// The tool on its own: read `opts.input` once, write the records kept
@@ -363,15 +391,12 @@ fn resolve_seed(header: &sam::Header, sampling: &Sampling, cram: bool) -> Result
     }
     let mut seed = given;
     let mut previous = HashSet::new();
+    let mut unrecorded = 0usize;
     for (rs, hash) in earlier_runs(header, cram) {
         match rs {
             None => {
                 seed = JavaRandom::new(i64::from(hash)).next_int();
-                eprintln!(
-                    "bammetrics: DownsampleSam has been run before on this data, but the \
-                     previous seed was not recorded. The used seed will be changed to minimize \
-                     the chance of using the same seed as in a previous run."
-                );
+                unrecorded += 1;
             }
             Some(text) => {
                 let earlier = crate::java::parse_integer(&text, 32)
@@ -379,6 +404,19 @@ fn resolve_seed(header: &sam::Header, sampling: &Sampling, cram: bool) -> Result
                 previous.insert(earlier as i32);
             }
         }
+    }
+    // Picard logs this once per `@PG` line; one line with the count here.
+    if unrecorded > 0 {
+        let times = if unrecorded == 1 {
+            String::new()
+        } else {
+            format!(" ({unrecorded} {PROGRAM} @PG lines without rs)")
+        };
+        eprintln!(
+            "bammetrics: DownsampleSam has been run before on this data, but the previous \
+             seed was not recorded{times}. The used seed will be changed to minimize the \
+             chance of using the same seed as in a previous run."
+        );
     }
     let mut random = JavaRandom::new(i64::from(seed));
     while previous.contains(&seed) {

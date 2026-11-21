@@ -347,3 +347,53 @@ fn a_downsample_step_refuses_what_the_tool_refuses() {
     }
     fs::remove_dir_all(&dir).expect("cleanup");
 }
+
+/// `OUTPUT` is renamed into place before the registry writes
+/// `METRICS_FILE`: a metrics directory the run cannot write fails the run
+/// before the read, so no BAM is left.
+#[test]
+#[cfg(unix)]
+fn an_unwritable_metrics_directory_leaves_no_bam() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = fresh_dir("metrics-dir");
+    let locked = dir.join("ro");
+    fs::create_dir(&locked).expect("dir");
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o555)).expect("chmod");
+    // A user who writes anyway (root) cannot see the refusal.
+    if fs::write(locked.join("probe"), b"").is_ok() {
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).expect("chmod");
+        fs::remove_dir_all(&dir).expect("cleanup");
+        return;
+    }
+    let path = |name: &str| dir.join(name).display().to_string();
+    for (argv, out) in [
+        (
+            vec![
+                "DownsampleSam".to_owned(),
+                format!("I={MARKDUP}"),
+                format!("O={}", path("d.bam")),
+                format!("M={}", path("ro/d.txt")),
+                "P=0.5".to_owned(),
+            ],
+            "d.bam",
+        ),
+        (
+            vec![
+                "MarkDuplicates".to_owned(),
+                format!("I={MARKDUP}"),
+                format!("O={}", path("m.bam")),
+                format!("M={}", path("ro/m.txt")),
+            ],
+            "m.bam",
+        ),
+    ] {
+        let output = bammetrics(&argv);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{argv:?}: {stderr}");
+        assert!(stderr.contains("ro/"), "{argv:?}: {stderr}");
+        assert!(!dir.join(out).exists(), "{argv:?} left {out}");
+    }
+    assert_eq!(fs::read_dir(&locked).expect("list").count(), 0);
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).expect("chmod");
+    fs::remove_dir_all(&dir).expect("cleanup");
+}

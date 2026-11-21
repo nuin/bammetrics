@@ -25,6 +25,19 @@ Wave W13 of docs/07, the downsampling tools: `DownsampleSam` and
 - `tests/concordance/PicardBatch.java`: many Picard command lines in one JVM under the
   queue lock, for the seed sweeps.
 
+### Fixed
+
+- A `READ_NAME_REGEX` with fewer than three groups that matches a read name exits 1, as
+  Picard fails with `No group N`, in `MarkDuplicates`, `EstimateLibraryComplexity`,
+  `PositionBasedDownsampleSam` and `CollectDuplicateByTileMetrics`. It exited 0 with no
+  location for any read.
+- `MarkDuplicates` and `DownsampleSam` refuse a `METRICS_FILE` directory they cannot write
+  before the read. The BAM was renamed into place first and stayed behind.
+- `java_hash_set.rs` links a tree bin's list in constant time per name. 262,144 names of
+  one hash code in one HighAccuracy chunk took 10.6 s.
+- CRAM 3.1 from samtools 1.25 whose name tokenizer duplicates a `DZLen` stream decodes
+  (`vendor/noodles-cram`, fifth patch). It panicked with `unhandled ty: DZLen`.
+
 ## 0.30.0
 
 Wave W12 of docs/07: the interval layer `interval_ops` and five interval tools (65 in all), none of them a chain step; `qc --panel` takes the lists they write.

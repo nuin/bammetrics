@@ -1085,7 +1085,10 @@ them, with a `@PG` line (`ID:DownsampleSam`, or `.1` and on when the input has o
   keeps `PROBABILITY` of each chunk exactly, the names drawn by `java.util.Random`. It
   holds every name decided so far and one chunk of records, as Picard does: about 140
   bytes per template (1,968 MiB for the 14.7 million templates of a chr20 and chr21
-  slice).
+  slice). A chunk closes only after `ceil(1 / ACCURACY)` new names, so a small
+  `--accuracy` or many records under few names hold those records at once
+  (`--accuracy 1e-9` on 2 million names: 1,141 MiB). Neither is capped: a cap or a spill
+  would change which names Picard keeps (decision D122).
 - `Chained` runs ConstantMemory at `P + 3.3 sqrt(P / 50000)`, then HighAccuracy on what it
   kept. It holds the names the first stage keeps.
 - The records of one read name are kept or dropped together: mates, secondary and
@@ -1108,6 +1111,9 @@ Picard's default of 5 or 7 fields split on `:`); the second keeps the records in
 circle of area `--fraction` on the tile, or outside one of area `1 - FRACTION` above 0.5.
 
 - A name without a location counts as tile -1 at (-1, -1), as in Picard: no error.
+- A `--read-name-regex` with fewer than three groups exits 1 at the first name it matches
+  whose groups before the missing one are numbers, as Picard fails with `No group N`.
+  `mark-duplicates`, `library-complexity` and `duplicate-by-tile` do the same.
 - `--remove-duplicate-information` (default true) clears the duplicate flag.
 - `--stop-after N` reads N records in each read; 0 or less writes no record.
 - An input whose header has a `PositionBasedDownsampleSam` `@PG` exits 1 unless

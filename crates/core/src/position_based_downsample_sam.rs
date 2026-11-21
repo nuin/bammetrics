@@ -219,11 +219,11 @@ impl CircleSelector {
 
 /// The location `getSamRecordLocation` gives a record: Picard's
 /// `PhysicalLocationInt` of -1, -1, -1, filled as far as the name allows.
-fn location(parser: &ReadNameParser, record: &RawRecord) -> Location {
+fn location(parser: &ReadNameParser, record: &RawRecord) -> Result<Location> {
     let mut at = Location::default();
     let name = String::from_utf8_lossy(record.name());
-    parser.read_location(&name, &mut at);
-    at
+    parser.read_location(&name, &mut at)?;
+    Ok(at)
 }
 
 /// One read of `INPUT` under `STOP_AFTER`: `start` makes a state from the
@@ -261,24 +261,30 @@ fn each_record<S>(
 
 /// `checkProgramRecords`: an earlier run of this tool on the input fails
 /// the run unless `ALLOW_MULTIPLE_DOWNSAMPLING_DESPITE_WARNINGS`.
+/// Picard logs a warning per earlier `@PG` line; the allowed run prints
+/// one line with the first ID and the count.
 fn check_programs(header: &sam::Header, allow: bool) -> Result<()> {
-    for (id, map) in header.programs().as_ref() {
-        let named = map
-            .other_fields()
+    let mut earlier = header.programs().as_ref().iter().filter(|(_, map)| {
+        map.other_fields()
             .get(&tag::NAME)
-            .is_some_and(|name| name.as_slice() == PROGRAM.as_bytes());
-        if !named {
-            continue;
-        }
-        let message = format!(
-            "Found previous Program Record that indicates that this file has been downsampled \
-             already with this program. Operation not supported! Previous PG: {}",
-            String::from_utf8_lossy(id)
-        );
-        if !allow {
-            return Err(Error::Metric(message));
-        }
+            .is_some_and(|name| name.as_slice() == PROGRAM.as_bytes())
+    });
+    let Some((first, _)) = earlier.next() else {
+        return Ok(());
+    };
+    let message = format!(
+        "Found previous Program Record that indicates that this file has been downsampled \
+         already with this program. Operation not supported! Previous PG: {}",
+        String::from_utf8_lossy(first)
+    );
+    if !allow {
+        return Err(Error::Metric(message));
+    }
+    let more = earlier.count();
+    if more == 0 {
         eprintln!("bammetrics: {message}");
+    } else {
+        eprintln!("bammetrics: {message} (and {more} more {PROGRAM} @PG lines)");
     }
     Ok(())
 }
@@ -301,7 +307,7 @@ pub fn run(opts: &Options) -> Result<()> {
         opts,
         |_, _| Ok(HashMap::<i16, Coord>::new()),
         |tiles, record| {
-            let at = location(&parser, record);
+            let at = location(&parser, record)?;
             tiles.entry(at.tile).or_default().add(&at);
             Ok(())
         },
@@ -344,7 +350,7 @@ fn write_kept(
             })
         },
         |writing, record| {
-            let at = location(parser, record);
+            let at = location(parser, record)?;
             let tile = tiles.entry(at.tile).or_default();
             if !selector.select(&at, tile) {
                 return Ok(());

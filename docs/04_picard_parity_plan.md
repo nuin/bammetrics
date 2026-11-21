@@ -103,8 +103,8 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | AddOrReplaceReadGroups | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the record-editing shape `record_edit.rs`; a chain transform, a barrier when it sorts): every `@RG` line replaced by one read group, `RG` on every record, `RGDT` in UTC, `SORT_ORDER` sorted as Picard's writer sorts. S | samtools addreplacerg |
 | BamToBfq | Read data | out | Obsolete aligner format. | none |
 | CleanSam | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): alignments and mate CIGARs past a contig end soft-clipped, MAPQ 0 on unmapped records. S | none |
-| DownsampleSam | Read data | core | Shipped in 0.31.0 (wave W13 of docs/07): the three htsjdk strategies with Picard's seeds, records equal to Picard's for 50 seeds per strategy at five probabilities; a chain transform. S | samtools view -s |
-| PositionBasedDownsampleSam | Read data | core | Shipped in 0.31.0 (wave W13 of docs/07): Picard's two reads and its circle per tile, records equal to Picard's; not a chain step. S | none |
+| DownsampleSam | Read data | core | Shipped in wave W13 of docs/07: the three htsjdk strategies with Picard's seeds, records equal to Picard's for 50 seeds per strategy at five probabilities; a chain transform. S | samtools view -s |
+| PositionBasedDownsampleSam | Read data | core | Shipped in wave W13 of docs/07: Picard's two reads and its circle per tile, records equal to Picard's; not a chain step. S | none |
 | FastqToSam | Read data | later | Harness builds unaligned fixtures. | samtools import, fgbio |
 | FilterSamReads | Read data | out | Subsetting. | samtools view |
 | GatherBamFiles | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, `bgzf_copy.rs`): BAM inputs block copied as htsjdk copies them, byte for byte at `COMPRESSION_LEVEL=0`; SAM or CRAM inputs read record by record. S | samtools cat |

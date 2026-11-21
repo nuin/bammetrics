@@ -853,9 +853,11 @@ needs = [
 max_rss_mib = 64
 max_seconds = 300
 
-# Wave W13: the downsampling tools. Fixture rows on markdup.bam; scale rows on the
-# HG002 exome (150,538,907 records) and, for HighAccuracy, whose memory grows with the
-# read names as Picard's does, the W05 chr20 and chr21 slice (29.3 million records).
+# Wave W13: the downsampling tools. The three fixture rows on markdup.bam (36 records,
+# 6 to 8 MiB) check that each command runs; only the scale rows can catch a memory
+# regression. Scale rows on the HG002 exome (150,538,907 records) and, for HighAccuracy,
+# whose memory grows with the read names as Picard's does, the W05 chr20 and chr21 slice
+# (29.3 million records).
 # Measured 2026-11-21 on the Mac Studio: ConstantMemory exome 20.7 MiB in 23 s, Chained
 # exome 139.5 MiB in 18 s, HighAccuracy slice 1,968 MiB in 21 s, PositionBased exome
 # 33.2 MiB in 58 s. The HighAccuracy limit is the W05 rule, 2 GiB plus 1 GiB.

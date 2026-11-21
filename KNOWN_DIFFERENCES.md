@@ -1280,7 +1280,11 @@ below. bammetrics differs here:
   text and `ViewSam` prints it back. bammetrics holds BAM records, as Picard does once it
   writes a BAM. A reference name the header lacks is read as no reference (`*`). A base
   outside `=ACMGRSVTWYHKDBN.` is read as `N`. A `MAPQ` outside 0 to 255 keeps its low byte, a
-  flag above 65535 its low 16 bits, as htsjdk writes both into a BAM. A negative `MAPQ` passes
+  flag above 65535 its low 16 bits. A tool that writes these records (`SortSam`,
+  `DownsampleSam`) writes the altered record, where Picard 3.5.0 fails when it writes the
+  BAM: `Value (70000) too large to be written as ushort`, `Value (300) to large to be
+  written as ubyte`, `Bad base passed to charToCompressedBaseHigh`, `Reference index for
+  nope not found in sequence dictionary` (for `RNAME` and `RNEXT`). A negative `MAPQ` passes
   `STRICT` in htsjdk (it checks only `MAPQ < 256`), so `ViewSam` and a SAM `SortSam` print
   `-1` at every stringency where bammetrics prints `255`. These are errors at every stringency: a `QUAL` whose
   length differs from `SEQ`, a `QUAL` without `SEQ`, a CIGAR that does not parse (htsjdk
@@ -1736,6 +1740,11 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   text; Picard uses the whole unit. The SAM specification allows printable ASCII in a
   name, where the two agree.
 - A `.cram` `OUTPUT` exits 2 naming wave W15; Picard writes a CRAM.
+- A BAM header line that repeats a tag (`@PG ... rs:1 rs:2`) or has a tag with no value
+  (`rs:`) exits 1 in every tool (`the header could not be read: invalid record`): noodles
+  refuses it. Picard fails too at the default `VALIDATION_STRINGENCY=STRICT` (`Error
+  parsing SAM header`) and reads it under `LENIENT` or `SILENT`. Such a line in SAM text
+  is read as htsjdk reads it at each stringency. The SAM specification allows neither.
 - `PositionBasedDownsampleSam` refuses standard input and pipes with exit 2: it reads its
   input twice. Picard opens `INPUT` three times and its later reads of a pipe find no
   record.
