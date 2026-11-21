@@ -10,8 +10,9 @@ use std::path::Path;
 use super::header::{Header, Sequence, SortOrder};
 use super::{Interval, IntervalList};
 use crate::bed_to_interval_list;
+use crate::create_sequence_dictionary::{NAME_PATTERN, legal_name};
 use crate::error::{Error, Result, excerpt};
-use crate::vcf::VcfReader;
+use crate::vcf::SiteReader;
 
 /// The bytes of an interval list read at most, inflated when it is gzip:
 /// the text is held whole while it is parsed.
@@ -311,26 +312,28 @@ pub struct VcfInterval {
 /// end) on `+`, named by `ID`, or `interval-N` counting the records
 /// without one (an `AtomicInteger`, so it wraps as a Java `int`). Each
 /// record is checked as htsjdk's codec checks its site
-/// ([`VcfReader::next_site`]); lines are read one at a time under
+/// ([`SiteReader::next_site`](crate::vcf::SiteReader::next_site)); lines are read one at a time under
 /// [`MAX_LINE_BYTES`].
 pub struct VcfIntervals {
-    reader: VcfReader,
+    reader: SiteReader,
     include_filtered: bool,
     unnamed: i32,
 }
 
 impl VcfIntervals {
-    /// Open `path` and make its dictionary: the `##contig` lines (`SN`,
-    /// `LN` or 0, `AS` from `assembly`), as `VCFHeader.getSequenceDictionary`
-    /// makes it. A VCF without `##contig` lines has none, and Picard fails
-    /// there with a `NullPointerException`.
+    /// Open `path` and make its dictionary as `VCFHeader.getSequenceDictionary`
+    /// makes it from the `##contig` lines: `SN`, `LN` from `length`
+    /// (`Integer.parseInt`) or 0 without one, the name checked as
+    /// `SAMSequenceRecord` checks it, `AS` from `assembly`. A VCF without
+    /// `##contig` lines has none, and Picard fails there with a
+    /// `NullPointerException`.
     pub fn open(path: &Path, include_filtered: bool) -> Result<(Header, Self)> {
-        let reader = VcfReader::open_capped(path, MAX_LINE_BYTES, crate::vcf::MAX_DBSNP_LINES)?;
+        let reader = SiteReader::open(path, MAX_LINE_BYTES, crate::vcf::MAX_DBSNP_LINES)?;
         let intervals_error = |message: String| Error::Intervals {
             path: path.to_path_buf(),
             message,
         };
-        let contigs = reader.header().contigs();
+        let contigs = &reader.header().contigs;
         if contigs.is_empty() {
             return Err(intervals_error(
                 "the VCF has no ##contig lines, so no sequence dictionary (Picard fails with a \
@@ -339,19 +342,21 @@ impl VcfIntervals {
             ));
         }
         let mut sequences = Vec::with_capacity(contigs.len());
-        for (name, contig) in contigs {
-            let length = match contig.length() {
-                Some(length) => i32::try_from(length).map_err(|_| {
-                    intervals_error(format!("For input string: \"{length}\" (##contig {name})"))
+        for contig in contigs {
+            let length = match &contig.length {
+                Some(text) => parse_int(text).map_err(|message| {
+                    intervals_error(format!("{message} (##contig {})", contig.id))
                 })?,
                 None => 0,
             };
-            let mut sequence = Sequence::new(name, length);
-            if let Some((_, assembly)) = contig
-                .other_fields()
-                .iter()
-                .find(|(key, _)| key.as_ref() == "assembly")
-            {
+            if !legal_name(&contig.id) {
+                return Err(intervals_error(format!(
+                    "Sequence name '{}' doesn't match regex: '{NAME_PATTERN}'",
+                    contig.id
+                )));
+            }
+            let mut sequence = Sequence::new(&contig.id, length);
+            if let Some(assembly) = &contig.assembly {
                 sequence
                     .attributes
                     .push(("AS".to_owned(), assembly.clone()));

@@ -36,11 +36,13 @@ mod bit_set;
 mod header;
 mod line_cap;
 mod site;
+mod site_header;
 
 pub use bit_set::MAX_DBSNP_PAGES;
 use bit_set::PAGE_BITS;
 use bit_set::{BitSet, OverBudget};
 use line_cap::LineCap;
+pub use site_header::{ContigLine, MAX_HEADER_BYTES, SiteHeader};
 
 use crate::bed_to_interval_list;
 use crate::error::{Error, Result};
@@ -429,10 +431,39 @@ pub struct VcfReader {
     reader: vcf::io::Reader<Box<dyn BufRead>>,
     record: vcf::Record,
     line: u64,
-    /// The line [`VcfReader::next_site`] read last, as bytes.
-    raw: Vec<u8>,
-    /// What the header tells [`VcfReader::next_site`], made at its first call.
-    rules: Option<site::Rules>,
+}
+
+/// `path` as text lines under the caps: plain, or gzip members in turn
+/// (BGZF or plain) when its first two bytes are the gzip magic, as
+/// `GZIPInputStream` reads a `.vcf.gz` for htsjdk. One open: the magic
+/// bytes are handed back in front of the rest, so a named pipe is read
+/// once.
+fn open_text(path: &Path, max_line_bytes: usize, max_lines: u64) -> Result<Box<dyn BufRead>> {
+    let input = |source| Error::Input {
+        path: path.to_path_buf(),
+        source,
+    };
+    let mut file = File::open(path).map_err(input)?;
+    let mut magic = [0u8; 2];
+    let mut read = 0;
+    while read < magic.len() {
+        match file.read(&mut magic[read..]) {
+            Ok(0) => break,
+            Ok(n) => read += n,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+            Err(error) => return Err(input(error)),
+        }
+    }
+    let gzip = read == 2 && magic == [0x1f, 0x8b];
+    let file = io::Cursor::new(magic[..read].to_vec()).chain(file);
+    let text: Box<dyn BufRead> = if gzip {
+        Box::new(io::BufReader::new(crate::gzip::GzipReader::new(
+            io::BufReader::new(file),
+        )))
+    } else {
+        Box::new(io::BufReader::new(file))
+    };
+    Ok(Box::new(LineCap::new(text, max_line_bytes, max_lines)))
 }
 
 impl VcfReader {
@@ -447,31 +478,7 @@ impl VcfReader {
             path: path.to_path_buf(),
             source,
         };
-        // One open: the magic bytes are read and handed back in front of
-        // the rest, so a named pipe is read once.
-        let mut file = File::open(path).map_err(input)?;
-        let mut magic = [0u8; 2];
-        let mut read = 0;
-        while read < magic.len() {
-            match file.read(&mut magic[read..]) {
-                Ok(0) => break,
-                Ok(n) => read += n,
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-                Err(error) => return Err(input(error)),
-            }
-        }
-        let gzip = read == 2 && magic == [0x1f, 0x8b];
-        let file = io::Cursor::new(magic[..read].to_vec()).chain(file);
-        // Gzip members in turn, BGZF or plain, as `GZIPInputStream` reads a
-        // `.vcf.gz` for htsjdk.
-        let text: Box<dyn BufRead> = if gzip {
-            Box::new(io::BufReader::new(crate::gzip::GzipReader::new(
-                io::BufReader::new(file),
-            )))
-        } else {
-            Box::new(io::BufReader::new(file))
-        };
-        let capped: Box<dyn BufRead> = Box::new(LineCap::new(text, max_line_bytes, max_lines));
+        let capped = open_text(path, max_line_bytes, max_lines)?;
         let mut reader = vcf::io::Reader::new(capped);
         let header = header::read_header(reader.get_mut()).map_err(input)?;
         Ok(Self {
@@ -480,8 +487,6 @@ impl VcfReader {
             reader,
             record: vcf::Record::default(),
             line: 0,
-            raw: Vec::new(),
-            rules: None,
         })
     }
 
@@ -545,22 +550,64 @@ impl VcfReader {
         &self.record
     }
 
+    /// Every remaining record.
+    pub fn variants(mut self) -> Result<Vec<Variant>> {
+        let mut out = Vec::new();
+        while let Some(v) = self.next_variant()? {
+            out.push(v);
+        }
+        Ok(out)
+    }
+}
+
+/// A VCF read for its sites as htsjdk's `VCFCodec` reads them for
+/// `VcfToIntervalList`: the header through `vcf/site_header.rs`, then each
+/// record line through `vcf/site.rs`, without noodles.
+pub struct SiteReader {
+    path: PathBuf,
+    reader: Box<dyn BufRead>,
+    header: SiteHeader,
+    rules: site::Rules,
+    line: u64,
+    /// The line read last, as bytes.
+    raw: Vec<u8>,
+}
+
+impl SiteReader {
+    /// Open `path` (plain or gzip by its first bytes) and read its header,
+    /// a line over `max_line_bytes` or more than `max_lines` lines being a
+    /// read error.
+    pub fn open(path: &Path, max_line_bytes: usize, max_lines: u64) -> Result<Self> {
+        let mut reader = open_text(path, max_line_bytes, max_lines)?;
+        let header = site_header::read(&mut reader).map_err(|message| Error::Intervals {
+            path: path.to_path_buf(),
+            message,
+        })?;
+        Ok(Self {
+            path: path.to_path_buf(),
+            reader,
+            rules: site::Rules::of(&header),
+            header,
+            line: 0,
+            raw: Vec::new(),
+        })
+    }
+
+    pub fn header(&self) -> &SiteHeader {
+        &self.header
+    }
+
     /// The next record's position, `ID` and filter status, read from its
     /// line as htsjdk's `VCFCodec` reads it for a site (`vcf/site.rs`): the
     /// fixed columns checked, the genotypes left undecoded unless the
-    /// header's samples are not in sorted order; `None` at the end of the
-    /// file. A line is decoded as UTF-8, a byte that is not becoming
-    /// U+FFFD as Java's decoder makes it.
+    /// header's samples are not in sorted order; a line starting with `#`
+    /// skipped; `None` at the end of the file. A line is decoded as UTF-8,
+    /// a byte that is not becoming U+FFFD.
     pub fn next_site(&mut self) -> Result<Option<Site>> {
-        let rules = self
-            .rules
-            .get_or_insert_with(|| site::Rules::of(&self.header))
-            .clone();
         loop {
             self.raw.clear();
             let read = self
                 .reader
-                .get_mut()
                 .read_until(b'\n', &mut self.raw)
                 .map_err(|source| Error::Input {
                     path: self.path.clone(),
@@ -576,8 +623,8 @@ impl VcfReader {
                     self.raw.pop();
                 }
             }
-            let text = String::from_utf8_lossy(&self.raw);
-            match site::parse_line(&text, &rules) {
+            let text = crate::java::decode_utf8(&self.raw);
+            match site::parse_line(&text, &self.rules) {
                 Ok(Some(site)) => return Ok(Some(site)),
                 Ok(None) => {}
                 Err(message) => {
@@ -589,18 +636,9 @@ impl VcfReader {
             }
         }
     }
-
-    /// Every remaining record.
-    pub fn variants(mut self) -> Result<Vec<Variant>> {
-        let mut out = Vec::new();
-        while let Some(v) = self.next_variant()? {
-            out.push(v);
-        }
-        Ok(out)
-    }
 }
 
-/// One record as [`VcfReader::next_site`] reads it.
+/// One record as [`SiteReader::next_site`] reads it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Site {
     pub contig: String,

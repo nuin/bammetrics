@@ -36,9 +36,11 @@
 //!   decodes the genotypes at once (`samplesWereAlreadySorted`), so their
 //!   errors are the record's.
 
-use noodles::vcf;
+use std::collections::HashSet;
 
+use super::site_header::SiteHeader;
 use super::{Site, parse_genotype};
+use crate::error::excerpt;
 
 /// What the header tells the line parser.
 #[derive(Clone, Debug, Default)]
@@ -59,23 +61,16 @@ impl Rules {
     /// What [`VcfReader::next_site`] needs from the header: the sample count,
     /// whether the samples are in sorted order (`String.compareTo`), and
     /// whether `END` is declared as a flag.
-    pub fn of(header: &vcf::Header) -> Self {
-        use vcf::header::record::value::map::info::Type;
-        let names: Vec<&String> = header.sample_names().iter().collect();
+    pub fn of(header: &SiteHeader) -> Self {
+        let names = &header.samples;
         let sorted = names
             .windows(2)
             .all(|w| w[0].encode_utf16().le(w[1].encode_utf16()));
         Self {
             samples: names.len(),
             eager_genotypes: !sorted,
-            end_is_flag: header
-                .infos()
-                .get("END")
-                .is_some_and(|info| info.ty() == Type::Flag),
-            percent_decoded: {
-                let format = header.file_format();
-                (format.major(), format.minor()) >= (4, 3)
-            },
+            end_is_flag: header.end_is_flag,
+            percent_decoded: header.minor >= 3,
         }
     }
 }
@@ -89,14 +84,15 @@ pub fn parse_line(line: &str, rules: &Rules) -> Result<Option<Site>, String> {
     let parts = split_condensed(line, max);
     if parts.len() != max {
         return Err(format!(
-            "there aren't enough columns for line {line} (we expected {max} tokens, and saw {} )",
+            "there aren't enough columns for line {} (we expected {max} tokens, and saw {} )",
+            excerpt(line),
             parts.len()
         ));
     }
     let start = crate::java::parse_integer(parts[1], 32).map_err(|_| {
         format!(
             "{} is not a valid start position in the VCF format",
-            parts[1]
+            excerpt(parts[1])
         )
     })? as i32;
     let id = match parts[2] {
@@ -225,8 +221,9 @@ fn parse_filters(text: &str) -> Result<bool, String> {
     for name in &names {
         if name.is_empty() || !name.bytes().all(|b| matches!(b, b'!'..=b':' | b'<'..=b'~')) {
             return Err(format!(
-                "Filter '{name}' contains an illegal character. It must conform to the regex \
-                 ;'^[!-:<-~]+$"
+                "Filter '{}' contains an illegal character. It must conform to the regex \
+                 ;'^[!-:<-~]+$",
+                excerpt(name)
             ));
         }
     }
@@ -256,7 +253,8 @@ fn parse_info_end(info: &str, rules: &Rules) -> Result<Option<String>, String> {
     if info.contains(['\t', ' ']) {
         return Err(format!(
             "The VCF specification does not allow for whitespace in the INFO field. Offending \
-             field value was \"{info}\""
+             field value was \"{}\"",
+            excerpt(info)
         ));
     }
     let mut end = None;
@@ -346,7 +344,8 @@ fn check_allele(allele: &str, is_ref: bool) -> Result<(), String> {
     if is_symbolic(bytes) {
         if is_ref {
             return Err(format!(
-                "Symbolic alleles not allowed as reference allele: {allele}"
+                "Symbolic alleles not allowed as reference allele: {}",
+                excerpt(allele)
             ));
         }
         return Ok(());
@@ -371,7 +370,7 @@ fn check_allele(allele: &str, is_ref: bool) -> Result<(), String> {
             "VCF support for complex rearrangements with breakends has not yet been implemented"
                 .to_owned()
         } else {
-            format!("unparsable vcf record with allele {allele}")
+            format!("unparsable vcf record with allele {}", excerpt(allele))
         });
     }
     if is_ref && allele == "." {
@@ -382,10 +381,10 @@ fn check_allele(allele: &str, is_ref: bool) -> Result<(), String> {
 
 /// `AbstractVCFCodec.parseAlleles`, then the duplicate check of
 /// `VariantContext.makeAlleles` (bases compared, the reference flag
-/// ignored).
+/// ignored), one hash lookup per allele.
 fn parse_alleles(reference: &str, alternates: &str) -> Result<Alleles, String> {
     check_allele(reference, true)?;
-    let mut seen: Vec<String> = vec![reference.to_owned()];
+    let mut seen: HashSet<String> = HashSet::from([reference.to_owned()]);
     let mut symbolic = false;
     let alts = if alternates.contains(',') {
         java_split(alternates, ',')
@@ -404,9 +403,12 @@ fn parse_alleles(reference: &str, alternates: &str) -> Result<Alleles, String> {
             alt.to_ascii_uppercase()
         };
         if seen.contains(&bases) {
-            return Err(format!("Duplicate allele added to VariantContext: {bases}"));
+            return Err(format!(
+                "Duplicate allele added to VariantContext: {}",
+                excerpt(&bases)
+            ));
         }
-        seen.push(bases);
+        seen.insert(bases);
     }
     Ok(Alleles {
         count: seen.len(),
@@ -554,6 +556,25 @@ mod tests {
         ] {
             assert!(!ok(r, a), "{r} {a}");
         }
+    }
+
+    /// 100,000 alternates, then the first again: one hash lookup each, so
+    /// the record is read in well under a second (a scan of the alleles
+    /// seen took 10 s here).
+    #[test]
+    fn many_alternates_are_checked_in_linear_time() {
+        let alternate = |i: usize| -> String {
+            (0..9)
+                .map(|k| ['A', 'C', 'G', 'T'][(i >> (2 * k)) & 3])
+                .collect()
+        };
+        let alts: Vec<String> = (0..100_000).map(alternate).collect();
+        let started = std::time::Instant::now();
+        let line = |alts: &str| format!("c1\t1\t.\tAAAAAAAAAA\t{alts}\t.\t.\t.");
+        let joined = alts.join(",");
+        assert!(site(&line(&joined)).is_ok());
+        assert!(site(&line(&format!("{joined},{}", alts[0]))).is_err());
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
     }
 
     #[test]
