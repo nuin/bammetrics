@@ -46,6 +46,7 @@ mod spool;
 mod tests;
 
 pub use exec::{Halt, halt, run_chain};
+pub(crate) use sinks::fill;
 pub use sinks::{CollectorSink, WriteFormat, WriteOptions, later_kind};
 
 /// Records per batch. Measured: with the 4096 of [`pass`] a
@@ -507,6 +508,13 @@ const STAGES: &[StageRow] = &[
         label: "reverted",
         kind: StageKind::Holds,
         check: crate::revert_original_base_qualities_and_add_mate_cigar::check_stage,
+    },
+    StageRow {
+        tool: "DownsampleSam",
+        build: crate::downsample_sam::stage,
+        label: "downsampled",
+        kind: StageKind::Streams,
+        check: crate::downsample_sam::check_stage,
     },
 ];
 

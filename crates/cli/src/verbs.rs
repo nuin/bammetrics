@@ -670,6 +670,33 @@ pub const VERBS: &[Verb] = &[
         ],
         ..verb("non-n-fasta-size", "NonNFastaSize", Files::Single)
     },
+    Verb {
+        about: Some(
+            "keeps the records of a random part of the templates, as Picard's DownsampleSam \
+             does: -o gets them in input order with a @PG line (rs: the seed), every record of \
+             a read name kept or dropped together; --metrics-file the QualityYieldMetrics of \
+             the records kept. --strategy ConstantMemory hashes each name, HighAccuracy keeps \
+             exact counts per chunk, Chained does both.",
+        ),
+        writes: "BAM",
+        aliases: &[("METRICS", "METRICS_FILE")],
+        ..verb("downsample-sam", "DownsampleSam", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "keeps the records whose read name places them in a circle of area --fraction on \
+             each tile of the flow cell, as Picard's PositionBasedDownsampleSam does: -o gets \
+             them in input order with the duplicate flag cleared and a @PG line. The input is \
+             read twice (the tile extents, then the records).",
+        ),
+        writes: "BAM",
+        reads_stdin: false,
+        ..verb(
+            "position-based-downsample-sam",
+            "PositionBasedDownsampleSam",
+            Files::Bam,
+        )
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
