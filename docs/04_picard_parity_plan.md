@@ -83,7 +83,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | ClusterCrosscheckMetrics | Fingerprint | later | Java hash order. S | none |
 | IdentifyContaminant | Fingerprint | out | Niche, VCF output only. M | VerifyBamID |
 | BedToIntervalList | Intervals | core | Hs, TargetedPcr and Wgs take interval_list. Harness needs it. | none |
-| IntervalListToBed | Intervals | later | Reverse of the parser. | none |
+| IntervalListToBed | Intervals | core | Shipped in wave W12 of docs/07 over `interval_ops`: the list read as tribble's `IntervalListCodec` reads it, the sort with its spill of names past 500,000 intervals, `SCORE`, gzip output. S | bedtools (partial) |
 | IntervalListTools | Intervals | later | Implement only the ops metrics use (merge, pad, uniquify). | bedtools |
 | LiftOverIntervalList | Intervals | out | Liftover, no metrics. | UCSC liftOver, CrossMap |
 | CreateSequenceDictionary | Reference | core | Metrics need contig lengths. Harness prep. | samtools dict |
@@ -153,7 +153,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | SplitVcfs | Variant | out | SNP/indel split. | bcftools view -v |
 | UpdateVcfSequenceDictionary | Variant | out | Header contig update. | bcftools reheader |
 | VcfFormatConverter | Variant | out | VCF/BCF conversion. | bcftools view |
-| VcfToIntervalList | Variant | later | Source of Hs-style targets from VCF sites. | bcftools query plus BedToIntervalList |
+| VcfToIntervalList | Variant | core | Shipped in wave W12 of docs/07 over `interval_ops`: each record checked as htsjdk's codec checks its site, neighbours merged in file order, `INCLUDE_FILTERED`, `VARIANT_ID_METHOD`. S | bcftools query plus BedToIntervalList |
 
 Scheduling update (2026-11-09): the 65 `out` tools and the 26 unbuilt `later` tools are now scheduled. `docs/07_full_parity_program.md` places each of the 91 in a wave (section 5 there) with its oracle tier and acceptance line. The `out` decision in the table above records the 2026-10-29 reasoning and the covering tool; it no longer means "not built". The rows are rewritten to `build (docs/07 Wnn)` one wave at a time, closing at the 1.0.0 parity gate (docs/07 W40, change D1).
 

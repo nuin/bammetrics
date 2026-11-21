@@ -22,6 +22,8 @@ bammetrics reimplements Picard BAM QC metrics in Rust (on `noodles` 0.119) and e
 
 `SplitSamByLibrary` and `SplitSamByNumberOfReads` (wave W10, verbs `split-sam-by-library` and `split-sam-by-number-of-reads`) write several files from one read through `split_sam.rs` and `split_sam/fanout.rs` (`Fanout`: full BGZF blocks of every file compressed on one shared `Pool` of the run's threads, each file writing its frames in order; at most `MAX_OPEN_FILES` 64 open, a closed file reopened for append after its device and inode are checked, every file renamed with its `.bai` and `.md5` after the last record, none left on a failure, at most `MAX_FILES` 100,000). In a chain each is a split step (`Role::Split`, `split_sam::chain_step`, a sink of the executor) that claims every file it makes against the chain's planned files through the shared `Claims`; `crates/cli/src/chain/prepare/split.rs` plans it. Tests: `split_sam/tests.rs`, `crates/cli/tests/split_sam.rs`, `tests/concordance/test_split_sam_by_library.py` (its `compare_split` serves both modules) and `split_bams.py`.
 
+`IntervalListToBed` (verb `interval-list-to-bed`) and `VcfToIntervalList` (verb `vcf-to-interval-list`), wave W12 over `interval_ops`: each writes its `OUTPUT` itself through `interval_ops::write_text` (verbs `Files::Bam`, `-o` required); `vcf/site.rs` reads a VCF record line as htsjdk's codec reads its site (`VcfReader::next_site`), `vcf/header.rs` the header with a repeated `##contig` dropped; `tests/data/make_interval_fixtures.py` writes their fixtures and `benches/interval_scale.py` their memgate inputs.
+
 ## Commands
 
 ```bash

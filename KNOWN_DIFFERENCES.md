@@ -1662,6 +1662,16 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
 - A scatter into more than 100,000 lists (`SCATTER_COUNT`, or the count `SCATTER_CONTENT`
   gives) and a `BREAK_BANDS_AT_MULTIPLES_OF` that makes more than 20,000,000 intervals
   fail with a usage error. Picard writes the files, or runs out of memory.
+- `IntervalListToBed` and `VcfToIntervalList` write a `.gz` `OUTPUT` as BGZF; it inflates
+  to Picard's text.
+- `IntervalListToBed` on more than 500,000 intervals refuses a name with a character whose
+  low byte is 0 (U+0000, U+0100, ...). Picard's sort spill cuts the name there and misreads
+  the records after it.
+- `VcfToIntervalList` refuses a `.bcf` `INPUT`. It reads a gzip VCF by its first bytes
+  whatever its name, where Picard goes by the `.gz` name.
+- A boolean option given another word than `true` or `false` (`SORT=maybe`,
+  `INCLUDE_FILTERED=yes`) is a usage error, as on every bammetrics tool; Picard reads it as
+  false.
 
 ## Not in Picard
 

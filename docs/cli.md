@@ -1296,6 +1296,68 @@ counted as a collector; when it fails (a contig the BAM header lacks), the summa
 as an `ERROR` line and `qc` exits 1 (`exit 1: 1 collector(s) and 1 prepare step(s) failed`
 when hs fails on the same BED).
 
+### interval-list-to-bed
+
+```bash
+bammetrics interval-list-to-bed panel.interval_list -o panel.bed
+bammetrics interval-list-to-bed panel.interval_list -o - --score 0 --sort false
+bammetrics IntervalListToBed I=panel.interval_list O=panel.bed.gz
+```
+
+Picard's `IntervalListToBed`: one BED line per interval of the list, byte for byte the
+lines Picard writes. Each line holds the contig, the start less 1, the end, the name (`.`
+stays `.`), `--score` (`SCORE=`, default 500, any integer) and the strand. `--sort`
+(default true) orders the lines by contig, start, end, strand and name; `--sort false`
+keeps the file order.
+
+- The list is read as Picard's feature reader reads it: a record on a contig the header
+  lacks is skipped, and a file with no `@` line has no contig, so its BED is empty. A
+  record Picard rejects (not five fields, a start below 1, an end below start - 1, a strand
+  other than `+` or `-`, an end past a contig length other than 0) exits 1.
+- `-o FILE` is required; `-o -` writes standard output. A name ending in `.gz` is
+  compressed (BGZF, which inflates to Picard's text). `-o` naming the input exits 2, and a
+  failed run leaves no file.
+- A list of more than 500,000 intervals goes through Picard's sort spill, which keeps the
+  low byte of each name character: a name past U+00FF prints as Picard prints it. A name
+  with a character whose low byte is 0 exits 1.
+- `--threads` is accepted and ignored. `--format` takes `picard` only.
+
+`bed-to-interval-list --dict LIST` converts the BED back. The intervals come back in
+sorted order under `@HD VN:1.6 SO:coordinate` when each has a length above 0 and a name
+without a space or a double quote (`tests/concordance/test_interval_list_to_bed.py`
+checks both tools). `qc --panel` reads the BED.
+
+### vcf-to-interval-list
+
+```bash
+bammetrics vcf-to-interval-list calls.vcf.gz -o calls.interval_list
+bammetrics vcf-to-interval-list calls.vcf -o - --include-filtered --variant-id-method USE_FIRST
+bammetrics VcfToIntervalList I=calls.vcf O=calls.interval_list
+```
+
+Picard's `VcfToIntervalList`, byte for byte: `@HD VN:1.6`, one `@SQ` line per `##contig`
+line (`LN:0` without a length, `AS` from `assembly`), then one interval per record from
+`POS` to `END` (else the end of the reference allele) on `+`, named by its `ID` or
+`interval-N` for the Nth record without one. A record that overlaps or abuts the interval
+before it in file order joins it: with `--variant-id-method CONCAT_ALL` (the default) the
+interval spans both and joins the distinct names with `|`; with `USE_FIRST` it keeps the
+first start and name. An unsorted VCF merges only neighbours, as Picard does.
+
+- `--include-filtered` (`INCLUDE_FILTERED=`, `IF=`) keeps records whose `FILTER` is neither
+  `.` nor `PASS`.
+- A record on a contig without a `##contig` line, or past its length, is written as it is.
+  A VCF without `##contig` lines exits 1 (Picard fails with a `NullPointerException`).
+- Each record is checked as htsjdk's codec checks its site: a missing column, a `POS`,
+  `QUAL` or `END` that is not a number, an empty `ID` or `INFO`, a bad `FILTER` name, an
+  allele that is not one, or a repeated allele exits 1 with htsjdk's message. A failed run
+  leaves no file.
+- The input is plain text or gzip (BGZF or plain), told by its first bytes. A `.bcf` input
+  exits 2: BCF is not read.
+- `-o FILE` is required; `-o -` writes standard output; a name ending in `.gz` is compressed.
+  `--threads` is accepted and ignored. `--format` takes `picard` only.
+
+`qc --panel` takes the interval list as it is.
+
 ### create-sequence-dictionary
 
 ```bash
