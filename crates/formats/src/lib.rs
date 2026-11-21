@@ -13,24 +13,29 @@
 //! | JSON Lines, TSV, CSV, aligned text | [`delimited`] | no |
 //! | Markdown | [`markdown`] | no |
 //! | JUnit XML, MultiQC custom content | [`junit`], [`multiqc`] | no |
+//! | XLSX, DOCX (stored zip of OOXML parts) | [`xlsx`], [`docx`] | no |
 //!
 //! [`read`] takes either readable form, so Picard text to JSON to Picard
 //! text is byte for byte the first file (`tests/round_trip.rs` runs it on
-//! every fixture). The crate uses `std` and the core only: Parquet, XLSX
-//! and Arrow, which bring dependencies, come behind features (docs/07
-//! W21, W46) and write from the same [`Table`].
+//! every fixture). The crate uses `std` and the core only; XLSX and DOCX
+//! are hand-written zips of XML ([`ooxml`]). Parquet and Arrow, which
+//! bring dependencies, come behind features (docs/07 W21, W46) and write
+//! from the same [`Table`].
 
 pub mod delimited;
+pub mod docx;
 pub mod error;
 pub mod json;
 pub mod junit;
 pub mod markdown;
 pub mod metrics_json;
 pub mod multiqc;
+pub mod ooxml;
 pub mod picard;
 pub mod sheet;
 pub mod table;
 pub mod verdict;
+pub mod xlsx;
 
 pub use error::{Error, Result};
 pub use table::{Document, Table, Ty, glossary_type};
@@ -46,11 +51,13 @@ pub enum Format {
     Human,
     Csv,
     Markdown,
+    Xlsx,
+    Docx,
 }
 
 impl Format {
     /// Every format, in `--help` order.
-    pub const ALL: [Format; 7] = [
+    pub const ALL: [Format; 9] = [
         Format::Picard,
         Format::Json,
         Format::Tsv,
@@ -58,6 +65,8 @@ impl Format {
         Format::Human,
         Format::Csv,
         Format::Markdown,
+        Format::Xlsx,
+        Format::Docx,
     ];
 
     pub fn name(self) -> &'static str {
@@ -69,6 +78,8 @@ impl Format {
             Format::Human => "human",
             Format::Csv => "csv",
             Format::Markdown => "markdown",
+            Format::Xlsx => "xlsx",
+            Format::Docx => "docx",
         }
     }
 
@@ -91,7 +102,15 @@ impl Format {
             Format::Human => "human.txt",
             Format::Csv => "csv",
             Format::Markdown => "md",
+            Format::Xlsx => "xlsx",
+            Format::Docx => "docx",
         }
+    }
+
+    /// True for a format whose file is bytes, not text: [`render_bytes`]
+    /// writes it.
+    pub fn is_binary(self) -> bool {
+        matches!(self, Format::Xlsx | Format::Docx)
     }
 }
 
@@ -121,9 +140,10 @@ pub enum ListError {
     Repeated(Format),
 }
 
-/// `doc` in `format`. A one-table format prints `table` (the main table
-/// without one). Only `picard` fails: on a cell Picard text cannot hold
-/// ([`picard::write`]).
+/// `doc` in a text format. A one-table format prints `table` (the main
+/// table without one). `picard` fails on a cell Picard text cannot hold
+/// ([`picard::write`]); a binary format is an error here, since
+/// [`render_bytes`] writes it.
 pub fn render(format: Format, doc: &Document, table: Option<&Table>) -> Result<String> {
     let one = || table.or_else(|| doc.main_table());
     Ok(match format {
@@ -134,7 +154,18 @@ pub fn render(format: Format, doc: &Document, table: Option<&Table>) -> Result<S
         Format::Csv => one().map(delimited::csv).unwrap_or_default(),
         Format::Human => one().map(delimited::human).unwrap_or_default(),
         Format::Markdown => markdown::write(&[doc], &[]),
+        Format::Xlsx | Format::Docx => return Err(Error::Binary(format.name())),
     })
+}
+
+/// `doc` in any format as bytes: the text of [`render`], or the file of a
+/// binary format. XLSX and DOCX fail past their limits ([`Error::Limit`]).
+pub fn render_bytes(format: Format, doc: &Document, table: Option<&Table>) -> Result<Vec<u8>> {
+    match format {
+        Format::Xlsx => xlsx::write(doc),
+        Format::Docx => docx::write(doc),
+        text => render(text, doc, table).map(String::into_bytes),
+    }
 }
 
 /// `text` without a leading byte order mark (U+FEFF), which some editors
@@ -227,8 +258,13 @@ mod tests {
         let doc = read(cell).expect("reads");
         assert_eq!(render(Format::Tsv, &doc, None).expect("tsv"), "A\na\\tb\n");
         for format in Format::ALL {
-            let rendered = render(format, &doc, None);
+            let rendered = render_bytes(format, &doc, None);
             assert_eq!(rendered.is_err(), format == Format::Picard, "{format:?}");
+            let text = render(format, &doc, None);
+            assert_eq!(
+                text.is_err(),
+                format == Format::Picard || format.is_binary()
+            );
         }
         let error = render(Format::Picard, &doc, None).expect_err("a tab");
         assert!(matches!(error, Error::Picard(_)), "{error}");

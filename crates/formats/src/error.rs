@@ -14,15 +14,21 @@ pub enum Error {
     Metrics(String),
     /// The document holds a cell Picard text has no form for.
     Picard(String),
+    /// The document is over a limit of the format (an XLSX sheet's rows).
+    Limit(String),
+    /// A binary format asked of the text writer.
+    Binary(&'static str),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Json(message) => write!(f, "json: {message}"),
-            Error::Document(message) | Error::Metrics(message) | Error::Picard(message) => {
-                f.write_str(message)
-            }
+            Error::Document(message)
+            | Error::Metrics(message)
+            | Error::Picard(message)
+            | Error::Limit(message) => f.write_str(message),
+            Error::Binary(name) => write!(f, "{name} is a binary format, not text"),
         }
     }
 }

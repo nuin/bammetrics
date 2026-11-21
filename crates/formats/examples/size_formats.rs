@@ -9,6 +9,7 @@ use std::path::Path;
 use bammetrics_core::metrics_file::MetricsDoc;
 use bammetrics_formats::{
     CheckLine, Format, Outcome, VerdictSummary, junit, markdown, multiqc, read, render,
+    render_bytes,
 };
 
 /// A verdict with one check per outcome, so every branch of the three
@@ -59,7 +60,7 @@ fn main() {
             }
         };
         for format in Format::ALL {
-            match render(format, &doc, None) {
+            match render_bytes(format, &doc, None) {
                 Ok(text) => println!("{path}: {} bytes of {}", text.len(), format.name()),
                 Err(e) => eprintln!("{path}: {e}"),
             }
