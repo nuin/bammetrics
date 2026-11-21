@@ -1,0 +1,12 @@
+## argv
+umi-prevalence
+tests/data/umi_prevalence.bam
+-o
+OUT/umi.txt
+--progress-step-interval
+0
+## exit
+1
+## stdout
+## stderr
+bammetrics umi-prevalence: PROGRESS_STEP_INTERVAL=0: Picard's progress logger divides by it (/ by zero)

@@ -304,6 +304,7 @@ pub struct Document {
 impl Document {
     /// What `tool` returned, with `headers` as its `StringHeader` texts.
     pub fn from_output(tool: &str, headers: Vec<String>, output: &MetricsOutput) -> Self {
+        let output = output.materialized();
         let tables = if output.is_histogram_only() {
             Vec::new()
         } else {

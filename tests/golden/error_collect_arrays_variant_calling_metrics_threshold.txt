@@ -1,0 +1,11 @@
+## argv
+CollectArraysVariantCallingMetrics
+I=tests/data/arrays/arrays.vcf.gz
+DBSNP=tests/data/arrays/dbsnp.vcf
+O=OUT/arrays
+CALL_RATE_PF_THRESHOLD=0
+## exit
+1
+## stdout
+## stderr
+bammetrics: The parameter CALL_RATE_PF_THRESHOLD must be > 0 and <= 1.0

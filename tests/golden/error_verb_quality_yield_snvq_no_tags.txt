@@ -1,0 +1,10 @@
+## argv
+quality-yield-s-n-v-q
+tests/data/insert_size.bam
+-o
+OUT/snvq.txt
+## exit
+1
+## stdout
+## stderr
+bammetrics quality-yield-s-n-v-q: record r0: no qa tag; CollectQualityYieldMetricsSNVQ needs it on every record it counts (Picard fails with a NullPointerException)

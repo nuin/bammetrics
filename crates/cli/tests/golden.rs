@@ -65,6 +65,16 @@ const FIXTURES: &[(&str, &str)] = &[
     ("CS_PAST", "tests/data/clean_sam_past.sam"),
     ("RV", "tests/data/revert.bam"),
     ("RV_SAM", "tests/data/revert.sam"),
+    ("SNVQ", "tests/data/snvq.bam"),
+    ("UMI", "tests/data/umi_prevalence.bam"),
+    ("RRBS", "tests/data/rrbs.bam"),
+    ("BAF", "tests/data/arrays/bafregress.txt"),
+    ("BAF_BAD", "tests/data/arrays/bafregress_bad.txt"),
+    ("VID", "tests/data/arrays/verifyidintensity.txt"),
+    ("VID_BAD", "tests/data/arrays/verifyidintensity_bad.txt"),
+    ("AVCF", "tests/data/arrays/arrays.vcf.gz"),
+    ("AVCF_PLAIN", "tests/data/arrays/arrays.vcf"),
+    ("ADBSNP", "tests/data/arrays/dbsnp.vcf"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -82,17 +92,26 @@ struct Case {
     /// Run in the output directory, with fixtures by absolute path
     /// (recorded as `ROOT/...`): for a command that writes into `.`.
     in_out: bool,
+    /// Run with `TZ=UTC`: for a tool that prints dates in the zone of the
+    /// process.
+    utc: bool,
 }
 
 macro_rules! case {
     ($name:literal, $($arg:expr),+ $(,)?) => {
-        Case { name: $name, argv: &[$($arg),+], in_out: false }
+        Case { name: $name, argv: &[$($arg),+], in_out: false, utc: false }
     };
 }
 
 macro_rules! case_in_out {
     ($name:literal, $($arg:expr),+ $(,)?) => {
-        Case { name: $name, argv: &[$($arg),+], in_out: true }
+        Case { name: $name, argv: &[$($arg),+], in_out: true, utc: false }
+    };
+}
+
+macro_rules! case_utc {
+    ($name:literal, $($arg:expr),+ $(,)?) => {
+        Case { name: $name, argv: &[$($arg),+], in_out: false, utc: true }
     };
 }
 
@@ -741,6 +760,62 @@ const GATHER_CHECKSUM_CASES: &[Case] = &[
     case!("error_chain_calculate_read_group_checksum", "chain", "MD", "-o", "OUT/s", "+", "calculate-read-group-checksum"),
 ];
 
+/// `CollectQualityYieldMetricsSNVQ` and `CollectUmiPrevalenceMetrics`
+/// (wave W11) on the fixtures of `tests/data/make_snvq_umi_fixtures.py`.
+#[rustfmt::skip]
+const SNVQ_UMI_CASES: &[Case] = &[
+    case!("picard_quality_yield_snvq", "CollectQualityYieldMetricsSNVQ", "I=SNVQ", "O=OUT/snvq.txt"),
+    case!("picard_quality_yield_snvq_histogram_stdout", "CollectQualityYieldMetricsSNVQ", "I=SNVQ", "INCLUDE_BQ_HISTOGRAM=true", "AQA=XQ"),
+    case!("verb_quality_yield_snvq", "quality-yield-s-n-v-q", "SNVQ", "-o", "OUT/snvq.txt", "--include-bq-histogram", "--stop-after", "5"),
+    case!("chain_quality_yield_snvq", "chain", "SNVQ", "-o", "OUT/s", "+", "sort-sam", "--sort-order", "queryname", "+", "quality-yield-s-n-v-q", "+", "quality-yield"),
+    case!("error_quality_yield_snvq_secondary", "CollectQualityYieldMetricsSNVQ", "I=SNVQ", "O=OUT/snvq.txt", "INCLUDE_SECONDARY_ALIGNMENTS=true"),
+    case!("error_verb_quality_yield_snvq_no_tags", "quality-yield-s-n-v-q", "IS", "-o", "OUT/snvq.txt"),
+    case!("picard_umi_prevalence", "CollectUmiPrevalenceMetrics", "I=UMI", "O=OUT/umi.txt"),
+    case!("picard_umi_prevalence_stdout_unpaired", "CollectUmiPrevalenceMetrics", "I=UMI", "FUR=false", "BQ=100"),
+    case!("verb_umi_prevalence", "umi-prevalence", "UMI", "-o", "OUT/umi.txt", "--minimum-mq", "10", "--max-records-in-ram", "3"),
+    case!("verb_umi_prevalence_json", "umi-prevalence", "UMI", "--format", "json"),
+    case!("picard_umi_prevalence_no_umis", "CollectUmiPrevalenceMetrics", "I=MD", "O=OUT/umi.txt", "BARCODE_TAG=ZZ"),
+    case!("error_umi_prevalence_assume_sorted", "CollectUmiPrevalenceMetrics", "I=UMI", "O=OUT/umi.txt", "ASSUME_SORTED=true"),
+    case!("error_verb_umi_prevalence_progress", "umi-prevalence", "UMI", "-o", "OUT/umi.txt", "--progress-step-interval", "0"),
+    case!("error_chain_umi_prevalence", "chain", "UMI", "-o", "OUT/s", "+", "umi-prevalence"),
+];
+
+/// Wave W11: `CollectRrbsMetrics` on the bisulfite fixture of
+/// tests/data/make_rrbs_bam.py, the Picard face, the verb, a chain tap and
+/// the errors.
+#[rustfmt::skip]
+const RRBS_CASES: &[Case] = &[
+    case!("picard_rrbs", "CollectRrbsMetrics", "I=RRBS", "M=OUT/rrbs", "R=REF", "LEVEL=SAMPLE"),
+    case!("picard_rrbs_options", "CollectRrbsMetrics", "I=RRBS", "M=OUT/rrbs.", "R=REF", "C_QUALITY_THRESHOLD=0", "MINIMUM_READ_LENGTH=40", "MAX_MISMATCH_RATE=0.2", "SEQUENCE_NAMES=chr1", "DO_NOT_CREATE_PLOTS=true", "LEVEL=null", "LEVEL=LIBRARY"),
+    case!("verb_rrbs_json", "rrbs", "RRBS", "-R", "REF", "-o", "OUT/rrbs", "--next-base-quality-threshold", "30", "--format", "picard,json"),
+    case!("verb_rrbs_cram", "rrbs", "IS_CRAM", "-R", "REF", "-o", "OUT/cram", "--max-mismatch-rate", "1"),
+    case!("chain_rrbs", "chain", "RRBS", "-R", "REF", "-o", "OUT/s", "+", "rrbs", "--level", "READ_GROUP", "--minimum-read-length", "60", "+", "mark-duplicates", "+", "rrbs", "--sequence-names", "none"),
+    case!("error_rrbs_rate", "CollectRrbsMetrics", "I=RRBS", "M=OUT/x", "R=REF", "MAX_MISMATCH_RATE=1.5", "MINIMUM_READ_LENGTH=0"),
+    case!("error_rrbs_no_reference", "CollectRrbsMetrics", "I=RRBS", "M=OUT/x"),
+    case!("error_rrbs_reference_sequence", "CollectRrbsMetrics", "I=RRBS", "M=OUT/x", "REFERENCE_SEQUENCE=REF"),
+    case!("error_verb_rrbs_unsorted", "rrbs", "DM", "-R", "REF", "-o", "OUT/x"),
+    case!("error_chain_rrbs_no_reference", "chain", "RRBS", "-o", "OUT/s", "+", "rrbs"),
+];
+
+/// Wave W11: the three picard.arrays tools on `tests/data/arrays`
+/// (`tests/data/make_arrays_fixtures.py`). The arrays VCF records print
+/// dates in the zone of the process, so they run with `TZ=UTC`.
+#[rustfmt::skip]
+const ARRAYS_CASES: &[Case] = &[
+    case!("picard_create_baf_regress_metrics_file", "CreateBafRegressMetricsFile", "I=BAF", "O=OUT/baf"),
+    case!("verb_create_baf_regress_file", "create-baf-regress-file", "BAF", "-o", "OUT/baf", "--format", "picard,json"),
+    case!("error_create_baf_regress_metrics_file_bad_row", "CreateBafRegressMetricsFile", "I=BAF_BAD", "O=OUT/baf"),
+    case!("picard_create_verify_id_intensity_contamination_metrics_file", "CreateVerifyIDIntensityContaminationMetricsFile", "I=VID", "O=OUT/vid"),
+    case!("verb_create_verify_id_intensity_contamination_file", "create-verify-i-d-intensity-contamination-file", "VID", "-o", "OUT/vid"),
+    case!("error_create_verify_id_intensity_contamination_metrics_file_bad_llk", "CreateVerifyIDIntensityContaminationMetricsFile", "I=VID_BAD", "O=OUT/vid"),
+    case_utc!("picard_collect_arrays_variant_calling_metrics", "CollectArraysVariantCallingMetrics", "I=AVCF", "DBSNP=ADBSNP", "O=OUT/arrays"),
+    case_utc!("verb_arrays_variant_calling", "arrays-variant-calling", "AVCF", "--dbsnp", "ADBSNP", "-o", "OUT/arrays", "--call-rate-pf-threshold", "0.5", "--num-processors", "4"),
+    case!("error_collect_arrays_variant_calling_metrics_no_index", "CollectArraysVariantCallingMetrics", "I=AVCF_PLAIN", "DBSNP=ADBSNP", "O=OUT/arrays"),
+    case!("error_collect_arrays_variant_calling_metrics_threshold", "CollectArraysVariantCallingMetrics", "I=AVCF", "DBSNP=ADBSNP", "O=OUT/arrays", "CALL_RATE_PF_THRESHOLD=0"),
+    case!("error_verb_arrays_variant_calling_no_dbsnp", "arrays-variant-calling", "AVCF", "-o", "OUT/arrays"),
+    case!("error_chain_arrays_variant_calling", "chain", "MD", "-o", "OUT/s", "+", "arrays-variant-calling"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -846,6 +921,8 @@ const T1_CASES: &[Case] = &[
     case!("t1_adapter_content", "adapter-content", "T1", "-o", "OUT/adapter_content.txt"),
     case!("t1_duplicate_by_tile", "duplicate-by-tile", "T1", "-o", "OUT/duplicate_by_tile.txt"),
     case!("t1_telomere", "telomere", "T1", "-o", "OUT/telomere.txt"),
+    case!("t1_umi_prevalence", "umi-prevalence", "T1", "-o", "OUT/umi_prevalence.txt", "--barcode-tag", "RG", "--filter-unpaired-reads", "false"),
+    case!("t1_rrbs", "rrbs", "T1", "-R", "T1_REF", "-o", "OUT/rrbs", "--minimum-read-length", "1000", "--level", "READ_GROUP"),
 ];
 
 fn root() -> PathBuf {
@@ -900,11 +977,12 @@ fn record(case: &Case) -> String {
         (root(), String::new())
     };
     let argv: Vec<String> = case.argv.iter().map(|a| resolve(a, out, &base)).collect();
-    let result = Command::new(binary())
-        .args(&argv)
-        .current_dir(cwd)
-        .output()
-        .expect("run bammetrics");
+    let mut command = Command::new(binary());
+    command.args(&argv).current_dir(cwd);
+    if case.utc {
+        command.env("TZ", "UTC");
+    }
+    let result = command.output().expect("run bammetrics");
     let mut text = String::from("## argv\n");
     for arg in &argv {
         text.push_str(arg);
@@ -1194,6 +1272,21 @@ fn documented_gather_and_checksum_commands_on_the_fixtures() {
     check(GATHER_CHECKSUM_CASES);
 }
 
+#[test]
+fn documented_snvq_and_umi_commands_on_the_fixtures() {
+    check(SNVQ_UMI_CASES);
+}
+
+#[test]
+fn documented_rrbs_commands_on_the_fixtures() {
+    check(RRBS_CASES);
+}
+
+#[test]
+fn documented_arrays_commands_on_the_fixtures() {
+    check(ARRAYS_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1304,6 +1397,9 @@ fn case_names_are_unique() {
         .chain(READ_GROUP_CASES)
         .chain(SPLIT_CASES)
         .chain(GATHER_CHECKSUM_CASES)
+        .chain(SNVQ_UMI_CASES)
+        .chain(RRBS_CASES)
+        .chain(ARRAYS_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

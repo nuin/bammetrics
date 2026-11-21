@@ -520,6 +520,47 @@ to complete pairs (the command is in `benches/memgate.toml`), removed after the 
 | `gather-bam-files slice` | scale | 5.9 / 512 | 0.45 | |
 | `calculate-read-group-checksum exome` | scale | 4.5 / 64 | 0.00 | |
 
+The W11 rows of `rrbs` (2026-11-20): the fixture at 5.2 / 64 MiB in 0.01 s, `rrbs
+slice` at 95.3 / 512 MiB in 7.79 s, `rrbs read groups slice` (`SAMPLE` and `READ_GROUP`
+added, 3.3 million detail rows) at 152.1 / 512 MiB in 10.60 s. Picard takes 31.1 s on the
+slice and writes the same two files. `rrbs exome` runs the HG002 exome, which is not
+bisulfite data, at three levels: 16.6 million CpG sites per unit, 50 million detail rows
+(2.1 GB), 433.6 / 1024 MiB in 174.74 s. Before the review of the branch the slice peaked at
+562.5 MiB and the exome at `ALL_READS` alone at 7.2 GB: every detail row was held as cells
+until the file was written, and each contig load of the reference walker kept memory the
+allocator did not return (1.7 GB after eight hs37d5 contigs, 243 MiB now). The detail rows
+are now made as the file is written (`metric::RowSource`), a unit packs the sites of each
+contig it leaves at 3 to 4 bytes a site, and the walker refills one buffer.
+`set-nm-md-and-uq-tags slice` and `set-nm-and-uq-tags slice` read the reference through
+the same walker: 81.9 and 81.4 MiB (182.7 and 178.8 MiB before).
+
+Every wave W11 row at 0.29.0 (2026-11-20, release/0.29.0, 8 threads, one run each; `make
+memgate` passes 37 fixture rows, `TIER=scale make memgate` passes 21 scale rows and skips
+3: the two chain sort-barrier rows and `revert-original-base-qualities-and-add-mate-cigar
+pairs`, whose inputs were removed after earlier runs). Scale outputs went under
+`~/data/bammetrics-scale/waves/w11`, removed after:
+
+| command | tier | peak RSS MiB / limit | wall s | spill MiB |
+|---|---|---|---:|---:|
+| `quality-yield-s-n-v-q` | fixture | 4.7 / 64 | 0.01 | |
+| `umi-prevalence` | fixture | 5.0 / 64 | 0.01 | 0.0 |
+| `umi-prevalence 400,000 records` | fixture | 14.2 / 64 | 1.26 | 6.6 |
+| `rrbs` | fixture | 5.2 / 64 | 0.00 | |
+| `create-baf-regress-file` | fixture | 3.7 / 64 | 0.00 | |
+| `create-verify-i-d-intensity-contamination-file` | fixture | 3.7 / 64 | 0.00 | |
+| `arrays-variant-calling` | fixture | 4.8 / 64 | 0.00 | |
+| `arrays-variant-calling at the sample cap` | fixture | 111.6 / 288 | 0.57 | |
+| `arrays-variant-calling far dbSNP sites` | fixture | 30.8 / 64 | 0.10 | |
+| `create-baf-regress-file at the line cap` | fixture | 45.2 / 128 | 0.67 | |
+| `rrbs slice` | scale | 94.2 / 512 | 7.72 | |
+| `rrbs read groups slice` | scale | 150.9 / 512 | 10.08 | |
+| `rrbs exome` | scale | 528.1 / 1024 | 169.04 | |
+
+The arrays rows were first measured on feat/arrays: 201.2 MiB at the sample cap and 79.7
+MiB at the line cap there, 111.6 and 45.2 MiB here. `rrbs exome` peaked at 433.6 MiB on
+feat/rrbs and 528.1 MiB here, under its 1024 MiB limit. The other scale rows are within
+4.2 MiB of their 0.28.0 values.
+
 The W09 rows of `add-comments-to-bam slice` and `replace-sam-header slice` copy the
 blocks as bytes at 0.28.0: 6.3 MiB and 0.28 s, 6.3 MiB and 0.21 s (28.5 MiB and 2.94 s,
 28.2 MiB and 3.13 s at 0.27.0).
@@ -575,9 +616,10 @@ and CI runs it on the Linux and macOS runners after the unit tests.
 | Binary growth | 300 KB | 600 KB | 290.8 KB | 297,808 bytes: stripped `size_report` less stripped `size_base`; the probe leaves out the verbs' code (see below) |
 | Binary growth, 0.19.0 | 300 KB | 600 KB | 371.5 KB | 380,400 bytes stripped (408,768 unstripped), measured 2026-11-09 by `make budgets` on the same machine: over the 300 KB target, under the 600 KB limit, so the test prints `over target` and passes; 80.7 KB more than the 0.16.0 row |
 | Binary growth, 0.25.0 | 300 KB | 600 KB | 387.6 KB | 396,944 bytes stripped, measured 2026-11-17 by `make budgets` on release/0.25.0: over the 300 KB target, under the 600 KB limit, so the test prints `over target` and passes; accepted for the release pending owner review (docs/07 decision D22) |
-| Binary growth, 0.26.0 | 300 KB | 600 KB | 403.8 KB | 413,456 bytes stripped (443,728 unstripped), measured 2026-11-17 by `make budgets` on release/0.26.0: 16,512 bytes (16.5 KB) over the 0.25.0 row in one wave, over the 300 KB target and under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review: raise the target, or find what in the core grows the probe per wave. The probe links no verb code, so the rise comes from the core (glossary rows, the registry, `bai/csi.rs`) |
+| Binary growth, 0.26.0 | 300 KB | 600 KB | 403.8 KB | 413,456 bytes stripped (443,728 unstripped), measured 2026-11-17 by `make budgets` on release/0.26.0: 16,512 bytes (16.5 KB) over the 0.25.0 row in one wave, over the 300 KB target and under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review: raise the target, or find what in the core grows the probe per wave. The probe links no verb code, so the rise comes from the core. Which part of the core (glossary rows, the registry, `bai/csi.rs`) is unconfirmed |
 | Binary growth, 0.27.0 | 300 KB | 600 KB | 403.8 KB | 413,456 bytes stripped (443,728 unstripped), measured 2026-11-18 by `make budgets` on release/0.27.0: the same bytes as the 0.26.0 row, so wave W09 adds nothing to the probe (its six tools are verb and core code the probe does not link). 106,256 bytes (103.8 KB) over the 300 KB target and 200,944 bytes under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review |
 | Binary growth, 0.28.0 | 300 KB | 600 KB | 403.8 KB | 413,456 bytes stripped (443,648 unstripped), measured 2026-11-19 by `make budgets` on release/0.28.0: the same stripped bytes as the 0.26.0 and 0.27.0 rows, so wave W10 adds nothing to the probe (its six tools are verb and core code the probe does not link). 106,256 bytes (103.8 KB) over the 300 KB target and 200,944 bytes under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review |
+| Binary growth, 0.29.0 | 300 KB | 600 KB | 419.9 KB | 429,968 bytes stripped (460,224 unstripped), measured 2026-11-20 by `make budgets` on release/0.29.0: 16,512 bytes (16.1 KB) over the 0.28.0 row. The cause is unconfirmed: probably the glossary rows of the six W11 tools, which the report links. 122,768 bytes (119.9 KB) over the 300 KB target and 184,432 bytes under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review |
 | Formats growth, W02 | 150 KB | 300 KB | 129.2 KB | 132,304 bytes stripped (148,480 unstripped), measured 2026-11-10 by `make budgets`: stripped `size_formats` less stripped `size_formats_base` (`crates/formats/examples`); see below |
 | Added passes over the BAM | 0 | 1 | 0 | `qc` reports 1 BAM read with the verdict and page; `report` and `check` run with the BAM deleted |
 
@@ -656,6 +698,8 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 0.27.0 pdf | the same with `--features pdf` | 12,750,880 | 10,833,936 |
 | 0.28.0 | 2026-11-19, release/0.28.0: feat/read-groups, feat/split-sinks and feat/gather-checksum merged, the version set, rustc 1.100.0, default features | 9,192,912 | 7,836,544 |
 | 0.28.0 pdf | the same with `--features pdf` | 13,173,264 | 11,198,248 |
+| 0.29.0 | 2026-11-20, release/0.29.0: feat/snvq-umi, feat/rrbs and feat/arrays merged, the version set, rustc 1.100.0, default features | 9,534,848 | 8,134,608 |
+| 0.29.0 pdf | the same with `--features pdf` | 13,498,464 | 11,479,808 |
 
 From 0.21.0 to 0.22.0 the binary grew 202,816 bytes (198.1 KB), 182,072 stripped (177.8
 KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
@@ -695,6 +739,13 @@ with rustc 1.100.0: `AddOrReplaceReadGroups` with its date reader,
 `GatherBamFiles` with `bgzf_copy.rs`, and `CalculateReadGroupChecksum` with `java_date.rs`.
 With `--features pdf` it grew 364,312 bytes stripped, and the PDF build is 3,361,704 bytes
 over the default build.
+
+From 0.28.0 to 0.29.0 the default binary grew 298,064 bytes stripped (3.8%), both built
+with rustc 1.100.0: `CollectQualityYieldMetricsSNVQ`, `CollectUmiPrevalenceMetrics`,
+`CollectRrbsMetrics` with the row source of the Picard writer, and the three
+`picard.arrays` tools with the text reader, the capped VCF reader and the lenient date
+parser. With `--features pdf` it grew 281,560 bytes stripped, and the PDF build is
+3,345,200 bytes over the default build.
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and

@@ -1,0 +1,11 @@
+## argv
+arrays-variant-calling
+tests/data/arrays/arrays.vcf.gz
+-o
+OUT/arrays
+## exit
+2
+## stdout
+## stderr
+bammetrics arrays-variant-calling: missing --dbsnp (Picard: DBSNP)
+  every option: bammetrics help arrays-variant-calling

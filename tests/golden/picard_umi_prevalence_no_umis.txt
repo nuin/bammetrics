@@ -1,0 +1,17 @@
+## argv
+CollectUmiPrevalenceMetrics
+I=tests/data/markdup.bam
+O=OUT/umi.txt
+BARCODE_TAG=ZZ
+## exit
+0
+## stdout
+## stderr
+## file umi.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectUmiPrevalenceMetrics INPUT=tests/data/markdup.bam OUTPUT=OUT/umi.txt BARCODE_TAG=ZZ
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+
+

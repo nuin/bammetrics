@@ -93,6 +93,12 @@ fn julian_date(fixed: i64) -> (i64, i64, i64) {
 /// calendar of `year` before its month rolls over, Gregorian from 1582 on
 /// when that date is on or after the cutover, else Julian.
 pub(crate) fn calendar_time(year: i64, month0: i64, day: i64, time_of_day: i64) -> i64 {
+    let (days, time_of_day) = calendar_days(year, month0, day, time_of_day);
+    days * DAY + time_of_day
+}
+
+/// [`calendar_time`] as days from 1970 and the milliseconds into the day.
+fn calendar_days(year: i64, month0: i64, day: i64, time_of_day: i64) -> (i64, i64) {
     let days = floor_div(time_of_day, DAY);
     let time_of_day = time_of_day.rem_euclid(DAY);
     let gregorian = days + gregorian_fixed(year, month0 + 1, day);
@@ -101,7 +107,7 @@ pub(crate) fn calendar_time(year: i64, month0: i64, day: i64, time_of_day: i64) 
     } else {
         days + julian_fixed(year, month0 + 1, day)
     };
-    (fixed - EPOCH_OFFSET) * DAY + time_of_day
+    (fixed - EPOCH_OFFSET, time_of_day)
 }
 
 /// `java.util.StringTokenizer(text, "-T:.+Z", true)`: runs of other
@@ -659,6 +665,49 @@ fn iso8601_text(
         "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}{sign}{:04}",
         minutes / 60 * 100 + minutes % 60
     )
+}
+
+/// The wall-clock time of lenient calendar fields (`month0` from 0, every
+/// field free to roll over), as milliseconds from 1970 with no zone:
+/// `GregorianCalendar.computeTime` before the zone offset. `None` more
+/// than [`MAX_WALL_MILLIS`] from 1970 (about 292,000,000 years), where
+/// Java's `long` arithmetic wraps.
+pub fn wall_millis(year: i64, month0: i64, day: i64, time_of_day: i64) -> Option<i64> {
+    let (days, time_of_day) = calendar_days(year, month0, day, time_of_day);
+    days.checked_mul(DAY)?
+        .checked_add(time_of_day)
+        .filter(|wall| wall.unsigned_abs() <= MAX_WALL_MILLIS as u64)
+}
+
+/// The furthest wall time from 1970 [`wall_millis`] gives, a day inside the range
+/// of a `long`, so a zone offset added to it cannot overflow.
+pub const MAX_WALL_MILLIS: i64 = i64::MAX - DAY;
+
+/// The instant of `wall` (from [`wall_millis`]) in the process's zone, as
+/// `GregorianCalendar.computeTime` resolves it through
+/// `ZoneInfo.getOffsetsByWall`; `None` past what the C library converts.
+pub fn local_instant(wall: i64) -> Option<i64> {
+    let before = zone_offset(wall - 14 * 3_600_000)?;
+    let after = zone_offset(wall + 14 * 3_600_000)?;
+    Some(wall_instant(
+        wall,
+        before,
+        after,
+        zone_offset(wall - after)?,
+    ))
+}
+
+/// `getOffsetsByWall` around one transition from the offset `before` to
+/// `after`: a transition takes effect at its instant plus the new offset
+/// in wall time. So a wall time the clocks skip takes the offset before,
+/// and one they repeat takes the offset after (the later instant).
+/// `at_late` is the zone's offset at `wall - after`.
+pub fn wall_instant(wall: i64, before: i64, after: i64, at_late: i64) -> i64 {
+    if at_late == after {
+        wall - after
+    } else {
+        wall - before
+    }
 }
 
 #[cfg(test)]

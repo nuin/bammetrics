@@ -547,6 +547,51 @@ pub const VERBS: &[Verb] = &[
             Files::Bam,
         )
     },
+    verb(
+        "quality-yield-s-n-v-q",
+        "CollectQualityYieldMetricsSNVQ",
+        Files::Single,
+    ),
+    verb(
+        "umi-prevalence",
+        "CollectUmiPrevalenceMetrics",
+        Files::Single,
+    ),
+    Verb {
+        reads: &["REFERENCE"],
+        ..verb("rrbs", "CollectRrbsMetrics", Files::Prefix)
+    },
+    Verb {
+        input: "TEXT",
+        ignores: &[(Key::Threads, "no BAM is read")],
+        ..verb(
+            "create-baf-regress-file",
+            "CreateBafRegressMetricsFile",
+            Files::Prefix,
+        )
+    },
+    Verb {
+        input: "TEXT",
+        ignores: &[(Key::Threads, "no BAM is read")],
+        ..verb(
+            "create-verify-i-d-intensity-contamination-file",
+            "CreateVerifyIDIntensityContaminationMetricsFile",
+            Files::Prefix,
+        )
+    },
+    Verb {
+        input: "VCF",
+        reads: &["DBSNP", "SEQUENCE_DICTIONARY"],
+        ignores: &[(
+            Key::Threads,
+            "no BAM is read; NUM_PROCESSORS changes nothing",
+        )],
+        ..verb(
+            "arrays-variant-calling",
+            "CollectArraysVariantCallingMetrics",
+            Files::Prefix,
+        )
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the

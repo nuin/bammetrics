@@ -31,7 +31,7 @@ emits.
 |---|---|---|
 | source | One BAM, CRAM or SAM text file, or a pipe holding one | the positional argument, `-` for standard input |
 | transform | A tool that changes the records later steps see. A barrier needs every record before one goes on; a streaming transform edits each batch as it passes (section 16) | `mark-duplicates`, `sort-sam`, `revert-original-base-qualities-and-add-mate-cigar` (barriers); `add-comments-to-bam`, `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`, `set-nm-and-uq-tags` (streaming); `add-or-replace-read-groups` (streaming, a barrier with a `--sort-order` that differs from the stream's; section 17) |
-| tap | A one-pass tool on the records of its position. It changes nothing | 18 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check`, `mt-copy-number`, `exon-coverage`, `adapter-content`, `duplicate-by-tile`, `telomere` |
+| tap | A one-pass tool on the records of its position. It changes nothing | 20 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check`, `mt-copy-number`, `exon-coverage`, `adapter-content`, `duplicate-by-tile`, `telomere`, `quality-yield-s-n-v-q`, `rrbs` |
 | write | A tap that writes the records of its position as a BAM, or as SAM text | `write [PATH]` |
 | split | A sink that writes the records of its position over BAMs in a directory (section 18) | `split-sam-by-library`, `split-sam-by-number-of-reads` |
 
@@ -190,6 +190,12 @@ Rules:
 - A tool whose `OUTPUT` is a prefix (`sequencing-artifact`) names its files when it
   finishes. If one of them is the file of another step, or a file the chain reads, that
   tool fails alone, writes none of its files, and the other file stays.
+- `rrbs` is the second tap whose `OUTPUT` is a prefix. It names both files
+  (`PREFIX.rrbs_summary_metrics`, `PREFIX.rrbs_detail_metrics`) before the first read,
+  so they get the checks of every other output.
+- `create-baf-regress-file`, `create-verify-i-d-intensity-contamination-file` and
+  `arrays-variant-calling` read a text file or a VCF and no BAM. A chain refuses them as
+  steps with exit 2.
 - An output that is a file the chain reads (the source, the reference and its `.fai`, an
   interval list of a step, the plan file of `--plan`) is a usage error. Nothing is read
   and nothing is written. The same file through a symbolic link, a hard link or `..`
@@ -283,7 +289,7 @@ its records is not, and a run that reads it exits 1 with `truncated BAM`.
 | A plan file over 1 MiB (1,048,576 bytes) | `not a plan file: it is larger than 1 MiB` | 2 |
 | An output that is a symbolic link, pipe, socket or device another user owns | `owned by another user; not written in place`, the words and the exit code of the tool verb | 1 |
 
-Values. `bammetrics_core::tap_options::check` holds one row per one-pass tool (18). Each
+Values. `bammetrics_core::tap_options::check` holds one row per one-pass tool (20). Each
 row calls the option parser that the tool's own collector calls, with no header and no
 file opened. A unit test fails when a one-pass tool has no row. In 0.22.0 the tap failed
 alone when it was built, after the transform in front of it had read the whole source,
@@ -632,7 +638,7 @@ run.metrics["insert-size"]          # out/NA12878.insert_size_metrics, parsed
 | `step_table(name)` | A `StepTable` for a verb named in snake or kebab case, by its Picard class or by its function name: `verb`, `role`, `keywords`. An unknown name is a usage error with the closest step |
 | `StepTable::keyword(name)` | One keyword, or the usage error with the closest name. `input`, and `output` of `mark_duplicates`, are refused with the reason |
 | `Keyword` | `name`, `long` (the flag it spells), `ty`, `many` (`One`, `Repeated`: one occurrence per item, `Joined`: one comma list) |
-| `step_names()` | The 27 names `step` takes, snake case, in `bammetrics tools` order, `write` last |
+| `step_names()` | The 33 names `step` takes, snake case, in `bammetrics tools` order, `write` last |
 | `metric_key(chain, step, path)` | The key of a metrics file in `Run.metrics`: the verb, `STREAM.` in front for a tap that does not read the last stream, `.FILE` after it for a further file |
 | `stubs()` | The `bammetrics.pyi` entries: `_StepVerb`, `step`, three `chain` overloads |
 

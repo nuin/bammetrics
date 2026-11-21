@@ -1,0 +1,36 @@
+## argv
+rrbs
+tests/corpus/out/t1.bam
+-R
+tests/corpus/out/reference.fa
+-o
+OUT/rrbs
+--minimum-read-length
+1000
+--level
+READ_GROUP
+## exit
+0
+## stdout
+## stderr
+## file rrbs.rrbs_detail_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectRrbsMetrics INPUT=tests/corpus/out/t1.bam REFERENCE=tests/corpus/out/reference.fa MINIMUM_READ_LENGTH=1000 METRIC_ACCUMULATION_LEVEL=READ_GROUP METRICS_FILE_PREFIX=OUT/rrbs
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+
+
+## file rrbs.rrbs_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectRrbsMetrics INPUT=tests/corpus/out/t1.bam REFERENCE=tests/corpus/out/reference.fa MINIMUM_READ_LENGTH=1000 METRIC_ACCUMULATION_LEVEL=READ_GROUP METRICS_FILE_PREFIX=OUT/rrbs
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.RrbsSummaryMetrics
+READS_ALIGNED	NON_CPG_BASES	NON_CPG_CONVERTED_BASES	PCT_NON_CPG_BASES_CONVERTED	CPG_BASES_SEEN	CPG_BASES_CONVERTED	PCT_CPG_BASES_CONVERTED	MEAN_CPG_COVERAGE	MEDIAN_CPG_COVERAGE	READS_WITH_NO_CPG	READS_IGNORED_SHORT	READS_IGNORED_MISMATCHES	SAMPLE	LIBRARY	READ_GROUP
+40000	0	0	0	0	0	0	?	0	0	40000	0			
+0	0	0	0	0	0	0	?	0	0	0	0	SYN1	libA	
+40000	0	0	0	0	0	0	?	0	0	40000	0	unknown	unknown	unknown
+
+

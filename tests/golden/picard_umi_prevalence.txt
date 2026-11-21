@@ -1,0 +1,21 @@
+## argv
+CollectUmiPrevalenceMetrics
+I=tests/data/umi_prevalence.bam
+O=OUT/umi.txt
+## exit
+0
+## stdout
+## stderr
+## file umi.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectUmiPrevalenceMetrics INPUT=tests/data/umi_prevalence.bam OUTPUT=OUT/umi.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+
+## HISTOGRAM	java.lang.Integer
+numUmis	duplicateSets
+1	2
+2	2
+3	2
+

@@ -1,5 +1,109 @@
 # Changelog
 
+## 0.29.0
+
+Wave W11 of docs/07: six metrics tools (60 in all), two of them chain taps, and the first inputs that are text another program prints.
+
+### Added
+
+- `CollectQualityYieldMetricsSNVQ` (verb `quality-yield-s-n-v-q`, Python
+  `collect_quality_yield_metrics_s_n_v_q()`), as Picard 3.5.0: read, base and Q20, Q30
+  and Q40 totals, and the same for the SNV qualities of the `qa`, `qc`, `qg` and `qt` tags
+  (three observations per called base, four per `N` or IUPAC code), `PF` forms and
+  fractions; `ALTERNATE_QUALITY_ATTRIBUTE`, `INCLUDE_SECONDARY_ALIGNMENTS`,
+  `INCLUDE_SUPPLEMENTAL_ALIGNMENTS`, `STOP_AFTER`; `INCLUDE_BQ_HISTOGRAM` adds `BQ_COUNT`,
+  `SNVQ_COUNT` and the means by read index on one `KEY` column. A record without an SNVQ
+  tag exits 1 naming it. A chain tap (`PREFIX.quality_yield_snvq_metrics`).
+- `bam_raw::HtsjdkTags`: the tag list htsjdk's `BinaryTagCodec.readTags` builds, a
+  repeated tag with its last value and the tags its lost append point drops. Both new tools
+  read their tags through it, so a repeated `qa` or `RX` counts as in Picard.
+- `CollectUmiPrevalenceMetrics` (verb `umi-prevalence`, Python
+  `collect_umi_prevalence_metrics()`), as Picard 3.5.0: the histogram of duplicate sets by
+  their number of distinct `BARCODE_TAG` UMIs, over mapped primary records at
+  `MINIMUM_MQ`, with Picard's inverted `BARCODE_BQ` filter and `FILTER_UNPAIRED_READS`.
+  The records are sorted in htsjdk's duplicate order (`MAX_RECORDS_IN_RAM`, `TMP_DIR`), so
+  the input needs no index and no sort order. `DuplicateKey::set_order` is htsjdk's
+  `duplicateSetCompare`. A sorted run also spills at 256 MiB of keys and UMIs.
+- `tests/concordance/snvq_umi_bams.py`, `test_quality_yield_s_n_v_q.py` and
+  `test_umi_prevalence.py`: every option, CRAM and SAM text, error parity and the
+  distinct-value gate against Picard. `tests/data/snvq.bam` and `umi_prevalence.bam`
+  (`tests/data/make_snvq_umi_fixtures.py`) back the golden cases.
+- `CollectRrbsMetrics` (verb `rrbs`, Python `collect_rrbs_metrics()`; wave W11 of docs/07):
+  `PREFIX.rrbs_summary_metrics` (`RrbsSummaryMetrics`, one row per accumulation unit) and
+  `PREFIX.rrbs_detail_metrics` (`RrbsCpgDetailMetrics`, one row per CpG site and unit),
+  equal to Picard 3.5.0 on every option and level, CRAM and SAM text. A chain tap: the
+  chain's `-R` is its `REFERENCE`. `tests/data/rrbs.bam` (`make_rrbs_bam.py`) is the
+  fixture, `tests/concordance/rrbs_bams.py` the bisulfite corpus.
+- A tool option named `REFERENCE` puts the FASTA's `.fai` among the run's inputs, as
+  `REFERENCE_SEQUENCE` does.
+- `CreateBafRegressMetricsFile` (verb `create-baf-regress-file`, Python
+  `create_baf_regress_metrics_file()`), as Picard 3.5.0: the text bafRegress prints, its
+  header line checked whole, each line split at runs of Java's `\s` into 7 fields, numbers
+  read by `Double.parseDouble` and `Integer.parseInt`, `LOG10_PVAL` from `PVAL`; one
+  `BafRegressMetrics` row per sample in `OUTPUT.bafregress_metrics`.
+- `CreateVerifyIDIntensityContaminationMetricsFile` (verb
+  `create-verify-i-d-intensity-contamination-file`, Python
+  `create_verify_i_d_intensity_contamination_metrics_file()`), as Picard 3.5.0: the header,
+  the rule and each result line matched against Picard's three patterns; one
+  `VerifyIDIntensityContaminationMetrics` row per result in
+  `OUTPUT.verifyidintensity_metrics`.
+- `CollectArraysVariantCallingMetrics` (verb `arrays-variant-calling`, Python
+  `collect_arrays_variant_calling_metrics()`), as Picard 3.5.0: an arrays VCF as GtcToVcf
+  writes it, with its `.tbi` or `.idx`; `DBSNP`, `CALL_RATE_PF_THRESHOLD`,
+  `SEQUENCE_DICTIONARY`, `NUM_PROCESSORS` (taken, no effect). The per-sample detail file in
+  Java `HashMap` order, the summary and the 23 control codes from the header; the header
+  dates read by a lenient `SimpleDateFormat` port, `##imagingDate` in New York time, both
+  printed in the process's time zone (`arrays/header_date.rs`).
+- `VcfReader::open_capped`: a VCF read under a line-length and line-count cap
+  (`vcf/line_cap.rs`). `java_date::wall_millis` and `local_instant`: lenient calendar
+  fields to an instant in the process's zone, a repeated hour resolved to the later
+  instant as `ZoneInfo.getOffsetsByWall` does.
+- The review of the arrays tools: the detail rows follow a `HashMap` filled in reverse
+  header order, so names that share a bin (`S1` and `.`, 12 or 45 names) come out as
+  Picard writes them; a VCF whose names make a tree bin exits 1. A record counts when it
+  overlaps 1 to its `##contig` length. A tab or line end in a header value exits 1 with no
+  file, as in Picard. A dbSNP file without `##contig` lines is read. At most 50,000
+  samples and 8 MiB per line; the header fields are held once for every sample.
+- The dbSNP bit set keeps pages of 4,096 positions where a site sets a bit, at most 1 GiB
+  in one run (`vcf/bit_set.rs`): 200 sites at position 2,147,483,000 take 5 MiB, not
+  1.3 GiB. Every dbSNP and VCF dictionary is read under 16 MiB per line.
+- `VcfReader` opens its file once, so a named pipe is read. `output_path` drops trailing
+  separators as `java.io.File` does: `O=dir/` writes `dir.<extension>`. An `OUTPUT` that is
+  a hard link to an input is refused by device and inode (`registry::check_writable`).
+- The text inputs decode an encoded surrogate (`ED A0 80`) as one U+FFFD, as Java does, and
+  hold at most 100,000 lines. A header date more than 292,000,000 years from 1970 exits 1
+  where the arithmetic overflowed. `chain` names the tools that read a text or VCF file
+  and no BAM. `tests/data/make_arrays_stress.py` and three memgate rows at the caps.
+- `tests/concordance/array_vcfs.py`, a seeded writer of arrays VCFs and their dbSNP, and the
+  concordance modules of the three tools; `tests/data/arrays` (`make_arrays_fixtures.py`);
+  12 golden forms, the arrays VCF ones under `TZ=UTC`.
+
+### Changed
+
+- A metrics file formats each row as it writes it (`MetricsFile::write_rows`): the rows are
+  no longer held a second time as text. The bytes written are unchanged.
+- `MetricsOutput::source` (`metric::RowSource`): rows made as the Picard writer writes
+  them. `CollectRrbsMetrics` writes its detail file this way from sites packed at 3 to 4
+  bytes: the HG002 exome at three levels peaks at 434 MiB (7.2 GB at `ALL_READS` before).
+  The JSON and delimited formats and Python fill the rows first
+  (`MetricsOutput::materialized`).
+- The reference walker (`Reference::contig`) refills one buffer reserved at the `.fai`
+  length, at most the FASTA's size, and `Reference::load` copies nothing: eight hs37d5
+  contigs peak at 243 MiB (1.7 GB before), `set-nm-md-and-uq-tags` on the slice at 82 MiB
+  (183 MiB before). The bases are noodles' query of the whole contig.
+
+### Fixed
+
+- `chain` plans the two files of `rrbs` before the first read: two `rrbs` steps on one
+  prefix, a `write` onto one of their files, or a source named like one exit 2. A file a
+  step names when it finishes is also checked by its path once an earlier step wrote it,
+  so two `sequencing-artifact` steps on one prefix fail in place of replacing the files.
+- `CollectRrbsMetrics` checks that both files can be written before it reads, as Picard
+  does.
+- The concordance modules of `AddCommentsToBam`, `ReplaceSamHeader` and `GatherBamFiles`
+  compare a block copy's `.bai` with Picard's by block number and offset in the block
+  (docs/07 D93): the header block deflated by zlib-rs can be a byte shorter than the JDK's.
+
 ## 0.28.0
 
 Wave W10 of docs/07: six tools (54 in all), a writer that sorts, fan-out sinks and a BGZF block copy.

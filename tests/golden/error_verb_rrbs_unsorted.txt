@@ -1,0 +1,12 @@
+## argv
+rrbs
+tests/data/duplicate_marking.bam
+-R
+tests/data/ref_100k.fa
+-o
+OUT/x
+## exit
+2
+## stdout
+## stderr
+bammetrics rrbs: tests/data/duplicate_marking.bam should be coordinate sorted but the header says the sort order is queryname; pass ASSUME_SORTED=true to read it anyway

@@ -372,6 +372,12 @@ pub const TOOLS: &[&Tool] = &[
     &crate::split_sam_by_number_of_reads::TOOL,
     &crate::gather_bam_files::TOOL,
     &crate::calculate_read_group_checksum::TOOL,
+    &crate::quality_yield_snvq::TOOL,
+    &crate::umi_prevalence::TOOL,
+    &crate::rrbs_metrics::TOOL,
+    &crate::arrays::baf_regress::TOOL,
+    &crate::arrays::verify_id_intensity::TOOL,
+    &crate::arrays::variant_calling::TOOL,
 ];
 
 /// The tool named `name`.
@@ -686,7 +692,7 @@ impl Tool {
                         input = Some(PathBuf::from(&value));
                     }
                     if opt.ty == Ty::Path && !opt.written && value != "null" {
-                        if opt.names[0] == "REFERENCE_SEQUENCE" {
+                        if matches!(opt.names[0], "REFERENCE_SEQUENCE" | "REFERENCE") {
                             inv.inputs
                                 .extend(crate::reference::files_read(Path::new(&value)));
                         } else {
@@ -785,13 +791,27 @@ pub fn write_files(inv: &Invocation, output: &ToolOutput) -> Result<()> {
     Ok(())
 }
 
+/// The device and inode of the file `path` names, links followed.
+fn file_id(path: &Path) -> Option<(u64, u64)> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::metadata(path).ok().map(|m| (m.dev(), m.ino()))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        None
+    }
+}
+
 /// Fail before any file is written when one of `targets` cannot be
 /// written, as Picard's `assertFileIsWritable` does for every output first:
 /// a directory, a file without write permission, a missing parent
-/// directory. A target that is one of `inputs` fails too, so a run never
-/// replaces a file it reads. A symbolic link or a non-regular file another
-/// user owns fails with the error its write would give
-/// ([`crate::cleanup::refusal`]).
+/// directory. A target that is one of `inputs`, by name or by device and
+/// inode, fails too, so a run never replaces a file it reads. A symbolic
+/// link or a non-regular file another user owns fails with the error its
+/// write would give ([`crate::cleanup::refusal`]).
 pub fn check_writable<'a>(
     targets: impl IntoIterator<Item = &'a Path>,
     inputs: &[PathBuf],
@@ -800,19 +820,25 @@ pub fn check_writable<'a>(
         .iter()
         .filter_map(|p| p.canonicalize().ok())
         .collect();
+    // A hard link to an input has another name and the same inode.
+    let input_ids: Vec<(u64, u64)> = inputs.iter().filter_map(|p| file_id(p)).collect();
+    let is_input = |target: &Path| {
+        target.canonicalize().is_ok_and(|t| inputs.contains(&t))
+            || file_id(target).is_some_and(|id| input_ids.contains(&id))
+    };
     for target in targets {
         let output_error = |source| Error::Output {
             path: target.to_path_buf(),
             source,
         };
         if let Some(refused) = crate::cleanup::refusal(target)
-            && !target.canonicalize().is_ok_and(|t| inputs.contains(&t))
+            && !is_input(target)
         {
             return Err(output_error(refused));
         }
         match std::fs::metadata(target) {
             Ok(meta) if meta.is_dir() || meta.is_file() => {
-                if target.canonicalize().is_ok_and(|t| inputs.contains(&t)) {
+                if is_input(target) {
                     return Err(Error::Usage(format!(
                         "{} is an input; writing it would destroy it",
                         target.display()

@@ -338,10 +338,54 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
         "CollectIndexDepthMetrics",
         vec![format!("I={DATA}/index_depth.bam"), out("index_depth")],
     );
+    // The SNVQ fixture carries qa, qc, qg and qt; the histogram adds its labels.
+    args.insert(
+        "CollectQualityYieldMetricsSNVQ",
+        vec![
+            format!("I={DATA}/snvq.bam"),
+            out("snvq"),
+            "INCLUDE_BQ_HISTOGRAM=true".to_owned(),
+        ],
+    );
+    // The UMI fixture carries RX, BQ and MC on its pairs.
+    args.insert(
+        "CollectUmiPrevalenceMetrics",
+        vec![
+            format!("I={DATA}/umi_prevalence.bam"),
+            out("umi_prevalence"),
+        ],
+    );
+    // The bisulfite fixture fills both files at the read group level.
+    args.insert(
+        "CollectRrbsMetrics",
+        vec![
+            format!("I={DATA}/rrbs.bam"),
+            reference.clone(),
+            format!("M={}", dir.join("rrbs").display()),
+            "LEVEL=READ_GROUP".to_owned(),
+        ],
+    );
     // The fixture BAM has no @RG line, which CollectOxoGMetrics refuses.
     args.insert(
         "CollectOxoGMetrics",
         vec![format!("I={DATA}/oxog.bam"), reference.clone(), out("oxog")],
+    );
+    // Wave W11: the picard.arrays fixtures of tests/data/make_arrays_fixtures.py.
+    args.insert(
+        "CreateBafRegressMetricsFile",
+        vec![format!("I={DATA}/arrays/bafregress.txt"), out("baf")],
+    );
+    args.insert(
+        "CreateVerifyIDIntensityContaminationMetricsFile",
+        vec![format!("I={DATA}/arrays/verifyidintensity.txt"), out("vid")],
+    );
+    args.insert(
+        "CollectArraysVariantCallingMetrics",
+        vec![
+            format!("I={DATA}/arrays/arrays.vcf.gz"),
+            format!("DBSNP={DATA}/arrays/dbsnp.vcf"),
+            out("arrays"),
+        ],
     );
     args
 }

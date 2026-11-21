@@ -19,7 +19,9 @@
 //!
 //! [`DbSnpSets`] holds `DbSnpBitSetUtil.createSnpAndIndelBitSets`: one bit
 //! per reference position, set for every position a SNP (or an indel)
-//! record spans. [`Regions`] is the interval list support the VCF tools need
+//! record spans, in pages made only where a bit is set, at most
+//! [`MAX_DBSNP_PAGES`]. A dbSNP or dictionary VCF is read under
+//! [`MAX_LINE_BYTES`] per line and [`MAX_DBSNP_LINES`] lines. [`Regions`] is the interval list support the VCF tools need
 //! (`IntervalList.fromPath`, `uniqued`, `intersection`, `union`, base count
 //! and overlap queries by contig name).
 
@@ -29,7 +31,14 @@ use std::io::{self, BufRead, Read};
 use std::path::{Path, PathBuf};
 
 use noodles::vcf;
-use noodles::vcf::io::CompressionMethod;
+
+mod bit_set;
+mod line_cap;
+
+pub use bit_set::MAX_DBSNP_PAGES;
+use bit_set::PAGE_BITS;
+use bit_set::{BitSet, OverBudget};
+use line_cap::LineCap;
 
 use crate::bed_to_interval_list;
 use crate::error::{Error, Result};
@@ -101,7 +110,7 @@ pub fn read_dictionary(path: &Path) -> Result<Dictionary> {
         .iter()
         .any(|e| name.ends_with(e))
     {
-        let reader = VcfReader::open(path)?;
+        let reader = VcfReader::open_capped(path, MAX_LINE_BYTES, MAX_DBSNP_LINES)?;
         return reader.dictionary().ok_or_else(|| Error::Intervals {
             path: path.to_path_buf(),
             message: "no ##contig line: cannot extract a sequence dictionary".to_owned(),
@@ -422,23 +431,38 @@ pub struct VcfReader {
 
 impl VcfReader {
     pub fn open(path: &Path) -> Result<Self> {
+        Self::open_capped(path, usize::MAX, u64::MAX)
+    }
+
+    /// [`VcfReader::open`] where a line (header or record) over
+    /// `max_line_bytes`, or more than `max_lines` lines, is a read error.
+    pub fn open_capped(path: &Path, max_line_bytes: usize, max_lines: u64) -> Result<Self> {
         let input = |source| Error::Input {
             path: path.to_path_buf(),
             source,
         };
+        // One open: the magic bytes are read and handed back in front of
+        // the rest, so a named pipe is read once.
+        let mut file = File::open(path).map_err(input)?;
         let mut magic = [0u8; 2];
-        let read = File::open(path)
-            .and_then(|mut f| f.read(&mut magic))
-            .map_err(input)?;
-        let method = if read == 2 && magic == [0x1f, 0x8b] {
-            CompressionMethod::Bgzf
+        let mut read = 0;
+        while read < magic.len() {
+            match file.read(&mut magic[read..]) {
+                Ok(0) => break,
+                Ok(n) => read += n,
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+                Err(error) => return Err(input(error)),
+            }
+        }
+        let gzip = read == 2 && magic == [0x1f, 0x8b];
+        let file = io::Cursor::new(magic[..read].to_vec()).chain(file);
+        let text: Box<dyn BufRead> = if gzip {
+            Box::new(noodles::bgzf::io::Reader::new(file))
         } else {
-            CompressionMethod::None
+            Box::new(io::BufReader::new(file))
         };
-        let mut reader = vcf::io::reader::Builder::default()
-            .set_compression_method(method)
-            .build_from_path(path)
-            .map_err(input)?;
+        let capped: Box<dyn BufRead> = Box::new(LineCap::new(text, max_line_bytes, max_lines));
+        let mut reader = vcf::io::Reader::new(capped);
         let header = reader.read_header().map_err(input)?;
         Ok(Self {
             path: path.to_path_buf(),
@@ -495,6 +519,18 @@ impl VcfReader {
                 path: self.path.clone(),
                 message: format!("record {}: {message}", self.line),
             })
+    }
+
+    /// The header as noodles read it.
+    pub fn header(&self) -> &vcf::Header {
+        &self.header
+    }
+
+    /// The raw record [`VcfReader::next_variant`] read last, for the
+    /// fields a [`Variant`] does not keep (each `FILTER` name, a `FORMAT`
+    /// value such as `GTA`).
+    pub fn record(&self) -> &vcf::Record {
+        &self.record
     }
 
     /// Every remaining record.
@@ -647,28 +683,20 @@ fn parse_genotype(
     Ok(genotype)
 }
 
-/// A growable bit set indexed by 1-based position (`java.util.BitSet`).
-#[derive(Clone, Debug, Default)]
-struct BitSet(Vec<u64>);
+/// The longest line of a dbSNP or dictionary VCF, in bytes.
+pub const MAX_LINE_BYTES: usize = 16 << 20;
+/// The most lines of a dbSNP or dictionary VCF (dbSNP 156 has about 1.2
+/// billion records).
+pub const MAX_DBSNP_LINES: u64 = 4_000_000_000;
 
-impl BitSet {
-    fn set(&mut self, position: i64) {
-        if position < 0 {
-            return;
-        }
-        let (word, bit) = ((position / 64) as usize, position % 64);
-        if word >= self.0.len() {
-            self.0.resize(word + 1, 0);
-        }
-        self.0[word] |= 1 << bit;
-    }
-
-    fn get(&self, position: i64) -> bool {
-        if position < 0 {
-            return false;
-        }
-        let (word, bit) = ((position / 64) as usize, position % 64);
-        self.0.get(word).is_some_and(|w| w & (1 << bit) != 0)
+/// The error for bit sets over [`MAX_DBSNP_PAGES`].
+fn over_budget(path: &Path) -> Error {
+    Error::Intervals {
+        path: path.to_path_buf(),
+        message: format!(
+            "the sites set over {MAX_DBSNP_PAGES} pages of {PAGE_BITS} positions (1 GiB of bit \
+             set), the most a dbSNP file may set"
+        ),
     }
 }
 
@@ -707,12 +735,32 @@ impl DbSnpSets {
         dictionary: Option<&Dictionary>,
         regions: Option<&Regions>,
     ) -> Result<Self> {
+        Self::load_with(path, dictionary, regions, true)
+    }
+
+    /// [`DbSnpSets::load`] where a dbSNP file without `##contig` lines is
+    /// read without the dictionary check (`CollectArraysVariantCallingMetrics`
+    /// completes on one).
+    pub fn load_lenient(path: &Path, dictionary: &Dictionary) -> Result<Self> {
+        Self::load_with(path, Some(dictionary), None, false)
+    }
+
+    fn load_with(
+        path: &Path,
+        dictionary: Option<&Dictionary>,
+        regions: Option<&Regions>,
+        needs_dictionary: bool,
+    ) -> Result<Self> {
         let mut sets = Self::default();
-        load_db_snp(path, dictionary, regions, true, |variant| {
+        let mut budget = MAX_DBSNP_PAGES;
+        load_db_snp(path, dictionary, regions, needs_dictionary, |variant| {
             let kind = variant.kind();
-            sets.snps.add(variant, kind == VariantType::Snp);
-            sets.indels.add(variant, kind == VariantType::Indel);
-        })?;
+            sets.snps
+                .add(variant, kind == VariantType::Snp, &mut budget)?;
+            sets.indels
+                .add(variant, kind == VariantType::Indel, &mut budget)
+        })
+        .map_err(|e| e.into_error(path))?;
         Ok(sets)
     }
 }
@@ -727,21 +775,52 @@ impl DbSnpBitSet {
         regions: Option<&Regions>,
     ) -> Result<Self> {
         let mut set = Self::default();
+        let mut budget = MAX_DBSNP_PAGES;
         load_db_snp(path, dictionary, regions, false, |variant| {
-            set.add(variant, true);
-        })?;
+            set.add(variant, true, &mut budget)
+        })
+        .map_err(|e| e.into_error(path))?;
         Ok(set)
     }
 
     /// The record's contig gets a set (empty when not `wanted`), and a
     /// wanted record sets every position from its start to its end.
-    fn add(&mut self, variant: &Variant, wanted: bool) {
-        let bits = self.by_contig.entry(variant.contig.clone()).or_default();
+    fn add(
+        &mut self,
+        variant: &Variant,
+        wanted: bool,
+        budget: &mut usize,
+    ) -> std::result::Result<(), LoadError> {
+        let bits = match self.by_contig.get_mut(&variant.contig) {
+            Some(bits) => bits,
+            None => self.by_contig.entry(variant.contig.clone()).or_default(),
+        };
         if wanted {
-            for position in variant.start..=variant.end {
-                bits.set(position);
-            }
+            bits.set_range(variant.start, variant.end, budget)
+                .map_err(|OverBudget| LoadError::Budget)?;
         }
+        Ok(())
+    }
+}
+
+/// Why a dbSNP load stopped.
+enum LoadError {
+    Read(Error),
+    Budget,
+}
+
+impl LoadError {
+    fn into_error(self, path: &Path) -> Error {
+        match self {
+            Self::Read(error) => error,
+            Self::Budget => over_budget(path),
+        }
+    }
+}
+
+impl From<Error> for LoadError {
+    fn from(error: Error) -> Self {
+        Self::Read(error)
     }
 }
 
@@ -755,9 +834,9 @@ fn load_db_snp(
     dictionary: Option<&Dictionary>,
     regions: Option<&Regions>,
     needs_dictionary: bool,
-    mut each: impl FnMut(&Variant),
-) -> Result<()> {
-    let mut reader = VcfReader::open(path)?;
+    mut each: impl FnMut(&Variant) -> std::result::Result<(), LoadError>,
+) -> std::result::Result<(), LoadError> {
+    let mut reader = VcfReader::open_capped(path, MAX_LINE_BYTES, MAX_DBSNP_LINES)?;
     let own = reader.dictionary();
     if needs_dictionary || own.is_some() {
         assert_dictionaries_equal(
@@ -776,15 +855,15 @@ fn load_db_snp(
         if let Some(dictionary) = dictionary
             && !dictionary.iter().any(|c| c.name == variant.contig)
         {
-            return Err(Error::Intervals {
+            return Err(LoadError::Read(Error::Intervals {
                 path: path.to_path_buf(),
                 message: format!(
                     "contig {} is not in the sequence dictionary (Picard fails with a NullPointerException)",
                     variant.contig
                 ),
-            });
+            }));
         }
-        each(&variant);
+        each(&variant)?;
     }
     Ok(())
 }
@@ -1153,7 +1232,7 @@ mod tests {
     #[test]
     fn bit_sets_grow() {
         let mut bits = BitSet::default();
-        bits.set(130);
+        bits.set_range(130, 130, &mut 1).unwrap();
         assert!(bits.get(130) && !bits.get(129) && !bits.get(1000));
     }
 }

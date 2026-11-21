@@ -553,3 +553,146 @@ argv = [
 needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
 max_rss_mib = 64
 max_seconds = 10
+
+[[command]]
+name = "quality-yield-s-n-v-q"
+argv = [
+    "{bin}", "quality-yield-s-n-v-q", "tests/data/snvq.bam", "-o", "{out}/snvq.txt",
+    "--include-bq-histogram",
+]
+needs = ["tests/data/snvq.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+# A sorted run of 3 records spills the duplicate sort to TMP_DIR.
+[[command]]
+name = "umi-prevalence"
+argv = [
+    "{bin}", "umi-prevalence", "tests/data/umi_prevalence.bam", "-o", "{out}/umi.txt",
+    "--filter-unpaired-reads", "false", "--max-records-in-ram", "3", "--tmp-dir", "{out}/tmp",
+]
+needs = ["tests/data/umi_prevalence.bam"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+max_spill_mib = 1
+
+# 400,000 records of SAM text with MC and RX (no real data carries both): the duplicate
+# sort holds 20,000 keys at a time and spills the rest, so the peak stays flat.
+[[command]]
+name = "umi-prevalence 400,000 records"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_umi_stress.py {out}/stress.sam && {bin} umi-prevalence {out}/stress.sam -o {out}/umi.txt --max-records-in-ram 20000 --tmp-dir {out}/tmp",
+]
+needs = ["tests/data/make_umi_stress.py"]
+max_rss_mib = 64
+max_seconds = 60
+spill_dir = "{out}/tmp"
+
+[[command]]
+name = "rrbs"
+argv = [
+    "{bin}", "rrbs", "tests/data/rrbs.bam", "-R", "tests/data/ref_100k.fa", "-o", "{out}/rrbs",
+    "--level", "READ_GROUP",
+]
+needs = ["tests/data/rrbs.bam", "tests/data/ref_100k.fa"]
+max_rss_mib = 64
+max_seconds = 30
+
+# One contig of the reference in one buffer, the sites of the contig each unit reads in
+# a hash map, and every other CpG site packed at 3 to 4 bytes; the detail rows are made
+# as the file is written. The slice holds about 1.1 million sites per unit, the exome
+# 16.6 million.
+[[command]]
+name = "rrbs slice"
+tier = "scale"
+argv = [
+    "{bin}", "rrbs", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "-R",
+    "~/data/bammetrics-scale/exome/hs37d5.fa", "-o", "{out}/rrbs",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "~/data/bammetrics-scale/exome/hs37d5.fa"]
+max_rss_mib = 512
+
+[[command]]
+name = "rrbs read groups slice"
+tier = "scale"
+argv = [
+    "{bin}", "rrbs", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "-R",
+    "~/data/bammetrics-scale/exome/hs37d5.fa", "-o", "{out}/rrbs", "--level", "SAMPLE",
+    "--level", "READ_GROUP",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "~/data/bammetrics-scale/exome/hs37d5.fa"]
+max_rss_mib = 512
+
+[[command]]
+name = "rrbs exome"
+tier = "scale"
+argv = [
+    "{bin}", "rrbs", "~/data/bammetrics-scale/exome/HG002.exome.bam", "-R",
+    "~/data/bammetrics-scale/exome/hs37d5.fa", "-o", "{out}/rrbs", "--level", "SAMPLE",
+    "--level", "READ_GROUP",
+]
+needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam", "~/data/bammetrics-scale/exome/hs37d5.fa"]
+max_rss_mib = 1024
+
+[[command]]
+name = "create-baf-regress-file"
+argv = ["{bin}", "create-baf-regress-file", "tests/data/arrays/bafregress.txt", "-o", "{out}/baf"]
+needs = ["tests/data/arrays/bafregress.txt"]
+max_rss_mib = 64
+max_seconds = 10
+
+[[command]]
+name = "create-verify-i-d-intensity-contamination-file"
+argv = [
+    "{bin}", "create-verify-i-d-intensity-contamination-file",
+    "tests/data/arrays/verifyidintensity.txt", "-o", "{out}/vid",
+]
+needs = ["tests/data/arrays/verifyidintensity.txt"]
+max_rss_mib = 64
+max_seconds = 10
+
+[[command]]
+name = "arrays-variant-calling"
+argv = [
+    "{bin}", "arrays-variant-calling", "tests/data/arrays/arrays.vcf.gz",
+    "--dbsnp", "tests/data/arrays/dbsnp.vcf", "-o", "{out}/arrays",
+]
+needs = ["tests/data/arrays/arrays.vcf.gz", "tests/data/arrays/dbsnp.vcf"]
+max_rss_mib = 64
+max_seconds = 10
+
+# The arrays caps: tests/data/make_arrays_stress.py writes the inputs in the same shell,
+# so its Python counts. 50,000 samples (MAX_SAMPLES) peak at 201 MiB; 200 dbSNP sites at
+# 2,147,483,000 and up at 31.6 MiB (bammetrics alone 5 MiB, 1,346 MiB before the bit set
+# kept pages); bafRegress at its 100,000-line cap at 80 MiB.
+[[command]]
+name = "arrays-variant-calling at the sample cap"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_arrays_stress.py {out} && {bin} arrays-variant-calling {out}/many.vcf --dbsnp tests/data/arrays/dbsnp.vcf -o {out}/m",
+]
+needs = ["tests/data/make_arrays_stress.py", "tests/data/arrays/arrays.vcf", "tests/data/arrays/dbsnp.vcf"]
+max_rss_mib = 288
+max_seconds = 60
+
+[[command]]
+name = "arrays-variant-calling far dbSNP sites"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_arrays_stress.py {out} && {bin} arrays-variant-calling tests/data/arrays/arrays.vcf.gz --dbsnp {out}/far_dbsnp.vcf -o {out}/f",
+]
+needs = ["tests/data/make_arrays_stress.py", "tests/data/arrays/arrays.vcf.gz", "tests/data/arrays/dbsnp.vcf"]
+max_rss_mib = 64
+max_seconds = 60
+
+[[command]]
+name = "create-baf-regress-file at the line cap"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_arrays_stress.py {out} && {bin} create-baf-regress-file {out}/baf_cap.txt -o {out}/b",
+]
+needs = ["tests/data/make_arrays_stress.py", "tests/data/arrays/arrays.vcf", "tests/data/arrays/dbsnp.vcf"]
+max_rss_mib = 128
+max_seconds = 60

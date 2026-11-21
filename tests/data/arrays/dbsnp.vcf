@@ -1,0 +1,70 @@
+##fileformat=VCFv4.2
+##contig=<ID=1,length=40000,assembly=GRCh37>
+##contig=<ID=2,length=30000,assembly=GRCh37>
+##contig=<ID=X,length=30000,assembly=GRCh37>
+##contig=<ID=Y,length=12000,assembly=GRCh37>
+##contig=<ID=MT,length=16569,assembly=GRCh37>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+1	872	rs900000	C	A	.	.	.
+1	4304	rs900001	A	AG	.	.	.
+1	8557	rs900002	C	G	.	.	.
+1	15605	rs900003	C	T	.	.	.
+1	21025	rs900004	A	C	.	.	.
+1	23329	rs900005	A	C	.	.	.
+1	24255	rs900006	A	G	.	.	.
+1	28578	rs900007	A	C	.	.	.
+1	30761	rs900008	A	G	.	.	.
+1	36613	rs900009	A	C	.	.	.
+1	38595	rs900010	A	C	.	.	.
+1	38849	rs900011	G	A	.	.	.
+1	39588	rs900012	T	TT	.	.	.
+1	39698	rs900013	G	T	.	.	.
+2	1069	rs900014	C	A	.	.	.
+2	3318	rs900015	A	C	.	.	.
+2	6521	rs900016	A	C	.	.	.
+2	7287	rs900017	G	A	.	.	.
+2	9481	rs900018	A	C	.	.	.
+2	10611	rs900019	A	C	.	.	.
+2	23513	rs900020	G	T	.	.	.
+2	24439	rs900021	AT	A	.	.	.
+2	27516	rs900022	A	C	.	.	.
+2	29642	rs900023	A	C	.	.	.
+X	2028	rs900024	A	C	.	.	.
+X	7509	rs900025	A	C	.	.	.
+X	7835	rs900026	C	G	.	.	.
+X	9102	rs900027	A	C	.	.	.
+X	13720	rs900028	G	GT	.	.	.
+X	15725	rs900029	C	G	.	.	.
+X	15823	rs900030	A	T	.	.	.
+X	18684	rs900031	TAG	T	.	.	.
+X	23215	rs900032	A	C	.	.	.
+X	25082	rs900033	A	C	.	.	.
+X	25379	rs900034	T	TT	.	.	.
+X	28315	rs900035	A	T	.	.	.
+Y	1047	rs900036	A	AT	.	.	.
+Y	2011	rs900037	A	C	.	.	.
+Y	3370	rs900038	G	GT	.	.	.
+Y	3629	rs900039	G	A	.	.	.
+Y	3899	rs900040	A	C	.	.	.
+Y	5184	rs900041	T	TT	.	.	.
+Y	5434	rs900042	A	C	.	.	.
+Y	5639	rs900043	T	G	.	.	.
+Y	7170	rs900044	GAA	G	.	.	.
+Y	7956	rs900045	G	A	.	.	.
+Y	9548	rs900046	A	C	.	.	.
+Y	10093	rs900047	A	C	.	.	.
+Y	11740	rs900048	TT	AA	.	.	.
+MT	851	rs900049	A	C	.	.	.
+MT	1412	rs900050	A	C	.	.	.
+MT	2057	rs900051	C	T	.	.	.
+MT	5425	rs900052	T	C	.	.	.
+MT	5827	rs900053	A	C	.	.	.
+MT	7149	rs900054	C	G	.	.	.
+MT	7747	rs900055	A	C	.	.	.
+MT	8198	rs900056	G	C	.	.	.
+MT	9543	rs900057	A	C	.	.	.
+MT	10601	rs900058	C	A	.	.	.
+MT	10993	rs900059	C	G	.	.	.
+MT	11496	rs900060	TG	T	.	.	.
+MT	14395	rs900061	A	C	.	.	.
+MT	15051	rs900062	A	C	.	.	.

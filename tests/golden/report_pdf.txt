@@ -9,18 +9,18 @@ OUT
 ## exit
 0
 ## stdout
-1 sample, preset generic v1 (6dd89e), bammetrics 0.28.0
+1 sample, preset generic v1 (6dd89e), bammetrics 0.29.0
 PASS        NA12878  6 pass
 wrote 4 files to OUT, index OUT/index.html
 ## stderr
 ## file NA12878.report.html
 <page not recorded>
 ## file NA12878.report.pdf
-<pdf not recorded: 27 pages, 649775 bytes>
+<pdf not recorded: 27 pages, 649803 bytes>
 ## file NA12878.verdict.json
 {
   "schema": "bammetrics.verdict/1",
-  "tool_version": "0.28.0",
+  "tool_version": "0.29.0",
   "sample": "NA12878",
   "preset": {
     "name": "generic",

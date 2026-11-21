@@ -317,6 +317,12 @@ table.
 | `split-sam-by-number-of-reads` | SplitSamByNumberOfReads (a SAM, BAM or CRAM; `--n-files` or `--n-reads`) | `-o DIR`: `shard_0001.bam` and on |
 | `gather-bam-files` | GatherBamFiles (BAMs as positionals or `-i`, in the order to gather; a text file of paths, one per line; SAM or CRAM read record by record) | `-o` BAM, no metrics file |
 | `calculate-read-group-checksum` | CalculateReadGroupChecksum (a SAM, BAM or CRAM; only its header is read) | the 32 hex digits of the checksum in `-o`, default beside the input |
+| `quality-yield-s-n-v-q` | CollectQualityYieldMetricsSNVQ (`qa`, `qc`, `qg` and `qt` on every counted record; `--alternate-quality-attribute`, `--include-bq-histogram`) | one |
+| `umi-prevalence` | CollectUmiPrevalenceMetrics (`--barcode-tag`, `--barcode-bq`, `--minimum-mq`, `--minimum-barcode-bq`, `--filter-unpaired-reads`) | one histogram, no metrics row |
+| `rrbs` | CollectRrbsMetrics (a coordinate-sorted SAM, BAM or CRAM; `-R` required) | `PREFIX.rrbs_summary_metrics`, `PREFIX.rrbs_detail_metrics` |
+| `create-baf-regress-file` | CreateBafRegressMetricsFile (the text bafRegress prints) | `PREFIX.bafregress_metrics` |
+| `create-verify-i-d-intensity-contamination-file` | CreateVerifyIDIntensityContaminationMetricsFile (the text VerifyIDIntensity prints) | `PREFIX.verifyidintensity_metrics` |
+| `arrays-variant-calling` | CollectArraysVariantCallingMetrics (an arrays VCF with its index; `--dbsnp` required) | `PREFIX.arrays_variant_calling_{detail,summary}_metrics`, `PREFIX.arrays_control_code_summary_metrics` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -911,6 +917,149 @@ computes it, 32 hex digits with no line end, in `-o` or beside the input as
   `@RG` without `SM`, two values of one key or a `DT` that is no date exits 1.
 - Only the header is read. An `-o` that is the input exits 2. Not a chain step.
 
+### quality-yield-s-n-v-q
+
+```bash
+bammetrics quality-yield-s-n-v-q sample.bam -o sample.quality_yield_snvq_metrics
+bammetrics quality-yield-s-n-v-q sample.bam --include-bq-histogram --alternate-quality-attribute XQ
+bammetrics CollectQualityYieldMetricsSNVQ I=sample.bam O=out.txt INCLUDE_BQ_HISTOGRAM=true
+```
+
+Picard's `CollectQualityYieldMetricsSNVQ`: one row of read, base and Q20, Q30 and Q40
+totals, and the same counts for the SNV qualities of the Ultima tags `qa`, `qc`, `qg` and
+`qt` (`tests/concordance/test_quality_yield_s_n_v_q.py`).
+
+- Each tag holds one Phred+33 character per base, in stored order. At each base the tags
+  of the three other bases count, so an `A`, `C`, `G` or `T` gives 3 observations and an
+  `N`, an IUPAC code or `=` gives 4. Lower-case bases are read upper case, as htsjdk reads
+  them. A quality of 40 counts in Q20, Q30 and Q40.
+- Every counted record needs all four tags; a record without one exits 1 naming the record
+  and the tag (Picard throws a `NullPointerException`). A secondary or supplementary record
+  is skipped before its tags are read unless its `--include-*` flag is set. A tag shorter
+  than the read fails only where a base reads past its end; a character outside `!` to `~`
+  fails where it is read.
+- A tag given twice in a record is read as htsjdk 5.0.0 lists it: the last value counts.
+  When the second copy replaces the field htsjdk last appended, the tags after it that sort
+  later are lost, so a record `qa qa qc qg qt` has no `qc` and exits 1 in both tools.
+  `umi-prevalence` reads `RX` and `BQ` the same way.
+- `--alternate-quality-attribute TAG` reads the base qualities from a Phred+33 tag in place
+  of `QUAL`; every counted record needs it, with one character per base.
+- `--include-bq-histogram` adds one `KEY` histogram holding four series: `BQ_COUNT`,
+  `SNVQ_COUNT`, and the mean base and SNV quality at each read index. The quality keys and
+  the read indexes share the `KEY` column, as in Picard.
+- A chain tap: `bammetrics chain in.bam -o s + quality-yield-s-n-v-q` writes
+  `s.quality_yield_snvq_metrics`. Not a `CollectMultipleMetrics` program in Picard 3.5.0.
+
+### umi-prevalence
+
+```bash
+bammetrics umi-prevalence sample.bam -o sample.umi_prevalence_metrics
+bammetrics umi-prevalence sample.bam --filter-unpaired-reads false --minimum-mq 10
+bammetrics CollectUmiPrevalenceMetrics I=sample.bam O=out.txt BARCODE_TAG=RX
+```
+
+Picard's `CollectUmiPrevalenceMetrics`: a histogram of duplicate sets by the number of
+distinct UMIs in each, `numUmis` against `duplicateSets`, with no metrics row
+(`tests/concordance/test_umi_prevalence.py`).
+
+- Records count when mapped, at or above `--minimum-mq` (30), primary, with the
+  `--barcode-tag` (RX) tag, past the barcode quality filter, and with
+  `--filter-unpaired-reads` (on) paired with a mapped mate.
+- The barcode quality filter is Picard's as written: a record with the `--barcode-bq` (BQ)
+  tag is kept only when one quality (Phred+33, spaces ignored) is below
+  `--minimum-barcode-bq` (30). A record whose barcode qualities are all good is dropped; one
+  without the tag is kept (KNOWN_DIFFERENCES.md, "CollectUmiPrevalenceMetrics").
+- The input need not be sorted or indexed: the records are sorted in htsjdk's duplicate
+  order, `--max-records-in-ram` at a time spilled under `--tmp-dir`, and a set is the run of
+  records equal to its first under `duplicateSetCompare` (library, reference, unclipped 5'
+  end, orientation, mate). Each read of a pair is its own record. A fragment or a read with
+  an unmapped mate joins the pairs on its strand when `--filter-unpaired-reads false` keeps
+  it.
+- A paired record with a mapped mate needs `MC`, as in Picard; a run that keeps one record
+  never compares it and passes without one.
+- A sorted run also spills at 256 MiB of keys and UMIs; Picard bounds it by records alone.
+  The distinct UMIs of one set are held in memory, as in Picard, so peak memory grows with
+  the largest set: 1,000,000 distinct 16-base UMIs at one position took 176 MiB.
+- `--progress-step-interval 0` exits 1 once a set is found, as Picard's progress logger
+  divides by it. Not a chain step: the tool reads the stream whole before its first set.
+
+### rrbs
+
+```bash
+bammetrics rrbs sample.bam -R ref.fa -o out/sample --level READ_GROUP
+bammetrics CollectRrbsMetrics I=sample.bam R=ref.fa M=out/sample DO_NOT_CREATE_PLOTS=true
+bammetrics chain sample.bam -R ref.fa -o out/sample + rrbs + mark-duplicates + rrbs
+```
+
+Picard's `CollectRrbsMetrics`: bisulfite conversion at CpG and non-CpG Cs against the
+reference, `PREFIX.rrbs_summary_metrics` with one row per accumulation unit and
+`PREFIX.rrbs_detail_metrics` with one row per CpG site and unit
+(`tests/concordance/test_rrbs.py`). `-o` (Picard `METRICS_FILE_PREFIX`, `M`) gets a `.`
+unless it ends in one. No plot is drawn: `--do-not-create-plots` is accepted.
+
+- Every record not flagged unmapped counts, secondary, supplementary, duplicate and
+  QC-failed records included; `--sequence-names` limits the contigs. Reads under
+  `--minimum-read-length` (5) and reads with more bisulfite mismatches than
+  `Math.round(length x --max-mismatch-rate)` (0.1) are counted and set aside.
+- A CpG counts when the read has a C or a T at the C, the G matched, the C at
+  `--c-quality-threshold` (20) and the base after it at `--next-base-quality-threshold`
+  (10). A reverse-strand read is read reverse complemented. `POSITION` is the 0-based C of
+  the forward strand. Detail rows sort by contig name, then position.
+- The non-CpG quality test reads the record's qualities in file order at the index within
+  the alignment block, as Picard does.
+- The reference contig of a record is taken by its index in the FASTA, with no dictionary
+  check, as Picard's walker takes it. The `.fai` is required. A record on an earlier contig
+  than the one before it exits 1.
+- A header that is not `SO:coordinate` exits 1 unless `--assume-sorted`. A record without
+  base qualities and a second alignment block exits 1, as Picard does. A chain step: the
+  chain's `-R` is its reference.
+
+### create-baf-regress-file, create-verify-i-d-intensity-contamination-file and arrays-variant-calling
+
+```bash
+bammetrics create-baf-regress-file bafregress.txt -o chip
+bammetrics create-verify-i-d-intensity-contamination-file verifyidintensity.txt -o chip
+bammetrics arrays-variant-calling chip.vcf.gz --dbsnp dbsnp.vcf.gz -o chip
+bammetrics CollectArraysVariantCallingMetrics I=chip.vcf.gz DBSNP=dbsnp.vcf.gz O=chip
+```
+
+The three `picard.arrays` metrics tools of Picard 3.5.0, each writing under the prefix
+`-o` (`tests/concordance/test_create_baf_regress_metrics_file.py`,
+`test_create_verify_i_d_intensity_contamination_metrics_file.py`,
+`test_arrays_variant_calling.py`).
+
+- `CreateBafRegressMetricsFile` reads the text bafRegress prints: the first line must be
+  `sample estimate stderr tval pval callrate Nhom` with tabs, and every later line must
+  split at spaces and tabs into 7 fields, numbers as Java reads them (`NaN`, `1e-5`).
+  `LOG10_PVAL` is `log10(pval)`. The file is `PREFIX.bafregress_metrics`.
+- `CreateVerifyIDIntensityContaminationMetricsFile` reads the text VerifyIDIntensity
+  prints: the `ID %Mix LLK LLK0` header, a rule of dashes, then one line of four numbers
+  per result. The file is `PREFIX.verifyidintensity_metrics`.
+- The two text inputs are read whole, at most 64 MiB, 1 MiB per line and 100,000 lines,
+  decoded as UTF-8 (a malformed sequence becomes U+FFFD, as in Java). A header alone gives a file
+  with no row; any other line Picard refuses exits 1 and writes nothing.
+- `CollectArraysVariantCallingMetrics` reads an arrays VCF as GtcToVcf writes it. Picard
+  opens it with its index, so a bgzip VCF needs its `.tbi` and a plain one its `.idx`;
+  without one the run exits 1. The index is not read. It writes
+  `PREFIX.arrays_variant_calling_detail_metrics` (one row per sample, in the order of a
+  Java `HashMap` filled in reverse header order),
+  `PREFIX.arrays_variant_calling_summary_metrics` (the sum) and
+  `PREFIX.arrays_control_code_summary_metrics` (the 23 Illumina controls from their header
+  lines). The header must hold `sampleAlias`, `arrayType`, `autocallGender`,
+  `autocallVersion`, `autocallDate`, `imagingDate`, `extendedIlluminaManifestVersion`,
+  `clusterFile`, `p95Green`, `p95Red`, `scannerName` and the control lines.
+- `AUTOCALL_DATE` and `IMAGING_DATE` print in the time zone of the process, as Picard's
+  print in the JVM's: set `TZ` to compare runs from two machines. `##imagingDate` is read
+  in New York time with the `AM` and `PM` markers GtcToVcf writes; an `en_CA` JVM reads
+  `a.m.` and `p.m.` and fails on them (`KNOWN_DIFFERENCES.md`).
+- `--call-rate-pf-threshold` (default 0.98, over 0 and at most 1) sets `AUTOCALL_PF`.
+  `--num-processors` is taken and changes nothing. `--sequence-dictionary` gives the
+  contigs the dbSNP file is checked against. The VCF is read at most 8 MiB per line,
+  100,000,000 lines and 50,000 samples. A record counts when it overlaps 1 to the length
+  of its `##contig` line. A tab or line end in a header value exits 1 and writes nothing,
+  as in Picard.
+- None of the three reads a BAM: none is a chain step.
+
 ### qc
 
 ```bash
@@ -1050,7 +1199,7 @@ is the short form.
   `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`,
   `set-nm-and-uq-tags`, and the two of wave W10: `add-or-replace-read-groups`,
   `revert-original-base-qualities-and-add-mate-cigar`) changes the records later steps
-  see; any number may follow one another. A tap (the 18 one-pass tool verbs) reads the
+  see; any number may follow one another. A tap (the 20 one-pass tool verbs) reads the
   records of its position and changes nothing. A split (`split-sam-by-library`,
   `split-sam-by-number-of-reads`) writes them over BAMs in a directory. `write [PATH]` writes those records as a
   BAM, or as SAM text for a name ending in `.sam`; `-` is standard output, and `write -
@@ -1647,7 +1796,7 @@ purpose is listed in KNOWN_DIFFERENCES.md.
 
 The worked examples of docs/05 section 2.5 that work today, written against the committed
 fixtures so each runs from the repository root as shown (`tests/data/insert_size.bam` has
-no `@RG SM`, so the sample is the BAM name). Output is what 0.28.0 prints; long lines are
+no `@RG SM`, so the sample is the BAM name). Output is what 0.29.0 prints; long lines are
 cut.
 
 **1 and 2. One tool, as Picard text or machine-readable.**
@@ -1716,7 +1865,7 @@ $ for bam in bams/*.bam; do
         -o runs/2026-11-02/$(basename "$bam" .bam) -q > /dev/null
   done
 $ bammetrics report runs/2026-11-02/ --preset clinical-panel
-2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.28.0
+2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.29.0
 FAIL        NA1  7 fail, 1 warn, 9 pass, 1 not measured
   FAIL  Mean target coverage is 0.377778, below the fail limit of 100
   ...

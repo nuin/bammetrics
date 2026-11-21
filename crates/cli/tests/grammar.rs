@@ -637,6 +637,62 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("VALIDATION_STRINGENCY", "SILENT")),
             picard_outputs: single,
         },
+        Case {
+            verb: "quality-yield-s-n-v-q",
+            class: "CollectQualityYieldMetricsSNVQ",
+            verb_args: strings(&["tests/data/snvq.bam"]),
+            picard_args: strings(&["I=tests/data/snvq.bam"]),
+            option: Some(("ALTERNATE_QUALITY_ATTRIBUTE", "XQ")),
+            picard_outputs: single,
+        },
+        Case {
+            verb: "umi-prevalence",
+            class: "CollectUmiPrevalenceMetrics",
+            verb_args: strings(&["tests/data/umi_prevalence.bam"]),
+            picard_args: strings(&["I=tests/data/umi_prevalence.bam"]),
+            option: Some(("MINIMUM_BARCODE_BQ", "40")),
+            picard_outputs: single,
+        },
+        // METRICS_FILE_PREFIX is the prefix of the two files.
+        Case {
+            verb: "rrbs",
+            class: "CollectRrbsMetrics",
+            verb_args: strings(&["tests/data/rrbs.bam", "-R", REF]),
+            picard_args: strings(&["I=tests/data/rrbs.bam", &r]),
+            option: Some(("MAX_MISMATCH_RATE", "0.2")),
+            picard_outputs: |out| vec![format!("M={out}")],
+        },
+        Case {
+            verb: "create-baf-regress-file",
+            class: "CreateBafRegressMetricsFile",
+            verb_args: strings(&["tests/data/arrays/bafregress.txt"]),
+            picard_args: strings(&["I=tests/data/arrays/bafregress.txt"]),
+            option: None,
+            picard_outputs: prefix,
+        },
+        Case {
+            verb: "create-verify-i-d-intensity-contamination-file",
+            class: "CreateVerifyIDIntensityContaminationMetricsFile",
+            verb_args: strings(&["tests/data/arrays/verifyidintensity.txt"]),
+            picard_args: strings(&["I=tests/data/arrays/verifyidintensity.txt"]),
+            option: None,
+            picard_outputs: prefix,
+        },
+        Case {
+            verb: "arrays-variant-calling",
+            class: "CollectArraysVariantCallingMetrics",
+            verb_args: strings(&[
+                "tests/data/arrays/arrays.vcf.gz",
+                "--dbsnp",
+                "tests/data/arrays/dbsnp.vcf",
+            ]),
+            picard_args: strings(&[
+                "I=tests/data/arrays/arrays.vcf.gz",
+                "DBSNP=tests/data/arrays/dbsnp.vcf",
+            ]),
+            option: Some(("CALL_RATE_PF_THRESHOLD", "0.5")),
+            picard_outputs: prefix,
+        },
     ]
 }
 
@@ -769,7 +825,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 54);
+    assert_eq!(classes.len(), 60);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

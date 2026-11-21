@@ -378,6 +378,7 @@ insert_size\tAll_Reads.fr_count\n\
                 }),
                 with_headers: true,
                 text: None,
+                source: None,
             };
             let headers = vec!["CollectInsertSizeMetrics INPUT=x".to_owned()];
             let mut expected = Vec::new();
