@@ -235,11 +235,14 @@ fn threads_and_sample_are_accepted_and_change_nothing() {
         "--format",
         "json",
         "-@",
-        "x",
+        "4",
         "--sample",
         "S1",
     ]);
     assert_eq!(plain.stdout, ignored.stdout);
+    // The count is checked as on every verb, though it changes nothing here.
+    let checked = bammetrics(&["bed-to-interval-list", BED, "--from-bam", BAM, "-@", "x"]);
+    assert_eq!(checked.status.code(), Some(2));
     let json = String::from_utf8_lossy(&plain.stdout);
     assert!(!json.contains("\"sample\""), "{json}");
     assert!(json.contains("\"contig\": \"chr1\""), "{json}");
@@ -249,7 +252,7 @@ fn threads_and_sample_are_accepted_and_change_nothing() {
         "The interval list; standard output without one, or with -.",
         "--sample NAME",
         "Accepted and ignored: an interval list has no sample.",
-        "Accepted and ignored: no BAM record is read",
+        "Checked, then ignored: no BAM record is read",
         "--from-bam, --dict FILE",
     ] {
         assert!(help.contains(line), "{line}: {help}");

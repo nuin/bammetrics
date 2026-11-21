@@ -1,0 +1,21 @@
+## argv
+interval-list-tools
+tests/data/intervals_a.interval_list
+-i
+tests/data/targets.interval_list
+--action
+INTERSECT
+--unique
+-o
+OUT/intersect.interval_list
+## exit
+0
+## stdout
+## stderr
+## file intersect.interval_list
+@HD	VN:1.6
+@SQ	SN:chr1	LN:100000
+@PG	ID:1	CL:IntervalListTools INPUT=[tests/data/intervals_a.interval_list, tests/data/targets.interval_list] OUTPUT=OUT/intersect.interval_list UNIQUE=true ACTION=INTERSECT    PADDING=0 DONT_MERGE_ABUTTING=false SORT=true SCATTER_COUNT=1 INCLUDE_FILTERED=false BREAK_BANDS_AT_MULTIPLES_OF=0 SUBDIVISION_MODE=INTERVAL_SUBDIVISION INVERT=false OUTPUT_VALUE=NONE VERBOSITY=INFO QUIET=false VALIDATION_STRINGENCY=STRICT COMPRESSION_LEVEL=5 MAX_RECORDS_IN_RAM=500000 CREATE_INDEX=false CREATE_MD5_FILE=false USE_JDK_DEFLATER=false USE_JDK_INFLATER=false	PN:IntervalListTools
+chr1	1150	1200	+	t1 intersection a2
+chr1	2300	2350	+	t2 intersection a2
+chr1	5500	5600	+	t4 intersection a1

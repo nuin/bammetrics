@@ -1,5 +1,175 @@
 # Changelog
 
+## 0.30.0
+
+Wave W12 of docs/07: the interval layer `interval_ops` and five interval tools (65 in all), none of them a chain step; `qc --panel` takes the lists they write.
+
+### Added
+
+- `interval_ops` (`crates/core/src/interval_ops.rs` and `interval_ops/`), the interval
+  layer of wave W12: htsjdk 5.0.0's `IntervalList` read from a Picard interval list (the
+  header through `SAMTextHeaderCodec` at `SILENT`, the records through
+  `IntervalListCodec`, gzip by name), from a VCF (`VCFFileReader.toIntervalList`,
+  `INCLUDE_FILTERED`, `END`, `interval-N` names) and from a BED through
+  `bed_to_interval_list`, and written as `IntervalList.write`. `sorted`, `uniqued`,
+  `concatenate`, `union`, `intersection`, `subtract`, `difference`, `overlaps`, `invert`,
+  `padded` and `breakIntervalsAtBandMultiples` keep htsjdk's results, names and orders;
+  overlap queries go through a segment tree, so no operation compares every pair. The
+  five `IntervalListScatterer` modes, `SCATTER_CONTENT`, and the
+  `temp_NNNN_of_N/scattered.interval_list` directory written as one set (at most 100,000
+  files). No registry tool yet: `IntervalListTools` and the other W12 tools come next.
+- `crates/core/examples/interval_ops.rs`: `IntervalListTools` over the layer, and
+  `tests/concordance/test_interval_ops.py` with the seeded lists of
+  `tests/concordance/interval_lists.py`: every `ACTION` under 13 option sets
+  (`PADDING` -5, 0 and 7, `UNIQUE`, `SORT=false`, `DONT_MERGE_ABUTTING`, `INVERT`,
+  `BREAK_BANDS_AT_MULTIPLES_OF`, `COMMENT`), every scatter mode at `SCATTER_COUNT` 1, 2,
+  3, 7, 50 and 200 and with `SCATTER_CONTENT`, Picard-made and corpus lists, and error
+  parity, against Picard 3.5.0.
+- `IntervalListTools` (`crates/core/src/interval_list_tools.rs`, verb
+  `interval-list-tools`, Python `interval_list_tools()`): the steps of Picard 3.5.0's
+  `doWork` over `interval_ops`, with every option: `INPUT` and `SECOND_INPUT` repeated,
+  each `ACTION`, `PADDING`, `UNIQUE`, `DONT_MERGE_ABUTTING`, `SORT`, `INVERT`,
+  `BREAK_BANDS_AT_MULTIPLES_OF`, `COMMENT`, `SCATTER_COUNT`, `SCATTER_CONTENT`,
+  `SUBDIVISION_MODE`, `OUTPUT_VALUE`, `COUNT_OUTPUT`, `INCLUDE_FILTERED`. The `@PG` line
+  holds Picard's command line, in the form of either Picard parser, so every file equals
+  Picard's byte for byte. A file named exactly `.vcf`, `.vcf.gz` or `.vcf.bgz` is read
+  as a VCF, as Picard reads it. Without `OUTPUT` no list is written and the count is
+  printed. Every output is checked before the first is written; a scatter is renamed
+  into place as one set. A chain refuses it as a step. Python returns one row per
+  interval written, with the number of its scatter list.
+- `tests/concordance/test_interval_list_tools.py`: 270 cases against Picard 3.5.0, every
+  file compared whole, the `@PG` line included: every `ACTION` under 13 option sets, the
+  lists Picard's `BedToIntervalList` and `VcfToIntervalList` wrote, the foundation and
+  exome lists, a VCF named `.vcf`, the five scatter modes at five counts on two inputs,
+  `SCATTER_CONTENT`, the counts, both syntaxes, standard input and 30 error cases.
+  16 golden forms (`tests/data/make_interval_list_fixtures.py`), `qc --panel` on the
+  lists it writes (`crates/cli/tests/interval_list_tools.rs`), and three memory gate rows
+  (`tests/data/make_interval_tiling.py`: a 1 Mbp tiling of a dictionary).
+- `Invocation::given` and `Invocation::legacy_syntax`: every option as given and the
+  parser Picard would use, for a tool that writes Picard's command line.
+- `IntervalListToBed` (verb `interval-list-to-bed`, Python `interval_list_to_bed()`):
+  one BED line per interval, the start less 1, the name, `SCORE` and the strand, sorted
+  unless `SORT=false`, byte for byte Picard 3.5.0's file on 2,000,000 GRCh38 intervals
+  (the names of its sort spill past 500,000 included). The list is read as Picard's
+  feature reader reads it; gzip in and out by name.
+- `VcfToIntervalList` (verb `vcf-to-interval-list`, Python `vcf_to_interval_list()`):
+  the `##contig` lines as `@SQ`, one interval per record from `POS` to `END`, neighbours
+  that overlap or abut merged in file order, `INCLUDE_FILTERED`, `VARIANT_ID_METHOD`.
+  The header is read as htsjdk's `VCFCodec` reads it (`vcf/site_header.rs`, at most
+  64 MiB): `VCFv4.0` to `VCFv4.3`, a repeated `ID`, a missing `Description`, a bare `##`
+  line and spaces after commas read; `VCFv3.3`, `VCFv4.4`, `VCFv5.0`, a bad `Type` or
+  `Number` and an unclosed quote refused. Each record is checked as htsjdk's codec checks
+  its site, and each merged interval is written as it is made (3 MiB of memory on 10
+  million records). Neither tool can be a chain step. `qc --panel` takes the output of
+  both.
+- `tests/concordance/test_interval_list_to_bed.py` and `test_vcf_to_interval_list.py`:
+  every option on the interval_lists.py, variant_vcfs.py and array_vcfs.py inputs,
+  Picard-made lists, hand-written edge cases and error parity, against Picard 3.5.0;
+  `benches/interval_scale.py` and four memgate rows.
+- `ScatterIntervalsByNs` (verb `scatter-intervals-by-ns`, Python
+  `scatter_intervals_by_ns()`), as Picard 3.5.0: the reference as an interval list of
+  `ACGTmer` and `Nmer` runs (`N`, `n` and `.` are N), an N run of at most `MAX_TO_MERGE`
+  bases joined into the `ACGTmer` around it, `OUTPUT_TYPE`, the `.dict`'s `@SQ` lines
+  under `@HD VN:1.6 SO:coordinate`. The FASTA is read through its `.fai` 1 MiB at a time
+  and each interval written as soon as it is decided, so memory does not grow with a
+  contig or the number of intervals.
+- `NonNFastaSize` (verb `non-n-fasta-size`, Python `non_n_fasta_size()`), as Picard 3.5.0:
+  the bases that are not `N` or `n`, inside `INTERVALS` when given (matched by `@SQ`
+  index, as Picard's mask matches them), written as the number and a line end.
+- `indexed_fasta` (`crates/core/src/indexed_fasta.rs`): a FASTA as htsjdk's indexed reader
+  opens it (FASTA extensions, the `.dict` beside it, the `.fai` and the `.gzi` of a bgzip
+  FASTA, the dictionary checked against the index) and a contig's bases at the `.fai`
+  geometry, handed on 1 MiB at a time.
+- `tests/concordance/n_run_refs.py` writes the seeded references (N runs of 1 to 10,000
+  bases at contig starts, ends and middles, lower case, IUPAC codes, an all-N contig, a
+  contig of no base, three wraps, CRLF, one line) and the committed fixtures
+  `tests/data/n_runs.fa`, `n_runs.interval_list`, `n_runs_panel.interval_list` and
+  `targets.interval_list.gz`. `test_scatter_intervals_by_ns.py` and
+  `test_non_n_fasta_size.py` compare both tools with Picard 3.5.0 on them, on
+  `ref_100k.fa`, the foundation and exome references, every option and error parity.
+
+### Changed
+
+- `interval_ops::scatter` returns `Scattered`, one header and the intervals of each list:
+  1,000 lists over GRCh38's 3,366 `@SQ` lines peaked at 1,748 MiB with a header per
+  list and peak at 19 MiB now (Picard 3.5.0: 732 MiB).
+- The example `interval_ops` runs the `IntervalListTools` registry tool.
+- `VcfReader` keeps the first of two `##contig` lines with one ID (noodles refused the
+  header), so `IntervalListTools` reads such a VCF as Picard does. `next_site`
+  checks each record as htsjdk's `VCFCodec` checks its site.
+- `qc --panel` and `hs-metrics --panel` (and every interval file option read through
+  `intervals.rs`) inflate a file named `.gz`, `.gzip` or `.bfq` before reading it, as
+  htsjdk does, so a gzip interval list from `IntervalListTools` is a panel. A VCF panel
+  exits 2 in `qc` and 1 in the tools, naming `VcfToIntervalList`. A BED panel's run is
+  byte for byte the same.
+- A chain step that reads a FASTA (`create-sequence-dictionary`, `scatter-intervals-by-ns`
+  and `non-n-fasta-size`)
+  is refused with the reason given for the TEXT and VCF tools.
+- A `Files::Bam` verb that writes no BAM names what it writes in its `-o` help and in
+  its missing `-o` error.
+- `BedToIntervalList` inflates a plain gzip BED named `.gz`, `.gzip`, `.bgz` or `.bgzf`, as
+  Picard 3.5.0 does; it read `.gz` as bgzip only. The BED is read under a 1 GiB cap.
+  `qc --panel p.bed.gz` runs its prepare step on such a BED.
+- `qc --panel` exits 2 on gzip data under a name it does not inflate (`.bgz`) and on a
+  panel named `.interval_list` whose first line is no `@` header line; a gzip VCF gets the
+  VCF message.
+- The `.fai` of `ScatterIntervalsByNs` and `NonNFastaSize` is read as htsjdk's `Scanner`
+  reads it (`(.+)\t+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)` found in each line), and a FASTA or
+  `.dict` that is no regular file exits 1 before it is opened. With `-o -` a failed
+  `ScatterIntervalsByNs` prints nothing. `NonNFastaSize INTERVALS` drops the names before
+  the merge.
+- `BedToIntervalList UNIQUE=true` merges an interval with no base as htsjdk does: a
+  zero-length interval at 10 now joins one starting at 11 (Picard 3.5.0 writes one
+  interval there). Its sort compares names by UTF-16 unit, as Java does.
+- `vcf::Regions` (the `INTERVALS` of `CollectVariantCallingMetrics`,
+  `GenotypeConcordance` and `CollectSequencingArtifactMetrics`) reads, merges,
+  intersects and queries through `interval_ops`: the header as htsjdk decodes it, a
+  dictionary mismatch between two lists as htsjdk's error, an interval with no base
+  overlapping nothing, and overlap queries by binary search in place of a scan.
+- `mt_copy_number::subtract` is `interval_ops::subtract_disjoint`, unchanged.
+- The interval merge tests the overlap of the unmoved coordinates before the abutting
+  distance, as `IntervalMergerIterator` does: a VCF record whose `END` lies inside the
+  open interval joins it however far its `POS` lies past it.
+- An interval list holds at most 20,000,000 intervals (`interval_ops::MAX_INTERVALS`).
+  Bytes that are not UTF-8 decode as the JDK decodes them (an encoded surrogate is one
+  U+FFFD), and a record error quotes at most 200 characters of its line.
+- `VALIDATION_STRINGENCY` on a tool that reads no record is checked: a value other than
+  `STRICT`, `LENIENT`, `SILENT` or `null` is a usage error, as in Picard. `--threads` is
+  checked on every verb, a verb that ignores it included.
+
+### Fixed
+
+- `interval_ops` reads at most 20,000,000 intervals, 1,000,000 header lines and
+  8,000,000 header fields per list or VCF, counted while it reads: a 1 GiB list of
+  one-base intervals took 7.6 GB. A list that is not UTF-8 is decoded line by line, not
+  copied whole. An intersection makes at most 10,000,000 overlapping pairs and 256 MiB of
+  names (two lists of 4,000 nested intervals took 4.3 GB). A scatter is capped by the
+  lists it makes, so `SCATTER_COUNT=100001` on a short list writes what Picard writes, and
+  by 32 GiB of text before the first file. An error message quoting a line is cut to
+  300 bytes. A `##contig` ID outside the SAM name pattern fails as in htsjdk.
+- `VcfReader` reads a plain gzip `.vcf.gz` (no BGZF extra field) as `GZIPInputStream`
+  does; it failed with `failed to fill whole buffer`.
+- A bare `--KEY` boolean on the Picard face (`--UNIQUE` before another option or last)
+  is true, as Barclay reads it, for every tool.
+- `BedToIntervalList` reads a BED and an `SD` `.dict` (or SAM text, an interval list or a
+  CRAM header) with bytes that are not UTF-8 as Picard 3.5.0 does: each malformed
+  sequence is one U+FFFD, an encoded surrogate (`ED A0 80`) included, and the run exits 0.
+  It exited 1 with `stream did not contain valid UTF-8`. A BAM header is read one
+  character per byte, as htsjdk reads it.
+- `ScatterIntervalsByNs` decodes each `.dict` line as the JDK decodes UTF-8: an encoded
+  surrogate in an `@SQ` field is one U+FFFD in `OUTPUT`, as Picard writes it, where it was
+  three.
+- The `VcfToIntervalList` header reader keeps a key index beside the fields of a `<...>`
+  line: a line of 200,000 distinct keys parses in linear time, where each key searched the
+  keys before it.
+- The verb help of `VALIDATION_STRINGENCY` on a tool that reads no record, and of an
+  ignored `--threads`, says "Checked, then ignored", as both are checked.
+- `IntervalListTools`: a value with a line feed (`COMMENT`, a path) exits 2 before any
+  file, as Picard fails in `StringHeader`; a trailing `/` on `OUTPUT` or `COUNT_OUTPUT`
+  names the file before it, as Java's `Path` does; a `COUNT_OUTPUT` inside a list
+  directory of the scatter is refused before the scatter is written; `--COMMENT null`
+  prints Picard's empty piece in the `@PG` command line.
+
 ## 0.29.0
 
 Wave W11 of docs/07: six metrics tools (60 in all), two of them chain taps, and the first inputs that are text another program prints.

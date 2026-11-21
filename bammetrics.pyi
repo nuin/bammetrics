@@ -1510,6 +1510,73 @@ def collect_arrays_variant_calling_metrics(
     PREFIX.arrays_control_code_summary_metrics; Python returns one row per file: file
     and rows."""
 
+def interval_list_tools(
+    input: _Paths,
+    *,
+    output: _Path | None = None,
+    padding: int | None = None,
+    unique: bool | None = None,
+    dont_merge_abutting: bool | None = None,
+    sort: bool | None = None,
+    action: str | None = None,
+    second_input: _Path | Sequence[_Path] | None = None,
+    comment: str | Sequence[str] | None = None,
+    scatter_count: int | None = None,
+    scatter_content: int | None = None,
+    include_filtered: bool | None = None,
+    break_bands_at_multiples_of: int | None = None,
+    subdivision_mode: str | None = None,
+    invert: bool | None = None,
+    output_value: str | None = None,
+    count_output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """IntervalListTools: one row per interval written (list, contig, start, end, strand,
+    name; list counts the scatter lists from 1); OUTPUT gets the interval list, or the
+    scatter directory when SCATTER_COUNT is above 1."""
+
+def interval_list_to_bed(
+    input: _Path,
+    *,
+    output: _Path,
+    score: int | None = None,
+    sort: bool | None = None,
+) -> list[dict[str, Any]]:
+    """IntervalListToBed: writes OUTPUT as a BED: one line per interval of the interval
+    list (contig, 0-based start, end, name, SCORE, strand). Returns one row per line."""
+
+def vcf_to_interval_list(
+    input: _Path,
+    *,
+    output: _Path,
+    include_filtered: bool | None = None,
+    variant_id_method: str | None = None,
+) -> list[dict[str, Any]]:
+    """VcfToIntervalList: writes OUTPUT as an interval list: the VCF's ##contig lines as
+    @SQ lines, then one interval per record (POS to END), neighbours that overlap or
+    abut merged. Returns one row per interval."""
+
+def scatter_intervals_by_ns(
+    reference: _Path,
+    *,
+    output: _Path | None = None,
+    output_type: str | None = None,
+    max_to_merge: int | None = None,
+) -> list[dict[str, Any]]:
+    """ScatterIntervalsByNs: writes the reference as an interval list of ACGTmer and Nmer
+    runs (N, n and . are N; an N run of at most MAX_TO_MERGE bases stays inside the
+    ACGTmer around it) to OUTPUT. Returns one row per contig: length, then the ACGTmer
+    and Nmer intervals and bases."""
+
+def non_n_fasta_size(
+    input: _Path,
+    *,
+    intervals: _Path | None = None,
+    output: _Path | None = None,
+) -> list[dict[str, Any]]:
+    """NonNFastaSize: counts the bases of a FASTA that are not N or n (IUPAC codes and .
+    count), inside INTERVALS when given, and writes the number and a line end. Returns
+    one row: the count."""
+
 # END registry tools
 
 def alignment_summary(

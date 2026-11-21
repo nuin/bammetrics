@@ -1,0 +1,10 @@
+## argv
+IntervalListTools
+I=tests/data/intervals_a.interval_list
+ACTION=SUBTRACT
+O=OUT/x.interval_list
+## exit
+1
+## stdout
+## stderr
+bammetrics: SECOND_INPUT was not provided but action SUBTRACT requires a second input.

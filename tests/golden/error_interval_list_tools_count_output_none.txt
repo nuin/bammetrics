@@ -1,0 +1,9 @@
+## argv
+IntervalListTools
+I=tests/data/intervals_a.interval_list
+COUNT_OUTPUT=OUT/c.txt
+## exit
+1
+## stdout
+## stderr
+bammetrics: COUNT_OUTPUT was provided but OUTPUT_VALUE is set to NONE.

@@ -43,7 +43,10 @@ behaves how.
   any other text as false: `USE_OQ=yes` writes the `USE_OQ=false` file there.
 - Options that cannot change a metric are accepted, dropped and noted on stderr:
   `VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`, `VERBOSITY`, `H` and `CHART` (no PDF
-  is drawn), `R` for tools that do not read a reference.
+  is drawn), `R` for tools that do not read a reference. Their values are not checked:
+  `VALIDATION_STRINGENCY=BOGUS`, `VERBOSITY=BOGUS`, `COMPRESSION_LEVEL=99` or `=abc` and
+  `MAX_RECORDS_IN_RAM=abc` on a tool that drops the option are noted and dropped, where
+  Picard exits 1 and writes nothing.
 - `ASSUME_SORTED=false` (`AS`) on a BAM whose header sort order is not `coordinate` (or
   has no `@HD` sort order) exits 1 and writes no file in every registry tool, as Picard
   does.
@@ -896,7 +899,9 @@ double quotes are stripped from the name; a fifth field that is not a float ends
 before the strand; `.` is the positive strand; zero-length intervals are dropped unless
 `KEEP_LENGTH_ZERO_INTERVALS=true`; `UNIQUE=true` merges overlapping and abutting intervals
 with the first one's strand and the distinct names joined by `|`; the header is
-`@HD VN:1.6 SO:coordinate` whatever `SORT` says.
+`@HD VN:1.6 SO:coordinate` whatever `SORT` says; a BED or `SD` `.dict` byte that is not
+UTF-8 is written as U+FFFD, one per malformed sequence as the JDK decodes it (an encoded
+surrogate `ED A0 80` is one).
 
 `CompareMetrics` behaviour reproduced from Picard 3.5.0
 (`tests/concordance/test_compare_metrics.py`, 74 cases): files equal when every field
@@ -1652,6 +1657,71 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   with a space or with an empty name (`DUPE;;ZEROED_OUT_ASSAY`), and a record whose
   alleles repeat (`A>A`, `A>T,T`) in `INPUT` or `DBSNP`. Each gives the files where Picard
   exits 1.
+
+## Interval lists (the interval layer of wave W12)
+
+- An interval list written under a name ending in `.gz`, `.gzip` or `.bfq` is BGZF:
+  it inflates to the text Picard writes, and Picard's single gzip member has other bytes.
+- Two dictionaries whose `@SQ` names differ only through an `AN` alternative name are
+  refused as different dictionaries; htsjdk's `isSameSequence` accepts them.
+- A scatter that makes more than 100,000 lists, or more than 32 GiB of text (each
+  list carries the whole header), and a `BREAK_BANDS_AT_MULTIPLES_OF` that makes more
+  than 20,000,000 intervals fail with a usage error before the first file. Picard
+  writes the files, or runs out of memory. A `SCATTER_COUNT` above 100,000 that makes
+  fewer lists runs as in Picard.
+- An interval list or VCF with more than 20,000,000 intervals, 1,000,000 header lines
+  or 8,000,000 header fields is refused while it is read. An intersection (`INTERSECT`
+  of several lists, `SUBTRACT`, `SYMDIFF`) that makes more than 10,000,000 overlapping
+  pairs, or an intersection or band break that makes more than 256 MiB of names, is
+  refused: htsjdk makes one interval per overlapping pair before it merges them, so two
+  lists of 4,000 nested intervals peak at 4.3 GB. Picard has none of these bounds.
+- An error message that quotes a malformed line is cut to 300 bytes; Picard prints the
+  whole line.
+- `IntervalListTools` refuses an `INPUT` named exactly `.bcf`, which Picard reads as BCF.
+  It reads a file named exactly `.vcf`, `.vcf.gz` or `.vcf.bgz` as a VCF, as Picard does;
+  every other name is an interval list in both.
+- `IntervalListTools` checks `OUTPUT` and `COUNT_OUTPUT` before it writes either: a
+  `COUNT_OUTPUT` in a missing directory, naming `OUTPUT`, or inside a list directory of
+  the scatter under `OUTPUT`, fails with no file written. Picard writes `OUTPUT` first
+  and then fails, or writes the count over the list.
+- `IntervalListToBed` and `VcfToIntervalList` write a `.gz` `OUTPUT` as BGZF; it inflates
+  to Picard's text.
+- `IntervalListToBed` on more than 500,000 intervals refuses a name with a character whose
+  low byte is 0 (U+0000, U+0100, ...). Picard's sort spill cuts the name there and misreads
+  the records after it.
+- `VcfToIntervalList` refuses a `.bcf` `INPUT`. It reads a gzip VCF by its first bytes
+  whatever its name, where Picard goes by the `.gz` name.
+- A boolean option of `IntervalListTools`, `IntervalListToBed` or `VcfToIntervalList`
+  given another word than `true` or `false` (`UNIQUE=T`, `SORT=maybe`,
+  `INCLUDE_FILTERED=yes`) is a usage error, as on every bammetrics tool; Picard's legacy
+  parser reads it as false. `true` and `false` are read in any case.
+- A VCF header of more than 64 MiB is refused with exit 1. Picard reads it while its
+  memory lasts.
+- `VcfToIntervalList` from Python returns no rows when `OUTPUT` is a device or a pipe: the
+  rows are read back from the file written.
+
+## ScatterIntervalsByNs and NonNFastaSize
+
+- A FASTA that ends before the bases its `.fai` gives a contig exits 1. htsjdk's
+  `getSubsequenceAt` leaves the missing bases as zero bytes, which both Picard tools
+  count as `ACGT` bases.
+- A gzip FASTA that is not bgzip, and a bgzip FASTA whose name does not end in `.gz`,
+  exit 1. htsjdk opens the first through its `.fai` and reads the compressed bytes as
+  bases; the second it reads as plain text.
+- A FASTA or `.dict` that is not a regular file (a named pipe, a socket, a device) exits 1
+  before it is opened. The `.fai` reader seeks, and opening a named pipe with no writer
+  would block.
+- A run that fails writes no `OUTPUT`, and an `OUTPUT` that is the FASTA, its `.fai`,
+  `.gzi` or `.dict`, or the `INTERVALS` file exits 1 before anything is read. With
+  `O=/dev/stdout` or `-o -` the list is made in the system temporary directory and copied
+  to standard output once the walk has finished, so a failed run prints nothing.
+- The Picard face of `NonNFastaSize` without `OUTPUT` prints the count on standard
+  output, as every bammetrics tool does; Picard requires `OUTPUT`.
+- `ScatterIntervalsByNs` writes an `OUTPUT` named `.gz` as BGZF, as the interval layer
+  writes every interval list (above).
+- Same as Picard: a `.dict` line with bytes that are not UTF-8 is decoded as the JDK
+  decodes it, so an encoded surrogate (`ED A0 80`) in an `@SQ` field is one U+FFFD in
+  the `OUTPUT` of `ScatterIntervalsByNs`.
 
 ## Not in Picard
 

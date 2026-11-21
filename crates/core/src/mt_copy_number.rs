@@ -249,44 +249,9 @@ fn roles(opts: &Options, header: &sam::Header) -> Result<(usize, Vec<Option<Role
     Ok((mt, roles))
 }
 
-/// The bases of `include` outside `exclude`. Both are `uniqued`: sorted by
-/// contig and start, disjoint. One merge walk over the two lists.
-pub fn subtract(include: &[Interval], exclude: &[Interval]) -> Vec<Interval> {
-    let mut out = Vec::with_capacity(include.len());
-    let mut e = 0;
-    for &interval in include {
-        let mut start = interval.start;
-        while e < exclude.len()
-            && (exclude[e].contig, exclude[e].end) < (interval.contig, interval.start)
-        {
-            e += 1;
-        }
-        let mut k = e;
-        while k < exclude.len()
-            && exclude[k].contig == interval.contig
-            && exclude[k].start <= interval.end
-        {
-            let cut = exclude[k];
-            if cut.start > start {
-                out.push(Interval {
-                    contig: interval.contig,
-                    start,
-                    end: cut.start - 1,
-                });
-            }
-            start = start.max(cut.end + 1);
-            k += 1;
-        }
-        if start <= interval.end {
-            out.push(Interval {
-                contig: interval.contig,
-                start,
-                end: interval.end,
-            });
-        }
-    }
-    out
-}
+/// The bases of `include` outside `exclude`, both `uniqued`: one merge walk
+/// (`interval_ops::subtract_disjoint`).
+pub use crate::interval_ops::subtract_disjoint as subtract;
 
 /// `CollectMtCopyNumberMetrics` as a pass [`Accumulator`].
 pub struct MtCopyNumber {

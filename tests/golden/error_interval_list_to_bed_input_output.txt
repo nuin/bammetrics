@@ -1,0 +1,9 @@
+## argv
+IntervalListToBed
+I=tests/data/intervals.interval_list
+O=tests/data/intervals.interval_list
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/intervals.interval_list is an input; writing it would destroy it

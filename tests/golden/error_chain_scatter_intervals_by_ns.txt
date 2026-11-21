@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
++
+scatter-intervals-by-ns
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (scatter-intervals-by-ns): ScatterIntervalsByNs reads a FASTA file and no BAM, and a chain hands on the records of a BAM: it cannot be a step
+  run it on its own: bammetrics scatter-intervals-by-ns --help
+  the steps: bammetrics chain --help

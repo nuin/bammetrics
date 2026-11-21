@@ -33,12 +33,16 @@ use std::path::{Path, PathBuf};
 use noodles::vcf;
 
 mod bit_set;
+mod header;
 mod line_cap;
+mod site;
+mod site_header;
 
 pub use bit_set::MAX_DBSNP_PAGES;
 use bit_set::PAGE_BITS;
 use bit_set::{BitSet, OverBudget};
 use line_cap::LineCap;
+pub use site_header::{ContigLine, MAX_HEADER_BYTES, SiteHeader};
 
 use crate::bed_to_interval_list;
 use crate::error::{Error, Result};
@@ -429,6 +433,51 @@ pub struct VcfReader {
     line: u64,
 }
 
+/// `path` as text lines under the caps, more than `max_header_lines`
+/// lines starting with `#` included: plain, or gzip when its first two
+/// bytes are the gzip magic, as `GZIPInputStream` reads a `.vcf.gz` for
+/// htsjdk. A gzip member whose header carries the BGZF `BC` extra field is
+/// read as BGZF; any other gzip member by member. One open: the first
+/// bytes are handed back in front of the rest, so a named pipe is read
+/// once.
+fn open_text(
+    path: &Path,
+    max_line_bytes: usize,
+    max_lines: u64,
+    max_header_lines: u64,
+) -> Result<Box<dyn BufRead>> {
+    let input = |source| Error::Input {
+        path: path.to_path_buf(),
+        source,
+    };
+    let mut file = File::open(path).map_err(input)?;
+    let mut magic = [0u8; 14];
+    let mut read = 0;
+    while read < magic.len() {
+        match file.read(&mut magic[read..]) {
+            Ok(0) => break,
+            Ok(n) => read += n,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+            Err(error) => return Err(input(error)),
+        }
+    }
+    let gzip = read >= 2 && magic[..2] == [0x1f, 0x8b];
+    let bgzf = read == magic.len() && magic[3] & 0x04 != 0 && magic[12..14] == *b"BC";
+    let file = io::Cursor::new(magic[..read].to_vec()).chain(file);
+    let text: Box<dyn BufRead> = if gzip && bgzf {
+        Box::new(noodles::bgzf::io::Reader::new(file))
+    } else if gzip {
+        Box::new(io::BufReader::new(crate::gzip::GzipReader::new(
+            io::BufReader::new(file),
+        )))
+    } else {
+        Box::new(io::BufReader::new(file))
+    };
+    Ok(Box::new(
+        LineCap::new(text, max_line_bytes, max_lines).with_header_lines(max_header_lines),
+    ))
+}
+
 impl VcfReader {
     pub fn open(path: &Path) -> Result<Self> {
         Self::open_capped(path, usize::MAX, u64::MAX)
@@ -437,33 +486,25 @@ impl VcfReader {
     /// [`VcfReader::open`] where a line (header or record) over
     /// `max_line_bytes`, or more than `max_lines` lines, is a read error.
     pub fn open_capped(path: &Path, max_line_bytes: usize, max_lines: u64) -> Result<Self> {
+        Self::open_capped_header(path, max_line_bytes, max_lines, u64::MAX)
+    }
+
+    /// [`VcfReader::open_capped`] where more than `max_header_lines` lines
+    /// starting with `#` is a read error too, so a header of millions of
+    /// `##contig` lines is refused before noodles holds it.
+    pub fn open_capped_header(
+        path: &Path,
+        max_line_bytes: usize,
+        max_lines: u64,
+        max_header_lines: u64,
+    ) -> Result<Self> {
         let input = |source| Error::Input {
             path: path.to_path_buf(),
             source,
         };
-        // One open: the magic bytes are read and handed back in front of
-        // the rest, so a named pipe is read once.
-        let mut file = File::open(path).map_err(input)?;
-        let mut magic = [0u8; 2];
-        let mut read = 0;
-        while read < magic.len() {
-            match file.read(&mut magic[read..]) {
-                Ok(0) => break,
-                Ok(n) => read += n,
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-                Err(error) => return Err(input(error)),
-            }
-        }
-        let gzip = read == 2 && magic == [0x1f, 0x8b];
-        let file = io::Cursor::new(magic[..read].to_vec()).chain(file);
-        let text: Box<dyn BufRead> = if gzip {
-            Box::new(noodles::bgzf::io::Reader::new(file))
-        } else {
-            Box::new(io::BufReader::new(file))
-        };
-        let capped: Box<dyn BufRead> = Box::new(LineCap::new(text, max_line_bytes, max_lines));
+        let capped = open_text(path, max_line_bytes, max_lines, max_header_lines)?;
         let mut reader = vcf::io::Reader::new(capped);
-        let header = reader.read_header().map_err(input)?;
+        let header = header::read_header(reader.get_mut()).map_err(input)?;
         Ok(Self {
             path: path.to_path_buf(),
             header,
@@ -541,6 +582,103 @@ impl VcfReader {
         }
         Ok(out)
     }
+}
+
+/// A VCF read for its sites as htsjdk's `VCFCodec` reads them for
+/// `VcfToIntervalList`: the header through `vcf/site_header.rs`, then each
+/// record line through `vcf/site.rs`, without noodles.
+pub struct SiteReader {
+    path: PathBuf,
+    reader: Box<dyn BufRead>,
+    header: SiteHeader,
+    rules: site::Rules,
+    line: u64,
+    /// The line read last, as bytes.
+    raw: Vec<u8>,
+}
+
+impl SiteReader {
+    /// Open `path` (plain or gzip by its first bytes) and read its header,
+    /// a line over `max_line_bytes`, more than `max_lines` lines or more
+    /// than `max_header_lines` header lines being a read error.
+    pub fn open(
+        path: &Path,
+        max_line_bytes: usize,
+        max_lines: u64,
+        max_header_lines: u64,
+    ) -> Result<Self> {
+        let mut reader = open_text(path, max_line_bytes, max_lines, max_header_lines)?;
+        let header = site_header::read(&mut reader).map_err(|message| Error::Intervals {
+            path: path.to_path_buf(),
+            message,
+        })?;
+        Ok(Self {
+            path: path.to_path_buf(),
+            reader,
+            rules: site::Rules::of(&header),
+            header,
+            line: 0,
+            raw: Vec::new(),
+        })
+    }
+
+    pub fn header(&self) -> &SiteHeader {
+        &self.header
+    }
+
+    /// The next record's position, `ID` and filter status, read from its
+    /// line as htsjdk's `VCFCodec` reads it for a site (`vcf/site.rs`): the
+    /// fixed columns checked, the genotypes left undecoded unless the
+    /// header's samples are not in sorted order; a line starting with `#`
+    /// skipped; `None` at the end of the file. A line is decoded as UTF-8,
+    /// a byte that is not becoming U+FFFD.
+    pub fn next_site(&mut self) -> Result<Option<Site>> {
+        loop {
+            self.raw.clear();
+            let read = self
+                .reader
+                .read_until(b'\n', &mut self.raw)
+                .map_err(|source| Error::Input {
+                    path: self.path.clone(),
+                    source,
+                })?;
+            if read == 0 {
+                return Ok(None);
+            }
+            self.line += 1;
+            if self.raw.last() == Some(&b'\n') {
+                self.raw.pop();
+                if self.raw.last() == Some(&b'\r') {
+                    self.raw.pop();
+                }
+            }
+            let text = crate::java::decode_utf8(&self.raw);
+            match site::parse_line(&text, &self.rules) {
+                Ok(Some(site)) => return Ok(Some(site)),
+                Ok(None) => {}
+                Err(message) => {
+                    return Err(Error::Intervals {
+                        path: self.path.clone(),
+                        message: format!("record {}: {message}", self.line),
+                    });
+                }
+            }
+        }
+    }
+}
+
+/// One record as [`SiteReader::next_site`] reads it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Site {
+    pub contig: String,
+    /// `POS`, a Java `int`.
+    pub start: i32,
+    /// `INFO/END`, else `start + reference length - 1`.
+    pub end: i32,
+    /// `ID`, `None` for `.`.
+    pub id: Option<String>,
+    /// `FILTER` is neither `.` nor `PASS`.
+    pub filtered: bool,
 }
 
 /// `VCFCodec.parseFilters`: `.` and `PASS` are unfiltered. noodles hands
@@ -868,160 +1006,8 @@ fn load_db_snp(
     Ok(())
 }
 
-/// An interval list for the VCF tools: its own `@SQ` dictionary and the
-/// intervals by contig, kept in file order until [`Regions::uniqued`].
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Regions {
-    pub dictionary: Dictionary,
-    /// `(contig index, start, end)`, 1-based closed.
-    pub intervals: Vec<(usize, i64, i64)>,
-}
-
-impl Regions {
-    /// `IntervalList.fromPath`: a header of `@` lines (the `@SQ` lines are
-    /// the dictionary) then `contig start end strand name` records. A record
-    /// on a contig the dictionary lacks is skipped, as htsjdk does with a
-    /// warning. A file without the header is Picard's error.
-    pub fn read(path: &Path) -> Result<Self> {
-        let text = fs::read_to_string(path).map_err(|source| Error::Input {
-            path: path.to_path_buf(),
-            source,
-        })?;
-        Self::parse(&text).map_err(|message| Error::Intervals {
-            path: path.to_path_buf(),
-            message,
-        })
-    }
-
-    fn parse(text: &str) -> std::result::Result<Self, String> {
-        if !text.starts_with('@') {
-            return Err("Interval list file must contain header. ".to_owned());
-        }
-        let mut dictionary = Vec::new();
-        let mut intervals = Vec::new();
-        for line in text.lines() {
-            if let Some(fields) = line.strip_prefix("@SQ\t") {
-                let mut name = None;
-                let mut length = None;
-                for field in fields.split('\t') {
-                    if let Some(v) = field.strip_prefix("SN:") {
-                        name = Some(v.to_owned());
-                    } else if let Some(v) = field.strip_prefix("LN:") {
-                        length = v.parse::<i64>().ok();
-                    }
-                }
-                let name = name.ok_or_else(|| format!("@SQ line without SN: {line}"))?;
-                dictionary.push(Contig { name, length });
-                continue;
-            }
-            if line.starts_with('@') || line.trim().is_empty() {
-                continue;
-            }
-            let fields: Vec<&str> = line.split('\t').collect();
-            let [contig, start, end, strand, _name] = fields[..] else {
-                return Err(format!(
-                    "Invalid interval record contains {} fields: {line}",
-                    fields.len()
-                ));
-            };
-            let start: i64 = start
-                .parse()
-                .map_err(|_| format!("bad start {start:?}: {line}"))?;
-            let end: i64 = end
-                .parse()
-                .map_err(|_| format!("bad end {end:?}: {line}"))?;
-            if start < 1 {
-                return Err(format!("start value of {start} is less than 1: {line}"));
-            }
-            if start > end + 1 {
-                return Err(format!("start {start} is greater than end + 1: {line}"));
-            }
-            if strand != "+" && strand != "-" {
-                return Err(format!("Invalid strand field: {strand}"));
-            }
-            let Some(index) = dictionary.iter().position(|c| c.name == contig) else {
-                continue;
-            };
-            if let Some(length) = dictionary[index].length.filter(|&l| l > 0 && l < end) {
-                return Err(format!(
-                    "interval with end {end} extends beyond the end of {contig} ({length} bp)"
-                ));
-            }
-            intervals.push((index, start, end));
-        }
-        Ok(Self {
-            dictionary,
-            intervals,
-        })
-    }
-
-    /// `IntervalList.uniqued()`: sorted by contig, start and end, then
-    /// overlapping or abutting intervals merged.
-    pub fn uniqued(&self) -> Self {
-        let mut sorted = self.intervals.clone();
-        sorted.sort_unstable();
-        let mut merged: Vec<(usize, i64, i64)> = Vec::with_capacity(sorted.len());
-        for next in sorted {
-            match merged.last_mut() {
-                Some(current) if current.0 == next.0 && next.1 <= current.2 + 1 => {
-                    current.2 = current.2.max(next.2);
-                }
-                _ => merged.push(next),
-            }
-        }
-        Self {
-            dictionary: self.dictionary.clone(),
-            intervals: merged,
-        }
-    }
-
-    /// `IntervalList.intersection`: every overlap of an interval of `self`
-    /// with one of `other`, then `uniqued` (both lists share a dictionary).
-    pub fn intersection(&self, other: &Regions) -> Self {
-        let mut intervals = Vec::new();
-        for &(c, s, e) in &self.intervals {
-            for &(oc, os, oe) in &other.intervals {
-                if c == oc && s <= oe && os <= e {
-                    intervals.push((c, s.max(os), e.min(oe)));
-                }
-            }
-        }
-        Self {
-            dictionary: self.dictionary.clone(),
-            intervals,
-        }
-    }
-
-    /// `IntervalList.union`: the concatenation, `uniqued`.
-    pub fn union(&self, other: &Regions) -> Self {
-        let mut intervals = self.intervals.clone();
-        intervals.extend(other.intervals.iter().copied());
-        Self {
-            dictionary: self.dictionary.clone(),
-            intervals,
-        }
-        .uniqued()
-    }
-
-    /// `IntervalList.getBaseCount`: the summed lengths.
-    pub fn base_count(&self) -> i64 {
-        self.intervals.iter().map(|(_, s, e)| e - s + 1).sum()
-    }
-
-    /// True when `start..=end` on `contig` shares a base with an interval
-    /// (`OverlapDetector.getOverlaps` non-empty).
-    pub fn overlaps(&self, contig: &str, start: i64, end: i64) -> bool {
-        let Some(index) = self.dictionary.iter().position(|c| c.name == contig) else {
-            return false;
-        };
-        if end < start {
-            return false;
-        }
-        self.intervals
-            .iter()
-            .any(|&(c, s, e)| c == index && s <= end && start <= e)
-    }
-}
+/// The interval list support of the VCF tools, over `interval_ops`.
+pub use crate::interval_ops::Regions;
 
 /// `Tribble.indexPath` or `Tribble.tabixIndexPath` exists next to `path`.
 pub fn index_exists(path: &Path) -> bool {
@@ -1187,30 +1173,6 @@ mod tests {
         assert!(parse_genotype(&keys, "0/2", 2).is_err());
         assert!(parse_genotype(&["GQ", "GT"], "20:0/1", 2).is_err());
         assert!(parse_genotype(&["GT"], "0/1:20", 2).is_err());
-    }
-
-    #[test]
-    fn regions_merge_intersect_and_count() {
-        let text = "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:1000\n@SQ\tSN:c2\tLN:500\n\
-                    c1\t10\t20\t+\ta\nc1\t21\t30\t+\tb\nc1\t50\t60\t-\tc\nc2\t5\t5\t+\td\ncX\t1\t2\t+\te\n";
-        let regions = Regions::parse(text).expect("parses").uniqued();
-        assert_eq!(regions.intervals, vec![(0, 10, 30), (0, 50, 60), (1, 5, 5)]);
-        assert_eq!(regions.base_count(), 21 + 11 + 1);
-        assert!(regions.overlaps("c1", 1, 10) && !regions.overlaps("c1", 31, 49));
-        assert!(!regions.overlaps("c3", 1, 10));
-        let other = Regions {
-            dictionary: regions.dictionary.clone(),
-            intervals: vec![(0, 25, 55), (1, 1, 10)],
-        };
-        assert_eq!(
-            regions.intersection(&other).uniqued().intervals,
-            vec![(0, 25, 30), (0, 50, 55), (1, 5, 5)]
-        );
-        assert_eq!(
-            regions.union(&other).intervals,
-            vec![(0, 10, 60), (1, 1, 10)]
-        );
-        assert!(Regions::parse("c1\t0\t10\n").is_err());
     }
 
     #[test]

@@ -93,6 +93,9 @@ pub struct Verb {
     /// tools): the verb makes it when missing, as it makes the directory
     /// above a file.
     pub directory: bool,
+    /// A [`Files::Bam`] verb whose `-o` may be left out with nothing
+    /// written in its place (`interval-list-tools` then prints a count).
+    pub optional_output: bool,
 }
 
 const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
@@ -112,6 +115,7 @@ const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
         reads_stdin: true,
         default_output: None,
         directory: false,
+        optional_output: false,
     }
 }
 
@@ -592,6 +596,80 @@ pub const VERBS: &[Verb] = &[
             Files::Prefix,
         )
     },
+    Verb {
+        input: "LIST",
+        about: Some(
+            "combines interval lists as Picard's IntervalListTools does: pad, then --action \
+             (CONCAT, UNION, INTERSECT, SUBTRACT, SYMDIFF, OVERLAPS against --second-input), \
+             then sort, invert, merge and break at band multiples. -o gets the list, or with \
+             --scatter-count above 1 a directory of temp_NNNN_of_N/scattered.interval_list \
+             files, renamed into place as one set. --output-value BASES or INTERVALS prints the \
+             count to standard output or --count-output; -o may then be left out.",
+        ),
+        writes: "interval list",
+        reads: &["SECOND_INPUT"],
+        also_writes: &["COUNT_OUTPUT"],
+        ignores: &[
+            (Key::Threads, "no record is read"),
+            (Key::Sample, "an interval list has no sample"),
+        ],
+        optional_output: true,
+        ..verb("interval-list-tools", "IntervalListTools", Files::Bam)
+    },
+    Verb {
+        input: "LIST",
+        about: Some(
+            "writes a BED as Picard's IntervalListToBed does: one line per interval of the \
+             interval list (contig, start less 1, end, name, --score, strand), sorted by \
+             contig, start, end, strand and name unless --sort false.",
+        ),
+        writes: "BED",
+        ignores: &[(Key::Threads, "no record is read")],
+        ..verb("interval-list-to-bed", "IntervalListToBed", Files::Bam)
+    },
+    Verb {
+        input: "VCF",
+        about: Some(
+            "writes an interval list as Picard's VcfToIntervalList does: the VCF's ##contig \
+             lines as @SQ lines, then one interval per record from POS to END, records that \
+             overlap or abut the one before merged and named by their IDs.",
+        ),
+        writes: "interval list",
+        ignores: &[(Key::Threads, "no record is read")],
+        ..verb("vcf-to-interval-list", "VcfToIntervalList", Files::Bam)
+    },
+    Verb {
+        input: "FASTA",
+        about: Some(
+            "writes the reference as an interval list, as Picard's ScatterIntervalsByNs does: \
+             -o gets @HD, the .dict's @SQ lines and one interval per run of N bases (Nmer; N, \
+             n and .) or of other bases (ACGTmer). An N run of at most --max-to-merge bases \
+             stays inside the ACGTmer around it. The FASTA needs its .fai and .dict beside it.",
+        ),
+        writes: "interval list",
+        ignores: &[(Key::Threads, "no record is read")],
+        ..verb(
+            "scatter-intervals-by-ns",
+            "ScatterIntervalsByNs",
+            Files::Bam,
+        )
+    },
+    Verb {
+        input: "FASTA",
+        about: Some(
+            "counts the bases of a FASTA that are not N or n, as Picard's NonNFastaSize does \
+             (IUPAC codes and . count); --intervals counts only inside an interval list. -o or \
+             standard output gets the number and a line end. The FASTA needs its .fai and \
+             .dict beside it.",
+        ),
+        writes: "count",
+        reads: &["INTERVALS"],
+        ignores: &[
+            (Key::Threads, "no record is read"),
+            (Key::Sample, "a count has no sample"),
+        ],
+        ..verb("non-n-fasta-size", "NonNFastaSize", Files::Single)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
@@ -670,7 +748,9 @@ impl Verb {
         let table = tool.table();
         let mut flags = Vec::new();
         if let Some(input) = table.iter().find(|o| o.picard() == "INPUT") {
-            let stdin = if self.reads_stdin {
+            let stdin = if self.input == "FASTA" {
+                ". Standard input and pipes are refused: the FASTA is read through its .fai."
+            } else if self.reads_stdin {
                 "; - reads standard input."
             } else {
                 ". Standard input and pipes are refused: the tool reads each input twice."
@@ -709,6 +789,20 @@ impl Verb {
                 format!(
                     "The {} to write; - writes standard output. Without -o it goes beside the \
                      input, named as Picard names it.",
+                    self.writes
+                ),
+            ),
+            Files::Bam if self.optional_output => (
+                "FILE",
+                format!(
+                    "The {} to write; - writes standard output. Without -o none is written.",
+                    self.writes
+                ),
+            ),
+            Files::Bam if !self.writes.contains("BAM") => (
+                "FILE",
+                format!(
+                    "The {} to write; - writes standard output. Required.",
                     self.writes
                 ),
             ),
@@ -818,6 +912,10 @@ impl Verb {
                      or CRAM is read the same at every value."
                         .to_owned()
                 }
+                // The value is checked as Picard parses the enum.
+                Kind::Ignored(why) if opt.picard() == "VALIDATION_STRINGENCY" => {
+                    format!("Checked, then ignored: {why}.")
+                }
                 Kind::Ignored(why) => format!("Accepted and ignored: {why}."),
                 _ if opt.required => format!("{} Required.", opt.help),
                 _ => opt.help.to_owned(),
@@ -831,8 +929,13 @@ impl Verb {
         }
         flags.extend(shared);
         for flag in &mut flags {
-            if let Some((_, why)) = self.ignores.iter().find(|(key, _)| *key == flag.key) {
-                flag.help = format!("Accepted and ignored: {why}.");
+            if let Some((key, why)) = self.ignores.iter().find(|(key, _)| *key == flag.key) {
+                // `threads` checks an ignored count as it checks any other.
+                flag.help = if *key == Key::Threads {
+                    format!("Checked, then ignored: {why}.")
+                } else {
+                    format!("Accepted and ignored: {why}.")
+                };
             }
         }
         flags
@@ -1266,6 +1369,15 @@ impl Verb {
                 Some(g) => Ok(Some(PathBuf::from(&g.values[0]))),
                 None => match self.default_output {
                     Some(beside) => self.output_beside_input(picard, beside).map(Some),
+                    None if self.optional_output => Ok(None),
+                    None if !self.writes.contains("BAM") => Err(VerbError::usage(
+                        self.name,
+                        format!("missing -o FILE (Picard: OUTPUT), the {}", self.writes),
+                    )
+                    .hint(format!(
+                        "-o - writes the {} to standard output",
+                        self.writes
+                    ))),
                     None => Err(
                         VerbError::usage(self.name, "missing -o BAM (Picard: OUTPUT)")
                             .hint("-o - writes the BAM to standard output"),
@@ -1622,18 +1734,21 @@ impl Verb {
     }
 
     fn threads(&self, parsed: &Parsed) -> Result<usize, VerbError> {
-        let given = parsed
-            .last(Key::Threads)
-            .filter(|_| !self.ignored(Key::Threads));
-        let Some(given) = given else {
+        let Some(given) = parsed.last(Key::Threads) else {
             return Ok(pass::default_threads());
         };
+        // Checked on every verb, a verb that ignores the count included.
         let threads = given.values[0].parse().map_err(|_| {
             VerbError::usage(self.name, format!("{:?} is not a number", given.values[0]))
                 .from(given.spelled.clone())
         })?;
-        pass::check_threads(threads).map_err(|e| {
+        let threads = pass::check_threads(threads).map_err(|e| {
             VerbError::usage(self.name, format!("{threads} is {e}")).from(given.spelled.clone())
+        })?;
+        Ok(if self.ignored(Key::Threads) {
+            pass::default_threads()
+        } else {
+            threads
         })
     }
 }

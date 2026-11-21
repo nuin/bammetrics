@@ -64,7 +64,13 @@ def test_the_committed_table_parses_and_names_both_tiers():
                        "create-verify-i-d-intensity-contamination-file",
                        "arrays-variant-calling", "arrays-variant-calling at the sample cap",
                        "arrays-variant-calling far dbSNP sites",
-                       "create-baf-regress-file at the line cap"]
+                       "create-baf-regress-file at the line cap",
+                       "interval-list-tools scatter", "interval-list-to-bed fixture",
+                       "vcf-to-interval-list fixture",
+                       "interval-list-to-bed past the sort spill",
+                       "vcf-to-interval-list 200,000 alleles in one record",
+                       "scatter-intervals-by-ns", "non-n-fasta-size",
+                       "scatter-intervals-by-ns long contig", "non-n-fasta-size long contig"]
     for r in rows:
         # A row whose input a script writes first runs both in one `sh -c`.
         shell = r.argv[0] in ("sh", "/bin/sh") and r.argv[1:2] == ["-c"] and "{bin}" in r.argv[2]

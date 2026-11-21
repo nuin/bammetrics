@@ -196,6 +196,8 @@ Rules:
 - `create-baf-regress-file`, `create-verify-i-d-intensity-contamination-file` and
   `arrays-variant-calling` read a text file or a VCF and no BAM. A chain refuses them as
   steps with exit 2.
+- `scatter-intervals-by-ns`, `non-n-fasta-size` and `create-sequence-dictionary` read a
+  FASTA and no BAM. A chain refuses them as steps with exit 2 and the same reason.
 - An output that is a file the chain reads (the source, the reference and its `.fai`, an
   interval list of a step, the plan file of `--plan`) is a usage error. Nothing is read
   and nothing is written. The same file through a symbolic link, a hard link or `..`

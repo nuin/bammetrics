@@ -696,3 +696,159 @@ argv = [
 needs = ["tests/data/make_arrays_stress.py", "tests/data/arrays/arrays.vcf", "tests/data/arrays/dbsnp.vcf"]
 max_rss_mib = 128
 max_seconds = 60
+
+# Wave W12: IntervalListTools. tests/data/make_interval_tiling.py writes the lists in the
+# same shell, so its Python counts. The fixture row tiles chr1 of tests/data/chr1.dict
+# every 100 bases (1,000 and 500 intervals) and scatters the symmetric difference.
+[[command]]
+name = "interval-list-tools scatter"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_interval_tiling.py tests/data/chr1.dict {out} --step 100 && {bin} interval-list-tools {out}/tiles.interval_list --second-input {out}/shifted.interval_list --action SYMDIFF --scatter-count 50 -o {out}/scatter --output-value INTERVALS",
+]
+needs = ["tests/data/make_interval_tiling.py", "tests/data/chr1.dict"]
+max_rss_mib = 64
+max_seconds = 30
+
+# The scale rows tile GRCh38's 3,366 sequences every 1 Mbp (6,494 and 1,583 intervals
+# under 3,366 @SQ lines). 1,000 scatter lists share one header: 19 MiB, where a header
+# per list held 1,748 MiB (Picard 3.5.0: 732 MiB); the lists take 723 MB of disk.
+[[command]]
+name = "interval-list-tools GRCh38 scatter"
+tier = "scale"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_interval_tiling.py ~/data/bammetrics-scale/genome/GRCh38.dict {out} && {bin} interval-list-tools {out}/tiles.interval_list --scatter-count 1000 -M BALANCING_WITHOUT_INTERVAL_SUBDIVISION -o {out}/scatter --output-value INTERVALS",
+]
+needs = ["~/data/bammetrics-scale/genome/GRCh38.dict"]
+max_rss_mib = 1024
+
+[[command]]
+name = "interval-list-tools GRCh38 subtract"
+tier = "scale"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_interval_tiling.py ~/data/bammetrics-scale/genome/GRCh38.dict {out} && {bin} interval-list-tools {out}/tiles.interval_list --second-input {out}/shifted.interval_list --action SUBTRACT --padding 1000 --unique --break-bands-at-multiples-of 250000 -o {out}/subtract.interval_list --output-value BASES",
+]
+needs = ["~/data/bammetrics-scale/genome/GRCh38.dict"]
+max_rss_mib = 1024
+
+# Wave W12: IntervalListToBed and VcfToIntervalList. benches/interval_scale.py writes the
+# inputs in the same shell, so its Python counts (about 500 MiB at 2,000,000 records).
+# Measured with bammetrics alone at 2,000,000: interval-list-to-bed 274 MiB, 1.3 s;
+# vcf-to-interval-list 128 MiB, 1.2 s (Picard 3.5.0: 1,763 MiB, 6.5 s and 603 MiB, 2.7 s).
+[[command]]
+name = "interval-list-to-bed fixture"
+argv = ["{bin}", "interval-list-to-bed", "tests/data/intervals.interval_list", "-o", "{out}/intervals.bed"]
+needs = ["tests/data/intervals.interval_list"]
+max_rss_mib = 32
+max_seconds = 10
+
+[[command]]
+name = "vcf-to-interval-list fixture"
+argv = ["{bin}", "vcf-to-interval-list", "tests/data/intervals.vcf", "-o", "{out}/intervals.interval_list"]
+needs = ["tests/data/intervals.vcf"]
+max_rss_mib = 32
+max_seconds = 10
+
+[[command]]
+name = "interval-list-to-bed past the sort spill"
+argv = [
+    "sh", "-c",
+    "python3 benches/interval_scale.py {out} 600000 && {bin} interval-list-to-bed {out}/big.interval_list -o {out}/big.bed && {bin} vcf-to-interval-list {out}/big.vcf -o {out}/big.interval_list.gz",
+]
+needs = ["benches/interval_scale.py"]
+max_rss_mib = 320
+max_seconds = 60
+
+# One record of 200,000 alternate alleles (a 2 MB line): each is checked against the
+# alleles before it by hash. A scan of a list took 40 s here.
+[[command]]
+name = "vcf-to-interval-list 200,000 alleles in one record"
+argv = [
+    "sh", "-c",
+    "python3 benches/interval_scale.py --alleles {out} 200000 && {bin} vcf-to-interval-list {out}/alleles.vcf -o {out}/alleles.interval_list",
+]
+needs = ["benches/interval_scale.py"]
+max_rss_mib = 64
+max_seconds = 10
+
+[[command]]
+name = "interval converters on GRCh38, 2,000,000 records"
+tier = "scale"
+argv = [
+    "sh", "-c",
+    "python3 benches/interval_scale.py {out} 2000000 ~/data/bammetrics-scale/genome/GRCh38.dict && {bin} interval-list-to-bed {out}/big.interval_list -o {out}/big.bed && {bin} vcf-to-interval-list {out}/big.vcf -o {out}/big.out.interval_list",
+]
+needs = ["~/data/bammetrics-scale/genome/GRCh38.dict"]
+max_rss_mib = 768
+max_seconds = 120
+
+# Wave W12: ScatterIntervalsByNs and NonNFastaSize read the FASTA through its .fai 1 MiB
+# at a time. The long rows write one contig of 200,000,000 bases (a 100-base N run in
+# every 10,000, so 40,000 intervals) with tests/concordance/n_run_refs.py --long in the
+# same shell: a tool that held the contig would peak over 190 MiB.
+[[command]]
+name = "scatter-intervals-by-ns"
+argv = ["{bin}", "scatter-intervals-by-ns", "tests/data/n_runs.fa", "-o", "{out}/n_runs.interval_list"]
+needs = ["tests/data/n_runs.fa", "tests/data/n_runs.fa.fai", "tests/data/n_runs.dict"]
+max_rss_mib = 64
+max_seconds = 10
+
+[[command]]
+name = "non-n-fasta-size"
+argv = [
+    "{bin}", "non-n-fasta-size", "tests/data/n_runs.fa", "--intervals",
+    "tests/data/n_runs.interval_list", "-o", "{out}/n_runs.non_n",
+]
+needs = ["tests/data/n_runs.fa", "tests/data/n_runs.fa.fai", "tests/data/n_runs.dict"]
+max_rss_mib = 64
+max_seconds = 10
+
+[[command]]
+name = "scatter-intervals-by-ns long contig"
+argv = [
+    "sh", "-c",
+    "python3 tests/concordance/n_run_refs.py {out} --long 200000000 && {bin} scatter-intervals-by-ns {out}/long.fa -o {out}/long.interval_list",
+]
+needs = ["tests/concordance/n_run_refs.py"]
+max_rss_mib = 64
+max_seconds = 120
+
+[[command]]
+name = "non-n-fasta-size long contig"
+argv = [
+    "sh", "-c",
+    "python3 tests/concordance/n_run_refs.py {out} --long 200000000 && {bin} non-n-fasta-size {out}/long.fa -o {out}/long.non_n",
+]
+needs = ["tests/concordance/n_run_refs.py"]
+max_rss_mib = 64
+max_seconds = 120
+
+[[command]]
+name = "scatter-intervals-by-ns GRCh38"
+tier = "scale"
+argv = [
+    "{bin}", "scatter-intervals-by-ns", "~/data/bammetrics-scale/genome/GRCh38.fa", "-o",
+    "{out}/GRCh38.interval_list",
+]
+needs = [
+    "~/data/bammetrics-scale/genome/GRCh38.fa", "~/data/bammetrics-scale/genome/GRCh38.fa.fai",
+    "~/data/bammetrics-scale/genome/GRCh38.dict",
+]
+max_rss_mib = 64
+max_seconds = 300
+
+[[command]]
+name = "non-n-fasta-size GRCh38"
+tier = "scale"
+argv = [
+    "{bin}", "non-n-fasta-size", "~/data/bammetrics-scale/genome/GRCh38.fa", "-o",
+    "{out}/GRCh38.non_n",
+]
+needs = [
+    "~/data/bammetrics-scale/genome/GRCh38.fa", "~/data/bammetrics-scale/genome/GRCh38.fa.fai",
+    "~/data/bammetrics-scale/genome/GRCh38.dict",
+]
+max_rss_mib = 64
+max_seconds = 300

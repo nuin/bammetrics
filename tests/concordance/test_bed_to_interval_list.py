@@ -6,8 +6,11 @@ number (the strand after it is not read), `.` and `-` strands, zero-length
 intervals, overlapping and abutting intervals, repeated names, header and comment
 lines, and lines with one or two fields. `test_verb_face` runs the
 `bed-to-interval-list` verb with `--from-bam` and `--dict` on three of them, at the
-defaults and under each option's verb spelling (`VERB_OPTIONS`).
+defaults and under each option's verb spelling (`VERB_OPTIONS`). A BED and a .dict
+with bytes that are not UTF-8 give Picard's U+FFFD characters
+(`test_bytes_that_are_not_utf8`).
 """
+import gzip
 import subprocess
 
 import pytest
@@ -25,6 +28,7 @@ BEDS = {
               "chr1\t30\t40\t\t1.5\t.\nchr1\t39\t45\tabut\nchr1  40  41\nchrM\t0\t12000\tall\n"),
     "unsorted": "chr2\t10\t20\tb\nchr1\t10\t20\ta\nchr1\t5\t30\tc\nchr1\t5\t30\ta\nchr1\t5\t30\n",
     "short_lines": "chr1\nchr1\t1\t2\nchr1\t7\n",
+    "zero_abutting": "chr1\t9\t9\tz\nchr1\t10\t20\tn\nchr1\t30\t30\tz2\nchr1\t25\t29\tm\n",
     "tier_baits": None,  # tests/corpus/out/baits.bed
 }
 OPTIONS = {
@@ -163,3 +167,41 @@ def test_verb_face(beds, corpus, tmp_path, name, spelling, source, option):
 def test_assume_sorted_is_not_an_option(beds, corpus, tmp_path):
     picard, ours, *_ = run_both(beds["plain"], corpus / "ref.dict", ["ASSUME_SORTED=true"], tmp_path)
     assert picard.returncode != 0 and ours.returncode != 0 and "ASSUME_SORTED" in ours.stderr
+
+
+@pytest.mark.parametrize("suffix", [".bed.gz", ".bed.gzip", ".bed.bgz", ".bed.bgzf"])
+@pytest.mark.parametrize("members", [1, 2])
+def test_gzip_bed(beds, corpus, tmp_path, suffix, members):
+    """Picard 3.5.0 reads a gzip BED under each of htsjdk's block-compressed names, one
+    plain gzip member or several (bgzip writes several)."""
+    text = beds["messy"].read_bytes()
+    cut = len(text) // members
+    bed = tmp_path / f"messy{suffix}"
+    bed.write_bytes(b"".join(gzip.compress(part, mtime=0) for part in (text[:cut], text[cut:]) if part))
+    compare(bed, corpus / "ref.dict", ["UNIQUE=true"], tmp_path, f"messy{suffix} {members} member(s)")
+
+
+def with_bytes_in_first_sq(text, insert):
+    """`text`, a .dict, with `insert` appended to its first @SQ line."""
+    lines = text.split(b"\n")
+    at = next(i for i, line in enumerate(lines) if line.startswith(b"@SQ"))
+    lines[at] += insert
+    return b"\n".join(lines)
+
+
+@pytest.mark.parametrize("dictionary", ["ref.dict", "surrogate.dict"])
+def test_bytes_that_are_not_utf8(corpus, tmp_path, dictionary):
+    """A BED name with byte FF, a lone C3 and an encoded surrogate (ED A0 80), and a
+    .dict with ED A0 80 in an @SQ field: Picard decodes each as the JDK decodes UTF-8
+    (one U+FFFD per malformed sequence, one for the surrogate) and exits 0."""
+    bed = tmp_path / "bytes.bed"
+    bed.write_bytes(b"chr1\t100\t200\tn\xffm\nchr1\t300\t400\ts\xed\xa0\x80t\n"
+                    b"chr1\t500\t600\tc\xc3\n")
+    source = corpus / "ref.dict"
+    if dictionary == "surrogate.dict":
+        source = tmp_path / dictionary
+        source.write_bytes(with_bytes_in_first_sq((corpus / "ref.dict").read_bytes(),
+                                                  b"\tAS:a\xed\xa0\x80b"))
+    compare(bed, source, [], tmp_path, f"bytes that are not UTF-8, SD={dictionary}")
+    assert (tmp_path / "ours.interval_list").read_bytes().count("�".encode()) == (
+        4 if dictionary == "surrogate.dict" else 3)

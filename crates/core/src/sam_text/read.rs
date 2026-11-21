@@ -252,6 +252,23 @@ impl HeaderLine<'_> {
     }
 }
 
+/// One header line as `SAMTextHeaderCodec.decode` keeps it at
+/// `stringency`: `None` for a line it drops, else the line without the
+/// fields it drops and with a non-conforming `SO` read as `unknown`. The
+/// interval list reader of `interval_ops` decodes its header with it.
+pub(crate) fn clean_header_line(
+    text: &[u8],
+    stringency: Stringency,
+) -> io::Result<Option<Vec<u8>>> {
+    HeaderLine {
+        stringency,
+        file: None,
+        text,
+        number: 0,
+    }
+    .clean()
+}
+
 /// A SAM text file: [`Reader::new`] reads the header, [`Reader::records`]
 /// gives the records.
 pub struct Reader<R> {

@@ -23,9 +23,10 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 
-use noodles::{bam, bgzf};
+use noodles::bam;
 
 use crate::error::{Error, Result};
+use crate::interval_ops;
 use crate::metric::{MetricsOutput, ToolOutput, Value};
 use crate::registry::{Invocation, Opt, Tool};
 
@@ -126,28 +127,29 @@ pub fn read_dictionary(path: &Path) -> Result<Vec<Sequence>> {
         header.read_format_version().map_err(input)?;
         header.read_file_id().map_err(input)?;
         let mut container = header.container_reader().map_err(input)?;
-        let mut text = String::new();
+        let mut bytes = Vec::new();
         container
             .raw_sam_header_reader()
             .map_err(input)?
-            .read_to_string(&mut text)
+            .read_to_end(&mut bytes)
             .map_err(input)?;
-        text
+        crate::java::decode_utf8(&bytes).into_owned()
     } else if name.ends_with(".bam") {
         let mut reader = bam::io::Reader::new(File::open(path).map_err(input)?);
         let mut header = reader.header_reader();
         header.read_magic_number().map_err(input)?;
         let mut raw = header.raw_sam_header_reader().map_err(input)?;
-        let mut text = String::new();
-        raw.read_to_string(&mut text).map_err(input)?;
-        text
+        let mut bytes = Vec::new();
+        raw.read_to_end(&mut bytes).map_err(input)?;
+        // htsjdk reads a BAM's header text one character per byte.
+        bytes.iter().copied().map(char::from).collect()
     } else if [".fa", ".fasta", ".fna", ".fa.gz", ".fasta.gz"]
         .iter()
         .any(|e| name.ends_with(e))
     {
         return fasta_dictionary(path);
     } else {
-        std::fs::read_to_string(path).map_err(input)?
+        crate::java::decode_utf8(&std::fs::read(path).map_err(input)?).into_owned()
     };
     let sequences = parse_sq_lines(&text).map_err(|message| Error::Intervals {
         path: path.to_path_buf(),
@@ -176,10 +178,11 @@ fn fasta_dictionary(path: &Path) -> Result<Vec<Sequence>> {
         return read_dictionary(&dict);
     }
     let fai = PathBuf::from(format!("{name}.fai"));
-    let text = std::fs::read_to_string(&fai).map_err(|source| Error::Input {
+    let bytes = std::fs::read(&fai).map_err(|source| Error::Input {
         path: fai.clone(),
         source,
     })?;
+    let text = crate::java::decode_utf8(&bytes);
     let mut sequences = Vec::new();
     for line in text.lines().filter(|l| !l.trim().is_empty()) {
         let mut fields = line.split('\t');
@@ -366,53 +369,50 @@ pub fn read_bed(text: &str, dictionary: &[Sequence], opts: &Options) -> Result<V
     Ok(intervals)
 }
 
-/// `IntervalCoordinateComparator`: contig, start, end, `+` before `-`, then
-/// a missing name before any name, names by code unit.
-pub fn sort(intervals: &mut [Interval]) {
-    intervals.sort_by(|a, b| {
-        (a.contig, a.start, a.end, a.negative_strand, &a.name).cmp(&(
-            b.contig,
-            b.start,
-            b.end,
-            b.negative_strand,
-            &b.name,
-        ))
-    });
-}
-
-/// `IntervalList.uniqued()`: sort, then merge runs of intervals that
-/// overlap or abut (`IntervalMergerIterator` with `combineAbuttingIntervals`,
-/// without `enforceSameStrands`). A merged interval keeps the strand of its
-/// first member and joins the distinct names of its members with `|`, in
-/// order, skipping missing ones (`IntervalList.merge`).
-pub fn uniqued(intervals: &[Interval]) -> Vec<Interval> {
-    let mut sorted = intervals.to_vec();
-    sort(&mut sorted);
-    let mut merged: Vec<(Interval, Vec<String>)> = Vec::new();
-    for next in sorted {
-        match merged.last_mut() {
-            Some((current, names))
-                if current.contig == next.contig && next.start <= current.end + 1 =>
-            {
-                current.end = current.end.max(next.end);
-                if let Some(name) = next.name
-                    && !names.contains(&name)
-                {
-                    names.push(name);
-                }
-            }
-            _ => {
-                let names = next.name.iter().cloned().collect();
-                merged.push((next, names));
-            }
+impl Interval {
+    /// The interval as `interval_ops` holds it. `read_bed` checked the
+    /// coordinates against the dictionary, whose lengths are Java `int`s.
+    fn to_ops(&self) -> interval_ops::Interval {
+        interval_ops::Interval {
+            contig: self.contig,
+            start: self.start as i32,
+            end: self.end as i32,
+            negative_strand: self.negative_strand,
+            name: self.name.clone(),
         }
     }
-    merged
+
+    fn from_ops(interval: interval_ops::Interval) -> Self {
+        Self {
+            contig: interval.contig,
+            start: i64::from(interval.start),
+            end: i64::from(interval.end),
+            negative_strand: interval.negative_strand,
+            name: interval.name,
+        }
+    }
+}
+
+/// `IntervalCoordinateComparator` (`interval_ops::ops::compare`): contig,
+/// start, end, `+` before `-`, then a missing name before any name, names
+/// by UTF-16 unit. A stable sort, as `List.sort`.
+pub fn sort(intervals: &mut [Interval]) {
+    let mut sorted: Vec<interval_ops::Interval> = intervals.iter().map(Interval::to_ops).collect();
+    sorted.sort_by(interval_ops::ops::compare);
+    for (slot, interval) in intervals.iter_mut().zip(sorted) {
+        *slot = Interval::from_ops(interval);
+    }
+}
+
+/// `IntervalList.uniqued()`: [`sort`], then `interval_ops::merge_intervals`
+/// with abutting intervals combined and names joined, as
+/// `IntervalMergerIterator` and `IntervalList.merge` do.
+pub fn uniqued(intervals: &[Interval]) -> Vec<Interval> {
+    let mut sorted: Vec<interval_ops::Interval> = intervals.iter().map(Interval::to_ops).collect();
+    sorted.sort_by(interval_ops::ops::compare);
+    interval_ops::merge_intervals(sorted, true, true)
         .into_iter()
-        .map(|(mut interval, names)| {
-            interval.name = (!names.is_empty()).then(|| names.join("|"));
-            interval
-        })
+        .map(Interval::from_ops)
         .collect()
 }
 
@@ -463,24 +463,41 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     Ok(MetricsOutput::text(&COLUMNS, rows, text).into())
 }
 
-/// The BED text, inflated when the name ends in `.gz`.
+/// The BED text, at most [`crate::interval_ops::MAX_LIST_BYTES`], decoded
+/// as the JDK decodes UTF-8 ([`crate::java::decode_utf8`]). A name with one
+/// of htsjdk's block-compressed extensions (`.gz`, `.gzip`, `.bgz`,
+/// `.bgzf`) is inflated as gzip members, plain gzip or bgzip: Picard 3.5.0
+/// reads a plain gzip BED under each of those names.
 fn read_bed_file(path: &Path) -> Result<String> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
     };
-    let file = File::open(path).map_err(input)?;
-    let mut text = String::new();
-    if path.to_string_lossy().ends_with(".gz") {
-        bgzf::io::Reader::new(file)
-            .read_to_string(&mut text)
+    let cap = crate::interval_ops::MAX_LIST_BYTES;
+    let file = std::io::BufReader::new(File::open(path).map_err(input)?);
+    let name = path.to_string_lossy();
+    let mut bytes = Vec::new();
+    if [".gz", ".gzip", ".bgz", ".bgzf"]
+        .iter()
+        .any(|extension| name.ends_with(extension))
+    {
+        crate::gzip::GzipReader::new(file)
+            .take(cap + 1)
+            .read_to_end(&mut bytes)
             .map_err(input)?;
     } else {
-        std::io::BufReader::new(file)
-            .read_to_string(&mut text)
-            .map_err(input)?;
+        file.take(cap + 1).read_to_end(&mut bytes).map_err(input)?;
     }
-    Ok(text)
+    if bytes.len() as u64 > cap {
+        return Err(Error::Intervals {
+            path: path.to_path_buf(),
+            message: format!("the BED holds more than {cap} bytes, the most read"),
+        });
+    }
+    Ok(match String::from_utf8(bytes) {
+        Ok(text) => text,
+        Err(e) => crate::java::decode_utf8(e.as_bytes()).into_owned(),
+    })
 }
 
 #[cfg(test)]
@@ -568,6 +585,31 @@ mod tests {
         assert!(read_bed("chr1\t0\t1001\n", &dictionary, &options()).is_err());
         assert!(read_bed("chr1\t1000\t1000\n", &dictionary, &options()).is_err());
         assert!(read_bed("chr1\t10\t5\n", &dictionary, &options()).is_err());
+    }
+
+    /// Picard 3.5.0 `BedToIntervalList KEEP_LENGTH_ZERO_INTERVALS=true
+    /// UNIQUE=true` on these lines: the interval with no base at 10 joins
+    /// 11-20, the one at 31 stays apart from 26-29.
+    #[test]
+    fn a_zero_length_interval_merges_as_htsjdk_merges_it() {
+        let keep = Options {
+            keep_length_zero_intervals: true,
+            ..options()
+        };
+        let bed = "chr1\t9\t9\tz\nchr1\t10\t20\tn\nchr1\t30\t30\tz2\nchr1\t25\t29\tm\n";
+        let unique = uniqued(&read_bed(bed, &dictionary(), &keep).expect("ok"));
+        let shown: Vec<_> = unique
+            .iter()
+            .map(|i| (i.start, i.end, i.name.clone().unwrap_or_default()))
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                (10, 20, "z|n".to_owned()),
+                (26, 29, "m".to_owned()),
+                (31, 30, "z2".to_owned())
+            ]
+        );
     }
 
     #[test]

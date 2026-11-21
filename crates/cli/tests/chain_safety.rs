@@ -476,10 +476,49 @@ fn a_thread_count_over_the_maximum_is_a_usage_error_everywhere() {
         let over = format!("{threads} is more than the maximum of 256 threads");
         let clap = format!("invalid value \"{threads}\": more than the maximum of 256 threads");
         let picard_threads = format!("threads={threads}");
-        let cases: [(&[&str], String, i32); 9] = [
+        let cases: [(&[&str], String, i32); 12] = [
             (
                 &["insert-size", BAM, "-o", &out, "--threads", threads],
                 format!("bammetrics insert-size: {over} (from --threads)\n"),
+                2,
+            ),
+            // A verb that reads no BAM ignores the count but checks it.
+            (
+                &[
+                    "interval-list-to-bed",
+                    "tests/data/intervals.interval_list",
+                    "-o",
+                    &out,
+                    "--threads",
+                    threads,
+                ],
+                format!("bammetrics interval-list-to-bed: {over} (from --threads)\n"),
+                2,
+            ),
+            (
+                &[
+                    "vcf-to-interval-list",
+                    "tests/data/intervals.vcf",
+                    "-o",
+                    &out,
+                    "--threads",
+                    threads,
+                ],
+                format!("bammetrics vcf-to-interval-list: {over} (from --threads)\n"),
+                2,
+            ),
+            (
+                &[
+                    "bed-to-interval-list",
+                    "tests/data/targets.bed",
+                    "-o",
+                    &out,
+                    "--sequence-dictionary",
+                    "tests/data/chr1.dict",
+                    "--threads",
+                    threads,
+                ],
+                format!("bammetrics bed-to-interval-list: {over} (from --threads)\n"),
                 2,
             ),
             (

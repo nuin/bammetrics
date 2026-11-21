@@ -323,6 +323,9 @@ table.
 | `create-baf-regress-file` | CreateBafRegressMetricsFile (the text bafRegress prints) | `PREFIX.bafregress_metrics` |
 | `create-verify-i-d-intensity-contamination-file` | CreateVerifyIDIntensityContaminationMetricsFile (the text VerifyIDIntensity prints) | `PREFIX.verifyidintensity_metrics` |
 | `arrays-variant-calling` | CollectArraysVariantCallingMetrics (an arrays VCF with its index; `--dbsnp` required) | `PREFIX.arrays_variant_calling_{detail,summary}_metrics`, `PREFIX.arrays_control_code_summary_metrics` |
+| `interval-list-tools` | IntervalListTools (interval lists as positionals or `-i`; `--second-input` for SUBTRACT, SYMDIFF and OVERLAPS) | `-o` interval list, or with `--scatter-count` above 1 the directory `-o` of `temp_NNNN_of_N/scattered.interval_list`; the `--output-value` count on standard output or in `--count-output`; no file without `-o` |
+| `scatter-intervals-by-ns` | ScatterIntervalsByNs (a FASTA with its `.fai` and `.dict`; `--max-to-merge`, `--output-type`) | `-o` interval list of `ACGTmer` and `Nmer` runs, `-o -` standard output |
+| `non-n-fasta-size` | NonNFastaSize (a FASTA with its `.fai` and `.dict`; `--intervals`) | the count and a line end, in `-o` or on standard output |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -1276,8 +1279,9 @@ standard input.
 - `--sort` (default true), `--unique`, `--drop-missing-contigs` and
   `--keep-length-zero-intervals` are Picard's options.
 - `--format json`, `jsonl`, `tsv` and `human` print the intervals as rows (`contig`,
-  `start`, `end`, `strand`, `name`), with no `sample`. `--threads` and `--sample` are
-  accepted and ignored: no BAM record is read, and an interval list has no sample.
+  `start`, `end`, `strand`, `name`), with no `sample`. `--threads` is checked (at most
+  256) and ignored: no BAM record is read. `--sample` is accepted and ignored: an interval
+  list has no sample.
 
 `hs-metrics`, `collect` and `qc` read a BED directly, so the verb is for Picard tools and
 other programs that take only interval lists.
@@ -1285,7 +1289,14 @@ other programs that take only interval lists.
 In `qc`, `--panel BED` runs the same conversion with the BAM as the dictionary and keeps
 `PREFIX.panel.interval_list`, the bytes `bammetrics bed-to-interval-list BED --from-bam
 BAM` writes. A panel whose first non-blank line starts with `@` is an interval list
-already, and prepare writes nothing for it. A `--panel` BED that is itself named
+already, and prepare writes nothing for it: the lists `IntervalListTools`,
+`ScatterIntervalsByNs` and `VcfToIntervalList` write go to `qc` and `hs-metrics --panel` as
+they are. A panel named `.gz`, `.gzip` or `.bfq` is inflated first, as htsjdk inflates it,
+then told by its first line in the same way; a gzip BED goes to `BedToIntervalList`, which
+inflates it as Picard does. A VCF (`##fileformat=VCF` on its first line, gzip or not)
+exits 2 (`a VCF is no panel`): `VcfToIntervalList` converts it. Gzip data under another
+name (`.bgz`) exits 2, as does a panel named `.interval_list` whose first line is no `@`
+header line: the hs reader takes either name at its word. A `--panel` BED that is itself named
 `PREFIX.panel.interval_list` exits 2 (`is an input; writing it would destroy it (from
 --panel)`), as does any planned file that is an input. The hs collector reads the `--panel`
 file itself, so its file, header line and `BAIT_SET` are the same with or without the
@@ -1295,6 +1306,75 @@ written again, and a later run without the BED removes it as a stale file. It is
 counted as a collector; when it fails (a contig the BAM header lacks), the summary lists it
 as an `ERROR` line and `qc` exits 1 (`exit 1: 1 collector(s) and 1 prepare step(s) failed`
 when hs fails on the same BED).
+
+### interval-list-to-bed
+
+```bash
+bammetrics interval-list-to-bed panel.interval_list -o panel.bed
+bammetrics interval-list-to-bed panel.interval_list -o - --score 0 --sort false
+bammetrics IntervalListToBed I=panel.interval_list O=panel.bed.gz
+```
+
+Picard's `IntervalListToBed`: one BED line per interval of the list, byte for byte the
+lines Picard writes. Each line holds the contig, the start less 1, the end, the name (`.`
+stays `.`), `--score` (`SCORE=`, default 500, any integer) and the strand. `--sort`
+(default true) orders the lines by contig, start, end, strand and name; `--sort false`
+keeps the file order.
+
+- The list is read as Picard's feature reader reads it: a record on a contig the header
+  lacks is skipped, and a file with no `@` line has no contig, so its BED is empty. A
+  record Picard rejects (not five fields, a start below 1, an end below start - 1, a strand
+  other than `+` or `-`, an end past a contig length other than 0) exits 1.
+- `-o FILE` is required; `-o -` writes standard output. A name ending in `.gz` is
+  compressed (BGZF, which inflates to Picard's text). `-o` naming the input exits 2, and a
+  failed run leaves no file.
+- A list of more than 500,000 intervals goes through Picard's sort spill, which keeps the
+  low byte of each name character: a name past U+00FF prints as Picard prints it. A name
+  with a character whose low byte is 0 exits 1.
+- An empty first line, or an empty line right after the `@` lines, exits 1, as in Picard.
+  A list of more than 20,000,000 intervals exits 1.
+- `--threads` is checked (at most 256) and ignored. `--format` takes `picard` only.
+
+`bed-to-interval-list --dict LIST` converts the BED back. The intervals come back in
+sorted order under `@HD VN:1.6 SO:coordinate` when each has a length above 0 and a name
+without a space or a double quote (`tests/concordance/test_interval_list_to_bed.py`
+checks both tools). `qc --panel` reads the BED.
+
+### vcf-to-interval-list
+
+```bash
+bammetrics vcf-to-interval-list calls.vcf.gz -o calls.interval_list
+bammetrics vcf-to-interval-list calls.vcf -o - --include-filtered --variant-id-method USE_FIRST
+bammetrics VcfToIntervalList I=calls.vcf O=calls.interval_list
+```
+
+Picard's `VcfToIntervalList`, byte for byte: `@HD VN:1.6`, one `@SQ` line per `##contig`
+line (`LN:0` without a length, `AS` from `assembly`), then one interval per record from
+`POS` to `END` (else the end of the reference allele) on `+`, named by its `ID` or
+`interval-N` for the Nth record without one. A record that overlaps or abuts the interval
+before it in file order joins it: with `--variant-id-method CONCAT_ALL` (the default) the
+interval spans both and joins the distinct names with `|`; with `USE_FIRST` it keeps the
+first start and name. An unsorted VCF merges only neighbours, as Picard does.
+
+- `--include-filtered` (`INCLUDE_FILTERED=`, `IF=`) keeps records whose `FILTER` is neither
+  `.` nor `PASS`.
+- A record on a contig without a `##contig` line, or past its length, is written as it is.
+  A VCF without `##contig` lines exits 1 (Picard fails with a `NullPointerException`).
+- Each record is checked as htsjdk's codec checks its site: a missing column, a `POS`,
+  `QUAL` or `END` that is not a number, an empty `ID` or `INFO`, a bad `FILTER` name, an
+  allele that is not one, or a repeated allele exits 1 with htsjdk's message. A failed run
+  leaves no file.
+- The header is read as htsjdk's codec reads it: `VCFv4.0` to `VCFv4.3`, the last
+  `##fileformat` line winning; a repeated `ID`, a `##INFO` line without `Description` and
+  a `##` line without `=` are read. `VCFv3.3`, `VCFv4.4`, `VCFv5.0`, a `##INFO` line with
+  a bad `Type` or `Number` and an unclosed quote exit 1. A header over 64 MiB exits 1.
+- The input is plain text or gzip (BGZF or plain), told by its first bytes. A `.bcf` input
+  exits 2: BCF is not read.
+- Each interval is written as it is made, so memory does not grow with the VCF.
+- `-o FILE` is required; `-o -` writes standard output; a name ending in `.gz` is compressed.
+  `--threads` is checked (at most 256) and ignored. `--format` takes `picard` only.
+
+`qc --panel` takes the interval list as it is.
 
 ### create-sequence-dictionary
 
@@ -1330,6 +1410,52 @@ without `O=` writes the FASTA name with its extension replaced by `.dict`, besid
 The tools that look for a `.dict` beside a FASTA (`bed-to-interval-list --dict ref.fa`,
 `SD=ref.fa`) read the file this verb writes, and Picard's CollectWgsMetrics takes it as
 the dictionary of `R=ref.fa`.
+
+### scatter-intervals-by-ns and non-n-fasta-size
+
+```bash
+bammetrics scatter-intervals-by-ns ref.fa -o ref.acgt.interval_list --output-type ACGT --max-to-merge 50
+bammetrics ScatterIntervalsByNs R=ref.fa O=ref.interval_list
+bammetrics non-n-fasta-size ref.fa
+bammetrics NonNFastaSize I=ref.fa INTERVALS=panel.interval_list O=panel.non_n
+```
+
+Both read the FASTA as htsjdk's indexed reader does: the name ends in a FASTA extension,
+the `.fai` beside it gives each contig's offset and line geometry, and the `.dict` (the
+FASTA name with its extension replaced by `.dict`, else the name plus `.dict`) must list
+the `.fai`'s contigs in its order with its lengths. A bgzip FASTA named `.gz` is read
+through its `.gzi`. The bases are read 1 MiB at a time, whatever the contig length; the
+`.fai` and `.dict` are read whole, at most 64 MiB each
+(`tests/concordance/test_scatter_intervals_by_ns.py`, `test_non_n_fasta_size.py`,
+fixtures from `tests/concordance/n_run_refs.py`).
+
+- `scatter-intervals-by-ns` writes `@HD VN:1.6 SO:coordinate`, the `.dict`'s `@SQ` lines,
+  then one interval per run: `Nmer` for a run of `N`, `n` or `.`, `ACGTmer` for a run of any
+  other byte (IUPAC codes, `-` and `*` included). An `Nmer` of at most `--max-to-merge`
+  bases (default 1) between two `ACGTmer`s joins them, from the start of the list, so a
+  joined interval may join the next. `--output-type` (`ACGT`, `N` or `BOTH`, the default;
+  upper case only) picks the intervals written. Each interval is written as soon as it is
+  decided: at most three are held. `-o` is required; `-o -` writes standard output, and a
+  name ending in `.gz` is written as BGZF. `--format` takes `picard` only. Python returns
+  one row per contig: its length and the `ACGTmer` and `Nmer` intervals and bases.
+- `non-n-fasta-size` counts every base but `N` and `n` (IUPAC codes and `.` count) and
+  writes the number and a line end. `--intervals FILE` (an interval list) counts only the
+  bases inside it; its `@SQ` line `k` stands for the FASTA's contig `k`, whatever the name,
+  as Picard's mask matches them. `--format json` and the other forms print one row,
+  `non_n_bases`. `--threads` is checked (at most 256) and ignored; `--sample` is accepted
+  and ignored.
+- Both exit 1 without a `.fai`, without a `.dict` or with one of no `@SQ` line, with a
+  `.dict` whose contigs or lengths differ from the `.fai`, and on a `.fai` line with 0
+  bases per line, as Picard fails. `scatter-intervals-by-ns` also exits 1 on a contig of
+  no base, which Picard cannot index. A FASTA that ends before the bases its `.fai` gives,
+  and a gzip FASTA that is not bgzip, exit 1 where Picard reads bytes that are no bases
+  (`KNOWN_DIFFERENCES.md`). A `.fai` line is read as htsjdk's `Scanner` reads it (the
+  pattern `(.+)\t+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)` found in the line, a blank line before a
+  later entry and a last entry with no line end refused). A FASTA or `.dict` that is no
+  regular file exits 1 before it is opened. No output may be the FASTA, its `.fai`, `.gzi`
+  or `.dict`, or the `--intervals` file; a failed run writes no file, and with `-o -` prints
+  nothing: the list is copied to standard output once it is whole.
+- Neither reads a BAM, so neither is a step of `chain` (exit 2).
 
 ### mark-duplicates
 
@@ -1509,6 +1635,37 @@ Every check, threshold and form is in [docs/doctor.md](doctor.md).
 bammetrics doctor sample.cram -R ref.fa --expect-build hg38
 bammetrics doctor sample.bam --sample-sheet samples.csv --sample NA12878 --format json
 ```
+
+### interval-list-tools
+
+`IntervalListTools` of Picard 3.5.0 (wave W12, `crates/core/src/interval_list_tools.rs`).
+Each input list is padded by `--padding`, the lists are combined by `--action`, then the
+result is sorted, inverted (`--invert`), merged (`--unique`, `--dont-merge-abutting`) and
+broken at `--break-bands-at-multiples-of`, in Picard's order. `-o` gets the list, or with
+`--scatter-count` (or `--scatter-content`) above 1 a directory of
+`temp_NNNN_of_N/scattered.interval_list` files, renamed into place as one set; a run that
+fails leaves none. `--output-value BASES` or `INTERVALS` prints the count of what was
+written to standard output, or to `--count-output`; without `-o` no list is written. The
+`@PG` line holds Picard's command line for the same options, so the files equal
+Picard's byte for byte. A file named exactly `.vcf`, `.vcf.gz` or `.vcf.bgz` is read as a
+VCF (`--include-filtered` keeps its filtered records); every other name is an interval
+list, as in Picard. A chain refuses the verb as a step: it reads no BAM.
+
+Stated limits: a list or VCF holds at most 20,000,000 intervals, 1,000,000 header lines
+and 8,000,000 header fields; an intersection (`INTERSECT`, `SUBTRACT`, `SYMDIFF`) makes
+at most 10,000,000 overlapping pairs and 256 MiB of names; a scatter makes at most
+100,000 lists and 32 GiB of text. A value with a line feed exits 2 before any file, as
+Picard fails before it reads. A `--count-output` inside a list directory of the scatter
+is refused.
+
+```bash
+bammetrics interval-list-tools panel_a.interval_list -i panel_b.interval_list --action UNION -o union.interval_list
+bammetrics IntervalListTools I=targets.interval_list SI=blacklist.interval_list ACTION=SUBTRACT PADDING=50 O=kept.interval_list
+bammetrics interval-list-tools genome.interval_list --scatter-count 24 -M BALANCING_WITHOUT_INTERVAL_SUBDIVISION -o shards
+bammetrics interval-list-tools targets.interval_list --unique --output-value BASES
+```
+
+`qc --panel` takes the list it writes.
 
 ## Post verbs
 
@@ -1796,7 +1953,7 @@ purpose is listed in KNOWN_DIFFERENCES.md.
 
 The worked examples of docs/05 section 2.5 that work today, written against the committed
 fixtures so each runs from the repository root as shown (`tests/data/insert_size.bam` has
-no `@RG SM`, so the sample is the BAM name). Output is what 0.29.0 prints; long lines are
+no `@RG SM`, so the sample is the BAM name). Output is what 0.30.0 prints; long lines are
 cut.
 
 **1 and 2. One tool, as Picard text or machine-readable.**
@@ -1865,7 +2022,7 @@ $ for bam in bams/*.bam; do
         -o runs/2026-11-02/$(basename "$bam" .bam) -q > /dev/null
   done
 $ bammetrics report runs/2026-11-02/ --preset clinical-panel
-2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.29.0
+2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.30.0
 FAIL        NA1  7 fail, 1 warn, 9 pass, 1 not measured
   FAIL  Mean target coverage is 0.377778, below the fail limit of 100
   ...

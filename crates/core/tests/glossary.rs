@@ -284,6 +284,19 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
         "CheckDuplicateMarking",
         vec![bam.clone(), out("bad_querynames.txt")],
     );
+    // The two interval converters write their file themselves and return
+    // rows without a class.
+    args.insert(
+        "IntervalListToBed",
+        vec![
+            format!("I={DATA}/targets.interval_list"),
+            out("targets.bed"),
+        ],
+    );
+    args.insert(
+        "VcfToIntervalList",
+        vec![format!("I={calls}"), out("calls.interval_list")],
+    );
     args.insert(
         "GenotypeConcordance",
         vec![
@@ -386,6 +399,25 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
             format!("DBSNP={DATA}/arrays/dbsnp.vcf"),
             out("arrays"),
         ],
+    );
+    // An interval list and no metrics file: the rows have no class.
+    args.insert(
+        "IntervalListTools",
+        vec![
+            format!("I={DATA}/targets.interval_list"),
+            "PADDING=50".to_owned(),
+            out("padded.interval_list"),
+        ],
+    );
+    // Wave W12: tests/data/n_runs.fa of tests/concordance/n_run_refs.py. Both
+    // write a file that is no metrics file and return rows without a class.
+    args.insert(
+        "ScatterIntervalsByNs",
+        vec![format!("R={DATA}/n_runs.fa"), out("n_runs.interval_list")],
+    );
+    args.insert(
+        "NonNFastaSize",
+        vec![format!("I={DATA}/n_runs.fa"), out("n_runs.non_n")],
     );
     args
 }

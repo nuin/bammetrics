@@ -397,26 +397,29 @@ One failure lists every gap of every tool with the edit that closes it. Wave W05
 docs/07 added `ViewSam` (tool 34, `test_view_sam.py`), `SortSam` (tool 35,
 `test_sort_sam.py`) and `BuildBamIndex` (tool 36, `test_build_bam_index.py`), each with
 an argument list in the glossary test (`BuildBamIndex` returns rows without a class). The
-60 tools pass at 0.29.0 (wave W07 adds `CollectMtCopyNumberMetrics` and
+65 tools pass at 0.30.0 (wave W07 adds `CollectMtCopyNumberMetrics` and
 `CollectExonCoverageMetrics`, wave W08 `CollectAdapterContentMetrics`,
 `CollectDuplicateByTileMetrics`, `CollectTelomereMetrics` and `CollectIndexDepthMetrics`,
 wave W09 the six record-editing tools, wave W10 `AddOrReplaceReadGroups`,
 `RevertOriginalBaseQualitiesAndAddMateCigar`, `SplitSamByLibrary`,
 `SplitSamByNumberOfReads`, `GatherBamFiles` and `CalculateReadGroupChecksum`, wave W11
 `CollectQualityYieldMetricsSNVQ`, `CollectUmiPrevalenceMetrics`, `CollectRrbsMetrics` and
-the three `picard.arrays` tools): 37 have a module named after them (`test_exon_coverage.py`, `test_duplicate_by_tile.py`,
+the three `picard.arrays` tools, wave W12 `IntervalListTools`, `IntervalListToBed`,
+`VcfToIntervalList`, `ScatterIntervalsByNs` and `NonNFastaSize`): 42 have a module named after them (`test_exon_coverage.py`, `test_duplicate_by_tile.py`,
 `test_index_depth.py`, the six of W09, `test_add_comments_to_bam.py` to
 `test_set_nm_and_uq_tags.py`, and the six of W10, `test_add_or_replace_read_groups.py` to
 `test_calculate_read_group_checksum.py`, and the six of W11, `test_quality_yield_s_n_v_q.py`,
 `test_umi_prevalence.py`, `test_rrbs.py`, `test_create_baf_regress_metrics_file.py`,
 `test_create_verify_i_d_intensity_contamination_metrics_file.py` and
-`test_arrays_variant_calling.py`, among them), 18 are mapped in `CONCORDANCE` to a shared module
+`test_arrays_variant_calling.py`, and the five of W12, `test_interval_list_tools.py`,
+`test_interval_list_to_bed.py`, `test_vcf_to_interval_list.py`,
+`test_scatter_intervals_by_ns.py` and `test_non_n_fasta_size.py`, among them), 18 are mapped in `CONCORDANCE` to a shared module
 (`test_read_level.py` 6, `test_wgs_metrics.py` 3, `test_variant_tools.py` 3, six others 1
 each), and 5 are only in `NO_PICARD_ORACLE` (not Picard tools): `CollectCoverageGaps`,
 `CollectSexCheckMetrics`, `CollectMtCopyNumberMetrics`, `CollectAdapterContentMetrics` and
 `CollectTelomereMetrics`. The 7 tools of docs/06 are all in `NO_PICARD_ORACLE`; 2 of them,
 `CollectDuplicateByTileMetrics` and `CollectIndexDepthMetrics`, also have a module and are
-counted among the 37. `test_duplicate_by_tile.py` checks its `ALL` row against Picard
+counted among the 42. `test_duplicate_by_tile.py` checks its `ALL` row against Picard
 `MarkDuplicates`, `test_index_depth.py` its counts against `samtools idxstats`. `FifoBuffer` (wave W04 of docs/07) is tool 33. Its module is
 `tests/concordance/test_fifo_buffer.py`. It is a line of `EXEMPT`: it copies standard
 input to standard output and writes no metrics column. The six tools of wave W09 are the

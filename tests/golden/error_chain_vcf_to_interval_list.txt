@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
++
+vcf-to-interval-list
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (vcf-to-interval-list): VcfToIntervalList reads a VCF file and no BAM, and a chain hands on the records of a BAM: it cannot be a step
+  run it on its own: bammetrics vcf-to-interval-list --help
+  the steps: bammetrics chain --help

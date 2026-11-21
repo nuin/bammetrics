@@ -75,6 +75,18 @@ const FIXTURES: &[(&str, &str)] = &[
     ("AVCF", "tests/data/arrays/arrays.vcf.gz"),
     ("AVCF_PLAIN", "tests/data/arrays/arrays.vcf"),
     ("ADBSNP", "tests/data/arrays/dbsnp.vcf"),
+    ("ILA", "tests/data/intervals_a.interval_list"),
+    ("ILO", "tests/data/intervals_other.interval_list"),
+    ("IVL", "tests/data/intervals.interval_list"),
+    ("IVCF", "tests/data/intervals.vcf"),
+    ("IVCF_BAD", "tests/data/intervals_bad.vcf"),
+    ("NR", "tests/data/n_runs.fa"),
+    ("NR_IL", "tests/data/n_runs.interval_list"),
+    ("NR_PANEL", "tests/data/n_runs_panel.interval_list"),
+    ("IL_GZ", "tests/data/targets.interval_list.gz"),
+    ("BED_GZ", "tests/data/targets.bed.gz"),
+    ("BED_BGZ", "tests/data/targets_bed.bgz"),
+    ("BED_AS_IL", "tests/data/targets_bed.interval_list"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -816,6 +828,79 @@ const ARRAYS_CASES: &[Case] = &[
     case!("error_chain_arrays_variant_calling", "chain", "MD", "-o", "OUT/s", "+", "arrays-variant-calling"),
 ];
 
+/// Wave W12: `IntervalListTools` on `tests/data/intervals_a.interval_list`
+/// and `targets.interval_list` (`tests/data/make_interval_list_fixtures.py`):
+/// the Picard face in both syntaxes, the verb, a scatter directory, the
+/// counts and the errors.
+#[rustfmt::skip]
+const INTERVAL_LIST_TOOLS_CASES: &[Case] = &[
+    case!("picard_interval_list_tools_union", "IntervalListTools", "I=ILA", "I=IL", "ACTION=UNION", "O=OUT/union.interval_list", "COMMENT=golden"),
+    case!("picard_interval_list_tools_subtract_bases", "IntervalListTools", "ACTION=SUBTRACT", "I=IL", "SI=ILA", "PADDING=10", "O=OUT/subtract.interval_list", "OUTPUT_VALUE=BASES"),
+    case!("picard_interval_list_tools_count_only", "IntervalListTools", "I=ILA", "OUTPUT_VALUE=INTERVALS"),
+    case!("picard_interval_list_tools_scatter", "IntervalListTools", "I=ILA", "I=IL", "SCATTER_COUNT=3", "M=INTERVAL_COUNT_WITH_DISTRIBUTED_REMAINDER", "O=OUT/scatter", "OUTPUT_VALUE=BASES", "COUNT_OUTPUT=OUT/count.txt"),
+    case!("picard_interval_list_tools_invert_bands", "IntervalListTools", "I=ILA", "INVERT=true", "BRK=20000", "O=OUT/inverted.interval_list"),
+    case!("picard_interval_list_tools_dashed", "IntervalListTools", "--INPUT", "ILA", "--ACTION", "OVERLAPS", "--SECOND_INPUT", "IL", "--OUTPUT", "OUT/overlaps.interval_list"),
+    case!("verb_interval_list_tools", "interval-list-tools", "ILA", "-i", "IL", "--action", "INTERSECT", "--unique", "-o", "OUT/intersect.interval_list"),
+    case!("verb_interval_list_tools_stdout", "interval-list-tools", "ILA", "--no-sort", "--dont-merge-abutting", "--comment", "unsorted", "-o", "-"),
+    case!("verb_interval_list_tools_scatter_content", "interval-list-tools", "ILA", "--scatter-content", "2", "-M", "INTERVAL_COUNT", "-o", "OUT/by_count", "--output-value", "INTERVALS"),
+    case!("error_interval_list_tools_no_second_input", "IntervalListTools", "I=ILA", "ACTION=SUBTRACT", "O=OUT/x.interval_list"),
+    case!("error_interval_list_tools_padding", "IntervalListTools", "I=ILA", "PADDING=-5", "O=OUT/x.interval_list"),
+    case!("error_interval_list_tools_count_output_none", "IntervalListTools", "I=ILA", "COUNT_OUTPUT=OUT/c.txt"),
+    case!("error_interval_list_tools_vcf", "IntervalListTools", "I=AVCF_PLAIN", "O=OUT/x.interval_list"),
+    case!("error_interval_list_tools_dictionary", "IntervalListTools", "I=ILA", "I=ILO", "ACTION=INTERSECT", "O=OUT/x.interval_list"),
+    case!("error_verb_interval_list_tools_input_output", "interval-list-tools", "ILA", "-o", "ILA"),
+    case!("error_chain_interval_list_tools", "chain", "MD", "-o", "OUT/s", "+", "interval-list-tools"),
+];
+
+/// Wave W12: `IntervalListToBed` and `VcfToIntervalList` on the fixtures of
+/// `tests/data/make_interval_fixtures.py`.
+#[rustfmt::skip]
+const INTERVAL_CONVERT_CASES: &[Case] = &[
+    case!("picard_interval_list_to_bed", "IntervalListToBed", "I=IVL", "O=OUT/intervals.bed"),
+    case!("picard_interval_list_to_bed_unsorted", "IntervalListToBed", "I=IVL", "O=OUT/intervals.bed", "SORT=false", "SCORE=-7"),
+    case!("verb_interval_list_to_bed", "interval-list-to-bed", "IL", "-o", "-", "--score", "1000"),
+    case!("error_interval_list_to_bed_input_output", "IntervalListToBed", "I=IVL", "O=IVL"),
+    case!("error_verb_interval_list_to_bed_no_output", "interval-list-to-bed", "IVL"),
+    case!("picard_vcf_to_interval_list", "VcfToIntervalList", "I=IVCF", "O=OUT/intervals.interval_list"),
+    case!("picard_vcf_to_interval_list_use_first", "VcfToIntervalList", "I=IVCF", "O=OUT/intervals.interval_list", "INCLUDE_FILTERED=true", "VARIANT_ID_METHOD=USE_FIRST"),
+    case!("verb_vcf_to_interval_list", "vcf-to-interval-list", "IVCF", "-o", "-", "--include-filtered"),
+    case!("error_vcf_to_interval_list_bad_record", "VcfToIntervalList", "I=IVCF_BAD", "O=OUT/bad.interval_list"),
+    case!("error_vcf_to_interval_list_method", "VcfToIntervalList", "I=IVCF", "O=OUT/x.interval_list", "VARIANT_ID_METHOD=ALL"),
+    case!("error_chain_vcf_to_interval_list", "chain", "MD", "-o", "OUT/s", "+", "vcf-to-interval-list"),
+    case!("error_chain_interval_list_to_bed", "chain", "MD", "-o", "OUT/s", "+", "interval-list-to-bed"),
+];
+
+/// Wave W12: `ScatterIntervalsByNs` and `NonNFastaSize` on
+/// `tests/data/n_runs.fa` (`tests/concordance/n_run_refs.py --fixtures`),
+/// and `qc --panel` with an interval list: gzip, and the ACGTmer list
+/// `ScatterIntervalsByNs` writes for the masked `ref_100k.fa`.
+#[rustfmt::skip]
+const N_RUNS_CASES: &[Case] = &[
+    case!("picard_scatter_intervals_by_ns", "ScatterIntervalsByNs", "R=NR", "O=OUT/n_runs.interval_list"),
+    case!("picard_scatter_intervals_by_ns_acgt", "ScatterIntervalsByNs", "R=NR", "O=OUT/acgt.interval_list", "MAX_TO_MERGE=2", "OUTPUT_TYPE=ACGT"),
+    case!("verb_scatter_intervals_by_ns", "scatter-intervals-by-ns", "NR", "-o", "OUT/n.interval_list", "--output-type", "N", "-N", "4"),
+    case!("verb_scatter_intervals_by_ns_stdout", "scatter-intervals-by-ns", "NR", "-o", "-"),
+    case!("error_scatter_intervals_by_ns_no_dict", "ScatterIntervalsByNs", "R=REF", "O=OUT/ref.interval_list"),
+    case!("error_scatter_intervals_by_ns_output_type", "ScatterIntervalsByNs", "R=NR", "O=OUT/x.interval_list", "OT=acgt"),
+    case!("error_verb_scatter_intervals_by_ns_no_output", "scatter-intervals-by-ns", "NR"),
+    case!("error_chain_scatter_intervals_by_ns", "chain", "MD", "-o", "OUT/s", "+", "scatter-intervals-by-ns"),
+    case!("picard_non_n_fasta_size", "NonNFastaSize", "I=NR", "O=OUT/n_runs.non_n"),
+    case!("picard_non_n_fasta_size_intervals", "NonNFastaSize", "I=NR", "INTERVALS=NR_IL", "O=OUT/masked.non_n"),
+    case!("verb_non_n_fasta_size", "non-n-fasta-size", "NR"),
+    case!("verb_non_n_fasta_size_json", "non-n-fasta-size", "NR", "--intervals", "NR_IL", "--format", "json"),
+    case!("error_non_n_fasta_size_no_dict", "NonNFastaSize", "I=REF", "O=OUT/ref.non_n"),
+    case!("error_chain_non_n_fasta_size", "chain", "MD", "-o", "OUT/s", "+", "non-n-fasta-size"),
+    case!("qc_panel_interval_list_gz", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--panel", "IL_GZ", "-R", "REF", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("qc_panel_scatter_intervals", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--panel", "NR_PANEL", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("plan_panel_interval_list", "plan", "IS", "-o", "OUT/sample", "--panel", "NR_PANEL"),
+    case!("verb_hs_metrics_panel_gz", "hs-metrics", "IS", "--panel", "IL_GZ", "--sample-size", "1000"),
+    case!("error_qc_panel_vcf", "qc", "IS", "-o", "OUT/sample", "--panel", "AVCF_PLAIN"),
+    case!("picard_bed_to_interval_list_gzip", "BedToIntervalList", "I=BED_GZ", "SD=DICT", "O=OUT/gz.interval_list"),
+    case!("qc_panel_bed_gz", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--panel", "BED_GZ", "-R", "REF", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("error_qc_panel_gzip_misnamed", "qc", "IS", "-o", "OUT/sample", "--panel", "BED_BGZ"),
+    case!("error_qc_panel_bed_as_interval_list", "qc", "IS", "-o", "OUT/sample", "--panel", "BED_AS_IL"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -1287,6 +1372,21 @@ fn documented_arrays_commands_on_the_fixtures() {
     check(ARRAYS_CASES);
 }
 
+#[test]
+fn documented_interval_list_tools_commands_on_the_fixtures() {
+    check(INTERVAL_LIST_TOOLS_CASES);
+}
+
+#[test]
+fn documented_interval_converter_commands_on_the_fixtures() {
+    check(INTERVAL_CONVERT_CASES);
+}
+
+#[test]
+fn documented_n_runs_and_panel_commands_on_the_fixtures() {
+    check(N_RUNS_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1400,6 +1500,9 @@ fn case_names_are_unique() {
         .chain(SNVQ_UMI_CASES)
         .chain(RRBS_CASES)
         .chain(ARRAYS_CASES)
+        .chain(INTERVAL_LIST_TOOLS_CASES)
+        .chain(INTERVAL_CONVERT_CASES)
+        .chain(N_RUNS_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

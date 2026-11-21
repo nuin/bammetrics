@@ -630,6 +630,22 @@ fn cases(built: &Built) -> Vec<Case> {
             picard_outputs: commented_bam,
         },
         Case {
+            verb: "interval-list-to-bed",
+            class: "IntervalListToBed",
+            verb_args: strings(&[IL]),
+            picard_args: strings(&[&format!("I={IL}")]),
+            option: Some(("SCORE", "7")),
+            picard_outputs: single,
+        },
+        Case {
+            verb: "vcf-to-interval-list",
+            class: "VcfToIntervalList",
+            verb_args: strings(&[&built.vcf]),
+            picard_args: strings(&[&format!("I={}", built.vcf)]),
+            option: Some(("VARIANT_ID_METHOD", "USE_FIRST")),
+            picard_outputs: single,
+        },
+        Case {
             verb: "calculate-read-group-checksum",
             class: "CalculateReadGroupChecksum",
             verb_args: strings(&["tests/data/oxog.bam"]),
@@ -692,6 +708,22 @@ fn cases(built: &Built) -> Vec<Case> {
             ]),
             option: Some(("CALL_RATE_PF_THRESHOLD", "0.5")),
             picard_outputs: prefix,
+        },
+        Case {
+            verb: "scatter-intervals-by-ns",
+            class: "ScatterIntervalsByNs",
+            verb_args: strings(&["tests/data/n_runs.fa"]),
+            picard_args: strings(&["R=tests/data/n_runs.fa"]),
+            option: Some(("MAX_TO_MERGE", "2")),
+            picard_outputs: single,
+        },
+        Case {
+            verb: "non-n-fasta-size",
+            class: "NonNFastaSize",
+            verb_args: strings(&["tests/data/n_runs.fa"]),
+            picard_args: strings(&["I=tests/data/n_runs.fa"]),
+            option: Some(("INTERVALS", "tests/data/n_runs.interval_list")),
+            picard_outputs: single,
         },
     ]
 }
@@ -815,17 +847,20 @@ fn every_registry_tool_is_in_the_matrix() {
     let covered: Vec<&str> = cases(&built).iter().map(|c| c.class).collect();
     // FifoBuffer writes no file: tests/fifo_buffer.rs compares its spellings.
     // BuildBamIndex writes a binary index: tests/build_bam_index.rs compares its.
+    // IntervalListTools writes its command line, output path included, into
+    // the list: tests/interval_list_tools.rs compares its spellings.
     let elsewhere = [
         "AccumulateVariantCallingMetrics",
         "FifoBuffer",
         "BuildBamIndex",
+        "IntervalListTools",
     ];
     let missing: Vec<&&str> = classes
         .iter()
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 60);
+    assert_eq!(classes.len(), 65);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

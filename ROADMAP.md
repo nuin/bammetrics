@@ -61,13 +61,15 @@ shape, `SplitSamByLibrary` and `SplitSamByNumberOfReads` as fan-out sinks of a c
 and `CollectRrbsMetrics` as chain taps, `CollectUmiPrevalenceMetrics` over the duplicate-set
 sort, and `CreateBafRegressMetricsFile`, `CreateVerifyIDIntensityContaminationMetricsFile`
 and `CollectArraysVariantCallingMetrics` on text and arrays VCF input (tools 55 to 60,
-0.29.0, wave W11). CHANGELOG.md has each.
+0.29.0, wave W11), and the interval layer `interval_ops` with `IntervalListTools`,
+`IntervalListToBed`, `VcfToIntervalList`, `ScatterIntervalsByNs` and `NonNFastaSize`
+(tools 61 to 65, 0.30.0, wave W12). CHANGELOG.md has each.
 
 Remaining for bammetrics:
 
 - bioconda recipe and a PyPI release (first push of the branch runs the CI workflow).
 - The Picard tools still to build, further formats and DOCX reports: the program plan
-  `docs/07_full_parity_program.md` (waves W12 onward);
+  `docs/07_full_parity_program.md` (waves W13 onward);
   docs/04 section 4 holds the P9 queue.
 
 Exit criterion: a `pip install`-able library that produces correct, hand-verified numbers.
