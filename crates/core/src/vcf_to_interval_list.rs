@@ -27,15 +27,19 @@
 //! `.gz` is compressed: Picard writes plain gzip, this tool BGZF, and both
 //! inflate to the same text (docs/07 D97). A failed run leaves no `OUTPUT`.
 //!
-//! The Python function returns one row per interval written (`COLUMNS`).
+//! Each merged interval is written as it is made, so memory holds one
+//! interval and the contig names. The Python function returns one row per
+//! interval written (`COLUMNS`), read back from `OUTPUT` (none when
+//! `OUTPUT` is a device or a pipe).
 
+use std::cell::RefCell;
 use std::collections::HashMap;
-use std::io::{self, Write};
+use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::error::{Error, Result};
-use crate::interval_ops::{self, Header, Interval, VcfIntervals};
+use crate::interval_ops::{self, Interval, VcfIntervals};
 use crate::metric::{MetricsOutput, RowSource, ToolOutput, Value};
 use crate::registry::{Invocation, Opt, Tool};
 
@@ -106,41 +110,74 @@ impl Options {
     }
 }
 
-/// The intervals written, their contigs by index into `names`: the
-/// dictionary's names, then each other name in the order met.
+/// The intervals written, read back from `OUTPUT` when rows are asked for,
+/// so no interval is held while the VCF is read.
 #[derive(Debug)]
 pub struct Written {
-    pub header: Header,
-    pub names: Vec<String>,
-    pub intervals: Vec<Interval>,
+    /// `OUTPUT`.
+    pub path: PathBuf,
+    /// The header lines before the first interval.
+    pub header_lines: usize,
+    /// The intervals written; 0 rows for an `OUTPUT` that is not a regular
+    /// file (a device or a pipe), which cannot be read back.
+    pub count: usize,
 }
 
 impl Written {
-    fn row(&self, interval: &Interval) -> [Value; 5] {
-        [
-            Value::Str(self.names[interval.contig].clone()),
-            Value::Int(i64::from(interval.start)),
-            Value::Int(i64::from(interval.end)),
-            Value::Str("+".to_owned()),
-            interval.name.clone().into(),
-        ]
-    }
-}
-
-impl RowSource for Written {
-    fn len(&self) -> usize {
-        self.intervals.len()
-    }
-
-    fn each(&self, row: &mut dyn FnMut(&[Value]) -> io::Result<()>) -> io::Result<()> {
-        for interval in &self.intervals {
-            row(&self.row(interval))?;
+    /// The rows of the lines written: contig, start, end, strand, name.
+    fn rows(&self, row: &mut dyn FnMut(&[Value]) -> io::Result<()>) -> io::Result<()> {
+        if self.count == 0 {
+            return Ok(());
+        }
+        let file = std::fs::File::open(&self.path)?;
+        let text: Box<dyn BufRead> = if interval_ops::gzip_name(&self.path) {
+            Box::new(BufReader::new(crate::gzip::GzipReader::new(
+                BufReader::new(file),
+            )))
+        } else {
+            Box::new(BufReader::new(file))
+        };
+        for line in text.split(b'\n').skip(self.header_lines).take(self.count) {
+            let line = String::from_utf8(line?)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            let fields: Vec<&str> = line.splitn(5, '\t').collect();
+            let [contig, start, end, strand, name] = fields[..] else {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("{}: not an interval line: {line}", self.path.display()),
+                ));
+            };
+            let number = |text: &str| {
+                text.parse::<i64>()
+                    .map(Value::Int)
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+            };
+            row(&[
+                Value::Str(contig.to_owned()),
+                number(start)?,
+                number(end)?,
+                Value::Str(strand.to_owned()),
+                Value::Str(name.to_owned()),
+            ])?;
         }
         Ok(())
     }
 }
 
-/// Read `input`, merge and write `output`, as `doWork` does.
+impl RowSource for Written {
+    fn len(&self) -> usize {
+        self.count
+    }
+
+    fn each(&self, row: &mut dyn FnMut(&[Value]) -> io::Result<()>) -> io::Result<()> {
+        self.rows(row)
+    }
+}
+
+/// Read `input`, merge and write `output`, as `doWork` does: each merged
+/// interval is written as the merger hands it out, so memory holds one
+/// interval and the contig names, whatever the size of the VCF. A failed
+/// run leaves no `output`.
 pub fn convert(input: &Path, output: &Path, opts: &Options) -> Result<Written> {
     if input
         .extension()
@@ -154,62 +191,69 @@ pub fn convert(input: &Path, output: &Path, opts: &Options) -> Result<Written> {
     let inputs = [input.to_path_buf()];
     interval_ops::check_target(output, &inputs)?;
     let (header, mut sites) = VcfIntervals::open(input, opts.include_filtered)?;
-    let mut names: Vec<String> = header.sequences.iter().map(|s| s.name.clone()).collect();
+    let header_text = header.encode();
+    // The dictionary's names, then each other contig in the order met: the
+    // reader adds to it while the writer looks names up.
+    let names: RefCell<Vec<String>> =
+        RefCell::new(header.sequences.iter().map(|s| s.name.clone()).collect());
     let mut index: HashMap<String, usize> = header.name_index();
-    let mut failure = None;
-    let read = std::iter::from_fn(|| match sites.next_interval() {
-        Ok(Some(site)) => {
-            let contig = *index.entry(site.contig).or_insert_with_key(|name| {
-                names.push(name.clone());
-                names.len() - 1
-            });
-            Some(Interval {
-                contig,
-                start: site.start,
-                end: site.end,
-                negative_strand: false,
-                name: Some(site.name),
-            })
-        }
-        Ok(None) => None,
-        Err(error) => {
-            failure = Some(error);
-            None
-        }
-    });
-    let merged: Vec<Interval> = interval_ops::merged(read, true, opts.concatenate_names).collect();
-    if let Some(error) = failure {
-        return Err(error);
-    }
-    let written = Written {
-        header,
-        names,
-        intervals: merged,
-    };
+    let mut count = 0usize;
     interval_ops::write_text(output, &inputs, |out| {
-        write_list(&written, out).map_err(|source| Error::Output {
+        let mut failure = None;
+        let read = std::iter::from_fn(|| match sites.next_interval() {
+            Ok(Some(site)) => {
+                let contig = *index.entry(site.contig).or_insert_with_key(|name| {
+                    let mut names = names.borrow_mut();
+                    names.push(name.clone());
+                    names.len() - 1
+                });
+                Some(Interval {
+                    contig,
+                    start: site.start,
+                    end: site.end,
+                    negative_strand: false,
+                    name: Some(site.name),
+                })
+            }
+            Ok(None) => None,
+            Err(error) => {
+                failure = Some(error);
+                None
+            }
+        });
+        let write_error = |source| Error::Output {
             path: output.to_path_buf(),
             source,
-        })
+        };
+        out.write_all(header_text.as_bytes()).map_err(write_error)?;
+        let merged = interval_ops::merged(read, true, opts.concatenate_names);
+        for interval in merged {
+            write_interval(&names.borrow(), &interval, out).map_err(write_error)?;
+            count += 1;
+        }
+        match failure {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
     })?;
-    Ok(written)
+    let regular = std::fs::metadata(output).is_ok_and(|m| m.is_file());
+    Ok(Written {
+        path: output.to_path_buf(),
+        header_lines: header_text.lines().count(),
+        count: if regular { count } else { 0 },
+    })
 }
 
-/// `IntervalListWriter`: the header, then each interval as contig, start,
-/// end, `+` and name.
-fn write_list(written: &Written, out: &mut dyn Write) -> io::Result<()> {
-    out.write_all(written.header.encode().as_bytes())?;
-    for interval in &written.intervals {
-        writeln!(
-            out,
-            "{}\t{}\t{}\t+\t{}",
-            written.names[interval.contig],
-            interval.start,
-            interval.end,
-            interval.name.as_deref().unwrap_or(".")
-        )?;
-    }
-    Ok(())
+/// `IntervalListWriter.write`: contig, start, end, `+` and name.
+fn write_interval(names: &[String], interval: &Interval, out: &mut dyn Write) -> io::Result<()> {
+    writeln!(
+        out,
+        "{}\t{}\t{}\t+\t{}",
+        names[interval.contig],
+        interval.start,
+        interval.end,
+        interval.name.as_deref().unwrap_or(".")
+    )
 }
 
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {

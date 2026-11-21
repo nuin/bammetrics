@@ -38,7 +38,7 @@ impl IntervalList {
 }
 
 /// True for a name htsjdk's `IOUtil.openFileForWriting` compresses.
-pub(super) fn gzip_name(path: &Path) -> bool {
+pub(crate) fn gzip_name(path: &Path) -> bool {
     path.file_name().is_some_and(|name| {
         let name = name.to_string_lossy();
         [".gz", ".gzip", ".bfq"].iter().any(|e| name.ends_with(e))

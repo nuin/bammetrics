@@ -45,7 +45,7 @@ pub use scatter::{
     MAX_SCATTER_FILES, ScatterMode, list_weight, scatter, scatter_count_for_content, scatter_path,
     write_scatter,
 };
-pub(crate) use write::check_target;
+pub(crate) use write::{check_target, gzip_name};
 pub use write::{write_list, write_text};
 
 /// One interval as htsjdk's `Interval` holds it: `contig` is the index of
