@@ -213,6 +213,7 @@ the sizes and a Chrome recipe for a build without the feature.
 | CreateBafRegressMetricsFile (the text bafRegress prints, one `BafRegressMetrics` row per sample, in `OUTPUT.bafregress_metrics`) | | `create_baf_regress_metrics_file()` |
 | CreateVerifyIDIntensityContaminationMetricsFile (the text VerifyIDIntensity prints, one `VerifyIDIntensityContaminationMetrics` row per result, in `OUTPUT.verifyidintensity_metrics`) | | `create_verify_i_d_intensity_contamination_metrics_file()` |
 | CollectArraysVariantCallingMetrics (an arrays VCF as GtcToVcf writes it, with its `.tbi` or `.idx`; `DBSNP`, `CALL_RATE_PF_THRESHOLD`, `SEQUENCE_DICTIONARY`; the per-sample detail, summary and control-code files) | | `collect_arrays_variant_calling_metrics()` |
+| IntervalListTools (every `ACTION`, `PADDING`, `UNIQUE`, `SORT`, `INVERT`, `BREAK_BANDS_AT_MULTIPLES_OF`, `COMMENT`; the five `SUBDIVISION_MODE` scatters into `OUTPUT/temp_NNNN_of_N/scattered.interval_list`, renamed into place as one set; `OUTPUT_VALUE`, `COUNT_OUTPUT`; the `@PG` line holds Picard's command line) | | `interval_list_tools()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 | SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | `validation_stringency=` |

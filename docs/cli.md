@@ -323,6 +323,7 @@ table.
 | `create-baf-regress-file` | CreateBafRegressMetricsFile (the text bafRegress prints) | `PREFIX.bafregress_metrics` |
 | `create-verify-i-d-intensity-contamination-file` | CreateVerifyIDIntensityContaminationMetricsFile (the text VerifyIDIntensity prints) | `PREFIX.verifyidintensity_metrics` |
 | `arrays-variant-calling` | CollectArraysVariantCallingMetrics (an arrays VCF with its index; `--dbsnp` required) | `PREFIX.arrays_variant_calling_{detail,summary}_metrics`, `PREFIX.arrays_control_code_summary_metrics` |
+| `interval-list-tools` | IntervalListTools (interval lists as positionals or `-i`; `--second-input` for SUBTRACT, SYMDIFF and OVERLAPS) | `-o` interval list, or with `--scatter-count` above 1 the directory `-o` of `temp_NNNN_of_N/scattered.interval_list`; the `--output-value` count on standard output or in `--count-output`; no file without `-o` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics

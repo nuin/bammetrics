@@ -84,7 +84,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | IdentifyContaminant | Fingerprint | out | Niche, VCF output only. M | VerifyBamID |
 | BedToIntervalList | Intervals | core | Hs, TargetedPcr and Wgs take interval_list. Harness needs it. | none |
 | IntervalListToBed | Intervals | later | Reverse of the parser. | none |
-| IntervalListTools | Intervals | later | Implement only the ops metrics use (merge, pad, uniquify). | bedtools |
+| IntervalListTools | Intervals | core | Shipped in wave W12 of docs/07 (0.30.0, the interval layer `interval_ops.rs`): every `ACTION`, padding, sort, merge, invert, band breaks, the five scatter modes written as one set, `OUTPUT_VALUE` and `COUNT_OUTPUT`, Picard's command line in the `@PG` line. M | bedtools |
 | LiftOverIntervalList | Intervals | out | Liftover, no metrics. | UCSC liftOver, CrossMap |
 | CreateSequenceDictionary | Reference | core | Metrics need contig lengths. Harness prep. | samtools dict |
 | ExtractSequences | Reference | out | Region FASTA subsetting. | samtools faidx |
