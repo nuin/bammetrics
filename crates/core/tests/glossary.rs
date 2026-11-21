@@ -284,6 +284,19 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
         "CheckDuplicateMarking",
         vec![bam.clone(), out("bad_querynames.txt")],
     );
+    // The two interval converters write their file themselves and return
+    // rows without a class.
+    args.insert(
+        "IntervalListToBed",
+        vec![
+            format!("I={DATA}/targets.interval_list"),
+            out("targets.bed"),
+        ],
+    );
+    args.insert(
+        "VcfToIntervalList",
+        vec![format!("I={calls}"), out("calls.interval_list")],
+    );
     args.insert(
         "GenotypeConcordance",
         vec![

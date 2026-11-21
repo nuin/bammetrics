@@ -1,0 +1,17 @@
+## argv
+IntervalListToBed
+I=tests/data/intervals.interval_list
+O=OUT/intervals.bed
+SORT=false
+SCORE=-7
+## exit
+0
+## stdout
+## stderr
+## file intervals.bed
+chr2	99	200	b1	-7	-
+chr1	5000	5600	t4	-7	+
+chr1	1000	1200	t1	-7	+
+chr1	1000	1200	t1	-7	+
+chr1	299	299	zero	-7	+
+chr1	2000	2400	.	-7	-

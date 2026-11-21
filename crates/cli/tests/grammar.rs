@@ -630,6 +630,22 @@ fn cases(built: &Built) -> Vec<Case> {
             picard_outputs: commented_bam,
         },
         Case {
+            verb: "interval-list-to-bed",
+            class: "IntervalListToBed",
+            verb_args: strings(&[IL]),
+            picard_args: strings(&[&format!("I={IL}")]),
+            option: Some(("SCORE", "7")),
+            picard_outputs: single,
+        },
+        Case {
+            verb: "vcf-to-interval-list",
+            class: "VcfToIntervalList",
+            verb_args: strings(&[&built.vcf]),
+            picard_args: strings(&[&format!("I={}", built.vcf)]),
+            option: Some(("VARIANT_ID_METHOD", "USE_FIRST")),
+            picard_outputs: single,
+        },
+        Case {
             verb: "calculate-read-group-checksum",
             class: "CalculateReadGroupChecksum",
             verb_args: strings(&["tests/data/oxog.bam"]),
@@ -825,7 +841,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 60);
+    assert_eq!(classes.len(), 62);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

@@ -1,0 +1,10 @@
+@HD	VN:1.6
+@SQ	SN:chr1	LN:100000
+@SQ	SN:chr2	LN:5000
+chr2	100	200	-	b1
+chr1	5001	5600	+	t4
+chr1	1001	1200	+	t1
+chr1	1001	1200	+	t1
+chr1	300	299	+	zero
+chr1	2001	2400	-	.
+chr3	1	10	+	missing

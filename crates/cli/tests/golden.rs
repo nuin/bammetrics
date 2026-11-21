@@ -75,6 +75,9 @@ const FIXTURES: &[(&str, &str)] = &[
     ("AVCF", "tests/data/arrays/arrays.vcf.gz"),
     ("AVCF_PLAIN", "tests/data/arrays/arrays.vcf"),
     ("ADBSNP", "tests/data/arrays/dbsnp.vcf"),
+    ("IVL", "tests/data/intervals.interval_list"),
+    ("IVCF", "tests/data/intervals.vcf"),
+    ("IVCF_BAD", "tests/data/intervals_bad.vcf"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -816,6 +819,24 @@ const ARRAYS_CASES: &[Case] = &[
     case!("error_chain_arrays_variant_calling", "chain", "MD", "-o", "OUT/s", "+", "arrays-variant-calling"),
 ];
 
+/// Wave W12: `IntervalListToBed` and `VcfToIntervalList` on the fixtures of
+/// `tests/data/make_interval_fixtures.py`.
+#[rustfmt::skip]
+const INTERVAL_CONVERT_CASES: &[Case] = &[
+    case!("picard_interval_list_to_bed", "IntervalListToBed", "I=IVL", "O=OUT/intervals.bed"),
+    case!("picard_interval_list_to_bed_unsorted", "IntervalListToBed", "I=IVL", "O=OUT/intervals.bed", "SORT=false", "SCORE=-7"),
+    case!("verb_interval_list_to_bed", "interval-list-to-bed", "IL", "-o", "-", "--score", "1000"),
+    case!("error_interval_list_to_bed_input_output", "IntervalListToBed", "I=IVL", "O=IVL"),
+    case!("error_verb_interval_list_to_bed_no_output", "interval-list-to-bed", "IVL"),
+    case!("picard_vcf_to_interval_list", "VcfToIntervalList", "I=IVCF", "O=OUT/intervals.interval_list"),
+    case!("picard_vcf_to_interval_list_use_first", "VcfToIntervalList", "I=IVCF", "O=OUT/intervals.interval_list", "INCLUDE_FILTERED=true", "VARIANT_ID_METHOD=USE_FIRST"),
+    case!("verb_vcf_to_interval_list", "vcf-to-interval-list", "IVCF", "-o", "-", "--include-filtered"),
+    case!("error_vcf_to_interval_list_bad_record", "VcfToIntervalList", "I=IVCF_BAD", "O=OUT/bad.interval_list"),
+    case!("error_vcf_to_interval_list_method", "VcfToIntervalList", "I=IVCF", "O=OUT/x.interval_list", "VARIANT_ID_METHOD=ALL"),
+    case!("error_chain_vcf_to_interval_list", "chain", "MD", "-o", "OUT/s", "+", "vcf-to-interval-list"),
+    case!("error_chain_interval_list_to_bed", "chain", "MD", "-o", "OUT/s", "+", "interval-list-to-bed"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -1287,6 +1308,11 @@ fn documented_arrays_commands_on_the_fixtures() {
     check(ARRAYS_CASES);
 }
 
+#[test]
+fn documented_interval_converter_commands_on_the_fixtures() {
+    check(INTERVAL_CONVERT_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1400,6 +1426,7 @@ fn case_names_are_unique() {
         .chain(SNVQ_UMI_CASES)
         .chain(RRBS_CASES)
         .chain(ARRAYS_CASES)
+        .chain(INTERVAL_CONVERT_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

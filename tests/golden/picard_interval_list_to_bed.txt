@@ -1,0 +1,15 @@
+## argv
+IntervalListToBed
+I=tests/data/intervals.interval_list
+O=OUT/intervals.bed
+## exit
+0
+## stdout
+## stderr
+## file intervals.bed
+chr1	299	299	zero	500	+
+chr1	1000	1200	t1	500	+
+chr1	1000	1200	t1	500	+
+chr1	2000	2400	.	500	-
+chr1	5000	5600	t4	500	+
+chr2	99	200	b1	500	-
