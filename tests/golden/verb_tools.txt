@@ -64,6 +64,7 @@ rrbs                                               CollectRrbsMetrics
 create-baf-regress-file                            CreateBafRegressMetricsFile
 create-verify-i-d-intensity-contamination-file     CreateVerifyIDIntensityContaminationMetricsFile
 arrays-variant-calling                             CollectArraysVariantCallingMetrics
+interval-list-tools                                IntervalListTools
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.
