@@ -1320,7 +1320,9 @@ keeps the file order.
 - A list of more than 500,000 intervals goes through Picard's sort spill, which keeps the
   low byte of each name character: a name past U+00FF prints as Picard prints it. A name
   with a character whose low byte is 0 exits 1.
-- `--threads` is accepted and ignored. `--format` takes `picard` only.
+- An empty first line, or an empty line right after the `@` lines, exits 1, as in Picard.
+  A list of more than 30,000,000 intervals exits 1.
+- `--threads` is checked (at most 256) and ignored. `--format` takes `picard` only.
 
 `bed-to-interval-list --dict LIST` converts the BED back. The intervals come back in
 sorted order under `@HD VN:1.6 SO:coordinate` when each has a length above 0 and a name
@@ -1351,10 +1353,15 @@ first start and name. An unsorted VCF merges only neighbours, as Picard does.
   `QUAL` or `END` that is not a number, an empty `ID` or `INFO`, a bad `FILTER` name, an
   allele that is not one, or a repeated allele exits 1 with htsjdk's message. A failed run
   leaves no file.
+- The header is read as htsjdk's codec reads it: `VCFv4.0` to `VCFv4.3`, the last
+  `##fileformat` line winning; a repeated `ID`, a `##INFO` line without `Description` and
+  a `##` line without `=` are read. `VCFv3.3`, `VCFv4.4`, `VCFv5.0`, a `##INFO` line with
+  a bad `Type` or `Number` and an unclosed quote exit 1. A header over 64 MiB exits 1.
 - The input is plain text or gzip (BGZF or plain), told by its first bytes. A `.bcf` input
   exits 2: BCF is not read.
+- Each interval is written as it is made, so memory does not grow with the VCF.
 - `-o FILE` is required; `-o -` writes standard output; a name ending in `.gz` is compressed.
-  `--threads` is accepted and ignored. `--format` takes `picard` only.
+  `--threads` is checked (at most 256) and ignored. `--format` takes `picard` only.
 
 `qc --panel` takes the interval list as it is.
 

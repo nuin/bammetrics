@@ -1672,6 +1672,10 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
 - A boolean option given another word than `true` or `false` (`SORT=maybe`,
   `INCLUDE_FILTERED=yes`) is a usage error, as on every bammetrics tool; Picard reads it as
   false.
+- A list of more than 30,000,000 intervals, and a `VcfToIntervalList` header of more than
+  64 MiB, are refused with exit 1. Picard reads them while its memory lasts.
+- `VcfToIntervalList` from Python returns no rows when `OUTPUT` is a device or a pipe: the
+  rows are read back from the file written.
 
 ## Not in Picard
 
