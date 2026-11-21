@@ -69,6 +69,8 @@ interval-list-to-bed                               IntervalListToBed
 vcf-to-interval-list                               VcfToIntervalList
 scatter-intervals-by-ns                            ScatterIntervalsByNs
 non-n-fasta-size                                   NonNFastaSize
+fix-mate-information                               FixMateInformation
+filter-sam-reads                                   FilterSamReads
 
 Other verbs:
   collect      Several metrics from one read of the BAM, one Picard file each.
