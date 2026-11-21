@@ -1331,7 +1331,7 @@ keeps the file order.
   low byte of each name character: a name past U+00FF prints as Picard prints it. A name
   with a character whose low byte is 0 exits 1.
 - An empty first line, or an empty line right after the `@` lines, exits 1, as in Picard.
-  A list of more than 30,000,000 intervals exits 1.
+  A list of more than 20,000,000 intervals exits 1.
 - `--threads` is checked (at most 256) and ignored. `--format` takes `picard` only.
 
 `bed-to-interval-list --dict LIST` converts the BED back. The intervals come back in
