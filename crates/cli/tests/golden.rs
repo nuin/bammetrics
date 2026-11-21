@@ -44,6 +44,8 @@ const FIXTURES: &[(&str, &str)] = &[
         "tests/data/picard/NA12878/NA12878.insert_size_metrics",
     ),
     ("INS_JSON", "tests/data/insert_size_metrics.json"),
+    ("INS_PQ", "tests/data/insert_size_metrics.parquet"),
+    ("INS_PQ_LONG", "tests/data/insert_size_metrics.long.parquet"),
     ("NO_READS", "tests/data/no_reads.bam"),
     ("PLAN_MD", "tests/data/chain_markdup.toml"),
     ("PLAN_TAPS", "tests/data/chain_taps.toml"),
@@ -494,12 +496,28 @@ const FORMAT_CASES: &[Case] = &[
     case!("error_check_format_list_stdout", "check", "PICARD", "--format", "text,junit"),
     case!("error_check_format", "check", "PICARD", "--format", "xml"),
     case!("qc_also", "qc", "IS", "-o", "OUT/sample", "--also", "json,tsv,markdown,junit,multiqc", "--date", "2026-01-02 03:04:05 UTC"),
-    case!("error_qc_also", "qc", "IS", "-o", "OUT/sample", "--also", "parquet"),
+    case!("error_qc_also", "qc", "IS", "-o", "OUT/sample", "--also", "prquet"),
     case!("plan_also", "plan", "IS", "-o", "OUT/sample", "--also", "json,markdown"),
     case!("plan_also_jsonl", "plan", "IS", "-o", "OUT/sample", "--also", "csv,junit,multiqc", "--format", "jsonl"),
     case!("verb_insert_size_json_picard", "insert-size", "IS", "--format", "json,picard", "-o", "OUT/insert_size.json"),
     case!("error_check_overwrites_input", "check", "PICARD", "-o", "PIC_INS"),
     case!("qc_also_no_reads", "qc", "NO_READS", "-o", "OUT/sample", "--also", "json,csv,junit", "--date", "2026-01-02 03:04:05 UTC"),
+    // Parquet (wave W21): tests/data/insert_size_metrics.parquet and its two
+    // companions are `convert` of Picard's insert size file.
+    case!("convert_picard_to_parquet", "convert", "PIC_INS", "--format", "parquet", "-o", "OUT/insert_size.parquet"),
+    case!("convert_parquet_to_picard", "convert", "INS_PQ"),
+    case!("convert_parquet_list", "convert", "INS_PQ", "--format", "json,csv,parquet", "-o", "OUT/insert_size.json", "--sample", "S1"),
+    case!("verb_insert_size_parquet", "insert-size", "IS", "--format", "parquet", "-o", "OUT/insert_size.parquet", "--sample", "S1"),
+    case!("verb_quality_distribution_parquet", "quality-score-distribution", "IS", "--format", "picard,parquet", "-o", "OUT/quality.txt"),
+    case!("verb_multiple_metrics_parquet", "multiple-metrics", "IS", "-o", "OUT/sample", "--program", "CollectQualityYieldMetrics", "--program", "CollectInsertSizeMetrics", "--format", "picard,parquet"),
+    case!("qc_also_parquet", "qc", "IS", "-o", "OUT/sample", "--also", "parquet,json", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("qc_also_no_reads_parquet", "qc", "NO_READS", "-o", "OUT/sample", "--also", "parquet", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("chain_taps_parquet", "chain", "IS", "-o", "OUT/sample", "--format", "picard,parquet", "+", "quality-yield", "+", "insert-size"),
+    case!("plan_also_parquet", "plan", "IS", "-o", "OUT/sample", "--also", "parquet"),
+    case!("error_verb_parquet_stdout", "insert-size", "IS", "--format", "parquet"),
+    case!("error_convert_parquet_stdout", "convert", "PIC_INS", "--format", "parquet"),
+    case!("error_convert_parquet_long", "convert", "INS_PQ_LONG"),
+    case!("error_convert_overwrites_parquet_companion", "convert", "INS_PQ", "-o", "tests/data/insert_size_metrics.histogram.parquet"),
 ];
 
 /// `chain` (docs/chaining.md): the two documented examples from the command
@@ -1123,6 +1141,13 @@ fn record(case: &Case) -> String {
             text.push_str(&hex_lines(&fs::read(path).expect("read the index")));
             continue;
         }
+        // A Parquet file is snappy-compressed; it is recorded decoded. Its
+        // size is fixed for `convert` of a committed file; elsewhere the
+        // command line and start time it carries vary in length.
+        if name.ends_with(".parquet") {
+            text.push_str(&parquet_text(&path, case.argv.first() == Some(&"convert")));
+            continue;
+        }
         text.push_str(&String::from_utf8_lossy(
             &fs::read(path).expect("read output file"),
         ));
@@ -1138,6 +1163,20 @@ fn page_count(pdf: &[u8]) -> usize {
     pdf.windows(marker.len() + 1)
         .filter(|w| w.starts_with(marker) && !w[marker.len()].is_ascii_alphabetic())
         .count()
+}
+
+/// A Parquet file as `bammetrics_formats::parquet::describe` prints it,
+/// the size replaced by `<size>` unless `sized`.
+fn parquet_text(path: &Path, sized: bool) -> String {
+    let bytes = fs::read(path).expect("read the Parquet file");
+    #[cfg(feature = "parquet")]
+    let text = bammetrics_formats::parquet::describe(bytes).unwrap_or_else(|e| format!("<{e}>\n"));
+    #[cfg(not(feature = "parquet"))]
+    let text = format!("parquet {} bytes, not decoded\n", bytes.len());
+    match text.split_once(" bytes,") {
+        Some((_, rest)) if !sized => format!("parquet <size> bytes,{rest}"),
+        _ => text,
+    }
 }
 
 /// Bytes as hex, 32 to a line.
@@ -1231,6 +1270,9 @@ fn normalize(text: &str, out: &str) -> String {
     for line in text.lines() {
         if line.starts_with("# Started on: ") {
             normalized.push_str("# Started on: <time>");
+        } else if line.starts_with("header Started on: ") {
+            // The same header in the decoded form of a Parquet file.
+            normalized.push_str("header Started on: <time>");
         } else if let Some(indent) = line.strip_suffix(line.trim_start())
             && line.trim_start().starts_with("\"Started on: ")
         {

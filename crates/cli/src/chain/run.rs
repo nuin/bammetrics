@@ -192,16 +192,24 @@ fn write_metrics(
     formats: &[Format],
     context: &Context<'_>,
 ) -> bammetrics_core::Result<Vec<Written>> {
-    let texts = format::render_all(formats, context, file);
+    let rendered =
+        format::render_all(formats, context, file).map_err(|e| format::unrendered(path, &e))?;
     let mut written = Vec::with_capacity(formats.len());
-    for (index, (format, text)) in formats.iter().zip(texts).enumerate() {
-        let (target, kind) = if index == 0 {
-            (path.to_path_buf(), "metrics")
+    for (index, (format, files)) in formats.iter().zip(rendered).enumerate() {
+        let main = if index == 0 {
+            path.to_path_buf()
         } else {
-            (format::sibling(path, format.extension()), format.name())
+            format::sibling(path, format.extension())
         };
-        registry::write_to(Some(&target), |out| out.write_all(text.as_bytes()))?;
-        written.push(Written { path: target, kind });
+        for (target, bytes) in format::placed(&main, files) {
+            let kind = if index == 0 && target == path {
+                "metrics"
+            } else {
+                format.name()
+            };
+            registry::write_to(Some(&target), |out| out.write_all(&bytes))?;
+            written.push(Written { path: target, kind });
+        }
     }
     Ok(written)
 }
@@ -238,10 +246,7 @@ fn write_tool_files(
         let metrics = file.text.is_none() && planned.is_none_or(|p| p.kind == "metrics");
         let formats = if metrics { &step.formats[..] } else { &picard };
         if planned.is_none() {
-            let siblings = formats[1..]
-                .iter()
-                .map(|format| format::sibling(path, format.extension()));
-            for late in std::iter::once(path.clone()).chain(siblings) {
+            for late in format::all_files(path, formats) {
                 if inputs.owner(&late).is_some() {
                     return Err(bammetrics_core::Error::Usage(format!(
                         "{} is an input; writing it would destroy it",
@@ -256,8 +261,11 @@ fn write_tool_files(
     let mut written = Vec::new();
     match (&products.output.main, &step.output, step.stdout) {
         (Some(main), _, true) => {
-            let text = format::render_all(&picard, &context, main).remove(0);
-            registry::write_to(None, |out| out.write_all(text.as_bytes()))?;
+            let text = format::render_all(&picard, &context, main)
+                .map_err(|e| format::unrendered(Path::new("-"), &e))?
+                .remove(0)
+                .remove(0);
+            registry::write_to(None, |out| out.write_all(&text.bytes))?;
         }
         (Some(main), Some(path), false) => {
             written.extend(write_metrics(path, main, &step.formats, &context)?);

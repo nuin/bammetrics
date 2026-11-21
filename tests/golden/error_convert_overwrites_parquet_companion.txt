@@ -1,0 +1,10 @@
+## argv
+convert
+tests/data/insert_size_metrics.parquet
+-o
+tests/data/insert_size_metrics.histogram.parquet
+## exit
+2
+## stdout
+## stderr
+bammetrics convert: tests/data/insert_size_metrics.histogram.parquet is an input; writing it would destroy it

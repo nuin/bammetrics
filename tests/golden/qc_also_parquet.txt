@@ -1,0 +1,1279 @@
+## argv
+qc
+tests/data/insert_size.bam
+-o
+OUT/sample
+--also
+parquet,json
+--date
+2026-01-02 03:04:05 UTC
+## exit
+0
+## stdout
+insert_size  PASS  preset generic v1 (6dd89e)  4 collectors, 1 BAM read (10 records)
+PASS          6 checks
+wrote 21 files to OUT/sample.*, report OUT/sample.report.html
+## stderr
+## file sample.alignment_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectAlignmentSummaryMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.alignment_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.AlignmentSummaryMetrics
+CATEGORY	TOTAL_READS	PF_READS	PCT_PF_READS	PF_NOISE_READS	PF_READS_ALIGNED	PCT_PF_READS_ALIGNED	PF_ALIGNED_BASES	PF_HQ_ALIGNED_READS	PF_HQ_ALIGNED_BASES	PF_HQ_ALIGNED_Q20_BASES	PF_HQ_MEDIAN_MISMATCHES	PF_MISMATCH_RATE	PF_HQ_ERROR_RATE	PF_INDEL_RATE	MEAN_READ_LENGTH	SD_READ_LENGTH	MEDIAN_READ_LENGTH	MAD_READ_LENGTH	MIN_READ_LENGTH	MAX_READ_LENGTH	MEAN_ALIGNED_READ_LENGTH	READS_ALIGNED_IN_PAIRS	PCT_READS_ALIGNED_IN_PAIRS	PF_READS_IMPROPER_PAIRS	PCT_PF_READS_IMPROPER_PAIRS	BAD_CYCLES	STRAND_BALANCE	PCT_CHIMERAS	PCT_ADAPTER	PCT_SOFTCLIP	PCT_HARDCLIP	AVG_POS_3PRIME_SOFTCLIP_LENGTH	SAMPLE	LIBRARY	READ_GROUP
+FIRST_OF_PAIR	5	5	1	0	5	1	500	5	500	500	0	0	0	0	100	0	100	0	100	100	100	5	1	0	0	0	1	0	0	0	0	0			
+SECOND_OF_PAIR	5	5	1	0	5	1	500	5	500	500	0	0	0	0	100	0	100	0	100	100	100	5	1	0	0	0	0	0	0	0	0	0			
+PAIR	10	10	1	0	10	1	1000	10	1000	1000	0	0	0	0	100	0	100	0	100	100	100	10	1	0	0	0	0.5	0	0	0	0	0			
+
+## HISTOGRAM	java.lang.Integer
+READ_LENGTH	PAIRED_TOTAL_LENGTH_COUNT	PAIRED_ALIGNED_LENGTH_COUNT
+100	10	10
+
+## file sample.alignment_summary_metrics.histogram.parquet
+parquet <size> bytes, part histogram, 1 rows, 1 row groups, created_by bammetrics
+class java.lang.Integer
+tool CollectAlignmentSummaryMetrics
+sample insert_size
+header CollectAlignmentSummaryMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.alignment_summary_metrics
+header Started on: <time>
+column READ_LENGTH INT64 optional
+column PAIRED_TOTAL_LENGTH_COUNT DOUBLE optional
+column PAIRED_ALIGNED_LENGTH_COUNT DOUBLE optional
+100	10.0	10.0
+## file sample.alignment_summary_metrics.json
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectAlignmentSummaryMetrics",
+  "sample": "insert_size",
+  "headers": [
+    "CollectAlignmentSummaryMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.alignment_summary_metrics",
+    "Started on: <time>"
+  ],
+  "class": "picard.analysis.AlignmentSummaryMetrics",
+  "columns": [
+    "CATEGORY",
+    "TOTAL_READS",
+    "PF_READS",
+    "PCT_PF_READS",
+    "PF_NOISE_READS",
+    "PF_READS_ALIGNED",
+    "PCT_PF_READS_ALIGNED",
+    "PF_ALIGNED_BASES",
+    "PF_HQ_ALIGNED_READS",
+    "PF_HQ_ALIGNED_BASES",
+    "PF_HQ_ALIGNED_Q20_BASES",
+    "PF_HQ_MEDIAN_MISMATCHES",
+    "PF_MISMATCH_RATE",
+    "PF_HQ_ERROR_RATE",
+    "PF_INDEL_RATE",
+    "MEAN_READ_LENGTH",
+    "SD_READ_LENGTH",
+    "MEDIAN_READ_LENGTH",
+    "MAD_READ_LENGTH",
+    "MIN_READ_LENGTH",
+    "MAX_READ_LENGTH",
+    "MEAN_ALIGNED_READ_LENGTH",
+    "READS_ALIGNED_IN_PAIRS",
+    "PCT_READS_ALIGNED_IN_PAIRS",
+    "PF_READS_IMPROPER_PAIRS",
+    "PCT_PF_READS_IMPROPER_PAIRS",
+    "BAD_CYCLES",
+    "STRAND_BALANCE",
+    "PCT_CHIMERAS",
+    "PCT_ADAPTER",
+    "PCT_SOFTCLIP",
+    "PCT_HARDCLIP",
+    "AVG_POS_3PRIME_SOFTCLIP_LENGTH",
+    "SAMPLE",
+    "LIBRARY",
+    "READ_GROUP"
+  ],
+  "types": [
+    "string",
+    "int",
+    "int",
+    "float",
+    "int",
+    "int",
+    "float",
+    "int",
+    "int",
+    "int",
+    "int",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "int",
+    "float",
+    "int",
+    "float",
+    "int",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "float",
+    "string",
+    "string",
+    "string"
+  ],
+  "metrics": [
+    {
+      "CATEGORY": "FIRST_OF_PAIR",
+      "TOTAL_READS": 5,
+      "PF_READS": 5,
+      "PCT_PF_READS": 1,
+      "PF_NOISE_READS": 0,
+      "PF_READS_ALIGNED": 5,
+      "PCT_PF_READS_ALIGNED": 1,
+      "PF_ALIGNED_BASES": 500,
+      "PF_HQ_ALIGNED_READS": 5,
+      "PF_HQ_ALIGNED_BASES": 500,
+      "PF_HQ_ALIGNED_Q20_BASES": 500,
+      "PF_HQ_MEDIAN_MISMATCHES": 0,
+      "PF_MISMATCH_RATE": 0,
+      "PF_HQ_ERROR_RATE": 0,
+      "PF_INDEL_RATE": 0,
+      "MEAN_READ_LENGTH": 100,
+      "SD_READ_LENGTH": 0,
+      "MEDIAN_READ_LENGTH": 100,
+      "MAD_READ_LENGTH": 0,
+      "MIN_READ_LENGTH": 100,
+      "MAX_READ_LENGTH": 100,
+      "MEAN_ALIGNED_READ_LENGTH": 100,
+      "READS_ALIGNED_IN_PAIRS": 5,
+      "PCT_READS_ALIGNED_IN_PAIRS": 1,
+      "PF_READS_IMPROPER_PAIRS": 0,
+      "PCT_PF_READS_IMPROPER_PAIRS": 0,
+      "BAD_CYCLES": 0,
+      "STRAND_BALANCE": 1,
+      "PCT_CHIMERAS": 0,
+      "PCT_ADAPTER": 0,
+      "PCT_SOFTCLIP": 0,
+      "PCT_HARDCLIP": 0,
+      "AVG_POS_3PRIME_SOFTCLIP_LENGTH": 0,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "CATEGORY": "SECOND_OF_PAIR",
+      "TOTAL_READS": 5,
+      "PF_READS": 5,
+      "PCT_PF_READS": 1,
+      "PF_NOISE_READS": 0,
+      "PF_READS_ALIGNED": 5,
+      "PCT_PF_READS_ALIGNED": 1,
+      "PF_ALIGNED_BASES": 500,
+      "PF_HQ_ALIGNED_READS": 5,
+      "PF_HQ_ALIGNED_BASES": 500,
+      "PF_HQ_ALIGNED_Q20_BASES": 500,
+      "PF_HQ_MEDIAN_MISMATCHES": 0,
+      "PF_MISMATCH_RATE": 0,
+      "PF_HQ_ERROR_RATE": 0,
+      "PF_INDEL_RATE": 0,
+      "MEAN_READ_LENGTH": 100,
+      "SD_READ_LENGTH": 0,
+      "MEDIAN_READ_LENGTH": 100,
+      "MAD_READ_LENGTH": 0,
+      "MIN_READ_LENGTH": 100,
+      "MAX_READ_LENGTH": 100,
+      "MEAN_ALIGNED_READ_LENGTH": 100,
+      "READS_ALIGNED_IN_PAIRS": 5,
+      "PCT_READS_ALIGNED_IN_PAIRS": 1,
+      "PF_READS_IMPROPER_PAIRS": 0,
+      "PCT_PF_READS_IMPROPER_PAIRS": 0,
+      "BAD_CYCLES": 0,
+      "STRAND_BALANCE": 0,
+      "PCT_CHIMERAS": 0,
+      "PCT_ADAPTER": 0,
+      "PCT_SOFTCLIP": 0,
+      "PCT_HARDCLIP": 0,
+      "AVG_POS_3PRIME_SOFTCLIP_LENGTH": 0,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    },
+    {
+      "CATEGORY": "PAIR",
+      "TOTAL_READS": 10,
+      "PF_READS": 10,
+      "PCT_PF_READS": 1,
+      "PF_NOISE_READS": 0,
+      "PF_READS_ALIGNED": 10,
+      "PCT_PF_READS_ALIGNED": 1,
+      "PF_ALIGNED_BASES": 1000,
+      "PF_HQ_ALIGNED_READS": 10,
+      "PF_HQ_ALIGNED_BASES": 1000,
+      "PF_HQ_ALIGNED_Q20_BASES": 1000,
+      "PF_HQ_MEDIAN_MISMATCHES": 0,
+      "PF_MISMATCH_RATE": 0,
+      "PF_HQ_ERROR_RATE": 0,
+      "PF_INDEL_RATE": 0,
+      "MEAN_READ_LENGTH": 100,
+      "SD_READ_LENGTH": 0,
+      "MEDIAN_READ_LENGTH": 100,
+      "MAD_READ_LENGTH": 0,
+      "MIN_READ_LENGTH": 100,
+      "MAX_READ_LENGTH": 100,
+      "MEAN_ALIGNED_READ_LENGTH": 100,
+      "READS_ALIGNED_IN_PAIRS": 10,
+      "PCT_READS_ALIGNED_IN_PAIRS": 1,
+      "PF_READS_IMPROPER_PAIRS": 0,
+      "PCT_PF_READS_IMPROPER_PAIRS": 0,
+      "BAD_CYCLES": 0,
+      "STRAND_BALANCE": 0.5,
+      "PCT_CHIMERAS": 0,
+      "PCT_ADAPTER": 0,
+      "PCT_SOFTCLIP": 0,
+      "PCT_HARDCLIP": 0,
+      "AVG_POS_3PRIME_SOFTCLIP_LENGTH": 0,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    }
+  ],
+  "non_finite": [],
+  "histogram": {
+    "key_class": "java.lang.Integer",
+    "columns": [
+      "READ_LENGTH",
+      "PAIRED_TOTAL_LENGTH_COUNT",
+      "PAIRED_ALIGNED_LENGTH_COUNT"
+    ],
+    "types": [
+      "int",
+      "float",
+      "float"
+    ],
+    "rows": [
+      {
+        "READ_LENGTH": 100,
+        "PAIRED_TOTAL_LENGTH_COUNT": 10,
+        "PAIRED_ALIGNED_LENGTH_COUNT": 10
+      }
+    ],
+    "non_finite": []
+  }
+}
+## file sample.alignment_summary_metrics.long.parquet
+parquet <size> bytes, part long, 111 rows, 1 row groups, created_by bammetrics
+class picard.analysis.AlignmentSummaryMetrics
+tool CollectAlignmentSummaryMetrics
+sample insert_size
+header CollectAlignmentSummaryMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.alignment_summary_metrics
+header Started on: <time>
+column sample BYTE_ARRAY (STRING) optional
+column class BYTE_ARRAY (STRING) required
+column row_key BYTE_ARRAY (STRING) required
+column column BYTE_ARRAY (STRING) required
+column value BYTE_ARRAY (STRING) optional
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	CATEGORY	FIRST_OF_PAIR
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	TOTAL_READS	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_READS	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PCT_PF_READS	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_NOISE_READS	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_READS_ALIGNED	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PCT_PF_READS_ALIGNED	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_ALIGNED_BASES	500
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_HQ_ALIGNED_READS	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_HQ_ALIGNED_BASES	500
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_HQ_ALIGNED_Q20_BASES	500
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_HQ_MEDIAN_MISMATCHES	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_MISMATCH_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_HQ_ERROR_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_INDEL_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	MEAN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	SD_READ_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	MEDIAN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	MAD_READ_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	MIN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	MAX_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	MEAN_ALIGNED_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	READS_ALIGNED_IN_PAIRS	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PCT_READS_ALIGNED_IN_PAIRS	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_READS_IMPROPER_PAIRS	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PCT_PF_READS_IMPROPER_PAIRS	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	BAD_CYCLES	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	STRAND_BALANCE	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PCT_CHIMERAS	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PCT_ADAPTER	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PCT_SOFTCLIP	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PCT_HARDCLIP	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	AVG_POS_3PRIME_SOFTCLIP_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	SAMPLE	
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	LIBRARY	
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	READ_GROUP	
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	CATEGORY	SECOND_OF_PAIR
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	TOTAL_READS	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_READS	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PCT_PF_READS	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_NOISE_READS	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_READS_ALIGNED	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PCT_PF_READS_ALIGNED	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_ALIGNED_BASES	500
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_HQ_ALIGNED_READS	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_HQ_ALIGNED_BASES	500
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_HQ_ALIGNED_Q20_BASES	500
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_HQ_MEDIAN_MISMATCHES	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_MISMATCH_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_HQ_ERROR_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_INDEL_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	MEAN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	SD_READ_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	MEDIAN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	MAD_READ_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	MIN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	MAX_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	MEAN_ALIGNED_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	READS_ALIGNED_IN_PAIRS	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PCT_READS_ALIGNED_IN_PAIRS	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_READS_IMPROPER_PAIRS	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PCT_PF_READS_IMPROPER_PAIRS	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	BAD_CYCLES	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	STRAND_BALANCE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PCT_CHIMERAS	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PCT_ADAPTER	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PCT_SOFTCLIP	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PCT_HARDCLIP	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	AVG_POS_3PRIME_SOFTCLIP_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	SAMPLE	
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	LIBRARY	
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	READ_GROUP	
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	CATEGORY	PAIR
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	TOTAL_READS	10
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_READS	10
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PCT_PF_READS	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_NOISE_READS	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_READS_ALIGNED	10
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PCT_PF_READS_ALIGNED	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_ALIGNED_BASES	1000
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_HQ_ALIGNED_READS	10
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_HQ_ALIGNED_BASES	1000
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_HQ_ALIGNED_Q20_BASES	1000
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_HQ_MEDIAN_MISMATCHES	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_MISMATCH_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_HQ_ERROR_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_INDEL_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	MEAN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	SD_READ_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	MEDIAN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	MAD_READ_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	MIN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	MAX_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	MEAN_ALIGNED_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	READS_ALIGNED_IN_PAIRS	10
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PCT_READS_ALIGNED_IN_PAIRS	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_READS_IMPROPER_PAIRS	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PCT_PF_READS_IMPROPER_PAIRS	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	BAD_CYCLES	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	STRAND_BALANCE	0.5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PCT_CHIMERAS	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PCT_ADAPTER	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PCT_SOFTCLIP	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PCT_HARDCLIP	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	AVG_POS_3PRIME_SOFTCLIP_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	SAMPLE	
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	LIBRARY	
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	READ_GROUP	
+insert_size	picard.analysis.AlignmentSummaryMetrics	histogram/0	READ_LENGTH	100
+insert_size	picard.analysis.AlignmentSummaryMetrics	histogram/0	PAIRED_TOTAL_LENGTH_COUNT	10.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	histogram/0	PAIRED_ALIGNED_LENGTH_COUNT	10.0
+## file sample.alignment_summary_metrics.parquet
+parquet <size> bytes, part metrics, 3 rows, 1 row groups, created_by bammetrics
+class picard.analysis.AlignmentSummaryMetrics
+tool CollectAlignmentSummaryMetrics
+sample insert_size
+header CollectAlignmentSummaryMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.alignment_summary_metrics
+header Started on: <time>
+histogram companion
+column CATEGORY BYTE_ARRAY (STRING) optional
+column TOTAL_READS INT64 optional
+column PF_READS INT64 optional
+column PCT_PF_READS DOUBLE optional
+column PF_NOISE_READS INT64 optional
+column PF_READS_ALIGNED INT64 optional
+column PCT_PF_READS_ALIGNED DOUBLE optional
+column PF_ALIGNED_BASES INT64 optional
+column PF_HQ_ALIGNED_READS INT64 optional
+column PF_HQ_ALIGNED_BASES INT64 optional
+column PF_HQ_ALIGNED_Q20_BASES INT64 optional
+column PF_HQ_MEDIAN_MISMATCHES DOUBLE optional
+column PF_MISMATCH_RATE DOUBLE optional
+column PF_HQ_ERROR_RATE DOUBLE optional
+column PF_INDEL_RATE DOUBLE optional
+column MEAN_READ_LENGTH DOUBLE optional
+column SD_READ_LENGTH DOUBLE optional
+column MEDIAN_READ_LENGTH DOUBLE optional
+column MAD_READ_LENGTH DOUBLE optional
+column MIN_READ_LENGTH DOUBLE optional
+column MAX_READ_LENGTH DOUBLE optional
+column MEAN_ALIGNED_READ_LENGTH DOUBLE optional
+column READS_ALIGNED_IN_PAIRS INT64 optional
+column PCT_READS_ALIGNED_IN_PAIRS DOUBLE optional
+column PF_READS_IMPROPER_PAIRS INT64 optional
+column PCT_PF_READS_IMPROPER_PAIRS DOUBLE optional
+column BAD_CYCLES INT64 optional
+column STRAND_BALANCE DOUBLE optional
+column PCT_CHIMERAS DOUBLE optional
+column PCT_ADAPTER DOUBLE optional
+column PCT_SOFTCLIP DOUBLE optional
+column PCT_HARDCLIP DOUBLE optional
+column AVG_POS_3PRIME_SOFTCLIP_LENGTH DOUBLE optional
+column SAMPLE BYTE_ARRAY (STRING) optional
+column LIBRARY BYTE_ARRAY (STRING) optional
+column READ_GROUP BYTE_ARRAY (STRING) optional
+FIRST_OF_PAIR	5	5	1.0	0	5	1.0	500	5	500	500	0.0	0.0	0.0	0.0	100.0	0.0	100.0	0.0	100.0	100.0	100.0	5	1.0	0	0.0	0	1.0	0.0	0.0	0.0	0.0	0.0			
+SECOND_OF_PAIR	5	5	1.0	0	5	1.0	500	5	500	500	0.0	0.0	0.0	0.0	100.0	0.0	100.0	0.0	100.0	100.0	100.0	5	1.0	0	0.0	0	0.0	0.0	0.0	0.0	0.0	0.0			
+PAIR	10	10	1.0	0	10	1.0	1000	10	1000	1000	0.0	0.0	0.0	0.0	100.0	0.0	100.0	0.0	100.0	100.0	100.0	10	1.0	0	0.0	0	0.5	0.0	0.0	0.0	0.0	0.0			
+## file sample.duplicate_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectDuplicateMetrics INPUT=tests/data/insert_size.bam METRICS_FILE=OUT/sample.duplicate_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.DuplicationMetrics
+LIBRARY	UNPAIRED_READS_EXAMINED	READ_PAIRS_EXAMINED	SECONDARY_OR_SUPPLEMENTARY_RDS	UNMAPPED_READS	UNPAIRED_READ_DUPLICATES	READ_PAIR_DUPLICATES	READ_PAIR_OPTICAL_DUPLICATES	PERCENT_DUPLICATION	ESTIMATED_LIBRARY_SIZE
+Unknown Library	0	5	0	0	0	0	0	0	
+
+
+## file sample.duplicate_metrics.json
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectDuplicateMetrics",
+  "sample": "insert_size",
+  "headers": [
+    "CollectDuplicateMetrics INPUT=tests/data/insert_size.bam METRICS_FILE=OUT/sample.duplicate_metrics",
+    "Started on: <time>"
+  ],
+  "class": "picard.sam.DuplicationMetrics",
+  "columns": [
+    "LIBRARY",
+    "UNPAIRED_READS_EXAMINED",
+    "READ_PAIRS_EXAMINED",
+    "SECONDARY_OR_SUPPLEMENTARY_RDS",
+    "UNMAPPED_READS",
+    "UNPAIRED_READ_DUPLICATES",
+    "READ_PAIR_DUPLICATES",
+    "READ_PAIR_OPTICAL_DUPLICATES",
+    "PERCENT_DUPLICATION",
+    "ESTIMATED_LIBRARY_SIZE"
+  ],
+  "types": [
+    "string",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "float",
+    "int"
+  ],
+  "metrics": [
+    {
+      "LIBRARY": "Unknown Library",
+      "UNPAIRED_READS_EXAMINED": 0,
+      "READ_PAIRS_EXAMINED": 5,
+      "SECONDARY_OR_SUPPLEMENTARY_RDS": 0,
+      "UNMAPPED_READS": 0,
+      "UNPAIRED_READ_DUPLICATES": 0,
+      "READ_PAIR_DUPLICATES": 0,
+      "READ_PAIR_OPTICAL_DUPLICATES": 0,
+      "PERCENT_DUPLICATION": 0,
+      "ESTIMATED_LIBRARY_SIZE": null
+    }
+  ],
+  "non_finite": [],
+  "histogram": null
+}
+## file sample.duplicate_metrics.long.parquet
+parquet <size> bytes, part long, 10 rows, 1 row groups, created_by bammetrics
+class picard.sam.DuplicationMetrics
+tool CollectDuplicateMetrics
+sample insert_size
+header CollectDuplicateMetrics INPUT=tests/data/insert_size.bam METRICS_FILE=OUT/sample.duplicate_metrics
+header Started on: <time>
+column sample BYTE_ARRAY (STRING) optional
+column class BYTE_ARRAY (STRING) required
+column row_key BYTE_ARRAY (STRING) required
+column column BYTE_ARRAY (STRING) required
+column value BYTE_ARRAY (STRING) optional
+insert_size	picard.sam.DuplicationMetrics	metrics/0	LIBRARY	Unknown Library
+insert_size	picard.sam.DuplicationMetrics	metrics/0	UNPAIRED_READS_EXAMINED	0
+insert_size	picard.sam.DuplicationMetrics	metrics/0	READ_PAIRS_EXAMINED	5
+insert_size	picard.sam.DuplicationMetrics	metrics/0	SECONDARY_OR_SUPPLEMENTARY_RDS	0
+insert_size	picard.sam.DuplicationMetrics	metrics/0	UNMAPPED_READS	0
+insert_size	picard.sam.DuplicationMetrics	metrics/0	UNPAIRED_READ_DUPLICATES	0
+insert_size	picard.sam.DuplicationMetrics	metrics/0	READ_PAIR_DUPLICATES	0
+insert_size	picard.sam.DuplicationMetrics	metrics/0	READ_PAIR_OPTICAL_DUPLICATES	0
+insert_size	picard.sam.DuplicationMetrics	metrics/0	PERCENT_DUPLICATION	0.0
+insert_size	picard.sam.DuplicationMetrics	metrics/0	ESTIMATED_LIBRARY_SIZE	
+## file sample.duplicate_metrics.parquet
+parquet <size> bytes, part metrics, 1 rows, 1 row groups, created_by bammetrics
+class picard.sam.DuplicationMetrics
+tool CollectDuplicateMetrics
+sample insert_size
+header CollectDuplicateMetrics INPUT=tests/data/insert_size.bam METRICS_FILE=OUT/sample.duplicate_metrics
+header Started on: <time>
+column LIBRARY BYTE_ARRAY (STRING) optional
+column UNPAIRED_READS_EXAMINED INT64 optional
+column READ_PAIRS_EXAMINED INT64 optional
+column SECONDARY_OR_SUPPLEMENTARY_RDS INT64 optional
+column UNMAPPED_READS INT64 optional
+column UNPAIRED_READ_DUPLICATES INT64 optional
+column READ_PAIR_DUPLICATES INT64 optional
+column READ_PAIR_OPTICAL_DUPLICATES INT64 optional
+column PERCENT_DUPLICATION DOUBLE optional
+column ESTIMATED_LIBRARY_SIZE INT64 optional
+Unknown Library	0	5	0	0	0	0	0	0.0	
+## file sample.insert_size_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.insert_size_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.InsertSizeMetrics
+MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MAX_INSERT_SIZE	MEAN_INSERT_SIZE	STANDARD_DEVIATION	READ_PAIRS	PAIR_ORIENTATION	WIDTH_OF_10_PERCENT	WIDTH_OF_20_PERCENT	WIDTH_OF_30_PERCENT	WIDTH_OF_40_PERCENT	WIDTH_OF_50_PERCENT	WIDTH_OF_60_PERCENT	WIDTH_OF_70_PERCENT	WIDTH_OF_80_PERCENT	WIDTH_OF_90_PERCENT	WIDTH_OF_95_PERCENT	WIDTH_OF_99_PERCENT	SAMPLE	LIBRARY	READ_GROUP
+310	310	10	300	500	310	8.164966	5	FR	1	1	1	1	21	21	21	21	381	381	381			
+
+## HISTOGRAM	java.lang.Integer
+insert_size	All_Reads.fr_count
+300	1
+310	2
+320	1
+
+## file sample.insert_size_metrics.histogram.parquet
+parquet <size> bytes, part histogram, 3 rows, 1 row groups, created_by bammetrics
+class java.lang.Integer
+tool CollectInsertSizeMetrics
+sample insert_size
+header CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.insert_size_metrics
+header Started on: <time>
+column insert_size INT64 optional
+column All_Reads.fr_count DOUBLE optional
+300	1.0
+310	2.0
+320	1.0
+## file sample.insert_size_metrics.json
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectInsertSizeMetrics",
+  "sample": "insert_size",
+  "headers": [
+    "CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.insert_size_metrics",
+    "Started on: <time>"
+  ],
+  "class": "picard.analysis.InsertSizeMetrics",
+  "columns": [
+    "MEDIAN_INSERT_SIZE",
+    "MODE_INSERT_SIZE",
+    "MEDIAN_ABSOLUTE_DEVIATION",
+    "MIN_INSERT_SIZE",
+    "MAX_INSERT_SIZE",
+    "MEAN_INSERT_SIZE",
+    "STANDARD_DEVIATION",
+    "READ_PAIRS",
+    "PAIR_ORIENTATION",
+    "WIDTH_OF_10_PERCENT",
+    "WIDTH_OF_20_PERCENT",
+    "WIDTH_OF_30_PERCENT",
+    "WIDTH_OF_40_PERCENT",
+    "WIDTH_OF_50_PERCENT",
+    "WIDTH_OF_60_PERCENT",
+    "WIDTH_OF_70_PERCENT",
+    "WIDTH_OF_80_PERCENT",
+    "WIDTH_OF_90_PERCENT",
+    "WIDTH_OF_95_PERCENT",
+    "WIDTH_OF_99_PERCENT",
+    "SAMPLE",
+    "LIBRARY",
+    "READ_GROUP"
+  ],
+  "types": [
+    "float",
+    "float",
+    "float",
+    "int",
+    "int",
+    "float",
+    "float",
+    "int",
+    "string",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "string",
+    "string",
+    "string"
+  ],
+  "metrics": [
+    {
+      "MEDIAN_INSERT_SIZE": 310,
+      "MODE_INSERT_SIZE": 310,
+      "MEDIAN_ABSOLUTE_DEVIATION": 10,
+      "MIN_INSERT_SIZE": 300,
+      "MAX_INSERT_SIZE": 500,
+      "MEAN_INSERT_SIZE": 310,
+      "STANDARD_DEVIATION": 8.164966,
+      "READ_PAIRS": 5,
+      "PAIR_ORIENTATION": "FR",
+      "WIDTH_OF_10_PERCENT": 1,
+      "WIDTH_OF_20_PERCENT": 1,
+      "WIDTH_OF_30_PERCENT": 1,
+      "WIDTH_OF_40_PERCENT": 1,
+      "WIDTH_OF_50_PERCENT": 21,
+      "WIDTH_OF_60_PERCENT": 21,
+      "WIDTH_OF_70_PERCENT": 21,
+      "WIDTH_OF_80_PERCENT": 21,
+      "WIDTH_OF_90_PERCENT": 381,
+      "WIDTH_OF_95_PERCENT": 381,
+      "WIDTH_OF_99_PERCENT": 381,
+      "SAMPLE": null,
+      "LIBRARY": null,
+      "READ_GROUP": null
+    }
+  ],
+  "non_finite": [],
+  "histogram": {
+    "key_class": "java.lang.Integer",
+    "columns": [
+      "insert_size",
+      "All_Reads.fr_count"
+    ],
+    "types": [
+      "int",
+      "float"
+    ],
+    "rows": [
+      {
+        "insert_size": 300,
+        "All_Reads.fr_count": 1
+      },
+      {
+        "insert_size": 310,
+        "All_Reads.fr_count": 2
+      },
+      {
+        "insert_size": 320,
+        "All_Reads.fr_count": 1
+      }
+    ],
+    "non_finite": []
+  }
+}
+## file sample.insert_size_metrics.long.parquet
+parquet <size> bytes, part long, 29 rows, 1 row groups, created_by bammetrics
+class picard.analysis.InsertSizeMetrics
+tool CollectInsertSizeMetrics
+sample insert_size
+header CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.insert_size_metrics
+header Started on: <time>
+column sample BYTE_ARRAY (STRING) optional
+column class BYTE_ARRAY (STRING) required
+column row_key BYTE_ARRAY (STRING) required
+column column BYTE_ARRAY (STRING) required
+column value BYTE_ARRAY (STRING) optional
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	MEDIAN_INSERT_SIZE	310.0
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	MODE_INSERT_SIZE	310.0
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	MEDIAN_ABSOLUTE_DEVIATION	10.0
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	MIN_INSERT_SIZE	300
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	MAX_INSERT_SIZE	500
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	MEAN_INSERT_SIZE	310.0
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	STANDARD_DEVIATION	8.164966
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	READ_PAIRS	5
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	PAIR_ORIENTATION	FR
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_10_PERCENT	1
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_20_PERCENT	1
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_30_PERCENT	1
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_40_PERCENT	1
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_50_PERCENT	21
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_60_PERCENT	21
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_70_PERCENT	21
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_80_PERCENT	21
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_90_PERCENT	381
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_95_PERCENT	381
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_99_PERCENT	381
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	SAMPLE	
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	LIBRARY	
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	READ_GROUP	
+insert_size	picard.analysis.InsertSizeMetrics	histogram/0	insert_size	300
+insert_size	picard.analysis.InsertSizeMetrics	histogram/0	All_Reads.fr_count	1.0
+insert_size	picard.analysis.InsertSizeMetrics	histogram/1	insert_size	310
+insert_size	picard.analysis.InsertSizeMetrics	histogram/1	All_Reads.fr_count	2.0
+insert_size	picard.analysis.InsertSizeMetrics	histogram/2	insert_size	320
+insert_size	picard.analysis.InsertSizeMetrics	histogram/2	All_Reads.fr_count	1.0
+## file sample.insert_size_metrics.parquet
+parquet <size> bytes, part metrics, 1 rows, 1 row groups, created_by bammetrics
+class picard.analysis.InsertSizeMetrics
+tool CollectInsertSizeMetrics
+sample insert_size
+header CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.insert_size_metrics
+header Started on: <time>
+histogram companion
+column MEDIAN_INSERT_SIZE DOUBLE optional
+column MODE_INSERT_SIZE DOUBLE optional
+column MEDIAN_ABSOLUTE_DEVIATION DOUBLE optional
+column MIN_INSERT_SIZE INT64 optional
+column MAX_INSERT_SIZE INT64 optional
+column MEAN_INSERT_SIZE DOUBLE optional
+column STANDARD_DEVIATION DOUBLE optional
+column READ_PAIRS INT64 optional
+column PAIR_ORIENTATION BYTE_ARRAY (STRING) optional
+column WIDTH_OF_10_PERCENT INT64 optional
+column WIDTH_OF_20_PERCENT INT64 optional
+column WIDTH_OF_30_PERCENT INT64 optional
+column WIDTH_OF_40_PERCENT INT64 optional
+column WIDTH_OF_50_PERCENT INT64 optional
+column WIDTH_OF_60_PERCENT INT64 optional
+column WIDTH_OF_70_PERCENT INT64 optional
+column WIDTH_OF_80_PERCENT INT64 optional
+column WIDTH_OF_90_PERCENT INT64 optional
+column WIDTH_OF_95_PERCENT INT64 optional
+column WIDTH_OF_99_PERCENT INT64 optional
+column SAMPLE BYTE_ARRAY (STRING) optional
+column LIBRARY BYTE_ARRAY (STRING) optional
+column READ_GROUP BYTE_ARRAY (STRING) optional
+310.0	310.0	10.0	300	500	310.0	8.164966	5	FR	1	1	1	1	21	21	21	21	381	381	381			
+## file sample.manifest.json
+{
+  "schema": "bammetrics.manifest/1",
+  "tool_version": "0.30.0",
+  "sample": "insert_size",
+  "bam": "tests/data/insert_size.bam",
+  "prefix": "OUT/sample",
+  "preset": {
+    "name": "generic",
+    "hash": "6dd89ed0478fd5e4"
+  },
+  "steps": [
+    {
+      "id": "CollectQualityYieldMetrics",
+      "stage": "pass",
+      "tool": "CollectQualityYieldMetrics",
+      "argv": [
+        "INPUT=tests/data/insert_size.bam",
+        "OUTPUT=OUT/sample.quality_yield_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.30.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.quality_yield_metrics",
+          "tool": "CollectQualityYieldMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "CollectAlignmentSummaryMetrics",
+      "stage": "pass",
+      "tool": "CollectAlignmentSummaryMetrics",
+      "argv": [
+        "INPUT=tests/data/insert_size.bam",
+        "OUTPUT=OUT/sample.alignment_summary_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.30.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.alignment_summary_metrics",
+          "tool": "CollectAlignmentSummaryMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "CollectInsertSizeMetrics",
+      "stage": "pass",
+      "tool": "CollectInsertSizeMetrics",
+      "argv": [
+        "INPUT=tests/data/insert_size.bam",
+        "OUTPUT=OUT/sample.insert_size_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.30.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.insert_size_metrics",
+          "tool": "CollectInsertSizeMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "CollectDuplicateMetrics",
+      "stage": "pass",
+      "tool": "CollectDuplicateMetrics",
+      "argv": [
+        "INPUT=tests/data/insert_size.bam",
+        "METRICS_FILE=OUT/sample.duplicate_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.30.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.duplicate_metrics",
+          "tool": "CollectDuplicateMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "verdict",
+      "stage": "post",
+      "tool": "bammetrics",
+      "argv": [
+        "--preset=generic",
+        "OUT/sample.alignment_summary_metrics",
+        "OUT/sample.duplicate_metrics",
+        "OUT/sample.insert_size_metrics",
+        "OUT/sample.quality_yield_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.30.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [],
+      "outputs": [],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "report",
+      "stage": "report",
+      "tool": "bammetrics",
+      "argv": [
+        "--all-plots=false",
+        "--date=2026-01-02 03:04:05 UTC"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.30.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.verdict.json",
+          "tool": "bammetrics",
+          "kind": "verdict"
+        },
+        {
+          "path": "OUT/sample.report.html",
+          "tool": "bammetrics",
+          "kind": "report"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "also",
+      "stage": "report",
+      "tool": "bammetrics",
+      "argv": [
+        "--also=parquet,json"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.30.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/insert_size.bam",
+        "size": 328,
+        "mtime": "<mtime>",
+        "edges_hash": "9194c505a3f0ed99"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.alignment_summary_metrics.parquet",
+          "tool": "bammetrics",
+          "kind": "parquet"
+        },
+        {
+          "path": "OUT/sample.alignment_summary_metrics.histogram.parquet",
+          "tool": "bammetrics",
+          "kind": "parquet"
+        },
+        {
+          "path": "OUT/sample.alignment_summary_metrics.long.parquet",
+          "tool": "bammetrics",
+          "kind": "parquet"
+        },
+        {
+          "path": "OUT/sample.duplicate_metrics.parquet",
+          "tool": "bammetrics",
+          "kind": "parquet"
+        },
+        {
+          "path": "OUT/sample.duplicate_metrics.long.parquet",
+          "tool": "bammetrics",
+          "kind": "parquet"
+        },
+        {
+          "path": "OUT/sample.insert_size_metrics.parquet",
+          "tool": "bammetrics",
+          "kind": "parquet"
+        },
+        {
+          "path": "OUT/sample.insert_size_metrics.histogram.parquet",
+          "tool": "bammetrics",
+          "kind": "parquet"
+        },
+        {
+          "path": "OUT/sample.insert_size_metrics.long.parquet",
+          "tool": "bammetrics",
+          "kind": "parquet"
+        },
+        {
+          "path": "OUT/sample.quality_yield_metrics.parquet",
+          "tool": "bammetrics",
+          "kind": "parquet"
+        },
+        {
+          "path": "OUT/sample.quality_yield_metrics.long.parquet",
+          "tool": "bammetrics",
+          "kind": "parquet"
+        },
+        {
+          "path": "OUT/sample.alignment_summary_metrics.json",
+          "tool": "bammetrics",
+          "kind": "json"
+        },
+        {
+          "path": "OUT/sample.duplicate_metrics.json",
+          "tool": "bammetrics",
+          "kind": "json"
+        },
+        {
+          "path": "OUT/sample.insert_size_metrics.json",
+          "tool": "bammetrics",
+          "kind": "json"
+        },
+        {
+          "path": "OUT/sample.quality_yield_metrics.json",
+          "tool": "bammetrics",
+          "kind": "json"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    }
+  ]
+}
+## file sample.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectQualityYieldMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+10	10	100	1000	1000	1000	1000	1000	1000	2000	2000
+
+
+## file sample.quality_yield_metrics.json
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CollectQualityYieldMetrics",
+  "sample": "insert_size",
+  "headers": [
+    "CollectQualityYieldMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.quality_yield_metrics",
+    "Started on: <time>"
+  ],
+  "class": "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics",
+  "columns": [
+    "TOTAL_READS",
+    "PF_READS",
+    "READ_LENGTH",
+    "TOTAL_BASES",
+    "PF_BASES",
+    "Q20_BASES",
+    "PF_Q20_BASES",
+    "Q30_BASES",
+    "PF_Q30_BASES",
+    "Q20_EQUIVALENT_YIELD",
+    "PF_Q20_EQUIVALENT_YIELD"
+  ],
+  "types": [
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int"
+  ],
+  "metrics": [
+    {
+      "TOTAL_READS": 10,
+      "PF_READS": 10,
+      "READ_LENGTH": 100,
+      "TOTAL_BASES": 1000,
+      "PF_BASES": 1000,
+      "Q20_BASES": 1000,
+      "PF_Q20_BASES": 1000,
+      "Q30_BASES": 1000,
+      "PF_Q30_BASES": 1000,
+      "Q20_EQUIVALENT_YIELD": 2000,
+      "PF_Q20_EQUIVALENT_YIELD": 2000
+    }
+  ],
+  "non_finite": [],
+  "histogram": null
+}
+## file sample.quality_yield_metrics.long.parquet
+parquet <size> bytes, part long, 11 rows, 1 row groups, created_by bammetrics
+class picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+tool CollectQualityYieldMetrics
+sample insert_size
+header CollectQualityYieldMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.quality_yield_metrics
+header Started on: <time>
+column sample BYTE_ARRAY (STRING) optional
+column class BYTE_ARRAY (STRING) required
+column row_key BYTE_ARRAY (STRING) required
+column column BYTE_ARRAY (STRING) required
+column value BYTE_ARRAY (STRING) optional
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	TOTAL_READS	10
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	PF_READS	10
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	READ_LENGTH	100
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	TOTAL_BASES	1000
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	PF_BASES	1000
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	Q20_BASES	1000
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	PF_Q20_BASES	1000
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	Q30_BASES	1000
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	PF_Q30_BASES	1000
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	Q20_EQUIVALENT_YIELD	2000
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	PF_Q20_EQUIVALENT_YIELD	2000
+## file sample.quality_yield_metrics.parquet
+parquet <size> bytes, part metrics, 1 rows, 1 row groups, created_by bammetrics
+class picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+tool CollectQualityYieldMetrics
+sample insert_size
+header CollectQualityYieldMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/sample.quality_yield_metrics
+header Started on: <time>
+column TOTAL_READS INT64 optional
+column PF_READS INT64 optional
+column READ_LENGTH INT64 optional
+column TOTAL_BASES INT64 optional
+column PF_BASES INT64 optional
+column Q20_BASES INT64 optional
+column PF_Q20_BASES INT64 optional
+column Q30_BASES INT64 optional
+column PF_Q30_BASES INT64 optional
+column Q20_EQUIVALENT_YIELD INT64 optional
+column PF_Q20_EQUIVALENT_YIELD INT64 optional
+10	10	100	1000	1000	1000	1000	1000	1000	2000	2000
+## file sample.report.html
+<page not recorded>
+## file sample.verdict.json
+{
+  "schema": "bammetrics.verdict/1",
+  "tool_version": "0.30.0",
+  "sample": "insert_size",
+  "preset": {
+    "name": "generic",
+    "version": 1,
+    "hash": "6dd89ed0478fd5e4",
+    "source": "built-in",
+    "note": "starting values"
+  },
+  "status": "pass",
+  "counts": {
+    "pass": 6,
+    "warn": 0,
+    "fail": 0,
+    "not_measured": 0
+  },
+  "files": [
+    {
+      "path": "OUT/sample.alignment_summary_metrics",
+      "classes": [
+        "picard.analysis.AlignmentSummaryMetrics"
+      ]
+    },
+    {
+      "path": "OUT/sample.duplicate_metrics",
+      "classes": [
+        "picard.sam.DuplicationMetrics"
+      ]
+    },
+    {
+      "path": "OUT/sample.insert_size_metrics",
+      "classes": [
+        "picard.analysis.InsertSizeMetrics"
+      ]
+    },
+    {
+      "path": "OUT/sample.quality_yield_metrics",
+      "classes": [
+        "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "rule": "alignment.pf-reads-aligned",
+      "label": "PF reads aligned",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_PF_READS_ALIGNED",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 1,
+      "warn": "< 0.9",
+      "fail": "< 0.8",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "alignment.adapter",
+      "label": "Adapter reads",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_ADAPTER",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 0,
+      "warn": "> 0.01",
+      "fail": "> 0.05",
+      "status": "pass",
+      "reason": null,
+      "plot": "insert-size"
+    },
+    {
+      "rule": "alignment.chimeras",
+      "label": "Chimeric pairs",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_CHIMERAS",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 0,
+      "warn": "> 0.05",
+      "fail": "> 0.1",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "insert.median",
+      "label": "Median insert size",
+      "class": "InsertSizeMetrics",
+      "metric": "MEDIAN_INSERT_SIZE",
+      "level": "ALL_READS",
+      "select": "PAIR_ORIENTATION=FR",
+      "unit": null,
+      "value": 310,
+      "warn": "outside 100..1000",
+      "fail": "outside 50..2000",
+      "status": "pass",
+      "reason": null,
+      "plot": "insert-size"
+    },
+    {
+      "rule": "yield.q30",
+      "label": "Q30 fraction of PF bases",
+      "class": "QualityYieldMetrics",
+      "metric": "PF_Q30_BASES / PF_BASES",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 1,
+      "warn": "< 0.8",
+      "fail": "< 0.7",
+      "status": "pass",
+      "reason": null,
+      "plot": "cycle-quality"
+    },
+    {
+      "rule": "duplication.percent",
+      "label": "Duplicate reads",
+      "class": "DuplicationMetrics",
+      "metric": "PERCENT_DUPLICATION",
+      "level": "LIBRARY",
+      "select": null,
+      "unit": "Unknown Library",
+      "value": 0,
+      "warn": "> 0.3",
+      "fail": "> 0.5",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    }
+  ]
+}

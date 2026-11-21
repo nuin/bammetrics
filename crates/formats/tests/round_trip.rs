@@ -359,3 +359,282 @@ fn a_repeated_histogram_column_round_trips_through_parquet() {
     let _ = fs::remove_dir_all(&dir);
     result.expect("round trips");
 }
+
+/// What an outside reader must see in one Parquet file: its rows, and per
+/// column its name, its glossary type, its nulls and its NaNs.
+#[cfg(feature = "parquet")]
+struct Expected {
+    rows: usize,
+    columns: Vec<(String, Ty, usize, usize)>,
+}
+
+#[cfg(feature = "parquet")]
+fn expected_table(table: &bammetrics_formats::Table) -> Expected {
+    use bammetrics_core::metric::Value;
+    let columns = table
+        .keys()
+        .into_iter()
+        .zip(&table.columns)
+        .enumerate()
+        .map(|(j, (key, (_, ty)))| {
+            let cells = || table.rows.iter().map(move |row| &row[j]);
+            let nulls = cells().filter(|c| matches!(c, Value::Null)).count();
+            let nans = cells()
+                .filter(|c| matches!(c, Value::Float(v) if v.is_nan()))
+                .count();
+            (key, *ty, nulls, nans)
+        })
+        .collect();
+    Expected {
+        rows: table.rows.len(),
+        columns,
+    }
+}
+
+#[cfg(feature = "parquet")]
+fn expected_long(doc: &bammetrics_formats::Document) -> Expected {
+    use bammetrics_core::metric::Value;
+    let cells: Vec<&Value> = doc
+        .tables
+        .iter()
+        .chain(&doc.histogram)
+        .flat_map(|t| t.rows.iter().flatten())
+        .collect();
+    let rows = cells.len();
+    let empty = cells.iter().filter(|c| matches!(c, Value::Null)).count();
+    let sample_nulls = if doc.sample.is_some() { 0 } else { rows };
+    let names = ["sample", "class", "row_key", "column", "value"];
+    let nulls = [sample_nulls, 0, 0, 0, empty];
+    Expected {
+        rows,
+        columns: names
+            .iter()
+            .zip(nulls)
+            .map(|(name, n)| ((*name).to_owned(), Ty::Str, n, 0))
+            .collect(),
+    }
+}
+
+/// Every Picard fixture and golden metrics file as Parquet under `dir`,
+/// with what each file must read as.
+#[cfg(feature = "parquet")]
+fn parquet_corpus(dir: &Path) -> std::collections::BTreeMap<String, Expected> {
+    use bammetrics_formats::{parquet, render_files};
+    let mut texts = Vec::new();
+    let mut files = Vec::new();
+    files_under(&root().join("tests/data/picard"), &mut files);
+    files_under(&root().join("tests/golden"), &mut files);
+    files.sort();
+    for path in files {
+        let text = fs::read_to_string(&path).expect("read a fixture");
+        if path.starts_with(root().join("tests/golden")) {
+            texts.extend(golden_sections(&text).into_iter().map(|(_, t)| t));
+        } else {
+            texts.push(text);
+        }
+    }
+    let mut expected = std::collections::BTreeMap::new();
+    for (i, text) in texts.iter().filter(|t| is_metrics_file(t)).enumerate() {
+        let mut doc = read(text).expect("reads");
+        // Every other file carries a sample, so the long file's sample
+        // column is seen both null and filled.
+        if i % 2 == 1 {
+            doc.sample = Some(format!("S{i}"));
+        }
+        let main = dir.join(format!("f{i}.parquet"));
+        for file in render_files(Format::Parquet, &doc, None).expect("writes") {
+            let path = file
+                .part
+                .map_or(main.clone(), |p| parquet::companion(&main, p));
+            fs::write(&path, &file.bytes).expect("write a Parquet file");
+            let table = match file.part {
+                None => doc.main_table(),
+                Some("histogram") => doc.histogram.as_ref(),
+                Some(_) => None,
+            };
+            let want = table.map_or_else(|| expected_long(&doc), expected_table);
+            let name = path.file_name().expect("a name").to_string_lossy();
+            expected.insert(name.into_owned(), want);
+        }
+    }
+    expected
+}
+
+/// DuckDB's name of a glossary type.
+#[cfg(feature = "parquet")]
+fn duckdb_type(ty: Ty) -> &'static str {
+    match ty {
+        Ty::Int => "BIGINT",
+        Ty::Float => "DOUBLE",
+        Ty::Str => "VARCHAR",
+    }
+}
+
+/// DuckDB reads every Parquet file of every fixture with the glossary's
+/// types, every row and every null (docs/07 section 5, wave W21). Skipped
+/// when `duckdb` is not on PATH.
+#[cfg(feature = "parquet")]
+#[test]
+fn duckdb_reads_every_parquet_file_with_the_glossary_types() {
+    use std::io::Write as _;
+    use std::process::{Command, Stdio};
+    if Command::new("duckdb").arg("-version").output().is_err() {
+        eprintln!("skipped: duckdb is not on PATH");
+        return;
+    }
+    let dir = temporary("parquet-duckdb");
+    let expected = parquet_corpus(&dir);
+    let mut sql = String::new();
+    for (name, want) in &expected {
+        let path = dir.join(name);
+        let path = path.display();
+        sql.push_str(&format!(
+            "SELECT '{name}', column_name, column_type FROM (DESCRIBE SELECT * FROM read_parquet('{path}'));\n"
+        ));
+        let nulls: Vec<String> = want
+            .columns
+            .iter()
+            .map(|(key, ..)| format!("count(*) - count(\"{}\")", key.replace('"', "\"\"")))
+            .collect();
+        sql.push_str(&format!(
+            "SELECT '{name}', 'rows', concat_ws('|', count(*), {}) FROM read_parquet('{path}');\n",
+            nulls.join(", ")
+        ));
+    }
+    let mut child = Command::new("duckdb")
+        .args(["-csv", "-noheader"])
+        .env_remove("AI_AGENT")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("start duckdb");
+    // The queries go in from a thread: duckdb answers while it reads, and
+    // a full pipe each way would stop both.
+    let mut stdin = child.stdin.take().expect("stdin");
+    let feeder = std::thread::spawn(move || stdin.write_all(sql.as_bytes()));
+    let out = child.wait_with_output().expect("duckdb runs");
+    feeder
+        .join()
+        .expect("the feeder")
+        .expect("send the queries");
+    let _ = fs::remove_dir_all(&dir);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let mut seen: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let (name, rest) = line.split_once(',').expect("a CSV line");
+        seen.entry(name.to_owned())
+            .or_default()
+            .push(rest.to_owned());
+    }
+    let mut failures = Vec::new();
+    for (name, want) in &expected {
+        let mut lines: Vec<String> = want
+            .columns
+            .iter()
+            .map(|(key, ty, ..)| {
+                // DuckDB's CSV quotes a field with a comma or a quote.
+                let quoted = if key.contains([',', '"', '\'']) {
+                    format!("\"{}\"", key.replace('"', "\"\""))
+                } else {
+                    key.clone()
+                };
+                format!("{quoted},{}", duckdb_type(*ty))
+            })
+            .collect();
+        let counts: Vec<String> = std::iter::once(want.rows)
+            .chain(want.columns.iter().map(|c| c.2))
+            .map(|n| n.to_string())
+            .collect();
+        lines.push(format!("rows,{}", counts.join("|")));
+        if seen.get(name) != Some(&lines) {
+            failures.push(format!("{name}: {:?} != {lines:?}", seen.get(name)));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    eprintln!("duckdb read {} Parquet files", expected.len());
+}
+
+/// polars and pyarrow read every Parquet file of every fixture with the
+/// glossary's types, every row, null and NaN. The interpreter is
+/// `BAMMETRICS_PARQUET_PYTHON` (default `python3`); a reader it lacks is
+/// skipped: `python3 -m venv target/pyreaders && target/pyreaders/bin/pip
+/// install polars pyarrow` gives both.
+#[cfg(feature = "parquet")]
+#[test]
+fn polars_and_pyarrow_read_every_parquet_file_with_the_glossary_types() {
+    use bammetrics_formats::json::Json;
+    use std::process::Command;
+    let python =
+        std::env::var("BAMMETRICS_PARQUET_PYTHON").unwrap_or_else(|_| "python3".to_owned());
+    let dir = temporary("parquet-python");
+    let expected = parquet_corpus(&dir);
+    let script = root().join("crates/formats/tests/parquet_readers.py");
+    let out = Command::new(&python)
+        .arg("-I")
+        .arg(&script)
+        .arg(&dir)
+        .output();
+    let _ = fs::remove_dir_all(&dir);
+    let Ok(out) = out else {
+        eprintln!("skipped: no {python}");
+        return;
+    };
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let mut failures = Vec::new();
+    let mut read = std::collections::BTreeMap::<String, usize>::new();
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let json = Json::parse(line).expect("a JSON line");
+        let reader = json.get("reader").and_then(Json::as_str).expect("a reader");
+        if json.get("missing").is_some() {
+            eprintln!("skipped: {python} has no {reader}");
+            continue;
+        }
+        *read.entry(reader.to_owned()).or_default() += 1;
+        let name = json.get("file").and_then(Json::as_str).expect("a file");
+        let want = &expected[name];
+        let type_name = |ty: Ty| match (reader, ty) {
+            ("polars", Ty::Int) => "Int64",
+            ("polars", Ty::Float) => "Float64",
+            ("polars", Ty::Str) => "String",
+            (_, Ty::Int) => "int64",
+            (_, Ty::Float) => "double",
+            (_, Ty::Str) => "string",
+        };
+        let number = |n: usize| Json::Number(n.to_string());
+        let columns: Vec<Json> = want
+            .columns
+            .iter()
+            .map(|(key, ty, nulls, nans)| {
+                Json::Array(vec![
+                    Json::text(key),
+                    Json::text(type_name(*ty)),
+                    number(*nulls),
+                    if *ty == Ty::Float {
+                        number(*nans)
+                    } else {
+                        Json::Null
+                    },
+                ])
+            })
+            .collect();
+        if json.get("rows") != Some(&number(want.rows))
+            || json.get("columns") != Some(&Json::Array(columns.clone()))
+        {
+            failures.push(format!("{reader} {name}: {line}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    for (reader, files) in &read {
+        assert_eq!(*files, expected.len(), "{reader} read every file");
+        eprintln!("{reader} read {files} Parquet files");
+    }
+}

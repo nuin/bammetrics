@@ -1,0 +1,8 @@
+## argv
+convert
+tests/data/insert_size_metrics.long.parquet
+## exit
+1
+## stdout
+## stderr
+bammetrics convert: tests/data/insert_size_metrics.long.parquet: parquet: a long file is not read back: give the main file, FILE.parquet

@@ -4,11 +4,11 @@ tests/data/insert_size.bam
 -o
 OUT/sample
 --also
-parquet
+prquet
 ## exit
 2
 ## stdout
 ## stderr
-bammetrics qc: invalid value "parquet" (from --also)
-  one of: json, jsonl, tsv, csv, markdown, junit, multiqc
+bammetrics qc: invalid value "prquet" (from --also)
+  one of: json, jsonl, tsv, csv, markdown, junit, multiqc, parquet
   every option: bammetrics help qc

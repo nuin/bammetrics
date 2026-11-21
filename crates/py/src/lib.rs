@@ -961,7 +961,9 @@ fn table_object<'py>(
 }
 
 /// Read one table of a metrics file with the glossary's column types. The
-/// file is Picard text or the JSON `--format json` writes. `table` names
+/// file is Picard text, the JSON `--format json` writes, or the main file
+/// `--format parquet` writes (its histogram companion read from beside it,
+/// in a build with the feature `parquet`, as the wheel is). `table` names
 /// the table: "metrics" (the first class), "histogram", or a class name;
 /// by default the metrics class, or the histogram of a file without one.
 /// Returns a `Table`: `columns` ({name: list}), `dtypes` ({name: "int",
@@ -977,9 +979,10 @@ fn read_table<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let doc = py
         .detach(|| {
-            let text =
-                std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-            bammetrics_formats::read(&text).map_err(|e| format!("{}: {e}", path.display()))
+            bammetrics_formats::read_path(&path).map_err(|e| match e {
+                bammetrics_formats::Error::Io(message) => message,
+                e => format!("{}: {e}", path.display()),
+            })
         })
         .map_err(input_error)?;
     let picked = match table {

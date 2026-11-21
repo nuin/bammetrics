@@ -117,7 +117,8 @@ fn after_help() -> String {
 Each metrics file is byte for byte the one `bammetrics <Tool> \
 INPUT=BAM OUTPUT=FILE` writes, apart from the Started on line.\n\n\
 --also json, jsonl, tsv or csv adds FILE.json (.jsonl, .tsv, .csv) beside every metrics file; \
-markdown adds PREFIX.report.md, junit PREFIX.junit.xml, multiqc PREFIX.verdict_mqc.json. The \
+parquet adds FILE.parquet, FILE.histogram.parquet when the file has a histogram, and \
+FILE.long.parquet; markdown adds PREFIX.report.md, junit PREFIX.junit.xml, multiqc PREFIX.verdict_mqc.json. The \
 manifest lists them under the step `also`.\n\n\
 Without --fail-on, qc exits 0 on any verdict; bammetrics check always gates.\n\n{EXIT_CODES}\n  \
 qc also exits 1 when a collector failed, after it writes the files the others made."
@@ -1070,6 +1071,12 @@ fn prefix(args: &QcArgs) -> Result<(PathBuf, Origin)> {
 
 /// Prepare: everything checked and decided, nothing written.
 pub fn prepare(args: &QcArgs) -> Result<Plan> {
+    let per_file = args.also.iter().filter_map(|also| also.per_file());
+    if let Some(missing) = per_file.clone().find(|f| !crate::format::available(*f)) {
+        return Err(crate::format::unavailable("qc", missing)
+            .from("--also")
+            .into());
+    }
     let pdf = args
         .pdf
         .prepare(args.writes(ReportForm::Pdf), "--report pdf")?;
