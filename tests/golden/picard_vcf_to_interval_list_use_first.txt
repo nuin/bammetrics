@@ -1,0 +1,21 @@
+## argv
+VcfToIntervalList
+I=tests/data/intervals.vcf
+O=OUT/intervals.interval_list
+INCLUDE_FILTERED=true
+VARIANT_ID_METHOD=USE_FIRST
+## exit
+0
+## stdout
+## stderr
+## file intervals.interval_list
+@HD	VN:1.6
+@SQ	SN:chr1	LN:100000	AS:test
+@SQ	SN:chr2	LN:5000
+chr1	1050	1052	+	rs1
+chr1	1500	1500	+	interval-2
+chr1	2010	2010	+	rs2;rs3
+chr2	100	180	+	del1
+chr1	900	900	+	interval-3
+chr1	3000	3005	+	x
+chr3	10	10	+	lost

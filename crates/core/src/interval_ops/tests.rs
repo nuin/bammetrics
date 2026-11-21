@@ -184,6 +184,70 @@ fn merging_follows_the_merger_iterator() {
 }
 
 #[test]
+fn an_interval_ending_before_it_starts_joins_by_its_unmoved_end() {
+    // Picard VcfToIntervalList on c1:100 END=110, c1:120 END=110 and
+    // c1:111 END=130 writes `c1 100 130 + a|b|c`: the second record's end
+    // 110 lies inside 100-110, though 119-111 (moved one base) does not.
+    let spans = |input: Vec<Interval>, concatenate: bool| -> Vec<(i32, i32, Option<String>)> {
+        merged(input, true, concatenate)
+            .map(|i| (i.start, i.end, i.name))
+            .collect()
+    };
+    let two = vec![
+        iv(0, 100, 110, false, Some("a")),
+        iv(0, 120, 110, false, Some("b")),
+    ];
+    assert_eq!(
+        spans(two.clone(), true),
+        [(100, 110, Some("a|b".to_owned()))]
+    );
+    assert_eq!(spans(two, false), [(100, 110, Some("a".to_owned()))]);
+    let three = vec![
+        iv(0, 100, 110, false, Some("a")),
+        iv(0, 120, 110, false, Some("b")),
+        iv(0, 111, 130, false, Some("c")),
+    ];
+    assert_eq!(spans(three, true), [(100, 130, Some("a|b|c".to_owned()))]);
+    // Without abutting merges only the overlap test runs.
+    let apart = vec![
+        iv(0, 100, 110, false, Some("a")),
+        iv(0, 111, 120, false, Some("b")),
+    ];
+    assert_eq!(merged(apart, false, true).count(), 2);
+}
+
+#[test]
+fn the_feature_reader_fails_on_an_empty_line_after_the_header() {
+    // Picard IntervalListToBed: "Unable to parse header with error: Index
+    // 0 out of bounds for length 0" for each of the first five; a blank
+    // line inside or after the records is skipped.
+    let dir = scratch("blank");
+    let path = dir.join("in.interval_list");
+    let read = |text: &str| {
+        std::fs::write(&path, text).expect("writes");
+        IntervalList::read_features(&path)
+    };
+    for bad in [
+        "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\n\nc1\t1\t5\t+\tn\n",
+        "@HD\tVN:1.6\n\n@SQ\tSN:c1\tLN:100\nc1\t1\t5\t+\tn\n",
+        "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\n\n",
+        "\n@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\n",
+        "\n",
+    ] {
+        let error = read(bad).expect_err(bad).to_string();
+        assert!(error.contains("Index 0 out of bounds"), "{error}");
+    }
+    for good in [
+        "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\nc1\t1\t5\t+\tn\n\nc1\t7\t9\t+\tm\n",
+        "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\nc1\t1\t5\t+\tn\n\n",
+        "",
+    ] {
+        assert!(read(good).is_ok(), "{good:?}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn padding_clamps_and_refuses_a_negative_value() {
     let input = list("c1\t3\t998\t-\ta\nc2\t100\t99\t+\tz\nc3\t1\t10\t+\tq\n");
     assert_eq!(
@@ -550,13 +614,14 @@ fn reading_stops_at_each_count_cap() {
     };
     let text = format!("{DICT}c1\t1\t5\t+\ta\nc1\t7\t9\t+\tb\n");
     let text = text.as_bytes();
-    assert!(IntervalList::parse_limited(text, &limits(4, 7, 2)).is_ok());
-    let header = IntervalList::parse_limited(text, &limits(3, 7, 2)).expect_err("lines");
+    assert!(IntervalList::parse_limited(text, &limits(4, 7, 2), true).is_ok());
+    let header = IntervalList::parse_limited(text, &limits(3, 7, 2), true).expect_err("lines");
     assert!(header.contains("more than 3 lines"), "{header}");
     // `VN`, then `SN` and `LN` on each of three `@SQ` lines.
-    let fields = IntervalList::parse_limited(text, &limits(4, 6, 2)).expect_err("fields");
+    let fields = IntervalList::parse_limited(text, &limits(4, 6, 2), true).expect_err("fields");
     assert!(fields.contains("more than 6 fields"), "{fields}");
-    let intervals = IntervalList::parse_limited(text, &limits(4, 7, 1)).expect_err("intervals");
+    let intervals =
+        IntervalList::parse_limited(text, &limits(4, 7, 1), true).expect_err("intervals");
     assert!(intervals.contains("more than 1 intervals"), "{intervals}");
 }
 
@@ -565,7 +630,10 @@ fn a_long_bad_line_is_cut_in_the_message() {
     let line = "x".repeat(5000);
     let error = IntervalList::parse(&format!("{DICT}{line}\n")).expect_err("refused");
     assert!(error.len() < 400, "{} bytes", error.len());
-    assert!(error.ends_with("(5043 bytes)"), "{error}");
+    // The record error quotes 200 characters of the line (`error::excerpt`);
+    // `cut` bounds any other message at 300 bytes.
+    assert!(error.ends_with("x..."), "{error}");
+    assert_eq!(read::cut("y".repeat(5000)).len(), 300 + "... (5000 bytes)".len());
 }
 
 #[test]

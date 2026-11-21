@@ -1,0 +1,9 @@
+## argv
+interval-list-to-bed
+tests/data/intervals.interval_list
+## exit
+2
+## stdout
+## stderr
+bammetrics interval-list-to-bed: missing -o FILE (Picard: OUTPUT), the BED
+  -o - writes the BED to standard output

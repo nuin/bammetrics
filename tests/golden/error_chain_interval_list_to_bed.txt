@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
++
+interval-list-to-bed
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (interval-list-to-bed): IntervalListToBed reads a LIST file and no BAM, and a chain hands on the records of a BAM: it cannot be a step
+  run it on its own: bammetrics interval-list-to-bed --help
+  the steps: bammetrics chain --help

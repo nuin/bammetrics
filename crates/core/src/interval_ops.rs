@@ -25,7 +25,7 @@
 //! committed as one set.
 //!
 //! Limits: an interval list is read under [`MAX_LIST_BYTES`], a list or
-//! VCF with at most [`MAX_LIST_INTERVALS`] intervals, [`MAX_HEADER_LINES`]
+//! VCF with at most [`MAX_INTERVALS`] intervals, [`MAX_HEADER_LINES`]
 //! header lines and [`MAX_HEADER_FIELDS`] header fields; an intersection
 //! makes at most [`MAX_INTERSECTION_PAIRS`] pairs and, with the band
 //! breaks, [`MAX_MADE_NAME_BYTES`] of names; a scatter writes at most
@@ -41,16 +41,19 @@ mod write;
 pub use header::{Header, HeaderRecord, MAX_HEADER_FIELDS, Sequence, SortOrder};
 pub use ops::{
     MAX_BAND_PIECES, MAX_INTERSECTION_PAIRS, MAX_MADE_NAME_BYTES, break_at_band_multiples,
-    concatenate, difference, intersection, invert, merge_intervals, overlaps, subtract,
+    concatenate, difference, intersection, invert, merge_intervals, merged, overlaps, subtract,
     subtract_disjoint, union, unique_intervals,
 };
-pub use read::{MAX_HEADER_LINES, MAX_LINE_BYTES, MAX_LIST_BYTES, MAX_LIST_INTERVALS};
+pub use read::{
+    MAX_HEADER_LINES, MAX_INTERVALS, MAX_LINE_BYTES, MAX_LIST_BYTES, VcfInterval, VcfIntervals,
+};
 pub use regions::Regions;
 pub use scatter::{
     MAX_SCATTER_BYTES, MAX_SCATTER_FILES, ScatterMode, Scattered, list_weight, scatter,
     scatter_bytes, scatter_count_for_content, scatter_path, write_scatter,
 };
-pub use write::write_list;
+pub(crate) use write::{check_target, gzip_name};
+pub use write::{write_list, write_text};
 
 /// One interval as htsjdk's `Interval` holds it: `contig` is the index of
 /// its `@SQ` line in the list's header.

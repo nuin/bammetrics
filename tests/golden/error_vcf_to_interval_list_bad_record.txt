@@ -1,0 +1,9 @@
+## argv
+VcfToIntervalList
+I=tests/data/intervals_bad.vcf
+O=OUT/bad.interval_list
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/intervals_bad.vcf: record 1: Duplicate allele added to VariantContext: C

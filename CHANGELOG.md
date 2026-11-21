@@ -45,6 +45,25 @@
   (`tests/data/make_interval_tiling.py`: a 1 Mbp tiling of a dictionary).
 - `Invocation::given` and `Invocation::legacy_syntax`: every option as given and the
   parser Picard would use, for a tool that writes Picard's command line.
+- `IntervalListToBed` (verb `interval-list-to-bed`, Python `interval_list_to_bed()`):
+  one BED line per interval, the start less 1, the name, `SCORE` and the strand, sorted
+  unless `SORT=false`, byte for byte Picard 3.5.0's file on 2,000,000 GRCh38 intervals
+  (the names of its sort spill past 500,000 included). The list is read as Picard's
+  feature reader reads it; gzip in and out by name.
+- `VcfToIntervalList` (verb `vcf-to-interval-list`, Python `vcf_to_interval_list()`):
+  the `##contig` lines as `@SQ`, one interval per record from `POS` to `END`, neighbours
+  that overlap or abut merged in file order, `INCLUDE_FILTERED`, `VARIANT_ID_METHOD`.
+  The header is read as htsjdk's `VCFCodec` reads it (`vcf/site_header.rs`, at most
+  64 MiB): `VCFv4.0` to `VCFv4.3`, a repeated `ID`, a missing `Description`, a bare `##`
+  line and spaces after commas read; `VCFv3.3`, `VCFv4.4`, `VCFv5.0`, a bad `Type` or
+  `Number` and an unclosed quote refused. Each record is checked as htsjdk's codec checks
+  its site, and each merged interval is written as it is made (3 MiB of memory on 10
+  million records). Neither tool can be a chain step. `qc --panel` takes the output of
+  both.
+- `tests/concordance/test_interval_list_to_bed.py` and `test_vcf_to_interval_list.py`:
+  every option on the interval_lists.py, variant_vcfs.py and array_vcfs.py inputs,
+  Picard-made lists, hand-written edge cases and error parity, against Picard 3.5.0;
+  `benches/interval_scale.py` and four memgate rows.
 
 ### Changed
 
@@ -53,6 +72,9 @@
   list and peak at 19 MiB now (Picard 3.5.0: 732 MiB).
 - The example `interval_ops` runs the `IntervalListTools` registry tool.
 
+- `VcfReader` keeps the first of two `##contig` lines with one ID (noodles refused the
+  header), so `IntervalListTools` reads such a VCF as Picard does. `next_site`
+  checks each record as htsjdk's `VCFCodec` checks its site.
 - `BedToIntervalList UNIQUE=true` merges an interval with no base as htsjdk does: a
   zero-length interval at 10 now joins one starting at 11 (Picard 3.5.0 writes one
   interval there). Its sort compares names by UTF-16 unit, as Java does.
@@ -62,6 +84,15 @@
   dictionary mismatch between two lists as htsjdk's error, an interval with no base
   overlapping nothing, and overlap queries by binary search in place of a scan.
 - `mt_copy_number::subtract` is `interval_ops::subtract_disjoint`, unchanged.
+- The interval merge tests the overlap of the unmoved coordinates before the abutting
+  distance, as `IntervalMergerIterator` does: a VCF record whose `END` lies inside the
+  open interval joins it however far its `POS` lies past it.
+- An interval list holds at most 20,000,000 intervals (`interval_ops::MAX_INTERVALS`).
+  Bytes that are not UTF-8 decode as the JDK decodes them (an encoded surrogate is one
+  U+FFFD), and a record error quotes at most 200 characters of its line.
+- `VALIDATION_STRINGENCY` on a tool that reads no record is checked: a value other than
+  `STRICT`, `LENIENT`, `SILENT` or `null` is a usage error, as in Picard. `--threads` is
+  checked on every verb, a verb that ignores it included.
 
 ### Fixed
 

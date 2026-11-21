@@ -1670,9 +1670,6 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   pairs, or an intersection or band break that makes more than 256 MiB of names, is
   refused: htsjdk makes one interval per overlapping pair before it merges them, so two
   lists of 4,000 nested intervals peak at 4.3 GB. Picard has none of these bounds.
-- A VCF input with a `##contig` ID given twice is refused (`duplicate contig ID`, from
-  the noodles header parser). htsjdk keeps the first line of the ID and Picard reads
-  the file.
 - An error message that quotes a malformed line is cut to 300 bytes; Picard prints the
   whole line.
 - `IntervalListTools` refuses an `INPUT` named exactly `.bcf`, which Picard reads as BCF.
@@ -1682,9 +1679,21 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   `COUNT_OUTPUT` in a missing directory, naming `OUTPUT`, or inside a list directory of
   the scatter under `OUTPUT`, fails with no file written. Picard writes `OUTPUT` first
   and then fails, or writes the count over the list.
-- A boolean option of `IntervalListTools` takes `true` or `false` in any case. Picard's
-  legacy parser reads any other text as `false` (`UNIQUE=T` is false); bammetrics
-  refuses it, as for every tool.
+- `IntervalListToBed` and `VcfToIntervalList` write a `.gz` `OUTPUT` as BGZF; it inflates
+  to Picard's text.
+- `IntervalListToBed` on more than 500,000 intervals refuses a name with a character whose
+  low byte is 0 (U+0000, U+0100, ...). Picard's sort spill cuts the name there and misreads
+  the records after it.
+- `VcfToIntervalList` refuses a `.bcf` `INPUT`. It reads a gzip VCF by its first bytes
+  whatever its name, where Picard goes by the `.gz` name.
+- A boolean option of `IntervalListTools`, `IntervalListToBed` or `VcfToIntervalList`
+  given another word than `true` or `false` (`UNIQUE=T`, `SORT=maybe`,
+  `INCLUDE_FILTERED=yes`) is a usage error, as on every bammetrics tool; Picard's legacy
+  parser reads it as false. `true` and `false` are read in any case.
+- A VCF header of more than 64 MiB is refused with exit 1. Picard reads it while its
+  memory lasts.
+- `VcfToIntervalList` from Python returns no rows when `OUTPUT` is a device or a pipe: the
+  rows are read back from the file written.
 
 ## Not in Picard
 

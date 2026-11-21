@@ -13,7 +13,7 @@ impl IntervalList {
     /// The file `IntervalList.write` writes: the header lines, then
     /// `contig`, `start`, `end`, `+` or `-` and the name (`.` without one),
     /// tab-separated, each line ended by `\n`.
-    pub fn write_to(&self, out: &mut impl Write) -> io::Result<()> {
+    pub fn write_to(&self, out: &mut (impl Write + ?Sized)) -> io::Result<()> {
         write_intervals(&self.header, &self.intervals, out)
     }
 
@@ -31,7 +31,7 @@ impl IntervalList {
 pub(super) fn write_intervals(
     header: &Header,
     intervals: &[Interval],
-    out: &mut impl Write,
+    out: &mut (impl Write + ?Sized),
 ) -> io::Result<()> {
     out.write_all(header.encode().as_bytes())?;
     for interval in intervals {
@@ -49,7 +49,7 @@ pub(super) fn write_intervals(
 }
 
 /// True for a name htsjdk's `IOUtil.openFileForWriting` compresses.
-pub(super) fn gzip_name(path: &Path) -> bool {
+pub(crate) fn gzip_name(path: &Path) -> bool {
     path.file_name().is_some_and(|name| {
         let name = name.to_string_lossy();
         [".gz", ".gzip", ".bfq"].iter().any(|e| name.ends_with(e))
@@ -58,7 +58,7 @@ pub(super) fn gzip_name(path: &Path) -> bool {
 
 /// Refuse `target` when it is one of `inputs` (by name or by device and
 /// inode), or a link or non-regular file another user owns.
-pub(super) fn check_target(target: &Path, inputs: &[PathBuf]) -> Result<()> {
+pub(crate) fn check_target(target: &Path, inputs: &[PathBuf]) -> Result<()> {
     if let Some(refused) = crate::cleanup::refusal(target) {
         return Err(Error::Output {
             path: target.to_path_buf(),
@@ -88,6 +88,20 @@ pub(super) fn check_target(target: &Path, inputs: &[PathBuf]) -> Result<()> {
 /// file htsjdk reads back) under a name [`gzip_name`] accepts.
 pub(super) fn stage(header: &Header, intervals: &[Interval], file: &AtomicFile) -> Result<()> {
     let target = file.path().to_path_buf();
+    stage_with(file, |out| {
+        write_intervals(header, intervals, out).map_err(|source| Error::Output {
+            path: target,
+            source,
+        })
+    })
+}
+
+/// Run `write` into `file`: plain text, or BGZF under a name
+/// [`gzip_name`] accepts, as `IOUtil.openFileForBufferedWriting` opens a
+/// file (Picard writes plain gzip there; both inflate to the same text).
+/// An error `write` returns is the run's error, as it is.
+fn stage_with(file: &AtomicFile, write: impl FnOnce(&mut dyn Write) -> Result<()>) -> Result<()> {
+    let target = file.path().to_path_buf();
     let output = |source| Error::Output {
         path: target.clone(),
         source,
@@ -95,14 +109,14 @@ pub(super) fn stage(header: &Header, intervals: &[Interval], file: &AtomicFile) 
     let handle = file.create().map_err(output)?;
     if gzip_name(&target) {
         let mut writer = noodles::bgzf::io::Writer::new(BufWriter::new(handle));
-        write_intervals(header, intervals, &mut writer).map_err(output)?;
+        write(&mut writer)?;
         writer
             .finish()
             .and_then(|mut inner| inner.flush())
             .map_err(output)?;
     } else {
         let mut writer = BufWriter::new(handle);
-        write_intervals(header, intervals, &mut writer).map_err(output)?;
+        write(&mut writer)?;
         writer.flush().map_err(output)?;
     }
     Ok(())
@@ -113,6 +127,25 @@ pub(super) fn stage(header: &Header, intervals: &[Interval], file: &AtomicFile) 
 /// into place (keeping the mode of a file it replaces), and a failed write
 /// leaves `path` and its directory as they were.
 pub fn write_list(list: &IntervalList, path: &Path, inputs: &[PathBuf]) -> Result<()> {
+    write_text(path, inputs, |out| {
+        list.write_to(out).map_err(|source| Error::Output {
+            path: path.to_path_buf(),
+            source,
+        })
+    })
+}
+
+/// Any text file a tool of this layer writes (an interval list, a BED),
+/// under the rules of [`write_list`]: `path` may not be one of `inputs`,
+/// a link or a non-regular file another user owns is refused, the text
+/// goes to a temporary name renamed into place (BGZF under a gzip name),
+/// and a failed run, `write` failing included, leaves `path` and the
+/// directories above it as they were.
+pub fn write_text(
+    path: &Path,
+    inputs: &[PathBuf],
+    write: impl FnOnce(&mut dyn Write) -> Result<()>,
+) -> Result<()> {
     check_target(path, inputs)?;
     let mut dirs = MadeDirs::default();
     dirs.create_parent(path).map_err(|source| Error::Output {
@@ -120,7 +153,7 @@ pub fn write_list(list: &IntervalList, path: &Path, inputs: &[PathBuf]) -> Resul
         source,
     })?;
     let file = AtomicFile::new(path);
-    stage(&list.header, &list.intervals, &file)?;
+    stage_with(&file, write)?;
     file.commit().map_err(|source| Error::Output {
         path: path.to_path_buf(),
         source,

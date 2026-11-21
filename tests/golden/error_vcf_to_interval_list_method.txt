@@ -1,0 +1,10 @@
+## argv
+VcfToIntervalList
+I=tests/data/intervals.vcf
+O=OUT/x.interval_list
+VARIANT_ID_METHOD=ALL
+## exit
+1
+## stdout
+## stderr
+bammetrics: VARIANT_ID_METHOD=ALL: the values are CONCAT_ALL and USE_FIRST

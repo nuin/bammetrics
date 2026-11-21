@@ -616,6 +616,28 @@ pub const VERBS: &[Verb] = &[
         optional_output: true,
         ..verb("interval-list-tools", "IntervalListTools", Files::Bam)
     },
+    Verb {
+        input: "LIST",
+        about: Some(
+            "writes a BED as Picard's IntervalListToBed does: one line per interval of the \
+             interval list (contig, start less 1, end, name, --score, strand), sorted by \
+             contig, start, end, strand and name unless --sort false.",
+        ),
+        writes: "BED",
+        ignores: &[(Key::Threads, "no BAM is read")],
+        ..verb("interval-list-to-bed", "IntervalListToBed", Files::Bam)
+    },
+    Verb {
+        input: "VCF",
+        about: Some(
+            "writes an interval list as Picard's VcfToIntervalList does: the VCF's ##contig \
+             lines as @SQ lines, then one interval per record from POS to END, records that \
+             overlap or abut the one before merged and named by their IDs.",
+        ),
+        writes: "interval list",
+        ignores: &[(Key::Threads, "no BAM is read")],
+        ..verb("vcf-to-interval-list", "VcfToIntervalList", Files::Bam)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
@@ -740,6 +762,13 @@ impl Verb {
                 "FILE",
                 format!(
                     "The {} to write; - writes standard output. Without -o none is written.",
+                    self.writes
+                ),
+            ),
+            Files::Bam if !self.writes.contains("BAM") => (
+                "FILE",
+                format!(
+                    "The {} to write; - writes standard output. Required.",
                     self.writes
                 ),
             ),
@@ -1298,6 +1327,14 @@ impl Verb {
                 None => match self.default_output {
                     Some(beside) => self.output_beside_input(picard, beside).map(Some),
                     None if self.optional_output => Ok(None),
+                    None if !self.writes.contains("BAM") => Err(VerbError::usage(
+                        self.name,
+                        format!("missing -o FILE (Picard: OUTPUT), the {}", self.writes),
+                    )
+                    .hint(format!(
+                        "-o - writes the {} to standard output",
+                        self.writes
+                    ))),
                     None => Err(
                         VerbError::usage(self.name, "missing -o BAM (Picard: OUTPUT)")
                             .hint("-o - writes the BAM to standard output"),
@@ -1654,18 +1691,21 @@ impl Verb {
     }
 
     fn threads(&self, parsed: &Parsed) -> Result<usize, VerbError> {
-        let given = parsed
-            .last(Key::Threads)
-            .filter(|_| !self.ignored(Key::Threads));
-        let Some(given) = given else {
+        let Some(given) = parsed.last(Key::Threads) else {
             return Ok(pass::default_threads());
         };
+        // Checked on every verb, a verb that ignores the count included.
         let threads = given.values[0].parse().map_err(|_| {
             VerbError::usage(self.name, format!("{:?} is not a number", given.values[0]))
                 .from(given.spelled.clone())
         })?;
-        pass::check_threads(threads).map_err(|e| {
+        let threads = pass::check_threads(threads).map_err(|e| {
             VerbError::usage(self.name, format!("{threads} is {e}")).from(given.spelled.clone())
+        })?;
+        Ok(if self.ignored(Key::Threads) {
+            pass::default_threads()
+        } else {
+            threads
         })
     }
 }

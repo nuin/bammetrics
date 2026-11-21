@@ -64,6 +64,18 @@ impl Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// The characters of a file's text an error message quotes at most.
+pub const EXCERPT_CHARS: usize = 200;
+
+/// `text` for an error message that quotes a line or field of a file: its
+/// first [`EXCERPT_CHARS`] characters, then `...` when there are more.
+pub fn excerpt(text: &str) -> std::borrow::Cow<'_, str> {
+    match text.char_indices().nth(EXCERPT_CHARS) {
+        Some((at, _)) => format!("{}...", &text[..at]).into(),
+        None => text.into(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

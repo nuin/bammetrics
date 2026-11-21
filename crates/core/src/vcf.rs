@@ -33,12 +33,16 @@ use std::path::{Path, PathBuf};
 use noodles::vcf;
 
 mod bit_set;
+mod header;
 mod line_cap;
+mod site;
+mod site_header;
 
 pub use bit_set::MAX_DBSNP_PAGES;
 use bit_set::PAGE_BITS;
 use bit_set::{BitSet, OverBudget};
 use line_cap::LineCap;
+pub use site_header::{ContigLine, MAX_HEADER_BYTES, SiteHeader};
 
 use crate::bed_to_interval_list;
 use crate::error::{Error, Result};
@@ -429,6 +433,51 @@ pub struct VcfReader {
     line: u64,
 }
 
+/// `path` as text lines under the caps, more than `max_header_lines`
+/// lines starting with `#` included: plain, or gzip when its first two
+/// bytes are the gzip magic, as `GZIPInputStream` reads a `.vcf.gz` for
+/// htsjdk. A gzip member whose header carries the BGZF `BC` extra field is
+/// read as BGZF; any other gzip member by member. One open: the first
+/// bytes are handed back in front of the rest, so a named pipe is read
+/// once.
+fn open_text(
+    path: &Path,
+    max_line_bytes: usize,
+    max_lines: u64,
+    max_header_lines: u64,
+) -> Result<Box<dyn BufRead>> {
+    let input = |source| Error::Input {
+        path: path.to_path_buf(),
+        source,
+    };
+    let mut file = File::open(path).map_err(input)?;
+    let mut magic = [0u8; 14];
+    let mut read = 0;
+    while read < magic.len() {
+        match file.read(&mut magic[read..]) {
+            Ok(0) => break,
+            Ok(n) => read += n,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+            Err(error) => return Err(input(error)),
+        }
+    }
+    let gzip = read >= 2 && magic[..2] == [0x1f, 0x8b];
+    let bgzf = read == magic.len() && magic[3] & 0x04 != 0 && magic[12..14] == *b"BC";
+    let file = io::Cursor::new(magic[..read].to_vec()).chain(file);
+    let text: Box<dyn BufRead> = if gzip && bgzf {
+        Box::new(noodles::bgzf::io::Reader::new(file))
+    } else if gzip {
+        Box::new(io::BufReader::new(crate::gzip::GzipReader::new(
+            io::BufReader::new(file),
+        )))
+    } else {
+        Box::new(io::BufReader::new(file))
+    };
+    Ok(Box::new(
+        LineCap::new(text, max_line_bytes, max_lines).with_header_lines(max_header_lines),
+    ))
+}
+
 impl VcfReader {
     pub fn open(path: &Path) -> Result<Self> {
         Self::open_capped(path, usize::MAX, u64::MAX)
@@ -453,38 +502,9 @@ impl VcfReader {
             path: path.to_path_buf(),
             source,
         };
-        // One open: the first bytes are read and handed back in front of
-        // the rest, so a named pipe is read once. A gzip member whose
-        // header carries the BGZF `BC` extra field is BGZF; any other gzip
-        // is read member by member as `GZIPInputStream` reads it.
-        let mut file = File::open(path).map_err(input)?;
-        let mut magic = [0u8; 14];
-        let mut read = 0;
-        while read < magic.len() {
-            match file.read(&mut magic[read..]) {
-                Ok(0) => break,
-                Ok(n) => read += n,
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-                Err(error) => return Err(input(error)),
-            }
-        }
-        let gzip = read >= 2 && magic[..2] == [0x1f, 0x8b];
-        let bgzf = read == magic.len() && magic[3] & 0x04 != 0 && magic[12..14] == *b"BC";
-        let file = io::Cursor::new(magic[..read].to_vec()).chain(file);
-        let text: Box<dyn BufRead> = if gzip && bgzf {
-            Box::new(noodles::bgzf::io::Reader::new(file))
-        } else if gzip {
-            Box::new(io::BufReader::new(crate::gzip::GzipReader::new(
-                io::BufReader::new(file),
-            )))
-        } else {
-            Box::new(io::BufReader::new(file))
-        };
-        let capped: Box<dyn BufRead> = Box::new(
-            LineCap::new(text, max_line_bytes, max_lines).with_header_lines(max_header_lines),
-        );
+        let capped = open_text(path, max_line_bytes, max_lines, max_header_lines)?;
         let mut reader = vcf::io::Reader::new(capped);
-        let header = reader.read_header().map_err(input)?;
+        let header = header::read_header(reader.get_mut()).map_err(input)?;
         Ok(Self {
             path: path.to_path_buf(),
             header,
@@ -554,29 +574,6 @@ impl VcfReader {
         &self.record
     }
 
-    /// The next record's position, `ID` and filter status, its alleles and
-    /// genotypes not decoded (htsjdk decodes genotypes lazily, so a site
-    /// list never reads them); `None` at the end of the file.
-    pub fn next_site(&mut self) -> Result<Option<Site>> {
-        let read = self
-            .reader
-            .read_record(&mut self.record)
-            .map_err(|source| Error::Input {
-                path: self.path.clone(),
-                source,
-            })?;
-        if read == 0 {
-            return Ok(None);
-        }
-        self.line += 1;
-        parse_site(&self.record)
-            .map(Some)
-            .map_err(|message| Error::Intervals {
-                path: self.path.clone(),
-                message: format!("record {}: {message}", self.line),
-            })
-    }
-
     /// Every remaining record.
     pub fn variants(mut self) -> Result<Vec<Variant>> {
         let mut out = Vec::new();
@@ -587,7 +584,90 @@ impl VcfReader {
     }
 }
 
-/// One record as [`VcfReader::next_site`] reads it.
+/// A VCF read for its sites as htsjdk's `VCFCodec` reads them for
+/// `VcfToIntervalList`: the header through `vcf/site_header.rs`, then each
+/// record line through `vcf/site.rs`, without noodles.
+pub struct SiteReader {
+    path: PathBuf,
+    reader: Box<dyn BufRead>,
+    header: SiteHeader,
+    rules: site::Rules,
+    line: u64,
+    /// The line read last, as bytes.
+    raw: Vec<u8>,
+}
+
+impl SiteReader {
+    /// Open `path` (plain or gzip by its first bytes) and read its header,
+    /// a line over `max_line_bytes`, more than `max_lines` lines or more
+    /// than `max_header_lines` header lines being a read error.
+    pub fn open(
+        path: &Path,
+        max_line_bytes: usize,
+        max_lines: u64,
+        max_header_lines: u64,
+    ) -> Result<Self> {
+        let mut reader = open_text(path, max_line_bytes, max_lines, max_header_lines)?;
+        let header = site_header::read(&mut reader).map_err(|message| Error::Intervals {
+            path: path.to_path_buf(),
+            message,
+        })?;
+        Ok(Self {
+            path: path.to_path_buf(),
+            reader,
+            rules: site::Rules::of(&header),
+            header,
+            line: 0,
+            raw: Vec::new(),
+        })
+    }
+
+    pub fn header(&self) -> &SiteHeader {
+        &self.header
+    }
+
+    /// The next record's position, `ID` and filter status, read from its
+    /// line as htsjdk's `VCFCodec` reads it for a site (`vcf/site.rs`): the
+    /// fixed columns checked, the genotypes left undecoded unless the
+    /// header's samples are not in sorted order; a line starting with `#`
+    /// skipped; `None` at the end of the file. A line is decoded as UTF-8,
+    /// a byte that is not becoming U+FFFD.
+    pub fn next_site(&mut self) -> Result<Option<Site>> {
+        loop {
+            self.raw.clear();
+            let read = self
+                .reader
+                .read_until(b'\n', &mut self.raw)
+                .map_err(|source| Error::Input {
+                    path: self.path.clone(),
+                    source,
+                })?;
+            if read == 0 {
+                return Ok(None);
+            }
+            self.line += 1;
+            if self.raw.last() == Some(&b'\n') {
+                self.raw.pop();
+                if self.raw.last() == Some(&b'\r') {
+                    self.raw.pop();
+                }
+            }
+            let text = crate::java::decode_utf8(&self.raw);
+            match site::parse_line(&text, &self.rules) {
+                Ok(Some(site)) => return Ok(Some(site)),
+                Ok(None) => {}
+                Err(message) => {
+                    return Err(Error::Intervals {
+                        path: self.path.clone(),
+                        message: format!("record {}: {message}", self.line),
+                    });
+                }
+            }
+        }
+    }
+}
+
+/// One record as [`SiteReader::next_site`] reads it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Site {
     pub contig: String,
@@ -599,36 +679,6 @@ pub struct Site {
     pub id: Option<String>,
     /// `FILTER` is neither `.` nor `PASS`.
     pub filtered: bool,
-}
-
-fn parse_site(record: &vcf::Record) -> std::result::Result<Site, String> {
-    let int =
-        |value: i64| i32::try_from(value).map_err(|_| format!("For input string: \"{value}\""));
-    let start = match record.variant_start() {
-        Some(Ok(p)) => usize::from(p) as i64,
-        Some(Err(e)) => return Err(format!("bad position: {e}")),
-        None => 0,
-    };
-    let mut end = start + record.reference_bases().len() as i64 - 1;
-    let info_field = record.info();
-    let info: &str = info_field.as_ref();
-    for field in info.split(';') {
-        if let Some(value) = field.strip_prefix("END=") {
-            end = value
-                .parse::<i32>()
-                .map(i64::from)
-                .map_err(|_| "the END value in the INFO field is not valid".to_owned())?;
-        }
-    }
-    let ids = record.ids();
-    let id: &str = ids.as_ref();
-    Ok(Site {
-        contig: record.reference_sequence_name().to_owned(),
-        start: int(start)?,
-        end: int(end)?,
-        id: (!id.is_empty() && id != ".").then(|| id.to_owned()),
-        filtered: is_filtered(record.filters().as_ref()),
-    })
 }
 
 /// `VCFCodec.parseFilters`: `.` and `PASS` are unfiltered. noodles hands

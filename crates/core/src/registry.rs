@@ -379,6 +379,8 @@ pub const TOOLS: &[&Tool] = &[
     &crate::arrays::verify_id_intensity::TOOL,
     &crate::arrays::variant_calling::TOOL,
     &crate::interval_list_tools::TOOL,
+    &crate::interval_list_to_bed::TOOL,
+    &crate::vcf_to_interval_list::TOOL,
 ];
 
 /// The tool named `name`.
@@ -703,6 +705,13 @@ impl Tool {
                             .extend(crate::reference::files_read(Path::new(&value)));
                         inv.values.entry(opt.names[0]).or_default().push(value);
                     } else if opt.names[0] == "VALIDATION_STRINGENCY" {
+                        // Picard parses the enum before the tool runs, with
+                        // its case: `strict` is refused as `BOGUS` is.
+                        if !matches!(value.as_str(), "STRICT" | "LENIENT" | "SILENT" | "null") {
+                            return Err(Error::Usage(format!(
+                                "{name}={value}: expected STRICT, LENIENT or SILENT"
+                            )));
+                        }
                         inv.values.entry(opt.names[0]).or_default().push(value);
                     }
                 }

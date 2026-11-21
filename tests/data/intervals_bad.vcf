@@ -1,0 +1,7 @@
+##fileformat=VCFv4.2
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position">
+##FILTER=<ID=q10,Description="Quality below 10">
+##contig=<ID=chr1,length=100000,assembly=test>
+##contig=<ID=chr2,length=5000>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+chr1	10	.	A	C,C	50	PASS	.

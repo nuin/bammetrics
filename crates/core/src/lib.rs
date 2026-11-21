@@ -49,6 +49,7 @@ pub mod histogram;
 pub mod hs_metrics;
 pub mod index_depth;
 pub mod insert_size;
+pub mod interval_list_to_bed;
 pub mod interval_list_tools;
 pub mod interval_ops;
 pub mod intervals;
@@ -105,6 +106,7 @@ pub mod tree_set;
 pub mod umi_prevalence;
 pub mod variant_calling_metrics;
 pub mod vcf;
+pub mod vcf_to_interval_list;
 pub mod view_sam;
 pub mod wgs_metrics;
 
