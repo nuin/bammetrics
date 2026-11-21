@@ -59,7 +59,7 @@ use crate::pass;
 use crate::record_edit::{self, Mode, Out, Pipeline, Restore, WriterOrder};
 use crate::registry::{self, Invocation, Opt, Tool};
 use crate::spill::TempDir;
-use crate::view_sam::{IntervalFilter, Step, has_index};
+use crate::view_sam::{IntervalFilter, Step, UniquedList, has_index};
 
 pub const TOOL: Tool = Tool {
     name: "MergeSamFiles",
@@ -326,12 +326,16 @@ fn run(merge: &Merge) -> Result<()> {
                 merge.merge_dictionaries,
             )?;
             let header = output_header(merge, &merged);
+            let intervals = merge
+                .intervals
+                .as_deref()
+                .map(UniquedList::read)
+                .transpose()?;
             let mut sources: Vec<Box<dyn RecordSource + '_>> = Vec::new();
             for ((input_header, reader, cram), path) in streams.into_iter().zip(&merge.inputs) {
-                let filter = merge
-                    .intervals
-                    .as_deref()
-                    .map(|list| IntervalFilter::load(list, &input_header, true))
+                let filter = intervals
+                    .as_ref()
+                    .map(|list| IntervalFilter::on_header(list, &input_header, true))
                     .transpose()?;
                 let restore = Restore::new(
                     cram,

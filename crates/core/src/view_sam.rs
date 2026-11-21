@@ -202,6 +202,26 @@ struct Region {
     end: i32,
 }
 
+/// An interval list after `IntervalList.uniqued()`, with its contig names.
+pub(crate) struct UniquedList {
+    path: PathBuf,
+    names: Vec<String>,
+    unique: Vec<intervals::Interval>,
+}
+
+impl UniquedList {
+    pub(crate) fn read(path: &Path) -> Result<Self> {
+        let (names, list) = intervals::read_interval_list(path)?;
+        let unique =
+            intervals::uniqued(&list.iter().map(|named| named.interval).collect::<Vec<_>>());
+        Ok(Self {
+            path: path.to_path_buf(),
+            names,
+            unique,
+        })
+    }
+}
+
 /// The `INTERVAL_LIST` filter over records in file order.
 pub(crate) struct IntervalFilter {
     regions: Vec<Region>,
@@ -213,9 +233,16 @@ pub(crate) struct IntervalFilter {
 impl IntervalFilter {
     /// The uniqued intervals of `path` on the references of `header`.
     pub(crate) fn load(path: &Path, header: &sam::Header, query: bool) -> Result<Self> {
-        let (names, list) = intervals::read_interval_list(path)?;
-        let unique =
-            intervals::uniqued(&list.iter().map(|named| named.interval).collect::<Vec<_>>());
+        Self::on_header(&UniquedList::read(path)?, header, query)
+    }
+
+    /// The filter of a list read once, on the references of `header`.
+    pub(crate) fn on_header(list: &UniquedList, header: &sam::Header, query: bool) -> Result<Self> {
+        let UniquedList {
+            path,
+            names,
+            unique,
+        } = list;
         let references = header.reference_sequences();
         let regions: Vec<Region> = unique
             .iter()
