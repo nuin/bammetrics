@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Parquet (wave W21 of docs/07, docs/formats.md section Parquet): `--format parquet` on the
+  tool verbs and `convert`, `qc --also parquet` and `chain --also parquet`. One metrics file
+  becomes `FILE.parquet` (the class table, or the histogram of a file without one),
+  `FILE.histogram.parquet` and `FILE.long.parquet` (`sample`, `class`, `row_key`, `column`,
+  `value`), written through the `parquet` crate's `SerializedFileWriter` with snappy: the
+  glossary's types as `INT64`, `DOUBLE` and `STRING`, null for an empty cell, NaN and full
+  doubles kept, the headers and class in the key-value metadata, the same bytes for the
+  same document. `convert` reads a Parquet main file and its histogram companion back to
+  every format; Picard text to Parquet to Picard text is byte for byte on every fixture.
+  Python `read_table` reads it too. The reader checks an MD5 and every page header against
+  the bytes present before the crate decodes a page.
+- The feature `parquet` of `bammetrics-formats`, a default feature of `bammetrics-cli` and
+  `bammetrics-py` (on in `cargo build --release` and the wheel): 1,095,672 bytes of stripped
+  binary with the crate at opt-level `"z"`. `make budgets` reports it as Parquet growth.
+- Tests: Parquet round trips over `tests/data/picard` and every golden metrics file, DuckDB,
+  polars and pyarrow reading every file written (`crates/formats/tests/round_trip.rs`,
+  skipped without the reader), 14 golden forms, the committed
+  `tests/data/insert_size_metrics.parquet` set.
+
+### Changed
+
+- `--format` and `--also` name `parquet` in their lists, so the error text of an unknown
+  format lists it (`error_verb_format`, `error_verb_format_twice` and `error_qc_also`, which
+  now gives `prquet`).
+
 ## 0.30.0
 
 Wave W12 of docs/07: the interval layer `interval_ops` and five interval tools (65 in all), none of them a chain step; `qc --panel` takes the lists they write.

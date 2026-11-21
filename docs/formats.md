@@ -11,6 +11,7 @@ bammetrics qc in.bam -o out/S1 --also json,markdown,junit,multiqc
 bammetrics check out/ --format junit > junit.xml
 bammetrics convert out/S1.hs_metrics --format csv                # Picard text in, CSV out
 bammetrics convert out/S1.hs_metrics | bammetrics convert -      # the first file, byte for byte
+bammetrics insert-size in.bam --format parquet -o is.parquet     # is.parquet and its companions
 ```
 
 ## Formats
@@ -26,11 +27,12 @@ bammetrics convert out/S1.hs_metrics | bammetrics convert -      # the first fil
 | Aligned text | `human` | `.human.txt` | no | one table |
 | JUnit XML | `junit` | `.junit.xml` | no | the checks of `check` and `qc` |
 | MultiQC custom content | `multiqc` | `.verdict_mqc.json` | no | a verdict table, one row per sample |
+| Parquet | `parquet` | `.parquet` | yes | headers, metrics class, histogram, column types, full doubles |
 
-The tool verbs and `convert` take the first seven. `check` takes `text`, `json`, `jsonl`,
-`junit`, `markdown` and `multiqc`. `qc --also` takes `json`, `jsonl`, `tsv`, `csv`,
-`markdown`, `junit` and `multiqc`. Parquet, XLSX, DOCX, SQL and Arrow come in later waves
-(docs/07 W21 and W46) and are written from the same table.
+The tool verbs and `convert` take the first seven and `parquet`. `check` takes `text`,
+`json`, `jsonl`, `junit`, `markdown` and `multiqc`. `qc --also` takes `json`, `jsonl`,
+`tsv`, `csv`, `markdown`, `junit`, `multiqc` and `parquet`. XLSX, DOCX, SQL and Arrow come
+in later waves (docs/07 W21 and W46) and are written from the same table.
 
 ## The typed table
 
@@ -109,6 +111,7 @@ bammetrics qc in.bam -o out/S1 --also json,csv --also markdown
 | `markdown` (`md`) | `out/S1.report.md`: the verdict, then every metrics table |
 | `junit` | `out/S1.junit.xml`: one testcase per rule |
 | `multiqc` | `out/S1.verdict_mqc.json`: MultiQC custom content |
+| `parquet` | `FILE.parquet`, `FILE.histogram.parquet` (a file with a histogram) and `FILE.long.parquet` beside every metrics file |
 
 The manifest lists the files under the step `also`, each with its format as `kind`. The
 files are written from the metrics files on disk, so a file `--resume` kept is exported
@@ -220,8 +223,10 @@ first cell starts with `## `, because that starts a section. `tsv`, `csv`, `json
 bammetrics convert FILE [--format FORMAT[,FORMAT]] [-o FILE] [--table NAME] [--sample NAME]
 ```
 
-- `FILE` is Picard text or `bammetrics.metrics/1` JSON; `-` reads standard input.
-- `--format` defaults to `json` for Picard text and `picard` for JSON.
+- `FILE` is Picard text, `bammetrics.metrics/1` JSON or the main file of `--format
+  parquet`; `-` reads standard input. A Parquet file with a histogram is read from a
+  path: its histogram companion is read from beside it.
+- `--format` defaults to `json` for Picard text and `picard` for JSON and Parquet.
 - `-o FILE` writes the first format there (`-` is standard output); a list needs it.
   `convert` refuses to write its input (exit 2).
 - `--table` picks the table `tsv`, `csv` and `human` print: `metrics` (the first class),
@@ -325,5 +330,76 @@ with 1 sample.
 
 ## Python
 
-`read_table(path)` reads either readable form and returns a `Table` with plain lists and
-the glossary's dtypes; see [python.md](python.md).
+`read_table(path)` reads any readable form, the main file of a Parquet set too, and
+returns a `Table` with plain lists and the glossary's dtypes; see [python.md](python.md).
+
+## Parquet
+
+```bash
+bammetrics insert-size in.bam --format parquet -o is.parquet
+bammetrics convert S1.insert_size_metrics --format parquet -o S1.parquet
+bammetrics convert S1.parquet | cmp - S1.insert_size_metrics      # byte for byte
+bammetrics qc in.bam -o out/S1 --also parquet
+duckdb -c "SELECT sample, value::DOUBLE FROM 'out/*.long.parquet' WHERE column = 'MEAN_INSERT_SIZE'"
+```
+
+Parquet is the lossless binary form (docs/07 section 3.1). The `parquet` crate writes it
+(feature `parquet`, on by default in `bammetrics-cli` and the wheel). One metrics file
+becomes up to three files:
+
+| File | Holds |
+|---|---|
+| `PATH` | the metrics class table, or the histogram of a file without a class |
+| `STEM.histogram.parquet` | the histogram, for a file with a class and a histogram |
+| `STEM.long.parquet` | every cell as a row: `sample`, `class`, `row_key`, `column`, `value` |
+
+`STEM` is `PATH` less a last `.parquet`: `-o is.parquet` gives `is.histogram.parquet`, and
+the sibling `is.txt.parquet` of `--format picard,parquet -o is.txt` gives
+`is.txt.histogram.parquet`. Parquet writes several files, so it needs `-o` (exit 2
+without). A multi-file verb and `chain` write it beside every metrics file, as the other
+further formats.
+
+- A column is `INT64` for an `int`, `DOUBLE` for a `float` and `BYTE_ARRAY` with the
+  `STRING` annotation for a `string`: the glossary's type. DuckDB reads them as `BIGINT`,
+  `DOUBLE` and `VARCHAR`, polars as `Int64`, `Float64` and `String`.
+- Every column is optional. An empty cell is null, `?` is NaN, and a double keeps all 64
+  bits.
+- A column name Picard repeats gets `.1`, `.2` as in JSON; the Picard names travel in
+  `picard_columns`.
+- The key-value metadata `bammetrics` holds a JSON object: `schema`
+  (`bammetrics.parquet/1`), `part` (`metrics`, `histogram`, `long` or `empty`), `tool` and
+  `sample` when known, `headers`, `class` (the metrics class, or the key's Java class of a
+  histogram), `picard_columns` when a name repeats, and in the main file `histogram`, true
+  when the histogram companion belongs to it. `bammetrics.md5` is the MD5 of every byte
+  before the footer.
+- The long file has one row per cell of the class table, then of the histogram. `class` is
+  the metrics class (the tool name in a file without one). `row_key` is `metrics/<i>` or
+  `histogram/<i>`, `i` the row's index from 0 in its table. `column` is the Picard column
+  name. `value` is text: an int in decimal, a double in the shortest form that reads back
+  as the same double (`310.0`, `1e-7`, `NaN`, `Infinity`, `-Infinity`), a string as it is,
+  null for an empty cell. `value::DOUBLE` in DuckDB gives the number back.
+- A metrics file with headers only (`CollectDuplicateMetrics` on a BAM with no read) gets a
+  main file of part `empty`: the long file's five columns and no row. A Parquet file needs
+  a column.
+- Snappy, one row group per file, data pages version 1, no dictionary, no statistics, no
+  page index, `created_by` `bammetrics`. The same document gives the same bytes;
+  `crates/formats/src/parquet/read.rs` pins three files by size and MD5.
+
+Picard text to Parquet to Picard text is byte for byte the first file, with the same
+exceptions as JSON (see the round trip). `crates/formats/tests/round_trip.rs` runs it on
+every Picard fixture and every metrics file in the golden records, and runs DuckDB,
+polars and pyarrow on every file it writes (910 files at wave W21): each reads the glossary
+types, every row, null and NaN. A reader that is not installed is skipped; the Python
+readers run under `BAMMETRICS_PARQUET_PYTHON` (default `python3`).
+
+`convert` and `read_table` read a file bammetrics wrote: the `bammetrics` metadata, one
+flat level of `INT64`, `DOUBLE` and `BYTE_ARRAY` columns. The reader reads at most 256 MiB
+and 134,217,728 cells. Before the `parquet` crate decodes a page it checks the MD5 and
+every page header against the bytes present: a page that claims more than 64 times its
+compressed size plus 1 KiB uncompressed, a page outside its column chunk, or more values
+than rows is an error. A long file is not read back (exit 1). A file another tool
+rewrote has no `bammetrics` metadata and is refused.
+
+The feature costs 1,095,672 bytes of stripped binary (1.04 MiB) with the `parquet` crate
+at opt-level `"z"` (docs/benchmarks.md). A build with `--no-default-features` has no
+Parquet: `--format parquet` and `--also parquet` are a usage error there (exit 2).

@@ -14,6 +14,12 @@ name = "bammetrics_formats"
 # with snappy only, no arrow.
 parquet = ["dep:parquet", "dep:bytes"]
 
+# The Parquet growth probe of `make budgets`: size_formats with the feature
+# parquet.
+[[example]]
+name = "size_parquet"
+required-features = ["parquet"]
+
 [dependencies]
 bammetrics-core.workspace = true
 # The Parquet writer and reader (feature parquet): snappy, no arrow. bytes is

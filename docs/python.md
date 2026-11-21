@@ -148,7 +148,7 @@ A failed check is a value, never an exception. A file that cannot be read raises
 
 ## read_table
 
-`read_table(path, table=None)` reads one table of a metrics file and returns a `Table`. The file is Picard text or the JSON `--format json` writes (schema `bammetrics.metrics/1`), told apart by its first character (`{` or `[` is JSON; a byte order mark is dropped).
+`read_table(path, table=None)` reads one table of a metrics file and returns a `Table`. The file is Picard text, the JSON `--format json` writes (schema `bammetrics.metrics/1`) or the main file `--format parquet` writes, told apart by its first bytes (`PAR1` is Parquet; `{` or `[` is JSON; a byte order mark is dropped). A Parquet file's histogram is read from its companion beside it (docs/formats.md section Parquet).
 
 ```python
 t = bm.read_table("out/s.insert_size_metrics")
