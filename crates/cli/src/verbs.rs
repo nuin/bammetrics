@@ -1974,7 +1974,7 @@ pub(crate) fn create_parent(verb: &str, made: &mut MadeDirs, path: &Path) -> Res
 }
 
 /// `text` to `path` through a temporary file, as a core output error.
-fn write_text(path: &Path, text: String) -> bammetrics_core::Result<()> {
+fn write_text(path: &Path, text: impl AsRef<[u8]>) -> bammetrics_core::Result<()> {
     write_atomic(path, text).map_err(|e| bammetrics_core::Error::Output {
         path: path.to_path_buf(),
         source: match e {
@@ -1996,16 +1996,17 @@ fn write_single(
 ) -> bammetrics_core::Result<Vec<PathBuf>> {
     let mut written = Vec::new();
     if let Some(main) = &result.main {
-        let mut texts = format::render_all(formats, context, main).into_iter();
+        let mut texts = format::render_all(formats, context, main)
+            .map_err(|e| format::output_error(target, e))?
+            .into_iter();
         let text = texts.next().expect("one text per format");
         match target {
-            None => io::stdout()
-                .lock()
-                .write_all(text.as_bytes())
-                .map_err(|source| bammetrics_core::Error::Output {
+            None => io::stdout().lock().write_all(&text).map_err(|source| {
+                bammetrics_core::Error::Output {
                     path: PathBuf::from("-"),
                     source,
-                })?,
+                }
+            })?,
             Some(path) => {
                 write_text(path, text)?;
                 written.push(path.to_path_buf());
@@ -2045,7 +2046,8 @@ fn write_siblings(
         .chain(result.extra.iter().map(|(path, file)| (file, path)))
         .filter(|(file, _)| file.text.is_none());
     for (file, path) in files {
-        let texts = format::render_all(&formats[1..], context, file);
+        let texts = format::render_all(&formats[1..], context, file)
+            .map_err(|e| format::output_error(Some(path), e))?;
         for (format, text) in formats[1..].iter().zip(texts) {
             let sibling = format::sibling(path, format.extension());
             write_text(&sibling, text)?;

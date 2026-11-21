@@ -1064,7 +1064,7 @@ fn also(spec: &Spec) -> Result<Vec<Also>, VerbError> {
             if let Some(best) = bammetrics_core::registry::did_you_mean(name, names) {
                 error = error.hint(format!("did you mean {best}?"));
             }
-            error.hint("formats: json, jsonl, tsv, csv, markdown")
+            error.hint("formats: json, jsonl, tsv, csv, xlsx, docx, markdown")
         })?;
         if matches!(format, Also::Junit | Also::Multiqc) {
             return Err(usage(format!(

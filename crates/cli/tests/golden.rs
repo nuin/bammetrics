@@ -44,6 +44,7 @@ const FIXTURES: &[(&str, &str)] = &[
         "tests/data/picard/NA12878/NA12878.insert_size_metrics",
     ),
     ("INS_JSON", "tests/data/insert_size_metrics.json"),
+    ("INS_XLSX", "tests/data/insert_size_metrics.xlsx"),
     ("NO_READS", "tests/data/no_reads.bam"),
     ("PLAN_MD", "tests/data/chain_markdup.toml"),
     ("PLAN_TAPS", "tests/data/chain_taps.toml"),
@@ -500,6 +501,15 @@ const FORMAT_CASES: &[Case] = &[
     case!("verb_insert_size_json_picard", "insert-size", "IS", "--format", "json,picard", "-o", "OUT/insert_size.json"),
     case!("error_check_overwrites_input", "check", "PICARD", "-o", "PIC_INS"),
     case!("qc_also_no_reads", "qc", "NO_READS", "-o", "OUT/sample", "--also", "json,csv,junit", "--date", "2026-01-02 03:04:05 UTC"),
+    // XLSX and DOCX (wave W21): each recorded as its size and its parts.
+    case!("convert_xlsx_docx", "convert", "PIC_INS", "--format", "xlsx,docx", "-o", "OUT/insert_size.xlsx"),
+    case!("convert_hs_xlsx_docx", "convert", "tests/data/picard/NA12878/NA12878.hs_metrics", "--format", "xlsx,docx", "-o", "OUT/hs.xlsx"),
+    case!("verb_insert_size_xlsx_docx", "insert-size", "IS", "--format", "picard,xlsx,docx", "-o", "OUT/insert_size.txt", "--sample", "S1"),
+    case!("verb_multiple_metrics_docx", "multiple-metrics", "IS", "-o", "OUT/sample", "--program", "CollectQualityYieldMetrics", "--format", "picard,docx"),
+    case!("qc_also_xlsx_docx", "qc", "NO_READS", "-o", "OUT/sample", "--also", "xlsx,docx", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("chain_also_xlsx", "chain", "IS", "-o", "OUT/s", "--also", "xlsx", "+", "quality-yield"),
+    case!("error_convert_reads_xlsx", "convert", "INS_XLSX"),
+    case!("error_verb_xlsx_stdout_list", "insert-size", "IS", "--format", "xlsx,docx"),
 ];
 
 /// `chain` (docs/chaining.md): the two documented examples from the command
@@ -1123,6 +1133,12 @@ fn record(case: &Case) -> String {
             text.push_str(&hex_lines(&fs::read(path).expect("read the index")));
             continue;
         }
+        // An XLSX or DOCX carries the run's time and output paths; it is
+        // recorded as its parts with those normalized.
+        if name.ends_with(".xlsx") || name.ends_with(".docx") {
+            text.push_str(&ooxml_text(&fs::read(path).expect("read the zip"), out));
+            continue;
+        }
         text.push_str(&String::from_utf8_lossy(
             &fs::read(path).expect("read output file"),
         ));
@@ -1138,6 +1154,69 @@ fn page_count(pdf: &[u8]) -> usize {
     pdf.windows(marker.len() + 1)
         .filter(|w| w.starts_with(marker) && !w[marker.len()].is_ascii_alphabetic())
         .count()
+}
+
+/// A stored zip (XLSX or DOCX) as text: its size with the output
+/// directory and the `Started on` time written as in [`normalize`], then
+/// each part, its name and size, and the text of a sheet or the document
+/// body. A part that is not a stored entry is recorded as unreadable.
+fn ooxml_text(bytes: &[u8], out: &str) -> String {
+    let u16_at = |i: usize| {
+        bytes
+            .get(i..i + 2)
+            .map(|b| usize::from(u16::from_le_bytes([b[0], b[1]])))
+    };
+    let u32_at = |i: usize| {
+        bytes
+            .get(i..i + 4)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize)
+    };
+    let mut parts = Vec::new();
+    let mut at = 0;
+    while u32_at(at) == Some(0x0403_4b50) {
+        let (Some(0), Some(size), Some(name_length), Some(extra)) = (
+            u16_at(at + 8),
+            u32_at(at + 18),
+            u16_at(at + 26),
+            u16_at(at + 28),
+        ) else {
+            return "<unreadable zip>\n".to_owned();
+        };
+        let name = String::from_utf8_lossy(&bytes[at + 30..at + 30 + name_length]).into_owned();
+        let start = at + 30 + name_length + extra;
+        let Some(data) = bytes.get(start..start + size) else {
+            return "<unreadable zip>\n".to_owned();
+        };
+        parts.push((name, String::from_utf8_lossy(data).into_owned()));
+        at = start + size;
+    }
+    let mut size = bytes.len();
+    let mut text = String::new();
+    for (name, data) in &parts {
+        let normal = normalize_part(data, out);
+        size = size + normal.len() - data.len();
+        text.push_str(&format!("### part {name} ({} bytes)\n", normal.len()));
+        if name.starts_with("xl/worksheets/") || name == "word/document.xml" {
+            text.push_str(&normal);
+        }
+    }
+    format!("<zip: {size} bytes, {} parts>\n{text}", parts.len())
+}
+
+/// A part's text with `out` as `OUT` and the `Started on` time as `<time>`.
+fn normalize_part(text: &str, out: &str) -> String {
+    let text = text.replace(out, "OUT");
+    let mut normal = String::with_capacity(text.len());
+    let mut rest = text.as_str();
+    while let Some(i) = rest.find("Started on: ") {
+        let start = i + "Started on: ".len();
+        normal.push_str(&rest[..start]);
+        normal.push_str("<time>");
+        let end = rest[start..].find('<').map_or(rest.len(), |e| start + e);
+        rest = &rest[end..];
+    }
+    normal.push_str(rest);
+    normal
 }
 
 /// Bytes as hex, 32 to a line.

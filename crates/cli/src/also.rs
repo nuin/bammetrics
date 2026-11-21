@@ -29,6 +29,10 @@ pub enum Also {
     Tsv,
     /// FILE.csv beside every metrics file: the metrics table, RFC 4180.
     Csv,
+    /// FILE.xlsx beside every metrics file: a sheet per table.
+    Xlsx,
+    /// FILE.docx beside every metrics file: the headers and every table.
+    Docx,
     /// PREFIX.report.md: the verdict, then every metrics table, at most
     /// 65,536 characters.
     #[value(alias = "md")]
@@ -47,6 +51,8 @@ impl Also {
             Also::Jsonl => "jsonl",
             Also::Tsv => "tsv",
             Also::Csv => "csv",
+            Also::Xlsx => "xlsx",
+            Also::Docx => "docx",
             Also::Markdown => "markdown",
             Also::Junit => "junit",
             Also::Multiqc => "multiqc",
@@ -61,6 +67,8 @@ impl Also {
             Also::Jsonl => Some(Format::Jsonl),
             Also::Tsv => Some(Format::Tsv),
             Also::Csv => Some(Format::Csv),
+            Also::Xlsx => Some(Format::Xlsx),
+            Also::Docx => Some(Format::Docx),
             Also::Markdown | Also::Junit | Also::Multiqc => None,
         }
     }
@@ -71,7 +79,7 @@ impl Also {
             Also::Markdown => ".report.md",
             Also::Junit => ".junit.xml",
             Also::Multiqc => ".verdict_mqc.json",
-            Also::Json | Also::Jsonl | Also::Tsv | Also::Csv => "",
+            Also::Json | Also::Jsonl | Also::Tsv | Also::Csv | Also::Xlsx | Also::Docx => "",
         }
     }
 }
@@ -145,7 +153,7 @@ fn documents(metrics: &[&Path], sample: &str) -> Result<Vec<Document>> {
         .collect()
 }
 
-/// Each target with its text. The metrics files are read back from disk
+/// Each target with its bytes. The metrics files are read back from disk
 /// when a format prints them (`junit` and `multiqc` print the verdict
 /// only), so a file `--resume` kept is exported like one this run wrote;
 /// the JSON forms carry `sample`. A metrics file with no table still gets
@@ -159,7 +167,7 @@ pub fn texts(
     sample: &str,
     verdict: &Verdict,
     fail_on: Option<FailOn>,
-) -> Result<Vec<(Target, String)>> {
+) -> Result<Vec<(Target, Vec<u8>)>> {
     let targets = targets(prefix, metrics, also);
     let reads_metrics = |t: &Target| t.source.is_some() || t.also == Also::Markdown;
     let docs = if targets.iter().any(reads_metrics) {
@@ -172,11 +180,15 @@ pub fn texts(
         .into_iter()
         .map(|target| {
             let text = match (target.also.per_file(), target.source, target.also) {
-                (Some(format), Some(j), _) => bammetrics_formats::render(format, &docs[j], None)
-                    .map_err(|e| Error::Input(format!("{}: {e}", metrics[j].display())))?,
-                (_, _, Also::Junit) => junit::write(&verdicts, fail_on == Some(FailOn::Warn)),
-                (_, _, Also::Multiqc) => multiqc::write(&verdicts),
-                _ => markdown::write(&docs.iter().collect::<Vec<_>>(), &verdicts),
+                (Some(format), Some(j), _) => {
+                    bammetrics_formats::render_bytes(format, &docs[j], None)
+                        .map_err(|e| Error::Input(format!("{}: {e}", metrics[j].display())))?
+                }
+                (_, _, Also::Junit) => {
+                    junit::write(&verdicts, fail_on == Some(FailOn::Warn)).into_bytes()
+                }
+                (_, _, Also::Multiqc) => multiqc::write(&verdicts).into_bytes(),
+                _ => markdown::write(&docs.iter().collect::<Vec<_>>(), &verdicts).into_bytes(),
             };
             Ok((target, text))
         })

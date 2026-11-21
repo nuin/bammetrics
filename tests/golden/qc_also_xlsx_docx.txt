@@ -1,0 +1,560 @@
+## argv
+qc
+tests/data/no_reads.bam
+-o
+OUT/sample
+--also
+xlsx,docx
+--date
+2026-01-02 03:04:05 UTC
+## exit
+0
+## stdout
+no_reads  INCOMPLETE  preset generic v1 (6dd89e)  4 collectors, 1 BAM read
+NOT MEASURED  alignment.pf-reads-aligned  no AlignmentSummaryMetrics row with CATEGORY=PAIR at ALL_READS
+NOT MEASURED  alignment.adapter           no AlignmentSummaryMetrics row with CATEGORY=PAIR at ALL_READS
+NOT MEASURED  alignment.chimeras          no AlignmentSummaryMetrics row with CATEGORY=PAIR at ALL_READS
+NOT MEASURED  insert.median               no InsertSizeMetrics file
+NOT MEASURED  yield.q30                   PF_BASES is 0
+NOT MEASURED  duplication.percent         no DuplicationMetrics file
+PASS          0 checks
+wrote 12 files to OUT/sample.*, report OUT/sample.report.html
+use --fail-on fail or bammetrics check to gate
+## stderr
+bammetrics: all data categories were discarded because they contained < 0.05 of the total aligned paired data; no metrics written
+## file sample.alignment_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectAlignmentSummaryMetrics INPUT=tests/data/no_reads.bam OUTPUT=OUT/sample.alignment_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.AlignmentSummaryMetrics
+CATEGORY	TOTAL_READS	PF_READS	PCT_PF_READS	PF_NOISE_READS	PF_READS_ALIGNED	PCT_PF_READS_ALIGNED	PF_ALIGNED_BASES	PF_HQ_ALIGNED_READS	PF_HQ_ALIGNED_BASES	PF_HQ_ALIGNED_Q20_BASES	PF_HQ_MEDIAN_MISMATCHES	PF_MISMATCH_RATE	PF_HQ_ERROR_RATE	PF_INDEL_RATE	MEAN_READ_LENGTH	SD_READ_LENGTH	MEDIAN_READ_LENGTH	MAD_READ_LENGTH	MIN_READ_LENGTH	MAX_READ_LENGTH	MEAN_ALIGNED_READ_LENGTH	READS_ALIGNED_IN_PAIRS	PCT_READS_ALIGNED_IN_PAIRS	PF_READS_IMPROPER_PAIRS	PCT_PF_READS_IMPROPER_PAIRS	BAD_CYCLES	STRAND_BALANCE	PCT_CHIMERAS	PCT_ADAPTER	PCT_SOFTCLIP	PCT_HARDCLIP	AVG_POS_3PRIME_SOFTCLIP_LENGTH	SAMPLE	LIBRARY	READ_GROUP
+UNPAIRED	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0			
+
+
+## file sample.alignment_summary_metrics.docx
+<zip: 10269 bytes, 5 parts>
+### part [Content_Types].xml (558 bytes)
+### part _rels/.rels (299 bytes)
+### part word/document.xml (6742 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>CollectAlignmentSummaryMetrics, sample no_reads</w:t></w:r></w:p>
+<w:p><w:r><w:t>CollectAlignmentSummaryMetrics INPUT=tests/data/no_reads.bam OUTPUT=OUT/sample.alignment_summary_metrics</w:t></w:r></w:p>
+<w:p><w:r><w:t>Started on: <time></w:t></w:r></w:p>
+<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>picard.analysis.AlignmentSummaryMetrics</w:t></w:r></w:p>
+<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="0" w:type="auto"/><w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr><w:tblGrid><w:gridCol/><w:gridCol/></w:tblGrid>
+<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Column</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>1</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>CATEGORY</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>UNPAIRED</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>TOTAL_READS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_READS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_PF_READS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_NOISE_READS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_READS_ALIGNED</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_PF_READS_ALIGNED</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_ALIGNED_BASES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_HQ_ALIGNED_READS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_HQ_ALIGNED_BASES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_HQ_ALIGNED_Q20_BASES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_HQ_MEDIAN_MISMATCHES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_MISMATCH_RATE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_HQ_ERROR_RATE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_INDEL_RATE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MEAN_READ_LENGTH</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>SD_READ_LENGTH</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MEDIAN_READ_LENGTH</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MAD_READ_LENGTH</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MIN_READ_LENGTH</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MAX_READ_LENGTH</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MEAN_ALIGNED_READ_LENGTH</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>READS_ALIGNED_IN_PAIRS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_READS_ALIGNED_IN_PAIRS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_READS_IMPROPER_PAIRS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_PF_READS_IMPROPER_PAIRS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>BAD_CYCLES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>STRAND_BALANCE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_CHIMERAS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_ADAPTER</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_SOFTCLIP</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PCT_HARDCLIP</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>AVG_POS_3PRIME_SOFTCLIP_LENGTH</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>SAMPLE</w:t></w:r></w:p></w:tc><w:tc><w:p></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>LIBRARY</w:t></w:r></w:p></w:tc><w:tc><w:p></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>READ_GROUP</w:t></w:r></w:p></w:tc><w:tc><w:p></w:p></w:tc></w:tr>
+</w:tbl>
+<w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="851" w:right="851" w:bottom="851" w:left="851" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>
+### part word/_rels/document.xml.rels (284 bytes)
+### part word/styles.xml (1804 bytes)
+## file sample.alignment_summary_metrics.xlsx
+<zip: 7764 bytes, 7 parts>
+### part [Content_Types].xml (817 bytes)
+### part _rels/.rels (297 bytes)
+### part xl/workbook.xml (387 bytes)
+### part xl/_rels/workbook.xml.rels (566 bytes)
+### part xl/styles.xml (823 bytes)
+### part xl/worksheets/sheet1.xml (496 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:A2"/><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetData>
+<row r="1"><c r="A1" t="inlineStr"><is><t>CollectAlignmentSummaryMetrics INPUT=tests/data/no_reads.bam OUTPUT=OUT/sample.alignment_summary_metrics</t></is></c></row>
+<row r="2"><c r="A2" t="inlineStr"><is><t>Started on: <time></t></is></c></row>
+</sheetData></worksheet>
+### part xl/worksheets/sheet2.xml (3560 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:AJ2"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>
+<row r="1"><c r="A1" s="1" t="inlineStr"><is><t>CATEGORY</t></is></c><c r="B1" s="1" t="inlineStr"><is><t>TOTAL_READS</t></is></c><c r="C1" s="1" t="inlineStr"><is><t>PF_READS</t></is></c><c r="D1" s="1" t="inlineStr"><is><t>PCT_PF_READS</t></is></c><c r="E1" s="1" t="inlineStr"><is><t>PF_NOISE_READS</t></is></c><c r="F1" s="1" t="inlineStr"><is><t>PF_READS_ALIGNED</t></is></c><c r="G1" s="1" t="inlineStr"><is><t>PCT_PF_READS_ALIGNED</t></is></c><c r="H1" s="1" t="inlineStr"><is><t>PF_ALIGNED_BASES</t></is></c><c r="I1" s="1" t="inlineStr"><is><t>PF_HQ_ALIGNED_READS</t></is></c><c r="J1" s="1" t="inlineStr"><is><t>PF_HQ_ALIGNED_BASES</t></is></c><c r="K1" s="1" t="inlineStr"><is><t>PF_HQ_ALIGNED_Q20_BASES</t></is></c><c r="L1" s="1" t="inlineStr"><is><t>PF_HQ_MEDIAN_MISMATCHES</t></is></c><c r="M1" s="1" t="inlineStr"><is><t>PF_MISMATCH_RATE</t></is></c><c r="N1" s="1" t="inlineStr"><is><t>PF_HQ_ERROR_RATE</t></is></c><c r="O1" s="1" t="inlineStr"><is><t>PF_INDEL_RATE</t></is></c><c r="P1" s="1" t="inlineStr"><is><t>MEAN_READ_LENGTH</t></is></c><c r="Q1" s="1" t="inlineStr"><is><t>SD_READ_LENGTH</t></is></c><c r="R1" s="1" t="inlineStr"><is><t>MEDIAN_READ_LENGTH</t></is></c><c r="S1" s="1" t="inlineStr"><is><t>MAD_READ_LENGTH</t></is></c><c r="T1" s="1" t="inlineStr"><is><t>MIN_READ_LENGTH</t></is></c><c r="U1" s="1" t="inlineStr"><is><t>MAX_READ_LENGTH</t></is></c><c r="V1" s="1" t="inlineStr"><is><t>MEAN_ALIGNED_READ_LENGTH</t></is></c><c r="W1" s="1" t="inlineStr"><is><t>READS_ALIGNED_IN_PAIRS</t></is></c><c r="X1" s="1" t="inlineStr"><is><t>PCT_READS_ALIGNED_IN_PAIRS</t></is></c><c r="Y1" s="1" t="inlineStr"><is><t>PF_READS_IMPROPER_PAIRS</t></is></c><c r="Z1" s="1" t="inlineStr"><is><t>PCT_PF_READS_IMPROPER_PAIRS</t></is></c><c r="AA1" s="1" t="inlineStr"><is><t>BAD_CYCLES</t></is></c><c r="AB1" s="1" t="inlineStr"><is><t>STRAND_BALANCE</t></is></c><c r="AC1" s="1" t="inlineStr"><is><t>PCT_CHIMERAS</t></is></c><c r="AD1" s="1" t="inlineStr"><is><t>PCT_ADAPTER</t></is></c><c r="AE1" s="1" t="inlineStr"><is><t>PCT_SOFTCLIP</t></is></c><c r="AF1" s="1" t="inlineStr"><is><t>PCT_HARDCLIP</t></is></c><c r="AG1" s="1" t="inlineStr"><is><t>AVG_POS_3PRIME_SOFTCLIP_LENGTH</t></is></c><c r="AH1" s="1" t="inlineStr"><is><t>SAMPLE</t></is></c><c r="AI1" s="1" t="inlineStr"><is><t>LIBRARY</t></is></c><c r="AJ1" s="1" t="inlineStr"><is><t>READ_GROUP</t></is></c></row>
+<row r="2"><c r="A2" t="inlineStr"><is><t>UNPAIRED</t></is></c><c r="B2"><v>0</v></c><c r="C2"><v>0</v></c><c r="D2"><v>0.0</v></c><c r="E2"><v>0</v></c><c r="F2"><v>0</v></c><c r="G2"><v>0.0</v></c><c r="H2"><v>0</v></c><c r="I2"><v>0</v></c><c r="J2"><v>0</v></c><c r="K2"><v>0</v></c><c r="L2"><v>0.0</v></c><c r="M2"><v>0.0</v></c><c r="N2"><v>0.0</v></c><c r="O2"><v>0.0</v></c><c r="P2"><v>0.0</v></c><c r="Q2"><v>0.0</v></c><c r="R2"><v>0.0</v></c><c r="S2"><v>0.0</v></c><c r="T2"><v>0.0</v></c><c r="U2"><v>0.0</v></c><c r="V2"><v>0.0</v></c><c r="W2"><v>0</v></c><c r="X2"><v>0.0</v></c><c r="Y2"><v>0</v></c><c r="Z2"><v>0.0</v></c><c r="AA2"><v>0</v></c><c r="AB2"><v>0.0</v></c><c r="AC2"><v>0.0</v></c><c r="AD2"><v>0.0</v></c><c r="AE2"><v>0.0</v></c><c r="AF2"><v>0.0</v></c><c r="AG2"><v>0.0</v></c></row>
+</sheetData></worksheet>
+## file sample.duplicate_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectDuplicateMetrics INPUT=tests/data/no_reads.bam METRICS_FILE=OUT/sample.duplicate_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+
+
+## file sample.duplicate_metrics.docx
+<zip: 4174 bytes, 5 parts>
+### part [Content_Types].xml (558 bytes)
+### part _rels/.rels (299 bytes)
+### part word/document.xml (647 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>CollectDuplicateMetrics, sample no_reads</w:t></w:r></w:p>
+<w:p><w:r><w:t>CollectDuplicateMetrics INPUT=tests/data/no_reads.bam METRICS_FILE=OUT/sample.duplicate_metrics</w:t></w:r></w:p>
+<w:p><w:r><w:t>Started on: <time></w:t></w:r></w:p>
+<w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="851" w:right="851" w:bottom="851" w:left="851" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>
+### part word/_rels/document.xml.rels (284 bytes)
+### part word/styles.xml (1804 bytes)
+## file sample.duplicate_metrics.xlsx
+<zip: 3731 bytes, 6 parts>
+### part [Content_Types].xml (681 bytes)
+### part _rels/.rels (297 bytes)
+### part xl/workbook.xml (324 bytes)
+### part xl/_rels/workbook.xml.rels (425 bytes)
+### part xl/styles.xml (823 bytes)
+### part xl/worksheets/sheet1.xml (487 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:A2"/><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetData>
+<row r="1"><c r="A1" t="inlineStr"><is><t>CollectDuplicateMetrics INPUT=tests/data/no_reads.bam METRICS_FILE=OUT/sample.duplicate_metrics</t></is></c></row>
+<row r="2"><c r="A2" t="inlineStr"><is><t>Started on: <time></t></is></c></row>
+</sheetData></worksheet>
+## file sample.manifest.json
+{
+  "schema": "bammetrics.manifest/1",
+  "tool_version": "0.30.0",
+  "sample": "no_reads",
+  "bam": "tests/data/no_reads.bam",
+  "prefix": "OUT/sample",
+  "preset": {
+    "name": "generic",
+    "hash": "6dd89ed0478fd5e4"
+  },
+  "steps": [
+    {
+      "id": "CollectQualityYieldMetrics",
+      "stage": "pass",
+      "tool": "CollectQualityYieldMetrics",
+      "argv": [
+        "INPUT=tests/data/no_reads.bam",
+        "OUTPUT=OUT/sample.quality_yield_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.30.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/no_reads.bam",
+        "size": 120,
+        "mtime": "<mtime>",
+        "edges_hash": "36a7ca9f202b61d5"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.quality_yield_metrics",
+          "tool": "CollectQualityYieldMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "CollectAlignmentSummaryMetrics",
+      "stage": "pass",
+      "tool": "CollectAlignmentSummaryMetrics",
+      "argv": [
+        "INPUT=tests/data/no_reads.bam",
+        "OUTPUT=OUT/sample.alignment_summary_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.30.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/no_reads.bam",
+        "size": 120,
+        "mtime": "<mtime>",
+        "edges_hash": "36a7ca9f202b61d5"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.alignment_summary_metrics",
+          "tool": "CollectAlignmentSummaryMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "CollectInsertSizeMetrics",
+      "stage": "pass",
+      "tool": "CollectInsertSizeMetrics",
+      "argv": [
+        "INPUT=tests/data/no_reads.bam",
+        "OUTPUT=OUT/sample.insert_size_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.30.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/no_reads.bam",
+        "size": 120,
+        "mtime": "<mtime>",
+        "edges_hash": "36a7ca9f202b61d5"
+      },
+      "files": [],
+      "outputs": [],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "CollectDuplicateMetrics",
+      "stage": "pass",
+      "tool": "CollectDuplicateMetrics",
+      "argv": [
+        "INPUT=tests/data/no_reads.bam",
+        "METRICS_FILE=OUT/sample.duplicate_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.30.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/no_reads.bam",
+        "size": 120,
+        "mtime": "<mtime>",
+        "edges_hash": "36a7ca9f202b61d5"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.duplicate_metrics",
+          "tool": "CollectDuplicateMetrics",
+          "kind": "metrics"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "verdict",
+      "stage": "post",
+      "tool": "bammetrics",
+      "argv": [
+        "--preset=generic",
+        "OUT/sample.alignment_summary_metrics",
+        "OUT/sample.duplicate_metrics",
+        "OUT/sample.quality_yield_metrics"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.30.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/no_reads.bam",
+        "size": 120,
+        "mtime": "<mtime>",
+        "edges_hash": "36a7ca9f202b61d5"
+      },
+      "files": [],
+      "outputs": [],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "report",
+      "stage": "report",
+      "tool": "bammetrics",
+      "argv": [
+        "--all-plots=false",
+        "--date=2026-01-02 03:04:05 UTC"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.30.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/no_reads.bam",
+        "size": 120,
+        "mtime": "<mtime>",
+        "edges_hash": "36a7ca9f202b61d5"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.verdict.json",
+          "tool": "bammetrics",
+          "kind": "verdict"
+        },
+        {
+          "path": "OUT/sample.report.html",
+          "tool": "bammetrics",
+          "kind": "report"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    },
+    {
+      "id": "also",
+      "stage": "report",
+      "tool": "bammetrics",
+      "argv": [
+        "--also=xlsx,docx"
+      ],
+      "argv_hash": "<argv_hash>",
+      "tool_version": "0.30.0",
+      "preset_hash": "6dd89ed0478fd5e4",
+      "input": {
+        "path": "tests/data/no_reads.bam",
+        "size": 120,
+        "mtime": "<mtime>",
+        "edges_hash": "36a7ca9f202b61d5"
+      },
+      "files": [],
+      "outputs": [
+        {
+          "path": "OUT/sample.alignment_summary_metrics.xlsx",
+          "tool": "bammetrics",
+          "kind": "xlsx"
+        },
+        {
+          "path": "OUT/sample.duplicate_metrics.xlsx",
+          "tool": "bammetrics",
+          "kind": "xlsx"
+        },
+        {
+          "path": "OUT/sample.quality_yield_metrics.xlsx",
+          "tool": "bammetrics",
+          "kind": "xlsx"
+        },
+        {
+          "path": "OUT/sample.alignment_summary_metrics.docx",
+          "tool": "bammetrics",
+          "kind": "docx"
+        },
+        {
+          "path": "OUT/sample.duplicate_metrics.docx",
+          "tool": "bammetrics",
+          "kind": "docx"
+        },
+        {
+          "path": "OUT/sample.quality_yield_metrics.docx",
+          "tool": "bammetrics",
+          "kind": "docx"
+        }
+      ],
+      "status": "ok",
+      "error": null
+    }
+  ]
+}
+## file sample.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectQualityYieldMetrics INPUT=tests/data/no_reads.bam OUTPUT=OUT/sample.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+0	0	0	0	0	0	0	0	0	0	0
+
+
+## file sample.quality_yield_metrics.docx
+<zip: 6472 bytes, 5 parts>
+### part [Content_Types].xml (558 bytes)
+### part _rels/.rels (299 bytes)
+### part word/document.xml (2945 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>CollectQualityYieldMetrics, sample no_reads</w:t></w:r></w:p>
+<w:p><w:r><w:t>CollectQualityYieldMetrics INPUT=tests/data/no_reads.bam OUTPUT=OUT/sample.quality_yield_metrics</w:t></w:r></w:p>
+<w:p><w:r><w:t>Started on: <time></w:t></w:r></w:p>
+<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics</w:t></w:r></w:p>
+<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="0" w:type="auto"/><w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr><w:tblGrid><w:gridCol/><w:gridCol/></w:tblGrid>
+<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Column</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>1</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>TOTAL_READS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_READS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>READ_LENGTH</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>TOTAL_BASES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_BASES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>Q20_BASES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_Q20_BASES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>Q30_BASES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_Q30_BASES</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>Q20_EQUIVALENT_YIELD</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PF_Q20_EQUIVALENT_YIELD</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>0</w:t></w:r></w:p></w:tc></w:tr>
+</w:tbl>
+<w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="851" w:right="851" w:bottom="851" w:left="851" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>
+### part word/_rels/document.xml.rels (284 bytes)
+### part word/styles.xml (1804 bytes)
+## file sample.quality_yield_metrics.xlsx
+<zip: 5489 bytes, 7 parts>
+### part [Content_Types].xml (817 bytes)
+### part _rels/.rels (297 bytes)
+### part xl/workbook.xml (383 bytes)
+### part xl/_rels/workbook.xml.rels (566 bytes)
+### part xl/styles.xml (823 bytes)
+### part xl/worksheets/sheet1.xml (488 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:A2"/><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetData>
+<row r="1"><c r="A1" t="inlineStr"><is><t>CollectQualityYieldMetrics INPUT=tests/data/no_reads.bam OUTPUT=OUT/sample.quality_yield_metrics</t></is></c></row>
+<row r="2"><c r="A2" t="inlineStr"><is><t>Started on: <time></t></is></c></row>
+</sheetData></worksheet>
+### part xl/worksheets/sheet2.xml (1297 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:K2"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>
+<row r="1"><c r="A1" s="1" t="inlineStr"><is><t>TOTAL_READS</t></is></c><c r="B1" s="1" t="inlineStr"><is><t>PF_READS</t></is></c><c r="C1" s="1" t="inlineStr"><is><t>READ_LENGTH</t></is></c><c r="D1" s="1" t="inlineStr"><is><t>TOTAL_BASES</t></is></c><c r="E1" s="1" t="inlineStr"><is><t>PF_BASES</t></is></c><c r="F1" s="1" t="inlineStr"><is><t>Q20_BASES</t></is></c><c r="G1" s="1" t="inlineStr"><is><t>PF_Q20_BASES</t></is></c><c r="H1" s="1" t="inlineStr"><is><t>Q30_BASES</t></is></c><c r="I1" s="1" t="inlineStr"><is><t>PF_Q30_BASES</t></is></c><c r="J1" s="1" t="inlineStr"><is><t>Q20_EQUIVALENT_YIELD</t></is></c><c r="K1" s="1" t="inlineStr"><is><t>PF_Q20_EQUIVALENT_YIELD</t></is></c></row>
+<row r="2"><c r="A2"><v>0</v></c><c r="B2"><v>0</v></c><c r="C2"><v>0</v></c><c r="D2"><v>0</v></c><c r="E2"><v>0</v></c><c r="F2"><v>0</v></c><c r="G2"><v>0</v></c><c r="H2"><v>0</v></c><c r="I2"><v>0</v></c><c r="J2"><v>0</v></c><c r="K2"><v>0</v></c></row>
+</sheetData></worksheet>
+## file sample.report.html
+<page not recorded>
+## file sample.verdict.json
+{
+  "schema": "bammetrics.verdict/1",
+  "tool_version": "0.30.0",
+  "sample": "no_reads",
+  "preset": {
+    "name": "generic",
+    "version": 1,
+    "hash": "6dd89ed0478fd5e4",
+    "source": "built-in",
+    "note": "starting values"
+  },
+  "status": "incomplete",
+  "counts": {
+    "pass": 0,
+    "warn": 0,
+    "fail": 0,
+    "not_measured": 6
+  },
+  "files": [
+    {
+      "path": "OUT/sample.alignment_summary_metrics",
+      "classes": [
+        "picard.analysis.AlignmentSummaryMetrics"
+      ]
+    },
+    {
+      "path": "OUT/sample.duplicate_metrics",
+      "classes": []
+    },
+    {
+      "path": "OUT/sample.quality_yield_metrics",
+      "classes": [
+        "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "rule": "alignment.pf-reads-aligned",
+      "label": "PF reads aligned",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_PF_READS_ALIGNED",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": null,
+      "warn": "< 0.9",
+      "fail": "< 0.8",
+      "status": "not_measured",
+      "reason": "no AlignmentSummaryMetrics row with CATEGORY=PAIR at ALL_READS",
+      "plot": null
+    },
+    {
+      "rule": "alignment.adapter",
+      "label": "Adapter reads",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_ADAPTER",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": null,
+      "warn": "> 0.01",
+      "fail": "> 0.05",
+      "status": "not_measured",
+      "reason": "no AlignmentSummaryMetrics row with CATEGORY=PAIR at ALL_READS",
+      "plot": "insert-size"
+    },
+    {
+      "rule": "alignment.chimeras",
+      "label": "Chimeric pairs",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_CHIMERAS",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": null,
+      "warn": "> 0.05",
+      "fail": "> 0.1",
+      "status": "not_measured",
+      "reason": "no AlignmentSummaryMetrics row with CATEGORY=PAIR at ALL_READS",
+      "plot": null
+    },
+    {
+      "rule": "insert.median",
+      "label": "Median insert size",
+      "class": "InsertSizeMetrics",
+      "metric": "MEDIAN_INSERT_SIZE",
+      "level": "ALL_READS",
+      "select": "PAIR_ORIENTATION=FR",
+      "unit": null,
+      "value": null,
+      "warn": "outside 100..1000",
+      "fail": "outside 50..2000",
+      "status": "not_measured",
+      "reason": "no InsertSizeMetrics file",
+      "plot": "insert-size"
+    },
+    {
+      "rule": "yield.q30",
+      "label": "Q30 fraction of PF bases",
+      "class": "QualityYieldMetrics",
+      "metric": "PF_Q30_BASES / PF_BASES",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": null,
+      "warn": "< 0.8",
+      "fail": "< 0.7",
+      "status": "not_measured",
+      "reason": "PF_BASES is 0",
+      "plot": "cycle-quality"
+    },
+    {
+      "rule": "duplication.percent",
+      "label": "Duplicate reads",
+      "class": "DuplicationMetrics",
+      "metric": "PERCENT_DUPLICATION",
+      "level": "LIBRARY",
+      "select": null,
+      "unit": null,
+      "value": null,
+      "warn": "> 0.3",
+      "fail": "> 0.5",
+      "status": "not_measured",
+      "reason": "no DuplicationMetrics file",
+      "plot": null
+    }
+  ]
+}

@@ -10,5 +10,5 @@ parquet
 ## stdout
 ## stderr
 bammetrics qc: invalid value "parquet" (from --also)
-  one of: json, jsonl, tsv, csv, markdown, junit, multiqc
+  one of: json, jsonl, tsv, csv, xlsx, docx, markdown, junit, multiqc
   every option: bammetrics help qc

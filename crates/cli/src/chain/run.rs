@@ -192,7 +192,8 @@ fn write_metrics(
     formats: &[Format],
     context: &Context<'_>,
 ) -> bammetrics_core::Result<Vec<Written>> {
-    let texts = format::render_all(formats, context, file);
+    let texts = format::render_all(formats, context, file)
+        .map_err(|e| format::output_error(Some(path), e))?;
     let mut written = Vec::with_capacity(formats.len());
     for (index, (format, text)) in formats.iter().zip(texts).enumerate() {
         let (target, kind) = if index == 0 {
@@ -200,7 +201,7 @@ fn write_metrics(
         } else {
             (format::sibling(path, format.extension()), format.name())
         };
-        registry::write_to(Some(&target), |out| out.write_all(text.as_bytes()))?;
+        registry::write_to(Some(&target), |out| out.write_all(&text))?;
         written.push(Written { path: target, kind });
     }
     Ok(written)
@@ -256,8 +257,10 @@ fn write_tool_files(
     let mut written = Vec::new();
     match (&products.output.main, &step.output, step.stdout) {
         (Some(main), _, true) => {
-            let text = format::render_all(&picard, &context, main).remove(0);
-            registry::write_to(None, |out| out.write_all(text.as_bytes()))?;
+            let text = format::render_all(&picard, &context, main)
+                .map_err(|e| format::output_error(None, e))?
+                .remove(0);
+            registry::write_to(None, |out| out.write_all(&text))?;
         }
         (Some(main), Some(path), false) => {
             written.extend(write_metrics(path, main, &step.formats, &context)?);

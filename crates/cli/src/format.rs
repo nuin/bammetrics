@@ -63,12 +63,13 @@ pub fn sibling(path: &Path, extension: &str) -> PathBuf {
 
 /// `output` in each of `formats`, with one set of `StringHeader` lines, so
 /// the Picard file and its JSON sibling carry the same start time. The
-/// Picard form is the file the registry writer writes.
+/// Picard form is the file the registry writer writes. Only a binary
+/// format fails, past its limits (an XLSX sheet of over 1,048,576 rows).
 pub fn render_all(
     formats: &[Format],
     context: &Context<'_>,
     output: &MetricsOutput,
-) -> Vec<String> {
+) -> Result<Vec<Vec<u8>>, bammetrics_formats::Error> {
     let headers = output.headers(context.command);
     let document = formats.iter().any(|f| *f != Format::Picard).then(|| {
         let mut doc = Document::from_output(context.tool, headers.clone(), output);
@@ -83,12 +84,22 @@ pub fn render_all(
                 output
                     .write(headers.clone(), &mut bytes)
                     .expect("writing to memory");
-                String::from_utf8_lossy(&bytes).into_owned()
+                Ok(bytes)
             }
-            (format, Some(doc)) => bammetrics_formats::render(*format, doc, None)
-                .expect("only the Picard writer refuses a document"),
+            (format, Some(doc)) => bammetrics_formats::render_bytes(*format, doc, None),
         })
         .collect()
+}
+
+/// A format's error as the output error of the file it was to be.
+pub fn output_error(
+    path: Option<&Path>,
+    error: bammetrics_formats::Error,
+) -> bammetrics_core::Error {
+    bammetrics_core::Error::Output {
+        path: path.map_or_else(|| PathBuf::from("-"), Path::to_path_buf),
+        source: std::io::Error::other(error.to_string()),
+    }
 }
 
 /// What the Markdown, JUnit and MultiQC writers need of `verdict`.
@@ -169,7 +180,10 @@ mod tests {
     }
 
     fn render(format: Format, context: &Context<'_>, output: &MetricsOutput) -> String {
-        render_all(&[format], context, output).remove(0)
+        let bytes = render_all(&[format], context, output)
+            .expect("renders")
+            .remove(0);
+        String::from_utf8(bytes).expect("a text format")
     }
 
     fn context(sample: Option<&str>) -> Context<'_> {
@@ -226,7 +240,12 @@ mod tests {
 
     #[test]
     fn a_list_shares_one_start_time() {
-        let all = render_all(&[Format::Picard, Format::Json], &context(None), &output());
+        let all: Vec<String> =
+            render_all(&[Format::Picard, Format::Json], &context(None), &output())
+                .expect("renders")
+                .into_iter()
+                .map(|bytes| String::from_utf8(bytes).expect("text"))
+                .collect();
         let started = all[0]
             .lines()
             .find_map(|l| l.strip_prefix("# Started on: "))
@@ -249,7 +268,7 @@ mod tests {
         assert_eq!(
             unknown.to_string(),
             "bammetrics insert-size: no format \"jsn\" (from --format)\n  did you mean json?\n  \
-             formats: picard, json, tsv, jsonl, human, csv, markdown"
+             formats: picard, json, tsv, jsonl, human, csv, markdown, xlsx, docx"
         );
         let twice = parse_list("insert-size", "tsv,tsv", "--format").expect_err("twice");
         assert!(twice.to_string().contains("format tsv is given twice"));

@@ -6,6 +6,8 @@
 //! the other readable form, so `convert` applied twice gives the first
 //! file back byte for byte. A JSON cell with a tab or a line end has no
 //! Picard text form: `--format picard` is then an error and writes nothing.
+//! `xlsx` and `docx` are written only: an input that starts as a zip is
+//! refused with that reason.
 
 use std::fs;
 use std::io::Read as _;
@@ -15,7 +17,7 @@ use bammetrics_formats::{Document, Format, Table};
 use clap::Args;
 
 use crate::error::{Result, VerbError};
-use crate::events::print_stdout;
+use crate::events::print_stdout_bytes;
 use crate::format::{parse_list, sibling};
 use crate::report::write_atomic;
 use crate::verbs::refuse_overwriting_inputs;
@@ -26,8 +28,8 @@ const VERB: &str = "convert";
 #[command(
     after_help = "Formats: picard (Picard metrics text), json (schema bammetrics.metrics/1, \
 docs/schema/metrics-1.json), jsonl (one object per row, a histogram row with \"histogram\": true), \
-tsv, csv (RFC 4180), markdown, human. Picard text and json read back; the others are written \
-only.\n\nPicard text to json to Picard text is byte for byte the first file, for a file Picard or \
+tsv, csv (RFC 4180), markdown, human, xlsx (a sheet per table), docx (the headers and every \
+table). Picard text and json read back; the others are written only.\n\nPicard text to json to Picard text is byte for byte the first file, for a file Picard or \
 bammetrics wrote. tsv, csv and human print one table: the metrics class, or the histogram of a \
 file without one; --table picks."
 )]
@@ -55,23 +57,41 @@ pub struct ConvertArgs {
     pub sample: Option<String>,
 }
 
+/// The zip magic an XLSX or DOCX file starts with.
+const ZIP_MAGIC: &[u8] = b"PK\x03\x04";
+
 fn read_input(path: &Path) -> std::result::Result<String, VerbError> {
-    if path == Path::new("-") {
-        let mut text = String::new();
-        return std::io::stdin()
+    let name = if path == Path::new("-") {
+        "standard input".to_owned()
+    } else {
+        path.display().to_string()
+    };
+    let bytes = if path == Path::new("-") {
+        let mut bytes = Vec::new();
+        std::io::stdin()
             .lock()
-            .read_to_string(&mut text)
-            .map(|_| text)
-            .map_err(|e| VerbError::input(VERB, format!("standard input: {e}")));
+            .read_to_end(&mut bytes)
+            .map(|_| bytes)
+            .map_err(|e| VerbError::input(VERB, format!("{name}: {e}")))?
+    } else {
+        fs::read(path).map_err(|e| {
+            let what = if e.kind() == std::io::ErrorKind::NotFound {
+                format!("{name} not found")
+            } else {
+                format!("{name}: {e}")
+            };
+            VerbError::input(VERB, what)
+        })?
+    };
+    if bytes.starts_with(ZIP_MAGIC) {
+        return Err(VerbError::input(
+            VERB,
+            format!("{name}: a zip (XLSX or DOCX) does not read back"),
+        )
+        .hint("convert reads Picard text and the JSON of --format json"));
     }
-    fs::read_to_string(path).map_err(|e| {
-        let what = if e.kind() == std::io::ErrorKind::NotFound {
-            format!("{} not found", path.display())
-        } else {
-            format!("{}: {e}", path.display())
-        };
-        VerbError::input(VERB, what)
-    })
+    String::from_utf8(bytes)
+        .map_err(|_| VerbError::input(VERB, format!("{name}: stream did not contain valid UTF-8")))
 }
 
 /// The table `--table NAME` names, or a usage error listing the tables
@@ -139,14 +159,17 @@ pub fn run(args: &ConvertArgs) -> Result<u8> {
     // document Picard text cannot hold leaves no file behind.
     let texts = formats
         .iter()
-        .map(|format| bammetrics_formats::render(*format, &doc, table))
-        .collect::<std::result::Result<Vec<String>, _>>()
-        .map_err(|e| {
-            input_error(e).hint("the other formats hold it: json, jsonl, tsv, csv, markdown")
+        .map(|format| bammetrics_formats::render_bytes(*format, &doc, table))
+        .collect::<std::result::Result<Vec<Vec<u8>>, _>>()
+        .map_err(|e| match e {
+            bammetrics_formats::Error::Picard(_) => {
+                input_error(e).hint("the other formats hold it: json, jsonl, tsv, csv, markdown")
+            }
+            e => input_error(e),
         })?;
     if targets.is_empty() {
         for text in texts {
-            print_stdout(&text);
+            print_stdout_bytes(&text);
         }
         return Ok(0);
     }
