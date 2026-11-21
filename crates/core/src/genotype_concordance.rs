@@ -1177,8 +1177,8 @@ fn load_intervals(opts: &Options) -> Result<Option<Regions>> {
         let list = Regions::read(path)?;
         combined = Some(match combined {
             None => list,
-            Some(current) if opts.intersect_intervals => current.intersection(&list),
-            Some(current) => current.union(&list),
+            Some(current) if opts.intersect_intervals => current.intersection(&list)?,
+            Some(current) => current.union(&list)?,
         });
     }
     Ok(combined.map(|r| r.uniqued()))

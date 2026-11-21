@@ -533,6 +533,29 @@ impl VcfReader {
         &self.record
     }
 
+    /// The next record's position, `ID` and filter status, its alleles and
+    /// genotypes not decoded (htsjdk decodes genotypes lazily, so a site
+    /// list never reads them); `None` at the end of the file.
+    pub fn next_site(&mut self) -> Result<Option<Site>> {
+        let read = self
+            .reader
+            .read_record(&mut self.record)
+            .map_err(|source| Error::Input {
+                path: self.path.clone(),
+                source,
+            })?;
+        if read == 0 {
+            return Ok(None);
+        }
+        self.line += 1;
+        parse_site(&self.record)
+            .map(Some)
+            .map_err(|message| Error::Intervals {
+                path: self.path.clone(),
+                message: format!("record {}: {message}", self.line),
+            })
+    }
+
     /// Every remaining record.
     pub fn variants(mut self) -> Result<Vec<Variant>> {
         let mut out = Vec::new();
@@ -541,6 +564,50 @@ impl VcfReader {
         }
         Ok(out)
     }
+}
+
+/// One record as [`VcfReader::next_site`] reads it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Site {
+    pub contig: String,
+    /// `POS`, a Java `int`.
+    pub start: i32,
+    /// `INFO/END`, else `start + reference length - 1`.
+    pub end: i32,
+    /// `ID`, `None` for `.`.
+    pub id: Option<String>,
+    /// `FILTER` is neither `.` nor `PASS`.
+    pub filtered: bool,
+}
+
+fn parse_site(record: &vcf::Record) -> std::result::Result<Site, String> {
+    let int =
+        |value: i64| i32::try_from(value).map_err(|_| format!("For input string: \"{value}\""));
+    let start = match record.variant_start() {
+        Some(Ok(p)) => usize::from(p) as i64,
+        Some(Err(e)) => return Err(format!("bad position: {e}")),
+        None => 0,
+    };
+    let mut end = start + record.reference_bases().len() as i64 - 1;
+    let info_field = record.info();
+    let info: &str = info_field.as_ref();
+    for field in info.split(';') {
+        if let Some(value) = field.strip_prefix("END=") {
+            end = value
+                .parse::<i32>()
+                .map(i64::from)
+                .map_err(|_| "the END value in the INFO field is not valid".to_owned())?;
+        }
+    }
+    let ids = record.ids();
+    let id: &str = ids.as_ref();
+    Ok(Site {
+        contig: record.reference_sequence_name().to_owned(),
+        start: int(start)?,
+        end: int(end)?,
+        id: (!id.is_empty() && id != ".").then(|| id.to_owned()),
+        filtered: is_filtered(record.filters().as_ref()),
+    })
 }
 
 /// `VCFCodec.parseFilters`: `.` and `PASS` are unfiltered. noodles hands
@@ -868,160 +935,8 @@ fn load_db_snp(
     Ok(())
 }
 
-/// An interval list for the VCF tools: its own `@SQ` dictionary and the
-/// intervals by contig, kept in file order until [`Regions::uniqued`].
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Regions {
-    pub dictionary: Dictionary,
-    /// `(contig index, start, end)`, 1-based closed.
-    pub intervals: Vec<(usize, i64, i64)>,
-}
-
-impl Regions {
-    /// `IntervalList.fromPath`: a header of `@` lines (the `@SQ` lines are
-    /// the dictionary) then `contig start end strand name` records. A record
-    /// on a contig the dictionary lacks is skipped, as htsjdk does with a
-    /// warning. A file without the header is Picard's error.
-    pub fn read(path: &Path) -> Result<Self> {
-        let text = fs::read_to_string(path).map_err(|source| Error::Input {
-            path: path.to_path_buf(),
-            source,
-        })?;
-        Self::parse(&text).map_err(|message| Error::Intervals {
-            path: path.to_path_buf(),
-            message,
-        })
-    }
-
-    fn parse(text: &str) -> std::result::Result<Self, String> {
-        if !text.starts_with('@') {
-            return Err("Interval list file must contain header. ".to_owned());
-        }
-        let mut dictionary = Vec::new();
-        let mut intervals = Vec::new();
-        for line in text.lines() {
-            if let Some(fields) = line.strip_prefix("@SQ\t") {
-                let mut name = None;
-                let mut length = None;
-                for field in fields.split('\t') {
-                    if let Some(v) = field.strip_prefix("SN:") {
-                        name = Some(v.to_owned());
-                    } else if let Some(v) = field.strip_prefix("LN:") {
-                        length = v.parse::<i64>().ok();
-                    }
-                }
-                let name = name.ok_or_else(|| format!("@SQ line without SN: {line}"))?;
-                dictionary.push(Contig { name, length });
-                continue;
-            }
-            if line.starts_with('@') || line.trim().is_empty() {
-                continue;
-            }
-            let fields: Vec<&str> = line.split('\t').collect();
-            let [contig, start, end, strand, _name] = fields[..] else {
-                return Err(format!(
-                    "Invalid interval record contains {} fields: {line}",
-                    fields.len()
-                ));
-            };
-            let start: i64 = start
-                .parse()
-                .map_err(|_| format!("bad start {start:?}: {line}"))?;
-            let end: i64 = end
-                .parse()
-                .map_err(|_| format!("bad end {end:?}: {line}"))?;
-            if start < 1 {
-                return Err(format!("start value of {start} is less than 1: {line}"));
-            }
-            if start > end + 1 {
-                return Err(format!("start {start} is greater than end + 1: {line}"));
-            }
-            if strand != "+" && strand != "-" {
-                return Err(format!("Invalid strand field: {strand}"));
-            }
-            let Some(index) = dictionary.iter().position(|c| c.name == contig) else {
-                continue;
-            };
-            if let Some(length) = dictionary[index].length.filter(|&l| l > 0 && l < end) {
-                return Err(format!(
-                    "interval with end {end} extends beyond the end of {contig} ({length} bp)"
-                ));
-            }
-            intervals.push((index, start, end));
-        }
-        Ok(Self {
-            dictionary,
-            intervals,
-        })
-    }
-
-    /// `IntervalList.uniqued()`: sorted by contig, start and end, then
-    /// overlapping or abutting intervals merged.
-    pub fn uniqued(&self) -> Self {
-        let mut sorted = self.intervals.clone();
-        sorted.sort_unstable();
-        let mut merged: Vec<(usize, i64, i64)> = Vec::with_capacity(sorted.len());
-        for next in sorted {
-            match merged.last_mut() {
-                Some(current) if current.0 == next.0 && next.1 <= current.2 + 1 => {
-                    current.2 = current.2.max(next.2);
-                }
-                _ => merged.push(next),
-            }
-        }
-        Self {
-            dictionary: self.dictionary.clone(),
-            intervals: merged,
-        }
-    }
-
-    /// `IntervalList.intersection`: every overlap of an interval of `self`
-    /// with one of `other`, then `uniqued` (both lists share a dictionary).
-    pub fn intersection(&self, other: &Regions) -> Self {
-        let mut intervals = Vec::new();
-        for &(c, s, e) in &self.intervals {
-            for &(oc, os, oe) in &other.intervals {
-                if c == oc && s <= oe && os <= e {
-                    intervals.push((c, s.max(os), e.min(oe)));
-                }
-            }
-        }
-        Self {
-            dictionary: self.dictionary.clone(),
-            intervals,
-        }
-    }
-
-    /// `IntervalList.union`: the concatenation, `uniqued`.
-    pub fn union(&self, other: &Regions) -> Self {
-        let mut intervals = self.intervals.clone();
-        intervals.extend(other.intervals.iter().copied());
-        Self {
-            dictionary: self.dictionary.clone(),
-            intervals,
-        }
-        .uniqued()
-    }
-
-    /// `IntervalList.getBaseCount`: the summed lengths.
-    pub fn base_count(&self) -> i64 {
-        self.intervals.iter().map(|(_, s, e)| e - s + 1).sum()
-    }
-
-    /// True when `start..=end` on `contig` shares a base with an interval
-    /// (`OverlapDetector.getOverlaps` non-empty).
-    pub fn overlaps(&self, contig: &str, start: i64, end: i64) -> bool {
-        let Some(index) = self.dictionary.iter().position(|c| c.name == contig) else {
-            return false;
-        };
-        if end < start {
-            return false;
-        }
-        self.intervals
-            .iter()
-            .any(|&(c, s, e)| c == index && s <= end && start <= e)
-    }
-}
+/// The interval list support of the VCF tools, over `interval_ops`.
+pub use crate::interval_ops::Regions;
 
 /// `Tribble.indexPath` or `Tribble.tabixIndexPath` exists next to `path`.
 pub fn index_exists(path: &Path) -> bool {
@@ -1187,30 +1102,6 @@ mod tests {
         assert!(parse_genotype(&keys, "0/2", 2).is_err());
         assert!(parse_genotype(&["GQ", "GT"], "20:0/1", 2).is_err());
         assert!(parse_genotype(&["GT"], "0/1:20", 2).is_err());
-    }
-
-    #[test]
-    fn regions_merge_intersect_and_count() {
-        let text = "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:1000\n@SQ\tSN:c2\tLN:500\n\
-                    c1\t10\t20\t+\ta\nc1\t21\t30\t+\tb\nc1\t50\t60\t-\tc\nc2\t5\t5\t+\td\ncX\t1\t2\t+\te\n";
-        let regions = Regions::parse(text).expect("parses").uniqued();
-        assert_eq!(regions.intervals, vec![(0, 10, 30), (0, 50, 60), (1, 5, 5)]);
-        assert_eq!(regions.base_count(), 21 + 11 + 1);
-        assert!(regions.overlaps("c1", 1, 10) && !regions.overlaps("c1", 31, 49));
-        assert!(!regions.overlaps("c3", 1, 10));
-        let other = Regions {
-            dictionary: regions.dictionary.clone(),
-            intervals: vec![(0, 25, 55), (1, 1, 10)],
-        };
-        assert_eq!(
-            regions.intersection(&other).uniqued().intervals,
-            vec![(0, 25, 30), (0, 50, 55), (1, 5, 5)]
-        );
-        assert_eq!(
-            regions.union(&other).intervals,
-            vec![(0, 10, 60), (1, 1, 10)]
-        );
-        assert!(Regions::parse("c1\t0\t10\n").is_err());
     }
 
     #[test]

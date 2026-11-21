@@ -294,7 +294,7 @@ def test_interval_past_its_contig(corpus, tmp_path):
     name = next(f[3:] for f in sq[1].split("\t") if f.startswith("SN:"))
     intervals.write_text("\n".join([*sq, f"{name}\t1\t{length + 1000}\t+\tbeyond"]) + "\n")
     both_fail(collector(corpus / "corpus.bam", corpus / "ref.fa", f"INTERVALS={intervals}"),
-              tmp_path, "extends beyond the end of", "extends beyond end of sequence")
+              tmp_path, "extends beyond end of sequence", "extends beyond end of sequence")
 
 
 def test_oq_below_bang(built, tmp_path):

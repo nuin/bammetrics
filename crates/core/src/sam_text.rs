@@ -42,6 +42,7 @@ mod read;
 mod write;
 
 pub use parse::{LineParser, parse_cigar};
+pub(crate) use read::clean_header_line;
 pub use read::{Reader, RecordStream, Records};
 pub use write::{SamWriter, header_text, write_record};
 

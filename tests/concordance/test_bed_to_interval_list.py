@@ -25,6 +25,7 @@ BEDS = {
               "chr1\t30\t40\t\t1.5\t.\nchr1\t39\t45\tabut\nchr1  40  41\nchrM\t0\t12000\tall\n"),
     "unsorted": "chr2\t10\t20\tb\nchr1\t10\t20\ta\nchr1\t5\t30\tc\nchr1\t5\t30\ta\nchr1\t5\t30\n",
     "short_lines": "chr1\nchr1\t1\t2\nchr1\t7\n",
+    "zero_abutting": "chr1\t9\t9\tz\nchr1\t10\t20\tn\nchr1\t30\t30\tz2\nchr1\t25\t29\tm\n",
     "tier_baits": None,  # tests/corpus/out/baits.bed
 }
 OPTIONS = {

@@ -1653,6 +1653,16 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   alleles repeat (`A>A`, `A>T,T`) in `INPUT` or `DBSNP`. Each gives the files where Picard
   exits 1.
 
+## Interval lists (the interval layer of wave W12)
+
+- An interval list written under a name ending in `.gz`, `.gzip` or `.bfq` is BGZF:
+  it inflates to the text Picard writes, and Picard's single gzip member has other bytes.
+- Two dictionaries whose `@SQ` names differ only through an `AN` alternative name are
+  refused as different dictionaries; htsjdk's `isSameSequence` accepts them.
+- A scatter into more than 100,000 lists (`SCATTER_COUNT`, or the count `SCATTER_CONTENT`
+  gives) and a `BREAK_BANDS_AT_MULTIPLES_OF` that makes more than 20,000,000 intervals
+  fail with a usage error. Picard writes the files, or runs out of memory.
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))
