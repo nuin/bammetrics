@@ -30,7 +30,7 @@ emits.
 | Step | What it is | Today |
 |---|---|---|
 | source | One BAM, CRAM or SAM text file, or a pipe holding one | the positional argument, `-` for standard input |
-| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on; a streaming transform edits each batch as it passes (section 16) | `mark-duplicates`, `sort-sam`, `revert-original-base-qualities-and-add-mate-cigar` (barriers); `add-comments-to-bam`, `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`, `set-nm-and-uq-tags` (streaming); `add-or-replace-read-groups` (streaming, a barrier with a `--sort-order` that differs from the stream's; section 17) |
+| transform | A tool that changes the records later steps see. A barrier needs every record before one goes on; a streaming transform edits each batch as it passes (section 16) | `mark-duplicates`, `sort-sam`, `revert-original-base-qualities-and-add-mate-cigar` (barriers); `add-comments-to-bam`, `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`, `set-nm-and-uq-tags` (streaming); `add-or-replace-read-groups` (streaming, a barrier with a `--sort-order` that differs from the stream's; section 17); `fix-mate-information` (a barrier), `filter-sam-reads` (streaming, a barrier when it sorts; section 19) |
 | tap | A one-pass tool on the records of its position. It changes nothing | 20 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check`, `mt-copy-number`, `exon-coverage`, `adapter-content`, `duplicate-by-tile`, `telomere`, `quality-yield-s-n-v-q`, `rrbs` |
 | write | A tap that writes the records of its position as a BAM, or as SAM text | `write [PATH]` |
 | split | A sink that writes the records of its position over BAMs in a directory (section 18) | `split-sam-by-library`, `split-sam-by-number-of-reads` |
@@ -1305,3 +1305,28 @@ Chained equals staged (`crates/cli/tests/split_sam.rs`, `test_split_sam_by_libra
 fixtures and the foundation corpus, `sort-sam -SO queryname` then a count split, a split
 beside a tap and `write`; every file has the staged run's name, header lines and record
 bytes.
+
+## 19. W13: mate fixing and filtering steps
+
+`fix-mate-information` holds its records as `revert-original-base-qualities-and-add-mate-cigar`
+does (section 17): a queryname sort, the mate fields of each name, then `--sort-order`
+(default the stream's). `filter-sam-reads` streams the records its `--filter` keeps, or
+holds and sorts them when `--sort-order` names another order than the stream's.
+
+```bash
+bammetrics chain in.bam -o out/s \
+    + fix-mate-information \
+    + filter-sam-reads --filter includePairedIntervals --interval-list panel.interval_list \
+    + mark-duplicates \
+    + write out/s.bam --index
+```
+
+| Tool | Default stream | What the step does |
+|---|---|---|
+| `fix-mate-information` | `fixed` | Holds its records: a queryname sort, the mate reference, start, strand, `MQ`, `MC` and `TLEN` of each pair, then `--sort-order` (default the stream's). It sorts by name even when the stream says `SO:queryname`, where the tool on its own takes the records as they come; `--assume-sorted`, `--sort-order unknown` and a second input exit 2 |
+| `filter-sam-reads` | `filtered` | Keeps the records `--filter` keeps, streaming; with a `--sort-order` that differs from the stream's order it holds them and hands them on sorted. The pair filters (`includeAligned`, `excludeAligned`) need a stream in queryname order, `includePairedIntervals` one in coordinate order. `--write-reads-files` exits 2 |
+
+Chained equals staged (`crates/cli/tests/mate_filter.rs`): each step first, in the middle
+and last, beside `mark-duplicates` and `sort-sam`, streaming and sorting, on
+`tests/data/mate_filter.bam`, its queryname form, `tests/data/revert.bam`, corpus t1 and
+the foundation corpus.

@@ -1723,6 +1723,33 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   decodes it, so an encoded surrogate (`ED A0 80`) in an `@SQ` field is one U+FFFD in
   the `OUTPUT` of `ScatterIntervalsByNs`.
 
+## FixMateInformation and FilterSamReads
+
+- `FixMateInformation` without `OUTPUT` writes the fixed records under a temporary name
+  beside the input and renames them over it, keeping its mode and any symbolic link to
+  it. Picard moves the input to `<input>.old` first (and fails when that name exists),
+  writes a new file of the default mode, and leaves the index and MD5 under its temporary
+  name (`x.bam.being_fixed.<n>bam.md5`) with a warning; bammetrics writes `x.bai` and
+  `x.bam.md5`. An input that is SAM text, a CRAM, a BAM named `.sam` or `.cram`, or not a
+  regular file exits 2 without `OUTPUT`: Picard writes BAM bytes under that name.
+- `FixMateInformation` with several inputs that are not all `SO:queryname` takes them one
+  after the other. htsjdk's merge compares the identity hash codes of two records there,
+  an order that changes from run to run; the name sort that follows gives one order but
+  for records whose names, flags and `HI` are equal across inputs.
+- In a chain, `fix-mate-information` sorts by name even when the stream says
+  `SO:queryname`. The tool on its own takes such records as they come; the two agree on a
+  stream in htsjdk's queryname order (`sort-sam`), and on another order where Picard's
+  presorted queryname writer would fail, the step sorts.
+- `FilterSamReads WRITE_READS_FILES=true` writes both `.reads` files from its one read of
+  `INPUT`; Picard reads `INPUT` once more and `OUTPUT` back. A run that fails leaves no
+  `.reads` file (Picard leaves the input's). A `.reads` name that is an input or `OUTPUT`
+  exits 2.
+- `FilterSamReads` compares a read list name with a record name byte for byte, a name of
+  the list decoded as UTF-8 and each character at most U+00FF taken as one byte. A SAM text
+  record whose name holds a character above U+00FF keeps its low byte (as every bammetrics
+  tool reads SAM text), so no list name matches it; Picard compares the Java strings.
+- `FILTER=includeJavascript` and `JAVASCRIPT_FILE` exit 2 (docs/07 Q6).
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))

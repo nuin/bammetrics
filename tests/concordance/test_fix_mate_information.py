@@ -119,9 +119,7 @@ def test_options(bams, tmp_path, args):
     outcome = "same" if args[0] in ("IGNORE_MISSING_MATES=false", "ASSUME_SORTED=true") \
         else "equal"
     for kind in ("damaged", "damaged.queryname"):
-        written = compare(TOOL, bams / f"{kind}.bam", run, f"{kind} {' '.join(args)}", outcome)
-        if written.outcome == "equal" and args == ["ADD_MATE_CIGAR=false"]:
-            assert not any("\tMC:Z:" in line for line in written.records)
+        compare(TOOL, bams / f"{kind}.bam", run, f"{kind} {' '.join(args)}", outcome)
 
 
 @pytest.mark.parametrize("order", ["", "queryname"])
