@@ -541,6 +541,9 @@ const FORMAT_CASES: &[Case] = &[
     case!("qc_also_sql_no_reads", "qc", "NO_READS", "-o", "OUT/sample", "--also", "sql", "--date", "2026-01-02 03:04:05 UTC"),
     case!("plan_also_sql", "plan", "IS", "-o", "OUT/sample", "--also", "sql,markdown"),
     case!("chain_also_sql", "chain", "IS", "-o", "OUT/s", "--also", "sql", "+", "insert-size", "+", "quality-yield"),
+    // The four W21 formats in one list: one file set with the Parquet companions.
+    case!("verb_insert_size_w21_list", "insert-size", "IS", "--format", "picard,parquet,xlsx,docx,sql", "-o", "OUT/insert_size.txt", "--sample", "S1"),
+    case!("verb_multiple_metrics_w21_list", "multiple-metrics", "IS", "-o", "OUT/sample", "--program", "CollectInsertSizeMetrics", "--format", "picard,parquet,xlsx,sql"),
 ];
 
 /// `chain` (docs/chaining.md): the two documented examples from the command

@@ -231,14 +231,16 @@ bammetrics convert FILE [--format FORMAT[,FORMAT]] [-o FILE] [--table NAME] [--s
   parquet`; `-` reads standard input. A Parquet file with a histogram is read from a
   path: its histogram companion is read from beside it.
 - `--format` defaults to `json` for Picard text and `picard` for JSON and Parquet.
-- `-o FILE` writes the first format there (`-` is standard output); a list needs it.
+- `-o FILE` writes the first format there (`-` is standard output); a list and
+  `parquet` need it, and `xlsx` and `docx` need it when standard output is a terminal.
   `convert` refuses to write its input (exit 2).
 - `--table` picks the table `tsv`, `csv` and `human` print: `metrics` (the first class),
   `histogram`, or a class name. Without it they print the metrics class, or the histogram of
   a file without one.
 - `--sample` sets the sample of the `json`, `jsonl` and `sql` forms.
 - Exit 1 for a file that is neither form, with the reason: the JSON error for text that
-  starts with `{` or `[`, the SQL dump's own reason for a dump, else `not a metrics file`. `convert` does not read BAM, VCF or
+  starts with `{` or `[`, the SQL dump's own reason for a dump, `a zip (XLSX or DOCX) does
+  not read back` after the first 4 bytes of a zip, else `not a metrics file`. `convert` does not read BAM, VCF or
   interval lists.
 - Exit 1 for `--format picard` on a JSON cell Picard text cannot hold (see the round trip).
 

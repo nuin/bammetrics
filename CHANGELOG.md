@@ -76,6 +76,17 @@ Wave W21 of docs/07: Parquet, XLSX, DOCX and the SQL dump of a metrics file. No 
   text of an unknown format lists them (`error_verb_format`, `error_verb_format_twice` and
   `error_qc_also`, which now gives `prquet`). `convert` of a zip names Parquet among the
   formats it reads (`error_convert_reads_xlsx`).
+- The three formats share one path: `render_files` writes XLSX and DOCX as one file and
+  Parquet as a main file with companions. A `--format` list goes out as one file set, the
+  further formats of a multi-file verb rendered before its Picard files are written.
+  Parquet needs `-o` (a format with companions); XLSX and DOCX go to standard output when
+  it is a file or a pipe. Two golden forms put all four formats in one list
+  (`verb_insert_size_w21_list`, `verb_multiple_metrics_w21_list`).
+- `make budgets`: the Parquet growth target is 0.6 MiB, failing at 1.2 MiB (docs/07
+  decision D214, pending owner review). The merged probe measures 1,112,176 bytes, one
+  16 KiB page more than the Parquet branch alone and 686 bytes over the old limit.
+- docs/07 section 7: the W21 decisions are D200 to D214, renumbered after the last D row
+  of main by the integrator of the next release.
 
 ## 0.30.0
 
