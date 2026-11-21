@@ -693,6 +693,22 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("CALL_RATE_PF_THRESHOLD", "0.5")),
             picard_outputs: prefix,
         },
+        Case {
+            verb: "scatter-intervals-by-ns",
+            class: "ScatterIntervalsByNs",
+            verb_args: strings(&["tests/data/n_runs.fa"]),
+            picard_args: strings(&["R=tests/data/n_runs.fa"]),
+            option: Some(("MAX_TO_MERGE", "2")),
+            picard_outputs: single,
+        },
+        Case {
+            verb: "non-n-fasta-size",
+            class: "NonNFastaSize",
+            verb_args: strings(&["tests/data/n_runs.fa"]),
+            picard_args: strings(&["I=tests/data/n_runs.fa"]),
+            option: Some(("INTERVALS", "tests/data/n_runs.interval_list")),
+            picard_outputs: single,
+        },
     ]
 }
 
@@ -825,7 +841,7 @@ fn every_registry_tool_is_in_the_matrix() {
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 60);
+    assert_eq!(classes.len(), 62);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

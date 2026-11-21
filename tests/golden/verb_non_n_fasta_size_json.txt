@@ -1,0 +1,30 @@
+## argv
+non-n-fasta-size
+tests/data/n_runs.fa
+--intervals
+tests/data/n_runs.interval_list
+--format
+json
+## exit
+0
+## stdout
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "NonNFastaSize",
+  "headers": [],
+  "class": null,
+  "columns": [
+    "non_n_bases"
+  ],
+  "types": [
+    "int"
+  ],
+  "metrics": [
+    {
+      "non_n_bases": 49
+    }
+  ],
+  "non_finite": [],
+  "histogram": null
+}
+## stderr

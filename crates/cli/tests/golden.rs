@@ -75,6 +75,10 @@ const FIXTURES: &[(&str, &str)] = &[
     ("AVCF", "tests/data/arrays/arrays.vcf.gz"),
     ("AVCF_PLAIN", "tests/data/arrays/arrays.vcf"),
     ("ADBSNP", "tests/data/arrays/dbsnp.vcf"),
+    ("NR", "tests/data/n_runs.fa"),
+    ("NR_IL", "tests/data/n_runs.interval_list"),
+    ("NR_PANEL", "tests/data/n_runs_panel.interval_list"),
+    ("IL_GZ", "tests/data/targets.interval_list.gz"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -816,6 +820,33 @@ const ARRAYS_CASES: &[Case] = &[
     case!("error_chain_arrays_variant_calling", "chain", "MD", "-o", "OUT/s", "+", "arrays-variant-calling"),
 ];
 
+/// Wave W12: `ScatterIntervalsByNs` and `NonNFastaSize` on
+/// `tests/data/n_runs.fa` (`tests/concordance/n_run_refs.py --fixtures`),
+/// and `qc --panel` with an interval list: gzip, and the ACGTmer list
+/// `ScatterIntervalsByNs` writes for the masked `ref_100k.fa`.
+#[rustfmt::skip]
+const N_RUNS_CASES: &[Case] = &[
+    case!("picard_scatter_intervals_by_ns", "ScatterIntervalsByNs", "R=NR", "O=OUT/n_runs.interval_list"),
+    case!("picard_scatter_intervals_by_ns_acgt", "ScatterIntervalsByNs", "R=NR", "O=OUT/acgt.interval_list", "MAX_TO_MERGE=2", "OUTPUT_TYPE=ACGT"),
+    case!("verb_scatter_intervals_by_ns", "scatter-intervals-by-ns", "NR", "-o", "OUT/n.interval_list", "--output-type", "N", "-N", "4"),
+    case!("verb_scatter_intervals_by_ns_stdout", "scatter-intervals-by-ns", "NR", "-o", "-"),
+    case!("error_scatter_intervals_by_ns_no_dict", "ScatterIntervalsByNs", "R=REF", "O=OUT/ref.interval_list"),
+    case!("error_scatter_intervals_by_ns_output_type", "ScatterIntervalsByNs", "R=NR", "O=OUT/x.interval_list", "OT=acgt"),
+    case!("error_verb_scatter_intervals_by_ns_no_output", "scatter-intervals-by-ns", "NR"),
+    case!("error_chain_scatter_intervals_by_ns", "chain", "MD", "-o", "OUT/s", "+", "scatter-intervals-by-ns"),
+    case!("picard_non_n_fasta_size", "NonNFastaSize", "I=NR", "O=OUT/n_runs.non_n"),
+    case!("picard_non_n_fasta_size_intervals", "NonNFastaSize", "I=NR", "INTERVALS=NR_IL", "O=OUT/masked.non_n"),
+    case!("verb_non_n_fasta_size", "non-n-fasta-size", "NR"),
+    case!("verb_non_n_fasta_size_json", "non-n-fasta-size", "NR", "--intervals", "NR_IL", "--format", "json"),
+    case!("error_non_n_fasta_size_no_dict", "NonNFastaSize", "I=REF", "O=OUT/ref.non_n"),
+    case!("error_chain_non_n_fasta_size", "chain", "MD", "-o", "OUT/s", "+", "non-n-fasta-size"),
+    case!("qc_panel_interval_list_gz", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--panel", "IL_GZ", "-R", "REF", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("qc_panel_scatter_intervals", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--panel", "NR_PANEL", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("plan_panel_interval_list", "plan", "IS", "-o", "OUT/sample", "--panel", "NR_PANEL"),
+    case!("verb_hs_metrics_panel_gz", "hs-metrics", "IS", "--panel", "IL_GZ", "--sample-size", "1000"),
+    case!("error_qc_panel_vcf", "qc", "IS", "-o", "OUT/sample", "--panel", "AVCF_PLAIN"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -1287,6 +1318,11 @@ fn documented_arrays_commands_on_the_fixtures() {
     check(ARRAYS_CASES);
 }
 
+#[test]
+fn documented_n_runs_and_panel_commands_on_the_fixtures() {
+    check(N_RUNS_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1400,6 +1436,7 @@ fn case_names_are_unique() {
         .chain(SNVQ_UMI_CASES)
         .chain(RRBS_CASES)
         .chain(ARRAYS_CASES)
+        .chain(N_RUNS_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

@@ -1,0 +1,9 @@
+## argv
+scatter-intervals-by-ns
+tests/data/n_runs.fa
+## exit
+2
+## stdout
+## stderr
+bammetrics scatter-intervals-by-ns: missing -o FILE (Picard: OUTPUT), the interval list
+  -o - writes the interval list to standard output

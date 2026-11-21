@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
++
+non-n-fasta-size
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (non-n-fasta-size): NonNFastaSize reads a FASTA file and no BAM, and a chain hands on the records of a BAM: it cannot be a step
+  run it on its own: bammetrics non-n-fasta-size --help
+  the steps: bammetrics chain --help

@@ -1,0 +1,9 @@
+## argv
+ScatterIntervalsByNs
+R=tests/data/ref_100k.fa
+O=OUT/ref.interval_list
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/ref_100k.fa: Reference file must include a dictionary, but no dictionary file was found

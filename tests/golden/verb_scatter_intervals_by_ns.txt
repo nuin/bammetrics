@@ -1,0 +1,22 @@
+## argv
+scatter-intervals-by-ns
+tests/data/n_runs.fa
+-o
+OUT/n.interval_list
+--output-type
+N
+-N
+4
+## exit
+0
+## stdout
+## stderr
+## file n.interval_list
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:c1	LN:66	M5:163a287f7109a4830c5740ea350b337b
+@SQ	SN:c2	LN:20	M5:6de75cb07c00dc4a6208166f42891a80
+@SQ	SN:c3	LN:39	M5:03a76525540a7f10558f2870e03ab846
+c1	1	2	+	Nmer
+c1	30	40	+	Nmer
+c1	61	66	+	Nmer
+c2	1	20	+	Nmer
