@@ -899,7 +899,9 @@ double quotes are stripped from the name; a fifth field that is not a float ends
 before the strand; `.` is the positive strand; zero-length intervals are dropped unless
 `KEEP_LENGTH_ZERO_INTERVALS=true`; `UNIQUE=true` merges overlapping and abutting intervals
 with the first one's strand and the distinct names joined by `|`; the header is
-`@HD VN:1.6 SO:coordinate` whatever `SORT` says.
+`@HD VN:1.6 SO:coordinate` whatever `SORT` says; a BED or `SD` `.dict` byte that is not
+UTF-8 is written as U+FFFD, one per malformed sequence as the JDK decodes it (an encoded
+surrogate `ED A0 80` is one).
 
 `CompareMetrics` behaviour reproduced from Picard 3.5.0
 (`tests/concordance/test_compare_metrics.py`, 74 cases): files equal when every field
@@ -1717,6 +1719,9 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   output, as every bammetrics tool does; Picard requires `OUTPUT`.
 - `ScatterIntervalsByNs` writes an `OUTPUT` named `.gz` as BGZF, as the interval layer
   writes every interval list (above).
+- Same as Picard: a `.dict` line with bytes that are not UTF-8 is decoded as the JDK
+  decodes it, so an encoded surrogate (`ED A0 80`) in an `@SQ` field is one U+FFFD in
+  the `OUTPUT` of `ScatterIntervalsByNs`.
 
 ## Not in Picard
 

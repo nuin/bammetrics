@@ -610,7 +610,7 @@ pub const VERBS: &[Verb] = &[
         reads: &["SECOND_INPUT"],
         also_writes: &["COUNT_OUTPUT"],
         ignores: &[
-            (Key::Threads, "no BAM is read"),
+            (Key::Threads, "no record is read"),
             (Key::Sample, "an interval list has no sample"),
         ],
         optional_output: true,
@@ -624,7 +624,7 @@ pub const VERBS: &[Verb] = &[
              contig, start, end, strand and name unless --sort false.",
         ),
         writes: "BED",
-        ignores: &[(Key::Threads, "no BAM is read")],
+        ignores: &[(Key::Threads, "no record is read")],
         ..verb("interval-list-to-bed", "IntervalListToBed", Files::Bam)
     },
     Verb {
@@ -635,7 +635,7 @@ pub const VERBS: &[Verb] = &[
              overlap or abut the one before merged and named by their IDs.",
         ),
         writes: "interval list",
-        ignores: &[(Key::Threads, "no BAM is read")],
+        ignores: &[(Key::Threads, "no record is read")],
         ..verb("vcf-to-interval-list", "VcfToIntervalList", Files::Bam)
     },
     Verb {
@@ -647,7 +647,7 @@ pub const VERBS: &[Verb] = &[
              stays inside the ACGTmer around it. The FASTA needs its .fai and .dict beside it.",
         ),
         writes: "interval list",
-        ignores: &[(Key::Threads, "no BAM is read")],
+        ignores: &[(Key::Threads, "no record is read")],
         ..verb(
             "scatter-intervals-by-ns",
             "ScatterIntervalsByNs",
@@ -665,7 +665,7 @@ pub const VERBS: &[Verb] = &[
         writes: "count",
         reads: &["INTERVALS"],
         ignores: &[
-            (Key::Threads, "no BAM is read"),
+            (Key::Threads, "no record is read"),
             (Key::Sample, "a count has no sample"),
         ],
         ..verb("non-n-fasta-size", "NonNFastaSize", Files::Single)
@@ -912,6 +912,10 @@ impl Verb {
                      or CRAM is read the same at every value."
                         .to_owned()
                 }
+                // The value is checked as Picard parses the enum.
+                Kind::Ignored(why) if opt.picard() == "VALIDATION_STRINGENCY" => {
+                    format!("Checked, then ignored: {why}.")
+                }
                 Kind::Ignored(why) => format!("Accepted and ignored: {why}."),
                 _ if opt.required => format!("{} Required.", opt.help),
                 _ => opt.help.to_owned(),
@@ -925,8 +929,13 @@ impl Verb {
         }
         flags.extend(shared);
         for flag in &mut flags {
-            if let Some((_, why)) = self.ignores.iter().find(|(key, _)| *key == flag.key) {
-                flag.help = format!("Accepted and ignored: {why}.");
+            if let Some((key, why)) = self.ignores.iter().find(|(key, _)| *key == flag.key) {
+                // `threads` checks an ignored count as it checks any other.
+                flag.help = if *key == Key::Threads {
+                    format!("Checked, then ignored: {why}.")
+                } else {
+                    format!("Accepted and ignored: {why}.")
+                };
             }
         }
         flags

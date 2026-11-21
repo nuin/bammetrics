@@ -1279,8 +1279,9 @@ standard input.
 - `--sort` (default true), `--unique`, `--drop-missing-contigs` and
   `--keep-length-zero-intervals` are Picard's options.
 - `--format json`, `jsonl`, `tsv` and `human` print the intervals as rows (`contig`,
-  `start`, `end`, `strand`, `name`), with no `sample`. `--threads` and `--sample` are
-  accepted and ignored: no BAM record is read, and an interval list has no sample.
+  `start`, `end`, `strand`, `name`), with no `sample`. `--threads` is checked (at most
+  256) and ignored: no BAM record is read. `--sample` is accepted and ignored: an interval
+  list has no sample.
 
 `hs-metrics`, `collect` and `qc` read a BED directly, so the verb is for Picard tools and
 other programs that take only interval lists.
@@ -1441,7 +1442,8 @@ fixtures from `tests/concordance/n_run_refs.py`).
   writes the number and a line end. `--intervals FILE` (an interval list) counts only the
   bases inside it; its `@SQ` line `k` stands for the FASTA's contig `k`, whatever the name,
   as Picard's mask matches them. `--format json` and the other forms print one row,
-  `non_n_bases`. `--threads` and `--sample` are accepted and ignored.
+  `non_n_bases`. `--threads` is checked (at most 256) and ignored; `--sample` is accepted
+  and ignored.
 - Both exit 1 without a `.fai`, without a `.dict` or with one of no `@SQ` line, with a
   `.dict` whose contigs or lengths differ from the `.fai`, and on a `.fai` line with 0
   bases per line, as Picard fails. `scatter-intervals-by-ns` also exits 1 on a contig of

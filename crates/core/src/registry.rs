@@ -252,8 +252,9 @@ pub const STRINGENCY_UNREAD: &str =
     "a BAM or CRAM is not validated; SAM text is checked at the level given";
 
 /// `VALIDATION_STRINGENCY` of a tool that reads no SAM, BAM or CRAM record
-/// (bytes, a VCF, a metrics file, a FASTA, a BED): Picard takes it, nothing
-/// reads it, and Python offers no keyword for it.
+/// (bytes, a VCF, a metrics file, a FASTA, a BED): Picard parses the value,
+/// nothing reads it, and Python offers no keyword for it. The parser checks
+/// it, and the verb's help says so.
 pub const STRINGENCY_NO_RECORDS: Opt = Opt::ignored(
     &["VALIDATION_STRINGENCY"],
     "no SAM, BAM or CRAM record is read",

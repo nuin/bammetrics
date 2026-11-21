@@ -127,28 +127,29 @@ pub fn read_dictionary(path: &Path) -> Result<Vec<Sequence>> {
         header.read_format_version().map_err(input)?;
         header.read_file_id().map_err(input)?;
         let mut container = header.container_reader().map_err(input)?;
-        let mut text = String::new();
+        let mut bytes = Vec::new();
         container
             .raw_sam_header_reader()
             .map_err(input)?
-            .read_to_string(&mut text)
+            .read_to_end(&mut bytes)
             .map_err(input)?;
-        text
+        crate::java::decode_utf8(&bytes).into_owned()
     } else if name.ends_with(".bam") {
         let mut reader = bam::io::Reader::new(File::open(path).map_err(input)?);
         let mut header = reader.header_reader();
         header.read_magic_number().map_err(input)?;
         let mut raw = header.raw_sam_header_reader().map_err(input)?;
-        let mut text = String::new();
-        raw.read_to_string(&mut text).map_err(input)?;
-        text
+        let mut bytes = Vec::new();
+        raw.read_to_end(&mut bytes).map_err(input)?;
+        // htsjdk reads a BAM's header text one character per byte.
+        bytes.iter().copied().map(char::from).collect()
     } else if [".fa", ".fasta", ".fna", ".fa.gz", ".fasta.gz"]
         .iter()
         .any(|e| name.ends_with(e))
     {
         return fasta_dictionary(path);
     } else {
-        std::fs::read_to_string(path).map_err(input)?
+        crate::java::decode_utf8(&std::fs::read(path).map_err(input)?).into_owned()
     };
     let sequences = parse_sq_lines(&text).map_err(|message| Error::Intervals {
         path: path.to_path_buf(),
@@ -177,10 +178,11 @@ fn fasta_dictionary(path: &Path) -> Result<Vec<Sequence>> {
         return read_dictionary(&dict);
     }
     let fai = PathBuf::from(format!("{name}.fai"));
-    let text = std::fs::read_to_string(&fai).map_err(|source| Error::Input {
+    let bytes = std::fs::read(&fai).map_err(|source| Error::Input {
         path: fai.clone(),
         source,
     })?;
+    let text = crate::java::decode_utf8(&bytes);
     let mut sequences = Vec::new();
     for line in text.lines().filter(|l| !l.trim().is_empty()) {
         let mut fields = line.split('\t');
@@ -461,10 +463,11 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     Ok(MetricsOutput::text(&COLUMNS, rows, text).into())
 }
 
-/// The BED text, at most [`crate::interval_ops::MAX_LIST_BYTES`]. A name
-/// with one of htsjdk's block-compressed extensions (`.gz`, `.gzip`,
-/// `.bgz`, `.bgzf`) is inflated as gzip members, plain gzip or bgzip:
-/// Picard 3.5.0 reads a plain gzip BED under each of those names.
+/// The BED text, at most [`crate::interval_ops::MAX_LIST_BYTES`], decoded
+/// as the JDK decodes UTF-8 ([`crate::java::decode_utf8`]). A name with one
+/// of htsjdk's block-compressed extensions (`.gz`, `.gzip`, `.bgz`,
+/// `.bgzf`) is inflated as gzip members, plain gzip or bgzip: Picard 3.5.0
+/// reads a plain gzip BED under each of those names.
 fn read_bed_file(path: &Path) -> Result<String> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
@@ -473,27 +476,28 @@ fn read_bed_file(path: &Path) -> Result<String> {
     let cap = crate::interval_ops::MAX_LIST_BYTES;
     let file = std::io::BufReader::new(File::open(path).map_err(input)?);
     let name = path.to_string_lossy();
-    let mut text = String::new();
+    let mut bytes = Vec::new();
     if [".gz", ".gzip", ".bgz", ".bgzf"]
         .iter()
         .any(|extension| name.ends_with(extension))
     {
         crate::gzip::GzipReader::new(file)
             .take(cap + 1)
-            .read_to_string(&mut text)
+            .read_to_end(&mut bytes)
             .map_err(input)?;
     } else {
-        file.take(cap + 1)
-            .read_to_string(&mut text)
-            .map_err(input)?;
+        file.take(cap + 1).read_to_end(&mut bytes).map_err(input)?;
     }
-    if text.len() as u64 > cap {
+    if bytes.len() as u64 > cap {
         return Err(Error::Intervals {
             path: path.to_path_buf(),
             message: format!("the BED holds more than {cap} bytes, the most read"),
         });
     }
-    Ok(text)
+    Ok(match String::from_utf8(bytes) {
+        Ok(text) => text,
+        Err(e) => crate::java::decode_utf8(e.as_bytes()).into_owned(),
+    })
 }
 
 #[cfg(test)]
