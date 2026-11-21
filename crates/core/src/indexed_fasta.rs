@@ -170,9 +170,8 @@ fn refuse_irregular(path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// A whole small file, at most [`MAX_INDEX_BYTES`]; bytes that are not
-/// UTF-8 become U+FFFD.
-fn read_capped(path: &Path) -> Result<String> {
+/// A whole small file as bytes, at most [`MAX_INDEX_BYTES`].
+fn read_capped(path: &Path) -> Result<Vec<u8>> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
@@ -190,14 +189,14 @@ fn read_capped(path: &Path) -> Result<String> {
             format!("over the {MAX_INDEX_BYTES}-byte cap"),
         ));
     }
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
+    Ok(bytes)
 }
 
 /// `loadDictionary`: the leading `@` lines of the `.dict`, decoded at
-/// `SILENT`.
+/// `SILENT`, each line decoded as the JDK decodes UTF-8.
 fn read_dictionary(path: &Path) -> Result<Header> {
-    let text = read_capped(path)?;
-    let lines: Vec<_> = crate::interval_ops::java_lines(text.as_bytes())
+    let bytes = read_capped(path)?;
+    let lines: Vec<_> = crate::interval_ops::java_lines(&bytes)
         .take_while(|l| l.starts_with('@'))
         .collect();
     Header::decode(lines.iter().map(|l| l.as_ref()))
@@ -249,10 +248,11 @@ fn truncate_sequence_name(name: &str) -> &str {
 /// a later entry included, is invalid. A last entry whose match runs to the
 /// end of a file with no final line end fails (`nextLine` finds no line).
 pub fn read_index(path: &Path) -> Result<Vec<Entry>> {
-    let text = read_capped(path)?;
+    let bytes = read_capped(path)?;
+    let text = crate::java::decode_utf8(&bytes);
     let mut entries = Vec::new();
     let mut names = HashSet::new();
-    let mut rest = text.as_str();
+    let mut rest: &str = &text;
     while !rest.chars().all(java_whitespace) {
         let (line, next) = scanner_line(rest);
         let invalid = || reference_error(path, format!("Found invalid line in index file:{line}"));

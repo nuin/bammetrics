@@ -10,6 +10,8 @@ tests/data/ref_100k.fa (with chr1.dict as its .dict), the foundation corpus ref.
 the exome slice ref.fa. Every option set runs on w60; the others run four sets. The
 n_run_refs.py oracle (`scatter`) checks the generated references too.
 
+A .dict with an encoded surrogate (ED A0 80) in an @SQ field gives one U+FFFD in both.
+
 Errors (both tools exit non-zero, bammetrics leaves no OUTPUT): no .dict, no .fai, a
 .dict with another contig count, name or length, a contig of no base, a .fai with 0
 bases per line, a bgzip FASTA without its .gzi, a name outside the FASTA extensions, a
@@ -269,6 +271,20 @@ def test_known_differences(refs, tmp_path):
         assert picard.returncode == 0, f"Picard {label}: {picard.stderr[-500:]}"
         assert ours.returncode != 0 and not out.exists(), label
         RESULTS.append((f"{TOOL} {label}", 0, 0, "Picard reads bytes that are no bases; refused"))
+
+
+def test_dict_bytes_that_are_not_utf8(refs, tmp_path):
+    """A .dict with an encoded surrogate (ED A0 80) in an @SQ field: Picard writes one
+    U+FFFD, as the JDK decodes UTF-8."""
+    def edit(directory):
+        path = directory / "x.dict"
+        lines = path.read_bytes().split(b"\n")
+        at = next(i for i, line in enumerate(lines) if line.startswith(b"@SQ"))
+        lines[at] += b"\tAS:a\xed\xa0\x80b"
+        path.write_bytes(b"\n".join(lines))
+    fasta = broken(refs, tmp_path, "dict_surrogate", edit)
+    text = compare(fasta, [], tmp_path, "dict surrogate")
+    assert text.count("\tAS:a\ufffdb\n") == 1
 
 
 def first_line_then(insert):

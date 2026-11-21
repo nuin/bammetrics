@@ -151,6 +151,19 @@ Wave W12 of docs/07: the interval layer `interval_ops` and five interval tools (
   does; it failed with `failed to fill whole buffer`.
 - A bare `--KEY` boolean on the Picard face (`--UNIQUE` before another option or last)
   is true, as Barclay reads it, for every tool.
+- `BedToIntervalList` reads a BED and an `SD` `.dict` (or SAM text, an interval list or a
+  CRAM header) with bytes that are not UTF-8 as Picard 3.5.0 does: each malformed
+  sequence is one U+FFFD, an encoded surrogate (`ED A0 80`) included, and the run exits 0.
+  It exited 1 with `stream did not contain valid UTF-8`. A BAM header is read one
+  character per byte, as htsjdk reads it.
+- `ScatterIntervalsByNs` decodes each `.dict` line as the JDK decodes UTF-8: an encoded
+  surrogate in an `@SQ` field is one U+FFFD in `OUTPUT`, as Picard writes it, where it was
+  three.
+- The `VcfToIntervalList` header reader keeps a key index beside the fields of a `<...>`
+  line: a line of 200,000 distinct keys parses in linear time, where each key searched the
+  keys before it.
+- The verb help of `VALIDATION_STRINGENCY` on a tool that reads no record, and of an
+  ignored `--threads`, says "Checked, then ignored", as both are checked.
 - `IntervalListTools`: a value with a line feed (`COMMENT`, a path) exits 2 before any
   file, as Picard fails in `StringHeader`; a trailing `/` on `OUTPUT` or `COUNT_OUTPUT`
   names the file before it, as Java's `Path` does; a `COUNT_OUTPUT` inside a list

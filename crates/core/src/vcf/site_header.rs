@@ -23,6 +23,7 @@
 //!
 //! The header is held whole while it is read, at most [`MAX_HEADER_BYTES`].
 
+use std::collections::HashMap;
 use std::io::BufRead;
 
 use crate::error::excerpt;
@@ -348,11 +349,21 @@ fn get<'a>(fields: &'a [(String, String)], key: &str) -> Option<&'a str> {
         .map(|(_, v)| v.as_str())
 }
 
-/// `LinkedHashMap.put`: a key already present keeps its place.
-fn put(fields: &mut Vec<(String, String)>, key: &str, value: String) {
-    match fields.iter_mut().find(|(k, _)| k == key) {
-        Some(entry) => entry.1 = value,
-        None => fields.push((key.to_owned(), value)),
+/// `LinkedHashMap.put`: a key already present keeps its place. `index`
+/// maps each key to its place in `fields`, so a line of many keys costs
+/// one hash lookup per pair.
+fn put(
+    fields: &mut Vec<(String, String)>,
+    index: &mut HashMap<String, usize>,
+    key: &str,
+    value: String,
+) {
+    match index.get(key) {
+        Some(&at) => fields[at].1 = value,
+        None => {
+            index.insert(key.to_owned(), fields.len());
+            fields.push((key.to_owned(), value));
+        }
     }
 }
 
@@ -364,6 +375,7 @@ fn parse_fields(
     recommended: &[&str],
 ) -> Result<Vec<(String, String)>, String> {
     let mut fields: Vec<(String, String)> = Vec::new();
+    let mut index_of = HashMap::new();
     let mut builder = String::new();
     let mut key = String::new();
     let mut in_quote = false;
@@ -395,7 +407,12 @@ fn parse_fields(
                 '<' if index == 0 => {}
                 '<' | '>' => {
                     if index == last {
-                        put(&mut fields, &key, java_trim(&builder).to_owned());
+                        put(
+                            &mut fields,
+                            &mut index_of,
+                            &key,
+                            java_trim(&builder).to_owned(),
+                        );
                     }
                 }
                 '=' => {
@@ -403,7 +420,12 @@ fn parse_fields(
                     builder.clear();
                 }
                 ',' => {
-                    put(&mut fields, &key, java_trim(&builder).to_owned());
+                    put(
+                        &mut fields,
+                        &mut index_of,
+                        &key,
+                        java_trim(&builder).to_owned(),
+                    );
                     builder.clear();
                 }
                 c => builder.push(c),
@@ -477,6 +499,33 @@ mod tests {
 
     fn with(meta: &str) -> Result<SiteHeader, String> {
         header(&format!("##fileformat=VCFv4.2\n{meta}{COLUMN_LINE}"))
+    }
+
+    #[test]
+    fn a_repeated_key_keeps_its_first_place() {
+        let fields = parse_fields("<ID=a,B=1,C=2,B=3>", None, &[]).expect("parses");
+        assert_eq!(
+            fields,
+            [("ID", "a"), ("B", "3"), ("C", "2")].map(|(k, v)| (k.to_owned(), v.to_owned()))
+        );
+    }
+
+    /// One `put` per pair costs a hash lookup: 200,000 distinct keys took
+    /// minutes when each pair searched the pairs before it.
+    #[test]
+    fn many_distinct_keys_parse_in_linear_time() {
+        const KEYS: usize = 200_000;
+        let pairs: Vec<String> = (0..KEYS).map(|i| format!("K{i}={i}")).collect();
+        let line = format!("<{}>", pairs.join(","));
+        let started = std::time::Instant::now();
+        let fields = parse_fields(&line, None, &[]).expect("parses");
+        let elapsed = started.elapsed();
+        assert_eq!(fields.len(), KEYS);
+        assert_eq!(
+            fields[KEYS - 1],
+            (format!("K{}", KEYS - 1), (KEYS - 1).to_string())
+        );
+        assert!(elapsed.as_secs_f64() < 1.0, "{elapsed:?}");
     }
 
     #[test]

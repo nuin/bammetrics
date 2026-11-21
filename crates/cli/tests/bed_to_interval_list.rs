@@ -252,7 +252,7 @@ fn threads_and_sample_are_accepted_and_change_nothing() {
         "The interval list; standard output without one, or with -.",
         "--sample NAME",
         "Accepted and ignored: an interval list has no sample.",
-        "Accepted and ignored: no BAM record is read",
+        "Checked, then ignored: no BAM record is read",
         "--from-bam, --dict FILE",
     ] {
         assert!(help.contains(line), "{line}: {help}");
