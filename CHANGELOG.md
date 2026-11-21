@@ -56,6 +56,17 @@
   is refused with the reason given for the TEXT and VCF tools.
 - A `Files::Bam` verb that writes no BAM names what it writes in its `-o` help and in
   its missing `-o` error.
+- `BedToIntervalList` inflates a plain gzip BED named `.gz`, `.gzip`, `.bgz` or `.bgzf`, as
+  Picard 3.5.0 does; it read `.gz` as bgzip only. The BED is read under a 1 GiB cap.
+  `qc --panel p.bed.gz` runs its prepare step on such a BED.
+- `qc --panel` exits 2 on gzip data under a name it does not inflate (`.bgz`) and on a
+  panel named `.interval_list` whose first line is no `@` header line; a gzip VCF gets the
+  VCF message.
+- The `.fai` of `ScatterIntervalsByNs` and `NonNFastaSize` is read as htsjdk's `Scanner`
+  reads it (`(.+)\t+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)` found in each line), and a FASTA or
+  `.dict` that is no regular file exits 1 before it is opened. With `-o -` a failed
+  `ScatterIntervalsByNs` prints nothing. `NonNFastaSize INTERVALS` drops the names before
+  the merge.
 
 - `BedToIntervalList UNIQUE=true` merges an interval with no base as htsjdk does: a
   zero-length interval at 10 now joins one starting at 11 (Picard 3.5.0 writes one

@@ -43,7 +43,10 @@ behaves how.
   any other text as false: `USE_OQ=yes` writes the `USE_OQ=false` file there.
 - Options that cannot change a metric are accepted, dropped and noted on stderr:
   `VALIDATION_STRINGENCY`, `TMP_DIR`, `QUIET`, `VERBOSITY`, `H` and `CHART` (no PDF
-  is drawn), `R` for tools that do not read a reference.
+  is drawn), `R` for tools that do not read a reference. Their values are not checked:
+  `VALIDATION_STRINGENCY=BOGUS`, `VERBOSITY=BOGUS`, `COMPRESSION_LEVEL=99` or `=abc` and
+  `MAX_RECORDS_IN_RAM=abc` on a tool that drops the option are noted and dropped, where
+  Picard exits 1 and writes nothing.
 - `ASSUME_SORTED=false` (`AS`) on a BAM whose header sort order is not `coordinate` (or
   has no `@HD` sort order) exits 1 and writes no file in every registry tool, as Picard
   does.
@@ -1671,10 +1674,13 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
 - A gzip FASTA that is not bgzip, and a bgzip FASTA whose name does not end in `.gz`,
   exit 1. htsjdk opens the first through its `.fai` and reads the compressed bytes as
   bases; the second it reads as plain text.
-- A `.fai` line with other than five tab-separated fields exits 1. htsjdk's pattern
-  takes a longer line and reads its fields in other places.
+- A FASTA or `.dict` that is not a regular file (a named pipe, a socket, a device) exits 1
+  before it is opened. The `.fai` reader seeks, and opening a named pipe with no writer
+  would block.
 - A run that fails writes no `OUTPUT`, and an `OUTPUT` that is the FASTA, its `.fai`,
-  `.gzi` or `.dict`, or the `INTERVALS` file exits 1 before anything is read.
+  `.gzi` or `.dict`, or the `INTERVALS` file exits 1 before anything is read. With
+  `O=/dev/stdout` or `-o -` the list is made in the system temporary directory and copied
+  to standard output once the walk has finished, so a failed run prints nothing.
 - The Picard face of `NonNFastaSize` without `OUTPUT` prints the count on standard
   output, as every bammetrics tool does; Picard requires `OUTPUT`.
 - `ScatterIntervalsByNs` writes an `OUTPUT` named `.gz` as BGZF, as the interval layer

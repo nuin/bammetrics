@@ -1290,8 +1290,11 @@ BAM` writes. A panel whose first non-blank line starts with `@` is an interval l
 already, and prepare writes nothing for it: the lists `IntervalListTools`,
 `ScatterIntervalsByNs` and `VcfToIntervalList` write go to `qc` and `hs-metrics --panel` as
 they are. A panel named `.gz`, `.gzip` or `.bfq` is inflated first, as htsjdk inflates it,
-then told by its first line in the same way. A VCF (`##fileformat=VCF` on its first line)
-exits 2 (`a VCF is no panel`): `VcfToIntervalList` converts it. A `--panel` BED that is itself named
+then told by its first line in the same way; a gzip BED goes to `BedToIntervalList`, which
+inflates it as Picard does. A VCF (`##fileformat=VCF` on its first line, gzip or not)
+exits 2 (`a VCF is no panel`): `VcfToIntervalList` converts it. Gzip data under another
+name (`.bgz`) exits 2, as does a panel named `.interval_list` whose first line is no `@`
+header line: the hs reader takes either name at its word. A `--panel` BED that is itself named
 `PREFIX.panel.interval_list` exits 2 (`is an input; writing it would destroy it (from
 --panel)`), as does any planned file that is an input. The hs collector reads the `--panel`
 file itself, so its file, header line and `BAIT_SET` are the same with or without the
@@ -1374,8 +1377,12 @@ fixtures from `tests/concordance/n_run_refs.py`).
   bases per line, as Picard fails. `scatter-intervals-by-ns` also exits 1 on a contig of
   no base, which Picard cannot index. A FASTA that ends before the bases its `.fai` gives,
   and a gzip FASTA that is not bgzip, exit 1 where Picard reads bytes that are no bases
-  (`KNOWN_DIFFERENCES.md`). No output may be the FASTA, its `.fai`, `.gzi` or `.dict`, or
-  the `--intervals` file; a failed run writes no file.
+  (`KNOWN_DIFFERENCES.md`). A `.fai` line is read as htsjdk's `Scanner` reads it (the
+  pattern `(.+)\t+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)` found in the line, a blank line before a
+  later entry and a last entry with no line end refused). A FASTA or `.dict` that is no
+  regular file exits 1 before it is opened. No output may be the FASTA, its `.fai`, `.gzi`
+  or `.dict`, or the `--intervals` file; a failed run writes no file, and with `-o -` prints
+  nothing: the list is copied to standard output once it is whole.
 - Neither reads a BAM, so neither is a step of `chain` (exit 2).
 
 ### mark-duplicates
