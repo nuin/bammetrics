@@ -17,6 +17,7 @@ bammetrics-formats = { path = "crates/formats", version = "0.30.0" }
 bammetrics-pdf = { path = "crates/pdf", version = "0.30.0" }
 clap = { version = "4", features = ["derive", "string"] }
 libc = "0.2"
+hashbrown = { version = "0.17", default-features = false }
 noodles = { version = "0.119", features = ["bam", "sam", "bgzf", "core", "cram", "csi", "fasta", "vcf", "tabix"] }
 pyo3 = { version = "0.30", features = ["extension-module"] }
 regex = "1"

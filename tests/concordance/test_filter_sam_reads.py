@@ -15,7 +15,7 @@ ends, absent and repeated names, gzip, names beyond ASCII on `latin1.sam`), inte
 written by IntervalListTools (padded, merged) and the corpus and exome target lists, SAM
 text and CRAM input. Options: every FILTER but includeJavascript, TAG with values of
 every type, several TAG_VALUEs, each SORT_ORDER, WRITE_READS_FILES (the `.reads` files
-compared byte for byte), MAX_RECORDS_IN_RAM, COMPRESSION_LEVEL, CREATE_INDEX,
+compared byte for byte, also with names and tags beyond ASCII from a BAM and SAM text), MAX_RECORDS_IN_RAM, COMPRESSION_LEVEL, CREATE_INDEX,
 CREATE_MD5_FILE, SAM text output. Error parity: each FILTER without the option it needs,
 an option for another FILTER, a TAG of three characters, the pair filters on a coordinate
 input, includePairedIntervals on a queryname input, a mate without MC, an empty read list,
@@ -191,24 +191,50 @@ def test_sam_text_and_cram(corpus, bams, tmp_path):
                 f"R={reference}"], "CRAM input", reference=reference)
 
 
-def test_reads_files(corpus, bams, tmp_path):
-    """WRITE_READS_FILES: `<basename>.reads` of INPUT and of OUTPUT beside OUTPUT."""
+def reads_files_equal(source, args, directory, label):
+    """Both tools with WRITE_READS_FILES=true; the `.reads` files equal byte for byte."""
     texts = {}
     for side in ("picard", "bammetrics"):
-        directory = tmp_path / side
-        directory.mkdir()
-        done = run_tool(side, TOOL, [f"I={corpus / 'corpus.bam'}", f"O={directory / 'kept.bam'}",
-                                     *SILENT, "FILTER=includeReadList",
-                                     f"READ_LIST_FILE={bams / 'names_plain.txt'}",
-                                     "WRITE_READS_FILES=true", "SORT_ORDER=queryname"])
+        out = directory / side
+        out.mkdir()
+        done = run_tool(side, TOOL, [f"I={source}", f"O={out / 'kept.bam'}", *SILENT, *args,
+                                     "WRITE_READS_FILES=true"])
         assert done.returncode == 0, f"{side}: {done.stderr[-800:]}"
-        texts[side] = {p.name: p.read_bytes() for p in directory.iterdir()
-                       if p.suffix == ".reads"}
-    assert sorted(texts["picard"]) == sorted(texts["bammetrics"]) == ["corpus.reads",
-                                                                      "kept.reads"]
+        texts[side] = {p.name: p.read_bytes() for p in out.iterdir() if p.suffix == ".reads"}
+    assert sorted(texts["picard"]) == sorted(texts["bammetrics"]) == \
+        sorted([f"{source.stem}.reads", "kept.reads"])
     for name in texts["picard"]:
         assert texts["picard"][name] == texts["bammetrics"][name], name
-    RESULTS.append((f"{TOOL} WRITE_READS_FILES", 2, 2, ".reads files equal byte for byte"))
+    RESULTS.append((f"{TOOL} WRITE_READS_FILES {label}", 2, 2,
+                    ".reads files equal byte for byte"))
+    return texts["picard"]
+
+
+def test_reads_files(corpus, bams, tmp_path):
+    """WRITE_READS_FILES: `<basename>.reads` of INPUT and of OUTPUT beside OUTPUT."""
+    reads_files_equal(corpus / "corpus.bam",
+                      ["FILTER=includeReadList", f"READ_LIST_FILE={bams / 'names_plain.txt'}",
+                       "SORT_ORDER=queryname"], tmp_path, "corpus")
+
+
+def test_reads_files_beyond_ascii(tmp_path):
+    """htsjdk holds each byte of a BAM name or tag as one character and writes the
+    `.reads` files in UTF-8: the BAM bytes C3 A9 of é become C3 83 C2 A9; SAM text's é is
+    one character, written C3 A9."""
+    sam = tmp_path / "beyond.sam"
+    sam.write_bytes(("@HD\tVN:1.6\tSO:unsorted\n@SQ\tSN:c1\tLN:1000\n"
+                     "caf\u00e9\t4\t*\t0\t0\t*\t*\t0\t0\tACGT\tIIII\tXT:Z:\u00e9\n"
+                     "plain\t4\t*\t0\t0\t*\t*\t0\t0\tACGT\tIIII\tXT:Z:m\u00fcller\n")
+                    .encode())
+    bam = tmp_path / "beyond.bam"
+    subprocess.run(["samtools", "view", "--no-PG", "-b", "-o", str(bam), str(sam)],
+                   check=True)
+    args = ["FILTER=excludeTagValues", "TAG=XT", "TAG_VALUE=none"]
+    for source, widened in ((sam, b"caf\xc3\xa9\t"), (bam, b"caf\xc3\x83\xc2\xa9\t")):
+        directory = tmp_path / source.suffix[1:]
+        directory.mkdir()
+        texts = reads_files_equal(source, args, directory, f"beyond ASCII {source.suffix}")
+        assert texts["kept.reads"].startswith(widened), texts
 
 
 def test_index_and_md5(bams, tmp_path):

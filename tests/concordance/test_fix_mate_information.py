@@ -17,7 +17,8 @@ unsorted, SAM text, CRAM 3.0 and 3.1), the fixture BAMs, t1 to t3, the foundatio
 and the exome slice as they are (two primary first reads under one name: Picard
 decides). Options: each SORT_ORDER, ASSUME_SORTED, ADD_MATE_CIGAR, IGNORE_MISSING_MATES,
 MAX_RECORDS_IN_RAM (runs of 20 and of 1), TMP_DIR, COMPRESSION_LEVEL, CREATE_INDEX,
-CREATE_MD5_FILE, SAM text output, two and three INPUTs. Without OUTPUT: the input is
+CREATE_MD5_FILE, SAM text output, two and three INPUTs, a BAM without MD and NM merged
+with a CRAM (only the CRAM's records get them). Without OUTPUT: the input is
 rewritten in place and equals Picard's in-place file; bammetrics keeps the mode, a link,
 and writes `x.bai` and `x.bam.md5` where Picard leaves them under its temporary name
 (docs/07 decision rows). Error parity: two primary first reads, a missing mate under
@@ -165,6 +166,20 @@ def test_every_input(corpus, exome, name):
     written = compare(TOOL, source, SILENT, name, "same")
     if written.outcome == "equal":
         note(source, written, "input")
+
+
+def test_a_bam_and_a_cram_merged():
+    """htsjdk rebuilds MD and NM as it decodes a CRAM: the 10 records of the CRAM get them,
+    the 23 of a BAM without them stay without them. The two share no read group ID: htsjdk
+    fails with a NullPointerException on a CRAM input whose read group ID collides."""
+    bam, cram = FIXTURES / "mate_filter.bam", FIXTURES / "insert_size.cram"
+    for inputs in ([bam, cram], [cram, bam]):
+        for order in ("", "queryname"):
+            args = [*SILENT, f"R={REF}", *([f"SORT_ORDER={order}"] if order else [])]
+            written = merged(inputs, args, f"{inputs[0].name} and {inputs[1].name} "
+                             f"{order or 'input order'}")
+            assert sum("\tNM:i:" in line for line in written.records) == 10, written.records
+            assert len(written.records) == 33
 
 
 def test_sam_text_and_a_cram_fixture():

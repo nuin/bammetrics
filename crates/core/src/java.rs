@@ -826,6 +826,25 @@ mod lang_tests {
     }
 }
 
+/// The UTF-8 bytes of a Java string htsjdk made one character per byte
+/// (`StringUtil.bytesToString`): a byte from `0x80` up is the character of
+/// that value, which UTF-8 writes as two bytes.
+pub fn latin1_utf8(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
+    if bytes.is_ascii() {
+        return std::borrow::Cow::Borrowed(bytes);
+    }
+    let mut out = Vec::with_capacity(bytes.len() * 2);
+    for &byte in bytes {
+        if byte.is_ascii() {
+            out.push(byte);
+        } else {
+            out.push(0xC0 | (byte >> 6));
+            out.push(0x80 | (byte & 0x3F));
+        }
+    }
+    std::borrow::Cow::Owned(out)
+}
+
 /// `new String(bytes, UTF_8)`: each malformed sequence becomes U+FFFD as
 /// the JDK's decoder replaces it. That is Rust's `from_utf8_lossy` but for
 /// an encoded surrogate: `ED` followed by `A0` to `BF` is one malformed

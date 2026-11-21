@@ -237,19 +237,15 @@ impl HeaderMerger {
             overall.extend(result);
             current = translate(current, &ids, false);
             left = translate(left, &ids, true);
-            let mut next = Vec::new();
-            let mut i = 0;
-            while i < left.len() {
-                let pp = previous(&left[i]).expect("only PP records are left");
-                if current
-                    .iter()
-                    .any(|done| done.input == left[i].input && done.id == pp)
-                {
-                    next.push(left.remove(i));
-                } else {
-                    i += 1;
-                }
-            }
+            let done: HashSet<(usize, &[u8])> = current
+                .iter()
+                .map(|done| (done.input, done.id.as_slice()))
+                .collect();
+            let (next, rest): (Vec<_>, Vec<_>) = left.into_iter().partition(|e| {
+                let pp = previous(e).expect("only PP records are left");
+                done.contains(&(e.input, pp.as_slice()))
+            });
+            left = rest;
             current = next;
         }
         self.program_ids = ids;
@@ -272,14 +268,13 @@ impl HeaderMerger {
         ids: &mut [HashMap<Id, Id>],
     ) -> (Vec<(Id, M)>, bool) {
         let mut by_id: Vec<(Id, Distinct<M>)> = Vec::new();
+        let mut index: HashMap<&[u8], usize> = HashMap::new();
         for entry in entries {
-            let records = match by_id.iter_mut().find(|(id, _)| *id == entry.id) {
-                Some((_, records)) => records,
-                None => {
-                    by_id.push((entry.id.clone(), Vec::new()));
-                    &mut by_id.last_mut().expect("pushed").1
-                }
-            };
+            let at = *index.entry(&entry.id).or_insert_with(|| {
+                by_id.push((entry.id.clone(), Vec::new()));
+                by_id.len() - 1
+            });
+            let records = &mut by_id[at].1;
             match records.iter_mut().find(|(m, _)| *m == entry.map) {
                 Some((_, inputs)) => inputs.push(entry.input),
                 None => records.push((entry.map.clone(), vec![entry.input])),
@@ -374,9 +369,9 @@ enum Order {
     Coordinate,
     Queryname,
     /// Each input after the one before it. htsjdk compares the
-    /// `System.identityHashCode` of the two records, an order no run
-    /// repeats; the inputs in the order given is the one order a test can
-    /// hold.
+    /// `System.identityHashCode` of the two records, an order that follows
+    /// no field of the record; the inputs in the order given is the one
+    /// order a test can hold.
     Unsorted,
 }
 
@@ -494,8 +489,13 @@ impl<'a> Merger<'a> {
     /// The next record into `record`, its IDs renamed; false after the
     /// last.
     pub fn next(&mut self, record: &mut RawRecord) -> Result<bool> {
+        Ok(self.next_from(record)?.is_some())
+    }
+
+    /// [`Merger::next`], with the index of the input the record came from.
+    pub fn next_from(&mut self, record: &mut RawRecord) -> Result<Option<usize>> {
         let Some(i) = self.poll() else {
-            return Ok(false);
+            return Ok(None);
         };
         *record = self.heads[i].take().expect("queued inputs have a record");
         self.advance(i)?;
@@ -505,7 +505,7 @@ impl<'a> Merger<'a> {
         if self.merged.program_collisions {
             translate_tag(record, *b"PG", &self.merged.program_ids[i])?;
         }
-        Ok(true)
+        Ok(Some(i))
     }
 }
 

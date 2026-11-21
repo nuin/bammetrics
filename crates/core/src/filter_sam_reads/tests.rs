@@ -93,7 +93,7 @@ fn the_pair_filters_want_mates_in_queryname_order() {
 fn only_a_string_tag_matches_a_value() {
     let rule = || Rule::Tag {
         tag: java_tag("XT"),
-        values: vec![b"1".to_vec()],
+        values: HashSet::from([b"1".to_vec()]),
         include: true,
         tags: HtsjdkTags::default(),
     };
@@ -107,7 +107,7 @@ fn only_a_string_tag_matches_a_value() {
     let error = run_filter(
         Rule::Tag {
             tag: java_tag("XTX"),
-            values: Vec::new(),
+            values: HashSet::new(),
             include: false,
             tags: HtsjdkTags::default(),
         },
@@ -135,7 +135,7 @@ fn read_names_take_the_first_word_of_each_line() {
     let dir = scratch("names");
     let list = dir.join("names.txt");
     std::fs::write(&list, b"r1\r\nr2\rr3\n\n  \nr4 x\n").expect("write");
-    let mut got: Vec<Vec<u8>> = read_names(&list).expect("names").into_iter().collect();
+    let mut got = read_names(&list).expect("names").names();
     got.sort();
     assert_eq!(
         got,
@@ -150,12 +150,43 @@ fn read_names_take_the_first_word_of_each_line() {
     let mut writer = noodles::bgzf::io::Writer::new(std::fs::File::create(&gz).expect("create"));
     writer.write_all(b"g1\ng2\n").expect("gz");
     writer.finish().expect("finish");
-    let mut got: Vec<Vec<u8>> = read_names(&gz).expect("gz names").into_iter().collect();
+    let mut got = read_names(&gz).expect("gz names").names();
     got.sort();
     assert_eq!(got, [b"g1".to_vec(), b"g2".to_vec()]);
     let empty = dir.join("empty.txt");
     std::fs::write(&empty, b"").expect("write");
     assert!(read_names(&empty).is_err());
+    std::fs::remove_dir_all(&dir).expect("clean");
+}
+
+#[test]
+fn the_name_set_holds_each_name_once_up_to_its_limit() {
+    let mut set = NameSet::new(3);
+    for name in [&b"r1"[..], b"r2", b"r1", b"", b"r2"] {
+        set.insert(name).expect("under the limit");
+    }
+    assert!(set.contains(b"r1") && set.contains(b"r2") && set.contains(b""));
+    assert!(!set.contains(b"r") && !set.contains(b"r12"));
+    let error = set.insert(b"r3").expect_err("a fourth name");
+    assert!(error.contains("more than 3 distinct reads"), "{error}");
+    set.insert(b"r1").expect("a name held again");
+    let mut names = set.names();
+    names.sort();
+    assert_eq!(names, [b"".to_vec(), b"r1".to_vec(), b"r2".to_vec()]);
+}
+
+#[test]
+fn a_reads_line_writes_each_byte_from_0x80_up_as_its_character_in_utf8() {
+    let dir = scratch("reads-utf8");
+    let path = dir.join("in.reads");
+    let mut reads = ReadsText::create(&path, &sam::Header::default()).expect("create");
+    reads
+        .write(&build("\u{e9}1", 0x4, -1, -1, &[], &[], b"XTZ\xC3\xA9\0"))
+        .expect("write");
+    reads.commit().expect("commit");
+    let text = std::fs::read(&path).expect("read");
+    assert!(text.starts_with(b"\xC3\x83\xC2\xA91\t4\t"), "{text:?}");
+    assert!(text.ends_with(b"XT:Z:\xC3\x83\xC2\xA9\n"), "{text:?}");
     std::fs::remove_dir_all(&dir).expect("clean");
 }
 

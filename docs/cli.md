@@ -1509,7 +1509,8 @@ Picard's `FilterSamReads` (`tests/concordance/test_filter_sam_reads.py`):
   blank names the text before its first whitespace character, so a line that starts with a
   space names nothing; `#` is no comment. Lines end at `\n`, `\r` or `\r\n`; the file is
   UTF-8, inflated first when its name ends in `.gz`, `.gzip` or `.bfq`; an empty file exits
-  1; at most 1 GiB and lines of 16 MiB are read. The names go into a hash set.
+  1; at most 1 GiB, lines of 16 MiB and 50,000,000 distinct names are read. The names go
+  into one arena with a hash table of their offsets, at most about 1.5 GiB of memory.
 - `includeTagValues` and `excludeTagValues` compare `--tag` with each `--tag-value`. Picard
   compares the tag's Java object with strings, so only a `Z` value can match: an integer,
   float, character or array tag matches no value, and `excludeTagValues` keeps it. Without a
@@ -1529,8 +1530,9 @@ Picard's `FilterSamReads` (`tests/concordance/test_filter_sam_reads.py`):
   JavaScript (docs/07 Q6). An option for another filter is a usage error, as Picard's
   checks give it: `--tag` with `includeAligned`, `--read-list-file` with `includeTagValues`.
 - `--write-reads-files` writes the SAM line of each record read to `<INPUT basename>.reads`
-  and of each record written to `<OUTPUT basename>.reads`, both beside `-o`. A `.reads` name
-  that is an input or `-o` is a usage error.
+  and of each record written to `<OUTPUT basename>.reads`, both beside `-o`, in UTF-8 as
+  Picard writes them: a byte of a BAM name or tag from `0x80` up is the character of that
+  value, written as two bytes. A `.reads` name that is an input or `-o` is a usage error.
 - The output header is the input's with `SO` set to `--sort-order`; the writer is presorted
   for the input's order and sorts any other (`--max-records-in-ram`, `--tmp-dir`).
 - In a chain the step leaves `filtered` and streams, or holds and sorts its records when

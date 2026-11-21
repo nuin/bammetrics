@@ -11,8 +11,11 @@
 //!   name matches a record name whose bytes are its characters (a name with
 //!   a character above U+00FF matches none). A name ending in `.gz`,
 //!   `.gzip` or `.bfq` is inflated first; an empty file fails; at most
-//!   [`MAX_READ_LIST_BYTES`] bytes and lines of at most
-//!   [`MAX_READ_LIST_LINE_BYTES`] are read. The names go into a hash set.
+//!   [`MAX_READ_LIST_BYTES`] bytes, lines of at most
+//!   [`MAX_READ_LIST_LINE_BYTES`] and [`MAX_READ_LIST_NAMES`] distinct
+//!   names are read. The names go into one arena with a hash table of their
+//!   offsets ([`NameSet`]): the name bytes plus one byte each, and 5 to 10
+//!   bytes per name for the table, so at most about 1.5 GiB.
 //! * `includeTagValues`, `excludeTagValues`: the records whose `TAG` holds
 //!   (does not hold) one of `TAG_VALUE` (`TagFilter`). htsjdk compares the
 //!   tag's Java object with the strings of `TAG_VALUE`, so only a string
@@ -47,6 +50,7 @@
 
 use std::collections::{HashSet, VecDeque};
 use std::fs::File;
+use std::hash::{BuildHasher, RandomState};
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
@@ -74,6 +78,8 @@ use crate::stage::{Frame, Stage};
 pub const MAX_READ_LIST_BYTES: u64 = 1 << 30;
 /// The longest line of `READ_LIST_FILE`.
 pub const MAX_READ_LIST_LINE_BYTES: usize = 16 << 20;
+/// The most distinct names of `READ_LIST_FILE`.
+pub const MAX_READ_LIST_NAMES: usize = 50_000_000;
 
 pub const TOOL: Tool = Tool {
     name: "FilterSamReads",
@@ -358,8 +364,80 @@ fn java_tag(text: &str) -> JavaTag {
     }
 }
 
+/// `ReadNameFilter`'s set of names: every name's bytes in one arena, each
+/// ended by `\n` (no name holds one, `\s` ends it), and a hash table of
+/// their offsets, so a name costs its bytes plus one, and one table slot.
+struct NameSet {
+    arena: Vec<u8>,
+    table: hashbrown::HashTable<u32>,
+    hasher: RandomState,
+    /// The most distinct names held: [`MAX_READ_LIST_NAMES`].
+    limit: usize,
+}
+
+/// The name at offset `at` of `arena`.
+fn name_at(arena: &[u8], at: u32) -> &[u8] {
+    let rest = &arena[at as usize..];
+    let end = rest.iter().position(|&b| b == b'\n').unwrap_or(rest.len());
+    &rest[..end]
+}
+
+impl NameSet {
+    fn new(limit: usize) -> Self {
+        Self {
+            arena: Vec::new(),
+            table: hashbrown::HashTable::new(),
+            hasher: RandomState::new(),
+            limit,
+        }
+    }
+
+    /// The names in no order.
+    #[cfg(test)]
+    fn names(&self) -> Vec<Vec<u8>> {
+        self.table
+            .iter()
+            .map(|&at| name_at(&self.arena, at).to_vec())
+            .collect()
+    }
+
+    fn contains(&self, name: &[u8]) -> bool {
+        let hash = self.hasher.hash_one(name);
+        self.table
+            .find(hash, |&at| name_at(&self.arena, at) == name)
+            .is_some()
+    }
+
+    /// Add `name`; an error past `limit` names or an arena of 4 GiB.
+    fn insert(&mut self, name: &[u8]) -> std::result::Result<(), String> {
+        let hash = self.hasher.hash_one(name);
+        if self
+            .table
+            .find(hash, |&at| name_at(&self.arena, at) == name)
+            .is_some()
+        {
+            return Ok(());
+        }
+        if self.table.len() == self.limit {
+            return Err(format!(
+                "the read list names more than {} distinct reads, the most held",
+                self.limit
+            ));
+        }
+        let at = u32::try_from(self.arena.len()).map_err(|_| {
+            "the read list names more than 4 GiB of reads, the most held".to_owned()
+        })?;
+        self.arena.extend_from_slice(name);
+        self.arena.push(b'\n');
+        let (arena, hasher) = (&self.arena, &self.hasher);
+        self.table
+            .insert_unique(hash, at, |&at| hasher.hash_one(name_at(arena, at)));
+        Ok(())
+    }
+}
+
 /// `ReadNameFilter`'s set of `READ_LIST_FILE`, as [`latin1`] bytes.
-fn read_names(path: &Path) -> Result<HashSet<Vec<u8>>> {
+fn read_names(path: &Path) -> Result<NameSet> {
     let in_error = |source| Error::Input {
         path: path.to_path_buf(),
         source,
@@ -381,7 +459,7 @@ fn read_names(path: &Path) -> Result<HashSet<Vec<u8>>> {
         Box::new(file)
     };
     let mut reader = BufReader::new(inner.take(MAX_READ_LIST_BYTES + 1));
-    let mut names = HashSet::new();
+    let mut names = NameSet::new(MAX_READ_LIST_NAMES);
     let mut line = Vec::new();
     let mut total: u64 = 0;
     loop {
@@ -411,7 +489,9 @@ fn read_names(path: &Path) -> Result<HashSet<Vec<u8>>> {
         // are blank, which `ReadNameFilter` skips.
         for piece in text.split(|&b| b == b'\r') {
             if let Some(name) = first_name(piece) {
-                names.insert(name);
+                names
+                    .insert(&name)
+                    .map_err(|why| in_error(io::Error::new(io::ErrorKind::InvalidData, why)))?;
             }
         }
     }
@@ -481,12 +561,12 @@ enum Rule {
     /// `AlignedFilter(include)`.
     Aligned(bool),
     Names {
-        names: HashSet<Vec<u8>>,
+        names: NameSet,
         include: bool,
     },
     Tag {
         tag: JavaTag,
-        values: Vec<Vec<u8>>,
+        values: HashSet<Vec<u8>>,
         include: bool,
         tags: HtsjdkTags,
     },
@@ -785,7 +865,9 @@ fn reads_path(output: &Path, file: &Path) -> PathBuf {
 }
 
 /// A `.reads` file being written: `SAMRecord.toString`, the SAM line, of
-/// each record.
+/// each record, through Picard's UTF-8 writer. htsjdk holds each byte of a
+/// BAM field as one character, so a byte from `0x80` up is written as the
+/// two UTF-8 bytes of that character ([`crate::java::latin1_utf8`]).
 struct ReadsText {
     file: AtomicFile,
     out: BufWriter<File>,
@@ -823,7 +905,7 @@ impl ReadsText {
         self.line.clear();
         write_record(&mut self.line, record, &self.references).map_err(Error::Record)?;
         self.out
-            .write_all(&self.line)
+            .write_all(&crate::java::latin1_utf8(&self.line))
             .map_err(|source| self.error(source))
     }
 

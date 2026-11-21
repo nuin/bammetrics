@@ -12,17 +12,21 @@
   each name (`mate_group_with` of the reverting tool, with `ADD_MATE_CIGAR` and
   `IGNORE_MISSING_MATES`); the writer presorted for `queryname`, sorting for every other
   `SORT_ORDER`; `CREATE_INDEX` refused off `coordinate`. Without `OUTPUT` the input BAM is
-  rewritten in place through an `AtomicFile` (mode and links kept, `x.bai`, `x.bam.md5`).
-  A chain barrier leaving `fixed`.
+  rewritten in place through an `AtomicFile` (mode and links kept, `x.bai`, `x.bam.md5`;
+  a directory the user cannot write is named before the first read). `MD` and `NM` are
+  rebuilt on the records of a CRAM input only. A chain barrier leaving `fixed`.
 - `FilterSamReads` (`crates/core/src/filter_sam_reads.rs`, verb `filter-sam-reads`,
   Python `filter_sam_reads()`): `includeAligned` and `excludeAligned` (the pairs of a
   queryname input judged together, htsjdk's mate and order assertions),
   `includeReadList` and `excludeReadList` (`READ_LIST_FILE` as `ReadNameFilter` reads it,
-  a hash set, 1 GiB cap), `includeTagValues` and `excludeTagValues` (only `Z` values
+  one arena of names with a hash table of offsets, 1 GiB and 50,000,000 distinct names),
+  `includeTagValues` and `excludeTagValues` (only `Z` values
   match), `includePairedIntervals` (`INTERVAL_LIST` through the W12 overlap tree, both
   ends of a pair together, `MC` for the mate's end); `includeJavascript` and
   `JAVASCRIPT_FILE` refused (Q6); Picard's option checks per filter; `SORT_ORDER`;
-  `WRITE_READS_FILES`. A chain transform leaving `filtered`, a barrier when it sorts.
+  `WRITE_READS_FILES` (each byte from `0x80` up written as the UTF-8 of that character,
+  as Picard writes htsjdk's string). A chain transform leaving `filtered`, a barrier when
+  it sorts.
 - `tests/concordance/test_fix_mate_information.py` and `test_filter_sam_reads.py` against
   Picard 3.5.0 through `compare_bam` with record bytes, on the inputs of
   `tests/concordance/mate_filter_bams.py` (the foundation corpus with mate fields
@@ -35,6 +39,11 @@
 
 - `header_merge::Merger` merges `SO:unsorted` inputs one after the other. MarkDuplicates
   on several unsorted inputs now exits 1 with Picard's sort-order message.
+- `header_merge::HeaderMerger` finds the records of one read group or program ID through a
+  hash map: two inputs of 100,000 colliding `@RG` lines merge in 0.3 s, where they took
+  about 20 s.
+- `java::latin1_utf8` holds the one copy of the Latin-1 to UTF-8 widening that
+  `CollectQualityYieldMetricsSNVQ` and the `.reads` files of `FilterSamReads` share.
 
 ## 0.30.0
 

@@ -323,3 +323,39 @@ fn a_step_refuses_the_options_of_the_tool_alone() {
         assert_eq!(output.status.code(), Some(2), "{step} {option}");
     }
 }
+
+/// In place in a directory the user cannot write: the error names the
+/// directory before the first read, and the input stays whole.
+#[test]
+fn in_place_in_a_read_only_directory_names_the_directory() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = fresh_dir("read-only");
+    let locked = dir.join("ro");
+    fs::create_dir(&locked).expect("dir");
+    let input = locked.join("in.bam");
+    fs::copy(root().join(MATES), &input).expect("copy");
+    let before = fs::read(&input).expect("read");
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o555)).expect("chmod");
+    if fs::write(locked.join("probe"), b"").is_ok() {
+        // A user who writes any directory (root) cannot see the refusal.
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).expect("chmod");
+        fs::remove_dir_all(&dir).expect("clean");
+        return;
+    }
+    let output = bammetrics(&[
+        "FixMateInformation".to_owned(),
+        format!("I={}", input.display()),
+    ]);
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).expect("chmod");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    let named = locked.canonicalize().expect("resolved");
+    assert!(
+        stderr.contains(&format!("{}: ", named.display())) && stderr.contains("temporary file"),
+        "{stderr}"
+    );
+    assert_eq!(fs::read(&input).expect("read"), before);
+    let left: Vec<_> = fs::read_dir(&locked).expect("list").collect();
+    assert_eq!(left.len(), 1, "{left:?}");
+    fs::remove_dir_all(&dir).expect("clean");
+}

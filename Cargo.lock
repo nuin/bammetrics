@@ -116,6 +116,7 @@ dependencies = [
 name = "bammetrics-core"
 version = "0.30.0"
 dependencies = [
+ "hashbrown",
  "libc",
  "noodles",
  "regex",

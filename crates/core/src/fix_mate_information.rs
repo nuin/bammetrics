@@ -5,7 +5,8 @@
 //! ([`crate::header_merge`]: one dictionary, read group and program IDs
 //! renamed on a collision), in queryname order when every input says
 //! `SO:queryname`, else one input after the other (htsjdk compares the
-//! records' identity hash codes there, an order no run repeats). Unless
+//! records' identity hash codes there, an order that follows no field of
+//! the record, even when every input says `SO:coordinate`). Unless
 //! every input says `SO:queryname` or `ASSUME_SORTED` is true, the records
 //! are sorted by name (`SAMRecordQueryNameComparator`, `MAX_RECORDS_IN_RAM`
 //! records per run spilled to `TMP_DIR`). The records of each read name, as
@@ -17,6 +18,8 @@
 //! mate is placed at the mate's start. A secondary record and an unpaired
 //! one are handed on as they came. `IGNORE_MISSING_MATES` (default true)
 //! hands on a primary record whose mate is missing; false fails the run.
+//! The records of a CRAM input, and only those, get `MD` and `NM` rebuilt
+//! as htsjdk's decoder rebuilds them.
 //!
 //! The output header is the first input's (or the merged one) with `SO`
 //! set to `SORT_ORDER`, default the first input's order. Picard's writer is
@@ -34,7 +37,8 @@
 //! renames the input to `<input>.old` first and leaves the index and the
 //! MD5 under the temporary name. Picard writes BAM bytes whatever the
 //! input's name, so an input that is SAM text, a CRAM, a name ending in
-//! `.sam` or not a regular file needs `OUTPUT` (exit 2).
+//! `.sam` or not a regular file needs `OUTPUT` (exit 2). A directory the
+//! user cannot make the temporary file in is named before the first read.
 //!
 //! In a chain the step is a barrier that leaves `fixed`: it holds every
 //! record, sorts them by name, sets the mate fields and hands them on in
@@ -259,7 +263,32 @@ fn in_place_target(input: &Path) -> Result<PathBuf> {
             path: resolved.clone(),
             source,
         })?;
+    writable_directory(&resolved)?;
     Ok(resolved)
+}
+
+/// The directory of the input in place, where the rewritten file is made
+/// under a temporary name: the user must be able to make a file there.
+fn writable_directory(file: &Path) -> Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    let dir = file.parent().unwrap_or(Path::new("/"));
+    let text = std::ffi::CString::new(dir.as_os_str().as_bytes())
+        .map_err(|e| Error::Usage(format!("INPUT={}: {e}", file.display())))?;
+    // SAFETY: `text` is a NUL-terminated path that outlives the call.
+    if unsafe { libc::access(text.as_ptr(), libc::W_OK | libc::X_OK) } == 0 {
+        return Ok(());
+    }
+    let cause = io::Error::last_os_error();
+    Err(Error::Output {
+        path: dir.to_path_buf(),
+        source: io::Error::new(
+            cause.kind(),
+            format!(
+                "{cause}: without OUTPUT the input is rewritten through a temporary file in \
+                 this directory"
+            ),
+        ),
+    })
 }
 
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
@@ -274,12 +303,15 @@ enum Source<'a> {
 }
 
 impl Source<'_> {
-    fn next(&mut self, record: &mut RawRecord, path: &Path, cram: bool) -> Result<bool> {
+    /// The next record into `record` and the index of its input; `None`
+    /// after the last.
+    fn next(&mut self, record: &mut RawRecord, path: &Path, cram: bool) -> Result<Option<usize>> {
         match self {
-            Self::One(reader) => record
+            Self::One(reader) => Ok(record
                 .read_from(*reader)
-                .map_err(|e| crate::pass::read_error(path, cram, e)),
-            Self::Merged(merger) => merger.next(record),
+                .map_err(|e| crate::pass::read_error(path, cram, e))?
+                .then_some(0)),
+            Self::Merged(merger) => merger.next_from(record),
         }
     }
 }
@@ -365,7 +397,9 @@ fn run(opts: &FixOptions) -> Result<Counters> {
             let queryname = streams
                 .iter()
                 .all(|(header, _, _)| SortOrder::of(header) == SortOrder::Queryname);
-            let cram = streams.iter().any(|(_, _, cram)| *cram);
+            // htsjdk rebuilds `MD` and `NM` as it decodes a CRAM, so only
+            // the records of a CRAM input get them.
+            let crams: Vec<bool> = streams.iter().map(|(_, _, cram)| *cram).collect();
             let order = opts.mates.order.unwrap_or(first_order);
             if edit.create_index && order != SortOrder::Coordinate {
                 return Err(Error::Metric(
@@ -394,8 +428,12 @@ fn run(opts: &FixOptions) -> Result<Counters> {
             let mut pipe_opts = edit.clone();
             pipe_opts.reorder.regroup = (!grouped).then(|| opts.mates.regroup());
             pipe_opts.reorder.writer = writer_order(order);
-            let mut restore =
-                Restore::new(cram, Mode::Rewrite, edit.reference.as_deref(), &header)?;
+            let mut restore = Restore::new(
+                crams.contains(&true),
+                Mode::Rewrite,
+                edit.reference.as_deref(),
+                &header,
+            )?;
             let mut pipeline = Pipeline::new(&pipe_opts, first_order, &header, &temp, None);
             let mut adjacent = grouped.then(|| Adjacent {
                 group: Vec::new(),
@@ -408,9 +446,11 @@ fn run(opts: &FixOptions) -> Result<Counters> {
                 counters.records_out += 1;
                 pipeline.push(record)
             };
-            while source.next(&mut record, &opts.inputs[0], cram)? {
+            while let Some(input) = source.next(&mut record, &opts.inputs[0], crams[0])? {
                 record_edit::check_reference_ids(&record, references)?;
-                restore.apply(&mut record)?;
+                if crams[input] {
+                    restore.apply(&mut record)?;
+                }
                 match adjacent.as_mut() {
                     Some(adjacent) => adjacent.push(std::mem::take(&mut record), &mut push)?,
                     None => push(&mut record)?,
