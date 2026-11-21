@@ -75,7 +75,7 @@ insert_size	All_Reads.fr_count
 ### part word/_rels/document.xml.rels (284 bytes)
 ### part word/styles.xml (1804 bytes)
 ## file insert_size.txt.xlsx
-<zip: 7814 bytes, 8 parts>
+<zip: 7946 bytes, 8 parts>
 ### part [Content_Types].xml (953 bytes)
 ### part _rels/.rels (297 bytes)
 ### part xl/workbook.xml (430 bytes)
@@ -87,11 +87,11 @@ insert_size	All_Reads.fr_count
 <row r="1"><c r="A1" t="inlineStr"><is><t>CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam MINIMUM_PCT=0.05 DEVIATIONS=10.0 INCLUDE_DUPLICATES=false METRIC_ACCUMULATION_LEVEL=[ALL_READS] OUTPUT=OUT/insert_size.txt</t></is></c></row>
 <row r="2"><c r="A2" t="inlineStr"><is><t>Started on: <time></t></is></c></row>
 </sheetData></worksheet>
-### part xl/worksheets/sheet2.xml (2410 bytes)
+### part xl/worksheets/sheet2.xml (2542 bytes)
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:W2"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>
 <row r="1"><c r="A1" s="1" t="inlineStr"><is><t>MEDIAN_INSERT_SIZE</t></is></c><c r="B1" s="1" t="inlineStr"><is><t>MODE_INSERT_SIZE</t></is></c><c r="C1" s="1" t="inlineStr"><is><t>MEDIAN_ABSOLUTE_DEVIATION</t></is></c><c r="D1" s="1" t="inlineStr"><is><t>MIN_INSERT_SIZE</t></is></c><c r="E1" s="1" t="inlineStr"><is><t>MAX_INSERT_SIZE</t></is></c><c r="F1" s="1" t="inlineStr"><is><t>MEAN_INSERT_SIZE</t></is></c><c r="G1" s="1" t="inlineStr"><is><t>STANDARD_DEVIATION</t></is></c><c r="H1" s="1" t="inlineStr"><is><t>READ_PAIRS</t></is></c><c r="I1" s="1" t="inlineStr"><is><t>PAIR_ORIENTATION</t></is></c><c r="J1" s="1" t="inlineStr"><is><t>WIDTH_OF_10_PERCENT</t></is></c><c r="K1" s="1" t="inlineStr"><is><t>WIDTH_OF_20_PERCENT</t></is></c><c r="L1" s="1" t="inlineStr"><is><t>WIDTH_OF_30_PERCENT</t></is></c><c r="M1" s="1" t="inlineStr"><is><t>WIDTH_OF_40_PERCENT</t></is></c><c r="N1" s="1" t="inlineStr"><is><t>WIDTH_OF_50_PERCENT</t></is></c><c r="O1" s="1" t="inlineStr"><is><t>WIDTH_OF_60_PERCENT</t></is></c><c r="P1" s="1" t="inlineStr"><is><t>WIDTH_OF_70_PERCENT</t></is></c><c r="Q1" s="1" t="inlineStr"><is><t>WIDTH_OF_80_PERCENT</t></is></c><c r="R1" s="1" t="inlineStr"><is><t>WIDTH_OF_90_PERCENT</t></is></c><c r="S1" s="1" t="inlineStr"><is><t>WIDTH_OF_95_PERCENT</t></is></c><c r="T1" s="1" t="inlineStr"><is><t>WIDTH_OF_99_PERCENT</t></is></c><c r="U1" s="1" t="inlineStr"><is><t>SAMPLE</t></is></c><c r="V1" s="1" t="inlineStr"><is><t>LIBRARY</t></is></c><c r="W1" s="1" t="inlineStr"><is><t>READ_GROUP</t></is></c></row>
-<row r="2"><c r="A2"><v>310.0</v></c><c r="B2"><v>310.0</v></c><c r="C2"><v>10.0</v></c><c r="D2"><v>300</v></c><c r="E2"><v>500</v></c><c r="F2"><v>310.0</v></c><c r="G2"><v>8.16496580927726</v></c><c r="H2"><v>5</v></c><c r="I2" t="inlineStr"><is><t>FR</t></is></c><c r="J2"><v>1</v></c><c r="K2"><v>1</v></c><c r="L2"><v>1</v></c><c r="M2"><v>1</v></c><c r="N2"><v>21</v></c><c r="O2"><v>21</v></c><c r="P2"><v>21</v></c><c r="Q2"><v>21</v></c><c r="R2"><v>381</v></c><c r="S2"><v>381</v></c><c r="T2"><v>381</v></c></row>
+<row r="2"><c r="A2"><v>310.0</v></c><c r="B2"><v>310.0</v></c><c r="C2"><v>10.0</v></c><c r="D2"><v>300</v></c><c r="E2"><v>500</v></c><c r="F2"><v>310.0</v></c><c r="G2"><v>8.16496580927726</v></c><c r="H2"><v>5</v></c><c r="I2" t="inlineStr"><is><t>FR</t></is></c><c r="J2"><v>1</v></c><c r="K2"><v>1</v></c><c r="L2"><v>1</v></c><c r="M2"><v>1</v></c><c r="N2"><v>21</v></c><c r="O2"><v>21</v></c><c r="P2"><v>21</v></c><c r="Q2"><v>21</v></c><c r="R2"><v>381</v></c><c r="S2"><v>381</v></c><c r="T2"><v>381</v></c><c r="U2" t="inlineStr"><is><t></t></is></c><c r="V2" t="inlineStr"><is><t></t></is></c><c r="W2" t="inlineStr"><is><t></t></is></c></row>
 </sheetData></worksheet>
 ### part xl/worksheets/sheet3.xml (680 bytes)
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>

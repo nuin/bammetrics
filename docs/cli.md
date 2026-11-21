@@ -192,7 +192,8 @@ infinity `null` and listed in `non_finite`; `tsv` and `human` print Picard's cel
 rows of `tsv`, `csv` and `human` are the histogram. `xlsx` is a workbook with a `Headers`
 sheet, a sheet per class and a `Histogram` sheet, numbers with every digit; `docx` is the
 headers and every table as Picard text ([docs/formats.md](formats.md)). Both are binary
-files: standard output takes them as it takes the others.
+files: standard output takes them when it is a file or a pipe; on a terminal the verb exits
+2 and asks for `-o`.
 
 `--format` takes a list (`picard,json,csv`). The first format goes to `-o` or standard
 output, each further one beside `-o` as `FILE.json`, `FILE.csv`; a list needs `-o`. A
@@ -1871,8 +1872,9 @@ or the JSON of `--format json` (schema `bammetrics.metrics/1`), told apart by it
 character (`{` or `[` is JSON; a byte order mark before it is dropped); `-` reads standard
 input. `--format` takes `picard`, `json`, `jsonl`, `tsv`,
 `csv`, `markdown`, `human`, `xlsx` or `docx`, one or a list; without it the output is `json`
-for Picard text and `picard` for JSON. XLSX and DOCX are written only: an input that starts
-as a zip exits 1 with that reason. Picard text to JSON to Picard text is byte for byte the first
+for Picard text and `picard` for JSON. XLSX and DOCX are written only: an input whose first
+4 bytes are a zip's exits 1 with that reason. Neither goes to standard output when it is a
+terminal (exit 2). Picard text to JSON to Picard text is byte for byte the first
 file, for a file Picard or bammetrics wrote.
 
 ```bash
@@ -1882,7 +1884,8 @@ bammetrics convert S1.insert_size_metrics | bammetrics convert - | cmp - S1.inse
 ```
 
 - `-o FILE` writes the first format there; each further format of a list goes beside it.
-  `convert` refuses to write its input (exit 2).
+  `convert` refuses to write its input (exit 2), and an `-o` through a missing directory
+  with a `..` behind it (exit 2), as the tool verbs do.
 - `--table metrics|histogram|CLASS` picks the table `tsv`, `csv` and `human` print.
 - `--sample NAME` sets the sample of the `json` and `jsonl` forms.
 - A file that is neither form exits 1 with the reason. [docs/formats.md](formats.md) lists

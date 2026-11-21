@@ -977,8 +977,10 @@ fn read_table<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let doc = py
         .detach(|| {
-            let text =
-                std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            let text = std::fs::File::open(&path)
+                .map_err(bammetrics_formats::TextError::Io)
+                .and_then(bammetrics_formats::read_text)
+                .map_err(|e| format!("{}: {e}", path.display()))?;
             bammetrics_formats::read(&text).map_err(|e| format!("{}: {e}", path.display()))
         })
         .map_err(input_error)?;

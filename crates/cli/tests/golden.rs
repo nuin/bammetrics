@@ -510,6 +510,7 @@ const FORMAT_CASES: &[Case] = &[
     case!("chain_also_xlsx", "chain", "IS", "-o", "OUT/s", "--also", "xlsx", "+", "quality-yield"),
     case!("error_convert_reads_xlsx", "convert", "INS_XLSX"),
     case!("error_verb_xlsx_stdout_list", "insert-size", "IS", "--format", "xlsx,docx"),
+    case!("error_convert_unresolved_output", "convert", "PIC_INS", "--format", "xlsx", "-o", "OUT/nodir/../insert_size.xlsx"),
 ];
 
 /// `chain` (docs/chaining.md): the two documented examples from the command

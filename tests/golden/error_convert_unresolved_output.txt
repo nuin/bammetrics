@@ -1,0 +1,13 @@
+## argv
+convert
+tests/data/picard/NA12878/NA12878.insert_size_metrics
+--format
+xlsx
+-o
+OUT/nodir/../insert_size.xlsx
+## exit
+2
+## stdout
+## stderr
+bammetrics convert: OUT/nodir/../insert_size.xlsx: OUT/nodir does not exist, so the .. behind it names no directory (from -o)
+  name the output without the ..: a run makes the directories that are missing

@@ -24,7 +24,7 @@ def test_qc_also_writes_a_workbook_and_a_document(tmp_path):
     assert workbook[0] == "[Content_Types].xml"
     assert "xl/worksheets/sheet3.xml" in workbook
     assert "word/document.xml" in parts(str(prefix) + ".insert_size_metrics.docx")
-    with pytest.raises(bammetrics.InputError):
+    with pytest.raises(bammetrics.InputError, match="a zip \\(XLSX or DOCX\\) does not read back"):
         bammetrics.read_table(str(prefix) + ".insert_size_metrics.xlsx")
 
 

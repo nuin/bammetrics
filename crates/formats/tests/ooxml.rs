@@ -250,11 +250,14 @@ fn sheet_cells(xml: &str) -> Vec<Vec<Option<Cell>>> {
         .collect()
 }
 
-/// What XLSX must hold for `value`.
-fn expected_cell(value: &Value) -> Option<Cell> {
+/// What XLSX must hold for `value` in a column of type `ty`: an empty
+/// text for a null or empty cell of a text column, no cell for one of a
+/// number column.
+fn expected_cell(value: &Value, ty: Ty) -> Option<Cell> {
     match value {
+        Value::Null if ty == Ty::Str => Some(Cell::Text(String::new())),
         Value::Null => None,
-        Value::Str(s) if s.is_empty() => None,
+        Value::Str(s) if s.is_empty() && ty != Ty::Str => None,
         Value::Int(v) => Some(Cell::Number(v.to_string())),
         Value::Float(v) if v.is_finite() => Some(Cell::Number(format!("{v:?}"))),
         other => Some(Cell::Text(other.picard_text())),
@@ -263,7 +266,7 @@ fn expected_cell(value: &Value) -> Option<Cell> {
 
 /// True when the cell XLSX holds is `value`: an int with its digits, a
 /// float as the same double, every other cell as its text.
-fn same_cell(held: Option<&Cell>, value: &Value) -> bool {
+fn same_cell(held: Option<&Cell>, value: &Value, ty: Ty) -> bool {
     match (held, value) {
         (Some(Cell::Number(text)), Value::Int(v)) => text.parse::<i64>() == Ok(*v),
         (Some(Cell::Number(text)), Value::Float(v)) => {
@@ -272,7 +275,7 @@ fn same_cell(held: Option<&Cell>, value: &Value) -> bool {
                     .parse::<f64>()
                     .is_ok_and(|p| p.to_bits() == v.to_bits())
         }
-        (held, value) => held == expected_cell(value).as_ref(),
+        (held, value) => held == expected_cell(value, ty).as_ref(),
     }
 }
 
@@ -335,7 +338,7 @@ fn xlsx_round_trip(doc: &Document) -> Result<(), String> {
         for (r, row) in table.rows.iter().enumerate() {
             for (j, value) in row.iter().enumerate() {
                 let held = cells[r + 1].get(j).and_then(Option::as_ref);
-                if !same_cell(held, value) {
+                if !same_cell(held, value, table.columns[j].1) {
                     return Err(format!(
                         "sheet {} row {} column {}: {held:?} for {value:?}",
                         i + 2,
@@ -392,10 +395,10 @@ fn cell_text(xml: &str) -> String {
     text
 }
 
-/// The cells DOCX must hold for `table`: the header row, then the rows,
+/// The tables DOCX must hold for `table`: the header row, then the rows,
 /// or one row per column for a table of more than 8 columns and at most
-/// 8 rows.
-fn expected_docx_table(table: &Table) -> Vec<Vec<String>> {
+/// 8 rows; a wider table cut into parts of at most 63 columns.
+fn expected_docx_table(table: &Table) -> Vec<Vec<Vec<String>>> {
     // A line end of any form is one Word line break.
     let text = |v: &Value| v.picard_text().replace("\r\n", "\n").replace('\r', "\n");
     if table.columns.len() > 8 && table.rows.len() <= 8 {
@@ -411,10 +414,22 @@ fn expected_docx_table(table: &Table) -> Vec<Vec<String>> {
                     .collect(),
             );
         }
-        return rows;
+        return vec![rows];
     }
-    std::iter::once(table.names().map(str::to_owned).collect())
-        .chain(table.rows.iter().map(|r| r.iter().map(text).collect()))
+    let names: Vec<String> = table.names().map(str::to_owned).collect();
+    (0..names.len())
+        .step_by(63)
+        .map(|first| {
+            let last = (first + 63).min(names.len());
+            std::iter::once(names[first..last].to_vec())
+                .chain(
+                    table
+                        .rows
+                        .iter()
+                        .map(|r| r[first..last].iter().map(text).collect()),
+                )
+                .collect()
+        })
         .collect()
 }
 
@@ -422,7 +437,7 @@ fn expected_docx(doc: &Document) -> Vec<Vec<Vec<String>>> {
     tables(doc)
         .into_iter()
         .filter(|t| !t.rows.is_empty())
-        .map(expected_docx_table)
+        .flat_map(expected_docx_table)
         .collect()
 }
 
@@ -532,6 +547,15 @@ fn planted() -> Document {
                 columns: vec![("ONLY".to_owned(), Ty::Str)],
                 rows: Vec::new(),
             },
+            // Wider than the 63 columns of a Word table and long, so DOCX
+            // cuts it into parts.
+            Table {
+                class: "picard.analysis.WideMetrics".to_owned(),
+                columns: (0..70).map(|j| (format!("C{j}"), Ty::Int)).collect(),
+                rows: (0..10)
+                    .map(|i| (0..70).map(|j| Value::Int(i * 100 + j)).collect())
+                    .collect(),
+            },
         ],
         histogram: Some(Table {
             class: "java.lang.Integer".to_owned(),
@@ -553,16 +577,27 @@ fn a_planted_document_round_trips() {
     let workbook = unzip(&bytes).expect("unzips")[2].1.clone();
     assert_eq!(
         sheet_names(&String::from_utf8(workbook).expect("UTF-8")),
-        ["Headers", "Headers (2)", "History (2)", "Histogram"]
+        [
+            "Headers",
+            "Headers (2)",
+            "History (2)",
+            "WideMetrics",
+            "Histogram"
+        ]
     );
+    let docx = render_bytes(Format::Docx, &doc, None).expect("docx");
+    let body = String::from_utf8_lossy(&docx);
+    assert!(body.contains("<w:t>Columns 64 to 70 of 70.</w:t>"));
 }
 
-/// A cell an outside reader must give: null, an int, a float or a text.
-fn reader_cell(value: &Value) -> Json {
+/// A cell an outside reader must give: null, an int, a float or a text
+/// (an empty one for a null cell of a text column).
+fn reader_cell(value: &Value, ty: Ty) -> Json {
     let tagged = |tag: &str, text: String| Json::Object(vec![(tag.to_owned(), Json::Str(text))]);
     match value {
+        Value::Null if ty == Ty::Str => tagged("text", String::new()),
         Value::Null => Json::Null,
-        Value::Str(s) if s.is_empty() => Json::Null,
+        Value::Str(s) if s.is_empty() && ty != Ty::Str => Json::Null,
         Value::Int(v) => tagged("int", v.to_string()),
         Value::Float(v) if v.is_finite() => tagged("float", format!("{v:?}")),
         other => tagged("text", other.picard_text()),
@@ -581,12 +616,14 @@ fn reader_case(xlsx: &Path, docx: &Path, doc: &Document) -> Json {
     )];
     for table in tables(doc) {
         let mut rows = vec![Json::Array(table.names().map(text_cell).collect())];
-        rows.extend(
-            table
-                .rows
-                .iter()
-                .map(|row| Json::Array(row.iter().map(reader_cell).collect())),
-        );
+        rows.extend(table.rows.iter().map(|row| {
+            Json::Array(
+                row.iter()
+                    .zip(&table.columns)
+                    .map(|(value, (_, ty))| reader_cell(value, *ty))
+                    .collect(),
+            )
+        }));
         sheets.push(Json::Array(rows));
     }
     let docx_tables = expected_docx(doc)
@@ -607,13 +644,11 @@ fn reader_case(xlsx: &Path, docx: &Path, doc: &Document) -> Json {
     ])
 }
 
-/// The documents the outside readers get: the Picard fixtures and the
-/// planted document, written into `dir`.
+/// The documents the outside readers get: the Picard fixtures, every
+/// metrics file of the golden records and the planted document, written
+/// into `dir`.
 fn write_reader_files(dir: &Path) -> Vec<(PathBuf, PathBuf, Document)> {
-    let mut docs: Vec<(String, Document)> = documents()
-        .into_iter()
-        .filter(|(name, _)| name.contains("tests/data/picard"))
-        .collect();
+    let mut docs = documents();
     docs.push(("planted".to_owned(), planted()));
     docs.into_iter()
         .enumerate()
@@ -722,9 +757,37 @@ fn pandoc_reads_every_docx_table() {
     eprintln!("pandoc read {checked} DOCX files");
 }
 
-/// DuckDB's `excel` extension reads each class sheet with its header row:
-/// the row count, and the sum of each number column equal to the sum of
-/// the document's cells. Skipped unless `LOAD excel` works offline.
+/// The rows DuckDB's `read_xlsx` gives for `table` with its default
+/// types, or `None` when it may fail: a NaN or infinity is the text `?` in a
+/// number column. It stops at the first row with no cell, a row whose
+/// every cell is a null number.
+fn duckdb_default_rows(table: &Table) -> Option<usize> {
+    let non_finite = table.rows.iter().any(|row| {
+        row.iter()
+            .any(|v| matches!(v, Value::Float(f) if !f.is_finite()))
+    });
+    if non_finite {
+        return None;
+    }
+    let empty = |row: &Vec<Value>| {
+        row.iter()
+            .zip(&table.columns)
+            .all(|(v, (_, ty))| *ty != Ty::Str && matches!(v, Value::Null))
+    };
+    Some(
+        table
+            .rows
+            .iter()
+            .position(empty)
+            .unwrap_or(table.rows.len()),
+    )
+}
+
+/// DuckDB's `excel` extension reads each class sheet with its header row.
+/// With its default types: the rows before the first row with no cell,
+/// and the sum of an int column equal to the sum of the document's cells.
+/// A sheet with a `?` in a number column may fail there; it reads with
+/// `all_varchar=true`. Skipped unless `LOAD excel` works offline.
 #[test]
 fn duckdb_reads_every_class_sheet() {
     let duckdb = |sql: &str| {
@@ -738,7 +801,7 @@ fn duckdb_reads_every_class_sheet() {
         return;
     }
     let dir = scratch("duckdb");
-    let mut checked = 0;
+    let (mut typed, mut varchar) = (0, 0);
     for (xlsx, _, doc) in write_reader_files(&dir) {
         let bytes = fs::read(&xlsx).expect("read back");
         let entries = unzip(&bytes).expect("unzips");
@@ -750,10 +813,22 @@ fn duckdb_reads_every_class_sheet() {
             {
                 continue;
             }
+            let source = format!(
+                "read_xlsx('{}', sheet='{}'",
+                xlsx.display(),
+                sheet.replace('\'', "''")
+            );
+            let Some(rows) = duckdb_default_rows(table) else {
+                let sql = format!("LOAD excel; SELECT count(*) FROM {source}, all_varchar=true);");
+                let output = duckdb(&sql).expect("run duckdb");
+                let line = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+                assert_eq!(line.parse::<usize>(), Ok(table.rows.len()), "{sql}");
+                varchar += 1;
+                continue;
+            };
             // An int column whose every cell a double holds exactly.
             let exact = |j: usize| {
-                table
-                    .rows
+                table.rows[..rows]
                     .iter()
                     .all(|r| r[j].as_int().is_none_or(|v| v.unsigned_abs() < 1 << 53))
             };
@@ -763,11 +838,7 @@ fn duckdb_reads_every_class_sheet() {
                 || "0".to_owned(),
                 |j| format!("coalesce(sum(\"{}\"), 0)", table.columns[j].0),
             );
-            let sql = format!(
-                "LOAD excel; SELECT count(*), {sum} FROM read_xlsx('{}', sheet='{}', all_varchar=false);",
-                xlsx.display(),
-                sheet.replace('\'', "''")
-            );
+            let sql = format!("LOAD excel; SELECT count(*), {sum} FROM {source});");
             let output = duckdb(&sql).expect("run duckdb");
             assert!(
                 output.status.success(),
@@ -775,20 +846,23 @@ fn duckdb_reads_every_class_sheet() {
                 String::from_utf8_lossy(&output.stderr)
             );
             let line = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-            let (rows, total) = line.split_once(',').expect("two columns");
-            assert_eq!(rows.parse::<usize>(), Ok(table.rows.len()), "{sql}");
+            let (count, total) = line.split_once(',').expect("two columns");
+            assert_eq!(count.parse::<usize>(), Ok(rows), "{sql}");
             if let Some(j) = number {
-                let want: i64 = table.rows.iter().filter_map(|r| r[j].as_int()).sum();
+                let want: i64 = table.rows[..rows]
+                    .iter()
+                    .filter_map(|r| r[j].as_int())
+                    .sum();
                 let got: f64 = total.parse().expect("a number");
                 assert!(
                     (got - want as f64).abs() <= want.unsigned_abs() as f64 * 1e-12,
                     "{sql}: {got} for {want}"
                 );
             }
-            checked += 1;
+            typed += 1;
         }
     }
     let _ = fs::remove_dir_all(&dir);
-    eprintln!("duckdb read {checked} sheets");
-    assert!(checked > 0);
+    eprintln!("duckdb read {typed} sheets with its types and {varchar} as text");
+    assert!(typed > 0);
 }

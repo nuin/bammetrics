@@ -14,7 +14,15 @@
   docs/formats.md says what each loses.
 - `crates/formats/tests/ooxml.rs`: every metrics file of `tests/data/picard` and
   `tests/golden` read back from both formats cell by cell, and openpyxl, pandas,
-  python-docx, pandoc and DuckDB's `excel` extension on the files when installed.
+  python-docx, pandoc and DuckDB's `excel` extension on the same files when installed.
+- XLSX writes a null cell of a text column as an empty inline string, so DuckDB's
+  `read_xlsx` types the column as text. DOCX cuts a table past Word's 63 columns into
+  parts. Both check the 1 GiB cap row by row, before the file is built whole.
+- `convert` refuses an `-o` through a missing directory with a `..` behind it (exit 2),
+  which overwrote its input before; it reads 4 bytes before it refuses a zip, and
+  `read_table` gives the same zip message. `convert` and the tool verbs refuse to print
+  XLSX or DOCX on a terminal (exit 2). A multi-file verb renders its further formats
+  before it writes its Picard files.
 
 ### Changed
 

@@ -7,20 +7,22 @@
 //! file back byte for byte. A JSON cell with a tab or a line end has no
 //! Picard text form: `--format picard` is then an error and writes nothing.
 //! `xlsx` and `docx` are written only: an input that starts as a zip is
-//! refused with that reason.
+//! refused with that reason after its first four bytes. Neither goes to
+//! standard output when it is a terminal.
 
 use std::fs;
-use std::io::Read as _;
+use std::io::IsTerminal as _;
 use std::path::{Path, PathBuf};
 
-use bammetrics_formats::{Document, Format, Table};
+use bammetrics_core::cleanup::MadeDirs;
+use bammetrics_formats::{Document, Format, Table, TextError};
 use clap::Args;
 
 use crate::error::{Result, VerbError};
 use crate::events::print_stdout_bytes;
 use crate::format::{parse_list, sibling};
 use crate::report::write_atomic;
-use crate::verbs::refuse_overwriting_inputs;
+use crate::verbs::{UNRESOLVED_HINT, create_parent, refuse_overwriting_inputs, unresolved_output};
 
 const VERB: &str = "convert";
 
@@ -57,41 +59,32 @@ pub struct ConvertArgs {
     pub sample: Option<String>,
 }
 
-/// The zip magic an XLSX or DOCX file starts with.
-const ZIP_MAGIC: &[u8] = b"PK\x03\x04";
-
 fn read_input(path: &Path) -> std::result::Result<String, VerbError> {
     let name = if path == Path::new("-") {
         "standard input".to_owned()
     } else {
         path.display().to_string()
     };
-    let bytes = if path == Path::new("-") {
-        let mut bytes = Vec::new();
-        std::io::stdin()
-            .lock()
-            .read_to_end(&mut bytes)
-            .map(|_| bytes)
-            .map_err(|e| VerbError::input(VERB, format!("{name}: {e}")))?
+    let text = if path == Path::new("-") {
+        bammetrics_formats::read_text(std::io::stdin().lock())
     } else {
-        fs::read(path).map_err(|e| {
+        let file = fs::File::open(path).map_err(|e| {
             let what = if e.kind() == std::io::ErrorKind::NotFound {
                 format!("{name} not found")
             } else {
                 format!("{name}: {e}")
             };
             VerbError::input(VERB, what)
-        })?
+        })?;
+        bammetrics_formats::read_text(file)
     };
-    if bytes.starts_with(ZIP_MAGIC) {
-        return Err(VerbError::input(
-            VERB,
-            format!("{name}: a zip (XLSX or DOCX) does not read back"),
-        )
-        .hint("convert reads Picard text and the JSON of --format json"));
-    }
-    String::from_utf8(bytes)
-        .map_err(|_| VerbError::input(VERB, format!("{name}: stream did not contain valid UTF-8")))
+    text.map_err(|e| {
+        let error = VerbError::input(VERB, format!("{name}: {e}"));
+        match e {
+            TextError::Zip => error.hint("convert reads Picard text and the JSON of --format json"),
+            TextError::Io(_) => error,
+        }
+    })
 }
 
 /// The table `--table NAME` names, or a usage error listing the tables
@@ -133,10 +126,30 @@ pub fn run(args: &ConvertArgs) -> Result<u8> {
         .hint("give -o FILE: the further formats are written beside it")
         .into());
     }
+    if output.is_none() && formats[0].is_binary() && std::io::stdout().is_terminal() {
+        return Err(VerbError::usage(
+            VERB,
+            format!(
+                "--format {} is a binary file; standard output is a terminal",
+                formats[0].name()
+            ),
+        )
+        .from("--format")
+        .hint("give -o FILE, or send standard output to a file or a pipe")
+        .into());
+    }
     let mut targets: Vec<PathBuf> = Vec::new();
     if let Some(path) = output {
         targets.push(path.to_path_buf());
         targets.extend(formats[1..].iter().map(|f| sibling(path, f.extension())));
+    }
+    for target in &targets {
+        if let Some(what) = unresolved_output(target) {
+            return Err(VerbError::usage(VERB, what)
+                .from("-o")
+                .hint(UNRESOLVED_HINT)
+                .into());
+        }
     }
     refuse_overwriting_inputs(VERB, std::slice::from_ref(&args.input), &targets)?;
     let input_error = |e: bammetrics_formats::Error| {
@@ -162,9 +175,8 @@ pub fn run(args: &ConvertArgs) -> Result<u8> {
         .map(|format| bammetrics_formats::render_bytes(*format, &doc, table))
         .collect::<std::result::Result<Vec<Vec<u8>>, _>>()
         .map_err(|e| match e {
-            bammetrics_formats::Error::Picard(_) => {
-                input_error(e).hint("the other formats hold it: json, jsonl, tsv, csv, markdown")
-            }
+            bammetrics_formats::Error::Picard(_) => input_error(e)
+                .hint("the other formats hold it: json, jsonl, tsv, csv, markdown, xlsx, docx"),
             e => input_error(e),
         })?;
     if targets.is_empty() {
@@ -173,11 +185,13 @@ pub fn run(args: &ConvertArgs) -> Result<u8> {
         }
         return Ok(0);
     }
-    if let Some(parent) = targets[0].parent().filter(|d| !d.as_os_str().is_empty()) {
-        fs::create_dir_all(parent).map_err(|e| crate::error::Error::io(parent, e))?;
-    }
+    // Dropped by an error below, `made` removes the directories the run
+    // made that are still empty.
+    let mut made = MadeDirs::default();
+    create_parent(VERB, &mut made, &targets[0])?;
     for (path, text) in targets.iter().zip(texts) {
         write_atomic(path, text)?;
     }
+    made.keep();
     Ok(0)
 }

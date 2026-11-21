@@ -10,7 +10,10 @@
 //!   number with the shortest digits that read back as the same double,
 //!   and always a point or an exponent, so a reader gives a float. NaN and
 //!   infinity have no spreadsheet number: they are the text Picard prints,
-//!   `?` and `-?`. A null cell and an empty string are no cell.
+//!   `?` (NaN and positive infinity alike) and `-?`. A null cell and an
+//!   empty string are no cell in a number column and an empty inline
+//!   string in a text column, so a reader that types a column by its
+//!   first data row (DuckDB) gives the text column text.
 //! * A string is an inline string. A character XML 1.0 cannot hold is
 //!   `_xHHHH_`, the escape of the OOXML string type that Excel decodes,
 //!   and a `_x` that would read as one is written `_x005F_x`. A string
@@ -22,13 +25,13 @@
 //! does; a larger table is an error, as is a workbook over the zip cap.
 //! The bytes depend on the document only: no date or name of the run.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use bammetrics_core::metric::Value;
 
 use crate::error::{Error, Result};
 use crate::ooxml::{DECLARATION, MAX_ZIP_BYTES, Zip, escape_into, package_rels};
-use crate::table::{Document, Table};
+use crate::table::{Document, Table, Ty};
 
 /// The most rows of a sheet.
 pub const MAX_ROWS: usize = 1 << 20;
@@ -122,10 +125,12 @@ fn hex_escape(out: &mut String, c: char) {
 struct Sheet {
     xml: String,
     rows: usize,
+    /// The most bytes the sheet may take: the cap less the earlier sheets.
+    room: usize,
 }
 
 impl Sheet {
-    fn new(rows: usize, columns: usize, frozen_header: bool) -> Self {
+    fn new(rows: usize, columns: usize, frozen_header: bool, room: usize) -> Self {
         let last = if rows == 0 || columns == 0 {
             "A1".to_owned()
         } else {
@@ -147,6 +152,7 @@ impl Sheet {
                 "{DECLARATION}<worksheet xmlns=\"{MAIN}\"><dimension ref=\"{range}\"/>{view}<sheetData>\n"
             ),
             rows: 0,
+            room,
         }
     }
 
@@ -182,9 +188,9 @@ impl Sheet {
             }
         }
         self.xml.push_str("</row>\n");
-        if self.xml.len() > MAX_ZIP_BYTES {
+        if self.xml.len() > self.room {
             return Err(Error::Limit(format!(
-                "a sheet is over the {MAX_ZIP_BYTES}-byte cap of an XLSX file"
+                "the sheets are over the {MAX_ZIP_BYTES}-byte cap of an XLSX file"
             )));
         }
         Ok(())
@@ -202,13 +208,15 @@ enum Cell<'a> {
     Text(&'a str, bool),
 }
 
-fn value_cell(value: &Value) -> Option<Cell<'_>> {
+/// The cell of `value` in a column of type `ty`.
+fn value_cell(value: &Value, ty: Ty) -> Option<Cell<'_>> {
     match value {
+        Value::Null if ty == Ty::Str => Some(Cell::Text("", false)),
         Value::Null => None,
         Value::Int(v) => Some(Cell::Number(v.to_string())),
         Value::Float(v) if v.is_finite() => Some(Cell::Number(float_text(*v))),
         Value::Float(_) | Value::Bool(_) => Some(Cell::Text(value_text(value), false)),
-        Value::Str(s) if s.is_empty() => None,
+        Value::Str(s) if s.is_empty() && ty != Ty::Str => None,
         Value::Str(s) => Some(Cell::Text(s, false)),
     }
 }
@@ -226,7 +234,7 @@ fn value_text(value: &Value) -> &'static str {
 }
 
 /// The sheet of `table`: the column names, then the rows.
-fn table_sheet(table: &Table) -> Result<String> {
+fn table_sheet(table: &Table, room: usize) -> Result<String> {
     let rows = table.rows.len() + 1;
     let columns = table.columns.len();
     if rows > MAX_ROWS || columns > MAX_COLUMNS {
@@ -240,23 +248,27 @@ fn table_sheet(table: &Table) -> Result<String> {
             }
         )));
     }
-    let mut sheet = Sheet::new(rows, columns, true);
+    let mut sheet = Sheet::new(rows, columns, true, room);
     sheet.row(table.names().map(|name| Some(Cell::Text(name, true))))?;
     for row in &table.rows {
-        sheet.row(row.iter().map(value_cell))?;
+        sheet.row(
+            row.iter()
+                .zip(&table.columns)
+                .map(|(value, (_, ty))| value_cell(value, *ty)),
+        )?;
     }
     Ok(sheet.finish())
 }
 
 /// The sheet of the `StringHeader` texts, one per row.
-fn headers_sheet(headers: &[String]) -> Result<String> {
+fn headers_sheet(headers: &[String], room: usize) -> Result<String> {
     if headers.len() > MAX_ROWS {
         return Err(Error::Limit(format!(
             "an XLSX sheet holds at most {MAX_ROWS} rows; the file has {} header lines",
             headers.len()
         )));
     }
-    let mut sheet = Sheet::new(headers.len(), 1, false);
+    let mut sheet = Sheet::new(headers.len(), 1, false, room);
     for header in headers {
         sheet.row(std::iter::once(Some(Cell::Text(header, false))))?;
     }
@@ -264,9 +276,13 @@ fn headers_sheet(headers: &[String]) -> Result<String> {
 }
 
 /// Sheet names as Excel takes them: forbidden characters as `_`, at most
-/// [`MAX_NAME_UNITS`] UTF-16 units, no two equal in any case.
+/// [`MAX_NAME_UNITS`] UTF-16 units, no apostrophe at either end, no two
+/// equal in any case.
 struct Names {
     taken: HashSet<String>,
+    /// The next suffix number to try per lower-cased stem and suffix
+    /// width, so `n` sheets of one class take `O(n)` tries in all.
+    next: HashMap<(String, usize), usize>,
 }
 
 impl Names {
@@ -274,11 +290,14 @@ impl Names {
         // Excel keeps `History` for itself.
         Self {
             taken: HashSet::from(["history".to_owned()]),
+            next: HashMap::new(),
         }
     }
 
-    fn fit(base: &str, suffix: &str) -> String {
-        let room = MAX_NAME_UNITS - suffix.len();
+    /// `base` cut to leave room for a suffix of `suffix` units, with no
+    /// apostrophe at its end.
+    fn stem(base: &str, suffix: usize) -> String {
+        let room = MAX_NAME_UNITS - suffix;
         let mut name = String::new();
         let mut units = 0;
         for c in base.chars() {
@@ -288,7 +307,8 @@ impl Names {
             }
             name.push(c);
         }
-        name.push_str(suffix);
+        let kept = name.trim_end_matches('\'').len();
+        name.truncate(kept);
         name
     }
 
@@ -312,14 +332,24 @@ impl Names {
         } else {
             clean
         };
-        let mut n = 1;
+        let plain = Self::stem(base, 0);
+        if self.taken.insert(plain.to_lowercase()) {
+            return plain;
+        }
+        let mut n = 2;
         loop {
-            let suffix = if n == 1 {
-                String::new()
-            } else {
-                format!(" ({n})")
-            };
-            let name = Self::fit(base, &suffix);
+            let suffix = format!(" ({n})");
+            let stem = Self::stem(base, suffix.len());
+            let next = self
+                .next
+                .entry((stem.to_lowercase(), suffix.len()))
+                .or_insert(2);
+            if *next > n {
+                n = *next;
+                continue;
+            }
+            *next = n + 1;
+            let name = stem + &suffix;
             if self.taken.insert(name.to_lowercase()) {
                 return name;
             }
@@ -339,13 +369,20 @@ fn class_sheet_name(class: &str) -> &str {
 /// `doc` as an XLSX workbook.
 pub fn write(doc: &Document) -> Result<Vec<u8>> {
     let mut names = Names::new();
-    let mut sheets = vec![(names.name("Headers"), headers_sheet(&doc.headers)?)];
-    for table in &doc.tables {
-        let name = names.name(class_sheet_name(&table.class));
-        sheets.push((name, table_sheet(table)?));
-    }
-    if let Some(histogram) = &doc.histogram {
-        sheets.push((names.name("Histogram"), table_sheet(histogram)?));
+    // Each sheet may take what the earlier ones left of the cap, so the
+    // sheets held before the zip is built stay under it together.
+    let headers = headers_sheet(&doc.headers, MAX_ZIP_BYTES)?;
+    let mut used = headers.len();
+    let mut sheets = vec![(names.name("Headers"), headers)];
+    for (name, table) in doc
+        .tables
+        .iter()
+        .map(|t| (class_sheet_name(&t.class), t))
+        .chain(doc.histogram.iter().map(|h| ("Histogram", h)))
+    {
+        let sheet = table_sheet(table, MAX_ZIP_BYTES - used)?;
+        used += sheet.len();
+        sheets.push((names.name(name), sheet));
     }
 
     let mut types = format!(
@@ -404,7 +441,6 @@ Target=\"worksheets/sheet{n}.xml\"/>"
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::table::Ty;
 
     #[test]
     fn columns_are_lettered_as_excel_letters_them() {
@@ -451,6 +487,9 @@ mod tests {
         let long = "X".repeat(40);
         assert_eq!(names.name(&long), "X".repeat(31));
         assert_eq!(names.name(&long), format!("{} (2)", "X".repeat(27)));
+        let quoted = format!("{}'{}", "Q".repeat(30), "Q".repeat(5));
+        assert_eq!(names.name(&quoted), "Q".repeat(30));
+        assert_eq!(names.name(&quoted), format!("{} (2)", "Q".repeat(27)));
         assert_eq!(
             class_sheet_name("picard.analysis.InsertSizeMetrics"),
             "InsertSizeMetrics"
@@ -494,7 +533,7 @@ mod tests {
 
     #[test]
     fn a_sheet_holds_typed_cells() {
-        let sheet = table_sheet(&doc().tables[0]).expect("fits");
+        let sheet = table_sheet(&doc().tables[0], MAX_ZIP_BYTES).expect("fits");
         assert!(sheet.contains("<dimension ref=\"A1:C3\"/>"), "{sheet}");
         assert!(
             sheet
@@ -502,7 +541,8 @@ mod tests {
         );
         assert!(sheet.contains(
             "<row r=\"2\"><c r=\"A2\"><v>9223372036854775807</v></c>\
-             <c r=\"B2\" t=\"inlineStr\"><is><t>?</t></is></c></row>"
+             <c r=\"B2\" t=\"inlineStr\"><is><t>?</t></is></c>\
+             <c r=\"C2\" t=\"inlineStr\"><is><t></t></is></c></row>"
         ));
         assert!(sheet.contains("<c r=\"B3\" t=\"inlineStr\"><is><t>-?</t></is></c>"));
         assert!(sheet.contains("<t xml:space=\"preserve\"> a&amp;b </t>"));
@@ -521,6 +561,19 @@ mod tests {
     }
 
     #[test]
+    fn many_sheets_of_one_class_get_distinct_names() {
+        let mut names = Names::new();
+        assert_eq!(names.name("AAAA (3)"), "AAAA (3)");
+        let mut seen = HashSet::new();
+        for _ in 0..20_000 {
+            assert!(seen.insert(names.name("aaaa").to_lowercase()));
+        }
+        assert!(seen.contains("aaaa (20001)"));
+        assert!(!seen.contains("aaaa (3)"));
+        assert_eq!(names.next[&("aaaa".to_owned(), 8)], 20_002);
+    }
+
+    #[test]
     fn a_table_past_the_sheet_limits_is_an_error() {
         let table = Table {
             class: "Wide".to_owned(),
@@ -529,10 +582,15 @@ mod tests {
                 .collect(),
             rows: Vec::new(),
         };
-        let error = table_sheet(&table).expect_err("too wide").to_string();
+        let error = table_sheet(&table, MAX_ZIP_BYTES)
+            .expect_err("too wide")
+            .to_string();
         assert!(
             error.contains("16384 columns; Wide has 1 rows and 16385"),
             "{error}"
         );
+        let small = &doc().tables[0];
+        let error = table_sheet(small, 100).expect_err("over the room left");
+        assert!(matches!(error, Error::Limit(_)), "{error}");
     }
 }

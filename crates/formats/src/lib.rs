@@ -192,9 +192,62 @@ pub fn read(text: &str) -> Result<Document> {
     }
 }
 
+/// The zip magic an XLSX or DOCX file starts with.
+pub const ZIP_MAGIC: &[u8] = b"PK\x03\x04";
+
+/// Why [`read_text`] gave no text.
+#[derive(Debug)]
+pub enum TextError {
+    /// The input starts as a zip: XLSX and DOCX do not read back.
+    Zip,
+    /// A read error, or bytes that are not UTF-8.
+    Io(std::io::Error),
+}
+
+impl std::fmt::Display for TextError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TextError::Zip => f.write_str("a zip (XLSX or DOCX) does not read back"),
+            TextError::Io(e) => e.fmt(f),
+        }
+    }
+}
+
+/// The UTF-8 text of `reader`. Its first four bytes are read first, so a
+/// zip is refused before the rest of it is read.
+pub fn read_text(mut reader: impl std::io::Read) -> std::result::Result<String, TextError> {
+    use std::io::Read as _;
+    let mut bytes = Vec::new();
+    reader
+        .by_ref()
+        .take(ZIP_MAGIC.len() as u64)
+        .read_to_end(&mut bytes)
+        .map_err(TextError::Io)?;
+    if bytes == ZIP_MAGIC {
+        return Err(TextError::Zip);
+    }
+    reader.read_to_end(&mut bytes).map_err(TextError::Io)?;
+    String::from_utf8(bytes).map_err(|_| {
+        TextError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "stream did not contain valid UTF-8",
+        ))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_zip_is_refused_after_four_bytes() {
+        let mut zip = std::io::Cursor::new(b"PK\x03\x04 and more".to_vec());
+        assert!(matches!(read_text(&mut zip), Err(TextError::Zip)));
+        assert_eq!(zip.position(), 4);
+        assert_eq!(read_text(&b"PK"[..]).expect("text"), "PK");
+        let error = read_text(&b"\xff\xfe"[..]).expect_err("not UTF-8");
+        assert_eq!(error.to_string(), "stream did not contain valid UTF-8");
+    }
 
     #[test]
     fn format_lists_parse() {
