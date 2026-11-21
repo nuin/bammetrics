@@ -158,6 +158,7 @@ INPUT_CASES = {
     "picard_made_overlaps": (["ACTION=OVERLAPS", "I={b}", "SI={picard_union}", "SORT=false"]),
     "picard_made_symdiff": (["ACTION=SYMDIFF", "I={picard_union}", "SI={a}", "UNIQUE=true"]),
     "repeat_input": (["ACTION=INTERSECT", "I={a}", "I={a}"]),
+    "non_utf8": (["I={non_utf8}", "UNIQUE=true"]),
     "count_bases": (["I={a}", "UNIQUE=true", "OUTPUT_VALUE=BASES"]),
     "count_intervals": (["I={a}", "I={b}", "OUTPUT_VALUE=INTERVALS"]),
     "subtract_no_second": (["ACTION=SUBTRACT", "I={a}"]),

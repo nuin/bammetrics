@@ -15,6 +15,8 @@ no interval in any list, c4 of length 0):
 - `other_dictionary`: `b` with c1 one base longer, for the dictionary checks;
 - `extra_header`: `@RG`, `@PG` and `@CO` lines and `@HD` tags in odd order, a later
   `@SQ` line and a blank line among the records;
+- `non_utf8`: names with a Latin-1 byte and cut UTF-8 sequences, which both readers
+  decode as U+FFFD;
 - the bad files of `BAD`, each one failing htsjdk's reader in a different way.
 
 Returns a dict of name to path.
@@ -93,7 +95,10 @@ def write(out, seed=1):
     body = text(c, "").splitlines(keepends=True)
     files["extra_header"] = extra + "".join(body[:5]) + "@SQ\tSN:late\tLN:9\n\n" + "".join(body[5:])
     files.update(BAD)
-    paths = {}
+    non_utf8 = out / "non_utf8.interval_list"
+    non_utf8.write_bytes(HEADER.encode() + b"c1\t1\t5\t+\tna\xe9ve\nc1\t7\t9\t+\tcut\xe2\x82\n"
+                         b"c1\t11\t12\t+\tbad\xf0\x9f\x98\nc1\t20\t21\t+\tx\xc3(y\n")
+    paths = {"non_utf8": non_utf8}
     for name, content in files.items():
         path = out / f"{name}.interval_list"
         path.write_text(content)
