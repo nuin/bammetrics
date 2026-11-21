@@ -20,7 +20,6 @@
 //! [`multiple_metrics::file_extensions`] and written whole, then renamed.
 
 use std::ffi::OsString;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use bammetrics_core::cleanup::MadeDirs;
@@ -867,8 +866,15 @@ fn prepare_steps(cx: &Context) -> Result<Vec<Step>> {
     let Some(panel) = &cx.args.panel else {
         return Ok(Vec::new());
     };
-    let text = fs::read_to_string(panel)
-        .map_err(|e| Error::Input(format!("{}: {e} (from --panel)", panel.display())))?;
+    let text =
+        intervals::read_text(panel).map_err(|e| Error::Input(format!("{e} (from --panel)")))?;
+    if intervals::is_vcf(&text) {
+        return Err(Error::Usage(format!(
+            "--panel {}: a VCF is no panel; convert it first with bammetrics VcfToIntervalList \
+             I=VCF O=panel.interval_list",
+            panel.display()
+        )));
+    }
     if intervals::is_interval_list(&text) {
         return Ok(Vec::new());
     }

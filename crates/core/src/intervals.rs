@@ -130,12 +130,24 @@ pub fn read_files<P: AsRef<Path>>(paths: &[P], header: &sam::Header) -> Result<V
 }
 
 /// The text of an interval list or BED, at most [`MAX_INTERVAL_LIST_BYTES`]
-/// read: a pipe has no size to check first, so the read itself stops.
-fn read_capped(path: &Path) -> Result<String> {
+/// read: a pipe has no size to check first, so the read itself stops. A
+/// name ending in `.gz`, `.gzip` or `.bfq` is inflated first, as htsjdk's
+/// `IOUtil.openFileForReading` inflates it (`IntervalListTools` writes
+/// such lists).
+pub fn read_text(path: &Path) -> Result<String> {
+    if has_gzip_extension(path) {
+        return read_gzip_capped(path, MAX_INTERVAL_LIST_BYTES);
+    }
     read_capped_at(path, MAX_INTERVAL_LIST_BYTES)
 }
 
-/// [`read_capped`] with the cap as an argument, so a test can pass a small one.
+/// True for VCF text: its first line starts with `##fileformat=VCF`. A
+/// VCF is no interval file; `VcfToIntervalList` converts one.
+pub fn is_vcf(text: &str) -> bool {
+    text.starts_with("##fileformat=VCF")
+}
+
+/// [`read_text`] of plain text with the cap as an argument, so a test can pass a small one.
 fn read_capped_at(path: &Path, cap: u64) -> Result<String> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
@@ -164,7 +176,14 @@ pub fn read_named_files<P: AsRef<Path>>(
     let mut intervals = Vec::new();
     for path in paths {
         let path = path.as_ref();
-        let text = read_capped(path)?;
+        let text = read_text(path)?;
+        if is_vcf(&text) {
+            return Err(Error::Intervals {
+                path: path.to_path_buf(),
+                message: "a VCF is no interval list or BED; VcfToIntervalList converts it"
+                    .to_owned(),
+            });
+        }
         let parsed = if is_interval_list_file(path, &text) {
             parse_interval_list(&text, header)
         } else {
@@ -644,7 +663,7 @@ mod tests {
         let latin1 = dir.join("latin1.bed");
         fs::write(&latin1, b"chr1\t0\t10\tna\xefve\n").expect("write");
         assert!(matches!(
-            read_capped(&latin1),
+            read_text(&latin1),
             Err(Error::Input { source, .. }) if source.kind() == std::io::ErrorKind::InvalidData
         ));
         assert_eq!(MAX_INTERVAL_LIST_BYTES, 1 << 30);
@@ -686,6 +705,36 @@ mod tests {
         assert!(has_gzip_extension(Path::new("a/x.gzip")));
         assert!(has_gzip_extension(Path::new("x.bfq")));
         assert!(!has_gzip_extension(Path::new("x.gz/list")));
+        fs::remove_dir_all(&dir).expect("remove the temporary directory");
+    }
+
+    /// A panel named `.gz` is inflated before it is told apart (the lists
+    /// `IntervalListTools` writes there), and a VCF is refused by name.
+    #[test]
+    fn a_gzip_panel_is_read_and_a_vcf_is_refused() {
+        use std::io::Write as _;
+        let dir = std::env::temp_dir().join(format!("bammetrics-panel-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("temporary directory");
+        let header = sam::Header::builder()
+            .add_reference_sequence(
+                "c1",
+                sam::header::record::value::Map::<
+                    sam::header::record::value::map::ReferenceSequence,
+                >::new(std::num::NonZeroUsize::new(100).expect("length")),
+            )
+            .build();
+        let text = "@HD\tVN:1.6\n@SQ\tSN:c1\tLN:100\nc1\t5\t9\t+\tt1\n";
+        let gz = dir.join("panel.interval_list.gz");
+        let mut writer = noodles::bgzf::io::Writer::new(fs::File::create(&gz).expect("create"));
+        writer.write_all(text.as_bytes()).expect("write");
+        writer.finish().expect("finish");
+        let named = read_named_files(&[&gz], &header).expect("a gzip panel");
+        assert_eq!(named[0].interval, iv(0, 5, 9));
+        assert!(is_interval_list(&read_text(&gz).expect("inflated")));
+        let vcf = dir.join("panel.bed");
+        fs::write(&vcf, "##fileformat=VCFv4.2\n#CHROM\tPOS\nc1\t5\n").expect("write");
+        let error = read_named_files(&[&vcf], &header).expect_err("a VCF");
+        assert!(error.to_string().contains("VcfToIntervalList"), "{error}");
         fs::remove_dir_all(&dir).expect("remove the temporary directory");
     }
 }
