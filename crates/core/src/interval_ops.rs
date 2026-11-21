@@ -30,6 +30,7 @@
 mod header;
 pub mod ops;
 mod read;
+mod regions;
 mod scatter;
 mod write;
 
@@ -39,6 +40,7 @@ pub use ops::{
     overlaps, subtract, subtract_disjoint, union, unique_intervals,
 };
 pub use read::{MAX_LINE_BYTES, MAX_LIST_BYTES};
+pub use regions::Regions;
 pub use scatter::{
     MAX_SCATTER_FILES, ScatterMode, list_weight, scatter, scatter_count_for_content, scatter_path,
     write_scatter,

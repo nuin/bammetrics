@@ -51,7 +51,7 @@ impl Action {
     fn reduce_each(self, a: IntervalList, b: IntervalList) -> Result<IntervalList> {
         match self {
             Action::Intersect => intersection(&a, &b),
-            _ => concatenate(&[a, b]),
+            _ => concatenate(vec![a, b]),
         }
     }
 
@@ -64,7 +64,7 @@ impl Action {
         match self {
             Action::Concat | Action::Union | Action::Intersect => Ok(a),
             Action::Subtract => subtract(&a, &second()?),
-            Action::Symdiff => difference(&union(&[a])?, &union(&[second()?])?),
+            Action::Symdiff => difference(&union(vec![a])?, &union(vec![second()?])?),
             Action::Overlaps => overlaps(&a, &second()?),
         }
     }
@@ -244,10 +244,12 @@ fn run(args: &[String]) -> Result<()> {
         opts.sort = true;
         opts.unique = true;
     }
+    // The output header is the action's, before the sort sets its order.
+    let mut header = result.header.clone();
     let possibly_sorted = if opts.sort {
-        result.sorted()
+        result.into_sorted()
     } else {
-        result.clone()
+        result
     };
     let possibly_inverted = if opts.invert {
         invert(&possibly_sorted)
@@ -262,7 +264,6 @@ fn run(args: &[String]) -> Result<()> {
     if opts.break_bands > 0 {
         intervals = break_at_band_multiples(&intervals, opts.break_bands)?;
     }
-    let mut header = result.header;
     header.add_program(
         &format!("IntervalListTools {}", args.join(" ")),
         "IntervalListTools",

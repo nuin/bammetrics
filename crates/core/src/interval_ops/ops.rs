@@ -147,19 +147,29 @@ impl IntervalList {
     /// `IntervalList.sorted`: a copy in [`compare`] order (a stable sort,
     /// as `List.sort`), its header set to `SO:coordinate`.
     pub fn sorted(&self) -> IntervalList {
-        let mut copy = self.clone();
-        copy.intervals.sort_by(compare);
-        copy.header.set_sort_order(SortOrder::Coordinate);
-        copy
+        self.clone().into_sorted()
+    }
+
+    /// [`IntervalList::sorted`] of a list no longer needed.
+    pub fn into_sorted(mut self) -> IntervalList {
+        self.intervals.sort_by(compare);
+        self.header.set_sort_order(SortOrder::Coordinate);
+        self
     }
 
     /// `IntervalList.uniqued(concatenateNames)`: the sorted intervals
     /// merged where they overlap or abut, under this list's header (its
     /// sort order unchanged).
     pub fn uniqued(&self, concatenate_names: bool) -> IntervalList {
+        self.clone().into_uniqued(concatenate_names)
+    }
+
+    /// [`IntervalList::uniqued`] of a list no longer needed.
+    pub fn into_uniqued(self, concatenate_names: bool) -> IntervalList {
+        let header = self.header.clone();
         IntervalList {
-            header: self.header.clone(),
-            intervals: merge_intervals(self.sorted().intervals, true, concatenate_names),
+            header,
+            intervals: merge_intervals(self.into_sorted().intervals, true, concatenate_names),
         }
     }
 
@@ -194,24 +204,24 @@ fn dictionary_error(message: String) -> Error {
 /// `IntervalList.concatenate(lists)`: every interval in list order under
 /// the first list's header, which `addOther` sets to `SO:unsorted`; each
 /// list's dictionary must equal the first's.
-pub fn concatenate(lists: &[IntervalList]) -> Result<IntervalList> {
-    let first = lists.first().ok_or_else(|| {
+pub fn concatenate(lists: Vec<IntervalList>) -> Result<IntervalList> {
+    let mut lists = lists.into_iter();
+    let mut out = lists.next().ok_or_else(|| {
         Error::Usage("Cannot combine empty collection of IntervalLists".to_owned())
     })?;
-    let mut out = IntervalList::new(first.header.clone());
+    out.header.set_sort_order(SortOrder::Unsorted);
     for list in lists {
         out.header
             .assert_same_dictionary(&list.header)
             .map_err(dictionary_error)?;
-        out.header.set_sort_order(SortOrder::Unsorted);
-        out.intervals.extend(list.intervals.iter().cloned());
+        out.intervals.extend(list.intervals);
     }
     Ok(out)
 }
 
 /// `IntervalList.union(lists)`: [`concatenate`], then `uniqued()`.
-pub fn union(lists: &[IntervalList]) -> Result<IntervalList> {
-    Ok(concatenate(lists)?.uniqued(true))
+pub fn union(lists: Vec<IntervalList>) -> Result<IntervalList> {
+    Ok(concatenate(lists)?.into_uniqued(true))
 }
 
 /// Overlap queries on a list's intervals as htsjdk's `OverlapDetector`
@@ -333,7 +343,7 @@ pub fn intersection(a: &IntervalList, b: &IntervalList) -> Result<IntervalList> 
             });
         });
     }
-    Ok(out.uniqued(true))
+    Ok(out.into_uniqued(true))
 }
 
 /// `IntervalList.invert`: per contig in dictionary order, the bases the
@@ -381,7 +391,7 @@ pub fn subtract(a: &IntervalList, b: &IntervalList) -> Result<IntervalList> {
 /// `IntervalList.difference(a, b)`: the union of `subtract(a, b)` and
 /// `subtract(b, a)`.
 pub fn difference(a: &IntervalList, b: &IntervalList) -> Result<IntervalList> {
-    union(&[subtract(a, b)?, subtract(b, a)?])
+    union(vec![subtract(a, b)?, subtract(b, a)?])
 }
 
 /// `IntervalList.overlaps(a, b)`: the intervals of `a`, whole and in their

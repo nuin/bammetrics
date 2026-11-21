@@ -212,11 +212,11 @@ fn set_operations_keep_htsjdks_names_and_orders() {
             "c2\t5\t9\t+\tb2 intersection a3"
         ]
     );
-    let concatenated = concatenate(&[a.clone(), b.clone()]).expect("concatenates");
+    let concatenated = concatenate(vec![a.clone(), b.clone()]).expect("concatenates");
     assert_eq!(concatenated.header.sort_order(), SortOrder::Unsorted);
     assert_eq!(concatenated.len(), 7);
     assert_eq!(
-        body(&union(std::slice::from_ref(&a)).expect("unites")),
+        body(&union(vec![a.clone()]).expect("unites")),
         ["c1\t10\t30\t+\ta1|same|a2", "c2\t5\t9\t+\ta3"]
     );
     assert_eq!(
@@ -244,7 +244,7 @@ fn set_operations_keep_htsjdks_names_and_orders() {
     let other = IntervalList::parse("@SQ\tSN:c1\tLN:999\n@SQ\tSN:c2\tLN:500\n@SQ\tSN:c3\tLN:0\n")
         .expect("parses");
     assert!(intersection(&a, &other).is_err());
-    assert!(concatenate(&[]).is_err());
+    assert!(concatenate(Vec::new()).is_err());
 }
 
 #[test]
@@ -502,5 +502,39 @@ fn a_bed_is_read_as_bed_to_interval_list_reads_it() {
         parsed.to_text(),
         "@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:c1\tLN:1000\tM5:ab\nc1\t10\t20\t-\tn\nc1\t1\t5\t+\t.\n"
     );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `qc --panel` and the hs tools read a list this layer writes: the
+/// interval list reader of `intervals.rs` takes it against a BAM header
+/// with the same `@SQ` lines.
+#[test]
+fn the_panel_reader_takes_a_written_list() {
+    let dir = scratch("panel");
+    let path = dir.join("panel.interval_list");
+    let mut written = IntervalList::parse(
+        "@SQ\tSN:c1\tLN:1000\n@SQ\tSN:c2\tLN:500\nc2\t5\t9\t-\tq\nc1\t1\t10\t+\tp\n",
+    )
+    .expect("parses")
+    .sorted();
+    written.header.add_program("cmd", "IntervalListTools");
+    written.header.add_comment("made here");
+    write_list(&written, &path, &[]).expect("writes");
+    let header: noodles::sam::Header = "@SQ\tSN:c1\tLN:1000\n@SQ\tSN:c2\tLN:500\n"
+        .parse()
+        .expect("header");
+    let read = crate::intervals::read_named_files(&[&path], &header).expect("reads");
+    let shown: Vec<_> = read
+        .iter()
+        .map(|i| {
+            (
+                i.interval.contig,
+                i.interval.start,
+                i.interval.end,
+                i.name.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(shown, [(0, 1, 10, "p"), (1, 5, 9, "q")]);
     let _ = std::fs::remove_dir_all(&dir);
 }

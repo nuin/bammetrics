@@ -26,6 +26,7 @@ use std::path::{Path, PathBuf};
 use noodles::{bam, bgzf};
 
 use crate::error::{Error, Result};
+use crate::interval_ops;
 use crate::metric::{MetricsOutput, ToolOutput, Value};
 use crate::registry::{Invocation, Opt, Tool};
 
@@ -366,53 +367,50 @@ pub fn read_bed(text: &str, dictionary: &[Sequence], opts: &Options) -> Result<V
     Ok(intervals)
 }
 
-/// `IntervalCoordinateComparator`: contig, start, end, `+` before `-`, then
-/// a missing name before any name, names by code unit.
-pub fn sort(intervals: &mut [Interval]) {
-    intervals.sort_by(|a, b| {
-        (a.contig, a.start, a.end, a.negative_strand, &a.name).cmp(&(
-            b.contig,
-            b.start,
-            b.end,
-            b.negative_strand,
-            &b.name,
-        ))
-    });
-}
-
-/// `IntervalList.uniqued()`: sort, then merge runs of intervals that
-/// overlap or abut (`IntervalMergerIterator` with `combineAbuttingIntervals`,
-/// without `enforceSameStrands`). A merged interval keeps the strand of its
-/// first member and joins the distinct names of its members with `|`, in
-/// order, skipping missing ones (`IntervalList.merge`).
-pub fn uniqued(intervals: &[Interval]) -> Vec<Interval> {
-    let mut sorted = intervals.to_vec();
-    sort(&mut sorted);
-    let mut merged: Vec<(Interval, Vec<String>)> = Vec::new();
-    for next in sorted {
-        match merged.last_mut() {
-            Some((current, names))
-                if current.contig == next.contig && next.start <= current.end + 1 =>
-            {
-                current.end = current.end.max(next.end);
-                if let Some(name) = next.name
-                    && !names.contains(&name)
-                {
-                    names.push(name);
-                }
-            }
-            _ => {
-                let names = next.name.iter().cloned().collect();
-                merged.push((next, names));
-            }
+impl Interval {
+    /// The interval as `interval_ops` holds it. `read_bed` checked the
+    /// coordinates against the dictionary, whose lengths are Java `int`s.
+    fn to_ops(&self) -> interval_ops::Interval {
+        interval_ops::Interval {
+            contig: self.contig,
+            start: self.start as i32,
+            end: self.end as i32,
+            negative_strand: self.negative_strand,
+            name: self.name.clone(),
         }
     }
-    merged
+
+    fn from_ops(interval: interval_ops::Interval) -> Self {
+        Self {
+            contig: interval.contig,
+            start: i64::from(interval.start),
+            end: i64::from(interval.end),
+            negative_strand: interval.negative_strand,
+            name: interval.name,
+        }
+    }
+}
+
+/// `IntervalCoordinateComparator` (`interval_ops::ops::compare`): contig,
+/// start, end, `+` before `-`, then a missing name before any name, names
+/// by UTF-16 unit. A stable sort, as `List.sort`.
+pub fn sort(intervals: &mut [Interval]) {
+    let mut sorted: Vec<interval_ops::Interval> = intervals.iter().map(Interval::to_ops).collect();
+    sorted.sort_by(interval_ops::ops::compare);
+    for (slot, interval) in intervals.iter_mut().zip(sorted) {
+        *slot = Interval::from_ops(interval);
+    }
+}
+
+/// `IntervalList.uniqued()`: [`sort`], then `interval_ops::merge_intervals`
+/// with abutting intervals combined and names joined, as
+/// `IntervalMergerIterator` and `IntervalList.merge` do.
+pub fn uniqued(intervals: &[Interval]) -> Vec<Interval> {
+    let mut sorted: Vec<interval_ops::Interval> = intervals.iter().map(Interval::to_ops).collect();
+    sorted.sort_by(interval_ops::ops::compare);
+    interval_ops::merge_intervals(sorted, true, true)
         .into_iter()
-        .map(|(mut interval, names)| {
-            interval.name = (!names.is_empty()).then(|| names.join("|"));
-            interval
-        })
+        .map(Interval::from_ops)
         .collect()
 }
 
@@ -568,6 +566,31 @@ mod tests {
         assert!(read_bed("chr1\t0\t1001\n", &dictionary, &options()).is_err());
         assert!(read_bed("chr1\t1000\t1000\n", &dictionary, &options()).is_err());
         assert!(read_bed("chr1\t10\t5\n", &dictionary, &options()).is_err());
+    }
+
+    /// Picard 3.5.0 `BedToIntervalList KEEP_LENGTH_ZERO_INTERVALS=true
+    /// UNIQUE=true` on these lines: the interval with no base at 10 joins
+    /// 11-20, the one at 31 stays apart from 26-29.
+    #[test]
+    fn a_zero_length_interval_merges_as_htsjdk_merges_it() {
+        let keep = Options {
+            keep_length_zero_intervals: true,
+            ..options()
+        };
+        let bed = "chr1\t9\t9\tz\nchr1\t10\t20\tn\nchr1\t30\t30\tz2\nchr1\t25\t29\tm\n";
+        let unique = uniqued(&read_bed(bed, &dictionary(), &keep).expect("ok"));
+        let shown: Vec<_> = unique
+            .iter()
+            .map(|i| (i.start, i.end, i.name.clone().unwrap_or_default()))
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                (10, 20, "z|n".to_owned()),
+                (26, 29, "m".to_owned()),
+                (31, 30, "z2".to_owned())
+            ]
+        );
     }
 
     #[test]
