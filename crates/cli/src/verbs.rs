@@ -592,6 +592,38 @@ pub const VERBS: &[Verb] = &[
             Files::Prefix,
         )
     },
+    Verb {
+        input: "FASTA",
+        about: Some(
+            "writes the reference as an interval list, as Picard's ScatterIntervalsByNs does: \
+             -o gets @HD, the .dict's @SQ lines and one interval per run of N bases (Nmer; N, \
+             n and .) or of other bases (ACGTmer). An N run of at most --max-to-merge bases \
+             stays inside the ACGTmer around it. The FASTA needs its .fai and .dict beside it.",
+        ),
+        writes: "interval list",
+        ignores: &[(Key::Threads, "no BAM is read")],
+        ..verb(
+            "scatter-intervals-by-ns",
+            "ScatterIntervalsByNs",
+            Files::Bam,
+        )
+    },
+    Verb {
+        input: "FASTA",
+        about: Some(
+            "counts the bases of a FASTA that are not N or n, as Picard's NonNFastaSize does \
+             (IUPAC codes and . count); --intervals counts only inside an interval list. -o or \
+             standard output gets the number and a line end. The FASTA needs its .fai and \
+             .dict beside it.",
+        ),
+        writes: "count",
+        reads: &["INTERVALS"],
+        ignores: &[
+            (Key::Threads, "no BAM is read"),
+            (Key::Sample, "a count has no sample"),
+        ],
+        ..verb("non-n-fasta-size", "NonNFastaSize", Files::Single)
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
@@ -670,7 +702,9 @@ impl Verb {
         let table = tool.table();
         let mut flags = Vec::new();
         if let Some(input) = table.iter().find(|o| o.picard() == "INPUT") {
-            let stdin = if self.reads_stdin {
+            let stdin = if self.input == "FASTA" {
+                ". Standard input and pipes are refused: the FASTA is read through its .fai."
+            } else if self.reads_stdin {
                 "; - reads standard input."
             } else {
                 ". Standard input and pipes are refused: the tool reads each input twice."
@@ -709,6 +743,13 @@ impl Verb {
                 format!(
                     "The {} to write; - writes standard output. Without -o it goes beside the \
                      input, named as Picard names it.",
+                    self.writes
+                ),
+            ),
+            Files::Bam if !self.writes.contains("BAM") => (
+                "FILE",
+                format!(
+                    "The {} to write; - writes standard output. Required.",
                     self.writes
                 ),
             ),
@@ -1266,6 +1307,14 @@ impl Verb {
                 Some(g) => Ok(Some(PathBuf::from(&g.values[0]))),
                 None => match self.default_output {
                     Some(beside) => self.output_beside_input(picard, beside).map(Some),
+                    None if !self.writes.contains("BAM") => Err(VerbError::usage(
+                        self.name,
+                        format!("missing -o FILE (Picard: OUTPUT), the {}", self.writes),
+                    )
+                    .hint(format!(
+                        "-o - writes the {} to standard output",
+                        self.writes
+                    ))),
                     None => Err(
                         VerbError::usage(self.name, "missing -o BAM (Picard: OUTPUT)")
                             .hint("-o - writes the BAM to standard output"),
