@@ -37,7 +37,12 @@ fn path(dir: &Path, name: &str) -> String {
 fn the_command_line_is_picards() {
     let cases: [(&[&str], &str); 4] = [
         (
-            &["I=lists/a.interval_list", "O=p.interval_list", "COMMENT=hi", "QUIET=true"],
+            &[
+                "I=lists/a.interval_list",
+                "O=p.interval_list",
+                "COMMENT=hi",
+                "QUIET=true",
+            ],
             "IntervalListTools INPUT=[lists/a.interval_list] OUTPUT=p.interval_list \
              COMMENT=[hi] QUIET=true    PADDING=0 UNIQUE=false DONT_MERGE_ABUTTING=false \
              SORT=true ACTION=CONCAT SCATTER_COUNT=1 INCLUDE_FILTERED=false \
@@ -220,7 +225,10 @@ fn a_failing_run_writes_nothing() {
             format!("COUNT_OUTPUT={out}"),
         ],
         // OUTPUT under a missing directory, as Picard fails.
-        vec![format!("I={input}"), format!("O={}", path(&dir, "missing/x"))],
+        vec![
+            format!("I={input}"),
+            format!("O={}", path(&dir, "missing/x")),
+        ],
         // COUNT_OUTPUT under a missing directory.
         vec![
             format!("I={input}"),

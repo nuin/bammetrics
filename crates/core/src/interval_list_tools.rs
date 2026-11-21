@@ -26,14 +26,15 @@
 //! makes its directories, as Picard does), and `COUNT_OUTPUT` is not
 //! `OUTPUT`. A scatter is written as one set ([`interval_ops::write_scatter`]).
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::error::{Error, Result};
 use crate::interval_ops::{
-    Header, Interval, IntervalList, ScatterMode, Scattered, break_at_band_multiples,
-    concatenate, difference, intersection, invert, overlaps, scatter, scatter_count_for_content,
-    subtract, union, unique_intervals, write_list, write_scatter,
+    Header, Interval, IntervalList, ScatterMode, Scattered, break_at_band_multiples, concatenate,
+    difference, intersection, invert, overlaps, scatter, scatter_count_for_content, subtract,
+    union, unique_intervals, write_list, write_scatter,
 };
 use crate::metric::{MetricsOutput, RowSource, ToolOutput, Value};
 use crate::registry::{self, Invocation, Opt, Tool};
@@ -117,8 +118,11 @@ pub const TOOL: Tool = Tool {
             "NONE (default), BASES or INTERVALS: the count printed to standard output or \
              COUNT_OUTPUT.",
         ),
-        Opt::output(&["COUNT_OUTPUT"])
-            .with_help("The file the OUTPUT_VALUE count goes to; standard output without one."),
+        Opt::path(
+            &["COUNT_OUTPUT"],
+            "The file the OUTPUT_VALUE count goes to; standard output without one.",
+        )
+        .written(),
         Opt::ignored_int(
             &["COMPRESSION_LEVEL"],
             "a .gz list is written as BGZF at the default level",
@@ -218,6 +222,7 @@ struct Options {
     mode: ScatterMode,
     invert: bool,
     count: Count,
+    count_output: Option<PathBuf>,
 }
 
 fn usage(message: String) -> Error {
@@ -229,6 +234,7 @@ impl Options {
     /// error as Picard lists them.
     fn from_invocation(inv: &Invocation) -> Result<Self> {
         let paths = |name: &str| inv.list(name, Vec::new(), |v| Ok(PathBuf::from(v)));
+        let path = |name: &str| inv.get(name).filter(|v| *v != "null").map(PathBuf::from);
         let action = match inv.get("ACTION") {
             None => Action::Concat,
             Some(text) => Action::parse(text).ok_or_else(|| {
@@ -261,7 +267,7 @@ impl Options {
         let opts = Self {
             inputs: paths("INPUT")?,
             second_inputs: paths("SECOND_INPUT")?,
-            output: inv.get("OUTPUT").filter(|o| *o != "null").map(PathBuf::from),
+            output: path("OUTPUT"),
             action,
             padding: inv.parse("PADDING", 0)?,
             unique: inv.flag("UNIQUE", false)?,
@@ -278,6 +284,7 @@ impl Options {
             mode,
             invert: inv.flag("INVERT", false)?,
             count,
+            count_output: path("COUNT_OUTPUT"),
         };
         let mut problems = Vec::new();
         if opts.inputs.is_empty() {
@@ -291,7 +298,10 @@ impl Options {
                 .push("BREAK_BANDS_AT_MULTIPLES_OF must be greater than or equal to 0.".to_owned());
         }
         let name = opts.action.name();
-        match (opts.second_inputs.is_empty(), opts.action.takes_second_input()) {
+        match (
+            opts.second_inputs.is_empty(),
+            opts.action.takes_second_input(),
+        ) {
             (true, true) => problems.push(format!(
                 "SECOND_INPUT was not provided but action {name} requires a second input."
             )),
@@ -300,7 +310,7 @@ impl Options {
             )),
             _ => {}
         }
-        if inv.output.is_some() && opts.count == Count::None {
+        if opts.count_output.is_some() && opts.count == Count::None {
             problems.push("COUNT_OUTPUT was provided but OUTPUT_VALUE is set to NONE.".to_owned());
         }
         if !problems.is_empty() {
@@ -385,10 +395,12 @@ fn compute(inv: &Invocation, opts: &Options) -> Result<IntervalList> {
 /// Refuse an output that cannot be written before any is: a missing
 /// directory above `OUTPUT` (a scatter makes its own) or `COUNT_OUTPUT`, an
 /// input, or `COUNT_OUTPUT` naming `OUTPUT`.
-fn check_outputs(inv: &Invocation, output: Option<&Path>, scattered: bool) -> Result<()> {
+fn check_outputs(inv: &Invocation, opts: &Options, scattered: bool) -> Result<()> {
+    let output = opts.output.as_deref();
+    let count = opts.count_output.as_deref();
     let single = output.filter(|_| !scattered);
-    registry::check_writable(single.into_iter().chain(inv.output.as_deref()), &inv.inputs)?;
-    if let (Some(list), Some(count)) = (output, inv.output.as_deref())
+    registry::check_writable(single.into_iter().chain(count), &inv.inputs)?;
+    if let (Some(list), Some(count)) = (output, count)
         && crate::mark_duplicates::same_file(list, count)
     {
         return Err(usage(format!(
@@ -409,25 +421,30 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let written = match &opts.output {
         Some(dir) if scatter_count > 1 => {
             let lists = scatter(&output, opts.mode, scatter_count)?;
-            check_outputs(inv, Some(dir), true)?;
+            check_outputs(inv, &opts, true)?;
             write_scatter(dir, &lists, scatter_count, &inv.inputs)?;
             lists
         }
         Some(path) => {
-            check_outputs(inv, Some(path), false)?;
+            check_outputs(inv, &opts, false)?;
             write_list(&output, path, &inv.inputs)?;
             whole(output)
         }
         None => {
-            check_outputs(inv, None, false)?;
+            check_outputs(inv, &opts, false)?;
             whole(output)
         }
     };
-    let text = match opts.count {
+    let mut text = match opts.count {
         Count::None => String::new(),
         Count::Bases => format!("{}\n", written.base_count()),
         Count::Intervals => format!("{}\n", written.interval_count()),
     };
+    // `COUNT_OUTPUT` gets the count; without it the registry prints it.
+    if let Some(path) = &opts.count_output {
+        registry::write_to(Some(path), |out| out.write_all(text.as_bytes()))?;
+        text.clear();
+    }
     let mut file = MetricsOutput::text(&COLUMNS, Vec::new(), text);
     file.source = Some(Arc::new(Rows(written)));
     Ok(file.into())
@@ -506,7 +523,11 @@ const FIELDS: &[(&str, Shape, Option<&str>)] = &[
     ("SCATTER_CONTENT", Shape::Int, None),
     ("INCLUDE_FILTERED", Shape::Bool, Some("false")),
     ("BREAK_BANDS_AT_MULTIPLES_OF", Shape::Int, Some("0")),
-    ("SUBDIVISION_MODE", Shape::Text, Some("INTERVAL_SUBDIVISION")),
+    (
+        "SUBDIVISION_MODE",
+        Shape::Text,
+        Some("INTERVAL_SUBDIVISION"),
+    ),
     ("INVERT", Shape::Bool, Some("false")),
     ("OUTPUT_VALUE", Shape::Text, Some("NONE")),
     ("COUNT_OUTPUT", Shape::Text, None),
