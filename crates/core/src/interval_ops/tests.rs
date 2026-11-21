@@ -648,6 +648,15 @@ fn bytes_that_are_not_utf8_read_as_replacement_characters() {
         body(&parsed),
         ["c1\t1\t5\t+\tn\u{fffd}\u{fffd}ame", "c2\t2\t3\t-\t\u{fffd}"]
     );
+    // The JDK decodes an encoded surrogate (ED A0 80) as one U+FFFD, where
+    // `from_utf8_lossy` makes three.
+    let mut text = DICT.as_bytes().to_vec();
+    text.extend_from_slice(b"c1\t1\t5\t+\tr\xed\xa0\x80s\nc1\t7\t9\t+\t\xed\xa0A\n");
+    let parsed = IntervalList::parse_bytes(&text).expect("parses");
+    assert_eq!(
+        body(&parsed),
+        ["c1\t1\t5\t+\tr\u{fffd}s", "c1\t7\t9\t+\t\u{fffd}A"]
+    );
 }
 
 #[test]

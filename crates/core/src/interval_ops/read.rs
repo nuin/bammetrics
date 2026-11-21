@@ -76,10 +76,11 @@ fn read_text(path: &Path, cap: u64) -> Result<String> {
 }
 
 /// The lines of `text` as `BufferedReader.readLine` ends them: at `\n`,
-/// `\r` or `\r\n`. Each line is decoded alone, bytes that are not UTF-8
-/// as U+FFFD: no line end is part of a UTF-8 sequence, so the lines are
-/// those of the decoded text, and a text that is not UTF-8 is never copied
-/// whole.
+/// `\r` or `\r\n`. Each line is decoded alone as the JDK's UTF-8 decoder
+/// decodes it ([`crate::java::decode_utf8`]: an encoded surrogate is one
+/// U+FFFD, where `String::from_utf8_lossy` makes three): no line end is
+/// part of a UTF-8 sequence, so the lines are those of the decoded text,
+/// and a text that is not UTF-8 is never copied whole.
 pub(crate) fn java_lines(text: &[u8]) -> impl Iterator<Item = Cow<'_, str>> {
     let mut rest = text;
     std::iter::from_fn(move || {
@@ -97,7 +98,7 @@ pub(crate) fn java_lines(text: &[u8]) -> impl Iterator<Item = Cow<'_, str>> {
             None => 0,
         };
         rest = &rest[end + skip..];
-        Some(String::from_utf8_lossy(line))
+        Some(crate::java::decode_utf8(line))
     })
 }
 
