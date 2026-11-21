@@ -284,10 +284,7 @@ fn run(args: &[String]) -> Result<()> {
                 lists.len(),
                 dir.display()
             );
-            (
-                lists.iter().map(IntervalList::base_count).sum::<i64>(),
-                lists.iter().map(|l| l.len() as i64).sum::<i64>(),
-            )
+            (lists.base_count(), lists.interval_count())
         }
         Some(path) => {
             write_list(&output, path, &inputs)?;

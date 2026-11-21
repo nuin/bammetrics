@@ -11,6 +11,7 @@
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
+use super::header::Header;
 use super::write::{check_target, stage};
 use super::{Interval, IntervalList};
 use crate::cleanup::{AtomicFile, MadeDirs};
@@ -189,8 +190,42 @@ pub fn scatter_count_for_content(mode: ScatterMode, list: &IntervalList, content
     java_round(list_weight(mode, list) as f64 / f64::from(content)) as i32
 }
 
+/// The lists of a scatter: the header every list carries, held once, and
+/// each list's intervals. A header of 3,000 `@SQ` lines cloned into
+/// [`MAX_SCATTER_FILES`] lists would hold gigabytes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Scattered {
+    pub header: Header,
+    pub parts: Vec<Vec<Interval>>,
+}
+
+impl Scattered {
+    /// The number of lists.
+    pub fn len(&self) -> usize {
+        self.parts.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.parts.is_empty()
+    }
+
+    /// The summed base counts of the lists (`ScatterSummary.baseCount`).
+    pub fn base_count(&self) -> i64 {
+        self.parts
+            .iter()
+            .flatten()
+            .map(|i| i64::from(i.length()))
+            .sum()
+    }
+
+    /// The summed interval counts of the lists.
+    pub fn interval_count(&self) -> i64 {
+        self.parts.iter().map(|p| p.len() as i64).sum()
+    }
+}
+
 /// `IntervalListScatter(scatterer, list, count)` iterated to its end.
-pub fn scatter(list: &IntervalList, mode: ScatterMode, count: i32) -> Result<Vec<IntervalList>> {
+pub fn scatter(list: &IntervalList, mode: ScatterMode, count: i32) -> Result<Scattered> {
     if count < 1 {
         return Err(Error::Usage(format!(
             "Scatter count should be a positive integer, but it was{count}."
@@ -208,12 +243,13 @@ pub fn scatter(list: &IntervalList, mode: ScatterMode, count: i32) -> Result<Vec
     };
     let ideal = i64::from(mode.ideal_split_weight(&list, count));
     let mut weight_remaining = list_weight(mode, &list);
-    let mut queue: VecDeque<Interval> = list.intervals.iter().cloned().collect();
+    let IntervalList { header, intervals } = list;
+    let mut queue = VecDeque::from(intervals);
     let mut out = Vec::new();
     let mut returned: i64 = 0;
     while !queue.is_empty() {
         returned += 1;
-        let mut part = IntervalList::new(list.header.clone());
+        let mut part = Vec::new();
         let mut current: i64 = 0;
         let mut ended = false;
         while returned < i64::from(count) {
@@ -232,14 +268,14 @@ pub fn scatter(list: &IntervalList, mode: ScatterMode, count: i32) -> Result<Vec
                 break;
             };
             current += mode.interval_weight(&take);
-            part.intervals.push(take);
+            part.push(take);
         }
         if !ended {
-            part.intervals.extend(queue.drain(..));
+            part.extend(queue.drain(..));
         }
         out.push(part);
     }
-    Ok(out)
+    Ok(Scattered { header, parts: out })
 }
 
 /// `createSubDirectoryAndGetScatterFile`: `dir/temp_NNNN_of_COUNT/scattered.interval_list`,
@@ -255,7 +291,7 @@ pub fn scatter_path(dir: &Path, index: usize, count: i32) -> PathBuf {
 /// No file may be one of `inputs`.
 pub fn write_scatter(
     dir: &Path,
-    lists: &[IntervalList],
+    lists: &Scattered,
     count: i32,
     inputs: &[PathBuf],
 ) -> Result<Vec<PathBuf>> {
@@ -273,13 +309,13 @@ pub fn write_scatter(
     }
     let mut dirs = MadeDirs::default();
     let mut staged = Vec::with_capacity(lists.len());
-    for (list, path) in lists.iter().zip(&paths) {
+    for (part, path) in lists.parts.iter().zip(&paths) {
         dirs.create_parent(path).map_err(|source| Error::Output {
             path: path.clone(),
             source,
         })?;
         let file = AtomicFile::new(path);
-        stage(list, &file)?;
+        stage(&lists.header, part, &file)?;
         staged.push(file);
     }
     let written = crate::split_sam::commit_all(staged)?;

@@ -42,8 +42,8 @@ pub use ops::{
 pub use read::{MAX_LINE_BYTES, MAX_LIST_BYTES};
 pub use regions::Regions;
 pub use scatter::{
-    MAX_SCATTER_FILES, ScatterMode, list_weight, scatter, scatter_count_for_content, scatter_path,
-    write_scatter,
+    MAX_SCATTER_FILES, ScatterMode, Scattered, list_weight, scatter, scatter_count_for_content,
+    scatter_path, write_scatter,
 };
 pub use write::write_list;
 

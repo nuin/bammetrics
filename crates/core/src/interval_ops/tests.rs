@@ -371,9 +371,12 @@ fn scatter_by_subdivision_splits_to_the_ideal_weight() {
     let input = list("c1\t201\t300\t+\tb\nc1\t1\t100\t+\ta\n");
     let lists = scatter(&input, ScatterMode::IntervalSubdivision, 3).expect("scatters");
     let shown: Vec<Vec<(i32, i32)>> = lists
+        .parts
         .iter()
-        .map(|l| l.intervals.iter().map(|i| (i.start, i.end)).collect())
+        .map(|p| p.iter().map(|i| (i.start, i.end)).collect())
         .collect();
+    assert_eq!(lists.header, input.uniqued(true).header);
+    assert_eq!((lists.base_count(), lists.interval_count()), (200, 4));
     assert_eq!(
         shown,
         [vec![(1, 66)], vec![(67, 100), (201, 232)], vec![(233, 300)]]
