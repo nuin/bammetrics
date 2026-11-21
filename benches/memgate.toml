@@ -696,3 +696,39 @@ argv = [
 needs = ["tests/data/make_arrays_stress.py", "tests/data/arrays/arrays.vcf", "tests/data/arrays/dbsnp.vcf"]
 max_rss_mib = 128
 max_seconds = 60
+
+# Wave W12: IntervalListTools. tests/data/make_interval_tiling.py writes the lists in the
+# same shell, so its Python counts. The fixture row tiles chr1 of tests/data/chr1.dict
+# every 100 bases (1,000 and 500 intervals) and scatters the symmetric difference.
+[[command]]
+name = "interval-list-tools scatter"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_interval_tiling.py tests/data/chr1.dict {out} --step 100 && {bin} interval-list-tools {out}/tiles.interval_list --second-input {out}/shifted.interval_list --action SYMDIFF --scatter-count 50 -o {out}/scatter --output-value INTERVALS",
+]
+needs = ["tests/data/make_interval_tiling.py", "tests/data/chr1.dict"]
+max_rss_mib = 64
+max_seconds = 30
+
+# The scale rows tile GRCh38's 3,366 sequences every 1 Mbp (6,494 and 1,583 intervals
+# under 3,366 @SQ lines). 1,000 scatter lists share one header: 19 MiB, where a header
+# per list held 1,748 MiB (Picard 3.5.0: 732 MiB); the lists take 723 MB of disk.
+[[command]]
+name = "interval-list-tools GRCh38 scatter"
+tier = "scale"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_interval_tiling.py ~/data/bammetrics-scale/genome/GRCh38.dict {out} && {bin} interval-list-tools {out}/tiles.interval_list --scatter-count 1000 -M BALANCING_WITHOUT_INTERVAL_SUBDIVISION -o {out}/scatter --output-value INTERVALS",
+]
+needs = ["~/data/bammetrics-scale/genome/GRCh38.dict"]
+max_rss_mib = 1024
+
+[[command]]
+name = "interval-list-tools GRCh38 subtract"
+tier = "scale"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_interval_tiling.py ~/data/bammetrics-scale/genome/GRCh38.dict {out} && {bin} interval-list-tools {out}/tiles.interval_list --second-input {out}/shifted.interval_list --action SUBTRACT --padding 1000 --unique --break-bands-at-multiples-of 250000 -o {out}/subtract.interval_list --output-value BASES",
+]
+needs = ["~/data/bammetrics-scale/genome/GRCh38.dict"]
+max_rss_mib = 1024
