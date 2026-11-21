@@ -88,9 +88,9 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | LiftOverIntervalList | Intervals | out | Liftover, no metrics. | UCSC liftOver, CrossMap |
 | CreateSequenceDictionary | Reference | core | Metrics need contig lengths. Harness prep. | samtools dict |
 | ExtractSequences | Reference | out | Region FASTA subsetting. | samtools faidx |
-| NonNFastaSize | Reference | later | One number, WGS computes it internally. | seqkit stats |
+| NonNFastaSize | Reference | core | Shipped in wave W12 of docs/07: the bases that are not `N` or `n`, read through the `.fai` 1 MiB at a time, `INTERVALS` matched by `@SQ` index as Picard matches them. S | seqkit stats |
 | NormalizeFasta | Reference | out | FASTA rewrap. | seqkit seq -w |
-| ScatterIntervalsByNs | Reference | out | Pipeline scatter helper. | bedtools |
+| ScatterIntervalsByNs | Reference | core | Shipped in wave W12 of docs/07: `ACGTmer` and `Nmer` runs with Picard's merge of short N runs, `OUTPUT_TYPE`, the `.dict` header; the interval list written as it is walked. S | bedtools |
 | BaitDesigner | Reference | out | Legacy bait design. | none |
 | FixMateInformation | Read data | later | Harness input prep (MC tag). | samtools fixmate -m |
 | SetNmMdAndUqTags | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): `MD`, `NM` and `UQ` from the reference as htsjdk's `SequenceUtil` computes them, `SET_ONLY_UQ`, `IS_BISULFITE_SEQUENCE`. M | samtools calmd |

@@ -1663,6 +1663,23 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   gives) and a `BREAK_BANDS_AT_MULTIPLES_OF` that makes more than 20,000,000 intervals
   fail with a usage error. Picard writes the files, or runs out of memory.
 
+## ScatterIntervalsByNs and NonNFastaSize
+
+- A FASTA that ends before the bases its `.fai` gives a contig exits 1. htsjdk's
+  `getSubsequenceAt` leaves the missing bases as zero bytes, which both Picard tools
+  count as `ACGT` bases.
+- A gzip FASTA that is not bgzip, and a bgzip FASTA whose name does not end in `.gz`,
+  exit 1. htsjdk opens the first through its `.fai` and reads the compressed bytes as
+  bases; the second it reads as plain text.
+- A `.fai` line with other than five tab-separated fields exits 1. htsjdk's pattern
+  takes a longer line and reads its fields in other places.
+- A run that fails writes no `OUTPUT`, and an `OUTPUT` that is the FASTA, its `.fai`,
+  `.gzi` or `.dict`, or the `INTERVALS` file exits 1 before anything is read.
+- The Picard face of `NonNFastaSize` without `OUTPUT` prints the count on standard
+  output, as every bammetrics tool does; Picard requires `OUTPUT`.
+- `ScatterIntervalsByNs` writes an `OUTPUT` named `.gz` as BGZF, as the interval layer
+  writes every interval list (above).
+
 ## Not in Picard
 
 `CollectCoverageGaps` and `CollectSexCheckMetrics` ([docs/06](docs/06_clinical_checks.md))
