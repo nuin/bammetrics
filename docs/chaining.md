@@ -640,7 +640,7 @@ run.metrics["insert-size"]          # out/NA12878.insert_size_metrics, parsed
 | `step_table(name)` | A `StepTable` for a verb named in snake or kebab case, by its Picard class or by its function name: `verb`, `role`, `keywords`. An unknown name is a usage error with the closest step |
 | `StepTable::keyword(name)` | One keyword, or the usage error with the closest name. `input`, and `output` of `mark_duplicates`, are refused with the reason |
 | `Keyword` | `name`, `long` (the flag it spells), `ty`, `many` (`One`, `Repeated`: one occurrence per item, `Joined`: one comma list) |
-| `step_names()` | The 33 names `step` takes, snake case, in `bammetrics tools` order, `write` last |
+| `step_names()` | The 37 names `step` takes, snake case, in `bammetrics tools` order, `write` last |
 | `metric_key(chain, step, path)` | The key of a metrics file in `Run.metrics`: the verb, `STREAM.` in front for a tap that does not read the last stream, `.FILE` after it for a further file |
 | `stubs()` | The `bammetrics.pyi` entries: `_StepVerb`, `step`, three `chain` overloads |
 

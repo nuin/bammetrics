@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.31.0
 
-Wave W13 of docs/07: `MergeSamFiles`, `ReorderSam`, `FixMateInformation`, `FilterSamReads`, `DownsampleSam` and `PositionBasedDownsampleSam`.
+Wave W13 of docs/07: `MergeSamFiles`, `ReorderSam`, `FixMateInformation`, `FilterSamReads`, `DownsampleSam` and `PositionBasedDownsampleSam` (71 tools in all), four of them chain transforms.
 
 ### Added
 

@@ -92,7 +92,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | NormalizeFasta | Reference | out | FASTA rewrap. | seqkit seq -w |
 | ScatterIntervalsByNs | Reference | core | Shipped in 0.30.0 (wave W12 of docs/07): `ACGTmer` and `Nmer` runs with Picard's merge of short N runs, `OUTPUT_TYPE`, the `.dict` header; the interval list written as it is walked. S | bedtools |
 | BaitDesigner | Reference | out | Legacy bait design. | none |
-| FixMateInformation | Read data | core | Shipped in wave W13 of docs/07 (the record-editing shape `record_edit.rs`; a chain barrier): the mate fields, `MQ`, `MC` and `TLEN` from each mate after a name sort, then `SORT_ORDER`; several inputs merged; the input rewritten in place without `OUTPUT`. S | samtools fixmate -m |
+| FixMateInformation | Read data | core | Shipped in 0.31.0 (wave W13 of docs/07; the record-editing shape `record_edit.rs`; a chain barrier): the mate fields, `MQ`, `MC` and `TLEN` from each mate after a name sort, then `SORT_ORDER`; several inputs merged; the input rewritten in place without `OUTPUT`. S | samtools fixmate -m |
 | SetNmMdAndUqTags | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): `MD`, `NM` and `UQ` from the reference as htsjdk's `SequenceUtil` computes them, `SET_ONLY_UQ`, `IS_BISULFITE_SEQUENCE`. M | samtools calmd |
 | SetNmAndUqTags | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): Picard's deprecated name of SetNmMdAndUqTags, the same options and output. S | samtools calmd |
 | BuildBamIndex | Read data | core | Shipped in 0.23.0 (wave W05 of docs/07): the `.bai` byte for byte Picard's for the same BAM, the index behind `MarkDuplicates CREATE_INDEX`, `SortSam CREATE_INDEX` and `chain ... + write --index`. S | samtools index |
@@ -103,14 +103,14 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | AddOrReplaceReadGroups | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the record-editing shape `record_edit.rs`; a chain transform, a barrier when it sorts): every `@RG` line replaced by one read group, `RG` on every record, `RGDT` in UTC, `SORT_ORDER` sorted as Picard's writer sorts. S | samtools addreplacerg |
 | BamToBfq | Read data | out | Obsolete aligner format. | none |
 | CleanSam | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): alignments and mate CIGARs past a contig end soft-clipped, MAPQ 0 on unmapped records. S | none |
-| DownsampleSam | Read data | core | Shipped in wave W13 of docs/07: the three htsjdk strategies with Picard's seeds, records equal to Picard's for 50 seeds per strategy at five probabilities; a chain transform. S | samtools view -s |
-| PositionBasedDownsampleSam | Read data | core | Shipped in wave W13 of docs/07: Picard's two reads and its circle per tile, records equal to Picard's; not a chain step. S | none |
+| DownsampleSam | Read data | core | Shipped in 0.31.0 (wave W13 of docs/07): the three htsjdk strategies with Picard's seeds, records equal to Picard's for 50 seeds per strategy at five probabilities; a chain transform. S | samtools view -s |
+| PositionBasedDownsampleSam | Read data | core | Shipped in 0.31.0 (wave W13 of docs/07): Picard's two reads and its circle per tile, records equal to Picard's; not a chain step. S | none |
 | FastqToSam | Read data | later | Harness builds unaligned fixtures. | samtools import, fgbio |
-| FilterSamReads | Read data | core | Shipped in wave W13 of docs/07 (the record-editing shape `record_edit.rs`; a chain transform, a barrier when it sorts): every `FILTER` but `includeJavascript` (Q6, D16), `WRITE_READS_FILES`. S | samtools view |
+| FilterSamReads | Read data | core | Shipped in 0.31.0 (wave W13 of docs/07; the record-editing shape `record_edit.rs`; a chain transform, a barrier when it sorts): every `FILTER` but `includeJavascript` (Q6, D16), `WRITE_READS_FILES`. S | samtools view |
 | GatherBamFiles | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, `bgzf_copy.rs`): BAM inputs block copied as htsjdk copies them, byte for byte at `COMPRESSION_LEVEL=0`; SAM or CRAM inputs read record by record. S | samtools cat |
-| MergeSamFiles | Read data | core | Shipped in wave W13 of docs/07 (`merge_sam_files.rs` over `header_merge.rs`): read group and program IDs renamed on a collision, `MERGE_SEQUENCE_DICTIONARIES`, the priority-queue merge of presorted inputs, else the `SortSam` sort; `INTERVALS`. Not a chain step. S | samtools merge |
+| MergeSamFiles | Read data | core | Shipped in 0.31.0 (wave W13 of docs/07; `merge_sam_files.rs` over `header_merge.rs`): read group and program IDs renamed on a collision, `MERGE_SEQUENCE_DICTIONARIES`, the priority-queue merge of presorted inputs, else the `SortSam` sort; `INTERVALS`. Not a chain step. S | samtools merge |
 | MergeBamAlignment | Read data | out | uBAM merge step. | fgbio ZipperBams |
-| ReorderSam | Read data | core | Shipped in wave W13 of docs/07 (`reorder_sam.rs`, a record edit): references matched by name, records on a lost contig made unplaced, the input's order sorted again; a chain barrier. S | none |
+| ReorderSam | Read data | core | Shipped in 0.31.0 (wave W13 of docs/07; `reorder_sam.rs`, a record edit): references matched by name, records on a lost contig made unplaced, the input's order sorted again; a chain barrier. S | none |
 | ReplaceSamHeader | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): the header of `HEADER` over every record, Picard's sort order checks. S | samtools reheader |
 | RevertOriginalBaseQualitiesAndAddMateCigar | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the record-editing shape `record_edit.rs`; a chain barrier): `QUAL` from `OQ`, `MC`, `MQ` and the mate fields from each mate after a name sort, `SORT_ORDER`, Picard's early exit. S | samtools fixmate (MC only) |
 | RevertSam | Read data | out | BAM to uBAM. | none |
@@ -357,6 +357,7 @@ Columns for these tools are verified by run, except where marked. Entries are sh
 
 - BedToIntervalList (core): parse BED, write interval_list with `@SQ` header from a dictionary. Needed by Hs, TargetedPcr, Wgs `INTERVALS`. Both sides must read identical interval_lists.
 - IntervalListToBed, IntervalListTools, VcfToIntervalList, NonNFastaSize and ScatterIntervalsByNs: shipped in 0.30.0 (wave W12 of docs/07) as registry tools with Picard's faces, over the library layer `interval_ops`.
+- MergeSamFiles, ReorderSam, FixMateInformation, FilterSamReads, DownsampleSam and PositionBasedDownsampleSam: shipped in 0.31.0 (wave W13 of docs/07) as registry tools with Picard's faces; ReorderSam, FixMateInformation, FilterSamReads and DownsampleSam are chain transforms.
 - CreateSequenceDictionary (core for the harness): `picard CreateSequenceDictionary` or `samtools dict`. The library reads `.dict` or `.fai` for contig lengths.
 - Harness prep only: FixMateInformation (MC tag, via `samtools fixmate -m`), SetNmMdAndUqTags (`samtools calmd`), BuildBamIndex, SortSam, AddOrReplaceReadGroups, CleanSam, DownsampleSam, FastqToSam. Never ported.
 
