@@ -504,22 +504,6 @@ const FORMAT_CASES: &[Case] = &[
     case!("verb_insert_size_json_picard", "insert-size", "IS", "--format", "json,picard", "-o", "OUT/insert_size.json"),
     case!("error_check_overwrites_input", "check", "PICARD", "-o", "PIC_INS"),
     case!("qc_also_no_reads", "qc", "NO_READS", "-o", "OUT/sample", "--also", "json,csv,junit", "--date", "2026-01-02 03:04:05 UTC"),
-    // Parquet (wave W21): tests/data/insert_size_metrics.parquet and its two
-    // companions are `convert` of Picard's insert size file.
-    case!("convert_picard_to_parquet", "convert", "PIC_INS", "--format", "parquet", "-o", "OUT/insert_size.parquet"),
-    case!("convert_parquet_to_picard", "convert", "INS_PQ"),
-    case!("convert_parquet_list", "convert", "INS_PQ", "--format", "json,csv,parquet", "-o", "OUT/insert_size.json", "--sample", "S1"),
-    case!("verb_insert_size_parquet", "insert-size", "IS", "--format", "parquet", "-o", "OUT/insert_size.parquet", "--sample", "S1"),
-    case!("verb_quality_distribution_parquet", "quality-score-distribution", "IS", "--format", "picard,parquet", "-o", "OUT/quality.txt"),
-    case!("verb_multiple_metrics_parquet", "multiple-metrics", "IS", "-o", "OUT/sample", "--program", "CollectQualityYieldMetrics", "--program", "CollectInsertSizeMetrics", "--format", "picard,parquet"),
-    case!("qc_also_parquet", "qc", "IS", "-o", "OUT/sample", "--also", "parquet,json", "--date", "2026-01-02 03:04:05 UTC"),
-    case!("qc_also_no_reads_parquet", "qc", "NO_READS", "-o", "OUT/sample", "--also", "parquet", "--date", "2026-01-02 03:04:05 UTC"),
-    case!("chain_taps_parquet", "chain", "IS", "-o", "OUT/sample", "--format", "picard,parquet", "+", "quality-yield", "+", "insert-size"),
-    case!("plan_also_parquet", "plan", "IS", "-o", "OUT/sample", "--also", "parquet"),
-    case!("error_verb_parquet_stdout", "insert-size", "IS", "--format", "parquet"),
-    case!("error_convert_parquet_stdout", "convert", "PIC_INS", "--format", "parquet"),
-    case!("error_convert_parquet_long", "convert", "INS_PQ_LONG"),
-    case!("error_convert_overwrites_parquet_companion", "convert", "INS_PQ", "-o", "tests/data/insert_size_metrics.histogram.parquet"),
     // XLSX and DOCX (wave W21): each recorded as its size and its parts.
     case!("convert_xlsx_docx", "convert", "PIC_INS", "--format", "xlsx,docx", "-o", "OUT/insert_size.xlsx"),
     case!("convert_hs_xlsx_docx", "convert", "tests/data/picard/NA12878/NA12878.hs_metrics", "--format", "xlsx,docx", "-o", "OUT/hs.xlsx"),
@@ -541,6 +525,28 @@ const FORMAT_CASES: &[Case] = &[
     case!("qc_also_sql_no_reads", "qc", "NO_READS", "-o", "OUT/sample", "--also", "sql", "--date", "2026-01-02 03:04:05 UTC"),
     case!("plan_also_sql", "plan", "IS", "-o", "OUT/sample", "--also", "sql,markdown"),
     case!("chain_also_sql", "chain", "IS", "-o", "OUT/s", "--also", "sql", "+", "insert-size", "+", "quality-yield"),
+];
+
+/// The forms that write or read Parquet, run only in a build with the
+/// feature `parquet` (a cli feature, on by default).
+#[rustfmt::skip]
+const PARQUET_CASES: &[Case] = &[
+    // Parquet (wave W21): tests/data/insert_size_metrics.parquet and its two
+    // companions are `convert` of Picard's insert size file.
+    case!("convert_picard_to_parquet", "convert", "PIC_INS", "--format", "parquet", "-o", "OUT/insert_size.parquet"),
+    case!("convert_parquet_to_picard", "convert", "INS_PQ"),
+    case!("convert_parquet_list", "convert", "INS_PQ", "--format", "json,csv,parquet", "-o", "OUT/insert_size.json", "--sample", "S1"),
+    case!("verb_insert_size_parquet", "insert-size", "IS", "--format", "parquet", "-o", "OUT/insert_size.parquet", "--sample", "S1"),
+    case!("verb_quality_distribution_parquet", "quality-score-distribution", "IS", "--format", "picard,parquet", "-o", "OUT/quality.txt"),
+    case!("verb_multiple_metrics_parquet", "multiple-metrics", "IS", "-o", "OUT/sample", "--program", "CollectQualityYieldMetrics", "--program", "CollectInsertSizeMetrics", "--format", "picard,parquet"),
+    case!("qc_also_parquet", "qc", "IS", "-o", "OUT/sample", "--also", "parquet,json", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("qc_also_no_reads_parquet", "qc", "NO_READS", "-o", "OUT/sample", "--also", "parquet", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("chain_taps_parquet", "chain", "IS", "-o", "OUT/sample", "--format", "picard,parquet", "+", "quality-yield", "+", "insert-size"),
+    case!("plan_also_parquet", "plan", "IS", "-o", "OUT/sample", "--also", "parquet"),
+    case!("error_verb_parquet_stdout", "insert-size", "IS", "--format", "parquet"),
+    case!("error_convert_parquet_stdout", "convert", "PIC_INS", "--format", "parquet"),
+    case!("error_convert_parquet_long", "convert", "INS_PQ_LONG"),
+    case!("error_convert_overwrites_parquet_companion", "convert", "INS_PQ", "-o", "tests/data/insert_size_metrics.histogram.parquet"),
     // The four W21 formats in one list: one file set with the Parquet companions.
     case!("verb_insert_size_w21_list", "insert-size", "IS", "--format", "picard,parquet,xlsx,docx,sql", "-o", "OUT/insert_size.txt", "--sample", "S1"),
     case!("verb_multiple_metrics_w21_list", "multiple-metrics", "IS", "-o", "OUT/sample", "--program", "CollectInsertSizeMetrics", "--format", "picard,parquet,xlsx,sql"),
@@ -1461,6 +1467,12 @@ fn documented_format_commands_on_the_fixtures() {
     check(FORMAT_CASES);
 }
 
+#[cfg(feature = "parquet")]
+#[test]
+fn documented_parquet_commands_on_the_fixtures() {
+    check(PARQUET_CASES);
+}
+
 #[test]
 fn documented_doctor_commands_on_the_fixtures() {
     check(DOCTOR_CASES);
@@ -1631,6 +1643,7 @@ fn case_names_are_unique() {
     let mut names: Vec<&str> = FIXTURE_CASES
         .iter()
         .chain(FORMAT_CASES)
+        .chain(PARQUET_CASES)
         .chain(CHAIN_CASES)
         .chain(T1_CASES)
         .chain(PDF_OPTION_CASES)

@@ -466,6 +466,9 @@ duckdb is.duckdb < is.txt.sql
 - The `sqlite3` shell runs the statements after a failed one, so `COMMIT` keeps a partial
   load. `sqlite3 -bail DB < FILE.sql` stops at the first error and leaves no table.
 - The text depends on the document only: the same file gives the same dump.
+- On the tool verbs and `chain`, the `sample` column of `tables` comes from `--sample` only:
+  without it the column is `NULL`, where the json, jsonl and parquet forms fall back to the
+  header's `SM` or the file stem.
 - A table with no column (a class block with no column, possible in JSON) gets no SQL table.
 - `convert` does not read a dump back. It refuses a file whose first line is the dump's
   first line, `-- bammetrics SQL dump of one metrics file: sqlite3 DB < FILE.sql`.

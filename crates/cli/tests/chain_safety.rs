@@ -824,7 +824,12 @@ fn convert_refuses_an_output_through_a_missing_directory() {
     fs::write(&input, &bytes).expect("copy");
     let onto_input = text(&dir.join("missing/../in.txt"));
     let missing = text(&dir.join("missing"));
-    for format in ["json", "parquet"] {
+    let formats: &[&str] = if cfg!(feature = "parquet") {
+        &["json", "parquet"]
+    } else {
+        &["json"]
+    };
+    for &format in formats {
         let (code, stderr) = run(&[
             "convert",
             &text(&input),
