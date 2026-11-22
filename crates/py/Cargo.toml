@@ -14,9 +14,13 @@ crate-type = ["cdylib"]
 # The PDF report through `bammetrics_cli` (pyproject.toml turns it on for
 # the wheel).
 pdf = ["bammetrics-cli/pdf"]
+# Parquet through bammetrics_cli and read_table (docs/formats.md); on by
+# default and in the wheel.
+default = ["parquet"]
+parquet = ["bammetrics-cli/parquet"]
 
 [dependencies]
-bammetrics-cli = { path = "../cli" }
+bammetrics-cli = { path = "../cli", default-features = false }
 bammetrics-core.workspace = true
 bammetrics-formats.workspace = true
 bammetrics-report.workspace = true

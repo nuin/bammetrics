@@ -1,0 +1,3068 @@
+## argv
+multiple-metrics
+tests/data/insert_size.bam
+-o
+OUT/sample
+--program
+CollectQualityYieldMetrics
+--program
+CollectInsertSizeMetrics
+--format
+picard,parquet
+## exit
+0
+## stdout
+## stderr
+## file sample.alignment_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.AlignmentSummaryMetrics
+CATEGORY	TOTAL_READS	PF_READS	PCT_PF_READS	PF_NOISE_READS	PF_READS_ALIGNED	PCT_PF_READS_ALIGNED	PF_ALIGNED_BASES	PF_HQ_ALIGNED_READS	PF_HQ_ALIGNED_BASES	PF_HQ_ALIGNED_Q20_BASES	PF_HQ_MEDIAN_MISMATCHES	PF_MISMATCH_RATE	PF_HQ_ERROR_RATE	PF_INDEL_RATE	MEAN_READ_LENGTH	SD_READ_LENGTH	MEDIAN_READ_LENGTH	MAD_READ_LENGTH	MIN_READ_LENGTH	MAX_READ_LENGTH	MEAN_ALIGNED_READ_LENGTH	READS_ALIGNED_IN_PAIRS	PCT_READS_ALIGNED_IN_PAIRS	PF_READS_IMPROPER_PAIRS	PCT_PF_READS_IMPROPER_PAIRS	BAD_CYCLES	STRAND_BALANCE	PCT_CHIMERAS	PCT_ADAPTER	PCT_SOFTCLIP	PCT_HARDCLIP	AVG_POS_3PRIME_SOFTCLIP_LENGTH	SAMPLE	LIBRARY	READ_GROUP
+FIRST_OF_PAIR	5	5	1	0	5	1	500	5	500	500	0	0	0	0	100	0	100	0	100	100	100	5	1	0	0	0	1	0	0	0	0	0			
+SECOND_OF_PAIR	5	5	1	0	5	1	500	5	500	500	0	0	0	0	100	0	100	0	100	100	100	5	1	0	0	0	0	0	0	0	0	0			
+PAIR	10	10	1	0	10	1	1000	10	1000	1000	0	0	0	0	100	0	100	0	100	100	100	10	1	0	0	0	0.5	0	0	0	0	0			
+
+## HISTOGRAM	java.lang.Integer
+READ_LENGTH	PAIRED_TOTAL_LENGTH_COUNT	PAIRED_ALIGNED_LENGTH_COUNT
+100	10	10
+
+## file sample.alignment_summary_metrics.histogram.parquet
+parquet <size> bytes, part histogram, 1 rows, 1 row groups, created_by bammetrics
+class java.lang.Integer
+tool CollectMultipleMetrics
+sample insert_size
+header CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+header Started on: <time>
+column READ_LENGTH INT64 optional
+column PAIRED_TOTAL_LENGTH_COUNT DOUBLE optional
+column PAIRED_ALIGNED_LENGTH_COUNT DOUBLE optional
+100	10.0	10.0
+## file sample.alignment_summary_metrics.long.parquet
+parquet <size> bytes, part long, 111 rows, 1 row groups, created_by bammetrics
+class picard.analysis.AlignmentSummaryMetrics
+tool CollectMultipleMetrics
+sample insert_size
+header CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+header Started on: <time>
+column sample BYTE_ARRAY (STRING) optional
+column class BYTE_ARRAY (STRING) required
+column row_key BYTE_ARRAY (STRING) required
+column column BYTE_ARRAY (STRING) required
+column value BYTE_ARRAY (STRING) optional
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	CATEGORY	FIRST_OF_PAIR
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	TOTAL_READS	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_READS	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PCT_PF_READS	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_NOISE_READS	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_READS_ALIGNED	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PCT_PF_READS_ALIGNED	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_ALIGNED_BASES	500
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_HQ_ALIGNED_READS	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_HQ_ALIGNED_BASES	500
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_HQ_ALIGNED_Q20_BASES	500
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_HQ_MEDIAN_MISMATCHES	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_MISMATCH_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_HQ_ERROR_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_INDEL_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	MEAN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	SD_READ_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	MEDIAN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	MAD_READ_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	MIN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	MAX_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	MEAN_ALIGNED_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	READS_ALIGNED_IN_PAIRS	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PCT_READS_ALIGNED_IN_PAIRS	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PF_READS_IMPROPER_PAIRS	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PCT_PF_READS_IMPROPER_PAIRS	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	BAD_CYCLES	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	STRAND_BALANCE	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PCT_CHIMERAS	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PCT_ADAPTER	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PCT_SOFTCLIP	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	PCT_HARDCLIP	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	AVG_POS_3PRIME_SOFTCLIP_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	SAMPLE	
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	LIBRARY	
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/0	READ_GROUP	
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	CATEGORY	SECOND_OF_PAIR
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	TOTAL_READS	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_READS	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PCT_PF_READS	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_NOISE_READS	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_READS_ALIGNED	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PCT_PF_READS_ALIGNED	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_ALIGNED_BASES	500
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_HQ_ALIGNED_READS	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_HQ_ALIGNED_BASES	500
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_HQ_ALIGNED_Q20_BASES	500
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_HQ_MEDIAN_MISMATCHES	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_MISMATCH_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_HQ_ERROR_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_INDEL_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	MEAN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	SD_READ_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	MEDIAN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	MAD_READ_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	MIN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	MAX_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	MEAN_ALIGNED_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	READS_ALIGNED_IN_PAIRS	5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PCT_READS_ALIGNED_IN_PAIRS	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PF_READS_IMPROPER_PAIRS	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PCT_PF_READS_IMPROPER_PAIRS	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	BAD_CYCLES	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	STRAND_BALANCE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PCT_CHIMERAS	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PCT_ADAPTER	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PCT_SOFTCLIP	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	PCT_HARDCLIP	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	AVG_POS_3PRIME_SOFTCLIP_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	SAMPLE	
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	LIBRARY	
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/1	READ_GROUP	
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	CATEGORY	PAIR
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	TOTAL_READS	10
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_READS	10
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PCT_PF_READS	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_NOISE_READS	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_READS_ALIGNED	10
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PCT_PF_READS_ALIGNED	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_ALIGNED_BASES	1000
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_HQ_ALIGNED_READS	10
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_HQ_ALIGNED_BASES	1000
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_HQ_ALIGNED_Q20_BASES	1000
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_HQ_MEDIAN_MISMATCHES	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_MISMATCH_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_HQ_ERROR_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_INDEL_RATE	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	MEAN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	SD_READ_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	MEDIAN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	MAD_READ_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	MIN_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	MAX_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	MEAN_ALIGNED_READ_LENGTH	100.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	READS_ALIGNED_IN_PAIRS	10
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PCT_READS_ALIGNED_IN_PAIRS	1.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PF_READS_IMPROPER_PAIRS	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PCT_PF_READS_IMPROPER_PAIRS	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	BAD_CYCLES	0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	STRAND_BALANCE	0.5
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PCT_CHIMERAS	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PCT_ADAPTER	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PCT_SOFTCLIP	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	PCT_HARDCLIP	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	AVG_POS_3PRIME_SOFTCLIP_LENGTH	0.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	SAMPLE	
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	LIBRARY	
+insert_size	picard.analysis.AlignmentSummaryMetrics	metrics/2	READ_GROUP	
+insert_size	picard.analysis.AlignmentSummaryMetrics	histogram/0	READ_LENGTH	100
+insert_size	picard.analysis.AlignmentSummaryMetrics	histogram/0	PAIRED_TOTAL_LENGTH_COUNT	10.0
+insert_size	picard.analysis.AlignmentSummaryMetrics	histogram/0	PAIRED_ALIGNED_LENGTH_COUNT	10.0
+## file sample.alignment_summary_metrics.parquet
+parquet <size> bytes, part metrics, 3 rows, 1 row groups, created_by bammetrics
+class picard.analysis.AlignmentSummaryMetrics
+tool CollectMultipleMetrics
+sample insert_size
+header CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+header Started on: <time>
+histogram companion
+column CATEGORY BYTE_ARRAY (STRING) optional
+column TOTAL_READS INT64 optional
+column PF_READS INT64 optional
+column PCT_PF_READS DOUBLE optional
+column PF_NOISE_READS INT64 optional
+column PF_READS_ALIGNED INT64 optional
+column PCT_PF_READS_ALIGNED DOUBLE optional
+column PF_ALIGNED_BASES INT64 optional
+column PF_HQ_ALIGNED_READS INT64 optional
+column PF_HQ_ALIGNED_BASES INT64 optional
+column PF_HQ_ALIGNED_Q20_BASES INT64 optional
+column PF_HQ_MEDIAN_MISMATCHES DOUBLE optional
+column PF_MISMATCH_RATE DOUBLE optional
+column PF_HQ_ERROR_RATE DOUBLE optional
+column PF_INDEL_RATE DOUBLE optional
+column MEAN_READ_LENGTH DOUBLE optional
+column SD_READ_LENGTH DOUBLE optional
+column MEDIAN_READ_LENGTH DOUBLE optional
+column MAD_READ_LENGTH DOUBLE optional
+column MIN_READ_LENGTH DOUBLE optional
+column MAX_READ_LENGTH DOUBLE optional
+column MEAN_ALIGNED_READ_LENGTH DOUBLE optional
+column READS_ALIGNED_IN_PAIRS INT64 optional
+column PCT_READS_ALIGNED_IN_PAIRS DOUBLE optional
+column PF_READS_IMPROPER_PAIRS INT64 optional
+column PCT_PF_READS_IMPROPER_PAIRS DOUBLE optional
+column BAD_CYCLES INT64 optional
+column STRAND_BALANCE DOUBLE optional
+column PCT_CHIMERAS DOUBLE optional
+column PCT_ADAPTER DOUBLE optional
+column PCT_SOFTCLIP DOUBLE optional
+column PCT_HARDCLIP DOUBLE optional
+column AVG_POS_3PRIME_SOFTCLIP_LENGTH DOUBLE optional
+column SAMPLE BYTE_ARRAY (STRING) optional
+column LIBRARY BYTE_ARRAY (STRING) optional
+column READ_GROUP BYTE_ARRAY (STRING) optional
+FIRST_OF_PAIR	5	5	1.0	0	5	1.0	500	5	500	500	0.0	0.0	0.0	0.0	100.0	0.0	100.0	0.0	100.0	100.0	100.0	5	1.0	0	0.0	0	1.0	0.0	0.0	0.0	0.0	0.0			
+SECOND_OF_PAIR	5	5	1.0	0	5	1.0	500	5	500	500	0.0	0.0	0.0	0.0	100.0	0.0	100.0	0.0	100.0	100.0	100.0	5	1.0	0	0.0	0	0.0	0.0	0.0	0.0	0.0	0.0			
+PAIR	10	10	1.0	0	10	1.0	1000	10	1000	1000	0.0	0.0	0.0	0.0	100.0	0.0	100.0	0.0	100.0	100.0	100.0	10	1.0	0	0.0	0	0.5	0.0	0.0	0.0	0.0	0.0			
+## file sample.base_distribution_by_cycle_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.BaseDistributionByCycleMetrics
+READ_END	CYCLE	PCT_A	PCT_C	PCT_G	PCT_T	PCT_N
+1	1	100	0	0	0	0
+1	2	100	0	0	0	0
+1	3	100	0	0	0	0
+1	4	100	0	0	0	0
+1	5	100	0	0	0	0
+1	6	100	0	0	0	0
+1	7	100	0	0	0	0
+1	8	100	0	0	0	0
+1	9	100	0	0	0	0
+1	10	100	0	0	0	0
+1	11	100	0	0	0	0
+1	12	100	0	0	0	0
+1	13	100	0	0	0	0
+1	14	100	0	0	0	0
+1	15	100	0	0	0	0
+1	16	100	0	0	0	0
+1	17	100	0	0	0	0
+1	18	100	0	0	0	0
+1	19	100	0	0	0	0
+1	20	100	0	0	0	0
+1	21	100	0	0	0	0
+1	22	100	0	0	0	0
+1	23	100	0	0	0	0
+1	24	100	0	0	0	0
+1	25	100	0	0	0	0
+1	26	100	0	0	0	0
+1	27	100	0	0	0	0
+1	28	100	0	0	0	0
+1	29	100	0	0	0	0
+1	30	100	0	0	0	0
+1	31	100	0	0	0	0
+1	32	100	0	0	0	0
+1	33	100	0	0	0	0
+1	34	100	0	0	0	0
+1	35	100	0	0	0	0
+1	36	100	0	0	0	0
+1	37	100	0	0	0	0
+1	38	100	0	0	0	0
+1	39	100	0	0	0	0
+1	40	100	0	0	0	0
+1	41	100	0	0	0	0
+1	42	100	0	0	0	0
+1	43	100	0	0	0	0
+1	44	100	0	0	0	0
+1	45	100	0	0	0	0
+1	46	100	0	0	0	0
+1	47	100	0	0	0	0
+1	48	100	0	0	0	0
+1	49	100	0	0	0	0
+1	50	100	0	0	0	0
+1	51	100	0	0	0	0
+1	52	100	0	0	0	0
+1	53	100	0	0	0	0
+1	54	100	0	0	0	0
+1	55	100	0	0	0	0
+1	56	100	0	0	0	0
+1	57	100	0	0	0	0
+1	58	100	0	0	0	0
+1	59	100	0	0	0	0
+1	60	100	0	0	0	0
+1	61	100	0	0	0	0
+1	62	100	0	0	0	0
+1	63	100	0	0	0	0
+1	64	100	0	0	0	0
+1	65	100	0	0	0	0
+1	66	100	0	0	0	0
+1	67	100	0	0	0	0
+1	68	100	0	0	0	0
+1	69	100	0	0	0	0
+1	70	100	0	0	0	0
+1	71	100	0	0	0	0
+1	72	100	0	0	0	0
+1	73	100	0	0	0	0
+1	74	100	0	0	0	0
+1	75	100	0	0	0	0
+1	76	100	0	0	0	0
+1	77	100	0	0	0	0
+1	78	100	0	0	0	0
+1	79	100	0	0	0	0
+1	80	100	0	0	0	0
+1	81	100	0	0	0	0
+1	82	100	0	0	0	0
+1	83	100	0	0	0	0
+1	84	100	0	0	0	0
+1	85	100	0	0	0	0
+1	86	100	0	0	0	0
+1	87	100	0	0	0	0
+1	88	100	0	0	0	0
+1	89	100	0	0	0	0
+1	90	100	0	0	0	0
+1	91	100	0	0	0	0
+1	92	100	0	0	0	0
+1	93	100	0	0	0	0
+1	94	100	0	0	0	0
+1	95	100	0	0	0	0
+1	96	100	0	0	0	0
+1	97	100	0	0	0	0
+1	98	100	0	0	0	0
+1	99	100	0	0	0	0
+1	100	100	0	0	0	0
+2	101	100	0	0	0	0
+2	102	100	0	0	0	0
+2	103	100	0	0	0	0
+2	104	100	0	0	0	0
+2	105	100	0	0	0	0
+2	106	100	0	0	0	0
+2	107	100	0	0	0	0
+2	108	100	0	0	0	0
+2	109	100	0	0	0	0
+2	110	100	0	0	0	0
+2	111	100	0	0	0	0
+2	112	100	0	0	0	0
+2	113	100	0	0	0	0
+2	114	100	0	0	0	0
+2	115	100	0	0	0	0
+2	116	100	0	0	0	0
+2	117	100	0	0	0	0
+2	118	100	0	0	0	0
+2	119	100	0	0	0	0
+2	120	100	0	0	0	0
+2	121	100	0	0	0	0
+2	122	100	0	0	0	0
+2	123	100	0	0	0	0
+2	124	100	0	0	0	0
+2	125	100	0	0	0	0
+2	126	100	0	0	0	0
+2	127	100	0	0	0	0
+2	128	100	0	0	0	0
+2	129	100	0	0	0	0
+2	130	100	0	0	0	0
+2	131	100	0	0	0	0
+2	132	100	0	0	0	0
+2	133	100	0	0	0	0
+2	134	100	0	0	0	0
+2	135	100	0	0	0	0
+2	136	100	0	0	0	0
+2	137	100	0	0	0	0
+2	138	100	0	0	0	0
+2	139	100	0	0	0	0
+2	140	100	0	0	0	0
+2	141	100	0	0	0	0
+2	142	100	0	0	0	0
+2	143	100	0	0	0	0
+2	144	100	0	0	0	0
+2	145	100	0	0	0	0
+2	146	100	0	0	0	0
+2	147	100	0	0	0	0
+2	148	100	0	0	0	0
+2	149	100	0	0	0	0
+2	150	100	0	0	0	0
+2	151	100	0	0	0	0
+2	152	100	0	0	0	0
+2	153	100	0	0	0	0
+2	154	100	0	0	0	0
+2	155	100	0	0	0	0
+2	156	100	0	0	0	0
+2	157	100	0	0	0	0
+2	158	100	0	0	0	0
+2	159	100	0	0	0	0
+2	160	100	0	0	0	0
+2	161	100	0	0	0	0
+2	162	100	0	0	0	0
+2	163	100	0	0	0	0
+2	164	100	0	0	0	0
+2	165	100	0	0	0	0
+2	166	100	0	0	0	0
+2	167	100	0	0	0	0
+2	168	100	0	0	0	0
+2	169	100	0	0	0	0
+2	170	100	0	0	0	0
+2	171	100	0	0	0	0
+2	172	100	0	0	0	0
+2	173	100	0	0	0	0
+2	174	100	0	0	0	0
+2	175	100	0	0	0	0
+2	176	100	0	0	0	0
+2	177	100	0	0	0	0
+2	178	100	0	0	0	0
+2	179	100	0	0	0	0
+2	180	100	0	0	0	0
+2	181	100	0	0	0	0
+2	182	100	0	0	0	0
+2	183	100	0	0	0	0
+2	184	100	0	0	0	0
+2	185	100	0	0	0	0
+2	186	100	0	0	0	0
+2	187	100	0	0	0	0
+2	188	100	0	0	0	0
+2	189	100	0	0	0	0
+2	190	100	0	0	0	0
+2	191	100	0	0	0	0
+2	192	100	0	0	0	0
+2	193	100	0	0	0	0
+2	194	100	0	0	0	0
+2	195	100	0	0	0	0
+2	196	100	0	0	0	0
+2	197	100	0	0	0	0
+2	198	100	0	0	0	0
+2	199	100	0	0	0	0
+2	200	100	0	0	0	0
+
+
+## file sample.base_distribution_by_cycle_metrics.long.parquet
+parquet <size> bytes, part long, 1400 rows, 1 row groups, created_by bammetrics
+class picard.analysis.BaseDistributionByCycleMetrics
+tool CollectMultipleMetrics
+sample insert_size
+header CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+header Started on: <time>
+column sample BYTE_ARRAY (STRING) optional
+column class BYTE_ARRAY (STRING) required
+column row_key BYTE_ARRAY (STRING) required
+column column BYTE_ARRAY (STRING) required
+column value BYTE_ARRAY (STRING) optional
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/0	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/0	CYCLE	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/0	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/0	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/0	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/0	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/0	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/1	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/1	CYCLE	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/1	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/1	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/1	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/1	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/1	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/2	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/2	CYCLE	3
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/2	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/2	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/2	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/2	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/2	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/3	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/3	CYCLE	4
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/3	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/3	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/3	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/3	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/3	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/4	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/4	CYCLE	5
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/4	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/4	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/4	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/4	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/4	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/5	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/5	CYCLE	6
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/5	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/5	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/5	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/5	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/5	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/6	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/6	CYCLE	7
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/6	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/6	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/6	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/6	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/6	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/7	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/7	CYCLE	8
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/7	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/7	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/7	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/7	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/7	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/8	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/8	CYCLE	9
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/8	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/8	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/8	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/8	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/8	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/9	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/9	CYCLE	10
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/9	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/9	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/9	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/9	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/9	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/10	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/10	CYCLE	11
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/10	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/10	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/10	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/10	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/10	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/11	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/11	CYCLE	12
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/11	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/11	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/11	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/11	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/11	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/12	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/12	CYCLE	13
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/12	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/12	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/12	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/12	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/12	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/13	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/13	CYCLE	14
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/13	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/13	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/13	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/13	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/13	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/14	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/14	CYCLE	15
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/14	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/14	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/14	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/14	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/14	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/15	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/15	CYCLE	16
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/15	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/15	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/15	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/15	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/15	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/16	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/16	CYCLE	17
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/16	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/16	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/16	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/16	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/16	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/17	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/17	CYCLE	18
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/17	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/17	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/17	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/17	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/17	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/18	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/18	CYCLE	19
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/18	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/18	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/18	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/18	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/18	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/19	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/19	CYCLE	20
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/19	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/19	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/19	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/19	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/19	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/20	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/20	CYCLE	21
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/20	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/20	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/20	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/20	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/20	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/21	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/21	CYCLE	22
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/21	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/21	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/21	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/21	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/21	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/22	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/22	CYCLE	23
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/22	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/22	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/22	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/22	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/22	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/23	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/23	CYCLE	24
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/23	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/23	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/23	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/23	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/23	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/24	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/24	CYCLE	25
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/24	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/24	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/24	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/24	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/24	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/25	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/25	CYCLE	26
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/25	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/25	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/25	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/25	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/25	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/26	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/26	CYCLE	27
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/26	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/26	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/26	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/26	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/26	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/27	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/27	CYCLE	28
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/27	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/27	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/27	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/27	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/27	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/28	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/28	CYCLE	29
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/28	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/28	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/28	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/28	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/28	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/29	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/29	CYCLE	30
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/29	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/29	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/29	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/29	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/29	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/30	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/30	CYCLE	31
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/30	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/30	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/30	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/30	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/30	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/31	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/31	CYCLE	32
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/31	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/31	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/31	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/31	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/31	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/32	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/32	CYCLE	33
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/32	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/32	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/32	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/32	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/32	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/33	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/33	CYCLE	34
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/33	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/33	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/33	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/33	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/33	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/34	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/34	CYCLE	35
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/34	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/34	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/34	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/34	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/34	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/35	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/35	CYCLE	36
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/35	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/35	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/35	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/35	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/35	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/36	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/36	CYCLE	37
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/36	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/36	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/36	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/36	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/36	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/37	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/37	CYCLE	38
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/37	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/37	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/37	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/37	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/37	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/38	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/38	CYCLE	39
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/38	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/38	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/38	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/38	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/38	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/39	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/39	CYCLE	40
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/39	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/39	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/39	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/39	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/39	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/40	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/40	CYCLE	41
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/40	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/40	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/40	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/40	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/40	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/41	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/41	CYCLE	42
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/41	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/41	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/41	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/41	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/41	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/42	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/42	CYCLE	43
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/42	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/42	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/42	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/42	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/42	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/43	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/43	CYCLE	44
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/43	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/43	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/43	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/43	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/43	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/44	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/44	CYCLE	45
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/44	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/44	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/44	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/44	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/44	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/45	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/45	CYCLE	46
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/45	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/45	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/45	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/45	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/45	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/46	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/46	CYCLE	47
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/46	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/46	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/46	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/46	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/46	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/47	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/47	CYCLE	48
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/47	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/47	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/47	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/47	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/47	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/48	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/48	CYCLE	49
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/48	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/48	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/48	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/48	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/48	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/49	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/49	CYCLE	50
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/49	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/49	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/49	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/49	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/49	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/50	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/50	CYCLE	51
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/50	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/50	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/50	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/50	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/50	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/51	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/51	CYCLE	52
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/51	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/51	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/51	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/51	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/51	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/52	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/52	CYCLE	53
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/52	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/52	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/52	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/52	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/52	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/53	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/53	CYCLE	54
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/53	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/53	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/53	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/53	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/53	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/54	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/54	CYCLE	55
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/54	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/54	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/54	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/54	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/54	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/55	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/55	CYCLE	56
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/55	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/55	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/55	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/55	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/55	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/56	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/56	CYCLE	57
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/56	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/56	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/56	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/56	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/56	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/57	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/57	CYCLE	58
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/57	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/57	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/57	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/57	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/57	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/58	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/58	CYCLE	59
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/58	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/58	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/58	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/58	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/58	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/59	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/59	CYCLE	60
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/59	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/59	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/59	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/59	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/59	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/60	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/60	CYCLE	61
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/60	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/60	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/60	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/60	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/60	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/61	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/61	CYCLE	62
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/61	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/61	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/61	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/61	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/61	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/62	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/62	CYCLE	63
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/62	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/62	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/62	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/62	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/62	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/63	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/63	CYCLE	64
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/63	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/63	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/63	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/63	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/63	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/64	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/64	CYCLE	65
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/64	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/64	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/64	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/64	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/64	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/65	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/65	CYCLE	66
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/65	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/65	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/65	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/65	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/65	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/66	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/66	CYCLE	67
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/66	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/66	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/66	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/66	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/66	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/67	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/67	CYCLE	68
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/67	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/67	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/67	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/67	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/67	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/68	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/68	CYCLE	69
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/68	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/68	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/68	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/68	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/68	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/69	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/69	CYCLE	70
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/69	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/69	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/69	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/69	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/69	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/70	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/70	CYCLE	71
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/70	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/70	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/70	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/70	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/70	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/71	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/71	CYCLE	72
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/71	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/71	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/71	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/71	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/71	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/72	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/72	CYCLE	73
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/72	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/72	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/72	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/72	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/72	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/73	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/73	CYCLE	74
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/73	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/73	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/73	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/73	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/73	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/74	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/74	CYCLE	75
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/74	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/74	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/74	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/74	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/74	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/75	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/75	CYCLE	76
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/75	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/75	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/75	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/75	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/75	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/76	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/76	CYCLE	77
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/76	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/76	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/76	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/76	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/76	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/77	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/77	CYCLE	78
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/77	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/77	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/77	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/77	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/77	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/78	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/78	CYCLE	79
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/78	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/78	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/78	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/78	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/78	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/79	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/79	CYCLE	80
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/79	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/79	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/79	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/79	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/79	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/80	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/80	CYCLE	81
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/80	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/80	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/80	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/80	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/80	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/81	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/81	CYCLE	82
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/81	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/81	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/81	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/81	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/81	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/82	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/82	CYCLE	83
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/82	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/82	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/82	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/82	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/82	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/83	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/83	CYCLE	84
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/83	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/83	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/83	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/83	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/83	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/84	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/84	CYCLE	85
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/84	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/84	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/84	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/84	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/84	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/85	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/85	CYCLE	86
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/85	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/85	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/85	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/85	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/85	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/86	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/86	CYCLE	87
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/86	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/86	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/86	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/86	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/86	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/87	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/87	CYCLE	88
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/87	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/87	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/87	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/87	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/87	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/88	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/88	CYCLE	89
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/88	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/88	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/88	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/88	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/88	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/89	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/89	CYCLE	90
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/89	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/89	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/89	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/89	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/89	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/90	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/90	CYCLE	91
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/90	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/90	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/90	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/90	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/90	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/91	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/91	CYCLE	92
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/91	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/91	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/91	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/91	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/91	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/92	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/92	CYCLE	93
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/92	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/92	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/92	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/92	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/92	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/93	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/93	CYCLE	94
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/93	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/93	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/93	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/93	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/93	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/94	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/94	CYCLE	95
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/94	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/94	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/94	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/94	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/94	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/95	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/95	CYCLE	96
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/95	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/95	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/95	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/95	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/95	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/96	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/96	CYCLE	97
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/96	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/96	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/96	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/96	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/96	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/97	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/97	CYCLE	98
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/97	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/97	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/97	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/97	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/97	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/98	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/98	CYCLE	99
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/98	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/98	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/98	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/98	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/98	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/99	READ_END	1
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/99	CYCLE	100
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/99	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/99	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/99	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/99	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/99	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/100	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/100	CYCLE	101
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/100	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/100	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/100	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/100	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/100	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/101	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/101	CYCLE	102
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/101	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/101	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/101	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/101	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/101	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/102	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/102	CYCLE	103
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/102	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/102	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/102	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/102	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/102	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/103	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/103	CYCLE	104
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/103	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/103	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/103	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/103	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/103	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/104	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/104	CYCLE	105
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/104	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/104	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/104	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/104	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/104	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/105	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/105	CYCLE	106
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/105	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/105	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/105	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/105	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/105	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/106	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/106	CYCLE	107
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/106	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/106	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/106	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/106	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/106	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/107	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/107	CYCLE	108
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/107	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/107	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/107	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/107	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/107	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/108	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/108	CYCLE	109
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/108	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/108	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/108	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/108	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/108	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/109	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/109	CYCLE	110
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/109	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/109	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/109	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/109	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/109	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/110	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/110	CYCLE	111
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/110	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/110	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/110	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/110	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/110	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/111	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/111	CYCLE	112
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/111	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/111	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/111	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/111	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/111	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/112	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/112	CYCLE	113
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/112	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/112	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/112	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/112	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/112	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/113	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/113	CYCLE	114
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/113	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/113	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/113	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/113	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/113	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/114	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/114	CYCLE	115
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/114	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/114	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/114	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/114	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/114	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/115	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/115	CYCLE	116
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/115	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/115	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/115	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/115	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/115	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/116	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/116	CYCLE	117
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/116	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/116	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/116	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/116	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/116	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/117	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/117	CYCLE	118
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/117	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/117	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/117	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/117	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/117	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/118	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/118	CYCLE	119
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/118	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/118	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/118	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/118	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/118	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/119	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/119	CYCLE	120
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/119	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/119	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/119	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/119	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/119	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/120	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/120	CYCLE	121
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/120	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/120	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/120	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/120	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/120	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/121	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/121	CYCLE	122
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/121	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/121	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/121	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/121	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/121	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/122	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/122	CYCLE	123
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/122	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/122	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/122	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/122	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/122	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/123	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/123	CYCLE	124
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/123	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/123	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/123	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/123	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/123	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/124	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/124	CYCLE	125
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/124	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/124	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/124	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/124	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/124	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/125	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/125	CYCLE	126
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/125	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/125	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/125	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/125	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/125	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/126	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/126	CYCLE	127
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/126	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/126	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/126	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/126	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/126	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/127	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/127	CYCLE	128
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/127	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/127	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/127	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/127	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/127	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/128	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/128	CYCLE	129
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/128	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/128	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/128	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/128	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/128	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/129	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/129	CYCLE	130
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/129	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/129	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/129	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/129	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/129	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/130	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/130	CYCLE	131
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/130	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/130	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/130	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/130	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/130	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/131	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/131	CYCLE	132
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/131	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/131	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/131	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/131	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/131	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/132	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/132	CYCLE	133
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/132	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/132	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/132	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/132	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/132	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/133	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/133	CYCLE	134
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/133	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/133	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/133	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/133	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/133	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/134	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/134	CYCLE	135
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/134	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/134	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/134	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/134	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/134	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/135	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/135	CYCLE	136
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/135	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/135	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/135	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/135	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/135	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/136	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/136	CYCLE	137
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/136	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/136	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/136	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/136	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/136	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/137	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/137	CYCLE	138
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/137	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/137	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/137	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/137	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/137	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/138	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/138	CYCLE	139
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/138	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/138	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/138	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/138	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/138	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/139	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/139	CYCLE	140
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/139	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/139	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/139	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/139	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/139	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/140	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/140	CYCLE	141
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/140	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/140	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/140	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/140	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/140	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/141	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/141	CYCLE	142
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/141	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/141	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/141	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/141	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/141	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/142	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/142	CYCLE	143
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/142	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/142	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/142	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/142	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/142	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/143	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/143	CYCLE	144
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/143	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/143	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/143	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/143	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/143	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/144	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/144	CYCLE	145
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/144	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/144	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/144	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/144	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/144	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/145	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/145	CYCLE	146
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/145	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/145	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/145	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/145	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/145	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/146	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/146	CYCLE	147
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/146	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/146	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/146	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/146	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/146	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/147	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/147	CYCLE	148
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/147	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/147	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/147	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/147	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/147	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/148	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/148	CYCLE	149
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/148	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/148	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/148	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/148	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/148	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/149	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/149	CYCLE	150
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/149	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/149	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/149	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/149	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/149	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/150	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/150	CYCLE	151
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/150	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/150	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/150	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/150	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/150	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/151	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/151	CYCLE	152
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/151	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/151	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/151	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/151	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/151	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/152	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/152	CYCLE	153
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/152	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/152	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/152	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/152	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/152	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/153	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/153	CYCLE	154
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/153	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/153	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/153	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/153	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/153	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/154	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/154	CYCLE	155
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/154	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/154	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/154	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/154	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/154	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/155	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/155	CYCLE	156
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/155	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/155	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/155	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/155	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/155	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/156	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/156	CYCLE	157
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/156	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/156	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/156	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/156	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/156	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/157	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/157	CYCLE	158
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/157	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/157	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/157	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/157	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/157	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/158	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/158	CYCLE	159
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/158	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/158	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/158	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/158	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/158	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/159	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/159	CYCLE	160
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/159	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/159	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/159	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/159	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/159	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/160	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/160	CYCLE	161
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/160	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/160	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/160	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/160	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/160	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/161	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/161	CYCLE	162
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/161	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/161	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/161	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/161	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/161	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/162	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/162	CYCLE	163
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/162	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/162	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/162	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/162	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/162	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/163	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/163	CYCLE	164
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/163	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/163	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/163	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/163	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/163	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/164	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/164	CYCLE	165
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/164	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/164	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/164	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/164	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/164	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/165	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/165	CYCLE	166
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/165	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/165	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/165	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/165	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/165	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/166	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/166	CYCLE	167
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/166	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/166	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/166	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/166	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/166	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/167	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/167	CYCLE	168
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/167	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/167	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/167	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/167	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/167	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/168	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/168	CYCLE	169
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/168	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/168	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/168	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/168	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/168	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/169	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/169	CYCLE	170
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/169	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/169	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/169	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/169	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/169	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/170	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/170	CYCLE	171
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/170	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/170	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/170	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/170	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/170	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/171	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/171	CYCLE	172
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/171	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/171	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/171	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/171	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/171	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/172	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/172	CYCLE	173
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/172	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/172	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/172	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/172	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/172	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/173	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/173	CYCLE	174
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/173	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/173	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/173	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/173	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/173	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/174	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/174	CYCLE	175
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/174	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/174	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/174	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/174	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/174	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/175	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/175	CYCLE	176
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/175	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/175	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/175	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/175	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/175	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/176	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/176	CYCLE	177
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/176	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/176	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/176	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/176	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/176	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/177	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/177	CYCLE	178
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/177	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/177	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/177	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/177	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/177	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/178	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/178	CYCLE	179
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/178	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/178	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/178	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/178	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/178	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/179	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/179	CYCLE	180
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/179	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/179	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/179	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/179	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/179	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/180	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/180	CYCLE	181
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/180	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/180	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/180	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/180	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/180	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/181	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/181	CYCLE	182
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/181	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/181	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/181	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/181	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/181	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/182	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/182	CYCLE	183
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/182	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/182	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/182	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/182	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/182	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/183	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/183	CYCLE	184
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/183	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/183	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/183	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/183	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/183	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/184	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/184	CYCLE	185
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/184	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/184	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/184	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/184	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/184	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/185	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/185	CYCLE	186
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/185	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/185	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/185	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/185	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/185	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/186	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/186	CYCLE	187
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/186	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/186	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/186	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/186	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/186	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/187	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/187	CYCLE	188
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/187	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/187	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/187	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/187	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/187	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/188	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/188	CYCLE	189
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/188	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/188	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/188	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/188	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/188	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/189	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/189	CYCLE	190
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/189	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/189	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/189	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/189	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/189	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/190	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/190	CYCLE	191
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/190	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/190	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/190	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/190	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/190	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/191	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/191	CYCLE	192
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/191	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/191	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/191	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/191	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/191	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/192	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/192	CYCLE	193
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/192	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/192	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/192	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/192	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/192	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/193	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/193	CYCLE	194
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/193	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/193	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/193	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/193	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/193	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/194	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/194	CYCLE	195
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/194	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/194	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/194	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/194	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/194	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/195	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/195	CYCLE	196
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/195	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/195	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/195	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/195	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/195	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/196	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/196	CYCLE	197
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/196	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/196	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/196	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/196	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/196	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/197	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/197	CYCLE	198
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/197	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/197	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/197	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/197	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/197	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/198	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/198	CYCLE	199
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/198	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/198	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/198	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/198	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/198	PCT_N	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/199	READ_END	2
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/199	CYCLE	200
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/199	PCT_A	100.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/199	PCT_C	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/199	PCT_G	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/199	PCT_T	0.0
+insert_size	picard.analysis.BaseDistributionByCycleMetrics	metrics/199	PCT_N	0.0
+## file sample.base_distribution_by_cycle_metrics.parquet
+parquet <size> bytes, part metrics, 200 rows, 1 row groups, created_by bammetrics
+class picard.analysis.BaseDistributionByCycleMetrics
+tool CollectMultipleMetrics
+sample insert_size
+header CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+header Started on: <time>
+column READ_END INT64 optional
+column CYCLE INT64 optional
+column PCT_A DOUBLE optional
+column PCT_C DOUBLE optional
+column PCT_G DOUBLE optional
+column PCT_T DOUBLE optional
+column PCT_N DOUBLE optional
+1	1	100.0	0.0	0.0	0.0	0.0
+1	2	100.0	0.0	0.0	0.0	0.0
+1	3	100.0	0.0	0.0	0.0	0.0
+1	4	100.0	0.0	0.0	0.0	0.0
+1	5	100.0	0.0	0.0	0.0	0.0
+1	6	100.0	0.0	0.0	0.0	0.0
+1	7	100.0	0.0	0.0	0.0	0.0
+1	8	100.0	0.0	0.0	0.0	0.0
+1	9	100.0	0.0	0.0	0.0	0.0
+1	10	100.0	0.0	0.0	0.0	0.0
+1	11	100.0	0.0	0.0	0.0	0.0
+1	12	100.0	0.0	0.0	0.0	0.0
+1	13	100.0	0.0	0.0	0.0	0.0
+1	14	100.0	0.0	0.0	0.0	0.0
+1	15	100.0	0.0	0.0	0.0	0.0
+1	16	100.0	0.0	0.0	0.0	0.0
+1	17	100.0	0.0	0.0	0.0	0.0
+1	18	100.0	0.0	0.0	0.0	0.0
+1	19	100.0	0.0	0.0	0.0	0.0
+1	20	100.0	0.0	0.0	0.0	0.0
+1	21	100.0	0.0	0.0	0.0	0.0
+1	22	100.0	0.0	0.0	0.0	0.0
+1	23	100.0	0.0	0.0	0.0	0.0
+1	24	100.0	0.0	0.0	0.0	0.0
+1	25	100.0	0.0	0.0	0.0	0.0
+1	26	100.0	0.0	0.0	0.0	0.0
+1	27	100.0	0.0	0.0	0.0	0.0
+1	28	100.0	0.0	0.0	0.0	0.0
+1	29	100.0	0.0	0.0	0.0	0.0
+1	30	100.0	0.0	0.0	0.0	0.0
+1	31	100.0	0.0	0.0	0.0	0.0
+1	32	100.0	0.0	0.0	0.0	0.0
+1	33	100.0	0.0	0.0	0.0	0.0
+1	34	100.0	0.0	0.0	0.0	0.0
+1	35	100.0	0.0	0.0	0.0	0.0
+1	36	100.0	0.0	0.0	0.0	0.0
+1	37	100.0	0.0	0.0	0.0	0.0
+1	38	100.0	0.0	0.0	0.0	0.0
+1	39	100.0	0.0	0.0	0.0	0.0
+1	40	100.0	0.0	0.0	0.0	0.0
+1	41	100.0	0.0	0.0	0.0	0.0
+1	42	100.0	0.0	0.0	0.0	0.0
+1	43	100.0	0.0	0.0	0.0	0.0
+1	44	100.0	0.0	0.0	0.0	0.0
+1	45	100.0	0.0	0.0	0.0	0.0
+1	46	100.0	0.0	0.0	0.0	0.0
+1	47	100.0	0.0	0.0	0.0	0.0
+1	48	100.0	0.0	0.0	0.0	0.0
+1	49	100.0	0.0	0.0	0.0	0.0
+1	50	100.0	0.0	0.0	0.0	0.0
+1	51	100.0	0.0	0.0	0.0	0.0
+1	52	100.0	0.0	0.0	0.0	0.0
+1	53	100.0	0.0	0.0	0.0	0.0
+1	54	100.0	0.0	0.0	0.0	0.0
+1	55	100.0	0.0	0.0	0.0	0.0
+1	56	100.0	0.0	0.0	0.0	0.0
+1	57	100.0	0.0	0.0	0.0	0.0
+1	58	100.0	0.0	0.0	0.0	0.0
+1	59	100.0	0.0	0.0	0.0	0.0
+1	60	100.0	0.0	0.0	0.0	0.0
+1	61	100.0	0.0	0.0	0.0	0.0
+1	62	100.0	0.0	0.0	0.0	0.0
+1	63	100.0	0.0	0.0	0.0	0.0
+1	64	100.0	0.0	0.0	0.0	0.0
+1	65	100.0	0.0	0.0	0.0	0.0
+1	66	100.0	0.0	0.0	0.0	0.0
+1	67	100.0	0.0	0.0	0.0	0.0
+1	68	100.0	0.0	0.0	0.0	0.0
+1	69	100.0	0.0	0.0	0.0	0.0
+1	70	100.0	0.0	0.0	0.0	0.0
+1	71	100.0	0.0	0.0	0.0	0.0
+1	72	100.0	0.0	0.0	0.0	0.0
+1	73	100.0	0.0	0.0	0.0	0.0
+1	74	100.0	0.0	0.0	0.0	0.0
+1	75	100.0	0.0	0.0	0.0	0.0
+1	76	100.0	0.0	0.0	0.0	0.0
+1	77	100.0	0.0	0.0	0.0	0.0
+1	78	100.0	0.0	0.0	0.0	0.0
+1	79	100.0	0.0	0.0	0.0	0.0
+1	80	100.0	0.0	0.0	0.0	0.0
+1	81	100.0	0.0	0.0	0.0	0.0
+1	82	100.0	0.0	0.0	0.0	0.0
+1	83	100.0	0.0	0.0	0.0	0.0
+1	84	100.0	0.0	0.0	0.0	0.0
+1	85	100.0	0.0	0.0	0.0	0.0
+1	86	100.0	0.0	0.0	0.0	0.0
+1	87	100.0	0.0	0.0	0.0	0.0
+1	88	100.0	0.0	0.0	0.0	0.0
+1	89	100.0	0.0	0.0	0.0	0.0
+1	90	100.0	0.0	0.0	0.0	0.0
+1	91	100.0	0.0	0.0	0.0	0.0
+1	92	100.0	0.0	0.0	0.0	0.0
+1	93	100.0	0.0	0.0	0.0	0.0
+1	94	100.0	0.0	0.0	0.0	0.0
+1	95	100.0	0.0	0.0	0.0	0.0
+1	96	100.0	0.0	0.0	0.0	0.0
+1	97	100.0	0.0	0.0	0.0	0.0
+1	98	100.0	0.0	0.0	0.0	0.0
+1	99	100.0	0.0	0.0	0.0	0.0
+1	100	100.0	0.0	0.0	0.0	0.0
+2	101	100.0	0.0	0.0	0.0	0.0
+2	102	100.0	0.0	0.0	0.0	0.0
+2	103	100.0	0.0	0.0	0.0	0.0
+2	104	100.0	0.0	0.0	0.0	0.0
+2	105	100.0	0.0	0.0	0.0	0.0
+2	106	100.0	0.0	0.0	0.0	0.0
+2	107	100.0	0.0	0.0	0.0	0.0
+2	108	100.0	0.0	0.0	0.0	0.0
+2	109	100.0	0.0	0.0	0.0	0.0
+2	110	100.0	0.0	0.0	0.0	0.0
+2	111	100.0	0.0	0.0	0.0	0.0
+2	112	100.0	0.0	0.0	0.0	0.0
+2	113	100.0	0.0	0.0	0.0	0.0
+2	114	100.0	0.0	0.0	0.0	0.0
+2	115	100.0	0.0	0.0	0.0	0.0
+2	116	100.0	0.0	0.0	0.0	0.0
+2	117	100.0	0.0	0.0	0.0	0.0
+2	118	100.0	0.0	0.0	0.0	0.0
+2	119	100.0	0.0	0.0	0.0	0.0
+2	120	100.0	0.0	0.0	0.0	0.0
+2	121	100.0	0.0	0.0	0.0	0.0
+2	122	100.0	0.0	0.0	0.0	0.0
+2	123	100.0	0.0	0.0	0.0	0.0
+2	124	100.0	0.0	0.0	0.0	0.0
+2	125	100.0	0.0	0.0	0.0	0.0
+2	126	100.0	0.0	0.0	0.0	0.0
+2	127	100.0	0.0	0.0	0.0	0.0
+2	128	100.0	0.0	0.0	0.0	0.0
+2	129	100.0	0.0	0.0	0.0	0.0
+2	130	100.0	0.0	0.0	0.0	0.0
+2	131	100.0	0.0	0.0	0.0	0.0
+2	132	100.0	0.0	0.0	0.0	0.0
+2	133	100.0	0.0	0.0	0.0	0.0
+2	134	100.0	0.0	0.0	0.0	0.0
+2	135	100.0	0.0	0.0	0.0	0.0
+2	136	100.0	0.0	0.0	0.0	0.0
+2	137	100.0	0.0	0.0	0.0	0.0
+2	138	100.0	0.0	0.0	0.0	0.0
+2	139	100.0	0.0	0.0	0.0	0.0
+2	140	100.0	0.0	0.0	0.0	0.0
+2	141	100.0	0.0	0.0	0.0	0.0
+2	142	100.0	0.0	0.0	0.0	0.0
+2	143	100.0	0.0	0.0	0.0	0.0
+2	144	100.0	0.0	0.0	0.0	0.0
+2	145	100.0	0.0	0.0	0.0	0.0
+2	146	100.0	0.0	0.0	0.0	0.0
+2	147	100.0	0.0	0.0	0.0	0.0
+2	148	100.0	0.0	0.0	0.0	0.0
+2	149	100.0	0.0	0.0	0.0	0.0
+2	150	100.0	0.0	0.0	0.0	0.0
+2	151	100.0	0.0	0.0	0.0	0.0
+2	152	100.0	0.0	0.0	0.0	0.0
+2	153	100.0	0.0	0.0	0.0	0.0
+2	154	100.0	0.0	0.0	0.0	0.0
+2	155	100.0	0.0	0.0	0.0	0.0
+2	156	100.0	0.0	0.0	0.0	0.0
+2	157	100.0	0.0	0.0	0.0	0.0
+2	158	100.0	0.0	0.0	0.0	0.0
+2	159	100.0	0.0	0.0	0.0	0.0
+2	160	100.0	0.0	0.0	0.0	0.0
+2	161	100.0	0.0	0.0	0.0	0.0
+2	162	100.0	0.0	0.0	0.0	0.0
+2	163	100.0	0.0	0.0	0.0	0.0
+2	164	100.0	0.0	0.0	0.0	0.0
+2	165	100.0	0.0	0.0	0.0	0.0
+2	166	100.0	0.0	0.0	0.0	0.0
+2	167	100.0	0.0	0.0	0.0	0.0
+2	168	100.0	0.0	0.0	0.0	0.0
+2	169	100.0	0.0	0.0	0.0	0.0
+2	170	100.0	0.0	0.0	0.0	0.0
+2	171	100.0	0.0	0.0	0.0	0.0
+2	172	100.0	0.0	0.0	0.0	0.0
+2	173	100.0	0.0	0.0	0.0	0.0
+2	174	100.0	0.0	0.0	0.0	0.0
+2	175	100.0	0.0	0.0	0.0	0.0
+2	176	100.0	0.0	0.0	0.0	0.0
+2	177	100.0	0.0	0.0	0.0	0.0
+2	178	100.0	0.0	0.0	0.0	0.0
+2	179	100.0	0.0	0.0	0.0	0.0
+2	180	100.0	0.0	0.0	0.0	0.0
+2	181	100.0	0.0	0.0	0.0	0.0
+2	182	100.0	0.0	0.0	0.0	0.0
+2	183	100.0	0.0	0.0	0.0	0.0
+2	184	100.0	0.0	0.0	0.0	0.0
+2	185	100.0	0.0	0.0	0.0	0.0
+2	186	100.0	0.0	0.0	0.0	0.0
+2	187	100.0	0.0	0.0	0.0	0.0
+2	188	100.0	0.0	0.0	0.0	0.0
+2	189	100.0	0.0	0.0	0.0	0.0
+2	190	100.0	0.0	0.0	0.0	0.0
+2	191	100.0	0.0	0.0	0.0	0.0
+2	192	100.0	0.0	0.0	0.0	0.0
+2	193	100.0	0.0	0.0	0.0	0.0
+2	194	100.0	0.0	0.0	0.0	0.0
+2	195	100.0	0.0	0.0	0.0	0.0
+2	196	100.0	0.0	0.0	0.0	0.0
+2	197	100.0	0.0	0.0	0.0	0.0
+2	198	100.0	0.0	0.0	0.0	0.0
+2	199	100.0	0.0	0.0	0.0	0.0
+2	200	100.0	0.0	0.0	0.0	0.0
+## file sample.insert_size_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.InsertSizeMetrics
+MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MAX_INSERT_SIZE	MEAN_INSERT_SIZE	STANDARD_DEVIATION	READ_PAIRS	PAIR_ORIENTATION	WIDTH_OF_10_PERCENT	WIDTH_OF_20_PERCENT	WIDTH_OF_30_PERCENT	WIDTH_OF_40_PERCENT	WIDTH_OF_50_PERCENT	WIDTH_OF_60_PERCENT	WIDTH_OF_70_PERCENT	WIDTH_OF_80_PERCENT	WIDTH_OF_90_PERCENT	WIDTH_OF_95_PERCENT	WIDTH_OF_99_PERCENT	SAMPLE	LIBRARY	READ_GROUP
+310	310	10	300	500	310	8.164966	5	FR	1	1	1	1	21	21	21	21	381	381	381			
+
+## HISTOGRAM	java.lang.Integer
+insert_size	All_Reads.fr_count
+300	1
+310	2
+320	1
+
+## file sample.insert_size_metrics.histogram.parquet
+parquet <size> bytes, part histogram, 3 rows, 1 row groups, created_by bammetrics
+class java.lang.Integer
+tool CollectMultipleMetrics
+sample insert_size
+header CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+header Started on: <time>
+column insert_size INT64 optional
+column All_Reads.fr_count DOUBLE optional
+300	1.0
+310	2.0
+320	1.0
+## file sample.insert_size_metrics.long.parquet
+parquet <size> bytes, part long, 29 rows, 1 row groups, created_by bammetrics
+class picard.analysis.InsertSizeMetrics
+tool CollectMultipleMetrics
+sample insert_size
+header CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+header Started on: <time>
+column sample BYTE_ARRAY (STRING) optional
+column class BYTE_ARRAY (STRING) required
+column row_key BYTE_ARRAY (STRING) required
+column column BYTE_ARRAY (STRING) required
+column value BYTE_ARRAY (STRING) optional
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	MEDIAN_INSERT_SIZE	310.0
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	MODE_INSERT_SIZE	310.0
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	MEDIAN_ABSOLUTE_DEVIATION	10.0
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	MIN_INSERT_SIZE	300
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	MAX_INSERT_SIZE	500
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	MEAN_INSERT_SIZE	310.0
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	STANDARD_DEVIATION	8.16496580927726
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	READ_PAIRS	5
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	PAIR_ORIENTATION	FR
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_10_PERCENT	1
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_20_PERCENT	1
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_30_PERCENT	1
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_40_PERCENT	1
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_50_PERCENT	21
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_60_PERCENT	21
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_70_PERCENT	21
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_80_PERCENT	21
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_90_PERCENT	381
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_95_PERCENT	381
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_99_PERCENT	381
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	SAMPLE	
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	LIBRARY	
+insert_size	picard.analysis.InsertSizeMetrics	metrics/0	READ_GROUP	
+insert_size	picard.analysis.InsertSizeMetrics	histogram/0	insert_size	300
+insert_size	picard.analysis.InsertSizeMetrics	histogram/0	All_Reads.fr_count	1.0
+insert_size	picard.analysis.InsertSizeMetrics	histogram/1	insert_size	310
+insert_size	picard.analysis.InsertSizeMetrics	histogram/1	All_Reads.fr_count	2.0
+insert_size	picard.analysis.InsertSizeMetrics	histogram/2	insert_size	320
+insert_size	picard.analysis.InsertSizeMetrics	histogram/2	All_Reads.fr_count	1.0
+## file sample.insert_size_metrics.parquet
+parquet <size> bytes, part metrics, 1 rows, 1 row groups, created_by bammetrics
+class picard.analysis.InsertSizeMetrics
+tool CollectMultipleMetrics
+sample insert_size
+header CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+header Started on: <time>
+histogram companion
+column MEDIAN_INSERT_SIZE DOUBLE optional
+column MODE_INSERT_SIZE DOUBLE optional
+column MEDIAN_ABSOLUTE_DEVIATION DOUBLE optional
+column MIN_INSERT_SIZE INT64 optional
+column MAX_INSERT_SIZE INT64 optional
+column MEAN_INSERT_SIZE DOUBLE optional
+column STANDARD_DEVIATION DOUBLE optional
+column READ_PAIRS INT64 optional
+column PAIR_ORIENTATION BYTE_ARRAY (STRING) optional
+column WIDTH_OF_10_PERCENT INT64 optional
+column WIDTH_OF_20_PERCENT INT64 optional
+column WIDTH_OF_30_PERCENT INT64 optional
+column WIDTH_OF_40_PERCENT INT64 optional
+column WIDTH_OF_50_PERCENT INT64 optional
+column WIDTH_OF_60_PERCENT INT64 optional
+column WIDTH_OF_70_PERCENT INT64 optional
+column WIDTH_OF_80_PERCENT INT64 optional
+column WIDTH_OF_90_PERCENT INT64 optional
+column WIDTH_OF_95_PERCENT INT64 optional
+column WIDTH_OF_99_PERCENT INT64 optional
+column SAMPLE BYTE_ARRAY (STRING) optional
+column LIBRARY BYTE_ARRAY (STRING) optional
+column READ_GROUP BYTE_ARRAY (STRING) optional
+310.0	310.0	10.0	300	500	310.0	8.16496580927726	5	FR	1	1	1	1	21	21	21	21	381	381	381			
+## file sample.quality_by_cycle_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+
+## HISTOGRAM	java.lang.Integer
+CYCLE	MEAN_QUALITY
+1	40
+2	40
+3	40
+4	40
+5	40
+6	40
+7	40
+8	40
+9	40
+10	40
+11	40
+12	40
+13	40
+14	40
+15	40
+16	40
+17	40
+18	40
+19	40
+20	40
+21	40
+22	40
+23	40
+24	40
+25	40
+26	40
+27	40
+28	40
+29	40
+30	40
+31	40
+32	40
+33	40
+34	40
+35	40
+36	40
+37	40
+38	40
+39	40
+40	40
+41	40
+42	40
+43	40
+44	40
+45	40
+46	40
+47	40
+48	40
+49	40
+50	40
+51	40
+52	40
+53	40
+54	40
+55	40
+56	40
+57	40
+58	40
+59	40
+60	40
+61	40
+62	40
+63	40
+64	40
+65	40
+66	40
+67	40
+68	40
+69	40
+70	40
+71	40
+72	40
+73	40
+74	40
+75	40
+76	40
+77	40
+78	40
+79	40
+80	40
+81	40
+82	40
+83	40
+84	40
+85	40
+86	40
+87	40
+88	40
+89	40
+90	40
+91	40
+92	40
+93	40
+94	40
+95	40
+96	40
+97	40
+98	40
+99	40
+100	40
+101	40
+102	40
+103	40
+104	40
+105	40
+106	40
+107	40
+108	40
+109	40
+110	40
+111	40
+112	40
+113	40
+114	40
+115	40
+116	40
+117	40
+118	40
+119	40
+120	40
+121	40
+122	40
+123	40
+124	40
+125	40
+126	40
+127	40
+128	40
+129	40
+130	40
+131	40
+132	40
+133	40
+134	40
+135	40
+136	40
+137	40
+138	40
+139	40
+140	40
+141	40
+142	40
+143	40
+144	40
+145	40
+146	40
+147	40
+148	40
+149	40
+150	40
+151	40
+152	40
+153	40
+154	40
+155	40
+156	40
+157	40
+158	40
+159	40
+160	40
+161	40
+162	40
+163	40
+164	40
+165	40
+166	40
+167	40
+168	40
+169	40
+170	40
+171	40
+172	40
+173	40
+174	40
+175	40
+176	40
+177	40
+178	40
+179	40
+180	40
+181	40
+182	40
+183	40
+184	40
+185	40
+186	40
+187	40
+188	40
+189	40
+190	40
+191	40
+192	40
+193	40
+194	40
+195	40
+196	40
+197	40
+198	40
+199	40
+200	40
+
+## file sample.quality_by_cycle_metrics.long.parquet
+parquet <size> bytes, part long, 400 rows, 1 row groups, created_by bammetrics
+class CollectMultipleMetrics
+tool CollectMultipleMetrics
+sample insert_size
+header CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+header Started on: <time>
+column sample BYTE_ARRAY (STRING) optional
+column class BYTE_ARRAY (STRING) required
+column row_key BYTE_ARRAY (STRING) required
+column column BYTE_ARRAY (STRING) required
+column value BYTE_ARRAY (STRING) optional
+insert_size	CollectMultipleMetrics	histogram/0	CYCLE	1
+insert_size	CollectMultipleMetrics	histogram/0	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/1	CYCLE	2
+insert_size	CollectMultipleMetrics	histogram/1	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/2	CYCLE	3
+insert_size	CollectMultipleMetrics	histogram/2	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/3	CYCLE	4
+insert_size	CollectMultipleMetrics	histogram/3	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/4	CYCLE	5
+insert_size	CollectMultipleMetrics	histogram/4	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/5	CYCLE	6
+insert_size	CollectMultipleMetrics	histogram/5	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/6	CYCLE	7
+insert_size	CollectMultipleMetrics	histogram/6	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/7	CYCLE	8
+insert_size	CollectMultipleMetrics	histogram/7	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/8	CYCLE	9
+insert_size	CollectMultipleMetrics	histogram/8	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/9	CYCLE	10
+insert_size	CollectMultipleMetrics	histogram/9	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/10	CYCLE	11
+insert_size	CollectMultipleMetrics	histogram/10	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/11	CYCLE	12
+insert_size	CollectMultipleMetrics	histogram/11	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/12	CYCLE	13
+insert_size	CollectMultipleMetrics	histogram/12	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/13	CYCLE	14
+insert_size	CollectMultipleMetrics	histogram/13	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/14	CYCLE	15
+insert_size	CollectMultipleMetrics	histogram/14	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/15	CYCLE	16
+insert_size	CollectMultipleMetrics	histogram/15	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/16	CYCLE	17
+insert_size	CollectMultipleMetrics	histogram/16	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/17	CYCLE	18
+insert_size	CollectMultipleMetrics	histogram/17	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/18	CYCLE	19
+insert_size	CollectMultipleMetrics	histogram/18	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/19	CYCLE	20
+insert_size	CollectMultipleMetrics	histogram/19	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/20	CYCLE	21
+insert_size	CollectMultipleMetrics	histogram/20	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/21	CYCLE	22
+insert_size	CollectMultipleMetrics	histogram/21	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/22	CYCLE	23
+insert_size	CollectMultipleMetrics	histogram/22	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/23	CYCLE	24
+insert_size	CollectMultipleMetrics	histogram/23	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/24	CYCLE	25
+insert_size	CollectMultipleMetrics	histogram/24	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/25	CYCLE	26
+insert_size	CollectMultipleMetrics	histogram/25	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/26	CYCLE	27
+insert_size	CollectMultipleMetrics	histogram/26	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/27	CYCLE	28
+insert_size	CollectMultipleMetrics	histogram/27	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/28	CYCLE	29
+insert_size	CollectMultipleMetrics	histogram/28	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/29	CYCLE	30
+insert_size	CollectMultipleMetrics	histogram/29	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/30	CYCLE	31
+insert_size	CollectMultipleMetrics	histogram/30	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/31	CYCLE	32
+insert_size	CollectMultipleMetrics	histogram/31	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/32	CYCLE	33
+insert_size	CollectMultipleMetrics	histogram/32	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/33	CYCLE	34
+insert_size	CollectMultipleMetrics	histogram/33	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/34	CYCLE	35
+insert_size	CollectMultipleMetrics	histogram/34	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/35	CYCLE	36
+insert_size	CollectMultipleMetrics	histogram/35	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/36	CYCLE	37
+insert_size	CollectMultipleMetrics	histogram/36	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/37	CYCLE	38
+insert_size	CollectMultipleMetrics	histogram/37	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/38	CYCLE	39
+insert_size	CollectMultipleMetrics	histogram/38	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/39	CYCLE	40
+insert_size	CollectMultipleMetrics	histogram/39	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/40	CYCLE	41
+insert_size	CollectMultipleMetrics	histogram/40	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/41	CYCLE	42
+insert_size	CollectMultipleMetrics	histogram/41	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/42	CYCLE	43
+insert_size	CollectMultipleMetrics	histogram/42	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/43	CYCLE	44
+insert_size	CollectMultipleMetrics	histogram/43	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/44	CYCLE	45
+insert_size	CollectMultipleMetrics	histogram/44	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/45	CYCLE	46
+insert_size	CollectMultipleMetrics	histogram/45	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/46	CYCLE	47
+insert_size	CollectMultipleMetrics	histogram/46	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/47	CYCLE	48
+insert_size	CollectMultipleMetrics	histogram/47	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/48	CYCLE	49
+insert_size	CollectMultipleMetrics	histogram/48	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/49	CYCLE	50
+insert_size	CollectMultipleMetrics	histogram/49	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/50	CYCLE	51
+insert_size	CollectMultipleMetrics	histogram/50	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/51	CYCLE	52
+insert_size	CollectMultipleMetrics	histogram/51	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/52	CYCLE	53
+insert_size	CollectMultipleMetrics	histogram/52	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/53	CYCLE	54
+insert_size	CollectMultipleMetrics	histogram/53	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/54	CYCLE	55
+insert_size	CollectMultipleMetrics	histogram/54	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/55	CYCLE	56
+insert_size	CollectMultipleMetrics	histogram/55	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/56	CYCLE	57
+insert_size	CollectMultipleMetrics	histogram/56	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/57	CYCLE	58
+insert_size	CollectMultipleMetrics	histogram/57	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/58	CYCLE	59
+insert_size	CollectMultipleMetrics	histogram/58	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/59	CYCLE	60
+insert_size	CollectMultipleMetrics	histogram/59	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/60	CYCLE	61
+insert_size	CollectMultipleMetrics	histogram/60	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/61	CYCLE	62
+insert_size	CollectMultipleMetrics	histogram/61	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/62	CYCLE	63
+insert_size	CollectMultipleMetrics	histogram/62	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/63	CYCLE	64
+insert_size	CollectMultipleMetrics	histogram/63	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/64	CYCLE	65
+insert_size	CollectMultipleMetrics	histogram/64	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/65	CYCLE	66
+insert_size	CollectMultipleMetrics	histogram/65	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/66	CYCLE	67
+insert_size	CollectMultipleMetrics	histogram/66	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/67	CYCLE	68
+insert_size	CollectMultipleMetrics	histogram/67	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/68	CYCLE	69
+insert_size	CollectMultipleMetrics	histogram/68	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/69	CYCLE	70
+insert_size	CollectMultipleMetrics	histogram/69	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/70	CYCLE	71
+insert_size	CollectMultipleMetrics	histogram/70	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/71	CYCLE	72
+insert_size	CollectMultipleMetrics	histogram/71	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/72	CYCLE	73
+insert_size	CollectMultipleMetrics	histogram/72	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/73	CYCLE	74
+insert_size	CollectMultipleMetrics	histogram/73	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/74	CYCLE	75
+insert_size	CollectMultipleMetrics	histogram/74	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/75	CYCLE	76
+insert_size	CollectMultipleMetrics	histogram/75	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/76	CYCLE	77
+insert_size	CollectMultipleMetrics	histogram/76	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/77	CYCLE	78
+insert_size	CollectMultipleMetrics	histogram/77	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/78	CYCLE	79
+insert_size	CollectMultipleMetrics	histogram/78	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/79	CYCLE	80
+insert_size	CollectMultipleMetrics	histogram/79	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/80	CYCLE	81
+insert_size	CollectMultipleMetrics	histogram/80	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/81	CYCLE	82
+insert_size	CollectMultipleMetrics	histogram/81	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/82	CYCLE	83
+insert_size	CollectMultipleMetrics	histogram/82	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/83	CYCLE	84
+insert_size	CollectMultipleMetrics	histogram/83	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/84	CYCLE	85
+insert_size	CollectMultipleMetrics	histogram/84	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/85	CYCLE	86
+insert_size	CollectMultipleMetrics	histogram/85	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/86	CYCLE	87
+insert_size	CollectMultipleMetrics	histogram/86	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/87	CYCLE	88
+insert_size	CollectMultipleMetrics	histogram/87	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/88	CYCLE	89
+insert_size	CollectMultipleMetrics	histogram/88	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/89	CYCLE	90
+insert_size	CollectMultipleMetrics	histogram/89	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/90	CYCLE	91
+insert_size	CollectMultipleMetrics	histogram/90	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/91	CYCLE	92
+insert_size	CollectMultipleMetrics	histogram/91	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/92	CYCLE	93
+insert_size	CollectMultipleMetrics	histogram/92	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/93	CYCLE	94
+insert_size	CollectMultipleMetrics	histogram/93	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/94	CYCLE	95
+insert_size	CollectMultipleMetrics	histogram/94	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/95	CYCLE	96
+insert_size	CollectMultipleMetrics	histogram/95	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/96	CYCLE	97
+insert_size	CollectMultipleMetrics	histogram/96	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/97	CYCLE	98
+insert_size	CollectMultipleMetrics	histogram/97	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/98	CYCLE	99
+insert_size	CollectMultipleMetrics	histogram/98	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/99	CYCLE	100
+insert_size	CollectMultipleMetrics	histogram/99	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/100	CYCLE	101
+insert_size	CollectMultipleMetrics	histogram/100	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/101	CYCLE	102
+insert_size	CollectMultipleMetrics	histogram/101	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/102	CYCLE	103
+insert_size	CollectMultipleMetrics	histogram/102	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/103	CYCLE	104
+insert_size	CollectMultipleMetrics	histogram/103	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/104	CYCLE	105
+insert_size	CollectMultipleMetrics	histogram/104	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/105	CYCLE	106
+insert_size	CollectMultipleMetrics	histogram/105	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/106	CYCLE	107
+insert_size	CollectMultipleMetrics	histogram/106	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/107	CYCLE	108
+insert_size	CollectMultipleMetrics	histogram/107	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/108	CYCLE	109
+insert_size	CollectMultipleMetrics	histogram/108	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/109	CYCLE	110
+insert_size	CollectMultipleMetrics	histogram/109	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/110	CYCLE	111
+insert_size	CollectMultipleMetrics	histogram/110	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/111	CYCLE	112
+insert_size	CollectMultipleMetrics	histogram/111	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/112	CYCLE	113
+insert_size	CollectMultipleMetrics	histogram/112	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/113	CYCLE	114
+insert_size	CollectMultipleMetrics	histogram/113	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/114	CYCLE	115
+insert_size	CollectMultipleMetrics	histogram/114	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/115	CYCLE	116
+insert_size	CollectMultipleMetrics	histogram/115	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/116	CYCLE	117
+insert_size	CollectMultipleMetrics	histogram/116	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/117	CYCLE	118
+insert_size	CollectMultipleMetrics	histogram/117	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/118	CYCLE	119
+insert_size	CollectMultipleMetrics	histogram/118	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/119	CYCLE	120
+insert_size	CollectMultipleMetrics	histogram/119	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/120	CYCLE	121
+insert_size	CollectMultipleMetrics	histogram/120	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/121	CYCLE	122
+insert_size	CollectMultipleMetrics	histogram/121	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/122	CYCLE	123
+insert_size	CollectMultipleMetrics	histogram/122	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/123	CYCLE	124
+insert_size	CollectMultipleMetrics	histogram/123	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/124	CYCLE	125
+insert_size	CollectMultipleMetrics	histogram/124	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/125	CYCLE	126
+insert_size	CollectMultipleMetrics	histogram/125	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/126	CYCLE	127
+insert_size	CollectMultipleMetrics	histogram/126	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/127	CYCLE	128
+insert_size	CollectMultipleMetrics	histogram/127	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/128	CYCLE	129
+insert_size	CollectMultipleMetrics	histogram/128	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/129	CYCLE	130
+insert_size	CollectMultipleMetrics	histogram/129	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/130	CYCLE	131
+insert_size	CollectMultipleMetrics	histogram/130	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/131	CYCLE	132
+insert_size	CollectMultipleMetrics	histogram/131	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/132	CYCLE	133
+insert_size	CollectMultipleMetrics	histogram/132	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/133	CYCLE	134
+insert_size	CollectMultipleMetrics	histogram/133	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/134	CYCLE	135
+insert_size	CollectMultipleMetrics	histogram/134	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/135	CYCLE	136
+insert_size	CollectMultipleMetrics	histogram/135	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/136	CYCLE	137
+insert_size	CollectMultipleMetrics	histogram/136	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/137	CYCLE	138
+insert_size	CollectMultipleMetrics	histogram/137	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/138	CYCLE	139
+insert_size	CollectMultipleMetrics	histogram/138	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/139	CYCLE	140
+insert_size	CollectMultipleMetrics	histogram/139	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/140	CYCLE	141
+insert_size	CollectMultipleMetrics	histogram/140	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/141	CYCLE	142
+insert_size	CollectMultipleMetrics	histogram/141	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/142	CYCLE	143
+insert_size	CollectMultipleMetrics	histogram/142	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/143	CYCLE	144
+insert_size	CollectMultipleMetrics	histogram/143	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/144	CYCLE	145
+insert_size	CollectMultipleMetrics	histogram/144	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/145	CYCLE	146
+insert_size	CollectMultipleMetrics	histogram/145	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/146	CYCLE	147
+insert_size	CollectMultipleMetrics	histogram/146	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/147	CYCLE	148
+insert_size	CollectMultipleMetrics	histogram/147	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/148	CYCLE	149
+insert_size	CollectMultipleMetrics	histogram/148	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/149	CYCLE	150
+insert_size	CollectMultipleMetrics	histogram/149	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/150	CYCLE	151
+insert_size	CollectMultipleMetrics	histogram/150	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/151	CYCLE	152
+insert_size	CollectMultipleMetrics	histogram/151	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/152	CYCLE	153
+insert_size	CollectMultipleMetrics	histogram/152	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/153	CYCLE	154
+insert_size	CollectMultipleMetrics	histogram/153	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/154	CYCLE	155
+insert_size	CollectMultipleMetrics	histogram/154	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/155	CYCLE	156
+insert_size	CollectMultipleMetrics	histogram/155	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/156	CYCLE	157
+insert_size	CollectMultipleMetrics	histogram/156	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/157	CYCLE	158
+insert_size	CollectMultipleMetrics	histogram/157	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/158	CYCLE	159
+insert_size	CollectMultipleMetrics	histogram/158	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/159	CYCLE	160
+insert_size	CollectMultipleMetrics	histogram/159	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/160	CYCLE	161
+insert_size	CollectMultipleMetrics	histogram/160	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/161	CYCLE	162
+insert_size	CollectMultipleMetrics	histogram/161	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/162	CYCLE	163
+insert_size	CollectMultipleMetrics	histogram/162	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/163	CYCLE	164
+insert_size	CollectMultipleMetrics	histogram/163	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/164	CYCLE	165
+insert_size	CollectMultipleMetrics	histogram/164	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/165	CYCLE	166
+insert_size	CollectMultipleMetrics	histogram/165	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/166	CYCLE	167
+insert_size	CollectMultipleMetrics	histogram/166	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/167	CYCLE	168
+insert_size	CollectMultipleMetrics	histogram/167	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/168	CYCLE	169
+insert_size	CollectMultipleMetrics	histogram/168	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/169	CYCLE	170
+insert_size	CollectMultipleMetrics	histogram/169	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/170	CYCLE	171
+insert_size	CollectMultipleMetrics	histogram/170	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/171	CYCLE	172
+insert_size	CollectMultipleMetrics	histogram/171	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/172	CYCLE	173
+insert_size	CollectMultipleMetrics	histogram/172	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/173	CYCLE	174
+insert_size	CollectMultipleMetrics	histogram/173	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/174	CYCLE	175
+insert_size	CollectMultipleMetrics	histogram/174	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/175	CYCLE	176
+insert_size	CollectMultipleMetrics	histogram/175	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/176	CYCLE	177
+insert_size	CollectMultipleMetrics	histogram/176	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/177	CYCLE	178
+insert_size	CollectMultipleMetrics	histogram/177	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/178	CYCLE	179
+insert_size	CollectMultipleMetrics	histogram/178	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/179	CYCLE	180
+insert_size	CollectMultipleMetrics	histogram/179	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/180	CYCLE	181
+insert_size	CollectMultipleMetrics	histogram/180	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/181	CYCLE	182
+insert_size	CollectMultipleMetrics	histogram/181	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/182	CYCLE	183
+insert_size	CollectMultipleMetrics	histogram/182	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/183	CYCLE	184
+insert_size	CollectMultipleMetrics	histogram/183	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/184	CYCLE	185
+insert_size	CollectMultipleMetrics	histogram/184	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/185	CYCLE	186
+insert_size	CollectMultipleMetrics	histogram/185	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/186	CYCLE	187
+insert_size	CollectMultipleMetrics	histogram/186	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/187	CYCLE	188
+insert_size	CollectMultipleMetrics	histogram/187	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/188	CYCLE	189
+insert_size	CollectMultipleMetrics	histogram/188	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/189	CYCLE	190
+insert_size	CollectMultipleMetrics	histogram/189	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/190	CYCLE	191
+insert_size	CollectMultipleMetrics	histogram/190	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/191	CYCLE	192
+insert_size	CollectMultipleMetrics	histogram/191	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/192	CYCLE	193
+insert_size	CollectMultipleMetrics	histogram/192	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/193	CYCLE	194
+insert_size	CollectMultipleMetrics	histogram/193	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/194	CYCLE	195
+insert_size	CollectMultipleMetrics	histogram/194	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/195	CYCLE	196
+insert_size	CollectMultipleMetrics	histogram/195	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/196	CYCLE	197
+insert_size	CollectMultipleMetrics	histogram/196	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/197	CYCLE	198
+insert_size	CollectMultipleMetrics	histogram/197	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/198	CYCLE	199
+insert_size	CollectMultipleMetrics	histogram/198	MEAN_QUALITY	40.0
+insert_size	CollectMultipleMetrics	histogram/199	CYCLE	200
+insert_size	CollectMultipleMetrics	histogram/199	MEAN_QUALITY	40.0
+## file sample.quality_by_cycle_metrics.parquet
+parquet <size> bytes, part histogram, 200 rows, 1 row groups, created_by bammetrics
+class java.lang.Integer
+tool CollectMultipleMetrics
+sample insert_size
+header CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+header Started on: <time>
+column CYCLE INT64 optional
+column MEAN_QUALITY DOUBLE optional
+1	40.0
+2	40.0
+3	40.0
+4	40.0
+5	40.0
+6	40.0
+7	40.0
+8	40.0
+9	40.0
+10	40.0
+11	40.0
+12	40.0
+13	40.0
+14	40.0
+15	40.0
+16	40.0
+17	40.0
+18	40.0
+19	40.0
+20	40.0
+21	40.0
+22	40.0
+23	40.0
+24	40.0
+25	40.0
+26	40.0
+27	40.0
+28	40.0
+29	40.0
+30	40.0
+31	40.0
+32	40.0
+33	40.0
+34	40.0
+35	40.0
+36	40.0
+37	40.0
+38	40.0
+39	40.0
+40	40.0
+41	40.0
+42	40.0
+43	40.0
+44	40.0
+45	40.0
+46	40.0
+47	40.0
+48	40.0
+49	40.0
+50	40.0
+51	40.0
+52	40.0
+53	40.0
+54	40.0
+55	40.0
+56	40.0
+57	40.0
+58	40.0
+59	40.0
+60	40.0
+61	40.0
+62	40.0
+63	40.0
+64	40.0
+65	40.0
+66	40.0
+67	40.0
+68	40.0
+69	40.0
+70	40.0
+71	40.0
+72	40.0
+73	40.0
+74	40.0
+75	40.0
+76	40.0
+77	40.0
+78	40.0
+79	40.0
+80	40.0
+81	40.0
+82	40.0
+83	40.0
+84	40.0
+85	40.0
+86	40.0
+87	40.0
+88	40.0
+89	40.0
+90	40.0
+91	40.0
+92	40.0
+93	40.0
+94	40.0
+95	40.0
+96	40.0
+97	40.0
+98	40.0
+99	40.0
+100	40.0
+101	40.0
+102	40.0
+103	40.0
+104	40.0
+105	40.0
+106	40.0
+107	40.0
+108	40.0
+109	40.0
+110	40.0
+111	40.0
+112	40.0
+113	40.0
+114	40.0
+115	40.0
+116	40.0
+117	40.0
+118	40.0
+119	40.0
+120	40.0
+121	40.0
+122	40.0
+123	40.0
+124	40.0
+125	40.0
+126	40.0
+127	40.0
+128	40.0
+129	40.0
+130	40.0
+131	40.0
+132	40.0
+133	40.0
+134	40.0
+135	40.0
+136	40.0
+137	40.0
+138	40.0
+139	40.0
+140	40.0
+141	40.0
+142	40.0
+143	40.0
+144	40.0
+145	40.0
+146	40.0
+147	40.0
+148	40.0
+149	40.0
+150	40.0
+151	40.0
+152	40.0
+153	40.0
+154	40.0
+155	40.0
+156	40.0
+157	40.0
+158	40.0
+159	40.0
+160	40.0
+161	40.0
+162	40.0
+163	40.0
+164	40.0
+165	40.0
+166	40.0
+167	40.0
+168	40.0
+169	40.0
+170	40.0
+171	40.0
+172	40.0
+173	40.0
+174	40.0
+175	40.0
+176	40.0
+177	40.0
+178	40.0
+179	40.0
+180	40.0
+181	40.0
+182	40.0
+183	40.0
+184	40.0
+185	40.0
+186	40.0
+187	40.0
+188	40.0
+189	40.0
+190	40.0
+191	40.0
+192	40.0
+193	40.0
+194	40.0
+195	40.0
+196	40.0
+197	40.0
+198	40.0
+199	40.0
+200	40.0
+## file sample.quality_distribution_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+
+## HISTOGRAM	java.lang.Byte
+QUALITY	COUNT_OF_Q
+40	1000
+
+## file sample.quality_distribution_metrics.long.parquet
+parquet <size> bytes, part long, 2 rows, 1 row groups, created_by bammetrics
+class CollectMultipleMetrics
+tool CollectMultipleMetrics
+sample insert_size
+header CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+header Started on: <time>
+column sample BYTE_ARRAY (STRING) optional
+column class BYTE_ARRAY (STRING) required
+column row_key BYTE_ARRAY (STRING) required
+column column BYTE_ARRAY (STRING) required
+column value BYTE_ARRAY (STRING) optional
+insert_size	CollectMultipleMetrics	histogram/0	QUALITY	40
+insert_size	CollectMultipleMetrics	histogram/0	COUNT_OF_Q	1000.0
+## file sample.quality_distribution_metrics.parquet
+parquet <size> bytes, part histogram, 1 rows, 1 row groups, created_by bammetrics
+class java.lang.Byte
+tool CollectMultipleMetrics
+sample insert_size
+header CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+header Started on: <time>
+column QUALITY INT64 optional
+column COUNT_OF_Q DOUBLE optional
+40	1000.0
+## file sample.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+10	10	100	1000	1000	1000	1000	1000	1000	2000	2000
+
+
+## file sample.quality_yield_metrics.long.parquet
+parquet <size> bytes, part long, 11 rows, 1 row groups, created_by bammetrics
+class picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+tool CollectMultipleMetrics
+sample insert_size
+header CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+header Started on: <time>
+column sample BYTE_ARRAY (STRING) optional
+column class BYTE_ARRAY (STRING) required
+column row_key BYTE_ARRAY (STRING) required
+column column BYTE_ARRAY (STRING) required
+column value BYTE_ARRAY (STRING) optional
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	TOTAL_READS	10
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	PF_READS	10
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	READ_LENGTH	100
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	TOTAL_BASES	1000
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	PF_BASES	1000
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	Q20_BASES	1000
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	PF_Q20_BASES	1000
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	Q30_BASES	1000
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	PF_Q30_BASES	1000
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	Q20_EQUIVALENT_YIELD	2000
+insert_size	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics	metrics/0	PF_Q20_EQUIVALENT_YIELD	2000
+## file sample.quality_yield_metrics.parquet
+parquet <size> bytes, part metrics, 1 rows, 1 row groups, created_by bammetrics
+class picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+tool CollectMultipleMetrics
+sample insert_size
+header CollectMultipleMetrics INPUT=tests/data/insert_size.bam PROGRAM=CollectQualityYieldMetrics PROGRAM=CollectInsertSizeMetrics OUTPUT=OUT/sample
+header Started on: <time>
+column TOTAL_READS INT64 optional
+column PF_READS INT64 optional
+column READ_LENGTH INT64 optional
+column TOTAL_BASES INT64 optional
+column PF_BASES INT64 optional
+column Q20_BASES INT64 optional
+column PF_Q20_BASES INT64 optional
+column Q30_BASES INT64 optional
+column PF_Q30_BASES INT64 optional
+column Q20_EQUIVALENT_YIELD INT64 optional
+column PF_Q20_EQUIVALENT_YIELD INT64 optional
+10	10	100	1000	1000	1000	1000	1000	1000	2000	2000

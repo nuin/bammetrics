@@ -148,7 +148,7 @@ A failed check is a value, never an exception. A file that cannot be read raises
 
 ## read_table
 
-`read_table(path, table=None)` reads one table of a metrics file and returns a `Table`. The file is Picard text or the JSON `--format json` writes (schema `bammetrics.metrics/1`), told apart by its first character (`{` or `[` is JSON; a byte order mark is dropped).
+`read_table(path, table=None)` reads one table of a metrics file and returns a `Table`. The file is Picard text, the JSON `--format json` writes (schema `bammetrics.metrics/1`) or the main file `--format parquet` writes, told apart by its first bytes (`PAR1` is Parquet; `{` or `[` is JSON; a byte order mark is dropped). A Parquet file's histogram is read from its companion beside it (docs/formats.md section Parquet). A Parquet file with header lines and no table (part `empty`) raises `InputError`; `read_metrics` reads Picard text only and raises `InputError` for a Parquet file.
 
 ```python
 t = bm.read_table("out/s.insert_size_metrics")
@@ -234,7 +234,7 @@ These are the two examples of docs/chaining.md. `tests/data/chain_markdup.toml` 
 | `threads` | `--threads N` | BGZF threads of each read and of `write`. Over 256 is a `UsageError`, on `chain`, `qc` and `collect` |
 | `tmp_dir` | `--tmp-dir DIR` | Where a transform spills and a piped source is copied |
 | `format` | `--format LIST` | `picard` first. `["picard", "json"]` adds `FILE.json` beside every metrics file |
-| `also` | `--also LIST` | `json`, `jsonl`, `tsv`, `csv` beside every metrics file, `markdown` as `PREFIX.report.md` |
+| `also` | `--also LIST` | `json`, `jsonl`, `tsv`, `csv`, `parquet`, `xlsx`, `docx`, `sql` beside every metrics file, `markdown` as `PREFIX.report.md` |
 | `sample` | `--sample NAME` | The sample of the json forms and of `Run.sample` |
 | `sort_memory` | `--sort-memory BYTES` | What a `sort_sam` step holds before it spills: `"2G"`, `"512M"`, a number of bytes as a str. Default 2 GiB |
 | `force_space` | `--force-space` | `True` runs a chain whose estimated temporary and output bytes exceed the free space; without it that chain raises `InputError` before the first read |

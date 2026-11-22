@@ -1,0 +1,230 @@
+## argv
+insert-size
+tests/data/insert_size.bam
+--format
+picard,parquet,xlsx,docx,sql
+-o
+OUT/insert_size.txt
+--sample
+S1
+## exit
+0
+## stdout
+## stderr
+## file insert_size.txt
+## htsjdk.samtools.metrics.StringHeader
+# CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam MINIMUM_PCT=0.05 DEVIATIONS=10.0 INCLUDE_DUPLICATES=false METRIC_ACCUMULATION_LEVEL=[ALL_READS] OUTPUT=OUT/insert_size.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.InsertSizeMetrics
+MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MAX_INSERT_SIZE	MEAN_INSERT_SIZE	STANDARD_DEVIATION	READ_PAIRS	PAIR_ORIENTATION	WIDTH_OF_10_PERCENT	WIDTH_OF_20_PERCENT	WIDTH_OF_30_PERCENT	WIDTH_OF_40_PERCENT	WIDTH_OF_50_PERCENT	WIDTH_OF_60_PERCENT	WIDTH_OF_70_PERCENT	WIDTH_OF_80_PERCENT	WIDTH_OF_90_PERCENT	WIDTH_OF_95_PERCENT	WIDTH_OF_99_PERCENT	SAMPLE	LIBRARY	READ_GROUP
+310	310	10	300	500	310	8.164966	5	FR	1	1	1	1	21	21	21	21	381	381	381			
+
+## HISTOGRAM	java.lang.Integer
+insert_size	All_Reads.fr_count
+300	1
+310	2
+320	1
+
+## file insert_size.txt.docx
+<zip: 9453 bytes, 5 parts>
+### part [Content_Types].xml (558 bytes)
+### part _rels/.rels (299 bytes)
+### part word/document.xml (5926 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>CollectInsertSizeMetrics, sample S1</w:t></w:r></w:p>
+<w:p><w:r><w:t>CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam MINIMUM_PCT=0.05 DEVIATIONS=10.0 INCLUDE_DUPLICATES=false METRIC_ACCUMULATION_LEVEL=[ALL_READS] OUTPUT=OUT/insert_size.txt</w:t></w:r></w:p>
+<w:p><w:r><w:t>Started on: <time></w:t></w:r></w:p>
+<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>picard.analysis.InsertSizeMetrics</w:t></w:r></w:p>
+<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="0" w:type="auto"/><w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr><w:tblGrid><w:gridCol/><w:gridCol/></w:tblGrid>
+<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Column</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>1</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MEDIAN_INSERT_SIZE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>310</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MODE_INSERT_SIZE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>310</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MEDIAN_ABSOLUTE_DEVIATION</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>10</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MIN_INSERT_SIZE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>300</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MAX_INSERT_SIZE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>500</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>MEAN_INSERT_SIZE</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>310</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>STANDARD_DEVIATION</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>8.164966</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>READ_PAIRS</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>5</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>PAIR_ORIENTATION</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>FR</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>WIDTH_OF_10_PERCENT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>WIDTH_OF_20_PERCENT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>WIDTH_OF_30_PERCENT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>WIDTH_OF_40_PERCENT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>WIDTH_OF_50_PERCENT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>21</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>WIDTH_OF_60_PERCENT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>21</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>WIDTH_OF_70_PERCENT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>21</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>WIDTH_OF_80_PERCENT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>21</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>WIDTH_OF_90_PERCENT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>381</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>WIDTH_OF_95_PERCENT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>381</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>WIDTH_OF_99_PERCENT</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>381</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>SAMPLE</w:t></w:r></w:p></w:tc><w:tc><w:p></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>LIBRARY</w:t></w:r></w:p></w:tc><w:tc><w:p></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>READ_GROUP</w:t></w:r></w:p></w:tc><w:tc><w:p></w:p></w:tc></w:tr>
+</w:tbl>
+<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Histogram of picard.analysis.InsertSizeMetrics, by insert_size</w:t></w:r></w:p>
+<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="0" w:type="auto"/><w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr><w:tblGrid><w:gridCol/><w:gridCol/></w:tblGrid>
+<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>insert_size</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>All_Reads.fr_count</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>300</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>310</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>2</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>320</w:t></w:r></w:p></w:tc><w:tc><w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>1</w:t></w:r></w:p></w:tc></w:tr>
+</w:tbl>
+<w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/><w:pgMar w:top="851" w:right="851" w:bottom="851" w:left="851" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>
+### part word/_rels/document.xml.rels (284 bytes)
+### part word/styles.xml (1804 bytes)
+## file insert_size.txt.histogram.parquet
+parquet <size> bytes, part histogram, 3 rows, 1 row groups, created_by bammetrics
+class java.lang.Integer
+tool CollectInsertSizeMetrics
+sample S1
+header CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam MINIMUM_PCT=0.05 DEVIATIONS=10.0 INCLUDE_DUPLICATES=false METRIC_ACCUMULATION_LEVEL=[ALL_READS] OUTPUT=OUT/insert_size.txt
+header Started on: <time>
+column insert_size INT64 optional
+column All_Reads.fr_count DOUBLE optional
+300	1.0
+310	2.0
+320	1.0
+## file insert_size.txt.long.parquet
+parquet <size> bytes, part long, 29 rows, 1 row groups, created_by bammetrics
+class picard.analysis.InsertSizeMetrics
+tool CollectInsertSizeMetrics
+sample S1
+header CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam MINIMUM_PCT=0.05 DEVIATIONS=10.0 INCLUDE_DUPLICATES=false METRIC_ACCUMULATION_LEVEL=[ALL_READS] OUTPUT=OUT/insert_size.txt
+header Started on: <time>
+column sample BYTE_ARRAY (STRING) optional
+column class BYTE_ARRAY (STRING) required
+column row_key BYTE_ARRAY (STRING) required
+column column BYTE_ARRAY (STRING) required
+column value BYTE_ARRAY (STRING) optional
+S1	picard.analysis.InsertSizeMetrics	metrics/0	MEDIAN_INSERT_SIZE	310.0
+S1	picard.analysis.InsertSizeMetrics	metrics/0	MODE_INSERT_SIZE	310.0
+S1	picard.analysis.InsertSizeMetrics	metrics/0	MEDIAN_ABSOLUTE_DEVIATION	10.0
+S1	picard.analysis.InsertSizeMetrics	metrics/0	MIN_INSERT_SIZE	300
+S1	picard.analysis.InsertSizeMetrics	metrics/0	MAX_INSERT_SIZE	500
+S1	picard.analysis.InsertSizeMetrics	metrics/0	MEAN_INSERT_SIZE	310.0
+S1	picard.analysis.InsertSizeMetrics	metrics/0	STANDARD_DEVIATION	8.16496580927726
+S1	picard.analysis.InsertSizeMetrics	metrics/0	READ_PAIRS	5
+S1	picard.analysis.InsertSizeMetrics	metrics/0	PAIR_ORIENTATION	FR
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_10_PERCENT	1
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_20_PERCENT	1
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_30_PERCENT	1
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_40_PERCENT	1
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_50_PERCENT	21
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_60_PERCENT	21
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_70_PERCENT	21
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_80_PERCENT	21
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_90_PERCENT	381
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_95_PERCENT	381
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_99_PERCENT	381
+S1	picard.analysis.InsertSizeMetrics	metrics/0	SAMPLE	
+S1	picard.analysis.InsertSizeMetrics	metrics/0	LIBRARY	
+S1	picard.analysis.InsertSizeMetrics	metrics/0	READ_GROUP	
+S1	picard.analysis.InsertSizeMetrics	histogram/0	insert_size	300
+S1	picard.analysis.InsertSizeMetrics	histogram/0	All_Reads.fr_count	1.0
+S1	picard.analysis.InsertSizeMetrics	histogram/1	insert_size	310
+S1	picard.analysis.InsertSizeMetrics	histogram/1	All_Reads.fr_count	2.0
+S1	picard.analysis.InsertSizeMetrics	histogram/2	insert_size	320
+S1	picard.analysis.InsertSizeMetrics	histogram/2	All_Reads.fr_count	1.0
+## file insert_size.txt.parquet
+parquet <size> bytes, part metrics, 1 rows, 1 row groups, created_by bammetrics
+class picard.analysis.InsertSizeMetrics
+tool CollectInsertSizeMetrics
+sample S1
+header CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam MINIMUM_PCT=0.05 DEVIATIONS=10.0 INCLUDE_DUPLICATES=false METRIC_ACCUMULATION_LEVEL=[ALL_READS] OUTPUT=OUT/insert_size.txt
+header Started on: <time>
+histogram companion
+column MEDIAN_INSERT_SIZE DOUBLE optional
+column MODE_INSERT_SIZE DOUBLE optional
+column MEDIAN_ABSOLUTE_DEVIATION DOUBLE optional
+column MIN_INSERT_SIZE INT64 optional
+column MAX_INSERT_SIZE INT64 optional
+column MEAN_INSERT_SIZE DOUBLE optional
+column STANDARD_DEVIATION DOUBLE optional
+column READ_PAIRS INT64 optional
+column PAIR_ORIENTATION BYTE_ARRAY (STRING) optional
+column WIDTH_OF_10_PERCENT INT64 optional
+column WIDTH_OF_20_PERCENT INT64 optional
+column WIDTH_OF_30_PERCENT INT64 optional
+column WIDTH_OF_40_PERCENT INT64 optional
+column WIDTH_OF_50_PERCENT INT64 optional
+column WIDTH_OF_60_PERCENT INT64 optional
+column WIDTH_OF_70_PERCENT INT64 optional
+column WIDTH_OF_80_PERCENT INT64 optional
+column WIDTH_OF_90_PERCENT INT64 optional
+column WIDTH_OF_95_PERCENT INT64 optional
+column WIDTH_OF_99_PERCENT INT64 optional
+column SAMPLE BYTE_ARRAY (STRING) optional
+column LIBRARY BYTE_ARRAY (STRING) optional
+column READ_GROUP BYTE_ARRAY (STRING) optional
+310.0	310.0	10.0	300	500	310.0	8.16496580927726	5	FR	1	1	1	1	21	21	21	21	381	381	381			
+## file insert_size.txt.sql
+-- bammetrics SQL dump of one metrics file: sqlite3 DB < FILE.sql
+BEGIN TRANSACTION;
+CREATE TABLE "headers" ("position" BIGINT, "text" TEXT);
+INSERT INTO "headers" VALUES (1, 'CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam MINIMUM_PCT=0.05 DEVIATIONS=10.0 INCLUDE_DUPLICATES=false METRIC_ACCUMULATION_LEVEL=[ALL_READS] OUTPUT=OUT/insert_size.txt');
+INSERT INTO "headers" VALUES (2, 'Started on: <time>');
+CREATE TABLE "tables" ("name" TEXT, "kind" TEXT, "class" TEXT, "tool" TEXT, "sample" TEXT);
+INSERT INTO "tables" VALUES ('InsertSizeMetrics', 'metrics', 'picard.analysis.InsertSizeMetrics', 'CollectInsertSizeMetrics', 'S1');
+INSERT INTO "tables" VALUES ('histogram', 'histogram', 'java.lang.Integer', 'CollectInsertSizeMetrics', 'S1');
+CREATE TABLE "columns" ("table" TEXT, "position" BIGINT, "column" TEXT, "name" TEXT, "type" TEXT);
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 1, 'MEDIAN_INSERT_SIZE', 'MEDIAN_INSERT_SIZE', 'float');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 2, 'MODE_INSERT_SIZE', 'MODE_INSERT_SIZE', 'float');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 3, 'MEDIAN_ABSOLUTE_DEVIATION', 'MEDIAN_ABSOLUTE_DEVIATION', 'float');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 4, 'MIN_INSERT_SIZE', 'MIN_INSERT_SIZE', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 5, 'MAX_INSERT_SIZE', 'MAX_INSERT_SIZE', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 6, 'MEAN_INSERT_SIZE', 'MEAN_INSERT_SIZE', 'float');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 7, 'STANDARD_DEVIATION', 'STANDARD_DEVIATION', 'float');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 8, 'READ_PAIRS', 'READ_PAIRS', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 9, 'PAIR_ORIENTATION', 'PAIR_ORIENTATION', 'string');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 10, 'WIDTH_OF_10_PERCENT', 'WIDTH_OF_10_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 11, 'WIDTH_OF_20_PERCENT', 'WIDTH_OF_20_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 12, 'WIDTH_OF_30_PERCENT', 'WIDTH_OF_30_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 13, 'WIDTH_OF_40_PERCENT', 'WIDTH_OF_40_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 14, 'WIDTH_OF_50_PERCENT', 'WIDTH_OF_50_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 15, 'WIDTH_OF_60_PERCENT', 'WIDTH_OF_60_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 16, 'WIDTH_OF_70_PERCENT', 'WIDTH_OF_70_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 17, 'WIDTH_OF_80_PERCENT', 'WIDTH_OF_80_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 18, 'WIDTH_OF_90_PERCENT', 'WIDTH_OF_90_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 19, 'WIDTH_OF_95_PERCENT', 'WIDTH_OF_95_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 20, 'WIDTH_OF_99_PERCENT', 'WIDTH_OF_99_PERCENT', 'int');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 21, 'SAMPLE', 'SAMPLE', 'string');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 22, 'LIBRARY', 'LIBRARY', 'string');
+INSERT INTO "columns" VALUES ('InsertSizeMetrics', 23, 'READ_GROUP', 'READ_GROUP', 'string');
+INSERT INTO "columns" VALUES ('histogram', 1, 'insert_size', 'insert_size', 'int');
+INSERT INTO "columns" VALUES ('histogram', 2, 'All_Reads.fr_count', 'All_Reads.fr_count', 'float');
+CREATE TABLE "InsertSizeMetrics" ("MEDIAN_INSERT_SIZE" DOUBLE, "MODE_INSERT_SIZE" DOUBLE, "MEDIAN_ABSOLUTE_DEVIATION" DOUBLE, "MIN_INSERT_SIZE" BIGINT, "MAX_INSERT_SIZE" BIGINT, "MEAN_INSERT_SIZE" DOUBLE, "STANDARD_DEVIATION" DOUBLE, "READ_PAIRS" BIGINT, "PAIR_ORIENTATION" TEXT, "WIDTH_OF_10_PERCENT" BIGINT, "WIDTH_OF_20_PERCENT" BIGINT, "WIDTH_OF_30_PERCENT" BIGINT, "WIDTH_OF_40_PERCENT" BIGINT, "WIDTH_OF_50_PERCENT" BIGINT, "WIDTH_OF_60_PERCENT" BIGINT, "WIDTH_OF_70_PERCENT" BIGINT, "WIDTH_OF_80_PERCENT" BIGINT, "WIDTH_OF_90_PERCENT" BIGINT, "WIDTH_OF_95_PERCENT" BIGINT, "WIDTH_OF_99_PERCENT" BIGINT, "SAMPLE" TEXT, "LIBRARY" TEXT, "READ_GROUP" TEXT);
+INSERT INTO "InsertSizeMetrics" VALUES (310.0, 310.0, 10.0, 300, 500, 310.0, 8.16496580927726, 5, 'FR', 1, 1, 1, 1, 21, 21, 21, 21, 381, 381, 381, NULL, NULL, NULL);
+CREATE TABLE "histogram" ("insert_size" BIGINT, "All_Reads.fr_count" DOUBLE);
+INSERT INTO "histogram" VALUES (300, 1.0);
+INSERT INTO "histogram" VALUES (310, 2.0);
+INSERT INTO "histogram" VALUES (320, 1.0);
+COMMIT;
+## file insert_size.txt.xlsx
+<zip: 7946 bytes, 8 parts>
+### part [Content_Types].xml (953 bytes)
+### part _rels/.rels (297 bytes)
+### part xl/workbook.xml (430 bytes)
+### part xl/_rels/workbook.xml.rels (707 bytes)
+### part xl/styles.xml (823 bytes)
+### part xl/worksheets/sheet1.xml (572 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:A2"/><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetData>
+<row r="1"><c r="A1" t="inlineStr"><is><t>CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam MINIMUM_PCT=0.05 DEVIATIONS=10.0 INCLUDE_DUPLICATES=false METRIC_ACCUMULATION_LEVEL=[ALL_READS] OUTPUT=OUT/insert_size.txt</t></is></c></row>
+<row r="2"><c r="A2" t="inlineStr"><is><t>Started on: <time></t></is></c></row>
+</sheetData></worksheet>
+### part xl/worksheets/sheet2.xml (2542 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:W2"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>
+<row r="1"><c r="A1" s="1" t="inlineStr"><is><t>MEDIAN_INSERT_SIZE</t></is></c><c r="B1" s="1" t="inlineStr"><is><t>MODE_INSERT_SIZE</t></is></c><c r="C1" s="1" t="inlineStr"><is><t>MEDIAN_ABSOLUTE_DEVIATION</t></is></c><c r="D1" s="1" t="inlineStr"><is><t>MIN_INSERT_SIZE</t></is></c><c r="E1" s="1" t="inlineStr"><is><t>MAX_INSERT_SIZE</t></is></c><c r="F1" s="1" t="inlineStr"><is><t>MEAN_INSERT_SIZE</t></is></c><c r="G1" s="1" t="inlineStr"><is><t>STANDARD_DEVIATION</t></is></c><c r="H1" s="1" t="inlineStr"><is><t>READ_PAIRS</t></is></c><c r="I1" s="1" t="inlineStr"><is><t>PAIR_ORIENTATION</t></is></c><c r="J1" s="1" t="inlineStr"><is><t>WIDTH_OF_10_PERCENT</t></is></c><c r="K1" s="1" t="inlineStr"><is><t>WIDTH_OF_20_PERCENT</t></is></c><c r="L1" s="1" t="inlineStr"><is><t>WIDTH_OF_30_PERCENT</t></is></c><c r="M1" s="1" t="inlineStr"><is><t>WIDTH_OF_40_PERCENT</t></is></c><c r="N1" s="1" t="inlineStr"><is><t>WIDTH_OF_50_PERCENT</t></is></c><c r="O1" s="1" t="inlineStr"><is><t>WIDTH_OF_60_PERCENT</t></is></c><c r="P1" s="1" t="inlineStr"><is><t>WIDTH_OF_70_PERCENT</t></is></c><c r="Q1" s="1" t="inlineStr"><is><t>WIDTH_OF_80_PERCENT</t></is></c><c r="R1" s="1" t="inlineStr"><is><t>WIDTH_OF_90_PERCENT</t></is></c><c r="S1" s="1" t="inlineStr"><is><t>WIDTH_OF_95_PERCENT</t></is></c><c r="T1" s="1" t="inlineStr"><is><t>WIDTH_OF_99_PERCENT</t></is></c><c r="U1" s="1" t="inlineStr"><is><t>SAMPLE</t></is></c><c r="V1" s="1" t="inlineStr"><is><t>LIBRARY</t></is></c><c r="W1" s="1" t="inlineStr"><is><t>READ_GROUP</t></is></c></row>
+<row r="2"><c r="A2"><v>310.0</v></c><c r="B2"><v>310.0</v></c><c r="C2"><v>10.0</v></c><c r="D2"><v>300</v></c><c r="E2"><v>500</v></c><c r="F2"><v>310.0</v></c><c r="G2"><v>8.16496580927726</v></c><c r="H2"><v>5</v></c><c r="I2" t="inlineStr"><is><t>FR</t></is></c><c r="J2"><v>1</v></c><c r="K2"><v>1</v></c><c r="L2"><v>1</v></c><c r="M2"><v>1</v></c><c r="N2"><v>21</v></c><c r="O2"><v>21</v></c><c r="P2"><v>21</v></c><c r="Q2"><v>21</v></c><c r="R2"><v>381</v></c><c r="S2"><v>381</v></c><c r="T2"><v>381</v></c><c r="U2" t="inlineStr"><is><t></t></is></c><c r="V2" t="inlineStr"><is><t></t></is></c><c r="W2" t="inlineStr"><is><t></t></is></c></row>
+</sheetData></worksheet>
+### part xl/worksheets/sheet3.xml (680 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:B4"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>
+<row r="1"><c r="A1" s="1" t="inlineStr"><is><t>insert_size</t></is></c><c r="B1" s="1" t="inlineStr"><is><t>All_Reads.fr_count</t></is></c></row>
+<row r="2"><c r="A2"><v>300</v></c><c r="B2"><v>1.0</v></c></row>
+<row r="3"><c r="A3"><v>310</v></c><c r="B3"><v>2.0</v></c></row>
+<row r="4"><c r="A4"><v>320</v></c><c r="B4"><v>1.0</v></c></row>
+</sheetData></worksheet>

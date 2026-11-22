@@ -34,6 +34,10 @@ allow = [
     # copyright notice only.
     "BSD-3-Clause",
     "BSD-2-Clause",
+    # tiny-keccak under const-random under ahash, a dependency of parquet
+    # (feature parquet), on wasm32 only: a public domain dedication. snap,
+    # parquet's snappy codec, is BSD-3-Clause.
+    "CC0-1.0",
 ]
 confidence-threshold = 0.93
 
@@ -49,6 +53,8 @@ skip = [
     { crate = "miniz_oxide@0.8.9", reason = "png and tiny-skia under krilla, feature pdf" },
     { crate = "roxmltree@0.20.0", reason = "fontconfig-parser under fontdb, feature pdf" },
     { crate = "weezl@0.1.12", reason = "gif under krilla, feature pdf" },
+    { crate = "getrandom@0.3.4", reason = "ahash under parquet, feature parquet" },
+    { crate = "getrandom@0.2.17", reason = "const-random under ahash under parquet, wasm32 only, feature parquet" },
 ]
 # The workspace crates name each other by path and version.
 allow-wildcard-paths = true

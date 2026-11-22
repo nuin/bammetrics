@@ -41,10 +41,13 @@ pub struct Reporter {
 /// `text` on stdout. A write error (a closed pipe) is dropped on purpose:
 /// the run goes on, writes its files and keeps its exit code.
 pub fn print_stdout(text: &str) {
+    print_stdout_bytes(text.as_bytes());
+}
+
+/// [`print_stdout`] for bytes (an XLSX file).
+pub fn print_stdout_bytes(bytes: &[u8]) {
     let mut stdout = std::io::stdout().lock();
-    let _ = stdout
-        .write_all(text.as_bytes())
-        .and_then(|()| stdout.flush());
+    let _ = stdout.write_all(bytes).and_then(|()| stdout.flush());
 }
 
 /// A verb's fatal error: `bammetrics VERB: what` on stderr and, with

@@ -2,13 +2,15 @@
 //! point the command calls in this crate (both readers, each format of a
 //! metrics file, the JSON read back, and the Markdown, JUnit and MultiQC
 //! forms of a verdict). See `size_formats_base.rs` for what the size difference
-//! measures.
+//! measures. `size_parquet` runs this `main` with the feature `parquet`, which
+//! also writes each file as Parquet and reads it back.
 
 use std::path::Path;
 
 use bammetrics_core::metrics_file::MetricsDoc;
 use bammetrics_formats::{
     CheckLine, Format, Outcome, VerdictSummary, junit, markdown, multiqc, read, render,
+    render_bytes,
 };
 
 /// A verdict with one check per outcome, so every branch of the three
@@ -41,7 +43,36 @@ fn verdict(sample: &str) -> VerdictSummary {
     }
 }
 
-fn main() {
+/// The Parquet files of `doc` written beside `path` as `path.parquet`,
+/// read back, and the main file described.
+#[cfg(feature = "parquet")]
+fn parquet_round_trip(path: &str, doc: &bammetrics_formats::Document) {
+    use bammetrics_formats::{parquet, read_path, render_files};
+    let main = Path::new(path).with_extension("parquet");
+    let files = match render_files(Format::Parquet, doc, None) {
+        Ok(files) => files,
+        Err(e) => return eprintln!("{path}: {e}"),
+    };
+    for file in files {
+        let at = file
+            .part
+            .map_or(main.clone(), |part| parquet::companion(&main, part));
+        if let Err(e) = std::fs::write(&at, &file.bytes) {
+            return eprintln!("{}: {e}", at.display());
+        }
+    }
+    match read_path(&main).map(|back| back.tables.len()) {
+        Ok(n) => println!("{}: {n} tables read back", main.display()),
+        Err(e) => eprintln!("{}: {e}", main.display()),
+    }
+    match std::fs::read(&main).map(parquet::describe) {
+        Ok(Ok(text)) => println!("{} bytes described", text.len()),
+        Ok(Err(e)) => eprintln!("{}: {e}", main.display()),
+        Err(e) => eprintln!("{}: {e}", main.display()),
+    }
+}
+
+pub fn main() {
     let mut docs = Vec::new();
     for path in std::env::args().skip(1) {
         match MetricsDoc::read(Path::new(&path)) {
@@ -59,7 +90,7 @@ fn main() {
             }
         };
         for format in Format::ALL {
-            match render(format, &doc, None) {
+            match render_bytes(format, &doc, None) {
                 Ok(text) => println!("{path}: {} bytes of {}", text.len(), format.name()),
                 Err(e) => eprintln!("{path}: {e}"),
             }
@@ -70,6 +101,8 @@ fn main() {
                 Err(e) => eprintln!("{path}: {e}"),
             }
         }
+        #[cfg(feature = "parquet")]
+        parquet_round_trip(&path, &doc);
         docs.push(doc);
     }
     let verdicts = [verdict("S1")];

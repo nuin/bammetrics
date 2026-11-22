@@ -11,6 +11,7 @@ bammetrics qc in.bam -o out/S1 --also json,markdown,junit,multiqc
 bammetrics check out/ --format junit > junit.xml
 bammetrics convert out/S1.hs_metrics --format csv                # Picard text in, CSV out
 bammetrics convert out/S1.hs_metrics | bammetrics convert -      # the first file, byte for byte
+bammetrics insert-size in.bam --format parquet -o is.parquet     # is.parquet and its companions
 ```
 
 ## Formats
@@ -26,11 +27,15 @@ bammetrics convert out/S1.hs_metrics | bammetrics convert -      # the first fil
 | Aligned text | `human` | `.human.txt` | no | one table |
 | JUnit XML | `junit` | `.junit.xml` | no | the checks of `check` and `qc` |
 | MultiQC custom content | `multiqc` | `.verdict_mqc.json` | no | a verdict table, one row per sample |
+| Parquet | `parquet` | `.parquet` | yes | headers, metrics class, histogram, column types, full doubles |
+| XLSX | `xlsx` | `.xlsx` | no | headers, a sheet per metrics class, a histogram sheet; full doubles |
+| DOCX | `docx` | `.docx` | no | headers and every table as Picard text, no plot |
+| SQL dump | `sql` | `.sql` | no (`sqlite3` loads it) | headers, every table, column types; NaN and infinity as `NULL` |
 
-The tool verbs and `convert` take the first seven. `check` takes `text`, `json`, `jsonl`,
-`junit`, `markdown` and `multiqc`. `qc --also` takes `json`, `jsonl`, `tsv`, `csv`,
-`markdown`, `junit` and `multiqc`. Parquet, XLSX, DOCX, SQL and Arrow come in later waves
-(docs/07 W21 and W46) and are written from the same table.
+The tool verbs and `convert` take the first seven, `parquet`, `xlsx`, `docx` and `sql`.
+`check` takes `text`, `json`, `jsonl`, `junit`, `markdown` and `multiqc`. `qc --also` takes
+`json`, `jsonl`, `tsv`, `csv`, `parquet`, `xlsx`, `docx`, `sql`, `markdown`, `junit` and
+`multiqc`. Arrow comes in a later wave (docs/07 W46) and is written from the same table.
 
 ## The typed table
 
@@ -71,7 +76,7 @@ format given twice is a usage error.
 - `chain` takes `picard` first too, on the chain and on a step (a step's own
   `--format` replaces the chain's list for that step). Each further format is written
   beside every metrics file a tap or `mark-duplicates` writes. `chain --also
-  json|jsonl|tsv|csv` adds the same siblings and `--also markdown` writes
+  json|jsonl|tsv|csv|parquet|xlsx|docx|sql` adds the same siblings and `--also markdown` writes
   `PREFIX.report.md` with every metrics table of the run and no verdict. `junit` and
   `multiqc` are a usage error there: a chain has no verdict. The siblings are written
   from the values in memory, as a verb's `--format picard,json` writes them, so a
@@ -105,10 +110,11 @@ bammetrics qc in.bam -o out/S1 --also json,csv --also markdown
 
 | Value | Files |
 |---|---|
-| `json`, `jsonl`, `tsv`, `csv` | `FILE.json` (`.jsonl`, `.tsv`, `.csv`) beside every metrics file of the run |
+| `json`, `jsonl`, `tsv`, `csv`, `xlsx`, `docx`, `sql` | `FILE.json` (`.jsonl`, `.tsv`, `.csv`, `.xlsx`, `.docx`, `.sql`) beside every metrics file of the run |
 | `markdown` (`md`) | `out/S1.report.md`: the verdict, then every metrics table |
 | `junit` | `out/S1.junit.xml`: one testcase per rule |
 | `multiqc` | `out/S1.verdict_mqc.json`: MultiQC custom content |
+| `parquet` | `FILE.parquet`, `FILE.histogram.parquet` (a file with a histogram) and `FILE.long.parquet` beside every metrics file |
 
 The manifest lists the files under the step `also`, each with its format as `kind`. The
 files are written from the metrics files on disk, so a file `--resume` kept is exported
@@ -119,6 +125,7 @@ JSON forms carry the run's sample name.
 `--also` does not change the exit code of the run. `CollectDuplicateMetrics` writes a file
 with headers only for a BAM with no read. Its `.json` sibling is a document with the
 headers, `class` null and no row; its `.tsv`, `.csv` and `.jsonl` siblings are empty files.
+Its `.sql` sibling holds the `headers` table and empty `tables` and `columns` tables.
 `junit` and `multiqc` print the verdict and read no metrics file.
 
 ## JSON, schema `bammetrics.metrics/1`
@@ -220,16 +227,20 @@ first cell starts with `## `, because that starts a section. `tsv`, `csv`, `json
 bammetrics convert FILE [--format FORMAT[,FORMAT]] [-o FILE] [--table NAME] [--sample NAME]
 ```
 
-- `FILE` is Picard text or `bammetrics.metrics/1` JSON; `-` reads standard input.
-- `--format` defaults to `json` for Picard text and `picard` for JSON.
-- `-o FILE` writes the first format there (`-` is standard output); a list needs it.
+- `FILE` is Picard text, `bammetrics.metrics/1` JSON or the main file of `--format
+  parquet`; `-` reads standard input. A Parquet file with a histogram is read from a
+  path: its histogram companion is read from beside it.
+- `--format` defaults to `json` for Picard text and `picard` for JSON and Parquet.
+- `-o FILE` writes the first format there (`-` is standard output); a list and
+  `parquet` need it, and `xlsx` and `docx` need it when standard output is a terminal.
   `convert` refuses to write its input (exit 2).
 - `--table` picks the table `tsv`, `csv` and `human` print: `metrics` (the first class),
   `histogram`, or a class name. Without it they print the metrics class, or the histogram of
   a file without one.
-- `--sample` sets the sample of the `json` and `jsonl` forms.
+- `--sample` sets the sample of the `json`, `jsonl` and `sql` forms.
 - Exit 1 for a file that is neither form, with the reason: the JSON error for text that
-  starts with `{` or `[`, else `not a metrics file`. `convert` does not read BAM, VCF or
+  starts with `{` or `[`, the SQL dump's own reason for a dump, `a zip (XLSX or DOCX) does
+  not read back` after the first 4 bytes of a zip, else `not a metrics file`. `convert` does not read BAM, VCF or
   interval lists.
 - Exit 1 for `--format picard` on a JSON cell Picard text cannot hold (see the round trip).
 
@@ -288,6 +299,92 @@ with the sample and the band, the preset and the counts, then one table row per 
 - The text is at most 65,536 characters, the limit of a GitHub comment. Rows that do not
   fit are left out and the last line says how many.
 
+## XLSX
+
+`--format xlsx` writes an Office Open XML workbook. The XML is written by hand into a zip
+of stored entries: no compression, no dependency. The same document gives the same bytes:
+every entry carries the date 1980-01-01 00:00, and the parts come in a fixed order.
+
+| Sheet | Holds |
+|---|---|
+| `Headers` | the `StringHeader` texts, one per row in column A |
+| one per metrics class | named by the class after its last `.` or `$` (`InsertSizeMetrics`): row 1 the column names in bold and frozen, then one row per metrics row |
+| `Histogram` | the histogram: the key and one column per series |
+
+- An `int` cell is a number with every digit. A `float` cell is a number with the shortest
+  digits that read back as the same double, always with a point or an exponent (`310.0`,
+  `8.16496580927726`, `1e300`), so openpyxl gives a Python `float`.
+- NaN and infinity have no spreadsheet number. They are the text Picard prints: `?` for NaN
+  and positive infinity, `-?` for negative infinity, so NaN and positive infinity share the
+  text `?`. `pandas.read_excel(path, na_values=["?"])` reads them as NaN.
+- A null cell and an empty string are no cell in an `int` or `float` column and an empty
+  inline string in a `string` column. A reader that types a column by its first data row
+  (DuckDB) then types a text column as text even where that row holds no value.
+- A string is an inline string, XML-escaped. A character XML 1.0 cannot hold (a control
+  character other than tab, line feed and carriage return) is written `_xHHHH_`, the escape
+  of the OOXML string type that Excel decodes. A `_x` that would read as such an escape is
+  written `_x005F_x`.
+- A sheet name has at most 31 characters and none of `: \ / ? * [ ]`. A name equal to an
+  earlier one in any case, or to `History`, gets ` (2)`, ` (3)` after it.
+- A sheet holds at most 1,048,576 rows and 16,384 columns, as Excel does. A larger table is
+  an error (exit 1) and no file is written. The file is at most 1 GiB, so it needs no zip64
+  record. Each sheet is checked against what the earlier sheets left of the 1 GiB after
+  every row, so an over-cap workbook fails before it is built whole. A multi-file verb
+  renders every further format before it writes its Picard files, so this error leaves no
+  file there either.
+- A sheet name loses an apostrophe at either end, also one a cut to 31 characters leaves.
+  `N` sheets of one class are named in `O(N)` tries.
+
+What XLSX loses: the column types (a reader infers them from the cells), the histogram's key
+class, the `sample` and `tool` of the JSON form, a string past 32,767 characters (it is
+cut to the most an Excel cell holds), and the difference between null and an empty string.
+Excel shows 15 significant digits: an int above 2^53 keeps every digit in the file and in
+openpyxl, not on screen. openpyxl and pandas do not decode `_xHHHH_`; they show such a cell
+as written. `pandas.read_excel` gives `int64` for a float column whose cells are all whole
+numbers. `convert` and `read_table` do not read XLSX back: each reads the first 4 bytes and
+refuses a zip with `a zip (XLSX or DOCX) does not read back` (`convert` exits 1, `read_table`
+raises `InputError`).
+
+DuckDB's `excel` extension (`read_xlsx`) types each column by the first data row. An `int`
+column reads as `DOUBLE`, so an int above 2^53 loses digits there. A `?` or `-?` in a
+number column fails the read (`Could not convert string '?' to DOUBLE`) unless `?` sits in
+the first data row; read such a sheet with `all_varchar=true`, then `TRY_CAST`. `read_xlsx`
+stops at the first row with no cell: a row whose every cell is a null number, in a table
+with no `string` column.
+
+`crates/formats/tests/ooxml.rs` reads every sheet of every metrics file under
+`tests/data/picard` and `tests/golden` back from the zip and compares each cell with the
+document. It also runs openpyxl and pandas (`tests/ooxml_readers.py`, the Python of
+`OOXML_PYTHON` or `python3`) and DuckDB's `excel` extension on the same files when they are
+installed, and skips each otherwise.
+
+## DOCX
+
+`--format docx` writes a WordprocessingML document of text and tables, A4 landscape, no
+plot. Like XLSX it is a stored zip with fixed dates and the same bytes for the same document.
+
+- A `Heading 1` with the tool and the sample when known, then one paragraph per
+  `StringHeader` text.
+- A `Heading 2` and a table per metrics class, then the histogram under the heading of the
+  Markdown form (`Histogram of CLASS, by KEY`). The first row holds the column names in
+  bold and repeats on every page. A class with no row is the line `No rows.`
+- A table with more than 8 columns and at most 8 rows is turned on its side, as in Markdown:
+  one row per column.
+- Word holds at most 63 columns in a table. A table of more columns and more than 8 rows
+  is cut into tables of at most 63 columns, each after the line `Columns A to B of N.`;
+  every part holds every row in the same order.
+- The document is at most 1 GiB. The body is checked after each paragraph and table row,
+  so an over-cap document fails (exit 1, no file) before it is built whole.
+- A cell holds the text Picard prints: at most 6 fraction digits, `?` for NaN. Numbers are
+  right-aligned. A tab is a Word tab and a line end a line break.
+
+What DOCX loses: every digit past the sixth fraction digit, the column types, the form of a
+line end (`\r\n` and `\r` become a line break), and a character XML 1.0 cannot hold
+(U+FFFD in its place). `convert` and `read_table` do not read DOCX back. `crates/formats/tests/ooxml.rs`
+compares every table cell with the document, runs python-docx through
+`tests/ooxml_readers.py`, and checks that pandoc converts each file to Markdown and finds
+one table per table with a row.
+
 ## JUnit XML
 
 `check --format junit` and `qc --also junit` write one `<testsuite>` per sample and one
@@ -323,7 +420,147 @@ multiqc run/          # section "bammetrics verdict", plus the Picard sections
 (or `MULTIQC` names it) and is skipped otherwise. MultiQC 1.35 reads the file as a table
 with 1 sample.
 
+## SQL dump
+
+`--format sql` writes one text file that `sqlite3` loads into a database. It is the
+`.dump` form: no database file is written (a native `.sqlite` is docs/07 wave W46).
+
+```bash
+bammetrics insert-size in.bam --format picard,sql -o is.txt      # is.txt and is.txt.sql
+sqlite3 is.db < is.txt.sql
+sqlite3 is.db 'SELECT MEDIAN_INSERT_SIZE, READ_PAIRS FROM InsertSizeMetrics'
+duckdb is.duckdb < is.txt.sql
+```
+
+| Table | Columns | Rows |
+|---|---|---|
+| `headers` | `position`, `text` | the `StringHeader` texts, from 1 |
+| `tables` | `name`, `kind`, `class`, `tool`, `sample` | one per table below; `kind` is `metrics` or `histogram` |
+| `columns` | `table`, `position`, `column`, `name`, `type` | one per column of each table; `name` as the file has it, `type` `int`, `float` or `string` |
+| a class, by its name after the last `.` or `$` | the class's columns | the metrics rows |
+| `histogram` | the key, then one column per series | the histogram rows |
+
+- A column is `BIGINT`, `DOUBLE` or `TEXT` by its glossary type. SQLite gives these the
+  affinities INTEGER, REAL and TEXT. DuckDB reads 64-bit integers and doubles: its own
+  `INTEGER` is 32 bits and its `REAL` a 32-bit float.
+- The names `headers`, `tables`, `columns` and `histogram` are taken first. A class whose
+  name is taken, in any case, gets `_2`, `_3`: SQLite and DuckDB compare names without case.
+  A class name that starts with `sqlite_`, in any case, gets `_` before it
+  (`_sqlite_x`): SQLite keeps such names for its own tables. No Picard class has one.
+- A column name the table repeats, or repeats in another case, gets `.1`, `.2` (the
+  histogram of `CollectHsMetrics` with two units), as the JSON form names it. `columns`
+  keeps the name of the file.
+- Identifiers are in double quotes with `"` doubled. Strings are in single quotes with `'`
+  doubled. A carriage return or a NUL in a string is written `char(13)` or `char(0)`: the
+  `sqlite3` shell drops a carriage return before a line end. `char` is SQLite's, so DuckDB
+  does not load a dump with either character in a cell. A carriage return or a NUL in a name
+  becomes U+240D or U+2400 in the identifier.
+- A float keeps every digit: the shortest text that reads back as the same `f64`, with a
+  point or an exponent (`310.0`, `1e-7`). An empty cell, NaN and infinity are all `NULL`.
+  The form is lossy there: `?` and an empty cell read back the same. A `-0.0` is written
+  as `-0.0`, and SQLite 3.54.0 and DuckDB 2.0.1 both read it back as `0.0`.
+- Every statement is in one transaction, one `INSERT` per row. SQLite's default statement
+  limit is 1,000,000,000 bytes. SQLite refuses a table of over 2,000 columns. The widest
+  class of the glossary, `HsMetrics`, has 69. The histogram of `CollectHsMetrics` has 3
+  columns per unit, so over 666 units it does not load.
+- The `sqlite3` shell runs the statements after a failed one, so `COMMIT` keeps a partial
+  load. `sqlite3 -bail DB < FILE.sql` stops at the first error and leaves no table.
+- The text depends on the document only: the same file gives the same dump.
+- A table with no column (a class block with no column, possible in JSON) gets no SQL table.
+- `convert` does not read a dump back. It refuses a file whose first line is the dump's
+  first line, `-- bammetrics SQL dump of one metrics file: sqlite3 DB < FILE.sql`.
+
+`crates/formats/tests/sql.rs` loads the dump of every Picard file under `tests/data/picard`
+and of every metrics file in `tests/golden` (373 files, 93,924 cells) into `sqlite3` 3.54.0
+and DuckDB 2.0.1. `SELECT` gives back every cell, every declared type and every header
+line. A reader that is not on PATH is skipped.
+
 ## Python
 
-`read_table(path)` reads either readable form and returns a `Table` with plain lists and
-the glossary's dtypes; see [python.md](python.md).
+`read_table(path)` reads any readable form, the main file of a Parquet set too, and
+returns a `Table` with plain lists and the glossary's dtypes; see [python.md](python.md).
+
+## Parquet
+
+```bash
+bammetrics insert-size in.bam --format parquet -o is.parquet
+bammetrics convert S1.insert_size_metrics --format parquet -o S1.parquet
+bammetrics convert S1.parquet | cmp - S1.insert_size_metrics      # byte for byte
+bammetrics qc in.bam -o out/S1 --also parquet
+duckdb -c "SELECT sample, value::DOUBLE FROM 'out/*.long.parquet' WHERE column = 'MEAN_INSERT_SIZE'"
+```
+
+Parquet is the lossless binary form (docs/07 section 3.1). The `parquet` crate writes it
+(feature `parquet`, on by default in `bammetrics-cli` and the wheel). One metrics file
+becomes up to three files:
+
+| File | Holds |
+|---|---|
+| `PATH` | the metrics class table, or the histogram of a file without a class |
+| `STEM.histogram.parquet` | the histogram, for a file with a class and a histogram |
+| `STEM.long.parquet` | every cell as a row: `sample`, `class`, `row_key`, `column`, `value` |
+
+`STEM` is `PATH` less a last `.parquet`: `-o is.parquet` gives `is.histogram.parquet`, and
+the sibling `is.txt.parquet` of `--format picard,parquet -o is.txt` gives
+`is.txt.histogram.parquet`. Parquet writes several files, so it needs `-o` (exit 2
+without). A multi-file verb and `chain` write it beside every metrics file, as the other
+further formats.
+
+- A column is `INT64` for an `int`, `DOUBLE` for a `float` and `BYTE_ARRAY` with the
+  `STRING` annotation for a `string`: the glossary's type. DuckDB reads them as `BIGINT`,
+  `DOUBLE` and `VARCHAR`, polars as `Int64`, `Float64` and `String`.
+- Every column is optional. An empty cell is null, `?` is NaN, and a double keeps all 64
+  bits.
+- A column name Picard repeats gets `.1`, `.2` as in JSON; the Picard names travel in
+  `picard_columns`.
+- The key-value metadata `bammetrics` holds a JSON object: `schema`
+  (`bammetrics.parquet/1`), `part` (`metrics`, `histogram`, `long` or `empty`), `tool` and
+  `sample` when known, `headers`, `class` (the metrics class, or the key's Java class of a
+  histogram), `picard_columns` when a name repeats, and in the main file `histogram`, true
+  when the histogram companion belongs to it. `bammetrics.md5` is the MD5 of every byte
+  before the footer.
+- The long file has one row per cell of the class table, then of the histogram. `class` is
+  the metrics class (the tool name in a file without one). `row_key` is `metrics/<i>` or
+  `histogram/<i>`, `i` the row's index from 0 in its table. `column` is the Picard column
+  name. `value` is text: an int in decimal, a double in the shortest form that reads back
+  as the same double (`310.0`, `1e-7`, `NaN`, `Infinity`, `-Infinity`), a string as it is,
+  null for an empty cell. `value::DOUBLE` in DuckDB gives the number back.
+- A metrics file with headers only (`CollectDuplicateMetrics` on a BAM with no read) gets a
+  main file of part `empty`: the long file's five columns and no row. A Parquet file needs
+  a column.
+- Snappy, one row group per file, data pages version 1, no dictionary, no statistics, no
+  page index, `created_by` `bammetrics`. The same document gives the same bytes;
+  `crates/formats/src/parquet/read.rs` pins three files by size and MD5.
+
+Picard text to Parquet to Picard text is byte for byte the first file, with the same
+exceptions as JSON (see the round trip). `crates/formats/tests/round_trip.rs` runs it on
+every Picard fixture and every metrics file in the golden records, and runs DuckDB,
+polars and pyarrow on every file it writes (910 files at wave W21): each reads the glossary
+types, every row, null and NaN. A reader that is not installed is skipped; the Python
+readers run under `BAMMETRICS_PARQUET_PYTHON` (default `python3`).
+
+`convert` and `read_table` read a file bammetrics wrote: the `bammetrics` metadata, one
+flat level of `INT64`, `DOUBLE` and `BYTE_ARRAY` columns in `PLAIN` data pages version 1.
+The reader reads at most 256 MiB, 8,388,608 cells (about 1 GiB decoded), 64 cells per byte
+of the file and 512 MiB of decompressed pages, all checked from the footer and the page
+headers before a value is decoded. A file of 47 KB that says 30,000,000 null rows is
+refused. Before the `parquet` crate decodes a page it checks the MD5 and every page header
+against the bytes present: a page that claims more than 64 times its compressed size plus
+1 KiB uncompressed, a page outside its column chunk, a dictionary page or encoding, or
+more values than rows is an error. A panic in the crate is an error, and its message is
+not printed. A long file is not read back (exit 1). A file another tool rewrote has no
+`bammetrics` metadata and is refused. `read_metrics` refuses a Parquet file and names
+`read_table`; `read_table` of a file with headers only (part `empty`) is an `InputError`.
+
+`convert`, the tool verbs and `chain` write a Parquet file, its companions and the further
+formats of a `--format` list as one set: each file under a temporary name, then all
+renamed into place. A failed write or rename leaves none of them and puts back each file a
+rename replaced. A new main
+file with no histogram removes a `STEM.histogram.parquet` beside it that a bammetrics run
+wrote as a companion (its metadata says so), so a glob such as `*.histogram.parquet`
+finds no stale histogram. `qc` removes the companions an earlier run wrote through its
+manifest.
+
+The feature costs 1,095,672 bytes of stripped binary (1.04 MiB) with the `parquet` crate
+at opt-level `"z"` (docs/benchmarks.md). A build with `--no-default-features` has no
+Parquet: `--format parquet` and `--also parquet` are a usage error there (exit 2).

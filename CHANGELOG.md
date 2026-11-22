@@ -1,5 +1,93 @@
 # Changelog
 
+## Unreleased
+
+Wave W21 of docs/07: Parquet, XLSX, DOCX and the SQL dump of a metrics file. No version bump; it ships with the release after 0.31.0.
+
+### Added
+
+- Parquet (wave W21 of docs/07, docs/formats.md section Parquet): `--format parquet` on the
+  tool verbs and `convert`, `qc --also parquet` and `chain --also parquet`. One metrics file
+  becomes `FILE.parquet` (the class table, or the histogram of a file without one),
+  `FILE.histogram.parquet` and `FILE.long.parquet` (`sample`, `class`, `row_key`, `column`,
+  `value`), written through the `parquet` crate's `SerializedFileWriter` with snappy: the
+  glossary's types as `INT64`, `DOUBLE` and `STRING`, null for an empty cell, NaN and full
+  doubles kept, the headers and class in the key-value metadata, the same bytes for the
+  same document. `convert` reads a Parquet main file and its histogram companion back to
+  every format; Picard text to Parquet to Picard text is byte for byte on every fixture.
+  Python `read_table` reads it too. The reader checks an MD5 and every page header against
+  the bytes present before the crate decodes a page, and reads at most 8,388,608 cells, 64
+  cells per byte of the file and 512 MiB of decompressed pages, `PLAIN` data pages only; a
+  panic in the crate is an error with no panic message. The long file is written a column
+  at a time in chunks of 65,536 cells, so writing Parquet takes about the memory of CSV.
+- `convert`, the tool verbs and `chain` write a Parquet set and the further formats of a
+  `--format` list as one set (`cleanup::write_set`): a failed write leaves none of them and
+  puts back each file a rename replaced. A new main file with no histogram removes the
+  histogram companion an earlier run left beside it. `convert -o` through a directory that
+  does not exist with a `..` behind it is a usage error (exit 2), as on the tool verbs.
+- The feature `parquet` of `bammetrics-formats`, a default feature of `bammetrics-cli` and
+  `bammetrics-py` (on in `cargo build --release` and the wheel): 1,095,672 bytes of stripped
+  binary with the crate at opt-level `"z"`. `make budgets` reports it as Parquet growth.
+- Tests: Parquet round trips over `tests/data/picard` and every golden metrics file, DuckDB,
+  polars and pyarrow reading every file written (`crates/formats/tests/round_trip.rs`,
+  skipped without the reader), 14 golden forms, the committed
+  `tests/data/insert_size_metrics.parquet` set.
+- XLSX and DOCX (wave W21 of docs/07): `--format xlsx` and `docx` on the tool verbs,
+  `convert` and `chain`, and `qc --also xlsx,docx` (and `chain --also`) beside every
+  metrics file. XLSX is a workbook with a `Headers` sheet, a sheet per metrics class and a
+  `Histogram` sheet, numbers with every digit; DOCX is the headers and every table as
+  Picard text, A4 landscape. Both are hand-written OOXML in a zip of stored entries
+  (`crates/formats/src/ooxml.rs`, `xlsx.rs`, `docx.rs`): no new dependency, the same bytes
+  for the same document. Neither reads back; `convert` exits 1 on a zip input.
+  docs/formats.md says what each loses.
+- `crates/formats/tests/ooxml.rs`: every metrics file of `tests/data/picard` and
+  `tests/golden` read back from both formats cell by cell, and openpyxl, pandas,
+  python-docx, pandoc and DuckDB's `excel` extension on the same files when installed.
+- XLSX writes a null cell of a text column as an empty inline string, so DuckDB's
+  `read_xlsx` types the column as text. DOCX cuts a table past Word's 63 columns into
+  parts. Both check the 1 GiB cap row by row, before the file is built whole.
+- `convert` refuses an `-o` through a missing directory with a `..` behind it (exit 2),
+  which overwrote its input before; it reads 4 bytes before it refuses a zip, and
+  `read_table` gives the same zip message. `convert` and the tool verbs refuse to print
+  XLSX or DOCX on a terminal (exit 2). A multi-file verb renders its further formats
+  before it writes its Picard files.
+- `--format sql` (wave W21 of docs/07): an SQL dump of a metrics file that `sqlite3 DB <
+  FILE.sql` loads (`crates/formats/src/sql.rs`). One table per metrics class, named by
+  the class after its last `.` or `$`, the histogram as `histogram`, the `StringHeader`
+  texts as `headers`, and `tables` and `columns` that name each table and column with its
+  glossary type. Columns are `BIGINT`, `DOUBLE` or `TEXT`; a float keeps every digit; an
+  empty cell, NaN and infinity are `NULL`; `-0.0` reads back as `0.0`. A class name that
+  starts with `sqlite_` gets `_` before it. One `INSERT` per row in one transaction. The
+  tool verbs, `convert`, `qc --also sql` and `chain --also sql` write it; `convert` and
+  `read_table` refuse a dump. No crate is added; the stripped binary grows 16,560 bytes.
+- `crates/formats/tests/sql.rs`: `sqlite3` 3.54.0 and DuckDB 2.0.1 load the dump of every
+  file of `tests/data/picard` and every metrics file in `tests/golden` (373 files, 93,924
+  cells) and give back every cell, column type and header line; each reader is skipped
+  when it is not on PATH. `tests/python/test_sql.py` loads the `qc` and `chain` dumps with
+  Python's `sqlite3`.
+- Nine golden forms (`convert_sql`, `convert_sql_list`, `error_convert_reads_sql`,
+  `verb_insert_size_sql`, `verb_multiple_metrics_sql`, `qc_also_sql`,
+  `qc_also_sql_no_reads`, `plan_also_sql`, `chain_also_sql`) and the fixture
+  `tests/data/insert_size_metrics.sql`. Three error records list `sql` among the formats.
+
+### Changed
+
+- `--format` and `--also` name `parquet`, `xlsx`, `docx` and `sql` in their lists, so the error
+  text of an unknown format lists them (`error_verb_format`, `error_verb_format_twice` and
+  `error_qc_also`, which now gives `prquet`). `convert` of a zip names Parquet among the
+  formats it reads (`error_convert_reads_xlsx`).
+- The three formats share one path: `render_files` writes XLSX and DOCX as one file and
+  Parquet as a main file with companions. A `--format` list goes out as one file set, the
+  further formats of a multi-file verb rendered before its Picard files are written.
+  Parquet needs `-o` (a format with companions); XLSX and DOCX go to standard output when
+  it is a file or a pipe. Two golden forms put all four formats in one list
+  (`verb_insert_size_w21_list`, `verb_multiple_metrics_w21_list`).
+- `make budgets`: the Parquet growth target is 0.6 MiB, failing at 1.2 MiB (docs/07
+  decision D214, pending owner review). The merged probe measures 1,112,176 bytes, one
+  16 KiB page more than the Parquet branch alone and 686 bytes over the old limit.
+- docs/07 section 7: the W21 decisions are D200 to D214, renumbered after the last D row
+  of main by the integrator of the next release.
+
 ## 0.30.0
 
 Wave W12 of docs/07: the interval layer `interval_ops` and five interval tools (65 in all), none of them a chain step; `qc --panel` takes the lists they write.
