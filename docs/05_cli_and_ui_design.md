@@ -350,6 +350,8 @@ One row per sample, worst first. Sort: verdict rank (fail, warn, incomplete, pas
 
 `make budgets` (`crates/cli/tests/budgets.rs`) measures every row on the test fixtures and fails the build at 2x any target; CI runs it on Linux and macOS (decision 11). Each row's method and the history of the binary size are in docs/benchmarks.md.
 
+Targets moved on 2026-11-22. The owner accepted the binary size (docs/07 decisions D22, D149, D156 and D159), so three rows became regression checks at the 0.31.0 size rounded up, failing at 1.5x: binary growth 430,000 bytes (fails at 645,000), formats growth 200 KB (fails at 300 KB), Parquet growth 1.1 MiB (fails at 1.65 MiB). The 300 KB and 150 KB values in the table above are the original targets.
+
 ### 4.9 Out of scope: the hosted dashboard
 
 | Stays in the open report | Belongs to the hosted dashboard (ROADMAP.md) |

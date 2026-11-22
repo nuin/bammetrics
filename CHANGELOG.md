@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- `make budgets`: the binary, formats and Parquet growth rows are regression checks at the 0.31.0 size, after the owner accepted the binary size on 2026-11-22 (docs/07 decisions D22, D149, D156 and D159). Targets 430,000 bytes, 200 KB and 1.1 MiB; each fails at 1.5x its target (645,000 bytes, 300 KB, 1.65 MiB). The other rows still fail at 2x.
+
 ## 0.31.0
 
 Wave W13 of docs/07: `MergeSamFiles`, `ReorderSam`, `FixMateInformation`, `FilterSamReads`, `DownsampleSam` and `PositionBasedDownsampleSam` (71 tools in all), four of them chain transforms. Wave W21 of docs/07 (formats): Parquet, XLSX, DOCX and the SQL dump of a metrics file.
