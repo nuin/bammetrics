@@ -196,33 +196,7 @@ pub fn unclipped(start: i32, ops: &[(u32, u8)]) -> (i32, i32) {
 
 /// htsjdk `Murmur3.hashUnencodedChars` with seed 1, over one char per byte.
 fn murmur3(name: &[u8]) -> i32 {
-    fn mix_k1(k1: i32) -> i32 {
-        k1.wrapping_mul(0xcc9e_2d51_u32 as i32)
-            .rotate_left(15)
-            .wrapping_mul(0x1b87_3593)
-    }
-    fn mix_h1(h1: i32, k1: i32) -> i32 {
-        (h1 ^ k1)
-            .rotate_left(13)
-            .wrapping_mul(5)
-            .wrapping_add(0xe654_6b64_u32 as i32)
-    }
-    let mut h1 = 1i32;
-    let mut i = 1;
-    while i < name.len() {
-        let k1 = i32::from(name[i - 1]) | (i32::from(name[i]) << 16);
-        h1 = mix_h1(h1, mix_k1(k1));
-        i += 2;
-    }
-    if name.len() % 2 == 1 {
-        h1 ^= mix_k1(i32::from(name[name.len() - 1]));
-    }
-    h1 ^= (2 * name.len()) as i32;
-    h1 ^= ((h1 as u32) >> 16) as i32;
-    h1 = h1.wrapping_mul(0x85eb_ca6b_u32 as i32);
-    h1 ^= ((h1 as u32) >> 13) as i32;
-    h1 = h1.wrapping_mul(0xc2b2_ae35_u32 as i32);
-    h1 ^ ((h1 as u32) >> 16) as i32
+    crate::java_random::Murmur3::new(1).hash_bytes(name)
 }
 
 /// `DuplicateScoringStrategy.computeDuplicateScore`.
@@ -533,7 +507,12 @@ impl<'d> Builder<'d> {
         ends.library_id = self.library_id(rg.as_deref());
         let mut location = Location::default();
         let name = latin1(record.name());
-        if self.opts.finder.parser.read_location(&name, &mut location) {
+        if self
+            .opts
+            .finder
+            .parser
+            .read_location(&name, &mut location)?
+        {
             ends.read_group = self.groups.number(rg.as_deref());
         }
         ends.tile = location.tile;

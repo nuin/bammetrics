@@ -90,6 +90,26 @@ const EXEMPT: &[(&str, &str)] = &[
         "GatherBamFiles",
         "writes a BAM gathered from several: no metrics file, no row, no column",
     ),
+    (
+        "MergeSamFiles",
+        "writes a BAM merged from several: no metrics file, no row, no column",
+    ),
+    (
+        "ReorderSam",
+        "writes a BAM under another sequence dictionary: no metrics file, no row, no column",
+    ),
+    (
+        "FixMateInformation",
+        "writes a BAM or SAM text with mate fields set: no metrics file, no row, no column",
+    ),
+    (
+        "FilterSamReads",
+        "writes a BAM or SAM text of the records a filter keeps: no metrics file, no row, no column",
+    ),
+    (
+        "PositionBasedDownsampleSam",
+        "writes a BAM of the records kept: no metrics file, no row, no column",
+    ),
 ];
 
 /// A directory of its own for this test's files.
@@ -418,6 +438,16 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
     args.insert(
         "NonNFastaSize",
         vec![format!("I={DATA}/n_runs.fa"), out("n_runs.non_n")],
+    );
+    // Wave W13: the QualityYieldMetrics of the records kept.
+    args.insert(
+        "DownsampleSam",
+        vec![
+            format!("I={DATA}/markdup.bam"),
+            out("downsampled.bam"),
+            "P=0.5".to_owned(),
+            format!("M={}", dir.join("downsample_metrics").display()),
+        ],
     );
     args
 }

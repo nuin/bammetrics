@@ -365,14 +365,14 @@ pub fn sample_name(chain: &Chain) -> String {
     from_header.unwrap_or_else(|| verbs::stem(&chain.source))
 }
 
-/// The sample of the json and jsonl forms: [`sample_name`], and none for a
-/// piped source without `--sample`. Asked only when a step writes one of
-/// those forms.
+/// The sample of the json, jsonl and parquet forms: [`sample_name`], and
+/// none for a piped source without `--sample`. Asked only when a step writes
+/// one of those forms, as the verb asks it.
 fn sample(chain: &Chain) -> Option<String> {
     let wanted = chain.steps.iter().any(|step| {
         step.formats
             .iter()
-            .any(|f| matches!(f, Format::Json | Format::Jsonl))
+            .any(|f| matches!(f, Format::Json | Format::Jsonl | Format::Parquet))
     });
     (wanted && (chain.sample.is_some() || chain.replayable())).then(|| sample_name(chain))
 }

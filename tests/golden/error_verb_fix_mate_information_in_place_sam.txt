@@ -1,0 +1,8 @@
+## argv
+fix-mate-information
+tests/data/mate_filter.sam
+## exit
+2
+## stdout
+## stderr
+bammetrics fix-mate-information: INPUT=tests/data/mate_filter.sam: without OUTPUT the input is rewritten in place, and Picard writes BAM bytes under its name, which holds or names SAM text or a CRAM; give OUTPUT

@@ -1,0 +1,20 @@
+## argv
+filter-sam-reads
+tests/data/mate_filter.sam
+-o
+OUT/none.sam
+--filter
+includeTagValues
+--tag
+XI
+--tag-value
+7
+## exit
+0
+## stdout
+## stderr
+## file none.sam
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:chr1	LN:100000
+@RG	ID:rg1	SM:s1	LB:lib1	PU:unit1	PL:ILLUMINA
+@RG	ID:rg2	SM:s1	LB:lib2	PU:unit2	PL:ILLUMINA

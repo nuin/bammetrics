@@ -709,6 +709,64 @@ The queryname row first ran against 1.2 times its input (1,859 MiB) and failed a
 MiB; its limit is now 1.2 times its output, for the reason given above. The two inputs
 other than the slice are made again with the commands of that section before a run.
 
+The wave W13 rows (2026-11-21, feat/merge-reorder, one run each; the scale rows with
+`--out-root ~/data/bammetrics-scale/waves/w13`). The scale inputs are the W05 slice
+(`slice.chr20_21.bam`, 29,330,868 records) split by read group with `samtools split -@ 8
+--no-PG -f slice_rg_%#.bam` (12 BAMs of 168 to 181 MB) and `reversed.dict`, an `@HD
+VN:1.6` line then the slice's `@SQ` lines in reverse order (`samtools view -H
+slice.chr20_21.bam | grep '^@SQ' | tail -r`), all in `~/data/bammetrics-scale/waves/w13`.
+They were removed after the run and are made again with these commands. The limit of
+each scale row is the W05 sort gate, 3,072 MiB:
+
+| command | tier | peak RSS MiB / limit | wall s | spill MiB / limit |
+|---|---|---|---:|---:|
+| `merge-sam-files` | fixture | 7.2 / 64 | 0.01 | |
+| `merge-sam-files queryname` | fixture | 9.7 / 64 | 0.02 | 0.0 |
+| `reorder-sam` | fixture | 8.0 / 64 | 0.01 | 0.0 |
+| `merge-sam-files slice by read group` | scale | 96.3 / 3072 | 13.37 | |
+| `merge-sam-files slice queryname` | scale | 471.2 / 3072 | 71.88 | 2,783.0 / 3,284 |
+| `reorder-sam slice` | scale | 596.6 / 3072 | 33.51 | 1,725.2 / 3,284 |
+
+The presorted merge holds one record and one BGZF reader per input. The queryname merge
+and the reorder hold `MAX_RECORDS_IN_RAM` (500,000) records per sorted run, as `sort-sam
+queryname slice` does (592.4 MiB above).
+
+Every wave W13 row at 0.31.0 (2026-11-21, release/0.31.0, one run each; `make memgate`
+passes 55 fixture rows, `TIER=scale make memgate` passes 35 scale rows and skips 3: the
+two chain sort-barrier rows and `revert-original-base-qualities-and-add-mate-cigar
+pairs`, whose inputs were removed after earlier runs). The split slice and
+`reversed.dict` were made again with the commands above; scale outputs went under
+`~/data/bammetrics-scale/waves/w13`, and both were removed after the run:
+
+| command | tier | peak RSS MiB / limit | wall s | spill MiB / limit |
+|---|---|---|---:|---:|
+| `merge-sam-files` | fixture | 7.3 / 64 | 0.01 | |
+| `merge-sam-files queryname` | fixture | 9.6 / 64 | 0.02 | 0.0 |
+| `reorder-sam` | fixture | 7.7 / 64 | 0.01 | 0.0 |
+| `fix-mate-information` | fixture | 9.3 / 64 | 0.01 | 0.0 |
+| `filter-sam-reads` | fixture | 6.7 / 64 | 0.02 | 0.0 |
+| `chain fix-mate-information + filter-sam-reads + write` | fixture | 10.3 / 64 | 0.02 | 0.0 |
+| `downsample-sam HighAccuracy` | fixture | 6.0 / 64 | 0.00 | |
+| `chain downsample-sam + mark-duplicates + write` | fixture | 7.1 / 64 | 0.00 | |
+| `position-based-downsample-sam` | fixture | 5.7 / 64 | 0.00 | |
+| `merge-sam-files slice by read group` | scale | 79.4 / 3072 | 11.46 | |
+| `merge-sam-files slice queryname` | scale | 456.6 / 3072 | 70.42 | 2,783.0 / 3,284 |
+| `reorder-sam slice` | scale | 595.7 / 3072 | 32.86 | 1,725.2 / 3,284 |
+| `fix-mate-information slice` | scale | 646.3 / 3072 | 152.05 | 5,093.4 / 5,400 |
+| `filter-sam-reads slice` | scale | 35.5 / 1024 | 15.78 | |
+| `downsample-sam ConstantMemory exome` | scale | 23.4 / 1024 | 19.99 | |
+| `downsample-sam Chained exome` | scale | 137.0 / 1024 | 14.03 | |
+| `downsample-sam HighAccuracy slice` | scale | 1,972.5 / 3072 | 19.97 | |
+| `position-based-downsample-sam exome` | scale | 32.4 / 1024 | 58.29 | |
+
+The sort and merge rows stay under the W05 gate of `--sort-memory` (2 GiB) plus 1 GiB:
+the queryname merge of the 12 read-group pieces peaks at 456.6 MiB, the fix at 646.3 MiB.
+`downsample-sam HighAccuracy slice` holds every name decided so far, as Picard does
+(docs/07 D138): 1,972.5 MiB for the 14.7 million templates of the slice. Of the rows of
+earlier waves, `interval converters on GRCh38, 2,000,000 records` peaks at 489.4 / 768
+MiB (461.4 MiB at 0.30.0) and `mark-duplicates slice` at 659.5 / 1024 MiB (660.3 MiB at
+0.30.0).
+
 To add a scale row:
 
 1. Keep the data under `~/data/bammetrics-scale`, never in the repository. Write nothing
@@ -745,12 +803,15 @@ and CI runs it on the Linux and macOS runners after the unit tests.
 | Binary growth, 0.28.0 | 300 KB | 600 KB | 403.8 KB | 413,456 bytes stripped (443,648 unstripped), measured 2026-11-19 by `make budgets` on release/0.28.0: the same stripped bytes as the 0.26.0 and 0.27.0 rows, so wave W10 adds nothing to the probe (its six tools are verb and core code the probe does not link). 106,256 bytes (103.8 KB) over the 300 KB target and 200,944 bytes under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review |
 | Binary growth, 0.29.0 | 300 KB | 600 KB | 419.9 KB | 429,968 bytes stripped (460,224 unstripped), measured 2026-11-20 by `make budgets` on release/0.29.0: 16,512 bytes (16.1 KB) over the 0.28.0 row. The cause is unconfirmed: probably the glossary rows of the six W11 tools, which the report links. 122,768 bytes (119.9 KB) over the 300 KB target and 184,432 bytes under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review |
 | Binary growth, 0.30.0 | 300 KB | 600 KB | 419.9 KB | 429,968 bytes stripped (460,224 unstripped), measured 2026-11-21 by `make budgets` on release/0.30.0: the same bytes as the 0.29.0 row, so wave W12 adds nothing to the probe (its five tools write no metrics file and add no glossary row). 122,768 bytes (119.9 KB) over the 300 KB target and 184,432 bytes under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review |
+| Binary growth, 0.31.0 | 300 KB | 600 KB | 419.9 KB | 429,968 bytes stripped (460,240 unstripped), measured 2026-11-21 by `make budgets` on release/0.31.0: the same stripped bytes as the 0.29.0 and 0.30.0 rows, so wave W13 adds nothing to the probe (no glossary row: `DownsampleSam` writes the existing `QualityYieldMetrics` and the other five no metrics file); wave W21 adds nothing either, measured again after the merge with main. 122,768 bytes (119.9 KB) over the 300 KB target and 184,432 bytes under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review |
 | Formats growth, W02 | 150 KB | 300 KB | 129.2 KB | 132,304 bytes stripped (148,480 unstripped), measured 2026-11-10 by `make budgets`: stripped `size_formats` less stripped `size_formats_base` (`crates/formats/examples`); see below |
-| Parquet growth, W21 | 0.53 MiB | 1.06 MiB | 1.045 MiB | 1,095,664 bytes stripped (1,497,920 unstripped), measured 2026-11-21 by `make budgets` after the review fixes (reader caps, streamed long file, file sets): stripped `size_parquet` (`size_formats` with the feature `parquet`) less stripped `size_formats`. Over the docs/07 target of 0.53 MiB, 15,826 bytes under the limit, so the test prints `over target` and passes (docs/07 decision D204); see below |
-| Formats growth, W21 XLSX and DOCX | 150 KB | 300 KB | 177.6 KB | 181,888 bytes stripped (201,856 unstripped), measured 2026-11-21 by `make budgets` on feat/ooxml: 49,608 bytes (48.4 KB) over the 132,280 bytes the same machine measured for main at 0.30.0, the XLSX, DOCX and zip writers that `size_formats` now links through `render_bytes`. 31,744 bytes (31.0 KB) over the 150 KB target and 125,312 bytes under the 300 KB limit, so the test prints `over target` and passes (docs/07 decision D211). The stripped `bammetrics` binary grows 33,064 bytes (8,383,176 to 8,416,240) |
+| Parquet growth, W21 | 0.53 MiB | 1.06 MiB | 1.045 MiB | 1,095,664 bytes stripped (1,497,920 unstripped), measured 2026-11-21 by `make budgets` after the review fixes (reader caps, streamed long file, file sets): stripped `size_parquet` (`size_formats` with the feature `parquet`) less stripped `size_formats`. Over the docs/07 target of 0.53 MiB, 15,826 bytes under the limit, so the test prints `over target` and passes (docs/07 decision D149); see below |
+| Formats growth, W21 XLSX and DOCX | 150 KB | 300 KB | 177.6 KB | 181,888 bytes stripped (201,856 unstripped), measured 2026-11-21 by `make budgets` on feat/ooxml: 49,608 bytes (48.4 KB) over the 132,280 bytes the same machine measured for main at 0.30.0, the XLSX, DOCX and zip writers that `size_formats` now links through `render_bytes`. 31,744 bytes (31.0 KB) over the 150 KB target and 125,312 bytes under the 300 KB limit, so the test prints `over target` and passes (docs/07 decision D156). The stripped `bammetrics` binary grows 33,064 bytes (8,383,176 to 8,416,240) |
 | Formats growth, W21 SQL dump | 150 KB | 300 KB | 145.4 KB | 148,864 bytes stripped (168,480 unstripped), measured 2026-11-21 by `make budgets` on feat/sql-dump: 16,576 bytes over the 132,288 bytes measured the same day for main at 0.30.0, the SQL writer that `size_formats` links through `render`. The `__text` section of `bammetrics` grows 16,128 bytes and the stripped binary 16,560 bytes (8,383,160 to 8,399,720). No crate is added |
-| Parquet growth, W21 merged | 0.6 MiB | 1.2 MiB | 1.061 MiB | 1,112,176 bytes stripped (1,514,800 unstripped), measured 2026-11-21 by `make budgets` on feat/formats-2, the three W21 branches merged. 16,512 bytes over the Parquet branch alone: the probe's `__TEXT` crossed one more 16 KiB page. The old limit of 1.06 MiB failed by 686 bytes; the target is 0.6 MiB now (docs/07 decision D214, pending owner review). `over target`, passes |
-| Formats growth, W21 merged | 150 KB | 300 KB | 193.8 KB | 198,448 bytes stripped (220,144 unstripped), measured 2026-11-21 by `make budgets` on feat/formats-2: the XLSX, DOCX and SQL writers together, 66,144 bytes over the 132,304 bytes of the W02 row. 48,848 bytes over the 150 KB target and 108,752 bytes under the 300 KB limit, so the test prints `over target` and passes (docs/07 decision D211) |
+| Parquet growth, W21 merged | 0.6 MiB | 1.2 MiB | 1.061 MiB | 1,112,176 bytes stripped (1,514,800 unstripped), measured 2026-11-21 by `make budgets` on feat/formats-2, the three W21 branches merged. 16,512 bytes over the Parquet branch alone: the probe's `__TEXT` crossed one more 16 KiB page. The old limit of 1.06 MiB failed by 686 bytes; the target is 0.6 MiB now (docs/07 decision D159, pending owner review). `over target`, passes |
+| Formats growth, W21 merged | 150 KB | 300 KB | 193.8 KB | 198,448 bytes stripped (220,144 unstripped), measured 2026-11-21 by `make budgets` on feat/formats-2: the XLSX, DOCX and SQL writers together, 66,144 bytes over the 132,304 bytes of the W02 row. 48,848 bytes over the 150 KB target and 108,752 bytes under the 300 KB limit, so the test prints `over target` and passes (docs/07 decision D156) |
+| Formats growth, 0.31.0 | 150 KB | 300 KB | 193.8 KB | 198,432 bytes stripped (220,128 unstripped), measured 2026-11-21 by `make budgets` on release/0.31.0 with W21 merged: 16 bytes under the W21 merged row. 44,832 bytes over the 150 KB target and 108,768 bytes under the 300 KB limit, so the test prints `over target` and passes (docs/07 decision D156) |
+| Parquet growth, 0.31.0 | 0.6 MiB | 1.2 MiB | 1.045 MiB | 1,095,680 bytes stripped (1,498,480 unstripped), measured 2026-11-21 by `make budgets` on release/0.31.0 with W21 merged: 16,496 bytes under the W21 merged row, one 16 KiB page of the probe's `__TEXT` fewer. Over the 0.6 MiB target and 162,611 bytes under the 1.2 MiB limit, so the test prints `over target` and passes (docs/07 decision D159) |
 | Added passes over the BAM | 0 | 1 | 0 | `qc` reports 1 BAM read with the verdict and page; `report` and `check` run with the BAM deleted |
 
 The other rows at 0.19.0, same run: render 1.65 ms and 0.72 ms, sample page 96.5 KB
@@ -832,6 +893,8 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 0.29.0 pdf | the same with `--features pdf` | 13,498,464 | 11,479,808 |
 | 0.30.0 | 2026-11-21, release/0.30.0: feat/interval-ops, feat/interval-list-tools, feat/interval-bed-vcf and feat/scatter-n merged, the version set, rustc 1.100.0, default features | 9,816,208 | 8,383,160 |
 | 0.30.0 pdf | the same with `--features pdf` | 13,780,656 | 11,728,392 |
+| 0.31.0 | 2026-11-21, release/0.31.0: feat/merge-reorder, feat/fix-mate-filter and feat/downsample merged, then main with wave W21 (Parquet, XLSX, DOCX, SQL dump) and fix/formats-2-review, the version set, rustc 1.100.0, default features (feature `parquet` on) | 11,726,400 | 9,843,200 |
+| 0.31.0 pdf | the same with `--features pdf` | 15,689,568 | 13,188,376 |
 
 From 0.21.0 to 0.22.0 the binary grew 202,816 bytes (198.1 KB), 182,072 stripped (177.8
 KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
@@ -885,6 +948,16 @@ with rustc 1.100.0: the interval layer `interval_ops`, `IntervalListTools`,
 `ScatterIntervalsByNs` and `NonNFastaSize` with the indexed FASTA walk. With
 `--features pdf` it grew 248,584 bytes stripped, and the PDF build is 3,345,232 bytes over
 the default build.
+
+From 0.30.0 to 0.31.0 the default binary grew 1,460,040 bytes stripped (17.4%), both built
+with rustc 1.100.0. Wave W13 adds 265,096 of them (measured on release/0.31.0 before the
+merge): `MergeSamFiles` and the dictionary merge of `header_merge.rs`, `ReorderSam`,
+`FixMateInformation`, `FilterSamReads` with its read-name arena, `DownsampleSam` with
+`java_random.rs` and `java_hash_set.rs`, and `PositionBasedDownsampleSam`. Wave W21 adds
+1,194,944: the feature `parquet`, on by default, and the XLSX, DOCX and SQL writers (the
+section "The three W21 formats merged" below measured 1,194,928 on main). With
+`--features pdf` it grew 1,459,984 bytes stripped, and the PDF build is 3,345,176 bytes
+over the default build.
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and
@@ -953,8 +1026,8 @@ build. XLSX, DOCX, the SQL dump and the file sets add 99,232 bytes without it; t
 measured 33,064 (XLSX and DOCX) and 16,560 (SQL) alone. The rest is the merged command code
 in `crates/cli` and page rounding: the linker grows `__TEXT` in 16 KiB pages. `make budgets`
 on the merge: binary growth 419.9 KB (over the 300 KB target, docs/07 decision D22 still
-open), formats growth 193.8 KB (over its 150 KB target, D211), Parquet growth 1.061 MiB
-(over its 0.6 MiB target, D214), PDF growth 3.301 MiB; every row under its limit.
+open), formats growth 193.8 KB (over its 150 KB target, D156), Parquet growth 1.061 MiB
+(over its 0.6 MiB target, D159), PDF growth 3.301 MiB; every row under its limit.
 
 ## PDF report (wave W06, docs/07 section 3.3)
 

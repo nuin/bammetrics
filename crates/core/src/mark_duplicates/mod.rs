@@ -22,7 +22,7 @@
 //! The rules that decide which record is flagged are in the submodules.
 
 mod build;
-mod inputs;
+pub(crate) mod inputs;
 mod mark;
 mod mates;
 mod md_nm;
@@ -539,6 +539,12 @@ pub fn run(opts: &Options) -> Result<crate::metric::MetricsOutput> {
         }
     }
     refuse_overlaps(opts)?;
+    // `OUTPUT` is renamed into place before the registry writes
+    // `METRICS_FILE`, so an unwritable metrics directory fails here.
+    crate::cleanup::AtomicFile::probe(&opts.metrics).map_err(|source| Error::Output {
+        path: opts.metrics.clone(),
+        source,
+    })?;
     let temp = TempDir::new(opts.tmp_dir.as_deref(), "mark-duplicates");
     let inputs = spool_streams(&opts.inputs, &temp)?;
     // An input copied from a pipe fails under the name the user gave.

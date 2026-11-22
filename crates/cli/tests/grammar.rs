@@ -392,6 +392,15 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("TAGGING_POLICY", "All")),
             picard_outputs: marked,
         },
+        // The BAM's @PG line holds the command line: the metrics compare.
+        Case {
+            verb: "downsample-sam",
+            class: "DownsampleSam",
+            verb_args: strings(&[MD]),
+            picard_args: strings(&[&format!("I={MD}")]),
+            option: Some(("PROBABILITY", "0.5")),
+            picard_outputs: marked,
+        },
         Case {
             verb: "sequencing-artifact",
             class: "CollectSequencingArtifactMetrics",
@@ -725,6 +734,66 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("INTERVALS", "tests/data/n_runs.interval_list")),
             picard_outputs: single,
         },
+        Case {
+            verb: "merge-sam-files",
+            class: "MergeSamFiles",
+            verb_args: strings(&[
+                MD,
+                "--input",
+                "tests/data/artifact.bam",
+                "--create-md5-file",
+            ]),
+            picard_args: strings(&[
+                &format!("I={MD}"),
+                "I=tests/data/artifact.bam",
+                "CREATE_MD5_FILE=true",
+            ]),
+            option: Some(("SORT_ORDER", "queryname")),
+            picard_outputs: commented_bam,
+        },
+        Case {
+            verb: "reorder-sam",
+            class: "ReorderSam",
+            verb_args: strings(&[
+                MD,
+                "--sequence-dictionary",
+                "tests/data/reorder_extra.dict",
+                "--create-md5-file",
+            ]),
+            picard_args: strings(&[
+                &format!("I={MD}"),
+                "SD=tests/data/reorder_extra.dict",
+                "CREATE_MD5_FILE=true",
+            ]),
+            option: Some(("MAX_RECORDS_IN_RAM", "5")),
+            picard_outputs: commented_bam,
+        },
+        Case {
+            verb: "fix-mate-information",
+            class: "FixMateInformation",
+            verb_args: strings(&["tests/data/mate_filter.sam", "--no-add-mate-cigar"]),
+            picard_args: strings(&["I=tests/data/mate_filter.sam", "ADD_MATE_CIGAR=false"]),
+            option: Some(("SORT_ORDER", "queryname")),
+            picard_outputs: sorted_sam,
+        },
+        Case {
+            verb: "filter-sam-reads",
+            class: "FilterSamReads",
+            verb_args: strings(&[
+                "tests/data/mate_filter.sam",
+                "--filter",
+                "includeReadList",
+                "--read-list-file",
+                "tests/data/mate_filter_names.txt",
+            ]),
+            picard_args: strings(&[
+                "I=tests/data/mate_filter.sam",
+                "FILTER=includeReadList",
+                "READ_LIST_FILE=tests/data/mate_filter_names.txt",
+            ]),
+            option: Some(("SORT_ORDER", "queryname")),
+            picard_outputs: sorted_sam,
+        },
     ]
 }
 
@@ -750,8 +819,12 @@ fn named_output(verb: &str) -> Option<&'static str> {
         | "set-nm-md-and-uq-tags"
         | "set-nm-and-uq-tags"
         | "add-or-replace-read-groups"
-        | "revert-original-base-qualities-and-add-mate-cigar" => Some("sam"),
-        "add-comments-to-bam" | "gather-bam-files" => Some("bam"),
+        | "revert-original-base-qualities-and-add-mate-cigar"
+        | "fix-mate-information"
+        | "filter-sam-reads" => Some("sam"),
+        "add-comments-to-bam" | "gather-bam-files" | "merge-sam-files" | "reorder-sam" => {
+            Some("bam")
+        }
         _ => None,
     }
 }
@@ -809,7 +882,7 @@ fn every_verb_reads_three_spellings_as_the_picard_face_does() {
             let mut args = vec![case.verb.to_owned()];
             args.extend(case.verb_args.iter().cloned());
             args.extend(form.iter().cloned());
-            if case.verb == "mark-duplicates" {
+            if matches!(case.verb, "mark-duplicates" | "downsample-sam") {
                 args.extend([
                     "-o".to_owned(),
                     format!("{out}.bam"),
@@ -849,18 +922,21 @@ fn every_registry_tool_is_in_the_matrix() {
     // BuildBamIndex writes a binary index: tests/build_bam_index.rs compares its.
     // IntervalListTools writes its command line, output path included, into
     // the list: tests/interval_list_tools.rs compares its spellings.
+    // PositionBasedDownsampleSam writes only a BAM whose @PG holds the
+    // command line: tests/downsample.rs compares its spellings.
     let elsewhere = [
         "AccumulateVariantCallingMetrics",
         "FifoBuffer",
         "BuildBamIndex",
         "IntervalListTools",
+        "PositionBasedDownsampleSam",
     ];
     let missing: Vec<&&str> = classes
         .iter()
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 65);
+    assert_eq!(classes.len(), 71);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

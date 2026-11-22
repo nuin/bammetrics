@@ -212,7 +212,7 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
 /// A stream the second pass could not read again: `-` (the verb grammar
 /// maps it to `/dev/stdin`), the device itself, or a named pipe or socket
 /// (`<(cat in.bam)` is `/dev/fd/63`).
-fn is_stream(input: &str) -> bool {
+pub(crate) fn is_stream(input: &str) -> bool {
     input == "-" || input == "/dev/stdin" || input == "/dev/fd/0" || is_pipe(Path::new(input))
 }
 

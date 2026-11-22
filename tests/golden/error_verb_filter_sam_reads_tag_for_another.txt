@@ -1,0 +1,14 @@
+## argv
+filter-sam-reads
+tests/data/mate_filter.bam
+-o
+OUT/x.bam
+--filter
+includeAligned
+--tag
+RG
+## exit
+2
+## stdout
+## stderr
+bammetrics filter-sam-reads: TAG may only be specified when using FILTER from includeTagValues,excludeTagValues, FILTER value: includeAligned

@@ -1,0 +1,12 @@
+## argv
+downsample-sam
+tests/data/markdup.bam
+-o
+OUT/ds.bam
+--metrics-file
+tests/data/markdup.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics downsample-sam: tests/data/markdup.bam is an input; writing it would destroy it (from --metrics-file)

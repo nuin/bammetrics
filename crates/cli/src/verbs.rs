@@ -669,6 +669,77 @@ pub const VERBS: &[Verb] = &[
         ],
         ..verb("non-n-fasta-size", "NonNFastaSize", Files::Single)
     },
+    Verb {
+        about: Some(
+            "merges the records of several SAM, BAM or CRAM files under one header, as \
+             Picard's MergeSamFiles does: read group and program IDs that collide renamed, \
+             -o gets every record in --sort-order (default coordinate), merged when the inputs \
+             are in it, else sorted.",
+        ),
+        writes: "BAM",
+        reads: &["INTERVALS"],
+        ..verb("merge-sam-files", "MergeSamFiles", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "moves the records of a SAM, BAM or CRAM to the sequence dictionary of \
+             --sequence-dictionary, contigs matched by name, as Picard's ReorderSam does: -o \
+             gets every record sorted again in the input's order, a record on a contig the \
+             dictionary lacks made unplaced.",
+        ),
+        writes: "BAM",
+        reads: &["SEQUENCE_DICTIONARY"],
+        ..verb("reorder-sam", "ReorderSam", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "sets the mate fields, MQ, MC and TLEN of each pair from its mate, as Picard's \
+             FixMateInformation does: -o gets every record of every input (several are merged) \
+             in --sort-order, a BAM or SAM text for a name ending in .sam. Without -o the one \
+             input BAM is rewritten in place, renamed over it when complete.",
+        ),
+        writes: "BAM",
+        optional_output: true,
+        ..verb("fix-mate-information", "FixMateInformation", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "keeps the records --filter picks, as Picard's FilterSamReads does: aligned or \
+             unmapped reads (pairs of a queryname-sorted input together), names in a read \
+             list, string values of a tag, or pairs with an end over an interval list. -o \
+             gets a BAM, or SAM text for a name ending in .sam, in --sort-order.",
+        ),
+        writes: "BAM",
+        reads: &["READ_LIST_FILE", "INTERVAL_LIST"],
+        ..verb("filter-sam-reads", "FilterSamReads", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "keeps the records of a random part of the templates, as Picard's DownsampleSam \
+             does: -o gets them in input order with a @PG line (rs: the seed), every record of \
+             a read name kept or dropped together; --metrics-file the QualityYieldMetrics of \
+             the records kept. --strategy ConstantMemory hashes each name, HighAccuracy keeps \
+             exact counts per chunk, Chained does both.",
+        ),
+        writes: "BAM",
+        aliases: &[("METRICS", "METRICS_FILE")],
+        ..verb("downsample-sam", "DownsampleSam", Files::Bam)
+    },
+    Verb {
+        about: Some(
+            "keeps the records whose read name places them in a circle of area --fraction on \
+             each tile of the flow cell, as Picard's PositionBasedDownsampleSam does: -o gets \
+             them in input order with the duplicate flag cleared and a @PG line. The input is \
+             read twice (the tile extents, then the records).",
+        ),
+        writes: "BAM",
+        reads_stdin: false,
+        ..verb(
+            "position-based-downsample-sam",
+            "PositionBasedDownsampleSam",
+            Files::Bam,
+        )
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
@@ -790,6 +861,12 @@ impl Verb {
                      input, named as Picard names it.",
                     self.writes
                 ),
+            ),
+            Files::Bam if self.class == bammetrics_core::fix_mate_information::TOOL.name => (
+                "FILE",
+                "The BAM to write, or SAM text for a name ending in .sam; - writes standard \
+                 output. Without -o the one input BAM is rewritten in place."
+                    .to_owned(),
             ),
             Files::Bam if self.optional_output => (
                 "FILE",

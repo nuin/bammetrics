@@ -1280,7 +1280,11 @@ below. bammetrics differs here:
   text and `ViewSam` prints it back. bammetrics holds BAM records, as Picard does once it
   writes a BAM. A reference name the header lacks is read as no reference (`*`). A base
   outside `=ACMGRSVTWYHKDBN.` is read as `N`. A `MAPQ` outside 0 to 255 keeps its low byte, a
-  flag above 65535 its low 16 bits, as htsjdk writes both into a BAM. A negative `MAPQ` passes
+  flag above 65535 its low 16 bits. A tool that writes these records (`SortSam`,
+  `DownsampleSam`) writes the altered record, where Picard 3.5.0 fails when it writes the
+  BAM: `Value (70000) too large to be written as ushort`, `Value (300) to large to be
+  written as ubyte`, `Bad base passed to charToCompressedBaseHigh`, `Reference index for
+  nope not found in sequence dictionary` (for `RNAME` and `RNEXT`). A negative `MAPQ` passes
   `STRICT` in htsjdk (it checks only `MAPQ < 256`), so `ViewSam` and a SAM `SortSam` print
   `-1` at every stringency where bammetrics prints `255`. These are errors at every stringency: a `QUAL` whose
   length differs from `SEQ`, a `QUAL` without `SEQ`, a CIGAR that does not parse (htsjdk
@@ -1722,6 +1726,85 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
 - Same as Picard: a `.dict` line with bytes that are not UTF-8 is decoded as the JDK
   decodes it, so an encoded surrogate (`ED A0 80`) in an `@SQ` field is one U+FFFD in
   the `OUTPUT` of `ScatterIntervalsByNs`.
+
+## MergeSamFiles and ReorderSam
+
+- `MergeSamFiles SORT_ORDER=unsorted` writes the records of the first input, then of the
+  second, and so on. Picard merges them by `System.identityHashCode`, an order that
+  changes from run to run (docs/07 D121).
+- `MergeSamFiles` over inputs that are not all in `SORT_ORDER` sorts them; records that tie
+  in the sort (one read name in two read groups, under `queryname`) come in input order.
+  Picard hands its sort the records in hash order, so the tie can come the other way
+  (D122).
+- `MergeSamFiles SORT_ORDER=duplicate` on two or more inputs that are all in duplicate
+  order exits 2 (D123).
+- `MergeSamFiles COMMENT` with a line end exits 2; Picard writes it (D125).
+- `MergeSamFiles INTERVALS` reads each input whole and keeps what the index query returns
+  (D126). The index must exist, but its bytes are never read: a stale, empty or garbage
+  index gives the records the query of a right index returns, where Picard fails or keeps
+  none. It opens at most 1,000 inputs.
+- `ReorderSam` reads its input in file order. Picard reads an indexed input contig by
+  contig in its dictionary's order: the same for a coordinate-sorted input (D127).
+- A `SEQUENCE_DICTIONARY` file read whole (a `.dict`, an interval list, SAM text) holds
+  at most 256 MiB, a BAM or CRAM header text at most 64 MiB.
+- `ReorderSam` refuses a dictionary length below 1 or over 2^31 - 1 (`LN:0`, a VCF
+  `##contig` without a length); Picard with `ALLOW_INCOMPLETE_DICT_CONCORDANCE` and
+  `ALLOW_CONTIG_LENGTH_DISCORDANCE` writes a BAM whose header samtools cannot read (D130).
+
+## FixMateInformation and FilterSamReads
+
+- `FixMateInformation` without `OUTPUT` writes the fixed records under a temporary name
+  beside the input and renames them over it, keeping its mode and any symbolic link to
+  it. Picard moves the input to `<input>.old` first (and fails when that name exists),
+  writes a new file of the default mode, and leaves the index and MD5 under its temporary
+  name (`x.bam.being_fixed.<n>bam.md5`) with a warning; bammetrics writes `x.bai` and
+  `x.bam.md5`. An input that is SAM text, a CRAM, a BAM named `.sam` or `.cram`, or not a
+  regular file is a usage error without `OUTPUT` (exit 2 on the verb, 1 on the Picard
+  face): Picard writes BAM bytes under that name.
+- `FixMateInformation` with several inputs that are not all `SO:queryname` takes them one
+  after the other. htsjdk's merge compares the identity hash codes of two records there,
+  an order that changes from run to run; the name sort that follows gives one order but
+  for records whose names, flags and `HI` are equal across inputs.
+- In a chain, `fix-mate-information` sorts by name even when the stream says
+  `SO:queryname`. The tool on its own takes such records as they come; the two agree on a
+  stream in htsjdk's queryname order (`sort-sam`), and on another order where Picard's
+  presorted queryname writer would fail, the step sorts.
+- `FilterSamReads WRITE_READS_FILES=true` writes both `.reads` files from its one read of
+  `INPUT`; Picard reads `INPUT` once more and `OUTPUT` back. A run that fails leaves no
+  `.reads` file (Picard leaves the input's). A `.reads` name that is an input or `OUTPUT`
+  is a usage error (exit 2 on the verb, 1 on the Picard face).
+- `FilterSamReads` compares a read list name with a record name byte for byte, a name of
+  the list decoded as UTF-8 and each character at most U+00FF taken as one byte. A SAM text
+  record whose name holds a character above U+00FF keeps its low byte (as every bammetrics
+  tool reads SAM text), so no list name matches it; Picard compares the Java strings.
+- `FILTER=includeJavascript` and `JAVASCRIPT_FILE` are a usage error (exit 2 on the verb, 1 on
+  the Picard face; docs/07 Q6).
+
+## DownsampleSam and PositionBasedDownsampleSam
+
+- The `@PG` line holds the bammetrics command line (`CL`) and version (`VN:bammetrics
+  <version>`); its `ID`, `PN`, `rs` and the absence of `PP` are Picard's. The harness
+  compares the `@PG` IDs and PP.
+- `DownsampleSam RANDOM_SEED=null` draws its seed from the clock and the process id, where
+  Picard calls `new Random().nextInt()`. Neither run can be repeated; both print the seed
+  and write it as `rs`.
+- `DownsampleSam STRATEGY=HighAccuracy` and `Chained` hold at most 50,000,000 read names
+  (decided or in the current chunk; about 6.5 GiB). The next new name exits 1 with an error
+  that names `STRATEGY=ConstantMemory`, which holds none. Picard holds every name until
+  the JVM runs out of memory (docs/07 D138).
+- A read name from SAM text with a character above U+00FF is hashed (ConstantMemory) and
+  ordered (HighAccuracy) by the low byte of each UTF-16 unit, as bammetrics holds SAM
+  text; Picard uses the whole unit. The SAM specification allows printable ASCII in a
+  name, where the two agree.
+- A `.cram` `OUTPUT` exits 2 naming wave W15; Picard writes a CRAM.
+- A BAM header line that repeats a tag (`@PG ... rs:1 rs:2`) or has a tag with no value
+  (`rs:`) exits 1 in every tool (`the header could not be read: invalid record`): noodles
+  refuses it. Picard fails too at the default `VALIDATION_STRINGENCY=STRICT` (`Error
+  parsing SAM header`) and reads it under `LENIENT` or `SILENT`. Such a line in SAM text
+  is read as htsjdk reads it at each stringency. The SAM specification allows neither.
+- `PositionBasedDownsampleSam` refuses standard input and pipes with exit 2: it reads its
+  input twice. Picard opens `INPUT` three times and its later reads of a pipe find no
+  record.
 
 ## Not in Picard
 

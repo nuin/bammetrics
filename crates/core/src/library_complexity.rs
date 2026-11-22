@@ -393,7 +393,7 @@ impl Accumulator for Reader {
             None => {
                 let mut pair = Pair::new();
                 let text = String::from_utf8_lossy(&name);
-                if let Some((tile, x, y)) = self.opts.finder.parser.location(&text) {
+                if let Some((tile, x, y)) = self.opts.finder.parser.location(&text)? {
                     pair.location.tile = tile;
                     pair.location.x = x;
                     pair.location.y = y;

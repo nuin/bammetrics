@@ -36,6 +36,7 @@
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use noodles::sam;
 
@@ -162,7 +163,7 @@ impl Options {
 /// BAM or CRAM in a regular file with `x.bai` or `x.csi` (for `x.bam`),
 /// `x.crai` or `x.cram.crai` (for `x.cram`), `NAME.bai` or `NAME.csi`
 /// beside it, or the same names beside the file a symbolic link names.
-fn has_index(path: &Path) -> bool {
+pub(crate) fn has_index(path: &Path) -> bool {
     let beside = |file: &Path| {
         let Some(name) = file.file_name().and_then(|name| name.to_str()) else {
             return false;
@@ -186,7 +187,7 @@ fn has_index(path: &Path) -> bool {
 
 /// What the interval filter says of a record.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Step {
+pub(crate) enum Step {
     Print,
     Skip,
     /// No later record can match.
@@ -202,9 +203,61 @@ struct Region {
     end: i32,
 }
 
+/// One uniqued interval; `contig` numbers the list's contigs that hold an
+/// interval, in list order.
+#[derive(Clone, Copy, Debug)]
+struct ListRegion {
+    contig: u32,
+    start: i32,
+    end: i32,
+}
+
+/// An interval list after `IntervalList.uniqued()`. Its regions are shared
+/// by every filter made from it; a filter holds one reference index per
+/// contig that has an interval.
+pub(crate) struct UniquedList {
+    path: PathBuf,
+    /// The name of each contig that holds an interval, in list order.
+    contigs: Vec<String>,
+    regions: Arc<[ListRegion]>,
+}
+
+impl UniquedList {
+    pub(crate) fn read(path: &Path) -> Result<Self> {
+        let (names, list) = intervals::read_interval_list(path)?;
+        let unique =
+            intervals::uniqued(&list.iter().map(|named| named.interval).collect::<Vec<_>>());
+        drop(list);
+        let mut contigs: Vec<String> = Vec::new();
+        let mut last = None;
+        let regions = unique
+            .iter()
+            .map(|interval| {
+                // `uniqued` sorts by contig, so each contig is one run.
+                if last != Some(interval.contig) {
+                    last = Some(interval.contig);
+                    contigs.push(names[interval.contig].clone());
+                }
+                ListRegion {
+                    contig: (contigs.len() - 1) as u32,
+                    start: interval.start as i32,
+                    end: interval.end as i32,
+                }
+            })
+            .collect();
+        Ok(Self {
+            path: path.to_path_buf(),
+            contigs,
+            regions,
+        })
+    }
+}
+
 /// The `INTERVAL_LIST` filter over records in file order.
-struct IntervalFilter {
-    regions: Vec<Region>,
+pub(crate) struct IntervalFilter {
+    regions: Arc<[ListRegion]>,
+    /// The header index of each list contig, -1 for one the header lacks.
+    references: Vec<i32>,
     at: usize,
     /// True for Picard's index query, false for its scan.
     query: bool,
@@ -212,51 +265,65 @@ struct IntervalFilter {
 
 impl IntervalFilter {
     /// The uniqued intervals of `path` on the references of `header`.
-    fn load(path: &Path, header: &sam::Header, query: bool) -> Result<Self> {
-        let (names, list) = intervals::read_interval_list(path)?;
-        let unique =
-            intervals::uniqued(&list.iter().map(|named| named.interval).collect::<Vec<_>>());
-        let references = header.reference_sequences();
-        let regions: Vec<Region> = unique
+    pub(crate) fn load(path: &Path, header: &sam::Header, query: bool) -> Result<Self> {
+        Self::on_header(&UniquedList::read(path)?, header, query)
+    }
+
+    /// The filter of a list read once, on the references of `header`.
+    pub(crate) fn on_header(list: &UniquedList, header: &sam::Header, query: bool) -> Result<Self> {
+        let references: Vec<i32> = list
+            .contigs
             .iter()
-            .map(|interval| Region {
-                reference: references
-                    .get_index_of(names[interval.contig].as_bytes())
-                    .map_or(-1, |index| index as i32),
-                start: interval.start as i32,
-                end: interval.end as i32,
+            .map(|name| {
+                header
+                    .reference_sequences()
+                    .get_index_of(name.as_bytes())
+                    .map_or(-1, |index| index as i32)
             })
             .collect();
         // `IntervalUtil.assertOrderedNonOverlapping` on the scan,
-        // `QueryInterval.assertIntervalsOptimized` on the query.
-        if let Some(at) = regions
-            .windows(2)
-            .position(|pair| pair[0].reference > pair[1].reference)
-        {
-            let show = |interval: &intervals::Interval| {
+        // `QueryInterval.assertIntervalsOptimized` on the query. Within a
+        // contig the reference is one, so only contig boundaries can fail.
+        if let Some(contig) = references.windows(2).position(|pair| pair[0] > pair[1]) {
+            let last = list
+                .regions
+                .iter()
+                .rposition(|region| region.contig as usize == contig)
+                .expect("each list contig holds a region");
+            let show = |region: &ListRegion| {
                 format!(
                     "{}:{}-{}",
-                    names[interval.contig], interval.start, interval.end
+                    list.contigs[region.contig as usize], region.start, region.end
                 )
             };
             return Err(Error::Intervals {
-                path: path.to_path_buf(),
+                path: list.path.clone(),
                 message: format!(
                     "Intervals not in order: {}; {}: the interval list orders its contigs \
                      differently from the input's header",
-                    show(&unique[at]),
-                    show(&unique[at + 1])
+                    show(&list.regions[last]),
+                    show(&list.regions[last + 1])
                 ),
             });
         }
         Ok(Self {
-            regions,
+            regions: Arc::clone(&list.regions),
+            references,
             at: 0,
             query,
         })
     }
 
-    fn step(&mut self, record: &RawRecord) -> Step {
+    /// Region `at` on the input's references.
+    fn region(&self, at: usize) -> Option<Region> {
+        self.regions.get(at).map(|region| Region {
+            reference: self.references[region.contig as usize],
+            start: region.start,
+            end: region.end,
+        })
+    }
+
+    pub(crate) fn step(&mut self, record: &RawRecord) -> Step {
         if self.query {
             self.query_step(record)
         } else {
@@ -275,7 +342,7 @@ impl IntervalFilter {
         } else {
             alignment_end(record)
         };
-        while let Some(region) = self.regions.get(self.at) {
+        while let Some(region) = self.region(self.at) {
             // An end of 0 or less means the end of the reference.
             let region_end = if region.end <= 0 {
                 i32::MAX
@@ -301,7 +368,9 @@ impl IntervalFilter {
         let start = record.alignment_start();
         let (stop_reference, stop_position) = self
             .regions
-            .last()
+            .len()
+            .checked_sub(1)
+            .and_then(|last| self.region(last))
             .map_or((-1, -1), |last| (last.reference, last.end));
         if reference == -1
             || reference > stop_reference
@@ -309,12 +378,12 @@ impl IntervalFilter {
         {
             return Step::Stop;
         }
-        while self.regions.get(self.at).is_some_and(|region| {
+        while self.region(self.at).is_some_and(|region| {
             region.reference < reference || (region.reference == reference && region.end < start)
         }) {
             self.at += 1;
         }
-        match self.regions.get(self.at) {
+        match self.region(self.at) {
             Some(region)
                 if region.reference == reference && region.start <= alignment_end(record) =>
             {
@@ -566,13 +635,10 @@ mod tests {
     }
 
     fn filter(query: bool) -> IntervalFilter {
-        let region = |reference, start, end| Region {
-            reference,
-            start,
-            end,
-        };
+        let region = |contig, start, end| ListRegion { contig, start, end };
         IntervalFilter {
-            regions: vec![region(0, 100, 200), region(1, 50, 60)],
+            regions: vec![region(0, 100, 200), region(1, 50, 60)].into(),
+            references: vec![0, 1],
             at: 0,
             query,
         }
@@ -625,7 +691,8 @@ mod tests {
         assert_eq!(filter(true).step(&past), Step::Stop);
         assert_eq!(filter(true).step(&unplaced), Step::Skip);
         let mut none = IntervalFilter {
-            regions: Vec::new(),
+            regions: Vec::new().into(),
+            references: Vec::new(),
             at: 0,
             query: false,
         };

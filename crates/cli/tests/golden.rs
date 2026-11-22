@@ -69,6 +69,10 @@ const FIXTURES: &[(&str, &str)] = &[
     ("CS_PAST", "tests/data/clean_sam_past.sam"),
     ("RV", "tests/data/revert.bam"),
     ("RV_SAM", "tests/data/revert.sam"),
+    ("MF", "tests/data/mate_filter.bam"),
+    ("MF_SAM", "tests/data/mate_filter.sam"),
+    ("MF_QN", "tests/data/mate_filter.queryname.bam"),
+    ("MF_NAMES", "tests/data/mate_filter_names.txt"),
     ("SNVQ", "tests/data/snvq.bam"),
     ("UMI", "tests/data/umi_prevalence.bam"),
     ("RRBS", "tests/data/rrbs.bam"),
@@ -91,6 +95,11 @@ const FIXTURES: &[(&str, &str)] = &[
     ("BED_GZ", "tests/data/targets.bed.gz"),
     ("BED_BGZ", "tests/data/targets_bed.bgz"),
     ("BED_AS_IL", "tests/data/targets_bed.interval_list"),
+    ("MRG_SAM", "tests/data/merge_other_dict.sam"),
+    ("RO_EXTRA", "tests/data/reorder_extra.dict"),
+    ("RO_DROPPED", "tests/data/reorder_dropped.dict"),
+    ("RO_LENGTH", "tests/data/reorder_length.dict"),
+    ("DS", "tests/data/downsampled.bam"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -504,22 +513,6 @@ const FORMAT_CASES: &[Case] = &[
     case!("verb_insert_size_json_picard", "insert-size", "IS", "--format", "json,picard", "-o", "OUT/insert_size.json"),
     case!("error_check_overwrites_input", "check", "PICARD", "-o", "PIC_INS"),
     case!("qc_also_no_reads", "qc", "NO_READS", "-o", "OUT/sample", "--also", "json,csv,junit", "--date", "2026-01-02 03:04:05 UTC"),
-    // Parquet (wave W21): tests/data/insert_size_metrics.parquet and its two
-    // companions are `convert` of Picard's insert size file.
-    case!("convert_picard_to_parquet", "convert", "PIC_INS", "--format", "parquet", "-o", "OUT/insert_size.parquet"),
-    case!("convert_parquet_to_picard", "convert", "INS_PQ"),
-    case!("convert_parquet_list", "convert", "INS_PQ", "--format", "json,csv,parquet", "-o", "OUT/insert_size.json", "--sample", "S1"),
-    case!("verb_insert_size_parquet", "insert-size", "IS", "--format", "parquet", "-o", "OUT/insert_size.parquet", "--sample", "S1"),
-    case!("verb_quality_distribution_parquet", "quality-score-distribution", "IS", "--format", "picard,parquet", "-o", "OUT/quality.txt"),
-    case!("verb_multiple_metrics_parquet", "multiple-metrics", "IS", "-o", "OUT/sample", "--program", "CollectQualityYieldMetrics", "--program", "CollectInsertSizeMetrics", "--format", "picard,parquet"),
-    case!("qc_also_parquet", "qc", "IS", "-o", "OUT/sample", "--also", "parquet,json", "--date", "2026-01-02 03:04:05 UTC"),
-    case!("qc_also_no_reads_parquet", "qc", "NO_READS", "-o", "OUT/sample", "--also", "parquet", "--date", "2026-01-02 03:04:05 UTC"),
-    case!("chain_taps_parquet", "chain", "IS", "-o", "OUT/sample", "--format", "picard,parquet", "+", "quality-yield", "+", "insert-size"),
-    case!("plan_also_parquet", "plan", "IS", "-o", "OUT/sample", "--also", "parquet"),
-    case!("error_verb_parquet_stdout", "insert-size", "IS", "--format", "parquet"),
-    case!("error_convert_parquet_stdout", "convert", "PIC_INS", "--format", "parquet"),
-    case!("error_convert_parquet_long", "convert", "INS_PQ_LONG"),
-    case!("error_convert_overwrites_parquet_companion", "convert", "INS_PQ", "-o", "tests/data/insert_size_metrics.histogram.parquet"),
     // XLSX and DOCX (wave W21): each recorded as its size and its parts.
     case!("convert_xlsx_docx", "convert", "PIC_INS", "--format", "xlsx,docx", "-o", "OUT/insert_size.xlsx"),
     case!("convert_hs_xlsx_docx", "convert", "tests/data/picard/NA12878/NA12878.hs_metrics", "--format", "xlsx,docx", "-o", "OUT/hs.xlsx"),
@@ -541,6 +534,28 @@ const FORMAT_CASES: &[Case] = &[
     case!("qc_also_sql_no_reads", "qc", "NO_READS", "-o", "OUT/sample", "--also", "sql", "--date", "2026-01-02 03:04:05 UTC"),
     case!("plan_also_sql", "plan", "IS", "-o", "OUT/sample", "--also", "sql,markdown"),
     case!("chain_also_sql", "chain", "IS", "-o", "OUT/s", "--also", "sql", "+", "insert-size", "+", "quality-yield"),
+];
+
+/// The forms that write or read Parquet, run only in a build with the
+/// feature `parquet` (a cli feature, on by default).
+#[rustfmt::skip]
+const PARQUET_CASES: &[Case] = &[
+    // Parquet (wave W21): tests/data/insert_size_metrics.parquet and its two
+    // companions are `convert` of Picard's insert size file.
+    case!("convert_picard_to_parquet", "convert", "PIC_INS", "--format", "parquet", "-o", "OUT/insert_size.parquet"),
+    case!("convert_parquet_to_picard", "convert", "INS_PQ"),
+    case!("convert_parquet_list", "convert", "INS_PQ", "--format", "json,csv,parquet", "-o", "OUT/insert_size.json", "--sample", "S1"),
+    case!("verb_insert_size_parquet", "insert-size", "IS", "--format", "parquet", "-o", "OUT/insert_size.parquet", "--sample", "S1"),
+    case!("verb_quality_distribution_parquet", "quality-score-distribution", "IS", "--format", "picard,parquet", "-o", "OUT/quality.txt"),
+    case!("verb_multiple_metrics_parquet", "multiple-metrics", "IS", "-o", "OUT/sample", "--program", "CollectQualityYieldMetrics", "--program", "CollectInsertSizeMetrics", "--format", "picard,parquet"),
+    case!("qc_also_parquet", "qc", "IS", "-o", "OUT/sample", "--also", "parquet,json", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("qc_also_no_reads_parquet", "qc", "NO_READS", "-o", "OUT/sample", "--also", "parquet", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("chain_taps_parquet", "chain", "IS", "-o", "OUT/sample", "--format", "picard,parquet", "+", "quality-yield", "+", "insert-size"),
+    case!("plan_also_parquet", "plan", "IS", "-o", "OUT/sample", "--also", "parquet"),
+    case!("error_verb_parquet_stdout", "insert-size", "IS", "--format", "parquet"),
+    case!("error_convert_parquet_stdout", "convert", "PIC_INS", "--format", "parquet"),
+    case!("error_convert_parquet_long", "convert", "INS_PQ_LONG"),
+    case!("error_convert_overwrites_parquet_companion", "convert", "INS_PQ", "-o", "tests/data/insert_size_metrics.histogram.parquet"),
     // The four W21 formats in one list: one file set with the Parquet companions.
     case!("verb_insert_size_w21_list", "insert-size", "IS", "--format", "picard,parquet,xlsx,docx,sql", "-o", "OUT/insert_size.txt", "--sample", "S1"),
     case!("verb_multiple_metrics_w21_list", "multiple-metrics", "IS", "-o", "OUT/sample", "--program", "CollectInsertSizeMetrics", "--format", "picard,parquet,xlsx,sql"),
@@ -914,6 +929,39 @@ const INTERVAL_CONVERT_CASES: &[Case] = &[
     case!("error_chain_interval_list_to_bed", "chain", "MD", "-o", "OUT/s", "+", "interval-list-to-bed"),
 ];
 
+/// `FixMateInformation` and `FilterSamReads` (wave W13) on
+/// `tests/data/mate_filter.bam`, its SAM text and queryname forms
+/// (`tests/data/make_mate_filter_fixtures.py`): the Picard face, the verbs,
+/// the errors, each tool as a chain step.
+#[rustfmt::skip]
+const MATE_FILTER_CASES: &[Case] = &[
+    case!("picard_fix_mate_information", "FixMateInformation", "I=MF", "O=OUT/fixed.bam"),
+    case!("picard_fix_mate_information_sam", "FixMateInformation", "I=MF_SAM", "O=OUT/fixed.sam", "SORT_ORDER=queryname", "ADD_MATE_CIGAR=false"),
+    case!("picard_fix_mate_information_merged", "FixMateInformation", "I=MF", "I=RV", "O=OUT/merged.bam", "CREATE_INDEX=true", "CREATE_MD5_FILE=true"),
+    case!("picard_fix_mate_information_queryname", "FixMateInformation", "I=MF_QN", "O=OUT/fixed.sam", "ASSUME_SORTED=true"),
+    case!("verb_fix_mate_information", "fix-mate-information", "MF", "-o", "OUT/fixed.sam", "--sort-order", "coordinate", "--max-records-in-ram", "3"),
+    case!("error_fix_mate_information_missing_mate", "FixMateInformation", "I=MF", "O=OUT/fixed.bam", "IGNORE_MISSING_MATES=false"),
+    case!("error_fix_mate_information_index_order", "FixMateInformation", "I=MF", "O=OUT/fixed.bam", "SORT_ORDER=queryname", "CREATE_INDEX=true"),
+    case!("error_fix_mate_information_two_inputs_in_place", "FixMateInformation", "I=MF", "I=RV"),
+    case!("error_verb_fix_mate_information_in_place_sam", "fix-mate-information", "MF_SAM"),
+    case!("chain_fix_mate_information", "chain", "MF_QN", "-o", "OUT/s", "+", "fix-mate-information", "--sort-order", "coordinate", "+", "filter-sam-reads", "--filter", "includePairedIntervals", "--interval-list", "IL", "+", "insert-size", "+", "write", "OUT/out.bam"),
+    case!("chain_dry_run_fix_mate_information", "chain", "MF", "-o", "OUT/s", "--dry-run", "+", "fix-mate-information", "--sort-order", "queryname", "+", "write", "OUT/out.bam"),
+    case!("error_chain_fix_mate_information_assume_sorted", "chain", "MF", "+", "fix-mate-information", "--assume-sorted", "+", "write", "OUT/out.bam"),
+    case!("picard_filter_sam_reads_read_list", "FilterSamReads", "I=MF", "O=OUT/kept.bam", "FILTER=includeReadList", "READ_LIST_FILE=MF_NAMES", "WRITE_READS_FILES=true"),
+    case!("picard_filter_sam_reads_aligned", "FilterSamReads", "I=MF_QN", "O=OUT/aligned.sam", "FILTER=includeAligned", "SORT_ORDER=coordinate"),
+    case!("picard_filter_sam_reads_tags", "FilterSamReads", "I=MF", "O=OUT/tags.bam", "FILTER=excludeTagValues", "TAG=XZ", "TAG_VALUE=a", "TAG_VALUE=b", "CREATE_INDEX=true"),
+    case!("verb_filter_sam_reads", "filter-sam-reads", "MF_QN", "-o", "OUT/unmapped.bam", "--filter", "excludeAligned"),
+    case!("verb_filter_sam_reads_integer_tag", "filter-sam-reads", "MF_SAM", "-o", "OUT/none.sam", "--filter", "includeTagValues", "--tag", "XI", "--tag-value", "7"),
+    case!("error_filter_sam_reads_intervals_without_mc", "FilterSamReads", "I=MF", "O=OUT/x.bam", "FILTER=includePairedIntervals", "INTERVAL_LIST=IL"),
+    case!("error_filter_sam_reads_no_list", "FilterSamReads", "I=MF", "O=OUT/x.bam", "FILTER=includeReadList"),
+    case!("error_filter_sam_reads_javascript", "FilterSamReads", "I=MF", "O=OUT/x.bam", "FILTER=includeJavascript"),
+    case!("error_filter_sam_reads_pairs_on_coordinate", "FilterSamReads", "I=MF", "O=OUT/x.bam", "FILTER=includeAligned"),
+    case!("error_verb_filter_sam_reads_tag_for_another", "filter-sam-reads", "MF", "-o", "OUT/x.bam", "--filter", "includeAligned", "--tag", "RG"),
+    case!("chain_filter_sam_reads", "chain", "MF_QN", "-o", "OUT/s", "+", "filter-sam-reads", "--filter", "includeAligned", "+", "quality-yield", "+", "write", "OUT/out.bam"),
+    case!("chain_filter_sam_reads_sorted", "chain", "MF", "-o", "OUT/s", "+", "filter-sam-reads", "--filter", "includeReadList", "--read-list-file", "MF_NAMES", "--sort-order", "queryname", "+", "write", "OUT/out.sam"),
+    case!("error_chain_filter_sam_reads_reads_files", "chain", "MF_QN", "+", "filter-sam-reads", "--filter", "includeAligned", "--write-reads-files", "+", "write", "OUT/out.bam"),
+];
+
 /// Wave W12: `ScatterIntervalsByNs` and `NonNFastaSize` on
 /// `tests/data/n_runs.fa` (`tests/concordance/n_run_refs.py --fixtures`),
 /// and `qc --panel` with an interval list: gzip, and the ACGTmer list
@@ -943,6 +991,204 @@ const N_RUNS_CASES: &[Case] = &[
     case!("qc_panel_bed_gz", "qc", "IS", "-o", "OUT/sample", "--preset", "clinical-panel", "--panel", "BED_GZ", "-R", "REF", "--date", "2026-01-02 03:04:05 UTC"),
     case!("error_qc_panel_gzip_misnamed", "qc", "IS", "-o", "OUT/sample", "--panel", "BED_BGZ"),
     case!("error_qc_panel_bed_as_interval_list", "qc", "IS", "-o", "OUT/sample", "--panel", "BED_AS_IL"),
+];
+
+/// Wave W13: `MergeSamFiles` and `ReorderSam` on the fixture BAMs and the
+/// fixtures of `tests/data/make_merge_reorder_fixtures.py`.
+const MERGE_REORDER_CASES: &[Case] = &[
+    case!(
+        "picard_merge_sam_files",
+        "MergeSamFiles",
+        "I=MD",
+        "I=ART",
+        "O=OUT/merged.bam",
+        "COMMENT=lane 1",
+        "CREATE_INDEX=true",
+        "CREATE_MD5_FILE=true"
+    ),
+    case!(
+        "picard_merge_sam_files_queryname",
+        "MergeSamFiles",
+        "I=MD",
+        "I=OXOG",
+        "I=IS",
+        "O=OUT/merged.bam",
+        "SO=queryname"
+    ),
+    case!(
+        "picard_merge_sam_files_dictionaries",
+        "MergeSamFiles",
+        "I=MD",
+        "I=MRG_SAM",
+        "O=OUT/merged.sam",
+        "MERGE_SEQUENCE_DICTIONARIES=true"
+    ),
+    case!(
+        "verb_merge_sam_files",
+        "merge-sam-files",
+        "MD",
+        "-i",
+        "OXOG",
+        "-o",
+        "OUT/merged.bam",
+        "--comment",
+        "lane 1"
+    ),
+    case!(
+        "error_merge_sam_files_dictionaries",
+        "MergeSamFiles",
+        "I=MD",
+        "I=MRG_SAM",
+        "O=OUT/merged.bam"
+    ),
+    case!(
+        "error_merge_sam_files_index_order",
+        "MergeSamFiles",
+        "I=MD",
+        "O=OUT/merged.bam",
+        "SO=queryname",
+        "CREATE_INDEX=true"
+    ),
+    case!(
+        "error_merge_sam_files_intervals_no_index",
+        "MergeSamFiles",
+        "I=MD",
+        "O=OUT/merged.bam",
+        "INTERVALS=IL"
+    ),
+    case!(
+        "error_chain_merge_sam_files",
+        "chain",
+        "MD",
+        "-o",
+        "OUT/s",
+        "+",
+        "merge-sam-files"
+    ),
+    case!(
+        "picard_reorder_sam",
+        "ReorderSam",
+        "I=MD",
+        "O=OUT/reordered.bam",
+        "SD=RO_EXTRA",
+        "CREATE_INDEX=true"
+    ),
+    case!(
+        "picard_reorder_sam_dropped",
+        "ReorderSam",
+        "I=MD",
+        "O=OUT/reordered.sam",
+        "SD=RO_DROPPED",
+        "ALLOW_INCOMPLETE_DICT_CONCORDANCE=true"
+    ),
+    case!(
+        "verb_reorder_sam",
+        "reorder-sam",
+        "IS_CRAM",
+        "-R",
+        "REF",
+        "--sequence-dictionary",
+        "RO_EXTRA",
+        "-o",
+        "OUT/reordered.bam"
+    ),
+    case!(
+        "error_reorder_sam_dropped",
+        "ReorderSam",
+        "I=MD",
+        "O=OUT/reordered.bam",
+        "SD=RO_DROPPED"
+    ),
+    case!(
+        "error_reorder_sam_length",
+        "reorder-sam",
+        "MD",
+        "--sequence-dictionary",
+        "RO_LENGTH",
+        "-o",
+        "OUT/reordered.bam"
+    ),
+    case!(
+        "error_reorder_sam_fasta_without_dict",
+        "ReorderSam",
+        "I=MD",
+        "O=OUT/reordered.bam",
+        "SD=REF"
+    ),
+    case!(
+        "chain_reorder_sam",
+        "chain",
+        "MD",
+        "-o",
+        "OUT/s",
+        "+",
+        "reorder-sam",
+        "--sequence-dictionary",
+        "RO_EXTRA",
+        "+",
+        "quality-yield",
+        "+",
+        "write",
+        "OUT/chained.bam"
+    ),
+    case!(
+        "chain_dry_run_reorder_sam",
+        "chain",
+        "MD",
+        "-o",
+        "OUT/s",
+        "--dry-run",
+        "+",
+        "reorder-sam",
+        "--sequence-dictionary",
+        "RO_EXTRA",
+        "+",
+        "write",
+        "OUT/out.bam"
+    ),
+    case!(
+        "chain_dry_run_reorder_sam_stdin",
+        "chain",
+        "-",
+        "--tmp-dir",
+        "OUT/tmp",
+        "--dry-run",
+        "+",
+        "reorder-sam",
+        "--sequence-dictionary",
+        "RO_EXTRA",
+        "+",
+        "write",
+        "-"
+    ),
+];
+
+/// Wave W13: `DownsampleSam` and `PositionBasedDownsampleSam` on
+/// `markdup.bam` and on `downsampled.bam` (tests/data/make_downsampled_bam.py:
+/// its header says both tools ran before), the Picard face, the verbs, a
+/// chain step and the errors.
+#[rustfmt::skip]
+const DOWNSAMPLE_CASES: &[Case] = &[
+    case!("picard_downsample_sam", "DownsampleSam", "I=MD", "O=OUT/ds.bam", "P=0.5", "M=OUT/ds.quality_yield_metrics"),
+    case!("picard_downsample_sam_high_accuracy_sam", "DownsampleSam", "I=MD", "O=OUT/ds.sam", "P=0.4", "STRATEGY=HighAccuracy", "ACCURACY=0.1", "RANDOM_SEED=7"),
+    case!("picard_downsample_sam_chained_index", "DownsampleSam", "I=MD", "O=OUT/ds.bam", "P=0.3", "S=Chained", "A=0.2", "CREATE_INDEX=true"),
+    case!("picard_downsample_sam_again", "DownsampleSam", "I=DS", "O=OUT/again.bam", "P=0.5"),
+    case!("verb_downsample_sam", "downsample-sam", "MD", "-o", "OUT/ds.bam", "-P", "0.6", "--strategy", "HighAccuracy", "--metrics-file", "OUT/ds.txt"),
+    case!("verb_downsample_sam_cram", "downsample-sam", "IS_CRAM", "--reference-sequence", "REF", "-o", "OUT/ds.sam", "--probability", "0.5", "-R", "-3"),
+    case!("chain_downsample_sam", "chain", "MD", "-o", "OUT/s", "+", "downsample-sam", "--probability", "0.5", "--strategy", "Chained", "--metrics-file", "OUT/s.downsampled.txt", "+", "mark-duplicates", "+", "quality-yield", "+", "write", "OUT/out.bam"),
+    case!("error_downsample_sam_probability", "DownsampleSam", "I=MD", "O=OUT/ds.bam", "P=1.5"),
+    case!("error_downsample_sam_strategy", "DownsampleSam", "I=MD", "O=OUT/ds.bam", "STRATEGY=constantmemory"),
+    case!("error_downsample_sam_accuracy", "DownsampleSam", "I=MD", "O=OUT/ds.bam", "S=HighAccuracy", "A=1"),
+    case!("error_downsample_sam_cram_output", "DownsampleSam", "I=MD", "O=OUT/ds.cram", "P=0.5"),
+    case!("error_verb_downsample_sam_metrics_input", "downsample-sam", "MD", "-o", "OUT/ds.bam", "--metrics-file", "MD"),
+    case!("picard_position_based_downsample_sam", "PositionBasedDownsampleSam", "I=MD", "O=OUT/pb.bam", "F=0.5"),
+    case!("picard_position_based_downsample_sam_options", "PositionBasedDownsampleSam", "I=MD", "O=OUT/pb.sam", "F=0.8", "REMOVE_DUPLICATE_INFORMATION=false", "STOP_AFTER=30"),
+    case!("picard_position_based_downsample_sam_allow", "PositionBasedDownsampleSam", "I=DS", "O=OUT/pb.bam", "F=0.5", "ALLOW_MULTIPLE_DOWNSAMPLING_DESPITE_WARNINGS=true"),
+    case!("verb_position_based_downsample_sam", "position-based-downsample-sam", "MD", "-o", "OUT/pb.bam", "--fraction", "0.3", "--read-name-regex", "null"),
+    case!("error_position_based_downsample_sam_again", "PositionBasedDownsampleSam", "I=DS", "O=OUT/pb.bam", "F=0.5"),
+    case!("error_position_based_downsample_sam_fraction", "PositionBasedDownsampleSam", "I=MD", "O=OUT/pb.bam", "F=2"),
+    case!("error_verb_position_based_downsample_sam_stdin", "position-based-downsample-sam", "-", "--fraction", "0.5", "-o", "OUT/pb.bam"),
+    case!("error_chain_position_based_downsample_sam", "chain", "MD", "-o", "OUT/s", "+", "position-based-downsample-sam", "--fraction", "0.5"),
 ];
 
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
@@ -1461,6 +1707,12 @@ fn documented_format_commands_on_the_fixtures() {
     check(FORMAT_CASES);
 }
 
+#[cfg(feature = "parquet")]
+#[test]
+fn documented_parquet_commands_on_the_fixtures() {
+    check(PARQUET_CASES);
+}
+
 #[test]
 fn documented_doctor_commands_on_the_fixtures() {
     check(DOCTOR_CASES);
@@ -1529,6 +1781,21 @@ fn documented_interval_converter_commands_on_the_fixtures() {
 #[test]
 fn documented_n_runs_and_panel_commands_on_the_fixtures() {
     check(N_RUNS_CASES);
+}
+
+#[test]
+fn documented_merge_and_reorder_commands_on_the_fixtures() {
+    check(MERGE_REORDER_CASES);
+}
+
+#[test]
+fn documented_fix_mate_and_filter_commands_on_the_fixtures() {
+    check(MATE_FILTER_CASES);
+}
+
+#[test]
+fn documented_downsample_commands_on_the_fixtures() {
+    check(DOWNSAMPLE_CASES);
 }
 
 /// `make golden` runs this with `--features pdf` and the test below without.
@@ -1631,6 +1898,7 @@ fn case_names_are_unique() {
     let mut names: Vec<&str> = FIXTURE_CASES
         .iter()
         .chain(FORMAT_CASES)
+        .chain(PARQUET_CASES)
         .chain(CHAIN_CASES)
         .chain(T1_CASES)
         .chain(PDF_OPTION_CASES)
@@ -1647,6 +1915,9 @@ fn case_names_are_unique() {
         .chain(INTERVAL_LIST_TOOLS_CASES)
         .chain(INTERVAL_CONVERT_CASES)
         .chain(N_RUNS_CASES)
+        .chain(MERGE_REORDER_CASES)
+        .chain(MATE_FILTER_CASES)
+        .chain(DOWNSAMPLE_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();

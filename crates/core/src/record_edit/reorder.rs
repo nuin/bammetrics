@@ -206,8 +206,11 @@ impl<'d> Last<'d> {
     }
 }
 
+/// Sees each record as it goes into the file.
+pub(crate) type Observer<'d> = Box<dyn FnMut(&RawRecord) -> Result<()> + 'd>;
+
 /// Records from the edit to the file of a stand-alone run.
-pub(super) struct Pipeline<'d> {
+pub(crate) struct Pipeline<'d> {
     group: Option<(RecordSorter<'d>, Regroup)>,
     last: Last<'d>,
     /// The file, made by [`Pipeline::open`] or at the first record written:
@@ -219,13 +222,15 @@ pub(super) struct Pipeline<'d> {
     mode: Mode,
     /// `MAX_RECORDS_IN_RAM` below 1: a sort fails.
     no_room: bool,
+    /// Sees each record written, in the file's order.
+    observer: Option<Observer<'d>>,
 }
 
 impl<'d> Pipeline<'d> {
     /// `header` is the output header: the writer's sort reads its read
     /// groups (`duplicate` order). `input` is the order of the header
     /// read, which a [`WriterOrder::Header`] is resolved against.
-    pub(super) fn new(
+    pub(crate) fn new(
         opts: &'d Options,
         input: SortOrder,
         header: &sam::Header,
@@ -249,11 +254,18 @@ impl<'d> Pipeline<'d> {
             header: header.clone(),
             mode: opts.mode,
             no_room,
+            observer: None,
         }
     }
 
+    /// Show `observer` each record as it is written (`FilterSamReads`
+    /// writes the names of its output beside it).
+    pub(crate) fn observe(&mut self, observer: Observer<'d>) {
+        self.observer = Some(observer);
+    }
+
     /// Make the file now, when it is not made yet.
-    pub(super) fn open(&mut self) -> Result<&mut Out> {
+    pub(crate) fn open(&mut self) -> Result<&mut Out> {
         let out = match self.out.take() {
             Some(out) => out,
             None => Out::create(self.opts, &self.header)?,
@@ -263,6 +275,9 @@ impl<'d> Pipeline<'d> {
 
     fn write(&mut self, record: &mut RawRecord) -> Result<()> {
         let mode = self.mode;
+        if let Some(observer) = self.observer.as_mut() {
+            observer(record)?;
+        }
         self.open()?.write(record, mode)
     }
 
@@ -271,7 +286,7 @@ impl<'d> Pipeline<'d> {
     }
 
     /// Hand on `record`; its content afterwards is unspecified.
-    pub(super) fn push(&mut self, record: &mut RawRecord) -> Result<()> {
+    pub(crate) fn push(&mut self, record: &mut RawRecord) -> Result<()> {
         if self.no_room && self.sorts() {
             return Err(no_records_in_ram());
         }
@@ -292,7 +307,7 @@ impl<'d> Pipeline<'d> {
 
     /// After the last record: every record in the file, the file not yet
     /// closed.
-    pub(super) fn finish(mut self) -> Result<Out> {
+    pub(crate) fn finish(mut self) -> Result<Out> {
         if self.no_room && self.sorts() {
             return Err(no_records_in_ram());
         }

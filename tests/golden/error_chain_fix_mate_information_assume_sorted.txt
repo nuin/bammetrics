@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/mate_filter.bam
++
+fix-mate-information
+--assume-sorted
++
+write
+OUT/out.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (fix-mate-information): ASSUME_SORTED: a chain step sorts its stream by read name before it sets the mates

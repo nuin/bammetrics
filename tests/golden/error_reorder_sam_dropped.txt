@@ -1,0 +1,10 @@
+## argv
+ReorderSam
+I=tests/data/markdup.bam
+O=OUT/reordered.bam
+SD=tests/data/reorder_dropped.dict
+## exit
+1
+## stdout
+## stderr
+bammetrics: New reference sequence does not contain a matching contig for chr1

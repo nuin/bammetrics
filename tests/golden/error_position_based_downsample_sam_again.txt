@@ -1,0 +1,10 @@
+## argv
+PositionBasedDownsampleSam
+I=tests/data/downsampled.bam
+O=OUT/pb.bam
+F=0.5
+## exit
+1
+## stdout
+## stderr
+bammetrics: Found previous Program Record that indicates that this file has been downsampled already with this program. Operation not supported! Previous PG: PositionBasedDownsampleSam

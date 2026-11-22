@@ -1,11 +1,84 @@
 # Changelog
 
-## Unreleased
+## 0.31.0
 
-Wave W21 of docs/07: Parquet, XLSX, DOCX and the SQL dump of a metrics file. No version bump; it ships with the release after 0.31.0.
+Wave W13 of docs/07: `MergeSamFiles`, `ReorderSam`, `FixMateInformation`, `FilterSamReads`, `DownsampleSam` and `PositionBasedDownsampleSam` (71 tools in all), four of them chain transforms. Wave W21 of docs/07 (formats): Parquet, XLSX, DOCX and the SQL dump of a metrics file.
 
 ### Added
 
+- `MergeSamFiles` (verb `merge-sam-files`, Python `merge_sam_files()`), as Picard 3.5.0:
+  the records of every `INPUT` under one merged header (`header_merge.rs`): read group and
+  program IDs that collide renamed with htsjdk's base 36 counter, the `@CO` lines of every
+  input then `COMMENT`, `GO:none`, `SO:<SORT_ORDER>`, no `@PG` line. Inputs all in
+  `SORT_ORDER` (or with `ASSUME_SORTED`, `INTERVALS`, or `SORT_ORDER=unsorted`) are merged
+  through the port of `java.util.PriorityQueue` into a presorted writer; others are sorted
+  as `SortSam` sorts (`MAX_RECORDS_IN_RAM`, `TMP_DIR`). `MERGE_SEQUENCE_DICTIONARIES`
+  merges the dictionaries as `mergeSequenceDictionaries` does and moves each record's
+  references by name; the coordinate merge then compares merged indexes. `INTERVALS`
+  keeps the records an index query returns and needs an index beside each input.
+  `USE_THREADING` changes nothing. `CREATE_INDEX` needs `SORT_ORDER=coordinate`. Not a
+  chain step (exit 2, wave W14).
+- `ReorderSam` (verb `reorder-sam`, Python `reorder_sam()`), as Picard 3.5.0: the records
+  under the dictionary of `SEQUENCE_DICTIONARY` (a `.dict`, a FASTA with its `.dict`, a
+  SAM, BAM or CRAM, an interval list, a VCF), contigs matched by name;
+  `ALLOW_INCOMPLETE_DICT_CONCORDANCE` makes the records of a lost contig unplaced and
+  their mates' mate fields unplaced without `MC`; `ALLOW_CONTIG_LENGTH_DISCORDANCE`.
+  Sorted again in the input's order as Picard's writer sorts. A chain barrier
+  (`reordered`).
+- `header_merge.rs`: `HeaderMerger::merge_with`, `merge_dictionaries`, the dictionary test
+  of `SAMSequenceRecord.isSameSequence` (`M5`, `AN`), `Merger::from_sources` with
+  `MergeOrder` (coordinate with merged indexes, queryname, input order, no comparator).
+- Concordance modules `tests/concordance/test_merge_sam_files.py` (inputs from
+  `merge_bams.py`) and `test_reorder_sam.py`; golden cases on the fixtures of
+  `tests/data/make_merge_reorder_fixtures.py`; `crates/cli/tests/reorder_sam.rs` (chained
+  equals staged); memgate rows, fixture and scale (docs/benchmarks.md).
+- `FixMateInformation` (`crates/core/src/fix_mate_information.rs`, verb
+  `fix-mate-information`, Python `fix_mate_information()`): every `INPUT` read, several
+  merged through `header_merge` (read group and program IDs renamed on a collision,
+  queryname inputs merged by name, any other mix input after input); a name sort unless
+  every input says `SO:queryname` or `ASSUME_SORTED`; htsjdk's `SetMateInfoIterator` on
+  each name (`mate_group_with` of the reverting tool, with `ADD_MATE_CIGAR` and
+  `IGNORE_MISSING_MATES`); the writer presorted for `queryname`, sorting for every other
+  `SORT_ORDER`; `CREATE_INDEX` refused off `coordinate`. Without `OUTPUT` the input BAM is
+  rewritten in place through an `AtomicFile` (mode and links kept, `x.bai`, `x.bam.md5`;
+  a directory the user cannot write is named before the first read). `MD` and `NM` are
+  rebuilt on the records of a CRAM input only. A chain barrier leaving `fixed`.
+- `FilterSamReads` (`crates/core/src/filter_sam_reads.rs`, verb `filter-sam-reads`,
+  Python `filter_sam_reads()`): `includeAligned` and `excludeAligned` (the pairs of a
+  queryname input judged together, htsjdk's mate and order assertions),
+  `includeReadList` and `excludeReadList` (`READ_LIST_FILE` as `ReadNameFilter` reads it,
+  one arena of names with a hash table of offsets, 1 GiB and 50,000,000 distinct names),
+  `includeTagValues` and `excludeTagValues` (only `Z` values
+  match), `includePairedIntervals` (`INTERVAL_LIST` through the W12 overlap tree, both
+  ends of a pair together, `MC` for the mate's end); `includeJavascript` and
+  `JAVASCRIPT_FILE` refused (Q6); Picard's option checks per filter; `SORT_ORDER`;
+  `WRITE_READS_FILES` (each byte from `0x80` up written as the UTF-8 of that character,
+  as Picard writes htsjdk's string). A chain transform leaving `filtered`, a barrier when
+  it sorts.
+- `tests/concordance/test_fix_mate_information.py` and `test_filter_sam_reads.py` against
+  Picard 3.5.0 through `compare_bam` with record bytes, on the inputs of
+  `tests/concordance/mate_filter_bams.py` (the foundation corpus with mate fields
+  damaged, split by read group with colliding IDs, tags of every type, read lists of every
+  name kind), the `revert_bams.py` records, the fixtures, t1 to t3, the exome slice, SAM
+  text and CRAM; `crates/cli/tests/mate_filter.rs`, chained equals staged; golden
+  records on `tests/data/mate_filter.bam` (`tests/data/make_mate_filter_fixtures.py`).
+- `java_random.rs`: `java.util.Random` (moved from `sensitivity.rs`, whose output is
+  unchanged) with `nextInt`, `nextInt(bound)` and `Collections.shuffle`, and htsjdk's
+  `Murmur3.hashUnencodedChars`. `java_hash_set.rs`: the iteration order of a
+  `HashSet<String>` filled by `add`, tree bins included, held to the orders a JVM prints.
+- `DownsampleSam` (`crates/core/src/downsample_sam.rs` and `downsample_sam/`, verb
+  `downsample-sam`, Python `downsample_sam()`): the ConstantMemory, HighAccuracy and
+  Chained strategies of htsjdk 5.0.0, `PROBABILITY`, `RANDOM_SEED` (changed after an
+  earlier run as Picard changes it; `null` draws one), `ACCURACY`, `METRICS_FILE`, BAM or
+  SAM text out, a streaming chain transform. Records equal to Picard 3.5.0's for 50 seeds
+  per strategy at probabilities 0.01 to 1.0 on the foundation corpus and t1, smaller
+  chunks, the exome slice, SAM text, CRAM and a second run.
+- `PositionBasedDownsampleSam` (`crates/core/src/position_based_downsample_sam.rs`, verb
+  `position-based-downsample-sam`, Python `position_based_downsample_sam()`): Picard's
+  two reads, the tile extents and the circle of area `FRACTION`, every option. Records
+  equal to Picard's on the markdup and complexity BAMs. Not a chain step.
+- `tests/concordance/PicardBatch.java`: many Picard command lines in one JVM under the
+  queue lock, for the seed sweeps.
 - Parquet (wave W21 of docs/07, docs/formats.md section Parquet): `--format parquet` on the
   tool verbs and `convert`, `qc --also parquet` and `chain --also parquet`. One metrics file
   becomes `FILE.parquet` (the class table, or the histogram of a file without one),
@@ -72,6 +145,29 @@ Wave W21 of docs/07: Parquet, XLSX, DOCX and the SQL dump of a metrics file. No 
 
 ### Changed
 
+- The header merge of `MergeSamFiles` and of `MarkDuplicates` with several inputs is
+  linear in the `@RG` and `@PG` lines and the dictionaries: IDs and records found by hash,
+  the `PP` walk indexed by input and ID, the merged dictionary a linked list. 100,000
+  `@RG` lines on two inputs merge in 0.55 s (26 s before); a 20,000-program chain in
+  0.12 s (23 s before).
+- `MergeSamFiles INTERVALS` reads the list once and shares its regions between inputs:
+  a list of 1,000,000 intervals over 50 inputs peaks at 158 MB (749 MB before).
+  `COMMENT=null` clears the comments given before it, as in Picard.
+- `ReorderSam SEQUENCE_DICTIONARY` is told by its extension as htsjdk tells it: `.txt`
+  and `.fas` are FASTA names, an unknown extension exits 1, a dictionary with no `@SQ`
+  line is taken, a length over 2^31 - 1 exits 1 naming `SEQUENCE_DICTIONARY` (D130).
+- A dictionary file (`.dict`, interval list, SAM text, `.fai`) and an interval list are
+  read by a read that stops at the cap, so a pipe or device costs no more than a file; a
+  BAM or CRAM header used as a dictionary is read under 64 MiB and its binary reference
+  list checked.
+- A command-line argument that is not UTF-8 exits 2 naming its position; it panicked.
+- The dictionary test of `MarkDuplicates` with several inputs follows
+  `SAMSequenceRecord.isSameSequence`: two `M5` values that differ fail the run, two names
+  that an `AN` field matches pass.
+- `header_merge::Merger` merges `SO:unsorted` inputs one after the other. MarkDuplicates
+  on several unsorted inputs now exits 1 with Picard's sort-order message.
+- `java::latin1_utf8` holds the one copy of the Latin-1 to UTF-8 widening that
+  `CollectQualityYieldMetricsSNVQ` and the `.reads` files of `FilterSamReads` share.
 - `--format` and `--also` name `parquet`, `xlsx`, `docx` and `sql` in their lists, so the error
   text of an unknown format lists them (`error_verb_format`, `error_verb_format_twice` and
   `error_qc_also`, which now gives `prquet`). `convert` of a zip names Parquet among the
@@ -83,10 +179,34 @@ Wave W21 of docs/07: Parquet, XLSX, DOCX and the SQL dump of a metrics file. No 
   it is a file or a pipe. Two golden forms put all four formats in one list
   (`verb_insert_size_w21_list`, `verb_multiple_metrics_w21_list`).
 - `make budgets`: the Parquet growth target is 0.6 MiB, failing at 1.2 MiB (docs/07
-  decision D214, pending owner review). The merged probe measures 1,112,176 bytes, one
+  decision D159, pending owner review). The merged probe measures 1,112,176 bytes, one
   16 KiB page more than the Parquet branch alone and 686 bytes over the old limit.
-- docs/07 section 7: the W21 decisions are D200 to D214, renumbered after the last D row
-  of main by the integrator of the next release.
+- docs/07 section 7: the W21 decisions are D145 to D159, after the W13 rows D121 to D144.
+
+### Fixed
+
+- `MarkDuplicates` hashes read names through `java_random::Murmur3`, the hash DownsampleSam
+  uses, in place of its own copy (same output); docs/07 D137 names it and the `No group 1`
+  error of `optical.rs` `read_location`.
+- `chain --dry-run` plans `reorder-sam` as a sort that holds its records (one pass, the
+  stream order); it printed the replay or spool text and the memory of `mark-duplicates`.
+- `DownsampleSam STRATEGY=HighAccuracy` and `Chained` hold at most 50,000,000 read names,
+  then exit 1 naming `STRATEGY=ConstantMemory` (D138). They held every name with no cap:
+  1,972.5 MiB at 14.7 million templates.
+- A BAM cut inside the header of a BGZF block (its end-of-file block cut to 8 bytes) exits 1
+  with `truncated BAM` in every tool that reads through the shared reader, as Picard
+  (`Incorrect header size for file`) and samtools fail. It read as whole and exited 0. A
+  BAM that only lacks its end-of-file block reads as before.
+- A `READ_NAME_REGEX` with fewer than three groups that matches a read name exits 1, as
+  Picard fails with `No group N`, in `MarkDuplicates`, `EstimateLibraryComplexity`,
+  `PositionBasedDownsampleSam` and `CollectDuplicateByTileMetrics`. It exited 0 with no
+  location for any read.
+- `MarkDuplicates` and `DownsampleSam` refuse a `METRICS_FILE` directory they cannot write
+  before the read. The BAM was renamed into place first and stayed behind.
+- `java_hash_set.rs` links a tree bin's list in constant time per name. 262,144 names of
+  one hash code in one HighAccuracy chunk took 10.6 s.
+- CRAM 3.1 from samtools 1.25 whose name tokenizer duplicates a `DZLen` stream decodes
+  (`vendor/noodles-cram`, fifth patch). It panicked with `unhandled ty: DZLen`.
 
 ## 0.30.0
 

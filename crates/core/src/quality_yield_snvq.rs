@@ -302,25 +302,6 @@ impl Report {
     }
 }
 
-/// The bytes of a `Z` tag as Java's `String.getBytes` gives them: htsjdk
-/// holds one character per byte, and UTF-8 writes a character from `0x80`
-/// up as two bytes.
-fn java_bytes(text: &[u8]) -> Cow<'_, [u8]> {
-    if text.is_ascii() {
-        return Cow::Borrowed(text);
-    }
-    let mut out = Vec::with_capacity(text.len() * 2);
-    for &byte in text {
-        if byte.is_ascii() {
-            out.push(byte);
-        } else {
-            out.push(0xC0 | (byte >> 6));
-            out.push(0x80 | (byte & 0x3F));
-        }
-    }
-    Cow::Owned(out)
-}
-
 /// `SAMUtils.fastqToPhred(char)`.
 fn phred(byte: u8) -> Option<i32> {
     (PHRED_OFFSET..=PHRED_LAST)
@@ -405,7 +386,7 @@ impl QualityYieldSnvq {
         let tag = alternate.ok_or_else(|| {
             Error::Metric(format!("String tag does not have length() == 2: {given}"))
         })?;
-        let text = java_bytes(Self::string_tag(&self.tags, record, tag)?);
+        let text = crate::java::latin1_utf8(Self::string_tag(&self.tags, record, tag)?);
         self.qualities.clear();
         for &byte in text.iter() {
             let quality = phred(byte).ok_or_else(|| {
@@ -458,7 +439,7 @@ impl Accumulator for QualityYieldSnvq {
         }
         let mut tags: [Cow<'_, [u8]>; 4] = Default::default();
         for (text, tag) in tags.iter_mut().zip(TAGS) {
-            *text = java_bytes(Self::string_tag(&self.tags, record, tag)?);
+            *text = crate::java::latin1_utf8(Self::string_tag(&self.tags, record, tag)?);
         }
         let report = &mut self.report;
         for (index, (&quality, &base)) in self.qualities.iter().zip(&self.bases).enumerate() {

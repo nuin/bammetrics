@@ -1,0 +1,20 @@
+## argv
+filter-sam-reads
+tests/data/mate_filter.queryname.bam
+-o
+OUT/unmapped.bam
+--filter
+excludeAligned
+## exit
+0
+## stdout
+## stderr
+## file unmapped.bam
+@HD	VN:1.6	SO:queryname
+@SQ	SN:chr1	LN:100000
+@RG	ID:rg1	SM:s1	LB:lib1	PU:unit1	PL:ILLUMINA
+@RG	ID:rg2	SM:s1	LB:lib2	PU:unit2	PL:ILLUMINA
+h1	73	0	5100	RG:Z:rg1	XZ:Z:c	XI:i:3
+h1	133	0	5100	RG:Z:rg1	XZ:Z:c	XI:i:3
+n1	77	-1	0	RG:Z:rg1	XZ:Z:d	XI:i:1
+n1	141	-1	0	RG:Z:rg1	XZ:Z:d	XI:i:1

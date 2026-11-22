@@ -1,0 +1,11 @@
+## argv
+DownsampleSam
+I=tests/data/markdup.bam
+O=OUT/ds.bam
+S=HighAccuracy
+A=1
+## exit
+1
+## stdout
+## stderr
+bammetrics: ACCURACY=1.0: Illegal value. Must be 1/MAX_INT < accuracy < 1

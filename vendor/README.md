@@ -8,7 +8,7 @@ crates.io releases. `exclude = ["vendor"]` keeps them out of the workspace, so
 
 The crates.io tarball (`noodles-cram-0.102.0.crate`), unpacked, with
 `Cargo.lock` dropped, an empty `[workspace]` table added to `Cargo.toml`, and
-four changes marked `bammetrics patch`. The first is in
+five changes marked `bammetrics patch`. The first is in
 `src/io/reader/container/slice.rs`:
 
 - `calculate_template_length` is htsjdk 4's
@@ -49,8 +49,15 @@ SEQ `*` alone has neither, and noodles failed with `missing data series
 encoding: Bases`. Picard reads both shapes; `ViewSam` on each prints Picard's
 text (`tests/concordance/test_replace_sam_header.py::test_cram_shapes_as_htsjdk_reads_them`).
 
-`cargo test --manifest-path vendor/noodles-cram/Cargo.toml` runs 311 tests, one
-of them for the third change.
+The fifth is in `src/codecs/name_tokenizer/decode.rs`: `TokenReader::get`
+returns the `DZLen` stream, so a token stream that duplicates one decodes.
+noodles had `DZLen` in `set` and `get_mut` but not in `get`, and panicked with
+`unhandled ty: DZLen` on a CRAM 3.1 container samtools 1.25 wrote. An unknown
+stream type in `get` or `set`, a stream before the first token and a duplicate
+of a token not read yet are now `InvalidData` errors in place of panics.
+
+`cargo test --manifest-path vendor/noodles-cram/Cargo.toml` runs 312 tests, one
+of them for the third change and one for the fifth.
 
 To move to a later noodles-cram: unpack its tarball here, apply the
 `bammetrics patch` changes again if upstream has not, and run that test module

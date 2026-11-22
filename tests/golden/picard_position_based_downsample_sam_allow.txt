@@ -1,0 +1,40 @@
+## argv
+PositionBasedDownsampleSam
+I=tests/data/downsampled.bam
+O=OUT/pb.bam
+F=0.5
+ALLOW_MULTIPLE_DOWNSAMPLING_DESPITE_WARNINGS=true
+## exit
+0
+## stdout
+## stderr
+bammetrics: Found previous Program Record that indicates that this file has been downsampled already with this program. Operation not supported! Previous PG: PositionBasedDownsampleSam
+## file pb.bam
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:chr1	LN:100000
+@RG	ID:rg1	SM:s1	LB:lib1	PU:fc1.1
+@RG	ID:rg2	SM:s1	LB:lib2	PU:fc1.2
+@PG	ID:bwa	PN:bwa	VN:0.7.17
+@PG	ID:DownsampleSam	PN:DownsampleSam	PP:bwa	VN:3.5.0	rs:1
+@PG	ID:DownsampleSam.1	PN:DownsampleSam	PP:DownsampleSam	VN:3.5.0
+@PG	ID:PositionBasedDownsampleSam	PN:PositionBasedDownsampleSam	PP:DownsampleSam.1	VN:3.5.0
+@PG	ID:PositionBasedDownsampleSam.4	PN:PositionBasedDownsampleSam	CL:PositionBasedDownsampleSam INPUT=tests/data/downsampled.bam OUTPUT=OUT/pb.bam FRACTION=0.5 ALLOW_MULTIPLE_DOWNSAMPLING_DESPITE_WARNINGS=true	VN:bammetrics <version>
+M1:7:FC1:1:1101:1000:2000	99	0	1001	RG:Z:rg1	MC:Z:50M	PG:Z:bwa	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	99	0	1001	RG:Z:rg1	MC:Z:50M	PG:Z:bwa	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	99	0	1001	RG:Z:rg1	MC:Z:50M	PG:Z:bwa	RX:Z:TTGA	DT:Z:SQ
+M1:7:FC1:1:1101:1000:2000	147	0	1251	RG:Z:rg1	MC:Z:50M	PG:Z:bwa	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	147	0	1251	RG:Z:rg1	MC:Z:50M	PG:Z:bwa	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	147	0	1251	RG:Z:rg1	MC:Z:50M	PG:Z:bwa	RX:Z:TTGA	DT:Z:SQ
+M1:7:FC1:1:1101:1000:2000	99	0	3001	RG:Z:rg2	MC:Z:50M	PG:Z:bwa	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	163	0	3001	RG:Z:rg2	MC:Z:50M	PG:Z:bwa	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	99	0	3001	RG:Z:rg2	MC:Z:50M	PG:Z:bwa	RX:Z:TTGA
+M1:7:FC1:1:1101:1120:2090	163	0	3001	RG:Z:rg2	MC:Z:50M	PG:Z:bwa	RX:Z:ACGT
+M1:7:FC1:1:1101:1000:2000	147	0	3281	RG:Z:rg2	MC:Z:50M	PG:Z:bwa	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	83	0	3281	RG:Z:rg2	MC:Z:50M	PG:Z:bwa	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	147	0	3281	RG:Z:rg2	MC:Z:50M	PG:Z:bwa	RX:Z:TTGA
+M1:7:FC1:1:1101:1120:2090	83	0	3281	RG:Z:rg2	MC:Z:50M	PG:Z:bwa	RX:Z:ACGT
+M1:7:FC1:1:1101:1000:2000	99	0	5001	RG:Z:rg1	MC:Z:50M	PG:Z:bwa	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	99	0	5001	RG:Z:rg1	MC:Z:50M	PG:Z:bwa	RX:Z:ACGT
+M1:7:FC1:1:1101:1000:2000	147	0	5251	RG:Z:rg1	MC:Z:50M	PG:Z:bwa	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	147	0	5251	RG:Z:rg1	MC:Z:50M	PG:Z:bwa	RX:Z:ACGT
+M1:7:FC1:1:1101:1000:2000	329	0	9001	RG:Z:rg1

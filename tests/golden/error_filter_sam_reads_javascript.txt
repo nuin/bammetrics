@@ -1,0 +1,10 @@
+## argv
+FilterSamReads
+I=tests/data/mate_filter.bam
+O=OUT/x.bam
+FILTER=includeJavascript
+## exit
+1
+## stdout
+## stderr
+bammetrics: FILTER=includeJavascript: bammetrics runs no JavaScript, and JAVASCRIPT_FILE is refused (docs/07_full_parity_program.md Q6)

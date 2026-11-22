@@ -384,6 +384,12 @@ pub const TOOLS: &[&Tool] = &[
     &crate::vcf_to_interval_list::TOOL,
     &crate::scatter_intervals_by_ns::TOOL,
     &crate::non_n_fasta_size::TOOL,
+    &crate::merge_sam_files::TOOL,
+    &crate::reorder_sam::TOOL,
+    &crate::fix_mate_information::TOOL,
+    &crate::filter_sam_reads::TOOL,
+    &crate::downsample_sam::TOOL,
+    &crate::position_based_downsample_sam::TOOL,
 ];
 
 /// The tool named `name`.

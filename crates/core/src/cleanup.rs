@@ -466,6 +466,20 @@ impl AtomicFile {
         registry.insert(self.path.clone());
         Ok(Some(self.path.clone()))
     }
+
+    /// Make the temporary file of `path` and remove it again: the error a
+    /// later [`AtomicFile::create`] would give for an unwritable directory,
+    /// before the run writes anything. A tool that renames one output into
+    /// place before the registry writes the next calls this on the next,
+    /// so a failed run leaves neither. A path written in place (a device,
+    /// a pipe) is not opened.
+    pub fn probe(path: &Path) -> io::Result<()> {
+        let file = Self::new(path);
+        if file.temp.is_some() {
+            file.create()?;
+        }
+        Ok(())
+    }
 }
 
 /// Write `files` as one set: every file under its temporary name first,

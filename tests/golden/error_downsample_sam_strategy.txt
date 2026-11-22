@@ -1,0 +1,10 @@
+## argv
+DownsampleSam
+I=tests/data/markdup.bam
+O=OUT/ds.bam
+STRATEGY=constantmemory
+## exit
+1
+## stdout
+## stderr
+bammetrics: STRATEGY=constantmemory: expected HighAccuracy, ConstantMemory or Chained

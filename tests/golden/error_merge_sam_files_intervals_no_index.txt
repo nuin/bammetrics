@@ -1,0 +1,10 @@
+## argv
+MergeSamFiles
+I=tests/data/markdup.bam
+O=OUT/merged.bam
+INTERVALS=tests/data/targets.interval_list
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/markdup.bam: Merging with interval but file is not indexed: tests/data/markdup.bam

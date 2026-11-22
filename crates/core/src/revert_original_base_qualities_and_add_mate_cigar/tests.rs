@@ -57,7 +57,7 @@ fn a_mapped_pair_gets_each_others_fields() {
         &[(10, 4), (40, 0)],
         20,
     );
-    set_mate_info(&mut a, &mut b).expect("mates");
+    set_mate_info(&mut a, &mut b, true).expect("mates");
     assert_eq!((a.mate_reference_id(), a.mate_alignment_start()), (0, 300));
     assert_eq!(a.flags() & (MATE_REVERSE | MATE_UNMAPPED), MATE_REVERSE);
     assert_eq!(tag(&a, b"MQ"), Some(TagValue::Int(20)));
@@ -71,7 +71,7 @@ fn a_mapped_pair_gets_each_others_fields() {
 fn a_pair_on_two_contigs_has_tlen_0() {
     let mut a = record("p", PAIRED | FIRST, 0, 100, &[(50, 0)], 60);
     let mut b = record("p", PAIRED | SECOND, 1, 300, &[(50, 0)], 60);
-    set_mate_info(&mut a, &mut b).expect("mates");
+    set_mate_info(&mut a, &mut b, true).expect("mates");
     assert_eq!((a.template_length(), b.template_length()), (0, 0));
     assert_eq!(a.mate_reference_id(), 1);
 }
@@ -80,7 +80,7 @@ fn a_pair_on_two_contigs_has_tlen_0() {
 fn an_unmapped_mate_is_placed_beside_the_mapped_one() {
     let mut a = record("p", PAIRED | FIRST | REVERSE, 0, 100, &[(50, 0)], 60);
     let mut b = record("p", PAIRED | SECOND | UNMAPPED, -1, 0, &[], 0);
-    set_mate_info(&mut a, &mut b).expect("mates");
+    set_mate_info(&mut a, &mut b, true).expect("mates");
     assert_eq!((b.reference_id(), b.alignment_start()), (0, 100));
     assert_eq!((b.mate_reference_id(), b.mate_alignment_start()), (0, 100));
     assert_ne!(b.flags() & MATE_REVERSE, 0);
@@ -96,7 +96,7 @@ fn an_unmapped_mate_is_placed_beside_the_mapped_one() {
 fn an_unmapped_pair_is_unplaced() {
     let mut a = record("p", PAIRED | FIRST | UNMAPPED, 0, 100, &[], 0);
     let mut b = record("p", PAIRED | SECOND | UNMAPPED | REVERSE, 0, 100, &[], 0);
-    set_mate_info(&mut a, &mut b).expect("mates");
+    set_mate_info(&mut a, &mut b, true).expect("mates");
     for r in [&a, &b] {
         assert_eq!((r.reference_id(), r.alignment_start()), (-1, 0));
         assert_eq!((r.mate_reference_id(), r.mate_alignment_start()), (-1, 0));
