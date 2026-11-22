@@ -805,6 +805,11 @@ and CI runs it on the Linux and macOS runners after the unit tests.
 | Binary growth, 0.30.0 | 300 KB | 600 KB | 419.9 KB | 429,968 bytes stripped (460,224 unstripped), measured 2026-11-21 by `make budgets` on release/0.30.0: the same bytes as the 0.29.0 row, so wave W12 adds nothing to the probe (its five tools write no metrics file and add no glossary row). 122,768 bytes (119.9 KB) over the 300 KB target and 184,432 bytes under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review |
 | Binary growth, 0.31.0 | 300 KB | 600 KB | 419.9 KB | 429,968 bytes stripped (460,240 unstripped), measured 2026-11-21 by `make budgets` on release/0.31.0: the same stripped bytes as the 0.29.0 and 0.30.0 rows, so wave W13 adds nothing to the probe (no glossary row: `DownsampleSam` writes the existing `QualityYieldMetrics` and the other five no metrics file). 122,768 bytes (119.9 KB) over the 300 KB target and 184,432 bytes under the 600 KB limit, so the test prints `over target` and passes. docs/07 decision D22 stays open for owner review |
 | Formats growth, W02 | 150 KB | 300 KB | 129.2 KB | 132,304 bytes stripped (148,480 unstripped), measured 2026-11-10 by `make budgets`: stripped `size_formats` less stripped `size_formats_base` (`crates/formats/examples`); see below |
+| Parquet growth, W21 | 0.53 MiB | 1.06 MiB | 1.045 MiB | 1,095,664 bytes stripped (1,497,920 unstripped), measured 2026-11-21 by `make budgets` after the review fixes (reader caps, streamed long file, file sets): stripped `size_parquet` (`size_formats` with the feature `parquet`) less stripped `size_formats`. Over the docs/07 target of 0.53 MiB, 15,826 bytes under the limit, so the test prints `over target` and passes (docs/07 decision D204); see below |
+| Formats growth, W21 XLSX and DOCX | 150 KB | 300 KB | 177.6 KB | 181,888 bytes stripped (201,856 unstripped), measured 2026-11-21 by `make budgets` on feat/ooxml: 49,608 bytes (48.4 KB) over the 132,280 bytes the same machine measured for main at 0.30.0, the XLSX, DOCX and zip writers that `size_formats` now links through `render_bytes`. 31,744 bytes (31.0 KB) over the 150 KB target and 125,312 bytes under the 300 KB limit, so the test prints `over target` and passes (docs/07 decision D211). The stripped `bammetrics` binary grows 33,064 bytes (8,383,176 to 8,416,240) |
+| Formats growth, W21 SQL dump | 150 KB | 300 KB | 145.4 KB | 148,864 bytes stripped (168,480 unstripped), measured 2026-11-21 by `make budgets` on feat/sql-dump: 16,576 bytes over the 132,288 bytes measured the same day for main at 0.30.0, the SQL writer that `size_formats` links through `render`. The `__text` section of `bammetrics` grows 16,128 bytes and the stripped binary 16,560 bytes (8,383,160 to 8,399,720). No crate is added |
+| Parquet growth, W21 merged | 0.6 MiB | 1.2 MiB | 1.061 MiB | 1,112,176 bytes stripped (1,514,800 unstripped), measured 2026-11-21 by `make budgets` on feat/formats-2, the three W21 branches merged. 16,512 bytes over the Parquet branch alone: the probe's `__TEXT` crossed one more 16 KiB page. The old limit of 1.06 MiB failed by 686 bytes; the target is 0.6 MiB now (docs/07 decision D214, pending owner review). `over target`, passes |
+| Formats growth, W21 merged | 150 KB | 300 KB | 193.8 KB | 198,448 bytes stripped (220,144 unstripped), measured 2026-11-21 by `make budgets` on feat/formats-2: the XLSX, DOCX and SQL writers together, 66,144 bytes over the 132,304 bytes of the W02 row. 48,848 bytes over the 150 KB target and 108,752 bytes under the 300 KB limit, so the test prints `over target` and passes (docs/07 decision D211) |
 | Added passes over the BAM | 0 | 1 | 0 | `qc` reports 1 BAM read with the verdict and page; `report` and `check` run with the BAM deleted |
 
 The other rows at 0.19.0, same run: render 1.65 ms and 0.72 ms, sample page 96.5 KB
@@ -975,6 +980,49 @@ the formats crate. `size_formats` adds both readers, the seven formats of a metr
 and the Markdown, JUnit and MultiQC forms of a verdict. The difference, 132,304 bytes, is
 the crate's code and data. The command's own format code in `crates/cli` is outside the
 probe. The 150 KB target is the measured size plus 16%; the test fails at 300 KB.
+
+## Parquet (wave W21, docs/07 section 3.2)
+
+Measured 2026-11-21 on the Mac Studio, rustc 1.100.0, parquet 60.2.0. The feature `parquet`
+is a default feature of `bammetrics-cli`, so `cargo build --release` links it. The stripped
+`bammetrics` binary is 8,399,736 bytes with `--no-default-features` and grows by:
+
+| `parquet` crate opt-level | Growth, stripped |
+|---|---:|
+| 3 (the release profile) | 1,340,128 bytes |
+| `"s"` | 1,241,416 bytes |
+| `"z"` (the root `Cargo.toml`) | 1,095,672 bytes |
+
+`"z"` on chrono, ahash, half, num-bigint, twox-hash and snap as well saves 16 bytes more,
+so only the `parquet` crate has it. The `size_parquet` probe of `make budgets` grows
+1,095,632 bytes over `size_formats`: the probe and the binary agree within 40 bytes. The
+docs/07 estimate was 0.53 MB. Most of the growth is probably the crate itself: its column
+readers and writers are generic over all eight physical types, and the row group writer and
+reader build every one. `cargo-bloat` was not installed to confirm it.
+
+The NA12878 insert size metrics file (1,380 bytes of Picard text) gives a 3,507-byte main
+file, a 1,180-byte histogram companion and a 1,921-byte long file
+(`tests/data/insert_size_metrics.parquet` and its companions).
+
+### The three W21 formats merged (feat/formats-2)
+
+Measured 2026-11-21 on the Mac Studio, the stripped `bammetrics` binary of each build
+(`strip -o`), main at 0.30.0 against the three W21 branches merged:
+
+| Build | main 0.30.0 | W21 merged | Growth |
+|---|---:|---:|---:|
+| `cargo build --release` (default, feature `parquet`) | 8,383,176 | 9,578,104 | 1,194,928 |
+| `--no-default-features` (no `parquet`) | 8,383,176 | 8,482,408 | 99,232 |
+| `--features pdf` (with `parquet`) | 11,728,400 | 12,906,752 | 1,178,352 |
+| `--no-default-features --features pdf` | 11,728,400 | 11,827,624 | 99,224 |
+
+The feature `parquet` adds 1,095,696 bytes to the default build and 1,079,128 to the PDF
+build. XLSX, DOCX, the SQL dump and the file sets add 99,232 bytes without it; the branches
+measured 33,064 (XLSX and DOCX) and 16,560 (SQL) alone. The rest is the merged command code
+in `crates/cli` and page rounding: the linker grows `__TEXT` in 16 KiB pages. `make budgets`
+on the merge: binary growth 419.9 KB (over the 300 KB target, docs/07 decision D22 still
+open), formats growth 193.8 KB (over its 150 KB target, D211), Parquet growth 1.061 MiB
+(over its 0.6 MiB target, D214), PDF growth 3.301 MiB; every row under its limit.
 
 ## PDF report (wave W06, docs/07 section 3.3)
 

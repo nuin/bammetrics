@@ -44,7 +44,11 @@ const FIXTURES: &[(&str, &str)] = &[
         "tests/data/picard/NA12878/NA12878.insert_size_metrics",
     ),
     ("INS_JSON", "tests/data/insert_size_metrics.json"),
+    ("INS_PQ", "tests/data/insert_size_metrics.parquet"),
+    ("INS_PQ_LONG", "tests/data/insert_size_metrics.long.parquet"),
+    ("INS_XLSX", "tests/data/insert_size_metrics.xlsx"),
     ("NO_READS", "tests/data/no_reads.bam"),
+    ("INS_SQL", "tests/data/insert_size_metrics.sql"),
     ("PLAN_MD", "tests/data/chain_markdup.toml"),
     ("PLAN_TAPS", "tests/data/chain_taps.toml"),
     ("PLAN_BAD", "tests/data/chain_bad_key.toml"),
@@ -503,12 +507,52 @@ const FORMAT_CASES: &[Case] = &[
     case!("error_check_format_list_stdout", "check", "PICARD", "--format", "text,junit"),
     case!("error_check_format", "check", "PICARD", "--format", "xml"),
     case!("qc_also", "qc", "IS", "-o", "OUT/sample", "--also", "json,tsv,markdown,junit,multiqc", "--date", "2026-01-02 03:04:05 UTC"),
-    case!("error_qc_also", "qc", "IS", "-o", "OUT/sample", "--also", "parquet"),
+    case!("error_qc_also", "qc", "IS", "-o", "OUT/sample", "--also", "prquet"),
     case!("plan_also", "plan", "IS", "-o", "OUT/sample", "--also", "json,markdown"),
     case!("plan_also_jsonl", "plan", "IS", "-o", "OUT/sample", "--also", "csv,junit,multiqc", "--format", "jsonl"),
     case!("verb_insert_size_json_picard", "insert-size", "IS", "--format", "json,picard", "-o", "OUT/insert_size.json"),
     case!("error_check_overwrites_input", "check", "PICARD", "-o", "PIC_INS"),
     case!("qc_also_no_reads", "qc", "NO_READS", "-o", "OUT/sample", "--also", "json,csv,junit", "--date", "2026-01-02 03:04:05 UTC"),
+    // Parquet (wave W21): tests/data/insert_size_metrics.parquet and its two
+    // companions are `convert` of Picard's insert size file.
+    case!("convert_picard_to_parquet", "convert", "PIC_INS", "--format", "parquet", "-o", "OUT/insert_size.parquet"),
+    case!("convert_parquet_to_picard", "convert", "INS_PQ"),
+    case!("convert_parquet_list", "convert", "INS_PQ", "--format", "json,csv,parquet", "-o", "OUT/insert_size.json", "--sample", "S1"),
+    case!("verb_insert_size_parquet", "insert-size", "IS", "--format", "parquet", "-o", "OUT/insert_size.parquet", "--sample", "S1"),
+    case!("verb_quality_distribution_parquet", "quality-score-distribution", "IS", "--format", "picard,parquet", "-o", "OUT/quality.txt"),
+    case!("verb_multiple_metrics_parquet", "multiple-metrics", "IS", "-o", "OUT/sample", "--program", "CollectQualityYieldMetrics", "--program", "CollectInsertSizeMetrics", "--format", "picard,parquet"),
+    case!("qc_also_parquet", "qc", "IS", "-o", "OUT/sample", "--also", "parquet,json", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("qc_also_no_reads_parquet", "qc", "NO_READS", "-o", "OUT/sample", "--also", "parquet", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("chain_taps_parquet", "chain", "IS", "-o", "OUT/sample", "--format", "picard,parquet", "+", "quality-yield", "+", "insert-size"),
+    case!("plan_also_parquet", "plan", "IS", "-o", "OUT/sample", "--also", "parquet"),
+    case!("error_verb_parquet_stdout", "insert-size", "IS", "--format", "parquet"),
+    case!("error_convert_parquet_stdout", "convert", "PIC_INS", "--format", "parquet"),
+    case!("error_convert_parquet_long", "convert", "INS_PQ_LONG"),
+    case!("error_convert_overwrites_parquet_companion", "convert", "INS_PQ", "-o", "tests/data/insert_size_metrics.histogram.parquet"),
+    // XLSX and DOCX (wave W21): each recorded as its size and its parts.
+    case!("convert_xlsx_docx", "convert", "PIC_INS", "--format", "xlsx,docx", "-o", "OUT/insert_size.xlsx"),
+    case!("convert_hs_xlsx_docx", "convert", "tests/data/picard/NA12878/NA12878.hs_metrics", "--format", "xlsx,docx", "-o", "OUT/hs.xlsx"),
+    case!("verb_insert_size_xlsx_docx", "insert-size", "IS", "--format", "picard,xlsx,docx", "-o", "OUT/insert_size.txt", "--sample", "S1"),
+    case!("verb_multiple_metrics_docx", "multiple-metrics", "IS", "-o", "OUT/sample", "--program", "CollectQualityYieldMetrics", "--format", "picard,docx"),
+    case!("qc_also_xlsx_docx", "qc", "NO_READS", "-o", "OUT/sample", "--also", "xlsx,docx", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("chain_also_xlsx", "chain", "IS", "-o", "OUT/s", "--also", "xlsx", "+", "quality-yield"),
+    case!("error_convert_reads_xlsx", "convert", "INS_XLSX"),
+    case!("error_verb_xlsx_stdout_list", "insert-size", "IS", "--format", "xlsx,docx"),
+    case!("error_convert_unresolved_output", "convert", "PIC_INS", "--format", "xlsx", "-o", "OUT/nodir/../insert_size.xlsx"),
+    // The SQL dump (docs/formats.md "SQL dump"); tests/data/insert_size_metrics.sql is
+    // `convert PIC_INS --format sql`.
+    case!("convert_sql", "convert", "PIC_INS", "--format", "sql", "--sample", "NA12878"),
+    case!("convert_sql_list", "convert", "INS_JSON", "--format", "picard,sql", "-o", "OUT/insert_size.txt"),
+    case!("error_convert_reads_sql", "convert", "INS_SQL"),
+    case!("verb_insert_size_sql", "insert-size", "IS", "--format", "picard,sql", "-o", "OUT/insert_size.txt", "--sample", "S1"),
+    case!("verb_multiple_metrics_sql", "multiple-metrics", "IS", "-o", "OUT/sample", "--program", "CollectQualityYieldMetrics", "--program", "CollectInsertSizeMetrics", "--format", "picard,sql"),
+    case!("qc_also_sql", "qc", "IS", "-o", "OUT/sample", "--also", "sql", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("qc_also_sql_no_reads", "qc", "NO_READS", "-o", "OUT/sample", "--also", "sql", "--date", "2026-01-02 03:04:05 UTC"),
+    case!("plan_also_sql", "plan", "IS", "-o", "OUT/sample", "--also", "sql,markdown"),
+    case!("chain_also_sql", "chain", "IS", "-o", "OUT/s", "--also", "sql", "+", "insert-size", "+", "quality-yield"),
+    // The four W21 formats in one list: one file set with the Parquet companions.
+    case!("verb_insert_size_w21_list", "insert-size", "IS", "--format", "picard,parquet,xlsx,docx,sql", "-o", "OUT/insert_size.txt", "--sample", "S1"),
+    case!("verb_multiple_metrics_w21_list", "multiple-metrics", "IS", "-o", "OUT/sample", "--program", "CollectInsertSizeMetrics", "--format", "picard,parquet,xlsx,sql"),
 ];
 
 /// `chain` (docs/chaining.md): the two documented examples from the command
@@ -1363,6 +1407,19 @@ fn record(case: &Case) -> String {
             text.push_str(&hex_lines(&fs::read(path).expect("read the index")));
             continue;
         }
+        // A Parquet file is snappy-compressed; it is recorded decoded. Its
+        // size is fixed for `convert` of a committed file; elsewhere the
+        // command line and start time it carries vary in length.
+        if name.ends_with(".parquet") {
+            text.push_str(&parquet_text(&path, case.argv.first() == Some(&"convert")));
+            continue;
+        }
+        // An XLSX or DOCX carries the run's time and output paths; it is
+        // recorded as its parts with those normalized.
+        if name.ends_with(".xlsx") || name.ends_with(".docx") {
+            text.push_str(&ooxml_text(&fs::read(path).expect("read the zip"), out));
+            continue;
+        }
         text.push_str(&String::from_utf8_lossy(
             &fs::read(path).expect("read output file"),
         ));
@@ -1378,6 +1435,83 @@ fn page_count(pdf: &[u8]) -> usize {
     pdf.windows(marker.len() + 1)
         .filter(|w| w.starts_with(marker) && !w[marker.len()].is_ascii_alphabetic())
         .count()
+}
+
+/// A Parquet file as `bammetrics_formats::parquet::describe` prints it,
+/// the size replaced by `<size>` unless `sized`.
+fn parquet_text(path: &Path, sized: bool) -> String {
+    let bytes = fs::read(path).expect("read the Parquet file");
+    #[cfg(feature = "parquet")]
+    let text = bammetrics_formats::parquet::describe(bytes).unwrap_or_else(|e| format!("<{e}>\n"));
+    #[cfg(not(feature = "parquet"))]
+    let text = format!("parquet {} bytes, not decoded\n", bytes.len());
+    match text.split_once(" bytes,") {
+        Some((_, rest)) if !sized => format!("parquet <size> bytes,{rest}"),
+        _ => text,
+    }
+}
+
+/// A stored zip (XLSX or DOCX) as text: its size with the output
+/// directory and the `Started on` time written as in [`normalize`], then
+/// each part, its name and size, and the text of a sheet or the document
+/// body. A part that is not a stored entry is recorded as unreadable.
+fn ooxml_text(bytes: &[u8], out: &str) -> String {
+    let u16_at = |i: usize| {
+        bytes
+            .get(i..i + 2)
+            .map(|b| usize::from(u16::from_le_bytes([b[0], b[1]])))
+    };
+    let u32_at = |i: usize| {
+        bytes
+            .get(i..i + 4)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize)
+    };
+    let mut parts = Vec::new();
+    let mut at = 0;
+    while u32_at(at) == Some(0x0403_4b50) {
+        let (Some(0), Some(size), Some(name_length), Some(extra)) = (
+            u16_at(at + 8),
+            u32_at(at + 18),
+            u16_at(at + 26),
+            u16_at(at + 28),
+        ) else {
+            return "<unreadable zip>\n".to_owned();
+        };
+        let name = String::from_utf8_lossy(&bytes[at + 30..at + 30 + name_length]).into_owned();
+        let start = at + 30 + name_length + extra;
+        let Some(data) = bytes.get(start..start + size) else {
+            return "<unreadable zip>\n".to_owned();
+        };
+        parts.push((name, String::from_utf8_lossy(data).into_owned()));
+        at = start + size;
+    }
+    let mut size = bytes.len();
+    let mut text = String::new();
+    for (name, data) in &parts {
+        let normal = normalize_part(data, out);
+        size = size + normal.len() - data.len();
+        text.push_str(&format!("### part {name} ({} bytes)\n", normal.len()));
+        if name.starts_with("xl/worksheets/") || name == "word/document.xml" {
+            text.push_str(&normal);
+        }
+    }
+    format!("<zip: {size} bytes, {} parts>\n{text}", parts.len())
+}
+
+/// A part's text with `out` as `OUT` and the `Started on` time as `<time>`.
+fn normalize_part(text: &str, out: &str) -> String {
+    let text = text.replace(out, "OUT");
+    let mut normal = String::with_capacity(text.len());
+    let mut rest = text.as_str();
+    while let Some(i) = rest.find("Started on: ") {
+        let start = i + "Started on: ".len();
+        normal.push_str(&rest[..start]);
+        normal.push_str("<time>");
+        let end = rest[start..].find('<').map_or(rest.len(), |e| start + e);
+        rest = &rest[end..];
+    }
+    normal.push_str(rest);
+    normal
 }
 
 /// Bytes as hex, 32 to a line.
@@ -1471,11 +1605,21 @@ fn normalize(text: &str, out: &str) -> String {
     for line in text.lines() {
         if line.starts_with("# Started on: ") {
             normalized.push_str("# Started on: <time>");
+        } else if line.starts_with("header Started on: ") {
+            // The same header in the decoded form of a Parquet file.
+            normalized.push_str("header Started on: <time>");
         } else if let Some(indent) = line.strip_suffix(line.trim_start())
             && line.trim_start().starts_with("\"Started on: ")
         {
             // The same header in the `headers` array of the JSON form.
             normalized.push_str(&format!("{indent}\"Started on: <time>\""));
+        } else if let Some(rest) = line.strip_prefix("INSERT INTO \"headers\" VALUES (")
+            && let Some((position, _)) = rest.split_once(", 'Started on: ")
+        {
+            // The same header in the `headers` table of the SQL form.
+            normalized.push_str(&format!(
+                "INSERT INTO \"headers\" VALUES ({position}, 'Started on: <time>');"
+            ));
         } else if let Some(indent) = line.strip_suffix(line.trim_start())
             && let Some(key) = ["mtime", "argv_hash"]
                 .into_iter()

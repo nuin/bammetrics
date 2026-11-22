@@ -1,5 +1,5 @@
-"""read_table: columns as lists with the glossary's dtypes, from Picard text and
-from the JSON form; qc(also=...) writes the files the command writes."""
+"""read_table: columns as lists with the glossary's dtypes, from Picard text, the
+JSON form and the Parquet form; qc(also=...) writes the files the command writes."""
 import json
 import math
 import pickle
@@ -215,4 +215,36 @@ def test_qc_also_writes_the_listed_files(tmp_path):
     assert {".junit.xml", ".verdict_mqc.json"} <= written
     assert ".report.md" not in written
     with pytest.raises(bammetrics.UsageError, match="also"):
-        bammetrics.qc("tests/data/insert_size.bam", output=prefix, also="parquet", force=True)
+        bammetrics.qc("tests/data/insert_size.bam", output=prefix, also="prquet", force=True)
+
+
+def test_the_parquet_form_reads_the_same(tmp_path):
+    """qc(also="parquet") writes FILE.parquet, FILE.histogram.parquet and
+    FILE.long.parquet; read_table of the main file gives the cells, types, headers
+    and histogram of the Picard file, NaN and empty cells included."""
+    prefix = tmp_path / "s"
+    run = bammetrics.qc("tests/data/insert_size.bam", output=prefix, also="parquet")
+    written = {path[len(str(prefix)):] for path in run.files}
+    assert {".insert_size_metrics.parquet", ".insert_size_metrics.histogram.parquet",
+            ".insert_size_metrics.long.parquet"} <= written
+    from_parquet = bammetrics.read_table(str(prefix) + ".insert_size_metrics.parquet")
+    from_text = bammetrics.read_table(str(prefix) + ".insert_size_metrics")
+    assert from_parquet.columns == from_text.columns
+    assert from_parquet.dtypes == from_text.dtypes
+    assert from_parquet.headers == from_text.headers
+    assert from_parquet.histogram.columns == from_text.histogram.columns
+    assert from_parquet.sample == run.sample
+    with pytest.raises(OSError, match="long file"):
+        bammetrics.read_table(str(prefix) + ".insert_size_metrics.long.parquet")
+    with pytest.raises(OSError, match="read_table reads it"):
+        bammetrics.read_metrics(str(prefix) + ".insert_size_metrics.parquet")
+
+
+def test_a_parquet_file_with_headers_only_is_an_input_error(tmp_path):
+    """A metrics file with headers only (CollectDuplicateMetrics on a BAM with no
+    read) gives a Parquet main file of part empty: read_table raises InputError."""
+    prefix = tmp_path / "e"
+    bammetrics.qc("tests/data/no_reads.bam", output=prefix, also="parquet")
+    empty = str(prefix) + ".duplicate_metrics.parquet"
+    with pytest.raises(bammetrics.InputError, match="no table"):
+        bammetrics.read_table(empty)

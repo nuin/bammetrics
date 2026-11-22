@@ -1,0 +1,44 @@
+## argv
+chain
+tests/data/insert_size.bam
+-o
+OUT/s
+--also
+xlsx
++
+quality-yield
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: 1 step finished, 2 files written
+## file s.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectQualityYieldMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/s.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+10	10	100	1000	1000	1000	1000	1000	1000	2000	2000
+
+
+## file s.quality_yield_metrics.xlsx
+<zip: 5515 bytes, 7 parts>
+### part [Content_Types].xml (817 bytes)
+### part _rels/.rels (297 bytes)
+### part xl/workbook.xml (383 bytes)
+### part xl/_rels/workbook.xml.rels (566 bytes)
+### part xl/styles.xml (823 bytes)
+### part xl/worksheets/sheet1.xml (486 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:A2"/><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetData>
+<row r="1"><c r="A1" t="inlineStr"><is><t>CollectQualityYieldMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/s.quality_yield_metrics</t></is></c></row>
+<row r="2"><c r="A2" t="inlineStr"><is><t>Started on: <time></t></is></c></row>
+</sheetData></worksheet>
+### part xl/worksheets/sheet2.xml (1325 bytes)
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:K2"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>
+<row r="1"><c r="A1" s="1" t="inlineStr"><is><t>TOTAL_READS</t></is></c><c r="B1" s="1" t="inlineStr"><is><t>PF_READS</t></is></c><c r="C1" s="1" t="inlineStr"><is><t>READ_LENGTH</t></is></c><c r="D1" s="1" t="inlineStr"><is><t>TOTAL_BASES</t></is></c><c r="E1" s="1" t="inlineStr"><is><t>PF_BASES</t></is></c><c r="F1" s="1" t="inlineStr"><is><t>Q20_BASES</t></is></c><c r="G1" s="1" t="inlineStr"><is><t>PF_Q20_BASES</t></is></c><c r="H1" s="1" t="inlineStr"><is><t>Q30_BASES</t></is></c><c r="I1" s="1" t="inlineStr"><is><t>PF_Q30_BASES</t></is></c><c r="J1" s="1" t="inlineStr"><is><t>Q20_EQUIVALENT_YIELD</t></is></c><c r="K1" s="1" t="inlineStr"><is><t>PF_Q20_EQUIVALENT_YIELD</t></is></c></row>
+<row r="2"><c r="A2"><v>10</v></c><c r="B2"><v>10</v></c><c r="C2"><v>100</v></c><c r="D2"><v>1000</v></c><c r="E2"><v>1000</v></c><c r="F2"><v>1000</v></c><c r="G2"><v>1000</v></c><c r="H2"><v>1000</v></c><c r="I2"><v>1000</v></c><c r="J2"><v>2000</v></c><c r="K2"><v>2000</v></c></row>
+</sheetData></worksheet>

@@ -1,6 +1,7 @@
 //! `qc --also FORMAT[,FORMAT]` (docs/formats.md): further formats beside
-//! the Picard files of a run. `json`, `jsonl`, `tsv` and `csv` are written
-//! beside every metrics file as `FILE.json`; `markdown`, `junit` and
+//! the Picard files of a run. `json`, `jsonl`, `tsv`, `csv`, `parquet`,
+//! `xlsx`, `docx` and `sql` are written beside every metrics file as
+//! `FILE.json` (`parquet` with its companions); `markdown`, `junit` and
 //! `multiqc` are one file per run under the prefix. [`targets`] names the
 //! files (for `plan` too), [`texts`] renders them from the metrics files
 //! on disk, and `engine::write_also` writes them and records the manifest
@@ -9,7 +10,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use bammetrics_formats::{Document, Format, junit, markdown, multiqc};
+use bammetrics_formats::{Document, File, Format, junit, markdown, multiqc, parquet};
 use bammetrics_verdict::Verdict;
 use clap::ValueEnum;
 
@@ -29,6 +30,15 @@ pub enum Also {
     Tsv,
     /// FILE.csv beside every metrics file: the metrics table, RFC 4180.
     Csv,
+    /// FILE.parquet beside every metrics file, with FILE.histogram.parquet
+    /// (when the file has a histogram) and FILE.long.parquet.
+    Parquet,
+    /// FILE.xlsx beside every metrics file: a sheet per table.
+    Xlsx,
+    /// FILE.docx beside every metrics file: the headers and every table.
+    Docx,
+    /// FILE.sql beside every metrics file: an SQL dump sqlite3 loads.
+    Sql,
     /// PREFIX.report.md: the verdict, then every metrics table, at most
     /// 65,536 characters.
     #[value(alias = "md")]
@@ -47,6 +57,10 @@ impl Also {
             Also::Jsonl => "jsonl",
             Also::Tsv => "tsv",
             Also::Csv => "csv",
+            Also::Parquet => "parquet",
+            Also::Xlsx => "xlsx",
+            Also::Docx => "docx",
+            Also::Sql => "sql",
             Also::Markdown => "markdown",
             Also::Junit => "junit",
             Also::Multiqc => "multiqc",
@@ -61,6 +75,10 @@ impl Also {
             Also::Jsonl => Some(Format::Jsonl),
             Also::Tsv => Some(Format::Tsv),
             Also::Csv => Some(Format::Csv),
+            Also::Parquet => Some(Format::Parquet),
+            Also::Xlsx => Some(Format::Xlsx),
+            Also::Docx => Some(Format::Docx),
+            Also::Sql => Some(Format::Sql),
             Also::Markdown | Also::Junit | Also::Multiqc => None,
         }
     }
@@ -71,7 +89,14 @@ impl Also {
             Also::Markdown => ".report.md",
             Also::Junit => ".junit.xml",
             Also::Multiqc => ".verdict_mqc.json",
-            Also::Json | Also::Jsonl | Also::Tsv | Also::Csv => "",
+            Also::Json
+            | Also::Jsonl
+            | Also::Tsv
+            | Also::Csv
+            | Also::Parquet
+            | Also::Xlsx
+            | Also::Docx
+            | Also::Sql => "",
         }
     }
 }
@@ -102,6 +127,9 @@ pub struct Target {
     /// The metrics file a per-file format is written beside, as an index
     /// into the metrics paths; `None` for a one-file-per-run format.
     source: Option<usize>,
+    /// The companion this file is (`parquet`'s `histogram` and `long`);
+    /// `None` for a format's main file.
+    part: Option<&'static str>,
 }
 
 /// The files the formats of `also` write for the metrics files `metrics`
@@ -114,15 +142,28 @@ pub fn targets(prefix: &Path, metrics: &[&Path], also: &[Also]) -> Vec<Target> {
             continue;
         }
         match format.per_file() {
-            Some(per_file) => targets.extend(metrics.iter().enumerate().map(|(j, path)| Target {
-                path: sibling(path, per_file.extension()),
-                also: *format,
-                source: Some(j),
-            })),
+            Some(per_file) => {
+                for (j, path) in metrics.iter().enumerate() {
+                    let main = sibling(path, per_file.extension());
+                    let parts = std::iter::once(None)
+                        .chain(per_file.companions().iter().map(|part| Some(*part)));
+                    targets.extend(parts.map(|part| Target {
+                        path:
+                            part.map_or_else(
+                                || main.clone(),
+                                |part| parquet::companion(&main, part),
+                            ),
+                        also: *format,
+                        source: Some(j),
+                        part,
+                    }));
+                }
+            }
             None => targets.push(Target {
                 path: with_suffix(prefix, format.run_suffix()),
                 also: *format,
                 source: None,
+                part: None,
             }),
         }
     }
@@ -145,13 +186,15 @@ fn documents(metrics: &[&Path], sample: &str) -> Result<Vec<Document>> {
         .collect()
 }
 
-/// Each target with its text. The metrics files are read back from disk
+/// Each target with its bytes. The metrics files are read back from disk
 /// when a format prints them (`junit` and `multiqc` print the verdict
 /// only), so a file `--resume` kept is exported like one this run wrote;
-/// the JSON forms carry `sample`. A metrics file with no table still gets
-/// its sibling: the JSON document with the headers, an empty `tsv`, `csv`
-/// or `jsonl` file. `warn_fails` is the gate `--fail-on warn`, under which
-/// JUnit counts a warning as a failure.
+/// the JSON and Parquet forms carry `sample`. A metrics file with no table
+/// still gets its sibling: the JSON document with the headers, an empty
+/// `tsv`, `csv` or `jsonl` file, a Parquet file of part `empty`. A
+/// histogram companion is left out for a metrics file with no histogram.
+/// `warn_fails` is the gate `--fail-on warn`, under which JUnit counts a
+/// warning as a failure.
 pub fn texts(
     prefix: &Path,
     metrics: &[&Path],
@@ -159,7 +202,7 @@ pub fn texts(
     sample: &str,
     verdict: &Verdict,
     fail_on: Option<FailOn>,
-) -> Result<Vec<(Target, String)>> {
+) -> Result<Vec<(Target, Vec<u8>)>> {
     let targets = targets(prefix, metrics, also);
     let reads_metrics = |t: &Target| t.source.is_some() || t.also == Also::Markdown;
     let docs = if targets.iter().any(reads_metrics) {
@@ -168,19 +211,35 @@ pub fn texts(
         Vec::new()
     };
     let verdicts = [summary(verdict)];
-    targets
-        .into_iter()
-        .map(|target| {
-            let text = match (target.also.per_file(), target.source, target.also) {
-                (Some(format), Some(j), _) => bammetrics_formats::render(format, &docs[j], None)
-                    .map_err(|e| Error::Input(format!("{}: {e}", metrics[j].display())))?,
-                (_, _, Also::Junit) => junit::write(&verdicts, fail_on == Some(FailOn::Warn)),
-                (_, _, Also::Multiqc) => multiqc::write(&verdicts),
-                _ => markdown::write(&docs.iter().collect::<Vec<_>>(), &verdicts),
-            };
-            Ok((target, text))
-        })
-        .collect()
+    // The files of one format for one metrics file, rendered once for the
+    // main target and its companions, which follow it.
+    let mut rendered: Option<((Format, usize), Vec<File>)> = None;
+    let mut out = Vec::with_capacity(targets.len());
+    for target in targets {
+        let bytes = match (target.also.per_file(), target.source, target.also) {
+            (Some(format), Some(j), _) => {
+                if rendered.as_ref().is_none_or(|(key, _)| *key != (format, j)) {
+                    let files = bammetrics_formats::render_files(format, &docs[j], None)
+                        .map_err(|e| Error::Input(format!("{}: {e}", metrics[j].display())))?;
+                    rendered = Some(((format, j), files));
+                }
+                let files = rendered.as_mut().map(|(_, files)| files);
+                let file = files.and_then(|files| {
+                    let at = files.iter().position(|f| f.part == target.part)?;
+                    Some(files.swap_remove(at))
+                });
+                match file {
+                    Some(file) => file.bytes,
+                    None => continue,
+                }
+            }
+            (_, _, Also::Junit) => junit::write(&verdicts, fail_on == Some(FailOn::Warn)).into(),
+            (_, _, Also::Multiqc) => multiqc::write(&verdicts).into(),
+            _ => markdown::write(&docs.iter().collect::<Vec<_>>(), &verdicts).into(),
+        };
+        out.push((target, bytes));
+    }
+    Ok(out)
 }
 
 #[cfg(test)]

@@ -1,0 +1,98 @@
+## argv
+insert-size
+tests/data/insert_size.bam
+--format
+parquet
+-o
+OUT/insert_size.parquet
+--sample
+S1
+## exit
+0
+## stdout
+## stderr
+## file insert_size.histogram.parquet
+parquet <size> bytes, part histogram, 3 rows, 1 row groups, created_by bammetrics
+class java.lang.Integer
+tool CollectInsertSizeMetrics
+sample S1
+header CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam MINIMUM_PCT=0.05 DEVIATIONS=10.0 INCLUDE_DUPLICATES=false METRIC_ACCUMULATION_LEVEL=[ALL_READS]
+header Started on: <time>
+column insert_size INT64 optional
+column All_Reads.fr_count DOUBLE optional
+300	1.0
+310	2.0
+320	1.0
+## file insert_size.long.parquet
+parquet <size> bytes, part long, 29 rows, 1 row groups, created_by bammetrics
+class picard.analysis.InsertSizeMetrics
+tool CollectInsertSizeMetrics
+sample S1
+header CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam MINIMUM_PCT=0.05 DEVIATIONS=10.0 INCLUDE_DUPLICATES=false METRIC_ACCUMULATION_LEVEL=[ALL_READS]
+header Started on: <time>
+column sample BYTE_ARRAY (STRING) optional
+column class BYTE_ARRAY (STRING) required
+column row_key BYTE_ARRAY (STRING) required
+column column BYTE_ARRAY (STRING) required
+column value BYTE_ARRAY (STRING) optional
+S1	picard.analysis.InsertSizeMetrics	metrics/0	MEDIAN_INSERT_SIZE	310.0
+S1	picard.analysis.InsertSizeMetrics	metrics/0	MODE_INSERT_SIZE	310.0
+S1	picard.analysis.InsertSizeMetrics	metrics/0	MEDIAN_ABSOLUTE_DEVIATION	10.0
+S1	picard.analysis.InsertSizeMetrics	metrics/0	MIN_INSERT_SIZE	300
+S1	picard.analysis.InsertSizeMetrics	metrics/0	MAX_INSERT_SIZE	500
+S1	picard.analysis.InsertSizeMetrics	metrics/0	MEAN_INSERT_SIZE	310.0
+S1	picard.analysis.InsertSizeMetrics	metrics/0	STANDARD_DEVIATION	8.16496580927726
+S1	picard.analysis.InsertSizeMetrics	metrics/0	READ_PAIRS	5
+S1	picard.analysis.InsertSizeMetrics	metrics/0	PAIR_ORIENTATION	FR
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_10_PERCENT	1
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_20_PERCENT	1
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_30_PERCENT	1
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_40_PERCENT	1
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_50_PERCENT	21
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_60_PERCENT	21
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_70_PERCENT	21
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_80_PERCENT	21
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_90_PERCENT	381
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_95_PERCENT	381
+S1	picard.analysis.InsertSizeMetrics	metrics/0	WIDTH_OF_99_PERCENT	381
+S1	picard.analysis.InsertSizeMetrics	metrics/0	SAMPLE	
+S1	picard.analysis.InsertSizeMetrics	metrics/0	LIBRARY	
+S1	picard.analysis.InsertSizeMetrics	metrics/0	READ_GROUP	
+S1	picard.analysis.InsertSizeMetrics	histogram/0	insert_size	300
+S1	picard.analysis.InsertSizeMetrics	histogram/0	All_Reads.fr_count	1.0
+S1	picard.analysis.InsertSizeMetrics	histogram/1	insert_size	310
+S1	picard.analysis.InsertSizeMetrics	histogram/1	All_Reads.fr_count	2.0
+S1	picard.analysis.InsertSizeMetrics	histogram/2	insert_size	320
+S1	picard.analysis.InsertSizeMetrics	histogram/2	All_Reads.fr_count	1.0
+## file insert_size.parquet
+parquet <size> bytes, part metrics, 1 rows, 1 row groups, created_by bammetrics
+class picard.analysis.InsertSizeMetrics
+tool CollectInsertSizeMetrics
+sample S1
+header CollectInsertSizeMetrics INPUT=tests/data/insert_size.bam MINIMUM_PCT=0.05 DEVIATIONS=10.0 INCLUDE_DUPLICATES=false METRIC_ACCUMULATION_LEVEL=[ALL_READS]
+header Started on: <time>
+histogram companion
+column MEDIAN_INSERT_SIZE DOUBLE optional
+column MODE_INSERT_SIZE DOUBLE optional
+column MEDIAN_ABSOLUTE_DEVIATION DOUBLE optional
+column MIN_INSERT_SIZE INT64 optional
+column MAX_INSERT_SIZE INT64 optional
+column MEAN_INSERT_SIZE DOUBLE optional
+column STANDARD_DEVIATION DOUBLE optional
+column READ_PAIRS INT64 optional
+column PAIR_ORIENTATION BYTE_ARRAY (STRING) optional
+column WIDTH_OF_10_PERCENT INT64 optional
+column WIDTH_OF_20_PERCENT INT64 optional
+column WIDTH_OF_30_PERCENT INT64 optional
+column WIDTH_OF_40_PERCENT INT64 optional
+column WIDTH_OF_50_PERCENT INT64 optional
+column WIDTH_OF_60_PERCENT INT64 optional
+column WIDTH_OF_70_PERCENT INT64 optional
+column WIDTH_OF_80_PERCENT INT64 optional
+column WIDTH_OF_90_PERCENT INT64 optional
+column WIDTH_OF_95_PERCENT INT64 optional
+column WIDTH_OF_99_PERCENT INT64 optional
+column SAMPLE BYTE_ARRAY (STRING) optional
+column LIBRARY BYTE_ARRAY (STRING) optional
+column READ_GROUP BYTE_ARRAY (STRING) optional
+310.0	310.0	10.0	300	500	310.0	8.16496580927726	5	FR	1	1	1	1	21	21	21	21	381	381	381			

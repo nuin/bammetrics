@@ -1,0 +1,11 @@
+## argv
+insert-size
+tests/data/insert_size.bam
+--format
+parquet
+## exit
+2
+## stdout
+## stderr
+bammetrics insert-size: --format parquet writes a file and its companions; standard output holds one text (from --format)
+  give -o FILE: the companions are written beside it

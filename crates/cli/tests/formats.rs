@@ -708,3 +708,232 @@ fn multiqc_reads_the_verdict_file() {
     assert!(row.contains("310"), "{row}");
     let _ = fs::remove_dir_all(&dir);
 }
+
+/// `convert FILE --format parquet` then `convert FILE.parquet` is `FILE`,
+/// for every metrics file Picard 3.5.0 wrote for the fixture BAM, and the
+/// Parquet set of a file with a histogram has its three files.
+#[cfg(feature = "parquet")]
+#[test]
+fn convert_through_parquet_gives_every_picard_file_back() {
+    let dir = fresh_dir("parquet-round-trip");
+    let mut checked = 0;
+    for path in picard_files() {
+        let text = fs::read_to_string(&path).expect("read fixture");
+        if !text.contains("## METRICS CLASS") && !text.contains("## HISTOGRAM") {
+            continue;
+        }
+        let name = path.file_name().expect("a name").to_string_lossy();
+        let main = dir.join(format!("{name}.parquet"));
+        let input = path.to_str().expect("utf-8");
+        let out = main.to_str().expect("utf-8");
+        let wrote = bammetrics(&["convert", input, "--format", "parquet", "-o", out]);
+        assert_eq!(code(&wrote), 0, "{name}: {}", stderr(&wrote));
+        assert!(dir.join(format!("{name}.long.parquet")).is_file(), "{name}");
+        let both = text.contains("## METRICS CLASS") && text.contains("## HISTOGRAM");
+        let histogram = dir.join(format!("{name}.histogram.parquet"));
+        assert_eq!(histogram.is_file(), both, "{name}");
+        let back = bammetrics(&["convert", out]);
+        assert_eq!(code(&back), 0, "{name}: {}", stderr(&back));
+        assert!(back.stdout == text.as_bytes(), "{name} comes back");
+        checked += 1;
+    }
+    let _ = fs::remove_dir_all(&dir);
+    assert!(checked >= 8, "{checked} files");
+}
+
+/// A Parquet file whose histogram is in a companion cannot come from
+/// standard input; one without a histogram can. A damaged file is an
+/// error that writes nothing.
+#[cfg(feature = "parquet")]
+#[test]
+fn convert_reads_parquet_from_a_path_and_refuses_damage() {
+    let dir = fresh_dir("parquet-input");
+    let main = root().join("tests/data/insert_size_metrics.parquet");
+    let bytes = fs::read(&main).expect("the committed Parquet file");
+    let piped_in = piped(&["convert", "-"], &bytes);
+    assert_eq!(code(&piped_in), 1);
+    assert!(
+        stderr(&piped_in).contains("companion"),
+        "{}",
+        stderr(&piped_in)
+    );
+
+    // A histogram alone is the main file: no companion to find.
+    let summary = root()
+        .join(PICARD)
+        .join("NA12878/NA12878.quality_distribution_metrics");
+    let parquet = dir.join("quality.parquet");
+    let wrote = bammetrics(&[
+        "convert",
+        summary.to_str().expect("utf-8"),
+        "--format",
+        "parquet",
+        "-o",
+        parquet.to_str().expect("utf-8"),
+    ]);
+    assert_eq!(code(&wrote), 0, "{}", stderr(&wrote));
+    let from_stdin = piped(&["convert", "-"], &fs::read(&parquet).expect("read"));
+    assert_eq!(code(&from_stdin), 0, "{}", stderr(&from_stdin));
+    assert!(from_stdin.stdout == fs::read(&summary).expect("the Picard file"));
+
+    let mut damaged = bytes.clone();
+    damaged[100] ^= 0xff;
+    let cut = dir.join("damaged.parquet");
+    fs::write(&cut, &damaged).expect("write the damaged copy");
+    let out = dir.join("out.txt");
+    let failed = bammetrics(&[
+        "convert",
+        cut.to_str().expect("utf-8"),
+        "-o",
+        out.to_str().expect("utf-8"),
+    ]);
+    assert_eq!(code(&failed), 1, "{}", stderr(&failed));
+    assert!(stderr(&failed).contains("damaged"), "{}", stderr(&failed));
+    assert!(!out.exists());
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// Every file of a Parquet set replaced by a later run keeps its 0600
+/// mode, as every other output does.
+#[cfg(all(unix, feature = "parquet"))]
+#[test]
+fn a_replaced_parquet_set_keeps_its_mode() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let dir = fresh_dir("parquet-mode");
+    let main = dir.join("is.parquet");
+    let args = [
+        "insert-size",
+        BAM,
+        "--format",
+        "parquet",
+        "-o",
+        main.to_str().expect("utf-8"),
+    ];
+    assert_eq!(code(&bammetrics(&args)), 0);
+    let files = ["is.parquet", "is.histogram.parquet", "is.long.parquet"];
+    for name in files {
+        fs::set_permissions(dir.join(name), fs::Permissions::from_mode(0o600)).expect("chmod");
+    }
+    assert_eq!(code(&bammetrics(&args)), 0);
+    for name in files {
+        let mode = fs::metadata(dir.join(name))
+            .expect("metadata")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600, "{name}");
+    }
+    assert_eq!(
+        names(&dir),
+        ["is.histogram.parquet", "is.long.parquet", "is.parquet"]
+    );
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// A Parquet set and the further formats of its list are written as one
+/// set: when a later file cannot be written (a directory holds its name)
+/// none of the set is left, and the files an earlier run wrote keep their
+/// bytes. Through `convert`, a tool verb and a `picard,parquet` list.
+#[cfg(feature = "parquet")]
+#[test]
+fn a_failed_parquet_set_leaves_none_of_its_files() {
+    let dir = fresh_dir("parquet-set");
+    let input = root()
+        .join(PICARD)
+        .join("NA12878/NA12878.insert_size_metrics");
+    let input = input.to_str().expect("utf-8");
+    let path = |name: &str| dir.join(name).to_str().expect("utf-8").to_owned();
+    let argv = |head: &[&str], out: &str| -> Vec<String> {
+        head.iter()
+            .map(|a| (*a).to_owned())
+            .chain([path(out)])
+            .collect()
+    };
+    let runs: [(Vec<String>, &str); 3] = [
+        (
+            argv(
+                &["convert", input, "--format", "parquet", "-o"],
+                "t.parquet",
+            ),
+            "t.long.parquet",
+        ),
+        (
+            argv(
+                &["insert-size", BAM, "--format", "parquet", "-o"],
+                "p.parquet",
+            ),
+            "p.long.parquet",
+        ),
+        (
+            argv(
+                &["insert-size", BAM, "--format", "picard,parquet", "-o"],
+                "o.txt",
+            ),
+            "o.txt.long.parquet",
+        ),
+    ];
+    for (args, blocked) in &runs {
+        fs::create_dir(dir.join(blocked)).expect("a directory in the way");
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let failed = bammetrics(&args);
+        assert_eq!(code(&failed), 1, "{args:?}: {}", stderr(&failed));
+        assert!(
+            stderr(&failed).contains("Is a directory"),
+            "{}",
+            stderr(&failed)
+        );
+        assert_eq!(names(&dir), [blocked.to_string()], "{args:?}");
+        fs::remove_dir(dir.join(blocked)).expect("rmdir");
+    }
+    // An earlier set keeps its bytes when a later run fails.
+    let (args, blocked) = &runs[0];
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    assert_eq!(code(&bammetrics(&args)), 0);
+    let before = fs::read(dir.join("t.parquet")).expect("main");
+    fs::remove_file(dir.join(blocked)).expect("rm");
+    fs::create_dir(dir.join(blocked)).expect("a directory in the way");
+    let quality = root()
+        .join(PICARD)
+        .join("NA12878/NA12878.quality_yield_metrics");
+    let other = [
+        "convert",
+        quality.to_str().expect("utf-8"),
+        "--format",
+        "parquet",
+        "-o",
+        args[args.len() - 1],
+    ];
+    assert_eq!(code(&bammetrics(&other)), 1);
+    assert_eq!(fs::read(dir.join("t.parquet")).expect("main"), before);
+    assert!(dir.join("t.histogram.parquet").is_file());
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// A new main file with no histogram removes the histogram companion an
+/// earlier run left beside it; a main file that happens to have the
+/// companion's name stays.
+#[cfg(feature = "parquet")]
+#[test]
+fn a_main_file_without_a_histogram_removes_a_stale_companion() {
+    let dir = fresh_dir("parquet-stale");
+    let picard = |name: &str| {
+        let path = root().join(PICARD).join(format!("NA12878/NA12878.{name}"));
+        path.to_str().expect("utf-8").to_owned()
+    };
+    let path = |name: &str| dir.join(name).to_str().expect("utf-8").to_owned();
+    let convert = |input: &str, out: &str| {
+        let wrote = bammetrics(&["convert", input, "--format", "parquet", "-o", out]);
+        assert_eq!(code(&wrote), 0, "{}", stderr(&wrote));
+    };
+    convert(&picard("insert_size_metrics"), &path("s.parquet"));
+    assert!(dir.join("s.histogram.parquet").is_file());
+    convert(&picard("quality_yield_metrics"), &path("s.parquet"));
+    assert_eq!(names(&dir), ["s.long.parquet", "s.parquet"]);
+    // A histogram alone is a main file, never removed as a companion.
+    convert(
+        &picard("quality_distribution_metrics"),
+        &path("h.histogram.parquet"),
+    );
+    convert(&picard("quality_yield_metrics"), &path("h.parquet"));
+    assert!(dir.join("h.histogram.parquet").is_file());
+    let _ = fs::remove_dir_all(&dir);
+}

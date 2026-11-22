@@ -435,8 +435,9 @@ def read_metrics(path: _Path) -> _MetricsDoc:
 def read_table(path: _Path, table: str | None = None) -> Table:
     """Read one table of a metrics file with the glossary's column types.
 
-    The file is Picard text or the JSON --format json writes (schema
-    bammetrics.metrics/1). table is "metrics" (the first class), "histogram" or
+    The file is Picard text, the JSON --format json writes (schema
+    bammetrics.metrics/1) or the main file --format parquet writes, its
+    histogram companion read from beside it. table is "metrics" (the first class), "histogram" or
     a class name; by default the metrics class, or the histogram of a file
     without one. MEDIAN_INSERT_SIZE prints 310 and is a float here, where
     read_metrics types each cell from its text."""
@@ -1848,7 +1849,7 @@ def qc(
     force: bool = False,
     threads: int | None = None,
     validation_stringency: Literal["STRICT", "LENIENT", "SILENT"] | None = None,
-    also: Literal["json", "jsonl", "tsv", "csv", "markdown", "junit", "multiqc"] | Sequence[Literal["json", "jsonl", "tsv", "csv", "markdown", "junit", "multiqc"]] | None = None,
+    also: Literal["json", "jsonl", "tsv", "csv", "parquet", "xlsx", "docx", "sql", "markdown", "junit", "multiqc"] | Sequence[Literal["json", "jsonl", "tsv", "csv", "parquet", "xlsx", "docx", "sql", "markdown", "junit", "multiqc"]] | None = None,
     all_plots: bool = False,
     date: str | None = None,
     report: bool | Literal["html", "pdf"] | Sequence[Literal["html", "pdf"]] = True,

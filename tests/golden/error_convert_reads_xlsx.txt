@@ -1,0 +1,9 @@
+## argv
+convert
+tests/data/insert_size_metrics.xlsx
+## exit
+1
+## stdout
+## stderr
+bammetrics convert: tests/data/insert_size_metrics.xlsx: a zip (XLSX or DOCX) does not read back
+  convert reads Picard text, the JSON of --format json and Parquet

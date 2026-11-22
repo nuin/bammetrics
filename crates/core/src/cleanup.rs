@@ -482,6 +482,27 @@ impl AtomicFile {
     }
 }
 
+/// Write `files` as one set: every file under its temporary name first,
+/// then all renamed into place by [`crate::split_sam::commit_all`]. A
+/// failed write or rename leaves none of the set's files, and each file a
+/// rename replaced comes back. Returns the paths in order.
+pub fn write_set<B: AsRef<[u8]>>(files: Vec<(PathBuf, B)>) -> crate::Result<Vec<PathBuf>> {
+    use std::io::Write as _;
+    let mut staged = Vec::with_capacity(files.len());
+    for (path, bytes) in files {
+        let file = AtomicFile::new(&path);
+        let written = file.create().and_then(|mut out| {
+            out.write_all(bytes.as_ref())?;
+            out.sync_all()
+        });
+        if let Err(source) = written {
+            return Err(crate::Error::Output { path, source });
+        }
+        staged.push(file);
+    }
+    crate::split_sam::commit_all(staged)
+}
+
 impl Drop for AtomicFile {
     fn drop(&mut self) {
         if let Some(temp) = self.take_created() {

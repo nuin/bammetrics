@@ -22,6 +22,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 const BAM: &str = "tests/data/insert_size.bam";
+const PICARD_TEXT: &str = "tests/data/picard/NA12878/NA12878.insert_size_metrics";
 const MARKDUP: &str = "tests/data/markdup.bam";
 /// Queryname sorted: a tap with `--no-assume-sorted` fails when it is built.
 const QUERYNAME: &str = "tests/data/duplicate_marking.bam";
@@ -808,5 +809,41 @@ fn a_failed_verb_leaves_no_directory_it_made_empty() {
     let (code, stderr) = run(&["collect", BAM, "-o", &text(&dir.join("kept/s"))]);
     assert_eq!(code, Some(0), "{stderr}");
     assert!(!names(&dir.join("kept")).is_empty());
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+/// `convert` refuses an output through a directory that does not exist
+/// with a `..` behind it, as the tool verbs do: exit 2, the input keeps its
+/// bytes and `missing` is not made. Before, `-o missing/../in.txt` wrote
+/// Parquet over the input.
+#[test]
+fn convert_refuses_an_output_through_a_missing_directory() {
+    let dir = fresh_dir("convert-unresolved");
+    let input = dir.join("in.txt");
+    let bytes = fs::read(root().join(PICARD_TEXT)).expect("fixture");
+    fs::write(&input, &bytes).expect("copy");
+    let onto_input = text(&dir.join("missing/../in.txt"));
+    let missing = text(&dir.join("missing"));
+    for format in ["json", "parquet"] {
+        let (code, stderr) = run(&[
+            "convert",
+            &text(&input),
+            "--format",
+            format,
+            "-o",
+            &onto_input,
+        ]);
+        assert_eq!(
+            stderr,
+            format!(
+                "bammetrics convert: {onto_input}: {missing} does not exist, so the .. behind it \
+                 names no directory (from -o)\n  name the output without the ..: a run makes the \
+                 directories that are missing\n"
+            )
+        );
+        assert_eq!(code, Some(2));
+        assert_eq!(names(&dir), ["in.txt"]);
+        assert_eq!(fs::read(&input).expect("input"), bytes);
+    }
     fs::remove_dir_all(&dir).expect("cleanup");
 }

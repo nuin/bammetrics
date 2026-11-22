@@ -1,0 +1,11 @@
+## argv
+convert
+tests/data/picard/NA12878/NA12878.insert_size_metrics
+--format
+parquet
+## exit
+2
+## stdout
+## stderr
+bammetrics convert: --format parquet writes a file and its companions; standard output holds one text (from --format)
+  give -o FILE: the companions are written beside it

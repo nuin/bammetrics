@@ -82,6 +82,13 @@ opt-level = "s"
 [profile.release.package.unicode-normalization]
 opt-level = "s"
 
+# The Parquet writer and reader (feature parquet of crates/formats, on in the
+# release build) are optimized for size: they write and read files of a few
+# kilobytes. The stripped bammetrics binary grows 1,340,128 bytes at
+# opt-level 3, 1,241,416 at "s" and 1,095,672 at "z" (docs/benchmarks.md).
+[profile.release.package.parquet]
+opt-level = "z"
+
 # noodles-cram 0.102.0 with one change: the template length of attached mates
 # follows htsjdk (vendor/README.md).
 [patch.crates-io]

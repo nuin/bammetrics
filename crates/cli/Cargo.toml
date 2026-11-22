@@ -16,6 +16,10 @@ name = "bammetrics"
 path = "src/main.rs"
 
 [features]
+# --format parquet, qc --also parquet and convert of a Parquet file
+# (docs/formats.md). On by default, so cargo build --release has it.
+default = ["parquet"]
+parquet = ["bammetrics-formats/parquet"]
 # `report --pdf` and `qc --report pdf`. Needs rustc 1.92 (krilla); the
 # default build keeps the workspace rust-version, 1.91.
 pdf = ["dep:bammetrics-pdf", "bammetrics-pdf/pdf"]
