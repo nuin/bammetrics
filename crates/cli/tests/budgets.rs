@@ -32,7 +32,7 @@
 //!   with the feature `parquet`, which writes and reads every file as
 //!   Parquet) less the stripped `size_formats`: the `parquet` crate, its
 //!   dependencies and `crates/formats/src/parquet`. The target is 0.6 MiB
-//!   (docs/07 decision D214, pending owner review): docs/07 section 3.2 says
+//!   (docs/07 decision D159, pending owner review): docs/07 section 3.2 says
 //!   0.53 MiB, and wave W21 measured 1.04 MiB on the binary with the crate
 //!   at opt-level "z" (docs/benchmarks.md). The probe's `__TEXT` grows in
 //!   16 KiB pages, so one page more put it 686 bytes over the old 1.06 MiB

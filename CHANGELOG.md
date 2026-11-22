@@ -179,7 +179,7 @@ Wave W13 of docs/07: `MergeSamFiles`, `ReorderSam`, `FixMateInformation`, `Filte
   it is a file or a pipe. Two golden forms put all four formats in one list
   (`verb_insert_size_w21_list`, `verb_multiple_metrics_w21_list`).
 - `make budgets`: the Parquet growth target is 0.6 MiB, failing at 1.2 MiB (docs/07
-  decision D214, pending owner review). The merged probe measures 1,112,176 bytes, one
+  decision D159, pending owner review). The merged probe measures 1,112,176 bytes, one
   16 KiB page more than the Parquet branch alone and 686 bytes over the old limit.
 - docs/07 section 7: the W21 decisions are D145 to D159, after the W13 rows D121 to D144.
 
