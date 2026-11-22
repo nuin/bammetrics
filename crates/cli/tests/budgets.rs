@@ -1,7 +1,11 @@
 //! The size and speed budgets of docs/05 section 4.8, measured on the
 //! committed fixtures. Each budget has a target; the test fails when a
-//! measured value reaches twice its target (decision 11 of docs/05 section
-//! 8) and prints `over target` when it passes the target alone.
+//! measured value reaches its limit and prints `over target` when it passes
+//! the target alone. The limit is twice the target (decision 11 of docs/05
+//! section 8), except for the binary, formats and Parquet growth rows. The
+//! owner accepted their size on 2026-11-22 (docs/07 decisions D22, D149,
+//! D156 and D159): each target is the 0.31.0 size rounded up, and each
+//! limit is 1.5 times the target, so a later jump of half again fails.
 //!
 //! Ignored by `cargo test`, because the times only mean something on a
 //! release build and the binary growth needs the four probe examples built:
@@ -22,21 +26,20 @@
 //!   already reads metrics files. Both are built with the release profile
 //!   of the workspace, on the machine that runs the test, so the number
 //!   holds on any CI runner. The unstripped difference is printed too.
+//!   The target is 430,000 bytes (429,968 at 0.31.0), the limit 645,000.
 //! - Formats growth is the same measure for `crates/formats`: the stripped
 //!   `size_formats` example less the stripped `size_formats_base` example
 //!   (`crates/formats/examples`), the code the format writers and readers
 //!   add to a binary that already holds the registry and the glossary. The
-//!   target is 150 KB: the crate measured 129.2 KB when the row was added
-//!   (docs/benchmarks.md; the estimate of docs/07 section 3.2 was 16 KB).
+//!   target is 200 KB (198,432 bytes at 0.31.0), the limit 300 KB. The
+//!   crate measured 129.2 KB when the row was added (docs/benchmarks.md).
 //! - Parquet growth is the stripped `size_parquet` example (`size_formats`
 //!   with the feature `parquet`, which writes and reads every file as
 //!   Parquet) less the stripped `size_formats`: the `parquet` crate, its
-//!   dependencies and `crates/formats/src/parquet`. The target is 0.6 MiB
-//!   (docs/07 decision D159, pending owner review): docs/07 section 3.2 says
-//!   0.53 MiB, and wave W21 measured 1.04 MiB on the binary with the crate
-//!   at opt-level "z" (docs/benchmarks.md). The probe's `__TEXT` grows in
-//!   16 KiB pages, so one page more put it 686 bytes over the old 1.06 MiB
-//!   limit with the XLSX, DOCX and SQL writers linked.
+//!   dependencies and `crates/formats/src/parquet`. The target is 1.1 MiB,
+//!   the limit 1.65 MiB: 0.31.0 measured 1,095,680 to 1,112,176 bytes,
+//!   because the probe's `__TEXT` grows in 16 KiB pages and the build can
+//!   land one page either side.
 //! - PDF growth is the same measure for the PDF report of `crates/pdf`
 //!   (feature `pdf`, docs/07 section 3.3): the stripped `size_pdf` example
 //!   less the stripped `size_report`, the code and data krilla, krilla-svg,
@@ -125,27 +128,39 @@ fn median(mut f: impl FnMut() -> usize) -> Duration {
     times[RUNS / 2]
 }
 
-/// One measured budget: its name, target, measured value and unit.
+/// The limit of a docs/05 budget: twice its target (decision 11).
+const BUDGET: f64 = 2.0;
+/// The limit of a size tripwire: half again its target, the 0.31.0 size
+/// rounded up (docs/07 decisions D22, D149, D156 and D159).
+const TRIPWIRE: f64 = 1.5;
+
+/// One measured budget: its name, target, limit factor, measured value and
+/// unit.
 struct Budget {
     name: &'static str,
     target: f64,
+    factor: f64,
     measured: f64,
     unit: &'static str,
 }
 
 impl Budget {
-    /// At twice the target or more; for a target of 0, any value above 0.
+    fn limit(&self) -> f64 {
+        self.factor * self.target
+    }
+
+    /// At the limit or more; for a target of 0, any value above 0.
     fn fails(&self) -> bool {
         if self.target == 0.0 {
             self.measured > 0.0
         } else {
-            self.measured >= 2.0 * self.target
+            self.measured >= self.limit()
         }
     }
 
     fn status(&self) -> &'static str {
         if self.fails() {
-            "FAIL (2x target)"
+            "FAIL (at limit)"
         } else if self.measured >= self.target && self.target > 0.0 {
             "over target"
         } else {
@@ -291,10 +306,11 @@ fn pdf_budget(example: &Path) -> ([f64; 3], f64) {
 }
 
 #[test]
-fn a_budget_fails_at_twice_its_target() {
+fn a_budget_fails_at_its_limit() {
     let at = |target: f64, measured: f64| Budget {
         name: "t",
         target,
+        factor: BUDGET,
         measured,
         unit: "ms",
     };
@@ -305,6 +321,15 @@ fn a_budget_fails_at_twice_its_target() {
     assert!(at(20.0, 40.0).fails());
     assert!(!at(0.0, 0.0).fails());
     assert!(at(0.0, 1.0).fails());
+    let wire = |measured: f64| Budget {
+        name: "t",
+        target: 100.0,
+        factor: TRIPWIRE,
+        measured,
+        unit: "KB",
+    };
+    assert_eq!(wire(149.9).status(), "over target");
+    assert!(wire(150.0).fails());
 }
 
 #[test]
@@ -374,78 +399,89 @@ fn budgets_of_docs_05_section_4_8() {
         Budget {
             name: "render, sample page",
             target: 20.0,
+            factor: BUDGET,
             measured: page_time.as_secs_f64() * 1000.0,
             unit: "ms",
         },
         Budget {
             name: "render, index of 100 samples",
             target: 100.0,
+            factor: BUDGET,
             measured: index_time.as_secs_f64() * 1000.0,
             unit: "ms",
         },
         Budget {
             name: "sample page size",
             target: 100.0,
+            factor: BUDGET,
             measured: *pages.iter().max().expect("three pages") as f64 / KB,
             unit: "KB",
         },
         Budget {
             name: "index size, 100 samples",
             target: 200.0,
+            factor: BUDGET,
             measured: index as f64 / KB,
             unit: "KB",
         },
         Budget {
             name: "binary growth",
-            target: 300.0,
+            target: 430_000.0 / KB,
+            factor: TRIPWIRE,
             measured: growth / KB,
             unit: "KB",
         },
         Budget {
             name: "formats growth",
-            target: 150.0,
+            target: 200.0,
+            factor: TRIPWIRE,
             measured: formats_growth / KB,
             unit: "KB",
         },
         Budget {
             name: "Parquet growth",
-            target: 0.6,
+            target: 1.1,
+            factor: TRIPWIRE,
             measured: parquet_growth / KB / KB,
             unit: "MiB",
         },
         Budget {
             name: "PDF growth",
             target: 4.0,
+            factor: BUDGET,
             measured: pdf_growth / KB / KB,
             unit: "MiB",
         },
         Budget {
             name: "render, sample PDF",
             target: 100.0,
+            factor: BUDGET,
             measured: pdf_time,
             unit: "ms",
         },
         Budget {
             name: "sample PDF size",
             target: 500.0,
+            factor: BUDGET,
             measured: pdf_bytes.iter().copied().fold(0.0, f64::max) / KB,
             unit: "KB",
         },
         Budget {
             name: "added passes over the BAM",
             target: 0.0,
+            factor: BUDGET,
             measured: passes,
             unit: "",
         },
     ];
-    println!("budget                         target    limit (2x)  measured    status");
+    println!("budget                            target         limit     measured    status");
     for b in &budgets {
         println!(
-            "{:<30} {:>6} {:<2} {:>6} {:<2}  {:>9.3} {:<2}  {}",
+            "{:<30} {:>9.2} {:<3} {:>9.2} {:<3}  {:>9.3} {:<3}  {}",
             b.name,
             b.target,
             b.unit,
-            2.0 * b.target,
+            b.limit(),
             b.unit,
             b.measured,
             b.unit,
@@ -492,5 +528,5 @@ fn budgets_of_docs_05_section_4_8() {
         .filter(|b| b.fails())
         .map(|b| b.name)
         .collect();
-    assert!(failed.is_empty(), "at 2x target or more: {failed:?}");
+    assert!(failed.is_empty(), "at the limit or more: {failed:?}");
 }
