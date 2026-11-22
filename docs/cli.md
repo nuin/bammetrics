@@ -1091,8 +1091,10 @@ them, with a `@PG` line (`ID:DownsampleSam`, or `.1` and on when the input has o
   bytes per template (1,968 MiB for the 14.7 million templates of a chr20 and chr21
   slice). A chunk closes only after `ceil(1 / ACCURACY)` new names, so a small
   `--accuracy` or many records under few names hold those records at once
-  (`--accuracy 1e-9` on 2 million names: 1,141 MiB). Neither is capped: a cap or a spill
-  would change which names Picard keeps (decision D138).
+  (`--accuracy 1e-9` on 2 million names: 1,141 MiB). A spill would change which names
+  Picard keeps, so the names stay in memory up to a cap of 50,000,000 (about 6.5 GiB);
+  the next new name exits 1 and the error names `--strategy ConstantMemory`, which holds
+  no name (decision D138).
 - `Chained` runs ConstantMemory at `P + 3.3 sqrt(P / 50000)`, then HighAccuracy on what it
   kept. It holds the names the first stage keeps.
 - The records of one read name are kept or dropped together: mates, secondary and

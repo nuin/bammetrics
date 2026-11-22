@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use crate::bam_raw::RawRecord;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::java_hash_set::HashSetOrder;
 use crate::java_random::{JavaRandom, Murmur3};
 use crate::sensitivity::math_round;
@@ -31,6 +31,12 @@ impl Strategy {
         }
     }
 }
+
+/// The most read names `HighAccuracy` and `Chained` hold, decided or in
+/// the current chunk, as `filter_sam_reads::MAX_READ_LIST_NAMES` caps a
+/// read list. Picard holds them all; at about 140 bytes a template this is
+/// about 6.5 GiB (decision D138).
+pub const MAX_HELD_NAMES: usize = 50_000_000;
 
 /// `ChainedDownsamplingIterator.MIN_ACCURATE_INPUT_READS`.
 const MIN_ACCURATE_INPUT_READS: f64 = 50_000.0;
@@ -104,10 +110,12 @@ struct HighAccuracy {
     index: HashMap<Box<[u8]>, usize>,
     /// The chunk has its names and waits to be decided.
     full: bool,
+    /// The most names held: [`MAX_HELD_NAMES`].
+    max_names: usize,
 }
 
 impl HighAccuracy {
-    fn new(proportion: f64, accuracy: f64, seed: i32) -> Self {
+    fn new(proportion: f64, accuracy: f64, seed: i32, max_names: usize) -> Self {
         Self {
             proportion,
             max_templates: (1.0 / accuracy).ceil() as i32,
@@ -119,17 +127,26 @@ impl HighAccuracy {
             names: Vec::new(),
             index: HashMap::new(),
             full: false,
+            max_names,
         }
     }
 
     /// Take `record` into the current chunk. False when the strategy reads
-    /// nothing (a chunk of no name: `ACCURACY=NaN`).
-    fn take(&mut self, record: &mut RawRecord) -> bool {
+    /// nothing (a chunk of no name: `ACCURACY=NaN`). An error for a new
+    /// name past [`MAX_HELD_NAMES`].
+    fn take(&mut self, record: &mut RawRecord) -> Result<bool> {
         if self.max_templates <= 0 {
-            return false;
+            return Ok(false);
         }
         let name = record.name();
         if !self.decisions.contains_key(name) && !self.index.contains_key(name) {
+            if self.decisions.len() + self.names.len() >= self.max_names {
+                return Err(Error::Metric(format!(
+                    "STRATEGY HighAccuracy and Chained hold every read name they decide: more \
+                     than {} names; STRATEGY=ConstantMemory holds none",
+                    self.max_names
+                )));
+            }
             let name: Box<[u8]> = name.into();
             self.index.insert(name.clone(), self.names.len());
             self.names.push(name);
@@ -138,7 +155,7 @@ impl HighAccuracy {
         if self.names.len() >= self.max_templates as usize {
             self.full = true;
         }
-        true
+        Ok(true)
     }
 
     /// `calculateTemplatesToKeep`: up while the proportion kept so far is
@@ -196,17 +213,20 @@ pub struct Sampler {
 
 impl Sampler {
     pub fn new(sampling: &Sampling, seed: i32) -> Self {
+        Self::with_name_cap(sampling, seed, MAX_HELD_NAMES)
+    }
+
+    /// [`Sampler::new`] holding at most `max_names` read names.
+    pub(super) fn with_name_cap(sampling: &Sampling, seed: i32, max_names: usize) -> Self {
         let p = sampling.probability;
+        let exact = |p| HighAccuracy::new(p, sampling.accuracy, seed, max_names);
         let (front, exact) = match sampling.strategy {
             Strategy::ConstantMemory => (Some(ConstantMemory::new(p, seed)), None),
-            Strategy::HighAccuracy => (None, Some(HighAccuracy::new(p, sampling.accuracy, seed))),
+            Strategy::HighAccuracy => (None, Some(exact(p))),
             Strategy::Chained => {
                 // `adjustProportion`.
                 let adjusted = java_min(1.0, p + 3.3 * (p / MIN_ACCURATE_INPUT_READS).sqrt());
-                (
-                    Some(ConstantMemory::new(adjusted, seed)),
-                    Some(HighAccuracy::new(p, sampling.accuracy, seed)),
-                )
+                (Some(ConstantMemory::new(adjusted, seed)), Some(exact(p)))
             }
         };
         Self {
@@ -236,7 +256,11 @@ impl Sampler {
             let proportion = self.chunk_proportion();
             self.decide(proportion, out);
         }
-        if self.exact.as_mut().is_some_and(|e| e.take(record)) {
+        let taken = match self.exact.as_mut() {
+            Some(exact) => exact.take(record)?,
+            None => false,
+        };
+        if taken {
             self.counting = true;
             self.counts.accepted += 1;
         }

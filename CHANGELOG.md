@@ -108,6 +108,18 @@ Wave W13 of docs/07: `MergeSamFiles`, `ReorderSam`, `FixMateInformation`, `Filte
 
 ### Fixed
 
+- `MarkDuplicates` hashes read names through `java_random::Murmur3`, the hash DownsampleSam
+  uses, in place of its own copy (same output); docs/07 D137 names it and the `No group 1`
+  error of `optical.rs` `read_location`.
+- `chain --dry-run` plans `reorder-sam` as a sort that holds its records (one pass, the
+  stream order); it printed the replay or spool text and the memory of `mark-duplicates`.
+- `DownsampleSam STRATEGY=HighAccuracy` and `Chained` hold at most 50,000,000 read names,
+  then exit 1 naming `STRATEGY=ConstantMemory` (D138). They held every name with no cap:
+  1,972.5 MiB at 14.7 million templates.
+- A BAM cut inside the header of a BGZF block (its end-of-file block cut to 8 bytes) exits 1
+  with `truncated BAM` in every tool that reads through the shared reader, as Picard
+  (`Incorrect header size for file`) and samtools fail. It read as whole and exited 0. A
+  BAM that only lacks its end-of-file block reads as before.
 - A `READ_NAME_REGEX` with fewer than three groups that matches a read name exits 1, as
   Picard fails with `No group N`, in `MarkDuplicates`, `EstimateLibraryComplexity`,
   `PositionBasedDownsampleSam` and `CollectDuplicateByTileMetrics`. It exited 0 with no

@@ -107,13 +107,15 @@ fn role(step: &Planned, first_read: bool) -> String {
 }
 
 /// What a transform does in its first read. `fix-mate-information` sorts
-/// by name first, whatever its `SORT_ORDER`.
+/// by name first, whatever its `SORT_ORDER`; `reorder-sam` sorts in the
+/// stream's order over the new dictionary.
 fn first_read(step: &Planned) -> String {
-    if step
-        .tool
-        .is_some_and(|tool| tool.name == bammetrics_core::fix_mate_information::TOOL.name)
-    {
+    let name = step.tool.map(|tool| tool.name);
+    if name == Some(bammetrics_core::fix_mate_information::TOOL.name) {
         return "takes every record and sorts them by queryname".to_owned();
+    }
+    if name == Some(bammetrics_core::reorder_sam::TOOL.name) {
+        return "takes every record and sorts them in the stream order".to_owned();
     }
     let order = step
         .argv

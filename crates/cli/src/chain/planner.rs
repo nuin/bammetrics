@@ -4,7 +4,9 @@
 //!
 //! Each barrier reads its input once and then hands the stream on:
 //! * `sort-sam` holds its records ([`Next::Records`]). It keeps at most
-//!   `--sort-memory` bytes and spills the rest as sorted runs.
+//!   `--sort-memory` bytes and spills the rest as sorted runs. So do
+//!   `reorder-sam` (one sort), `fix-mate-information` and the reverting
+//!   step (two sorts each).
 //! * `mark-duplicates` reads its input twice. It replays the source when it
 //!   reads the source itself. Behind another transform it writes a spool of
 //!   its input and replays that. A pipe source in front of it is copied to
@@ -314,14 +316,24 @@ fn sorts_twice(name: &str) -> bool {
     name == REVERT || name == FIX_MATE
 }
 
+/// `ReorderSam`: holds its records and sorts them once, in the stream's
+/// order over the new dictionary (`record_edit::reorder::sorting_stage`).
+const REORDER: &str = "ReorderSam";
+
+/// True for a step whose sort keeps the stream's order when no
+/// `SORT_ORDER` is given.
+fn keeps_order(name: &str) -> bool {
+    sorts_twice(name) || name == REORDER
+}
+
 /// True for a transform that may hold its records in a sort: `sort-sam`,
-/// the reverting step, and a streaming tool whose arguments may make it
+/// the reverting step, `reorder-sam`, and a streaming tool whose arguments may make it
 /// sort (`add-or-replace-read-groups` with a `SORT_ORDER` that names a
 /// sort; a stream already in that order goes through unsorted, which the
 /// plan, made before the header is read, counts as a sort).
 fn holds(step: &Planned, name: &str) -> bool {
     name == "SortSam"
-        || sorts_twice(name)
+        || keeps_order(name)
         || (!step.streams() && step.tool.is_some_and(stage::streams))
 }
 
@@ -367,7 +379,7 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
                 // A reverting step sorts twice: by name, then in its order.
                 let passes = if sorts_twice(name) { 2 } else { 1 };
                 let given = picard_value(step, "SORT_ORDER").and_then(SortOrder::parse);
-                let sorted = if sorts_twice(name) {
+                let sorted = if keeps_order(name) {
                     given.or(order)
                 } else {
                     given

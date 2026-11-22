@@ -1313,7 +1313,9 @@ bytes.
 record to the dictionary of `--sequence-dictionary` and holds the records when the
 stream's header names a sort (`coordinate`, `queryname`, `duplicate`), then hands them on
 sorted under the new dictionary; an `unsorted` stream goes through as it comes. The plan
-lists it as a barrier either way. The dictionary is read when the step is built, before
+lists it as a barrier either way: a sort of one pass in the stream's order ("takes every
+record and sorts them in the stream order"), with the memory and spill of a `sort-sam`
+step under `--sort-memory`. The dictionary is read when the step is built, before
 the first record.
 
 ```bash

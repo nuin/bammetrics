@@ -181,3 +181,46 @@ fn the_cram_reference_error_names_the_long_option() {
         Error::Metric(text) if text == "other"
     ));
 }
+
+#[test]
+fn high_accuracy_and_chained_fail_past_the_name_cap() {
+    let input = records(50);
+    for strategy in [Strategy::HighAccuracy, Strategy::Chained] {
+        let sampling = Sampling {
+            strategy,
+            probability: 1.0,
+            accuracy: 0.1,
+            seed: Some(1),
+        };
+        let mut under = Sampler::with_name_cap(&sampling, 1, 50);
+        let mut out = Vec::new();
+        for record in &input {
+            under
+                .push(&mut record.clone(), &mut out)
+                .expect("50 names fit");
+        }
+        under.finish(&mut out).expect("finished");
+        assert_eq!(out.len(), 100, "{strategy:?}");
+
+        let mut over = Sampler::with_name_cap(&sampling, 1, 49);
+        let err = input
+            .iter()
+            .try_for_each(|record| over.push(&mut record.clone(), &mut Vec::new()))
+            .expect_err("the 50th name is past the cap");
+        let text = err.to_string();
+        assert!(text.contains("more than 49 names"), "{text}");
+        assert!(text.contains("STRATEGY=ConstantMemory"), "{text}");
+    }
+    let constant = Sampling {
+        strategy: Strategy::ConstantMemory,
+        probability: 1.0,
+        accuracy: 0.1,
+        seed: Some(1),
+    };
+    let mut sampler = Sampler::with_name_cap(&constant, 1, 0);
+    for record in &input {
+        sampler
+            .push(&mut record.clone(), &mut Vec::new())
+            .expect("ConstantMemory holds no name");
+    }
+}

@@ -1,0 +1,29 @@
+## argv
+chain
+-
+--tmp-dir
+OUT/tmp
+--dry-run
++
+reorder-sam
+--sequence-dictionary
+tests/data/reorder_extra.dict
++
+write
+-
+## exit
+0
+## stdout
+chain plan for standard input
+  source    standard input (a pipe: it is read once)
+  prefix    not used: every step names its files
+segment 1  one read of standard input
+  step 1  reorder-sam  transform, first read  takes every record and sorts them in the stream order
+segment 2  the records step 1 holds, sorted by its order
+  step 1  reorder-sam  stream reordered       no file
+  step 2  write        BAM of reordered       standard output
+barrier    step 1 reorder-sam: holds its records; spills past --sort-memory 2.0 GiB; memory unknown
+temp disk  unknown (a pipe has no size to read) in OUT/tmp
+memory     unknown (a pipe has no size to read) at the peak
+nothing ran: this is a plan
+## stderr
