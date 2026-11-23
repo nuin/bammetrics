@@ -1115,3 +1115,57 @@ argv = [
 needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
 max_rss_mib = 1024
 max_seconds = 600
+
+# Wave W15: CompareSAMs holds the records that wait for a partner (none for two files in
+# one order) and, under LENIENT_DUP, two sorts of duplicate keys; CheckTerminatorBlock
+# reads the last 64 KiB of the file.
+[[command]]
+name = "compare-s-a-ms"
+argv = [
+    "{bin}", "compare-s-a-ms", "tests/data/markdup.bam", "tests/data/markdup.sam", "-o",
+    "{out}/compared.txt", "--compare-mq",
+]
+needs = ["tests/data/markdup.bam", "tests/data/markdup.sam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "compare-s-a-ms lenient"
+argv = [
+    "{bin}", "compare-s-a-ms", "tests/data/compare_sams_left.bam",
+    "tests/data/compare_sams_right.bam", "-o", "{out}/compared.txt", "--lenient-header",
+    "--lenient-dup", "--lenient-low-mq-alignment", "--lenient-unknown-mq-alignment",
+    "--max-records-in-ram", "2",
+]
+needs = ["tests/data/compare_sams_left.bam", "tests/data/compare_sams_right.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "check-terminator-block"
+argv = ["{bin}", "check-terminator-block", "tests/data/markdup.bam", "-o", "{out}/end.txt"]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "compare-s-a-ms exome against itself"
+tier = "scale"
+argv = [
+    "{bin}", "compare-s-a-ms", "~/data/bammetrics-scale/exome/HG002.exome.bam",
+    "~/data/bammetrics-scale/exome/HG002.exome.bam", "-o", "{out}/compared.txt", "--compare-mq",
+]
+needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
+max_rss_mib = 1024
+max_seconds = 1800
+
+[[command]]
+name = "check-terminator-block exome"
+tier = "scale"
+argv = [
+    "{bin}", "check-terminator-block", "~/data/bammetrics-scale/exome/HG002.exome.bam", "-o",
+    "{out}/end.txt",
+]
+needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
+max_rss_mib = 64
+max_seconds = 10
