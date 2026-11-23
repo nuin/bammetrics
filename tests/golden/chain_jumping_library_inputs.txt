@@ -1,0 +1,26 @@
+## argv
+chain
+tests/data/orientation.bam
+-o
+OUT/s
++
+jumping-library
+tests/data/insert_size.bam
+--tail-limit
+100
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: 1 step finished, 1 file written
+## file s.jumping_library_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectJumpingLibraryMetrics INPUT=tests/data/orientation.bam OUTPUT=OUT/s.jumping_library_metrics INPUT=tests/data/insert_size.bam TAIL_LIMIT=100
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.JumpingLibraryMetrics
+JUMP_PAIRS	JUMP_DUPLICATE_PAIRS	JUMP_DUPLICATE_PCT	JUMP_LIBRARY_SIZE	JUMP_MEAN_INSERT_SIZE	JUMP_STDEV_INSERT_SIZE	NONJUMP_PAIRS	NONJUMP_DUPLICATE_PAIRS	NONJUMP_DUPLICATE_PCT	NONJUMP_LIBRARY_SIZE	NONJUMP_MEAN_INSERT_SIZE	NONJUMP_STDEV_INSERT_SIZE	CHIMERIC_PAIRS	FRAGMENTS	PCT_JUMPS	PCT_NONJUMPS	PCT_CHIMERAS
+2	0	0	0	400	0	42	0	0	0	297.368421	16.222142	1	0	0.044444	0.933333	0.022222
+
+

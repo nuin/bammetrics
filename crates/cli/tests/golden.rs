@@ -613,10 +613,9 @@ const CHAIN_CASES: &[Case] = &[
     case!("chain_two_mark_duplicates", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "+", "quality-yield", "+", "mark-duplicates"),
     case!("error_chain_one_file_twice", "chain", "IS", "-o", "OUT/s", "+", "insert-size", "+", "insert-size"),
     case!("error_chain_overwrites_input", "chain", "MD", "+", "mark-duplicates", "+", "write", "MD"),
-    case!("error_chain_not_a_step", "chain", "IS", "+", "wgs"),
+    case!("error_chain_not_a_step", "chain", "IS", "+", "non-n-fasta-size"),
     case!("error_chain_fifo_buffer", "chain", "MD", "+", "mark-duplicates", "+", "fifo-buffer", "--buffer-size", "1024", "+", "write", "-"),
     case!("error_chain_build_bam_index", "chain", "MD", "+", "mark-duplicates", "+", "build-bam-index", "+", "write", "OUT/marked.bam"),
-    case!("error_chain_view_sam", "chain", "MD", "+", "sort-sam", "--sort-order", "queryname", "+", "view-sam"),
     case!("error_chain_bad_number", "chain", "IS", "+", "insert-size", "--minimum-pct", "abc"),
     case!("error_chain_step_input", "chain", "IS", "+", "insert-size", "OR"),
     case!("error_chain_step_threads", "chain", "IS", "+", "insert-size", "--threads", "2"),
@@ -827,8 +826,6 @@ const GATHER_CHECKSUM_CASES: &[Case] = &[
     case!("verb_calculate_read_group_checksum_sam", "calculate-read-group-checksum", "MD_SAM", "-o", "OUT/markdup.md5", "--validation-stringency", "SILENT"),
     case!("error_calculate_read_group_checksum_input_output", "CalculateReadGroupChecksum", "I=OXOG", "O=OXOG"),
     case!("error_calculate_read_group_checksum_missing", "CalculateReadGroupChecksum", "I=tests/data/nope.bam", "O=OUT/x.md5"),
-    case!("error_chain_gather_bam_files", "chain", "MD", "-o", "OUT/s", "+", "gather-bam-files"),
-    case!("error_chain_calculate_read_group_checksum", "chain", "MD", "-o", "OUT/s", "+", "calculate-read-group-checksum"),
 ];
 
 /// `CollectQualityYieldMetricsSNVQ` and `CollectUmiPrevalenceMetrics`
@@ -848,7 +845,6 @@ const SNVQ_UMI_CASES: &[Case] = &[
     case!("picard_umi_prevalence_no_umis", "CollectUmiPrevalenceMetrics", "I=MD", "O=OUT/umi.txt", "BARCODE_TAG=ZZ"),
     case!("error_umi_prevalence_assume_sorted", "CollectUmiPrevalenceMetrics", "I=UMI", "O=OUT/umi.txt", "ASSUME_SORTED=true"),
     case!("error_verb_umi_prevalence_progress", "umi-prevalence", "UMI", "-o", "OUT/umi.txt", "--progress-step-interval", "0"),
-    case!("error_chain_umi_prevalence", "chain", "UMI", "-o", "OUT/s", "+", "umi-prevalence"),
 ];
 
 /// Wave W11: `CollectRrbsMetrics` on the bisulfite fixture of
@@ -1057,15 +1053,6 @@ const MERGE_REORDER_CASES: &[Case] = &[
         "INTERVALS=IL"
     ),
     case!(
-        "error_chain_merge_sam_files",
-        "chain",
-        "MD",
-        "-o",
-        "OUT/s",
-        "+",
-        "merge-sam-files"
-    ),
-    case!(
         "picard_reorder_sam",
         "ReorderSam",
         "I=MD",
@@ -1188,7 +1175,6 @@ const DOWNSAMPLE_CASES: &[Case] = &[
     case!("error_position_based_downsample_sam_again", "PositionBasedDownsampleSam", "I=DS", "O=OUT/pb.bam", "F=0.5"),
     case!("error_position_based_downsample_sam_fraction", "PositionBasedDownsampleSam", "I=MD", "O=OUT/pb.bam", "F=2"),
     case!("error_verb_position_based_downsample_sam_stdin", "position-based-downsample-sam", "-", "--fraction", "0.5", "-o", "OUT/pb.bam"),
-    case!("error_chain_position_based_downsample_sam", "chain", "MD", "-o", "OUT/s", "+", "position-based-downsample-sam", "--fraction", "0.5"),
 ];
 
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
@@ -1798,6 +1784,11 @@ fn documented_downsample_commands_on_the_fixtures() {
     check(DOWNSAMPLE_CASES);
 }
 
+#[test]
+fn documented_materialize_commands_on_the_fixtures() {
+    check(MATERIALIZE_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1918,6 +1909,7 @@ fn case_names_are_unique() {
         .chain(MERGE_REORDER_CASES)
         .chain(MATE_FILTER_CASES)
         .chain(DOWNSAMPLE_CASES)
+        .chain(MATERIALIZE_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();
@@ -1926,3 +1918,29 @@ fn case_names_are_unique() {
     names.dedup();
     assert_eq!(count, names.len(), "case names repeat");
 }
+
+/// Wave W14, the materialize fallback (docs/chaining.md, "Materialize"): a
+/// tool with neither a stage nor a collector runs on a file of the stream
+/// at its position. Metrics tools, the tools that read an index, a tool
+/// that writes its own file, SAM text on standard output, a tool that
+/// fails after its file, several inputs, the tools that write a BAM, the
+/// plan with its disk cost, and the usage errors of a step that hands its
+/// BAM on.
+#[rustfmt::skip]
+const MATERIALIZE_CASES: &[Case] = &[
+    case!("chain_materialize_metrics", "chain", "MD", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "wgs", "-R", "REF", "+", "raw-wgs", "-R", "REF", "+", "library-complexity", "+", "targeted-pcr", "--amplicon-intervals", "IL", "--target-intervals", "IL"),
+    case!("chain_materialize_index", "chain", "IS", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "bam-index-stats", "+", "index-depth"),
+    case!("chain_multiple_metrics", "chain", "MD", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "multiple-metrics", "--program", "CollectQualityYieldMetrics"),
+    case!("chain_calculate_read_group_checksum", "chain", "ART", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "calculate-read-group-checksum"),
+    case!("chain_view_sam", "chain", "MD", "+", "sort-sam", "--sort-order", "queryname", "+", "view-sam", "-o", "-"),
+    case!("chain_check_duplicate_marking", "chain", "DM", "-o", "OUT/s", "+", "check-duplicate-marking"),
+    case!("chain_umi_prevalence", "chain", "UMI", "-o", "OUT/s", "+", "umi-prevalence", "--minimum-mq", "10"),
+    case!("chain_jumping_library_inputs", "chain", "OR", "-o", "OUT/s", "+", "jumping-library", "IS", "--tail-limit", "100"),
+    case!("chain_merge_sam_files", "chain", "MD", "-o", "OUT/s", "+", "merge-sam-files", "MD", "+", "insert-size"),
+    case!("chain_gather_bam_files", "chain", "IS", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "gather-bam-files", "NO_READS", "+", "write", "OUT/gathered.bam"),
+    case!("chain_position_based_downsample_sam", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "+", "position-based-downsample-sam", "--fraction", "0.5", "+", "write", "OUT/pb.bam"),
+    case!("plan_chain_materialize", "chain", "MD", "-o", "OUT/s", "--dry-run", "+", "raw-wgs", "-R", "REF", "+", "add-comments-to-bam", "--comment", "c", "+", "raw-wgs", "-R", "REF", "+", "merge-sam-files", "MD", "+", "insert-size"),
+    case!("error_chain_materialize_write_option", "chain", "MD", "-o", "OUT/s", "+", "merge-sam-files", "--create-index"),
+    case!("error_chain_materialize_output", "chain", "MD", "-o", "OUT/s", "+", "merge-sam-files", "-o", "OUT/m.bam"),
+    case!("error_chain_materialize_input", "chain", "MD", "-o", "OUT/s", "+", "wgs", "-R", "REF", "MD"),
+];

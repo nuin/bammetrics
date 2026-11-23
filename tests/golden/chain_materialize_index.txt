@@ -1,0 +1,42 @@
+## argv
+chain
+tests/data/insert_size.bam
+-o
+OUT/s
++
+add-comments-to-bam
+--comment
+c
++
+bam-index-stats
++
+index-depth
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: step 1 (add-comments-to-bam): 10 records in, 10 out, 0 changed
+bammetrics chain: 3 steps finished, 2 files written
+## file s.bam_index_stats
+chr1 length=	100000	Aligned= 10	Unaligned= 0
+NoCoordinateCount= 0
+## file s.index_depth_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectIndexDepthMetrics INPUT=tests/data/insert_size.bam OUTPUT=OUT/s.index_depth_metrics CHAIN=AddCommentsToBam
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	bammetrics.qc.IndexDepthMetrics
+CONTIG	GROUP	LENGTH	MAPPED	UNMAPPED_PLACED	ESTIMATED_MEAN_DEPTH	RATIO_TO_AUTOSOMES	READ_LENGTH	NO_COORDINATE	INFERRED_SEX	MT_COPY_NUMBER	REASON
+chr1	AUTOSOME	100000	10	0	0.01	1	100				
+	AUTOSOME	100000	10	0	0.01	1	100				
+	X	0	0	0	?	?	100				
+	Y	0	0	0	?	?	100				
+	MT	0	0	0	?	?	100				
+	ALT	0	0	0	?	?	100				
+	DECOY	0	0	0	?	?	100				
+	HLA	0	0	0	?	?	100				
+	OTHER	0	0	0	?	?	100				
+	ALL	100000	10	0	0.01	1	100	0	UNKNOWN	?	no X bases; no Y bases; no mitochondrial contig
+
+
