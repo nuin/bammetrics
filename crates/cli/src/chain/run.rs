@@ -503,11 +503,107 @@ fn after_reads(
     }
 }
 
+/// The one read of the chain: the steps the run reads with, from the source
+/// or the kept stream `--resume` starts at. No step, no read.
+fn read_stream(
+    chain: &Chain,
+    resume: &Resume,
+    claims: &Claims,
+) -> Result<(Vec<bammetrics_core::Result<Products>>, Vec<Slot>), VerbError> {
+    let (steps, slots) = core_steps(chain, resume, claims)?;
+    if steps.is_empty() {
+        return Ok((Vec::new(), slots));
+    }
+    let source = match &resume.start {
+        Some((_, kept)) => FileSource::new(kept, chain.reference.as_deref())
+            .decoded_from_cram(bammetrics_core::cram::is_cram(&chain.source_path)),
+        None => FileSource::new(&chain.source_path, chain.reference.as_deref()),
+    };
+    let plan = ChainPlan {
+        source: Box::new(source.with_stringency(chain.stringency)),
+        steps,
+        threads: chain.threads,
+        tmp_dir: chain.tmp_dir.clone(),
+        lower: !chain.stage_executor,
+    };
+    let results = stage::run_chain(plan, None).map_err(|e| VerbError::core(VERB, &e))?;
+    Ok((results, slots))
+}
+
+/// The outcome of each step the read ran, its files written; a kept
+/// stream's files join its transform's.
+fn gather(
+    chain: &mut Chain,
+    slots: Vec<Slot>,
+    results: Vec<bammetrics_core::Result<Products>>,
+    sample: Option<&str>,
+) -> Vec<Option<StepOutcome>> {
+    let mut outcomes: Vec<Option<StepOutcome>> = chain.steps.iter().map(|_| None).collect();
+    for (slot, result) in slots.into_iter().zip(results) {
+        match slot {
+            Slot::Step(index) => {
+                let finished =
+                    result.and_then(|products| finish_step(chain, index, &products, sample));
+                outcomes[index] =
+                    Some(finished.unwrap_or_else(|e| failed_step(&chain.steps[index], &e)));
+            }
+            Slot::Keep(index) => {
+                let Some(outcome) = outcomes[index].as_mut() else {
+                    continue;
+                };
+                match result {
+                    Ok(products) => outcome.files.extend(super::keep::written(&products)),
+                    Err(e) if outcome.status == StepStatus::Ok => {
+                        outcome.status = StepStatus::Failed;
+                        outcome.error = Some(format!("keeping its stream: {e}"));
+                    }
+                    Err(_) => {}
+                }
+            }
+        }
+    }
+    outcomes
+}
+
+/// Write the manifest of `run` and, after a resumed run that finished,
+/// remove the files of the run before that this run does not keep.
+fn write_manifest(
+    chain: &Chain,
+    run: &resume::Run,
+    notes: &mut Vec<String>,
+) -> Result<Option<Written>, VerbError> {
+    let Some(path) = &chain.manifest else {
+        return Ok(None);
+    };
+    let manifest = resume::manifest(chain, run);
+    crate::report::write_atomic(path, manifest.to_json())
+        .map_err(|e| VerbError::input(VERB, format!("the manifest: {e}")))?;
+    if let (0, Some(previous)) = (run.code, &run.resume.previous) {
+        let removed = resume::remove_stale(chain, previous, &manifest);
+        if removed > 0 {
+            notes.push(format!(
+                "--resume: removed {} the run before wrote and this run does not",
+                count(removed, "file")
+            ));
+        }
+    }
+    Ok(Some(Written {
+        path: path.clone(),
+        kind: "manifest",
+    }))
+}
+
 /// [`execute`], with the directories it makes recorded in `made`.
 fn run_steps(mut chain: Chain, made: &mut MadeDirs) -> Result<Outcome, VerbError> {
     super::planner::check_space(&chain)?;
     check_writable(&chain, made)?;
-    let keys = resume::keys(&chain);
+    // A chain that writes no manifest fingerprints nothing: it reads what
+    // it read before this wave.
+    let keys = if chain.manifest.is_some() {
+        resume::keys(&chain)
+    } else {
+        Vec::new()
+    };
     let resume = resume::decide(&chain, &keys);
     let mut notes: Vec<String> = resume
         .note
@@ -529,50 +625,9 @@ fn run_steps(mut chain: Chain, made: &mut MadeDirs) -> Result<Outcome, VerbError
         &chain.steps,
         chain.report.as_deref(),
     )?));
-    let (steps, slots) = core_steps(&chain, &resume, &claims)?;
-    let source = match &resume.start {
-        Some((_, kept)) => FileSource::new(kept, chain.reference.as_deref())
-            .decoded_from_cram(bammetrics_core::cram::is_cram(&chain.source_path)),
-        None => FileSource::new(&chain.source_path, chain.reference.as_deref()),
-    };
-    let results = if steps.is_empty() {
-        Vec::new()
-    } else {
-        let plan = ChainPlan {
-            source: Box::new(source.with_stringency(chain.stringency)),
-            steps,
-            threads: chain.threads,
-            tmp_dir: chain.tmp_dir.clone(),
-            lower: !chain.stage_executor,
-        };
-        stage::run_chain(plan, None).map_err(|e| VerbError::core(VERB, &e))?
-    };
+    let (results, slots) = read_stream(&chain, &resume, &claims)?;
     let sample = sample(&chain);
-    let mut outcomes: Vec<Option<StepOutcome>> = chain.steps.iter().map(|_| None).collect();
-    for (slot, result) in slots.into_iter().zip(results) {
-        match slot {
-            Slot::Step(index) => {
-                let finished = result.and_then(|products| {
-                    finish_step(&mut chain, index, &products, sample.as_deref())
-                });
-                outcomes[index] =
-                    Some(finished.unwrap_or_else(|e| failed_step(&chain.steps[index], &e)));
-            }
-            Slot::Keep(index) => {
-                let Some(outcome) = outcomes[index].as_mut() else {
-                    continue;
-                };
-                match result {
-                    Ok(products) => outcome.files.extend(super::keep::written(&products)),
-                    Err(e) if outcome.status == StepStatus::Ok => {
-                        outcome.status = StepStatus::Failed;
-                        outcome.error = Some(format!("keeping its stream: {e}"));
-                    }
-                    Err(_) => {}
-                }
-            }
-        }
-    }
+    let mut outcomes = gather(&mut chain, slots, results, sample.as_deref());
     for (index, key) in keys.iter().enumerate() {
         if resume.skipped(index) {
             outcomes[index] = Some(resume::skipped_outcome(
@@ -620,7 +675,7 @@ fn run_steps(mut chain: Chain, made: &mut MadeDirs) -> Result<Outcome, VerbError
             .map_err(|e| step_error("--also markdown", &e))?;
         files.push(written);
     }
-    if let Some(path) = &chain.manifest {
+    if chain.manifest.is_some() {
         let run = resume::Run {
             keys: &keys,
             resume: &resume,
@@ -630,22 +685,7 @@ fn run_steps(mut chain: Chain, made: &mut MadeDirs) -> Result<Outcome, VerbError
             millis: u64::try_from(clock.elapsed().as_millis()).unwrap_or(u64::MAX),
             code,
         };
-        let manifest = resume::manifest(&chain, &run);
-        crate::report::write_atomic(path, manifest.to_json())
-            .map_err(|e| VerbError::input(VERB, format!("the manifest: {e}")))?;
-        files.push(Written {
-            path: path.clone(),
-            kind: "manifest",
-        });
-        if let (0, Some(previous)) = (code, &resume.previous) {
-            let removed = resume::remove_stale(&chain, previous, &manifest);
-            if removed > 0 {
-                notes.push(format!(
-                    "--resume: removed {} the run before wrote and this run does not",
-                    count(removed, "file")
-                ));
-            }
-        }
+        files.extend(write_manifest(&chain, &run, &mut notes)?);
     }
     Ok(Outcome {
         chain,

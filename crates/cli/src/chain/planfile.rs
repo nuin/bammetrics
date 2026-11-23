@@ -488,6 +488,36 @@ mod tests {
         );
     }
 
+    /// `resume`, a transform's `keep` and a last `qc` step read as their
+    /// command-line flags.
+    #[test]
+    fn resume_keep_and_qc_read_as_their_flags() {
+        let plan = "[chain]\nsource = \"in.bam\"\nresume = true\n\n[[step]]\n\
+            verb = \"mark-duplicates\"\nkeep = true\n\n[[step]]\nverb = \"qc\"\n\
+            preset = \"wgs\"\nalso = [\"junit\", \"markdown\"]\nfail-on = \"warn\"\n";
+        let spec = parse(plan, "p.toml").expect("parses");
+        assert!(spec.resume);
+        assert_eq!(spec.steps[0].args, ["--keep=true"]);
+        assert_eq!(spec.steps[1].verb, "qc");
+        assert_eq!(
+            spec.steps[1].args,
+            [
+                "--preset=wgs",
+                "--also=junit",
+                "--also=markdown",
+                "--fail-on=warn"
+            ]
+        );
+        let error =
+            parse("[[step]]\nverb = \"qc\"\nprest = \"wgs\"\n", "p.toml").expect_err("typo");
+        assert!(
+            error
+                .to_string()
+                .contains("unknown key prest\n  did you mean preset?"),
+            "{error}"
+        );
+    }
+
     #[test]
     fn unknown_names_are_errors_with_the_closest_name() {
         let cases = [

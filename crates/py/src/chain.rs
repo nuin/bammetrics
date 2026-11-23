@@ -222,12 +222,14 @@ impl Step {
 /// class, or write. The keywords are those of the tool's function
 /// (minimum_pct=0.1) without its input, plus output (the step's own file,
 /// or prefix for a tool that writes several), format, panel on hs_metrics
-/// (baits and targets in one file), and as_ on a transform (the name of the
-/// stream it leaves). write takes output, index, md5, compression_level and
-/// output_format ("bam" or "sam").
-/// An unknown verb or keyword raises UsageError here, with the closest
-/// name; so does a float that is NaN or infinite, and a list of texts with
-/// an item that is not a str.
+/// (baits and targets in one file), and as_ and keep on a transform (the
+/// name of the stream it leaves; keep=True writes it as PREFIX.STREAM.bam).
+/// write takes output, index, md5, compression_level and output_format
+/// ("bam" or "sam"). qc, the last step, takes preset, report, also, fail_on,
+/// panel, ref_flat, strand, ribosomal_intervals, sex, all_plots, date,
+/// pdf_font and page_size. An unknown verb or keyword raises UsageError
+/// here, with the closest name; so does a float that is NaN or infinite, and
+/// a list of texts with an item that is not a str.
 //
 // The docstring above is the stub's (tests/python/test_mirror.py compares
 // them).
@@ -381,6 +383,9 @@ struct Finished {
     prefix: String,
     /// Every file written: each step's in step order, then the chain's.
     files: Vec<String>,
+    /// `PREFIX.manifest.json` of a run that resumes, keeps a stream or
+    /// ends in qc.
+    manifest: Option<String>,
     code: u8,
     stages: Vec<Stage>,
     /// `(key, parsed file)` of every metrics file written.
@@ -442,6 +447,7 @@ fn finished(outcome: &Outcome) -> Result<Finished, VerbError> {
         sample: cli::sample_name(chain),
         prefix: chain.prefix.display().to_string(),
         files,
+        manifest: chain.manifest.as_ref().map(|m| m.display().to_string()),
         code: outcome.code,
         stages,
         metrics,
@@ -553,7 +559,8 @@ fn failed_steps(py: Python<'_>, run: Py<Run>, done: &Finished) -> PyErr {
     err
 }
 
-/// The `Run` of a finished chain: no manifest and no verdict.
+/// The `Run` of a finished chain: no verdict; the manifest when the run
+/// wrote one.
 fn run_object(py: Python<'_>, done: &Finished) -> PyResult<Py<Run>> {
     let errors = PyDict::new(py);
     for stage in done.stages.iter().filter(|stage| stage.error.is_some()) {
@@ -574,7 +581,7 @@ fn run_object(py: Python<'_>, done: &Finished) -> PyResult<Py<Run>> {
             sample: done.sample.clone(),
             prefix: done.prefix.clone(),
             files: done.files.clone(),
-            manifest: None,
+            manifest: done.manifest.clone(),
             exit_code: done.code,
             errors: errors.unbind(),
             metrics: metrics.unbind(),
@@ -596,7 +603,8 @@ fn run_object(py: Python<'_>, done: &Finished) -> PyResult<Py<Run>> {
 /// output_format "sam". plan names a TOML plan file in place of steps; a keyword given
 /// replaces the file's. Returns a Run: files, metrics (keyed by verb,
 /// STREAM.verb in front of a transform) and stages (one Stage per step).
-/// dry_run=True returns the plan text and runs nothing. A failed step raises
+/// dry_run=True returns the plan text and runs nothing. resume=True skips
+/// the steps PREFIX.manifest.json proves done. A failed step raises
 /// InputError after the other steps wrote their files (its .run holds the
 /// Run).
 //
@@ -609,7 +617,8 @@ fn run_object(py: Python<'_>, done: &Finished) -> PyResult<Py<Run>> {
     signature = (source = None, steps = None, **options),
     text_signature = "(source=None, steps=None, *, output=None, reference=None, threads=None, \
                       tmp_dir=None, format=None, also=None, sample=None, sort_memory=None, \
-                      force_space=None, validation_stringency=None, plan=None, dry_run=False)"
+                      force_space=None, validation_stringency=None, resume=None, plan=None, \
+                      dry_run=False)"
 )]
 pub fn py_chain<'py>(
     py: Python<'py>,
@@ -626,7 +635,9 @@ pub fn py_chain<'py>(
         Done::Ran(done) => done,
     };
     let run = run_object(py, &done)?;
-    if done.code != 0 {
+    // 10 and 11 are the qc step's verdict, not a failed step: the Run
+    // holds the code.
+    if done.code == 1 {
         return Err(failed_steps(py, run, &done));
     }
     Ok(run.into_any())

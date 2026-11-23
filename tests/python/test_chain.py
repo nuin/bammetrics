@@ -628,3 +628,47 @@ def test_chain_reads_standard_input_and_a_cram(tmp_path):
     piped = bam(tmp_path / "p.marked.bam")
     bm.chain(MARKDUP, ["mark_duplicates", "write"], output=tmp_path / "f")
     assert piped[1] == bam(tmp_path / "f.marked.bam")[1]
+
+
+def test_resume_skips_what_the_manifest_proves_done(tmp_path):
+    """W14: resume=True skips each step its record in PREFIX.manifest.json
+    proves done; keep=True writes a transform's stream for a later read."""
+    steps = ["quality_yield", bm.step("mark_duplicates", keep=True), "insert_size"]
+    first = bm.chain(MARKDUP, steps, output=tmp_path / "s", resume=True)
+    assert [s.status for s in first.stages] == ["ok"] * 3
+    assert (tmp_path / "s.marked.bam").exists()
+    assert (tmp_path / "s.manifest.json").exists()
+    again = bm.chain(MARKDUP, steps, output=tmp_path / "s", resume=True)
+    assert [s.status for s in again.stages] == ["skipped"] * 3
+    assert list(again.metrics) == list(first.metrics)
+    changed = [steps[0], steps[1], bm.step("insert_size", minimum_pct=0.1)]
+    plan = bm.chain(MARKDUP, changed, output=tmp_path / "s", resume=True, dry_run=True)
+    assert "resume     step 3 insert-size: runs: its options changed" in plan
+    run = bm.chain(MARKDUP, changed, output=tmp_path / "s", resume=True)
+    assert [s.status for s in run.stages] == ["skipped", "skipped", "ok"]
+
+
+def test_qc_is_the_last_step(tmp_path):
+    """W14: a qc step writes the verdict the qc verb writes for the same taps."""
+    date = "2026-01-02 03:04:05 UTC"
+    run = bm.chain(BAM, ["insert_size", bm.step("qc", date=date, also="junit")],
+                   output=tmp_path / "s")
+    assert [s.role for s in run.stages] == ["tap", "qc", "tap", "tap", "tap"]
+    assert [Path(f).name for f in run.stages[1].files] == [
+        "s.verdict.json", "s.report.html", "s.junit.xml"]
+    verdict = bm.qc(BAM, output=tmp_path / "q" / "s", date=date).verdict
+    written = (tmp_path / "s.verdict.json").read_text()
+    assert written.replace(str(tmp_path / "s."), str(tmp_path / "q" / "s.")) == \
+        (tmp_path / "q" / "s.verdict.json").read_text()
+    assert verdict.status == "pass"
+    with pytest.raises(bm.UsageError, match="panel="):
+        bm.step("qc", hs=["a", "b"])
+
+
+def test_a_qc_step_gate_is_the_exit_code_not_an_error(tmp_path):
+    """The qc step's fail_on code (10, 11) is Run.exit_code: no step failed."""
+    run = bm.chain(MARKDUP, ["mark_duplicates", bm.step("qc", fail_on="warn")],
+                   output=tmp_path / "s")
+    assert run.exit_code == 10
+    assert all(s.status == "ok" for s in run.stages)
+    assert run.manifest == str(tmp_path / "s.manifest.json")
