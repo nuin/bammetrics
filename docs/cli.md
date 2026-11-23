@@ -591,8 +591,10 @@ bytes for SAM text; `test_cram_writer.py` for the CRAM).
   `--compression-level` sets the BGZF level. A CRAM input needs `-R`, and its records get
   the `MD` and `NM` tags htsjdk rebuilds.
 - `-o out.cram` writes a CRAM against `-R` (KNOWN_DIFFERENCES.md, CRAM output);
-  `--create-index` with it exits 2. An `-o` that is the input (a link or a hard link
-  included) exits 2 and replaces nothing.
+  `--create-index` with it exits 2. Each contig of the header is found in the FASTA by
+  its name, so the FASTA may hold more contigs or hold them in another order; a record on
+  a contig the FASTA lacks exits 1. This holds for every verb that writes a CRAM. An `-o`
+  that is the input (a link or a hard link included) exits 2 and replaces nothing.
 
 ### add-comments-to-bam
 
