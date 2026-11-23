@@ -25,8 +25,8 @@ use bammetrics_core::multiple_metrics::file_extensions;
 use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
 use bammetrics_core::view_sam;
 use bammetrics_core::{
-    bam_index_stats, build_bam_index, check_duplicate_marking, compare_metrics, cram, index_depth,
-    pass, split_sam,
+    bam_index_stats, build_bam_index, check_duplicate_marking, check_terminator_block,
+    compare_metrics, compare_sams, cram, index_depth, pass, split_sam,
 };
 
 use crate::error::VerbError;
@@ -740,6 +740,36 @@ pub const VERBS: &[Verb] = &[
             Files::Bam,
         )
     },
+    Verb {
+        input: "FILE",
+        about: Some(
+            "compares two SAM, BAM or CRAM files as Picard's CompareSAMs does: the \
+             SamComparisonMetric row to -o or standard output, each header difference and the \
+             verdict (SAM files match. or SAM files differ.) on standard error, which -q \
+             drops, exit 1 when the files differ.",
+        ),
+        ignores: &[(Key::Sample, "a comparison has no sample")],
+        ..verb("compare-s-a-ms", "CompareSAMs", Files::Single)
+    },
+    Verb {
+        input: "FILE",
+        about: Some(
+            "says how a BGZF file (a BAM, a bgzip VCF) ends, as Picard's CheckTerminatorBlock \
+             does: HAS_TERMINATOR_BLOCK, HAS_HEALTHY_LAST_BLOCK or DEFECTIVE to -o or standard \
+             output, read from the last 64 KiB of the file, exit 100 on DEFECTIVE.",
+        ),
+        writes: "termination",
+        reads_stdin: false,
+        ignores: &[
+            (Key::Threads, "the last bytes are read, no record"),
+            (Key::Sample, "a file's end has no sample"),
+        ],
+        ..verb(
+            "check-terminator-block",
+            "CheckTerminatorBlock",
+            Files::Single,
+        )
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
@@ -822,6 +852,8 @@ impl Verb {
                 ". Standard input and pipes are refused: the FASTA is read through its .fai."
             } else if self.reads_stdin {
                 "; - reads standard input."
+            } else if tool.name == check_terminator_block::TOOL.name {
+                ". Standard input and pipes are refused: the last bytes of the file are read."
             } else {
                 ". Standard input and pipes are refused: the tool reads each input twice."
             };
@@ -1201,6 +1233,8 @@ impl Verb {
             }
             let status = check.status();
             (check.output, status)
+        } else if let Some(result) = self.with_picard_status(tool, &inv, quiet) {
+            result.map_err(core)?
         } else if tool.name == view_sam::TOOL.name && formats == [Format::Picard] {
             // The SAM text goes out as it is read: no rows are held.
             let status = match &output {
@@ -1267,6 +1301,37 @@ impl Verb {
         }
         made.keep();
         Ok(status)
+    }
+
+    /// `compare-s-a-ms` and `check-terminator-block`: the tool's output and
+    /// Picard's exit code (1 when the files differ, 100 for `DEFECTIVE`).
+    /// The lines Picard's CompareSAMs prints on standard output go to
+    /// standard error here, where `-q` drops them. `None` for another tool.
+    fn with_picard_status(
+        &self,
+        tool: &Tool,
+        inv: &Invocation,
+        quiet: bool,
+    ) -> Option<bammetrics_core::Result<(bammetrics_core::metric::ToolOutput, u8)>> {
+        if tool.name == compare_sams::TOOL.name {
+            let mut say = |line: &str| {
+                if !quiet {
+                    eprintln!("bammetrics {}: {line}", self.name);
+                }
+            };
+            Some(compare_sams::compare(inv, &mut say).map(|comparison| {
+                say(comparison.verdict());
+                let status = comparison.status();
+                (comparison.output, status)
+            }))
+        } else if tool.name == check_terminator_block::TOOL.name {
+            Some(check_terminator_block::check(inv).map(|check| {
+                let status = check.status();
+                (check.output, status)
+            }))
+        } else {
+            None
+        }
     }
 
     /// `compare-metrics`: the comparison as the main file (standard output

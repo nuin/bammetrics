@@ -1,0 +1,8 @@
+## argv
+CheckTerminatorBlock
+I=tests/data/doctor/no_eof.bam
+## exit
+0
+## stdout
+## stderr
+HAS_HEALTHY_LAST_BLOCK

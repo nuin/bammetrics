@@ -1,0 +1,10 @@
+## argv
+CompareSAMs
+tests/data/compare_sams_left.bam
+tests/data/compare_sams_right.bam
+LOW_MQ_THRESHOLD=null
+## exit
+1
+## stdout
+## stderr
+bammetrics: LOW_MQ_THRESHOLD=null: not a valid value

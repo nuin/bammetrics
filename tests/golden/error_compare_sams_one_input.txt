@@ -1,0 +1,9 @@
+## argv
+CompareSAMs
+tests/data/compare_sams_left.bam
+O=OUT/compared.txt
+## exit
+1
+## stdout
+## stderr
+bammetrics: CompareSAMs: exactly two input files are compared, got 1

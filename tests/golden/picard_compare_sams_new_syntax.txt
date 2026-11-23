@@ -1,0 +1,25 @@
+## argv
+CompareSAMs
+-O
+OUT/compared.txt
+tests/data/compare_sams_other.bam
+--LOW_MQ_THRESHOLD
+2
+tests/data/compare_sams_left.bam
+--LENIENT_LOW_MQ_ALIGNMENT
+## exit
+1
+## stdout
+SAM files differ.
+## stderr
+## file compared.txt
+## htsjdk.samtools.metrics.StringHeader
+# CompareSAMs OUTPUT=OUT/compared.txt INPUT=tests/data/compare_sams_other.bam LOW_MQ_THRESHOLD=2 INPUT=tests/data/compare_sams_left.bam LENIENT_LOW_MQ_ALIGNMENT=true
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.SamComparisonMetric
+LEFT_FILE	RIGHT_FILE	MAPPINGS_MATCH	MAPPINGS_DIFFER	UNMAPPED_BOTH	UNMAPPED_LEFT	UNMAPPED_RIGHT	MISSING_LEFT	MISSING_RIGHT	DUPLICATE_MARKINGS_DIFFER	ARE_EQUAL
+ROOT/tests/data/compare_sams_other.bam	ROOT/tests/data/compare_sams_left.bam	9	1	1	1	0	1	1	2	N
+
+

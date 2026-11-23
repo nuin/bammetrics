@@ -204,6 +204,15 @@ pub fn run() -> error::Result<u8> {
             if tool.name == bammetrics_core::view_sam::TOOL.name {
                 return Ok(bammetrics_core::view_sam::run_cli(rest)?);
             }
+            // Two positional inputs, the differences on standard output,
+            // Picard's exit code.
+            if tool.name == bammetrics_core::compare_sams::TOOL.name {
+                return Ok(bammetrics_core::compare_sams::run_cli(rest)?);
+            }
+            // The outcome on standard error, exit 100 for DEFECTIVE.
+            if tool.name == bammetrics_core::check_terminator_block::TOOL.name {
+                return Ok(bammetrics_core::check_terminator_block::run_cli(rest)?);
+            }
             // Picard's CreateSequenceDictionary names its .dict when O= is absent;
             // the verb and Python write standard output and rows instead.
             if tool.name == create_sequence_dictionary::TOOL.name {

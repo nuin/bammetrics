@@ -1,0 +1,25 @@
+## argv
+compare-s-a-ms
+tests/data/compare_sams_left.bam
+tests/data/compare_sams_right.bam
+-o
+OUT/compared.txt
+## exit
+1
+## stdout
+## stderr
+bammetrics compare-s-a-ms: VN Program Record attribute differs.
+bammetrics compare-s-a-ms: File 1: 1.0
+bammetrics compare-s-a-ms: File 2: 1.1
+bammetrics compare-s-a-ms: SAM files differ.
+## file compared.txt
+## htsjdk.samtools.metrics.StringHeader
+# CompareSAMs INPUT=tests/data/compare_sams_left.bam INPUT=tests/data/compare_sams_right.bam OUTPUT=OUT/compared.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.SamComparisonMetric
+LEFT_FILE	RIGHT_FILE	MAPPINGS_MATCH	MAPPINGS_DIFFER	UNMAPPED_BOTH	UNMAPPED_LEFT	UNMAPPED_RIGHT	MISSING_LEFT	MISSING_RIGHT	DUPLICATE_MARKINGS_DIFFER	ARE_EQUAL
+ROOT/tests/data/compare_sams_left.bam	ROOT/tests/data/compare_sams_right.bam	10	2	1	0	0	0	0	4	N
+
+

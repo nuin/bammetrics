@@ -1,0 +1,8 @@
+## argv
+check-terminator-block
+tests/data/insert_size.bam
+## exit
+0
+## stdout
+HAS_TERMINATOR_BLOCK
+## stderr
