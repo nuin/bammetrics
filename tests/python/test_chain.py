@@ -673,3 +673,13 @@ def test_a_recipe_runs_its_chain(tmp_path, monkeypatch):
     with pytest.raises(bm.UsageError, match="no recipe \"prp\""):
         bm.recipe("prp", BAM, output=tmp_path / "x.bam")
     assert "quality-yield" in bm.recipe("qc-only", BAM, output=tmp_path / "p", dry_run=True)
+
+
+def test_an_unknown_step_in_set_and_an_upper_case_sam_are_usage_errors(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    with pytest.raises(bm.UsageError, match="recipe prep has no step mark-dups"):
+        bm.recipe("prep", DATA / "oxog.bam", output=tmp_path / "x.bam",
+                  set={"mark-dups.remove-duplicates": True})
+    with pytest.raises(bm.UsageError, match="writes SAM text only for a name ending in .sam"):
+        bm.chain(MARKDUP, ["mark_duplicates"], output=tmp_path / "x.SAM")
+    assert not (tmp_path / "x.SAM").exists()

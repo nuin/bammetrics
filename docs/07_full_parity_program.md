@@ -470,8 +470,12 @@ Each change is one reviewed edit in the wave named.
 | D168 | owner goal, recipes "read from ~/.config/bammetrics/recipes/" | shipped and user recipes side by side | A user recipe with a shipped recipe's name replaces it | grammar |
 | D169 | owner goal, the config reference on "the tool verbs that take -R" | every such verb | Only a tool that reads the reference (a value option), or any tool on a CRAM input; a BAM run of a tool that ignores `REFERENCE_SEQUENCE` prints no new note | grammar |
 | D170 | owner goal, Python "config file used unless config=False" | every Python function | `chain` and `recipe`; Python `qc` reads no config file | grammar |
+| D171 | D160, "a step's own `-o` in last place needs the + form" | every step | `write` without a path and a split step keep their `-o` in last place: `write -o out.bam` had sent `-o` to the prefix and written `out.bam.marked.bam`, `split-sam-by-library -o DIR` had written into `.` | grammar |
+| D172 | owner goal, a config or variable reference that is not a file | an input error for every chain | Only a chain with a step that reads the reference exits 1 (a tap with a reference value option, a transform that requires one, `reorder-sam` without its dictionary, a CRAM source); `qc`, `plan` and `collect` leave it out with a note on standard error | grammar |
+| D173 | owner goal, "-o ends in .bam, .sam or .cram" | any case | `-o r.SAM` exits 2: the write step writes SAM text for a lower-case `.sam` only, as htsjdk's `SAMFileWriterFactory`, so `r.SAM` would hold BGZF bytes with no `.bai` | grammar |
+| D174 | owner goal, item 4, "defaults the same way" | every user of `-R` | The dictionary default applies in a chain only; the `reorder-sam` verb keeps its command line and golden records | grammar |
 
-D160 to D170 are the rows of the simpler chain grammar (branch feat/chain-grammar, docs/chaining.md sections 22 to 26); the integrator renumbers them.
+D160 to D174 are the rows of the simpler chain grammar (branch feat/chain-grammar, docs/chaining.md sections 22 to 26); the integrator renumbers them.
 
 D145 to D159 are the rows of wave W21, numbered D200 to D214 on their branch and renumbered after the W13 rows when the two waves merged for 0.31.0.
 

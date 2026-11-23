@@ -20,13 +20,26 @@
 //!   csv`): one the step has no flag for, and one the step has with the
 //!   chain's meaning (its own `-o`, `--format`, `--threads`, its reference
 //!   and its `TMP_DIR`). A step option of another meaning stays
-//!   (`downsample-sam -R 7` is its `RANDOM_SEED`). A step's own `-o` in last
-//!   place needs the `+` form.
+//!   (`downsample-sam -R 7` is its `RANDOM_SEED`). Two steps keep their
+//!   `-o` in last place: `write` without a path (`write -o out.bam`) and a
+//!   split step (`split-sam-by-library -o DIR`), whose `-o` names what
+//!   they write.
+//!
+//! A command line in the new form (a bare word started a step, or no `+`
+//! and no `--plan` at all) gets errors in its own terms: a source that
+//! names a step, a word that is no verb where a step or the source was
+//! expected, a chain option in the middle of the chain, an option of
+//! `write` on the last step, `-o` given twice. The `+` form keeps the
+//! errors of the parser.
+
+use std::path::Path;
 
 use bammetrics_core::registry::did_you_mean;
 
-use super::args::{find_step, parser_flags, step_parser_flags, unknown_step, write_flags};
-use super::{STEP, WRITE};
+use super::args::{
+    CHAIN_KEYS, find_step, is_split, parser_flags, step_parser_flags, unknown_step, write_flags,
+};
+use super::{STEP, WRITE, usage};
 use crate::error::VerbError;
 use crate::grammar::{self, Flag, Key};
 use crate::verbs::VERBS;
@@ -46,6 +59,9 @@ const SAME_MEANING: [Key; 11] = [
     Key::Picard("TMP_DIR"),
     Key::Picard("VALIDATION_STRINGENCY"),
 ];
+
+/// The form of the bare command line, for its errors.
+const BARE_USAGE: &str = "bammetrics chain BAM STEP [STEP OPTIONS] [STEP ...] [-o OUT]";
 
 /// One step as written: whether a bare word started it, its verb and the
 /// words after the verb.
@@ -70,14 +86,69 @@ fn starts_step(word: &str) -> bool {
     word == WRITE || find_step(word).is_some()
 }
 
+/// True for a word that may name a file or set a Picard key: the parser,
+/// not this module, says what is wrong with it.
+fn path_like(word: &str) -> bool {
+    word.contains(['/', '.', '='])
+}
+
+/// The verb names and `write`.
+fn verb_names() -> impl Iterator<Item = &'static str> {
+    VERBS.iter().map(|verb| verb.name).chain([WRITE])
+}
+
+/// The verb closest to `word`: the shortest verb `word` starts (3 letters
+/// or more, so `ins` is `insert-size`), else the closest by spelling.
+/// `loose` adds a verb that holds `word` (`dup` in `mark-duplicates`).
+fn closest_verb(word: &str, loose: bool) -> Option<&'static str> {
+    let word = word.to_ascii_lowercase();
+    let long_enough = word.chars().count() >= 3;
+    let shortest = |found: &dyn Fn(&str) -> bool| {
+        verb_names()
+            .filter(|name| found(name))
+            .min_by_key(|name| name.len())
+    };
+    if long_enough && let Some(name) = shortest(&|name| name.starts_with(&word)) {
+        return Some(name);
+    }
+    if let Some(name) = did_you_mean(&word, verb_names()) {
+        return Some(name);
+    }
+    if loose && long_enough {
+        return shortest(&|name| name.contains(&word))
+            .or_else(|| common_prefix(&word, verb_names()));
+    }
+    None
+}
+
+/// The name of `names` that shares the longest start with `word`, 4
+/// letters or more (`mark-dups` and `mark-duplicates`).
+pub(super) fn common_prefix<'a>(
+    word: &str,
+    names: impl Iterator<Item = &'a str>,
+) -> Option<&'a str> {
+    let shared = |name: &str| {
+        word.bytes()
+            .zip(name.bytes())
+            .take_while(|(a, b)| a.eq_ignore_ascii_case(b))
+            .count()
+    };
+    names
+        .map(|name| (shared(name), name))
+        .filter(|(count, _)| *count >= 4)
+        .max_by_key(|(count, name)| (*count, std::cmp::Reverse(name.len())))
+        .map(|(_, name)| name)
+}
+
 /// The verb a word is a misspelling of: a bare word that names no file
-/// and no verb, close to a verb name.
+/// and no verb, a letter or two from a verb name. The verb it names is
+/// [`closest_verb`]'s.
 fn misspelled(word: &str) -> Option<&'static str> {
     if word.contains(['/', '.']) {
         return None;
     }
-    let names = VERBS.iter().map(|verb| verb.name).chain([WRITE]);
-    did_you_mean(word, names)
+    did_you_mean(word, verb_names())?;
+    closest_verb(word, false)
 }
 
 /// The option `args[at]` with the words it takes, from the step's flags,
@@ -92,6 +163,14 @@ fn option_at<'f>(
     grammar::option_of(step, &args[at], next).or_else(|| grammar::option_of(chain, &args[at], next))
 }
 
+/// A bare word that is neither the source nor a step's verb: where it
+/// stands (0 in front of the first step, else the step's number) and the
+/// word.
+struct Stray {
+    step: usize,
+    word: String,
+}
+
 /// The command line in the `+` form: every step behind a `+`, the chain's
 /// options of the last bare step moved in front of the first.
 pub(super) fn with_plus(args: &[String]) -> Result<Vec<String>, VerbError> {
@@ -99,6 +178,8 @@ pub(super) fn with_plus(args: &[String]) -> Result<Vec<String>, VerbError> {
     let mut head: Vec<String> = Vec::new();
     let mut steps: Vec<Written> = Vec::new();
     let mut source = false;
+    let mut source_word: Option<String> = None;
+    let mut strays: Vec<Stray> = Vec::new();
     let mut literal = false;
     // The word before was an option no flag has: the word after it may be
     // its value, so it starts no step.
@@ -153,6 +234,7 @@ pub(super) fn with_plus(args: &[String]) -> Result<Vec<String>, VerbError> {
         let bare = !arg.starts_with('-') || arg == "-";
         if in_head && !source && bare {
             source = true;
+            source_word = Some(arg.clone());
             head.push(arg.clone());
             continue;
         }
@@ -177,16 +259,33 @@ pub(super) fn with_plus(args: &[String]) -> Result<Vec<String>, VerbError> {
             error.hints.insert(0, format!("did you mean {best}?"));
             return Err(error);
         }
+        if bare && arg != "-" && !is_write && !value_of_unknown {
+            strays.push(Stray {
+                step: steps.len(),
+                word: arg.clone(),
+            });
+        }
         let words = match steps.last_mut() {
             Some(step) => &mut step.args,
             None => &mut head,
         };
         words.push(arg.clone());
     }
+    let has_plan = args
+        .iter()
+        .any(|arg| arg == "--plan" || arg.starts_with("--plan="));
+    let new_form =
+        steps.iter().any(|step| step.bare) || !(args.iter().any(|a| a == STEP) || has_plan);
+    if new_form {
+        new_form_errors(&steps, source_word.as_deref(), &strays)?;
+    }
+    let number = steps.len();
     if let Some(last) = steps.last_mut().filter(|step| step.bare) {
-        let flags = flags_of(last.verb.as_deref());
-        let (kept, moved) = split_last(&flags, &chain, &last.args);
+        let (kept, moved) = split_last(last.verb.as_deref(), number, &chain, &last.args)?;
         last.args = kept;
+        if new_form {
+            twice(&head, &moved, &chain)?;
+        }
         head.extend(moved);
     }
     let mut out = head;
@@ -198,9 +297,174 @@ pub(super) fn with_plus(args: &[String]) -> Result<Vec<String>, VerbError> {
     Ok(out)
 }
 
-/// The words of the last bare step: those that stay with it and the
-/// chain's options it hands to the chain.
-fn split_last(step: &[Flag], chain: &[Flag], args: &[String]) -> (Vec<String>, Vec<String>) {
+/// The errors of a command line in the new form, found before the parser
+/// would give its own in the terms of the `+` form.
+fn new_form_errors(
+    steps: &[Written],
+    source: Option<&str>,
+    strays: &[Stray],
+) -> Result<(), VerbError> {
+    if let Some(word) = source.filter(|word| starts_step(word) && !Path::new(word).exists()) {
+        return Err(
+            usage(format!("{word} names a step: the source comes first"))
+                .from(word)
+                .hint(format!("usage: {BARE_USAGE}")),
+        );
+    }
+    for (index, step) in steps.iter().enumerate() {
+        if step.bare && index + 1 < steps.len() {
+            middle_chain_option(step, index + 1)?;
+        }
+    }
+    let Some(stray) = strays.first() else {
+        return Ok(());
+    };
+    let word = stray.word.as_str();
+    let suggest = |error: VerbError| match closest_verb(word, true) {
+        Some(best) => error.hint(format!("did you mean {best}?")),
+        None => error,
+    };
+    if stray.step == 0 {
+        if path_like(word) || Path::new(word).exists() {
+            let count = 1 + strays.iter().filter(|s| s.step == 0).count();
+            return Err(usage(format!("one source expected, got {count}"))
+                .from(word)
+                .hint("the source comes first, then the steps")
+                .hint(format!("usage: {BARE_USAGE}")));
+        }
+        let error = usage(format!(
+            "{word:?} is no step verb, and the chain takes one source"
+        ))
+        .from(word);
+        return Err(suggest(error).hint(
+            "the source comes first, then the steps; bammetrics tools lists the step verbs",
+        ));
+    }
+    if path_like(word) {
+        // The parser's error: a step takes no input.
+        return Ok(());
+    }
+    let step = &steps[stray.step - 1];
+    let verb = step.verb.as_deref().unwrap_or_default();
+    let error = usage(format!(
+        "step {} ({verb}): {word:?} is no step verb, and a step takes no positional value",
+        stray.step
+    ))
+    .from(word);
+    Err(suggest(error).hint(format!(
+        "an option's value follows its option (--option VALUE); bammetrics tools lists the step \
+         verbs, bammetrics chain BAM + {verb} --help the options of {verb}"
+    )))
+}
+
+/// The error for an option of the chain in a bare step that is not the
+/// last: the chain's options go in front of the first step or after the
+/// last.
+fn middle_chain_option(step: &Written, number: usize) -> Result<(), VerbError> {
+    let verb = step.verb.as_deref().unwrap_or_default();
+    if verb == WRITE {
+        return Ok(());
+    }
+    let flags = flags_of(Some(verb));
+    let chain = super::args::global_flags();
+    let mut at = 0;
+    while at < step.args.len() {
+        let arg = &step.args[at];
+        if arg == "--" {
+            break;
+        }
+        let next = step.args.get(at + 1).map(String::as_str);
+        let (chain_option, takes) = match grammar::option_of(&flags, arg, next) {
+            Some((flag, takes)) => (CHAIN_KEYS.contains(&flag.key), takes),
+            None => match grammar::option_of(&chain, arg, next) {
+                Some((flag, takes)) => (flag.key != Key::Help, takes),
+                None => (false, 0),
+            },
+        };
+        if chain_option {
+            let spelled = arg.split_once('=').map_or(arg.as_str(), |(name, _)| name);
+            return Err(usage(format!(
+                "step {number} ({verb}): {spelled} belongs to the chain: give it before the first \
+                 step or after the last"
+            ))
+            .from(spelled));
+        }
+        at += 1 + takes;
+    }
+    Ok(())
+}
+
+/// The error for `-o` given in front of the first step and again after
+/// the last: the parser would keep the last without a word.
+fn twice(head: &[String], moved: &[String], chain: &[Flag]) -> Result<(), VerbError> {
+    let outputs = |words: &[String]| -> Vec<String> {
+        let mut found = Vec::new();
+        let mut at = 0;
+        while at < words.len() {
+            let next = words.get(at + 1).map(String::as_str);
+            match grammar::option_of(chain, &words[at], next) {
+                Some((flag, takes)) => {
+                    if flag.key == Key::Output {
+                        let value = match takes {
+                            0 => words[at].split_once('=').map_or("", |(_, v)| v).to_owned(),
+                            _ => words.get(at + 1).cloned().unwrap_or_default(),
+                        };
+                        found.push(value);
+                    }
+                    at += 1 + takes;
+                }
+                None => at += 1,
+            }
+        }
+        found
+    };
+    let (before, after) = (outputs(head), outputs(moved));
+    if let (Some(first), Some(last)) = (before.first(), after.last()) {
+        return Err(usage(format!(
+            "-o is given twice: {first} in front of the first step, {last} after the last"
+        ))
+        .from("-o")
+        .hint("give it once"));
+    }
+    Ok(())
+}
+
+/// True when the words of a `write` step name its file: a word that is no
+/// option nor an option's value.
+fn names_path(args: &[String]) -> bool {
+    let flags = write_flags();
+    let mut at = 0;
+    while at < args.len() {
+        if args[at] == "--" {
+            return at + 1 < args.len();
+        }
+        let next = args.get(at + 1).map(String::as_str);
+        match grammar::option_of(&flags, &args[at], next) {
+            Some((_, takes)) => at += 1 + takes,
+            None if !args[at].starts_with('-') || args[at] == "-" => return true,
+            None => at += 1,
+        }
+    }
+    false
+}
+
+/// The words of the last bare step `verb`, step `number`: those that stay
+/// with it and the chain's options it hands to the chain. An option of
+/// `write` the step has no flag for is an error that names the `write`
+/// step: the short form's write takes `--index` alone.
+fn split_last(
+    verb: Option<&str>,
+    number: usize,
+    chain: &[Flag],
+    args: &[String],
+) -> Result<(Vec<String>, Vec<String>), VerbError> {
+    let step = flags_of(verb);
+    let keeps_output = match verb {
+        Some(WRITE) => !names_path(args),
+        Some(name) => find_step(name).is_some_and(is_split),
+        None => false,
+    };
+    let writes = write_flags();
     let (mut kept, mut moved) = (Vec::new(), Vec::new());
     let mut at = 0;
     while at < args.len() {
@@ -209,10 +473,33 @@ fn split_last(step: &[Flag], chain: &[Flag], args: &[String]) -> (Vec<String>, V
             break;
         }
         let next = args.get(at + 1).map(String::as_str);
-        let own = grammar::option_of(step, &args[at], next);
+        let own = grammar::option_of(&step, &args[at], next);
         let of_chain = grammar::option_of(chain, &args[at], next).filter(|(flag, _)| {
-            flag.key != Key::Help && own.is_none_or(|(own, _)| SAME_MEANING.contains(&own.key))
+            flag.key != Key::Help
+                && own.is_none_or(|(own, _)| {
+                    SAME_MEANING.contains(&own.key) && !(keeps_output && own.key == Key::Output)
+                })
         });
+        if own.is_none()
+            && of_chain.is_none()
+            && verb.is_some_and(|v| v != WRITE)
+            && let Some((flag, _)) = grammar::option_of(&writes, &args[at], next)
+                .filter(|(flag, _)| !matches!(flag.key, Key::Output | Key::Help))
+        {
+            let verb = verb.unwrap_or_default();
+            let spelled = args[at]
+                .split_once('=')
+                .map_or(args[at].as_str(), |(n, _)| n);
+            return Err(usage(format!(
+                "step {number} ({verb}): {spelled} is an option of write"
+            ))
+            .from(spelled)
+            .hint(format!(
+                "-o OUT.bam adds write OUT.bam --index; for --{}, name the step: {verb} ... \
+                 write OUT.bam --{}",
+                flag.long, flag.long
+            )));
+        }
         let (target, takes) = match (of_chain, own) {
             (Some((_, takes)), _) => (&mut moved, takes),
             (None, Some((_, takes))) => (&mut kept, takes),
@@ -222,7 +509,7 @@ fn split_last(step: &[Flag], chain: &[Flag], args: &[String]) -> (Vec<String>, V
         target.extend(args[at..end].iter().cloned());
         at = end;
     }
-    (kept, moved)
+    Ok((kept, moved))
 }
 
 #[cfg(test)]
@@ -430,10 +717,128 @@ mod tests {
                 .to_string()
                 .contains("step 1: unknown step \"inser-size\"")
         );
-        // A path is no misspelling: the parser's own error follows.
+        // A path is no misspelling: a second source in the new form, the
+        // parser's own error in the + form.
+        assert!(
+            error_of(&["in.bam", "other.bam", "insert-size"])
+                .starts_with("bammetrics chain: one source expected, got 2 (from other.bam)")
+        );
         assert_eq!(
-            plus(&["in.bam", "other.bam", "insert-size"]),
+            plus(&["in.bam", "other.bam", "+", "insert-size"]),
             strings(&["in.bam", "other.bam", "+", "insert-size"])
+        );
+        // A prefix ranks first: ins is insert-size, not wgs.
+        assert!(error_of(&["in.bam", "insert-size", "ins"]).contains("did you mean insert-size?"));
+    }
+
+    fn error_of(args: &[&str]) -> String {
+        with_plus(&strings(args)).expect_err("an error").to_string()
+    }
+
+    #[test]
+    fn a_word_that_is_no_verb_gets_an_error_in_the_terms_of_the_bare_form() {
+        let error = error_of(&["in.bam", "insert-size", "mark", "-o", "x"]);
+        assert!(
+            error.starts_with(
+                "bammetrics chain: step 1 (insert-size): \"mark\" is no step verb, and a step \
+                 takes no positional value (from mark)\n  did you mean mark-duplicates?"
+            ),
+            "{error}"
+        );
+        assert!(
+            error_of(&["in.bam", "sort-sam", "coordinate"])
+                .contains("\"coordinate\" is no step verb")
+        );
+        let error = error_of(&["in.bam", "bogus"]);
+        assert!(error.contains("\"bogus\" is no step verb, and the chain takes one source"));
+        assert!(!error.contains('+'), "{error}");
+        assert!(
+            error_of(&["insert-size", "in.bam"])
+                .starts_with("bammetrics chain: insert-size names a step: the source comes first")
+        );
+        // The + form keeps the parser's errors.
+        assert_eq!(
+            plus(&["in.bam", "+", "sort-sam", "coordinate"]),
+            strings(&["in.bam", "+", "sort-sam", "coordinate"])
+        );
+        assert_eq!(
+            plus(&["IS", "OR", "+", "insert-size"]),
+            strings(&["IS", "OR", "+", "insert-size"])
+        );
+    }
+
+    #[test]
+    fn write_and_split_keep_their_output_in_last_place() {
+        assert_eq!(
+            plus(&["in.bam", "mark-duplicates", "write", "-o", "x.bam"]),
+            strings(&[
+                "in.bam",
+                "+",
+                "mark-duplicates",
+                "+",
+                "write",
+                "-o",
+                "x.bam"
+            ])
+        );
+        // With its path, write hands -o to the chain.
+        assert_eq!(
+            plus(&["in.bam", "mark-duplicates", "write", "m.bam", "-o", "out/s"]),
+            strings(&[
+                "in.bam",
+                "-o",
+                "out/s",
+                "+",
+                "mark-duplicates",
+                "+",
+                "write",
+                "m.bam"
+            ])
+        );
+        assert_eq!(
+            plus(&[
+                "in.bam",
+                "split-sam-by-library",
+                "-o",
+                "dir",
+                "--threads",
+                "2"
+            ]),
+            strings(&[
+                "in.bam",
+                "--threads",
+                "2",
+                "+",
+                "split-sam-by-library",
+                "-o",
+                "dir"
+            ])
+        );
+    }
+
+    #[test]
+    fn chain_options_in_the_middle_write_options_last_and_two_outputs_are_errors() {
+        assert!(
+            error_of(&["in.bam", "insert-size", "-q", "alignment-summary"]).starts_with(
+                "bammetrics chain: step 1 (insert-size): -q belongs to the chain: give it before \
+                 the first step or after the last (from -q)"
+            )
+        );
+        assert!(
+            error_of(&["in.bam", "insert-size", "--also=csv", "alignment-summary"])
+                .contains("--also belongs to the chain")
+        );
+        let error = error_of(&["in.bam", "mark-duplicates", "-o", "x.bam", "--md5"]);
+        assert!(
+            error.starts_with(
+                "bammetrics chain: step 1 (mark-duplicates): --md5 is an option of write (from --md5)"
+            ),
+            "{error}"
+        );
+        assert!(error.contains("write OUT.bam --md5"));
+        assert!(
+            error_of(&["-o", "a", "in.bam", "insert-size", "-o", "b"])
+                .starts_with("bammetrics chain: -o is given twice: a in front of the first step, b after the last")
         );
     }
 }

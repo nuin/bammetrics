@@ -1988,6 +1988,22 @@ const CHAIN_GRAMMAR_CASES: &[Case] = &[
     case!("error_recipe_needs_bam", "prep", "OXOG", "-o", "OUT/s"),
     case!("error_recipe_and_steps", "chain", "IS", "--recipe", "qc-only", "insert-size"),
     case!("error_recipe_bad_override", "qc-only", "IS", "insert-size.minimum-pt=0.1"),
+    // The review of the grammar: write and split keep their -o in last
+    // place, the errors of the bare form, a stale config reference.
+    case!("chain_bare_write_output", "chain", "OXOG", "-o", "OUT/p", "mark-duplicates", "write", "-o", "OUT/x.bam"),
+    case!("chain_bare_split_output", "chain", "OXOG", "split-sam-by-library", "-o", "OUT/split", "-v"),
+    case!("error_chain_result_sam_upper", "chain", "MD", "mark-duplicates", "-o", "OUT/s.SAM"),
+    case!("error_chain_bare_not_a_verb", "chain", "IS", "insert-size", "mark", "-o", "OUT/x"),
+    case!("error_chain_bare_source_is_step", "chain", "insert-size", "IS"),
+    case!("error_chain_bare_middle_option", "chain", "IS", "insert-size", "-q", "alignment-summary"),
+    case!("error_chain_bare_write_option", "chain", "MD", "mark-duplicates", "-o", "OUT/y.bam", "--md5"),
+    case!("error_chain_bare_output_twice", "chain", "-o", "OUT/a", "IS", "insert-size", "-o", "OUT/b"),
+    case!("chain_transforms_only_note", "chain", "OXOG", "reorder-sam", "-R", "REF", "-o", "OUT/t"),
+    case_config!("chain_stale_config_reference", "reference = \"/nowhere/ref.fa\"\n", "chain", "IS", "insert-size", "-o", "OUT/s"),
+    case!("recipe_help", "prep", "--help"),
+    case!("error_recipe_unknown_override_step", "prep", "OXOG", "-o", "OUT/x.bam", "mark-dups.remove-duplicates=true"),
+    case!("error_recipe_override_without_value", "prep", "OXOG", "-o", "OUT/x.bam", "mark-duplicates.remove-duplicates"),
+    case!("error_recipe_twice", "chain", "IS", "--recipe=prep", "-o", "OUT/p.bam", "--recipe=qc-only"),
 ];
 
 /// What the grammar records prove: each new form writes the files of the

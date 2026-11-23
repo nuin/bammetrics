@@ -29,7 +29,7 @@ use bammetrics_core::toml::parse_tables;
 
 use super::args::{find_step, step_parser_flags, write_flags};
 use super::planfile;
-use super::{Spec, VERB, WRITE, read_capped, usage};
+use super::{Spec, VERB, WRITE, usage};
 use crate::error::VerbError;
 use crate::grammar::{self, Flag};
 
@@ -186,7 +186,7 @@ fn user_file(name: &str) -> Option<PathBuf> {
 
 fn read_user(name: &str, path: &Path) -> Result<Recipe, VerbError> {
     let file = path.display().to_string();
-    let text = read_capped(path, FILE_CAP).map_err(|e| {
+    let text = crate::config::read_regular_capped(path, FILE_CAP).map_err(|e| {
         VerbError::usage(VERB, format!("{file}: not a recipe: {e}"))
             .hint("a recipe is TOML text (docs/chaining.md)")
     })?;
@@ -224,7 +224,9 @@ fn names() -> Vec<String> {
                     .to_str()?
                     .strip_suffix(".toml")?
                     .to_owned();
-                plain_name(&name).then_some(name)
+                // The test of `user_file`: a link to a regular file counts,
+                // a FIFO, a device or a directory does not.
+                (plain_name(&name) && entry.path().is_file()).then_some(name)
             })
             .take(MAX_USER_RECIPES)
             .collect();
@@ -280,7 +282,9 @@ fn option_flag(spec: &Spec, recipe: &str, step: &str, option: &str) -> Result<Fl
     if !has {
         let steps: Vec<&str> = spec.steps.iter().map(|s| s.verb.as_str()).collect();
         let mut error = usage(format!("recipe {recipe} has no step {step}"));
-        if let Some(best) = did_you_mean(step, steps.iter().copied()) {
+        let best = did_you_mean(step, steps.iter().copied())
+            .or_else(|| super::bare::common_prefix(step, steps.iter().copied()));
+        if let Some(best) = best {
             error = error.hint(format!("did you mean {best}?"));
         }
         return Err(error.hint(format!("its steps: {}", steps.join(", "))));
@@ -305,16 +309,23 @@ pub struct Override {
     pub value: String,
 }
 
+/// True for the step or option part of a `STEP.option` word: a letter,
+/// then letters, digits, `-` and `_`. A path (`out/a.b=c`) has a `/`.
+fn plain_part(text: &str) -> bool {
+    text.starts_with(|c: char| c.is_ascii_alphabetic())
+        && text
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
 impl Override {
-    /// The word as `STEP.option=value`, when its step part names a step
-    /// verb or `write`.
+    /// The word as `STEP.option=value`, when both parts are plain words.
+    /// The step part need not name a verb: [`apply`] gives the closest
+    /// step of the recipe for one that names none.
     pub fn of(word: &str) -> Option<Self> {
         let (target, value) = word.split_once('=')?;
         let (step, option) = split_target(target)?;
-        let plain = option
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
-        (plain && verb_name(step).is_some()).then(|| Self {
+        (plain_part(step) && plain_part(option)).then(|| Self {
             step: step.to_owned(),
             option: option.to_owned(),
             value: value.to_owned(),
@@ -322,18 +333,38 @@ impl Override {
     }
 }
 
+/// The words of a command line without its overrides, and each override
+/// with the word that gave it.
+pub(super) type Split = (Vec<String>, Vec<(String, Override)>);
+
 /// The `STEP.option=value` words of `args` in front of a `--`, taken out.
-pub(super) fn take_overrides(args: &[String]) -> (Vec<String>, Vec<(String, Override)>) {
+/// A `STEP.option` word without `=` whose step part names a step verb is
+/// an error that asks for the value.
+pub(super) fn take_overrides(args: &[String]) -> Result<Split, VerbError> {
     let end = args.iter().position(|a| a == "--").unwrap_or(args.len());
     let mut kept = Vec::new();
     let mut overrides = Vec::new();
     for (index, arg) in args.iter().enumerate() {
-        match Override::of(arg).filter(|_| index < end) {
-            Some(found) => overrides.push((arg.clone(), found)),
-            None => kept.push(arg.clone()),
+        if index >= end {
+            kept.push(arg.clone());
+            continue;
         }
+        if let Some(found) = Override::of(arg) {
+            overrides.push((arg.clone(), found));
+            continue;
+        }
+        if !arg.contains('=')
+            && let Some((step, option)) = split_target(arg)
+            && verb_name(step).is_some()
+            && plain_part(option)
+        {
+            return Err(usage(format!("{arg} sets an option: it needs =VALUE"))
+                .from(arg.clone())
+                .hint(format!("{arg}=VALUE")));
+        }
+        kept.push(arg.clone());
     }
-    (kept, overrides)
+    Ok((kept, overrides))
 }
 
 /// The recipe's chain with `overrides` applied and its required options
@@ -355,6 +386,10 @@ pub fn apply(recipe: &Recipe, overrides: &[(String, Override)]) -> Result<Spec, 
                 grammar::option_of(&flags, arg, None).is_none_or(|(f, _)| f.key != flag.key)
             });
             step.args.push(format!("--{}={}", flag.long, set.value));
+            step.origin = Some(match step.origin.take() {
+                Some(origin) => format!("{origin} with {word}"),
+                None => word.clone(),
+            });
         }
     }
     for required in &recipe.requires {
@@ -396,19 +431,50 @@ pub(super) fn load(
     Ok((recipe, spec))
 }
 
+/// True when `name` is a verb of the command line, which runs before a
+/// recipe of the same name: `bammetrics NAME` cannot run such a recipe.
+fn shadowed(name: &str) -> bool {
+    crate::verbs::find(name).is_some()
+        || crate::info::CLAP_VERBS.contains(&name)
+        || [
+            super::VERB,
+            "plan",
+            "collect",
+            "tools",
+            "presets",
+            "help",
+            "completions",
+            crate::config::VERB,
+            LIST_VERB,
+        ]
+        .contains(&name)
+}
+
 /// `bammetrics recipes`: one line per recipe, then where they come from.
-pub fn list() -> Result<String, VerbError> {
-    let recipes: Vec<Recipe> = names()
-        .iter()
-        .filter_map(|name| find(name).transpose())
-        .collect::<Result<_, _>>()?;
-    let width = recipes.iter().map(|r| r.name.len()).max().unwrap_or(0);
+/// A user recipe that cannot be read is listed with the reason, and the
+/// others still are.
+pub fn list() -> String {
+    let names = names();
+    let width = names.iter().map(String::len).max().unwrap_or(0);
     let mut text = String::new();
-    for recipe in &recipes {
-        let from = if recipe.origin == "shipped" {
-            ""
-        } else {
-            " (yours)"
+    for name in &names {
+        let recipe = match find(name) {
+            Ok(Some(recipe)) => recipe,
+            Ok(None) => continue,
+            Err(error) => {
+                text.push_str(&format!(
+                    "{name:<width$}  (yours) not usable: {}\n",
+                    error.what
+                ));
+                continue;
+            }
+        };
+        let from = match (recipe.origin == "shipped", shadowed(name)) {
+            (true, _) => String::new(),
+            (false, false) => " (yours)".to_owned(),
+            (false, true) => format!(
+                " (yours; bammetrics {name} runs the verb: run it with chain BAM --recipe {name})"
+            ),
         };
         text.push_str(&format!(
             "{:<width$}  {}{from}\n",
@@ -429,7 +495,54 @@ pub fn list() -> Result<String, VerbError> {
         "\nRun one: bammetrics NAME BAM -o OUT, or bammetrics chain BAM --recipe NAME -o OUT. \
          STEP.option=value sets an option of a step. Your recipes: {dir}/NAME.toml.\n"
     ));
-    Ok(text)
+    text
+}
+
+/// `bammetrics NAME --help` for a recipe: its description, its steps with
+/// their options and the options the command line must set.
+pub fn help(recipe: &Recipe) -> String {
+    let from = if recipe.origin == "shipped" {
+        "shipped".to_owned()
+    } else {
+        recipe.origin.clone()
+    };
+    let output = if recipe.output_bam {
+        " -o OUT.bam"
+    } else {
+        " -o OUT"
+    };
+    let mut text = format!(
+        "bammetrics {name}: {description} (recipe, {from})\n\nUsage: bammetrics {name} BAM{output} \
+         [OPTIONS] [STEP.option=value ...]\n       bammetrics chain BAM --recipe {name}{output} \
+         [OPTIONS] [STEP.option=value ...]\n\nSteps:\n",
+        name = recipe.name,
+        description = recipe.description,
+    );
+    for (index, step) in recipe.spec.steps.iter().enumerate() {
+        let mut line = format!("  {:>2}  {}", index + 1, step.verb);
+        for arg in &step.args {
+            line.push(' ');
+            line.push_str(arg);
+        }
+        text.push_str(&line);
+        text.push('\n');
+    }
+    if !recipe.requires.is_empty() {
+        text.push_str("\nRequired: ");
+        let words: Vec<String> = recipe
+            .requires
+            .iter()
+            .map(|r| format!("{r}=VALUE"))
+            .collect();
+        text.push_str(&words.join(" "));
+        text.push('\n');
+    }
+    text.push_str(
+        "\nSTEP.option=value sets an option of a step, replacing the recipe's value. The \
+         chain's options (-R, --threads, --format, --also, --dry-run, ...): bammetrics chain \
+         --help. docs/chaining.md, \"Recipes\".\n",
+    );
+    text
 }
 
 /// `bammetrics recipes [--help]`.
@@ -449,12 +562,19 @@ pub fn run_list(args: &[String]) -> Result<u8, VerbError> {
                 .hint("usage: bammetrics recipes"),
         );
     }
-    crate::events::print_stdout(&list()?);
+    crate::events::print_stdout(&list());
     Ok(0)
 }
 
-/// `bammetrics NAME ARGS` for a recipe: `chain --recipe NAME ARGS`.
+/// `bammetrics NAME ARGS` for a recipe: `chain --recipe NAME ARGS`, or
+/// the recipe's help for `--help` in front of a `--`.
 pub fn run_shorthand(name: &str, args: &[String]) -> Result<u8, VerbError> {
+    let end = args.iter().position(|a| a == "--").unwrap_or(args.len());
+    if args[..end].iter().any(|a| a == "--help" || a == "-h") {
+        let recipe = find(name)?.ok_or_else(|| unknown(name))?;
+        crate::events::print_stdout(&help(&recipe));
+        return Ok(0);
+    }
     let mut argv = vec!["--recipe".to_owned(), name.to_owned()];
     argv.extend(args.iter().cloned());
     super::run(&argv)
@@ -536,7 +656,23 @@ mod tests {
         assert!(bad("insert-size.minimum-pt=0.1").contains("did you mean insert-size.minimum-pct"));
         assert!(bad("gc-bias.scan-window-size=3").contains("recipe prep has no step gc-bias"));
         assert_eq!(Override::of("out/a.b=c"), None);
-        assert_eq!(Override::of("nope.x=1"), None);
+        assert_eq!(Override::of("x.bam"), None);
+        let error = bad("mark-dups.remove-duplicates=true");
+        assert!(
+            error.contains("recipe prep has no step mark-dups")
+                && error.contains("\n  did you mean mark-duplicates?"),
+            "{error}"
+        );
+        let words =
+            |args: &[&str]| -> Vec<String> { args.iter().map(|a| (*a).to_owned()).collect() };
+        let error = take_overrides(&words(&["in.bam", "mark-duplicates.remove-duplicates"]))
+            .expect_err("no value")
+            .to_string();
+        assert!(error.contains("needs =VALUE"), "{error}");
+        let (kept, found) =
+            take_overrides(&words(&["in.bam", "nope.x=1", "--", "a.b=c"])).expect("takes");
+        assert_eq!(kept, ["in.bam", "--", "a.b=c"]);
+        assert_eq!(found[0].1.step, "nope");
         let error = |text: &str| parse("x", text, "x.toml").expect_err(text).to_string();
         assert!(error("[[step]]\nverb = \"insert-size\"\n").contains("no [recipe] table"));
         assert!(

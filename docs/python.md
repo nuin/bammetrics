@@ -229,7 +229,7 @@ These are the two examples of docs/chaining.md. `tests/data/chain_markdup.toml` 
 |---|---|---|
 | `source` | the positional `BAM` | A BAM, SAM text, or a CRAM with `reference`. `"-"` reads the standard input of the process. `None` when the plan file names it |
 | `steps` | `+ STEP ...` | A list of verb names and `step(...)` objects, in order. One name or one `Step` is a chain of one step |
-| `output` | `-o PREFIX` | The prefix of every step that names no file of its own. Default `./<source name>`. `""` raises `UsageError`: it would name hidden files (`.insert_size_metrics`). A name ending in `.bam` or `.sam` on a chain with a transform and no `write` step adds `write OUTPUT` (with its index for a BAM) as the last step and names the metrics files from `OUTPUT` without its extension; on a chain of taps alone it raises `UsageError` (docs/chaining.md section 23) |
+| `output` | `-o PREFIX` | The prefix of every step that names no file of its own. Default `./<source name>`. `""` raises `UsageError`: it would name hidden files (`.insert_size_metrics`). A name ending in `.bam` or a lower-case `.sam` on a chain with a transform and no `write` step adds `write OUTPUT` (with its index for a BAM) as the last step and names the metrics files from `OUTPUT` without its extension; on a chain of taps alone, and for `.SAM`, it raises `UsageError` (docs/chaining.md section 23) |
 | `reference` | `-R FASTA` | Decodes a CRAM source, and goes to every step that reads a reference and names none |
 | `threads` | `--threads N` | BGZF threads of each read and of `write`. Over 256 is a `UsageError`, on `chain`, `qc` and `collect` |
 | `tmp_dir` | `--tmp-dir DIR` | Where a transform spills and a piped source is copied |

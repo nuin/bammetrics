@@ -423,3 +423,175 @@ fn the_downsample_recipe_takes_its_probability_from_the_command_line() {
     same_files(&recipe, &hand);
     assert_eq!(names(&recipe), ["d.bai", "d.bam"]);
 }
+
+/// A stale reference in the config file or the variable fails only a chain
+/// with a step that reads it; `qc` and `collect` leave it out with a note.
+#[test]
+fn a_stale_config_reference_fails_only_what_reads_it() {
+    let config = config_dir("stale", Some("reference = \"/nowhere/stale.fa\"\n"));
+    let dir = fresh_dir("stale-run");
+    let prefix = |name: &str| dir.join(name).display().to_string();
+    ok(&run_with(
+        &["chain", SOURCE, "insert-size", "-o", &prefix("a")],
+        &config,
+        None,
+    ));
+    ok(&run_with(
+        &[
+            "chain",
+            "tests/data/markdup.bam",
+            "mark-duplicates",
+            "-o",
+            &prefix("m.bam"),
+        ],
+        &config,
+        None,
+    ));
+    let stderr = ok(&run_with(
+        &["qc", SOURCE, "-o", &prefix("q"), "--preset", "generic"],
+        &config,
+        None,
+    ));
+    assert!(
+        stderr.contains("note: /nowhere/stale.fa not found (the reference of "),
+        "{stderr}"
+    );
+    // A step that reads it still fails, with the variable's own hint.
+    let empty = config_dir("stale-env", None);
+    let output = run_with(
+        &["chain", SOURCE, "reorder-sam", "-o", &prefix("r.bam")],
+        &empty,
+        Some("/nowhere/env.fa"),
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("unset BAMMETRICS_REFERENCE"), "{stderr}");
+}
+
+/// A config file or a user recipe that is a FIFO is refused at once.
+#[test]
+fn a_fifo_config_or_recipe_is_refused_without_a_wait() {
+    let config = config_dir("fifo", None);
+    let dir = config.join("bammetrics");
+    fs::create_dir_all(dir.join("recipes")).expect("recipes");
+    for path in [dir.join("config.toml"), dir.join("recipes/pipe.toml")] {
+        let status = Command::new("mkfifo").arg(&path).status().expect("mkfifo");
+        assert!(status.success());
+    }
+    let mut child = Command::new(env!("CARGO_BIN_EXE_bammetrics"))
+        .arg("config")
+        .current_dir(root())
+        .env("XDG_CONFIG_HOME", &config)
+        .env_remove("BAMMETRICS_REFERENCE")
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn");
+    let started = std::time::Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("wait") {
+            break status;
+        }
+        if started.elapsed() > std::time::Duration::from_secs(20) {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("bammetrics config waits on a FIFO");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
+    assert_eq!(status.code(), Some(2));
+    fs::remove_file(dir.join("config.toml")).expect("remove");
+    let listed = String::from_utf8(run_with(&["recipes"], &config, None).stdout).expect("text");
+    assert!(!listed.contains("pipe"), "{listed}");
+}
+
+/// One broken user recipe is listed with its reason; the rest still are.
+#[test]
+fn a_broken_user_recipe_does_not_hide_the_others() {
+    let config = config_dir("broken", None);
+    let recipes = config.join("bammetrics/recipes");
+    fs::create_dir_all(&recipes).expect("recipes");
+    fs::write(
+        recipes.join("bad.toml"),
+        "[recipe]\ndescription = \"bad\"\n[[step]]\nverb = \"insert-sise\"\n",
+    )
+    .expect("bad");
+    fs::write(
+        recipes.join("sort-sam.toml"),
+        "[recipe]\ndescription = \"mine\"\n[[step]]\nverb = \"insert-size\"\n",
+    )
+    .expect("shadowed");
+    let output = run_with(&["recipes"], &config, None);
+    let listed = String::from_utf8(output.stdout).expect("text");
+    assert_eq!(output.status.code(), Some(0), "{listed}");
+    assert!(listed.contains("prep "), "{listed}");
+    assert!(
+        listed.contains("bad         (yours) not usable: "),
+        "{listed}"
+    );
+    assert!(
+        listed.contains("(yours; bammetrics sort-sam runs the verb"),
+        "{listed}"
+    );
+    let help =
+        String::from_utf8(run_with(&["prep", "--help"], &config, None).stdout).expect("text");
+    assert!(help.starts_with("bammetrics prep: fix mates"), "{help}");
+    assert!(
+        help.contains("   3  sort-sam --sort-order=coordinate\n"),
+        "{help}"
+    );
+}
+
+/// `write -o FILE` and `split-sam-by-library -o DIR` in last place keep
+/// their `-o`; `-o r.SAM` is refused.
+#[test]
+fn the_last_writer_keeps_its_output() {
+    let config = config_dir("writers", None);
+    let dir = fresh_dir("writers-run");
+    let x = dir.join("x.bam").display().to_string();
+    let p = dir.join("p").display().to_string();
+    ok(&run_with(
+        &[
+            "chain",
+            "tests/data/oxog.bam",
+            "-o",
+            &p,
+            "mark-duplicates",
+            "write",
+            "-o",
+            &x,
+        ],
+        &config,
+        None,
+    ));
+    assert_eq!(names(&dir), ["p.marked.duplication_metrics", "x.bam"]);
+    let split = dir.join("split").display().to_string();
+    ok(&run_with(
+        &[
+            "chain",
+            "tests/data/oxog.bam",
+            "split-sam-by-library",
+            "-o",
+            &split,
+        ],
+        &config,
+        None,
+    ));
+    assert_eq!(names(&dir.join("split")), ["L1.bam", "L2.bam"]);
+    let sam = dir.join("s.SAM").display().to_string();
+    let stderr = usage_error(&run_with(
+        &[
+            "chain",
+            "tests/data/markdup.bam",
+            "mark-duplicates",
+            "-o",
+            &sam,
+        ],
+        &config,
+        None,
+    ));
+    assert!(
+        stderr.contains("writes SAM text only for a name ending in .sam"),
+        "{stderr}"
+    );
+    assert!(!dir.join("s.SAM").exists());
+}

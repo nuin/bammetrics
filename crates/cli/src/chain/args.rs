@@ -485,8 +485,10 @@ pub fn help() -> String {
          bammetrics chain BAM --recipe NAME [OPTIONS] [STEP.option=value ...]\n\n\
          Every + starts a step; so does a bare word that names a step verb (bammetrics \
          chain BAM mark-duplicates insert-size -o out.bam). The chain's options go in front \
-         of the first step or after the last. A step sees the records the step before it \
-         emits.\n  \
+         of the first step or after the last. After the last bare step, -o, -R, --threads, \
+         --format and --tmp-dir are the chain's (write without a path and a split keep their \
+         -o); in the middle, a step's own -o, -R and --format are its own. A step sees the \
+         records the step before it emits.\n  \
          transform  changes the records later steps see: {}\n  \
          tap        reads the records of its position, changes nothing: {}\n  \
          write      write [PATH] writes the records of its position as a BAM\n  \
@@ -710,6 +712,17 @@ fn recipe_spec(
         }
         return Ok(None);
     };
+    let named: Vec<&str> = parsed
+        .all(RECIPE)
+        .map(|given| given.values[0].as_str())
+        .collect();
+    if let [first, .., last] = named.as_slice() {
+        return Err(
+            usage(format!("--recipe is given twice: {first} and {last}"))
+                .from(given.spelled.clone())
+                .hint("a chain runs one recipe"),
+        );
+    }
     if let Some(plan) = parsed.last(PLAN) {
         return Err(
             usage(format!("{} and --recipe both give the steps", plan.spelled))
@@ -733,7 +746,7 @@ fn recipe_spec(
 /// Parse the arguments after `chain`.
 pub fn parse(args: &[String]) -> Result<Asked, VerbError> {
     let (args, no_config) = crate::config::strip_no_config(args);
-    let (args, overrides) = recipes::take_overrides(&args);
+    let (args, overrides) = recipes::take_overrides(&args)?;
     let args = bare::with_plus(&args)?;
     let mut segments = args.split(|arg| arg == STEP);
     let head = segments.next().unwrap_or_default();

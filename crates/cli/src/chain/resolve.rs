@@ -14,9 +14,10 @@
 
 use std::path::{Path, PathBuf};
 
+use bammetrics_core::registry::Kind as OptKind;
 use bammetrics_core::stage::later_kind;
 
-use super::args::{find_step, is_transform, step_parser_flags};
+use super::args::{find_step, is_split, is_transform, step_parser_flags};
 use super::{Spec, StepSpec, WRITE, usage};
 use crate::config;
 use crate::error::VerbError;
@@ -55,12 +56,17 @@ pub(super) struct Resolved {
 enum Kind {
     Bam,
     Sam,
+    /// `.SAM` or `.Sam`: the write step, as htsjdk's writer, writes SAM
+    /// text only for a name ending in lower-case `.sam`, so such a name is
+    /// refused.
+    SamCase,
     /// A kind the writer cannot make yet: its name and its wave.
     Later(&'static str, &'static str),
 }
 
 /// The kind of a name that is a result, as `-o` gives it: one ending in
 /// `.bam`, `.sam` or `.cram` in any case, and not a directory.
+/// `.sam` in another case than lower is [`Kind::SamCase`].
 fn result_of(text: &str) -> Option<Kind> {
     let lower = text.to_ascii_lowercase();
     if Path::new(text).is_dir() || text.ends_with('/') {
@@ -69,8 +75,11 @@ fn result_of(text: &str) -> Option<Kind> {
     if lower.ends_with(".bam") {
         return Some(Kind::Bam);
     }
-    if lower.ends_with(".sam") {
+    if text.ends_with(".sam") {
         return Some(Kind::Sam);
+    }
+    if lower.ends_with(".sam") {
+        return Some(Kind::SamCase);
     }
     if lower.ends_with(".cram") {
         let (kind, wave) = later_kind(Path::new(text)).unwrap_or(("CRAM", "W15"));
@@ -111,6 +120,17 @@ fn result_output(spec: &mut Spec) -> Result<(), VerbError> {
         ))
         .from("-o")
         .hint("-o out.bam writes a BAM"));
+    }
+    if result == Kind::SamCase {
+        let stem = &text[..text.len() - 4];
+        return Err(usage(format!(
+            "-o {text}: the write step writes SAM text only for a name ending in .sam (lower \
+             case), as htsjdk does, and a BAM under any other name"
+        ))
+        .from("-o")
+        .hint(format!(
+            "-o {stem}.sam writes SAM text; -o {stem}.bam writes a BAM"
+        )));
     }
     let mut args = vec![text.clone()];
     if result == Kind::Bam {
@@ -156,7 +176,7 @@ fn dictionary_of(reference: &str) -> Option<(PathBuf, String)> {
 /// error that says both ways to give it.
 fn dictionary_defaults(spec: &mut Spec) -> Result<Vec<(usize, String)>, VerbError> {
     let mut notes = Vec::new();
-    let reference = spec.reference.clone();
+    let chain_reference = spec.reference.clone();
     for (index, step) in spec.steps.iter_mut().enumerate() {
         let Some(verb) = find_step(&step.verb) else {
             continue;
@@ -166,12 +186,19 @@ fn dictionary_defaults(spec: &mut Spec) -> Result<Vec<(usize, String)>, VerbErro
                 continue;
             }
             let flags = step_parser_flags(verb);
-            let given = grammar::parse(verb.name, &flags, &step.args)
-                .map(|parsed| parsed.last(Key::Picard(option)).is_some());
             // A step that does not parse is reported by prepare as written.
-            if given.unwrap_or(true) {
+            let Ok(parsed) = grammar::parse(verb.name, &flags, &step.args) else {
+                continue;
+            };
+            if parsed.last(Key::Picard(option)).is_some() {
                 continue;
             }
+            // The step's own -R comes first: in the middle of a bare
+            // chain it stays with the step.
+            let own = parsed
+                .last(Key::Picard("REFERENCE_SEQUENCE"))
+                .map(|given| given.values[0].clone());
+            let reference = own.or_else(|| chain_reference.clone());
             let flag = flags
                 .iter()
                 .find(|flag| flag.key == Key::Picard(option))
@@ -182,7 +209,11 @@ fn dictionary_defaults(spec: &mut Spec) -> Result<Vec<(usize, String)>, VerbErro
                     "{label}: missing --{}: no reference to take it from",
                     flag.long
                 ))
-                .hint(format!("give --{} FILE on the step", flag.long))
+                .hint(format!(
+                    "give --{} FILE on the step (--from-bam BAM copies the @SQ lines of a BAM \
+                     header; --dict FILE reads a .dict)",
+                    flag.long
+                ))
                 .hint("or -R FASTA, or reference in the config file: its .dict, else its .fai"));
             };
             let Some((path, note)) = dictionary_of(reference) else {
@@ -211,7 +242,13 @@ fn config_defaults(spec: &mut Spec) -> Result<(), VerbError> {
     if spec.reference.is_none()
         && let Some(reference) = &config.reference
     {
-        spec.reference = Some(config::checked(super::VERB, reference)?);
+        // A path that is not a file fails the chain only when a step
+        // reads the reference; any other chain runs without it.
+        match config::checked(super::VERB, reference) {
+            Ok(path) => spec.reference = Some(path),
+            Err(error) if needs_reference(spec) => return Err(error),
+            Err(_) => {}
+        }
     }
     if spec.threads.is_none() {
         spec.threads = config.threads.map(|t| t.value);
@@ -223,6 +260,60 @@ fn config_defaults(spec: &mut Spec) -> Result<(), VerbError> {
         spec.sort_memory = config.sort_memory.map(|m| m.value);
     }
     Ok(())
+}
+
+/// True when a step of `spec` reads the chain's reference: a tap whose
+/// `REFERENCE_SEQUENCE` or `REFERENCE` is a value option, a transform
+/// that requires one, a step of
+/// [`DICTIONARY_DEFAULTS`] without its option, or any step on a CRAM
+/// source, which the reference decodes.
+fn needs_reference(spec: &Spec) -> bool {
+    if spec
+        .source
+        .as_deref()
+        .is_some_and(|source| bammetrics_core::cram::is_cram(Path::new(source)))
+    {
+        return true;
+    }
+    spec.steps.iter().any(|step| {
+        let Some(verb) = find_step(&step.verb) else {
+            return false;
+        };
+        let tool = verb.tool();
+        // A transform or split takes `REFERENCE_SEQUENCE` to decode a CRAM
+        // (the shared `registry::REFERENCE_OPTION`), unless it cannot run
+        // without it (`set-nm-md-and-uq-tags`). A tap reads it as given.
+        let edits = is_transform(verb) || is_split(verb);
+        let reads = ["REFERENCE", "REFERENCE_SEQUENCE"].iter().any(|name| {
+            tool.option(name)
+                .is_some_and(|opt| opt.kind == OptKind::Value && (opt.required || !edits))
+        });
+        let defaults = DICTIONARY_DEFAULTS.iter().any(|(class, option)| {
+            verb.class == *class
+                && grammar::parse(verb.name, &step_parser_flags(verb), &step.args)
+                    .is_ok_and(|parsed| parsed.last(Key::Picard(option)).is_none())
+        });
+        reads || defaults
+    })
+}
+
+/// The note the run prints before the first read when a `.bam` or `.sam`
+/// prefix meets a `write` step of the chain's own: the prefix names the
+/// metrics files there (D162).
+fn chain_notes(spec: &Spec) -> Vec<(usize, String)> {
+    let mut notes = Vec::new();
+    if let Some(prefix) = spec.prefix.as_deref().filter(|p| result_of(p).is_some())
+        && let Some(index) = spec.steps.iter().rposition(|step| step.verb == WRITE)
+    {
+        notes.push((
+            index,
+            format!(
+                "-o {prefix} is the metrics prefix: this write step names the BAM, so metrics \
+                 files are named {prefix}.<extension>"
+            ),
+        ));
+    }
+    notes
 }
 
 /// `spec` with its defaults: the config, the result BAM, the dictionaries.
@@ -242,8 +333,9 @@ pub(super) fn resolve(spec: &Spec) -> Result<Resolved, VerbError> {
             .hint(format!("bammetrics {name} BAM -o out.bam")));
         }
     }
+    let mut notes = chain_notes(&spec);
     result_output(&mut spec)?;
-    let notes = dictionary_defaults(&mut spec)?;
+    notes.extend(dictionary_defaults(&mut spec)?);
     Ok(Resolved { spec, notes })
 }
 
@@ -269,10 +361,16 @@ mod tests {
             chain.steps.last(),
             Some(&StepSpec::new("write", &["out/r.bam", "--index"]))
         );
-        let mut sam = spec("r.SAM", &["mark-duplicates"]);
+        let mut sam = spec("r.sam", &["mark-duplicates"]);
         result_output(&mut sam).expect("resolves");
         assert_eq!(sam.prefix.as_deref(), Some("r"));
-        assert_eq!(sam.steps.last(), Some(&StepSpec::new("write", &["r.SAM"])));
+        assert_eq!(sam.steps.last(), Some(&StepSpec::new("write", &["r.sam"])));
+        let mut upper = spec("r.BAM", &["mark-duplicates"]);
+        result_output(&mut upper).expect("resolves");
+        assert_eq!(
+            upper.steps.last(),
+            Some(&StepSpec::new("write", &["r.BAM", "--index"]))
+        );
         // A prefix, or a chain with its own write, is as before.
         for (prefix, verbs) in [
             ("out/s", &["mark-duplicates"][..]),
@@ -299,6 +397,13 @@ mod tests {
             error("r.cram", &["mark-duplicates"])
                 .contains("CRAM output is wave W15 of docs/07_full_parity_program.md")
         );
+        for name in ["r.SAM", "r.Sam"] {
+            assert!(
+                error(name, &["mark-duplicates"])
+                    .contains("writes SAM text only for a name ending in .sam (lower case)"),
+                "{name}"
+            );
+        }
     }
 
     #[test]

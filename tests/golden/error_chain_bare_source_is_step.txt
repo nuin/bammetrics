@@ -1,0 +1,10 @@
+## argv
+chain
+insert-size
+tests/data/insert_size.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: insert-size names a step: the source comes first (from insert-size)
+  usage: bammetrics chain BAM STEP [STEP OPTIONS] [STEP ...] [-o OUT]

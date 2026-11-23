@@ -1157,6 +1157,16 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
     for (index, note) in resolved.notes {
         steps[index].notes.push(note);
     }
+    // Transforms alone that name no file: the run would end with nothing
+    // written (docs/chaining.md section 23).
+    if steps
+        .iter()
+        .all(|step| step.role == Role::Transform && step.files.is_empty())
+        && let Some(last) = steps.last_mut()
+    {
+        last.notes
+            .push("no step writes the records: -o OUT.bam or a write step writes them".to_owned());
+    }
     let report = also
         .contains(&Also::Markdown)
         .then(|| with_suffix(&prefix, Also::Markdown.run_suffix()));

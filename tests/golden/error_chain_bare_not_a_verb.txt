@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/insert_size.bam
+insert-size
+mark
+-o
+OUT/x
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (insert-size): "mark" is no step verb, and a step takes no positional value (from mark)
+  did you mean mark-duplicates?
+  an option's value follows its option (--option VALUE); bammetrics tools lists the step verbs, bammetrics chain BAM + insert-size --help the options of insert-size

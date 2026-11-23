@@ -1330,15 +1330,19 @@ bammetrics chain in.bam --recipe prep -o out.bam              # or: bammetrics p
 
 - A bare word that names a step verb starts a step; `+` still does, and both mix. An
   option takes its values with it, so a value that names a verb stays a value. The
-  chain's options may follow the last step.
-- `-o r.bam` (or `r.sam`) on a chain with a transform and no `write` adds `write r.bam
-  --index` as the last step and names the metrics files `r.<extension>`. On a chain of
-  taps alone it exits 2; `r.cram` exits 2 with wave W15.
+  chain's options may follow the last step; `write` without a path and a split step keep
+  their own `-o` there. A word that is no verb where a step or the source stands, a chain
+  option in the middle, an option of `write` on the last step and `-o` twice each exit 2
+  with the step's number.
+- `-o r.bam` (or `r.sam`, lower case) on a chain with a transform and no `write` adds
+  `write r.bam --index` as the last step and names the metrics files `r.<extension>`. On
+  a chain of taps alone it exits 2; `r.cram` exits 2 with wave W15; `r.SAM` exits 2, since
+  the write step writes SAM text for a lower-case `.sam` only.
 - `-R`, `--threads`, `--tmp-dir` and `--sort-memory` come from the user config file when
   not given (`bammetrics config`); `-R` also from `BAMMETRICS_REFERENCE`. `--no-config`
   leaves the file unread.
 - `reorder-sam --sequence-dictionary` defaults to the reference's `.dict`, else its
-  `.fai`; the step's note says which.
+  `.fai`, in a chain; the step's note says which. The `reorder-sam` verb still needs it.
 - `--recipe NAME` runs a named chain; `STEP.option=value` sets an option of one of its
   steps.
 
@@ -1366,7 +1370,10 @@ key, a value of the wrong type and a file over the cap exit 2 with the line.
 `-R` on the command line replaces the variable and the file; the variable replaces the
 file. `--no-config` (on `config`, `chain`, `qc`, `plan`, `collect` and the tool verbs)
 leaves the file unread. A reference from the file or the variable that is not a file
-exits 1 and names where it came from.
+exits 1 and names where it came from, on a chain only when a step reads it and on a tool
+verb only when the tool reads it; `qc`, `plan` and `collect` leave it out with a note on
+standard error. A `config.toml` that is a FIFO, a device or a directory exits 2 before a
+byte is read.
 
 ### recipes
 
@@ -1383,6 +1390,9 @@ preset), `qc-only` (those four files), `downsample` (`downsample-sam` ConstantMe
 `downsample-sam.probability` required, the BAM indexed), then the user's from
 `~/.config/bammetrics/recipes/NAME.toml`. `bammetrics NAME BAM [OPTIONS]` is `bammetrics
 chain BAM --recipe NAME [OPTIONS]`. A recipe that writes a BAM needs `-o` to name it.
+`bammetrics NAME --help` prints the recipe's steps. A user recipe that cannot be read is
+listed as `not usable` with the reason, the others still; one named like a verb is
+marked, since the verb runs first (`chain BAM --recipe NAME` runs it).
 
 ## Prepare verbs
 

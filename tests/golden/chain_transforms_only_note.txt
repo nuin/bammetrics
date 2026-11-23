@@ -1,0 +1,16 @@
+## argv
+chain
+tests/data/oxog.bam
+reorder-sam
+-R
+tests/data/ref_100k.fa
+-o
+OUT/t
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: step 1 (reorder-sam): SEQUENCE_DICTIONARY: the dictionary is the reference's index tests/data/ref_100k.fa.fai (no tests/data/ref_100k.dict beside the reference): names and lengths only
+bammetrics chain: step 1 (reorder-sam): no step writes the records: -o OUT.bam or a write step writes them
+bammetrics chain: step 1 (reorder-sam): 120 records in, 120 out, 0 changed
+bammetrics chain: 1 step finished, 0 files written

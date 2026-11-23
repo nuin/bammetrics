@@ -241,7 +241,7 @@ pub fn load(use_file: bool) -> Result<Config, VerbError> {
     if let (true, Some(file)) = (use_file, config.path.clone())
         && file.exists()
     {
-        let text = crate::chain::read_capped(&file, FILE_CAP).map_err(|e| {
+        let text = read_regular_capped(&file, FILE_CAP).map_err(|e| {
             VerbError::usage(VERB, format!("{}: not a config file: {e}", file.display()))
                 .hint(format!("{NO_CONFIG} leaves it unread"))
         })?;
@@ -257,17 +257,62 @@ pub fn load(use_file: bool) -> Result<Config, VerbError> {
     Ok(config)
 }
 
+/// The text of the user file at `path` (a config file or a recipe), at
+/// most `cap` bytes. The file is opened without blocking and must be a
+/// regular file: a FIFO, a device or a directory is refused before a byte
+/// is read, so a pipe named `config.toml` never stops a command.
+pub(crate) fn read_regular_capped(path: &Path, cap: u64) -> std::io::Result<String> {
+    use std::io::{Error, ErrorKind, Read as _};
+    use std::os::unix::fs::OpenOptionsExt as _;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(path)?;
+    if !file.metadata()?.is_file() {
+        return Err(Error::new(ErrorKind::InvalidInput, "not a regular file"));
+    }
+    let mut bytes = Vec::new();
+    file.take(cap.saturating_add(1)).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > cap {
+        return Err(Error::new(
+            ErrorKind::FileTooLarge,
+            format!("larger than {cap} bytes"),
+        ));
+    }
+    String::from_utf8(bytes).map_err(|e| Error::new(ErrorKind::InvalidData, e.utf8_error()))
+}
+
+fn renamed(verb: &str, mut error: VerbError) -> VerbError {
+    verb.clone_into(&mut error.verb);
+    error
+}
+
 /// The reference of the config file or [`REFERENCE_ENV`] for `verb`, which
-/// was given none, checked by [`checked`].
+/// was given none, checked by [`checked`]: for a command that reads it.
 pub fn reference_for(verb: &str, use_file: bool) -> Result<Option<String>, VerbError> {
-    let config = load(use_file).map_err(|mut e| {
-        verb.clone_into(&mut e.verb);
-        e
-    })?;
+    let config = load(use_file).map_err(|e| renamed(verb, e))?;
     config
         .reference
         .map(|reference| checked(verb, &reference))
         .transpose()
+}
+
+/// The reference of the config file or [`REFERENCE_ENV`] for `verb`, which
+/// was given none and may run without one (`qc`, `plan`, `collect`): a
+/// path that is not a file is left out with a note on standard error, so
+/// a stale config fails only the steps that need a reference.
+pub fn optional_reference_for(verb: &str, use_file: bool) -> Result<Option<String>, VerbError> {
+    let config = load(use_file).map_err(|e| renamed(verb, e))?;
+    let Some(reference) = config.reference else {
+        return Ok(None);
+    };
+    match checked(verb, &reference) {
+        Ok(path) => Ok(Some(path)),
+        Err(error) => {
+            eprintln!("bammetrics {verb}: note: {}: not used", error.what);
+            Ok(None)
+        }
+    }
 }
 
 /// The path of a reference from the config file or [`REFERENCE_ENV`]: an
@@ -284,9 +329,10 @@ pub fn checked(verb: &str, reference: &Sourced<String>) -> Result<String, VerbEr
             reference.origin.describe()
         ),
     )
-    .hint(format!(
-        "-R FASTA names another; {NO_CONFIG} leaves the file unread"
-    )))
+    .hint(match reference.origin {
+        Origin::File(..) => format!("-R FASTA names another; {NO_CONFIG} leaves the file unread"),
+        Origin::Env => format!("-R FASTA names another; unset {REFERENCE_ENV} to use none"),
+    }))
 }
 
 /// `args` without every [`NO_CONFIG`] in front of a `--`, and whether one

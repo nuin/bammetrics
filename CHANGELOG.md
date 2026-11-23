@@ -29,6 +29,16 @@
   option of a recipe's step (section 25).
 - Python: `chain(output="r.bam")` follows the same rule, `chain(recipe=..., config=False)`,
   and `bammetrics.recipe(name, source, output=..., set={...})` (docs/python.md).
+- The review of the grammar (docs/07 D171 to D174): `write -o out.bam` and
+  `split-sam-by-library -o DIR` in last place keep their `-o`; `-o r.SAM` exits 2; a
+  stale config or variable reference fails only a chain step that reads it, and `qc`,
+  `plan` and `collect` leave it out with a note; a FIFO `config.toml` is refused without
+  a wait; the bare form's errors name the source, a stray word with the closest verb
+  (`ins` is `insert-size`), a chain option in the middle and an option of `write` on the
+  last step; `-o` or `--recipe` twice exits 2; a `STEP.option=value` with an unknown
+  step gets the closest step; `bammetrics recipes` lists past a broken user recipe and
+  marks one named like a verb; `bammetrics NAME --help` prints the recipe. Golden record
+  `error_reorder_sam_no_reference` changes: its hint names `--from-bam` and `--dict`.
 
 ### Changed
 

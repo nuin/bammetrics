@@ -9,5 +9,5 @@ OUT/r.bam
 ## stdout
 ## stderr
 bammetrics chain: step 1 (reorder-sam): missing --sequence-dictionary: no reference to take it from
-  give --sequence-dictionary FILE on the step
+  give --sequence-dictionary FILE on the step (--from-bam BAM copies the @SQ lines of a BAM header; --dict FILE reads a .dict)
   or -R FASTA, or reference in the config file: its .dict, else its .fai

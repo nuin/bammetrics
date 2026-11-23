@@ -189,7 +189,7 @@ pub fn run(args: &[String]) -> Result<u8, VerbError> {
     let given = grammar::parse(VERB, &flags(), &args)?;
     if given.last(Key::Own("reference")).is_none()
         && !given.flag(Key::Help)
-        && let Some(reference) = crate::config::reference_for(VERB, !no_config)?
+        && let Some(reference) = crate::config::optional_reference_for(VERB, !no_config)?
     {
         args.push(format!("--reference={reference}"));
     }
