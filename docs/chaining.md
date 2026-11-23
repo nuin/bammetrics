@@ -5,7 +5,19 @@ memory. No shell pipe and no intermediate file is used. This page describes what
 to W05 of docs/07_full_parity_program.md (section 2) built: the stage layer and its
 executor (W03, 0.21.0), then the `chain` verb, its plan file, its plan text and the Python
 `chain` and `step` (W04, 0.22.0), then the sort barrier, the spool, the planner and SAM
-text in and out (W05, 0.23.0).
+text in and out (W05, 0.23.0). Sections 22 to 32 hold chain 2 (0.32.0): steps without
+`+`, `-o` naming the BAM, the config file and the recipes (22 to 26), the manifest,
+`--resume`, `--keep` and `qc` as the last step (27 to 30), every tool that reads a BAM as
+a step (31), and the three together (32).
+
+```bash
+# 0.32.0: a bare word starts a step, -o names the BAM, the reference comes from the config file
+bammetrics chain in.bam mark-duplicates insert-size -o out/NA12878.bam
+bammetrics prep in.bam -o out/NA12878.bam qc --fail-on fail --resume    # a recipe, the verdict, resumable
+```
+
+The long form puts a `+` in front of every step and names each file. Every form of this
+page written with `+` runs as it did at 0.31.0, byte for byte:
 
 ```bash
 # MarkDuplicates, four collectors on the marked records and the marked BAM, one process
@@ -68,10 +80,12 @@ chain writes to a file.
 
 ```
 bammetrics chain [OPTIONS] BAM + STEP [STEP OPTIONS] [+ STEP ...]
+bammetrics chain [OPTIONS] BAM STEP [STEP OPTIONS] [STEP ...] [OPTIONS]      (section 22)
 bammetrics chain --plan FILE [OPTIONS] [BAM]
+bammetrics chain BAM --recipe NAME [OPTIONS] [STEP.option=value ...] [qc [QC OPTIONS]]   (section 25)
 ```
 
-The chain's options and the source come first. Every `+` starts a step. The first word of
+This section describes the `+` form. The chain's options and the source come first. Every `+` starts a step. The first word of
 a step is its verb: a tool verb (`insert-size`), its Picard class
 (`CollectInsertSizeMetrics`), or `write`. The words after it are that step's options.
 
@@ -98,6 +112,8 @@ works in a step: `--minimum-pct 0.1`, `--MINIMUM_PCT 0.1`, `MINIMUM_PCT=0.1`, `-
 | `--validation-stringency` | `STRICT` (default), `LENIENT` or `SILENT` for a SAM text source. A step refuses it |
 | `--resume` | Skip each step whose record in `PREFIX.manifest.json` matches and whose transforms in front are skipped too (section 27). Standard input as the source is a usage error |
 | `--plan FILE` | Read the source, the options and the steps from a plan file (section 3) |
+| `--recipe NAME` | Run a named chain; `STEP.option=value` sets an option of one of its steps, and a last `qc` step may follow (section 25) |
+| `--no-config` | Leave the user config file unread (section 24) |
 | `--dry-run` | Print the plan and run nothing (section 4) |
 | `-q`, `-v` | No notes and no summary; or each command line and each file written |
 
@@ -644,7 +660,7 @@ run.metrics["insert-size"]          # out/NA12878.insert_size_metrics, parsed
 | `step_table(name)` | A `StepTable` for a verb named in snake or kebab case, by its Picard class or by its function name: `verb`, `role`, `keywords`. An unknown name is a usage error with the closest step |
 | `StepTable::keyword(name)` | One keyword, or the usage error with the closest name. `input` (except on `merge_sam_files`, `gather_bam_files` and `jumping_library`, where it names the further inputs) and `output` of `mark_duplicates` are refused with the reason |
 | `Keyword` | `name`, `long` (the flag it spells), `ty`, `many` (`One`, `Repeated`: one occurrence per item, `Joined`: one comma list) |
-| `step_names()` | The 38 names `step` takes, snake case, in `bammetrics tools` order, then `write` and `qc` |
+| `step_names()` | The 55 names `step` takes, snake case: the 53 tool verbs in `bammetrics tools` order, then `write` and `qc` |
 | `metric_key(chain, step, path)` | The key of a metrics file in `Run.metrics`: the verb, `STREAM.` in front for a tap that does not read the last stream, `.FILE` after it for a further file |
 | `stubs()` | The `bammetrics.pyi` entries: `_StepVerb`, `step`, three `chain` overloads |
 
