@@ -19,13 +19,22 @@
 //! count, then per index `ID`, `SM`, `LB`, `DS`, `PU`, `PI`, `CN`, `DT`,
 //! `PL`); and, unless `LENIENT_HEADER`, the program records (the count,
 //! then per index `ID`, `VN`, `CL`). `GO`, `@CO` lines and every other
-//! field are not compared.
+//! field are not compared. A value is the string htsjdk holds: a BAM's
+//! header one character per byte, a CRAM's and SAM text's decoded as
+//! UTF-8. SAM text is compared through the header whose values are UTF-8
+//! ([`crate::sam_text::Reader::decoded_header`]), so `A` and U+0141, one
+//! byte in the header a BAM record is read against, are two values.
 //!
 //! # Records
 //!
 //! Secondary and supplementary records are skipped. Two records are one
 //! read when their names are equal and both are unpaired, or both first, or
-//! both second of their pair (`PrimaryAlignmentKey`). The walk depends on
+//! both second of their pair (`PrimaryAlignmentKey`). A name is the string
+//! htsjdk holds (`records::Names`): one character per byte of a BAM, UTF-8
+//! of a CRAM and of SAM text, whose names with a character above U+00FF
+//! come beside the record stream ([`crate::sam_text::WideNames`]). So `é`
+//! as the byte `E9` in a BAM and as `C3 A9` in SAM text is one name, and
+//! the UTF-8 bytes in a BAM are another. The walk depends on
 //! the sort order, which both headers must share (`Sort Order differs.`
 //! and `Cannot compare alignments if sort orders differ.` otherwise, with
 //! every count 0):
@@ -77,7 +86,14 @@
 //! bytes a record at the peak, 418 under `LENIENT_DUP`
 //! (docs/benchmarks.md). Two files in the same order hold the records of
 //! one place. The `LENIENT_DUP` sorts hold `MAX_RECORDS_IN_RAM` keys each
-//! and spill to `TMP_DIR`.
+//! and spill to `TMP_DIR`. What is read back from them is held in memory
+//! and is not bounded: one name per record of every left duplicate set of
+//! two or more records (`duplicates::LeftSets`), the names matched so far,
+//! and one duplicate set whole. Only pairs whose duplicate flags differ
+//! reach the sorts, so the worst case is every pair differing inside sets
+//! of two or more: 257 MB for 400,000 such pairs in one set against 69 MB
+//! without `LENIENT_DUP`, about 470 bytes a pair. Picard holds the
+//! `SAMRecord`s of those sets.
 //!
 //! A BAM or a CRAM is not validated (`VALIDATION_STRINGENCY` applies to
 //! SAM text), as for every tool. One check htsjdk makes at any stringency
@@ -91,10 +107,13 @@ mod records;
 #[cfg(test)]
 mod tests;
 
-use std::io::Write;
-use std::path::PathBuf;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+
+use noodles::sam;
 
 use crate::compare_metrics::JavaFile;
+use crate::cram::Kind;
 use crate::error::{Error, Result};
 use crate::metric::{
     HistogramSection, HistogramSeries, MetricRow, MetricsOutput, ToolOutput, Value,
@@ -107,6 +126,7 @@ use crate::spill::TempDir;
 use alignments::{Comparer, Input};
 use duplicates::Lenient;
 use header::Say;
+use records::Names;
 
 /// Picard's `MAX_RECORDS_IN_RAM` default, the size of a sorted run.
 const DEFAULT_RECORDS_IN_RAM: i64 = 500_000;
@@ -370,11 +390,7 @@ fn compare_opened(
     say: Say<'_>,
 ) -> Result<Comparison> {
     let Opened { left, right } = opened;
-    let side = |input: &Input<'_>, header| header::Side {
-        header,
-        one_byte_chars: !input.cram && !crate::cram::is_sam(input.path),
-    };
-    let (left_side, right_side) = (side(&left, left.header), side(&right, right.header));
+    let (left_side, right_side) = (left.shown, right.shown);
     let headers = header::compare(&left_side, &right_side, options.lenient_header, say)?;
     let orders = (left_side.sort_order(), right_side.sort_order());
     let temp = TempDir::new(options.tmp_dir.as_deref(), "compare-sams");
@@ -388,7 +404,7 @@ fn compare_opened(
             right.header,
         )
     });
-    let mut comparer = Comparer::new(options, lenient, left.header, right.header);
+    let mut comparer = Comparer::new(options, lenient, &left_side, &right_side);
     let alignments =
         comparer.alignments(orders, headers.dictionaries_differ, (left, right), say)?;
     let mut counts = comparer.counts;
@@ -425,37 +441,63 @@ pub fn compare(inv: &Invocation, say: Say<'_>) -> Result<Comparison> {
     }
     let stringency = inv.stringency()?;
     let (reference, threads) = (inv.reference(), inv.threads);
-    pass::with_record_stream_at(
+    pass::with_record_stream_text(
         &options.left,
         reference,
         threads,
         stringency,
-        |left_header, left_reader, left_cram| {
-            pass::with_record_stream_at(
+        |left_header, left_reader, left_kind, left_text| {
+            pass::with_record_stream_text(
                 &options.right,
                 reference,
                 threads,
                 stringency,
-                |right_header, right_reader, right_cram| {
+                |right_header, right_reader, right_kind, right_text| {
                     let opened = Opened {
-                        left: Input {
-                            path: &options.left,
-                            reader: left_reader,
-                            cram: left_cram,
-                            header: left_header,
-                        },
-                        right: Input {
-                            path: &options.right,
-                            reader: right_reader,
-                            cram: right_cram,
-                            header: right_header,
-                        },
+                        left: input(
+                            &options.left,
+                            left_reader,
+                            left_kind,
+                            (left_header, left_text),
+                        ),
+                        right: input(
+                            &options.right,
+                            right_reader,
+                            right_kind,
+                            (right_header, right_text),
+                        ),
                     };
                     compare_opened(&options, inv, opened, say)
                 },
             )
         },
     )
+}
+
+/// One opened file as the comparison reads it: a BAM's header values and
+/// read names one character per byte, a CRAM's and SAM text's as UTF-8.
+fn input<'r>(
+    path: &'r Path,
+    reader: &'r mut dyn Read,
+    kind: Kind,
+    (header, text): (&'r sam::Header, &'r pass::Text),
+) -> Input<'r> {
+    let (names, one_byte_chars) = match kind {
+        Kind::Bam => (Names::Bytes, true),
+        Kind::Cram => (Names::Utf8, false),
+        Kind::Sam | Kind::GzipSam => (Names::Text(text.wide_names.clone()), false),
+    };
+    Input {
+        path,
+        reader,
+        cram: kind == Kind::Cram,
+        header,
+        shown: header::Side {
+            header: text.decoded_header.as_ref().unwrap_or(header),
+            one_byte_chars,
+        },
+        names,
+    }
 }
 
 fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
@@ -465,7 +507,10 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
 /// Picard's command line as the registry reads it: each positional
 /// argument (a word without `=` that is no option's value) becomes
 /// `INPUT=WORD`. Picard has no `INPUT` option on this tool, so one given by
-/// name is refused as Picard refuses it.
+/// name is refused as Picard refuses it. A boolean option takes the next
+/// word as its value only when that word is `true` or `false` in any case,
+/// as Picard's parser does: `--LENIENT_DUP a.bam b.bam` is a flag and two
+/// files.
 pub fn picard_arguments(args: &[String]) -> Result<Vec<String>> {
     let is_bool = |name: &str| {
         TOOL.table()
@@ -489,8 +534,17 @@ pub fn picard_arguments(args: &[String]) -> Result<Vec<String>> {
             continue;
         }
         out.push(arg.clone());
-        let bare_bool = is_bool(body) && rest.peek().is_none_or(|next| next.starts_with('-'));
-        if arg.starts_with('-') && !body.contains('=') && !bare_bool {
+        let is_value = |word: &&String| {
+            word.eq_ignore_ascii_case("true") || word.eq_ignore_ascii_case("false")
+        };
+        if !arg.starts_with('-') || body.contains('=') {
+            continue;
+        }
+        if is_bool(body) && !rest.peek().is_some_and(is_value) {
+            // Said in full: the registry reads the word after `--KEY` as
+            // its value, and the next word here is a file or an option.
+            out.push("true".to_owned());
+        } else {
             out.extend(rest.next().cloned());
         }
     }

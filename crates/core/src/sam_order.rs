@@ -388,14 +388,22 @@ pub struct DuplicateKey<'a> {
     /// `DuplicateScoringStrategy.computeDuplicateScore` with
     /// `TOTAL_MAPPED_REFERENCE_LENGTH` and the mate's CIGAR.
     pub score: i16,
+    /// The record is unmapped, its mate is mapped and it has no `MC`:
+    /// htsjdk cannot score it. It scores a record only against one that
+    /// ties with it in `fileOrderCompare`, and fails there ([`Scoring`]).
+    /// `score` leaves the mate's term out.
+    pub unscored: bool,
     /// The `RG` tag: the read name's prefix in `getCanonicalRecordName`.
     pub read_group: Option<Vec<u8>>,
     pub name: Cow<'a, [u8]>,
 }
 
 impl<'a> DuplicateKey<'a> {
-    /// The key of `record`. A paired record whose mate is mapped needs an
-    /// `MC` tag, as in htsjdk.
+    /// The key of `record`. A mapped record of a pair whose mate is mapped
+    /// needs an `MC` tag, as in htsjdk, which reads the mate's coordinate
+    /// from it for every record it compares. An unmapped record with a
+    /// mapped mate needs `MC` for its score alone: without it the key is
+    /// [`DuplicateKey::unscored`].
     pub fn of(record: &'a RawRecord, libraries: &Libraries) -> Result<Self> {
         let flags = record.flags();
         let name = || String::from_utf8_lossy(record.name()).into_owned();
@@ -432,10 +440,19 @@ impl<'a> DuplicateKey<'a> {
         let mate_mapped = flags & PAIRED != 0 && flags & MATE_UNMAPPED == 0;
         let mut mate_reference_id = -1;
         let mut mate_coordinate = -1;
-        if mate_mapped {
-            let mate_cigar = string_tag(*b"MC")?.ok_or_else(|| {
-                Error::Metric(format!("Mate CIGAR (Tag MC) not found: {}", name()))
-            })?;
+        let mate_cigar = if mate_mapped {
+            string_tag(*b"MC")?
+        } else {
+            None
+        };
+        let unscored = mate_mapped && mate_cigar.is_none();
+        if unscored && !unmapped {
+            return Err(Error::Metric(format!(
+                "Mate CIGAR (Tag MC) not found: {}",
+                name()
+            )));
+        }
+        if let Some(mate_cigar) = mate_cigar {
             let ops = parse_cigar(&mate_cigar).map_err(Error::Metric)?;
             let reference_length = crate::bam_raw::reference_length(ops.iter().copied());
             score = score.wrapping_add(reference_length.min(cap) as i16);
@@ -460,9 +477,22 @@ impl<'a> DuplicateKey<'a> {
             mate_reference_id,
             mate_coordinate,
             score,
+            unscored,
             read_group,
             name: Cow::Borrowed(record.name()),
         })
+    }
+
+    /// The flags and [`DuplicateKey::unscored`] as one number of a run
+    /// file.
+    pub fn packed_flags(&self) -> u64 {
+        u64::from(self.flags) | u64::from(self.unscored) << 16
+    }
+
+    /// The flags and `unscored` of a [`DuplicateKey::packed_flags`];
+    /// `None` for a number that is none.
+    pub fn unpacked_flags(packed: u64) -> Option<(u16, bool)> {
+        (packed >> 17 == 0).then_some((packed as u16, packed >> 16 == 1))
     }
 
     /// The key without its borrow of the record.
@@ -485,7 +515,7 @@ impl<'a> DuplicateKey<'a> {
         ] {
             put_i64(out, i64::from(value));
         }
-        put_u64(out, u64::from(self.flags));
+        put_u64(out, self.packed_flags());
         match &self.read_group {
             Some(group) => {
                 out.push(1);
@@ -515,7 +545,8 @@ impl<'a> DuplicateKey<'a> {
             score,
         ] = values;
         let score = i16::try_from(score).map_err(|_| invalid("a score past 16 bits"))?;
-        let flags = u16::try_from(need_u64(input)?).map_err(|_| invalid("flags past 16 bits"))?;
+        let (flags, unscored) =
+            Self::unpacked_flags(need_u64(input)?).ok_or_else(|| invalid("flags past 17 bits"))?;
         let mut flag = [0u8];
         input.read_exact(&mut flag)?;
         let read_group = match flag[0] {
@@ -531,6 +562,7 @@ impl<'a> DuplicateKey<'a> {
             mate_reference_id,
             mate_coordinate,
             score,
+            unscored,
             read_group,
             name: Cow::Owned(name),
         })
@@ -655,6 +687,56 @@ impl<'a> DuplicateKey<'a> {
                     Ordering::Equal
                 }
             })
+    }
+}
+
+/// The records of a stream sorted by [`DuplicateKey::compare`], watched
+/// for the one failure htsjdk's comparator has after a key is built: it
+/// scores a record (`DuplicateScoringStrategy.compare`) when
+/// `fileOrderCompare` ties, and an [`DuplicateKey::unscored`] record then
+/// fails (a null mate CIGAR). Records that tie in the file order are
+/// neighbours in the sorted stream, and a sort compares neighbours, so
+/// htsjdk fails when an unscored record has a neighbour that ties with it.
+/// One such record with no tie is never scored.
+#[derive(Debug, Default)]
+pub struct Scoring {
+    /// The last key, without its read group; its name only when unscored.
+    last: Option<DuplicateKey<'static>>,
+}
+
+impl Scoring {
+    /// The next key of the sorted stream.
+    pub fn next(&mut self, key: &DuplicateKey<'_>) -> Result<()> {
+        if let Some(last) = &self.last
+            && (last.unscored || key.unscored)
+            && last.file_order(key) == Ordering::Equal
+        {
+            // The words of the failure a mapped record without `MC` gives
+            // when its key is built: one message for a missing mate CIGAR.
+            let name = if last.unscored { &last.name } else { &key.name };
+            return Err(Error::Metric(format!(
+                "Mate CIGAR (Tag MC) not found: {}",
+                String::from_utf8_lossy(name)
+            )));
+        }
+        let name = if key.unscored {
+            Cow::Owned(key.name.to_vec())
+        } else {
+            Cow::Borrowed(&[][..])
+        };
+        self.last = Some(DuplicateKey {
+            library: key.library,
+            reference_id: key.reference_id,
+            read_coordinate: key.read_coordinate,
+            flags: key.flags,
+            mate_reference_id: key.mate_reference_id,
+            mate_coordinate: key.mate_coordinate,
+            score: key.score,
+            unscored: key.unscored,
+            read_group: None,
+            name,
+        });
+        Ok(())
     }
 }
 

@@ -29,7 +29,7 @@ use noodles::sam;
 use super::records::{DUPLICATE, UNMAPPED};
 use crate::bam_raw::RawRecord;
 use crate::error::{Error, Result};
-use crate::sam_order::{DuplicateKey, Libraries};
+use crate::sam_order::{DuplicateKey, Libraries, Scoring};
 use crate::spill::{Sorted, Sorter, Spill, TempDir, get_u64, put_u64};
 
 /// One record in a sort: what `SAMRecordDuplicateComparator` reads from it.
@@ -102,12 +102,28 @@ struct Sets<'d> {
     sorted: Sorted<'d, Member>,
     /// The first record of the next set.
     ahead: Option<Member>,
+    scoring: Scoring,
 }
 
 impl<'d> Sets<'d> {
-    fn new(mut sorted: Sorted<'d, Member>) -> Result<Self> {
-        let ahead = sorted.next_item()?;
-        Ok(Self { sorted, ahead })
+    fn new(sorted: Sorted<'d, Member>) -> Result<Self> {
+        let mut sets = Self {
+            sorted,
+            ahead: None,
+            scoring: Scoring::default(),
+        };
+        sets.ahead = sets.next_member()?;
+        Ok(sets)
+    }
+
+    /// The next sorted record, failing where htsjdk's sort fails to score
+    /// one ([`Scoring`]).
+    fn next_member(&mut self) -> Result<Option<Member>> {
+        let member = self.sorted.next_item()?;
+        if let Some(member) = &member {
+            self.scoring.next(&member.key)?;
+        }
+        Ok(member)
     }
 
     fn next_set(&mut self) -> Result<Option<Vec<Entry>>> {
@@ -120,7 +136,7 @@ impl<'d> Sets<'d> {
         };
         let mut records = vec![entry(&first.key)];
         let mut representative = first.key;
-        while let Some(member) = self.sorted.next_item()? {
+        while let Some(member) = self.next_member()? {
             let order = if representative.flags & UNMAPPED != 0 {
                 Ordering::Less
             } else {
@@ -283,8 +299,11 @@ impl<'t> Lenient<'t> {
         }
     }
 
-    /// `catalogDuplicateDifferences` for a pair whose flags differ.
-    pub fn add(&mut self, left: &RawRecord, right: &RawRecord) -> Result<()> {
+    /// `catalogDuplicateDifferences` for a pair whose flags differ. `name`
+    /// is the read name both records have as htsjdk's string
+    /// ([`super::records::Key::name`]): the sets of the two files are
+    /// matched by it, whatever bytes each file spells it in.
+    pub fn add(&mut self, left: &RawRecord, right: &RawRecord, name: &str) -> Result<()> {
         self.pairs += 1;
         let sides = [
             (left, &self.left_libraries, &mut self.left),
@@ -292,9 +311,13 @@ impl<'t> Lenient<'t> {
         ];
         for (record, libraries, sorter) in sides {
             match DuplicateKey::of(record, libraries) {
-                Ok(key) => sorter.push(Member {
-                    key: key.into_owned(),
-                })?,
+                Ok(key) => {
+                    let mut key = key.into_owned();
+                    if !name.is_ascii() {
+                        key.name = std::borrow::Cow::Owned(name.as_bytes().to_vec());
+                    }
+                    sorter.push(Member { key })?;
+                }
                 Err(error) => {
                     self.held.get_or_insert(error);
                 }
@@ -435,6 +458,7 @@ mod tests {
             mate_reference_id: -1,
             mate_coordinate: -1,
             score: 77,
+            unscored: true,
             read_group: Some(b"rg1".to_vec()),
             name: std::borrow::Cow::Owned(b"read".to_vec()),
         };

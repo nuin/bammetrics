@@ -4,6 +4,8 @@ tests/data/make_compare_sams_fixtures.py and the doctor fixtures. Picard's own
 answers for these files are in tests/concordance. Run: pytest tests/python after
 maturin develop."""
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -83,7 +85,25 @@ def test_terminator_errors_raise(tmp_path):
         bammetrics.check_terminator_block(str(tmp_path / "none.bam"))
     with pytest.raises(Exception, match="because it is a directory"):
         bammetrics.check_terminator_block(str(tmp_path))
+
+
+PIPE_CALL = """
+import sys
+import bammetrics
+try:
+    bammetrics.check_terminator_block(sys.argv[1])
+except ValueError as error:
+    print(error)
+    sys.exit(7)
+"""
+
+
+def test_a_named_pipe_is_refused_without_being_opened(tmp_path):
+    """No writer ever opens the pipe, so a call that opened it would wait for
+    ever: it runs in a child that `subprocess.run` kills after 20 seconds."""
     pipe = tmp_path / "pipe.bam"
     os.mkfifo(pipe)
-    with pytest.raises(ValueError, match="not a regular file"):
-        bammetrics.check_terminator_block(str(pipe))
+    done = subprocess.run([sys.executable, "-c", PIPE_CALL, str(pipe)], capture_output=True,
+                          text=True, timeout=20)
+    assert done.returncode == 7, done.stderr
+    assert "not a regular file" in done.stdout

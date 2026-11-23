@@ -586,7 +586,8 @@ bytes for SAM text).
 - `queryname` is htsjdk's `SAMRecordQueryNameComparator` (name by bytes, first of pair
   before second, forward before reverse, primary before secondary and supplementary, `HI`),
   `coordinate` its coordinate comparator (unplaced records last), `duplicate` its duplicate
-  comparator, which needs the `MC` tag on every paired record with a mapped mate.
+  comparator, which needs the `MC` tag on every mapped record of a pair with a mapped mate,
+  and on an unmapped record with a mapped mate when another record ties with it.
   Records with equal keys keep their input order.
 - `--max-records-in-ram N` (default 500,000) records are sorted in memory per run; more
   spill to `--tmp-dir` as sorted runs (BGZF level 3, mode 0600, removed at the end, on a
@@ -2043,10 +2044,14 @@ lines on standard error, each after `bammetrics compare-s-a-ms: `; `-q` drops th
   `MAPPINGS_DIFFER`. A record without a partner counts in `MISSING_RIGHT` (a left record) or
   `MISSING_LEFT`. The strand is never compared (Picard compares the left strand with
   itself).
+- Names and header values are compared as the strings htsjdk holds: one character per
+  byte of a BAM, UTF-8 of a CRAM and of SAM text. `é` as the byte `E9` in a BAM equals `é`
+  in SAM text; the UTF-8 bytes `C3 A9` in a BAM are the two characters `Ã©`. Two SAM text
+  values that differ in a character above U+00FF (`A` and `Ł`) differ.
 - Both headers must name one sort order, else Picard prints `Cannot compare alignments if
   sort orders differ.` and every count is 0. `coordinate` pairs records by place, then the
   rest by key; it is refused when the dictionaries differ. `queryname` merges the two files
-  by key, the name in byte order (not `samtools sort -n` order). `unsorted`, `duplicate`
+  by key, the name in Java string order (not `samtools sort -n` order). `unsorted`, `duplicate`
   and a header without `SO` hold the left file by key. `SO:unknown` exits 1, as in Picard.
 - `--lenient-low-mq-alignment` counts a pair as a match wherever it maps when both mapping
   qualities are at most `--low-mq-threshold` (default 3; Picard's help says below, its code
@@ -2054,8 +2059,9 @@ lines on standard error, each after `bammetrics compare-s-a-ms: `; `-q` drops th
 - A pair whose duplicate flags differ counts in `DUPLICATE_MARKINGS_DIFFER`.
   `--lenient-dup` forgives the pairs where the two files chose another representative of
   one duplicate set: those pairs are sorted as htsjdk's duplicate order sorts them
-  (`--max-records-in-ram` keys per sort, runs in `--tmp-dir`) and need `MC` on a pair whose
-  mate is mapped once two pairs differ.
+  (`--max-records-in-ram` keys per sort, runs in `--tmp-dir`) and need `MC` on a mapped
+  record whose mate is mapped once two pairs differ. An unmapped record with a mapped mate
+  needs `MC` only when another differing record is at its place, as in Picard.
 - `--compare-mq` adds a histogram of pairs by `LEFT,RIGHT` mapping quality (`BIN`, `VALUE`),
   the keys in text order, as Picard writes it.
 - `ARE_EQUAL` is `Y` when the headers are equal, the records were compared, and
@@ -2071,6 +2077,11 @@ lines on standard error, each after `bammetrics compare-s-a-ms: `; `-q` drops th
   primary record of the left file when unsorted. A waiting record costs 233 bytes at the
   peak, 418 under `--lenient-dup` (1,969 and 3,526 MiB for 8.4 million unsorted records;
   Picard holds 6,065 MiB there under `-Xmx8g`, docs/benchmarks.md).
+- Memory under `--lenient-dup`: the sorts spill, the duplicate sets read back from them do
+  not. One name per record of every left duplicate set of two or more records, the names
+  matched so far and one set whole stay in memory, about 470 bytes for each pair whose
+  duplicate flags differ (257 MB for 400,000 such pairs in one set, 69 MB without the
+  option). The worst case is every pair differing. Picard holds the records of those sets.
 - `LEFT_FILE` and `RIGHT_FILE` are absolute paths, the working directory in front of a
   relative one. `-o` may not name an input (exit 2; the Picard face exits 1). A failed run
   writes no file.

@@ -99,13 +99,32 @@ fn positional_arguments_become_inputs() {
             "--LENIENT_DUP",
             "true",
             "INPUT=b.bam",
-            "--COMPARE_MQ"
+            "--COMPARE_MQ",
+            "true"
         ]
     );
+    // A boolean takes the next word only when it is true or false; a
+    // flag alone is said in full for the registry.
     assert_eq!(
         turned(&["--COMPARE_MQ", "--QUIET", "a.bam"]),
-        ["--COMPARE_MQ", "--QUIET", "a.bam"]
+        ["--COMPARE_MQ", "true", "--QUIET", "true", "INPUT=a.bam"]
     );
+    let flag_first = turned(&["--LENIENT_DUP", "a.bam", "b.bam", "--COMPARE_MQ", "FALSE"]);
+    assert_eq!(
+        flag_first,
+        [
+            "--LENIENT_DUP",
+            "true",
+            "INPUT=a.bam",
+            "INPUT=b.bam",
+            "--COMPARE_MQ",
+            "FALSE"
+        ]
+    );
+    let inv = TOOL.parse(&flag_first).expect("parse");
+    let options = Options::from_invocation(&inv).expect("options");
+    assert_eq!(inv.all("INPUT"), ["a.bam", "b.bam"]);
+    assert!(options.lenient_dup && !options.compare_mq);
     for named in [&["I=a.bam"][..], &["--INPUT", "a.bam"], &["INPUT=a.bam"]] {
         let error = picard_arguments(&args(named)).expect_err("INPUT by name");
         assert!(error.to_string().contains("Unrecognized option"), "{error}");
@@ -519,5 +538,132 @@ fn the_output_may_not_be_an_input() {
     let (result, _) = run(&left, &left, &[&format!("OUTPUT={left}")]);
     assert!(result.is_err());
     assert_eq!(std::fs::read(&left).expect("read"), before);
+    std::fs::remove_dir_all(&dir).expect("remove");
+}
+
+/// A header with one read group whose `DS` is `ds`.
+fn described(ds: &str) -> String {
+    format!("@HD\tVN:1.6\tSO:coordinate\n{SQ}@RG\tID:g1\tSM:s\tLB:lib\tDS:{ds}\n")
+}
+
+/// htsjdk decodes SAM text as UTF-8 and compares strings. The header the
+/// records are read against holds one byte per UTF-16 unit, in which
+/// `A` and U+0141 are one value, and U+0109 and U+010A a tab and a line
+/// end.
+#[test]
+fn sam_text_header_values_are_compared_as_the_file_spells_them() {
+    let dir = scratch("wide-header");
+    let records = [rec("a", 0, 100, 60)];
+    let pairs = [
+        ("caf\u{e9}", "caf\u{e8}"),
+        ("A", "\u{141}"),
+        ("\u{141}", "\u{241}"),
+        ("\u{6f22}\u{5b57}", "\u{6f22}\u{5b50}"),
+        ("a\u{109}b", "ab"),
+        ("a\u{10a}b", "ab"),
+        ("a\u{100}b", "ab"),
+        ("x\u{1f600}", "x\u{1f601}"),
+    ];
+    for (ours, theirs) in pairs {
+        let left = file(&dir, "left.sam", &described(ours), &records);
+        let right = file(&dir, "right.sam", &described(theirs), &records);
+        let (result, lines) = run(&left, &right, &[]);
+        let row = result.expect("compare").row;
+        assert!(!row.are_equal, "{ours} against {theirs}");
+        assert_eq!(row.counts.mappings_match, 1);
+        let expected = [
+            "DS for read group g1 differs.".to_owned(),
+            format!("File 1: {ours}"),
+            format!("File 2: {theirs}"),
+        ];
+        assert_eq!(lines, expected);
+        let (same, lines) = run(&left, &left, &[]);
+        assert!(
+            same.expect("compare").row.are_equal,
+            "{ours} against itself"
+        );
+        assert!(lines.is_empty(), "{lines:?}");
+    }
+    std::fs::remove_dir_all(&dir).expect("remove");
+}
+
+/// Read names of SAM text are htsjdk's strings: `A` and U+0141 are two
+/// reads, though a BAM record holds the byte 0x41 for both.
+#[test]
+fn sam_text_read_names_are_compared_as_the_file_spells_them() {
+    let dir = scratch("wide-names");
+    let pairs = [
+        ("A", "\u{141}"),
+        ("caf\u{e9}", "caf\u{e8}"),
+        ("\u{6f22}\u{5b57}", "\u{6f22}\u{5b50}"),
+        ("x\u{1f600}", "x\u{1f601}"),
+    ];
+    for order in ["coordinate", "queryname", "unsorted"] {
+        let head = header(order);
+        for (ours, theirs) in pairs {
+            // The queryname merge fails when the right file ends first.
+            let (ours, theirs) = if ours.encode_utf16().lt(theirs.encode_utf16()) {
+                (ours, theirs)
+            } else {
+                (theirs, ours)
+            };
+            // A secondary record first: every record read has an index.
+            let records = |name: &str| [rec("s", 256, 50, 60), rec(name, 0, 100, 60)];
+            let left = file(&dir, "left.sam", &head, &records(ours));
+            let right = file(&dir, "right.sam", &head, &records(theirs));
+            let found = counts(&left, &right, &[]);
+            assert_eq!(
+                (
+                    found.missing_left,
+                    found.missing_right,
+                    found.mappings_match
+                ),
+                (1, 1, 0),
+                "{order}: {ours} against {theirs}"
+            );
+            let same = counts(&right, &right, &[]);
+            assert_eq!((same.mappings_match, same.missing_left), (1, 0), "{theirs}");
+        }
+    }
+    // The queryname merge orders names by UTF-16 unit: U+1F600 (a
+    // surrogate pair) before U+FFE5, so the right file does not end first.
+    let head = header("queryname");
+    let left = file(&dir, "left.sam", &head, &[rec("\u{1f600}", 0, 100, 60)]);
+    let right = file(&dir, "right.sam", &head, &[rec("\u{ffe5}", 0, 100, 60)]);
+    let found = counts(&left, &right, &[]);
+    assert_eq!((found.missing_left, found.missing_right), (1, 1));
+    assert!(run(&right, &left, &[]).0.is_err());
+    std::fs::remove_dir_all(&dir).expect("remove");
+}
+
+/// An unmapped record with a mapped mate and no `MC` is scored by htsjdk
+/// only against a record at its place: alone there it counts, with a
+/// second one there Picard fails, and so does this.
+#[test]
+fn lenient_dup_scores_an_unmapped_record_only_on_a_tie() {
+    let dir = scratch("unscored");
+    let head = header("coordinate");
+    let tail = "ACGTACGTAC\tIIIIIIIIII\tRG:Z:g1";
+    let pair = |name: &str, at: i32, mark: u16| -> Vec<String> {
+        vec![
+            format!("{name}\t73\tc1\t{at}\t60\t10M\t=\t{at}\t0\t{tail}\n"),
+            format!(
+                "{name}\t{}\tc1\t{at}\t0\t*\t=\t{at}\t0\t{tail}\n",
+                133 | mark
+            ),
+        ]
+    };
+    let two = |second: i32, mark: u16| [pair("u", 100, mark), pair("v", second, mark)].concat();
+    let lenient = ["LENIENT_DUP=true"];
+    let left = file(&dir, "left.sam", &head, &two(200, 0));
+    let right = file(&dir, "right.sam", &head, &two(200, 1024));
+    assert_eq!(counts(&left, &right, &lenient).duplicate_markings_differ, 2);
+    let left = file(&dir, "left.sam", &head, &two(100, 0));
+    let right = file(&dir, "right.sam", &head, &two(100, 1024));
+    let error = run(&left, &right, &lenient).0.expect_err("a tie is scored");
+    assert!(
+        error.to_string().contains("Mate CIGAR (Tag MC) not found"),
+        "{error}"
+    );
     std::fs::remove_dir_all(&dir).expect("remove");
 }

@@ -19,7 +19,11 @@ Hand-written duplicate sets for LENIENT_DUP. Corpus t1 and the exome slice again
 themselves. Error parity: the right file ends first under queryname order (Picard
 throws), SO:unknown, a pair without MC under LENIENT_DUP, bad option values, one input
 and three, a missing file, an OUTPUT whose directory is missing. The verb gives the
-Picard face's file and exit code.
+Picard face's file and exit code. Header values and read names beyond ASCII (accented,
+CJK, emoji, characters that share a low byte, characters whose low byte is a tab, a line
+end or NUL) in SAM text, BAM and CRAM against each other. A boolean flag before the
+files in Picard 3 syntax. An unmapped record with a mapped mate and no MC under
+LENIENT_DUP and under SortSam's duplicate order: counted alone, failing on a tie.
 
 Picard runs with VALIDATION_STRINGENCY=SILENT (its default refuses corpus records),
 QUIET=true and JAVA_OPTS=-Xmx8g. Needs picard and samtools; run `make concordance`.
@@ -215,7 +219,8 @@ def files(tmp_path_factory, corpus):
 def run(side, arguments, quiet=("QUIET=true",)):
     if side == "picard":
         env = picard_env()
-        env["JAVA_OPTS"] = "-Xmx8g"
+        # Header values beyond ASCII are printed: the JVM writes them as UTF-8.
+        env["JAVA_OPTS"] = "-Xmx8g -Dstdout.encoding=UTF-8"
         return subprocess.run(["picard", TOOL, *map(str, arguments), *quiet], env=env,
                               capture_output=True, text=True)
     return subprocess.run([str(BAMMETRICS), TOOL, *map(str, arguments)], capture_output=True,
@@ -660,6 +665,192 @@ def test_bammetrics_refuses_an_output_that_is_an_input(files, tmp_path):
     before = copy.read_bytes()
     result = run("ours", [copy, files["hand_swap_right"], f"O={copy}"])
     assert result.returncode != 0 and copy.read_bytes() == before, result.stderr
+
+
+# Header values and read names beyond ASCII. htsjdk holds strings: a BAM's bytes one
+# character each, SAM text and a CRAM decoded as UTF-8. samtools copies the UTF-8 bytes
+# of SAM text into a BAM, so the BAM of `é` holds the two characters `Ã©`.
+WIDE = {
+    "latin": ("caf\u00e9", "caf\u00e8"),
+    "cjk": ("\u6f22\u5b57", "\u6f22\u5b50"),
+    "emoji": ("x\U0001F600", "x\U0001F601"),
+    "low_byte": ("A", "\u0141"),
+    "low_bytes": ("\u0141", "\u0241"),
+    "tab_byte": ("a\u0109b", "ab"),
+    "line_byte": ("a\u010ab", "ab"),
+    "nul_byte": ("a\u0100b", "ab"),
+}
+WIDE_KINDS = [("sam", "sam"), ("sam", "bam"), ("bam", "sam"), ("sam", "cram"), ("cram", "sam"),
+              ("cram", "bam"), ("bam", "bam")]
+
+
+def wide_file(directory, name, header, records, kind):
+    """SAM text written as UTF-8, or the BAM or CRAM samtools makes of it."""
+    text = directory / f"{name}.sam"
+    text.write_text("\n".join([*header, *records]) + "\n", encoding="utf-8")
+    if kind == "sam":
+        return text
+    out = directory / f"{name}.{kind}"
+    if kind == "bam":
+        make.samtools("view", "--no-PG", "-b", "-o", out, text)
+    else:
+        make.samtools("view", "--no-PG", "-C", "-T", wide_reference(directory), "-o", out, text)
+    return out
+
+
+def wide_reference(directory):
+    reference = directory / "wide_ref.fa"
+    if not reference.exists():
+        reference.write_text(">c1\n" + "ACGT" * 1250 + "\n")
+        make.samtools("faidx", reference)
+    return reference
+
+
+def wide_header(value, order="unsorted"):
+    return [f"@HD\tVN:1.6\tSO:{order}", "@SQ\tSN:c1\tLN:5000",
+            f"@RG\tID:g1\tSM:{value}\tLB:lib\tDS:{value}\tPU:{value}\tCN:{value}",
+            f"@PG\tID:p1\tVN:{value}\tCL:run {value}"]
+
+
+def wide_record(name, flag=0, pos=100):
+    return f"{name}\t{flag}\tc1\t{pos}\t60\t8M\t*\t0\t0\tACGTACGT\tIIIIIIII\tRG:Z:g1"
+
+
+def same_outcome(left, right, args, tmp_path, label):
+    """Both tools on the pair, whatever Picard does: the exit code and standard output
+    equal, and OUTPUT equal or written by neither. Returns Picard's exit code and row."""
+    results, outputs = {}, {}
+    for side in ("picard", "ours"):
+        outputs[side] = tmp_path / f"{label}.{side}.txt".replace(" ", "_").replace("/", "_")
+        results[side] = run(side, [left, right, f"O={outputs[side]}", SILENT, *args])
+    picard, ours = results["picard"], results["ours"]
+    assert ours.returncode == picard.returncode, (
+        f"{label}: Picard exit {picard.returncode}, bammetrics exit {ours.returncode}\n"
+        f"Picard: {picard.stdout}{picard.stderr[-600:]}\nbammetrics: {ours.stdout}{ours.stderr[-600:]}")
+    assert ours.stdout == picard.stdout, (
+        f"{label}: standard output differs\nPicard: {picard.stdout}\nbammetrics: {ours.stdout}")
+    assert outputs["ours"].exists() == outputs["picard"].exists(), f"{label}: {ours.stderr[-400:]}"
+    row = None
+    if outputs["picard"].exists():
+        assert body(outputs["ours"]) == body(outputs["picard"]), label
+        row = row_of(outputs["picard"])
+    RESULTS.append((f"{TOOL} {label}", 1, 1, f"exit {picard.returncode}, stdout and OUTPUT identical"))
+    return picard.returncode, row
+
+
+@pytest.mark.parametrize("kinds", WIDE_KINDS, ids="/".join)
+@pytest.mark.parametrize("name", list(WIDE))
+def test_header_values_beyond_ascii(tmp_path, name, kinds):
+    """SM, DS, PU, CN, VN and CL that differ in one character, and the same value on
+    both sides, in each pair of file kinds. Two SAM text values that share their low
+    bytes (`A` and U+0141) differ; a character whose low byte is a tab or a line end
+    stays in its value."""
+    ours, theirs = WIDE[name]
+    reference = [f"R={wide_reference(tmp_path)}"]
+    records = [wide_record("r1")]
+    left = wide_file(tmp_path, "left", wide_header(ours), records, kinds[0])
+    right = wide_file(tmp_path, "right", wide_header(theirs), records, kinds[1])
+    same = wide_file(tmp_path, "same", wide_header(ours), records, kinds[1])
+    label = f"header {name} {'/'.join(kinds)}"
+    code, lines, _ = compare(left, right, reference, tmp_path, label)
+    assert code == 1 and "DS for read group g1 differs." in lines
+    if kinds == ("sam", "sam"):
+        assert f"File 1: {ours}" in lines and f"File 2: {theirs}" in lines
+    code, lines, _ = compare(left, same, reference, tmp_path, f"{label} one value")
+    if kinds[0] == kinds[1]:
+        assert code == 0, lines
+
+
+@pytest.mark.parametrize("order", ["coordinate", "queryname", "unsorted"])
+@pytest.mark.parametrize("name", ["latin", "cjk", "emoji", "low_byte", "low_bytes"])
+def test_read_names_beyond_ascii(tmp_path, name, order):
+    """Read names that differ in one character, and one name on both sides, in SAM text
+    and BAM. A CRAM with such a name is left out: bammetrics refuses it for every tool
+    (KNOWN_DIFFERENCES.md). Under queryname order Picard throws when the right file
+    ends first, and bammetrics fails there too."""
+    ours, theirs = WIDE[name]
+    header = wide_header("s", order)
+    for kinds in (("sam", "sam"), ("bam", "bam"), ("sam", "bam"), ("bam", "sam")):
+        left = wide_file(tmp_path, "left", header, [wide_record(ours)], kinds[0])
+        right = wide_file(tmp_path, "right", header, [wide_record(theirs)], kinds[1])
+        same = wide_file(tmp_path, "same", header, [wide_record(ours)], kinds[1])
+        label = f"names {name} {order} {'/'.join(kinds)}"
+        code, row = same_outcome(left, right, [], tmp_path, label)
+        assert code == 1
+        if kinds == ("sam", "sam") and row is not None:
+            assert (row["MISSING_LEFT"], row["MISSING_RIGHT"], row["MAPPINGS_MATCH"]) == ("1", "1", "0")
+        code, row = same_outcome(left, same, [], tmp_path, f"{label} one name")
+        if kinds[0] == kinds[1]:
+            assert code == 0 and row["MAPPINGS_MATCH"] == "1"
+
+
+def test_a_flag_before_the_files(files, tmp_path):
+    """Picard 3 syntax: a boolean option takes the next word only when it is true or
+    false, so `--LENIENT_DUP LEFT RIGHT` is a flag and two files."""
+    left, right = files["hand_swap_left"], files["hand_swap_right"]
+    forms = [["--LENIENT_DUP", left, right], [left, "--LENIENT_DUP", right],
+             ["--LENIENT_DUP", "TRUE", left, right], ["--LENIENT_DUP", "False", left, right],
+             ["--COMPARE_MQ", "--LENIENT_DUP", left, right], [left, right, "--LENIENT_DUP"]]
+    for at, form in enumerate(forms):
+        outputs = {}
+        for side in ("picard", "ours"):
+            outputs[side] = tmp_path / f"flag{at}.{side}.txt"
+            result = run(side, [*form, "--OUTPUT", outputs[side], "--VALIDATION_STRINGENCY", "SILENT"],
+                         quiet=("--QUIET", "true"))
+            assert result.stdout.splitlines()[-1:] in ([VERDICTS[0]], [VERDICTS[1]]), (
+                side, form[:2], result.stderr[-500:])
+            outputs[side + " code"] = result.returncode
+        assert outputs["ours code"] == outputs["picard code"], form[:2]
+        assert body(outputs["ours"]) == body(outputs["picard"]), form[:2]
+    RESULTS.append((f"{TOOL} a flag before the files", len(forms), len(forms), "OUTPUT identical"))
+
+
+def unmapped_beside_a_mapped_mate(name, at, mark):
+    """A pair whose second read is unmapped at its mate's place and has no MC."""
+    tail = f"{'ACGT' * 5}\t{'I' * 20}\tRG:Z:g1"
+    return [f"{name}\t73\tc1\t{at}\t60\t20M\t=\t{at}\t0\t{tail}\tMC:Z:20M",
+            f"{name}\t{133 | mark}\tc1\t{at}\t0\t*\t=\t{at}\t0\t{tail}"]
+
+
+def test_lenient_dup_scores_an_unmapped_record_only_on_a_tie(tmp_path):
+    """htsjdk reads the mate CIGAR of an unmapped record only to score it, and scores
+    a record only against one that ties with it in the file order: two such records at
+    two places are counted, two at one place fail in both tools."""
+    def pairs(second, mark):
+        return [*unmapped_beside_a_mapped_mate("u", 100, mark),
+                *unmapped_beside_a_mapped_mate("v", second, mark)]
+    left = make.write(tmp_path, "apart_left", make.HAND_HEADER, pairs(200, 0))
+    right = make.write(tmp_path, "apart_right", make.HAND_HEADER, pairs(200, 1024))
+    _, _, row = compare(left, right, ["LENIENT_DUP=true"], tmp_path, "unmapped without MC apart")
+    assert row["DUPLICATE_MARKINGS_DIFFER"] == "2"
+    compare(left, right, [], tmp_path, "unmapped without MC apart strict")
+    left = make.write(tmp_path, "tie_left", make.HAND_HEADER, pairs(100, 0))
+    right = make.write(tmp_path, "tie_right", make.HAND_HEADER, pairs(100, 1024))
+    both_fail([left, right, SILENT, "LENIENT_DUP=true"], tmp_path, "unmapped without MC at one place")
+
+
+@pytest.mark.parametrize("label,places,fails", [
+    ("alone", [100], False), ("apart", [200, 100], False), ("at one place", [100, 100], True)])
+def test_the_duplicate_order_scores_an_unmapped_record_only_on_a_tie(tmp_path, label, places, fails):
+    """The comparator LENIENT_DUP sorts with is SortSam's SORT_ORDER=duplicate: the same
+    records through both tools' SortSam come out in one order, or fail in both."""
+    records = [unmapped_beside_a_mapped_mate(f"r{at}", place, 0)[1] for at, place in enumerate(places)]
+    source = make.write(tmp_path, "unsorted", ["@HD\tVN:1.6\tSO:unsorted", *make.HAND_HEADER[1:]], records)
+    sorted_records = {}
+    for side, command in (("picard", ["picard", "SortSam"]), ("ours", [str(BAMMETRICS), "SortSam"])):
+        out = tmp_path / f"sorted.{side}.sam"
+        env = picard_env()
+        env["JAVA_OPTS"] = "-Xmx8g"
+        result = subprocess.run([*command, f"I={source}", f"O={out}", "SORT_ORDER=duplicate", SILENT,
+                                 "QUIET=true"], env=env, capture_output=True, text=True)
+        assert (result.returncode != 0) == fails, (side, label, result.stderr[-600:])
+        if not fails:
+            sorted_records[side] = [line for line in out.read_text().splitlines() if not line.startswith("@")]
+    if not fails:
+        assert sorted_records["ours"] == sorted_records["picard"]
+        assert len(sorted_records["ours"]) == len(places)
+    RESULTS.append((f"SortSam duplicate order, unmapped without MC {label}", 1, 1,
+                    "both fail" if fails else "records identical"))
 
 
 def test_values_are_distinct():

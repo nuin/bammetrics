@@ -1,0 +1,25 @@
+## argv
+CompareSAMs
+--LENIENT_DUP
+tests/data/compare_sams_left.bam
+tests/data/compare_sams_right.bam
+-O
+OUT/compared.txt
+--LENIENT_HEADER
+True
+## exit
+1
+## stdout
+SAM files differ.
+## stderr
+## file compared.txt
+## htsjdk.samtools.metrics.StringHeader
+# CompareSAMs LENIENT_DUP=true INPUT=tests/data/compare_sams_left.bam INPUT=tests/data/compare_sams_right.bam OUTPUT=OUT/compared.txt LENIENT_HEADER=True
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.SamComparisonMetric
+LEFT_FILE	RIGHT_FILE	MAPPINGS_MATCH	MAPPINGS_DIFFER	UNMAPPED_BOTH	UNMAPPED_LEFT	UNMAPPED_RIGHT	MISSING_LEFT	MISSING_RIGHT	DUPLICATE_MARKINGS_DIFFER	ARE_EQUAL
+ROOT/tests/data/compare_sams_left.bam	ROOT/tests/data/compare_sams_right.bam	10	2	1	0	0	0	0	0	N
+
+

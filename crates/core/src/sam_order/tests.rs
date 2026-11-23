@@ -310,6 +310,30 @@ fn the_duplicate_key_needs_the_mate_cigar_and_scores_both_ends() {
     let error = DuplicateKey::of(&missing, &libraries).expect_err("no MC");
     assert!(error.to_string().contains("Mate CIGAR (Tag MC) not found"));
 
+    // An unmapped record with a mapped mate and no MC has a key: htsjdk
+    // reads its mate CIGAR only to score it, against a record that ties
+    // with it in the file order.
+    let unmapped = build(0x45, &[], None);
+    let key = DuplicateKey::of(&unmapped, &libraries).expect("a key without MC");
+    assert!(key.unscored);
+    assert_eq!((key.score, key.mate_coordinate), (0, -1));
+    let mut alone = Scoring::default();
+    alone.next(&key).expect("one record is never scored");
+    let elsewhere = DuplicateKey {
+        read_coordinate: key.read_coordinate + 1,
+        ..key.clone()
+    };
+    alone.next(&elsewhere).expect("no tie, no score");
+    let error = alone.next(&elsewhere).expect_err("a tie is scored");
+    assert!(
+        error
+            .to_string()
+            .contains("Mate CIGAR (Tag MC) not found: r")
+    );
+    let packed = DuplicateKey::unpacked_flags(key.packed_flags());
+    assert_eq!(packed, Some((0x45, true)));
+    assert_eq!(DuplicateKey::unpacked_flags(1 << 17), None);
+
     // Forward read, reverse mate: 5S10M at 100, mate 4S6M2H at 300.
     let forward = build(0x61, &[(5, 4), (10, 0)], Some(b"4S6M2H"));
     let key = DuplicateKey::of(&forward, &libraries).expect("key");
@@ -354,6 +378,7 @@ fn the_set_order_collapses_a_fragment_into_pairs_on_its_strand() {
         },
         mate_coordinate,
         score: 0,
+        unscored: false,
         read_group: None,
         name: std::borrow::Cow::Borrowed(b"r"),
     };

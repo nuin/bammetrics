@@ -47,7 +47,11 @@ impl SortOrder {
 }
 
 /// One file's header and how htsjdk decodes its bytes: a BAM's header one
-/// character per byte, SAM text and a CRAM as UTF-8.
+/// character per byte, SAM text and a CRAM as UTF-8. The header of SAM
+/// text is the one whose values are UTF-8
+/// ([`crate::sam_text::Reader::decoded_header`]): the header its records
+/// are read against holds the low byte of each UTF-16 code unit, which two
+/// values may share.
 #[derive(Clone, Copy)]
 pub struct Side<'h> {
     pub header: &'h sam::Header,
@@ -55,7 +59,8 @@ pub struct Side<'h> {
 }
 
 impl Side<'_> {
-    fn text(&self, bytes: &[u8]) -> String {
+    /// The string htsjdk holds for `bytes` of this header.
+    pub fn text(&self, bytes: &[u8]) -> String {
         if self.one_byte_chars {
             latin1(bytes)
         } else {

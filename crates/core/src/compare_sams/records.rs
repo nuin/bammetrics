@@ -3,6 +3,7 @@
 //! are paired by (`PrimaryAlignmentKey`) and the map that holds the records
 //! still waiting for their partner (a `LinkedHashMap` in Picard).
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -10,8 +11,10 @@ use std::io::{self, Read};
 use std::path::Path;
 
 use crate::bam_raw::{Fields, RawRecord, TagIter, Tags};
+use crate::check_duplicate_marking::latin1;
 use crate::error::{Error, Result};
 use crate::pass;
+use crate::sam_text::WideNames;
 
 const PAIRED: u16 = 0x1;
 pub const UNMAPPED: u16 = 0x4;
@@ -28,35 +31,67 @@ pub enum Pair {
     Second,
 }
 
+/// How htsjdk decodes the read names of one file into its strings.
+#[derive(Clone, Debug)]
+pub enum Names {
+    /// A BAM: one character per byte.
+    Bytes,
+    /// A CRAM: UTF-8.
+    Utf8,
+    /// SAM text: UTF-8. The record holds the low byte of each UTF-16 code
+    /// unit, which is the character up to U+00FF; a name with a character
+    /// above that comes through the queue, as the file spells it.
+    Text(Option<WideNames>),
+}
+
+/// `getReadName` of a record with the name `bytes`; `wide` is the name of
+/// SAM text that the bytes cannot hold.
+fn java_name<'a>(bytes: &'a [u8], names: &Names, wide: Option<String>) -> Cow<'a, str> {
+    if let Some(wide) = wide {
+        return Cow::Owned(wide);
+    }
+    match (std::str::from_utf8(bytes), names) {
+        (Ok(text), _) if bytes.is_ascii() => Cow::Borrowed(text),
+        (_, Names::Utf8) => String::from_utf8_lossy(bytes),
+        (_, Names::Bytes | Names::Text(_)) => Cow::Owned(latin1(bytes)),
+    }
+}
+
 /// `PrimaryAlignmentKey`: the read name and the end of the pair. A paired
-/// record that is not flagged second of its pair is `First`. One
-/// allocation holds both, the pair status in the first byte, so a waiting
-/// record costs its name and 16 bytes of key.
+/// record that is not flagged second of its pair is `First`. The name is
+/// the string htsjdk holds, so a BAM, a CRAM and SAM text that spell one
+/// name in their own bytes give one key. One allocation holds both, the
+/// pair status as the first character, so a waiting record costs its name
+/// and 16 bytes of key.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Key(Box<[u8]>);
+pub struct Key(Box<str>);
 
 impl Key {
-    pub fn new(name: &[u8], pair: Pair) -> Self {
-        let mut bytes = Vec::with_capacity(name.len() + 1);
-        bytes.push(pair as u8);
-        bytes.extend_from_slice(name);
-        Self(bytes.into_boxed_slice())
+    pub fn new(name: &str, pair: Pair) -> Self {
+        let mut text = String::with_capacity(name.len() + 1);
+        text.push(char::from(pair as u8));
+        text.push_str(name);
+        Self(text.into_boxed_str())
     }
 
-    pub fn name(&self) -> &[u8] {
+    pub fn name(&self) -> &str {
         &self.0[1..]
     }
 
     fn pair(&self) -> u8 {
-        self.0[0]
+        self.0.as_bytes()[0]
     }
 
-    /// `compareTo`: the name as `String.compareTo` orders it (a BAM name is
-    /// one character per byte), then the pair status.
+    /// `compareTo`: the name as `String.compareTo` orders it, by UTF-16
+    /// code unit, then the pair status.
     pub fn compare(&self, other: &Self) -> Ordering {
-        self.name()
-            .cmp(other.name())
-            .then(self.pair().cmp(&other.pair()))
+        let (ours, theirs) = (self.name(), other.name());
+        let by_name = if ours.is_ascii() && theirs.is_ascii() {
+            ours.cmp(theirs)
+        } else {
+            ours.encode_utf16().cmp(theirs.encode_utf16())
+        };
+        by_name.then(self.pair().cmp(&other.pair()))
     }
 }
 
@@ -143,6 +178,9 @@ pub struct Side<'r> {
     /// The dictionary size: a reference index at or past it is an error.
     references: usize,
     keep_raw: bool,
+    names: Names,
+    /// Records read so far: the index of the next one.
+    index: u64,
     record: RawRecord,
     current: Option<Primary>,
 }
@@ -152,7 +190,7 @@ impl<'r> Side<'r> {
     pub fn new(
         path: &'r Path,
         reader: &'r mut dyn Read,
-        cram: bool,
+        (cram, names): (bool, Names),
         references: usize,
         keep_raw: bool,
     ) -> Result<Self> {
@@ -162,6 +200,8 @@ impl<'r> Side<'r> {
             cram,
             references,
             keep_raw,
+            names,
+            index: 0,
             record: RawRecord::default(),
             current: None,
         };
@@ -182,16 +222,32 @@ impl<'r> Side<'r> {
             .read_from(self.reader)
             .map_err(|e| pass::read_error(self.path, self.cram, e))?
         {
+            let wide = self.wide_name();
+            self.index += 1;
             self.in_dictionary(self.record.reference_id())?;
             self.in_dictionary(self.record.mate_reference_id())?;
             let flags = self.record.flags();
             if flags & (SECONDARY | SUPPLEMENTARY) != 0 {
                 continue;
             }
-            self.current = Some(self.primary(flags));
+            self.current = Some(self.primary(flags, wide));
             break;
         }
         Ok(())
+    }
+
+    /// The name of the record just read, when it is SAM text with a
+    /// character its bytes cannot hold.
+    fn wide_name(&self) -> Option<String> {
+        let Names::Text(Some(queue)) = &self.names else {
+            return None;
+        };
+        let mut queue = queue
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let ours = queue.front().is_some_and(|(index, _)| *index == self.index);
+        ours.then(|| queue.pop_front().map(|(_, name)| name))
+            .flatten()
     }
 
     /// htsjdk resolves the reference and mate reference names of every
@@ -209,13 +265,13 @@ impl<'r> Side<'r> {
         )))
     }
 
-    fn primary(&mut self, flags: u16) -> Primary {
+    fn primary(&mut self, flags: u16, wide: Option<String>) -> Primary {
         let pair = match (flags & PAIRED != 0, flags & SECOND != 0) {
             (false, _) => Pair::Unpaired,
             (true, true) => Pair::Second,
             (true, false) => Pair::First,
         };
-        let key = Key::new(self.record.name(), pair);
+        let key = Key::new(&java_name(self.record.name(), &self.names, wide), pair);
         let reference = self.record.reference_id();
         let start = self.record.alignment_start();
         let mapping_quality = self.record.mapping_quality();
@@ -356,7 +412,7 @@ mod tests {
 
     #[test]
     fn a_key_orders_by_name_then_pair_and_a_waiting_entry_is_small() {
-        let key = |name: &str, pair| Key::new(name.as_bytes(), pair);
+        let key = Key::new;
         assert_eq!(
             key("a", Pair::Second).compare(&key("b", Pair::Unpaired)),
             Ordering::Less
@@ -370,7 +426,34 @@ mod tests {
             Ordering::Less
         );
         assert_ne!(key("a", Pair::First), key("a", Pair::Second));
-        assert_eq!(key("ab", Pair::First).name(), b"ab");
+        assert_eq!(key("ab", Pair::First).name(), "ab");
         assert!(std::mem::size_of::<(Key, Slot)>() <= 48);
+    }
+
+    /// One name in the bytes of each kind of file is one key, and two
+    /// names that share their low bytes are two.
+    #[test]
+    fn a_name_is_the_string_htsjdk_holds() {
+        let key = |bytes: &[u8], names: &Names, wide: Option<&str>| {
+            Key::new(
+                &java_name(bytes, names, wide.map(str::to_owned)),
+                Pair::Unpaired,
+            )
+        };
+        let text = Names::Text(None);
+        let cafe = key(&[b'c', 0xE9], &Names::Bytes, None);
+        assert_eq!(cafe.name(), "c\u{e9}");
+        assert_eq!(key("c\u{e9}".as_bytes(), &Names::Utf8, None), cafe);
+        assert_eq!(key(&[b'c', 0xE9], &text, None), cafe);
+        // A BAM that holds the UTF-8 bytes holds two characters.
+        assert_ne!(key("c\u{e9}".as_bytes(), &Names::Bytes, None), cafe);
+        // `A` and U+0141 share the byte 0x41 in a record of SAM text.
+        assert_ne!(key(b"A", &text, Some("\u{141}")), key(b"A", &text, None));
+        // `String.compareTo` orders by UTF-16 unit: a surrogate pair
+        // (U+1F600) sorts before U+FFFD, and after it by code point.
+        let emoji = key(b"", &text, Some("\u{1f600}"));
+        let high = key(b"", &text, Some("\u{fffd}"));
+        assert_eq!(emoji.compare(&high), Ordering::Less);
+        assert_eq!(key(b"a", &text, None).compare(&emoji), Ordering::Less);
     }
 }

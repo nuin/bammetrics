@@ -45,7 +45,7 @@ use crate::metric::{HistogramSection, HistogramSeries, MetricsOutput, ToolOutput
 use crate::metrics_file::KeyClass;
 use crate::pass;
 use crate::registry::{Invocation, Opt, Tool};
-use crate::sam_order::{DuplicateKey, Libraries};
+use crate::sam_order::{DuplicateKey, Libraries, Scoring};
 use crate::spill::{Sorter, Spill, TempDir, get_u64, put_bytes};
 
 /// The histogram labels Picard writes.
@@ -346,6 +346,8 @@ fn count_sets(sorted: &mut crate::spill::Sorted<'_, Member>, interval: i32) -> R
     let Some(first) = sorted.next_item()? else {
         return Ok(histogram);
     };
+    let mut scoring = Scoring::default();
+    scoring.next(&first.key)?;
     let mut representative = first.key;
     let mut umis: HashSet<Vec<u8>> = HashSet::from([first.umi]);
     let mut close = |umis: &mut HashSet<Vec<u8>>| -> Result<()> {
@@ -360,6 +362,7 @@ fn count_sets(sorted: &mut crate::spill::Sorted<'_, Member>, interval: i32) -> R
         Ok(())
     };
     while let Some(member) = sorted.next_item()? {
+        scoring.next(&member.key)?;
         match representative.set_order(&member.key) {
             Ordering::Greater => {
                 return Err(Error::Metric(format!(

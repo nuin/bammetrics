@@ -95,6 +95,10 @@ pub struct Verb {
     /// A [`Files::Bam`] verb whose `-o` may be left out with nothing
     /// written in its place (`interval-list-tools` then prints a count).
     pub optional_output: bool,
+    /// The arguments of the two usage lines of `--help`, the verb's and
+    /// the Picard face's, for a tool whose inputs are not one `I=`
+    /// (`compare-s-a-ms`: two files, positional on the Picard face).
+    pub usage: Option<(&'static str, &'static str)>,
 }
 
 const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
@@ -115,6 +119,7 @@ const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
         default_output: None,
         directory: false,
         optional_output: false,
+        usage: None,
     }
 }
 
@@ -746,9 +751,11 @@ pub const VERBS: &[Verb] = &[
             "compares two SAM, BAM or CRAM files as Picard's CompareSAMs does: the \
              SamComparisonMetric row to -o or standard output, each header difference and the \
              verdict (SAM files match. or SAM files differ.) on standard error, which -q \
-             drops, exit 1 when the files differ.",
+             drops, exit 1 when the files differ. The Picard face takes the two files as \
+             positional arguments, as Picard does, and has no I= option.",
         ),
         ignores: &[(Key::Sample, "a comparison has no sample")],
+        usage: Some(("LEFT RIGHT", "LEFT RIGHT [KEY=VALUE ...]")),
         ..verb("compare-s-a-ms", "CompareSAMs", Files::Single)
     },
     Verb {
@@ -1057,20 +1064,24 @@ impl Verb {
     /// `bammetrics <verb> --help`.
     pub fn help(&self) -> String {
         let tool = self.tool();
-        let (input, redirects) = if self.copies_stream() {
-            (String::new(), " < IN > OUT")
-        } else {
-            (format!("[{}] ", self.input), "")
+        let (input, redirects) = match self.usage {
+            Some((arguments, _)) => (format!("{arguments} "), ""),
+            None if self.copies_stream() => (String::new(), " < IN > OUT"),
+            None => (format!("[{}] ", self.input), ""),
+        };
+        let picard = match self.usage {
+            Some((_, arguments)) => arguments,
+            None if tool.takes_input() => "I=... [KEY=VALUE ...]",
+            None => "KEY=... [KEY=VALUE ...]",
         };
         let mut text = format!(
             "bammetrics {}: {}, {}\n\nUsage: bammetrics {} {input}[OPTIONS]{redirects}\n       \
-             bammetrics {} {}=... [KEY=VALUE ...]   (Picard syntax)\n\n",
+             bammetrics {} {picard}   (Picard syntax)\n\n",
             self.name,
             tool.name,
             self.about.unwrap_or(tool.summary),
             self.name,
             tool.name,
-            if tool.takes_input() { "I" } else { "KEY" },
         );
         text.push_str(
             "Every option also reads as --PICARD_KEY VALUE and PICARD_KEY=VALUE. A boolean \

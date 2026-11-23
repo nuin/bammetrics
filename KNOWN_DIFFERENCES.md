@@ -1320,6 +1320,12 @@ below. bammetrics differs here:
   each UTF-16 code unit, so `é` (bytes `C3 A9`) comes out as the byte `E9`. bammetrics
   does the same. htsjdk orders such names by code unit while they are in memory;
   bammetrics orders the bytes it holds, which differs for characters above U+00FF.
+  `CompareSAMs` alone compares names and header values as the file spells them.
+- A header line is split into its fields after it is decoded, as htsjdk splits it, so a
+  character whose low byte is a tab or a colon (U+0109, U+013A) stays inside its value.
+  Where that low byte is a tab or a line end (U+0109, U+010A, U+010D and the like),
+  bammetrics holds `?` for it. htsjdk writes the byte itself into a BAM header, which
+  then has a field or a line more than the SAM text had.
 - `VALIDATION_STRINGENCY` is carried by every tool on the Picard face, every verb, every
   Python function (`validation_stringency=`), `chain --validation-stringency` for its
   source and `qc --validation-stringency`. A step of a chain refuses it: the chain reads
@@ -1837,7 +1843,15 @@ Picard behavior kept, each checked against Picard 3.5.0
   of the process. Two `DT` values that name one instant in two zones are equal.
 - The `COMPARE_MQ` histogram keys (`LEFT,RIGHT`) are in text order: `10,3` before `2,2`.
 - `LENIENT_DUP` reads `MC` on a pair whose mate is mapped only when two or more pairs
-  differ in their duplicate flag; one pair alone counts 1.
+  differ in their duplicate flag; one pair alone counts 1. An unmapped record with a
+  mapped mate and no `MC` fails only when another differing record ties with it in
+  htsjdk's file order (library, reference, unclipped 5' end, orientation): htsjdk reads
+  the mate CIGAR of such a record for its score alone, and scores on a tie. `SortSam
+  SORT_ORDER=duplicate` and `CollectUmiPrevalenceMetrics` follow the same rule.
+- Read names and header values are htsjdk's strings: a BAM's bytes one character each, a
+  CRAM's and SAM text's decoded as UTF-8. A BAM that holds `é` as UTF-8 (`C3 A9`) and SAM
+  text that spells `é` name two reads; a BAM that holds the byte `E9` and that SAM text
+  name one. The queryname walk orders names as `String.compareTo` does, by UTF-16 unit.
 
 Where bammetrics differs:
 
@@ -1853,6 +1867,13 @@ Where bammetrics differs:
 - `LENIENT_DUP` finds each swapped representative through an index of the left file's
   duplicate sets where Picard walks the set for every unflagged record; the count is the
   same and the work is linear in the set (`compare_sams/duplicates.rs`).
+- `LENIENT_DUP` holds in memory what it reads back from its two sorts: one name per
+  record of every left duplicate set of two or more records, the names matched so far and
+  one set whole, about 470 bytes for each pair whose duplicate flags differ (257 MB for
+  400,000 such pairs in one set). The sorts spill; this index does not. Picard holds the
+  `SAMRecord`s of the same sets.
+- A CRAM whose read names hold a byte outside printable ASCII is refused by the CRAM
+  reader (`invalid name`), for every tool; Picard reads it and decodes the name as UTF-8.
 - A record waiting for its partner holds its name and 48 bytes (233 bytes a record at
   the peak of 8.4 million; under `LENIENT_DUP` also its fixed fields, CIGAR, `RG` and
   `MC`, 418 bytes), where Picard holds the `SAMRecord`. The worst case is the same:

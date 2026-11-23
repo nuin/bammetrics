@@ -1207,6 +1207,8 @@ const COMPARE_TERMINATOR_CASES: &[Case] = &[
     case!("picard_compare_sams_lenient", "CompareSAMs", "CSL", "CSR", "O=OUT/compared.txt", "LENIENT_HEADER=true", "LENIENT_DUP=true", "LENIENT_LOW_MQ_ALIGNMENT=true", "LENIENT_UNKNOWN_MQ_ALIGNMENT=true", "COMPARE_MQ=true"),
     case!("picard_compare_sams_stdout", "CompareSAMs", "CSL", "CSO"),
     case!("picard_compare_sams_new_syntax", "CompareSAMs", "-O", "OUT/compared.txt", "CSO", "--LOW_MQ_THRESHOLD", "2", "CSL", "--LENIENT_LOW_MQ_ALIGNMENT"),
+    // A flag takes the next word only when it is true or false: here it is a file.
+    case!("picard_compare_sams_flag_first", "CompareSAMs", "--LENIENT_DUP", "CSL", "CSR", "-O", "OUT/compared.txt", "--LENIENT_HEADER", "True"),
     case!("picard_compare_sams_cram", "CompareSAMs", "IS", "IS_CRAM", "R=REF", "O=OUT/compared.txt", "COMPARE_MQ=true"),
     case!("picard_compare_sams_queryname", "CompareSAMs", "DM", "DM", "O=OUT/compared.txt"),
     case!("picard_compare_sams_sort_orders", "CompareSAMs", "MD", "DM"),

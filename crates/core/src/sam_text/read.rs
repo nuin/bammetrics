@@ -1,13 +1,14 @@
 //! `SAMTextReader`: the header lines, then one record per line, and the
 //! same records as a BAM record stream for [`crate::pass`].
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::{self, BufRead, Read};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use noodles::sam;
 
-use super::{LineParser, Stringency, invalid, java_bytes};
+use super::{LineParser, Stringency, invalid};
 use crate::bam_raw::RawRecord;
 
 /// The sort orders htsjdk's `SAMFileHeader.SortOrder` names.
@@ -173,7 +174,7 @@ impl HeaderLine<'_> {
                 ))?;
                 continue;
             }
-            if key.len() != 2 {
+            if utf16_units(key) != 2 {
                 self.report(&format!(
                     "Problem parsing {kind} key:value pair {}:<value> key is not two characters",
                     show(key)
@@ -252,6 +253,66 @@ impl HeaderLine<'_> {
     }
 }
 
+/// The length of `text` as Java counts it: UTF-16 code units.
+fn utf16_units(text: &[u8]) -> usize {
+    if text.is_ascii() {
+        return text.len();
+    }
+    String::from_utf8_lossy(text).encode_utf16().count()
+}
+
+/// The bytes held for a decoded header line: the low byte of each UTF-16
+/// code unit, as htsjdk writes the line into a BAM. A character above
+/// U+00FF whose low byte is a tab or a line end is held as `?`: htsjdk
+/// writes that byte into the BAM, where it ends the field or the line
+/// (KNOWN_DIFFERENCES.md).
+fn held_bytes(line: &[u8]) -> Vec<u8> {
+    if line.is_ascii() {
+        return line.to_vec();
+    }
+    String::from_utf8_lossy(line)
+        .encode_utf16()
+        .map(|unit| match unit as u8 {
+            b'\t' | b'\n' | b'\r' if unit > 0xFF => b'?',
+            low => low,
+        })
+        .collect()
+}
+
+/// The header of `text`, lines ended by `\n`, as noodles holds it. htsjdk
+/// takes the `@HD` line wherever it stands; noodles wants it first, so it
+/// is given first.
+fn parse_header(text: &[u8]) -> io::Result<sam::Header> {
+    let mut parser = sam::header::Parser::default();
+    let lines = || text.split(|&b| b == b'\n').filter(|line| !line.is_empty());
+    let is_hd = |line: &&[u8]| line.starts_with(b"@HD");
+    for line in lines()
+        .filter(is_hd)
+        .chain(lines().filter(|line| !is_hd(line)))
+    {
+        parser.parse_partial(line).map_err(|e| {
+            let mut causes = e.to_string();
+            let mut source = std::error::Error::source(&e);
+            while let Some(cause) = source {
+                causes.push_str(&format!(": {cause}"));
+                source = cause.source();
+            }
+            invalid(format!(
+                "the SAM header line {:?} cannot be read: {causes}",
+                String::from_utf8_lossy(line)
+            ))
+        })?;
+    }
+    Ok(parser.finish())
+}
+
+/// The read names of a SAM text file with a character above U+00FF, each
+/// as the file spells it and with the index of its record from 0, in file
+/// order. A BAM record holds the low byte of each UTF-16 code unit of a
+/// name, so two such names may hold the same bytes. The reader of the
+/// records takes each entry as its record comes.
+pub type WideNames = Arc<Mutex<VecDeque<(u64, String)>>>;
+
 /// One header line as `SAMTextHeaderCodec.decode` keeps it at
 /// `stringency`: `None` for a line it drops, else the line without the
 /// fields it drops and with a non-conforming `SO` read as `unknown`. The
@@ -274,6 +335,8 @@ pub(crate) fn clean_header_line(
 pub struct Reader<R> {
     lines: LineReader<R>,
     header: Vec<u8>,
+    /// The kept lines as UTF-8; `None` while every line is ASCII.
+    decoded: Option<Vec<u8>>,
     wide: Vec<String>,
     stringency: Stringency,
     file: Option<PathBuf>,
@@ -286,31 +349,41 @@ impl<R: BufRead> Reader<R> {
     pub fn new(inner: R, stringency: Stringency, file: Option<&Path>) -> io::Result<Self> {
         let mut lines = LineReader::new(inner);
         let mut header = Vec::new();
+        let mut decoded: Option<Vec<u8>> = None;
         let mut wide = Vec::new();
         let mut line = Vec::new();
         while lines.peek()? == Some(b'@') {
             lines.read_line(&mut line)?;
-            let text = java_bytes(&line);
-            if !line.is_ascii() {
-                let decoded = String::from_utf8_lossy(&line);
-                if decoded.chars().any(|c| u32::from(c) > 0xFF) {
-                    wide.push(decoded.into_owned());
-                }
+            // htsjdk decodes the line, then splits it: a tab or a colon is
+            // a character of the text, never the low byte of another.
+            let text = String::from_utf8_lossy(&line);
+            let ascii = line.is_ascii();
+            if !ascii && text.chars().any(|c| u32::from(c) > 0xFF) {
+                wide.push(text.clone().into_owned());
             }
             let checked = HeaderLine {
                 stringency,
                 file,
-                text: &text,
+                text: text.as_bytes(),
                 number: lines.number,
             };
-            if let Some(clean) = checked.clean()? {
-                header.extend_from_slice(&clean);
-                header.push(b'\n');
+            let Some(clean) = checked.clean()? else {
+                continue;
+            };
+            if !ascii && decoded.is_none() {
+                decoded = Some(header.clone());
             }
+            if let Some(decoded) = &mut decoded {
+                decoded.extend_from_slice(&clean);
+                decoded.push(b'\n');
+            }
+            header.extend_from_slice(&held_bytes(&clean));
+            header.push(b'\n');
         }
         Ok(Self {
             lines,
             header,
+            decoded,
             wide,
             stringency,
             file: file.map(Path::to_path_buf),
@@ -330,34 +403,17 @@ impl<R: BufRead> Reader<R> {
         &self.wide
     }
 
-    /// The header as noodles holds it. htsjdk takes the `@HD` line
-    /// wherever it stands; noodles wants it first, so it is given first.
+    /// The header as noodles holds it, its values the bytes htsjdk writes
+    /// into a BAM.
     pub fn header(&self) -> io::Result<sam::Header> {
-        let mut parser = sam::header::Parser::default();
-        let lines = || {
-            self.header
-                .split(|&b| b == b'\n')
-                .filter(|line| !line.is_empty())
-        };
-        let is_hd = |line: &&[u8]| line.starts_with(b"@HD");
-        for line in lines()
-            .filter(is_hd)
-            .chain(lines().filter(|line| !is_hd(line)))
-        {
-            parser.parse_partial(line).map_err(|e| {
-                let mut causes = e.to_string();
-                let mut source = std::error::Error::source(&e);
-                while let Some(cause) = source {
-                    causes.push_str(&format!(": {cause}"));
-                    source = cause.source();
-                }
-                invalid(format!(
-                    "the SAM header line {:?} cannot be read: {causes}",
-                    String::from_utf8_lossy(line)
-                ))
-            })?;
-        }
-        Ok(parser.finish())
+        parse_header(&self.header)
+    }
+
+    /// The header with every value as UTF-8, the text htsjdk holds, for a
+    /// tool that prints or compares header values (`CompareSAMs`). `None`
+    /// for an ASCII header: [`Reader::header`] is then that header.
+    pub fn decoded_header(&self) -> io::Result<Option<sam::Header>> {
+        self.decoded.as_deref().map(parse_header).transpose()
     }
 
     /// The records, parsed against `header` (the value of
@@ -367,6 +423,8 @@ impl<R: BufRead> Reader<R> {
             parser: LineParser::new(header, self.stringency, self.file.as_deref()),
             lines: self.lines,
             line: Vec::new(),
+            wide_names: None,
+            count: 0,
         }
     }
 }
@@ -376,15 +434,41 @@ pub struct Records<R> {
     lines: LineReader<R>,
     parser: LineParser,
     line: Vec<u8>,
+    /// Where the names a BAM record cannot hold go, when asked for.
+    wide_names: Option<WideNames>,
+    /// Records parsed so far: the index of the next one.
+    count: u64,
 }
 
 impl<R: BufRead> Records<R> {
+    /// From here on every read name with a character above U+00FF is also
+    /// put into the queue returned, with the index of its record. The
+    /// caller takes the entries as it reads the records, so the queue
+    /// holds the names of the records read ahead and no more.
+    pub fn wide_names(&mut self) -> WideNames {
+        Arc::clone(self.wide_names.get_or_insert_with(WideNames::default))
+    }
+
     /// The next record; `None` at the end of the file.
     pub fn next_record(&mut self) -> io::Result<Option<RawRecord>> {
         if !self.lines.read_line(&mut self.line)? {
             return Ok(None);
         }
-        self.parser.parse(&self.line, self.lines.number).map(Some)
+        let record = self.parser.parse(&self.line, self.lines.number)?;
+        if let Some(names) = &self.wide_names {
+            let name = self.line.split(|&b| b == b'\t').next().unwrap_or_default();
+            if !name.is_ascii() {
+                let text = String::from_utf8_lossy(name);
+                if text.chars().any(|c| u32::from(c) > 0xFF) {
+                    names
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .push_back((self.count, text.into_owned()));
+                }
+            }
+        }
+        self.count += 1;
+        Ok(Some(record))
     }
 }
 
@@ -409,6 +493,11 @@ impl<R: BufRead> RecordStream<R> {
             at: 0,
             done: false,
         }
+    }
+
+    /// [`Records::wide_names`] of the records this stream reads.
+    pub fn wide_names(&mut self) -> WideNames {
+        self.records.wide_names()
     }
 
     fn refill(&mut self) -> io::Result<()> {

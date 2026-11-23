@@ -8,27 +8,32 @@ use std::path::Path;
 use noodles::sam;
 
 use super::duplicates::Lenient;
-use super::header::{Say, SortOrder, values};
-use super::records::{Facts, Pending, Primary, Side};
+use super::header::{self, Say, SortOrder, values};
+use super::records::{Facts, Key, Names, Pending, Primary, Side};
 use super::{Counts, Options};
 use crate::error::{Error, Result};
 use crate::histogram::Histogram;
 
 /// One input of the comparison: its path, its record stream, whether it is
-/// a CRAM, and its header.
+/// a CRAM, its header, and how htsjdk decodes its header values and its
+/// read names.
 pub struct Input<'r> {
     pub path: &'r Path,
     pub reader: &'r mut dyn Read,
     pub cram: bool,
     pub header: &'r sam::Header,
+    /// The header the comparison reads values from: `header`, or for SAM
+    /// text with a line that is not ASCII the same lines as UTF-8.
+    pub shown: header::Side<'r>,
+    pub names: Names,
 }
 
-/// The reference names of a header, by index.
-fn reference_names(header: &sam::Header) -> Vec<Vec<u8>> {
-    header
+/// The reference names of a header, by index, as htsjdk's strings.
+fn reference_names(side: &header::Side<'_>) -> Vec<String> {
+    side.header
         .reference_sequences()
         .keys()
-        .map(|name| name.to_vec())
+        .map(|name| side.text(name))
         .collect()
 }
 
@@ -52,8 +57,8 @@ pub struct Comparer<'o, 't> {
     /// `COMPARE_MQ`: pairs by [`super::mq_pair_key`].
     pub mapping_qualities: Histogram,
     pub lenient: Option<Lenient<'t>>,
-    left_names: Vec<Vec<u8>>,
-    right_names: Vec<Vec<u8>>,
+    left_names: Vec<String>,
+    right_names: Vec<String>,
     /// The most records the pending maps held at once.
     pub peak_pending: usize,
 }
@@ -62,8 +67,8 @@ impl<'o, 't> Comparer<'o, 't> {
     pub fn new(
         options: &'o Options,
         lenient: Option<Lenient<'t>>,
-        left: &sam::Header,
-        right: &sam::Header,
+        left: &header::Side<'_>,
+        right: &header::Side<'_>,
     ) -> Self {
         Self {
             options,
@@ -80,7 +85,7 @@ impl<'o, 't> Comparer<'o, 't> {
         Side::new(
             input.path,
             input.reader,
-            input.cram,
+            (input.cram, input.names),
             input.header.reference_sequences().len(),
             self.lenient.is_some(),
         )
@@ -89,7 +94,7 @@ impl<'o, 't> Comparer<'o, 't> {
     /// `getReferenceName().equals(...)`: the names of the two indexes, each
     /// in its own header; `*` for a record without a reference.
     fn same_reference(&self, left: i32, right: i32) -> bool {
-        fn name(names: &[Vec<u8>], index: i32) -> Option<&Vec<u8>> {
+        fn name(names: &[String], index: i32) -> Option<&String> {
             usize::try_from(index).ok().and_then(|at| names.get(at))
         }
         name(&self.left_names, left) == name(&self.right_names, right)
@@ -112,12 +117,14 @@ impl<'o, 't> Comparer<'o, 't> {
         same_place || both_low || both_unknown
     }
 
-    /// `tallyAlignmentRecords`: the duplicate flags, the outcome of the
-    /// pair, the mapping qualities.
-    fn tally(&mut self, left: &Facts, right: &Facts) -> Result<()> {
+    /// `tallyAlignmentRecords` of the two records of `key`: the duplicate
+    /// flags, the outcome of the pair, the mapping qualities.
+    fn tally(&mut self, key: &Key, left: &Facts, right: &Facts) -> Result<()> {
         if left.duplicate() != right.duplicate() {
             match (&mut self.lenient, &left.raw, &right.raw) {
-                (Some(lenient), Some(left), Some(right)) => lenient.add(left, right)?,
+                (Some(lenient), Some(left), Some(right)) => {
+                    lenient.add(left, right, key.name())?;
+                }
                 _ => self.counts.duplicate_markings_differ += 1,
             }
         }
@@ -168,7 +175,7 @@ impl<'o, 't> Comparer<'o, 't> {
             }
             while let Some(record) = right.take_if(|next| order(next) == Ordering::Equal)? {
                 match here.remove(&record.key) {
-                    Some(partner) => self.tally(&partner, &record.facts)?,
+                    Some(partner) => self.tally(&record.key, &partner, &record.facts)?,
                     None => right_unmatched.put(record.waiting()),
                 }
             }
@@ -182,7 +189,7 @@ impl<'o, 't> Comparer<'o, 't> {
         self.rights_against(&mut right, &mut left_unmatched)?;
         for record in left_unmatched.drain_ordered() {
             match right_unmatched.remove(&record.key) {
-                Some(partner) => self.tally(&record.facts, &partner)?,
+                Some(partner) => self.tally(&record.key, &record.facts, &partner)?,
                 None => self.counts.missing_right += 1,
             }
         }
@@ -201,7 +208,7 @@ impl<'o, 't> Comparer<'o, 't> {
         let mut next = Some(first);
         while let Some(record) = next {
             match right_unmatched.remove(&record.key) {
-                Some(partner) => self.tally(&record.facts, &partner)?,
+                Some(partner) => self.tally(&record.key, &record.facts, &partner)?,
                 None => self.counts.missing_right += 1,
             }
             next = left.take()?;
@@ -214,7 +221,7 @@ impl<'o, 't> Comparer<'o, 't> {
     fn rights_against(&mut self, right: &mut Side<'_>, waiting: &mut Pending) -> Result<()> {
         while let Some(record) = right.take()? {
             match waiting.remove(&record.key) {
-                Some(partner) => self.tally(&partner, &record.facts)?,
+                Some(partner) => self.tally(&record.key, &partner, &record.facts)?,
                 None => self.counts.missing_left += 1,
             }
         }
@@ -252,7 +259,7 @@ impl<'o, 't> Comparer<'o, 't> {
                 }
                 Ordering::Equal => {
                     if let (Some(ours), Some(theirs)) = (left.take()?, right.take()?) {
-                        self.tally(&ours.facts, &theirs.facts)?;
+                        self.tally(&ours.key, &ours.facts, &theirs.facts)?;
                     }
                 }
             }
