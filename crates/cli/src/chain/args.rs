@@ -5,7 +5,7 @@ use bammetrics_core::pass;
 use bammetrics_core::registry::Ty;
 use bammetrics_core::stage;
 
-use super::{STEP, Spec, StepSpec, VERB, WRITE, planfile, usage};
+use super::{STEP, Spec, StepSpec, VERB, WRITE, bare, planfile, recipes, usage};
 use crate::error::VerbError;
 use crate::grammar::{self, Flag, Key, Parsed};
 use crate::verbs::{self, Files, VERBS, Verb, option_lines};
@@ -19,6 +19,7 @@ pub(crate) const DRY_RUN: Key = Key::Own("dry-run");
 pub(crate) const SORT_MEMORY: Key = Key::Own("sort-memory");
 pub(crate) const FORCE_SPACE: Key = Key::Own("force-space");
 pub(crate) const STRINGENCY: Key = Key::Own("validation-stringency");
+pub(crate) const RECIPE: Key = Key::Own("recipe");
 const LOWER: Key = Key::Own("lower");
 const FREE_SPACE: Key = Key::Own("free-space");
 /// A transform's `--as NAME`.
@@ -164,6 +165,15 @@ pub fn global_flags() -> Vec<Flag> {
         )
         .placeholder("FILE"),
         Flag::new(
+            RECIPE,
+            "recipe",
+            &[],
+            Ty::Text,
+            "Run a named chain (bammetrics recipes lists them): its steps in place of the \
+             command line's. STEP.option=value sets an option of one of its steps.",
+        )
+        .placeholder("NAME"),
+        Flag::new(
             DRY_RUN,
             "dry-run",
             &[],
@@ -192,7 +202,7 @@ pub fn global_flags() -> Vec<Flag> {
 /// The flags the parser takes in front of the first `+`: the documented
 /// ones, `--no-lower`, which the measurements of docs/chaining.md use, and
 /// `--free-space`, which the tests of the free-space refusal use.
-fn parser_flags() -> Vec<Flag> {
+pub(crate) fn parser_flags() -> Vec<Flag> {
     let mut flags = global_flags();
     flags.push(
         Flag::new(
@@ -470,8 +480,13 @@ pub fn help() -> String {
         "bammetrics chain: several steps on one BAM in one process. Records move from step \
          to step in memory: no pipe, no intermediate file.\n\n\
          Usage: {USAGE}\n       \
-         bammetrics chain --plan FILE [OPTIONS] [BAM]\n\n\
-         Every + starts a step. A step sees the records the step before it emits.\n  \
+         bammetrics chain [OPTIONS] BAM STEP [STEP OPTIONS] [STEP ...] [OPTIONS]\n       \
+         bammetrics chain --plan FILE [OPTIONS] [BAM]\n       \
+         bammetrics chain BAM --recipe NAME [OPTIONS] [STEP.option=value ...]\n\n\
+         Every + starts a step; so does a bare word that names a step verb (bammetrics \
+         chain BAM mark-duplicates insert-size -o out.bam). The chain's options go in front \
+         of the first step or after the last. A step sees the records the step before it \
+         emits.\n  \
          transform  changes the records later steps see: {}\n  \
          tap        reads the records of its position, changes nothing: {}\n  \
          write      write [PATH] writes the records of its position as a BAM\n  \
@@ -482,7 +497,12 @@ pub fn help() -> String {
          Files: a tap on the last stream writes PREFIX.<extension>, the names qc writes; a \
          tap in front of a transform writes PREFIX.<stream>.<extension> (PREFIX.in.* on the \
          source); mark-duplicates writes PREFIX.marked.duplication_metrics; write without a \
-         path writes PREFIX.<stream>.bam. A step's own -o replaces the name.\n\n\
+         path writes PREFIX.<stream>.bam. A step's own -o replaces the name. -o out.bam on \
+         a chain with a transform and no write adds write out.bam --index as the last step \
+         and names the metrics out.<extension>.\n\n\
+         Defaults: -R, --threads, --tmp-dir and --sort-memory come from the user config file \
+         when not given, -R also from BAMMETRICS_REFERENCE (bammetrics config prints them); \
+         reorder-sam's dictionary from the reference's .dict, else its .fai.\n\n\
          Exit 0 when every step finished; 1 when a step failed (a tap fails alone, a \
          transform or write stops its segment; the summary says which); 2 for a usage \
          error, found before the first read.\n\nOptions:\n",
@@ -491,6 +511,11 @@ pub fn help() -> String {
         step_names(is_split),
     );
     text.push_str(&option_lines(&global_flags()));
+    text.push_str(&format!(
+        "  --no-config{:pad$}Leave the user config file unread (bammetrics config).\n",
+        "",
+        pad = 31
+    ));
     text.push_str("\nOptions of write:\n");
     text.push_str(&option_lines(&write_flags()));
     text
@@ -661,8 +686,50 @@ fn no_report_step(error: VerbError) -> VerbError {
         .hint("bammetrics report DIR --pdf writes them for the metrics files a chain wrote to DIR")
 }
 
+/// The recipe `--recipe NAME` names, with the `STEP.option=value` words
+/// applied: its name, whether `-o` must name its BAM, and its chain. A
+/// recipe gives the steps, so it takes no step on the command line and no
+/// `--plan`; a `STEP.option=value` word without a recipe is refused.
+fn recipe_spec(
+    parsed: &Parsed,
+    steps: &[StepSpec],
+    overrides: &[(String, recipes::Override)],
+) -> Result<Option<(String, bool, Spec)>, VerbError> {
+    let Some(given) = parsed.last(RECIPE) else {
+        if let Some((word, _)) = overrides.first() {
+            return Err(usage(format!(
+                "{word} sets an option of a recipe's step, and no recipe is named"
+            ))
+            .from(word.clone())
+            .hint("bammetrics chain BAM --recipe NAME STEP.option=value; on a step: STEP --option VALUE"));
+        }
+        return Ok(None);
+    };
+    if let Some(plan) = parsed.last(PLAN) {
+        return Err(
+            usage(format!("{} and --recipe both give the steps", plan.spelled))
+                .from(plan.spelled.clone()),
+        );
+    }
+    if !steps.is_empty() {
+        return Err(usage(format!(
+            "--recipe {} gives the steps: a step on the command line cannot be added",
+            given.values[0]
+        ))
+        .from(given.spelled.clone())
+        .hint(
+            "STEP.option=value sets an option of a recipe's step: bammetrics recipes lists them",
+        ));
+    }
+    let (recipe, spec) = recipes::load(&given.values[0], overrides)?;
+    Ok(Some((recipe.name.clone(), recipe.output_bam, spec)))
+}
+
 /// Parse the arguments after `chain`.
 pub fn parse(args: &[String]) -> Result<Asked, VerbError> {
+    let (args, no_config) = crate::config::strip_no_config(args);
+    let (args, overrides) = recipes::take_overrides(&args);
+    let args = bare::with_plus(&args)?;
     let mut segments = args.split(|arg| arg == STEP);
     let head = segments.next().unwrap_or_default();
     let rest: Vec<&[String]> = segments.collect();
@@ -675,6 +742,7 @@ pub fn parse(args: &[String]) -> Result<Asked, VerbError> {
     if let Some(index) = steps.iter().position(wants_help) {
         return step_help(&steps[index].verb, index + 1).map(Asked::Help);
     }
+    let recipe = recipe_spec(&parsed, &steps, &overrides)?;
     let mut spec = match parsed.last(PLAN) {
         None => Spec::default(),
         Some(given) if !steps.is_empty() => {
@@ -690,7 +758,12 @@ pub fn parse(args: &[String]) -> Result<Asked, VerbError> {
     if parsed.last(PLAN).is_none() {
         spec.steps = steps;
     }
+    if let Some((name, output_bam, recipe)) = recipe {
+        spec = recipe;
+        spec.recipe_bam = output_bam.then_some(name);
+    }
     apply_globals(&parsed, &mut spec)?;
+    spec.no_config = no_config;
     Ok(Asked::Chain {
         spec: Box::new(spec),
         dry_run: parsed.flag(DRY_RUN),

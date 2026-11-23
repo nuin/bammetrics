@@ -359,11 +359,17 @@ fn step_table(at: &At, table: &Table, number: usize) -> Result<StepSpec, VerbErr
 
 /// The plan in `text`; `file` names it in errors.
 pub fn parse(text: &str, file: &str) -> Result<Spec, VerbError> {
+    let tables = parse_tables(text).map_err(|e| At { file }.error(e.line, e.message))?;
+    from_tables(&tables, file)
+}
+
+/// The plan in `tables`, read from `file`: a plan file's, or a recipe's
+/// without its `[recipe]` table.
+pub(super) fn from_tables(tables: &[Table], file: &str) -> Result<Spec, VerbError> {
     let at = At { file };
-    let tables = parse_tables(text).map_err(|e| at.error(e.line, e.message))?;
     let mut spec = Spec::default();
     let mut chain_seen = false;
-    for table in &tables {
+    for table in tables {
         match (table.name.as_str(), table.array) {
             ("chain", false) if chain_seen => {
                 return Err(at.error(table.line, "[chain] is given twice"));

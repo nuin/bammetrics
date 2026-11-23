@@ -1263,6 +1263,20 @@ pub fn make_prefix_dir(prefix: &Path) -> Result<MadeDirs> {
     Ok(made)
 }
 
+/// `-R` from the user config file or `BAMMETRICS_REFERENCE`
+/// ([`crate::config`]) when the command line gives none; `no_config`
+/// leaves the file unread.
+pub fn reference_from_config(
+    args: &mut QcArgs,
+    verb: &str,
+    no_config: bool,
+) -> std::result::Result<(), crate::error::VerbError> {
+    if args.reference.is_none() {
+        args.reference = crate::config::reference_for(verb, !no_config)?.map(PathBuf::from);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
