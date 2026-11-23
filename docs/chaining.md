@@ -1752,7 +1752,14 @@ kept stream that is no longer coordinate sorted goes. These stay, each named wit
   deliver/final.bam (a write or split step's file; this run has no such step)`), so
   dropping `write` to rerun faster keeps the BAM;
 - a file outside the prefix's files, which only a hand-edited manifest can list;
+- a file whose recorded kind is none a chain writes, or a `bam`, `kept`, `sam`, `index`
+  or `md5` record whose name lacks that kind's extension (`--resume: left in place:
+  out/s.insert_size_metrics (its kind is none a chain writes under that name)`);
 - a file changed since the run before wrote it.
+
+A manifest owned by another user, or a link to a file another user owns, is not read:
+`out/s.manifest.json is owned by user 0, not by this user: every step runs and no file is
+removed`.
 
 A run that fails still writes its manifest, on purpose: its record of the failed step makes
 the next `--resume` rerun that step, and the steps that finished are skipped. It removes no
@@ -1771,7 +1778,8 @@ steps 3, 4 and 5 and every file equals a fresh run; the feed without a kept stre
 changed source; a damaged manifest; a hand-edited file left alone; a failed step that
 reruns), `crates/cli/tests/chain_resume_safety.rs` (a respelled source or prefix, a
 source swapped during a run, the lock, what a resumed run removes and leaves, a grafted
-record, an unwritable directory, a killed run's temporary file, the examples of
+record, a record whose kind does not fit its name, a manifest of another user, an
+unwritable directory, a killed run's temporary file, the examples of
 docs/cli.md and the README), the golden records `chain_resume_*` and
 `plan_chain_resume_option_change`.
 

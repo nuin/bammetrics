@@ -333,6 +333,98 @@ fn a_hand_edited_manifest_removes_nothing_outside_the_prefix() {
     let _ = fs::remove_dir_all(&dir);
 }
 
+/// A record under the prefix whose kind was changed by hand to one that
+/// does not fit its name is left in place; unchanged, the same file goes.
+#[test]
+fn a_record_with_a_kind_that_does_not_fit_removes_nothing() {
+    let dir = fresh_dir("kind");
+    let source = root().join(MARKDUP).display().to_string();
+    let both = [
+        "chain",
+        &source,
+        "-o",
+        "o/s",
+        "--resume",
+        "+",
+        "mark-duplicates",
+        "--keep",
+        "+",
+        "insert-size",
+    ];
+    let one = [
+        "chain",
+        &source,
+        "-o",
+        "o/s",
+        "--resume",
+        "+",
+        "mark-duplicates",
+        "--keep",
+    ];
+    run_in(&dir, &both);
+    let manifest = dir.join("o/s.manifest.json");
+    let text = fs::read_to_string(&manifest).expect("manifest");
+    let at = text.find("\"o/s.insert_size_metrics\"").expect("record");
+    let kind = at + text[at..].find("\"kind\": \"metrics\"").expect("kind");
+    let edited = format!(
+        "{}\"kind\": \"bam\"{}",
+        &text[..kind],
+        &text[kind + "\"kind\": \"metrics\"".len()..]
+    );
+    fs::write(&manifest, edited).expect("edit");
+    let stderr = run_in(&dir, &one);
+    assert!(dir.join("o/s.insert_size_metrics").is_file(), "{stderr}");
+    assert!(
+        stderr.contains("left in place: o/s.insert_size_metrics (its kind is none"),
+        "{stderr}"
+    );
+    run_in(&dir, &both);
+    let stderr = run_in(&dir, &one);
+    assert!(!dir.join("o/s.insert_size_metrics").exists(), "{stderr}");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// A manifest that links to a file another user owns (`/etc/hosts`,
+/// owned by root and not writable here) fails before the read and removes
+/// nothing. A manifest of another user this user can write is not read
+/// (`resume::foreign_owner`, its unit test): no test user can make one.
+#[cfg(unix)]
+#[test]
+fn a_manifest_linked_to_another_user_s_file_removes_nothing() {
+    // SAFETY: geteuid has no preconditions.
+    if unsafe { libc::geteuid() } == 0 {
+        return;
+    }
+    let dir = fresh_dir("owner");
+    let source = root().join(MARKDUP).display().to_string();
+    fs::create_dir_all(dir.join("o")).expect("o");
+    fs::write(dir.join("o/s.insert_size_metrics"), "left").expect("file");
+    std::os::unix::fs::symlink("/etc/hosts", dir.join("o/s.manifest.json")).expect("link");
+    let output = bammetrics_in(
+        &dir,
+        &[
+            "chain",
+            &source,
+            "-o",
+            "o/s",
+            "--resume",
+            "+",
+            "quality-yield",
+        ],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.contains("the manifest: o/s.manifest.json: Permission denied"),
+        "{stderr}"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.join("o/s.insert_size_metrics")).expect("kept"),
+        "left"
+    );
+    let _ = fs::remove_dir_all(&dir);
+}
+
 /// A temporary file a killed run left beside the prefix is named on the
 /// next `--resume`, and left in place.
 #[test]

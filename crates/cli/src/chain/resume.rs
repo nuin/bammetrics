@@ -480,6 +480,13 @@ pub fn decide(chain: &Chain, keys: &[Key]) -> Resume {
     let (true, Some(path), Some(snap)) = (chain.resume, &chain.manifest, &snapshot) else {
         return Resume::everything(chain, snapshot, None, None);
     };
+    if let Some(uid) = foreign_owner(path) {
+        let note = format!(
+            "{} is owned by user {uid}, not by this user: every step runs and no file is removed",
+            path.display()
+        );
+        return Resume::everything(chain, snapshot, None, Some(note));
+    }
     let previous = match v2::read_any(path) {
         Ok(Some(AnyManifest::Chain(manifest))) => *manifest,
         Ok(Some(AnyManifest::Qc(_))) => {
@@ -542,6 +549,20 @@ pub fn decide(chain: &Chain, keys: &[Key]) -> Resume {
         runs,
         start,
     }
+}
+
+/// The owner of `path`, or of the file a link at `path` points to, when
+/// that owner is another user. The paths a resumed run removes come from
+/// the manifest, so a manifest another user can write is never trusted.
+fn foreign_owner(path: &Path) -> Option<u32> {
+    use std::os::unix::fs::MetadataExt as _;
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    let me = unsafe { libc::geteuid() };
+    [std::fs::symlink_metadata(path), std::fs::metadata(path)]
+        .into_iter()
+        .filter_map(Result::ok)
+        .map(|meta| meta.uid())
+        .find(|&uid| uid != me)
 }
 
 /// The lines of the plan text about `--resume`.
@@ -741,39 +762,56 @@ pub fn skipped_outcome(number: usize, key: &Key, resume: &Resume) -> StepOutcome
 }
 
 /// The kinds a run writes, as the `&'static str` of [`super::run::Written`].
+const KINDS: [&str; 25] = [
+    "metrics",
+    "gaps",
+    "file",
+    "bam",
+    "sam",
+    "index",
+    "md5",
+    "kept",
+    "intervals",
+    "verdict",
+    "report",
+    "pdf",
+    "manifest",
+    "json",
+    "jsonl",
+    "tsv",
+    "csv",
+    "parquet",
+    "xlsx",
+    "docx",
+    "sql",
+    "markdown",
+    "junit",
+    "multiqc",
+    "human",
+];
+
+/// [`KINDS`] entry `kind`, or `file` for a kind no run writes.
 fn known_kind(kind: &str) -> &'static str {
-    const KINDS: [&str; 25] = [
-        "metrics",
-        "gaps",
-        "file",
-        "bam",
-        "sam",
-        "index",
-        "md5",
-        "kept",
-        "intervals",
-        "verdict",
-        "report",
-        "pdf",
-        "manifest",
-        "json",
-        "jsonl",
-        "tsv",
-        "csv",
-        "parquet",
-        "xlsx",
-        "docx",
-        "sql",
-        "markdown",
-        "junit",
-        "multiqc",
-        "human",
-    ];
     KINDS
         .iter()
         .find(|k| **k == kind)
         .copied()
         .unwrap_or("file")
+}
+
+/// True when a manifest may name `path` with `kind`: a kind a chain
+/// writes, and for a BAM, SAM, index or MD5 the extension that kind has.
+/// A record that calls some other file a `bam` is not trusted.
+fn kind_fits(kind: &str, path: &Path) -> bool {
+    let extension = path.extension().and_then(|e| e.to_str());
+    let wanted = match kind {
+        "bam" | "kept" => Some("bam"),
+        "sam" => Some("sam"),
+        "index" => Some("bai"),
+        "md5" => Some("md5"),
+        _ => None,
+    };
+    KINDS.contains(&kind) && wanted.is_none_or(|w| extension == Some(w))
 }
 
 /// A path of a run in directory `then` as a run in `here` names it: as
@@ -835,8 +873,10 @@ fn companions(bam: &Path) -> [PathBuf; 3] {
 /// manifest of the run before lists it, it is still a regular file (no
 /// link is followed) with the fingerprint recorded, the chain does not
 /// read it, and either it sits in the directory of `PREFIX` with a name
-/// that starts with `PREFIX`'s, or it is the `.bai` or `.md5` of a BAM the
-/// same step wrote in this run. The files of a `write` or split step this
+/// that starts with `PREFIX`'s and its recorded kind is one this run
+/// writes, or it is an `index` or `md5` record naming the `.bai` or `.md5`
+/// of a BAM the same step wrote in this run. [`decide`] drops a manifest
+/// another user owns, so this never runs on one. The files of a `write` or split step this
 /// run does not have, a file elsewhere and a file changed since are left in
 /// place and named.
 pub fn remove_stale(chain: &Chain, previous: &ChainManifest, now: &ChainManifest) -> Stale {
@@ -885,15 +925,19 @@ pub fn remove_stale(chain: &Chain, previous: &ChainManifest, now: &ChainManifest
             {
                 continue;
             }
-            let companion = beside
-                .get(step.id.as_str())
-                .is_some_and(|names| names.contains(&resolved));
+            let kind = output.kind.as_deref();
+            let companion = matches!(kind, Some("index" | "md5"))
+                && beside
+                    .get(step.id.as_str())
+                    .is_some_and(|names| names.contains(&resolved));
             let why = if matches!(step.role.as_str(), "write" | "split")
                 && now.step(&step.id).is_none()
             {
                 Some("a write or split step's file; this run has no such step")
             } else if !in_prefix(&resolved) && !companion {
                 Some("outside the files of the output prefix")
+            } else if !kind.is_some_and(|k| kind_fits(k, &resolved)) {
+                Some("its kind is none a chain writes under that name")
             } else if !output.on_disk_in(then) {
                 Some("changed since the run before wrote it")
             } else {
@@ -1021,6 +1065,36 @@ mod tests {
             rebase(&dir.join("a"), Path::new("/elsewhere"), Path::new("m.bam")),
             want
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_kind_must_be_one_a_chain_writes_with_its_extension() {
+        assert!(kind_fits("metrics", Path::new("o/s.insert_size_metrics")));
+        assert!(kind_fits("kept", Path::new("o/s.marked.bam")));
+        assert!(kind_fits("index", Path::new("o/s.marked.bai")));
+        assert!(kind_fits("md5", Path::new("o/s.marked.bam.md5")));
+        assert!(!kind_fits("bam", Path::new("o/s.insert_size_metrics")));
+        assert!(!kind_fits("index", Path::new("o/s.marked.bam")));
+        assert!(!kind_fits("kept", Path::new("o/s.vcf")));
+        assert!(!kind_fits("anything", Path::new("o/s.txt")));
+        assert!(!kind_fits("", Path::new("o/s.txt")));
+    }
+
+    #[test]
+    fn a_file_of_another_user_is_foreign() {
+        let dir = std::env::temp_dir().join(format!("bammetrics-owner-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let mine = dir.join("m.manifest.json");
+        std::fs::write(&mine, "{}").expect("write");
+        assert_eq!(foreign_owner(&mine), None);
+        // SAFETY: geteuid has no preconditions.
+        if unsafe { libc::geteuid() } != 0 {
+            assert_eq!(foreign_owner(Path::new("/")), Some(0));
+            let link = dir.join("link.manifest.json");
+            std::os::unix::fs::symlink("/", &link).expect("link");
+            assert_eq!(foreign_owner(&link), Some(0));
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
