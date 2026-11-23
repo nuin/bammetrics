@@ -85,7 +85,8 @@ pub const TOOL: Tool = Tool {
     name: "FilterSamReads",
     summary: "no rows; OUTPUT gets the records of INPUT that FILTER keeps (aligned or unmapped \
               reads, a read name list, tag values, pairs over intervals), in SORT_ORDER: a BAM, \
-              or SAM text for a name ending in .sam.",
+              SAM text for a name ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one \
+              ending in .cram.",
     options: &[
         Opt::text(
             &["FILTER"],

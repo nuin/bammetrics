@@ -53,8 +53,9 @@ pub const TOOL: Tool = Tool {
     name: "ReorderSam",
     summary: "no rows; OUTPUT gets every record of the input under the sequence dictionary of \
               SEQUENCE_DICTIONARY, references matched by name, a record on a contig the \
-              dictionary lacks made unplaced, sorted again in the input's order: a BAM, or SAM \
-              text for a name ending in .sam.",
+              dictionary lacks made unplaced, sorted again in the input's order: a BAM, SAM \
+              text for a name ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending \
+              in .cram.",
     options: &[
         Opt::path(
             &["SEQUENCE_DICTIONARY", "SD"],

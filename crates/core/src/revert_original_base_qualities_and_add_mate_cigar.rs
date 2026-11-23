@@ -62,8 +62,9 @@ pub const TOOL: Tool = Tool {
     name: "RevertOriginalBaseQualitiesAndAddMateCigar",
     summary: "no rows; OUTPUT gets every record with QUAL restored from OQ, a CIGAR past the \
               end of its reference soft-clipped, and MC, MQ and the mate fields set from each \
-              mate, in SORT_ORDER: a BAM, or SAM text for a name ending in .sam. A file whose \
-              first records need nothing is skipped and OUTPUT is not written.",
+              mate, in SORT_ORDER: a BAM, SAM text for a name ending in .sam, or a CRAM (with \
+              REFERENCE_SEQUENCE) for one ending in .cram. A file whose first records need \
+              nothing is skipped and OUTPUT is not written.",
     options: &[
         Opt::text(
             &["SORT_ORDER", "SO"],

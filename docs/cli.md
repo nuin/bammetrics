@@ -311,19 +311,19 @@ table.
 | `build-bam-index` | BuildBamIndex (a coordinate-sorted BAM; `-o` names the index, default beside the BAM) | one `.bai`, no metrics file |
 | `fifo-buffer` | FifoBuffer (standard input to standard output; no input argument, no `-o`) | no file: the bytes it read, on standard output |
 | `view-sam` | ViewSam (SAM, BAM or CRAM in) | SAM text on standard output, or in `-o` |
-| `sort-sam` | SortSam (`--sort-order` queryname, coordinate or duplicate) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `sort-sam` | SortSam (`--sort-order` queryname, coordinate or duplicate) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
 | `exon-coverage` | CollectExonCoverageMetrics (not a Picard tool, [exon_coverage.md](exon_coverage.md); `--annotation` GTF, GFF3, BED12 or BED) | one (plus the `--summary-output` gene and transcript file) |
 | `duplicate-by-tile` | CollectDuplicateByTileMetrics (not a Picard tool, docs/06 section 8; `--read-name-regex`, `--outlier-sd`) | one |
 | `telomere` | CollectTelomereMetrics (not a Picard tool, [telomere.md](telomere.md); `-K` the repeat threshold, `--repeat`, `--count-duplicates`) | one |
 | `index-depth` | CollectIndexDepthMetrics (not a Picard tool, [docs/06](06_clinical_checks.md) section 10; a BAM with its `.bai` or `.csi`, never read whole; a CRAM refused) | one |
 | `add-comments-to-bam` | AddCommentsToBam (a BAM; `--comment` repeated) | `-o` BAM, no metrics file |
-| `replace-sam-header` | ReplaceSamHeader (a SAM, BAM or CRAM; `--header` names the file whose header replaces the input's) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `add-o-a-tag` | AddOATag (a SAM, BAM or CRAM; `-L` an interval list) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `clean-sam` | CleanSam (a SAM, BAM or CRAM; soft-clips alignments past the end of their reference, MAPQ 0 on unmapped records) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `set-nm-md-and-uq-tags` | SetNmMdAndUqTags (a coordinate-sorted SAM, BAM or CRAM; `-R` required; `--is-bisulfite-sequence`, `--set-only-uq`) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `set-nm-and-uq-tags` | SetNmAndUqTags (Picard's deprecated name of SetNmMdAndUqTags: the same options and output) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `add-or-replace-read-groups` | AddOrReplaceReadGroups (a SAM, BAM or CRAM; `--rglb`, `--rgpl`, `--rgpu`, `--rgsm` required; `--sort-order`) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `revert-original-base-qualities-and-add-mate-cigar` | RevertOriginalBaseQualitiesAndAddMateCigar (a SAM, BAM or CRAM; `--sort-order`, `--restore-original-qualities`, `--max-records-to-examine`) | `-o` BAM (with `.bai` and `.md5` by default), or SAM text for a name ending in `.sam`; nothing for a file in shape |
+| `replace-sam-header` | ReplaceSamHeader (a SAM, BAM or CRAM; `--header` names the file whose header replaces the input's) | `-o` BAM; when the input name does not end in `.bam`, SAM text for a name ending in `.sam` or a CRAM for one ending in `.cram` (with `-R`) |
+| `add-o-a-tag` | AddOATag (a SAM, BAM or CRAM; `-L` an interval list) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
+| `clean-sam` | CleanSam (a SAM, BAM or CRAM; soft-clips alignments past the end of their reference, MAPQ 0 on unmapped records) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
+| `set-nm-md-and-uq-tags` | SetNmMdAndUqTags (a coordinate-sorted SAM, BAM or CRAM; `-R` required; `--is-bisulfite-sequence`, `--set-only-uq`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
+| `set-nm-and-uq-tags` | SetNmAndUqTags (Picard's deprecated name of SetNmMdAndUqTags: the same options and output) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
+| `add-or-replace-read-groups` | AddOrReplaceReadGroups (a SAM, BAM or CRAM; `--rglb`, `--rgpl`, `--rgpu`, `--rgsm` required; `--sort-order`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
+| `revert-original-base-qualities-and-add-mate-cigar` | RevertOriginalBaseQualitiesAndAddMateCigar (a SAM, BAM or CRAM; `--sort-order`, `--restore-original-qualities`, `--max-records-to-examine`) | `-o` BAM (with `.bai` and `.md5` by default), SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`, its `.md5` and no index); nothing for a file in shape |
 | `split-sam-by-library` | SplitSamByLibrary (a SAM, BAM or CRAM; a CRAM exits 2) | `-o DIR`, default the current directory: one BAM, or SAM text, per library |
 | `split-sam-by-number-of-reads` | SplitSamByNumberOfReads (a SAM, BAM or CRAM; `--n-files` or `--n-reads`) | `-o DIR`: `shard_0001.bam` and on |
 | `gather-bam-files` | GatherBamFiles (BAMs as positionals or `-i`, in the order to gather; a text file of paths, one per line; SAM or CRAM read record by record) | `-o` BAM, no metrics file |
@@ -337,12 +337,12 @@ table.
 | `interval-list-tools` | IntervalListTools (interval lists as positionals or `-i`; `--second-input` for SUBTRACT, SYMDIFF and OVERLAPS) | `-o` interval list, or with `--scatter-count` above 1 the directory `-o` of `temp_NNNN_of_N/scattered.interval_list`; the `--output-value` count on standard output or in `--count-output`; no file without `-o` |
 | `scatter-intervals-by-ns` | ScatterIntervalsByNs (a FASTA with its `.fai` and `.dict`; `--max-to-merge`, `--output-type`) | `-o` interval list of `ACGTmer` and `Nmer` runs, `-o -` standard output |
 | `non-n-fasta-size` | NonNFastaSize (a FASTA with its `.fai` and `.dict`; `--intervals`) | the count and a line end, in `-o` or on standard output |
-| `merge-sam-files` | MergeSamFiles (SAM, BAM or CRAM files as positionals or `-i`; `--sort-order`, `--merge-sequence-dictionaries`, `--comment`, `--intervals`) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `reorder-sam` | ReorderSam (a SAM, BAM or CRAM; `--sequence-dictionary` required, `-S`, `-U`) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `fix-mate-information` | FixMateInformation (SAM, BAM or CRAM, several merged; `--sort-order`, `--add-mate-cigar`, `--ignore-missing-mates`, `--assume-sorted`) | `-o` BAM, or SAM text for a name ending in `.sam`; without `-o` the one input BAM rewritten in place |
-| `filter-sam-reads` | FilterSamReads (a SAM, BAM or CRAM; `--filter` required, `--read-list-file`, `--interval-list`, `--tag`, `--tag-value`, `--sort-order`, `--write-reads-files`) | `-o` BAM, or SAM text for a name ending in `.sam`; `.reads` files beside it with `--write-reads-files` |
-| `downsample-sam` | DownsampleSam (a SAM, BAM or CRAM; `--probability`, `--strategy`, `--random-seed`, `--accuracy`) | `-o` BAM, or SAM text for a name ending in `.sam`; `--metrics-file` the QualityYieldMetrics of the records kept |
-| `position-based-downsample-sam` | PositionBasedDownsampleSam (a SAM, BAM or CRAM file, read twice; `--fraction` required) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `merge-sam-files` | MergeSamFiles (SAM, BAM or CRAM files as positionals or `-i`; `--sort-order`, `--merge-sequence-dictionaries`, `--comment`, `--intervals`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
+| `reorder-sam` | ReorderSam (a SAM, BAM or CRAM; `--sequence-dictionary` required, `-S`, `-U`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
+| `fix-mate-information` | FixMateInformation (SAM, BAM or CRAM, several merged; `--sort-order`, `--add-mate-cigar`, `--ignore-missing-mates`, `--assume-sorted`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`); without `-o` the one input BAM rewritten in place |
+| `filter-sam-reads` | FilterSamReads (a SAM, BAM or CRAM; `--filter` required, `--read-list-file`, `--interval-list`, `--tag`, `--tag-value`, `--sort-order`, `--write-reads-files`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`); `.reads` files beside it with `--write-reads-files` |
+| `downsample-sam` | DownsampleSam (a SAM, BAM or CRAM; `--probability`, `--strategy`, `--random-seed`, `--accuracy`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`); `--metrics-file` the QualityYieldMetrics of the records kept |
+| `position-based-downsample-sam` | PositionBasedDownsampleSam (a SAM, BAM or CRAM file, read twice; `--fraction` required) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -571,9 +571,10 @@ bammetrics SortSam I=sample.bam O=sample.sorted.bam SORT_ORDER=coordinate
 
 Picard's `SortSam`: every record of a BAM, CRAM or SAM in `queryname`, `coordinate` or
 `duplicate` order (the three Picard 3.5.0 takes; `unsorted` and `unknown` exit as Picard
-exits). The output is a BAM, or SAM text for a name ending in `.sam`, the records Picard
+exits). The output is a BAM, SAM text for a name ending in `.sam`, or a CRAM for a name
+ending in `.cram` (with `-R`; KNOWN_DIFFERENCES.md, CRAM output), the records Picard
 writes in Picard's order (`tests/concordance/test_sort_sam.py`: decoded records for BAM,
-bytes for SAM text).
+bytes for SAM text; `test_cram_writer.py` for the CRAM).
 
 - The header is the input's with `SO` set and `@HD VN:1.6`. `GO`, `SS`, every other line
   and every field stay, and no `@PG` line is added, as in Picard.

@@ -80,8 +80,8 @@ pub const TOOL: Tool = Tool {
         .required(),
         Opt::path(
             &["OUTPUT", "O"],
-            "The BAM to write, or SAM text for a name ending in .sam when an input is SAM or \
-             CRAM.",
+            "The BAM to write. When an input is SAM or CRAM: SAM text for a name ending in \
+             .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in .cram.",
         )
         .written()
         .required(),

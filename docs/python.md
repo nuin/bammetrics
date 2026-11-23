@@ -77,7 +77,8 @@ The keywords of `qc`, `check` and `report` are the command's long flags in snake
   `output`: `chain(source, [step("write", output="x.sam")])` writes SAM text.
 - `sort_sam(input, *, output, sort_order, compression_level, create_index,
   create_md5_file, max_records_in_ram, tmp_dir, reference_sequence, validation_stringency)`
-  writes `output` (a BAM, or SAM text for a name ending in `.sam`) with every record in
+  writes `output` (a BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in
+  `.cram`, with `reference_sequence`) with every record in
   `sort_order` (`"queryname"`, `"coordinate"` or `"duplicate"`), as `bammetrics sort-sam`
   does, and returns `[]`: it writes no metrics file. In a chain, `step("sort_sam",
   sort_order="queryname")` is a transform and `write` writes its records.

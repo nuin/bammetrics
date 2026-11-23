@@ -49,8 +49,8 @@ pub const DEFAULT_RECORDS_IN_RAM: usize = 500_000;
 pub const TOOL: Tool = Tool {
     name: "SortSam",
     summary: "no rows; OUTPUT gets every record in SORT_ORDER (queryname, coordinate or \
-              duplicate) under the input header with SO set, as a BAM, or as SAM text for a \
-              name ending in .sam.",
+              duplicate) under the input header with SO set: a BAM, SAM text for a name \
+              ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in .cram.",
     options: &[
         Opt::path(
             &["OUTPUT", "O"],
