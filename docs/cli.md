@@ -2066,9 +2066,11 @@ lines on standard error, each after `bammetrics compare-s-a-ms: `; `-q` drops th
   queryname-sorted pair whose right file ends first exits 1 with no result; a file sorted
   by `samtools sort -n` is not in the order the merge expects.
 - Memory: the queryname merge holds two records. The other two walks hold the records that
-  wait for a partner, about 100 bytes plus the name each (the record's BAM bytes too under
-  `--lenient-dup`): none for two files in one order, every primary record of both files
-  when they share no read, every primary record of the left file when unsorted.
+  wait for a partner: none for two files in one order (45 MiB for the 10 GB HG002 exome
+  against itself), every primary record of both files when they share no read, every
+  primary record of the left file when unsorted. A waiting record costs 233 bytes at the
+  peak, 418 under `--lenient-dup` (1,969 and 3,526 MiB for 8.4 million unsorted records;
+  Picard holds 6,065 MiB there under `-Xmx8g`, docs/benchmarks.md).
 - `LEFT_FILE` and `RIGHT_FILE` are absolute paths, the working directory in front of a
   relative one. `-o` may not name an input (exit 2; the Picard face exits 1). A failed run
   writes no file.

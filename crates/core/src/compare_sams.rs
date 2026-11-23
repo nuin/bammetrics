@@ -70,11 +70,14 @@
 //! The queryname walk holds two records. The other two hold waiting
 //! records, as Picard's maps do, and the worst case is every primary
 //! record of both files (coordinate: two files that share no read at any
-//! place) or of the left file (unsorted). An entry is the read name plus
-//! about 100 bytes, where Picard holds the whole `SAMRecord`; under
-//! `LENIENT_DUP` it also holds the record's BAM bytes. Two files in the
-//! same order hold the records of one place. The `LENIENT_DUP` sorts hold
-//! `MAX_RECORDS_IN_RAM` keys each and spill to `TMP_DIR`.
+//! place) or of the left file (unsorted). An entry is 48 bytes and the
+//! read name, where Picard holds the whole `SAMRecord`; under
+//! `LENIENT_DUP` it also holds the record cut to what the duplicate order
+//! reads (`records::slim`). Measured on 8.4 million unsorted records: 233
+//! bytes a record at the peak, 418 under `LENIENT_DUP`
+//! (docs/benchmarks.md). Two files in the same order hold the records of
+//! one place. The `LENIENT_DUP` sorts hold `MAX_RECORDS_IN_RAM` keys each
+//! and spill to `TMP_DIR`.
 //!
 //! A BAM or a CRAM is not validated (`VALIDATION_STRINGENCY` applies to
 //! SAM text), as for every tool. One check htsjdk makes at any stringency

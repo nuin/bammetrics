@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Added
+
+- `CompareSAMs` (verb `compare-s-a-ms`, Python `compare_s_a_ms()`), as Picard 3.5.0: two
+  SAM, BAM or CRAM files as Picard's two positional arguments, the header comparison
+  (version, `CR`, `SO`, the dictionaries, read groups and program records) printed as
+  Picard's three lines per difference, the three record walks of `SamComparison`
+  (coordinate, queryname, unsorted), the `SamComparisonMetric` file, `LENIENT_HEADER`,
+  `LENIENT_DUP` (htsjdk's duplicate order and duplicate sets, spilled at
+  `MAX_RECORDS_IN_RAM`), `LENIENT_LOW_MQ_ALIGNMENT`, `LENIENT_UNKNOWN_MQ_ALIGNMENT`,
+  `LOW_MQ_THRESHOLD`, the `COMPARE_MQ` histogram, and exit 1 when the files differ. The
+  strand quirk of docs/04 Q-018 is kept. Not a chain step.
+- `CheckTerminatorBlock` (verb `check-terminator-block`, Python
+  `check_terminator_block()`), as Picard 3.5.0: `HAS_TERMINATOR_BLOCK`,
+  `HAS_HEALTHY_LAST_BLOCK` or `DEFECTIVE` from the last 64 KiB of a BGZF file, exit 100 on
+  `DEFECTIVE`. The Picard face prints the name on standard error, as Picard does; the verb
+  on standard output. A named pipe is refused without being opened.
+- `tests/data/compare_sams_{left,right,other}.bam`
+  (`tests/data/make_compare_sams_fixtures.py`), 28 golden records, the concordance modules
+  `test_compare_s_a_ms.py` and `test_check_terminator_block.py`, five memory gate rows (three on fixtures, two on the exome).
+
 ### Changed
 
 - `make budgets`: the binary, formats and Parquet growth rows are regression checks at the 0.31.0 size, after the owner accepted the binary size on 2026-11-22 (docs/07 decisions D22, D149, D156 and D159). Targets 430,000 bytes, 200 KB and 1.1 MiB; each fails at 1.5x its target (645,000 bytes, 300 KB, 1.65 MiB). The other rows still fail at 2x.
