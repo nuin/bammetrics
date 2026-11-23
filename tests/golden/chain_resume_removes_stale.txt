@@ -13,7 +13,8 @@ OUT/out.bam
 0
 ## stdout
 ## stderr
-bammetrics chain: --resume: removed 1 file the run before wrote and this run does not
+bammetrics chain: --resume: removed OUT/s.quality_yield_metrics: the run before wrote it and this run does not
+bammetrics chain: --resume: removed OUT/out.bai: the run before wrote it and this run does not
 bammetrics chain: step 1 (insert-size): skipped: the manifest proves it done, its files stay
 bammetrics chain: 2 steps finished, 1 of them skipped by --resume, 2 files written
 ## file out.bam
@@ -82,6 +83,7 @@ insert_size	All_Reads.fr_count
   "tool_version": "0.31.0",
   "verb": "chain",
   "sample": "s1",
+  "directory": "<directory>",
   "source": {
     "path": "tests/data/markdup.bam",
     "size": "<size>",

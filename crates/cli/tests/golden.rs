@@ -53,6 +53,7 @@ const FIXTURES: &[(&str, &str)] = &[
     ("PLAN_TAPS", "tests/data/chain_taps.toml"),
     ("PLAN_BAD", "tests/data/chain_bad_key.toml"),
     ("PLAN_SELF", "tests/data/chain_writes_plan.toml"),
+    ("PLAN_KEEP_TAP", "tests/data/chain_keep_on_tap.toml"),
     ("MD_SAM", "tests/data/markdup.sam"),
     ("MT", "tests/data/mt_copy_number.bam"),
     ("MT_TARGETS", "tests/data/mt_targets.bed"),
@@ -703,6 +704,9 @@ const CHAIN_MANIFEST_CASES: &[Case] = &[
     case!("error_chain_resume_stdin", "chain", "-", "--resume", "+", "insert-size"),
     case!("error_chain_keep_on_tap", "chain", "MD", "+", "insert-size", "--keep"),
     case!("error_chain_keep_and_write", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "--keep", "+", "write"),
+    case!("error_chain_keep_on_chain", "chain", "MD", "-o", "OUT/s", "--keep", "+", "mark-duplicates"),
+    case!("error_chain_plan_keep_on_tap", "chain", "--plan", "PLAN_KEEP_TAP", "-o", "OUT/s"),
+    case!("chain_dry_run_qc_hs", "chain", "IS", "-R", "REF", "-o", "OUT/s", "--dry-run", "+", "hs-metrics", "--bait-intervals", "IL", "--target-intervals", "IL", "+", "qc", "--preset", "clinical-panel"),
     case!("error_chain_qc_not_last", "chain", "IS", "+", "qc", "+", "insert-size"),
     case!("error_chain_qc_also_json", "chain", "IS", "+", "qc", "--also", "json"),
     case!("error_chain_qc_preset", "chain", "IS", "+", "qc", "--preset", "nope"),
@@ -756,7 +760,8 @@ const RESUME_CASES: &[Sequence] = &[
     Sequence { name: "chain_resume_option_change", before: &[RESUME_FIRST], argv: &["chain", "MD", "-o", "OUT/s", "--resume", "+", "quality-yield", "+", "mark-duplicates", "--keep", "--program-group-command-line", "pinned", "--program-group-version", "pinned", "+", "sort-sam", "-SO", "queryname", "--max-records-in-ram", "7", "+", "insert-size", "+", "write"] },
     Sequence { name: "plan_chain_resume_option_change", before: &[RESUME_FIRST], argv: &["plan", "MD", "-o", "OUT/s", "--resume", "+", "quality-yield", "+", "mark-duplicates", "--keep", "--program-group-command-line", "pinned", "--program-group-version", "pinned", "+", "sort-sam", "-SO", "queryname", "--max-records-in-ram", "7", "+", "insert-size", "+", "write"] },
     Sequence { name: "chain_resume_qc", before: &[&["chain", "IS", "-o", "OUT/s", "--resume", "+", "insert-size", "+", "qc", "--date", "2026-01-01 00:00:00 UTC"]], argv: &["chain", "IS", "-o", "OUT/s", "--resume", "+", "insert-size", "+", "qc", "--date", "2026-01-01 00:00:00 UTC"] },
-    Sequence { name: "chain_resume_removes_stale", before: &[&["chain", "MD", "-o", "OUT/s", "--resume", "+", "insert-size", "+", "write", "OUT/out.bam", "--index"]], argv: &["chain", "MD", "-o", "OUT/s", "--resume", "+", "insert-size", "+", "write", "OUT/out.bam"] },
+    Sequence { name: "chain_resume_removes_stale", before: &[&["chain", "MD", "-o", "OUT/s", "--resume", "+", "insert-size", "+", "quality-yield", "+", "write", "OUT/out.bam", "--index"]], argv: &["chain", "MD", "-o", "OUT/s", "--resume", "+", "insert-size", "+", "write", "OUT/out.bam"] },
+    Sequence { name: "chain_resume_leaves_a_write", before: &[&["chain", "MD", "-o", "OUT/s", "--resume", "+", "mark-duplicates", "+", "write", "OUT/deliver/final.bam", "--index", "+", "insert-size"]], argv: &["chain", "MD", "-o", "OUT/s", "--resume", "+", "mark-duplicates", "+", "insert-size"] },
     Sequence { name: "chain_resume_qc_manifest", before: &[&["qc", "IS", "-o", "OUT/s", "--date", "2026-01-01 00:00:00 UTC"]], argv: &["chain", "IS", "-o", "OUT/s", "--resume", "+", "insert-size"] },
 ];
 
@@ -1703,9 +1708,16 @@ fn normalize(text: &str, out: &str) -> String {
             chain_manifest = true;
         }
         let trimmed = line.trim_start();
-        let volatile = ["started", "seconds", "size", "edges_hash", "options_hash"]
-            .into_iter()
-            .find(|key| chain_manifest && trimmed.starts_with(&format!("\"{key}\": ")));
+        let volatile = [
+            "directory",
+            "started",
+            "seconds",
+            "size",
+            "edges_hash",
+            "options_hash",
+        ]
+        .into_iter()
+        .find(|key| chain_manifest && trimmed.starts_with(&format!("\"{key}\": ")));
         if let Some(key) = volatile {
             let indent = &line[..line.len() - trimmed.len()];
             let comma = if trimmed.ends_with(',') { "," } else { "" };

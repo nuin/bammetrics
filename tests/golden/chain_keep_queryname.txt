@@ -22,6 +22,7 @@ bammetrics chain: 2 steps finished, 3 files written
   "tool_version": "0.31.0",
   "verb": "chain",
   "sample": "s1",
+  "directory": "<directory>",
   "source": {
     "path": "tests/data/markdup.bam",
     "size": "<size>",

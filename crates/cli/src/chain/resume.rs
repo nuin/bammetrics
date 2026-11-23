@@ -15,15 +15,86 @@
 //! (`--keep`) and whose BAM is still there, else at the source; every
 //! transform between that start and the last step that runs runs too, to
 //! feed the steps after it.
+//!
+//! A file is one file whatever its spelling: paths are compared through
+//! [`resolve`], the paths of the run before against the working directory
+//! that run recorded. The source and the reference are fingerprinted before
+//! the first read, each output as soon as the run wrote it.
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::collections::{HashMap, HashSet};
+use std::path::{Component, Path, PathBuf};
 
+use bammetrics_core::registry::{Kind, Ty};
 use bammetrics_verdict::bytes_hash;
 
 use super::prepare::{Chain, Planned, Role};
 use super::run::{StepOutcome, StepStatus};
 use crate::manifest::v2::{self, AnyManifest, ChainManifest, FileRecord, Kept, StepRecord};
+
+/// `path` as an absolute path with every link of the part that exists
+/// followed and `.` and `..` taken out: one name per file whatever the
+/// spelling (`m.bam`, `./m.bam`, `$PWD/m.bam`, a link to it, `../d/m.bam`
+/// from a subdirectory). `-` and a path under `/dev` stay as they are.
+pub(super) fn resolve(path: &Path) -> PathBuf {
+    match std::env::current_dir() {
+        Ok(dir) => resolve_in(&dir, path),
+        Err(_) => path.to_path_buf(),
+    }
+}
+
+/// [`resolve`] with `dir` as the working directory.
+pub(super) fn resolve_in(dir: &Path, path: &Path) -> PathBuf {
+    if path == Path::new("-") || path.starts_with("/dev") {
+        return path.to_path_buf();
+    }
+    let mut resolved = PathBuf::new();
+    let mut exists = true;
+    for component in dir.join(path).components() {
+        match component {
+            Component::Prefix(_) | Component::RootDir => resolved.push(component.as_os_str()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                resolved.pop();
+            }
+            Component::Normal(name) => {
+                resolved.push(name);
+                if exists {
+                    match std::fs::canonicalize(&resolved) {
+                        Ok(real) => resolved = real,
+                        Err(_) => exists = false,
+                    }
+                }
+            }
+        }
+    }
+    resolved
+}
+
+/// The working directory of this run, resolved.
+fn directory() -> PathBuf {
+    resolve(Path::new("."))
+}
+
+/// What the run reads first, fingerprinted before the first read: a
+/// source swapped during the run then shows as changed to the next one.
+#[derive(Clone, Debug)]
+pub struct Snapshot {
+    /// The working directory, resolved: the paths of the manifest are
+    /// relative to it.
+    pub directory: PathBuf,
+    pub source: FileRecord,
+    pub reference: Option<FileRecord>,
+}
+
+impl Snapshot {
+    pub fn take(chain: &Chain) -> Self {
+        Self {
+            directory: directory(),
+            source: FileRecord::input(&chain.source_path),
+            reference: chain.reference.as_deref().map(FileRecord::input),
+        }
+    }
+}
 
 /// What identifies a step in the manifest.
 #[derive(Clone, Debug)]
@@ -86,6 +157,38 @@ fn argv(chain: &Chain, index: usize) -> Vec<String> {
     argv
 }
 
+/// The names of the path options of `step`'s tool: their values are
+/// files, hashed by [`resolve`] so a respelled path hashes the same.
+fn path_names(step: &Planned) -> Vec<&'static str> {
+    if step.write.is_some() {
+        return vec!["OUTPUT"];
+    }
+    step.tool.map_or_else(Vec::new, |tool| {
+        tool.table()
+            .into_iter()
+            .filter(|o| o.ty == Ty::Path || o.kind == Kind::Output)
+            .flat_map(|o| o.names.iter().copied())
+            .collect()
+    })
+}
+
+/// `argv` as the options hash reads it: each file value resolved.
+fn hashed_argv(step: &Planned, argv: &[String]) -> Vec<String> {
+    let names = path_names(step);
+    argv.iter()
+        .map(|arg| match arg.split_once('=') {
+            Some((key, value))
+                if (key == super::keep::ARGV_KEY || names.contains(&key))
+                    && value != "null"
+                    && !value.is_empty() =>
+            {
+                format!("{key}={}", resolve(Path::new(value)).display())
+            }
+            _ => arg.clone(),
+        })
+        .collect()
+}
+
 /// The files step `index` reads by name: the source is the manifest's own
 /// record, and a pipe has no fingerprint.
 fn inputs(chain: &Chain, index: usize) -> Vec<FileRecord> {
@@ -128,7 +231,7 @@ pub fn keys(chain: &Chain) -> Vec<Key> {
             format!("sample={}", chain.sample.as_deref().unwrap_or_default()),
             format!("stringency={}", stringency_name(chain)),
         ];
-        let text = argv
+        let text = hashed_argv(step, &argv)
             .iter()
             .chain(&hashed)
             .map(String::as_str)
@@ -192,6 +295,9 @@ impl Why {
 
 /// What a run resumes from.
 pub struct Resume {
+    /// The source and reference as this run found them before its read;
+    /// `None` for a run that writes no manifest.
+    pub snapshot: Option<Snapshot>,
     /// The manifest of the run before, when it is one of a chain.
     pub previous: Option<ChainManifest>,
     /// Why every step runs, when that is so for the whole run.
@@ -204,8 +310,14 @@ pub struct Resume {
 }
 
 impl Resume {
-    fn everything(chain: &Chain, previous: Option<ChainManifest>, note: Option<String>) -> Self {
+    fn everything(
+        chain: &Chain,
+        snapshot: Option<Snapshot>,
+        previous: Option<ChainManifest>,
+        note: Option<String>,
+    ) -> Self {
         Self {
+            snapshot,
             previous,
             note,
             runs: vec![Some(Why::Run); chain.steps.len()],
@@ -220,33 +332,49 @@ impl Resume {
 
 /// Why the whole run reruns: the manifest is of another version, the
 /// source, the reference or the stringency changed.
-fn whole_run(chain: &Chain, previous: &ChainManifest) -> Option<String> {
+fn whole_run(snapshot: &Snapshot, previous: &ChainManifest, stringency: &str) -> Option<String> {
     if previous.tool_version != env!("CARGO_PKG_VERSION") {
         return Some(format!(
             "the manifest was written by bammetrics {}",
             previous.tool_version
         ));
     }
-    let source = FileRecord::input(&chain.source_path);
-    if previous.source.path != source.path || source.print.is_none() {
+    let source = &snapshot.source;
+    if source.print.is_none() {
         return Some(format!(
-            "the source is not {}",
-            previous.source.path.display()
+            "the source {} is not a regular file",
+            source.path.display()
+        ));
+    }
+    let then = resolve_in(&previous.directory, &previous.source.path);
+    let now = resolve(&source.path);
+    if then != now {
+        let (then, now) = if previous.source.path == source.path {
+            (then, now)
+        } else {
+            (previous.source.path.clone(), source.path.clone())
+        };
+        return Some(format!(
+            "the run before read {}; this run reads {}",
+            then.display(),
+            now.display()
         ));
     }
     if previous.source.print != source.print {
         return Some(format!("the source {} changed", source.path.display()));
     }
-    let reference = chain.reference.as_deref().map(FileRecord::input);
-    let same = match (&reference, &previous.reference) {
+    let same = match (&snapshot.reference, &previous.reference) {
         (None, None) => true,
-        (Some(new), Some(old)) => new.path == old.path && new.print == old.print,
+        (Some(new), Some(old)) => {
+            resolve(&new.path) == resolve_in(&previous.directory, &old.path)
+                && new.print == old.print
+        }
         _ => false,
     };
     if !same {
         return Some("the reference changed".to_owned());
     }
-    if previous.stringency != stringency_name(chain) {
+    if previous.stringency != stringency {
         return Some(format!(
             "the validation stringency was {}",
             previous.stringency
@@ -274,11 +402,12 @@ fn stale(chain: &Chain, index: usize, key: &Key, previous: &ChainManifest) -> Op
     if old.status != StepStatus::Ok.name() {
         return Some(Why::Status(old.status.clone()));
     }
+    let then = &previous.directory;
     for input in &key.inputs {
-        let same = old
-            .inputs
-            .iter()
-            .any(|o| o.path == input.path && input.print.is_some() && o.print == input.print);
+        let now = resolve(&input.path);
+        let same = old.inputs.iter().any(|o| {
+            input.print.is_some() && o.print == input.print && resolve_in(then, &o.path) == now
+        });
         if !same {
             return Some(Why::Input(input.path.clone()));
         }
@@ -288,8 +417,8 @@ fn stale(chain: &Chain, index: usize, key: &Key, previous: &ChainManifest) -> Op
     }
     old.outputs
         .iter()
-        .find(|output| !output.on_disk())
-        .map(|output| Why::Output(output.path.clone()))
+        .find(|output| !output.on_disk_in(then))
+        .map(|output| Why::Output(shown(then, &output.path)))
 }
 
 /// True for a step the chain's read runs: every step but the qc step and
@@ -308,17 +437,25 @@ fn kept_on_disk(
     index: usize,
 ) -> Option<PathBuf> {
     let kept = chain.kept.iter().find(|k| k.index == index)?;
+    let now = resolve(kept.path());
+    let then = &previous.directory;
     previous
         .kept
         .iter()
-        .find(|k| k.step == keys[index].id && k.file.path == kept.path() && k.file.on_disk())
-        .map(|k| k.file.path.clone())
+        .find(|k| {
+            k.step == keys[index].id
+                && resolve_in(then, &k.file.path) == now
+                && k.file.on_disk_in(then)
+        })
+        .map(|_| kept.path().to_path_buf())
 }
 
 /// What the run skips, what it runs and why, and where its read starts.
 pub fn decide(chain: &Chain, keys: &[Key]) -> Resume {
-    let (true, Some(path)) = (chain.resume, &chain.manifest) else {
-        return Resume::everything(chain, None, None);
+    // A chain that writes no manifest fingerprints nothing.
+    let snapshot = chain.manifest.as_ref().map(|_| Snapshot::take(chain));
+    let (true, Some(path), Some(snap)) = (chain.resume, &chain.manifest, &snapshot) else {
+        return Resume::everything(chain, snapshot, None, None);
     };
     let previous = match v2::read_any(path) {
         Ok(Some(AnyManifest::Chain(manifest))) => *manifest,
@@ -328,19 +465,20 @@ pub fn decide(chain: &Chain, keys: &[Key]) -> Resume {
                 path.display(),
                 crate::manifest::SCHEMA
             );
-            return Resume::everything(chain, None, Some(note));
+            return Resume::everything(chain, snapshot, None, Some(note));
         }
         Ok(None) => {
             let note = format!("no manifest at {}: every step runs", path.display());
-            return Resume::everything(chain, None, Some(note));
+            return Resume::everything(chain, snapshot, None, Some(note));
         }
         Err(why) => {
-            return Resume::everything(chain, None, Some(format!("{why}: every step runs")));
+            let note = format!("{why}: every step runs");
+            return Resume::everything(chain, snapshot, None, Some(note));
         }
     };
-    if let Some(why) = whole_run(chain, &previous) {
+    if let Some(why) = whole_run(snap, &previous, stringency_name(chain)) {
         let note = format!("{why}: every step runs");
-        return Resume::everything(chain, Some(previous), Some(note));
+        return Resume::everything(chain, snapshot, Some(previous), Some(note));
     }
     let mut runs: Vec<Option<Why>> = Vec::with_capacity(keys.len());
     for (index, key) in keys.iter().enumerate() {
@@ -371,6 +509,7 @@ pub fn decide(chain: &Chain, keys: &[Key]) -> Resume {
         }
     }
     Resume {
+        snapshot,
         previous: Some(previous),
         note: None,
         runs,
@@ -437,7 +576,14 @@ fn record(
         outputs: outcome
             .files
             .iter()
-            .map(|file| FileRecord::output(&file.path, file.kind))
+            .map(|file| match &file.print {
+                Some(print) => FileRecord {
+                    path: file.path.clone(),
+                    kind: Some(file.kind.to_owned()),
+                    print: Some(print.clone()),
+                },
+                None => FileRecord::output(&file.path, file.kind),
+            })
             .collect(),
         status: outcome.status.name().to_owned(),
         error: outcome.error.clone(),
@@ -462,6 +608,11 @@ pub struct Run<'a> {
 /// (with `skipped` true and its number now), every other step gets the
 /// record of this run.
 pub fn manifest(chain: &Chain, run: &Run) -> ChainManifest {
+    let snapshot = run
+        .resume
+        .snapshot
+        .clone()
+        .unwrap_or_else(|| Snapshot::take(chain));
     let mut steps = Vec::with_capacity(chain.steps.len());
     for (index, (key, outcome)) in run.keys.iter().zip(run.outcomes).enumerate() {
         let kept = run
@@ -469,13 +620,21 @@ pub fn manifest(chain: &Chain, run: &Run) -> ChainManifest {
             .previous
             .as_ref()
             .filter(|_| run.resume.skipped(index))
-            .and_then(|previous| previous.step(&key.id));
+            .and_then(|previous| Some((previous.step(&key.id)?, &previous.directory)));
         steps.push(match kept {
-            Some(old) => StepRecord {
-                number: chain.steps[index].number,
-                skipped: true,
-                ..old.clone()
-            },
+            Some((old, then)) => {
+                let mut old = StepRecord {
+                    number: chain.steps[index].number,
+                    skipped: true,
+                    ..old.clone()
+                };
+                // The paths of a record of another working directory are
+                // kept as that directory names them.
+                for file in old.inputs.iter_mut().chain(old.outputs.iter_mut()) {
+                    file.path = rebase(then, &snapshot.directory, &file.path);
+                }
+                old
+            }
             None => record(chain, index, key, outcome, &run.started, run.millis),
         });
     }
@@ -498,8 +657,9 @@ pub fn manifest(chain: &Chain, run: &Run) -> ChainManifest {
     ChainManifest {
         tool_version: env!("CARGO_PKG_VERSION").to_owned(),
         sample: run.sample.clone(),
-        source: FileRecord::input(&chain.source_path),
-        reference: chain.reference.as_deref().map(FileRecord::input),
+        directory: snapshot.directory,
+        source: snapshot.source,
+        reference: snapshot.reference,
         prefix: chain.prefix.clone(),
         stringency: stringency_name(chain).to_owned(),
         started: run.started.clone(),
@@ -513,16 +673,21 @@ pub fn manifest(chain: &Chain, run: &Run) -> ChainManifest {
 /// The outcome of a step the run skips: its files as the run before wrote
 /// them.
 pub fn skipped_outcome(number: usize, key: &Key, resume: &Resume) -> StepOutcome {
+    let here = resume
+        .snapshot
+        .as_ref()
+        .map_or_else(directory, |s| s.directory.clone());
     let files = resume
         .previous
         .as_ref()
-        .and_then(|previous| previous.step(&key.id))
-        .map(|old| {
+        .and_then(|previous| Some((previous.step(&key.id)?, &previous.directory)))
+        .map(|(old, then)| {
             old.outputs
                 .iter()
                 .map(|o| super::run::Written {
-                    path: o.path.clone(),
+                    path: rebase(then, &here, &o.path),
                     kind: known_kind(o.kind.as_deref().unwrap_or_default()),
+                    print: o.print.clone(),
                 })
                 .collect()
         })
@@ -573,34 +738,180 @@ fn known_kind(kind: &str) -> &'static str {
         .unwrap_or("file")
 }
 
-/// After a resumed run that finished: remove the files the run before
-/// wrote that this run neither wrote nor kept. Only a file the manifest of
-/// the run before lists, still a regular file (no link is followed) with
-/// the fingerprint recorded, and no file the chain reads or plans to write.
-pub fn remove_stale(chain: &Chain, previous: &ChainManifest, now: &ChainManifest) -> usize {
-    let listed = |path: &Path| {
-        now.steps
+/// A path of a run in directory `then` as a run in `here` names it: as
+/// recorded when the two are one directory, else relative to `here` when
+/// the file is under it, else absolute.
+fn rebase(then: &Path, here: &Path, path: &Path) -> PathBuf {
+    if then == here {
+        return path.to_path_buf();
+    }
+    let absolute = resolve_in(then, path);
+    absolute
+        .strip_prefix(here)
+        .map_or_else(|_| absolute.clone(), Path::to_path_buf)
+}
+
+/// [`rebase`] into this run's working directory.
+fn shown(then: &Path, path: &Path) -> PathBuf {
+    rebase(then, &directory(), path)
+}
+
+/// What a resumed run did with the files of the run before that it neither
+/// wrote nor kept.
+#[derive(Debug, Default)]
+pub struct Stale {
+    pub removed: Vec<PathBuf>,
+    /// Each file left in place, with why.
+    pub left: Vec<(PathBuf, &'static str)>,
+}
+
+impl Stale {
+    /// One line per file, for standard error.
+    pub fn notes(&self) -> Vec<String> {
+        let removed = self.removed.iter().map(|path| {
+            format!(
+                "--resume: removed {}: the run before wrote it and this run does not",
+                path.display()
+            )
+        });
+        let left = self
+            .left
             .iter()
-            .flat_map(|s| &s.outputs)
-            .any(|o| o.path == path)
+            .map(|(path, why)| format!("--resume: left in place: {} ({why})", path.display()));
+        removed.chain(left).collect()
+    }
+}
+
+/// The `.bai` and `.md5` names htsjdk gives the companions of BAM or SAM
+/// file `bam`.
+fn companions(bam: &Path) -> [PathBuf; 3] {
+    [
+        bam.with_extension("bai"),
+        crate::qc::with_suffix(bam, ".bai"),
+        crate::qc::with_suffix(bam, ".md5"),
+    ]
+}
+
+/// After a resumed run that finished: remove the files the run before
+/// wrote that this run neither wrote nor kept. A file goes only when the
+/// manifest of the run before lists it, it is still a regular file (no
+/// link is followed) with the fingerprint recorded, the chain does not
+/// read it, and either it sits in the directory of `PREFIX` with a name
+/// that starts with `PREFIX`'s, or it is the `.bai` or `.md5` of a BAM the
+/// same step wrote in this run. The files of a `write` or split step this
+/// run does not have, a file elsewhere and a file changed since are left in
+/// place and named.
+pub fn remove_stale(chain: &Chain, previous: &ChainManifest, now: &ChainManifest) -> Stale {
+    let here = directory();
+    let written: HashSet<PathBuf> = now
+        .steps
+        .iter()
+        .flat_map(|s| &s.outputs)
+        .map(|o| resolve(&o.path))
+        .collect();
+    // The companion names of each BAM a step wrote in this run, by step id.
+    let mut beside: HashMap<&str, HashSet<PathBuf>> = HashMap::new();
+    for step in now.steps.iter().filter(|s| !s.skipped) {
+        let names = step
+            .outputs
+            .iter()
+            .filter(|o| o.path.extension().is_some_and(|e| e == "bam" || e == "sam"))
+            .flat_map(|o| companions(&resolve(&o.path)));
+        beside.entry(step.id.as_str()).or_default().extend(names);
+    }
+    let prefix = resolve(&chain.prefix);
+    let prefix_dir = prefix.parent().map(Path::to_path_buf);
+    let starts = prefix
+        .file_name()
+        .map(|name| format!("{}.", name.to_string_lossy()));
+    let in_prefix = |path: &Path| {
+        let name = path.file_name().map(|n| n.to_string_lossy());
+        path.parent() == prefix_dir.as_deref()
+            && starts
+                .as_deref()
+                .zip(name)
+                .is_some_and(|(starts, name)| name.starts_with(starts))
     };
-    let mut removed = 0;
-    for output in previous.steps.iter().flat_map(|s| &s.outputs) {
-        let path = output.path.as_path();
-        let plain = std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_file());
-        if !plain
-            || listed(path)
-            || !output.on_disk()
-            || chain.inputs.owner(path).is_some()
-            || chain.outputs.owner(path).is_some()
-        {
-            continue;
-        }
-        if std::fs::remove_file(path).is_ok() {
-            removed += 1;
+    let then = &previous.directory;
+    let mut stale = Stale::default();
+    let mut seen = HashSet::new();
+    for step in &previous.steps {
+        for output in &step.outputs {
+            let path = rebase(then, &here, &output.path);
+            let resolved = resolve(&path);
+            let plain = std::fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_file());
+            if !plain
+                || written.contains(&resolved)
+                || chain.inputs.owner(&path).is_some()
+                || !seen.insert(resolved.clone())
+            {
+                continue;
+            }
+            let companion = beside
+                .get(step.id.as_str())
+                .is_some_and(|names| names.contains(&resolved));
+            let why = if matches!(step.role.as_str(), "write" | "split")
+                && now.step(&step.id).is_none()
+            {
+                Some("a write or split step's file; this run has no such step")
+            } else if !in_prefix(&resolved) && !companion {
+                Some("outside the files of the output prefix")
+            } else if !output.on_disk_in(then) {
+                Some("changed since the run before wrote it")
+            } else {
+                None
+            };
+            match why {
+                Some(why) => stale.left.push((path, why)),
+                None => {
+                    if std::fs::remove_file(&path).is_ok() {
+                        stale.removed.push(path);
+                    }
+                }
+            }
         }
     }
-    removed
+    stale
+}
+
+/// The temporary files a run of this prefix left when it was killed
+/// (`.NAME.PID.N.HASH.tmp` in the prefix's directory, its process gone):
+/// named, never removed, since another program may own a name of that
+/// form.
+pub fn orphans(chain: &Chain) -> Vec<PathBuf> {
+    let Some(name) = chain.prefix.file_name().map(|n| n.to_string_lossy()) else {
+        return Vec::new();
+    };
+    let dir = match chain.prefix.parent() {
+        Some(dir) if !dir.as_os_str().is_empty() => dir.to_path_buf(),
+        _ => PathBuf::from("."),
+    };
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let starts = format!(".{name}.");
+    let mut found: Vec<PathBuf> = entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let file = entry.file_name().to_string_lossy().into_owned();
+            let rest = file.strip_prefix(&starts)?.strip_suffix(".tmp")?;
+            // NAME.PID.N.HASH: the process id is the third field from the end.
+            let pid: i32 = rest.rsplit('.').nth(2)?.parse().ok()?;
+            (!alive(pid)).then(|| dir.join(&file))
+        })
+        .collect();
+    found.sort();
+    found
+}
+
+/// True while process `pid` runs (or another user's process has it).
+fn alive(pid: i32) -> bool {
+    if pid <= 0 {
+        return false;
+    }
+    // SAFETY: signal 0 checks for the process and sends nothing.
+    let sent = unsafe { libc::kill(pid, 0) };
+    sent == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
 }
 
 #[cfg(test)]
@@ -632,5 +943,64 @@ mod tests {
             assert_eq!(known_kind(kind), kind);
         }
         assert_eq!(known_kind("nope"), "file");
+    }
+
+    #[test]
+    fn every_spelling_of_one_file_resolves_to_one_path() {
+        let dir = std::env::temp_dir().join(format!("bammetrics-resolve-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("a/b")).expect("dirs");
+        let dir = dir.canonicalize().expect("dir");
+        std::fs::write(dir.join("a/m.bam"), "x").expect("file");
+        let want = dir.join("a/m.bam");
+        for spelled in [
+            "a/m.bam",
+            "./a/m.bam",
+            "a/b/../m.bam",
+            "a/./b/../../a/m.bam",
+        ] {
+            assert_eq!(resolve_in(&dir, Path::new(spelled)), want, "{spelled}");
+        }
+        assert_eq!(resolve_in(&dir.join("a/b"), Path::new("../m.bam")), want);
+        assert_eq!(resolve_in(Path::new("/x"), &want), want);
+        // A path that does not exist yet: the part that does is resolved.
+        assert_eq!(
+            resolve_in(&dir, Path::new("a/b/../new/s.txt")),
+            dir.join("a/new/s.txt")
+        );
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(dir.join("a"), dir.join("link")).expect("link");
+            assert_eq!(resolve_in(&dir, Path::new("link/m.bam")), want);
+        }
+        assert_eq!(resolve_in(&dir, Path::new("-")), PathBuf::from("-"));
+        // The paths of a run in a/b, read by a run in `dir`.
+        assert_eq!(
+            rebase(&dir.join("a/b"), &dir, Path::new("../m.bam")),
+            PathBuf::from("a/m.bam")
+        );
+        assert_eq!(rebase(&dir, &dir, Path::new("./x")), PathBuf::from("./x"));
+        assert_eq!(
+            rebase(&dir.join("a"), Path::new("/elsewhere"), Path::new("m.bam")),
+            want
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_stale_note_names_each_file() {
+        let stale = Stale {
+            removed: vec![PathBuf::from("out/s.sorted.bai")],
+            left: vec![(
+                PathBuf::from("deliver/final.bam"),
+                "a write or split step's file",
+            )],
+        };
+        assert_eq!(
+            stale.notes(),
+            [
+                "--resume: removed out/s.sorted.bai: the run before wrote it and this run does not",
+                "--resume: left in place: deliver/final.bam (a write or split step's file)",
+            ]
+        );
     }
 }

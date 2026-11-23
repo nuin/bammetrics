@@ -391,6 +391,15 @@ impl Step {
     }
 }
 
+/// The collector that writes the metrics class `class` (`HsMetrics`), as
+/// `qc` chooses it.
+pub fn source_tool(class: &str) -> Option<&'static str> {
+    SOURCES
+        .iter()
+        .find(|(c, _, _)| *c == class)
+        .map(|(_, tool, _)| *tool)
+}
+
 /// A metrics class some rule reads that no collector of this run writes.
 pub struct Unmet {
     pub class: String,

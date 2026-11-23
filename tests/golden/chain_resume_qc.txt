@@ -69,6 +69,7 @@ insert_size	All_Reads.fr_count
   "tool_version": "0.31.0",
   "verb": "chain",
   "sample": "insert_size",
+  "directory": "<directory>",
   "source": {
     "path": "tests/data/insert_size.bam",
     "size": "<size>",

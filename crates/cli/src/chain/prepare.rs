@@ -1243,6 +1243,7 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         .contains(&Also::Markdown)
         .then(|| with_suffix(&prefix, Also::Markdown.run_suffix()));
     prefix_used |= report.is_some();
+    keep::refuse_a_write_on_the_kept_file(&steps, &kept)?;
     check_one_stdout(&steps)?;
     refuse_unresolved(&steps, report.as_deref())?;
     let mut outputs = claim_outputs(&steps, report.as_deref())?;

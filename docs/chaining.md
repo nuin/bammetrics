@@ -1445,18 +1445,66 @@ resume     step 5 write: runs: step 3 in front of it runs
 A skipped step prints `skipped: the manifest proves it done, its files stay`, and the
 summary counts it: `5 steps finished, 2 of them skipped by --resume, 3 files written`.
 
+One file has one name. `--resume` compares paths resolved: absolute, links followed, `.`
+and `..` taken out. The manifest records the run's working directory (`directory`), and
+its other paths are as the run named them, relative to it. So `m.bam`, `./m.bam`,
+`$PWD/m.bam`, a link to it and `../m.bam` from a subdirectory name one source, and an
+`-o` spelled another way names one prefix. The options hash reads each path option
+resolved. Another file under the source's name prints `--resume: the run before read
+m.bam; this run reads other.bam: every step runs`.
+
+Fingerprints. The source and the reference are fingerprinted before the first read, and
+each output as soon as the run wrote it. A source replaced while a run reads it therefore
+shows as changed to the next `--resume`, which reruns every step.
+
+One run per prefix. A chain that writes a manifest holds an advisory lock (`flock`) on
+`PREFIX.manifest.json.lock` from before its first read to its end, and removes the file
+then (on SIGINT, SIGTERM and SIGHUP too). A second run on the same prefix exits 2 before
+it reads: `another chain is writing out/s.manifest.json (it holds
+out/s.manifest.json.lock): one run per output prefix`. A lock file a killed run left is
+no lock: `flock` ends with the process.
+
 File safety. The manifest is read under a 16 MiB cap through the JSON reader with a
-nesting limit of 64, so a damaged file is a note, never a crash. A step that runs replaces
-its files atomically; a skipped step's files are not opened for writing. After a resumed
-run that finished, the files the manifest of the run before lists that this run neither
-wrote nor kept are removed, each only while it is a regular file (no link is followed)
-with the fingerprint recorded, and never a file the chain reads or plans to write. A file
-edited since stays.
+nesting limit of 64, so a damaged file is a note, never a crash. Its directory is checked
+before the first read by making and removing the temporary file it is written under; a
+directory that takes no new file fails with exit 1 and names the directory: `the manifest
+out/s.manifest.json: cannot write in out: Permission denied`. A step that runs replaces its
+files atomically; a skipped step's files are not opened for writing.
+
+After a resumed run that finished, each file the manifest of the run before lists that
+this run neither wrote nor kept is removed, and named: `--resume: removed out/s.sorted.bai:
+the run before wrote it and this run does not`. It goes only while it is a regular file
+(no link is followed) with the fingerprint recorded, the chain does not read it, and it is
+a `PREFIX.*` file in the prefix's directory or the `.bai` or `.md5` of a BAM the same step
+wrote in this run. A planned file this run did not write is stale too: the `.bai` of a
+kept stream that is no longer coordinate sorted goes. These stay, each named with why:
+
+- the files of a `write` or split step this run does not have (`--resume: left in place:
+  deliver/final.bam (a write or split step's file; this run has no such step)`), so
+  dropping `write` to rerun faster keeps the BAM;
+- a file outside the prefix's files, which only a hand-edited manifest can list;
+- a file changed since the run before wrote it.
+
+A run that fails still writes its manifest, on purpose: its record of the failed step makes
+the next `--resume` rerun that step, and the steps that finished are skipped. It removes no
+file of the run before.
+
+A run killed with SIGINT, SIGTERM or SIGHUP leaves no temporary file and the files of the
+run before as they were (exit 130 on SIGINT). A run killed with SIGKILL cannot clean up:
+its temporary files stay as `.NAME.PID.N.HASH.tmp` beside the prefix, up to the size of
+the file being written. The next `--resume` names each one whose process is gone
+(`--resume: left in place: out/.s.marked.bam.4571.0.e6d139e96494597c.tmp (a temporary file
+of a run that was killed; remove it)`) and leaves it: another program may own a name of
+that form.
 
 Tests: `crates/cli/tests/chain_resume.rs` (the gate: an option of step 3 of five reruns
 steps 3, 4 and 5 and every file equals a fresh run; the feed without a kept stream; a
 changed source; a damaged manifest; a hand-edited file left alone; a failed step that
-reruns), the golden records `chain_resume_*` and `plan_chain_resume_option_change`.
+reruns), `crates/cli/tests/chain_resume_safety.rs` (a respelled source or prefix, a
+source swapped during a run, the lock, what a resumed run removes and leaves, a grafted
+record, an unwritable directory, a killed run's temporary file, the examples of
+docs/cli.md and the README), the golden records `chain_resume_*` and
+`plan_chain_resume_option_change`.
 
 ## 23. W14: kept streams
 
@@ -1468,7 +1516,10 @@ A plan file writes `keep = true` in the step's table; Python passes `keep=True` 
 
 The kept BAM is a planned file of its transform: it is claimed, checked for writability and
 against the inputs before the first read, so `+ mark-duplicates --keep + write` (both
-`PREFIX.marked.bam`) is a usage error. The plan lists it as `PREFIX.marked.bam (kept)` and
+`PREFIX.marked.bam`) is a usage error: `step 1 (mark-duplicates) --keep and step 2 (write)
+both write out/s.marked.bam: give write its own path, or drop --keep`. `--keep` before the
+first `+` is a usage error that names the transform step, and `keep = true` on a tap in a
+plan file gets the message of `--keep` on a tap. The plan lists it as `PREFIX.marked.bam (kept)` and
 its index as `(when coordinate sorted)`, and the output line counts its bytes: `output
 about 2.7 KiB written by write and the kept streams`.
 
@@ -1503,7 +1554,11 @@ The qc step keeps the number it was given. A transform's own metrics file
 The source, `-o`, `-R`, `--threads`, `--sample` and `--resume` belong to the chain. A step
 after `qc` is a usage error. The step prints its verdict on standard error: `step 2 (qc):
 verdict pass: 6 checks, 6 pass, 0 warn, 0 fail, 0 not measured`. A class no step can write
-is named in the plan (`qc         WgsMetrics not measured: needs -R FASTA`).
+is named in the plan (`qc         WgsMetrics not measured: needs -R FASTA`); a class a tap
+of the stream writes is measured, so an `hs-metrics` step in front gives `HsMetrics`.
+The `sex-check` tap the qc step adds counts reads per base over each whole contig: it does
+not take `TARGET_INTERVALS` from an `hs-metrics` step, where `qc --hs` gives it the
+targets, so its `X_READS_PER_BASE` and `Y_READS_PER_BASE` differ from the verb's.
 
 `CollectWgsMetrics` has no one-pass collector. Under a qc step it reads the source on its
 own after the chain when no transform is in front, or the stream the last transform keeps
@@ -1530,3 +1585,6 @@ files and `verdict.json` of `chain_qc_step` equal those of `qc_generic`),
 | `qc.rs` | `Plan.bam` becomes a chain, `Read` gains `Tap(n)` | The qc verb is unchanged; the qc step reuses its collector planning (`qc::plan_chain_step`) | qc golden records stay byte for byte |
 | Kept product kind | A kept product may be CRAM | BAM, with its index when coordinate sorted | CRAM writing is wave W15 |
 | Materialize fallback | A tool with only `run` reads a spooled copy of the stream | Not built here; the qc step's `CollectWgsMetrics` reads the source or a kept stream | Left for the branch that builds the spool |
+| Paths and fingerprints | The manifest's fingerprints | Paths compared resolved against the recorded `directory`; the source fingerprinted before the read, each output when written | A respelled path reran every step; a source swapped during a run was recorded with its new fingerprint |
+| Concurrent runs | Not covered | One run per prefix through `PREFIX.manifest.json.lock`; a second exits 2 | Two runs on one prefix wrote one kept BAM and a manifest that skipped over the other run's records |
+| What a resumed run removes | Every file the old manifest lists and this run does not write | `PREFIX.*` files and the companions of a BAM the same step rewrote; a dropped `write` step's files and any file elsewhere are left and named | A dropped `write` lost its BAM; a hand-edited manifest removed a file of another prefix |

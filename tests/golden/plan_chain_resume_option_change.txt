@@ -88,6 +88,7 @@ insert_size	All_Reads.fr_count
   "tool_version": "0.31.0",
   "verb": "chain",
   "sample": "s1",
+  "directory": "<directory>",
   "source": {
     "path": "tests/data/markdup.bam",
     "size": "<size>",

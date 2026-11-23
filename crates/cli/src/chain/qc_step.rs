@@ -574,6 +574,9 @@ fn added(
             }
         }
     }
+    // A class a tap of the stream writes is measured: its tool's file is
+    // among the metrics files the verdict reads.
+    unmet.retain(|u| !qc::source_tool(&u.class).is_some_and(covered));
     added.unmet = unmet;
     Ok((added, preset, pdf))
 }
@@ -724,7 +727,7 @@ pub(super) fn finish(
     let mut files = Vec::new();
     let mut write = |path: PathBuf, text: &[u8], kind: &'static str| {
         write_atomic(&path, text)?;
-        files.push(Written { path, kind });
+        files.push(Written::new(path, kind));
         crate::error::Result::Ok(())
     };
     write(
@@ -751,7 +754,7 @@ pub(super) fn finish(
     if let (Some(settings), Some(bytes)) = (&plan.pdf, pdf) {
         let path = qc::pdf_path(prefix);
         settings.save(&path, &bytes, &inputs)?;
-        files.push(Written { path, kind: "pdf" });
+        files.push(Written::new(path, "pdf"));
     }
     let code = args.fail_on.map_or(0, |gate| {
         check::exit_code(std::slice::from_ref(&verdict), gate)

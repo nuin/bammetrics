@@ -17,5 +17,5 @@ write
 2
 ## stdout
 ## stderr
-bammetrics chain: step 2 (sort-sam) and step 3 (write) both write OUT/s.sorted.bam: every output of a chain needs its own file
-  a step's own -o names another file (bammetrics chain --help)
+bammetrics chain: step 2 (sort-sam) --keep and step 3 (write) both write OUT/s.sorted.bam: give write its own path, or drop --keep
+  --keep writes PREFIX.<stream>.bam; write without a path writes the same name

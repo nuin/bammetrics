@@ -12,5 +12,5 @@ write
 2
 ## stdout
 ## stderr
-bammetrics chain: step 1 (mark-duplicates) and step 2 (write) both write OUT/s.marked.bam: every output of a chain needs its own file
-  a step's own -o names another file (bammetrics chain --help)
+bammetrics chain: step 1 (mark-duplicates) --keep and step 2 (write) both write OUT/s.marked.bam: give write its own path, or drop --keep
+  --keep writes PREFIX.<stream>.bam; write without a path writes the same name

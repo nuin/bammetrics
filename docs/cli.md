@@ -1266,7 +1266,7 @@ bammetrics chain in.bam -o out/NA12878 --sort-memory 4G \
 samtools view -b in.bam chr20 | bammetrics chain - + mark-duplicates + write - | samtools flagstat -
 bammetrics chain --plan plan.toml -o out/NA12878 --dry-run
 bammetrics chain in.bam -o out/NA12878 --resume + mark-duplicates --keep \
-    + insert-size + write + qc --preset generic --fail-on fail
+    + insert-size + write out/NA12878.bam + qc --preset generic --fail-on fail
 ```
 
 Several steps on one BAM in one process. Records move from step to step in memory: no
@@ -1320,7 +1320,10 @@ is the short form.
   writes) and whose transforms in front are skipped too. The read starts at the last kept
   stream in front of the first step that runs, else at the source. `plan --resume` prints
   why each step runs or is skipped. A chain that resumes, keeps a stream or ends in `qc`
-  writes the manifest (docs/chaining.md section 22).
+  writes the manifest (docs/chaining.md section 22). Paths are compared resolved, so
+  `./in.bam` and `$PWD/in.bam` name one source. One run per prefix: a second exits 2.
+  A resumed run names each file of the run before it removes, and leaves the BAM of a
+  `write` step it no longer has.
 - `qc` as the last step (`+ qc --preset P --report html,pdf --also junit --fail-on fail`)
   evaluates the preset over the taps of its stream and writes `PREFIX.verdict.json` and
   `PREFIX.report.html` as `qc` writes them for the same taps; it adds the taps the preset

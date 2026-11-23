@@ -60,6 +60,14 @@ impl FileRecord {
             .is_some_and(|print| fingerprint(&self.path).as_ref() == Some(print))
     }
 
+    /// [`FileRecord::on_disk`] for a record of a run in working directory
+    /// `dir`: a relative path is read under it.
+    pub fn on_disk_in(&self, dir: &Path) -> bool {
+        self.print
+            .as_ref()
+            .is_some_and(|print| fingerprint(&dir.join(&self.path)).as_ref() == Some(print))
+    }
+
     fn to_json(&self) -> Json {
         let mut members = vec![("path".to_owned(), Json::text(&path_text(&self.path)))];
         if let Some(kind) = &self.kind {
@@ -301,6 +309,9 @@ impl Kept {
 pub struct ChainManifest {
     pub tool_version: String,
     pub sample: String,
+    /// The working directory of the run, resolved: every relative path of
+    /// the manifest is relative to it.
+    pub directory: PathBuf,
     pub source: FileRecord,
     pub reference: Option<FileRecord>,
     pub prefix: PathBuf,
@@ -321,6 +332,10 @@ impl ChainManifest {
             ("tool_version".to_owned(), Json::text(&self.tool_version)),
             ("verb".to_owned(), Json::text(crate::chain::VERB)),
             ("sample".to_owned(), Json::text(&self.sample)),
+            (
+                "directory".to_owned(),
+                Json::text(&path_text(&self.directory)),
+            ),
             ("source".to_owned(), self.source.to_json()),
             (
                 "reference".to_owned(),
@@ -363,6 +378,7 @@ impl ChainManifest {
         Some(Self {
             tool_version: text("tool_version")?,
             sample: text("sample")?,
+            directory: PathBuf::from(text("directory")?),
             source: FileRecord::from_json(json.get("source")?, false)?,
             reference,
             prefix: PathBuf::from(text("prefix")?),
@@ -489,6 +505,7 @@ mod tests {
         ChainManifest {
             tool_version: "0.31.0".to_owned(),
             sample: "NA12878".to_owned(),
+            directory: PathBuf::from("/work"),
             source: FileRecord {
                 path: PathBuf::from("in.bam"),
                 kind: None,

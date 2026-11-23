@@ -676,12 +676,18 @@ fn steps(segments: &[&[String]]) -> Result<Vec<StepSpec>, VerbError> {
 const REPORT_OPTIONS: [&str; 5] = ["report", "pdf", "pdf-only", "pdf-font", "page-size"];
 
 /// An unknown chain option that is one of [`REPORT_OPTIONS`]: the refusal
-/// that names the qc step. Any other error as it is.
+/// that names the qc step; `--keep`: the refusal that names the transform
+/// step. Any other error as it is.
 fn no_report_step(error: VerbError) -> VerbError {
     let Some(spelled) = grammar::unknown_option(&error) else {
         return error;
     };
     let name = spelled.trim_start_matches('-').split('=').next();
+    if name.is_some_and(|name| name.eq_ignore_ascii_case("keep")) {
+        return usage("--keep belongs to a transform step: give it after the verb")
+            .from(spelled)
+            .hint("bammetrics chain BAM -o PREFIX + mark-duplicates --keep + insert-size");
+    }
     if !name.is_some_and(|name| REPORT_OPTIONS.contains(&name)) {
         return error;
     }

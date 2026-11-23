@@ -30,6 +30,18 @@
   verdict forms `qc` writes for the same taps on the same records. Its `--fail-on` code
   (10, 11) is the chain's when every step finished. `CollectWgsMetrics` reads the source,
   or the last transform's kept stream. Python `step("qc", ...)`.
+- `chain --resume` compares paths resolved against the working directory the manifest
+  records (member `directory` of manifest 2): `./m.bam`, `$PWD/m.bam`, a link and
+  `../m.bam` from a subdirectory name one source. The source and the reference are
+  fingerprinted before the first read and each output as soon as it is written, so a
+  source replaced during a run makes the next `--resume` rerun every step. A chain that
+  writes a manifest holds a lock on `PREFIX.manifest.json.lock`; a second run on the same
+  prefix exits 2 before it reads. A resumed run removes only `PREFIX.*` files and the
+  `.bai` or `.md5` of a BAM the same step rewrote, names each file it removes, and leaves
+  (and names) the files of a dropped `write` step, a file outside the prefix and a file
+  edited since; the stale `.bai` of a kept stream no longer coordinate sorted goes. A
+  killed run's temporary files are named. A manifest directory that takes no new file
+  fails before the read, naming the directory.
 - Frozen JSON schemas (docs/formats.md, Frozen schemas): `docs/schema/verdict-1.json`,
   `manifest-1.json`, `manifest-2.json` and `events-1.json` beside `metrics-1.json`, every
   object closed. `crates/cli/tests/schemas.rs` validates what `qc`, `check` and `chain`

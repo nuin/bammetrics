@@ -335,6 +335,18 @@ fn step_table(at: &At, table: &Table, number: usize) -> Result<StepSpec, VerbErr
             ));
         }
         let Some(flag) = found else {
+            if entry.key == "keep" {
+                // The message of `--keep` on such a step on the command line.
+                return Err(at
+                    .error(
+                        entry.line,
+                        format!(
+                            "{label}: --keep writes the stream a transform leaves, and {name} \
+                             leaves none"
+                        ),
+                    )
+                    .hint("write [PATH] writes the records at its position as a BAM"));
+            }
             let mut error = at.error(entry.line, format!("{label}: unknown key {}", entry.key));
             if let Some(best) = grammar::closest(&flags, &entry.key) {
                 error = error.hint(format!("did you mean {best}?"));

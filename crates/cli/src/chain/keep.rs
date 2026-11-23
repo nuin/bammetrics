@@ -11,6 +11,7 @@ use bammetrics_core::stage::{Products, Step, WriteOptions};
 
 use super::prepare::{Planned, PlannedFile};
 use super::run::Written;
+use crate::error::VerbError;
 use crate::qc::with_suffix;
 
 /// The planned kind of a kept BAM.
@@ -57,6 +58,30 @@ pub(super) fn plan(prefix: &Path, index: usize, step: &mut Planned) -> Kept {
     }
 }
 
+/// A `write` step whose BAM is the file a `--keep` writes: a bare `write`
+/// right after the kept transform names `PREFIX.<stream>.bam` too. The
+/// error names both ways out.
+pub(super) fn refuse_a_write_on_the_kept_file(
+    steps: &[Planned],
+    kept: &[Kept],
+) -> Result<(), VerbError> {
+    for k in kept {
+        let write = steps
+            .iter()
+            .find(|s| s.write.as_ref().is_some_and(|w| w.path == k.path()));
+        if let Some(write) = write {
+            return Err(super::usage(format!(
+                "{} --keep and {} both write {}: give write its own path, or drop --keep",
+                steps[k.index].label,
+                write.label,
+                k.path().display()
+            ))
+            .hint("--keep writes PREFIX.<stream>.bam; write without a path writes the same name"));
+        }
+    }
+    Ok(())
+}
+
 /// The step of the stage layer that writes the kept stream: a `write` at
 /// the position right after the transform.
 pub(super) fn step(kept: &Kept, threads: usize, label: &str) -> Step {
@@ -72,13 +97,13 @@ pub(super) fn written(products: &Products) -> Vec<Written> {
     products
         .files
         .iter()
-        .map(|path| Written {
-            path: path.clone(),
-            kind: if path.extension().is_some_and(|e| e == "bai") {
+        .map(|path| {
+            let kind = if path.extension().is_some_and(|e| e == "bai") {
                 "index"
             } else {
                 KIND
-            },
+            };
+            Written::new(path.clone(), kind)
         })
         .collect()
 }
@@ -86,8 +111,11 @@ pub(super) fn written(products: &Products) -> Vec<Written> {
 /// The canonical argument that a step keeps its stream, for the manifest:
 /// keeping changes what the step writes, so it changes the step's key.
 pub(super) fn argv(kept: &Kept) -> String {
-    format!("KEEP={}", kept.path().display())
+    format!("{ARGV_KEY}={}", kept.path().display())
 }
+
+/// The key of [`argv`]: its value is a file.
+pub(super) const ARGV_KEY: &str = "KEEP";
 
 #[cfg(test)]
 mod tests {

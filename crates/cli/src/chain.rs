@@ -39,6 +39,7 @@ mod args;
 mod claims;
 mod describe;
 mod keep;
+mod lock;
 mod planfile;
 mod planner;
 mod prepare;

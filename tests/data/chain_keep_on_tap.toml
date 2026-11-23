@@ -1,0 +1,8 @@
+# A plan file with keep on a tap: bammetrics chain refuses it as it
+# refuses --keep on a tap on the command line.
+[chain]
+source = "tests/data/insert_size.bam"
+
+[[step]]
+verb = "insert-size"
+keep = true

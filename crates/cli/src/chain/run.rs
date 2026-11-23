@@ -22,10 +22,12 @@ use bammetrics_core::stage::{self, ChainPlan, Counters, FileSource, Halt, Produc
 use bammetrics_formats::{Document, markdown};
 
 use super::VERB;
+use super::lock::PrefixLock;
 use super::prepare::{Chain, Planned, PrefixOrigin, Role};
 use super::resume::{self, Resume};
 use crate::error::VerbError;
 use crate::format::{self, Context, Format};
+use crate::manifest::Fingerprint;
 use crate::verbs;
 
 /// How a step ended.
@@ -63,6 +65,19 @@ impl StepStatus {
 pub struct Written {
     pub path: PathBuf,
     pub kind: &'static str,
+    /// Its fingerprint, taken as soon as the run wrote it, for the
+    /// manifest; `None` until then and in a run that writes no manifest.
+    pub print: Option<Fingerprint>,
+}
+
+impl Written {
+    pub fn new(path: PathBuf, kind: &'static str) -> Self {
+        Self {
+            path,
+            kind,
+            print: None,
+        }
+    }
 }
 
 /// One step after the run.
@@ -138,8 +153,30 @@ fn check_writable(chain: &Chain, made: &mut MadeDirs) -> Result<(), VerbError> {
         create_parent("the manifest", manifest)?;
         registry::check_writable([manifest.as_path()], &[])
             .map_err(|e| step_error("the manifest", &e))?;
+        // The manifest is written last, under a temporary name beside it:
+        // a directory that takes no new file fails here, before the read.
+        bammetrics_core::cleanup::AtomicFile::probe(manifest)
+            .map_err(|e| manifest_error(manifest, &e))?;
     }
     Ok(())
+}
+
+/// The error of a manifest that cannot be written, naming its directory
+/// (the temporary name it is written under means nothing to a user).
+fn manifest_error(manifest: &Path, e: &std::io::Error) -> VerbError {
+    let dir = match manifest.parent() {
+        Some(dir) if !dir.as_os_str().is_empty() => dir,
+        _ => Path::new("."),
+    };
+    VerbError::input(
+        VERB,
+        format!(
+            "the manifest {}: cannot write in {}: {}",
+            manifest.display(),
+            dir.display(),
+            e
+        ),
+    )
 }
 
 /// A split step: its directory and options, every file the chain reads,
@@ -222,7 +259,7 @@ fn write_metrics(
             } else {
                 format.name()
             };
-            Written { path: target, kind }
+            Written::new(target, kind)
         })
         .collect())
 }
@@ -319,10 +356,7 @@ fn finish_step(
         .files
         .iter()
         .filter(|_| !piped)
-        .map(|path| Written {
-            path: path.clone(),
-            kind: bam_kind(path),
-        })
+        .map(|path| Written::new(path.clone(), bam_kind(path)))
         .collect();
     if chain.steps[index].tool.is_some() {
         files.extend(write_tool_files(chain, index, products, sample)?);
@@ -417,10 +451,7 @@ fn write_report(
     }
     let text = markdown::write(&docs.iter().collect::<Vec<_>>(), &[]);
     registry::write_to(Some(report), |out| out.write_all(text.as_bytes()))?;
-    Ok(Written {
-        path: report.to_path_buf(),
-        kind: "markdown",
-    })
+    Ok(Written::new(report.to_path_buf(), "markdown"))
 }
 
 /// Run `chain` and write every file. `Err` for what stops the chain
@@ -576,27 +607,51 @@ fn write_manifest(
         return Ok(None);
     };
     let manifest = resume::manifest(chain, run);
-    crate::report::write_atomic(path, manifest.to_json())
-        .map_err(|e| VerbError::input(VERB, format!("the manifest: {e}")))?;
+    crate::report::write_atomic(path, manifest.to_json()).map_err(|e| match e {
+        crate::error::Error::Io { source, .. } => manifest_error(path, &source),
+        other => VerbError::input(VERB, format!("the manifest: {other}")),
+    })?;
     if let (0, Some(previous)) = (run.code, &run.resume.previous) {
-        let removed = resume::remove_stale(chain, previous, &manifest);
-        if removed > 0 {
-            notes.push(format!(
-                "--resume: removed {} the run before wrote and this run does not",
-                count(removed, "file")
-            ));
+        notes.extend(resume::remove_stale(chain, previous, &manifest).notes());
+    }
+    if chain.resume {
+        notes.extend(resume::orphans(chain).into_iter().map(|path| {
+            format!(
+                "--resume: left in place: {} (a temporary file of a run that was killed; \
+                 remove it)",
+                path.display()
+            )
+        }));
+    }
+    Ok(Some(Written::new(path.clone(), "manifest")))
+}
+
+/// Fingerprint each file a step wrote that has none yet: right after the
+/// read or step that wrote it, so the manifest records the bytes this run
+/// wrote.
+fn stamp(outcomes: &mut [Option<StepOutcome>]) {
+    for file in outcomes
+        .iter_mut()
+        .flatten()
+        .flat_map(|o| o.files.iter_mut())
+    {
+        if file.print.is_none() {
+            file.print = crate::manifest::v2::fingerprint(&file.path);
         }
     }
-    Ok(Some(Written {
-        path: path.clone(),
-        kind: "manifest",
-    }))
 }
 
 /// [`execute`], with the directories it makes recorded in `made`.
 fn run_steps(mut chain: Chain, made: &mut MadeDirs) -> Result<Outcome, VerbError> {
     super::planner::check_space(&chain)?;
     check_writable(&chain, made)?;
+    // One run per manifest, from before the read to the end.
+    let _lock = chain
+        .manifest
+        .as_deref()
+        .map(PrefixLock::take)
+        .transpose()?;
+    let manifested = chain.manifest.is_some();
     // A chain that writes no manifest fingerprints nothing: it reads what
     // it read before this wave.
     let keys = if chain.manifest.is_some() {
@@ -628,6 +683,9 @@ fn run_steps(mut chain: Chain, made: &mut MadeDirs) -> Result<Outcome, VerbError
     let (results, slots) = read_stream(&chain, &resume, &claims)?;
     let sample = sample(&chain);
     let mut outcomes = gather(&mut chain, slots, results, sample.as_deref());
+    if manifested {
+        stamp(&mut outcomes);
+    }
     for (index, key) in keys.iter().enumerate() {
         if resume.skipped(index) {
             outcomes[index] = Some(resume::skipped_outcome(
@@ -638,6 +696,9 @@ fn run_steps(mut chain: Chain, made: &mut MadeDirs) -> Result<Outcome, VerbError
         }
     }
     after_reads(&mut chain, &resume, &mut outcomes, sample.as_deref());
+    if manifested {
+        stamp(&mut outcomes);
+    }
     let mut gate = 0;
     if let Some(qc) = &chain.qc {
         let ended = super::qc_step::finish(
@@ -650,6 +711,7 @@ fn run_steps(mut chain: Chain, made: &mut MadeDirs) -> Result<Outcome, VerbError
         let (outcome, code) = super::qc_step::outcome(chain.steps[qc.index].number, ended);
         gate = code;
         outcomes[qc.index] = Some(outcome);
+        stamp(&mut outcomes);
     }
     let outcomes: Vec<StepOutcome> = outcomes
         .into_iter()
