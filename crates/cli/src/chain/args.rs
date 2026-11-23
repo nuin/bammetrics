@@ -510,12 +510,17 @@ pub fn help() -> String {
         step_names(taps),
         step_names(is_split),
     );
-    text.push_str(&option_lines(&global_flags()));
-    text.push_str(&format!(
-        "  --no-config{:pad$}Leave the user config file unread (bammetrics config).\n",
-        "",
-        pad = 31
+    // `--no-config` is taken out before the parser sees the arguments
+    // (`crate::config::strip_no_config`); it is listed with the others.
+    let mut listed = global_flags();
+    listed.push(Flag::new(
+        Key::Own("no-config"),
+        "no-config",
+        &[],
+        Ty::Bool,
+        "Leave the user config file unread (bammetrics config prints what it gives).",
     ));
+    text.push_str(&option_lines(&listed));
     text.push_str("\nOptions of write:\n");
     text.push_str(&option_lines(&write_flags()));
     text
