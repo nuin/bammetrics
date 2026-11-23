@@ -1369,8 +1369,8 @@ the record-editing tools that rewrite their records, and the chain `write` step.
 1.25, Picard 3.5.0 and bammetrics read it to the header and the records of the BAM the
 same command writes (`tests/concordance/test_cram_writer.py`: `SortSam`, `MergeSamFiles`,
 `MarkDuplicates`, `AddOrReplaceReadGroups`, `CleanSam`, `DownsampleSam` and the chain
-`write` step; `AddOATag` in its own module). The other record-editing tools write through
-the same code and have no CRAM test. CRAM bytes are never compared. At scale one input
+`write` step; `AddOATag` in its own module). The nine other record-editing tools are read
+by samtools alone, each on one fixture of 9 to 36 records. CRAM bytes are never compared. At scale one input
 was written, the HG002 exome BAM in coordinate order: samtools reads its 150,538,907
 records equal to the BAM's, the file is 16.6% larger than samtools' CRAM 3.0 of that BAM
 and takes 3.7 times as long to write (docs/benchmarks.md). Picard did not read that file,
@@ -1585,7 +1585,7 @@ a bisulfite set, SAM text and CRAM (`tests/concordance/test_set_nm_md_and_uq_tag
 - A BAM record is not validated (section Validation). A read past the end of its contig
   without qualities gets the tags the walk gives at every `VALIDATION_STRINGENCY`; Picard
   refuses it at `STRICT` and writes the same tags at `SILENT`. With qualities both fail.
-- A `.cram` `OUTPUT` is a CRAM, which differs from the one Picard writes (section CRAM output). No test writes one with these two tools.
+- A `.cram` `OUTPUT` is a CRAM, which differs from the one Picard writes (section CRAM output).
 - A failed run leaves no `OUTPUT`. Picard leaves a partial one (59 bytes of SAM header
   after a read past its contig).
 - `SetNmMdAndUqTags` on a BAM cut in half exits 1 and writes nothing. Picard exits 0 (as
@@ -1615,9 +1615,10 @@ decisions D53 to D57):
   records flagged neither first nor second can order them differently, as in `SortSam`
   (section SortSam): bammetrics merges 64 runs into one as they spill, htsjdk merges every
   run at once.
-- A `.cram` `OUTPUT` is a CRAM, which differs from the one Picard writes (section CRAM output). No test
-  writes one with `RevertOriginalBaseQualitiesAndAddMateCigar`. A failed run leaves no
-  `OUTPUT`.
+- A `.cram` `OUTPUT` is a CRAM, which differs from the one Picard writes (section CRAM output).
+  `RevertOriginalBaseQualitiesAndAddMateCigar`, whose `CREATE_INDEX` defaults to true,
+  writes the CRAM and its MD5 without an index; Picard writes `<CRAM>.bai` too. A failed
+  run leaves no `OUTPUT`.
 - `RevertOriginalBaseQualitiesAndAddMateCigar` holds the records of one read name together
   to set their mate fields. A name with more than 1,000,000 records exits 1. Picard holds
   them all while the JVM heap lasts.
@@ -1849,8 +1850,7 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   ordered (HighAccuracy) by the low byte of each UTF-16 unit, as bammetrics holds SAM
   text; Picard uses the whole unit. The SAM specification allows printable ASCII in a
   name, where the two agree.
-- A `.cram` `OUTPUT` is a CRAM, which differs from the one Picard writes (section CRAM output). No test
-  writes one with `PositionBasedDownsampleSam`.
+- A `.cram` `OUTPUT` is a CRAM, which differs from the one Picard writes (section CRAM output).
 - A BAM header line that repeats a tag (`@PG ... rs:1 rs:2`) or has a tag with no value
   (`rs:`) exits 1 in every tool (`the header could not be read: invalid record`): noodles
   refuses it. Picard fails too at the default `VALIDATION_STRINGENCY=STRICT` (`Error

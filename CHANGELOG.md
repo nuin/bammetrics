@@ -14,9 +14,10 @@
   `<CRAM>.md5`; `COMPRESSION_LEVEL` sets the gzip level of the blocks. Decisions W15-1 to
   W15-11 of docs/07 list where this is not what Picard's writer does.
 - `tests/concordance/test_cram_writer.py`: each CRAM is read by samtools, Picard 3.5.0 and
-  bammetrics and held to the BAM of the same stream and to samtools' own CRAM of it. 50
-  cases on the foundation corpus, t1, the exome slice and the hand-built BAMs of
-  `cram_bams.py`, through `SortSam`, five more tools and the chain `write` step.
+  bammetrics and held to the BAM of the same stream and to samtools' own CRAM of it, on
+  the foundation corpus, t1, the exome slice and the hand-built BAMs of `cram_bams.py`,
+  through `SortSam`, five more tools and the chain `write` step. Nine more tools are read
+  by samtools alone, each on a fixture.
 - `vendor/noodles-cram`: `io::writer::raw`, the CRAM writer in pieces, and a writer whose
   bytes are a function of its records (vendor/README.md, changes six and seven).
 
@@ -29,6 +30,8 @@
   A block copy (`AddCommentsToBam`, `ReplaceSamHeader` of a BAM, `GatherBamFiles` of
   BAMs) still refuses a `.cram` name, and `SplitSamByLibrary` still refuses a CRAM input,
   now without a wave in its message. `--output-format` takes `cram`.
+  `RevertOriginalBaseQualitiesAndAddMateCigar`, whose `CREATE_INDEX` defaults to true,
+  writes a CRAM and its MD5 without an index.
 - `benches/memgate.toml`: a fixture row and a scale row for the CRAM writer. The HG002
   exome BAM (150,538,907 records) as a CRAM with 8 threads: 587 and 688 MiB peak RSS in
   two runs, about 180 s, 52.9% of the BAM's bytes; samtools reads every record equal to

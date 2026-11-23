@@ -24,8 +24,10 @@ Inputs: the foundation corpus, t1, the exome slice and the BAMs of cram_bams.py 
 header without @HD, no record, every kind of slice, a shuffled stream, reads over a contig
 end sorted and shuffled, and what a CRAM does not give back). Writers: SortSam on every
 input in two orders; MergeSamFiles, MarkDuplicates, AddOrReplaceReadGroups, CleanSam,
-DownsampleSam and the chain `write` step on three. Also Picard's own CRAM of each tool
-against bammetrics', error parity without a reference, the options, and the departures.
+DownsampleSam and the chain `write` step on three. The nine other tools on
+`record_edit::Out`, each on a fixture, read by samtools. Also Picard's own CRAM of each
+tool against bammetrics', error parity without a reference, the options, and the
+departures.
 
 Picard's own CRAM is a truth only where its writer keeps the record. It is compared on
 inputs without a repeated read name and whose records name read groups of the header. A
@@ -39,7 +41,7 @@ from collections import Counter
 import pytest
 
 import cram_bams
-from cases import BAMMETRICS, CORPUS
+from cases import BAMMETRICS, CORPUS, FIXTURES
 from conftest import RESULTS
 from run_picard import picard_env
 
@@ -282,6 +284,63 @@ def test_the_chain_write_step_keeps_the_stream(name, corpus, exome, edge, tmp_pa
     same_records(f"chain write {name}: the input", samtools_view(bam, reference),
                  samtools_view(written.cram, reference))
     RESULTS.append((f"cram-writer chain write {name}", records, records, "3 readers; input order"))
+
+
+FIXTURE_REFERENCE = FIXTURES / "ref_100k.fa"
+# The other tools that write through `record_edit::Out`, each with arguments that work on a
+# fixture of tests/data (the golden suite runs the same ones to a BAM).
+OTHER_TOOLS = {
+    "ReplaceSamHeader": [f"I={FIXTURES / 'markdup.sam'}", f"HEADER={FIXTURES / 'insert_size.bam'}"],
+    "SetNmMdAndUqTags": [f"I={FIXTURES / 'markdup.bam'}"],
+    "SetNmAndUqTags": [f"I={FIXTURES / 'insert_size.bam'}"],
+    "RevertOriginalBaseQualitiesAndAddMateCigar": [f"I={FIXTURES / 'revert.bam'}"],
+    "GatherBamFiles": [f"I={FIXTURES / 'markdup.sam'}"],
+    "FixMateInformation": [f"I={FIXTURES / 'mate_filter.bam'}"],
+    "FilterSamReads": [f"I={FIXTURES / 'mate_filter.bam'}", "FILTER=excludeTagValues", "TAG=XZ",
+                       "TAG_VALUE=a", "TAG_VALUE=b"],
+    "PositionBasedDownsampleSam": [f"I={FIXTURES / 'markdup.bam'}", "F=0.5"],
+    "ReorderSam": [f"I={FIXTURES / 'markdup.bam'}", f"SD={FIXTURES / 'chr1.dict'}"],
+}
+
+
+def other_tool_cram_reads_as_its_bam(tool, tmp):
+    """`tool` on its fixture to a BAM and to a CRAM; samtools reads both to the same
+    header and records. Returns the number of records. No JVM."""
+    outs = {}
+    for kind in ("bam", "cram"):
+        outs[kind] = tmp / f"out.{kind}"
+        done = ours(tool, *OTHER_TOOLS[tool], f"O={outs[kind]}", f"R={FIXTURE_REFERENCE}", SILENT)
+        assert done.returncode == 0, f"{tool} -> {kind}: {done.stderr.decode('latin-1')[-400:]}"
+    assert outs["cram"].read_bytes()[:6] == b"CRAM\x03\x00", f"{tool}: not a CRAM 3.0"
+    from_bam = samtools_view(outs["bam"], FIXTURE_REFERENCE)
+    from_cram = samtools_view(outs["cram"], FIXTURE_REFERENCE)
+    assert header_lines(from_cram) == header_lines(from_bam), f"{tool}: header"
+    assert from_bam.records, f"{tool}: no record written"
+    same_records(f"{tool}: samtools, CRAM against BAM", from_bam, from_cram)
+    return len(from_bam.records)
+
+
+@pytest.mark.parametrize("tool", sorted(OTHER_TOOLS))
+def test_the_other_record_editing_tools_write_a_cram(tool, tmp_path):
+    """Read by samtools alone: test_each_tool_writes_a_cram_that_reads_as_its_bam holds the
+    writer to all three readers through five tools."""
+    records = other_tool_cram_reads_as_its_bam(tool, tmp_path)
+    RESULTS.append((f"cram-writer {tool} fixture", records, records, "samtools"))
+
+
+def test_the_index_a_tool_makes_by_default_is_left_out_of_a_cram(tmp_path):
+    """RevertOriginalBaseQualitiesAndAddMateCigar makes an index and an MD5 by default. With
+    a CRAM it writes the MD5 and no index, where Picard writes `<CRAM>.bai`; an index asked
+    for is refused, as for every tool."""
+    tool = "RevertOriginalBaseQualitiesAndAddMateCigar"
+    other_tool_cram_reads_as_its_bam(tool, tmp_path)
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "out.bai", "out.bam", "out.bam.md5", "out.cram", "out.cram.md5"]
+    asked = tmp_path / "asked.cram"
+    done = ours(tool, *OTHER_TOOLS[tool], f"O={asked}", f"R={FIXTURE_REFERENCE}", "CREATE_INDEX=true")
+    assert done.returncode == 1 and b"no index is written beside a CRAM" in done.stderr, done.stderr
+    assert not asked.exists()
+    RESULTS.append(("cram-writer default index", 1, 1, "MD5 and no index beside a CRAM"))
 
 
 def test_what_a_cram_does_not_give_back(edge, tmp_path):

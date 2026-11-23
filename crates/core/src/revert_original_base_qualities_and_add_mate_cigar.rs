@@ -30,7 +30,9 @@
 //! `coordinate` and `duplicate` are sorted again, `unsorted` is written in
 //! the queryname order of the mate pass, `unknown` fails on a second
 //! record. Both sorts hold `MAX_RECORDS_IN_RAM` records per run, spilled to
-//! `TMP_DIR`. `CREATE_INDEX` and `CREATE_MD5_FILE` default to true. Picard
+//! `TMP_DIR`. `CREATE_INDEX` and `CREATE_MD5_FILE` default to true; for an
+//! `OUTPUT` ending in `.cram` the index defaults to false, since no index is
+//! written beside a CRAM (Picard writes `<CRAM>.bai` there). Picard
 //! reads with `EAGERLY_DECODE`, so every record is encoded again: tags in
 //! [`crate::bam_raw::Tags`] order and widths, the `bin` htsjdk computes,
 //! qualities whose first byte is `0xFF` written as all `0xFF`. No `@PG`
@@ -54,7 +56,7 @@ use crate::record_edit::{self, Gate, Outcome, RecordEdit, Reorder, Setup, Writer
 use crate::registry::{Invocation, Opt, Tool};
 use crate::sam_text::parse_cigar;
 use crate::spill::TempDir;
-use crate::stage::{Frame, Stage};
+use crate::stage::{Frame, Stage, WriteFormat};
 
 pub const TOOL: Tool = Tool {
     name: "RevertOriginalBaseQualitiesAndAddMateCigar",
@@ -576,7 +578,12 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     let options = RevertOptions::from_invocation(inv)?;
     let examine = inv.parse::<i64>("MAX_RECORDS_TO_EXAMINE", 10_000)?;
     let mut opts = record_edit::Options::from_invocation(inv)?;
-    opts.create_index = inv.flag("CREATE_INDEX", true)?;
+    // `CREATE_INDEX` defaults to true, as in Picard, which then writes
+    // `<CRAM>.bai` beside a CRAM. bammetrics writes no index of a CRAM, so
+    // the default asks for none there; `CREATE_INDEX=true` with a CRAM is
+    // refused as for every tool (`cram_writer::index_refusal`).
+    let cram = WriteFormat::of(&opts.output) == WriteFormat::Cram;
+    opts.create_index = inv.flag("CREATE_INDEX", !cram)?;
     opts.create_md5 = inv.flag("CREATE_MD5_FILE", true)?;
     let (limits, tmp_dir) = record_edit::sort_limits(inv)?;
     opts.reorder = Reorder {

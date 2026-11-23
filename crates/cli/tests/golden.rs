@@ -1211,6 +1211,8 @@ const CRAM_WRITER_CASES: &[Case] = &[
     case!("error_chain_write_cram_index", "chain", "MD", "-R", "REF", "+", "write", "OUT/x.cram", "--index"),
     case!("error_add_comments_to_bam_cram_output", "AddCommentsToBam", "I=MD", "O=OUT/commented.cram", "C=one"),
     case!("error_gather_bam_files_cram_name", "GatherBamFiles", "I=MD", "O=OUT/gathered.cram"),
+    // CREATE_INDEX and CREATE_MD5_FILE default to true for this tool: a CRAM gets the MD5 and no index.
+    case!("picard_revert_original_base_qualities_cram", "RevertOriginalBaseQualitiesAndAddMateCigar", "I=RV", "O=OUT/reverted.cram", "R=REF"),
 ];
 
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
