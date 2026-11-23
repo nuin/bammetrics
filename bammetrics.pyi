@@ -2049,6 +2049,7 @@ def recipe(
     source: _Path | None = None,
     *,
     set: dict[str, Any] | None = None,
+    qc: Step | bool | None = None,
     config: bool = True,
     dry_run: bool = False,
     **options: Any,
@@ -2056,7 +2057,9 @@ def recipe(
     """bammetrics recipe: run the named chain name (prep, qc-only, downsample, or one of
     yours; bammetrics recipes lists them) on source, as bammetrics NAME BAM does. set
     holds STEP.option values ({"downsample-sam.probability": 0.1}); each replaces the
-    recipe's value of that option. The keywords are those of chain(). Returns the Run of
-    chain(), or the plan text with dry_run=True."""
+    recipe's value of that option. qc=True or qc=step("qc", preset=...) adds qc as the
+    last step: the verdict and the report over the recipe's metrics. The keywords are
+    those of chain() (resume=True skips the steps the manifest proves done). Returns the
+    Run of chain(), or the plan text with dry_run=True."""
 
 # END verbs

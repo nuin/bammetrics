@@ -29,7 +29,7 @@ use bammetrics_core::toml::parse_tables;
 
 use super::args::{find_step, step_parser_flags, write_flags};
 use super::planfile;
-use super::{Spec, VERB, WRITE, usage};
+use super::{QC, Spec, VERB, WRITE, usage};
 use crate::error::VerbError;
 use crate::grammar::{self, Flag};
 
@@ -47,6 +47,9 @@ pub const FILE_CAP: u64 = 64 << 10;
 pub const MAX_USER_RECIPES: usize = 256;
 /// The verb that lists the recipes.
 pub const LIST_VERB: &str = "recipes";
+
+/// The [`Recipe::origin`] of a recipe compiled in.
+const SHIPPED_ORIGIN: &str = "shipped";
 
 /// One recipe, read.
 #[derive(Clone, Debug)]
@@ -173,7 +176,7 @@ fn shipped(name: &str) -> Option<Recipe> {
     let recipe = parse(name, text, &format!("recipe {name}"))
         .expect("the shipped recipes parse (recipes::tests)");
     Some(Recipe {
-        origin: "shipped".to_owned(),
+        origin: SHIPPED_ORIGIN.to_owned(),
         ..recipe
     })
 }
@@ -256,10 +259,13 @@ fn split_target(text: &str) -> Option<(&str, &str)> {
     (!step.is_empty() && !option.is_empty()).then_some((step, option))
 }
 
-/// The verb name a step word resolves to: the verb, or `write`.
+/// The verb name a step word resolves to: the verb, `write` or `qc`.
 fn verb_name(word: &str) -> Option<&'static str> {
     if word == WRITE {
         return Some(WRITE);
+    }
+    if word == QC {
+        return Some(QC);
     }
     find_step(word).map(|verb| verb.name)
 }
@@ -267,6 +273,9 @@ fn verb_name(word: &str) -> Option<&'static str> {
 fn flags_of(verb: &str) -> Vec<Flag> {
     if verb == WRITE {
         return write_flags();
+    }
+    if verb == QC {
+        return super::qc_step::flags();
     }
     find_step(verb).map(step_parser_flags).unwrap_or_default()
 }
@@ -372,6 +381,10 @@ pub(super) fn take_overrides(args: &[String]) -> Result<Split, VerbError> {
 /// option on every step of its verb.
 pub fn apply(recipe: &Recipe, overrides: &[(String, Override)]) -> Result<Spec, VerbError> {
     let mut spec = recipe.spec.clone();
+    // A user recipe is a file the chain reads: no step may write it.
+    if recipe.origin != SHIPPED_ORIGIN {
+        spec.reads.push(recipe.origin.clone());
+    }
     for (word, set) in overrides {
         let flag = option_flag(&spec, &recipe.name, &set.step, &set.option)
             .map_err(|e| e.from(word.clone()))?;
@@ -469,7 +482,7 @@ pub fn list() -> String {
                 continue;
             }
         };
-        let from = match (recipe.origin == "shipped", shadowed(name)) {
+        let from = match (recipe.origin == SHIPPED_ORIGIN, shadowed(name)) {
             (true, _) => String::new(),
             (false, false) => " (yours)".to_owned(),
             (false, true) => format!(
@@ -501,8 +514,8 @@ pub fn list() -> String {
 /// `bammetrics NAME --help` for a recipe: its description, its steps with
 /// their options and the options the command line must set.
 pub fn help(recipe: &Recipe) -> String {
-    let from = if recipe.origin == "shipped" {
-        "shipped".to_owned()
+    let from = if recipe.origin == SHIPPED_ORIGIN {
+        SHIPPED_ORIGIN.to_owned()
     } else {
         recipe.origin.clone()
     };
@@ -513,8 +526,8 @@ pub fn help(recipe: &Recipe) -> String {
     };
     let mut text = format!(
         "bammetrics {name}: {description} (recipe, {from})\n\nUsage: bammetrics {name} BAM{output} \
-         [OPTIONS] [STEP.option=value ...]\n       bammetrics chain BAM --recipe {name}{output} \
-         [OPTIONS] [STEP.option=value ...]\n\nSteps:\n",
+         [OPTIONS] [STEP.option=value ...] [qc [QC OPTIONS]]\n       bammetrics chain BAM \
+         --recipe {name}{output} [OPTIONS] [STEP.option=value ...] [qc [QC OPTIONS]]\n\nSteps:\n",
         name = recipe.name,
         description = recipe.description,
     );
@@ -538,9 +551,11 @@ pub fn help(recipe: &Recipe) -> String {
         text.push('\n');
     }
     text.push_str(
-        "\nSTEP.option=value sets an option of a step, replacing the recipe's value. The \
-         chain's options (-R, --threads, --format, --also, --dry-run, ...): bammetrics chain \
-         --help. docs/chaining.md, \"Recipes\".\n",
+        "\nSTEP.option=value sets an option of a step, replacing the recipe's value. A last \
+         qc step adds the verdict and the report over the recipe's metrics (qc --preset \
+         generic --fail-on fail); no other step can be added. --resume skips the steps \
+         PREFIX.manifest.json proves done. The chain's options (-R, --threads, --format, \
+         --also, --dry-run, ...): bammetrics chain --help. docs/chaining.md, \"Recipes\".\n",
     );
     text
 }

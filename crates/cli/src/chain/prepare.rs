@@ -1273,10 +1273,12 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         prefix_used = true;
     }
     let reference = spec.reference.as_ref().map(PathBuf::from);
+    let settings: Vec<PathBuf> = spec.reads.iter().map(PathBuf::from).collect();
     let read = Read {
         source: &source_path,
         reference: reference.as_deref(),
         plan_file: spec.plan_file.as_deref().map(Path::new),
+        settings: &settings,
     };
     let inputs = inputs_of(&read, &steps);
     refuse_overwriting_inputs(&inputs, &steps, report.as_deref())?;

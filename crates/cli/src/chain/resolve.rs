@@ -4,10 +4,11 @@
 //!   give the reference, the threads, the temporary directory and the
 //!   sort memory the command line does not.
 //! * `-o r.bam` names the result: a chain with a transform and no `write`
-//!   step gets `write r.bam --index` as its last step, and its metrics
-//!   files are named from `r` (`r.insert_size_metrics`). `-o r.sam` writes
-//!   SAM text, with no index. A chain that changes no record refuses such
-//!   a name.
+//!   step gets `write r.bam --index` as its last step, in front of a `qc`
+//!   step, which stays last, and its metrics files, its manifest and the
+//!   files of its qc step are named from `r` (`r.insert_size_metrics`,
+//!   `r.manifest.json`, `r.verdict.json`). `-o r.sam` writes SAM text, with
+//!   no index. A chain that changes no record refuses such a name.
 //! * A step option that names a dictionary defaults to the reference's
 //!   ([`DICTIONARY_DEFAULTS`]): the `.dict` beside the FASTA, else its
 //!   `.fai`, with a note that says which.
@@ -18,7 +19,7 @@ use bammetrics_core::registry::Kind as OptKind;
 use bammetrics_core::stage::later_kind;
 
 use super::args::{find_step, is_split, is_transform, step_parser_flags};
-use super::{Spec, StepSpec, WRITE, usage};
+use super::{QC, Spec, StepSpec, WRITE, usage};
 use crate::config;
 use crate::error::VerbError;
 use crate::grammar::{self, Key};
@@ -136,11 +137,20 @@ fn result_output(spec: &mut Spec) -> Result<(), VerbError> {
     if result == Kind::Bam {
         args.push("--index".to_owned());
     }
-    spec.steps.push(StepSpec {
-        verb: WRITE.to_owned(),
-        args,
-        origin: None,
-    });
+    // A qc step is the last step of its chain: the write reads the stream
+    // qc's taps read, so it goes in front of it.
+    let at = match spec.steps.last() {
+        Some(last) if last.verb == QC => spec.steps.len() - 1,
+        _ => spec.steps.len(),
+    };
+    spec.steps.insert(
+        at,
+        StepSpec {
+            verb: WRITE.to_owned(),
+            args,
+            origin: None,
+        },
+    );
     spec.prefix = Some(text[..text.len() - 4].to_owned());
     Ok(())
 }
@@ -239,6 +249,10 @@ fn config_defaults(spec: &mut Spec) -> Result<(), VerbError> {
         super::VERB.clone_into(&mut e.verb);
         e
     })?;
+    // The chain read the file: no step may write it.
+    if let (true, Some(path)) = (config.read, &config.path) {
+        spec.reads.push(path.display().to_string());
+    }
     if spec.reference.is_none()
         && let Some(reference) = &config.reference
     {
@@ -408,8 +422,7 @@ mod tests {
 
     #[test]
     fn the_dictionary_is_the_references_dict_then_its_index() {
-        let dir =
-            std::env::temp_dir().join(format!("bammetrics-defaults-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("bammetrics-defaults-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("dir");
         let fasta = dir.join("ref.fa");
         std::fs::write(&fasta, ">c\nACGT\n").expect("fasta");

@@ -113,6 +113,9 @@ pub struct Spec {
     pub no_config: bool,
     /// The recipe whose `-o` must name the BAM it writes.
     pub recipe_bam: Option<String>,
+    /// The files the chain was read from beside the plan file: the user
+    /// config file and a user recipe. No step may write one.
+    pub reads: Vec<String>,
     /// `--resume`: skip the steps `PREFIX.manifest.json` proves done.
     pub resume: bool,
 }

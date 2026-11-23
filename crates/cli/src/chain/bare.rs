@@ -11,8 +11,8 @@
 //!   names a verb stays a value.
 //! * The first bare word in front of the first step is the source, unless
 //!   `-i`, `--input` or `I=` gave it.
-//! * Any other bare word that names a step verb, a Picard class or `write`
-//!   starts a step; one a letter or two away from a verb is an unknown
+//! * Any other bare word that names a step verb, a Picard class, `write` or
+//!   `qc` starts a step; one a letter or two away from a verb is an unknown
 //!   step with the closest verb; any other bare word stays with its step
 //!   (the path of `write`).
 //! * In the last step, when a bare word started it, an option of the chain
@@ -23,7 +23,9 @@
 //!   (`downsample-sam -R 7` is its `RANDOM_SEED`). Two steps keep their
 //!   `-o` in last place: `write` without a path (`write -o out.bam`) and a
 //!   split step (`split-sam-by-library -o DIR`), whose `-o` names what
-//!   they write.
+//!   they write. `qc` in last place keeps its own options (`--preset`,
+//!   `--report`, its `--also` of verdict forms) and hands on the rest
+//!   (`-o r.bam`, `--resume`).
 //!
 //! A command line in the new form (a bare word started a step, or no `+`
 //! and no `--plan` at all) gets errors in its own terms: a source that
@@ -39,7 +41,7 @@ use bammetrics_core::registry::did_you_mean;
 use super::args::{
     CHAIN_KEYS, find_step, is_split, parser_flags, step_parser_flags, unknown_step, write_flags,
 };
-use super::{STEP, WRITE, usage};
+use super::{QC, STEP, WRITE, qc_step, usage};
 use crate::error::VerbError;
 use crate::grammar::{self, Flag, Key};
 use crate::verbs::VERBS;
@@ -76,14 +78,16 @@ struct Written {
 fn flags_of(verb: Option<&str>) -> Vec<Flag> {
     match verb {
         Some(WRITE) => write_flags(),
+        Some(QC) => qc_step::flags(),
         Some(name) => find_step(name).map(step_parser_flags).unwrap_or_default(),
         None => Vec::new(),
     }
 }
 
-/// True when the bare word `word` starts a step.
+/// True when the bare word `word` starts a step: a step verb, a Picard
+/// class, `write` or `qc`.
 fn starts_step(word: &str) -> bool {
-    word == WRITE || find_step(word).is_some()
+    word == WRITE || word == QC || find_step(word).is_some()
 }
 
 /// True for a word that may name a file or set a Picard key: the parser,
@@ -92,7 +96,8 @@ fn path_like(word: &str) -> bool {
     word.contains(['/', '.', '='])
 }
 
-/// The verb names and `write`.
+/// The verb names and `write`, for the closest name to a misspelled word.
+/// `qc` is left out: every word of two letters is two letters from it.
 fn verb_names() -> impl Iterator<Item = &'static str> {
     VERBS.iter().map(|verb| verb.name).chain([WRITE])
 }
@@ -494,11 +499,19 @@ fn split_last(
                 "step {number} ({verb}): {spelled} is an option of write"
             ))
             .from(spelled)
-            .hint(format!(
-                "-o OUT.bam adds write OUT.bam --index; for --{}, name the step: {verb} ... \
-                 write OUT.bam --{}",
-                flag.long, flag.long
-            )));
+            .hint(if verb == QC {
+                format!(
+                    "-o OUT.bam adds write OUT.bam --index in front of qc; for --{}, name the \
+                     step there: ... write OUT.bam --{} qc",
+                    flag.long, flag.long
+                )
+            } else {
+                format!(
+                    "-o OUT.bam adds write OUT.bam --index; for --{}, name the step: {verb} ... \
+                     write OUT.bam --{}",
+                    flag.long, flag.long
+                )
+            }));
         }
         let (target, takes) = match (of_chain, own) {
             (Some((_, takes)), _) => (&mut moved, takes),

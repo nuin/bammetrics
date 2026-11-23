@@ -661,23 +661,27 @@ pub fn py_chain<'py>(
 /// bammetrics recipe: run the named chain name (prep, qc-only, downsample, or
 /// one of yours; bammetrics recipes lists them) on source, as bammetrics NAME
 /// BAM does. set holds STEP.option values ({"downsample-sam.probability":
-/// 0.1}); each replaces the recipe's value of that option. The keywords are
-/// those of chain(). Returns the Run of chain(), or the plan text with
-/// dry_run=True.
+/// 0.1}); each replaces the recipe's value of that option. qc=True or
+/// qc=step("qc", preset=...) adds qc as the last step: the verdict and the
+/// report over the recipe's metrics. The keywords are those of chain()
+/// (resume=True skips the steps the manifest proves done). Returns the Run of
+/// chain(), or the plan text with dry_run=True.
 //
 // The argv of `chain(source, recipe=name, **options)` plus one
-// `STEP.option=value` word per item of `set`.
+// `STEP.option=value` word per item of `set`, then `+ qc ...` for `qc`.
 #[pyfunction]
 #[pyo3(
     name = "recipe",
-    signature = (name, source = None, *, set = None, **options),
-    text_signature = "(name, source=None, *, set=None, config=True, dry_run=False, **options)"
+    signature = (name, source = None, *, set = None, qc = None, **options),
+    text_signature = "(name, source=None, *, set=None, qc=None, config=True, dry_run=False, \
+                      **options)"
 )]
 pub fn py_recipe<'py>(
     py: Python<'py>,
     name: &str,
     source: Option<&Bound<'py, PyAny>>,
     set: Option<&Bound<'py, PyDict>>,
+    qc: Option<&Bound<'py, PyAny>>,
     options: Option<&Bound<'py, PyDict>>,
 ) -> PyResult<Py<PyAny>> {
     if options.is_some_and(|o| o.contains("recipe").unwrap_or(false)) {
@@ -697,6 +701,7 @@ pub fn py_recipe<'py>(
         };
         argv.push(format!("{target}={text}"));
     }
+    argv.extend(recipe_qc(py, qc)?);
     let done = py
         .detach(|| run(&argv))
         .map_err(|e| verbs::verb_error(&e))?;
@@ -705,8 +710,42 @@ pub fn py_recipe<'py>(
         Done::Ran(done) => done,
     };
     let run = run_object(py, &done)?;
-    if done.code != 0 {
+    // 10 and 11 are the qc step's verdict, not a failed step: the Run
+    // holds the code.
+    if done.code == 1 {
         return Err(failed_steps(py, run, &done));
     }
     Ok(run.into_any())
+}
+
+/// The words of `recipe(..., qc=...)`: `+ qc OPTIONS` for `True` or a
+/// `step("qc", ...)`, none for `None` and `False`. Any other step is
+/// refused: a recipe gives its steps.
+fn recipe_qc<'py>(py: Python<'py>, qc: Option<&Bound<'py, PyAny>>) -> PyResult<Vec<String>> {
+    let Some(qc) = qc.filter(|qc| !qc.is_none()) else {
+        return Ok(Vec::new());
+    };
+    let step = if qc.is_instance_of::<PyBool>() {
+        if !qc.extract::<bool>()? {
+            return Ok(Vec::new());
+        }
+        Bound::new(py, Step::build(py, cli::QC, None)?)?
+    } else if let Ok(step) = qc.cast::<Step>() {
+        step.clone()
+    } else {
+        return Err(PyTypeError::new_err(format!(
+            "bammetrics {VERB}: qc takes True or step(\"qc\", ...), not {}",
+            qc.get_type().name()?
+        )));
+    };
+    let step = step.get();
+    if step.verb != cli::QC {
+        return Err(usage_error(format!(
+            "bammetrics {VERB}: qc takes the qc step, not {}: a recipe gives its other steps",
+            step.verb
+        )));
+    }
+    let mut words = vec![cli::STEP.to_owned(), step.verb.clone()];
+    words.extend(step.args.iter().cloned());
+    Ok(words)
 }

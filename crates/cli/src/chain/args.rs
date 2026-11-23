@@ -731,8 +731,9 @@ fn no_report_step(error: VerbError) -> VerbError {
 
 /// The recipe `--recipe NAME` names, with the `STEP.option=value` words
 /// applied: its name, whether `-o` must name its BAM, and its chain. A
-/// recipe gives the steps, so it takes no step on the command line and no
-/// `--plan`; a `STEP.option=value` word without a recipe is refused.
+/// recipe gives the steps, so it takes no `--plan` and no step on the
+/// command line but a last `qc`, which is added to its steps; a
+/// `STEP.option=value` word without a recipe is refused.
 fn recipe_spec(
     parsed: &Parsed,
     steps: &[StepSpec],
@@ -765,17 +766,39 @@ fn recipe_spec(
                 .from(plan.spelled.clone()),
         );
     }
-    if !steps.is_empty() {
-        return Err(usage(format!(
-            "--recipe {} gives the steps: a step on the command line cannot be added",
-            given.values[0]
-        ))
-        .from(given.spelled.clone())
-        .hint(
-            "STEP.option=value sets an option of a recipe's step: bammetrics recipes lists them",
-        ));
+    // One step may follow a recipe: `qc`, the last step of any chain, which
+    // reads the metrics files the recipe's taps write.
+    let added = match steps {
+        [] => None,
+        [qc] if qc.verb == super::QC => Some(qc),
+        _ => {
+            return Err(usage(format!(
+                "--recipe {} gives the steps: a step on the command line cannot be added",
+                given.values[0]
+            ))
+            .from(given.spelled.clone())
+            .hint(
+                "STEP.option=value sets an option of a recipe's step: bammetrics recipes lists \
+                 them",
+            )
+            .hint("a last qc step may follow a recipe: bammetrics NAME BAM -o OUT qc --preset P"));
+        }
+    };
+    let (recipe, mut spec) = recipes::load(&given.values[0], overrides)?;
+    if let Some(qc) = added {
+        if spec.steps.last().is_some_and(|last| last.verb == super::QC) {
+            return Err(usage(format!(
+                "recipe {} ends in a qc step: a second one cannot follow it",
+                recipe.name
+            ))
+            .from(super::QC)
+            .hint(format!(
+                "qc.option=value sets an option of the recipe's qc step: bammetrics {} --help",
+                recipe.name
+            )));
+        }
+        spec.steps.push(qc.clone());
     }
-    let (recipe, spec) = recipes::load(&given.values[0], overrides)?;
     Ok(Some((recipe.name.clone(), recipe.output_bam, spec)))
 }
 

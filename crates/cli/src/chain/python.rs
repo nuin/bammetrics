@@ -378,8 +378,10 @@ pub const CHAIN_DOC: &str = "bammetrics chain: several steps on one BAM in one p
 pub const RECIPE_DOC: &str = "bammetrics recipe: run the named chain name (prep, qc-only, \
      downsample, or one of yours; bammetrics recipes lists them) on source, as bammetrics \
      NAME BAM does. set holds STEP.option values ({\"downsample-sam.probability\": 0.1}); each \
-     replaces the recipe's value of that option. The keywords are those of chain(). Returns \
-     the Run of chain(), or the plan text with dry_run=True.";
+     replaces the recipe's value of that option. qc=True or qc=step(\"qc\", preset=...) adds \
+     qc as the last step: the verdict and the report over the recipe's metrics. The keywords \
+     are those of chain() (resume=True skips the steps the manifest proves done). Returns the \
+     Run of chain(), or the plan text with dry_run=True.";
 
 /// A docstring as `.pyi` lines under a `def`.
 fn doc_lines(doc: &str) -> String {
@@ -441,8 +443,9 @@ pub fn stubs() -> String {
     text.push_str(&chain_overload("bool", "Run[None] | str", None));
     text.push_str(
         "\ndef recipe(\n    name: str,\n    source: _Path | None = None,\n    *,\n    \
-         set: dict[str, Any] | None = None,\n    config: bool = True,\n    \
-         dry_run: bool = False,\n    **options: Any,\n) -> Run[None] | str:\n",
+         set: dict[str, Any] | None = None,\n    qc: Step | bool | None = None,\n    \
+         config: bool = True,\n    dry_run: bool = False,\n    **options: Any,\n\
+         ) -> Run[None] | str:\n",
     );
     text.push_str(&doc_lines(RECIPE_DOC));
     text
