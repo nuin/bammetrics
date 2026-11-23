@@ -38,7 +38,12 @@ where
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
     write_itf8(writer, len)?;
 
-    for (&block_content_id, encoding) in tag_encodings.iter() {
+    // bammetrics patch: in the order of the content IDs, not of the
+    // `HashMap`, so the same records give the same bytes.
+    let mut entries: Vec<_> = tag_encodings.iter().collect();
+    entries.sort_unstable_by_key(|(block_content_id, _)| **block_content_id);
+
+    for (&block_content_id, encoding) in entries {
         write_itf8(writer, block_content_id)?;
         write_byte_array_encoding(writer, encoding)?;
     }

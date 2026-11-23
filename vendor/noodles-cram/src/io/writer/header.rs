@@ -8,6 +8,8 @@ use std::io::{self, Write};
 use noodles_fasta as fasta;
 use noodles_sam::{self as sam, header::ReferenceSequences};
 
+// bammetrics patch
+pub(super) use self::container::write_text_container;
 use self::{
     container::write_container, file_id::write_file_id, format_version::write_format_version,
     magic_number::write_magic_number,

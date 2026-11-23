@@ -1,3 +1,6 @@
+// bammetrics patch: reachable through `io::writer::raw`, as noodles wrote it.
+#![allow(missing_docs)]
+
 use std::io;
 
 use bstr::BStr;

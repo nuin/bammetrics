@@ -6,6 +6,8 @@ pub(crate) mod container;
 mod context;
 pub(crate) mod header;
 pub(crate) mod num;
+// bammetrics patch: containers of records the caller converted.
+pub mod raw;
 pub(crate) mod record;
 
 use std::io::{self, Write};

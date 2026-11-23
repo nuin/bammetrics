@@ -32,6 +32,32 @@ where
     Ok(())
 }
 
+/// bammetrics patch: the file header container holding `text`, the SAM
+/// header as the caller wrote it (`io::writer::raw`). No `M5` field is
+/// asked of an `@SQ` line: htsjdk 5.0.0 writes none and reads without one.
+pub(in crate::io::writer) fn write_text_container<W>(writer: &mut W, text: &[u8]) -> io::Result<()>
+where
+    W: Write,
+{
+    const ENCODER: Encoder = Encoder::Gzip(Compression::new(6));
+    const LENGTH_SIZE: usize = mem::size_of::<i32>();
+
+    let len = i32::try_from(text.len())
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+
+    let mut buf = Vec::with_capacity(LENGTH_SIZE + text.len());
+    buf.extend_from_slice(&len.to_le_bytes());
+    buf.extend_from_slice(text);
+
+    let block = Block::encode(ContentType::FileHeader, 0, Some(&ENCODER), &buf)?;
+
+    let header = build_header();
+    let len = block.size()?;
+    write_header(writer, &header, len)?;
+
+    write_block(writer, &block)
+}
+
 fn validate_reference_sequences(
     reference_sequences: &sam::header::ReferenceSequences,
 ) -> io::Result<()> {

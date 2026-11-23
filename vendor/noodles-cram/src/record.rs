@@ -23,7 +23,9 @@ use self::{
     quality_scores::QualityScores,
     sequence::Sequence,
 };
-pub(crate) use self::{feature::Feature, flags::Flags, mate_flags::MateFlags};
+pub(crate) use self::feature::Feature;
+// bammetrics patch: public, for `io::writer::raw`.
+pub use self::{flags::Flags, mate_flags::MateFlags};
 use crate::{
     container::compression_header::preservation_map::SubstitutionMatrix,
     io::reader::container::slice::ReferenceSequence,
