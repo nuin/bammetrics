@@ -1227,6 +1227,64 @@ pub fn prepare_tools(args: &QcArgs, tools: &[&str]) -> Result<Plan> {
     })
 }
 
+/// What `qc` as the last step of a chain takes from this verb's planning
+/// (docs/chaining.md section 24): the preset, the prepare step of a
+/// `--panel` BED, the collectors the preset needs, each built as `qc`
+/// builds it for `args.bam` under `prefix`, and the classes no collector
+/// can write.
+pub(crate) struct ChainQc {
+    pub preset: Preset,
+    pub prepare: Vec<Step>,
+    pub steps: Vec<Step>,
+    pub unmet: Vec<Unmet>,
+    pub pdf: Option<Pdf>,
+}
+
+/// Plan the qc step of a chain. The chain checked its source; every other
+/// file an option names must exist, as for the verb. Nothing is written.
+pub(crate) fn plan_chain_step(args: &QcArgs, prefix: &Path) -> Result<ChainQc> {
+    let pdf = args
+        .pdf
+        .prepare(args.writes(ReportForm::Pdf), "--report pdf")?;
+    if let Some(reference) = &args.reference {
+        need_file(&with_suffix(reference, ".fai"), "-R, its .fai index")?;
+    }
+    for (baits, targets) in hs_runs(args) {
+        need_file(&baits, "--hs or --panel")?;
+        need_file(&targets, "--hs or --panel")?;
+    }
+    if let Some(ref_flat) = &args.ref_flat {
+        need_file(ref_flat, "--ref-flat")?;
+    }
+    if let Some(ribosomal) = &args.ribosomal_intervals {
+        need_file(ribosomal, "--ribosomal-intervals")?;
+    }
+    let preset = Preset::resolve(&args.preset)?;
+    check_sex_has_a_rule(args, &preset)?;
+    // The record keys of these steps are the verb's; the chain keys its
+    // steps in its own manifest.
+    let fingerprint = Fingerprint {
+        size: 0,
+        mtime: String::new(),
+        edges: String::new(),
+    };
+    let cx = Context {
+        args,
+        prefix,
+        preset: &preset,
+        fingerprint: &fingerprint,
+    };
+    let prepare = prepare_steps(&cx)?;
+    let (steps, unmet) = collectors(&cx)?;
+    Ok(ChainQc {
+        preset,
+        prepare,
+        steps,
+        unmet,
+        pdf,
+    })
+}
+
 pub fn manifest_path(prefix: &Path) -> PathBuf {
     with_suffix(prefix, ".manifest.json")
 }

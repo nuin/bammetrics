@@ -370,6 +370,7 @@ fn status_name(status: StepStatus) -> &'static str {
         StepStatus::Failed => "failed",
         StepStatus::Stopped => "stopped",
         StepStatus::NotRun => "not_run",
+        StepStatus::Skipped => "skipped",
     }
 }
 

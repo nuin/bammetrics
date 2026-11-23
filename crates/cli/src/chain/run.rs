@@ -11,9 +11,11 @@
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use bammetrics_core::cleanup::MadeDirs;
 use bammetrics_core::metric::MetricsOutput;
+use bammetrics_core::metrics_file::CivilTime;
 use bammetrics_core::registry;
 use bammetrics_core::split_sam::{self, Claims};
 use bammetrics_core::stage::{self, ChainPlan, Counters, FileSource, Halt, Products, Step};
@@ -21,6 +23,7 @@ use bammetrics_formats::{Document, markdown};
 
 use super::VERB;
 use super::prepare::{Chain, Planned, PrefixOrigin, Role};
+use super::resume::{self, Resume};
 use crate::error::VerbError;
 use crate::format::{self, Context, Format};
 use crate::verbs;
@@ -37,6 +40,9 @@ pub enum StepStatus {
     Stopped,
     /// A step in front of it failed before it started.
     NotRun,
+    /// `--resume`: the manifest of the run before proves it done, and its
+    /// files stay as that run wrote them.
+    Skipped,
 }
 
 impl StepStatus {
@@ -46,6 +52,7 @@ impl StepStatus {
             StepStatus::Failed => "failed",
             StepStatus::Stopped => "stopped",
             StepStatus::NotRun => "not run",
+            StepStatus::Skipped => "skipped",
         }
     }
 }
@@ -84,8 +91,11 @@ pub struct Outcome {
     /// The files of the chain itself (`PREFIX.report.md`).
     pub files: Vec<Written>,
     /// The exit code `bammetrics chain` gives the same run: 0, or 1 when
-    /// a step did not finish.
+    /// a step did not finish, or the qc step's 10 or 11 under `--fail-on`.
     pub code: u8,
+    /// Lines about the run as a whole: why `--resume` reruns every step,
+    /// the files of the run before it removed.
+    pub notes: Vec<String>,
 }
 
 /// An error of step `label` found before the run.
@@ -123,6 +133,11 @@ fn check_writable(chain: &Chain, made: &mut MadeDirs) -> Result<(), VerbError> {
         create_parent("--also markdown", report)?;
         registry::check_writable([report.as_path()], &[])
             .map_err(|e| step_error("--also markdown", &e))?;
+    }
+    if let Some(manifest) = &chain.manifest {
+        create_parent("the manifest", manifest)?;
+        registry::check_writable([manifest.as_path()], &[])
+            .map_err(|e| step_error("the manifest", &e))?;
     }
     Ok(())
 }
@@ -424,52 +439,220 @@ pub fn execute(chain: Chain) -> Result<Outcome, VerbError> {
     Ok(outcome)
 }
 
+/// What a step of the stage layer stands for: a step of the chain, or the
+/// write of the stream a transform keeps.
+#[derive(Clone, Copy)]
+enum Slot {
+    Step(usize),
+    Keep(usize),
+}
+
+/// The steps of the stage layer for the steps of `chain` the read runs
+/// (all of them without `--resume`), each kept stream's write right after
+/// its transform.
+fn core_steps(
+    chain: &Chain,
+    resume: &Resume,
+    claims: &Claims,
+) -> Result<(Vec<Step>, Vec<Slot>), VerbError> {
+    let mut steps = Vec::new();
+    let mut slots = Vec::new();
+    for (index, step) in chain.steps.iter().enumerate() {
+        if resume.skipped(index) || !resume::in_read(chain, index) {
+            continue;
+        }
+        steps.push(core_step(chain, index, step, claims)?);
+        slots.push(Slot::Step(index));
+        if let Some(kept) = chain.kept.iter().find(|kept| kept.index == index) {
+            steps.push(super::keep::step(kept, chain.threads, &step.label));
+            slots.push(Slot::Keep(index));
+        }
+    }
+    Ok((steps, slots))
+}
+
+/// The steps of the qc step that run after the reads (an own read, the
+/// panel's interval list): the tool on its own, its files written as a
+/// tap's.
+fn after_reads(
+    chain: &mut Chain,
+    resume: &Resume,
+    outcomes: &mut [Option<StepOutcome>],
+    sample: Option<&str>,
+) {
+    let indices: Vec<usize> = (0..chain.steps.len())
+        .filter(|&i| !resume::in_read(chain, i) && chain.steps[i].role != Role::Qc)
+        .filter(|&i| !resume.skipped(i))
+        .collect();
+    for index in indices {
+        let step = &chain.steps[index];
+        let result = step.tool.map_or_else(
+            || Err(bammetrics_core::Error::Usage("no tool".to_owned())),
+            |tool| {
+                let mut inv = tool.parse(&step.argv)?;
+                inv.threads = chain.threads;
+                inv.quiet = true;
+                (tool.run)(&inv).map(|output| Products {
+                    output,
+                    ..Products::default()
+                })
+            },
+        );
+        let finished = result.and_then(|products| finish_step(chain, index, &products, sample));
+        outcomes[index] = Some(finished.unwrap_or_else(|e| failed_step(&chain.steps[index], &e)));
+    }
+}
+
 /// [`execute`], with the directories it makes recorded in `made`.
 fn run_steps(mut chain: Chain, made: &mut MadeDirs) -> Result<Outcome, VerbError> {
     super::planner::check_space(&chain)?;
     check_writable(&chain, made)?;
+    let keys = resume::keys(&chain);
+    let resume = resume::decide(&chain, &keys);
+    let mut notes: Vec<String> = resume
+        .note
+        .iter()
+        .map(|note| format!("--resume: {note}"))
+        .collect();
+    let started = CivilTime::now().iso();
+    let clock = Instant::now();
+    if let Some(qc) = &chain.qc
+        && let Some(pdf) = &qc.pdf
+    {
+        let sample = sample_name(&chain);
+        pdf.check_sample(&sample)
+            .map_err(|e| super::usage(format!("{}: {e}", chain.steps[qc.index].label)))?;
+    }
     // The planned files again, for the split steps to claim the files they
     // name once the stream is read.
     let claims: Claims = Arc::new(Mutex::new(super::claims::claim_outputs(
         &chain.steps,
         chain.report.as_deref(),
     )?));
-    let steps = chain
-        .steps
-        .iter()
-        .enumerate()
-        .map(|(index, step)| core_step(&chain, index, step, &claims))
-        .collect::<Result<Vec<_>, _>>()?;
-    let plan = ChainPlan {
-        source: Box::new(
-            FileSource::new(&chain.source_path, chain.reference.as_deref())
-                .with_stringency(chain.stringency),
-        ),
-        steps,
-        threads: chain.threads,
-        tmp_dir: chain.tmp_dir.clone(),
-        lower: !chain.stage_executor,
+    let (steps, slots) = core_steps(&chain, &resume, &claims)?;
+    let source = match &resume.start {
+        Some((_, kept)) => FileSource::new(kept, chain.reference.as_deref())
+            .decoded_from_cram(bammetrics_core::cram::is_cram(&chain.source_path)),
+        None => FileSource::new(&chain.source_path, chain.reference.as_deref()),
     };
-    let results = stage::run_chain(plan, None).map_err(|e| VerbError::core(VERB, &e))?;
+    let results = if steps.is_empty() {
+        Vec::new()
+    } else {
+        let plan = ChainPlan {
+            source: Box::new(source.with_stringency(chain.stringency)),
+            steps,
+            threads: chain.threads,
+            tmp_dir: chain.tmp_dir.clone(),
+            lower: !chain.stage_executor,
+        };
+        stage::run_chain(plan, None).map_err(|e| VerbError::core(VERB, &e))?
+    };
     let sample = sample(&chain);
-    let mut outcomes = Vec::with_capacity(results.len());
-    for (index, result) in results.into_iter().enumerate() {
-        let finished = result
-            .and_then(|products| finish_step(&mut chain, index, &products, sample.as_deref()));
-        outcomes.push(finished.unwrap_or_else(|e| failed_step(&chain.steps[index], &e)));
+    let mut outcomes: Vec<Option<StepOutcome>> = chain.steps.iter().map(|_| None).collect();
+    for (slot, result) in slots.into_iter().zip(results) {
+        match slot {
+            Slot::Step(index) => {
+                let finished = result.and_then(|products| {
+                    finish_step(&mut chain, index, &products, sample.as_deref())
+                });
+                outcomes[index] =
+                    Some(finished.unwrap_or_else(|e| failed_step(&chain.steps[index], &e)));
+            }
+            Slot::Keep(index) => {
+                let Some(outcome) = outcomes[index].as_mut() else {
+                    continue;
+                };
+                match result {
+                    Ok(products) => outcome.files.extend(super::keep::written(&products)),
+                    Err(e) if outcome.status == StepStatus::Ok => {
+                        outcome.status = StepStatus::Failed;
+                        outcome.error = Some(format!("keeping its stream: {e}"));
+                    }
+                    Err(_) => {}
+                }
+            }
+        }
     }
-    let code = u8::from(outcomes.iter().any(|step| step.status != StepStatus::Ok));
+    for (index, key) in keys.iter().enumerate() {
+        if resume.skipped(index) {
+            outcomes[index] = Some(resume::skipped_outcome(
+                chain.steps[index].number,
+                key,
+                &resume,
+            ));
+        }
+    }
+    after_reads(&mut chain, &resume, &mut outcomes, sample.as_deref());
+    let mut gate = 0;
+    if let Some(qc) = &chain.qc {
+        let ended = super::qc_step::finish(
+            qc,
+            &chain.steps,
+            &outcomes,
+            &chain.prefix,
+            &sample_name(&chain),
+        );
+        let (outcome, code) = super::qc_step::outcome(chain.steps[qc.index].number, ended);
+        gate = code;
+        outcomes[qc.index] = Some(outcome);
+    }
+    let outcomes: Vec<StepOutcome> = outcomes
+        .into_iter()
+        .zip(&chain.steps)
+        .map(|(outcome, step)| {
+            outcome.unwrap_or_else(|| StepOutcome {
+                number: step.number,
+                status: StepStatus::NotRun,
+                error: Some("not run: the read stopped before it".to_owned()),
+                files: Vec::new(),
+                counters: None,
+                notes: Vec::new(),
+            })
+        })
+        .collect();
+    let failed = outcomes
+        .iter()
+        .any(|step| !matches!(step.status, StepStatus::Ok | StepStatus::Skipped));
+    let code = if failed { 1 } else { gate };
     let mut files = Vec::new();
     if let Some(report) = &chain.report {
         let written = write_report(report, &outcomes, sample.as_deref())
             .map_err(|e| step_error("--also markdown", &e))?;
         files.push(written);
     }
+    if let Some(path) = &chain.manifest {
+        let run = resume::Run {
+            keys: &keys,
+            resume: &resume,
+            outcomes: &outcomes,
+            sample: sample_name(&chain),
+            started,
+            millis: u64::try_from(clock.elapsed().as_millis()).unwrap_or(u64::MAX),
+            code,
+        };
+        let manifest = resume::manifest(&chain, &run);
+        crate::report::write_atomic(path, manifest.to_json())
+            .map_err(|e| VerbError::input(VERB, format!("the manifest: {e}")))?;
+        files.push(Written {
+            path: path.clone(),
+            kind: "manifest",
+        });
+        if let (0, Some(previous)) = (code, &resume.previous) {
+            let removed = resume::remove_stale(&chain, previous, &manifest);
+            if removed > 0 {
+                notes.push(format!(
+                    "--resume: removed {} the run before wrote and this run does not",
+                    count(removed, "file")
+                ));
+            }
+        }
+    }
     Ok(Outcome {
         chain,
         steps: outcomes,
         files,
         code,
+        notes,
     })
 }
 
@@ -504,7 +687,11 @@ pub fn summary(outcome: &Outcome) -> Vec<String> {
         .iter()
         .any(|step| matches!(step.status, StepStatus::Stopped | StepStatus::NotRun));
     let mut lines = Vec::new();
+    if !chain.quiet {
+        lines.extend(outcome.notes.iter().cloned());
+    }
     let mut ended = [0usize; 4];
+    let mut skipped = 0;
     for (step, planned) in outcome.steps.iter().zip(&chain.steps) {
         let label = &planned.label;
         let error = step.error.as_deref().unwrap_or_default();
@@ -539,18 +726,37 @@ pub fn summary(outcome: &Outcome) -> Vec<String> {
                 ended[3] += 1;
                 lines.push(format!("{label}: {error}"));
             }
+            StepStatus::Skipped => {
+                ended[0] += 1;
+                skipped += 1;
+                if !chain.quiet {
+                    lines.push(format!(
+                        "{label}: skipped: the manifest proves it done, its files stay"
+                    ));
+                }
+            }
         }
     }
     let files = outcome
         .steps
         .iter()
+        .filter(|step| step.status != StepStatus::Skipped)
         .map(|step| step.files.len())
         .sum::<usize>()
         + outcome.files.len();
     let total = outcome.steps.len();
     let [finished, failed, stopped, not_run] = ended;
     if finished == total {
-        if !chain.quiet {
+        if chain.quiet {
+            return lines;
+        }
+        if skipped > 0 {
+            lines.push(format!(
+                "{} finished, {skipped} of them skipped by --resume, {} written",
+                count(total, "step"),
+                count(files, "file")
+            ));
+        } else {
             lines.push(format!(
                 "{} finished, {} written",
                 count(total, "step"),

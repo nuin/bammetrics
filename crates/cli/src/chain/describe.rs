@@ -12,6 +12,7 @@ use std::fmt::Write as _;
 
 use super::planner::{self, Barrier, Estimate, How, Source};
 use super::prepare::{Chain, Planned, PrefixOrigin, Role};
+use super::{keep, resume};
 use crate::error::VerbError;
 
 /// `1,158`: a byte count with thousands separators.
@@ -71,7 +72,11 @@ fn files(step: &Planned) -> String {
         .files
         .iter()
         .filter(|_| !(step.stdout && step.role == Role::Write))
-        .map(|file| file.path.display().to_string())
+        .map(|file| match file.kind {
+            keep::KIND => format!("{} (kept)", file.path.display()),
+            keep::INDEX_KIND => format!("{} (when coordinate sorted)", file.path.display()),
+            _ => file.path.display().to_string(),
+        })
         .collect();
     if let Some(prefix) = step.late_prefix.as_ref().filter(|_| step.files.is_empty()) {
         names.push(format!(
@@ -90,8 +95,21 @@ fn files(step: &Planned) -> String {
 }
 
 /// What a step does, in the column after its verb.
-fn role(step: &Planned, first_read: bool) -> String {
+fn role(chain: &Chain, step: &Planned, first_read: bool) -> String {
+    let index = step.number - 1;
+    if let Some(qc) = &chain.qc {
+        if qc.added.contains(&index) {
+            return format!("tap on {}, for qc", step.reads);
+        }
+        if qc.own.contains(&index) {
+            return "own read, after the chain".to_owned();
+        }
+        if qc.prepare.contains(&index) {
+            return "after the chain, from the header".to_owned();
+        }
+    }
     match (step.role, &step.leaves, &step.write) {
+        (Role::Qc, _, _) => format!("verdict on {}", step.reads),
         (Role::Transform, Some(_), _) if first_read => "transform, first read".to_owned(),
         (Role::Transform, Some(stream), _) => format!("stream {stream}"),
         (Role::Write, _, Some(options)) => {
@@ -129,14 +147,14 @@ fn first_read(step: &Planned) -> String {
 }
 
 /// One step line: `  step 3  insert-size  tap on marked  FILES`.
-fn step_line(out: &mut String, widths: (usize, usize), step: &Planned, first: bool) {
+fn step_line(out: &mut String, chain: &Chain, widths: (usize, usize), step: &Planned, first: bool) {
     let what = if first { first_read(step) } else { files(step) };
     let _ = writeln!(
         out,
         "  step {:<2} {:<verb$}  {:<role$}  {what}",
         step.number,
         step.verb,
-        role(step, first),
+        role(chain, step, first),
         verb = widths.0,
         role = widths.1,
     );
@@ -245,13 +263,20 @@ fn budget_lines(out: &mut String, chain: &Chain, estimate: &Estimate) {
     let _ = writeln!(out, "{temp}");
     if !estimate.outputs.is_empty() {
         let bytes = estimate.outputs.iter().map(|(_, b)| *b).sum();
-        let writers = match (
-            chain.steps.iter().any(|step| step.role == Role::Write),
-            chain.steps.iter().any(|step| step.role == Role::Split),
-        ) {
-            (true, true) => "write and the splits",
-            (false, true) => "the splits",
-            _ => "write",
+        let mut names = Vec::new();
+        if chain.steps.iter().any(|step| step.role == Role::Write) {
+            names.push("write");
+        }
+        if chain.steps.iter().any(|step| step.role == Role::Split) {
+            names.push("the splits");
+        }
+        if !chain.kept.is_empty() {
+            names.push("the kept streams");
+        }
+        let writers = match names.as_slice() {
+            [] => "write".to_owned(),
+            [one] => (*one).to_owned(),
+            [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
         };
         let _ = writeln!(
             out,
@@ -312,7 +337,7 @@ pub fn text(chain: &Chain) -> Result<String, VerbError> {
         chain
             .steps
             .iter()
-            .map(|s| role(s, false).len().max(role(s, true).len()))
+            .map(|s| role(chain, s, false).len().max(role(chain, s, true).len()))
             .max()
             .unwrap_or(0),
     );
@@ -326,16 +351,42 @@ pub fn text(chain: &Chain) -> Result<String, VerbError> {
             let barrier = step.role == Role::Transform && !step.streams();
             let emits = barrier && step.segment + 1 == segment;
             if step.segment == segment {
-                step_line(&mut out, widths, step, barrier);
+                step_line(&mut out, chain, widths, step, barrier);
             } else if emits {
-                step_line(&mut out, widths, step, false);
+                step_line(&mut out, chain, widths, step, false);
             }
         }
     }
     if let Some(report) = &chain.report {
         let _ = writeln!(out, "also       {} (every metrics table)", report.display());
     }
+    if let Some(qc) = &chain.qc {
+        for unmet in &qc.unmet {
+            let _ = writeln!(
+                out,
+                "qc         {} not measured: {} ({})",
+                unmet.class,
+                unmet.why,
+                unmet.rules.join(", ")
+            );
+        }
+    }
+    if let Some(manifest) = &chain.manifest {
+        let _ = writeln!(
+            out,
+            "manifest   {} ({})",
+            manifest.display(),
+            crate::manifest::v2::SCHEMA
+        );
+    }
     budget_lines(&mut out, chain, &estimate);
+    if chain.resume {
+        let keys = resume::keys(chain);
+        let decided = resume::decide(chain, &keys);
+        for line in resume::plan_lines(chain, &decided) {
+            let _ = writeln!(out, "{line}");
+        }
+    }
     out.push_str("nothing ran: this is a plan\n");
     Ok(out)
 }

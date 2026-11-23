@@ -153,6 +153,9 @@ pub struct FileSource {
     /// The path as the user gave it, when `path` is a spooled copy.
     label: String,
     stringency: Stringency,
+    /// The records were decoded from a CRAM before this file held them
+    /// (a stream a chain kept): the frame says CRAM.
+    from_cram: bool,
 }
 
 impl FileSource {
@@ -162,7 +165,17 @@ impl FileSource {
             reference: reference.map(Path::to_path_buf),
             label: path.display().to_string(),
             stringency: Stringency::Strict,
+            from_cram: false,
         }
+    }
+
+    /// The source of a stream a chain kept as a BAM after reading a CRAM:
+    /// its frame says CRAM, so the stages after it rebuild `MD` and `NM`
+    /// as they did when the stream came from the CRAM itself.
+    #[must_use]
+    pub fn decoded_from_cram(mut self, from_cram: bool) -> Self {
+        self.from_cram = from_cram;
+        self
     }
 
     /// The source with SAM text checked at `stringency`
@@ -193,7 +206,7 @@ impl Source for FileSource {
             bytes,
             |header, reader, cram| {
                 let mut frame = Frame::new(header.clone(), self.label.clone());
-                frame.cram = cram;
+                frame.cram = cram || self.from_cram;
                 frame.reads = std::iter::once(&self.path)
                     .chain(&self.reference)
                     .cloned()
@@ -222,6 +235,7 @@ impl Source for FileSource {
             reference: self.reference.clone(),
             label: self.label.clone(),
             stringency: self.stringency,
+            from_cram: self.from_cram,
         }))
     }
 

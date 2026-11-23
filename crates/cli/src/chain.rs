@@ -38,10 +38,13 @@
 mod args;
 mod claims;
 mod describe;
+mod keep;
 mod planfile;
 mod planner;
 mod prepare;
 pub mod python;
+mod qc_step;
+mod resume;
 mod run;
 
 use crate::error::VerbError;
@@ -58,6 +61,8 @@ pub const VERB: &str = "chain";
 pub const STEP: &str = "+";
 /// The step that is not a tool verb.
 pub const WRITE: &str = "write";
+/// The last step that evaluates a preset and writes the report.
+pub const QC: &str = "qc";
 
 /// A chain as asked for: the source, the chain's options and the steps,
 /// each still as text. The command line and a plan file both make one.
@@ -97,6 +102,8 @@ pub struct Spec {
     /// The free bytes the planner assumes in every directory, in place of
     /// the file system's answer (a test hook, not in `--help`).
     pub free_space: Option<u64>,
+    /// `--resume`: skip the steps `PREFIX.manifest.json` proves done.
+    pub resume: bool,
 }
 
 /// One step as asked for: its verb and its own arguments.

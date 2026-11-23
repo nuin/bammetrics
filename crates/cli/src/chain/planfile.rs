@@ -45,7 +45,7 @@ use crate::error::VerbError;
 use crate::grammar::{self, Flag, Key};
 
 /// The keys of `[chain]`.
-const CHAIN_KEYS: [&str; 13] = [
+const CHAIN_KEYS: [&str; 14] = [
     "source",
     "output-prefix",
     "reference",
@@ -59,6 +59,7 @@ const CHAIN_KEYS: [&str; 13] = [
     "sort-memory",
     "force-space",
     "validation-stringency",
+    "resume",
 ];
 
 /// A plan file and the line an error is on.
@@ -190,6 +191,7 @@ fn chain_table(at: &At, table: &Table, spec: &mut Spec) -> Result<(), VerbError>
             "quiet" => spec.quiet = boolean(at, entry)?,
             "verbose" => spec.verbose = boolean(at, entry)?,
             "force-space" => spec.force_space = boolean(at, entry)?,
+            "resume" => spec.resume = boolean(at, entry)?,
             "validation-stringency" => spec.stringency = Some(string(at, entry)?),
             "sort-memory" => {
                 let text = match &entry.value {
@@ -291,6 +293,8 @@ fn step_table(at: &At, table: &Table, number: usize) -> Result<StepSpec, VerbErr
     let name = string(at, verb_entry)?;
     let flags = if name == WRITE {
         write_flags()
+    } else if name == super::QC {
+        super::qc_step::flags()
     } else {
         let verb = find_step(&name).ok_or_else(|| {
             let mut error = unknown_step(&name, None);

@@ -23,15 +23,17 @@ use bammetrics_core::{cram, java, pass};
 use clap::ValueEnum;
 
 use super::args::{
-    AS, CHAIN_KEYS, COMPRESSION_LEVEL, INDEX, MD5, OUTPUT_FORMAT, STEPS_HINT, belongs_to_chain,
-    chain_option_on_step, find_step, is_split, is_transform, not_a_step, step_parser_flags,
-    unknown_step, write_flags,
+    AS, CHAIN_KEYS, COMPRESSION_LEVEL, INDEX, KEEP, MD5, OUTPUT_FORMAT, STEPS_HINT,
+    belongs_to_chain, chain_option_on_step, find_step, is_split, is_transform, not_a_step,
+    step_parser_flags, unknown_step, write_flags,
 };
 use super::claims::{
     Read, check_one_stdout, claim_outputs, inputs_of, refuse_overwriting_inputs, refuse_unresolved,
 };
+use super::keep::{self, Kept};
 use super::planner;
-use super::{EMPTY_PREFIX_HINT, Spec, StepSpec, VERB, WRITE, usage};
+use super::qc_step::{self, QcPlan};
+use super::{EMPTY_PREFIX_HINT, QC, Spec, StepSpec, VERB, WRITE, usage};
 use crate::also::Also;
 use crate::error::VerbError;
 use crate::format::{self, Format};
@@ -61,6 +63,9 @@ pub enum Role {
     /// A split tool: the records of its position over several BAMs in a
     /// directory, named once the stream is read (`split-sam-by-library`).
     Split,
+    /// `qc`, the last step: the verdict and report over the taps of its
+    /// stream.
+    Qc,
 }
 
 impl Role {
@@ -70,6 +75,7 @@ impl Role {
             Role::Tap => "tap",
             Role::Write => "write",
             Role::Split => "split",
+            Role::Qc => "qc",
         }
     }
 }
@@ -161,6 +167,15 @@ pub struct Chain {
     pub steps: Vec<Planned>,
     /// `PREFIX.report.md` of `--also markdown`.
     pub report: Option<PathBuf>,
+    /// `--resume`: skip the steps `PREFIX.manifest.json` proves done.
+    pub resume: bool,
+    /// The streams the run writes as BAMs (`--keep`).
+    pub kept: Vec<Kept>,
+    /// The qc step, when the chain ends in one.
+    pub qc: Option<QcPlan>,
+    /// `PREFIX.manifest.json`, written by a run that resumes, keeps a
+    /// stream or ends in `qc`.
+    pub manifest: Option<PathBuf>,
     /// Every planned file with the label of its step.
     pub(crate) outputs: Outputs,
     /// Every file the chain reads: no step may write one.
@@ -213,6 +228,7 @@ impl Planned {
 enum What {
     Tool(&'static Verb, Role),
     Write,
+    Qc,
 }
 
 /// A step with its arguments parsed by its verb's flags.
@@ -235,7 +251,7 @@ impl Draft<'_> {
     fn error(&self, mut error: VerbError) -> VerbError {
         let what = match self.what {
             What::Tool(verb, _) => own_message(verb.tool().name, &error.what),
-            What::Write => &error.what,
+            What::Write | What::Qc => &error.what,
         };
         error.what = format!("{}: {what}", self.place());
         VERB.clone_into(&mut error.verb);
@@ -309,6 +325,8 @@ fn empty_path<'a>(draft: &'a Draft) -> Option<&'a str> {
 fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
     let (what, name, flags) = if spec.verb == WRITE {
         (What::Write, WRITE, write_flags())
+    } else if spec.verb == QC {
+        (What::Qc, QC, qc_step::flags())
     } else {
         let (verb, role) = tool_role(spec, number)?;
         (What::Tool(verb, role), verb.name, step_parser_flags(verb))
@@ -317,6 +335,17 @@ fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
     let parsed = grammar::parse(name, &flags, &spec.args).map_err(|mut error| {
         if let Some(belongs) = chain_option_on_step(&error, &place(spec, &label)) {
             return belongs;
+        }
+        let keep = grammar::unknown_option(&error)
+            .and_then(|spelled| spelled.trim_start_matches('-').split('=').next())
+            .is_some_and(|name| name.eq_ignore_ascii_case("keep"));
+        if keep {
+            return usage(format!(
+                "{}: --keep writes the stream a transform leaves, and {name} leaves none",
+                place(spec, &label)
+            ))
+            .from("--keep")
+            .hint("write [PATH] writes the records at its position as a BAM");
         }
         error.what = format!("{}: {}", place(spec, &label), error.what);
         VERB.clone_into(&mut error.verb);
@@ -341,6 +370,11 @@ fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
             .from(spelled));
     }
     let What::Tool(verb, role) = draft.what else {
+        if let (What::Qc, Some(extra)) = (draft.what, draft.parsed.positional.first()) {
+            return Err(draft
+                .usage("qc takes no input: it reads the metrics files of the taps on its stream")
+                .from(extra.clone()));
+        }
         return Ok(draft);
     };
     if let Some(extra) = draft.parsed.positional.first() {
@@ -723,7 +757,7 @@ fn output_is_prefix(tool: &Tool) -> bool {
 
 /// The files `argv` names as written, each with a sibling per further
 /// format when it is a metrics file.
-fn planned_files(tool: &Tool, argv: &[String], formats: &[Format]) -> Vec<PlannedFile> {
+pub(super) fn planned_files(tool: &Tool, argv: &[String], formats: &[Format]) -> Vec<PlannedFile> {
     let mut files = Vec::new();
     for arg in argv {
         let Some((name, value)) = arg.split_once('=') else {
@@ -1087,7 +1121,10 @@ fn also(spec: &Spec) -> Result<Vec<Also>, VerbError> {
                 "bammetrics check DIR --format {} reads the files a chain wrote",
                 format.name()
             ))
-            .hint("qc as the last step of a chain is wave W14 of docs/07"));
+            .hint(format!(
+                "a qc step writes the verdict: bammetrics chain BAM + ... + qc --also {}",
+                format.name()
+            )));
         }
         if !formats.contains(&format) {
             formats.push(format);
@@ -1099,6 +1136,13 @@ fn also(spec: &Spec) -> Result<Vec<Also>, VerbError> {
 /// Prepare: everything checked and named, nothing read or written.
 pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
     let (source, source_path) = source(spec)?;
+    if spec.resume && source == "-" {
+        return Err(usage(
+            "--resume compares the source's fingerprint, and standard input has none",
+        )
+        .from("--resume")
+        .hint("give the source as a file"));
+    }
     let is_cram = reference(spec, &source_path)?;
     let (prefix, prefix_origin) = prefix(spec, &source)?;
     let formats = chain_formats(spec)?;
@@ -1139,14 +1183,59 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         also: &per_file,
         threads,
     };
-    let mut steps = Vec::with_capacity(drafts.len());
+    let mut steps: Vec<Planned> = Vec::with_capacity(drafts.len());
     let mut prefix_used = false;
+    let mut kept: Vec<Kept> = Vec::new();
+    let mut qc: Option<QcPlan> = None;
+    // Every metrics file's formats: the chain's, then those of `--also`.
+    let mut all_formats = formats.clone();
+    for format in &per_file {
+        if !all_formats.contains(format) {
+            all_formats.push(*format);
+        }
+    }
+    let qcx = qc_step::Context {
+        source_path: &source_path,
+        replayable: std::fs::metadata(&source_path).is_ok_and(|m| m.is_file())
+            && !source_path.starts_with("/dev"),
+        reference: spec.reference.as_deref(),
+        prefix: &prefix,
+        formats: &all_formats,
+        threads,
+        sample: spec.sample.as_deref(),
+    };
     for (draft, position) in drafts.into_iter().zip(positions) {
-        let (step, uses_prefix) = match draft.what {
+        if let Some(plan) = &qc {
+            return Err(draft.usage(format!(
+                "{} is the last step: no step may follow it",
+                steps[plan.index].label
+            )));
+        }
+        let keep = draft.parsed.flag(KEEP);
+        let index = steps.len();
+        let (mut step, uses_prefix) = match draft.what {
             What::Tool(verb, Role::Split) => split::split_step(&cx, draft, verb, position)?,
             What::Tool(verb, role) => tool_step(&cx, draft, (verb, role), position)?,
             What::Write => write_step(&cx, &draft, position)?,
+            What::Qc => {
+                let at = qc_step::At {
+                    number: draft.number,
+                    label: &draft.place(),
+                    reads: &position.reads,
+                    segment: position.segment,
+                    behind: &position.behind,
+                };
+                let (planned, plan) = qc_step::plan(&qcx, &at, &draft.parsed, &steps, &kept)?;
+                steps.extend(planned);
+                qc = Some(plan);
+                prefix_used = true;
+                continue;
+            }
         };
+        if keep {
+            kept.push(keep::plan(&prefix, index, &mut step));
+            prefix_used = true;
+        }
         prefix_used |= uses_prefix;
         steps.push(step);
     }
@@ -1156,7 +1245,15 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
     prefix_used |= report.is_some();
     check_one_stdout(&steps)?;
     refuse_unresolved(&steps, report.as_deref())?;
-    let outputs = claim_outputs(&steps, report.as_deref())?;
+    let mut outputs = claim_outputs(&steps, report.as_deref())?;
+    let manifest = (spec.resume || !kept.is_empty() || qc.is_some())
+        .then(|| crate::qc::manifest_path(&prefix));
+    if let Some(path) = &manifest {
+        outputs
+            .claim("the manifest", path)
+            .map_err(|e| VerbError::core(VERB, &e))?;
+        prefix_used = true;
+    }
     let reference = spec.reference.as_ref().map(PathBuf::from);
     let read = Read {
         source: &source_path,
@@ -1165,6 +1262,15 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
     };
     let inputs = inputs_of(&read, &steps);
     refuse_overwriting_inputs(&inputs, &steps, report.as_deref())?;
+    if let Some(path) = manifest
+        .as_ref()
+        .filter(|path| inputs.owner(path).is_some())
+    {
+        return Err(usage(format!(
+            "the manifest {} is an input; writing it would destroy it",
+            path.display()
+        )));
+    }
     Ok(Chain {
         source,
         source_path,
@@ -1184,6 +1290,10 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         free_space: spec.free_space,
         steps,
         report,
+        resume: spec.resume,
+        kept,
+        qc,
+        manifest,
         outputs,
         inputs,
     })
