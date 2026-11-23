@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nuin/bammetrics/blob/main/docs/schema/manifest-1.json",
+  "title": "bammetrics.manifest/1",
+  "description": "PREFIX.manifest.json of the qc verb: one record per step with what qc --resume compares. A chain writes schema 2 (manifest-2.json); a reader of either takes both. Frozen: until 1.0.0 the schema changes only by adding members (docs/formats.md, Frozen schemas).",
+  "type": "object",
+  "required": ["schema", "tool_version", "sample", "bam", "prefix", "preset", "steps"],
+  "properties": {
+    "schema": {"const": "bammetrics.manifest/1"},
+    "tool_version": {"type": "string"},
+    "sample": {"type": "string"},
+    "bam": {"type": "string"},
+    "prefix": {"type": "string"},
+    "preset": {
+      "type": "object",
+      "required": ["name", "hash"],
+      "properties": {
+        "name": {"type": "string"},
+        "hash": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "steps": {"type": "array", "items": {"$ref": "#/$defs/step"}}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "fingerprint": {
+      "description": "A file by its size, its mtime (seconds.nanoseconds since the epoch) and the FNV-1a 64 of its first and last 64 KiB.",
+      "type": "object",
+      "required": ["path", "size", "mtime", "edges_hash"],
+      "properties": {
+        "path": {"type": "string"},
+        "size": {"type": "integer", "minimum": 0},
+        "mtime": {"type": "string"},
+        "edges_hash": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "step": {
+      "type": "object",
+      "required": ["id", "stage", "tool", "argv", "argv_hash", "tool_version", "preset_hash", "input", "files", "outputs", "status", "error"],
+      "properties": {
+        "id": {"type": "string"},
+        "stage": {"enum": ["prepare", "pass", "own-read", "post", "report"]},
+        "tool": {"type": "string"},
+        "argv": {"type": "array", "items": {"type": "string"}},
+        "argv_hash": {"type": "string"},
+        "tool_version": {"type": "string"},
+        "preset_hash": {"type": "string"},
+        "input": {"$ref": "#/$defs/fingerprint"},
+        "files": {"type": "array", "items": {"$ref": "#/$defs/fingerprint"}},
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "tool", "kind"],
+            "properties": {
+              "path": {"type": "string"},
+              "tool": {"type": "string"},
+              "kind": {"type": "string"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "status": {"enum": ["ok", "failed"]},
+        "error": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    }
+  }
+}

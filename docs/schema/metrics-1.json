@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/nuin/bammetrics/blob/main/docs/schema/metrics-1.json",
   "title": "bammetrics.metrics/1",
-  "description": "One Picard metrics file as JSON: the StringHeader texts, the metrics class as typed rows, and the histogram as a second table. Written by --format json and by convert; read back by convert and by read_table. Until 1.0.0 the schema changes only by adding members.",
+  "description": "One Picard metrics file as JSON: the StringHeader texts, the metrics class as typed rows, and the histogram as a second table. Written by --format json and by convert; read back by convert and by read_table. Frozen: until 1.0.0 the schema changes only by adding members (docs/formats.md, Frozen schemas).",
   "type": "object",
   "required": ["schema", "headers", "class", "columns", "types", "metrics", "non_finite", "histogram"],
   "properties": {
@@ -48,7 +48,8 @@
             "types": {"$ref": "#/$defs/types"},
             "rows": {"$ref": "#/$defs/rows"},
             "non_finite": {"$ref": "#/$defs/non_finite"}
-          }
+          },
+          "additionalProperties": false
         }
       ]
     },
@@ -65,10 +66,12 @@
           "types": {"$ref": "#/$defs/types"},
           "metrics": {"$ref": "#/$defs/rows"},
           "non_finite": {"$ref": "#/$defs/non_finite"}
-        }
+        },
+        "additionalProperties": false
       }
     }
   },
+  "additionalProperties": false,
   "$defs": {
     "columns": {
       "description": "The members of a row object in file order, no two equal: the column names. A name the file repeats (the histogram of CollectHsMetrics with two units) gets .1, .2 after it, and picard_columns holds the names of the file.",

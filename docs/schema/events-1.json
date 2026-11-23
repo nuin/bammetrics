@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nuin/bammetrics/blob/main/docs/schema/events-1.json",
+  "title": "bammetrics events, version 1",
+  "description": "One line of qc --format jsonl or check --format jsonl: a JSON object with an event member. qc writes start, progress, file, error, check and done; check writes check and verdict. A run that stops on an error writes an error event with step null and a done event with exit alone. Frozen: until 1.0.0 an event changes only by adding members, and new events may appear (docs/formats.md, Frozen schemas).",
+  "oneOf": [
+    {"$ref": "#/$defs/start"},
+    {"$ref": "#/$defs/progress"},
+    {"$ref": "#/$defs/file"},
+    {"$ref": "#/$defs/error"},
+    {"$ref": "#/$defs/check"},
+    {"$ref": "#/$defs/done"},
+    {"$ref": "#/$defs/fatal_done"},
+    {"$ref": "#/$defs/verdict"}
+  ],
+  "$defs": {
+    "counts": {
+      "type": "object",
+      "required": ["pass", "warn", "fail", "not_measured"],
+      "properties": {
+        "pass": {"type": "integer", "minimum": 0},
+        "warn": {"type": "integer", "minimum": 0},
+        "fail": {"type": "integer", "minimum": 0},
+        "not_measured": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "start": {
+      "type": "object",
+      "required": ["event", "sample", "bam", "prefix", "preset", "preset_hash", "collectors", "skipped"],
+      "properties": {
+        "event": {"const": "start"},
+        "sample": {"type": "string"},
+        "bam": {"type": "string"},
+        "prefix": {"type": "string"},
+        "preset": {"type": "string"},
+        "preset_hash": {"type": "string"},
+        "collectors": {"type": "integer", "minimum": 0},
+        "skipped": {"description": "The collectors --resume skips.", "type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "progress": {
+      "type": "object",
+      "required": ["event", "records"],
+      "properties": {
+        "event": {"const": "progress"},
+        "records": {"type": "integer", "minimum": 0},
+        "percent": {"description": "Of the BAM's bytes; absent when its size is not known.", "type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "file": {
+      "type": "object",
+      "required": ["event", "step", "path", "tool", "kind", "written"],
+      "properties": {
+        "event": {"const": "file"},
+        "step": {"type": "string"},
+        "path": {"type": "string"},
+        "tool": {"type": "string"},
+        "kind": {"type": "string"},
+        "written": {"description": "False for a file --resume kept from the run before.", "type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "required": ["event", "step", "message"],
+      "properties": {
+        "event": {"const": "error"},
+        "step": {"description": "The step that failed; null for an error that stops the run.", "type": ["string", "null"]},
+        "message": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "check": {
+      "description": "One check of a sample's verdict: the members of a check of verdict.json, after event and sample.",
+      "type": "object",
+      "required": ["event", "sample", "rule", "label", "class", "metric", "level", "select", "unit", "value", "warn", "fail", "status", "reason", "plot"],
+      "properties": {
+        "event": {"const": "check"},
+        "sample": {"type": "string"},
+        "rule": {"type": "string"},
+        "label": {"type": "string"},
+        "class": {"type": "string"},
+        "metric": {"type": "string"},
+        "level": {"type": "string"},
+        "select": {"type": ["string", "null"]},
+        "unit": {"type": ["string", "null"]},
+        "value": {"type": ["number", "null"]},
+        "text": {"type": "string"},
+        "warn": {"type": ["string", "null"]},
+        "fail": {"type": ["string", "null"]},
+        "status": {"enum": ["pass", "warn", "fail", "not_measured"]},
+        "reason": {"type": ["string", "null"]},
+        "plot": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "done": {
+      "type": "object",
+      "required": ["event", "sample", "status", "counts", "report", "exit"],
+      "properties": {
+        "event": {"const": "done"},
+        "sample": {"type": "string"},
+        "status": {"enum": ["pass", "warn", "fail", "incomplete"]},
+        "counts": {"$ref": "#/$defs/counts"},
+        "report": {"type": "string"},
+        "exit": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "fatal_done": {
+      "description": "The last line of a run that stopped on an error.",
+      "type": "object",
+      "required": ["event", "exit"],
+      "properties": {
+        "event": {"const": "done"},
+        "exit": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "verdict": {
+      "description": "check --format jsonl: one per sample after its check events.",
+      "type": "object",
+      "required": ["event", "sample", "status", "counts", "preset"],
+      "properties": {
+        "event": {"const": "verdict"},
+        "sample": {"type": "string"},
+        "status": {"enum": ["pass", "warn", "fail", "incomplete"]},
+        "counts": {"$ref": "#/$defs/counts"},
+        "preset": {
+          "type": "object",
+          "required": ["name", "version", "hash"],
+          "properties": {
+            "name": {"type": "string"},
+            "version": {"type": "integer", "minimum": 0},
+            "hash": {"type": "string"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
