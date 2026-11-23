@@ -1,0 +1,630 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
++
+mark-duplicates
+--program-group-command-line
+pinned
+--program-group-version
+pinned
++
+qc
+--date
+2026-01-01 00:00:00 UTC
+--also
+junit,markdown
+--fail-on
+warn
+## exit
+10
+## stdout
+## stderr
+bammetrics chain: step 1 (mark-duplicates): 36 records in, 36 out, 16 changed
+bammetrics chain: step 2 (qc): verdict fail: 6 checks, 4 pass, 1 warn, 1 fail, 0 not measured
+bammetrics chain: 6 steps finished, 10 files written
+## file s.alignment_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectAlignmentSummaryMetrics INPUT=tests/data/markdup.bam OUTPUT=OUT/s.alignment_summary_metrics CHAIN=MarkDuplicates
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.AlignmentSummaryMetrics
+CATEGORY	TOTAL_READS	PF_READS	PCT_PF_READS	PF_NOISE_READS	PF_READS_ALIGNED	PCT_PF_READS_ALIGNED	PF_ALIGNED_BASES	PF_HQ_ALIGNED_READS	PF_HQ_ALIGNED_BASES	PF_HQ_ALIGNED_Q20_BASES	PF_HQ_MEDIAN_MISMATCHES	PF_MISMATCH_RATE	PF_HQ_ERROR_RATE	PF_INDEL_RATE	MEAN_READ_LENGTH	SD_READ_LENGTH	MEDIAN_READ_LENGTH	MAD_READ_LENGTH	MIN_READ_LENGTH	MAX_READ_LENGTH	MEAN_ALIGNED_READ_LENGTH	READS_ALIGNED_IN_PAIRS	PCT_READS_ALIGNED_IN_PAIRS	PF_READS_IMPROPER_PAIRS	PCT_PF_READS_IMPROPER_PAIRS	BAD_CYCLES	STRAND_BALANCE	PCT_CHIMERAS	PCT_ADAPTER	PCT_SOFTCLIP	PCT_HARDCLIP	AVG_POS_3PRIME_SOFTCLIP_LENGTH	SAMPLE	LIBRARY	READ_GROUP
+FIRST_OF_PAIR	15	15	1	0	14	0.933333	700	14	700	700	0	0	0	0	50	0	50	0	50	50	46.666667	13	0.928571	1	0.071429	0	0.857143	0	0	0	0	0			
+SECOND_OF_PAIR	15	15	1	0	13	0.866667	650	13	650	650	0	0	0	0	50	0	50	0	50	50	43.333333	13	1	0	0	0	0.153846	0	0	0	0	0			
+PAIR	30	30	1	0	27	0.9	1350	27	1350	1350	0	0	0	0	50	0	50	0	50	50	45	26	0.962963	1	0.037037	0	0.518519	0	0	0	0	0			
+UNPAIRED	4	4	1	0	4	1	200	4	200	200	0	0	0	0	50	0	50	0	50	50	50	0	0	0	0	0	1	0	0	0	0	0			
+
+## HISTOGRAM	java.lang.Integer
+READ_LENGTH	PAIRED_TOTAL_LENGTH_COUNT	PAIRED_ALIGNED_LENGTH_COUNT	UNPAIRED_TOTAL_LENGTH_COUNT	UNPAIRED_ALIGNED_LENGTH_COUNT
+0	0	3	0	0
+50	30	27	4	4
+
+## file s.duplicate_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectDuplicateMetrics INPUT=tests/data/markdup.bam METRICS_FILE=OUT/s.duplicate_metrics CHAIN=MarkDuplicates
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.DuplicationMetrics
+LIBRARY	UNPAIRED_READS_EXAMINED	READ_PAIRS_EXAMINED	SECONDARY_OR_SUPPLEMENTARY_RDS	UNMAPPED_READS	UNPAIRED_READ_DUPLICATES	READ_PAIR_DUPLICATES	READ_PAIR_OPTICAL_DUPLICATES	PERCENT_DUPLICATION	ESTIMATED_LIBRARY_SIZE
+lib1	3	6	1	1	2	3	0	0.533333	3
+lib2	2	7	1	2	1	4	0	0.5625	3
+
+
+## file s.insert_size_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectInsertSizeMetrics INPUT=tests/data/markdup.bam OUTPUT=OUT/s.insert_size_metrics CHAIN=MarkDuplicates
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.InsertSizeMetrics
+MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MAX_INSERT_SIZE	MEAN_INSERT_SIZE	STANDARD_DEVIATION	READ_PAIRS	PAIR_ORIENTATION	WIDTH_OF_10_PERCENT	WIDTH_OF_20_PERCENT	WIDTH_OF_30_PERCENT	WIDTH_OF_40_PERCENT	WIDTH_OF_50_PERCENT	WIDTH_OF_60_PERCENT	WIDTH_OF_70_PERCENT	WIDTH_OF_80_PERCENT	WIDTH_OF_90_PERCENT	WIDTH_OF_95_PERCENT	WIDTH_OF_99_PERCENT	SAMPLE	LIBRARY	READ_GROUP
+340	300	35	300	450	350	56.213877	6	FR	21	21	21	61	61	81	81	81	221	221	221			
+
+## HISTOGRAM	java.lang.Integer
+insert_size	All_Reads.fr_count
+300	2
+330	1
+350	1
+370	1
+450	1
+
+## file s.junit.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="bammetrics check" tests="6" failures="2" errors="0" skipped="0">
+  <testsuite name="s1" tests="6" failures="2" errors="0" skipped="0">
+    <properties>
+      <property name="preset" value="generic v1 (6dd89e)"/>
+      <property name="verdict" value="fail"/>
+    </properties>
+    <testcase classname="bammetrics.s1" name="alignment.pf-reads-aligned"/>
+    <testcase classname="bammetrics.s1" name="alignment.adapter"/>
+    <testcase classname="bammetrics.s1" name="alignment.chimeras"/>
+    <testcase classname="bammetrics.s1" name="insert.median"/>
+    <testcase classname="bammetrics.s1" name="yield.q30">
+      <failure type="warn" message="Q30 fraction of PF bases is 0.735294, below the warn limit of 0.8">yield.q30: QualityYieldMetrics PF_Q30_BASES / PF_BASES = 0.735294, warn &lt; 0.8, fail &lt; 0.7</failure>
+    </testcase>
+    <testcase classname="bammetrics.s1" name="duplication.percent">
+      <failure type="fail" message="Duplicate reads is 0.5625 in lib2, above the fail limit of 0.5">duplication.percent: DuplicationMetrics PERCENT_DUPLICATION = 0.5625, warn &gt; 0.3, fail &gt; 0.5</failure>
+    </testcase>
+  </testsuite>
+</testsuites>
+## file s.manifest.json
+{
+  "schema": "bammetrics.manifest/2",
+  "tool_version": "0.31.0",
+  "verb": "chain",
+  "sample": "s1",
+  "directory": "<directory>",
+  "source": {
+    "path": "tests/data/markdup.bam",
+    "size": "<size>",
+    "mtime": "<mtime>",
+    "edges_hash": "<edges_hash>"
+  },
+  "reference": null,
+  "prefix": "OUT/s",
+  "stringency": "STRICT",
+  "started": "<started>",
+  "seconds": "<seconds>",
+  "exit": 10,
+  "steps": [
+    {
+      "id": "marked",
+      "number": 1,
+      "verb": "mark-duplicates",
+      "tool": "MarkDuplicates",
+      "role": "transform",
+      "reads": "in",
+      "leaves": "marked",
+      "upstream": [],
+      "argv": [
+        "INPUT=tests/data/markdup.bam",
+        "METRICS_FILE=OUT/s.marked.duplication_metrics",
+        "PROGRAM_GROUP_COMMAND_LINE=pinned",
+        "PROGRAM_GROUP_VERSION=pinned"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/s.marked.duplication_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "qc",
+      "number": 2,
+      "verb": "qc",
+      "tool": null,
+      "role": "qc",
+      "reads": "marked",
+      "leaves": null,
+      "upstream": [
+        "marked"
+      ],
+      "argv": [
+        "--also=junit,markdown",
+        "--fail-on=warn",
+        "--date=2026-01-01 00:00:00 UTC"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/s.verdict.json",
+          "kind": "verdict",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        },
+        {
+          "path": "OUT/s.report.html",
+          "kind": "report",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        },
+        {
+          "path": "OUT/s.junit.xml",
+          "kind": "junit",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        },
+        {
+          "path": "OUT/s.report.md",
+          "kind": "markdown",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "quality-yield@marked",
+      "number": 3,
+      "verb": "quality-yield",
+      "tool": "CollectQualityYieldMetrics",
+      "role": "tap",
+      "reads": "marked",
+      "leaves": null,
+      "upstream": [
+        "marked"
+      ],
+      "argv": [
+        "INPUT=tests/data/markdup.bam",
+        "OUTPUT=OUT/s.quality_yield_metrics"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/s.quality_yield_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "alignment-summary@marked",
+      "number": 4,
+      "verb": "alignment-summary",
+      "tool": "CollectAlignmentSummaryMetrics",
+      "role": "tap",
+      "reads": "marked",
+      "leaves": null,
+      "upstream": [
+        "marked"
+      ],
+      "argv": [
+        "INPUT=tests/data/markdup.bam",
+        "OUTPUT=OUT/s.alignment_summary_metrics"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/s.alignment_summary_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "insert-size@marked",
+      "number": 5,
+      "verb": "insert-size",
+      "tool": "CollectInsertSizeMetrics",
+      "role": "tap",
+      "reads": "marked",
+      "leaves": null,
+      "upstream": [
+        "marked"
+      ],
+      "argv": [
+        "INPUT=tests/data/markdup.bam",
+        "OUTPUT=OUT/s.insert_size_metrics"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/s.insert_size_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "duplicate-metrics@marked",
+      "number": 6,
+      "verb": "duplicate-metrics",
+      "tool": "CollectDuplicateMetrics",
+      "role": "tap",
+      "reads": "marked",
+      "leaves": null,
+      "upstream": [
+        "marked"
+      ],
+      "argv": [
+        "INPUT=tests/data/markdup.bam",
+        "METRICS_FILE=OUT/s.duplicate_metrics"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/s.duplicate_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    }
+  ],
+  "kept": []
+}
+## file s.marked.duplication_metrics
+## htsjdk.samtools.metrics.StringHeader
+# MarkDuplicates INPUT=tests/data/markdup.bam METRICS_FILE=OUT/s.marked.duplication_metrics PROGRAM_GROUP_COMMAND_LINE=pinned PROGRAM_GROUP_VERSION=pinned
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.DuplicationMetrics
+LIBRARY	UNPAIRED_READS_EXAMINED	READ_PAIRS_EXAMINED	SECONDARY_OR_SUPPLEMENTARY_RDS	UNMAPPED_READS	UNPAIRED_READ_DUPLICATES	READ_PAIR_DUPLICATES	READ_PAIR_OPTICAL_DUPLICATES	PERCENT_DUPLICATION	ESTIMATED_LIBRARY_SIZE
+lib1	3	6	1	1	2	3	3	0.533333	
+lib2	2	7	1	2	1	4	3	0.5625	6
+
+## HISTOGRAM	java.lang.Double
+set_size	all_sets	optical_sets	non_optical_sets
+1.0	2	0	5
+2.0	2	2	1
+3.0	1	2	0
+4.0	1	0	0
+
+## file s.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectQualityYieldMetrics INPUT=tests/data/markdup.bam OUTPUT=OUT/s.quality_yield_metrics CHAIN=MarkDuplicates
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+34	34	50	1700	1700	1700	1700	1250	1250	2590	2590
+
+
+## file s.report.html
+<page not recorded>
+## file s.report.md
+# s1: FAIL
+
+Preset generic v1 (6dd89e). 1 fail, 1 warn, 4 pass, 0 not measured.
+
+| Status | Rule | Value | Warn | Fail | Reason |
+| --- | --- | ---: | --- | --- | --- |
+| PASS | alignment.pf-reads-aligned | 0.9 | < 0.9 | < 0.8 |  |
+| PASS | alignment.adapter | 0 | > 0.01 | > 0.05 |  |
+| PASS | alignment.chimeras | 0 | > 0.05 | > 0.1 |  |
+| PASS | insert.median | 340 | outside 100..1000 | outside 50..2000 |  |
+| WARN | yield.q30 | 0.735294 | < 0.8 | < 0.7 | Q30 fraction of PF bases is 0.735294, below the warn limit of 0.8 |
+| FAIL | duplication.percent | 0.5625 | > 0.3 | > 0.5 | Duplicate reads is 0.5625 in lib2, above the fail limit of 0.5 |
+
+## picard.analysis.AlignmentSummaryMetrics
+
+| Column | 1 | 2 | 3 | 4 |
+| --- | --- | --- | --- | --- |
+| CATEGORY | FIRST_OF_PAIR | SECOND_OF_PAIR | PAIR | UNPAIRED |
+| TOTAL_READS | 15 | 15 | 30 | 4 |
+| PF_READS | 15 | 15 | 30 | 4 |
+| PCT_PF_READS | 1 | 1 | 1 | 1 |
+| PF_NOISE_READS | 0 | 0 | 0 | 0 |
+| PF_READS_ALIGNED | 14 | 13 | 27 | 4 |
+| PCT_PF_READS_ALIGNED | 0.933333 | 0.866667 | 0.9 | 1 |
+| PF_ALIGNED_BASES | 700 | 650 | 1350 | 200 |
+| PF_HQ_ALIGNED_READS | 14 | 13 | 27 | 4 |
+| PF_HQ_ALIGNED_BASES | 700 | 650 | 1350 | 200 |
+| PF_HQ_ALIGNED_Q20_BASES | 700 | 650 | 1350 | 200 |
+| PF_HQ_MEDIAN_MISMATCHES | 0 | 0 | 0 | 0 |
+| PF_MISMATCH_RATE | 0 | 0 | 0 | 0 |
+| PF_HQ_ERROR_RATE | 0 | 0 | 0 | 0 |
+| PF_INDEL_RATE | 0 | 0 | 0 | 0 |
+| MEAN_READ_LENGTH | 50 | 50 | 50 | 50 |
+| SD_READ_LENGTH | 0 | 0 | 0 | 0 |
+| MEDIAN_READ_LENGTH | 50 | 50 | 50 | 50 |
+| MAD_READ_LENGTH | 0 | 0 | 0 | 0 |
+| MIN_READ_LENGTH | 50 | 50 | 50 | 50 |
+| MAX_READ_LENGTH | 50 | 50 | 50 | 50 |
+| MEAN_ALIGNED_READ_LENGTH | 46.666667 | 43.333333 | 45 | 50 |
+| READS_ALIGNED_IN_PAIRS | 13 | 13 | 26 | 0 |
+| PCT_READS_ALIGNED_IN_PAIRS | 0.928571 | 1 | 0.962963 | 0 |
+| PF_READS_IMPROPER_PAIRS | 1 | 0 | 1 | 0 |
+| PCT_PF_READS_IMPROPER_PAIRS | 0.071429 | 0 | 0.037037 | 0 |
+| BAD_CYCLES | 0 | 0 | 0 | 0 |
+| STRAND_BALANCE | 0.857143 | 0.153846 | 0.518519 | 1 |
+| PCT_CHIMERAS | 0 | 0 | 0 | 0 |
+| PCT_ADAPTER | 0 | 0 | 0 | 0 |
+| PCT_SOFTCLIP | 0 | 0 | 0 | 0 |
+| PCT_HARDCLIP | 0 | 0 | 0 | 0 |
+| AVG_POS_3PRIME_SOFTCLIP_LENGTH | 0 | 0 | 0 | 0 |
+| SAMPLE |  |  |  |  |
+| LIBRARY |  |  |  |  |
+| READ_GROUP |  |  |  |  |
+
+## Histogram of picard.analysis.AlignmentSummaryMetrics, by READ_LENGTH
+
+| READ_LENGTH | PAIRED_TOTAL_LENGTH_COUNT | PAIRED_ALIGNED_LENGTH_COUNT | UNPAIRED_TOTAL_LENGTH_COUNT | UNPAIRED_ALIGNED_LENGTH_COUNT |
+| ---: | ---: | ---: | ---: | ---: |
+| 0 | 0 | 3 | 0 | 0 |
+| 50 | 30 | 27 | 4 | 4 |
+
+## picard.sam.DuplicationMetrics
+
+| Column | 1 | 2 |
+| --- | --- | --- |
+| LIBRARY | lib1 | lib2 |
+| UNPAIRED_READS_EXAMINED | 3 | 2 |
+| READ_PAIRS_EXAMINED | 6 | 7 |
+| SECONDARY_OR_SUPPLEMENTARY_RDS | 1 | 1 |
+| UNMAPPED_READS | 1 | 2 |
+| UNPAIRED_READ_DUPLICATES | 2 | 1 |
+| READ_PAIR_DUPLICATES | 3 | 4 |
+| READ_PAIR_OPTICAL_DUPLICATES | 0 | 0 |
+| PERCENT_DUPLICATION | 0.533333 | 0.5625 |
+| ESTIMATED_LIBRARY_SIZE | 3 | 3 |
+
+## picard.analysis.InsertSizeMetrics
+
+| Column | 1 |
+| --- | --- |
+| MEDIAN_INSERT_SIZE | 340 |
+| MODE_INSERT_SIZE | 300 |
+| MEDIAN_ABSOLUTE_DEVIATION | 35 |
+| MIN_INSERT_SIZE | 300 |
+| MAX_INSERT_SIZE | 450 |
+| MEAN_INSERT_SIZE | 350 |
+| STANDARD_DEVIATION | 56.213877 |
+| READ_PAIRS | 6 |
+| PAIR_ORIENTATION | FR |
+| WIDTH_OF_10_PERCENT | 21 |
+| WIDTH_OF_20_PERCENT | 21 |
+| WIDTH_OF_30_PERCENT | 21 |
+| WIDTH_OF_40_PERCENT | 61 |
+| WIDTH_OF_50_PERCENT | 61 |
+| WIDTH_OF_60_PERCENT | 81 |
+| WIDTH_OF_70_PERCENT | 81 |
+| WIDTH_OF_80_PERCENT | 81 |
+| WIDTH_OF_90_PERCENT | 221 |
+| WIDTH_OF_95_PERCENT | 221 |
+| WIDTH_OF_99_PERCENT | 221 |
+| SAMPLE |  |
+| LIBRARY |  |
+| READ_GROUP |  |
+
+## Histogram of picard.analysis.InsertSizeMetrics, by insert_size
+
+| insert_size | All_Reads.fr_count |
+| ---: | ---: |
+| 300 | 2 |
+| 330 | 1 |
+| 350 | 1 |
+| 370 | 1 |
+| 450 | 1 |
+
+## picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+
+| Column | 1 |
+| --- | --- |
+| TOTAL_READS | 34 |
+| PF_READS | 34 |
+| READ_LENGTH | 50 |
+| TOTAL_BASES | 1700 |
+| PF_BASES | 1700 |
+| Q20_BASES | 1700 |
+| PF_Q20_BASES | 1700 |
+| Q30_BASES | 1250 |
+| PF_Q30_BASES | 1250 |
+| Q20_EQUIVALENT_YIELD | 2590 |
+| PF_Q20_EQUIVALENT_YIELD | 2590 |
+## file s.verdict.json
+{
+  "schema": "bammetrics.verdict/1",
+  "tool_version": "0.31.0",
+  "sample": "s1",
+  "preset": {
+    "name": "generic",
+    "version": 1,
+    "hash": "6dd89ed0478fd5e4",
+    "source": "built-in",
+    "note": "starting values"
+  },
+  "status": "fail",
+  "counts": {
+    "pass": 4,
+    "warn": 1,
+    "fail": 1,
+    "not_measured": 0
+  },
+  "files": [
+    {
+      "path": "OUT/s.alignment_summary_metrics",
+      "classes": [
+        "picard.analysis.AlignmentSummaryMetrics"
+      ]
+    },
+    {
+      "path": "OUT/s.duplicate_metrics",
+      "classes": [
+        "picard.sam.DuplicationMetrics"
+      ]
+    },
+    {
+      "path": "OUT/s.insert_size_metrics",
+      "classes": [
+        "picard.analysis.InsertSizeMetrics"
+      ]
+    },
+    {
+      "path": "OUT/s.quality_yield_metrics",
+      "classes": [
+        "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "rule": "alignment.pf-reads-aligned",
+      "label": "PF reads aligned",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_PF_READS_ALIGNED",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 0.9,
+      "warn": "< 0.9",
+      "fail": "< 0.8",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "alignment.adapter",
+      "label": "Adapter reads",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_ADAPTER",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 0,
+      "warn": "> 0.01",
+      "fail": "> 0.05",
+      "status": "pass",
+      "reason": null,
+      "plot": "insert-size"
+    },
+    {
+      "rule": "alignment.chimeras",
+      "label": "Chimeric pairs",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_CHIMERAS",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 0,
+      "warn": "> 0.05",
+      "fail": "> 0.1",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "insert.median",
+      "label": "Median insert size",
+      "class": "InsertSizeMetrics",
+      "metric": "MEDIAN_INSERT_SIZE",
+      "level": "ALL_READS",
+      "select": "PAIR_ORIENTATION=FR",
+      "unit": null,
+      "value": 340,
+      "warn": "outside 100..1000",
+      "fail": "outside 50..2000",
+      "status": "pass",
+      "reason": null,
+      "plot": "insert-size"
+    },
+    {
+      "rule": "yield.q30",
+      "label": "Q30 fraction of PF bases",
+      "class": "QualityYieldMetrics",
+      "metric": "PF_Q30_BASES / PF_BASES",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0.7352941176470589,
+      "warn": "< 0.8",
+      "fail": "< 0.7",
+      "status": "warn",
+      "reason": "Q30 fraction of PF bases is 0.735294, below the warn limit of 0.8",
+      "plot": "cycle-quality"
+    },
+    {
+      "rule": "duplication.percent",
+      "label": "Duplicate reads",
+      "class": "DuplicationMetrics",
+      "metric": "PERCENT_DUPLICATION",
+      "level": "LIBRARY",
+      "select": null,
+      "unit": "lib2",
+      "value": 0.5625,
+      "warn": "> 0.3",
+      "fail": "> 0.5",
+      "status": "fail",
+      "reason": "Duplicate reads is 0.5625 in lib2, above the fail limit of 0.5",
+      "plot": null
+    }
+  ]
+}

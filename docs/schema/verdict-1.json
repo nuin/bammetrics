@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nuin/bammetrics/blob/main/docs/schema/verdict-1.json",
+  "title": "bammetrics.verdict/1",
+  "description": "PREFIX.verdict.json: one sample's preset evaluated over its metrics files. Written by qc, report and a chain's qc step; read back by report and Python. Frozen: until 1.0.0 the schema changes only by adding members (docs/formats.md, Frozen schemas).",
+  "type": "object",
+  "required": ["schema", "tool_version", "sample", "preset", "status", "counts", "files", "checks"],
+  "properties": {
+    "schema": {"const": "bammetrics.verdict/1"},
+    "tool_version": {"description": "The bammetrics version that wrote the file.", "type": "string"},
+    "sample": {"type": "string"},
+    "preset": {
+      "type": "object",
+      "required": ["name", "version", "hash", "source", "note"],
+      "properties": {
+        "name": {"type": "string"},
+        "version": {"type": "integer", "minimum": 0},
+        "hash": {"description": "FNV-1a 64 of the preset's content, 16 hex digits.", "type": "string"},
+        "source": {"description": "built-in, or the preset file.", "type": "string"},
+        "note": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "status": {"$ref": "#/$defs/band"},
+    "counts": {"$ref": "#/$defs/counts"},
+    "files": {
+      "description": "The metrics files evaluated, in path order, with the classes each holds.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "classes"],
+        "properties": {
+          "path": {"type": "string"},
+          "classes": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": false
+      }
+    },
+    "checks": {"type": "array", "items": {"$ref": "#/$defs/check"}}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "band": {"enum": ["pass", "warn", "fail", "incomplete"]},
+    "counts": {
+      "type": "object",
+      "required": ["pass", "warn", "fail", "not_measured"],
+      "properties": {
+        "pass": {"type": "integer", "minimum": 0},
+        "warn": {"type": "integer", "minimum": 0},
+        "fail": {"type": "integer", "minimum": 0},
+        "not_measured": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "check": {
+      "description": "One rule of the preset, judged.",
+      "type": "object",
+      "required": ["rule", "label", "class", "metric", "level", "select", "unit", "value", "warn", "fail", "status", "reason", "plot"],
+      "properties": {
+        "rule": {"type": "string"},
+        "label": {"type": "string"},
+        "class": {"type": "string"},
+        "metric": {"type": "string"},
+        "level": {"type": "string"},
+        "select": {"type": ["string", "null"]},
+        "unit": {"type": ["string", "null"]},
+        "value": {"description": "The value judged; null when not measured or not finite.", "type": ["number", "null"]},
+        "text": {"description": "The cell judged as text. Present only on a check judged as text.", "type": "string"},
+        "warn": {"type": ["string", "null"]},
+        "fail": {"type": ["string", "null"]},
+        "status": {"enum": ["pass", "warn", "fail", "not_measured"]},
+        "reason": {"type": ["string", "null"]},
+        "plot": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    }
+  }
+}

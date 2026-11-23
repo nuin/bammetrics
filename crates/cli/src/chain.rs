@@ -39,12 +39,16 @@ mod args;
 mod bare;
 mod claims;
 mod describe;
+mod keep;
+mod lock;
 mod planfile;
 mod planner;
 mod prepare;
 pub mod python;
+mod qc_step;
 pub mod recipes;
 mod resolve;
+mod resume;
 mod run;
 
 use crate::error::VerbError;
@@ -63,6 +67,8 @@ pub const VERB: &str = "chain";
 pub const STEP: &str = "+";
 /// The step that is not a tool verb.
 pub const WRITE: &str = "write";
+/// The last step that evaluates a preset and writes the report.
+pub const QC: &str = "qc";
 
 /// A chain as asked for: the source, the chain's options and the steps,
 /// each still as text. The command line and a plan file both make one.
@@ -107,6 +113,8 @@ pub struct Spec {
     pub no_config: bool,
     /// The recipe whose `-o` must name the BAM it writes.
     pub recipe_bam: Option<String>,
+    /// `--resume`: skip the steps `PREFIX.manifest.json` proves done.
+    pub resume: bool,
 }
 
 /// One step as asked for: its verb and its own arguments.

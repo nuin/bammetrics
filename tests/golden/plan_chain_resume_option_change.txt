@@ -1,0 +1,395 @@
+## argv
+plan
+tests/data/markdup.bam
+-o
+OUT/s
+--resume
++
+quality-yield
++
+mark-duplicates
+--keep
+--program-group-command-line
+pinned
+--program-group-version
+pinned
++
+sort-sam
+-SO
+queryname
+--max-records-in-ram
+7
++
+insert-size
++
+write
+## exit
+0
+## stdout
+chain plan for tests/data/markdup.bam
+  source    tests/data/markdup.bam (BAM, 1,158 bytes, sort order coordinate; a file, it can be read again)
+  prefix    OUT/s (from -o)
+segment 1  one read of tests/data/markdup.bam
+  step 1  quality-yield    tap on in              OUT/s.in.quality_yield_metrics
+  step 2  mark-duplicates  transform, first read  takes every record, then finds the duplicate sets
+segment 2  a second read of tests/data/markdup.bam through step 2 (replay: nothing is spooled)
+  step 2  mark-duplicates  stream marked          OUT/s.marked.duplication_metrics, OUT/s.marked.bam (kept), OUT/s.marked.bai (when coordinate sorted)
+  step 3  sort-sam         transform, first read  takes every record and sorts them by queryname
+segment 3  the records step 3 holds, sorted by queryname
+  step 3  sort-sam         stream sorted          no file
+  step 4  insert-size      tap on sorted          OUT/s.insert_size_metrics
+  step 5  write            BAM of sorted          OUT/s.sorted.bam
+manifest   OUT/s.manifest.json (bammetrics.manifest/2)
+barrier    step 2 mark-duplicates: replays the source; about 16 records by the file size, no spill under MAX_RECORDS_IN_RAM 4,000,000; memory about 100.0 MiB
+barrier    step 3 sort-sam: holds its records; spills about 1.6 KiB (--sort-memory 2.0 GiB and MAX_RECORDS_IN_RAM 7); memory about 100.0 MiB
+temp disk  about 1.6 KiB in the system temporary directory
+output     about 2.7 KiB written by write and the kept streams
+memory     about 100.0 MiB at the peak, a fixed 100.0 MiB for the chain beside its barriers included (a small input takes less)
+resume     from OUT/s.manifest.json
+resume     step 1 quality-yield: skipped: its record and files match
+resume     step 2 mark-duplicates: skipped; its kept stream OUT/s.marked.bam starts the read
+resume     step 3 sort-sam: runs: its options changed
+resume     step 4 insert-size: runs: step 3 in front of it runs
+resume     step 5 write: runs: step 3 in front of it runs
+nothing ran: this is a plan
+## stderr
+## file s.in.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectQualityYieldMetrics INPUT=tests/data/markdup.bam OUTPUT=OUT/s.in.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+34	34	50	1700	1700	1700	1700	1250	1250	2590	2590
+
+
+## file s.insert_size_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectInsertSizeMetrics INPUT=tests/data/markdup.bam OUTPUT=OUT/s.insert_size_metrics CHAIN=MarkDuplicates+SortSam
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.InsertSizeMetrics
+MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MAX_INSERT_SIZE	MEAN_INSERT_SIZE	STANDARD_DEVIATION	READ_PAIRS	PAIR_ORIENTATION	WIDTH_OF_10_PERCENT	WIDTH_OF_20_PERCENT	WIDTH_OF_30_PERCENT	WIDTH_OF_40_PERCENT	WIDTH_OF_50_PERCENT	WIDTH_OF_60_PERCENT	WIDTH_OF_70_PERCENT	WIDTH_OF_80_PERCENT	WIDTH_OF_90_PERCENT	WIDTH_OF_95_PERCENT	WIDTH_OF_99_PERCENT	SAMPLE	LIBRARY	READ_GROUP
+340	300	35	300	450	350	56.213877	6	FR	21	21	21	61	61	81	81	81	221	221	221			
+
+## HISTOGRAM	java.lang.Integer
+insert_size	All_Reads.fr_count
+300	2
+330	1
+350	1
+370	1
+450	1
+
+## file s.manifest.json
+{
+  "schema": "bammetrics.manifest/2",
+  "tool_version": "0.31.0",
+  "verb": "chain",
+  "sample": "s1",
+  "directory": "<directory>",
+  "source": {
+    "path": "tests/data/markdup.bam",
+    "size": "<size>",
+    "mtime": "<mtime>",
+    "edges_hash": "<edges_hash>"
+  },
+  "reference": null,
+  "prefix": "OUT/s",
+  "stringency": "STRICT",
+  "started": "<started>",
+  "seconds": "<seconds>",
+  "exit": 0,
+  "steps": [
+    {
+      "id": "quality-yield@in",
+      "number": 1,
+      "verb": "quality-yield",
+      "tool": "CollectQualityYieldMetrics",
+      "role": "tap",
+      "reads": "in",
+      "leaves": null,
+      "upstream": [],
+      "argv": [
+        "INPUT=tests/data/markdup.bam",
+        "OUTPUT=OUT/s.in.quality_yield_metrics"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/s.in.quality_yield_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "marked",
+      "number": 2,
+      "verb": "mark-duplicates",
+      "tool": "MarkDuplicates",
+      "role": "transform",
+      "reads": "in",
+      "leaves": "marked",
+      "upstream": [],
+      "argv": [
+        "INPUT=tests/data/markdup.bam",
+        "METRICS_FILE=OUT/s.marked.duplication_metrics",
+        "PROGRAM_GROUP_COMMAND_LINE=pinned",
+        "PROGRAM_GROUP_VERSION=pinned",
+        "KEEP=OUT/s.marked.bam"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/s.marked.duplication_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        },
+        {
+          "path": "OUT/s.marked.bam",
+          "kind": "kept",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        },
+        {
+          "path": "OUT/s.marked.bai",
+          "kind": "index",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "sorted",
+      "number": 3,
+      "verb": "sort-sam",
+      "tool": "SortSam",
+      "role": "transform",
+      "reads": "marked",
+      "leaves": "sorted",
+      "upstream": [
+        "marked"
+      ],
+      "argv": [
+        "INPUT=tests/data/markdup.bam",
+        "SORT_ORDER=queryname",
+        "MAX_RECORDS_IN_RAM=5"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "insert-size@sorted",
+      "number": 4,
+      "verb": "insert-size",
+      "tool": "CollectInsertSizeMetrics",
+      "role": "tap",
+      "reads": "sorted",
+      "leaves": null,
+      "upstream": [
+        "marked",
+        "sorted"
+      ],
+      "argv": [
+        "INPUT=tests/data/markdup.bam",
+        "OUTPUT=OUT/s.insert_size_metrics"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/s.insert_size_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "write@sorted",
+      "number": 5,
+      "verb": "write",
+      "tool": null,
+      "role": "write",
+      "reads": "sorted",
+      "leaves": null,
+      "upstream": [
+        "marked",
+        "sorted"
+      ],
+      "argv": [
+        "OUTPUT=OUT/s.sorted.bam",
+        "FORMAT=bam",
+        "COMPRESSION_LEVEL=5",
+        "CREATE_INDEX=false",
+        "CREATE_MD5_FILE=false"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/s.sorted.bam",
+          "kind": "bam",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    }
+  ],
+  "kept": [
+    {
+      "step": "marked",
+      "stream": "marked",
+      "path": "OUT/s.marked.bam",
+      "size": "<size>",
+      "mtime": "<mtime>",
+      "edges_hash": "<edges_hash>"
+    }
+  ]
+}
+## file s.marked.bai
+<index not recorded>
+## file s.marked.bam
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:chr1	LN:100000
+@RG	ID:rg1	SM:s1	LB:lib1	PU:fc1.1
+@RG	ID:rg2	SM:s1	LB:lib2	PU:fc1.2
+@PG	ID:bwa	PN:bwa	VN:0.7.17
+@PG	ID:MarkDuplicates	VN:pinned	CL:pinned	PN:MarkDuplicates
+@PG	ID:MarkDuplicates.2	VN:pinned	CL:pinned	PN:MarkDuplicates	PP:bwa
+M1:7:FC1:1:1101:1000:2000	1123	0	1001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1123	0	1001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	99	0	1001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:9000:9000	1024	0	1001	PG:Z:MarkDuplicates.2	RG:Z:rg1
+M1:7:FC1:1:1101:9001:9000	1024	0	1001	PG:Z:MarkDuplicates.2	RG:Z:rg1
+M1:7:FC1:1:1101:1000:2000	1171	0	1251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1171	0	1251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	147	0	1251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	99	0	2001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	147	0	2301	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1000:2000	1123	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1187	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	1123	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1101:1120:2090	163	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1000:2000	1171	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1107	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	1171	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1101:1120:2090	83	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1102:1000:2000	1123	0	4001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1102:1040:2030	99	0	4001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1102:1000:2000	1171	0	4321	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1102:1040:2030	147	0	4321	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1000:2000	1123	0	5001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	99	0	5001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1101:1000:2000	1171	0	5251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	147	0	5251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1102:1000:2000	99	0	6001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	147	0	6401	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+single0	1024	0	7001	PG:Z:MarkDuplicates	RG:Z:rg2
+single1	0	0	7001	PG:Z:MarkDuplicates	RG:Z:rg2
+mateless	73	0	8001	PG:Z:MarkDuplicates	RG:Z:rg1
+mateless	133	0	8001	PG:Z:MarkDuplicates	RG:Z:rg1
+M1:7:FC1:1:1101:1000:2000	329	0	9001	PG:Z:MarkDuplicates	RG:Z:rg1
+M1:7:FC1:1:1102:1000:2000	2121	0	9501	PG:Z:MarkDuplicates	RG:Z:rg2
+unplaced	77	-1	0	PG:Z:MarkDuplicates.2	RG:Z:rg2
+unplaced	141	-1	0	PG:Z:MarkDuplicates.2	RG:Z:rg2
+## file s.marked.duplication_metrics
+## htsjdk.samtools.metrics.StringHeader
+# MarkDuplicates INPUT=tests/data/markdup.bam METRICS_FILE=OUT/s.marked.duplication_metrics PROGRAM_GROUP_COMMAND_LINE=pinned PROGRAM_GROUP_VERSION=pinned
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.DuplicationMetrics
+LIBRARY	UNPAIRED_READS_EXAMINED	READ_PAIRS_EXAMINED	SECONDARY_OR_SUPPLEMENTARY_RDS	UNMAPPED_READS	UNPAIRED_READ_DUPLICATES	READ_PAIR_DUPLICATES	READ_PAIR_OPTICAL_DUPLICATES	PERCENT_DUPLICATION	ESTIMATED_LIBRARY_SIZE
+lib1	3	6	1	1	2	3	3	0.533333	
+lib2	2	7	1	2	1	4	3	0.5625	6
+
+## HISTOGRAM	java.lang.Double
+set_size	all_sets	optical_sets	non_optical_sets
+1.0	2	0	5
+2.0	2	2	1
+3.0	1	2	0
+4.0	1	0	0
+
+## file s.sorted.bam
+@HD	VN:1.6	SO:queryname
+@SQ	SN:chr1	LN:100000
+@RG	ID:rg1	SM:s1	LB:lib1	PU:fc1.1
+@RG	ID:rg2	SM:s1	LB:lib2	PU:fc1.2
+@PG	ID:bwa	PN:bwa	VN:0.7.17
+@PG	ID:MarkDuplicates	VN:pinned	CL:pinned	PN:MarkDuplicates
+@PG	ID:MarkDuplicates.2	VN:pinned	CL:pinned	PN:MarkDuplicates	PP:bwa
+M1:7:FC1:1:1101:1000:2000	1123	0	1001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1000:2000	1123	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1101:1000:2000	1123	0	5001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1000:2000	329	0	9001	PG:Z:MarkDuplicates	RG:Z:rg1
+M1:7:FC1:1:1101:1000:2000	1171	0	1251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1000:2000	1171	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1101:1000:2000	1171	0	5251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1123	0	1001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1101:1040:2030	99	0	5001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1101:1040:2030	1107	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1040:2030	1187	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1040:2030	1171	0	1251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1101:1040:2030	147	0	5251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	99	0	1001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1080:2060	1123	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1101:1080:2060	147	0	1251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1080:2060	1171	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1101:1120:2090	83	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1120:2090	163	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:9000:9000	1024	0	1001	PG:Z:MarkDuplicates.2	RG:Z:rg1
+M1:7:FC1:1:1101:9001:9000	1024	0	1001	PG:Z:MarkDuplicates.2	RG:Z:rg1
+M1:7:FC1:1:1102:1000:2000	99	0	2001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	1123	0	4001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	99	0	6001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	2121	0	9501	PG:Z:MarkDuplicates	RG:Z:rg2
+M1:7:FC1:1:1102:1000:2000	147	0	2301	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	1171	0	4321	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	147	0	6401	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1102:1040:2030	99	0	4001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1102:1040:2030	147	0	4321	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+mateless	73	0	8001	PG:Z:MarkDuplicates	RG:Z:rg1
+mateless	133	0	8001	PG:Z:MarkDuplicates	RG:Z:rg1
+single0	1024	0	7001	PG:Z:MarkDuplicates	RG:Z:rg2
+single1	0	0	7001	PG:Z:MarkDuplicates	RG:Z:rg2
+unplaced	77	-1	0	PG:Z:MarkDuplicates.2	RG:Z:rg2
+unplaced	141	-1	0	PG:Z:MarkDuplicates.2	RG:Z:rg2

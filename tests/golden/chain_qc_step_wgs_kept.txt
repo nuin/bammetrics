@@ -1,0 +1,945 @@
+## argv
+chain
+tests/data/markdup.bam
+-R
+tests/data/ref_100k.fa
+-o
+OUT/s
++
+mark-duplicates
+--keep
+--program-group-command-line
+pinned
+--program-group-version
+pinned
++
+qc
+--preset
+wgs
+--date
+2026-01-01 00:00:00 UTC
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: step 1 (mark-duplicates): 36 records in, 36 out, 16 changed
+bammetrics chain: step 2 (qc): verdict fail: 10 checks, 3 pass, 0 warn, 6 fail, 1 not measured
+bammetrics chain: 7 steps finished, 11 files written
+## file s.alignment_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectAlignmentSummaryMetrics INPUT=tests/data/markdup.bam OUTPUT=OUT/s.alignment_summary_metrics REFERENCE_SEQUENCE=tests/data/ref_100k.fa CHAIN=MarkDuplicates
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.AlignmentSummaryMetrics
+CATEGORY	TOTAL_READS	PF_READS	PCT_PF_READS	PF_NOISE_READS	PF_READS_ALIGNED	PCT_PF_READS_ALIGNED	PF_ALIGNED_BASES	PF_HQ_ALIGNED_READS	PF_HQ_ALIGNED_BASES	PF_HQ_ALIGNED_Q20_BASES	PF_HQ_MEDIAN_MISMATCHES	PF_MISMATCH_RATE	PF_HQ_ERROR_RATE	PF_INDEL_RATE	MEAN_READ_LENGTH	SD_READ_LENGTH	MEDIAN_READ_LENGTH	MAD_READ_LENGTH	MIN_READ_LENGTH	MAX_READ_LENGTH	MEAN_ALIGNED_READ_LENGTH	READS_ALIGNED_IN_PAIRS	PCT_READS_ALIGNED_IN_PAIRS	PF_READS_IMPROPER_PAIRS	PCT_PF_READS_IMPROPER_PAIRS	BAD_CYCLES	STRAND_BALANCE	PCT_CHIMERAS	PCT_ADAPTER	PCT_SOFTCLIP	PCT_HARDCLIP	AVG_POS_3PRIME_SOFTCLIP_LENGTH	SAMPLE	LIBRARY	READ_GROUP
+FIRST_OF_PAIR	15	15	1	0	14	0.933333	700	14	700	700	0	0	0	0	50	0	50	0	50	50	46.666667	13	0.928571	1	0.071429	0	0.857143	0	0	0	0	0			
+SECOND_OF_PAIR	15	15	1	0	13	0.866667	650	13	650	650	0	0	0	0	50	0	50	0	50	50	43.333333	13	1	0	0	0	0.153846	0	0	0	0	0			
+PAIR	30	30	1	0	27	0.9	1350	27	1350	1350	0	0	0	0	50	0	50	0	50	50	45	26	0.962963	1	0.037037	0	0.518519	0	0	0	0	0			
+UNPAIRED	4	4	1	0	4	1	200	4	200	200	0	0	0	0	50	0	50	0	50	50	50	0	0	0	0	0	1	0	0	0	0	0			
+
+## HISTOGRAM	java.lang.Integer
+READ_LENGTH	PAIRED_TOTAL_LENGTH_COUNT	PAIRED_ALIGNED_LENGTH_COUNT	UNPAIRED_TOTAL_LENGTH_COUNT	UNPAIRED_ALIGNED_LENGTH_COUNT
+0	0	3	0	0
+50	30	27	4	4
+
+## file s.duplicate_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectDuplicateMetrics INPUT=tests/data/markdup.bam METRICS_FILE=OUT/s.duplicate_metrics CHAIN=MarkDuplicates
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.DuplicationMetrics
+LIBRARY	UNPAIRED_READS_EXAMINED	READ_PAIRS_EXAMINED	SECONDARY_OR_SUPPLEMENTARY_RDS	UNMAPPED_READS	UNPAIRED_READ_DUPLICATES	READ_PAIR_DUPLICATES	READ_PAIR_OPTICAL_DUPLICATES	PERCENT_DUPLICATION	ESTIMATED_LIBRARY_SIZE
+lib1	3	6	1	1	2	3	0	0.533333	3
+lib2	2	7	1	2	1	4	0	0.5625	3
+
+
+## file s.insert_size_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectInsertSizeMetrics INPUT=tests/data/markdup.bam OUTPUT=OUT/s.insert_size_metrics CHAIN=MarkDuplicates
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.InsertSizeMetrics
+MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MAX_INSERT_SIZE	MEAN_INSERT_SIZE	STANDARD_DEVIATION	READ_PAIRS	PAIR_ORIENTATION	WIDTH_OF_10_PERCENT	WIDTH_OF_20_PERCENT	WIDTH_OF_30_PERCENT	WIDTH_OF_40_PERCENT	WIDTH_OF_50_PERCENT	WIDTH_OF_60_PERCENT	WIDTH_OF_70_PERCENT	WIDTH_OF_80_PERCENT	WIDTH_OF_90_PERCENT	WIDTH_OF_95_PERCENT	WIDTH_OF_99_PERCENT	SAMPLE	LIBRARY	READ_GROUP
+340	300	35	300	450	350	56.213877	6	FR	21	21	21	61	61	81	81	81	221	221	221			
+
+## HISTOGRAM	java.lang.Integer
+insert_size	All_Reads.fr_count
+300	2
+330	1
+350	1
+370	1
+450	1
+
+## file s.manifest.json
+{
+  "schema": "bammetrics.manifest/2",
+  "tool_version": "0.31.0",
+  "verb": "chain",
+  "sample": "s1",
+  "directory": "<directory>",
+  "source": {
+    "path": "tests/data/markdup.bam",
+    "size": "<size>",
+    "mtime": "<mtime>",
+    "edges_hash": "<edges_hash>"
+  },
+  "reference": {
+    "path": "tests/data/ref_100k.fa",
+    "size": "<size>",
+    "mtime": "<mtime>",
+    "edges_hash": "<edges_hash>"
+  },
+  "prefix": "OUT/s",
+  "stringency": "STRICT",
+  "started": "<started>",
+  "seconds": "<seconds>",
+  "exit": 0,
+  "steps": [
+    {
+      "id": "marked",
+      "number": 1,
+      "verb": "mark-duplicates",
+      "tool": "MarkDuplicates",
+      "role": "transform",
+      "reads": "in",
+      "leaves": "marked",
+      "upstream": [],
+      "argv": [
+        "INPUT=tests/data/markdup.bam",
+        "METRICS_FILE=OUT/s.marked.duplication_metrics",
+        "REFERENCE_SEQUENCE=tests/data/ref_100k.fa",
+        "PROGRAM_GROUP_COMMAND_LINE=pinned",
+        "PROGRAM_GROUP_VERSION=pinned",
+        "KEEP=OUT/s.marked.bam"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [
+        {
+          "path": "tests/data/ref_100k.fa",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        },
+        {
+          "path": "tests/data/ref_100k.fa.fai",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "OUT/s.marked.duplication_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        },
+        {
+          "path": "OUT/s.marked.bam",
+          "kind": "kept",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        },
+        {
+          "path": "OUT/s.marked.bai",
+          "kind": "index",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "qc",
+      "number": 2,
+      "verb": "qc",
+      "tool": null,
+      "role": "qc",
+      "reads": "marked",
+      "leaves": null,
+      "upstream": [
+        "marked"
+      ],
+      "argv": [
+        "--preset=wgs",
+        "--date=2026-01-01 00:00:00 UTC"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/s.verdict.json",
+          "kind": "verdict",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        },
+        {
+          "path": "OUT/s.report.html",
+          "kind": "report",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "quality-yield@marked",
+      "number": 3,
+      "verb": "quality-yield",
+      "tool": "CollectQualityYieldMetrics",
+      "role": "tap",
+      "reads": "marked",
+      "leaves": null,
+      "upstream": [
+        "marked"
+      ],
+      "argv": [
+        "INPUT=tests/data/markdup.bam",
+        "OUTPUT=OUT/s.quality_yield_metrics"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/s.quality_yield_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "alignment-summary@marked",
+      "number": 4,
+      "verb": "alignment-summary",
+      "tool": "CollectAlignmentSummaryMetrics",
+      "role": "tap",
+      "reads": "marked",
+      "leaves": null,
+      "upstream": [
+        "marked"
+      ],
+      "argv": [
+        "INPUT=tests/data/markdup.bam",
+        "OUTPUT=OUT/s.alignment_summary_metrics",
+        "REFERENCE_SEQUENCE=tests/data/ref_100k.fa"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [
+        {
+          "path": "tests/data/ref_100k.fa",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        },
+        {
+          "path": "tests/data/ref_100k.fa.fai",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "OUT/s.alignment_summary_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "insert-size@marked",
+      "number": 5,
+      "verb": "insert-size",
+      "tool": "CollectInsertSizeMetrics",
+      "role": "tap",
+      "reads": "marked",
+      "leaves": null,
+      "upstream": [
+        "marked"
+      ],
+      "argv": [
+        "INPUT=tests/data/markdup.bam",
+        "OUTPUT=OUT/s.insert_size_metrics"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/s.insert_size_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "duplicate-metrics@marked",
+      "number": 6,
+      "verb": "duplicate-metrics",
+      "tool": "CollectDuplicateMetrics",
+      "role": "tap",
+      "reads": "marked",
+      "leaves": null,
+      "upstream": [
+        "marked"
+      ],
+      "argv": [
+        "INPUT=tests/data/markdup.bam",
+        "METRICS_FILE=OUT/s.duplicate_metrics"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/s.duplicate_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "wgs@marked",
+      "number": 7,
+      "verb": "wgs",
+      "tool": "CollectWgsMetrics",
+      "role": "tap",
+      "reads": "marked",
+      "leaves": null,
+      "upstream": [
+        "marked"
+      ],
+      "argv": [
+        "INPUT=OUT/s.marked.bam",
+        "OUTPUT=OUT/s.wgs_metrics",
+        "REFERENCE_SEQUENCE=tests/data/ref_100k.fa"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [
+        {
+          "path": "tests/data/ref_100k.fa",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        },
+        {
+          "path": "tests/data/ref_100k.fa.fai",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "OUT/s.wgs_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    }
+  ],
+  "kept": [
+    {
+      "step": "marked",
+      "stream": "marked",
+      "path": "OUT/s.marked.bam",
+      "size": "<size>",
+      "mtime": "<mtime>",
+      "edges_hash": "<edges_hash>"
+    }
+  ]
+}
+## file s.marked.bai
+<index not recorded>
+## file s.marked.bam
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:chr1	LN:100000
+@RG	ID:rg1	SM:s1	LB:lib1	PU:fc1.1
+@RG	ID:rg2	SM:s1	LB:lib2	PU:fc1.2
+@PG	ID:bwa	PN:bwa	VN:0.7.17
+@PG	ID:MarkDuplicates	VN:pinned	CL:pinned	PN:MarkDuplicates
+@PG	ID:MarkDuplicates.2	VN:pinned	CL:pinned	PN:MarkDuplicates	PP:bwa
+M1:7:FC1:1:1101:1000:2000	1123	0	1001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1123	0	1001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	99	0	1001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:9000:9000	1024	0	1001	PG:Z:MarkDuplicates.2	RG:Z:rg1
+M1:7:FC1:1:1101:9001:9000	1024	0	1001	PG:Z:MarkDuplicates.2	RG:Z:rg1
+M1:7:FC1:1:1101:1000:2000	1171	0	1251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1171	0	1251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	147	0	1251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	99	0	2001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	147	0	2301	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1000:2000	1123	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1187	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	1123	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1101:1120:2090	163	0	3001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1000:2000	1171	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	1107	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1080:2060	1171	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1101:1120:2090	83	0	3281	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1102:1000:2000	1123	0	4001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1102:1040:2030	99	0	4001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1102:1000:2000	1171	0	4321	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1102:1040:2030	147	0	4321	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:ACGT
+M1:7:FC1:1:1101:1000:2000	1123	0	5001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	99	0	5001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1101:1000:2000	1171	0	5251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:TTGA
+M1:7:FC1:1:1101:1040:2030	147	0	5251	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg1	RX:Z:ACGT
+M1:7:FC1:1:1102:1000:2000	99	0	6001	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+M1:7:FC1:1:1102:1000:2000	147	0	6401	MC:Z:50M	PG:Z:MarkDuplicates.2	RG:Z:rg2	RX:Z:TTGA
+single0	1024	0	7001	PG:Z:MarkDuplicates	RG:Z:rg2
+single1	0	0	7001	PG:Z:MarkDuplicates	RG:Z:rg2
+mateless	73	0	8001	PG:Z:MarkDuplicates	RG:Z:rg1
+mateless	133	0	8001	PG:Z:MarkDuplicates	RG:Z:rg1
+M1:7:FC1:1:1101:1000:2000	329	0	9001	PG:Z:MarkDuplicates	RG:Z:rg1
+M1:7:FC1:1:1102:1000:2000	2121	0	9501	PG:Z:MarkDuplicates	RG:Z:rg2
+unplaced	77	-1	0	PG:Z:MarkDuplicates.2	RG:Z:rg2
+unplaced	141	-1	0	PG:Z:MarkDuplicates.2	RG:Z:rg2
+## file s.marked.duplication_metrics
+## htsjdk.samtools.metrics.StringHeader
+# MarkDuplicates INPUT=tests/data/markdup.bam METRICS_FILE=OUT/s.marked.duplication_metrics REFERENCE_SEQUENCE=tests/data/ref_100k.fa PROGRAM_GROUP_COMMAND_LINE=pinned PROGRAM_GROUP_VERSION=pinned
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.DuplicationMetrics
+LIBRARY	UNPAIRED_READS_EXAMINED	READ_PAIRS_EXAMINED	SECONDARY_OR_SUPPLEMENTARY_RDS	UNMAPPED_READS	UNPAIRED_READ_DUPLICATES	READ_PAIR_DUPLICATES	READ_PAIR_OPTICAL_DUPLICATES	PERCENT_DUPLICATION	ESTIMATED_LIBRARY_SIZE
+lib1	3	6	1	1	2	3	3	0.533333	
+lib2	2	7	1	2	1	4	3	0.5625	6
+
+## HISTOGRAM	java.lang.Double
+set_size	all_sets	optical_sets	non_optical_sets
+1.0	2	0	5
+2.0	2	2	1
+3.0	1	2	0
+4.0	1	0	0
+
+## file s.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectQualityYieldMetrics INPUT=tests/data/markdup.bam OUTPUT=OUT/s.quality_yield_metrics CHAIN=MarkDuplicates
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+34	34	50	1700	1700	1700	1700	1250	1250	2590	2590
+
+
+## file s.report.html
+<page not recorded>
+## file s.verdict.json
+{
+  "schema": "bammetrics.verdict/1",
+  "tool_version": "0.31.0",
+  "sample": "s1",
+  "preset": {
+    "name": "wgs",
+    "version": 1,
+    "hash": "8a5fc4360f357d10",
+    "source": "built-in",
+    "note": "starting values"
+  },
+  "status": "fail",
+  "counts": {
+    "pass": 3,
+    "warn": 0,
+    "fail": 6,
+    "not_measured": 1
+  },
+  "files": [
+    {
+      "path": "OUT/s.alignment_summary_metrics",
+      "classes": [
+        "picard.analysis.AlignmentSummaryMetrics"
+      ]
+    },
+    {
+      "path": "OUT/s.duplicate_metrics",
+      "classes": [
+        "picard.sam.DuplicationMetrics"
+      ]
+    },
+    {
+      "path": "OUT/s.insert_size_metrics",
+      "classes": [
+        "picard.analysis.InsertSizeMetrics"
+      ]
+    },
+    {
+      "path": "OUT/s.quality_yield_metrics",
+      "classes": [
+        "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics"
+      ]
+    },
+    {
+      "path": "OUT/s.wgs_metrics",
+      "classes": [
+        "picard.analysis.WgsMetrics"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "rule": "wgs.mean-coverage",
+      "label": "Mean coverage",
+      "class": "WgsMetrics",
+      "metric": "MEAN_COVERAGE",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0.006,
+      "warn": "< 30",
+      "fail": "< 20",
+      "status": "fail",
+      "reason": "Mean coverage is 0.006, below the fail limit of 20",
+      "plot": "coverage"
+    },
+    {
+      "rule": "wgs.bases-10x",
+      "label": "Genome bases at 10x",
+      "class": "WgsMetrics",
+      "metric": "PCT_10X",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0,
+      "warn": "< 0.95",
+      "fail": "< 0.9",
+      "status": "fail",
+      "reason": "Genome bases at 10x is 0, below the fail limit of 0.9",
+      "plot": "coverage"
+    },
+    {
+      "rule": "wgs.bases-30x",
+      "label": "Genome bases at 30x",
+      "class": "WgsMetrics",
+      "metric": "PCT_30X",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0,
+      "warn": "< 0.8",
+      "fail": "< 0.6",
+      "status": "fail",
+      "reason": "Genome bases at 30x is 0, below the fail limit of 0.6",
+      "plot": "coverage"
+    },
+    {
+      "rule": "wgs.evenness",
+      "label": "Fold-80 base penalty",
+      "class": "WgsMetrics",
+      "metric": "FOLD_80_BASE_PENALTY",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": null,
+      "warn": "> 1.5",
+      "fail": "> 2",
+      "status": "not_measured",
+      "reason": "FOLD_80_BASE_PENALTY is ?",
+      "plot": "coverage"
+    },
+    {
+      "rule": "alignment.pf-reads-aligned",
+      "label": "PF reads aligned",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_PF_READS_ALIGNED",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 0.9,
+      "warn": "< 0.98",
+      "fail": "< 0.95",
+      "status": "fail",
+      "reason": "PF reads aligned is 0.9, below the fail limit of 0.95",
+      "plot": null
+    },
+    {
+      "rule": "alignment.adapter",
+      "label": "Adapter reads",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_ADAPTER",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 0,
+      "warn": "> 0.005",
+      "fail": "> 0.02",
+      "status": "pass",
+      "reason": null,
+      "plot": "insert-size"
+    },
+    {
+      "rule": "alignment.chimeras",
+      "label": "Chimeric pairs",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_CHIMERAS",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 0,
+      "warn": "> 0.02",
+      "fail": "> 0.05",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "insert.median",
+      "label": "Median insert size",
+      "class": "InsertSizeMetrics",
+      "metric": "MEDIAN_INSERT_SIZE",
+      "level": "ALL_READS",
+      "select": "PAIR_ORIENTATION=FR",
+      "unit": null,
+      "value": 340,
+      "warn": "outside 250..600",
+      "fail": "outside 150..900",
+      "status": "pass",
+      "reason": null,
+      "plot": "insert-size"
+    },
+    {
+      "rule": "yield.q30",
+      "label": "Q30 fraction of PF bases",
+      "class": "QualityYieldMetrics",
+      "metric": "PF_Q30_BASES / PF_BASES",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0.7352941176470589,
+      "warn": "< 0.85",
+      "fail": "< 0.75",
+      "status": "fail",
+      "reason": "Q30 fraction of PF bases is 0.735294, below the fail limit of 0.75",
+      "plot": "cycle-quality"
+    },
+    {
+      "rule": "duplication.percent",
+      "label": "Duplicate reads",
+      "class": "DuplicationMetrics",
+      "metric": "PERCENT_DUPLICATION",
+      "level": "LIBRARY",
+      "select": null,
+      "unit": "lib2",
+      "value": 0.5625,
+      "warn": "> 0.15",
+      "fail": "> 0.3",
+      "status": "fail",
+      "reason": "Duplicate reads is 0.5625 in lib2, above the fail limit of 0.3",
+      "plot": null
+    }
+  ]
+}
+## file s.wgs_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectWgsMetrics INPUT=OUT/s.marked.bam OUTPUT=OUT/s.wgs_metrics REFERENCE_SEQUENCE=tests/data/ref_100k.fa
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.WgsMetrics
+GENOME_TERRITORY	MEAN_COVERAGE	SD_COVERAGE	MEDIAN_COVERAGE	MAD_COVERAGE	PCT_EXC_ADAPTER	PCT_EXC_MAPQ	PCT_EXC_DUPE	PCT_EXC_UNPAIRED	PCT_EXC_BASEQ	PCT_EXC_OVERLAP	PCT_EXC_CAPPED	PCT_EXC_TOTAL	PCT_1X	PCT_5X	PCT_10X	PCT_15X	PCT_20X	PCT_25X	PCT_30X	PCT_40X	PCT_50X	PCT_60X	PCT_70X	PCT_80X	PCT_90X	PCT_100X	FOLD_80_BASE_PENALTY	FOLD_90_BASE_PENALTY	FOLD_95_BASE_PENALTY	HET_SNP_SENSITIVITY	HET_SNP_Q
+100000	0.006	0.077227	0	0	0	0	0.53125	0.09375	0	0	0	0.625	0.006	0	0	0	0	0	0	0	0	0	0	0	0	0	?	?	?	0.000766	0
+
+## HISTOGRAM	java.lang.Integer
+coverage	high_quality_coverage_count
+0	99400
+1	600
+2	0
+3	0
+4	0
+5	0
+6	0
+7	0
+8	0
+9	0
+10	0
+11	0
+12	0
+13	0
+14	0
+15	0
+16	0
+17	0
+18	0
+19	0
+20	0
+21	0
+22	0
+23	0
+24	0
+25	0
+26	0
+27	0
+28	0
+29	0
+30	0
+31	0
+32	0
+33	0
+34	0
+35	0
+36	0
+37	0
+38	0
+39	0
+40	0
+41	0
+42	0
+43	0
+44	0
+45	0
+46	0
+47	0
+48	0
+49	0
+50	0
+51	0
+52	0
+53	0
+54	0
+55	0
+56	0
+57	0
+58	0
+59	0
+60	0
+61	0
+62	0
+63	0
+64	0
+65	0
+66	0
+67	0
+68	0
+69	0
+70	0
+71	0
+72	0
+73	0
+74	0
+75	0
+76	0
+77	0
+78	0
+79	0
+80	0
+81	0
+82	0
+83	0
+84	0
+85	0
+86	0
+87	0
+88	0
+89	0
+90	0
+91	0
+92	0
+93	0
+94	0
+95	0
+96	0
+97	0
+98	0
+99	0
+100	0
+101	0
+102	0
+103	0
+104	0
+105	0
+106	0
+107	0
+108	0
+109	0
+110	0
+111	0
+112	0
+113	0
+114	0
+115	0
+116	0
+117	0
+118	0
+119	0
+120	0
+121	0
+122	0
+123	0
+124	0
+125	0
+126	0
+127	0
+128	0
+129	0
+130	0
+131	0
+132	0
+133	0
+134	0
+135	0
+136	0
+137	0
+138	0
+139	0
+140	0
+141	0
+142	0
+143	0
+144	0
+145	0
+146	0
+147	0
+148	0
+149	0
+150	0
+151	0
+152	0
+153	0
+154	0
+155	0
+156	0
+157	0
+158	0
+159	0
+160	0
+161	0
+162	0
+163	0
+164	0
+165	0
+166	0
+167	0
+168	0
+169	0
+170	0
+171	0
+172	0
+173	0
+174	0
+175	0
+176	0
+177	0
+178	0
+179	0
+180	0
+181	0
+182	0
+183	0
+184	0
+185	0
+186	0
+187	0
+188	0
+189	0
+190	0
+191	0
+192	0
+193	0
+194	0
+195	0
+196	0
+197	0
+198	0
+199	0
+200	0
+201	0
+202	0
+203	0
+204	0
+205	0
+206	0
+207	0
+208	0
+209	0
+210	0
+211	0
+212	0
+213	0
+214	0
+215	0
+216	0
+217	0
+218	0
+219	0
+220	0
+221	0
+222	0
+223	0
+224	0
+225	0
+226	0
+227	0
+228	0
+229	0
+230	0
+231	0
+232	0
+233	0
+234	0
+235	0
+236	0
+237	0
+238	0
+239	0
+240	0
+241	0
+242	0
+243	0
+244	0
+245	0
+246	0
+247	0
+248	0
+249	0
+250	0
+

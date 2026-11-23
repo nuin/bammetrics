@@ -1,0 +1,38 @@
+## argv
+chain
+tests/data/insert_size.bam
+-R
+tests/data/ref_100k.fa
+-o
+OUT/s
+--dry-run
++
+hs-metrics
+--bait-intervals
+tests/data/targets.interval_list
+--target-intervals
+tests/data/targets.interval_list
++
+qc
+--preset
+clinical-panel
+## exit
+0
+## stdout
+chain plan for tests/data/insert_size.bam
+  source    tests/data/insert_size.bam (BAM, 328 bytes, sort order coordinate; a file, it can be read again)
+  prefix    OUT/s (from -o)
+  reference tests/data/ref_100k.fa
+segment 1  one read of tests/data/insert_size.bam
+  step 1  hs-metrics         tap on in          OUT/s.hs_metrics
+  step 2  qc                 verdict on in      OUT/s.verdict.json, OUT/s.report.html
+  step 3  quality-yield      tap on in, for qc  OUT/s.quality_yield_metrics
+  step 4  alignment-summary  tap on in, for qc  OUT/s.alignment_summary_metrics
+  step 5  insert-size        tap on in, for qc  OUT/s.insert_size_metrics
+  step 6  sex-check          tap on in, for qc  OUT/s.sex_check_metrics
+qc         CoverageGapMetrics not measured: needs --hs BAITS TARGETS or --panel FILE (gaps.reportable-range, gaps.targets-complete)
+manifest   OUT/s.manifest.json (bammetrics.manifest/2)
+temp disk  none: no step spills
+memory     about 100.0 MiB at the peak, a fixed 100.0 MiB for the chain beside its barriers included (a small input takes less)
+nothing ran: this is a plan
+## stderr

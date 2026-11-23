@@ -40,10 +40,58 @@
   marks one named like a verb; `bammetrics NAME --help` prints the recipe. Golden record
   `error_reorder_sam_no_reference` changes: its hint names `--from-bam` and `--dict`.
 
+- Manifest 2 (wave W14 of docs/07, docs/chaining.md section 27): a chain that resumes,
+  keeps a stream or ends in `qc` writes `PREFIX.manifest.json` with schema
+  `bammetrics.manifest/2` (docs/schema/manifest-2.json): the source's fingerprint, one
+  record per step (id, verb, canonical argv, options hash, the fingerprints of the files it
+  reads and writes, status, timing, the ids of the transforms in front) and the kept
+  streams. `qc` keeps writing schema 1. `manifest::v2::read_any` reads either schema under a
+  16 MiB cap.
+- `chain --resume` (Python `chain(..., resume=True)`, plan file `resume = true`): a step is
+  skipped when its record matches and every transform in front of it is skipped too; the
+  read starts at the last kept stream in front of the first step that runs, else at the
+  source, and the transforms in between run again to feed it. Change one option of step 3
+  of five and steps 3, 4 and 5 run. `plan --resume` and `--dry-run --resume` print why each
+  step runs or is skipped. After a resumed run that finished, a file the run before wrote
+  and this run does not is removed, only while it holds the fingerprint recorded.
+  Standard input as the source is a usage error. Python `Stage.status` gains `skipped`;
+  `Run.manifest` names the manifest.
+- `--keep` on a transform (Python `step(..., keep=True)`, plan file `keep = true`) writes
+  the stream it leaves as `PREFIX.<stream>.bam`, byte for byte the BAM `write` writes
+  there, with its `.bai` when coordinate sorted. The plan counts its bytes.
+- `qc` as the last step of a chain (docs/chaining.md section 29): `+ qc --preset P
+  --report html,pdf --also markdown,junit,multiqc --fail-on warn|fail` and the capture,
+  RNA and sex options of `qc`. It evaluates the preset over the taps of its stream, adds
+  the taps the preset needs (numbered after it), and writes the verdict, the page and the
+  verdict forms `qc` writes for the same taps on the same records. Its `--fail-on` code
+  (10, 11) is the chain's when every step finished. `CollectWgsMetrics` reads the source,
+  or the last transform's kept stream. Python `step("qc", ...)`.
+- `chain --resume` compares paths resolved against the working directory the manifest
+  records (member `directory` of manifest 2): `./m.bam`, `$PWD/m.bam`, a link and
+  `../m.bam` from a subdirectory name one source. The source and the reference are
+  fingerprinted before the first read and each output as soon as it is written, so a
+  source replaced during a run makes the next `--resume` rerun every step. A chain that
+  writes a manifest holds a lock on `PREFIX.manifest.json.lock`; a second run on the same
+  prefix exits 2 before it reads. A resumed run removes only `PREFIX.*` files and the
+  `.bai` or `.md5` of a BAM the same step rewrote, names each file it removes, and leaves
+  (and names) the files of a dropped `write` step, a file outside the prefix and a file
+  edited since; the stale `.bai` of a kept stream no longer coordinate sorted goes. A
+  killed run's temporary files are named. A manifest directory that takes no new file
+  fails before the read, naming the directory.
+- Frozen JSON schemas (docs/formats.md, Frozen schemas): `docs/schema/verdict-1.json`,
+  `manifest-1.json`, `manifest-2.json` and `events-1.json` beside `metrics-1.json`, every
+  object closed. `crates/cli/tests/schemas.rs` validates what `qc`, `check` and `chain`
+  write and fails on a member a schema lacks.
+
 ### Changed
 
 - `bammetrics tools` lists the verbs `recipes` and `config` (golden record
   `verb_tools`, two lines).
+- Three golden records change because their hint named wave W14: `chain --report`,
+  `chain --pdf-font` and `chain --also junit` now name the qc step
+  (`error_chain_report_pdf`, `error_chain_pdf_font`, `error_chain_also_junit`).
+- `docs/schema/metrics-1.json` closes its top object, its histogram and `more_classes`
+  (`additionalProperties: false`); every fixture stays valid.
 - `make budgets`: the binary, formats and Parquet growth rows are regression checks at the 0.31.0 size, after the owner accepted the binary size on 2026-11-22 (docs/07 decisions D22, D149, D156 and D159). Targets 430,000 bytes, 200 KB and 1.1 MiB; each fails at 1.5x its target (645,000 bytes, 300 KB, 1.65 MiB). The other rows still fail at 2x.
 
 ## 0.31.0

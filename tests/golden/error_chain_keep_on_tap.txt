@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/markdup.bam
++
+insert-size
+--keep
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (insert-size): --keep writes the stream a transform leaves, and insert-size leaves none (from --keep)
+  write [PATH] writes the records at its position as a BAM

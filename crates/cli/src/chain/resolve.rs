@@ -408,7 +408,8 @@ mod tests {
 
     #[test]
     fn the_dictionary_is_the_references_dict_then_its_index() {
-        let dir = std::env::temp_dir().join(format!("bammetrics-resolve-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("bammetrics-defaults-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("dir");
         let fasta = dir.join("ref.fa");
         std::fs::write(&fasta, ">c\nACGT\n").expect("fasta");

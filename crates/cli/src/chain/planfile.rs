@@ -45,7 +45,7 @@ use crate::error::VerbError;
 use crate::grammar::{self, Flag, Key};
 
 /// The keys of `[chain]`.
-const CHAIN_KEYS: [&str; 13] = [
+const CHAIN_KEYS: [&str; 14] = [
     "source",
     "output-prefix",
     "reference",
@@ -59,6 +59,7 @@ const CHAIN_KEYS: [&str; 13] = [
     "sort-memory",
     "force-space",
     "validation-stringency",
+    "resume",
 ];
 
 /// A plan file and the line an error is on.
@@ -190,6 +191,7 @@ fn chain_table(at: &At, table: &Table, spec: &mut Spec) -> Result<(), VerbError>
             "quiet" => spec.quiet = boolean(at, entry)?,
             "verbose" => spec.verbose = boolean(at, entry)?,
             "force-space" => spec.force_space = boolean(at, entry)?,
+            "resume" => spec.resume = boolean(at, entry)?,
             "validation-stringency" => spec.stringency = Some(string(at, entry)?),
             "sort-memory" => {
                 let text = match &entry.value {
@@ -291,6 +293,8 @@ fn step_table(at: &At, table: &Table, number: usize) -> Result<StepSpec, VerbErr
     let name = string(at, verb_entry)?;
     let flags = if name == WRITE {
         write_flags()
+    } else if name == super::QC {
+        super::qc_step::flags()
     } else {
         let verb = find_step(&name).ok_or_else(|| {
             let mut error = unknown_step(&name, None);
@@ -331,6 +335,18 @@ fn step_table(at: &At, table: &Table, number: usize) -> Result<StepSpec, VerbErr
             ));
         }
         let Some(flag) = found else {
+            if entry.key == "keep" {
+                // The message of `--keep` on such a step on the command line.
+                return Err(at
+                    .error(
+                        entry.line,
+                        format!(
+                            "{label}: --keep writes the stream a transform leaves, and {name} \
+                             leaves none"
+                        ),
+                    )
+                    .hint("write [PATH] writes the records at its position as a BAM"));
+            }
             let mut error = at.error(entry.line, format!("{label}: unknown key {}", entry.key));
             if let Some(best) = grammar::closest(&flags, &entry.key) {
                 error = error.hint(format!("did you mean {best}?"));
@@ -487,6 +503,36 @@ mod tests {
                     Some("plan.toml:23")
                 ),
             ]
+        );
+    }
+
+    /// `resume`, a transform's `keep` and a last `qc` step read as their
+    /// command-line flags.
+    #[test]
+    fn resume_keep_and_qc_read_as_their_flags() {
+        let plan = "[chain]\nsource = \"in.bam\"\nresume = true\n\n[[step]]\n\
+            verb = \"mark-duplicates\"\nkeep = true\n\n[[step]]\nverb = \"qc\"\n\
+            preset = \"wgs\"\nalso = [\"junit\", \"markdown\"]\nfail-on = \"warn\"\n";
+        let spec = parse(plan, "p.toml").expect("parses");
+        assert!(spec.resume);
+        assert_eq!(spec.steps[0].args, ["--keep=true"]);
+        assert_eq!(spec.steps[1].verb, "qc");
+        assert_eq!(
+            spec.steps[1].args,
+            [
+                "--preset=wgs",
+                "--also=junit",
+                "--also=markdown",
+                "--fail-on=warn"
+            ]
+        );
+        let error =
+            parse("[[step]]\nverb = \"qc\"\nprest = \"wgs\"\n", "p.toml").expect_err("typo");
+        assert!(
+            error
+                .to_string()
+                .contains("unknown key prest\n  did you mean preset?"),
+            "{error}"
         );
     }
 

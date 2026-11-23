@@ -491,6 +491,14 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
             }
             _ => {}
         }
+        // A kept stream is a BAM of every record at its position.
+        if let (Some(kept), Some(n)) = (chain.kept.iter().find(|k| k.index == index), records) {
+            let per_record = match order {
+                Some(SortOrder::Coordinate) => BAM_OUT_COORDINATE,
+                _ => BAM_OUT_QUERYNAME,
+            };
+            outputs.push((kept.path().to_path_buf(), n.saturating_mul(per_record)));
+        }
     }
     Ok(Estimate {
         source,

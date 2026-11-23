@@ -231,7 +231,8 @@ gate`. `report` exits 0 on any verdict. `check` always gates. A `qc` run with a 
 collector exits 1 after it writes the other files, the verdict and the page. The tool verbs
 and `collect` exit 0, 1 or 2; the Picard face keeps 0 and 1. `chain` exits 0, 1 or 2: 2
 for a usage error in any step, found before the first read, and 1 when a step failed, after
-the other steps wrote their files. `compare-metrics` and
+the other steps wrote their files; a chain that ends in `qc --fail-on` exits 10 or 11 as
+`check` does when every step finished. `compare-metrics` and
 `CompareMetrics` exit 1 when the two files are NOT equal, as Picard does;
 `check-duplicate-marking` and `CheckDuplicateMarking` exit 1 when a record's duplicate flag
 differs from the first record of its queryname.
@@ -1264,6 +1265,8 @@ bammetrics chain in.bam -o out/NA12878 --sort-memory 4G \
     + sort-sam --sort-order coordinate + write out/NA12878.bam --index
 samtools view -b in.bam chr20 | bammetrics chain - + mark-duplicates + write - | samtools flagstat -
 bammetrics chain --plan plan.toml -o out/NA12878 --dry-run
+bammetrics chain in.bam -o out/NA12878 --resume + mark-duplicates --keep \
+    + insert-size + write out/NA12878.bam + qc --preset generic --fail-on fail
 ```
 
 Several steps on one BAM in one process. Records move from step to step in memory: no
@@ -1310,6 +1313,21 @@ is the short form.
   sets how a SAM text source is checked.
 - Standard error gets each transform's record counts, each failed step and one summary
   line. `-q` leaves only the errors.
+- `--keep` on a transform also writes the stream it leaves as `PREFIX.<stream>.bam`, with
+  its `.bai` when coordinate sorted (docs/chaining.md section 28).
+- `--resume` reads `PREFIX.manifest.json` (schema `bammetrics.manifest/2`) and skips each
+  step whose record matches (verb, options, the fingerprints of the files it reads and
+  writes) and whose transforms in front are skipped too. The read starts at the last kept
+  stream in front of the first step that runs, else at the source. `plan --resume` prints
+  why each step runs or is skipped. A chain that resumes, keeps a stream or ends in `qc`
+  writes the manifest (docs/chaining.md section 27). Paths are compared resolved, so
+  `./in.bam` and `$PWD/in.bam` name one source. One run per prefix: a second exits 2.
+  A resumed run names each file of the run before it removes, and leaves the BAM of a
+  `write` step it no longer has.
+- `qc` as the last step (`+ qc --preset P --report html,pdf --also junit --fail-on fail`)
+  evaluates the preset over the taps of its stream and writes `PREFIX.verdict.json` and
+  `PREFIX.report.html` as `qc` writes them for the same taps; it adds the taps the preset
+  needs (docs/chaining.md section 29).
 
 Exit 0 when every step finished. Exit 2 for a usage error in any step: it is found before
 the first read, names the step (`step 2 (insert-size): unknown option --minmum-pct`), and
@@ -1318,7 +1336,7 @@ writes its files; a failing transform or `write` stops its segment, and the summ
 which (`failed alone`, `failed and stopped its segment`, `stopped`, `not run`).
 
 A chain without a transform is the pass of `qc`: the same metrics files, byte for byte
-apart from the `Started on` line. It writes no verdict, page or manifest.
+apart from the `Started on` line. Without a qc step it writes no verdict or page.
 
 The short form (docs/chaining.md sections 22 to 25) runs the same chains:
 

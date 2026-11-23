@@ -1,0 +1,16 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
++
+mark-duplicates
+--keep
++
+write
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (mark-duplicates) --keep and step 2 (write) both write OUT/s.marked.bam: give write its own path, or drop --keep
+  --keep writes PREFIX.<stream>.bam; write without a path writes the same name

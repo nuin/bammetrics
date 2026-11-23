@@ -518,7 +518,7 @@ def test_stub_step_verbs_are_the_runtime_names():
     with pytest.raises(bm.UsageError) as caught:
         bm.step("no_such")
     assert stub == str(caught.value).split("steps: ")[1].split(", ")
-    assert stub[-1] == "write"
+    assert stub[-2:] == ["write", "qc"]
     for name in stub:
         assert bm.step(name).verb == name.replace("_", "-")
 

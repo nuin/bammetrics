@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
+--keep
++
+mark-duplicates
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: --keep belongs to a transform step: give it after the verb (from --keep)
+  bammetrics chain BAM -o PREFIX + mark-duplicates --keep + insert-size

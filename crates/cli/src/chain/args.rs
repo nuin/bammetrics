@@ -20,10 +20,13 @@ pub(crate) const SORT_MEMORY: Key = Key::Own("sort-memory");
 pub(crate) const FORCE_SPACE: Key = Key::Own("force-space");
 pub(crate) const STRINGENCY: Key = Key::Own("validation-stringency");
 pub(crate) const RECIPE: Key = Key::Own("recipe");
+pub(crate) const RESUME: Key = Key::Own("resume");
 const LOWER: Key = Key::Own("lower");
 const FREE_SPACE: Key = Key::Own("free-space");
 /// A transform's `--as NAME`.
 pub(crate) const AS: Key = Key::Own("as");
+/// A transform's `--keep`: its stream as `PREFIX.<stream>.bam`.
+pub(crate) const KEEP: Key = Key::Own("keep");
 /// The options of `write`.
 pub(crate) const INDEX: Key = Key::Own("index");
 pub(crate) const MD5: Key = Key::Own("md5");
@@ -155,6 +158,15 @@ pub fn global_flags() -> Vec<Flag> {
         )
         .names(&["VALIDATION_STRINGENCY"])
         .placeholder("LEVEL"),
+        Flag::new(
+            RESUME,
+            "resume",
+            &[],
+            Ty::Bool,
+            "Skip each step whose record in PREFIX.manifest.json matches (verb, options, input \
+             and output fingerprints) and whose upstream steps are skipped too; a later \
+             segment reads a kept stream (--keep) in place of the source. Writes the manifest.",
+        ),
         Flag::new(
             PLAN,
             "plan",
@@ -381,6 +393,15 @@ pub(crate) fn step_parser_flags(verb: &Verb) -> Vec<Flag> {
             )
             .placeholder("NAME"),
         );
+        flags.push(Flag::new(
+            KEEP,
+            "keep",
+            &[],
+            Ty::Bool,
+            "Also write the stream this step leaves as PREFIX.<stream>.bam, with its .bai when \
+             coordinate sorted, and record it in PREFIX.manifest.json: chain --resume reads it \
+             in place of the source.",
+        ));
     }
     flags
 }
@@ -492,7 +513,9 @@ pub fn help() -> String {
          transform  changes the records later steps see: {}\n  \
          tap        reads the records of its position, changes nothing: {}\n  \
          write      write [PATH] writes the records of its position as a BAM\n  \
-         split      writes the records of its position over BAMs in its -o DIR: {}\n\n\
+         split      writes the records of its position over BAMs in its -o DIR: {}\n  \
+         qc         the last step: the verdict and report over the taps of its stream, \
+         as bammetrics qc writes them; it adds the taps its --preset needs\n\n\
          A step takes its verb's own options in every spelling (--minimum-pct 0.1, \
          --MINIMUM_PCT 0.1, MINIMUM_PCT=0.1); bammetrics chain BAM + VERB --help lists them. \
          A value that is a lone + is written --option=+.\n\n\
@@ -501,7 +524,9 @@ pub fn help() -> String {
          source); mark-duplicates writes PREFIX.marked.duplication_metrics; write without a \
          path writes PREFIX.<stream>.bam. A step's own -o replaces the name. -o out.bam on \
          a chain with a transform and no write adds write out.bam --index as the last step \
-         and names the metrics out.<extension>.\n\n\
+         and names the metrics out.<extension>. --keep on a transform writes \
+         PREFIX.<stream>.bam; --resume reads PREFIX.manifest.json and skips the steps it \
+         proves done.\n\n\
          Defaults: -R, --threads, --tmp-dir and --sort-memory come from the user config file \
          when not given, -R also from BAMMETRICS_REFERENCE (bammetrics config prints them); \
          reorder-sam's dictionary from the reference's .dict, else its .fai.\n\n\
@@ -531,6 +556,9 @@ pub fn help() -> String {
 /// The help of step `number`: `write`, or a tool verb as a step. A verb
 /// that cannot be a step gets the refusal a run gives it.
 pub fn step_help(name: &str, number: usize) -> Result<String, VerbError> {
+    if name == super::QC {
+        return Ok(super::qc_step::help());
+    }
     if name == WRITE {
         return Ok(format!(
             "bammetrics chain ... + write [PATH] [OPTIONS]: the records of its position as a \
@@ -580,7 +608,7 @@ pub(crate) fn unknown_step(name: &str, label: Option<&str>) -> VerbError {
     let candidates = VERBS
         .iter()
         .flat_map(|verb| [verb.name, verb.class])
-        .chain([WRITE]);
+        .chain([WRITE, super::QC]);
     let mut error = usage(what);
     if let Some(best) = bammetrics_core::registry::did_you_mean(name, candidates) {
         error = error.hint(format!("did you mean {best}?"));
@@ -643,6 +671,7 @@ fn apply_globals(parsed: &Parsed, spec: &mut Spec) -> Result<(), VerbError> {
         (Key::Verbose, &mut spec.verbose, true),
         (LOWER, &mut spec.stage_executor, false),
         (FORCE_SPACE, &mut spec.force_space, true),
+        (RESUME, &mut spec.resume, true),
     ];
     for (key, slot, when) in flags {
         if parsed.last(key).is_some() {
@@ -674,22 +703,29 @@ fn steps(segments: &[&[String]]) -> Result<Vec<StepSpec>, VerbError> {
         .collect()
 }
 
-/// The report options of `report` and `qc`. A chain has no verdict and no
-/// report step until wave W14 of docs/07 (`chain ... + qc`).
+/// The report options of `report` and `qc`. A chain writes its verdict
+/// and report in its last step, `qc` (docs/chaining.md section 29).
 const REPORT_OPTIONS: [&str; 5] = ["report", "pdf", "pdf-only", "pdf-font", "page-size"];
 
 /// An unknown chain option that is one of [`REPORT_OPTIONS`]: the refusal
-/// that says why and what writes the report. Any other error as it is.
+/// that names the qc step; `--keep`: the refusal that names the transform
+/// step. Any other error as it is.
 fn no_report_step(error: VerbError) -> VerbError {
     let Some(spelled) = grammar::unknown_option(&error) else {
         return error;
     };
     let name = spelled.trim_start_matches('-').split('=').next();
+    if name.is_some_and(|name| name.eq_ignore_ascii_case("keep")) {
+        return usage("--keep belongs to a transform step: give it after the verb")
+            .from(spelled)
+            .hint("bammetrics chain BAM -o PREFIX + mark-duplicates --keep + insert-size");
+    }
     if !name.is_some_and(|name| REPORT_OPTIONS.contains(&name)) {
         return error;
     }
-    usage("a chain writes no verdict or report; its report step comes with wave W14 of docs/07")
+    usage("a chain writes its verdict and report in its last step, qc: give the option there")
         .from(spelled)
+        .hint("bammetrics chain BAM + STEP ... + qc --report html,pdf")
         .hint("bammetrics report DIR --pdf writes them for the metrics files a chain wrote to DIR")
 }
 

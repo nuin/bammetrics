@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nuin/bammetrics/blob/main/docs/schema/manifest-2.json",
+  "title": "bammetrics.manifest/2",
+  "description": "PREFIX.manifest.json of a chain that resumes, keeps a stream or ends in qc (docs/chaining.md section 27): the source's fingerprint, one record per step with what chain --resume compares, and the kept streams. Frozen: until 1.0.0 the schema changes only by adding members (docs/formats.md, Frozen schemas).",
+  "type": "object",
+  "required": ["schema", "tool_version", "verb", "sample", "directory", "source", "reference", "prefix", "stringency", "started", "seconds", "exit", "steps", "kept"],
+  "properties": {
+    "schema": {"const": "bammetrics.manifest/2"},
+    "tool_version": {"description": "The bammetrics version of the run; another version reruns every step.", "type": "string"},
+    "verb": {"const": "chain"},
+    "sample": {"type": "string"},
+    "directory": {"description": "The working directory of the run, absolute with links followed: every relative path of the manifest is relative to it.", "type": "string"},
+    "source": {"$ref": "#/$defs/file"},
+    "reference": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/file"}]},
+    "prefix": {"type": "string"},
+    "stringency": {"description": "How a SAM text source was read.", "enum": ["STRICT", "LENIENT", "SILENT"]},
+    "started": {"description": "When the run started, 2026-01-02 03:04:05 UTC.", "type": "string"},
+    "seconds": {"description": "The run's wall time.", "type": "number", "minimum": 0},
+    "exit": {"description": "The run's exit code.", "type": "integer", "minimum": 0},
+    "steps": {"type": "array", "items": {"$ref": "#/$defs/step"}},
+    "kept": {
+      "description": "The streams kept as BAMs (--keep): the transform's id, the stream and the BAM.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["step", "stream", "path", "size", "mtime", "edges_hash"],
+        "properties": {
+          "step": {"type": "string"},
+          "stream": {"type": "string"},
+          "path": {"type": "string"},
+          "size": {"type": ["integer", "null"], "minimum": 0},
+          "mtime": {"type": ["string", "null"]},
+          "edges_hash": {"type": ["string", "null"]}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "file": {
+      "description": "A file a step reads by name, with its fingerprint: the size, the mtime (seconds.nanoseconds since the epoch) and the FNV-1a 64 of its first and last 64 KiB; null for a pipe.",
+      "type": "object",
+      "required": ["path", "size", "mtime", "edges_hash"],
+      "properties": {
+        "path": {"type": "string"},
+        "size": {"type": ["integer", "null"], "minimum": 0},
+        "mtime": {"type": ["string", "null"]},
+        "edges_hash": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "output": {
+      "description": "A file a step wrote, with its kind and its fingerprint after the write.",
+      "type": "object",
+      "required": ["path", "kind", "size", "mtime", "edges_hash"],
+      "properties": {
+        "path": {"type": "string"},
+        "kind": {"description": "metrics, gaps, file, bam, sam, index, md5, kept, intervals, verdict, report, pdf, or a further format (json, markdown, junit, ...).", "type": "string"},
+        "size": {"type": ["integer", "null"], "minimum": 0},
+        "mtime": {"type": ["string", "null"]},
+        "edges_hash": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "step": {
+      "type": "object",
+      "required": ["id", "number", "verb", "tool", "role", "reads", "leaves", "upstream", "argv", "options_hash", "inputs", "outputs", "status", "error", "skipped", "started", "seconds"],
+      "properties": {
+        "id": {"description": "A transform's stream (marked), else VERB@STREAM (insert-size@marked), #2 for a second one; qc for the qc step.", "type": "string"},
+        "number": {"type": "integer", "minimum": 1},
+        "verb": {"type": "string"},
+        "tool": {"type": ["string", "null"]},
+        "role": {"enum": ["transform", "tap", "write", "split", "qc"]},
+        "reads": {"type": "string"},
+        "leaves": {"type": ["string", "null"]},
+        "upstream": {"description": "The ids of the transforms in front of the step.", "type": "array", "items": {"type": "string"}},
+        "argv": {"description": "The canonical argv: a tool's Picard arguments, write's and qc's options.", "type": "array", "items": {"type": "string"}},
+        "options_hash": {"description": "FNV-1a 64 of the argv, the tool version, the formats, the sample and the stringency.", "type": "string"},
+        "inputs": {"type": "array", "items": {"$ref": "#/$defs/file"}},
+        "outputs": {"type": "array", "items": {"$ref": "#/$defs/output"}},
+        "status": {"enum": ["ok", "failed", "stopped", "not run"]},
+        "error": {"type": ["string", "null"]},
+        "skipped": {"description": "True when this run kept the record of the run before.", "type": "boolean"},
+        "started": {"type": "string"},
+        "seconds": {"type": "number", "minimum": 0}
+      },
+      "additionalProperties": false
+    }
+  }
+}

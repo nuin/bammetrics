@@ -567,3 +567,36 @@ manifest.
 The feature costs 1,095,672 bytes of stripped binary (1.04 MiB) with the `parquet` crate
 at opt-level `"z"` (docs/benchmarks.md). A build with `--no-default-features` has no
 Parquet: `--format parquet` and `--also parquet` are a usage error there (exit 2).
+
+## Frozen schemas
+
+From wave W14 (0.32.0) the JSON documents bammetrics writes are frozen. Each has a committed
+JSON Schema under `docs/schema`:
+
+| Schema | Written by | File |
+|---|---|---|
+| `bammetrics.metrics/1` | `--format json`, `--also json`, `convert` | [metrics-1.json](schema/metrics-1.json) |
+| `bammetrics.verdict/1` | `qc`, `report`, a chain's qc step | [verdict-1.json](schema/verdict-1.json) |
+| `bammetrics.manifest/1` | `qc` | [manifest-1.json](schema/manifest-1.json) |
+| `bammetrics.manifest/2` | `chain` that resumes, keeps a stream or ends in `qc` | [manifest-2.json](schema/manifest-2.json) |
+| events, version 1 | `qc --format jsonl`, `check --format jsonl` | [events-1.json](schema/events-1.json) |
+
+Frozen means four things until 1.0.0:
+
+- A member keeps its name, its type and its meaning. A value it may hold stays allowed.
+- A change only adds: a new optional member, a new event, a new value of an enum that a
+  reader treats as unknown. Anything else is a new schema version with a new name
+  (`bammetrics.manifest/3`), and the old version stays readable.
+- Every object a schema lists members of closes the others (`additionalProperties`
+  `false`, or a schema for a row's cells). A writer that emits a member the committed
+  schema lacks fails `crates/cli/tests/schemas.rs`, so a member is added to the schema in
+  the same change as the writer.
+- The schema's `title` is the writer's version constant, and a test says so.
+
+`crates/cli/tests/schemas.rs` validates the verdict, the manifest and the jsonl events of a
+`qc` run and of its resume, the lines of `check --format jsonl` and of a run that stops on
+an error, and the manifest of a chain that keeps a stream, resumes, ends in `qc` and reads
+a pipe. `crates/formats/tests/schema.rs` validates `bammetrics.metrics/1` over every
+Picard fixture. Both use the validator of `crates/formats/tests/validator`, which knows the
+keywords the schemas use and fails on any other. A reader takes either manifest schema:
+`bammetrics_cli::manifest::v2::read_any`.
