@@ -60,8 +60,7 @@ fn format(extension: &str) -> Result<Format> {
         "sam" => Ok(Format::Sam),
         "cram" => Err(Error::Usage(
             "INPUT is a CRAM, and Picard writes a CRAM per library: this tool writes a BAM or SAM \
-             text per library (docs/07 D58): write INPUT as a BAM first, with `bammetrics chain \
-             in.cram -R ref.fa + write in.bam`"
+             text per library (docs/07 D58): convert INPUT to a BAM first"
                 .to_owned(),
         )),
         _ => Ok(Format::Bam),

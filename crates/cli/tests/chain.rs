@@ -1553,10 +1553,10 @@ fn write_writes_sam_text_by_name_or_by_output_format() {
             "{extension}"
         );
     }
-    let (code, stderr) = chain(&[source, "+", "write", &sam, "--output-format", "cram"]);
+    let (code, stderr) = chain(&[source, "+", "write", &sam, "--output-format", "fastq"]);
     assert_eq!(code, Some(2), "{stderr}");
     assert!(
-        stderr.contains("expected bam or sam, got \"cram\""),
+        stderr.contains("expected bam, sam or cram, got \"fastq\""),
         "{stderr}"
     );
     fs::remove_dir_all(&dir).expect("cleanup");
@@ -1580,11 +1580,11 @@ fn usage_errors_exit_2_before_anything_runs() {
         ),
         (
             &[source, "+", "mark-duplicates", "+", "write", &cram],
-            "out.cram: bammetrics writes BAM and SAM only: CRAM output is wave W15",
+            "out.cram: a CRAM is written against the reference: give the chain -R FASTA",
         ),
         (
             &[source, "+", "write", &fastq],
-            "out.fastq.gz: bammetrics writes BAM and SAM only: FASTQ output is wave W22",
+            "out.fastq.gz: bammetrics writes BAM, SAM and CRAM only: FASTQ output is wave W22",
         ),
         // A stream name another transform took.
         (

@@ -938,6 +938,12 @@ fn write_step(
         options.format = format;
     }
     options.reference = cx.reference.map(PathBuf::from);
+    if options.format == WriteFormat::Cram && options.reference.is_none() {
+        return Err(draft.usage(format!(
+            "{}: a CRAM is written against the reference: give the chain -R FASTA",
+            path.display()
+        )));
+    }
     if let Some(given) = parsed.last(COMPRESSION_LEVEL) {
         options.compression_level = given.values[0]
             .parse()
