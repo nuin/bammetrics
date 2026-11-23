@@ -358,6 +358,55 @@ fn what_a_cram_cannot_hold_reads_back_as_the_module_says() {
     assert_eq!(read[2].bases(), b"ACGTACGT");
 }
 
+/// The feature codes of a record's bases, for the base past a contig end.
+#[test]
+fn every_base_past_the_end_of_its_contig_is_stored() {
+    use noodles::cram::io::writer::raw::Feature;
+    let reference = b"ACGTACGT";
+    // Six bases on the contig, then N, A and `=` past its end.
+    let record = raw(&Rec {
+        name: "over",
+        start: 3,
+        cigar: &[(9, 0)],
+        bases: b"GTACGTNA=",
+        ..Rec::default()
+    });
+    let window = convert::Window {
+        bases: reference,
+        first: 1,
+    };
+    let (converted, end) = convert::convert(&record, window).expect("converts");
+    assert_eq!(end, 11);
+    let stored: Vec<(usize, u8)> = converted
+        .features
+        .iter()
+        .map(|feature| match feature {
+            Feature::ReadBase { position, base, .. } => (usize::from(*position), *base),
+            other => panic!("a stored base expected, got {other:?}"),
+        })
+        .collect();
+    assert_eq!(stored, [(7, b'N'), (8, b'A'), (9, b'=')]);
+    // On the contig a read N over a reference N stores nothing.
+    let record = raw(&Rec {
+        name: "on",
+        start: 1,
+        cigar: &[(3, 0)],
+        bases: b"ANG",
+        ..Rec::default()
+    });
+    let window = convert::Window {
+        bases: b"ANGT",
+        first: 1,
+    };
+    assert!(
+        convert::convert(&record, window)
+            .expect("converts")
+            .0
+            .features
+            .is_empty()
+    );
+}
+
 #[test]
 fn a_header_without_hd_and_no_record() {
     let header: sam::Header = format!("@SQ\tSN:c1\tLN:{}\n@SQ\tSN:c2\tLN:2000\n", C1.len())

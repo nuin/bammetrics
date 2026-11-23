@@ -30,12 +30,21 @@
 //! * **Every tag where the BAM has it, typed as the BAM types it**, `RG`,
 //!   `MD` and `NM` among them. The read group data series is -1: a decoder
 //!   that takes `RG` from it prints the tag last.
-//! * **Bases as features against the reference**, upper case, a base past
-//!   the contig's end read as `N` (htsjdk `restoreReadBases`, htslib). A
-//!   mismatch with a base outside `ACGTN` on either side is stored as the
-//!   base. The qualities are an array, `0xFF` bytes for a record without
-//!   them, as htslib stores them; a record without bases stores its CIGAR
-//!   alone, an insertion or a clip as `N`s.
+//! * **Bases as features against the reference**, upper case. A mismatch
+//!   with a base outside `ACGTN` on either side is stored as the base, and
+//!   so is every read base past the end of its contig, whatever it is.
+//!   htsjdk leaves a read `N` there to the decoder, which reads the missing
+//!   reference base as `N`. From such a CRAM samtools 1.25 warns `Ref pos
+//!   outside of ref sequence boundary` and rebuilds another `MD` than from
+//!   its own CRAM of the same record, and Picard 3.5.0 rebuilds an empty
+//!   `MD` (seen on a 20-base read with 14 bases past the end, 4 of them
+//!   `N`). With the base stored, samtools reads 28 shapes of such reads as
+//!   it reads its own CRAM of them, without the warning
+//!   (`tests/concordance/test_cram_writer.py`).
+//! * **The qualities as an array**, `0xFF` bytes for a record without
+//!   them, which samtools, Picard and this crate's reader each print `*`.
+//!   A record without bases stores its CIGAR alone, an insertion or a clip
+//!   as `N`s.
 //!
 //! Memory: the records of one container per compression thread, and one
 //! contig of the reference. A slice on one reference loads that contig
@@ -52,6 +61,19 @@
 //!   has no reference to differ from, and the writer fails naming it.
 //! * The `bin` field and the width of an integer tag, which a decoder
 //!   chooses; the text of the record is the same.
+//!
+//! What a CRAM holds and a reader does not give back, from any writer's
+//! file (`tests/concordance/test_cram_writer.py` holds each to htslib's own
+//! CRAM of the same BAM):
+//! * The mate reference and mate start of a record without the paired
+//!   flag: htslib 1.25 reads the reference as `*`, htsjdk 5.0.0 both as
+//!   `*` and 0. This crate's reader returns them.
+//! * The unsigned subtype of a `B` array: htsjdk 5.0.0 and this crate's
+//!   reader, which follows it, read `B:C`, `B:S` and `B:I` as `B:c`, `B:s`
+//!   and `B:i`. htslib returns the subtype stored.
+//! * A deletion that runs past the end of its contig: `samtools view`
+//!   fails on the slice (`CRAM CIGAR extends beyond slice reference
+//!   extents`) unless it is told `decode_md=0`.
 
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -445,7 +467,7 @@ pub fn finish(writer: CramWriter, md5: bool) -> Result<Vec<PathBuf>> {
 pub fn index_refusal(output: &str) -> Error {
     Error::Usage(format!(
         "{output}: no index is written beside a CRAM (Picard writes a .cram.bai that only \
-         htsjdk reads): leave CREATE_INDEX out and run `samtools index` for a .crai"
+         htsjdk reads): write it without one and run `samtools index` for a .crai"
     ))
 }
 

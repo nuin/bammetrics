@@ -29,14 +29,13 @@ pub(super) struct Window<'a> {
 }
 
 impl Window<'_> {
-    /// The base at the 1-based `position`; `N` past the last base, as
-    /// htsjdk and htslib read a base past the end of a contig.
-    fn base(&self, position: usize) -> u8 {
+    /// The base at the 1-based `position`; `None` past the last base,
+    /// where the contig has ended.
+    fn base(&self, position: usize) -> Option<u8> {
         position
             .checked_sub(self.first)
             .and_then(|at| self.bases.get(at))
             .copied()
-            .unwrap_or(b'N')
     }
 }
 
@@ -215,19 +214,22 @@ fn features(
                 let aligned = bases.get(read - 1..read - 1 + length).unwrap_or(&[]);
                 for (offset, &base) in aligned.iter().enumerate() {
                     let expected = reference.base(on_reference + offset);
-                    if base == expected {
+                    if expected == Some(base) {
                         continue;
                     }
                     let at = position(read + offset)?;
-                    features.push(match (Base::try_from(expected), Base::try_from(base)) {
-                        (Ok(reference_base), Ok(read_base)) => Feature::Substitution {
+                    let codes =
+                        expected.map(|expected| (Base::try_from(expected), Base::try_from(base)));
+                    features.push(match codes {
+                        Some((Ok(reference_base), Ok(read_base))) => Feature::Substitution {
                             position: at,
                             reference_base,
                             read_base,
                         },
                         // A base outside ACGTN on either side has no
-                        // substitution code: the base is stored, with the
-                        // quality the array holds for it.
+                        // substitution code, and a base past the end of
+                        // the contig has no reference base: the base is
+                        // stored, with the quality the array holds for it.
                         _ => Feature::ReadBase {
                             position: at,
                             base,
@@ -307,7 +309,8 @@ pub(super) fn convert(record: &RawRecord, reference: Window<'_>) -> io::Result<(
     }
 
     // The qualities are always an array, `0xFF` bytes for a record without
-    // them, as htslib stores them: every reader prints such an array `*`.
+    // them: samtools, Picard and this crate's reader print such an array
+    // `*`. Without the array flag the noodles reader gives quality 0.
     let mut cram_flags = Flags::IS_DETACHED | Flags::QUALITY_SCORES_ARE_STORED_AS_ARRAY;
     if bases.is_empty() {
         cram_flags |= Flags::SEQUENCE_IS_MISSING;
