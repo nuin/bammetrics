@@ -6,4 +6,4 @@ O=OUT/cleaned.cram
 1
 ## stdout
 ## stderr
-bammetrics: OUTPUT=OUT/cleaned.cram: bammetrics writes BAM and SAM only: CRAM output is wave W15 of docs/07_full_parity_program.md
+bammetrics: A reference must be supplied that includes the reference sequence for chr1.

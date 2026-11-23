@@ -1,0 +1,15 @@
+## argv
+mark-duplicates
+tests/data/markdup.bam
+-o
+OUT/marked.cram
+--metrics
+OUT/m.txt
+-R
+tests/data/ref_100k.fa
+--create-index
+## exit
+2
+## stdout
+## stderr
+bammetrics mark-duplicates: OUTPUT=OUT/marked.cram: no index is written beside a CRAM (Picard writes a .cram.bai that only htsjdk reads): write it without one and run `samtools index` for a .crai
