@@ -98,6 +98,7 @@ works in a step: `--minimum-pct 0.1`, `--MINIMUM_PCT 0.1`, `MINIMUM_PCT=0.1`, `-
 | `--sort-memory BYTES` | What the barriers of the chain hold: a `sort-sam` step spills a sorted run at it, less 64 MiB and the read ends of a later `mark-duplicates`. A number, or one with K, M, G or T (1024 based), at most 18446744073709551615 bytes (exit 2 past it). Default 2G (section 15) |
 | `--force-space` | Run when the estimated temporary and output bytes exceed the free space of their file system (section 15) |
 | `--validation-stringency` | `STRICT` (default), `LENIENT` or `SILENT` for a SAM text source. A step refuses it |
+| `--resume` | Skip each step whose record in `PREFIX.manifest.json` matches and whose transforms in front are skipped too (section 22). Standard input as the source is a usage error |
 | `--plan FILE` | Read the source, the options and the steps from a plan file (section 3) |
 | `--dry-run` | Print the plan and run nothing (section 4) |
 | `-q`, `-v` | No notes and no summary; or each command line and each file written |
@@ -140,6 +141,9 @@ working directory (`.insert_size_metrics`).
   build-bam-index` exits 2 and names `write --index`.
 - A file option with an empty value (`-o ''`, `--metrics-file ''`, `write ''`) is a usage
   error: `step 1 (gc-bias): -o names no file: its value is empty`.
+- `--keep` on a transform writes the stream it leaves as `PREFIX.<stream>.bam` (section
+  23). On any other step it is a usage error.
+- `qc` is the last step: the verdict and report over the taps of its stream (section 24).
 
 ### 2.3 Files and names
 
@@ -256,6 +260,7 @@ A message names a step by its number and verb: `step 3 (insert-size)`.
 | 1 | A file system with less free space than the estimate needs there, without `--force-space` | Before the first read. No directory is made |
 | 1 | An output that cannot be written (its directory cannot be made, the file is read only) | Before the first read, as the Picard face exits for its `OUTPUT` |
 | 1 | A step failed | During the run. The other steps still write their files (section 9) |
+| 10, 11 | The qc step's verdict reached its `--fail-on`, or is incomplete, and every step finished | After the run, as `check` gives them (section 24) |
 
 ```
 $ bammetrics chain in.bam + quality-yield + insert-size --minmum-pct 0.1
@@ -617,7 +622,7 @@ entry.
 ### 5.3 Python
 
 `bammetrics.chain(source, steps, output=, reference=, threads=, tmp_dir=, format=, also=,
-sample=, plan=, dry_run=)` and `bammetrics.step(verb, **options)` run this verb in the
+sample=, resume=, plan=, dry_run=)` and `bammetrics.step(verb, **options)` run this verb in the
 process. docs/python.md is their reference.
 
 ```python
@@ -640,7 +645,7 @@ run.metrics["insert-size"]          # out/NA12878.insert_size_metrics, parsed
 | `step_table(name)` | A `StepTable` for a verb named in snake or kebab case, by its Picard class or by its function name: `verb`, `role`, `keywords`. An unknown name is a usage error with the closest step |
 | `StepTable::keyword(name)` | One keyword, or the usage error with the closest name. `input`, and `output` of `mark_duplicates`, are refused with the reason |
 | `Keyword` | `name`, `long` (the flag it spells), `ty`, `many` (`One`, `Repeated`: one occurrence per item, `Joined`: one comma list) |
-| `step_names()` | The 37 names `step` takes, snake case, in `bammetrics tools` order, `write` last |
+| `step_names()` | The 38 names `step` takes, snake case, in `bammetrics tools` order, then `write` and `qc` |
 | `metric_key(chain, step, path)` | The key of a metrics file in `Run.metrics`: the verb, `STREAM.` in front for a tap that does not read the last stream, `.FILE` after it for a further file |
 | `stubs()` | The `bammetrics.pyi` entries: `_StepVerb`, `step`, three `chain` overloads |
 
@@ -999,7 +1004,7 @@ check linear in the number of steps.
 |---|---|
 | W05, done | The sort barrier (`Next::Records`), the planner (`Frame` per position, `requires`, the free-space refusal), the spool for a replay behind another transform, `--sort-memory`, SAM output of `write`; `write --index` writes Picard's `.bai` of the written BAM (`bai.rs`); `BuildBamIndex` and `make memgate` |
 | W09 on | Each BAM-writing tool registers its stage in `stage_of` and its stream name in `label_of` |
-| W14 | `qc` as the last step of a chain, manifest 2, resume per step (`resume=` in Python), kept products, the spool for tools that read their input their own way, a progress line |
+| W14, part done | `qc` as the last step of a chain, manifest 2, resume per step (`resume=` in Python), kept products (sections 22 to 25). Left: the spool for tools that read their input their own way, a progress line |
 | W15, W22 | `write` to CRAM, FASTQ |
 | W46 | Variant streams (`Kind`), pileup and capture sinks |
 
@@ -1380,3 +1385,148 @@ the header with its `@PG` line, as `DownsampleSam` writes it on its own.
 Chained equals staged (`crates/cli/tests/downsample.rs`): each strategy first, in the
 middle and last beside `mark-duplicates` and `sort-sam` on the fixture, and first on t1;
 the records as bytes, the header lines and every metrics file equal.
+
+## 22. W14: the manifest and `--resume`
+
+A chain writes `PREFIX.manifest.json` (schema `bammetrics.manifest/2`,
+[docs/schema/manifest-2.json](schema/manifest-2.json)) when it resumes, keeps a stream or
+ends in `qc`. A chain that asks for none of these writes the files it wrote before.
+
+```bash
+bammetrics chain in.bam -o out/s --resume \
+    + quality-yield + mark-duplicates --keep \
+    + sort-sam -SO queryname + insert-size + write
+# Edit step 3 and run again: steps 1 and 2 are skipped, the read starts at
+# out/s.marked.bam, steps 3, 4 and 5 run.
+```
+
+The manifest holds the source's fingerprint (size, mtime, the FNV-1a 64 of its first and
+last 64 KiB), the reference's, the validation stringency, when the run started, its wall
+time and exit code. Then one record per step:
+
+| Member | What it is |
+|---|---|
+| `id` | A transform's stream (`marked`), else `VERB@STREAM` (`insert-size@marked`), `#2` for the second of one verb on one stream; `qc` for the qc step |
+| `upstream` | The ids of the transforms in front of the step |
+| `argv` | The canonical argv: a tool's Picard arguments (with `KEEP=PATH` for a kept stream), `write`'s and `qc`'s options as `KEY=VALUE` |
+| `options_hash` | FNV-1a 64 of the argv, the tool version, the formats, `--sample` and the stringency |
+| `inputs` | Every file the step reads by name, with its fingerprint: the reference and its `.fai`, dictionaries, interval and read lists |
+| `outputs` | Every file it wrote, with its kind and its fingerprint after the write |
+| `status`, `error`, `skipped` | `ok`, `failed`, `stopped` or `not run`; `skipped` is true when the run kept the record of the run before |
+| `started`, `seconds` | The start and wall time of the run that ran the step |
+
+Then `kept`: each kept stream with its transform's id and its BAM's fingerprint.
+
+`--resume` skips a step when the record under its id has the same verb and hash, ended
+`ok`, read files with the same fingerprints, and every file it wrote is there with its
+fingerprint; and when every transform in front of it is skipped too. A tap in front of
+the changed step is not upstream of it, so it stays skipped. The qc step and a step that
+writes standard output always run. Every step runs when there is no manifest, when it is
+the manifest of a `qc` run (schema 1), when it is damaged (a note says why, the run goes
+on), or when the tool version, the source, the reference or the stringency changed.
+
+The steps that run share reads. The read starts at the last transform in front of the
+first step that runs whose stream the run before kept and whose BAM is still there with
+its fingerprint. Without one it starts at the source, and every transform between the
+start and the last step that runs runs again to feed the steps after it. A run where every
+step is skipped reads nothing.
+
+`plan --resume` and `chain --resume --dry-run` print one line per step after the plan:
+
+```
+resume     from out/s.manifest.json
+resume     step 1 quality-yield: skipped: its record and files match
+resume     step 2 mark-duplicates: skipped; its kept stream out/s.marked.bam starts the read
+resume     step 3 sort-sam: runs: its options changed
+resume     step 4 insert-size: runs: step 3 in front of it runs
+resume     step 5 write: runs: step 3 in front of it runs
+```
+
+A skipped step prints `skipped: the manifest proves it done, its files stay`, and the
+summary counts it: `5 steps finished, 2 of them skipped by --resume, 3 files written`.
+
+File safety. The manifest is read under a 16 MiB cap through the JSON reader with a
+nesting limit of 64, so a damaged file is a note, never a crash. A step that runs replaces
+its files atomically; a skipped step's files are not opened for writing. After a resumed
+run that finished, the files the manifest of the run before lists that this run neither
+wrote nor kept are removed, each only while it is a regular file (no link is followed)
+with the fingerprint recorded, and never a file the chain reads or plans to write. A file
+edited since stays.
+
+Tests: `crates/cli/tests/chain_resume.rs` (the gate: an option of step 3 of five reruns
+steps 3, 4 and 5 and every file equals a fresh run; the feed without a kept stream; a
+changed source; a damaged manifest; a hand-edited file left alone; a failed step that
+reruns), the golden records `chain_resume_*` and `plan_chain_resume_option_change`.
+
+## 23. W14: kept streams
+
+`--keep` on a transform writes the stream it leaves as `PREFIX.<stream>.bam`, with
+`PREFIX.<stream>.bai` when the stream is coordinate sorted. The file is the BAM `write`
+writes at that position, byte for byte, and its index Picard's `BuildBamIndex` index of it.
+No note is printed for a stream that is not coordinate sorted: no index is the rule there.
+A plan file writes `keep = true` in the step's table; Python passes `keep=True` to `step`.
+
+The kept BAM is a planned file of its transform: it is claimed, checked for writability and
+against the inputs before the first read, so `+ mark-duplicates --keep + write` (both
+`PREFIX.marked.bam`) is a usage error. The plan lists it as `PREFIX.marked.bam (kept)` and
+its index as `(when coordinate sorted)`, and the output line counts its bytes: `output
+about 2.7 KiB written by write and the kept streams`.
+
+A kept stream read by `--resume` in place of a CRAM source keeps the CRAM's frame
+(`FileSource::decoded_from_cram`), so the stages after it rebuild `MD` and `NM` as they did.
+
+## 24. W14: `qc` as the last step
+
+```bash
+bammetrics chain in.bam -o out/s + mark-duplicates + write out/s.bam + qc --preset generic
+```
+
+The qc step evaluates the preset over the metrics files of the taps on its stream and
+writes `PREFIX.verdict.json` and `PREFIX.report.html` (`--report pdf` adds
+`PREFIX.report.pdf`) as `bammetrics qc` writes them for the same taps on the same records:
+the same `verdict.json`, and the same page apart from the date and each metrics file's
+command line. A collector the preset needs that no tap of the stream runs is added as a
+tap, built as the qc verb builds it (its file `PREFIX.<extension>`, its levels, its
+reference) and numbered after the qc step: `step 3 quality-yield tap on marked, for qc`.
+The qc step keeps the number it was given. A transform's own metrics file
+(`PREFIX.marked.duplication_metrics`) is no tap's, so it does not enter the verdict.
+
+| Option | Meaning |
+|---|---|
+| `--preset NAME\|FILE` | The rules (default `generic`) |
+| `--report FORM[,FORM]` | `html` (default), `pdf`, or both |
+| `--also FORMAT[,FORMAT]` | The forms of the verdict: `markdown`, `junit`, `multiqc`. A per-file format is the chain's `--also` and a usage error here |
+| `--fail-on warn\|fail` | The chain exits 10 when the verdict reaches it, 11 when it is incomplete; 1 still wins when a step failed |
+| `--hs BAITS TARGETS`, `--panel FILE`, `--ref-flat FILE`, `--strand`, `--ribosomal-intervals`, `--sex` | As for `qc`: the capture, RNA and sex check collectors |
+| `--all-plots`, `--date`, `--pdf-font`, `--page-size` | As for `qc` |
+
+The source, `-o`, `-R`, `--threads`, `--sample` and `--resume` belong to the chain. A step
+after `qc` is a usage error. The step prints its verdict on standard error: `step 2 (qc):
+verdict pass: 6 checks, 6 pass, 0 warn, 0 fail, 0 not measured`. A class no step can write
+is named in the plan (`qc         WgsMetrics not measured: needs -R FASTA`).
+
+`CollectWgsMetrics` has no one-pass collector. Under a qc step it reads the source on its
+own after the chain when no transform is in front, or the stream the last transform keeps
+(`--keep`); without either the class is not measured. A `--panel` BED is written as
+`PREFIX.panel.interval_list` from the source's dictionary after the chain, as `qc` writes
+it; a piped source with a BED panel is a usage error.
+
+The chain writes `PREFIX.manifest.json` with schema 2; the qc verb keeps writing schema 1.
+`--resume` always reruns the qc step, so the verdict and the report are rewritten over
+the files of the steps it skips.
+
+Tests: `crates/cli/tests/chain_resume.rs` (the qc step after `mark-duplicates` against
+`qc` on the BAM the chain wrote), the golden records `chain_qc_step*` (the four metrics
+files and `verdict.json` of `chain_qc_step` equal those of `qc_generic`),
+`tests/python/test_chain.py::test_qc_is_the_last_step`.
+
+## 25. W14: departures from docs/07
+
+| Item | docs/07 | Built | Why |
+|---|---|---|---|
+| When manifest 2 is written | Every chain and qc run | A chain that resumes, keeps a stream or ends in `qc`; `qc` keeps schema 1 | The golden records of every earlier chain form stay byte for byte |
+| `Key.upstream` | A hash of every earlier step's key | The ids of the transforms in front, and a step is skipped only when they are | A hash over every earlier step reruns the taps after a changed tap; the gate wants taps in front of step 3 kept |
+| Timing | Per step | The start and wall time of the run that ran the step | The steps of a chain share reads and run at once |
+| `qc.rs` | `Plan.bam` becomes a chain, `Read` gains `Tap(n)` | The qc verb is unchanged; the qc step reuses its collector planning (`qc::plan_chain_step`) | qc golden records stay byte for byte |
+| Kept product kind | A kept product may be CRAM | BAM, with its index when coordinate sorted | CRAM writing is wave W15 |
+| Materialize fallback | A tool with only `run` reads a spooled copy of the stream | Not built here; the qc step's `CollectWgsMetrics` reads the source or a kept stream | Left for the branch that builds the spool |

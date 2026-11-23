@@ -223,7 +223,7 @@ These are the two examples of docs/chaining.md. `tests/data/chain_markdup.toml` 
 
 ### chain
 
-`chain(source=None, steps=None, *, output, reference, threads, tmp_dir, format, also, sample, sort_memory, force_space, validation_stringency, plan, dry_run)`.
+`chain(source=None, steps=None, *, output, reference, threads, tmp_dir, format, also, sample, sort_memory, force_space, validation_stringency, resume, plan, dry_run)`.
 
 | Argument | Command | Value |
 |---|---|---|
@@ -239,6 +239,7 @@ These are the two examples of docs/chaining.md. `tests/data/chain_markdup.toml` 
 | `sort_memory` | `--sort-memory BYTES` | What a `sort_sam` step holds before it spills: `"2G"`, `"512M"`, a number of bytes as a str. Default 2 GiB |
 | `force_space` | `--force-space` | `True` runs a chain whose estimated temporary and output bytes exceed the free space; without it that chain raises `InputError` before the first read |
 | `validation_stringency` | `--validation-stringency` | How a SAM text source is checked: `"STRICT"` (default), `"LENIENT"`, `"SILENT"`. A step refuses the keyword |
+| `resume` | `--resume` | `True` skips each step `PREFIX.manifest.json` proves done and writes the manifest (docs/chaining.md section 22). `"-"` as the source raises `UsageError` |
 | `plan` | `--plan FILE` | A TOML plan file in place of `steps`. A keyword given replaces the file's value. `steps` beside `plan` raises `UsageError`. Paths in the file are read relative to the working directory of the process, never to the file's directory. A step that names the plan file as its output raises `UsageError` |
 | `dry_run` | `--dry-run` | `True` returns the plan text as a str and runs nothing |
 
@@ -258,20 +259,22 @@ bm.step("wgs")                             # UsageError: CollectWgsMetrics ... c
 bm.step("fifo_buffer")                     # UsageError: FifoBuffer buffers the pipe between two commands and a chain has no pipe
 ```
 
-- The verb is a tool verb in snake case (`insert_size`, `mark_duplicates`), or `write`. The kebab form (`insert-size`), the Picard class (`CollectInsertSizeMetrics`) and the function name (`collect_insert_size_metrics`) name the same step. The stub lists the 37 names as `_StepVerb`: 14 transforms (`mark_duplicates`, `sort_sam`, `revert_original_base_qualities_and_add_mate_cigar`, `reorder_sam` and `fix_mate_information`, barriers; `add_comments_to_bam`, `replace_sam_header`, `add_o_a_tag`, `clean_sam`, `set_nm_md_and_uq_tags`, `set_nm_and_uq_tags`, `add_or_replace_read_groups`, `filter_sam_reads` and `downsample_sam`, streaming, `add_or_replace_read_groups` and `filter_sam_reads` a barrier when their `sort_order` differs from the stream's), 20 taps (`insert_size`, `alignment_summary`, `quality_yield`, `hs_metrics`, `gc_bias`, `quality_score_distribution`, `mean_quality_by_cycle`, `base_distribution_by_cycle`, `duplicate_metrics`, `rna_seq`, `sequencing_artifact`, `coverage_gaps`, `sex_check`, `mt_copy_number`, `exon_coverage`, `adapter_content`, `duplicate_by_tile`, `telomere`, `quality_yield_s_n_v_q`, `rrbs`), 2 splits (`split_sam_by_library`, `split_sam_by_number_of_reads`) and `write`.
+- The verb is a tool verb in snake case (`insert_size`, `mark_duplicates`), `write`, or `qc`. The kebab form (`insert-size`), the Picard class (`CollectInsertSizeMetrics`) and the function name (`collect_insert_size_metrics`) name the same step. The stub lists the 38 names as `_StepVerb`: 14 transforms (`mark_duplicates`, `sort_sam`, `revert_original_base_qualities_and_add_mate_cigar`, `reorder_sam` and `fix_mate_information`, barriers; `add_comments_to_bam`, `replace_sam_header`, `add_o_a_tag`, `clean_sam`, `set_nm_md_and_uq_tags`, `set_nm_and_uq_tags`, `add_or_replace_read_groups`, `filter_sam_reads` and `downsample_sam`, streaming, `add_or_replace_read_groups` and `filter_sam_reads` a barrier when their `sort_order` differs from the stream's), 20 taps (`insert_size`, `alignment_summary`, `quality_yield`, `hs_metrics`, `gc_bias`, `quality_score_distribution`, `mean_quality_by_cycle`, `base_distribution_by_cycle`, `duplicate_metrics`, `rna_seq`, `sequencing_artifact`, `coverage_gaps`, `sex_check`, `mt_copy_number`, `exon_coverage`, `adapter_content`, `duplicate_by_tile`, `telomere`, `quality_yield_s_n_v_q`, `rrbs`), 2 splits (`split_sam_by_library`, `split_sam_by_number_of_reads`), `write` and `qc`.
 - The keywords are those of the tool's function in `bammetrics.pyi` (`registry::python_keywords`, the list the generated stub prints): `step("insert_size", minimum_pct=0.1)` takes what `collect_insert_size_metrics(bam, minimum_pct=0.1)` takes. `input` is refused: the chain's source feeds every step.
 - `output` is the step's own `-o`: the file of a tap that writes one file, a prefix for a tap that writes several (`gc_bias`). Without it the chain's prefix names the files. `mark_duplicates` takes no `output`, since a transform writes no BAM in a chain; `step("write", output=...)` after it writes the BAM, and `metrics_file` names its metrics. A split (`split_sam_by_library`, `split_sam_by_number_of_reads`) takes `output` as the directory it writes its files into; `split_sam_by_number_of_reads` also needs `total_reads_in_input` in a chain.
 - `format` is the step's own `--format` list. `as_` on a transform is `--as NAME`, the name of the stream it leaves (`as` is a Python keyword).
 - `panel` on `hs_metrics` is the verb flag `--panel FILE`: one file as `bait_intervals` and `target_intervals`. The command's error for missing intervals names `--panel`, and `qc` takes `panel=` too.
 - `write` takes `output`, `index`, `md5`, `compression_level` and `output_format` (`"bam"` or `"sam"`; a name ending in `.sam` is SAM text without it).
+- `keep=True` on a transform writes the stream it leaves as `PREFIX.<stream>.bam`, with its `.bai` when coordinate sorted (docs/chaining.md section 23).
+- `qc` is the last step: `step("qc", preset="generic", report=["html", "pdf"], also="junit", fail_on="fail")`. It takes `preset`, `report`, `also` (`markdown`, `junit`, `multiqc`), `fail_on`, `panel`, `ref_flat`, `strand`, `ribosomal_intervals`, `sex`, `all_plots`, `date`, `pdf_font` and `page_size`. `hs` raises `UsageError`: it takes two files per run, so `panel=` or an `hs_metrics` step in front gives the capture metrics. The step writes the verdict and the report `qc` writes for the same taps; the `Run` of the chain has no `verdict`, so read `PREFIX.verdict.json` (docs/chaining.md section 24).
 - A bool option takes `True` or `False`, an int option an int, a float option a number, a path a str or an `os.PathLike` (`TypeError` otherwise). A text option takes a str, or one number as its text. A list or tuple is a repeated option (`metric_accumulation_level`, `comment`); a list of a text option holds `str` items only. `None` leaves the option out.
 - A float that is NaN or infinite is a `UsageError` here (`minimum_pct takes a finite number, not nan`). So is a list of a text option with another type in it (`metric_accumulation_level takes a list of str, not one holding int`). Neither waits for the tap to be built.
 
-`Step` fields: `verb` (as the command spells it, `insert-size`), `role` (`transform`, `tap` or `write`), `options` (the keywords given, a list kept as a tuple), `args` (what they spell for the command, `["--minimum-pct=0.1"]`). Two steps with the same verb and args are equal and hash alike. `Step(verb, **options)` is the same call as `step`.
+`Step` fields: `verb` (as the command spells it, `insert-size`), `role` (`transform`, `tap`, `write`, `split` or `qc`), `options` (the keywords given, a list kept as a tuple), `args` (what they spell for the command, `["--minimum-pct=0.1"]`). Two steps with the same verb and args are equal and hash alike. `Step(verb, **options)` is the same call as `step`.
 
 ### The Run of a chain
 
-`verdict` and `manifest` are `None`. `sample` is `sample=`, else the first `@RG SM` of a file source, else the source name (`stdin` for a pipe). `files` lists every file written, in step order, then `PREFIX.report.md`.
+`verdict` is `None`. `manifest` is `PREFIX.manifest.json` when the run resumes, keeps a stream or ends in `qc`, else `None`. `sample` is `sample=`, else the first `@RG SM` of a file source, else the source name (`stdin` for a pipe). `files` lists every file written, in step order (a skipped step's files as the run before wrote them), then `PREFIX.report.md` and the manifest.
 
 `run.metrics` maps a name to the parsed file, as for `qc`. The name is the step's verb (`insert-size`, `mark-duplicates`), with four additions:
 
@@ -286,8 +289,8 @@ bm.step("fifo_buffer")                     # UsageError: FifoBuffer buffers the 
 
 | Field | Value |
 |---|---|
-| `number`, `verb`, `role` | The step's place from 1, its verb, `transform`, `tap` or `write` |
-| `status` | `ok`, `failed`, `stopped` (another step of its segment failed while it ran) or `not_run` (a step in front of it failed) |
+| `number`, `verb`, `role` | The step's place from 1, its verb, `transform`, `tap`, `write`, `split` or `qc` |
+| `status` | `ok`, `failed`, `stopped` (another step of its segment failed while it ran), `not_run` (a step in front of it failed) or `skipped` (`resume=True` found it done in the manifest; its files stay) |
 | `error` | Why, for a status that is not `ok`. `None` otherwise |
 | `reads`, `leaves` | The stream the step read (`in`, or the name a transform in front left). The stream a transform leaves (`marked`), `None` otherwise |
 | `segment` | The segment it ran in, from 1. A transform starts the next one |
@@ -297,13 +300,14 @@ bm.step("fifo_buffer")                     # UsageError: FifoBuffer buffers the 
 | Outcome | Command exit | Python |
 |---|---|---|
 | every step finished | 0 | returns the `Run` |
+| every step finished and the qc step's verdict reached its `fail_on`, or is incomplete | 10, 11 | returns the `Run`; `exit_code` holds the code |
 | a step failed | 1 | raises `InputError` after the other steps wrote their files. `.run` holds the `Run`, `run.errors` maps `step N (verb)` to each message, `run.stages` holds each status |
 | usage error, nothing ran (a plan file that is not UTF-8 text included) | 2 | raises `UsageError` |
 | the source, the reference or the plan file cannot be read, or an output cannot be written | 1 | raises `InputError` (`.run` is `None`) |
 
 A tap that fails fails alone: the other steps finish. A transform or `write` that fails stops its segment: the message names it and counts the rest (`1 step(s) failed: step 2 (mark-duplicates): ...; 1 stopped; 2 not run`).
 
-`resume` is not a keyword: resume per step is wave W14. A second transform replays the source or spools its input ([docs/chaining.md](chaining.md) section 15).
+`resume=True` skips the steps the manifest of the run before proves done (wave W14, [docs/chaining.md](chaining.md) section 22): their stages have status `skipped` and their files stay. A second transform replays the source or spools its input (section 15).
 
 ## Errors
 

@@ -102,6 +102,18 @@ spelling. A usage error in any step is found before the first read and names the
 space refuses before the first read, and `--plan plan.toml` reads the chain from a file.
 The reference is [docs/chaining.md](docs/chaining.md).
 
+```bash
+bammetrics chain sample.bam -o out/NA12878 --resume \
+    + mark-duplicates --keep + sort-sam --sort-order queryname + insert-size \
+    + qc --preset generic --fail-on fail
+```
+
+`--keep` writes the marked stream as `out/NA12878.marked.bam`. `--resume` writes
+`out/NA12878.manifest.json`; run the command again with another option of `sort-sam` and
+only `sort-sam`, `insert-size` and the qc step run, reading the kept BAM. The qc step
+writes the verdict and the page `qc` writes for the same taps, adds the taps its preset
+needs, and exits 10 when the verdict reaches `--fail-on`.
+
 The same chain from Python ([docs/python.md](docs/python.md)):
 
 ```python
