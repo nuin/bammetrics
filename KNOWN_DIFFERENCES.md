@@ -1896,3 +1896,11 @@ in a 600-example sample of seed 1 (27 of 1,800 commands) was a `CollectMultipleM
 whose `CollectAlignmentSummaryMetrics` had a category with reads and no PF read, the
 `Input file contains no PF_READS` throw listed under Failures above, which bammetrics
 reproduces as exit 1.
+
+## ReorderSam takes a FASTA index as SEQUENCE_DICTIONARY
+
+`ReorderSam SEQUENCE_DICTIONARY=ref.fa.fai` reads the `.fai` as a dictionary of names and
+lengths. Picard 3.5.0 exits with `Cannot figure out type of file ... from extension`. A
+chain step `reorder-sam` gets the reference's `.fai` as its dictionary when no `.dict`
+is beside the reference (docs/chaining.md section 24). Every other file type is read as
+Picard reads it.

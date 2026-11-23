@@ -1320,6 +1320,70 @@ which (`failed alone`, `failed and stopped its segment`, `stopped`, `not run`).
 A chain without a transform is the pass of `qc`: the same metrics files, byte for byte
 apart from the `Started on` line. It writes no verdict, page or manifest.
 
+The short form (docs/chaining.md sections 22 to 25) runs the same chains:
+
+```bash
+bammetrics chain fixed.bam reorder-sam insert-size -o r.bam   # reference from the config file
+bammetrics chain in.bam mark-duplicates insert-size --level SAMPLE -o out/NA12878.bam
+bammetrics chain in.bam --recipe prep -o out.bam              # or: bammetrics prep in.bam -o out.bam
+```
+
+- A bare word that names a step verb starts a step; `+` still does, and both mix. An
+  option takes its values with it, so a value that names a verb stays a value. The
+  chain's options may follow the last step.
+- `-o r.bam` (or `r.sam`) on a chain with a transform and no `write` adds `write r.bam
+  --index` as the last step and names the metrics files `r.<extension>`. On a chain of
+  taps alone it exits 2; `r.cram` exits 2 with wave W15.
+- `-R`, `--threads`, `--tmp-dir` and `--sort-memory` come from the user config file when
+  not given (`bammetrics config`); `-R` also from `BAMMETRICS_REFERENCE`. `--no-config`
+  leaves the file unread.
+- `reorder-sam --sequence-dictionary` defaults to the reference's `.dict`, else its
+  `.fai`; the step's note says which.
+- `--recipe NAME` runs a named chain; `STEP.option=value` sets an option of one of its
+  steps.
+
+### config
+
+```bash
+bammetrics config
+bammetrics config --no-config
+```
+
+Prints the values `chain`, `qc`, `plan`, `collect` and the tool verbs take from the user
+config file and `BAMMETRICS_REFERENCE`, one line each with where it came from (the file
+and line, or the variable), then the recipes directory. The file is
+`$XDG_CONFIG_HOME/bammetrics/config.toml`, else `$HOME/.config/bammetrics/config.toml`:
+the keys `reference`, `threads`, `tmp_dir` and `sort_memory`, at most 64 KiB. An unknown
+key, a value of the wrong type and a file over the cap exit 2 with the line.
+
+| Verb | Takes from the config |
+|---|---|
+| `chain` and the recipes | `reference`, `threads`, `tmp_dir`, `sort_memory` |
+| `qc`, `plan`, `collect` | `reference` |
+| a tool verb | `reference`, when the tool reads one or the input is a CRAM |
+| the Picard face | nothing |
+
+`-R` on the command line replaces the variable and the file; the variable replaces the
+file. `--no-config` (on `config`, `chain`, `qc`, `plan`, `collect` and the tool verbs)
+leaves the file unread. A reference from the file or the variable that is not a file
+exits 1 and names where it came from.
+
+### recipes
+
+```bash
+bammetrics recipes
+bammetrics prep in.bam -o out.bam
+bammetrics qc-only in.bam -o out/NA12878
+bammetrics downsample in.bam -o d.bam downsample-sam.probability=0.1
+```
+
+Lists the named chains, one line each with its steps: `prep` (fix mates, mark
+duplicates, sort by coordinate, the BAM indexed, the four metrics files of qc's generic
+preset), `qc-only` (those four files), `downsample` (`downsample-sam` ConstantMemory,
+`downsample-sam.probability` required, the BAM indexed), then the user's from
+`~/.config/bammetrics/recipes/NAME.toml`. `bammetrics NAME BAM [OPTIONS]` is `bammetrics
+chain BAM --recipe NAME [OPTIONS]`. A recipe that writes a BAM needs `-o` to name it.
+
 ## Prepare verbs
 
 ### bed-to-interval-list

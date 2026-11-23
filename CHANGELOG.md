@@ -2,8 +2,38 @@
 
 ## Unreleased
 
+### Added
+
+- `bammetrics chain` takes steps without `+`: a bare word that names a step verb starts a
+  step, an option takes its values with it, and the chain's options may follow the last
+  step. `bammetrics chain fixed.bam reorder-sam insert-size -o r.bam` runs what `chain
+  fixed.bam -R ref.fa -o r + reorder-sam --sequence-dictionary ref.dict + insert-size +
+  write r.bam --index` runs, byte for byte. Every `+` form runs as before
+  (docs/chaining.md section 22).
+- `-o r.bam` (or `r.sam`) on a chain with a transform and no `write` step adds `write
+  r.bam --index` as the last step and names the metrics files `r.<extension>`. A chain of
+  taps alone exits 2 on such a name, `r.cram` exits 2 with wave W15 (section 23).
+- The user config file `$XDG_CONFIG_HOME/bammetrics/config.toml` (else
+  `~/.config/bammetrics/config.toml`, 64 KiB cap): `reference`, `threads`, `tmp_dir`,
+  `sort_memory`. `BAMMETRICS_REFERENCE` replaces its reference, `-R` both, `--no-config`
+  leaves it unread. `chain` takes all four; `qc`, `plan`, `collect` and the tool verbs
+  that read a reference take `reference`; the Picard face takes none. `bammetrics config`
+  prints each value and where it came from (section 24).
+- `reorder-sam` in a chain defaults its `--sequence-dictionary` to the reference's
+  `.dict`, else its `.fai`, with a note that says which. `ReorderSam` reads a `.fai` as a
+  dictionary of names and lengths (KNOWN_DIFFERENCES.md).
+- Recipes: named chains in the plan file format. `prep`, `qc-only` and `downsample` are
+  compiled in (`crates/cli/recipes/`); the user's come from
+  `~/.config/bammetrics/recipes/NAME.toml`. `bammetrics recipes` lists them; `bammetrics
+  NAME BAM -o OUT` and `chain BAM --recipe NAME` run one; `STEP.option=value` sets an
+  option of a recipe's step (section 25).
+- Python: `chain(output="r.bam")` follows the same rule, `chain(recipe=..., config=False)`,
+  and `bammetrics.recipe(name, source, output=..., set={...})` (docs/python.md).
+
 ### Changed
 
+- `bammetrics tools` lists the verbs `recipes` and `config` (golden record
+  `verb_tools`, two lines).
 - `make budgets`: the binary, formats and Parquet growth rows are regression checks at the 0.31.0 size, after the owner accepted the binary size on 2026-11-22 (docs/07 decisions D22, D149, D156 and D159). Targets 430,000 bytes, 200 KB and 1.1 MiB; each fails at 1.5x its target (645,000 bytes, 300 KB, 1.65 MiB). The other rows still fail at 2x.
 
 ## 0.31.0
