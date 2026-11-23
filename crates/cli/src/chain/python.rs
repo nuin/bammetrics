@@ -14,8 +14,8 @@ use std::path::Path;
 use bammetrics_core::registry::{Ty, did_you_mean, python_keywords, snake_case, wrap};
 
 use super::args::{
-    ALSO, AS, KEEP, find_step, global_flags, is_split, is_step, is_transform, not_a_step,
-    step_flags, write_flags,
+    ALSO, AS, KEEP, find_step, global_flags, is_materialized, is_split, is_step, is_transform,
+    materialize_leaves, not_a_step, step_flags, takes_further_inputs, write_flags,
 };
 use super::prepare::{Chain, Planned, Role};
 use super::{QC, WRITE, qc_step, usage};
@@ -209,7 +209,13 @@ const PANEL: Key = Key::Own("panel");
 fn tool_keywords(verb: &Verb) -> (Vec<Keyword>, Vec<(&'static str, String)>) {
     let flags = step_flags(verb);
     let tool = verb.tool();
-    let mut refused = vec![("input", "the chain's source feeds every step".to_owned())];
+    let further = takes_further_inputs(verb);
+    // A materialized tool that writes no BAM names its own file.
+    let own_file = is_materialized(verb) && !materialize_leaves(verb);
+    let mut refused = Vec::new();
+    if !further {
+        refused.push(("input", "the chain's source feeds every step".to_owned()));
+    }
     let mut keywords = Vec::new();
     for keyword in python_keywords(tool) {
         if keyword.picard == "VALIDATION_STRINGENCY" {
@@ -222,7 +228,7 @@ fn tool_keywords(verb: &Verb) -> (Vec<Keyword>, Vec<(&'static str, String)>) {
         // A split's `output` is its directory, the step's own `-o`.
         let split_output = is_split(verb) && keyword.picard == "OUTPUT";
         // A transform that writes a BAM as a tool writes none in a chain.
-        if verb.files == Files::Bam && keyword.picard == "OUTPUT" && !split_output {
+        if verb.files == Files::Bam && keyword.picard == "OUTPUT" && !split_output && !own_file {
             refused.push((
                 "output",
                 format!(
@@ -232,7 +238,8 @@ fn tool_keywords(verb: &Verb) -> (Vec<Keyword>, Vec<(&'static str, String)>) {
             ));
             continue;
         }
-        let key = if (keyword.output && verb.files != Files::Bam) || split_output {
+        let named_output = own_file && keyword.picard == "OUTPUT";
+        let key = if (keyword.output && verb.files != Files::Bam) || split_output || named_output {
             Key::Output
         } else {
             Key::Picard(keyword.picard)
@@ -244,12 +251,20 @@ fn tool_keywords(verb: &Verb) -> (Vec<Keyword>, Vec<(&'static str, String)>) {
     // `--panel` of `hs-metrics` is no row of the tool's table, so its
     // function has no such keyword; the verb's missing-intervals error
     // names it, and `qc` takes `panel=` too.
-    let own = [
+    let mut own = vec![
         (PANEL, "panel"),
         (Key::Format, "format"),
         (AS, "as_"),
         (KEEP, "keep"),
     ];
+    // The further inputs, and the file of a tool that has no `OUTPUT` of
+    // its own (`bam_index_stats`, `view_sam`).
+    if further {
+        own.push((Key::Input, "input"));
+    }
+    if own_file && !keywords.iter().any(|k: &Keyword| k.name == "output") {
+        own.push((Key::Output, "output"));
+    }
     for (key, name) in own {
         if let Some(flag) = flags.iter().find(|flag| flag.key == key) {
             keywords.push(Keyword::of(name, flag));
@@ -301,6 +316,8 @@ pub fn step_table(name: &str) -> Result<StepTable, VerbError> {
         Role::Transform
     } else if is_split(verb) {
         Role::Split
+    } else if is_materialized(verb) {
+        Role::Materialize
     } else {
         Role::Tap
     };
@@ -555,7 +572,12 @@ mod tests {
         for verb in VERBS.iter().filter(|verb| is_step(verb)) {
             let table = step_table(verb.name).expect(verb.name);
             for keyword in python_keywords(verb.tool()) {
-                let bam = verb.files == Files::Bam && keyword.picard == "OUTPUT" && !is_split(verb);
+                // A materialized tool that writes no BAM names its own file.
+                let own_file = is_materialized(verb) && !materialize_leaves(verb);
+                let bam = verb.files == Files::Bam
+                    && keyword.picard == "OUTPUT"
+                    && !is_split(verb)
+                    && !own_file;
                 let chain_s = keyword.picard == "VALIDATION_STRINGENCY";
                 assert_eq!(
                     table.keywords.iter().any(|k| k.name == keyword.name),
@@ -589,9 +611,10 @@ mod tests {
                 "bammetrics chain: unknown step \"inser-size\"\n  did you mean insert-size?",
             ),
             (
-                "wgs",
-                "bammetrics chain: step wgs: CollectWgsMetrics has no stage and does not read a \
-                 BAM in one pass: it cannot be a step\n  wave W14 of docs/07",
+                "non_n_fasta_size",
+                "bammetrics chain: step non-n-fasta-size: NonNFastaSize reads a FASTA file and \
+                 no BAM, and a chain hands on the records of a BAM: it cannot be a step\n  run \
+                 it on its own: bammetrics non-n-fasta-size --help",
             ),
             (
                 "fifo_buffer",

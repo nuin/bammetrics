@@ -1,0 +1,44 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
+--dry-run
++
+raw-wgs
+-R
+tests/data/ref_100k.fa
++
+add-comments-to-bam
+--comment
+c
++
+raw-wgs
+-R
+tests/data/ref_100k.fa
++
+merge-sam-files
+tests/data/markdup.bam
++
+insert-size
+## exit
+0
+## stdout
+chain plan for tests/data/markdup.bam
+  source    tests/data/markdup.bam (BAM, 1,158 bytes, sort order coordinate; a file, it can be read again)
+  prefix    OUT/s (from -o)
+segment 1  one read of tests/data/markdup.bam
+  step 1  raw-wgs              materialize on in         OUT/s.in.raw_wgs_metrics
+  step 2  add-comments-to-bam  stream commented          no file
+  step 3  raw-wgs              materialize on commented  OUT/s.commented.raw_wgs_metrics
+  step 4  merge-sam-files      materialize, first read   writes its input to a file, then runs on it
+segment 2  a read of the BAM step 4 wrote (materialize)
+  step 4  merge-sam-files      stream merged             no file
+  step 5  insert-size          tap on merged             OUT/s.insert_size_metrics
+materialize step 4 merge-sam-files: writes its input to a file, about 1.2 KiB; writes its BAM, about 2.3 KiB
+materialize step 1 raw-wgs: reads the source file itself, nothing is copied
+materialize step 3 raw-wgs: writes its stream to a file, about 1.2 KiB
+temp disk  about 4.7 KiB in the system temporary directory
+memory     about 100.0 MiB at the peak, a fixed 100.0 MiB for the chain beside its barriers included (a small input takes less)
+nothing ran: this is a plan
+## stderr

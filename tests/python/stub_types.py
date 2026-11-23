@@ -46,7 +46,7 @@ def forms(names: list[str]) -> None:
     assert_type(bm.qc("x.bam", also="junit"), bm.Run[bm.Verdict])
     step = bm.step("mark_duplicates", remove_duplicates=True, as_="dedup")
     assert_type(step, bm.Step)
-    assert_type(step.role, Literal["transform", "tap", "write", "split", "qc"])
+    assert_type(step.role, Literal["transform", "tap", "write", "split", "materialize", "qc"])
     assert_type(bm.Step("write", output="x.bam", index=True).args, list[str])
     chained = bm.chain("x.bam", [step, "insert_size", bm.step("write")], output="o",
                        reference="r.fa", also=["json", "markdown"], format="picard,json")

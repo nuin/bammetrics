@@ -40,6 +40,7 @@ use crate::sam_text::Stringency;
 use crate::spill::TempDir;
 
 mod exec;
+pub mod materialize;
 mod sinks;
 mod spool;
 #[cfg(test)]
@@ -76,6 +77,10 @@ pub struct Frame {
     pub label: String,
     /// The files the stream is read from. A writer refuses to replace one.
     pub reads: Vec<PathBuf>,
+    /// The regular file that holds exactly this stream: the source, read
+    /// with no stage in front. A materialized step reads it in place of a
+    /// copy ([`materialize`]).
+    pub file: Option<PathBuf>,
 }
 
 impl Frame {
@@ -87,6 +92,7 @@ impl Frame {
             cram: false,
             label,
             reads: Vec::new(),
+            file: None,
         }
     }
 
@@ -99,6 +105,7 @@ impl Frame {
             cram: self.cram,
             label: format!("{} + {step}", self.label),
             reads: self.reads.clone(),
+            file: None,
         }
     }
 }
@@ -211,6 +218,7 @@ impl Source for FileSource {
                     .chain(&self.reference)
                     .cloned()
                     .collect();
+                frame.file = self.replayable().then(|| self.path.clone());
                 consume(
                     frame,
                     &mut StreamRecords {
@@ -319,6 +327,9 @@ pub struct Products {
     /// Lines for standard error: what the step did not do and why (an
     /// index asked for on a stream that is not coordinate sorted).
     pub notes: Vec<String>,
+    /// The step wrote its files and still fails, as its tool exits 1
+    /// (`CheckDuplicateMarking` on records that disagree).
+    pub failure: Option<String>,
 }
 
 impl Products {
@@ -358,6 +369,13 @@ pub trait Transform {
 /// A stage that takes the whole stream before any record goes on.
 pub trait Barrier<'t> {
     fn push(&mut self, batch: &[RawRecord]) -> Result<()>;
+
+    /// False for a barrier that needs no record of its input (a
+    /// materialized tool that reads the source file itself): the segment
+    /// stops reading once nothing else in it needs a record.
+    fn takes_records(&self) -> bool {
+        true
+    }
 
     /// After the last batch: the header and the stream of the next segment.
     fn seal(self: Box<Self>) -> Result<Sealed<'t>>;
@@ -639,6 +657,9 @@ pub enum StepKind {
     },
     /// A sink whose failure stops its segment (a writer).
     Sink(BuildSink),
+    /// A sink that fails alone, as a tap does: a tool run on a file of the
+    /// records of its position ([`materialize`]).
+    Alone(BuildSink),
     Stage(Box<dyn StageBuilder>),
 }
 

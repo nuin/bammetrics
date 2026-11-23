@@ -1,0 +1,19 @@
+## argv
+chain
+tests/data/artifact.bam
+-o
+OUT/s
++
+add-comments-to-bam
+--comment
+c
++
+calculate-read-group-checksum
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: step 1 (add-comments-to-bam): 12 records in, 12 out, 0 changed
+bammetrics chain: 2 steps finished, 1 file written
+## file s.read_group_md5
+9c6e9c4d784bea04a82de4454631b3ec

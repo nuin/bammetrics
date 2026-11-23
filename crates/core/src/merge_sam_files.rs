@@ -130,7 +130,7 @@ pub const TOOL: Tool = Tool {
 pub const MAX_INPUTS: usize = 1_000;
 
 /// The options of one merge.
-struct Merge {
+pub(crate) struct Merge {
     inputs: Vec<PathBuf>,
     order: SortOrder,
     assume_sorted: bool,
@@ -141,7 +141,7 @@ struct Merge {
 }
 
 impl Merge {
-    fn from_invocation(inv: &Invocation) -> Result<Self> {
+    pub(crate) fn from_invocation(inv: &Invocation) -> Result<Self> {
         let inputs: Vec<PathBuf> = inv.all("INPUT").iter().map(PathBuf::from).collect();
         if inputs.is_empty() {
             return Err(Error::Usage("INPUT is required".to_owned()));

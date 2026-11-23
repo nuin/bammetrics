@@ -290,10 +290,35 @@ pub(crate) fn is_transform(verb: &Verb) -> bool {
     stage::stage_of(verb.tool()).is_some()
 }
 
-/// True for a verb that can be a step: a transform, a split or a one-pass
-/// tool.
+/// True for a verb that can be a step: a transform, a split, a one-pass
+/// tool, or a tool that runs on a file of its stream (materialize).
 pub(crate) fn is_step(verb: &Verb) -> bool {
-    is_transform(verb) || is_split(verb) || verb.tool().collector.is_some()
+    is_transform(verb) || is_split(verb) || verb.tool().collector.is_some() || is_materialized(verb)
+}
+
+/// True for a verb whose tool runs on a file holding the stream at its
+/// position (docs/07 section 2.3, the materialize fallback).
+pub(crate) fn is_materialized(verb: &Verb) -> bool {
+    stage::materialize::materializes(verb.tool())
+}
+
+/// True for a materialized verb that takes files after the stream:
+/// `--input FILE` (or a file after the verb) is a further `INPUT`
+/// (`merge-sam-files`, `gather-bam-files`, `jumping-library`).
+pub(crate) fn takes_further_inputs(verb: &Verb) -> bool {
+    stage::materialize::row_of(verb.tool()).is_some_and(|row| row.several_inputs)
+}
+
+/// True when `key`, given on a step of `verb`, belongs to the chain. The
+/// input of a step that takes further inputs is its own.
+pub(crate) fn is_chain_key(verb: Option<&Verb>, key: Key) -> bool {
+    CHAIN_KEYS.contains(&key) && !(key == Key::Input && verb.is_some_and(takes_further_inputs))
+}
+
+/// True for a materialized verb that writes a BAM, which is the next
+/// stream (`merge-sam-files`).
+pub(crate) fn materialize_leaves(verb: &Verb) -> bool {
+    stage::materialize::leaves(verb.tool()).is_some()
 }
 
 /// True for a split tool: a step that writes the records of its position
@@ -307,8 +332,7 @@ pub(crate) fn is_split(verb: &Verb) -> bool {
 /// hint, the one that lists the steps.
 ///
 /// `build-bam-index` names the `write --index` that does its work in a
-/// chain, `view-sam` the `write - --output-format sam` that prints the
-/// stream. `fifo-buffer` has its own reason. It copies the bytes of a pipe between
+/// chain. `fifo-buffer` has its own reason. It copies the bytes of a pipe between
 /// two commands, and the steps of a chain hand records on in memory, so no
 /// later wave makes it a step.
 pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
@@ -333,28 +357,6 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
              ... + write out.bam --index",
         );
     }
-    if verb.class == bammetrics_core::view_sam::TOOL.name {
-        return usage(format!(
-            "{place}: {} prints the records of a file as SAM text and a chain hands records to \
-             write: it cannot be a step",
-            verb.class
-        ))
-        .hint(
-            "write - --output-format sam prints the stream as SAM text: bammetrics chain BAM + \
-             ... + write - --output-format sam",
-        );
-    }
-    if verb.class == bammetrics_core::merge_sam_files::TOOL.name {
-        return usage(format!(
-            "{place}: {} merges several INPUT files and a chain reads one source: it cannot be \
-             a step",
-            verb.class
-        ))
-        .hint(
-            "merge the files first, then chain the merged BAM; wave W14 of docs/07 adds steps \
-             that read more than the stream",
-        );
-    }
     if matches!(verb.input, "TEXT" | "VCF" | "LIST" | "FASTA") {
         return usage(format!(
             "{place}: {} reads a {} file and no BAM, and a chain hands on the records of a BAM: \
@@ -367,10 +369,14 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
         ));
     }
     usage(format!(
-        "{place}: {} has no stage and does not read a BAM in one pass: it cannot be a step",
+        "{place}: {} reads no BAM, and a chain hands on the records of a BAM: it cannot be a \
+         step",
         verb.class
     ))
-    .hint("wave W14 of docs/07 runs such a tool on a spooled copy of the stream")
+    .hint(format!(
+        "run it on its own: bammetrics {} --help",
+        verb.name
+    ))
 }
 
 /// The flags the parser takes for a step of `verb`: the verb's own, plus
@@ -378,8 +384,10 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
 /// one given on a step says where it belongs.
 pub(crate) fn step_parser_flags(verb: &Verb) -> Vec<Flag> {
     let mut flags = verb.flags();
-    if is_transform(verb) {
-        let default = stage::label_of(verb.tool()).unwrap_or_default();
+    if is_transform(verb) || materialize_leaves(verb) {
+        let default = stage::label_of(verb.tool())
+            .or_else(|| stage::materialize::leaves(verb.tool()))
+            .unwrap_or_default();
         flags.push(
             Flag::new(
                 AS,
@@ -453,16 +461,23 @@ pub(crate) fn chain_option_on_step(error: &VerbError, place: &str) -> Option<Ver
 pub fn step_flags(verb: &Verb) -> Vec<Flag> {
     let mut flags: Vec<Flag> = step_parser_flags(verb)
         .into_iter()
-        .filter(|flag| !CHAIN_KEYS.contains(&flag.key))
-        .filter(|flag| !(verb.files == Files::Bam && flag.key == Key::Output && !is_split(verb)))
+        .filter(|flag| !is_chain_key(Some(verb), flag.key))
+        .filter(|flag| {
+            let own_file = is_split(verb) || (is_materialized(verb) && !materialize_leaves(verb));
+            !(verb.files == Files::Bam && flag.key == Key::Output && !own_file)
+        })
         .collect();
     for flag in &mut flags {
         match (flag.key, verb.files) {
+            (Key::Input, _) => {
+                "A further input after the stream, the first INPUT; repeat for more."
+                    .clone_into(&mut flag.help);
+            }
             (Key::Output, _) if is_split(verb) => {
                 "The directory this step writes its files into; made when missing."
                     .clone_into(&mut flag.help);
             }
-            (Key::Output, Files::Single) => {
+            (Key::Output, Files::Single) | (Key::Output, Files::Bam) => {
                 flag.help = format!(
                     "The {} of this step; - writes standard output. Without one the chain's \
                      prefix names it.",
@@ -496,7 +511,9 @@ fn step_names(wanted: fn(&Verb) -> bool) -> String {
 
 /// `bammetrics chain --help`.
 pub fn help() -> String {
-    let taps = |verb: &Verb| is_step(verb) && !is_transform(verb) && !is_split(verb);
+    let taps = |verb: &Verb| {
+        is_step(verb) && !is_transform(verb) && !is_split(verb) && !is_materialized(verb)
+    };
     let mut text = format!(
         "bammetrics chain: several steps on one BAM in one process. Records move from step \
          to step in memory: no pipe, no intermediate file.\n\n\
@@ -514,6 +531,8 @@ pub fn help() -> String {
          tap        reads the records of its position, changes nothing: {}\n  \
          write      write [PATH] writes the records of its position as a BAM\n  \
          split      writes the records of its position over BAMs in its -o DIR: {}\n  \
+         materialize runs on a file of the records of its position (the source itself, or a \
+         copy in the temporary directory): {}\n  \
          qc         the last step: the verdict and report over the taps of its stream, \
          as bammetrics qc writes them; it adds the taps its --preset needs\n\n\
          A step takes its verb's own options in every spelling (--minimum-pct 0.1, \
@@ -536,6 +555,7 @@ pub fn help() -> String {
         step_names(is_transform),
         step_names(taps),
         step_names(is_split),
+        step_names(is_materialized),
     );
     // `--no-config` is taken out before the parser sees the arguments
     // (`crate::config::strip_no_config`); it is listed with the others.
@@ -575,6 +595,12 @@ pub fn step_help(name: &str, number: usize) -> Result<String, VerbError> {
     let tool = verb.tool();
     let kind = if is_transform(verb) {
         "a transform: later steps see the records it emits"
+    } else if materialize_leaves(verb) {
+        "materialize: it runs on a file of the records of its position, and later steps see \
+         the BAM it writes"
+    } else if is_materialized(verb) {
+        "materialize: it runs on a file of the records of its position (the source itself, \
+         or a copy in the temporary directory) and changes nothing"
     } else if is_split(verb) {
         "a split: it writes the records of its position over BAMs in its -o DIR, renamed \
          into place when the stream ends"

@@ -767,6 +767,24 @@ earlier waves, `interval converters on GRCh38, 2,000,000 records` peaks at 489.4
 MiB (461.4 MiB at 0.30.0) and `mark-duplicates slice` at 659.5 / 1024 MiB (660.3 MiB at
 0.30.0).
 
+The materialize rows of wave W14 (2026-11-22, feat/chain-stages, one run each; `make
+memgate` passes 57 fixture rows). The scale row wrote under
+`~/data/bammetrics-scale/waves/w14`, removed after the run:
+
+| command | tier | peak RSS MiB / limit | wall s | spill MiB / limit |
+|---|---|---|---:|---:|
+| `chain materialize taps` | fixture | 39.7 / 64 | 0.42 | 0.0 / 16 |
+| `chain materialize merge` | fixture | 11.5 / 64 | 0.02 | 0.0 / 16 |
+| `chain materialize slice` | scale | 53.4 / 1024 | 12.58 | 1,175.0 / 2,048 |
+
+`chain materialize slice` copies the 8,445,233 records of the 573 MB slice twice behind
+`add-comments-to-bam`: once with its `.bai` for `bam-index-stats`, once as the input of
+`merge-sam-files`, whose BAM is the stream of `insert-size`. The two copies peak at
+1,175.0 MiB in the temporary directory, about 588 MiB (1.02 times the input) each; the
+plan estimates 602 MiB per copy and 1.8 GiB in all, the merge's BAM included, since it
+counts every file as held at once. The copy is written by the streaming writer, so RSS
+stays at 53.4 MiB.
+
 To add a scale row:
 
 1. Keep the data under `~/data/bammetrics-scale`, never in the repository. Write nothing

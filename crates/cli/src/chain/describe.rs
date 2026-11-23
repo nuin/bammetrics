@@ -111,7 +111,9 @@ fn role(chain: &Chain, step: &Planned, first_read: bool) -> String {
     match (step.role, &step.leaves, &step.write) {
         (Role::Qc, _, _) => format!("verdict on {}", step.reads),
         (Role::Transform, Some(_), _) if first_read => "transform, first read".to_owned(),
-        (Role::Transform, Some(stream), _) => format!("stream {stream}"),
+        (Role::Materialize, Some(_), _) if first_read => "materialize, first read".to_owned(),
+        (Role::Transform | Role::Materialize, Some(stream), _) => format!("stream {stream}"),
+        (Role::Materialize, None, _) => format!("materialize on {}", step.reads),
         (Role::Write, _, Some(options)) => {
             let kind = match options.format {
                 bammetrics_core::stage::WriteFormat::Bam => "BAM",
@@ -128,6 +130,9 @@ fn role(chain: &Chain, step: &Planned, first_read: bool) -> String {
 /// by name first, whatever its `SORT_ORDER`; `reorder-sam` sorts in the
 /// stream's order over the new dictionary.
 fn first_read(step: &Planned) -> String {
+    if step.role == Role::Materialize {
+        return "writes its input to a file, then runs on it".to_owned();
+    }
     let name = step.tool.map(|tool| tool.name);
     if name == Some(bammetrics_core::fix_mate_information::TOOL.name) {
         return "takes every record and sorts them by queryname".to_owned();
@@ -199,6 +204,9 @@ fn segment_line(chain: &Chain, estimate: &Estimate, number: usize, taps_only: bo
             "segment {number}  a read of the spool of step {step}'s input through step {step} \
              (spool: its input is no file)"
         ),
+        How::Materializes => {
+            format!("segment {number}  a read of the BAM step {step} wrote (materialize)")
+        }
     }
 }
 
@@ -218,6 +226,18 @@ fn barrier_line(chain: &Chain, records: Option<u64>, barrier: &Barrier) -> Strin
         How::Replays => "replays the source".to_owned(),
         How::SpoolsSource => "replays a copy of the piped source".to_owned(),
         How::Spools => format!("spools its input, {}", about(barrier.spool)),
+        How::Materializes => {
+            let input = match barrier.spool {
+                Some(0) => "reads the source file itself".to_owned(),
+                bytes => format!("writes its input to a file, {}", about(bytes)),
+            };
+            return format!(
+                "materialize step {} {}: {input}; writes its BAM, {}",
+                barrier.number,
+                barrier.verb,
+                about(barrier.spill)
+            );
+        }
     };
     let bound = match (barrier.how, barrier.records_in_ram) {
         (How::Holds, None) => format!("--sort-memory {}", human(chain.sort_memory)),
@@ -251,11 +271,24 @@ fn budget_lines(out: &mut String, chain: &Chain, estimate: &Estimate) {
     for barrier in &estimate.barriers {
         let _ = writeln!(out, "{}", barrier_line(chain, estimate.records, barrier));
     }
+    for step in &estimate.materialized {
+        let what = match (step.direct, step.copy) {
+            (true, _) => "reads the source file itself, nothing is copied".to_owned(),
+            (false, Some(0)) => "writes the header of its stream to a file".to_owned(),
+            (false, bytes) => format!("writes its stream to a file, {}", about(bytes)),
+        };
+        let _ = writeln!(
+            out,
+            "materialize step {} {}: {what}",
+            step.number, step.verb
+        );
+    }
     let place = match &chain.tmp_dir {
         Some(dir) => dir.display().to_string(),
         None => "the system temporary directory".to_owned(),
     };
-    let temp = match (estimate.barriers.is_empty(), estimate.temp()) {
+    let copies = estimate.materialized.is_empty();
+    let temp = match (estimate.barriers.is_empty() && copies, estimate.temp()) {
         (true, _) => "temp disk  none: no step spills".to_owned(),
         (false, Some(0)) => "temp disk  none expected".to_owned(),
         (false, bytes) => format!("temp disk  {} in {place}", about(bytes)),
@@ -348,7 +381,7 @@ pub fn text(chain: &Chain) -> Result<String, VerbError> {
             segment_line(chain, &estimate, segment, taps_only)
         );
         for step in &chain.steps {
-            let barrier = step.role == Role::Transform && !step.streams();
+            let barrier = step.starts_segment();
             let emits = barrier && step.segment + 1 == segment;
             if step.segment == segment {
                 step_line(&mut out, chain, widths, step, barrier);

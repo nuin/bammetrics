@@ -169,10 +169,27 @@ fn a_failed_run_leaves_no_file() {
     fs::remove_dir_all(&dir).expect("cleanup");
 }
 
+/// `umi-prevalence` is a materialized step (wave W14): it runs on a file
+/// of its stream, and chain_positions.rs holds it to the staged tool.
 #[test]
-fn umi_prevalence_is_no_chain_step() {
-    let output = bammetrics(&["chain", UMI, "-o", "/dev/null/x", "+", "umi-prevalence"]);
-    assert_eq!(output.status.code(), Some(2));
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("cannot be a step"), "{stderr}");
+fn umi_prevalence_is_a_chain_step() {
+    let output = bammetrics(&[
+        "chain",
+        UMI,
+        "--dry-run",
+        "-o",
+        "/dev/null/x",
+        "+",
+        "add-comments-to-bam",
+        "--comment",
+        "c",
+        "+",
+        "umi-prevalence",
+    ]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(output.status.code(), Some(0), "{stdout}");
+    assert!(
+        stdout.contains("materialize step 2 umi-prevalence: writes its stream to a file"),
+        "{stdout}"
+    );
 }

@@ -229,6 +229,10 @@ impl<'scope> SinkWorker<'scope> {
     ) -> Self {
         let (sender, batches) = mpsc::sync_channel::<Shared>(QUEUED_BATCHES);
         let signals = Arc::new(Signals::default());
+        // A sink that wants no record from the start is never sent one.
+        if sink.done() {
+            signals.done.store(true, Ordering::Release);
+        }
         let seen = Arc::clone(&signals);
         let handle = scope.spawn(move || {
             let mut running = Some(sink);
@@ -359,7 +363,10 @@ impl Segment<'_, '_> {
     fn idle(&self) -> bool {
         self.head.is_none()
             && self.transforms.is_empty()
-            && self.barrier.is_none()
+            && self
+                .barrier
+                .as_ref()
+                .is_none_or(|(_, barrier)| !barrier.takes_records())
             && !self.workers().any(SinkWorker::listening)
     }
 
@@ -573,6 +580,13 @@ impl<'t> Chain<'t, '_> {
                     let worker = SinkWorker::spawn(scope, step, sink, true);
                     segment.positions.last_mut().expect("one").push(worker);
                 }
+                StepKind::Alone(build) => match build(&segment.frame) {
+                    Ok(sink) => {
+                        let worker = SinkWorker::spawn(scope, step, sink, false);
+                        segment.positions.last_mut().expect("one").push(worker);
+                    }
+                    Err(e) => self.results[step] = Some(Err(e)),
+                },
                 StepKind::Stage(builder) => {
                     // A barrier that replays a stream no file holds keeps a
                     // copy of its input.

@@ -83,6 +83,38 @@
   object closed. `crates/cli/tests/schemas.rs` validates what `qc`, `check` and `chain`
   write and fails on a member a schema lacks.
 
+- Chain: every registered tool that reads a BAM runs at any position, 53 of the 71 tools
+  (wave W14 of docs/07). The 17 tools with neither a stage nor a collector are
+  materialized: each runs through its own `run` on a file that holds the records of its
+  position, the source itself when it reads the source with no stage in front, else a
+  BGZF level 3 BAM in the chain's temporary directory (with its `.bai` for
+  `bam-index-stats` and `index-depth`, the header alone for
+  `calculate-read-group-checksum`). `merge-sam-files`, `gather-bam-files` and
+  `position-based-downsample-sam` are barriers whose BAM is the next stream (`merged`,
+  `gathered`, `downsampled`); the stream is the first `INPUT` and the files after the
+  verb, `--input`, a plan file's `input` and Python's `input=` are the further ones.
+  `wgs`, `raw-wgs`, `wgs-with-non-zero-coverage`, `targeted-pcr`, `library-complexity`,
+  `multiple-metrics`, `oxo-g`, `bam-index-stats`, `index-depth`,
+  `check-duplicate-marking` (fails after its file when a record disagrees),
+  `jumping-library`, `view-sam` (to `-o FILE` or `-o -`), `calculate-read-group-checksum`
+  and `umi-prevalence` fail alone, as taps do. The plan lists each materialized step and
+  its disk, and the free-space refusal counts it (docs/chaining.md section 31, decisions
+  D190 to D197).
+- `crates/cli/tests/chain_positions.rs`: each of the 53 steps first, in the middle and
+  last of a chain equals the staged run; a tool with no step row and no refusal row fails
+  the test.
+- 21 golden forms (`MATERIALIZE_CASES`): the runs, a plan and nine usage errors.
+- Chain: a materialized step is checked before the first read (exit 2): its tool's own
+  option parser on every value, each further input (a directory, a file that is no BAM,
+  CRAM or SAM, a CRAM without `-R`), at most 1,000 inputs of `merge-sam-files`, the
+  `.bai` or `.csi` of a source that `bam-index-stats` or `index-depth` reads itself, the
+  files of every `multiple-metrics` program against the other steps' files, and
+  `--tmp-dir`. The index a step reads beside its inputs is an input no step may write.
+- Chain: a materialized tool that spills (`check-duplicate-marking`, `umi-prevalence`,
+  `merge-sam-files`) spills under `--tmp-dir` unless the step names its own (D198).
+- `gather-bam-files`: a list line over 4,096 bytes is refused, quoting 200 characters of
+  it.
+
 ### Changed
 
 - `bammetrics tools` lists the verbs `recipes` and `config` (golden record
@@ -92,6 +124,22 @@
   (`error_chain_report_pdf`, `error_chain_pdf_font`, `error_chain_also_junit`).
 - `docs/schema/metrics-1.json` closes its top object, its histogram and `more_classes`
   (`additionalProperties: false`); every fixture stays valid.
+- Golden records: `error_chain_not_a_step` names `non-n-fasta-size` (wgs is a step now);
+  `error_chain_filter_sam_reads_reads_files` gives the new reason. The six refusals of
+  `error_chain_view_sam`, `error_chain_merge_sam_files`, `error_chain_gather_bam_files`,
+  `error_chain_calculate_read_group_checksum`, `error_chain_umi_prevalence` and
+  `error_chain_position_based_downsample_sam` are gone: those tools are steps.
+- The refusal of a tool that reads no BAM says so and names its verb; the refusals that
+  named wave W14 are gone. A second `INPUT` of `fix-mate-information` names
+  `merge-sam-files`.
+- Python: `Step.role` and `Stage.role` may be `"materialize"`; `_StepVerb` holds 54 names.
+- Chain: `index-depth` on a CRAM source with `-R` gets no `REFERENCE_SEQUENCE` (it
+  refuses the option) and gives its own CRAM refusal. An error of a materialized step's
+  copy names the stream in place of the temporary file. `bam-index-stats` and
+  `index-depth` on a stream that is not coordinate sorted fail when the stream starts,
+  naming `sort-sam --sort-order coordinate`.
+- Golden record `chain_materialize_metrics`: `wgs` and `raw-wgs` take `--coverage-cap
+  10`, so the record holds 241 lines in place of 100,467.
 - `make budgets`: the binary, formats and Parquet growth rows are regression checks at the 0.31.0 size, after the owner accepted the binary size on 2026-11-22 (docs/07 decisions D22, D149, D156 and D159). Targets 430,000 bytes, 200 KB and 1.1 MiB; each fails at 1.5x its target (645,000 bytes, 300 KB, 1.65 MiB). The other rows still fail at 2x.
 
 ## 0.31.0

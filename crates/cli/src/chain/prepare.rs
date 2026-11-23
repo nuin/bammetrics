@@ -23,9 +23,9 @@ use bammetrics_core::{cram, java, pass};
 use clap::ValueEnum;
 
 use super::args::{
-    AS, CHAIN_KEYS, COMPRESSION_LEVEL, INDEX, KEEP, MD5, OUTPUT_FORMAT, STEPS_HINT,
-    belongs_to_chain, chain_option_on_step, find_step, is_split, is_transform, not_a_step,
-    step_parser_flags, unknown_step, write_flags,
+    AS, COMPRESSION_LEVEL, INDEX, KEEP, MD5, OUTPUT_FORMAT, STEPS_HINT, belongs_to_chain,
+    chain_option_on_step, find_step, is_chain_key, is_materialized, is_split, is_transform,
+    materialize_leaves, not_a_step, step_parser_flags, unknown_step, write_flags,
 };
 use super::claims::{
     Read, check_one_stdout, claim_outputs, inputs_of, refuse_overwriting_inputs, refuse_unresolved,
@@ -41,6 +41,7 @@ use crate::grammar::{self, Flag, Key, Parsed};
 use crate::qc::with_suffix;
 use crate::verbs::{self, Files, Verb};
 
+mod materialize;
 mod split;
 
 /// The stream of the source.
@@ -66,6 +67,10 @@ pub enum Role {
     /// `qc`, the last step: the verdict and report over the taps of its
     /// stream.
     Qc,
+    /// A tool run on a file of the records of its position (docs/07
+    /// section 2.3): the source itself, or a copy in the temporary
+    /// directory. One that writes a BAM leaves a stream (`merge-sam-files`).
+    Materialize,
 }
 
 impl Role {
@@ -76,6 +81,7 @@ impl Role {
             Role::Write => "write",
             Role::Split => "split",
             Role::Qc => "qc",
+            Role::Materialize => "materialize",
         }
     }
 }
@@ -206,12 +212,19 @@ impl Chain {
         1 + self
             .steps
             .iter()
-            .filter(|step| step.role == Role::Transform && !step.streams())
+            .filter(|step| step.starts_segment())
             .count()
     }
 }
 
 impl Planned {
+    /// True for a step whose stream goes on in the next segment: a barrier
+    /// transform, or a materialized tool that writes a BAM.
+    pub fn starts_segment(&self) -> bool {
+        (self.role == Role::Transform && !self.streams())
+            || (self.role == Role::Materialize && self.leaves.is_some())
+    }
+
     /// True for a transform that edits the stream as it passes
     /// ([`stage::streams`]): it takes and emits its records in its own
     /// segment.
@@ -297,6 +310,9 @@ fn tool_role(spec: &StepSpec, number: usize) -> Result<(&'static Verb, Role), Ve
     if verb.tool().collector.is_some() {
         return Ok((verb, Role::Tap));
     }
+    if is_materialized(verb) {
+        return Ok((verb, Role::Materialize));
+    }
     let label = format!("step {number} ({})", verb.name);
     Err(not_a_step(verb, &place(spec, &label)).hint(STEPS_HINT))
 }
@@ -377,7 +393,9 @@ fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
         }
         return Ok(draft);
     };
-    if let Some(extra) = draft.parsed.positional.first() {
+    let several = bammetrics_core::stage::materialize::row_of(verb.tool())
+        .is_some_and(|row| row.several_inputs);
+    if let Some(extra) = draft.parsed.positional.first().filter(|_| !several) {
         let mut error = draft
             .usage("a step takes no input, the chain's source feeds every step")
             .from(extra.clone());
@@ -390,12 +408,12 @@ fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
         .parsed
         .given
         .iter()
-        .find(|given| CHAIN_KEYS.contains(&given.key))
+        .find(|given| is_chain_key(Some(verb), given.key))
     {
         return Err(belongs_to_chain(&draft.place(), &given.spelled));
     }
-    if let (Role::Transform, Files::Bam, Some(given)) =
-        (role, verb.files, draft.parsed.last(Key::Output))
+    let hands_on = role == Role::Transform || materialize_leaves(verb);
+    if let (true, Files::Bam, Some(given)) = (hands_on, verb.files, draft.parsed.last(Key::Output))
     {
         return Err(draft
             .usage(format!(
@@ -437,7 +455,10 @@ struct Position {
 /// The name of the stream a transform leaves: `--as`, or its default.
 fn stream_name(draft: &Draft, verb: &Verb) -> Result<String, VerbError> {
     let Some(given) = draft.parsed.last(AS) else {
-        return Ok(stage::label_of(verb.tool()).unwrap_or(verb.name).to_owned());
+        let default = stage::label_of(verb.tool())
+            .or_else(|| stage::materialize::leaves(verb.tool()))
+            .unwrap_or(verb.name);
+        return Ok(default.to_owned());
     };
     let name = &given.values[0];
     let plain = !name.is_empty()
@@ -483,7 +504,12 @@ fn positions(drafts: &[Draft]) -> Result<Vec<Position>, VerbError> {
             segment,
             behind: behind.join("+"),
         };
-        if let What::Tool(verb, Role::Transform) = draft.what {
+        let leaves = match draft.what {
+            What::Tool(verb, Role::Transform) => Some(verb),
+            What::Tool(verb, Role::Materialize) if materialize_leaves(verb) => Some(verb),
+            _ => None,
+        };
+        if let Some(verb) = leaves {
             stream = stream_name(draft, verb)?;
             if taken.contains(&stream) {
                 if let Some(given) = draft.parsed.last(AS) {
@@ -512,7 +538,7 @@ fn positions(drafts: &[Draft]) -> Result<Vec<Position>, VerbError> {
             let picard = verb
                 .picard_arguments(&parsed, &draft.flags)
                 .unwrap_or_default();
-            if !stage::streams_with(verb.tool(), &picard) {
+            if materialize_leaves(verb) || !stage::streams_with(verb.tool(), &picard) {
                 segment += 1;
             }
         }
@@ -534,6 +560,8 @@ struct Context<'a> {
     /// The per-file formats of `--also`.
     also: &'a [Format],
     threads: usize,
+    /// The chain's `--tmp-dir`.
+    tmp_dir: Option<&'a Path>,
 }
 
 impl Context<'_> {
@@ -660,7 +688,13 @@ fn tap_names(
     let output = tool.output_name();
     let own_output = draft.parsed.last(Key::Output);
     let mut named = Named::default();
-    let base = match (own_output.map(|given| given.values[0].as_str()), verb.files) {
+    // A materialized tool whose verb writes a BAM next to it names one
+    // file of its own here (`calculate-read-group-checksum`).
+    let files = match verb.files {
+        Files::Bam if is_materialized(verb) => Files::Single,
+        files => files,
+    };
+    let base = match (own_output.map(|given| given.values[0].as_str()), files) {
         (Some("-"), Files::Single) => {
             named.stdout = true;
             return Ok(named);
@@ -680,13 +714,13 @@ fn tap_names(
             cx.base(&position.reads)
         }
     };
-    let table = file_extensions(tool.name).unwrap_or_default();
+    let table = materialize::extensions(tool);
     if table.is_empty() {
         return Err(draft
             .usage(format!("{} has no name under a prefix", verb.class))
             .hint("give the step -o FILE"));
     }
-    for (option, extension) in table {
+    for (option, extension) in &table {
         let main = *option == "OUTPUT";
         let option = if main { output } else { option };
         if main || !sets(own, option) {
@@ -725,10 +759,12 @@ fn reference_arg(cx: &Context, tool: &Tool, own: &[String]) -> Option<String> {
     {
         return (!sets(own, "REFERENCE")).then(|| format!("REFERENCE={reference}"));
     }
-    let reads = tool
-        .option("REFERENCE_SEQUENCE")
-        .is_some_and(|opt| opt.kind == Kind::Value);
-    ((reads || cx.is_cram) && !sets(own, "REFERENCE_SEQUENCE"))
+    let option = tool.option("REFERENCE_SEQUENCE");
+    let reads = option.is_some_and(|opt| opt.kind == Kind::Value);
+    // A tool that refuses the option (`CollectIndexDepthMetrics`) gets
+    // none: its own refusal of a CRAM says why.
+    let takes = option.is_some_and(|opt| opt.kind != Kind::Rejected);
+    ((reads || cx.is_cram) && takes && !sets(own, "REFERENCE_SEQUENCE"))
         .then(|| format!("REFERENCE_SEQUENCE={reference}"))
 }
 
@@ -751,7 +787,7 @@ fn file_kind(tool: &Tool, option: &str) -> &'static str {
 /// True for a tool whose `OUTPUT` (or own output option) is a prefix: it
 /// names its files when it finishes.
 fn output_is_prefix(tool: &Tool) -> bool {
-    matches!(file_extensions(tool.name), Some([(option, "")])
+    matches!(materialize::extensions(tool).as_slice(), [(option, "")]
         if *option == "OUTPUT" || *option == tool.output_name())
 }
 
@@ -844,13 +880,16 @@ fn tool_step(
     verb.check_one_spelling(&draft.parsed, &draft.flags)
         .map_err(|e| draft.error(e))?;
     check_types(&draft)?;
-    draft.parsed.positional.push(cx.source.to_owned());
+    // The stream is the first input; a materialized tool that merges takes
+    // the step's files after it.
+    draft.parsed.positional.insert(0, cx.source.to_owned());
     let picard = verb
         .picard_arguments(&draft.parsed, &draft.flags)
         .map_err(|e| draft.error(e))?;
     let (input, own) = picard.split_first().expect("the source is the first input");
     let named = match role {
         Role::Transform => transform_names(cx, tool, &position, own),
+        Role::Materialize if materialize_leaves(verb) => Named::default(),
         _ => tap_names(cx, &draft, verb, &position, own)?,
     };
     if named.stdout {
@@ -871,6 +910,7 @@ fn tool_step(
     argv.extend(named.args.iter().cloned());
     argv.extend(reference_arg(cx, tool, own));
     argv.extend(own.iter().cloned());
+    let printed = materialize::take_output(tool, &mut argv);
     verb.check_required(&draft.flags, &argv)
         .and_then(|()| verb.check_inputs(&draft.parsed, &argv))
         .map_err(|e| draft.error(e))?;
@@ -878,18 +918,38 @@ fn tool_step(
     inv.threads = cx.threads;
     match role {
         Role::Transform => stage::check_stage_options(tool, &inv),
+        Role::Materialize => materialize::check(
+            tool,
+            &argv,
+            &materialize::Before {
+                source: cx.source,
+                reads_source: position.segment == 1 && position.reads == SOURCE_STREAM,
+                has_reference: cx.reference.is_some(),
+                tmp_dir: cx.tmp_dir,
+            },
+        ),
         _ => inv
             .limits()
             .and_then(|_| bammetrics_core::tap_options::check(tool, &inv)),
     }
     .map_err(|e| draft.core(verb, &e))?;
-    if role == Role::Tap && !position.behind.is_empty() {
+    let tap = role == Role::Tap || (role == Role::Materialize && position.leaves.is_none());
+    if tap && !position.behind.is_empty() {
         inv.command.push_str(&format!(" CHAIN={}", position.behind));
     }
     let late_prefix = inv.output.clone().filter(|_| output_is_prefix(tool));
     let mut files = planned_files(tool, &argv, &formats);
     if let Some(prefix) = &late_prefix {
         files.extend(prefix_files(tool, prefix, &formats));
+    }
+    if role == Role::Materialize {
+        materialize::plan_files(tool, printed.as_ref(), &mut files, &mut formats);
+        files.extend(
+            materialize::program_files(tool, &inv, &formats).map_err(|e| draft.core(verb, &e))?,
+        );
+        // The index a step reads beside its inputs is an input too.
+        inv.inputs
+            .extend(stage::materialize::index_inputs(tool, &argv));
     }
     let planned = Planned {
         number: draft.number,
@@ -905,7 +965,7 @@ fn tool_step(
         stdout: named.stdout,
         command: Some(inv.command),
         argv,
-        output: inv.output,
+        output: printed.or(inv.output),
         notes: inv.notes,
         formats,
         write: None,
@@ -1186,6 +1246,7 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         formats: &formats,
         also: &per_file,
         threads,
+        tmp_dir: spec.tmp_dir.as_deref().map(Path::new),
     };
     let mut steps: Vec<Planned> = Vec::with_capacity(drafts.len());
     let mut prefix_used = false;

@@ -122,7 +122,7 @@ pub struct Step {
     /// The verb as the command spells it: `insert-size`, or `write`.
     #[pyo3(get)]
     verb: String,
-    /// `transform`, `tap` or `write`.
+    /// `transform`, `tap`, `write`, `split` or `materialize`.
     #[pyo3(get)]
     role: String,
     /// The options as the command takes them: `["--minimum-pct=0.1"]`.
@@ -247,7 +247,7 @@ pub struct Stage {
     number: usize,
     /// The verb as the command spells it: `insert-size`, or `write`.
     verb: String,
-    /// `transform`, `tap` or `write`.
+    /// `transform`, `tap`, `write`, `split` or `materialize`.
     role: String,
     /// `ok`, `failed`, `stopped` (another step of its segment failed) or
     /// `not_run` (a step in front of it failed).

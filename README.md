@@ -90,10 +90,12 @@ reads the marked BAM, and the BAM holds the records `MarkDuplicates` writes. On 
 exome the chain took 16.5 s against 22.2 s for `MarkDuplicates` followed by the four
 collectors on its output.
 
-Every `+` starts a step: a transform (`mark-duplicates`, `sort-sam`, the six
-record-editing verbs of wave W09 and the two of wave W10), a tap (20 one-pass tool verbs),
-a split (`split-sam-by-library`, `split-sam-by-number-of-reads`) or `write [PATH]` (`-`
-is standard output). Transforms may follow one another:
+Every `+` starts a step: a transform (`mark-duplicates`, `sort-sam` and 12 record-editing
+verbs), a tap (20 one-pass tool verbs), a split (`split-sam-by-library`,
+`split-sam-by-number-of-reads`), a materialized tool (17 verbs such as `wgs`,
+`targeted-pcr`, `library-complexity` and `merge-sam-files`, each run on a file of the
+records of its position) or `write [PATH]` (`-` is standard output). Every tool that
+reads a BAM is a step at any position, 53 of the 71. Transforms may follow one another:
 `+ sort-sam --sort-order queryname + mark-duplicates + sort-sam --sort-order coordinate +
 write out.bam --index` sorts, marks and sorts back in one process, a sort holding at most
 `--sort-memory` bytes (default 2G). Each step takes its verb's own options in every

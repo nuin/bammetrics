@@ -1573,7 +1573,7 @@ fn usage_errors_exit_2_before_anything_runs() {
     let cram = file("out.cram");
     let fastq = file("out.fastq.gz");
     let source = FIXTURE.0;
-    let cases: [(&[&str], &str); 38] = [
+    let cases: [(&[&str], &str); 39] = [
         (
             &[source, "+", "write", &sam, "--index"],
             "out.sam: an index needs a BAM: SAM text has none",
@@ -1666,8 +1666,13 @@ fn usage_errors_exit_2_before_anything_runs() {
             "step 1: unknown step \"inser-size\"\n  did you mean insert-size?",
         ),
         (
+            &[source, "+", "non-n-fasta-size"],
+            "step 1 (non-n-fasta-size): NonNFastaSize reads a FASTA file and no BAM",
+        ),
+        // A materialized step checks its options as its verb does.
+        (
             &[source, "+", "wgs"],
-            "step 1 (wgs): CollectWgsMetrics has no stage and does not read a BAM in one pass",
+            "step 1 (wgs): missing --reference-sequence (Picard: REFERENCE_SEQUENCE)",
         ),
         (
             &[
@@ -1909,12 +1914,13 @@ fn fifo_buffer_is_refused_as_a_step() {
         "{stderr}"
     );
     assert_eq!(names(&dir), ["fifo.toml"]);
-    let (code, stderr) = chain(&[source, "+", "wgs", "--help"]);
+    let (code, stderr) = chain(&[source, "+", "non-n-fasta-size", "--help"]);
     assert_eq!(code, Some(2));
     assert!(
         stderr.starts_with(
-            "bammetrics chain: step 1 (wgs): CollectWgsMetrics has no stage and does not read \
-             a BAM in one pass: it cannot be a step\n  wave W14"
+            "bammetrics chain: step 1 (non-n-fasta-size): NonNFastaSize reads a FASTA file and \
+             no BAM, and a chain hands on the records of a BAM: it cannot be a step\n  run it \
+             on its own"
         ),
         "{stderr}"
     );

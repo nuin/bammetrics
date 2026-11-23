@@ -1132,3 +1132,46 @@ argv = ["{bin}", "prep", "tests/data/oxog.bam", "--no-config", "-o", "{out}/p.ba
 needs = ["tests/data/oxog.bam"]
 max_rss_mib = 64
 max_seconds = 30
+
+# Wave W14, the materialize fallback (docs/chaining.md section 31): a tool with neither a
+# stage nor a collector runs on a copy of its stream in the chain's temporary directory
+# (the spill_dir), then on the source itself; a tool that writes a BAM hands it on.
+[[command]]
+name = "chain materialize taps"
+argv = [
+    "{bin}", "chain", "tests/data/markdup.bam", "-o", "{out}/s", "--tmp-dir", "{out}/tmp",
+    "+", "add-comments-to-bam", "--comment", "c", "+", "wgs", "-R", "tests/data/ref_100k.fa",
+    "+", "library-complexity", "+", "bam-index-stats", "+", "umi-prevalence",
+]
+needs = ["tests/data/markdup.bam", "tests/data/ref_100k.fa"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+max_spill_mib = 16
+
+[[command]]
+name = "chain materialize merge"
+argv = [
+    "{bin}", "chain", "tests/data/markdup.bam", "-o", "{out}/s", "--tmp-dir", "{out}/tmp",
+    "+", "add-comments-to-bam", "--comment", "c", "+", "merge-sam-files",
+    "tests/data/oxog.bam", "+", "insert-size", "+", "write", "{out}/merged.bam", "--index",
+]
+needs = ["tests/data/markdup.bam", "tests/data/oxog.bam"]
+max_rss_mib = 64
+max_seconds = 30
+spill_dir = "{out}/tmp"
+max_spill_mib = 16
+
+[[command]]
+name = "chain materialize slice"
+tier = "scale"
+argv = [
+    "{bin}", "chain", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "-o", "{out}/s",
+    "--tmp-dir", "{out}/tmp", "+", "add-comments-to-bam", "--comment", "c", "+",
+    "bam-index-stats", "+", "merge-sam-files", "+", "insert-size",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 1024
+max_seconds = 600
+spill_dir = "{out}/tmp"
+max_spill_mib = 2048
