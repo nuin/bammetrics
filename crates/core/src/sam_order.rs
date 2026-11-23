@@ -43,6 +43,7 @@
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::io::{self, BufRead};
 
 use noodles::sam;
 use noodles::sam::header::record::value::map::read_group::tag::LIBRARY;
@@ -51,6 +52,7 @@ use crate::bam_raw::{RawRecord, TagValue};
 use crate::error::{Error, Result};
 use crate::mark_duplicates::unclipped;
 use crate::sam_text::parse_cigar;
+use crate::spill::{need_bytes, need_i64, need_u64, put_bytes, put_i64, put_u64};
 
 const PAIRED: u16 = 0x1;
 const UNMAPPED: u16 = 0x4;
@@ -469,6 +471,75 @@ impl<'a> DuplicateKey<'a> {
             name: Cow::Owned(self.name.into_owned()),
             ..self
         }
+    }
+
+    /// The key as a run file of [`crate::spill::Sorter`] holds it.
+    pub fn encode(&self, out: &mut Vec<u8>) {
+        for value in [
+            self.library,
+            self.reference_id,
+            self.read_coordinate,
+            self.mate_reference_id,
+            self.mate_coordinate,
+            i32::from(self.score),
+        ] {
+            put_i64(out, i64::from(value));
+        }
+        put_u64(out, u64::from(self.flags));
+        match &self.read_group {
+            Some(group) => {
+                out.push(1);
+                put_bytes(out, group);
+            }
+            None => out.push(0),
+        }
+        put_bytes(out, &self.name);
+    }
+
+    /// The key [`DuplicateKey::encode`] wrote. The end of the file inside
+    /// a key is an error.
+    pub fn decode(input: &mut impl BufRead) -> io::Result<DuplicateKey<'static>> {
+        let invalid =
+            |what: &str| io::Error::new(io::ErrorKind::InvalidData, format!("spill file: {what}"));
+        let mut values = [0i32; 6];
+        for value in &mut values {
+            *value =
+                i32::try_from(need_i64(input)?).map_err(|_| invalid("a value past 32 bits"))?;
+        }
+        let [
+            library,
+            reference_id,
+            read_coordinate,
+            mate_reference_id,
+            mate_coordinate,
+            score,
+        ] = values;
+        let score = i16::try_from(score).map_err(|_| invalid("a score past 16 bits"))?;
+        let flags = u16::try_from(need_u64(input)?).map_err(|_| invalid("flags past 16 bits"))?;
+        let mut flag = [0u8];
+        input.read_exact(&mut flag)?;
+        let read_group = match flag[0] {
+            0 => None,
+            _ => Some(need_bytes(input)?),
+        };
+        let name = need_bytes(input)?;
+        Ok(DuplicateKey {
+            library,
+            reference_id,
+            read_coordinate,
+            flags,
+            mate_reference_id,
+            mate_coordinate,
+            score,
+            read_group,
+            name: Cow::Owned(name),
+        })
+    }
+
+    /// The bytes the key holds outside its own size: the name and the read
+    /// group.
+    pub fn heap_bytes(&self) -> usize {
+        self.name.len() + self.read_group.as_ref().map_or(0, Vec::len)
     }
 
     fn has(&self, flag: u16) -> bool {

@@ -46,9 +46,7 @@ use crate::metrics_file::KeyClass;
 use crate::pass;
 use crate::registry::{Invocation, Opt, Tool};
 use crate::sam_order::{DuplicateKey, Libraries};
-use crate::spill::{
-    Sorter, Spill, TempDir, get_u64, need_bytes, need_i64, need_u64, put_bytes, put_i64, put_u64,
-};
+use crate::spill::{Sorter, Spill, TempDir, get_u64, put_bytes};
 
 /// The histogram labels Picard writes.
 pub const KEY_LABEL: &str = "numUmis";
@@ -303,37 +301,10 @@ impl Ord for Member {
     }
 }
 
-fn invalid(what: &str) -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, format!("spill file: {what}"))
-}
-
-fn need_i32(input: &mut impl BufRead) -> io::Result<i32> {
-    i32::try_from(need_i64(input)?).map_err(|_| invalid("a value past 32 bits"))
-}
-
 impl Spill for Member {
     fn encode(&self, out: &mut Vec<u8>) {
-        let key = &self.key;
         put_bytes(out, &self.umi);
-        for value in [
-            key.library,
-            key.reference_id,
-            key.read_coordinate,
-            key.mate_reference_id,
-            key.mate_coordinate,
-            i32::from(key.score),
-        ] {
-            put_i64(out, i64::from(value));
-        }
-        put_u64(out, u64::from(key.flags));
-        match &key.read_group {
-            Some(group) => {
-                out.push(1);
-                put_bytes(out, group);
-            }
-            None => out.push(0),
-        }
-        put_bytes(out, &key.name);
+        self.key.encode(out);
     }
 
     fn decode(input: &mut impl BufRead) -> io::Result<Option<Self>> {
@@ -341,48 +312,14 @@ impl Spill for Member {
             return Ok(None);
         };
         let umi = crate::spill::read_bytes(input, len)?;
-        let mut values = [0i32; 6];
-        for value in &mut values {
-            *value = need_i32(input)?;
-        }
-        let [
-            library,
-            reference_id,
-            read_coordinate,
-            mate_reference_id,
-            mate_coordinate,
-            score,
-        ] = values;
-        let score = i16::try_from(score).map_err(|_| invalid("a score past 16 bits"))?;
-        let flags = u16::try_from(need_u64(input)?).map_err(|_| invalid("flags past 16 bits"))?;
-        let mut flag = [0u8];
-        input.read_exact(&mut flag)?;
-        let read_group = match flag[0] {
-            0 => None,
-            _ => Some(need_bytes(input)?),
-        };
-        let name = need_bytes(input)?;
-        Ok(Some(Self {
-            key: DuplicateKey {
-                library,
-                reference_id,
-                read_coordinate,
-                flags,
-                mate_reference_id,
-                mate_coordinate,
-                score,
-                read_group,
-                name: std::borrow::Cow::Owned(name),
-            },
-            umi,
-        }))
+        let key = DuplicateKey::decode(input)?;
+        Ok(Some(Self { key, umi }))
     }
 
     fn memory(&self) -> usize {
         std::mem::size_of::<Self>()
             + self.umi.len()
-            + self.key.name.len()
-            + self.key.read_group.as_ref().map_or(0, Vec::len)
+            + self.key.heap_bytes()
             + 2 * std::mem::size_of::<usize>()
     }
 
