@@ -397,7 +397,7 @@ One failure lists every gap of every tool with the edit that closes it. Wave W05
 docs/07 added `ViewSam` (tool 34, `test_view_sam.py`), `SortSam` (tool 35,
 `test_sort_sam.py`) and `BuildBamIndex` (tool 36, `test_build_bam_index.py`), each with
 an argument list in the glossary test (`BuildBamIndex` returns rows without a class). The
-71 tools pass at 0.31.0 (wave W07 adds `CollectMtCopyNumberMetrics` and
+71 tools pass at 0.32.0 (wave W07 adds `CollectMtCopyNumberMetrics` and
 `CollectExonCoverageMetrics`, wave W08 `CollectAdapterContentMetrics`,
 `CollectDuplicateByTileMetrics`, `CollectTelomereMetrics` and `CollectIndexDepthMetrics`,
 wave W09 the six record-editing tools, wave W10 `AddOrReplaceReadGroups`,

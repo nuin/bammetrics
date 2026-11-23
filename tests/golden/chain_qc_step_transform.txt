@@ -95,7 +95,7 @@ insert_size	All_Reads.fr_count
 ## file s.manifest.json
 {
   "schema": "bammetrics.manifest/2",
-  "tool_version": "0.31.0",
+  "tool_version": "0.32.0",
   "verb": "chain",
   "sample": "s1",
   "directory": "<directory>",
@@ -493,7 +493,7 @@ Preset generic v1 (6dd89e). 1 fail, 1 warn, 4 pass, 0 not measured.
 ## file s.verdict.json
 {
   "schema": "bammetrics.verdict/1",
-  "tool_version": "0.31.0",
+  "tool_version": "0.32.0",
   "sample": "s1",
   "preset": {
     "name": "generic",

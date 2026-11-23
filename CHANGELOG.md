@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.32.0
+
+Chain 2 (wave W14 of docs/07) and the simpler chain command, 71 tools and no new one: steps without `+` and `-o` naming the BAM (`bammetrics chain fixed.bam reorder-sam insert-size -o r.bam`), a user config file, the recipes (`bammetrics prep in.bam -o out.bam`), manifest 2 with `--resume` per step and `--keep`, `qc` as the last step, and every tool that reads a BAM as a step at any position (53 of the 71); every `+` form of 0.31.0 runs as before.
+
 ### Added
 
 - The short chain form, the manifest and the materialized steps work as one design
