@@ -511,6 +511,8 @@ threads. samtools 1.25 with `--output-fmt-option version=3.0` is there for scale
 | `bammetrics chain BAM -R hs37d5.fa + write out.cram`, first run | 181.5 s | 587 MiB | 5,464,644,737 | 52.9% |
 | the same, as the row `chain write cram exome` of `make memgate TIER=scale` | 173.3 s | 688 MiB | | |
 | `samtools view -@ 8 -C --output-fmt-option version=3.0` | 48.7 s | 1,389 MiB | 4,687,059,835 | 45.3% |
+| the bammetrics command after the review fixes, first run | 207.2 s | 360 MiB | 5,464,644,737 | 52.9% |
+| the same, second run | 191.7 s | 422 MiB | 5,464,644,737 | 52.9% |
 
 The two bammetrics runs are the same command on the same input; their peak RSS differs by
 100 MiB, and why was not looked into. bammetrics' CRAM is 16.6% larger than samtools' and
@@ -527,6 +529,36 @@ What was checked on that file:
   records, so it sees a difference where there is one.
 - bammetrics `CollectQualityYieldMetrics` gives the same file body from the BAM (34 s)
   and from the CRAM (55 s): 150,386,776 reads, 18,948,733,776 bases.
+
+The last two rows are the writer after its review (docs/07 W15-12 to W15-17): a slice
+reads the reference bases it spans in place of its whole contig, and a container ends at
+8 MiB of BAM records as well as at 10,000 records. `cargo clippy` and `cargo test` ran on
+the machine during both runs, so the wall times are not comparable with the rows above.
+The file has the same number of bytes. samtools reads the header and the 150,538,907
+records to the text it reads from the BAM (`samtools view -h --no-PG`, `decode_md=0` on
+the CRAM: MD5 `13acf6f32c56cc96c67042a725d3955d` of both, 150,538,997 lines), and
+`CollectQualityYieldMetrics` on the CRAM gives 150,386,776 reads and 18,948,733,776 bases.
+
+Long reads and many contigs, generated inputs, `/usr/bin/time -l`:
+
+| input and command | before the review fixes | after |
+|---|---:|---:|
+| 25,000 reads of 20,000 bases, `chain + write x.cram --threads 1` | 5.6 s, 1,855 MiB | 2.7 s, 649 MiB |
+| the same, `--threads 8` | 3.0 s, 2,996 MiB | 1.4 s, 1,088 MiB |
+| the same to a BAM, `--threads 8` | | 2.0 s, 719 MiB |
+| 3,000 reads of 50,000 bases, `clean-sam -o x.cram` | 2.3 s, 777 MiB | 1.1 s, 185 MiB |
+| the same to a BAM | | 0.9 s, 27 MiB |
+| 5 reads within 250 bases of a 250 Mbp contig, `SortSam O=x.cram` | 0.2 s, 248 MiB | 0.4 s, 10 MiB |
+| 2 reads at the two ends of that contig | 1.0 s, 248 MiB | 1.0 s, 248 MiB |
+| 160,000 contigs of 200 bases, one read each, `chain + write x.cram` | 19.2 s, 116 MiB | 0.5 s, 124 MiB |
+| the same to a BAM | | 0.3 s, 102 MiB |
+
+The CRAM of the 25,000 long reads is 290,281,654 bytes before and 150,884,476 after.
+The probable cause: a slice of 10,000 such reads holds 200,000,000 quality scores, past
+the count at which the vendored rANS encoder's 32-bit product wrapped (vendor/README.md,
+the ninth change). With slices of 8 MiB the file has 150,884,476 bytes with the 32-bit
+product and with the 64-bit one. The old slices with the 64-bit product were not
+measured. samtools reads each file after the fixes to the records of the BAM.
 
 Not measured: Picard on that file; an unsorted stream at scale, which reads the bases
 under each record through the `.fai`; other thread counts. The memgate row ran with the

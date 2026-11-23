@@ -525,3 +525,156 @@ def test_options_and_departures(corpus, tmp_path):
         assert start("SortSam", f"O={out}", *base).returncode == 0, side
         assert out.read_bytes()[:4] == b"\x1f\x8b\x08\x04", side
     RESULTS.append(("cram-writer options", 5, 5, "md5, level, index refused, .CRAM is a BAM"))
+
+
+def read_fasta(path):
+    """[(name, bases)] of a FASTA."""
+    contigs = []
+    for line in path.read_text().split("\n"):
+        if line.startswith(">"):
+            contigs.append([line[1:].split()[0], []])
+        elif line:
+            contigs[-1][1].append(line)
+    return [(name, "".join(lines)) for name, lines in contigs]
+
+
+def write_fasta(path, contigs):
+    with open(path, "w") as out:
+        for name, bases in contigs:
+            out.write(f">{name}\n")
+            out.writelines(bases[at:at + 70] + "\n" for at in range(0, len(bases), 70))
+    assert run(["samtools", "faidx", path]).returncode == 0
+    return path
+
+
+ABSENT = ("A reference must be supplied (reference sequence SAMSequenceRecord(name=chrM,length=12000,"
+          "dict_index=2,assembly=null,alternate_names=[]) not found).")
+
+
+def test_the_fasta_holds_the_headers_contigs_by_name(corpus, tmp_path):
+    """htsjdk finds each contig of the header in the FASTA by its name. Both tools write
+    against a FASTA in another order, one with more contigs, one whose contig is longer
+    than its @SQ line and one that lacks a contig no record lies on; both fail at the first
+    record on a contig the FASTA lacks, with the same sentence."""
+    bam, reference = corpus / "corpus.bam", corpus / "ref.fa"
+    contigs = read_fasta(reference)
+    assert [name for name, _ in contigs] == ["chr1", "chr2", "chrM"]
+    no_m = tmp_path / "no_m.bam"
+    assert run(["samtools", "view", "--no-PG", "-b", "-e", 'rname != "chrM"', "-o", no_m, bam]).returncode == 0
+    cases = {
+        "order": (bam, contigs[::-1]),
+        "more": (bam, [("chrFirst", "ACGT" * 500), *contigs, ("chrLast", "TTGCA" * 300)]),
+        "longer": (bam, [(name, bases + "ACGTA" if name == "chr2" else bases) for name, bases in contigs]),
+        "absent": (no_m, contigs[:2]),
+    }
+    total = 0
+    for case, (source_bam, fasta_contigs) in cases.items():
+        fasta = write_fasta(tmp_path / f"{case}.fa", fasta_contigs)
+        outs = {}
+        for side, start in (("picard", picard), ("bammetrics", ours)):
+            outs[side] = tmp_path / f"{case}.{side}.cram"
+            done = start("SortSam", f"I={source_bam}", f"O={outs[side]}", "SO=coordinate", f"R={fasta}", SILENT)
+            assert done.returncode == 0, f"{case}, {side}: {done.stderr.decode('latin-1')[-400:]}"
+        as_bam = tmp_path / f"{case}.bam"
+        assert ours("SortSam", f"I={source_bam}", f"O={as_bam}", "SO=coordinate").returncode == 0
+        from_bam = samtools_view(as_bam, fasta)
+        assert from_bam.records
+        same_records(f"{case}: samtools, CRAM against BAM", from_bam, samtools_view(outs["bammetrics"], fasta))
+        same_records(f"{case}: Picard, CRAM against BAM", picard_view(as_bam, fasta),
+                     picard_view(outs["bammetrics"], fasta), rules=("rebuilt", "signed"))
+        # Picard's own CRAM against that FASTA holds the same records: its writer leaves MD
+        # and NM out and orders the tags its own way.
+        theirs, mine = samtools_view(outs["picard"], fasta), samtools_view(outs["bammetrics"], fasta)
+        for decoded in (theirs, mine):
+            for record in decoded.records:
+                record[11:] = sorted(tag for tag in record[11:] if tag[:2] not in ("MD", "NM"))
+        same_records(f"{case}: Picard's CRAM against bammetrics'", theirs, mine)
+        total += len(from_bam.records)
+    # A record on chrM, which the FASTA lacks.
+    fasta = tmp_path / "absent.fa"
+    for side, start in (("picard", picard), ("bammetrics", ours)):
+        out = tmp_path / f"fails.{side}.cram"
+        done = start("SortSam", f"I={bam}", f"O={out}", "SO=coordinate", f"R={fasta}", SILENT)
+        assert done.returncode == 1, f"{side}: exit {done.returncode}"
+        assert ABSENT in done.stderr.decode("latin-1"), f"{side}: {done.stderr.decode('latin-1')[-400:]}"
+    assert not (tmp_path / "fails.bammetrics.cram").exists()
+    RESULTS.append(("cram-writer FASTA by name", total, total, "order, more, longer, absent; both fail on a used absent contig"))
+
+
+def test_a_tag_text_with_bytes_outside_printable_ascii(tmp_path):
+    """A BAM whose `Z` value holds UTF-8 bytes or a control byte, and whose read name holds
+    UTF-8 bytes (samtools makes it: both tools read SAM text one byte per character). Both
+    tools write the CRAM. samtools reads bammetrics' CRAM to the bytes of its BAM, and
+    bammetrics reads its CRAM as its BAM. Picard's own CRAM holds another `XZ` text."""
+    head = "@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:chr1\tLN:100000\n"
+    body = ("r1\t0\tchr1\t10\t60\t8M\t*\t0\t0\tACGTACGT\tIIIIIIII\tXZ:Z:café 中\tXY:Z:a\x01b\n"
+            "café\t0\tchr1\t20\t60\t8M\t*\t0\t0\tACGTACGT\tIIIIIIII\tXZ:Z:plain\n")
+    sam, bam = tmp_path / "text.sam", tmp_path / "text.bam"
+    sam.write_bytes((head + body).encode())
+    assert run(["samtools", "view", "--no-PG", "-b", "-o", bam, sam]).returncode == 0
+    outs = {}
+    for side, start in (("picard", picard), ("bammetrics", ours)):
+        for kind in ("bam", "cram"):
+            outs[side, kind] = tmp_path / f"{side}.{kind}"
+            done = start("SortSam", f"I={bam}", f"O={outs[side, kind]}", "SO=coordinate",
+                         f"R={FIXTURE_REFERENCE}", SILENT)
+            assert done.returncode == 0, f"{side} {kind}: {done.stderr.decode('latin-1')[-400:]}"
+    from_bam = samtools_view(outs["bammetrics", "bam"], FIXTURE_REFERENCE)
+    from_cram = samtools_view(outs["bammetrics", "cram"], FIXTURE_REFERENCE)
+    same_records("tag text: samtools, CRAM against BAM", from_bam, from_cram)
+    # samtools prints the bytes; `lines_of` reads them one character per byte.
+    expected = [field.encode().decode("latin-1") for field in ("XZ:Z:café 中", "XY:Z:a\x01b")]
+    assert from_cram.records[0][11:] == expected, from_cram.records[0][11:]
+    assert from_cram.records[1][0] == "café".encode().decode("latin-1")
+    same_records("tag text: bammetrics, CRAM against BAM",
+                 Decoded("bammetrics", ours("ViewSam", f"I={outs['bammetrics', 'bam']}"), header=True),
+                 ours_view(outs["bammetrics", "cram"], FIXTURE_REFERENCE), rules=("rebuilt",))
+    theirs = [tag for tag in samtools_view(outs["picard", "cram"], FIXTURE_REFERENCE).records[0][11:]
+              if tag.startswith("XZ:")]
+    assert theirs and theirs != expected[:1], "Picard's CRAM now keeps the bytes of the tag"
+    RESULTS.append(("cram-writer tag text bytes", 2, 2, f"kept as in the BAM; Picard's CRAM holds {theirs[0]!r}"))
+
+
+def test_a_mate_reference_the_header_lacks_fails_in_both(tmp_path):
+    """A record whose mate reference index is not in the header: a CRAM of it is one no
+    reader opens. Both tools fail, and bammetrics leaves no file."""
+    import struct
+
+    import index_bams
+
+    forged = bytearray(index_bams.record("forged", 0, 100, flag=1))
+    struct.pack_into("<i", forged, 24, 7)
+    bam = tmp_path / "forged.bam"
+    bam.write_bytes(index_bams.bam([("chr1", 100000)], [bytes(forged)], order="unsorted"))
+    for side, start in (("picard", picard), ("bammetrics", ours)):
+        out = tmp_path / f"{side}.cram"
+        done = start("SortSam", f"I={bam}", f"O={out}", "SO=queryname", f"R={FIXTURE_REFERENCE}", SILENT)
+        assert done.returncode == 1, f"{side}: exit {done.returncode}: {done.stderr.decode('latin-1')[-300:]}"
+    assert b"record forged: mate reference index 7 is not in the header" in done.stderr
+    assert not (tmp_path / "bammetrics.cram").exists()
+    RESULTS.append(("cram-writer mate reference outside the header", 1, 1, "both fail"))
+
+
+def test_two_records_picard_refuses_and_bammetrics_writes(tmp_path):
+    """KNOWN_DIFFERENCES.md, CRAM output: a read that starts past the end of its contig and
+    an unmapped record with a CIGAR. Picard's CRAM writer fails on each. bammetrics writes
+    both, as samtools does: samtools reads its CRAM as it reads samtools' own."""
+    head = "@HD\tVN:1.6\tSO:unsorted\n@SQ\tSN:chr1\tLN:100000\n"
+    cases = {
+        "past": "r1\t0\tchr1\t100001\t60\t8M\t*\t0\t0\tACGTACGT\tIIIIIIII\n",
+        "cigar": "r1\t4\tchr1\t10\t60\t8M\t*\t0\t0\tACGTACGT\tIIIIIIII\n",
+    }
+    for case, line in cases.items():
+        sam, bam = tmp_path / f"{case}.sam", tmp_path / f"{case}.bam"
+        sam.write_text(head + line)
+        assert run(["samtools", "view", "--no-PG", "-b", "-o", bam, sam]).returncode == 0
+        theirs = picard("SortSam", f"I={bam}", f"O={tmp_path / f'{case}.picard.cram'}", "SO=queryname",
+                        f"R={FIXTURE_REFERENCE}", SILENT)
+        assert theirs.returncode == 1, f"{case}: Picard now writes it"
+        out, own = tmp_path / f"{case}.cram", tmp_path / f"{case}.samtools.cram"
+        done = ours("SortSam", f"I={bam}", f"O={out}", "SO=queryname", f"R={FIXTURE_REFERENCE}", SILENT)
+        assert done.returncode == 0, done.stderr.decode("latin-1")[-300:]
+        assert run(["samtools", "view", "--no-PG", "-C", "-T", FIXTURE_REFERENCE, "-o", own, bam]).returncode == 0
+        same_records(f"{case}: samtools, ours against samtools' CRAM",
+                     samtools_view(own, FIXTURE_REFERENCE), samtools_view(out, FIXTURE_REFERENCE))
+    RESULTS.append(("cram-writer records Picard refuses", 2, 2, "written; read as samtools' own CRAM"))

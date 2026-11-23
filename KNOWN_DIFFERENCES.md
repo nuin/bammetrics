@@ -1402,6 +1402,29 @@ It differs from the CRAM Picard writes:
   an empty one. A chain that writes a CRAM without `-R` exits 2 before the first read.
 - A block copy (`AddCommentsToBam`, `ReplaceSamHeader` of a BAM, `GatherBamFiles` of BAMs)
   refuses a `.cram` name: Picard writes BAM bytes under it. `out.CRAM` is a BAM in both.
+- The reference. Both find each contig of the header in the FASTA by its name: the FASTA
+  may hold more contigs, in another order, a contig longer than its `@SQ` line, and may
+  lack a contig no record lies on. Both fail on a record whose contig the FASTA lacks, with
+  one sentence (`A reference must be supplied (reference sequence SAMSequenceRecord(name=...)
+  not found).`). Picard also takes `chr1` of the FASTA for `1` of the header. bammetrics
+  fails there with that sentence: samtools reads no record of the CRAM Picard wrote that
+  way (`Reference file given, but ref '1' not present`).
+- Two records Picard's CRAM writer fails on, and bammetrics writes as samtools does. A read
+  that starts past the end of its contig (`Requested start 100000 is beyond the sequence
+  length chr1`): every base is stored. An unmapped record with a CIGAR (`9 > 0`): the CRAM
+  holds neither its CIGAR nor its mapping quality.
+- A mate reference index the header lacks fails in both (bammetrics: `record <name>: mate
+  reference index 7 is not in the header`). No reader opens a CRAM that holds one.
+- Tag texts. bammetrics stores a `Z` or `H` value as the bytes of the BAM. Picard's CRAM
+  holds an `H` as a `B:c` array (`X5:H:1AE301` reads `X5:B:c,26,-29,1`) and each byte of a
+  `Z` over 127 as `?` (`café` in UTF-8 reads `caf??`).
+- Header text that is not ASCII. bammetrics writes the bytes of the BAM header. Picard's
+  CRAM of a header with `DS:café über` in UTF-8 reads, under samtools, as `DS:cafÃ© Ã¼ber`.
+  Picard reads bammetrics' CRAM header as UTF-8 and its BAM header one character per byte,
+  so its `ViewSam` prints the two differently.
+- Slices. Both end a slice at 10,000 records, or at 1,000 at a change of reference.
+  bammetrics also ends one at 8 MiB of BAM records, so a container of long reads is no
+  larger than one of short reads: Picard's holds 10,000 reads of any length.
 
 A reader does not give these back from a CRAM, bammetrics' or samtools' own:
 

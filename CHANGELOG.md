@@ -12,7 +12,7 @@
   chain's `-R`, or `--output-format cram`). The header is the BAM's. Each record keeps
   its own mate fields and every tag where the BAM has it. `CREATE_MD5_FILE` writes
   `<CRAM>.md5`; `COMPRESSION_LEVEL` sets the gzip level of the blocks. Decisions W15-1 to
-  W15-11 of docs/07 list where this is not what Picard's writer does.
+  W15-17 of docs/07 list where this is not what Picard's writer does.
 - `tests/concordance/test_cram_writer.py`: each CRAM is read by samtools, Picard 3.5.0 and
   bammetrics and held to the BAM of the same stream and to samtools' own CRAM of it, on
   the foundation corpus, t1, the exome slice and the hand-built BAMs of `cram_bams.py`,
@@ -20,6 +20,35 @@
   by samtools alone, each on a fixture.
 - `vendor/noodles-cram`: `io::writer::raw`, the CRAM writer in pieces, and a writer whose
   bytes are a function of its records (vendor/README.md, changes six and seven).
+- The CRAM writer after its review (docs/07 W15-12 to W15-17):
+  - The reference of a CRAM output is found by name. A FASTA with more contigs than the
+    header, in another order, with a contig longer than its `@SQ` line, or without a
+    contig no record lies on is written, as Picard writes it. A record on a contig the
+    FASTA lacks fails with htsjdk's sentence. The strict check refused all four.
+  - A `Z` or `H` tag value is stored as the bytes of the BAM. One record with a UTF-8
+    letter or a control byte in a tag failed the whole file with `invalid string`.
+  - A record whose mate reference index is not in the header fails the writer, as it
+    fails Picard. It was written into a CRAM no reader opens.
+  - A slice ends at 8 MiB of BAM records as well as at 10,000 records, and at most 64 MiB
+    of BAM records wait for the encoders. 25,000 reads of 20,000 bases: 1,855 MiB peak
+    RSS before and 649 MiB after with 1 thread, 2,996 and 1,088 MiB with 8.
+  - A slice reads the reference bases it spans, in place of its whole contig. 5 reads
+    close together on a 250 Mbp contig: 248 MiB before, 10 MiB after.
+  - No `.fai` line is searched by name. 160,000 contigs with one read each: 19.2 s
+    before, 0.5 s after.
+  - bammetrics reads a CRAM whose read name or tag text has a byte noodles' BAM encoder
+    refuses (a UTF-8 letter, a control byte, an `@` in a name), from any writer.
+  - `vendor/noodles-cram`: the rANS 4x8 frequency table in 64-bit arithmetic, tag texts
+    as bytes, `Record::mask_texts` (vendor/README.md, changes eight to ten).
+  - `benches/memgate.toml`: the fixture row `clean-sam cram long reads` (3,000 reads of
+    50,000 bases, 185 to 200 MiB, limit 320 MiB; 777 MiB before).
+  - `tests/concordance/test_cram_writer.py`: four tests against Picard for the FASTA found
+    by name, tag texts outside printable ASCII, a mate reference the header lacks, and the
+    two records Picard's CRAM writer refuses and bammetrics writes (a read that starts
+    past its contig end, an unmapped record with a CIGAR; KNOWN_DIFFERENCES.md). One
+    golden record, `error_sort_sam_cram_absent_contig`.
+  - `--help`, the tool summaries, the Python docstrings, README, docs/cli.md and
+    docs/python.md name the CRAM output where they named a BAM and SAM text alone.
 
 ### Changed
 
@@ -36,8 +65,9 @@
   exome BAM (150,538,907 records) as a CRAM with 8 threads: 587 and 688 MiB peak RSS in
   two runs, about 180 s, 52.9% of the BAM's bytes; samtools reads every record equal to
   the BAM's. samtools' own CRAM 3.0 of it is 14% smaller and written 3.7 times as fast
-  (docs/benchmarks.md, docs/07 W15-11). Not measured: Picard on that file, an unsorted
-  stream at scale.
+  (docs/benchmarks.md, docs/07 W15-11). After the review fixes: 360 and 422 MiB, the
+  same bytes, every record equal under samtools again. Not measured: Picard on that
+  file, an unsorted stream at scale.
 - `make budgets`: the binary, formats and Parquet growth rows are regression checks at the 0.31.0 size, after the owner accepted the binary size on 2026-11-22 (docs/07 decisions D22, D149, D156 and D159). Targets 430,000 bytes, 200 KB and 1.1 MiB; each fails at 1.5x its target (645,000 bytes, 300 KB, 1.65 MiB). The other rows still fail at 2x.
 
 ## 0.31.0

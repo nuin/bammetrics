@@ -1,0 +1,11 @@
+## argv
+SortSam
+I=tests/data/markdup.bam
+O=OUT/sorted.cram
+SORT_ORDER=coordinate
+R=tests/data/n_runs.fa
+## exit
+1
+## stdout
+## stderr
+bammetrics: A reference must be supplied (reference sequence SAMSequenceRecord(name=chr1,length=100000,dict_index=0,assembly=null,alternate_names=[]) not found).
