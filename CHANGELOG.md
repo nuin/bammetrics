@@ -29,8 +29,12 @@
   A block copy (`AddCommentsToBam`, `ReplaceSamHeader` of a BAM, `GatherBamFiles` of
   BAMs) still refuses a `.cram` name, and `SplitSamByLibrary` still refuses a CRAM input,
   now without a wave in its message. `--output-format` takes `cram`.
-- Not measured: the writer on real data. No scale run was made and `benches/memgate.toml`
-  has no row for it (docs/07 W15-11).
+- `benches/memgate.toml`: a fixture row and a scale row for the CRAM writer. The HG002
+  exome BAM (150,538,907 records) as a CRAM with 8 threads: 587 and 688 MiB peak RSS in
+  two runs, about 180 s, 52.9% of the BAM's bytes; samtools reads every record equal to
+  the BAM's. samtools' own CRAM 3.0 of it is 14% smaller and written 3.7 times as fast
+  (docs/benchmarks.md, docs/07 W15-11). Not measured: Picard on that file, an unsorted
+  stream at scale.
 - `make budgets`: the binary, formats and Parquet growth rows are regression checks at the 0.31.0 size, after the owner accepted the binary size on 2026-11-22 (docs/07 decisions D22, D149, D156 and D159). Targets 430,000 bytes, 200 KB and 1.1 MiB; each fails at 1.5x its target (645,000 bytes, 300 KB, 1.65 MiB). The other rows still fail at 2x.
 
 ## 0.31.0

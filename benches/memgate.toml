@@ -1115,3 +1115,32 @@ argv = [
 needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
 max_rss_mib = 1024
 max_seconds = 600
+
+# A CRAM against the reference (cram_writer.rs): one contig of the reference in memory,
+# one container per compression thread.
+[[command]]
+name = "sort-sam cram"
+argv = [
+    "{bin}", "sort-sam", "tests/data/markdup.bam", "-o", "{out}/sorted.cram",
+    "--sort-order", "coordinate", "-R", "tests/data/ref_100k.fa", "--create-md5-file",
+]
+needs = ["tests/data/markdup.bam", "tests/data/ref_100k.fa"]
+max_rss_mib = 64
+max_seconds = 30
+
+# The exome BAM (150,538,907 records, coordinate order) as a CRAM, with the default 8
+# threads. Two runs when the row was added: 587 and 688 MiB peak RSS, 182 and 173 s,
+# 5,464,644,737 bytes. The limit is the streaming writer target of docs/07 section 6.
+[[command]]
+name = "chain write cram exome"
+tier = "scale"
+argv = [
+    "{bin}", "chain", "~/data/bammetrics-scale/exome/HG002.exome.bam", "-R",
+    "~/data/bammetrics-scale/exome/hs37d5.fa", "+", "write", "{out}/exome.cram",
+]
+needs = [
+    "~/data/bammetrics-scale/exome/HG002.exome.bam",
+    "~/data/bammetrics-scale/exome/hs37d5.fa",
+]
+max_rss_mib = 1024
+max_seconds = 600

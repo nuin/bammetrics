@@ -61,11 +61,12 @@ const SPILL_BYTES_COORDINATE: u64 = 76;
 /// and 584,011,111 (coordinate) over those records.
 const BAM_OUT_QUERYNAME: u64 = 102;
 const BAM_OUT_COORDINATE: u64 = 70;
-/// CRAM bytes per record `write x.cram` makes: the BAM's, a placeholder. No
-/// real input was measured (docs/07 W15-11). It errs high: the CRAM was 32%
-/// to 69% of the BAM on the corpus files.
+/// CRAM bytes per record `write x.cram` makes. Coordinate order: 5,464,644,737
+/// bytes over the 150,538,907 records of the whole exome (36.3). Any other
+/// order was not measured at scale and takes the BAM's, which errs high (a
+/// queryname CRAM was 32% to 67% of its BAM on three corpus files).
 const CRAM_OUT_QUERYNAME: u64 = BAM_OUT_QUERYNAME;
-const CRAM_OUT_COORDINATE: u64 = BAM_OUT_COORDINATE;
+const CRAM_OUT_COORDINATE: u64 = 37;
 /// Peak bytes in `TMP_DIR` per record of a `MarkDuplicates` run that
 /// spills: 46 on that BAM (6.5 GiB), 59 on that CRAM (42.1 GiB). The
 /// larger one, so the estimate errs high.

@@ -1370,8 +1370,11 @@ the record-editing tools that rewrite their records, and the chain `write` step.
 same command writes (`tests/concordance/test_cram_writer.py`: `SortSam`, `MergeSamFiles`,
 `MarkDuplicates`, `AddOrReplaceReadGroups`, `CleanSam`, `DownsampleSam` and the chain
 `write` step; `AddOATag` in its own module). The other record-editing tools write through
-the same code and have no CRAM test. CRAM bytes are never compared. No real data was
-written: memory and speed at scale are not measured.
+the same code and have no CRAM test. CRAM bytes are never compared. At scale one input
+was written, the HG002 exome BAM in coordinate order: samtools reads its 150,538,907
+records equal to the BAM's, the file is 16.6% larger than samtools' CRAM 3.0 of that BAM
+and takes 3.7 times as long to write (docs/benchmarks.md). Picard did not read that file,
+and no unsorted stream was written at scale.
 
 It differs from the CRAM Picard writes:
 

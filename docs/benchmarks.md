@@ -499,6 +499,39 @@ holds 1 MiB of bases and at most three intervals. On one generated contig of 200
 bases (`n_run_refs.py --long`, 40,002 lines written) bammetrics peaks at 4.9 MiB in both
 tools.
 
+## CRAM writer (wave W15, HG002 exome)
+
+20 cores, 64 GB. Release build of `feat/cram-writer`, under `/usr/bin/time -l`, other
+builds and test runs on the machine. The input is `HG002.exome.bam`: 10,339,495,604
+bytes, 150,538,907 records, coordinate order, on `hs37d5.fa`. Each command ran with 8
+threads. samtools 1.25 with `--output-fmt-option version=3.0` is there for scale.
+
+| command | wall | peak RSS | CRAM bytes | of the BAM |
+|---|---:|---:|---:|---:|
+| `bammetrics chain BAM -R hs37d5.fa + write out.cram`, first run | 181.5 s | 587 MiB | 5,464,644,737 | 52.9% |
+| the same, as the row `chain write cram exome` of `make memgate TIER=scale` | 173.3 s | 688 MiB | | |
+| `samtools view -@ 8 -C --output-fmt-option version=3.0` | 48.7 s | 1,389 MiB | 4,687,059,835 | 45.3% |
+
+The two bammetrics runs are the same command on the same input; their peak RSS differs by
+100 MiB, and why was not looked into. bammetrics' CRAM is 16.6% larger than samtools' and
+takes 3.7 times as long to write. Every record is detached, every tag is stored where
+the BAM has it, and all blocks but the quality scores are gzip; which of these costs what
+was not measured.
+
+What was checked on that file:
+
+- samtools reads its header and its 150,538,907 records equal to the BAM's
+  (`samtools view --input-fmt-option decode_md=0`): the two decoded texts compared line
+  by line, 0 differ, and their MD5 is the same (`966e8c70e4a7c4b2f34032abc4b25226`). The
+  same comparison with `-x RG` on the CRAM side reports every one of its first 1,000,000
+  records, so it sees a difference where there is one.
+- bammetrics `CollectQualityYieldMetrics` gives the same file body from the BAM (34 s)
+  and from the CRAM (55 s): 150,386,776 reads, 18,948,733,776 bases.
+
+Not measured: Picard on that file; an unsorted stream at scale, which reads the bases
+under each record through the `.fai`; other thread counts. The memgate row ran with the
+default `--out-root`, so its file was written under the checkout's `target/memgate`.
+
 ## Memory gate
 
 `make memgate` runs each row of `benches/memgate.toml` under `/usr/bin/time -l` and fails
