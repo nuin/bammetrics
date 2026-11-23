@@ -1,11 +1,13 @@
 //! Reference bases one contig at a time, as Picard's
 //! `ReferenceSequenceFileWalker` hands them to `SinglePassSamProgram`.
 
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
-use noodles::core::{Position, Region};
+use noodles::core::Position;
+use noodles::core::region::Interval;
 use noodles::fasta;
 use noodles::sam;
 
@@ -37,16 +39,14 @@ impl Reference {
     /// they must name the same contigs with the same lengths in the same
     /// order (`SequenceDictionaryUtils.assertSequenceDictionariesEqual`).
     pub fn open(path: &Path, header: &sam::Header) -> Result<Self> {
+        let reference = Self::open_unchecked(path)?;
         let error = |message: String| Error::Reference {
             path: path.to_path_buf(),
             message,
         };
-        let reader = fasta::io::indexed_reader::Builder::default()
-            .build_from_path(path)
-            .map_err(|e| error(format!("cannot open with its .fai index: {e}")))?;
         let contigs = header.reference_sequences();
         if !contigs.is_empty() {
-            let index = reader.index().as_ref();
+            let index = reference.reader.index().as_ref();
             if index.len() != contigs.len() {
                 return Err(error(format!(
                     "{} contigs in the reference, {} in the BAM header",
@@ -66,12 +66,44 @@ impl Reference {
                 }
             }
         }
+        Ok(reference)
+    }
+
+    /// Open `path` and its `path.fai` with no check against a header: the
+    /// caller finds each contig it needs ([`Reference::places`]).
+    pub fn open_unchecked(path: &Path) -> Result<Self> {
+        let reader = fasta::io::indexed_reader::Builder::default()
+            .build_from_path(path)
+            .map_err(|e| Error::Reference {
+                path: path.to_path_buf(),
+                message: format!("cannot open with its .fai index: {e}"),
+            })?;
         Ok(Self {
             path: path.to_path_buf(),
             reader,
             size: std::fs::metadata(path).map_or(0, |m| m.len()),
             current: None,
         })
+    }
+
+    /// Where the `.fai` has each reference sequence of `header`, found by
+    /// name: its index there and its length there, `None` for a name the
+    /// `.fai` lacks. The first line of a name counts. One pass over the
+    /// `.fai` and one over the header.
+    pub fn places(&self, header: &sam::Header) -> Vec<Option<(usize, u64)>> {
+        let index = self.reader.index().as_ref();
+        let mut by_name: HashMap<&[u8], usize> = HashMap::with_capacity(index.len());
+        for (id, record) in index.iter().enumerate() {
+            by_name.entry(record.name().as_ref()).or_insert(id);
+        }
+        header
+            .reference_sequences()
+            .keys()
+            .map(|name| {
+                let id = *by_name.get(AsRef::<[u8]>::as_ref(name))?;
+                Some((id, index[id].length()))
+            })
+            .collect()
     }
 
     /// Bases of the contig at `id` in the reference dictionary.
@@ -97,8 +129,10 @@ impl Reference {
     }
 
     /// Bases `start..=end` (1-based) of the contig at `id`, read through the
-    /// `.fai` without loading the contig (`ReferenceSequenceFile.getSubsequenceAt`).
-    /// It does not move the forward-only `contig` walker.
+    /// `.fai` without loading the contig (`ReferenceSequenceFile.getSubsequenceAt`):
+    /// fewer where the contig's lines end before `end`. The `.fai` line is
+    /// taken by `id`, with no search by name. It does not move the
+    /// forward-only `contig` walker.
     pub fn subsequence(&mut self, id: usize, start: i64, end: i64) -> Result<Vec<u8>> {
         if end < start {
             return Ok(Vec::new());
@@ -109,8 +143,21 @@ impl Reference {
                 .and_then(Position::new)
                 .ok_or_else(|| self.error(format!("bad position {p}")))
         };
-        let region = Region::new(self.name(id)?, position(start)?..=position(end)?);
-        self.query(&region)
+        let (start, end) = (position(start)?, position(end)?);
+        let record = self.record(id)?;
+        if usize::from(start) as u64 > record.length() {
+            // The offset of such a start lies in the lines of a later contig.
+            return Ok(Vec::new());
+        }
+        let offset = record
+            .query(Interval::from(start..=end))
+            .map_err(|e| self.error(e.to_string()))?;
+        let limit = usize::from(end) - usize::from(start) + 1;
+        // Nothing is reserved: `limit` comes from a record's CIGAR.
+        let mut bases = Vec::new();
+        read_bases(self.reader.get_mut(), offset, limit, &mut bases)
+            .map_err(|e| self.error(e.to_string()))?;
+        Ok(bases)
     }
 
     /// Every base of the contig at `id`, read fresh through the `.fai`.
@@ -124,17 +171,16 @@ impl Reference {
     /// Every base of the contig at `id` into `bases`, cleared first: the
     /// bases noodles' query of the whole contig returns, read into a buffer
     /// reserved at the `.fai` length (at most the FASTA's size) with no
-    /// copy. Picard's walker holds one contig too.
+    /// copy. Picard's walker holds one contig too. The `.fai` line is taken
+    /// by `id`: noodles' query by name scans the index, which made a walk
+    /// over every contig quadratic in their number.
     fn read_contig(&mut self, id: usize, bases: &mut Vec<u8>) -> Result<()> {
-        let region = Region::new(self.name(id)?, ..);
-        let index = self.reader.index();
-        let length = index.as_ref().get(id).map_or(0, |r| r.length());
-        let offset = index
-            .query(&region)
-            .map_err(|e| self.error(e.to_string()))?;
+        let record = self.record(id)?;
+        let (length, offset) = (record.length(), record.position());
         bases.clear();
         bases.reserve(usize::try_from(length.min(self.size)).unwrap_or(0));
-        read_bases(self.reader.get_mut(), offset, bases).map_err(|e| self.error(e.to_string()))
+        read_bases(self.reader.get_mut(), offset, usize::MAX, bases)
+            .map_err(|e| self.error(e.to_string()))
     }
 
     /// Number of contigs in the `.fai`.
@@ -146,24 +192,17 @@ impl Reference {
         self.len() == 0
     }
 
-    fn name(&self, id: usize) -> Result<Vec<u8>> {
+    /// The `.fai` line at `id`.
+    fn record(&self, id: usize) -> Result<&fasta::fai::Record> {
         self.reader
             .index()
             .as_ref()
             .get(id)
-            .map(|r| r.name().to_vec())
             .ok_or_else(|| self.error(format!("no contig {id} in the .fai index")))
     }
 
-    fn query(&mut self, region: &Region) -> Result<Vec<u8>> {
-        let record = self
-            .reader
-            .query(region)
-            .map_err(|e: io::Error| self.error(e.to_string()))?;
-        Ok(record.sequence().as_ref().to_vec())
-    }
-
-    fn error(&self, message: String) -> Error {
+    /// An error that names this FASTA.
+    pub(crate) fn error(&self, message: String) -> Error {
         Error::Reference {
             path: self.path.clone(),
             message,
@@ -173,14 +212,20 @@ impl Reference {
 
 /// The sequence lines from `offset` to the next `>` or the end of the
 /// file, as noodles' sequence reader takes them: empty lines skipped, the
-/// line end and a `\r` before it dropped.
+/// line end and a `\r` before it dropped. At most `limit` bases are added
+/// to `bases`.
 fn read_bases<R: BufRead + Seek>(
     reader: &mut R,
     offset: u64,
+    limit: usize,
     bases: &mut Vec<u8>,
 ) -> io::Result<()> {
     reader.seek(SeekFrom::Start(offset))?;
+    let end = bases.len().saturating_add(limit);
     loop {
+        if bases.len() >= end {
+            return Ok(());
+        }
         loop {
             let mut newline = false;
             if reader.fill_buf()?.starts_with(b"\r") {
@@ -204,6 +249,7 @@ fn read_bases<R: BufRead + Seek>(
             .position(|&b| b == b'\n')
             .map_or(src, |end| &src[..end]);
         let line = line.strip_suffix(b"\r").unwrap_or(line);
+        let line = &line[..line.len().min(end - bases.len())];
         bases.extend_from_slice(line);
         let used = line.len();
         reader.consume(used);
@@ -212,7 +258,64 @@ fn read_bases<R: BufRead + Seek>(
 
 #[cfg(test)]
 mod tests {
+    use noodles::core::Region;
+
     use super::*;
+
+    /// A contig is read through its own `.fai` line, with no search by
+    /// name. 100,000 contigs, each loaded whole and read in part: noodles'
+    /// query by name took 176 s in a debug build on the machine this was
+    /// written on, and reading by index 0.3 s.
+    #[test]
+    fn a_walk_over_100_000_contigs_is_linear() {
+        const CONTIGS: usize = 100_000;
+        let dir = std::env::temp_dir().join(format!("bammetrics-ref-{}-many", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("ref.fa");
+        let (mut fasta, mut fai) = (String::new(), String::new());
+        for id in 0..CONTIGS {
+            fasta.push_str(&format!(">c{id}\n"));
+            fai.push_str(&format!("c{id}\t8\t{}\t8\t9\n", fasta.len()));
+            fasta.push_str("ACGTACGT\n");
+        }
+        std::fs::write(&path, fasta).expect("write FASTA");
+        std::fs::write(dir.join("ref.fa.fai"), fai).expect("write .fai");
+        let mut reference = Reference::open_unchecked(&path).expect("opens");
+        let started = std::time::Instant::now();
+        for id in 0..CONTIGS {
+            assert_eq!(reference.load(id).expect("load"), b"ACGTACGT");
+            assert_eq!(reference.subsequence(id, 3, 6).expect("part"), b"GTAC");
+        }
+        let took = started.elapsed();
+        std::fs::remove_dir_all(&dir).expect("cleanup");
+        assert!(took.as_secs() < 10, "{took:?} for {CONTIGS} contigs");
+    }
+
+    /// The contigs of a header are found by name: a FASTA with more
+    /// contigs, in another order, of another length, or without one.
+    #[test]
+    fn places_are_found_by_name() {
+        let reference = Reference::open_unchecked(&two_contigs("places")).expect("opens");
+        let header: sam::Header = "@SQ\tSN:chr2\tLN:9\n@SQ\tSN:chrX\tLN:5\n@SQ\tSN:chr1\tLN:10\n"
+            .parse()
+            .expect("header");
+        assert_eq!(
+            reference.places(&header),
+            [Some((1, 4)), None, Some((0, 10))]
+        );
+        assert!(Reference::open(&two_contigs("strict"), &header).is_err());
+    }
+
+    /// A part of a contig stops at the contig's last line, and at the end
+    /// asked for inside a line.
+    #[test]
+    fn a_subsequence_ends_with_its_contig() {
+        let mut reference = Reference::open_unchecked(&two_contigs("ends")).expect("opens");
+        assert_eq!(reference.subsequence(0, 9, 40).expect("chr1"), b"AC");
+        assert_eq!(reference.subsequence(1, 2, 3).expect("chr2"), b"GG");
+        assert!(reference.subsequence(0, 11, 14).expect("past").is_empty());
+        assert!(reference.subsequence(2, 1, 4).is_err());
+    }
 
     /// chr1 = ACGTACGTAC, chr2 = GGGG, one line each, with a `.fai`, in a
     /// directory of its own per test so parallel tests do not race.

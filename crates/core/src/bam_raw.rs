@@ -212,6 +212,50 @@ pub(crate) fn sign_unsigned_arrays(buf: &mut [u8]) -> io::Result<()> {
     Ok(())
 }
 
+/// Put back the texts a CRAM record was written without
+/// (`noodles::cram::Record::mask_texts`) into the record `buf` (no
+/// `block_size`): the read name `name`, of the length the record's has, and
+/// for each `(place, type, bytes)` of `texts` the field at `place` among
+/// the tags, which is a `Z` of as many bytes and gets the type and the
+/// bytes. `texts` is in the order of the places.
+pub(crate) fn restore_texts(
+    buf: &mut [u8],
+    name: Option<&[u8]>,
+    texts: &[(usize, u8, Vec<u8>)],
+) -> io::Result<()> {
+    let start = checked_tags_start(buf)?;
+    if let Some(name) = name {
+        if usize::from(buf[8]) != name.len() + 1 {
+            return Err(invalid("a read name of another length than the CRAM holds"));
+        }
+        buf[FIXED..FIXED + name.len()].copy_from_slice(name);
+    }
+    let mut wanted = texts.iter().peekable();
+    let mut found = Vec::with_capacity(texts.len());
+    let mut tags = TagIter::new(&buf[start..]);
+    let mut place = 0;
+    while let Some((at_place, _, text)) = wanted.peek() {
+        let at = buf.len() - tags.rest.len();
+        if tags.next().transpose()?.is_none() {
+            return Err(invalid("fewer tags than the CRAM record has"));
+        }
+        if place == *at_place {
+            let value = at + 3..at + 3 + text.len();
+            if buf[at + 2] != b'Z' || buf.get(value.end) != Some(&0) {
+                return Err(invalid("a tag text of another length than the CRAM holds"));
+            }
+            found.push(value);
+            wanted.next();
+        }
+        place += 1;
+    }
+    for (value, (_, kind, text)) in found.into_iter().zip(texts) {
+        buf[value.start - 1] = *kind;
+        buf[value].copy_from_slice(text);
+    }
+    Ok(())
+}
+
 impl RawRecord {
     /// The record whose bytes are `buf`, checked so every accessor stays in
     /// bounds.

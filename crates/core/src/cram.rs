@@ -619,7 +619,7 @@ fn decode_container(
     for slice in container.slices() {
         let slice = slice?;
         let (core, external) = slice.decode_blocks()?;
-        let records = slice
+        let mut records = slice
             .records(
                 repository.clone(),
                 header,
@@ -628,9 +628,26 @@ fn decode_container(
                 &external,
             )
             .map_err(checksum)?;
-        for record in &records {
+        for record in &mut records {
             let start = writer.get_ref().len();
-            writer.write_alignment_record(header, record)?;
+            if let Err(error) = writer.write_alignment_record(header, record) {
+                // noodles' BAM encoder refuses a read name with a byte
+                // outside `!` to `~` or an `@`, a `Z` byte outside ` ` to
+                // `~` and an `H` text that is not hex pairs. A BAM and a
+                // CRAM hold each, and htsjdk and htslib read them: the
+                // record is written with stand-in texts, then given its own.
+                let (name, texts) = record.mask_texts();
+                if name.is_none() && texts.is_empty() {
+                    return Err(error);
+                }
+                writer.get_mut().truncate(start);
+                writer.write_alignment_record(header, record)?;
+                crate::bam_raw::restore_texts(
+                    &mut writer.get_mut()[start + 4..],
+                    name.as_deref(),
+                    &texts,
+                )?;
+            }
             if sam::alignment::Record::flags(record)?.is_unmapped() {
                 // CRAM stores no mapping quality for an unmapped record.
                 // htsjdk gives it 0; noodles leaves it missing, which BAM

@@ -659,7 +659,32 @@ fn records_a_cram_cannot_hold_fail_and_name_the_record() {
         ..Rec::default()
     });
     let message = fails("other", true, &header, &[other]);
-    assert!(message.contains("reference index 7"), "{message}");
+    assert!(
+        message.contains("record other: reference index 7 is not in the header"),
+        "{message}"
+    );
+    // A reader fails on a mate reference the header lacks, on a placed
+    // record and on an unplaced one.
+    for (name, reference, start) in [("mate", 0, 1), ("lone", -1, 0)] {
+        let record = raw(&Rec {
+            name,
+            flags: if reference < 0 { 0x5 } else { 0x1 },
+            reference,
+            start,
+            cigar: if reference < 0 { &[] } else { &[(4, 0)] },
+            mate: (2, 5, 0),
+            bases: b"ACGT",
+            qualities: Some(&qualities),
+            ..Rec::default()
+        });
+        let message = fails(name, true, &header, &[record]);
+        assert!(
+            message.contains(&format!(
+                "record {name}: mate reference index 2 is not in the header"
+            )),
+            "{message}"
+        );
+    }
 }
 
 #[test]
@@ -677,13 +702,164 @@ fn records_out_of_the_headers_order_fail_as_in_the_bam_writer() {
     );
 }
 
+/// Ten bases of c2 from `start` on, as a record on the reference sequence
+/// `reference` of the header.
+fn on_c2(name: &str, reference: i32, start: i32) -> RawRecord {
+    let c2 = "ACGGTCAT".repeat(250);
+    let from = (start - 1) as usize;
+    let bases: Vec<u8> = c2.bytes().chain([b'T'; 20]).skip(from).take(10).collect();
+    raw(&Rec {
+        name,
+        reference,
+        start,
+        cigar: &[(10, 0)],
+        bases: &bases,
+        qualities: Some(&[25u8; 10]),
+        ..Rec::default()
+    })
+}
+
+/// htsjdk's `ReferenceSource` finds a contig by its name: the FASTA may
+/// hold more contigs than the header, in another order, and lack one no
+/// record lies on.
 #[test]
-fn the_reference_must_hold_the_headers_contigs() {
-    let header: sam::Header = format!("@SQ\tSN:c1\tLN:{}\n", C1.len())
-        .parse()
-        .expect("header");
-    let message = fails("contigs", true, &header, &[]);
-    assert!(message.contains("2 contigs in the reference"), "{message}");
+fn the_fasta_holds_the_headers_contigs_by_name() {
+    let parse = |text: &str| -> sam::Header { text.parse().expect("header") };
+    let cases = [
+        ("more", "@SQ\tSN:c2\tLN:2000\n", 0),
+        ("order", "@SQ\tSN:c2\tLN:2000\n@SQ\tSN:c1\tLN:43\n", 0),
+        (
+            "absent",
+            "@SQ\tSN:c0\tLN:77\n@SQ\tSN:c1\tLN:43\n@SQ\tSN:c2\tLN:2000\n",
+            2,
+        ),
+    ];
+    for (name, text, c2) in cases {
+        let header = parse(text);
+        // The second record's slice spans under an eighth of c2, and the
+        // third runs four bases past its end.
+        let written = [on_c2("a", c2, 1), on_c2("b", c2, 700), on_c2("c", c2, 1995)];
+        let (read, records, _) = round_trip(name, &header, &written, 1);
+        assert_eq!(
+            read.reference_sequences().len(),
+            header.reference_sequences().len()
+        );
+        assert_eq!(records.len(), 3, "{name}");
+        for (written, read) in written.iter().zip(&records) {
+            assert_same(written, read);
+        }
+    }
+    // A record on the contig the FASTA lacks fails with htsjdk's sentence.
+    let message = fails("absent-used", true, &parse(cases[2].1), &[on_c2("a", 0, 1)]);
+    assert_eq!(
+        message,
+        "A reference must be supplied (reference sequence SAMSequenceRecord(name=c0,length=77,\
+         dict_index=0,assembly=null,alternate_names=[]) not found)."
+    );
+}
+
+/// An `@SQ` length that is not the FASTA's: the bases both hold are stored
+/// against the reference, the bases past either end as they are.
+#[test]
+fn a_contig_of_another_length_than_its_sq_line() {
+    for (name, length) in [("longer", 1990), ("shorter", 2010)] {
+        let header: sam::Header = format!("@SQ\tSN:c1\tLN:43\n@SQ\tSN:c2\tLN:{length}\n")
+            .parse()
+            .expect("header");
+        let written = [
+            on_c2("a", 1, 1),
+            on_c2("b", 1, 1985),
+            on_c2("c", 1, 1995),
+            on_c2("d", 1, 2005),
+        ];
+        let (_, records, _) = round_trip(name, &header, &written, 1);
+        assert_eq!(records.len(), 4, "{name}");
+        for (written, read) in written.iter().zip(&records) {
+            assert_same(written, read);
+        }
+    }
+}
+
+/// A slice that spans a small part of its contig reads that part through
+/// the `.fai`; one that spans more loads the contig, and the writer keeps
+/// it for the slices after it. The reader checks the MD5 of each slice
+/// against the bases it reads itself.
+#[test]
+fn a_slice_reads_the_bases_it_spans() {
+    let narrow: Vec<RawRecord> = (0..40)
+        .map(|i| on_c2(&format!("n{i:02}"), 1, 600 + i))
+        .collect();
+    let (_, records, bytes) = round_trip("narrow", &header("coordinate"), &narrow, 1);
+    assert_eq!(containers(&bytes), [(1, 40)]);
+    for (written, read) in narrow.iter().zip(&records) {
+        assert_same(written, read);
+    }
+    // A first slice from base 1 to base 1,909 of c2, then the narrow one.
+    let mut wide = vec![on_c2("w", 1, 1)];
+    wide.extend((0..9_999).map(|i| on_c2(&format!("w{i:04}"), 1, 1900)));
+    wide.extend(narrow.iter().cloned());
+    let (_, records, bytes) = round_trip("wide", &header("unsorted"), &wide, 2);
+    assert_eq!(containers(&bytes), [(1, 10_000), (1, 40)]);
+    assert_eq!(records.len(), wide.len());
+    for (written, read) in wide.iter().zip(&records) {
+        assert_same(written, read);
+    }
+}
+
+/// A container ends at [`BYTES_PER_SLICE`] of BAM records as well as at
+/// 10,000 records, so long reads fill no more memory than short ones.
+#[test]
+fn a_container_of_long_reads_is_cut_by_its_bytes() {
+    let bases = vec![b'A'; 500_000];
+    let qualities = vec![30u8; bases.len()];
+    let names: Vec<String> = (0..26).map(|i| format!("long{i:02}")).collect();
+    let written: Vec<RawRecord> = names
+        .iter()
+        .map(|name| {
+            raw(&Rec {
+                name,
+                flags: 0x4,
+                reference: -1,
+                start: 0,
+                mapq: 0,
+                bases: &bases,
+                qualities: Some(&qualities),
+                ..Rec::default()
+            })
+        })
+        .collect();
+    let size = written[0].as_bytes().len() + 4;
+    let per_container = BYTES_PER_SLICE.div_ceil(size);
+    assert_eq!(per_container, 12);
+    let (_, read, bytes) = round_trip("long", &header("unsorted"), &written, 2);
+    assert_eq!(read.len(), written.len());
+    assert_eq!(read[25].bases(), bases);
+    assert_eq!(containers(&bytes), [(-1, 12), (-1, 12), (-1, 2)]);
+}
+
+/// A `Z` or `H` text and a read name are stored as the bytes the BAM
+/// holds: a UTF-8 letter, a control byte, lower-case hex digits, an `@` and
+/// a space in a name. noodles' encoders refuse each, in the CRAM writer
+/// (the tags) and in the BAM records the CRAM reader makes (both).
+#[test]
+fn a_tag_text_keeps_bytes_outside_printable_ascii() {
+    let written = raw(&Rec {
+        name: "caf\u{e9}@ x",
+        reference: 1,
+        start: 1,
+        cigar: &[(8, 0)],
+        bases: b"ACGGTCAT",
+        qualities: Some(&[20u8; 8]),
+        tags: b"RGZcaf\xc3\xa9\0XZZa\x01b\0XAAqXHH1ae3\0XZZ\0XYZ\xff\0XBBc\x01\x00\x00\x00\x07",
+        ..Rec::default()
+    });
+    let (_, read, _) = round_trip(
+        "text",
+        &header("coordinate"),
+        std::slice::from_ref(&written),
+        1,
+    );
+    assert_same(&written, &read[0]);
 }
 
 #[test]

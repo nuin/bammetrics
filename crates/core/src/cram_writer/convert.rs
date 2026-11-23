@@ -73,6 +73,37 @@ fn cigar(record: &RawRecord) -> io::Result<(Vec<(u32, u8)>, bool)> {
     Ok((field, false))
 }
 
+/// [`cigar`] as a decoder reads it back: CIGAR `*` on a mapped record with
+/// bases is one `M` over the read, so the bases are stored against the
+/// reference under it.
+fn aligned_cigar(record: &RawRecord) -> io::Result<(Vec<(u32, u8)>, bool)> {
+    let (mut cigar, long) = cigar(record)?;
+    let length = record.sequence_length();
+    if record.flags() & 0x4 == 0 && cigar.is_empty() && length > 0 {
+        cigar.push((length as u32, 0));
+    }
+    Ok((cigar, long))
+}
+
+/// The last reference base a mapped record of `cigar` at `start` covers:
+/// `start` for a record without a reference base.
+fn last_base(start: usize, cigar: &[(u32, u8)]) -> usize {
+    let span = crate::bam_raw::reference_length(cigar.iter().copied());
+    start + usize::try_from(span).unwrap_or(0).max(1) - 1
+}
+
+/// The first and the last reference base of `record`, as [`convert`]
+/// returns its end: the start twice for a record flagged unmapped. The
+/// writer reads the bases of a slice between the extents of its records.
+pub(super) fn extent(record: &RawRecord) -> io::Result<(usize, usize)> {
+    let start = usize::try_from(record.alignment_start()).unwrap_or(0);
+    if record.flags() & 0x4 != 0 {
+        return Ok((start, start));
+    }
+    let (cigar, _) = aligned_cigar(record)?;
+    Ok((start, last_base(start, &cigar)))
+}
+
 /// One field of a tag block.
 struct Field<'a> {
     name: [u8; 2],
@@ -301,12 +332,7 @@ pub(super) fn convert(record: &RawRecord, reference: Window<'_>) -> io::Result<(
     let start = usize::try_from(record.alignment_start()).unwrap_or(0);
     let bases = record.bases();
     let qualities = record.qualities();
-    let (mut cigar, long) = cigar(record)?;
-    if mapped && cigar.is_empty() && !bases.is_empty() {
-        // CIGAR `*` on a mapped record: a decoder gives it one `M` over the
-        // read, so the bases are stored against the reference under it.
-        cigar.push((bases.len() as u32, 0));
-    }
+    let (cigar, long) = aligned_cigar(record)?;
 
     // The qualities are always an array, `0xFF` bytes for a record without
     // them: samtools, Picard and this crate's reader print such an array
@@ -337,8 +363,7 @@ pub(super) fn convert(record: &RawRecord, reference: Window<'_>) -> io::Result<(
             ));
         }
         read_features = features(record, &cigar, &bases, reference)?;
-        let span = crate::bam_raw::reference_length(cigar.iter().copied());
-        end = start + usize::try_from(span).unwrap_or(0).max(1) - 1;
+        end = last_base(start, &cigar);
     }
 
     let mut mate_flags = MateFlags::empty();
