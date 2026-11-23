@@ -226,6 +226,7 @@ the sizes and a Chrome recipe for a build without the feature.
 | PositionBasedDownsampleSam (the records whose read name places them in a circle of area `FRACTION` on each tile; two reads of the input; `REMOVE_DUPLICATE_INFORMATION`, `READ_NAME_REGEX`, `STOP_AFTER`, `ALLOW_MULTIPLE_DOWNSAMPLING_DESPITE_WARNINGS`) | | `position_based_downsample_sam()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
+| CRAM output (3.0) for an `OUTPUT` ending in `.cram`, with `R=` the reference: SortSam, MarkDuplicates, the record-editing tools that rewrite their records, and the chain `write` step with `-R` | | `reference_sequence=` |
 | SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | `validation_stringency=` |
 
 Levels are `METRIC_ACCUMULATION_LEVEL`: `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`.

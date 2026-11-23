@@ -240,6 +240,12 @@ fn features(
     };
     for &(length, op) in cigar {
         let length = length as usize;
+        // An operator of length 0 changes no base and is left out, so
+        // `5M0D5M` reads back `10M` under samtools and htsjdk. htsjdk's
+        // writer leaves out `0I` and `0H` alone (docs/07 W15-18).
+        if length == 0 {
+            continue;
+        }
         match op {
             0 | 7 | 8 => {
                 let aligned = bases.get(read - 1..read - 1 + length).unwrap_or(&[]);
@@ -319,6 +325,34 @@ fn read_length(cigar: &[(u32, u8)]) -> usize {
         .filter(|(_, op)| matches!(op, 0 | 1 | 4 | 7 | 8))
         .map(|(length, _)| *length as usize)
         .sum()
+}
+
+/// The most read bases the CIGAR of a mapped record without bases (SEQ
+/// `*`) may cover. The writer holds an `N` and a missing quality for each
+/// (its insertions and clips, and the quality array), so a forged CIGAR of
+/// 2^28 bases on a 200-byte record would cost 512 MiB. 16 Mi bases is 4
+/// times the longest read sequenced so far.
+pub(super) const MAX_MISSING_SEQUENCE: usize = 1 << 24;
+
+/// The bytes [`convert`] holds for `record` beyond its BAM bytes: two per
+/// read base its CIGAR covers when it is mapped without bases, else 0.
+/// Fails over [`MAX_MISSING_SEQUENCE`] bases, before any is held.
+pub(super) fn missing_sequence_bytes(record: &RawRecord) -> io::Result<usize> {
+    if record.flags() & 0x4 != 0 || record.sequence_length() != 0 {
+        return Ok(0);
+    }
+    let (cigar, _) = cigar(record)?;
+    let covered = read_length(&cigar);
+    if covered > MAX_MISSING_SEQUENCE {
+        return Err(invalid(
+            record,
+            &format!(
+                "SEQ * with a CIGAR over {covered} read bases: a CRAM holds a base and a \
+                 quality for each, and at most {MAX_MISSING_SEQUENCE} are written"
+            ),
+        ));
+    }
+    Ok(2 * covered)
 }
 
 /// `record` as a detached CRAM record: its own mate fields, template

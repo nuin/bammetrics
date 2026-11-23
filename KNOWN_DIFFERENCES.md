@@ -1415,6 +1415,12 @@ It differs from the CRAM Picard writes:
   holds neither its CIGAR nor its mapping quality.
 - A mate reference index the header lacks fails in both (bammetrics: `record <name>: mate
   reference index 7 is not in the header`). No reader opens a CRAM that holds one.
+- A mapped record without bases (SEQ `*`) whose CIGAR covers more than 16 Mi read bases
+  fails bammetrics' CRAM writer, naming it (docs/07 W15-18): the CRAM holds an `N` and a
+  missing quality for each. Picard writes it.
+- CIGAR operators of length 0. bammetrics' CRAM leaves each out, so `5M0D5M` reads back
+  `10M`. Picard's leaves out `0I` and `0H` alone: samtools reads its `5M0D5M` as `5M5M`
+  and fails on the slice of its `10M0S`.
 - Tag texts. bammetrics stores a `Z` or `H` value as the bytes of the BAM. Picard's CRAM
   holds an `H` as a `B:c` array (`X5:H:1AE301` reads `X5:B:c,26,-29,1`) and each byte of a
   `Z` over 127 as `?` (`café` in UTF-8 reads `caf??`).

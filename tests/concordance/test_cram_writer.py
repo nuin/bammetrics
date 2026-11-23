@@ -678,3 +678,115 @@ def test_two_records_picard_refuses_and_bammetrics_writes(tmp_path):
         same_records(f"{case}: samtools, ours against samtools' CRAM",
                      samtools_view(own, FIXTURE_REFERENCE), samtools_view(out, FIXTURE_REFERENCE))
     RESULTS.append(("cram-writer records Picard refuses", 2, 2, "written; read as samtools' own CRAM"))
+
+
+def sam_to_bam(tmp_path, name, text):
+    sam, bam = tmp_path / f"{name}.sam", tmp_path / f"{name}.bam"
+    sam.write_bytes(text.encode())
+    done = run(["samtools", "view", "--no-PG", "-b", "-o", bam, sam])
+    assert done.returncode == 0, done.stderr.decode()[-300:]
+    return bam
+
+
+FIXTURE_HEAD = "@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:chr1\tLN:100000\n"
+
+
+def test_a_container_of_fewer_than_four_qualities(tmp_path):
+    """rANS 4x8 of order 1 takes no block under 4 bytes, so a quality block of 1 to 3
+    bytes is coded with order 0 (vendor/README.md, the eleventh change). Both tools write
+    one read of 1, 2 or 3 bases, three reads of 1 base, and a tail container of one 1-base
+    read after 10,000 reads of 3 bases; samtools and Picard read bammetrics' CRAM as the
+    BAM."""
+    line = "r{0}\t0\tchr1\t{1}\t60\t{2}M\t*\t0\t0\t{3}\t{4}\n"
+    cases = {
+        "1x1": [line.format(0, 100, 1, "A", "I")],
+        "1x2": [line.format(0, 100, 2, "AC", "I#")],
+        "1x3": [line.format(0, 100, 3, "ACG", "I#5")],
+        "3x1": [line.format(i, 100 + i, 1, "A", "I") for i in range(3)],
+        "tail": [line.format(i, 100 + i // 10, 3, "ACG", "I#5") for i in range(10_000)]
+                + [line.format("t", 2000, 1, "A", "I")],
+    }
+    for case, lines in cases.items():
+        bam = sam_to_bam(tmp_path, case, FIXTURE_HEAD + "".join(lines))
+        for side, start in (("picard", picard), ("bammetrics", ours)):
+            out = tmp_path / f"{case}.{side}.cram"
+            done = start("SortSam", f"I={bam}", f"O={out}", "SO=coordinate", f"R={FIXTURE_REFERENCE}", SILENT)
+            assert done.returncode == 0, f"{case}, {side}: {done.stderr.decode('latin-1')[-300:]}"
+        mine = tmp_path / f"{case}.bammetrics.cram"
+        same_records(f"{case}: samtools, CRAM against BAM", samtools_view(bam, FIXTURE_REFERENCE),
+                     samtools_view(mine, FIXTURE_REFERENCE))
+        same_records(f"{case}: Picard, CRAM against BAM", picard_view(bam, FIXTURE_REFERENCE),
+                     picard_view(mine, FIXTURE_REFERENCE), rules=("rebuilt",))
+    RESULTS.append(("cram-writer quality blocks under 4 bytes", len(cases), len(cases),
+                    "written by both; read as the BAM"))
+
+
+def test_an_operator_of_length_0_is_left_out(tmp_path):
+    """docs/07 W15-18: bammetrics' CRAM leaves out every operator of length 0, so each
+    CIGAR below reads back `10M` under samtools and Picard. Picard's CRAM leaves out `0I`
+    and `0H` alone: samtools reads its `5M0D5M` as `5M5M`, its `0S10M` as `0S10M`, and
+    fails on the slice of its `10M0S` (`Feature position 11 after end of read`)."""
+    cigars = ("5M0I5M", "5M0D5M", "0S10M", "5M0N5M", "0H10M", "5M0P5M", "10M0S")
+    picards = {"5M0I5M": "10M", "5M0D5M": "5M5M", "0S10M": "0S10M", "10M0S": None}
+    read = {}
+    for i, cigar in enumerate(cigars):
+        line = f"z{i}\t0\tchr1\t{100 + i}\t60\t{cigar}\t*\t0\t0\tACGTACGTAC\tIIIIIIIIII\n"
+        bam = sam_to_bam(tmp_path, f"zero{i}", FIXTURE_HEAD + line)
+        for side, start in (("picard", picard), ("bammetrics", ours)):
+            if side == "picard" and cigar not in picards:
+                continue
+            out = tmp_path / f"zero{i}.{side}.cram"
+            done = start("SortSam", f"I={bam}", f"O={out}", "SO=coordinate", f"R={FIXTURE_REFERENCE}", SILENT)
+            assert done.returncode == 0, f"{cigar}, {side}: {done.stderr.decode('latin-1')[-300:]}"
+            decoded = samtools_view(out, FIXTURE_REFERENCE)
+            read[side, cigar] = [r[5] for r in decoded.records][0] if decoded.code == 0 else None
+            if side == "bammetrics":
+                assert [r[5] for r in picard_view(out, FIXTURE_REFERENCE).records] == ["10M"], cigar
+    assert all(read["bammetrics", cigar] == "10M" for cigar in cigars), read
+    assert {cigar: read["picard", cigar] for cigar in picards} == picards, read
+    RESULTS.append(("cram-writer operators of length 0", len(cigars), len(cigars),
+                    "left out; Picard's CRAM keeps 0D, 0N, 0P and 0S"))
+
+
+def test_a_record_without_bases_over_16_mi_read_bases_fails(tmp_path):
+    """docs/07 W15-18: SEQ `*` with a CIGAR over 16 Mi read bases fails bammetrics' CRAM
+    writer, naming the record, and leaves no file. One of 1,001 read bases is written and
+    samtools reads it back as the BAM."""
+    fine = "ok\t0\tchr1\t100\t60\t1000S1M\t*\t0\t0\t*\t*\n"
+    forged = "forged\t0\tchr1\t100\t60\t268435455S1M\t*\t0\t0\t*\t*\n"
+    bam = sam_to_bam(tmp_path, "fine", FIXTURE_HEAD + fine)
+    out = tmp_path / "fine.cram"
+    done = ours("SortSam", f"I={bam}", f"O={out}", "SO=coordinate", f"R={FIXTURE_REFERENCE}")
+    assert done.returncode == 0, done.stderr.decode()[-300:]
+    same_records("SEQ *: samtools, CRAM against BAM", samtools_view(bam, FIXTURE_REFERENCE),
+                 samtools_view(out, FIXTURE_REFERENCE))
+    bam = sam_to_bam(tmp_path, "forged", FIXTURE_HEAD + fine + forged)
+    out = tmp_path / "forged.cram"
+    done = ours("SortSam", f"I={bam}", f"O={out}", "SO=coordinate", f"R={FIXTURE_REFERENCE}")
+    assert done.returncode == 1
+    assert b"record forged: SEQ * with a CIGAR over 268435456 read bases" in done.stderr, done.stderr
+    assert not out.exists()
+    RESULTS.append(("cram-writer SEQ * over 16 Mi bases", 1, 1, "refused, no file; Picard writes it"))
+
+
+def test_header_text_outside_ascii(tmp_path):
+    """docs/07 W15-13: the CRAM holds the bytes of the BAM header. samtools and bammetrics
+    read the CRAM header as the BAM's. Picard reads the CRAM header as UTF-8 and the BAM
+    header one character per byte, so its ViewSam prints the two differently; the test
+    fails when that changes."""
+    head = FIXTURE_HEAD + "@RG\tID:g1\tSM:s\tDS:café über\n@CO\tcafé ✓\n"
+    body = "r1\t0\tchr1\t10\t60\t8M\t*\t0\t0\tACGTACGT\tIIIIIIII\tRG:Z:g1\n"
+    bam = sam_to_bam(tmp_path, "header", head + body)
+    outs = {kind: tmp_path / f"out.{kind}" for kind in ("bam", "cram")}
+    for out in outs.values():
+        done = ours("SortSam", f"I={bam}", f"O={out}", "SO=coordinate", f"R={FIXTURE_REFERENCE}")
+        assert done.returncode == 0, done.stderr.decode()[-300:]
+    samtools_side = {kind: header_lines(samtools_view(out, FIXTURE_REFERENCE)) for kind, out in outs.items()}
+    assert samtools_side["cram"] == samtools_side["bam"]
+    assert "@CO\t" + "café ✓".encode().decode("latin-1") in samtools_side["cram"]
+    ours_side = {kind: header_lines(ours_view(out, FIXTURE_REFERENCE)) for kind, out in outs.items()}
+    assert ours_side["cram"] == ours_side["bam"]
+    picard_side = {kind: header_lines(picard_view(out, FIXTURE_REFERENCE)) for kind, out in outs.items()}
+    assert picard_side["cram"] != picard_side["bam"], "Picard now reads the two headers alike"
+    RESULTS.append(("cram-writer header text outside ASCII", 1, 1,
+                    "samtools and bammetrics read the BAM's header; Picard reads the two otherwise"))

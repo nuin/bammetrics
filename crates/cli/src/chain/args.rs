@@ -475,7 +475,8 @@ pub fn help() -> String {
          Every + starts a step. A step sees the records the step before it emits.\n  \
          transform  changes the records later steps see: {}\n  \
          tap        reads the records of its position, changes nothing: {}\n  \
-         write      write [PATH] writes the records of its position as a BAM\n  \
+         write      write [PATH] writes the records of its position as a BAM, SAM \
+         text (.sam) or a CRAM against -R (.cram)\n  \
          split      writes the records of its position over BAMs in its -o DIR: {}\n\n\
          A step takes its verb's own options in every spelling (--minimum-pct 0.1, \
          --MINIMUM_PCT 0.1, MINIMUM_PCT=0.1); bammetrics chain BAM + VERB --help lists them. \
@@ -503,7 +504,8 @@ pub fn step_help(name: &str, number: usize) -> Result<String, VerbError> {
     if name == WRITE {
         return Ok(format!(
             "bammetrics chain ... + write [PATH] [OPTIONS]: the records of its position as a \
-             BAM. SAM, CRAM and FASTQ output are later waves.\n\nOptions:\n{}",
+             BAM, SAM text for a name ending in .sam, or a CRAM against the chain's -R for one \
+             ending in .cram. FASTQ output is a later wave.\n\nOptions:\n{}",
             option_lines(&write_flags())
         ));
     }

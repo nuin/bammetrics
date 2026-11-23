@@ -870,3 +870,110 @@ fn no_index_is_written_beside_a_cram() {
         "{message}"
     );
 }
+
+/// A container whose quality scores are fewer than 4 bytes: rANS 4x8 of
+/// order 1 takes no such block, so it is coded with order 0, as htscodecs
+/// codes it. One read of 1 to 3 bases, three reads of 1 base, and a tail
+/// container of one 1-base read after a full one.
+#[test]
+fn a_container_of_fewer_than_four_qualities_is_written() {
+    let qualities = [30u8; 3];
+    let shapes: [&[(usize, &[u8])]; 4] =
+        [&[(1, b"A")], &[(1, b"AC")], &[(1, b"ACG")], &[(3, b"A")]];
+    for (n, shape) in shapes.iter().enumerate() {
+        let written: Vec<RawRecord> = shape
+            .iter()
+            .flat_map(|&(count, bases)| {
+                (0..count).map(move |i| {
+                    raw(&Rec {
+                        name: "q",
+                        start: 1 + i as i32,
+                        bases,
+                        qualities: Some(&qualities[..bases.len()]),
+                        ..Rec::default()
+                    })
+                })
+            })
+            .collect();
+        let (_, read, _) = round_trip(&format!("small{n}"), &header("coordinate"), &written, 1);
+        assert_eq!(read.len(), written.len());
+        for (written, read) in written.iter().zip(&read) {
+            assert_eq!(read.bases(), written.bases());
+            assert_eq!(read.qualities(), written.qualities());
+        }
+    }
+    let mut written: Vec<RawRecord> = (0..READS_PER_SLICE)
+        .map(|i| {
+            raw(&Rec {
+                name: "full",
+                start: 1 + (i * 39 / READS_PER_SLICE) as i32,
+                cigar: &[(3, 0)],
+                bases: b"ACG",
+                qualities: Some(&qualities),
+                ..Rec::default()
+            })
+        })
+        .collect();
+    written.push(raw(&Rec {
+        name: "tail",
+        reference: 1,
+        cigar: &[(1, 0)],
+        bases: b"A",
+        qualities: Some(&qualities[..1]),
+        ..Rec::default()
+    }));
+    let (_, read, bytes) = round_trip("small-tail", &header("coordinate"), &written, 2);
+    assert_eq!(read.len(), written.len());
+    assert_eq!(read[READS_PER_SLICE].qualities(), [30]);
+    assert_eq!(containers(&bytes), [(0, READS_PER_SLICE), (1, 1)]);
+}
+
+/// A mapped record without bases (SEQ `*`) is stored with an `N` and a
+/// missing quality per read base of its CIGAR. That weight counts toward
+/// the container, and a CIGAR over 16 Mi read bases fails before any is
+/// held.
+#[test]
+fn a_record_without_bases_is_bounded_by_its_cigar() {
+    let star = |name, clip: u32| {
+        raw(&Rec {
+            name,
+            cigar: &[(clip, 4), (1, 0)],
+            ..Rec::default()
+        })
+    };
+    let message = fails(
+        "forged",
+        true,
+        &header("coordinate"),
+        &[star("ok", 10), star("forged", (1 << 28) - 1)],
+    );
+    assert!(
+        message.contains("record forged: SEQ * with a CIGAR over 268435456 read bases"),
+        "{message}"
+    );
+    // 2 Mi bases each, 4 MiB of weight: two to a container.
+    let clip = (2 << 20) - 1;
+    let written: Vec<RawRecord> = (0..5).map(|_| star("star", clip)).collect();
+    let (_, read, bytes) = round_trip("star", &header("coordinate"), &written, 1);
+    assert_eq!(read.len(), 5);
+    assert_eq!(read[0].cigar().collect::<Vec<_>>(), [(clip, 4), (1, 0)]);
+    assert!(read[0].bases().is_empty());
+    assert_eq!(containers(&bytes), [(0, 2), (0, 2), (0, 1)]);
+}
+
+/// An operator of length 0 is left out: `5M0I5M` and `5M0D5M` read back
+/// `10M`.
+#[test]
+fn an_operator_of_length_0_is_left_out() {
+    let qualities = [20u8; 10];
+    let written = [raw(&Rec {
+        name: "zero",
+        cigar: &[(5, 0), (0, 1), (0, 4), (0, 2), (0, 3), (5, 0)],
+        bases: b"ACGTACGTAC",
+        qualities: Some(&qualities),
+        ..Rec::default()
+    })];
+    let (_, read, _) = round_trip("zero", &header("coordinate"), &written, 1);
+    assert_eq!(read[0].cigar().collect::<Vec<_>>(), [(10, 0)]);
+    assert_eq!(read[0].bases(), b"ACGTACGTAC");
+}

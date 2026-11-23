@@ -8,8 +8,8 @@ crates.io releases. `exclude = ["vendor"]` keeps them out of the workspace, so
 
 The crates.io tarball (`noodles-cram-0.102.0.crate`), unpacked, with
 `Cargo.lock` dropped, an empty `[workspace]` table added to `Cargo.toml`, and
-ten changes marked `bammetrics patch`: six in the reader, three in the writer,
-one in the rANS codec. The first is in
+eleven changes marked `bammetrics patch`: six in the reader, three in the writer,
+two in the rANS codec. The first is in
 `src/io/reader/container/slice.rs`:
 
 - `calculate_template_length` is htsjdk 4's
@@ -125,9 +125,18 @@ each such text with as many `x` bytes and returns the bytes, and
 bammetrics read no CRAM that holds such a name or tag, its own, Picard's or
 samtools'.
 
-`cargo test --manifest-path vendor/noodles-cram/Cargo.toml` runs 317 tests, one
+The eleventh is in `src/codecs/rans_4x8/encode.rs`: `encode` codes a block of 1
+to 3 bytes with order 0 when order 1 is asked, as htscodecs'
+`rans_compress_to_4x8` does. The order-1 encoder refuses a stream shorter than
+its 4 states (`InvalidInput`), and the quality scores are order 1, so a
+container of one read of 1 to 3 bases, or a tail container of such reads,
+failed the whole file with `invalid input parameter`. The order is the first
+byte of the block, so every reader decodes either. An empty block is never
+encoded.
+
+`cargo test --manifest-path vendor/noodles-cram/Cargo.toml` runs 318 tests, one
 of them for the third change, one for the fifth, two for the sixth, one for the
-eighth and two for the ninth. `cargo test -p bammetrics-core cram_writer` holds
+eighth, two for the ninth and one for the eleventh. `cargo test -p bammetrics-core cram_writer` holds
 the tenth.
 
 To move to a later noodles-cram: unpack its tarball here, apply the

@@ -65,7 +65,15 @@
 //! Memory is bounded by bytes, whatever the read length and the thread
 //! count:
 //! * The container being filled: at most [`BYTES_PER_SLICE`] (8 MiB) of BAM
-//!   records and one record.
+//!   records and one record. A mapped record without bases (SEQ `*`) also
+//!   counts two bytes per read base of its CIGAR, the `N` and the missing
+//!   quality it is stored with, and one whose CIGAR covers more than
+//!   16 Mi read bases fails the writer
+//!   (`convert::MAX_MISSING_SEQUENCE`): a 194-byte BAM of 4 such records
+//!   with CIGAR `268435455M` cost 2,058 MiB before. 40 records of
+//!   `16000000S1M` peak at 76 MiB with 1 thread under macOS with its
+//!   large-allocation cache off (`MallocLargeCache=0`), and at 590 MiB with
+//!   it on: libmalloc keeps the freed blocks of each container.
 //! * The containers that wait for their encoders: one per thread, and at
 //!   most `QUEUED_BYTES` (64 MiB) of BAM records together. 3,000 reads of
 //!   50,000 bases (225 MB of BAM records) peak at 185 MiB with 8 threads,
@@ -87,7 +95,9 @@
 //!
 //! What a CRAM cannot hold, so a decoder gives another record than the BAM:
 //! * `=` and `X` operators, read back as `M`; neighbouring operators of one
-//!   kind, read back as one; an operator of length 0.
+//!   kind, read back as one. An operator of length 0 is left out, so
+//!   `5M0D5M` reads back `10M`. htsjdk leaves out `0I` and `0H` alone; its
+//!   `10M0S` is a slice samtools 1.25 fails on.
 //! * The CIGAR of a record flagged unmapped, and its mapping quality.
 //!   htsjdk's writer fails on such a record (`9 > 0`); htslib writes it as
 //!   this writer does.
@@ -254,6 +264,10 @@ pub struct CramWriter {
     pending: Vec<u8>,
     /// The records in `pending`.
     filled: usize,
+    /// The bytes of `pending` and the bytes its records hold once converted
+    /// beyond them (`N`s and missing qualities of a mapped record without
+    /// bases): what [`BYTES_PER_SLICE`] and `QUEUED_BYTES` count.
+    weight: usize,
     slice: Option<Slice>,
     /// The first and the last reference base of the records in `pending`,
     /// kept while they lie on one reference.
@@ -261,7 +275,7 @@ pub struct CramWriter {
     /// Containers cut and not yet encoded, at most `threads` and
     /// [`QUEUED_BYTES`].
     cut: Vec<Cut>,
-    /// The bytes `pending` held for the containers in `cut`.
+    /// The `weight` of the containers in `cut`.
     queued: usize,
     /// A contig in memory, upper case and cut at its `@SQ` length: the one
     /// of the last slice that spanned more than a part of its contig.
@@ -328,6 +342,7 @@ impl CramWriter {
             contigs,
             pending: Vec::new(),
             filled: 0,
+            weight: 0,
             slice: None,
             span: (0, 0),
             cut: Vec::new(),
@@ -405,10 +420,11 @@ impl CramWriter {
     pub fn write(&mut self, record: &RawRecord) -> Result<()> {
         self.order.check(record, &self.path)?;
         let class = self.class(record)?;
+        let missing = convert::missing_sequence_bytes(record).map_err(Error::Record)?;
         // htsjdk `ContainerFactory.shouldEmitSlice`, and the byte limit.
         let full = match (self.slice, class) {
             (None, _) => false,
-            _ if self.pending.len() >= BYTES_PER_SLICE => true,
+            _ if self.weight >= BYTES_PER_SLICE => true,
             (Some(Slice::Single(_) | Slice::Unplaced), next) if self.slice == Some(next) => {
                 self.filled >= READS_PER_SLICE
             }
@@ -429,7 +445,9 @@ impl CramWriter {
             Some(current) if current == class => current,
             Some(_) => Slice::Many,
         });
+        let before = self.pending.len();
         record.write_to(&mut self.pending).map_err(Error::Record)?;
+        self.weight += self.pending.len() - before + missing;
         self.filled += 1;
         Ok(())
     }
@@ -570,7 +588,7 @@ impl CramWriter {
         });
         self.counter += self.filled as u64;
         self.filled = 0;
-        self.queued += pending.len();
+        self.queued += std::mem::take(&mut self.weight);
         self.pending = pending;
         self.pending.clear();
         self.scratch = record;

@@ -12,7 +12,7 @@
   chain's `-R`, or `--output-format cram`). The header is the BAM's. Each record keeps
   its own mate fields and every tag where the BAM has it. `CREATE_MD5_FILE` writes
   `<CRAM>.md5`; `COMPRESSION_LEVEL` sets the gzip level of the blocks. Decisions W15-1 to
-  W15-17 of docs/07 list where this is not what Picard's writer does.
+  W15-18 of docs/07 list where this is not what Picard's writer does.
 - `tests/concordance/test_cram_writer.py`: each CRAM is read by samtools, Picard 3.5.0 and
   bammetrics and held to the BAM of the same stream and to samtools' own CRAM of it, on
   the foundation corpus, t1, the exome slice and the hand-built BAMs of `cram_bams.py`,
@@ -49,6 +49,20 @@
     golden record, `error_sort_sam_cram_absent_contig`.
   - `--help`, the tool summaries, the Python docstrings, README, docs/cli.md and
     docs/python.md name the CRAM output where they named a BAM and SAM text alone.
+  - A container with 1 to 3 quality bytes is written: its rANS block is order 0, as
+    htscodecs codes it (vendor/README.md, change eleven). One read of 1 to 3 bases, or
+    a tail container of such reads, failed the whole file with `invalid input
+    parameter`.
+  - A mapped record without bases (SEQ `*`) counts two bytes per read base of its
+    CIGAR toward its container, and one whose CIGAR covers more than 16 Mi read bases
+    fails naming it (docs/07 W15-18). A 194-byte BAM of 4 records with CIGAR
+    `268435455M` cost 2,058 MiB.
+  - A CIGAR operator of length 0 is left out: `5M0I5M`, `5M0D5M` and `10M0S` read back
+    `10M` under samtools and Picard. Picard's CRAM leaves out `0I` and `0H` alone.
+  - The chain planner counts a coordinate-sorted CRAM at 49 bytes per record, 69% of
+    the BAM on the foundation corpus and the exome slice. It counted 37, from the
+    exome alone. `chain + write
+    --help` names the SAM and CRAM output.
 
 ### Changed
 
