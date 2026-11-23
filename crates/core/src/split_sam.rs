@@ -490,7 +490,7 @@ pub struct Run<'a> {
     pub kind: SplitKind,
     pub dir: PathBuf,
     /// The format of each kind of input, by extension: `SplitSamByLibrary`
-    /// writes the input's kind (a CRAM is refused, docs/07 wave W15);
+    /// writes the input's kind (a CRAM is refused, docs/07 D58);
     /// `SplitSamByNumberOfReads` writes SAM text for SAM, else a BAM.
     pub format: fn(&str) -> Result<Format>,
 }

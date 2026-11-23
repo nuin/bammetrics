@@ -916,7 +916,10 @@ fn write_step(
         .map(|given| {
             WriteFormat::parse(&given.values[0]).ok_or_else(|| {
                 draft
-                    .usage(format!("expected bam or sam, got {:?}", given.values[0]))
+                    .usage(format!(
+                        "expected bam, sam or cram, got {:?}",
+                        given.values[0]
+                    ))
                     .from(given.spelled.clone())
             })
         })
@@ -934,6 +937,7 @@ fn write_step(
     if let Some(format) = format {
         options.format = format;
     }
+    options.reference = cx.reference.map(PathBuf::from);
     if let Some(given) = parsed.last(COMPRESSION_LEVEL) {
         options.compression_level = given.values[0]
             .parse()

@@ -16,7 +16,8 @@
 //! header of <INPUT>`, with nothing written.
 //!
 //! Picard writes CRAM files for a CRAM input; bammetrics refuses one
-//! before the first read (CRAM output is docs/07 wave W15). Two libraries
+//! before the first read (docs/07 D58: the fan-out sink writes BGZF blocks,
+//! and a CRAM per library would hold one contig per open file). Two libraries
 //! whose safe names are one file, or a library named `unknown` beside
 //! records without a library, make Picard write one file over the other;
 //! bammetrics fails and writes none.
@@ -53,13 +54,14 @@ pub const TOOL: Tool = Tool {
 };
 
 /// The format of a library's file: the input's kind. A CRAM input gets
-/// CRAM files in Picard, a later wave here.
+/// CRAM files in Picard and is refused here.
 fn format(extension: &str) -> Result<Format> {
     match extension {
         "sam" => Ok(Format::Sam),
         "cram" => Err(Error::Usage(
-            "INPUT is a CRAM, and Picard writes a CRAM per library: bammetrics writes BAM and \
-             SAM only: CRAM output is wave W15 of docs/07_full_parity_program.md"
+            "INPUT is a CRAM, and Picard writes a CRAM per library: this tool writes a BAM or SAM \
+             text per library (docs/07 D58): write INPUT as a BAM first, with `bammetrics chain \
+             in.cram -R ref.fa + write in.bam`"
                 .to_owned(),
         )),
         _ => Ok(Format::Bam),

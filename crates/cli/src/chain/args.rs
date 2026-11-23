@@ -225,9 +225,10 @@ pub fn write_flags() -> Vec<Flag> {
             "output",
             &["o", "O"],
             Ty::Path,
-            "The BAM to write, or SAM text for a name ending in .sam: the positional \
-             argument; - writes standard output. Without one, PREFIX.<stream>.bam \
-             (PREFIX.marked.bam after mark-duplicates).",
+            "The BAM to write, SAM text for a name ending in .sam, or a CRAM against the \
+             chain's -R for one ending in .cram: the positional argument; - writes standard \
+             output. Without one, PREFIX.<stream>.bam (PREFIX.marked.bam after \
+             mark-duplicates).",
         )
         .names(&["OUTPUT", "O"])
         .placeholder("PATH"),
@@ -255,8 +256,8 @@ pub fn write_flags() -> Vec<Flag> {
             "output-format",
             &[],
             Ty::Text,
-            "bam or sam: what is written, whatever the name says. write - --output-format sam \
-             prints SAM text on standard output.",
+            "bam, sam or cram: what is written, whatever the name says. write - --output-format \
+             sam prints SAM text on standard output.",
         )
         .placeholder("KIND"),
         Flag::new(Key::Help, "help", &["h"], Ty::Bool, "This help."),

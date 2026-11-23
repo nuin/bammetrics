@@ -245,12 +245,81 @@ fn a_stream_gets_no_index_and_no_md5() {
     std::fs::remove_dir_all(&dir).expect("scratch");
 }
 
+/// The records of `path`, a BAM, or a CRAM on `ref_100k.fa`.
+fn records(path: &Path) -> Vec<RawRecord> {
+    let reference = data("ref_100k.fa");
+    pass::with_record_stream(path, Some(&reference), 1, |_, reader, _| {
+        let mut records = Vec::new();
+        let mut record = RawRecord::default();
+        while record.read_from(reader).map_err(Error::Record)? {
+            records.push(record.clone());
+        }
+        Ok(records)
+    })
+    .expect("the records")
+}
+
 #[test]
-fn a_cram_output_names_its_wave() {
+fn a_cram_output_holds_the_records_the_bam_holds() {
     let dir = scratch("cram-out");
-    let opts = options(&data("insert_size.bam"), &dir.join("out.cram"));
-    let message = run(&opts, keep).expect_err("CRAM output").to_string();
-    assert!(message.contains("CRAM output is wave"), "{message}");
+    let input = data("markdup.bam");
+    let bam = dir.join("out.bam");
+    let cram = dir.join("out.cram");
+    let reference = Some(data("ref_100k.fa"));
+    for output in [&bam, &cram] {
+        let opts = Options {
+            reference: reference.clone(),
+            create_md5: true,
+            ..options(&input, output)
+        };
+        run(&opts, keep).expect("the run");
+    }
+    assert_eq!(
+        &std::fs::read(&cram).expect("the CRAM")[..6],
+        b"CRAM\x03\x00"
+    );
+    assert!(dir.join("out.cram.md5").is_file());
+    let (from_bam, from_cram) = (records(&bam), records(&cram));
+    assert_eq!(from_bam.len(), 36);
+    assert_eq!(from_cram.len(), from_bam.len());
+    for (bam, cram) in from_bam.iter().zip(&from_cram) {
+        assert_eq!(bam.name(), cram.name());
+        assert_eq!(bam.flags(), cram.flags());
+        assert_eq!(bam.bases(), cram.bases());
+        assert_eq!(bam.qualities(), cram.qualities());
+        assert_eq!(bam.tag_bytes(), cram.tag_bytes());
+    }
+    std::fs::remove_dir_all(&dir).expect("scratch");
+}
+
+#[test]
+fn a_cram_output_needs_the_reference_and_takes_no_index() {
+    let dir = scratch("cram-refused");
+    let input = data("markdup.bam");
+    let opts = options(&input, &dir.join("out.cram"));
+    let message = run(&opts, keep).expect_err("no reference").to_string();
+    assert_eq!(
+        message,
+        "A reference must be supplied that includes the reference sequence for chr1."
+    );
+    let indexed = Options {
+        reference: Some(data("ref_100k.fa")),
+        create_index: true,
+        ..opts.clone()
+    };
+    let message = run(&indexed, keep).expect_err("an index").to_string();
+    assert!(
+        message.contains("no index is written beside a CRAM"),
+        "{message}"
+    );
+    // Picard's block copy writes BAM bytes under any name.
+    let copied = Options {
+        mode: Mode::BlockCopy,
+        ..opts
+    };
+    let message = run(&copied, keep).expect_err("a block copy").to_string();
+    assert!(message.contains("name the OUTPUT .bam"), "{message}");
+    assert_eq!(std::fs::read_dir(&dir).expect("scratch").count(), 0);
     std::fs::remove_dir_all(&dir).expect("scratch");
 }
 

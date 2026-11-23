@@ -61,6 +61,10 @@ const SPILL_BYTES_COORDINATE: u64 = 76;
 /// and 584,011,111 (coordinate) over those records.
 const BAM_OUT_QUERYNAME: u64 = 102;
 const BAM_OUT_COORDINATE: u64 = 70;
+/// CRAM bytes per record `write x.cram` makes, set to the BAM's until the
+/// scale run of docs/benchmarks.md gives its own: the estimate errs high.
+const CRAM_OUT_QUERYNAME: u64 = BAM_OUT_QUERYNAME;
+const CRAM_OUT_COORDINATE: u64 = BAM_OUT_COORDINATE;
 /// Peak bytes in `TMP_DIR` per record of a `MarkDuplicates` run that
 /// spills: 46 on that BAM (6.5 GiB), 59 on that CRAM (42.1 GiB). The
 /// larger one, so the estimate errs high.
@@ -474,6 +478,8 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
                     (WriteFormat::Sam, _) => SAM_BYTES_PER_RECORD,
                     (WriteFormat::Bam, Some(SortOrder::Coordinate)) => BAM_OUT_COORDINATE,
                     (WriteFormat::Bam, _) => BAM_OUT_QUERYNAME,
+                    (WriteFormat::Cram, Some(SortOrder::Coordinate)) => CRAM_OUT_COORDINATE,
+                    (WriteFormat::Cram, _) => CRAM_OUT_QUERYNAME,
                 };
                 if let Some(n) = records {
                     outputs.push((options.path.clone(), n.saturating_mul(per_record)));

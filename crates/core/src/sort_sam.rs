@@ -28,6 +28,7 @@ use noodles::sam;
 
 use crate::bam_raw::RawRecord;
 use crate::bam_writer::{self, BamWriter, Companions};
+use crate::cram_writer::{self, CramOptions, CramWriter};
 use crate::error::{Error, Result};
 use crate::mark_duplicates::{ContigCache, restore_md_and_nm, same_file};
 use crate::metric::ToolOutput;
@@ -53,7 +54,8 @@ pub const TOOL: Tool = Tool {
     options: &[
         Opt::path(
             &["OUTPUT", "O"],
-            "The sorted BAM, or SAM text for a name ending in .sam.",
+            "The sorted BAM, SAM text for a name ending in .sam, or a CRAM (with \
+             REFERENCE_SEQUENCE) for one ending in .cram.",
         )
         .written()
         .required(),
@@ -201,10 +203,11 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
     Ok(ToolOutput::NONE)
 }
 
-/// Where the sorted records go: a BAM or SAM text.
+/// Where the sorted records go: a BAM, SAM text or a CRAM.
 enum Out {
     Bam(BamWriter),
     Sam(SamWriter),
+    Cram(Box<CramWriter>),
 }
 
 impl Out {
@@ -212,6 +215,7 @@ impl Out {
         match self {
             Self::Bam(writer) => writer.write(record),
             Self::Sam(writer) => writer.write(record),
+            Self::Cram(writer) => writer.write(record),
         }
     }
 }
@@ -221,8 +225,15 @@ impl Out {
 fn check_output(opts: &Options) -> Result<()> {
     if let Some((kind, wave)) = later_kind(&opts.output) {
         return Err(Error::Usage(format!(
-            "OUTPUT={}: bammetrics writes BAM and SAM only: {kind} output is wave {wave} of \
-             docs/07_full_parity_program.md",
+            "OUTPUT={}: bammetrics writes BAM, SAM and CRAM only: {kind} output is wave {wave} \
+             of docs/07_full_parity_program.md",
+            opts.output.display()
+        )));
+    }
+    let cram = WriteFormat::of(&opts.output) == WriteFormat::Cram;
+    if cram && opts.create_index {
+        return Err(cram_writer::index_refusal(&format!(
+            "OUTPUT={}",
             opts.output.display()
         )));
     }
@@ -288,6 +299,19 @@ pub fn run(opts: &Options) -> Result<SortStats> {
                     let text = sam_text::header_text(&out_header, false);
                     Out::Sam(SamWriter::create(&opts.output, &out_header, &text)?)
                 }
+                WriteFormat::Cram => {
+                    let cram = CramOptions {
+                        compression_level: opts.compression_level,
+                        threads: opts.limits.threads,
+                    };
+                    let reference = opts.reference.as_deref();
+                    Out::Cram(Box::new(CramWriter::create(
+                        &opts.output,
+                        reference,
+                        &out_header,
+                        &cram,
+                    )?))
+                }
                 WriteFormat::Bam => Out::Bam(BamWriter::create(
                     &opts.output,
                     opts.compression_level,
@@ -322,6 +346,7 @@ fn finish(out: Out, header: &sam::Header, opts: &Options) -> Result<()> {
             };
             bam_writer::finish(writer, header, companions).map(|_| ())
         }
+        Out::Cram(writer) => cram_writer::finish(*writer, opts.create_md5).map(|_| ()),
         Out::Sam(writer) => {
             let output = writer.close()?;
             let target = output.path().to_path_buf();

@@ -344,7 +344,8 @@ pub const TOOL: Tool = Tool {
         .required(),
         Opt::path(
             &["OUTPUT", "O"],
-            "The BAM to write: every record, duplicates flagged (0x400).",
+            "The BAM to write, or a CRAM (with REFERENCE_SEQUENCE) for a name ending in .cram: \
+             every record, duplicates flagged (0x400).",
         )
         .written()
         .required(),
@@ -524,9 +525,16 @@ pub fn run(opts: &Options) -> Result<crate::metric::MetricsOutput> {
     for path in [&opts.output, &opts.metrics] {
         check_writable(path)?;
     }
-    if has_extension(&opts.output, "cram") || has_extension(&opts.output, "sam") {
+    if has_extension(&opts.output, "sam") {
         return Err(Error::Usage(format!(
-            "OUTPUT={}: bammetrics writes BAM only (SAM and CRAM output are not supported)",
+            "OUTPUT={}: MarkDuplicates writes a BAM, or a CRAM for a name ending in .cram (SAM \
+             output is not supported)",
+            opts.output.display()
+        )));
+    }
+    if opts.create_index && writes_cram(&opts.output) {
+        return Err(crate::cram_writer::index_refusal(&format!(
+            "OUTPUT={}",
             opts.output.display()
         )));
     }
@@ -697,6 +705,12 @@ pub(crate) fn same_file(a: &Path, b: &Path) -> bool {
         }
     }
     same_file_key(a) == same_file_key(b)
+}
+
+/// True for an `OUTPUT` written as a CRAM: a name ending in `.cram`, lower
+/// case, as htsjdk's `SAMFileWriterFactory` tells it.
+pub(crate) fn writes_cram(output: &Path) -> bool {
+    crate::stage::WriteFormat::of(output) == crate::stage::WriteFormat::Cram
 }
 
 fn has_extension(path: &Path, extension: &str) -> bool {
