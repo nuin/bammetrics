@@ -288,7 +288,9 @@ pub(crate) fn is_split(verb: &Verb) -> bool {
 /// chain, `view-sam` the `write - --output-format sam` that prints the
 /// stream. `fifo-buffer` has its own reason. It copies the bytes of a pipe between
 /// two commands, and the steps of a chain hand records on in memory, so no
-/// later wave makes it a step.
+/// later wave makes it a step. `compare-s-a-ms` (two files) and
+/// `check-terminator-block` (a file's last bytes) have theirs too: a spooled
+/// stream gives neither what it reads.
 pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
     if verb.copies_stream() {
         return usage(format!(
@@ -332,6 +334,25 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
             "merge the files first, then chain the merged BAM; wave W14 of docs/07 adds steps \
              that read more than the stream",
         );
+    }
+    if verb.class == bammetrics_core::compare_sams::TOOL.name {
+        return usage(format!(
+            "{place}: {} compares two files and a chain hands on the records of one: it cannot \
+             be a step",
+            verb.class
+        ))
+        .hint(
+            "write the stream to a file, then compare: bammetrics chain BAM + ... + write \
+             out.bam; bammetrics compare-s-a-ms BAM out.bam",
+        );
+    }
+    if verb.class == bammetrics_core::check_terminator_block::TOOL.name {
+        return usage(format!(
+            "{place}: {} reads the last bytes of a file and a chain hands on records: it \
+             cannot be a step",
+            verb.class
+        ))
+        .hint("run it on the file: bammetrics check-terminator-block FILE");
     }
     if matches!(verb.input, "TEXT" | "VCF" | "LIST" | "FASTA") {
         return usage(format!(

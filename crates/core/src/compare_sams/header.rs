@@ -125,6 +125,15 @@ impl Side<'_> {
     pub fn sort_order(&self) -> SortOrder {
         SortOrder::of(self.hd(*b"SO").as_deref())
     }
+
+    /// `getAttribute("SO")`: htsjdk's `setAttribute` stores a value that
+    /// names no `SortOrder` constant as `unknown`. SAM text arrives that
+    /// way from its reader; a BAM's header is read by noodles, which keeps
+    /// `SO:bogus` or `SO:Coordinate` as written.
+    fn so(&self) -> Option<&'static str> {
+        self.hd(*b"SO")
+            .map(|value| SortOrder::of(Some(&value)).name())
+    }
 }
 
 /// The result of the header comparison.
@@ -299,7 +308,7 @@ fn program_records(left: &Side<'_>, right: &Side<'_>, say: Say<'_>) -> bool {
 pub fn compare(left: &Side<'_>, right: &Side<'_>, lenient: bool, say: Say<'_>) -> Result<Headers> {
     let mut equal = values(left.version(), right.version(), "File format version", say);
     equal &= values(left.hd(*b"CR"), right.hd(*b"CR"), "File creator", say);
-    equal &= values(left.hd(*b"SO"), right.hd(*b"SO"), "Sort order", say);
+    equal &= values(left.so(), right.so(), "Sort order", say);
     let dictionaries = sequence_dictionaries(left, right, lenient, say);
     equal &= dictionaries;
     equal &= read_groups(left, right, say)?;

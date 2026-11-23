@@ -454,3 +454,26 @@ fn a_named_pipe_is_refused_without_opening_it() {
     }
     fs::remove_dir_all(&dir).expect("clean");
 }
+
+#[test]
+fn neither_tool_is_a_chain_step_and_each_says_why() {
+    for (verb, reason, hint) in [
+        (
+            "compare-s-a-ms",
+            "CompareSAMs compares two files and a chain hands on the records of one",
+            "bammetrics compare-s-a-ms BAM out.bam",
+        ),
+        (
+            "check-terminator-block",
+            "CheckTerminatorBlock reads the last bytes of a file and a chain hands on records",
+            "bammetrics check-terminator-block FILE",
+        ),
+    ] {
+        let run = bammetrics(&["chain", WHOLE, "+", verb]);
+        assert_eq!(run.status.code(), Some(2), "{verb}");
+        let stderr = err(&run);
+        assert!(stderr.contains(reason), "{stderr}");
+        assert!(stderr.contains(hint), "{stderr}");
+        assert!(!stderr.contains("W14"), "{stderr}");
+    }
+}

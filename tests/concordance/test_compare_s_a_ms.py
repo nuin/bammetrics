@@ -23,7 +23,10 @@ Picard face's file and exit code. Header values and read names beyond ASCII (acc
 CJK, emoji, characters that share a low byte, characters whose low byte is a tab, a line
 end or NUL) in SAM text, BAM and CRAM against each other. A boolean flag before the
 files in Picard 3 syntax. An unmapped record with a mapped mate and no MC under
-LENIENT_DUP and under SortSam's duplicate order: counted alone, failing on a tie.
+LENIENT_DUP and under SortSam's duplicate order: counted alone, failing on a tie. Two
+unmapped records without MC whose mates are not flagged unmapped. A BAM and a CRAM whose
+SO names no sort order (`unknown` in both), BAM headers Picard's STRICT refuses, and a
+CRAM whose Z tag is not printable ASCII against its BAM, SAM text and CRAM.
 
 Picard runs with VALIDATION_STRINGENCY=SILENT (its default refuses corpus records),
 QUIET=true and JAVA_OPTS=-Xmx8g. Needs picard and samtools; run `make concordance`.
@@ -851,6 +854,72 @@ def test_the_duplicate_order_scores_an_unmapped_record_only_on_a_tie(tmp_path, l
         assert len(sorted_records["ours"]) == len(places)
     RESULTS.append((f"SortSam duplicate order, unmapped without MC {label}", 1, 1,
                     "both fail" if fails else "records identical"))
+
+
+@pytest.mark.parametrize("kind", ["bam", "cram"])
+@pytest.mark.parametrize("order", ["bogus", "Coordinate", "COORDINATE", "queryname2"])
+def test_a_sort_order_htsjdk_does_not_know_prints_unknown(tmp_path, order, kind):
+    """htsjdk's setAttribute stores an SO that names no SortOrder as `unknown`, so the
+    `Sort order differs.` lines of a BAM or CRAM print `unknown` (at SILENT; Picard's
+    default STRICT refuses the header, KNOWN_DIFFERENCES.md)."""
+    reference = [f"R={wide_reference(tmp_path)}"]
+    records = [wide_record("r1")]
+    for other in ("unsorted", "coordinate"):
+        base = wide_file(tmp_path, f"base_{other}", wide_header("s", other), records, kind)
+        odd = wide_file(tmp_path, "odd", wide_header("s", order), records, kind)
+        for left, right in ((base, odd), (odd, base)):
+            label = f"so {order} {kind} {other} {left.stem}"
+            code, lines, _ = compare(left, right, reference, tmp_path, label)
+            expected = ([f"File 1: {other}", "File 2: unknown"] if left == base
+                        else ["File 1: unknown", f"File 2: {other}"])
+            assert code == 1 and lines[:3] == ["Sort order differs.", *expected], lines
+            assert order not in "\n".join(lines), lines
+
+
+def test_a_bam_header_htsjdk_refuses_at_strict_fails_in_both(tmp_path):
+    """An empty SO and a tag given twice in one @RG line: Picard's STRICT header codec
+    and noodles' parser both refuse the BAM header."""
+    records = [wide_record("r1")]
+    base = wide_file(tmp_path, "base", wide_header("s"), records, "bam")
+    for name, header in (
+            ("empty so", ["@HD\tVN:1.6\tSO:", "@SQ\tSN:c1\tLN:5000", "@RG\tID:g1\tSM:s"]),
+            ("tag twice", ["@HD\tVN:1.6\tSO:unsorted", "@SQ\tSN:c1\tLN:5000",
+                           "@RG\tID:g1\tSM:s\tSM:x"])):
+        odd = wide_file(tmp_path, name.replace(" ", "_"), header, records, "bam")
+        both_fail([base, odd], tmp_path, f"bam header {name} strict")
+
+
+@pytest.mark.parametrize("value", ["é", "aéb 中"])
+def test_a_cram_tag_text_beyond_ascii(tmp_path, value):
+    """A Z tag outside printable ASCII in a CRAM: htsjdk reads it, and so does the CRAM
+    decoder, which noodles' BAM encoder refused (`invalid string`)."""
+    reference = [f"R={wide_reference(tmp_path)}"]
+    records = [f"{wide_record('r1')}\tXZ:Z:{value}", f"{wide_record('r2', pos=200)}\tXZ:Z:x"]
+    header = wide_header("s")
+    cram = wide_file(tmp_path, "tags", header, records, "cram")
+    for kind in ("bam", "sam", "cram"):
+        other = wide_file(tmp_path, f"tags_{kind}", header, records, kind)
+        code, _, row = compare(cram, other, reference, tmp_path, f"cram tag text {kind}")
+        assert code == 0 and row["MAPPINGS_MATCH"] == "2"
+
+
+def test_lenient_dup_counts_unmapped_records_without_mc(tmp_path):
+    """Two unmapped records of two pairs whose mates are not flagged unmapped, no MC,
+    duplicate flags set on the right: htsjdk never reads their mate CIGAR (an unmapped
+    record has no mate coordinate and the two do not tie), so both tools say the files
+    differ."""
+    header = ["@HD\tVN:1.6\tSO:unsorted", "@SQ\tSN:c1\tLN:5000", "@SQ\tSN:c2\tLN:3000",
+              "@RG\tID:g1\tSM:s"]
+
+    def records(mark):
+        tail = "ACGT\tIIII\tRG:Z:g1"
+        return [f"u1\t{69 | mark}\tc1\t12\t0\t*\t=\t0\t0\t{tail}",
+                f"u2\t{133 | mark}\t*\t0\t0\t*\t=\t0\t0\t{tail}"]
+    left = make.write(tmp_path, "unscored_left", header, records(0), sam=True)
+    right = make.write(tmp_path, "unscored_right", header, records(1024), sam=True)
+    for args in (["LENIENT_DUP=true"], []):
+        code, lines, _ = compare(left, right, args, tmp_path, f"unmapped without MC {args}")
+        assert code == 1 and lines[-1] == VERDICTS[1]
 
 
 def test_values_are_distinct():

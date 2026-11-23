@@ -630,7 +630,13 @@ fn decode_container(
             .map_err(checksum)?;
         for record in &records {
             let start = writer.get_ref().len();
-            writer.write_alignment_record(header, record)?;
+            if let Err(e) = writer.write_alignment_record(header, record) {
+                if e.kind() != io::ErrorKind::InvalidInput {
+                    return Err(e);
+                }
+                writer.get_mut().truncate(start);
+                write_with_any_text(&mut writer, header, record)?;
+            }
             if sam::alignment::Record::flags(record)?.is_unmapped() {
                 // CRAM stores no mapping quality for an unmapped record.
                 // htsjdk gives it 0; noodles leaves it missing, which BAM
@@ -641,6 +647,112 @@ fn decode_container(
         }
     }
     Ok(writer.into_inner())
+}
+
+/// `record` as a BAM record whose `Z` and `H` tag values keep every byte.
+/// noodles' BAM encoder refuses a `Z` byte outside `' '..='~'` and an `H`
+/// that is not hex digits; htsjdk reads such a CRAM, and a BAM holds those
+/// bytes. The record goes through noodles without its tags, then each tag
+/// is encoded here and `block_size` is set again.
+fn write_with_any_text(
+    writer: &mut bam::io::Writer<Vec<u8>>,
+    header: &sam::Header,
+    record: &dyn sam::alignment::Record,
+) -> io::Result<()> {
+    use sam::alignment::record::data::field::Tag;
+    let mut bare = sam::alignment::RecordBuf::try_from_alignment_record(header, record)?;
+    bare.data_mut().clear();
+    let start = writer.get_ref().len();
+    writer.write_alignment_record(header, &bare)?;
+    let out = writer.get_mut();
+    for field in record.data().iter() {
+        let (tag, value) = field?;
+        if tag == Tag::CIGAR {
+            continue;
+        }
+        out.extend_from_slice(tag.as_ref());
+        encode_value(out, &value)?;
+    }
+    let size = u32::try_from(out.len() - start - 4)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "a record over 4 GiB"))?;
+    out[start..start + 4].copy_from_slice(&size.to_le_bytes());
+    Ok(())
+}
+
+/// The type code and the bytes of one tag value (SAM specification 4.2.4).
+fn encode_value(
+    out: &mut Vec<u8>,
+    value: &sam::alignment::record::data::field::Value<'_>,
+) -> io::Result<()> {
+    use sam::alignment::record::data::field::Value;
+    use sam::alignment::record::data::field::value::Array;
+    fn array<N>(
+        out: &mut Vec<u8>,
+        code: u8,
+        values: &dyn sam::alignment::record::data::field::value::array::Values<'_, N>,
+        bytes: impl Fn(N) -> Vec<u8>,
+    ) -> io::Result<()> {
+        let count = u32::try_from(values.len())
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "an array over 2^32"))?;
+        out.extend_from_slice(&[b'B', code]);
+        out.extend_from_slice(&count.to_le_bytes());
+        for item in values.iter() {
+            out.extend(bytes(item?));
+        }
+        Ok(())
+    }
+    match value {
+        Value::Character(c) => out.extend_from_slice(&[b'A', *c]),
+        Value::Int8(n) => out.extend_from_slice(&[b'c', n.to_le_bytes()[0]]),
+        Value::UInt8(n) => out.extend_from_slice(&[b'C', *n]),
+        Value::Int16(n) => {
+            out.push(b's');
+            out.extend_from_slice(&n.to_le_bytes());
+        }
+        Value::UInt16(n) => {
+            out.push(b'S');
+            out.extend_from_slice(&n.to_le_bytes());
+        }
+        Value::Int32(n) => {
+            out.push(b'i');
+            out.extend_from_slice(&n.to_le_bytes());
+        }
+        Value::UInt32(n) => {
+            out.push(b'I');
+            out.extend_from_slice(&n.to_le_bytes());
+        }
+        Value::Float(n) => {
+            out.push(b'f');
+            out.extend_from_slice(&n.to_le_bytes());
+        }
+        Value::String(text) | Value::Hex(text) => {
+            out.push(if matches!(value, Value::Hex(_)) {
+                b'H'
+            } else {
+                b'Z'
+            });
+            out.extend_from_slice(text);
+            out.push(0);
+        }
+        Value::Array(Array::Int8(v)) => array(out, b'c', v.as_ref(), |n| n.to_le_bytes().to_vec())?,
+        Value::Array(Array::UInt8(v)) => array(out, b'C', v.as_ref(), |n| vec![n])?,
+        Value::Array(Array::Int16(v)) => {
+            array(out, b's', v.as_ref(), |n| n.to_le_bytes().to_vec())?
+        }
+        Value::Array(Array::UInt16(v)) => {
+            array(out, b'S', v.as_ref(), |n| n.to_le_bytes().to_vec())?;
+        }
+        Value::Array(Array::Int32(v)) => {
+            array(out, b'i', v.as_ref(), |n| n.to_le_bytes().to_vec())?
+        }
+        Value::Array(Array::UInt32(v)) => {
+            array(out, b'I', v.as_ref(), |n| n.to_le_bytes().to_vec())?;
+        }
+        Value::Array(Array::Float(v)) => {
+            array(out, b'f', v.as_ref(), |n| n.to_le_bytes().to_vec())?
+        }
+    }
+    Ok(())
 }
 
 /// The mapping quality byte of a BAM record, after `block_size`, `refID`,
@@ -663,6 +775,59 @@ fn checksum(e: io::Error) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A record with `fields`, written by noodles and by
+    /// [`write_with_any_text`].
+    fn both_writes(
+        fields: Vec<(
+            sam::alignment::record::data::field::Tag,
+            sam::alignment::record_buf::data::field::Value,
+        )>,
+    ) -> (io::Result<Vec<u8>>, Vec<u8>) {
+        let header = sam::Header::default();
+        let record = sam::alignment::RecordBuf::builder()
+            .set_name("r1")
+            .set_data(fields.into_iter().collect())
+            .build();
+        let mut noodles = bam::io::Writer::from(Vec::new());
+        let direct = noodles
+            .write_alignment_record(&header, &record)
+            .map(|()| noodles.into_inner());
+        let mut ours = bam::io::Writer::from(Vec::new());
+        write_with_any_text(&mut ours, &header, &record).expect("written");
+        (direct, ours.into_inner())
+    }
+
+    #[test]
+    fn tag_texts_keep_every_byte() {
+        use sam::alignment::record::data::field::Tag;
+        use sam::alignment::record_buf::data::field::Value;
+        use sam::alignment::record_buf::data::field::value::Array;
+        let tag = |name: &[u8; 2]| Tag::from(*name);
+        let printable = vec![
+            (tag(b"XA"), Value::Character(b'q')),
+            (tag(b"XC"), Value::Int8(-3)),
+            (tag(b"XI"), Value::UInt32(70_000)),
+            (tag(b"XF"), Value::Float(1.5)),
+            (tag(b"XZ"), Value::from("abc")),
+            (tag(b"XH"), Value::Hex("1AE3".into())),
+            (tag(b"XB"), Value::Array(Array::Int16(vec![-1, 300]))),
+            (tag(b"XU"), Value::Array(Array::UInt8(vec![0, 255]))),
+        ];
+        let (direct, ours) = both_writes(printable);
+        assert_eq!(ours, direct.expect("noodles writes printable text"));
+        let (direct, ours) = both_writes(vec![
+            (tag(b"XZ"), Value::String(b"\xe9\x80".into())),
+            (tag(b"XH"), Value::Hex("ZZ".into())),
+        ]);
+        assert_eq!(
+            direct.expect_err("noodles refuses").kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert!(ours.ends_with(b"XZZ\xe9\x80\x00XHHZZ\x00"), "{ours:?}");
+        let size = u32::from_le_bytes(ours[..4].try_into().expect("four bytes"));
+        assert_eq!(size as usize, ours.len() - 4);
+    }
 
     #[test]
     fn sniffing_puts_the_bytes_back() {

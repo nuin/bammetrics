@@ -1835,6 +1835,9 @@ Picard behavior kept, each checked against Picard 3.5.0
   differ, and the counts are what the merge gives, in both tools.
 - `SO:unknown`, and an `SO` value htsjdk does not know, exit 1 (`Unrecognized sort order
   (unknown) found.`).
+- An `SO` value htsjdk does not know (`bogus`, `Coordinate`) prints as `unknown` on the
+  `Sort order differs.` lines, in a BAM, a CRAM and SAM text: htsjdk's `setAttribute`
+  stores it that way.
 - A record whose reference index or mate reference index is outside the dictionary,
   a secondary or supplementary record too, exits 1 at any stringency (`Reference name
   for '77' not found in sequence dictionary.`): htsjdk resolves both names of every
@@ -1858,6 +1861,15 @@ Where bammetrics differs:
 - A BAM or a CRAM is not validated, as for every tool: Picard's default `STRICT` stops
   at a record it finds invalid, so the harness runs Picard with
   `VALIDATION_STRINGENCY=SILENT`. SAM text is checked at the stringency given.
+- The header of a BAM or a CRAM is read by noodles and is not checked at the stringency
+  given. Picard's default `STRICT` refuses a BAM header with an `SO` value htsjdk does not
+  know; bammetrics prints the difference with `unknown`, as Picard does at `SILENT`.
+- Three header shapes htsjdk reads and noodles refuses exit 1 (`not a BAM or CRAM file`
+  for a BAM, `cannot be read` for SAM text): an `@HD VN` that is not `MAJOR.MINOR`
+  (`1.6.1`; Picard prints `File format version differs.` at every stringency), and, in a
+  BAM at `SILENT` or `LENIENT`, an empty `SO:` (Picard prints `File 2: null`) and a tag
+  given twice in one line (Picard keeps one value). At Picard's default `STRICT` the last
+  two fail in both tools.
 - A file that is neither SAM, BAM nor CRAM exits 1 before the comparison. htsjdk opens any
   text as SAM text with an empty header and reads its lines only when records are
   compared, so against a file of another sort order Picard prints the header differences

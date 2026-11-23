@@ -34,6 +34,13 @@
   `CompareSAMs LENIENT_DUP`): an unmapped record with a mapped mate and no `MC` fails only
   when another record ties with it in the file order, as htsjdk scores it only then. It
   failed whenever it was read.
+- CRAM input: a `Z` tag value outside printable ASCII (`XZ:Z:é`, the bytes `E9 80`) and
+  an `H` value that is not hex digits are read with every byte, as htsjdk reads them.
+  Every tool failed on such a record with `invalid string`.
+- `CompareSAMs`: an `SO` value htsjdk does not know prints as `unknown` for a BAM or a
+  CRAM, as for SAM text. `chain` refuses `compare-s-a-ms` and `check-terminator-block`
+  as steps with a reason of their own (docs/chaining.md section 1). `CheckTerminatorBlock`
+  opens the path as given, so a file name that is not UTF-8 is checked.
 - `make budgets`: the binary, formats and Parquet growth rows are regression checks at the 0.31.0 size, after the owner accepted the binary size on 2026-11-22 (docs/07 decisions D22, D149, D156 and D159). Targets 430,000 bytes, 200 KB and 1.1 MiB; each fails at 1.5x its target (645,000 bytes, 300 KB, 1.65 MiB). The other rows still fail at 2x.
 
 ## 0.31.0

@@ -417,6 +417,38 @@ fn header_differences_are_picards_three_lines() {
     std::fs::remove_dir_all(&dir).expect("remove");
 }
 
+/// noodles keeps a BAM's `SO:bogus` as written; htsjdk holds `unknown`.
+#[test]
+fn a_sort_order_htsjdk_does_not_know_prints_unknown() {
+    let parse = |so: &str| -> sam::Header {
+        format!("@HD\tVN:1.6\tSO:{so}\n{SQ}{RG}")
+            .parse()
+            .expect("a header")
+    };
+    for (so, shown) in [
+        ("bogus", "unknown"),
+        ("Coordinate", "unknown"),
+        ("unknown", "unknown"),
+        ("queryname", "queryname"),
+    ] {
+        let (left, right) = (parse("unsorted"), parse(so));
+        let side = |header| header::Side {
+            header,
+            one_byte_chars: true,
+        };
+        let mut lines = Vec::new();
+        header::compare(&side(&left), &side(&right), false, &mut |line| {
+            lines.push(line.to_owned());
+        })
+        .expect("compare");
+        let expected = format!("File 2: {shown}");
+        assert_eq!(
+            lines,
+            ["Sort order differs.", "File 1: unsorted", expected.as_str()]
+        );
+    }
+}
+
 #[test]
 fn sort_orders_decide_whether_records_are_compared() {
     let dir = scratch("orders");

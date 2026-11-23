@@ -28,7 +28,7 @@
 //! of 0 as `DEFECTIVE` (KNOWN_DIFFERENCES.md).
 
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::bgzf_copy::{Termination, termination};
 use crate::compare_metrics::JavaFile;
@@ -75,8 +75,10 @@ pub fn name(termination: Termination) -> &'static str {
 /// `IOUtil.assertFileIsReadable` with htsjdk's messages, then the refusal
 /// of a path that is not a regular file.
 fn open(input: &Path) -> Result<(File, u64)> {
+    // The lossy text names the file in a message; the bytes open it.
     let file = JavaFile::new(&input.to_string_lossy());
-    let path = Path::new(&file.absolute);
+    let normalized = java_normalized(input);
+    let path = normalized.as_path();
     let Ok(metadata) = std::fs::metadata(path) else {
         return Err(Error::Metric(format!(
             "Cannot read non-existent file: {}",
@@ -99,6 +101,23 @@ fn open(input: &Path) -> Result<(File, u64)> {
     let opened = File::open(path)
         .map_err(|_| Error::Metric(format!("File exists but is not readable: {}", file.uri())))?;
     Ok((opened, metadata.len()))
+}
+
+/// `input` as `java.io.File` normalizes it, byte for byte: each run of `/`
+/// becomes one, and a `/` at the end of a longer path is dropped, so
+/// `x.bam/` names the file `x.bam`.
+fn java_normalized(input: &Path) -> PathBuf {
+    use std::os::unix::ffi::{OsStrExt, OsStringExt};
+    let mut bytes: Vec<u8> = Vec::with_capacity(input.as_os_str().len());
+    for &byte in input.as_os_str().as_bytes() {
+        if !(byte == b'/' && bytes.last() == Some(&b'/')) {
+            bytes.push(byte);
+        }
+    }
+    if bytes.len() > 1 && bytes.last() == Some(&b'/') {
+        bytes.pop();
+    }
+    PathBuf::from(std::ffi::OsString::from_vec(bytes))
 }
 
 /// How the file at `input` ends.
@@ -269,6 +288,23 @@ mod tests {
         );
         let device = check_file(Path::new("/dev/null")).expect_err("a device");
         assert!(matches!(device, Error::Usage(_)), "{device}");
+        assert!(path.exists());
+        std::fs::remove_dir_all(&dir).expect("remove the temp dir");
+    }
+
+    #[test]
+    fn a_path_keeps_its_bytes_and_drops_java_s_extra_slashes() {
+        use std::os::unix::ffi::OsStrExt;
+        let raw = std::ffi::OsStr::from_bytes(b"d//\xff.bam/");
+        let normalized = java_normalized(Path::new(raw));
+        assert_eq!(normalized.as_os_str().as_bytes(), b"d/\xff.bam");
+        assert_eq!(java_normalized(Path::new("/")), Path::new("/"));
+        let (dir, path) = file_of("slashes", &EOF_BLOCK);
+        let given = format!("{}//x.bam/", dir.display());
+        assert_eq!(
+            check_file(Path::new(&given)).expect("the file"),
+            Termination::Terminator
+        );
         assert!(path.exists());
         std::fs::remove_dir_all(&dir).expect("remove the temp dir");
     }
