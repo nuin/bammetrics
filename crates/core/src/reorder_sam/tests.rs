@@ -138,3 +138,32 @@ fn a_length_a_bam_header_cannot_hold_names_the_dictionary() {
     let zero = scratch("zero.dict", "@SQ\tSN:c\tLN:0\n");
     assert!(read_dictionary(&zero).is_err());
 }
+
+/// A FASTA index is read as a dictionary of names and lengths; a line
+/// without a length is an error, never a panic.
+#[test]
+fn a_fasta_index_is_a_dictionary_of_names_and_lengths() {
+    assert_eq!(
+        DictionaryKind::of("/d/ref.fa.fai"),
+        Some(DictionaryKind::Fai)
+    );
+    let fai = scratch(
+        "idx.fa.fai",
+        "chr1\t100000\t6\t60\t61\nchrM\t16569\t101700\t60\t61\n",
+    );
+    let sequences = read_dictionary(&fai).expect("a .fai");
+    assert_eq!(sequences.len(), 2);
+    let (name, map) = sequences.first().expect("chr1");
+    assert_eq!(name.as_slice(), b"chr1");
+    assert_eq!(usize::from(map.length()), 100_000);
+    for bad in ["chr1\n", "chr1\tlong\n", "\t5\n"] {
+        let path = scratch("bad.fa.fai", bad);
+        let error = read_dictionary(&path).expect_err(bad);
+        assert!(
+            error
+                .to_string()
+                .contains("expected NAME, a tab and a length"),
+            "{error}"
+        );
+    }
+}
