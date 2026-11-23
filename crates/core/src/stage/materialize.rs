@@ -338,9 +338,13 @@ fn run_on(spec: &Spec, input: &Path, direct: bool, shown: &str) -> Result<Produc
             }
             products.output = check.output;
         }
-        Run::Emits => unreachable!("a tool that writes a BAM is a barrier"),
+        Run::Emits => {
+            return Err(Error::Metric(format!(
+                "{} writes a BAM: it runs as a barrier, not a sink",
+                spec.tool.name
+            )));
+        }
     }
-    products.notes = inv.notes;
     Ok(products)
 }
 
@@ -422,7 +426,6 @@ impl<'t> Barrier<'t> for MaterializedBarrier<'t> {
             next: Next::Records(Box::new(records)),
             products: Products {
                 output: output_files,
-                notes: inv.notes,
                 ..Products::default()
             },
         })

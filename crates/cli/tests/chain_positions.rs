@@ -788,6 +788,89 @@ fn a_tool_that_is_no_step_is_refused_with_its_reason() {
     }
 }
 
+/// The free-space refusal counts the copy a materialized step writes: short
+/// of space, a step behind a transform refuses before the first read, and
+/// the same step on the source itself copies nothing and runs.
+#[test]
+fn the_free_space_refusal_counts_a_materialized_copy() {
+    let dir = fresh_dir("space");
+    let prefix = dir.join("s").display().to_string();
+    let run = |args: &[&str]| {
+        let mut argv: Vec<String> = ["chain", MD, "-o", &prefix, "--free-space", "100", "-q"]
+            .iter()
+            .map(|a| (*a).to_owned())
+            .collect();
+        argv.extend(args.iter().map(|a| (*a).to_owned()));
+        bammetrics(&argv)
+    };
+    let behind = run(&[
+        "+",
+        "add-comments-to-bam",
+        "--comment",
+        "c",
+        "+",
+        "library-complexity",
+    ]);
+    let stderr = String::from_utf8_lossy(&behind.stderr);
+    assert_eq!(behind.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("not enough free space"), "{stderr}");
+    assert!(listing(&dir).is_empty(), "{:?}", listing(&dir));
+    let direct = run(&["+", "library-complexity"]);
+    assert!(direct.status.success(), "{direct:?}");
+    assert_eq!(listing(&dir), ["s.library_complexity_metrics"]);
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+/// The copies of a run, and the BAM a merge wrote, leave nothing in the
+/// temporary directory, after a run that finishes and after one whose
+/// materialized tap fails.
+#[test]
+fn materialized_copies_leave_nothing_behind() {
+    let dir = fresh_dir("leftovers");
+    let tmp = dir.join("tmp");
+    let run = |source: &str, tail: &[&str]| {
+        let mut argv: Vec<String> = [
+            "chain",
+            source,
+            "-o",
+            &dir.join("s").display().to_string(),
+            "--tmp-dir",
+            &tmp.display().to_string(),
+            "-q",
+            "+",
+            "add-comments-to-bam",
+            "--comment",
+            "c",
+        ]
+        .iter()
+        .map(|a| (*a).to_owned())
+        .collect();
+        argv.extend(tail.iter().map(|a| (*a).to_owned()));
+        bammetrics(&argv)
+    };
+    let ok = run(
+        MD,
+        &[
+            "+",
+            "library-complexity",
+            "+",
+            "merge-sam-files",
+            OXOG,
+            "+",
+            "insert-size",
+        ],
+    );
+    assert!(ok.status.success(), "{ok:?}");
+    assert!(listing(&tmp).is_empty(), "{:?}", listing(&tmp));
+    let failed = run(
+        "tests/data/duplicate_marking.bam",
+        &["+", "check-duplicate-marking"],
+    );
+    assert_eq!(failed.status.code(), Some(1), "{failed:?}");
+    assert!(listing(&tmp).is_empty(), "{:?}", listing(&tmp));
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
 /// The further inputs of a materialized step read alike as files after the
 /// verb, as `--input`, as `INPUT=` and as a plan file's `input` list.
 #[test]

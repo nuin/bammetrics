@@ -734,6 +734,24 @@ impl Spill for u64 {
 mod tests {
     use super::*;
 
+    /// A named file and the index a tool writes beside it are removed with
+    /// the directory; a path outside it is refused, so nothing else is.
+    #[test]
+    fn a_named_file_and_its_index_go_with_the_directory() {
+        let dir = TempDir::new(None, "test");
+        let bam = dir.file_with_extension("copy", "bam").expect("name");
+        assert!(bam.to_string_lossy().ends_with(".bam"));
+        let index = bam.with_extension("bai");
+        dir.register(&index).expect("inside");
+        fs::write(&bam, b"x").expect("bam");
+        fs::write(&index, b"x").expect("bai");
+        let outside = std::env::temp_dir().join("bammetrics-not-mine.bai");
+        assert!(dir.register(&outside).is_err());
+        let root = dir.path().expect("made").to_path_buf();
+        drop(dir);
+        assert!(!bam.exists() && !index.exists() && !root.exists());
+    }
+
     #[test]
     fn runs_merge_into_one_sorted_stream_and_are_removed() {
         let dir = TempDir::new(None, "test");
