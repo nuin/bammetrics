@@ -138,8 +138,10 @@ const ROWS: &[MaterializeRow] = &[
         ..row("CalculateReadGroupChecksum", ".read_group_md5")
     },
     row("CollectUmiPrevalenceMetrics", ".umi_prevalence_metrics"),
+    // `INTERVALS` queries the index of every input, the stream's copy too.
     MaterializeRow {
         several_inputs: true,
+        index: true,
         ..emits("MergeSamFiles", "merged")
     },
     MaterializeRow {
