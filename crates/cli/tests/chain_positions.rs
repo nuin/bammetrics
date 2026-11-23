@@ -960,3 +960,55 @@ fn every_tool_that_reads_a_bam_runs_at_any_position_as_staged() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     fs::remove_dir_all(&dir).expect("cleanup");
 }
+
+/// A `--tmp-dir` no temporary directory can be made in (one the user may
+/// not write, a file) is a usage error before the first read, even for a
+/// step that reads the source itself and copies nothing: its tool spills
+/// there (`Spec::invocation` passes it as `TMP_DIR`; the unit test in
+/// `stage/materialize.rs` holds that). A writable one is left empty.
+#[test]
+fn a_materialized_tool_spills_under_the_chains_tmp_dir() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = fresh_dir("spill");
+    let locked = dir.join("locked");
+    fs::create_dir(&locked).expect("locked dir");
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o500)).expect("mode");
+    let run = |tmp: &Path| {
+        let argv: Vec<String> = [
+            "chain",
+            "tests/data/umi_prevalence.bam",
+            "-o",
+            &dir.join("s").display().to_string(),
+            "--tmp-dir",
+            &tmp.display().to_string(),
+            "-q",
+            "+",
+            "umi-prevalence",
+            "--max-records-in-ram",
+            "1",
+        ]
+        .iter()
+        .map(|a| (*a).to_owned())
+        .collect();
+        bammetrics(&argv)
+    };
+    let failed = run(&locked);
+    let stderr = String::from_utf8_lossy(&failed.stderr);
+    assert_eq!(failed.status.code(), Some(2), "{stderr}");
+    assert!(stderr.contains(&locked.display().to_string()), "{stderr}");
+    assert!(!dir.join("s.umi_prevalence_metrics").exists());
+    let below = locked.join("new");
+    assert_eq!(run(&below).status.code(), Some(2));
+    let open = dir.join("open");
+    fs::create_dir(&open).expect("open dir");
+    let ok = run(&open);
+    assert!(ok.status.success(), "{ok:?}");
+    assert!(listing(&open).is_empty(), "{:?}", listing(&open));
+    let file = dir.join("s.umi_prevalence_metrics");
+    let usage = run(&file);
+    let stderr = String::from_utf8_lossy(&usage.stderr);
+    assert_eq!(usage.status.code(), Some(2), "{stderr}");
+    assert!(stderr.contains("not a directory"), "{stderr}");
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o700)).expect("mode");
+    fs::remove_dir_all(&dir).expect("cleanup");
+}

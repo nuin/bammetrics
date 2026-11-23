@@ -1928,7 +1928,7 @@ fn case_names_are_unique() {
 /// BAM on.
 #[rustfmt::skip]
 const MATERIALIZE_CASES: &[Case] = &[
-    case!("chain_materialize_metrics", "chain", "MD", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "wgs", "-R", "REF", "+", "raw-wgs", "-R", "REF", "+", "library-complexity", "+", "targeted-pcr", "--amplicon-intervals", "IL", "--target-intervals", "IL"),
+    case!("chain_materialize_metrics", "chain", "MD", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "wgs", "-R", "REF", "--coverage-cap", "10", "+", "raw-wgs", "-R", "REF", "--coverage-cap", "10", "+", "library-complexity", "+", "targeted-pcr", "--amplicon-intervals", "IL", "--target-intervals", "IL"),
     case!("chain_materialize_index", "chain", "IS", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "bam-index-stats", "+", "index-depth"),
     case!("chain_multiple_metrics", "chain", "MD", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "multiple-metrics", "--program", "CollectQualityYieldMetrics"),
     case!("chain_calculate_read_group_checksum", "chain", "ART", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "calculate-read-group-checksum"),
@@ -1943,4 +1943,10 @@ const MATERIALIZE_CASES: &[Case] = &[
     case!("error_chain_materialize_write_option", "chain", "MD", "-o", "OUT/s", "+", "merge-sam-files", "--create-index"),
     case!("error_chain_materialize_output", "chain", "MD", "-o", "OUT/s", "+", "merge-sam-files", "-o", "OUT/m.bam"),
     case!("error_chain_materialize_input", "chain", "MD", "-o", "OUT/s", "+", "wgs", "-R", "REF", "MD"),
+    case!("error_chain_materialize_value", "chain", "MD", "-o", "OUT/s", "+", "add-comments-to-bam", "--comment", "c", "+", "check-duplicate-marking", "--mode", "NOPE"),
+    case!("error_chain_materialize_no_index", "chain", "MD", "-o", "OUT/s", "+", "bam-index-stats"),
+    case!("error_chain_materialize_index_depth_cram", "chain", "IS_CRAM", "-R", "REF", "-o", "OUT/s", "+", "index-depth"),
+    case!("error_chain_materialize_further_input", "chain", "MD", "-o", "OUT/s", "+", "merge-sam-files", "REF", "+", "insert-size"),
+    case!("error_chain_materialize_index_is_input", "chain", "IS", "-o", "OUT/s", "+", "bam-index-stats", "+", "write", "IS_BAI"),
+    case!("error_chain_multiple_metrics_clash", "chain", "MD", "-o", "OUT/s", "+", "multiple-metrics", "+", "insert-size"),
 ];

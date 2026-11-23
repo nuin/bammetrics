@@ -160,7 +160,13 @@ above where a verb has them.
   `PREFIX.marked.duplication_metrics`, `write` without a path `PREFIX.marked.bam`. A
   step's own `-o` replaces the name ([docs/chaining.md](chaining.md) section 2.3). A
   materialized step that `qc` does not name takes the extension of docs/chaining.md
-  section 22.2 (`PREFIX.raw_wgs_metrics`, `PREFIX.library_complexity_metrics`).
+  section 22.2 (`PREFIX.raw_wgs_metrics`, `PREFIX.library_complexity_metrics`). The
+  files of every `multiple-metrics` program are named before the first read, so a tap
+  that writes one of them (`+ multiple-metrics + insert-size` on one prefix) is a usage
+  error (exit 2).
+- In `chain`, the `.bai` or `.csi` that `bam-index-stats`, `index-depth` or
+  `merge-sam-files` reads beside an input is an input: `+ write in.bam.bai` is a usage
+  error, as `bam-index-stats -o in.bam.bai` is on the verb.
 - Run files of `qc`: `PREFIX.manifest.json`, `PREFIX.verdict.json`, `PREFIX.report.html`,
   and `PREFIX.panel.interval_list` for a `--panel` BED. `report` writes
   `OUT/SAMPLE.verdict.json`, `OUT/SAMPLE.report.html` and `OUT/index.html`.

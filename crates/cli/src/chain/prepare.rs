@@ -526,6 +526,8 @@ struct Context<'a> {
     /// The per-file formats of `--also`.
     also: &'a [Format],
     threads: usize,
+    /// The chain's `--tmp-dir`.
+    tmp_dir: Option<&'a Path>,
 }
 
 impl Context<'_> {
@@ -723,10 +725,12 @@ fn reference_arg(cx: &Context, tool: &Tool, own: &[String]) -> Option<String> {
     {
         return (!sets(own, "REFERENCE")).then(|| format!("REFERENCE={reference}"));
     }
-    let reads = tool
-        .option("REFERENCE_SEQUENCE")
-        .is_some_and(|opt| opt.kind == Kind::Value);
-    ((reads || cx.is_cram) && !sets(own, "REFERENCE_SEQUENCE"))
+    let option = tool.option("REFERENCE_SEQUENCE");
+    let reads = option.is_some_and(|opt| opt.kind == Kind::Value);
+    // A tool that refuses the option (`CollectIndexDepthMetrics`) gets
+    // none: its own refusal of a CRAM says why.
+    let takes = option.is_some_and(|opt| opt.kind != Kind::Rejected);
+    ((reads || cx.is_cram) && takes && !sets(own, "REFERENCE_SEQUENCE"))
         .then(|| format!("REFERENCE_SEQUENCE={reference}"))
 }
 
@@ -880,7 +884,16 @@ fn tool_step(
     inv.threads = cx.threads;
     match role {
         Role::Transform => stage::check_stage_options(tool, &inv),
-        Role::Materialize => stage::materialize::check(tool, &inv),
+        Role::Materialize => materialize::check(
+            tool,
+            &argv,
+            &materialize::Before {
+                source: cx.source,
+                reads_source: position.segment == 1 && position.reads == SOURCE_STREAM,
+                has_reference: cx.reference.is_some(),
+                tmp_dir: cx.tmp_dir,
+            },
+        ),
         _ => inv
             .limits()
             .and_then(|_| bammetrics_core::tap_options::check(tool, &inv)),
@@ -897,6 +910,12 @@ fn tool_step(
     }
     if role == Role::Materialize {
         materialize::plan_files(tool, printed.as_ref(), &mut files, &mut formats);
+        files.extend(
+            materialize::program_files(tool, &inv, &formats).map_err(|e| draft.core(verb, &e))?,
+        );
+        // The index a step reads beside its inputs is an input too.
+        inv.inputs
+            .extend(stage::materialize::index_inputs(tool, &argv));
     }
     let planned = Planned {
         number: draft.number,
@@ -1179,6 +1198,7 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         formats: &formats,
         also: &per_file,
         threads,
+        tmp_dir: spec.tmp_dir.as_deref().map(Path::new),
     };
     let mut steps = Vec::with_capacity(drafts.len());
     let mut prefix_used = false;

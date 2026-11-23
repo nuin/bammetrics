@@ -1,0 +1,15 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
++
+merge-sam-files
+tests/data/ref_100k.fa
++
+insert-size
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (merge-sam-files): tests/data/ref_100k.fa: not a BAM or CRAM file (and not SAM text: the first line is no header line and has fewer than 11 tab-separated fields)

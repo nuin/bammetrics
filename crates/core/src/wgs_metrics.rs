@@ -181,7 +181,7 @@ pub struct Options {
 }
 
 impl Options {
-    fn from_invocation(inv: &Invocation, variant: Variant) -> Result<Self> {
+    pub(crate) fn from_invocation(inv: &Invocation, variant: Variant) -> Result<Self> {
         let reference = inv.get("REFERENCE_SEQUENCE").ok_or_else(|| {
             Error::Usage(format!(
                 "{}: REFERENCE_SEQUENCE is required",

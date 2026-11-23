@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
++
+bam-index-stats
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (bam-index-stats): tests/data/markdup.bam: no .bai or .csi beside it, and BamIndexStats reads the index. samtools index or bammetrics build-bam-index writes one; a transform in front gives this step a copy of the stream with its own .bai

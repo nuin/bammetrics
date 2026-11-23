@@ -5,14 +5,15 @@
 //! (`BamIndexStats` and `ViewSam` print to standard output on their own),
 //! and the kinds of the files it plans.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use bammetrics_core::multiple_metrics::file_extensions;
-use bammetrics_core::registry::{Kind, Tool};
+use bammetrics_core::Error;
+use bammetrics_core::multiple_metrics::{self, file_extensions};
+use bammetrics_core::registry::{Invocation, Kind, Tool};
 use bammetrics_core::stage::materialize::{self, Run};
 
 use super::PlannedFile;
-use crate::format::Format;
+use crate::format::{self, Format};
 
 /// The file options of `tool` under a prefix, as (option, extension): the
 /// table `qc` names with, else the extension of the tool's materialize row
@@ -76,6 +77,106 @@ pub(super) fn plan_files(
         }
         formats.truncate(1);
     }
+}
+
+/// What a materialized step is checked against before the first read.
+pub(super) struct Before<'a> {
+    /// The chain's source as given.
+    pub source: &'a str,
+    /// The step reads the source's stream with no step in front.
+    pub reads_source: bool,
+    pub has_reference: bool,
+    /// The chain's `--tmp-dir`.
+    pub tmp_dir: Option<&'a Path>,
+}
+
+/// The checks of a materialized step before the first read, on its Picard
+/// arguments `argv`: the tool's own option parser
+/// ([`materialize::check`]), each further input
+/// ([`materialize::check_further_input`]), the index of a source it reads
+/// directly ([`materialize::check_source`]), and the `--tmp-dir` its copy
+/// goes to.
+pub(super) fn check(tool: &Tool, argv: &[String], before: &Before) -> Result<(), Error> {
+    materialize::check(tool, argv)?;
+    let row = materialize::row_of(tool);
+    if row.is_some_and(|row| row.several_inputs) {
+        for input in argv.iter().skip(1).filter_map(|a| a.strip_prefix("INPUT=")) {
+            // A gather list is read by the tool; only a named BAM, SAM or
+            // CRAM is checked here.
+            let list = tool.name == "GatherBamFiles"
+                && ![".bam", ".sam", ".cram"].iter().any(|e| input.ends_with(e));
+            if !list && input != "-" {
+                materialize::check_further_input(Path::new(input), before.has_reference)?;
+            }
+        }
+    }
+    let source = Path::new(before.source);
+    let regular = std::fs::metadata(source).is_ok_and(|m| m.is_file());
+    if before.reads_source && regular && !source.starts_with("/dev") {
+        materialize::check_source(tool, source)?;
+    }
+    match before.tmp_dir.map(unusable_tmp_dir) {
+        Some(Some(why)) => Err(Error::Usage(format!(
+            "--tmp-dir {}: {why}; the step's copy of its stream and its spill go there",
+            before.tmp_dir.unwrap_or(Path::new("")).display()
+        ))),
+        _ => Ok(()),
+    }
+}
+
+/// Why no temporary directory can be made under `dir`; `None` when one
+/// can. A missing `dir` is made by the run (`create_dir_all`), so the
+/// nearest directory that exists must be one the user may write.
+fn unusable_tmp_dir(dir: &Path) -> Option<String> {
+    use std::os::unix::ffi::OsStrExt;
+    let existing = dir
+        .ancestors()
+        .find(|path| !path.as_os_str().is_empty() && std::fs::symlink_metadata(path).is_ok());
+    let existing = existing.unwrap_or(Path::new("."));
+    if !std::fs::metadata(existing).is_ok_and(|m| m.is_dir()) {
+        return Some(format!("{} is not a directory", existing.display()));
+    }
+    let text = std::ffi::CString::new(existing.as_os_str().as_bytes()).ok()?;
+    // SAFETY: `text` is a NUL-terminated path that outlives the call.
+    if unsafe { libc::access(text.as_ptr(), libc::W_OK | libc::X_OK) } == 0 {
+        return None;
+    }
+    let cause = std::io::Error::last_os_error();
+    Some(format!("{}: {cause}", existing.display()))
+}
+
+/// The metrics files `CollectMultipleMetrics` names under its prefix
+/// before it reads ([`multiple_metrics::planned_files`]), each with a
+/// sibling per further format, so a tap that writes one of them is a
+/// usage error before the first read.
+pub(super) fn program_files(
+    tool: &Tool,
+    inv: &Invocation,
+    formats: &[Format],
+) -> Result<Vec<PlannedFile>, Error> {
+    if tool.name != multiple_metrics::TOOL.name {
+        return Ok(Vec::new());
+    }
+    let mut files = Vec::new();
+    for path in multiple_metrics::planned_files(inv)? {
+        let siblings: Vec<PlannedFile> = formats[1..]
+            .iter()
+            .flat_map(|f| {
+                format::files_of(&format::sibling(&path, f.extension()), *f)
+                    .into_iter()
+                    .map(|path| PlannedFile {
+                        path,
+                        kind: f.name(),
+                    })
+            })
+            .collect();
+        files.push(PlannedFile {
+            path,
+            kind: "metrics",
+        });
+        files.extend(siblings);
+    }
+    Ok(files)
 }
 
 #[cfg(test)]

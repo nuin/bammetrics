@@ -110,6 +110,10 @@ pub const MAX_INPUTS: usize = 100_000;
 pub const MAX_LISTS: usize = 10_000;
 /// The bytes of one list file.
 pub const MAX_LIST_BYTES: u64 = 64 << 20;
+/// The bytes of one path a list names: Linux's `PATH_MAX`, four times
+/// macOS's. A longer line names no file, and its error quotes 200
+/// characters of it.
+pub const MAX_PATH_BYTES: usize = 4096;
 /// The bytes of every list file of one run together.
 pub const MAX_TOTAL_LIST_BYTES: u64 = 256 << 20;
 
@@ -143,6 +147,15 @@ fn unroll_within(given: &[String], total: u64) -> Result<(Vec<PathBuf>, Vec<Path
         let text = list_text(&path, left, total)?;
         left -= text.len() as u64;
         for line in list_lines(&text) {
+            if line.len() > MAX_PATH_BYTES {
+                return Err(Error::Usage(format!(
+                    "INPUT: list {} holds a line of {} bytes, which names no file (paths \
+                     hold at most {MAX_PATH_BYTES} bytes): {}",
+                    path.display(),
+                    line.len(),
+                    crate::error::excerpt(line)
+                )));
+            }
             if stack.len() + inputs.len() == MAX_INPUTS {
                 return Err(Error::Usage(format!(
                     "INPUT: more than {MAX_INPUTS} inputs; does a list name itself?"

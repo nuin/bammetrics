@@ -636,7 +636,7 @@ run.metrics["insert-size"]          # out/NA12878.insert_size_metrics, parsed
 |---|---|
 | `chain_keywords()`, `chain_keyword(name)`, `source_keyword()` | The keywords of `chain`: every flag of `global_flags()` in snake case (`output` for `--output-prefix`), without the source, `--quiet`, `--verbose` and `--help` |
 | `step_table(name)` | A `StepTable` for a verb named in snake or kebab case, by its Picard class or by its function name: `verb`, `role`, `keywords`. An unknown name is a usage error with the closest step |
-| `StepTable::keyword(name)` | One keyword, or the usage error with the closest name. `input`, and `output` of `mark_duplicates`, are refused with the reason |
+| `StepTable::keyword(name)` | One keyword, or the usage error with the closest name. `input` (except on `merge_sam_files`, `gather_bam_files` and `jumping_library`, where it names the further inputs) and `output` of `mark_duplicates` are refused with the reason |
 | `Keyword` | `name`, `long` (the flag it spells), `ty`, `many` (`One`, `Repeated`: one occurrence per item, `Joined`: one comma list) |
 | `step_names()` | The 37 names `step` takes, snake case, in `bammetrics tools` order, `write` last |
 | `metric_key(chain, step, path)` | The key of a metrics file in `Run.metrics`: the verb, `STREAM.` in front for a tap that does not read the last stream, `.FILE` after it for a further file |
@@ -970,7 +970,7 @@ W04, Python (docs/07 section 2.2, the `crates/py` paragraph):
 | `crates/py/src/verbs.rs` holds `bm.chain` | `crates/py/src/chain.rs` | `verbs.rs` has 1,138 lines. The chain classes and functions are one file of 632 |
 | `bm.chain(..., resume=)` | No `resume` keyword | Resume per step is W14 (manifest 2). A keyword that does nothing would be a lie in the signature |
 | `Run.stages` holds the transform counters | One `Stage` per step: `status`, `error`, `files`, `reads`, `leaves`, `segment`, and `records_in`, `records_out`, `changed` for a transform (`None` for a tap and `write`) | A failed run needs the status of every step, and `Products::counters` exists for a stage only. A chain of taps lowers to the read of `qc`, which counts no records |
-| `bm.step` validates against the generated registry signature | It does, through `registry::python_keywords`. `input` is refused, `output` is the step's own `-o` (a prefix for a tool that writes several files), `mark_duplicates` takes no `output`, and `format` and `as_` are added | A step has no input of its own, a transform writes no BAM in a chain, and `--format` and `--as` are step options with no row in the registry |
+| `bm.step` validates against the generated registry signature | It does, through `registry::python_keywords`. `input` is refused except on `merge-sam-files`, `gather-bam-files` and `jumping-library` (the files after the stream), `output` is the step's own `-o` (a prefix for a tool that writes several files), `mark_duplicates` takes no `output`, and `format` and `as_` are added | A step reads the stream, plus the further inputs of those three, a transform writes no BAM in a chain, and `--format` and `--as` are step options with no row in the registry |
 | Steps are named `"sort_sam"`, `"insert_size"` | Snake case, and also kebab case, the Picard class and the function name | `Run.metrics` and `collect(metrics=[...])` already spell verbs with a dash, and `tools()` gives the class |
 | The keywords of `bm.chain` are `output`, `reference`, `resume` | `output`, `reference`, `threads`, `tmp_dir`, `format`, `also`, `sample`, `plan`, `dry_run` | Every option of the verb that is not about printing. The table is read from `global_flags()`, so a new option becomes a keyword |
 | No word on `dry_run` | `dry_run=True` returns the plan text as a str | The command prints that text. The stub has three overloads, so `chain(...)` types as `Run[None]` and `chain(..., dry_run=True)` as `str` |
@@ -1424,6 +1424,28 @@ bammetrics chain lane1.bam -o out/s \
   disagrees, as Picard exits 1.
 - The command line the tool writes (`@PG CL`, the `StringHeader`) names the step's input
   as the chain planned it, never the file in the temporary directory.
+- Each materialized step writes its own copy. Three such steps on one stream write three
+  copies, so the disk and the compression grow with the count of steps; the plan lists
+  each copy.
+- A tool that spills (`check-duplicate-marking`, `umi-prevalence`, the sort of
+  `merge-sam-files`) spills under `--tmp-dir` too, unless the step gives its own
+  `--tmp-dir`. The planner counts the copy and the BAM a tool writes, not the tool's own
+  spill.
+- Before the first read, as for every step: the tool's own option parser judges every
+  value (`check-duplicate-marking --mode NOPE`, `multiple-metrics --level NOPE`, exit 2);
+  each further input must be a BAM, CRAM (with the chain's `-R`) or SAM file, and
+  `merge-sam-files` takes at most 1,000 inputs, the stream among them; a
+  `bam-index-stats` or `index-depth` step that reads the source itself needs the
+  source's `.bai` or `.csi` (`index-depth` also refuses a CRAM there); the files every
+  `multiple-metrics` program writes are claimed, so a tap that writes one of them
+  (`insert-size`) is a usage error; the `.bai` or `.csi` a step reads beside its inputs is
+  an input no step may write; and `--tmp-dir` must be a directory the user may write, or a missing one whose nearest existing parent is.
+- `bam-index-stats` and `index-depth` on a stream that is not coordinate sorted fail
+  alone when the stream starts: its copy gets no `.bai`. `sort-sam --sort-order
+  coordinate` in front gives it one.
+- An error of the copy names the stream (`markdup.bam + step 1 (gather-bam-files)`). A
+  stream whose records break the order its header says fails the next materialized step
+  with `the stream ... is not in the order its header says`.
 
 ### 22.2 Names
 
@@ -1474,7 +1496,9 @@ temp disk  about 4.7 KiB in the system temporary directory
 The copy takes the bytes per record of a spool (76 in coordinate order, 105 in another,
 section 15.3) times the records the source size gives. The BAM of a tool that writes one
 takes the same per record plus the size of every further input. The planner sums every
-copy as if all were held at once.
+copy as if all were held at once. The spill of a tool that sorts on its own
+(`check-duplicate-marking`, `umi-prevalence`, `merge-sam-files`) is not counted
+(decision D168).
 
 ### 22.4 Every tool and its role
 
@@ -1591,3 +1615,4 @@ The decision rows D160 to D167 of docs/07 hold each departure with its reason:
   count.
 - D167: a second `INPUT` of `fix-mate-information` and `--write-reads-files` of
   `filter-sam-reads` stay refused, with a new reason.
+- D168: one copy per materialized step, and the tool's own spill is not in the plan.
