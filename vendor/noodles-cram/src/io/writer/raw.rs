@@ -280,6 +280,57 @@ mod tests {
     }
 
     #[test]
+    fn test_a_tag_text_is_stored_as_its_bytes() -> Result<(), Box<dyn std::error::Error>> {
+        use sam::alignment::{
+            record::data::field::Tag, record_buf::data::field::Value as BufValue,
+        };
+
+        let text = b"@SQ\tSN:sq0\tLN:16\n";
+        let reference = b"ACGTACGTACGTACGT";
+        let options = Options::default();
+        let (xz, xh) = (Tag::new(b'X', b'Z'), Tag::new(b'X', b'H'));
+        // A UTF-8 letter and a control byte in a `Z`, an odd `H`.
+        let mut tagged = record("r1", 2, 0);
+        tagged.data = vec![
+            (xz, BufValue::String(b"caf\xc3\xa9\x01".into())),
+            (xh, BufValue::Hex(b"1AE".into())),
+        ];
+
+        let mut buf = Vec::new();
+        write_file_definition(&mut buf, &options)?;
+        write_header_text(&mut buf, text)?;
+        let context = SliceContext::Single {
+            reference_sequence_id: 0,
+            alignment_start: Position::new(2).unwrap(),
+            alignment_end: Position::new(5).unwrap(),
+            reference_md5: crate::calculate_normalized_sequence_digest(&reference[1..5]),
+        };
+        buf.extend(encode_container(&options, 0, context, true, &[tagged])?);
+        write_eof(&mut buf)?;
+
+        let repository = fasta::Repository::new(vec![fasta::Record::new(
+            fasta::record::Definition::new("sq0", None),
+            fasta::record::Sequence::from(reference.to_vec()),
+        )]);
+        let mut reader = crate::io::reader::Builder::default()
+            .set_reference_sequence_repository(repository)
+            .build_from_reader(&buf[..]);
+        let header = reader.read_header()?;
+        let read: Vec<_> = reader.records(&header).collect::<io::Result<_>>()?;
+        assert_eq!(
+            read[0].data().get(&xz),
+            Some(&BufValue::String(b"caf\xc3\xa9\x01".into()))
+        );
+        assert_eq!(read[0].data().get(&xh), Some(&BufValue::Hex(b"1AE".into())));
+
+        let mut nul = record("r2", 2, 0);
+        nul.data = vec![(xz, BufValue::String(b"a\0b".into()))];
+        assert!(encode_container(&options, 0, context, true, &[nul]).is_err());
+
+        Ok(())
+    }
+
+    #[test]
     fn test_deltas_need_one_reference_sequence() {
         let options = Options::default();
         let records = [record("r1", 2, 0)];

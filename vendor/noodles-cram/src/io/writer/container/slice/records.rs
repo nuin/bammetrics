@@ -379,7 +379,25 @@ impl<'a> Writer<'a> {
         let mut buf = Vec::new();
 
         for ((_, encoding), (_, value)) in tag_set.iter().zip(&record.data) {
-            write_value(&mut buf, &value.into())?;
+            // bammetrics patch: a `Z` or `H` value is stored as the bytes
+            // given and its NUL, as a BAM stores it. noodles' encoder
+            // refused a `Z` byte outside ` ` to `~` and an `H` text that is
+            // not pairs of hex digits (`invalid string`), which a BAM holds
+            // and htsjdk and htslib write into a CRAM.
+            match value {
+                sam::alignment::record_buf::data::field::Value::String(text)
+                | sam::alignment::record_buf::data::field::Value::Hex(text) => {
+                    if text.contains(&0) {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            "a NUL in a tag text",
+                        ));
+                    }
+                    buf.extend_from_slice(text);
+                    buf.push(0);
+                }
+                _ => write_value(&mut buf, &value.into())?,
+            }
             encoding.encode(self.core_data_writer, self.external_data_writers, &buf)?;
             buf.clear();
         }

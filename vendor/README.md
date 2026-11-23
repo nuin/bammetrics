@@ -8,8 +8,8 @@ crates.io releases. `exclude = ["vendor"]` keeps them out of the workspace, so
 
 The crates.io tarball (`noodles-cram-0.102.0.crate`), unpacked, with
 `Cargo.lock` dropped, an empty `[workspace]` table added to `Cargo.toml`, and
-seven changes marked `bammetrics patch`: five in the reader, two in the writer.
-The first is in
+ten changes marked `bammetrics patch`: six in the reader, three in the writer,
+one in the rANS codec. The first is in
 `src/io/reader/container/slice.rs`:
 
 - `calculate_template_length` is htsjdk 4's
@@ -94,8 +94,41 @@ lookups linear:
   record's set in a `HashMap`. noodles compared each record's tag set with
   every set of the container, twice.
 
-`cargo test --manifest-path vendor/noodles-cram/Cargo.toml` runs 314 tests, one
-of them for the third change, one for the fifth and two for the sixth.
+The eighth is in `src/io/writer/container/slice/records.rs`: `write_data`
+stores a `Z` or `H` tag value as the bytes given and a NUL, as a BAM stores it.
+noodles' BAM value encoder refused a `Z` byte outside ` ` to `~` and an `H`
+text that is not pairs of `0-9A-F` (`invalid string`, `invalid hex`), so one
+record with `XZ:Z:café` in UTF-8 failed the whole file. A BAM holds such texts
+and Picard and samtools write a CRAM of them. A text with a NUL is an error.
+
+The ninth is in `src/codecs/rans_4x8/encode/order_0.rs`, `normalize_frequencies`,
+which the order-1 encoder of the quality scores calls per context:
+
+- The product `count * 4095` is taken in 64 bits. In 32 bits it wrapped for a
+  symbol seen more than 1,048,832 times in a block, a panic in a debug build
+  and a table that no longer followed the counts in a release build: three
+  symbols seen 1,400,000 times each got 3411, 342 and 342 of 4095 in place of
+  1365 each. The file still decoded. A slice of 10,000 reads of 20,000 bases
+  is such a block; `cram_writer.rs` now also ends a slice at 8 MiB of BAM
+  records, which keeps most blocks under that count.
+- What the normalized sum is over 4095 is taken from the most frequent symbol
+  and, when that leaves it at 1, from the next. noodles took it all from the
+  most frequent symbol, whose frequency went below 0 for a block of 60 common
+  and 196 rare symbols (181 over, the largest frequency 68).
+
+The tenth is in `src/record.rs`: `Record::mask_texts`, for the reader in
+`crates/core/src/cram.rs`, which turns each CRAM record into a BAM record
+through noodles-bam. Its encoder refuses a read name with a byte outside `!` to
+`~` or an `@`, and the tag texts of the eighth change. `mask_texts` replaces
+each such text with as many `x` bytes and returns the bytes, and
+`bam_raw::restore_texts` puts them back into the BAM record. Without it
+bammetrics read no CRAM that holds such a name or tag, its own, Picard's or
+samtools'.
+
+`cargo test --manifest-path vendor/noodles-cram/Cargo.toml` runs 317 tests, one
+of them for the third change, one for the fifth, two for the sixth, one for the
+eighth and two for the ninth. `cargo test -p bammetrics-core cram_writer` holds
+the tenth.
 
 To move to a later noodles-cram: unpack its tarball here, apply the
 `bammetrics patch` changes again if upstream has not, and run that test module,

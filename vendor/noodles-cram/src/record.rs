@@ -58,6 +58,78 @@ pub struct Record<'c> {
 }
 
 impl Record<'_> {
+    /// bammetrics patch: replaces each text that the BAM encoder of
+    /// noodles-bam refuses with as many `x` bytes, and returns what it
+    /// replaced, for a caller that writes the record as BAM and puts the
+    /// bytes back. A BAM holds such texts, and htsjdk and htslib store them
+    /// in a CRAM.
+    ///
+    /// The first value is the read name, when it has 1 to 254 bytes and one
+    /// outside `!` to `~` or an `@`, or is `*`. The second holds each `Z`
+    /// tag value with a byte outside ` ` to `~` and each `H` value that is
+    /// not pairs of `0-9A-F`, written as a `Z`: the place of the field
+    /// among the fields `data()` yields, its type (`Z` or `H`) and its
+    /// bytes. A read group the record holds as an index into the header
+    /// becomes an `RG` field at the end, where `data()` yields it.
+    #[allow(clippy::type_complexity)]
+    pub fn mask_texts(&mut self) -> (Option<Vec<u8>>, Vec<(usize, u8, Vec<u8>)>) {
+        let name = self.name.as_mut().and_then(|name| {
+            let refused = name.as_ref() == b"*"
+                || name.iter().any(|b| !b.is_ascii_graphic() || *b == b'@');
+
+            if (1..=254).contains(&name.len()) && refused {
+                let len = name.len();
+                Some(std::mem::replace(name, Cow::Owned(vec![b'x'; len])).into_owned())
+            } else {
+                None
+            }
+        });
+
+        (name, self.mask_tag_texts())
+    }
+
+    fn mask_tag_texts(&mut self) -> Vec<(usize, u8, Vec<u8>)> {
+        fn is_bam_text(kind: u8, text: &[u8]) -> bool {
+            match kind {
+                b'Z' => text.iter().all(|b| matches!(b, b' '..=b'~')),
+                _ => {
+                    text.len().is_multiple_of(2)
+                        && text.iter().all(|b| matches!(b, b'0'..=b'9' | b'A'..=b'F'))
+                }
+            }
+        }
+
+        if let (Some(header), Some(id)) = (self.header, self.read_group_id)
+            && let Some((name, _)) = header.read_groups().get_index(id)
+            && !is_bam_text(b'Z', name)
+        {
+            let name: &BStr = name.as_ref();
+            self.data
+                .push((Tag::READ_GROUP, Value::String(Cow::Owned(name.into()))));
+            self.read_group_id = None;
+        }
+
+        let mut masked = Vec::new();
+
+        for (i, (_, value)) in self.data.iter_mut().enumerate() {
+            let (kind, text) = match value {
+                Value::String(text) => (b'Z', text),
+                Value::Hex(text) => (b'H', text),
+                _ => continue,
+            };
+
+            if is_bam_text(kind, text) {
+                continue;
+            }
+
+            let len = text.len();
+            masked.push((i, kind, text.to_vec()));
+            *value = Value::String(Cow::Owned(vec![b'x'; len].into()));
+        }
+
+        masked
+    }
+
     fn alignment_span(&self) -> usize {
         calculate_alignment_span(self.read_length, &self.features)
     }
