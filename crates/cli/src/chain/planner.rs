@@ -61,8 +61,9 @@ const SPILL_BYTES_COORDINATE: u64 = 76;
 /// and 584,011,111 (coordinate) over those records.
 const BAM_OUT_QUERYNAME: u64 = 102;
 const BAM_OUT_COORDINATE: u64 = 70;
-/// CRAM bytes per record `write x.cram` makes, set to the BAM's until the
-/// scale run of docs/benchmarks.md gives its own: the estimate errs high.
+/// CRAM bytes per record `write x.cram` makes: the BAM's, a placeholder. No
+/// real input was measured (docs/07 W15-11). It errs high: the CRAM was 32%
+/// to 69% of the BAM on the corpus files.
 const CRAM_OUT_QUERYNAME: u64 = BAM_OUT_QUERYNAME;
 const CRAM_OUT_COORDINATE: u64 = BAM_OUT_COORDINATE;
 /// Peak bytes in `TMP_DIR` per record of a `MarkDuplicates` run that

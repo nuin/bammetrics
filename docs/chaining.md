@@ -126,12 +126,14 @@ working directory (`.insert_size_metrics`).
 - `write [PATH]` takes `--index` (`CREATE_INDEX`), `--md5` (`CREATE_MD5_FILE`) and
   `--compression-level N` (0 to 9, default 5). `-` as the path is standard output, so a
   pipe to another tool still works: `bammetrics chain in.bam + mark-duplicates + write -
-  | samtools flagstat -`. The file is a BAM, or SAM text for a name ending in `.sam`, lower
-  case as htsjdk tells it (`out.SAM` is a BAM). `--output-format bam|sam` says which
-  whatever the name is, so `write - --output-format sam` prints SAM text. A name ending
-  in `.cram`, `.fastq` or `.fq` (with `.gz` too) is refused with the wave that adds that
-  kind: CRAM is W15, FASTQ is W22. `.sam.gz` is refused: SAM text is written
-  uncompressed. Section 14 has the details.
+  | samtools flagstat -`. The file is a BAM, SAM text for a name ending in `.sam`, or a
+  CRAM against the chain's `-R` for a name ending in `.cram`, lower case as htsjdk tells
+  them (`out.SAM` and `out.CRAM` are BAMs). `--output-format bam|sam|cram` says which
+  whatever the name is, so `write - --output-format sam` prints SAM text. A CRAM needs
+  `-R` and takes no `--index`: either is a usage error before the first read
+  (KNOWN_DIFFERENCES.md, CRAM output). A name ending in `.fastq` or `.fq` (with `.gz`
+  too) is refused with the wave that adds it, W22. `.sam.gz` is refused: SAM text is
+  written uncompressed. Section 14 has the details.
 - `--index` writes the `.bai` htsjdk names: `out.bam` gives `out.bai`, `out.dat` gives
   `out.dat.bai`. It writes one only for a coordinate-sorted stream. For any other sort
   order `write` writes no index and says so on standard error. The exit code stays 0.
@@ -267,7 +269,7 @@ bammetrics chain: step 1: unknown step "inser-size"
   did you mean insert-size?
   a step is a tool verb (bammetrics tools lists them) or write
 $ bammetrics chain in.bam + write out/x.cram
-bammetrics chain: step 1 (write): out/x.cram: bammetrics writes BAM and SAM only: CRAM output is wave W15 of docs/07_full_parity_program.md
+bammetrics chain: step 1 (write): out/x.cram: a CRAM is written against the reference: give the chain -R FASTA
 ```
 
 What is checked before the first read: the step name, every option name, every value of
@@ -575,7 +577,7 @@ reads no record and nothing of a pipe.
 | `Products` | `output` (metrics the caller writes), `files` (a writer's renamed files), `counters` (a stage's records in, out, changed), `notes` (lines for standard error) |
 | `halt(error)`, `Halt` | `Stopped` or `NotRun` for the result of a step another step halted, `None` for a step's own failure |
 | `WriteOptions` | `path`, `format` (`WriteFormat::Bam` or `Sam`, from the name), `compression_level`, `create_index`, `create_md5`. `check()` refuses a name of a later wave and an index beside SAM text. `files()` lists the BAM or SAM, the `.bai` and the `.md5` |
-| `later_kind(path)` | The kind and wave of a name `write` cannot make yet: `("CRAM", "W15")` |
+| `later_kind(path)` | The kind and wave of a name `write` cannot make yet: `("FASTQ", "W22")` |
 | `Outputs` | The files of a chain's steps in a hash map, keyed by device and inode or by the resolved path. `claim(label, path)` is a usage error when a step already writes the file. `owner(path)` |
 | `check_distinct_outputs(outputs)`, `writer_of(outputs, path)` | The same check over a slice |
 | `stage_of(tool)`, `label_of(tool)`, `check_stage_options(tool, inv)` | The stage function of a registry tool, the default name of its stream (`marked`), and its options checked before a run. One tool: `MarkDuplicates` |
@@ -1000,7 +1002,8 @@ check linear in the number of steps.
 | W05, done | The sort barrier (`Next::Records`), the planner (`Frame` per position, `requires`, the free-space refusal), the spool for a replay behind another transform, `--sort-memory`, SAM output of `write`; `write --index` writes Picard's `.bai` of the written BAM (`bai.rs`); `BuildBamIndex` and `make memgate` |
 | W09 on | Each BAM-writing tool registers its stage in `stage_of` and its stream name in `label_of` |
 | W14 | `qc` as the last step of a chain, manifest 2, resume per step (`resume=` in Python), kept products, the spool for tools that read their input their own way, a progress line |
-| W15, W22 | `write` to CRAM, FASTQ |
+| W15, done | `write` to a CRAM against the chain's `-R` (`cram_writer.rs`) |
+| W22 | `write` to FASTQ |
 | W46 | Variant streams (`Kind`), pileup and capture sinks |
 
 ## 14. W05 part A: SAM text

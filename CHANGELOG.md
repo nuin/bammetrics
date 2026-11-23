@@ -2,8 +2,35 @@
 
 ## Unreleased
 
+### Added
+
+- CRAM output (wave W15 of docs/07, `crates/core/src/cram_writer.rs`). An `OUTPUT` whose
+  name ends in `.cram`, lower case, is written as a CRAM 3.0 against `REFERENCE_SEQUENCE`
+  by `SortSam`, `MarkDuplicates`, every record-editing tool that rewrites its records
+  (`MergeSamFiles`, `AddOrReplaceReadGroups`, `CleanSam`, `DownsampleSam`, `AddOATag` and
+  the others on `record_edit.rs`) and the chain `write` step (`write out.cram` with the
+  chain's `-R`, or `--output-format cram`). The header is the BAM's. Each record keeps
+  its own mate fields and every tag where the BAM has it. `CREATE_MD5_FILE` writes
+  `<CRAM>.md5`; `COMPRESSION_LEVEL` sets the gzip level of the blocks. Decisions W15-1 to
+  W15-11 of docs/07 list where this is not what Picard's writer does.
+- `tests/concordance/test_cram_writer.py`: each CRAM is read by samtools, Picard 3.5.0 and
+  bammetrics and held to the BAM of the same stream and to samtools' own CRAM of it. 50
+  cases on the foundation corpus, t1, the exome slice and the hand-built BAMs of
+  `cram_bams.py`, through `SortSam`, five more tools and the chain `write` step.
+- `vendor/noodles-cram`: `io::writer::raw`, the CRAM writer in pieces, and a writer whose
+  bytes are a function of its records (vendor/README.md, changes six and seven).
+
 ### Changed
 
+- A `.cram` `OUTPUT` is no longer refused naming wave W15. Without `REFERENCE_SEQUENCE` a
+  tool fails at the first record with a reference sequence, with htsjdk's message, exit
+  1, and leaves no file; a chain that writes a CRAM without `-R` exits 2 before the first
+  read. `CREATE_INDEX` with a CRAM output is a usage error (Picard writes a `.cram.bai`).
+  A block copy (`AddCommentsToBam`, `ReplaceSamHeader` of a BAM, `GatherBamFiles` of
+  BAMs) still refuses a `.cram` name, and `SplitSamByLibrary` still refuses a CRAM input,
+  now without a wave in its message. `--output-format` takes `cram`.
+- Not measured: the writer on real data. No scale run was made and `benches/memgate.toml`
+  has no row for it (docs/07 W15-11).
 - `make budgets`: the binary, formats and Parquet growth rows are regression checks at the 0.31.0 size, after the owner accepted the binary size on 2026-11-22 (docs/07 decisions D22, D149, D156 and D159). Targets 430,000 bytes, 200 KB and 1.1 MiB; each fails at 1.5x its target (645,000 bytes, 300 KB, 1.65 MiB). The other rows still fail at 2x.
 
 ## 0.31.0

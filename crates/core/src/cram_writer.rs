@@ -8,10 +8,10 @@
 //! and the records a BAM of the same stream holds.
 //!
 //! What is written, and why:
-//! * **CRAM 3.0.** htsjdk 5.0.0 (Picard 3.5.0) writes 3.1. Every reader of
-//!   3.1 reads 3.0, and htsjdk before 4.2 and htslib before 1.12 read 3.0
-//!   alone. Blocks are gzip at `COMPRESSION_LEVEL`, the quality scores rANS
-//!   4x8 of order 1.
+//! * **CRAM 3.0.** htsjdk 5.0.0 (Picard 3.5.0) writes 3.1: its files start
+//!   `CRAM 03 01`. 3.0 is the version a reader of 3.1 also reads; samtools
+//!   1.25, Picard 3.5.0 and this crate read the files. Blocks are gzip at
+//!   `COMPRESSION_LEVEL`, the quality scores rANS 4x8 of order 1.
 //! * **The header as the BAM holds it**, byte for byte
 //!   ([`crate::bam_writer::header_bytes`]). htsjdk adds no `M5` and no `UR`
 //!   to an `@SQ` line and needs neither to read; a reader finds the bases

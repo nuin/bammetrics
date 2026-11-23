@@ -324,7 +324,7 @@ table.
 | `set-nm-and-uq-tags` | SetNmAndUqTags (Picard's deprecated name of SetNmMdAndUqTags: the same options and output) | `-o` BAM, or SAM text for a name ending in `.sam` |
 | `add-or-replace-read-groups` | AddOrReplaceReadGroups (a SAM, BAM or CRAM; `--rglb`, `--rgpl`, `--rgpu`, `--rgsm` required; `--sort-order`) | `-o` BAM, or SAM text for a name ending in `.sam` |
 | `revert-original-base-qualities-and-add-mate-cigar` | RevertOriginalBaseQualitiesAndAddMateCigar (a SAM, BAM or CRAM; `--sort-order`, `--restore-original-qualities`, `--max-records-to-examine`) | `-o` BAM (with `.bai` and `.md5` by default), or SAM text for a name ending in `.sam`; nothing for a file in shape |
-| `split-sam-by-library` | SplitSamByLibrary (a SAM, BAM or CRAM; a CRAM exits 2 naming wave W15) | `-o DIR`, default the current directory: one BAM, or SAM text, per library |
+| `split-sam-by-library` | SplitSamByLibrary (a SAM, BAM or CRAM; a CRAM exits 2) | `-o DIR`, default the current directory: one BAM, or SAM text, per library |
 | `split-sam-by-number-of-reads` | SplitSamByNumberOfReads (a SAM, BAM or CRAM; `--n-files` or `--n-reads`) | `-o DIR`: `shard_0001.bam` and on |
 | `gather-bam-files` | GatherBamFiles (BAMs as positionals or `-i`, in the order to gather; a text file of paths, one per line; SAM or CRAM read record by record) | `-o` BAM, no metrics file |
 | `calculate-read-group-checksum` | CalculateReadGroupChecksum (a SAM, BAM or CRAM; only its header is read) | the 32 hex digits of the checksum in `-o`, default beside the input |
@@ -589,7 +589,8 @@ bytes for SAM text).
   text, as Picard; `--create-md5-file` writes `out.bam.md5` (or `out.sam.md5`);
   `--compression-level` sets the BGZF level. A CRAM input needs `-R`, and its records get
   the `MD` and `NM` tags htsjdk rebuilds.
-- `-o out.cram` exits 2 naming wave W15. An `-o` that is the input (a link or a hard link
+- `-o out.cram` writes a CRAM against `-R` (KNOWN_DIFFERENCES.md, CRAM output);
+  `--create-index` with it exits 2. An `-o` that is the input (a link or a hard link
   included) exits 2 and replaces nothing.
 
 ### add-comments-to-bam
@@ -673,8 +674,8 @@ Picard's `AddOATag`: each record's alignment appended to its `OA` tag, then ever
   `out.dat`, as htsjdk names it. CRAM records get `MD` and `NM` as htsjdk decodes them, so
   their entries carry the `NM` htsjdk computes.
 - SAM text is written for a name ending in `.sam`, lower case; `OUT.SAM` is a BAM, as in
-  Picard. A `.cram` `OUTPUT` is refused before the first read until wave W15: the verb
-  exits 2, the Picard face exits 1. Picard writes the CRAM.
+  Picard. A name ending in `.cram` is a CRAM against `-R`, as in Picard
+  (KNOWN_DIFFERENCES.md, CRAM output).
 - An `@HD SO` value htsjdk does not name fails at `VALIDATION_STRINGENCY=STRICT` (`Found
   non-conforming header SO tag`), as in Picard. At `LENIENT` and `SILENT` it is written
   `SO:unknown`.
@@ -707,7 +708,8 @@ Picard's `CleanSam`: every record of the input with three fixes
 - A read that starts past the end of its reference gets a CIGAR longer than its bases
   (`20M` at 100050 on a 100000-base contig becomes `69S`). Picard writes that record and
   samtools refuses the file; bammetrics exits 1 and writes nothing.
-- `--create-index` writes `out.bai`; `-o` ending in `.cram` exits 1 naming wave W15.
+- `--create-index` writes `out.bai`; `-o` ending in `.cram` writes a CRAM against `-R`
+  and takes no index.
 - In a chain the step cleans the stream at its position: `bammetrics chain in.bam +
   clean-sam + mark-duplicates + write out.bam`. Its stream is `cleaned`.
 
@@ -827,7 +829,7 @@ Picard's `SplitSamByLibrary`: one file per library of the header's `@RG` lines
   groups that have no `LB`.
 - A header with no `LB` on any read group exits 2, `No individual libraries are specified
   in the header of INPUT`, as Picard does, and writes nothing.
-- Picard writes a CRAM per library for a CRAM input; bammetrics exits 2 naming wave W15.
+- Picard writes a CRAM per library for a CRAM input; bammetrics exits 2.
 - Two libraries with one safe name (`a b` and `a_b`), a library `unknown` beside records
   without a library, and names that differ in case only on a file system that ignores case
   make Picard write one file over the other. bammetrics exits 1 and leaves no file.
@@ -1118,7 +1120,7 @@ them, with a `@PG` line (`ID:DownsampleSam`, or `.1` and on when the input has o
 - `--metrics-file` writes the QualityYieldMetrics of the records kept: original
   qualities, no secondary or supplementary record.
 - A CRAM input needs `--reference-sequence` (no short name: `-R` is `--random-seed`, as
-  in Picard). A `.cram` `-o` exits 2 naming wave W15.
+  in Picard). A `.cram` `-o` writes a CRAM against `--reference-sequence`.
 - In a chain `downsample-sam` is a streaming transform (stream name `downsampled`);
   `--metrics-file` on the step writes its file.
 
@@ -1281,9 +1283,11 @@ is the short form.
   records later steps see; any number may follow one another. A tap (the 20 one-pass tool verbs) reads the
   records of its position and changes nothing. A split (`split-sam-by-library`,
   `split-sam-by-number-of-reads`) writes them over BAMs in a directory. `write [PATH]` writes those records as a
-  BAM, or as SAM text for a name ending in `.sam`; `-` is standard output, and `write -
-  --output-format sam` prints SAM text there. A `.cram` or `.fastq` name is refused with
-  the wave of docs/07 that adds it.
+  BAM, as SAM text for a name ending in `.sam`, or as a CRAM against the chain's `-R` for
+  a name ending in `.cram` (`--output-format cram` for any name); `-` is standard output,
+  and `write - --output-format sam` prints SAM text there. A chain that writes a CRAM
+  without `-R`, or with `--index`, exits 2 before the first read. A `.fastq` name is
+  refused with the wave of docs/07 that adds it.
 - Each step takes its verb's own options in every spelling (`--minimum-pct 0.1`,
   `--MINIMUM_PCT 0.1`, `MINIMUM_PCT=0.1`), with did-you-mean per step. `bammetrics chain
   BAM + VERB --help` lists them.
@@ -1730,8 +1734,9 @@ metrics file.
   output that is an input (by path, symbolic link or hard link), or two outputs that
   name one file, exit 2 before anything is read.
 - A CRAM input needs `-R`. Its records come out with the `MD` and `NM` tags htsjdk
-  rebuilds while decoding. The output is always BAM: an `-o` ending in `.sam` or `.cram`
-  exits 2 (the Picard face exits 1); `bammetrics chain IN + mark-duplicates + write
+  rebuilds while decoding. The output is a BAM, or a CRAM against `-R` for an `-o` ending
+  in `.cram`; an `-o` ending in `.sam` exits 2 (the Picard face exits 1); `bammetrics
+  chain IN + mark-duplicates + write
   out.sam` writes SAM text. SAM text input is read, plain or in gzip members, at
   `--validation-stringency`.
 - `--create-index` writes `marked.bai` beside a coordinate-sorted BAM, the index Picard
