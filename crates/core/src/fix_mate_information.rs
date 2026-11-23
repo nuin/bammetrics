@@ -497,8 +497,8 @@ pub fn check_stage(inv: &Invocation) -> Result<()> {
     record_edit::check_stage(inv)?;
     if inv.all("INPUT").len() > 1 {
         return Err(Error::Usage(
-            "INPUT: a chain step reads the chain's one stream; merging several inputs belongs \
-             to the tool on its own (wave W14 of docs/07_full_parity_program.md)"
+            "INPUT: a chain step reads the chain's one stream; a merge-sam-files step in front \
+             of it adds further files to the stream"
                 .to_owned(),
         ));
     }

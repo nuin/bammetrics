@@ -14,8 +14,8 @@ use std::path::Path;
 use bammetrics_core::registry::{Ty, did_you_mean, python_keywords, snake_case, wrap};
 
 use super::args::{
-    ALSO, AS, find_step, global_flags, is_split, is_step, is_transform, not_a_step, step_flags,
-    write_flags,
+    ALSO, AS, find_step, global_flags, is_materialized, is_split, is_step, is_transform,
+    not_a_step, step_flags, write_flags,
 };
 use super::prepare::{Chain, Planned, Role};
 use super::{WRITE, usage};
@@ -277,6 +277,8 @@ pub fn step_table(name: &str) -> Result<StepTable, VerbError> {
         Role::Transform
     } else if is_split(verb) {
         Role::Split
+    } else if is_materialized(verb) {
+        Role::Materialize
     } else {
         Role::Tap
     };
@@ -540,9 +542,10 @@ mod tests {
                 "bammetrics chain: unknown step \"inser-size\"\n  did you mean insert-size?",
             ),
             (
-                "wgs",
-                "bammetrics chain: step wgs: CollectWgsMetrics has no stage and does not read a \
-                 BAM in one pass: it cannot be a step\n  wave W14 of docs/07",
+                "non_n_fasta_size",
+                "bammetrics chain: step non-n-fasta-size: NonNFastaSize reads a FASTA file and \
+                 no BAM, and a chain hands on the records of a BAM: it cannot be a step\n  run \
+                 it on its own: bammetrics non-n-fasta-size --help",
             ),
             (
                 "fifo_buffer",

@@ -169,11 +169,11 @@ class Step:
     unknown verb or keyword raises UsageError here.
 
     verb is the verb as the command spells it (insert-size, write); role is
-    "transform", "tap", "write" or "split"; options holds the keywords given, without those
+    "transform", "tap", "write", "split" or "materialize"; options holds the keywords given, without those
     that were None; args is what they spell for the command (["--minimum-pct=0.1"]).
     Two steps with the same verb and args are equal."""
     verb: str
-    role: Literal["transform", "tap", "write", "split"]
+    role: Literal["transform", "tap", "write", "split", "materialize"]
     options: dict[str, Any]
     args: list[str]
     def __init__(self, verb: _StepVerb | str, /, **options: Any) -> None: ...
@@ -191,7 +191,7 @@ class Stage:
     tap and for write."""
     number: int
     verb: str
-    role: Literal["transform", "tap", "write", "split"]
+    role: Literal["transform", "tap", "write", "split", "materialize"]
     status: Literal["ok", "failed", "stopped", "not_run"]
     error: str | None
     reads: str
@@ -1922,17 +1922,29 @@ _StepVerb = Literal[
     "mean_quality_by_cycle",
     "base_distribution_by_cycle",
     "duplicate_metrics",
+    "library_complexity",
+    "multiple_metrics",
+    "wgs",
+    "raw_wgs",
+    "wgs_with_non_zero_coverage",
+    "targeted_pcr",
     "rna_seq",
     "mark_duplicates",
     "sequencing_artifact",
+    "oxo_g",
     "coverage_gaps",
     "sex_check",
+    "bam_index_stats",
+    "check_duplicate_marking",
+    "jumping_library",
+    "view_sam",
     "sort_sam",
     "mt_copy_number",
     "exon_coverage",
     "adapter_content",
     "duplicate_by_tile",
     "telomere",
+    "index_depth",
     "add_comments_to_bam",
     "replace_sam_header",
     "add_o_a_tag",
@@ -1943,12 +1955,17 @@ _StepVerb = Literal[
     "revert_original_base_qualities_and_add_mate_cigar",
     "split_sam_by_library",
     "split_sam_by_number_of_reads",
+    "gather_bam_files",
+    "calculate_read_group_checksum",
     "quality_yield_s_n_v_q",
+    "umi_prevalence",
     "rrbs",
+    "merge_sam_files",
     "reorder_sam",
     "fix_mate_information",
     "filter_sam_reads",
     "downsample_sam",
+    "position_based_downsample_sam",
     "write",
 ]
 

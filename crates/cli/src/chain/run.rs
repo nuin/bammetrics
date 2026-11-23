@@ -16,7 +16,9 @@ use bammetrics_core::cleanup::MadeDirs;
 use bammetrics_core::metric::MetricsOutput;
 use bammetrics_core::registry;
 use bammetrics_core::split_sam::{self, Claims};
-use bammetrics_core::stage::{self, ChainPlan, Counters, FileSource, Halt, Products, Step};
+use bammetrics_core::stage::{
+    self, ChainPlan, Counters, FileSource, Halt, Products, Step, materialize,
+};
 use bammetrics_formats::{Document, markdown};
 
 use super::VERB;
@@ -173,6 +175,19 @@ fn core_step(
             match step.role {
                 Role::Transform => Step::tool_stage(tool, inv).ok_or_else(unfit)?,
                 Role::Split => split_step(chain, step, tool, &inv, claims).map_err(failed)?,
+                Role::Materialize => Step::materialize(
+                    &step.label,
+                    materialize::Spec {
+                        tool,
+                        argv: step.argv.clone(),
+                        threads: chain.threads,
+                        quiet: chain.quiet,
+                        sort_memory: inv.sort_memory,
+                        tmp_dir: chain.tmp_dir.clone(),
+                        stringency: chain.stringency,
+                        output: step.output.clone().filter(|_| !step.stdout),
+                    },
+                ),
                 _ => Step::tool_tap(tool, inv)
                     .map_err(failed)?
                     .ok_or_else(unfit)?,
@@ -300,22 +315,29 @@ fn finish_step(
     // `write -` names /dev/stdout: the BAM went to the pipe, no file was
     // written.
     let piped = chain.steps[index].stdout;
+    // A materialized tool's own file (a checksum, SAM text) has one form.
+    let own = chain.steps[index].role == Role::Materialize;
     let mut files: Vec<Written> = products
         .files
         .iter()
         .filter(|_| !piped)
         .map(|path| Written {
             path: path.clone(),
-            kind: bam_kind(path),
+            kind: if own { "file" } else { bam_kind(path) },
         })
         .collect();
     if chain.steps[index].tool.is_some() {
         files.extend(write_tool_files(chain, index, products, sample)?);
     }
+    // The tool wrote its files and fails, as it exits 1 on its own.
+    let status = match products.failure {
+        Some(_) => StepStatus::Failed,
+        None => StepStatus::Ok,
+    };
     Ok(StepOutcome {
         number: index + 1,
-        status: StepStatus::Ok,
-        error: None,
+        status,
+        error: products.failure.clone(),
         files,
         counters: products.counters,
         notes: products.notes.clone(),
@@ -485,9 +507,10 @@ fn count(n: usize, word: &str) -> String {
 /// How a step that failed by itself reads in the summary: a tap fails
 /// alone, a transform or `write` stops its segment when another step was
 /// halted by it.
-fn failure_words(role: Role, halted: bool) -> &'static str {
-    match (role, halted) {
-        (Role::Tap, _) => "failed alone",
+fn failure_words(step: &Planned, halted: bool) -> &'static str {
+    let alone = step.role == Role::Tap || (step.role == Role::Materialize && step.leaves.is_none());
+    match (alone, halted) {
+        (true, _) => "failed alone",
         (_, true) => "failed and stopped its segment",
         (_, false) => "failed",
     }
@@ -528,7 +551,7 @@ pub fn summary(outcome: &Outcome) -> Vec<String> {
             }
             StepStatus::Failed => {
                 ended[1] += 1;
-                let words = failure_words(planned.role, halted);
+                let words = failure_words(planned, halted);
                 lines.push(format!("{label}: {words}: {error}"));
             }
             StepStatus::Stopped => {
