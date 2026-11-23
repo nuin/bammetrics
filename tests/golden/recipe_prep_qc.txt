@@ -1,0 +1,730 @@
+## argv
+prep
+tests/data/oxog.bam
+-o
+OUT/p.bam
+qc
+--date
+2026-01-01 00:00:00 UTC
+--fail-on
+fail
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: step 1 (fix-mate-information): 120 records in, 120 out, 0 changed
+bammetrics chain: step 2 (mark-duplicates): 120 records in, 120 out, 0 changed
+bammetrics chain: step 2 (mark-duplicates): spooled 5883 bytes of its input to replay them
+bammetrics chain: step 3 (sort-sam): 120 records in, 120 out, 0 changed
+bammetrics chain: step 9 (qc): verdict pass: 6 checks, 6 pass, 0 warn, 0 fail, 0 not measured
+bammetrics chain: 9 steps finished, 10 files written
+## file p.alignment_summary_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectAlignmentSummaryMetrics INPUT=tests/data/oxog.bam OUTPUT=OUT/p.alignment_summary_metrics CHAIN=FixMateInformation+MarkDuplicates+SortSam
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.AlignmentSummaryMetrics
+CATEGORY	TOTAL_READS	PF_READS	PCT_PF_READS	PF_NOISE_READS	PF_READS_ALIGNED	PCT_PF_READS_ALIGNED	PF_ALIGNED_BASES	PF_HQ_ALIGNED_READS	PF_HQ_ALIGNED_BASES	PF_HQ_ALIGNED_Q20_BASES	PF_HQ_MEDIAN_MISMATCHES	PF_MISMATCH_RATE	PF_HQ_ERROR_RATE	PF_INDEL_RATE	MEAN_READ_LENGTH	SD_READ_LENGTH	MEDIAN_READ_LENGTH	MAD_READ_LENGTH	MIN_READ_LENGTH	MAX_READ_LENGTH	MEAN_ALIGNED_READ_LENGTH	READS_ALIGNED_IN_PAIRS	PCT_READS_ALIGNED_IN_PAIRS	PF_READS_IMPROPER_PAIRS	PCT_PF_READS_IMPROPER_PAIRS	BAD_CYCLES	STRAND_BALANCE	PCT_CHIMERAS	PCT_ADAPTER	PCT_SOFTCLIP	PCT_HARDCLIP	AVG_POS_3PRIME_SOFTCLIP_LENGTH	SAMPLE	LIBRARY	READ_GROUP
+FIRST_OF_PAIR	60	60	1	0	60	1	6000	60	6000	5683	0	0	0	0	100	0	100	0	100	100	100	60	1	0	0	0	0.433333	0	0	0	0	0			
+SECOND_OF_PAIR	60	60	1	0	60	1	6000	60	6000	5708	0	0	0	0	100	0	100	0	100	100	100	60	1	0	0	0	0.566667	0	0	0	0	0			
+PAIR	120	120	1	0	120	1	12000	120	12000	11391	0	0	0	0	100	0	100	0	100	100	100	120	1	0	0	0	0.5	0	0	0	0	0			
+
+## HISTOGRAM	java.lang.Integer
+READ_LENGTH	PAIRED_TOTAL_LENGTH_COUNT	PAIRED_ALIGNED_LENGTH_COUNT
+100	120	120
+
+## file p.bai
+<index not recorded>
+## file p.bam
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:chr1	LN:100000
+@RG	ID:rgA	SM:S1	LB:L1
+@RG	ID:rgB	SM:S1	LB:L2
+@PG	ID:MarkDuplicates	VN:bammetrics <version>	CL:MarkDuplicates INPUT=tests/data/oxog.bam METRICS_FILE=OUT/p.marked.duplication_metrics	PN:MarkDuplicates
+p27	163	0	1032	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p12	163	0	1086	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p12	83	0	1200	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60	OQ:Z:II#IIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#I#IIII#IIIIII#II#III#II#I
+p29	99	0	1212	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p11	99	0	1233	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p8	163	0	1233	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p27	83	0	1272	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60	OQ:Z:IIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+p49	163	0	1292	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p37	99	0	1356	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60	OQ:Z:II#IIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#III#IIII#II#IIIIIIIIIIIIIIIIIIII
+p10	163	0	1378	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60	OQ:Z:IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#III#IIIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#II
+p6	99	0	1386	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p38	99	0	1423	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p10	83	0	1430	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p44	99	0	1439	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p8	83	0	1447	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p0	99	0	1464	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p3	99	0	1470	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p29	147	0	1493	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p49	83	0	1517	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p11	147	0	1527	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p39	99	0	1552	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p44	147	0	1552	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p38	147	0	1559	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p1	99	0	1563	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p37	147	0	1583	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p13	163	0	1596	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p0	147	0	1608	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60	OQ:Z:#IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#IIIIIIII#IIIII#IIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIII
+p28	163	0	1610	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p1	147	0	1631	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p6	147	0	1638	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p45	163	0	1697	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60	OQ:Z:IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIII#IIIIIIIIII#I#IIIIIIIIIIIIIII#IIIII#IIIIIII
+p19	163	0	1698	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p40	99	0	1715	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p13	83	0	1730	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p18	99	0	1736	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p3	147	0	1742	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p28	83	0	1743	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p35	163	0	1767	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60	OQ:Z:IIIIIIIIIIIIIIIIIIIIIII##IIIIIIII#IIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIII
+p39	147	0	1773	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p46	163	0	1784	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p50	99	0	1787	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p40	147	0	1789	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60	OQ:Z:IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIII
+p2	163	0	1833	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p34	163	0	1853	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p47	163	0	1884	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p4	163	0	1887	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p20	163	0	1896	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60	OQ:Z:IIIIIIIII###IIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIII#IIIIIIIIII#IIIIIIIIIIIIIIIII#IIIIII#III
+p19	83	0	1907	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p33	99	0	1933	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p35	83	0	1933	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p2	83	0	1935	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60	OQ:Z:IIIIIIIIIIIIIIIIIIIIIIIIIIII#I#IIIIIIIIII#IIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#II
+p14	163	0	1939	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p59	99	0	1953	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p45	83	0	1954	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p20	83	0	1956	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p50	147	0	1977	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60	OQ:Z:IIIII#IIIIIIIIIIIII#III#IIIIIIIIIIIIIIIIIIIIII#IIIIIIIII#IIIIIIIIIIIIIII#IIIIIIIII#III#IIIIIIIIII#II
+p53	99	0	1978	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p26	99	0	1985	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p18	147	0	1987	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p46	83	0	1998	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p34	83	0	2024	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p9	163	0	2027	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p33	147	0	2058	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p55	99	0	2061	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p14	83	0	2062	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p26	147	0	2071	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p36	163	0	2076	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p23	163	0	2090	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p4	83	0	2098	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p42	99	0	2100	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60	OQ:Z:IIIIIIIII#IIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#II#
+p51	163	0	2116	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p47	83	0	2142	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60	OQ:Z:IIIIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#IIIIIIII#IIIIIIIII#I#IIIIIIIIIIIIIIIIIII
+p7	99	0	2151	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60	OQ:Z:IIIIIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIII#IIIIIIIIIIIIIIII#IIIIIIII#IIIIIIIIIIIIIIIII#I#IIIII#IIIIIIIIII
+p48	163	0	2165	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p59	147	0	2186	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p23	83	0	2187	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p53	147	0	2221	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p9	83	0	2221	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p43	163	0	2228	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p56	163	0	2246	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p32	163	0	2254	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p48	83	0	2259	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p51	83	0	2285	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p43	83	0	2298	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p36	83	0	2305	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p22	99	0	2313	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60	OQ:Z:IIII#IIIIII#I#IIIIIIIIIIIIIIII#IIII#IIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIII#I#IIIIIIIIIIIIIIIII
+p7	147	0	2349	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p55	147	0	2356	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60	OQ:Z:IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#III#IIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+p42	147	0	2372	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p32	83	0	2505	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60	OQ:Z:IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#IIIIII#I#III#IIIIIIIIII#I
+p22	147	0	2531	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p56	83	0	2541	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p31	163	0	2551	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p41	99	0	2590	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p24	163	0	2592	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p54	163	0	2656	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p17	163	0	2677	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p5	99	0	2694	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p31	83	0	2721	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p30	99	0	2734	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p52	163	0	2776	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p25	163	0	2783	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60	OQ:Z:I#IIIII##IIIIIII#IIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIII#IIII##IIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+p17	83	0	2796	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60	OQ:Z:IIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIII
+p54	83	0	2800	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p41	147	0	2819	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p57	99	0	2820	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60	OQ:Z:IIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIII#I#IIIIIII#IIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIIIII
+p24	83	0	2824	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p30	147	0	2871	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60	OQ:Z:IIIIIIIIII#IIIIIIIIII#IIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIII#IIIIII#IIIIIIIIIII#IIII#IIIIIIIIIIIIIIIIII
+p15	99	0	2886	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p25	83	0	2893	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p21	163	0	2895	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p52	83	0	2902	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60	OQ:Z:II#IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIII
+p5	147	0	2923	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60	OQ:Z:II#IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#IIIIIIIII#IIIIIIIIIIIIIIIIIIIII#II#IIII#III#IIIIIIIIIIIIIIII
+p57	147	0	2941	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p16	163	0	2957	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p58	163	0	2959	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p15	147	0	2977	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60	OQ:Z:IIIIIIIIII###IIIIIIIIIIIIIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIII#IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+p16	83	0	3097	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+p21	83	0	3111	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgB	MQ:i:60
+p58	83	0	3159	MC:Z:100M	PG:Z:MarkDuplicates	RG:Z:rgA	MQ:i:60
+## file p.duplicate_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectDuplicateMetrics INPUT=tests/data/oxog.bam METRICS_FILE=OUT/p.duplicate_metrics CHAIN=FixMateInformation+MarkDuplicates+SortSam
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.DuplicationMetrics
+LIBRARY	UNPAIRED_READS_EXAMINED	READ_PAIRS_EXAMINED	SECONDARY_OR_SUPPLEMENTARY_RDS	UNMAPPED_READS	UNPAIRED_READ_DUPLICATES	READ_PAIR_DUPLICATES	READ_PAIR_OPTICAL_DUPLICATES	PERCENT_DUPLICATION	ESTIMATED_LIBRARY_SIZE
+L1	0	30	0	0	0	0	0	0	
+L2	0	30	0	0	0	0	0	0	
+
+
+## file p.insert_size_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectInsertSizeMetrics INPUT=tests/data/oxog.bam OUTPUT=OUT/p.insert_size_metrics CHAIN=FixMateInformation+MarkDuplicates+SortSam
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.InsertSizeMetrics
+MEDIAN_INSERT_SIZE	MODE_INSERT_SIZE	MEDIAN_ABSOLUTE_DEVIATION	MIN_INSERT_SIZE	MAX_INSERT_SIZE	MEAN_INSERT_SIZE	STANDARD_DEVIATION	READ_PAIRS	PAIR_ORIENTATION	WIDTH_OF_10_PERCENT	WIDTH_OF_20_PERCENT	WIDTH_OF_30_PERCENT	WIDTH_OF_40_PERCENT	WIDTH_OF_50_PERCENT	WIDTH_OF_60_PERCENT	WIDTH_OF_70_PERCENT	WIDTH_OF_80_PERCENT	WIDTH_OF_90_PERCENT	WIDTH_OF_95_PERCENT	WIDTH_OF_99_PERCENT	SAMPLE	LIBRARY	READ_GROUP
+292	329	58.5	152	395	278.983333	68.221099	60	FR	39	49	75	97	117	133	157	181	207	245	281			
+
+## HISTOGRAM	java.lang.Integer
+insert_size	All_Reads.fr_count
+152	1
+160	1
+168	1
+170	1
+174	1
+186	1
+191	1
+194	1
+197	1
+202	1
+210	1
+213	1
+214	1
+219	1
+221	1
+223	1
+225	1
+226	1
+233	1
+234	1
+236	1
+237	1
+240	1
+244	2
+266	1
+269	1
+270	1
+271	1
+290	1
+294	1
+298	1
+300	1
+309	1
+311	1
+314	2
+316	1
+318	1
+321	1
+325	1
+327	1
+329	3
+332	1
+333	1
+340	1
+343	1
+351	2
+352	1
+357	1
+358	1
+372	2
+381	1
+394	1
+395	2
+
+## file p.manifest.json
+{
+  "schema": "bammetrics.manifest/2",
+  "tool_version": "0.31.0",
+  "verb": "chain",
+  "sample": "S1",
+  "directory": "<directory>",
+  "source": {
+    "path": "tests/data/oxog.bam",
+    "size": "<size>",
+    "mtime": "<mtime>",
+    "edges_hash": "<edges_hash>"
+  },
+  "reference": null,
+  "prefix": "OUT/p",
+  "stringency": "STRICT",
+  "started": "<started>",
+  "seconds": "<seconds>",
+  "exit": 0,
+  "steps": [
+    {
+      "id": "fixed",
+      "number": 1,
+      "verb": "fix-mate-information",
+      "tool": "FixMateInformation",
+      "role": "transform",
+      "reads": "in",
+      "leaves": "fixed",
+      "upstream": [],
+      "argv": [
+        "INPUT=tests/data/oxog.bam"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "marked",
+      "number": 2,
+      "verb": "mark-duplicates",
+      "tool": "MarkDuplicates",
+      "role": "transform",
+      "reads": "fixed",
+      "leaves": "marked",
+      "upstream": [
+        "fixed"
+      ],
+      "argv": [
+        "INPUT=tests/data/oxog.bam",
+        "METRICS_FILE=OUT/p.marked.duplication_metrics"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/p.marked.duplication_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "sorted",
+      "number": 3,
+      "verb": "sort-sam",
+      "tool": "SortSam",
+      "role": "transform",
+      "reads": "marked",
+      "leaves": "sorted",
+      "upstream": [
+        "fixed",
+        "marked"
+      ],
+      "argv": [
+        "INPUT=tests/data/oxog.bam",
+        "SORT_ORDER=coordinate"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "quality-yield@sorted",
+      "number": 4,
+      "verb": "quality-yield",
+      "tool": "CollectQualityYieldMetrics",
+      "role": "tap",
+      "reads": "sorted",
+      "leaves": null,
+      "upstream": [
+        "fixed",
+        "marked",
+        "sorted"
+      ],
+      "argv": [
+        "INPUT=tests/data/oxog.bam",
+        "OUTPUT=OUT/p.quality_yield_metrics"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/p.quality_yield_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "alignment-summary@sorted",
+      "number": 5,
+      "verb": "alignment-summary",
+      "tool": "CollectAlignmentSummaryMetrics",
+      "role": "tap",
+      "reads": "sorted",
+      "leaves": null,
+      "upstream": [
+        "fixed",
+        "marked",
+        "sorted"
+      ],
+      "argv": [
+        "INPUT=tests/data/oxog.bam",
+        "OUTPUT=OUT/p.alignment_summary_metrics"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/p.alignment_summary_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "insert-size@sorted",
+      "number": 6,
+      "verb": "insert-size",
+      "tool": "CollectInsertSizeMetrics",
+      "role": "tap",
+      "reads": "sorted",
+      "leaves": null,
+      "upstream": [
+        "fixed",
+        "marked",
+        "sorted"
+      ],
+      "argv": [
+        "INPUT=tests/data/oxog.bam",
+        "OUTPUT=OUT/p.insert_size_metrics"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/p.insert_size_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "duplicate-metrics@sorted",
+      "number": 7,
+      "verb": "duplicate-metrics",
+      "tool": "CollectDuplicateMetrics",
+      "role": "tap",
+      "reads": "sorted",
+      "leaves": null,
+      "upstream": [
+        "fixed",
+        "marked",
+        "sorted"
+      ],
+      "argv": [
+        "INPUT=tests/data/oxog.bam",
+        "METRICS_FILE=OUT/p.duplicate_metrics"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/p.duplicate_metrics",
+          "kind": "metrics",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "write@sorted",
+      "number": 8,
+      "verb": "write",
+      "tool": null,
+      "role": "write",
+      "reads": "sorted",
+      "leaves": null,
+      "upstream": [
+        "fixed",
+        "marked",
+        "sorted"
+      ],
+      "argv": [
+        "OUTPUT=OUT/p.bam",
+        "FORMAT=bam",
+        "COMPRESSION_LEVEL=5",
+        "CREATE_INDEX=true",
+        "CREATE_MD5_FILE=false"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/p.bam",
+          "kind": "bam",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        },
+        {
+          "path": "OUT/p.bai",
+          "kind": "index",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    },
+    {
+      "id": "qc",
+      "number": 9,
+      "verb": "qc",
+      "tool": null,
+      "role": "qc",
+      "reads": "sorted",
+      "leaves": null,
+      "upstream": [
+        "fixed",
+        "marked",
+        "sorted"
+      ],
+      "argv": [
+        "--fail-on=fail",
+        "--date=2026-01-01 00:00:00 UTC"
+      ],
+      "options_hash": "<options_hash>",
+      "inputs": [],
+      "outputs": [
+        {
+          "path": "OUT/p.verdict.json",
+          "kind": "verdict",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        },
+        {
+          "path": "OUT/p.report.html",
+          "kind": "report",
+          "size": "<size>",
+          "mtime": "<mtime>",
+          "edges_hash": "<edges_hash>"
+        }
+      ],
+      "status": "ok",
+      "error": null,
+      "skipped": false,
+      "started": "<started>",
+      "seconds": "<seconds>"
+    }
+  ],
+  "kept": []
+}
+## file p.marked.duplication_metrics
+## htsjdk.samtools.metrics.StringHeader
+# MarkDuplicates INPUT=tests/data/oxog.bam METRICS_FILE=OUT/p.marked.duplication_metrics
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.DuplicationMetrics
+LIBRARY	UNPAIRED_READS_EXAMINED	READ_PAIRS_EXAMINED	SECONDARY_OR_SUPPLEMENTARY_RDS	UNMAPPED_READS	UNPAIRED_READ_DUPLICATES	READ_PAIR_DUPLICATES	READ_PAIR_OPTICAL_DUPLICATES	PERCENT_DUPLICATION	ESTIMATED_LIBRARY_SIZE
+L1	0	30	0	0	0	0	0	0	
+L2	0	30	0	0	0	0	0	0	
+
+## HISTOGRAM	java.lang.Double
+set_size	all_sets	non_optical_sets
+1.0	60	60
+
+## file p.quality_yield_metrics
+## htsjdk.samtools.metrics.StringHeader
+# CollectQualityYieldMetrics INPUT=tests/data/oxog.bam OUTPUT=OUT/p.quality_yield_metrics CHAIN=FixMateInformation+MarkDuplicates+SortSam
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics
+TOTAL_READS	PF_READS	READ_LENGTH	TOTAL_BASES	PF_BASES	Q20_BASES	PF_Q20_BASES	Q30_BASES	PF_Q30_BASES	Q20_EQUIVALENT_YIELD	PF_Q20_EQUIVALENT_YIELD
+120	120	100	12000	12000	11384	11384	11384	11384	22829	22829
+
+
+## file p.report.html
+<page not recorded>
+## file p.verdict.json
+{
+  "schema": "bammetrics.verdict/1",
+  "tool_version": "0.31.0",
+  "sample": "S1",
+  "preset": {
+    "name": "generic",
+    "version": 1,
+    "hash": "6dd89ed0478fd5e4",
+    "source": "built-in",
+    "note": "starting values"
+  },
+  "status": "pass",
+  "counts": {
+    "pass": 6,
+    "warn": 0,
+    "fail": 0,
+    "not_measured": 0
+  },
+  "files": [
+    {
+      "path": "OUT/p.alignment_summary_metrics",
+      "classes": [
+        "picard.analysis.AlignmentSummaryMetrics"
+      ]
+    },
+    {
+      "path": "OUT/p.duplicate_metrics",
+      "classes": [
+        "picard.sam.DuplicationMetrics"
+      ]
+    },
+    {
+      "path": "OUT/p.insert_size_metrics",
+      "classes": [
+        "picard.analysis.InsertSizeMetrics"
+      ]
+    },
+    {
+      "path": "OUT/p.quality_yield_metrics",
+      "classes": [
+        "picard.analysis.CollectQualityYieldMetrics$QualityYieldMetrics"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "rule": "alignment.pf-reads-aligned",
+      "label": "PF reads aligned",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_PF_READS_ALIGNED",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 1,
+      "warn": "< 0.9",
+      "fail": "< 0.8",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "alignment.adapter",
+      "label": "Adapter reads",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_ADAPTER",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 0,
+      "warn": "> 0.01",
+      "fail": "> 0.05",
+      "status": "pass",
+      "reason": null,
+      "plot": "insert-size"
+    },
+    {
+      "rule": "alignment.chimeras",
+      "label": "Chimeric pairs",
+      "class": "AlignmentSummaryMetrics",
+      "metric": "PCT_CHIMERAS",
+      "level": "ALL_READS",
+      "select": "CATEGORY=PAIR",
+      "unit": null,
+      "value": 0,
+      "warn": "> 0.05",
+      "fail": "> 0.1",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    },
+    {
+      "rule": "insert.median",
+      "label": "Median insert size",
+      "class": "InsertSizeMetrics",
+      "metric": "MEDIAN_INSERT_SIZE",
+      "level": "ALL_READS",
+      "select": "PAIR_ORIENTATION=FR",
+      "unit": null,
+      "value": 292,
+      "warn": "outside 100..1000",
+      "fail": "outside 50..2000",
+      "status": "pass",
+      "reason": null,
+      "plot": "insert-size"
+    },
+    {
+      "rule": "yield.q30",
+      "label": "Q30 fraction of PF bases",
+      "class": "QualityYieldMetrics",
+      "metric": "PF_Q30_BASES / PF_BASES",
+      "level": "ALL_READS",
+      "select": null,
+      "unit": null,
+      "value": 0.9486666666666667,
+      "warn": "< 0.8",
+      "fail": "< 0.7",
+      "status": "pass",
+      "reason": null,
+      "plot": "cycle-quality"
+    },
+    {
+      "rule": "duplication.percent",
+      "label": "Duplicate reads",
+      "class": "DuplicationMetrics",
+      "metric": "PERCENT_DUPLICATION",
+      "level": "LIBRARY",
+      "select": null,
+      "unit": "L2",
+      "value": 0,
+      "warn": "> 0.3",
+      "fail": "> 0.5",
+      "status": "pass",
+      "reason": null,
+      "plot": null
+    }
+  ]
+}

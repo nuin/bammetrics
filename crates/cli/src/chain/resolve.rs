@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use bammetrics_core::registry::Kind as OptKind;
 use bammetrics_core::stage::later_kind;
 
-use super::args::{find_step, is_split, is_transform, step_parser_flags};
+use super::args::{find_step, is_split, is_transform, materialize_leaves, step_parser_flags};
 use super::{QC, Spec, StepSpec, WRITE, usage};
 use crate::config;
 use crate::error::VerbError;
@@ -100,10 +100,11 @@ fn result_output(spec: &mut Spec) -> Result<(), VerbError> {
     if spec.steps.iter().any(|step| step.verb == WRITE) {
         return Ok(());
     }
-    let changes = spec
-        .steps
-        .iter()
-        .any(|step| find_step(&step.verb).is_some_and(is_transform));
+    // A transform, or a materialized tool that writes a BAM
+    // (`merge-sam-files`): either leaves records no file holds.
+    let changes = spec.steps.iter().any(|step| {
+        find_step(&step.verb).is_some_and(|verb| is_transform(verb) || materialize_leaves(verb))
+    });
     if !changes {
         return Err(usage(format!(
             "-o {text} names the BAM a chain writes, and no step of this chain changes the records"
@@ -394,6 +395,31 @@ mod tests {
             result_output(&mut same).expect("resolves");
             assert_eq!(same, spec(prefix, verbs));
         }
+    }
+
+    /// A qc step stays last: the write goes in front of it. A materialized
+    /// tool that writes a BAM changes the records, so `-o m.bam` writes them.
+    #[test]
+    fn the_write_goes_in_front_of_qc_and_a_merge_counts_as_a_change() {
+        let mut chain = spec("out/r.bam", &["mark-duplicates", "insert-size", "qc"]);
+        result_output(&mut chain).expect("resolves");
+        let verbs: Vec<&str> = chain.steps.iter().map(|s| s.verb.as_str()).collect();
+        assert_eq!(verbs, ["mark-duplicates", "insert-size", "write", "qc"]);
+        assert_eq!(chain.steps[2].args, ["out/r.bam", "--index"]);
+        assert_eq!(chain.prefix.as_deref(), Some("out/r"));
+        let mut merge = spec("m.bam", &["merge-sam-files"]);
+        result_output(&mut merge).expect("a merge changes the records");
+        assert_eq!(
+            merge.steps.last(),
+            Some(&StepSpec::new("write", &["m.bam", "--index"]))
+        );
+        // Taps and qc alone change nothing.
+        let error = result_output(&mut spec("r.bam", &["insert-size", "qc"])).expect_err("taps");
+        assert!(
+            error
+                .to_string()
+                .contains("no step of this chain changes the records")
+        );
     }
 
     #[test]

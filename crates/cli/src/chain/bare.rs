@@ -14,7 +14,8 @@
 //! * Any other bare word that names a step verb, a Picard class, `write` or
 //!   `qc` starts a step; one a letter or two away from a verb is an unknown
 //!   step with the closest verb; any other bare word stays with its step
-//!   (the path of `write`).
+//!   (the path of `write`, a further input of `merge-sam-files`,
+//!   `gather-bam-files` or `jumping-library`).
 //! * In the last step, when a bare word started it, an option of the chain
 //!   goes to the chain (`-o r.bam`, `-R ref.fa`, `--threads 8`, `--also
 //!   csv`): one the step has no flag for, and one the step has with the
@@ -39,7 +40,8 @@ use std::path::Path;
 use bammetrics_core::registry::did_you_mean;
 
 use super::args::{
-    CHAIN_KEYS, find_step, is_split, parser_flags, step_parser_flags, unknown_step, write_flags,
+    find_step, is_chain_key, is_split, parser_flags, step_parser_flags, takes_further_inputs,
+    unknown_step, write_flags,
 };
 use super::{QC, STEP, WRITE, qc_step, usage};
 use crate::error::VerbError;
@@ -252,7 +254,13 @@ pub(super) fn with_plus(args: &[String]) -> Result<Vec<String>, VerbError> {
             });
             continue;
         }
-        let is_write = steps.last().and_then(|s| s.verb.as_deref()) == Some(WRITE);
+        // A step that takes words of its own: the path of `write`, the
+        // further inputs of a step that reads several (`merge-sam-files
+        // b.bam`).
+        let is_write = steps
+            .last()
+            .and_then(|s| s.verb.as_deref())
+            .is_some_and(|verb| verb == WRITE || find_step(verb).is_some_and(takes_further_inputs));
         if bare
             && !is_write
             && !value_of_unknown
@@ -380,7 +388,7 @@ fn middle_chain_option(step: &Written, number: usize) -> Result<(), VerbError> {
         }
         let next = step.args.get(at + 1).map(String::as_str);
         let (chain_option, takes) = match grammar::option_of(&flags, arg, next) {
-            Some((flag, takes)) => (CHAIN_KEYS.contains(&flag.key), takes),
+            Some((flag, takes)) => (is_chain_key(find_step(verb), flag.key), takes),
             None => match grammar::option_of(&chain, arg, next) {
                 Some((flag, takes)) => (flag.key != Key::Help, takes),
                 None => (false, 0),
@@ -469,6 +477,8 @@ fn split_last(
         Some(name) => find_step(name).is_some_and(is_split),
         None => false,
     };
+    // `--input` of a step that reads several files names a further input.
+    let keeps_input = verb.and_then(find_step).is_some_and(takes_further_inputs);
     let writes = write_flags();
     let (mut kept, mut moved) = (Vec::new(), Vec::new());
     let mut at = 0;
@@ -482,7 +492,9 @@ fn split_last(
         let of_chain = grammar::option_of(chain, &args[at], next).filter(|(flag, _)| {
             flag.key != Key::Help
                 && own.is_none_or(|(own, _)| {
-                    SAME_MEANING.contains(&own.key) && !(keeps_output && own.key == Key::Output)
+                    SAME_MEANING.contains(&own.key)
+                        && !(keeps_output && own.key == Key::Output)
+                        && !(keeps_input && own.key == Key::Input)
                 })
         });
         if own.is_none()
@@ -642,6 +654,93 @@ mod tests {
                 "m.bam",
                 "--index"
             ])
+        );
+    }
+
+    /// `qc` is a step word: in last place it keeps its own options and hands
+    /// the chain's on. A file after `merge-sam-files` stays with the step,
+    /// and so does its `--input`.
+    #[test]
+    fn qc_and_a_step_with_further_inputs_in_the_bare_form() {
+        assert_eq!(
+            plus(&[
+                "in.bam",
+                "mark-duplicates",
+                "--keep",
+                "qc",
+                "--preset",
+                "wgs",
+                "--also",
+                "junit",
+                "-o",
+                "r.bam",
+                "--resume",
+                "-R",
+                "ref.fa"
+            ]),
+            strings(&[
+                "in.bam",
+                "-o",
+                "r.bam",
+                "--resume",
+                "-R",
+                "ref.fa",
+                "+",
+                "mark-duplicates",
+                "--keep",
+                "+",
+                "qc",
+                "--preset",
+                "wgs",
+                "--also",
+                "junit"
+            ])
+        );
+        assert_eq!(
+            plus(&[
+                "in.bam",
+                "merge-sam-files",
+                "second",
+                "third.bam",
+                "insert-size",
+                "-o",
+                "m.bam"
+            ]),
+            strings(&[
+                "in.bam",
+                "-o",
+                "m.bam",
+                "+",
+                "merge-sam-files",
+                "second",
+                "third.bam",
+                "+",
+                "insert-size"
+            ])
+        );
+        assert_eq!(
+            plus(&[
+                "in.bam",
+                "merge-sam-files",
+                "--input",
+                "b.bam",
+                "-o",
+                "m.bam"
+            ]),
+            strings(&[
+                "in.bam",
+                "-o",
+                "m.bam",
+                "+",
+                "merge-sam-files",
+                "--input",
+                "b.bam"
+            ])
+        );
+        // A word of two letters is no misspelled qc.
+        assert_eq!(
+            plus(&["IS", "OR", "+", "insert-size"]),
+            strings(&["IS", "OR", "+", "insert-size"])
         );
     }
 

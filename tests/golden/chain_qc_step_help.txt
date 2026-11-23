@@ -7,9 +7,9 @@ qc
 ## exit
 0
 ## stdout
-bammetrics chain ... + qc [OPTIONS]: the last step. It evaluates the preset over the metrics files of the taps on its stream and writes PREFIX.verdict.json and PREFIX.report.html as bammetrics qc writes them for the same taps on the same records. A collector the preset needs that no tap of the stream runs is added as a tap. The chain writes PREFIX.manifest.json (schema bammetrics.manifest/2).
+bammetrics chain ... + qc [OPTIONS]: the last step. It evaluates the preset over the metrics files of the taps on its stream and writes PREFIX.verdict.json and PREFIX.report.html as bammetrics qc writes them for the same taps on the same records. A collector the preset needs that no tap of the stream runs is added as a tap. A tool with no collector (CollectWgsMetrics) reads a file of the stream after the chain: the source with no transform in front, the last kept stream (--keep) or the BAM a write step wrote (-o out.bam); with no such file it runs on a copy of the stream, as the wgs step does. The chain writes PREFIX.manifest.json (schema bammetrics.manifest/2).
 
-Every option also reads as KEY=VALUE. The source, -o, -R, --threads, --sample and --resume belong to the chain: give them before the first +.
+Every option also reads as KEY=VALUE. The source, -o, -R, --threads, --sample and --resume belong to the chain: give them before the first step, or after qc in the form without +. qc may follow a recipe: bammetrics prep BAM -o out.bam qc.
 
 Exit codes:
   0   every sample passes, or none reaches --fail-on

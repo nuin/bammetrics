@@ -41,7 +41,7 @@ A tap or `write` does not change the stream, so the step after it sees the same 
 the second tap and the writer the marked records.
 
 Every registered tool that reads a BAM is a step at any position, 53 of the 71 (section
-22). The 17 tools that read no BAM (interval, VCF, FASTA and text tools,
+31). The 17 tools that read no BAM (interval, VCF, FASTA and text tools,
 `compare-metrics`, `fifo-buffer`) are refused with exit 2 and the reason. So is
 `build-bam-index`: it names `write --index`, which writes the `.bai` of the BAM a chain
 writes.
@@ -140,7 +140,8 @@ working directory (`.insert_size_metrics`).
 - A file option with an empty value (`-o ''`, `--metrics-file ''`, `write ''`) is a usage
   error: `step 1 (gc-bias): -o names no file: its value is empty`.
 - `--keep` on a transform writes the stream it leaves as `PREFIX.<stream>.bam` (section
-  23). On any other step it is a usage error.
+  28). A materialized tool that writes a BAM takes it too. On any other step it is a
+  usage error.
 - `qc` is the last step: the verdict and report over the taps of its stream (section 29).
 
 ### 2.3 Files and names
@@ -959,9 +960,9 @@ W04:
 | Two taps of one tool at one position is a usage error | It is one when both are named by the prefix, since they write one file. With `-o` on one of them the chain runs | A step's own `-o` is allowed, and two option sets of one tool on one stream is a use (`quality-yield` with and without original qualities) |
 | The `# INPUT=` line names the chain source and the step list | `INPUT=<source>` plus ` CHAIN=<transforms in front>`, as W03 wrote it. A tap on the source writes the tool's own line | A chain without a transform must write the bytes `qc` writes (section 10.2). The steps behind a tap do not change its records, so the line names only the transforms in front |
 | A transform's kept product is `PREFIX.<label>.bam` | The same, written by `write` without a path. The transform's own metrics file is `PREFIX.<label>.duplication_metrics` | docs/07 names no file for a transform's metrics. The label says which step wrote it |
-| `plan` prints segments, replay or spool per barrier, temp disk, and what `--resume` skips | Segments, replay or spool, the files of each step, the temp disk estimate. No `--resume` line | Resume per step is W14 (manifest 2) |
+| `plan` prints segments, replay or spool per barrier, temp disk, and what `--resume` skips | Segments, replay or spool, the files of each step, the temp disk estimate. No `--resume` line | Resume per step came with W14 (manifest 2, section 27) |
 | The planner refuses when free space is below the estimate | The plan prints the estimate and refuses nothing | The planner and its `statvfs` call are W05 |
-| `--also` on `chain` as on `qc` | `json`, `jsonl`, `tsv`, `csv`, `parquet`, `xlsx`, `docx`, `sql`, `markdown`. `junit` and `multiqc` are a usage error | They print a verdict. `qc` as the last step of a chain is W14 |
+| `--also` on `chain` as on `qc` | `json`, `jsonl`, `tsv`, `csv`, `parquet`, `xlsx`, `docx`, `sql`, `markdown`. `junit` and `multiqc` are a usage error | They print a verdict. `qc` as the last step of a chain came with W14 (section 29) |
 | `--format a,b` | `picard` must be first, on the chain and on a step | A chain names Picard files under a prefix, as the multi-file verbs do. A first format that is not `picard` would put JSON under a Picard name |
 | `parse_tables` moves to core | It moved, and it reads one-line arrays of scalars as well | A repeatable option of a step (`level`, `comment`) needs a list. A preset still takes no list |
 | `chain --plan plan.toml` reads the same steps | It reads the source and the chain's options too, and the command line may replace them | One file then describes one run, and one file can run on many sources (`--plan FILE other.bam -o other`) |
@@ -973,7 +974,7 @@ W04, Python (docs/07 section 2.2, the `crates/py` paragraph):
 | docs/07 | As built | Reason |
 |---|---|---|
 | `crates/py/src/verbs.rs` holds `bm.chain` | `crates/py/src/chain.rs` | `verbs.rs` has 1,138 lines. The chain classes and functions are one file of 632 |
-| `bm.chain(..., resume=)` | No `resume` keyword | Resume per step is W14 (manifest 2). A keyword that does nothing would be a lie in the signature |
+| `bm.chain(..., resume=)` | No `resume` keyword | Resume per step came with W14 (`resume=`, section 27). A keyword that does nothing would be a lie in the signature |
 | `Run.stages` holds the transform counters | One `Stage` per step: `status`, `error`, `files`, `reads`, `leaves`, `segment`, and `records_in`, `records_out`, `changed` for a transform (`None` for a tap and `write`) | A failed run needs the status of every step, and `Products::counters` exists for a stage only. A chain of taps lowers to the read of `qc`, which counts no records |
 | `bm.step` validates against the generated registry signature | It does, through `registry::python_keywords`. `input` is refused except on `merge-sam-files`, `gather-bam-files` and `jumping-library` (the files after the stream), `output` is the step's own `-o` (a prefix for a tool that writes several files), `mark_duplicates` takes no `output`, and `format` and `as_` are added | A step reads the stream, plus the further inputs of those three, a transform writes no BAM in a chain, and `--format` and `--as` are step options with no row in the registry |
 | Steps are named `"sort_sam"`, `"insert_size"` | Snake case, and also kebab case, the Picard class and the function name | `Run.metrics` and `collect(metrics=[...])` already spell verbs with a dash, and `tools()` gives the class |
@@ -1402,7 +1403,7 @@ bammetrics chain fixed.bam reorder-sam insert-size -o c/r.bam
 The rules, applied to each word in turn (`crates/cli/src/chain/bare.rs`):
 
 - `+` starts a step, and the word after it is the step's verb, as before.
-- A bare word that names a step verb, a Picard class or `write` starts a step.
+- A bare word that names a step verb, a Picard class, `write` or `qc` starts a step.
 - An option takes its values with it. `--as insert-size` keeps `insert-size` as the value
   of `--as`, so a value that names a verb stays a value.
 - The first bare word in front of the first step is the source, unless `-i`, `--input`
@@ -1422,6 +1423,12 @@ The rules, applied to each word in turn (`crates/cli/src/chain/bare.rs`):
   in last place needs the `+` form. In the middle of the chain a step keeps its own
   `-o`, `--format` and `-R`: `insert-size --format picard,json alignment-summary`
   writes JSON for `insert-size` alone.
+- `qc` in last place keeps its own options (`--preset`, `--report`, `--fail-on`, its
+  `--also` of verdict forms) and hands on the rest: `qc --preset wgs -o r.bam --resume`
+  gives `-o` and `--resume` to the chain (section 32).
+- A bare word after `merge-sam-files`, `gather-bam-files` or `jumping-library` that is
+  no verb is a further input of that step (`merge-sam-files second.bam`), and so is its
+  `--input`, in the middle and in last place.
 - A word that names a verb is a step, so a `write` path that is also a verb name is
   written `./NAME`.
 
@@ -1452,7 +1459,11 @@ no `write` step adds `write OUT --index` as the last step (`write OUT` for `.sam
 text has no index), and the prefix of every metrics file is the name without its
 extension:
 `-o r.bam` writes `r.bam`, `r.bai` and `r.insert_size_metrics`
-(`crates/cli/src/chain/resolve.rs`).
+(`crates/cli/src/chain/resolve.rs`). A materialized tool that writes a BAM
+(`merge-sam-files`, `gather-bam-files`, `position-based-downsample-sam`) counts as a
+transform here. A `qc` step stays last: the write goes in front of it, and the manifest,
+the verdict and the report take the same prefix (`r.manifest.json`, `r.verdict.json`,
+`r.report.html`; section 32).
 
 | `-o` | The chain | What it does |
 |---|---|---|
@@ -1579,7 +1590,12 @@ strategy = "ConstantMemory"
   step names a verb exits 2 with `needs =VALUE`. An error in a step an override set names
   the word beside the recipe line (`recipe prep:21 with sort-sam.sort-order=a=b`).
 - A recipe gives the steps: a step on the command line beside `--recipe` exits 2, and so
-  does `--plan` beside it. A second `--recipe` exits 2.
+  does `--plan` beside it. A second `--recipe` exits 2. One step may follow a recipe:
+  `qc`, the last step of any chain (`bammetrics prep in.bam -o out.bam qc --preset
+  generic`, section 32). A recipe file may also end in a `qc` step, and `qc.option=value`
+  sets its options; a second `qc` after such a recipe exits 2.
+- A user recipe is a file the chain reads, and so is the config file: a step that would
+  write either exits 2 (`is an input; writing it would destroy it`).
 - `STEP.option=value` without a recipe exits 2.
 - `bammetrics recipes` lists a user recipe that cannot be read as `NAME  (yours) not
   usable: REASON` and goes on with the rest. A user file that is not a regular file is
@@ -1591,7 +1607,8 @@ strategy = "ConstantMemory"
 
 ## 26. Departures from docs/07 (the simpler grammar)
 
-The decision rows of this branch, numbered from D160 (the integrator renumbers):
+The decision rows of the simpler grammar, D160 to D174 of docs/07. Rows D199 to D205 hold
+what changed when the grammar met the manifest and the materialized steps (section 32):
 
 | Row | docs/07 or the task | As built | Reason |
 |---|---|---|---|
@@ -1638,8 +1655,8 @@ time and exit code. Then one record per step:
 
 | Member | What it is |
 |---|---|
-| `id` | A transform's stream (`marked`), else `VERB@STREAM` (`insert-size@marked`), `#2` for the second of one verb on one stream; `qc` for the qc step |
-| `upstream` | The ids of the transforms in front of the step |
+| `id` | The stream of a transform or of a materialized tool that writes a BAM (`marked`, `merged`), else `VERB@STREAM` (`insert-size@marked`), `#2` for the second of one verb on one stream; `qc` for the qc step |
+| `upstream` | The ids of the transforms in front of the step (a materialized tool that writes a BAM counts as one) |
 | `argv` | The canonical argv: a tool's Picard arguments (with `KEEP=PATH` for a kept stream), `write`'s and `qc`'s options as `KEY=VALUE` |
 | `options_hash` | FNV-1a 64 of the argv, the tool version, the formats, `--sample` and the stringency |
 | `inputs` | Every file the step reads by name, with its fingerprint: the reference and its `.fai`, dictionaries, interval and read lists |
@@ -1658,10 +1675,14 @@ the manifest of a `qc` run (schema 1), when it is damaged (a note says why, the 
 on), or when the tool version, the source, the reference or the stringency changed.
 
 The steps that run share reads. The read starts at the last transform in front of the
-first step that runs whose stream the run before kept and whose BAM is still there with
-its fingerprint. Without one it starts at the source, and every transform between the
-start and the last step that runs runs again to feed the steps after it. A run where every
-step is skipped reads nothing.
+first step that runs whose stream is in a BAM the run before wrote and that is still
+there with its fingerprint: the stream it kept (`--keep`), or the BAM a `write` step of
+that stream wrote, when that `write` step is skipped in this run. So `-o out.bam` is a
+place to resume from without `--keep` (decision D201). Without such a BAM the read starts
+at the source, and every transform between the start and the last step that runs runs
+again to feed the steps after it. A run where every step is skipped reads nothing. The
+plan names the start: `skipped; its kept stream out/s.marked.bam starts the read`, or
+`skipped; the BAM a write step wrote of its stream, out/r.bam, starts the read`.
 
 `plan --resume` and `chain --resume --dry-run` print one line per step after the plan:
 
@@ -1741,8 +1762,11 @@ docs/cli.md and the README), the golden records `chain_resume_*` and
 ## 28. W14: kept streams
 
 `--keep` on a transform writes the stream it leaves as `PREFIX.<stream>.bam`, with
-`PREFIX.<stream>.bai` when the stream is coordinate sorted. The file is the BAM `write`
-writes at that position, byte for byte, and its index Picard's `BuildBamIndex` index of it.
+`PREFIX.<stream>.bai` when the stream is coordinate sorted. A materialized tool that
+writes a BAM takes it too (`merge-sam-files --keep` writes `PREFIX.merged.bam`). The file
+is the BAM `write` writes at that position, byte for byte, and its index Picard's
+`BuildBamIndex` index of it. `--keep` on the last transform beside `-o out.bam` writes the
+same records twice (`PREFIX.<stream>.bam` and `out.bam`); `--resume` starts at either.
 No note is printed for a stream that is not coordinate sorted: no index is the rule there.
 A plan file writes `keep = true` in the step's table; Python passes `keep=True` to `step`.
 
@@ -1792,9 +1816,14 @@ The `sex-check` tap the qc step adds counts reads per base over each whole conti
 not take `TARGET_INTERVALS` from an `hs-metrics` step, where `qc --hs` gives it the
 targets, so its `X_READS_PER_BASE` and `Y_READS_PER_BASE` differ from the verb's.
 
-`CollectWgsMetrics` has no one-pass collector. Under a qc step it reads the source on its
-own after the chain when no transform is in front, or the stream the last transform keeps
-(`--keep`); without either the class is not measured. A `--panel` BED is written as
+`CollectWgsMetrics` has no one-pass collector. Under a qc step it reads a file of the
+stream on its own after the chain: the source when no transform is in front, else the
+stream the last transform keeps (`--keep`), else the BAM a `write` step writes of that
+stream (the BAM `-o out.bam` names). With no such file it is a materialized step of the
+chain's read (section 31): it runs on a copy of the stream in the temporary directory,
+the plan lists it as `materialize on marked, for qc` and counts its disk. A `wgs` step
+the chain already runs on the stream is not added twice, and the verdict reads its file
+(decision D202). A `--panel` BED is written as
 `PREFIX.panel.interval_list` from the source's dictionary after the chain, as `qc` writes
 it; a piped source with a BED panel is a usage error.
 
@@ -1816,7 +1845,7 @@ files and `verdict.json` of `chain_qc_step` equal those of `qc_generic`),
 | Timing | Per step | The start and wall time of the run that ran the step | The steps of a chain share reads and run at once |
 | `qc.rs` | `Plan.bam` becomes a chain, `Read` gains `Tap(n)` | The qc verb is unchanged; the qc step reuses its collector planning (`qc::plan_chain_step`) | qc golden records stay byte for byte |
 | Kept product kind | A kept product may be CRAM | BAM, with its index when coordinate sorted | CRAM writing is wave W15 |
-| Materialize fallback | A tool with only `run` reads a spooled copy of the stream | Not built here; the qc step's `CollectWgsMetrics` reads the source or a kept stream | Left for the branch that builds the spool |
+| Materialize fallback | A tool with only `run` reads a spooled copy of the stream | Built in section 31. The qc step's `CollectWgsMetrics` reads the source, a kept stream or the BAM a `write` step wrote, else it is a materialized step (D202) | No copy is written when a file already holds the stream |
 | Paths and fingerprints | The manifest's fingerprints | Paths compared resolved against the recorded `directory`; the source fingerprinted before the read, each output when written | A respelled path reran every step; a source swapped during a run was recorded with its new fingerprint |
 | Concurrent runs | Not covered | One run per prefix through `PREFIX.manifest.json.lock`; a second exits 2 | Two runs on one prefix wrote one kept BAM and a manifest that skipped over the other run's records |
 | What a resumed run removes | Every file the old manifest lists and this run does not write | `PREFIX.*` files and the companions of a BAM the same step rewrote; a dropped `write` step's files and any file elsewhere are left and named | A dropped `write` lost its BAM; a hand-edited manifest removed a file of another prefix |
@@ -1862,6 +1891,12 @@ bammetrics chain lane1.bam -o out/s \
   `--create-md5-file` belong to `write` (exit 2).
 - A materialized tool that writes no BAM fails alone, as a tap does. A materialized
   tool that writes a BAM fails as a barrier: the later steps are not run.
+- A materialized tool that writes a BAM is a transform to the rest of the chain: it takes
+  `--keep` (`PREFIX.merged.bam`), `--resume` starts a read at its kept stream and reruns
+  the steps behind it when it runs, `-o out.bam` writes its records, and a `qc` step
+  reads the taps of its stream. A materialized tool that writes no BAM is a tap to the
+  qc step: the verdict reads its metrics file (`wgs` in front of `qc --preset wgs`).
+  Section 32 holds the cases.
 - `check-duplicate-marking` writes its file and then fails (exit 1) when a record
   disagrees, as Picard exits 1.
 - The command line the tool writes (`@PG CL`, the `StringHeader`) names the step's input
@@ -2040,7 +2075,7 @@ tool has no row in its table of steps and none in its table of refusals, and eac
 
 ### 31.6 Departures from docs/07
 
-The decision rows D190 to D197 of docs/07 hold each departure with its reason:
+The decision rows D190 to D198 of docs/07 hold each departure with its reason:
 
 - D190: a table of materialized tools (`stage::materialize`), no `Tool` field; the tool
   reads the source itself when it can.
@@ -2058,3 +2093,144 @@ The decision rows D190 to D197 of docs/07 hold each departure with its reason:
 - D197: a second `INPUT` of `fix-mate-information` and `--write-reads-files` of
   `filter-sam-reads` stay refused, with a new reason.
 - D198: one copy per materialized step, and the tool's own spill is not in the plan.
+
+## 32. 0.32.0: the short form, the manifest and the materialized steps together
+
+Sections 22 to 26 (the simpler grammar), 27 to 30 (the manifest) and 31 (materialize)
+were built on three branches. This section holds the rules where they meet, each with
+its test in `crates/cli/tests/chain_combined.rs` and its golden record. The decision rows
+are D199 to D205 of docs/07.
+
+```bash
+# Before (0.31.0): every step behind a +, the write step named, a prefix beside it
+bammetrics chain fixed.bam -R hs37d5.fa -o c/r \
+    + reorder-sam --sequence-dictionary hs37d5.dict + insert-size + write c/r.bam --index
+
+# 0.32.0, with reference = "hs37d5.fa" in ~/.config/bammetrics/config.toml
+bammetrics chain fixed.bam reorder-sam insert-size -o r.bam
+
+# Run it again after an edit: only what changed runs
+bammetrics chain fixed.bam reorder-sam insert-size --minimum-pct 0.2 -o r.bam --resume
+
+# The recipe, the verdict and the report in one command
+bammetrics prep sample.bam -o out.bam qc --preset generic --fail-on fail --resume
+```
+
+### 32.1 qc and --resume in the short form
+
+- `qc` is a step word (`chain BAM mark-duplicates insert-size qc -o r.bam`). In last
+  place it keeps `--preset`, `--report`, `--fail-on`, its `--also` of verdict forms and
+  the capture, RNA and sex options. Every other option after it is the chain's: `-o`,
+  `-R`, `--threads`, `--sample`, `--resume`, `--dry-run`.
+- `--resume` after the last step is the chain's. `--keep` after a transform's verb is
+  that step's.
+- `-o r.bam` on a chain that ends in `qc` adds `write r.bam --index` in front of the qc
+  step (decision D200). The prefix is `r`: `r.insert_size_metrics`, `r.manifest.json`,
+  `r.verdict.json`, `r.report.html`.
+- `qc --index` in last place exits 2 and names the form: `... write OUT.bam --index qc`.
+  A step after `qc` exits 2 (`step 2 (qc) is the last step: no step may follow it`).
+- `chain - STEP ... --resume` exits 2: a pipe has no fingerprint.
+- The reference from the config file or `BAMMETRICS_REFERENCE` is the chain's reference
+  in the manifest. It is fingerprinted before the first read, as `-R` is, so another
+  reference in the config file reruns every step.
+
+### 32.2 A resumed run starts at the BAM it wrote
+
+`-o r.bam` writes the last stream. A resumed run whose `write` step is skipped (its
+record matches and `r.bam` and `r.bai` hold their fingerprints) starts its read at
+`r.bam`, as it would at a kept stream (decision D201):
+
+```
+$ bammetrics chain fixed.bam reorder-sam insert-size --minimum-pct 0.2 -o r.bam --resume --dry-run
+resume     from r.manifest.json
+resume     step 1 reorder-sam: skipped; the BAM a write step wrote of its stream, r.bam, starts the read
+resume     step 2 insert-size: runs: its options changed
+resume     step 3 write: skipped: its record and files match
+```
+
+- The BAM is the one `--keep` would write at that position: the same writer on the same
+  records. A `write` step counts when it reads the stream of the transform in question,
+  writes a BAM (no SAM text, no standard output) and is skipped in this run.
+- `r.bam` changed by another hand has another fingerprint. The `write` step then runs
+  again and the transform in front runs to feed it, from the source.
+- A kept stream comes first when both are there. `--keep` on the last transform beside
+  `-o r.bam` writes the records twice and is not needed for `--resume`.
+- A resumed run opens no file of a skipped step for writing. `r.bam` is read, never
+  written, in the run above.
+
+### 32.3 Recipes with qc and --resume
+
+- One step may follow a recipe on the command line: `qc` (decision D199). `bammetrics
+  prep in.bam -o out.bam qc --preset generic` runs the seven steps of `prep`, writes
+  `out.bam` and `out.bai`, then the verdict and the page over the four metrics files the
+  recipe's taps wrote. The verdict equals the verdict of `bammetrics qc out.bam`.
+- Any other step beside a recipe exits 2, as before. A recipe file may end in a `qc`
+  step; a second `qc` after it exits 2 (`recipe NAME ends in a qc step`).
+- `qc.option=value` sets an option of a recipe's own qc step (`qc.preset=wgs`).
+  `STEP.keep=true` keeps the stream of a recipe's transform.
+- `--resume` works on a recipe as on its chain. An override is an option of its step, so
+  `bammetrics prep in.bam -o out.bam --resume insert-size.minimum-pct=0.2` after a first
+  run skips seven of the eight steps and reads `out.bam` for `insert-size`. An override
+  of a transform (`mark-duplicates.remove-duplicates=true`) reruns that step and every
+  step behind it.
+- A user recipe and the config file are inputs of the chain (decision D204). A step that
+  would write either exits 2 before the first read.
+- Python: `bm.recipe("prep", bam, output="out.bam", qc=True, resume=True)`, or
+  `qc=bm.step("qc", preset="generic", fail_on="fail")`. `Run.exit_code` holds 10 or 11
+  from the qc step; no exception is raised for them.
+
+### 32.4 Materialized steps in the short form
+
+- A bare word after `merge-sam-files`, `gather-bam-files` or `jumping-library` that names
+  no verb is a further input of that step: `chain a.bam merge-sam-files b.bam insert-size
+  -o m.bam`. `--input b.bam` there is the step's too, in the middle and in last place
+  (decision D205). A file named like a verb is written `./NAME`.
+- `-o m.bam` on a chain whose only change is a materialized tool that writes a BAM
+  (`chain a.bam merge-sam-files b.bam -o m.bam`) adds the `write`: the merge changes the
+  records (decision D203).
+- `--keep` on `merge-sam-files`, `gather-bam-files` and `position-based-downsample-sam`
+  writes `PREFIX.merged.bam`, `PREFIX.gathered.bam` or `PREFIX.downsampled.bam`, and
+  `--resume` starts there. Such a step has its stream as its id in the manifest and is
+  upstream of the steps behind it, as a transform is. A further input that changed
+  reruns it (`runs: b.bam changed`) and every step behind it.
+- A materialized tool that writes no BAM (`wgs`, `library-complexity`) has a record of
+  its own: unchanged, it is skipped; with a changed option it runs alone, on the kept
+  stream or the written BAM when one starts the read.
+
+### 32.5 The qc step and tools with no collector
+
+`qc --preset wgs` needs `CollectWgsMetrics`, which reads a file. The qc step picks the
+first of these (decision D202):
+
+| The chain | What `CollectWgsMetrics` reads | The plan |
+|---|---|---|
+| a `wgs` step on the qc step's stream | nothing more: the verdict reads that step's file | `step 2  wgs  materialize on marked` |
+| no transform in front, the source a file | the source, after the chain | `own read, after the chain` |
+| `--keep` on the last transform | `PREFIX.<stream>.bam`, after the chain | `own read, after the chain` |
+| a `write` step of the stream to a BAM (`-o out.bam`) | that BAM, after the chain | `own read, after the chain` |
+| none of these | a copy of the stream in the temporary directory, in the chain's read | `materialize on marked, for qc` |
+
+All five give the metrics `wgs` gives for the BAM the chain wrote, and one verdict
+(`the_qc_step_measures_wgs_behind_a_transform`). On the manifest branch alone the last
+row was `WgsMetrics not measured`.
+
+### 32.6 What equals what
+
+`crates/cli/tests/chain_combined.rs`, each against the long form or a fresh run:
+
+| Test | What it holds |
+|---|---|
+| `the_owners_example_resumes` | `chain BAM reorder-sam insert-size -o r.bam --resume` with the config reference: the second run reads nothing; a changed `insert-size` option reruns that step alone from `r.bam` and leaves `r.bam` untouched; a replaced `r.bam` starts no read; the files equal the long form |
+| `a_recipe_resumes_after_an_option_change` | `prep --resume`, then with `insert-size.minimum-pct=0.2`: 7 of 8 steps skipped, only that file and the manifest rewritten, the files of a fresh run; an override of a transform reruns every step |
+| `qc_is_the_last_step_of_the_prep_recipe` | `prep BAM -o p.bam qc` equals the nine steps by hand and the verdict of `qc p.bam`; another step and a second `qc` exit 2 |
+| `a_user_recipe_ends_in_qc` | A recipe file with a `qc` step, `qc.date=...`, the write in front of qc; a step that writes the recipe or the config file exits 2 |
+| `a_merge_in_the_short_form_keeps_and_resumes` | `merge-sam-files FILE --keep` in the short form, the resumed read at `m.merged.bam`, the long form |
+| `the_qc_step_measures_wgs_behind_a_transform` | The ways of 32.5 against `wgs` on the written BAM |
+| `a_materialized_step_resumes` | `library-complexity` skipped, `wgs` rerun alone |
+| `the_short_form_refuses_what_the_long_form_refuses` | The usage errors of 32.1, nothing written |
+
+Golden records: the 9 of `CHAIN_COMBINED_CASES` and the 4 of `COMBINED_RESUME_CASES`
+(`chain_short_form_qc`, `recipe_prep_qc`, `chain_short_form_merge`, the two plans
+`chain_plan_qc_wgs_*`, four errors, `chain_short_form_resume_skips`,
+`chain_short_form_resume_option_change`, its plan, `recipe_prep_resume_option_change`).
+`tests/python/test_chain.py` holds the same cases through `chain`, `step` and `recipe`.

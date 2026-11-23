@@ -80,7 +80,7 @@ pub(super) fn plan_files(
 }
 
 /// What a materialized step is checked against before the first read.
-pub(super) struct Before<'a> {
+pub(in crate::chain) struct Before<'a> {
     /// The chain's source as given.
     pub source: &'a str,
     /// The step reads the source's stream with no step in front.
@@ -96,7 +96,7 @@ pub(super) struct Before<'a> {
 /// ([`materialize::check_further_input`]), the index of a source it reads
 /// directly ([`materialize::check_source`]), and the `--tmp-dir` its copy
 /// goes to.
-pub(super) fn check(tool: &Tool, argv: &[String], before: &Before) -> Result<(), Error> {
+pub(in crate::chain) fn check(tool: &Tool, argv: &[String], before: &Before) -> Result<(), Error> {
     materialize::check(tool, argv)?;
     let row = materialize::row_of(tool);
     if row.is_some_and(|row| row.several_inputs) {

@@ -66,13 +66,19 @@ and `CollectArraysVariantCallingMetrics` on text and arrays VCF input (tools 55 
 (tools 61 to 65, 0.30.0, wave W12), and `MergeSamFiles` with merged sequence
 dictionaries, `ReorderSam`, `FixMateInformation`, `FilterSamReads`, `DownsampleSam` with
 Picard's seeds and `PositionBasedDownsampleSam`, four of them chain transforms (tools 66
-to 71, 0.31.0, wave W13; docs/chaining.md sections 19 to 21). CHANGELOG.md has each.
+to 71, 0.31.0, wave W13; docs/chaining.md sections 19 to 21), and chain 2 with no new
+tool (0.32.0, wave W14; docs/chaining.md sections 22 to 32): steps without `+`
+(`bammetrics chain fixed.bam reorder-sam insert-size -o r.bam`), `-o` naming the BAM, the
+user config file, the recipes `prep`, `qc-only` and `downsample`, manifest 2 with
+`--resume` per step and `--keep`, `qc` as the last step, and every tool that reads a BAM
+as a step at any position (53 of the 71) through the materialize fallback. CHANGELOG.md
+has each.
 
 Remaining for bammetrics:
 
 - bioconda recipe and a PyPI release (first push of the branch runs the CI workflow).
 - The Picard tools still to build, further formats and DOCX reports: the program plan
-  `docs/07_full_parity_program.md` (waves W14 onward);
+  `docs/07_full_parity_program.md` (waves W15 onward);
   docs/04 section 4 holds the P9 queue.
 
 Exit criterion: a `pip install`-able library that produces correct, hand-verified numbers.

@@ -1,0 +1,13 @@
+## argv
+chain
+-
+mark-duplicates
+-o
+OUT/r.bam
+--resume
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: --resume compares the source's fingerprint, and standard input has none (from --resume)
+  give the source as a file

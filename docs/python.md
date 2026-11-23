@@ -239,9 +239,9 @@ These are the two examples of docs/chaining.md. `tests/data/chain_markdup.toml` 
 | `sort_memory` | `--sort-memory BYTES` | What a `sort_sam` step holds before it spills: `"2G"`, `"512M"`, a number of bytes as a str. Default 2 GiB |
 | `force_space` | `--force-space` | `True` runs a chain whose estimated temporary and output bytes exceed the free space; without it that chain raises `InputError` before the first read |
 | `validation_stringency` | `--validation-stringency` | How a SAM text source is checked: `"STRICT"` (default), `"LENIENT"`, `"SILENT"`. A step refuses the keyword |
-| `resume` | `--resume` | `True` skips each step `PREFIX.manifest.json` proves done and writes the manifest (docs/chaining.md section 27). `"-"` as the source raises `UsageError` |
+| `resume` | `--resume` | `True` skips each step `PREFIX.manifest.json` proves done and writes the manifest (docs/chaining.md section 27). The read starts at a kept stream or at the BAM a skipped `write` step wrote, so `output="r.bam", resume=True` reruns a changed tap from `r.bam` (section 32.2). `"-"` as the source raises `UsageError` |
 | `plan` | `--plan FILE` | A TOML plan file in place of `steps`. A keyword given replaces the file's value. `steps` beside `plan` raises `UsageError`. Paths in the file are read relative to the working directory of the process, never to the file's directory. A step that names the plan file as its output raises `UsageError` |
-| `recipe` | `--recipe NAME` | A recipe in place of `steps` (`prep`, `qc-only`, `downsample`, or one of the user's); `steps` beside it raises `UsageError`. `recipe()` below sets its step options |
+| `recipe` | `--recipe NAME` | A recipe in place of `steps` (`prep`, `qc-only`, `downsample`, or one of the user's). `steps` beside it raises `UsageError`, but for one step: `steps=["qc"]` or `steps=[step("qc", ...)]` adds qc as the last step. `recipe()` below sets its step options |
 | `config` | `--no-config` when `False` | `True` (default) reads the user config file: `reference`, `threads`, `tmp_dir` and `sort_memory` when the keyword is not given (docs/chaining.md section 24). `BAMMETRICS_REFERENCE` counts either way. Not a bool: `UsageError` |
 | `dry_run` | `--dry-run` | `True` returns the plan text as a str and runs nothing |
 
@@ -251,16 +251,22 @@ The keywords spell the command's argv, and the command's parser, `prepare` and `
 
 ### recipe
 
-`recipe(name, source=None, *, set=None, config=True, dry_run=False, **options)` runs the recipe `name` as `bammetrics NAME BAM` does: `chain(source, recipe=name, **options)` plus one `STEP.option=value` word per item of `set`.
+`recipe(name, source=None, *, set=None, qc=None, config=True, dry_run=False, **options)` runs the recipe `name` as `bammetrics NAME BAM` does: `chain(source, recipe=name, **options)` plus one `STEP.option=value` word per item of `set`, then the qc step when `qc` is given.
 
 ```python
 run = bm.recipe("prep", "in.bam", output="out.bam")          # out.bam, out.bai, four metrics files
+run = bm.recipe("prep", "in.bam", output="out.bam", qc=True)  # and out.verdict.json, out.report.html
+run = bm.recipe("prep", "in.bam", output="out.bam", resume=True,
+                qc=bm.step("qc", preset="generic", fail_on="fail"),
+                set={"insert-size.minimum-pct": 0.2})         # a second run: insert-size alone runs, from out.bam
 bm.recipe("downsample", "in.bam", output="d.bam", set={"downsample-sam.probability": 0.1})
 bm.recipe("downsample", "in.bam", output="d.bam")            # UsageError: recipe downsample needs downsample-sam.probability=VALUE
 print(bm.recipe("prep", "in.bam", output="out.bam", dry_run=True))
 ```
 
 The keywords are those of `chain`. `set` maps `STEP.option` (a step verb or Picard class, then any spelling of its option) to a value; each replaces the recipe's value of that option. An unknown recipe, step or option raises `UsageError` with the closest name.
+
+`qc=True` adds the qc step with its defaults, `qc=step("qc", ...)` with its options: the verdict and the report over the metrics files the recipe's taps write, as `bammetrics NAME BAM -o OUT qc` (docs/chaining.md section 32.3). `output` names the BAM in front of the qc step. `Run.exit_code` holds 10 or 11 when the verdict reaches `fail_on`; no exception is raised for them. Any other step raises `UsageError`, a value that is no bool and no `Step` raises `TypeError`.
 
 ### step
 

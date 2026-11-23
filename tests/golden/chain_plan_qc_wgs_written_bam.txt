@@ -1,0 +1,37 @@
+## argv
+chain
+tests/data/markdup.bam
+-R
+tests/data/ref_100k.fa
+mark-duplicates
+qc
+--preset
+wgs
+-o
+OUT/w.bam
+--dry-run
+## exit
+0
+## stdout
+chain plan for tests/data/markdup.bam
+  source    tests/data/markdup.bam (BAM, 1,158 bytes, sort order coordinate; a file, it can be read again)
+  prefix    OUT/w (from -o)
+  reference tests/data/ref_100k.fa
+segment 1  one read of tests/data/markdup.bam
+  step 1  mark-duplicates    transform, first read      takes every record, then finds the duplicate sets
+segment 2  a second read of tests/data/markdup.bam through step 1 (replay: nothing is spooled)
+  step 1  mark-duplicates    stream marked              OUT/w.marked.duplication_metrics
+  step 2  write              BAM of marked              OUT/w.bam, OUT/w.bai
+  step 3  qc                 verdict on marked          OUT/w.verdict.json, OUT/w.report.html
+  step 4  quality-yield      tap on marked, for qc      OUT/w.quality_yield_metrics
+  step 5  alignment-summary  tap on marked, for qc      OUT/w.alignment_summary_metrics
+  step 6  insert-size        tap on marked, for qc      OUT/w.insert_size_metrics
+  step 7  duplicate-metrics  tap on marked, for qc      OUT/w.duplicate_metrics
+  step 8  wgs                own read, after the chain  OUT/w.wgs_metrics
+manifest   OUT/w.manifest.json (bammetrics.manifest/2)
+barrier    step 1 mark-duplicates: replays the source; about 16 records by the file size, no spill under MAX_RECORDS_IN_RAM 4,000,000; memory about 100.0 MiB
+temp disk  none expected
+output     about 1.1 KiB written by write
+memory     about 100.0 MiB at the peak, a fixed 100.0 MiB for the chain beside its barriers included (a small input takes less)
+nothing ran: this is a plan
+## stderr

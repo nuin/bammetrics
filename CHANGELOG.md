@@ -4,6 +4,44 @@
 
 ### Added
 
+- The short chain form, the manifest and the materialized steps work as one design
+  (docs/chaining.md section 32, docs/07 D199 to D205). `bammetrics chain fixed.bam
+  reorder-sam insert-size -o r.bam --resume` writes `r.bam`, `r.bai`,
+  `r.insert_size_metrics` and `r.manifest.json`; the same command again reads nothing; with
+  another option of `insert-size` it reruns that step alone.
+- `chain --resume` starts its read at the BAM a skipped `write` step wrote of a
+  transform's stream, as it does at a kept stream: `-o r.bam` is a place to resume from
+  without `--keep`, and the transforms in front do not run again. A BAM whose fingerprint
+  changed starts no read.
+- `qc` is a step word in the form without `+`. In last place it keeps `--preset`,
+  `--report`, `--fail-on` and its `--also`, and hands `-o`, `-R`, `--threads` and
+  `--resume` to the chain. `-o r.bam` on a chain that ends in `qc` adds `write r.bam
+  --index` in front of the qc step.
+- One step may follow a recipe: `qc`. `bammetrics prep in.bam -o out.bam qc --preset
+  generic --fail-on fail` adds the verdict and the report over the recipe's metrics. A
+  recipe file may end in a `qc` step, and `qc.option=value` sets its options. `--resume`
+  works on a recipe as on its chain: `prep in.bam -o out.bam --resume
+  insert-size.minimum-pct=0.2` skips seven of eight steps.
+- A materialized tool that writes a BAM (`merge-sam-files`, `gather-bam-files`,
+  `position-based-downsample-sam`) takes `--keep`, starts a resumed read, counts as a
+  change for `-o out.bam` and is upstream of the steps behind it in the manifest. In the
+  form without `+` a file after `merge-sam-files`, `gather-bam-files` or `jumping-library`
+  is a further input of that step.
+- The qc step measures a class whose tool has no collector behind a transform:
+  `CollectWgsMetrics` reads the source, the last kept stream or the BAM a `write` step
+  wrote, else it runs on a copy of the stream as a materialized step (`materialize on
+  STREAM, for qc`). A `wgs` step the chain already runs is not added twice and the verdict
+  reads its file.
+- The user config file and a user recipe are inputs of the chain: a step that would write
+  one exits 2 before the first read.
+- Python: `recipe(name, source, qc=True)` or `qc=step("qc", ...)` adds the qc step;
+  `chain(recipe=..., steps=["qc"])` is the same call. The qc step's exit codes 10 and 11
+  raise nothing from `recipe`.
+- `crates/cli/tests/chain_combined.rs` (8 tests) and 13 golden records
+  (`CHAIN_COMBINED_CASES`, `COMBINED_RESUME_CASES`): the owner's example with `--resume`, a
+  recipe resumed after an option change, `qc` as the last step of the prep recipe, a merge
+  in the short form with `--keep`, the five ways the qc step reads `CollectWgsMetrics`,
+  and the usage errors.
 - `bammetrics chain` takes steps without `+`: a bare word that names a step verb starts a
   step, an option takes its values with it, and the chain's options may follow the last
   step. `bammetrics chain fixed.bam reorder-sam insert-size -o r.bam` runs what `chain
@@ -117,6 +155,10 @@
 
 ### Changed
 
+- Golden records `recipe_help` and `error_recipe_and_steps` name the qc step a recipe
+  takes; `chain_qc_step_help` says how the qc step reads `CollectWgsMetrics` and where
+  the chain's options go in the form without `+`. The help of `chain` lists the qc step
+  beside a recipe and the further inputs of a merge.
 - `bammetrics tools` lists the verbs `recipes` and `config` (golden record
   `verb_tools`, two lines).
 - Three golden records change because their hint named wave W14: `chain --report`,
@@ -132,7 +174,7 @@
 - The refusal of a tool that reads no BAM says so and names its verb; the refusals that
   named wave W14 are gone. A second `INPUT` of `fix-mate-information` names
   `merge-sam-files`.
-- Python: `Step.role` and `Stage.role` may be `"materialize"`; `_StepVerb` holds 54 names.
+- Python: `Step.role` and `Stage.role` may be `"materialize"` or `"qc"`; `_StepVerb` holds 55 names.
 - Chain: `index-depth` on a CRAM source with `-R` gets no `REFERENCE_SEQUENCE` (it
   refuses the option) and gives its own CRAM refusal. An error of a materialized step's
   copy names the stream in place of the temporary file. `bam-index-stats` and

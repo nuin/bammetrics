@@ -41,7 +41,7 @@ use crate::grammar::{self, Flag, Key, Parsed};
 use crate::qc::with_suffix;
 use crate::verbs::{self, Files, Verb};
 
-mod materialize;
+pub(super) mod materialize;
 mod split;
 
 /// The stream of the source.
@@ -218,6 +218,21 @@ impl Chain {
 }
 
 impl Planned {
+    /// True for a step whose records the steps after it read: a transform,
+    /// or a materialized tool that writes a BAM (`merge-sam-files`). `--keep`
+    /// writes its stream, `--resume` starts a read there, and the qc step
+    /// reads the stream of the last one.
+    pub fn hands_on(&self) -> bool {
+        self.role == Role::Transform || (self.role == Role::Materialize && self.leaves.is_some())
+    }
+
+    /// True for a step that reads the records of its position and changes
+    /// none: a tap, or a materialized tool that writes no BAM (`wgs`). It
+    /// fails alone, and the qc step reads its metrics file.
+    pub fn reads_only(&self) -> bool {
+        self.role == Role::Tap || (self.role == Role::Materialize && self.leaves.is_none())
+    }
+
     /// True for a step whose stream goes on in the next segment: a barrier
     /// transform, or a materialized tool that writes a BAM.
     pub fn starts_segment(&self) -> bool {
@@ -1268,6 +1283,8 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         formats: &all_formats,
         threads,
         sample: spec.sample.as_deref(),
+        source: &source,
+        tmp_dir: spec.tmp_dir.as_deref().map(Path::new),
     };
     for (draft, position) in drafts.into_iter().zip(positions) {
         if let Some(plan) = &qc {

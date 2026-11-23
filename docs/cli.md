@@ -1267,9 +1267,14 @@ other files, the verdict and the page are written.
 ### chain
 
 ```bash
+bammetrics chain BAM STEP [STEP OPTIONS] [STEP ...] [-o OUT] [OPTIONS]
 bammetrics chain [OPTIONS] BAM + STEP [STEP OPTIONS] [+ STEP ...]
 bammetrics chain --plan FILE [OPTIONS] [BAM]
+bammetrics chain BAM --recipe NAME [OPTIONS] [STEP.option=value ...] [qc [QC OPTIONS]]
 
+bammetrics chain fixed.bam reorder-sam insert-size -o r.bam          # reference from the config file
+bammetrics chain in.bam mark-duplicates insert-size qc -o out/NA12878.bam --resume
+bammetrics prep in.bam -o out.bam qc --fail-on fail                  # a recipe, then the verdict
 bammetrics chain in.bam -R ref.fa -o out/NA12878 \
     + mark-duplicates \
     + alignment-summary + insert-size + quality-yield + duplicate-metrics \
@@ -1285,7 +1290,9 @@ bammetrics chain in.bam -o out/NA12878 --resume + mark-duplicates --keep \
 
 Several steps on one BAM in one process. Records move from step to step in memory: no
 shell pipe and no intermediate file. [docs/chaining.md](chaining.md) is the reference; this
-is the short form.
+is the summary. A step starts at a bare word that names a step verb, or at a `+`; the two
+forms run the same chain and write the same files, and every `+` form of 0.31.0 runs as
+before. The rules of the form without `+` follow the list below.
 
 - The chain's options and the source (a BAM, a CRAM with `-R`, `-` for standard input)
   come before the first `+`. Every `+` starts a step.
@@ -1297,7 +1304,11 @@ is the short form.
   `reorder-sam`, `fix-mate-information`, `filter-sam-reads`, `downsample-sam`) changes the
   records later steps see; any number may follow one another. A tap (the 20 one-pass tool verbs) reads the
   records of its position and changes nothing. A split (`split-sam-by-library`,
-  `split-sam-by-number-of-reads`) writes them over BAMs in a directory. `write [PATH]` writes those records as a
+  `split-sam-by-number-of-reads`) writes them over BAMs in a directory. A materialized
+  tool (17 verbs with neither a stage nor a collector, such as `wgs`, `library-complexity`
+  and `merge-sam-files`) runs on a file of the records of its position; three of them
+  write a BAM that is the next stream. So every tool that reads a BAM is a step at any
+  position, 53 of the 71 (docs/chaining.md section 31). `qc` is the last step. `write [PATH]` writes those records as a
   BAM, or as SAM text for a name ending in `.sam`; `-` is standard output, and `write -
   --output-format sam` prints SAM text there. A `.cram` or `.fastq` name is refused with
   the wave of docs/07 that adds it.
@@ -1332,7 +1343,8 @@ is the short form.
 - `--resume` reads `PREFIX.manifest.json` (schema `bammetrics.manifest/2`) and skips each
   step whose record matches (verb, options, the fingerprints of the files it reads and
   writes) and whose transforms in front are skipped too. The read starts at the last kept
-  stream in front of the first step that runs, else at the source. `plan --resume` prints
+  stream in front of the first step that runs, or at the BAM a skipped `write` step wrote
+  of that stream (the BAM `-o out.bam` names), else at the source. `plan --resume` prints
   why each step runs or is skipped. A chain that resumes, keeps a stream or ends in `qc`
   writes the manifest (docs/chaining.md section 27). Paths are compared resolved, so
   `./in.bam` and `$PWD/in.bam` name one source. One run per prefix: a second exits 2.
@@ -1341,7 +1353,9 @@ is the short form.
 - `qc` as the last step (`+ qc --preset P --report html,pdf --also junit --fail-on fail`)
   evaluates the preset over the taps of its stream and writes `PREFIX.verdict.json` and
   `PREFIX.report.html` as `qc` writes them for the same taps; it adds the taps the preset
-  needs (docs/chaining.md section 29).
+  needs (docs/chaining.md section 29). `CollectWgsMetrics`, which has no collector, reads
+  the source, a kept stream or the BAM a `write` step wrote; with no such file it runs on
+  a copy of the stream, as the `wgs` step does (section 32.5).
 
 Exit 0 when every step finished. Exit 2 for a usage error in any step: it is found before
 the first read, names the step (`step 2 (insert-size): unknown option --minmum-pct`), and
@@ -1352,12 +1366,14 @@ which (`failed alone`, `failed and stopped its segment`, `stopped`, `not run`).
 A chain without a transform is the pass of `qc`: the same metrics files, byte for byte
 apart from the `Started on` line. Without a qc step it writes no verdict or page.
 
-The short form (docs/chaining.md sections 22 to 25) runs the same chains:
+The form without `+` (docs/chaining.md sections 22 to 25 and 32) runs the same chains:
 
 ```bash
 bammetrics chain fixed.bam reorder-sam insert-size -o r.bam   # reference from the config file
 bammetrics chain in.bam mark-duplicates insert-size --level SAMPLE -o out/NA12878.bam
 bammetrics chain in.bam --recipe prep -o out.bam              # or: bammetrics prep in.bam -o out.bam
+bammetrics chain a.bam merge-sam-files b.bam insert-size -o merged.bam
+bammetrics chain in.bam mark-duplicates qc --preset wgs -R ref.fa -o out.bam --resume
 ```
 
 - A bare word that names a step verb starts a step; `+` still does, and both mix. An
@@ -1366,8 +1382,13 @@ bammetrics chain in.bam --recipe prep -o out.bam              # or: bammetrics p
   their own `-o` there. A word that is no verb where a step or the source stands, a chain
   option in the middle, an option of `write` on the last step and `-o` twice each exit 2
   with the step's number.
-- `-o r.bam` (or `r.sam`, lower case) on a chain with a transform and no `write` adds
-  `write r.bam --index` as the last step and names the metrics files `r.<extension>`. On
+- `qc` is a step word. In last place it keeps `--preset`, `--report`, `--fail-on` and
+  its `--also`; `-o`, `-R`, `--threads` and `--resume` after it are the chain's. A file
+  after `merge-sam-files`, `gather-bam-files` or `jumping-library` is a further input of
+  that step.
+- `-o r.bam` (or `r.sam`, lower case) on a chain with a transform (or a materialized tool
+  that writes a BAM) and no `write` adds `write r.bam --index` as the last step, in front
+  of a `qc` step, and names the metrics files, the manifest and the verdict `r.<extension>`. On
   a chain of taps alone it exits 2; `r.cram` exits 2 with wave W15; `r.SAM` exits 2, since
   the write step writes SAM text for a lower-case `.sam` only.
 - `-R`, `--threads`, `--tmp-dir` and `--sort-memory` come from the user config file when
@@ -1376,7 +1397,9 @@ bammetrics chain in.bam --recipe prep -o out.bam              # or: bammetrics p
 - `reorder-sam --sequence-dictionary` defaults to the reference's `.dict`, else its
   `.fai`, in a chain; the step's note says which. The `reorder-sam` verb still needs it.
 - `--recipe NAME` runs a named chain; `STEP.option=value` sets an option of one of its
-  steps.
+  steps. One step may follow a recipe: `qc`. `--resume` works on a recipe as on its chain.
+- `--resume` with `-o r.bam`: a second run with another option of a tap reruns that tap
+  alone and reads `r.bam`; the transforms in front do not run again.
 
 ### config
 
@@ -1422,6 +1445,12 @@ preset), `qc-only` (those four files), `downsample` (`downsample-sam` ConstantMe
 `downsample-sam.probability` required, the BAM indexed), then the user's from
 `~/.config/bammetrics/recipes/NAME.toml`. `bammetrics NAME BAM [OPTIONS]` is `bammetrics
 chain BAM --recipe NAME [OPTIONS]`. A recipe that writes a BAM needs `-o` to name it.
+`bammetrics prep in.bam -o out.bam qc --preset generic --fail-on fail` adds `qc` as the
+last step: the verdict and the report over the recipe's four metrics files, exit 10 when
+the verdict reaches `--fail-on`. No other step can be added. `--resume` skips the steps
+`out.manifest.json` proves done (`bammetrics prep in.bam -o out.bam --resume
+insert-size.minimum-pct=0.2` reruns `insert-size` alone, from `out.bam`). A user recipe
+and the config file are inputs: a step that would write one exits 2.
 `bammetrics NAME --help` prints the recipe's steps. A user recipe that cannot be read is
 listed as `not usable` with the reason, the others still; one named like a verb is
 marked, since the verb runs first (`chain BAM --recipe NAME` runs it).

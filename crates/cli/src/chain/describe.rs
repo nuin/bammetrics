@@ -98,6 +98,9 @@ fn files(step: &Planned) -> String {
 fn role(chain: &Chain, step: &Planned, first_read: bool) -> String {
     let index = step.number - 1;
     if let Some(qc) = &chain.qc {
+        if qc.materialized.contains(&index) {
+            return format!("materialize on {}, for qc", step.reads);
+        }
         if qc.added.contains(&index) {
             return format!("tap on {}, for qc", step.reads);
         }

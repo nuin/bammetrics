@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+insert-size
+-o
+OUT/bammetrics/config.toml
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (insert-size): OUT/bammetrics/config.toml is an input; writing it would destroy it
+## file bammetrics/config.toml
+threads = 2

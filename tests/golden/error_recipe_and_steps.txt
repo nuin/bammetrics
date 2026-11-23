@@ -10,3 +10,4 @@ insert-size
 ## stderr
 bammetrics chain: --recipe qc-only gives the steps: a step on the command line cannot be added (from --recipe)
   STEP.option=value sets an option of a recipe's step: bammetrics recipes lists them
+  a last qc step may follow a recipe: bammetrics NAME BAM -o OUT qc --preset P

@@ -1935,22 +1935,7 @@ fn documented_downsample_commands_on_the_fixtures() {
 #[test]
 fn documented_chain_manifest_commands_on_the_fixtures() {
     check(CHAIN_MANIFEST_CASES);
-    let cases: Vec<Case> = RESUME_CASES
-        .iter()
-        .map(|s| Case {
-            name: s.name,
-            argv: s.argv,
-            in_out: false,
-            utc: false,
-            config: None,
-        })
-        .collect();
-    let runs: Vec<(&Case, &[&[&str]])> = cases
-        .iter()
-        .zip(RESUME_CASES)
-        .map(|(case, s)| (case, s.before))
-        .collect();
-    check_runs(&runs);
+    check_sequences(RESUME_CASES);
     // The qc step and the qc verb: one prefix, one date, the same taps.
     let (chain, qc) = (recorded("chain_qc_step"), recorded("qc_generic"));
     for extension in [
@@ -2102,9 +2087,11 @@ fn case_names_are_unique() {
         .chain(DOWNSAMPLE_CASES)
         .chain(CHAIN_MANIFEST_CASES)
         .chain(MATERIALIZE_CASES)
+        .chain(CHAIN_COMBINED_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .chain(RESUME_CASES.iter().map(|s| s.name))
+        .chain(COMBINED_RESUME_CASES.iter().map(|s| s.name))
         .collect();
     let count = names.len();
     names.sort_unstable();
@@ -2226,3 +2213,86 @@ const MATERIALIZE_CASES: &[Case] = &[
     case!("error_chain_materialize_index_is_input", "chain", "IS", "-o", "OUT/s", "+", "bam-index-stats", "+", "write", "IS_BAI"),
     case!("error_chain_multiple_metrics_clash", "chain", "MD", "-o", "OUT/s", "+", "multiple-metrics", "+", "insert-size"),
 ];
+
+/// The pieces of 0.32.0 together (docs/chaining.md section 32): the short
+/// form with `qc`, a recipe with a last qc step, a merge with its further
+/// input in the short form, the plans that say how the qc step reads
+/// `CollectWgsMetrics`, and the errors.
+#[rustfmt::skip]
+const CHAIN_COMBINED_CASES: &[Case] = &[
+    case!("chain_short_form_qc", "chain", "MD", "mark-duplicates", "insert-size", "qc", "--date", "2026-01-01 00:00:00 UTC", "-o", "OUT/r.bam"),
+    case!("recipe_prep_qc", "prep", "OXOG", "-o", "OUT/p.bam", "qc", "--date", "2026-01-01 00:00:00 UTC", "--fail-on", "fail"),
+    case!("chain_short_form_merge", "chain", "MD", "merge-sam-files", "OXOG", "insert-size", "-o", "OUT/m.bam"),
+    case!("chain_plan_qc_wgs_materialized", "chain", "MD", "-R", "REF", "mark-duplicates", "qc", "--preset", "wgs", "-o", "OUT/w", "--dry-run"),
+    case!("chain_plan_qc_wgs_written_bam", "chain", "MD", "-R", "REF", "mark-duplicates", "qc", "--preset", "wgs", "-o", "OUT/w.bam", "--dry-run"),
+    case!("error_chain_short_form_step_after_qc", "chain", "MD", "mark-duplicates", "qc", "insert-size", "-o", "OUT/r.bam"),
+    case!("error_chain_short_form_qc_write_option", "chain", "MD", "mark-duplicates", "qc", "--index", "-o", "OUT/r.bam"),
+    case!("error_chain_short_form_resume_stdin", "chain", "-", "mark-duplicates", "-o", "OUT/r.bam", "--resume"),
+    case_config!("error_chain_writes_config", "threads = 2\n", "chain", "IS", "+", "insert-size", "-o", "OUT/bammetrics/config.toml"),
+];
+
+/// The owner's example with `--resume`, then with an option of
+/// `insert-size` changed, and the prep recipe resumed after an option
+/// change: the read starts at the BAM `-o` names.
+const SHORT_RESUME_FIRST: &[&str] = &[
+    "chain",
+    "IS",
+    "-R",
+    "REF",
+    "reorder-sam",
+    "insert-size",
+    "-o",
+    "OUT/r.bam",
+    "--resume",
+];
+
+#[rustfmt::skip]
+const COMBINED_RESUME_CASES: &[Sequence] = &[
+    Sequence { name: "chain_short_form_resume_skips", before: &[SHORT_RESUME_FIRST], argv: SHORT_RESUME_FIRST },
+    Sequence { name: "chain_short_form_resume_option_change", before: &[SHORT_RESUME_FIRST], argv: &["chain", "IS", "-R", "REF", "reorder-sam", "insert-size", "--minimum-pct", "0.2", "-o", "OUT/r.bam", "--resume"] },
+    Sequence { name: "chain_plan_short_form_resume_option_change", before: &[SHORT_RESUME_FIRST], argv: &["chain", "IS", "-R", "REF", "reorder-sam", "insert-size", "--minimum-pct", "0.2", "-o", "OUT/r.bam", "--resume", "--dry-run"] },
+    Sequence { name: "recipe_prep_resume_option_change", before: &[&["prep", "OXOG", "-o", "OUT/p.bam", "--resume"]], argv: &["prep", "OXOG", "-o", "OUT/p.bam", "--resume", "insert-size.minimum-pct=0.2"] },
+];
+
+/// The cases of `sequences`, each with the commands it runs first.
+fn check_sequences(sequences: &[Sequence]) {
+    let cases: Vec<Case> = sequences
+        .iter()
+        .map(|s| Case {
+            name: s.name,
+            argv: s.argv,
+            in_out: false,
+            utc: false,
+            config: None,
+        })
+        .collect();
+    let runs: Vec<(&Case, &[&[&str]])> = cases
+        .iter()
+        .zip(sequences)
+        .map(|(case, s)| (case, s.before))
+        .collect();
+    check_runs(&runs);
+}
+
+#[test]
+fn documented_combined_chain_commands_on_the_fixtures() {
+    check(CHAIN_COMBINED_CASES);
+    check_sequences(COMBINED_RESUME_CASES);
+    // The short form with qc and the recipe with qc hold the verdict of
+    // their taps; the resumed short form skips every step, then all but
+    // the changed one.
+    assert!(recorded("chain_short_form_qc").contains("step 4 (qc): verdict"));
+    assert!(recorded("recipe_prep_qc").contains("step 9 (qc): verdict pass"));
+    assert!(
+        recorded("chain_short_form_resume_skips")
+            .contains("3 steps finished, 3 of them skipped by --resume")
+    );
+    let changed = recorded("chain_short_form_resume_option_change");
+    for step in ["step 1 (reorder-sam): skipped", "step 3 (write): skipped"] {
+        assert!(changed.contains(step), "{step}");
+    }
+    assert!(
+        recorded("recipe_prep_resume_option_change")
+            .contains("8 steps finished, 7 of them skipped by --resume")
+    );
+}

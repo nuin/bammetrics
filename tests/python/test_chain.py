@@ -764,3 +764,63 @@ def test_a_qc_step_gate_is_the_exit_code_not_an_error(tmp_path):
     assert run.exit_code == 10
     assert all(s.status == "ok" for s in run.stages)
     assert run.manifest == str(tmp_path / "s.manifest.json")
+
+
+def test_a_recipe_takes_a_last_qc_step_and_resumes(tmp_path, monkeypatch):
+    """0.32.0: recipe(qc=...) adds qc as the last step, output names the BAM
+    in front of it, and resume=True reads that BAM for the step that changed."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    date = "2026-01-02 03:04:05 UTC"
+    oxog = DATA / "oxog.bam"
+    qc = bm.step("qc", date=date, fail_on="fail")
+    first = bm.recipe("prep", oxog, output=tmp_path / "p.bam", qc=qc, resume=True)
+    assert [s.verb for s in first.stages] == [
+        "fix-mate-information", "mark-duplicates", "sort-sam", "quality-yield",
+        "alignment-summary", "insert-size", "duplicate-metrics", "write", "qc"]
+    assert first.exit_code == 0 and first.manifest == str(tmp_path / "p.manifest.json")
+    assert (tmp_path / "p.bam").exists() and (tmp_path / "p.verdict.json").exists()
+    again = bm.recipe("prep", oxog, output=tmp_path / "p.bam", qc=qc, resume=True,
+                      set={"insert-size.minimum-pct": 0.2})
+    assert [s.status for s in again.stages] == ["skipped"] * 5 + ["ok", "skipped", "skipped", "ok"]
+    # qc=True is the qc step with its defaults; chain(recipe=..., steps=["qc"]) is the same call.
+    plain = bm.recipe("prep", oxog, output=tmp_path / "q.bam", qc=True)
+    assert plain.stages[-1].role == "qc"
+    listed = bm.chain(oxog, ["qc"], recipe="prep", output=tmp_path / "r.bam")
+    assert [s.verb for s in listed.stages] == [s.verb for s in plain.stages]
+    with pytest.raises(bm.UsageError, match="qc takes the qc step, not insert-size"):
+        bm.recipe("prep", oxog, output=tmp_path / "x.bam", qc=bm.step("insert_size"))
+    with pytest.raises(TypeError, match="qc takes True or step"):
+        bm.recipe("prep", oxog, output=tmp_path / "x.bam", qc="generic")
+    with pytest.raises(bm.UsageError, match="a step on the command line cannot be added"):
+        bm.chain(oxog, ["insert_size"], recipe="prep", output=tmp_path / "x.bam")
+    assert not (tmp_path / "x.bam").exists()
+
+
+def test_the_short_output_rule_resumes_from_the_bam_it_wrote(tmp_path, monkeypatch):
+    """0.32.0: output="r.bam" with resume=True; a changed tap reads r.bam."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+
+    def run(pct, **more):
+        steps = ["reorder_sam", bm.step("insert_size", minimum_pct=pct)]
+        return bm.chain(BAM, steps, output=tmp_path / "r.bam", reference=REFERENCE,
+                        resume=True, **more)
+
+    assert [s.status for s in run(0.05).stages] == ["ok"] * 3
+    assert [s.status for s in run(0.05).stages] == ["skipped"] * 3
+    plan = run(0.2, dry_run=True)
+    assert "skipped; the BAM a write step wrote of its stream" in plan
+    assert [s.status for s in run(0.2).stages] == ["skipped", "ok", "skipped"]
+
+
+def test_a_materialized_step_takes_keep_and_feeds_qc(tmp_path, monkeypatch):
+    """0.32.0: keep=True on merge_sam_files, and a wgs step the qc step reads."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    merged = bm.chain(MARKDUP, [bm.step("merge_sam_files", input=[DATA / "oxog.bam"], keep=True),
+                                "insert_size"], output=tmp_path / "m", resume=True)
+    assert (tmp_path / "m.merged.bam").exists()
+    assert [s.role for s in merged.stages] == ["materialize", "tap"]
+    run = bm.chain(MARKDUP, ["mark_duplicates", bm.step("wgs", coverage_cap=10),
+                             bm.step("qc", preset="wgs")],
+                   output=tmp_path / "w", reference=REFERENCE)
+    assert [s.verb for s in run.stages].count("wgs") == 1
+    assert "WgsMetrics" in (tmp_path / "w.verdict.json").read_text()

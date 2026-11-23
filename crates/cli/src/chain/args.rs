@@ -164,8 +164,9 @@ pub fn global_flags() -> Vec<Flag> {
             &[],
             Ty::Bool,
             "Skip each step whose record in PREFIX.manifest.json matches (verb, options, input \
-             and output fingerprints) and whose upstream steps are skipped too; a later \
-             segment reads a kept stream (--keep) in place of the source. Writes the manifest.",
+             and output fingerprints) and whose upstream steps are skipped too; the read \
+             starts at a kept stream (--keep) or at the BAM a skipped write step wrote (-o \
+             out.bam), in place of the source. Writes the manifest.",
         ),
         Flag::new(
             PLAN,
@@ -182,7 +183,8 @@ pub fn global_flags() -> Vec<Flag> {
             &[],
             Ty::Text,
             "Run a named chain (bammetrics recipes lists them): its steps in place of the \
-             command line's. STEP.option=value sets an option of one of its steps.",
+             command line's. STEP.option=value sets an option of one of its steps; a last qc \
+             step may follow.",
         )
         .placeholder("NAME"),
         Flag::new(
@@ -520,13 +522,16 @@ pub fn help() -> String {
          Usage: {USAGE}\n       \
          bammetrics chain [OPTIONS] BAM STEP [STEP OPTIONS] [STEP ...] [OPTIONS]\n       \
          bammetrics chain --plan FILE [OPTIONS] [BAM]\n       \
-         bammetrics chain BAM --recipe NAME [OPTIONS] [STEP.option=value ...]\n\n\
+         bammetrics chain BAM --recipe NAME [OPTIONS] [STEP.option=value ...] [qc [QC \
+         OPTIONS]]\n\n\
          Every + starts a step; so does a bare word that names a step verb (bammetrics \
          chain BAM mark-duplicates insert-size -o out.bam). The chain's options go in front \
          of the first step or after the last. After the last bare step, -o, -R, --threads, \
          --format and --tmp-dir are the chain's (write without a path and a split keep their \
-         -o); in the middle, a step's own -o, -R and --format are its own. A step sees the \
-         records the step before it emits.\n  \
+         -o; qc keeps --preset, --report and its --also); in the middle, a step's own -o, -R \
+         and --format are its own. A file after merge-sam-files, gather-bam-files or \
+         jumping-library is a further input of that step. A step sees the records the step \
+         before it emits.\n  \
          transform  changes the records later steps see: {}\n  \
          tap        reads the records of its position, changes nothing: {}\n  \
          write      write [PATH] writes the records of its position as a BAM\n  \
@@ -542,10 +547,11 @@ pub fn help() -> String {
          tap in front of a transform writes PREFIX.<stream>.<extension> (PREFIX.in.* on the \
          source); mark-duplicates writes PREFIX.marked.duplication_metrics; write without a \
          path writes PREFIX.<stream>.bam. A step's own -o replaces the name. -o out.bam on \
-         a chain with a transform and no write adds write out.bam --index as the last step \
-         and names the metrics out.<extension>. --keep on a transform writes \
-         PREFIX.<stream>.bam; --resume reads PREFIX.manifest.json and skips the steps it \
-         proves done.\n\n\
+         a chain that changes the records (a transform, merge-sam-files) and has no write \
+         adds write out.bam --index as the last step, in front of qc, and names the metrics \
+         out.<extension>. --keep on such a step writes PREFIX.<stream>.bam; --resume reads \
+         PREFIX.manifest.json, skips the steps it proves done, and starts its read at a kept \
+         stream or at the BAM a skipped write step wrote.\n\n\
          Defaults: -R, --threads, --tmp-dir and --sort-memory come from the user config file \
          when not given, -R also from BAMMETRICS_REFERENCE (bammetrics config prints them); \
          reorder-sam's dictionary from the reference's .dict, else its .fai.\n\n\

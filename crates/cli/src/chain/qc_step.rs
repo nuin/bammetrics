@@ -8,9 +8,14 @@
 //! as taps, numbered after the qc step, each built as `qc` builds it. A tool
 //! with no one-pass collector (`CollectWgsMetrics`) reads a file of the
 //! stream on its own after the chain: the source when no transform is in
-//! front, else the stream the last transform kept (`--keep`). The step's
-//! exit code is the chain's when every step finished: 10 or 11 under
-//! `--fail-on`, as `check` gives them.
+//! front, else the stream the last transform kept (`--keep`), else the BAM
+//! a `write` step writes of that stream (`-o out.bam`). With no such file
+//! it is a materialized step of the chain's read (docs/chaining.md
+//! section 31): it runs on a copy of the stream in the temporary directory,
+//! as `wgs` given as a step does. A tap or a materialized tool the chain
+//! already runs on the stream is not added twice, and the verdict reads its
+//! file. The step's exit code is the chain's when every step finished: 10
+//! or 11 under `--fail-on`, as `check` gives them.
 
 use std::path::{Path, PathBuf};
 
@@ -21,7 +26,7 @@ use bammetrics_verdict::{Input, Verdict, evaluate};
 use clap::ValueEnum;
 
 use super::keep::Kept;
-use super::prepare::{Planned, PlannedFile, Role, planned_files};
+use super::prepare::{Planned, PlannedFile, Role, materialize, planned_files};
 use super::run::{StepOutcome, StepStatus, Written};
 use super::{QC, VERB, usage};
 use crate::also::Also;
@@ -185,9 +190,14 @@ pub fn help() -> String {
          metrics files of the taps on its stream and writes PREFIX.verdict.json and \
          PREFIX.report.html as bammetrics qc writes them for the same taps on the same \
          records. A collector the preset needs that no tap of the stream runs is added as a \
-         tap. The chain writes PREFIX.manifest.json (schema bammetrics.manifest/2).\n\n\
+         tap. A tool with no collector (CollectWgsMetrics) reads a file of the stream after \
+         the chain: the source with no transform in front, the last kept stream (--keep) or \
+         the BAM a write step wrote (-o out.bam); with no such file it runs on a copy of the \
+         stream, as the wgs step does. The chain writes PREFIX.manifest.json (schema \
+         bammetrics.manifest/2).\n\n\
          Every option also reads as KEY=VALUE. The source, -o, -R, --threads, --sample and \
-         --resume belong to the chain: give them before the first +.\n\n\
+         --resume belong to the chain: give them before the first step, or after qc in the \
+         form without +. qc may follow a recipe: bammetrics prep BAM -o out.bam qc.\n\n\
          {}\n\nOptions:\n{}",
         check::EXIT_CODES,
         option_lines(&flags())
@@ -206,6 +216,10 @@ pub(super) struct Context<'a> {
     pub formats: &'a [Format],
     pub threads: usize,
     pub sample: Option<&'a str>,
+    /// The chain's source as given, and its `--tmp-dir`: what a
+    /// materialized step is checked against before the first read.
+    pub source: &'a str,
+    pub tmp_dir: Option<&'a Path>,
 }
 
 /// Where the qc step stands: its number and label, the stream it reads,
@@ -227,6 +241,9 @@ pub struct QcPlan {
     pub pdf: Option<Pdf>,
     /// The taps it added, by index in `Chain::steps`.
     pub added: Vec<usize>,
+    /// Those of them that are materialized steps: a tool with no collector
+    /// on a stream no file holds.
+    pub materialized: Vec<usize>,
     /// The steps that read a file of the stream on their own after the
     /// chain (`CollectWgsMetrics`).
     pub own: Vec<usize>,
@@ -413,21 +430,38 @@ fn step_error(place: &str, error: crate::error::Error) -> VerbError {
 struct Added {
     steps: Vec<Planned>,
     own: Vec<usize>,
+    /// The tools that run on a copy of the stream in the chain's read.
+    materialized: Vec<usize>,
     prepare: Vec<usize>,
     unmet: Vec<Unmet>,
 }
 
 /// The file a tool that reads on its own reads for the qc step: the source
-/// with no transform in front, else the stream the last transform keeps.
-fn own_read_file(cx: &Context, before: &[Planned], kept: &[Kept]) -> Option<PathBuf> {
-    let last = before.iter().rposition(|s| s.role == Role::Transform);
+/// with no transform in front, else the stream the last transform keeps
+/// (`--keep`), else the BAM a `write` step writes of that stream (the BAM
+/// `-o out.bam` names). `None` when no file holds the stream: the tool is
+/// then a materialized step of the chain's read ([`materialized`]).
+fn own_read_file(cx: &Context, at: &At, before: &[Planned], kept: &[Kept]) -> Option<PathBuf> {
+    let last = before.iter().rposition(Planned::hands_on);
     match last {
         None => cx.replayable.then(|| cx.source_path.to_path_buf()),
         Some(index) => kept
             .iter()
             .find(|k| k.index == index)
-            .map(|k| k.path().to_path_buf()),
+            .map(|k| k.path().to_path_buf())
+            .or_else(|| written_bam(at, before)),
     }
+}
+
+/// The BAM a `write` step writes of the qc step's stream, when one does:
+/// the records the taps of that stream read, in a file.
+fn written_bam(at: &At, before: &[Planned]) -> Option<PathBuf> {
+    before
+        .iter()
+        .filter(|step| step.reads == at.reads && !step.stdout)
+        .filter_map(|step| step.write.as_ref())
+        .find(|options| options.format == bammetrics_core::stage::WriteFormat::Bam)
+        .map(|options| options.path.clone())
 }
 
 /// A step of the qc verb's plan as a step of the chain, numbered `number`.
@@ -492,6 +526,34 @@ fn planned(
     })
 }
 
+/// A tool that reads on its own as a materialized step of the chain's
+/// read, for a stream no file holds (a transform in front without `--keep`,
+/// or a piped source): the step `VERB` given on the command line would be,
+/// with the checks it gets before the first read.
+fn materialized(
+    cx: &Context,
+    at: &At,
+    step: qc::Step,
+    number: usize,
+) -> Result<Planned, VerbError> {
+    let mut planned = planned(cx, at, step, number, None)?;
+    planned.role = Role::Materialize;
+    if let Some(tool) = planned.tool {
+        let before = materialize::Before {
+            source: cx.source,
+            reads_source: false,
+            has_reference: cx.reference.is_some(),
+            tmp_dir: cx.tmp_dir,
+        };
+        materialize::check(tool, &planned.argv, &before)
+            .map_err(|e| usage(format!("{}: {e}", planned.label)))?;
+    }
+    if let (false, Some(command)) = (at.behind.is_empty(), planned.command.as_mut()) {
+        command.push_str(&format!(" CHAIN={}", at.behind));
+    }
+    Ok(planned)
+}
+
 /// The taps, own reads and prepare step of the verb's plan that the chain
 /// does not run already.
 fn added(
@@ -511,12 +573,14 @@ fn added(
     let mut added = Added {
         steps: Vec::new(),
         own: Vec::new(),
+        materialized: Vec::new(),
         prepare: Vec::new(),
         unmet: Vec::new(),
     };
+    // A tap of the stream, or a materialized tool on it (`wgs` as a step).
     let covered = |name: &str| {
         before.iter().any(|s| {
-            s.role == Role::Tap && s.reads == at.reads && s.tool.is_some_and(|t| t.name == name)
+            s.reads_only() && s.reads == at.reads && s.tool.is_some_and(|t| t.name == name)
         })
     };
     // The qc step is number `before.len() + 1`; its steps follow it.
@@ -540,11 +604,15 @@ fn added(
         }
         let number = first + added.steps.len();
         match step.read {
-            Read::Own(_) => match own_read_file(cx, before, kept) {
+            Read::Own(_) => match own_read_file(cx, at, before, kept) {
                 Some(file) => {
                     let input = (file != cx.source_path).then_some(file.as_path());
                     added.own.push(number - 1);
                     added.steps.push(planned(cx, at, step, number, input)?);
+                }
+                None if bammetrics_core::stage::materialize::materializes(step.tool) => {
+                    added.materialized.push(number - 1);
+                    added.steps.push(materialized(cx, at, step, number)?);
                 }
                 None => {
                     // The class stays unmeasured, as for the verb without
@@ -562,7 +630,7 @@ fn added(
                                     class: class.to_owned(),
                                     rules: vec![rule.clone()],
                                     why: "reads a file of the stream on its own: --keep on the \
-                                          last transform",
+                                          last transform, or a write step",
                                 }),
                             }
                         }
@@ -672,6 +740,7 @@ pub(super) fn plan(
         added: (index + 1..index + steps.len())
             .filter(|i| !added.own.contains(i) && !added.prepare.contains(i))
             .collect(),
+        materialized: added.materialized,
         own: added.own,
         prepare: added.prepare,
         unmet: added.unmet,
@@ -703,7 +772,7 @@ pub(super) fn finish(
     let mut paths: Vec<&Path> = steps
         .iter()
         .zip(outcomes)
-        .filter(|(step, _)| step.role == Role::Tap && &step.reads == reads)
+        .filter(|(step, _)| step.reads_only() && &step.reads == reads)
         .filter_map(|(_, outcome)| outcome.as_ref())
         .filter(|outcome| matches!(outcome.status, StepStatus::Ok | StepStatus::Skipped))
         .flat_map(|outcome| &outcome.files)

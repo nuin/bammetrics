@@ -8,11 +8,16 @@
 //! under its id has the same verb and hash, ended `ok`, read files with the
 //! same fingerprints, and every file it wrote is still there with its
 //! fingerprint, and when every transform in front of it is skipped too.
-//! A step that writes standard output and the qc step always run.
+//! A step that writes standard output and the qc step always run. A
+//! materialized tool that writes a BAM (`merge-sam-files`) counts as a
+//! transform here: its id is its stream, and the steps behind it run when
+//! it does.
 //!
 //! The steps that run share reads. The read starts at the last transform
-//! in front of the first step that runs whose stream the run before kept
-//! (`--keep`) and whose BAM is still there, else at the source; every
+//! in front of the first step that runs whose stream is in a BAM the run
+//! before wrote and that is still there: the stream it kept (`--keep`), or
+//! the BAM a `write` step of that stream wrote when that step is skipped
+//! (the BAM `-o out.bam` names). Else it starts at the source. Every
 //! transform between that start and the last step that runs runs too, to
 //! feed the steps after it.
 //!
@@ -121,7 +126,7 @@ fn stringency_name(chain: &Chain) -> &'static str {
 /// The id a step has in the manifest, before a `#2` for a repeat.
 fn base_id(step: &Planned) -> String {
     match (step.role, &step.leaves) {
-        (Role::Transform, Some(stream)) => stream.clone(),
+        (Role::Transform | Role::Materialize, Some(stream)) => stream.clone(),
         (Role::Qc, _) => super::QC.to_owned(),
         _ => format!("{}@{}", step.verb, step.reads),
     }
@@ -244,7 +249,7 @@ pub fn keys(chain: &Chain) -> Vec<Key> {
             argv,
             inputs: inputs(chain, index),
         });
-        if step.role == Role::Transform {
+        if step.hands_on() {
             transforms.push(id);
         }
     }
@@ -304,7 +309,8 @@ pub struct Resume {
     pub note: Option<String>,
     /// One per step: `None` for a step that is skipped, else why it runs.
     pub runs: Vec<Option<Why>>,
-    /// The kept stream the read starts from: the transform's index and its
+    /// The BAM the read starts from, a kept stream or the BAM a skipped
+    /// `write` step wrote of it: the transform's index and its
     /// BAM. `None` reads the source.
     pub start: Option<(usize, PathBuf)>,
 }
@@ -450,6 +456,23 @@ fn kept_on_disk(
         .map(|_| kept.path().to_path_buf())
 }
 
+/// The BAM a skipped `write` step holds of the stream transform `index`
+/// leaves: the records every step of that stream reads, written by the
+/// writer `--keep` uses. A `write` that runs in this run, one that writes
+/// SAM text and one that writes standard output give none.
+fn written_on_disk(chain: &Chain, runs: &[Option<Why>], index: usize) -> Option<PathBuf> {
+    let stream = chain.steps[index].leaves.as_deref()?;
+    chain
+        .steps
+        .iter()
+        .zip(runs)
+        .skip(index + 1)
+        .filter(|(step, runs)| runs.is_none() && step.reads == stream && !step.stdout)
+        .filter_map(|(step, _)| step.write.as_ref())
+        .find(|options| options.format == bammetrics_core::stage::WriteFormat::Bam)
+        .map(|options| options.path.clone())
+}
+
 /// What the run skips, what it runs and why, and where its read starts.
 pub fn decide(chain: &Chain, keys: &[Key]) -> Resume {
     // A chain that writes no manifest fingerprints nothing.
@@ -486,7 +509,7 @@ pub fn decide(chain: &Chain, keys: &[Key]) -> Resume {
             chain.steps[..index]
                 .iter()
                 .zip(&runs)
-                .find(|(step, runs)| step.role == Role::Transform && runs.is_some())
+                .find(|(step, runs)| step.hands_on() && runs.is_some())
                 .map(|(step, _)| Why::Upstream(step.number))
         });
         runs.push(why);
@@ -498,11 +521,15 @@ pub fn decide(chain: &Chain, keys: &[Key]) -> Resume {
     if let (Some(&first), Some(&last)) = (reading.first(), reading.last()) {
         start = (0..first)
             .rev()
-            .filter(|&t| chain.steps[t].role == Role::Transform)
-            .find_map(|t| kept_on_disk(chain, keys, &previous, t).map(|path| (t, path)));
+            .filter(|&t| chain.steps[t].hands_on())
+            .find_map(|t| {
+                kept_on_disk(chain, keys, &previous, t)
+                    .or_else(|| written_on_disk(chain, &runs, t))
+                    .map(|path| (t, path))
+            });
         let from = start.as_ref().map_or(0, |(t, _)| t + 1);
         for t in from..last {
-            if chain.steps[t].role == Role::Transform && runs[t].is_none() {
+            if chain.steps[t].hands_on() && runs[t].is_none() {
                 let fed = reading.iter().find(|&&r| r > t).copied().unwrap_or(last);
                 runs[t] = Some(Why::Feeds(chain.steps[fed].number));
             }
@@ -530,10 +557,21 @@ pub fn plan_lines(chain: &Chain, resume: &Resume) -> Vec<String> {
     for (index, step) in chain.steps.iter().enumerate() {
         let what = match (&resume.runs[index], &resume.start) {
             (None, Some((start, kept))) if *start == index => {
-                format!(
-                    "skipped; its kept stream {} starts the read",
-                    kept.display()
-                )
+                let is_kept = chain
+                    .kept
+                    .iter()
+                    .any(|k| k.index == index && k.path() == kept);
+                if is_kept {
+                    format!(
+                        "skipped; its kept stream {} starts the read",
+                        kept.display()
+                    )
+                } else {
+                    format!(
+                        "skipped; the BAM a write step wrote of its stream, {}, starts the read",
+                        kept.display()
+                    )
+                }
             }
             (None, _) => "skipped: its record and files match".to_owned(),
             (Some(why), _) => why.text(),
