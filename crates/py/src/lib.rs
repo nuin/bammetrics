@@ -1068,6 +1068,7 @@ fn bammetrics(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(verbs::py_report, m)?)?;
     m.add_function(wrap_pyfunction!(chain::py_chain, m)?)?;
     m.add_function(wrap_pyfunction!(chain::py_step, m)?)?;
+    m.add_function(wrap_pyfunction!(chain::py_recipe, m)?)?;
     m.add_function(wrap_pyfunction!(doctor::py_doctor, m)?)?;
     m.add_class::<doctor::Doctor>()?;
     m.add_class::<doctor::DoctorCheck>()?;

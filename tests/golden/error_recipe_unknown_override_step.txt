@@ -1,0 +1,13 @@
+## argv
+prep
+tests/data/oxog.bam
+-o
+OUT/x.bam
+mark-dups.remove-duplicates=true
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: recipe prep has no step mark-dups (from mark-dups.remove-duplicates=true)
+  did you mean mark-duplicates?
+  its steps: fix-mate-information, mark-duplicates, sort-sam, quality-yield, alignment-summary, insert-size, duplicate-metrics

@@ -120,23 +120,33 @@ struct Case {
     /// Run with `TZ=UTC`: for a tool that prints dates in the zone of the
     /// process.
     utc: bool,
+    /// The text of `OUT/bammetrics/config.toml`, the user config file of
+    /// the run (`ROOT/` reads the repository root).
+    config: Option<&'static str>,
 }
 
 macro_rules! case {
     ($name:literal, $($arg:expr),+ $(,)?) => {
-        Case { name: $name, argv: &[$($arg),+], in_out: false, utc: false }
+        Case { name: $name, argv: &[$($arg),+], in_out: false, utc: false, config: None }
+    };
+}
+
+/// A case run with a user config file of the given text.
+macro_rules! case_config {
+    ($name:literal, $config:expr, $($arg:expr),+ $(,)?) => {
+        Case { name: $name, argv: &[$($arg),+], in_out: false, utc: false, config: Some($config) }
     };
 }
 
 macro_rules! case_in_out {
     ($name:literal, $($arg:expr),+ $(,)?) => {
-        Case { name: $name, argv: &[$($arg),+], in_out: true, utc: false }
+        Case { name: $name, argv: &[$($arg),+], in_out: true, utc: false, config: None }
     };
 }
 
 macro_rules! case_utc {
     ($name:literal, $($arg:expr),+ $(,)?) => {
-        Case { name: $name, argv: &[$($arg),+], in_out: false, utc: true }
+        Case { name: $name, argv: &[$($arg),+], in_out: false, utc: true, config: None }
     };
 }
 
@@ -1353,7 +1363,19 @@ fn record(case: &Case) -> String {
     };
     let argv: Vec<String> = case.argv.iter().map(|a| resolve(a, out, &base)).collect();
     let mut command = Command::new(binary());
-    command.args(&argv).current_dir(cwd);
+    // The user config file is OUT/bammetrics/config.toml, absent unless the
+    // case writes it, so no record depends on the machine's config.
+    command
+        .args(&argv)
+        .current_dir(cwd)
+        .env("XDG_CONFIG_HOME", &out_dir)
+        .env_remove("BAMMETRICS_REFERENCE");
+    if let Some(text) = case.config {
+        let dir = out_dir.join("bammetrics");
+        fs::create_dir_all(dir.join("recipes")).expect("config directory");
+        let text = text.replace("ROOT/", &format!("{}/", root().display()));
+        fs::write(dir.join("config.toml"), text).expect("config file");
+    }
     if case.utc {
         command.env("TZ", "UTC");
     }
@@ -1900,6 +1922,7 @@ fn case_names_are_unique() {
         .chain(FORMAT_CASES)
         .chain(PARQUET_CASES)
         .chain(CHAIN_CASES)
+        .chain(CHAIN_GRAMMAR_CASES)
         .chain(T1_CASES)
         .chain(PDF_OPTION_CASES)
         .chain(DOCTOR_CASES)
@@ -1925,4 +1948,87 @@ fn case_names_are_unique() {
     names.sort_unstable();
     names.dedup();
     assert_eq!(count, names.len(), "case names repeat");
+}
+
+/// The config file of the grammar cases: the fixture reference.
+const REFERENCE_CONFIG: &str = "reference = \"ROOT/tests/data/ref_100k.fa\"\n";
+
+/// The simpler chain grammar (docs/chaining.md sections 22 to 26): steps
+/// without `+`, `-o` naming the result BAM, the config file, the
+/// dictionary default, the recipes, and the error of each rule.
+#[rustfmt::skip]
+const CHAIN_GRAMMAR_CASES: &[Case] = &[
+    // The owner's example, new form and old form: the same files.
+    case_config!("chain_short_form", REFERENCE_CONFIG, "chain", "IS", "reorder-sam", "insert-size", "-o", "OUT/r.bam"),
+    case!("chain_short_form_long", "chain", "IS", "-R", "REF", "-o", "OUT/r", "+", "reorder-sam", "--sequence-dictionary", "tests/data/ref_100k.fa.fai", "+", "insert-size", "+", "write", "OUT/r.bam", "--index"),
+    case!("chain_bare_steps", "chain", "MD", "mark-duplicates", "--as", "insert-size", "quality-yield", "write", "OUT/m.bam", "--index", "-o", "OUT/s"),
+    case!("chain_bare_and_plus", "chain", "MD", "-o", "OUT/s", "+", "mark-duplicates", "--as", "insert-size", "+", "quality-yield", "+", "write", "OUT/m.bam", "--index"),
+    case!("chain_result_sam", "chain", "MD", "sort-sam", "--sort-order", "queryname", "insert-size", "-o", "OUT/q.sam"),
+    case!("error_chain_bare_misspelled", "chain", "IS", "insert-size", "quality-yeld"),
+    case!("error_chain_result_taps_only", "chain", "IS", "insert-size", "-o", "OUT/r.bam"),
+    case!("error_chain_result_cram", "chain", "IS", "mark-duplicates", "-o", "OUT/r.cram"),
+    case!("error_chain_override_without_recipe", "chain", "IS", "insert-size", "insert-size.minimum-pct=0.1"),
+    // The config file: printed, its errors, its reference on a tool verb.
+    case_config!("config_print", "reference = \"ROOT/tests/data/ref_100k.fa\"\nthreads = 2\ntmp_dir = \"tmp\"\nsort_memory = \"4G\"\n", "config"),
+    case_config!("config_print_no_config", REFERENCE_CONFIG, "config", "--no-config"),
+    case!("config_print_none", "config"),
+    case_config!("error_config_unknown_key", "refernce = \"x.fa\"\n", "config"),
+    case_config!("error_config_missing_reference", "reference = \"/nowhere/ref.fa\"\n", "chain", "IS", "reorder-sam", "-o", "OUT/r.bam"),
+    case_config!("verb_config_reference", REFERENCE_CONFIG, "alignment-summary", "IS", "-o", "OUT/a.txt"),
+    case!("error_reorder_sam_no_reference", "chain", "IS", "reorder-sam", "-o", "OUT/r.bam"),
+    // Recipes: the list, a plan, each recipe run, their errors.
+    case!("recipes_list", "recipes"),
+    case!("chain_recipe_plan", "chain", "OXOG", "--recipe", "prep", "-o", "OUT/p.bam", "--dry-run"),
+    case!("recipe_prep", "prep", "OXOG", "-o", "OUT/p.bam"),
+    case!("recipe_prep_long", "chain", "OXOG", "fix-mate-information", "mark-duplicates", "sort-sam", "--sort-order", "coordinate", "quality-yield", "alignment-summary", "insert-size", "duplicate-metrics", "-o", "OUT/p.bam"),
+    case!("recipe_qc_only", "qc-only", "IS", "-o", "OUT/sample"),
+    case!("recipe_downsample", "downsample", "OXOG", "-o", "OUT/d.bam", "downsample-sam.probability=0.5"),
+    case!("error_recipe_unknown", "chain", "IS", "--recipe", "prp", "-o", "OUT/r.bam"),
+    case!("error_recipe_requires", "downsample", "OXOG", "-o", "OUT/d.bam"),
+    case!("error_recipe_needs_bam", "prep", "OXOG", "-o", "OUT/s"),
+    case!("error_recipe_and_steps", "chain", "IS", "--recipe", "qc-only", "insert-size"),
+    case!("error_recipe_bad_override", "qc-only", "IS", "insert-size.minimum-pt=0.1"),
+    // The review of the grammar: write and split keep their -o in last
+    // place, the errors of the bare form, a stale config reference.
+    case!("chain_bare_write_output", "chain", "OXOG", "-o", "OUT/p", "mark-duplicates", "write", "-o", "OUT/x.bam"),
+    case!("chain_bare_split_output", "chain", "OXOG", "split-sam-by-library", "-o", "OUT/split", "-v"),
+    case!("error_chain_result_sam_upper", "chain", "MD", "mark-duplicates", "-o", "OUT/s.SAM"),
+    case!("error_chain_bare_not_a_verb", "chain", "IS", "insert-size", "mark", "-o", "OUT/x"),
+    case!("error_chain_bare_source_is_step", "chain", "insert-size", "IS"),
+    case!("error_chain_bare_middle_option", "chain", "IS", "insert-size", "-q", "alignment-summary"),
+    case!("error_chain_bare_write_option", "chain", "MD", "mark-duplicates", "-o", "OUT/y.bam", "--md5"),
+    case!("error_chain_bare_output_twice", "chain", "-o", "OUT/a", "IS", "insert-size", "-o", "OUT/b"),
+    case!("chain_transforms_only_note", "chain", "OXOG", "reorder-sam", "-R", "REF", "-o", "OUT/t"),
+    case_config!("chain_stale_config_reference", "reference = \"/nowhere/ref.fa\"\n", "chain", "IS", "insert-size", "-o", "OUT/s"),
+    case!("recipe_help", "prep", "--help"),
+    case!("error_recipe_unknown_override_step", "prep", "OXOG", "-o", "OUT/x.bam", "mark-dups.remove-duplicates=true"),
+    case!("error_recipe_override_without_value", "prep", "OXOG", "-o", "OUT/x.bam", "mark-duplicates.remove-duplicates"),
+    case!("error_recipe_twice", "chain", "IS", "--recipe=prep", "-o", "OUT/p.bam", "--recipe=qc-only"),
+];
+
+/// What the grammar records prove: each new form writes the files of the
+/// old form it stands for, byte for byte (the stderr notes aside).
+#[test]
+fn documented_chain_grammar_commands_on_the_fixtures() {
+    check(CHAIN_GRAMMAR_CASES);
+    let files_of = |record: &str| -> Vec<(String, String)> {
+        let mut files = Vec::new();
+        for part in record.split("\n## file ").skip(1) {
+            let (name, body) = part.split_once('\n').unwrap_or((part, ""));
+            if !name.starts_with("bammetrics/") {
+                files.push((name.to_owned(), body.to_owned()));
+            }
+        }
+        files
+    };
+    for (short, long) in [
+        ("chain_short_form", "chain_short_form_long"),
+        ("chain_bare_steps", "chain_bare_and_plus"),
+        ("recipe_prep", "recipe_prep_long"),
+        ("recipe_qc_only", "chain_taps"),
+    ] {
+        let (a, b) = (recorded(short), recorded(long));
+        assert!(result_of(&a).starts_with("## exit\n0\n"), "{short}");
+        assert_eq!(files_of(&a), files_of(&b), "{short} against {long}");
+    }
 }

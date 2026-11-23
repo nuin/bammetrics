@@ -1,0 +1,14 @@
+## argv
+chain
+-o
+OUT/a
+tests/data/insert_size.bam
+insert-size
+-o
+OUT/b
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: -o is given twice: OUT/a in front of the first step, OUT/b after the last (from -o)
+  give it once

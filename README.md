@@ -102,6 +102,15 @@ spelling. A usage error in any step is found before the first read and names the
 space refuses before the first read, and `--plan plan.toml` reads the chain from a file.
 The reference is [docs/chaining.md](docs/chaining.md).
 
+The short form: steps without `+`, `-o` naming the BAM to write, and the reference from
+the user config file (`~/.config/bammetrics/config.toml`, `reference = "ref.fa"`;
+`bammetrics config` prints it):
+
+```bash
+bammetrics chain sample.bam mark-duplicates insert-size -o out/NA12878.bam
+bammetrics prep sample.bam -o out/NA12878.bam      # a recipe: bammetrics recipes lists them
+```
+
 The same chain from Python ([docs/python.md](docs/python.md)):
 
 ```python

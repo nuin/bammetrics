@@ -1,0 +1,11 @@
+## argv
+chain
+tests/data/insert_size.bam
+insert-size
+-q
+alignment-summary
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (insert-size): -q belongs to the chain: give it before the first step or after the last (from -q)

@@ -503,6 +503,18 @@ fn argv<'py>(
     let mut argv = Vec::new();
     for (key, value) in options.into_iter().flat_map(|o| o.iter()) {
         let name: String = key.extract()?;
+        if name == "config" {
+            if !value.is_instance_of::<PyBool>() {
+                return Err(usage_error(format!(
+                    "bammetrics {VERB}: config takes True or False, not {}",
+                    value.get_type().name()?
+                )));
+            }
+            if !value.extract::<bool>()? {
+                argv.push(bammetrics_cli::config::NO_CONFIG.to_owned());
+            }
+            continue;
+        }
         let keyword = table::chain_keyword(&name).map_err(|e| verbs::verb_error(&e))?;
         if !value.is_none() {
             argv.extend(keyword_args("", &keyword, &value)?);
@@ -597,7 +609,10 @@ fn run_object(py: Python<'_>, done: &Finished) -> PyResult<Py<Run>> {
 /// STREAM.verb in front of a transform) and stages (one Stage per step).
 /// dry_run=True returns the plan text and runs nothing. A failed step raises
 /// InputError after the other steps wrote their files (its .run holds the
-/// Run).
+/// Run). output ending in .bam on a chain with a transform and no write step
+/// adds write OUTPUT with its index and names the metrics files from OUTPUT
+/// without .bam. recipe names a recipe in place of steps. config=False leaves
+/// the user config file unread.
 //
 // Runs `chain::prepare` and `chain::execute` without the GIL. The text
 // signature and the docstring above are the stub's
@@ -608,7 +623,8 @@ fn run_object(py: Python<'_>, done: &Finished) -> PyResult<Py<Run>> {
     signature = (source = None, steps = None, **options),
     text_signature = "(source=None, steps=None, *, output=None, reference=None, threads=None, \
                       tmp_dir=None, format=None, also=None, sample=None, sort_memory=None, \
-                      force_space=None, validation_stringency=None, plan=None, dry_run=False)"
+                      force_space=None, validation_stringency=None, plan=None, recipe=None, \
+                      config=True, dry_run=False)"
 )]
 pub fn py_chain<'py>(
     py: Python<'py>,
@@ -617,6 +633,59 @@ pub fn py_chain<'py>(
     options: Option<&Bound<'py, PyDict>>,
 ) -> PyResult<Py<PyAny>> {
     let argv = argv(py, source, steps, options)?;
+    let done = py
+        .detach(|| run(&argv))
+        .map_err(|e| verbs::verb_error(&e))?;
+    let done = match done {
+        Done::Plan(text) => return Ok(PyString::new(py, &text).into_any().unbind()),
+        Done::Ran(done) => done,
+    };
+    let run = run_object(py, &done)?;
+    if done.code != 0 {
+        return Err(failed_steps(py, run, &done));
+    }
+    Ok(run.into_any())
+}
+
+/// bammetrics recipe: run the named chain name (prep, qc-only, downsample, or
+/// one of yours; bammetrics recipes lists them) on source, as bammetrics NAME
+/// BAM does. set holds STEP.option values ({"downsample-sam.probability":
+/// 0.1}); each replaces the recipe's value of that option. The keywords are
+/// those of chain(). Returns the Run of chain(), or the plan text with
+/// dry_run=True.
+//
+// The argv of `chain(source, recipe=name, **options)` plus one
+// `STEP.option=value` word per item of `set`.
+#[pyfunction]
+#[pyo3(
+    name = "recipe",
+    signature = (name, source = None, *, set = None, **options),
+    text_signature = "(name, source=None, *, set=None, config=True, dry_run=False, **options)"
+)]
+pub fn py_recipe<'py>(
+    py: Python<'py>,
+    name: &str,
+    source: Option<&Bound<'py, PyAny>>,
+    set: Option<&Bound<'py, PyDict>>,
+    options: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Py<PyAny>> {
+    if options.is_some_and(|o| o.contains("recipe").unwrap_or(false)) {
+        return Err(usage_error(format!(
+            "bammetrics {VERB}: recipe() takes the recipe as name, not as recipe="
+        )));
+    }
+    let mut argv = argv(py, source, None, options)?;
+    argv.push("--recipe".to_owned());
+    argv.push(name.to_owned());
+    for (key, value) in set.into_iter().flat_map(|s| s.iter()) {
+        let target: String = key.extract()?;
+        let text = if value.is_instance_of::<PyBool>() {
+            value.extract::<bool>()?.to_string()
+        } else {
+            value.str()?.to_str()?.to_owned()
+        };
+        argv.push(format!("{target}={text}"));
+    }
     let done = py
         .detach(|| run(&argv))
         .map_err(|e| verbs::verb_error(&e))?;

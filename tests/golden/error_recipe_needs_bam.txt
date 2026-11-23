@@ -1,0 +1,11 @@
+## argv
+prep
+tests/data/oxog.bam
+-o
+OUT/s
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: recipe prep writes a BAM: -o names it (-o out.bam)
+  bammetrics prep BAM -o out.bam

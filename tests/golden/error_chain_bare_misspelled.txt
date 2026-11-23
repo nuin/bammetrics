@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/insert_size.bam
+insert-size
+quality-yeld
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 2: unknown step "quality-yeld"
+  did you mean quality-yield?
+  a step is a tool verb (bammetrics tools lists them) or write

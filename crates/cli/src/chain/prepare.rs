@@ -1096,8 +1096,12 @@ fn also(spec: &Spec) -> Result<Vec<Also>, VerbError> {
     Ok(formats)
 }
 
-/// Prepare: everything checked and named, nothing read or written.
+/// Prepare: everything checked and named, nothing read or written. The
+/// defaults of [`super::resolve`] are filled in first: the config file,
+/// the BAM `-o` names, a step's dictionary.
 pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
+    let resolved = super::resolve::resolve(spec)?;
+    let spec = &resolved.spec;
     let (source, source_path) = source(spec)?;
     let is_cram = reference(spec, &source_path)?;
     let (prefix, prefix_origin) = prefix(spec, &source)?;
@@ -1149,6 +1153,19 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         };
         prefix_used |= uses_prefix;
         steps.push(step);
+    }
+    for (index, note) in resolved.notes {
+        steps[index].notes.push(note);
+    }
+    // Transforms alone that name no file: the run would end with nothing
+    // written (docs/chaining.md section 23).
+    if steps
+        .iter()
+        .all(|step| step.role == Role::Transform && step.files.is_empty())
+        && let Some(last) = steps.last_mut()
+    {
+        last.notes
+            .push("no step writes the records: -o OUT.bam or a write step writes them".to_owned());
     }
     let report = also
         .contains(&Also::Markdown)

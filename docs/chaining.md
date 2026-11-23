@@ -1380,3 +1380,237 @@ the header with its `@PG` line, as `DownsampleSam` writes it on its own.
 Chained equals staged (`crates/cli/tests/downsample.rs`): each strategy first, in the
 middle and last beside `mark-duplicates` and `sort-sam` on the fixture, and first on t1;
 the records as bytes, the header lines and every metrics file equal.
+
+## 22. Steps without +
+
+The owner's goal of 2026-11-22: the chain command line is too long. Both forms below run
+the same chain and write the same files, byte for byte (`chain_short_form` and
+`chain_short_form_long` in `tests/golden`):
+
+```bash
+# The + form, as before
+bammetrics chain fixed.bam -R hs37d5.fa -o c/r \
+    + reorder-sam --sequence-dictionary hs37d5.dict + insert-size + write c/r.bam --index
+
+# The short form, with reference = "hs37d5.fa" in the config file
+bammetrics chain fixed.bam reorder-sam insert-size -o c/r.bam
+```
+
+The rules, applied to each word in turn (`crates/cli/src/chain/bare.rs`):
+
+- `+` starts a step, and the word after it is the step's verb, as before.
+- A bare word that names a step verb, a Picard class or `write` starts a step.
+- An option takes its values with it. `--as insert-size` keeps `insert-size` as the value
+  of `--as`, so a value that names a verb stays a value.
+- The first bare word in front of the first step is the source, unless `-i`, `--input`
+  or `I=` gave it.
+- A bare word one or two letters away from a verb is an unknown step, named by its
+  number, with the closest verb (`step 2: unknown step "quality-yeld"`, `did you mean
+  quality-yield?`). A verb the word starts ranks first: `ins` is `insert-size`. A word
+  with a `/` or a `.` is never taken for a misspelled verb.
+- After `--`, every word up to the next `+` is positional.
+- The chain's options go in front of the first step, or after the last step when a bare
+  word started that step. There an option goes to the chain when the step has no flag of
+  its spelling, or when the step's flag means what the chain's does: `-o`, `--format`,
+  `--threads`, the reference and `TMP_DIR`. A step option of another meaning stays with
+  the step: `downsample-sam -R 7` is its `RANDOM_SEED`. Two steps keep their `-o` in
+  last place, since it names what they write: `write` without a path (`write -o
+  out.bam`) and a split step (`split-sam-by-library -o DIR`). Any other step's own `-o`
+  in last place needs the `+` form. In the middle of the chain a step keeps its own
+  `-o`, `--format` and `-R`: `insert-size --format picard,json alignment-summary`
+  writes JSON for `insert-size` alone.
+- A word that names a verb is a step, so a `write` path that is also a verb name is
+  written `./NAME`.
+
+A command line in the new form (a bare word started a step, or it has no `+` and no
+`--plan`) gets its errors in its own terms, each exit 2 before the first read:
+
+| Command line | Error |
+|---|---|
+| `chain insert-size in.bam` | `insert-size names a step: the source comes first` |
+| `chain in.bam bogus` | `"bogus" is no step verb, and the chain takes one source` |
+| `chain in.bam a.bam insert-size` | `one source expected, got 2`, hint `the source comes first, then the steps` |
+| `chain in.bam insert-size mark` | `step 1 (insert-size): "mark" is no step verb, and a step takes no positional value`, `did you mean mark-duplicates?` |
+| `chain in.bam insert-size -q alignment-summary` | `step 1 (insert-size): -q belongs to the chain: give it before the first step or after the last` |
+| `chain in.bam mark-duplicates -o x.bam --md5` | `step 1 (mark-duplicates): --md5 is an option of write`, with the `write OUT.bam --md5` form |
+| `chain -o a in.bam insert-size -o b` | `-o is given twice` |
+
+The closest verb of a stray word is the shortest verb it starts, else the closest by
+spelling, else the shortest verb that holds it, else the verb that shares its longest
+start (4 letters or more). A command line with a `+` in front of every step comes back
+unchanged and keeps the parser's errors, so every old form runs as before. Both forms mix: `chain in.bam + mark-duplicates quality-yield write
+m.bam`. `plan` tells a chain from a `qc` plan by a `+`, `--plan` or `--recipe`; for the
+short form write `bammetrics plan chain BAM STEP ...`.
+
+## 23. -o names the result
+
+`-o` ending in `.bam` (any case) or `.sam` (lower case) on a chain with a transform and
+no `write` step adds `write OUT --index` as the last step (`write OUT` for `.sam`: SAM
+text has no index), and the prefix of every metrics file is the name without its
+extension:
+`-o r.bam` writes `r.bam`, `r.bai` and `r.insert_size_metrics`
+(`crates/cli/src/chain/resolve.rs`).
+
+| `-o` | The chain | What it does |
+|---|---|---|
+| `out/s` (no extension) | any | The prefix, as before |
+| `r.bam` | a transform, no `write` | `write r.bam --index` last, prefix `r` |
+| `r.sam` | a transform, no `write` | `write r.sam` last, prefix `r` |
+| `r.bam` | a `write` step | The prefix `r.bam`, as before |
+| `r.bam` | taps only | Exit 2: `-o PREFIX names the metrics files` |
+| `r.cram` | a transform, no `write` | Exit 2: CRAM output is wave W15 |
+| `r.SAM`, `r.Sam` | a transform, no `write` | Exit 2: the write step, as htsjdk's writer, writes SAM text only for a name ending in lower-case `.sam`, and a BAM under any other name |
+
+Two notes go to standard error before the first read. A chain of transforms that name
+no file (`chain in.bam reorder-sam -o out/s`: no tap, no `write`, no split, no metrics
+file) gets `no step writes the records: -o OUT.bam or a write step writes them` on its
+last step. A `.bam` or `.sam` prefix beside a `write` step of the
+chain's own gets a note on that step: the prefix names the metrics files
+(`-o r.bam` gives `r.bam.insert_size_metrics`).
+
+The added `write` is the `write r.bam --index` of the long form. A stream that is not
+sorted by coordinate gets that step's note (`CREATE_INDEX: no index written, the sort
+order is queryname ...`) and no `.bai`.
+
+## 24. Defaults from the config file and the reference
+
+The user config file is `$XDG_CONFIG_HOME/bammetrics/config.toml` (an absolute
+`XDG_CONFIG_HOME`), else `$HOME/.config/bammetrics/config.toml`:
+
+```toml
+reference = "~/refs/hs37d5.fa"
+threads = 8
+tmp_dir = "/scratch"
+sort_memory = "4G"
+```
+
+- The file is read through `bammetrics_core::toml` with a cap of 64 KiB. Every key is
+  checked; an unknown one is an error with the line and the closest name.
+- `~/` is the home directory. A relative path is relative to the directory of the file.
+- `BAMMETRICS_REFERENCE` replaces the file's reference. `-R` replaces both.
+- `--no-config` leaves the file unread; the variable still counts.
+- The file must be a regular file. A FIFO, a device or a directory named `config.toml`
+  is a usage error before a byte is read; the file is opened without blocking.
+- A reference from the file or the variable that is not a file fails a chain only when a
+  step reads it: a tap whose `REFERENCE_SEQUENCE` or `REFERENCE` is a value option, a
+  transform that requires one (`set-nm-md-and-uq-tags`), a `reorder-sam` without its
+  dictionary, or any step on a CRAM source. That is an input error (exit 1) naming where
+  the path came from, with the hint `--no-config` for the file and `unset
+  BAMMETRICS_REFERENCE` for the variable. Any other chain runs without it. `qc`, `plan`
+  and `collect` leave such a path out with a note on standard error (`bammetrics qc:
+  note: /x.fa not found (the reference of ...): not used`).
+- `bammetrics config` prints each value and where it came from (`crates/cli/src/config.rs`).
+
+| Verb | Takes from the config |
+|---|---|
+| `chain` (and every recipe) | `reference`, `threads`, `tmp_dir`, `sort_memory` |
+| `qc`, `plan` | `reference` |
+| `collect` | `reference` |
+| a tool verb | `reference`, when the tool reads one, or the input is a CRAM |
+| the Picard face (`KEY=VALUE` after a class) | nothing: it stays Picard's command line |
+
+A step option that takes the reference itself gets the chain's `-R` when the step names
+none, as before (section 2.1): `REFERENCE_SEQUENCE` of `alignment-summary`,
+`hs-metrics`, `gc-bias`, `sequencing-artifact`, `set-nm-md-and-uq-tags`,
+`set-nm-and-uq-tags` and every record-editing step (for a CRAM source), and `REFERENCE`
+of `rrbs`. One step option names a dictionary:
+
+| Step | Option | Default |
+|---|---|---|
+| `reorder-sam` | `--sequence-dictionary` | The reference's `.dict` (its FASTA extension replaced, as htsjdk finds it), else its `.fai` |
+
+The step's notes say which file it took:
+
+```text
+bammetrics chain: step 1 (reorder-sam): SEQUENCE_DICTIONARY: the dictionary is the reference's index ref.fa.fai (no ref.dict beside the reference): names and lengths only
+```
+
+A dictionary read from a `.fai` holds `SN` and `LN` alone; the `.dict` adds `M5` and `UR`.
+Picard 3.5.0 refuses a `.fai` as `SEQUENCE_DICTIONARY`; bammetrics reads one
+(KNOWN_DIFFERENCES.md). A `reorder-sam` step with no dictionary and no reference is a
+usage error that names the ways to give one (`--sequence-dictionary`, `--from-bam`,
+`--dict`, `-R`, the config file). The step's own `-R` comes first, then the chain's: in
+the middle of a bare chain `reorder-sam -R ref.fa insert-size` takes the dictionary of
+`ref.fa`. The default applies in a chain only; the `reorder-sam` verb still needs its
+`--sequence-dictionary`, as before.
+
+## 25. Recipes
+
+A recipe is a named chain in the plan file format (section 3), with a `[recipe]` table
+and no source. Three are compiled in from `crates/cli/recipes/`; the user's are read from
+the `recipes` directory beside the config file (`~/.config/bammetrics/recipes/NAME.toml`,
+64 KiB each), and one with the name of a shipped recipe replaces it.
+
+| Recipe | Steps | `-o` |
+|---|---|---|
+| `prep` | `fix-mate-information`, `mark-duplicates`, `sort-sam --sort-order coordinate`, `quality-yield`, `alignment-summary`, `insert-size`, `duplicate-metrics` (the taps of qc's generic preset), then the BAM with its index | the BAM: `-o out.bam` |
+| `qc-only` | the four taps of qc's generic preset | the prefix |
+| `downsample` | `downsample-sam --strategy ConstantMemory`; needs `downsample-sam.probability`; then the BAM with its index | the BAM: `-o out.bam` |
+
+```bash
+bammetrics recipes                                     # one line each, with its steps
+bammetrics prep in.bam -o out.bam                      # the shorthand verb
+bammetrics chain in.bam --recipe prep -o out.bam       # the same chain
+bammetrics downsample in.bam -o d.bam downsample-sam.probability=0.1
+bammetrics chain in.bam --recipe prep -o out.bam --dry-run   # its plan
+```
+
+```toml
+[recipe]
+description = "one line for bammetrics recipes"
+output = "bam"                                 # optional: -o must name the BAM
+requires = ["downsample-sam.probability"]      # optional
+
+[[step]]
+verb = "downsample-sam"
+strategy = "ConstantMemory"
+```
+
+- A word `STEP.option=value` sets that option on every step of the verb `STEP` in the
+  recipe, in place of the recipe's value. `STEP` is a verb or its Picard class, `option`
+  any spelling of the step's option. A recipe without such a step, or a step without such
+  an option, is a usage error with the closest name.
+- Any word `STEP.option=value` whose two parts are plain words is an override, so a
+  misspelled step gets the closest step of the recipe (`recipe prep has no step
+  mark-dups`, `did you mean mark-duplicates?`). A `STEP.option` word without `=` whose
+  step names a verb exits 2 with `needs =VALUE`. An error in a step an override set names
+  the word beside the recipe line (`recipe prep:21 with sort-sam.sort-order=a=b`).
+- A recipe gives the steps: a step on the command line beside `--recipe` exits 2, and so
+  does `--plan` beside it. A second `--recipe` exits 2.
+- `STEP.option=value` without a recipe exits 2.
+- `bammetrics recipes` lists a user recipe that cannot be read as `NAME  (yours) not
+  usable: REASON` and goes on with the rest. A user file that is not a regular file is
+  not listed. A user recipe named like a verb (`sort-sam`) is listed with `bammetrics
+  sort-sam runs the verb`: run it with `chain BAM --recipe sort-sam`.
+- `bammetrics NAME --help` prints the recipe's description, its steps with their options
+  and its required options.
+- `output = "bam"` makes `-o` name a BAM; the implicit `write` of section 23 writes it.
+
+## 26. Departures from docs/07 (the simpler grammar)
+
+The decision rows of this branch, numbered from D160 (the integrator renumbers):
+
+| Row | docs/07 or the task | As built | Reason |
+|---|---|---|---|
+| D160 | Chain options "after the last step keep their meaning" | In the last bare step an option goes to the chain when the step has no flag of its spelling or the step's flag has the chain's meaning (`-o`, `--format`, `--threads`, the reference, `TMP_DIR`); others stay with the step | The owner's example puts `-o` after `insert-size`, which has its own `-o`. `downsample-sam -R` is `RANDOM_SEED`, not the reference |
+| D161 | "indexed when the stream is coordinate sorted" | The added step is `write OUT --index`: an unsorted stream gets that step's note and no `.bai` | The sort order is known when the stream reaches `write`. The new form then equals the long form byte for byte, notes included |
+| D162 | The -o rule for every chain | A chain with its own `write` keeps `-o r.bam` as its prefix | Today's forms stay unchanged byte for byte |
+| D163 | "the dictionary read from its .fai" | `ReorderSam` reads a `.fai` as `SEQUENCE_DICTIONARY` (names and lengths); Picard 3.5.0 exits on one | No file is written for the dictionary. The project has the precedent of `CollectWgsMetrics` on a `.fai` without a `.dict` |
+| D164 | Config `threads`, `tmp_dir`, `sort_memory` for every verb | Those three apply to `chain` and the recipes; `qc`, `plan`, `collect` and the tool verbs take `reference` | `qc --threads` has a clap default, and its Python keywords come from the clap arguments; the tool verbs keep their documented defaults |
+| D165 | `--no-config` on every verb | `qc`, `plan`, `collect` and the tool verbs take it out of their arguments before parsing; `chain --help` lists it | Their `--help` texts and golden records stay unchanged |
+| D166 | Override "STEP.option=value or the step repeated" | `STEP.option=value` | One form; a step repeated after a recipe exits 2 |
+| D167 | Config paths | `~/` is `$HOME`; a relative path is relative to the file's directory | The file names the same reference from any working directory |
+| D168 | Recipe names | A user recipe replaces a shipped one of its name | A user changes `prep` without a new name |
+| D169 | Config reference on the tool verbs | Only when the tool reads the reference, or the input is a CRAM | A BAM run of a tool that ignores `REFERENCE_SEQUENCE` prints no new note |
+| D170 | Python `config=False` | On `chain` and `recipe` only; Python `qc` reads no config | The task names chain and recipe; a notebook's `qc` keeps its explicit keywords |
+| D171 | D160: a step's own `-o` in last place needs the `+` form | `write` without a path and a split step keep their `-o` in last place | `write -o out.bam` sent `-o` to the prefix and wrote `out.bam.marked.bam`; `split-sam-by-library -o DIR` wrote into `.` |
+| D172 | A config or variable reference that is not a file exits 1 | Only a chain with a step that reads it exits 1; `qc`, `plan` and `collect` leave it out with a note | A stale config failed every chain, `insert-size` alone included |
+| D173 | `-o` ending in `.sam` in any case | `.SAM` exits 2 | The write step writes SAM text for lower-case `.sam` only, as htsjdk's `SAMFileWriterFactory`; `-o r.SAM` wrote BGZF bytes with no `.bai` |
+| D174 | The dictionary default for every `-R` user | In a chain only | The `reorder-sam` verb keeps its command line and golden records; its error names `--from-bam` and `--dict`, and so does the chain's |
+
+Tests: `crates/cli/src/chain/bare.rs`, `recipes.rs`, `resolve.rs` and
+`crates/cli/src/config.rs` (unit), `crates/cli/tests/chain_grammar.rs` (each new form
+against its long form, byte for byte; the reference order; the Picard face untouched;
+recipes, user recipes and the 64 KiB cap; a stale reference, a FIFO config file, a
+broken user recipe, the last writer's `-o`), the 41 records of `CHAIN_GRAMMAR_CASES` in
+`crates/cli/tests/golden.rs`, and `tests/python/test_chain.py`.

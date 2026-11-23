@@ -1,0 +1,14 @@
+## argv
+recipes
+## exit
+0
+## stdout
+prep        fix mates, mark duplicates, sort by coordinate, the BAM indexed, qc's generic metrics
+              steps: fix-mate-information mark-duplicates sort-sam quality-yield alignment-summary insert-size duplicate-metrics -o OUT.bam
+qc-only     qc's generic metrics on one read: quality yield, alignment summary, insert size, duplicates
+              steps: quality-yield alignment-summary insert-size duplicate-metrics
+downsample  keep a share of the templates by a hash of the read name, the BAM indexed
+              steps: downsample-sam -o OUT.bam downsample-sam.probability=VALUE
+
+Run one: bammetrics NAME BAM -o OUT, or bammetrics chain BAM --recipe NAME -o OUT. STEP.option=value sets an option of a step. Your recipes: OUT/bammetrics/recipes/NAME.toml.
+## stderr

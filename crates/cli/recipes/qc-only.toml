@@ -1,0 +1,22 @@
+# bammetrics qc-only BAM -o out/sample
+#
+# The four metrics files of qc's generic preset on one read, no verdict
+# and no page. -o is the prefix of the files. The same chain by hand:
+#
+#   bammetrics chain BAM quality-yield alignment-summary insert-size \
+#       duplicate-metrics -o out/sample
+
+[recipe]
+description = "qc's generic metrics on one read: quality yield, alignment summary, insert size, duplicates"
+
+[[step]]
+verb = "quality-yield"
+
+[[step]]
+verb = "alignment-summary"
+
+[[step]]
+verb = "insert-size"
+
+[[step]]
+verb = "duplicate-metrics"

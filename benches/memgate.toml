@@ -1115,3 +1115,20 @@ argv = [
 needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
 max_rss_mib = 1024
 max_seconds = 600
+
+[[command]]
+name = "chain short form reorder-sam insert-size -o r.bam"
+argv = [
+    "{bin}", "chain", "tests/data/insert_size.bam", "reorder-sam", "insert-size",
+    "-R", "tests/data/ref_100k.fa", "--no-config", "-o", "{out}/r.bam",
+]
+needs = ["tests/data/insert_size.bam", "tests/data/ref_100k.fa"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "recipe prep"
+argv = ["{bin}", "prep", "tests/data/oxog.bam", "--no-config", "-o", "{out}/p.bam"]
+needs = ["tests/data/oxog.bam"]
+max_rss_mib = 64
+max_seconds = 30

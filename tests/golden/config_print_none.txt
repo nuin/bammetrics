@@ -1,0 +1,12 @@
+## argv
+config
+## exit
+0
+## stdout
+file         OUT/bammetrics/config.toml (not there)
+reference    none (give -R)
+threads      default (the available cores, at most 8)
+tmp_dir      default (the system temporary directory)
+sort_memory  default (2G)
+recipes      OUT/bammetrics/recipes
+## stderr

@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/markdup.bam
+mark-duplicates
+-o
+OUT/s.SAM
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: -o OUT/s.SAM: the write step writes SAM text only for a name ending in .sam (lower case), as htsjdk does, and a BAM under any other name (from -o)
+  -o OUT/s.sam writes SAM text; -o OUT/s.bam writes a BAM

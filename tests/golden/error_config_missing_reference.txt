@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/insert_size.bam
+reorder-sam
+-o
+OUT/r.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics chain: /nowhere/ref.fa not found (the reference of OUT/bammetrics/config.toml:1)
+  -R FASTA names another; --no-config leaves the file unread
+## file bammetrics/config.toml
+reference = "/nowhere/ref.fa"

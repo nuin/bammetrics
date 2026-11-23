@@ -1,0 +1,35 @@
+# bammetrics prep BAM -o out.bam
+#
+# The BAM ready for calling: mate fields fixed, duplicates marked, sorted
+# by coordinate, written with its index, and the four metrics files of
+# qc's generic preset on the records written. The same chain by hand:
+#
+#   bammetrics chain BAM fix-mate-information mark-duplicates \
+#       sort-sam --sort-order coordinate \
+#       quality-yield alignment-summary insert-size duplicate-metrics -o out.bam
+
+[recipe]
+description = "fix mates, mark duplicates, sort by coordinate, the BAM indexed, qc's generic metrics"
+output = "bam"
+
+[[step]]
+verb = "fix-mate-information"
+
+[[step]]
+verb = "mark-duplicates"
+
+[[step]]
+verb = "sort-sam"
+sort-order = "coordinate"
+
+[[step]]
+verb = "quality-yield"
+
+[[step]]
+verb = "alignment-summary"
+
+[[step]]
+verb = "insert-size"
+
+[[step]]
+verb = "duplicate-metrics"

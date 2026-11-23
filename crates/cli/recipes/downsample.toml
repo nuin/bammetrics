@@ -1,0 +1,16 @@
+# bammetrics downsample BAM -o out.bam downsample-sam.probability=0.1
+#
+# A share of the templates, kept by a hash of the read name, written with
+# its index when the BAM is sorted by coordinate. The same chain by hand:
+#
+#   bammetrics chain BAM downsample-sam --strategy ConstantMemory \
+#       --probability 0.1 -o out.bam
+
+[recipe]
+description = "keep a share of the templates by a hash of the read name, the BAM indexed"
+output = "bam"
+requires = ["downsample-sam.probability"]
+
+[[step]]
+verb = "downsample-sam"
+strategy = "ConstantMemory"

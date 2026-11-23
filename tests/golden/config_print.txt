@@ -1,0 +1,17 @@
+## argv
+config
+## exit
+0
+## stdout
+file         OUT/bammetrics/config.toml (read)
+reference    ROOT/tests/data/ref_100k.fa (from OUT/bammetrics/config.toml:1)
+threads      2 (from OUT/bammetrics/config.toml:2)
+tmp_dir      OUT/bammetrics/tmp (from OUT/bammetrics/config.toml:3)
+sort_memory  4G (from OUT/bammetrics/config.toml:4)
+recipes      OUT/bammetrics/recipes
+## stderr
+## file bammetrics/config.toml
+reference = "ROOT/tests/data/ref_100k.fa"
+threads = 2
+tmp_dir = "tmp"
+sort_memory = "4G"

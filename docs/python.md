@@ -223,13 +223,13 @@ These are the two examples of docs/chaining.md. `tests/data/chain_markdup.toml` 
 
 ### chain
 
-`chain(source=None, steps=None, *, output, reference, threads, tmp_dir, format, also, sample, sort_memory, force_space, validation_stringency, plan, dry_run)`.
+`chain(source=None, steps=None, *, output, reference, threads, tmp_dir, format, also, sample, sort_memory, force_space, validation_stringency, plan, recipe, config, dry_run)`.
 
 | Argument | Command | Value |
 |---|---|---|
 | `source` | the positional `BAM` | A BAM, SAM text, or a CRAM with `reference`. `"-"` reads the standard input of the process. `None` when the plan file names it |
 | `steps` | `+ STEP ...` | A list of verb names and `step(...)` objects, in order. One name or one `Step` is a chain of one step |
-| `output` | `-o PREFIX` | The prefix of every step that names no file of its own. Default `./<source name>`. `""` raises `UsageError`: it would name hidden files (`.insert_size_metrics`) |
+| `output` | `-o PREFIX` | The prefix of every step that names no file of its own. Default `./<source name>`. `""` raises `UsageError`: it would name hidden files (`.insert_size_metrics`). A name ending in `.bam` or a lower-case `.sam` on a chain with a transform and no `write` step adds `write OUTPUT` (with its index for a BAM) as the last step and names the metrics files from `OUTPUT` without its extension; on a chain of taps alone, and for `.SAM`, it raises `UsageError` (docs/chaining.md section 23) |
 | `reference` | `-R FASTA` | Decodes a CRAM source, and goes to every step that reads a reference and names none |
 | `threads` | `--threads N` | BGZF threads of each read and of `write`. Over 256 is a `UsageError`, on `chain`, `qc` and `collect` |
 | `tmp_dir` | `--tmp-dir DIR` | Where a transform spills and a piped source is copied |
@@ -240,11 +240,26 @@ These are the two examples of docs/chaining.md. `tests/data/chain_markdup.toml` 
 | `force_space` | `--force-space` | `True` runs a chain whose estimated temporary and output bytes exceed the free space; without it that chain raises `InputError` before the first read |
 | `validation_stringency` | `--validation-stringency` | How a SAM text source is checked: `"STRICT"` (default), `"LENIENT"`, `"SILENT"`. A step refuses the keyword |
 | `plan` | `--plan FILE` | A TOML plan file in place of `steps`. A keyword given replaces the file's value. `steps` beside `plan` raises `UsageError`. Paths in the file are read relative to the working directory of the process, never to the file's directory. A step that names the plan file as its output raises `UsageError` |
+| `recipe` | `--recipe NAME` | A recipe in place of `steps` (`prep`, `qc-only`, `downsample`, or one of the user's); `steps` beside it raises `UsageError`. `recipe()` below sets its step options |
+| `config` | `--no-config` when `False` | `True` (default) reads the user config file: `reference`, `threads`, `tmp_dir` and `sort_memory` when the keyword is not given (docs/chaining.md section 24). `BAMMETRICS_REFERENCE` counts either way. Not a bool: `UsageError` |
 | `dry_run` | `--dry-run` | `True` returns the plan text as a str and runs nothing |
 
 `--quiet` and `--verbose` have no keyword: `chain` prints nothing. A core tool's own warning still goes to stderr. `write` to `"-"` writes the BAM to the standard output of the process, as the command does.
 
 The keywords spell the command's argv, and the command's parser, `prepare` and `execute` (`bammetrics_cli::chain`) check and run it. So a message is the command's line with its spelling: `bammetrics chain: step 2 (insert-size): ...`, `--plan gives the steps: a + step on the command line cannot be added`. Every usage error is raised before the first read, and nothing is written.
+
+### recipe
+
+`recipe(name, source=None, *, set=None, config=True, dry_run=False, **options)` runs the recipe `name` as `bammetrics NAME BAM` does: `chain(source, recipe=name, **options)` plus one `STEP.option=value` word per item of `set`.
+
+```python
+run = bm.recipe("prep", "in.bam", output="out.bam")          # out.bam, out.bai, four metrics files
+bm.recipe("downsample", "in.bam", output="d.bam", set={"downsample-sam.probability": 0.1})
+bm.recipe("downsample", "in.bam", output="d.bam")            # UsageError: recipe downsample needs downsample-sam.probability=VALUE
+print(bm.recipe("prep", "in.bam", output="out.bam", dry_run=True))
+```
+
+The keywords are those of `chain`. `set` maps `STEP.option` (a step verb or Picard class, then any spelling of its option) to a value; each replaces the recipe's value of that option. An unknown recipe, step or option raises `UsageError` with the closest name.
 
 ### step
 

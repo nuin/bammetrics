@@ -1978,6 +1978,8 @@ def chain(
     force_space: bool | None = None,
     validation_stringency: str | None = None,
     plan: _Path | None = None,
+    recipe: str | None = None,
+    config: bool = True,
     dry_run: Literal[False] = False,
 ) -> Run[None]:
     """bammetrics chain: several steps on one BAM in one process, the records handed from
@@ -1988,7 +1990,10 @@ def chain(
     keyword given replaces the file's. Returns a Run: files, metrics (keyed by verb,
     STREAM.verb in front of a transform) and stages (one Stage per step). dry_run=True
     returns the plan text and runs nothing. A failed step raises InputError after the
-    other steps wrote their files (its .run holds the Run)."""
+    other steps wrote their files (its .run holds the Run). output ending in .bam on a
+    chain with a transform and no write step adds write OUTPUT with its index and names
+    the metrics files from OUTPUT without .bam. recipe names a recipe in place of steps.
+    config=False leaves the user config file unread."""
 @overload
 def chain(
     source: _Path | None = None,
@@ -2005,6 +2010,8 @@ def chain(
     force_space: bool | None = None,
     validation_stringency: str | None = None,
     plan: _Path | None = None,
+    recipe: str | None = None,
+    config: bool = True,
     dry_run: Literal[True],
 ) -> str: ...
 @overload
@@ -2023,7 +2030,24 @@ def chain(
     force_space: bool | None = None,
     validation_stringency: str | None = None,
     plan: _Path | None = None,
+    recipe: str | None = None,
+    config: bool = True,
     dry_run: bool,
 ) -> Run[None] | str: ...
+
+def recipe(
+    name: str,
+    source: _Path | None = None,
+    *,
+    set: dict[str, Any] | None = None,
+    config: bool = True,
+    dry_run: bool = False,
+    **options: Any,
+) -> Run[None] | str:
+    """bammetrics recipe: run the named chain name (prep, qc-only, downsample, or one of
+    yours; bammetrics recipes lists them) on source, as bammetrics NAME BAM does. set
+    holds STEP.option values ({"downsample-sam.probability": 0.1}); each replaces the
+    recipe's value of that option. The keywords are those of chain(). Returns the Run of
+    chain(), or the plan text with dry_run=True."""
 
 # END verbs

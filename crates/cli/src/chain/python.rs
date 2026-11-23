@@ -342,7 +342,17 @@ pub const CHAIN_DOC: &str = "bammetrics chain: several steps on one BAM in one p
      place of steps; a keyword given replaces the file's. Returns a Run: files, metrics (keyed \
      by verb, STREAM.verb in front of a transform) and stages (one Stage per step). \
      dry_run=True returns the plan text and runs nothing. A failed step raises InputError \
-     after the other steps wrote their files (its .run holds the Run).";
+     after the other steps wrote their files (its .run holds the Run). output ending in .bam \
+     on a chain with a transform and no write step adds write OUTPUT with its index and names \
+     the metrics files from OUTPUT without .bam. recipe names a recipe in place of steps. \
+     config=False leaves the user config file unread.";
+
+/// The docstring of `recipe`.
+pub const RECIPE_DOC: &str = "bammetrics recipe: run the named chain name (prep, qc-only, \
+     downsample, or one of yours; bammetrics recipes lists them) on source, as bammetrics \
+     NAME BAM does. set holds STEP.option values ({\"downsample-sam.probability\": 0.1}); each \
+     replaces the recipe's value of that option. The keywords are those of chain(). Returns \
+     the Run of chain(), or the plan text with dry_run=True.";
 
 /// A docstring as `.pyi` lines under a `def`.
 fn doc_lines(doc: &str) -> String {
@@ -365,6 +375,7 @@ fn chain_overload(dry_run: &str, returns: &str, doc: Option<&str>) -> String {
     );
     for keyword in chain_keywords() {
         if keyword.name == "dry_run" {
+            text.push_str("    config: bool = True,\n");
             text.push_str(&format!("    dry_run: {dry_run},\n"));
         } else {
             text.push_str(&format!(
@@ -401,6 +412,12 @@ pub fn stubs() -> String {
     ));
     text.push_str(&chain_overload("Literal[True]", "str", None));
     text.push_str(&chain_overload("bool", "Run[None] | str", None));
+    text.push_str(
+        "\ndef recipe(\n    name: str,\n    source: _Path | None = None,\n    *,\n    \
+         set: dict[str, Any] | None = None,\n    config: bool = True,\n    \
+         dry_run: bool = False,\n    **options: Any,\n) -> Run[None] | str:\n",
+    );
+    text.push_str(&doc_lines(RECIPE_DOC));
     text
 }
 
@@ -428,6 +445,7 @@ mod tests {
                 "force_space",
                 "validation_stringency",
                 "plan",
+                "recipe",
                 "dry_run"
             ]
         );
