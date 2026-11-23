@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/insert_size.bam
++
+qc
++
+insert-size
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 2 (insert-size): step 1 (qc) is the last step: no step may follow it

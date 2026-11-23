@@ -11,4 +11,4 @@ insert-size
 ## stderr
 bammetrics chain: --also junit prints a verdict, and a chain has none (from --also)
   bammetrics check DIR --format junit reads the files a chain wrote
-  qc as the last step of a chain is wave W14 of docs/07
+  a qc step writes the verdict: bammetrics chain BAM + ... + qc --also junit

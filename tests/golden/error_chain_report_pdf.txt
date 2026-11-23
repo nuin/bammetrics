@@ -9,5 +9,6 @@ insert-size
 2
 ## stdout
 ## stderr
-bammetrics chain: a chain writes no verdict or report; its report step comes with wave W14 of docs/07 (from --report)
+bammetrics chain: a chain writes its verdict and report in its last step, qc: give the option there (from --report)
+  bammetrics chain BAM + STEP ... + qc --report html,pdf
   bammetrics report DIR --pdf writes them for the metrics files a chain wrote to DIR

@@ -57,8 +57,7 @@ pub fn flags() -> Vec<Flag> {
         "hs",
         &[],
         Ty::Path,
-        "One CollectHsMetrics run: bait and target intervals (interval list or BED). Repeat \
-         for more runs.",
+        "One CollectHsMetrics run: bait and target intervals (interval list or BED).",
     )
     .placeholder("BAITS TARGETS")
     .repeated();
