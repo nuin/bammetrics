@@ -158,7 +158,9 @@ above where a verb has them.
   writes the name `qc` writes, a tap in front of a transform `PREFIX.<stream>.<extension>`
   (`PREFIX.in.insert_size_metrics` on the source), `mark-duplicates`
   `PREFIX.marked.duplication_metrics`, `write` without a path `PREFIX.marked.bam`. A
-  step's own `-o` replaces the name ([docs/chaining.md](chaining.md) section 2.3).
+  step's own `-o` replaces the name ([docs/chaining.md](chaining.md) section 2.3). A
+  materialized step that `qc` does not name takes the extension of docs/chaining.md
+  section 22.2 (`PREFIX.raw_wgs_metrics`, `PREFIX.library_complexity_metrics`).
 - Run files of `qc`: `PREFIX.manifest.json`, `PREFIX.verdict.json`, `PREFIX.report.html`,
   and `PREFIX.panel.interval_list` for a `--panel` BED. `report` writes
   `OUT/SAMPLE.verdict.json`, `OUT/SAMPLE.report.html` and `OUT/index.html`.
@@ -911,7 +913,9 @@ header of the first (`tests/concordance/test_gather_bam_files.py`).
   header.
 - An `-o` that is an input or a list exits 2. A block copy into an `-o` ending in `.sam`
   or `.cram` exits 2: Picard writes BAM bytes under that name. A failed run leaves no
-  output. Not a chain step: a chain reads one source.
+  output. In a chain the step runs on a file of its stream, the first input, and the
+  files after the verb; its BAM is the stream `gathered` ([docs/chaining.md](chaining.md)
+  section 22).
 
 ### calculate-read-group-checksum
 
@@ -935,7 +939,9 @@ computes it, 32 hex digits with no line end, in `-o` or beside the input as
   `TZ`, as Picard's depends on the JVM's zone.
 - Every header line is checked at `--validation-stringency`: at `STRICT` (the default) an
   `@RG` without `SM`, two values of one key or a `DT` that is no date exits 1.
-- Only the header is read. An `-o` that is the input exits 2. Not a chain step.
+- Only the header is read. An `-o` that is the input exits 2. In a chain the step runs on
+  a file that holds the header of its stream and writes `PREFIX.read_group_md5`
+  ([docs/chaining.md](chaining.md) section 22).
 
 ### quality-yield-s-n-v-q
 
@@ -1001,7 +1007,8 @@ distinct UMIs in each, `numUmis` against `duplicateSets`, with no metrics row
   The distinct UMIs of one set are held in memory, as in Picard, so peak memory grows with
   the largest set: 1,000,000 distinct 16-base UMIs at one position took 176 MiB.
 - `--progress-step-interval 0` exits 1 once a set is found, as Picard's progress logger
-  divides by it. Not a chain step: the tool reads the stream whole before its first set.
+  divides by it. In a chain the step runs on a file of its stream, since the tool reads
+  the stream whole before its first set ([docs/chaining.md](chaining.md) section 22).
 
 ### rrbs
 
@@ -1135,7 +1142,8 @@ circle of area `--fraction` on the tile, or outside one of area `1 - FRACTION` a
 - `--stop-after N` reads N records in each read; 0 or less writes no record.
 - An input whose header has a `PositionBasedDownsampleSam` `@PG` exits 1 unless
   `--allow-multiple-downsampling-despite-warnings`.
-- Not a chain step: it reads its input twice (wave W14).
+- In a chain the step runs on a file of its stream, since it reads its input twice; its
+  BAM is the stream `downsampled` ([docs/chaining.md](chaining.md) section 22).
 
 ### qc
 
@@ -1568,8 +1576,10 @@ Picard's `MergeSamFiles` (`tests/concordance/test_merge_sam_files.py`, inputs fr
   reads each input whole.
 - `--create-index` needs `--sort-order coordinate`. A `--comment` with a line end exits 2.
   At most 1,000 inputs, all open at once.
-- It merges several files, so it is not a step of `chain` (exit 2): merge first, then
-  chain the merged BAM.
+- In a chain the stream is the first input and the files after the verb are the others:
+  `bammetrics chain lane1.bam + merge-sam-files lane2.bam + mark-duplicates + write
+  out.bam`. The step runs on a file of its stream and its BAM is the stream `merged`
+  ([docs/chaining.md](chaining.md) section 22).
 
 ### reorder-sam
 

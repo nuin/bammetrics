@@ -34,19 +34,17 @@ emits.
 | tap | A one-pass tool on the records of its position. It changes nothing | 20 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check`, `mt-copy-number`, `exon-coverage`, `adapter-content`, `duplicate-by-tile`, `telomere`, `quality-yield-s-n-v-q`, `rrbs` |
 | write | A tap that writes the records of its position as a BAM, or as SAM text | `write [PATH]` |
 | split | A sink that writes the records of its position over BAMs in a directory (section 18) | `split-sam-by-library`, `split-sam-by-number-of-reads` |
+| materialize | A tool with neither a stage nor a collector, run on a file of the records of its position: the source itself, or a copy in the temporary directory (section 22). One that writes a BAM hands it on as the next stream | 17 verbs: `wgs`, `raw-wgs`, `wgs-with-non-zero-coverage`, `targeted-pcr`, `library-complexity`, `multiple-metrics`, `oxo-g`, `bam-index-stats`, `index-depth`, `check-duplicate-marking`, `jumping-library`, `view-sam`, `calculate-read-group-checksum`, `umi-prevalence`; `merge-sam-files`, `gather-bam-files`, `position-based-downsample-sam` (each leaves a stream) |
 
 A tap or `write` does not change the stream, so the step after it sees the same records.
 `in.bam + tap + mark-duplicates + tap + write` gives the first tap the source records and
 the second tap and the writer the marked records.
 
-A tool without a collector and without a stage (`wgs`, `targeted-pcr`,
-`library-complexity`, `multiple-metrics`, every tool that reads no BAM) cannot be a step.
-W14 spools the stream for those.
-
-`build-bam-index` and `view-sam` are no steps either, each with its own reason (exit 2).
-`build-bam-index` names `write --index`, which writes the `.bai` of the BAM a chain
-writes. `view-sam` names `write - --output-format sam`, which prints the stream as SAM
-text.
+Every registered tool that reads a BAM is a step at any position, 53 of the 71 (section
+22). The 17 tools that read no BAM (interval, VCF, FASTA and text tools,
+`compare-metrics`, `fifo-buffer`) are refused with exit 2 and the reason. So is
+`build-bam-index`: it names `write --index`, which writes the `.bai` of the BAM a chain
+writes.
 
 `fifo-buffer` is never a step. `FifoBuffer` copies the bytes of a pipe between two
 commands. The steps of a chain hand records on in memory, so a chain has no pipe for it
@@ -999,7 +997,7 @@ check linear in the number of steps.
 |---|---|
 | W05, done | The sort barrier (`Next::Records`), the planner (`Frame` per position, `requires`, the free-space refusal), the spool for a replay behind another transform, `--sort-memory`, SAM output of `write`; `write --index` writes Picard's `.bai` of the written BAM (`bai.rs`); `BuildBamIndex` and `make memgate` |
 | W09 on | Each BAM-writing tool registers its stage in `stage_of` and its stream name in `label_of` |
-| W14 | `qc` as the last step of a chain, manifest 2, resume per step (`resume=` in Python), kept products, the spool for tools that read their input their own way, a progress line |
+| W14 | `qc` as the last step of a chain, manifest 2, resume per step (`resume=` in Python), kept products, a progress line. The spool for tools that read their input their own way landed as the materialize fallback (section 22) |
 | W15, W22 | `write` to CRAM, FASTQ |
 | W46 | Variant streams (`Kind`), pileup and capture sinks |
 
@@ -1329,8 +1327,8 @@ bammetrics chain in.bam -o out/s \
 |---|---|---|
 | `reorder-sam` | `reordered` | New `@SQ` lines, each record's reference and mate reference moved by name; with `-S` a record on a contig the dictionary lacks becomes unplaced and its mate loses `MC`; then the sort of the stream's order |
 
-`merge-sam-files` reads several `INPUT` files and a chain reads one source, so it is no
-step (exit 2, the reason names wave W14). Merge first, then chain the merged BAM.
+`merge-sam-files` is a materialized step since wave W14 (section 22): the stream is its
+first `INPUT`, and the files after the verb are the further ones.
 
 Chained equals staged (`crates/cli/tests/reorder_sam.rs`): the step first, in the middle
 and last, beside `mark-duplicates` and `sort-sam`, on `tests/data/markdup.bam`, corpus t1
@@ -1374,9 +1372,222 @@ the header with its `@PG` line, as `DownsampleSam` writes it on its own.
 
 - `--metrics-file` on the step writes the QualityYieldMetrics of the records it keeps.
 - `-o`, `--compression-level`, `--create-index` and `--create-md5-file` belong to `write`.
-- `position-based-downsample-sam` reads its input twice and is refused as a step; wave W14
-  runs such a tool on a spooled copy of the stream.
+- `position-based-downsample-sam` reads its input twice: since wave W14 it is a
+  materialized step that runs on a file of its stream (section 22).
 
 Chained equals staged (`crates/cli/tests/downsample.rs`): each strategy first, in the
 middle and last beside `mark-duplicates` and `sort-sam` on the fixture, and first on t1;
 the records as bytes, the header lines and every metrics file equal.
+
+## 22. W14: every registered tool at any position, the materialize fallback
+
+Every registered tool that reads a BAM runs at any position of a chain: 53 of the 71
+tools. A tool with a stage is a transform, a one-pass tool is a tap, a split tool is a
+split. A tool with neither a stage nor a collector is materialized (docs/07 section
+2.3): it runs on a file that holds the records of its position.
+
+```bash
+# wgs and library-complexity behind fix-mate-information, the BAM merged with a second
+# lane, then insert size on the merged stream and the merged BAM written
+bammetrics chain lane1.bam -o out/s \
+    + fix-mate-information \
+    + wgs -R ref.fa + library-complexity \
+    + merge-sam-files lane2.bam \
+    + insert-size \
+    + write out/s.bam --index
+```
+
+### 22.1 What materialize does
+
+- On the source with no stage in front, and the source a regular file, the tool reads
+  the source itself: nothing is copied.
+- Anywhere else the records of the position are written to a BAM in the chain's
+  temporary directory (`--tmp-dir`, or the system one): BGZF level 3, by the writer
+  `write` uses, with htsjdk's order check. `bam-index-stats` and `index-depth` get its
+  `.bai` when the stream is coordinate sorted. `calculate-read-group-checksum` reads the
+  header alone: the file holds no record.
+- The tool then runs through its own `run` on that file, so its output is the output of
+  `chain ... + write x.bam` and then the tool on `x.bam`. The file is removed when the
+  tool is done, or with the temporary directory.
+- A tool that writes a BAM (`merge-sam-files`, `gather-bam-files`,
+  `position-based-downsample-sam`) is a barrier. Its stream is its first `INPUT`, and
+  files after the verb (or `--input FILE`, `input = [...]` in a plan file, `input=[...]`
+  in Python) are the further inputs of `merge-sam-files`, `gather-bam-files` and
+  `jumping-library`. The tool writes its BAM in the temporary directory at level 3, and
+  that BAM is the stream of the next segment, named `merged`, `gathered` or
+  `downsampled` (`--as NAME` renames it, as on a transform; `merge-sam-files` takes its
+  `ASSUME_SORTED` as `--assume-sorted`, as `mark-duplicates` does). Its `-o`, `--compression-level`, `--create-index` and
+  `--create-md5-file` belong to `write` (exit 2).
+- A materialized tool that writes no BAM fails alone, as a tap does. A materialized
+  tool that writes a BAM fails as a barrier: the later steps are not run.
+- `check-duplicate-marking` writes its file and then fails (exit 1) when a record
+  disagrees, as Picard exits 1.
+- The command line the tool writes (`@PG CL`, the `StringHeader`) names the step's input
+  as the chain planned it, never the file in the temporary directory.
+
+### 22.2 Names
+
+A materialized tap writes `PREFIX<extension>` on the last stream and
+`PREFIX.<stream><extension>` in front of a transform, as a tap does, or its own `-o
+FILE`. `-o -` prints `view-sam` and `bam-index-stats` on standard output.
+
+| Verb | Extension |
+|---|---|
+| `wgs` | `.wgs_metrics` (the name `qc` writes) |
+| `multiple-metrics` | the prefix itself: each program adds its extension |
+| `raw-wgs` | `.raw_wgs_metrics` |
+| `wgs-with-non-zero-coverage` | `.wgs_non_zero_coverage_metrics` |
+| `targeted-pcr` | `.targeted_pcr_metrics` |
+| `library-complexity` | `.library_complexity_metrics` |
+| `oxo-g` | `.oxog_metrics` |
+| `bam-index-stats` | `.bam_index_stats` |
+| `index-depth` | `.index_depth_metrics` |
+| `check-duplicate-marking` | `.duplicate_marking_check` |
+| `jumping-library` | `.jumping_library_metrics` |
+| `view-sam` | `.view.sam` |
+| `calculate-read-group-checksum` | `.read_group_md5` |
+| `umi-prevalence` | `.umi_prevalence_metrics` |
+
+### 22.3 The plan
+
+`--dry-run` and `plan` show each materialized step and its disk, and the free-space
+refusal counts it in the temporary directory:
+
+```
+$ bammetrics chain tests/data/markdup.bam -o out/s --dry-run + raw-wgs -R ref.fa \
+    + add-comments-to-bam --comment c + raw-wgs -R ref.fa + merge-sam-files tests/data/markdup.bam \
+    + insert-size
+segment 1  one read of tests/data/markdup.bam
+  step 1  raw-wgs              materialize on in         out/s.in.raw_wgs_metrics
+  step 2  add-comments-to-bam  stream commented          no file
+  step 3  raw-wgs              materialize on commented  out/s.commented.raw_wgs_metrics
+  step 4  merge-sam-files      materialize, first read   writes its input to a file, then runs on it
+segment 2  a read of the BAM step 4 wrote (materialize)
+  step 4  merge-sam-files      stream merged             no file
+  step 5  insert-size          tap on merged             out/s.insert_size_metrics
+materialize step 4 merge-sam-files: writes its input to a file, about 1.2 KiB; writes its BAM, about 2.3 KiB
+materialize step 1 raw-wgs: reads the source file itself, nothing is copied
+materialize step 3 raw-wgs: writes its stream to a file, about 1.2 KiB
+temp disk  about 4.7 KiB in the system temporary directory
+```
+
+The copy takes the bytes per record of a spool (76 in coordinate order, 105 in another,
+section 15.3) times the records the source size gives. The BAM of a tool that writes one
+takes the same per record plus the size of every further input. The planner sums every
+copy as if all were held at once.
+
+### 22.4 Every tool and its role
+
+| Count | Role |
+|---|---|
+| 20 | tap |
+| 14 | transform |
+| 2 | split |
+| 17 | materialize (3 of them leave a stream) |
+| 18 | refused: 17 read no BAM, and `build-bam-index` |
+
+| Verb | Picard class | Role in a chain |
+|---|---|---|
+| `insert-size` | `CollectInsertSizeMetrics` | tap |
+| `alignment-summary` | `CollectAlignmentSummaryMetrics` | tap |
+| `quality-yield` | `CollectQualityYieldMetrics` | tap |
+| `hs-metrics` | `CollectHsMetrics` | tap |
+| `gc-bias` | `CollectGcBiasMetrics` | tap |
+| `quality-score-distribution` | `QualityScoreDistribution` | tap |
+| `mean-quality-by-cycle` | `MeanQualityByCycle` | tap |
+| `base-distribution-by-cycle` | `CollectBaseDistributionByCycle` | tap |
+| `duplicate-metrics` | `CollectDuplicateMetrics` | tap |
+| `library-complexity` | `EstimateLibraryComplexity` | materialize |
+| `multiple-metrics` | `CollectMultipleMetrics` | materialize |
+| `accumulate-quality-yield` | `AccumulateQualityYieldMetrics` | refused: reads no BAM |
+| `wgs` | `CollectWgsMetrics` | materialize |
+| `raw-wgs` | `CollectRawWgsMetrics` | materialize |
+| `wgs-with-non-zero-coverage` | `CollectWgsMetricsWithNonZeroCoverage` | materialize |
+| `targeted-pcr` | `CollectTargetedPcrMetrics` | materialize |
+| `rna-seq` | `CollectRnaSeqMetrics` | tap |
+| `variant-calling` | `CollectVariantCallingMetrics` | refused: reads no BAM |
+| `accumulate-variant-calling` | `AccumulateVariantCallingMetrics` | refused: reads no BAM |
+| `genotype-concordance` | `GenotypeConcordance` | refused: reads no BAM |
+| `bed-to-interval-list` | `BedToIntervalList` | refused: reads no BAM |
+| `compare-metrics` | `CompareMetrics` | refused: reads no BAM |
+| `create-sequence-dictionary` | `CreateSequenceDictionary` | refused: reads no BAM |
+| `mark-duplicates` | `MarkDuplicates` | transform, barrier, replays |
+| `sequencing-artifact` | `CollectSequencingArtifactMetrics` | tap |
+| `convert-sequencing-artifact-to-oxo-g` | `ConvertSequencingArtifactToOxoG` | refused: reads no BAM |
+| `oxo-g` | `CollectOxoGMetrics` | materialize |
+| `coverage-gaps` | `CollectCoverageGaps` | tap |
+| `sex-check` | `CollectSexCheckMetrics` | tap |
+| `bam-index-stats` | `BamIndexStats` | materialize |
+| `check-duplicate-marking` | `CheckDuplicateMarking` | materialize |
+| `jumping-library` | `CollectJumpingLibraryMetrics` | materialize |
+| `build-bam-index` | `BuildBamIndex` | refused: `write --index` writes the `.bai` |
+| `fifo-buffer` | `FifoBuffer` | refused: a chain has no pipe |
+| `view-sam` | `ViewSam` | materialize |
+| `sort-sam` | `SortSam` | transform, barrier, holds |
+| `mt-copy-number` | `CollectMtCopyNumberMetrics` | tap |
+| `exon-coverage` | `CollectExonCoverageMetrics` | tap |
+| `adapter-content` | `CollectAdapterContentMetrics` | tap |
+| `duplicate-by-tile` | `CollectDuplicateByTileMetrics` | tap |
+| `telomere` | `CollectTelomereMetrics` | tap |
+| `index-depth` | `CollectIndexDepthMetrics` | materialize |
+| `add-comments-to-bam` | `AddCommentsToBam` | transform, streams |
+| `replace-sam-header` | `ReplaceSamHeader` | transform, streams |
+| `add-o-a-tag` | `AddOATag` | transform, streams |
+| `clean-sam` | `CleanSam` | transform, streams |
+| `set-nm-md-and-uq-tags` | `SetNmMdAndUqTags` | transform, streams |
+| `set-nm-and-uq-tags` | `SetNmAndUqTags` | transform, streams |
+| `add-or-replace-read-groups` | `AddOrReplaceReadGroups` | transform, streams (a barrier when it sorts) |
+| `revert-original-base-qualities-and-add-mate-cigar` | `RevertOriginalBaseQualitiesAndAddMateCigar` | transform, barrier, holds |
+| `split-sam-by-library` | `SplitSamByLibrary` | split |
+| `split-sam-by-number-of-reads` | `SplitSamByNumberOfReads` | split |
+| `gather-bam-files` | `GatherBamFiles` | materialize, leaves `gathered` |
+| `calculate-read-group-checksum` | `CalculateReadGroupChecksum` | materialize |
+| `quality-yield-s-n-v-q` | `CollectQualityYieldMetricsSNVQ` | tap |
+| `umi-prevalence` | `CollectUmiPrevalenceMetrics` | materialize |
+| `rrbs` | `CollectRrbsMetrics` | tap |
+| `create-baf-regress-file` | `CreateBafRegressMetricsFile` | refused: reads no BAM |
+| `create-verify-i-d-intensity-contamination-file` | `CreateVerifyIDIntensityContaminationMetricsFile` | refused: reads no BAM |
+| `arrays-variant-calling` | `CollectArraysVariantCallingMetrics` | refused: reads no BAM |
+| `interval-list-tools` | `IntervalListTools` | refused: reads no BAM |
+| `interval-list-to-bed` | `IntervalListToBed` | refused: reads no BAM |
+| `vcf-to-interval-list` | `VcfToIntervalList` | refused: reads no BAM |
+| `scatter-intervals-by-ns` | `ScatterIntervalsByNs` | refused: reads no BAM |
+| `non-n-fasta-size` | `NonNFastaSize` | refused: reads no BAM |
+| `merge-sam-files` | `MergeSamFiles` | materialize, leaves `merged` |
+| `reorder-sam` | `ReorderSam` | transform, barrier, holds |
+| `fix-mate-information` | `FixMateInformation` | transform, barrier, holds |
+| `filter-sam-reads` | `FilterSamReads` | transform, streams (a barrier when it sorts) |
+| `downsample-sam` | `DownsampleSam` | transform, streams |
+| `position-based-downsample-sam` | `PositionBasedDownsampleSam` | materialize, leaves `downsampled` |
+
+### 22.5 What equals what
+
+`crates/cli/tests/chain_positions.rs` walks `TOOLS`. Each of the 53 tools that are steps
+runs first (`SOURCE + TOOL`), in the middle (`SOURCE + C1 + TOOL + C2`) and last
+(`SOURCE + C1 + C2 + TOOL`), where C1 and C2 are `add-comments-to-bam` steps, on a
+fixture with its options. Each run equals the staged run: the stream in front written by
+`write`, the tool's own verb on that file, then C2 on the tool's BAM. Metrics files are
+equal after their `StringHeader` lines, BAMs in their header lines (the `CL` of `@PG`
+aside) and every record as bytes, text files whole. The test fails when a registered
+tool has no row in its table of steps and none in its table of refusals, and each of the
+18 refusals must exit 2 with its reason.
+
+### 22.6 Departures from docs/07
+
+The decision rows D160 to D167 of docs/07 hold each departure with its reason:
+
+- D160: a table of materialized tools (`stage::materialize`), no `Tool` field; the tool
+  reads the source itself when it can.
+- D161: "every registered tool runs at any position" means the 53 tools that read a BAM
+  and are no `build-bam-index`.
+- D162: the W09 to W13 tools without a stage (`gather-bam-files`,
+  `calculate-read-group-checksum`, `umi-prevalence`, `merge-sam-files`,
+  `position-based-downsample-sam`) are materialized, not given a stage.
+- D163: `view-sam` is a materialized step, no longer refused.
+- D164: `check-duplicate-marking` fails after its file.
+- D165: the names under the prefix of the tools `qc` does not name.
+- D166: the plan counts a copy at the bytes per record of a spool, and a merge's BAM
+  adds the size of its further inputs; the steps after a merge keep the source's record
+  count.
+- D167: a second `INPUT` of `fix-mate-information` and `--write-reads-files` of
+  `filter-sam-reads` stay refused, with a new reason.

@@ -42,6 +42,8 @@ bammetrics reimplements Picard BAM QC metrics in Rust (on `noodles` 0.119) and e
 
 `PositionBasedDownsampleSam` (verb `position-based-downsample-sam`, wave W13) reads its input twice (`each_record`): the tile extents from `optical::ReadNameParser`, then the records whose `x, y` fall in a circle of area `FRACTION` per tile (`CircleSelector`), duplicate flags cleared unless `REMOVE_DUPLICATE_INFORMATION=false`; standard input refused, not a chain step. Truth from `test_position_based_downsample_sam.py`; fixtures from `tests/data/make_downsampled_bam.py`.
 
+The materialize fallback of wave W14 (docs/chaining.md section 22, `crates/core/src/stage/materialize.rs`, `crates/cli/src/chain/prepare/materialize.rs`): the 17 tools with neither a stage nor a collector (`ROWS`) run at any chain position through their own `run` on a file of the stream there: the source itself when the step reads it with no stage in front (`Frame::file`), else a BGZF level 3 BAM in a `TempDir` (indexed for `BamIndexStats` and `CollectIndexDepthMetrics`, header only for `CalculateReadGroupChecksum`). One that writes no BAM is a `StepKind::Alone` sink that fails alone; `MergeSamFiles`, `GatherBamFiles` and `PositionBasedDownsampleSam` are barriers whose BAM is the next stream (`Role::Materialize` with `leaves`), the stream their first `INPUT`, files after the verb or `--input` the further ones. `crates/cli/tests/chain_positions.rs` walks `TOOLS`: 53 steps at the first, a middle and the last position equal the staged run, 18 tools are refused with a reason (17 read no BAM, and `BuildBamIndex`).
+
 ## Commands
 
 ```bash

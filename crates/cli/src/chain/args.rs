@@ -280,6 +280,19 @@ pub(crate) fn is_materialized(verb: &Verb) -> bool {
     stage::materialize::materializes(verb.tool())
 }
 
+/// True for a materialized verb that takes files after the stream:
+/// `--input FILE` (or a file after the verb) is a further `INPUT`
+/// (`merge-sam-files`, `gather-bam-files`, `jumping-library`).
+pub(crate) fn takes_further_inputs(verb: &Verb) -> bool {
+    stage::materialize::row_of(verb.tool()).is_some_and(|row| row.several_inputs)
+}
+
+/// True when `key`, given on a step of `verb`, belongs to the chain. The
+/// input of a step that takes further inputs is its own.
+pub(crate) fn is_chain_key(verb: Option<&Verb>, key: Key) -> bool {
+    CHAIN_KEYS.contains(&key) && !(key == Key::Input && verb.is_some_and(takes_further_inputs))
+}
+
 /// True for a materialized verb that writes a BAM, which is the next
 /// stream (`merge-sam-files`).
 pub(crate) fn materialize_leaves(verb: &Verb) -> bool {
@@ -417,7 +430,7 @@ pub(crate) fn chain_option_on_step(error: &VerbError, place: &str) -> Option<Ver
 pub fn step_flags(verb: &Verb) -> Vec<Flag> {
     let mut flags: Vec<Flag> = step_parser_flags(verb)
         .into_iter()
-        .filter(|flag| !CHAIN_KEYS.contains(&flag.key))
+        .filter(|flag| !is_chain_key(Some(verb), flag.key))
         .filter(|flag| {
             let own_file = is_split(verb) || (is_materialized(verb) && !materialize_leaves(verb));
             !(verb.files == Files::Bam && flag.key == Key::Output && !own_file)
@@ -425,6 +438,10 @@ pub fn step_flags(verb: &Verb) -> Vec<Flag> {
         .collect();
     for flag in &mut flags {
         match (flag.key, verb.files) {
+            (Key::Input, _) => {
+                "A further input after the stream, the first INPUT; repeat for more."
+                    .clone_into(&mut flag.help);
+            }
             (Key::Output, _) if is_split(verb) => {
                 "The directory this step writes its files into; made when missing."
                     .clone_into(&mut flag.help);

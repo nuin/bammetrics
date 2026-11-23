@@ -31,6 +31,9 @@ needs_cli = pytest.mark.skipif(not CLI.exists(), reason="needs `cargo build --re
 
 # The four collectors of both documented examples, as chain steps and as
 # the extension qc gives each file.
+# The materialized steps that hand a BAM on: like a transform, no output.
+LEAVES = ('merge_sam_files', 'gather_bam_files', 'position_based_downsample_sam')
+
 TAPS = {
     "alignment_summary": ".alignment_summary_metrics",
     "insert_size": ".insert_size_metrics",
@@ -255,6 +258,40 @@ def test_panel_names_the_baits_and_the_targets_of_hs_metrics(tmp_path):
     assert all(copied == step for copied in round_trips(step))
 
 
+def test_a_materialized_step_equals_its_tool_on_the_staged_file(tmp_path):
+    """wgs, merge_sam_files and calculate_read_group_checksum have neither a
+    stage nor a collector: each runs on a file of the stream at its position
+    (docs/chaining.md, "Materialize")."""
+    staged = tmp_path / "staged.bam"
+    bm.chain(MARKDUP, [bm.step("add_comments_to_bam", comment=["c"]),
+                       bm.step("write", output=staged)])
+    bm.collect_wgs_metrics(staged, reference_sequence=REFERENCE,
+                           output=tmp_path / "staged.wgs_metrics")
+    run = bm.chain(MARKDUP, [bm.step("add_comments_to_bam", comment=["c"]),
+                             bm.step("wgs", reference_sequence=REFERENCE),
+                             bm.step("calculate_read_group_checksum",
+                                     output=tmp_path / "chain.md5"),
+                             bm.step("merge_sam_files", input=[MARKDUP]),
+                             "insert_size"],
+                   output=tmp_path / "chain")
+    assert run.exit_code == 0, run.errors
+    assert [(s.verb, s.role, s.leaves) for s in run.stages] == [
+        ("add-comments-to-bam", "transform", "commented"),
+        ("wgs", "materialize", None),
+        ("calculate-read-group-checksum", "materialize", None),
+        ("merge-sam-files", "materialize", "merged"),
+        ("insert-size", "tap", None),
+    ]
+    assert body(tmp_path / "chain.commented.wgs_metrics") == body(
+        tmp_path / "staged.wgs_metrics")
+    assert (tmp_path / "chain.md5").read_text() == bm.calculate_read_group_checksum(
+        staged, output=tmp_path / "staged.md5")[0]["checksum"]
+    inserts = bm.read_metrics(tmp_path / "chain.insert_size_metrics")
+    pairs = inserts["classes"][0]["rows"][0]["READ_PAIRS"]
+    staged_pairs = bm.collect_insert_size_metrics(MARKDUP)[0]["READ_PAIRS"]
+    assert pairs == 2 * staged_pairs
+
+
 def test_stages_hold_each_steps_status_files_and_record_counts(tmp_path):
     run = bm.chain(MARKDUP, ["quality_yield", bm.step("mark_duplicates", as_="dedup",
                                                       remove_duplicates=True),
@@ -369,8 +406,8 @@ def test_a_step_is_checked_when_it_is_made():
      r'chain: unknown step "inser_size"\n  did you mean insert_size\?\n  steps: insert_size, '),
     (lambda: bm.step("inser-size"), bm.UsageError, r"did you mean insert-size\?"),
     (lambda: bm.Step("mark_duplicats"), bm.UsageError, r"did you mean mark_duplicates\?"),
-    (lambda: bm.step("wgs"), bm.UsageError,
-     "step wgs: CollectWgsMetrics has no stage and does not read a BAM in one pass"),
+    (lambda: bm.step("non_n_fasta_size"), bm.UsageError,
+     "step non-n-fasta-size: NonNFastaSize reads a FASTA file and no BAM"),
     # FifoBuffer buffers a pipe, and a chain has none: its own reason, in every spelling.
     (lambda: bm.step("fifo_buffer"), bm.UsageError,
      "step fifo-buffer: FifoBuffer buffers the pipe between two commands and a chain has no "
@@ -439,7 +476,7 @@ def test_a_step_takes_the_keywords_of_its_tools_function():
         function = stub_function("".join(
             "_" + c.lower() if c.isupper() else c for c in steps[verb]).lstrip("_"))
         for keyword in (a.arg for a in function.args.kwonlyargs):
-            if keyword == "output" and role == "transform":
+            if keyword == "output" and (role == "transform" or verb in LEAVES):
                 with pytest.raises(bm.UsageError, match="writes no BAM in a chain"):
                     bm.step(verb, output=None)
             elif keyword == "validation_stringency":

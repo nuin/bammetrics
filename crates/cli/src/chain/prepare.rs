@@ -23,9 +23,9 @@ use bammetrics_core::{cram, java, pass};
 use clap::ValueEnum;
 
 use super::args::{
-    AS, CHAIN_KEYS, COMPRESSION_LEVEL, INDEX, MD5, OUTPUT_FORMAT, STEPS_HINT, belongs_to_chain,
-    chain_option_on_step, find_step, is_materialized, is_split, is_transform, materialize_leaves,
-    not_a_step, step_parser_flags, unknown_step, write_flags,
+    AS, COMPRESSION_LEVEL, INDEX, MD5, OUTPUT_FORMAT, STEPS_HINT, belongs_to_chain,
+    chain_option_on_step, find_step, is_chain_key, is_materialized, is_split, is_transform,
+    materialize_leaves, not_a_step, step_parser_flags, unknown_step, write_flags,
 };
 use super::claims::{
     Read, check_one_stdout, claim_outputs, inputs_of, refuse_overwriting_inputs, refuse_unresolved,
@@ -374,7 +374,7 @@ fn draft(spec: &StepSpec, number: usize) -> Result<Draft<'_>, VerbError> {
         .parsed
         .given
         .iter()
-        .find(|given| CHAIN_KEYS.contains(&given.key))
+        .find(|given| is_chain_key(Some(verb), given.key))
     {
         return Err(belongs_to_chain(&draft.place(), &given.spelled));
     }

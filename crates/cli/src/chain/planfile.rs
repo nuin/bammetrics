@@ -37,8 +37,7 @@ use bammetrics_core::registry::{Ty, did_you_mean};
 use bammetrics_core::toml::{Entry, Scalar, Table, parse_tables};
 
 use super::args::{
-    CHAIN_KEYS as CHAIN_FLAGS, chain_option, find_step, step_parser_flags, unknown_step,
-    write_flags,
+    chain_option, find_step, is_chain_key, step_parser_flags, unknown_step, write_flags,
 };
 use super::{EMPTY_PREFIX_HINT, PLAN_FILE_CAP, Spec, StepSpec, VERB, WRITE, read_capped};
 use crate::error::VerbError;
@@ -289,16 +288,16 @@ fn step_table(at: &At, table: &Table, number: usize) -> Result<StepSpec, VerbErr
             )
         })?;
     let name = string(at, verb_entry)?;
-    let flags = if name == WRITE {
-        write_flags()
+    let step_verb = if name == WRITE {
+        None
     } else {
-        let verb = find_step(&name).ok_or_else(|| {
+        Some(find_step(&name).ok_or_else(|| {
             let mut error = unknown_step(&name, None);
             error.what = format!("{}:{}: {}", at.file, verb_entry.line, error.what);
             error
-        })?;
-        step_parser_flags(verb)
+        })?)
     };
+    let flags = step_verb.map_or_else(write_flags, step_parser_flags);
     let label = format!("step {number} ({name})");
     let mut args = Vec::new();
     let mut seen = HashSet::new();
@@ -314,7 +313,7 @@ fn step_table(at: &At, table: &Table, number: usize) -> Result<StepSpec, VerbErr
         // A chain option: one the verb's own flags hold (`threads`), or
         // one no step has (`also`).
         let of_chain = match found {
-            Some(flag) if CHAIN_FLAGS.contains(&flag.key) => {
+            Some(flag) if is_chain_key(step_verb, flag.key) => {
                 chain_option(&format!("--{}", flag.long))
             }
             Some(_) => None,

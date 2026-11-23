@@ -788,6 +788,64 @@ fn a_tool_that_is_no_step_is_refused_with_its_reason() {
     }
 }
 
+/// The further inputs of a materialized step read alike as files after the
+/// verb, as `--input`, as `INPUT=` and as a plan file's `input` list.
+#[test]
+fn further_inputs_read_alike_in_every_spelling() {
+    let dir = fresh_dir("inputs");
+    let out = |name: &str| dir.join(name).display().to_string();
+    let plan = dir.join("plan.toml");
+    fs::write(
+        &plan,
+        format!(
+            "[chain]\nsource = \"{MD}\"\n\n[[step]]\nverb = \"merge-sam-files\"\n\
+             input = [\"{OXOG}\"]\n\n[[step]]\nverb = \"write\"\noutput = \"{}\"\n",
+            out("plan.bam")
+        ),
+    )
+    .expect("plan file");
+    let forms: [Vec<String>; 3] = [
+        vec![OXOG.to_owned()],
+        vec!["--input".to_owned(), OXOG.to_owned()],
+        vec![format!("INPUT={OXOG}")],
+    ];
+    for (n, form) in forms.iter().enumerate() {
+        let mut argv = vec![
+            "chain".to_owned(),
+            MD.to_owned(),
+            "-q".to_owned(),
+            "+".to_owned(),
+            "merge-sam-files".to_owned(),
+        ];
+        argv.extend(form.iter().cloned());
+        argv.extend(["+".to_owned(), "write".to_owned(), out(&format!("{n}.bam"))]);
+        let output = bammetrics(&argv);
+        assert!(output.status.success(), "{argv:?}: {output:?}");
+    }
+    let output = bammetrics(&[
+        "chain".to_owned(),
+        "--plan".to_owned(),
+        plan.display().to_string(),
+        "-q".to_owned(),
+    ]);
+    assert!(output.status.success(), "{output:?}");
+    let staged = dir.join("staged.bam");
+    let output = bammetrics(&[
+        "merge-sam-files".to_owned(),
+        MD.to_owned(),
+        OXOG.to_owned(),
+        "-o".to_owned(),
+        staged.display().to_string(),
+    ]);
+    assert!(output.status.success(), "{output:?}");
+    let want = bam(&staged);
+    assert!(want.1.len() > 36, "{}", want.1.len());
+    for name in ["0.bam", "1.bam", "2.bam", "plan.bam"] {
+        assert_eq!(bam(&dir.join(name)), want, "{name}");
+    }
+    fs::remove_dir_all(&dir).expect("cleanup");
+}
+
 #[test]
 fn every_tool_that_reads_a_bam_runs_at_any_position_as_staged() {
     let dir = fresh_dir("all");
