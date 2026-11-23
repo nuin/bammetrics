@@ -55,24 +55,26 @@ pub(super) struct Resolved {
 enum Kind {
     Bam,
     Sam,
+    /// A kind the writer cannot make yet: its name and its wave.
+    Later(&'static str, &'static str),
 }
 
-/// The extension of a name that is a result, as `-o` gives it: `.bam`,
-/// `.sam` or `.cram` in any case. `Err` holds the kind and wave of a name
-/// the writer cannot make yet.
-fn result_of(text: &str) -> Option<Result<(Kind, usize), (&'static str, &'static str)>> {
+/// The kind of a name that is a result, as `-o` gives it: one ending in
+/// `.bam`, `.sam` or `.cram` in any case, and not a directory.
+fn result_of(text: &str) -> Option<Kind> {
     let lower = text.to_ascii_lowercase();
     if Path::new(text).is_dir() || text.ends_with('/') {
         return None;
     }
     if lower.ends_with(".bam") {
-        return Some(Ok((Kind::Bam, 4)));
+        return Some(Kind::Bam);
     }
     if lower.ends_with(".sam") {
-        return Some(Ok((Kind::Sam, 4)));
+        return Some(Kind::Sam);
     }
     if lower.ends_with(".cram") {
-        return Some(Err(later_kind(Path::new(text)).unwrap_or(("CRAM", "W15"))));
+        let (kind, wave) = later_kind(Path::new(text)).unwrap_or(("CRAM", "W15"));
+        return Some(Kind::Later(kind, wave));
     }
     None
 }
@@ -102,19 +104,16 @@ fn result_output(spec: &mut Spec) -> Result<(), VerbError> {
         )
         .hint(format!("write {text} as a step copies the records")));
     }
-    let (kind, cut) = match result {
-        Ok(found) => found,
-        Err((kind, wave)) => {
-            return Err(usage(format!(
-                "-o {text}: bammetrics writes BAM and SAM only: {kind} output is wave {wave} of \
-                 docs/07_full_parity_program.md"
-            ))
-            .from("-o")
-            .hint("-o out.bam writes a BAM"));
-        }
-    };
+    if let Kind::Later(kind, wave) = result {
+        return Err(usage(format!(
+            "-o {text}: bammetrics writes BAM and SAM only: {kind} output is wave {wave} of \
+             docs/07_full_parity_program.md"
+        ))
+        .from("-o")
+        .hint("-o out.bam writes a BAM"));
+    }
     let mut args = vec![text.clone()];
-    if kind == Kind::Bam {
+    if result == Kind::Bam {
         args.push("--index".to_owned());
     }
     spec.steps.push(StepSpec {
@@ -122,7 +121,7 @@ fn result_output(spec: &mut Spec) -> Result<(), VerbError> {
         args,
         origin: None,
     });
-    spec.prefix = Some(text[..text.len() - cut].to_owned());
+    spec.prefix = Some(text[..text.len() - 4].to_owned());
     Ok(())
 }
 
@@ -235,7 +234,7 @@ pub(super) fn resolve(spec: &Spec) -> Result<Resolved, VerbError> {
             .prefix
             .as_deref()
             .and_then(result_of)
-            .is_some_and(|r| r.is_ok());
+            .is_some_and(|kind| kind == Kind::Bam);
         if !names_bam {
             return Err(usage(format!(
                 "recipe {name} writes a BAM: -o names it (-o out.bam)"

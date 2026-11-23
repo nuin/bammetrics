@@ -237,10 +237,6 @@ pub fn run() -> error::Result<u8> {
             "plan" if chain::is_chain(rest) => return Ok(chain::run_plan(rest)?),
             config::VERB => return Ok(config::run(rest)?),
             chain::recipes::LIST_VERB => return Ok(chain::recipes::run_list(rest)?),
-            // A recipe's name runs it: `bammetrics prep BAM -o out.bam`.
-            other if !info::CLAP_VERBS.contains(&other) && chain::recipes::exists(other) => {
-                return Ok(chain::recipes::run_shorthand(other, rest)?);
-            }
             "tools" => {
                 print!("{}", info::tools(&Cli::command()));
                 return Ok(0);
@@ -256,6 +252,10 @@ pub fn run() -> error::Result<u8> {
             "completions" => {
                 info::completions(Cli::command(), rest)?;
                 return Ok(0);
+            }
+            // After every verb, a recipe's name runs it: `bammetrics prep BAM -o out.bam`.
+            other if !info::CLAP_VERBS.contains(&other) && chain::recipes::exists(other) => {
+                return Ok(chain::recipes::run_shorthand(other, rest)?);
             }
             other if !other.starts_with('-') && !info::CLAP_VERBS.contains(&other) => {
                 return Err(info::unknown_verb(other).into());
