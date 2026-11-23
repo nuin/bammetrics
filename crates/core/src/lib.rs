@@ -27,6 +27,7 @@ pub mod commons_math;
 pub mod compare_metrics;
 pub mod coverage_gaps;
 pub mod cram;
+pub mod cram_writer;
 pub mod create_sequence_dictionary;
 pub mod cycle;
 pub mod doctor;
