@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/insert_size.bam
+insert-size
+-o
+OUT/r.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: -o OUT/r.bam names the BAM a chain writes, and no step of this chain changes the records (from -o)
+  -o PREFIX names the metrics files: -o out/sample gives out/sample.insert_size_metrics
+  write OUT/r.bam as a step copies the records

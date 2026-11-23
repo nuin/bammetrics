@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/insert_size.bam
+--recipe
+qc-only
+insert-size
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: --recipe qc-only gives the steps: a step on the command line cannot be added (from --recipe)
+  STEP.option=value sets an option of a recipe's step: bammetrics recipes lists them

@@ -1,0 +1,12 @@
+## argv
+downsample
+tests/data/oxog.bam
+-o
+OUT/d.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: recipe downsample needs downsample-sam.probability=VALUE
+  downsample-sam.probability: The proportion of templates to keep, 0 to 1 (default 1).
+  bammetrics downsample BAM -o out.bam downsample-sam.probability=VALUE

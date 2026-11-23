@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/insert_size.bam
+reorder-sam
+-o
+OUT/r.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (reorder-sam): missing --sequence-dictionary: no reference to take it from
+  give --sequence-dictionary FILE on the step
+  or -R FASTA, or reference in the config file: its .dict, else its .fai

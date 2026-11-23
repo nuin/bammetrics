@@ -628,3 +628,48 @@ def test_chain_reads_standard_input_and_a_cram(tmp_path):
     piped = bam(tmp_path / "p.marked.bam")
     bm.chain(MARKDUP, ["mark_duplicates", "write"], output=tmp_path / "f")
     assert piped[1] == bam(tmp_path / "f.marked.bam")[1]
+
+
+def test_output_naming_a_bam_writes_it_indexed_and_names_the_metrics(tmp_path, monkeypatch):
+    # The -o rule of the command: a chain with a transform and no write
+    # step writes OUTPUT with its index, the metrics files named from it.
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    run = bm.chain(MARKDUP, ["mark_duplicates", "insert_size"], output=tmp_path / "r.bam",
+                   config=False)
+    assert sorted(Path(f).name for f in run.files) == [
+        "r.bai", "r.bam", "r.insert_size_metrics", "r.marked.duplication_metrics"]
+    assert run.stages[-1].verb == "write"
+    with pytest.raises(bm.UsageError, match="no step of this chain changes the records"):
+        bm.chain(BAM, ["insert_size"], output=tmp_path / "t.bam")
+    with pytest.raises(bm.UsageError, match="config takes True or False"):
+        bm.chain(BAM, ["insert_size"], output=tmp_path / "t", config="no")
+
+
+def test_the_config_reference_is_used_unless_config_is_false(tmp_path, monkeypatch):
+    config = tmp_path / "config" / "bammetrics"
+    config.mkdir(parents=True)
+    (config / "config.toml").write_text(f'reference = "{REFERENCE}"\n')
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.delenv("BAMMETRICS_REFERENCE", raising=False)
+    plan = bm.chain(BAM, ["reorder_sam", "insert_size"], output=tmp_path / "r.bam", dry_run=True)
+    assert str(REFERENCE) in plan
+    with pytest.raises(bm.UsageError, match="missing --sequence-dictionary"):
+        bm.chain(BAM, ["reorder_sam"], output=tmp_path / "r.bam", config=False)
+
+
+def test_a_recipe_runs_its_chain(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    run = bm.recipe("qc-only", BAM, output=tmp_path / "s")
+    assert sorted(Path(f).name for f in run.files) == sorted(f"s{e}" for e in TAPS.values())
+    bm.chain(BAM, ["quality_yield", "alignment_summary", "insert_size", "duplicate_metrics"],
+             output=tmp_path / "h")
+    for extension in TAPS.values():
+        assert body(tmp_path / f"s{extension}") == body(tmp_path / f"h{extension}")
+    down = bm.recipe("downsample", DATA / "oxog.bam", output=tmp_path / "d.bam",
+                     set={"downsample-sam.probability": 0.5})
+    assert down.stages[0].records_out == 60
+    with pytest.raises(bm.UsageError, match="needs downsample-sam.probability=VALUE"):
+        bm.recipe("downsample", DATA / "oxog.bam", output=tmp_path / "e.bam")
+    with pytest.raises(bm.UsageError, match="no recipe \"prp\""):
+        bm.recipe("prp", BAM, output=tmp_path / "x.bam")
+    assert "quality-yield" in bm.recipe("qc-only", BAM, output=tmp_path / "p", dry_run=True)

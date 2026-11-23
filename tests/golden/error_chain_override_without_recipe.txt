@@ -1,0 +1,11 @@
+## argv
+chain
+tests/data/insert_size.bam
+insert-size
+insert-size.minimum-pct=0.1
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: insert-size.minimum-pct=0.1 sets an option of a recipe's step, and no recipe is named (from insert-size.minimum-pct=0.1)
+  bammetrics chain BAM --recipe NAME STEP.option=value; on a step: STEP --option VALUE
