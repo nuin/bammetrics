@@ -910,8 +910,19 @@ pub fn summary(outcome: &Outcome) -> Vec<String> {
 /// the exit code.
 pub(super) fn command(chain: Chain) -> Result<u8, VerbError> {
     let say = |line: &str| eprintln!("bammetrics {VERB}: {line}");
-    if chain.prefix_origin == PrefixOrigin::SourceName && chain.prefix_used && !chain.quiet {
-        say(&format!("no -o, files go to {}.*", chain.prefix.display()));
+    if chain.prefix_used && !chain.quiet {
+        let from = match chain.prefix_origin {
+            PrefixOrigin::Option | PrefixOrigin::Directory => None,
+            PrefixOrigin::SourceName => Some(""),
+            PrefixOrigin::WritePath => Some(", beside the BAM of the write step"),
+            PrefixOrigin::SplitDirectory => Some(", in the directory of the split step"),
+        };
+        if let Some(from) = from {
+            say(&format!(
+                "no -o, files go to {}.*{from}",
+                chain.prefix.display()
+            ));
+        }
     }
     for step in &chain.steps {
         if let (true, Some(command)) = (chain.verbose, &step.command) {

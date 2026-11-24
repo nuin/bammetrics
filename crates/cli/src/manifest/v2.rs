@@ -503,7 +503,7 @@ mod tests {
         failed.outputs.clear();
         failed.skipped = true;
         ChainManifest {
-            tool_version: "0.31.0".to_owned(),
+            tool_version: env!("CARGO_PKG_VERSION").to_owned(),
             sample: "NA12878".to_owned(),
             directory: PathBuf::from("/work"),
             source: FileRecord {
@@ -556,7 +556,7 @@ mod tests {
         assert!(parse_any(&deep).is_err());
         // A schema 1 document of the qc verb reads as one.
         let qc = super::super::Manifest {
-            tool_version: "0.31.0".to_owned(),
+            tool_version: env!("CARGO_PKG_VERSION").to_owned(),
             sample: "s".to_owned(),
             bam: PathBuf::from("a.bam"),
             prefix: PathBuf::from("out/s"),

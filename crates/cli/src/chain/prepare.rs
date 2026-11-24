@@ -103,6 +103,12 @@ pub enum PrefixOrigin {
     Directory,
     /// No `-o`: `./` plus the source name.
     SourceName,
+    /// No `-o`: the path of the last `write` step without its `.bam` or
+    /// `.sam`.
+    WritePath,
+    /// No `-o` and no `write` with a path: a split step's `-o DIR` plus
+    /// the source name.
+    SplitDirectory,
 }
 
 /// One step, ready to run.
@@ -1157,6 +1163,49 @@ fn prefix(spec: &Spec, source: &str) -> Result<(PathBuf, PrefixOrigin), VerbErro
     }
 }
 
+/// The prefix of a chain without `-o` whose step names where it writes:
+/// the path of the last `write` step without its `.bam` or `.sam`
+/// (`write d/out.bam` gives `d/out`), else the last split step's `-o DIR`
+/// plus the source name. Standard output and a device under `/dev` name
+/// no place.
+fn step_prefix(drafts: &[Draft], source: &str) -> Option<(PathBuf, PrefixOrigin)> {
+    let named = |value: &String| value != "-" && !value.is_empty() && !value.starts_with("/dev/");
+    let written = drafts
+        .iter()
+        .rev()
+        .filter(|draft| matches!(draft.what, What::Write))
+        .find_map(|draft| {
+            let parsed = &draft.parsed;
+            parsed
+                .positional
+                .iter()
+                .chain(parsed.all(Key::Output).flat_map(|given| &given.values))
+                .next()
+                .filter(|path| named(path))
+        });
+    if let Some(path) = written {
+        let lower = path.to_ascii_lowercase();
+        let stem = if lower.ends_with(".bam") || lower.ends_with(".sam") {
+            &path[..path.len() - 4]
+        } else {
+            path.as_str()
+        };
+        return Some((PathBuf::from(stem), PrefixOrigin::WritePath));
+    }
+    drafts.iter().rev().find_map(|draft| match draft.what {
+        What::Tool(_, Role::Split) => {
+            let dir = &draft.parsed.last(Key::Output)?.values[0];
+            named(dir).then(|| {
+                (
+                    Path::new(dir).join(verbs::stem(source)),
+                    PrefixOrigin::SplitDirectory,
+                )
+            })
+        }
+        _ => None,
+    })
+}
+
 /// The chain's `--format` list: `picard` first.
 fn chain_formats(spec: &Spec) -> Result<Vec<Format>, VerbError> {
     let Some(value) = &spec.formats else {
@@ -1239,6 +1288,12 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
         .enumerate()
         .map(|(index, step)| draft(step, index + 1))
         .collect::<Result<Vec<_>, _>>()?;
+    let (prefix, prefix_origin) = match prefix_origin {
+        PrefixOrigin::SourceName => {
+            step_prefix(&drafts, &source).unwrap_or((prefix, prefix_origin))
+        }
+        _ => (prefix, prefix_origin),
+    };
     let positions = positions(&drafts)?;
     let last_stream = positions
         .iter()

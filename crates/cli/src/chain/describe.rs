@@ -358,6 +358,10 @@ pub fn text(chain: &Chain) -> Result<String, VerbError> {
         PrefixOrigin::Option => "from -o",
         PrefixOrigin::Directory => "from -o, a directory, and the source name",
         PrefixOrigin::SourceName => "from the source name, no -o",
+        PrefixOrigin::WritePath => "from the write step's path, no -o",
+        PrefixOrigin::SplitDirectory => {
+            "from the split step's directory and the source name, no -o"
+        }
     };
     if chain.prefix_used {
         let _ = writeln!(out, "  prefix    {} ({origin})", chain.prefix.display());
