@@ -1,0 +1,16 @@
+## argv
+make-vcf-sample-name-map
+tests/data/vcf_writer/truth.vcf
+tests/data/vcf_tools/u.vcf
+tests/data/vcf_writer/../vcf_writer/truth.vcf
+-o
+OUT/cohort.sample_map
+## exit
+0
+## stdout
+## stderr
+bammetrics: Duplicate sample: T. Sample was found in both tests/data/vcf_writer/truth.vcf and in tests/data/vcf_writer/../vcf_writer/truth.vcf
+## file cohort.sample_map
+tests/data/vcf_writer/truth.vcf	T
+tests/data/vcf_tools/u.vcf	U
+tests/data/vcf_writer/../vcf_writer/truth.vcf	T

@@ -1758,7 +1758,6 @@ def split_vcfs(
     sequence_dictionary: _Path | None = None,
     strict: bool | None = None,
     create_index: bool | None = None,
-    create_md5_file: bool | None = None,
     compression_level: int | None = None,
     verbosity: str | None = None,
 ) -> list[dict[str, Any]]:
@@ -1772,7 +1771,6 @@ def make_sites_only_vcf(
     output: _Path,
     sample: str | Sequence[str] | None = None,
     create_index: bool | None = None,
-    create_md5_file: bool | None = None,
     compression_level: int | None = None,
 ) -> list[dict[str, Any]]:
     """MakeSitesOnlyVcf: writes OUTPUT: every record of the VCF without its genotypes, or

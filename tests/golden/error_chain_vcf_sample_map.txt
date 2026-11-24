@@ -1,0 +1,13 @@
+## argv
+chain
+tests/data/vcf_writer/calls.vcf
+make-vcf-sample-name-map
+-o
+OUT/r
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (make-vcf-sample-name-map): MakeVcfSampleNameMap reads the headers of several VCF files and writes a sample map, and a chain hands on the records of one stream: it cannot be a step
+  run it on the VCF files: bammetrics make-vcf-sample-name-map A.vcf.gz B.vcf.gz -o cohort.sample_map
+  the steps: bammetrics chain --help

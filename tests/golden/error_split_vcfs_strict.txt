@@ -1,0 +1,10 @@
+## argv
+SplitVcfs
+I=tests/data/vcf_tools/types.vcf
+SNP_OUTPUT=OUT/snp.vcf.gz
+INDEL_OUTPUT=OUT/indel.vcf.gz
+## exit
+1
+## stdout
+## stderr
+bammetrics: tests/data/vcf_tools/types.vcf: Found a record with type MNP

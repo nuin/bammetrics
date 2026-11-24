@@ -505,6 +505,18 @@ const REFUSED: &[(&str, &str, &str)] = &[
         "check-terminator-block",
         "reads the last bytes of a file",
     ),
+    // Steps of a VCF stream (crates/cli/tests/vcf_chain.rs): refused on a BAM.
+    ("SplitVcfs", "split-vcfs", "reads VCF records"),
+    (
+        "MakeSitesOnlyVcf",
+        "make-sites-only-vcf",
+        "reads VCF records",
+    ),
+    (
+        "MakeVcfSampleNameMap",
+        "make-vcf-sample-name-map",
+        "writes a sample map",
+    ),
 ];
 
 fn root() -> PathBuf {
@@ -793,7 +805,7 @@ fn every_registered_tool_has_a_step_or_a_refusal() {
         "each tool needs one row in CASES or REFUSED: {missing:?}"
     );
     assert_eq!(CASES.len() + REFUSED.len(), TOOLS.len());
-    assert_eq!((CASES.len(), REFUSED.len()), (53, 21));
+    assert_eq!((CASES.len(), REFUSED.len()), (53, 24));
 }
 
 #[test]

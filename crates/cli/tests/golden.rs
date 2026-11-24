@@ -113,6 +113,8 @@ const FIXTURES: &[(&str, &str)] = &[
     ("VW_CALL", "tests/data/vcf_writer/call.vcf"),
     ("VW_CORNERS", "tests/data/vcf_writer/corners.vcf"),
     ("VW_BAD", "tests/data/vcf_writer/bad_filter.vcf"),
+    ("VT_TYPES", "tests/data/vcf_tools/types.vcf"),
+    ("VT_ONE", "tests/data/vcf_tools/u.vcf"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -1326,6 +1328,35 @@ const VCF_WRITER_CASES: &[Case] = &[
     case!("error_chain_vcf_qc", "chain", "VW_CALLS", "-o", "OUT/s", "+", "qc"),
 ];
 
+/// SplitVcfs, MakeSitesOnlyVcf and MakeVcfSampleNameMap (wave W16) on
+/// tests/data/vcf_tools (tests/data/make_vcf_tools_fixtures.py) and the
+/// writer's fixtures: the Picard faces, the verbs, the chain steps and the
+/// errors.
+#[rustfmt::skip]
+const VCF_TOOLS_CASES: &[Case] = &[
+    case!("picard_split_vcfs", "SplitVcfs", "I=VW_CALLS", "SNP_OUTPUT=OUT/snp.vcf.gz", "INDEL_OUTPUT=OUT/indel.vcf.gz", "STRICT=false"),
+    // Plain outputs under the default CREATE_INDEX: no .idx, a note; Picard's DEBUG line.
+    case!("picard_split_vcfs_plain_debug", "SplitVcfs", "I=VT_TYPES", "SNP_OUTPUT=OUT/snp.vcf", "INDEL_OUTPUT=OUT/indel.vcf", "STRICT=false", "VERBOSITY=DEBUG", "CREATE_MD5_FILE=true"),
+    case!("verb_split_vcfs", "split-vcfs", "VT_TYPES", "-o", "OUT/t", "--strict", "false"),
+    case!("error_split_vcfs_strict", "SplitVcfs", "I=VT_TYPES", "SNP_OUTPUT=OUT/snp.vcf.gz", "INDEL_OUTPUT=OUT/indel.vcf.gz"),
+    case!("error_split_vcfs_plain_index", "SplitVcfs", "I=VT_TYPES", "SNP_OUTPUT=OUT/snp.vcf", "INDEL_OUTPUT=OUT/indel.vcf.gz", "STRICT=false", "CREATE_INDEX=true"),
+    case!("error_split_vcfs_one_file", "split-vcfs", "VT_TYPES", "--snp-output", "OUT/x.vcf.gz", "--indel-output", "OUT/x.vcf.gz"),
+    case!("picard_make_sites_only_vcf", "MakeSitesOnlyVcf", "I=VW_CALLS", "O=OUT/sites.vcf.gz"),
+    case!("picard_make_sites_only_vcf_samples", "MakeSitesOnlyVcf", "I=VT_TYPES", "O=OUT/sites.vcf", "SAMPLE=S1", "SAMPLE=NOPE", "CREATE_INDEX=false"),
+    case!("verb_make_sites_only_vcf", "make-sites-only-vcf", "VW_CALLS_GZ", "-o", "OUT/sites.vcf", "--create-index", "false", "--sample", "S2"),
+    case!("error_make_sites_only_vcf_missing", "MakeSitesOnlyVcf", "I=tests/data/vcf_tools/none.vcf", "O=OUT/sites.vcf.gz"),
+    case!("picard_make_vcf_sample_name_map", "MakeVcfSampleNameMap", "I=VW_TRUTH", "I=VT_ONE", "O=OUT/cohort.sample_map"),
+    // The sample T twice: both lines and Picard's warning.
+    case!("verb_make_vcf_sample_name_map", "make-vcf-sample-name-map", "VW_TRUTH", "VT_ONE", "tests/data/vcf_writer/../vcf_writer/truth.vcf", "-o", "OUT/cohort.sample_map"),
+    case!("error_make_vcf_sample_name_map_two_samples", "MakeVcfSampleNameMap", "I=VW_CALL", "O=OUT/cohort.sample_map"),
+    case!("chain_vcf_sites_split", "chain", "VW_CALLS", "make-sites-only-vcf", "split-vcfs", "--strict", "false", "-o", "OUT/r"),
+    case!("chain_vcf_sites_samples", "chain", "VT_TYPES", "make-sites-only-vcf", "--sample", "S1", "-o", "OUT/s.vcf.gz"),
+    case!("plan_chain_vcf_sites_split", "chain", "VW_CALLS", "make-sites-only-vcf", "--sample", "S1", "split-vcfs", "--strict", "false", "variant-calling", "--dbsnp", "VW_DBSNP", "-o", "OUT/r", "--dry-run"),
+    case!("error_chain_vcf_sites_keep", "chain", "VW_CALLS", "make-sites-only-vcf", "--keep", "-o", "OUT/r.vcf.gz"),
+    case!("error_chain_vcf_sample_map", "chain", "VW_CALLS", "make-vcf-sample-name-map", "-o", "OUT/r"),
+    case!("error_chain_split_vcfs_on_bam", "chain", "MD", "split-vcfs", "-o", "OUT/r"),
+];
+
 /// `SamFormatConverter` (wave W15): the conversions by the name of `O`, the
 /// verb, and the errors Picard gives or bammetrics adds.
 #[rustfmt::skip]
@@ -2146,6 +2177,11 @@ fn documented_vcf_writer_commands_on_the_fixtures() {
 }
 
 #[test]
+fn documented_vcf_tool_commands_on_the_fixtures() {
+    check(VCF_TOOLS_CASES);
+}
+
+#[test]
 fn documented_sam_format_converter_commands_on_the_fixtures() {
     check(SAM_FORMAT_CONVERTER_CASES);
 }
@@ -2283,6 +2319,7 @@ fn case_names_are_unique() {
         .chain(SAM_FORMAT_CONVERTER_CASES)
         .chain(COMPARE_TERMINATOR_CASES)
         .chain(VCF_WRITER_CASES)
+        .chain(VCF_TOOLS_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .chain(RESUME_CASES.iter().map(|s| s.name))
