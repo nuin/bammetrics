@@ -245,7 +245,7 @@ def compare(left, right, args, tmp_path, label):
     the exit code, the standard output lines and the row."""
     results, outputs = {}, {}
     for side in ("picard", "ours"):
-        outputs[side] = tmp_path / f"{label}.{side}.txt".replace(" ", "_")
+        outputs[side] = tmp_path / f"{label}.{side}.txt".replace(" ", "_").replace("/", "_")
         results[side] = run(side, [left, right, f"O={outputs[side]}", SILENT, *args])
     picard, ours = results["picard"], results["ours"]
     done = picard.stdout.splitlines()[-1:] in ([VERDICTS[0]], [VERDICTS[1]])
@@ -892,8 +892,9 @@ def test_a_bam_header_htsjdk_refuses_at_strict_fails_in_both(tmp_path):
 @pytest.mark.parametrize("value", ["é", "aéb 中"])
 def test_a_cram_tag_text_beyond_ascii(tmp_path, value):
     """A Z tag outside printable ASCII in a CRAM: htsjdk reads it, and so does the CRAM
-    decoder, which noodles' BAM encoder refused (`invalid string`)."""
-    reference = [f"R={wide_reference(tmp_path)}"]
+    decoder, which noodles' BAM encoder refused (`invalid string`). LENIENT_HEADER: the
+    CRAM's @SQ line gains M5 and UR."""
+    reference = [f"R={wide_reference(tmp_path)}", "LENIENT_HEADER=true"]
     records = [f"{wide_record('r1')}\tXZ:Z:{value}", f"{wide_record('r2', pos=200)}\tXZ:Z:x"]
     header = wide_header("s")
     cram = wide_file(tmp_path, "tags", header, records, "cram")
