@@ -223,7 +223,7 @@ fn features(
         let length = length as usize;
         // An operator of length 0 changes no base and is left out, so
         // `5M0D5M` reads back `10M` under samtools and htsjdk. htsjdk's
-        // writer leaves out `0I` and `0H` alone (docs/07 W15-18).
+        // writer leaves out `0I` and `0H` alone (docs/07 D223).
         if length == 0 {
             continue;
         }

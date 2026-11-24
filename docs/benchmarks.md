@@ -530,7 +530,7 @@ What was checked on that file:
 - bammetrics `CollectQualityYieldMetrics` gives the same file body from the BAM (34 s)
   and from the CRAM (55 s): 150,386,776 reads, 18,948,733,776 bases.
 
-The last two rows are the writer after its review (docs/07 W15-12 to W15-17): a slice
+The last two rows are the writer after its review (docs/07 D217 to D222): a slice
 reads the reference bases it spans in place of its whole contig, and a container ends at
 8 MiB of BAM records as well as at 10,000 records. `cargo clippy` and `cargo test` ran on
 the machine during both runs, so the wall times are not comparable with the rows above.
@@ -1063,6 +1063,8 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 0.31.0 pdf | the same with `--features pdf` | 15,689,568 | 13,188,376 |
 | 0.32.0 | 2026-11-23, release/0.32.0: feat/chain-grammar, feat/chain-manifest and feat/chain-stages merged and reconciled, the version set, rustc 1.100.0, default features (feature `parquet` on) | 12,150,128 | 10,223,776 |
 | 0.32.0 pdf | the same with `--features pdf` | 16,096,304 | 13,552,448 |
+| 0.33.0 | 2026-11-23, release/0.33.0: feat/cram-writer, feat/sam-format-converter and feat/compare-terminator merged on release/0.32.0, the version set, rustc 1.100.0, default features (feature `parquet` on) | 12,693,488 | 10,703,568 |
+| 0.33.0 pdf | the same with `--features pdf` | 16,655,648 | 14,048,760 |
 
 From 0.21.0 to 0.22.0 the binary grew 202,816 bytes (198.1 KB), 182,072 stripped (177.8
 KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
@@ -1133,6 +1135,13 @@ file and the recipes with their three compiled-in files, manifest 2 with `--resu
 `--keep` and the prefix lock, the qc step with its flag table and writers, and the
 materialize fallback with its 17 rows. With `--features pdf` it grew 364,072 bytes
 stripped, and the PDF build is 3,328,672 bytes over the default build.
+
+From 0.32.0 to 0.33.0 the default binary grew 479,792 bytes stripped (4.7%), both built
+with rustc 1.100.0: the CRAM writer (`cram_writer.rs` and the vendored noodles-cram
+writer pieces), `SamFormatConverter`, `CompareSAMs` with its three record walks, and
+`CheckTerminatorBlock`. With `--features pdf` it grew 496,312 bytes stripped, and the
+PDF build is 3,345,192 bytes over the default build. The owner accepts binary growth
+(2026-11-22); `make budgets` checks the formats and report rows.
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and

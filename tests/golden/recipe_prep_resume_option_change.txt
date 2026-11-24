@@ -242,7 +242,7 @@ insert_size	All_Reads.fr_count
 ## file p.manifest.json
 {
   "schema": "bammetrics.manifest/2",
-  "tool_version": "0.32.0",
+  "tool_version": "0.33.0",
   "verb": "chain",
   "sample": "S1",
   "directory": "<directory>",

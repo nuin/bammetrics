@@ -1296,7 +1296,7 @@ below. bammetrics differs here:
   2^28 bases or more (`268435456M`). A BAM record holds neither. More than 65,535 CIGAR
   operators are read as htsjdk's codec stores them in a BAM: the placeholder `<read
   length>S<reference length>N` and the operators in a `CG:B:i` tag, which SAM text and a
-  CRAM write back as the CIGAR (docs/07 W15-23).
+  CRAM write back as the CIGAR (docs/07 D228).
 - Messages. A line htsjdk refuses fails with htsjdk's text after `bad record: ` (`Error
   parsing text SAM file. MRNM specified but flags indicate unpaired; File x.sam; Line
   7`), without the Java stack trace. A header line fails as `x.sam: Error parsing SAM
@@ -1424,7 +1424,7 @@ It differs from the CRAM Picard writes:
 - A mate reference index the header lacks fails in both (bammetrics: `record <name>: mate
   reference index 7 is not in the header`). No reader opens a CRAM that holds one.
 - A mapped record without bases (SEQ `*`) whose CIGAR covers more than 16 Mi read bases
-  fails bammetrics' CRAM writer, naming it (docs/07 W15-18): the CRAM holds an `N` and a
+  fails bammetrics' CRAM writer, naming it (docs/07 D223): the CRAM holds an `N` and a
   missing quality for each. Picard writes it.
 - CIGAR operators of length 0. bammetrics' CRAM leaves each out, so `5M0D5M` reads back
   `10M`. Picard's leaves out `0I` and `0H` alone: samtools reads its `5M0D5M` as `5M5M`
@@ -1436,7 +1436,7 @@ It differs from the CRAM Picard writes:
   holds: one per byte of a BAM header, so a BAM's `DS:café über` in UTF-8 reads under
   samtools as `DS:cafÃ© Ã¼ber` from either CRAM, and one per character of SAM text. A
   character above U+00FF in SAM text differs: bammetrics holds its low byte (`✓`, U+2713,
-  as 0x13) and stores that, where Picard stores the character's UTF-8 (docs/07 W15-13).
+  as 0x13) and stores that, where Picard stores the character's UTF-8 (docs/07 D218).
   Both readers read a CRAM header as UTF-8, one byte per character after.
 - Slices. Both end a slice at 10,000 records, or at 1,000 at a change of reference.
   bammetrics also ends one at 8 MiB of BAM records, so a container of long reads is no
@@ -1509,18 +1509,18 @@ a CRAM decoded to the records of Picard's BAM of the same source. It differs her
   0 with the records read before the cut: `markdup.bam` cut to 400 or 1,000 bytes gives
   its 5 header lines and no record. Bytes after the end-of-file block (zeros, `0xFF`, a
   gzip member, a cut block header, random bytes) are read by neither tool, as htsjdk
-  stops at an empty block (docs/07 W15-24). An empty block followed by a whole block is
+  stops at an empty block (docs/07 D229). An empty block followed by a whole block is
   read on by bammetrics (section BuildBamIndex).
 - A header with two `@RG` lines of one `ID` exits 1 (`duplicate read group ID`) and
   writes nothing, from SAM text, a BAM or a CRAM. Picard writes both lines (docs/07
-  W15-25). Every bammetrics tool refuses such a header.
+  D230). Every bammetrics tool refuses such a header.
 - A mapped record without bases (SEQ `*`, CIGAR `100M`) in a CRAM: Picard reads its own
   CRAM of it as `0M`; Picard and samtools read bammetrics' as `100M`, and samtools reads
-  Picard's as `100M` (docs/07 W15-26).
+  Picard's as `100M` (docs/07 D231).
 - A CRAM read with a FASTA whose contig is shorter than its `@SQ` length exits 1 naming
   both lengths (docs/07 D52), also when every read lies inside the FASTA's contig.
   Picard converts it.
-- `MD` and `NM` of a CRAM input come from `REFERENCE_SEQUENCE` alone (docs/07 W15-27).
+- `MD` and `NM` of a CRAM input come from `REFERENCE_SEQUENCE` alone (docs/07 D232).
   samtools' CRAM with `embed_ref=1` read without `R=`: Picard rebuilds both from the
   embedded reference, bammetrics writes neither (33 of the 36 records of `markdup.bam`).
   With `no_ref=1` and `R=`: Picard writes neither, bammetrics both. The records are

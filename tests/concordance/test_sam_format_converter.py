@@ -16,12 +16,12 @@ Both tools convert each form to the other two, reading at `VALIDATION_STRINGENCY
   `decode_md=0`, holds the header and every record, tags in order, of Picard's BAM of the
   same source (both tools hold that BAM equal). Picard's own CRAM, decoded the same way,
   holds the same fields, and the tags as a multiset without `MD` and `NM`: htsjdk's CRAM
-  writer leaves both out and orders the tags its own way (docs/07 W15-4). That second
+  writer leaves both out and orders the tags its own way (docs/07 D209). That second
   truth is taken only where Picard's CRAM writer keeps the records (`PICARD_CRAM_LOSES`).
 
 `reader_gaps` names the records the two readers give otherwise from one source, for any
 writer, and `CRAM_LOSES` what no CRAM holds; the test fails when a set changes either way
-(docs/07 W15-23). A CIGAR of 70,000 operators converts as in Picard in all six.
+(docs/07 D228). A CIGAR of 70,000 operators converts as in Picard in all six.
 
 Round trips: each form converted by bammetrics to each other form and back holds the
 records of the form it started from (samtools, the tags as a multiset: htsjdk orders
@@ -34,7 +34,7 @@ Also: Picard's own CRAM 3.1 as a source; the name that picks the format (`.BAM`,
 on bad SAM lines); headers without `@HD`, with `VN:1.5`, without `SO`. Error parity: a
 CRAM out or in without a reference, `CREATE_INDEX` on a header that is not coordinate
 sorted, records out of the header's order, `ASSUME_SORTED`, `OUTPUT` equal to `INPUT`
-(Picard truncates it; bammetrics refuses, docs/07 W15-20).
+(Picard truncates it; bammetrics refuses, docs/07 D225).
 """
 import gzip
 import hashlib
@@ -71,7 +71,7 @@ INPUTS = (*CORPORA, *(f"data/{name}" for name in FIXTURE_BAMS), *(f"edge/{name}"
 #   long_cigar (edges, no_hd): a CIGAR of 70,000 operators (`1M1I` repeated) that ends
 #     the reference span of its slice. From a CRAM htsjdk rebuilds NM against that span
 #     and leaves out the insertion after its last base (34,999); bammetrics counts it
-#     (35,000). The CIGAR itself converts as in Picard in all six (docs/07 W15-23).
+#     (35,000). The CIGAR itself converts as in Picard in all six (docs/07 D228).
 LONG_CIGAR = {"edge/edges", "edge/no_hd"}
 # The record of each input with an `H` tag.
 HEX_TAG = {"edge/edges": {"tags_all"}, "edge/no_hd": {"tags_all"}}
@@ -91,7 +91,7 @@ CRAM_LOSES = {
     "data/clean_sam": {"unmapped", "unplaced"},
     "edge/limits": {"eq_x", "m_then_m", "unmapped_cigar", "unpaired_mate_fields"},
 }
-# Inputs where Picard's CRAM is not a truth (test_cram_writer.py, docs/07 W15-3 to W15-5):
+# Inputs where Picard's CRAM is not a truth (test_cram_writer.py, docs/07 D208 to D210):
 # a read group the header lacks (dropped), mates whose fields disagree with each other
 # (htsjdk attaches them and rebuilds the fields: mate_filter, revert), reads past a contig
 # end, what no CRAM holds (clean_sam, limits).
@@ -433,7 +433,7 @@ def test_sam_text_gets_an_md5_and_no_index(tmp_path):
 
 
 def test_a_cram_gets_an_md5_and_its_index_is_refused(tmp_path):
-    """A departure (docs/07 W15-2): Picard writes `<CRAM>.bai`; bammetrics refuses
+    """A departure (docs/07 D207): Picard writes `<CRAM>.bai`; bammetrics refuses
     CREATE_INDEX with a CRAM and writes nothing."""
     base = (f"R={FIXTURE_REFERENCE}",)
     sides = both_with(tmp_path, FIXTURES / "markdup.bam", "out.cram", *base, "CREATE_MD5_FILE=true")
@@ -579,7 +579,7 @@ def test_assume_sorted_is_no_option(tmp_path):
 
 def test_output_equal_to_input(tmp_path):
     """Picard opens the output over its input: a BAM read in place fails and is left empty.
-    bammetrics refuses before it reads (docs/07 W15-20) and leaves the input whole."""
+    bammetrics refuses before it reads (docs/07 D225) and leaves the input whole."""
     original = (FIXTURES / "markdup.bam").read_bytes()
     for side in ("picard", "bammetrics"):
         copy = tmp_path / f"{side}.bam"
@@ -608,7 +608,7 @@ TAILS = {
 @pytest.mark.parametrize("tail", sorted(TAILS))
 def test_bytes_after_the_end_of_file_block(tmp_path, tail, target):
     """htsjdk reads an empty BGZF block as the end of the stream: the bytes after the
-    end-of-file block are never read. Both convert every record (docs/07 W15-24)."""
+    end-of-file block are never read. Both convert every record (docs/07 D229)."""
     source = tmp_path / "in.bam"
     source.write_bytes((FIXTURES / "markdup.bam").read_bytes() + TAILS[tail])
     sides = both_with(tmp_path, source, target, f"R={FIXTURE_REFERENCE}")
@@ -654,7 +654,7 @@ def test_header_text_outside_ascii(tmp_path, source_kind, target_kind):
     a header one character per byte of a BAM, per character of SAM text or of a CRAM's
     UTF-8, writes SAM text and a BAM as the low byte of each character and a CRAM as UTF-8.
     Every header is Picard's, but one line: SAM text to a CRAM, where bammetrics holds `✓`
-    (U+2713) as its low byte 0x13 and Picard stores its UTF-8 (docs/07 W15-13)."""
+    (U+2713) as its low byte 0x13 and Picard stores its UTF-8 (docs/07 D218)."""
     sam = tmp_path / "in.sam"
     sam.write_bytes((HEAD_UTF8 + BODY_UTF8).encode())
     sources = {"sam": sam, "bam": tmp_path / "in.bam", "cram": tmp_path / "in.cram"}
@@ -682,7 +682,7 @@ def test_header_text_outside_ascii(tmp_path, source_kind, target_kind):
 def test_a_repeated_read_group_id(tmp_path):
     """KNOWN_DIFFERENCES.md: a header with two `@RG` lines of one ID. Picard keeps both;
     bammetrics' header (noodles' `sam::Header`, read groups keyed by ID) holds one, so it
-    exits 1 naming the line and writes nothing (docs/07 W15-25)."""
+    exits 1 naming the line and writes nothing (docs/07 D230)."""
     source = tmp_path / "in.sam"
     source.write_text("@HD\tVN:1.6\tSO:unsorted\n@SQ\tSN:chr1\tLN:100000\n@RG\tID:rgA\tSM:s\n"
                       "@RG\tID:rgA\tSM:other\nr1\t0\tchr1\t10\t60\t4M\t*\t0\t0\tACGT\tIIII\tRG:Z:rgA\n")
@@ -699,7 +699,7 @@ def test_a_repeated_read_group_id(tmp_path):
 
 
 def test_a_record_without_bases_in_a_cram(tmp_path):
-    """KNOWN_DIFFERENCES.md, docs/07 W15-26: a mapped record with SEQ `*`, `100M`. Picard
+    """KNOWN_DIFFERENCES.md, docs/07 D231: a mapped record with SEQ `*`, `100M`. Picard
     reads its own CRAM of it as `0M`; Picard and samtools read bammetrics' CRAM as `100M`,
     and samtools reads Picard's as `100M` too."""
     source = tmp_path / "in.sam"

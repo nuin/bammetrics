@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.33.0
+
+Wave W15 of docs/07, 74 tools: CRAM output for every `OUTPUT` and chain `write` step ending in `.cram` (`-o r.cram` on a chain too), and `SamFormatConverter`, `CompareSAMs` and `CheckTerminatorBlock` (tools 72 to 74, none a chain step); decisions D206 to D235.
+
 ### Added
 
 - CRAM output (wave W15 of docs/07, `crates/core/src/cram_writer.rs`). An `OUTPUT` whose
@@ -11,8 +15,8 @@
   the others on `record_edit.rs`) and the chain `write` step (`write out.cram` with the
   chain's `-R`, or `--output-format cram`). The header is the BAM's. Each record keeps
   its own mate fields and every tag where the BAM has it. `CREATE_MD5_FILE` writes
-  `<CRAM>.md5`; `COMPRESSION_LEVEL` sets the gzip level of the blocks. Decisions W15-1 to
-  W15-18 of docs/07 list where this is not what Picard's writer does.
+  `<CRAM>.md5`; `COMPRESSION_LEVEL` sets the gzip level of the blocks. Decisions D206 to
+  D223 of docs/07 list where this is not what Picard's writer does.
 - `tests/concordance/test_cram_writer.py`: each CRAM is read by samtools, Picard 3.5.0 and
   bammetrics and held to the BAM of the same stream and to samtools' own CRAM of it, on
   the foundation corpus, t1, the exome slice and the hand-built BAMs of `cram_bams.py`,
@@ -20,7 +24,7 @@
   by samtools alone, each on a fixture.
 - `vendor/noodles-cram`: `io::writer::raw`, the CRAM writer in pieces, and a writer whose
   bytes are a function of its records (vendor/README.md, changes six and seven).
-- The CRAM writer after its review (docs/07 W15-12 to W15-17):
+- The CRAM writer after its review (docs/07 D217 to D222):
   - The reference of a CRAM output is found by name. A FASTA with more contigs than the
     header, in another order, with a contig longer than its `@SQ` line, or without a
     contig no record lies on is written, as Picard writes it. A record on a contig the
@@ -55,7 +59,7 @@
     parameter`.
   - A mapped record without bases (SEQ `*`) counts two bytes per read base of its
     CIGAR toward its container, and one whose CIGAR covers more than 16 Mi read bases
-    fails naming it (docs/07 W15-18). A 194-byte BAM of 4 records with CIGAR
+    fails naming it (docs/07 D223). A 194-byte BAM of 4 records with CIGAR
     `268435455M` cost 2,058 MiB.
   - A CIGAR operator of length 0 is left out: `5M0I5M`, `5M0D5M` and `10M0S` read back
     `10M` under samtools and Picard. Picard's CRAM leaves out `0I` and `0H` alone.
@@ -71,7 +75,7 @@
   `CREATE_INDEX`, `CREATE_MD5_FILE`, `COMPRESSION_LEVEL`; `MAX_RECORDS_IN_RAM` changes
   nothing. `CREATE_INDEX` on a header not sorted by coordinate fails with Picard's
   sentence before any file is made. Not a chain step: `chain BAM + sam-format-converter`
-  exits 2 and names `write`. Decisions W15-19 to W15-23 of docs/07. 72 registry tools.
+  exits 2 and names `write`. Decisions D224 to D228 of docs/07. 72 registry tools.
 - `tests/concordance/test_sam_format_converter.py`: the six conversions of SAM text, BAM
   and CRAM on the foundation corpus, t1, the exome slice, the tests/data BAMs and the
   BAMs of `cram_bams.py`, each against Picard's file of the same conversion (SAM text
@@ -80,7 +84,7 @@
 - 12 golden records (`SAM_FORMAT_CONVERTER_CASES`), two fixture and two scale rows in
   `benches/memgate.toml`. `docs/cli.md` says that `convert` converts metrics files and
   `sam-format-converter` converts reads.
-- `SamFormatConverter` after its review (docs/07 W15-23 to W15-27):
+- `SamFormatConverter` after its review (docs/07 D228 to D232):
   - A BAM followed by bytes after its end-of-file block (zeros, `0xFF`, a gzip member, a
     cut block header) is read to that block, as htsjdk reads it, by every tool. 32 of 40
     such conversions exited 1 (`truncated BAM`, `invalid frame size`).
@@ -144,7 +148,7 @@
   exome BAM (150,538,907 records) as a CRAM with 8 threads: 587 and 688 MiB peak RSS in
   two runs, about 180 s, 52.9% of the BAM's bytes; samtools reads every record equal to
   the BAM's. samtools' own CRAM 3.0 of it is 14% smaller and written 3.7 times as fast
-  (docs/benchmarks.md, docs/07 W15-11). After the review fixes: 360 and 422 MiB, the
+  (docs/benchmarks.md, docs/07 D216). After the review fixes: 360 and 422 MiB, the
   same bytes, every record equal under samtools again. Not measured: Picard on that
   file, an unsorted stream at scale.
 - SAM text: a header line is split into fields after it is decoded as UTF-8, as htsjdk

@@ -52,8 +52,8 @@ A tap or `write` does not change the stream, so the step after it sees the same 
 `in.bam + tap + mark-duplicates + tap + write` gives the first tap the source records and
 the second tap and the writer the marked records.
 
-Every registered tool that reads a BAM is a step at any position, 53 of the 71 (section
-31). The 17 tools that read no BAM (interval, VCF, FASTA and text tools,
+Every registered tool that reads a BAM is a step at any position, 53 of the 74 (section
+31), but the four named below. The 17 tools that read no BAM (interval, VCF, FASTA and text tools,
 `compare-metrics`, `fifo-buffer`) are refused with exit 2 and the reason. So is
 `build-bam-index`: it names `write --index`, which writes the `.bai` of the BAM a chain
 writes. So is `sam-format-converter` (wave W15): it writes the records it reads in the
@@ -1892,7 +1892,8 @@ files and `verdict.json` of `chain_qc_step` equal those of `qc_generic`),
 ## 31. W14: every registered tool at any position, the materialize fallback
 
 Every registered tool that reads a BAM runs at any position of a chain: 53 of the 71
-tools. A tool with a stage is a transform, a one-pass tool is a tap, a split tool is a
+tools at 0.32.0, 53 of the 74 at 0.33.0, whose three new tools are refused as steps with
+their reasons (section 3; docs/07 D224 and D233). A tool with a stage is a transform, a one-pass tool is a tap, a split tool is a
 split. A tool with neither a stage nor a collector is materialized (docs/07 section
 2.3): it runs on a file that holds the records of its position.
 

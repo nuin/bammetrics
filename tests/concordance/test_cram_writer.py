@@ -722,7 +722,7 @@ def test_a_container_of_fewer_than_four_qualities(tmp_path):
 
 
 def test_an_operator_of_length_0_is_left_out(tmp_path):
-    """docs/07 W15-18: bammetrics' CRAM leaves out every operator of length 0, so each
+    """docs/07 D223: bammetrics' CRAM leaves out every operator of length 0, so each
     CIGAR below reads back `10M` under samtools and Picard. Picard's CRAM leaves out `0I`
     and `0H` alone: samtools reads its `5M0D5M` as `5M5M`, its `0S10M` as `0S10M`, and
     fails on the slice of its `10M0S` (`Feature position 11 after end of read`)."""
@@ -749,7 +749,7 @@ def test_an_operator_of_length_0_is_left_out(tmp_path):
 
 
 def test_a_record_without_bases_over_16_mi_read_bases_fails(tmp_path):
-    """docs/07 W15-18: SEQ `*` with a CIGAR over 16 Mi read bases fails bammetrics' CRAM
+    """docs/07 D223: SEQ `*` with a CIGAR over 16 Mi read bases fails bammetrics' CRAM
     writer, naming the record, and leaves no file. One of 1,001 read bases is written and
     samtools reads it back as the BAM."""
     fine = "ok\t0\tchr1\t100\t60\t1000S1M\t*\t0\t0\t*\t*\n"
@@ -770,7 +770,7 @@ def test_a_record_without_bases_over_16_mi_read_bases_fails(tmp_path):
 
 
 def test_header_text_outside_ascii(tmp_path):
-    """docs/07 W15-13: the CRAM header holds the header as htsjdk holds it (one character
+    """docs/07 D218: the CRAM header holds the header as htsjdk holds it (one character
     per byte of the BAM, or per character of SAM text) encoded as UTF-8, and a CRAM
     header is read back as UTF-8. Picard's CRAM of the BAM and bammetrics' read alike under
     samtools, and Picard and bammetrics read each CRAM as the BAM. Converted from SAM text,

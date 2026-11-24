@@ -116,7 +116,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | RevertSam | Read data | out | BAM to uBAM. | none |
 | SamToFastq | Read data | out | Export. | samtools fastq |
 | SamToFastqWithTags | Read data | out | Export with tags. | samtools fastq -T |
-| SplitSamByLibrary | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the fan-out writer `split_sam.rs`; a chain split): one BAM or SAM text per library, `unknown` for the rest, Picard's safe names and exit 2 without a library; a CRAM input exits 2 (docs/07 D58, W15-8). S | samtools split |
+| SplitSamByLibrary | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the fan-out writer `split_sam.rs`; a chain split): one BAM or SAM text per library, `unknown` for the rest, Picard's safe names and exit 2 without a library; a CRAM input exits 2 (docs/07 D58, D213). S | samtools split |
 | SplitSamByNumberOfReads | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the fan-out writer `split_sam.rs`; a chain split with `TOTAL_READS_IN_INPUT`): files of about one size, a run of one name never cut, `shard_0001` names. S | samtools split |
 | ViewSam | Diagnostics | core | Prints the header and the records as htsjdk writes SAM text. Shipped in 0.23.0 (wave W05 of docs/07) with the SAM text reader and writer. S | samtools view |
 | CollectHiSeqXPfFailMetrics | Diagnostics | out | Needs basecall directory. | none |
