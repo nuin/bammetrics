@@ -6,8 +6,8 @@
 //! [`super::site_header::parse`]):
 //!
 //! - `##INFO` and `##FORMAT` lines keep `ID`, `Number`, `Type`,
-//!   `Description`, `Source` and `Version`; any other key of the line is
-//!   dropped. A missing `Description` reads `Not provided in original VCF
+//!   `Description`, and from VCF 4.2 `Source` and `Version`; any other key
+//!   of the line is dropped. A missing `Description` reads `Not provided in original VCF
 //!   header`. A `Flag` with a fixed `Number` gets `Number=0`.
 //! - A line of the standard set (`VCFStandardHeaderLines`: `FORMAT` `GT`,
 //!   `GQ`, `DP`, `PL`, `AD`, `FT`, `PS`, `PQ`; `INFO` `END`, `DB`, `DP`,
@@ -393,8 +393,9 @@ fn compound(key: &'static str, text: &str, minor: u8) -> Result<Line, String> {
         count,
         ty,
         description: get("Description").unwrap_or_else(|| NO_DESCRIPTION.to_owned()),
-        source: get("Source"),
-        version: get("Version"),
+        // htsjdk keeps `Source` and `Version` from VCF 4.2 on.
+        source: get("Source").filter(|_| minor >= 2),
+        version: get("Version").filter(|_| minor >= 2),
     }))
 }
 

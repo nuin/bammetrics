@@ -12,7 +12,9 @@
 //!   (`out.vcf.gz.tbi`), built as `TabixIndexCreator` builds it
 //!   ([`tabix`]) from the finished file read back, so each record's offset
 //!   is where the file holds it. The records must be sorted by contig and
-//!   start. Picard also writes a tribble `.idx` beside a plain `.vcf`
+//!   start, and the header needs `##contig` lines, as Picard's VCF writers
+//!   ask (`A sequence dictionary must be available in the input file when
+//!   creating indexed output`). Picard also writes a tribble `.idx` beside a plain `.vcf`
 //!   (`DynamicIndexCreator`); this writer refuses that index (docs/07
 //!   decision W16-3) and writes the `.vcf` alone.
 //! - `md5` writes `OUTPUT.md5`, the hex MD5 of the file.
@@ -194,6 +196,14 @@ impl VcfWriter {
     /// writes it.
     pub fn create(path: &Path, header: &VcfHeader, options: VcfOptions) -> Result<Self> {
         options.check(path)?;
+        if options.index && header.dictionary().is_none() {
+            // Picard's VCF writers refuse it before the first record.
+            return Err(Error::Usage(format!(
+                "{}: A sequence dictionary must be available in the input file when creating \
+                 indexed output (the header has no ##contig line)",
+                path.display()
+            )));
+        }
         let format = VcfFormat::of(path)?;
         let output = |source| Error::Output {
             path: path.to_path_buf(),
