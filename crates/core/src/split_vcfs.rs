@@ -87,11 +87,10 @@ pub(crate) const INDEX_OPTION: Opt = Opt::bool(
     "Write a .tbi beside each .vcf.gz output (default true; a plain .vcf gets no index, and \
      true given for one is refused).",
 );
-/// `CREATE_MD5_FILE` of a Picard VCF writer.
-pub(crate) const MD5_OPTION: Opt = Opt::bool(
-    &["CREATE_MD5_FILE"],
-    "Write OUTPUT.md5 beside each VCF (default false).",
-);
+/// `CREATE_MD5_FILE`, which Picard's VCF writers do not read: no `.md5` is
+/// written beside a VCF (`VariantContextWriterBuilder` takes `Defaults`).
+pub(crate) const MD5_OPTION: Opt =
+    Opt::ignored_bool(&["CREATE_MD5_FILE"], "Picard writes no .md5 beside a VCF");
 /// `COMPRESSION_LEVEL` of a Picard VCF writer.
 pub(crate) const COMPRESSION_OPTION: Opt = Opt::int(
     &["COMPRESSION_LEVEL"],
@@ -107,13 +106,12 @@ const VERBOSITY_OPTION: Opt = Opt::text(
 pub const COLUMNS: [&str; 3] = ["snp_records", "indel_records", "other_records"];
 
 /// The writer options of a Picard VCF tool: `CREATE_INDEX` (default true),
-/// `CREATE_MD5_FILE`, `COMPRESSION_LEVEL`.
+/// `COMPRESSION_LEVEL`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WriterOptions {
     pub create_index: bool,
     /// `CREATE_INDEX` was given, not left at its default.
     pub index_given: bool,
-    pub md5: bool,
     pub compression_level: u8,
     pub threads: usize,
 }
@@ -128,7 +126,6 @@ impl WriterOptions {
         Ok(Self {
             create_index: inv.flag("CREATE_INDEX", true)?,
             index_given: inv.get("CREATE_INDEX").is_some(),
-            md5: inv.flag("CREATE_MD5_FILE", false)?,
             compression_level,
             threads: inv.threads.max(1),
         })
@@ -159,7 +156,7 @@ impl WriterOptions {
             compression_level: self.compression_level,
             threads: self.threads,
             index: self.create_index && !plain,
-            md5: self.md5,
+            md5: false,
         };
         Ok((options, note))
     }
@@ -525,7 +522,7 @@ impl VariantSink for SplitSink {
 }
 
 /// The files a split of `snp` and `indel` writes: each VCF, then its
-/// `.tbi` and `.md5` when asked for.
+/// `.tbi` when asked for.
 pub fn output_files(writer: &WriterOptions, snp: &Path, indel: &Path) -> Result<Vec<PathBuf>> {
     let mut files = writer.files(snp)?;
     files.extend(writer.files(indel)?);

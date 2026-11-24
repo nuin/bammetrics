@@ -147,12 +147,7 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
 }
 
 /// The options a transform of a chain leaves to its `write` step.
-const WRITE_STEP_OPTIONS: [&str; 4] = [
-    "OUTPUT",
-    "CREATE_INDEX",
-    "CREATE_MD5_FILE",
-    "COMPRESSION_LEVEL",
-];
+const WRITE_STEP_OPTIONS: [&str; 3] = ["OUTPUT", "CREATE_INDEX", "COMPRESSION_LEVEL"];
 
 /// The tool as a transform of a variant stream (docs/chaining.md section
 /// 34): each record cut as the tool cuts it, the header's samples those of

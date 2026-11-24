@@ -32,7 +32,6 @@ fn options(input: &Path, output: &Path, samples: &[&str]) -> Options {
         writer: WriterOptions {
             create_index: false,
             index_given: true,
-            md5: false,
             compression_level: 5,
             threads: 1,
         },

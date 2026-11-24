@@ -63,29 +63,82 @@ pub struct Line {
     pub sample: String,
 }
 
-/// The file an `INPUT` names: `IOUtil.getPath` of a path, or of a
-/// `file://` URI (its path percent-decoded). Any other URI scheme fails, as
-/// Picard has no provider for it here.
+/// The file an `INPUT` names, as `IOUtil.getPath` finds it: the text must
+/// parse as a `java.net.URI` (no space, control character, `"<>\^`{|}[]`
+/// or bad `%` escape), then a text without a scheme is the path as given,
+/// a `file:` URI the absolute path it names (percent-decoded), and any
+/// other scheme fails, as Picard has no file system for it here.
 pub fn input_path(input: &str) -> Result<PathBuf> {
-    if let Some(rest) = input.strip_prefix("file://") {
-        if !rest.starts_with('/') {
-            return Err(Error::Usage(format!(
-                "Error while converting input {input} to Path: a file URI names an absolute path"
-            )));
-        }
-        return Ok(PathBuf::from(percent_decode(rest)?));
-    }
-    if let Some((scheme, _)) = input.split_once("://")
-        && !scheme.is_empty()
-        && scheme
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
-    {
-        return Err(Error::Usage(format!(
-            "Error while converting input {input} to Path: the scheme {scheme} is not read"
+    let refused = |why: &str| {
+        Error::Usage(format!(
+            "Error while converting input {input} to Path: {why}"
+        ))
+    };
+    check_uri(input).map_err(|why| refused(&why))?;
+    let Some(scheme) = uri_scheme(input) else {
+        return Ok(PathBuf::from(input));
+    };
+    if !scheme.eq_ignore_ascii_case("file") {
+        return Err(refused(&format!(
+            "no file system reads the scheme {scheme}"
         )));
     }
-    Ok(PathBuf::from(input))
+    let rest = &input[scheme.len() + 1..];
+    let path = match rest.strip_prefix("//") {
+        Some(after) if after.starts_with('/') => after,
+        Some(_) => return Err(refused("a file URI names no host")),
+        None if rest.starts_with('/') => rest,
+        None => return Err(refused("a file URI names an absolute path")),
+    };
+    if path.contains(['?', '#']) {
+        return Err(refused("a file URI has no query or fragment"));
+    }
+    Ok(PathBuf::from(percent_decode(path)?))
+}
+
+/// `URI.getScheme`: the text before the first `:` when it starts with a
+/// letter, holds only letters, digits, `+`, `-` and `.`, and comes before
+/// any `/`, `?` or `#`.
+fn uri_scheme(input: &str) -> Option<&str> {
+    let end = input.find([':', '/', '?', '#'])?;
+    let scheme = &input[..end];
+    let valid = input[end..].starts_with(':')
+        && scheme
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic())
+        && scheme
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
+    valid.then_some(scheme)
+}
+
+/// The characters `java.net.URI` takes in a path, query or fragment:
+/// unreserved and reserved ASCII, `%` with two hex digits, one `#`, and
+/// any character above ASCII that is no control or space character.
+fn check_uri(input: &str) -> std::result::Result<(), String> {
+    let bytes = input.as_bytes();
+    let mut hashes = 0;
+    for (at, c) in input.char_indices() {
+        let fine = match c {
+            '%' => bytes
+                .get(at + 1..at + 3)
+                .is_some_and(|h| h.iter().all(u8::is_ascii_hexdigit)),
+            '#' => {
+                hashes += 1;
+                hashes == 1
+            }
+            c if c.is_ascii_alphanumeric() => true,
+            '-' | '_' | '.' | '!' | '~' | '*' | '\'' | '(' | ')' | ';' | '/' | '?' | ':' | '@'
+            | '&' | '=' | '+' | '$' | ',' => true,
+            c if c.is_ascii() => false,
+            c => !c.is_control() && !c.is_whitespace(),
+        };
+        if !fine {
+            return Err(format!("illegal character {c:?} at index {at}"));
+        }
+    }
+    Ok(())
 }
 
 /// The bytes `%HH` escapes stand for, as UTF-8 text.

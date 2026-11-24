@@ -38,7 +38,6 @@ fn options(dir: &Path, input: &Path, strict: bool, snp: &str, indel: &str) -> Op
         writer: WriterOptions {
             create_index: true,
             index_given: false,
-            md5: false,
             compression_level: 5,
             threads: 1,
         },

@@ -91,4 +91,14 @@ fn file_uris_name_paths() {
     assert_eq!(input_path("x.vcf").expect("a path"), PathBuf::from("x.vcf"));
     assert!(input_path("gs://bucket/x.vcf").is_err());
     assert!(input_path("file://relative").is_err());
+    assert!(input_path("file:/abs/x.vcf").is_ok());
+    assert!(input_path("m/b b.vcf").is_err());
+    assert!(input_path("m/x%zz.vcf").is_err());
+    assert!(input_path("m/a|b.vcf").is_err());
+    assert_eq!(
+        input_path("m/x:y.vcf").expect("no scheme"),
+        PathBuf::from("m/x:y.vcf")
+    );
+    assert!(input_path("x:y.vcf").is_err());
+    assert!(input_path("m/ünï.vcf").is_ok());
 }
