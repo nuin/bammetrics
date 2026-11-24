@@ -418,7 +418,11 @@ mod tests {
         let mut format = spec("r", &["mark-duplicates", "write"]);
         format.steps[1].args = vec!["x".to_owned(), "--output-format=cram".to_owned()];
         assert!(writes_cram(&format));
-        format.steps[1].args = vec!["x.cram".to_owned(), "--output-format".to_owned(), "bam".to_owned()];
+        format.steps[1].args = vec![
+            "x.cram".to_owned(),
+            "--output-format".to_owned(),
+            "bam".to_owned(),
+        ];
         assert!(!writes_cram(&format));
         assert!(!writes_cram(&spec("r.bam", &["mark-duplicates"])));
         let mut upper = spec("r.BAM", &["mark-duplicates"]);
