@@ -1757,9 +1757,11 @@ kept stream that is no longer coordinate sorted goes. These stay, each named wit
   out/s.insert_size_metrics (its kind is none a chain writes under that name)`);
 - a file changed since the run before wrote it.
 
-A manifest owned by another user, or a link to a file another user owns, is not read:
-`out/s.manifest.json is owned by user 0, not by this user: every step runs and no file is
-removed`.
+The manifest is opened once without following a link, and its owner, mode and text come
+from that one descriptor. A manifest that is a symbolic link, is not a regular file, is
+owned by another user or may be written by group or others is not read, so every step
+runs and no file is removed: `out/s.manifest.json has mode 664: group or others may write
+it, so it is not read: every step runs`.
 
 A run that fails still writes its manifest, on purpose: its record of the failed step makes
 the next `--resume` rerun that step, and the steps that finished are skipped. It removes no
@@ -1778,7 +1780,7 @@ steps 3, 4 and 5 and every file equals a fresh run; the feed without a kept stre
 changed source; a damaged manifest; a hand-edited file left alone; a failed step that
 reruns), `crates/cli/tests/chain_resume_safety.rs` (a respelled source or prefix, a
 source swapped during a run, the lock, what a resumed run removes and leaves, a grafted
-record, a record whose kind does not fit its name, a manifest of another user, an
+record, a record whose kind does not fit its name, a linked or group-writable manifest, an
 unwritable directory, a killed run's temporary file, the examples of
 docs/cli.md and the README), the golden records `chain_resume_*` and
 `plan_chain_resume_option_change`.

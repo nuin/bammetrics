@@ -384,6 +384,63 @@ fn a_record_with_a_kind_that_does_not_fit_removes_nothing() {
     let _ = fs::remove_dir_all(&dir);
 }
 
+/// A manifest that is a symbolic link, or that group or others may write,
+/// is not read: every step runs, so the file of the dropped step stays.
+#[cfg(unix)]
+#[test]
+fn a_linked_or_group_writable_manifest_is_not_read() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let source = root().join(MARKDUP).display().to_string();
+    let both = [
+        "chain",
+        &source,
+        "-o",
+        "o/s",
+        "--resume",
+        "+",
+        "quality-yield",
+        "+",
+        "insert-size",
+    ];
+    let one = [
+        "chain",
+        &source,
+        "-o",
+        "o/s",
+        "--resume",
+        "+",
+        "quality-yield",
+    ];
+    for (name, says) in [
+        (
+            "linked",
+            "is a symbolic link, so it is not read: every step runs",
+        ),
+        (
+            "writable",
+            "group or others may write it, so it is not read: every step runs",
+        ),
+    ] {
+        let dir = fresh_dir(name);
+        run_in(&dir, &both);
+        let manifest = dir.join("o/s.manifest.json");
+        if name == "linked" {
+            fs::rename(&manifest, dir.join("o/real.json")).expect("move");
+            std::os::unix::fs::symlink("real.json", &manifest).expect("link");
+        } else {
+            fs::set_permissions(&manifest, fs::Permissions::from_mode(0o664)).expect("mode");
+        }
+        let stderr = run_in(&dir, &one);
+        assert!(stderr.contains(says), "{name}: {stderr}");
+        assert!(!stderr.contains("--resume: removed"), "{name}: {stderr}");
+        assert!(
+            dir.join("o/s.insert_size_metrics").is_file(),
+            "{name}: {stderr}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+}
+
 /// A manifest that links to a file another user owns (`/etc/hosts`,
 /// owned by root and not writable here) fails before the read and removes
 /// nothing. A manifest of another user this user can write is not read

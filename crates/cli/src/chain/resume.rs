@@ -480,14 +480,7 @@ pub fn decide(chain: &Chain, keys: &[Key]) -> Resume {
     let (true, Some(path), Some(snap)) = (chain.resume, &chain.manifest, &snapshot) else {
         return Resume::everything(chain, snapshot, None, None);
     };
-    if let Some(uid) = foreign_owner(path) {
-        let note = format!(
-            "{} is owned by user {uid}, not by this user: every step runs and no file is removed",
-            path.display()
-        );
-        return Resume::everything(chain, snapshot, None, Some(note));
-    }
-    let previous = match v2::read_any(path) {
+    let previous = match read_previous(path) {
         Ok(Some(AnyManifest::Chain(manifest))) => *manifest,
         Ok(Some(AnyManifest::Qc(_))) => {
             let note = format!(
@@ -551,18 +544,72 @@ pub fn decide(chain: &Chain, keys: &[Key]) -> Resume {
     }
 }
 
-/// The owner of `path`, or of the file a link at `path` points to, when
-/// that owner is another user. The paths a resumed run removes come from
-/// the manifest, so a manifest another user can write is never trusted.
-fn foreign_owner(path: &Path) -> Option<u32> {
-    use std::os::unix::fs::MetadataExt as _;
+/// The manifest of the run before at `path`, read only when this user
+/// may trust it, since the files a resumed run removes come from it. The
+/// file is opened once without following a link, and the checks and the
+/// read use that one descriptor, so no file swapped in between is read.
+/// `Ok(None)` when there is none; `Err` names why it is not read: a link,
+/// not a regular file, another user's file, or one group or others may
+/// write. At most [`v2::CAP`] bytes are read.
+#[cfg(unix)]
+fn read_previous(path: &Path) -> Result<Option<AnyManifest>, String> {
+    use std::io::Read as _;
+    use std::os::unix::fs::{MetadataExt as _, OpenOptionsExt as _};
+    let refused = |why: String| format!("{} {why}, so it is not read", path.display());
+    let file = match std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+    {
+        Ok(file) => file,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) if e.raw_os_error() == Some(libc::ELOOP) => {
+            return Err(refused("is a symbolic link".to_owned()));
+        }
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    };
+    let meta = file
+        .metadata()
+        .map_err(|e| format!("{}: {e}", path.display()))?;
     // SAFETY: geteuid has no preconditions and cannot fail.
     let me = unsafe { libc::geteuid() };
-    [std::fs::symlink_metadata(path), std::fs::metadata(path)]
-        .into_iter()
-        .filter_map(Result::ok)
-        .map(|meta| meta.uid())
-        .find(|&uid| uid != me)
+    if !meta.file_type().is_file() {
+        return Err(refused("is not a regular file".to_owned()));
+    }
+    if meta.uid() != me {
+        return Err(refused(format!(
+            "is owned by user {}, not by this user",
+            meta.uid()
+        )));
+    }
+    if meta.mode() & 0o022 != 0 {
+        return Err(refused(format!(
+            "has mode {:o}: group or others may write it",
+            meta.mode() & 0o777
+        )));
+    }
+    let mut bytes = Vec::new();
+    file.take(v2::CAP.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    if bytes.len() as u64 > v2::CAP {
+        return Err(format!(
+            "{}: larger than {} MiB",
+            path.display(),
+            v2::CAP >> 20
+        ));
+    }
+    let text =
+        String::from_utf8(bytes).map_err(|e| format!("{}: {}", path.display(), e.utf8_error()))?;
+    v2::parse_any(&text)
+        .map(Some)
+        .map_err(|why| format!("{}: {why}", path.display()))
+}
+
+/// [`read_previous`] where no owner or mode can be checked.
+#[cfg(not(unix))]
+fn read_previous(path: &Path) -> Result<Option<AnyManifest>, String> {
+    v2::read_any(path)
 }
 
 /// The lines of the plan text about `--resume`.
@@ -1081,19 +1128,44 @@ mod tests {
         assert!(!kind_fits("", Path::new("o/s.txt")));
     }
 
+    #[cfg(unix)]
     #[test]
-    fn a_file_of_another_user_is_foreign() {
+    fn a_manifest_is_read_only_when_this_user_alone_may_write_it() {
+        use std::os::unix::fs::PermissionsExt as _;
         let dir = std::env::temp_dir().join(format!("bammetrics-owner-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("dir");
+        let not_json = |path: &Path| {
+            let why = read_previous(path).expect_err("a refusal or a parse error");
+            assert!(!why.contains("so it is not read"), "{why}");
+        };
+        let refused = |path: &Path, says: &str| {
+            let why = read_previous(path).expect_err("refused");
+            assert!(
+                why.contains(says) && why.ends_with("so it is not read"),
+                "{why}"
+            );
+        };
         let mine = dir.join("m.manifest.json");
         std::fs::write(&mine, "{}").expect("write");
-        assert_eq!(foreign_owner(&mine), None);
+        std::fs::set_permissions(&mine, std::fs::Permissions::from_mode(0o644)).expect("mode");
+        not_json(&mine);
+        assert!(
+            read_previous(&dir.join("none.json"))
+                .expect("absent")
+                .is_none()
+        );
+        let link = dir.join("link.manifest.json");
+        std::os::unix::fs::symlink(&mine, &link).expect("link");
+        refused(&link, "is a symbolic link");
+        for mode in [0o664, 0o646] {
+            std::fs::set_permissions(&mine, std::fs::Permissions::from_mode(mode)).expect("mode");
+            refused(&mine, "group or others may write it");
+        }
+        refused(&dir, "is not a regular file");
         // SAFETY: geteuid has no preconditions.
         if unsafe { libc::geteuid() } != 0 {
-            assert_eq!(foreign_owner(Path::new("/")), Some(0));
-            let link = dir.join("link.manifest.json");
-            std::os::unix::fs::symlink("/", &link).expect("link");
-            assert_eq!(foreign_owner(&link), Some(0));
+            refused(Path::new("/etc/hosts"), "is owned by user 0");
         }
         let _ = std::fs::remove_dir_all(&dir);
     }
