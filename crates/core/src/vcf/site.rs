@@ -11,9 +11,9 @@
 //! - `POS` is a Java `int` (`Integer.parseInt`: `+10` and `-5` are read).
 //! - `ID` may not be empty; `.` is no ID, any other text is kept whole.
 //! - `QUAL` is `.` or a Java double, or `inf`, `infinity` or `nan` in any
-//!   case with a sign (`VCFUtils.parseVcfDouble`). A negative value other
-//!   than `-10` fails `VariantContext`'s check that `log10PError` is not
-//!   above 0.
+//!   case with a sign (`VCFUtils.parseVcfDouble`). A value within 5e-5 of
+//!   -1 is missing; any other negative value but -10 fails
+//!   `VariantContext`'s check that `log10PError` is not above 0.
 //! - `FILTER`: `.` and `PASS` are unfiltered, `0` and an empty field are
 //!   errors, else the names split on `;` (trailing empty names dropped)
 //!   must each match `^[!-:<-~]+$`. A record with names is filtered.
@@ -38,8 +38,8 @@
 
 use std::collections::HashSet;
 
+use super::Site;
 use super::site_header::SiteHeader;
-use super::{Site, parse_genotype};
 use crate::error::excerpt;
 
 /// What the header tells the line parser.
@@ -131,7 +131,12 @@ pub fn parse_line(line: &str, rules: &Rules) -> Result<Option<Site>, String> {
         }
     };
     if rules.eager_genotypes {
-        check_genotypes(parts[8], rules.samples, alleles.count)?;
+        super::encode_genotypes::check(
+            parts[8],
+            rules.samples,
+            alleles.count,
+            rules.percent_decoded,
+        )?;
     }
     Ok(Some(Site {
         contig: parts[0].to_owned(),
@@ -144,7 +149,7 @@ pub fn parse_line(line: &str, rules: &Rules) -> Result<Option<Site>, String> {
 
 /// `ParsingUtils.split(line, parts, '\t', true)` with `max` parts: a
 /// leading tab skipped, the last part holding the rest of the line.
-fn split_condensed(line: &str, max: usize) -> Vec<&str> {
+pub(super) fn split_condensed(line: &str, max: usize) -> Vec<&str> {
     let mut parts = Vec::with_capacity(max);
     let mut rest = line;
     if rest.starts_with('\t') {
@@ -170,38 +175,52 @@ fn split_condensed(line: &str, max: usize) -> Vec<&str> {
 
 /// `AbstractVCFCodec.parseQual`, then `CommonInfo.setLog10PError`.
 fn check_quality(text: &str) -> Result<(), String> {
+    log10_p_error(text).map(|_| ())
+}
+
+/// `VCFConstants.VCF_ENCODING_EPSILON`.
+const ENCODING_EPSILON: f64 = 5e-5;
+
+/// `AbstractVCFCodec.parseQual`, then `CommonInfo.setLog10PError`: the
+/// `log10PError` of `QUAL`, `None` for a missing quality. `.` is missing,
+/// and so is a negative value within 5e-5 of -1 (the VCF 3 spelling). Any
+/// other value is divided by -10; a result above 0 other than exactly 1
+/// fails (the message prints the builder's value before the set, 1.0), and
+/// exactly 1 (`QUAL` -10) is `NO_LOG10_PERROR`, missing too.
+pub(crate) fn log10_p_error(text: &str) -> Result<Option<f64>, String> {
     if text == "." {
-        return Ok(());
+        return Ok(None);
     }
     let quality = match crate::java::parse_double(text) {
         Ok(q) => q,
-        Err(_) if is_vcf_special_double(text) => return Ok(()),
-        Err(message) => return Err(message),
+        Err(message) => special_double(text).ok_or(message)?,
     };
-    // `parseQual` maps a value within 1e-5 of -10 to `log10PError` 1.
-    if quality < 0.0 && (quality + 10.0).abs() >= 1e-5 {
-        return Err(format!(
-            "BUG: log10PError cannot be > 0 : {}",
-            quality / -10.0
-        ));
+    if quality < 0.0 && (quality + 1.0).abs() < ENCODING_EPSILON {
+        return Ok(None);
     }
-    Ok(())
+    let log10 = quality / -10.0;
+    if log10 > 0.0 && log10 != 1.0 {
+        return Err("BUG: log10PError cannot be > 0 : 1.0".to_owned());
+    }
+    Ok((log10 != 1.0).then_some(log10))
 }
 
-/// `^[-+]?(INF|INFINITY|NAN)$` without regard to case: an infinite or NaN
-/// quality, which `setLog10PError` takes (-infinity becomes +infinity
-/// over -10 and fails there, which `parse_double` reaches first as
-/// `-Infinity`; `-inf` is the one spelling left to check).
-fn is_vcf_special_double(text: &str) -> bool {
+/// `VCFUtils.parseVcfDouble`'s `^[-+]?(INF|INFINITY|NAN)$` without regard
+/// to case.
+pub(super) fn special_double(text: &str) -> Option<f64> {
     let (negative, body) = match text.as_bytes().first() {
         Some(b'-') => (true, &text[1..]),
         Some(b'+') => (false, &text[1..]),
         _ => (false, text),
     };
-    let special = ["inf", "infinity", "nan"]
-        .iter()
-        .any(|w| body.eq_ignore_ascii_case(w));
-    special && !(negative && !body.eq_ignore_ascii_case("nan"))
+    let value = if body.eq_ignore_ascii_case("nan") {
+        f64::NAN
+    } else if body.eq_ignore_ascii_case("inf") || body.eq_ignore_ascii_case("infinity") {
+        f64::INFINITY
+    } else {
+        return None;
+    };
+    Some(if negative { -value } else { value })
 }
 
 /// `VCFCodec.parseFilters` and the filter check of `VariantContext`: true
@@ -231,7 +250,7 @@ fn parse_filters(text: &str) -> Result<bool, String> {
 }
 
 /// `String.split` on one character: trailing empty parts dropped.
-fn java_split(text: &str, separator: char) -> Vec<&str> {
+pub(super) fn java_split(text: &str, separator: char) -> Vec<&str> {
     let mut parts: Vec<&str> = text.split(separator).collect();
     while parts.last().is_some_and(|p| p.is_empty()) {
         parts.pop();
@@ -292,7 +311,7 @@ fn parse_info_end(info: &str, rules: &Rules) -> Result<Option<String>, String> {
 /// `VCFPercentEncodedTextTransformer.decodeText`: each `%` with two hex
 /// digits after it becomes the character of that code; any other `%`
 /// stays.
-fn percent_decode(text: &str) -> String {
+pub(super) fn percent_decode(text: &str) -> String {
     if !text.contains('%') {
         return text.to_owned();
     }
@@ -325,7 +344,7 @@ struct Alleles {
 }
 
 /// `Allele.wouldBeSymbolicAllele`.
-fn is_symbolic(bytes: &[u8]) -> bool {
+pub(super) fn is_symbolic(bytes: &[u8]) -> bool {
     bytes.len() > 1
         && (bytes[0] == b'<'
             || bytes[bytes.len() - 1] == b'>'
@@ -416,26 +435,6 @@ fn parse_alleles(reference: &str, alternates: &str) -> Result<Alleles, String> {
     })
 }
 
-/// `AbstractVCFCodec.createGenotypeMap` over `FORMAT` and the samples:
-/// as many sample fields as the header names, each decoded.
-fn check_genotypes(text: &str, samples: usize, alleles: usize) -> Result<(), String> {
-    let mut fields = text.split('\t');
-    let format = fields.next().unwrap_or_default();
-    let keys: Vec<&str> = format.split(':').collect();
-    let mut seen = 0;
-    for sample in fields.take(samples) {
-        parse_genotype(&keys, sample, alleles)?;
-        seen += 1;
-    }
-    if seen != samples {
-        return Err(format!(
-            "there are {seen} genotypes while the header requires that {samples} genotypes be \
-             present for all records"
-        ));
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -520,11 +519,21 @@ mod tests {
     fn qualities_follow_the_codec() {
         let ok = |q: &str| site(&format!("c1\t1\t.\tA\tC\t{q}\t.\t.")).is_ok();
         for good in [
-            ".", "5", " 5 ", "5d", "0x1p3", "-10", "nan", "Infinity", "INF", "+inf", "-0",
+            ".", "5", " 5 ", "5d", "0x1p3", "-10", "nan", "Infinity", "INF", "+inf", "-0", "-1",
+            "-1.00001", "-0.99996",
         ] {
             assert!(ok(good), "{good}");
         }
-        for bad in ["-5", "abc", "-inf", "-Infinity", ""] {
+        for bad in [
+            "-5",
+            "abc",
+            "-inf",
+            "-Infinity",
+            "",
+            "-0.5",
+            "-10.000001",
+            "-1.0001",
+        ] {
             assert!(!ok(bad), "{bad}");
         }
     }

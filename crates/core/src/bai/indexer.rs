@@ -20,7 +20,7 @@ use crate::error::{Error, Result};
 use crate::pass;
 
 /// `GenomicIndexUtil.regionToBin` for the zero-based half-open `[beg, end)`.
-pub(super) fn region_to_bin(beg: i64, end: i64) -> u32 {
+pub(crate) fn region_to_bin(beg: i64, end: i64) -> u32 {
     let end = end - 1;
     for (shift, first) in [(14, FIRST_LEAF_BIN), (17, 585), (20, 73), (23, 9), (26, 1)] {
         if beg >> shift == end >> shift {
@@ -32,7 +32,7 @@ pub(super) fn region_to_bin(beg: i64, end: i64) -> u32 {
 
 /// `LinearIndex.convertToLinearIndexOffset`: the window of a 1-based
 /// position.
-pub(super) fn window(position: i64) -> i64 {
+pub(crate) fn window(position: i64) -> i64 {
     (position.max(1) - 1) >> WINDOW_SHIFT
 }
 

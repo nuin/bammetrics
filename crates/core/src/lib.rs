@@ -122,6 +122,7 @@ pub mod umi_prevalence;
 pub mod variant_calling_metrics;
 pub mod vcf;
 pub mod vcf_to_interval_list;
+pub mod vcf_writer;
 pub mod view_sam;
 pub mod wgs_metrics;
 

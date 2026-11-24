@@ -59,9 +59,25 @@ fn malformed(message: impl std::fmt::Display) -> String {
     format!("Your input file has a malformed header: {message}")
 }
 
+/// The header lines of a VCF as read: every `##` line in order, the
+/// column line, and the minor version the last `##fileformat` line names.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RawHeader {
+    pub lines: Vec<String>,
+    pub columns: String,
+    pub minor: u8,
+}
+
 /// Read the header lines of `reader`, the column line last, leaving the
 /// reader at the first record.
 pub fn read(reader: &mut impl BufRead) -> Result<SiteHeader, String> {
+    let raw = read_raw(reader)?;
+    parse_lines(&raw.lines, &raw.columns, raw.minor)
+}
+
+/// [`read`] without the checks of each line: the lines, the column line
+/// and the version. [`parse`] checks them.
+pub fn read_raw(reader: &mut impl BufRead) -> Result<RawHeader, String> {
     let mut lines = Vec::new();
     let mut held = 0usize;
     let mut minor = None;
@@ -101,7 +117,11 @@ pub fn read(reader: &mut impl BufRead) -> Result<SiteHeader, String> {
                     "We never saw a header line specifying VCF version",
                 ));
             };
-            return parse_lines(&lines, &line, minor);
+            return Ok(RawHeader {
+                lines,
+                columns: line,
+                minor,
+            });
         } else {
             return Err(malformed(
                 "We never saw the required CHROM header line (starting with one #) for the input \
@@ -137,6 +157,12 @@ fn version_line(line: &str) -> Result<Option<u8>, String> {
             parts[1]
         ))
     })
+}
+
+/// The checks `AbstractVCFCodec.parseHeaderFromLines` makes of each line,
+/// and what a site reader needs.
+pub fn parse(raw: &RawHeader) -> Result<SiteHeader, String> {
+    parse_lines(&raw.lines, &raw.columns, raw.minor)
 }
 
 fn parse_lines(lines: &[String], columns: &str, minor: u8) -> Result<SiteHeader, String> {
@@ -188,7 +214,7 @@ fn parse_lines(lines: &[String], columns: &str, minor: u8) -> Result<SiteHeader,
 
 /// `String.substring(begin)`: the text after the first `begin` characters,
 /// an error when the line is shorter.
-fn after(line: &str, begin: usize) -> Result<&str, String> {
+pub(super) fn after(line: &str, begin: usize) -> Result<&str, String> {
     let length = line.chars().count();
     match line.char_indices().nth(begin) {
         Some((at, _)) => Ok(&line[at..]),
@@ -198,7 +224,7 @@ fn after(line: &str, begin: usize) -> Result<&str, String> {
 }
 
 /// The column line's samples, each once.
-fn column_samples(line: &str) -> Result<Vec<String>, String> {
+pub(super) fn column_samples(line: &str) -> Result<Vec<String>, String> {
     let fields = java_split(&line[1..], '\t');
     if fields.len() < COLUMNS.len() {
         return Err(malformed(format!(
@@ -369,7 +395,7 @@ fn put(
 
 /// `VCF4Parser.parseLine`: the `key=value` pairs of a `<...>` text in
 /// order, then the tag order checked against `expected`.
-fn parse_fields(
+pub(super) fn parse_fields(
     line: &str,
     expected: Option<&[&str]>,
     recommended: &[&str],
@@ -474,12 +500,12 @@ fn parse_fields(
 }
 
 /// `String.trim`: characters up to U+0020 removed from both ends.
-fn java_trim(text: &str) -> &str {
+pub(super) fn java_trim(text: &str) -> &str {
     text.trim_matches(|c: char| c <= ' ')
 }
 
 /// `String.split` on one character: trailing empty parts dropped.
-fn java_split(text: &str, separator: char) -> Vec<&str> {
+pub(super) fn java_split(text: &str, separator: char) -> Vec<&str> {
     let mut parts: Vec<&str> = text.split(separator).collect();
     while parts.last().is_some_and(|p| p.is_empty()) {
         parts.pop();

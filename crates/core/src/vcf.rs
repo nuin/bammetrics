@@ -33,6 +33,9 @@ use std::path::{Path, PathBuf};
 use noodles::vcf;
 
 mod bit_set;
+mod encode;
+mod encode_genotypes;
+mod full_header;
 mod header;
 mod line_cap;
 mod site;
@@ -41,8 +44,10 @@ mod site_header;
 pub use bit_set::MAX_DBSNP_PAGES;
 use bit_set::PAGE_BITS;
 use bit_set::{BitSet, OverBudget};
+pub use encode::{Encoder, format_quality};
+pub use full_header::{Count, Definition, VcfHeader, java_compare};
 use line_cap::LineCap;
-pub use site_header::{ContigLine, MAX_HEADER_BYTES, SiteHeader};
+pub use site_header::{ContigLine, MAX_HEADER_BYTES, RawHeader, SiteHeader};
 
 use crate::bed_to_interval_list;
 use crate::error::{Error, Result};
@@ -667,6 +672,97 @@ impl SiteReader {
     }
 }
 
+/// A VCF read line by line for a writer: the whole header as htsjdk's
+/// `VCFCodec` reads it ([`VcfHeader`]), then each record line as text, at
+/// most [`MAX_LINE_BYTES`] each, one line in memory at a time.
+pub struct VcfLines {
+    path: PathBuf,
+    reader: Box<dyn BufRead>,
+    header: VcfHeader,
+    raw: Vec<u8>,
+    line: u64,
+}
+
+impl VcfLines {
+    /// Open `path` (plain, gzip or BGZF by its first bytes) and read its
+    /// header.
+    pub fn open(path: &Path) -> Result<Self> {
+        let mut reader = open_text(path, MAX_LINE_BYTES, u64::MAX, u64::MAX)?;
+        let header = VcfHeader::read(&mut reader).map_err(|message| Error::Intervals {
+            path: path.to_path_buf(),
+            message,
+        })?;
+        Ok(Self {
+            path: path.to_path_buf(),
+            reader,
+            header,
+            raw: Vec::new(),
+            line: 0,
+        })
+    }
+
+    pub fn header(&self) -> &VcfHeader {
+        &self.header
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// The record lines read so far.
+    pub fn lines(&self) -> u64 {
+        self.line
+    }
+
+    /// Replace `out` by the next line without its line end (`\n` or
+    /// `\r\n`), decoded as UTF-8 (a byte that is not becomes U+FFFD, as
+    /// Java decodes it). False at the end of the file.
+    pub fn next_line(&mut self, out: &mut String) -> Result<bool> {
+        self.raw.clear();
+        let read = self
+            .reader
+            .read_until(b'\n', &mut self.raw)
+            .map_err(|source| Error::Input {
+                path: self.path.clone(),
+                source,
+            })?;
+        if read == 0 {
+            return Ok(false);
+        }
+        self.line += 1;
+        if self.raw.last() == Some(&b'\n') {
+            self.raw.pop();
+            if self.raw.last() == Some(&b'\r') {
+                self.raw.pop();
+            }
+        }
+        out.clear();
+        out.push_str(&crate::java::decode_utf8(&self.raw));
+        Ok(true)
+    }
+}
+
+/// True when `path` is a regular file whose text (plain, gzip or BGZF)
+/// starts with `##fileformat`: a VCF. A pipe or a device is never opened
+/// here, so it is never read ahead of its reader.
+pub fn is_vcf(path: &Path) -> bool {
+    if !fs::metadata(path).is_ok_and(|m| m.is_file()) || path.starts_with("/dev") {
+        return false;
+    }
+    let Ok(mut text) = open_text(path, MAX_LINE_BYTES, u64::MAX, u64::MAX) else {
+        return false;
+    };
+    let mut start = [0u8; 12];
+    let mut filled = 0;
+    while filled < start.len() {
+        match text.read(&mut start[filled..]) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => filled += n,
+        }
+    }
+    &start[..filled] == b"##fileformat"
+}
+
 /// One record as [`SiteReader::next_site`] reads it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Site {
@@ -769,7 +865,8 @@ fn parse_genotype(
                 ));
             }
             let gt = value.unwrap_or(".");
-            for token in gt.split(['/', '|']) {
+            // `StringTokenizer` over `/|\`: empty tokens are skipped.
+            for token in gt.split(['/', '|', '\\']).filter(|t| !t.is_empty()) {
                 if token == "." {
                     genotype.alleles.push(None);
                 } else {
