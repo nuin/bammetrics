@@ -1,0 +1,10 @@
+## argv
+CheckTerminatorBlock
+I=tests/data/doctor/cut.bam
+VALIDATION_STRINGENCY=SILENT
+## exit
+100
+## stdout
+## stderr
+bammetrics: ignoring VALIDATION_STRINGENCY=SILENT: no SAM, BAM or CRAM record is read
+DEFECTIVE

@@ -1,0 +1,26 @@
+## argv
+CompareSAMs
+tests/data/insert_size.bam
+tests/data/insert_size.cram
+R=tests/data/ref_100k.fa
+O=OUT/compared.txt
+COMPARE_MQ=true
+## exit
+0
+## stdout
+SAM files match.
+## stderr
+## file compared.txt
+## htsjdk.samtools.metrics.StringHeader
+# CompareSAMs INPUT=tests/data/insert_size.bam INPUT=tests/data/insert_size.cram REFERENCE_SEQUENCE=tests/data/ref_100k.fa OUTPUT=OUT/compared.txt COMPARE_MQ=true
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.SamComparisonMetric
+LEFT_FILE	RIGHT_FILE	MAPPINGS_MATCH	MAPPINGS_DIFFER	UNMAPPED_BOTH	UNMAPPED_LEFT	UNMAPPED_RIGHT	MISSING_LEFT	MISSING_RIGHT	DUPLICATE_MARKINGS_DIFFER	ARE_EQUAL
+ROOT/tests/data/insert_size.bam	ROOT/tests/data/insert_size.cram	10	0	0	0	0	0	0	0	Y
+
+## HISTOGRAM	java.lang.String
+BIN	VALUE
+60,60	10
+

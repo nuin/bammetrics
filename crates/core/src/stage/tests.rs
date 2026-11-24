@@ -619,7 +619,6 @@ fn write_options_name_their_files_and_refuse_the_kinds_of_later_waves() {
     );
     options.check().expect("a BAM name");
     for (name, kind, wave) in [
-        ("out.CRAM", "CRAM", "W15"),
         ("dir/reads.fastq", "FASTQ", "W22"),
         ("reads.fq.gz", "FASTQ", "W22"),
     ] {
@@ -630,7 +629,7 @@ fn write_options_name_their_files_and_refuse_the_kinds_of_later_waves() {
         assert_eq!(
             text,
             format!(
-                "{name}: bammetrics writes BAM and SAM only: {kind} output is wave {wave} of \
+                "{name}: bammetrics writes BAM, SAM and CRAM only: {kind} output is wave {wave} of \
                  docs/07_full_parity_program.md"
             )
         );
@@ -659,8 +658,24 @@ fn write_options_name_their_files_and_refuse_the_kinds_of_later_waves() {
     assert_eq!(WriteFormat::of(Path::new("OUT.SAM")), WriteFormat::Bam);
     assert_eq!(WriteFormat::of(Path::new(".sam")), WriteFormat::Sam);
     assert_eq!(WriteFormat::parse("sam"), Some(WriteFormat::Sam));
-    assert_eq!(WriteFormat::parse("cram"), None);
+    assert_eq!(WriteFormat::parse("cram"), Some(WriteFormat::Cram));
+    assert_eq!(WriteFormat::parse("fastq"), None);
     assert_eq!(WriteFormat::Sam.name(), "sam");
+    // A CRAM by the name, lower case as htsjdk tells it; no index beside it.
+    let mut cram = WriteOptions::new(Path::new("dir/out.cram"));
+    assert_eq!(cram.format, WriteFormat::Cram);
+    cram.check().expect("a CRAM name");
+    cram.create_md5 = true;
+    assert_eq!(
+        cram.files(),
+        ["dir/out.cram", "dir/out.cram.md5"].map(PathBuf::from)
+    );
+    cram.create_index = true;
+    assert!(matches!(
+        cram.check(),
+        Err(Error::Usage(text)) if text.starts_with("dir/out.cram: no index is written")
+    ));
+    assert_eq!(WriteFormat::of(Path::new("out.CRAM")), WriteFormat::Bam);
     for name in [
         "out.bam",
         "out",
@@ -668,6 +683,8 @@ fn write_options_name_their_files_and_refuse_the_kinds_of_later_waves() {
         "out.sam.bam",
         "/dev/stdout",
         "x.gz",
+        "out.cram",
+        "out.CRAM",
     ] {
         assert_eq!(later_kind(Path::new(name)), None, "{name}");
     }
@@ -932,7 +949,12 @@ fn the_write_step_copies_the_stream_into_a_bam_with_its_index_and_md5() {
 
     let refusals = [
         (source.clone(), "it is the input"),
-        (dir.join("out.cram"), "bammetrics writes BAM and SAM only"),
+        (
+            dir.join("out.fastq"),
+            "bammetrics writes BAM, SAM and CRAM only",
+        ),
+        // A CRAM of placed records needs the chain's reference.
+        (dir.join("out.cram"), "A reference must be supplied"),
         (dir.join("missing").join("out.bam"), "No such file"),
     ];
     for (path, text) in refusals {
@@ -943,6 +965,34 @@ fn the_write_step_copies_the_stream_into_a_bam_with_its_index_and_md5() {
     }
     assert_eq!(read_bam(&source).1.len(), 36);
     assert_eq!(std::fs::read_dir(&dir).expect("dir").count(), 3);
+
+    // A CRAM against the reference holds the records of the stream.
+    let cram = dir.join("copy.cram");
+    let reference = data("ref_100k.fa");
+    let options = WriteOptions {
+        reference: Some(reference.clone()),
+        create_md5: true,
+        ..WriteOptions::new(&cram)
+    };
+    let results = run_chain(write_plan(&source, options), None).expect("the chain runs");
+    let products = results[0].as_ref().expect("the write step");
+    assert_eq!(products.files, [cram.clone(), dir.join("copy.cram.md5")]);
+    let decoded = pass::with_record_stream(&cram, Some(&reference), 1, |_, reader, cram| {
+        assert!(cram);
+        let mut names = Vec::new();
+        let mut record = RawRecord::default();
+        while record.read_from(reader).map_err(Error::Record)? {
+            names.push((record.name().to_vec(), record.tag_bytes().to_vec()));
+        }
+        Ok(names)
+    })
+    .expect("the CRAM");
+    let written: Vec<_> = read_bam(&source)
+        .1
+        .iter()
+        .map(|record| (record.name().to_vec(), record.tag_bytes().to_vec()))
+        .collect();
+    assert_eq!(decoded, written);
     std::fs::remove_dir_all(&dir).expect("cleanup");
 }
 

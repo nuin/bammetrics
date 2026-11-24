@@ -2,6 +2,181 @@
 
 ## Unreleased
 
+## 0.33.0
+
+Wave W15 of docs/07, 74 tools: CRAM output for every `OUTPUT` and chain `write` step ending in `.cram` (`-o r.cram` on a chain too), and `SamFormatConverter`, `CompareSAMs` and `CheckTerminatorBlock` (tools 72 to 74, none a chain step); decisions D206 to D235.
+
+### Added
+
+- CRAM output (wave W15 of docs/07, `crates/core/src/cram_writer.rs`). An `OUTPUT` whose
+  name ends in `.cram`, lower case, is written as a CRAM 3.0 against `REFERENCE_SEQUENCE`
+  by `SortSam`, `MarkDuplicates`, every record-editing tool that rewrites its records
+  (`MergeSamFiles`, `AddOrReplaceReadGroups`, `CleanSam`, `DownsampleSam`, `AddOATag` and
+  the others on `record_edit.rs`) and the chain `write` step (`write out.cram` with the
+  chain's `-R`, or `--output-format cram`). The header is the BAM's. Each record keeps
+  its own mate fields and every tag where the BAM has it. `CREATE_MD5_FILE` writes
+  `<CRAM>.md5`; `COMPRESSION_LEVEL` sets the gzip level of the blocks. Decisions D206 to
+  D223 of docs/07 list where this is not what Picard's writer does.
+- `tests/concordance/test_cram_writer.py`: each CRAM is read by samtools, Picard 3.5.0 and
+  bammetrics and held to the BAM of the same stream and to samtools' own CRAM of it, on
+  the foundation corpus, t1, the exome slice and the hand-built BAMs of `cram_bams.py`,
+  through `SortSam`, five more tools and the chain `write` step. Nine more tools are read
+  by samtools alone, each on a fixture.
+- `vendor/noodles-cram`: `io::writer::raw`, the CRAM writer in pieces, and a writer whose
+  bytes are a function of its records (vendor/README.md, changes six and seven).
+- The CRAM writer after its review (docs/07 D217 to D222):
+  - The reference of a CRAM output is found by name. A FASTA with more contigs than the
+    header, in another order, with a contig longer than its `@SQ` line, or without a
+    contig no record lies on is written, as Picard writes it. A record on a contig the
+    FASTA lacks fails with htsjdk's sentence. The strict check refused all four.
+  - A `Z` or `H` tag value is stored as the bytes of the BAM. One record with a UTF-8
+    letter or a control byte in a tag failed the whole file with `invalid string`.
+  - A record whose mate reference index is not in the header fails the writer, as it
+    fails Picard. It was written into a CRAM no reader opens.
+  - A slice ends at 8 MiB of BAM records as well as at 10,000 records, and at most 64 MiB
+    of BAM records wait for the encoders. 25,000 reads of 20,000 bases: 1,855 MiB peak
+    RSS before and 649 MiB after with 1 thread, 2,996 and 1,088 MiB with 8.
+  - A slice reads the reference bases it spans, in place of its whole contig. 5 reads
+    close together on a 250 Mbp contig: 248 MiB before, 10 MiB after.
+  - No `.fai` line is searched by name. 160,000 contigs with one read each: 19.2 s
+    before, 0.5 s after.
+  - bammetrics reads a CRAM whose read name or tag text has a byte noodles' BAM encoder
+    refuses (a UTF-8 letter, a control byte, an `@` in a name), from any writer.
+  - `vendor/noodles-cram`: the rANS 4x8 frequency table in 64-bit arithmetic, tag texts
+    as bytes, `Record::mask_texts` (vendor/README.md, changes eight to ten).
+  - `benches/memgate.toml`: the fixture row `clean-sam cram long reads` (3,000 reads of
+    50,000 bases, 185 to 200 MiB, limit 320 MiB; 777 MiB before).
+  - `tests/concordance/test_cram_writer.py`: four tests against Picard for the FASTA found
+    by name, tag texts outside printable ASCII, a mate reference the header lacks, and the
+    two records Picard's CRAM writer refuses and bammetrics writes (a read that starts
+    past its contig end, an unmapped record with a CIGAR; KNOWN_DIFFERENCES.md). One
+    golden record, `error_sort_sam_cram_absent_contig`.
+  - `--help`, the tool summaries, the Python docstrings, README, docs/cli.md and
+    docs/python.md name the CRAM output where they named a BAM and SAM text alone.
+  - A container with 1 to 3 quality bytes is written: its rANS block is order 0, as
+    htscodecs codes it (vendor/README.md, change eleven). One read of 1 to 3 bases, or
+    a tail container of such reads, failed the whole file with `invalid input
+    parameter`.
+  - A mapped record without bases (SEQ `*`) counts two bytes per read base of its
+    CIGAR toward its container, and one whose CIGAR covers more than 16 Mi read bases
+    fails naming it (docs/07 D223). A 194-byte BAM of 4 records with CIGAR
+    `268435455M` cost 2,058 MiB.
+  - A CIGAR operator of length 0 is left out: `5M0I5M`, `5M0D5M` and `10M0S` read back
+    `10M` under samtools and Picard. Picard's CRAM leaves out `0I` and `0H` alone.
+  - The chain planner counts a coordinate-sorted CRAM at 49 bytes per record, 69% of
+    the BAM on the foundation corpus and the exome slice. It counted 37, from the
+    exome alone. `chain + write
+    --help` names the SAM and CRAM output.
+- `SamFormatConverter` (wave W15 of docs/07, `crates/core/src/sam_format_converter.rs`,
+  verb `sam-format-converter`, Python `sam_format_converter()`). Every record of a SAM,
+  BAM or CRAM is written unchanged in the format the name of `OUTPUT` gives, as htsjdk
+  decides it: SAM text for `.sam`, a CRAM for `.cram` (with `R=`), a BAM for any other
+  name. The header is the input's as htsjdk's writer writes it, with no `@PG` line.
+  `CREATE_INDEX`, `CREATE_MD5_FILE`, `COMPRESSION_LEVEL`; `MAX_RECORDS_IN_RAM` changes
+  nothing. `CREATE_INDEX` on a header not sorted by coordinate fails with Picard's
+  sentence before any file is made. Not a chain step: `chain BAM + sam-format-converter`
+  exits 2 and names `write`. Decisions D224 to D228 of docs/07. 72 registry tools.
+- `tests/concordance/test_sam_format_converter.py`: the six conversions of SAM text, BAM
+  and CRAM on the foundation corpus, t1, the exome slice, the tests/data BAMs and the
+  BAMs of `cram_bams.py`, each against Picard's file of the same conversion (SAM text
+  byte for byte, BAM records as bytes, CRAM decoded), round trips back to the first
+  form, every option, headers, bad SAM lines at each stringency and error parity.
+- 12 golden records (`SAM_FORMAT_CONVERTER_CASES`), two fixture and two scale rows in
+  `benches/memgate.toml`. `docs/cli.md` says that `convert` converts metrics files and
+  `sam-format-converter` converts reads.
+- `SamFormatConverter` after its review (docs/07 D228 to D232):
+  - A BAM followed by bytes after its end-of-file block (zeros, `0xFF`, a gzip member, a
+    cut block header) is read to that block, as htsjdk reads it, by every tool. 32 of 40
+    such conversions exited 1 (`truncated BAM`, `invalid frame size`).
+  - A CIGAR of more than 65,535 operators is read from SAM text into the BAM form htsjdk
+    writes (`<n>S<m>N` and `CG:B:i`), and written to SAM text as the operators of the
+    tag. SAM text holding one exited 1; a BAM of one gave a SAM line with the
+    placeholder. The CRAM writer takes the operators of `CG:B:i`, htsjdk's form, as it
+    took `CG:B:I`, and fails a `CG` tag of 65,535 operators or fewer as htsjdk does. A
+    CRAM record of one gets `MD` and `NM` from its operators.
+  - A CRAM header is stored and read as UTF-8 of the characters htsjdk holds. A SAM
+    header with `DS:café` gave a CRAM with the byte `0xE9`, and a CRAM header in UTF-8
+    gave SAM text and BAM headers with two bytes per letter.
+  - A record without the paired flag read from a CRAM has no mate reference and no mate
+    start, as in htsjdk.
+  - Documented in KNOWN_DIFFERENCES.md, with a test each: a BAM cut inside its records, a
+    repeated `@RG` ID, a mapped record without bases in Picard's CRAM, a CRAM read with
+    a shorter FASTA, `MD` and `NM` of a CRAM with an embedded reference or none, a
+    header character above U+00FF from SAM text into a CRAM.
+  - The golden record `verb_sam_format_converter_other_name` holds the decoded BAM in
+    place of its compressed bytes: a BAM under any name is recorded as a `.bam` is.
+- `CompareSAMs` (verb `compare-s-a-ms`, Python `compare_s_a_ms()`), as Picard 3.5.0: two
+  SAM, BAM or CRAM files as Picard's two positional arguments, the header comparison
+  (version, `CR`, `SO`, the dictionaries, read groups and program records) printed as
+  Picard's three lines per difference, the three record walks of `SamComparison`
+  (coordinate, queryname, unsorted), the `SamComparisonMetric` file, `LENIENT_HEADER`,
+  `LENIENT_DUP` (htsjdk's duplicate order and duplicate sets, spilled at
+  `MAX_RECORDS_IN_RAM`), `LENIENT_LOW_MQ_ALIGNMENT`, `LENIENT_UNKNOWN_MQ_ALIGNMENT`,
+  `LOW_MQ_THRESHOLD`, the `COMPARE_MQ` histogram, and exit 1 when the files differ. The
+  strand quirk of docs/04 Q-018 is kept. Not a chain step. Read names and header values
+  are compared as htsjdk's strings (a BAM one character per byte, SAM text and a CRAM as
+  UTF-8), so two SAM text values that share their low bytes differ.
+- `CheckTerminatorBlock` (verb `check-terminator-block`, Python
+  `check_terminator_block()`), as Picard 3.5.0: `HAS_TERMINATOR_BLOCK`,
+  `HAS_HEALTHY_LAST_BLOCK` or `DEFECTIVE` from the last 64 KiB of a BGZF file, exit 100 on
+  `DEFECTIVE`. The Picard face prints the name on standard error, as Picard does; the verb
+  on standard output. A named pipe is refused without being opened.
+- `tests/data/compare_sams_{left,right,other}.bam`
+  (`tests/data/make_compare_sams_fixtures.py`), 29 golden records, the concordance modules
+  `test_compare_s_a_ms.py` and `test_check_terminator_block.py`, five memory gate rows (three on fixtures, two on the exome).
+
+### Changed
+
+- `CompareSAMs` compares the header values of a CRAM as the UTF-8 htsjdk decodes, as it
+  did before the CRAM header was held one byte per character (`cram::read_header_decoded`):
+  `café` against `cafè`, CJK and emoji values print as Picard prints them. 22 cases of
+  `test_header_values_beyond_ascii` failed on the merged branch.
+- CRAM header text is split into lines and fields after it is decoded, as htsjdk splits
+  it, and only then held one byte per character. A character above U+00FF whose low byte
+  is a tab, a line end or a NUL (U+0109, U+010A, U+0100) is held as `?`, as for SAM text.
+  A crafted CRAM header could add `@RG` or `@SQ` lines or fields before
+  (`test_cram_header_text.py` against Picard `ViewSam`).
+- Chain, fitted to 0.32.0: `-o r.cram` on a chain with a transform and no `write` adds
+  `write r.cram` (no `--index`) as the last step, against `-R`, `BAMMETRICS_REFERENCE` or
+  the config file's `reference`, and names the metrics `r.<extension>`; without a
+  reference it exits 2 before the first read, and `-o r.CRAM` exits 2 as `r.SAM` does.
+  Manifest 2 records the file with kind `cram`; `--resume` skips its `write` step as a
+  BAM's and never starts a read at it. Golden record `error_chain_result_cram` no longer
+  names wave W15, `error_chain_write_cram` gains the config hint, and two records are new
+  (`chain_result_cram`, `error_chain_result_cram_case`).
+- A `.cram` `OUTPUT` is no longer refused naming wave W15. Without `REFERENCE_SEQUENCE` a
+  tool fails at the first record with a reference sequence, with htsjdk's message, exit
+  1, and leaves no file; a chain that writes a CRAM without `-R` exits 2 before the first
+  read. `CREATE_INDEX` with a CRAM output is a usage error (Picard writes a `.cram.bai`).
+  A block copy (`AddCommentsToBam`, `ReplaceSamHeader` of a BAM, `GatherBamFiles` of
+  BAMs) still refuses a `.cram` name, and `SplitSamByLibrary` still refuses a CRAM input,
+  now without a wave in its message. `--output-format` takes `cram`.
+  `RevertOriginalBaseQualitiesAndAddMateCigar`, whose `CREATE_INDEX` defaults to true,
+  writes a CRAM and its MD5 without an index.
+- `benches/memgate.toml`: a fixture row and a scale row for the CRAM writer. The HG002
+  exome BAM (150,538,907 records) as a CRAM with 8 threads: 587 and 688 MiB peak RSS in
+  two runs, about 180 s, 52.9% of the BAM's bytes; samtools reads every record equal to
+  the BAM's. samtools' own CRAM 3.0 of it is 14% smaller and written 3.7 times as fast
+  (docs/benchmarks.md, docs/07 D216). After the review fixes: 360 and 422 MiB, the
+  same bytes, every record equal under samtools again. Not measured: Picard on that
+  file, an unsorted stream at scale.
+- SAM text: a header line is split into fields after it is decoded as UTF-8, as htsjdk
+  splits it. A character above U+00FF whose low byte is a tab, a line end or a NUL
+  (U+0109, U+010A, U+0100) no longer cuts its value or fails the header; it is held as
+  `?` (KNOWN_DIFFERENCES.md, SAM text).
+- `MarkDuplicates` and `FixMateInformation` with several inputs name a BAM cut inside a
+  record as the other readers do (`PATH: truncated BAM: the file ends inside a record or
+  a block`), where they said `bad record: failed to fill whole buffer`
+  (`crates/cli/tests/cut_record.rs`).
+- The duplicate order (`SortSam SORT_ORDER=duplicate`, `CollectUmiPrevalenceMetrics`,
+  `CompareSAMs LENIENT_DUP`): an unmapped record with a mapped mate and no `MC` fails only
+  when another record ties with it in the file order, as htsjdk scores it only then. It
+  failed whenever it was read.
+- `CompareSAMs`: an `SO` value htsjdk does not know prints as `unknown` for a BAM or a
+  CRAM, as for SAM text. `chain` refuses `compare-s-a-ms` and `check-terminator-block`
+  as steps with a reason of their own (docs/chaining.md section 1). `CheckTerminatorBlock`
+  opens the path as given, so a file name that is not UTF-8 is checked.
+
 ## 0.32.0
 
 Chain 2 (wave W14 of docs/07) and the simpler chain command, 71 tools and no new one: steps without `+` and `-o` naming the BAM (`bammetrics chain fixed.bam reorder-sam insert-size -R ref.fa -o r.bam`, `-R` from the config file when it holds `reference`), a user config file, the recipes (`bammetrics prep in.bam -o out.bam`), manifest 2 with `--resume` per step and `--keep`, `qc` as the last step, and every tool that reads a BAM as a step at any position (53 of the 71); every `+` form of 0.31.0 runs as before.

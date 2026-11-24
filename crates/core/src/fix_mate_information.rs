@@ -69,8 +69,9 @@ use crate::stage::{Counters, Frame, Stage, WriteFormat, later_kind};
 pub const TOOL: Tool = Tool {
     name: "FixMateInformation",
     summary: "no rows; OUTPUT gets every record of every INPUT with the mate fields, MQ, MC and \
-              TLEN of each pair set from its mate, in SORT_ORDER: a BAM, or SAM text for a \
-              name ending in .sam. Without OUTPUT the one INPUT is rewritten in place.",
+              TLEN of each pair set from its mate, in SORT_ORDER: a BAM, SAM text for a name \
+              ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in .cram. \
+              Without OUTPUT the one INPUT is rewritten in place.",
     options: &[
         Opt::path(
             &["INPUT", "I"],
@@ -81,8 +82,9 @@ pub const TOOL: Tool = Tool {
         .required(),
         Opt::path(
             &["OUTPUT", "O"],
-            "The BAM to write, or SAM text for a name ending in .sam; without it the one INPUT \
-             BAM is rewritten in place.",
+            "The BAM to write, SAM text for a name ending in .sam, or a CRAM (with \
+             REFERENCE_SEQUENCE) for one ending in .cram; without it the one INPUT BAM is \
+             rewritten in place.",
         )
         .written(),
         Opt::text(
@@ -410,8 +412,11 @@ fn run(opts: &FixOptions) -> Result<Counters> {
                 let (header, reader, _) = streams.pop().expect("one input");
                 (header, Source::One(reader))
             } else {
-                let (headers, readers): (Vec<sam::Header>, Vec<_>) =
-                    streams.into_iter().map(|(h, r, _)| (h, r)).unzip();
+                let (headers, readers): (Vec<sam::Header>, Vec<_>) = streams
+                    .into_iter()
+                    .zip(&opts.inputs)
+                    .map(|((h, r, c), path)| (h, (path.as_path(), c, r)))
+                    .unzip();
                 let merged = HeaderMerger::merge(&headers)?;
                 let header = merged.header.clone();
                 let merge = if queryname {

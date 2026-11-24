@@ -499,6 +499,98 @@ holds 1 MiB of bases and at most three intervals. On one generated contig of 200
 bases (`n_run_refs.py --long`, 40,002 lines written) bammetrics peaks at 4.9 MiB in both
 tools.
 
+## CRAM writer (wave W15, HG002 exome)
+
+20 cores, 64 GB. Release build of `feat/cram-writer`, under `/usr/bin/time -l`, other
+builds and test runs on the machine. The input is `HG002.exome.bam`: 10,339,495,604
+bytes, 150,538,907 records, coordinate order, on `hs37d5.fa`. Each command ran with 8
+threads. samtools 1.25 with `--output-fmt-option version=3.0` is there for scale.
+
+| command | wall | peak RSS | CRAM bytes | of the BAM |
+|---|---:|---:|---:|---:|
+| `bammetrics chain BAM -R hs37d5.fa + write out.cram`, first run | 181.5 s | 587 MiB | 5,464,644,737 | 52.9% |
+| the same, as the row `chain write cram exome` of `make memgate TIER=scale` | 173.3 s | 688 MiB | | |
+| `samtools view -@ 8 -C --output-fmt-option version=3.0` | 48.7 s | 1,389 MiB | 4,687,059,835 | 45.3% |
+| the bammetrics command after the review fixes, first run | 207.2 s | 360 MiB | 5,464,644,737 | 52.9% |
+| the same, second run | 191.7 s | 422 MiB | 5,464,644,737 | 52.9% |
+
+The two bammetrics runs are the same command on the same input; their peak RSS differs by
+100 MiB, and why was not looked into. bammetrics' CRAM is 16.6% larger than samtools' and
+takes 3.7 times as long to write. Every record is detached, every tag is stored where
+the BAM has it, and all blocks but the quality scores are gzip; which of these costs what
+was not measured.
+
+What was checked on that file:
+
+- samtools reads its header and its 150,538,907 records equal to the BAM's
+  (`samtools view --input-fmt-option decode_md=0`): the two decoded texts compared line
+  by line, 0 differ, and their MD5 is the same (`966e8c70e4a7c4b2f34032abc4b25226`). The
+  same comparison with `-x RG` on the CRAM side reports every one of its first 1,000,000
+  records, so it sees a difference where there is one.
+- bammetrics `CollectQualityYieldMetrics` gives the same file body from the BAM (34 s)
+  and from the CRAM (55 s): 150,386,776 reads, 18,948,733,776 bases.
+
+The last two rows are the writer after its review (docs/07 D217 to D222): a slice
+reads the reference bases it spans in place of its whole contig, and a container ends at
+8 MiB of BAM records as well as at 10,000 records. `cargo clippy` and `cargo test` ran on
+the machine during both runs, so the wall times are not comparable with the rows above.
+The file has the same number of bytes. samtools reads the header and the 150,538,907
+records to the text it reads from the BAM (`samtools view -h --no-PG`, `decode_md=0` on
+the CRAM: MD5 `13acf6f32c56cc96c67042a725d3955d` of both, 150,538,997 lines), and
+`CollectQualityYieldMetrics` on the CRAM gives 150,386,776 reads and 18,948,733,776 bases.
+
+Long reads and many contigs, generated inputs, `/usr/bin/time -l`:
+
+| input and command | before the review fixes | after |
+|---|---:|---:|
+| 25,000 reads of 20,000 bases, `chain + write x.cram --threads 1` | 5.6 s, 1,855 MiB | 2.7 s, 649 MiB |
+| the same, `--threads 8` | 3.0 s, 2,996 MiB | 1.4 s, 1,088 MiB |
+| the same to a BAM, `--threads 8` | | 2.0 s, 719 MiB |
+| 3,000 reads of 50,000 bases, `clean-sam -o x.cram` | 2.3 s, 777 MiB | 1.1 s, 185 MiB |
+| the same to a BAM | | 0.9 s, 27 MiB |
+| 5 reads within 250 bases of a 250 Mbp contig, `SortSam O=x.cram` | 0.2 s, 248 MiB | 0.4 s, 10 MiB |
+| 2 reads at the two ends of that contig | 1.0 s, 248 MiB | 1.0 s, 248 MiB |
+| 160,000 contigs of 200 bases, one read each, `chain + write x.cram` | 19.2 s, 116 MiB | 0.5 s, 124 MiB |
+| the same to a BAM | | 0.3 s, 102 MiB |
+
+The CRAM of the 25,000 long reads is 290,281,654 bytes before and 150,884,476 after.
+The probable cause: a slice of 10,000 such reads holds 200,000,000 quality scores, past
+the count at which the vendored rANS encoder's 32-bit product wrapped (vendor/README.md,
+the ninth change). With slices of 8 MiB the file has 150,884,476 bytes with the 32-bit
+product and with the 64-bit one. The old slices with the 64-bit product were not
+measured. samtools reads each file after the fixes to the records of the BAM.
+
+Not measured: Picard on that file; an unsorted stream at scale, which reads the bases
+under each record through the `.fai`; other thread counts. The memgate row ran with the
+default `--out-root`, so its file was written under the checkout's `target/memgate`.
+
+## CompareSAMs and CheckTerminatorBlock (wave W15, HG002 exome)
+
+`HG002.exome.bam` (10 GB, 150,386,776 primary records) and its chromosomes 20 to 22
+(`samtools view`, 8,445,233 records, 547 MiB), coordinate sorted and collated (`samtools
+collate`, `SO:unsorted`); the default threads; `/usr/bin/time -l`; Picard 3.5.0 with `-Xmx8g`,
+`VALIDATION_STRINGENCY=SILENT` and `QUIET=true`. Every file against itself, so the
+coordinate walk pairs each record at its place and holds none, and the unsorted walk holds
+every primary record of the left file. Picard and bammetrics wrote the same row for both
+slices.
+
+| command | bammetrics | Picard |
+|---|---|---|
+| `check-terminator-block` exome | 0.0 s, 8 MiB | not run |
+| `compare-s-a-ms` exome, coordinate | 50.8 s, 45 MiB | not run |
+| `compare-s-a-ms --lenient-dup` exome, coordinate | 65.4 s, 117 MiB | not run |
+| `compare-s-a-ms` slice, coordinate | 2.2 s, 13 MiB | 12.1 s, 749 MiB |
+| `compare-s-a-ms` slice, unsorted | 7.9 s, 1,969 MiB | 19.7 s, 6,065 MiB |
+| `compare-s-a-ms --lenient-dup` slice, unsorted | 12.1 s, 3,526 MiB | not run |
+
+The unsorted walk is the worst case of the tool: 233 bytes a waiting record at the peak
+(48 bytes of table entry, the read name, and the old table while it is resized), 418 under
+`--lenient-dup`, which keeps each waiting record's fixed fields, name, CIGAR, `RG` and
+`MC`. Picard held 6,065 MiB under `-Xmx8g`. A coordinate walk of two files that share no
+read holds the primary records of both the same way. The two tools add 99,360 bytes to the
+stripped default binary (9,843,192 at 0.31.0, 9,942,552 with them; 113,664 unstripped),
+both built with rustc 1.100.0.
+
 ## Memory gate
 
 `make memgate` runs each row of `benches/memgate.toml` under `/usr/bin/time -l` and fails
@@ -827,6 +919,46 @@ The resumed run writes the `insert_size_metrics` the fresh run writes, byte for 
 after the `StringHeader` lines, in a tenth of its time: the read starts at the BAM the
 `write` step wrote (docs/chaining.md section 32.2).
 
+Wave W15 (`compare-s-a-ms`, `check-terminator-block`), measured with the commands of
+step 4 below, outputs under `~/data/bammetrics-scale/waves/w15`, removed after the run:
+
+| command | tier | peak RSS MiB / limit | wall s | spill MiB / limit |
+|---|---|---|---:|---:|
+| `compare-s-a-ms` | fixture | 9.8 / 64 | 0.01 | |
+| `compare-s-a-ms lenient` | fixture | 9.1 / 64 | 0.02 | |
+| `check-terminator-block` | fixture | 7.5 / 64 | 0.01 | |
+| `compare-s-a-ms exome against itself` | scale | 44.5 / 1024 | 43.43 | |
+| `check-terminator-block exome` | scale | 7.6 / 64 | 0.01 | |
+
+Every wave W15 row at 0.33.0 (2026-11-24, release/0.33.0 with fix/0.32.0-review merged,
+one run each; `make memgate` passes 70 fixture rows, `TIER=scale make memgate` passes 39
+scale rows and skips 6: the two chain sort-barrier rows,
+`revert-original-base-qualities-and-add-mate-cigar pairs`, the two `merge-sam-files
+slice` rows and `reorder-sam slice`, whose inputs were removed after earlier runs). Scale
+outputs went under `~/data/bammetrics-scale/waves/w15` and were removed after the run.
+The fixture wall times are from a second fixture run the same day, which peaked within
+0.3 MiB of these rows except `clean-sam cram long reads` (172.5 MiB):
+
+| command | tier | peak RSS MiB / limit | wall s | spill MiB / limit |
+|---|---|---|---:|---:|
+| `sort-sam cram` | fixture | 10.2 / 64 | 0.00 | |
+| `clean-sam cram long reads` | fixture | 194.0 / 320 | 2.71 | |
+| `sam-format-converter` | fixture | 8.8 / 64 | 0.00 | |
+| `sam-format-converter cram` | fixture | 11.2 / 64 | 0.00 | |
+| `compare-s-a-ms` | fixture | 10.0 / 64 | 0.02 | |
+| `compare-s-a-ms lenient` | fixture | 9.2 / 64 | 0.01 | |
+| `check-terminator-block` | fixture | 7.5 / 64 | 0.01 | |
+| `chain write cram exome` | scale | 359.7 / 1024 | 187.88 | |
+| `sam-format-converter slice sam` | scale | 12.8 / 512 | 9.00 | |
+| `sam-format-converter slice cram` | scale | 178.1 / 1024 | 10.39 | |
+| `compare-s-a-ms exome against itself` | scale | 49.1 / 1024 | 44.06 | |
+| `check-terminator-block exome` | scale | 7.7 / 64 | 0.01 | |
+
+Of the rows of earlier waves, `mark-duplicates slice` peaks at 634.5 / 1024 MiB (666.8 at
+0.32.0), `fix-mate-information slice` at 622.6 / 3072 (629.0), `downsample-sam
+HighAccuracy slice` at 1,976.9 / 3072 (1,975.3), `rrbs exome` at 453.7 / 1024 (528.1 at
+0.31.0) and `chain short form resumed slice` at 651.7 / 2048 (680.1 at 0.32.0).
+
 To add a scale row:
 
 1. Keep the data under `~/data/bammetrics-scale`, never in the repository. Write nothing
@@ -960,6 +1092,8 @@ The whole binary, for the record (macOS arm64, rustc 1.99.1, each commit built o
 | 0.31.0 pdf | the same with `--features pdf` | 15,689,568 | 13,188,376 |
 | 0.32.0 | 2026-11-23, release/0.32.0: feat/chain-grammar, feat/chain-manifest and feat/chain-stages merged and reconciled, the version set, rustc 1.100.0, default features (feature `parquet` on) | 12,150,128 | 10,223,776 |
 | 0.32.0 pdf | the same with `--features pdf` | 16,096,304 | 13,552,448 |
+| 0.33.0 | 2026-11-23, release/0.33.0: feat/cram-writer, feat/sam-format-converter and feat/compare-terminator merged on release/0.32.0, the version set, rustc 1.100.0, default features (feature `parquet` on) | 12,693,488 | 10,703,568 |
+| 0.33.0 pdf | the same with `--features pdf` | 16,655,648 | 14,048,760 |
 
 From 0.21.0 to 0.22.0 the binary grew 202,816 bytes (198.1 KB), 182,072 stripped (177.8
 KB, 3.0%): the `chain` verb with its plan file and plan text, and `FifoBuffer`.
@@ -1030,6 +1164,13 @@ file and the recipes with their three compiled-in files, manifest 2 with `--resu
 `--keep` and the prefix lock, the qc step with its flag table and writers, and the
 materialize fallback with its 17 rows. With `--features pdf` it grew 364,072 bytes
 stripped, and the PDF build is 3,328,672 bytes over the default build.
+
+From 0.32.0 to 0.33.0 the default binary grew 479,792 bytes stripped (4.7%), both built
+with rustc 1.100.0: the CRAM writer (`cram_writer.rs` and the vendored noodles-cram
+writer pieces), `SamFormatConverter`, `CompareSAMs` with its three record walks, and
+`CheckTerminatorBlock`. With `--features pdf` it grew 496,312 bytes stripped, and the
+PDF build is 3,345,192 bytes over the default build. The owner accepts binary growth
+(2026-11-22); `make budgets` checks the formats and report rows.
 
 From 28647a8 to f82df56 the binary grew 387,952 bytes (378.9 KB), 347,504 stripped (339.4
 KB): the two crates plus the verbs' discovery and output code, over the 300 KB target and

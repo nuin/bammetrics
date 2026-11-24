@@ -244,6 +244,10 @@ the other steps wrote their files; a chain that ends in `qc --fail-on` exits 10 
 `CompareMetrics` exit 1 when the two files are NOT equal, as Picard does;
 `check-duplicate-marking` and `CheckDuplicateMarking` exit 1 when a record's duplicate flag
 differs from the first record of its queryname.
+`compare-s-a-ms` and `CompareSAMs` exit 1 when the two files differ, as Picard does.
+`check-terminator-block` and `CheckTerminatorBlock` exit 100 when the file's end is
+`DEFECTIVE`, Picard's code, and 0 for the other two outcomes; an error (a missing file)
+exits 1, or 2 for a usage error on the verb.
 
 ## Errors
 
@@ -320,20 +324,20 @@ table.
 | `build-bam-index` | BuildBamIndex (a coordinate-sorted BAM; `-o` names the index, default beside the BAM) | one `.bai`, no metrics file |
 | `fifo-buffer` | FifoBuffer (standard input to standard output; no input argument, no `-o`) | no file: the bytes it read, on standard output |
 | `view-sam` | ViewSam (SAM, BAM or CRAM in) | SAM text on standard output, or in `-o` |
-| `sort-sam` | SortSam (`--sort-order` queryname, coordinate or duplicate) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `sort-sam` | SortSam (`--sort-order` queryname, coordinate or duplicate) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
 | `exon-coverage` | CollectExonCoverageMetrics (not a Picard tool, [exon_coverage.md](exon_coverage.md); `--annotation` GTF, GFF3, BED12 or BED) | one (plus the `--summary-output` gene and transcript file) |
 | `duplicate-by-tile` | CollectDuplicateByTileMetrics (not a Picard tool, docs/06 section 8; `--read-name-regex`, `--outlier-sd`) | one |
 | `telomere` | CollectTelomereMetrics (not a Picard tool, [telomere.md](telomere.md); `-K` the repeat threshold, `--repeat`, `--count-duplicates`) | one |
 | `index-depth` | CollectIndexDepthMetrics (not a Picard tool, [docs/06](06_clinical_checks.md) section 10; a BAM with its `.bai` or `.csi`, never read whole; a CRAM refused) | one |
 | `add-comments-to-bam` | AddCommentsToBam (a BAM; `--comment` repeated) | `-o` BAM, no metrics file |
-| `replace-sam-header` | ReplaceSamHeader (a SAM, BAM or CRAM; `--header` names the file whose header replaces the input's) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `add-o-a-tag` | AddOATag (a SAM, BAM or CRAM; `-L` an interval list) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `clean-sam` | CleanSam (a SAM, BAM or CRAM; soft-clips alignments past the end of their reference, MAPQ 0 on unmapped records) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `set-nm-md-and-uq-tags` | SetNmMdAndUqTags (a coordinate-sorted SAM, BAM or CRAM; `-R` required; `--is-bisulfite-sequence`, `--set-only-uq`) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `set-nm-and-uq-tags` | SetNmAndUqTags (Picard's deprecated name of SetNmMdAndUqTags: the same options and output) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `add-or-replace-read-groups` | AddOrReplaceReadGroups (a SAM, BAM or CRAM; `--rglb`, `--rgpl`, `--rgpu`, `--rgsm` required; `--sort-order`) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `revert-original-base-qualities-and-add-mate-cigar` | RevertOriginalBaseQualitiesAndAddMateCigar (a SAM, BAM or CRAM; `--sort-order`, `--restore-original-qualities`, `--max-records-to-examine`) | `-o` BAM (with `.bai` and `.md5` by default), or SAM text for a name ending in `.sam`; nothing for a file in shape |
-| `split-sam-by-library` | SplitSamByLibrary (a SAM, BAM or CRAM; a CRAM exits 2 naming wave W15) | `-o DIR`, default the current directory: one BAM, or SAM text, per library |
+| `replace-sam-header` | ReplaceSamHeader (a SAM, BAM or CRAM; `--header` names the file whose header replaces the input's) | `-o` BAM; when the input name does not end in `.bam`, SAM text for a name ending in `.sam` or a CRAM for one ending in `.cram` (with `-R`) |
+| `add-o-a-tag` | AddOATag (a SAM, BAM or CRAM; `-L` an interval list) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
+| `clean-sam` | CleanSam (a SAM, BAM or CRAM; soft-clips alignments past the end of their reference, MAPQ 0 on unmapped records) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
+| `set-nm-md-and-uq-tags` | SetNmMdAndUqTags (a coordinate-sorted SAM, BAM or CRAM; `-R` required; `--is-bisulfite-sequence`, `--set-only-uq`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
+| `set-nm-and-uq-tags` | SetNmAndUqTags (Picard's deprecated name of SetNmMdAndUqTags: the same options and output) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
+| `add-or-replace-read-groups` | AddOrReplaceReadGroups (a SAM, BAM or CRAM; `--rglb`, `--rgpl`, `--rgpu`, `--rgsm` required; `--sort-order`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
+| `revert-original-base-qualities-and-add-mate-cigar` | RevertOriginalBaseQualitiesAndAddMateCigar (a SAM, BAM or CRAM; `--sort-order`, `--restore-original-qualities`, `--max-records-to-examine`) | `-o` BAM (with `.bai` and `.md5` by default), SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`, its `.md5` and no index); nothing for a file in shape |
+| `split-sam-by-library` | SplitSamByLibrary (a SAM, BAM or CRAM; a CRAM exits 2) | `-o DIR`, default the current directory: one BAM, or SAM text, per library |
 | `split-sam-by-number-of-reads` | SplitSamByNumberOfReads (a SAM, BAM or CRAM; `--n-files` or `--n-reads`) | `-o DIR`: `shard_0001.bam` and on |
 | `gather-bam-files` | GatherBamFiles (BAMs as positionals or `-i`, in the order to gather; a text file of paths, one per line; SAM or CRAM read record by record) | `-o` BAM, no metrics file |
 | `calculate-read-group-checksum` | CalculateReadGroupChecksum (a SAM, BAM or CRAM; only its header is read) | the 32 hex digits of the checksum in `-o`, default beside the input |
@@ -346,12 +350,15 @@ table.
 | `interval-list-tools` | IntervalListTools (interval lists as positionals or `-i`; `--second-input` for SUBTRACT, SYMDIFF and OVERLAPS) | `-o` interval list, or with `--scatter-count` above 1 the directory `-o` of `temp_NNNN_of_N/scattered.interval_list`; the `--output-value` count on standard output or in `--count-output`; no file without `-o` |
 | `scatter-intervals-by-ns` | ScatterIntervalsByNs (a FASTA with its `.fai` and `.dict`; `--max-to-merge`, `--output-type`) | `-o` interval list of `ACGTmer` and `Nmer` runs, `-o -` standard output |
 | `non-n-fasta-size` | NonNFastaSize (a FASTA with its `.fai` and `.dict`; `--intervals`) | the count and a line end, in `-o` or on standard output |
-| `merge-sam-files` | MergeSamFiles (SAM, BAM or CRAM files as positionals or `-i`; `--sort-order`, `--merge-sequence-dictionaries`, `--comment`, `--intervals`) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `reorder-sam` | ReorderSam (a SAM, BAM or CRAM; `--sequence-dictionary` required, `-S`, `-U`) | `-o` BAM, or SAM text for a name ending in `.sam` |
-| `fix-mate-information` | FixMateInformation (SAM, BAM or CRAM, several merged; `--sort-order`, `--add-mate-cigar`, `--ignore-missing-mates`, `--assume-sorted`) | `-o` BAM, or SAM text for a name ending in `.sam`; without `-o` the one input BAM rewritten in place |
-| `filter-sam-reads` | FilterSamReads (a SAM, BAM or CRAM; `--filter` required, `--read-list-file`, `--interval-list`, `--tag`, `--tag-value`, `--sort-order`, `--write-reads-files`) | `-o` BAM, or SAM text for a name ending in `.sam`; `.reads` files beside it with `--write-reads-files` |
-| `downsample-sam` | DownsampleSam (a SAM, BAM or CRAM; `--probability`, `--strategy`, `--random-seed`, `--accuracy`) | `-o` BAM, or SAM text for a name ending in `.sam`; `--metrics-file` the QualityYieldMetrics of the records kept |
-| `position-based-downsample-sam` | PositionBasedDownsampleSam (a SAM, BAM or CRAM file, read twice; `--fraction` required) | `-o` BAM, or SAM text for a name ending in `.sam` |
+| `merge-sam-files` | MergeSamFiles (SAM, BAM or CRAM files as positionals or `-i`; `--sort-order`, `--merge-sequence-dictionaries`, `--comment`, `--intervals`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
+| `reorder-sam` | ReorderSam (a SAM, BAM or CRAM; `--sequence-dictionary` required, `-S`, `-U`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
+| `fix-mate-information` | FixMateInformation (SAM, BAM or CRAM, several merged; `--sort-order`, `--add-mate-cigar`, `--ignore-missing-mates`, `--assume-sorted`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`); without `-o` the one input BAM rewritten in place |
+| `filter-sam-reads` | FilterSamReads (a SAM, BAM or CRAM; `--filter` required, `--read-list-file`, `--interval-list`, `--tag`, `--tag-value`, `--sort-order`, `--write-reads-files`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`); `.reads` files beside it with `--write-reads-files` |
+| `downsample-sam` | DownsampleSam (a SAM, BAM or CRAM; `--probability`, `--strategy`, `--random-seed`, `--accuracy`) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`); `--metrics-file` the QualityYieldMetrics of the records kept |
+| `position-based-downsample-sam` | PositionBasedDownsampleSam (a SAM, BAM or CRAM file, read twice; `--fraction` required) | `-o` BAM, SAM text for a name ending in `.sam`, or a CRAM for one ending in `.cram` (with `-R`) |
+| `sam-format-converter` | SamFormatConverter (a SAM, BAM or CRAM; every record unchanged; not `convert`, which converts metrics files) | `-o` SAM text for a name ending in `.sam`, a CRAM for one ending in `.cram` (with `-R`), a BAM for any other name |
+| `compare-s-a-ms` | CompareSAMs (two SAM, BAM or CRAM files as positionals, the left then the right; `--lenient-header`, `--lenient-dup`, `--lenient-low-mq-alignment`, `--lenient-unknown-mq-alignment`, `--low-mq-threshold`, `--compare-mq`) | one SamComparisonMetric file; the header differences and the verdict on standard error; exit 1 when the files differ |
+| `check-terminator-block` | CheckTerminatorBlock (a BGZF file: a BAM, a bgzip VCF; its last 64 KiB are read) | `HAS_TERMINATOR_BLOCK`, `HAS_HEALTHY_LAST_BLOCK` or `DEFECTIVE` on standard output; exit 100 on `DEFECTIVE` |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -580,16 +587,18 @@ bammetrics SortSam I=sample.bam O=sample.sorted.bam SORT_ORDER=coordinate
 
 Picard's `SortSam`: every record of a BAM, CRAM or SAM in `queryname`, `coordinate` or
 `duplicate` order (the three Picard 3.5.0 takes; `unsorted` and `unknown` exit as Picard
-exits). The output is a BAM, or SAM text for a name ending in `.sam`, the records Picard
+exits). The output is a BAM, SAM text for a name ending in `.sam`, or a CRAM for a name
+ending in `.cram` (with `-R`; KNOWN_DIFFERENCES.md, CRAM output), the records Picard
 writes in Picard's order (`tests/concordance/test_sort_sam.py`: decoded records for BAM,
-bytes for SAM text).
+bytes for SAM text; `test_cram_writer.py` for the CRAM).
 
 - The header is the input's with `SO` set and `@HD VN:1.6`. `GO`, `SS`, every other line
   and every field stay, and no `@PG` line is added, as in Picard.
 - `queryname` is htsjdk's `SAMRecordQueryNameComparator` (name by bytes, first of pair
   before second, forward before reverse, primary before secondary and supplementary, `HI`),
   `coordinate` its coordinate comparator (unplaced records last), `duplicate` its duplicate
-  comparator, which needs the `MC` tag on every paired record with a mapped mate.
+  comparator, which needs the `MC` tag on every mapped record of a pair with a mapped mate,
+  and on an unmapped record with a mapped mate when another record ties with it.
   Records with equal keys keep their input order.
 - `--max-records-in-ram N` (default 500,000) records are sorted in memory per run; more
   spill to `--tmp-dir` as sorted runs (BGZF level 3, mode 0600, removed at the end, on a
@@ -598,8 +607,11 @@ bytes for SAM text).
   text, as Picard; `--create-md5-file` writes `out.bam.md5` (or `out.sam.md5`);
   `--compression-level` sets the BGZF level. A CRAM input needs `-R`, and its records get
   the `MD` and `NM` tags htsjdk rebuilds.
-- `-o out.cram` exits 2 naming wave W15. An `-o` that is the input (a link or a hard link
-  included) exits 2 and replaces nothing.
+- `-o out.cram` writes a CRAM against `-R` (KNOWN_DIFFERENCES.md, CRAM output);
+  `--create-index` with it exits 2. Each contig of the header is found in the FASTA by
+  its name, so the FASTA may hold more contigs or hold them in another order; a record on
+  a contig the FASTA lacks exits 1. This holds for every verb that writes a CRAM. An `-o`
+  that is the input (a link or a hard link included) exits 2 and replaces nothing.
 
 ### add-comments-to-bam
 
@@ -682,8 +694,8 @@ Picard's `AddOATag`: each record's alignment appended to its `OA` tag, then ever
   `out.dat`, as htsjdk names it. CRAM records get `MD` and `NM` as htsjdk decodes them, so
   their entries carry the `NM` htsjdk computes.
 - SAM text is written for a name ending in `.sam`, lower case; `OUT.SAM` is a BAM, as in
-  Picard. A `.cram` `OUTPUT` is refused before the first read until wave W15: the verb
-  exits 2, the Picard face exits 1. Picard writes the CRAM.
+  Picard. A name ending in `.cram` is a CRAM against `-R`, as in Picard
+  (KNOWN_DIFFERENCES.md, CRAM output).
 - An `@HD SO` value htsjdk does not name fails at `VALIDATION_STRINGENCY=STRICT` (`Found
   non-conforming header SO tag`), as in Picard. At `LENIENT` and `SILENT` it is written
   `SO:unknown`.
@@ -716,7 +728,8 @@ Picard's `CleanSam`: every record of the input with three fixes
 - A read that starts past the end of its reference gets a CIGAR longer than its bases
   (`20M` at 100050 on a 100000-base contig becomes `69S`). Picard writes that record and
   samtools refuses the file; bammetrics exits 1 and writes nothing.
-- `--create-index` writes `out.bai`; `-o` ending in `.cram` exits 1 naming wave W15.
+- `--create-index` writes `out.bai`; `-o` ending in `.cram` writes a CRAM against `-R`
+  and takes no index.
 - In a chain the step cleans the stream at its position: `bammetrics chain in.bam +
   clean-sam + mark-duplicates + write out.bam`. Its stream is `cleaned`.
 
@@ -836,7 +849,7 @@ Picard's `SplitSamByLibrary`: one file per library of the header's `@RG` lines
   groups that have no `LB`.
 - A header with no `LB` on any read group exits 2, `No individual libraries are specified
   in the header of INPUT`, as Picard does, and writes nothing.
-- Picard writes a CRAM per library for a CRAM input; bammetrics exits 2 naming wave W15.
+- Picard writes a CRAM per library for a CRAM input; bammetrics exits 2.
 - Two libraries with one safe name (`a b` and `a_b`), a library `unknown` beside records
   without a library, and names that differ in case only on a file system that ignores case
   make Picard write one file over the other. bammetrics exits 1 and leaves no file.
@@ -1132,7 +1145,7 @@ them, with a `@PG` line (`ID:DownsampleSam`, or `.1` and on when the input has o
 - `--metrics-file` writes the QualityYieldMetrics of the records kept: original
   qualities, no secondary or supplementary record.
 - A CRAM input needs `--reference-sequence` (no short name: `-R` is `--random-seed`, as
-  in Picard). A `.cram` `-o` exits 2 naming wave W15.
+  in Picard). A `.cram` `-o` writes a CRAM against `--reference-sequence`.
 - In a chain `downsample-sam` is a streaming transform (stream name `downsampled`);
   `--metrics-file` on the step writes its file.
 
@@ -1151,6 +1164,41 @@ circle of area `--fraction` on the tile, or outside one of area `1 - FRACTION` a
   `--allow-multiple-downsampling-despite-warnings`.
 - In a chain the step runs on a file of its stream, since it reads its input twice; its
   BAM is the stream `downsampled` ([docs/chaining.md](chaining.md) section 31).
+
+### sam-format-converter
+
+```bash
+bammetrics sam-format-converter in.bam -o out.sam
+bammetrics sam-format-converter in.sam -o out.cram -R ref.fa --create-md5-file
+bammetrics SamFormatConverter I=in.cram R=ref.fa O=out.bam CREATE_INDEX=true
+```
+
+Picard's `SamFormatConverter` (wave W15, `tests/concordance/test_sam_format_converter.py`).
+It reads SAM text, a BAM or a CRAM and writes every record unchanged in the format the
+name of `-o` gives. It converts reads. `bammetrics convert` converts metrics files.
+
+- The name decides, lower case, as in htsjdk: `.sam` is SAM text, `.cram` a CRAM 3.0
+  against `-R`, and any other name a BAM (`out.BAM`, `out.sam.gz`, `out.txt`). Picard
+  writes a BAM for those names too.
+- The header is the input's as htsjdk's writer writes it: `@HD VN:1.6`, `SO:unsorted`
+  added to an `@HD` without one. No `@PG` line is added.
+- Each record keeps its fields and tags in their order. A record read from a CRAM gets
+  `MD` and `NM` as htsjdk decodes it. A BAM gets the `bin` htsjdk computes.
+- The records are written in input order, and the writer checks the header's order: a
+  record out of `SO:coordinate` or `SO:queryname` order exits 1, as in Picard.
+- `--create-index` writes `out.bai` beside a BAM. An input whose `SO` is not
+  `coordinate` exits 1 with Picard's `Can't CREATE_INDEX unless sort order is
+  coordinate`, before any file is written (Picard leaves an empty file). SAM text gets
+  no index. With a CRAM it exits 2 (1 on the Picard face) before the first read: no
+  index is written beside a CRAM (Picard writes a `.cram.bai`).
+- A CRAM input or output needs `-R`. Without it a placed record exits 1 with htsjdk's
+  `A reference must be supplied` and no file is left (Picard leaves an empty one).
+- `-o` naming the input exits 2 (1 on the Picard face) before the first read. Picard
+  truncates the input: a BAM read in place fails and is left empty.
+- `--compression-level` sets the BGZF level of a BAM and the gzip level of a CRAM's
+  blocks (Picard ignores it for a CRAM). `--max-records-in-ram` changes nothing.
+- Not a chain step: the chain's `write` step writes SAM text, a BAM or a CRAM by its
+  name (`+ write out.sam`).
 
 ### qc
 
@@ -1309,10 +1357,12 @@ before. The rules of the form without `+` follow the list below.
   tool (17 verbs with neither a stage nor a collector, such as `wgs`, `library-complexity`
   and `merge-sam-files`) runs on a file of the records of its position; three of them
   write a BAM that is the next stream. So every tool that reads a BAM is a step at any
-  position, 53 of the 71 (docs/chaining.md section 31). `qc` is the last step. `write [PATH]` writes those records as a
-  BAM, or as SAM text for a name ending in `.sam`; `-` is standard output, and `write -
-  --output-format sam` prints SAM text there. A `.cram` or `.fastq` name is refused with
-  the wave of docs/07 that adds it.
+  position, 53 of the 74 (docs/chaining.md section 31). `qc` is the last step. `write [PATH]` writes those records as a
+  BAM, as SAM text for a name ending in `.sam`, or as a CRAM against the chain's `-R` for
+  a name ending in `.cram` (`--output-format cram` for any name); `-` is standard output,
+  and `write - --output-format sam` prints SAM text there. A chain that writes a CRAM
+  without `-R`, or with `--index`, exits 2 before the first read. A `.fastq` name is
+  refused with the wave of docs/07 that adds it.
 - Each step takes its verb's own options in every spelling (`--minimum-pct 0.1`,
   `--MINIMUM_PCT 0.1`, `MINIMUM_PCT=0.1`), with did-you-mean per step. `bammetrics chain
   BAM + VERB --help` lists them.
@@ -1388,11 +1438,13 @@ bammetrics chain in.bam mark-duplicates qc --preset wgs -R ref.fa -o out.bam --r
   its `--also`; `-o`, `-R`, `--threads` and `--resume` after it are the chain's. A file
   after `merge-sam-files`, `gather-bam-files` or `jumping-library` is a further input of
   that step.
-- `-o r.bam` (or `r.sam`, lower case) on a chain with a transform (or a materialized tool
-  that writes a BAM) and no `write` adds `write r.bam --index` as the last step, in front
-  of a `qc` step, and names the metrics files, the manifest and the verdict `r.<extension>`. On
-  a chain of taps alone it exits 2; `r.cram` exits 2 with wave W15; `r.SAM` exits 2, since
-  the write step writes SAM text for a lower-case `.sam` only.
+- `-o r.bam` (or `r.sam` or `r.cram`, lower case) on a chain with a transform (or a
+  materialized tool that writes a BAM) and no `write` adds `write r.bam --index` as the
+  last step (`write r.sam`, `write r.cram`: no index), in front of a `qc` step, and names
+  the metrics files, the manifest and the verdict `r.<extension>`. `r.cram` is written
+  against the chain's reference (`-R`, `BAMMETRICS_REFERENCE` or the config file) and
+  exits 2 without one. On a chain of taps alone it exits 2; `r.SAM` and `r.CRAM` exit 2,
+  since the write step writes SAM text and a CRAM for a lower-case extension only.
 - `-R`, `--threads`, `--tmp-dir` and `--sort-memory` come from the user config file when
   not given (`bammetrics config`); `-R` also from `BAMMETRICS_REFERENCE`. `--no-config`
   leaves the file unread.
@@ -1869,8 +1921,9 @@ metrics file.
   output that is an input (by path, symbolic link or hard link), or two outputs that
   name one file, exit 2 before anything is read.
 - A CRAM input needs `-R`. Its records come out with the `MD` and `NM` tags htsjdk
-  rebuilds while decoding. The output is always BAM: an `-o` ending in `.sam` or `.cram`
-  exits 2 (the Picard face exits 1); `bammetrics chain IN + mark-duplicates + write
+  rebuilds while decoding. The output is a BAM, or a CRAM against `-R` for an `-o` ending
+  in `.cram`; an `-o` ending in `.sam` exits 2 (the Picard face exits 1); `bammetrics
+  chain IN + mark-duplicates + write
   out.sam` writes SAM text. SAM text input is read, plain or in gzip members, at
   `--validation-stringency`.
 - `--create-index` writes `marked.bai` beside a coordinate-sorted BAM, the index Picard
@@ -2146,6 +2199,114 @@ suppressed.`, then the summary at `ERROR` or `INFO`.
   list means every queryname agrees. It raises nothing for a bad marking, only for an
   error (a bad `mode`, an unpaired record under `PRIMARY_PROPER_PAIR_ONLY`).
 
+### compare-s-a-ms
+
+```bash
+bammetrics compare-s-a-ms old.bam new.bam -o compared.txt
+bammetrics compare-s-a-ms old.bam new.cram -R ref.fa --lenient-header --lenient-dup --lenient-low-mq-alignment
+bammetrics CompareSAMs old.bam new.bam O=compared.txt COMPARE_MQ=true
+```
+
+Two SAM, BAM or CRAM files in, one `SamComparisonMetric` row out; Picard 3.5.0's
+`CompareSAMs`, exit code included: 0 when the files are equal, 1 when they differ or on an
+error. The Picard face takes the two files as positional arguments anywhere among the
+options, as Picard does (`I=` is an unrecognized option there), prints each header
+difference on standard output as three lines (`X differs.`, `File 1: A`, `File 2: B`),
+writes the metrics file to `O=` only, and ends with `SAM files match.` or `SAM files
+differ.`. The verb writes the metrics file to `-o` or standard output and prints Picard's
+lines on standard error, each after `bammetrics compare-s-a-ms: `; `-q` drops them.
+
+- The header: the `@HD` version (`1.6` without `@HD`), `CR` and `SO`; per `@SQ` line the
+  name, the length, `SP`, `AS`, `M5` and `UR`; per `@RG` line `ID`, `SM`, `LB`, `DS`, `PU`,
+  `PI`, `CN`, `DT` and `PL`; per `@PG` line `ID`, `VN` and `CL`. Lines pair by position, and
+  a count that differs is one difference. `GO`, `@CO` lines and every other field are not
+  compared. `--lenient-header` leaves out `SP`, `AS`, `M5`, `UR` and the `@PG` lines. A `DT`
+  prints as htsjdk holds it, in the time zone of the process.
+- Records: secondary and supplementary records are skipped. Two records are one read when
+  their names are equal and both are unpaired, both first or both second of their pair.
+  A pair counts in `UNMAPPED_BOTH`, `UNMAPPED_LEFT` or `UNMAPPED_RIGHT` by its unmapped
+  flags, else in `MAPPINGS_MATCH` when reference name and start are equal, else in
+  `MAPPINGS_DIFFER`. A record without a partner counts in `MISSING_RIGHT` (a left record) or
+  `MISSING_LEFT`. The strand is never compared (Picard compares the left strand with
+  itself).
+- Names and header values are compared as the strings htsjdk holds: one character per
+  byte of a BAM, UTF-8 of a CRAM and of SAM text. `é` as the byte `E9` in a BAM equals `é`
+  in SAM text; the UTF-8 bytes `C3 A9` in a BAM are the two characters `Ã©`. Two SAM text
+  values that differ in a character above U+00FF (`A` and `Ł`) differ.
+- Both headers must name one sort order, else Picard prints `Cannot compare alignments if
+  sort orders differ.` and every count is 0. `coordinate` pairs records by place, then the
+  rest by key; it is refused when the dictionaries differ. `queryname` merges the two files
+  by key, the name in Java string order (not `samtools sort -n` order). `unsorted`, `duplicate`
+  and a header without `SO` hold the left file by key. `SO:unknown` exits 1, as in Picard.
+- `--lenient-low-mq-alignment` counts a pair as a match wherever it maps when both mapping
+  qualities are at most `--low-mq-threshold` (default 3; Picard's help says below, its code
+  tests at most). `--lenient-unknown-mq-alignment` does so when both are 255.
+- A pair whose duplicate flags differ counts in `DUPLICATE_MARKINGS_DIFFER`.
+  `--lenient-dup` forgives the pairs where the two files chose another representative of
+  one duplicate set: those pairs are sorted as htsjdk's duplicate order sorts them
+  (`--max-records-in-ram` keys per sort, runs in `--tmp-dir`) and need `MC` on a mapped
+  record whose mate is mapped once two pairs differ. An unmapped record with a mapped mate
+  needs `MC` only when another differing record is at its place, as in Picard.
+- `--compare-mq` adds a histogram of pairs by `LEFT,RIGHT` mapping quality (`BIN`, `VALUE`),
+  the keys in text order, as Picard writes it.
+- `ARE_EQUAL` is `Y` when the headers are equal, the records were compared, and
+  `MISSING_LEFT`, `MISSING_RIGHT`, `MAPPINGS_DIFFER`, `UNMAPPED_LEFT`, `UNMAPPED_RIGHT` and
+  `DUPLICATE_MARKINGS_DIFFER` are 0.
+- Three results that look wrong are Picard's (KNOWN_DIFFERENCES.md, CompareSAMs): a key a
+  file gives twice at one place holds one record, so such a file differs from itself; a
+  queryname-sorted pair whose right file ends first exits 1 with no result; a file sorted
+  by `samtools sort -n` is not in the order the merge expects.
+- Memory: the queryname merge holds two records. The other two walks hold the records that
+  wait for a partner: none for two files in one order (45 MiB for the 10 GB HG002 exome
+  against itself), every primary record of both files when they share no read, every
+  primary record of the left file when unsorted. A waiting record costs 233 bytes at the
+  peak, 418 under `--lenient-dup` (1,969 and 3,526 MiB for 8.4 million unsorted records;
+  Picard holds 6,065 MiB there under `-Xmx8g`, docs/benchmarks.md).
+- Memory under `--lenient-dup`: the sorts spill, the duplicate sets read back from them do
+  not. One name per record of every left duplicate set of two or more records, the names
+  matched so far and one set whole stay in memory, about 470 bytes for each pair whose
+  duplicate flags differ (257 MB for 400,000 such pairs in one set, 69 MB without the
+  option). The worst case is every pair differing. Picard holds the records of those sets.
+- `LEFT_FILE` and `RIGHT_FILE` are absolute paths, the working directory in front of a
+  relative one. `-o` may not name an input (exit 2; the Picard face exits 1). A failed run
+  writes no file.
+- `--format json`, `jsonl`, `tsv` and `human` print the row; `--sample` is accepted and
+  ignored. Python `compare_s_a_ms([left, right], lenient_dup=True, ...)` returns the row;
+  `ARE_EQUAL` is its verdict.
+
+### check-terminator-block
+
+```bash
+bammetrics check-terminator-block sample.bam
+bammetrics check-terminator-block calls.vcf.gz -o end.txt
+bammetrics CheckTerminatorBlock I=sample.bam
+```
+
+How a BGZF file ends; Picard 3.5.0's `CheckTerminatorBlock`, exit code included.
+`HAS_TERMINATOR_BLOCK`: the last 28 bytes are the BGZF end-of-file block.
+`HAS_HEALTHY_LAST_BLOCK`: no end-of-file block, and the last block ends at the last byte
+(a writer that stopped at a block boundary). `DEFECTIVE`, exit 100: anything else, such as
+a file cut inside a block, bytes after the end-of-file block, fewer than 28 bytes, a plain
+gzip file, a CRAM or SAM text. The Picard face prints the name on standard error, as Picard
+does, and nothing on standard output. The verb prints it on standard output or to `-o`.
+
+- The last 64 KiB of the file are read and nothing is inflated, so a 100 GB BAM takes as
+  long as a small one. It is htsjdk's `checkTermination`, the test `GatherBamFiles` and a
+  header-only record edit use before a block copy.
+- The file must be a regular file. A named pipe, a socket or a device exits 2 on the verb
+  and 1 on the Picard face without being opened; Picard opens it and reports a size of 0 as
+  `DEFECTIVE`.
+- A missing file, a directory and a file without read permission exit 1 with htsjdk's
+  messages (`Cannot read non-existent file: file:///...`).
+- `doctor`'s `eof` check reads the same bytes and says why: it passes on
+  `HAS_TERMINATOR_BLOCK`, fails with `no end-of-file block` on `HAS_HEALTHY_LAST_BLOCK` and
+  with `cut short` or `bytes after the end-of-file block` on `DEFECTIVE`.
+- Picard has no `OUTPUT`: `O=` on the Picard face exits 1 with `Unrecognized option: O`.
+  `--format json`, `jsonl`, `tsv` and `human` print one row: `file` and `termination`.
+  `--threads` and `--sample` are accepted and ignored.
+- Python `check_terminator_block(path)` returns the row and raises nothing for
+  `DEFECTIVE`.
+
 ### report
 
 ```bash
@@ -2222,7 +2383,7 @@ above, with `--fail-on fail` by default, whatever the format.
 bammetrics convert FILE [--format FORMAT[,FORMAT]] [-o FILE] [--table NAME] [--sample NAME]
 ```
 
-`convert` reads one metrics file and writes it in another format. The input is Picard text,
+`convert` reads one metrics file and writes it in another format. It does not convert reads: `sam-format-converter` writes SAM, BAM or CRAM. The input is Picard text,
 the JSON of `--format json` (schema `bammetrics.metrics/1`) or the main file of `--format
 parquet`, told apart by its first bytes (`PAR1` is Parquet; `{` or `[` is JSON, a byte
 order mark before it dropped); `-` reads standard input. A Parquet file reads its histogram
@@ -2320,7 +2481,7 @@ purpose is listed in KNOWN_DIFFERENCES.md.
 
 The worked examples of docs/05 section 2.5 that work today, written against the committed
 fixtures so each runs from the repository root as shown (`tests/data/insert_size.bam` has
-no `@RG SM`, so the sample is the BAM name). Output is what 0.32.0 prints; long lines are
+no `@RG SM`, so the sample is the BAM name). Output is what 0.33.0 prints; long lines are
 cut.
 
 **1 and 2. One tool, as Picard text or machine-readable.**
@@ -2389,7 +2550,7 @@ $ for bam in bams/*.bam; do
         -o runs/2026-11-02/$(basename "$bam" .bam) -q > /dev/null
   done
 $ bammetrics report runs/2026-11-02/ --preset clinical-panel
-2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.32.0
+2 samples, preset clinical-panel v3 (6f0d59), bammetrics 0.33.0
 FAIL        NA1  7 fail, 1 warn, 9 pass, 1 not measured
   FAIL  Mean target coverage is 0.377778, below the fail limit of 100
   ...

@@ -46,7 +46,8 @@ pub const TOOL: Tool = Tool {
     name: "AddOATag",
     summary: "no rows; OUTPUT gets every record of the input with its alignment appended to \
               its OA tag (RNAME,POS,STRAND,CIGAR,MAPQ,NM;), or only the records over \
-              INTERVAL_LIST: a BAM, or SAM text for a name ending in .sam.",
+              INTERVAL_LIST: a BAM, SAM text for a name ending in .sam, or a CRAM (with \
+              REFERENCE_SEQUENCE) for one ending in .cram.",
     options: &[
         Opt::path(
             &["INTERVAL_LIST", "L"],

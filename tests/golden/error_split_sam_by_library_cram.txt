@@ -7,4 +7,4 @@ O=OUT
 1
 ## stdout
 ## stderr
-bammetrics: INPUT is a CRAM, and Picard writes a CRAM per library: bammetrics writes BAM and SAM only: CRAM output is wave W15 of docs/07_full_parity_program.md
+bammetrics: INPUT is a CRAM, and Picard writes a CRAM per library: this tool writes a BAM or SAM text per library (docs/07 D58): convert INPUT to a BAM first

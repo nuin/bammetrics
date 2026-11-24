@@ -71,14 +71,16 @@ tool (0.32.0, wave W14; docs/chaining.md sections 22 to 32): steps without `+`
 (`bammetrics chain fixed.bam reorder-sam insert-size -o r.bam`), `-o` naming the BAM, the
 user config file, the recipes `prep`, `qc-only` and `downsample`, manifest 2 with
 `--resume` per step and `--keep`, `qc` as the last step, and every tool that reads a BAM
-as a step at any position (53 of the 71) through the materialize fallback. CHANGELOG.md
-has each.
+as a step at any position (53 of the 71) through the materialize fallback, and the CRAM
+writer behind every `OUTPUT` and `write` step ending in `.cram`, `SamFormatConverter`,
+`CompareSAMs` and `CheckTerminatorBlock` (tools 72 to 74, 0.33.0, wave W15; docs/07 D206
+to D235). CHANGELOG.md has each.
 
 Remaining for bammetrics:
 
 - bioconda recipe and a PyPI release (first push of the branch runs the CI workflow).
 - The Picard tools still to build, further formats and DOCX reports: the program plan
-  `docs/07_full_parity_program.md` (waves W15 onward);
+  `docs/07_full_parity_program.md` (waves W16 onward);
   docs/04 section 4 holds the P9 queue.
 
 Exit criterion: a `pip install`-able library that produces correct, hand-verified numbers.

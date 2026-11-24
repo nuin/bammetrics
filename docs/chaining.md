@@ -44,7 +44,7 @@ emits.
 | source | One BAM, CRAM or SAM text file, or a pipe holding one | the positional argument, `-` for standard input |
 | transform | A tool that changes the records later steps see. A barrier needs every record before one goes on; a streaming transform edits each batch as it passes (section 16) | `mark-duplicates`, `sort-sam`, `revert-original-base-qualities-and-add-mate-cigar` (barriers); `add-comments-to-bam`, `replace-sam-header`, `add-o-a-tag`, `clean-sam`, `set-nm-md-and-uq-tags`, `set-nm-and-uq-tags` (streaming); `add-or-replace-read-groups` (streaming, a barrier with a `--sort-order` that differs from the stream's; section 17); `reorder-sam` (a barrier; section 19); `fix-mate-information` (a barrier), `filter-sam-reads` (streaming, a barrier when it sorts; section 20); `downsample-sam` (streaming; section 21) |
 | tap | A one-pass tool on the records of its position. It changes nothing | 20 verbs: `insert-size`, `alignment-summary`, `quality-yield`, `hs-metrics`, `gc-bias`, `quality-score-distribution`, `mean-quality-by-cycle`, `base-distribution-by-cycle`, `duplicate-metrics`, `rna-seq`, `sequencing-artifact`, `coverage-gaps`, `sex-check`, `mt-copy-number`, `exon-coverage`, `adapter-content`, `duplicate-by-tile`, `telomere`, `quality-yield-s-n-v-q`, `rrbs` |
-| write | A tap that writes the records of its position as a BAM, or as SAM text | `write [PATH]` |
+| write | A tap that writes the records of its position as a BAM, as SAM text, or as a CRAM against `-R` | `write [PATH]` |
 | split | A sink that writes the records of its position over BAMs in a directory (section 18) | `split-sam-by-library`, `split-sam-by-number-of-reads` |
 | materialize | A tool with neither a stage nor a collector, run on a file of the records of its position: the source itself, or a copy in the temporary directory (section 31). One that writes a BAM hands it on as the next stream | 17 verbs: `wgs`, `raw-wgs`, `wgs-with-non-zero-coverage`, `targeted-pcr`, `library-complexity`, `multiple-metrics`, `oxo-g`, `bam-index-stats`, `index-depth`, `check-duplicate-marking`, `jumping-library`, `view-sam`, `calculate-read-group-checksum`, `umi-prevalence`; `merge-sam-files`, `gather-bam-files`, `position-based-downsample-sam` (each leaves a stream) |
 
@@ -52,11 +52,13 @@ A tap or `write` does not change the stream, so the step after it sees the same 
 `in.bam + tap + mark-duplicates + tap + write` gives the first tap the source records and
 the second tap and the writer the marked records.
 
-Every registered tool that reads a BAM is a step at any position, 53 of the 71 (section
-31). The 17 tools that read no BAM (interval, VCF, FASTA and text tools,
+Every registered tool that reads a BAM is a step at any position, 53 of the 74 (section
+31), but the four named below. The 17 tools that read no BAM (interval, VCF, FASTA and text tools,
 `compare-metrics`, `fifo-buffer`) are refused with exit 2 and the reason. So is
 `build-bam-index`: it names `write --index`, which writes the `.bai` of the BAM a chain
-writes.
+writes. So is `sam-format-converter` (wave W15): it writes the records it reads in the
+format its name gives, which is what `write out.sam`, `write out.bam` and `write
+out.cram` (with `-R`) do. The refusal names `write`.
 
 `fifo-buffer` is never a step. `FifoBuffer` copies the bytes of a pipe between two
 commands. The steps of a chain hand records on in memory, so a chain has no pipe for it
@@ -75,6 +77,13 @@ On a pipe into or out of a chain the verb works as on any pipe:
 flagstat -`, or `producer | bammetrics fifo-buffer | bammetrics chain - + insert-size`.
 `crates/cli/tests/chain.rs` checks both: the bytes behind the buffer equal the BAM the
 chain writes to a file.
+
+`compare-s-a-ms` and `check-terminator-block` are never steps, each with its own reason
+(exit 2). `CompareSAMs` reads two files and a chain has one stream: write the stream with
+`write out.bam`, then run `bammetrics compare-s-a-ms BAM out.bam`. `CheckTerminatorBlock`
+reads the last bytes of a file and a stream has none: run it on the file the chain wrote.
+A spooled copy of the stream gives neither tool its input, so no later wave makes either
+a step.
 
 ## 2. The chain verb
 
@@ -143,12 +152,14 @@ working directory (`.insert_size_metrics`).
 - `write [PATH]` takes `--index` (`CREATE_INDEX`), `--md5` (`CREATE_MD5_FILE`) and
   `--compression-level N` (0 to 9, default 5). `-` as the path is standard output, so a
   pipe to another tool still works: `bammetrics chain in.bam + mark-duplicates + write -
-  | samtools flagstat -`. The file is a BAM, or SAM text for a name ending in `.sam`, lower
-  case as htsjdk tells it (`out.SAM` is a BAM). `--output-format bam|sam` says which
-  whatever the name is, so `write - --output-format sam` prints SAM text. A name ending
-  in `.cram`, `.fastq` or `.fq` (with `.gz` too) is refused with the wave that adds that
-  kind: CRAM is W15, FASTQ is W22. `.sam.gz` is refused: SAM text is written
-  uncompressed. Section 14 has the details.
+  | samtools flagstat -`. The file is a BAM, SAM text for a name ending in `.sam`, or a
+  CRAM against the chain's `-R` for a name ending in `.cram`, lower case as htsjdk tells
+  them (`out.SAM` and `out.CRAM` are BAMs). `--output-format bam|sam|cram` says which
+  whatever the name is, so `write - --output-format sam` prints SAM text. A CRAM needs
+  `-R` and takes no `--index`: either is a usage error before the first read
+  (KNOWN_DIFFERENCES.md, CRAM output). A name ending in `.fastq` or `.fq` (with `.gz`
+  too) is refused with the wave that adds it, W22. `.sam.gz` is refused: SAM text is
+  written uncompressed. Section 14 has the details.
 - `--index` writes the `.bai` htsjdk names: `out.bam` gives `out.bai`, `out.dat` gives
   `out.dat.bai`. It writes one only for a coordinate-sorted stream. For any other sort
   order `write` writes no index and says so on standard error. The exit code stays 0.
@@ -289,7 +300,7 @@ bammetrics chain: step 1: unknown step "inser-size"
   did you mean insert-size?
   a step is a tool verb (bammetrics tools lists them) or write
 $ bammetrics chain in.bam + write out/x.cram
-bammetrics chain: step 1 (write): out/x.cram: bammetrics writes BAM and SAM only: CRAM output is wave W15 of docs/07_full_parity_program.md
+bammetrics chain: step 1 (write): out/x.cram: a CRAM is written against the reference: give the chain -R FASTA
 ```
 
 What is checked before the first read: the step name, every option name, every value of
@@ -596,8 +607,8 @@ reads no record and nothing of a pipe.
 | `run_chain(plan, progress)` | One `Result<Products>` per step, in step order. `Err` for a plan refused before the first read or a source that cannot be read in the first segment |
 | `Products` | `output` (metrics the caller writes), `files` (a writer's renamed files), `counters` (a stage's records in, out, changed), `notes` (lines for standard error) |
 | `halt(error)`, `Halt` | `Stopped` or `NotRun` for the result of a step another step halted, `None` for a step's own failure |
-| `WriteOptions` | `path`, `format` (`WriteFormat::Bam` or `Sam`, from the name), `compression_level`, `create_index`, `create_md5`. `check()` refuses a name of a later wave and an index beside SAM text. `files()` lists the BAM or SAM, the `.bai` and the `.md5` |
-| `later_kind(path)` | The kind and wave of a name `write` cannot make yet: `("CRAM", "W15")` |
+| `WriteOptions` | `path`, `format` (`WriteFormat::Bam`, `Sam` or `Cram`, from the name or `--output-format`), `compression_level`, `create_index`, `create_md5`. `check()` refuses a name of a later wave and an index beside SAM text. `files()` lists the BAM, SAM or CRAM, the `.bai` and the `.md5` |
+| `later_kind(path)` | The kind and wave of a name `write` cannot make yet: `("FASTQ", "W22")` |
 | `Outputs` | The files of a chain's steps in a hash map, keyed by device and inode or by the resolved path. `claim(label, path)` is a usage error when a step already writes the file. `owner(path)` |
 | `check_distinct_outputs(outputs)`, `writer_of(outputs, path)` | The same check over a slice |
 | `stage_of(tool)`, `label_of(tool)`, `check_stage_options(tool, inv)` | The stage function of a registry tool, the default name of its stream (`marked`), and its options checked before a run. One tool: `MarkDuplicates` |
@@ -974,7 +985,7 @@ W04:
 | docs/07 | As built | Reason |
 |---|---|---|
 | The verb is `chain`, with `run` as an alias or not (Q2) | `chain` only | The owner's decision on Q2 |
-| `write` picks BAM, SAM, CRAM or FASTQ by extension | BAM only. A `.sam`, `.cram`, `.fastq` or `.fq` name is a usage error naming W05, W15 or W22 | The SAM text writer is W05, the CRAM writer W15, FASTQ output W22 |
+| `write` picks BAM, SAM, CRAM or FASTQ by extension | BAM only. A `.sam`, `.cram`, `.fastq` or `.fq` name is a usage error naming W05, W15 or W22 | The SAM text writer is W05 (section 14). The CRAM writer shipped in W15, 0.33.0: `write r.cram` against the chain's `-R` (section 23). FASTQ output is W22 |
 | Two taps of one tool at one position is a usage error | It is one when both are named by the prefix, since they write one file. With `-o` on one of them the chain runs | A step's own `-o` is allowed, and two option sets of one tool on one stream is a use (`quality-yield` with and without original qualities) |
 | The `# INPUT=` line names the chain source and the step list | `INPUT=<source>` plus ` CHAIN=<transforms in front>`, as W03 wrote it. A tap on the source writes the tool's own line | A chain without a transform must write the bytes `qc` writes (section 10.2). The steps behind a tap do not change its records, so the line names only the transforms in front |
 | A transform's kept product is `PREFIX.<label>.bam` | The same, written by `write` without a path. The transform's own metrics file is `PREFIX.<label>.duplication_metrics` | docs/07 names no file for a transform's metrics. The label says which step wrote it |
@@ -1022,7 +1033,8 @@ check linear in the number of steps.
 | W05, done | The sort barrier (`Next::Records`), the planner (`Frame` per position, `requires`, the free-space refusal), the spool for a replay behind another transform, `--sort-memory`, SAM output of `write`; `write --index` writes Picard's `.bai` of the written BAM (`bai.rs`); `BuildBamIndex` and `make memgate` |
 | W09 on | Each BAM-writing tool registers its stage in `stage_of` and its stream name in `label_of` |
 | W14, done | `qc` as the last step of a chain, manifest 2, resume per step (`resume=` in Python), kept products (sections 27 to 30). The spool for tools that read their input their own way landed as the materialize fallback (section 31). Left: a progress line for a resumed run |
-| W15, W22 | `write` to CRAM, FASTQ |
+| W15, done | `write` to a CRAM against the chain's `-R` (`cram_writer.rs`) |
+| W22 | `write` to FASTQ |
 | W46 | Variant streams (`Kind`), pileup and capture sinks |
 
 ## 14. W05 part A: SAM text
@@ -1050,7 +1062,7 @@ the rest of W05.
 
 | docs/07 | As built | Reason |
 |---|---|---|
-| `write` picks BAM, SAM, CRAM or FASTQ by extension | BAM and SAM by extension, and `--output-format` | Standard output has no extension. CRAM and FASTQ stay W15 and W22 |
+| `write` picks BAM, SAM, CRAM or FASTQ by extension | BAM and SAM by extension, and `--output-format` | Standard output has no extension. CRAM shipped in W15, 0.33.0 (section 23, the `r.cram` row). FASTQ stays W22 |
 | SAM text reader and writer in one infrastructure row with header-merge and the BAI reader and writer | The reader, the writer and the comparators only | Part A. Header merge exists in `mark_duplicates/inputs.rs` since 0.18.0; BAI and the sort barrier are parts B and C |
 | A chain carries `VALIDATION_STRINGENCY` | The source is read at `STRICT` | A chain has one source and no option of the source's own; the tools and verbs carry the option |
 | The SAM file of `write` has the header of the stream, as the BAM has | The SAM file has htsjdk's `SAMFileWriter` header (`VN:1.6`) | Picard is the oracle for SAM text. The BAM of `write` keeps the stream's `VN`, which htsjdk also rewrites; changing that would change the bytes 0.22.0 writes |
@@ -1477,10 +1489,10 @@ short form write `bammetrics plan chain BAM STEP ...`.
 
 ## 23. -o names the result
 
-`-o` ending in `.bam` (any case) or `.sam` (lower case) on a chain with a transform and
-no `write` step adds `write OUT --index` as the last step (`write OUT` for `.sam`: SAM
-text has no index), and the prefix of every metrics file is the name without its
-extension:
+`-o` ending in `.bam` (any case), `.sam` or `.cram` (lower case) on a chain with a
+transform and no `write` step adds `write OUT --index` as the last step (`write OUT` for
+`.sam` and `.cram`: SAM text has no index, and a CRAM index is refused as `CREATE_INDEX`
+refuses it), and the prefix of every metrics file is the name without its extension:
 `-o r.bam` writes `r.bam`, `r.bai` and `r.insert_size_metrics`
 (`crates/cli/src/chain/resolve.rs`). A materialized tool that writes a BAM
 (`merge-sam-files`, `gather-bam-files`, `position-based-downsample-sam`) counts as a
@@ -1495,8 +1507,8 @@ the verdict and the report take the same prefix (`r.manifest.json`, `r.verdict.j
 | `r.sam` | a transform, no `write` | `write r.sam` last, prefix `r` |
 | `r.bam` | a `write` step | The prefix `r.bam`, as before |
 | `r.bam` | taps only | Exit 2: `-o PREFIX names the metrics files` |
-| `r.cram` | a transform, no `write` | Exit 2: CRAM output is wave W15 |
-| `r.SAM`, `r.Sam` | a transform, no `write` | Exit 2: the write step, as htsjdk's writer, writes SAM text only for a name ending in lower-case `.sam`, and a BAM under any other name |
+| `r.cram` | a transform, no `write` | `write r.cram` last, prefix `r`: a CRAM against the chain's reference (`-R`, else `BAMMETRICS_REFERENCE`, else `reference` of the config file); exit 2 before the first read without one |
+| `r.SAM`, `r.Sam`, `r.CRAM` | a transform, no `write` | Exit 2: the write step, as htsjdk's writer, writes SAM text or a CRAM only for a name ending in lower-case `.sam` or `.cram`, and a BAM under any other name |
 
 Two notes go to standard error before the first read. A chain of transforms that name
 no file (`chain in.bam reorder-sam -R ref.fa -o out/s`: no tap, no `write`, no split, no metrics
@@ -1683,7 +1695,7 @@ time and exit code. Then one record per step:
 | `argv` | The canonical argv: a tool's Picard arguments (with `KEEP=PATH` for a kept stream), `write`'s and `qc`'s options as `KEY=VALUE` |
 | `options_hash` | FNV-1a 64 of the argv, the tool version, the formats, `--sample` and the stringency |
 | `inputs` | Every file the step reads by name, with its fingerprint: the reference and its `.fai`, dictionaries, interval and read lists |
-| `outputs` | Every file it wrote, with its kind and its fingerprint after the write |
+| `outputs` | Every file it wrote, with its kind and its fingerprint after the write. A `write` step's file is `bam`, `sam` or `cram` by its extension, its companions `index` and `md5` |
 | `status`, `error`, `skipped` | `ok`, `failed`, `stopped` or `not run`; `skipped` is true when the run kept the record of the run before |
 | `started`, `seconds` | The start and wall time of the run that ran the step |
 
@@ -1701,7 +1713,8 @@ The steps that run share reads. The read starts at the last transform in front o
 first step that runs whose stream is in a BAM the run before wrote and that is still
 there with its fingerprint: the stream it kept (`--keep`), or the BAM a `write` step of
 that stream wrote, when that `write` step is skipped in this run. So `-o out.bam` is a
-place to resume from without `--keep` (decision D201). Without such a BAM the read starts
+place to resume from without `--keep` (decision D201). A `write` step that wrote SAM text
+or a CRAM is skipped as a BAM's is, and the read never starts at its file. Without such a BAM the read starts
 at the source, and every transform between the start and the last step that runs runs
 again to feed the steps after it. A run where every step is skipped reads nothing. The
 plan names the start: `skipped; its kept stream out/s.marked.bam starts the read`, or
@@ -1877,7 +1890,7 @@ files and `verdict.json` of `chain_qc_step` equal those of `qc_generic`),
 | `Key.upstream` | A hash of every earlier step's key | The ids of the transforms in front, and a step is skipped only when they are | A hash over every earlier step reruns the taps after a changed tap; the gate wants taps in front of step 3 kept |
 | Timing | Per step | The start and wall time of the run that ran the step | The steps of a chain share reads and run at once |
 | `qc.rs` | `Plan.bam` becomes a chain, `Read` gains `Tap(n)` | The qc verb is unchanged; the qc step reuses its collector planning (`qc::plan_chain_step`) | qc golden records stay byte for byte |
-| Kept product kind | A kept product may be CRAM | BAM, with its index when coordinate sorted | CRAM writing is wave W15 |
+| Kept product kind | A kept product may be CRAM | BAM, with its index when coordinate sorted | CRAM writing shipped in W15, 0.33.0, as `write r.cram` (section 23); `--keep` writes a BAM (section 28) |
 | Materialize fallback | A tool with only `run` reads a spooled copy of the stream | Built in section 31. The qc step's `CollectWgsMetrics` reads the source, a kept stream or the BAM a `write` step wrote, else it is a materialized step (D202) | No copy is written when a file already holds the stream |
 | Paths and fingerprints | The manifest's fingerprints | Paths compared resolved against the recorded `directory`; the source fingerprinted before the read, each output when written | A respelled path reran every step; a source swapped during a run was recorded with its new fingerprint |
 | Concurrent runs | Not covered | One run per prefix through `PREFIX.manifest.json.lock`; a second exits 2 | Two runs on one prefix wrote one kept BAM and a manifest that skipped over the other run's records |
@@ -1886,7 +1899,8 @@ files and `verdict.json` of `chain_qc_step` equal those of `qc_generic`),
 ## 31. W14: every registered tool at any position, the materialize fallback
 
 Every registered tool that reads a BAM runs at any position of a chain: 53 of the 71
-tools. A tool with a stage is a transform, a one-pass tool is a tap, a split tool is a
+tools at 0.32.0, 53 of the 74 at 0.33.0, whose three new tools are refused as steps with
+their reasons (section 3; docs/07 D224 and D233). A tool with a stage is a transform, a one-pass tool is a tap, a split tool is a
 split. A tool with neither a stage nor a collector is materialized (docs/07 section
 2.3): it runs on a file that holds the records of its position.
 

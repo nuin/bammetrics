@@ -1359,11 +1359,12 @@ fn a_bad_pipe_fails_under_the_name_of_standard_input() {
         &format!("M={}", dir.join("out.txt").display()),
         &format!("TMP_DIR={tmp_dir}"),
     ];
-    // The tool names no file for a record it cannot read (`bad record`).
+    // The tool names the cut as the chain does (`cut_record.rs`).
     let not_a_bam = "/dev/stdin: not a BAM or CRAM file";
+    let truncated = "/dev/stdin: truncated BAM";
     let cases: [(&[u8], &str, &str); 2] = [
         (b"not a bam\n", not_a_bam, not_a_bam),
-        (&bam[..600], "/dev/stdin: truncated BAM", "bad record"),
+        (&bam[..600], truncated, truncated),
     ];
     for (bytes, in_chain, in_tool) in cases {
         for (args, cause) in [(&chained[..], in_chain), (&tool[..], in_tool)] {
@@ -1553,10 +1554,10 @@ fn write_writes_sam_text_by_name_or_by_output_format() {
             "{extension}"
         );
     }
-    let (code, stderr) = chain(&[source, "+", "write", &sam, "--output-format", "cram"]);
+    let (code, stderr) = chain(&[source, "+", "write", &sam, "--output-format", "fastq"]);
     assert_eq!(code, Some(2), "{stderr}");
     assert!(
-        stderr.contains("expected bam or sam, got \"cram\""),
+        stderr.contains("expected bam, sam or cram, got \"fastq\""),
         "{stderr}"
     );
     fs::remove_dir_all(&dir).expect("cleanup");
@@ -1580,11 +1581,11 @@ fn usage_errors_exit_2_before_anything_runs() {
         ),
         (
             &[source, "+", "mark-duplicates", "+", "write", &cram],
-            "out.cram: bammetrics writes BAM and SAM only: CRAM output is wave W15",
+            "out.cram: a CRAM is written against the reference: give the chain -R FASTA",
         ),
         (
             &[source, "+", "write", &fastq],
-            "out.fastq.gz: bammetrics writes BAM and SAM only: FASTQ output is wave W22",
+            "out.fastq.gz: bammetrics writes BAM, SAM and CRAM only: FASTQ output is wave W22",
         ),
         // A stream name another transform took.
         (

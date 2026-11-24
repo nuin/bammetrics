@@ -1,0 +1,97 @@
+## argv
+compare-s-a-ms
+tests/data/compare_sams_left.bam
+tests/data/compare_sams_right.bam
+--lenient-header
+--lenient-dup
+--lenient-low-mq-alignment
+--lenient-unknown-mq-alignment
+--compare-mq
+--format
+json
+## exit
+0
+## stdout
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CompareSAMs",
+  "headers": [
+    "CompareSAMs INPUT=tests/data/compare_sams_left.bam INPUT=tests/data/compare_sams_right.bam LENIENT_HEADER=true LENIENT_DUP=true LENIENT_LOW_MQ_ALIGNMENT=true LENIENT_UNKNOWN_MQ_ALIGNMENT=true COMPARE_MQ=true",
+    "Started on: <time>"
+  ],
+  "class": "picard.sam.SamComparisonMetric",
+  "columns": [
+    "LEFT_FILE",
+    "RIGHT_FILE",
+    "MAPPINGS_MATCH",
+    "MAPPINGS_DIFFER",
+    "UNMAPPED_BOTH",
+    "UNMAPPED_LEFT",
+    "UNMAPPED_RIGHT",
+    "MISSING_LEFT",
+    "MISSING_RIGHT",
+    "DUPLICATE_MARKINGS_DIFFER",
+    "ARE_EQUAL"
+  ],
+  "types": [
+    "string",
+    "string",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "int",
+    "string"
+  ],
+  "metrics": [
+    {
+      "LEFT_FILE": "ROOT/tests/data/compare_sams_left.bam",
+      "RIGHT_FILE": "ROOT/tests/data/compare_sams_right.bam",
+      "MAPPINGS_MATCH": 12,
+      "MAPPINGS_DIFFER": 0,
+      "UNMAPPED_BOTH": 1,
+      "UNMAPPED_LEFT": 0,
+      "UNMAPPED_RIGHT": 0,
+      "MISSING_LEFT": 0,
+      "MISSING_RIGHT": 0,
+      "DUPLICATE_MARKINGS_DIFFER": 0,
+      "ARE_EQUAL": "Y"
+    }
+  ],
+  "non_finite": [],
+  "histogram": {
+    "key_class": "java.lang.String",
+    "columns": [
+      "BIN",
+      "VALUE"
+    ],
+    "types": [
+      "string",
+      "float"
+    ],
+    "rows": [
+      {
+        "BIN": "0,0",
+        "VALUE": 1
+      },
+      {
+        "BIN": "2,3",
+        "VALUE": 1
+      },
+      {
+        "BIN": "255,255",
+        "VALUE": 1
+      },
+      {
+        "BIN": "60,60",
+        "VALUE": 10
+      }
+    ],
+    "non_finite": []
+  }
+}
+## stderr
+bammetrics compare-s-a-ms: SAM files match.

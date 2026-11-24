@@ -1,3 +1,6 @@
+// bammetrics patch: reachable through `io::writer::raw`, as noodles wrote it.
+#![allow(missing_docs)]
+
 bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
     pub struct Flags: u8 {

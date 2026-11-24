@@ -13,7 +13,14 @@
 //! Text is decoded as `BufferedLineReader` decodes it (UTF-8) and stored
 //! as `StringUtil.stringToBytes` stores it (the low byte of each UTF-16
 //! code unit), so an ASCII file keeps its bytes and any other character
-//! becomes the byte htsjdk writes for it.
+//! becomes the byte htsjdk writes for it. A header line is split into its
+//! fields after it is decoded, as htsjdk splits it, and a character above
+//! U+00FF whose low byte is a tab, a line end or a NUL is stored as `?`:
+//! that byte would end the field, the line or the text. Two things the stored bytes
+//! cannot say are kept beside them for the tool that compares strings
+//! (`CompareSAMs`): the header with its values as UTF-8
+//! ([`Reader::decoded_header`]) and the read names with a character above
+//! U+00FF ([`WideNames`]).
 //!
 //! `VALIDATION_STRINGENCY` ([`Stringency`]) decides what a bad line does.
 //! `STRICT` fails at the first error with htsjdk's message. `LENIENT`
@@ -42,8 +49,8 @@ mod read;
 mod write;
 
 pub use parse::{LineParser, parse_cigar};
-pub(crate) use read::clean_header_line;
-pub use read::{Reader, RecordStream, Records};
+pub use read::{Reader, RecordStream, Records, WideNames};
+pub(crate) use read::{clean_header_line, held_bytes};
 pub use write::{SamWriter, header_text, write_record};
 
 use std::io;

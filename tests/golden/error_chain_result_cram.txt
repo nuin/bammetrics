@@ -8,5 +8,5 @@ OUT/r.cram
 2
 ## stdout
 ## stderr
-bammetrics chain: -o OUT/r.cram: bammetrics writes BAM and SAM only: CRAM output is wave W15 of docs/07_full_parity_program.md (from -o)
-  -o out.bam writes a BAM
+bammetrics chain: step 2 (write): OUT/r.cram: a CRAM is written against the reference: give the chain -R FASTA
+  or BAMMETRICS_REFERENCE, or reference in the config file (bammetrics config)

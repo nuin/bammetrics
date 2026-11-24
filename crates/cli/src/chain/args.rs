@@ -249,9 +249,10 @@ pub fn write_flags() -> Vec<Flag> {
             "output",
             &["o", "O"],
             Ty::Path,
-            "The BAM to write, or SAM text for a name ending in .sam: the positional \
-             argument; - writes standard output. Without one, PREFIX.<stream>.bam \
-             (PREFIX.marked.bam after mark-duplicates).",
+            "The BAM to write, SAM text for a name ending in .sam, or a CRAM against the \
+             chain's -R for one ending in .cram: the positional argument; - writes standard \
+             output. Without one, PREFIX.<stream>.bam (PREFIX.marked.bam after \
+             mark-duplicates).",
         )
         .names(&["OUTPUT", "O"])
         .placeholder("PATH"),
@@ -279,8 +280,8 @@ pub fn write_flags() -> Vec<Flag> {
             "output-format",
             &[],
             Ty::Text,
-            "bam or sam: what is written, whatever the name says. write - --output-format sam \
-             prints SAM text on standard output.",
+            "bam, sam or cram: what is written, whatever the name says. write - --output-format \
+             sam prints SAM text on standard output.",
         )
         .placeholder("KIND"),
         Flag::new(Key::Help, "help", &["h"], Ty::Bool, "This help."),
@@ -334,9 +335,12 @@ pub(crate) fn is_split(verb: &Verb) -> bool {
 /// hint, the one that lists the steps.
 ///
 /// `build-bam-index` names the `write --index` that does its work in a
-/// chain. `fifo-buffer` has its own reason. It copies the bytes of a pipe between
+/// chain, `sam-format-converter` the `write` whose file name picks the
+/// format. `fifo-buffer` has its own reason. It copies the bytes of a pipe between
 /// two commands, and the steps of a chain hand records on in memory, so no
-/// later wave makes it a step.
+/// later wave makes it a step. `compare-s-a-ms` (two files) and
+/// `check-terminator-block` (a file's last bytes) have theirs too: a spooled
+/// stream gives neither what it reads.
 pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
     if verb.copies_stream() {
         return usage(format!(
@@ -358,6 +362,36 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
             "write --index writes the .bai of the BAM a chain writes: bammetrics chain BAM + \
              ... + write out.bam --index",
         );
+    }
+    if verb.class == bammetrics_core::sam_format_converter::TOOL.name {
+        return usage(format!(
+            "{place}: {} writes the records it reads in another format, which is what the \
+             write step does: it cannot be a step",
+            verb.class
+        ))
+        .hint(
+            "name the file of write: bammetrics chain BAM + ... + write out.sam (or out.cram \
+             with -R, or out.bam)",
+        );
+    }
+    if verb.class == bammetrics_core::compare_sams::TOOL.name {
+        return usage(format!(
+            "{place}: {} compares two files and a chain hands on the records of one: it cannot \
+             be a step",
+            verb.class
+        ))
+        .hint(
+            "write the stream to a file, then compare: bammetrics chain BAM + ... + write \
+             out.bam; bammetrics compare-s-a-ms BAM out.bam",
+        );
+    }
+    if verb.class == bammetrics_core::check_terminator_block::TOOL.name {
+        return usage(format!(
+            "{place}: {} reads the last bytes of a file and a chain hands on records: it \
+             cannot be a step",
+            verb.class
+        ))
+        .hint("run it on the file: bammetrics check-terminator-block FILE");
     }
     if matches!(verb.input, "TEXT" | "VCF" | "LIST" | "FASTA") {
         return usage(format!(
@@ -534,7 +568,8 @@ pub fn help() -> String {
          before it emits.\n  \
          transform  changes the records later steps see: {}\n  \
          tap        reads the records of its position, changes nothing: {}\n  \
-         write      write [PATH] writes the records of its position as a BAM\n  \
+         write      write [PATH] writes the records of its position as a BAM, SAM \
+         text (.sam) or a CRAM against -R (.cram)\n  \
          split      writes the records of its position over BAMs in its -o DIR: {}\n  \
          materialize runs on a file of the records of its position (the source itself, or a \
          copy in the temporary directory): {}\n  \
@@ -549,7 +584,8 @@ pub fn help() -> String {
          path writes PREFIX.<stream>.bam. A step's own -o replaces the name. -o out.bam on \
          a chain that changes the records (a transform, merge-sam-files) and has no write \
          adds write out.bam --index as the last step, in front of qc, and names the metrics \
-         out.<extension>. --keep on such a step writes PREFIX.<stream>.bam; --resume reads \
+         out.<extension>; -o out.sam and -o out.cram (against -R) add write without --index. \
+         --keep on such a step writes PREFIX.<stream>.bam; --resume reads \
          PREFIX.manifest.json, skips the steps it proves done, and starts its read at a kept \
          stream or at the BAM a skipped write step wrote.\n\n\
          Defaults: -R, --threads, --tmp-dir and --sort-memory come from the user config file \
@@ -588,7 +624,8 @@ pub fn step_help(name: &str, number: usize) -> Result<String, VerbError> {
     if name == WRITE {
         return Ok(format!(
             "bammetrics chain ... + write [PATH] [OPTIONS]: the records of its position as a \
-             BAM. SAM, CRAM and FASTQ output are later waves.\n\nOptions:\n{}",
+             BAM, SAM text for a name ending in .sam, or a CRAM against the chain's -R for one \
+             ending in .cram. FASTQ output is a later wave.\n\nOptions:\n{}",
             option_lines(&write_flags())
         ));
     }

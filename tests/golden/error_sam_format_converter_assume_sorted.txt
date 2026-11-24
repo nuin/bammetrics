@@ -1,0 +1,10 @@
+## argv
+SamFormatConverter
+I=tests/data/markdup.bam
+O=OUT/converted.sam
+ASSUME_SORTED=true
+## exit
+1
+## stdout
+## stderr
+bammetrics: SamFormatConverter: Unrecognized option: ASSUME_SORTED

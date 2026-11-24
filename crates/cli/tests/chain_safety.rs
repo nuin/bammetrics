@@ -774,7 +774,8 @@ fn a_failed_verb_leaves_no_directory_it_made_empty() {
     let cut = cut_bam(&dir);
     let file = text(&dir.join("made/deeper/x.txt"));
     let prefix = text(&dir.join("made/deeper/s"));
-    // `mark-duplicates` reads raw records and names the cut in its own words.
+    // `mark-duplicates` reads raw records and names the cut as the one-pass
+    // reader does (`cut_record.rs`).
     let cases: [(&[&str], &str); 4] = [
         (&["insert-size", &cut, "-o", &file], "truncated BAM"),
         (
@@ -786,7 +787,7 @@ fn a_failed_verb_leaves_no_directory_it_made_empty() {
                 "--metrics-file",
                 &prefix,
             ],
-            "bad record: failed to fill whole buffer",
+            "truncated BAM",
         ),
         (&["collect", &cut, "-o", &prefix], "truncated BAM"),
         (&["qc", &cut, "-o", &prefix], "truncated BAM"),

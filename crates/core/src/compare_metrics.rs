@@ -287,13 +287,13 @@ fn allowed_changes(values: &[String]) -> Result<Vec<(String, f64)>> {
 /// a trailing `/` dropped) and `getAbsolutePath` (the working directory
 /// prefixed to a relative path, nothing resolved).
 #[derive(Clone, Debug)]
-struct JavaFile {
+pub(crate) struct JavaFile {
     given: String,
-    absolute: String,
+    pub(crate) absolute: String,
 }
 
 impl JavaFile {
-    fn new(path: &str) -> Self {
+    pub(crate) fn new(path: &str) -> Self {
         let mut given = String::new();
         for c in path.chars() {
             if !(c == '/' && given.ends_with('/')) {
@@ -320,7 +320,7 @@ impl JavaFile {
 
     /// `Path.toUri`: `file://`, the absolute path percent-encoded, `/` after
     /// a directory.
-    fn uri(&self) -> String {
+    pub(crate) fn uri(&self) -> String {
         let mut uri = String::from("file://");
         for byte in self.absolute.bytes() {
             if byte.is_ascii_alphanumeric() || b"/-_.!~*'()@:&=+$,;".contains(&byte) {

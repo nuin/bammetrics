@@ -153,6 +153,7 @@ impl HistogramSection {
                 let key_value = match self.key_class {
                     KeyClass::Double => Value::Float(key as f64),
                     KeyClass::Integer | KeyClass::Byte => Value::Int(key),
+                    KeyClass::MqPair => Value::Str(self.key_class.format(key)),
                 };
                 std::iter::once((self.key_label.to_owned(), key_value))
                     .chain(series.iter().map(|s| {

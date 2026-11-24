@@ -1234,3 +1234,148 @@ max_rss_mib = 2048
 max_seconds = 600
 spill_dir = "{out}/tmp"
 max_spill_mib = 2048
+
+# A CRAM against the reference (cram_writer.rs): the reference bases one slice spans in
+# memory, and one container of at most 8 MiB of BAM records per compression thread.
+[[command]]
+name = "sort-sam cram"
+argv = [
+    "{bin}", "sort-sam", "tests/data/markdup.bam", "-o", "{out}/sorted.cram",
+    "--sort-order", "coordinate", "-R", "tests/data/ref_100k.fa", "--create-md5-file",
+]
+needs = ["tests/data/markdup.bam", "tests/data/ref_100k.fa"]
+max_rss_mib = 64
+max_seconds = 30
+
+# 3,000 reads of 50,000 bases (tests/data/make_long_reads.py writes the SAM text and its
+# FASTA in the same shell, so its Python counts: 40 MiB), 225 MB as BAM records. A
+# container ends at 8 MiB of BAM records as well as at 10,000 records, and at most 64 MiB
+# wait for the encoders: 185 to 200 MiB at the default 8 threads, 777 MiB when a container held
+# all 3,000 reads. The same reads to a BAM: 27 MiB.
+[[command]]
+name = "clean-sam cram long reads"
+argv = [
+    "sh", "-c",
+    "python3 tests/data/make_long_reads.py {out} && {bin} clean-sam {out}/long.sam -o {out}/long.cram -R {out}/long.fa",
+]
+needs = ["tests/data/make_long_reads.py"]
+max_rss_mib = 320
+max_seconds = 60
+
+# The exome BAM (150,538,907 records, coordinate order) as a CRAM, with the default 8
+# threads. Two runs when the row was added: 587 and 688 MiB peak RSS, 182 and 173 s,
+# 5,464,644,737 bytes; 360 and 422 MiB since a slice reads the bases it spans in place of
+# its contig. The limit is the streaming writer target of docs/07 section 6.
+[[command]]
+name = "chain write cram exome"
+tier = "scale"
+argv = [
+    "{bin}", "chain", "~/data/bammetrics-scale/exome/HG002.exome.bam", "-R",
+    "~/data/bammetrics-scale/exome/hs37d5.fa", "+", "write", "{out}/exome.cram",
+]
+needs = [
+    "~/data/bammetrics-scale/exome/HG002.exome.bam",
+    "~/data/bammetrics-scale/exome/hs37d5.fa",
+]
+max_rss_mib = 1024
+max_seconds = 600
+
+# SamFormatConverter (sam_format_converter.rs): the records stream from the reader to the
+# writer of the format the name gives, so memory is the writer's.
+[[command]]
+name = "sam-format-converter"
+argv = ["{bin}", "sam-format-converter", "tests/data/markdup.bam", "-o", "{out}/converted.sam"]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "sam-format-converter cram"
+argv = [
+    "{bin}", "sam-format-converter", "tests/data/markdup.sam", "-o", "{out}/converted.cram",
+    "-R", "tests/data/ref_100k.fa", "--validation-stringency", "SILENT",
+]
+needs = ["tests/data/markdup.sam", "tests/data/ref_100k.fa"]
+max_rss_mib = 64
+max_seconds = 30
+
+# Chromosomes 20 to 22 of the HG002 exome (8,445,233 records) as SAM text and as a CRAM:
+# 12.3 MiB and 9.5 s, 179.0 MiB and 10.3 s with 8 threads when the rows were added.
+[[command]]
+name = "sam-format-converter slice sam"
+tier = "scale"
+argv = [
+    "{bin}", "sam-format-converter", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "-o",
+    "{out}/slice.sam",
+]
+needs = ["~/data/bammetrics-scale/waves/w03/chr20_21_22.bam"]
+max_rss_mib = 512
+max_seconds = 300
+
+[[command]]
+name = "sam-format-converter slice cram"
+tier = "scale"
+argv = [
+    "{bin}", "sam-format-converter", "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam", "-o",
+    "{out}/slice.cram", "-R", "~/data/bammetrics-scale/exome/hs37d5.fa",
+]
+needs = [
+    "~/data/bammetrics-scale/waves/w03/chr20_21_22.bam",
+    "~/data/bammetrics-scale/exome/hs37d5.fa",
+]
+max_rss_mib = 1024
+max_seconds = 600
+
+# Wave W15: CompareSAMs holds the records that wait for a partner (none for two files in
+# one order) and, under LENIENT_DUP, two sorts of duplicate keys; CheckTerminatorBlock
+# reads the last 64 KiB of the file.
+[[command]]
+name = "compare-s-a-ms"
+argv = [
+    "{bin}", "compare-s-a-ms", "tests/data/markdup.bam", "tests/data/markdup.sam", "-o",
+    "{out}/compared.txt", "--compare-mq",
+]
+needs = ["tests/data/markdup.bam", "tests/data/markdup.sam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "compare-s-a-ms lenient"
+argv = [
+    "{bin}", "compare-s-a-ms", "tests/data/compare_sams_left.bam",
+    "tests/data/compare_sams_right.bam", "-o", "{out}/compared.txt", "--lenient-header",
+    "--lenient-dup", "--lenient-low-mq-alignment", "--lenient-unknown-mq-alignment",
+    "--max-records-in-ram", "2",
+]
+needs = ["tests/data/compare_sams_left.bam", "tests/data/compare_sams_right.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "check-terminator-block"
+argv = ["{bin}", "check-terminator-block", "tests/data/markdup.bam", "-o", "{out}/end.txt"]
+needs = ["tests/data/markdup.bam"]
+max_rss_mib = 64
+max_seconds = 30
+
+[[command]]
+name = "compare-s-a-ms exome against itself"
+tier = "scale"
+argv = [
+    "{bin}", "compare-s-a-ms", "~/data/bammetrics-scale/exome/HG002.exome.bam",
+    "~/data/bammetrics-scale/exome/HG002.exome.bam", "-o", "{out}/compared.txt", "--compare-mq",
+]
+needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
+max_rss_mib = 1024
+max_seconds = 1800
+
+[[command]]
+name = "check-terminator-block exome"
+tier = "scale"
+argv = [
+    "{bin}", "check-terminator-block", "~/data/bammetrics-scale/exome/HG002.exome.bam", "-o",
+    "{out}/end.txt",
+]
+needs = ["~/data/bammetrics-scale/exome/HG002.exome.bam"]
+max_rss_mib = 64
+max_seconds = 10

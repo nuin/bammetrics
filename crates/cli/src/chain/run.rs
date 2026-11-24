@@ -353,6 +353,7 @@ fn bam_kind(path: &Path) -> &'static str {
         Some("bai") => "index",
         Some("md5") => "md5",
         Some("sam") => "sam",
+        Some("cram") => "cram",
         _ => "bam",
     }
 }

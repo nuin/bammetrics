@@ -1,0 +1,11 @@
+## argv
+check-terminator-block
+tests/data/targets_bed.bgz
+--format
+tsv
+## exit
+100
+## stdout
+file	termination
+tests/data/targets_bed.bgz	DEFECTIVE
+## stderr

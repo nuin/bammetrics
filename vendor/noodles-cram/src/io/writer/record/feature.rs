@@ -1,3 +1,6 @@
+// bammetrics patch: reachable through `io::writer::raw`, as noodles wrote it.
+#![allow(missing_docs)]
+
 use noodles_core::Position;
 
 use crate::container::compression_header::preservation_map::substitution_matrix::Base;

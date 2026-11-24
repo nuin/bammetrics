@@ -262,6 +262,20 @@ What tier B still proves, and what it does not:
   Picard's compressed blocks. It cannot be byte-equal to an index of a BAM bammetrics wrote.
   `BuildBamIndex` on one given BAM can be tier A. It is: the next section.
 
+A CRAM is tier B too (wave W15, `tests/concordance/test_cram_writer.py`, inputs from
+`cram_bams.py`). No writer is a registry tool of its own, so the registration rule names
+no module for it: the module holds `crates/core/src/cram_writer.rs` through SortSam,
+MergeSamFiles, MarkDuplicates, AddOrReplaceReadGroups, CleanSam, DownsampleSam and the
+chain `write` step. Each CRAM bammetrics writes is read by samtools (`decode_md=0`), by
+Picard `ViewSam` and by bammetrics `ViewSam`, and held to the BAM bammetrics writes of
+the same stream and to samtools' own CRAM of that BAM. The module also holds: a FASTA
+whose contigs are in another order, are more than the header's, are longer than their
+`@SQ` line, or lack a contig no record lies on (both tools write; both fail with one
+sentence on a record whose contig the FASTA lacks); a tag text and a read name with
+bytes outside printable ASCII; a mate reference index the header lacks (both fail); a
+read that starts past its contig end and an unmapped record with a CIGAR (Picard fails,
+bammetrics writes what samtools writes).
+
 ## BAM index
 
 A `.bai` is tier A for a given BAM. `tests/concordance/test_build_bam_index.py` runs
@@ -397,7 +411,7 @@ One failure lists every gap of every tool with the edit that closes it. Wave W05
 docs/07 added `ViewSam` (tool 34, `test_view_sam.py`), `SortSam` (tool 35,
 `test_sort_sam.py`) and `BuildBamIndex` (tool 36, `test_build_bam_index.py`), each with
 an argument list in the glossary test (`BuildBamIndex` returns rows without a class). The
-71 tools pass at 0.32.0 (wave W07 adds `CollectMtCopyNumberMetrics` and
+74 tools pass at 0.33.0 (wave W07 adds `CollectMtCopyNumberMetrics` and
 `CollectExonCoverageMetrics`, wave W08 `CollectAdapterContentMetrics`,
 `CollectDuplicateByTileMetrics`, `CollectTelomereMetrics` and `CollectIndexDepthMetrics`,
 wave W09 the six record-editing tools, wave W10 `AddOrReplaceReadGroups`,
@@ -407,7 +421,8 @@ wave W09 the six record-editing tools, wave W10 `AddOrReplaceReadGroups`,
 the three `picard.arrays` tools, wave W12 `IntervalListTools`, `IntervalListToBed`,
 `VcfToIntervalList`, `ScatterIntervalsByNs` and `NonNFastaSize`, wave W13 `MergeSamFiles`,
 `ReorderSam`, `FixMateInformation`, `FilterSamReads`, `DownsampleSam` and
-`PositionBasedDownsampleSam`): 48 have a module named after them (`test_exon_coverage.py`, `test_duplicate_by_tile.py`,
+`PositionBasedDownsampleSam`, wave W15 `SamFormatConverter`, `CompareSAMs` and
+`CheckTerminatorBlock`): 51 have a module named after them (`test_exon_coverage.py`, `test_duplicate_by_tile.py`,
 `test_index_depth.py`, the six of W09, `test_add_comments_to_bam.py` to
 `test_set_nm_and_uq_tags.py`, and the six of W10, `test_add_or_replace_read_groups.py` to
 `test_calculate_read_group_checksum.py`, and the six of W11, `test_quality_yield_s_n_v_q.py`,
@@ -418,17 +433,20 @@ the three `picard.arrays` tools, wave W12 `IntervalListTools`, `IntervalListToBe
 `test_scatter_intervals_by_ns.py` and `test_non_n_fasta_size.py`, and the six of W13,
 `test_merge_sam_files.py`, `test_reorder_sam.py`, `test_fix_mate_information.py`,
 `test_filter_sam_reads.py`, `test_downsample_sam.py` and
-`test_position_based_downsample_sam.py`, among them), 18 are mapped in `CONCORDANCE` to a shared module
+`test_position_based_downsample_sam.py`, and the three of W15,
+`test_sam_format_converter.py`, `test_compare_s_a_ms.py` and
+`test_check_terminator_block.py`, among them), 18 are mapped in `CONCORDANCE` to a shared module
 (`test_read_level.py` 6, `test_wgs_metrics.py` 3, `test_variant_tools.py` 3, six others 1
 each), and 5 are only in `NO_PICARD_ORACLE` (not Picard tools): `CollectCoverageGaps`,
 `CollectSexCheckMetrics`, `CollectMtCopyNumberMetrics`, `CollectAdapterContentMetrics` and
 `CollectTelomereMetrics`. The 7 tools of docs/06 are all in `NO_PICARD_ORACLE`; 2 of them,
 `CollectDuplicateByTileMetrics` and `CollectIndexDepthMetrics`, also have a module and are
-counted among the 48. `test_duplicate_by_tile.py` checks its `ALL` row against Picard
+counted among the 51. `test_duplicate_by_tile.py` checks its `ALL` row against Picard
 `MarkDuplicates`, `test_index_depth.py` its counts against `samtools idxstats`. `FifoBuffer` (wave W04 of docs/07) is tool 33. Its module is
 `tests/concordance/test_fifo_buffer.py`. It is a line of `EXEMPT`: it copies standard
 input to standard output and writes no metrics column. The six tools of wave W09 are the
-other 6 lines: each writes a BAM or SAM text and no metrics file.
+other 6 lines: each writes a BAM or SAM text and no metrics file (five of them a CRAM too, since
+wave W15; `AddCommentsToBam` copies BGZF blocks).
 
 ## Spec script
 

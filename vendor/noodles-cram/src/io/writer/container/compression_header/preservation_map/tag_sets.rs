@@ -35,18 +35,20 @@ fn encode(tag_sets: &TagSets) -> Vec<u8> {
 pub(super) fn build_tag_sets(records: &[Record]) -> TagSets {
     use crate::container::compression_header::preservation_map::tag_sets::Key;
 
+    // bammetrics patch: the sets seen are kept in a hash set. noodles
+    // compared each record's set with every set before it, which is
+    // quadratic in a container whose records each carry their own tags.
     let mut tag_sets = Vec::new();
+    let mut seen = std::collections::HashSet::new();
 
     for record in records {
-        let set = record
+        let set: Vec<Key> = record
             .data
             .iter()
             .map(|(tag, value)| Key::new(*tag, value.ty()))
             .collect();
 
-        if tag_sets.iter().any(|s| s == &set) {
-            continue;
-        } else {
+        if seen.insert(set.clone()) {
             tag_sets.push(set);
         }
     }

@@ -1,0 +1,9 @@
+## argv
+SamFormatConverter
+I=tests/data/markdup.bam
+O=OUT/converted.cram
+## exit
+1
+## stdout
+## stderr
+bammetrics: A reference must be supplied that includes the reference sequence for chr1.

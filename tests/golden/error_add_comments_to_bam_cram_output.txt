@@ -1,0 +1,10 @@
+## argv
+AddCommentsToBam
+I=tests/data/markdup.bam
+O=OUT/commented.cram
+C=one
+## exit
+1
+## stdout
+## stderr
+bammetrics: OUTPUT=OUT/commented.cram: the records of a BAM are copied as BAM blocks, and Picard writes BAM bytes under this name: name the OUTPUT .bam

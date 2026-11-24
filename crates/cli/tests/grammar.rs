@@ -794,6 +794,24 @@ fn cases(built: &Built) -> Vec<Case> {
             option: Some(("SORT_ORDER", "queryname")),
             picard_outputs: sorted_sam,
         },
+        Case {
+            verb: "sam-format-converter",
+            class: "SamFormatConverter",
+            verb_args: strings(&[MD]),
+            picard_args: strings(&[&format!("I={MD}")]),
+            option: Some(("COMPRESSION_LEVEL", "1")),
+            picard_outputs: sorted_sam,
+        },
+        // The Picard face takes the two files as positional arguments. A
+        // file against itself, so both faces exit 0.
+        Case {
+            verb: "compare-s-a-ms",
+            class: "CompareSAMs",
+            verb_args: strings(&[IS, IS]),
+            picard_args: strings(&[IS, IS]),
+            option: Some(("COMPARE_MQ", "true")),
+            picard_outputs: single,
+        },
     ]
 }
 
@@ -821,7 +839,8 @@ fn named_output(verb: &str) -> Option<&'static str> {
         | "add-or-replace-read-groups"
         | "revert-original-base-qualities-and-add-mate-cigar"
         | "fix-mate-information"
-        | "filter-sam-reads" => Some("sam"),
+        | "filter-sam-reads"
+        | "sam-format-converter" => Some("sam"),
         "add-comments-to-bam" | "gather-bam-files" | "merge-sam-files" | "reorder-sam" => {
             Some("bam")
         }
@@ -924,19 +943,23 @@ fn every_registry_tool_is_in_the_matrix() {
     // the list: tests/interval_list_tools.rs compares its spellings.
     // PositionBasedDownsampleSam writes only a BAM whose @PG holds the
     // command line: tests/downsample.rs compares its spellings.
+    // CheckTerminatorBlock prints on standard error on the Picard face and
+    // on standard output on the verb: tests/compare_terminator.rs compares
+    // the two.
     let elsewhere = [
         "AccumulateVariantCallingMetrics",
         "FifoBuffer",
         "BuildBamIndex",
         "IntervalListTools",
         "PositionBasedDownsampleSam",
+        "CheckTerminatorBlock",
     ];
     let missing: Vec<&&str> = classes
         .iter()
         .filter(|c| !covered.contains(c) && !elsewhere.contains(c))
         .collect();
     assert!(missing.is_empty(), "no spelling case for {missing:?}");
-    assert_eq!(classes.len(), 71);
+    assert_eq!(classes.len(), 74);
 }
 
 /// `gc-bias`, `multiple-metrics` and `collect` write the names

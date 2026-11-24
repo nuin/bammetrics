@@ -1,0 +1,21 @@
+## argv
+CompareSAMs
+tests/data/duplicate_marking.bam
+tests/data/duplicate_marking.bam
+O=OUT/compared.txt
+## exit
+0
+## stdout
+SAM files match.
+## stderr
+## file compared.txt
+## htsjdk.samtools.metrics.StringHeader
+# CompareSAMs INPUT=tests/data/duplicate_marking.bam INPUT=tests/data/duplicate_marking.bam OUTPUT=OUT/compared.txt
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.SamComparisonMetric
+LEFT_FILE	RIGHT_FILE	MAPPINGS_MATCH	MAPPINGS_DIFFER	UNMAPPED_BOTH	UNMAPPED_LEFT	UNMAPPED_RIGHT	MISSING_LEFT	MISSING_RIGHT	DUPLICATE_MARKINGS_DIFFER	ARE_EQUAL
+ROOT/tests/data/duplicate_marking.bam	ROOT/tests/data/duplicate_marking.bam	8	0	3	0	0	0	0	0	Y
+
+

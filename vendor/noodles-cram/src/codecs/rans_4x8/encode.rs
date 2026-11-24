@@ -12,6 +12,12 @@ use super::{LOWER_BOUND, Order, STATE_COUNT};
 pub fn encode(order: Order, src: &[u8]) -> io::Result<Vec<u8>> {
     match order {
         Order::Zero => order_0::encode(src),
+        // bammetrics patch: order 1 takes no stream of 1 to 3 bytes (fewer
+        // than one per state), so such a block is coded with order 0, as
+        // htscodecs' `rans_compress_to_4x8` does. The order is the block's
+        // first byte, so a reader decodes it either way. An empty block
+        // never reaches the encoder.
+        Order::One if (1..STATE_COUNT).contains(&src.len()) => order_0::encode(src),
         Order::One => order_1::encode(src),
     }
 }
@@ -48,6 +54,17 @@ fn state_step(s: u32, f: u16, g: u16) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_encode_with_order_1_under_4_bytes_is_order_0() -> io::Result<()> {
+        for data in [&b"I"[..], b"II", b"I#5"] {
+            let encoded = encode(Order::One, data)?;
+            assert_eq!(encoded, encode(Order::Zero, data)?);
+            assert_eq!(crate::codecs::rans_4x8::decode(&encoded)?, data);
+        }
+
+        Ok(())
+    }
 
     #[test]
     fn test_encode_with_order_0() -> io::Result<()> {

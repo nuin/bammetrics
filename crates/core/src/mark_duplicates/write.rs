@@ -54,6 +54,7 @@ use super::md_nm::{self, ContigCache};
 use super::{Options, TaggingPolicy};
 use crate::bam_raw::{RawRecord, TagValue};
 use crate::bam_writer::{self, BamWriter, Companions};
+use crate::cram_writer::{self, CramOptions, CramWriter};
 use crate::duplicate_metrics::Row;
 use crate::error::{Error, Result};
 use crate::metric::{HistogramSection, HistogramSeries, MetricsOutput};
@@ -150,6 +151,22 @@ fn java_bytes(text: &str) -> Vec<u8> {
     text.encode_utf16().map(|unit| unit as u8).collect()
 }
 
+/// `OUTPUT`: a BAM, or a CRAM against `REFERENCE_SEQUENCE` for a name
+/// ending in `.cram`.
+enum Out {
+    Bam(Box<BamWriter>),
+    Cram(Box<CramWriter>),
+}
+
+impl Emit for Out {
+    fn emit(&mut self, record: &mut RawRecord) -> Result<()> {
+        match self {
+            Self::Bam(writer) => writer.write(record),
+            Self::Cram(writer) => writer.write(record),
+        }
+    }
+}
+
 /// `MarkDuplicates` second read: write `OUTPUT`, return the metrics file.
 pub fn run(opts: &Options, inputs: &[PathBuf], marks: Marks<'_>) -> Result<MetricsOutput> {
     let (copier, header, writer) = inputs::open(
@@ -162,8 +179,26 @@ pub fn run(opts: &Options, inputs: &[PathBuf], marks: Marks<'_>) -> Result<Metri
             let order = SortOrder::of(&stream.header);
             check_order(order, opts.assume_sort_order)?;
             let (header, chained) = output_header(&stream.header, opts, &marks.pg_ids);
-            let mut writer =
-                BamWriter::create(&opts.output, opts.compression_level, opts.threads, &header)?;
+            let mut writer = if super::writes_cram(&opts.output) {
+                let cram = CramOptions {
+                    compression_level: opts.compression_level,
+                    threads: opts.threads,
+                };
+                let reference = opts.reference.as_deref();
+                Out::Cram(Box::new(CramWriter::create(
+                    &opts.output,
+                    reference,
+                    &header,
+                    &cram,
+                )?))
+            } else {
+                Out::Bam(Box::new(BamWriter::create(
+                    &opts.output,
+                    opts.compression_level,
+                    opts.threads,
+                    &header,
+                )?))
+            };
             let mut copier = Copier::new(opts, &stream.header, chained, stream.cram, marks)?;
             let mut record = RawRecord::default();
             while stream.next(&mut record)? {
@@ -172,11 +207,18 @@ pub fn run(opts: &Options, inputs: &[PathBuf], marks: Marks<'_>) -> Result<Metri
             Ok((copier, header, writer))
         },
     )?;
-    let companions = Companions {
-        index: opts.create_index,
-        md5: opts.create_md5_file,
-    };
-    bam_writer::finish(writer, &header, companions)?;
+    match writer {
+        Out::Bam(writer) => {
+            let companions = Companions {
+                index: opts.create_index,
+                md5: opts.create_md5_file,
+            };
+            bam_writer::finish(*writer, &header, companions)?;
+        }
+        Out::Cram(writer) => {
+            cram_writer::finish(*writer, opts.create_md5_file)?;
+        }
+    }
     Ok(copier.metrics())
 }
 

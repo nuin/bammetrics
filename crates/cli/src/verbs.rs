@@ -25,8 +25,8 @@ use bammetrics_core::multiple_metrics::file_extensions;
 use bammetrics_core::registry::{self, Invocation, Kind, Tool, Ty, normalize};
 use bammetrics_core::view_sam;
 use bammetrics_core::{
-    bam_index_stats, build_bam_index, check_duplicate_marking, compare_metrics, cram, index_depth,
-    pass, split_sam,
+    bam_index_stats, build_bam_index, check_duplicate_marking, check_terminator_block,
+    compare_metrics, compare_sams, cram, index_depth, pass, split_sam,
 };
 
 use crate::error::VerbError;
@@ -95,6 +95,10 @@ pub struct Verb {
     /// A [`Files::Bam`] verb whose `-o` may be left out with nothing
     /// written in its place (`interval-list-tools` then prints a count).
     pub optional_output: bool,
+    /// The arguments of the two usage lines of `--help`, the verb's and
+    /// the Picard face's, for a tool whose inputs are not one `I=`
+    /// (`compare-s-a-ms`: two files, positional on the Picard face).
+    pub usage: Option<(&'static str, &'static str)>,
 }
 
 const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
@@ -115,6 +119,7 @@ const fn verb(name: &'static str, class: &'static str, files: Files) -> Verb {
         default_output: None,
         directory: false,
         optional_output: false,
+        usage: None,
     }
 }
 
@@ -379,9 +384,9 @@ pub const VERBS: &[Verb] = &[
     Verb {
         about: Some(
             "sorts the records of a BAM, CRAM or SAM by --sort-order (queryname, coordinate or \
-             duplicate) as Picard's SortSam does: -o gets a BAM, or SAM text for a name ending \
-             in .sam, under the input header with SO set. Runs of --max-records-in-ram records \
-             spill to --tmp-dir.",
+             duplicate) as Picard's SortSam does: -o gets a BAM, SAM text for a name ending in \
+             .sam, or a CRAM (with -R) for one ending in .cram, under the input header with SO \
+             set. Runs of --max-records-in-ram records spill to --tmp-dir.",
         ),
         writes: "sorted BAM",
         ..verb("sort-sam", "SortSam", Files::Bam)
@@ -458,7 +463,7 @@ pub const VERBS: &[Verb] = &[
         about: Some(
             "computes MD, NM and UQ of each mapped record of a coordinate-sorted SAM, BAM or \
              CRAM against -R, as Picard's SetNmMdAndUqTags does: -o gets every record, a BAM, \
-             or SAM text for a name ending in .sam.",
+             SAM text for a name ending in .sam, or a CRAM for one ending in .cram.",
         ),
         writes: "BAM",
         ..verb("set-nm-md-and-uq-tags", "SetNmMdAndUqTags", Files::Bam)
@@ -695,8 +700,9 @@ pub const VERBS: &[Verb] = &[
         about: Some(
             "sets the mate fields, MQ, MC and TLEN of each pair from its mate, as Picard's \
              FixMateInformation does: -o gets every record of every input (several are merged) \
-             in --sort-order, a BAM or SAM text for a name ending in .sam. Without -o the one \
-             input BAM is rewritten in place, renamed over it when complete.",
+             in --sort-order: a BAM, SAM text for a name ending in .sam, or a CRAM (with -R) \
+             for one ending in .cram. Without -o the one input BAM is rewritten in place, \
+             renamed over it when complete.",
         ),
         writes: "BAM",
         optional_output: true,
@@ -707,7 +713,8 @@ pub const VERBS: &[Verb] = &[
             "keeps the records --filter picks, as Picard's FilterSamReads does: aligned or \
              unmapped reads (pairs of a queryname-sorted input together), names in a read \
              list, string values of a tag, or pairs with an end over an interval list. -o \
-             gets a BAM, or SAM text for a name ending in .sam, in --sort-order.",
+             gets a BAM, SAM text for a name ending in .sam, or a CRAM (with -R) for one \
+             ending in .cram, in --sort-order.",
         ),
         writes: "BAM",
         reads: &["READ_LIST_FILE", "INTERVAL_LIST"],
@@ -738,6 +745,48 @@ pub const VERBS: &[Verb] = &[
             "position-based-downsample-sam",
             "PositionBasedDownsampleSam",
             Files::Bam,
+        )
+    },
+    Verb {
+        about: Some(
+            "writes every record of the input unchanged in the format -o names, as Picard's \
+             SamFormatConverter does: SAM text for a name ending in .sam, a CRAM (with -R) for \
+             one ending in .cram, a BAM for any other name. The header is the input's, with no \
+             @PG line added. Not bammetrics convert, which converts metrics files.",
+        ),
+        writes: "BAM",
+        ..verb("sam-format-converter", "SamFormatConverter", Files::Bam)
+    },
+    Verb {
+        input: "FILE",
+        about: Some(
+            "compares two SAM, BAM or CRAM files as Picard's CompareSAMs does: the \
+             SamComparisonMetric row to -o or standard output, each header difference and the \
+             verdict (SAM files match. or SAM files differ.) on standard error, which -q \
+             drops, exit 1 when the files differ. The Picard face takes the two files as \
+             positional arguments, as Picard does, and has no I= option.",
+        ),
+        ignores: &[(Key::Sample, "a comparison has no sample")],
+        usage: Some(("LEFT RIGHT", "LEFT RIGHT [KEY=VALUE ...]")),
+        ..verb("compare-s-a-ms", "CompareSAMs", Files::Single)
+    },
+    Verb {
+        input: "FILE",
+        about: Some(
+            "says how a BGZF file (a BAM, a bgzip VCF) ends, as Picard's CheckTerminatorBlock \
+             does: HAS_TERMINATOR_BLOCK, HAS_HEALTHY_LAST_BLOCK or DEFECTIVE to -o or standard \
+             output, read from the last 64 KiB of the file, exit 100 on DEFECTIVE.",
+        ),
+        writes: "termination",
+        reads_stdin: false,
+        ignores: &[
+            (Key::Threads, "the last bytes are read, no record"),
+            (Key::Sample, "a file's end has no sample"),
+        ],
+        ..verb(
+            "check-terminator-block",
+            "CheckTerminatorBlock",
+            Files::Single,
         )
     },
 ];
@@ -800,6 +849,31 @@ impl Verb {
         registry::find(self.class).expect("every verb names a registered tool")
     }
 
+    /// The help of `-o` for a verb whose one file is a BAM: what else the
+    /// name of the file can ask for.
+    fn bam_output_help(&self) -> &'static str {
+        use bammetrics_core::{
+            add_comments_to_bam, gather_bam_files, mark_duplicates, replace_sam_header,
+        };
+        if self.class == add_comments_to_bam::TOOL.name {
+            // BGZF blocks are copied, whatever the input.
+            "The BAM to write; - writes standard output. Required."
+        } else if self.class == mark_duplicates::TOOL.name {
+            "The BAM to write, or a CRAM (with -R) for a name ending in .cram; - writes \
+             standard output. Required."
+        } else if self.class == gather_bam_files::TOOL.name {
+            "The BAM to write; with a SAM or CRAM input, SAM text for a name ending in .sam \
+             or a CRAM (with -R) for one ending in .cram. - writes standard output. Required."
+        } else if self.class == replace_sam_header::TOOL.name {
+            "The BAM to write; when the input name does not end in .bam, SAM text for a name \
+             ending in .sam or a CRAM (with -R) for one ending in .cram. - writes standard \
+             output. Required."
+        } else {
+            "The BAM to write, SAM text for a name ending in .sam, or a CRAM (with -R) for \
+             one ending in .cram; - writes standard output. Required."
+        }
+    }
+
     /// The verb's flags: input, output, `--format` and `--sample`, every
     /// row of the tool's option table, then the shared flags.
     pub fn flags(&self) -> Vec<Flag> {
@@ -822,6 +896,8 @@ impl Verb {
                 ". Standard input and pipes are refused: the FASTA is read through its .fai."
             } else if self.reads_stdin {
                 "; - reads standard input."
+            } else if tool.name == check_terminator_block::TOOL.name {
+                ". Standard input and pipes are refused: the last bytes of the file are read."
             } else {
                 ". Standard input and pipes are refused: the tool reads each input twice."
             };
@@ -864,8 +940,9 @@ impl Verb {
             ),
             Files::Bam if self.class == bammetrics_core::fix_mate_information::TOOL.name => (
                 "FILE",
-                "The BAM to write, or SAM text for a name ending in .sam; - writes standard \
-                 output. Without -o the one input BAM is rewritten in place."
+                "The BAM to write, SAM text for a name ending in .sam, or a CRAM (with -R) for \
+                 one ending in .cram; - writes standard output. Without -o the one input BAM \
+                 is rewritten in place."
                     .to_owned(),
             ),
             Files::Bam if self.optional_output => (
@@ -882,10 +959,7 @@ impl Verb {
                     self.writes
                 ),
             ),
-            Files::Bam => (
-                "BAM",
-                "The BAM to write; - writes standard output. Required.".to_owned(),
-            ),
+            Files::Bam => ("BAM", self.bam_output_help().to_owned()),
             Files::Single => (
                 "FILE",
                 format!(
@@ -1025,20 +1099,24 @@ impl Verb {
     /// `bammetrics <verb> --help`.
     pub fn help(&self) -> String {
         let tool = self.tool();
-        let (input, redirects) = if self.copies_stream() {
-            (String::new(), " < IN > OUT")
-        } else {
-            (format!("[{}] ", self.input), "")
+        let (input, redirects) = match self.usage {
+            Some((arguments, _)) => (format!("{arguments} "), ""),
+            None if self.copies_stream() => (String::new(), " < IN > OUT"),
+            None => (format!("[{}] ", self.input), ""),
+        };
+        let picard = match self.usage {
+            Some((_, arguments)) => arguments,
+            None if tool.takes_input() => "I=... [KEY=VALUE ...]",
+            None => "KEY=... [KEY=VALUE ...]",
         };
         let mut text = format!(
             "bammetrics {}: {}, {}\n\nUsage: bammetrics {} {input}[OPTIONS]{redirects}\n       \
-             bammetrics {} {}=... [KEY=VALUE ...]   (Picard syntax)\n\n",
+             bammetrics {} {picard}   (Picard syntax)\n\n",
             self.name,
             tool.name,
             self.about.unwrap_or(tool.summary),
             self.name,
             tool.name,
-            if tool.takes_input() { "I" } else { "KEY" },
         );
         text.push_str(
             "Every option also reads as --PICARD_KEY VALUE and PICARD_KEY=VALUE. A boolean \
@@ -1244,6 +1322,8 @@ impl Verb {
             }
             let status = check.status();
             (check.output, status)
+        } else if let Some(result) = self.with_picard_status(tool, &inv, quiet) {
+            result.map_err(core)?
         } else if tool.name == view_sam::TOOL.name && formats == [Format::Picard] {
             // The SAM text goes out as it is read: no rows are held.
             let status = match &output {
@@ -1310,6 +1390,37 @@ impl Verb {
         }
         made.keep();
         Ok(status)
+    }
+
+    /// `compare-s-a-ms` and `check-terminator-block`: the tool's output and
+    /// Picard's exit code (1 when the files differ, 100 for `DEFECTIVE`).
+    /// The lines Picard's CompareSAMs prints on standard output go to
+    /// standard error here, where `-q` drops them. `None` for another tool.
+    fn with_picard_status(
+        &self,
+        tool: &Tool,
+        inv: &Invocation,
+        quiet: bool,
+    ) -> Option<bammetrics_core::Result<(bammetrics_core::metric::ToolOutput, u8)>> {
+        if tool.name == compare_sams::TOOL.name {
+            let mut say = |line: &str| {
+                if !quiet {
+                    eprintln!("bammetrics {}: {line}", self.name);
+                }
+            };
+            Some(compare_sams::compare(inv, &mut say).map(|comparison| {
+                say(comparison.verdict());
+                let status = comparison.status();
+                (comparison.output, status)
+            }))
+        } else if tool.name == check_terminator_block::TOOL.name {
+            Some(check_terminator_block::check(inv).map(|check| {
+                let status = check.status();
+                (check.output, status)
+            }))
+        } else {
+            None
+        }
     }
 
     /// `compare-metrics`: the comparison as the main file (standard output

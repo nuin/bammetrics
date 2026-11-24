@@ -1,0 +1,8 @@
+## argv
+check-terminator-block
+-
+## exit
+2
+## stdout
+## stderr
+bammetrics check-terminator-block: INPUT /dev/stdin is not a regular file: CheckTerminatorBlock reads the last bytes of a file, and a pipe or a device has none to seek to

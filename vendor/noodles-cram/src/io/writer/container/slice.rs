@@ -77,6 +77,49 @@ pub(super) fn build_slice(
     })
 }
 
+/// bammetrics patch: [`build_slice`] for records the caller converted
+/// (`io::writer::raw`). The reference sequence context and the MD5 of its
+/// reference bases are the caller's, and the mate fields of each record stay
+/// as the caller set them: no mate is attached and no reference is read.
+pub(in crate::io::writer) fn build_prepared_slice(
+    ctx: &Context,
+    record_counter: u64,
+    compression_header: &CompressionHeader,
+    reference_sequence_context: ReferenceSequenceContext,
+    reference_md5: Option<[u8; 16]>,
+    records: &[Record],
+) -> io::Result<Slice> {
+    let (core_data_buf, external_data_bufs) =
+        write_records(compression_header, reference_sequence_context, records)?;
+
+    let (core_data_block, external_data_blocks) = build_blocks(
+        &ctx.block_content_encoder_map,
+        records,
+        core_data_buf,
+        external_data_bufs,
+    )?;
+
+    let mut block_content_ids = vec![core_data_block.content_id];
+    block_content_ids.extend(external_data_blocks.iter().map(|block| block.content_id));
+
+    let header = Header {
+        reference_sequence_context,
+        record_count: records.len(),
+        record_counter,
+        block_count: block_content_ids.len(),
+        block_content_ids,
+        embedded_reference_bases_block_content_id: None,
+        reference_md5,
+        optional_tags: Vec::new(),
+    };
+
+    Ok(Slice {
+        header,
+        core_data_block,
+        external_data_blocks,
+    })
+}
+
 fn get_reference_sequence_context(records: &[Record]) -> ReferenceSequenceContext {
     assert!(!records.is_empty());
 
@@ -178,10 +221,13 @@ fn write_records(
         writer.write_record(record)?;
     }
 
-    Ok((
-        core_data_writer.finish()?,
-        external_data_writers.into_iter().collect(),
-    ))
+    // bammetrics patch: the blocks in the order of their content IDs, so
+    // the same records give the same bytes. noodles wrote them in the
+    // order of a `HashMap`, which differs from run to run.
+    let mut external_data_bufs: Vec<_> = external_data_writers.into_iter().collect();
+    external_data_bufs.sort_unstable_by_key(|(block_content_id, _)| *block_content_id);
+
+    Ok((core_data_writer.finish()?, external_data_bufs))
 }
 
 fn build_blocks(

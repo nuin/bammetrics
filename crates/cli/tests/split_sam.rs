@@ -365,7 +365,7 @@ fn the_verb_makes_its_directory_and_refuses_a_cram_per_library() {
         &text(&refused),
     ]);
     assert_eq!(output.status.code(), Some(2));
-    assert!(String::from_utf8_lossy(&output.stderr).contains("W15"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Picard writes a CRAM per library"));
     assert!(!refused.exists(), "the directory it made is removed");
     fs::remove_dir_all(&dir).expect("cleanup");
 }

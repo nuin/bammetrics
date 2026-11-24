@@ -128,6 +128,63 @@ fn build_container(
     Ok((header, container_size, blocks))
 }
 
+/// bammetrics patch: a container of one slice holding `records`, which the
+/// caller converted (`io::writer::raw`), as its bytes.
+pub(in crate::io::writer) fn encode_prepared_container(
+    ctx: &Context,
+    record_counter: u64,
+    reference_sequence_context: ReferenceSequenceContext,
+    reference_md5: Option<[u8; 16]>,
+    records: &[Record],
+) -> io::Result<Vec<u8>> {
+    let compression_header = build_compression_header(ctx, records);
+
+    let slice = slice::build_prepared_slice(
+        ctx,
+        record_counter,
+        &compression_header,
+        reference_sequence_context,
+        reference_md5,
+        records,
+    )?;
+
+    let mut buf = Vec::new();
+    write_compression_header(&mut buf, &compression_header)?;
+    let compression_header_block = build_compression_header_block(&buf)?;
+
+    let mut container_size = compression_header_block.size()?;
+    let landmarks = vec![container_size];
+    let mut blocks = vec![compression_header_block];
+
+    buf.clear();
+    slice::write_header(&mut buf, &slice.header)?;
+    blocks.push(build_slice_header_block(&buf)?);
+    blocks.push(slice.core_data_block);
+    blocks.extend(slice.external_data_blocks);
+
+    for block in &blocks[1..] {
+        container_size += block.size()?;
+    }
+
+    let header = Header {
+        reference_sequence_context,
+        record_count: records.len(),
+        record_counter,
+        base_count: calculate_base_count(records)?,
+        block_count: blocks.len(),
+        landmarks,
+    };
+
+    let mut dst = Vec::new();
+    write_header(&mut dst, &header, container_size)?;
+
+    for block in &blocks {
+        write_block(&mut dst, block)?;
+    }
+
+    Ok(dst)
+}
+
 fn get_container_reference_sequence_context(
     slices: &[Slice],
 ) -> io::Result<ReferenceSequenceContext> {

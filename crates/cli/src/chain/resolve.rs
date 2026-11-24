@@ -7,8 +7,10 @@
 //!   step gets `write r.bam --index` as its last step, in front of a `qc`
 //!   step, which stays last, and its metrics files, its manifest and the
 //!   files of its qc step are named from `r` (`r.insert_size_metrics`,
-//!   `r.manifest.json`, `r.verdict.json`). `-o r.sam` writes SAM text, with
-//!   no index. A chain that changes no record refuses such a name.
+//!   `r.manifest.json`, `r.verdict.json`). `-o r.sam` writes SAM text and
+//!   `-o r.cram` a CRAM against the chain's reference (`-R`, the config
+//!   file or `BAMMETRICS_REFERENCE`), each with no index. A chain that
+//!   changes no record refuses such a name.
 //! * A step option that names a dictionary defaults to the reference's
 //!   ([`DICTIONARY_DEFAULTS`]): the `.dict` beside the FASTA, else its
 //!   `.fai`, with a note that says which.
@@ -16,7 +18,6 @@
 use std::path::{Path, PathBuf};
 
 use bammetrics_core::registry::Kind as OptKind;
-use bammetrics_core::stage::later_kind;
 
 use super::args::{find_step, is_split, is_transform, materialize_leaves, step_parser_flags};
 use super::{QC, Spec, StepSpec, WRITE, usage};
@@ -57,17 +58,17 @@ pub(super) struct Resolved {
 enum Kind {
     Bam,
     Sam,
-    /// `.SAM` or `.Sam`: the write step, as htsjdk's writer, writes SAM
-    /// text only for a name ending in lower-case `.sam`, so such a name is
-    /// refused.
-    SamCase,
-    /// A kind the writer cannot make yet: its name and its wave.
-    Later(&'static str, &'static str),
+    Cram,
+    /// `.SAM`, `.Sam` or `.CRAM`: the write step, as htsjdk's writer,
+    /// writes SAM text or a CRAM only for a name ending in lower-case
+    /// `.sam` or `.cram`, so such a name is refused. The lower-case
+    /// extension.
+    Case(&'static str),
 }
 
 /// The kind of a name that is a result, as `-o` gives it: one ending in
 /// `.bam`, `.sam` or `.cram` in any case, and not a directory.
-/// `.sam` in another case than lower is [`Kind::SamCase`].
+/// `.sam` or `.cram` in another case than lower is [`Kind::Case`].
 fn result_of(text: &str) -> Option<Kind> {
     let lower = text.to_ascii_lowercase();
     if Path::new(text).is_dir() || text.ends_with('/') {
@@ -79,12 +80,14 @@ fn result_of(text: &str) -> Option<Kind> {
     if text.ends_with(".sam") {
         return Some(Kind::Sam);
     }
+    if text.ends_with(".cram") {
+        return Some(Kind::Cram);
+    }
     if lower.ends_with(".sam") {
-        return Some(Kind::SamCase);
+        return Some(Kind::Case("sam"));
     }
     if lower.ends_with(".cram") {
-        let (kind, wave) = later_kind(Path::new(text)).unwrap_or(("CRAM", "W15"));
-        return Some(Kind::Later(kind, wave));
+        return Some(Kind::Case("cram"));
     }
     None
 }
@@ -115,24 +118,19 @@ fn result_output(spec: &mut Spec) -> Result<(), VerbError> {
         )
         .hint(format!("write {text} as a step copies the records")));
     }
-    if let Kind::Later(kind, wave) = result {
+    if let Kind::Case(extension) = result {
+        let stem = &text[..text.len() - extension.len() - 1];
+        let (kind, hint) = if extension == "sam" {
+            ("SAM text", format!("-o {stem}.sam writes SAM text"))
+        } else {
+            ("a CRAM", format!("-o {stem}.cram writes a CRAM against -R"))
+        };
         return Err(usage(format!(
-            "-o {text}: bammetrics writes BAM and SAM only: {kind} output is wave {wave} of \
-             docs/07_full_parity_program.md"
+            "-o {text}: the write step writes {kind} only for a name ending in .{extension} \
+             (lower case), as htsjdk does, and a BAM under any other name"
         ))
         .from("-o")
-        .hint("-o out.bam writes a BAM"));
-    }
-    if result == Kind::SamCase {
-        let stem = &text[..text.len() - 4];
-        return Err(usage(format!(
-            "-o {text}: the write step writes SAM text only for a name ending in .sam (lower \
-             case), as htsjdk does, and a BAM under any other name"
-        ))
-        .from("-o")
-        .hint(format!(
-            "-o {stem}.sam writes SAM text; -o {stem}.bam writes a BAM"
-        )));
+        .hint(format!("{hint}; -o {stem}.bam writes a BAM")));
     }
     let mut args = vec![text.clone()];
     if result == Kind::Bam {
@@ -152,7 +150,8 @@ fn result_output(spec: &mut Spec) -> Result<(), VerbError> {
             origin: None,
         },
     );
-    spec.prefix = Some(text[..text.len() - 4].to_owned());
+    let extension = if result == Kind::Cram { 5 } else { 4 };
+    spec.prefix = Some(text[..text.len() - extension].to_owned());
     Ok(())
 }
 
@@ -283,13 +282,14 @@ fn config_defaults(spec: &mut Spec) -> Result<(), VerbError> {
 /// True when a step of `spec` reads the chain's reference: a tap whose
 /// `REFERENCE_SEQUENCE` or `REFERENCE` is a value option, a transform
 /// that requires one, a step of
-/// [`DICTIONARY_DEFAULTS`] without its option, or any step on a CRAM
-/// source, which the reference decodes.
+/// [`DICTIONARY_DEFAULTS`] without its option, any step on a CRAM
+/// source, which the reference decodes, and a chain that writes a CRAM.
 fn needs_reference(spec: &Spec) -> bool {
     if spec
         .source
         .as_deref()
         .is_some_and(|source| bammetrics_core::cram::is_cram(Path::new(source)))
+        || writes_cram(spec)
     {
         return true;
     }
@@ -312,6 +312,32 @@ fn needs_reference(spec: &Spec) -> bool {
                     .is_ok_and(|parsed| parsed.last(Key::Picard(option)).is_none())
         });
         reads || defaults
+    })
+}
+
+/// True when `spec` writes a CRAM: `-o r.cram` with no `write` step of
+/// its own, or a `write` step whose path ends in `.cram` or whose
+/// `--output-format` is `cram`. The reference encodes it.
+fn writes_cram(spec: &Spec) -> bool {
+    let writes = spec.steps.iter().filter(|step| step.verb == WRITE);
+    if writes.clone().next().is_none() {
+        return spec
+            .prefix
+            .as_deref()
+            .and_then(result_of)
+            .is_some_and(|kind| kind == Kind::Cram);
+    }
+    writes.into_iter().any(|step| {
+        let mut args = step.args.iter();
+        let (mut named, mut format) = (false, None);
+        while let Some(arg) = args.next() {
+            match arg.split_once('=') {
+                Some(("--output-format", value)) => format = Some(value),
+                _ if arg == "--output-format" => format = args.next().map(String::as_str),
+                _ => named |= arg.ends_with(".cram"),
+            }
+        }
+        format.map_or(named, |format| format == "cram")
     })
 }
 
@@ -383,6 +409,25 @@ mod tests {
         result_output(&mut sam).expect("resolves");
         assert_eq!(sam.prefix.as_deref(), Some("r"));
         assert_eq!(sam.steps.last(), Some(&StepSpec::new("write", &["r.sam"])));
+        let mut cram = spec("out/r.cram", &["mark-duplicates", "insert-size"]);
+        result_output(&mut cram).expect("resolves");
+        assert_eq!(cram.prefix.as_deref(), Some("out/r"));
+        assert_eq!(
+            cram.steps.last(),
+            Some(&StepSpec::new("write", &["out/r.cram"]))
+        );
+        assert!(writes_cram(&spec("r.cram", &["mark-duplicates"])));
+        assert!(writes_cram(&cram));
+        let mut format = spec("r", &["mark-duplicates", "write"]);
+        format.steps[1].args = vec!["x".to_owned(), "--output-format=cram".to_owned()];
+        assert!(writes_cram(&format));
+        format.steps[1].args = vec![
+            "x.cram".to_owned(),
+            "--output-format".to_owned(),
+            "bam".to_owned(),
+        ];
+        assert!(!writes_cram(&format));
+        assert!(!writes_cram(&spec("r.bam", &["mark-duplicates"])));
         let mut upper = spec("r.BAM", &["mark-duplicates"]);
         result_output(&mut upper).expect("resolves");
         assert_eq!(
@@ -426,7 +471,7 @@ mod tests {
     }
 
     #[test]
-    fn a_result_name_without_a_transform_or_as_cram_is_refused() {
+    fn a_result_name_without_a_transform_or_in_upper_case_is_refused() {
         let error = |prefix: &str, verbs: &[&str]| {
             result_output(&mut spec(prefix, verbs))
                 .expect_err(prefix)
@@ -437,8 +482,8 @@ mod tests {
                  chain changes the records (from -o)\n  -o PREFIX names the metrics files"
         ));
         assert!(
-            error("r.cram", &["mark-duplicates"])
-                .contains("CRAM output is wave W15 of docs/07_full_parity_program.md")
+            error("r.CRAM", &["mark-duplicates"])
+                .contains("writes a CRAM only for a name ending in .cram (lower case)")
         );
         for name in ["r.SAM", "r.Sam"] {
             assert!(

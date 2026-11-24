@@ -9,6 +9,7 @@ use noodles::{bam, sam};
 use super::{Frame, Products, Sink};
 use crate::bam_raw::RawRecord;
 use crate::bam_writer::{self, BamWriter, Companions};
+use crate::cram_writer::{self, CramOptions, CramWriter};
 use crate::error::{Error, Result};
 use crate::mark_duplicates::{self, SortOrder};
 use crate::metric::ToolOutput;
@@ -117,15 +118,11 @@ impl Sink for CollectorSink {
 
 /// The file kinds `write` picks by extension in a later wave of docs/07:
 /// the extension, the kind and the wave.
-const LATER_KINDS: [(&str, &str, &str); 3] = [
-    ("cram", "CRAM", "W15"),
-    ("fastq", "FASTQ", "W22"),
-    ("fq", "FASTQ", "W22"),
-];
+const LATER_KINDS: [(&str, &str, &str); 2] = [("fastq", "FASTQ", "W22"), ("fq", "FASTQ", "W22")];
 
-/// The kind and wave of a name `write` cannot make yet (`out.cram`,
-/// `out.fastq.gz`); `None` for any other name, which is written as a BAM
-/// or, for `out.sam`, as SAM text.
+/// The kind and wave of a name `write` cannot make yet (`out.fastq.gz`);
+/// `None` for any other name, which is written as a BAM or, for `out.sam`
+/// and `out.cram`, as SAM text and as a CRAM.
 pub fn later_kind(path: &Path) -> Option<(&'static str, &'static str)> {
     let name = path.file_name()?.to_str()?.to_ascii_lowercase();
     let name = name.strip_suffix(".gz").unwrap_or(&name);
@@ -143,14 +140,17 @@ pub enum WriteFormat {
     /// SAM text, as htsjdk's `SAMFileWriter` writes it
     /// ([`crate::sam_text`]): the header with `VN:1.6`.
     Sam,
+    /// A CRAM against the reference ([`crate::cram_writer`]).
+    Cram,
 }
 
 impl WriteFormat {
-    /// `bam` or `sam`, the values of `--output-format`.
+    /// `bam`, `sam` or `cram`, the values of `--output-format`.
     pub fn parse(text: &str) -> Option<Self> {
         match text {
             "bam" => Some(Self::Bam),
             "sam" => Some(Self::Sam),
+            "cram" => Some(Self::Cram),
             _ => None,
         }
     }
@@ -159,18 +159,27 @@ impl WriteFormat {
         match self {
             Self::Bam => "bam",
             Self::Sam => "sam",
+            Self::Cram => "cram",
         }
     }
 
     /// The format a path asks for by its name: SAM for a name ending in
-    /// `.sam`, lower case, else BAM, as htsjdk's `SAMFileWriterFactory`
-    /// tells them (`out.SAM` is a BAM).
+    /// `.sam`, CRAM for one ending in `.cram`, both lower case, else BAM,
+    /// as htsjdk's `SAMFileWriterFactory` tells them (`out.SAM` and
+    /// `out.CRAM` are BAMs).
     pub fn of(path: &Path) -> Self {
         use std::os::unix::ffi::OsStrExt;
-        let sam = path
-            .file_name()
-            .is_some_and(|name| name.as_bytes().ends_with(b".sam"));
-        if sam { Self::Sam } else { Self::Bam }
+        let ends = |suffix: &[u8]| {
+            path.file_name()
+                .is_some_and(|name| name.as_bytes().ends_with(suffix))
+        };
+        if ends(b".sam") {
+            Self::Sam
+        } else if ends(b".cram") {
+            Self::Cram
+        } else {
+            Self::Bam
+        }
     }
 }
 
@@ -179,9 +188,12 @@ impl WriteFormat {
 pub struct WriteOptions {
     /// The file. Written under a temporary name and renamed when complete.
     pub path: PathBuf,
-    /// BAM, or SAM text.
+    /// BAM, SAM text or CRAM.
     pub format: WriteFormat,
-    /// BGZF level, 0 to 9. Picard's default is 5.
+    /// The FASTA a CRAM is written against: the chain's `-R`.
+    pub reference: Option<PathBuf>,
+    /// BGZF level of a BAM and gzip level of a CRAM's blocks, 0 to 9.
+    /// Picard's default is 5.
     pub compression_level: u8,
     /// A `.bai` beside a coordinate-sorted BAM.
     pub create_index: bool,
@@ -194,6 +206,7 @@ impl WriteOptions {
         Self {
             path: path.to_path_buf(),
             format: WriteFormat::of(path),
+            reference: None,
             compression_level: 5,
             create_index: false,
             create_md5: false,
@@ -201,14 +214,14 @@ impl WriteOptions {
     }
 
     /// A usage error for a name the step cannot write yet: the file is a
-    /// BAM or SAM text, and the error names the wave of docs/07 that adds
-    /// the kind the name asks for. A `.bai` beside SAM text is refused
-    /// too. The caller of a chain asks before the first read; the step
+    /// BAM, SAM text or a CRAM, and the error names the wave of docs/07
+    /// that adds the kind the name asks for. A `.bai` beside SAM text or a
+    /// CRAM is refused too. The caller of a chain asks before the first read; the step
     /// asks again when it is built.
     pub fn check(&self) -> Result<()> {
         if let Some((kind, wave)) = later_kind(&self.path) {
             return Err(Error::Usage(format!(
-                "{}: bammetrics writes BAM and SAM only: {kind} output is wave {wave} of \
+                "{}: bammetrics writes BAM, SAM and CRAM only: {kind} output is wave {wave} of \
                  docs/07_full_parity_program.md",
                 self.path.display()
             )));
@@ -225,6 +238,9 @@ impl WriteOptions {
                 "{}: an index needs a BAM: SAM text has none",
                 self.path.display()
             )));
+        }
+        if self.format == WriteFormat::Cram && self.create_index {
+            return Err(cram_writer::index_refusal(&self.path.to_string_lossy()));
         }
         Ok(())
     }
@@ -275,6 +291,16 @@ pub(super) fn write_sink(
             md5: options.create_md5,
         }));
     }
+    if options.format == WriteFormat::Cram {
+        let cram = CramOptions {
+            compression_level: options.compression_level,
+            threads,
+        };
+        return Ok(Box::new(CramSink {
+            writer: CramWriter::create(path, options.reference.as_deref(), &frame.header, &cram)?,
+            md5: options.create_md5,
+        }));
+    }
     Ok(Box::new(WriteSink {
         writer: BamWriter::create(path, options.compression_level, threads, &frame.header)?,
         header: frame.header.clone(),
@@ -317,6 +343,28 @@ impl Sink for SamSink {
         }
         Ok(Products {
             files,
+            ..Products::default()
+        })
+    }
+}
+
+/// The `write` step for a CRAM: the records at its position against the
+/// chain's reference.
+struct CramSink {
+    writer: CramWriter,
+    md5: bool,
+}
+
+impl Sink for CramSink {
+    fn accept_batch(&mut self, batch: &[RawRecord]) -> Result<()> {
+        batch
+            .iter()
+            .try_for_each(|record| self.writer.write(record))
+    }
+
+    fn finish(self: Box<Self>) -> Result<Products> {
+        Ok(Products {
+            files: cram_writer::finish(self.writer, self.md5)?,
             ..Products::default()
         })
     }

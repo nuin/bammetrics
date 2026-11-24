@@ -1,0 +1,31 @@
+## argv
+check-terminator-block
+tests/data/doctor/cut.bam
+--format
+json
+## exit
+100
+## stdout
+{
+  "schema": "bammetrics.metrics/1",
+  "tool": "CheckTerminatorBlock",
+  "headers": [],
+  "class": null,
+  "columns": [
+    "file",
+    "termination"
+  ],
+  "types": [
+    "string",
+    "string"
+  ],
+  "metrics": [
+    {
+      "file": "tests/data/doctor/cut.bam",
+      "termination": "DEFECTIVE"
+    }
+  ],
+  "non_finite": [],
+  "histogram": null
+}
+## stderr

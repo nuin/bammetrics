@@ -1,0 +1,11 @@
+## argv
+compare-s-a-ms
+tests/data/compare_sams_left.bam
+tests/data/compare_sams_right.bam
+-o
+tests/data/compare_sams_left.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics compare-s-a-ms: tests/data/compare_sams_left.bam is an input; writing it would destroy it (from -o)

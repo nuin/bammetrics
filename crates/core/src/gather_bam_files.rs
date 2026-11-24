@@ -80,8 +80,8 @@ pub const TOOL: Tool = Tool {
         .required(),
         Opt::path(
             &["OUTPUT", "O"],
-            "The BAM to write, or SAM text for a name ending in .sam when an input is SAM or \
-             CRAM.",
+            "The BAM to write. When an input is SAM or CRAM: SAM text for a name ending in \
+             .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in .cram.",
         )
         .written()
         .required(),
@@ -292,7 +292,7 @@ impl Gather {
     /// a file it reads, before anything is read.
     fn check_output(&self) -> Result<()> {
         let output = &self.opts.output;
-        if self.block_copy() && matches!(WriteFormat::of(output), WriteFormat::Sam)
+        if self.block_copy() && WriteFormat::of(output) != WriteFormat::Bam
             || self.block_copy() && later_kind(output).is_some()
         {
             return Err(Error::Usage(format!(
@@ -303,8 +303,14 @@ impl Gather {
         }
         if let Some((kind, wave)) = later_kind(output) {
             return Err(Error::Usage(format!(
-                "OUTPUT={}: bammetrics writes BAM and SAM only: {kind} output is wave {wave} of \
-                 docs/07_full_parity_program.md",
+                "OUTPUT={}: bammetrics writes BAM, SAM and CRAM only: {kind} output is wave \
+                 {wave} of docs/07_full_parity_program.md",
+                output.display()
+            )));
+        }
+        if self.opts.create_index && WriteFormat::of(output) == WriteFormat::Cram {
+            return Err(crate::cram_writer::index_refusal(&format!(
+                "OUTPUT={}",
                 output.display()
             )));
         }

@@ -19,7 +19,7 @@ COMPRESSION_LEVEL, CREATE_INDEX, CREATE_MD5_FILE, MAX_RECORDS_IN_RAM, REFERENCE_
 VALIDATION_STRINGENCY, the default OUTPUT. Error parity: no library (exit 2 in both),
 records out of order, an `RG:i` tag, ASSUME_SORTED, a missing input and a missing output
 directory. Departures, asserted as such: a CRAM input (Picard writes CRAM, bammetrics exits
-2 naming W15) and two libraries with one file name (Picard writes one over the other and
+2 saying so) and two libraries with one file name (Picard writes one over the other and
 exits 0, bammetrics exits 1 and leaves no file). The chain against Picard's MarkDuplicates
 then SplitSamByLibrary. The distinct-value gate wants three library counts and three input
 sizes.
@@ -205,7 +205,8 @@ def test_a_cram_input_is_wave_w15(corpus, tmp_path):
     assert done["picard"].returncode == 0, done["picard"].stderr[-800:]
     assert sorted(p.name for p in dirs["picard"].iterdir()) == [
         "LibA.cram", "LibB.cram", "LibC.cram", "LibD.cram"]
-    assert done["bammetrics"].returncode == 1 and "W15" in done["bammetrics"].stderr
+    assert done["bammetrics"].returncode == 1
+    assert "Picard writes a CRAM per library" in done["bammetrics"].stderr
     assert not os.listdir(dirs["bammetrics"])
     verb = subprocess.run([str(BAMMETRICS), "split-sam-by-library", str(cram), "-R",
                            str(reference), "-o", str(tmp_path / "verb")], capture_output=True,

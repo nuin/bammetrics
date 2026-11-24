@@ -47,8 +47,8 @@ use crate::stage::{Frame, Stage};
 pub const TOOL: Tool = Tool {
     name: "ReplaceSamHeader",
     summary: "no rows; OUTPUT gets the header of HEADER, then every record of the input: a \
-              BAM, or SAM text for a name ending in .sam when the input name does not end in \
-              .bam.",
+              BAM; when the input name does not end in .bam, SAM text for a name ending in \
+              .sam or a CRAM (with REFERENCE_SEQUENCE) for one ending in .cram.",
     options: &[
         Opt::path(
             &["HEADER"],

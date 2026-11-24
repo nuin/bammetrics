@@ -1,0 +1,32 @@
+## argv
+CompareSAMs
+tests/data/compare_sams_left.bam
+tests/data/compare_sams_right.bam
+O=OUT/compared.txt
+LENIENT_HEADER=true
+LENIENT_DUP=true
+LENIENT_LOW_MQ_ALIGNMENT=true
+LENIENT_UNKNOWN_MQ_ALIGNMENT=true
+COMPARE_MQ=true
+## exit
+0
+## stdout
+SAM files match.
+## stderr
+## file compared.txt
+## htsjdk.samtools.metrics.StringHeader
+# CompareSAMs INPUT=tests/data/compare_sams_left.bam INPUT=tests/data/compare_sams_right.bam OUTPUT=OUT/compared.txt LENIENT_HEADER=true LENIENT_DUP=true LENIENT_LOW_MQ_ALIGNMENT=true LENIENT_UNKNOWN_MQ_ALIGNMENT=true COMPARE_MQ=true
+## htsjdk.samtools.metrics.StringHeader
+# Started on: <time>
+
+## METRICS CLASS	picard.sam.SamComparisonMetric
+LEFT_FILE	RIGHT_FILE	MAPPINGS_MATCH	MAPPINGS_DIFFER	UNMAPPED_BOTH	UNMAPPED_LEFT	UNMAPPED_RIGHT	MISSING_LEFT	MISSING_RIGHT	DUPLICATE_MARKINGS_DIFFER	ARE_EQUAL
+ROOT/tests/data/compare_sams_left.bam	ROOT/tests/data/compare_sams_right.bam	12	0	1	0	0	0	0	0	Y
+
+## HISTOGRAM	java.lang.String
+BIN	VALUE
+0,0	1
+2,3	1
+255,255	1
+60,60	10
+

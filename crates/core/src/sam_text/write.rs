@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use noodles::sam;
 
 use super::invalid;
-use crate::bam_raw::{RawRecord, TagValue};
+use crate::bam_raw::{self, RawRecord, TagValue};
 use crate::bam_writer;
 use crate::cleanup::AtomicFile;
 use crate::error::{Error, Result};
@@ -136,6 +136,9 @@ fn reference_name(references: &[Vec<u8>], id: i32) -> io::Result<&[u8]> {
 
 /// `SAMTextWriter.writeAlignment`: append the SAM line of `record` and its
 /// `\n` to `out`. `references` holds the header's sequence names in order.
+/// A CIGAR over 65,535 operators, held in a BAM record as a placeholder and
+/// a `CG` tag ([`bam_raw::long_cigar`]), is written as htsjdk reads it from
+/// a BAM: the operators of the tag, without the tag.
 pub fn write_record(
     out: &mut Vec<u8>,
     record: &RawRecord,
@@ -151,8 +154,14 @@ pub fn write_record(
     out.push(b'\t');
     push_number(out, record.mapping_quality());
     out.push(b'\t');
+    let tags = record.tags()?;
+    let long = bam_raw::long_cigar(record, &tags)?;
+    let cigar: Box<dyn Iterator<Item = (u32, u8)>> = match &long {
+        Some(operators) => Box::new(operators.iter().copied()),
+        None => Box::new(record.cigar()),
+    };
     let mut operators = 0;
-    for (length, op) in record.cigar() {
+    for (length, op) in cigar {
         push_number(out, length);
         out.push(
             *CIGAR_OPS
@@ -193,7 +202,10 @@ pub fn write_record(
             }
         }
     }
-    for (name, value) in record.tags()?.iter() {
+    for (name, value) in tags.iter() {
+        if long.is_some() && *name == *b"CG" {
+            continue;
+        }
         out.push(b'\t');
         push_tag(out, *name, value)?;
     }

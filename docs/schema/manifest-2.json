@@ -57,7 +57,7 @@
       "required": ["path", "kind", "size", "mtime", "edges_hash"],
       "properties": {
         "path": {"type": "string"},
-        "kind": {"description": "metrics, gaps, file, bam, sam, index, md5, kept, intervals, verdict, report, pdf, or a further format (json, markdown, junit, ...).", "type": "string"},
+        "kind": {"description": "metrics, gaps, file, bam, sam, cram, index, md5, kept, intervals, verdict, report, pdf, or a further format (json, markdown, junit, ...).", "type": "string"},
         "size": {"type": ["integer", "null"], "minimum": 0},
         "mtime": {"type": ["string", "null"]},
         "edges_hash": {"type": ["string", "null"]}

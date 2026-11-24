@@ -160,7 +160,7 @@ column value BYTE_ARRAY (STRING) optional
 ## file sample.manifest.json
 {
   "schema": "bammetrics.manifest/1",
-  "tool_version": "0.32.0",
+  "tool_version": "0.33.0",
   "sample": "no_reads",
   "bam": "tests/data/no_reads.bam",
   "prefix": "OUT/sample",
@@ -178,7 +178,7 @@ column value BYTE_ARRAY (STRING) optional
         "OUTPUT=OUT/sample.quality_yield_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.32.0",
+      "tool_version": "0.33.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -206,7 +206,7 @@ column value BYTE_ARRAY (STRING) optional
         "OUTPUT=OUT/sample.alignment_summary_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.32.0",
+      "tool_version": "0.33.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -234,7 +234,7 @@ column value BYTE_ARRAY (STRING) optional
         "OUTPUT=OUT/sample.insert_size_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.32.0",
+      "tool_version": "0.33.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -256,7 +256,7 @@ column value BYTE_ARRAY (STRING) optional
         "METRICS_FILE=OUT/sample.duplicate_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.32.0",
+      "tool_version": "0.33.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -286,7 +286,7 @@ column value BYTE_ARRAY (STRING) optional
         "OUT/sample.quality_yield_metrics"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.32.0",
+      "tool_version": "0.33.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -308,7 +308,7 @@ column value BYTE_ARRAY (STRING) optional
         "--date=2026-01-02 03:04:05 UTC"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.32.0",
+      "tool_version": "0.33.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -340,7 +340,7 @@ column value BYTE_ARRAY (STRING) optional
         "--also=parquet"
       ],
       "argv_hash": "<argv_hash>",
-      "tool_version": "0.32.0",
+      "tool_version": "0.33.0",
       "preset_hash": "6dd89ed0478fd5e4",
       "input": {
         "path": "tests/data/no_reads.bam",
@@ -444,7 +444,7 @@ column PF_Q20_EQUIVALENT_YIELD INT64 optional
 ## file sample.verdict.json
 {
   "schema": "bammetrics.verdict/1",
-  "tool_version": "0.32.0",
+  "tool_version": "0.33.0",
   "sample": "no_reads",
   "preset": {
     "name": "generic",

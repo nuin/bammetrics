@@ -67,9 +67,9 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | CollectSexCheckMetrics | Clinical | core | Not a Picard tool, shipped 0.19.0, see docs/06. X and Y read ratios against EXPECTED_SEX. S | somalier, peddy (different method) |
 | ValidateSamFile | Diagnostics | out | Defined by htsjdk parser behaviour over about 70 rules. XL | samtools quickcheck (partial) |
 | CompareMetrics | Diagnostics | core | The oracle comparator. Its semantics go into the harness. S | none |
-| CompareSAMs | Diagnostics | later | Pipeline regression check. Quirks to copy. M | none |
+| CompareSAMs | Diagnostics | core | Shipped in wave W15 of docs/07: Picard's header comparison, its three walks (coordinate, queryname, unsorted), `LENIENT_DUP` through htsjdk's duplicate order, the `COMPARE_MQ` histogram, standard output and exit code. Q-018 kept. M | none |
 | CalculateReadGroupChecksum | Diagnostics | core | Shipped in 0.28.0 (wave W10 of docs/07): the MD5 of the `@RG` records as htsjdk computes it, the header text decoded as htsjdk decodes it, `DT` written back in the process's time zone. S | none |
-| CheckTerminatorBlock | Diagnostics | later | 50 lines, pre-flight check. S | noodles-bgzf, samtools quickcheck |
+| CheckTerminatorBlock | Diagnostics | core | Shipped in wave W15 of docs/07: htsjdk's `checkTermination` on the last 64 KiB, the name on standard error and exit 100 on `DEFECTIVE`, as Picard. S | noodles-bgzf, samtools quickcheck |
 | CollectVariantCallingMetrics | Variant | core | Variant-benchmarking pillar of the roadmap. M | bcftools stats (partial) |
 | AccumulateVariantCallingMetrics | Variant | later | Lossy shard merge, copy the inversion. S | none |
 | AccumulateQualityYieldMetrics | Metrics | later | Needs QualityYield first. S | none |
@@ -96,8 +96,8 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | SetNmMdAndUqTags | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): `MD`, `NM` and `UQ` from the reference as htsjdk's `SequenceUtil` computes them, `SET_ONLY_UQ`, `IS_BISULFITE_SEQUENCE`. M | samtools calmd |
 | SetNmAndUqTags | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): Picard's deprecated name of SetNmMdAndUqTags, the same options and output. S | samtools calmd |
 | BuildBamIndex | Read data | core | Shipped in 0.23.0 (wave W05 of docs/07): the `.bai` byte for byte Picard's for the same BAM, the index behind `MarkDuplicates CREATE_INDEX`, `SortSam CREATE_INDEX` and `chain ... + write --index`. S | samtools index |
-| SortSam | Read data | core | Shipped in 0.23.0 (wave W05 of docs/07): `queryname`, `coordinate` and `duplicate` with htsjdk's comparators, BAM or SAM text out, runs spilled to `TMP_DIR`; also the sort step of a chain. B | samtools sort |
-| SamFormatConverter | Read data | out | Format conversion. | samtools view |
+| SortSam | Read data | core | Shipped in 0.23.0 (wave W05 of docs/07): `queryname`, `coordinate` and `duplicate` with htsjdk's comparators, BAM or SAM text out (a CRAM since wave W15), runs spilled to `TMP_DIR`; also the sort step of a chain. B | samtools sort |
+| SamFormatConverter | Read data | core | Shipped in wave W15 of docs/07 (the record-editing shape `record_edit.rs` with an edit that changes nothing; the CRAM writer): SAM text, BAM or CRAM in, the format of `OUTPUT` by its name, the header as read with no `@PG`, records equal to Picard's for the six conversions; not a chain step, since `write` converts. S | samtools view |
 | AddCommentsToBam | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): one `@CO` line per `COMMENT`, the BAM's records copied as Picard copies its blocks. S | samtools reheader |
 | AddOATag | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): each record's alignment appended to its `OA` tag, `INTERVAL_LIST`. S | none |
 | AddOrReplaceReadGroups | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the record-editing shape `record_edit.rs`; a chain transform, a barrier when it sorts): every `@RG` line replaced by one read group, `RG` on every record, `RGDT` in UTC, `SORT_ORDER` sorted as Picard's writer sorts. S | samtools addreplacerg |
@@ -116,7 +116,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | RevertSam | Read data | out | BAM to uBAM. | none |
 | SamToFastq | Read data | out | Export. | samtools fastq |
 | SamToFastqWithTags | Read data | out | Export with tags. | samtools fastq -T |
-| SplitSamByLibrary | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the fan-out writer `split_sam.rs`; a chain split): one BAM or SAM text per library, `unknown` for the rest, Picard's safe names and exit 2 without a library; a CRAM input exits 2 naming W15. S | samtools split |
+| SplitSamByLibrary | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the fan-out writer `split_sam.rs`; a chain split): one BAM or SAM text per library, `unknown` for the rest, Picard's safe names and exit 2 without a library; a CRAM input exits 2 (docs/07 D58, D213). S | samtools split |
 | SplitSamByNumberOfReads | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the fan-out writer `split_sam.rs`; a chain split with `TOTAL_READS_IN_INPUT`): files of about one size, a run of one name never cut, `shard_0001` names. S | samtools split |
 | ViewSam | Diagnostics | core | Prints the header and the records as htsjdk writes SAM text. Shipped in 0.23.0 (wave W05 of docs/07) with the SAM text reader and writer. S | samtools view |
 | CollectHiSeqXPfFailMetrics | Diagnostics | out | Needs basecall directory. | none |
@@ -358,6 +358,7 @@ Columns for these tools are verified by run, except where marked. Entries are sh
 - BedToIntervalList (core): parse BED, write interval_list with `@SQ` header from a dictionary. Needed by Hs, TargetedPcr, Wgs `INTERVALS`. Both sides must read identical interval_lists.
 - IntervalListToBed, IntervalListTools, VcfToIntervalList, NonNFastaSize and ScatterIntervalsByNs: shipped in 0.30.0 (wave W12 of docs/07) as registry tools with Picard's faces, over the library layer `interval_ops`.
 - MergeSamFiles, ReorderSam, FixMateInformation, FilterSamReads, DownsampleSam and PositionBasedDownsampleSam: shipped in 0.31.0 (wave W13 of docs/07) as registry tools with Picard's faces; ReorderSam, FixMateInformation, FilterSamReads and DownsampleSam are chain transforms.
+- CompareSAMs and CheckTerminatorBlock: shipped in wave W15 of docs/07 as registry tools with Picard's faces and exit codes (1 when two files differ, 100 for `DEFECTIVE`); neither is a chain step.
 - CreateSequenceDictionary (core for the harness): `picard CreateSequenceDictionary` or `samtools dict`. The library reads `.dict` or `.fai` for contig lengths.
 - Harness prep only: FixMateInformation (MC tag, via `samtools fixmate -m`), SetNmMdAndUqTags (`samtools calmd`), BuildBamIndex, SortSam, AddOrReplaceReadGroups, CleanSam, DownsampleSam, FastqToSam. Never ported.
 
@@ -439,7 +440,7 @@ Release rule: a phase ends in a tagged release. A tool is listed "concordant" in
 | P6 RNA | 0.10.0 | M17. CollectRnaSeqMetrics with ribosomal intervals and the 101-row histogram | CollectRnaSeqMetrics | nf-core-style stranded RNA slice matches |
 | P7 Variants | 0.11.0 | M20, M21, M22. CollectVariantCallingMetrics, GenotypeConcordance, then AccumulateVariantCallingMetrics (needs M22; move it to the later queue instead if M22 is not ready) | CollectVariantCallingMetrics, GenotypeConcordance | Scheme table cells all hit by the corpus. Zero `UNTESTED` columns |
 | P8 Release 1.0 | 1.0.0 | CompareMetrics CLI. Stability gate (two clean releases). Full validation pack. Register frozen | All 19 core tools at C2, a subset at C3 | Section 5.9 criteria |
-| P9 Later queue | 1.x | Shipped from this queue: MarkDuplicates (0.18.0), SequencingArtifact, ConvertToOxoG, OxoG and BamIndexStats (0.19.0), ReadGroupChecksum (0.28.0), Rrbs, SNVQ and UmiPrevalence (0.29.0). Still in order: CheckTerminatorBlock, FindMendelianViolations, UmiAware (M19), fingerprint family (M22), SamErrorMetrics | Each at C2 before its release note | Each later tool re-reads the Picard source for its unread parts first |
+| P9 Later queue | 1.x | Shipped from this queue: MarkDuplicates (0.18.0), SequencingArtifact, ConvertToOxoG, OxoG and BamIndexStats (0.19.0), ReadGroupChecksum (0.28.0), Rrbs, SNVQ and UmiPrevalence (0.29.0), CheckTerminatorBlock and CompareSAMs (wave W15). Still in order: FindMendelianViolations, UmiAware (M19), fingerprint family (M22), SamErrorMetrics | Each at C2 before its release note | Each later tool re-reads the Picard source for its unread parts first |
 
 P2 status (2026-11-02, branch `feat/p2-read-level`): built. M11 is `quality.rs`, M12 is `cycle.rs`. QualityScoreDistribution, MeanQualityByCycle, CollectBaseDistributionByCycle, CollectDuplicateMetrics (not on main before P2; built here) and AccumulateQualityYieldMetrics are in the registry; CollectQualityYieldMetrics moved there. `tests/concordance/test_read_level.py` runs 332 file comparisons and 8 error-parity cases on T0 to T3, the foundation corpus and the `read_level_bams.py` BAMs: 152,643 cells, all identical, and every file body identical byte for byte after the header lines, histogram-only files included. Gate 2: every option that changes a number has a non-default case (`ASSUME_SORTED=false` and `FLOW_MODE=true` as error parity). Gate 5: every column has 3 distinct non-default values except CollectBaseDistributionByCycle READ_END (1 or 2) and CollectDuplicateMetrics READ_PAIR_OPTICAL_DUPLICATES (always 0). Gate 3 was checked by hand: seven planted faults (no second-end offset rule, unpaired second flag as second end, no reverse flip, no-calls counted, pairs not halved, `=` as C, Accumulate READ_LENGTH off by one) each fail cases; there is no `tests/concordance/faults/` runner yet. Claim level: C1 for the six tools (T1 seeds, T2 slices and fuzz are not run).
 
@@ -596,7 +597,7 @@ Seed entries from this plan:
 - Q-015 HET_SNP floating-point tolerance bound (candidate DEVIATION).
 - Q-016 Java hash-order row output in OxoG, Artifacts, Accumulate*, Crosscheck.
 - Q-017 AccumulateVariantCallingMetrics lossy inversion.
-- Q-018 CompareSAMs strand bug.
+- Q-018 CompareSAMs strand bug. Kept in wave W15: `alignmentsMatch` compares the left record's strand with itself, so the strand never counts (KNOWN_DIFFERENCES.md, CompareSAMs).
 - Q-019 InsertSize skips records with TLEN 0, secondary, supplementary or unmapped mate.
 - Q-020 GcBias prints the level as `All Reads` and READS_USED as `ALL`.
 - Q-021 AlignmentSummary SD_READ_LENGTH prints `?` for a single-read row, and unmapped reads fall in the UNPAIRED_ALIGNED_LENGTH_COUNT bin at key 0.

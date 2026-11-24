@@ -64,8 +64,8 @@ use crate::view_sam::{IntervalFilter, Step, UniquedList, has_index};
 pub const TOOL: Tool = Tool {
     name: "MergeSamFiles",
     summary: "no rows; OUTPUT gets the records of every INPUT under one merged header, merged \
-              in SORT_ORDER when the inputs are in it, else sorted: a BAM, or SAM text for a \
-              name ending in .sam.",
+              in SORT_ORDER when the inputs are in it, else sorted: a BAM, SAM text for a name \
+              ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in .cram.",
     options: &[
         Opt::path(
             &["INPUT", "I"],

@@ -1,0 +1,8 @@
+## argv
+CheckTerminatorBlock
+I=tests/data/nope.bam
+## exit
+1
+## stdout
+## stderr
+bammetrics: Cannot read non-existent file: file://ROOT/tests/data/nope.bam

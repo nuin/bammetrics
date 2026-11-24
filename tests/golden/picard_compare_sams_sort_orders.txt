@@ -1,0 +1,22 @@
+## argv
+CompareSAMs
+tests/data/markdup.bam
+tests/data/duplicate_marking.bam
+## exit
+1
+## stdout
+Sort order differs.
+File 1: coordinate
+File 2: queryname
+Number of read groups differs.
+File 1: 2
+File 2: 1
+Number of program records differs.
+File 1: 1
+File 2: 0
+Sort Order differs.
+File 1: coordinate
+File 2: queryname
+Cannot compare alignments if sort orders differ.
+SAM files differ.
+## stderr

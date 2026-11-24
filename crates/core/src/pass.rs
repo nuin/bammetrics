@@ -234,9 +234,10 @@ pub fn read_header_at(path: &Path, stringency: Stringency) -> Result<sam::Header
     };
     let sniffed = cram::sniff(File::open(path).map_err(input)?).map_err(input)?;
     match sniffed.kind {
-        Kind::Cram => noodles::cram::io::Reader::new(BufReader::new(sniffed.reader))
-            .read_header()
-            .map_err(|e| input(cram::truncated(e, true))),
+        Kind::Cram => cram::read_header(&mut noodles::cram::io::Reader::new(BufReader::new(
+            sniffed.reader,
+        )))
+        .map_err(|e| input(cram::truncated(e, true))),
         Kind::Bam => bam::io::Reader::new(sniffed.reader)
             .read_header()
             .map_err(|e| input(cram::bam_header_error(e))),
@@ -304,6 +305,7 @@ pub(crate) fn with_counted_stream<T>(
         reference,
         threads,
         stringency,
+        false,
         bytes,
         |header, reader, kind, _| consume(header, reader, kind == Kind::Cram),
     )
@@ -328,6 +330,21 @@ pub(crate) fn with_record_stream_kind<T>(
     )
 }
 
+/// What SAM text says that the BAM form of its header and records cannot
+/// hold. Every part is empty for a BAM; a CRAM has only `decoded_header`.
+#[derive(Default)]
+pub(crate) struct Text {
+    /// The header lines with a character above U+00FF, as the file spells
+    /// them ([`sam_text::Reader::wide_lines`]).
+    pub wide_lines: Vec<String>,
+    /// The header with its values as UTF-8, when a line is not ASCII
+    /// ([`sam_text::Reader::decoded_header`]).
+    pub decoded_header: Option<sam::Header>,
+    /// The read names with a character above U+00FF, when asked for
+    /// ([`sam_text::Records::wide_names`]).
+    pub wide_names: Option<sam_text::WideNames>,
+}
+
 /// [`with_record_stream_kind`], also handing `consume` the header lines of
 /// SAM text with a character above U+00FF as the file spells them
 /// ([`sam_text::Reader::wide_lines`]); empty for the other kinds.
@@ -339,16 +356,41 @@ pub(crate) fn with_record_stream_wide<T>(
     consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), Kind, &[String]) -> Result<T>,
 ) -> Result<T> {
     let bytes = Arc::new(AtomicU64::new(0));
-    with_stream_of_kind(path, reference, threads, stringency, &bytes, consume)
+    with_stream_of_kind(
+        path,
+        reference,
+        threads,
+        stringency,
+        false,
+        &bytes,
+        |header, reader, kind, text| consume(header, reader, kind, &text.wide_lines),
+    )
 }
 
+/// [`with_record_stream_kind`], also handing `consume` what SAM text says
+/// beyond its BAM form, the read names included ([`Text`]): for a tool
+/// that compares names and header values as htsjdk's strings
+/// (`CompareSAMs`).
+pub(crate) fn with_record_stream_text<T>(
+    path: &Path,
+    reference: Option<&Path>,
+    threads: usize,
+    stringency: Stringency,
+    consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), Kind, &Text) -> Result<T>,
+) -> Result<T> {
+    let bytes = Arc::new(AtomicU64::new(0));
+    with_stream_of_kind(path, reference, threads, stringency, true, &bytes, consume)
+}
+
+/// `names`: the wide read names of SAM text are kept for `consume`.
 fn with_stream_of_kind<T>(
     path: &Path,
     reference: Option<&Path>,
     threads: usize,
     stringency: Stringency,
+    names: bool,
     bytes: &Arc<AtomicU64>,
-    consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), Kind, &[String]) -> Result<T>,
+    consume: impl FnOnce(&sam::Header, &mut (dyn Read + 'static), Kind, &Text) -> Result<T>,
 ) -> Result<T> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
@@ -364,11 +406,14 @@ fn with_stream_of_kind<T>(
         Kind::Cram => {
             let mut reader =
                 noodles::cram::io::Reader::new(cram::Peek::new(BufReader::new(sniffed.reader)));
-            let header = reader
-                .read_header()
+            let (header, decoded_header) = cram::read_header_decoded(&mut reader)
                 .map_err(|e| input(cram::truncated(e, true)))?;
+            let text = Text {
+                decoded_header,
+                ..Text::default()
+            };
             cram::decode(reader, &header, reference, workers, |records| {
-                consume(&header, records.get_mut(), Kind::Cram, &[])
+                consume(&header, records.get_mut(), Kind::Cram, &text)
             })
         }
         Kind::Bam => {
@@ -380,15 +425,22 @@ fn with_stream_of_kind<T>(
             let header = reader
                 .read_header()
                 .map_err(|e| input(cram::bam_header_error(e)))?;
-            consume(&header, reader.get_mut(), Kind::Bam, &[])
+            consume(&header, reader.get_mut(), Kind::Bam, &Text::default())
         }
         Kind::Sam | Kind::GzipSam => {
             let kind = sniffed.kind;
             let reader = sam_reader(sniffed, stringency, path).map_err(input)?;
             let header = reader.header().map_err(input)?;
-            let wide = reader.wide_lines().to_vec();
+            let mut text = Text {
+                wide_lines: reader.wide_lines().to_vec(),
+                decoded_header: reader.decoded_header().map_err(input)?,
+                wide_names: None,
+            };
             let mut records = sam_text::RecordStream::new(reader.records(&header));
-            consume(&header, &mut records, kind, &wide)
+            if names {
+                text.wide_names = Some(records.wide_names());
+            }
+            consume(&header, &mut records, kind, &text)
         }
     }
 }
@@ -457,9 +509,8 @@ where
         Kind::Cram => {
             let mut reader =
                 noodles::cram::io::Reader::new(cram::Peek::new(BufReader::new(sniffed.reader)));
-            let header = reader
-                .read_header()
-                .map_err(|e| input(cram::truncated(e, true)))?;
+            let header =
+                cram::read_header(&mut reader).map_err(|e| input(cram::truncated(e, true)))?;
             cram::decode(reader, &header, reference, workers, |records| {
                 pass.drive(records, &header, build)
             })

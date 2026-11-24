@@ -33,6 +33,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::io::Read;
+use std::path::Path;
 
 use noodles::sam;
 use noodles::sam::header::record::value::Map;
@@ -482,12 +483,21 @@ pub trait RecordSource {
     fn next_record(&mut self, record: &mut RawRecord) -> Result<bool>;
 }
 
-/// The records of a BAM record stream.
-struct Stream<'a>(&'a mut (dyn Read + 'static));
+/// One input of [`Merger::new`]: its path, whether it is a CRAM, and its
+/// BAM record stream.
+pub type StreamInput<'a> = (&'a Path, bool, &'a mut (dyn Read + 'static));
+
+/// The records of a BAM record stream. A read error is named as the
+/// one-pass reader names it ([`crate::pass::read_error`]): a cut file is a
+/// truncated BAM of its path.
+struct Stream<'a>(StreamInput<'a>);
 
 impl RecordSource for Stream<'_> {
     fn next_record(&mut self, record: &mut RawRecord) -> Result<bool> {
-        record.read_from(self.0).map_err(Error::Record)
+        let (path, cram, reader) = &mut self.0;
+        record
+            .read_from(*reader)
+            .map_err(|e| crate::pass::read_error(path, *cram, e))
     }
 }
 
@@ -508,7 +518,7 @@ impl<'a> Merger<'a> {
     /// Take the records of `readers` (one per merged header, in order)
     /// in `order`: coordinate, queryname, or unsorted (input after input).
     pub fn new(
-        readers: Vec<&'a mut (dyn Read + 'static)>,
+        readers: Vec<StreamInput<'a>>,
         merged: HeaderMerger,
         order: SortOrder,
     ) -> Result<Self> {
