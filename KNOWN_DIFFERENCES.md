@@ -1327,9 +1327,11 @@ below. bammetrics differs here:
   `CompareSAMs` alone compares names and header values as the file spells them.
 - A header line is split into its fields after it is decoded, as htsjdk splits it, so a
   character whose low byte is a tab or a colon (U+0109, U+013A) stays inside its value.
-  Where that low byte is a tab or a line end (U+0109, U+010A, U+010D and the like),
-  bammetrics holds `?` for it. htsjdk writes the byte itself into a BAM header, which
-  then has a field or a line more than the SAM text had.
+  Where that low byte is a tab, a line end or a NUL (U+0109, U+010A, U+010D, U+0100 and
+  the like), bammetrics holds `?` for it. htsjdk writes the byte itself into a BAM header
+  or `ViewSam` text, which then has a field or a line more than the SAM text had. The
+  header text of a CRAM, which htsjdk also decodes as UTF-8, is held the same way
+  (`test_cram_header_text.py`).
 - `VALIDATION_STRINGENCY` is carried by every tool on the Picard face, every verb, every
   Python function (`validation_stringency=`), `chain --validation-stringency` for its
   source and `qc --validation-stringency`. A step of a chain refuses it: the chain reads
