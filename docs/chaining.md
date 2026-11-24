@@ -47,6 +47,9 @@ W14 spools the stream for those.
 `build-bam-index` names `write --index`, which writes the `.bai` of the BAM a chain
 writes. `view-sam` names `write - --output-format sam`, which prints the stream as SAM
 text.
+`sam-format-converter` (wave W15) is no step for the same kind of reason: it writes the
+records it reads in the format its name gives, which is what `write out.sam`, `write
+out.bam` and `write out.cram` (with `-R`) do. The refusal names `write`.
 
 `fifo-buffer` is never a step. `FifoBuffer` copies the bytes of a pipe between two
 commands. The steps of a chain hand records on in memory, so a chain has no pipe for it

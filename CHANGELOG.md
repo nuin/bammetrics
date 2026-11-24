@@ -63,6 +63,23 @@
     the BAM on the foundation corpus and the exome slice. It counted 37, from the
     exome alone. `chain + write
     --help` names the SAM and CRAM output.
+- `SamFormatConverter` (wave W15 of docs/07, `crates/core/src/sam_format_converter.rs`,
+  verb `sam-format-converter`, Python `sam_format_converter()`). Every record of a SAM,
+  BAM or CRAM is written unchanged in the format the name of `OUTPUT` gives, as htsjdk
+  decides it: SAM text for `.sam`, a CRAM for `.cram` (with `R=`), a BAM for any other
+  name. The header is the input's as htsjdk's writer writes it, with no `@PG` line.
+  `CREATE_INDEX`, `CREATE_MD5_FILE`, `COMPRESSION_LEVEL`; `MAX_RECORDS_IN_RAM` changes
+  nothing. `CREATE_INDEX` on a header not sorted by coordinate fails with Picard's
+  sentence before any file is made. Not a chain step: `chain BAM + sam-format-converter`
+  exits 2 and names `write`. Decisions W15-19 to W15-22 of docs/07. 72 registry tools.
+- `tests/concordance/test_sam_format_converter.py`: the six conversions of SAM text, BAM
+  and CRAM on the foundation corpus, t1, the exome slice, the tests/data BAMs and the
+  BAMs of `cram_bams.py`, each against Picard's file of the same conversion (SAM text
+  byte for byte, BAM records as bytes, CRAM decoded), round trips back to the first
+  form, every option, headers, bad SAM lines at each stringency and error parity.
+- 12 golden records (`SAM_FORMAT_CONVERTER_CASES`), two fixture and two scale rows in
+  `benches/memgate.toml`. `docs/cli.md` says that `convert` converts metrics files and
+  `sam-format-converter` converts reads.
 
 ### Changed
 

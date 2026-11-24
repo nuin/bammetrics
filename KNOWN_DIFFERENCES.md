@@ -1472,6 +1472,25 @@ differs here:
 - Sorted runs spill to `TMP_DIR` as BGZF level 3, not as htsjdk's temporary files. Picard's
   log lines (`Finished reading inputs`, the progress lines) are not printed.
 
+## SamFormatConverter
+
+`SamFormatConverter` writes the file Picard writes for each of the six conversions of
+SAM text, BAM and CRAM (`tests/concordance/test_sam_format_converter.py`): SAM text byte
+for byte, a BAM's header and records as samtools prints them and its records as bytes,
+a CRAM decoded to the records of Picard's BAM of the same source. It differs here:
+
+- A CRAM `OUTPUT` is bammetrics' CRAM (section CRAM output): version 3.0, every tag
+  stored, `CREATE_INDEX` refused.
+- `OUTPUT` naming the input exits before the first read (2 on the verb, 1 on the Picard
+  face). Picard opens the output over its input: a BAM read in place fails and is left
+  empty, and SAM text it has read whole before the output opens is written back.
+- `CREATE_INDEX` on a header whose `SO` is not `coordinate` exits 1 with Picard's
+  sentence, before any file is made. Picard throws after it made `OUTPUT`, and leaves an
+  empty BAM or a SAM header behind.
+- A CRAM out or in without `REFERENCE_SEQUENCE` fails in both; bammetrics leaves no file
+  where Picard leaves an empty one.
+- Not a chain step: the `write` step converts (`+ write out.sam`).
+
 ## AddCommentsToBam and ReplaceSamHeader
 
 Both write the header lines and records Picard writes, the records byte for byte after
