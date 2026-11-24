@@ -71,7 +71,7 @@
   `CREATE_INDEX`, `CREATE_MD5_FILE`, `COMPRESSION_LEVEL`; `MAX_RECORDS_IN_RAM` changes
   nothing. `CREATE_INDEX` on a header not sorted by coordinate fails with Picard's
   sentence before any file is made. Not a chain step: `chain BAM + sam-format-converter`
-  exits 2 and names `write`. Decisions W15-19 to W15-22 of docs/07. 72 registry tools.
+  exits 2 and names `write`. Decisions W15-19 to W15-23 of docs/07. 72 registry tools.
 - `tests/concordance/test_sam_format_converter.py`: the six conversions of SAM text, BAM
   and CRAM on the foundation corpus, t1, the exome slice, the tests/data BAMs and the
   BAMs of `cram_bams.py`, each against Picard's file of the same conversion (SAM text

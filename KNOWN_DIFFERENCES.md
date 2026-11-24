@@ -1490,6 +1490,10 @@ a CRAM decoded to the records of Picard's BAM of the same source. It differs her
 - A CRAM out or in without `REFERENCE_SEQUENCE` fails in both; bammetrics leaves no file
   where Picard leaves an empty one.
 - Not a chain step: the `write` step converts (`+ write out.sam`).
+- A CIGAR of more than 65,535 operators (section SAM text, section MarkDuplicates): SAM
+  text holding one is refused, and from a BAM or CRAM the SAM line holds the placeholder
+  and the `CG` tag where Picard's holds the CIGAR. From a CRAM an unpaired record keeps
+  the mate fields the CRAM stores, where htsjdk reads `*` and 0.
 
 ## AddCommentsToBam and ReplaceSamHeader
 
