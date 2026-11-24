@@ -379,9 +379,9 @@ pub const VERBS: &[Verb] = &[
     Verb {
         about: Some(
             "sorts the records of a BAM, CRAM or SAM by --sort-order (queryname, coordinate or \
-             duplicate) as Picard's SortSam does: -o gets a BAM, or SAM text for a name ending \
-             in .sam, under the input header with SO set. Runs of --max-records-in-ram records \
-             spill to --tmp-dir.",
+             duplicate) as Picard's SortSam does: -o gets a BAM, SAM text for a name ending in \
+             .sam, or a CRAM (with -R) for one ending in .cram, under the input header with SO \
+             set. Runs of --max-records-in-ram records spill to --tmp-dir.",
         ),
         writes: "sorted BAM",
         ..verb("sort-sam", "SortSam", Files::Bam)
@@ -458,7 +458,7 @@ pub const VERBS: &[Verb] = &[
         about: Some(
             "computes MD, NM and UQ of each mapped record of a coordinate-sorted SAM, BAM or \
              CRAM against -R, as Picard's SetNmMdAndUqTags does: -o gets every record, a BAM, \
-             or SAM text for a name ending in .sam.",
+             SAM text for a name ending in .sam, or a CRAM for one ending in .cram.",
         ),
         writes: "BAM",
         ..verb("set-nm-md-and-uq-tags", "SetNmMdAndUqTags", Files::Bam)
@@ -695,8 +695,9 @@ pub const VERBS: &[Verb] = &[
         about: Some(
             "sets the mate fields, MQ, MC and TLEN of each pair from its mate, as Picard's \
              FixMateInformation does: -o gets every record of every input (several are merged) \
-             in --sort-order, a BAM or SAM text for a name ending in .sam. Without -o the one \
-             input BAM is rewritten in place, renamed over it when complete.",
+             in --sort-order: a BAM, SAM text for a name ending in .sam, or a CRAM (with -R) \
+             for one ending in .cram. Without -o the one input BAM is rewritten in place, \
+             renamed over it when complete.",
         ),
         writes: "BAM",
         optional_output: true,
@@ -707,7 +708,8 @@ pub const VERBS: &[Verb] = &[
             "keeps the records --filter picks, as Picard's FilterSamReads does: aligned or \
              unmapped reads (pairs of a queryname-sorted input together), names in a read \
              list, string values of a tag, or pairs with an end over an interval list. -o \
-             gets a BAM, or SAM text for a name ending in .sam, in --sort-order.",
+             gets a BAM, SAM text for a name ending in .sam, or a CRAM (with -R) for one \
+             ending in .cram, in --sort-order.",
         ),
         writes: "BAM",
         reads: &["READ_LIST_FILE", "INTERVAL_LIST"],
@@ -800,6 +802,31 @@ impl Verb {
         registry::find(self.class).expect("every verb names a registered tool")
     }
 
+    /// The help of `-o` for a verb whose one file is a BAM: what else the
+    /// name of the file can ask for.
+    fn bam_output_help(&self) -> &'static str {
+        use bammetrics_core::{
+            add_comments_to_bam, gather_bam_files, mark_duplicates, replace_sam_header,
+        };
+        if self.class == add_comments_to_bam::TOOL.name {
+            // BGZF blocks are copied, whatever the input.
+            "The BAM to write; - writes standard output. Required."
+        } else if self.class == mark_duplicates::TOOL.name {
+            "The BAM to write, or a CRAM (with -R) for a name ending in .cram; - writes \
+             standard output. Required."
+        } else if self.class == gather_bam_files::TOOL.name {
+            "The BAM to write; with a SAM or CRAM input, SAM text for a name ending in .sam \
+             or a CRAM (with -R) for one ending in .cram. - writes standard output. Required."
+        } else if self.class == replace_sam_header::TOOL.name {
+            "The BAM to write; when the input name does not end in .bam, SAM text for a name \
+             ending in .sam or a CRAM (with -R) for one ending in .cram. - writes standard \
+             output. Required."
+        } else {
+            "The BAM to write, SAM text for a name ending in .sam, or a CRAM (with -R) for \
+             one ending in .cram; - writes standard output. Required."
+        }
+    }
+
     /// The verb's flags: input, output, `--format` and `--sample`, every
     /// row of the tool's option table, then the shared flags.
     pub fn flags(&self) -> Vec<Flag> {
@@ -864,8 +891,9 @@ impl Verb {
             ),
             Files::Bam if self.class == bammetrics_core::fix_mate_information::TOOL.name => (
                 "FILE",
-                "The BAM to write, or SAM text for a name ending in .sam; - writes standard \
-                 output. Without -o the one input BAM is rewritten in place."
+                "The BAM to write, SAM text for a name ending in .sam, or a CRAM (with -R) for \
+                 one ending in .cram; - writes standard output. Without -o the one input BAM \
+                 is rewritten in place."
                     .to_owned(),
             ),
             Files::Bam if self.optional_output => (
@@ -882,10 +910,7 @@ impl Verb {
                     self.writes
                 ),
             ),
-            Files::Bam => (
-                "BAM",
-                "The BAM to write; - writes standard output. Required.".to_owned(),
-            ),
+            Files::Bam => ("BAM", self.bam_output_help().to_owned()),
             Files::Single => (
                 "FILE",
                 format!(

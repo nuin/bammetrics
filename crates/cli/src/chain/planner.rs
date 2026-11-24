@@ -61,6 +61,14 @@ const SPILL_BYTES_COORDINATE: u64 = 76;
 /// and 584,011,111 (coordinate) over those records.
 const BAM_OUT_QUERYNAME: u64 = 102;
 const BAM_OUT_COORDINATE: u64 = 70;
+/// CRAM bytes per record `write x.cram` makes. Coordinate order: 5,464,644,737
+/// bytes over the 150,538,907 records of the whole exome (36.3), and 69% of
+/// the BAM on the foundation corpus and on the exome slice, which is 48.3 of
+/// `BAM_OUT_COORDINATE`'s 70. The larger, so the estimate errs high. Any
+/// other order was not measured at scale and takes the BAM's, which errs
+/// high (a queryname CRAM was 32% to 67% of its BAM on three corpus files).
+const CRAM_OUT_QUERYNAME: u64 = BAM_OUT_QUERYNAME;
+const CRAM_OUT_COORDINATE: u64 = 49;
 /// Peak bytes in `TMP_DIR` per record of a `MarkDuplicates` run that
 /// spills: 46 on that BAM (6.5 GiB), 59 on that CRAM (42.1 GiB). The
 /// larger one, so the estimate errs high.
@@ -532,6 +540,8 @@ pub fn estimate(chain: &Chain) -> Result<Estimate, VerbError> {
                     (WriteFormat::Sam, _) => SAM_BYTES_PER_RECORD,
                     (WriteFormat::Bam, Some(SortOrder::Coordinate)) => BAM_OUT_COORDINATE,
                     (WriteFormat::Bam, _) => BAM_OUT_QUERYNAME,
+                    (WriteFormat::Cram, Some(SortOrder::Coordinate)) => CRAM_OUT_COORDINATE,
+                    (WriteFormat::Cram, _) => CRAM_OUT_QUERYNAME,
                 };
                 if let Some(n) = records {
                     outputs.push((options.path.clone(), n.saturating_mul(per_record)));

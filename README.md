@@ -232,7 +232,7 @@ the sizes and a Chrome recipe for a build without the feature.
 | CollectJumpingLibraryMetrics (several `INPUT`s read in turn; `MINIMUM_MAPPING_QUALITY`, `TAIL_LIMIT`, `CHIMERA_KB_MIN`) | | `collect_jumping_library_metrics()` |
 | FifoBuffer (standard input to standard output through a memory buffer; `BUFFER_SIZE`, `IO_SIZE`, `DEBUG_FREQUENCY`, `NAME`; Picard's log lines) | | command only: `fifo_buffer()` raises `UsageError` |
 | ViewSam (the header and records of a SAM, BAM or CRAM as SAM text, as htsjdk writes it; `ALIGNMENT_STATUS`, `PF_STATUS`, `HEADER_ONLY`, `RECORDS_ONLY`, `INTERVAL_LIST`) | | `view_sam()` |
-| SortSam (`queryname`, `coordinate`, `duplicate`; BAM or SAM text out; `CREATE_INDEX`, `CREATE_MD5_FILE`, `MAX_RECORDS_IN_RAM` runs spilled to `TMP_DIR`; a chain step under `--sort-memory`) | | `sort_sam()` |
+| SortSam (`queryname`, `coordinate`, `duplicate`; BAM, SAM text or CRAM out; `CREATE_INDEX`, `CREATE_MD5_FILE`, `MAX_RECORDS_IN_RAM` runs spilled to `TMP_DIR`; a chain step under `--sort-memory`) | | `sort_sam()` |
 | BuildBamIndex (the `.bai` of a coordinate-sorted BAM, byte for byte the file Picard writes for the same BAM; `OUTPUT` or the default name; the same index behind `MarkDuplicates CREATE_INDEX` and `chain ... + write --index`) | | `build_bam_index()` |
 | doctor (not a Picard tool, [docs/doctor.md](docs/doctor.md): a pre-flight check of one BAM, CRAM or SAM file from its header, end-of-file marker and first 10,000 records; build, read groups, sort order, reference MD5s, a sample sheet row) | | `doctor()` |
 | CollectExonCoverageMetrics (not a Picard tool, [docs/exon_coverage.md](docs/exon_coverage.md): per exon of a GTF, GFF3, BED12 or BED annotation the mean, median, minimum and maximum depth and the bases at each `MIN_DEPTH`, with the CollectHsMetrics depth; `GENE`, `GENE_LIST`, `TRANSCRIPT`, `CANONICAL`, `FEATURE`; `SUMMARY_OUTPUT` per gene and transcript) | | `collect_exon_coverage_metrics()` |
@@ -240,8 +240,8 @@ the sizes and a Chrome recipe for a build without the feature.
 | CollectIndexDepthMetrics (not a Picard tool, docs/06 section 10: depth from the `.bai` or `.csi` alone, `MAPPED x READ_LENGTH / LENGTH` per reference and per contig group, the X and Y ratios with a sex call, `MT_COPY_NUMBER`; no whole read, a CRAM refused; `READ_LENGTH`, `READ_LENGTH_SAMPLE`) | | `collect_index_depth_metrics()` |
 | AddCommentsToBam (one `@CO` line per `COMMENT` after the header's own, the records of the BAM copied byte for byte; `CREATE_INDEX` writes `OUTPUT.bai`; a chain transform) | | `add_comments_to_bam()` |
 | ReplaceSamHeader (the header of `HEADER`, a SAM, BAM or CRAM, over every record; a `.bam` input keeps each record's reference index, any other its reference name; Picard's sort order checks; a chain transform) | | `replace_sam_header()` |
-| AddOATag (each record's alignment, `RNAME,POS,STRAND,CIGAR,MAPQ,NM;`, appended to its `OA` tag; `INTERVAL_LIST` limits it to the records over an interval; BAM or SAM text out; a chain transform) | | `add_o_a_tag()` |
-| CleanSam (an alignment past the end of its reference soft-clipped at its end, the mate's `MC` clipped the same way, MAPQ 0 on unmapped records; SAM, BAM or CRAM in, BAM or SAM text out; a chain transform) | | `clean_sam()` |
+| AddOATag (each record's alignment, `RNAME,POS,STRAND,CIGAR,MAPQ,NM;`, appended to its `OA` tag; `INTERVAL_LIST` limits it to the records over an interval; BAM, SAM text or CRAM out; a chain transform) | | `add_o_a_tag()` |
+| CleanSam (an alignment past the end of its reference soft-clipped at its end, the mate's `MC` clipped the same way, MAPQ 0 on unmapped records; SAM, BAM or CRAM in, BAM, SAM text or CRAM out; a chain transform) | | `clean_sam()` |
 | SetNmMdAndUqTags (`MD`, `NM` and `UQ` of each mapped record of a coordinate-sorted input against `REFERENCE_SEQUENCE`, as htsjdk computes them; `IS_BISULFITE_SEQUENCE`, `SET_ONLY_UQ`; a chain transform) | | `set_nm_md_and_uq_tags()` |
 | SetNmAndUqTags (Picard's deprecated name of SetNmMdAndUqTags: the same options and output) | | `set_nm_and_uq_tags()` |
 | AddOrReplaceReadGroups (every `@RG` line replaced by the one read group `RGID`, `RGLB`, `RGPL`, `RGPU`, `RGSM` and the optional fields give, `RG` set on every record; `RGDT` written in UTC; `SORT_ORDER` sorts when it differs from the input's; a chain transform, a barrier when it sorts) | | `add_or_replace_read_groups()` |
@@ -269,6 +269,7 @@ the sizes and a Chrome recipe for a build without the feature.
 | PositionBasedDownsampleSam (the records whose read name places them in a circle of area `FRACTION` on each tile; two reads of the input; `REMOVE_DUPLICATE_INFORMATION`, `READ_NAME_REGEX`, `STOP_AFTER`, `ALLOW_MULTIPLE_DOWNSAMPLING_DESPITE_WARNINGS`) | | `position_based_downsample_sam()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
+| CRAM output (3.0) for an `OUTPUT` ending in `.cram`, with `R=` the reference: SortSam, MarkDuplicates, the record-editing tools that rewrite their records, and the chain `write` step with `-R` | | `reference_sequence=` |
 | SAM text input (plain, bgzip or gzip) for every tool above that reads a BAM, checked as htsjdk checks it at `VALIDATION_STRINGENCY` | | `validation_stringency=` |
 
 Levels are `METRIC_ACCUMULATION_LEVEL`: `ALL_READS`, `SAMPLE`, `LIBRARY`, `READ_GROUP`.

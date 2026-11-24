@@ -117,7 +117,11 @@ pub(super) fn normalize_frequencies(raw_frequencies: &RawFrequencies) -> Frequen
             continue;
         }
 
-        let normalized_frequency = f * u32::from(SCALING_FACTOR) / sum;
+        // bammetrics patch: the product in 64 bits. In 32 bits it wrapped
+        // for a symbol seen more than 1,048,832 times in a block (a panic
+        // in a debug build), and the table no longer followed the counts:
+        // three symbols seen 1,400,000 times each got 3411, 342 and 342.
+        let normalized_frequency = u64::from(f) * u64::from(SCALING_FACTOR) / u64::from(sum);
         // SAFETY: `normalized_frequency <= SCALING_FACTOR`.
         *g = (normalized_frequency as u16).max(1);
 
@@ -126,8 +130,24 @@ pub(super) fn normalize_frequencies(raw_frequencies: &RawFrequencies) -> Frequen
 
     if normalized_sum < SCALING_FACTOR {
         normalized_frequencies[max_index] += SCALING_FACTOR - normalized_sum;
-    } else if normalized_sum > SCALING_FACTOR {
-        normalized_frequencies[max_index] -= normalized_sum - SCALING_FACTOR;
+    } else {
+        // bammetrics patch: what the sum is over 4095 is taken from the
+        // most frequent symbol and, when that leaves it at 1, from the
+        // next. noodles took it all from the most frequent symbol, which
+        // went below 0 for a block of many rare symbols (up to 255 over).
+        let mut excess = normalized_sum - SCALING_FACTOR;
+        let mut from = max_index;
+
+        while excess > 0 {
+            let take = excess.min(normalized_frequencies[from] - 1);
+            normalized_frequencies[from] -= take;
+            excess -= take;
+
+            // SAFETY: 4095 is more than the 256 symbols at 1 each.
+            from = (0..ALPHABET_SIZE)
+                .max_by_key(|&i| normalized_frequencies[i])
+                .unwrap();
+        }
     }
 
     normalized_frequencies
@@ -293,5 +313,39 @@ mod tests {
 
         let raw_frequencies = [0; ALPHABET_SIZE];
         assert_eq!(normalize_frequencies(&raw_frequencies), [0; ALPHABET_SIZE]);
+    }
+
+    // bammetrics patch: the two tables the 32-bit arithmetic got wrong.
+    #[test]
+    fn test_normalize_frequencies_of_large_and_of_rare_counts() {
+        // Three symbols seen 1,400,000 times each: 3411, 342 and 342 when
+        // each product wrapped.
+        let mut raw_frequencies = [0; ALPHABET_SIZE];
+        for symbol in [b',', b':', b'F'] {
+            raw_frequencies[usize::from(symbol)] = 1_400_000;
+        }
+        let actual = normalize_frequencies(&raw_frequencies);
+        for symbol in [b',', b':', b'F'] {
+            assert_eq!(actual[usize::from(symbol)], 1365);
+        }
+
+        // 60 symbols at 10,000 and 196 at 1: the 196 are raised to 1 each,
+        // which is 181 over 4095 and more than the 68 of any symbol.
+        let mut raw_frequencies = [1; ALPHABET_SIZE];
+        raw_frequencies[..60].fill(10_000);
+        let actual = normalize_frequencies(&raw_frequencies);
+        assert_eq!(actual.iter().map(|&f| u32::from(f)).sum::<u32>(), 4095);
+        assert!(actual.iter().all(|&f| (1..=68).contains(&f)));
+    }
+
+    #[test]
+    fn test_a_block_of_one_symbol_past_a_million_reads_back() -> io::Result<()> {
+        let mut data = vec![b'F'; 1_200_000];
+        data.extend(b"abracadabra");
+        for order in [Order::Zero, Order::One] {
+            let encoded = crate::codecs::rans_4x8::encode(order, &data)?;
+            assert_eq!(crate::codecs::rans_4x8::decode(&encoded)?, data);
+        }
+        Ok(())
     }
 }

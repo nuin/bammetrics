@@ -53,8 +53,8 @@ pub const TOOL: Tool = Tool {
     name: "CleanSam",
     summary: "no rows; OUTPUT gets every record of the input, a mapped record past the end \
               of its reference soft-clipped at its end, the MC of a mate past the end clipped \
-              the same way, an unmapped record at MAPQ 0: a BAM, or SAM text for a name \
-              ending in .sam.",
+              the same way, an unmapped record at MAPQ 0: a BAM, SAM text for a name ending \
+              in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in .cram.",
     options: &[
         record_edit::OUTPUT_OPTION,
         record_edit::COMPRESSION_OPTION,

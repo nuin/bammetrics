@@ -2,6 +2,95 @@
 
 ## Unreleased
 
+### Added
+
+- CRAM output (wave W15 of docs/07, `crates/core/src/cram_writer.rs`). An `OUTPUT` whose
+  name ends in `.cram`, lower case, is written as a CRAM 3.0 against `REFERENCE_SEQUENCE`
+  by `SortSam`, `MarkDuplicates`, every record-editing tool that rewrites its records
+  (`MergeSamFiles`, `AddOrReplaceReadGroups`, `CleanSam`, `DownsampleSam`, `AddOATag` and
+  the others on `record_edit.rs`) and the chain `write` step (`write out.cram` with the
+  chain's `-R`, or `--output-format cram`). The header is the BAM's. Each record keeps
+  its own mate fields and every tag where the BAM has it. `CREATE_MD5_FILE` writes
+  `<CRAM>.md5`; `COMPRESSION_LEVEL` sets the gzip level of the blocks. Decisions W15-1 to
+  W15-18 of docs/07 list where this is not what Picard's writer does.
+- `tests/concordance/test_cram_writer.py`: each CRAM is read by samtools, Picard 3.5.0 and
+  bammetrics and held to the BAM of the same stream and to samtools' own CRAM of it, on
+  the foundation corpus, t1, the exome slice and the hand-built BAMs of `cram_bams.py`,
+  through `SortSam`, five more tools and the chain `write` step. Nine more tools are read
+  by samtools alone, each on a fixture.
+- `vendor/noodles-cram`: `io::writer::raw`, the CRAM writer in pieces, and a writer whose
+  bytes are a function of its records (vendor/README.md, changes six and seven).
+- The CRAM writer after its review (docs/07 W15-12 to W15-17):
+  - The reference of a CRAM output is found by name. A FASTA with more contigs than the
+    header, in another order, with a contig longer than its `@SQ` line, or without a
+    contig no record lies on is written, as Picard writes it. A record on a contig the
+    FASTA lacks fails with htsjdk's sentence. The strict check refused all four.
+  - A `Z` or `H` tag value is stored as the bytes of the BAM. One record with a UTF-8
+    letter or a control byte in a tag failed the whole file with `invalid string`.
+  - A record whose mate reference index is not in the header fails the writer, as it
+    fails Picard. It was written into a CRAM no reader opens.
+  - A slice ends at 8 MiB of BAM records as well as at 10,000 records, and at most 64 MiB
+    of BAM records wait for the encoders. 25,000 reads of 20,000 bases: 1,855 MiB peak
+    RSS before and 649 MiB after with 1 thread, 2,996 and 1,088 MiB with 8.
+  - A slice reads the reference bases it spans, in place of its whole contig. 5 reads
+    close together on a 250 Mbp contig: 248 MiB before, 10 MiB after.
+  - No `.fai` line is searched by name. 160,000 contigs with one read each: 19.2 s
+    before, 0.5 s after.
+  - bammetrics reads a CRAM whose read name or tag text has a byte noodles' BAM encoder
+    refuses (a UTF-8 letter, a control byte, an `@` in a name), from any writer.
+  - `vendor/noodles-cram`: the rANS 4x8 frequency table in 64-bit arithmetic, tag texts
+    as bytes, `Record::mask_texts` (vendor/README.md, changes eight to ten).
+  - `benches/memgate.toml`: the fixture row `clean-sam cram long reads` (3,000 reads of
+    50,000 bases, 185 to 200 MiB, limit 320 MiB; 777 MiB before).
+  - `tests/concordance/test_cram_writer.py`: four tests against Picard for the FASTA found
+    by name, tag texts outside printable ASCII, a mate reference the header lacks, and the
+    two records Picard's CRAM writer refuses and bammetrics writes (a read that starts
+    past its contig end, an unmapped record with a CIGAR; KNOWN_DIFFERENCES.md). One
+    golden record, `error_sort_sam_cram_absent_contig`.
+  - `--help`, the tool summaries, the Python docstrings, README, docs/cli.md and
+    docs/python.md name the CRAM output where they named a BAM and SAM text alone.
+  - A container with 1 to 3 quality bytes is written: its rANS block is order 0, as
+    htscodecs codes it (vendor/README.md, change eleven). One read of 1 to 3 bases, or
+    a tail container of such reads, failed the whole file with `invalid input
+    parameter`.
+  - A mapped record without bases (SEQ `*`) counts two bytes per read base of its
+    CIGAR toward its container, and one whose CIGAR covers more than 16 Mi read bases
+    fails naming it (docs/07 W15-18). A 194-byte BAM of 4 records with CIGAR
+    `268435455M` cost 2,058 MiB.
+  - A CIGAR operator of length 0 is left out: `5M0I5M`, `5M0D5M` and `10M0S` read back
+    `10M` under samtools and Picard. Picard's CRAM leaves out `0I` and `0H` alone.
+  - The chain planner counts a coordinate-sorted CRAM at 49 bytes per record, 69% of
+    the BAM on the foundation corpus and the exome slice. It counted 37, from the
+    exome alone. `chain + write
+    --help` names the SAM and CRAM output.
+
+### Changed
+
+- Chain, fitted to 0.32.0: `-o r.cram` on a chain with a transform and no `write` adds
+  `write r.cram` (no `--index`) as the last step, against `-R`, `BAMMETRICS_REFERENCE` or
+  the config file's `reference`, and names the metrics `r.<extension>`; without a
+  reference it exits 2 before the first read, and `-o r.CRAM` exits 2 as `r.SAM` does.
+  Manifest 2 records the file with kind `cram`; `--resume` skips its `write` step as a
+  BAM's and never starts a read at it. Golden record `error_chain_result_cram` no longer
+  names wave W15, `error_chain_write_cram` gains the config hint, and two records are new
+  (`chain_result_cram`, `error_chain_result_cram_case`).
+- A `.cram` `OUTPUT` is no longer refused naming wave W15. Without `REFERENCE_SEQUENCE` a
+  tool fails at the first record with a reference sequence, with htsjdk's message, exit
+  1, and leaves no file; a chain that writes a CRAM without `-R` exits 2 before the first
+  read. `CREATE_INDEX` with a CRAM output is a usage error (Picard writes a `.cram.bai`).
+  A block copy (`AddCommentsToBam`, `ReplaceSamHeader` of a BAM, `GatherBamFiles` of
+  BAMs) still refuses a `.cram` name, and `SplitSamByLibrary` still refuses a CRAM input,
+  now without a wave in its message. `--output-format` takes `cram`.
+  `RevertOriginalBaseQualitiesAndAddMateCigar`, whose `CREATE_INDEX` defaults to true,
+  writes a CRAM and its MD5 without an index.
+- `benches/memgate.toml`: a fixture row and a scale row for the CRAM writer. The HG002
+  exome BAM (150,538,907 records) as a CRAM with 8 threads: 587 and 688 MiB peak RSS in
+  two runs, about 180 s, 52.9% of the BAM's bytes; samtools reads every record equal to
+  the BAM's. samtools' own CRAM 3.0 of it is 14% smaller and written 3.7 times as fast
+  (docs/benchmarks.md, docs/07 W15-11). After the review fixes: 360 and 422 MiB, the
+  same bytes, every record equal under samtools again. Not measured: Picard on that
+  file, an unsorted stream at scale.
+
 ## 0.32.0
 
 Chain 2 (wave W14 of docs/07) and the simpler chain command, 71 tools and no new one: steps without `+` and `-o` naming the BAM (`bammetrics chain fixed.bam reorder-sam insert-size -o r.bam`), a user config file, the recipes (`bammetrics prep in.bam -o out.bam`), manifest 2 with `--resume` per step and `--keep`, `qc` as the last step, and every tool that reads a BAM as a step at any position (53 of the 71); every `+` form of 0.31.0 runs as before.

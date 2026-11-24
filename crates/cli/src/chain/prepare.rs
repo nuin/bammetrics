@@ -1025,7 +1025,10 @@ fn write_step(
         .map(|given| {
             WriteFormat::parse(&given.values[0]).ok_or_else(|| {
                 draft
-                    .usage(format!("expected bam or sam, got {:?}", given.values[0]))
+                    .usage(format!(
+                        "expected bam, sam or cram, got {:?}",
+                        given.values[0]
+                    ))
                     .from(given.spelled.clone())
             })
         })
@@ -1042,6 +1045,15 @@ fn write_step(
     let mut options = WriteOptions::new(&path);
     if let Some(format) = format {
         options.format = format;
+    }
+    options.reference = cx.reference.map(PathBuf::from);
+    if options.format == WriteFormat::Cram && options.reference.is_none() {
+        return Err(draft
+            .usage(format!(
+                "{}: a CRAM is written against the reference: give the chain -R FASTA",
+                path.display()
+            ))
+            .hint("or BAMMETRICS_REFERENCE, or reference in the config file (bammetrics config)"));
     }
     if let Some(given) = parsed.last(COMPRESSION_LEVEL) {
         options.compression_level = given.values[0]

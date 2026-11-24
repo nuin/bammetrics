@@ -69,8 +69,9 @@ use crate::stage::{Counters, Frame, Stage, WriteFormat, later_kind};
 pub const TOOL: Tool = Tool {
     name: "FixMateInformation",
     summary: "no rows; OUTPUT gets every record of every INPUT with the mate fields, MQ, MC and \
-              TLEN of each pair set from its mate, in SORT_ORDER: a BAM, or SAM text for a \
-              name ending in .sam. Without OUTPUT the one INPUT is rewritten in place.",
+              TLEN of each pair set from its mate, in SORT_ORDER: a BAM, SAM text for a name \
+              ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in .cram. \
+              Without OUTPUT the one INPUT is rewritten in place.",
     options: &[
         Opt::path(
             &["INPUT", "I"],
@@ -81,8 +82,9 @@ pub const TOOL: Tool = Tool {
         .required(),
         Opt::path(
             &["OUTPUT", "O"],
-            "The BAM to write, or SAM text for a name ending in .sam; without it the one INPUT \
-             BAM is rewritten in place.",
+            "The BAM to write, SAM text for a name ending in .sam, or a CRAM (with \
+             REFERENCE_SEQUENCE) for one ending in .cram; without it the one INPUT BAM is \
+             rewritten in place.",
         )
         .written(),
         Opt::text(

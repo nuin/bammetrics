@@ -809,12 +809,13 @@ pub fn skipped_outcome(number: usize, key: &Key, resume: &Resume) -> StepOutcome
 }
 
 /// The kinds a run writes, as the `&'static str` of [`super::run::Written`].
-const KINDS: [&str; 25] = [
+const KINDS: [&str; 26] = [
     "metrics",
     "gaps",
     "file",
     "bam",
     "sam",
+    "cram",
     "index",
     "md5",
     "kept",
@@ -847,13 +848,14 @@ fn known_kind(kind: &str) -> &'static str {
 }
 
 /// True when a manifest may name `path` with `kind`: a kind a chain
-/// writes, and for a BAM, SAM, index or MD5 the extension that kind has.
+/// writes, and for a BAM, SAM, CRAM, index or MD5 the extension that kind has.
 /// A record that calls some other file a `bam` is not trusted.
 fn kind_fits(kind: &str, path: &Path) -> bool {
     let extension = path.extension().and_then(|e| e.to_str());
     let wanted = match kind {
         "bam" | "kept" => Some("bam"),
         "sam" => Some("sam"),
+        "cram" => Some("cram"),
         "index" => Some("bai"),
         "md5" => Some("md5"),
         _ => None,
@@ -940,7 +942,11 @@ pub fn remove_stale(chain: &Chain, previous: &ChainManifest, now: &ChainManifest
         let names = step
             .outputs
             .iter()
-            .filter(|o| o.path.extension().is_some_and(|e| e == "bam" || e == "sam"))
+            .filter(|o| {
+                o.path
+                    .extension()
+                    .is_some_and(|e| e == "bam" || e == "sam" || e == "cram")
+            })
             .flat_map(|o| companions(&resolve(&o.path)));
         beside.entry(step.id.as_str()).or_default().extend(names);
     }
@@ -1120,6 +1126,8 @@ mod tests {
         assert!(kind_fits("metrics", Path::new("o/s.insert_size_metrics")));
         assert!(kind_fits("kept", Path::new("o/s.marked.bam")));
         assert!(kind_fits("index", Path::new("o/s.marked.bai")));
+        assert!(kind_fits("cram", Path::new("o/r.cram")));
+        assert!(!kind_fits("cram", Path::new("o/r.bam")));
         assert!(kind_fits("md5", Path::new("o/s.marked.bam.md5")));
         assert!(!kind_fits("bam", Path::new("o/s.insert_size_metrics")));
         assert!(!kind_fits("index", Path::new("o/s.marked.bam")));

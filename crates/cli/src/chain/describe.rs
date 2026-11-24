@@ -121,6 +121,7 @@ fn role(chain: &Chain, step: &Planned, first_read: bool) -> String {
             let kind = match options.format {
                 bammetrics_core::stage::WriteFormat::Bam => "BAM",
                 bammetrics_core::stage::WriteFormat::Sam => "SAM text",
+                bammetrics_core::stage::WriteFormat::Cram => "CRAM",
             };
             format!("{kind} of {}", step.reads)
         }

@@ -1,3 +1,6 @@
+// bammetrics patch: reachable through `io::writer::raw`, as noodles wrote it.
+#![allow(missing_docs)]
+
 mod convert;
 mod feature;
 
@@ -15,24 +18,25 @@ pub use self::feature::Feature;
 use crate::record::{Flags, MateFlags};
 
 #[derive(Clone, Debug, Default, PartialEq)]
+// bammetrics patch: the fields are public, for `io::writer::raw`.
 pub struct Record {
-    pub(crate) bam_flags: sam::alignment::record::Flags,
-    pub(crate) cram_flags: Flags,
-    pub(crate) reference_sequence_id: Option<usize>,
-    pub(crate) read_length: usize,
-    pub(crate) alignment_start: Option<Position>,
-    pub(crate) read_group_id: Option<usize>,
-    pub(crate) name: Option<BString>,
-    pub(crate) mate_flags: MateFlags,
-    pub(crate) mate_reference_sequence_id: Option<usize>,
-    pub(crate) mate_alignment_start: Option<Position>,
-    pub(crate) template_length: i32,
-    pub(crate) mate_distance: Option<usize>,
-    pub(crate) data: Vec<(Tag, Value)>,
-    pub(crate) features: Vec<Feature>,
-    pub(crate) mapping_quality: Option<MappingQuality>,
-    pub(crate) sequence: Vec<u8>,
-    pub(crate) quality_scores: Vec<u8>,
+    pub bam_flags: sam::alignment::record::Flags,
+    pub cram_flags: Flags,
+    pub reference_sequence_id: Option<usize>,
+    pub read_length: usize,
+    pub alignment_start: Option<Position>,
+    pub read_group_id: Option<usize>,
+    pub name: Option<BString>,
+    pub mate_flags: MateFlags,
+    pub mate_reference_sequence_id: Option<usize>,
+    pub mate_alignment_start: Option<Position>,
+    pub template_length: i32,
+    pub mate_distance: Option<usize>,
+    pub data: Vec<(Tag, Value)>,
+    pub features: Vec<Feature>,
+    pub mapping_quality: Option<MappingQuality>,
+    pub sequence: Vec<u8>,
+    pub quality_scores: Vec<u8>,
 }
 
 impl Record {

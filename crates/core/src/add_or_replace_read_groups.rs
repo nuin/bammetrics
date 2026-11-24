@@ -53,8 +53,8 @@ pub const TOOL: Tool = Tool {
     name: "AddOrReplaceReadGroups",
     summary: "no rows; OUTPUT gets every record of the input with its RG tag set to RGID under \
               the input header whose @RG lines are replaced by the one read group the options \
-              give, sorted when SORT_ORDER differs from the input's: a BAM, or SAM text for a \
-              name ending in .sam.",
+              give, sorted when SORT_ORDER differs from the input's: a BAM, SAM text for a \
+              name ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in .cram.",
     options: &[
         Opt::text(&["RGID", "ID"], "Read group ID (default 1)."),
         Opt::text(&["RGLB", "LB"], "Read group library.").required(),

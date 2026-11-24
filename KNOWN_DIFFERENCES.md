@@ -1189,7 +1189,9 @@ the differences below are on purpose or cannot be avoided.
   it. The verb exits 2 for the same.
 - A record with more than 65,535 CIGAR operations keeps its real CIGAR in the `CG`
   tag; htsjdk reads that one, bammetrics reads the placeholder in the record, so such a
-  read's unclipped 5' end can differ. Reads this long are not in the harness.
+  read's unclipped 5' end can differ. `ViewSam` prints the placeholder and the tag where
+  Picard prints the CIGAR of the tag. One such read, of 70,000 operators, is in
+  `tests/concordance/cram_bams.py`; none is in the `MarkDuplicates` harness.
 - Picard 3.5.0 accepts every combination of `REMOVE_DUPLICATES`,
   `REMOVE_SEQUENCING_DUPLICATES` and `TAGGING_POLICY`; so does bammetrics, and the
   harness compares each.
@@ -1359,6 +1361,87 @@ differs here:
 - `OUTPUT` and `ASSUME_SORTED` are rejected with `Unrecognized option`, exit 1, as Picard
   rejects them. Picard prints its usage text first.
 
+## CRAM output
+
+An `OUTPUT` whose name ends in `.cram`, lower case, is a CRAM 3.0 against
+`REFERENCE_SEQUENCE` (`crates/core/src/cram_writer.rs`): for `SortSam`, `MarkDuplicates`,
+the record-editing tools that rewrite their records, and the chain `write` step. samtools
+1.25, Picard 3.5.0 and bammetrics read it to the header and the records of the BAM the
+same command writes (`tests/concordance/test_cram_writer.py`: `SortSam`, `MergeSamFiles`,
+`MarkDuplicates`, `AddOrReplaceReadGroups`, `CleanSam`, `DownsampleSam` and the chain
+`write` step; `AddOATag` in its own module). The nine other record-editing tools are read
+by samtools alone, each on one fixture of 9 to 36 records. CRAM bytes are never compared. At scale one input
+was written, the HG002 exome BAM in coordinate order: samtools reads its 150,538,907
+records equal to the BAM's, the file is 16.6% larger than samtools' CRAM 3.0 of that BAM
+and takes 3.7 times as long to write (docs/benchmarks.md). Picard did not read that file,
+and no unsorted stream was written at scale.
+
+It differs from the CRAM Picard writes:
+
+- Version. Picard writes CRAM 3.1, bammetrics CRAM 3.0.
+- `CREATE_INDEX` is a usage error. Picard writes `<CRAM>.bai`, a BAI over the slices, and
+  for another order than coordinate fails after it made both files. `samtools index`
+  writes a `.crai` of either file.
+- Tags. bammetrics stores every tag where the BAM has it. Picard's CRAM leaves `MD` and
+  `NM` out, so a reader rebuilds them, gives the tags back in another order, and drops an
+  `RG` that names no `@RG` line of the header.
+- Mates. bammetrics stores each record's own mate fields. Picard's CRAM of a file in which
+  read names repeat (the foundation corpus merged with itself) reads with the
+  mate-unmapped flag set on 314 of 25,836 records whose record in Picard's BAM lacks it.
+- A `B:C`, `B:S` or `B:I` array. bammetrics stores the unsigned subtype; samtools reads
+  `B:c`, `B:s`, `B:i` from Picard's CRAM.
+- A read past the end of its contig. bammetrics stores each base past the end. From
+  Picard's CRAM samtools warns `Ref pos outside of ref sequence boundary`, and for one
+  such read rebuilds another `MD` than from its own CRAM of the record; Picard rebuilds an
+  empty `MD` from it.
+- `COMPRESSION_LEVEL` sets the gzip level of bammetrics' blocks. Picard's CRAM is the same
+  size at levels 0 and 9.
+- No reference. Both fail at the first record with a reference sequence (`A reference
+  must be supplied that includes the reference sequence for <name>.`, exit 1) and both
+  write unplaced records alone without one. bammetrics leaves no file where Picard leaves
+  an empty one. A chain that writes a CRAM without `-R` exits 2 before the first read.
+- A block copy (`AddCommentsToBam`, `ReplaceSamHeader` of a BAM, `GatherBamFiles` of BAMs)
+  refuses a `.cram` name: Picard writes BAM bytes under it. `out.CRAM` is a BAM in both.
+- The reference. Both find each contig of the header in the FASTA by its name: the FASTA
+  may hold more contigs, in another order, a contig longer than its `@SQ` line, and may
+  lack a contig no record lies on. Both fail on a record whose contig the FASTA lacks, with
+  one sentence (`A reference must be supplied (reference sequence SAMSequenceRecord(name=...)
+  not found).`). Picard also takes `chr1` of the FASTA for `1` of the header. bammetrics
+  fails there with that sentence: samtools reads no record of the CRAM Picard wrote that
+  way (`Reference file given, but ref '1' not present`).
+- Two records Picard's CRAM writer fails on, and bammetrics writes as samtools does. A read
+  that starts past the end of its contig (`Requested start 100000 is beyond the sequence
+  length chr1`): every base is stored. An unmapped record with a CIGAR (`9 > 0`): the CRAM
+  holds neither its CIGAR nor its mapping quality.
+- A mate reference index the header lacks fails in both (bammetrics: `record <name>: mate
+  reference index 7 is not in the header`). No reader opens a CRAM that holds one.
+- A mapped record without bases (SEQ `*`) whose CIGAR covers more than 16 Mi read bases
+  fails bammetrics' CRAM writer, naming it (docs/07 W15-18): the CRAM holds an `N` and a
+  missing quality for each. Picard writes it.
+- CIGAR operators of length 0. bammetrics' CRAM leaves each out, so `5M0D5M` reads back
+  `10M`. Picard's leaves out `0I` and `0H` alone: samtools reads its `5M0D5M` as `5M5M`
+  and fails on the slice of its `10M0S`.
+- Tag texts. bammetrics stores a `Z` or `H` value as the bytes of the BAM. Picard's CRAM
+  holds an `H` as a `B:c` array (`X5:H:1AE301` reads `X5:B:c,26,-29,1`) and each byte of a
+  `Z` over 127 as `?` (`café` in UTF-8 reads `caf??`).
+- Header text that is not ASCII. bammetrics writes the bytes of the BAM header. Picard's
+  CRAM of a header with `DS:café über` in UTF-8 reads, under samtools, as `DS:cafÃ© Ã¼ber`.
+  Picard reads bammetrics' CRAM header as UTF-8 and its BAM header one character per byte,
+  so its `ViewSam` prints the two differently.
+- Slices. Both end a slice at 10,000 records, or at 1,000 at a change of reference.
+  bammetrics also ends one at 8 MiB of BAM records, so a container of long reads is no
+  larger than one of short reads: Picard's holds 10,000 reads of any length.
+
+A reader does not give these back from a CRAM, bammetrics' or samtools' own:
+
+- `=` and `X` operators and neighbouring `M` operators are read as one `M`. An unmapped
+  record keeps neither its CIGAR nor its mapping quality.
+- The mate reference and mate start of a record without the paired flag: samtools reads
+  the reference as `*`, Picard both as `*` and 0. bammetrics' reader returns them.
+- Picard, and bammetrics' reader after it, read an unsigned `B` array as signed.
+- A deletion that runs past the end of its contig: `samtools view` fails on the slice
+  unless it is given `--input-fmt-option decode_md=0`. Picard reads it.
+
 ## SortSam
 
 `SortSam` writes the records Picard writes, in Picard's order, on the fixture BAMs, the
@@ -1367,7 +1450,7 @@ keys in every tie class, a CRAM and SAM text (`tests/concordance/test_sort_sam.p
 decoded records and the header rule of `compare_bam`; SAM output byte for byte). It
 differs here:
 
-- An `OUTPUT` ending in `.cram` is a usage error naming wave W15. Picard writes a CRAM.
+- An `OUTPUT` ending in `.cram` is a CRAM, which differs from the one Picard writes (section CRAM output).
 - Records with equal keys keep their input order through every merge, as htsjdk's
   `SortingCollection` keeps them. bammetrics merges at most 64 run files at once and
   merges consecutive runs first when there are more; htsjdk opens every run file at once.
@@ -1486,9 +1569,7 @@ decisions D40 to D43):
   message. `CollectHsMetrics` converts a BED; this tool does not.
 - A failed run leaves no `OUTPUT`. Picard leaves the records it wrote before the failure,
   for example after `Alignments added out of order`.
-- A `.cram` `OUTPUT` is refused before the first read until wave W15 (`bammetrics writes
-  BAM and SAM only: CRAM output is wave W15`): the verb exits 2, the Picard face exits 1.
-  Picard writes the CRAM.
+- A `.cram` `OUTPUT` is a CRAM, which differs from the one Picard writes (section CRAM output).
 - A header with an `@SQ LN:0` line exits 1 at the header (`not a BAM or CRAM file (the
   header could not be read: invalid record)`), as every tool but `BuildBamIndex` and
   `CollectIndexDepthMetrics` (the `BuildBamIndex` entry under "Options"). Picard tags the
@@ -1508,7 +1589,7 @@ fixture BAMs, the corpus tiers, the exome slice, SAM text and a CRAM
   record, and samtools refuses the file.
 - A mapped record whose CIGAR of more than 65535 operators is held in a `CG` tag exits 1
   and writes nothing (D48). Picard clips the CIGAR of the tag.
-- `-o` ending in `.cram` exits 1 naming wave W15. Picard writes a CRAM.
+- `-o` ending in `.cram` is a CRAM, which differs from the one Picard writes (section CRAM output).
 - A header with an `@SQ LN:0` line exits 1 and writes nothing, on SAM text (`invalid
   length (LN): invalid value: 0`) and on a BAM (`the header could not be read`). Picard
   cleans the file. The noodles header parser refuses the line for every tool that reads
@@ -1533,7 +1614,7 @@ a bisulfite set, SAM text and CRAM (`tests/concordance/test_set_nm_md_and_uq_tag
 - A BAM record is not validated (section Validation). A read past the end of its contig
   without qualities gets the tags the walk gives at every `VALIDATION_STRINGENCY`; Picard
   refuses it at `STRICT` and writes the same tags at `SILENT`. With qualities both fail.
-- A `.cram` `OUTPUT` exits 2 naming wave W15. Picard writes a CRAM.
+- A `.cram` `OUTPUT` is a CRAM, which differs from the one Picard writes (section CRAM output).
 - A failed run leaves no `OUTPUT`. Picard leaves a partial one (59 bytes of SAM header
   after a read past its contig).
 - `SetNmMdAndUqTags` on a BAM cut in half exits 1 and writes nothing. Picard exits 0 (as
@@ -1563,8 +1644,10 @@ decisions D53 to D57):
   records flagged neither first nor second can order them differently, as in `SortSam`
   (section SortSam): bammetrics merges 64 runs into one as they spill, htsjdk merges every
   run at once.
-- A `.cram` `OUTPUT` exits 2 naming wave W15. Picard writes a CRAM. A failed run leaves no
-  `OUTPUT`.
+- A `.cram` `OUTPUT` is a CRAM, which differs from the one Picard writes (section CRAM output).
+  `RevertOriginalBaseQualitiesAndAddMateCigar`, whose `CREATE_INDEX` defaults to true,
+  writes the CRAM and its MD5 without an index; Picard writes `<CRAM>.bai` too. A failed
+  run leaves no `OUTPUT`.
 - `RevertOriginalBaseQualitiesAndAddMateCigar` holds the records of one read name together
   to set their mate fields. A name with more than 1,000,000 records exits 1. Picard holds
   them all while the JVM heap lasts.
@@ -1579,8 +1662,8 @@ BAMs, the corpus tiers, the exome slice, SAM text, gzip SAM and CRAM
 are open at once, and a file closed to make room ends its block early. They differ here
 (docs/07 decisions D58 to D62):
 
-- `SplitSamByLibrary` on a CRAM exits 2 naming wave W15 (1 on the Picard face) and writes
-  nothing. Picard writes a CRAM per library.
+- `SplitSamByLibrary` on a CRAM exits 2 (1 on the Picard face) and writes nothing. Picard
+  writes a CRAM per library.
 - Two libraries whose safe names are one file (`a b` and `a_b`), a library named
   `unknown` beside records without a library, or library names that differ in case only
   on a file system that ignores case: Picard writes one file over the other and exits 0;
@@ -1796,7 +1879,7 @@ lines on 13 bafRegress runs, 9 VerifyIDIntensity runs and 39 arrays VCF runs; 22
   ordered (HighAccuracy) by the low byte of each UTF-16 unit, as bammetrics holds SAM
   text; Picard uses the whole unit. The SAM specification allows printable ASCII in a
   name, where the two agree.
-- A `.cram` `OUTPUT` exits 2 naming wave W15; Picard writes a CRAM.
+- A `.cram` `OUTPUT` is a CRAM, which differs from the one Picard writes (section CRAM output).
 - A BAM header line that repeats a tag (`@PG ... rs:1 rs:2`) or has a tag with no value
   (`rs:`) exits 1 in every tool (`the header could not be read: invalid record`): noodles
   refuses it. Picard fails too at the default `VALIDATION_STRINGENCY=STRICT` (`Error

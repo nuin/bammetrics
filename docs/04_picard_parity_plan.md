@@ -96,7 +96,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | SetNmMdAndUqTags | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): `MD`, `NM` and `UQ` from the reference as htsjdk's `SequenceUtil` computes them, `SET_ONLY_UQ`, `IS_BISULFITE_SEQUENCE`. M | samtools calmd |
 | SetNmAndUqTags | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): Picard's deprecated name of SetNmMdAndUqTags, the same options and output. S | samtools calmd |
 | BuildBamIndex | Read data | core | Shipped in 0.23.0 (wave W05 of docs/07): the `.bai` byte for byte Picard's for the same BAM, the index behind `MarkDuplicates CREATE_INDEX`, `SortSam CREATE_INDEX` and `chain ... + write --index`. S | samtools index |
-| SortSam | Read data | core | Shipped in 0.23.0 (wave W05 of docs/07): `queryname`, `coordinate` and `duplicate` with htsjdk's comparators, BAM or SAM text out, runs spilled to `TMP_DIR`; also the sort step of a chain. B | samtools sort |
+| SortSam | Read data | core | Shipped in 0.23.0 (wave W05 of docs/07): `queryname`, `coordinate` and `duplicate` with htsjdk's comparators, BAM or SAM text out (a CRAM since wave W15), runs spilled to `TMP_DIR`; also the sort step of a chain. B | samtools sort |
 | SamFormatConverter | Read data | out | Format conversion. | samtools view |
 | AddCommentsToBam | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): one `@CO` line per `COMMENT`, the BAM's records copied as Picard copies its blocks. S | samtools reheader |
 | AddOATag | Read data | core | Shipped in 0.27.0 (wave W09 of docs/07, the record-editing shape `record_edit.rs`; a chain transform): each record's alignment appended to its `OA` tag, `INTERVAL_LIST`. S | none |
@@ -116,7 +116,7 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | RevertSam | Read data | out | BAM to uBAM. | none |
 | SamToFastq | Read data | out | Export. | samtools fastq |
 | SamToFastqWithTags | Read data | out | Export with tags. | samtools fastq -T |
-| SplitSamByLibrary | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the fan-out writer `split_sam.rs`; a chain split): one BAM or SAM text per library, `unknown` for the rest, Picard's safe names and exit 2 without a library; a CRAM input exits 2 naming W15. S | samtools split |
+| SplitSamByLibrary | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the fan-out writer `split_sam.rs`; a chain split): one BAM or SAM text per library, `unknown` for the rest, Picard's safe names and exit 2 without a library; a CRAM input exits 2 (docs/07 D58, W15-8). S | samtools split |
 | SplitSamByNumberOfReads | Read data | core | Shipped in 0.28.0 (wave W10 of docs/07, the fan-out writer `split_sam.rs`; a chain split with `TOTAL_READS_IN_INPUT`): files of about one size, a run of one name never cut, `shard_0001` names. S | samtools split |
 | ViewSam | Diagnostics | core | Prints the header and the records as htsjdk writes SAM text. Shipped in 0.23.0 (wave W05 of docs/07) with the SAM text reader and writer. S | samtools view |
 | CollectHiSeqXPfFailMetrics | Diagnostics | out | Needs basecall directory. | none |

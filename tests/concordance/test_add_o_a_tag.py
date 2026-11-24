@@ -20,8 +20,9 @@ CREATE_INDEX (`out.bai`), CREATE_MD5_FILE, MAX_RECORDS_IN_RAM, REFERENCE_SEQUENC
 VALIDATION_STRINGENCY. Error parity: a BED, a missing INTERVAL_LIST, records out of the
 header's order, OVERWRITE_TAG and ASSUME_SORTED (no such options), a bad SAM line at
 STRICT, a missing input and a missing output directory. bammetrics alone refuses an `NM`
-or `OA` array, which Picard prints as a Java object reference, and a CRAM output. The step
-in a chain against Picard's file. Header and name shapes: an `@HD SO` htsjdk does not
+or `OA` array, which Picard prints as a Java object reference. A CRAM output (with
+REFERENCE_SEQUENCE) reads as the BAM under samtools, Picard and bammetrics, and holds the
+records of Picard's CRAM. The step in a chain against Picard's file. Header and name shapes: an `@HD SO` htsjdk does not
 name (SILENT and STRICT), unplaced reads with falling POS under `SO:coordinate`, a gzip
 INTERVAL_LIST, an OUTPUT named `.SAM` (a BAM in both) and the `.bai` name of three OUTPUT
 names. The distinct-value gate wants three entry counts, three
@@ -33,7 +34,7 @@ from pathlib import Path
 import pysam
 import pytest
 
-from cases import CORPUS, FIXTURES
+from cases import BAMMETRICS, CORPUS, FIXTURES
 from conftest import RESULTS
 from test_add_comments_to_bam import chain_against_picard, compare, index_and_md5, run_tool
 
@@ -328,11 +329,26 @@ def test_an_array_value_is_refused(bad_inputs, tmp_path):
     RESULTS.append((f"{TOOL} array NM", 0, 0, "Picard prints an object reference, bammetrics fails"))
 
 
-def test_a_cram_output_is_refused(tmp_path):
-    out = tmp_path / "out.cram"
-    done = run_tool("bammetrics", TOOL, [f"I={SOURCES['markdup']}", f"O={out}", f"R={REF}"])
-    assert done.returncode == 1 and "CRAM output is wave" in done.stderr, done.stderr
-    assert not out.exists()
+def test_a_cram_output_holds_the_records_of_the_bam(tmp_path):
+    """OUTPUT ending in .cram is a CRAM against REFERENCE_SEQUENCE, as in Picard
+    (test_cram_writer.py holds the writer itself to the three readers)."""
+    from test_cram_writer import Written, same_records, samtools_view
+    source = SOURCES["markdup"]
+    written = Written(tmp_path, f"{TOOL} markdup", REF, lambda out: subprocess.run(
+        [str(BAMMETRICS), TOOL, f"I={source}", f"O={out}", f"R={REF}"], capture_output=True))
+    records, _ = written.against_bam()
+    theirs = tmp_path / "picard.cram"
+    done = run_tool("picard", TOOL, [f"I={source}", f"O={theirs}", f"R={REF}", SILENT])
+    assert done.returncode == 0, done.stderr[-800:]
+
+    def tags_sorted(decoded):
+        for record in decoded.records:
+            record[11:] = sorted(tag for tag in record[11:] if tag[:2] not in ("MD", "NM"))
+        return decoded
+
+    same_records(f"{TOOL}: Picard's CRAM against bammetrics'", tags_sorted(samtools_view(theirs, REF)),
+                 tags_sorted(samtools_view(written.cram, REF)))
+    RESULTS.append((f"{TOOL} CRAM output", records, records, "3 readers; Picard's CRAM"))
 
 
 def test_the_step_in_a_chain_equals_picard(corpus, tmp_path):

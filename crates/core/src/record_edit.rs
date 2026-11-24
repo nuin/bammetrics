@@ -12,9 +12,10 @@
 //! * [`run`], the tool on its own: one read of `INPUT` (BAM, CRAM with
 //!   `REFERENCE_SEQUENCE`, SAM text at `VALIDATION_STRINGENCY`), then a BAM
 //!   through [`BamWriter`] (`COMPRESSION_LEVEL`, `CREATE_INDEX`,
-//!   `CREATE_MD5_FILE`), or SAM text through [`SamWriter`] for an `OUTPUT`
-//!   ending in `.sam`. A `.cram` `OUTPUT` is refused with the wave that adds
-//!   it. Every file is written under a temporary name and renamed into place
+//!   `CREATE_MD5_FILE`), SAM text through [`SamWriter`] for an `OUTPUT`
+//!   ending in `.sam`, or a CRAM against `REFERENCE_SEQUENCE` through
+//!   [`CramWriter`] for one ending in `.cram` (no index: `CREATE_INDEX` is
+//!   refused). Every file is written under a temporary name and renamed into place
 //!   when complete ([`crate::cleanup::AtomicFile`]), so a failed run leaves
 //!   none. An `OUTPUT`, `.bai` or `.md5` that is an input (by device and
 //!   inode, or by resolved path) is refused before the first read.
@@ -55,6 +56,7 @@ use crate::bam_writer::{self, BamWriter, Companions};
 use crate::bgzf_copy;
 use crate::cleanup::AtomicFile;
 use crate::cram::Kind;
+use crate::cram_writer::{self, CramOptions, CramWriter};
 use crate::error::{Error, Result};
 use crate::mark_duplicates::{ContigCache, restore_md_and_nm, same_file};
 use crate::pass;
@@ -140,7 +142,8 @@ pub struct Setup<'a> {
 /// `OUTPUT` of a record-editing tool.
 pub const OUTPUT_OPTION: Opt = Opt::path(
     &["OUTPUT", "O"],
-    "The BAM to write, or SAM text for a name ending in .sam.",
+    "The BAM to write, SAM text for a name ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) \
+     for one ending in .cram.",
 )
 .written()
 .required();
@@ -222,8 +225,8 @@ impl Options {
         })
     }
 
-    /// The format written: BAM, or SAM text for a `.sam` name. A block
-    /// copy writes a BAM.
+    /// The format written: BAM, SAM text for a `.sam` name, a CRAM for a
+    /// `.cram` name. A block copy writes a BAM.
     fn format(&self) -> WriteFormat {
         match self.mode {
             Mode::BlockCopy => WriteFormat::Bam,
@@ -274,12 +277,18 @@ pub(crate) fn check_output_in_place(opts: &Options) -> Result<()> {
 fn check_written(opts: &Options, in_place: bool) -> Result<()> {
     if let Some((kind, wave)) = later_kind(&opts.output) {
         return Err(Error::Usage(format!(
-            "OUTPUT={}: bammetrics writes BAM and SAM only: {kind} output is wave {wave} of \
-             docs/07_full_parity_program.md",
+            "OUTPUT={}: bammetrics writes BAM, SAM and CRAM only: {kind} output is wave {wave} \
+             of docs/07_full_parity_program.md",
             opts.output.display()
         )));
     }
-    if opts.mode == Mode::BlockCopy && WriteFormat::of(&opts.output) == WriteFormat::Sam {
+    if opts.create_index && opts.format() == WriteFormat::Cram {
+        return Err(cram_writer::index_refusal(&format!(
+            "OUTPUT={}",
+            opts.output.display()
+        )));
+    }
+    if opts.mode == Mode::BlockCopy && WriteFormat::of(&opts.output) != WriteFormat::Bam {
         return Err(Error::Usage(format!(
             "OUTPUT={}: the records of a BAM are copied as BAM blocks, and Picard writes BAM \
              bytes under this name: name the OUTPUT .bam",
@@ -445,10 +454,12 @@ impl Restore {
     }
 }
 
-/// Where the records go: a BAM or SAM text, with the companions it gets.
+/// Where the records go: a BAM, SAM text or a CRAM, with the companions
+/// it gets.
 pub(crate) enum Out {
     Bam(BamWriter, Companions),
     Sam(SamWriter, Companions),
+    Cram(Box<CramWriter>, Companions),
 }
 
 impl Out {
@@ -458,6 +469,17 @@ impl Out {
             WriteFormat::Sam => {
                 let text = sam_text::header_text(header, false);
                 Self::Sam(SamWriter::create(&opts.output, header, &text)?, companions)
+            }
+            WriteFormat::Cram => {
+                let cram = CramOptions {
+                    compression_level: opts.compression_level,
+                    threads: opts.threads,
+                };
+                let reference = opts.reference.as_deref();
+                Self::Cram(
+                    Box::new(CramWriter::create(&opts.output, reference, header, &cram)?),
+                    companions,
+                )
             }
             WriteFormat::Bam => {
                 let writer =
@@ -480,6 +502,7 @@ impl Out {
         match self {
             Self::Bam(writer, _) => writer.write(record),
             Self::Sam(writer, _) => writer.write(record),
+            Self::Cram(writer, _) => writer.write(record),
         }
     }
 
@@ -494,6 +517,9 @@ impl Out {
                 opts.mode == Mode::BlockCopy,
             )
             .map(|_| ()),
+            Self::Cram(writer, companions) => {
+                cram_writer::finish(*writer, companions.md5).map(|_| ())
+            }
             Self::Sam(writer, companions) => {
                 let output = writer.close()?;
                 let target = output.path().to_path_buf();

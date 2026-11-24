@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/insert_size.bam
+mark-duplicates
+-o
+OUT/r.CRAM
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: -o OUT/r.CRAM: the write step writes a CRAM only for a name ending in .cram (lower case), as htsjdk does, and a BAM under any other name (from -o)
+  -o OUT/r.cram writes a CRAM against -R; -o OUT/r.bam writes a BAM

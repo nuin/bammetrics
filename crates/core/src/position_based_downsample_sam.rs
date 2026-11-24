@@ -48,8 +48,8 @@ pub const TOOL: Tool = Tool {
     name: "PositionBasedDownsampleSam",
     summary: "no rows; OUTPUT gets the records whose read name places them in a circle of \
               area FRACTION on each tile of the flow cell (outside one of area 1 - FRACTION \
-              above 0.5), duplicate flags cleared, with a @PG line: a BAM, or SAM text for a \
-              name ending in .sam.",
+              above 0.5), duplicate flags cleared, with a @PG line: a BAM, SAM text for a \
+              name ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in .cram.",
     options: &[
         record_edit::OUTPUT_OPTION,
         Opt::float(

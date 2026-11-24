@@ -348,7 +348,7 @@ const FIXTURE_CASES: &[Case] = &[
     case!("error_mark_duplicates_no_metrics", "MarkDuplicates", "I=MD", "O=OUT/marked.bam"),
     case!("error_mark_duplicates_no_read_group", "MarkDuplicates", "I=IS", "O=OUT/marked.bam", "M=OUT/markdup_metrics.txt"),
     case!("error_mark_duplicates_flow_mode", "MarkDuplicates", "I=MD", "O=OUT/marked.bam", "M=OUT/markdup_metrics.txt", "FLOW_MODE=true"),
-    case!("error_mark_duplicates_cram_output", "MarkDuplicates", "I=MD", "O=OUT/marked.cram", "M=OUT/markdup_metrics.txt", "R=REF"),
+    case!("picard_mark_duplicates_cram_output", "MarkDuplicates", "I=MD", "O=OUT/marked.cram", "M=OUT/markdup_metrics.txt", "R=REF"),
     case!("error_mark_duplicates_assume_both", "MarkDuplicates", "I=MD", "O=OUT/marked.bam", "M=OUT/markdup_metrics.txt", "AS=true", "ASO=coordinate"),
     case!("error_verb_mark_duplicates_no_output", "mark-duplicates", "MD", "--metrics", "OUT/markdup_metrics.txt"),
     case!("error_verb_mark_duplicates_format", "mark-duplicates", "MD", "-o", "OUT/marked.bam", "--metrics", "OUT/markdup_metrics.txt", "--format", "json"),
@@ -680,7 +680,7 @@ const CHAIN_CASES: &[Case] = &[
     case!("chain_write_sam", "chain", "IS", "+", "write", "OUT/x.sam"),
     case!("chain_write_sam_stdout", "chain", "MD", "-q", "-o", "OUT/s", "+", "mark-duplicates", "--program-group-command-line", "pinned", "--program-group-version", "pinned", "+", "write", "-", "--output-format", "sam"),
     case!("error_chain_write_sam_index", "chain", "IS", "+", "write", "OUT/x.sam", "--index"),
-    case!("error_chain_write_output_format", "chain", "IS", "+", "write", "OUT/x.bam", "--output-format", "cram"),
+    case!("error_chain_write_output_format", "chain", "IS", "+", "write", "OUT/x.bam", "--output-format", "fastq"),
     // SortSam: the Picard face, the verb, SAM text by the name, and the errors Picard gives.
     case!("picard_sort_sam_queryname", "SortSam", "I=MD", "O=OUT/sorted.bam", "SORT_ORDER=queryname"),
     case!("picard_sort_sam_coordinate_index", "SortSam", "I=DM", "O=OUT/sorted.bam", "SO=coordinate", "CREATE_INDEX=true", "CREATE_MD5_FILE=true", "MAX_RECORDS_IN_RAM=2"),
@@ -1266,6 +1266,32 @@ const DOWNSAMPLE_CASES: &[Case] = &[
     case!("error_verb_position_based_downsample_sam_stdin", "position-based-downsample-sam", "-", "--fraction", "0.5", "-o", "OUT/pb.bam"),
 ];
 
+/// A CRAM written (wave W15, `cram_writer.rs`): recorded as its header and
+/// records, decoded against `tests/data/ref_100k.fa`. An MD5 is recorded
+/// only where the header holds no path: `mark-duplicates` writes its
+/// command line, with the output directory, into `@PG`, so the bytes of
+/// that CRAM differ from run to run.
+#[rustfmt::skip]
+const CRAM_WRITER_CASES: &[Case] = &[
+    case!("picard_sort_sam_cram", "SortSam", "I=MD", "O=OUT/sorted.cram", "SORT_ORDER=queryname", "R=REF", "CREATE_MD5_FILE=true"),
+    case!("verb_sort_sam_cram", "sort-sam", "MD_SAM", "-o", "OUT/sorted.cram", "--sort-order", "coordinate", "-R", "REF", "--validation-stringency", "SILENT"),
+    case!("picard_clean_sam_cram", "CleanSam", "I=CS", "O=OUT/cleaned.cram", "R=REF"),
+    case!("picard_merge_sam_files_cram", "MergeSamFiles", "I=MD", "I=IS_CRAM", "O=OUT/merged.cram", "R=REF", "MERGE_SEQUENCE_DICTIONARIES=true"),
+    case!("verb_add_or_replace_read_groups_cram", "add-or-replace-read-groups", "IS_CRAM", "-R", "REF", "-o", "OUT/rg.cram", "--rglb", "lib1", "--rgpl", "ILLUMINA", "--rgpu", "unit1", "--rgsm", "sample1"),
+    case!("chain_write_cram", "chain", "MD", "-R", "REF", "-o", "OUT/s", "+", "mark-duplicates", "+", "write", "OUT/marked.cram"),
+    case!("chain_write_cram_format", "chain", "IS_CRAM", "-R", "REF", "+", "write", "OUT/x.dat", "--output-format", "cram", "--compression-level", "9", "--md5"),
+    case!("plan_chain_write_cram", "plan", "MD", "-R", "REF", "-o", "OUT/s", "+", "sort-sam", "--sort-order", "queryname", "+", "write", "OUT/q.cram"),
+    case!("error_sort_sam_cram_index", "SortSam", "I=MD", "O=OUT/sorted.cram", "SORT_ORDER=coordinate", "R=REF", "CREATE_INDEX=true"),
+    case!("error_verb_mark_duplicates_cram_index", "mark-duplicates", "MD", "-o", "OUT/marked.cram", "--metrics", "OUT/m.txt", "-R", "REF", "--create-index"),
+    case!("error_chain_write_cram_index", "chain", "MD", "-R", "REF", "+", "write", "OUT/x.cram", "--index"),
+    case!("error_add_comments_to_bam_cram_output", "AddCommentsToBam", "I=MD", "O=OUT/commented.cram", "C=one"),
+    case!("error_gather_bam_files_cram_name", "GatherBamFiles", "I=MD", "O=OUT/gathered.cram"),
+    // The FASTA is searched by name: it has c1 to c3 and no chr1.
+    case!("error_sort_sam_cram_absent_contig", "SortSam", "I=MD", "O=OUT/sorted.cram", "SORT_ORDER=coordinate", "R=NR"),
+    // CREATE_INDEX and CREATE_MD5_FILE default to true for this tool: a CRAM gets the MD5 and no index.
+    case!("picard_revert_original_base_qualities_cram", "RevertOriginalBaseQualitiesAndAddMateCigar", "I=RV", "O=OUT/reverted.cram", "R=REF"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -1501,7 +1527,16 @@ fn record_after(case: &Case, before: &[&[&str]]) -> String {
         // A BAM is compressed; its header and records are recorded as text.
         // A BAI holds offsets into those compressed bytes.
         if name.ends_with(".bam") {
-            text.push_str(&bam_text(&path));
+            text.push_str(&bam_text(&path, None));
+            continue;
+        }
+        // A CRAM, told by its magic whatever its name, is recorded as the
+        // BAM is, decoded against the fixtures' reference. A file named
+        // `.cram` that holds BAM bytes (`SplitSamByNumberOfReads`, as
+        // Picard) is recorded as before.
+        if fs::read(&path).is_ok_and(|bytes| bytes.starts_with(b"CRAM")) {
+            let reference = root().join("tests/data/ref_100k.fa");
+            text.push_str(&bam_text(&path, Some(&reference)));
             continue;
         }
         if name.ends_with(".bai") && wrote_bam {
@@ -1631,10 +1666,11 @@ fn hex_lines(bytes: &[u8]) -> String {
     text
 }
 
-/// A BAM as text: its SAM header, then one line per record with the name,
-/// flag, reference index, 1-based start and every tag in file order. The
-/// bammetrics version in the `@PG` line reads `<version>`.
-fn bam_text(path: &Path) -> String {
+/// A BAM, or a CRAM on `reference`, as text: its SAM header, then one line
+/// per record with the name, flag, reference index, 1-based start and
+/// every tag in file order. The bammetrics version in the `@PG` line reads
+/// `<version>`.
+fn bam_text(path: &Path, reference: Option<&Path>) -> String {
     use bammetrics_core::bam_raw::{RawRecord, TagIter, TagValue, header_text};
     let render = |value: &TagValue| match value {
         TagValue::Char(c) => format!("A:{}", char::from(*c)),
@@ -1644,32 +1680,33 @@ fn bam_text(path: &Path) -> String {
         TagValue::Hex(bytes) => format!("H:{bytes:02X?}"),
         TagValue::Array(subtype, count, _) => format!("B:{}x{count}", char::from(*subtype)),
     };
-    let text = bammetrics_core::pass::with_record_stream(path, None, 1, |header, reader, _| {
-        let mut text = header_text(header).map_err(bammetrics_core::Error::Record)?;
-        let mut record = RawRecord::default();
-        while record
-            .read_from(reader)
-            .map_err(bammetrics_core::Error::Record)?
-        {
-            text.push_str(&format!(
-                "{}\t{}\t{}\t{}",
-                String::from_utf8_lossy(record.name()),
-                record.flags(),
-                record.reference_id(),
-                record.alignment_start()
-            ));
-            for field in TagIter::new(record.tag_bytes()) {
-                let (tag, value) = field.map_err(bammetrics_core::Error::Record)?;
+    let text =
+        bammetrics_core::pass::with_record_stream(path, reference, 1, |header, reader, _| {
+            let mut text = header_text(header).map_err(bammetrics_core::Error::Record)?;
+            let mut record = RawRecord::default();
+            while record
+                .read_from(reader)
+                .map_err(bammetrics_core::Error::Record)?
+            {
                 text.push_str(&format!(
-                    "\t{}:{}",
-                    String::from_utf8_lossy(&tag),
-                    render(&value)
+                    "{}\t{}\t{}\t{}",
+                    String::from_utf8_lossy(record.name()),
+                    record.flags(),
+                    record.reference_id(),
+                    record.alignment_start()
                 ));
+                for field in TagIter::new(record.tag_bytes()) {
+                    let (tag, value) = field.map_err(bammetrics_core::Error::Record)?;
+                    text.push_str(&format!(
+                        "\t{}:{}",
+                        String::from_utf8_lossy(&tag),
+                        render(&value)
+                    ));
+                }
+                text.push('\n');
             }
-            text.push('\n');
-        }
-        Ok(text)
-    });
+            Ok(text)
+        });
     text.unwrap_or_else(|e| format!("<unreadable BAM: {e}>\n"))
         .replace(env!("CARGO_PKG_VERSION"), "<version>")
 }
@@ -1964,6 +2001,11 @@ fn documented_materialize_commands_on_the_fixtures() {
     check(MATERIALIZE_CASES);
 }
 
+#[test]
+fn documented_cram_output_commands_on_the_fixtures() {
+    check(CRAM_WRITER_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -2088,6 +2130,7 @@ fn case_names_are_unique() {
         .chain(CHAIN_MANIFEST_CASES)
         .chain(MATERIALIZE_CASES)
         .chain(CHAIN_COMBINED_CASES)
+        .chain(CRAM_WRITER_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .chain(RESUME_CASES.iter().map(|s| s.name))
@@ -2116,6 +2159,9 @@ const CHAIN_GRAMMAR_CASES: &[Case] = &[
     case!("error_chain_bare_misspelled", "chain", "IS", "insert-size", "quality-yeld"),
     case!("error_chain_result_taps_only", "chain", "IS", "insert-size", "-o", "OUT/r.bam"),
     case!("error_chain_result_cram", "chain", "IS", "mark-duplicates", "-o", "OUT/r.cram"),
+    // -o r.cram (wave W15): a CRAM against the config file's reference, no index.
+    case_config!("chain_result_cram", REFERENCE_CONFIG, "chain", "tests/data/markdup.bam", "mark-duplicates", "insert-size", "-o", "OUT/r.cram"),
+    case!("error_chain_result_cram_case", "chain", "IS", "mark-duplicates", "-o", "OUT/r.CRAM"),
     case!("error_chain_override_without_recipe", "chain", "IS", "insert-size", "insert-size.minimum-pct=0.1"),
     // The config file: printed, its errors, its reference on a tool verb.
     case_config!("config_print", "reference = \"ROOT/tests/data/ref_100k.fa\"\nthreads = 2\ntmp_dir = \"tmp\"\nsort_memory = \"4G\"\n", "config"),

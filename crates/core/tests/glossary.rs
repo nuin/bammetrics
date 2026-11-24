@@ -44,7 +44,7 @@ const EXEMPT: &[(&str, &str)] = &[
     ),
     (
         "SortSam",
-        "writes a BAM or SAM text: no metrics file, no row, no column",
+        "writes a BAM, SAM text or a CRAM: no metrics file, no row, no column",
     ),
     (
         "AddCommentsToBam",
@@ -52,19 +52,19 @@ const EXEMPT: &[(&str, &str)] = &[
     ),
     (
         "ReplaceSamHeader",
-        "writes a BAM or SAM text under a new header: no metrics file, no row, no column",
+        "writes a BAM, SAM text or a CRAM under a new header: no metrics file, no row, no column",
     ),
     (
         "AddOATag",
-        "writes a BAM or SAM text with OA tags added: no metrics file, no row, no column",
+        "writes a BAM, SAM text or a CRAM with OA tags added: no metrics file, no row, no column",
     ),
     (
         "CleanSam",
-        "writes a BAM or SAM text with clipped and MAPQ-fixed records: no metrics file, no row, no column",
+        "writes a BAM, SAM text or a CRAM with clipped and MAPQ-fixed records: no metrics file, no row, no column",
     ),
     (
         "SetNmMdAndUqTags",
-        "writes a BAM or SAM text with MD, NM and UQ set: no metrics file, no row, no column",
+        "writes a BAM, SAM text or a CRAM with MD, NM and UQ set: no metrics file, no row, no column",
     ),
     (
         "SetNmAndUqTags",
@@ -72,11 +72,11 @@ const EXEMPT: &[(&str, &str)] = &[
     ),
     (
         "AddOrReplaceReadGroups",
-        "writes a BAM or SAM text with one read group set: no metrics file, no row, no column",
+        "writes a BAM, SAM text or a CRAM with one read group set: no metrics file, no row, no column",
     ),
     (
         "RevertOriginalBaseQualitiesAndAddMateCigar",
-        "writes a BAM or SAM text with OQ restored and mate tags set: no metrics file, no row, no column",
+        "writes a BAM, SAM text or a CRAM with OQ restored and mate tags set: no metrics file, no row, no column",
     ),
     (
         "SplitSamByLibrary",
@@ -100,11 +100,11 @@ const EXEMPT: &[(&str, &str)] = &[
     ),
     (
         "FixMateInformation",
-        "writes a BAM or SAM text with mate fields set: no metrics file, no row, no column",
+        "writes a BAM, SAM text or a CRAM with mate fields set: no metrics file, no row, no column",
     ),
     (
         "FilterSamReads",
-        "writes a BAM or SAM text of the records a filter keeps: no metrics file, no row, no column",
+        "writes a BAM, SAM text or a CRAM of the records a filter keeps: no metrics file, no row, no column",
     ),
     (
         "PositionBasedDownsampleSam",

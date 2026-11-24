@@ -69,8 +69,8 @@ pub const TOOL: Tool = Tool {
     name: "DownsampleSam",
     summary: "no rows, or the QualityYieldMetrics row of the records kept with METRICS_FILE; \
               OUTPUT gets the records of a random part of the templates (a template's \
-              records kept or dropped together) with a @PG line: a BAM, or SAM text for a \
-              name ending in .sam.",
+              records kept or dropped together) with a @PG line: a BAM, SAM text for a name \
+              ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in .cram.",
     options: &[
         record_edit::OUTPUT_OPTION,
         Opt::output(&["METRICS_FILE", "M"]).with_help(

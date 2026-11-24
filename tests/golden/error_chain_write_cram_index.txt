@@ -1,0 +1,14 @@
+## argv
+chain
+tests/data/markdup.bam
+-R
+tests/data/ref_100k.fa
++
+write
+OUT/x.cram
+--index
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (write): OUT/x.cram: no index is written beside a CRAM (Picard writes a .cram.bai that only htsjdk reads): write it without one and run `samtools index` for a .crai

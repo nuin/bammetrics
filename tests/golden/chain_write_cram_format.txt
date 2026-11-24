@@ -1,0 +1,33 @@
+## argv
+chain
+tests/data/insert_size.cram
+-R
+tests/data/ref_100k.fa
++
+write
+OUT/x.dat
+--output-format
+cram
+--compression-level
+9
+--md5
+## exit
+0
+## stdout
+## stderr
+bammetrics chain: 1 step finished, 2 files written
+## file x.dat
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:chr1	LN:100000
+r0	99	0	1001	MC:Z:100M
+r0	147	0	1201	MC:Z:100M
+r1	99	0	2001	MC:Z:100M
+r1	147	0	2211	MC:Z:100M
+r2	99	0	3001	MC:Z:100M
+r2	147	0	3211	MC:Z:100M
+r3	99	0	4001	MC:Z:100M
+r3	147	0	4221	MC:Z:100M
+r4	99	0	5001	MC:Z:100M
+r4	147	0	5401	MC:Z:100M
+## file x.dat.md5
+a381bfa3c86a107eb09bb8b13a957883

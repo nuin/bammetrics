@@ -50,6 +50,8 @@ pub struct Writer<'a> {
     reference_sequence_context: ReferenceSequenceContext,
     prev_alignment_start: Option<Position>,
     resolved_tag_sets: Vec<Vec<(tag_sets::Key, &'a Encoding<ByteArray>)>>,
+    // bammetrics patch: the index of each tag set, looked up per record.
+    tag_set_ids: HashMap<&'a [tag_sets::Key], usize>,
 }
 
 impl<'a> Writer<'a> {
@@ -66,6 +68,18 @@ impl<'a> Writer<'a> {
 
         let resolved_tag_sets = resolve_tag_sets(compression_header)?;
 
+        // bammetrics patch: the first set of each kind, as `position` found it.
+        let mut tag_set_ids = HashMap::new();
+
+        for (i, set) in compression_header
+            .preservation_map()
+            .tag_sets()
+            .iter()
+            .enumerate()
+        {
+            tag_set_ids.entry(set.as_slice()).or_insert(i);
+        }
+
         Ok(Self {
             compression_header,
             core_data_writer,
@@ -73,6 +87,7 @@ impl<'a> Writer<'a> {
             reference_sequence_context,
             prev_alignment_start: initial_alignment_start,
             resolved_tag_sets,
+            tag_set_ids,
         })
     }
 
@@ -346,12 +361,12 @@ impl<'a> Writer<'a> {
             .map(|(tag, value)| tag_sets::Key::new(*tag, value.ty()))
             .collect();
 
+        // bammetrics patch: a hash lookup; noodles scanned every tag set of
+        // the container for each record.
         let tag_set_id = self
-            .compression_header
-            .preservation_map()
-            .tag_sets()
-            .iter()
-            .position(|set| **set == tag_set)
+            .tag_set_ids
+            .get(tag_set.as_slice())
+            .copied()
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "missing tag set"))?;
 
         self.write_tag_set_id(tag_set_id)?;
@@ -364,7 +379,25 @@ impl<'a> Writer<'a> {
         let mut buf = Vec::new();
 
         for ((_, encoding), (_, value)) in tag_set.iter().zip(&record.data) {
-            write_value(&mut buf, &value.into())?;
+            // bammetrics patch: a `Z` or `H` value is stored as the bytes
+            // given and its NUL, as a BAM stores it. noodles' encoder
+            // refused a `Z` byte outside ` ` to `~` and an `H` text that is
+            // not pairs of hex digits (`invalid string`), which a BAM holds
+            // and htsjdk and htslib write into a CRAM.
+            match value {
+                sam::alignment::record_buf::data::field::Value::String(text)
+                | sam::alignment::record_buf::data::field::Value::Hex(text) => {
+                    if text.contains(&0) {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            "a NUL in a tag text",
+                        ));
+                    }
+                    buf.extend_from_slice(text);
+                    buf.push(0);
+                }
+                _ => write_value(&mut buf, &value.into())?,
+            }
             encoding.encode(self.core_data_writer, self.external_data_writers, &buf)?;
             buf.clear();
         }

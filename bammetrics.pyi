@@ -1093,8 +1093,8 @@ def sort_sam(
     validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """SortSam: no rows; OUTPUT gets every record in SORT_ORDER (queryname, coordinate or
-    duplicate) under the input header with SO set, as a BAM, or as SAM text for a name
-    ending in .sam."""
+    duplicate) under the input header with SO set: a BAM, SAM text for a name ending in
+    .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in .cram."""
 
 def build_bam_index(
     input: _Path,
@@ -1252,8 +1252,8 @@ def replace_sam_header(
     validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """ReplaceSamHeader: no rows; OUTPUT gets the header of HEADER, then every record of
-    the input: a BAM, or SAM text for a name ending in .sam when the input name does not
-    end in .bam."""
+    the input: a BAM; when the input name does not end in .bam, SAM text for a name
+    ending in .sam or a CRAM (with REFERENCE_SEQUENCE) for one ending in .cram."""
 
 def add_o_a_tag(
     input: _Path,
@@ -1268,7 +1268,8 @@ def add_o_a_tag(
 ) -> list[dict[str, Any]]:
     """AddOATag: no rows; OUTPUT gets every record of the input with its alignment appended
     to its OA tag (RNAME,POS,STRAND,CIGAR,MAPQ,NM;), or only the records over
-    INTERVAL_LIST: a BAM, or SAM text for a name ending in .sam."""
+    INTERVAL_LIST: a BAM, SAM text for a name ending in .sam, or a CRAM (with
+    REFERENCE_SEQUENCE) for one ending in .cram."""
 
 def clean_sam(
     input: _Path,
@@ -1282,8 +1283,8 @@ def clean_sam(
 ) -> list[dict[str, Any]]:
     """CleanSam: no rows; OUTPUT gets every record of the input, a mapped record past the
     end of its reference soft-clipped at its end, the MC of a mate past the end clipped
-    the same way, an unmapped record at MAPQ 0: a BAM, or SAM text for a name ending in
-    .sam."""
+    the same way, an unmapped record at MAPQ 0: a BAM, SAM text for a name ending in
+    .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in .cram."""
 
 def set_nm_md_and_uq_tags(
     input: _Path,
@@ -1343,8 +1344,9 @@ def add_or_replace_read_groups(
 ) -> list[dict[str, Any]]:
     """AddOrReplaceReadGroups: no rows; OUTPUT gets every record of the input with its RG
     tag set to RGID under the input header whose @RG lines are replaced by the one read
-    group the options give, sorted when SORT_ORDER differs from the input's: a BAM, or
-    SAM text for a name ending in .sam."""
+    group the options give, sorted when SORT_ORDER differs from the input's: a BAM, SAM
+    text for a name ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending
+    in .cram."""
 
 def revert_original_base_qualities_and_add_mate_cigar(
     input: _Path,
@@ -1363,9 +1365,9 @@ def revert_original_base_qualities_and_add_mate_cigar(
 ) -> list[dict[str, Any]]:
     """RevertOriginalBaseQualitiesAndAddMateCigar: no rows; OUTPUT gets every record with
     QUAL restored from OQ, a CIGAR past the end of its reference soft-clipped, and MC,
-    MQ and the mate fields set from each mate, in SORT_ORDER: a BAM, or SAM text for a
-    name ending in .sam. A file whose first records need nothing is skipped and OUTPUT
-    is not written."""
+    MQ and the mate fields set from each mate, in SORT_ORDER: a BAM, SAM text for a name
+    ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in .cram. A file
+    whose first records need nothing is skipped and OUTPUT is not written."""
 
 def split_sam_by_library(
     input: _Path,
@@ -1597,8 +1599,9 @@ def merge_sam_files(
     validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """MergeSamFiles: no rows; OUTPUT gets the records of every INPUT under one merged
-    header, merged in SORT_ORDER when the inputs are in it, else sorted: a BAM, or SAM
-    text for a name ending in .sam."""
+    header, merged in SORT_ORDER when the inputs are in it, else sorted: a BAM, SAM text
+    for a name ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in
+    .cram."""
 
 def reorder_sam(
     input: _Path,
@@ -1617,8 +1620,9 @@ def reorder_sam(
 ) -> list[dict[str, Any]]:
     """ReorderSam: no rows; OUTPUT gets every record of the input under the sequence
     dictionary of SEQUENCE_DICTIONARY, references matched by name, a record on a contig
-    the dictionary lacks made unplaced, sorted again in the input's order: a BAM, or SAM
-    text for a name ending in .sam."""
+    the dictionary lacks made unplaced, sorted again in the input's order: a BAM, SAM
+    text for a name ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending
+    in .cram."""
 
 def fix_mate_information(
     input: _Paths,
@@ -1637,8 +1641,9 @@ def fix_mate_information(
     validation_stringency: str | None = None,
 ) -> list[dict[str, Any]]:
     """FixMateInformation: no rows; OUTPUT gets every record of every INPUT with the mate
-    fields, MQ, MC and TLEN of each pair set from its mate, in SORT_ORDER: a BAM, or SAM
-    text for a name ending in .sam. Without OUTPUT the one INPUT is rewritten in place."""
+    fields, MQ, MC and TLEN of each pair set from its mate, in SORT_ORDER: a BAM, SAM
+    text for a name ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending
+    in .cram. Without OUTPUT the one INPUT is rewritten in place."""
 
 def filter_sam_reads(
     input: _Path,
@@ -1661,7 +1666,8 @@ def filter_sam_reads(
 ) -> list[dict[str, Any]]:
     """FilterSamReads: no rows; OUTPUT gets the records of INPUT that FILTER keeps (aligned
     or unmapped reads, a read name list, tag values, pairs over intervals), in
-    SORT_ORDER: a BAM, or SAM text for a name ending in .sam."""
+    SORT_ORDER: a BAM, SAM text for a name ending in .sam, or a CRAM (with
+    REFERENCE_SEQUENCE) for one ending in .cram."""
 
 def downsample_sam(
     input: _Path,
@@ -1680,8 +1686,8 @@ def downsample_sam(
 ) -> list[dict[str, Any]]:
     """DownsampleSam: no rows, or the QualityYieldMetrics row of the records kept with
     METRICS_FILE; OUTPUT gets the records of a random part of the templates (a
-    template's records kept or dropped together) with a @PG line: a BAM, or SAM text for
-    a name ending in .sam."""
+    template's records kept or dropped together) with a @PG line: a BAM, SAM text for a
+    name ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in .cram."""
 
 def position_based_downsample_sam(
     input: _Path,
@@ -1700,8 +1706,9 @@ def position_based_downsample_sam(
 ) -> list[dict[str, Any]]:
     """PositionBasedDownsampleSam: no rows; OUTPUT gets the records whose read name places
     them in a circle of area FRACTION on each tile of the flow cell (outside one of area
-    1 - FRACTION above 0.5), duplicate flags cleared, with a @PG line: a BAM, or SAM
-    text for a name ending in .sam."""
+    1 - FRACTION above 0.5), duplicate flags cleared, with a @PG line: a BAM, SAM text
+    for a name ending in .sam, or a CRAM (with REFERENCE_SEQUENCE) for one ending in
+    .cram."""
 
 # END registry tools
 
