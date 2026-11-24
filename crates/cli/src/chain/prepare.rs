@@ -254,12 +254,13 @@ impl Planned {
 
     /// True for a transform that edits the stream as it passes
     /// ([`stage::streams`]): it takes and emits its records in its own
-    /// segment.
+    /// segment. Every transform of a variant stream streams.
     pub fn streams(&self) -> bool {
         self.role == Role::Transform
-            && self
-                .tool
-                .is_some_and(|tool| stage::streams_with(tool, &self.argv))
+            && self.tool.is_some_and(|tool| {
+                stage::streams_with(tool, &self.argv)
+                    || stage::variant::transform_label(tool).is_some()
+            })
     }
 }
 
@@ -332,17 +333,17 @@ fn tool_role(
     let label = format!("step {number}");
     let verb = find_step(&spec.verb)
         .ok_or_else(|| unknown_step(&spec.verb, Some(&place(spec, &label))))?;
-    let variant_tap = variant::is_tap(verb);
+    let variant_role = variant::role_of(verb);
     let wrong_kind = match stream {
-        stage::Kind::Variants => !variant_tap,
-        stage::Kind::Alignments => variant_tap,
+        stage::Kind::Variants => variant_role.is_none(),
+        stage::Kind::Alignments => variant_role.is_some(),
     };
     if wrong_kind {
         let label = format!("step {number} ({})", verb.name);
         return Err(variant::refusal(verb, &place(spec, &label), stream).hint(STEPS_HINT));
     }
-    if variant_tap {
-        return Ok((verb, Role::Tap));
+    if let Some(role) = variant_role {
+        return Ok((verb, role));
     }
     if is_transform(verb) {
         return Ok((verb, Role::Transform));
@@ -398,6 +399,9 @@ fn draft(spec: &StepSpec, number: usize, stream: stage::Kind) -> Result<Draft<'_
         let keep = grammar::unknown_option(&error)
             .and_then(|spelled| spelled.trim_start_matches('-').split('=').next())
             .is_some_and(|name| name.eq_ignore_ascii_case("keep"));
+        if keep && stream == stage::Kind::Variants {
+            return variant::keep_refusal(&place(spec, &label));
+        }
         if keep {
             return usage(format!(
                 "{}: --keep writes the stream a transform leaves, and {name} leaves none",
@@ -458,6 +462,18 @@ fn draft(spec: &StepSpec, number: usize, stream: stage::Kind) -> Result<Draft<'_
     let hands_on = role == Role::Transform || materialize_leaves(verb);
     if let (true, Files::Bam, Some(given)) = (hands_on, verb.files, draft.parsed.last(Key::Output))
     {
+        if verb.input == "VCF" {
+            return Err(draft
+                .usage(format!(
+                    "{} names a VCF, and a transform writes none in a chain",
+                    given.spelled
+                ))
+                .from(given.spelled.clone())
+                .hint(format!(
+                    "-o {} on the chain, or a write step after it, writes the VCF",
+                    given.values[0]
+                )));
+        }
         return Err(draft
             .usage(format!(
                 "{} names a BAM, and a transform writes none in a chain",
@@ -499,6 +515,7 @@ struct Position {
 fn stream_name(draft: &Draft, verb: &Verb) -> Result<String, VerbError> {
     let Some(given) = draft.parsed.last(AS) else {
         let default = stage::label_of(verb.tool())
+            .or_else(|| stage::variant::transform_label(verb.tool()))
             .or_else(|| stage::materialize::leaves(verb.tool()))
             .unwrap_or(verb.name);
         return Ok(default.to_owned());
@@ -581,7 +598,10 @@ fn positions(drafts: &[Draft]) -> Result<Vec<Position>, VerbError> {
             let picard = verb
                 .picard_arguments(&parsed, &draft.flags)
                 .unwrap_or_default();
-            if materialize_leaves(verb) || !stage::streams_with(verb.tool(), &picard) {
+            if materialize_leaves(verb)
+                || !(stage::streams_with(verb.tool(), &picard)
+                    || stage::variant::transform_label(verb.tool()).is_some())
+            {
                 segment += 1;
             }
         }
@@ -1396,6 +1416,12 @@ pub fn prepare(spec: &Spec) -> Result<Chain, VerbError> {
             What::Write if variants => variant::write_step(&cx, &draft, position)?,
             What::Tool(verb, Role::Tap) if variants => {
                 variant::tap_step(&cx, draft, verb, position)?
+            }
+            What::Tool(verb, Role::Transform) if variants => {
+                variant::transform_step(&cx, draft, verb, position)?
+            }
+            What::Tool(verb, Role::Split) if variants => {
+                variant::split_step(&cx, draft, verb, position)?
             }
             What::Qc if variants => return Err(variant::qc_refusal(&draft)),
             What::Tool(verb, Role::Split) => split::split_step(&cx, draft, verb, position)?,

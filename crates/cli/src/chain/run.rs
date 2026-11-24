@@ -373,8 +373,9 @@ fn finish_step(
     // A VCF and its companions carry the kinds their step planned.
     let step = &chain.steps[index];
     let planned = |path: &PathBuf| {
-        step.vcf
-            .and(step.files.iter().find(|f| f.path == *path))
+        (step.vcf.is_some() || (step.role == Role::Split && chain.stream == stage::Kind::Variants))
+            .then(|| step.files.iter().find(|f| f.path == *path))
+            .flatten()
             .map(|f| f.kind)
     };
     let mut files: Vec<Written> = products
@@ -625,7 +626,12 @@ fn read_variant_stream(
                 let mut inv = tool.parse(&step.argv).map_err(failed)?;
                 inv.threads = chain.threads;
                 inv.quiet = chain.quiet;
-                VariantStep::tool_tap(tool, &inv)
+                let built = match step.role {
+                    Role::Transform => VariantStep::tool_transform(tool, &inv),
+                    Role::Split => VariantStep::tool_split(tool, &inv),
+                    _ => VariantStep::tool_tap(tool, &inv),
+                };
+                built
                     .map_err(failed)?
                     .ok_or_else(|| super::usage(format!("{}: it cannot be a step", step.label)))?
             }

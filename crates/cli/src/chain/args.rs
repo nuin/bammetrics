@@ -300,7 +300,7 @@ pub(crate) fn is_step(verb: &Verb) -> bool {
         || is_split(verb)
         || verb.tool().collector.is_some()
         || is_materialized(verb)
-        || stage::variant::tap_of(verb.tool()).is_some()
+        || stage::variant::is_variant_step(verb.tool())
 }
 
 /// True for a verb whose tool runs on a file holding the stream at its
@@ -396,6 +396,17 @@ pub(crate) fn not_a_step(verb: &Verb, place: &str) -> VerbError {
             verb.class
         ))
         .hint("run it on the file: bammetrics check-terminator-block FILE");
+    }
+    if verb.class == bammetrics_core::make_vcf_sample_name_map::TOOL.name {
+        return usage(format!(
+            "{place}: {} reads the headers of several VCF files and writes a sample map, and a \
+             chain hands on the records of one stream: it cannot be a step",
+            verb.class
+        ))
+        .hint(format!(
+            "run it on the VCF files: bammetrics {} A.vcf.gz B.vcf.gz -o cohort.sample_map",
+            verb.name
+        ));
     }
     if matches!(verb.input, "TEXT" | "VCF" | "LIST" | "FASTA") {
         return usage(format!(

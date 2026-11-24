@@ -393,6 +393,9 @@ pub const TOOLS: &[&Tool] = &[
     &crate::sam_format_converter::TOOL,
     &crate::compare_sams::TOOL,
     &crate::check_terminator_block::TOOL,
+    &crate::split_vcfs::TOOL,
+    &crate::make_sites_only_vcf::TOOL,
+    &crate::make_vcf_sample_name_map::TOOL,
 ];
 
 /// The tool named `name`.

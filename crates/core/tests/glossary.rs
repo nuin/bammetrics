@@ -321,6 +321,24 @@ fn args(dir: &Path) -> BTreeMap<&'static str, Vec<String>> {
         "VcfToIntervalList",
         vec![format!("I={calls}"), out("calls.interval_list")],
     );
+    // The three VCF writers of wave W16 write their files themselves and
+    // return rows without a class.
+    args.insert(
+        "SplitVcfs",
+        vec![
+            format!("I={calls}"),
+            format!("SNP_OUTPUT={}", dir.join("snps.vcf.gz").display()),
+            format!("INDEL_OUTPUT={}", dir.join("indels.vcf.gz").display()),
+        ],
+    );
+    args.insert(
+        "MakeSitesOnlyVcf",
+        vec![format!("I={calls}"), out("sites.vcf.gz")],
+    );
+    args.insert(
+        "MakeVcfSampleNameMap",
+        vec![format!("I={calls}"), out("cohort.sample_map")],
+    );
     args.insert(
         "GenotypeConcordance",
         vec![

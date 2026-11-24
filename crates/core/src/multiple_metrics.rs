@@ -199,6 +199,13 @@ const OTHER_FILES: &[(&str, &[(&str, &str)])] = &[
     ),
     // METRICS_FILE_PREFIX is a prefix: the tool names its two files.
     ("CollectRrbsMetrics", &[("METRICS_FILE_PREFIX", "")]),
+    (
+        "SplitVcfs",
+        &[
+            ("SNP_OUTPUT", ".snp.vcf.gz"),
+            ("INDEL_OUTPUT", ".indel.vcf.gz"),
+        ],
+    ),
 ];
 
 /// The files `tool` writes under an output prefix, as (file option,

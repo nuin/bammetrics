@@ -1750,6 +1750,43 @@ def check_terminator_block(
     HAS_TERMINATOR_BLOCK, HAS_HEALTHY_LAST_BLOCK or DEFECTIVE, from its last 64 KiB; the
     command prints the name and exits 100 on DEFECTIVE."""
 
+def split_vcfs(
+    input: _Path,
+    *,
+    snp_output: _Path,
+    indel_output: _Path,
+    sequence_dictionary: _Path | None = None,
+    strict: bool | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    compression_level: int | None = None,
+    verbosity: str | None = None,
+) -> list[dict[str, Any]]:
+    """SplitVcfs: writes the SNP records of a VCF to SNP_OUTPUT and its indel records to
+    INDEL_OUTPUT, both under the input header; STRICT fails on any other type. Returns
+    one row: the records written to each file and those dropped."""
+
+def make_sites_only_vcf(
+    input: _Path,
+    *,
+    output: _Path,
+    sample: str | Sequence[str] | None = None,
+    create_index: bool | None = None,
+    create_md5_file: bool | None = None,
+    compression_level: int | None = None,
+) -> list[dict[str, Any]]:
+    """MakeSitesOnlyVcf: writes OUTPUT: every record of the VCF without its genotypes, or
+    with those of the SAMPLE names only, the site columns and INFO as read. Returns one
+    row: the records written."""
+
+def make_vcf_sample_name_map(
+    input: _Paths,
+    *,
+    output: _Path,
+) -> list[dict[str, Any]]:
+    """MakeVcfSampleNameMap: writes OUTPUT, a TSV of one line per input VCF: the input as
+    given, a tab, and the one sample its header names. Returns one row per line."""
+
 # END registry tools
 
 def alignment_summary(
@@ -2016,6 +2053,8 @@ _StepVerb = Literal[
     "filter_sam_reads",
     "downsample_sam",
     "position_based_downsample_sam",
+    "split_vcfs",
+    "make_sites_only_vcf",
     "write",
     "qc",
 ]

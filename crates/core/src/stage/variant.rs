@@ -105,8 +105,8 @@ impl VcfSource {
 /// A stage that edits the variant stream batch by batch.
 pub trait VariantTransform {
     /// The header of the stream after this stage.
-    fn header(&self, up: &VcfHeader) -> Result<VcfHeader> {
-        Ok(up.clone())
+    fn header(&self, up: &Arc<VcfHeader>) -> Result<Arc<VcfHeader>> {
+        Ok(Arc::clone(up))
     }
 
     /// Edit, drop or add lines of `batch` in place, in stream order.
@@ -264,6 +264,81 @@ impl VariantStep {
         };
         Ok(Some(Self::tap(tool.name, build(inv)?)))
     }
+
+    /// The registry tool `tool` as a transform of a variant stream; `None`
+    /// for a tool that is none. Its options are checked here.
+    pub fn tool_transform(tool: &'static Tool, inv: &Invocation) -> Result<Option<Self>> {
+        let Some(row) = VARIANT_TRANSFORMS.iter().find(|row| row.tool == tool.name) else {
+            return Ok(None);
+        };
+        Ok(Some(Self::transform(tool.name, (row.build)(inv)?)))
+    }
+
+    /// The registry tool `tool` as a split of a variant stream: a sink that
+    /// writes several files from the records of its position and stops the
+    /// chain when it fails, as `write` does. `None` for a tool that is none.
+    pub fn tool_split(tool: &'static Tool, inv: &Invocation) -> Result<Option<Self>> {
+        let Some(row) = VARIANT_SPLITS.iter().find(|row| row.tool == tool.name) else {
+            return Ok(None);
+        };
+        Ok(Some(Self {
+            label: tool.name.to_owned(),
+            kind: VariantStepKind::Sink((row.build)(inv)?),
+        }))
+    }
+}
+
+/// A registry tool's variant transform: its builder from its options.
+pub type VariantTransformFn = fn(&Invocation) -> Result<BuildVariantTransform>;
+
+/// One tool that is a transform of a variant stream.
+struct VariantTransformRow {
+    tool: &'static str,
+    build: VariantTransformFn,
+    /// The default name of the stream it leaves (docs/07 section 2.2).
+    label: &'static str,
+}
+
+/// The tools that edit a variant stream, one row each.
+const VARIANT_TRANSFORMS: &[VariantTransformRow] = &[VariantTransformRow {
+    tool: "MakeSitesOnlyVcf",
+    build: crate::make_sites_only_vcf::variant_transform,
+    label: "sites",
+}];
+
+/// A registry tool's variant split: its sink builder from its options.
+pub type VariantSplitFn = fn(&Invocation) -> Result<BuildVariantSink>;
+
+/// One tool that splits a variant stream into files.
+struct VariantSplitRow {
+    tool: &'static str,
+    build: VariantSplitFn,
+}
+
+/// The tools that write several VCFs from one variant stream.
+const VARIANT_SPLITS: &[VariantSplitRow] = &[VariantSplitRow {
+    tool: "SplitVcfs",
+    build: crate::split_vcfs::variant_split,
+}];
+
+/// The default name of the stream a variant transform leaves; `None` for
+/// a tool that is none.
+pub fn transform_label(tool: &Tool) -> Option<&'static str> {
+    VARIANT_TRANSFORMS
+        .iter()
+        .find(|row| row.tool == tool.name)
+        .map(|row| row.label)
+}
+
+/// True for a tool that splits a variant stream into files.
+pub fn is_split(tool: &Tool) -> bool {
+    VARIANT_SPLITS.iter().any(|row| row.tool == tool.name)
+}
+
+/// True for a tool that is a step of a variant stream: a tap, a
+/// transform or a split.
+pub fn is_variant_step(tool: &Tool) -> bool {
+    tap_of(tool).is_some() || transform_label(tool).is_some() || is_split(tool)
 }
 
 /// A variant chain: the source and its steps in order.
@@ -410,7 +485,7 @@ fn run<'scope>(
             VariantStepKind::Transform(build) => {
                 match build(&header).and_then(|t| t.header(&header).map(|h| (t, h))) {
                     Ok((transform, after)) => {
-                        header = Arc::new(after);
+                        header = after;
                         transforms.push((step, transform));
                         positions.push(Vec::new());
                     }

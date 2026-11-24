@@ -7,6 +7,7 @@
 
 use std::path::PathBuf;
 
+use bammetrics_core::split_vcfs;
 use bammetrics_core::stage::{self, Kind};
 use bammetrics_core::vcf_writer::{VcfFormat, VcfOptions};
 
@@ -28,6 +29,177 @@ pub(crate) fn is_tap(verb: &Verb) -> bool {
     stage::variant::tap_of(verb.tool()).is_some()
 }
 
+/// The role of a verb on a variant stream: a tap, a transform
+/// (`make-sites-only-vcf`) or a split (`split-vcfs`); `None` for a verb
+/// that is no step of one.
+pub(super) fn role_of(verb: &Verb) -> Option<Role> {
+    let tool = verb.tool();
+    if is_tap(verb) {
+        Some(Role::Tap)
+    } else if stage::variant::transform_label(tool).is_some() {
+        Some(Role::Transform)
+    } else if stage::variant::is_split(tool) {
+        Some(Role::Split)
+    } else {
+        None
+    }
+}
+
+/// The refusal of `--keep` on a step of a variant stream, named `place`.
+pub(super) fn keep_refusal(place: &str) -> VerbError {
+    super::usage(format!(
+        "{place}: --keep writes the stream a transform leaves as a BAM, and this stream holds \
+         VCF records"
+    ))
+    .from("--keep")
+    .hint("write PATH.vcf.gz after the step writes its records as a VCF")
+}
+
+/// The Picard arguments of a variant step: the stream as `INPUT`, then
+/// the step's own, parsed and checked as the tool parses them.
+fn step_invocation(
+    cx: &Context,
+    draft: &mut Draft,
+    verb: &'static Verb,
+    named: &[String],
+) -> Result<(Vec<String>, bammetrics_core::registry::Invocation), VerbError> {
+    verb.check_one_spelling(&draft.parsed, &draft.flags)
+        .map_err(|e| draft.error(e))?;
+    check_types(draft)?;
+    draft.parsed.positional.insert(0, cx.source.to_owned());
+    let picard = verb
+        .picard_arguments(&draft.parsed, &draft.flags)
+        .map_err(|e| draft.error(e))?;
+    let (input, own) = picard.split_first().expect("the source is the first input");
+    let mut argv = vec![input.clone()];
+    argv.extend(named.iter().cloned());
+    argv.extend(own.iter().cloned());
+    verb.check_inputs(&draft.parsed, &argv)
+        .map_err(|e| draft.error(e))?;
+    let mut inv = verb.tool().parse(&argv).map_err(|e| draft.core(verb, &e))?;
+    inv.threads = cx.threads;
+    Ok((argv, inv))
+}
+
+/// A transform of a variant stream (`make-sites-only-vcf`): it writes no
+/// file; the stream it leaves goes on to the steps after it.
+pub(super) fn transform_step(
+    cx: &Context,
+    mut draft: Draft,
+    verb: &'static Verb,
+    position: Position,
+) -> Result<(Planned, bool), VerbError> {
+    let tool = verb.tool();
+    let (argv, inv) = step_invocation(cx, &mut draft, verb, &[])?;
+    stage::variant::VariantStep::tool_transform(tool, &inv).map_err(|e| draft.core(verb, &e))?;
+    let planned = Planned {
+        number: draft.number,
+        verb: verb.name,
+        tool: Some(tool),
+        role: Role::Transform,
+        label: draft.label.clone(),
+        reads: position.reads,
+        leaves: position.leaves,
+        segment: position.segment,
+        files: Vec::new(),
+        late_prefix: None,
+        stdout: false,
+        command: Some(inv.command),
+        argv,
+        output: None,
+        notes: inv.notes,
+        formats: Vec::new(),
+        write: None,
+        vcf: None,
+        inputs: inv.inputs,
+    };
+    Ok((planned, false))
+}
+
+/// A split of a variant stream (`split-vcfs`): its two VCFs are the step's
+/// `--snp-output` and `--indel-output`, else `PREFIX.snp.vcf.gz` and
+/// `PREFIX.indel.vcf.gz` under the step's `-o` or the chain's prefix.
+pub(super) fn split_step(
+    cx: &Context,
+    mut draft: Draft,
+    verb: &'static Verb,
+    position: Position,
+) -> Result<(Planned, bool), VerbError> {
+    let tool = verb.tool();
+    let own_output = draft.parsed.last(Key::Output).map(|g| g.values[0].clone());
+    let (prefix, uses_prefix) = match own_output.as_deref() {
+        Some("-") => {
+            return Err(draft
+                .usage("standard output takes one file; this step writes several")
+                .hint("give the step -o PREFIX"));
+        }
+        Some(path) => (prefix_under(path, cx.source).0, false),
+        None => (cx.base(&position.reads), true),
+    };
+    let given = |key: &'static str| draft.parsed.given.iter().any(|g| g.key == Key::Picard(key));
+    let mut named = Vec::new();
+    let mut takes_prefix = false;
+    for (option, extension) in
+        bammetrics_core::multiple_metrics::file_extensions(tool.name).unwrap_or_default()
+    {
+        if !given(option) {
+            named.push(format!(
+                "{option}={}",
+                with_suffix(&prefix, extension).display()
+            ));
+            takes_prefix = true;
+        }
+    }
+    let (mut argv, inv) = step_invocation(cx, &mut draft, verb, &named)?;
+    argv.retain(|arg| !arg.starts_with("OUTPUT=") && !arg.starts_with("O="));
+    stage::variant::VariantStep::tool_split(tool, &inv).map_err(|e| draft.core(verb, &e))?;
+    let options = split_vcfs::Options::from_invocation(&inv).map_err(|e| draft.core(verb, &e))?;
+    let mut notes = inv.notes;
+    let mut files = Vec::new();
+    for (option, path) in [
+        ("SNP_OUTPUT", &options.snp_output),
+        ("INDEL_OUTPUT", &options.indel_output),
+    ] {
+        let (vcf, note) = options
+            .writer
+            .for_output(option, path)
+            .map_err(|e| draft.core(verb, &e))?;
+        notes.extend(note);
+        for file in vcf.files(path) {
+            let kind = if file == *path {
+                KIND
+            } else if file == bammetrics_core::vcf_writer::index_path(path) {
+                "index"
+            } else {
+                "md5"
+            };
+            files.push(PlannedFile { path: file, kind });
+        }
+    }
+    let planned = Planned {
+        number: draft.number,
+        verb: verb.name,
+        tool: Some(tool),
+        role: Role::Split,
+        label: draft.label.clone(),
+        reads: position.reads,
+        leaves: None,
+        segment: position.segment,
+        files,
+        late_prefix: None,
+        stdout: false,
+        command: Some(inv.command),
+        argv,
+        output: None,
+        notes,
+        formats: Vec::new(),
+        write: None,
+        vcf: None,
+        inputs: inv.inputs,
+    };
+    Ok((planned, uses_prefix && takes_prefix))
+}
+
 /// The words for what a stream of `kind` holds.
 fn holds(kind: Kind) -> &'static str {
     match kind {
@@ -39,10 +211,14 @@ fn holds(kind: Kind) -> &'static str {
 /// The refusal of `verb` as a step on a stream of `kind`: a step reads
 /// one kind of record, and a chain hands on one kind.
 pub(super) fn refusal(verb: &Verb, place: &str, kind: Kind) -> VerbError {
+    if verb.class == bammetrics_core::make_vcf_sample_name_map::TOOL.name {
+        return super::not_a_step(verb, place);
+    }
     if kind == Kind::Variants && !super::is_step(verb) {
         return super::usage(format!(
             "{place}: {} reads a {} file of its own: it cannot be a step; a VCF stream takes \
-             write and the taps variant-calling and genotype-concordance",
+             write, the taps variant-calling and genotype-concordance, the transform \
+             make-sites-only-vcf and the split split-vcfs",
             verb.class, verb.input
         ))
         .hint(format!(
@@ -50,7 +226,7 @@ pub(super) fn refusal(verb: &Verb, place: &str, kind: Kind) -> VerbError {
             verb.name
         ));
     }
-    let reads = if is_tap(verb) {
+    let reads = if role_of(verb).is_some() {
         "VCF records"
     } else {
         "alignments"
@@ -63,7 +239,8 @@ pub(super) fn refusal(verb: &Verb, place: &str, kind: Kind) -> VerbError {
     ));
     match kind {
         Kind::Variants => error.hint(
-            "on a VCF stream: write [PATH] writes a VCF; variant-calling and \
+            "on a VCF stream: write [PATH] writes a VCF; make-sites-only-vcf is a transform, \
+             split-vcfs a split, variant-calling and \
              genotype-concordance are taps",
         ),
         Kind::Alignments => error.hint(format!(

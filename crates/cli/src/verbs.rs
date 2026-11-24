@@ -789,6 +789,51 @@ pub const VERBS: &[Verb] = &[
             Files::Single,
         )
     },
+    Verb {
+        input: "VCF",
+        about: Some(
+            "splits a VCF as Picard's SplitVcfs does: its SNP records to PREFIX.snp.vcf.gz \
+             (or --snp-output), its indel records to PREFIX.indel.vcf.gz (or --indel-output), \
+             both under the input header with a .tbi each. Any other record type fails the run \
+             unless --strict false drops it.",
+        ),
+        writes: "VCF files",
+        reads_stdin: false,
+        reads: &["SEQUENCE_DICTIONARY"],
+        ignores: &[(Key::Sample, "a VCF keeps its own sample columns")],
+        ..verb("split-vcfs", "SplitVcfs", Files::Prefix)
+    },
+    Verb {
+        input: "VCF",
+        about: Some(
+            "writes a VCF as Picard's MakeSitesOnlyVcf does: every record without its \
+             genotypes, or with those of the --sample names only, the site columns and INFO as \
+             read; -o gets a .tbi beside a .vcf.gz.",
+        ),
+        writes: "VCF",
+        reads_stdin: false,
+        ignores: &[(Key::Sample, "--sample names the samples kept")],
+        ..verb("make-sites-only-vcf", "MakeSitesOnlyVcf", Files::Bam)
+    },
+    Verb {
+        input: "VCF",
+        about: Some(
+            "writes a sample map as Picard's MakeVcfSampleNameMap does: one line per input VCF, \
+             the input as given, a tab, and the one sample its header names, in Picard's \
+             order.",
+        ),
+        writes: "sample map",
+        reads_stdin: false,
+        ignores: &[
+            (Key::Threads, "only headers are read"),
+            (Key::Sample, "the samples come from the headers"),
+        ],
+        ..verb(
+            "make-vcf-sample-name-map",
+            "MakeVcfSampleNameMap",
+            Files::Bam,
+        )
+    },
 ];
 
 /// What `fifo-buffer` says on standard error unless `-q` is given: the
