@@ -1272,7 +1272,8 @@ bammetrics chain [OPTIONS] BAM + STEP [STEP OPTIONS] [+ STEP ...]
 bammetrics chain --plan FILE [OPTIONS] [BAM]
 bammetrics chain BAM --recipe NAME [OPTIONS] [STEP.option=value ...] [qc [QC OPTIONS]]
 
-bammetrics chain fixed.bam reorder-sam insert-size -o r.bam          # reference from the config file
+bammetrics chain fixed.bam reorder-sam insert-size -R ref.fa -o r.bam
+bammetrics chain fixed.bam reorder-sam insert-size -o r.bam          # with reference = "ref.fa" in the config file
 bammetrics chain in.bam mark-duplicates insert-size qc -o out/NA12878.bam --resume
 bammetrics prep in.bam -o out.bam qc --fail-on fail                  # a recipe, then the verdict
 bammetrics chain in.bam -R ref.fa -o out/NA12878 \
@@ -1369,7 +1370,8 @@ apart from the `Started on` line. Without a qc step it writes no verdict or page
 The form without `+` (docs/chaining.md sections 22 to 25 and 32) runs the same chains:
 
 ```bash
-bammetrics chain fixed.bam reorder-sam insert-size -o r.bam   # reference from the config file
+bammetrics chain fixed.bam reorder-sam insert-size -R ref.fa -o r.bam
+bammetrics chain fixed.bam reorder-sam insert-size -o r.bam   # with reference = "ref.fa" in the config file
 bammetrics chain in.bam mark-duplicates insert-size --level SAMPLE -o out/NA12878.bam
 bammetrics chain in.bam --recipe prep -o out.bam              # or: bammetrics prep in.bam -o out.bam
 bammetrics chain a.bam merge-sam-files b.bam insert-size -o merged.bam

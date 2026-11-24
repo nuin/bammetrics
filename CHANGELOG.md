@@ -4,13 +4,13 @@
 
 ## 0.32.0
 
-Chain 2 (wave W14 of docs/07) and the simpler chain command, 71 tools and no new one: steps without `+` and `-o` naming the BAM (`bammetrics chain fixed.bam reorder-sam insert-size -o r.bam`), a user config file, the recipes (`bammetrics prep in.bam -o out.bam`), manifest 2 with `--resume` per step and `--keep`, `qc` as the last step, and every tool that reads a BAM as a step at any position (53 of the 71); every `+` form of 0.31.0 runs as before.
+Chain 2 (wave W14 of docs/07) and the simpler chain command, 71 tools and no new one: steps without `+` and `-o` naming the BAM (`bammetrics chain fixed.bam reorder-sam insert-size -R ref.fa -o r.bam`, `-R` from the config file when it holds `reference`), a user config file, the recipes (`bammetrics prep in.bam -o out.bam`), manifest 2 with `--resume` per step and `--keep`, `qc` as the last step, and every tool that reads a BAM as a step at any position (53 of the 71); every `+` form of 0.31.0 runs as before.
 
 ### Added
 
 - The short chain form, the manifest and the materialized steps work as one design
   (docs/chaining.md section 32, docs/07 D199 to D205). `bammetrics chain fixed.bam
-  reorder-sam insert-size -o r.bam --resume` writes `r.bam`, `r.bai`,
+  reorder-sam insert-size -R ref.fa -o r.bam --resume` writes `r.bam`, `r.bai`,
   `r.insert_size_metrics` and `r.manifest.json`; the same command again reads nothing; with
   another option of `insert-size` it reruns that step alone.
 - `chain --resume` starts its read at the BAM a skipped `write` step wrote of a
@@ -48,7 +48,7 @@ Chain 2 (wave W14 of docs/07) and the simpler chain command, 71 tools and no new
   and the usage errors.
 - `bammetrics chain` takes steps without `+`: a bare word that names a step verb starts a
   step, an option takes its values with it, and the chain's options may follow the last
-  step. `bammetrics chain fixed.bam reorder-sam insert-size -o r.bam` runs what `chain
+  step. `bammetrics chain fixed.bam reorder-sam insert-size -R ref.fa -o r.bam` runs what `chain
   fixed.bam -R ref.fa -o r + reorder-sam --sequence-dictionary ref.dict + insert-size +
   write r.bam --index` runs, byte for byte. Every `+` form runs as before
   (docs/chaining.md section 22).
@@ -159,6 +159,15 @@ Chain 2 (wave W14 of docs/07) and the simpler chain command, 71 tools and no new
 
 ### Changed
 
+- A chain without `-o` names its metrics files beside what a step writes: with `write
+  d/out.bam` the prefix is `d/out`, else with a split step's `-o DIR` it is `DIR/` plus
+  the source name. Before, both went to `./` plus the source name. Standard error says
+  which; a chain `-o` still wins.
+- `--dry-run` after the last step of the `+` form is the chain's when that step has no
+  flag of that spelling (`chain BAM + quality-yield + write x.bam --index --dry-run`).
+- The usage error of a `reorder-sam` step with no dictionary and no reference names all
+  three sources of a reference: `-R`, `reference` in the config file and
+  `BAMMETRICS_REFERENCE` (golden record `error_reorder_sam_no_reference`).
 - Golden records `recipe_help` and `error_recipe_and_steps` name the qc step a recipe
   takes; `chain_qc_step_help` says how the qc step reads `CollectWgsMetrics` and where
   the chain's options go in the form without `+`. The help of `chain` lists the qc step
