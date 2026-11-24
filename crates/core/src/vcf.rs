@@ -704,6 +704,13 @@ impl VcfLines {
         std::sync::Arc::clone(&self.header)
     }
 
+    /// The header as the reader holds it, for a caller that rewrites it in
+    /// place ([`SampleSubset::new_shared`]); the lines read after are not
+    /// read by it.
+    pub fn header_mut(&mut self) -> &mut std::sync::Arc<VcfHeader> {
+        &mut self.header
+    }
+
     pub fn path(&self) -> &Path {
         &self.path
     }

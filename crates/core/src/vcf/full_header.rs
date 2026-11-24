@@ -601,9 +601,14 @@ impl VcfHeader {
     /// `new VCFHeader(getMetaDataInInputOrder(), samples)`.
     pub fn with_samples(&self, samples: Vec<String>) -> Self {
         let mut header = self.clone();
-        header.site.samples.clone_from(&samples);
-        header.samples = samples;
+        header.set_samples(samples);
         header
+    }
+
+    /// [`VcfHeader::with_samples`] in place.
+    pub fn set_samples(&mut self, samples: Vec<String>) {
+        self.site.samples.clone_from(&samples);
+        self.samples = samples;
     }
 
     /// The minor version of `VCFv4.N` the input named.

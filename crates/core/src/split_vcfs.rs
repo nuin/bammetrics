@@ -161,9 +161,9 @@ impl WriterOptions {
         Ok((options, note))
     }
 
-    /// The files written for `path`.
-    pub fn files(&self, path: &Path) -> Result<Vec<PathBuf>> {
-        Ok(self.for_output("OUTPUT", path)?.0.files(path))
+    /// The files written for `path`, named `option` in messages.
+    pub fn files(&self, option: &str, path: &Path) -> Result<Vec<PathBuf>> {
+        Ok(self.for_output(option, path)?.0.files(path))
     }
 }
 
@@ -395,15 +395,10 @@ pub fn split(opts: &Options) -> Result<(Counts, Vec<PathBuf>)> {
     let mut inputs = vec![opts.input.clone()];
     inputs.extend(opts.sequence_dictionary.iter().cloned());
     for input in &inputs {
-        if !input.exists() {
-            return Err(Error::Input {
-                path: input.clone(),
-                source: std::io::ErrorKind::NotFound.into(),
-            });
-        }
+        must_exist(input)?;
     }
-    let mut targets = opts.writer.files(&opts.snp_output)?;
-    targets.extend(opts.writer.files(&opts.indel_output)?);
+    let mut targets = opts.writer.files("SNP_OUTPUT", &opts.snp_output)?;
+    targets.extend(opts.writer.files("INDEL_OUTPUT", &opts.indel_output)?);
     registry::check_writable(targets.iter().map(PathBuf::as_path), &inputs)?;
     let mut lines = VcfLines::open(&opts.input)?;
     let header = lines.shared_header();
@@ -462,8 +457,8 @@ fn run_tool(inv: &Invocation) -> Result<ToolOutput> {
 pub fn variant_split(inv: &Invocation) -> Result<BuildVariantSink> {
     let opts = Options::from_invocation(inv)?;
     refuse_shared_files(
-        &opts.writer.files(&opts.snp_output)?,
-        &opts.writer.files(&opts.indel_output)?,
+        &opts.writer.files("SNP_OUTPUT", &opts.snp_output)?,
+        &opts.writer.files("INDEL_OUTPUT", &opts.indel_output)?,
     )?;
     Ok(Box::new(move |header: &Arc<vcf::VcfHeader>| {
         let dictionary = opts
@@ -521,12 +516,15 @@ impl VariantSink for SplitSink {
     }
 }
 
-/// The files a split of `snp` and `indel` writes: each VCF, then its
-/// `.tbi` when asked for.
-pub fn output_files(writer: &WriterOptions, snp: &Path, indel: &Path) -> Result<Vec<PathBuf>> {
-    let mut files = writer.files(snp)?;
-    files.extend(writer.files(indel)?);
-    Ok(files)
+/// An input that cannot be read is an error naming it, with the system's
+/// reason, before any output is checked.
+pub(crate) fn must_exist(path: &Path) -> Result<()> {
+    std::fs::metadata(path)
+        .map(|_| ())
+        .map_err(|source| Error::Input {
+            path: path.to_path_buf(),
+            source,
+        })
 }
 
 #[cfg(test)]

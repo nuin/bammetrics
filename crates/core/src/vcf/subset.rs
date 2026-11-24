@@ -59,6 +59,14 @@ impl SampleSubset {
     /// The edit of records read under `input`, keeping `samples` (any
     /// order, repeats allowed: they are read as a `TreeSet`).
     pub fn new(input: &VcfHeader, samples: &[String]) -> Self {
+        let mut shared = Arc::new(input.clone());
+        Self::new_shared(&mut shared, samples)
+    }
+
+    /// [`SampleSubset::new`] that turns `input` into the output header in
+    /// place when nothing else holds it, so a header near the reader's cap
+    /// is not held twice; else the header is copied.
+    pub fn new_shared(input: &mut Arc<VcfHeader>, samples: &[String]) -> Self {
         let kept = tree_set(samples);
         let column: std::collections::HashMap<&str, usize> = input
             .samples()
@@ -70,10 +78,13 @@ impl SampleSubset {
             .iter()
             .map(|name| column.get(name.as_str()).copied())
             .collect();
+        let rules = Rules::of(input.site());
+        let percent = input.minor() >= 3;
+        Arc::make_mut(input).set_samples(kept);
         Self {
-            rules: Rules::of(input.site()),
-            percent: input.minor() >= 3,
-            output: Arc::new(input.with_samples(kept)),
+            rules,
+            percent,
+            output: Arc::clone(input),
             picks,
         }
     }

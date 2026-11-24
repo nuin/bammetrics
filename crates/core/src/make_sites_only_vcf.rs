@@ -98,12 +98,7 @@ impl Options {
 /// Run the tool: the records written.
 pub fn make_sites_only(opts: &Options) -> Result<u64> {
     split_vcfs::refuse_bcf(&opts.input)?;
-    if !opts.input.exists() {
-        return Err(Error::Input {
-            path: opts.input.clone(),
-            source: std::io::ErrorKind::NotFound.into(),
-        });
-    }
+    split_vcfs::must_exist(&opts.input)?;
     let (options, note) = opts.writer.for_output("OUTPUT", &opts.output)?;
     let files = options.files(&opts.output);
     registry::check_writable(
@@ -117,7 +112,7 @@ pub fn make_sites_only(opts: &Options) -> Result<u64> {
     if let Some(note) = note.filter(|_| !opts.quiet) {
         eprintln!("bammetrics: {note}");
     }
-    let subset = SampleSubset::new(lines.header(), &opts.samples);
+    let subset = SampleSubset::new_shared(lines.header_mut(), &opts.samples);
     let mut writer = VcfWriter::create_shared(&opts.output, subset.shared_header(), options)?;
     let mut line = String::new();
     let mut edited = String::new();
