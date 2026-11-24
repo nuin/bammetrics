@@ -168,6 +168,16 @@ fn not_bam_or_cram() -> io::Error {
 /// is a line end, a tab or a NUL is held as `?`. The text is read
 /// whole, at most [`crate::doctor::input::MAX_HEADER_BYTES`] bytes.
 pub(crate) fn read_header<R: Read>(reader: &mut cram::io::Reader<R>) -> io::Result<sam::Header> {
+    read_header_decoded(reader).map(|(held, _)| held)
+}
+
+/// [`read_header`], and the header with its values as the UTF-8 of the
+/// characters htsjdk holds when the text is not ASCII, for a tool that
+/// compares header values as htsjdk's strings (`CompareSAMs`): two
+/// characters that share their low byte stay apart there.
+pub(crate) fn read_header_decoded<R: Read>(
+    reader: &mut cram::io::Reader<R>,
+) -> io::Result<(sam::Header, Option<sam::Header>)> {
     let cap = crate::doctor::input::MAX_HEADER_BYTES;
     let mut definition = reader.header_reader();
     definition.read_magic_number()?;
@@ -187,17 +197,26 @@ pub(crate) fn read_header<R: Read>(reader: &mut cram::io::Reader<R>) -> io::Resu
         raw.discard_to_end()?;
     }
     container.discard_to_end()?;
+    let mut decoded = None;
     if !text.is_ascii() {
+        let utf8 = crate::java::decode_utf8(&text).into_owned();
         // htsjdk splits the decoded text into lines and fields, so a
         // character whose low byte is a line end, a tab or a NUL (U+010A,
         // U+0109, U+0100) stays inside its field; `held_bytes` holds `?`
         // for it, never a byte that would end the field or the line.
-        text = crate::sam_text::held_bytes(crate::java::decode_utf8(&text).as_bytes());
+        text = crate::sam_text::held_bytes(utf8.as_bytes());
+        // Only `CompareSAMs` reads it; a line noodles refuses here leaves
+        // that tool the held header, and no other tool fails on it.
+        decoded = parse_header_lines(utf8.as_bytes()).ok();
     }
+    Ok((parse_header_lines(&text)?, decoded))
+}
+
+/// The header of `text`, cut into lines as noodles' `read_sam_header` cuts
+/// them: at each line feed, with a carriage return before it dropped.
+fn parse_header_lines(text: &[u8]) -> io::Result<sam::Header> {
     let mut parser = sam::header::Parser::default();
-    // Lines as noodles' `read_sam_header` cuts them: at each line feed,
-    // with a carriage return before it dropped.
-    let mut rest: &[u8] = &text;
+    let mut rest: &[u8] = text;
     while !rest.is_empty() {
         let end = rest.iter().position(|&b| b == b'\n');
         let (mut line, after) = match end {

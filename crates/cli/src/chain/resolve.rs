@@ -224,7 +224,10 @@ fn dictionary_defaults(spec: &mut Spec) -> Result<Vec<(usize, String)>, VerbErro
                      header; --dict FILE reads a .dict)",
                     flag.long
                 ))
-                .hint("or -R FASTA, or reference in the config file: its .dict, else its .fai"));
+                .hint(
+                    "or -R FASTA, reference = FASTA in the config file, or BAMMETRICS_REFERENCE: \
+                     its .dict, else its .fai",
+                ));
             };
             let Some((path, note)) = dictionary_of(reference) else {
                 return Err(usage(format!(

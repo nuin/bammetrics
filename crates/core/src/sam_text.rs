@@ -15,8 +15,8 @@
 //! code unit), so an ASCII file keeps its bytes and any other character
 //! becomes the byte htsjdk writes for it. A header line is split into its
 //! fields after it is decoded, as htsjdk splits it, and a character above
-//! U+00FF whose low byte is a tab or a line end is stored as `?`: that
-//! byte would end the field or the line. Two things the stored bytes
+//! U+00FF whose low byte is a tab, a line end or a NUL is stored as `?`:
+//! that byte would end the field, the line or the text. Two things the stored bytes
 //! cannot say are kept beside them for the tool that compares strings
 //! (`CompareSAMs`): the header with its values as UTF-8
 //! ([`Reader::decoded_header`]) and the read names with a character above

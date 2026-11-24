@@ -331,7 +331,7 @@ pub(crate) fn with_record_stream_kind<T>(
 }
 
 /// What SAM text says that the BAM form of its header and records cannot
-/// hold. Every part is empty for a BAM or a CRAM.
+/// hold. Every part is empty for a BAM; a CRAM has only `decoded_header`.
 #[derive(Default)]
 pub(crate) struct Text {
     /// The header lines with a character above U+00FF, as the file spells
@@ -406,10 +406,14 @@ fn with_stream_of_kind<T>(
         Kind::Cram => {
             let mut reader =
                 noodles::cram::io::Reader::new(cram::Peek::new(BufReader::new(sniffed.reader)));
-            let header =
-                cram::read_header(&mut reader).map_err(|e| input(cram::truncated(e, true)))?;
+            let (header, decoded_header) = cram::read_header_decoded(&mut reader)
+                .map_err(|e| input(cram::truncated(e, true)))?;
+            let text = Text {
+                decoded_header,
+                ..Text::default()
+            };
             cram::decode(reader, &header, reference, workers, |records| {
-                consume(&header, records.get_mut(), Kind::Cram, &Text::default())
+                consume(&header, records.get_mut(), Kind::Cram, &text)
             })
         }
         Kind::Bam => {

@@ -1752,17 +1752,18 @@ fn usage_errors_exit_2_before_anything_runs() {
             &[source, "+", "insert-size", "--plan", "p.toml"],
             "step 1 (insert-size): --plan belongs to the chain: give it before the first +",
         ),
+        // After the last step --dry-run is the chain's; before it, an error.
         (
             &[
                 source,
                 "+",
                 "quality-yield",
+                "--dry-run",
                 "+",
                 "write",
                 "--index",
-                "--dry-run",
             ],
-            "step 2 (write): --dry-run belongs to the chain: give it before the first +",
+            "step 1 (quality-yield): --dry-run belongs to the chain: give it before the first +",
         ),
         (
             &[source, "+", "insert-size", "--output-prefix", "x"],

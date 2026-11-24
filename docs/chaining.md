@@ -109,7 +109,7 @@ works in a step: `--minimum-pct 0.1`, `--MINIMUM_PCT 0.1`, `MINIMUM_PCT=0.1`, `-
 | Option | Meaning |
 |---|---|
 | `BAM`, `-i`, `I=` | The source: a BAM, or a CRAM with `-R`. `-` reads standard input |
-| `-o`, `--output-prefix`, `O=` | The prefix of every step that names no file of its own. Default `./` plus the source name without its extension, and standard error says so. A directory (an existing one, or a path ending in `/`) gets the source name as the file part |
+| `-o`, `--output-prefix`, `O=` | The prefix of every step that names no file of its own. Default `./` plus the source name without its extension; with a `write PATH` step, `PATH` without its `.bam` or `.sam` (`write d/out.bam` gives `d/out`); else with a split step's `-o DIR`, `DIR/` plus the source name. Standard error says which. A directory (an existing one, or a path ending in `/`) gets the source name as the file part |
 | `-R`, `--reference`, `R=` | Reference FASTA with a `.fai`. It decodes a CRAM source. It goes to every step that reads a reference and names none |
 | `-@`, `--threads` | BGZF threads of each read and of `write` (default: cores, at most 8; at most 256 may be asked for) |
 | `--tmp-dir`, `TMP_DIR=` | Where a transform spills and a piped source is copied |
@@ -129,6 +129,8 @@ works in a step: `--minimum-pct 0.1`, `--MINIMUM_PCT 0.1`, `MINIMUM_PCT=0.1`, `-
 The source, `--output-prefix`, `--threads`, `--sample`, `--also`, `--plan`, `--dry-run`,
 `-q` and `-v` belong to the chain. Given after the first `+` they are a usage error that
 says so: `step 1 (insert-size): --also belongs to the chain: give it before the first +`.
+One exception: `--dry-run` after the last step, when that step has no flag of that
+spelling, is the chain's (`chain BAM + quality-yield + write x.bam --index --dry-run`).
 `write` has none of the chain's options, so every one of them gets that error there.
 
 An empty prefix (`-o ''`) is a usage error, as in `qc`. It would name hidden files in the
@@ -1315,7 +1317,9 @@ bammetrics chain sample.bam -o out/s \
 
 - The step's own `-o DIR` names the directory; the run makes it when missing. Without `-o`
   `split-sam-by-library` writes into the current directory, as the tool does, and
-  `split-sam-by-number-of-reads` exits 2.
+  `split-sam-by-number-of-reads` exits 2. A chain with no `-o` of its own and no `write
+  PATH` names its metrics files under the step's directory: `chain s.bam insert-size
+  split-sam-by-library -o s1` writes `s1/s.insert_size_metrics`.
 - The files are BAMs named `.bam`, whatever the source: `LIBRARY.bam` and `unknown.bam`, or
   `OUT_PREFIX_0001.bam` on. `--create-index`, `--create-md5-file` and `--compression-level`
   belong to the step.
@@ -1424,7 +1428,10 @@ the same chain and write the same files, byte for byte (`chain_short_form` and
 bammetrics chain fixed.bam -R hs37d5.fa -o c/r \
     + reorder-sam --sequence-dictionary hs37d5.dict + insert-size + write c/r.bam --index
 
-# The short form, with reference = "hs37d5.fa" in the config file
+# The short form: -R gives the reference, and the step's dictionary is its .dict
+bammetrics chain fixed.bam reorder-sam insert-size -R hs37d5.fa -o c/r.bam
+
+# The same, with the line reference = "hs37d5.fa" in the config file (section 24)
 bammetrics chain fixed.bam reorder-sam insert-size -o c/r.bam
 ```
 
@@ -1504,7 +1511,7 @@ the verdict and the report take the same prefix (`r.manifest.json`, `r.verdict.j
 | `r.SAM`, `r.Sam`, `r.CRAM` | a transform, no `write` | Exit 2: the write step, as htsjdk's writer, writes SAM text or a CRAM only for a name ending in lower-case `.sam` or `.cram`, and a BAM under any other name |
 
 Two notes go to standard error before the first read. A chain of transforms that name
-no file (`chain in.bam reorder-sam -o out/s`: no tap, no `write`, no split, no metrics
+no file (`chain in.bam reorder-sam -R ref.fa -o out/s`: no tap, no `write`, no split, no metrics
 file) gets `no step writes the records: -o OUT.bam or a write step writes them` on its
 last step. A `.bam` or `.sam` prefix beside a `write` step of the
 chain's own gets a note on that step: the prefix names the metrics files
@@ -1571,7 +1578,7 @@ A dictionary read from a `.fai` holds `SN` and `LN` alone; the `.dict` adds `M5`
 Picard 3.5.0 refuses a `.fai` as `SEQUENCE_DICTIONARY`; bammetrics reads one
 (KNOWN_DIFFERENCES.md). A `reorder-sam` step with no dictionary and no reference is a
 usage error that names the ways to give one (`--sequence-dictionary`, `--from-bam`,
-`--dict`, `-R`, the config file). The step's own `-R` comes first, then the chain's: in
+`--dict`, `-R`, `reference` in the config file, `BAMMETRICS_REFERENCE`). The step's own `-R` comes first, then the chain's: in
 the middle of a bare chain `reorder-sam -R ref.fa insert-size` takes the dictionary of
 `ref.fa`. The default applies in a chain only; the `reorder-sam` verb still needs its
 `--sequence-dictionary`, as before.
@@ -2146,11 +2153,14 @@ are D199 to D205 of docs/07.
 bammetrics chain fixed.bam -R hs37d5.fa -o c/r \
     + reorder-sam --sequence-dictionary hs37d5.dict + insert-size + write c/r.bam --index
 
-# 0.32.0, with reference = "hs37d5.fa" in ~/.config/bammetrics/config.toml
-bammetrics chain fixed.bam reorder-sam insert-size -o r.bam
+# 0.32.0: -R gives the reference, and the step's dictionary is its .dict
+bammetrics chain fixed.bam reorder-sam insert-size -R hs37d5.fa -o r.bam
 
 # Run it again after an edit: only what changed runs
-bammetrics chain fixed.bam reorder-sam insert-size --minimum-pct 0.2 -o r.bam --resume
+bammetrics chain fixed.bam reorder-sam insert-size --minimum-pct 0.2 -R hs37d5.fa -o r.bam --resume
+
+# With the line reference = "hs37d5.fa" in ~/.config/bammetrics/config.toml, -R may go
+bammetrics chain fixed.bam reorder-sam insert-size -o r.bam
 
 # The recipe, the verdict and the report in one command
 bammetrics prep sample.bam -o out.bam qc --preset generic --fail-on fail --resume
@@ -2181,7 +2191,7 @@ record matches and `r.bam` and `r.bai` hold their fingerprints) starts its read 
 `r.bam`, as it would at a kept stream (decision D201):
 
 ```
-$ bammetrics chain fixed.bam reorder-sam insert-size --minimum-pct 0.2 -o r.bam --resume --dry-run
+$ bammetrics chain fixed.bam reorder-sam insert-size --minimum-pct 0.2 -R hs37d5.fa -o r.bam --resume --dry-run
 resume     from r.manifest.json
 resume     step 1 reorder-sam: skipped; the BAM a write step wrote of its stream, r.bam, starts the read
 resume     step 2 insert-size: runs: its options changed

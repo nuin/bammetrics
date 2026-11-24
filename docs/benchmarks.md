@@ -930,6 +930,35 @@ step 4 below, outputs under `~/data/bammetrics-scale/waves/w15`, removed after t
 | `compare-s-a-ms exome against itself` | scale | 44.5 / 1024 | 43.43 | |
 | `check-terminator-block exome` | scale | 7.6 / 64 | 0.01 | |
 
+Every wave W15 row at 0.33.0 (2026-11-24, release/0.33.0 with fix/0.32.0-review merged,
+one run each; `make memgate` passes 70 fixture rows, `TIER=scale make memgate` passes 39
+scale rows and skips 6: the two chain sort-barrier rows,
+`revert-original-base-qualities-and-add-mate-cigar pairs`, the two `merge-sam-files
+slice` rows and `reorder-sam slice`, whose inputs were removed after earlier runs). Scale
+outputs went under `~/data/bammetrics-scale/waves/w15` and were removed after the run.
+The fixture wall times are from a second fixture run the same day, which peaked within
+0.3 MiB of these rows except `clean-sam cram long reads` (172.5 MiB):
+
+| command | tier | peak RSS MiB / limit | wall s | spill MiB / limit |
+|---|---|---|---:|---:|
+| `sort-sam cram` | fixture | 10.2 / 64 | 0.00 | |
+| `clean-sam cram long reads` | fixture | 194.0 / 320 | 2.71 | |
+| `sam-format-converter` | fixture | 8.8 / 64 | 0.00 | |
+| `sam-format-converter cram` | fixture | 11.2 / 64 | 0.00 | |
+| `compare-s-a-ms` | fixture | 10.0 / 64 | 0.02 | |
+| `compare-s-a-ms lenient` | fixture | 9.2 / 64 | 0.01 | |
+| `check-terminator-block` | fixture | 7.5 / 64 | 0.01 | |
+| `chain write cram exome` | scale | 359.7 / 1024 | 187.88 | |
+| `sam-format-converter slice sam` | scale | 12.8 / 512 | 9.00 | |
+| `sam-format-converter slice cram` | scale | 178.1 / 1024 | 10.39 | |
+| `compare-s-a-ms exome against itself` | scale | 49.1 / 1024 | 44.06 | |
+| `check-terminator-block exome` | scale | 7.7 / 64 | 0.01 | |
+
+Of the rows of earlier waves, `mark-duplicates slice` peaks at 634.5 / 1024 MiB (666.8 at
+0.32.0), `fix-mate-information slice` at 622.6 / 3072 (629.0), `downsample-sam
+HighAccuracy slice` at 1,976.9 / 3072 (1,975.3), `rrbs exome` at 453.7 / 1024 (528.1 at
+0.31.0) and `chain short form resumed slice` at 651.7 / 2048 (680.1 at 0.32.0).
+
 To add a scale row:
 
 1. Keep the data under `~/data/bammetrics-scale`, never in the repository. Write nothing
