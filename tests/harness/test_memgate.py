@@ -86,7 +86,11 @@ def test_the_committed_table_parses_and_names_both_tiers():
                        "compare-s-a-ms lenient", "check-terminator-block", "chain vcf copy",
                        "chain vcf genotype-concordance",
                        "chain vcf 200,000 records", "chain vcf wide lines",
-                       "chain vcf 100,000 contig lines"]
+                       "chain vcf 100,000 contig lines", "split-vcfs",
+                       "make-sites-only-vcf", "make-vcf-sample-name-map",
+                       "chain vcf sites split 200,000 records",
+                       "make-sites-only-vcf wide samples",
+                       "make-sites-only-vcf at the header cap"]
     for r in rows:
         # A row whose input a script writes first runs both in one `sh -c`.
         shell = r.argv[0] in ("sh", "/bin/sh") and r.argv[1:2] == ["-c"] and "{bin}" in r.argv[2]

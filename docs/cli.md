@@ -359,6 +359,9 @@ table.
 | `sam-format-converter` | SamFormatConverter (a SAM, BAM or CRAM; every record unchanged; not `convert`, which converts metrics files) | `-o` SAM text for a name ending in `.sam`, a CRAM for one ending in `.cram` (with `-R`), a BAM for any other name |
 | `compare-s-a-ms` | CompareSAMs (two SAM, BAM or CRAM files as positionals, the left then the right; `--lenient-header`, `--lenient-dup`, `--lenient-low-mq-alignment`, `--lenient-unknown-mq-alignment`, `--low-mq-threshold`, `--compare-mq`) | one SamComparisonMetric file; the header differences and the verdict on standard error; exit 1 when the files differ |
 | `check-terminator-block` | CheckTerminatorBlock (a BGZF file: a BAM, a bgzip VCF; its last 64 KiB are read) | `HAS_TERMINATOR_BLOCK`, `HAS_HEALTHY_LAST_BLOCK` or `DEFECTIVE` on standard output; exit 100 on `DEFECTIVE` |
+| `split-vcfs` | SplitVcfs (a VCF, plain, gzip or BGZF; `--strict`, `--sequence-dictionary`, `--create-index`) | `PREFIX.snp.vcf.gz` and `PREFIX.indel.vcf.gz` with a `.tbi` each, or `--snp-output` and `--indel-output` |
+| `make-sites-only-vcf` | MakeSitesOnlyVcf (a VCF; `--sample` repeated) | `-o` VCF, block-compressed with a `.tbi` for a name ending in `.gz` |
+| `make-vcf-sample-name-map` | MakeVcfSampleNameMap (VCFs of one sample each, as positionals or `-i`) | `-o` sample map: the input as given, a tab, the sample |
 
 A verb runs its tool through the registry, so `bammetrics gc-bias BAM -R ref.fa -o P` and
 `bammetrics CollectGcBiasMetrics I=BAM R=ref.fa O=P.gc_bias.detail_metrics
@@ -2314,6 +2317,91 @@ does, and nothing on standard output. The verb prints it on standard output or t
   `--threads` and `--sample` are accepted and ignored.
 - Python `check_terminator_block(path)` returns the row and raises nothing for
   `DEFECTIVE`.
+
+### split-vcfs
+
+```bash
+bammetrics split-vcfs calls.vcf.gz -o out/calls --strict false
+bammetrics split-vcfs calls.vcf.gz --snp-output snps.vcf.gz --indel-output indels.vcf.gz
+bammetrics SplitVcfs I=calls.vcf.gz SNP_OUTPUT=snps.vcf.gz INDEL_OUTPUT=indels.vcf.gz STRICT=false
+```
+
+Picard 3.5.0's `SplitVcfs`: each SNP record goes to the SNP file and each indel record to
+the indel file, both under the input header, written as htsjdk's VCF writer writes them.
+The type is htsjdk's `VariantContext.getType`; `INDEL` is asked first.
+
+- Any other type (`MNP`, `MIXED`, `SYMBOLIC`, `NO_VARIATION`, a `*` allele alone) fails the
+  run under `--strict` (the default, as in Picard) with `Found a record with type MNP`.
+  `--strict false` drops the record. `VERBOSITY=DEBUG` prints Picard's line `Found N
+  records that didn't match SNP or INDEL`.
+- `-o PREFIX` names `PREFIX.snp.vcf.gz` and `PREFIX.indel.vcf.gz`; without it the prefix
+  is `./` and the input's name less `.vcf.gz` (`./calls`). A name ending in `.gz` (`.bgz`,
+  `.gzip`, `.bgzf`, any case) is block-compressed with a `.tbi`; any other name is plain
+  text.
+- `--create-index` (default true) needs a dictionary: the input's `##contig` lines or
+  `--sequence-dictionary` (a `.dict`, a SAM, BAM or CRAM header, an interval list). Without
+  one the run exits 1 before any record, as Picard does, even for plain outputs.
+- A plain output gets no index. Picard writes tribble's `.idx` there; bammetrics does not
+  (docs/07 decision W16-3). With `--create-index` left at its default the VCF is written
+  and a note says so; `CREATE_INDEX=true` given for a plain name exits 1.
+- `--create-md5-file` is accepted and ignored: Picard's VCF writers write no `.md5`.
+- Both files and their `.tbi` are renamed into place together after the last record. A run
+  that fails leaves none of them; Picard leaves the files it began. One file for both
+  outputs exits 1.
+- In a chain, `split-vcfs` is a split step of a VCF stream (docs/chaining.md section 34).
+- Python `split_vcfs(vcf, snp_output=..., indel_output=..., strict=False)` returns one row:
+  `snp_records`, `indel_records`, `other_records`.
+
+### make-sites-only-vcf
+
+```bash
+bammetrics make-sites-only-vcf calls.vcf.gz -o sites.vcf.gz
+bammetrics make-sites-only-vcf calls.vcf.gz -o two.vcf.gz --sample S2 --sample S1
+bammetrics MakeSitesOnlyVcf I=calls.vcf.gz O=sites.vcf.gz
+```
+
+Picard 3.5.0's `MakeSitesOnlyVcf`: every record without its genotypes, the site columns
+and `INFO` as read (`AN` and `AF` stay). The header keeps every line; its sample columns go.
+
+- `--sample NAME` (repeated; `null` clears) keeps those samples' genotypes, in the header
+  in sorted order (`String.compareTo`). Their genotypes are written anew as htsjdk writes
+  decoded genotypes: `GT` first, the other keys sorted, trailing missing values dropped.
+  A name the VCF lacks gets a no-call at the record's ploidy (`./.`, or `.` for haploid
+  genotypes).
+- With samples kept, every genotype of a record is decoded, so a bad genotype of any
+  sample fails the run, as in Picard. Without, the genotypes stay unread unless the input
+  names its samples out of sorted order.
+- `--create-index` (default true) needs the input's `##contig` lines; a `.vcf.gz` gets its
+  `.tbi`, a plain `.vcf` no `.idx` (decision W16-3, as for `split-vcfs`).
+  `--create-md5-file` is accepted and ignored.
+- In a chain it is a transform of a VCF stream that leaves the stream `sites`:
+  `bammetrics chain calls.vcf.gz make-sites-only-vcf -o sites.vcf.gz`.
+- Python `make_sites_only_vcf(vcf, output=..., sample=[...])` returns one row: `records`.
+
+### make-vcf-sample-name-map
+
+```bash
+bammetrics make-vcf-sample-name-map a.vcf.gz b.vcf.gz -o cohort.sample_map
+bammetrics MakeVcfSampleNameMap I=a.vcf.gz I=b.vcf.gz O=cohort.sample_map
+```
+
+Picard 3.5.0's `MakeVcfSampleNameMap`: one line per input VCF, the input as given (a
+relative path stays relative), a tab, then the one sample its header names, `\n` after
+each line. Picard 3.5.0 writes the input first and the sample second, whatever its
+summary says; this file is byte for byte Picard's.
+
+- The lines come in the order of Picard's `HashMap` of the input texts, sized by the
+  number of inputs. An input given twice is one line.
+- A header with no sample or with several exits 1 with Picard's `Input: X was expected to
+  contain a single sample but actually contained N samples.`
+- A sample in two inputs keeps both lines and prints Picard's warning `Duplicate sample:
+  S. Sample was found in both A and in B` on standard error.
+- An input must parse as a `java.net.URI`, as Picard's `IOUtil.getPath` asks: a space or
+  `|` in the name exits 1. A `file:///` URI names its absolute path; another scheme exits
+  1. Only headers are read, one at a time, at most 100,000 inputs.
+- Not a chain step: it reads the headers of several files and the stream holds one.
+- Python `make_vcf_sample_name_map(["a.vcf.gz", "b.vcf.gz"], output=...)` returns one row
+  per line: `input`, `sample`.
 
 ### report
 

@@ -2405,3 +2405,42 @@ on an executor of the same shape beside `exec.rs` (no barrier yet); its item is 
 record line, which the writer needs to pass genotypes through as htsjdk does; the
 plain VCF's `.idx` is refused; `-o r.vcf.gz` copies a VCF with no transform; the `.tbi`
 is built from the finished file read back.
+
+## 34. W16: the VCF tools as steps of a variant stream
+
+`make-sites-only-vcf` is a transform and `split-vcfs` a split of a variant stream;
+`make-vcf-sample-name-map` is no step.
+
+```bash
+bammetrics chain calls.vcf.gz make-sites-only-vcf -o sites.vcf.gz
+bammetrics chain calls.vcf.gz make-sites-only-vcf --sample S1 split-vcfs --strict false -o out/r
+bammetrics chain calls.vcf.gz split-vcfs --strict false --snp-output s.vcf.gz --indel-output i.vcf.gz variant-calling --dbsnp dbsnp.vcf.gz -o out/r
+```
+
+- `make-sites-only-vcf` edits each line as it passes (`stage::variant::VARIANT_TRANSFORMS`,
+  `vcf::SampleSubset`) and leaves the stream `sites` (or `--as NAME`). The steps after it
+  read the header without sample columns, or with those of `--sample`. It starts no
+  segment. `-o`, `--create-index` and `--compression-level` on the step exit 2: the VCF is
+  the `write` step's, or the chain's `-o r.vcf.gz`.
+- `split-vcfs` is a sink of the stream at its position (`VARIANT_SPLITS`): the SNP and
+  indel VCFs, with a `.tbi` beside each `.vcf.gz`, renamed into place as one set when the
+  stream ends. Without `--snp-output` and `--indel-output` they are `PREFIX.snp.vcf.gz`
+  and `PREFIX.indel.vcf.gz` under the step's `-o` or the chain's prefix (`PREFIX.STREAM`
+  when a transform comes after the step). Its failure stops the chain, as a `write` step's does, so
+  `--strict` (the default) on a record of another type exits 1 and leaves no file. Its
+  note counts the records `--strict false` dropped.
+- `--keep` on a step of a variant stream exits 2: a kept stream is a BAM.
+- On a BAM stream all three exit 2 naming the stream's kind; `make-vcf-sample-name-map`
+  exits 2 on either kind: it reads the headers of several files.
+- The manifest records the split's files as kinds `vcf` and `index`; `--resume` skips the
+  step when its files and options are unchanged, and runs the transform in front of any
+  step that runs.
+
+### 34.1 What equals what
+
+| Test | What it holds |
+|---|---|
+| `tests/concordance/test_split_vcfs.py` | every VCF of `variant_vcfs.py` and `types.vcf`, plain and gzip, into plain and `.vcf.gz` outputs: record and header lines equal to Picard's, `.tbi` queries equal, plain files byte for byte; `STRICT` fails both on the same type; every option; 6 error cases; `chain SRC make-sites-only-vcf split-vcfs` equals Picard `SplitVcfs` on `MakeSitesOnlyVcf`'s file |
+| `tests/concordance/test_make_sites_only_vcf.py` | the same inputs with every `SAMPLE` shape (each, all, a missing name, `null`), haploid no-calls, lazy and eager genotypes, 6 error cases; `chain X make-sites-only-vcf -o r.vcf.gz` equals Picard |
+| `tests/concordance/test_make_vcf_sample_name_map.py` | the map byte for byte for relative, absolute, `file://`, repeated and 40 inputs; the duplicate-sample warning; 10 error cases |
+| `crates/cli/tests/vcf_tools_chain.rs` | chained equals staged for both steps, `--resume` over a split with the transform in front rerun, a strict split with no file left, the refusals |

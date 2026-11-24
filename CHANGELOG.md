@@ -36,6 +36,24 @@
   Memory: batches end at 4 MiB of text, the header is shared and held as one buffer,
   decoded genotypes use one array per record (100,000 samples out of sorted order: 133
   MiB, was 1 GiB; 1,000,000 `##contig` lines: 199 MiB, was 2.5 GiB).
+- `SplitVcfs`, `MakeSitesOnlyVcf` and `MakeVcfSampleNameMap` (wave W16, tools 75 to 77;
+  `crates/core/src/split_vcfs.rs`, `make_sites_only_vcf.rs`, `make_vcf_sample_name_map.rs`):
+  the SNP and indel records of a VCF to two files renamed as one set (`STRICT`,
+  `SEQUENCE_DICTIONARY`, `CREATE_INDEX`, Picard's `DEBUG` count); every record without
+  its genotypes or cut to `SAMPLE` (`vcf::SampleSubset`, `GenotypesContext.subsetToSamples`
+  written anew, a no-call for a name the input lacks); the sample map byte for byte,
+  input then sample, in the order of Picard's `HashMap`. Verbs `split-vcfs`,
+  `make-sites-only-vcf`, `make-vcf-sample-name-map` and Python functions. In a chain
+  (docs/chaining.md section 34) `make-sites-only-vcf` is the first transform of a variant
+  stream (stream `sites`) and `split-vcfs` a split; `make-vcf-sample-name-map` is no step.
+  `Encoder::read_type`, `VcfWriter::stage` and an index dictionary for the writer.
+  Decisions W16-11 to W16-16: no `.idx` beside a plain output (a note under the default
+  `CREATE_INDEX`), no `.md5` (Picard's VCF tools write none), a failed run leaves no file.
+  `tests/concordance/test_split_vcfs.py`, `test_make_sites_only_vcf.py`,
+  `test_make_vcf_sample_name_map.py` (every VCF of `variant_vcfs.py` and `types.vcf`,
+  plain and gzip, every option, error parity, chained against Picard),
+  `crates/cli/tests/vcf_tools_chain.rs`, 19 golden records (`VCF_TOOLS_CASES` on
+  `tests/data/vcf_tools`), seven memgate rows.
 
 ### Fixed
 

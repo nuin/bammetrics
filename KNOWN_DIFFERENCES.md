@@ -2054,6 +2054,14 @@ Where it differs:
 - A record that starts or ends past 536,903,680 fails the `.tbi` in both tools; Picard
   with an `ArrayIndexOutOfBoundsException`, bammetrics naming the record. Neither writes
   a CSI index.
+- `SplitVcfs` and `MakeSitesOnlyVcf` write no `.idx` beside a plain output. With
+  `CREATE_INDEX` at its default (true) a note says so; `CREATE_INDEX=true` given for a
+  plain name exits 1 (docs/07 W16-11). The VCFs are Picard's byte for byte.
+- A failed `SplitVcfs` or `MakeSitesOnlyVcf` leaves no file; Picard leaves the VCFs it
+  began (W16-14). `SNP_OUTPUT` and `INDEL_OUTPUT` naming one file exits 1.
+- `MakeVcfSampleNameMap` exits 1 when more than 8 inputs fall into one bin of Picard's
+  `HashMap` of 64 slots or more, whose order bammetrics does not model (W16-15); no real
+  set of paths is known to do so.
 
 ## Not in Picard
 

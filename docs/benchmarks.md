@@ -631,6 +631,28 @@ decoded into one array per record, where each sample allocated before. The 1,000
 records above, written again and removed: the copy with its tap 1.40 s and 58.6 MiB, the
 samples out of sorted order 2.58 s (was 5.14 s) and 16.3 MiB.
 
+### SplitVcfs, MakeSitesOnlyVcf, MakeVcfSampleNameMap
+
+No real VCF is under `~/data`; the inputs are those of `benches/vcf_scale.py` and
+`benches/vcf_wide.py`, written for the measurement and removed. Peak RSS by
+`/usr/bin/time -l`, Picard 3.5.0 under `JAVA_OPTS=-Xmx8g`.
+
+| Input | Command | Picard | bammetrics |
+|---|---|---|---|
+| 1,000,000 records, 3 samples (104 MB) | `MakeSitesOnlyVcf O=.vcf.gz` | 3.7 s, 699 MiB | |
+| the same | `SplitVcfs STRICT=false`, two `.vcf.gz` | 5.0 s, 272 MiB | |
+| the same | `chain make-sites-only-vcf split-vcfs --strict false` | | 1.55 s, 17.6 MiB |
+| the same, samples out of sorted order | `make-sites-only-vcf --sample S1` (every genotype decoded) | | 3.08 s, 15.0 MiB |
+| 200,000 records | `chain make-sites-only-vcf split-vcfs` | | 0.32 s, 15.9 MiB |
+| 20,000 samples by 100 records | `chain make-sites-only-vcf --sample S000001` | | 0.32 s, 37.0 MiB |
+| 1,430,000 `##contig` lines (65 MB, at the 64 MiB header cap) | `make-sites-only-vcf` | | 1.8 s, 274 MiB |
+| the same | `chain make-sites-only-vcf -o c.vcf.gz` | | 1.9 s, 426 MiB |
+| the same | `split-vcfs --strict false` | | 2.0 s, 277 MiB |
+| the same | `chain -o c.vcf.gz` (the writer alone) | | 1.8 s, 275 MiB |
+
+The tool rewrites the header's sample columns in place; a chain keeps the input header
+for the steps in front and holds a second copy, under the 500 MiB of docs/07 section 5.
+
 ## Memory gate
 
 `make memgate` runs each row of `benches/memgate.toml` under `/usr/bin/time -l` and fails

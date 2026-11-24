@@ -272,6 +272,9 @@ the sizes and a Chrome recipe for a build without the feature.
 | SamFormatConverter (every record of a SAM, BAM or CRAM unchanged, as SAM text for an `OUTPUT` ending in `.sam`, a CRAM for `.cram` with `R=`, a BAM for any other name; the header as read, no `@PG` added; `CREATE_INDEX`, `CREATE_MD5_FILE`, `COMPRESSION_LEVEL`; not a chain step: `write` converts) | | `sam_format_converter()` |
 | CompareSAMs (two SAM, BAM or CRAM files as Picard's two positional arguments; `LENIENT_HEADER`, `LENIENT_DUP`, `LENIENT_LOW_MQ_ALIGNMENT`, `LENIENT_UNKNOWN_MQ_ALIGNMENT`, `LOW_MQ_THRESHOLD`, `COMPARE_MQ`; Picard's standard output and exit code, the `SamComparisonMetric` file) | | `compare_s_a_ms()` |
 | CheckTerminatorBlock (`HAS_TERMINATOR_BLOCK`, `HAS_HEALTHY_LAST_BLOCK` or `DEFECTIVE` from the last 64 KiB of a BGZF file; exit 100 on `DEFECTIVE`) | | `check_terminator_block()` |
+| SplitVcfs (the SNP records of a VCF to `SNP_OUTPUT`, its indel records to `INDEL_OUTPUT`, both under the input header; `STRICT` fails on any other type, false drops it; `SEQUENCE_DICTIONARY`, `CREATE_INDEX` (a `.tbi` beside a `.vcf.gz`); a split step of a VCF chain) | | `split_vcfs()` |
+| MakeSitesOnlyVcf (every record of a VCF without its genotypes, or with those of `SAMPLE` only, the site columns and `INFO` as read; `CREATE_INDEX`; a transform of a VCF chain) | | `make_sites_only_vcf()` |
+| MakeVcfSampleNameMap (one line per input VCF: the input as given, a tab, its one sample, in Picard's order; not a chain step) | | `make_vcf_sample_name_map()` |
 | the first four in one pass | | `collect()` |
 | CRAM input (3.0, 3.1) for every tool above that reads a BAM, with `R=` the reference | | `reference_sequence=` |
 | CRAM output (3.0) for an `OUTPUT` ending in `.cram`, with `R=` the reference: SortSam, MarkDuplicates, the record-editing tools that rewrite their records, and the chain `write` step with `-R` | | `reference_sequence=` |

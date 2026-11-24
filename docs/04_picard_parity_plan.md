@@ -145,12 +145,12 @@ The "Topic (ours)" column is our own grouping, not Picard's. Picard 3.5.0 has 10
 | FixVcfHeader | Variant | out | Header edit. | bcftools reheader |
 | GatherVcfs | Variant | out | Scatter-gather. | bcftools concat |
 | LiftoverVcf | Variant | out | Liftover. | CrossMap |
-| MakeSitesOnlyVcf | Variant | out | Drops genotypes. | bcftools view -G |
-| MakeVcfSampleNameMap | Variant | out | TSV helper. | bcftools query -l |
+| MakeSitesOnlyVcf | Variant | core | Shipped in wave W16 of docs/07 (0.34.0) over the VCF writer: genotypes dropped or cut to `SAMPLE`, a transform of a VCF chain. S | bcftools view -G |
+| MakeVcfSampleNameMap | Variant | core | Shipped in wave W16 of docs/07 (0.34.0): the sample map byte for byte, input then sample, in the order of Picard's `HashMap`. S | bcftools query -l |
 | MergeVcfs | Variant | out | VCF merge. | bcftools merge |
 | RenameSampleInVcf | Variant | out | Rename. | bcftools reheader -s |
 | SortVcf | Variant | out | Sort. | bcftools sort |
-| SplitVcfs | Variant | out | SNP/indel split. | bcftools view -v |
+| SplitVcfs | Variant | core | Shipped in wave W16 of docs/07 (0.34.0) over the VCF writer: SNP and indel files renamed as one set, `STRICT`, a split step of a VCF chain. S | bcftools view -v |
 | UpdateVcfSequenceDictionary | Variant | out | Header contig update. | bcftools reheader |
 | VcfFormatConverter | Variant | out | VCF/BCF conversion. | bcftools view |
 | VcfToIntervalList | Variant | core | Shipped in 0.30.0 (wave W12 of docs/07) over `interval_ops`: each record checked as htsjdk's codec checks its site, neighbours merged in file order, `INCLUDE_FILTERED`, `VARIANT_ID_METHOD`. S | bcftools query plus BedToIntervalList |

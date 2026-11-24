@@ -1447,3 +1447,83 @@ argv = [
 needs = ["benches/vcf_wide.py"]
 max_rss_mib = 64
 max_seconds = 30
+
+# Wave W16: SplitVcfs, MakeSitesOnlyVcf and MakeVcfSampleNameMap. Each reads the VCF line
+# by line through the writer of the rows above; the sample map reads headers only. No real
+# VCF is under ~/data, so the scale row reads the synthetic files of benches/vcf_scale.py
+# (written there for the measurement and removed after). Measured on this machine:
+# 200,000 records through make-sites-only-vcf and split-vcfs 16 MiB, 0.3 s; with the
+# samples out of sorted order and SAMPLE (every genotype decoded) 15 MiB; 20,000 samples
+# by 100 records cut to one sample 37 MiB; a header at the 64 MiB cap (1,430,000
+# ##contig lines) 274 MiB for the tool, which edits the header in place, and 426 MiB in a
+# chain, which also holds the input header for the steps in front.
+[[command]]
+name = "split-vcfs"
+argv = [
+    "{bin}", "split-vcfs", "tests/data/vcf_writer/calls.vcf", "--strict", "false",
+    "-o", "{out}/s",
+]
+needs = ["tests/data/vcf_writer/calls.vcf"]
+max_rss_mib = 32
+max_seconds = 10
+
+[[command]]
+name = "make-sites-only-vcf"
+argv = [
+    "{bin}", "make-sites-only-vcf", "tests/data/vcf_writer/calls.vcf.gz", "--sample", "S1",
+    "-o", "{out}/s.vcf.gz",
+]
+needs = ["tests/data/vcf_writer/calls.vcf.gz"]
+max_rss_mib = 32
+max_seconds = 10
+
+[[command]]
+name = "make-vcf-sample-name-map"
+argv = [
+    "{bin}", "make-vcf-sample-name-map", "tests/data/vcf_writer/truth.vcf",
+    "tests/data/vcf_tools/u.vcf", "-o", "{out}/cohort.sample_map",
+]
+needs = ["tests/data/vcf_writer/truth.vcf", "tests/data/vcf_tools/u.vcf"]
+max_rss_mib = 32
+max_seconds = 10
+
+[[command]]
+name = "chain vcf sites split 200,000 records"
+argv = [
+    "sh", "-c",
+    "python3 benches/vcf_scale.py {out} 200000 && {bin} chain {out}/big.vcf make-sites-only-vcf split-vcfs --strict false -o {out}/r && {bin} make-sites-only-vcf {out}/big_unsorted.vcf --sample S1 -o {out}/u.vcf.gz",
+]
+needs = ["benches/vcf_scale.py"]
+max_rss_mib = 64
+max_seconds = 60
+
+[[command]]
+name = "make-sites-only-vcf wide samples"
+argv = [
+    "sh", "-c",
+    "python3 benches/vcf_wide.py {out} 20000 100 10 && {bin} chain {out}/wide.vcf make-sites-only-vcf --sample S000001 -o {out}/w.vcf.gz",
+]
+needs = ["benches/vcf_wide.py"]
+max_rss_mib = 96
+max_seconds = 30
+
+[[command]]
+name = "make-sites-only-vcf at the header cap"
+argv = [
+    "sh", "-c",
+    "python3 benches/vcf_wide.py {out} 2 1 1430000 && {bin} make-sites-only-vcf {out}/contigs.vcf -o {out}/c.vcf.gz && {bin} chain {out}/contigs.vcf make-sites-only-vcf -o {out}/d.vcf.gz && {bin} split-vcfs {out}/contigs.vcf --strict false -o {out}/s",
+]
+needs = ["benches/vcf_wide.py"]
+max_rss_mib = 500
+max_seconds = 60
+
+[[command]]
+name = "chain vcf sites split 1,000,000 records"
+tier = "scale"
+argv = [
+    "sh", "-c",
+    "{bin} chain ~/data/bammetrics-scale/waves/w16/big.vcf make-sites-only-vcf split-vcfs --strict false -o {out}/r && {bin} make-sites-only-vcf ~/data/bammetrics-scale/waves/w16/big_unsorted.vcf --sample S1 -o {out}/u.vcf.gz",
+]
+needs = ["~/data/bammetrics-scale/waves/w16/big.vcf"]
+max_rss_mib = 500
+max_seconds = 300
