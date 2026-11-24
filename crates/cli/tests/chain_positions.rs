@@ -438,13 +438,21 @@ const REFUSED: &[(&str, &str, &str)] = &[
         "no BAM",
     ),
     ("BedToIntervalList", "bed-to-interval-list", "no BAM"),
-    ("CollectVariantCallingMetrics", "variant-calling", "no BAM"),
+    (
+        "CollectVariantCallingMetrics",
+        "variant-calling",
+        "reads VCF records",
+    ),
     (
         "AccumulateVariantCallingMetrics",
         "accumulate-variant-calling",
         "no BAM",
     ),
-    ("GenotypeConcordance", "genotype-concordance", "no BAM"),
+    (
+        "GenotypeConcordance",
+        "genotype-concordance",
+        "reads VCF records",
+    ),
     ("CompareMetrics", "compare-metrics", "no BAM"),
     (
         "CreateSequenceDictionary",

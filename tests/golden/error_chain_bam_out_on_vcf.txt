@@ -1,0 +1,11 @@
+## argv
+chain
+tests/data/vcf_writer/calls.vcf
+-o
+OUT/r.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: -o OUT/r.bam names a BAM, SAM or CRAM, and this chain's source is a VCF: its stream holds VCF records (from -o)
+  -o out.vcf.gz writes the VCF and its .tbi; -o PREFIX names the metrics files

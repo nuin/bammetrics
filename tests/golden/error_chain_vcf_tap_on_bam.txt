@@ -1,0 +1,16 @@
+## argv
+chain
+tests/data/markdup.bam
+-o
+OUT/s
++
+variant-calling
+--dbsnp
+tests/data/vcf_writer/dbsnp.vcf
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (variant-calling): CollectVariantCallingMetrics reads VCF records, and this chain's stream holds alignments (the source is a BAM, CRAM or SAM file): it cannot be a step of this chain
+  give the chain a VCF source: bammetrics chain calls.vcf.gz variant-calling ...
+  the steps: bammetrics chain --help

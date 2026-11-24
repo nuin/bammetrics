@@ -296,7 +296,11 @@ pub(crate) fn is_transform(verb: &Verb) -> bool {
 /// True for a verb that can be a step: a transform, a split, a one-pass
 /// tool, or a tool that runs on a file of its stream (materialize).
 pub(crate) fn is_step(verb: &Verb) -> bool {
-    is_transform(verb) || is_split(verb) || verb.tool().collector.is_some() || is_materialized(verb)
+    is_transform(verb)
+        || is_split(verb)
+        || verb.tool().collector.is_some()
+        || is_materialized(verb)
+        || stage::variant::tap_of(verb.tool()).is_some()
 }
 
 /// True for a verb whose tool runs on a file holding the stream at its
@@ -575,6 +579,10 @@ pub fn help() -> String {
          copy in the temporary directory): {}\n  \
          qc         the last step: the verdict and report over the taps of its stream, \
          as bammetrics qc writes them; it adds the taps its --preset needs\n\n\
+         A VCF source (a file whose text starts with ##fileformat) carries VCF records: \
+         write writes a VCF (.vcf.gz is BGZF, --index its .tbi), variant-calling and \
+         genotype-concordance are its taps, and -o out.vcf.gz adds write out.vcf.gz \
+         --index. A step of the other kind exits 2.\n\n\
          A step takes its verb's own options in every spelling (--minimum-pct 0.1, \
          --MINIMUM_PCT 0.1, MINIMUM_PCT=0.1); bammetrics chain BAM + VERB --help lists them. \
          A value that is a lone + is written --option=+.\n\n\

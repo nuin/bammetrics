@@ -1,0 +1,99 @@
+##fileformat=VCFv4.2
+##contig=<ID=c1,length=5000>
+##contig=<ID=c2,length=3000>
+##contig=<ID=c3,length=1000>
+##FILTER=<ID=LowQual,Description="Low quality">
+##FILTER=<ID=q10,Description="Quality below 10">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Depth">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Depth">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allele depths">
+##FORMAT=<ID=FT,Number=1,Type=String,Description="Genotype filter">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+c1	100	rs0	G	GA	50	PASS	.
+c1	114	rs2	G	A	50	PASS	.
+c1	128	rs4	T	C	50	PASS	.
+c1	142	rs6	C	CA	50	PASS	.
+c1	156	rs8	A	G	50	PASS	.
+c1	170	rs10	T	C	50	PASS	.
+c1	184	rs12	G	GA	50	PASS	.
+c1	198	rs14	A	G	50	PASS	.
+c1	212	rs16	A	G	50	PASS	.
+c1	226	rs18	A	AA	50	PASS	.
+c1	240	rs20	C	T	50	PASS	.
+c1	254	rs22	T	C	50	PASS	.
+c1	268	rs24	A	AA	50	PASS	.
+c1	282	rs26	A	G	50	PASS	.
+c1	296	rs28	T	C	50	PASS	.
+c1	310	rs30	G	GA	50	PASS	.
+c1	324	rs32	A	G	50	PASS	.
+c1	338	rs34	A	G	50	PASS	.
+c1	352	rs36	A	AA	50	PASS	.
+c1	366	rs38	A	G	50	PASS	.
+c1	380	rs40	T	C	50	PASS	.
+c1	394	rs42	G	GA	50	PASS	.
+c1	408	rs44	C	T	50	PASS	.
+c1	422	rs46	T	C	50	PASS	.
+c1	436	rs48	T	TA	50	PASS	.
+c1	450	rs50	T	C	50	PASS	.
+c1	464	rs52	A	G	50	PASS	.
+c1	478	rs54	A	AA	50	PASS	.
+c1	492	rs56	T	C	50	PASS	.
+c1	506	rs58	G	A	50	PASS	.
+c1	600	rs60	A	AA	50	PASS	.
+c1	618	rs62	A	G	50	PASS	.
+c1	636	rs64	A	G	50	PASS	.
+c1	654	rs66	A	AA	50	PASS	.
+c1	998	rs_del	ACCCCC	A	50	PASS	.
+c1	1000	rs68	A	G	50	PASS	.
+c1	1022	rs70	ACCC	A	50	PASS	.
+c1	1044	rs72	AC	A	50	PASS	.
+c1	1066	rs74	A	G	50	PASS	.
+c1	1088	rs76	AC	A	50	PASS	.
+c1	1110	rs78	ACCC	A	50	PASS	.
+c1	1132	rs80	A	G	50	PASS	.
+c1	1154	rs82	ACCC	A	50	PASS	.
+c1	1176	rs84	AC	A	50	PASS	.
+c1	1198	rs86	A	G	50	PASS	.
+c1	1220	rs88	AC	A	50	PASS	.
+c1	1242	rs90	ACCC	A	50	PASS	.
+c1	1264	rs92	A	G	50	PASS	.
+c1	1286	rs94	ACCC	A	50	PASS	.
+c1	1308	rs96	AC	A	50	PASS	.
+c1	1500	rs98	A	G	50	PASS	.
+c1	1526	rs100	ACG	T	50	PASS	.
+c1	1552	rs102	AT	GCC	50	PASS	.
+c1	1697	rs_mnp	GTA	CAT	50	PASS	.
+c1	1700	rs104	A	G	50	PASS	.
+c1	1730	rs106	A	G	50	PASS	.
+c1	1800	rs108	A	AA	50	PASS	.
+c1	1831	rs_multi	A	T,C	50	PASS	.
+c1	1840	rs112	C	T	50	PASS	.
+c2	117	rs114	T	TA	50	PASS	.
+c2	117	rs_filtered	A	G	50	LowQual	.
+c2	151	rs116	A	G	50	PASS	.
+c2	185	rs118	C	G	50	PASS	.
+c2	219	rs120	C	CGA	50	PASS	.
+c2	253	rs122	C	T	50	PASS	.
+c2	287	rs124	AC	A	50	PASS	.
+c2	321	rs126	T	TA	50	PASS	.
+c2	355	rs128	C	G	50	PASS	.
+c2	389	rs130	C	G	50	PASS	.
+c2	423	rs132	AC	A	50	PASS	.
+c2	457	rs134	A	G	50	PASS	.
+c2	491	rs136	C	CGA	50	PASS	.
+c2	525	rs138	T	TA	50	PASS	.
+c2	559	rs140	A	G	50	PASS	.
+c2	593	rs142	A	T	50	PASS	.
+c2	627	rs144	C	CGA	50	PASS	.
+c2	661	rs146	A	G	50	PASS	.
+c2	695	rs148	AC	A	50	PASS	.
+c2	729	rs150	A	AA	50	PASS	.
+c2	763	rs152	C	G	50	PASS	.
+c2	909	rs154	G	A	50	PASS	.
+c2	950	rs156	GT	ACC	50	PASS	.
+c2	1200	rs158	T	G	50	PASS	.
+c2	1222	rs160	T	TG	50	PASS	.
+c2	1244	rs162	T	TG	50	PASS	.

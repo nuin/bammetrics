@@ -1,0 +1,22 @@
+## argv
+chain
+tests/data/vcf_writer/calls.vcf
+variant-calling
+--dbsnp
+tests/data/vcf_writer/dbsnp.vcf
+-o
+OUT/r.vcf.gz
+--dry-run
+## exit
+0
+## stdout
+chain plan for tests/data/vcf_writer/calls.vcf
+  source    tests/data/vcf_writer/calls.vcf (VCF, 13,262 bytes; a file, it can be read again)
+  prefix    OUT/r (from -o)
+segment 1  one read of tests/data/vcf_writer/calls.vcf
+  step 1  variant-calling  tap on in  OUT/r.variant_calling_detail_metrics, OUT/r.variant_calling_summary_metrics
+  step 2  write            VCF of in  OUT/r.vcf.gz, OUT/r.vcf.gz.tbi
+temp disk  none: no step spills
+memory     about 100.0 MiB at the peak, a fixed 100.0 MiB for the chain beside its barriers included (a small input takes less)
+nothing ran: this is a plan
+## stderr

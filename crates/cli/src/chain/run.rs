@@ -350,7 +350,7 @@ fn write_tool_files(
 /// The kind of a file `write` renamed into place.
 fn bam_kind(path: &Path) -> &'static str {
     match path.extension().and_then(|e| e.to_str()) {
-        Some("bai") => "index",
+        Some("bai" | "tbi") => "index",
         Some("md5") => "md5",
         Some("sam") => "sam",
         Some("cram") => "cram",
@@ -370,11 +370,25 @@ fn finish_step(
     let piped = chain.steps[index].stdout;
     // A materialized tool's own file (a checksum, SAM text) has one form.
     let own = chain.steps[index].role == Role::Materialize;
+    // A VCF and its companions carry the kinds their step planned.
+    let step = &chain.steps[index];
+    let planned = |path: &PathBuf| {
+        step.vcf
+            .and(step.files.iter().find(|f| f.path == *path))
+            .map(|f| f.kind)
+    };
     let mut files: Vec<Written> = products
         .files
         .iter()
         .filter(|_| !piped)
-        .map(|path| Written::new(path.clone(), if own { "file" } else { bam_kind(path) }))
+        .map(|path| {
+            let kind = match planned(path) {
+                Some(kind) => kind,
+                None if own => "file",
+                None => bam_kind(path),
+            };
+            Written::new(path.clone(), kind)
+        })
         .collect();
     if chain.steps[index].tool.is_some() {
         files.extend(write_tool_files(chain, index, products, sample)?);
@@ -564,6 +578,9 @@ fn read_stream(
     resume: &Resume,
     claims: &Claims,
 ) -> Result<(Vec<bammetrics_core::Result<Products>>, Vec<Slot>), VerbError> {
+    if chain.stream == stage::Kind::Variants {
+        return read_variant_stream(chain, resume);
+    }
     let (steps, slots) = core_steps(chain, resume, claims)?;
     if steps.is_empty() {
         return Ok((Vec::new(), slots));
@@ -581,6 +598,53 @@ fn read_stream(
         lower: !chain.stage_executor,
     };
     let results = stage::run_chain(plan, None).map_err(|e| VerbError::core(VERB, &e))?;
+    Ok((results, slots))
+}
+
+/// The one read of a chain whose source is a VCF (docs/chaining.md
+/// section 33): the steps `--resume` does not skip, through the variant
+/// executor.
+fn read_variant_stream(
+    chain: &Chain,
+    resume: &Resume,
+) -> Result<(Vec<bammetrics_core::Result<Products>>, Vec<Slot>), VerbError> {
+    use bammetrics_core::stage::variant::{VariantPlan, VariantStep, VcfSource, run_variant_chain};
+    let mut steps = Vec::new();
+    let mut slots = Vec::new();
+    for (index, step) in chain.steps.iter().enumerate() {
+        if resume.skipped(index) {
+            continue;
+        }
+        let failed = |e: bammetrics_core::Error| step_error(&step.label, &e);
+        let mut built = match (&step.vcf, step.tool) {
+            (Some(options), _) => {
+                let path = &step.files[0].path;
+                VariantStep::write(path, *options)
+            }
+            (None, Some(tool)) => {
+                let mut inv = tool.parse(&step.argv).map_err(failed)?;
+                inv.threads = chain.threads;
+                inv.quiet = chain.quiet;
+                VariantStep::tool_tap(tool, &inv)
+                    .map_err(failed)?
+                    .ok_or_else(|| super::usage(format!("{}: it cannot be a step", step.label)))?
+            }
+            (None, None) => {
+                return Err(super::usage(format!("{}: it cannot be a step", step.label)));
+            }
+        };
+        built.label.clone_from(&step.label);
+        steps.push(built);
+        slots.push(Slot::Step(index));
+    }
+    if steps.is_empty() {
+        return Ok((Vec::new(), slots));
+    }
+    let plan = VariantPlan {
+        source: VcfSource::new(&chain.source_path),
+        steps,
+    };
+    let results = run_variant_chain(plan).map_err(|e| VerbError::core(VERB, &e))?;
     Ok((results, slots))
 }
 

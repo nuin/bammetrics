@@ -1,0 +1,43 @@
+##fileformat=VCFv4.2
+##source=a caller
+##contig=<ID=c2,length=3000,assembly=b37,md5=abc>
+##contig=<ID=c1,length=5000>
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total depth">
+##INFO=<ID=FL,Number=0,Type=Flag,Description="A flag">
+##INFO=<ID=FY,Number=.,Type=Flag,Description="A flag of any count">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele freq",Source="gatk",Version="3">
+##INFO=<ID=ZZ,Number=.,Type=String,Description="Has \"quotes\" and, commas">
+##INFO=<ID=XT,Number=1,Type=String,Description="Extra attrs",Foo=bar>
+##INFO=<ID=NODESC,Number=1,Type=Integer>
+##INFO=<ID=MQ,Number=1,Type=Integer,Description="Repaired to Float">
+##FILTER=<ID=q10,Description="Quality below 10">
+##FILTER=<ID=LowQual,Description="Low quality">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Depth">
+##FORMAT=<ID=PL,Number=G,Type=Integer,Description="PL">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allele depths">
+##FORMAT=<ID=FT,Number=1,Type=String,Description="Genotype filter">
+##FORMAT=<ID=XA,Number=A,Type=Float,Description="Per alternate">
+##FORMAT=<ID=XS,Number=1,Type=String,Description="Text">
+##ALT=<ID=NON_REF,Description="Any other allele">
+##META=<ID=Assay,Type=String,Number=.,Values=[WholeGenome, Exome]>
+##SAMPLE=<ID=S1,Assay=WholeGenome>
+##noequals
+##key=value with spaces
+##key=value with spaces
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	S2	S1
+c2	5	.	N	A	30.5	PASS	AF=1e-5	GT	0/1	0/1
+c2	6	.	C	T,G	1.005	PASS	AF=0.1,0.000001	GT:AD:XA	1/2:1,2,3:0.5	0/1:.:.
+c2	7	.	C	T	2.675	PASS	FL;FL;FY=2	GT	0/1	0/1
+c1	10	.	a	c	30	PASS	DP=10;FL;AF=0.5	GT:GQ:DP:AD:PL	0/1:30.5:10:3,7:10,0,100	1|1:.:.:.:.
+c1	11	rs1;rs2	AC	A,ACT	30.0	q10;LowQual	AF=0.25,0.5;DP=3	GT:GQ:AD	0/1:.:1,2,3	./.:.:.
+c1	12	rs3	G	T	12.345	LowQual;LowQual	.	GT:FT	0/1:PASS	0/1:q10;b;a
+c1	13	.	G	.	.	.	FL=1;XT=ab;FL=0	GT:FT	0/0:PASS	0/0:.
+c1	14	.	G	<NON_REF>	1e2	PASS	DP=7;NODESC=3;MQ=60	GT:PL	0/0:0,10,100	0/0:0,10,100
+c1	15	.	GTTT	G	0.001	q10	ZZ=x,y;AF=1.0	GT:GQ:XS	1/1:-1:x	0|1:99.5
+c1	16	.	C	T	1000000.5	PASS	DP=.	GT:DP:AD	0|1:-1:1,x	1:5:2,3
+c1	17	.	C	T	-1	PASS	DP=;DP	GT:XS:XA	0/1	.
+c1	18	.	C	T	45.678	PASS	DP=10;DP=11	XS:GQ	a:20	b
+c1	19	.	A	C,T,G	-10	.	.	GT:PL:XA	0/3:.:1,2,3	./.:.:.
+c1	20	.	A	C	inf	.	.	GT	0//1	1/

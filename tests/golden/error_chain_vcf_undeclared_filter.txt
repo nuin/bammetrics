@@ -1,0 +1,11 @@
+## argv
+chain
+tests/data/vcf_writer/bad_filter.vcf
+-o
+OUT/r.vcf
+## exit
+1
+## stdout
+## stderr
+bammetrics chain: step 1 (write): failed: OUT/r.vcf: record 1: Key nofilter found in VariantContext field FILTER at c1:1 but this key isn't defined in the VCFHeader.  We require all VCFs to have complete VCF headers by default.
+bammetrics chain: 0 of 1 step finished, 1 failed; 0 files written

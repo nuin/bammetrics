@@ -1977,6 +1977,8 @@ _StepVerb = Literal[
     "wgs_with_non_zero_coverage",
     "targeted_pcr",
     "rna_seq",
+    "variant_calling",
+    "genotype_concordance",
     "mark_duplicates",
     "sequencing_artifact",
     "oxo_g",

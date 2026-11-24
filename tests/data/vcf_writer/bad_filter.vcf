@@ -1,0 +1,30 @@
+##fileformat=VCFv4.2
+##source=a caller
+##contig=<ID=c2,length=3000,assembly=b37,md5=abc>
+##contig=<ID=c1,length=5000>
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total depth">
+##INFO=<ID=FL,Number=0,Type=Flag,Description="A flag">
+##INFO=<ID=FY,Number=.,Type=Flag,Description="A flag of any count">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele freq",Source="gatk",Version="3">
+##INFO=<ID=ZZ,Number=.,Type=String,Description="Has \"quotes\" and, commas">
+##INFO=<ID=XT,Number=1,Type=String,Description="Extra attrs",Foo=bar>
+##INFO=<ID=NODESC,Number=1,Type=Integer>
+##INFO=<ID=MQ,Number=1,Type=Integer,Description="Repaired to Float">
+##FILTER=<ID=q10,Description="Quality below 10">
+##FILTER=<ID=LowQual,Description="Low quality">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Depth">
+##FORMAT=<ID=PL,Number=G,Type=Integer,Description="PL">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allele depths">
+##FORMAT=<ID=FT,Number=1,Type=String,Description="Genotype filter">
+##FORMAT=<ID=XA,Number=A,Type=Float,Description="Per alternate">
+##FORMAT=<ID=XS,Number=1,Type=String,Description="Text">
+##ALT=<ID=NON_REF,Description="Any other allele">
+##META=<ID=Assay,Type=String,Number=.,Values=[WholeGenome, Exome]>
+##SAMPLE=<ID=S1,Assay=WholeGenome>
+##noequals
+##key=value with spaces
+##key=value with spaces
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	S1	S2
+c1	1	.	A	C	.	nofilter	.	GT	0	0

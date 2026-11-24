@@ -522,6 +522,7 @@ fn planned(
         notes: inv.notes,
         formats,
         write: None,
+        vcf: None,
         inputs: inv.inputs,
     })
 }
@@ -726,6 +727,7 @@ pub(super) fn plan(
         notes,
         formats: Vec::new(),
         write: None,
+        vcf: None,
         inputs: inputs.clone(),
     };
     let index = before.len();

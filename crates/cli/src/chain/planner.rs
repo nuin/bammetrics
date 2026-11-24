@@ -209,6 +209,15 @@ impl Source {
     /// The source of `chain`: its header is read, no record. A pipe is
     /// not opened.
     pub fn of(chain: &Chain) -> Result<Self, VerbError> {
+        if chain.stream == bammetrics_core::stage::Kind::Variants {
+            // A VCF is told by its text; its records go through no
+            // barrier, so the planner needs no estimate of them.
+            return Ok(Self {
+                kind: "VCF",
+                bytes: std::fs::metadata(&chain.source_path).ok().map(|m| m.len()),
+                order: None,
+            });
+        }
         if !chain.replayable() {
             return Ok(Self {
                 kind: "BAM, CRAM or SAM",

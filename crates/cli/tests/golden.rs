@@ -106,6 +106,13 @@ const FIXTURES: &[(&str, &str)] = &[
     ("NO_EOF", "tests/data/doctor/no_eof.bam"),
     ("CUT", "tests/data/doctor/cut.bam"),
     ("DS", "tests/data/downsampled.bam"),
+    ("VW_CALLS", "tests/data/vcf_writer/calls.vcf"),
+    ("VW_CALLS_GZ", "tests/data/vcf_writer/calls.vcf.gz"),
+    ("VW_DBSNP", "tests/data/vcf_writer/dbsnp.vcf"),
+    ("VW_TRUTH", "tests/data/vcf_writer/truth.vcf"),
+    ("VW_CALL", "tests/data/vcf_writer/call.vcf"),
+    ("VW_CORNERS", "tests/data/vcf_writer/corners.vcf"),
+    ("VW_BAD", "tests/data/vcf_writer/bad_filter.vcf"),
 ];
 
 /// Corpus files (`make corpus`), present only after the harness built them.
@@ -1297,6 +1304,28 @@ const CRAM_WRITER_CASES: &[Case] = &[
     case!("picard_revert_original_base_qualities_cram", "RevertOriginalBaseQualitiesAndAddMateCigar", "I=RV", "O=OUT/reverted.cram", "R=REF"),
 ];
 
+/// The VCF writer and the variant stream of the chain (wave W16,
+/// docs/chaining.md section 33): `-o` naming a VCF, `write` with its
+/// index and MD5, the two taps, the plan, and the refusals of a step of
+/// the other kind.
+#[rustfmt::skip]
+const VCF_WRITER_CASES: &[Case] = &[
+    case!("chain_vcf_out_gz", "chain", "VW_CALLS", "-o", "OUT/r.vcf.gz"),
+    case!("chain_vcf_out_plain", "chain", "VW_CALLS_GZ", "-o", "OUT/r.vcf"),
+    case!("chain_vcf_corners", "chain", "VW_CORNERS", "-o", "OUT/c.vcf"),
+    case!("chain_vcf_write_md5", "chain", "VW_CALLS", "write", "OUT/w.vcf.bgz", "--index", "--md5", "--compression-level", "1"),
+    case!("chain_vcf_taps", "chain", "VW_CALLS_GZ", "variant-calling", "--dbsnp", "VW_DBSNP", "write", "OUT/w.vcf", "-o", "OUT/s"),
+    case!("chain_vcf_concordance", "chain", "VW_CALL", "-o", "OUT/g", "+", "genotype-concordance", "--truth-vcf", "VW_TRUTH", "--truth-sample", "T", "--call-sample", "C"),
+    case!("plan_chain_vcf", "chain", "VW_CALLS", "variant-calling", "--dbsnp", "VW_DBSNP", "-o", "OUT/r.vcf.gz", "--dry-run"),
+    case!("error_chain_vcf_bam_step", "chain", "VW_CALLS", "insert-size", "-o", "OUT/s"),
+    case!("error_chain_vcf_tap_on_bam", "chain", "MD", "-o", "OUT/s", "+", "variant-calling", "--dbsnp", "VW_DBSNP"),
+    case!("error_chain_vcf_out_on_bam", "chain", "MD", "mark-duplicates", "-o", "OUT/r.vcf.gz"),
+    case!("error_chain_bam_out_on_vcf", "chain", "VW_CALLS", "-o", "OUT/r.bam"),
+    case!("error_chain_vcf_plain_index", "chain", "VW_CALLS", "write", "OUT/r.vcf", "--index"),
+    case!("error_chain_vcf_undeclared_filter", "chain", "VW_BAD", "-o", "OUT/r.vcf"),
+    case!("error_chain_vcf_qc", "chain", "VW_CALLS", "-o", "OUT/s", "+", "qc"),
+];
+
 /// `SamFormatConverter` (wave W15): the conversions by the name of `O`, the
 /// verb, and the errors Picard gives or bammetrics adds.
 #[rustfmt::skip]
@@ -1609,6 +1638,17 @@ fn record_after(case: &Case, before: &[&[&str]]) -> String {
             text.push_str(&bam_text(&path, None));
             continue;
         }
+        // A block-compressed VCF is recorded as its text, its .tbi as a
+        // line: the index holds offsets into the compressed bytes, and
+        // tests/concordance/test_vcf_writer.py holds its queries to Picard's.
+        if name.ends_with(".vcf.gz") || name.ends_with(".vcf.bgz") {
+            text.push_str(&bgzf_text(&path));
+            continue;
+        }
+        if name.ends_with(".tbi") {
+            text.push_str("<index not recorded>\n");
+            continue;
+        }
         if name.ends_with(".bai") && wrote_bam {
             text.push_str("<index not recorded>\n");
             continue;
@@ -1636,6 +1676,17 @@ fn record_after(case: &Case, before: &[&[&str]]) -> String {
     }
     let _ = fs::remove_dir_all(&out_dir);
     normalize(&text, out)
+}
+
+/// The text of a BGZF file, inflated.
+fn bgzf_text(path: &Path) -> String {
+    use std::io::Read;
+    let file = fs::File::open(path).expect("open the VCF");
+    let mut text = Vec::new();
+    bammetrics_core::gzip::GzipReader::new(std::io::BufReader::new(file))
+        .read_to_end(&mut text)
+        .expect("inflate the VCF");
+    String::from_utf8_lossy(&text).into_owned()
 }
 
 /// True when the first gzip member of `path` inflates to the BAM magic.
@@ -2090,6 +2141,11 @@ fn documented_cram_output_commands_on_the_fixtures() {
 }
 
 #[test]
+fn documented_vcf_writer_commands_on_the_fixtures() {
+    check(VCF_WRITER_CASES);
+}
+
+#[test]
 fn documented_sam_format_converter_commands_on_the_fixtures() {
     check(SAM_FORMAT_CONVERTER_CASES);
 }
@@ -2226,6 +2282,7 @@ fn case_names_are_unique() {
         .chain(CRAM_WRITER_CASES)
         .chain(SAM_FORMAT_CONVERTER_CASES)
         .chain(COMPARE_TERMINATOR_CASES)
+        .chain(VCF_WRITER_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .chain(RESUME_CASES.iter().map(|s| s.name))
