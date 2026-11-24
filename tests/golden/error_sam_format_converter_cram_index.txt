@@ -1,0 +1,11 @@
+## argv
+SamFormatConverter
+I=tests/data/markdup.bam
+O=OUT/converted.cram
+R=tests/data/ref_100k.fa
+CREATE_INDEX=true
+## exit
+1
+## stdout
+## stderr
+bammetrics: OUTPUT=OUT/converted.cram: no index is written beside a CRAM (Picard writes a .cram.bai that only htsjdk reads): write it without one and run `samtools index` for a .crai

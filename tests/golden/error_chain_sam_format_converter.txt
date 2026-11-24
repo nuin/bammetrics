@@ -1,0 +1,12 @@
+## argv
+chain
+tests/data/markdup.bam
++
+sam-format-converter
+## exit
+2
+## stdout
+## stderr
+bammetrics chain: step 1 (sam-format-converter): SamFormatConverter writes the records it reads in another format, which is what the write step does: it cannot be a step
+  name the file of write: bammetrics chain BAM + ... + write out.sam (or out.cram with -R, or out.bam)
+  the steps: bammetrics chain --help

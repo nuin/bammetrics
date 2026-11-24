@@ -1,0 +1,10 @@
+## argv
+sam-format-converter
+tests/data/markdup.bam
+-o
+tests/data/markdup.bam
+## exit
+2
+## stdout
+## stderr
+bammetrics sam-format-converter: tests/data/markdup.bam is an input; writing it would destroy it (from -o)

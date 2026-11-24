@@ -1217,6 +1217,25 @@ const CRAM_WRITER_CASES: &[Case] = &[
     case!("picard_revert_original_base_qualities_cram", "RevertOriginalBaseQualitiesAndAddMateCigar", "I=RV", "O=OUT/reverted.cram", "R=REF"),
 ];
 
+/// `SamFormatConverter` (wave W15): the conversions by the name of `O`, the
+/// verb, and the errors Picard gives or bammetrics adds.
+#[rustfmt::skip]
+const SAM_FORMAT_CONVERTER_CASES: &[Case] = &[
+    case!("picard_sam_format_converter_bam_to_sam", "SamFormatConverter", "I=MD", "O=OUT/converted.sam", "CREATE_MD5_FILE=true"),
+    case!("picard_sam_format_converter_sam_to_bam", "SamFormatConverter", "I=MD_SAM", "O=OUT/converted.bam", "CREATE_INDEX=true", "VALIDATION_STRINGENCY=SILENT"),
+    case!("picard_sam_format_converter_cram_to_sam", "SamFormatConverter", "I=IS_CRAM", "R=REF", "O=OUT/converted.sam"),
+    case!("verb_sam_format_converter_sam_to_cram", "sam-format-converter", "MD_SAM", "-R", "REF", "-o", "OUT/converted.cram", "--validation-stringency", "SILENT", "--create-md5-file"),
+    // Any name but .sam and .cram is a BAM, as in htsjdk.
+    case!("verb_sam_format_converter_other_name", "sam-format-converter", "MD", "-o", "OUT/converted.txt", "--max-records-in-ram", "1"),
+    case!("error_sam_format_converter_index_queryname", "SamFormatConverter", "I=DM", "O=OUT/converted.bam", "CREATE_INDEX=true"),
+    case!("error_sam_format_converter_cram_no_reference", "SamFormatConverter", "I=MD", "O=OUT/converted.cram"),
+    case!("error_sam_format_converter_cram_index", "SamFormatConverter", "I=MD", "O=OUT/converted.cram", "R=REF", "CREATE_INDEX=true"),
+    case!("error_sam_format_converter_output_is_input", "SamFormatConverter", "I=MD", "O=MD"),
+    case!("error_verb_sam_format_converter_output_is_input", "sam-format-converter", "MD", "-o", "MD"),
+    case!("error_sam_format_converter_assume_sorted", "SamFormatConverter", "I=MD", "O=OUT/converted.sam", "ASSUME_SORTED=true"),
+    case!("error_chain_sam_format_converter", "chain", "MD", "+", "sam-format-converter"),
+];
+
 /// The PDF report (docs/pdf.md) in a binary built with the feature `pdf`:
 /// `report --pdf` and `--pdf-only` on the Picard 3.5.0 directory, `qc
 /// --report`, both page sizes, and a `--pdf-font` that is no font or no
@@ -1840,6 +1859,11 @@ fn documented_cram_output_commands_on_the_fixtures() {
     check(CRAM_WRITER_CASES);
 }
 
+#[test]
+fn documented_sam_format_converter_commands_on_the_fixtures() {
+    check(SAM_FORMAT_CONVERTER_CASES);
+}
+
 /// `make golden` runs this with `--features pdf` and the test below without.
 #[cfg(feature = "pdf")]
 #[test]
@@ -1961,6 +1985,7 @@ fn case_names_are_unique() {
         .chain(MATE_FILTER_CASES)
         .chain(DOWNSAMPLE_CASES)
         .chain(CRAM_WRITER_CASES)
+        .chain(SAM_FORMAT_CONVERTER_CASES)
         .chain(pdf_cases)
         .map(|c| c.name)
         .collect();
