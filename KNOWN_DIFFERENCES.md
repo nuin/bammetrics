@@ -297,8 +297,8 @@ behaves how.
   twice (the mode pass, then the counts), so `jumping-library -`, `jumping-library
   <(cat in.bam)` and `I=/dev/stdin` are refused with a usage error (exit 2 on the verb, 1
   on the Picard face) where every other verb reads standard input; the verb's `--help`
-  says so. A BAM cut inside a BGZF block exits 1 with `failed to fill whole buffer` and
-  writes no file. Picard 3.5.0 exits 0 and writes an all-zero row when the cut falls
+  says so. A BAM cut inside a BGZF block exits 1 with `truncated BAM: the file ends
+  inside a record or a block` and writes no file. Picard 3.5.0 exits 0 and writes an all-zero row when the cut falls
   inside the first block after the header block (`tests/data/insert_size.bam` cut at 120
   or 250 bytes, `jumping_bams.py` `main` cut at 1000), and throws `FileTruncatedException`
   (exit 1) when it falls in a later block (`main` cut at 60000 or at half its length).

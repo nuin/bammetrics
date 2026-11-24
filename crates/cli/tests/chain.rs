@@ -1359,11 +1359,12 @@ fn a_bad_pipe_fails_under_the_name_of_standard_input() {
         &format!("M={}", dir.join("out.txt").display()),
         &format!("TMP_DIR={tmp_dir}"),
     ];
-    // The tool names no file for a record it cannot read (`bad record`).
+    // The tool names the cut as the chain does (`cut_record.rs`).
     let not_a_bam = "/dev/stdin: not a BAM or CRAM file";
+    let truncated = "/dev/stdin: truncated BAM";
     let cases: [(&[u8], &str, &str); 2] = [
         (b"not a bam\n", not_a_bam, not_a_bam),
-        (&bam[..600], "/dev/stdin: truncated BAM", "bad record"),
+        (&bam[..600], truncated, truncated),
     ];
     for (bytes, in_chain, in_tool) in cases {
         for (args, cause) in [(&chained[..], in_chain), (&tool[..], in_tool)] {
