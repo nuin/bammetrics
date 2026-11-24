@@ -1180,7 +1180,8 @@ needs = ["tests/data/markdup.sam", "tests/data/ref_100k.fa"]
 max_rss_mib = 64
 max_seconds = 30
 
-# Chromosomes 20 to 22 of the HG002 exome (8,445,233 records) as SAM text and as a CRAM.
+# Chromosomes 20 to 22 of the HG002 exome (8,445,233 records) as SAM text and as a CRAM:
+# 12.3 MiB and 9.5 s, 179.0 MiB and 10.3 s with 8 threads when the rows were added.
 [[command]]
 name = "sam-format-converter slice sam"
 tier = "scale"
