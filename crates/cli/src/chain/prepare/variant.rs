@@ -286,7 +286,8 @@ pub(super) fn tap_step(
         leaves: None,
         segment: position.segment,
         files,
-        late_prefix: None,
+        // Names the keys of the tap's files (`Run.metrics` of the Python chain).
+        late_prefix: Some(prefix),
         stdout: false,
         command: Some(inv.command),
         argv,
