@@ -433,7 +433,7 @@ impl Variant {
 pub struct VcfReader {
     path: PathBuf,
     header: vcf::Header,
-    reader: vcf::io::Reader<Box<dyn BufRead>>,
+    reader: vcf::io::Reader<Box<dyn BufRead + Send>>,
     record: vcf::Record,
     line: u64,
 }
@@ -450,7 +450,7 @@ fn open_text(
     max_line_bytes: usize,
     max_lines: u64,
     max_header_lines: u64,
-) -> Result<Box<dyn BufRead>> {
+) -> Result<Box<dyn BufRead + Send>> {
     let input = |source| Error::Input {
         path: path.to_path_buf(),
         source,
@@ -469,7 +469,7 @@ fn open_text(
     let gzip = read >= 2 && magic[..2] == [0x1f, 0x8b];
     let bgzf = read == magic.len() && magic[3] & 0x04 != 0 && magic[12..14] == *b"BC";
     let file = io::Cursor::new(magic[..read].to_vec()).chain(file);
-    let text: Box<dyn BufRead> = if gzip && bgzf {
+    let text: Box<dyn BufRead + Send> = if gzip && bgzf {
         Box::new(noodles::bgzf::io::Reader::new(file))
     } else if gzip {
         Box::new(io::BufReader::new(crate::gzip::GzipReader::new(
@@ -594,7 +594,7 @@ impl VcfReader {
 /// record line through `vcf/site.rs`, without noodles.
 pub struct SiteReader {
     path: PathBuf,
-    reader: Box<dyn BufRead>,
+    reader: Box<dyn BufRead + Send>,
     header: SiteHeader,
     rules: site::Rules,
     line: u64,
@@ -677,7 +677,7 @@ impl SiteReader {
 /// most [`MAX_LINE_BYTES`] each, one line in memory at a time.
 pub struct VcfLines {
     path: PathBuf,
-    reader: Box<dyn BufRead>,
+    reader: Box<dyn BufRead + Send>,
     header: VcfHeader,
     raw: Vec<u8>,
     line: u64,
@@ -740,6 +740,16 @@ impl VcfLines {
         out.push_str(&crate::java::decode_utf8(&self.raw));
         Ok(true)
     }
+}
+
+/// One record line (no line end) decoded into a [`Variant`] as
+/// [`VcfReader::next_variant`] decodes a record of a file whose header
+/// names `samples` samples: the same noodles fields and the same rules.
+pub fn variant_from_line(line: &str, samples: usize) -> std::result::Result<Variant, String> {
+    let mut reader = vcf::io::Reader::new(line.as_bytes());
+    let mut record = vcf::Record::default();
+    reader.read_record(&mut record).map_err(|e| e.to_string())?;
+    parse_variant(&record, samples)
 }
 
 /// True when `path` is a regular file whose text (plain, gzip or BGZF)

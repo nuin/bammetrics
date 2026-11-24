@@ -5,7 +5,7 @@
 use std::io::{self, BufRead, Read};
 
 pub(super) struct LineCap {
-    inner: Box<dyn BufRead>,
+    inner: Box<dyn BufRead + Send>,
     max_line_bytes: usize,
     max_lines: u64,
     /// Bytes handed out since the last line feed.
@@ -22,7 +22,11 @@ pub(super) struct LineCap {
 }
 
 impl LineCap {
-    pub(super) fn new(inner: Box<dyn BufRead>, max_line_bytes: usize, max_lines: u64) -> Self {
+    pub(super) fn new(
+        inner: Box<dyn BufRead + Send>,
+        max_line_bytes: usize,
+        max_lines: u64,
+    ) -> Self {
         Self {
             inner,
             max_line_bytes,
