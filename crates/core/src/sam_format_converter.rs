@@ -133,10 +133,7 @@ mod tests {
                 "Can't CREATE_INDEX unless sort order is coordinate"
             );
         }
-        assert!(
-            edit.header(&header("@HD\tVN:1.6\tSO:coordinate\n"))
-                .is_ok()
-        );
+        assert!(edit.header(&header("@HD\tVN:1.6\tSO:coordinate\n")).is_ok());
     }
 
     #[test]
